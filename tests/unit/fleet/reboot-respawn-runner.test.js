@@ -13,13 +13,20 @@ const SLOTS = [
   { name: 'Worker-2', role: 'worker', account_profile: null, resume_uuid: null }, // no token -> back-compat path
 ];
 
+/**
+ * FR-3: with no resume token the spawner mints a session id and passes `claude --session-id <uuid>`,
+ * so the child registers under a value the spawner already holds -- replacing the wt.exe-pid join that
+ * could never match. Injected via uuidFn so argv assertions stay EXACT rather than being loosened.
+ */
+const MINTED = '11111111-2222-4333-8444-555555555555';
+
 describe('runRebootRespawn dry-run (FR-5) — default INERT', () => {
   it('spawns NOTHING, logs per-slot resume invocations, and emits one fleet_verb_respawn event per slot', async () => {
     const events = [];
     const logFn = vi.fn(async (_s, ev) => { events.push(ev); return { ok: true }; });
     const spawnFn = vi.fn();
     const res = await runRebootRespawn({
-      supabase: {}, loadFn: async () => SLOTS, spawnFn, logFn, live: false, now: () => '2026-07-20T00:00:00.000Z',
+      supabase: {}, loadFn: async () => SLOTS, spawnFn, logFn, live: false, now: () => '2026-07-20T00:00:00.000Z', uuidFn: () => MINTED,
     });
 
     expect(spawnFn).not.toHaveBeenCalled(); // default-OFF: no OS process
@@ -32,7 +39,9 @@ describe('runRebootRespawn dry-run (FR-5) — default INERT', () => {
 
     // The per-slot invocation carries the correct --resume token (slot 1) / no token (slot 2).
     expect(res.results[0].invocation.args).toEqual(['new-tab', '-d', resolveRepoRoot(), '--', resolveClaudeCmd(), '--resume', 'u-1']);
-    expect(res.results[1].invocation.args).toEqual(['new-tab', '-d', resolveRepoRoot(), '--', resolveClaudeCmd()]);
+    // FR-3: a slot with no resume token gets a MINTED --session-id instead, so the spawner knows in
+    // advance the id the child will register under. Injected via uuidFn for determinism.
+    expect(res.results[1].invocation.args).toEqual(['new-tab', '-d', resolveRepoRoot(), '--', resolveClaudeCmd(), '--session-id', MINTED]);
   });
 
   // QF-20260724-335: opts.sdKey stamps every fleet_verb_respawn event with an explicit run-correlator
@@ -62,12 +71,12 @@ describe('runRebootRespawn live (FR-5)', () => {
     const spawnCalls = [];
     const spawnFn = vi.fn((program, args) => { spawnCalls.push({ program, args }); return { pid: 111 }; });
     const res = await runRebootRespawn({
-      supabase: {}, loadFn: async () => SLOTS, spawnFn, logFn: async () => ({ ok: true }), live: true, now: () => 'iso', sleepFn: vi.fn(),
+      supabase: {}, loadFn: async () => SLOTS, spawnFn, logFn: async () => ({ ok: true }), live: true, now: () => 'iso', sleepFn: vi.fn(), uuidFn: () => MINTED,
     });
     expect(res.live).toBe(true);
     expect(spawnFn).toHaveBeenCalledTimes(2);
     expect(spawnCalls[0]).toEqual({ program: 'wt.exe', args: ['new-tab', '-d', resolveRepoRoot(), '--', resolveClaudeCmd(), '--resume', 'u-1'] });
-    expect(spawnCalls[1].args).toEqual(['new-tab', '-d', resolveRepoRoot(), '--', resolveClaudeCmd()]); // slot 2 had no token
+    expect(spawnCalls[1].args).toEqual(['new-tab', '-d', resolveRepoRoot(), '--', resolveClaudeCmd(), '--session-id', MINTED]); // slot 2 had no resume token -> minted id
     expect(res.results.map((r) => r.spawned)).toEqual([true, true]);
   });
 

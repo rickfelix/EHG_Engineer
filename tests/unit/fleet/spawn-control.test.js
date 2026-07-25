@@ -32,6 +32,14 @@ const { logCoordinationEvent } = await import('../../../lib/coordinator/coordina
 const { sequenceSingletonRefresh } = await import('../../../lib/coordinator/singleton-refresh-sequencer.cjs');
 const { spawn: childProcessSpawnSpy } = await import('node:child_process');
 
+/**
+ * FR-3: the spawner MINTS the session id and passes it as `claude --session-id <uuid>`, so the child
+ * registers under this exact value and correlation is a direct lookup. Injected via opts.uuidFn to keep
+ * tests deterministic. Must be a syntactically valid UUID — buildSessionLaunch DROPS a malformed one
+ * rather than passing it to the CLI (which would reject it and fail the whole launch).
+ */
+const MINTED_SESSION_ID = '11111111-2222-4333-8444-555555555555';
+
 /** Minimal in-memory fake covering exactly the claude_sessions/session_coordination shapes spawn-control.js touches. */
 function makeFakeSupabase({ sessions = [] } = {}) {
   const store = new Map(sessions.map((s) => [s.session_id, { ...s }]));
@@ -214,15 +222,17 @@ describe('spawn (FR-1)', () => {
     const child = { pid: 4242 };
     const spawnFn = vi.fn().mockReturnValue(child);
     const execFn = vi.fn().mockResolvedValue({ stdout: '131074' });
+    // FR-3: the child now registers under the SPAWNER-MINTED --session-id, so the row is keyed on
+    // that id rather than on the wt.exe launcher pid (which never matched claude_sessions.pid).
     const supabaseClient = makeFakeSupabase({
       sessions: [{
-        session_id: 's1', pid: 4242, status: 'active',
+        session_id: MINTED_SESSION_ID, pid: 4242, status: 'active',
         created_at: new Date(nowMs - 5_000).toISOString(), // freshly self-registered, well within the match window
         metadata: { fleet_identity: { callsign: 'Alpha-5' }, role: 'worker' },
       }],
     });
-    await spawn({ role: 'worker', callsign: 'Beta-1' }, { live: true, spawnFn, execFn, sleepFn: vi.fn(), supabaseClient, nowMs, skipDedup: true });
-    const merged = supabaseClient._store.get('s1').metadata;
+    await spawn({ role: 'worker', callsign: 'Beta-1' }, { live: true, spawnFn, execFn, sleepFn: vi.fn(), supabaseClient, nowMs, skipDedup: true, uuidFn: () => MINTED_SESSION_ID });
+    const merged = supabaseClient._store.get(MINTED_SESSION_ID).metadata;
     // Pre-existing keys survive the write (would be wiped by a bare full-blob overwrite).
     expect(merged.fleet_identity).toEqual({ callsign: 'Alpha-5' });
     expect(merged.role).toBe('worker');
@@ -242,7 +252,11 @@ describe('spawn (FR-1)', () => {
         metadata: { fleet_identity: { callsign: 'Unrelated-Session' }, role: 'worker' },
       }],
     });
-    await spawn({ role: 'worker', callsign: 'Beta-1' }, { live: true, spawnFn, execFn, sleepFn: vi.fn(), supabaseClient, nowMs, skipDedup: true });
+    // FR-3: a valid minted id makes the bind a direct session_id lookup that never consults pid, which
+    // would make this test pass VACUOUSLY. uuidFn returns a non-UUID so buildSessionLaunch drops it
+    // (the CLI would reject a malformed --session-id) and spawn falls back to the pid path — which is
+    // exactly the path whose freshness window this test exists to guard. Keeps its teeth.
+    await spawn({ role: 'worker', callsign: 'Beta-1' }, { live: true, spawnFn, execFn, sleepFn: vi.fn(), supabaseClient, nowMs, skipDedup: true, uuidFn: () => 'not-a-uuid' });
     // Untouched -- the stale row's metadata must never be corrupted by a fresh spawn's recycled pid.
     expect(supabaseClient._store.get('s-old').metadata).toEqual({ fleet_identity: { callsign: 'Unrelated-Session' }, role: 'worker' });
   });
@@ -278,18 +292,79 @@ describe('spawn (FR-1)', () => {
     const execFn = vi.fn().mockResolvedValue({ stdout: '131074' });
     const supabaseClient = makeFakeSupabase({
       sessions: [{
-        session_id: 's1', pid: 4242, status: 'active',
+        session_id: MINTED_SESSION_ID, pid: 4242, status: 'active',
         created_at: new Date(nowMs - 5_000).toISOString(),
         metadata: { fleet_identity: { callsign: 'Beta-1' }, role: 'worker' },
       }],
     });
     logCoordinationEvent.mockClear();
-    const result = await spawn({ role: 'worker', callsign: 'Beta-1' }, { live: true, spawnFn, execFn, sleepFn: vi.fn(), supabaseClient, nowMs, skipDedup: true });
+    const result = await spawn({ role: 'worker', callsign: 'Beta-1' }, { live: true, spawnFn, execFn, sleepFn: vi.fn(), supabaseClient, nowMs, skipDedup: true, uuidFn: () => MINTED_SESSION_ID });
 
-    expect(result.session_id).toBe('s1');
+    expect(result.session_id).toBe(MINTED_SESSION_ID);
     const spawnEventCall = logCoordinationEvent.mock.calls.find((c) => c[1].event_type === 'fleet_verb_spawn');
     expect(spawnEventCall).toBeTruthy();
-    expect(spawnEventCall[1].session_id).toBe('s1'); // was hardcoded null before this fix
+    expect(spawnEventCall[1].session_id).toBe(MINTED_SESSION_ID); // was hardcoded null before QF-20260724-739
+  });
+
+  it('FR-3: binds by the MINTED session id, not by the wt.exe launcher pid', async () => {
+    // The regression this pins: reverting to a pid join re-breaks correlation silently. The row here
+    // carries a DIFFERENT pid than the launcher reports, which is the real-world case -- wt.exe exits
+    // and claude_sessions.pid is the Claude Code pid. A pid-based bind finds nothing; the minted-id
+    // bind finds the row.
+    const nowMs = 1_800_000_000_000;
+    const supabaseClient = makeFakeSupabase({
+      sessions: [{
+        session_id: MINTED_SESSION_ID, pid: 999999, status: 'active',
+        created_at: new Date(nowMs - 5_000).toISOString(),
+        metadata: {},
+      }],
+    });
+    const result = await spawn({ role: 'worker', callsign: 'Beta-1' }, {
+      live: true, spawnFn: vi.fn().mockReturnValue({ pid: 4242 }),
+      execFn: vi.fn().mockResolvedValue({ stdout: '131074' }),
+      sleepFn: vi.fn(), supabaseClient, nowMs, skipDedup: true, uuidFn: () => MINTED_SESSION_ID,
+    });
+    expect(result.session_id).toBe(MINTED_SESSION_ID);
+  });
+
+  it('FR-1/FR-3: stamps metadata.account_profile on the FRESH-spawn path (the discoverability fix)', async () => {
+    // Before this, accountProfile was used only to resolve a profile DIRECTORY (spawn-control.js:162)
+    // and never written, while the sole writer (canary-guard.js:173) sat on the RESPAWN path and was
+    // itself pid-dead. Net effect: zero sessions carried the stamp and resolveCanaryTarget fail-closed
+    // even with canaries alive -- survival was sufficient, discoverability was not.
+    const nowMs = 1_800_000_000_000;
+    const supabaseClient = makeFakeSupabase({
+      sessions: [{
+        session_id: MINTED_SESSION_ID, pid: 4242, status: 'active',
+        created_at: new Date(nowMs - 5_000).toISOString(),
+        metadata: { fleet_identity: { callsign: 'Canary-1' } },
+      }],
+    });
+    await spawn({ role: 'worker', callsign: 'Canary-1', accountProfile: 'canary' }, {
+      live: true, spawnFn: vi.fn().mockReturnValue({ pid: 4242 }),
+      execFn: vi.fn().mockResolvedValue({ stdout: '131074' }),
+      sleepFn: vi.fn(), supabaseClient, nowMs, skipDedup: true, uuidFn: () => MINTED_SESSION_ID,
+      baseDir: 'C:/fake', // resolveProfileDir(name, opts) honours opts.baseDir — no FLEET_* env needed
+    });
+    const md = supabaseClient._store.get(MINTED_SESSION_ID).metadata;
+    expect(md.account_profile).toBe('canary');
+    expect(md.fleet_identity).toEqual({ callsign: 'Canary-1' }); // merged, not replaced
+  });
+
+  it('FR-1/FR-3: does NOT stamp account_profile when none was requested', async () => {
+    const nowMs = 1_800_000_000_000;
+    const supabaseClient = makeFakeSupabase({
+      sessions: [{
+        session_id: MINTED_SESSION_ID, pid: 4242, status: 'active',
+        created_at: new Date(nowMs - 5_000).toISOString(), metadata: {},
+      }],
+    });
+    await spawn({ role: 'worker', callsign: 'Beta-1' }, {
+      live: true, spawnFn: vi.fn().mockReturnValue({ pid: 4242 }),
+      execFn: vi.fn().mockResolvedValue({ stdout: '131074' }),
+      sleepFn: vi.fn(), supabaseClient, nowMs, skipDedup: true, uuidFn: () => MINTED_SESSION_ID,
+    });
+    expect(supabaseClient._store.get(MINTED_SESSION_ID).metadata.account_profile).toBeUndefined();
   });
 
   it('QF-20260724-739: retries the session-bind lookup (bounded) when the SessionStart row has not landed yet on the first attempt', async () => {
