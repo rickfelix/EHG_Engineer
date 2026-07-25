@@ -44,6 +44,23 @@ const EVENT_TYPE = 'MIGRATION_DISPOSITION';
  * @param {Map<string,string>} mirrored entity_id -> most recent disposition already in audit_log
  * @returns {{rows: object[], skipped: string[], invalid: string[]}}
  */
+/**
+ * Stable fingerprint of the DECISION an entry records — everything an auditor would consider a
+ * different decision. Deliberately excludes recorded_at, so re-seeding alone never churns rows.
+ *
+ * @param {object} entry
+ * @returns {string}
+ */
+export function decisionFingerprint(entry) {
+  return JSON.stringify([
+    entry?.disposition ?? null,
+    (entry?.reason ?? '').trim(),
+    entry?.owner ?? null,
+    entry?.corroborated ?? null,
+    entry?.review_by ?? null,
+  ]);
+}
+
 export function buildAuditRows(ledger, mirrored = new Map(), actor = null) {
   const rows = [];
   const skipped = [];
@@ -54,7 +71,11 @@ export function buildAuditRows(ledger, mirrored = new Map(), actor = null) {
       invalid.push(basename);
       continue;
     }
-    if (mirrored.get(basename) === entry.disposition) {
+    // Keyed on the DECISION CONTENT, not the disposition alone. Keying on disposition let a
+    // materially reworded reason never reach the trail — observed for real: all three reasons
+    // were rewritten to add the self-assertion disclosure while the dispositions stayed
+    // DEFERRED, and this loop would have skipped every one of them.
+    if (mirrored.get(basename) === decisionFingerprint(entry)) {
       skipped.push(basename);
       continue;
     }
@@ -74,6 +95,12 @@ export function buildAuditRows(ledger, mirrored = new Map(), actor = null) {
         decided_at: entry.recorded_at || null,
         sd_key: entry.sd_key || null,
         source: entry.source || null,
+        // Provenance quality, as a queryable FIELD rather than only inside free-text prose:
+        // false means the grounds are self-asserted in the migration file and uncorroborated.
+        corroborated: entry.corroborated ?? null,
+        // When this suppression lapses and the file resurfaces as drift. null = never expires.
+        review_by: entry.review_by || null,
+        decision_fingerprint: decisionFingerprint(entry),
         // Whether this disposition actually removes the file from the strict fail set. APPLIED
         // is a legitimate record but NEVER suppresses (FR-2b), so a reader can tell a decision
         // that changed gate behaviour from one that only documented a fact.
@@ -120,7 +147,7 @@ if (isMain) {
       console.error(`Could not read existing audit rows (${error.message}) — refusing to write, to avoid duplicating the trail.`);
       process.exit(0);
     }
-    for (const r of data || []) mirrored.set(r.entity_id, r.metadata?.disposition);
+    for (const r of data || []) mirrored.set(r.entity_id, r.metadata?.decision_fingerprint ?? null);
     if (!data || data.length < PAGE) break;
   }
 

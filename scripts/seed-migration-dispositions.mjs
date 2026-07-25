@@ -38,6 +38,9 @@ const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const ROOT = path.resolve(__dirname, '..');
 const SD_KEY = 'SD-LEO-INFRA-MIGRATION-APPLY-STATE-TRIAGE-001';
 
+/** How long an auto-seeded, uncorroborated deferral suppresses before it must be revisited. */
+export const REVIEW_WINDOW_DAYS = 90;
+
 /** The 3-factor guard's approver regex, verbatim from scripts/lib/migration-guards.js:30. */
 const APPROVED_BY_RE = /^\s*--\s*@approved-by:\s*([^\s<>"]+@[^\s<>"]+)\s*$/m;
 
@@ -126,6 +129,11 @@ export function buildLedger({ gaps, sql, sweep, existing = {}, now }) {
         owner: 'chairman',
         sd_key: SD_KEY,
         recorded_at: now,
+        // A self-asserted, uncorroborated deferral must be time-boxed, or one comment line in
+        // the author's own SQL buys a PERMANENT gate exemption. At expiry the file resurfaces
+        // as real drift and as undispositioned, forcing a fresh decision rather than decaying
+        // into a silent allowance.
+        review_by: new Date(Date.parse(now) + REVIEW_WINDOW_DAYS * 86400000).toISOString(),
         source: 'auto:chairman-gate-marker',
         corroborated: false,
       };

@@ -96,20 +96,27 @@ jobs:
       - name: Disposition ledger is in sync with its seeder
         if: always()
         env:
-          SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
-          SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
+          # NO service-role key here, deliberately: without --strict/--alert the verifier never
+          # emits a breakage alert, and the seeder touches no database at all. This step needs
+          # only the read credentials the verifier itself uses.
           SUPABASE_DB_PASSWORD: ${{ secrets.SUPABASE_DB_PASSWORD }}
           SUPABASE_POOLER_URL: ${{ secrets.SUPABASE_POOLER_URL }}
           DATABASE_URL: ${{ secrets.DATABASE_URL }}
         run: |
           set +e
-          node scripts/verify-migration-apply-state.mjs --json > /tmp/apply-state.json 2>/dev/null
-          # The verifier exits non-zero only under --strict, which is not passed here; a
-          # missing/short file means the DB was unreachable, in which case skip rather than
-          # fail — an outage must not be reported as ledger drift.
-          if ! grep -Fq '"gaps"' /tmp/apply-state.json; then
-            echo "::warning::Could not obtain apply-state JSON (DB unreachable?) — ledger sync check skipped."
+          node scripts/verify-migration-apply-state.mjs --json > /tmp/apply-state.json 2>/tmp/apply-state.err
+          # Branch on the verifier's own MARKER, not on the shape of its output. Inferring
+          # "DB unreachable" from a missing '"gaps"' key made every non-DB failure — a syntax
+          # error, an OOM, a bad flag — exit 0 while blaming the database. The marker goes to
+          # stderr under --json; -Fxq so a filename can never forge it.
+          if grep -Fxq '[MIGRATION_APPLY_STATE_INFRA_ERROR]' /tmp/apply-state.err; then
+            echo "::warning::DB unreachable — ledger sync check skipped this run (non-blocking transient)."
             exit 0
+          fi
+          if ! grep -Fq '"gaps"' /tmp/apply-state.json; then
+            echo "::error::Verifier produced no usable JSON and did not report a DB outage — this is a real failure, not a transient."
+            cat /tmp/apply-state.err
+            exit 1
           fi
           set -e
           node scripts/seed-migration-dispositions.mjs --gaps=/tmp/apply-state.json --write

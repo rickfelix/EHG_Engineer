@@ -18,6 +18,7 @@ import {
   undispositionedBasenames,
   contradictoryBasenames,
   hasReadableReason,
+  isExpired,
   gapBasename,
   SUPPRESSING_DISPOSITIONS,
   KNOWN_DISPOSITIONS
@@ -129,9 +130,67 @@ describe('TS-1 reason-required invariant (FR-1)', () => {
     expect(hasReadableReason(reason)).toBe(false);
   });
 
-  it('accepts a reason that merely CONTAINS an invisible character', () => {
-    expect(hasReadableReason('superseded​ by 20260801')).toBe(true);
-    expect(isSuppressingEntry(entry({ reason: 'superseded​ by 20260801' }))).toBe(true);
+  it('accepts a real reason that merely CONTAINS an invisible character', () => {
+    const r = 'superseded​ by the consolidated migration, verified no live readers remain';
+    expect(hasReadableReason(r)).toBe(true);
+    expect(isSuppressingEntry(entry({ reason: r }))).toBe(true);
+  });
+
+  // The predicate is an ALLOWLIST for a reason: a denylist loses to new invisible codepoints,
+  // including ones Unicode classes as a LETTER (U+3164) or a SYMBOL (U+2800), which no
+  // \p{C}+\p{Z} strip would catch. Requiring positive evidence of words cannot be outrun.
+  it.each([
+    ['word joiner', '⁠'],
+    ['Mongolian vowel separator', '᠎'],
+    ['Hangul filler (a LETTER)', 'ㅤㅤㅤㅤ'],
+    ['Braille blank (a SYMBOL)', '⠀⠀⠀⠀'],
+    ['LTR mark', '‎'],
+    ['invisible separator', '⁣'],
+    ['tag space', '󠀠'],
+  ])('rejects an invisible-only reason built from %s', (_label, reason) => {
+    expect(hasReadableReason(reason)).toBe(false);
+    expect(isSuppressingEntry(entry({ reason }))).toBe(false);
+  });
+
+  it('rejects a too-thin reason like "x" or "n/a" that is technically visible', () => {
+    for (const r of ['x', 'n/a', '...', 'ok', '???']) expect(hasReadableReason(r)).toBe(false);
+  });
+});
+
+describe('review_by expiry — a deferral is a decision to revisit, not an exemption', () => {
+  const PAST = '2020-01-01T00:00:00.000Z';
+  const FUTURE = '2099-01-01T00:00:00.000Z';
+
+  it('stops suppressing once the review date has passed', () => {
+    expect(isSuppressingEntry(entry({ review_by: FUTURE }))).toBe(true);
+    expect(isSuppressingEntry(entry({ review_by: PAST }))).toBe(false);
+  });
+
+  it('an entry with NO review_by never expires — the field is additive', () => {
+    expect(isSuppressingEntry(entry())).toBe(true);
+    expect(isExpired(entry())).toBe(false);
+  });
+
+  it('an unparseable review_by does NOT silently expire a real decision', () => {
+    expect(isExpired(entry({ review_by: 'not a date' }))).toBe(false);
+    expect(isSuppressingEntry(entry({ review_by: 'not a date' }))).toBe(true);
+  });
+
+  it('an expired entry counts as UNDISPOSITIONED again, so it resurfaces in the metric', () => {
+    const gaps = [{ file: 'a.sql' }];
+    expect(undispositionedBasenames(gaps, new Map([['a.sql', entry({ review_by: PAST })]]))).toEqual(['a.sql']);
+    expect(undispositionedBasenames(gaps, new Map([['a.sql', entry({ review_by: FUTURE })]]))).toEqual([]);
+  });
+
+  it('SEC-11 REGRESSION GUARD: a carried-forward entry cannot suppress a file forever', () => {
+    // A migration dispositioned DEFERRED, then applied (leaving the gap set), then REGRESSED
+    // back into the gap set was invisible: suppressed, not undispositioned, not contradictory.
+    // Carry-forward retains the RECORD; expiry stops the record from being an open-ended grant.
+    const gaps = [{ file: 'm.sql' }];
+    const stale = new Map([['m.sql', entry({ review_by: PAST })]]);
+    expect(applyDispositions(gaps, stale).suppressed).toHaveLength(0);
+    expect(applyDispositions(gaps, stale).remaining).toHaveLength(1);
+    expect(undispositionedBasenames(gaps, stale)).toEqual(['m.sql']);
   });
 });
 

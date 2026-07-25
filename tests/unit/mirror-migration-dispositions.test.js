@@ -4,7 +4,7 @@
  */
 
 import { describe, it, expect } from 'vitest';
-import { buildAuditRows } from '../../scripts/mirror-migration-dispositions-to-audit.mjs';
+import { buildAuditRows, decisionFingerprint } from '../../scripts/mirror-migration-dispositions-to-audit.mjs';
 
 const entry = (over = {}) => ({
   disposition: 'DEFERRED', reason: 'blocked on chairman sign-off', owner: 'chairman',
@@ -45,16 +45,39 @@ describe('column contract — live audit_log columns only', () => {
 });
 
 describe('idempotence — by disposition, not by mere presence', () => {
-  it('skips an entity already mirrored with the SAME disposition', () => {
-    const { rows, skipped } = buildAuditRows({ 'a.sql': entry() }, new Map([['a.sql', 'DEFERRED']]));
+  it('skips an entity already mirrored with the SAME decision', () => {
+    const e = entry();
+    const { rows, skipped } = buildAuditRows({ 'a.sql': e }, new Map([['a.sql', decisionFingerprint(e)]]));
     expect(rows).toHaveLength(0);
     expect(skipped).toEqual(['a.sql']);
   });
 
   it('WRITES A NEW ROW when a human re-adjudicates, so the trail shows the change', () => {
-    const { rows } = buildAuditRows({ 'a.sql': entry({ disposition: 'RETIRED' }) }, new Map([['a.sql', 'DEFERRED']]));
+    const { rows } = buildAuditRows({ 'a.sql': entry({ disposition: 'RETIRED' }) }, new Map([['a.sql', decisionFingerprint(entry())]]));
     expect(rows).toHaveLength(1);
     expect(rows[0].metadata.disposition).toBe('RETIRED');
+  });
+
+  it('WRITES A NEW ROW when only the REASON changed — keying on disposition alone lost this', () => {
+    // Observed for real: all three reasons were rewritten to add the self-assertion
+    // disclosure while every disposition stayed DEFERRED. A disposition-keyed check skipped
+    // them, so the trail would have kept the superseded text indefinitely.
+    const before = entry();
+    const after = entry({ reason: `${before.reason} — now discloses self-asserted provenance` });
+    const { rows } = buildAuditRows({ 'a.sql': after }, new Map([['a.sql', decisionFingerprint(before)]]));
+    expect(rows).toHaveLength(1);
+  });
+
+  it('re-seeding alone does NOT churn rows — recorded_at is excluded from the fingerprint', () => {
+    const a = entry({ recorded_at: '2026-01-01T00:00:00.000Z' });
+    const b = entry({ recorded_at: '2026-09-09T00:00:00.000Z' });
+    expect(decisionFingerprint(a)).toBe(decisionFingerprint(b));
+  });
+
+  it('carries provenance and expiry into the trail as queryable FIELDS, not just prose', () => {
+    const { rows } = buildAuditRows({ 'a.sql': entry({ corroborated: false, review_by: '2026-10-01T00:00:00.000Z' }) });
+    expect(rows[0].metadata.corroborated).toBe(false);
+    expect(rows[0].metadata.review_by).toBe('2026-10-01T00:00:00.000Z');
   });
 
   it('an empty ledger writes nothing', () => {

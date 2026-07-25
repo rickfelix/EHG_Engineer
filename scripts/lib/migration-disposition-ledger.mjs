@@ -47,17 +47,45 @@ export const KNOWN_DISPOSITIONS = Object.freeze(['APPLIED', 'RETIRED', 'DEFERRED
 
 export const DEFAULT_LEDGER_PATH = path.join('docs', 'audits', 'migration-dispositions.json');
 
-/** Characters that render as nothing but survive String.trim(). */
-const INVISIBLE_RE = /[\s​-‍­﻿]/g;
-
 /**
- * True when `reason` contains at least one character a human could actually read.
+ * True when `reason` reads like a sentence a human wrote.
+ *
+ * ALLOWLIST, NOT DENYLIST — this was originally a trim(), then a strip of six known invisible
+ * characters. Adversarial review defeated both: U+3164 is a Unicode LETTER and U+2800 a
+ * SYMBOL, so even stripping \p{C}+\p{Z} leaves characters that render blank while passing.
+ * Any "remove the bad characters" rule loses that race. Requiring positive evidence of real
+ * words cannot be beaten by adding new invisible codepoints, because they are not letters.
+ *
+ * The bar is deliberately low (three words of 3+ letters) — it rejects blank-looking reasons
+ * without dictating how anyone writes; the real seeded reasons run to several sentences.
  *
  * @param {unknown} reason
  * @returns {boolean}
  */
 export function hasReadableReason(reason) {
-  return typeof reason === 'string' && reason.replace(INVISIBLE_RE, '') !== '';
+  if (typeof reason !== 'string') return false;
+  return (reason.match(/[A-Za-z]{3,}/g) || []).length >= 3;
+}
+
+/**
+ * True when a suppressing entry has passed its own review date.
+ *
+ * A deferral is a decision to revisit, not a permanent exemption. Without an expiry, an entry
+ * suppresses forever — and since carry-forward retains entries whose file has left the gap
+ * set, a migration that regresses back INTO the gap set later would be silently re-suppressed
+ * by a decision made about a situation that no longer exists. `review_by` is optional: an
+ * entry without one never expires, so this is additive.
+ *
+ * @param {object} entry
+ * @param {number|Date} [now]
+ * @returns {boolean}
+ */
+export function isExpired(entry, now = Date.now()) {
+  const by = entry && entry.review_by;
+  if (typeof by !== 'string' || !by) return false;
+  const t = Date.parse(by);
+  if (Number.isNaN(t)) return false; // unparseable date must not silently expire a real decision
+  return t < (now instanceof Date ? now.getTime() : now);
 }
 
 /**
@@ -68,8 +96,11 @@ export function hasReadableReason(reason) {
  * @param {unknown} entry
  * @returns {boolean}
  */
-export function isSuppressingEntry(entry) {
+export function isSuppressingEntry(entry, now = Date.now()) {
   if (!entry || typeof entry !== 'object' || Array.isArray(entry)) return false;
+
+  // A lapsed deferral stops suppressing and the gap resurfaces as real drift.
+  if (isExpired(entry, now)) return false;
 
   // Invariant 2 — reason required. Stripped rather than merely trimmed: String.trim()
   // removes only WhiteSpace/LineTerminator, so a reason of "​" (zero-width space),
@@ -147,11 +178,11 @@ export function inspectLedger(ledgerPath = DEFAULT_LEDGER_PATH) {
  * @param {Map<string, object>} ledger
  * @returns {Set<string>}
  */
-export function suppressedBasenames(ledger) {
+export function suppressedBasenames(ledger, now = Date.now()) {
   const out = new Set();
   if (!(ledger instanceof Map)) return out;
   for (const [basename, entry] of ledger) {
-    if (isSuppressingEntry(entry)) out.add(basename);
+    if (isSuppressingEntry(entry, now)) out.add(basename);
   }
   return out;
 }
@@ -234,13 +265,19 @@ export function undispositionedBasenames(gaps, ledger) {
   return [...out].sort();
 }
 
-/** A well-formed entry carrying a readable reason and a recognised disposition. */
-function isDecidedEntry(entry) {
+/**
+ * A well-formed, CURRENT entry: readable reason, recognised disposition, not lapsed.
+ * An expired decision counts as undispositioned — a decision nobody has revisited past its own
+ * review date is no longer a live decision, and it must resurface in the metric rather than
+ * keep crediting the file.
+ */
+function isDecidedEntry(entry, now = Date.now()) {
   return Boolean(
     entry && typeof entry === 'object' && !Array.isArray(entry)
     && hasReadableReason(entry.reason)
     && typeof entry.disposition === 'string'
     && KNOWN_DISPOSITIONS.includes(entry.disposition)
+    && !isExpired(entry, now)
   );
 }
 

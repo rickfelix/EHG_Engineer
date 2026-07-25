@@ -97,6 +97,18 @@ export function isRecent(file, cutoff = RETIRED_BEFORE) {
 const gapFileBasename = (g) => String((g && g.file) || '').replace(/^.*[\\/]/, '');
 
 /**
+ * Collapse newlines before echoing any FILENAME to stdout.
+ *
+ * migration-deploy-drift-guard.yml decides the gate verdict by matching bracketed markers in
+ * this output. Anchoring those greps with -Fx closed the substring attack, but a filename
+ * containing an embedded newline could still contribute a line that IS exactly a marker, and
+ * the INFRA marker is converted to exit 0. Git refuses such paths under core.protectNTFS
+ * (default-on since 2.25), so this is defence in depth — but relying on another tool's input
+ * validation to keep a safety gate honest is not a property worth depending on.
+ */
+const printableFile = (f) => String(f).replace(/[\r\n]+/g, ' ');
+
+/**
  * Filter a gaps array (objects with a .file) to only the RECENT ones — the strict-gate fail set.
  *
  * SD-LEO-INFRA-MIGRATION-APPLY-STATE-TRIAGE-001 FR-6: `suppressed` is an OPTIONAL THIRD
@@ -537,17 +549,17 @@ async function main() {
         if (recentGaps.length) {
           console.log(`  RECENT COMMITTED-NOT-DEPLOYED GAPS (newest first):`);
           for (const g of recentGaps) {
-            console.log(`   ${g.status.padEnd(12)} ${g.file}  [RECENT]`);
+            console.log(`   ${g.status.padEnd(12)} ${printableFile(g.file)}  [RECENT]`);
             for (const m of g.missing) console.log(`     missing ${m.cls}: ${m.name}`);
           }
         }
         if (legacyGaps.length) {
-          console.log(`  LEGACY gaps suppressed from the fail set (advisory): ${legacyGaps.map((g) => g.file).join(', ')}`);
+          console.log(`  LEGACY gaps suppressed from the fail set (advisory): ${legacyGaps.map((g) => printableFile(g.file)).join(', ')}`);
         }
       } else {
         console.log(`\n  COMMITTED-NOT-DEPLOYED GAPS (${activeGaps.length} file(s), newest first):`);
         for (const g of activeGaps) {
-          console.log(`   ${g.status.padEnd(12)} ${g.file}`);
+          console.log(`   ${g.status.padEnd(12)} ${printableFile(g.file)}`);
           for (const m of g.missing) console.log(`     missing ${m.cls}: ${m.name}`);
         }
       }
@@ -557,7 +569,7 @@ async function main() {
       // author-controlled text, and echoing it here could emit either OUTCOME literal, which
       // migration-deploy-drift-guard.yml greps for — letting a reason string steer the gate.
       if (suppressedGaps.length) {
-        console.log(`\n  SUPPRESSED BY LEDGER (${suppressedGaps.length}): ${suppressedGaps.map(gapFileBasename).join(', ')}`);
+        console.log(`\n  SUPPRESSED BY LEDGER (${suppressedGaps.length}): ${suppressedGaps.map((g) => printableFile(gapFileBasename(g))).join(', ')}`);
         console.log(`  (reasons are recorded in the ledger and in audit_log; run --json for the machine-readable set)`);
       }
     }
@@ -568,7 +580,7 @@ async function main() {
     // verifiably absent live — either the ledger is lying or an apply failed silently.
     // Both deserve an operator's eyes, so this prints even though it suppresses nothing.
     if (dispositions.contradictory) {
-      console.log(`  ⚠ LEDGER CONTRADICTS SCHEMA (${dispositions.contradictory}): marked APPLIED but still missing live objects: ${dispositions.contradictory_files.join(', ')}`);
+      console.log(`  ⚠ LEDGER CONTRADICTS SCHEMA (${dispositions.contradictory}): marked APPLIED but still missing live objects: ${dispositions.contradictory_files.map(printableFile).join(', ')}`);
     }
   }
 
