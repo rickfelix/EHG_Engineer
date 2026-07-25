@@ -1,0 +1,63 @@
+name: "Solomon late-verdict reconcile (cron)"
+
+# SD-LEO-INFRA-SOLOMON-CONSULT-CANNOT-DELIVER-001 (FR-4b) — MEASURED 2026-07-25: the Adam pre-send
+# Solomon consult failed 197 times out of 197 over 30 days (every duty=pre_send_consult ledger row
+# was solomon-consult-timeout::documented-proceed). The bounded wait was 8s against a measured
+# verdict latency of min 135s / p50 245-324s, so it ALWAYS timed out — and nothing ever consumed
+# the verdict that arrived minutes later, because the only consumer was an in-process poll in a
+# process that had already exited.
+#
+# This workflow is the DURABLE host for the reconciler. FR-4a already runs it inside adam-advisory's
+# inbox mode, but that host is SESSION-SCOPED and only fires while an Adam session is alive — and a
+# verdict landing 135-600s later routinely outlives the session that asked for it. A session-only
+# host would therefore stop reconciling exactly when it matters most. Same reasoning (and the same
+# proven GHA pattern) as adam-inbound-backlog-watchdog-cron.yml.
+
+on:
+  schedule:
+    # Every 15 minutes. The reconciler is cheap (two indexed reads, writes only on a match) and the
+    # window that matters is minutes, not hours. Plain interval, deliberately NOT a wall-clock/ET
+    # schedule: there is no quiet-window requirement here, so this avoids the DST
+    # double-registration idiom that hour-list schedules incur.
+    - cron: '*/15 * * * *'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ${{ github.workflow }}
+  cancel-in-progress: true
+
+jobs:
+  reconcile:
+    name: Late-verdict reconciliation sweep
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+
+    # supabase-js + service-role ONLY. No pooler/pg/DATABASE_URL path: SUPABASE_POOLER_URL is
+    # injected into ZERO *cron*.yml in this repo and is silently undefined on a GHA runner, so a
+    # pg path would fail closed with nobody watching.
+    env:
+      SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+      SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: 'npm'
+
+      - name: Install dependencies
+        run: npm ci --ignore-scripts
+
+      # Only 0 and 1 are possible. There is deliberately NO breach code: Solomon answers roughly
+      # 18% of consults by construction, so escalating on unanswered consults would fire constantly
+      # and train everyone to ignore the alarm — the exact alert-fatigue failure this SD exists to
+      # end. Exit 1 is an INFRA failure and must paint the run red.
+      - name: Run late-verdict reconciliation
+        run: node scripts/cron/adam-late-verdict-reconcile-sweep.mjs
