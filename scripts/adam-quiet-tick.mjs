@@ -25,6 +25,12 @@ import 'dotenv/config';
 import { rehydrateBoard } from '../lib/adam/task-rehydrate.js';
 import { checkAndAlertStalls } from '../lib/adam/stall-alert.js';
 import { runOutboundSilenceWatchdog } from '../lib/adam/outbound-silence-watchdog.js';
+// SD-LEO-INFRA-ADAM-INBOUND-BACKLOG-WATCHDOG-001 FR-3: the tick's backlog COUNT comes from the
+// same shared selector the watchdog uses, so the two agree BY CONSTRUCTION rather than by
+// numeric reconciliation (criterion 3 is a RECURRENCE of the lane-002 close that claimed
+// unified consumption semantics and did not achieve it).
+import { fetchInboundBacklog, classifyBacklog } from '../lib/adam/inbound-backlog.js';
+import { resolveAdamSessionIds } from '../lib/adam/inbound-backlog-watchdog.js';
 import { TABLE as TASK_LEDGER_TABLE, syncParentRollupStatus } from '../lib/adam/task-ledger.js';
 import { isMainModule } from '../lib/utils/is-main-module.js';
 // SD-LEO-INFRA-COUNT-TRUNCATION-DISCIPLINE-001 FR-6 batch 9: task_ledger has no archival/
@@ -279,6 +285,25 @@ export async function surfaceInboxItems(sb) {
       .gte('created_at', cutoffIso)
       .limit(400);
 
+    // FR-3: the BACKLOG COUNT is derived from the shared SSOT selector — the same one the cron
+    // watchdog consumes — so tick count and watchdog count agree BY CONSTRUCTION. The display
+    // list below deliberately keeps its own 7d window + cap (TICK_SURFACE_WINDOW_MS is NOT
+    // changed; aging out was verified NOT to be the cause and must not be "fixed"). Fail-soft:
+    // any selector error leaves backlogCount null and the tick still prints its item list.
+    let backlogCount = null;
+    let backlogBreachingCount = null;
+    try {
+      const { ids } = await resolveAdamSessionIds(sb);
+      if (ids && ids.length) {
+        const { rows: backlogRows, error: backlogError } = await fetchInboundBacklog(sb, ids);
+        if (!backlogError) {
+          const verdict = classifyBacklog(backlogRows, Date.now());
+          backlogCount = verdict.rawBacklogCount;
+          backlogBreachingCount = verdict.breachingCount;
+        }
+      }
+    } catch { /* fail-soft — the count is advisory; the item list below is the hard signal */ }
+
     const isDirectiveRow = (r) =>
       (r.payload && (DIRECTIVE_KINDS.includes(r.payload.kind) || r.payload.reply_needed || r.payload.reply_to)) || false;
 
@@ -289,10 +314,42 @@ export async function surfaceInboxItems(sb) {
     const eligible = (rows || []).filter((r) => {
       const k = r.payload && r.payload.kind;
       if (k != null && ADAM_EXCLUDED_KINDS.includes(k)) return false;
-      // SD-LEO-INFRA-COORDINATION-LANE-DELIVERY-CONTRACT-001 FR-4 (instance 3): a courtesy-ACK
-      // (kind='ack'/'coordinator_ack', already excluded from Adam's own inbox above) echoing
-      // this directive's correlation_id must never suppress the eventual genuine reply/verdict.
-      if (isDirectiveRow(r)) return !hasCorrelatedReply(r, correlationWindow || [], { excludeKinds: ADAM_EXCLUDED_KINDS });
+      // SD-LEO-INFRA-ADAM-INBOUND-BACKLOG-WATCHDOG-001 FR-3 (narrowed per RCA, not deleted).
+      //
+      // Being a REPLY in a chain is not discharge of the ack obligation. (Stated narrowly on
+      // purpose: "participation in a chain is not discharge" over-generalizes beyond what is
+      // verified here — the reply case is exactly what this guard encodes.)
+      //
+      // hasCorrelatedReply keys on `payload.correlation_id || id`
+      // (lib/coordinator/reply-correlation.cjs:30) and matches by equality at :36, so it admits
+      // ancestors and siblings — not only descendants. The guaranteed-present ancestor is Adam's
+      // own antecedent question, so ADAM'S QUESTION SUPPRESSED THE ANSWER TO ADAM'S QUESTION.
+      // Live 2026-07-25: 26 of 41 directive-class unacked inbound rows suppressed, 26/26 non-root,
+      // each by an OLDER Adam-sent row in its own thread (witnessed: 4479197b<-05ee0769,
+      // a81f9948<-3ca3d677, c160ef08<-12139a29).
+      //
+      // RESIDUAL, recorded rather than implied away (db-expert, measured over all 3,885 rows):
+      // the predicate is weaker than "correlated reply" even for roots. `payload.reply_to` never
+      // holds a row id (0 of 139) and `correlation_id === own row id` occurs 0 times, so the
+      // `|| id` fallback can never fire and the relation is UNDIRECTED — "shares a correlation_id
+      // with some other row". Rootness therefore does not make it sound in general: 81
+      // correlation_id groups are shared across >=2 ROOT rows (231 rows), so a root can still be
+      // suppressed by a sibling. That measured 0 in this directive lane today, and this guard is
+      // the option that closes the witnessed bug WITHOUT retiring the ratified assertions of
+      // C6-001 and LANE-DELIVERY-CONTRACT-001 FR-4 (retiring another SD's shipped contract needs
+      // its own supersession, not a side effect of this one). The durable fix is upstream and out
+      // of scope here: make successorship decidable by ancestry (reply_to carrying the parent ROW
+      // id, or a parent_id/thread_root_id column) instead of inferred from a shared group key.
+      //
+      // The root guard is behaviorally IDENTICAL to wholesale removal across the live population
+      // (both suppress 0 of 41) while preserving SD-LEO-INFRA-ACKSTAMP-FALSE-METRICS-C6-001 and
+      // SD-LEO-INFRA-COORDINATION-LANE-DELIVERY-CONTRACT-001 FR-4, whose fixtures are thread-root
+      // rows. Those two contracts and this one are DISJOINT on thread-rootedness, not
+      // conflicting — neither is superseded, and no assertion of either was retired.
+      if (isDirectiveRow(r)) {
+        const isThreadRoot = !(r.payload && r.payload.reply_to);
+        return !(isThreadRoot && hasCorrelatedReply(r, correlationWindow || [], { excludeKinds: ADAM_EXCLUDED_KINDS }));
+      }
       return !(r.payload && r.payload.tick_surfaced_at);
     });
     // FR-5: capHit now reflects a genuine authored-item backlog exceeding the display budget
@@ -300,7 +357,7 @@ export async function surfaceInboxItems(sb) {
     // higher ceiling) -- NOT "the raw window happened to contain 50 rows," which previously gave
     // a false CAP signal even when every one of those 50 rows was mechanical noise (eligible:[]).
     const capHit = eligible.length > INBOX_DISPLAY_CAP || (rows || []).length === INBOX_RAW_FETCH_LIMIT;
-    if (eligible.length === 0) return { items: [], directives: 0, capHit };
+    if (eligible.length === 0) return { items: [], directives: 0, capHit, backlogCount, backlogBreachingCount };
 
     const surfaced = eligible.slice(0, INBOX_DISPLAY_CAP);
     const items = surfaced.map((r) => {
@@ -317,7 +374,7 @@ export async function surfaceInboxItems(sb) {
     for (const r of surfaced.filter((x) => !isDirectiveRow(x) && !(x.payload && x.payload.tick_surfaced_at))) {
       await sb.from('session_coordination').update({ payload: { ...(r.payload || {}), tick_surfaced_at: seenAt } }).eq('id', r.id);
     }
-    return { items, directives: items.filter((i) => i.isDirective).length, capHit };
+    return { items, directives: items.filter((i) => i.isDirective).length, capHit, backlogCount, backlogBreachingCount };
   } catch (e) {
     return { items: [], directives: 0, error: e && e.message };
   }
@@ -574,6 +631,12 @@ async function main() {
     ventureRealBuildStallAlerted: ventureStall.realBuildStalled || [],
     inboxSurfaced: inboxSurface.items.length,
     inboxDirectives: inboxSurface.directives,
+    // FR-3: the SUPPRESSION-FREE backlog count from the shared SSOT selector. Distinct from
+    // inboxSurfaced, which is the windowed+capped DISPLAY count — the very number that read
+    // "1-5" while 21 rows sat unacked. Surfacing only the display count is what made the
+    // incident invisible, so the real one has to reach the operator, not just be computed.
+    inboxBacklog: inboxSurface.backlogCount,
+    inboxBacklogBreaching: inboxSurface.backlogBreachingCount,
     smsInbound: smsInbound.count,
     outboundSilence,
     crossPartyPing: delta.changed,
@@ -598,6 +661,10 @@ async function main() {
       `ventureStalls=${ventureStall.alerted.length} ` +
       `realBuildStalls=${(ventureStall.realBuildStalled || []).length} ` +
       `inbox=${inboxSurface.items.length}(dir:${inboxSurface.directives}) ` +
+      // The suppression-free backlog, printed alongside the display count. During the witnessed
+      // incident `inbox=` read 1-5 while 21 rows sat unacked; this is the number that would have
+      // shown the truth. `?` when the selector failed, never a healthy-looking 0.
+      `backlog=${inboxSurface.backlogCount ?? '?'}(breach:${inboxSurface.backlogBreachingCount ?? '?'}) ` +
       `sms=${smsInbound.count} ` +
       `probes=${outboundSilence.probed.length} esc=${outboundSilence.escalated.length} ` +
       `ping=${delta.changed ? delta.fields.join(',') : 'suppressed'} ` +
@@ -641,6 +708,15 @@ async function main() {
     }
     if (inboxSurface.capHit) {
       console.log('QUIET_TICK_INBOX_CAP=adam fetched=50 oldest-first — within-window overflow; ack surfaced rows to reach newer ones');
+    }
+    // SD-LEO-INFRA-ADAM-INBOUND-BACKLOG-WATCHDOG-001 FR-3: the backlog breach needs its OWN
+    // actionable token, not just a console figure. adam-startup-check's gate treats a tick with
+    // none of its allowlisted QUIET_TICK_* tokens as a NO-OP, so a tick whose ONLY anomaly was a
+    // backlog breach would be read as "nothing to do" — the fix would then be exactly as
+    // invisible as the incident it closes (regression-agent 108066da). The display list can be
+    // empty while the backlog is deep: that is the witnessed shape, 21 unacked behind "1-5".
+    if (inboxSurface.backlogBreachingCount > 0) {
+      console.log(`QUIET_TICK_INBOX_BACKLOG_BREACH=adam backlog=${inboxSurface.backlogCount} breaching=${inboxSurface.backlogBreachingCount} — unacked inbound rows past their breach threshold; drain via node scripts/adam-advisory.cjs inbox (the full-lane reader, no correlation filter)`);
     }
     // QF-20260719-848: undrained chairman SMS as first-class hard-interrupt lines (mirrors
     // QUIET_TICK_INBOX_DIRECTIVE) — the contract INBOUND WATCH duty. Act: drain + reply.
