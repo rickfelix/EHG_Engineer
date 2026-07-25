@@ -693,6 +693,15 @@ async function main() {
     if (inboxSurface.capHit) {
       console.log('QUIET_TICK_INBOX_CAP=adam fetched=50 oldest-first — within-window overflow; ack surfaced rows to reach newer ones');
     }
+    // SD-LEO-INFRA-ADAM-INBOUND-BACKLOG-WATCHDOG-001 FR-3: the backlog breach needs its OWN
+    // actionable token, not just a console figure. adam-startup-check's gate treats a tick with
+    // none of its allowlisted QUIET_TICK_* tokens as a NO-OP, so a tick whose ONLY anomaly was a
+    // backlog breach would be read as "nothing to do" — the fix would then be exactly as
+    // invisible as the incident it closes (regression-agent 108066da). The display list can be
+    // empty while the backlog is deep: that is the witnessed shape, 21 unacked behind "1-5".
+    if (inboxSurface.backlogBreachingCount > 0) {
+      console.log(`QUIET_TICK_INBOX_BACKLOG_BREACH=adam backlog=${inboxSurface.backlogCount} breaching=${inboxSurface.backlogBreachingCount} — unacked inbound rows past their breach threshold; drain via node scripts/adam-advisory.cjs inbox (the full-lane reader, no correlation filter)`);
+    }
     // QF-20260719-848: undrained chairman SMS as first-class hard-interrupt lines (mirrors
     // QUIET_TICK_INBOX_DIRECTIVE) — the contract INBOUND WATCH duty. Act: drain + reply.
     for (const s of smsInbound.rows) {
