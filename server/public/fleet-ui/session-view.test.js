@@ -101,8 +101,11 @@ describe('pure helpers', () => {
 
   it('attachStyleFor: resting/ok/degraded reasons map to distinct styles', async () => {
     const { attachStyleFor } = await loadModule();
-    expect(attachStyleFor(null).label).toBe('Attach: unknown');
-    expect(attachStyleFor({ ok: true }).label).toBe('Attached');
+    // QF-20260725-975: user-facing verb is "Open", not "Attach" (chairman decision). These
+    // assertions pin the USER-VISIBLE vocabulary, so they move with the labels. The helper name
+    // attachStyleFor is deliberately unchanged — the identifier rename is deferred, see the QF.
+    expect(attachStyleFor(null).label).toBe('Unknown');
+    expect(attachStyleFor({ ok: true }).label).toBe('Open');
     expect(attachStyleFor({ ok: false, reason: 'stale_handle' }).label).toBe('Window handle stale');
     expect(attachStyleFor({ ok: false, reason: 'not_found' }).label).toBe('Could not resolve target');
   });

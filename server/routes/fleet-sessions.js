@@ -141,8 +141,11 @@ router.get('/:id/browser-log', async (req, res) => {
   }
 });
 
-// POST /:id/attach -- FR-1: brings the session's terminal window to OS-level foreground focus.
-router.post('/:id/attach', async (req, res) => {
+// POST /:id/open -- FR-1: brings the session's terminal window to OS-level foreground focus.
+// QF-20260725-975 (chairman decision): the route verb is "open", not "attach" -- the user is
+// opening a session that already exists, not attaching to a handle. No /attach alias is kept:
+// server/public/fleet-ui/session-view.js was the only caller and moves with it.
+router.post('/:id/open', async (req, res) => {
   const supabase = getSupabase();
   try {
     const result = await attach(req.params.id, { supabaseClient: supabase, by: 'session_id' });
