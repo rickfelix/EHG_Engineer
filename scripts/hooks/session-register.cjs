@@ -89,6 +89,55 @@ function getTTY() {
   return `win-${pid}`;
 }
 
+/**
+ * QF-20260725-480 — session-creation lifecycle emission was fully decoupled from session
+ * creation: across a measured 12-hour window FOUR sessions were created and ZERO emitted
+ * SESSION_CREATED, while NINE SESSION_CREATED events fired for sessions created OUTSIDE it.
+ *
+ * Root cause: this hook is THE creation path for every real Claude Code session, and it
+ * upserted claude_sessions without ever emitting a lifecycle event. The only SESSION_CREATED
+ * emitter in the tree was lib/session-manager.mjs:474 (a different entry path), and the
+ * claim_sd RPC also writes SESSION_CREATED rows — which is why events kept appearing for
+ * ALREADY-EXISTING sessions while genuinely new ones emitted nothing. Not canary-specific:
+ * a session carrying no account_profile behaved identically.
+ *
+ * Emission is deliberately conditional on the row having just been INSERTED. This hook also
+ * runs on resume/compaction, where the upsert is a heartbeat UPDATE; emitting there would
+ * turn SESSION_CREATED into "session touched" and destroy the signal we are restoring.
+ * created_at is written once by the DB at insert and never moves on update, so
+ * (created_at ~= now) is the discriminator.
+ *
+ * Telemetry must never break session start, so every failure here is swallowed — matching
+ * the existing silent-fail convention in lib/session-manager.mjs.
+ */
+const NEW_ROW_WINDOW_MS = 10_000;
+
+async function emitSessionCreated(supabase, { sessionId, payload, now, upserted }) {
+  try {
+    const createdAtMs = Date.parse(upserted && upserted.created_at ? upserted.created_at : '');
+    // Fail CLOSED: if created_at is missing or unparseable we cannot show this row is new,
+    // so we stay silent rather than emit a SESSION_CREATED that might be a heartbeat.
+    if (!Number.isFinite(createdAtMs)) return false;
+    if (Math.abs(Date.parse(now) - createdAtMs) > NEW_ROW_WINDOW_MS) return false;
+
+    await supabase.rpc('log_session_event', {
+      p_event_type: 'SESSION_CREATED',
+      p_session_id: sessionId,
+      p_machine_id: payload.hostname || null,
+      p_terminal_id: payload.tty || null,
+      p_pid: process.pid,
+      p_metadata: {
+        codebase: payload.codebase,
+        hostname: payload.hostname,
+        source: 'session-register-hook'
+      }
+    });
+    return true;
+  } catch {
+    return false; // telemetry — never abort SessionStart
+  }
+}
+
 async function main() {
   let supabase;
   try {
@@ -117,15 +166,21 @@ async function main() {
     heartbeat_at: now
   });
 
-  const { error } = await supabase
+  // QF-20260725-480: ask for created_at back so we can tell an INSERT from a heartbeat
+  // UPDATE. The upsert itself cannot tell us which happened, and that distinction is the
+  // whole fix — emitting unconditionally would fire SESSION_CREATED on every hook run.
+  const { data: upserted, error } = await supabase
     .from('claude_sessions')
     .upsert(payload, {
       onConflict: 'session_id',
       ignoreDuplicates: false
-    });
+    })
+    .select('created_at')
+    .maybeSingle();
 
   if (!error) {
     console.log(`session-register: registered ${sessionId.slice(0, 12)}...`);
+    await emitSessionCreated(supabase, { sessionId, payload, now, upserted });
   } else {
     process.stderr.write(`[session-register] upsert.failed session=${sessionId.slice(0, 12)} error=${error.message}\n`);
   }
@@ -251,4 +306,4 @@ async function stampSpawnCorrelation(supabase, sessionId, correlation) {
   }
 }
 
-module.exports = { getCurrentSessionId, main, stampSpawnCorrelation };
+module.exports = { getCurrentSessionId, main, stampSpawnCorrelation, emitSessionCreated };
