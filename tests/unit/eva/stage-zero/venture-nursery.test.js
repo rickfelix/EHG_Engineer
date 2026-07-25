@@ -18,6 +18,7 @@ import {
   reactivateVenture,
   recordSynthesisFeedback,
   checkNurseryTriggers,
+  applyPendingNurseryPredicate,
   getNurseryHealth,
   toNurseryMaturityLevel,
   toNurserySourceType,
@@ -55,7 +56,7 @@ const LIVE_COLUMNS = new Set([
 
 /** Capturing mock: records insert/update payloads + select cols; FIFO list/single data. */
 function captureSb({ selectData = [], singleData = undefined, insertResult = undefined } = {}) {
-  const captured = { inserts: [], updates: [], selects: [] };
+  const captured = { inserts: [], updates: [], selects: [], ors: [], orders: [], filters: [] };
   const supabase = { from: (table) => {
     const state = { table, filters: [] };
     const c = {
@@ -63,8 +64,11 @@ function captureSb({ selectData = [], singleData = undefined, insertResult = und
       update: (payload) => { captured.updates.push({ table, payload, filters: state.filters }); return c; },
       select: (cols) => { captured.selects.push({ table, cols }); return c; },
       eq: (col, v) => { state.filters.push(['eq', col, v]); return c; },
-      is: (col, v) => { state.filters.push(['is', col, v]); return c; },
-      order: () => c,
+      is: (col, v) => { state.filters.push(['is', col, v]); captured.filters.push(['is', col, v]); return c; },
+      // SD-EHG-IDEATION-PIPELINE-SEAMS-001 FR-1: the eligibility filter moved from JS
+      // into the QUERY, so the mock must record .or() or the predicate is untestable.
+      or: (expr) => { captured.ors.push(expr); return c; },
+      order: (col, opts) => { captured.orders.push([col, opts]); return c; },
       limit: () => c,
       // fetch-all-paginated (FR-6) awaits .range() as the paginated terminal.
       range: () => Promise.resolve({ data: selectData, error: null }),
@@ -326,20 +330,81 @@ describe('checkNurseryTriggers (FR-2: next_evaluation_at + promoted_to_venture_i
     expect(await checkNurseryTriggers({ supabase, logger: silentLogger })).toEqual([]);
   });
 
-  test('returns items whose next_evaluation_at has passed; live columns only', async () => {
+  // SD-EHG-IDEATION-PIPELINE-SEAMS-001 FR-1. Eligibility filtering moved from JS into
+  // the QUERY, so these assert the PREDICATE rather than post-fetch filtering. That is
+  // deliberate and it is the honest unit-level claim: a mock cannot evaluate SQL, so a
+  // test that fed it two rows and expected one back would only be re-testing the mock.
+  // Whether the database actually returns the right rows is TS-1, an integration test.
+  test('admits NULL next_evaluation_at — the "empty selection forever" regression guard', async () => {
+    const { supabase, captured } = captureSb({ selectData: [] });
+    await checkNurseryTriggers({ supabase, logger: silentLogger });
+    const or = captured.ors.join(' ');
+    // The old code filtered `nextReview && nextReview <= now` in JS. That `&&` excluded
+    // NULL, and all 16 live rows are NULL, so it returned empty PERMANENTLY.
+    expect(or).toContain('next_evaluation_at.is.null');
+    expect(or).toContain('next_evaluation_at.lte.');
+    expect(captured.filters).toContainEqual(['is', 'promoted_to_venture_id', null]);
+  });
+
+  test('orders score-first with a STABLE tiebreak — five live rows tie at 90', async () => {
+    const { supabase, captured } = captureSb({ selectData: [] });
+    await checkNurseryTriggers({ supabase, logger: silentLogger });
+    const cols = captured.orders.map(([c]) => c);
+    expect(cols[0]).toBe('current_score');
+    expect(captured.orders[0][1]).toMatchObject({ ascending: false });
+    // Score alone is non-deterministic across the five 90s; created_at then id fixes it.
+    expect(cols).toEqual(['current_score', 'created_at', 'id']);
+  });
+
+  test('distinguishes never_scheduled from scheduled_review, and selects live columns only', async () => {
     const pastDate = new Date(Date.now() - 86400000).toISOString();
-    const futureDate = new Date(Date.now() + 86400000 * 30).toISOString();
     const { supabase, captured } = captureSb({ selectData: [
-      { id: 'n1', name: 'Ready', next_evaluation_at: pastDate, trigger_conditions: ['market_shift'] },
-      { id: 'n2', name: 'Not Ready', next_evaluation_at: futureDate, trigger_conditions: [] },
+      { id: 'n1', name: 'Scheduled', next_evaluation_at: pastDate, current_score: 90, trigger_conditions: ['market_shift'] },
+      { id: 'n2', name: 'Never scheduled', next_evaluation_at: null, current_score: 74, trigger_conditions: [] },
     ] });
     const result = await checkNurseryTriggers({ supabase, logger: silentLogger });
-    expect(result).toHaveLength(1);
+    expect(result).toHaveLength(2);
     expect(result[0]).toMatchObject({ id: 'n1', reason: 'scheduled_review', trigger_conditions: ['market_shift'] });
+    // A NULL schedule is not a scheduled review — it was never scheduled at all, and
+    // keeping the two causes separable is what made the original defect diagnosable.
+    expect(result[1]).toMatchObject({ id: 'n2', reason: 'never_scheduled', next_review_date: null });
     const sel = captured.selects.find((s) => s.table === 'venture_nursery');
     expect(sel.cols).toContain('next_evaluation_at');
+    expect(sel.cols).toContain('current_score');
     expect(sel.cols).not.toContain('metadata');
     expect(sel.cols).not.toContain('status');
+  });
+
+  test('the injected clock reaches the predicate, so eligibility is testable without waiting', async () => {
+    const { supabase, captured } = captureSb({ selectData: [] });
+    await checkNurseryTriggers({ supabase, logger: silentLogger, now: new Date('2030-01-01T00:00:00.000Z') });
+    expect(captured.ors.join(' ')).toContain('next_evaluation_at.lte.2030-01-01T00:00:00.000Z');
+  });
+});
+
+describe('applyPendingNurseryPredicate (FR-1: the single authoritative selector)', () => {
+  function fakeQuery(sink) {
+    const q = {
+      is: (c, v) => { sink.filters.push(['is', c, v]); return q; },
+      or: (e) => { sink.ors.push(e); return q; },
+      order: (c, o) => { sink.orders.push([c, o]); return q; },
+    };
+    return q;
+  }
+
+  test('excludes promoted rows, admits NULL schedules, and orders deterministically', () => {
+    const sink = { filters: [], ors: [], orders: [] };
+    applyPendingNurseryPredicate(fakeQuery(sink), { now: new Date('2026-07-25T00:00:00.000Z') });
+    expect(sink.filters).toContainEqual(['is', 'promoted_to_venture_id', null]);
+    expect(sink.ors[0]).toBe('next_evaluation_at.is.null,next_evaluation_at.lte.2026-07-25T00:00:00.000Z');
+    expect(sink.orders.map(([c]) => c)).toEqual(['current_score', 'created_at', 'id']);
+    expect(sink.orders[0][1]).toEqual({ ascending: false, nullsFirst: false });
+  });
+
+  test('returns the query so it composes with .limit() and with fetchAllPaginated', () => {
+    const sink = { filters: [], ors: [], orders: [] };
+    const q = fakeQuery(sink);
+    expect(applyPendingNurseryPredicate(q, {})).toBe(q);
   });
 });
 
@@ -390,10 +455,30 @@ describe('source pins (FR-2: phantom columns gone from BOTH files)', () => {
   it("discovery-mode's nursery_reeval SELECT is live-schema and the KNOWN-BROKEN pragma is GONE", () => {
     const start = discoverySrc.indexOf('async function runNurseryReeval');
     const reevalBlock = discoverySrc.slice(start, start + 3500);
-    expect(reevalBlock).toContain("is('promoted_to_venture_id', null)");
-    expect(reevalBlock).toContain('source_ref');
+    // SD-EHG-IDEATION-PIPELINE-SEAMS-001 FR-1: the promoted-row filter moved OUT of this
+    // block and into applyPendingNurseryPredicate. Pinning the shared selector is a
+    // STRONGER assertion than the old inline-literal pin — it fails if this reader ever
+    // re-grows its own private predicate, which is the drift that caused the three
+    // disagreeing selectors in the first place.
+    expect(reevalBlock).toContain('applyPendingNurseryPredicate');
+    expect(reevalBlock).toContain('NURSERY_PENDING_COLUMNS');
+    expect(reevalBlock).not.toContain("is('promoted_to_venture_id', null)");
     expect(reevalBlock).not.toContain('schema-lint-disable-line');
     expect(reevalBlock).not.toContain('original_score');
     expect(reevalBlock).not.toContain("eq('status'");
+  });
+
+  it('the authoritative predicate lives in exactly ONE place', () => {
+    // The whole point of FR-1. If a second module grows its own eligibility filter, the
+    // "empty selection forever" class returns. NURSERY_PENDING_COLUMNS must carry
+    // current_score, since score-first ordering is what surfaces the 90s.
+    expect(nurserySrc).toContain('export function applyPendingNurseryPredicate');
+    expect(nurserySrc).toMatch(/next_evaluation_at\.is\.null/);
+    expect(nurserySrc).toContain('current_score');
+    // The JS-side truthiness guard that excluded NULL must not come back. Comments are
+    // stripped first: the header deliberately QUOTES the old broken expression to explain
+    // the defect, and a naive source scan would flag that documentation as the bug itself.
+    const codeOnly = nurserySrc.replace(/\/\*[\s\S]*?\*\//g, '').replace(/^\s*\/\/.*$/gm, '');
+    expect(codeOnly).not.toMatch(/nextReview\s*&&/);
   });
 });
