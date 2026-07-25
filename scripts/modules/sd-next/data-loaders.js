@@ -429,14 +429,33 @@ export async function loadOpenQuickFixes(supabase) {
     // only checks the line containing the .select( match itself (RCA'd during
     // this SD's own round-2 adversarial review after the pragma-on-its-own-line
     // form above silently failed to suppress the lint).
-    const { data, error } = await supabase
+    //
+    // QF-20260724-598: because factory_lane is not applied yet, PostgREST fails the
+    // WHOLE multi-column select with 42703 (data:null) rather than degrading per-row --
+    // so this loader returned [] on every run and sd:next showed ZERO open QFs
+    // fleet-wide (Track C display AND the AUTO_PROCEED_ACTION:qf_start recommendation
+    // path both went dark, so idle workers concluded the belt was empty). This is the
+    // identical outage QF-20260720-763 fixed in scripts/worker-checkin.cjs
+    // selfClaimQuickFix(); data-loaders.js was never given the twin fallback. Retry
+    // once without factory_lane on exactly that error code -- qf.factory_lane then
+    // comes back undefined, which the `qf.factory_lane === true` check in
+    // display/quick-fixes.js already treats identically to the column's own DEFAULT
+    // false, so behavior is unchanged once the column lands and the retry simply stops
+    // firing (self-heals, no follow-up code change).
+    const QF_DISPLAY_COLUMNS = 'id, title, type, severity, status, estimated_loc, description, created_at, target_application, claiming_session_id, pr_url, commit_sha, not_before, factory_lane, owner, release_condition'; // schema-lint-disable-line: factory_lane staged, see comment above
+    const baseQuery = (columns) => supabase
       .from('quick_fixes')
-      .select('id, title, type, severity, status, estimated_loc, description, created_at, target_application, claiming_session_id, pr_url, commit_sha, not_before, factory_lane, owner, release_condition') // schema-lint-disable-line: factory_lane staged, see comment above
+      .select(columns)
       .in('status', ['open', 'in_progress'])
       .is('pr_url', null)
       .is('commit_sha', null)
       .order('created_at', { ascending: true })
       .limit(50);
+
+    let { data, error } = await baseQuery(QF_DISPLAY_COLUMNS);
+    if (error && error.code === '42703') {
+      ({ data, error } = await baseQuery(QF_DISPLAY_COLUMNS.replace(', factory_lane', '')));
+    }
 
     if (error) {
       logQueryFailure('loadOpenQuickFixes', error, { table: 'quick_fixes' });
