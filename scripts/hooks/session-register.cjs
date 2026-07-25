@@ -104,21 +104,37 @@ function getTTY() {
  * Emission is deliberately conditional on the row having just been INSERTED. This hook also
  * runs on resume/compaction, where the upsert is a heartbeat UPDATE; emitting there would
  * turn SESSION_CREATED into "session touched" and destroy the signal we are restoring.
- * created_at is written once by the DB at insert and never moves on update, so
- * (created_at ~= now) is the discriminator.
  *
- * Telemetry must never break session start, so every failure here is swallowed — matching
- * the existing silent-fail convention in lib/session-manager.mjs.
+ * HOW NEWNESS IS DETERMINED, and why it is not a timestamp comparison. The first version of
+ * this fix asked "is created_at within N seconds of now?". That is a TIME heuristic for a
+ * question that has nothing to do with time, and it has a window: end-to-end acceptance
+ * (run the real hook twice for one session) showed the second run emitting a SECOND
+ * SESSION_CREATED, because a resume landing inside the window still looked new. The unit
+ * tests missed it — they seeded a months-old created_at, which clears any window.
+ *
+ * So newness is now settled BEFORE the write: probe whether the row already exists, and emit
+ * only when it did not. No window, no clock skew, and re-running the hook for an existing
+ * session is silent no matter how soon it happens.
+ *
+ * Fail CLOSED: if the probe itself errored we cannot show the row is new, so we stay silent
+ * rather than risk relabelling a heartbeat as a creation. Telemetry must never break session
+ * start, so every failure here is swallowed — matching lib/session-manager.mjs.
  */
-const NEW_ROW_WINDOW_MS = 10_000;
-
-async function emitSessionCreated(supabase, { sessionId, payload, now, upserted }) {
+async function sessionRowExisted(supabase, sessionId) {
   try {
-    const createdAtMs = Date.parse(upserted && upserted.created_at ? upserted.created_at : '');
-    // Fail CLOSED: if created_at is missing or unparseable we cannot show this row is new,
-    // so we stay silent rather than emit a SESSION_CREATED that might be a heartbeat.
-    if (!Number.isFinite(createdAtMs)) return false;
-    if (Math.abs(Date.parse(now) - createdAtMs) > NEW_ROW_WINDOW_MS) return false;
+    const { data, error } = await supabase
+      .from('claude_sessions').select('session_id').eq('session_id', sessionId).maybeSingle();
+    if (error) return { probed: false, existed: true };
+    return { probed: true, existed: !!data };
+  } catch {
+    return { probed: false, existed: true };
+  }
+}
+
+async function emitSessionCreated(supabase, { sessionId, payload, prior }) {
+  try {
+    // Unknown or pre-existing both mean "do not emit". Only a confirmed absence qualifies.
+    if (!prior || prior.probed !== true || prior.existed !== false) return false;
 
     await supabase.rpc('log_session_event', {
       p_event_type: 'SESSION_CREATED',
@@ -166,21 +182,22 @@ async function main() {
     heartbeat_at: now
   });
 
-  // QF-20260725-480: ask for created_at back so we can tell an INSERT from a heartbeat
-  // UPDATE. The upsert itself cannot tell us which happened, and that distinction is the
-  // whole fix — emitting unconditionally would fire SESSION_CREATED on every hook run.
-  const { data: upserted, error } = await supabase
+  // QF-20260725-480: settle INSERT-vs-heartbeat-UPDATE BEFORE the upsert, because the upsert
+  // itself cannot report which one it did, and after it runs the row exists either way. That
+  // distinction is the whole fix — emitting unconditionally would fire SESSION_CREATED on
+  // every hook run, including every resume and compaction.
+  const prior = await sessionRowExisted(supabase, sessionId);
+
+  const { error } = await supabase
     .from('claude_sessions')
     .upsert(payload, {
       onConflict: 'session_id',
       ignoreDuplicates: false
-    })
-    .select('created_at')
-    .maybeSingle();
+    });
 
   if (!error) {
     console.log(`session-register: registered ${sessionId.slice(0, 12)}...`);
-    await emitSessionCreated(supabase, { sessionId, payload, now, upserted });
+    await emitSessionCreated(supabase, { sessionId, payload, prior });
   } else {
     process.stderr.write(`[session-register] upsert.failed session=${sessionId.slice(0, 12)} error=${error.message}\n`);
   }
