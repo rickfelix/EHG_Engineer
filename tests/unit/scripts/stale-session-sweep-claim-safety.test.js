@@ -162,3 +162,51 @@ describe('FR-1/FR-2 — no bare re-throw in the reset gate; reset helper is wrap
     expect(fnBody).toMatch(/WARN_RESET_SKIPPED/);
   });
 });
+
+/**
+ * SD-LEO-INFRA-PARKED-WORKER-CLAIM-LAPSE-001 (TS-8, TS-9) — the orphaned-claim branch used to
+ * release a claim on ABSENCE ALONE, with no liveness check and no check that the absence was
+ * real. Two composing defects:
+ *   TS-9: the SD status lookup discarded `error`. A transient failure yields data=null, an EMPTY
+ *         sdStatusMap, and therefore EVERY claimed session classified orphaned and released in
+ *         one pass. Emptiness is not absence.
+ *   TS-8: even with a correct lookup, the branch never consulted liveness, so a LIVE parked
+ *         worker (heartbeating, PID-alive, silence-armed) lost its claim. shouldHoldClaim was
+ *         imported at the top of the file but only ever used by the conflict-eviction path.
+ * The orphaned-claim filter is inline inside a long non-exported function, so these are
+ * source-invariant tests per this file's established convention — they cannot ship green on
+ * dead code because they assert the guard exists AT the release site.
+ */
+describe('SD-LEO-INFRA-PARKED-WORKER-CLAIM-LAPSE-001: orphaned-claim release is guarded', () => {
+  it('TS-9: the SD status lookup captures `error` instead of discarding it', () => {
+    expect(SOURCE).toMatch(/const \{ data: claimedSdStatus, error: claimedSdStatusError \} = await supabase/);
+  });
+
+  it('TS-9: a failed/absent SD lookup is treated as untrustworthy, not as "no rows"', () => {
+    expect(SOURCE).toMatch(/const sdLookupTrustworthy = !claimedSdStatusError && Array\.isArray\(claimedSdStatus\)/);
+  });
+
+  it('TS-9: orphaned-claim release is SKIPPED entirely when the lookup is untrustworthy (fail-closed)', () => {
+    expect(SOURCE).toMatch(/const orphanedClaims = \(sdLookupTrustworthy \? classified : \[\]\)/);
+  });
+
+  it('TS-8: the orphaned-claim branch consults shouldHoldClaim before releasing', () => {
+    const branch = SOURCE.slice(SOURCE.indexOf('const orphanedClaims ='), SOURCE.indexOf('const orphanedClaims =') + 900);
+    expect(branch).toMatch(/shouldHoldClaim\(s, \{ aliveCcPids: orphanAliveCcPids \}\)/);
+    expect(branch).toMatch(/if \(guard\.hold\)/);
+  });
+
+  it('TS-8: the guard receives a REAL PID set, not undefined (aliveCcPids is out of scope here)', () => {
+    // Passing undefined would silently degrade shouldHoldClaim to heartbeat-only and lose the
+    // PID-aliveness signal that distinguishes a parked-but-live worker from a dead one.
+    expect(SOURCE).toMatch(/orphanAliveCcPids = new Set\(\(detectIdentityCollisions\(\)\.aliveMarkers \|\| \[\]\)\.map/);
+  });
+
+  it('holding a live claim is logged, so a suppressed release is never silent', () => {
+    expect(SOURCE).toMatch(/HOLDING orphaned-claim release for/);
+  });
+
+  it('shouldHoldClaim is imported before the orphaned-claim site uses it', () => {
+    expect(SOURCE.indexOf("require('../lib/fleet/claim-release-guard.cjs')")).toBeLessThan(SOURCE.indexOf('const orphanedClaims ='));
+  });
+});

@@ -1216,12 +1216,25 @@ async function runQaFixtureScan(ctx) {
 
   // 3b. QA — detect sessions working on completed SDs
   const claimedSdKeys = [...new Set(classified.map(s => s.sd_key).filter(Boolean))];
-  const { data: claimedSdStatus } = await supabase
+  const { data: claimedSdStatus, error: claimedSdStatusError } = await supabase
     .from('strategic_directives_v2')
     // FR-3 (SD-LEO-FIX-STALE-SESSION-SWEEP-001): claiming_session_id lets the cross-signal guard
     // distinguish a genuinely-held SD from one whose claim was already cleared (zombie-tick case).
     .select('sd_key, status, completion_date, claiming_session_id')
     .in('sd_key', claimedSdKeys);
+
+  // SD-LEO-INFRA-PARKED-WORKER-CLAIM-LAPSE-001 FR-1/TS-9: this lookup used to discard `error`.
+  // orphanedClaims below is `!sdStatusMap[s.sd_key]` — ABSENCE means orphaned. So a TRANSIENT
+  // query failure yields data=null, an EMPTY map, and therefore EVERY claimed session classified
+  // as orphaned and released in one pass — against LIVE, heartbeating workers, because that
+  // branch never consults liveness. That is intermittent, self-recovering and liveness-blind:
+  // the exact shape of the four observed lapses. Emptiness is not absence; an unchecked error
+  // read as "no rows" is the same defect class that made an unrelated open-QF count read 0.
+  // FAIL CLOSED: if we cannot prove an SD is gone, we do not sweep anything this tick.
+  const sdLookupTrustworthy = !claimedSdStatusError && Array.isArray(claimedSdStatus);
+  if (!sdLookupTrustworthy) {
+    console.error(`[sweep] SD status lookup FAILED (${claimedSdStatusError?.message || 'no data'}) — skipping orphaned-claim release this tick (fail-closed, SD-LEO-INFRA-PARKED-WORKER-CLAIM-LAPSE-001)`);
+  }
 
   const sdStatusMap = {};
   (claimedSdStatus || []).forEach(sd => { sdStatusMap[sd.sd_key] = sd; });
@@ -1310,7 +1323,28 @@ async function runQaFixtureScan(ctx) {
     const ageSec = qfClaimAgeBySession.has(s.session_id) ? qfClaimAgeBySession.get(s.session_id) : Infinity;
     return ageSec < QF_CLAIM_GRACE_SECONDS;
   };
-  const orphanedClaims = classified.filter(s => !sdStatusMap[s.sd_key] && !isHeldQfClaim(s));
+  // SD-LEO-INFRA-PARKED-WORKER-CLAIM-LAPSE-001 FR-2: two guards this branch never had.
+  // (1) sdLookupTrustworthy — never infer "orphaned" from a failed lookup (see above).
+  // (2) shouldHoldClaim — this branch released on ABSENCE alone, with no liveness check at all,
+  //     which is why a live parked worker lost its claim while heartbeating. shouldHoldClaim was
+  //     already imported at the top of this file but consulted only by the conflict-eviction path.
+  // aliveCcPids is built far below (~line 1909) inside a different function, so it is NOT in
+  // scope here — computing it locally from the same source rather than passing undefined, which
+  // would silently degrade shouldHoldClaim to heartbeat-only and lose exactly the PID-aliveness
+  // signal that distinguishes a parked-but-live worker from a dead one.
+  let orphanAliveCcPids = null;
+  try {
+    orphanAliveCcPids = new Set((detectIdentityCollisions().aliveMarkers || []).map(m => String(m.pid)));
+  } catch { orphanAliveCcPids = null; } // fail-soft: guard still applies heartbeat/source-side signals
+  const orphanedClaims = (sdLookupTrustworthy ? classified : []).filter(s => {
+    if (sdStatusMap[s.sd_key] || isHeldQfClaim(s)) return false;
+    const guard = shouldHoldClaim(s, { aliveCcPids: orphanAliveCcPids });
+    if (guard.hold) {
+      console.error(`[sweep] HOLDING orphaned-claim release for ${s.session_id?.slice(0, 8)} on ${s.sd_key}: ${guard.reason} (live holder, SD-LEO-INFRA-PARKED-WORKER-CLAIM-LAPSE-001 FR-2)`);
+      return false;
+    }
+    return true;
+  });
   for (const s of orphanedClaims) {
     const targetStatus = s.status === 'ACTIVE' ? 'idle' : 'released';
     // SD-LEO-INFRA-SESSION-LIFECYCLE-CLEANUP-001 (FR-2): Clear dirty fields on claim release
