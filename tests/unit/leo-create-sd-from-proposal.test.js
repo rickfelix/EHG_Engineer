@@ -226,6 +226,36 @@ describe('mapProposalToCreateArgs (pure field mapping)', () => {
     // a different/foreign value is also not coerced to 'adam'
     expect(mapProposalToCreateArgs(normalized, validProposal({ sourced_by: 'drain-intake' }), 'p.json').metadata.sourced_by).toBeUndefined();
   });
+
+  // QF-20260725-213: proposal.description was never read, so an authored spec was silently
+  // replaced downstream by title-derived boilerplate, and four authored content arrays were
+  // dropped outright. Live case: a 6.5KB sink-conformance spec became a 148-char description.
+  it('QF-213: authored description is mapped and LEADS scope/rationale', () => {
+    const p = validProposal({ description: 'AUTHORED SPEC BODY' });
+    expect(mapProposalToCreateArgs(normalized, p, 'p.json').description).toBe('AUTHORED SPEC BODY');
+    // precedence: no description → scope, NOT the title (title-derived boilerplate was the defect)
+    expect(mapProposalToCreateArgs(normalized, validProposal(), 'p.json').description).toBe('DOES: x. DOES NOT: y.');
+  });
+
+  it('QF-213: key_changes/success_metrics/strategic_objectives/smoke_test_steps are mapped', () => {
+    const p = validProposal({
+      key_changes: ['kc'], success_metrics: ['sm'], strategic_objectives: ['so'], smoke_test_steps: ['st'],
+    });
+    const args = mapProposalToCreateArgs(normalized, p, 'p.json');
+    expect(args.key_changes).toEqual(['kc']);
+    expect(args.success_metrics).toEqual(['sm']);
+    expect(args.strategic_objectives).toEqual(['so']);
+    expect(args.smoke_test_steps).toEqual(['st']);
+    // non-array authored values are not coerced into a bogus one-element array
+    expect(mapProposalToCreateArgs(normalized, validProposal({ key_changes: 'oops' }), 'p.json').key_changes).toBeNull();
+  });
+
+  it('QF-213: an unmapped top-level key FAILS LOUD instead of being silently dropped', () => {
+    expect(() => mapProposalToCreateArgs(normalized, validProposal({ authored_but_unread: 'x' }), 'p.json'))
+      .toThrow(/DROP unmapped top-level key\(s\): authored_but_unread/);
+    // premise pin: a clean proposal must NOT throw, so the assertion above cannot pass for the wrong reason
+    expect(() => mapProposalToCreateArgs(normalized, validProposal(), 'p.json')).not.toThrow();
+  });
 });
 
 describe('createFromProposal (dry-run + idempotency, injected deps, zero DB/FS)', () => {
