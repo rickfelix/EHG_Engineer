@@ -208,3 +208,31 @@ describe('runRebootRespawn (QF-20260724-070): durable bind-time audit row', () =
     expect(writeLifecycleEventFn).not.toHaveBeenCalled();
   });
 });
+
+/**
+ * QF-20260724-290 — the keepalive prompt must survive BOTH hops (runner -> buildLiveSpawnInvocation
+ * -> buildSessionLaunch) and land in the spawned child's env. Asserted on the env the REAL spawnFn
+ * seam receives, not on an intermediate call arg: a prompt that is passed but silently discarded one
+ * hop later is exactly the ghost this fixes, and an arg-level assertion would not have caught it.
+ */
+describe('runRebootRespawn keepalive prompt plumbing (QF-20260724-290)', () => {
+  it('forwards the canonical FLEET_WORKER_STARTUP_PROMPT into the respawned child env', async () => {
+    const { FLEET_WORKER_STARTUP_PROMPT } = await import('../../../lib/coordinator/coordination-events.cjs');
+    let childEnv = null;
+    await runRebootRespawn({
+      supabase: null, loadFn: async () => [SLOTS[0]], logFn: async () => ({ ok: true }), live: true,
+      spawnFn: (_p, _a, env) => { childEnv = env; return { pid: 0 }; },
+    });
+    expect(childEnv.FLEET_WORKER_STARTUP_PROMPT).toBe(FLEET_WORKER_STARTUP_PROMPT);
+    expect(childEnv.FLEET_WORKER_STARTUP_PROMPT.length).toBeGreaterThan(0);
+  });
+
+  it('honors an explicit startupPrompt:null opt-out (env var left unset)', async () => {
+    let childEnv = null;
+    await runRebootRespawn({
+      supabase: null, loadFn: async () => [SLOTS[0]], logFn: async () => ({ ok: true }), live: true,
+      startupPrompt: null, spawnFn: (_p, _a, env) => { childEnv = env; return { pid: 0 }; },
+    });
+    expect(childEnv.FLEET_WORKER_STARTUP_PROMPT).toBeUndefined();
+  });
+});
