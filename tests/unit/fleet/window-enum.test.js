@@ -269,8 +269,14 @@ describe('FR-7 captureNewWindowHandle — bounded budget, asserted by call count
     // and orphaned unstamped sessions. The new path preserves it structurally (enumerateWindows
     // swallows and returns [], selectNewWindowHandle is pure and total), and this proves it.
     const execFn = vi.fn().mockRejectedValue(new Error('powershell is not recognized'));
-    await expect(captureNewWindowHandle([], { execFn, sleepFn: vi.fn() })).resolves.toMatchObject({
+    const sleepFn = vi.fn();
+    await expect(captureNewWindowHandle([], { execFn, sleepFn })).resolves.toMatchObject({
       handle: null, handleCaptureFailed: true,
     });
+    // THE RETRY-BUDGET HALF, restored after a TESTING review found it lost in the FR-7 deletion. The
+    // never-throws assertion alone is insufficient: enumerateWindows swallows a rejection into [], so a
+    // reject is indistinguishable from "no windows yet" and a change that BROKE the loop on error would
+    // keep the assertion above green while silently spending one attempt instead of the full budget.
+    expect(execFn).toHaveBeenCalledTimes(CAPTURE_POLL_MAX_ATTEMPTS);
   });
 });
