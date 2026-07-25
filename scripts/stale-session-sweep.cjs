@@ -1242,9 +1242,41 @@ async function runQaFixtureScan(ctx) {
   // QF-20260525-211 (B2): include 'cancelled', not just 'completed'. Cancelled SDs with a
   // live claiming session previously skipped this bilateral release and fell through to the
   // SD-only clear (FIX #2 below), leaving the session's stale sd_key to feed CLAIM_FIX churn.
+  // SD-LEO-INFRA-PARKED-WORKER-CLAIM-LAPSE-001 FR-2: this is the SECOND of the two sweep seams the
+  // PRD names (the other is orphanedClaims below). Both write the same fingerprint the observed
+  // lapse carried — { sd_key: null, status: ACTIVE ? 'idle' : 'released' } — and both were
+  // unguarded, even though shouldHoldClaim was already imported at line 370 and consulted only for
+  // conflict-eviction at ~:2521.
+  //
+  // The two seams differ in RISK, which is worth recording because it explains why only one of them
+  // produced the incident: orphanedClaims releases on ABSENCE from sdStatusMap, so the root-cause
+  // discarded-error (which emptied that map) made every claimed session look orphaned. THIS seam
+  // requires a POSITIVE terminal-status match, so an empty/failed lookup makes it release NOTHING —
+  // it already fails safe against the root cause. It is guarded anyway because the PRD's invariant
+  // is about the HOLDER, not about which query shape happened to be dangerous: a live, heartbeating,
+  // PID-alive holder inside an armed-silence window must not lose its claim to an automated path.
+  //
+  // Holding here is cheap: the SD is terminal, so it is not dispatchable regardless, and the sweep
+  // re-evaluates every tick — the release lands as soon as the holder is genuinely gone.
+  // Computed ONCE and shared with the orphanedClaims guard below — detectIdentityCollisions() scans
+  // host-local marker files, so calling it per-seam would double that work every tick. aliveCcPids
+  // is built far below (~line 1909) inside a DIFFERENT function and is not in scope here; passing
+  // undefined would silently degrade shouldHoldClaim to heartbeat-only and lose exactly the
+  // PID-aliveness signal that distinguishes a parked-but-live worker from a dead one.
+  let sweepAliveCcPids = null;
+  try {
+    sweepAliveCcPids = new Set((detectIdentityCollisions().aliveMarkers || []).map(m => String(m.pid)));
+  } catch { sweepAliveCcPids = null; } // fail-soft: guard still applies heartbeat/source-side signals
+
   const workingOnCompleted = classified.filter(s => {
     const sd = sdStatusMap[s.sd_key];
-    return sd && (sd.status === 'completed' || sd.status === 'cancelled');
+    if (!sd || (sd.status !== 'completed' && sd.status !== 'cancelled')) return false;
+    const guard = shouldHoldClaim(s, { aliveCcPids: sweepAliveCcPids });
+    if (guard.hold) {
+      console.error(`[sweep] HOLDING completed-SD release for ${String(s.session_id).slice(0, 8)} on ${s.sd_key} (${guard.reason}) — live holder, SD is terminal so nothing is blocked.`);
+      return false;
+    }
+    return true;
   });
 
   for (const s of workingOnCompleted) {
@@ -1328,14 +1360,9 @@ async function runQaFixtureScan(ctx) {
   // (2) shouldHoldClaim — this branch released on ABSENCE alone, with no liveness check at all,
   //     which is why a live parked worker lost its claim while heartbeating. shouldHoldClaim was
   //     already imported at the top of this file but consulted only by the conflict-eviction path.
-  // aliveCcPids is built far below (~line 1909) inside a different function, so it is NOT in
-  // scope here — computing it locally from the same source rather than passing undefined, which
-  // would silently degrade shouldHoldClaim to heartbeat-only and lose exactly the PID-aliveness
-  // signal that distinguishes a parked-but-live worker from a dead one.
-  let orphanAliveCcPids = null;
-  try {
-    orphanAliveCcPids = new Set((detectIdentityCollisions().aliveMarkers || []).map(m => String(m.pid)));
-  } catch { orphanAliveCcPids = null; } // fail-soft: guard still applies heartbeat/source-side signals
+  // Uses the shared sweepAliveCcPids computed with the workingOnCompleted guard above (same tick,
+  // same marker scan) rather than re-scanning the host-local markers a second time.
+  const orphanAliveCcPids = sweepAliveCcPids;
   const orphanedClaims = (sdLookupTrustworthy ? classified : []).filter(s => {
     if (sdStatusMap[s.sd_key] || isHeldQfClaim(s)) return false;
     const guard = shouldHoldClaim(s, { aliveCcPids: orphanAliveCcPids });

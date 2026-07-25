@@ -199,7 +199,40 @@ describe('SD-LEO-INFRA-PARKED-WORKER-CLAIM-LAPSE-001: orphaned-claim release is 
   it('TS-8: the guard receives a REAL PID set, not undefined (aliveCcPids is out of scope here)', () => {
     // Passing undefined would silently degrade shouldHoldClaim to heartbeat-only and lose the
     // PID-aliveness signal that distinguishes a parked-but-live worker from a dead one.
-    expect(SOURCE).toMatch(/orphanAliveCcPids = new Set\(\(detectIdentityCollisions\(\)\.aliveMarkers \|\| \[\]\)\.map/);
+    //
+    // Re-aimed (FR-2, 2nd pass): this pinned the exact assignment to the LOCAL name
+    // orphanAliveCcPids. When the second sweep seam (workingOnCompleted) was guarded, the marker
+    // scan was hoisted into a single shared `sweepAliveCcPids` so the host-local marker files are
+    // not scanned twice per tick — a correct change that broke the name-pinned form. The PROPERTY
+    // this test protects is that the PID set is really CONSTRUCTED from the marker source and
+    // really REACHES the guard; that is now asserted without naming the binding.
+    expect(SOURCE).toMatch(/new Set\(\(detectIdentityCollisions\(\)\.aliveMarkers \|\| \[\]\)\.map/);
+    // …and every shouldHoldClaim call in the release seams passes a named set, never undefined.
+    const calls = SOURCE.match(/shouldHoldClaim\([^)]*\{[^}]*\}\s*\)/g) || [];
+    expect(calls.length).toBeGreaterThanOrEqual(2); // workingOnCompleted + orphanedClaims
+    for (const c of calls) {
+      // Accept BOTH the explicit form ({ aliveCcPids: someSet }) and the ES6 shorthand
+      // ({ aliveCcPids }) used by the pre-existing conflict-eviction call — both pass a real
+      // binding. What must never appear is a literal undefined/null, which is the silent
+      // degradation to heartbeat-only that this test exists to prevent.
+      expect(c).toMatch(/aliveCcPids(\s*:\s*\w+)?\s*[,}]/);
+      expect(c).not.toMatch(/aliveCcPids\s*:\s*(undefined|null)/);
+    }
+  });
+
+  it('FR-2: BOTH named sweep seams consult shouldHoldClaim, not just the orphan branch', () => {
+    // The PRD names two sites: workingOnCompleted and orphanedClaims. Both write the same
+    // fingerprint the observed lapse carried, and guarding only one leaves the invariant
+    // ("a live holder never loses its claim to an automated path") undelivered at the other.
+    const wocIdx = SOURCE.indexOf('const workingOnCompleted =');
+    expect(wocIdx).toBeGreaterThan(0);
+    const wocEnd = SOURCE.indexOf('\n  });', wocIdx);
+    expect(wocEnd).toBeGreaterThan(wocIdx);
+    const woc = SOURCE.slice(wocIdx, wocEnd);
+    expect(woc).toMatch(/shouldHoldClaim\(/);
+    expect(woc).toMatch(/if \(guard\.hold\)/);
+    // The suppressed release must be observable, exactly as the orphan seam's is.
+    expect(woc).toMatch(/HOLDING completed-SD release/);
   });
 
   it('holding a live claim is logged, so a suppressed release is never silent', () => {

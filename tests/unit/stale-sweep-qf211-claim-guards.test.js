@@ -93,10 +93,22 @@ describe('SD-FDBK-INFRA-SHARED-FLEET-WORKER-001: CLAIM_FIX fixture-session guard
 
 describe('QF-20260525-211 (B2): workingOnCompleted covers cancelled', () => {
   it('workingOnCompleted filter matches completed OR cancelled', () => {
+    // SD-LEO-INFRA-PARKED-WORKER-CLAIM-LAPSE-001 FR-2: re-aimed. This pinned the positive form
+    //   sd.status === 'completed' || sd.status === 'cancelled'
+    // inside a 250-char window. The filter became an early-return BLOCK when the seam gained a
+    // shouldHoldClaim liveness guard (a live holder must not lose its claim to an automated path),
+    // which both inverted the comparison to a negative guard clause and pushed it past the window.
+    // The SEMANTIC this test protects — B2's fix that BOTH terminal statuses are swept, not just
+    // 'completed' — is unchanged, so it is asserted directly and bounded at the block's end.
     const idx = src.indexOf('const workingOnCompleted');
     expect(idx).toBeGreaterThan(0);
-    const block = src.slice(idx, idx + 250);
-    expect(block).toMatch(/sd\.status === ['"]completed['"] \|\| sd\.status === ['"]cancelled['"]/);
+    const end = src.indexOf('\n  });', idx);
+    expect(end).toBeGreaterThan(idx);
+    const block = src.slice(idx, end);
+    expect(block).toMatch(/['"]completed['"]/);
+    expect(block).toMatch(/['"]cancelled['"]/);
+    // Guard against a regression to completed-only, in either the positive or negative form.
+    expect(block).toMatch(/sd\.status (===|!==) ['"]cancelled['"]/);
   });
 
   it('release reason reflects cancellation (SWEEP_SD_CANCELLED) distinctly', () => {
