@@ -316,14 +316,30 @@ export async function surfaceInboxItems(sb) {
       if (k != null && ADAM_EXCLUDED_KINDS.includes(k)) return false;
       // SD-LEO-INFRA-ADAM-INBOUND-BACKLOG-WATCHDOG-001 FR-3 (narrowed per RCA, not deleted).
       //
-      // Suppression is sound ONLY for thread-ROOT rows. hasCorrelatedReply keys on
-      // `payload.correlation_id || id` (lib/coordinator/reply-correlation.cjs:30); for a row that
-      // is ITSELF a reply, correlation_id denotes the thread ROOT, so the equality match at :36
-      // admits ancestors and siblings — not only descendants. The guaranteed-present ancestor is
-      // Adam's own antecedent question, so ADAM'S QUESTION SUPPRESSED THE ANSWER TO ADAM'S
-      // QUESTION. Live 2026-07-25: 26 of 41 directive-class unacked inbound rows were suppressed,
-      // 26/26 of them non-root, each by an OLDER Adam-sent row in its own thread (witnessed:
-      // 4479197b<-05ee0769, a81f9948<-3ca3d677, c160ef08<-12139a29).
+      // Being a REPLY in a chain is not discharge of the ack obligation. (Stated narrowly on
+      // purpose: "participation in a chain is not discharge" over-generalizes beyond what is
+      // verified here — the reply case is exactly what this guard encodes.)
+      //
+      // hasCorrelatedReply keys on `payload.correlation_id || id`
+      // (lib/coordinator/reply-correlation.cjs:30) and matches by equality at :36, so it admits
+      // ancestors and siblings — not only descendants. The guaranteed-present ancestor is Adam's
+      // own antecedent question, so ADAM'S QUESTION SUPPRESSED THE ANSWER TO ADAM'S QUESTION.
+      // Live 2026-07-25: 26 of 41 directive-class unacked inbound rows suppressed, 26/26 non-root,
+      // each by an OLDER Adam-sent row in its own thread (witnessed: 4479197b<-05ee0769,
+      // a81f9948<-3ca3d677, c160ef08<-12139a29).
+      //
+      // RESIDUAL, recorded rather than implied away (db-expert, measured over all 3,885 rows):
+      // the predicate is weaker than "correlated reply" even for roots. `payload.reply_to` never
+      // holds a row id (0 of 139) and `correlation_id === own row id` occurs 0 times, so the
+      // `|| id` fallback can never fire and the relation is UNDIRECTED — "shares a correlation_id
+      // with some other row". Rootness therefore does not make it sound in general: 81
+      // correlation_id groups are shared across >=2 ROOT rows (231 rows), so a root can still be
+      // suppressed by a sibling. That measured 0 in this directive lane today, and this guard is
+      // the option that closes the witnessed bug WITHOUT retiring the ratified assertions of
+      // C6-001 and LANE-DELIVERY-CONTRACT-001 FR-4 (retiring another SD's shipped contract needs
+      // its own supersession, not a side effect of this one). The durable fix is upstream and out
+      // of scope here: make successorship decidable by ancestry (reply_to carrying the parent ROW
+      // id, or a parent_id/thread_root_id column) instead of inferred from a shared group key.
       //
       // The root guard is behaviorally IDENTICAL to wholesale removal across the live population
       // (both suppress 0 of 41) while preserving SD-LEO-INFRA-ACKSTAMP-FALSE-METRICS-C6-001 and
