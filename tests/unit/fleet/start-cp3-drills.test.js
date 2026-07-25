@@ -98,9 +98,10 @@ describe('defaultRunDrills — wired live path (QF-20260724-923)', () => {
 describe('defaultRunDrills — rebootQueryEventsFn wiring (QF-20260724-113)', () => {
   it('the default rebootQueryEventsFn queries fleet_verb_respawn events with no required argument', async () => {
     const eq = vi.fn().mockReturnThis();
+    const gte = vi.fn().mockReturnThis();
     const order = vi.fn().mockReturnThis();
     const limit = vi.fn().mockResolvedValue({ data: [{ event_type: 'fleet_verb_respawn' }, { event_type: 'fleet_verb_respawn' }] });
-    const select = vi.fn(() => ({ eq, order, limit }));
+    const select = vi.fn(() => ({ eq, gte, order, limit }));
     const supabase = { from: vi.fn(() => ({ select })) };
     const target = { session_id: 'canary-sess-1', metadata: { account_profile: 'canary' } };
     const resolveCanaryTarget = vi.fn(async () => target);
@@ -129,9 +130,10 @@ describe('defaultRunDrills — rebootQueryEventsFn wiring (QF-20260724-113)', ()
 describe('defaultRunDrills — rebootQueryLifecycleEventsFn wiring (QF-20260724-070)', () => {
   it('threads a default queryLifecycleEventsFn into runRebootRespawnDrill that reads RESPAWN_BIND_VERIFIED rows', async () => {
     const eq = vi.fn().mockReturnThis();
+    const gte = vi.fn().mockReturnThis();
     const order = vi.fn().mockReturnThis();
     const limit = vi.fn().mockResolvedValue({ data: [{ event_type: 'RESPAWN_BIND_VERIFIED', session_id: 's-1' }] });
-    const select = vi.fn(() => ({ eq, order, limit }));
+    const select = vi.fn(() => ({ eq, gte, order, limit }));
     const supabase = { from: vi.fn(() => ({ select })) };
     const target = { session_id: 'canary-sess-1', metadata: { account_profile: 'canary' } };
     const resolveCanaryTarget = vi.fn(async () => target);
@@ -151,6 +153,102 @@ describe('defaultRunDrills — rebootQueryLifecycleEventsFn wiring (QF-20260724-
     expect(select).toHaveBeenCalledWith('event_type,session_id');
     expect(eq).toHaveBeenCalledWith('event_type', 'RESPAWN_BIND_VERIFIED');
     expect(res.reboot.pass).toBe(true);
+  });
+});
+
+// QF-20260725-139: check 5 (respawn_bind_audited) was ARITHMETICALLY CLOSED, not merely failing.
+// boundSessionIds came from a TRAILING-50 window holding 4 historical bound respawns (2026-07-25T00:16
+// -00:17Z) while RESPAWN_BIND_VERIFIED was 0 all-time => 0 === 4, and a flawless run only reached
+// 1 === 5. No drill outcome could pass. These tests pin the POPULATION, not the assertion.
+//
+// Deliberately a filtering fake rather than `expect(gte).toHaveBeenCalled()`: asserting the call is a
+// proxy: it would stay green if the bound value were wrong, or if a later edit passed a value that
+// excluded nothing (exactly the sd_key='CHECKPOINT-3' no-op that was already tried and rejected).
+// Filtering real fixture rows measures the thing that actually matters -- what survives the query.
+describe('defaultRunDrills — reboot audit queries are scoped to THIS run (QF-20260725-139)', () => {
+  const RUN_STARTED_AT = '2026-07-25T23:40:00.000Z';
+  // The 4 real historical rows that closed the check, plus one respawn from this run.
+  const HISTORICAL = [
+    { event_type: 'fleet_verb_respawn', session_id: '283ca94a', created_at: '2026-07-25T00:17:17.527Z', payload: { outcome: 'ok' } },
+    { event_type: 'fleet_verb_respawn', session_id: '283ca94a', created_at: '2026-07-25T00:17:17.459Z', payload: { outcome: 'ok' } },
+    { event_type: 'fleet_verb_respawn', session_id: '8dc4f150', created_at: '2026-07-25T00:16:58.028Z', payload: { outcome: 'ok' } },
+    { event_type: 'fleet_verb_respawn', session_id: '8dc4f150', created_at: '2026-07-25T00:16:57.964Z', payload: { outcome: 'ok' } },
+  ];
+  const THIS_RUN = { event_type: 'fleet_verb_respawn', session_id: 'new-sess', created_at: '2026-07-25T23:40:05.000Z', payload: { outcome: 'ok' } };
+
+  /** Minimal PostgREST-ish fake that HONOURS eq/gte instead of ignoring them. */
+  function filteringSupabase(tables) {
+    const make = (table) => {
+      let rows = (tables[table] || []).slice();
+      const api = {
+        select: () => api,
+        eq: (col, val) => { rows = rows.filter((r) => r[col] === val); return api; },
+        gte: (col, val) => { rows = rows.filter((r) => r[col] >= val); return api; },
+        like: () => api,
+        order: () => api,
+        limit: () => Promise.resolve({ data: rows }),
+        then: (res) => res({ data: rows }),
+      };
+      return api;
+    };
+    return { from: vi.fn((t) => make(t)) };
+  }
+
+  function harness(tables) {
+    const target = { session_id: 'canary-sess-1', metadata: { account_profile: 'canary' } };
+    return {
+      supabase: filteringSupabase(tables),
+      runStartedAt: RUN_STARTED_AT,
+      resolveCanaryTarget: vi.fn(async () => target),
+      canaryRestart: vi.fn(async () => ({ verb: 'fleet_verb_restart', outcome: 'ok' })),
+      canaryRelaunchUnderProfile: vi.fn(async () => ({ verb: 'fleet_verb_relaunch_under_profile', outcome: 'ok' })),
+      runU4Drill: vi.fn(async () => ({ pass: true })),
+    };
+  }
+  const PLAN = { canaryProfile: 'canary', cwd: 'R:\\r', legs: [] };
+
+  it('REGRESSION: the 4 historical bound respawns are EXCLUDED — only this run\'s respawn survives', async () => {
+    let seen = null;
+    const deps = {
+      ...harness({ coordination_events: [...HISTORICAL, THIS_RUN] }),
+      runRebootRespawnDrill: vi.fn(async (args) => { seen = await args.queryEventsFn(); return { pass: true, checks: [] }; }),
+    };
+    await defaultRunDrills(PLAN, deps);
+    // Pre-fix this returned all 5 and check 5 evaluated 1 === 5. Never passable.
+    expect(seen).toHaveLength(1);
+    expect(seen[0].session_id).toBe('new-sess');
+  });
+
+  it('REGRESSION: an audit row from an EARLIER run cannot satisfy a bind performed by this one', async () => {
+    let seen = null;
+    const deps = {
+      ...harness({
+        session_lifecycle_events: [
+          { event_type: 'RESPAWN_BIND_VERIFIED', session_id: 'stale', created_at: '2026-07-25T00:17:00.000Z' },
+          { event_type: 'RESPAWN_BIND_VERIFIED', session_id: 'new-sess', created_at: '2026-07-25T23:40:06.000Z' },
+        ],
+      }),
+      runRebootRespawnDrill: vi.fn(async (args) => { seen = await args.queryLifecycleEventsFn(); return { pass: true, checks: [] }; }),
+    };
+    await defaultRunDrills(PLAN, deps);
+    expect(seen).toHaveLength(1);
+    expect(seen[0].session_id).toBe('new-sess');
+  });
+
+  it('the scoped population still lets check 5 GO RED — scoping is not weakening', async () => {
+    // This run binds a session but its audit row never lands: 0 === 1 => RED, and that red is
+    // informative because it reflects THIS run. If scoping had weakened the check, this would pass.
+    const deps = {
+      ...harness({ coordination_events: [...HISTORICAL, THIS_RUN], session_lifecycle_events: [] }),
+      runRebootRespawnDrill: vi.fn(async (args) => {
+        const { runRebootRespawnDrill: real } = await import('../../../lib/fleet/reboot-respawn-drill-runner.js');
+        return real({ ...args, live: false });
+      }),
+    };
+    const res = await defaultRunDrills(PLAN, deps);
+    const check5 = (res.reboot.checks || []).find((c) => c.name === 'respawn_bind_audited');
+    expect(check5.pass).toBe(false);
+    expect(check5.detail).toContain('0/1');
   });
 });
 

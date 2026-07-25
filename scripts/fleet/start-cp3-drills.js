@@ -103,21 +103,46 @@ export async function defaultRunDrills(plan, deps = {}) {
       .eq('session_id', sid).like('event_type', 'fleet_verb_%');
     return data || [];
   });
+  // QF-20260725-139: SCOPE THE AUDIT POPULATION TO *THIS* RUN.
+  //
+  // Both reboot queries below read a TRAILING-50 window, i.e. recent history, not this invocation.
+  // respawn_bind_audited (reboot-respawn-drill-runner.js) passes iff auditedCount === boundSessionIds
+  // .length, and that window held 4 historical bound respawns from 2026-07-25T00:16-00:17Z against 0
+  // all-time RESPAWN_BIND_VERIFIED rows -- so the check evaluated 0 === 4, and a FLAWLESS run would
+  // have made it 1 === 5. Still red. It was not a threshold a good run could clear; it was
+  // arithmetically closed, and no drill outcome could pass while those rows stayed in the population.
+  //
+  // A predetermined red is worse than a plain bug: arriving in a chairman-watched acceptance run it
+  // reads as "the bind leg failed" and sends someone hunting a defect that does not exist.
+  //
+  // WHY TIME AND NOT sd_key: the run-correlator stamped by QF-20260724-335 defaults to 'CHECKPOINT-3',
+  // which is exactly what those 4 historical rows already carry -- filtering on it excludes NOTHING.
+  // (Recorded because it was tried.) Drill-start time IS the discriminator that separates them; a
+  // run-unique id in the payload would be stronger, but none is emitted today.
+  //
+  // THIS SCOPES THE POPULATION, IT DOES NOT WEAKEN THE CHECK -- the assertion is untouched, and it must
+  // still be able to fail: one bind + its audit row gives 1 === 1 and PASSES; a run whose bind emitter
+  // fails gives 0 === 1 and goes RED, and that red is now informative because it reflects THIS run.
+  const runStartedAt = deps.runStartedAt || new Date().toISOString();
   // QF-20260724-113 (FR-b): reboot-respawn's respawn_events_present check takes a NO-ARG
   // queryEventsFn (unlike U4's session-scoped one, since reboot-respawn creates one replacement
   // session PER slot, not a single target) -- without this the live CLI path always failed
   // respawn_events_present ("no queryEventsFn supplied") even on a genuinely successful respawn.
   const rebootQueryEventsFn = deps.rebootQueryEventsFn || (async () => {
     const { data } = await supabase.from('coordination_events').select('event_type,payload,session_id')
-      .eq('event_type', 'fleet_verb_respawn').order('created_at', { ascending: false }).limit(50);
+      .eq('event_type', 'fleet_verb_respawn').gte('created_at', runStartedAt)
+      .order('created_at', { ascending: false }).limit(50);
     return data || [];
   });
   // QF-20260724-070: wire the durable-bind-audit query so the live drill's respawn_bind_audited check
   // (a real heartbeat proof recorded AT BIND TIME, surviving the session later ghosting) has real
   // evidence to read -- without this the check would fail-closed on every genuine live bind.
+  // QF-20260725-139: scoped to this run for the SAME reason -- an audit row from an earlier run must
+  // never be able to satisfy a bind performed by this one.
   const rebootQueryLifecycleEventsFn = deps.rebootQueryLifecycleEventsFn || (async () => {
     const { data } = await supabase.from('session_lifecycle_events').select('event_type,session_id')
-      .eq('event_type', 'RESPAWN_BIND_VERIFIED').order('created_at', { ascending: false }).limit(50);
+      .eq('event_type', 'RESPAWN_BIND_VERIFIED').gte('created_at', runStartedAt)
+      .order('created_at', { ascending: false }).limit(50);
     return data || [];
   });
 
