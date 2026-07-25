@@ -1,0 +1,26 @@
+{
+  "20260712_ship_review_findings_repo_column.sql": {
+    "disposition": "DEFERRED",
+    "reason": "Chairman-gated migration carrying no parseable \"-- @approved-by: <email>\" stamp, so the 3-factor guard in scripts/lib/migration-guards.js cannot admit it. Apply is blocked on chairman sign-off, not on engineering work.",
+    "owner": "chairman",
+    "sd_key": "SD-LEO-INFRA-MIGRATION-APPLY-STATE-TRIAGE-001",
+    "recorded_at": "2026-07-25T18:27:30.734Z",
+    "source": "auto:chairman-gate-marker"
+  },
+  "20260716_chairman_email_channel_health_debounce.sql": {
+    "disposition": "DEFERRED",
+    "reason": "Chairman-gated migration carrying no parseable \"-- @approved-by: <email>\" stamp, so the 3-factor guard in scripts/lib/migration-guards.js cannot admit it. Apply is blocked on chairman sign-off, not on engineering work.",
+    "owner": "chairman",
+    "sd_key": "SD-LEO-INFRA-MIGRATION-APPLY-STATE-TRIAGE-001",
+    "recorded_at": "2026-07-25T18:27:30.734Z",
+    "source": "auto:chairman-gate-marker"
+  },
+  "20260724190000_add_manual_revenue_provenance_columns.sql": {
+    "disposition": "DEFERRED",
+    "reason": "Chairman-gated migration carrying no parseable \"-- @approved-by: <email>\" stamp, so the 3-factor guard in scripts/lib/migration-guards.js cannot admit it. Apply is blocked on chairman sign-off, not on engineering work.",
+    "owner": "chairman",
+    "sd_key": "SD-LEO-INFRA-MIGRATION-APPLY-STATE-TRIAGE-001",
+    "recorded_at": "2026-07-25T18:27:30.734Z",
+    "source": "auto:chairman-gate-marker"
+  }
+}
