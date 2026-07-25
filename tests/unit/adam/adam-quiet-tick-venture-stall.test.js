@@ -3,8 +3,8 @@
  * only the Adam-PM-board (task_ledger) watch existed. checkVentureTraversalStalls()
  * closes that gap by checking ventures.orchestrator_state/workflow_status directly.
  */
-import { describe, it, expect } from 'vitest';
-import { checkVentureTraversalStalls } from '../../../scripts/adam-quiet-tick.mjs';
+import { describe, it, expect, vi } from 'vitest';
+import { checkVentureTraversalStalls, readVenturePark } from '../../../scripts/adam-quiet-tick.mjs';
 
 function readBuilder(data) {
   const b = {
@@ -114,6 +114,69 @@ describe('checkVentureTraversalStalls', () => {
     });
     const result = await checkVentureTraversalStalls(sb, {});
     expect(result.alerted).toHaveLength(0);
+  });
+
+  // --- QF-20260725-638: deliberate-not-work exclusion ---
+  const parked = (over = {}) => ({
+    id: 'vp', name: 'Image Alt Text Generator', status: 'active', orchestrator_state: 'blocked',
+    updated_at: '2020-01-01', is_demo: false, deleted_at: null,
+    metadata: {
+      gating_decision: {
+        decision: 'PARKED - deliberately deferred behind first-revenue work',
+        by: 'adam (chairman-delegated venture ops)',
+        at: '2026-07-25T16:15:51.055Z',
+        unpark_trigger: 'first-revenue venture ships',
+      },
+    },
+    ...over,
+  });
+
+  it('QF-638: does NOT flag a venture carrying a recorded gating decision (deliberate park, not a stall)', async () => {
+    const sb = makeSupabase({ ventures: [parked()], staleStageExecutions: new Set(['vp']) });
+    const log = vi.spyOn(console, 'log').mockImplementation(() => {});
+    const result = await checkVentureTraversalStalls(sb, {});
+    log.mockRestore();
+    expect(result.alerted).toHaveLength(0);
+    expect(result.realBuildStalled).toHaveLength(0);
+  });
+
+  it('QF-638: suppression is PERMANENT, not a one-tick false-clear — an ancient updated_at still does not alarm', async () => {
+    // The pre-fix remedy only worked because writing metadata bumped updated_at inside the
+    // 15-min window; once the row aged out it alarmed again. Here updated_at is years old
+    // (well outside the window), so a still-silent alarm proves the exclusion is state-based.
+    const sb = makeSupabase({ ventures: [parked({ updated_at: '2019-01-01' })], staleStageExecutions: new Set(['vp']) });
+    const log = vi.spyOn(console, 'log').mockImplementation(() => {});
+    const result = await checkVentureTraversalStalls(sb, { vp: Date.now() - 3_600_000 });
+    log.mockRestore();
+    expect(result.alerted).toHaveLength(0);
+    expect(result.snapshot.vp).toBeUndefined(); // cleared, so an unpark restarts the two-strike clock
+  });
+
+  it('QF-638: suppression is AUDITABLE — logs who parked it, why, and the unpark trigger', async () => {
+    const sb = makeSupabase({ ventures: [parked()], staleStageExecutions: new Set(['vp']) });
+    const lines = [];
+    const log = vi.spyOn(console, 'log').mockImplementation((...a) => lines.push(a.join(' ')));
+    await checkVentureTraversalStalls(sb, {});
+    log.mockRestore();
+    const line = lines.find((l) => l.includes('QUIET_TICK_VENTURE_PARK_SUPPRESSED'));
+    expect(line).toBeTruthy();
+    expect(line).toMatch(/by="adam \(chairman-delegated venture ops\)"/);
+    expect(line).toMatch(/unpark="first-revenue venture ships"/);
+    expect(line).toMatch(/at=2026-07-25T16:15:51\.055Z/);
+  });
+
+  it('QF-638: an UNPARKED venture (no gating decision) still alarms — exclusion is not blanket', async () => {
+    const v = parked(); delete v.metadata;
+    const sb = makeSupabase({ ventures: [v], staleStageExecutions: new Set(['vp']) });
+    const result = await checkVentureTraversalStalls(sb, {});
+    expect(result.alerted).toHaveLength(1);
+  });
+
+  it('QF-638: readVenturePark defaults missing audit fields rather than throwing or reporting them as real', () => {
+    expect(readVenturePark({})).toBeNull();
+    expect(readVenturePark({ metadata: {} })).toBeNull();
+    const p = readVenturePark({ metadata: { gating_decision: { decision: 'PARKED' } } });
+    expect(p).toMatchObject({ decision: 'PARKED', by: '(unknown)', unpark: '(no unpark trigger recorded)' });
   });
 
   it('is fail-soft: a throwing/malformed client returns empty alerts and the prior snapshot, never throws', async () => {
