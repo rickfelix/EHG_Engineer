@@ -6,7 +6,7 @@
  * `require.main === module`. That is precisely how an 8s bounded wait sat on a 100% failure rate
  * (197/197 duty=pre_send_consult ledger rows over 30d were timeout-proceed) with a green suite.
  */
-import { describe, it, expect, vi } from 'vitest';
+import { describe, it, expect } from 'vitest';
 import { createRequire } from 'module';
 const require = createRequire(import.meta.url);
 const { runPreSendConsultLane } = require('../../../lib/adam/presend-consult-lane.cjs');
