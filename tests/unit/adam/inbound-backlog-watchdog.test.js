@@ -141,6 +141,13 @@ describe('FR-2 — dedup discipline', () => {
       id: 'extra-breacher', target_session: 'adam-1', sender_type: 'coordinator',
       payload: { kind: 'adam_advisory' }, created_at: ago(400 * MIN), // also becomes the OLDEST
       read_at: null, acknowledged_at: null,
+    }, {
+      // Moves the undrainedKinds axis too. Without this, a leak of undrainedKinds into the hashed
+      // description survives, because both ticks would otherwise have an empty set (the one vector
+      // still open at testing-agent 536c3d84).
+      id: 'extra-undrained', target_session: 'adam-1', sender_type: 'coordinator',
+      payload: { kind: '__synthetic_undrained_kind__' }, created_at: ago(50 * MIN),
+      read_at: null, acknowledged_at: null,
     }];
     const sbLater = fakeSupabase(grown);
     await runInboundBacklogWatchdog(sbLater, { now: NOW + 37 * MIN });
@@ -256,7 +263,11 @@ describe('FR-3 / TS-3 — tick count equals watchdog count BY CONSTRUCTION', () 
     return rows;
   }
 
-  it('surfaceInboxItems reports the SAME count the watchdog does, across all four divergence axes', async () => {
+  // NAME SCOPED HONESTLY: the fake's .in() is a no-op, so axis 1 (retired session id) is
+  // fixture-nominal here — scoping the tick to the live id alone would still pass THIS test.
+  // Axis 1 is pinned falsifiably by TS-11 in tests/unit/adam/inbound-backlog.test.js instead.
+  // The three axes below are genuinely falsifiable here.
+  it('surfaceInboxItems reports the SAME count the watchdog does, across the display-divergence axes', async () => {
     const corpus = divergenceCorpus();
     const displayRows = corpus.slice(0, 3); // what the tick's own narrow display query would see
     const { surfaceInboxItems } = await import('../../../scripts/adam-quiet-tick.mjs');
