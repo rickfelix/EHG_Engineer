@@ -66,6 +66,12 @@ import { runOrphanSweep } from '../lib/worktree-reaper/orphan-sweep.js';
 import { liveClaimBlocksRemoval } from '../lib/worktree-reaper/live-claim-guard.js';
 import { heartbeatResidencyBlocksRemoval } from '../lib/worktree-reaper/residency-guard.js';
 import { hasReapEligibleMarker, readReapEligibleMarker } from '../lib/worktree-reaper/reap-eligible-marker.js';
+// QF-20260725-821: the opt-OUT marker. .reap-eligible.json is opt-IN TO REAPING; before this
+// there was no way to say "do not reap me", so any operator/drill/ops worktree without an
+// sd_key basename and a DB claim was auto-removed at stage 2 (live incident: the chairman's
+// in-flight CP3 drill tree, deleted mid-run). Honored at BOTH points that already honor the
+// cursor-protection convention — the main classification loop and selectStage0Reclaim.
+import { hasReapProtectedMarker, readReapProtectedMarker } from '../lib/worktree-reaper/reap-protected-marker.js';
 // SD-LEO-INFRA-WORKTREE-CONTENTION-CLEANUP-001: single-source reapability helpers.
 // These three used to be defined locally below; the canonical home is now
 // lib/worktree-reapability.js so every removal path shares one implementation.
@@ -780,6 +786,7 @@ export function selectStage0Reclaim(worktrees, ctx = {}) {
   const out = [];
   for (const wt of worktrees || []) {
     if (isCursorWorktree(wt.path)) continue; // inherit cursor-protection convention
+    if (hasReapProtectedMarker(wt.path)) continue; // QF-20260725-821: opt-OUT marker (stage-0 reclaim also destroys)
     const v = classifyStage0(wt, ctx);
     if (v.reclaim) out.push({ path: wt.path, branch: wt.branch, sd_key: v.sd_key, reason: v.reason });
   }
@@ -1224,6 +1231,23 @@ export async function main(argv = process.argv) {
       records.push(rec);
       emitJsonLine(rec);
       console.log(humanTableRow({ wtPath: wt.path, branch: wt.branch || '', categories: [], dirtyCount: 0, unpushedCount: 0, ageDays: null, verdict: 'keep:cursor', preserveCount: 0 }));
+      continue;
+    }
+
+    // QF-20260725-821: opt-OUT marker. Checked immediately after the cursor guard and BEFORE any
+    // classification, so a protected tree can never reach stage1/stage2 removal regardless of
+    // whether its basename resolves to an sd_key or it carries a DB claim.
+    if (hasReapProtectedMarker(wt.path)) {
+      const rec = buildRecord({
+        schema_version: SCHEMA_VERSION, wt, categories: [], verdict: 'keep',
+        reason: 'reap_protected_marker',
+        claim_status: 'n/a', dirtyCount: 0, unpushedCount: 0, ageDays: null,
+        preserveCount: 0, shipStatus: 'protected',
+        evidence: { marker: readReapProtectedMarker(wt.path) || {} },
+      });
+      records.push(rec);
+      emitJsonLine(rec);
+      console.log(humanTableRow({ wtPath: wt.path, branch: wt.branch || '', categories: [], dirtyCount: 0, unpushedCount: 0, ageDays: null, verdict: 'keep:protected', preserveCount: 0 }));
       continue;
     }
 
