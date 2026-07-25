@@ -141,7 +141,50 @@ const PROPOSAL_META_DROP_KEYS = new Set([
   'target_repos', 'depends_on',
 ]);
 
+// QF-20260725-213 (part c): TOP-LEVEL proposal keys this mapper actually consumes. Deliberately
+// scoped to TOP-LEVEL ONLY — proposal.metadata is preserved wholesale minus PROPOSAL_META_DROP_KEYS,
+// so a guard written against authored keys generally would false-positive on every metadata key.
+const MAPPED_PROPOSAL_KEYS = new Set([
+  'title', 'type', 'priority', 'description', 'scope', 'rationale', 'success_criteria',
+  'key_changes', 'success_metrics', 'strategic_objectives', 'smoke_test_steps', 'metadata',
+  'provenance', 'roadmap_phase', 'tier_hint', 'gold_origin', 'necessity', 'dedup_note', 'sourced_by',
+]);
+// Keys a proposal legitimately carries that this mapper does not consume because another stage of
+// the ingest path already does. Two such stages: validateProposalShape() above (proposed_sd_key,
+// title, sd_type, priority, PROPOSAL===true, status_intended==='draft' — these reach the SD via
+// `normalized`) and ingestProposalObject() below (premise_descriptor drives the checkPremiseLiveness
+// stale-guard at the `proposal.premise_descriptor` branch).
+// Adding a key here asserts "consumed elsewhere, and I checked where", NOT "safe to drop".
+const IGNORABLE_PROPOSAL_KEYS = new Set([
+  'PROPOSAL', 'proposed_sd_key', 'sd_type', 'status_intended', 'premise_descriptor',
+]);
+// Leak-guard keys: dropping these IS the correct behavior, not an oversight. vision_key/arch_key
+// drive enrichFromVisionArch's orphan-FK re-activation and parent_id/parentId would forge an
+// orchestrator link, so a proposal must never set them (see the "never leak into mapped args" test).
+const DELIBERATELY_DROPPED_PROPOSAL_KEYS = new Set(['vision_key', 'arch_key', 'parent_id', 'parentId']);
+
+/**
+ * QF-20260725-213 (part c): FAIL LOUD rather than silently dropping authored content. The whole
+ * defect class here is a mapper that quietly ignores a key — so any top-level key we do not
+ * consume must stop ingest and name itself, instead of producing an SD that looks populated.
+ */
+export function assertAllProposalKeysMapped(proposal) {
+  if (!proposal || typeof proposal !== 'object') return;
+  const unmapped = Object.keys(proposal)
+    .filter((k) => !MAPPED_PROPOSAL_KEYS.has(k) && !IGNORABLE_PROPOSAL_KEYS.has(k)
+      && !DELIBERATELY_DROPPED_PROPOSAL_KEYS.has(k));
+  if (unmapped.length > 0) {
+    throw new Error(
+      `Proposal ingest would DROP unmapped top-level key(s): ${unmapped.join(', ')}. `
+      + 'Add each to the mapper in scripts/modules/leo-create-sd/proposal-lanes.js (and to '
+      + 'MAPPED_PROPOSAL_KEYS), or to IGNORABLE_PROPOSAL_KEYS if it is genuinely structural. '
+      + 'Refusing to create an SD that silently loses authored content (QF-20260725-213).',
+    );
+  }
+}
+
 export function mapProposalToCreateArgs(normalized, proposal, filePath, opts = {}) {
+  assertAllProposalKeysMapped(proposal);
   // FR-1: preserve the proposal's full metadata object (merge with canonical defaults rather than
   // replacing), MINUS the leak-guard keys. This carries Adam-sourcing keys (min_tier_rank,
   // requires_human_action, deferred/deferred_until, etc.) that the old closed whitelist dropped.
@@ -170,12 +213,27 @@ export function mapProposalToCreateArgs(normalized, proposal, filePath, opts = {
     // description — when it led the description, the substantive ~1500ch scope was buried and workers
     // mis-flagged the SD as an 8-word stub. scope (the objective) is preferred; rationale is the
     // fallback only when scope is absent. Provenance still lives in `rationale` + metadata below.
-    description: proposal.scope || proposal.rationale || proposal.title,
+    // QF-20260725-213: proposal.description LEADS. It was never read at all, so an authored
+    // description was silently replaced by title-derived boilerplate from validate-sd-fields.js,
+    // and the resulting thin description is what invited the filename-search enrichment sweep to
+    // fill it (on SD-LEO-INFRA-LAUNCHER-CAN-HOST-001 it filled with an unrelated document).
+    // scope MUST STAY AHEAD OF rationale — that ordering is the SD-REFILL-00229BH8 fix above, not
+    // an arbitrary preference. Do not reorder those two.
+    description: proposal.description || proposal.scope || proposal.rationale || proposal.title,
     // Sibling parity: UAT/learn/feedback/QF/plan/child all set an explicit rationale
     // (used by the LEAD evaluator). Fall back to a provenance line when absent.
     rationale: proposal.rationale || `Materialized from proposal ${filePath || 'unknown'}`,
     scope: proposal.scope || null,
     success_criteria: Array.isArray(proposal.success_criteria) ? proposal.success_criteria : null,
+    // QF-20260725-213: these four were never mapped, so authored content was replaced by
+    // title-derived boilerplate ("Implement core changes for X", "Implementation completeness",
+    // "Navigate to the relevant page for X"). success_criteria mapped correctly, which is why the
+    // SD looked populated on casual inspection and this evaded notice. Same null-when-absent shape
+    // as success_criteria so a proposal that omits them is byte-identical to pre-fix behavior.
+    key_changes: Array.isArray(proposal.key_changes) ? proposal.key_changes : null,
+    success_metrics: Array.isArray(proposal.success_metrics) ? proposal.success_metrics : null,
+    strategic_objectives: Array.isArray(proposal.strategic_objectives) ? proposal.strategic_objectives : null,
+    smoke_test_steps: Array.isArray(proposal.smoke_test_steps) ? proposal.smoke_test_steps : null,
     // SD-FDBK-INFRA-LEO-CREATE-PROPOSAL-001 (FR-1): a proposal that declares
     // metadata.depends_on must populate the CANONICAL `dependencies` column — that is
     // what lib/coordinator/claimable-work.cjs and scripts/modules/sd-next/dependency-resolver.js
