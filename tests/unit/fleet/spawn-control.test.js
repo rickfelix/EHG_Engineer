@@ -126,7 +126,8 @@ describe('module surface (TS-10: exactly six named verbs, no more)', () => {
     // session-bind constants are exported so the budget can be asserted directly instead of by
     // wall-clock; they are values, not verbs, so they belong on this allowlist.
     const helperNames = ['roleOf', 'isSingletonRole', 'resolveProfileDir', 'isLiveEnabled', 'buildLiveSpawnInvocation',
-      'SESSION_BIND_MAX_ATTEMPTS', 'SESSION_BIND_DELAY_MS'];
+      'SESSION_BIND_MAX_ATTEMPTS', 'SESSION_BIND_DELAY_MS',
+      'CANARY_PROFILE', 'CANARY_CALLSIGN_PREFIX'];
     const unexpected = Object.keys(mod).filter((k) => !verbNames.includes(k) && !helperNames.includes(k));
     expect(unexpected).toEqual([]);
   });
@@ -456,6 +457,103 @@ describe('spawn (FR-1)', () => {
     const md = supabaseClient._store.get(MINTED_SESSION_ID).metadata;
     expect(md.window_handle).toBe(777);
     expect(md.window_handle_diagnostics).toBeUndefined();
+  });
+
+  it('CALLSIGN MINT: stamps fleet_identity.callsign for a canary so assertCanaryTarget can pass', async () => {
+    // The SECOND conjunct. assertCanaryTarget requires account_profile==='canary' AND a 'Canary-'
+    // callsign. FR-3 stamped only the first, so the live canary came back DISCOVERABLE but
+    // not_canary_callsign — half a predicate, and every CP3 target-scoped leg still rejected it.
+    // stampRespawnedCanary cannot supply this: it is a CARRY-FORWARD whose callsign comes from the
+    // target's CURRENT canary identity, which is null on a first provisioning.
+    const nowMs = 1_800_000_000_000;
+    const supabaseClient = makeFakeSupabase({
+      sessions: [{
+        session_id: MINTED_SESSION_ID, pid: 4242, status: 'active',
+        created_at: new Date(nowMs - 5_000).toISOString(),
+        metadata: { role: 'worker' },
+      }],
+    });
+    await spawn({ role: 'worker', callsign: 'Canary-pilot', accountProfile: 'canary' }, {
+      live: true, currencyRunner: CURRENT_RUNNER, spawnFn: vi.fn().mockReturnValue({ pid: 4242 }),
+      execFn: enumExec(), sleepFn: vi.fn(), supabaseClient, nowMs, skipDedup: true,
+      uuidFn: () => MINTED_SESSION_ID, baseDir: 'C:/fake',
+    });
+    const md = supabaseClient._store.get(MINTED_SESSION_ID).metadata;
+    expect(md.account_profile).toBe('canary');
+    expect(md.fleet_identity.callsign).toBe('Canary-pilot'); // both conjuncts now satisfiable
+    expect(md.role).toBe('worker');                          // merged, not clobbered
+  });
+
+  it('CALLSIGN MINT: NEVER stamps a callsign for an ordinary worker', async () => {
+    // Load-bearing safety property. Ordinary callsigns come from the coordinator's SET_IDENTITY and
+    // the tier-band scheme; minting one here would pre-empt that authority and collide with
+    // assign-fleet-identities. An over-broad mint would look harmless in this test file and cause a
+    // fleet-wide identity fight.
+    const nowMs = 1_800_000_000_000;
+    const supabaseClient = makeFakeSupabase({
+      sessions: [{
+        session_id: MINTED_SESSION_ID, pid: 4242, status: 'active',
+        created_at: new Date(nowMs - 5_000).toISOString(), metadata: {},
+      }],
+    });
+    await spawn({ role: 'worker', callsign: 'Bravo' }, {
+      live: true, currencyRunner: CURRENT_RUNNER, spawnFn: vi.fn().mockReturnValue({ pid: 4242 }),
+      execFn: enumExec(), sleepFn: vi.fn(), supabaseClient, nowMs, skipDedup: true,
+      uuidFn: () => MINTED_SESSION_ID,
+    });
+    expect(supabaseClient._store.get(MINTED_SESSION_ID).metadata.fleet_identity).toBeUndefined();
+  });
+
+  it('CALLSIGN MINT: a canary PROFILE with a non-canary slot name mints NOTHING', async () => {
+    // Defence in depth against the gap the coordinator flagged: selectCanarySlot enforces the profile
+    // but NOT the namespace, so a slot marked canary yet named "Bravo" must not mint a NATO callsign
+    // into the canary namespace check. It stays discoverable-but-untargetable, and canary-provision
+    // warns — better than silently minting something the guard will reject anyway.
+    const nowMs = 1_800_000_000_000;
+    const supabaseClient = makeFakeSupabase({
+      sessions: [{
+        session_id: MINTED_SESSION_ID, pid: 4242, status: 'active',
+        created_at: new Date(nowMs - 5_000).toISOString(), metadata: {},
+      }],
+    });
+    await spawn({ role: 'worker', callsign: 'Bravo', accountProfile: 'canary' }, {
+      live: true, currencyRunner: CURRENT_RUNNER, spawnFn: vi.fn().mockReturnValue({ pid: 4242 }),
+      execFn: enumExec(), sleepFn: vi.fn(), supabaseClient, nowMs, skipDedup: true,
+      uuidFn: () => MINTED_SESSION_ID, baseDir: 'C:/fake',
+    });
+    const md = supabaseClient._store.get(MINTED_SESSION_ID).metadata;
+    expect(md.account_profile).toBe('canary');
+    expect(md.fleet_identity).toBeUndefined();
+  });
+
+  it('CALLSIGN MINT: idempotent — an existing canary callsign is left alone', async () => {
+    const nowMs = 1_800_000_000_000;
+    const supabaseClient = makeFakeSupabase({
+      sessions: [{
+        session_id: MINTED_SESSION_ID, pid: 4242, status: 'active',
+        created_at: new Date(nowMs - 5_000).toISOString(),
+        metadata: { fleet_identity: { callsign: 'Canary-9', color: 'yellow' } },
+      }],
+    });
+    await spawn({ role: 'worker', callsign: 'Canary-pilot', accountProfile: 'canary' }, {
+      live: true, currencyRunner: CURRENT_RUNNER, spawnFn: vi.fn().mockReturnValue({ pid: 4242 }),
+      execFn: enumExec(), sleepFn: vi.fn(), supabaseClient, nowMs, skipDedup: true,
+      uuidFn: () => MINTED_SESSION_ID, baseDir: 'C:/fake',
+    });
+    const fi = supabaseClient._store.get(MINTED_SESSION_ID).metadata.fleet_identity;
+    expect(fi.callsign).toBe('Canary-9'); // carry-forward wins over a re-mint
+    expect(fi.color).toBe('yellow');
+  });
+
+  it('the duplicated canary constants agree with canary-guard (cycle-forced duplication must not drift)', async () => {
+    // spawn-control cannot import canary-guard (canary-guard imports stop/restart/relaunch from here,
+    // so it would be a cycle), hence the local copies. This pins them against the canonical source so
+    // a rename in one place is caught rather than silently diverging.
+    const mod = await import('../../../lib/fleet/spawn-control.js');
+    const guard = await import('../../../lib/fleet/canary-guard.js');
+    expect(guard.isCanaryCallsign(`${mod.CANARY_CALLSIGN_PREFIX}1`)).toBe(true);
+    expect(guard.isCanaryCallsign('Bravo')).toBe(false);
+    expect(mod.CANARY_PROFILE).toBe('canary');
   });
 
   it('FR-1/FR-3: does NOT stamp account_profile when none was requested', async () => {
