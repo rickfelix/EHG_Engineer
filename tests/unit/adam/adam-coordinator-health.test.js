@@ -171,10 +171,15 @@ describe('computePlanAdherence (TS-2)', () => {
 
 describe('computeFailLoudIntegrity (TS-3)', () => {
   it('fails loud (never null-coalesces to 0) on a query error in the recompute path', async () => {
-    const supabase = { from: () => ({ select: () => ({ eq: () => ({ is: () => Promise.resolve({ data: null, error: { message: 'boom' } }) }) }) }) };
+    // QF-20260725-089: the recompute now range-paginates (eligibility needs the rows, not a
+    // head-count), so the stub chain gains .range() — the seeded error must still surface verbatim.
+    const supabase = { from: () => ({ select: () => ({ eq: () => ({ is: () => ({ range: () => Promise.resolve({ data: null, error: { message: 'boom' } }) }) }) }) }) };
     const result = await computeFailLoudIntegrity(supabase, {});
     expect(result.integrity_ok).toBe(false);
-    expect(result.error).toBe('boom');
+    // The paginator wraps the cause with which page failed; assert the contract (the underlying
+    // error surfaces, never a silent 0) rather than an exact string the wrapper legitimately enriches.
+    expect(result.error).toContain('boom');
+    expect(result.divergent_fields).toEqual(['dispatchable_count']);
   });
 
   it('fails loud on an error from the self-reported (computeClaimableLeaves) source, never coalescing to 0', async () => {
@@ -192,9 +197,28 @@ describe('computeFailLoudIntegrity (TS-3)', () => {
     expect(result.divergent_fields).toEqual(['dispatchable_count']);
   });
 
-  it('does NOT flag a self-reported UNDER-count as a violation (ranker narrowing the raw set is healthy, not a divergence)', async () => {
-    const supabase = makeFakeSupabase({ strategic_directives_v2: [{ id: '1', status: 'draft', claiming_session_id: null }, { id: '2', status: 'draft', claiming_session_id: null }] });
+  // QF-20260725-089: this previously asserted an UNDER-count was healthy ("the ranker narrows the
+  // raw set"), which was true only while recomputed was the RAW draft_unclaimed count. recomputed
+  // now runs through the same eligibility gate as self_reported, so both measure the identical
+  // quantity and an under-count is a genuine divergence. This exact tolerance is how the live
+  // 8-vs-0 slipped through with integrity_ok=true and divergent_fields=[].
+  it('REGRESSION: flags a self-reported UNDER-count — both sides are eligibility-gated, so any disagreement is real', async () => {
+    // Two rows with no hold metadata => both eligible => recomputed=2 vs self_reported=0.
+    const supabase = makeFakeSupabase({ strategic_directives_v2: [{ id: '1', sd_key: 'SD-1', status: 'draft', claiming_session_id: null }, { id: '2', sd_key: 'SD-2', status: 'draft', claiming_session_id: null }] });
     const result = await computeFailLoudIntegrity(supabase, { selfReportedCounts: { dispatchable_count: 0 } });
+    expect(result.integrity_ok).toBe(false);
+    expect(result.divergent_fields).toEqual(['dispatchable_count']);
+  });
+
+  // QF-20260725-089: the live shape — held rows must not be counted as available work at all.
+  it('REGRESSION: human-action-HELD rows are excluded from recomputed, so a fully-held belt reads 0 and agrees with a 0 self-report', async () => {
+    const rows = Array.from({ length: 7 }, (_, i) => ({
+      id: `${i}`, sd_key: `SD-HELD-${i}`, status: 'draft', claiming_session_id: null,
+      metadata: { requires_human_action: true },
+    }));
+    const supabase = makeFakeSupabase({ strategic_directives_v2: rows });
+    const result = await computeFailLoudIntegrity(supabase, { selfReportedCounts: { dispatchable_count: 0 } });
+    expect(result.recomputed.dispatchable_count).toBe(0); // was 7 — the raw count that fired IDLE_WITH_BACKLOG
     expect(result.integrity_ok).toBe(true);
   });
 
@@ -216,32 +240,29 @@ describe('computeFailLoudIntegrity (TS-3)', () => {
     expect(result.integrity_ok).toBe(true);
   });
 
-  // QF-20260720-161
-  it('does NOT flag instrument_suspect when a wide self-reported/recomputed gap is explained by human-action holds (live-verified: 3 vs 20, 11 held)', async () => {
-    const rows = Array.from({ length: 20 }, (_, i) => ({ id: `${i}`, status: 'draft', claiming_session_id: null }));
-    const supabase = makeFakeSupabase({ strategic_directives_v2: rows });
+  // QF-20260720-161's instrument_suspect heuristic (a >50%-unexplained-gap proxy) is RETIRED by
+  // QF-20260725-089: it existed only because recomputed was raw and self_reported was narrowed, so
+  // the two could legitimately differ and only a *large unexplained* gap was suspicious. With both
+  // sides gated, exact equality is strictly stronger and subsumes it. The 3-vs-20-with-11-held
+  // scenario it was built around can no longer arise: those 11 holds are now excluded from
+  // recomputed rather than being tolerated inside a gap. human_action_held is still reported for
+  // observability — it explains WHY depth is low — but is no longer arithmetic input.
+  it('still surfaces human_action_held for observability, with held rows excluded from the count', async () => {
+    const held = Array.from({ length: 11 }, (_, i) => ({
+      id: `h${i}`, sd_key: `SD-HELD-${i}`, status: 'draft', claiming_session_id: null,
+      metadata: { requires_human_action: true },
+    }));
+    const free = Array.from({ length: 3 }, (_, i) => ({ id: `f${i}`, sd_key: `SD-${i}`, status: 'draft', claiming_session_id: null }));
+    const supabase = makeFakeSupabase({ strategic_directives_v2: [...held, ...free] });
     const claimableLeavesFn = vi.fn().mockResolvedValue({
       claimable: Array.from({ length: 3 }, (_, i) => ({ sd_key: `SD-${i}`, status: 'draft' })),
-      humanActionHolds: Array.from({ length: 11 }, (_, i) => ({ sd_key: `SD-HELD-${i}`, provenance: null })),
+      humanActionHolds: held.map((h) => ({ sd_key: h.sd_key, provenance: null })),
     });
     const result = await computeFailLoudIntegrity(supabase, { claimableLeavesFn });
+    expect(result.recomputed.dispatchable_count).toBe(3); // 14 raw - 11 held
     expect(result.human_action_held).toBe(11);
-    expect(result.instrument_suspect).toBe(false);
-    expect(result.integrity_ok).toBe(true);
-  });
-
-  it('flags instrument_suspect when the gap is NOT substantially explained by known human-action holds', async () => {
-    const rows = Array.from({ length: 20 }, (_, i) => ({ id: `${i}`, status: 'draft', claiming_session_id: null }));
-    const supabase = makeFakeSupabase({ strategic_directives_v2: rows });
-    const claimableLeavesFn = vi.fn().mockResolvedValue({
-      claimable: [{ sd_key: 'SD-0', status: 'draft' }],
-      humanActionHolds: [{ sd_key: 'SD-HELD-0', provenance: null }],
-    });
-    const result = await computeFailLoudIntegrity(supabase, { claimableLeavesFn });
-    expect(result.human_action_held).toBe(1);
-    expect(result.instrument_suspect).toBe(true);
-    expect(result.integrity_ok).toBe(false);
-    expect(result.divergent_fields).toContain('dispatchable_count_unexplained_gap');
+    expect(result.integrity_ok).toBe(true); // 3 === 3, genuine agreement rather than a tolerated gap
+    expect(result.instrument_suspect).toBeUndefined(); // retired
   });
 });
 
