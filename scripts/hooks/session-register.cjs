@@ -249,61 +249,18 @@ if (require.main === module) {
 }
 
 /**
- * SD-LEO-INFRA-LAUNCHER-CAN-HOST-001 FR-2 — spawn->session correlation stamp.
+ * SD-LEO-INFRA-LAUNCHER-CAN-HOST-001 — FR-2 (stampSpawnCorrelation) WAS REMOVED, deliberately.
  *
- * WHY THIS EXISTS. LEO has spawned zero of the sessions it displays: spawn-control.js
- * correlates its spawned row on the wt.exe pid, while claude_sessions.pid holds the CLAUDE
- * CODE pid (lib/session-manager.mjs), so the join can never match. The child must therefore
- * echo something the SPAWNER minted.
+ * FR-2 shipped an exported stamp for a spawner-minted correlation token. Two hours later FR-3 of the
+ * SAME SD superseded the whole approach: `claude --session-id <uuid>` lets the spawner CHOOSE the id,
+ * so the child registers under a value the spawner already holds and there is nothing left to
+ * correlate. That is now proven live (a registered session_id byte-identical to the minted uuid).
  *
- * WHY NOT AN ENV VAR. Hook subprocesses receive ONLY
- * [CLAUDE_AUTOCOMPACT_PCT_OVERRIDE, CLAUDE_CODE_DISABLE_BACKGROUND_TASKS, CLAUDE_CODE_ENTRYPOINT,
- * CLAUDE_CODE_EXPERIMENTAL_AGENT_TEAMS, CLAUDE_CODE_SSE_PORT, CLAUDE_PROJECT_DIR]
- * (lib/hooks/session-id.cjs:36-42). A FLEET_* var is dropped before this hook ever runs — which
- * is exactly why FLEET_AUTORESUME_SD and FLEET_WORKER_CALLSIGN both have ZERO readers repo-wide
- * today despite one carrying a comment claiming a SessionStart consumer. An env-carried token
- * would no-op here while every unit test stayed green.
- * CLAUDE_CODE_SSE_PORT is NOT usable either: it is daemon-wide, identical for every session on
- * the host, so it has zero discriminating power (netstat-verified, RCA 2026-05-04, same file).
- *
- * SEPARATE FROM THE UPSERT ON PURPOSE. main()'s upsert writes no metadata; adding metadata there
- * would REPLACE the whole JSONB blob and clobber whatever session-manager's create_or_replace_session
- * RPC wrote. This is read-row -> merge client-side -> write back to the SAME session_id, matching
- * the convention in spawn-control.js and canary-guard.js.
- *
- * Fail-soft by contract: returns a reason code, never throws and never rejects. SessionStart must
- * not abort. Injectable supabase so this is unit-testable without a live client.
- *
- * @param {object} supabase - client (injected; nothing is constructed here)
- * @param {string} sessionId - resolved session id (passed explicitly — never resolved in here,
- *   so tests need no stdin, no marker files and no CLAUDE_SESSION_ID)
- * @param {string} correlation - the spawner-minted value the child is echoing
- * @returns {Promise<{stamped: boolean, reason: string}>}
+ * The function was then left exported with ZERO callers and metadata.spawn_correlation with ZERO
+ * readers -- caught by the PLAN_VERIFICATION review (VAL-CANHOST-02). Deleting it is the consistent
+ * call: FR-7 of this same SD deleted the pid-capture family for exactly this reason, that a dead
+ * exported path beside the working one invites someone to wire up the wrong one. Keeping one and
+ * deleting the other would have been the inconsistency.
  */
-async function stampSpawnCorrelation(supabase, sessionId, correlation) {
-  if (!supabase) return { stamped: false, reason: 'no_supabase' };
-  if (!sessionId) return { stamped: false, reason: 'no_session_id' };
-  if (!correlation) return { stamped: false, reason: 'no_correlation' };
-  try {
-    const { data: current, error: readError } = await supabase
-      .from('claude_sessions')
-      .select('session_id, metadata')
-      .eq('session_id', sessionId)
-      .maybeSingle();
-    if (readError) return { stamped: false, reason: 'read_error' };
-    if (!current) return { stamped: false, reason: 'row_not_found' };
 
-    // Merge, never replace: a malformed/absent metadata blob degrades to {} rather than throwing.
-    const existing = (current.metadata && typeof current.metadata === 'object') ? current.metadata : {};
-    const { error: writeError } = await supabase
-      .from('claude_sessions')
-      .update({ metadata: { ...existing, spawn_correlation: correlation } })
-      .eq('session_id', current.session_id);
-    if (writeError) return { stamped: false, reason: 'write_error' };
-    return { stamped: true, reason: 'stamped' };
-  } catch {
-    return { stamped: false, reason: 'threw' };
-  }
-}
-
-module.exports = { getCurrentSessionId, main, stampSpawnCorrelation, emitSessionCreated };
+module.exports = { getCurrentSessionId, main, emitSessionCreated };
