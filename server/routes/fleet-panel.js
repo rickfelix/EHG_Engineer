@@ -16,6 +16,15 @@ import { loadStore, buildNamedAccountChips } from '../../lib/fleet/account-capac
 
 const router = Router();
 
+// A session counts as live if it heartbeat within this window. Generous on purpose: the point is
+// to drop months-dead rows, not to hide a session that went briefly quiet. Live sessions observed
+// at 3s-15m; dead ones at 4000h+, so anything in this range separates them cleanly.
+const LIVE_WINDOW_SECONDS = 3600;
+
+// Explicit cap so a truncated page is reported rather than mistaken for the true total
+// (PostgREST silently defaults to 1000, which is exactly what made the old list look complete).
+const PANEL_ROW_CAP = 500;
+
 // Resolve a service-role Supabase client. Prefers an injected client
 // (req.app.locals.supabase) so route tests can supply a mock; falls back to a
 // fresh service-role client for the running server. Mirrors server/routes/ventures.js.
@@ -30,14 +39,34 @@ function resolveServiceClient(req) {
 }
 
 /** Format a session row from v_active_sessions into the manifest-table shape. */
+/**
+ * A session carries an identity if it is a named fleet worker OR a known role session
+ * (coordinator / adam / solomon). Rows with NONE of these are ghosts: dead processes whose
+ * rows are still being heartbeated. Observed 2026-07-25 — four such rows heartbeating every
+ * few seconds whose entire metadata was the audit trail of an is_alive repair-then-revert,
+ * with no role, callsign, model or effort. Heartbeat recency cannot separate them, because
+ * they heartbeat; the absence of ANY identity is what distinguishes them.
+ */
+function sessionIdentityKind(meta = {}) {
+  if (meta.fleet_identity?.callsign) return 'worker';
+  if (meta.is_coordinator) return 'coordinator';
+  if (meta.role) return String(meta.role);
+  if (meta.model) return 'unstamped';   // real session, identity not yet assigned
+  return null;                          // no identity at all -> ghost
+}
+
 function formatSessionRow(row) {
   const meta = row.metadata || {};
   const identity = meta.fleet_identity || {};
   const model = meta.model || '--';
   const effort = meta.effort || '--';
+  const kind = sessionIdentityKind(meta);
   return {
     session_id: row.session_id,
-    callsign: identity.callsign || null,
+    // Fall back to the role name so the coordinator/Adam/Solomon rows read as themselves
+    // instead of as blanks. Fleet callsign still wins when present.
+    callsign: identity.callsign || (kind && kind !== 'unstamped' ? kind : null),
+    identity_kind: kind,
     color: identity.color || null,
     role: identity.role || null,
     account: identity.accountUuid8 || null,
@@ -67,12 +96,34 @@ function formatSessionRow(row) {
 export async function getFleetPanel(req, res) {
   const supabase = resolveServiceClient(req);
 
-  const { data: sessionRows, error: sessionsError } = await supabase
-    .from('v_active_sessions')
-    .select('session_id, sd_key, computed_status, metadata, heartbeat_age_human')
-    .order('heartbeat_age_human', { ascending: true });
+  // v_active_sessions is "active" in name only — it carries every session ever registered
+  // (measured 2026-07-25: 1000 rows returned, 6 with a heartbeat under 1h, oldest ~234 days).
+  // Default the panel to genuinely-live sessions; ?all=1 restores the full history, so this
+  // FILTERS the view without destroying the signal behind it.
+  const showAll = String(req?.query?.all ?? '') === '1';
+  const windowSeconds = Number.parseInt(req?.query?.windowSeconds, 10) || LIVE_WINDOW_SECONDS;
 
-  const sessions = sessionsError || !sessionRows ? [] : sessionRows.map(formatSessionRow);
+  // Order by the NUMERIC age, not heartbeat_age_human — that column is display text
+  // ("6s ago", "15m ago", "4500h ago") and sorting it lexicographically scrambled the list.
+  let query = supabase
+    .from('v_active_sessions')
+    .select('session_id, sd_key, computed_status, metadata, heartbeat_age_human, heartbeat_age_seconds')
+    .order('heartbeat_age_seconds', { ascending: true })
+    .limit(PANEL_ROW_CAP);
+
+  if (!showAll) query = query.lt('heartbeat_age_seconds', windowSeconds);
+
+  const { data: sessionRows, error: sessionsError } = await query;
+
+  const allRows = sessionsError || !sessionRows ? [] : sessionRows.map(formatSessionRow);
+  // Drop identity-less ghosts from the default view (they heartbeat, so the recency filter
+  // above cannot catch them). ?all=1 still shows everything.
+  const sessions = showAll ? allRows : allRows.filter((r) => r.identity_kind !== null);
+  const ghostsHidden = allRows.length - sessions.length;
+
+  // Surface truncation rather than silently returning a capped page (PostgREST defaults to 1000,
+  // which reads as a real total). Callers can tell "that is all of them" from "there are more".
+  const truncated = !sessionsError && Array.isArray(sessionRows) && sessionRows.length >= PANEL_ROW_CAP;
 
   // FR-1/FR-2: three named-account capacity chips (mockup-1) — always exactly 3, even when the
   // capacity store is empty/partial (unmatched accounts render 'wk --%').
@@ -85,7 +136,12 @@ export async function getFleetPanel(req, res) {
     attentionStrip = [];
   }
 
-  res.json({ sessions, accountChips, attentionStrip });
+  res.json({
+    sessions,
+    accountChips,
+    attentionStrip,
+    filter: { liveOnly: !showAll, windowSeconds, truncated, ghostsHidden },
+  });
 }
 
 router.get('/', getFleetPanel);
