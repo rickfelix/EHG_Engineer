@@ -19,8 +19,12 @@
  *   1 — INFRA failure (could not build the client / the sweep threw). Never conflated with "quiet".
  *
  * There is deliberately NO breach code. A consult with no verdict is NOT a failure of this sweep —
- * Solomon answers roughly 18% of consults by construction, so escalating on unanswered consults
- * would fire constantly and train everyone to ignore it. This sweep reports only what it CONSUMED.
+ * a bit under HALF of consults are ever answered (MEASURED 2026-07-25: 42 of 93 = 45.2%), so
+ * escalating on unanswered consults would fire on the majority of rows and train everyone to ignore
+ * it. This sweep reports only what it CONSUMED.
+ * (An earlier draft of this header cited ~18%; that figure was wrong by ~2.5x and is corrected here.
+ * The decision is unchanged — 55% unanswered is, if anything, a stronger argument against a breach
+ * code — but the number was load-bearing in the rationale, so it should not stay wrong.)
  */
 import { createClient } from '@supabase/supabase-js';
 // Windows-safe main-module guard (TR-4): the raw `import.meta.url === file://${process.argv[1]}`

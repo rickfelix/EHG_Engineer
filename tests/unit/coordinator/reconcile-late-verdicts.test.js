@@ -7,6 +7,9 @@
  */
 import { describe, it, expect, vi } from 'vitest';
 import { createRequire } from 'module';
+// The REAL key primitive. Every other test here stubs recordDisposition, which is exactly how a
+// contract violation in the subject we pass it survived a fully green suite (SEC-1).
+import { computeQuestionKey } from '../../../lib/decision-binding/disposition.js';
 const require = createRequire(import.meta.url);
 const { reconcileLateVerdicts } = require('../../../lib/coordinator/reply-class.cjs');
 
@@ -34,8 +37,9 @@ function makeFakeSupabase({ candidates = [], answers = [], onUpdate = () => {} }
   // Filters are recorded PER QUERY. A single shared map lets the answer query's
   // kind='adam_advisory' clobber the candidate query's kind='solomon_consult', which silently
   // inverts what the scoping assertions below actually prove (hit during EXEC).
-  const state = { updates: [], candidateFilters: {}, answerFilters: {}, mode: 'candidates' };
+  const state = { updates: [], candidateFilters: {}, answerFilters: {}, candidateOrders: [], answerOrders: [], mode: 'candidates' };
   const bucket = () => (state.mode === 'candidates' ? state.candidateFilters : state.answerFilters);
+  const orders = () => (state.mode === 'candidates' ? state.candidateOrders : state.answerOrders);
   const api = {
     from() { return api; },
     select(cols) {
@@ -45,7 +49,9 @@ function makeFakeSupabase({ candidates = [], answers = [], onUpdate = () => {} }
     eq(col, val) { bucket()[col] = val; return api; },
     is(col, val) { bucket()[col] = val; return api; },
     in() { return api; },
-    order() { return api; },
+    // Recorded, not ignored: ORDER is load-bearing here (it decides which slice of the backlog is
+    // drained and which answer wins), so a test must be able to assert on it.
+    order(col, opts) { orders().push({ col, opts }); return api; },
     limit() { return Promise.resolve({ data: candidates, error: null }); },
     range(from, to) {
       return Promise.resolve({ data: answers.slice(from, to + 1), error: null });
@@ -70,9 +76,11 @@ describe('reconcileLateVerdicts — FR-3 consumer', () => {
 
     expect(out).toMatchObject({ checked: 1, reconciled: 1 });
     expect(recordDisposition).toHaveBeenCalledTimes(1);
+    // Subject is a content-derived OBJECT. This assertion previously pinned `solomon-consult:corr-1`
+    // — a string — and so actively certified the SEC-1 defect as correct behaviour.
     expect(recordDisposition.mock.calls[0][0]).toMatchObject({
       decisionType: 'consult_answer',
-      subject: 'solomon-consult:corr-1',
+      subject: { consult_purpose: 'pre_send', question_text: 'b' },
     });
     // TR-5 guard: prove the answer set was genuinely non-empty, not a fail-open no-op.
     expect(out.reconciledIds).toEqual(['row-1']);
@@ -152,6 +160,67 @@ describe('reconcileLateVerdicts — FR-3 consumer', () => {
     });
     expect(out.reconciled).toBe(0);
     expect(state.updates).toHaveLength(0); // retryable — never silently marked done
+  });
+
+  it('SEC-1: the subject it builds satisfies the REAL computeQuestionKey contract', async () => {
+    // THE REGRESSION GUARD. Shipped code passed `solomon-consult:${corr}` — a STRING — and
+    // computeQuestionKey throws on a non-object. The throw landed in the per-candidate catch and was
+    // swallowed, so reconciled stayed 0, nothing was ever stamped, and the cron logged ok:true and
+    // exited 0 forever. Every test passed over it because every test stubbed the writer. Here the
+    // stub calls the REAL primitive, so a non-conforming subject fails loudly instead of silently.
+    const { api } = makeFakeSupabase({ candidates: [CONSULT()], answers: [ANSWER('corr-1')] });
+    const seen = [];
+    const out = await reconcileLateVerdicts(api, {
+      recordDisposition: async ({ decisionType, subject }) => {
+        seen.push(computeQuestionKey(decisionType, subject)); // throws on the old string subject
+        return { created: true };
+      },
+    });
+
+    expect(out.reconciled).toBe(1);
+    expect(seen).toHaveLength(1);
+    expect(seen[0]).toMatch(/^dq_[0-9a-f]{64}$/);
+  });
+
+  it('SEC-1: the key is CONTENT-derived — correlation_id must not change it', async () => {
+    // disposition.js is explicit that a consult_answer key derives from question TEXT and "never on
+    // correlation_id/message_id, which rotate per session". So the SAME question re-asked in a new
+    // session (new corr) must dedup onto the SAME key, and a DIFFERENT question must not.
+    const keyFor = async (corr, body) => {
+      const row = CONSULT({ corr, payload: { correlation_id: corr, body } });
+      const { api } = makeFakeSupabase({ candidates: [row], answers: [ANSWER(corr)] });
+      let key;
+      await reconcileLateVerdicts(api, {
+        recordDisposition: async ({ decisionType, subject }) => { key = computeQuestionKey(decisionType, subject); return { created: true }; },
+      });
+      return key;
+    };
+
+    expect(await keyFor('corr-A', 'should I send X?')).toBe(await keyFor('corr-B', 'should I send X?'));
+    expect(await keyFor('corr-A', 'should I send X?')).not.toBe(await keyFor('corr-A', 'should I send Y?'));
+  });
+
+  it('SEC-1: a consult with NO question text is skipped, not collapsed onto a shared key', async () => {
+    // The tempting fix is a constant placeholder when text is missing — but then every text-less
+    // consult hashes to ONE key, dedup returns the first row, and the rest read as reconciled
+    // without ever being reconciled. Skipping keeps them un-stamped and retryable.
+    const blank = { id: 'row-blank', subject: null, body: null, created_at: '2026-07-25T10:00:00Z',
+      payload: { kind: 'solomon_consult', consult_purpose: 'pre_send', correlation_id: 'corr-1', reply_class: 'reply-needed' } };
+    const { api, state } = makeFakeSupabase({ candidates: [blank], answers: [ANSWER('corr-1')] });
+    const recordDisposition = vi.fn(async () => ({ created: true }));
+    const out = await reconcileLateVerdicts(api, { recordDisposition });
+
+    expect(out).toMatchObject({ reconciled: 0, unkeyable: 1 });
+    expect(recordDisposition).not.toHaveBeenCalled();
+    expect(state.updates).toHaveLength(0); // stays retryable
+  });
+
+  it('SEC-3: candidates are drained OLDEST-FIRST, never an arbitrary slice', async () => {
+    // Unreconciled rows accumulate (only the answered fraction is ever stamped), so an unordered
+    // .limit() window would eventually stop surfacing the head of the backlog and go quietly blind.
+    const { api, state } = makeFakeSupabase({ candidates: [CONSULT()], answers: [ANSWER('corr-1')] });
+    await reconcileLateVerdicts(api, { recordDisposition: async () => ({ created: true }) });
+    expect(state.candidateOrders[0]).toMatchObject({ col: 'created_at', opts: { ascending: true } });
   });
 
   it('returns an inert result without a recordDisposition dep (no half-done writes)', async () => {

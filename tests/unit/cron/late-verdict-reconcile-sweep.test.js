@@ -38,8 +38,8 @@ describe('adam-late-verdict-reconcile-sweep main()', () => {
   });
 
   it('a quiet lane is a HEALTHY exit 0, never a breach', async () => {
-    // Solomon answers ~18% of consults by construction, so "nothing to reconcile" must never be
-    // escalated — that is the alert-fatigue failure this SD exists to end.
+    // Under half of consults are ever answered (MEASURED 2026-07-25: 42/93 = 45.2%), so "nothing to
+    // reconcile" must never be escalated — that is the alert-fatigue failure this SD exists to end.
     const log = logger();
     const { exitCode } = await main([], {
       env: ENV, now: NOW, logger: log, supabase: {},
@@ -78,6 +78,7 @@ describe('adam-late-verdict-reconcile-sweep main()', () => {
       select() { return this; },
       eq() { return this; },
       is() { return this; },
+      order() { return this; }, // SEC-3 added ORDER to the candidate query; omitting it here threw
       limit: async () => ({ data: [], error: null }),
     };
     const { exitCode, summary } = await main([], { env: ENV, now: NOW, logger: log, supabase: fakeSupabase });

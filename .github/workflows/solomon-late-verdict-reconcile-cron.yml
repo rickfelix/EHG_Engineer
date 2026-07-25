@@ -56,8 +56,9 @@ jobs:
         run: npm ci --ignore-scripts
 
       # Only 0 and 1 are possible. There is deliberately NO breach code: Solomon answers roughly
-      # 18% of consults by construction, so escalating on unanswered consults would fire constantly
-      # and train everyone to ignore the alarm — the exact alert-fatigue failure this SD exists to
-      # end. Exit 1 is an INFRA failure and must paint the run red.
+      # under half of consults are ever answered (MEASURED 2026-07-25: 42/93 = 45.2%), so escalating
+      # on unanswered consults would fire on the majority of rows and train everyone to ignore the
+      # alarm — the exact alert-fatigue failure this SD exists to end. Exit 1 is an INFRA failure
+      # and must paint the run red.
       - name: Run late-verdict reconciliation
         run: node scripts/cron/adam-late-verdict-reconcile-sweep.mjs
