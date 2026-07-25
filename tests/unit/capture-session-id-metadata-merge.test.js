@@ -90,3 +90,35 @@ describe('QF-20260627-531: buildSessionMetadata merge-preserves stamped fields',
     });
   });
 });
+
+// ── SD-LEO-INFRA-FLEET-MODEL-REGISTRY-001 FR-1/FR-2 ─────────────────────────────
+// This writer already stored the RAW model id; it now also stamps the derived family
+// and the provenance so both writers populate the same triple. The new keys live
+// strictly inside the `if (model)` branch — the no-model path is pinned to exactly
+// { cc_pid, source } above, and the no-clobber contract must survive.
+describe('FR-1/FR-2: buildSessionMetadata stamps model_family and model_source', () => {
+  it('stamps the derived family beside a versioned raw id', () => {
+    const merged = buildSessionMetadata({}, '9', 'startup', 'claude-opus-5[1m]');
+    expect(merged.model).toBe('claude-opus-5[1m]');
+    expect(merged.model_family).toBe('opus');
+    expect(merged.model_source).toBe('sessionstart_observed');
+  });
+
+  it('stamps family for a bare-family id too', () => {
+    const merged = buildSessionMetadata({}, '9', 'startup', 'opus');
+    expect(merged.model).toBe('opus');
+    expect(merged.model_family).toBe('opus');
+  });
+
+  it('adds NO model_family/model_source key when no model is supplied', () => {
+    // Guards the exact-shape assertion this file already pins for the no-model path.
+    const merged = buildSessionMetadata({}, '9', 'startup');
+    expect('model_family' in merged).toBe(false);
+    expect('model_source' in merged).toBe(false);
+  });
+
+  it('does not overwrite an externally stamped model_source', () => {
+    const merged = buildSessionMetadata({ model_source: 'chairman' }, '9', 'startup', 'opus');
+    expect(merged.model_source).toBe('chairman');
+  });
+});
