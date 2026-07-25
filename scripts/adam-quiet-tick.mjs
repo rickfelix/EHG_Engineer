@@ -25,6 +25,12 @@ import 'dotenv/config';
 import { rehydrateBoard } from '../lib/adam/task-rehydrate.js';
 import { checkAndAlertStalls } from '../lib/adam/stall-alert.js';
 import { runOutboundSilenceWatchdog } from '../lib/adam/outbound-silence-watchdog.js';
+// SD-LEO-INFRA-ADAM-INBOUND-BACKLOG-WATCHDOG-001 FR-3: the tick's backlog COUNT comes from the
+// same shared selector the watchdog uses, so the two agree BY CONSTRUCTION rather than by
+// numeric reconciliation (criterion 3 is a RECURRENCE of the lane-002 close that claimed
+// unified consumption semantics and did not achieve it).
+import { fetchInboundBacklog, classifyBacklog } from '../lib/adam/inbound-backlog.js';
+import { resolveAdamSessionIds } from '../lib/adam/inbound-backlog-watchdog.js';
 import { TABLE as TASK_LEDGER_TABLE, syncParentRollupStatus } from '../lib/adam/task-ledger.js';
 import { isMainModule } from '../lib/utils/is-main-module.js';
 // SD-LEO-INFRA-COUNT-TRUNCATION-DISCIPLINE-001 FR-6 batch 9: task_ledger has no archival/
@@ -279,6 +285,25 @@ export async function surfaceInboxItems(sb) {
       .gte('created_at', cutoffIso)
       .limit(400);
 
+    // FR-3: the BACKLOG COUNT is derived from the shared SSOT selector — the same one the cron
+    // watchdog consumes — so tick count and watchdog count agree BY CONSTRUCTION. The display
+    // list below deliberately keeps its own 7d window + cap (TICK_SURFACE_WINDOW_MS is NOT
+    // changed; aging out was verified NOT to be the cause and must not be "fixed"). Fail-soft:
+    // any selector error leaves backlogCount null and the tick still prints its item list.
+    let backlogCount = null;
+    let backlogBreachingCount = null;
+    try {
+      const { ids } = await resolveAdamSessionIds(sb);
+      if (ids && ids.length) {
+        const { rows: backlogRows, error: backlogError } = await fetchInboundBacklog(sb, ids);
+        if (!backlogError) {
+          const verdict = classifyBacklog(backlogRows, Date.now());
+          backlogCount = verdict.rawBacklogCount;
+          backlogBreachingCount = verdict.breachingCount;
+        }
+      }
+    } catch { /* fail-soft — the count is advisory; the item list below is the hard signal */ }
+
     const isDirectiveRow = (r) =>
       (r.payload && (DIRECTIVE_KINDS.includes(r.payload.kind) || r.payload.reply_needed || r.payload.reply_to)) || false;
 
@@ -289,10 +314,26 @@ export async function surfaceInboxItems(sb) {
     const eligible = (rows || []).filter((r) => {
       const k = r.payload && r.payload.kind;
       if (k != null && ADAM_EXCLUDED_KINDS.includes(k)) return false;
-      // SD-LEO-INFRA-COORDINATION-LANE-DELIVERY-CONTRACT-001 FR-4 (instance 3): a courtesy-ACK
-      // (kind='ack'/'coordinator_ack', already excluded from Adam's own inbox above) echoing
-      // this directive's correlation_id must never suppress the eventual genuine reply/verdict.
-      if (isDirectiveRow(r)) return !hasCorrelatedReply(r, correlationWindow || [], { excludeKinds: ADAM_EXCLUDED_KINDS });
+      // SD-LEO-INFRA-ADAM-INBOUND-BACKLOG-WATCHDOG-001 FR-3 (narrowed per RCA, not deleted).
+      //
+      // Suppression is sound ONLY for thread-ROOT rows. hasCorrelatedReply keys on
+      // `payload.correlation_id || id` (lib/coordinator/reply-correlation.cjs:30); for a row that
+      // is ITSELF a reply, correlation_id denotes the thread ROOT, so the equality match at :36
+      // admits ancestors and siblings — not only descendants. The guaranteed-present ancestor is
+      // Adam's own antecedent question, so ADAM'S QUESTION SUPPRESSED THE ANSWER TO ADAM'S
+      // QUESTION. Live 2026-07-25: 26 of 41 directive-class unacked inbound rows were suppressed,
+      // 26/26 of them non-root, each by an OLDER Adam-sent row in its own thread (witnessed:
+      // 4479197b<-05ee0769, a81f9948<-3ca3d677, c160ef08<-12139a29).
+      //
+      // The root guard is behaviorally IDENTICAL to wholesale removal across the live population
+      // (both suppress 0 of 41) while preserving SD-LEO-INFRA-ACKSTAMP-FALSE-METRICS-C6-001 and
+      // SD-LEO-INFRA-COORDINATION-LANE-DELIVERY-CONTRACT-001 FR-4, whose fixtures are thread-root
+      // rows. Those two contracts and this one are DISJOINT on thread-rootedness, not
+      // conflicting — neither is superseded, and no assertion of either was retired.
+      if (isDirectiveRow(r)) {
+        const isThreadRoot = !(r.payload && r.payload.reply_to);
+        return !(isThreadRoot && hasCorrelatedReply(r, correlationWindow || [], { excludeKinds: ADAM_EXCLUDED_KINDS }));
+      }
       return !(r.payload && r.payload.tick_surfaced_at);
     });
     // FR-5: capHit now reflects a genuine authored-item backlog exceeding the display budget
@@ -300,7 +341,7 @@ export async function surfaceInboxItems(sb) {
     // higher ceiling) -- NOT "the raw window happened to contain 50 rows," which previously gave
     // a false CAP signal even when every one of those 50 rows was mechanical noise (eligible:[]).
     const capHit = eligible.length > INBOX_DISPLAY_CAP || (rows || []).length === INBOX_RAW_FETCH_LIMIT;
-    if (eligible.length === 0) return { items: [], directives: 0, capHit };
+    if (eligible.length === 0) return { items: [], directives: 0, capHit, backlogCount, backlogBreachingCount };
 
     const surfaced = eligible.slice(0, INBOX_DISPLAY_CAP);
     const items = surfaced.map((r) => {
@@ -317,7 +358,7 @@ export async function surfaceInboxItems(sb) {
     for (const r of surfaced.filter((x) => !isDirectiveRow(x) && !(x.payload && x.payload.tick_surfaced_at))) {
       await sb.from('session_coordination').update({ payload: { ...(r.payload || {}), tick_surfaced_at: seenAt } }).eq('id', r.id);
     }
-    return { items, directives: items.filter((i) => i.isDirective).length, capHit };
+    return { items, directives: items.filter((i) => i.isDirective).length, capHit, backlogCount, backlogBreachingCount };
   } catch (e) {
     return { items: [], directives: 0, error: e && e.message };
   }

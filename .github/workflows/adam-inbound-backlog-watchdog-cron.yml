@@ -1,0 +1,67 @@
+name: "Adam inbound-backlog watchdog (cron)"
+
+# SD-LEO-INFRA-ADAM-INBOUND-BACKLOG-WATCHDOG-001 — WITNESSED 2026-07-25: 21 unacked inbound
+# rows accumulated in the Adam lane while the quiet-tick reported inbox counts of 1-5, because
+# surfaceInboxItems suppressed any row belonging to a correlation chain Adam participated in.
+# Seven were substantial Solomon/coordinator verdicts Adam never read; one reported that the CP3
+# hold flags were INERT, an unsupervised-activation risk unacknowledged for ~7h.
+#
+# This workflow is the DURABLE dispatcher. It deliberately does NOT live in a session-scoped
+# CronCreate: Adam's recurring loops died with the prior Adam session overnight, and session
+# crons expire after 7 days and die with the window (QF-20260719-196 / QF-20260719-997 class).
+#
+# The watchdog has NO liveness gate by design — "no live Adam session" is the WORST backlog
+# condition, not an exemption, so this must keep firing when nothing else is running.
+
+on:
+  schedule:
+    # Plain interval, every 30 minutes. Deliberately NOT a wall-clock/ET schedule: this alarm has
+    # no quiet-window requirement, so it avoids the DST double-registration idiom and the
+    # cronToIntervalSeconds hour-range fallback that hour-list schedules incur.
+    - cron: '*/30 * * * *'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ${{ github.workflow }}
+  cancel-in-progress: true
+
+jobs:
+  sweep:
+    name: Inbound-backlog age sweep
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+
+    # supabase-js + service-role ONLY. No pooler/pg/DATABASE_URL path: SUPABASE_POOLER_URL is
+    # injected into ZERO *cron*.yml in this repo and is silently undefined on a GHA runner.
+    env:
+      SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+      SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: 'npm'
+
+      - name: Install dependencies
+        run: npm ci --ignore-scripts
+
+      # Exit 2 is a BREACH (an expected, actionable outcome) and must not paint the run red;
+      # exit 1 is an INFRA failure and must. Anything else propagates as-is.
+      - name: Run inbound-backlog watchdog (--once)
+        run: |
+          set +e
+          node scripts/cron/adam-inbound-backlog-watchdog-sweep.mjs --once
+          code=$?
+          if [ "$code" = "2" ]; then
+            echo "::warning::Adam inbound-backlog BREACH escalated (exit 2) — feedback row emitted"
+            exit 0
+          fi
+          exit $code
