@@ -22,6 +22,11 @@ const fs = require('node:fs');
 const path = require('node:path');
 const { spawn, spawnSync } = require('node:child_process');
 
+// SD-LEO-INFRA-SPAWN-ROOT-CURRENCY-INVARIANT-001 FR-3: resolved from this module's own
+// location, so the reaper's root is a property of the installed code rather than of
+// whatever directory the caller happened to be standing in.
+const CANONICAL_REPO_ROOT = path.resolve(__dirname, '..', '..');
+
 const DEFAULT_CADENCE = 12; // every 12th sweep ≈ 1 hour at 5-min intervals
 const STATE_RELATIVE = path.join('.claude', 'worktree-reaper-state.json');
 const STATE_SCHEMA_VERSION = 1;
@@ -197,7 +202,16 @@ function buildReaperArgs({ reaperScript, execute, stage2, allPools }) {
  * @returns {object} { invoked, counter, cadence, result, enabled }
  */
 function tick(opts = {}) {
-  const repoRoot = opts.repoRoot || process.cwd();
+  // SD-LEO-INFRA-SPAWN-ROOT-CURRENCY-INVARIANT-001 FR-3: the fallback was process.cwd(),
+  // which meant the reaper's ROOT — and therefore, via reaperScript below, the reaper's
+  // own CODE — came from whatever directory the caller happened to be standing in. The
+  // only production caller (scripts/stale-session-sweep.cjs) passes no repoRoot, and the
+  // sweep routinely runs from a worktree. That is how the reap-protected marker shipped
+  // inert: its fix sits 50 commits back, so a root behind it executes a worktree-reaper.mjs
+  // in which the protection is physically absent.
+  // opts.repoRoot is PRESERVED — 12 tests inject it, and it is the seam that lets the
+  // refuse-to-reap test below run against a temp dir instead of the real repo.
+  const repoRoot = opts.repoRoot || CANONICAL_REPO_ROOT;
   const cadence = Number.isFinite(opts.cadence) && opts.cadence > 0 ? opts.cadence : DEFAULT_CADENCE;
   const logger = opts.logger || ((m) => console.log(m));
   const statePath = path.join(repoRoot, STATE_RELATIVE);
@@ -222,6 +236,39 @@ function tick(opts = {}) {
     state.last_result = 'script_missing';
     writeState(statePath, state);
     return { invoked: false, counter: state.sweep_counter, cadence, result: 'script_missing', enabled: true };
+  }
+
+  // SD-LEO-INFRA-SPAWN-ROOT-CURRENCY-INVARIANT-001 FR-3 — REFUSE TO REAP FROM A STALE TREE.
+  //
+  // reaperScript above is resolved OUT OF repoRoot, so the reaper's code identity is that
+  // tree's HEAD. Reaping is destructive and unrecoverable: a deleted worktree cannot be
+  // restored by a later error message, so failing loud AFTER the fact is not available to
+  // us. The only safe direction is to refuse before executing. This is precisely how the
+  // reap-protected marker came to be inert — the guard existed on origin/main and was
+  // physically absent from the file being run.
+  //
+  // Deliberately placed AFTER the enabled/cadence/script-exists checks so those keep
+  // reporting their own reasons, and so a disabled or not-due tick never touches git.
+  try {
+    const { enforceTreeCurrency } = require('../../lib/fleet/tree-currency.cjs');
+    enforceTreeCurrency({
+      dir: repoRoot,
+      logger: { warn: (m) => logger(m) },
+      label: 'worktree-reaper source tree',
+      // The reaper REFUSES; it never heals. It runs unattended against a shared root, so a
+      // fast-forward here could collide with a peer worktree's in-flight state. Skipping a
+      // reap costs nothing — the next tick retries — while a bad mutation on the shared
+      // root is exactly the hazard the auto-pull prohibition exists to prevent.
+      allowSelfHeal: false,
+      ...(opts.currencyRunner ? { runner: opts.currencyRunner } : {}),
+      ...(opts.currencyEnv ? { env: opts.currencyEnv } : {}),
+    });
+  } catch (err) {
+    logger(`WORKTREE REAPER TICK: sweep=${state.sweep_counter} — REFUSING TO REAP: ${err && err.message ? err.message : 'currency check failed'}`);
+    state.last_run_at = new Date().toISOString();
+    state.last_result = 'refused_stale_tree';
+    writeState(statePath, state);
+    return { invoked: false, counter: state.sweep_counter, cadence, result: 'refused_stale_tree', enabled: true };
   }
 
   // Single-flight guard: if the previous reaper is still running, do not stack a

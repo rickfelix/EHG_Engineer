@@ -10,10 +10,34 @@ import { describe, it, expect, beforeEach, afterEach } from 'vitest';
 import fs from 'node:fs';
 import path from 'node:path';
 import os from 'node:os';
+
 import { createRequire } from 'node:module';
 
 const require = createRequire(import.meta.url);
 const tickModPath = path.resolve(__dirname, '../../../scripts/fleet/worktree-reaper-tick.cjs');
+
+/**
+ * SD-LEO-INFRA-SPAWN-ROOT-CURRENCY-INVARIANT-001 FR-3 added a fail-closed currency
+ * precondition: the tick refuses to reap from a tree it cannot prove is current, because
+ * the reaper's own script is loaded out of that tree and a deletion cannot be undone by a
+ * later error message.
+ *
+ * These fixtures use a bare temp directory, which is not a git repository, so the guard
+ * correctly refuses it — the guard working, not a regression. The three tests that
+ * exercise SPAWN MECHANICS (detached launch, single-flight, spawn-error handling) rather
+ * than currency inject a runner reporting a clean, current tree, to isolate the behaviour
+ * under test. Injecting it explicitly is deliberate: it keeps the new precondition visible
+ * in those tests rather than silently bypassed.
+ *
+ * Refusal itself is covered separately, in the FR-3 describe block at the end of this file.
+ */
+const CURRENT_RUNNER = (args) => {
+  if (args[0] === 'fetch') return '';
+  if (args.includes('--abbrev-ref')) return 'main\n';
+  if (args[0] === 'status') return '';
+  if (args[0] === 'rev-list') return '0\n';
+  return '';
+};
 
 // Each test gets a fresh require so state file writes stay isolated.
 function loadTickModule() {
@@ -154,7 +178,7 @@ describe('worktree-reaper-tick — out-of-band launch (SD-FDBK-INFRA-WORKTREE-RE
   it('AC-1: launches the reaper detached and returns result=spawned with a pid (does not block)', () => {
     writeFakeReaper(tmpRoot);
     const { tick } = loadTickModule();
-    const res = tick({ repoRoot: tmpRoot, cadence: 3, force: true, logger: () => {} });
+    const res = tick({ repoRoot: tmpRoot, cadence: 3, force: true, logger: () => {}, currencyRunner: CURRENT_RUNNER });
     expect(res.result).toBe('spawned');
     expect(typeof res.pid).toBe('number');
     const state = readStateFile(tmpRoot);
@@ -174,7 +198,7 @@ describe('worktree-reaper-tick — out-of-band launch (SD-FDBK-INFRA-WORKTREE-RE
       JSON.stringify({ schema_version: 1, sweep_counter: 11, last_run_at: null, last_result: 'spawned', last_pid: process.pid, last_spawn_at: new Date().toISOString() }),
     );
     const { tick } = loadTickModule();
-    const res = tick({ repoRoot: tmpRoot, cadence: 3, force: true, logger: () => {} });
+    const res = tick({ repoRoot: tmpRoot, cadence: 3, force: true, logger: () => {}, currencyRunner: CURRENT_RUNNER });
     expect(res.result).toBe('skipped_in_flight');
     expect(res.invoked).toBe(false);
   });
@@ -186,7 +210,7 @@ describe('worktree-reaper-tick — out-of-band launch (SD-FDBK-INFRA-WORKTREE-RE
     fs.writeFileSync(path.join(tmpRoot, '.claude'), 'not a directory');
     const { tick } = loadTickModule();
     let res;
-    expect(() => { res = tick({ repoRoot: tmpRoot, cadence: 3, force: true, logger: () => {} }); }).not.toThrow();
+    expect(() => { res = tick({ repoRoot: tmpRoot, cadence: 3, force: true, logger: () => {}, currencyRunner: CURRENT_RUNNER }); }).not.toThrow();
     expect(res.result.startsWith('spawn_error')).toBe(true);
   });
 
@@ -197,5 +221,118 @@ describe('worktree-reaper-tick — out-of-band launch (SD-FDBK-INFRA-WORKTREE-RE
     expect(isPidAlive(0)).toBe(false);
     expect(isPidAlive(null)).toBe(false);
     expect(isPidAlive(-1)).toBe(false);
+  });
+});
+
+/**
+ * SD-LEO-INFRA-SPAWN-ROOT-CURRENCY-INVARIANT-001 FR-3 — REFUSE TO REAP FROM A STALE TREE.
+ *
+ * This is the destructive half of the SD. The tick resolves the reaper SCRIPT ITSELF out
+ * of repoRoot, so the reaper's code identity is that tree's HEAD. That is exactly how the
+ * reap-protected marker shipped inert: the guard existed on origin/main and was physically
+ * absent from the file being executed, and the reaper deleted a worktree the marker was
+ * supposed to protect.
+ *
+ * A deletion cannot be undone by a later error message, so failing loud after the fact is
+ * not available here — the only safe direction is to refuse before executing.
+ *
+ * SAFETY (SD correction C7): every case below runs against a TEMP directory with a FAKE
+ * reaper script. Nothing here runs git worktree add/remove against the real repo or
+ * invokes the real scripts/worktree-reaper.mjs. The chairman has an in-flight protected
+ * worktree; this suite must never be able to touch it.
+ */
+describe('FR-3: the reaper refuses to reap from a tree it cannot prove is current', () => {
+  const origEnv = { ...process.env };
+  let tmpRoot;
+
+  // A fake reaper that WRITES A SENTINEL when it runs. The assertion that matters is not
+  // just "result was refused" but that the reaper never executed at all.
+  function writeSentinelReaper(root) {
+    const dir = path.join(root, 'scripts');
+    fs.mkdirSync(dir, { recursive: true });
+    // JSON.stringify handles Windows path separators without hand-rolled escaping —
+    // a literal backslash in a generated script is an easy way to write a broken test.
+    const sentinel = JSON.stringify(path.join(root, 'REAPER_RAN.sentinel'));
+    fs.writeFileSync(
+      path.join(dir, 'worktree-reaper.mjs'),
+      `import fs from 'node:fs'; fs.writeFileSync(${sentinel}, 'ran'); process.exit(0);\n`,
+    );
+  }
+
+  const staleRunner = (args) => {
+    if (args[0] === 'fetch') return '';
+    if (args.includes('--abbrev-ref')) return 'main\n';
+    if (args[0] === 'status') return '';
+    if (args[0] === 'rev-list') return '7\n';   // 7 behind
+    if (args[0] === 'pull') throw new Error('pull must never be attempted by the reaper');
+    return '';
+  };
+
+  beforeEach(() => {
+    tmpRoot = fs.mkdtempSync(path.join(os.tmpdir(), 'reaper-currency-'));
+    fs.mkdirSync(path.join(tmpRoot, '.claude'), { recursive: true });
+    process.env.WORKTREE_REAPER_ENABLED = 'true';
+  });
+  afterEach(() => {
+    try { fs.rmSync(tmpRoot, { recursive: true, force: true }); } catch { /* ignore */ }
+    process.env = { ...origEnv };
+  });
+
+  it('a BEHIND tree refuses, and the reaper never runs', async () => {
+    writeSentinelReaper(tmpRoot);
+    const tickFn = loadTickModule().tick;
+    const res = tickFn({ repoRoot: tmpRoot, cadence: 3, force: true, logger: () => {}, currencyRunner: staleRunner, currencyEnv: {} });
+    expect(res.result).toBe('refused_stale_tree');
+    expect(res.invoked).toBe(false);
+    // The load-bearing assertion: nothing was executed.
+    await new Promise((r) => setTimeout(r, 60));
+    expect(fs.existsSync(path.join(tmpRoot, 'REAPER_RAN.sentinel'))).toBe(false);
+  });
+
+  it('a GIT ERROR refuses too — fail closed, never reap on uncertainty', async () => {
+    writeSentinelReaper(tmpRoot);
+    const tickFn = loadTickModule().tick;
+    const res = tickFn({
+      repoRoot: tmpRoot, cadence: 3, force: true, logger: () => {},
+      currencyRunner: () => { throw new Error('git unavailable'); }, currencyEnv: {},
+    });
+    expect(res.result).toBe('refused_stale_tree');
+    await new Promise((r) => setTimeout(r, 60));
+    expect(fs.existsSync(path.join(tmpRoot, 'REAPER_RAN.sentinel'))).toBe(false);
+  });
+
+  it('the refusal is PERSISTED to state, so a stale reaper is visible after the fact', async () => {
+    writeSentinelReaper(tmpRoot);
+    const tickFn = loadTickModule().tick;
+    tickFn({ repoRoot: tmpRoot, cadence: 3, force: true, logger: () => {}, currencyRunner: staleRunner, currencyEnv: {} });
+    const state = JSON.parse(fs.readFileSync(path.join(tmpRoot, '.claude', 'worktree-reaper-state.json'), 'utf8'));
+    expect(state.last_result).toBe('refused_stale_tree');
+  });
+
+  it('the reaper NEVER attempts a self-heal pull — it refuses instead of mutating', async () => {
+    // The spawn seam may fast-forward a clean tree. The reaper must not: it runs
+    // unattended on a shared root and a mutation there could clobber a peer worktree.
+    writeSentinelReaper(tmpRoot);
+    const tickFn = loadTickModule().tick;
+    const calls = [];
+    const recording = (args) => { calls.push(args[0]); return staleRunner(args); };
+    const res = tickFn({ repoRoot: tmpRoot, cadence: 3, force: true, logger: () => {}, currencyRunner: recording, currencyEnv: {} });
+    expect(res.result).toBe('refused_stale_tree');
+    expect(calls).not.toContain('pull');
+  });
+
+  it('the canonical root fallback is used when no repoRoot is injected (not process.cwd)', async () => {
+    const tickFn = loadTickModule().tick;
+    // Called with no repoRoot from an arbitrary cwd. Whatever it resolves, it must NOT be
+    // the ambient cwd of this test process — that is the defect FR-3 removes.
+    const seen = [];
+    tickFn({
+      cadence: 3, force: true, logger: () => {},
+      currencyRunner: (args, o) => { seen.push(o && o.cwd); return staleRunner(args); },
+      currencyEnv: {},
+    });
+    expect(seen.length).toBeGreaterThan(0);
+    expect(seen[0]).toBeTruthy();
+    expect(path.resolve(seen[0])).not.toBe(path.resolve(tmpRoot));
   });
 });
