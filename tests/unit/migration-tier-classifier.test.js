@@ -176,3 +176,64 @@ describe('classifyMigration — invariants', () => {
     expect(r.reason).not.toBe('embedded_semicolon_ambiguity');
   });
 });
+
+/**
+ * QF-20260725-761 — a trailing/inline comment must not decide the tier. normalizeHead only
+ * stripped comments that PRECEDE a statement, so prose survived into the matched head and
+ * pushed provably-additive migrations to TIER-2 (a human ceremony sized by a comment).
+ * The stripper is literal-aware on purpose: the blunt stripSqlComments used by the security
+ * scan corrupts a COMMENT ON ... IS '...' value containing '--', which regressed
+ * 20260710_venture_capabilities_evidence.sql from TIER-1 to TIER-2 during development.
+ */
+describe('QF-20260725-761 — comments must not change the tier', () => {
+  const T1 = (sql) => expect(classifyMigration(sql).tier).toBe(1);
+  const T2 = (sql) => expect(classifyMigration(sql).tier).toBe(2);
+
+  it('trailing comment on a mid-list ADD COLUMN item stays TIER-1 (the swallow bug)', () => {
+    T1('ALTER TABLE operator_cash_burn_monthly\n  ADD COLUMN manual_revenue_usd numeric, -- operator-entered\n  ADD COLUMN manual_revenue_last_synced_at timestamptz;');
+  });
+
+  it('classifies identically with and without that comment', () => {
+    const withC = 'ALTER TABLE foo\n  ADD COLUMN a numeric, -- note\n  ADD COLUMN b timestamptz;';
+    const without = 'ALTER TABLE foo\n  ADD COLUMN a numeric,\n  ADD COLUMN b timestamptz;';
+    expect(classifyMigration(withC).tier).toBe(classifyMigration(without).tier);
+  });
+
+  it('inline comment between a constant DEFAULT and the next item stays TIER-1', () => {
+    T1('ALTER TABLE foo ADD COLUMN a int DEFAULT 5 -- note\n, ADD COLUMN b text;');
+  });
+
+  it('block comment after a constant DEFAULT stays TIER-1', () => {
+    T1('ALTER TABLE foo ADD COLUMN a int DEFAULT 5 /* note */;');
+  });
+
+  // The literal-awareness guard — this is the case that a blunt comment-stripper breaks.
+  it('a COMMENT ON value containing -- as prose is NOT eaten (stays TIER-1)', () => {
+    T1("ALTER TABLE venture_capabilities ADD COLUMN evidence jsonb;\nCOMMENT ON COLUMN venture_capabilities.evidence IS 'citation -- a live URL, an account ID -- so it reflects delivered reality';");
+  });
+
+  it('a COMMENT ON value containing /* as prose is NOT eaten (stays TIER-1)', () => {
+    T1("ALTER TABLE foo ADD COLUMN a jsonb;\nCOMMENT ON COLUMN foo.a IS 'shape /* documented but not enforced */ see docs';");
+  });
+
+  // Criteria must NOT loosen: a comment cannot launder a genuinely TIER-2 statement.
+  it('NOT NULL is still TIER-2 even with a reassuring comment', () => {
+    T2('ALTER TABLE foo ADD COLUMN a int NOT NULL; -- harmless, promise');
+  });
+
+  it('volatile DEFAULT is still TIER-2 even with a comment', () => {
+    T2('ALTER TABLE foo ADD COLUMN a timestamptz DEFAULT now(); -- additive only');
+  });
+
+  it('DROP COLUMN is still TIER-2 even when a comment sits beside it', () => {
+    T2('ALTER TABLE foo ADD COLUMN a int, DROP COLUMN b; -- tidy-up');
+  });
+
+  it('a comment cannot hide a DROP behind an additive head', () => {
+    T2('ALTER TABLE foo ADD COLUMN a int; /* nothing to see */ DROP TABLE bar;');
+  });
+
+  it('comment-split SECURITY DEFINER is still caught (stripping yields a space, not a fusion)', () => {
+    T2('CREATE FUNCTION f() RETURNS void LANGUAGE sql SECURITY/*x*/DEFINER AS $$ SELECT 1 $$;');
+  });
+});
