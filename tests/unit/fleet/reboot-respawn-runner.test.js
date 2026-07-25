@@ -38,10 +38,10 @@ describe('runRebootRespawn dry-run (FR-5) — default INERT', () => {
     expect(events[0].payload).toMatchObject({ verb: 'respawn', callsign: 'Worker-1', resume_uuid: 'u-1', live: false });
 
     // The per-slot invocation carries the correct --resume token (slot 1) / no token (slot 2).
-    expect(res.results[0].invocation.args).toEqual(['new-tab', '-d', resolveRepoRoot(), '--', resolveClaudeCmd(), '--resume', 'u-1']);
+    expect(res.results[0].invocation.args).toEqual(['-w', 'new', 'new-tab', '-d', resolveRepoRoot(), '--', resolveClaudeCmd(), '--resume', 'u-1']);
     // FR-3: a slot with no resume token gets a MINTED --session-id instead, so the spawner knows in
     // advance the id the child will register under. Injected via uuidFn for determinism.
-    expect(res.results[1].invocation.args).toEqual(['new-tab', '-d', resolveRepoRoot(), '--', resolveClaudeCmd(), '--session-id', MINTED]);
+    expect(res.results[1].invocation.args).toEqual(['-w', 'new', 'new-tab', '-d', resolveRepoRoot(), '--', resolveClaudeCmd(), '--session-id', MINTED]);
   });
 
   // QF-20260724-335: opts.sdKey stamps every fleet_verb_respawn event with an explicit run-correlator
@@ -75,8 +75,8 @@ describe('runRebootRespawn live (FR-5)', () => {
     });
     expect(res.live).toBe(true);
     expect(spawnFn).toHaveBeenCalledTimes(2);
-    expect(spawnCalls[0]).toEqual({ program: 'wt.exe', args: ['new-tab', '-d', resolveRepoRoot(), '--', resolveClaudeCmd(), '--resume', 'u-1'] });
-    expect(spawnCalls[1].args).toEqual(['new-tab', '-d', resolveRepoRoot(), '--', resolveClaudeCmd(), '--session-id', MINTED]); // slot 2 had no resume token -> minted id
+    expect(spawnCalls[0]).toEqual({ program: 'wt.exe', args: ['-w', 'new', 'new-tab', '-d', resolveRepoRoot(), '--', resolveClaudeCmd(), '--resume', 'u-1'] });
+    expect(spawnCalls[1].args).toEqual(['-w', 'new', 'new-tab', '-d', resolveRepoRoot(), '--', resolveClaudeCmd(), '--session-id', MINTED]); // slot 2 had no resume token -> minted id
     expect(res.results.map((r) => r.spawned)).toEqual([true, true]);
   });
 
