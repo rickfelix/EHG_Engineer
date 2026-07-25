@@ -63,12 +63,15 @@ export const DIAGNOSIS = {
   no_canary_slot_seeded:
     'fleet_desired_slots has no enabled canary slot. Provisioning cannot invent one — S3 seeding must run first.',
   registration_timeout:
-    'Spawned, but no session ever resolved by account_profile=canary. EXPECTED until FR-3 lands: '
-    + 'spawn() never writes metadata.account_profile (it uses accountProfile only for the profile dir, '
-    + 'spawn-control.js:162), and the sole writer stampRespawnedCanary (canary-guard.js:173) is both '
-    + 'off the fresh-spawn path and pid-correlation-dead (:167). Check whether a session REGISTERED at '
-    + 'all before blaming the spawn: if claude_sessions gained a row, the spawn worked and only the '
-    + 'stamp is missing.',
+    'Spawned, but no session resolved by account_profile=canary. DIAGNOSE IN THIS ORDER, because the '
+    + 'first live run showed all three earlier legs SUCCEEDING while this still failed: '
+    + '(1) did a claude_sessions row appear at all? If yes the spawn and registration both worked. '
+    + '(2) does that row carry the MINTED session id logged above? If yes, --session-id took effect. '
+    + '(3) is its metadata EMPTY? Then the session-bind loop in spawn-control closed BEFORE the child '
+    + 'registered -- window_handle, account_profile and the session_id bind are all written inside that '
+    + 'one block, so a missed bind silently discards all three. Measured 2026-07-25: the bind closed '
+    + '1.3s too early. The budget has since been widened (SESSION_BIND_MAX_ATTEMPTS); if this recurs, '
+    + 'measure the gap between fleet_verb_spawn and claude_sessions.created_at rather than re-running.',
 };
 
 /**
@@ -140,6 +143,12 @@ export async function main(argv = process.argv.slice(2), deps = {}) {
   }
 
   const outcome = classifyProvisionOutcome(result);
+  // Surface the MINTED session id. Without it the first live run could not be diagnosed from outside:
+  // a session had registered, but nothing logged the id the spawner chose, so there was no way to tell
+  // "the child ignored --session-id" from "the child registered under it, just later than we looked".
+  const minted = result && result.spawn && result.spawn.invocation && result.spawn.invocation.sessionId;
+  if (minted) log(`[provision-canary] minted session id: ${minted} — the child should register under exactly this`);
+  if (result && result.spawn && result.spawn.pid) log(`[provision-canary] launcher pid: ${result.spawn.pid} (wt.exe; exits immediately — NOT the Claude Code pid)`);
   log(`[provision-canary] ${outcome.status.toUpperCase()} reason=${outcome.reason}`);
   log(`[provision-canary] ${outcome.diagnosis}`);
   return { ...outcome, ok: outcome.exitCode === EXIT.OK, result };
