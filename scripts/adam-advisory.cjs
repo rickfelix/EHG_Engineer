@@ -522,45 +522,58 @@ async function renderChairmanDirectives(supabase, role, { quiet = false } = {}) 
  * acknowledged_at IS NULL tier) until Adam genuinely acts.
  */
 /**
- * SD-LEO-INFRA-FW3-FRAMING-PLUMBING-001-C (FR-2/FR-3): record a chairman-escalation
- * pending decision for a pick/unproven oracle framing. Idempotent per advisory row id
- * (probe-before-insert on brief_data->context->>advisory_row_id; drainInbox is
- * single-process so retries serialize). Returns true iff the row is durably queued
- * (pre-existing counts). NEVER throws — fail-soft for drain liveness, loud on failure.
+ * SD-LEO-INFRA-FW3-FRAMING-PLUMBING-001-C (FR-2/FR-3): record a pick/unproven oracle
+ * framing flag. Idempotent per advisory row id. Returns true iff the row is durably
+ * recorded. NEVER throws — fail-soft for drain liveness, loud on failure.
+ *
+ * QF-20260725-450: DESTINATION CORRECTED. This previously wrote a pending row into
+ * chairman_decisions, which flooded the chairman decision queue at ~1 row per 15-min
+ * sweep tick (114 pending, 28h of ticks, none chairman-actionable) with verbatim
+ * excerpts of inter-role engineering correspondence. Framing quality on an inter-role
+ * message is an adherence/comms-quality signal, NOT a decision the chairman can make.
+ * It now lands in the comms-quality feedback lane. The detector is unchanged — only
+ * the destination was wrong.
  */
 async function recordFramingEscalation(supabase, r, routed) {
   try {
+    // Permanent (not per-day) idempotency per advisory row. emitFeedback's own dedup
+    // hash embeds today's date, so a row re-drained tomorrow would flag again; this
+    // probe preserves the original write-once-per-advisory contract.
     const { data: existing } = await supabase
-      .from('chairman_decisions')
+      .from('feedback')
       .select('id')
-      .eq('brief_data->context->>advisory_row_id', String(r.id))
+      .eq('category', 'comms_quality')
+      .eq('metadata->>advisory_row_id', String(r.id))
       .limit(1);
-    if (existing && existing.length > 0) return true; // already queued (idempotent)
+    if (existing && existing.length > 0) return true;
     const body = (r.payload && r.payload.body) || r.body || r.subject || '';
-    const { recordPendingDecision } = await import('../lib/chairman/record-pending-decision.mjs');
-    const res = await recordPendingDecision(supabase, {
-      title: `Framing escalation (${routed.reason}): ${String(body).slice(0, 120) || '(no body)'}`,
-      // RISK condition (a): blocking:false + non-session_question decisionType makes
-      // shouldAutoEscalate() provably false — queue-only, zero per-row standout email/SMS.
-      decisionType: 'framing_escalation',
-      blocking: false,
-      raisedBy: 'adam',
-      context: {
+    const { emitFeedback } = await import('../lib/governance/emit-feedback.js');
+    const res = await emitFeedback({
+      supabase,
+      title: `Framing flag (${routed.reason}): ${String(body).slice(0, 90) || '(no body)'}`,
+      description: `Inter-role advisory flagged as ${(r.payload && r.payload.framing_class) || 'unproven'} framing `
+        + `(reason: ${routed.reason}, lane analog: ${routed.laneAnalog}).\n\nExcerpt:\n${String(body).slice(0, 400)}`,
+      type: 'issue',
+      category: 'comms_quality',
+      severity: 'low',
+      // Idempotent per advisory row: dedup_key joins the emitter's dedup_hash so a
+      // re-drain of the same row cannot create a second flag.
+      dedup_key: `framing:${String(r.id)}`,
+      metadata: {
         advisory_row_id: String(r.id),
         framing_class: (r.payload && r.payload.framing_class) || 'unproven',
         reason: routed.reason,
         lane_analog: routed.laneAnalog,
         sender_session: r.sender_session || null,
-        excerpt: String(body).slice(0, 400),
       },
     });
-    if (!res || res.recorded !== true) {
-      console.error(`  ✖ ESCALATION WRITE FAILED (id=${r.id}): ${(res && res.error) || 'unknown'}`);
+    if (!res || (!res.id && !res.deduped)) {
+      console.error(`  ✖ FRAMING FLAG WRITE FAILED (id=${r.id}): ${(res && res.error) || 'unknown'}`);
       return false;
     }
     return true;
   } catch (e) {
-    console.error(`  ✖ ESCALATION WRITE FAILED (id=${r.id}): ${(e && e.message) || e}`);
+    console.error(`  ✖ FRAMING FLAG WRITE FAILED (id=${r.id}): ${(e && e.message) || e}`);
     return false;
   }
 }
