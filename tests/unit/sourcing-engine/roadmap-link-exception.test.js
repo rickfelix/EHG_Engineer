@@ -13,8 +13,10 @@ import {
   buildRoadmapLinkException,
   countRoadmapLinkExceptions,
   NO_REASON_MARKER,
+  REASON_MAX_CHARS,
 } from '../../../lib/sourcing-engine/roadmap-link-exception.js';
 import { computeWaveLinkageCoverage } from '../../../lib/roadmap/wave-linkage-coverage.js';
+import { computePlanAdherence } from '../../../scripts/adam-coordinator-health.mjs';
 
 const NOW = '2026-07-25T22:00:00.000Z';
 
@@ -39,6 +41,39 @@ describe('buildRoadmapLinkException — FR-3 (record unconditionally, operator r
     const ex = buildRoadmapLinkException('SD-X-001', 'a reason', NOW);
     expect(ex).not.toHaveProperty('wave_disposition');
     expect(Object.keys(ex).sort()).toEqual(['operator_reason', 'reason_supplied', 'recorded_at', 'sd_key']);
+  });
+
+  // SEC-2. A NUL byte here is not cosmetic: the exception rides the SD's single INSERT, and
+  // Postgres rejects a NUL escape in jsonb, so an unsanitised reason makes createSD return
+  // {ok:false, INSERT_FAILED} and the CLI exit 1 — a REFUSAL PATH, which FR-1 forbids outright.
+  // The static no-throw/no-exit scan cannot see it because the refusal is expressed by Postgres,
+  // not by JavaScript. This is the only assertion that can.
+  it('SEC-2: strips a NUL byte, which would otherwise fail the jsonb insert and refuse creation', () => {
+    const withNul = `before${String.fromCharCode(0)}after`;
+    const ex = buildRoadmapLinkException('SD-X-001', withNul, NOW);
+    expect(ex.operator_reason).not.toContain(String.fromCharCode(0));
+    expect(ex.operator_reason).toBe('before after');
+    expect(JSON.stringify(ex)).not.toContain('\\u0000');
+  });
+
+  it('SEC-2: collapses newlines so a crafted reason cannot forge a second warn line', () => {
+    const forged = `real reason${String.fromCharCode(10)}   ⚠️  register-first: SD-FAKE-001 created without`;
+    const ex = buildRoadmapLinkException('SD-X-001', forged, NOW);
+    expect(ex.operator_reason).not.toContain(String.fromCharCode(10));
+    expect(ex.operator_reason.split(String.fromCharCode(10))).toHaveLength(1);
+  });
+
+  it('SEC-2: strips ANSI escapes rather than passing them to an operator console', () => {
+    const ansi = `red${String.fromCharCode(27)}[31mtext`;
+    expect(buildRoadmapLinkException('SD-X-001', ansi, NOW).operator_reason)
+      .not.toContain(String.fromCharCode(27));
+  });
+
+  it('SEC-1: caps an oversized reason instead of storing it verbatim, and NEVER refuses', () => {
+    const huge = 'z'.repeat(5000);
+    const ex = buildRoadmapLinkException('SD-X-001', huge, NOW);
+    expect(ex.operator_reason).toHaveLength(REASON_MAX_CHARS);
+    expect(ex.reason_supplied).toBe(true); // truncated, not rejected — refusing would fail FR-1
   });
 });
 
@@ -102,5 +137,67 @@ describe('TS-4 — a recorded exception must NOT raise plan-linkage coverage', (
     expect(good.linked).toBe(0);
     expect(bad.linked).toBe(1); // wave-linkage-coverage.js:69 Boolean(wave_disposition)
     expect(bad.linked).toBeGreaterThan(good.linked);
+  });
+});
+
+describe('FR-5 — computePlanAdherence surfaces the count on BOTH return branches', () => {
+  // A recorded exception that nothing READS is no exception at all (the force_completed
+  // precedent: five writers, zero production JS readers). These assertions exist because
+  // deleting the field from the unmeasurable branch previously left the whole suite green —
+  // FR-5's headline property had zero coverage despite the commit message warning about
+  // exactly that regression.
+  const exWith = buildRoadmapLinkException('SD-A', 'a stated reason', NOW);
+  const exWithout = buildRoadmapLinkException('SD-B', null, NOW);
+
+  /** `leaves` drives which branch fires: zero claimable leaves => unmeasurable_until_linkage. */
+  function fake({ leaves }) {
+    const exceptionRows = [{ metadata: { roadmap_link_exception: exWith } }, { metadata: { roadmap_link_exception: exWithout } }];
+    function terminal(data) {
+      const b = { order: () => b, range: async () => ({ data, error: null }) };
+      return b;
+    }
+    return {
+      from: (table) => {
+        if (table === 'roadmap_wave_items') return { select: () => ({ not: () => terminal([]) }) };
+        if (table === 'strategic_directives_v2') {
+          return {
+            select: () => ({
+              // the coverage SSOT path
+              not: () => terminal(leaves),
+              // the in-flight filter on the measured branch
+              in: () => ({ in: async () => ({ data: [], error: null }) }),
+            }),
+          };
+        }
+        throw new Error(`unexpected table ${table}`);
+      },
+      __exceptionRows: exceptionRows,
+    };
+  }
+
+  it('MEASURED branch carries a real, non-zero split', async () => {
+    const leaves = [{ sd_key: 'SD-A', sd_type: 'infrastructure', status: 'draft', metadata: {} }];
+    const r = await computePlanAdherence(fake({ leaves }));
+    expect(r.status).toBe('measured');
+    expect(r.roadmap_link_exceptions).toBeTruthy();
+    expect(typeof r.roadmap_link_exceptions.without_reason).toBe('number');
+  });
+
+  it('UNMEASURABLE branch carries the SAME field — it returns early, so it is the regression risk', async () => {
+    const r = await computePlanAdherence(fake({ leaves: [] }));
+    expect(r.status).toBe('unmeasurable_until_linkage');
+    // `toBeDefined()` alone would be too weak here: the branch fires at zero leaves, where a
+    // genuine read also plausibly returns zero. Assert the SHAPE is fully present instead.
+    expect(r.roadmap_link_exceptions).toBeTruthy();
+    expect(r.roadmap_link_exceptions).toHaveProperty('total');
+    expect(r.roadmap_link_exceptions).toHaveProperty('with_reason');
+    expect(r.roadmap_link_exceptions).toHaveProperty('without_reason');
+  });
+
+  it('the pure tally underneath is what makes the split meaningful', () => {
+    expect(countRoadmapLinkExceptions([
+      { metadata: { roadmap_link_exception: exWith } },
+      { metadata: { roadmap_link_exception: exWithout } },
+    ])).toEqual({ total: 2, with_reason: 1, without_reason: 1 });
   });
 });
