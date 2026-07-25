@@ -239,3 +239,89 @@ describe('wiring pins', () => {
     expect(src).toMatch(/\.then\(\(code\) => armCliTeardown\(code\)\)/);
   });
 });
+
+/**
+ * QF-20260725-470 — ADD COLUMN class. The verifier had NO column class, so a migration whose only
+ * DDL is ALTER TABLE ... ADD COLUMN was structurally invisible and could contribute to a
+ * MIGRATION_APPLY_STATE_PASS (live ghost 2026-07-25: chairman-gated QF-20260719-281 closed while
+ * ship_review_findings.metadata/.repo and quick_fixes.factory_lane were still absent from prod).
+ * Names are table-qualified because a bare column name is not unique across the schema.
+ */
+describe('extraction — ADD COLUMN class (QF-20260725-470)', () => {
+  it('extracts a single ADD COLUMN, table-qualified, incl. IF NOT EXISTS', () => {
+    const { creates } = extractDdlFacts('ALTER TABLE ship_review_findings ADD COLUMN IF NOT EXISTS metadata jsonb;');
+    expect(creates).toEqual([{ cls: 'column', name: 'ship_review_findings.metadata' }]);
+  });
+
+  it('pairs the table with EVERY item of a comma-separated multi-column ALTER', () => {
+    const { creates } = extractDdlFacts(
+      'ALTER TABLE sms_budget\n  ADD COLUMN IF NOT EXISTS envelope_cents int,\n  ADD COLUMN spent_cents int DEFAULT 0;'
+    );
+    expect(creates).toEqual([
+      { cls: 'column', name: 'sms_budget.envelope_cents' },
+      { cls: 'column', name: 'sms_budget.spent_cents' },
+    ]);
+  });
+
+  it('normalizes quoted and schema-qualified table/column names', () => {
+    const { creates } = extractDdlFacts('ALTER TABLE public."quick_fixes" ADD COLUMN "factory_lane" text;');
+    expect(creates).toEqual([{ cls: 'column', name: 'quick_fixes.factory_lane' }]);
+  });
+
+  it('handles a final statement with no trailing semicolon', () => {
+    const { creates } = extractDdlFacts('ALTER TABLE foo ADD COLUMN bar text');
+    expect(creates).toEqual([{ cls: 'column', name: 'foo.bar' }]);
+  });
+
+  it('keeps tables distinct across multiple ALTER statements', () => {
+    const { creates } = extractDdlFacts('ALTER TABLE a ADD COLUMN x int;\nALTER TABLE b ADD COLUMN y int;');
+    expect(creates.map((c) => c.name)).toEqual(['a.x', 'b.y']);
+  });
+
+  it('routes DROP COLUMN to drops so the lifecycle fold stays drop-aware', () => {
+    const { creates, drops } = extractDdlFacts('ALTER TABLE foo ADD COLUMN a int, DROP COLUMN b;');
+    expect(creates).toEqual([{ cls: 'column', name: 'foo.a' }]);
+    expect(drops).toEqual([{ cls: 'column', name: 'foo.b' }]);
+  });
+
+  it('a column added then dropped later does NOT survive as an expected object', () => {
+    const folded = foldLifecycle([
+      { file: '1_add.sql', ...extractDdlFacts('ALTER TABLE foo ADD COLUMN tmp int;') },
+      { file: '2_drop.sql', ...extractDdlFacts('ALTER TABLE foo DROP COLUMN tmp;') },
+    ]);
+    expect([...folded.expected.keys()]).not.toContain('column:foo.tmp');
+  });
+
+  it('an absent declared column classifies NOT_APPLIED, not APPLIED', () => {
+    const facts = [{ file: 'm.sql', ...extractDdlFacts('ALTER TABLE ship_review_findings ADD COLUMN metadata jsonb;') }];
+    const { expected, perFile } = foldLifecycle(facts);
+    const live = new Set(); // column absent live
+    const [row] = classifyFiles(['m.sql'], expected, perFile, live);
+    expect(row.status).toBe('NOT_APPLIED');
+    expect(row.missing).toEqual([{ cls: 'column', name: 'ship_review_findings.metadata' }]);
+  });
+
+  it('ignores ADD COLUMN inside comments and dollar-quoted bodies', () => {
+    const dq = '$' + '$';
+    const { creates } = extractDdlFacts(
+      `-- ALTER TABLE ghost ADD COLUMN nope text;\n` +
+      `CREATE FUNCTION f() RETURNS void AS ${dq} BEGIN EXECUTE 'ALTER TABLE ghost ADD COLUMN nope text'; END ${dq} LANGUAGE plpgsql;`
+    );
+    expect(creates.filter((c) => c.cls === 'column')).toEqual([]);
+  });
+
+  it('does not regress ADD CONSTRAINT, which shares the ALTER TABLE prefix', () => {
+    const { creates } = extractDdlFacts('ALTER TABLE foo ADD CONSTRAINT foo_pk PRIMARY KEY (id);');
+    expect(creates).toEqual([{ cls: 'constraint', name: 'foo_pk' }]);
+  });
+
+  it('an ALTER TABLE with no column items yields no facts', () => {
+    expect(extractDdlFacts('ALTER TABLE foo ENABLE ROW LEVEL SECURITY;').creates).toEqual([]);
+  });
+
+  it('the live resolver has a column branch querying information_schema.columns', () => {
+    const src = fs.readFileSync(path.join(ROOT, 'scripts', 'verify-migration-apply-state.mjs'), 'utf8');
+    expect(src).toMatch(/byClass\.get\('column'\)/);
+    expect(src).toMatch(/information_schema\.columns/);
+  });
+});

@@ -166,6 +166,42 @@ const CREATE_RES = [
   { cls: 'constraint', re: new RegExp(String.raw`\bADD\s+CONSTRAINT\s+(${ID})`, 'gi') },
 ];
 
+/**
+ * QF-20260725-470: ADD/DROP COLUMN class. The other classes are single-name statements, but one
+ * ALTER TABLE carries the table once and any number of comma-separated ADD/DROP COLUMN items (the
+ * SMS spend-envelope migration does exactly this), so columns cannot be pulled by a one-capture
+ * regex like the rest — the table must be paired with each item. Names are stored TABLE-QUALIFIED
+ * ('table.column') because a bare column name is not unique across the schema.
+ *
+ * DROP COLUMN is handled too, deliberately: foldLifecycle is drop-aware, and without the drop side
+ * a column added by one migration and dropped by a later one would be reported missing forever —
+ * turning this fix into a new false-alarm source instead of a gap detector.
+ */
+const ALTER_TABLE_STMT_RE = new RegExp(String.raw`\bALTER\s+TABLE\s+(?:IF\s+EXISTS\s+)?(${ID})([\s\S]*?)(?=;|$)`, 'gi');
+const ADD_COLUMN_ITEM_RE = new RegExp(String.raw`\bADD\s+COLUMN\s+(?:IF\s+NOT\s+EXISTS\s+)?(${ID})`, 'gi');
+const DROP_COLUMN_ITEM_RE = new RegExp(String.raw`\bDROP\s+COLUMN\s+(?:IF\s+EXISTS\s+)?(${ID})`, 'gi');
+
+export function extractColumnFacts(s) {
+  const creates = [];
+  const drops = [];
+  ALTER_TABLE_STMT_RE.lastIndex = 0;
+  let stmt;
+  while ((stmt = ALTER_TABLE_STMT_RE.exec(s)) !== null) {
+    const table = normalizeName(stmt[1]);
+    const body = stmt[2] || '';
+    if (!table) continue;
+    for (const [, raw] of body.matchAll(ADD_COLUMN_ITEM_RE)) {
+      const col = normalizeName(raw);
+      if (col) creates.push({ cls: 'column', name: `${table}.${col}` });
+    }
+    for (const [, raw] of body.matchAll(DROP_COLUMN_ITEM_RE)) {
+      const col = normalizeName(raw);
+      if (col) drops.push({ cls: 'column', name: `${table}.${col}` });
+    }
+  }
+  return { creates, drops };
+}
+
 const DROP_RES = [
   { cls: 'table',      re: new RegExp(String.raw`\bDROP\s+TABLE\s+(?:IF\s+EXISTS\s+)?(${ID})`, 'gi') },
   { cls: 'matview',    re: new RegExp(String.raw`\bDROP\s+MATERIALIZED\s+VIEW\s+(?:IF\s+EXISTS\s+)?(${ID})`, 'gi') },
@@ -191,7 +227,12 @@ export function extractDdlFacts(sql) {
     }
     return out;
   };
-  return { creates: pull(CREATE_RES), drops: pull(DROP_RES) };
+  // QF-20260725-470: merge the column facts (extracted from the SAME stripped SQL) into both sides.
+  const cols = extractColumnFacts(s);
+  return {
+    creates: [...pull(CREATE_RES), ...cols.creates],
+    drops: [...pull(DROP_RES), ...cols.drops],
+  };
 }
 
 // ── Stage 3: chronological fold ──────────────────────────────────────────────
@@ -261,6 +302,20 @@ async function resolveLive(client, expected) {
       [[...byClass.get('trigger')]]
     );
     mark('trigger', rows, 'name');
+  }
+  // QF-20260725-470: resolve 'table.column' pairs against information_schema.columns. Without this
+  // branch a declared column is structurally invisible and its migration can still contribute to a
+  // MIGRATION_APPLY_STATE_PASS — the exact ghost that let chairman-gated QF-20260719-281 close with
+  // ship_review_findings.metadata / .repo and quick_fixes.factory_lane still absent from prod.
+  if (byClass.get('column')?.size) {
+    const { rows } = await client.query(
+      `SELECT c.table_name || '.' || c.column_name AS name
+         FROM information_schema.columns c
+        WHERE c.table_schema = 'public'
+          AND (c.table_name || '.' || c.column_name) = ANY($1::text[])`,
+      [[...byClass.get('column')]]
+    );
+    mark('column', rows, 'name');
   }
   if (byClass.get('constraint')?.size) {
     const { rows } = await client.query(
