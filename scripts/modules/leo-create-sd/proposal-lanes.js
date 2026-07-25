@@ -148,6 +148,9 @@ const MAPPED_PROPOSAL_KEYS = new Set([
   'title', 'type', 'priority', 'description', 'scope', 'rationale', 'success_criteria',
   'key_changes', 'success_metrics', 'strategic_objectives', 'smoke_test_steps', 'metadata',
   'provenance', 'roadmap_phase', 'tier_hint', 'gold_origin', 'necessity', 'dedup_note', 'sourced_by',
+  // SD-LEO-INFRA-ROADMAP-LINK-COUNTED-EXCEPTION-001 (FR-2): optional operator reason, consumed
+  // by the mapper above. Listed here so the authored-key guard does not flag it as unmapped.
+  'roadmap_link_reason',
 ]);
 // Keys a proposal legitimately carries that this mapper does not consume because another stage of
 // the ingest path already does. Two such stages: validateProposalShape() above (proposed_sd_key,
@@ -247,6 +250,17 @@ export function mapProposalToCreateArgs(normalized, proposal, filePath, opts = {
     // FR-2: the primary target repo becomes the canonical top-level target_application that the
     // branch-resolver / gate / repo-path resolution read (mirrors the --target-repos flag path).
     ...(proposalTargetRepos ? { target_application: proposalTargetRepos[0] } : {}),
+    // SD-LEO-INFRA-ROADMAP-LINK-COUNTED-EXCEPTION-001 (FR-2): carry the OPTIONAL operator reason
+    // for creating without a preceding roadmap registration.
+    // WHY THIS LANE SPECIFICALLY: --from-proposal / --proposal-b64 / --proposal-stdin are the
+    // canonical Adam sourcing routes, so they are where unlinked SDs are actually born at volume.
+    // Wiring only direct-lane left this path recording NO_REASON_MARKER unconditionally — the
+    // drive-to-zero target could not be moved by the very route that produces most of the gap,
+    // which is the "recorded but unmovable" defect this SD exists to close, reproduced inside its
+    // own fix. Absent is legal and still records the explicit marker; it never refuses.
+    ...(typeof proposal.roadmap_link_reason === 'string' && proposal.roadmap_link_reason.trim()
+      ? { roadmap_link_reason: proposal.roadmap_link_reason }
+      : {}),
     metadata: {
       // FR-1: full proposal metadata preserved (minus leak-guard keys), then canonical defaults
       // below WIN over any same-named proposal key (source, provenance, validated target_repos, …).
