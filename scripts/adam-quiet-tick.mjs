@@ -718,6 +718,14 @@ async function main() {
     for (const a of stall.alerted) {
       console.log(`QUIET_TICK_STALL_ALERT=adam node=${a.id} title="${a.title}" escalated=${a.escalated}`);
     }
+    // QF-20260725-639: audit trail for ledger rows EXCLUDED from the stall class (parent-tier
+    // anchors, advisory_thread comms). INFORMATIONAL ONLY — deliberately absent from the NO-OP
+    // gate in adam-startup-check.mjs, exactly like QUIET_TICK_VENTURE_PARK_SUPPRESSED: a tick
+    // whose only output is suppression lines is still a NO-OP. Treating these as actionable
+    // would wake Adam to be told nothing is wrong, rebuilding the alert fatigue QF-638 removed.
+    for (const s of stall.suppressed || []) {
+      console.log(`QUIET_TICK_STALL_SUPPRESSED=adam node=${s.id} title="${s.title || ''}" tier=${s.tier} source_kind=${s.source_kind} reason=${s.reason} ticks=${s.ticks}`);
+    }
     for (const v of ventureStall.alerted) {
       console.log(`QUIET_TICK_VENTURE_STALL_ALERT=adam venture=${v.id} name="${v.name}" state=${v.orchestrator_state} escalated=${v.escalated}`);
     }
