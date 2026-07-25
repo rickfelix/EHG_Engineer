@@ -55,6 +55,7 @@ export async function resolveFacts(supabase, { windowDays = WINDOW_DAYS, nowMs =
     adamMachineRaisedNoiseInWindow: null,
     pmBoardSnapshot: null,
     pmBoardPriorSnapshot: null,
+    pmBoardFindings: null,
     // SD-LEO-INFRA-ROLE-MEASUREMENT-INTEGRITY-001 FR-1: the belt-starvation (D1) + dispatch-boundary
     // (D2) cardinal facts are now resolved in the retro audit from LIVE claim tables (below), so
     // those probes no longer degrade to 'unknown' here (the 297/297-unknown class).
@@ -275,6 +276,21 @@ export async function resolveFacts(supabase, { windowDays = WINDOW_DAYS, nowMs =
       .not('status', 'in', '(done,cancelled)');
     if (error) throw error;
     facts.pmBoardSnapshot = (openRows || []).map((r) => ({ id: r.id, status: r.status }));
+  } catch { /* leave null -> unknown */ }
+
+  // QF-20260725-469 pm-board (finding closure): the finding-class rows whose termination state the
+  // probe asserts. source_kind='manual' is the discriminator — 'sourced_sd' rows are already-filed
+  // items and 'advisory_thread' rows are mechanical comms threads, so neither is a finding and
+  // sweeping them in would produce false offenders. Windowed like every other fact here: a probe
+  // that re-indicts every historical row could never return to pass.
+  try {
+    const { data: findingRows, error } = await supabase
+      .from('adam_task_ledger')
+      .select('id, source_ref, blocker')
+      .eq('source_kind', 'manual')
+      .gte('created_at', since);
+    if (error) throw error;
+    facts.pmBoardFindings = (findingRows || []).map((r) => ({ id: r.id, source_ref: r.source_ref, blocker: r.blocker }));
   } catch { /* leave null -> unknown */ }
 
   // P8 pm-board (prior snapshot): read back the CURRENT snapshot this probe recorded on its own
