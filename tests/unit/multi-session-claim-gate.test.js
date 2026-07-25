@@ -10,10 +10,15 @@
  */
 
 import { describe, it, expect, vi } from 'vitest';
+import { readFileSync } from 'node:fs';
+import { fileURLToPath } from 'node:url';
+import { dirname, resolve } from 'node:path';
 import {
   validateMultiSessionClaim,
   createMultiSessionClaimGate
 } from '../../scripts/modules/handoff/gates/multi-session-claim-gate.js';
+
+const __dirname = dirname(fileURLToPath(import.meta.url));
 
 /**
  * Mock supabase for the Surface-A-first contract.
@@ -334,6 +339,82 @@ describe('Multi-Session Claim Conflict Gate', () => {
 
       expect(result.pass).toBe(true);
       expect(result.score).toBe(100);
+    });
+  });
+
+  /**
+   * SD-LEO-INFRA-PARKED-WORKER-CLAIM-LAPSE-001 FR-3, second consumer.
+   *
+   * FR-3 taught shouldReleaseStaleOwner to distinguish an owner that MOVED to another sd_key
+   * (a genuine "they left" signal) from one whose sd_key is merely NULL (ambiguous — the
+   * observed lapse, where a parked-but-live worker looks abandoned). The fix landed at
+   * lib/claim-validity-gate.js but NOT here, even though this gate computes
+   * `ownerHasSdKeyDrifted = !!ownerRow && ownerRow.sd_key !== sdId`, which is TRUE for NULL.
+   * With ownerSdKeyMissing left undefined, the predicate short-circuited on
+   * `if (!ownerSdKeyMissing) return true` and this gate reported "no real conflict — passing",
+   * letting a handoff proceed against a LIVE worker's SD.
+   *
+   * Behavioural, through the real gate. Verified RED before the fix.
+   */
+  describe('FR-3 propagation: a NULL owner sd_key must not read as "they moved on"', () => {
+    const ARMED_SILENCE = () => new Date(Date.now() + 5 * 60 * 1000).toISOString();
+
+    it('BLOCKS when the owner is silence-armed and its sd_key is NULL (ambiguous, not drift)', async () => {
+      const supabase = createMockSupabase({
+        ownerSessionId: 'parked-live-owner-123',
+        ownerSessionRow: {
+          status: 'active',
+          is_alive: true,
+          heartbeat_at: FRESH_HEARTBEAT(),
+          expected_silence_until: ARMED_SILENCE(), // parked worker: alive but deliberately silent
+          hostname: 'REMOTE-SERVER',
+          terminal_id: null,
+          tty: '/dev/pts/1',
+          sd_key: null,                            // ← the ambiguous signal, NOT a move
+          codebase: 'EHG_Engineer'
+        }
+      });
+
+      const result = await validateMultiSessionClaim(supabase, 'SD-TEST-001', {
+        currentSessionId: 'my-session-456'
+      });
+
+      // Before the fix this returned pass:true ("dead/drifted — no real conflict").
+      expect(result.pass).toBe(false);
+    });
+
+    it('still PASSES when the owner verifiably MOVED to another sd_key (no claim leak)', async () => {
+      // The other direction matters just as much: over-guarding drift would strand claims and
+      // starve the belt. A genuine move is still a release signal even for a live, silenced owner.
+      const supabase = createMockSupabase({
+        ownerSessionId: 'moved-on-owner-789',
+        ownerSessionRow: {
+          status: 'active',
+          is_alive: true,
+          heartbeat_at: FRESH_HEARTBEAT(),
+          expected_silence_until: ARMED_SILENCE(),
+          hostname: 'REMOTE-SERVER',
+          terminal_id: null,
+          tty: '/dev/pts/1',
+          sd_key: 'SD-SOME-OTHER-SD-002',          // ← verifiably elsewhere
+          codebase: 'EHG_Engineer'
+        }
+      });
+
+      const result = await validateMultiSessionClaim(supabase, 'SD-TEST-001', {
+        currentSessionId: 'my-session-456'
+      });
+
+      expect(result.pass).toBe(true);
+    });
+
+    it('passes ownerSdKeyMissing through to the shared predicate (both consumers agree)', () => {
+      const src = readFileSync(
+        resolve(__dirname, '../..', 'scripts/modules/handoff/gates/multi-session-claim-gate.js'),
+        'utf8'
+      );
+      expect(src).toMatch(/const ownerSdKeyMissing = !!ownerRow && !ownerRow\.sd_key/);
+      expect(src).toMatch(/shouldReleaseStaleOwner\([^)]*ownerSdKeyMissing/);
     });
   });
 

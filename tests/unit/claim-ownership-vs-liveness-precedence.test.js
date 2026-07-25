@@ -88,12 +88,22 @@ describe('FR-5: each site still reads the surface matching its OWN question', ()
     expect(body).not.toMatch(/from\('claude_sessions'\)/);
   });
 
-  it('selectAvailableSds (a liveness question) keys on the session surface + heartbeat', () => {
+  it('selectAvailableSds (a liveness question) keys on the session surface, not on SDv2', () => {
     const src = read('scripts/hooks/coordination-inbox.cjs');
     const start = src.indexOf('function selectAvailableSds');
     expect(start).toBeGreaterThan(0);
-    const body = src.slice(start, start + 900);
-    expect(body).toMatch(/s\.sd_key/);
+    // Bound the slice at the END OF THE FUNCTION, not at a fixed character count. The original
+    // `start + 900` pin broke within the hour, when a comment inside the function grew and pushed
+    // the asserted token past the window — a self-inflicted instance of the exact brittleness this
+    // file warns about. The bound is now structural, so prose changes cannot move it.
+    const after = src.indexOf('\nfunction ', start + 1);
+    const body = src.slice(start, after > start ? after : src.length);
+    expect(body).toMatch(/\bsd_key\b/);
+    // BOTH liveness signals — a parked worker stops heartbeating on purpose, so heartbeat alone
+    // is not sufficient evidence that nobody is building.
     expect(body).toMatch(/heartbeat_at/);
+    expect(body).toMatch(/expected_silence_until/);
+    // It must NOT reach for the ownership surface to answer a liveness question.
+    expect(body).not.toMatch(/claiming_session_id/);
   });
 });

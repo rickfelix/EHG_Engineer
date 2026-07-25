@@ -57,7 +57,19 @@ describe('FR-2 fallthrough: sd_key drift triggers auto-release alongside ownerIs
     // an AMBIGUOUS drift (owner.sd_key === null) can be distinguished from a genuine one (owner
     // moved to another SD). The semantic this test pins — the auto-release decision routes through
     // shouldReleaseStaleOwner carrying the liveness signals — is unchanged and now stronger.
-    expect(src).toMatch(/if\s*\(\s*shouldReleaseStaleOwner\(\s*\{\s*ownerHasSdKeyDrifted,\s*ownerIsDead,\s*ownerIsSilenced,\s*ownerPidAlive,\s*ownerSdKeyMissing\s*\}\s*\)\s*\)/);
+    // SD-LEO-INFRA-PARKED-WORKER-CLAIM-LAPSE-001 FR-1 (2nd pass): this assertion previously pinned
+    // the ENTIRE `if (...)` including its opening paren, so it broke when the release site gained a
+    // fail-closed `!ownerLookupFailed &&` conjunct — a correct change (a discarded owner-lookup
+    // error was letting a failed query read as "owner is dead" and reap a LIVE claim). This is the
+    // 5th syntax pin in this repo to fail on a correct edit. Re-aimed at the SEMANTIC: the release
+    // decision routes through shouldReleaseStaleOwner carrying all five liveness signals. Any
+    // ADDITIONAL guard in front of it is by definition more conservative and must not fail here.
+    expect(src).toMatch(/shouldReleaseStaleOwner\(\s*\{\s*ownerHasSdKeyDrifted,\s*ownerIsDead,\s*ownerIsSilenced,\s*ownerPidAlive,\s*ownerSdKeyMissing\s*\}\s*\)/);
+    // …and the release is still gated by an `if`, not evaluated for side effects.
+    expect(src).toMatch(/if\s*\([^)]*shouldReleaseStaleOwner\(/);
+    // FR-1: an ERRORED owner lookup must suppress the release (a failed query is not an answer).
+    expect(src).toMatch(/!ownerLookupFailed\s*&&\s*shouldReleaseStaleOwner/);
+    expect(src).toMatch(/const ownerLookupFailed = Boolean\(ownerErr\)/);
     expect(src).toMatch(/function shouldReleaseStaleOwner/);
     // FR-3: the drift arm is now a BLOCK, not a bare `return true` — it releases unconditionally
     // only when the owner is verifiably on ANOTHER sd_key, and requires a negative liveness signal

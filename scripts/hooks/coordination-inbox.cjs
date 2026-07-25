@@ -90,6 +90,10 @@ const HEARTBEAT_INTERVAL_MS = 30_000; // Update heartbeat every 30 seconds
 // under it. Deliberately generous: a false "held" only delays a dispatch, a false "free" causes
 // the second-dispatch collision this SD exists to prevent.
 const SESSION_LIVENESS_WINDOW_MS = 15 * 60 * 1000;
+// Hard cap on an armed expected_silence_until window (mirrors the sweep's cap). A parked worker
+// is LIVE while its window is armed and within cap; beyond that the window is not trusted, so a
+// crashed worker that stamped a far-future timestamp cannot hold its SD indefinitely.
+const ARMED_SILENCE_CAP_MS = 30 * 60 * 1000;
 const ACTIONABLE_TYPES = ['WORK_ASSIGNMENT', 'CLAIM_RELEASED', 'CLAIM_REMINDER'];
 // SD-FDBK-FIX-WORKER-CHECK-SURFACES-001 (adversarial-review finding #1): only WORK_ASSIGNMENT
 // has a worker-side CLOSURE path for a busy worker (claim_sd/ackMessage stamps read_at when the
@@ -782,10 +786,20 @@ async function main() {
       // against the session side, the pattern coordinator-email-summary.mjs:64-66 already uses
       // ("claiming_session_id drifts to NULL after a claim-sweep even while the worker keeps
       // building"). That workaround existed in the email path and was never propagated here.
-      const { data: liveSessions } = await supabase
+      // expected_silence_until is selected because a PARKED worker stops heartbeating on purpose —
+      // see selectAvailableSds. Omitting it made this guard blind to the very worker state the SD
+      // is named for.
+      const { data: liveSessions, error: liveSessionsErr } = await supabase
         .from('claude_sessions')
-        .select('sd_key, heartbeat_at')
+        .select('sd_key, heartbeat_at, expected_silence_until')
         .not('sd_key', 'is', null);
+      if (liveSessionsErr) {
+        // The consequence is already safe (data is null on error → selectAvailableSds fails closed
+        // → nothing advertised), but the surrounding block swallows exceptions, so a persistent
+        // claude_sessions failure would suppress dispatch INDEFINITELY and look identical to
+        // "nothing available". Given this fleet's belt-starvation history, make it observable.
+        console.error(`[coordination-inbox] live-session cross-check FAILED (${liveSessionsErr.message}) — suppressing auto-claim dispatch this tick (fail-closed).`);
+      }
 
       const claimable = selectAvailableSds(availableSDs, liveSessions);
       if (claimable.length > 0) {
@@ -820,11 +834,30 @@ function selectAvailableSds(sdRows, liveSessions, opts = {}) {
   if (!Array.isArray(liveSessions)) return [];
   const nowMs = opts.nowMs ?? Date.now();
   const windowMs = opts.livenessWindowMs ?? SESSION_LIVENESS_WINDOW_MS;
-  const heldByLive = new Set(
-    liveSessions
-      .filter((s) => s && s.sd_key && s.heartbeat_at && (nowMs - Date.parse(s.heartbeat_at)) <= windowMs)
-      .map((s) => s.sd_key)
-  );
+  const silenceCapMs = opts.silenceCapMs ?? ARMED_SILENCE_CAP_MS;
+
+  // A worker is HOLDING its SD when either liveness signal is present:
+  //   (a) a fresh heartbeat, or
+  //   (b) an armed, within-cap expected_silence_until.
+  // (b) is not optional decoration — it is the whole persona this SD is named for. A parked
+  // /loop worker deliberately stops heartbeating and arms expected_silence_until to say
+  // "alive but silent"; the sweep and claim-validity-gate both honour it. Keying on heartbeat
+  // ALONE re-created the same blind spot one layer up: this worker's own loop arms wakeups of
+  // up to 1800s, which EXCEEDS the 900s heartbeat window, so a parked worker went invisible to
+  // this guard for the back half of every long nap and its SD was advertised for auto-claim.
+  // The cap is what keeps (b) from becoming an unbounded claim leak — a crashed worker's stale
+  // future timestamp cannot hold an SD forever.
+  const isHolding = (s) => {
+    if (!s || !s.sd_key) return false;
+    const hb = s.heartbeat_at ? Date.parse(s.heartbeat_at) : NaN;
+    if (Number.isFinite(hb) && (nowMs - hb) <= windowMs) return true;
+    const until = s.expected_silence_until ? Date.parse(s.expected_silence_until) : NaN;
+    if (!Number.isFinite(until)) return false;
+    // Armed (not yet expired) AND within cap — a runaway window is not a liveness signal.
+    return until > nowMs && (until - nowMs) <= silenceCapMs;
+  };
+
+  const heldByLive = new Set(liveSessions.filter(isHolding).map((s) => s.sd_key));
   return rows.filter((sd) => sd && sd.sd_key && !heldByLive.has(sd.sd_key));
 }
 

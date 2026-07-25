@@ -53,6 +53,71 @@ describe('FR-4/TS-4: an SD with a live builder is never advertised', () => {
   });
 });
 
+describe('FR-4 (2nd pass): a PARKED worker is live — heartbeat alone is not enough', () => {
+  // The SD is named for a PARKED worker. Such a worker deliberately STOPS heartbeating and arms
+  // expected_silence_until to say "alive but silent"; the sweep and claim-validity-gate both
+  // honour that field. The first pass of this predicate keyed on heartbeat only, which re-created
+  // the same blind spot one layer up: this worker's own loop arms wakeups of up to 1800s, well
+  // beyond the 900s heartbeat window, so a parked worker's SD was advertised for auto-claim
+  // during the back half of every long nap.
+  const armed = (msFromNow) => new Date(NOW + msFromNow).toISOString();
+
+  it('holds the SD of a worker whose heartbeat is stale but whose silence window is armed', () => {
+    const out = selectAvailableSds(
+      [{ sd_key: 'SD-PARKED' }],
+      [{ sd_key: 'SD-PARKED', heartbeat_at: stale, expected_silence_until: armed(5 * 60 * 1000) }],
+      { nowMs: NOW }
+    );
+    expect(out).toEqual([]);
+  });
+
+  it('covers the 1800s nap that exceeds the 900s heartbeat window (the actual gap)', () => {
+    const napStart = new Date(NOW - 1500 * 1000).toISOString(); // last beat 25 min ago
+    const out = selectAvailableSds(
+      [{ sd_key: 'SD-LONG-NAP' }],
+      [{ sd_key: 'SD-LONG-NAP', heartbeat_at: napStart, expected_silence_until: armed(300 * 1000) }],
+      { nowMs: NOW }
+    );
+    expect(out).toEqual([]);
+  });
+
+  it('releases once the silence window has EXPIRED (no claim leak)', () => {
+    const out = selectAvailableSds(
+      [{ sd_key: 'SD-EXPIRED' }],
+      [{ sd_key: 'SD-EXPIRED', heartbeat_at: stale, expected_silence_until: armed(-60 * 1000) }],
+      { nowMs: NOW }
+    );
+    expect(out.map((s) => s.sd_key)).toEqual(['SD-EXPIRED']);
+  });
+
+  it('does NOT trust a runaway far-future window beyond the cap (crashed worker cannot hold forever)', () => {
+    const out = selectAvailableSds(
+      [{ sd_key: 'SD-RUNAWAY' }],
+      [{ sd_key: 'SD-RUNAWAY', heartbeat_at: stale, expected_silence_until: armed(24 * 60 * 60 * 1000) }],
+      { nowMs: NOW }
+    );
+    expect(out.map((s) => s.sd_key)).toEqual(['SD-RUNAWAY']);
+  });
+
+  it('a fresh heartbeat still holds the SD with no silence window at all', () => {
+    const out = selectAvailableSds(
+      [{ sd_key: 'SD-BUSY' }],
+      [{ sd_key: 'SD-BUSY', heartbeat_at: fresh, expected_silence_until: null }],
+      { nowMs: NOW }
+    );
+    expect(out).toEqual([]);
+  });
+
+  it('ignores an unparseable silence timestamp rather than treating it as live', () => {
+    const out = selectAvailableSds(
+      [{ sd_key: 'SD-JUNK' }],
+      [{ sd_key: 'SD-JUNK', heartbeat_at: stale, expected_silence_until: 'not-a-date' }],
+      { nowMs: NOW }
+    );
+    expect(out.map((s) => s.sd_key)).toEqual(['SD-JUNK']);
+  });
+});
+
 describe('TS-5: the guarantee does not depend on SD phase', () => {
   // The two near-misses were caught by worker-checkin isSdInFlight, which blocks self-claim when
   // current_phase is not LEAD/LEAD_APPROVAL. That backstop is PHASE-based and would NOT have held

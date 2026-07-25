@@ -19,7 +19,24 @@ const src = fs.readFileSync(path.resolve('scripts/stale-session-sweep.cjs'), 'ut
 describe('QF-20260609-456: orphan classifier does not release live QF builders', () => {
   it('the orphan-claim filter excludes held QF claims (!isHeldQfClaim)', () => {
     // The step-3c orphan classifier must AND-in the QF-held guard, not key off sdStatusMap alone.
-    expect(src).toMatch(/orphanedClaims\s*=\s*classified\.filter\(\s*s\s*=>\s*!sdStatusMap\[s\.sd_key\]\s*&&\s*!isHeldQfClaim\(s\)\s*\)/);
+    //
+    // SD-LEO-INFRA-PARKED-WORKER-CLAIM-LAPSE-001 FR-1: this pinned the old SINGLE-EXPRESSION form
+    //   orphanedClaims = classified.filter(s => !sdStatusMap[s.sd_key] && !isHeldQfClaim(s))
+    // and broke when the filter became a BLOCK that additionally fails closed on an untrustworthy
+    // SD lookup (the root cause: a discarded Supabase error emptied sdStatusMap, so every claimed
+    // session read as orphaned and was released against LIVE workers) and consults shouldHoldClaim.
+    // The QF-exclusion SEMANTIC this test exists to protect is unchanged — a held QF claim still
+    // short-circuits to `return false` — so the assertion is re-aimed at that semantic.
+    //
+    // NOTE: tests/unit/scripts/sweep-residuals.test.js carries a DUPLICATE of this pin, which was
+    // re-aimed when the block landed; this second copy was missed, so the increment shipped with
+    // this file red. Two independent files pinning one predicate is how that happens.
+    const start = src.indexOf('const orphanedClaims =');
+    expect(start).toBeGreaterThan(0);
+    const orphanBlock = src.slice(start, start + 900);
+    expect(orphanBlock).toMatch(/if \(sdStatusMap\[s\.sd_key\] \|\| isHeldQfClaim\(s\)\) return false;/);
+    // …and the block is still driven by the classified session list.
+    expect(orphanBlock).toMatch(/classified/);
   });
 
   it('isHeldQfClaim treats an EXISTING quick_fix claim as held (not orphaned)', () => {
