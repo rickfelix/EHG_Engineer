@@ -214,6 +214,51 @@ describe('recent-vs-legacy classifier (FR-2)', () => {
     expect(isRecent('20260301_x.sql', '20260601')).toBe(false);
   });
 
+  // SD-LEO-INFRA-MIGRATION-APPLY-STATE-TRIAGE-001 FR-6: the optional THIRD parameter.
+  // The whole point of it being optional-and-last is that everything above this comment
+  // keeps passing untouched — those are the byte-identical-no-ledger-path assertions.
+  describe('ledger suppression seam (TRIAGE FR-6)', () => {
+    const gaps = [
+      { file: '20260701_real_new_drift.sql', status: 'NOT_APPLIED', missing: [] },
+      { file: '20260702_retired_thing.sql', status: 'NOT_APPLIED', missing: [] },
+      { file: '20260614_settled.sql', status: 'NOT_APPLIED', missing: [] },
+    ];
+
+    it('omitting the parameter suppresses nothing (no-ledger path unchanged)', () => {
+      expect(partitionRecentGaps(gaps, RETIRED_BEFORE).map((g) => g.file))
+        .toEqual(partitionRecentGaps(gaps).map((g) => g.file));
+      expect(partitionRecentGaps(gaps)).toHaveLength(2);
+    });
+
+    it('an empty suppression set is identical to omitting it', () => {
+      expect(partitionRecentGaps(gaps, RETIRED_BEFORE, new Set()).map((g) => g.file))
+        .toEqual(partitionRecentGaps(gaps).map((g) => g.file));
+    });
+
+    it('AC-2: a dispositioned file leaves failSet while an undispositioned recent file still fails', () => {
+      const recent = partitionRecentGaps(gaps, RETIRED_BEFORE, new Set(['20260702_retired_thing.sql']));
+      expect(recent.map((g) => g.file)).toEqual(['20260701_real_new_drift.sql']);
+      expect(recent.length > 0).toBe(true); // still red — suppression did not fake a pass
+    });
+
+    it('suppression can only REMOVE from the fail set, never admit a legacy gap into it', () => {
+      // A ledger naming a legacy file cannot pull it into recentGaps: isRecent still gates.
+      const recent = partitionRecentGaps(gaps, RETIRED_BEFORE, new Set(['20260614_settled.sql']));
+      expect(recent.map((g) => g.file)).toEqual(['20260701_real_new_drift.sql', '20260702_retired_thing.sql']);
+    });
+
+    it('matches on basename, so a path-qualified gap is still suppressed', () => {
+      const pathGaps = [{ file: 'database/migrations/20260701_real_new_drift.sql' }];
+      expect(partitionRecentGaps(pathGaps, RETIRED_BEFORE, new Set(['20260701_real_new_drift.sql']))).toHaveLength(0);
+    });
+
+    it('a non-Set argument degrades to no suppression rather than throwing', () => {
+      for (const bad of [null, undefined, ['20260701_real_new_drift.sql'], 'x', {}]) {
+        expect(partitionRecentGaps(gaps, RETIRED_BEFORE, bad)).toHaveLength(2);
+      }
+    });
+  });
+
   it('hasAnyDbCredential — MISCONFIG fires only when NO DB credential is present (FR-2 HIGH)', () => {
     expect(hasAnyDbCredential({})).toBe(false); // CI with no secrets => MISCONFIG (fail loud)
     expect(hasAnyDbCredential({ SUPABASE_DB_PASSWORD: 'x' })).toBe(true);
@@ -304,7 +349,7 @@ describe('extraction — ADD COLUMN class (QF-20260725-470)', () => {
   it('ignores ADD COLUMN inside comments and dollar-quoted bodies', () => {
     const dq = '$' + '$';
     const { creates } = extractDdlFacts(
-      `-- ALTER TABLE ghost ADD COLUMN nope text;\n` +
+      '-- ALTER TABLE ghost ADD COLUMN nope text;\n' +
       `CREATE FUNCTION f() RETURNS void AS ${dq} BEGIN EXECUTE 'ALTER TABLE ghost ADD COLUMN nope text'; END ${dq} LANGUAGE plpgsql;`
     );
     expect(creates.filter((c) => c.cls === 'column')).toEqual([]);

@@ -21,6 +21,12 @@ on:
       - 'scripts/verify-migration-apply-state.mjs'
       - 'scripts/lib/migration-guards.js'
       - '.github/workflows/migration-deploy-drift-guard.yml'
+      # The disposition ledger and its reader are GATE INPUTS: editing either changes which
+      # migrations are suppressed from the fail set. Without these, a push that suppresses
+      # migrations — or that changes the suppression LOGIC — would not re-run this gate, and
+      # the change would first surface at the next cron, already green.
+      - 'docs/audits/migration-dispositions.json'
+      - 'scripts/lib/migration-disposition-ledger.mjs'
   schedule:
     - cron: '17 9 * * *'   # daily 09:17 UTC — catches drift even with no migration pushes
   workflow_dispatch:
@@ -60,13 +66,19 @@ jobs:
           # MISCONFIG (no DB credential at all) is an operator error, NOT a transient
           # outage — HARD FAIL so the gate can never sit permanently green while never
           # actually checking the live DB.
-          if echo "$out" | grep -q 'MIGRATION_APPLY_STATE_MISCONFIG'; then
+          # -Fxq, NOT -q: the verifier prints its verdict as a bracketed marker alone on a line,
+          # but $out also contains raw migration FILENAMES. An unanchored substring match let a
+          # committed file named e.g. 20200101_MIGRATION_APPLY_STATE_INFRA_ERROR_x.sql satisfy
+          # the INFRA branch below and exit 0 — permanently silencing this gate, including the
+          # daily cron, with a legacy-dated name that is itself never blocking. Fixed-string
+          # whole-line matching closes that. (SD-LEO-INFRA-MIGRATION-APPLY-STATE-TRIAGE-001)
+          if echo "$out" | grep -Fxq '[MIGRATION_APPLY_STATE_MISCONFIG]'; then
             echo "::error::Deploy-drift gate has NO DB credential — set one of SUPABASE_DB_PASSWORD / SUPABASE_POOLER_URL / DATABASE_URL repo secrets. Failing loud: a credential-less gate verifies nothing."
             exit 1
           fi
           # INFRA = a genuine transient connect failure AFTER a credential was present —
           # non-blocking so an outage cannot red-X main.
-          if echo "$out" | grep -q 'MIGRATION_APPLY_STATE_INFRA_ERROR'; then
+          if echo "$out" | grep -Fxq '[MIGRATION_APPLY_STATE_INFRA_ERROR]'; then
             echo "::warning::DB temporarily unreachable — deploy-drift check skipped this run (non-blocking transient)."
             exit 0
           fi
@@ -74,3 +86,58 @@ jobs:
             echo "::error::RECENT committed-but-unapplied migration(s) detected (named above). Apply via 'node scripts/apply-migration.js <path> --prod-deploy' (3-factor @approved-by guard) or retire as legacy. Drift must not accumulate."
           fi
           exit "$code"
+
+      # SD-LEO-INFRA-MIGRATION-APPLY-STATE-TRIAGE-001 (FR-2). A pure-builder unit test proves
+      # buildLedger() is correct; it cannot prove the COMMITTED artifact matches what the
+      # seeder would produce today. Only re-running the seeder and diffing does that — without
+      # it, a hand-edited ledger silently diverges from its own generator and the suppressions
+      # in the gate stop being reproducible. Runs even when the gate above failed (if: always),
+      # because a stale ledger is worth reporting exactly when drift exists.
+      - name: Disposition ledger is in sync with its seeder
+        if: always()
+        env:
+          # NO service-role key here, deliberately: without --strict/--alert the verifier never
+          # emits a breakage alert, and the seeder touches no database at all. This step needs
+          # only the read credentials the verifier itself uses.
+          SUPABASE_DB_PASSWORD: ${{ secrets.SUPABASE_DB_PASSWORD }}
+          SUPABASE_POOLER_URL: ${{ secrets.SUPABASE_POOLER_URL }}
+          DATABASE_URL: ${{ secrets.DATABASE_URL }}
+        run: |
+          set +e
+          node scripts/verify-migration-apply-state.mjs --json > /tmp/apply-state.json 2>/tmp/apply-state.err
+          # Branch on the verifier's own MARKER, not on the shape of its output. Inferring
+          # "DB unreachable" from a missing '"gaps"' key made every non-DB failure — a syntax
+          # error, an OOM, a bad flag — exit 0 while blaming the database. The marker goes to
+          # stderr under --json; -Fxq so a filename can never forge it.
+          if grep -Fxq '[MIGRATION_APPLY_STATE_INFRA_ERROR]' /tmp/apply-state.err; then
+            echo "::warning::DB unreachable — ledger sync check skipped this run (non-blocking transient)."
+            exit 0
+          fi
+          if ! grep -Fq '"gaps"' /tmp/apply-state.json; then
+            echo "::error::Verifier produced no usable JSON and did not report a DB outage — this is a real failure, not a transient."
+            cat /tmp/apply-state.err
+            exit 1
+          fi
+          set -e
+          node scripts/seed-migration-dispositions.mjs --gaps=/tmp/apply-state.json --write
+          if ! git diff --quiet -- docs/audits/migration-dispositions.json; then
+            echo "::error::docs/audits/migration-dispositions.json is out of sync with its seeder. Re-run 'npm run migration:dispositions:seed -- --gaps=<verifier --json> --write' and commit the result."
+            git --no-pager diff -- docs/audits/migration-dispositions.json
+            exit 1
+          fi
+          echo "Ledger is in sync with the seeder."
+
+      # The wiring test proves THIS workflow cannot be failed open by a corrupt ledger, so this
+      # workflow is where it belongs. It lives under tests/integration/, which vitest.config
+      # routes to the opt-in `db` project — and no workflow runs `npm run test:db` (db-guards.yml
+      # runs test:db-GUARDS, a static analyser, which is easy to misread as the same thing). So
+      # the SD's only end-to-end safety proof was unreachable in CI: green forever, asserting
+      # nothing. Runs AFTER the sync check so its ledger backup/restore can never be mistaken
+      # for seeder drift.
+      - name: FR-6 fail-open wiring proof
+        if: always()
+        env:
+          SUPABASE_DB_PASSWORD: ${{ secrets.SUPABASE_DB_PASSWORD }}
+          SUPABASE_POOLER_URL: ${{ secrets.SUPABASE_POOLER_URL }}
+          DATABASE_URL: ${{ secrets.DATABASE_URL }}
+        run: npx vitest run tests/integration/migration-apply-state-ledger-wiring.test.js --project db

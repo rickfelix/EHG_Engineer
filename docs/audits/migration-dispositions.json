@@ -1,0 +1,32 @@
+{
+  "20260712_ship_review_findings_repo_column.sql": {
+    "disposition": "DEFERRED",
+    "reason": "Chairman-gated migration carrying no parseable \"-- @approved-by: <email>\" stamp, so the 3-factor guard in scripts/lib/migration-guards.js cannot admit it. Apply is blocked on chairman sign-off, not on engineering work. NOTE: the gate marker is SELF-ASSERTED in the migration file and is not corroborated against an external registry, so an author can obtain this deferral by adding one comment line to their own SQL. Treat as disclosed-but-unverified provenance when auditing.",
+    "owner": "chairman",
+    "sd_key": "SD-LEO-INFRA-MIGRATION-APPLY-STATE-TRIAGE-001",
+    "recorded_at": "2026-07-25T19:13:40.087Z",
+    "review_by": "2026-10-23T19:13:40.087Z",
+    "source": "auto:chairman-gate-marker",
+    "corroborated": false
+  },
+  "20260716_chairman_email_channel_health_debounce.sql": {
+    "disposition": "DEFERRED",
+    "reason": "Chairman-gated migration carrying no parseable \"-- @approved-by: <email>\" stamp, so the 3-factor guard in scripts/lib/migration-guards.js cannot admit it. Apply is blocked on chairman sign-off, not on engineering work. NOTE: the gate marker is SELF-ASSERTED in the migration file and is not corroborated against an external registry, so an author can obtain this deferral by adding one comment line to their own SQL. Treat as disclosed-but-unverified provenance when auditing.",
+    "owner": "chairman",
+    "sd_key": "SD-LEO-INFRA-MIGRATION-APPLY-STATE-TRIAGE-001",
+    "recorded_at": "2026-07-25T19:13:40.087Z",
+    "review_by": "2026-10-23T19:13:40.087Z",
+    "source": "auto:chairman-gate-marker",
+    "corroborated": false
+  },
+  "20260724190000_add_manual_revenue_provenance_columns.sql": {
+    "disposition": "DEFERRED",
+    "reason": "Chairman-gated migration carrying no parseable \"-- @approved-by: <email>\" stamp, so the 3-factor guard in scripts/lib/migration-guards.js cannot admit it. Apply is blocked on chairman sign-off, not on engineering work. NOTE: the gate marker is SELF-ASSERTED in the migration file and is not corroborated against an external registry, so an author can obtain this deferral by adding one comment line to their own SQL. Treat as disclosed-but-unverified provenance when auditing.",
+    "owner": "chairman",
+    "sd_key": "SD-LEO-INFRA-MIGRATION-APPLY-STATE-TRIAGE-001",
+    "recorded_at": "2026-07-25T19:13:40.087Z",
+    "review_by": "2026-10-23T19:13:40.087Z",
+    "source": "auto:chairman-gate-marker",
+    "corroborated": false
+  }
+}
