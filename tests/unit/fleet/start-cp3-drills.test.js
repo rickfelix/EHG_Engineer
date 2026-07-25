@@ -124,6 +124,36 @@ describe('defaultRunDrills — rebootQueryEventsFn wiring (QF-20260724-113)', ()
   });
 });
 
+// QF-20260724-070: the live drill must be wired with a queryLifecycleEventsFn so the new
+// respawn_bind_audited check has real session_lifecycle_events evidence to read on a genuine bind.
+describe('defaultRunDrills — rebootQueryLifecycleEventsFn wiring (QF-20260724-070)', () => {
+  it('threads a default queryLifecycleEventsFn into runRebootRespawnDrill that reads RESPAWN_BIND_VERIFIED rows', async () => {
+    const eq = vi.fn().mockReturnThis();
+    const order = vi.fn().mockReturnThis();
+    const limit = vi.fn().mockResolvedValue({ data: [{ event_type: 'RESPAWN_BIND_VERIFIED', session_id: 's-1' }] });
+    const select = vi.fn(() => ({ eq, order, limit }));
+    const supabase = { from: vi.fn(() => ({ select })) };
+    const target = { session_id: 'canary-sess-1', metadata: { account_profile: 'canary' } };
+    const resolveCanaryTarget = vi.fn(async () => target);
+    const canaryRestart = vi.fn(async () => ({ verb: 'fleet_verb_restart', outcome: 'ok' }));
+    const canaryRelaunchUnderProfile = vi.fn(async () => ({ verb: 'fleet_verb_relaunch_under_profile', outcome: 'ok' }));
+    const runRebootRespawnDrill = vi.fn(async (args) => {
+      const rows = await args.queryLifecycleEventsFn();
+      return { pass: rows.length >= 1, checks: [] };
+    });
+    const runU4Drill = vi.fn(async () => ({ pass: true }));
+
+    const plan = { canaryProfile: 'canary', cwd: 'R:\\r', legs: [] };
+    const res = await defaultRunDrills(plan, {
+      supabase, resolveCanaryTarget, canaryRestart, canaryRelaunchUnderProfile, runRebootRespawnDrill, runU4Drill,
+    });
+
+    expect(select).toHaveBeenCalledWith('event_type,session_id');
+    expect(eq).toHaveBeenCalledWith('event_type', 'RESPAWN_BIND_VERIFIED');
+    expect(res.reboot.pass).toBe(true);
+  });
+});
+
 // QF-20260724-335: an explicit, intentional run-correlator must be stamped on all 3 leg events of one
 // --live invocation (timing/session-proximity alone is insufficient -- a stray batch can collide with
 // a real run; Solomon S7 acceptance requires unique intentional binding of the 3 legs to one CP3 run).

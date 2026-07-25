@@ -112,6 +112,14 @@ export async function defaultRunDrills(plan, deps = {}) {
       .eq('event_type', 'fleet_verb_respawn').order('created_at', { ascending: false }).limit(50);
     return data || [];
   });
+  // QF-20260724-070: wire the durable-bind-audit query so the live drill's respawn_bind_audited check
+  // (a real heartbeat proof recorded AT BIND TIME, surviving the session later ghosting) has real
+  // evidence to read -- without this the check would fail-closed on every genuine live bind.
+  const rebootQueryLifecycleEventsFn = deps.rebootQueryLifecycleEventsFn || (async () => {
+    const { data } = await supabase.from('session_lifecycle_events').select('event_type,session_id')
+      .eq('event_type', 'RESPAWN_BIND_VERIFIED').order('created_at', { ascending: false }).limit(50);
+    return data || [];
+  });
 
   // QF-20260724-335: an explicit, intentional run-correlator stamped on all 3 leg fleet_verb events
   // of this single --live invocation. Timing/session-proximity correlation is insufficient (a stray
@@ -128,7 +136,7 @@ export async function defaultRunDrills(plan, deps = {}) {
   // G1a kill-supervisor -> fleet_verb_restart (canary-guarded).
   const g1a = await Promise.resolve(canaryRestart(target, { supabase, sdKey, live: true })).catch((e) => ({ error: e && e.message }));
   // (3) G1b+G2 reboot-respawn -> fleet_verb_respawn (now with a real client, not null).
-  const reboot = await runRebootRespawnDrill({ supabase, live: true, queryEventsFn: rebootQueryEventsFn, opts: { sdKey } }).catch((e) => ({ error: e && e.message }));
+  const reboot = await runRebootRespawnDrill({ supabase, live: true, queryEventsFn: rebootQueryEventsFn, queryLifecycleEventsFn: rebootQueryLifecycleEventsFn, opts: { sdKey } }).catch((e) => ({ error: e && e.message }));
   // (2) G3+U4 relaunch-under-profile -> fleet_verb_relaunch_under_profile (required args wired, was {opts:{}}).
   const u4 = await runU4Drill({
     target, fromProfile, toProfile, sessionId,
