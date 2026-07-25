@@ -119,14 +119,20 @@ export async function defaultRunDrills(plan, deps = {}) {
   // unique intentional binding of the 3 legs to one CP3 run.
   const sdKey = deps.sdKey || 'CHECKPOINT-3';
 
+  // QF-20260724-499: defaultRunDrills only ever runs after main()'s `if (!live) return` gate, so
+  // live is ALREADY known true here -- pass it explicitly on every leg (as reboot already did)
+  // instead of letting restart/relaunch fall through to spawn-control.js's isLiveEnabled() (an
+  // independent FLEET_SPAWN_CONTROL_LIVE env read that silently no-ops to dry-run when unset in
+  // THIS process, even though this --live invocation is genuine). Without this, restart+relaunch
+  // spawnReplacement() never gets live:true and unconditionally emits replacement_not_live.
   // G1a kill-supervisor -> fleet_verb_restart (canary-guarded).
-  const g1a = await Promise.resolve(canaryRestart(target, { supabase, sdKey })).catch((e) => ({ error: e && e.message }));
+  const g1a = await Promise.resolve(canaryRestart(target, { supabase, sdKey, live: true })).catch((e) => ({ error: e && e.message }));
   // (3) G1b+G2 reboot-respawn -> fleet_verb_respawn (now with a real client, not null).
   const reboot = await runRebootRespawnDrill({ supabase, live: true, queryEventsFn: rebootQueryEventsFn, opts: { sdKey } }).catch((e) => ({ error: e && e.message }));
   // (2) G3+U4 relaunch-under-profile -> fleet_verb_relaunch_under_profile (required args wired, was {opts:{}}).
   const u4 = await runU4Drill({
     target, fromProfile, toProfile, sessionId,
-    relaunchFn: canaryRelaunchUnderProfile, resolveFn: resolveProfileDir, queryEventsFn, opts: { supabase, sdKey },
+    relaunchFn: canaryRelaunchUnderProfile, resolveFn: resolveProfileDir, queryEventsFn, opts: { supabase, sdKey, live: true },
   }).catch((e) => ({ error: e && e.message }));
 
   return { g1a, reboot, u4 };

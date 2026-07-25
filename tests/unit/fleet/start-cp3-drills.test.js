@@ -69,8 +69,9 @@ describe('defaultRunDrills — wired live path (QF-20260724-923)', () => {
 
     // supabase is NOT null (was the stub bug); canary resolved.
     expect(resolveCanaryTarget).toHaveBeenCalledWith(supabase, { by: 'account_profile', value: 'canary' });
-    // G1a kill-supervisor -> fleet_verb_restart.
-    expect(canaryRestart).toHaveBeenCalledWith(target, { supabase, sdKey: 'CHECKPOINT-3' });
+    // G1a kill-supervisor -> fleet_verb_restart. QF-20260724-499: live:true explicit (was missing,
+    // causing restart to fall through to spawn-control's isLiveEnabled() and dry-run).
+    expect(canaryRestart).toHaveBeenCalledWith(target, { supabase, sdKey: 'CHECKPOINT-3', live: true });
     // G1b+G2 reboot-respawn gets a REAL client + live:true (was supabase=null) + a queryEventsFn
     // (QF-20260724-113 FR-b: without one, respawn_events_present always fails on a live run).
     const rebootArgs = runRebootRespawnDrill.mock.calls[0][0];
@@ -85,6 +86,8 @@ describe('defaultRunDrills — wired live path (QF-20260724-923)', () => {
     expect(typeof u4Args.relaunchFn).toBe('function');
     expect(typeof u4Args.resolveFn).toBe('function');
     expect(typeof u4Args.queryEventsFn).toBe('function');
+    // QF-20260724-499: relaunch's opts also carry live:true (mirrors the reboot leg's own explicit flag).
+    expect(u4Args.opts.live).toBe(true);
     expect(res).toMatchObject({ g1a: expect.anything(), reboot: expect.anything(), u4: expect.anything() });
   });
 });
