@@ -88,6 +88,11 @@ export async function main(argv = process.argv, deps = {}) {
       // in-session pass already records. Reconciliation itself is idempotent either way.
     });
 
+    // per-candidate write failures are surfaced, NOT folded into the quiet-lane reading. The
+    // reconciler fails open per row, so a sweep where every write threw still returns reconciled:0
+    // — identical on the wire to "nothing to do". That conflation is exactly how a reconciler that
+    // never once succeeded logged ok:true for its whole life. Still exit 0 (fail-open is
+    // deliberate; the rows stay retryable), but the counts make the difference visible.
     logger.log?.(`[late-verdict-reconcile] ${JSON.stringify({
       ts: new Date(nowMs).toISOString(),
       sd: SD_KEY,
@@ -95,6 +100,9 @@ export async function main(argv = process.argv, deps = {}) {
       checked: result.checked,
       reconciled: result.reconciled,
       near_misses: result.nearMisses,
+      already_dispositioned: result.alreadyDispositioned,
+      write_errors: result.errors,
+      first_error: result.firstError ?? null,
       ok: true,
     })}`);
     return { exitCode: EXIT_OK, summary: result };

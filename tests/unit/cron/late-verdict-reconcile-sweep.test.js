@@ -79,6 +79,7 @@ describe('adam-late-verdict-reconcile-sweep main()', () => {
       eq() { return this; },
       is() { return this; },
       order() { return this; }, // SEC-3 added ORDER to the candidate query; omitting it here threw
+      gte() { return this; },   // SEC-11 added the recency horizon
       limit: async () => ({ data: [], error: null }),
     };
     const { exitCode, summary } = await main([], { env: ENV, now: NOW, logger: log, supabase: fakeSupabase });

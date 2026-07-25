@@ -37,7 +37,7 @@ function makeFakeSupabase({ candidates = [], answers = [], onUpdate = () => {} }
   // Filters are recorded PER QUERY. A single shared map lets the answer query's
   // kind='adam_advisory' clobber the candidate query's kind='solomon_consult', which silently
   // inverts what the scoping assertions below actually prove (hit during EXEC).
-  const state = { updates: [], candidateFilters: {}, answerFilters: {}, candidateOrders: [], answerOrders: [], mode: 'candidates' };
+  const state = { updates: [], candidateFilters: {}, answerFilters: {}, candidateOrders: [], answerOrders: [], candidateGte: {}, mode: 'candidates' };
   const bucket = () => (state.mode === 'candidates' ? state.candidateFilters : state.answerFilters);
   const orders = () => (state.mode === 'candidates' ? state.candidateOrders : state.answerOrders);
   const api = {
@@ -49,6 +49,7 @@ function makeFakeSupabase({ candidates = [], answers = [], onUpdate = () => {} }
     eq(col, val) { bucket()[col] = val; return api; },
     is(col, val) { bucket()[col] = val; return api; },
     in() { return api; },
+    gte(col, val) { state.candidateGte[col] = val; return api; },
     // Recorded, not ignored: ORDER is load-bearing here (it decides which slice of the backlog is
     // drained and which answer wins), so a test must be able to assert on it.
     order(col, opts) { orders().push({ col, opts }); return api; },
@@ -182,37 +183,63 @@ describe('reconcileLateVerdicts — FR-3 consumer', () => {
     expect(seen[0]).toMatch(/^dq_[0-9a-f]{64}$/);
   });
 
-  it('SEC-1: the key is CONTENT-derived — correlation_id must not change it', async () => {
-    // disposition.js is explicit that a consult_answer key derives from question TEXT and "never on
-    // correlation_id/message_id, which rotate per session". So the SAME question re-asked in a new
-    // session (new corr) must dedup onto the SAME key, and a DIFFERENT question must not.
-    const keyFor = async (corr, body) => {
-      const row = CONSULT({ corr, payload: { correlation_id: corr, body } });
-      const { api } = makeFakeSupabase({ candidates: [row], answers: [ANSWER(corr)] });
+  it('SEC-9: two consults sharing question text do NOT collapse onto one disposition', async () => {
+    // THE REGRESSION GUARD FOR THE FIX'S OWN FIRST DRAFT. Keying on question_text alone recreated
+    // this SD's thesis defect: the second consult was stamped reconciled while only the FIRST
+    // verdict was ever persisted. Reachable, not theoretical — presend-consult-lane.cjs hardcodes
+    // the row subject to a constant and never passes sd_key, so for body-less consults every other
+    // discriminator is identical across rows.
+    const mk = (id, corr) => ({ id, subject: '[SOLOMON_CONSULT] pre-send', body: null, created_at: '2026-07-25T10:00:00Z',
+      payload: { kind: 'solomon_consult', consult_purpose: 'pre_send', correlation_id: corr, body: 'same question' } });
+    const { api, state } = makeFakeSupabase({
+      candidates: [mk('rA', 'corr-A'), mk('rB', 'corr-B')],
+      answers: [ANSWER('corr-A'), ANSWER('corr-B')],
+    });
+
+    const keys = new Set();
+    const out = await reconcileLateVerdicts(api, {
+      recordDisposition: async ({ decisionType, subject }) => { keys.add(computeQuestionKey(decisionType, subject)); return { created: true }; },
+    });
+
+    expect(out.reconciled).toBe(2);
+    expect(keys.size).toBe(2);       // two events => two dispositions, never one
+    expect(state.updates).toHaveLength(2);
+  });
+
+  it('SEC-9: the same consult row re-swept recomputes the SAME key (retries still dedup)', async () => {
+    // Per-event keying must not cost idempotency: a cron re-running over a row it already handled
+    // has to land on the identical key, or every sweep mints a duplicate disposition.
+    const keyFor = async (rowId) => {
+      const row = CONSULT({ id: rowId, payload: { body: 'q' } });
+      const { api } = makeFakeSupabase({ candidates: [row], answers: [ANSWER('corr-1')] });
       let key;
       await reconcileLateVerdicts(api, {
-        recordDisposition: async ({ decisionType, subject }) => { key = computeQuestionKey(decisionType, subject); return { created: true }; },
+        recordDisposition: async ({ decisionType, subject }) => { key = computeQuestionKey(decisionType, subject); return { created: false }; },
       });
       return key;
     };
-
-    expect(await keyFor('corr-A', 'should I send X?')).toBe(await keyFor('corr-B', 'should I send X?'));
-    expect(await keyFor('corr-A', 'should I send X?')).not.toBe(await keyFor('corr-A', 'should I send Y?'));
+    expect(await keyFor('row-1')).toBe(await keyFor('row-1'));
+    expect(await keyFor('row-1')).not.toBe(await keyFor('row-2'));
   });
 
-  it('SEC-1: a consult with NO question text is skipped, not collapsed onto a shared key', async () => {
-    // The tempting fix is a constant placeholder when text is missing — but then every text-less
-    // consult hashes to ONE key, dedup returns the first row, and the rest read as reconciled
-    // without ever being reconciled. Skipping keeps them un-stamped and retryable.
-    const blank = { id: 'row-blank', subject: null, body: null, created_at: '2026-07-25T10:00:00Z',
-      payload: { kind: 'solomon_consult', consult_purpose: 'pre_send', correlation_id: 'corr-1', reply_class: 'reply-needed' } };
-    const { api, state } = makeFakeSupabase({ candidates: [blank], answers: [ANSWER('corr-1')] });
-    const recordDisposition = vi.fn(async () => ({ created: true }));
-    const out = await reconcileLateVerdicts(api, { recordDisposition });
+  it('SEC-11: candidates are bounded by a recency HORIZON, not an unbounded oldest-first window', async () => {
+    // session_coordination has no reaper (4670 rows, 3379 already past expires_at). Oldest-first
+    // over an unbounded backlog is terminal: once the oldest `limit` rows are all permanently
+    // unanswerable the window stops advancing and the sweep is blind for good.
+    const { api, state } = makeFakeSupabase({ candidates: [CONSULT()], answers: [ANSWER('corr-1')] });
+    await reconcileLateVerdicts(api, { recordDisposition: async () => ({ created: true }), now: Date.parse('2026-07-25T12:00:00Z') });
+    expect(state.candidateGte['created_at']).toBe('2026-07-24T12:00:00.000Z');
+  });
 
-    expect(out).toMatchObject({ reconciled: 0, unkeyable: 1 });
-    expect(recordDisposition).not.toHaveBeenCalled();
-    expect(state.updates).toHaveLength(0); // stays retryable
+  it('condition C: a lane FAILING every write is distinguishable from a quiet lane', async () => {
+    // The silent catch is what hid SEC-1 — an all-throwing sweep returned {reconciled:0}, which on
+    // the wire is identical to "nothing to do". Counting the failures is the actual fix.
+    const { api } = makeFakeSupabase({ candidates: [CONSULT()], answers: [ANSWER('corr-1')] });
+    const out = await reconcileLateVerdicts(api, {
+      recordDisposition: async () => { throw new Error('db down'); },
+    });
+    expect(out).toMatchObject({ reconciled: 0, errors: 1 });
+    expect(out.firstError).toContain('db down');
   });
 
   it('SEC-3: candidates are drained OLDEST-FIRST, never an arbitrary slice', async () => {
@@ -221,6 +248,16 @@ describe('reconcileLateVerdicts — FR-3 consumer', () => {
     const { api, state } = makeFakeSupabase({ candidates: [CONSULT()], answers: [ANSWER('corr-1')] });
     await reconcileLateVerdicts(api, { recordDisposition: async () => ({ created: true }) });
     expect(state.candidateOrders[0]).toMatchObject({ col: 'created_at', opts: { ascending: true } });
+  });
+
+  it('SEC-3: the ANSWER query is ordered too — first-wins must mean earliest, not random-UUID', async () => {
+    // The dedup in resolveAnswerRows is first-wins per correlation_id, so ORDER decides which row
+    // becomes the verdict of record. Ordering by a UUID id alone makes that pick arbitrary. This
+    // assertion was plumbed for (answerOrders) but never actually written — a half-built guard
+    // reads as coverage while proving nothing.
+    const { api, state } = makeFakeSupabase({ candidates: [CONSULT()], answers: [ANSWER('corr-1')] });
+    await reconcileLateVerdicts(api, { recordDisposition: async () => ({ created: true }) });
+    expect(state.answerOrders[0]).toMatchObject({ col: 'created_at', opts: { ascending: true } });
   });
 
   it('returns an inert result without a recordDisposition dep (no half-done writes)', async () => {
