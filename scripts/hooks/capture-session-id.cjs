@@ -314,6 +314,14 @@ function buildSessionMetadata(existingMetadata, ccPid, source, model) {
     const family = coarseModelAlias(model);
     if (family && family !== model) merged.model_family = family;
     else if (MODEL_ALIAS_ORDER.includes(String(model).toLowerCase())) merged.model_family = String(model).toLowerCase();
+    // SEC-01 (adversarial security review of this SD): an id naming NO known family must
+    // CLEAR any inherited stamp, exactly as the check-in writer does. Setting-without-
+    // clearing let a stale family outlive the model it described: a seat stamped 'fable'
+    // that later ran an unrecognized id kept model_family='fable', and declaredSeatFamily
+    // reads model_family FIRST — so it walked straight through the Fable-exclusive
+    // one-way door that is supposed to fail closed on unknown. This branch introduced
+    // that field, so it introduced that hole; the two writers must agree.
+    else delete merged.model_family;
     // Auto-observed from Claude Code's own identifier. An externally stamped source
     // (coordinator/chairman) is authoritative and is never overwritten here.
     const priorSource = base.model_source;

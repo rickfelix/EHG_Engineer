@@ -122,3 +122,28 @@ describe('FR-1/FR-2: buildSessionMetadata stamps model_family and model_source',
     expect(merged.model_source).toBe('chairman');
   });
 });
+
+// SEC-01 — found by the adversarial SECURITY review of this SD, and it was a hole this
+// branch itself opened: buildSessionMetadata SET model_family but never CLEARED it, while
+// the check-in writer did. declaredSeatFamily reads model_family FIRST, so a stale value
+// outliving the model it described walked a non-Fable seat through the Fable-exclusive
+// one-way door — the gate that is supposed to fail CLOSED on an unknown model.
+describe('SEC-01: an unrecognized model CLEARS a stale model_family (both writers must agree)', () => {
+  it('does not let a fable stamp survive onto an unrecognized model id', () => {
+    const stale = { model: 'fable', model_family: 'fable' };
+    const merged = buildSessionMetadata(stale, '9', 'startup', 'gpt-5.2');
+    expect(merged.model).toBe('gpt-5.2');
+    expect('model_family' in merged).toBe(false);
+  });
+
+  it('the resolved seat family for that row is no longer fable', () => {
+    const { declaredSeatFamily } = require('../../lib/fleet/tier-ladder.cjs');
+    const merged = buildSessionMetadata({ model: 'fable', model_family: 'fable' }, '9', 'startup', 'gpt-5.2');
+    expect(declaredSeatFamily(merged)).toBeNull();
+  });
+
+  it('a recognizable id still REPLACES a prior family rather than clearing it', () => {
+    const merged = buildSessionMetadata({ model: 'fable', model_family: 'fable' }, '9', 'startup', 'claude-opus-5[1m]');
+    expect(merged.model_family).toBe('opus');
+  });
+});
