@@ -126,3 +126,18 @@ jobs:
             exit 1
           fi
           echo "Ledger is in sync with the seeder."
+
+      # The wiring test proves THIS workflow cannot be failed open by a corrupt ledger, so this
+      # workflow is where it belongs. It lives under tests/integration/, which vitest.config
+      # routes to the opt-in `db` project — and no workflow runs `npm run test:db` (db-guards.yml
+      # runs test:db-GUARDS, a static analyser, which is easy to misread as the same thing). So
+      # the SD's only end-to-end safety proof was unreachable in CI: green forever, asserting
+      # nothing. Runs AFTER the sync check so its ledger backup/restore can never be mistaken
+      # for seeder drift.
+      - name: FR-6 fail-open wiring proof
+        if: always()
+        env:
+          SUPABASE_DB_PASSWORD: ${{ secrets.SUPABASE_DB_PASSWORD }}
+          SUPABASE_POOLER_URL: ${{ secrets.SUPABASE_POOLER_URL }}
+          DATABASE_URL: ${{ secrets.DATABASE_URL }}
+        run: npx vitest run tests/integration/migration-apply-state-ledger-wiring.test.js --project db
