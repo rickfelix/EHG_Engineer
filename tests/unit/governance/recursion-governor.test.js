@@ -15,23 +15,58 @@ import {
 } from '../../../lib/governance/recursion-governor.js';
 
 describe('computeRecursionRatio', () => {
-  it('classifies SD-LEO-*, SD-LEARN-FIX-*, SD-MAN-INFRA-*, QF-* as meta and everything else as product', () => {
+  // QF-20260725-112: these previously fed {key} rows with NO durable field and asserted the
+  // key-prefix regex outcome — i.e. they encoded the very behaviour that made this gauge
+  // misinform. The discriminant is now target_application via classifySdRow, so the rows
+  // must carry it. Measured justification on the live 30d cohort (1076 rows): the regex read
+  // meta=951 product=125 ratio=7.608; the durable field reads meta=987 product=89
+  // unclassified=0 ratio=11.09, against a declared band max of 3.
+  it('classifies by the DURABLE target_application field, not the key prefix', () => {
     const items = [
-      { key: 'SD-LEO-INFRA-FOO-001' },
-      { key: 'SD-LEARN-FIX-BAR-001' },
-      { key: 'SD-MAN-INFRA-BAZ-001' },
-      { key: 'QF-20260703-001' },
-      { key: 'SD-MARKETLENS-VENTURE-001' },
+      { sd_key: 'SD-LEO-INFRA-FOO-001', target_application: 'EHG_Engineer' },
+      { sd_key: 'SD-LEARN-FIX-BAR-001', target_application: 'EHG_Engineer' },
+      // The regex called these PRODUCT because the prefix is unrecognised; the durable field
+      // says EHG_Engineer, i.e. harness work. This is the 88-row spread the QF is about.
+      { sd_key: 'SD-FDBK-ENH-SOMETHING-001', target_application: 'EHG_Engineer' },
+      { sd_key: 'SD-REFILL-WHATEVER-001', target_application: 'EHG_Engineer' },
+      { sd_key: 'SD-MARKETLENS-VENTURE-001', target_application: 'marketlens' },
     ];
     const result = computeRecursionRatio(items, { windowDays: 30 });
     expect(result.meta).toBe(4);
     expect(result.product).toBe(1);
+    expect(result.unclassified).toBe(0);
     expect(result.ratio).toBe(4);
     expect(result.windowDays).toBe(30);
   });
 
+  it('reports a row with NO durable field as unclassified, never as product', () => {
+    // The whole point of the three-valued classifier: absence of the field proves nothing,
+    // so it must NOT inflate product (which is what silently understated the taper).
+    const result = computeRecursionRatio([
+      { sd_key: 'SD-MARKETLENS-VENTURE-001' },          // unknown prefix, no durable field
+      { sd_key: 'SD-LEO-INFRA-FOO-001' },               // meta prefix still positively identifies
+      { sd_key: 'SD-SOMETHING-ELSE-001', target_application: 'ehg' },
+    ]);
+    expect(result.meta).toBe(1);
+    expect(result.product).toBe(1);
+    expect(result.unclassified).toBe(1);
+    expect(result.ratio).toBe(1); // unclassified excluded from the denominator
+  });
+
+  it('accepts a legacy {key} row by aliasing it onto sd_key', () => {
+    // Back-compat for any un-widened caller: prefix META detection still works, and an
+    // unrecognised legacy row lands in unclassified rather than being counted as product.
+    const result = computeRecursionRatio([{ key: 'QF-20260703-001' }, { key: 'SD-MARKETLENS-VENTURE-001' }]);
+    expect(result.meta).toBe(1);
+    expect(result.product).toBe(0);
+    expect(result.unclassified).toBe(1);
+  });
+
   it('returns ratio=null (not a divide-by-zero) when product=0 and meta>0', () => {
-    const items = [{ key: 'QF-1' }, { key: 'QF-2' }];
+    const items = [
+      { sd_key: 'QF-1', target_application: 'EHG_Engineer' },
+      { sd_key: 'QF-2', target_application: 'EHG_Engineer' },
+    ];
     const result = computeRecursionRatio(items);
     expect(result.meta).toBe(2);
     expect(result.product).toBe(0);
@@ -39,8 +74,8 @@ describe('computeRecursionRatio', () => {
   });
 
   it('handles an empty item list defensively', () => {
-    expect(computeRecursionRatio([])).toMatchObject({ meta: 0, product: 0, ratio: null });
-    expect(computeRecursionRatio(undefined)).toMatchObject({ meta: 0, product: 0, ratio: null });
+    expect(computeRecursionRatio([])).toMatchObject({ meta: 0, product: 0, unclassified: 0, ratio: null });
+    expect(computeRecursionRatio(undefined)).toMatchObject({ meta: 0, product: 0, unclassified: 0, ratio: null });
   });
 });
 
