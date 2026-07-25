@@ -615,3 +615,60 @@ describe('QF-20260703-860: supersede the open stall digest instead of inserting 
     expect(stubSb.updates.every((u) => u.id === 'dec-1')).toBe(true);
   });
 });
+
+/**
+ * QF-20260725-639 — the unshipped half of QF-20260725-638. The venture half merged (parked
+ * ventures stopped alarming) but the ANCHOR half did not, so 6 QUIET_TICK_STALL_ALERT lines
+ * fired every tick forever on rows that are not work: parent-tier anchors (forward-list /
+ * rollup entries that never advance by design) and advisory_thread comms rows.
+ */
+describe('QF-20260725-639 — non-work ledger rows never enter the stall class', () => {
+  const sb = {}; // recordPendingDecision is mocked; no IO reached for suppressed rows
+  const stale = (ids) => Object.fromEntries(ids.map((id) => [id, { updated_at: 'fixed', ticks: DEFAULT_STALE_TICKS - 1 }]));
+
+  it('suppresses a parent-tier anchor and never escalates it', async () => {
+    const parents = [{ id: 'a1', title: 'anchor', tier: 'parent', source_kind: 'manual', updated_at: 'fixed' }];
+    const { alerted, suppressed } = await checkAndAlertStalls(sb, parents, stale(['a1']));
+    expect(recordPendingDecision).not.toHaveBeenCalled();
+    expect(alerted).toEqual([]);
+    expect(suppressed).toEqual([expect.objectContaining({ id: 'a1', tier: 'parent', reason: 'parent_tier_anchor' })]);
+  });
+
+  it('suppresses a PARENT-tier advisory_thread anchor (the [SOLOMON_CONSULT] rows)', async () => {
+    const parents = [{ id: 'v1', title: '[SOLOMON_CONSULT] pre-send', tier: 'parent', source_kind: 'advisory_thread', updated_at: 'fixed' }];
+    const { alerted, suppressed } = await checkAndAlertStalls(sb, parents, stale(['v1']));
+    expect(recordPendingDecision).not.toHaveBeenCalled();
+    expect(alerted).toEqual([]);
+    expect(suppressed).toEqual([expect.objectContaining({ id: 'v1', reason: 'parent_tier_anchor' })]);
+  });
+
+  // Deliberately NOT suppressed: a child advisory_thread with a genuinely open correlation is an
+  // awaited answer that went unanswered. Blanket-excluding advisory_thread would revoke
+  // QF-20260704-319, which is why this fix is scoped to parent tier.
+  it('does NOT suppress a child-tier advisory_thread — QF-20260704-319 stays intact', async () => {
+    const parents = [{ id: 'v2', title: 'awaited reply', tier: 'child', source_kind: 'advisory_thread', updated_at: 'fixed' }];
+    const { suppressed } = await checkAndAlertStalls(sb, parents, stale(['v2']));
+    expect(suppressed).toEqual([]);
+  });
+
+  it('STILL alarms a genuine child-tier stall — the acceptance criterion', async () => {
+    const parents = [{ id: 'c1', title: 'real child work', tier: 'child', source_kind: 'manual', updated_at: 'fixed' }];
+    const { alerted, suppressed } = await checkAndAlertStalls(sb, parents, stale(['c1']));
+    expect(recordPendingDecision).toHaveBeenCalledTimes(1);
+    expect(alerted).toEqual([{ id: 'c1', title: 'real child work', escalated: true }]);
+    expect(suppressed).toEqual([]);
+  });
+
+  it('records the suppression reason per row so an exclusion is never silent', async () => {
+    const parents = [
+      { id: 'a1', title: 'anchor', tier: 'parent', source_kind: 'sourced_sd', updated_at: 'fixed' },
+      { id: 'v1', title: 'thread', tier: 'parent', source_kind: 'advisory_thread', updated_at: 'fixed' },
+      { id: 'c1', title: 'work', tier: 'child', source_kind: 'manual', updated_at: 'fixed' },
+    ];
+    const { alerted, suppressed } = await checkAndAlertStalls(sb, parents, stale(['a1', 'v1', 'c1']));
+    expect(suppressed.map((s) => `${s.id}:${s.reason}`)).toEqual(['a1:parent_tier_anchor', 'v1:parent_tier_anchor']);
+    expect(alerted.map((a) => a.id)).toEqual(['c1']);
+    // every suppressed row carries the fields the audit line prints
+    for (const s of suppressed) expect(s).toEqual(expect.objectContaining({ tier: expect.any(String), source_kind: expect.any(String), ticks: expect.any(Number) }));
+  });
+});
