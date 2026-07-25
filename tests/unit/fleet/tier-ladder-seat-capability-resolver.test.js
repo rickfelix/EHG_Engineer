@@ -142,3 +142,65 @@ describe('FR-5: capability resolved from absent or unrecognized evidence is obse
     expect(() => seatRankForModelEffort('gemini-3-5-pro', 'high')).not.toThrow();
   });
 });
+
+// ── FR-6: ADMISSION CONTROL, added at EXEC on live coordinator evidence ─────────
+// Observed 2026-07-25 while this SD was being built: seat 08d7f71d, carrying
+// tier_rank=4 with metadata.model AND metadata.effort both UNSET, SELF-CLAIMED a QF
+// while both the coordinator and Adam had spent the day explicitly routing around it.
+// That is the second observed instance, and it proves the defect is admission control
+// rather than routing accuracy: a coordinator refusing to dispatch to an unverified
+// seat does not stop that seat CLAIMING, because self-claim consults the persisted
+// stamp, not the coordinator. Re-stamping (FR-4) cannot fix it either — the stale
+// rank is already written, and resolveWorkerTierRank reads it directly.
+describe('FR-6: an unverified seat cannot self-admit above the lowest rung', () => {
+  const { seatCapabilityIsVerified } = ladder;
+  const { classifyDispatchIneligibility } = require('../../../lib/fleet/claim-eligibility.cjs');
+
+  it('a seat with model and effort BOTH unset is NOT verified (the observed 08d7f71d shape)', () => {
+    expect(seatCapabilityIsVerified({ tier_rank: 4 })).toBe(false);
+    expect(seatCapabilityIsVerified({})).toBe(false);
+    expect(seatCapabilityIsVerified(null)).toBe(false);
+  });
+
+  it('capability evidence is POSITIVE — a tier_rank stamp alone never counts as proof', () => {
+    // The stamp can be a stale value derived when unknown still resolved to STRONGEST,
+    // which is exactly how the observed seat reached rank 4 with zero evidence.
+    expect(seatCapabilityIsVerified({ tier_rank: 4, effort: 'high' })).toBe(false);
+  });
+
+  it('a real model — raw or via model_family — IS verified', () => {
+    expect(seatCapabilityIsVerified({ model: 'claude-opus-5[1m]' })).toBe(true);
+    expect(seatCapabilityIsVerified({ model_family: 'opus' })).toBe(true);
+    expect(seatCapabilityIsVerified({ model: 'opus' })).toBe(true);
+  });
+
+  it('an UNRECOGNIZED model is not capability evidence either', () => {
+    expect(seatCapabilityIsVerified({ model: 'gemini-3-5-pro' })).toBe(false);
+  });
+
+  it('the eligibility classifier REFUSES above-rung-1 work to an unverified seat', () => {
+    const sd = { sd_key: 'SD-X', status: 'draft', metadata: { min_tier_rank: 3 } };
+    const ctx = { worker_tier_rank: 4, worker_capability_unverified: true, tiering_active: true };
+    expect(classifyDispatchIneligibility(sd, ctx)).toBe('unverified_seat_capability');
+  });
+
+  it('the same seat may still take rung-1 work — refused admission, never stranded', () => {
+    // Blocking outright would idle every unstamped seat; the remedy is one command away
+    // (worker-checkin.cjs --model <m> --effort <e>), which the FR-5 event names.
+    const sd = { sd_key: 'SD-X', status: 'draft', metadata: { min_tier_rank: 1 } };
+    const ctx = { worker_tier_rank: 4, worker_capability_unverified: true, tiering_active: true };
+    expect(classifyDispatchIneligibility(sd, ctx)).not.toBe('unverified_seat_capability');
+  });
+
+  it('a VERIFIED seat is unaffected by the new axis', () => {
+    const sd = { sd_key: 'SD-X', status: 'draft', metadata: { min_tier_rank: 3 } };
+    const ctx = { worker_tier_rank: 4, worker_capability_unverified: false, tiering_active: true };
+    expect(classifyDispatchIneligibility(sd, ctx)).not.toBe('unverified_seat_capability');
+  });
+
+  it('an UNSCORED SD is unaffected — there is nothing to gate against', () => {
+    const sd = { sd_key: 'SD-X', status: 'draft', metadata: {} };
+    const ctx = { worker_tier_rank: 4, worker_capability_unverified: true, tiering_active: true };
+    expect(classifyDispatchIneligibility(sd, ctx)).not.toBe('unverified_seat_capability');
+  });
+});
