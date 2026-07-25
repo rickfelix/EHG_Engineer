@@ -596,3 +596,74 @@ describe('resolveCheckin — QF-20260705-115: directed QF assignment purges on q
     }
   });
 });
+
+// SD-LEO-INFRA-WORKER-INBOX-DRAIN-SUBSET-001 (FR-1): the seam-1 peek above only matches a
+// WORK_ASSIGNMENT carrying a structured directed SD. Every OTHER directive kind had no
+// surfacing path for a claim-holding worker, which is the measured shape of the incident:
+// the two worst non-drainers held coordinator_request / fence_notice rows while building.
+describe('resolveCheckin — surface pending DIRECTIVES on resume (FR-1)', () => {
+  const ws = require('../../lib/fleet/worker-status.cjs');
+
+  it('held claim + coordinator_request → surfaced on resume, claim kept, read_at NOT stamped', async () => {
+    const heldSd = 'SD-CURRENT-001';
+    const sb = fakeSb({ heldSd });
+    const orig = ws.getMessagesForSession;
+    ws.getMessagesForSession = async () => [
+      { id: 'dir-1', message_type: 'INFO', subject: 'coordinator asks', payload: { kind: 'coordinator_request' } },
+    ];
+    try {
+      const res = await resolveCheckin(sb, 'sess-busy', { getCoordinator: async () => null });
+      expect(res.action).toBe('resume');
+      expect(res.sd).toBe(heldSd); // never-strand: claim kept
+      expect(res.pending_directives).toEqual([{ id: 'dir-1', kind: 'coordinator_request', subject: 'coordinator asks' }]);
+      expect(res.message).toMatch(/PENDING DIRECTIVE/);
+    } finally { ws.getMessagesForSession = orig; }
+  });
+
+  it('surfaces fence_notice too (the kind the worst non-drainer was holding)', async () => {
+    const sb = fakeSb({ heldSd: 'SD-CURRENT-001' });
+    const orig = ws.getMessagesForSession;
+    ws.getMessagesForSession = async () => [
+      { id: 'f-1', message_type: 'INFO', subject: null, payload: { kind: 'fence_notice' } },
+    ];
+    try {
+      const res = await resolveCheckin(sb, 'sess-busy', { getCoordinator: async () => null });
+      expect(res.pending_directives.map(d => d.kind)).toEqual(['fence_notice']);
+    } finally { ws.getMessagesForSession = orig; }
+  });
+
+  it('does NOT double-surface a WORK_ASSIGNMENT (seam 1 already owns it)', async () => {
+    const sb = fakeSb({ heldSd: 'SD-CURRENT-001' });
+    const orig = ws.getMessagesForSession;
+    ws.getMessagesForSession = async () => [
+      { id: 'wa-1', message_type: 'WORK_ASSIGNMENT', payload: { kind: 'work_assignment', assigned_sd: 'SD-REDIRECT-002' } },
+    ];
+    try {
+      const res = await resolveCheckin(sb, 'sess-busy', { getCoordinator: async () => null });
+      expect(res.pending_work_assignment?.sd).toBe('SD-REDIRECT-002');
+      expect(res.pending_directives).toBeUndefined();
+    } finally { ws.getMessagesForSession = orig; }
+  });
+
+  it('no directives → resume result is BYTE-IDENTICAL to before (no new field, no message change)', async () => {
+    const sb = fakeSb({ heldSd: 'SD-CURRENT-001' });
+    const orig = ws.getMessagesForSession;
+    ws.getMessagesForSession = async () => [];
+    try {
+      const res = await resolveCheckin(sb, 'sess-busy', { getCoordinator: async () => null });
+      expect(res.pending_directives).toBeUndefined();
+      expect(res.message).not.toMatch(/PENDING DIRECTIVE/);
+    } finally { ws.getMessagesForSession = orig; }
+  });
+
+  it('fail-open: a throwing message pull still returns a plain resume', async () => {
+    const sb = fakeSb({ heldSd: 'SD-CURRENT-001' });
+    const orig = ws.getMessagesForSession;
+    ws.getMessagesForSession = async () => { throw new Error('boom'); };
+    try {
+      const res = await resolveCheckin(sb, 'sess-busy', { getCoordinator: async () => null });
+      expect(res.action).toBe('resume');
+      expect(res.pending_directives).toBeUndefined();
+    } finally { ws.getMessagesForSession = orig; }
+  });
+});
