@@ -97,7 +97,11 @@ describe('module surface (TS-10: exactly six named verbs, no more)', () => {
     const verbNames = ['spawn', 'attach', 'stop', 'restart', 'relaunchUnderProfile', 'drainAndRestart'];
     for (const name of verbNames) expect(typeof mod[name]).toBe('function');
     // Every OTHER export must be a helper, never an undocumented 7th verb.
-    const helperNames = ['roleOf', 'isSingletonRole', 'resolveProfileDir', 'isLiveEnabled', 'buildLiveSpawnInvocation'];
+    // The guard exists to catch an undocumented 7th VERB, not to freeze the helper surface. The two
+    // session-bind constants are exported so the budget can be asserted directly instead of by
+    // wall-clock; they are values, not verbs, so they belong on this allowlist.
+    const helperNames = ['roleOf', 'isSingletonRole', 'resolveProfileDir', 'isLiveEnabled', 'buildLiveSpawnInvocation',
+      'SESSION_BIND_MAX_ATTEMPTS', 'SESSION_BIND_DELAY_MS'];
     const unexpected = Object.keys(mod).filter((k) => !verbNames.includes(k) && !helperNames.includes(k));
     expect(unexpected).toEqual([]);
   });

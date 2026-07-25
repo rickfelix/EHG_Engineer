@@ -159,13 +159,21 @@ describe('FR-1 classifyProvisionOutcome — three-valued exit contract', () => {
     expect(classifyProvisionOutcome(null).status).toBe('infra');
   });
 
-  it('registration_timeout diagnosis names the STAMP as the suspect, not the spawn', () => {
-    // This is the whole value of the CLI: the one permitted live run must yield a diagnosis. A bare
-    // timeout looks identical whether the slot was unseeded, the spawn failed, or only the stamp did.
+  it('registration_timeout diagnosis gives an ORDERED procedure grounded in the real failure', () => {
+    // Rewritten after the first live run, and that rewrite is the point. The original text confidently
+    // named the stamp as the suspect "EXPECTED until FR-3 lands" -- but FR-3 HAD landed, and the real
+    // cause was the session-bind loop closing 1.3s before the child registered, which discards
+    // window_handle, account_profile AND the session_id bind together. A diagnosis that names the wrong
+    // suspect is worse than a bare timeout: it sends the next operator down a dead path with
+    // confidence. This now asserts the three ordered checks that actually discriminate.
     const d = DIAGNOSIS.registration_timeout;
-    expect(d).toMatch(/account_profile/);
-    expect(d).toMatch(/stamp/i);
-    expect(d).toMatch(/REGISTERED/);
+    expect(d).toMatch(/claude_sessions row appear/i); // (1) did anything register at all
+    expect(d).toMatch(/MINTED session id/i);          // (2) did --session-id take effect
+    expect(d).toMatch(/metadata EMPTY/i);             // (3) did the bind window miss
+    expect(d).toMatch(/bind/i);
+    // Must direct the operator to MEASURE the gap rather than re-run blind: a re-run spawns another
+    // real session, which is exactly the wrong response to a timing bug.
+    expect(d).toMatch(/measure the gap/i);
   });
 });
 
