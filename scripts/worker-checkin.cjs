@@ -1364,6 +1364,26 @@ async function assignFleetIdentityAtCheckin(sb, sessionId, claimSd) {
       if (isFixtureSession(sessionId)) return null;
     } catch { /* superset unavailable — retained isTestSessionId pre-filter still guards */ }
     const existing = myMeta.fleet_identity;
+    // SD-LEO-INFRA-LAUNCHER-CAN-HOST-001 FR-6: the SECOND, previously unguarded clobber writer.
+    // QF-20260724-521 added this canary skip to assign-fleet-identities.cjs:401 (the cron path) but
+    // NOT here, and this function applies the identical callsignInTierBand gate below. Canary sessions
+    // live outside the NATO tier-band scheme entirely -- canary-guard fail-closed REQUIRES a callsign
+    // starting with 'Canary-' -- so 'Canary-1' is in no NATO band, falls through to re-derive, and the
+    // canary is silently renamed to a NATO callsign mid-drill. Both writers must skip, or closing one
+    // just moves the clobber to the other.
+    //
+    // MUST be checked BEFORE the tier-band idempotency check below: that check returns early only for
+    // an in-band callsign, so placing this after it would let every canary reach the re-derive path
+    // first and the guard would never fire. Ordering is pinned by a test.
+    //
+    // Two independent conditions, matching the cron's: the account_profile stamp (authoritative, but
+    // written only once FR-1/FR-3 land) OR the 'Canary-' callsign prefix (works today). Deliberately
+    // an OR so this is NOT inert while the stamp is still being wired.
+    if (myMeta.account_profile === 'canary' || (existing && typeof existing.callsign === 'string' && existing.callsign.startsWith('Canary-'))) {
+      return existing && existing.callsign && existing.color
+        ? { callsign: existing.callsign, color: existing.color }
+        : null;
+    }
     // QF-20260627-108: idempotent ONLY when the existing callsign is in this worker's tier band
     // (effort-encoded SoT). A wrong-band callsign (e.g. a tier-2 worker still holding "Bravo") falls
     // through to re-derive, so check-in self-heals to the scheme just like the cron.
