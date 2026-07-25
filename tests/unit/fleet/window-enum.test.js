@@ -33,6 +33,9 @@ import {
   parseWindowListOutput,
   selectNewWindowHandle,
   enumerateWindows,
+  captureNewWindowHandle,
+  CAPTURE_POLL_MAX_ATTEMPTS,
+  CAPTURE_POLL_DELAY_MS,
 } from '../../../lib/fleet/window-handle.js';
 
 /** VERBATIM real stdout — 17 lines, unedited. */
@@ -216,5 +219,58 @@ describe('FR-4 enumerateWindows — fail-soft, never shells in unit tests', () =
     // An empty snapshot degrades to no_new_window downstream -- fail-closed, never a wrong handle.
     const rows = await enumerateWindows({ execFn: vi.fn().mockRejectedValue(new Error('powershell missing')) });
     expect(rows).toEqual([]);
+  });
+});
+
+describe('FR-7 captureNewWindowHandle — bounded budget, asserted by call count not wall-clock', () => {
+  it('spends AT MOST the exported attempt budget when no window ever appears', async () => {
+    // Asserted against the exported constant and the injected execFn CALL COUNT, never a clock. A
+    // timing assertion would be flaky on a loaded runner and -- the real problem -- would still pass
+    // while the poll was futile: the retired pid-based capture burned its whole budget on every spawn
+    // and no wall-clock test would ever have called that a bug.
+    const execFn = vi.fn().mockResolvedValue({ stdout: '' });
+    const sleepFn = vi.fn();
+    const r = await captureNewWindowHandle([], { execFn, sleepFn });
+    expect(execFn).toHaveBeenCalledTimes(CAPTURE_POLL_MAX_ATTEMPTS);
+    expect(sleepFn).toHaveBeenCalledTimes(CAPTURE_POLL_MAX_ATTEMPTS - 1); // no sleep after the last try
+    expect(sleepFn.mock.calls.every((c) => c[0] === CAPTURE_POLL_DELAY_MS)).toBe(true);
+    expect(r).toMatchObject({ handle: null, handleCaptureFailed: true, attempts: CAPTURE_POLL_MAX_ATTEMPTS });
+  });
+
+  it('stops as soon as the window appears rather than draining the budget', async () => {
+    let call = 0;
+    const execFn = vi.fn(async () => {
+      call += 1;
+      return { stdout: call < 3 ? '' : '4242|5555|WindowsTerminal|Claude Code' };
+    });
+    const sleepFn = vi.fn();
+    const r = await captureNewWindowHandle([], { execFn, sleepFn });
+    expect(r).toMatchObject({ handle: 4242, handleCaptureFailed: false, attempts: 3 });
+    expect(execFn).toHaveBeenCalledTimes(3);
+  });
+
+  it('does NOT poll on ambiguous — waiting cannot un-appear a window (the futile-poll lesson)', async () => {
+    // This is FR-7's actual principle: only retry a race you can win. Two windows already appeared,
+    // so spending the remaining 9 attempts would reproduce exactly the futile budget being retired.
+    const execFn = vi.fn().mockResolvedValue({
+      stdout: ['1|5|WindowsTerminal|Claude Code', '2|5|WindowsTerminal|Claude Code'].join('\n'),
+    });
+    const sleepFn = vi.fn();
+    const r = await captureNewWindowHandle([], { execFn, sleepFn });
+    expect(execFn).toHaveBeenCalledTimes(1);
+    expect(sleepFn).not.toHaveBeenCalled();
+    expect(r).toMatchObject({ handle: null, handleCaptureFailed: true });
+    expect(r.diagnostics.reason).toBe('ambiguous');
+  });
+
+  it('QF-20260724-113 invariant, carried forward: NEVER throws when the shell rejects', async () => {
+    // Re-asserted here because FR-7 deleted the tests that used to hold it. A throw out of capture
+    // aborted spawn()'s DB bookkeeping AFTER the real OS spawn -- real processes with zero evidence
+    // and orphaned unstamped sessions. The new path preserves it structurally (enumerateWindows
+    // swallows and returns [], selectNewWindowHandle is pure and total), and this proves it.
+    const execFn = vi.fn().mockRejectedValue(new Error('powershell is not recognized'));
+    await expect(captureNewWindowHandle([], { execFn, sleepFn: vi.fn() })).resolves.toMatchObject({
+      handle: null, handleCaptureFailed: true,
+    });
   });
 });
