@@ -1267,8 +1267,13 @@ async function selfHealStaleClaim(sb, sessionId, sdKey) {
 /**
  * SD-LEO-INFRA-CHECKIN-OWN-CLAIM-DETECT-001: the authoritative query — does strategic_directives_v2
  * (the same columns sd:next and the coordinator read) say THIS session holds a live, unworked claim?
- * claude_sessions.sd_key is only ever a cache of this; this is the source of truth. Fail-open (null on
- * any error) so a query hiccup never turns a checkin into action=error.
+ * This is an OWNERSHIP question, so SDv2 governs it — see the ratified precedence rule in
+ * docs/protocol/claim-ownership-vs-liveness.md (SD-LEO-INFRA-PARKED-WORKER-CLAIM-LAPSE-001 FR-5).
+ * NOTE: this comment used to say "claude_sessions.sd_key is only ever a cache of this", which read as
+ * a universal rule and contradicted coordinator-email-summary.mjs. It is not a cache — it answers a
+ * DIFFERENT question (is a worker currently BUILDING), and the two surfaces diverge legitimately in
+ * both directions. Do not consult sd_key here; do not consult claiming_session_id for liveness.
+ * Fail-open (null on any error) so a query hiccup never turns a checkin into action=error.
  * @returns {Promise<string|null>} the sd_key of the owned claim, or null
  */
 async function findOwnSdClaim(sb, sessionId) {

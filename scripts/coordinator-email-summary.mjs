@@ -62,7 +62,12 @@ const workableKeys = (workRows || []).filter(s => isClaimableSd(s, depStatus)).m
 const workable = workableKeys.length;
 
 // ── live workers + the SDs they ACTUALLY hold. claude_sessions.sd_key is the reliable build signal;
-//    SDv2.claiming_session_id drifts to NULL after a claim-sweep even while the worker keeps building. ──
+//    SDv2.claiming_session_id drifts to NULL after a claim-sweep even while the worker keeps building.
+//    This is a LIVENESS question, so the session surface governs it — ratified precedence rule in
+//    docs/protocol/claim-ownership-vs-liveness.md (SD-LEO-INFRA-PARKED-WORKER-CLAIM-LAPSE-001 FR-5).
+//    Do NOT generalize this into "sd_key always wins": ownership questions (who may release the SD)
+//    still read SDv2. The workaround noted here was correct but had never been propagated to the
+//    dispatch path, which is why coordination-inbox.cjs could advertise a busy SD (FR-4). ──
 const { data: sessRaw } = await db.from('claude_sessions').select('session_id,heartbeat_at,sd_key,loop_state,status,claimed_at,worktree_path,continuous_sds_completed,metadata').order('heartbeat_at', { ascending: false }).limit(60);
 // QF-20260607-608: identify a GENUINE worker the same way fleet-dashboard.cjs does, so the email
 // and the dashboard never disagree (the email was showing "9 workers" vs the dashboard's ~6 because
