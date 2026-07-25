@@ -80,7 +80,47 @@ const CONST_DEFAULT = /^\s*(?:NULL|TRUE|FALSE|-?\d+(?:\.\d+)?|'(?:[^']|'')*'|"(?
 
 function T2(reason) { return { tier: 2, reason, matched: [] }; }
 
-/** Strip leading line/block comments, lowercase, collapse whitespace — for head matching. */
+/**
+ * Strip line/block comments that are OUTSIDE single-quoted string literals, replacing each with
+ * a space. Literal-aware by necessity — see the note in normalizeHead: a COMMENT ON ... IS '...'
+ * value legitimately contains '--' and '/*' as prose, and eating it corrupts the statement the
+ * head matchers must read. Mirrors countTopLevelSemicolons' scanner, including the SQL-standard
+ * doubled-quote ('') escape. Dollar-quoted bodies are already removed by stripNonDdl upstream.
+ */
+function stripCommentsOutsideStrings(s) {
+  let out = '';
+  let inString = false;
+  for (let i = 0; i < s.length; i++) {
+    const ch = s[i];
+    if (inString) {
+      if (ch === "'") {
+        if (s[i + 1] === "'") { out += "''"; i++; continue; } // escaped '' stays inside the string
+        inString = false;
+      }
+      out += ch;
+      continue;
+    }
+    if (ch === "'") { inString = true; out += ch; continue; }
+    if (ch === '-' && s[i + 1] === '-') {
+      const nl = s.indexOf('\n', i);
+      out += ' ';
+      if (nl === -1) return out;   // line comment runs to end of input
+      i = nl - 1;                  // resume ON the newline so it is preserved
+      continue;
+    }
+    if (ch === '/' && s[i + 1] === '*') {
+      const end = s.indexOf('*/', i + 2);
+      out += ' ';
+      if (end === -1) return out;  // unterminated block comment swallows the rest
+      i = end + 1;
+      continue;
+    }
+    out += ch;
+  }
+  return out;
+}
+
+/** Strip leading comments, then all comments outside string literals; lowercase; collapse ws. */
 function normalizeHead(raw) {
   let s = String(raw);
   // strip leading -- line comments and /* */ block comments repeatedly
@@ -90,6 +130,26 @@ function normalizeHead(raw) {
     s = s.replace(/^\s*--[^\n]*\n?/, '');
     s = s.replace(/^\s*\/\*[\s\S]*?\*\//, '');
   } while (s !== prev);
+  // QF-20260725-761: the loop above is anchored, so it only removes comments that PRECEDE the
+  // statement. A TRAILING/INLINE comment survived into the head and made tier key on prose:
+  //   (a) it swallowed the following item — 'add column a text, -- note\n add column b text'
+  //       splits into ['add column a text', '-- note add column b text'], and the second item
+  //       fails Rule C's add-column match, so the whole ALTER falls to TIER-2; and
+  //   (b) it corrupted a constant DEFAULT — 'default 5 /* note */' fails CONST_DEFAULT.
+  // Both verified against the corpus: the flagship revenue migration 20260724190000 was TIER-2
+  // by a comment, not by risk.
+  //
+  // NOTE THE STRIPPER IS LITERAL-AWARE, and it must be: the security/body scans use the blunt
+  // stripSqlComments because over-stripping only makes a SCAN more conservative, but a head is
+  // MATCHED, so over-stripping corrupts legitimate DDL. Using stripSqlComments here regressed
+  // 20260710_venture_capabilities_evidence.sql from TIER-1 to TIER-2, because its COMMENT ON
+  // COLUMN ... IS '...' literal contains '--' as prose punctuation and the blunt stripper ate
+  // the rest of the statement. Same family as QF-20260711-804, where a COMMENT string's prose
+  // semicolons false-triggered the split checks — hence countTopLevelSemicolons above.
+  // This LOOSENS NO TIER-2 CRITERION: every check below still applies unchanged, and it cannot
+  // re-open the comment-split bypass because a stripped comment becomes a SPACE — an interior
+  // comment splits a token apart, it never fuses two fragments into a keyword.
+  s = stripCommentsOutsideStrings(s);
   return s.replace(/\s+/g, ' ').trim().toLowerCase();
 }
 
