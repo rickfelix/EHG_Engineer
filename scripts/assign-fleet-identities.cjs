@@ -22,6 +22,14 @@ const NATO = ['Alpha', 'Bravo', 'Charlie', 'Delta', 'Echo', 'Foxtrot', 'Golf', '
 // lib/fleet/tier-ladder.cjs module so K (ladderTopRank()) is never assumed to be 4.
 const { resolveWorkerTierRank, ladderTopRank, stampRankForWorker } = require('../lib/fleet/tier-ladder.cjs');
 
+// QF-20260725-538 (defect B): server/routes/fleet-panel.js formatSessionRow reads
+// identity.role and identity.accountUuid8, but this writer never wrote either, so the
+// chairman-facing LEO panel could NEVER populate its Role and Account columns. role comes
+// from the session's own metadata.role. accountUuid8 comes from the LOCAL process account
+// (lib/fleet/account-identity.cjs reads ~/.claude.json oauthAccount) -- see writeAccountUuid8
+// below for why that is deliberately NOT stamped on every session.
+const { getAccountIdentity } = require('../lib/fleet/account-identity.cjs');
+
 // QF-20260627-108 (FR-1): the chairman effort-encoded callsign scheme. A worker's callsign is
 // derived from its metadata.tier_rank (the source-of-truth), NOT flat first-available NATO order —
 // otherwise the 5-min cron re-clobbers the effort names every pass. Shared by the cron AND
@@ -446,7 +454,7 @@ async function main() {
   let refreshed = 0;
   for (const w of assigned) {
     const id = w.metadata.fleet_identity;
-    const currentSdLabel = w.sd_id || 'idle';
+    const currentSdLabel = w.sd_key || 'idle';
     const expectedDisplayName = `${id.callsign} | ${currentSdLabel}`;
     const expectedIdentity = { callsign: id.callsign, color: id.color, display_name: expectedDisplayName };
     if (identityNeedsRebroadcast(w, expectedIdentity)) {
@@ -462,7 +470,7 @@ async function main() {
         .from('session_coordination')
         .insert({
           target_session: w.session_id,
-          target_sd: w.sd_id || null,
+          target_sd: w.sd_key || null,
           message_type: 'SET_IDENTITY',
           subject: `Identity update: ${id.callsign} now on ${currentSdLabel}`,
           body: `Your display name updated to "${expectedDisplayName}" (SD changed).`,
@@ -482,7 +490,7 @@ async function main() {
     for (const w of assigned) {
       const id = w.metadata.fleet_identity;
       const ansi = ANSI[id.color] || '';
-      const sdLabel = w.sd_id || 'idle';
+      const sdLabel = w.sd_key || 'idle';
       console.log(`  ${ansi}\u25cf${ANSI.reset} ${id.callsign.padEnd(10)} ${ansi}${id.color.padEnd(8)}${ANSI.reset} ${w.session_id.substring(0, 12)}...  ${sdLabel}`);
     }
     console.log('');
@@ -508,11 +516,13 @@ async function main() {
   for (const w of assigned) {
     const id = w.metadata.fleet_identity;
     const ansi = ANSI[id.color] || '';
-    const sdLabel = w.sd_id || 'idle';
+    const sdLabel = w.sd_key || 'idle';
     console.log(`  ${ansi}\u25cf${ANSI.reset} ${id.callsign.padEnd(10)} ${ansi}${id.color.padEnd(8)}${ANSI.reset} ${w.session_id.substring(0, 12)}...  ${sdLabel} ${ANSI.dim}(existing)${ANSI.reset}`);
   }
 
   // Assign new workers
+  // QF-20260725-538: resolved ONCE per tick (one ~/.claude.json read), not per session.
+  const localAccount = getAccountIdentity();
   let newCount = 0;
   for (const worker of needsAssignment) {
     const callsign = pickCallsignForTier(tierRankOf(worker), usedCallsigns);
@@ -520,7 +530,7 @@ async function main() {
     usedCallsigns.add(callsign);
     usedColors.add(color);
 
-    const sdLabel = worker.sd_id || 'idle';
+    const sdLabel = worker.sd_key || 'idle';
     const displayName = `${callsign} | ${sdLabel}`;
 
     // Store identity in session metadata
@@ -529,6 +539,11 @@ async function main() {
       color,
       callsign,
       display_name: displayName,
+      // QF-20260725-538 (defect B): fleet-panel.js formatSessionRow reads identity.role and
+      // identity.accountUuid8 — without these two the chairman's Role/Account columns are
+      // structurally unpopulatable. role is the session's own metadata.role.
+      role: worker.metadata?.role || null,
+      accountUuid8: identityAccountUuid8(worker.metadata, localAccount),
       assigned_at: new Date().toISOString()
     };
     // QF-20260703-040: stamp what we're about to broadcast so a later tick can detect drift.
@@ -549,7 +564,7 @@ async function main() {
       .from('session_coordination')
       .insert({
         target_session: worker.session_id,
-        target_sd: worker.sd_id || null,
+        target_sd: worker.sd_key || null,
         message_type: 'SET_IDENTITY',
         subject: `Identity: ${callsign} (${color})`,
         body: `The coordinator assigned you callsign "${callsign}" with color "${color}". Your statusline will update automatically. You may also run: /color ${color}\n\nCommunication: send signals back via /signal (try /signal --help for types). Use it when stuck on a gate >2x, about to bypass, or seeing protocol/spec friction.`,
@@ -573,7 +588,23 @@ async function main() {
   console.log('');
 }
 
-module.exports = { filterOutCoordinators, filterOutGhostSessions, isTestSessionId, dedupeAssignedCallsigns, reserveParkedIdentities, NATO, COLORS, nextAvailable, extendCallsign, buildTierCallsignBands, tierRankOf, pickCallsignForTier, callsignInTierBand, identityNeedsRebroadcast };
+/**
+ * QF-20260725-538 (defect B): the accountUuid8 to stamp on a session's fleet_identity, or null.
+ * PURE + injectable so a test never has to read the real ~/.claude.json.
+ *
+ * getAccountIdentity() resolves the account of THIS process from the single global
+ * ~/.claude.json oauthAccount pointer. It cannot distinguish per-session accounts, and that
+ * pointer is known to be flip-prone across a relaunch (CP3 HF-1). So a session that declares its
+ * own account_profile -- canary deliberately runs a SEPARATE account -- gets null rather than the
+ * coordinator's account. A blank Account column is honest; a confidently-wrong one is worse than
+ * blank, which is the whole failure class this QF is fixing.
+ */
+function identityAccountUuid8(metadata, accountIdentity) {
+  if (metadata && metadata.account_profile) return null;
+  return (accountIdentity && accountIdentity.accountUuid8) || null;
+}
+
+module.exports = { filterOutCoordinators, filterOutGhostSessions, isTestSessionId, dedupeAssignedCallsigns, reserveParkedIdentities, NATO, COLORS, nextAvailable, extendCallsign, buildTierCallsignBands, tierRankOf, pickCallsignForTier, callsignInTierBand, identityNeedsRebroadcast, identityAccountUuid8 };
 
 if (require.main === module) {
   main().then(async () => {
