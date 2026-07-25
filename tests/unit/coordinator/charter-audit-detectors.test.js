@@ -446,6 +446,26 @@ describe('detectUnstampedModel (QF-20260720-497) — model-stamp gauge fail-loud
     expect(r.unstampedCount).toBe(0);
     expect(r.participatingCount).toBe(1);
   });
+  // SD-LEO-INFRA-FLEET-MODEL-REGISTRY-001 FR-2: the detector read effort_source as a PROXY
+  // for model provenance because no model_source field existed. It now reads the real field.
+  // The two assertions above are deliberately UNCHANGED: the legacy proxy is retained as a
+  // fallback, so a seat with a model but no provenance of any kind is still flagged, and a
+  // seat carrying the old effort_source stamp still passes. Only the case below is new.
+  it('does NOT flag a worker whose model provenance came from registration (model_source)', () => {
+    const r = detectUnstampedModel({
+      liveSessions: [participating({ metadata: { model: 'claude-opus-5[1m]', model_family: 'opus', model_source: 'sessionstart_observed' } })],
+    });
+    expect(r.violation).toBe(false);
+    expect(r.unstampedCount).toBe(0);
+  });
+
+  it('still flags a worker carrying an effort stamp but NO model at all', () => {
+    // An effort_source says nothing about the model — the proxy was wrong in this direction too.
+    const r = detectUnstampedModel({ liveSessions: [participating({ session_id: 'w2', metadata: { effort_source: 'worker_self_report' } })] });
+    expect(r.violation).toBe(true);
+    expect(r.unstampedSessions).toContain('w2');
+  });
+
   it('does NOT flag a fresh startup ghost that has not yet participated', () => {
     const r = detectUnstampedModel({ liveSessions: [{ session_id: 'ghost', metadata: {} /* no claim/worktree/completed */ }] });
     expect(r.violation).toBe(false);
