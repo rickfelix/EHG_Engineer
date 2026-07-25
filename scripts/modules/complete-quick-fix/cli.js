@@ -92,6 +92,10 @@ export function parseArguments(args) {
       'actual-source-loc':  { type: 'string' },
       'actual-test-loc':    { type: 'string' },
       'pr-url':             { type: 'string' },
+      // QF-20260725-691: explicit attestation that the QF's STATED SCOPE is satisfied. The
+      // merged-PR witness alone proves only that code landed, so it now reconciles NON-TERMINAL;
+      // this flag is what makes 'completed' truthful. Value names who/why for the audit trail.
+      'scope-accepted':     { type: 'string' },
       'skip-tests':         { type: 'boolean' },
       'tests-pass':         { type: 'string' },
       'skip-typecheck':     { type: 'boolean' },
@@ -204,6 +208,7 @@ export function parseArguments(args) {
     actualSourceLoc:   values['actual-source-loc'] != null ? parseInt(values['actual-source-loc'], 10) : undefined,
     actualTestLoc:     values['actual-test-loc']   != null ? parseInt(values['actual-test-loc'], 10) : undefined,
     prUrl:             values['pr-url'],
+    scopeAccepted:     values['scope-accepted'],
     skipTestRun:       values['skip-tests']       || false,
     testsPass:         values['tests-pass']       != null ? values['tests-pass'].toLowerCase().startsWith('y') : undefined,
     skipTypeCheck:     values['skip-typecheck']   || false,
