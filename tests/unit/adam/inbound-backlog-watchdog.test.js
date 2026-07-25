@@ -139,8 +139,53 @@ describe('FR-2 — dedup discipline', () => {
   });
 });
 
+describe('FR-2 / TS-15 — the distinct undrained_kind_in_lane signal', () => {
+  // A kind absent from DRAIN_SETS.adam is structurally undrainable, so it is excluded from the
+  // backlog AGE computation (else a continuously-replenished kind pins the alarm ON forever).
+  // That exclusion must not silently hide a real drain-set gap — hence a SEPARATE signal.
+  const undrainedRow = {
+    id: 'undrained-1', target_session: 'adam-1', sender_type: 'coordinator',
+    payload: { kind: '__synthetic_undrained_kind__' },
+    created_at: ago(300 * MIN), read_at: null, acknowledged_at: null,
+  };
+
+  it('emits the undrained signal EXACTLY once, with a dedup_key distinct from the backlog scope', async () => {
+    const sb = fakeSupabase([...replayFixtures(), undrainedRow]);
+    const r = await runInboundBacklogWatchdog(sb, { now: NOW });
+
+    expect(r.undrainedKinds).toContain('__synthetic_undrained_kind__');
+    const undrainedCalls = emitFeedbackMock.mock.calls.filter((c) => c[0].metadata.scope === SCOPE_UNDRAINED);
+    expect(undrainedCalls).toHaveLength(1);
+
+    const backlogCalls = emitFeedbackMock.mock.calls.filter((c) => c[0].metadata.scope === SCOPE_BACKLOG);
+    expect(backlogCalls).toHaveLength(1);
+    expect(undrainedCalls[0][0].dedup_key).toBe(`${ESCALATION_KIND}:${SCOPE_UNDRAINED}:2026-07-25`);
+    // Distinct keys, so one scope firing can never dedup-suppress the other.
+    expect(undrainedCalls[0][0].dedup_key).not.toBe(backlogCalls[0][0].dedup_key);
+    expect(undrainedCalls[0][0].description).not.toBe(backlogCalls[0][0].description);
+  });
+
+  it('does NOT let an undrainable kind pin the backlog age (it is excluded from the age computation)', async () => {
+    // The undrained row is the OLDEST by far; if it leaked into the age computation it would
+    // dominate oldestAgeMs and pin the alarm permanently.
+    const sb = fakeSupabase([...replayFixtures(), undrainedRow]);
+    const r = await runInboundBacklogWatchdog(sb, { now: NOW });
+    expect(r.oldestAgeMs).toBeLessThan(300 * MIN);
+  });
+
+  it('emits ONLY the undrained signal when the drainable backlog is clean', async () => {
+    const sb = fakeSupabase([undrainedRow]);
+    const r = await runInboundBacklogWatchdog(sb, { now: NOW });
+    expect(r.breaching).toBe(false);
+    expect(emitFeedbackMock.mock.calls.map((c) => c[0].metadata.scope)).toEqual([SCOPE_UNDRAINED]);
+  });
+});
+
 describe('FR-2 — bounded ceiling and evidence floor', () => {
-  it('never exceeds MAX_ESCALATIONS_PER_TICK under a 200-row burst', async () => {
+  // Honest labelling (testing-agent 37246c3a): `scopes` is built from at most 2 constants, so
+  // this bound holds structurally and the assertion cannot fail today. It is an INVARIANT
+  // BACKSTOP — it pins that row volume never drives escalation volume — not a reachable guard.
+  it('escalation volume is driven by SCOPE count, not row count, under a 200-row burst', async () => {
     const burst = Array.from({ length: 200 }, (_, i) => ({
       id: `burst-${i}`, target_session: 'adam-1', sender_type: 'coordinator',
       payload: { kind: 'adam_advisory' }, created_at: ago(120 * MIN), read_at: null, acknowledged_at: null,
@@ -164,13 +209,76 @@ describe('FR-2 — bounded ceiling and evidence floor', () => {
   });
 });
 
-describe('FR-3 — tick count equals watchdog count BY CONSTRUCTION', () => {
+describe('FR-3 / TS-3 — tick count equals watchdog count BY CONSTRUCTION', () => {
+  /**
+   * Corpus spanning the FOUR axes on which the tick's DISPLAY query and the shared backlog
+   * selector diverge. If the tick ever re-derived its count from its own display query, each axis
+   * alone would break equality:
+   *   1. rows at a RETIRED adam session id  (display: .eq(live id)      | selector: .in(all ids))
+   *   2. rows older than TICK_SURFACE_WINDOW_MS (display: .gte(cutoff)  | selector: no window)
+   *   3. more than 400 rows                 (display: .limit(400)       | selector: paginated)
+   *   4. rows already stamped tick_surfaced_at (display: filtered out   | selector: counts them)
+   */
+  function divergenceCorpus() {
+    const rows = [];
+    for (let i = 0; i < 420; i++) {                       // axis 3: > the display .limit(400)
+      rows.push({
+        id: `bulk-${i}`,
+        target_session: i % 7 === 0 ? 'adam-retired' : 'adam-1',   // axis 1
+        sender_type: 'coordinator',
+        payload: i % 5 === 0 ? { kind: 'adam_advisory', tick_surfaced_at: ago(MIN) } : { kind: 'adam_advisory' }, // axis 4
+        created_at: i % 3 === 0 ? ago(30 * 24 * 60 * MIN) : ago(120 * MIN),  // axis 2: >7d
+        read_at: null,
+        acknowledged_at: null,
+      });
+    }
+    return rows;
+  }
+
+  it('surfaceInboxItems reports the SAME count the watchdog does, across all four divergence axes', async () => {
+    const corpus = divergenceCorpus();
+    const displayRows = corpus.slice(0, 3); // what the tick's own narrow display query would see
+    const { surfaceInboxItems } = await import('../../../scripts/adam-quiet-tick.mjs');
+
+    // One fake serving both consumers: .range() => the paginated backlog selector, a direct await
+    // => the tick's display query, .or() => the correlation window.
+    const parityFake = { from: () => {
+      const st = { or: false, op: 'select' };
+      const c = {
+        select: () => c, update: () => { st.op = 'update'; return c; }, eq: () => c, in: () => c,
+        is: () => c, gte: () => c, order: () => c, limit: () => c, or: () => { st.or = true; return c; },
+        single: async () => ({ data: { session_id: 'adam-1', metadata: { role: 'adam' } }, error: null }),
+        range: (f, t) => Promise.resolve({ data: corpus.slice(f, t + 1), error: null }),
+        then: (res) => Promise.resolve(
+          st.op === 'update' ? { data: [], error: null }
+            : st.or ? { data: [], error: null }
+            : { data: displayRows, error: null }).then(res),
+      };
+      // claude_sessions role lookup resolves the historical id set.
+      c.eq = (col, val) => (col === 'metadata->>role' && val === 'adam'
+        ? { select: () => c, then: (res) => Promise.resolve({ data: [{ session_id: 'adam-1' }, { session_id: 'adam-retired' }], error: null }).then(res) }
+        : c);
+      return c;
+    } };
+
+    const tick = await surfaceInboxItems(parityFake);
+    const watchdog = await runInboundBacklogWatchdog(parityFake, { now: NOW });
+
+    // The equality that TS-3 actually demands: the TICK's own reported number, not a second call
+    // to the same pure function. A tautological restatement here would re-close LANE-002 on the
+    // same false evidence it was closed on the first time.
+    expect(tick.backlogCount).toBe(watchdog.rawBacklogCount);
+    expect(tick.backlogBreachingCount).toBe(watchdog.breachingCount);
+    // ...and it is genuinely NOT the display list's number — proving the axes bite.
+    expect(tick.backlogCount).toBe(corpus.length);
+    expect(tick.backlogCount).not.toBe(displayRows.length);
+    expect(tick.items.length).toBeLessThan(tick.backlogCount);
+  });
+
   it('classifyBacklog over identical seeded data yields one shared number for both consumers', async () => {
     const seeded = replayFixtures();
     const sb = fakeSupabase(seeded);
     const watchdog = await runInboundBacklogWatchdog(sb, { now: NOW });
-    // The tick derives its count from the SAME selector+classifier (scripts/adam-quiet-tick.mjs
-    // surfaceInboxItems), so equality is structural, not a reconciled coincidence.
     const tickVerdict = classifyBacklog(seeded, NOW);
     expect(tickVerdict.rawBacklogCount).toBe(watchdog.rawBacklogCount);
     expect(tickVerdict.breachingCount).toBe(watchdog.breachingCount);
