@@ -11,6 +11,7 @@
  * Usage: node scripts/solomon-ledger-pending-resurface.cjs [--threshold-hours 24]
  */
 require('dotenv').config();
+const crypto = require('node:crypto');
 const { createSupabaseServiceClient } = require('../lib/supabase-client.cjs');
 const { getActiveAdamId } = require('../lib/coordinator/adam-identity.cjs');
 
@@ -20,15 +21,125 @@ const DEFAULT_PAGE_SIZE = 50;
 // volume for a sweep script without reintroducing the head-of-queue starvation this fixes.
 const DEFAULT_MAX_PAGES = 10;
 
+// SD-LEO-INFRA-RESURFACE-DIGEST-BATCHING-001.
+// The LEGACY per-item kind. Still read (never written) for the one-day transition guard in
+// collectLegacyNotifiedIds, and still recognised by lib/coordination/lane-lint-gauge.cjs.
+const RESURFACE_KIND = 'solomon_ledger_pending_resurface';
+// The kind this script now WRITES: one digest row per run instead of one row per item.
+// Deliberately NOT registered in lib/fleet/worker-status.cjs PAYLOAD_KINDS / DRAIN_SETS.adam
+// (PRD TR-2): registering it flips isAdamInboxRow true (scripts/adam-advisory.cjs:639) and a
+// generic drain would then ACK the digest without dispositioning a single ledger row --
+// converting a noisy-but-visible problem into a silently-swallowed one.
+const DIGEST_KIND = 'solomon_ledger_pending_digest';
+// Bound the digest. The >24h bucket measured 29 on 2026-07-25 only because the ledger
+// population was ~34h deep (near-uniform age histogram, hard cliff at 36h, ~88 new rows/24h) --
+// that is NOT equilibrium, so this is sized for 100+ members with explicit truncation
+// disclosure rather than silent dropping (PRD FR-6).
+const DEFAULT_DIGEST_MAX_ITEMS = 100;
+const SUMMARY_MAX_CHARS = 100;
+
 function parseThresholdHours(argv) {
   const idx = argv.indexOf('--threshold-hours');
   const n = idx >= 0 ? Number(argv[idx + 1]) : NaN;
   return Number.isFinite(n) && n >= 0 ? n : DEFAULT_THRESHOLD_HOURS;
 }
 
-/** Pure: today's dedup key for a ledger row's resurface (rate limit: one per row per day). */
+/** Pure: today's dedup key for a ledger row's resurface (rate limit: one per row per day).
+ *  LEGACY key shape. No longer written -- retained because collectLegacyNotifiedIds reads it
+ *  for one transition day, and existing rows in the 30-day gauge window still carry it. */
 function dedupKeyFor(ledgerId, nowMs) {
   return `solomon_ledger_pending:${ledgerId}:${new Date(nowMs).toISOString().slice(0, 10)}`;
+}
+
+/**
+ * Pure: the digest's dedup key -- a CONTENT HASH over the sorted, de-duplicated member id set.
+ *
+ * DELIBERATELY NOT DATE-KEYED (PRD FR-3). A date-keyed digest suppresses a genuinely CHANGED
+ * member set for the rest of the day, which is exactly the head-of-queue starvation class
+ * QF-20260710-743 already closed for the paging query -- a newly-crossed item would wait until
+ * tomorrow. Hashing the membership instead means: unchanged set => same key => no re-send;
+ * changed set => new key => the digest re-issues in the SAME run the membership changes.
+ *
+ * No per-tick-varying value (count, max age, timestamp) may enter this key --
+ * lib/adam/inbound-backlog-watchdog.js:76-81 documents that doing so defeats dedup entirely.
+ * @param {string[]} ledgerIds
+ * @returns {string}
+ */
+function digestDedupKey(ledgerIds) {
+  const canonical = [...new Set((ledgerIds || []).map((id) => String(id)))].sort().join('\n');
+  const hash = crypto.createHash('sha256').update(canonical).digest('hex').slice(0, 16);
+  return `solomon_ledger_digest:${hash}`;
+}
+
+/**
+ * Pure: assemble the digest payload/body from ordered candidates (oldest first, as
+ * planStalePending returns them).
+ *
+ * Every member carries correlation_id because scripts/coordinator-ack-adam.cjs upserts the
+ * ledger with onConflict:'correlation_id' -- without it a member cannot be dispositioned from
+ * the digest at all, which would reduce "actionable" to "a summary plus a lookup" (PRD FR-2).
+ * @param {Array<object>} candidates
+ * @param {{nowMs?: number, maxItems?: number}} [opts]
+ */
+function buildDigest(candidates, { nowMs = Date.now(), maxItems = DEFAULT_DIGEST_MAX_ITEMS } = {}) {
+  const all = candidates || [];
+  const kept = all.slice(0, maxItems); // oldest retained preferentially -- input is oldest-first
+  const truncated = all.length > kept.length;
+  const items = kept.map((r) => ({
+    ledger_id: r.id,
+    correlation_id: r.correlation_id ?? null,
+    sd_key: r.sd_key ?? null,
+    age_hours: Math.floor((nowMs - new Date(r.created_at).getTime()) / (60 * 60 * 1000)),
+    summary: String(r.proposal_summary || '').slice(0, SUMMARY_MAX_CHARS),
+  }));
+  const ledgerIds = items.map((i) => i.ledger_id);
+  const oldestAge = items.length ? Math.max(...items.map((i) => i.age_hours)) : 0;
+  const lines = items.map((i) => `- [${i.ledger_id}] aged ${i.age_hours}h${i.sd_key ? ` (${i.sd_key})` : ''}: ${i.summary}`);
+  // Non-empty body is REQUIRED: lane-contract readCanonicalBody counts a bodyless row as
+  // bodyless_row, and this kind is not in LEGITIMATELY_BODYLESS_KINDS.
+  const body = [
+    `${items.length} Solomon ledger item(s) still pending, oldest ${oldestAge}h.`,
+    'Disposition individually by correlation_id.',
+    '',
+    ...lines,
+    ...(truncated ? ['', `NOTE: list truncated to ${maxItems} of ${all.length} pending items; ${all.length - kept.length} omitted.`] : []),
+  ].join('\n');
+  const subject = `[SOLOMON_LEDGER_PENDING_DIGEST] ${items.length} pending, oldest ${oldestAge}h${truncated ? ` (truncated from ${all.length})` : ''}`;
+  return { items, ledgerIds, body, subject, truncated, totalCandidates: all.length, oldestAge };
+}
+
+/**
+ * One-day transition guard (PRD FR-5): ledger ids already resurfaced TODAY under the legacy
+ * per-item key. Without this, the first digest run re-notifies every item that the old code
+ * path already announced today -- into the very lane this change exists to unclog (29 such
+ * rows existed at cutover).
+ *
+ * ONE query, not one per candidate: scoped by kind + today's rows, then matched client-side
+ * against today's legacy keys. Deliberately NOT an .in() over per-candidate keys -- that URL
+ * grows with the backlog (up to 500 keys) and would risk a PostgREST URL-length failure.
+ * Self-expiring: tomorrow no row carries today's key, so the guard evaporates with no cleanup.
+ * FAIL-OPEN on error: returning an empty set means "exclude nothing", which can at worst
+ * re-notify, never silently swallow.
+ */
+async function collectLegacyNotifiedIds(supabase, adamId, candidates, nowMs = Date.now()) {
+  const notified = new Set();
+  if (!candidates || candidates.length === 0) return notified;
+  const startOfDay = `${new Date(nowMs).toISOString().slice(0, 10)}T00:00:00.000Z`;
+  const wanted = new Map(candidates.map((r) => [dedupKeyFor(r.id, nowMs), r.id]));
+  try {
+    const { data, error } = await supabase
+      .from('session_coordination')
+      .select('payload')
+      .eq('target_session', adamId)
+      .eq('payload->>kind', RESURFACE_KIND)
+      .gte('created_at', startOfDay);
+    if (error) return notified;
+    for (const row of data || []) {
+      const key = row && row.payload && row.payload.dedup_key;
+      if (key && wanted.has(key)) notified.add(wanted.get(key));
+    }
+  } catch { /* fail-open */ }
+  return notified;
 }
 
 /**
@@ -57,32 +168,68 @@ async function planStalePending(supabase, { thresholdHours = DEFAULT_THRESHOLD_H
   return all;
 }
 
-/** Rate-limited, deduped daily resurface: at most one inbox row per stale ledger item per day. */
-async function resurfaceStalePending(supabase, adamId, { thresholdHours = DEFAULT_THRESHOLD_HOURS, nowMs = Date.now() } = {}) {
+/**
+ * Deduped resurface as a SINGLE DIGEST ROW (SD-LEO-INFRA-RESURFACE-DIGEST-BATCHING-001).
+ *
+ * WAS: one session_coordination row per stale item per day, so notification volume scaled with
+ * the pending backlog and crowded the oldest-first surfaces Adam actually renders
+ * (scripts/adam-quiet-tick.mjs display cap 50; scripts/read-adam-directives.cjs renders 20).
+ * NOW: exactly ONE row per run for any member count -- volume is O(1) in the backlog while
+ * every member stays individually dispositionable via payload.items[].correlation_id.
+ *
+ * Returns the same {candidates, resurfaced} shape; `resurfaced` is the member id list of a
+ * digest that was actually inserted (empty when deduped or when there is nothing to send).
+ */
+async function resurfaceStalePending(supabase, adamId, { thresholdHours = DEFAULT_THRESHOLD_HOURS, nowMs = Date.now(), maxItems = DEFAULT_DIGEST_MAX_ITEMS } = {}) {
   const candidates = await planStalePending(supabase, { thresholdHours, nowMs });
-  const resurfaced = [];
-  for (const r of candidates) {
-    const key = dedupKeyFor(r.id, nowMs);
-    const { data: existing } = await supabase.from('session_coordination').select('id')
-      .eq('target_session', adamId).eq('payload->>dedup_key', key).limit(1);
-    if (existing && existing.length) {
-      console.log(`[solomon-ledger-pending-resurface] ${r.id} already resurfaced today (${key}) — skipping`);
-      continue;
-    }
-    const ageHours = Math.floor((nowMs - new Date(r.created_at).getTime()) / (60 * 60 * 1000));
-    const { error } = await supabase.from('session_coordination').insert({
-      sender_session: null,
-      sender_type: 'sweep',
-      target_session: adamId,
-      message_type: 'INFO',
-      subject: `[SOLOMON_LEDGER_PENDING] aged ${ageHours}h: ${(r.proposal_summary || '').slice(0, 80)}`,
-      body: (r.proposal_summary || '').slice(0, 500),
-      payload: { kind: 'solomon_ledger_pending_resurface', dedup_key: key, ledger_id: r.id, correlation_id: r.correlation_id, sd_key: r.sd_key, age_hours: ageHours },
-    });
-    console.log(`[solomon-ledger-pending-resurface] ${error ? 'FAILED to resurface' : 'resurfaced'} ${r.id} age=${ageHours}h`);
-    if (!error) resurfaced.push(r.id);
+  if (candidates.length === 0) return { candidates, resurfaced: [] };
+
+  // One-day transition guard -- see collectLegacyNotifiedIds.
+  const alreadyNotified = await collectLegacyNotifiedIds(supabase, adamId, candidates, nowMs);
+  const members = candidates.filter((r) => !alreadyNotified.has(r.id));
+  if (members.length === 0) {
+    console.log(`[solomon-ledger-pending-resurface] all ${candidates.length} candidate(s) already resurfaced today under the legacy per-item key — no digest`);
+    return { candidates, resurfaced: [] };
   }
-  return { candidates, resurfaced };
+
+  const digest = buildDigest(members, { nowMs, maxItems });
+  const key = digestDedupKey(digest.ledgerIds);
+
+  // Content-hash dedup: an unchanged member set is a no-op; a changed set re-issues NOW.
+  const { data: existing } = await supabase.from('session_coordination').select('id')
+    .eq('target_session', adamId).eq('payload->>dedup_key', key).limit(1);
+  if (existing && existing.length) {
+    console.log(`[solomon-ledger-pending-resurface] digest unchanged (${key}, ${digest.items.length} member(s)) — skipping`);
+    return { candidates, resurfaced: [] };
+  }
+
+  const { error } = await supabase.from('session_coordination').insert({
+    sender_session: null,
+    // 'sweep' is in lane-lint-gauge LEGITIMATE_EMPTY_SENDER_TYPES -- changing it would trip
+    // empty_sender_row.
+    sender_type: 'sweep',
+    target_session: adamId,
+    message_type: 'INFO',
+    subject: digest.subject,
+    body: digest.body,
+    payload: {
+      kind: DIGEST_KIND,
+      dedup_key: key,
+      // ledger_ids is the flat membership list lane-lint-gauge reads for drift detection;
+      // items[] is the per-member actionable detail.
+      ledger_ids: digest.ledgerIds,
+      items: digest.items,
+      item_count: digest.items.length,
+      total_candidates: digest.totalCandidates,
+      truncated: digest.truncated,
+    },
+  });
+  if (error) {
+    console.log(`[solomon-ledger-pending-resurface] FAILED to insert digest (${digest.items.length} member(s)): ${error.message}`);
+    return { candidates, resurfaced: [] };
+  }
+  console.log(`[solomon-ledger-pending-resurface] digest inserted: ${digest.items.length} member(s)${digest.truncated ? ` (truncated from ${digest.totalCandidates})` : ''} key=${key}`);
+  return { candidates, resurfaced: digest.ledgerIds };
 }
 
 async function main() {
@@ -102,11 +249,15 @@ async function main() {
   if (!adamId) { console.log('SOLOMON LEDGER PENDING RESURFACE: no active Adam session found — nothing to resurface into.'); return; }
   const thresholdHours = parseThresholdHours(process.argv.slice(2));
   const { candidates, resurfaced } = await resurfaceStalePending(supabase, adamId, { thresholdHours });
-  console.log(`SOLOMON LEDGER PENDING RESURFACE — ${candidates.length} candidate(s) pending >${thresholdHours}h, ${resurfaced.length} newly resurfaced`);
+  console.log(`SOLOMON LEDGER PENDING RESURFACE — ${candidates.length} candidate(s) pending >${thresholdHours}h, ${resurfaced.length ? `1 digest row covering ${resurfaced.length} item(s)` : 'no digest (unchanged or already notified)'}`);
 }
 
 if (require.main === module) {
   main().catch(err => { console.error('UNHANDLED:', err.message || err); process.exit(1); });
 }
 
-module.exports = { parseThresholdHours, dedupKeyFor, planStalePending, resurfaceStalePending, DEFAULT_THRESHOLD_HOURS };
+module.exports = {
+  parseThresholdHours, dedupKeyFor, planStalePending, resurfaceStalePending, DEFAULT_THRESHOLD_HOURS,
+  digestDedupKey, buildDigest, collectLegacyNotifiedIds,
+  RESURFACE_KIND, DIGEST_KIND, DEFAULT_DIGEST_MAX_ITEMS,
+};

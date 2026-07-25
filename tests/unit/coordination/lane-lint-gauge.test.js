@@ -16,6 +16,7 @@ const {
   computeResurfaceDedupDrift,
   runLaneLintGauge,
   RESURFACE_KIND,
+  DIGEST_KIND,
 } = require('../../../lib/coordination/lane-lint-gauge.cjs');
 
 function cleanRow(overrides = {}) {
@@ -122,6 +123,57 @@ describe('computeResurfaceDedupDrift — instance 9', () => {
     ];
     expect(computeResurfaceDedupDrift(rows)).toBe(0);
   });
+
+  // ── SD-LEO-INFRA-RESURFACE-DIGEST-BATCHING-001 (FR-4) ─────────────────────────────────────
+  // The producer now writes ONE digest row per run carrying payload.ledger_ids[] instead of one
+  // row per item with a scalar payload.ledger_id.
+  //
+  // WHY THESE TESTS ARE SHAPED THIS WAY: the pre-change core read `payload.ledger_id` and did
+  // `continue` on falsy, so EVERY digest row was skipped and drift read 0 forever. Live drift is
+  // legitimately 0 today, so that regression would have been indistinguishable from a healthy
+  // reading by observation alone. Only an assertion that goes RED against the old code can see
+  // it — so each test below was verified to FAIL pre-change. A "two digest rows sharing nothing
+  // => 0" assertion was deliberately REJECTED: it passes both before and after, proving nothing.
+  function digestRow(ledgerIds, acknowledged) {
+    return {
+      id: 'd-' + Math.random().toString(36).slice(2),
+      payload: { kind: DIGEST_KIND, ledger_ids: ledgerIds, items: ledgerIds.map((id) => ({ ledger_id: id })) },
+      acknowledged_at: acknowledged ? new Date().toISOString() : null,
+    };
+  }
+
+  it('FR-4: a ledger id in TWO unacked DIGEST rows counts as drift (RED against the pre-change singular read)', () => {
+    const rows = [digestRow(['l1', 'l2'], false), digestRow(['l1', 'l3'], false)];
+    expect(computeResurfaceDedupDrift(rows)).toBe(1); // only l1 is doubled
+  });
+
+  it('FR-4: a MIXED legacy + digest pair sharing one ledger id counts as drift (the real 30-day window state)', () => {
+    const rows = [resurfaceRow('l1', false), digestRow(['l1', 'l2'], false)];
+    expect(computeResurfaceDedupDrift(rows)).toBe(1);
+  });
+
+  it('FR-4 AC-3: an id repeated WITHIN one digest row contributes at most 1, so it is not drift', () => {
+    // Guards the naive post-change implementation: flattening ledger_ids without a per-row Set
+    // would report a false-positive drift of 1 from a single row.
+    const rows = [digestRow(['l1', 'l1', 'l1'], false)];
+    expect(computeResurfaceDedupDrift(rows)).toBe(0);
+  });
+
+  it('FR-4: an acknowledged digest row is excluded from drift, exactly as an acknowledged legacy row is', () => {
+    const rows = [digestRow(['l1'], true), digestRow(['l1'], false)];
+    expect(computeResurfaceDedupDrift(rows)).toBe(0);
+  });
+
+  it('FR-4: falls back to items[].ledger_id when ledger_ids[] is absent', () => {
+    const rowA = { id: 'a', payload: { kind: DIGEST_KIND, items: [{ ledger_id: 'l1' }] }, acknowledged_at: null };
+    const rowB = { id: 'b', payload: { kind: DIGEST_KIND, items: [{ ledger_id: 'l1' }] }, acknowledged_at: null };
+    expect(computeResurfaceDedupDrift([rowA, rowB])).toBe(1);
+  });
+
+  it('FR-4: legacy singular rows still behave identically (no regression)', () => {
+    expect(computeResurfaceDedupDrift([resurfaceRow('l1', false), resurfaceRow('l1', false)])).toBe(1);
+    expect(computeResurfaceDedupDrift([resurfaceRow('l1', false), resurfaceRow('l2', false)])).toBe(0);
+  });
 });
 
 describe('runLaneLintGauge — tick entry point, fail-open, read-only', () => {
@@ -141,9 +193,19 @@ describe('runLaneLintGauge — tick entry point, fail-open, read-only', () => {
                 return {
                   ...page(windowRows),
                   eq: () => ({ gte: () => page(resurfaceRows) }),
+                  in: () => ({ gte: () => page(resurfaceRows) }),
                 };
               },
               eq() {
+                return { gte: () => page(resurfaceRows) };
+              },
+              // SD-LEO-INFRA-RESURFACE-DIGEST-BATCHING-001: loadResurfaceRows moved from
+              // .eq('payload->>kind', …) to .in(…, RESURFACE_KINDS) so it spans the legacy and
+              // digest kinds. Without this stub the builder call THROWS and loadResurfaceRows'
+              // catch (:176-178) fail-opens to [] — which reads as drift 0, i.e. exactly the
+              // silent false-green this SD exists to prevent. Keeping the stub in lockstep with
+              // the real query shape is what makes the assertion below meaningful.
+              in() {
                 return { gte: () => page(resurfaceRows) };
               },
             };
