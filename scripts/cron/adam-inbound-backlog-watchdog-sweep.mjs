@@ -82,7 +82,11 @@ export async function main(argv = process.argv, deps = {}) {
     oldest_age_ms: result.oldestAgeMs,
     undrained_kinds: result.undrainedKinds,
     escalated: result.escalated.map((e) => ({ scope: e.scope, deduped: e.deduped })),
-    error: result.error,
+    // Truncated: this repo is PUBLIC, so GHA logs are world-readable, and a raw PostgREST error
+    // can echo the failing filter — which would embed Adam session UUIDs in a public log
+    // (security-agent 5c5d559a SEC-3). Internal identifiers, never key material, but there is no
+    // reason to publish them. 200 chars keeps the diagnosis while cutting the echoed filter.
+    error: result.error ? String(result.error).slice(0, 200) : null,
   };
   logger.log?.(`[adam-inbound-backlog] ${JSON.stringify(summary)}`);
 

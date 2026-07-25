@@ -63,8 +63,13 @@ function fakeSupabase(backlogRows, { adamIds = ['adam-1'], sessionError = null }
         is() { return builder; },
         order() { return builder; },
         range(from, to) {
-          const page = backlogRows.slice(from, to + 1);
-          return Promise.resolve({ data: page, error: null });
+          // Both reads paginate now (session ids AND the backlog), so the fake must answer per table.
+          if (table === 'claude_sessions') {
+            return Promise.resolve(sessionError
+              ? { data: null, error: { message: sessionError } }
+              : { data: adamIds.slice(from, to + 1).map((id) => ({ session_id: id })), error: null });
+          }
+          return Promise.resolve({ data: backlogRows.slice(from, to + 1), error: null });
         },
         insert(payload) { writes.push({ table, op: 'insert', payload }); return Promise.resolve({ data: null, error: null }); },
         update(payload) { writes.push({ table, op: 'update', payload }); return Promise.resolve({ data: null, error: null }); },
@@ -119,18 +124,34 @@ describe('FR-2 — dedup discipline', () => {
     expect(dedupKeyFor(SCOPE_BACKLOG, NOW)).toBe(call.dedup_key);
   });
 
-  it('keeps description and dedup_key INVARIANT across ticks within the window', async () => {
+  it('keeps description and dedup_key INVARIANT when age advances AND the row count grows', async () => {
     // emitFeedback hashes `${today}::${description}::${dedup_key}` — any per-tick-varying value
     // in either defeats dedup entirely (the live 66-row fleet_dormancy storm).
+    //
+    // BOTH axes must move. An earlier version of this test replayed the SAME fixture set and only
+    // advanced the clock, so leaking breachingCount or oldestRowId into the description SURVIVED
+    // it (testing-agent 61d1a6e2 mutation-proved both). TS-6's given-clause demands "oldest-age
+    // advanced AND row count grew" for exactly this reason. Assertions are made on the CAPTURED
+    // emitFeedback argument, not on descriptionFor() — a call-site leak is invisible to the pure
+    // function.
     const sbEarly = fakeSupabase(replayFixtures());
     await runInboundBacklogWatchdog(sbEarly, { now: NOW });
-    const sbLater = fakeSupabase(replayFixtures());
-    await runInboundBacklogWatchdog(sbLater, { now: NOW + 37 * MIN }); // ages moved, same day
+
+    const grown = [...replayFixtures(), {
+      id: 'extra-breacher', target_session: 'adam-1', sender_type: 'coordinator',
+      payload: { kind: 'adam_advisory' }, created_at: ago(400 * MIN), // also becomes the OLDEST
+      read_at: null, acknowledged_at: null,
+    }];
+    const sbLater = fakeSupabase(grown);
+    await runInboundBacklogWatchdog(sbLater, { now: NOW + 37 * MIN });
+
     const [a, b] = emitFeedbackMock.mock.calls.map((c) => c[0]);
     expect(a.description).toBe(b.description);
     expect(a.dedup_key).toBe(b.dedup_key);
-    // ...while the variable evidence still reaches the row, via unhashed metadata.
+    // Every axis that moved must be absent from the hash inputs but PRESENT in metadata.
     expect(b.metadata.oldest_age_ms).toBeGreaterThan(a.metadata.oldest_age_ms);
+    expect(b.metadata.breaching_count).toBeGreaterThan(a.metadata.breaching_count);
+    expect(b.metadata.oldest_row_id).not.toBe(a.metadata.oldest_row_id);
   });
 
   it('embeds no digits in the hashed description (no age/count can leak into the hash)', () => {
@@ -242,22 +263,22 @@ describe('FR-3 / TS-3 — tick count equals watchdog count BY CONSTRUCTION', () 
 
     // One fake serving both consumers: .range() => the paginated backlog selector, a direct await
     // => the tick's display query, .or() => the correlation window.
-    const parityFake = { from: () => {
-      const st = { or: false, op: 'select' };
+    const ADAM_IDS = [{ session_id: 'adam-1' }, { session_id: 'adam-retired' }];
+    const parityFake = { from: (table) => {
+      const st = { or: false, op: 'select', roleQuery: false };
       const c = {
-        select: () => c, update: () => { st.op = 'update'; return c; }, eq: () => c, in: () => c,
+        select: () => c, update: () => { st.op = 'update'; return c; }, in: () => c,
         is: () => c, gte: () => c, order: () => c, limit: () => c, or: () => { st.or = true; return c; },
+        eq: (col, val) => { if (col === 'metadata->>role' && val === 'adam') st.roleQuery = true; return c; },
         single: async () => ({ data: { session_id: 'adam-1', metadata: { role: 'adam' } }, error: null }),
-        range: (f, t) => Promise.resolve({ data: corpus.slice(f, t + 1), error: null }),
+        range: (f, t) => Promise.resolve(st.roleQuery || table === 'claude_sessions'
+          ? { data: ADAM_IDS.slice(f, t + 1), error: null }
+          : { data: corpus.slice(f, t + 1), error: null }),
         then: (res) => Promise.resolve(
           st.op === 'update' ? { data: [], error: null }
             : st.or ? { data: [], error: null }
             : { data: displayRows, error: null }).then(res),
       };
-      // claude_sessions role lookup resolves the historical id set.
-      c.eq = (col, val) => (col === 'metadata->>role' && val === 'adam'
-        ? { select: () => c, then: (res) => Promise.resolve({ data: [{ session_id: 'adam-1' }, { session_id: 'adam-retired' }], error: null }).then(res) }
-        : c);
       return c;
     } };
 
