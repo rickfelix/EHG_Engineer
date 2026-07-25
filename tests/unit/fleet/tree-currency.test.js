@@ -126,8 +126,6 @@ describe('TS-1: the adversarial staleness test (real git, hermetic repo)', () =>
 // prove the decision logic but say nothing about whether the emitted git commands
 // are correct, which is exactly the gap that lets a fix ship inert.
 describe('TS-2: FAIL-CLOSED on every abnormal path (injected runner)', () => {
-  const ok = (out) => () => out;
-
   it('a throwing runner yields NOT-CURRENT, never CURRENT', () => {
     const r = assessTreeCurrency({
       dir: '/anywhere',
