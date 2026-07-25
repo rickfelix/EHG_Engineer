@@ -231,6 +231,29 @@ describe('reconcileLateVerdicts — FR-3 consumer', () => {
     expect(state.candidateGte['created_at']).toBe('2026-07-24T12:00:00.000Z');
   });
 
+  it('C1: a FAILED answer query is distinguishable from a genuinely quiet lane', async () => {
+    // The write-side conflation (SEC-1) was fixed; this is the same conflation at the READ side.
+    // resolveAnswerRows fail-opens to an empty Map on a query error, so without a signal the
+    // reconciler returns byte-identical {checked:N, reconciled:0, errors:0} whether the answer
+    // query blew up or nobody answered — and the cron logs ok:true while completely blind.
+    // Fail-open behaviour is deliberately KEPT: rows stay un-stamped and the next sweep retries.
+    const { api, state } = makeFakeSupabase({ candidates: [CONSULT()], answers: [] });
+    api.range = async () => { const e = new Error('answer query exploded'); e.code = '57014'; throw e; };
+
+    const out = await reconcileLateVerdicts(api, { recordDisposition: async () => ({ created: true }) });
+
+    expect(out).toMatchObject({ checked: 1, reconciled: 0, answerQueryFailed: true });
+    expect(out.firstErrorCode).toBe('57014');
+    expect(state.updates).toHaveLength(0); // still fail-open: nothing stamped, retried next sweep
+  });
+
+  it('C1: a genuinely quiet lane reports answerQueryFailed=false', async () => {
+    // The negative control. Without it the flag could be hardcoded true and still look "fixed".
+    const { api } = makeFakeSupabase({ candidates: [CONSULT()], answers: [] });
+    const out = await reconcileLateVerdicts(api, { recordDisposition: async () => ({ created: true }) });
+    expect(out).toMatchObject({ checked: 1, reconciled: 0, answerQueryFailed: false });
+  });
+
   it('SEC-14: the EARLY-RETURN shapes carry the counters too', async () => {
     // The no-answers path is the steady state (54.8% of consults are never answered), and
     // JSON.stringify drops undefined keys — so a sentinel missing these fields meant write_errors

@@ -107,6 +107,9 @@ export async function main(argv = process.argv, deps = {}) {
       // public repo. Length-capping that message would not help — it bounds size, not content.
       first_error_code: result.firstErrorCode ?? null,
       window_saturated: result.saturated === true,
+      // C1: "no answers" vs "could not READ the answers" are different states. Without this they
+      // log identically and a blind sweep reports a healthy quiet lane.
+      answer_query_failed: result.answerQueryFailed === true,
       ok: true,
     })}`);
     return { exitCode: EXIT_OK, summary: result };
