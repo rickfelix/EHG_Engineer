@@ -1,6 +1,14 @@
 /**
  * SD-LEO-INFRA-ADAM-INBOUND-BACKLOG-WATCHDOG-001 — Phase 2 (watchdog + cron sweep + tick parity).
  *
+ * ENV-INDEPENDENCE (learned the hard way — CI caught what a green local run hid): any fake handed
+ * to surfaceInboxItems MUST serve resolveAdamSessionId's AWAITED `metadata->>role = adam` query,
+ * not just its `.single()` branch. That `.single()` branch only fires when CLAUDE_SESSION_ID is
+ * set, which it is in a dev shell and is NOT in CI — so a fake that only serves `.single()` passes
+ * locally and fails in CI with an empty item list and an undefined backlogCount. Verify with
+ * `env -u CLAUDE_SESSION_ID npx vitest run <this file>` before trusting a green local run. This is
+ * the same defect class the SD itself closes: an environmental precondition hidden behind a mock.
+ *
  * Covers FR-2 (alarm/dedup/ceiling/zero-writes), FR-3 (tick parity by construction),
  * FR-4 (DI sweep + exit codes + workflow wiring) and FR-5 (seeded replay fixtures — no test
  * references a live session_coordination id, since replay row 4479197b is already past
@@ -288,6 +296,10 @@ describe('FR-3 / TS-3 — tick count equals watchdog count BY CONSTRUCTION', () 
           : { data: corpus.slice(f, t + 1), error: null }),
         then: (res) => Promise.resolve(
           st.op === 'update' ? { data: [], error: null }
+            // resolveAdamSessionId falls back to an AWAITED role=adam query when
+            // CLAUDE_SESSION_ID is absent (its .single() branch only fires when it is set).
+            // Serving this makes the test env-INDEPENDENT — see the note on the suite below.
+            : st.roleQuery ? { data: ADAM_IDS, error: null }
             : st.or ? { data: [], error: null }
             : { data: displayRows, error: null }).then(res),
       };
@@ -335,12 +347,16 @@ describe('FR-3 / TS-3 — tick count equals watchdog count BY CONSTRUCTION', () 
       id: r.payload.reply_to, payload: { kind: 'adam_advisory', correlation_id: r.payload.correlation_id },
       sender_session: 'adam-1', target_session: 'someone-else',
     }));
-    const sb = { from: () => { const st = { or: false, op: 'select' }; const c = {
-      select: () => c, update: () => { st.op = 'update'; return c; }, eq: () => c, is: () => c,
+    const sb = { from: () => { const st = { or: false, op: 'select', roleQuery: false }; const c = {
+      select: () => c, update: () => { st.op = 'update'; return c; }, is: () => c,
       gte: () => c, order: () => c, limit: () => c, or: () => { st.or = true; return c; },
+      eq: (col, val) => { if (col === 'metadata->>role' && val === 'adam') st.roleQuery = true; return c; },
       single: async () => ({ data: { session_id: 'adam-1', metadata: { role: 'adam' } }, error: null }),
       then: (res) => Promise.resolve(
         st.op === 'update' ? { data: [], error: null }
+          // Env-independent: serve resolveAdamSessionId's AWAITED role=adam fallback, which is
+          // the path taken whenever CLAUDE_SESSION_ID is unset (i.e. in CI).
+          : st.roleQuery ? { data: [{ session_id: 'adam-1' }], error: null }
           : st.or ? { data: [...seeded, ...ancestors], error: null }
           : { data: seeded, error: null }).then(res),
     }; return c; } };
