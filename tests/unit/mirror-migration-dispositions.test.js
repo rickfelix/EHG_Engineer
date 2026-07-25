@@ -13,8 +13,20 @@ const entry = (over = {}) => ({
 
 describe('column contract — live audit_log columns only', () => {
   it('emits exactly the columns that exist on the live table', () => {
+    // Live schema: id, event_type, entity_type, entity_id, old_value, new_value, metadata,
+    // severity, created_by, created_at. We write the subset we own.
     const { rows } = buildAuditRows({ 'a.sql': entry() });
-    expect(Object.keys(rows[0]).sort()).toEqual(['entity_id', 'entity_type', 'event_type', 'metadata', 'severity']);
+    expect(Object.keys(rows[0]).sort()).toEqual(['created_by', 'entity_id', 'entity_type', 'event_type', 'metadata', 'severity']);
+  });
+
+  it('records the ACTOR, not just the auto-derived owner role', () => {
+    const { rows } = buildAuditRows({ 'a.sql': entry() }, new Map(), 'codestreetlabs@gmail.com');
+    expect(rows[0].created_by).toBe('codestreetlabs@gmail.com');
+    expect(rows[0].metadata.owner).toBe('chairman'); // role, a different thing
+  });
+
+  it('an unavailable actor degrades to null rather than blocking the mirror', () => {
+    expect(buildAuditRows({ 'a.sql': entry() }).rows[0].created_by).toBeNull();
   });
 
   it('never emits the action/details columns that caused a prior runtime break', () => {

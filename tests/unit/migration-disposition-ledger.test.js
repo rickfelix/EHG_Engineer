@@ -12,9 +12,12 @@ import path from 'path';
 import {
   isSuppressingEntry,
   loadLedger,
+  inspectLedger,
   suppressedBasenames,
   applyDispositions,
   undispositionedBasenames,
+  contradictoryBasenames,
+  hasReadableReason,
   gapBasename,
   SUPPRESSING_DISPOSITIONS,
   KNOWN_DISPOSITIONS
@@ -54,14 +57,34 @@ describe('TS-6 GHOST-COMPLETION GUARD — APPLIED can never suppress (FR-2b)', (
     expect(remaining).toHaveLength(1);
   });
 
-  it('still counts APPLIED as a real DECISION for the undispositioned tally', () => {
-    // APPLIED is a legitimate disposition — it just is not grounds for
-    // suppression. Conflating the two would force a false choice between
-    // "cannot record an apply" and "an apply hides drift".
+  it('APPLIED on a file still IN gaps counts as UNDISPOSITIONED, not decided', () => {
+    // This assertion was originally inverted — it credited APPLIED as a real decision, on the
+    // reasoning that APPLIED is legitimate and merely non-suppressing. Two independent
+    // adversarial reviews showed that hands over the completion metric: hand-writing APPLIED
+    // for all 123 residual files drives "undispositioned" to 0 while suppressing nothing and
+    // leaving every gap real. FR-2b guards what the GATE BLOCKS on; this guards what the SD
+    // CLAIMS. A file in the gap set is not applied, whatever the ledger says.
     const gaps = [{ file: 'a.sql' }];
     const ledger = new Map([['a.sql', entry({ disposition: 'APPLIED' })]]);
-    expect(undispositionedBasenames(gaps, ledger)).toEqual([]);
+    expect(undispositionedBasenames(gaps, ledger)).toEqual(['a.sql']);
     expect(applyDispositions(gaps, ledger).suppressed).toHaveLength(0);
+  });
+
+  it('surfaces the contradiction explicitly rather than discarding it', () => {
+    const gaps = [{ file: 'a.sql' }, { file: 'b.sql' }];
+    const ledger = new Map([['a.sql', entry({ disposition: 'APPLIED' })], ['b.sql', entry()]]);
+    expect(contradictoryBasenames(gaps, ledger)).toEqual(['a.sql']);
+  });
+
+  it('APPLIED for a file NOT in the gap set is not a contradiction — that is the normal post-apply fact', () => {
+    const ledger = new Map([['applied-and-gone.sql', entry({ disposition: 'APPLIED' })]]);
+    expect(contradictoryBasenames([{ file: 'other.sql' }], ledger)).toEqual([]);
+  });
+
+  it('a reason-less or unknown-disposition APPLIED entry is malformed, not a contradiction', () => {
+    const gaps = [{ file: 'a.sql' }];
+    expect(contradictoryBasenames(gaps, new Map([['a.sql', entry({ disposition: 'APPLIED', reason: '  ' })]]))).toEqual([]);
+    expect(contradictoryBasenames(gaps, new Map([['a.sql', entry({ disposition: 'APPLY' })]]))).toEqual([]);
   });
 
   it('excludes APPLIED from the suppressing set but keeps it known', () => {
@@ -89,6 +112,47 @@ describe('TS-1 reason-required invariant (FR-1)', () => {
   it('POSITIVE CONTROL — suppresses when the reason is genuinely present', () => {
     expect(isSuppressingEntry(entry())).toBe(true);
     expect(isSuppressingEntry(entry({ disposition: 'DEFERRED' }))).toBe(true);
+  });
+
+  // String.trim() strips only WhiteSpace/LineTerminator, so these pass a trim-based check
+  // while rendering blank in every editor and diff — a reason no human can read, satisfying
+  // a rule named "reason required". Found by adversarial review.
+  it.each([
+    ['zero-width space', '​'],
+    ['zero-width non-joiner', '‌'],
+    ['zero-width joiner', '‍'],
+    ['soft hyphen', '­'],
+    ['BOM', '﻿'],
+    ['mixed invisibles + spaces', ' ​ ­﻿ '],
+  ])('rejects an invisible-only reason (%s)', (_label, reason) => {
+    expect(isSuppressingEntry(entry({ reason }))).toBe(false);
+    expect(hasReadableReason(reason)).toBe(false);
+  });
+
+  it('accepts a reason that merely CONTAINS an invisible character', () => {
+    expect(hasReadableReason('superseded​ by 20260801')).toBe(true);
+    expect(isSuppressingEntry(entry({ reason: 'superseded​ by 20260801' }))).toBe(true);
+  });
+});
+
+describe('inspectLedger — fail-open suppression, but an honest status for humans', () => {
+  it('distinguishes absent from malformed so a corrupt ledger cannot read as "no decisions yet"', () => {
+    expect(inspectLedger(path.join(tmpdir, 'nope.json'))).toMatchObject({ status: 'absent' });
+    expect(inspectLedger(writeLedger('{ broken'))).toMatchObject({ status: 'malformed' });
+    expect(inspectLedger(writeLedger('[]'))).toMatchObject({ status: 'wrong-shape' });
+    expect(inspectLedger(writeLedger({ 'a.sql': entry() }))).toMatchObject({ status: 'ok' });
+  });
+
+  it('every non-ok status still yields an EMPTY map — reporting changed, fail-open did not', () => {
+    for (const body of ['{ broken', '[]', '"str"', 'null', '']) {
+      expect(inspectLedger(writeLedger(body)).ledger.size).toBe(0);
+    }
+    expect(inspectLedger(path.join(tmpdir, 'nope.json')).ledger.size).toBe(0);
+  });
+
+  it('loadLedger stays a thin wrapper returning just the map', () => {
+    const p = writeLedger({ 'a.sql': entry() });
+    expect(loadLedger(p)).toEqual(inspectLedger(p).ledger);
   });
 });
 
@@ -165,8 +229,16 @@ describe('FR-3 undispositioned count — the machine-checkable DoD', () => {
 
   it('reaches zero only when every gap is genuinely decided', () => {
     const gaps = [{ file: 'a.sql' }, { file: 'b.sql' }];
-    const ledger = new Map([['a.sql', entry()], ['b.sql', entry({ disposition: 'APPLIED' })]]);
+    const ledger = new Map([['a.sql', entry()], ['b.sql', entry({ disposition: 'DEFERRED' })]]);
     expect(undispositionedBasenames(gaps, ledger)).toEqual([]);
+  });
+
+  it('CANNOT be driven to zero by marking every gap APPLIED — the metric-spoofing path', () => {
+    const gaps = Array.from({ length: 123 }, (_, i) => ({ file: `m${i}.sql` }));
+    const ledger = new Map(gaps.map((g) => [g.file, entry({ disposition: 'APPLIED' })]));
+    expect(undispositionedBasenames(gaps, ledger)).toHaveLength(123);
+    expect(applyDispositions(gaps, ledger).suppressed).toHaveLength(0);
+    expect(contradictoryBasenames(gaps, ledger)).toHaveLength(123);
   });
 
   it('returns sorted, deduplicated output', () => {

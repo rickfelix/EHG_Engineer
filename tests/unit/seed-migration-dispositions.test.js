@@ -119,6 +119,23 @@ describe('idempotence — re-seeding must produce no diff', () => {
     expect(ledger['a.sql'].disposition).toBe('RETIRED');
   });
 
+  it('CARRIES FORWARD an entry whose file has LEFT the gap set — the trail must not self-erase', () => {
+    // Seeding only over `gaps` deleted a recorded decision the moment its migration was
+    // applied or retired and therefore left the gap set: the audit trail erasing itself at
+    // exactly the moment a decision was fulfilled. Found by adversarial review.
+    const { ledger } = build({ gaps: [{ file: 'b.sql', missing: [] }], sql: new Map([['b.sql', PLAIN]]), existing });
+    expect(ledger['a.sql']).toEqual(existing['a.sql']);
+  });
+
+  it('carries forward even when the gap set is entirely empty', () => {
+    expect(build({ gaps: [], existing }).ledger).toEqual(existing);
+  });
+
+  it('a carried-forward APPLIED entry survives — APPLIED is legitimate once the file is applied', () => {
+    const applied = { 'a.sql': { disposition: 'APPLIED', reason: 'applied 2026-07-25 via apply-migration.js', owner: 'rick', sd_key: 'SD-X', recorded_at: '2026-07-25T00:00:00.000Z' } };
+    expect(build({ gaps: [], existing: applied }).ledger['a.sql'].disposition).toBe('APPLIED');
+  });
+
   it('serializeLedger sorts keys so re-seeding is byte-stable regardless of gap order', () => {
     expect(serializeLedger({ b: 1, a: 2 })).toBe(serializeLedger({ a: 2, b: 1 }));
     expect(Object.keys(JSON.parse(serializeLedger({ z: 1, a: 2 })))).toEqual(['a', 'z']);

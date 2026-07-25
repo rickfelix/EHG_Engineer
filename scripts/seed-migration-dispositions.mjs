@@ -90,6 +90,13 @@ export function buildLedger({ gaps, sql, sweep, existing = {}, now }) {
   const residue = [];
   const reasons = {};
 
+  // CARRY FORWARD EVERY EXISTING ENTRY FIRST, including ones whose file is no longer in the
+  // gap set. Seeding only over `gaps` would silently DELETE a recorded decision the moment its
+  // migration got applied or retired and therefore left the gap set — the audit trail erasing
+  // itself at exactly the moment a decision was fulfilled, which is the opposite of an audit
+  // trail. A disposition is a permanent record of a judgement, not a cache of current state.
+  for (const [basename, entry] of Object.entries(existing)) ledger[basename] = entry;
+
   for (const gap of gaps) {
     const base = String(gap.file).replace(/^.*[\\/]/, '');
 
@@ -112,11 +119,15 @@ export function buildLedger({ gaps, sql, sweep, existing = {}, now }) {
         disposition: 'DEFERRED',
         reason: 'Chairman-gated migration carrying no parseable "-- @approved-by: <email>" stamp, '
           + 'so the 3-factor guard in scripts/lib/migration-guards.js cannot admit it. Apply is '
-          + 'blocked on chairman sign-off, not on engineering work.',
+          + 'blocked on chairman sign-off, not on engineering work. NOTE: the gate marker is '
+          + 'SELF-ASSERTED in the migration file and is not corroborated against an external '
+          + 'registry, so an author can obtain this deferral by adding one comment line to their '
+          + 'own SQL. Treat as disclosed-but-unverified provenance when auditing.',
         owner: 'chairman',
         sd_key: SD_KEY,
         recorded_at: now,
         source: 'auto:chairman-gate-marker',
+        corroborated: false,
       };
       seeded.push(base);
       reasons[base] = 'A';

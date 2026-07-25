@@ -47,6 +47,19 @@ export const KNOWN_DISPOSITIONS = Object.freeze(['APPLIED', 'RETIRED', 'DEFERRED
 
 export const DEFAULT_LEDGER_PATH = path.join('docs', 'audits', 'migration-dispositions.json');
 
+/** Characters that render as nothing but survive String.trim(). */
+const INVISIBLE_RE = /[\s​-‍­﻿]/g;
+
+/**
+ * True when `reason` contains at least one character a human could actually read.
+ *
+ * @param {unknown} reason
+ * @returns {boolean}
+ */
+export function hasReadableReason(reason) {
+  return typeof reason === 'string' && reason.replace(INVISIBLE_RE, '') !== '';
+}
+
 /**
  * True when `entry` is a well-formed disposition that may suppress its file.
  *
@@ -58,9 +71,11 @@ export const DEFAULT_LEDGER_PATH = path.join('docs', 'audits', 'migration-dispos
 export function isSuppressingEntry(entry) {
   if (!entry || typeof entry !== 'object' || Array.isArray(entry)) return false;
 
-  // Invariant 2 — reason required. Trimmed, so '' and '   ' both fail.
-  const reason = entry.reason;
-  if (typeof reason !== 'string' || reason.trim() === '') return false;
+  // Invariant 2 — reason required. Stripped rather than merely trimmed: String.trim()
+  // removes only WhiteSpace/LineTerminator, so a reason of "​" (zero-width space),
+  // "‌", "­" (soft hyphen) or "﻿" survives it while rendering blank in every
+  // editor and diff — a reason no human can read, passing a check named "reason required".
+  if (!hasReadableReason(entry.reason)) return false;
 
   const disposition = entry.disposition;
   if (typeof disposition !== 'string') return false;
@@ -81,29 +96,46 @@ export function isSuppressingEntry(entry) {
  * @returns {Map<string, object>} basename -> entry. Empty on any failure.
  */
 export function loadLedger(ledgerPath = DEFAULT_LEDGER_PATH) {
+  return inspectLedger(ledgerPath).ledger;
+}
+
+/**
+ * loadLedger plus WHY it is empty.
+ *
+ * Fail-open means a corrupt ledger and an absent one behave identically, which is correct for
+ * suppression but wrong for reporting: an operator who corrupts the ledger would otherwise see
+ * "ledger entries=0" and read it as "no decisions recorded yet" — losing precisely the signal
+ * this module exists to provide. Suppression consumes `ledger`; humans consume `status`.
+ *
+ * @param {string} [ledgerPath]
+ * @returns {{ledger: Map<string, object>, status: 'ok'|'absent'|'unreadable'|'malformed'|'wrong-shape'}}
+ */
+export function inspectLedger(ledgerPath = DEFAULT_LEDGER_PATH) {
+  const empty = new Map();
   let raw;
   try {
     raw = fs.readFileSync(ledgerPath, 'utf8');
-  } catch {
-    return new Map(); // ENOENT, EACCES, EISDIR — all fail open.
+  } catch (e) {
+    // ENOENT is the ordinary "not created yet" state; anything else is a real problem.
+    return { ledger: empty, status: e && e.code === 'ENOENT' ? 'absent' : 'unreadable' };
   }
 
   let parsed;
   try {
     parsed = JSON.parse(raw);
   } catch {
-    return new Map(); // malformed, empty, whitespace-only, BOM-mangled.
+    return { ledger: empty, status: 'malformed' }; // malformed, empty, whitespace-only, BOM-mangled.
   }
 
   if (!parsed || typeof parsed !== 'object' || Array.isArray(parsed)) {
-    return new Map(); // valid JSON, wrong shape.
+    return { ledger: empty, status: 'wrong-shape' }; // valid JSON, wrong shape.
   }
 
   const out = new Map();
   for (const [basename, entry] of Object.entries(parsed)) {
     if (typeof basename === 'string' && basename) out.set(basename, entry);
   }
-  return out;
+  return { ledger: out, status: 'ok' };
 }
 
 /**
@@ -180,20 +212,58 @@ export function undispositionedBasenames(gaps, ledger) {
   const decided = new Set();
   if (ledger instanceof Map) {
     for (const [basename, entry] of ledger) {
-      // Any well-formed known disposition counts as decided, INCLUDING APPLIED —
-      // APPLIED is a real decision, it just is not grounds for suppression.
-      if (
-        entry && typeof entry === 'object' && !Array.isArray(entry) &&
-        typeof entry.reason === 'string' && entry.reason.trim() !== '' &&
-        typeof entry.disposition === 'string' &&
-        KNOWN_DISPOSITIONS.includes(entry.disposition)
-      ) decided.add(basename);
+      // APPLIED IS NOT A DECISION *HERE*. This function is only ever asked about files that
+      // appear in the verifier's gap set, and a genuinely applied migration cannot appear
+      // there — so an APPLIED entry reaching this loop is self-contradictory by construction.
+      //
+      // Crediting it would let a hand-edited ledger marking all 123 residual files APPLIED
+      // drive this metric — the SD's machine-checkable definition of done — to zero while
+      // suppressing nothing and leaving every gap real. That is QF-20260719-281's ghost
+      // completion again, one layer up from the suppression path FR-2b already guards.
+      // The suppression guard alone was not enough: it protects what the gate BLOCKS on,
+      // this protects what the SD CLAIMS. Contradictory entries are surfaced separately by
+      // contradictoryBasenames() rather than silently ignored.
+      if (isDecidedEntry(entry) && entry.disposition !== 'APPLIED') decided.add(basename);
     }
   }
   const out = new Set();
   for (const gap of list) {
     const basename = gapBasename(gap);
     if (basename && !decided.has(basename)) out.add(basename);
+  }
+  return [...out].sort();
+}
+
+/** A well-formed entry carrying a readable reason and a recognised disposition. */
+function isDecidedEntry(entry) {
+  return Boolean(
+    entry && typeof entry === 'object' && !Array.isArray(entry)
+    && hasReadableReason(entry.reason)
+    && typeof entry.disposition === 'string'
+    && KNOWN_DISPOSITIONS.includes(entry.disposition)
+  );
+}
+
+/**
+ * Basenames whose ledger entry CONTRADICTS observed reality: marked APPLIED, yet still
+ * present in the verifier's gap set with objects genuinely missing from the live schema.
+ *
+ * Reported loudly rather than quietly discarded. A contradiction means either the ledger is
+ * lying or the apply silently failed, and both are worth an operator's attention — the
+ * QF-20260719-281 post-mortem turned on exactly this state going unnoticed.
+ *
+ * @param {Array<object|string>} gaps
+ * @param {Map<string, object>} ledger
+ * @returns {string[]} sorted, deduplicated
+ */
+export function contradictoryBasenames(gaps, ledger) {
+  const list = Array.isArray(gaps) ? gaps : [];
+  if (!(ledger instanceof Map)) return [];
+  const out = new Set();
+  for (const gap of list) {
+    const basename = gapBasename(gap);
+    const entry = basename ? ledger.get(basename) : null;
+    if (entry && isDecidedEntry(entry) && entry.disposition === 'APPLIED') out.add(basename);
   }
   return [...out].sort();
 }

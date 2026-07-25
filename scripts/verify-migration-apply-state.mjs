@@ -395,10 +395,26 @@ async function main() {
   const cutoff = sinceVal || RETIRED_BEFORE;
 
   const { forward, down } = listForwardMigrations();
-  const fileFacts = forward.map((file) => ({
-    file,
-    ...extractDdlFacts(readFileSync(path.join(MIGRATIONS_DIR, file), 'utf8')),
-  }));
+  // An unreadable entry is an operator error, not a transient outage, and it must FAIL CLOSED.
+  // Left unguarded, a committed DIRECTORY named `x.sql/` (git stores `x.sql/keep`) passes the
+  // .sql filter and makes readFileSync throw EISDIR, which escapes main() into the entry catch
+  // and prints INFRA_ERROR — which the drift-guard workflow converts to exit 0. That is a
+  // one-commit permanent gate silencer. MISCONFIG matches how this file already treats a
+  // missing credential: a gate that cannot verify must say so loudly, never pass quietly.
+  const unreadable = [];
+  const fileFacts = [];
+  for (const file of forward) {
+    try {
+      fileFacts.push({ file, ...extractDdlFacts(readFileSync(path.join(MIGRATIONS_DIR, file), 'utf8')) });
+    } catch (e) {
+      unreadable.push(`${file} (${e.code || e.message})`);
+    }
+  }
+  if (unreadable.length) {
+    console.error(`Unreadable migration entr(ies) in ${MIGRATIONS_DIR}: ${unreadable.join(', ')}`);
+    console.log(`[${OUTCOME.MISCONFIG}]`);
+    return 2;
+  }
   const { expected, droppedLater, perFile } = foldLifecycle(fileFacts);
 
   // ── Disposition ledger (FR-6) — loaded BEFORE the DB try, deliberately ──────
@@ -416,15 +432,21 @@ async function main() {
   let ledger = new Map();
   let ledgerApi = null;
   let ledgerLoadError = null;
+  let ledgerStatus = 'unavailable';
   try {
     ledgerApi = await import('./lib/migration-disposition-ledger.mjs');
-    ledger = ledgerApi.loadLedger(path.resolve(__dirname, '..', ledgerApi.DEFAULT_LEDGER_PATH));
+    const seen = ledgerApi.inspectLedger(path.resolve(__dirname, '..', ledgerApi.DEFAULT_LEDGER_PATH));
+    ledger = seen.ledger;
+    ledgerStatus = seen.status;
   } catch (e) {
     ledgerLoadError = e.message; // stderr only, below — never an OUTCOME marker.
     ledgerApi = null;
     ledger = new Map();
+    ledgerStatus = 'unavailable';
   }
-  if (ledgerLoadError) console.error(`Disposition ledger unavailable (suppressing nothing): ${ledgerLoadError}`);
+  // A corrupt ledger suppresses nothing (fail-open), but must not LOOK like an empty one.
+  if (ledgerLoadError) console.error(`Disposition ledger module unavailable (suppressing nothing): ${ledgerLoadError}`);
+  else if (ledgerStatus !== 'ok' && ledgerStatus !== 'absent') console.error(`Disposition ledger is ${ledgerStatus} (suppressing nothing) — fix ${ledgerApi.DEFAULT_LEDGER_PATH}`);
 
   let live;
   let client;
@@ -482,14 +504,24 @@ async function main() {
   // RETIRED_BEFORE and can NEVER turn the gate red, so "every file has a decision" is
   // invisible to a PASS/GAPS exit for 93% of the corpus. This count is computed over ALL
   // gaps — recent and legacy alike — so completion is provable independently of the marker.
-  const undispositioned = ledgerApi ? ledgerApi.undispositionedBasenames(gaps, ledger) : gaps.map(gapFileBasename);
+  // The no-module fallback must report the SAME shape as the real path — deduplicated, sorted,
+  // and free of empty basenames — or the headline count silently changes meaning depending on
+  // whether the import resolved.
+  const undispositioned = ledgerApi
+    ? ledgerApi.undispositionedBasenames(gaps, ledger)
+    : [...new Set(gaps.map(gapFileBasename).filter(Boolean))].sort();
+  // Marked APPLIED yet still missing objects live — the ledger contradicts the schema.
+  const contradictory = ledgerApi ? ledgerApi.contradictoryBasenames(gaps, ledger) : [];
   const dispositions = {
     ledger_entries: ledger.size,
-    ledger_available: Boolean(ledgerApi) && !ledgerLoadError,
+    ledger_status: ledgerStatus,
+    ledger_available: Boolean(ledgerApi) && !ledgerLoadError && ledgerStatus === 'ok',
     suppressed: suppressedGaps.length,
     suppressed_files: suppressedGaps.map(gapFileBasename),
     undispositioned: undispositioned.length,
     undispositioned_files: undispositioned,
+    contradictory: contradictory.length,
+    contradictory_files: contradictory,
   };
 
   if (asJson) {
@@ -531,7 +563,13 @@ async function main() {
     }
     // FR-3: printed unconditionally — "0 undispositioned" is the completion signal, and a
     // line that only appears when non-zero cannot be used to prove the zero.
-    console.log(`\n  DISPOSITIONS: ${dispositions.undispositioned} of ${gaps.length} gap file(s) undispositioned; ${dispositions.suppressed} suppressed; ledger entries=${dispositions.ledger_entries}${dispositions.ledger_available ? '' : ' (LEDGER UNAVAILABLE — suppressing nothing)'}`);
+    console.log(`\n  DISPOSITIONS: ${dispositions.undispositioned} of ${gaps.length} gap file(s) undispositioned; ${dispositions.suppressed} suppressed; ledger entries=${dispositions.ledger_entries} (status=${ledgerStatus})`);
+    // A contradiction means the ledger claims APPLIED for a migration whose objects are
+    // verifiably absent live — either the ledger is lying or an apply failed silently.
+    // Both deserve an operator's eyes, so this prints even though it suppresses nothing.
+    if (dispositions.contradictory) {
+      console.log(`  ⚠ LEDGER CONTRADICTS SCHEMA (${dispositions.contradictory}): marked APPLIED but still missing live objects: ${dispositions.contradictory_files.join(', ')}`);
+    }
   }
 
   // SD-LEO-INFRA-BREAKAGE-DETECTOR-SURFACE-001-C (FR-C2): surface a committed-not-deployed migration gap
@@ -542,13 +580,22 @@ async function main() {
   // _DOWN migration is an expected gap, not a CRITICAL incident. Emit only when the operator has declared
   // the gaps actionable via --alert or --strict (strict already treats gaps as a failure exit).
   if (failSet.length > 0 && (args.includes('--alert') || strict)) {
-    const { createRequire } = await import('node:module');
-    const { emitBreakageAlert } = createRequire(import.meta.url)('../lib/breakage/emit-breakage-alert.cjs');
-    await emitBreakageAlert('migration-fail', 'migration-apply-state', {
-      message: `migration-apply-state: ${failSet.length} ${recentOnly ? 'recent ' : ''}committed-not-deployed migration gap(s)`,
-      sourceEntityId: failSet[0] ? failSet[0].file : null,
-      metadata: { gap_count: failSet.length, recent_only: recentOnly, gaps: failSet.map((g) => ({ file: g.file, status: g.status })) },
-    });
+    // emitBreakageAlert's BODY is fail-soft, but its MODULE LOAD is not: the require sits
+    // outside that boundary, and emit-breakage-alert.cjs top-level-requires alert-writer.cjs.
+    // A broken file there would throw past main() into the entry catch, print INFRA_ERROR, and
+    // the drift-guard workflow converts INFRA_ERROR to exit 0 — so the alerting path could fail
+    // the gate OPEN at precisely the moment it detected gaps. Contain load and call together.
+    try {
+      const { createRequire } = await import('node:module');
+      const { emitBreakageAlert } = createRequire(import.meta.url)('../lib/breakage/emit-breakage-alert.cjs');
+      await emitBreakageAlert('migration-fail', 'migration-apply-state', {
+        message: `migration-apply-state: ${failSet.length} ${recentOnly ? 'recent ' : ''}committed-not-deployed migration gap(s)`,
+        sourceEntityId: failSet[0] ? failSet[0].file : null,
+        metadata: { gap_count: failSet.length, recent_only: recentOnly, gaps: failSet.map((g) => ({ file: g.file, status: g.status })) },
+      });
+    } catch (e) {
+      console.error(`Breakage alert failed (non-fatal, gate verdict unaffected): ${e.message}`);
+    }
   }
 
   // failSet drives the marker + strict exit: with --recent-only, legacy gaps print

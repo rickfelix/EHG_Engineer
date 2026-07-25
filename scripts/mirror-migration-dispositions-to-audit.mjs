@@ -44,7 +44,7 @@ const EVENT_TYPE = 'MIGRATION_DISPOSITION';
  * @param {Map<string,string>} mirrored entity_id -> most recent disposition already in audit_log
  * @returns {{rows: object[], skipped: string[], invalid: string[]}}
  */
-export function buildAuditRows(ledger, mirrored = new Map()) {
+export function buildAuditRows(ledger, mirrored = new Map(), actor = null) {
   const rows = [];
   const skipped = [];
   const invalid = [];
@@ -63,6 +63,10 @@ export function buildAuditRows(ledger, mirrored = new Map()) {
       entity_type: 'migration',
       entity_id: basename,
       severity: 'info', // a recorded decision is not a warning
+      // The subject of this trail is "who authorised removing a migration from the CI fail
+      // set", so an actor is the one field it cannot omit. metadata.owner is an auto-derived
+      // ROLE (e.g. "chairman"), which is not the same as the identity that ran the write.
+      created_by: actor,
       metadata: {
         disposition: entry.disposition,
         owner: entry.owner || null,
@@ -101,17 +105,33 @@ if (isMain) {
   }
   const supabase = createClient(url, key);
 
+  // PAGINATE. PostgREST caps a select at 1000 rows and returns the cap SILENTLY, so an
+  // unpaginated read past 1000 MIGRATION_DISPOSITION rows would build `mirrored` from the
+  // oldest 1000 and re-insert everything newer — defeating the idempotence this is built on.
+  // Ascending order + last-write-wins means the final value per entity is its current one.
   const mirrored = new Map();
-  const { data, error } = await supabase
-    .from('audit_log').select('entity_id, metadata, created_at')
-    .eq('event_type', EVENT_TYPE).order('created_at', { ascending: true });
-  if (error) {
-    console.error(`Could not read existing audit rows (${error.message}) — refusing to write, to avoid duplicating the trail.`);
-    process.exit(0);
+  const PAGE = 1000;
+  for (let from = 0; ; from += PAGE) {
+    const { data, error } = await supabase
+      .from('audit_log').select('entity_id, metadata, created_at')
+      .eq('event_type', EVENT_TYPE).order('created_at', { ascending: true })
+      .range(from, from + PAGE - 1);
+    if (error) {
+      console.error(`Could not read existing audit rows (${error.message}) — refusing to write, to avoid duplicating the trail.`);
+      process.exit(0);
+    }
+    for (const r of data || []) mirrored.set(r.entity_id, r.metadata?.disposition);
+    if (!data || data.length < PAGE) break;
   }
-  for (const r of data || []) mirrored.set(r.entity_id, r.metadata?.disposition);
 
-  const { rows, skipped, invalid } = buildAuditRows(ledger, mirrored);
+  // Actor identity for created_by — the same source the migration approver factor uses.
+  let actor = null;
+  try {
+    const { execFileSync } = await import('node:child_process');
+    actor = execFileSync('git', ['config', 'user.email'], { cwd: ROOT, encoding: 'utf8' }).trim() || null;
+  } catch { /* unattributed is better than a failed mirror */ }
+
+  const { rows, skipped, invalid } = buildAuditRows(ledger, mirrored, actor);
   console.log(`ledger entries: ${Object.keys(ledger).length}`);
   console.log(`already mirrored (unchanged): ${skipped.length}`);
   console.log(`to write: ${rows.length}`);
