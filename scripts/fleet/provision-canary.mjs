@@ -2,10 +2,16 @@
 /**
  * provision-canary.mjs — SD-LEO-INFRA-LAUNCHER-CAN-HOST-001 (FR-1).
  *
- * THE GAP THIS CLOSES. provisionCanary (lib/fleet/canary-provision.js:69) is imported by NOTHING
- * outside its own unit test — repo-wide grep confirms it; the only other match,
- * scripts/canary/run-canary-probe.mjs:67, is an unrelated same-named LOCAL function. So the
- * provisioning step exists, is tested, and has never once run. This file is the missing caller.
+ * WHAT THIS FILE IS. The CLI entrypoint for provisionCanary (lib/fleet/canary-provision.js). It
+ * imports it below and calls it — this file IS the caller, and provisionCanary RUNS.
+ *
+ * The header used to open with "provisionCanary is imported by NOTHING outside its own unit test …
+ * has never once run", written in the PRESENT TENSE. That was the problem statement this file was
+ * created to close, not a description of current state, and once the file existed it was simply
+ * false. It cost a reader a full retraction cycle: they verified by direct inspection that the
+ * function was wired, then let this header talk them back out of their own correct finding. A
+ * problem statement left in the present tense outlives the problem and actively misinforms — record
+ * the gap in the commit that closed it, not in a banner on the fix.
  *
  * HISTORY, KEPT SHORT AND CURRENT. This header used to say the CLI could not close discoverability:
  * that spawn() had no stamp step, that the only account_profile writer was stampRespawnedCanary on the

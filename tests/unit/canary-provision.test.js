@@ -10,6 +10,7 @@
  */
 import { describe, it, expect } from 'vitest';
 import { selectCanarySlot, isProvisioned, provisionCanary } from '../../lib/fleet/canary-provision.js';
+import { assertCanaryTarget } from '../../lib/fleet/canary-guard.js';
 
 const CANARY_SLOT = { name: 'Canary-pilot', role: 'worker', account_profile: 'canary', model: 'opus' };
 const RESOLVED = { resolved: true, identity: { callsign: 'Canary-pilot', account_profile: 'canary' } };
@@ -21,8 +22,48 @@ describe('isProvisioned — the gate', () => {
     expect(isProvisioned(NOT_FOUND)).toBe(false);
   });
 
-  it('is true only on an explicit resolved:true', () => {
+  it('is true when BOTH conjuncts hold (profile AND canary callsign)', () => {
     expect(isProvisioned(RESOLVED)).toBe(true);
+  });
+
+  it('GATE-PREDICATE SCHISM: a HALF-provisioned canary is NOT provisioned', () => {
+    // THE discriminating case, and the one this fixture set was missing — which is why the schism
+    // survived. RESOLVED already carried BOTH conjuncts, so the gate could be tightened from one to
+    // two without a single test reding. `isProvisioned` had zero other references in the suite.
+    //
+    // The real state that blocked CP3 for hours: account_profile stamped, NO callsign. It satisfied
+    // the old gate (resolveCanaryTarget matches on account_profile alone), so provisionCanary
+    // short-circuited on already_live and never minted the callsign — while assertCanaryTarget, the
+    // actual consumer, rejected that same session with not_canary_callsign. The provisioner could not
+    // repair the state because its own gate said the state was fine. Self-sealing.
+    const halfProvisioned = {
+      resolved: true,
+      identity: { account_profile: 'canary', callsign: null },
+    };
+    expect(isProvisioned(halfProvisioned)).toBe(false);
+  });
+
+  it('GATE-PREDICATE SCHISM: the gate agrees with its CONSUMER on every shape', () => {
+    // The durable property, stronger than any single case: whatever assertCanaryTarget accepts is
+    // exactly what counts as provisioned. A gate that means LESS than its consumer lets a broken
+    // state look finished; pinning the equivalence stops the two drifting apart again.
+    const shapes = [
+      RESOLVED,
+      NOT_FOUND,
+      { resolved: true, identity: { account_profile: 'canary', callsign: null } },
+      { resolved: true, identity: { account_profile: 'canary', callsign: 'Bravo' } },
+      { resolved: true, identity: { account_profile: null, callsign: 'Canary-pilot' } },
+      { resolved: true, identity: {} },
+    ];
+    for (const s of shapes) {
+      expect(isProvisioned(s), JSON.stringify(s)).toBe(assertCanaryTarget(s).ok);
+    }
+  });
+
+  it('a non-canary callsign does not satisfy the gate even with the profile stamped', () => {
+    // Guards the selectCanarySlot naming gap: a slot marked canary but named "Bravo" provisions a
+    // session that must NOT read as drill-ready.
+    expect(isProvisioned({ resolved: true, identity: { account_profile: 'canary', callsign: 'Bravo' } })).toBe(false);
   });
 
   it('fails closed on malformed/absent resolutions', () => {
