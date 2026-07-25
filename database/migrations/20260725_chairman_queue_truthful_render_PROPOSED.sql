@@ -1,0 +1,47 @@
+-- QF-20260725-450 (part 3 of 3) — PROPOSED, NOT APPLIED. Requires chairman/coordinator
+-- approval before apply; stamp @approved-by and drop the _PROPOSED suffix at that point.
+--
+-- DEFECT (gauge-vs-reality): chairman_unified_decisions Source 4 hardcodes
+--   'chairman_approval'::text AS decision_type
+--   concat('Stage ', cd.lifecycle_stage, ' Chairman Approval') AS title
+--   'critical'::text AS priority
+-- for EVERY chairman_decisions row, discarding cd.decision_type and cd.blocking. So a
+-- non-blocking framing flag rendered to an operator as a "[critical] Stage 0 Chairman
+-- Approval" gate. Measured 2026-07-25: 114 such rows. The renderer
+-- (scripts/chairman-decisions.mjs) was NOT at fault — it faithfully prints what this view
+-- hands it. QF-20260725-450 parts 1+2 stopped the flood and cancelled the backlog; this
+-- part closes the latent display path so the next misrouted decision_type cannot repeat it.
+--
+-- WHY decision_type STAYS 'chairman_approval': it is the ROUTING KEY, not a label —
+-- lib/chairman/decision-queue.mjs::routeDecision switches on it to pick the
+-- fn_chairman_decide RPC (case 'chairman_approval'). Emitting the raw cd.decision_type
+-- here would make every such row hit "unknown decision_type" and become UNDECIDABLE.
+-- So the routing key is preserved and the DISPLAY is made truthful instead:
+--   * priority follows blocking (critical only when the row actually blocks)
+--   * title carries the real subtype instead of a synthesized approval-gate string
+-- Age escalation in chairman_pending_decisions is unchanged (visibility only).
+--
+-- APPLY: replace ONLY the Source 4 branch of chairman_unified_decisions from
+-- database/migrations/20260611_chairman_decision_queue.sql, preserving every other
+-- branch verbatim and the WITH (security_invoker = on) option. Rollback = re-run
+-- 20260611_chairman_decision_queue.sql.
+--
+-- Source 4 branch, corrected (splice into the CREATE OR REPLACE VIEW):
+--
+--   SELECT cd.id,
+--     'chairman_approval'::text AS decision_type,          -- routing key, unchanged
+--     CASE
+--       WHEN COALESCE(cd.decision_type, 'chairman_approval') = 'chairman_approval'
+--         THEN concat('Stage ', cd.lifecycle_stage, ' Chairman Approval')
+--       ELSE concat(cd.decision_type, ': ', COALESCE(left(cd.summary, 120), '(no summary)'))
+--     END AS title,
+--     CASE WHEN COALESCE(cd.blocking, false) THEN 'critical'::text
+--          ELSE 'medium'::text END AS priority,
+--     ... (all remaining columns exactly as in 20260611) ...
+--
+-- VERIFY after apply:
+--   1. node scripts/chairman-decisions.mjs list  -> no non-blocking row labelled critical
+--   2. decide still routes: node scripts/chairman-decisions.mjs decide chairman_approval:<id> defer --rationale "wire check"
+--   3. SELECT count(*) FROM chairman_pending_decisions;  -- matches pending chairman_decisions
+
+-- (intentionally no executable DDL — approval-gated)
