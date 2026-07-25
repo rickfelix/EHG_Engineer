@@ -176,6 +176,33 @@ const VENTURE_STALL_THRESHOLD_MS = 15 * 60 * 1000;
 // snapshot object so the two classes' clocks never conflate) and the same exclusions. Wrapped in
 // its own try/catch so any error degrades to no real_build_stall alarm and NEVER aborts the
 // class-1 scan or throws — the function's fail-soft contract is preserved.
+/**
+ * QF-20260725-638: DELIBERATE-NOT-WORK exclusion. The stall predicate is purely temporal
+ * (active + blocked + updated_at older than 15min), so a venture parked ON PURPOSE alarms
+ * forever. Worse, the documented remedy — "record a gating decision" — writes metadata and
+ * therefore BUMPS updated_at, pushing the row inside the 15-minute window: the alarm vanishes
+ * for exactly one tick and returns. Measured live 2026-07-25: Image Alt Text Generator and
+ * ApexNiche AI both recorded a decision at 16:15:51, showed ventureStalls=0 on the next tick,
+ * and alarmed again ~17 minutes later. That false-clear is the dangerous part — it invites the
+ * operator to conclude the remedy worked.
+ *
+ * Exclusion is STATE-based, not time-based, so a recorded decision genuinely silences the
+ * alarm instead of resetting its clock. It is never silent: every suppression logs who parked
+ * it, why, and the unpark trigger, so an excluded venture stays auditable on the tick.
+ * Applies to BOTH alarm classes — the real_build_stall message itself names "record a gating
+ * decision" as its remedy, so honouring it in only one class would leave the same false-clear.
+ */
+export function readVenturePark(v) {
+  const g = (v && v.metadata && v.metadata.gating_decision) || null;
+  if (!g) return null;
+  return {
+    decision: g.decision || '(unspecified)',
+    by: g.by || '(unknown)',
+    at: g.at || '(undated)',
+    unpark: g.unpark_trigger || g.unpark || '(no unpark trigger recorded)',
+  };
+}
+
 export async function checkVentureTraversalStalls(sb, priorSnapshot = {}, priorRealBuildSnapshot = {}) {
   const thresholdIso = new Date(Date.now() - VENTURE_STALL_THRESHOLD_MS).toISOString();
   const snapshot = {};
@@ -197,6 +224,15 @@ export async function checkVentureTraversalStalls(sb, priorSnapshot = {}, priorR
       .order('id', { ascending: true })); // unique tiebreaker (FR-6)
 
     for (const v of stuck) {
+      // QF-20260725-638: deliberately-parked ventures are excluded from BOTH classes before
+      // any clock is consulted. Cleared from both snapshots so an unpark starts a fresh
+      // two-strike escalation rather than inheriting a stale pre-park tick.
+      const park = readVenturePark(v);
+      if (park) {
+        console.log(`QUIET_TICK_VENTURE_PARK_SUPPRESSED=adam venture=${v.id} name="${v.name}" decision="${park.decision}" by="${park.by}" at=${park.at} unpark="${park.unpark}"`);
+        continue;
+      }
+
       const { data: recent } = await sb
         .from('stage_executions')
         .select('id, updated_at')
