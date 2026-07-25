@@ -231,6 +231,34 @@ describe('reconcileLateVerdicts — FR-3 consumer', () => {
     expect(state.candidateGte['created_at']).toBe('2026-07-24T12:00:00.000Z');
   });
 
+  it('SEC-14: the EARLY-RETURN shapes carry the counters too', async () => {
+    // The no-answers path is the steady state (54.8% of consults are never answered), and
+    // JSON.stringify drops undefined keys — so a sentinel missing these fields meant write_errors
+    // was absent from most real log lines. Asserted on the reconciler itself, because the cron test
+    // injects `reconcile` and therefore cannot see this shape at all.
+    const { api } = makeFakeSupabase({ candidates: [CONSULT()], answers: [] }); // candidates, no answers
+    const out = await reconcileLateVerdicts(api, { recordDisposition: async () => ({ created: true }) });
+
+    expect(out.checked).toBe(1);
+    for (const k of ['errors', 'alreadyDispositioned', 'firstError', 'firstErrorCode']) {
+      expect(Object.prototype.hasOwnProperty.call(out, k)).toBe(true);
+    }
+    expect(out.errors).toBe(0);
+  });
+
+  it('SEC-13: the raw driver message is returned but kept OUT of the loggable code field', async () => {
+    // Callers log firstErrorCode; firstError stays for in-process debugging only. A Postgres
+    // constraint violation carries the failing row's JSONB in its message.
+    const { api } = makeFakeSupabase({ candidates: [CONSULT()], answers: [ANSWER('corr-1')] });
+    const err = new Error('violates check constraint "c" Failing row contains (a1, SECRET-BODY)');
+    err.code = '23514';
+    const out = await reconcileLateVerdicts(api, { recordDisposition: async () => { throw err; } });
+
+    expect(out.firstErrorCode).toBe('23514');
+    expect(out.firstErrorCode).not.toContain('SECRET-BODY');
+    expect(out.firstError).toContain('SECRET-BODY'); // preserved for the caller that does NOT log it
+  });
+
   it('condition C: a lane FAILING every write is distinguishable from a quiet lane', async () => {
     // The silent catch is what hid SEC-1 — an all-throwing sweep returned {reconciled:0}, which on
     // the wire is identical to "nothing to do". Counting the failures is the actual fix.

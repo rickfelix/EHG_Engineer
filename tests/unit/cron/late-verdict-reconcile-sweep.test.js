@@ -51,6 +51,63 @@ describe('adam-late-verdict-reconcile-sweep main()', () => {
     expect(log.json()).toMatchObject({ ok: true, reconciled: 0 });
   });
 
+  it('condition C: an all-FAILING lane is visible in the log, not disguised as quiet', async () => {
+    // The reconciler fails open per candidate, so a sweep where every write threw still returns
+    // reconciled:0 — wire-identical to "nothing to do" unless the counters are actually printed.
+    // Previously nothing asserted these fields, and the stubs did not even return them, so the
+    // surfacing could have been dropped entirely with the suite still green.
+    const log = logger();
+    const { exitCode } = await main([], {
+      env: ENV, now: NOW, logger: log, supabase: {},
+      reconcile: async () => ({ checked: 5, reconciled: 0, reconciledIds: [], nearMisses: 0,
+        alreadyDispositioned: 0, errors: 5, firstError: 'raw driver text', firstErrorCode: '23514' }),
+      recordDisposition: async () => ({ created: true }), detectVerdictDelta: () => false,
+    });
+
+    expect(exitCode).toBe(0); // fail-open is deliberate: the rows stay retryable
+    expect(log.json()).toMatchObject({ ok: true, checked: 5, reconciled: 0, write_errors: 5, first_error_code: '23514' });
+  });
+
+  it('SEC-13: the raw driver message NEVER reaches the log', async () => {
+    // recordDisposition rethrows the driver message verbatim, and a Postgres constraint violation
+    // embeds "Failing row contains (...)" with the consult body. This log is world-readable on a
+    // public repo, so only the error CODE may be printed. Capping length would not help — it bounds
+    // size, not content, and in practice truncates mid-body.
+    const log = logger();
+    await main([], {
+      env: ENV, now: NOW, logger: log, supabase: {},
+      reconcile: async () => ({ checked: 1, reconciled: 0, reconciledIds: [], nearMisses: 0,
+        alreadyDispositioned: 0, errors: 1,
+        firstError: 'violates check constraint "c" Failing row contains (a1, SECRET-CONSULT-BODY)',
+        firstErrorCode: '23514' }),
+      recordDisposition: async () => ({ created: true }), detectVerdictDelta: () => false,
+    });
+
+    const line = log.lines[0];
+    expect(line).not.toContain('SECRET-CONSULT-BODY');
+    expect(line).not.toContain('Failing row contains');
+    expect(log.json().first_error_code).toBe('23514');
+  });
+
+  it('SEC-14: the counters are present on a QUIET lane too, not just a matched one', async () => {
+    // 54.8% of consults are never answered, so the no-answers path is the steady state. The
+    // reconciler's early-return shape omitted these keys and JSON.stringify drops undefined, so
+    // write_errors was absent from most real log lines — reintroducing field-absent vs field-zero
+    // ambiguity in the very signal added to remove it.
+    const log = logger();
+    await main([], {
+      env: ENV, now: NOW, logger: log, supabase: {},
+      reconcile: async () => ({ checked: 9, reconciled: 0, reconciledIds: [], nearMisses: 0,
+        alreadyDispositioned: 0, errors: 0, firstError: null, firstErrorCode: null }),
+      recordDisposition: async () => ({ created: true }), detectVerdictDelta: () => false,
+    });
+
+    const parsed = log.json();
+    expect(Object.prototype.hasOwnProperty.call(parsed, 'write_errors')).toBe(true);
+    expect(parsed.write_errors).toBe(0);
+    expect(Object.prototype.hasOwnProperty.call(parsed, 'already_dispositioned')).toBe(true);
+  });
+
   it('--dry-run records nothing but still exercises the read/match path', async () => {
     const log = logger();
     const recordDisposition = vi.fn();

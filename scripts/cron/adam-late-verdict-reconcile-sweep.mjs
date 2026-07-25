@@ -100,9 +100,12 @@ export async function main(argv = process.argv, deps = {}) {
       checked: result.checked,
       reconciled: result.reconciled,
       near_misses: result.nearMisses,
-      already_dispositioned: result.alreadyDispositioned,
-      write_errors: result.errors,
-      first_error: result.firstError ?? null,
+      already_dispositioned: result.alreadyDispositioned ?? 0,
+      write_errors: result.errors ?? 0,
+      // CODE only, never the raw driver message. A Postgres constraint violation embeds
+      // "Failing row contains (...)" with the consult body, and this log is world-readable on a
+      // public repo. Length-capping that message would not help — it bounds size, not content.
+      first_error_code: result.firstErrorCode ?? null,
       ok: true,
     })}`);
     return { exitCode: EXIT_OK, summary: result };
