@@ -58,14 +58,42 @@ dotenv.config({ path: path.resolve(__dirname, '../../../.env') });
  * @param {{ qf?:object, prUrl:string, mergeSha?:string|null, nowIso:string }} args
  * @returns {object} the UPDATE payload
  */
-export function buildMergedReconcileUpdate({ qf = {}, prUrl, mergeSha = null, nowIso }) {
-  const reconcileNote = `Reconciled to completed from already-MERGED PR ${prUrl} (SD-REFILL-00QQ60BN merged-PR witness; UAT not re-run in reconcile path).`;
+export function buildMergedReconcileUpdate({ qf = {}, prUrl, mergeSha = null, nowIso, scopeAcceptedBy = null }) {
+  // QF-20260725-691: a merged PR witnesses that CODE LANDED. Terminal `completed` asserts that
+  // the QF's SCOPE WAS SATISFIED. Those are different propositions and this path used to
+  // substitute one for the other silently — invisible precisely because the merge really did
+  // happen. Demonstrated by QF-20260725-638: it named two surfaces, one shipped, it reached
+  // completed anyway, and the remainder had to be re-filed as QF-20260725-639.
+  //
+  // So the merge witness alone now lands NON-TERMINAL: it records the true fact (this PR merged)
+  // without asserting the false one. Terminal `completed` requires an explicit scope attestation
+  // (--scope-accepted). No status-CHECK widening: 'in_progress' is already in the enum
+  // ('open','in_progress','completed','escalated'), so this needs no migration.
+  const merged = `PR ${prUrl} MERGED and reachable from origin/main${mergeSha ? ` (${mergeSha})` : ''}`;
+  if (!scopeAcceptedBy) {
+    const witnessNote = `${merged} — merge witnessed, SCOPE ACCEPTANCE OUTSTANDING (QF-20260725-691: a merged PR proves code landed, not that this QF's scope is satisfied; UAT not re-run in the reconcile path). Attest with: node scripts/complete-quick-fix.js ${qf.id || '<QF>'} --pr-url ${prUrl} --scope-accepted "<who/why>".`;
+    return {
+      status: 'in_progress',
+      pr_url: prUrl,
+      commit_sha: mergeSha,
+      // The merge IS a genuine CI witness — that part was never the lie.
+      tests_passing: true,
+      verification_notes: [qf.verification_notes, witnessNote].filter(Boolean).join(' | '),
+      // QF-20260711-176 preserved: an unheld QF must not pin worktree reaping. The row is left
+      // discoverable rather than closed, which is the point — it is NOT finished.
+      claiming_session_id: null
+    };
+  }
+  const reconcileNote = `${merged}; SCOPE ACCEPTED by ${scopeAcceptedBy} (QF-20260725-691 attestation; UAT not re-run in reconcile path).`;
   const verification_notes = [qf.verification_notes, reconcileNote].filter(Boolean).join(' | ');
   return {
     status: 'completed',
     pr_url: prUrl,
     commit_sha: mergeSha,
     tests_passing: true,
+    // The completed_requires_verification CHECK wants (tests_passing AND uat_verified) OR
+    // force_completed. UAT genuinely did not re-run here, so force_completed carries it rather
+    // than fabricating uat_verified — unchanged from SD-REFILL-00QQ60BN.
     force_completed: true,
     verification_notes,
     completed_at: qf.completed_at || nowIso,
@@ -171,12 +199,23 @@ export async function completeQuickFix(qfId, options = {}) {
   try {
     const probeWitness = verifyQFMergeWitness({ qfId, prUrl: options.prUrl || qf.pr_url, testDir });
     if (probeWitness.verified) {
-      console.log(`\n✅ QF own PR ${probeWitness.prUrl} (head ${probeWitness.headBranch}) is MERGED + reachable from origin/main — reconciling ${qfId} to completed (idempotent short-circuit).\n`);
       const mergeSha = probeWitness.mergeSha || qf.commit_sha || null;
+      // QF-20260725-691: the witness proves the PR merged, not that scope was satisfied. Without
+      // an explicit --scope-accepted attestation this records the merge and leaves the QF OPEN.
+      const scopeAcceptedBy = options.scopeAccepted || null;
+      if (scopeAcceptedBy) {
+        console.log(`\n✅ QF own PR ${probeWitness.prUrl} (head ${probeWitness.headBranch}) is MERGED + reachable from origin/main, and SCOPE ACCEPTED by ${scopeAcceptedBy} — completing ${qfId}.\n`);
+      } else {
+        console.log(`\n📌 QF own PR ${probeWitness.prUrl} (head ${probeWitness.headBranch}) is MERGED + reachable from origin/main.`);
+        console.log(`   Recording the merge and leaving ${qfId} IN_PROGRESS — a merged PR proves the code landed, NOT that this QF's scope is satisfied (QF-20260725-691).`);
+        console.log(`   Re-read the QF's stated scope. If every named surface is genuinely done, attest it:`);
+        console.log(`     node scripts/complete-quick-fix.js ${qfId} --pr-url ${probeWitness.prUrl} --scope-accepted "<who/why>"`);
+        console.log(`   If only part shipped, file the remainder rather than closing this row.\n`);
+      }
       // SD-REFILL-00QQ60BN: preserve the verification-column stamping the
       // completed_requires_verification CHECK demands, now with the SELF-DERIVED pr_url.
       const reconcileUpdate = buildMergedReconcileUpdate({
-        qf, prUrl: probeWitness.prUrl, mergeSha, nowIso: new Date().toISOString()
+        qf, prUrl: probeWitness.prUrl, mergeSha, nowIso: new Date().toISOString(), scopeAcceptedBy
       });
       const { error: reconcileErr } = await supabase
         .from('quick_fixes')
