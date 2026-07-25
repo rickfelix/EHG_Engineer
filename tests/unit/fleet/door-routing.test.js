@@ -182,6 +182,62 @@ describe('assertDoorRoutingAllowed (TS-3, TS-5)', () => {
     expect(row.payload.delegate_model).toBeUndefined();
   });
 
+  // ── SD-LEO-INFRA-FLEET-MODEL-REGISTRY-001 FR-3 / TS-3 + TS-8 ────────────────
+  // These gates compared metadata.model as an EXACT string against the bare family
+  // 'fable' (and against DELEGATE_TIERS). That was correct only for as long as the
+  // check-in writer coarsened every model to a bare family — which is precisely the
+  // lossy behavior FR-1 removes. Once the exact API id is stored, a genuine Fable
+  // seat registers as 'claude-fable-5' and the old comparison REFUSES it the one-way
+  // work it is the only seat class allowed to take. No test in this repo reached
+  // this gate with a versioned id before now (every sessMeta above seeds a bare
+  // family, and the one versioned string in this file goes straight to the ledger
+  // writer, bypassing the gate), so that regression would have shipped green.
+  // The gate now reads model_family, falling back to a family resolution of
+  // metadata.model for rows written before this SD. The fail-CLOSED direction on
+  // unknown is UNCHANGED — only the field being compared changes.
+  it('FR-3: one_way accepts a VERSIONED fable id (claude-fable-5), not just the bare family', async () => {
+    const sb = mockSupabaseForGate({ sdMeta: oneWayMeta, sessMeta: { tier_rank: TOP, model: 'claude-fable-5' } });
+    const row = { message_type: 'WORK_ASSIGNMENT', target_session: 's1', payload: { assigned_sd: 'SD-X-1' } };
+    await assertDoorRoutingAllowed(sb, row, { warn() {} });
+    expect(row.payload.delegate_model).toBeUndefined();
+  });
+
+  it('FR-3/TS-8: one_way accepts an explicit model_family, and the metadata.model fallback is equivalent', async () => {
+    // Primary path: model_family present (what both writers stamp after FR-1).
+    const withFamily = mockSupabaseForGate({
+      sdMeta: oneWayMeta, sessMeta: { tier_rank: TOP, model: 'claude-fable-5', model_family: 'fable' },
+    });
+    const rowA = { message_type: 'WORK_ASSIGNMENT', target_session: 's1', payload: { assigned_sd: 'SD-X-1' } };
+    await assertDoorRoutingAllowed(withFamily, rowA, { warn() {} });
+
+    // Fallback path: a row written BEFORE this SD has model but no model_family.
+    // On day one this is the only populated path, so it is the tested default.
+    const withoutFamily = mockSupabaseForGate({
+      sdMeta: oneWayMeta, sessMeta: { tier_rank: TOP, model: 'claude-fable-5' },
+    });
+    const rowB = { message_type: 'WORK_ASSIGNMENT', target_session: 's1', payload: { assigned_sd: 'SD-X-1' } };
+    await assertDoorRoutingAllowed(withoutFamily, rowB, { warn() {} });
+  });
+
+  it('FR-3: one_way still REFUSES an unrecognized model — fail-closed direction unchanged', async () => {
+    // Guards the latent defect in the other direction: an unrecognized --model used
+    // to persist the LITERAL 'fable' via normalizeModel and sail through this gate,
+    // defeating its fail-closed posture from upstream at the write path.
+    const sb = mockSupabaseForGate({ sdMeta: oneWayMeta, sessMeta: { tier_rank: TOP, model: 'gemini-3-5-pro' } });
+    const row = { message_type: 'WORK_ASSIGNMENT', target_session: 's1', payload: { assigned_sd: 'SD-X-1' } };
+    await expect(assertDoorRoutingAllowed(sb, row, { warn() {} })).rejects.toMatchObject({ code: 'DISPATCH_ONE_WAY_DOOR' });
+  });
+
+  it('FR-3: two_way resolves a VERSIONED opus id to the opus delegate tier, not the sonnet fallback', async () => {
+    // The silent-downgrade half of the same regression: DELEGATE_TIERS.includes()
+    // is an exact match, so 'claude-opus-5[1m]' would miss and quietly demote a
+    // genuine Opus seat to sonnet.
+    const sb = mockSupabaseForGate({ sdMeta: twoWayMeta, sessMeta: { tier_rank: 2, model: 'claude-opus-5[1m]' } });
+    const row = { message_type: 'WORK_ASSIGNMENT', target_session: 's1', payload: { assigned_sd: 'SD-X-2' } };
+    await assertDoorRoutingAllowed(sb, row, { warn() {} });
+    expect(row.payload.delegate_model).toBe('opus');
+  });
+
   it('caller-preset delegate_model outside DELEGATE_TIERS is REPLACED, never honored (finding F)', async () => {
     const sb = mockSupabaseForGate({ sdMeta: twoWayMeta, sessMeta: { tier_rank: 1, model: 'sonnet' } });
     const row = { message_type: 'WORK_ASSIGNMENT', target_session: 's1', payload: { assigned_sd: 'SD-X-2', delegate_model: 'haiku' } };
