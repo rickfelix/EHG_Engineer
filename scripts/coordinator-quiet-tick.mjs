@@ -95,6 +95,14 @@ export const COMPOSED_CORES = [
   // periodic-cron lag are most likely to have gone unnoticed).
   { key: 'unranked-gauge', script: 'gauge-unranked-claimable-leaves.mjs', args: ['scripts/gauge-unranked-claimable-leaves.mjs'], quiescentSkip: false },
   { key: 'audit', script: 'coordinator-audit.mjs', args: ['scripts/coordinator-audit.mjs'], quiescentSkip: true },
+  // QF-20260725-085: NOT quiescentSkip. This detects FINISHED work that no PR routes —
+  // a branch with commits and no PR is invisible to every other surface, because those
+  // track work that is claimed, in flight, or failing, and this work is none of those:
+  // it is invisible precisely BECAUSE it succeeded. A quiet fleet is exactly when such
+  // a branch is most likely to be sitting unnoticed (live incident: one pushed commit
+  // was THE root blocker of the whole LEO chain for 7 hours while every board looked
+  // clean). Default 3d window runs in ~5s, well inside the 90s core timeout.
+  { key: 'unrouted-branches', script: 'audit-unrouted-branches.mjs', args: ['scripts/audit-unrouted-branches.mjs'], quiescentSkip: false },
   // SD-LEO-INFRA-RELAY-QUEUE-CONFIRM-ON-RELAY-DELIVERY-GUARANTEE-001 / FR-1/FR-2: NOT
   // quiescentSkip -- a queued relay-request is exactly as urgent when the fleet is
   // otherwise quiet (a quiet fleet is precisely when a relay is most likely to sit
