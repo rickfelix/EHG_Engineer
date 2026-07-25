@@ -76,13 +76,16 @@ export async function computeUtilization(supabase, { nowMs = Date.now() } = {}) 
   // did not exist (measured: 8 reported, 0 truly claimable, 7 human-action-held). Depth now comes
   // from the shared gauge, which applies the same claim gate the dispatcher uses. Cap protection
   // is preserved inside that helper via fetchAllPaginated.
-  const { dispatchable: backlogSize } = await countDispatchableBacklog(supabase);
+  const { dispatchable: backlogSize, raw: rawUnclaimedDrafts } = await countDispatchableBacklog(supabase);
 
   return {
     live_workers: live.length,
     claimed: claimed.length,
     idle: idle.length,
     dispatchable_backlog_size: backlogSize,
+    // QF-20260725-879: the UNFILTERED draft+unclaimed head-count, kept alongside the filtered
+    // depth so the S4 raw-SQL cross-check can compare like with like (see its use below).
+    raw_unclaimed_drafts: rawUnclaimedDrafts,
   };
 }
 
@@ -360,7 +363,16 @@ export async function runProbe(supabase, opts = {}) {
         .from('strategic_directives_v2')
         .select('id', { count: 'exact', head: true })
         .in('status', ['in_progress', 'pending_approval', 'active']);
-      const probeCounts = { in_flight: inFlightCount, draft_unclaimed: utilization.dispatchable_backlog_size };
+      // QF-20260725-879: compare LIKE WITH LIKE. This passed dispatchable_backlog_size — the
+      // ELIGIBILITY-FILTERED depth — against a raw `status='draft' AND claiming_session_id IS
+      // NULL` SQL count, so the two sides measured different quantities BY DEFINITION and their
+      // difference was reported as an integrity breach (measured: probe=1 vs raw=9, both sides
+      // individually correct). The raw-SQL side is the unfiltered head-count, so the probe side
+      // must be the unfiltered head-count too; filtered depth is still emitted separately as
+      // utilization.dispatchable_backlog_size. A breach that fires on a definitional artifact
+      // trains everyone to discount recompute_ok=false, so the one time it means something it
+      // gets ignored.
+      const probeCounts = { in_flight: inFlightCount, draft_unclaimed: utilization.raw_unclaimed_drafts };
       const cmp = compareReadings(probeCounts, raw);
       recompute = { status: 'compared', ...cmp, probe: probeCounts, raw };
     } finally { await pg.end().catch(() => {}); }
