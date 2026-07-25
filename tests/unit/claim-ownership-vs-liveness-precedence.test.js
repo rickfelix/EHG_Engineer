@@ -92,18 +92,38 @@ describe('FR-5: each site still reads the surface matching its OWN question', ()
     const src = read('scripts/hooks/coordination-inbox.cjs');
     const start = src.indexOf('function selectAvailableSds');
     expect(start).toBeGreaterThan(0);
-    // Bound the slice at the END OF THE FUNCTION, not at a fixed character count. The original
-    // `start + 900` pin broke within the hour, when a comment inside the function grew and pushed
-    // the asserted token past the window — a self-inflicted instance of the exact brittleness this
-    // file warns about. The bound is now structural, so prose changes cannot move it.
-    const after = src.indexOf('\nfunction ', start + 1);
-    const body = src.slice(start, after > start ? after : src.length);
+
+    // Bounding this slice has now gone wrong twice, so it is worth stating what the bound must do.
+    // v1 used a fixed `start + 900` and broke within the hour when a comment grew past it. v2 used
+    // `indexOf('\nfunction ', start+1)` and claimed to be "structural" — but selectAvailableSds is
+    // the LAST function declaration in the file, so that returns -1 and silently fell back to EOF.
+    // It passed for a reason unrelated to the stated one, and would have silently NARROWED the
+    // moment any function was appended below. Bind to the real terminator instead, and assert the
+    // bound actually resolved rather than trusting a fallback.
+    const end = src.indexOf('\nmodule.exports', start);
+    expect(end).toBeGreaterThan(start);
+    const body = src.slice(start, end);
+
     expect(body).toMatch(/\bsd_key\b/);
-    // BOTH liveness signals — a parked worker stops heartbeating on purpose, so heartbeat alone
-    // is not sufficient evidence that nobody is building.
-    expect(body).toMatch(/heartbeat_at/);
-    expect(body).toMatch(/expected_silence_until/);
+    // Liveness is DELEGATED to the read-time SSOT rather than re-derived here. Pinning the
+    // individual column names would now be wrong: the whole point of DEFECT-7 was that a local
+    // re-derivation covered 2 of 5 signals and forked its own thresholds.
+    expect(body).toMatch(/isSessionAlive\(/);
     // It must NOT reach for the ownership surface to answer a liveness question.
     expect(body).not.toMatch(/claiming_session_id/);
+    // …and it must not quietly re-derive liveness locally again.
+    expect(body).not.toMatch(/Date\.parse\(\s*s\.heartbeat_at/);
+  });
+
+  it('the dispatch query selects every column the liveness SSOT reads', () => {
+    // A delegated liveness check degrades silently if the caller under-selects: the SSOT would see
+    // undefined for is_alive / terminal_id / process_alive_at and fall back to whatever happens to
+    // be present. That is DEFECT-7 re-entering through the query rather than the predicate.
+    const src = read('scripts/hooks/coordination-inbox.cjs');
+    const q = src.match(/\.from\('claude_sessions'\)\s*\.select\('([^']*)'\)\s*\.not\('sd_key'/);
+    expect(q).toBeTruthy();
+    for (const col of ['sd_key', 'heartbeat_at', 'expected_silence_until', 'is_alive', 'terminal_id', 'process_alive_at']) {
+      expect(q[1]).toContain(col);
+    }
   });
 });

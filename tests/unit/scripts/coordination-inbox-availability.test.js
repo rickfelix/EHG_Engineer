@@ -46,10 +46,64 @@ describe('FR-4/TS-4: an SD with a live builder is never advertised', () => {
     expect(out.map((s) => s.sd_key)).toEqual(['SD-ABANDONED']);
   });
 
-  it('a parked worker inside the liveness window still holds its SD', () => {
-    const justInside = new Date(NOW - (SESSION_LIVENESS_WINDOW_MS - 1000)).toISOString();
-    const out = selectAvailableSds([{ sd_key: 'SD-PARKED' }], [{ sd_key: 'SD-PARKED', heartbeat_at: justInside }], { nowMs: NOW });
+  it('a parked worker is held by its ARMED SILENCE, not by a long heartbeat window', () => {
+    // This test previously pinned a heartbeat of (SESSION_LIVENESS_WINDOW_MS - 1s), i.e. ~15min,
+    // back when this predicate re-derived liveness locally with its own 900s window. Liveness is
+    // now delegated to the lib/fleet/session-liveness.cjs SSOT, whose heartbeat threshold is 300s
+    // — so a 15-minute-old heartbeat is correctly NOT a liveness signal on its own. That is not a
+    // regression: a parked worker is protected by the signal it actually emits (an armed
+    // expected_silence_until), plus the PID/tick/raw signals below, rather than by stretching the
+    // heartbeat window to cover a worker that has deliberately stopped heartbeating.
+    const staleBeat = new Date(NOW - (SESSION_LIVENESS_WINDOW_MS - 1000)).toISOString();
+    const armed = new Date(NOW + 5 * 60 * 1000).toISOString();
+    const out = selectAvailableSds(
+      [{ sd_key: 'SD-PARKED' }],
+      [{ sd_key: 'SD-PARKED', heartbeat_at: staleBeat, expected_silence_until: armed }],
+      { nowMs: NOW }
+    );
     expect(out).toEqual([]);
+  });
+});
+
+describe('FR-4 (3rd pass): liveness comes from the SSOT, so ALL its signals count', () => {
+  // DEFECT-7. The hand-rolled predicate covered 2 of the SSOT's 5 signals, leaving a worker that
+  // is PID-alive or tick-fresh but heartbeat-stale invisible here — its SD was still advertised,
+  // which is the COLLISION direction. Each signal below independently holds the SD.
+  it('a raw is_alive session holds its SD even with no heartbeat at all', () => {
+    const out = selectAvailableSds(
+      [{ sd_key: 'SD-RAW' }],
+      [{ sd_key: 'SD-RAW', is_alive: true, heartbeat_at: null }],
+      { nowMs: NOW }
+    );
+    expect(out).toEqual([]);
+  });
+
+  it('a tick-fresh session holds its SD despite a stale heartbeat (mid sub-agent call)', () => {
+    // A worker inside a long Task()/Agent call emits no heartbeat but keeps stamping process_alive_at.
+    const out = selectAvailableSds(
+      [{ sd_key: 'SD-TICKING' }],
+      [{ sd_key: 'SD-TICKING', heartbeat_at: stale, process_alive_at: new Date(NOW - 30_000).toISOString() }],
+      { nowMs: NOW }
+    );
+    expect(out).toEqual([]);
+  });
+
+  it('a PID-alive session holds its SD (injected alive-pid set, host-local signal)', () => {
+    const out = selectAvailableSds(
+      [{ sd_key: 'SD-PID' }],
+      [{ sd_key: 'SD-PID', heartbeat_at: stale, terminal_id: 'win-cc-4001-12345' }],
+      { nowMs: NOW, aliveCcPids: new Set(['12345']) }
+    );
+    expect(out).toEqual([]);
+  });
+
+  it('a session with NO live signal at all is still released (no claim leak)', () => {
+    const out = selectAvailableSds(
+      [{ sd_key: 'SD-GONE' }],
+      [{ sd_key: 'SD-GONE', heartbeat_at: stale, is_alive: false, terminal_id: 'win-cc-4001-99999', process_alive_at: stale }],
+      { nowMs: NOW, aliveCcPids: new Set(['12345']) }
+    );
+    expect(out.map((s) => s.sd_key)).toEqual(['SD-GONE']);
   });
 });
 
@@ -166,7 +220,15 @@ describe('wiring: the call site uses the predicate, not the raw query result', (
   it('emitAutoClaimDirective is fed from the cross-checked list', () => {
     const { readFileSync } = require('node:fs');
     const src = readFileSync(resolve(__dirname, '../../..', 'scripts/hooks/coordination-inbox.cjs'), 'utf8');
-    expect(src).toMatch(/const claimable = selectAvailableSds\(availableSDs, liveSessions\)/);
+    // Pinned the exact expression `const claimable = selectAvailableSds(availableSDs, liveSessions)`
+    // until a later commit edited the query directly above it; it survived by luck. Exact-syntax and
+    // fixed-offset pins have now broken FOUR times inside this SD alone, so this asserts the two
+    // semantics instead: the predicate is fed from the raw query result, and the directive is fed
+    // from the predicate's output — never from the raw list. Renaming the local or adding an opts
+    // argument are both correct refactors and must not fail here.
+    expect(src).toMatch(/selectAvailableSds\(\s*availableSDs\s*,\s*liveSessions/);
     expect(src).toMatch(/emitAutoClaimDirective\(\s*claimable\[0\]\.sd_key/);
+    // The guard is worthless if the directive can still be fed straight from the unchecked list.
+    expect(src).not.toMatch(/emitAutoClaimDirective\(\s*availableSDs\[0\]/);
   });
 });

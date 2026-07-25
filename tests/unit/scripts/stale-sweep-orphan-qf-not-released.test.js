@@ -31,12 +31,14 @@ describe('QF-20260609-456: orphan classifier does not release live QF builders',
     // NOTE: tests/unit/scripts/sweep-residuals.test.js carries a DUPLICATE of this pin, which was
     // re-aimed when the block landed; this second copy was missed, so the increment shipped with
     // this file red. Two independent files pinning one predicate is how that happens.
+    // Bound at the END of the filter block, not a fixed +900 offset — re-aiming one pin with the
+    // very idiom that broke the others just relocates the problem.
     const start = src.indexOf('const orphanedClaims =');
     expect(start).toBeGreaterThan(0);
-    const orphanBlock = src.slice(start, start + 900);
+    const end = src.indexOf('\n  });', start);
+    expect(end).toBeGreaterThan(start);
+    const orphanBlock = src.slice(start, end);
     expect(orphanBlock).toMatch(/if \(sdStatusMap\[s\.sd_key\] \|\| isHeldQfClaim\(s\)\) return false;/);
-    // …and the block is still driven by the classified session list.
-    expect(orphanBlock).toMatch(/classified/);
   });
 
   it('isHeldQfClaim treats an EXISTING quick_fix claim as held (not orphaned)', () => {

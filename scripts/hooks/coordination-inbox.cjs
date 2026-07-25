@@ -89,11 +89,21 @@ const HEARTBEAT_INTERVAL_MS = 30_000; // Update heartbeat every 30 seconds
 // is still recognised as building between ticks rather than having its SD advertised out from
 // under it. Deliberately generous: a false "held" only delays a dispatch, a false "free" causes
 // the second-dispatch collision this SD exists to prevent.
+// Retained for back-compat with callers/tests that import it. Liveness itself is NOT decided here
+// — selectAvailableSds delegates to the lib/fleet/session-liveness.cjs SSOT, which owns the
+// heartbeat threshold (LIVENESS_HEARTBEAT_SEC), the tick window and the armed-silence cap. Do not
+// re-derive any of those locally; that fork is what DEFECT-7 of this SD was.
 const SESSION_LIVENESS_WINDOW_MS = 15 * 60 * 1000;
-// Hard cap on an armed expected_silence_until window (mirrors the sweep's cap). A parked worker
-// is LIVE while its window is armed and within cap; beyond that the window is not trusted, so a
-// crashed worker that stamped a far-future timestamp cannot hold its SD indefinitely.
-const ARMED_SILENCE_CAP_MS = 30 * 60 * 1000;
+// The READ-TIME liveness SSOT. Guarded require so an unavailable lib degrades to a conservative
+// hold (see selectAvailableSds) rather than crashing the hook.
+let isSessionAlive;
+try {
+  ({ isSessionAlive } = require(path.resolve(__dirname, '../../lib/fleet/session-liveness.cjs')));
+} catch {
+  // Fail CLOSED: with no liveness oracle we cannot prove any worker is gone, so treat every
+  // session that names an SD as holding it. Suppresses dispatch rather than risking a collision.
+  isSessionAlive = () => ({ alive: true, reason: 'liveness_ssot_unavailable' });
+}
 const ACTIONABLE_TYPES = ['WORK_ASSIGNMENT', 'CLAIM_RELEASED', 'CLAIM_REMINDER'];
 // SD-FDBK-FIX-WORKER-CHECK-SURFACES-001 (adversarial-review finding #1): only WORK_ASSIGNMENT
 // has a worker-side CLOSURE path for a busy worker (claim_sd/ackMessage stamps read_at when the
@@ -786,12 +796,14 @@ async function main() {
       // against the session side, the pattern coordinator-email-summary.mjs:64-66 already uses
       // ("claiming_session_id drifts to NULL after a claim-sweep even while the worker keeps
       // building"). That workaround existed in the email path and was never propagated here.
-      // expected_silence_until is selected because a PARKED worker stops heartbeating on purpose —
-      // see selectAvailableSds. Omitting it made this guard blind to the very worker state the SD
-      // is named for.
+      // Every column the session-liveness SSOT reads must be selected, or the cross-check silently
+      // degrades to whichever signals happen to be present — a PARKED worker stops heartbeating on
+      // purpose, and a busy one mid sub-agent call emits no heartbeat either, so heartbeat_at alone
+      // is not evidence that nobody is building. is_alive / terminal_id / process_alive_at carry the
+      // raw, PID and tick signals respectively.
       const { data: liveSessions, error: liveSessionsErr } = await supabase
         .from('claude_sessions')
-        .select('sd_key, heartbeat_at, expected_silence_until')
+        .select('sd_key, heartbeat_at, expected_silence_until, is_alive, terminal_id, process_alive_at')
         .not('sd_key', 'is', null);
       if (liveSessionsErr) {
         // The consequence is already safe (data is null on error → selectAvailableSds fails closed
@@ -833,28 +845,38 @@ function selectAvailableSds(sdRows, liveSessions, opts = {}) {
   // Fail closed: a null/undefined session list means the cross-check could not run.
   if (!Array.isArray(liveSessions)) return [];
   const nowMs = opts.nowMs ?? Date.now();
-  const windowMs = opts.livenessWindowMs ?? SESSION_LIVENESS_WINDOW_MS;
-  const silenceCapMs = opts.silenceCapMs ?? ARMED_SILENCE_CAP_MS;
 
-  // A worker is HOLDING its SD when either liveness signal is present:
-  //   (a) a fresh heartbeat, or
-  //   (b) an armed, within-cap expected_silence_until.
-  // (b) is not optional decoration — it is the whole persona this SD is named for. A parked
-  // /loop worker deliberately stops heartbeating and arms expected_silence_until to say
-  // "alive but silent"; the sweep and claim-validity-gate both honour it. Keying on heartbeat
-  // ALONE re-created the same blind spot one layer up: this worker's own loop arms wakeups of
-  // up to 1800s, which EXCEEDS the 900s heartbeat window, so a parked worker went invisible to
-  // this guard for the back half of every long nap and its SD was advertised for auto-claim.
-  // The cap is what keeps (b) from becoming an unbounded claim leak — a crashed worker's stale
-  // future timestamp cannot hold an SD forever.
+  // Liveness is delegated to the READ-TIME SSOT (lib/fleet/session-liveness.cjs), which declares
+  // itself "used by EVERY consumer" and covers FIVE signals: raw is_alive, fresh heartbeat, live
+  // PID marker, fresh process_alive_at tick, and an armed expected_silence_until window.
+  //
+  // This predicate first shipped with a hand-rolled two-signal check (heartbeat + silence). That
+  // left a worker which is PID-alive and tick-fresh but heartbeat-stale INVISIBLE here, so its SD
+  // was still advertised for auto-claim — the COLLISION direction, which is the harmful one. The
+  // omission is notable because FR-2 of this same SD went out of its way to compute an alive-PID
+  // set locally for the sweep, on the explicit reasoning that dropping the PID signal "would
+  // silently degrade shouldHoldClaim to heartbeat-only and lose exactly the PID-aliveness signal
+  // that distinguishes a parked-but-live worker from a dead one". That reasoning was correct and
+  // simply had not been carried one file over. Re-deriving liveness locally also forked a second
+  // heartbeat threshold and a fourth cap-constant name away from the SSOT.
+  //
+  // The SSOT's ONE-DIRECTIONAL contract is what makes it safe here: it can only ever read MORE
+  // alive than the raw flag, never less. For a dispatch-advertisement guard that is the correct
+  // asymmetry — a false HOLD costs a little dispatch delay, while a false FREE costs a collision
+  // with a live builder, which is the failure this SD exists to prevent.
+  //
+  // A dead session does not hold its SD forever: the sweep independently writes is_alive=false
+  // for genuinely dead sessions, which retires every raw/PID/tick signal here.
+  const aliveCcPids = opts.aliveCcPids ?? null;
   const isHolding = (s) => {
     if (!s || !s.sd_key) return false;
-    const hb = s.heartbeat_at ? Date.parse(s.heartbeat_at) : NaN;
-    if (Number.isFinite(hb) && (nowMs - hb) <= windowMs) return true;
-    const until = s.expected_silence_until ? Date.parse(s.expected_silence_until) : NaN;
-    if (!Number.isFinite(until)) return false;
-    // Armed (not yet expired) AND within cap — a runaway window is not a liveness signal.
-    return until > nowMs && (until - nowMs) <= silenceCapMs;
+    try {
+      return isSessionAlive(s, { nowMs, aliveCcPids }).alive === true;
+    } catch {
+      // Fail CLOSED for this row: if liveness cannot be determined we must not conclude the
+      // worker is gone. Treating an unanswerable check as "free" is the root-cause pattern.
+      return true;
+    }
   };
 
   const heldByLive = new Set(liveSessions.filter(isHolding).map((s) => s.sd_key));
