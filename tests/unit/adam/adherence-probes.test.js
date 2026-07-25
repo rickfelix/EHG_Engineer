@@ -6,7 +6,7 @@ import { describe, it, expect } from 'vitest';
 import {
   probeSourcingCadence, probeVisionMonitoring, probeFrictionSignaling, probeProposeOnly,
   probePmBoard, encodeFingerprintsTail, parseFingerprintsTail, encodeSnapshotTail, parseSnapshotTail,
-  runAdherenceProbes, hasDrift, ADHERENCE_PROBES, VERDICT,
+  runAdherenceProbes, hasDrift, ADHERENCE_PROBES, VERDICT, classifyFindingRow,
 } from '../../../lib/adam/adherence-probes.js';
 
 describe('probeSourcingCadence (P1)', () => {
@@ -69,7 +69,7 @@ describe('runAdherenceProbes + hasDrift', () => {
       sourcedInWindow: 1, visionGaugeReadInWindow: true, recurrencesInWindow: 0, signalsInWindow: 0,
       adamAuthoredBuildsInWindow: 0, claimableBelt: 1, idleWorkers: 0, sourceableBacklogCount: 0,
       advisoryBody: 'ok', adamChairmanDecisionQuestionsInWindow: [], adamMachineRaisedNoiseInWindow: [],
-      pmBoardSnapshot: [], pmBoardPriorSnapshot: new Map(),
+      pmBoardSnapshot: [], pmBoardPriorSnapshot: new Map(), pmBoardFindings: []
     });
     expect(bars).toHaveLength(8);
     for (const b of bars) {
@@ -89,28 +89,28 @@ describe('runAdherenceProbes + hasDrift', () => {
 describe('probePmBoard (P8) — SD-LEO-INFRA-UPSCALE-ADAM-PROJECT-MANAGEMENT-DISCIPLINE-001-C', () => {
   it('unknown when pmBoardSnapshot is unresolved', () => {
     expect(probePmBoard({}).verdict).toBe('unknown');
-    expect(probePmBoard({ pmBoardSnapshot: null, pmBoardPriorSnapshot: new Map() }).verdict).toBe('unknown');
+    expect(probePmBoard({ pmBoardSnapshot: null, pmBoardPriorSnapshot: new Map(), pmBoardFindings: [] }).verdict).toBe('unknown');
   });
 
   it('PASS on an empty board, regardless of prior/history state (no baseline needed to know nothing is stalled)', () => {
-    expect(probePmBoard({ pmBoardSnapshot: [], pmBoardPriorSnapshot: new Map() }).verdict).toBe('pass');
-    expect(probePmBoard({ pmBoardSnapshot: [], pmBoardPriorSnapshot: null }).verdict).toBe('pass');
+    expect(probePmBoard({ pmBoardSnapshot: [], pmBoardPriorSnapshot: new Map(), pmBoardFindings: [] }).verdict).toBe('pass');
+    expect(probePmBoard({ pmBoardSnapshot: [], pmBoardPriorSnapshot: null, pmBoardFindings: [] }).verdict).toBe('pass');
   });
 
   it('unknown on a non-empty board with no prior recorded check (first-ever run — no baseline to judge staleness)', () => {
-    const r = probePmBoard({ pmBoardSnapshot: [{ id: 'a', status: 'open' }], pmBoardPriorSnapshot: null });
+    const r = probePmBoard({ pmBoardSnapshot: [{ id: 'a', status: 'open' }], pmBoardPriorSnapshot: null, pmBoardFindings: [] });
     expect(r.verdict).toBe('unknown');
   });
 
   it('PASS when prior was legitimately empty and current has new items (board newly in use, not a stall)', () => {
-    const r = probePmBoard({ pmBoardSnapshot: [{ id: 'a', status: 'open' }], pmBoardPriorSnapshot: new Map() });
+    const r = probePmBoard({ pmBoardSnapshot: [{ id: 'a', status: 'open' }], pmBoardPriorSnapshot: new Map(), pmBoardFindings: [] });
     expect(r.verdict).toBe('pass');
   });
 
   it('FAIL — true regression-to-non-use: current identical to prior, nothing moved', () => {
     const r = probePmBoard({
       pmBoardSnapshot: [{ id: 'a', status: 'open' }],
-      pmBoardPriorSnapshot: new Map([['a', 'open']]),
+      pmBoardPriorSnapshot: new Map([['a', 'open']]), pmBoardFindings: []
     });
     expect(r.verdict).toBe('fail');
     expect(r.detail).toMatch(/regression-to-non-use/);
@@ -119,7 +119,7 @@ describe('probePmBoard (P8) — SD-LEO-INFRA-UPSCALE-ADAM-PROJECT-MANAGEMENT-DIS
   it('PASS — a shared item transitioned status since the prior check', () => {
     const r = probePmBoard({
       pmBoardSnapshot: [{ id: 'a', status: 'in_progress' }],
-      pmBoardPriorSnapshot: new Map([['a', 'open']]),
+      pmBoardPriorSnapshot: new Map([['a', 'open']]), pmBoardFindings: []
     });
     expect(r.verdict).toBe('pass');
   });
@@ -127,7 +127,7 @@ describe('probePmBoard (P8) — SD-LEO-INFRA-UPSCALE-ADAM-PROJECT-MANAGEMENT-DIS
   it('PASS — a prior item completed/left the open set since the prior check', () => {
     const r = probePmBoard({
       pmBoardSnapshot: [{ id: 'b', status: 'open' }], // 'a' is gone (completed/cancelled)
-      pmBoardPriorSnapshot: new Map([['a', 'open']]),
+      pmBoardPriorSnapshot: new Map([['a', 'open']]), pmBoardFindings: []
     });
     expect(r.verdict).toBe('pass');
   });
@@ -135,7 +135,7 @@ describe('probePmBoard (P8) — SD-LEO-INFRA-UPSCALE-ADAM-PROJECT-MANAGEMENT-DIS
   it('FAIL despite a brand-new unrelated item appearing (regression test: new-item churn alone must not mask a true stall)', () => {
     const r = probePmBoard({
       pmBoardSnapshot: [{ id: 'a', status: 'open' }, { id: 'b', status: 'open' }], // b is new; a unchanged
-      pmBoardPriorSnapshot: new Map([['a', 'open']]),
+      pmBoardPriorSnapshot: new Map([['a', 'open']]), pmBoardFindings: []
     });
     expect(r.verdict).toBe('fail');
   });
@@ -146,8 +146,54 @@ describe('probePmBoard (P8) — SD-LEO-INFRA-UPSCALE-ADAM-PROJECT-MANAGEMENT-DIS
     // replaces would have silently masked this exact case.
     const r = probePmBoard({
       pmBoardSnapshot: [{ id: 'a', status: 'blocked' }],
-      pmBoardPriorSnapshot: new Map([['a', 'blocked']]),
+      pmBoardPriorSnapshot: new Map([['a', 'blocked']]), pmBoardFindings: []
     });
+    expect(r.verdict).toBe('fail');
+  });
+});
+
+describe('probePmBoard finding-closure (QF-20260725-469)', () => {
+  const clean = { pmBoardSnapshot: [], pmBoardPriorSnapshot: new Map() };
+
+  it('unknown when pmBoardFindings is unresolved — fail-loud, never a silent pass', () => {
+    expect(probePmBoard({ ...clean, pmBoardFindings: null }).verdict).toBe('unknown');
+    expect(probePmBoard({ ...clean }).verdict).toBe('unknown');
+  });
+
+  it('FAIL and names the offending row ids when a finding is neither sourced nor deferred', () => {
+    const r = probePmBoard({ ...clean, pmBoardFindings: [
+      { id: 'row-a', source_ref: 'taper-gauge-artifact-2026-07-25', blocker: 'Needs a real classifier before it can be trusted' },
+    ] });
+    expect(r.verdict).toBe('fail');
+    expect(r.detail).toMatch(/row-a/);
+    expect(r.detail).toMatch(/silently absorbed/);
+  });
+
+  it('PASS when sourced (real filed key) or explicitly deferred (marker)', () => {
+    const r = probePmBoard({ ...clean, pmBoardFindings: [
+      { id: 'sourced', source_ref: 'QF-20260725-697', blocker: '' },
+      { id: 'deferred', source_ref: 'promotion-gap-2026-07-25', blocker: 'DEFERRED: wants a Solomon shape-consult first' },
+    ] });
+    expect(r.verdict).toBe('pass');
+  });
+
+  it('a synthetic slug in source_ref is NOT sourced — the exact shape that made absorption invisible', () => {
+    expect(classifyFindingRow({ source_ref: 'venture-stall-2026-07-25' })).toBe('orphan');
+    expect(classifyFindingRow({ source_ref: 'QF-20260725-697' })).toBe('sourced');
+    expect(classifyFindingRow({ source_ref: 'SD-LEO-INFRA-ADAM-INBOUND-BACKLOG-WATCHDOG-001' })).toBe('sourced');
+  });
+
+  it('blocker prose alone does NOT count as deferral — otherwise the probe ships inert', () => {
+    // Regression guard for the real defect: all six 2026-07-25 finding rows carry blocker prose,
+    // including both orphans. A non-empty-blocker test would have passed every one of them.
+    expect(classifyFindingRow({ source_ref: 'x-2026-07-25', blocker: 'Root cause not yet diagnosed' })).toBe('orphan');
+    expect(classifyFindingRow({ source_ref: 'x-2026-07-25', blocker: 'NOT-SOURCED: superseded by the venture-line diagnosis' })).toBe('deferred');
+  });
+
+  it('is reachable on an EMPTY board — the orphan check must not sit behind the clean-board early return', () => {
+    const r = probePmBoard({ pmBoardSnapshot: [], pmBoardPriorSnapshot: new Map(), pmBoardFindings: [
+      { id: 'orphan-1', source_ref: 'anchor-stall-false-positive-2026-07-25', blocker: 'DO NOT simply flip their status' },
+    ] });
     expect(r.verdict).toBe('fail');
   });
 });
