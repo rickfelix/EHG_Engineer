@@ -121,4 +121,25 @@ describe('SD-ARCH-HOTSPOT-LEO-CREATE-001: lib/sd-creation contains no process.ex
       expect(src.includes(needle), `${path.relative(root, file)} must not contain ${needle}`).toBe(false);
     }
   });
+
+  // SD-LEO-INFRA-ROADMAP-LINK-COUNTED-EXCEPTION-001 (FR-1): the scan above walks ONLY
+  // lib/sd-creation/, but the register-first predicate and the roadmap-link exception builder it
+  // now calls live in lib/sourcing-engine/. A refusal added there would run on the creation path
+  // and be invisible to the walk above — the blind spot is the point of this second assertion.
+  it('the sourcing-engine modules on the creation path contain no process.exit invocation', () => {
+    const __dirname = path.dirname(fileURLToPath(import.meta.url));
+    const onPath = ['register-first.js', 'roadmap-link-exception.js']
+      .map((f) => path.resolve(__dirname, '../../../lib/sourcing-engine', f));
+    const needle = 'process.' + 'exit(';
+    for (const file of onPath) {
+      expect(fs.existsSync(file), `${path.basename(file)} must exist — it is on the SD-creation path`).toBe(true);
+      const src = fs.readFileSync(file, 'utf8');
+      expect(src.includes(needle), `${path.basename(file)} must not contain ${needle}`).toBe(false);
+      // FR-1 also forbids a THROWN refusal from the exception seam. The builder is pure and must
+      // stay that way — a throw here would propagate into createSD's metadata assembly.
+      if (file.endsWith('roadmap-link-exception.js')) {
+        expect(src.includes('throw '), 'roadmap-link-exception.js must not throw — FR-1 forbids any refusal path').toBe(false);
+      }
+    }
+  });
 });

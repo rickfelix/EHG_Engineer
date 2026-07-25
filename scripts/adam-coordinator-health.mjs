@@ -17,6 +17,9 @@ import 'dotenv/config';
 import { createClient } from '@supabase/supabase-js';
 import { liveFleetWorkers } from '../lib/fleet/genuine-worker.mjs';
 import { computeWaveLinkageCoverage } from '../lib/roadmap/wave-linkage-coverage.js';
+// SD-LEO-INFRA-ROADMAP-LINK-COUNTED-EXCEPTION-001 (FR-5): surface the counted exception beside
+// the adherence number. Shared pure tally — never re-derived here.
+import { countRoadmapLinkExceptions } from '../lib/sourcing-engine/roadmap-link-exception.js';
 import { computeClaimableLeaves } from './coordinator-backlog-rank.mjs';
 import { getActiveCoordinatorId } from '../lib/coordinator/resolve.cjs';
 // QF-20260725-089: the ONE belt-depth gauge, eligibility-gated. Never re-derive a depth count here.
@@ -99,8 +102,19 @@ export async function computeUtilization(supabase, { nowMs = Date.now() } = {}) 
  */
 export async function computePlanAdherence(supabase) {
   const result = await computeWaveLinkageCoverage(supabase);
+  // SD-LEO-INFRA-ROADMAP-LINK-COUNTED-EXCEPTION-001 (FR-5): a recorded exception that nothing
+  // READS is no exception at all — the precedent is quick_fixes.force_completed, which has five
+  // writers and zero production JS readers. So the count is surfaced HERE, beside the adherence
+  // number, and it is fetched BEFORE the branch below because the unmeasurable branch returns
+  // early: a field added only to the measured branch reads `undefined` whenever there are zero
+  // claimable leaves. `without_reason` is the figure to drive to zero — NOT `total`, since the
+  // bypass stays legitimately available and its total is expected to remain non-zero.
+  const roadmap_link_exceptions = await countRoadmapLinkExceptionsLive(supabase);
   if (result.coverage === null) {
-    return { status: 'unmeasurable_until_linkage', coverage: null, linked: result.linked, total: result.total };
+    return {
+      status: 'unmeasurable_until_linkage', coverage: null, linked: result.linked, total: result.total,
+      roadmap_link_exceptions,
+    };
   }
 
   const candidateKeys = result.unlinkedKeys.length ? result.unlinkedKeys : ['__none__'];
@@ -118,7 +132,28 @@ export async function computePlanAdherence(supabase) {
     total: result.total,
     starved: result.starved,
     in_flight_unlinked: (inFlightRows || []).map((r) => r.sd_key),
+    roadmap_link_exceptions,
   };
+}
+
+/**
+ * IO for FR-5's counter. Paginated (the 1000-row PostgREST cap would otherwise silently
+ * under-count on a table of this size) and FAIL-SOFT — a fault returns zeros rather than
+ * throwing, because this gauge is advisory and must never break the health probe.
+ * The tally itself is the shared pure function, not a re-derivation.
+ */
+async function countRoadmapLinkExceptionsLive(supabase) {
+  try {
+    const { fetchAllPaginated } = await import('../lib/db/fetch-all-paginated.mjs');
+    const rows = await fetchAllPaginated(() => supabase
+      .from('strategic_directives_v2')
+      .select('sd_key, metadata')
+      .not('metadata->roadmap_link_exception', 'is', null)
+      .order('sd_key', { ascending: true }));
+    return countRoadmapLinkExceptions(rows || []);
+  } catch {
+    return { total: 0, with_reason: 0, without_reason: 0, unmeasured: true };
+  }
 }
 
 /**
