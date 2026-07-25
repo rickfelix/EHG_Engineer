@@ -28,6 +28,31 @@ const {
   roleOf, isSingletonRole, resolveProfileDir, isLiveEnabled, buildLiveSpawnInvocation,
   spawn, attach, stop, restart, relaunchUnderProfile, drainAndRestart,
 } = await import('../../../lib/fleet/spawn-control.js');
+
+/**
+ * SD-LEO-INFRA-SPAWN-ROOT-CURRENCY-INVARIANT-001 FR-2 + post-CI RCA.
+ *
+ * Every live-path call below crosses the tree-currency seam in spawn-control.js. Injecting a
+ * fake git runner is NOT mocking the gate: the gate is the enforceTreeCurrency CALL at that
+ * seam plus its decision table, and both still execute in full (fetch -> branch -> dirty ->
+ * behind -> current). `runner` is only the guard's I/O dependency, and tree-currency.cjs
+ * documents it as the injection seam; tests/unit/worktree-reaper/tick.test.js:181 already
+ * does exactly this. Deleting the enforcement block still turns the FR-2 seam suite red.
+ *
+ * WHY THIS IS REQUIRED, not cosmetic: without it these tests shell out to REAL git against
+ * whatever tree the checkout happens to live in. That passed on the author's machine purely
+ * because the runs happened inside .worktrees/ (which the guard deliberately exempts) and
+ * failed in CI, where actions/checkout leaves a DETACHED HEAD and the guard correctly
+ * refuses -- 21 red tests whose behaviour depended on the physical location of the checkout.
+ * A unit test must never depend on real git state or on network egress.
+ */
+const CURRENT_RUNNER = (args) => {
+  if (args[0] === 'fetch') return '';
+  if (args.includes('--abbrev-ref')) return 'main\n';
+  if (args[0] === 'status') return '';
+  if (args[0] === 'rev-list') return '0\n';
+  return '';
+};
 const { logCoordinationEvent } = await import('../../../lib/coordinator/coordination-events.cjs');
 const { sequenceSingletonRefresh } = await import('../../../lib/coordinator/singleton-refresh-sequencer.cjs');
 const { spawn: childProcessSpawnSpy } = await import('node:child_process');
@@ -226,7 +251,7 @@ describe('spawn (FR-1)', () => {
     childProcessSpawnSpy.mockReturnValue(fakeChild);
     const execFn = enumExec();
     const supabaseClient = makeFakeSupabase({ sessions: [] });
-    const result = await spawn({ role: 'worker', callsign: 'Alpha-5' }, { live: true, execFn, sleepFn: vi.fn(), supabaseClient });
+    const result = await spawn({ role: 'worker', callsign: 'Alpha-5' }, { live: true, currencyRunner: CURRENT_RUNNER, execFn, sleepFn: vi.fn(), supabaseClient });
     // LOAD-BEARING: kill-survival depends on detached:true (OS re-parents the child when the
     // supervisor dies) + stdio:'ignore' (no inherited pipes tie it to the parent). Deleting
     // detached:true from spawn-control.js:147 makes THIS assertion fail (mutation-verified).
@@ -251,7 +276,7 @@ describe('spawn (FR-1)', () => {
         metadata: { fleet_identity: { callsign: 'Alpha-5' }, role: 'worker' },
       }],
     });
-    await spawn({ role: 'worker', callsign: 'Beta-1' }, { live: true, spawnFn, execFn, sleepFn: vi.fn(), supabaseClient, nowMs, skipDedup: true, uuidFn: () => MINTED_SESSION_ID });
+    await spawn({ role: 'worker', callsign: 'Beta-1' }, { live: true, currencyRunner: CURRENT_RUNNER, spawnFn, execFn, sleepFn: vi.fn(), supabaseClient, nowMs, skipDedup: true, uuidFn: () => MINTED_SESSION_ID });
     const merged = supabaseClient._store.get(MINTED_SESSION_ID).metadata;
     // Pre-existing keys survive the write (would be wiped by a bare full-blob overwrite).
     expect(merged.fleet_identity).toEqual({ callsign: 'Alpha-5' });
@@ -276,7 +301,7 @@ describe('spawn (FR-1)', () => {
     // would make this test pass VACUOUSLY. uuidFn returns a non-UUID so buildSessionLaunch drops it
     // (the CLI would reject a malformed --session-id) and spawn falls back to the pid path — which is
     // exactly the path whose freshness window this test exists to guard. Keeps its teeth.
-    await spawn({ role: 'worker', callsign: 'Beta-1' }, { live: true, spawnFn, execFn, sleepFn: vi.fn(), supabaseClient, nowMs, skipDedup: true, uuidFn: () => 'not-a-uuid' });
+    await spawn({ role: 'worker', callsign: 'Beta-1' }, { live: true, currencyRunner: CURRENT_RUNNER, spawnFn, execFn, sleepFn: vi.fn(), supabaseClient, nowMs, skipDedup: true, uuidFn: () => 'not-a-uuid' });
     // Untouched -- the stale row's metadata must never be corrupted by a fresh spawn's recycled pid.
     expect(supabaseClient._store.get('s-old').metadata).toEqual({ fleet_identity: { callsign: 'Unrelated-Session' }, role: 'worker' });
   });
@@ -286,7 +311,7 @@ describe('spawn (FR-1)', () => {
     const supabaseClient = makeFakeSupabase({
       sessions: [{ session_id: 's1', status: 'active', metadata: { fleet_identity: { callsign: 'Alpha-5' } } }],
     });
-    const result = await spawn({ role: 'worker', callsign: 'Alpha-5' }, { live: true, spawnFn, supabaseClient });
+    const result = await spawn({ role: 'worker', callsign: 'Alpha-5' }, { live: true, currencyRunner: CURRENT_RUNNER, spawnFn, supabaseClient });
     expect(result.skipped).toBe(true);
     expect(spawnFn).not.toHaveBeenCalled();
   });
@@ -298,7 +323,7 @@ describe('spawn (FR-1)', () => {
     const supabaseClient = makeFakeSupabase({
       sessions: [{ session_id: 's1', status: 'active', metadata: { fleet_identity: { callsign: 'Alpha-5' } } }],
     });
-    const result = await spawn({ role: 'worker', callsign: 'Alpha-5' }, { live: true, spawnFn, execFn, sleepFn: vi.fn(), supabaseClient, skipDedup: true });
+    const result = await spawn({ role: 'worker', callsign: 'Alpha-5' }, { live: true, currencyRunner: CURRENT_RUNNER, spawnFn, execFn, sleepFn: vi.fn(), supabaseClient, skipDedup: true });
     expect(result.skipped).toBeUndefined();
     expect(spawnFn).toHaveBeenCalled();
   });
@@ -318,7 +343,7 @@ describe('spawn (FR-1)', () => {
       }],
     });
     logCoordinationEvent.mockClear();
-    const result = await spawn({ role: 'worker', callsign: 'Beta-1' }, { live: true, spawnFn, execFn, sleepFn: vi.fn(), supabaseClient, nowMs, skipDedup: true, uuidFn: () => MINTED_SESSION_ID });
+    const result = await spawn({ role: 'worker', callsign: 'Beta-1' }, { live: true, currencyRunner: CURRENT_RUNNER, spawnFn, execFn, sleepFn: vi.fn(), supabaseClient, nowMs, skipDedup: true, uuidFn: () => MINTED_SESSION_ID });
 
     expect(result.session_id).toBe(MINTED_SESSION_ID);
     const spawnEventCall = logCoordinationEvent.mock.calls.find((c) => c[1].event_type === 'fleet_verb_spawn');
@@ -340,7 +365,7 @@ describe('spawn (FR-1)', () => {
       }],
     });
     const result = await spawn({ role: 'worker', callsign: 'Beta-1' }, {
-      live: true, spawnFn: vi.fn().mockReturnValue({ pid: 4242 }),
+      live: true, currencyRunner: CURRENT_RUNNER, spawnFn: vi.fn().mockReturnValue({ pid: 4242 }),
       execFn: enumExec(),
       sleepFn: vi.fn(), supabaseClient, nowMs, skipDedup: true, uuidFn: () => MINTED_SESSION_ID,
     });
@@ -361,7 +386,7 @@ describe('spawn (FR-1)', () => {
       }],
     });
     await spawn({ role: 'worker', callsign: 'Canary-1', accountProfile: 'canary' }, {
-      live: true, spawnFn: vi.fn().mockReturnValue({ pid: 4242 }),
+      live: true, currencyRunner: CURRENT_RUNNER, spawnFn: vi.fn().mockReturnValue({ pid: 4242 }),
       execFn: enumExec(),
       sleepFn: vi.fn(), supabaseClient, nowMs, skipDedup: true, uuidFn: () => MINTED_SESSION_ID,
       baseDir: 'C:/fake', // resolveProfileDir(name, opts) honours opts.baseDir — no FLEET_* env needed
@@ -379,7 +404,7 @@ describe('spawn (FR-1)', () => {
     const order = [];
     const supabaseClient = makeFakeSupabase({ sessions: [] });
     await spawn({ role: 'worker', callsign: 'Beta-1' }, {
-      live: true,
+      live: true, currencyRunner: CURRENT_RUNNER,
       enumerateWindowsFn: async () => { order.push('enumerate'); return []; },
       spawnFn: () => { order.push('spawn'); return { pid: 4242 }; },
       captureNewWindowHandleFn: async () => { order.push('capture'); return { handle: 1, handleCaptureFailed: false, attempts: 1, diagnostics: {} }; },
@@ -400,7 +425,7 @@ describe('spawn (FR-1)', () => {
       }],
     });
     await spawn({ role: 'worker', callsign: 'Beta-1' }, {
-      live: true,
+      live: true, currencyRunner: CURRENT_RUNNER,
       spawnFn: vi.fn().mockReturnValue({ pid: 4242 }),
       enumerateWindowsFn: async () => [],
       captureNewWindowHandleFn: async () => ({
@@ -423,7 +448,7 @@ describe('spawn (FR-1)', () => {
       }],
     });
     await spawn({ role: 'worker', callsign: 'Beta-1' }, {
-      live: true, spawnFn: vi.fn().mockReturnValue({ pid: 4242 }),
+      live: true, currencyRunner: CURRENT_RUNNER, spawnFn: vi.fn().mockReturnValue({ pid: 4242 }),
       enumerateWindowsFn: async () => [],
       captureNewWindowHandleFn: async () => ({ handle: 777, handleCaptureFailed: false, attempts: 1, diagnostics: { reason: 'ok' } }),
       sleepFn: vi.fn(), supabaseClient, nowMs, skipDedup: true, uuidFn: () => MINTED_SESSION_ID,
@@ -442,7 +467,7 @@ describe('spawn (FR-1)', () => {
       }],
     });
     await spawn({ role: 'worker', callsign: 'Beta-1' }, {
-      live: true, spawnFn: vi.fn().mockReturnValue({ pid: 4242 }),
+      live: true, currencyRunner: CURRENT_RUNNER, spawnFn: vi.fn().mockReturnValue({ pid: 4242 }),
       execFn: enumExec(),
       sleepFn: vi.fn(), supabaseClient, nowMs, skipDedup: true, uuidFn: () => MINTED_SESSION_ID,
     });
@@ -477,7 +502,7 @@ describe('spawn (FR-1)', () => {
       },
     };
     const sleepFn = vi.fn().mockResolvedValue(undefined);
-    const result = await spawn({ role: 'worker', callsign: 'Beta-1' }, { live: true, spawnFn, execFn, sleepFn, supabaseClient, nowMs, skipDedup: true });
+    const result = await spawn({ role: 'worker', callsign: 'Beta-1' }, { live: true, currencyRunner: CURRENT_RUNNER, spawnFn, execFn, sleepFn, supabaseClient, nowMs, skipDedup: true });
 
     expect(lookups).toBe(2);
     expect(sleepFn).toHaveBeenCalledTimes(1); // slept once between attempt 1 and attempt 2
@@ -489,7 +514,7 @@ describe('spawn (FR-1)', () => {
     const spawnFn = vi.fn().mockReturnValue(child);
     const execFn = enumExec();
     const supabaseClient = makeFakeSupabase({ sessions: [] }); // never self-registers
-    const result = await spawn({ role: 'worker', callsign: 'Beta-1' }, { live: true, spawnFn, execFn, sleepFn: vi.fn(), supabaseClient, skipDedup: true });
+    const result = await spawn({ role: 'worker', callsign: 'Beta-1' }, { live: true, currencyRunner: CURRENT_RUNNER, spawnFn, execFn, sleepFn: vi.fn(), supabaseClient, skipDedup: true });
 
     expect(result.session_id).toBeNull();
     expect(result.live).toBe(true); // spawn itself still succeeded -- only the session-bind is unresolved
@@ -581,7 +606,7 @@ describe('restart (FR-4 singleton-serial / FR-5 worker-parallel)', () => {
     const supabaseClient = makeFakeSupabase({
       sessions: [{ session_id: 's1', status: 'active', metadata: { fleet_identity: { callsign: 'Alpha-5' }, role: 'worker' } }],
     });
-    const result = await restart('Alpha-5', { supabaseClient, live: true, spawnFn, execFn, sleepFn: vi.fn() });
+    const result = await restart('Alpha-5', { supabaseClient, live: true, currencyRunner: CURRENT_RUNNER, spawnFn, execFn, sleepFn: vi.fn() });
     expect(result.ok).toBe(true);
     expect(result.role).toBe('worker');
     expect(sequenceSingletonRefresh).not.toHaveBeenCalled();
@@ -620,7 +645,7 @@ describe('restart (FR-4 singleton-serial / FR-5 worker-parallel)', () => {
     const supabaseClient = makeFakeSupabase({
       sessions: [{ session_id: 's1', status: 'active', metadata: { fleet_identity: { callsign: 'Alpha-5' }, role: 'worker' } }],
     });
-    await restart('Alpha-5', { supabaseClient, live: true, spawnFn, execFn, sleepFn: vi.fn(), sdKey: 'CHECKPOINT-3' });
+    await restart('Alpha-5', { supabaseClient, live: true, currencyRunner: CURRENT_RUNNER, spawnFn, execFn, sleepFn: vi.fn(), sdKey: 'CHECKPOINT-3' });
     const [, eventArg] = logCoordinationEvent.mock.calls.at(-1);
     expect(eventArg.event_type).toBe('fleet_verb_restart');
     expect(eventArg.sd_key).toBe('CHECKPOINT-3');
@@ -648,7 +673,7 @@ describe('relaunchUnderProfile (FR-7)', () => {
         { session_id: 's2', status: 'active', metadata: { fleet_identity: { callsign: 'Alpha-6' }, role: 'worker' } },
       ],
     });
-    const result = await relaunchUnderProfile('Alpha-5', 'account_b', { supabaseClient, baseDir: 'C:\\profiles', live: true, spawnFn, execFn, sleepFn: vi.fn() });
+    const result = await relaunchUnderProfile('Alpha-5', 'account_b', { supabaseClient, baseDir: 'C:\\profiles', live: true, currencyRunner: CURRENT_RUNNER, spawnFn, execFn, sleepFn: vi.fn() });
     expect(result.ok).toBe(true);
     expect(supabaseClient._store.get('s1').status).toBe('released');
     expect(supabaseClient._store.get('s2').status).toBe('active');
@@ -672,7 +697,7 @@ describe('relaunchUnderProfile (FR-7)', () => {
       process.env.CLAUDE_CONFIG_DIR = '/tampered'; // simulate a hypothetical regression
       return { pid: 999 };
     });
-    await expect(relaunchUnderProfile('Alpha-5', 'account_b', { supabaseClient, baseDir: 'C:\\profiles', live: true, spawnFn, execFn: vi.fn().mockResolvedValue({ stdout: '0' }), sleepFn: vi.fn() }))
+    await expect(relaunchUnderProfile('Alpha-5', 'account_b', { supabaseClient, baseDir: 'C:\\profiles', live: true, currencyRunner: CURRENT_RUNNER, spawnFn, execFn: vi.fn().mockResolvedValue({ stdout: '0' }), sleepFn: vi.fn() }))
       .rejects.toThrow(/isolation invariant violated/);
     delete process.env.CLAUDE_CONFIG_DIR;
   });
@@ -687,7 +712,7 @@ describe('relaunchUnderProfile (FR-7)', () => {
     const supabaseClient = makeFakeSupabase({
       sessions: [{ session_id: 's1', status: 'active', metadata: { fleet_identity: { callsign: 'Alpha-5' }, role: 'worker' } }],
     });
-    await relaunchUnderProfile('Alpha-5', 'account_b', { supabaseClient, baseDir: 'C:\\profiles', live: true, spawnFn, execFn, sleepFn: vi.fn(), sdKey: 'CHECKPOINT-3' });
+    await relaunchUnderProfile('Alpha-5', 'account_b', { supabaseClient, baseDir: 'C:\\profiles', live: true, currencyRunner: CURRENT_RUNNER, spawnFn, execFn, sleepFn: vi.fn(), sdKey: 'CHECKPOINT-3' });
     const [, eventArg] = logCoordinationEvent.mock.calls.at(-1);
     expect(eventArg.event_type).toBe('fleet_verb_relaunch_under_profile');
     expect(eventArg.sd_key).toBe('CHECKPOINT-3');
@@ -757,7 +782,7 @@ describe('drainAndRestart (FR-6: never restarts mid-claim)', () => {
     const child = { pid: 5252 };
     const spawnFn = vi.fn().mockReturnValue(child);
     const execFn = enumExec();
-    const result = await drainAndRestart('Alpha-5', { supabaseClient, nowMs, live: true, spawnFn, execFn, sleepFn: vi.fn() });
+    const result = await drainAndRestart('Alpha-5', { supabaseClient, nowMs, live: true, currencyRunner: CURRENT_RUNNER, spawnFn, execFn, sleepFn: vi.fn() });
     expect(result.deferred).toBe(false);
     expect(result.verdict).toBe('PASS');
     expect(supabaseClient._store.get('s1').status).toBe('released');

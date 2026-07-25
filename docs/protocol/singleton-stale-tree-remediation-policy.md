@@ -20,6 +20,17 @@ behind `origin/main`.
 **This SD is measure/surface only.** No remediation automation is implemented here —
 that is deferred to a future SD, per the coordinator co-review's "measure first" guidance.
 
+> **Scope boundary (SD-LEO-INFRA-SPAWN-ROOT-CURRENCY-INVARIANT-001).** This policy governs a
+> tree whose staleness means a *role contract* has drifted — the session READS the tree as
+> rules. It does **not** govern a tree that other processes **load and execute code out of**
+> (the spawn path's start directory, the worktree reaper's own script). Those are
+> EXECUTION-SOURCE trees, and for them staleness is not an advisory signal: the operation
+> must self-heal or refuse. See
+> [`execution-source-tree-currency.md`](./execution-source-tree-currency.md).
+> The discriminator is **what reads from the tree, not how far behind it is** — applying the
+> standby rule to a tree something executes from is how a merged fix stays inert while
+> everyone verifies it on `origin/main` and reports it shipped.
+
 ## Default: SUPERVISED RELAUNCH, not in-place sync
 
 The default remediation for a detected `STALE-CRITICAL` singleton session is

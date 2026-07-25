@@ -135,6 +135,23 @@ export default defineConfig({
           name: 'unit',
           // NO dotenv .env load — unit tests must not reach the live DB.
           setupFiles: ['./tests/setup.unit.js'],
+          // SD-LEO-INFRA-SPAWN-ROOT-CURRENCY-INVARIANT-001 (post-CI RCA).
+          // Pin the fleet repo root to a path that does NOT exist, so the unit tier can
+          // never shell out to real git against the developer's actual checkout.
+          //
+          // The bug this closes: lib/fleet/build-session-launch.cjs resolves the spawn cwd
+          // from the MODULE's location, so the tier behaved differently depending on where
+          // the checkout physically lived. Running from .worktrees/ took the tree-currency
+          // guard's worktree exemption and skipped it entirely; running from a normal
+          // checkout ran it for real. 21 tests were green locally and red in CI for that
+          // reason alone, and nobody could have noticed locally.
+          //
+          // A nonexistent cwd makes execFileSync fail ENOENT immediately, with no network
+          // and no dependence on branch/dirty state — so a live spawn that forgets to
+          // inject opts.currencyRunner now fails FAST and IDENTICALLY on every machine.
+          // This is deliberately not a bypass: it makes nothing pass that would otherwise
+          // fail. It converts a hidden environmental accident into a loud, uniform one.
+          env: { FLEET_REPO_ROOT: './tests/fixtures/__no_such_tree__' },
           include: [
             '**/__tests__/**/*.test.js',
             '**/*.test.js',
