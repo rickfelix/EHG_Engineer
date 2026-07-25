@@ -19,11 +19,15 @@ import { liveFleetWorkers } from '../lib/fleet/genuine-worker.mjs';
 import { computeWaveLinkageCoverage } from '../lib/roadmap/wave-linkage-coverage.js';
 import { computeClaimableLeaves } from './coordinator-backlog-rank.mjs';
 import { getActiveCoordinatorId } from '../lib/coordinator/resolve.cjs';
+// QF-20260725-089: the ONE belt-depth gauge, eligibility-gated. Never re-derive a depth count here.
+import { countDispatchableBacklog } from '../lib/fleet/belt-depth.cjs';
 import { isMainModule } from '../lib/utils/is-main-module.js';
 // SD-LEO-INFRA-COUNT-TRUNCATION-DISCIPLINE-001 FR-6 batch 9: exact head-counts for the
 // gauge sites below (never rows.length on a capped read) + pagination for the sharpenings
 // SD-window read (strategic_directives_v2 is unbounded and iterated, not just counted).
-import { fetchAllPaginated, renderCount, POSTGREST_MAX_ROWS } from '../lib/db/fetch-all-paginated.mjs';
+// QF-20260725-089: renderCount dropped — both head-count gauges it guarded now route through
+// countDispatchableBacklog, which returns a plain number.
+import { fetchAllPaginated, POSTGREST_MAX_ROWS } from '../lib/db/fetch-all-paginated.mjs';
 // SD-LEO-INFRA-COORDINATOR-HEALTH-KPI-001: the 5-sharpening delta (Solomon cold-review).
 // KPI-0 outcome/flow is the PRIMARY axis; the base 3 KPIs stay untouched below.
 import { execSync } from 'child_process';
@@ -67,17 +71,12 @@ export async function computeUtilization(supabase, { nowMs = Date.now() } = {}) 
   const claimed = live.filter((s) => !!s.sd_key);
   const idle = live.filter((s) => !s.sd_key);
 
-  // FR-6 batch 9: this is a GAUGE (only the count is used below) — exact head-count instead
-  // of a rows.length on a .limit(1000) read, which is exactly the live-incident cap-masking
-  // shape (read silently truncated at 1000 while the true backlog was larger).
-  const { count: backlogCount, error: bErr } = await supabase
-    .from('strategic_directives_v2')
-    .select('id', { count: 'exact', head: true })
-    .eq('status', 'draft')
-    .is('claiming_session_id', null);
-  if (bErr) throw new Error(`utilization: backlog query failed: ${bErr.message}`);
-  const backlogSize = renderCount(backlogCount);
-  if (backlogSize === 'unavailable') throw new Error('utilization: backlog count measurement unavailable');
+  // QF-20260725-089: this counted raw draft_unclaimed rows with NO eligibility gate, so HELD work
+  // read as available and IDLE_WITH_BACKLOG fired against the coordinator for a dispatch gap that
+  // did not exist (measured: 8 reported, 0 truly claimable, 7 human-action-held). Depth now comes
+  // from the shared gauge, which applies the same claim gate the dispatcher uses. Cap protection
+  // is preserved inside that helper via fetchAllPaginated.
+  const { dispatchable: backlogSize } = await countDispatchableBacklog(supabase);
 
   return {
     live_workers: live.length,
@@ -148,17 +147,13 @@ export async function computeFailLoudIntegrity(supabase, { selfReportedCounts, c
   // exact invariant this KPI is built on). count===null (measurement failure, possibly with
   // error===null on a missing-relation edge case) is surfaced as integrity_ok=false too, per
   // this function's own "MUST NEVER be null-coalesced into a silent 0" contract above.
-  const { count, error } = await supabase
-    .from('strategic_directives_v2')
-    .select('id', { count: 'exact', head: true })
-    .eq('status', 'draft')
-    .is('claiming_session_id', null);
-  if (error) {
+  // QF-20260725-089: recomputed now runs through the SAME eligibility gate as self_reported
+  // (previously a raw draft_unclaimed head-count), so the two sides finally measure the same thing.
+  let dispatchableCount;
+  try {
+    ({ dispatchable: dispatchableCount } = await countDispatchableBacklog(supabase));
+  } catch (error) {
     return { integrity_ok: false, error: error.message, divergent_fields: ['dispatchable_count'] };
-  }
-  const dispatchableCount = renderCount(count);
-  if (dispatchableCount === 'unavailable') {
-    return { integrity_ok: false, error: 'dispatchable_count measurement unavailable', divergent_fields: ['dispatchable_count'] };
   }
   const recomputed = { dispatchable_count: dispatchableCount };
 
@@ -173,23 +168,29 @@ export async function computeFailLoudIntegrity(supabase, { selfReportedCounts, c
     humanActionHeld = (leaves?.humanActionHolds || []).length;
   }
 
-  const divergentFields = Object.keys(recomputed).filter((k) => (selfReported[k] ?? 0) > recomputed[k]);
-  // QF-20260720-161: self_reported <= recomputed is the healthy narrowing invariant (deps/
-  // holds/fixtures only ever REMOVE candidates), so a wide gap alone is not evidence of a
-  // stale read — 3 vs 20 with 11 held for human-action is real, verified fleet state. But a
-  // gap NOT explained by known holds is exactly the "confident but wrong" shape that hid
-  // live_workers=0 — flag the instrument as suspect instead of printing two opaque numbers.
-  const dc = recomputed.dispatchable_count;
-  const unexplained = humanActionHeld === null ? null : dc - selfReported.dispatchable_count - humanActionHeld;
-  const instrumentSuspect = unexplained !== null && dc > 0 && unexplained / dc > 0.5;
-  if (instrumentSuspect) divergentFields.push('dispatchable_count_unexplained_gap');
+  // QF-20260725-089: ANY inequality is now a divergence.
+  //
+  // The prior rule flagged only self_reported > recomputed, justified (QF-20260720-161) by the
+  // "healthy narrowing invariant": recomputed was the RAW draft_unclaimed count and self_reported
+  // was the narrowed one, so self_reported <= recomputed was expected and a wide gap was tolerated
+  // if roughly explained by known holds. That asymmetry is obsolete now that recomputed runs
+  // through the SAME eligibility gate — both sides measure the identical quantity, so any
+  // disagreement is a real instrument fault, not expected narrowing.
+  //
+  // It also had to go: the tolerated direction is exactly how 8-vs-0 passed. recomputed=8,
+  // self_reported=0 never tripped `selfReported > recomputed`, and the unexplained-gap heuristic
+  // computed 8-0-7=1 (12.5%, under its 50% threshold), so the audit returned integrity_ok=true
+  // with divergent_fields=[] while staring at an 8-vs-0 disagreement. Exact equality subsumes that
+  // heuristic and is strictly stronger, so instrument_suspect retires with it.
+  const divergentFields = Object.keys(recomputed).filter((k) => (selfReported[k] ?? 0) !== recomputed[k]);
 
   return {
     integrity_ok: divergentFields.length === 0,
     recomputed,
     self_reported: selfReported,
     divergent_fields: divergentFields,
-    ...(humanActionHeld !== null ? { human_action_held: humanActionHeld, instrument_suspect: instrumentSuspect } : {}),
+    // Retained for observability — it explains WHY depth is low, and is no longer arithmetic input.
+    ...(humanActionHeld !== null ? { human_action_held: humanActionHeld } : {}),
   };
 }
 

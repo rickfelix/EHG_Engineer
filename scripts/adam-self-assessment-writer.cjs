@@ -60,10 +60,21 @@ async function gatherSignals(sb) {
     }
   };
 
-  // D1: belt depth = unclaimed workable (draft) SDs
-  signals.belt_depth = await safeCount(() =>
-    sb.from('strategic_directives_v2').select('id', { count: 'exact', head: true }).eq('status', 'draft').is('claiming_session_id', null)
-  );
+  // D1: belt depth = unclaimed CLAIMABLE (draft) SDs.
+  // QF-20260725-089: this counted raw draft_unclaimed rows, so D1_proactive_sourcing scored 5/5 on
+  // belt_depth=8 at the exact moment the belt held 0 claimable work (7 human-action-held + a test
+  // fixture) — rewarding a full belt while it was empty, and making D1's own "belt starved while
+  // backlog rich" red-flag unobservable. Now routed through the shared eligibility-gated gauge,
+  // the SAME one the coordinator-health audit uses, so the two surfaces cannot drift apart again.
+  signals.belt_depth = await (async () => {
+    try {
+      const { countDispatchableBacklog } = require('../lib/fleet/belt-depth.cjs');
+      const { dispatchable } = await countDispatchableBacklog(sb);
+      return dispatchable;
+    } catch {
+      return null; // same fail-soft contract as safeCount: unmeasurable, never a silent 0
+    }
+  })();
 
   // D2: Adam-role sessions holding a non-null sd_key (should be 0 — Adam never claims).
   // NOTE: claude_sessions has no `callsign` column (role lives only in metadata.role) — this
