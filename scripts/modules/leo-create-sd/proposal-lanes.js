@@ -149,11 +149,15 @@ const MAPPED_PROPOSAL_KEYS = new Set([
   'key_changes', 'success_metrics', 'strategic_objectives', 'smoke_test_steps', 'metadata',
   'provenance', 'roadmap_phase', 'tier_hint', 'gold_origin', 'necessity', 'dedup_note', 'sourced_by',
 ]);
-// Structural keys a proposal legitimately carries that this mapper does not consume because
-// validateProposalShape() above already does (see its docstring: proposed_sd_key, title, sd_type,
-// priority, PROPOSAL===true, status_intended==='draft'). These reach the SD via `normalized`, or
-// are pure markers. Adding a key here asserts "consumed elsewhere", NOT "safe to drop".
-const IGNORABLE_PROPOSAL_KEYS = new Set(['PROPOSAL', 'proposed_sd_key', 'sd_type', 'status_intended']);
+// Keys a proposal legitimately carries that this mapper does not consume because another stage of
+// the ingest path already does. Two such stages: validateProposalShape() above (proposed_sd_key,
+// title, sd_type, priority, PROPOSAL===true, status_intended==='draft' — these reach the SD via
+// `normalized`) and ingestProposalObject() below (premise_descriptor drives the checkPremiseLiveness
+// stale-guard at the `proposal.premise_descriptor` branch).
+// Adding a key here asserts "consumed elsewhere, and I checked where", NOT "safe to drop".
+const IGNORABLE_PROPOSAL_KEYS = new Set([
+  'PROPOSAL', 'proposed_sd_key', 'sd_type', 'status_intended', 'premise_descriptor',
+]);
 // Leak-guard keys: dropping these IS the correct behavior, not an oversight. vision_key/arch_key
 // drive enrichFromVisionArch's orphan-FK re-activation and parent_id/parentId would forge an
 // orchestrator link, so a proposal must never set them (see the "never leak into mapped args" test).
