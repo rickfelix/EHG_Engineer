@@ -97,12 +97,16 @@
   }
 
   const ATTACH_STYLES = {
-    ok: { cls: 'sv-chip--ok', label: 'Attached' },
+    // QF-20260725-975 (chairman decision): the USER-FACING verb is "Open", not "Attach".
+    // "Attach" described what the CODE does (attach to a captured window handle); the person is
+    // opening a session that already exists. Identifier names (ATTACH_STYLES, mapAttachState,
+    // els.attach*) are deliberately NOT renamed here -- see the QF notes for why that is deferred.
+    ok: { cls: 'sv-chip--ok', label: 'Open' },
     not_resolved: { cls: 'sv-chip--not-resolved', label: 'Could not resolve target' },
     no_captured_handle: { cls: 'sv-chip--no-handle', label: 'No window handle captured' },
     stale_handle: { cls: 'sv-chip--stale', label: 'Window handle stale' },
-    other: { cls: 'sv-chip--not-resolved', label: 'Attach failed' },
-    resting: { cls: 'sv-chip--resting', label: 'Attach: unknown' },
+    other: { cls: 'sv-chip--not-resolved', label: 'Could not open' },
+    resting: { cls: 'sv-chip--resting', label: 'Unknown' },
   };
   const RESOLUTION_REASONS = new Set(['no_key', 'not_found', 'ambiguous']);
 
@@ -188,14 +192,14 @@
       ttyPane.setAttribute('aria-label', 'Live terminal');
       const ttyHeader = el('div', 'sv-tty-header', 'TERMINAL — live TTY (attach to type)');
       els.ttyScrollback = el('div', 'sv-tty-scrollback');
-      els.ttyScrollback.appendChild(el('p', 'sv-tty-placeholder', 'Attach to begin.'));
+      els.ttyScrollback.appendChild(el('p', 'sv-tty-placeholder', 'Open to begin.'));
 
       const attachRow = el('div', 'sv-attach-row');
-      els.attachChip = el('span', 'sv-chip sv-chip--resting', 'Attach: unknown');
+      els.attachChip = el('span', 'sv-chip sv-chip--resting', 'Unknown');
       els.pauseChip = el('span', 'sv-chip sv-chip--resting', 'Agent active');
       attachRow.append(els.attachChip, els.pauseChip);
 
-      els.attachButton = el('button', 'sv-button', 'Attach-focus');
+      els.attachButton = el('button', 'sv-button', 'Open');
       els.attachButton.type = 'button';
       els.attachMessage = el('p', 'sv-attach-message', '');
       els.attachMessage.setAttribute('aria-live', 'polite');
@@ -366,7 +370,8 @@
     els.attachButton.addEventListener('click', async () => {
       els.attachButton.disabled = true;
       try {
-        const res = await fetch(`${API_BASE}/${encodeURIComponent(sessionId)}/attach`, { method: 'POST' });
+        // QF-20260725-975: moves with the route rename in server/routes/fleet-sessions.js.
+        const res = await fetch(`${API_BASE}/${encodeURIComponent(sessionId)}/open`, { method: 'POST' });
         renderAttachState(await res.json());
       } finally {
         els.attachButton.disabled = false;

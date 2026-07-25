@@ -82,7 +82,7 @@ at the top of `server/index.js`) since the fleet-launcher operator UI is
 internal-only, not customer-facing product UI.
 
 - `server/routes/fleet-sessions.js` — 5 `requireAuth`-gated routes: `GET /:id`
-  (fresh view-model), `POST /:id/attach`, `POST /:id/browser-session`,
+  (fresh view-model), `POST /:id/open`, `POST /:id/browser-session`,
   `POST /:id/takeover`, `POST /:id/hand-back`, `GET /:id/browser-log` (auditable
   take-over/hand-back trail from `coordination_events`). No changes to the 3
   library modules — wired only.

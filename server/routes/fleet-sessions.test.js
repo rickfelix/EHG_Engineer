@@ -174,12 +174,12 @@ describe('GET /:id/browser-log', () => {
   });
 });
 
-describe('POST /:id/attach', () => {
+describe('POST /:id/open', () => {
   beforeEach(() => { vi.clearAllMocks(); mockSupabaseFromBuilder.mockReset(); });
 
   it('TS-1: attach() ok:true is returned as the non-degraded ok state', async () => {
     mockAttach.mockResolvedValue({ ok: true, reason: null, session_id: 'sess-1' });
-    const { res } = await invokeRoute('POST', '/:id/attach', { params: { id: 'sess-1' } });
+    const { res } = await invokeRoute('POST', '/:id/open', { params: { id: 'sess-1' } });
     expect(res.status).not.toHaveBeenCalledWith(500);
     const payload = res.json.mock.calls[0][0];
     expect(payload.ok).toBe(true);
@@ -188,7 +188,7 @@ describe('POST /:id/attach', () => {
 
   it('TS-2: attach() ok:false reason=not_found returns a distinct degraded state, not a generic failure', async () => {
     mockAttach.mockResolvedValue({ ok: false, reason: 'not_found' });
-    const { res } = await invokeRoute('POST', '/:id/attach', { params: { id: 'sess-x' } });
+    const { res } = await invokeRoute('POST', '/:id/open', { params: { id: 'sess-x' } });
     const payload = res.json.mock.calls[0][0];
     expect(payload.ok).toBe(false);
     expect(payload.degraded).toBe(true);
@@ -197,13 +197,13 @@ describe('POST /:id/attach', () => {
 
   it('resolves the URL :id as a session_id (by=session_id), not a callsign', async () => {
     mockAttach.mockResolvedValue({ ok: true, reason: null, session_id: 'sess-1' });
-    await invokeRoute('POST', '/:id/attach', { params: { id: 'sess-1' } });
+    await invokeRoute('POST', '/:id/open', { params: { id: 'sess-1' } });
     expect(mockAttach).toHaveBeenCalledWith('sess-1', expect.objectContaining({ by: 'session_id' }));
   });
 
   it('propagates a thrown error from attach() as 500', async () => {
     mockAttach.mockRejectedValue(new Error('boom'));
-    const { res } = await invokeRoute('POST', '/:id/attach', { params: { id: 'sess-1' } });
+    const { res } = await invokeRoute('POST', '/:id/open', { params: { id: 'sess-1' } });
     expect(res.status).toHaveBeenCalledWith(500);
   });
 });
