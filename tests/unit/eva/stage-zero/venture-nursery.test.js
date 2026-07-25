@@ -20,6 +20,7 @@ import {
   checkNurseryTriggers,
   applyPendingNurseryPredicate,
   recordNurseryEvaluation,
+  advanceNurserySchedule,
   NURSERY_EVAL_TRIGGER_TYPES,
   getNurseryHealth,
   toNurseryMaturityLevel,
@@ -451,6 +452,86 @@ describe('recordNurseryEvaluation (FR-4: the witness writer that never existed)'
     await recordNurseryEvaluation({ nurseryId: 'n1', triggerType: 'manual', previousScore: undefined, newScore: 'x' }, { supabase, logger: silentLogger });
     expect(captured.inserts[0].payload.previous_score).toBeNull();
     expect(captured.inserts[0].payload.new_score).toBeNull();
+  });
+});
+
+// COND-2 from adversarial review, found by grepping the whole write surface for an
+// ABSENCE: exactly ONE write to next_evaluation_at exists (parkVenture's INSERT) and no
+// UPDATE of it anywhere, so the column is WRITE-ONCE. Harmless while nothing consumes the
+// predicate on a schedule; a live defect the moment FR-6 wires a sweep, because every row
+// eligible once stays eligible forever and each sweep re-enqueues a ~16-LLM-call chain.
+describe('advanceNurserySchedule (COND-2: the write-once lifecycle gap)', () => {
+  test('throws on missing supabase or nurseryId', async () => {
+    await expect(advanceNurserySchedule('n1', {})).rejects.toThrow('supabase client is required');
+    const { supabase } = captureSb({ singleData: { evaluation_interval_days: 30 } });
+    await expect(advanceNurserySchedule(null, { supabase, logger: silentLogger })).rejects.toThrow('nurseryId is required');
+  });
+
+  test('moves next_evaluation_at INTO THE FUTURE by the row interval, and stamps last_evaluated_at', async () => {
+    const now = new Date('2026-07-25T00:00:00.000Z');
+    const { supabase, captured } = captureSb({ singleData: { evaluation_interval_days: 30 } });
+    const out = await advanceNurserySchedule('n1', { supabase, logger: silentLogger, now });
+    expect(out).toEqual({ next_evaluation_at: '2026-08-24T00:00:00.000Z', interval_days: 30 });
+    const upd = captured.updates.find((u) => u.table === 'venture_nursery');
+    expect(upd.payload.next_evaluation_at).toBe('2026-08-24T00:00:00.000Z');
+    expect(upd.payload.last_evaluated_at).toBe('2026-07-25T00:00:00.000Z');
+    // The whole point: after advancing, the row is NO LONGER eligible under the selector.
+    expect(new Date(upd.payload.next_evaluation_at).getTime()).toBeGreaterThan(now.getTime());
+  });
+
+  test('honours a non-default interval', async () => {
+    const now = new Date('2026-07-25T00:00:00.000Z');
+    const { supabase, captured } = captureSb({ singleData: { evaluation_interval_days: 7 } });
+    await advanceNurserySchedule('n1', { supabase, logger: silentLogger, now });
+    expect(captured.updates[0].payload.next_evaluation_at).toBe('2026-08-01T00:00:00.000Z');
+  });
+
+  test.each([[0], [null], [undefined], [-5], ['x']])(
+    'falls back to the 30d DEFAULT for a non-positive/absent interval (%s) rather than rescheduling to now',
+    async (evaluation_interval_days) => {
+      const now = new Date('2026-07-25T00:00:00.000Z');
+      const { supabase, captured } = captureSb({ singleData: { evaluation_interval_days } });
+      await advanceNurserySchedule('n1', { supabase, logger: silentLogger, now });
+      // A zero interval would reschedule to NOW and reproduce permanent eligibility —
+      // the exact bug this function closes.
+      expect(captured.updates[0].payload.next_evaluation_at).toBe('2026-08-24T00:00:00.000Z');
+      expect(new Date(captured.updates[0].payload.next_evaluation_at).getTime()).toBeGreaterThan(now.getTime());
+    }
+  );
+
+  test('TWO-RUN GUARD: recording an evaluation advances the schedule, so a second sweep skips the row', async () => {
+    const now = new Date('2026-07-25T00:00:00.000Z');
+    const { supabase, captured } = captureSb({ singleData: { evaluation_interval_days: 30 } });
+    await recordNurseryEvaluation({ nurseryId: 'n1', triggerType: 'periodic_review' }, { supabase, logger: silentLogger, now });
+    const upd = captured.updates.find((u) => u.table === 'venture_nursery');
+    expect(upd, 'recording an evaluation MUST advance the schedule').toBeDefined();
+    // Single-run tests cannot see this defect — it only appears on the second sweep, when
+    // an unadvanced row is re-selected and re-enqueued.
+    expect(new Date(upd.payload.next_evaluation_at).getTime()).toBeGreaterThan(now.getTime());
+  });
+
+  test('advancement is NOT opt-in — the failure mode is a caller that forgets', async () => {
+    const { supabase, captured } = captureSb({ singleData: { evaluation_interval_days: 30 } });
+    await recordNurseryEvaluation({ nurseryId: 'n1', triggerType: 'manual' }, { supabase, logger: silentLogger });
+    expect(captured.updates.some((u) => u.table === 'venture_nursery')).toBe(true);
+  });
+
+  test('an evaluation that happened is still recorded even if the reschedule write fails', async () => {
+    // Fail-soft: the evaluation is a true fact worth keeping. Losing the log row because
+    // the follow-up UPDATE failed would discard evidence to protect a schedule.
+    const supabase = { from: (table) => ({
+      insert: () => ({ select: () => ({ single: async () => ({ data: { id: 'log-1' }, error: null }) }) }),
+      select: () => ({ eq: () => ({ single: async () => ({ data: null, error: { message: 'read boom' } }) }) }),
+      update: () => ({ eq: async () => ({ error: { message: 'boom' } }) }),
+      _t: table,
+    }) };
+    const warn = vi.fn();
+    const result = await recordNurseryEvaluation(
+      { nurseryId: 'n1', triggerType: 'manual' },
+      { supabase, logger: { log: vi.fn(), warn } }
+    );
+    expect(result).toMatchObject({ id: 'log-1' });
+    expect(warn).toHaveBeenCalledWith(expect.stringContaining('reschedule failed'));
   });
 });
 
