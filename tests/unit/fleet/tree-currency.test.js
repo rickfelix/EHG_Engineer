@@ -359,17 +359,57 @@ describe('FR-2 seam: spawn() itself enforces currency (mutation-killing)', () =>
     expect(touched).toBe(false);
   });
 
-  it('the .worktrees/ exemption is real and is scoped to a genuine path segment', async () => {
-    const { assessTreeCurrency } = await import('../../../lib/fleet/tree-currency.cjs');
-    expect(typeof assessTreeCurrency).toBe('function');
-    // Pinned as a pure predicate so the exemption cannot silently widen: a directory that
-    // merely CONTAINS the word must not be treated as a worktree.
-    const BACKSLASH = String.fromCharCode(92);
-    const isExempt = (p) => String(p || '').split(BACKSLASH).join('/').includes('/.worktrees/');
-    expect(isExempt('C:/repo/.worktrees/SD-X')).toBe(true);
-    expect(isExempt(['C:', 'repo', '.worktrees', 'SD-X'].join(BACKSLASH))).toBe(true);
-    expect(isExempt('C:/repo/my-.worktrees-backup/x')).toBe(false);
-    expect(isExempt('C:/repo')).toBe(false);
+  /**
+   * R4 (post-CI RCA) — the exemption needs pinning at the seam for exactly the same reason
+   * the enforcement did.
+   *
+   * The test that stood here re-declared its own `isExempt` copy in the test body and made
+   * assertions about THAT. It therefore pinned a copy, not the code: mutating production to
+   * `.includes('worktrees')` (widening the exemption so any path containing the word skips
+   * the guard) or to a flat `false` left all 32 tests GREEN. That is this SD's own CRITICAL
+   * C1 finding recurring one line further down — enforcement pinned, exemption not — in an
+   * SD whose entire thesis is that an invariant must live at the seam.
+   *
+   * Both tests below drive the REAL spawn() and are discriminating: each one goes red under
+   * a different mutation of the predicate.
+   */
+  it('a decoy path merely CONTAINING "worktrees" is NOT exempt — the guard still refuses', async () => {
+    const { spawn } = await import('../../../lib/fleet/spawn-control.js');
+    // Kills the widening mutation `.includes('worktrees')`: under it this path becomes
+    // exempt, the guard is skipped, and spawnFn is reached instead of a refusal.
+    await expect(spawn(
+      { role: 'worker', callsign: 'Pin-3' },
+      {
+        live: true,
+        cwd: 'C:/fake/worktrees-decoy/repo',
+        currencyRunner: staleRunner,
+        env: {},
+        spawnFn: () => { throw new Error('spawn must NOT be reached: a decoy path is not a worktree'); },
+      },
+    )).rejects.toThrow(/REFUSED/);
+  });
+
+  it('a genuine /.worktrees/ path IS exempt — the guard never runs git at all', async () => {
+    const { spawn } = await import('../../../lib/fleet/spawn-control.js');
+    // Kills the mutation that deletes the exemption (`spawnsFromWorktree = false`): under it
+    // the guard runs, staleRunner reports 9-behind-and-dirty, and this REFUSES instead of
+    // spawning. Asserting the runner is untouched is the positive half of the predicate.
+    let gitCalls = 0;
+    const recordingRunner = (args) => { gitCalls += 1; return staleRunner(args); };
+    const res = await spawn(
+      { role: 'worker', callsign: 'Pin-4' },
+      {
+        live: true,
+        cwd: 'C:/fake/.worktrees/SD-X',
+        currencyRunner: recordingRunner,
+        env: {},
+        spawnFn: () => ({ pid: 4242 }),
+        execFn: async () => ({ stdout: '0' }),
+        sleepFn: () => {},
+      },
+    );
+    expect(gitCalls).toBe(0);
+    expect(res.live).toBe(true);
   });
 });
 
