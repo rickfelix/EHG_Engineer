@@ -581,7 +581,16 @@ function isAutoStartableQF(qf, nowMs) {
   // value excludes; only exactly false (the column default) allows self-claim.
   if (qf.factory_lane) return false;
   if (qf.routing_tier != null && Number(qf.routing_tier) >= 3) return false;  // persisted Tier-3 -> full SD, not auto-QF
-  if (TIER3_RISK_RE.test(qf.title || '')) return false;                        // risk-keyword drift -> hold for triage/human
+  // QF-20260725-244: scan TITLE **and** DESCRIPTION. Title-only let QF-20260725-096 through --
+  // an auth/security QF whose implied fix ("thread the internal API key into the fetch headers")
+  // would publish an app-wide admin-bypass secret to an UNAUTHENTICATED page. Its title reads
+  // "internal-API-key", which has no word-boundary `auth`, while its description is saturated
+  // with auth / authorization / credential. Verified by executing this exact regex against that
+  // row: title=false, description=true. scripts/classify-quick-fix.js already gates on
+  // DESCRIPTION and FAILS that QF, so description is the correct surface -- reading the title
+  // alone is what let the two surfaces disagree. `description` is already in
+  // QF_CANDIDATE_COLUMNS, so this needs no query change.
+  if (TIER3_RISK_RE.test(`${qf.title || ''} ${qf.description || ''}`)) return false; // risk-keyword drift -> hold for triage/human
   // SD-LEO-FIX-QUICK-FIXES-NEEDS-001: durable time-gated defer -- a QF genuinely not ready
   // yet (e.g. needs a clean 24h observation window) stays status='open' but is ineligible
   // for claim until not_before passes. Prevents the same worker re-claiming it every cycle.
