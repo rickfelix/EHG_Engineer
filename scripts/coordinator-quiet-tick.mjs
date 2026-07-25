@@ -32,6 +32,8 @@ const require = createRequire(import.meta.url);
 const { createClient } = require('@supabase/supabase-js');
 const { assessFleetActivity } = require('../lib/coordinator/fleet-quiescence.cjs');
 const { decideCadence, detectSalientDelta, runCoresFailSoft } = require('../lib/coordinator/quiet-tick.cjs');
+// QF-20260725-342: single source of truth for the resurface threshold (see that module's header).
+const { thresholdArgs } = require('../lib/coordination/resurface-threshold.cjs');
 const { getActiveCoordinatorId } = require('../lib/coordinator/resolve.cjs');
 const { hasUndeliveredChairmanEscalation } = require('../lib/coordinator/undelivered-escalation.cjs');
 // QF-20260719-138: emit the cross-party ping row ourselves (mechanical, byte-identical) rather
@@ -116,7 +118,12 @@ export const COMPOSED_CORES = [
   // stale ledger row per day via its own payload.dedup_key, so running it every tick is safe. NOT
   // quiescentSkip: an aged pending recommendation is exactly as stale-and-worth-surfacing during a
   // quiet fleet window as during an active one.
-  { key: 'solomon-ledger-resurface', script: 'solomon-ledger-pending-resurface.cjs', args: ['scripts/solomon-ledger-pending-resurface.cjs'], quiescentSkip: false },
+  // QF-20260725-342: this site passed NO --threshold-hours, so it silently ran at the script's
+  // 24h DEFAULT while only the GHA cron honored the 72h operating threshold. Proven at runtime:
+  // 34 rows landed in one batch at 20:35 (the cron fires :13/:43), when a 72h threshold has a
+  // crossing set of zero. Sourced from the shared constant so the value cannot reach one
+  // invoker and miss the others again.
+  { key: 'solomon-ledger-resurface', script: 'solomon-ledger-pending-resurface.cjs', args: ['scripts/solomon-ledger-pending-resurface.cjs', ...thresholdArgs()], quiescentSkip: false },
   // QF-20260720-638: encodes the coordinator's manual idle-QF claim-hint intervention as
   // standing behavior (Solomon-designed, Adam-sourced). PROPOSE-ONLY (writes an advisory hint
   // row per idle worker, never claims/mutates quick_fixes) with belt-and-suspenders chairman-
