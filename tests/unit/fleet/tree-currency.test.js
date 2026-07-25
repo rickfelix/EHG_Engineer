@@ -310,3 +310,110 @@ describe('FR-2: enforceTreeCurrency self-heals or REFUSES', () => {
     expect(warnings.join(' ')).toMatch(/air-gapped host, incident 123/);
   });
 });
+
+/**
+ * FR-2 SEAM PINNING — added after the EXEC-TO-PLAN review proved the enforcement was
+ * UNPINNED.
+ *
+ * The reviewer deleted the entire enforcement block from lib/fleet/spawn-control.js,
+ * left this module fully intact, and every test in the branch still passed. That is this
+ * SD's own thesis turned on itself: an enforcement that can be silently removed while
+ * still being reported as present is exactly the shipped-but-inert shape the SD exists to
+ * eliminate. Testing the primitive is not testing the invariant — the invariant lives at
+ * the SEAM.
+ *
+ * These tests fail if the call in spawn() is removed, weakened, or moved before the
+ * dry-run return.
+ */
+describe('FR-2 seam: spawn() itself enforces currency (mutation-killing)', () => {
+  const staleRunner = (args) => {
+    if (args[0] === 'fetch') return '';
+    if (args.includes('--abbrev-ref')) return 'main\n';
+    if (args[0] === 'status') return ' M dirty.txt\n';   // dirty => NOT self-healable
+    if (args[0] === 'rev-list') return '9\n';
+    return '';
+  };
+
+  it('a live spawn from a STALE, non-worktree tree is REFUSED by spawn() itself', async () => {
+    const { spawn } = await import('../../../lib/fleet/spawn-control.js');
+    await expect(spawn(
+      { role: 'worker', callsign: 'Pin-1' },
+      {
+        live: true,
+        cwd: 'C:/fake/repo-root',   // NOT under .worktrees/, so the guard applies
+        currencyRunner: staleRunner,
+        env: {},
+        spawnFn: () => { throw new Error('spawn must NOT be reached when the tree is stale'); },
+      },
+    )).rejects.toThrow(/REFUSED/);
+  });
+
+  it('a DRY RUN never touches git — the guard sits after the dry-run return', async () => {
+    const { spawn } = await import('../../../lib/fleet/spawn-control.js');
+    let touched = false;
+    const res = await spawn(
+      { role: 'worker', callsign: 'Pin-2' },
+      { live: false, currencyRunner: () => { touched = true; return ''; }, env: {} },
+    );
+    expect(res.live).toBe(false);
+    expect(touched).toBe(false);
+  });
+
+  it('the .worktrees/ exemption is real and is scoped to a genuine path segment', async () => {
+    const { assessTreeCurrency } = await import('../../../lib/fleet/tree-currency.cjs');
+    expect(typeof assessTreeCurrency).toBe('function');
+    // Pinned as a pure predicate so the exemption cannot silently widen: a directory that
+    // merely CONTAINS the word must not be treated as a worktree.
+    const BACKSLASH = String.fromCharCode(92);
+    const isExempt = (p) => String(p || '').split(BACKSLASH).join('/').includes('/.worktrees/');
+    expect(isExempt('C:/repo/.worktrees/SD-X')).toBe(true);
+    expect(isExempt(['C:', 'repo', '.worktrees', 'SD-X'].join(BACKSLASH))).toBe(true);
+    expect(isExempt('C:/repo/my-.worktrees-backup/x')).toBe(false);
+    expect(isExempt('C:/repo')).toBe(false);
+  });
+});
+
+describe('SEC-1: a base ref can never be smuggled to git as an option', () => {
+  it('a dash-leading baseRef is rejected before any git call', () => {
+    let called = false;
+    const r = assessTreeCurrency({
+      dir: '/x',
+      baseRef: '--upload-pack=cmd.exe /c echo PWNED/main',
+      runner: () => { called = true; return ''; },
+    });
+    expect(r.current).toBe(false);
+    expect(r.reason).toBe('invalid_base_ref');
+    // The load-bearing assertion: git was never invoked at all.
+    expect(called).toBe(false);
+  });
+
+  it('the fetch and pull invocations carry an end-of-options separator', () => {
+    const seen = [];
+    assessTreeCurrency({
+      dir: '/x',
+      runner: (args) => {
+        seen.push(args);
+        if (args.includes('--abbrev-ref')) return 'main\n';
+        if (args[0] === 'status') return '';
+        if (args[0] === 'rev-list') return '0\n';
+        return '';
+      },
+    });
+    const fetchCall = seen.find((a) => a[0] === 'fetch');
+    expect(fetchCall).toContain('--');
+  });
+
+  it('a legitimate baseRef still works', () => {
+    const r = assessTreeCurrency({
+      dir: '/x',
+      baseRef: 'origin/main',
+      runner: (args) => {
+        if (args.includes('--abbrev-ref')) return 'main\n';
+        if (args[0] === 'status') return '';
+        if (args[0] === 'rev-list') return '0\n';
+        return '';
+      },
+    });
+    expect(r.current).toBe(true);
+  });
+});

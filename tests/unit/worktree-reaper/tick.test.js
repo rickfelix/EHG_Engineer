@@ -333,6 +333,11 @@ describe('FR-3: the reaper refuses to reap from a tree it cannot prove is curren
     });
     expect(seen.length).toBeGreaterThan(0);
     expect(seen[0]).toBeTruthy();
-    expect(path.resolve(seen[0])).not.toBe(path.resolve(tmpRoot));
+    // C2: asserting "not tmpRoot" was VACUOUS — under vitest process.cwd() IS the repo
+    // root, so that assertion passed identically with the fix AND with the process.cwd()
+    // defect it was meant to catch. Assert the POSITIVE identity instead: the fallback
+    // must resolve from the MODULE's location, which is what makes it independent of
+    // wherever the caller happens to be standing.
+    expect(path.resolve(seen[0])).toBe(path.resolve(tickModPath, '..', '..', '..'));
   });
 });

@@ -76,13 +76,24 @@ Stated explicitly, because an unstated boundary is how a partial fix gets report
 which is this document's own thesis.
 
 **Enforced today:**
-- The spawn seam (`lib/fleet/spawn-control.js`), which every live spawn path routes through.
+- The `spawn()` verb in `lib/fleet/spawn-control.js`.
 - The worktree reaper tick (`scripts/fleet/worktree-reaper-tick.cjs`).
+
+> **Correction (adversarial review, pre-merge).** An earlier draft of this section claimed
+> `spawn()` is the seam "which every live spawn path routes through." **That was false**, and
+> two independent reviewers caught it. `lib/fleet/reboot-respawn-runner.js` and
+> `scripts/fleet/worker-spawn-executor.cjs` both call `buildSessionLaunch` /
+> `buildLiveSpawnInvocation` **directly** and launch via their own spawner, never entering
+> `spawn()`. They are live OS-spawn paths and they are **not** guarded. Reboot-respawn is the
+> highest-value uncovered case — a post-reboot respawn runs from a root that has not pulled
+> since the machine went down. Recorded here rather than quietly dropped, because a document
+> whose thesis is *state the boundary* had reproduced the exact failure it names.
 
 **NOT enforced — each is a known gap, not an oversight:**
 
 | Gap | Why it is not covered |
 |---|---|
+| **`reboot-respawn-runner.js`** and **`worker-spawn-executor.cjs`** | They call the launch builder directly and spawn themselves, bypassing the `spawn()` verb where the guard lives. Highest-value remaining gap: a post-reboot respawn runs from a root that has not pulled since the machine went down. |
 | Spawns issued from **inside** a `.worktrees/` tree | A per-SD worktree is legitimately off-main and behind by construction — that is what a feature branch is. Guarding it would refuse every worktree spawn while proving nothing about this defect; both measured incidents were the shared root. |
 | ~25 coordinator `STANDARD_LOOPS` (`scripts/coordinator-startup-check.mjs`) | Their prompts run bare `node scripts/…` at whatever cwd the coordinator holds. Not routed through any seam this SD touches. |
 | `scripts/cron/eva-watcher-task.cmd` and generated Task Scheduler entries | The root path is hardcoded into a Windows scheduled task. A spawn-time assertion **structurally cannot reach it** — the process starts outside anything we gate. |
