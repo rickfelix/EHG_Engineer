@@ -210,3 +210,103 @@ describe('TS-3: the decision table (injected runner)', () => {
     expect(DEFAULT_BASE_REF).toBe('origin/main');
   });
 });
+
+// FR-2 — enforcement. assessTreeCurrency only ANSWERS; this is the part that makes the
+// answer binding. The distinction matters: a gauge that reports staleness and lets the
+// caller proceed anyway is the habit-with-monitoring the acceptance bar rejects.
+describe('FR-2: enforceTreeCurrency self-heals or REFUSES', () => {
+  const { enforceTreeCurrency, TreeStaleError, BYPASS_REASON_ENV } = require('../../../lib/fleet/tree-currency.cjs');
+  const silent = { warn() {} };
+
+  const runnerFor = ({ branch = 'main', behind = '0', dirty = '', calls = [], healTo = '0' }) => {
+    let pulled = false;
+    return (args) => {
+      calls.push(args.join(' '));
+      if (args[0] === 'fetch') return '';
+      if (args[0] === 'pull') { pulled = true; return ''; }
+      if (args.includes('--abbrev-ref')) return `${branch}\n`;
+      if (args[0] === 'status') return dirty;
+      if (args[0] === 'rev-list') return `${pulled ? healTo : behind}\n`;
+      return '';
+    };
+  };
+
+  it('a CURRENT tree proceeds without healing', () => {
+    const r = enforceTreeCurrency({ dir: '/x', runner: runnerFor({}), env: {}, logger: silent });
+    expect(r.ok).toBe(true);
+    expect(r.healed).toBe(false);
+    expect(r.currencyBypassed).toBe(false);
+  });
+
+  it('behind + clean + main SELF-HEALS, and the pull is actually issued', () => {
+    const calls = [];
+    const r = enforceTreeCurrency({ dir: '/x', runner: runnerFor({ behind: '4', calls }), env: {}, logger: silent });
+    expect(r.ok).toBe(true);
+    expect(r.healed).toBe(true);
+    // Positive discriminator: the ff-only pull is observable in the call log.
+    expect(calls.some((c) => c.startsWith('pull --ff-only'))).toBe(true);
+  });
+
+  it('behind + DIRTY REFUSES and never issues a pull', () => {
+    const calls = [];
+    expect(() => enforceTreeCurrency({
+      dir: '/x', runner: runnerFor({ behind: '4', dirty: ' M a.txt\n', calls }), env: {}, logger: silent,
+    })).toThrow(TreeStaleError);
+    // The tree must not be mutated — that is the peer-worktree clobber hazard.
+    expect(calls.some((c) => c.startsWith('pull'))).toBe(false);
+  });
+
+  it('behind + OFF-MAIN REFUSES and never issues a pull', () => {
+    const calls = [];
+    expect(() => enforceTreeCurrency({
+      dir: '/x', runner: runnerFor({ behind: '4', branch: 'feat/x', calls }), env: {}, logger: silent,
+    })).toThrow(/REFUSED/);
+    expect(calls.some((c) => c.startsWith('pull'))).toBe(false);
+  });
+
+  it('a git ERROR REFUSES — fail closed, never proceed on uncertainty', () => {
+    expect(() => enforceTreeCurrency({
+      dir: '/x', runner: () => { throw new Error('git exploded'); }, env: {}, logger: silent,
+    })).toThrow(TreeStaleError);
+  });
+
+  it('a fast-forward that does NOT converge still REFUSES', () => {
+    // Trusting the pull's exit code would repeat this SD's own root cause: verifying at
+    // the merge instead of at the consumer. Enforcement re-assesses afterwards.
+    const runner = runnerFor({ behind: '4', healTo: '4' }); // pull "succeeds" but nothing changes
+    expect(() => enforceTreeCurrency({ dir: '/x', runner, env: {}, logger: silent }))
+      .toThrow(/still not current after a fast-forward/);
+  });
+
+  it('the refusal message names the behind-count and the remedy', () => {
+    let msg = '';
+    try {
+      enforceTreeCurrency({ dir: '/x', runner: runnerFor({ behind: '7', dirty: ' M a\n' }), env: {}, logger: silent });
+    } catch (e) { msg = e.message; }
+    expect(msg).toMatch(/7 commit/);
+    expect(msg).toMatch(/git pull --ff-only/);
+    expect(msg).toMatch(/FLEET_TREE_CURRENCY_BYPASS_REASON/);
+  });
+
+  it('the escape hatch is DEFAULT-OFF — a blank reason is not a bypass', () => {
+    expect(() => enforceTreeCurrency({
+      dir: '/x', runner: runnerFor({ behind: '4', dirty: ' M a\n' }), env: { [BYPASS_REASON_ENV]: '   ' }, logger: silent,
+    })).toThrow(TreeStaleError);
+  });
+
+  it('the escape hatch requires a REASON, and declares currency UNKNOWN rather than current', () => {
+    const warnings = [];
+    const r = enforceTreeCurrency({
+      dir: '/x',
+      runner: () => { throw new Error('offline'); },
+      env: { [BYPASS_REASON_ENV]: 'air-gapped host, incident 123' },
+      logger: { warn: (m) => warnings.push(m) },
+    });
+    expect(r.ok).toBe(true);
+    expect(r.currencyBypassed).toBe(true);
+    // It must NOT claim the tree is current — the answer is unknown-and-declared.
+    expect(r.assessment).toBeNull();
+    expect(warnings.join(' ')).toMatch(/CURRENCY_BYPASSED/);
+    expect(warnings.join(' ')).toMatch(/air-gapped host, incident 123/);
+  });
+});
