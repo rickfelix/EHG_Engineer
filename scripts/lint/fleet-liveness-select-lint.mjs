@@ -6,8 +6,10 @@
 // tree scan). ADVISORY-FIRST: exit 0 by default; pass --enforce for exit 1.
 //
 // A read is SAFE (not flagged) when ANY of:
-//   • it carries a server-side bound: `.gte('heartbeat_at', …)` OR (`.order(` AND `.limit(`)
-//     — ordering by heartbeat_at/heartbeat_age_seconds means the cap only drops the STALEST rows;
+//   • it carries a server-side bound: `.gte('heartbeat_at', …)` OR `.limit(` OR an `.order(` on a
+//     real RECENCY column (heartbeat_at / heartbeat_age_seconds / created_at …) — only then does
+//     the cap drop the STALEST rows. An `.order()` on any other column (or on a `_human` display
+//     string) is NOT a bound; see orderIsRecencyBound and QF-20260725-423;
 //   • it is a single-row lookup: `.eq('session_id', …)` / `.single()` / `.maybeSingle()`;
 //   • it is an exact-count head query: `count:` + `head:`;
 //   • it routes through the canonical helper (lib/fleet/live-fleet-sessions.cjs — which is itself
@@ -25,6 +27,26 @@ const ALLOWLIST_PATH = resolve(ROOT, 'scripts/lint/fleet-liveness-select-allowli
 
 const TARGET_TABLES = ['claude_sessions', 'v_active_sessions'];
 
+// An `.order()` that genuinely bounds the row cap must sort by a real recency value. Ordering by
+// anything else (a session_id, or a human-rendered age string) leaves the page arbitrary, so the
+// cap can still drop every live row. Deliberately a column-NAME test, not a direction test:
+// ascending on an age and descending on a timestamp are both newest-first.
+//
+// `_human`-suffixed columns are EXCLUDED even though they contain a recency word: heartbeat_age_human
+// is display text ("6s ago" / "4500h ago") that sorts lexicographically, which is the defect itself.
+// Matching on "heartbeat" alone would re-admit the exact query this rule exists to reject.
+const RECENCY_COL = /^[^'"]*(heartbeat|created_at|updated_at|last_seen|last_active)[^'"]*$/;
+const ORDER_COL = /\.order\(\s*['"]([^'"]+)['"]/;
+
+/** Does this chain's `.order()` sort by a real (non-display) recency column? */
+export function orderIsRecencyBound(chain) {
+  const m = chain.match(ORDER_COL);
+  if (!m) return false;
+  const col = m[1];
+  if (/_human$/.test(col)) return false;
+  return RECENCY_COL.test(col);
+}
+
 /**
  * Strip // line and block comments so commented-out queries do not register, PRESERVING line
  * count (block comments become the same newlines they spanned; line comments keep their newline)
@@ -40,15 +62,21 @@ export function stripComments(src) {
  * Is this claude_sessions/v_active_sessions read SAFE from the 1000-row cap? This guard targets the
  * exact pattern the SD names — an UNFILTERED select (like assessFleetActivity's original bare
  * `.from('v_active_sessions').select(cols)`), which PostgREST caps at the OLDEST 1000 rows. A read
- * is SAFE when it carries ANY server-side narrowing/paging: any filter, an `.order()` (ordering by
- * heartbeat desc returns the NEWEST 1000), a `.limit()`, a single-row read, or a count-head query.
+ * is SAFE when it carries ANY server-side narrowing/paging: any filter, an `.order()` ON A RECENCY
+ * COLUMN (which makes the page newest-first, so the cap drops only the stalest), a `.limit()`, a
+ * single-row read, or a count-head query.
  * (Status-filtered-but-unbounded scans, e.g. `.in('status',[active,idle])` with no limit, are a
  * broader latent class the SD scopes OUT — they filter server-side and are safe at today's < 1000
  * active; a follow-up may tighten them. This guard prevents the UNFILTERED regression.)
  */
 function isSafeChain(chain) {
   if (/\.limit\(/.test(chain)) return true;
-  if (/\.order\(/.test(chain)) return true; // order(heartbeat desc) => newest 1000 in the page
+  // `.order()` only bounds the cap when it orders by a RECENCY column — that is what makes the
+  // dropped rows the stalest ones. QF-20260725-423: server/routes/fleet-panel.js ordered by
+  // `heartbeat_age_human`, a rendered STRING ("6s ago" / "4500h ago"), so the page was
+  // lexicographic and the cap kept an arbitrary 1000 of which 994 were dead — yet this guard
+  // passed it, because it only asked whether `.order(` appeared at all.
+  if (orderIsRecencyBound(chain)) return true;
   if (/\.maybeSingle\(\)|\.single\(\)/.test(chain)) return true;
   // ANY server-side narrowing filter means it is not the "unfiltered" pattern.
   if (/\.(eq|in|not|filter|gt|gte|lt|lte|is|like|ilike|neq|contains|match|or|overlaps)\(/.test(chain)) return true;
