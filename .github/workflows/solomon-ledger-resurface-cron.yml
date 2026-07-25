@@ -42,4 +42,15 @@ jobs:
         run: npm ci --ignore-scripts
 
       - name: Resurface aged Solomon ledger rows
-        run: node scripts/solomon-ledger-pending-resurface.cjs
+        # QF-20260725-743 — INTERIM 72h override, EXPIRES ~2026-07-27T09:59Z.
+        # Explicit at the call site (NOT a change to DEFAULT_THRESHOLD_HOURS, which stays 24)
+        # so the mitigation is visible and trivially reversible — delete the flag to revert.
+        # Grounding: Solomon measured disposition latency p50 37.5h / p75 77.2h, with only 26%
+        # of 507 disposed rows clearing within 24h; 72h tracks p75. At 24h, ~28 rows/day
+        # resurfaced into a 50-row oldest-first window and displaced live directed messages
+        # (three incidents 2026-07-25; the worst let a RETRACTED finding reach an already-
+        # completed governance SD because the retraction sat behind 27 resurface rows).
+        # This is a MITIGATION, not the fix: SD-LEO-INFRA-RESURFACE-DIGEST-BATCHING-001
+        # (digest batching) is the actual fix and must land before the expiry above, when the
+        # oldest pending row crosses 72h and resurfacing resumes.
+        run: node scripts/solomon-ledger-pending-resurface.cjs --threshold-hours 72

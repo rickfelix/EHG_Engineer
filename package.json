@@ -607,6 +607,8 @@
     "validate:trigger-guard-pack": "node scripts/validate-trigger-guard-pack.mjs",
     "qf:create": "node scripts/create-quick-fix.js",
     "migration:apply-state": "node scripts/verify-migration-apply-state.mjs",
+    "migration:dispositions:seed": "node scripts/seed-migration-dispositions.mjs",
+    "migration:dispositions:mirror": "node scripts/mirror-migration-dispositions-to-audit.mjs",
     "retention:check": "node scripts/retention-enforce.js",
     "retention:apply": "node scripts/retention-enforce.js --apply",
     "liveness:watch": "node scripts/periodic-liveness-watcher.mjs",

@@ -32,6 +32,30 @@ const { logCoordinationEvent } = await import('../../../lib/coordinator/coordina
 const { sequenceSingletonRefresh } = await import('../../../lib/coordinator/singleton-refresh-sequencer.cjs');
 const { spawn: childProcessSpawnSpy } = await import('node:child_process');
 
+/**
+ * FR-3: the spawner MINTS the session id and passes it as `claude --session-id <uuid>`, so the child
+ * registers under this exact value and correlation is a direct lookup. Injected via opts.uuidFn to keep
+ * tests deterministic. Must be a syntactically valid UUID — buildSessionLaunch DROPS a malformed one
+ * rather than passing it to the CLI (which would reject it and fail the whole launch).
+ */
+const MINTED_SESSION_ID = '11111111-2222-4333-8444-555555555555';
+
+/**
+ * FR-4: spawn() now captures the window by ENUMERATION DIFF rather than by reading a per-process
+ * MainWindowHandle, so execFn must return enumeration-shaped stdout (`handle|pid|proc|title`).
+ * Call 1 is the BEFORE snapshot (no windows); every later call is an AFTER snapshot containing one
+ * new WindowsTerminal window. The old shape -- a bare number -- parses to ZERO rows, so the capture
+ * correctly fails; that is exactly why these tests went red until updated, and it is the signal that
+ * the production call path really changed rather than the tests being loosened around it.
+ */
+function enumExec(handle = 131074) {
+  let call = 0;
+  return vi.fn(async () => {
+    call += 1;
+    return { stdout: call === 1 ? '' : `${handle}|5555|WindowsTerminal|Claude Code` };
+  });
+}
+
 /** Minimal in-memory fake covering exactly the claude_sessions/session_coordination shapes spawn-control.js touches. */
 function makeFakeSupabase({ sessions = [] } = {}) {
   const store = new Map(sessions.map((s) => [s.session_id, { ...s }]));
@@ -196,7 +220,7 @@ describe('spawn (FR-1)', () => {
     const fakeChild = { pid: 4242, unref: vi.fn() };
     childProcessSpawnSpy.mockReset();
     childProcessSpawnSpy.mockReturnValue(fakeChild);
-    const execFn = vi.fn().mockResolvedValue({ stdout: '131074' });
+    const execFn = enumExec();
     const supabaseClient = makeFakeSupabase({ sessions: [] });
     const result = await spawn({ role: 'worker', callsign: 'Alpha-5' }, { live: true, execFn, sleepFn: vi.fn(), supabaseClient });
     // LOAD-BEARING: kill-survival depends on detached:true (OS re-parents the child when the
@@ -213,16 +237,18 @@ describe('spawn (FR-1)', () => {
     const nowMs = 1_800_000_000_000;
     const child = { pid: 4242 };
     const spawnFn = vi.fn().mockReturnValue(child);
-    const execFn = vi.fn().mockResolvedValue({ stdout: '131074' });
+    const execFn = enumExec();
+    // FR-3: the child now registers under the SPAWNER-MINTED --session-id, so the row is keyed on
+    // that id rather than on the wt.exe launcher pid (which never matched claude_sessions.pid).
     const supabaseClient = makeFakeSupabase({
       sessions: [{
-        session_id: 's1', pid: 4242, status: 'active',
+        session_id: MINTED_SESSION_ID, pid: 4242, status: 'active',
         created_at: new Date(nowMs - 5_000).toISOString(), // freshly self-registered, well within the match window
         metadata: { fleet_identity: { callsign: 'Alpha-5' }, role: 'worker' },
       }],
     });
-    await spawn({ role: 'worker', callsign: 'Beta-1' }, { live: true, spawnFn, execFn, sleepFn: vi.fn(), supabaseClient, nowMs, skipDedup: true });
-    const merged = supabaseClient._store.get('s1').metadata;
+    await spawn({ role: 'worker', callsign: 'Beta-1' }, { live: true, spawnFn, execFn, sleepFn: vi.fn(), supabaseClient, nowMs, skipDedup: true, uuidFn: () => MINTED_SESSION_ID });
+    const merged = supabaseClient._store.get(MINTED_SESSION_ID).metadata;
     // Pre-existing keys survive the write (would be wiped by a bare full-blob overwrite).
     expect(merged.fleet_identity).toEqual({ callsign: 'Alpha-5' });
     expect(merged.role).toBe('worker');
@@ -234,7 +260,7 @@ describe('spawn (FR-1)', () => {
     const nowMs = 1_800_000_000_000;
     const child = { pid: 4242 };
     const spawnFn = vi.fn().mockReturnValue(child);
-    const execFn = vi.fn().mockResolvedValue({ stdout: '131074' });
+    const execFn = enumExec();
     const supabaseClient = makeFakeSupabase({
       sessions: [{
         session_id: 's-old', pid: 4242, status: 'active',
@@ -242,7 +268,11 @@ describe('spawn (FR-1)', () => {
         metadata: { fleet_identity: { callsign: 'Unrelated-Session' }, role: 'worker' },
       }],
     });
-    await spawn({ role: 'worker', callsign: 'Beta-1' }, { live: true, spawnFn, execFn, sleepFn: vi.fn(), supabaseClient, nowMs, skipDedup: true });
+    // FR-3: a valid minted id makes the bind a direct session_id lookup that never consults pid, which
+    // would make this test pass VACUOUSLY. uuidFn returns a non-UUID so buildSessionLaunch drops it
+    // (the CLI would reject a malformed --session-id) and spawn falls back to the pid path — which is
+    // exactly the path whose freshness window this test exists to guard. Keeps its teeth.
+    await spawn({ role: 'worker', callsign: 'Beta-1' }, { live: true, spawnFn, execFn, sleepFn: vi.fn(), supabaseClient, nowMs, skipDedup: true, uuidFn: () => 'not-a-uuid' });
     // Untouched -- the stale row's metadata must never be corrupted by a fresh spawn's recycled pid.
     expect(supabaseClient._store.get('s-old').metadata).toEqual({ fleet_identity: { callsign: 'Unrelated-Session' }, role: 'worker' });
   });
@@ -260,7 +290,7 @@ describe('spawn (FR-1)', () => {
   it('FR-5: skipDedup:true (internal replacement path) bypasses the already-live check', async () => {
     const child = { pid: 4242 };
     const spawnFn = vi.fn().mockReturnValue(child);
-    const execFn = vi.fn().mockResolvedValue({ stdout: '131074' });
+    const execFn = enumExec();
     const supabaseClient = makeFakeSupabase({
       sessions: [{ session_id: 's1', status: 'active', metadata: { fleet_identity: { callsign: 'Alpha-5' } } }],
     });
@@ -275,28 +305,151 @@ describe('spawn (FR-1)', () => {
     const nowMs = 1_800_000_000_000;
     const child = { pid: 4242 };
     const spawnFn = vi.fn().mockReturnValue(child);
-    const execFn = vi.fn().mockResolvedValue({ stdout: '131074' });
+    const execFn = enumExec();
     const supabaseClient = makeFakeSupabase({
       sessions: [{
-        session_id: 's1', pid: 4242, status: 'active',
+        session_id: MINTED_SESSION_ID, pid: 4242, status: 'active',
         created_at: new Date(nowMs - 5_000).toISOString(),
         metadata: { fleet_identity: { callsign: 'Beta-1' }, role: 'worker' },
       }],
     });
     logCoordinationEvent.mockClear();
-    const result = await spawn({ role: 'worker', callsign: 'Beta-1' }, { live: true, spawnFn, execFn, sleepFn: vi.fn(), supabaseClient, nowMs, skipDedup: true });
+    const result = await spawn({ role: 'worker', callsign: 'Beta-1' }, { live: true, spawnFn, execFn, sleepFn: vi.fn(), supabaseClient, nowMs, skipDedup: true, uuidFn: () => MINTED_SESSION_ID });
 
-    expect(result.session_id).toBe('s1');
+    expect(result.session_id).toBe(MINTED_SESSION_ID);
     const spawnEventCall = logCoordinationEvent.mock.calls.find((c) => c[1].event_type === 'fleet_verb_spawn');
     expect(spawnEventCall).toBeTruthy();
-    expect(spawnEventCall[1].session_id).toBe('s1'); // was hardcoded null before this fix
+    expect(spawnEventCall[1].session_id).toBe(MINTED_SESSION_ID); // was hardcoded null before QF-20260724-739
+  });
+
+  it('FR-3: binds by the MINTED session id, not by the wt.exe launcher pid', async () => {
+    // The regression this pins: reverting to a pid join re-breaks correlation silently. The row here
+    // carries a DIFFERENT pid than the launcher reports, which is the real-world case -- wt.exe exits
+    // and claude_sessions.pid is the Claude Code pid. A pid-based bind finds nothing; the minted-id
+    // bind finds the row.
+    const nowMs = 1_800_000_000_000;
+    const supabaseClient = makeFakeSupabase({
+      sessions: [{
+        session_id: MINTED_SESSION_ID, pid: 999999, status: 'active',
+        created_at: new Date(nowMs - 5_000).toISOString(),
+        metadata: {},
+      }],
+    });
+    const result = await spawn({ role: 'worker', callsign: 'Beta-1' }, {
+      live: true, spawnFn: vi.fn().mockReturnValue({ pid: 4242 }),
+      execFn: enumExec(),
+      sleepFn: vi.fn(), supabaseClient, nowMs, skipDedup: true, uuidFn: () => MINTED_SESSION_ID,
+    });
+    expect(result.session_id).toBe(MINTED_SESSION_ID);
+  });
+
+  it('FR-1/FR-3: stamps metadata.account_profile on the FRESH-spawn path (the discoverability fix)', async () => {
+    // Before this, accountProfile was used only to resolve a profile DIRECTORY (spawn-control.js:162)
+    // and never written, while the sole writer (canary-guard.js:173) sat on the RESPAWN path and was
+    // itself pid-dead. Net effect: zero sessions carried the stamp and resolveCanaryTarget fail-closed
+    // even with canaries alive -- survival was sufficient, discoverability was not.
+    const nowMs = 1_800_000_000_000;
+    const supabaseClient = makeFakeSupabase({
+      sessions: [{
+        session_id: MINTED_SESSION_ID, pid: 4242, status: 'active',
+        created_at: new Date(nowMs - 5_000).toISOString(),
+        metadata: { fleet_identity: { callsign: 'Canary-1' } },
+      }],
+    });
+    await spawn({ role: 'worker', callsign: 'Canary-1', accountProfile: 'canary' }, {
+      live: true, spawnFn: vi.fn().mockReturnValue({ pid: 4242 }),
+      execFn: enumExec(),
+      sleepFn: vi.fn(), supabaseClient, nowMs, skipDedup: true, uuidFn: () => MINTED_SESSION_ID,
+      baseDir: 'C:/fake', // resolveProfileDir(name, opts) honours opts.baseDir — no FLEET_* env needed
+    });
+    const md = supabaseClient._store.get(MINTED_SESSION_ID).metadata;
+    expect(md.account_profile).toBe('canary');
+    expect(md.fleet_identity).toEqual({ callsign: 'Canary-1' }); // merged, not replaced
+  });
+
+  it('FR-4: takes the BEFORE snapshot strictly BEFORE launching the process (call-order pin)', async () => {
+    // THE most important test in FR-4, and the one the pure diff tests cannot give us. If the
+    // before-snapshot is taken AFTER the spawn, the set difference is always empty in production
+    // while every pure selectNewWindowHandle test still passes -- green and dead. Only an ordering
+    // assertion catches that, so this records the real interleaving rather than each call in isolation.
+    const order = [];
+    const supabaseClient = makeFakeSupabase({ sessions: [] });
+    await spawn({ role: 'worker', callsign: 'Beta-1' }, {
+      live: true,
+      enumerateWindowsFn: async () => { order.push('enumerate'); return []; },
+      spawnFn: () => { order.push('spawn'); return { pid: 4242 }; },
+      captureNewWindowHandleFn: async () => { order.push('capture'); return { handle: 1, handleCaptureFailed: false, attempts: 1, diagnostics: {} }; },
+      sleepFn: vi.fn(), supabaseClient, skipDedup: true, uuidFn: () => MINTED_SESSION_ID,
+    });
+    expect(order).toEqual(['enumerate', 'spawn', 'capture']);
+    expect(order.indexOf('enumerate')).toBeLessThan(order.indexOf('spawn'));
+  });
+
+  it('FR-4: persists the capture DIAGNOSIS into metadata when the handle cannot be resolved', async () => {
+    // So the one permitted live run is a diagnosis, not a re-run: the counts distinguish "nothing
+    // opened" from "the process filter excluded everything" from "too many opened at once".
+    const nowMs = 1_800_000_000_000;
+    const supabaseClient = makeFakeSupabase({
+      sessions: [{
+        session_id: MINTED_SESSION_ID, pid: 4242, status: 'active',
+        created_at: new Date(nowMs - 5_000).toISOString(), metadata: {},
+      }],
+    });
+    await spawn({ role: 'worker', callsign: 'Beta-1' }, {
+      live: true,
+      spawnFn: vi.fn().mockReturnValue({ pid: 4242 }),
+      enumerateWindowsFn: async () => [],
+      captureNewWindowHandleFn: async () => ({
+        handle: null, handleCaptureFailed: true, attempts: 1,
+        diagnostics: { reason: 'ambiguous', beforeCount: 1, afterCount: 3, appearedCount: 2 },
+      }),
+      sleepFn: vi.fn(), supabaseClient, nowMs, skipDedup: true, uuidFn: () => MINTED_SESSION_ID,
+    });
+    const md = supabaseClient._store.get(MINTED_SESSION_ID).metadata;
+    expect(md.handle_capture_failed).toBe(true);
+    expect(md.window_handle_diagnostics).toMatchObject({ reason: 'ambiguous', appearedCount: 2 });
+  });
+
+  it('FR-4: does NOT persist diagnostics on a SUCCESSFUL capture (noise, not signal)', async () => {
+    const nowMs = 1_800_000_000_000;
+    const supabaseClient = makeFakeSupabase({
+      sessions: [{
+        session_id: MINTED_SESSION_ID, pid: 4242, status: 'active',
+        created_at: new Date(nowMs - 5_000).toISOString(), metadata: {},
+      }],
+    });
+    await spawn({ role: 'worker', callsign: 'Beta-1' }, {
+      live: true, spawnFn: vi.fn().mockReturnValue({ pid: 4242 }),
+      enumerateWindowsFn: async () => [],
+      captureNewWindowHandleFn: async () => ({ handle: 777, handleCaptureFailed: false, attempts: 1, diagnostics: { reason: 'ok' } }),
+      sleepFn: vi.fn(), supabaseClient, nowMs, skipDedup: true, uuidFn: () => MINTED_SESSION_ID,
+    });
+    const md = supabaseClient._store.get(MINTED_SESSION_ID).metadata;
+    expect(md.window_handle).toBe(777);
+    expect(md.window_handle_diagnostics).toBeUndefined();
+  });
+
+  it('FR-1/FR-3: does NOT stamp account_profile when none was requested', async () => {
+    const nowMs = 1_800_000_000_000;
+    const supabaseClient = makeFakeSupabase({
+      sessions: [{
+        session_id: MINTED_SESSION_ID, pid: 4242, status: 'active',
+        created_at: new Date(nowMs - 5_000).toISOString(), metadata: {},
+      }],
+    });
+    await spawn({ role: 'worker', callsign: 'Beta-1' }, {
+      live: true, spawnFn: vi.fn().mockReturnValue({ pid: 4242 }),
+      execFn: enumExec(),
+      sleepFn: vi.fn(), supabaseClient, nowMs, skipDedup: true, uuidFn: () => MINTED_SESSION_ID,
+    });
+    expect(supabaseClient._store.get(MINTED_SESSION_ID).metadata.account_profile).toBeUndefined();
   });
 
   it('QF-20260724-739: retries the session-bind lookup (bounded) when the SessionStart row has not landed yet on the first attempt', async () => {
     const nowMs = 1_800_000_000_000;
     const child = { pid: 4242 };
     const spawnFn = vi.fn().mockReturnValue(child);
-    const execFn = vi.fn().mockResolvedValue({ stdout: '131074' });
+    const execFn = enumExec();
     let lookups = 0;
     const supabaseClient = {
       from(table) {
@@ -330,7 +483,7 @@ describe('spawn (FR-1)', () => {
   it('QF-20260724-739: gives up cleanly (session_id stays null, no throw) when the SessionStart row never lands within the bounded retry budget', async () => {
     const child = { pid: 4242 };
     const spawnFn = vi.fn().mockReturnValue(child);
-    const execFn = vi.fn().mockResolvedValue({ stdout: '131074' });
+    const execFn = enumExec();
     const supabaseClient = makeFakeSupabase({ sessions: [] }); // never self-registers
     const result = await spawn({ role: 'worker', callsign: 'Beta-1' }, { live: true, spawnFn, execFn, sleepFn: vi.fn(), supabaseClient, skipDedup: true });
 
@@ -420,7 +573,7 @@ describe('restart (FR-4 singleton-serial / FR-5 worker-parallel)', () => {
   it('worker path: releases the old session only once the replacement genuinely spawned live', async () => {
     const child = { pid: 4242 };
     const spawnFn = vi.fn().mockReturnValue(child);
-    const execFn = vi.fn().mockResolvedValue({ stdout: '131074' });
+    const execFn = enumExec();
     const supabaseClient = makeFakeSupabase({
       sessions: [{ session_id: 's1', status: 'active', metadata: { fleet_identity: { callsign: 'Alpha-5' }, role: 'worker' } }],
     });
@@ -459,7 +612,7 @@ describe('restart (FR-4 singleton-serial / FR-5 worker-parallel)', () => {
     logCoordinationEvent.mockClear();
     const child = { pid: 5151 };
     const spawnFn = vi.fn().mockReturnValue(child);
-    const execFn = vi.fn().mockResolvedValue({ stdout: '131074' });
+    const execFn = enumExec();
     const supabaseClient = makeFakeSupabase({
       sessions: [{ session_id: 's1', status: 'active', metadata: { fleet_identity: { callsign: 'Alpha-5' }, role: 'worker' } }],
     });
@@ -484,7 +637,7 @@ describe('relaunchUnderProfile (FR-7)', () => {
   it('isolates the account switch to the target session; sibling untouched (worker path, live spawn)', async () => {
     const child = { pid: 4343 };
     const spawnFn = vi.fn().mockReturnValue(child);
-    const execFn = vi.fn().mockResolvedValue({ stdout: '131074' });
+    const execFn = enumExec();
     const supabaseClient = makeFakeSupabase({
       sessions: [
         { session_id: 's1', status: 'active', metadata: { fleet_identity: { callsign: 'Alpha-5' }, role: 'worker' } },
@@ -526,7 +679,7 @@ describe('relaunchUnderProfile (FR-7)', () => {
     logCoordinationEvent.mockClear();
     const child = { pid: 6161 };
     const spawnFn = vi.fn().mockReturnValue(child);
-    const execFn = vi.fn().mockResolvedValue({ stdout: '131074' });
+    const execFn = enumExec();
     const supabaseClient = makeFakeSupabase({
       sessions: [{ session_id: 's1', status: 'active', metadata: { fleet_identity: { callsign: 'Alpha-5' }, role: 'worker' } }],
     });
@@ -599,7 +752,7 @@ describe('drainAndRestart (FR-6: never restarts mid-claim)', () => {
     });
     const child = { pid: 5252 };
     const spawnFn = vi.fn().mockReturnValue(child);
-    const execFn = vi.fn().mockResolvedValue({ stdout: '131074' });
+    const execFn = enumExec();
     const result = await drainAndRestart('Alpha-5', { supabaseClient, nowMs, live: true, spawnFn, execFn, sleepFn: vi.fn() });
     expect(result.deferred).toBe(false);
     expect(result.verdict).toBe('PASS');
