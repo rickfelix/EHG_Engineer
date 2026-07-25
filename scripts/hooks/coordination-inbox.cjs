@@ -83,6 +83,13 @@ function getIdentityFile(resolvedSessionId) {
 // sessions = 24/min, well below capacity.
 const CHECK_INTERVAL_MS = parseInt(process.env.COORDINATION_CHECK_INTERVAL_MS, 10) || 15_000;
 const HEARTBEAT_INTERVAL_MS = 30_000; // Update heartbeat every 30 seconds
+// SD-LEO-INFRA-PARKED-WORKER-CLAIM-LAPSE-001 FR-4: how fresh a session heartbeat must be for that
+// session to count as a live builder holding its sd_key. 15min matches the claim TTL the fleet
+// already uses (chairman_dashboard_config), so a parked /loop worker on a 900-1800s wake cadence
+// is still recognised as building between ticks rather than having its SD advertised out from
+// under it. Deliberately generous: a false "held" only delays a dispatch, a false "free" causes
+// the second-dispatch collision this SD exists to prevent.
+const SESSION_LIVENESS_WINDOW_MS = 15 * 60 * 1000;
 const ACTIONABLE_TYPES = ['WORK_ASSIGNMENT', 'CLAIM_RELEASED', 'CLAIM_REMINDER'];
 // SD-FDBK-FIX-WORKER-CHECK-SURFACES-001 (adversarial-review finding #1): only WORK_ASSIGNMENT
 // has a worker-side CLOSURE path for a busy worker (claim_sd/ackMessage stamps read_at when the
@@ -768,14 +775,57 @@ async function main() {
         .order('priority_score', { ascending: false })
         .limit(3);
 
-      if (availableSDs && availableSDs.length > 0) {
+      // SD-LEO-INFRA-PARKED-WORKER-CLAIM-LAPSE-001 FR-4: claiming_session_id alone is NOT
+      // evidence an SD is free. A live worker parked on ScheduleWakeup can have its claim
+      // transiently cleared while it is still building, and this query would then advertise
+      // its SD for auto-claim — the second-dispatch risk this SD exists to close. Cross-check
+      // against the session side, the pattern coordinator-email-summary.mjs:64-66 already uses
+      // ("claiming_session_id drifts to NULL after a claim-sweep even while the worker keeps
+      // building"). That workaround existed in the email path and was never propagated here.
+      const { data: liveSessions } = await supabase
+        .from('claude_sessions')
+        .select('sd_key, heartbeat_at')
+        .not('sd_key', 'is', null);
+
+      const claimable = selectAvailableSds(availableSDs, liveSessions);
+      if (claimable.length > 0) {
         emitAutoClaimDirective(
-          availableSDs[0].sd_key,
-          availableSDs.map(sd => sd.sd_key)
+          claimable[0].sd_key,
+          claimable.map(sd => sd.sd_key)
         );
       }
     } catch { /* fail silently */ }
   }
+}
+
+/**
+ * SD-LEO-INFRA-PARKED-WORKER-CLAIM-LAPSE-001 FR-7/FR-4 — the dispatch-availability predicate,
+ * extracted from main() so it can be asserted directly. It previously lived inline, which meant
+ * any test of it could only have mocked the query it was supposed to be testing.
+ *
+ * PURE. Returns the SDs that are genuinely claimable: those whose sd_key is NOT held by a live
+ * session. Fails CLOSED on an unusable session list — if we cannot prove nobody is building an
+ * SD, we do not advertise it. (Emptiness is not proof of absence: an unchecked query error
+ * returning null was the root cause of the claim lapse this SD came from.)
+ *
+ * @param {Array<{sd_key:string}>|null} sdRows        candidate SDs (claiming_session_id IS NULL)
+ * @param {Array<{sd_key:string, heartbeat_at:string}>|null} liveSessions  sessions holding an sd_key
+ * @param {{nowMs?:number, livenessWindowMs?:number}} [opts]
+ * @returns {Array<{sd_key:string}>}
+ */
+function selectAvailableSds(sdRows, liveSessions, opts = {}) {
+  const rows = Array.isArray(sdRows) ? sdRows : [];
+  if (rows.length === 0) return [];
+  // Fail closed: a null/undefined session list means the cross-check could not run.
+  if (!Array.isArray(liveSessions)) return [];
+  const nowMs = opts.nowMs ?? Date.now();
+  const windowMs = opts.livenessWindowMs ?? SESSION_LIVENESS_WINDOW_MS;
+  const heldByLive = new Set(
+    liveSessions
+      .filter((s) => s && s.sd_key && s.heartbeat_at && (nowMs - Date.parse(s.heartbeat_at)) <= windowMs)
+      .map((s) => s.sd_key)
+  );
+  return rows.filter((sd) => sd && sd.sd_key && !heldByLive.has(sd.sd_key));
 }
 
 if (require.main === module) {
@@ -783,6 +833,10 @@ if (require.main === module) {
 }
 
 module.exports = {
+  // SD-LEO-INFRA-PARKED-WORKER-CLAIM-LAPSE-001 FR-7: exported so the dispatch-availability
+  // predicate can be asserted directly instead of through a mock of its own query.
+  selectAvailableSds,
+  SESSION_LIVENESS_WINDOW_MS,
   getCurrentSessionId,
   readSessionIdFromStdin,
   // QF-20260504-912 — exposed for per-session throttle/heartbeat tests
