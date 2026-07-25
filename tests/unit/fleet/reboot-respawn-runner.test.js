@@ -36,6 +36,19 @@ describe('runRebootRespawn dry-run (FR-5) — default INERT', () => {
     expect(res.results[1].invocation.args).toEqual(['new-tab', '-d', resolveRepoRoot(), '--', resolveClaudeCmd()]);
   });
 
+  // QF-20260724-335: opts.sdKey stamps every fleet_verb_respawn event with an explicit run-correlator
+  // (e.g. 'CHECKPOINT-3') so the G1b/G2 leg's events are attributable to the same intentional CP3 run
+  // as the other 2 legs (Solomon S7 acceptance).
+  it('threads opts.sdKey onto every per-slot fleet_verb_respawn event (QF-20260724-335)', async () => {
+    const events = [];
+    const logFn = vi.fn(async (_s, ev) => { events.push(ev); return { ok: true }; });
+    await runRebootRespawn({
+      supabase: {}, loadFn: async () => SLOTS, spawnFn: vi.fn(), logFn, live: false, sdKey: 'CHECKPOINT-3',
+    });
+    expect(events).toHaveLength(2);
+    expect(events.every((e) => e.sd_key === 'CHECKPOINT-3')).toBe(true);
+  });
+
   it('builds a supervisor-shaped roster from the slots', async () => {
     const res = await runRebootRespawn({ supabase: {}, loadFn: async () => SLOTS, logFn: async () => ({ ok: true }), live: false });
     expect(res.roster).toEqual([
@@ -50,7 +63,7 @@ describe('runRebootRespawn live (FR-5)', () => {
     const spawnCalls = [];
     const spawnFn = vi.fn((program, args) => { spawnCalls.push({ program, args }); return { pid: 111 }; });
     const res = await runRebootRespawn({
-      supabase: {}, loadFn: async () => SLOTS, spawnFn, logFn: async () => ({ ok: true }), live: true, now: () => 'iso',
+      supabase: {}, loadFn: async () => SLOTS, spawnFn, logFn: async () => ({ ok: true }), live: true, now: () => 'iso', sleepFn: vi.fn(),
     });
     expect(res.live).toBe(true);
     expect(spawnFn).toHaveBeenCalledTimes(2);
@@ -65,7 +78,7 @@ describe('runRebootRespawn live (FR-5)', () => {
     const spawnFn = (program, args, env) => { spawnCalls.push(env); return { pid: 1 }; };
     const res = await runRebootRespawn({
       supabase: {}, loadFn: async () => [{ name: 'Canary-1', role: 'worker', account_profile: 'canary', resume_uuid: 'u-c' }],
-      spawnFn, logFn: async () => ({ ok: true }), live: true, resolveProfileDirFn: okResolver,
+      spawnFn, logFn: async () => ({ ok: true }), live: true, resolveProfileDirFn: okResolver, sleepFn: vi.fn(),
     });
     expect(spawnCalls[0].CLAUDE_CONFIG_DIR).toBe('C:\\profiles\\canary');
     expect(res.results[0].spawned).toBe(true);
@@ -76,10 +89,86 @@ describe('runRebootRespawn live (FR-5)', () => {
     const res2 = await runRebootRespawn({
       supabase: {}, loadFn: async () => [{ name: 'Canary-1', role: 'worker', account_profile: 'bad', resume_uuid: 'u-c' }],
       spawnFn: (p, a, e) => { spawnCalls2.push(e); return { pid: 1 }; },
-      logFn: async () => ({ ok: true }), live: true, resolveProfileDirFn: () => { throw new Error('bad profile'); },
+      logFn: async () => ({ ok: true }), live: true, resolveProfileDirFn: () => { throw new Error('bad profile'); }, sleepFn: vi.fn(),
     });
     expect(spawnCalls2).toHaveLength(0); // never spawned unisolated
     expect(res2.results[0].spawned).toBe(false);
     expect(res2.results[0].isolation_failed).toBe(true);
+  });
+});
+
+describe('runRebootRespawn (QF-20260724-911): payload.live is ground-truth-reconciled, not spawnFn()-returned', () => {
+  /** Minimal fake supporting exactly the claude_sessions.select().eq('pid',...).maybeSingle() shape used. */
+  function makeFakeSupabase(sessionsByPid) {
+    return {
+      from: (table) => {
+        if (table !== 'claude_sessions') throw new Error(`unexpected table: ${table}`);
+        return { select: () => ({ eq: (_col, pid) => ({ maybeSingle: async () => ({ data: sessionsByPid[pid] || null }) }) }) };
+      },
+    };
+  }
+
+  it('binds session_id + live:true + outcome:ok when the spawned pid reconciles to a fresh, heartbeating session', async () => {
+    const nowMs = 1_800_000_000_000;
+    const supabase = makeFakeSupabase({ 111: { session_id: 's-new', heartbeat_at: new Date(nowMs - 1000).toISOString(), loop_state: 'active' } });
+    const spawnFn = vi.fn(() => ({ pid: 111 }));
+    const events = [];
+    const logFn = vi.fn(async (_s, ev) => { events.push(ev); return { ok: true }; });
+    const res = await runRebootRespawn({
+      supabase, loadFn: async () => [SLOTS[0]], spawnFn, logFn, live: true, now: () => 'iso', sleepFn: vi.fn(), nowMs,
+    });
+    expect(res.results[0]).toMatchObject({ spawned: true, live: true, session_id: 's-new' });
+    expect(events[0].session_id).toBe('s-new');
+    expect(events[0].payload).toMatchObject({ live: true, outcome: 'ok' });
+  });
+
+  it('reports live:false + outcome:respawn_unbound + session_id:null (NOT true) when spawnFn returns without throwing but no session ever reconciles -- the exact forgeable case this fix closes (discriminating rule: a code path emitting live=true with session_id=null must fail a test like this one)', async () => {
+    const spawnFn = vi.fn(() => ({ pid: 999 })); // "succeeds" per the old fire-and-forget check
+    const supabase = makeFakeSupabase({}); // pid 999 never appears in claude_sessions -- child killed/failed before registering
+    const events = [];
+    const logFn = vi.fn(async (_s, ev) => { events.push(ev); return { ok: true }; });
+    const res = await runRebootRespawn({
+      supabase, loadFn: async () => [SLOTS[0]], spawnFn, logFn, live: true, now: () => 'iso', sleepFn: vi.fn(), reconcileMaxAttempts: 2,
+    });
+    expect(spawnFn).toHaveBeenCalled(); // the OS-level spawn call itself did succeed...
+    expect(res.results[0]).toMatchObject({ spawned: true, live: false, session_id: null }); // ...but it never bound
+    expect(events[0].session_id).toBeNull();
+    expect(events[0].payload).toMatchObject({ live: false, outcome: 'respawn_unbound' });
+  });
+
+  it('retries the reconcile lookup (bounded) when the session row has not landed yet on the first attempt', async () => {
+    const nowMs = 1_800_000_000_000;
+    let lookups = 0;
+    const supabase = {
+      from: () => ({
+        select: () => ({
+          eq: () => ({
+            maybeSingle: async () => {
+              lookups++;
+              if (lookups < 2) return { data: null };
+              return { data: { session_id: 's-late', heartbeat_at: new Date(nowMs - 1000).toISOString(), loop_state: 'active' } };
+            },
+          }),
+        }),
+      }),
+    };
+    const spawnFn = vi.fn(() => ({ pid: 111 }));
+    const sleepFn = vi.fn().mockResolvedValue(undefined);
+    const res = await runRebootRespawn({
+      supabase, loadFn: async () => [SLOTS[0]], spawnFn, logFn: async () => ({ ok: true }), live: true, sleepFn, nowMs,
+    });
+    expect(lookups).toBe(2);
+    expect(sleepFn).toHaveBeenCalledTimes(1);
+    expect(res.results[0].session_id).toBe('s-late');
+  });
+
+  it('dry-run (live:false at the runner level) never attempts reconciliation: outcome:dry_run, session_id:null', async () => {
+    const events = [];
+    const logFn = vi.fn(async (_s, ev) => { events.push(ev); return { ok: true }; });
+    const res = await runRebootRespawn({
+      supabase: {}, loadFn: async () => [SLOTS[0]], spawnFn: vi.fn(), logFn, live: false, now: () => 'iso',
+    });
+    expect(res.results[0]).toMatchObject({ spawned: false, live: false, session_id: null });
+    expect(events[0].payload).toMatchObject({ live: false, outcome: 'dry_run' });
   });
 });

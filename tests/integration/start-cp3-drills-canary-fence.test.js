@@ -103,10 +103,23 @@ describe.skipIf(!HAS_REAL_DB)('start-cp3-drills defaultRunDrills — non-mocked 
     // (never the env var), but asserting the env state here too keeps both tests self-documenting.
     expect(process.env.FLEET_SPAWN_CONTROL_LIVE).toBe('false');
 
+    // QF-20260724-911 (parallel fleet fix, reconciled here): payload.live is now derived from GROUND-
+    // TRUTH reconciliation against a real, fresh-heartbeating claude_sessions row (not merely "spawnFn
+    // returned without throwing") -- reconcileSpawnedSession polls by pid via checkNewSessionHealth
+    // (fresh heartbeat_at + a valid, non-exited loop_state). spawnFn itself is called synchronously
+    // (never awaited by the caller), so the fake row must exist BEFORE the drill runs, not be inserted
+    // from inside the stub.
+    const stubPid = 424243;
+    const stubSessionId = randomUUID();
+    await supabase.from('claude_sessions').insert({
+      session_id: stubSessionId, status: 'active', pid: stubPid,
+      heartbeat_at: new Date().toISOString(), loop_state: 'active',
+    });
+    cleanup.sessionIds.push(stubSessionId);
     const spawnCalls = [];
     const spawnFn = (program, args, env, cwd) => {
       spawnCalls.push({ program, args, env, cwd });
-      return { pid: 424242 }; // sanctioned OS-boundary stub -- no real process launched
+      return { pid: stubPid }; // sanctioned OS-boundary stub -- no real process launched
     };
 
     // NOTE: canaryOnlyLoadFn (production code) correctly filters to ALL canary-profile slots, which

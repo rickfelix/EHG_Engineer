@@ -97,45 +97,6 @@ export async function main(argv = process.argv.slice(2), deps = {}) {
  * canary-guard gating (assertCanaryTarget + FLEET_CANARY_KILL_ENABLED) still fail-closes a real run
  * against a non-canary, and the reboot leg's slot-filter fail-closes independently of the guard.
  */
-/**
- * DURABLE FIX (cp3-do-it-right-20260724, coordinator-diagnosed): G1a's restart() ALWAYS releases the
- * old canary target and spawns a fresh, UNSTAMPED replacement (metadata={}) -- without immediately
- * re-stamping it, G3/U4's target resolution (which reuses the pre-G1a callsign snapshot) races the
- * replacement's own self-registration and fails closed (not_found) every time, requiring a human to
- * manually stamp it mid-drill. Poll for the fresh session created since G1a started -- called BEFORE
- * the reboot leg runs, so the ONLY unstamped session in that window is G1a's own replacement (the
- * reboot leg's separate Canary-pilot spawn hasn't happened yet, so there's no ambiguity to resolve).
- * @param {object} supabase
- * @param {string} sinceIso - ISO timestamp captured right before canaryRestart() was called
- * @returns {Promise<string|null>} the fresh, still-unstamped session_id, or null if none appeared
- */
-async function pollForFreshUnstampedCanary(supabase, sinceIso, { maxAttempts = 10, delayMs = 500 } = {}) {
-  for (let attempt = 1; attempt <= maxAttempts; attempt++) {
-    const { data } = await supabase.from('claude_sessions')
-      .select('session_id, metadata, created_at')
-      .gt('created_at', sinceIso)
-      .in('status', ['active', 'idle'])
-      .order('created_at', { ascending: true });
-    const unstamped = (data || []).find((s) => !s.metadata || !s.metadata.account_profile);
-    if (unstamped) return unstamped.session_id;
-    if (attempt < maxAttempts) await new Promise((resolve) => { setTimeout(resolve, delayMs); });
-  }
-  return null;
-}
-
-/**
- * Read-merge-write stamp (never a blind overwrite -- mirrors the coordinator's own manual pattern):
- * sets metadata.account_profile=canary + metadata.fleet_identity.callsign on the fresh replacement,
- * preserving any other metadata keys already present.
- */
-async function restampCanary(supabase, newSessionId, callsign) {
-  const { data: current } = await supabase.from('claude_sessions').select('metadata').eq('session_id', newSessionId).maybeSingle();
-  const existing = (current && current.metadata) || {};
-  await supabase.from('claude_sessions').update({
-    metadata: { ...existing, account_profile: 'canary', fleet_identity: { ...(existing.fleet_identity || {}), callsign, role: 'worker' } },
-  }).eq('session_id', newSessionId);
-}
-
 export async function defaultRunDrills(plan, deps = {}) {
   const load = async (p, name, injected) => injected || (await import(p))[name];
   const runRebootRespawnDrill = await load('../../lib/fleet/reboot-respawn-drill-runner.js', 'runRebootRespawnDrill', deps.runRebootRespawnDrill);
@@ -150,11 +111,12 @@ export async function defaultRunDrills(plan, deps = {}) {
 
   // Resolve the live canary session (canary-guard fail-closes if none / not a real canary). `target`
   // here is the RESOLVED IDENTITY OBJECT ({resolved, identity:{session_id,callsign,...}} shape) --
-  // extract the callsign STRING for every downstream call that needs a target key (bug2).
+  // extract the callsign STRING for every downstream call that needs a target key (bug2: passing the
+  // whole object where guardedVerb's by:'callsign' resolution expects a string always fails not_found).
   const target = await resolveCanary(supabase, { by: 'account_profile', value: 'canary' });
   const targetCallsign = (target && target.resolved && target.identity && target.identity.callsign) || null;
-  // NOTE: reassigned after G1a's self-stamp step below (G1a's restart always replaces the session
-  // behind this callsign, so the pre-G1a session_id snapshot goes stale before G3/U4 needs it).
+  // NOTE: reassigned after G1a below (its restart always replaces the session behind this callsign,
+  // so the pre-G1a session_id snapshot goes stale before G3/U4 needs it for its own event query).
   let sessionId = (target && target.resolved && target.identity && target.identity.session_id) || null;
   const fromProfile = process.env.FLEET_LIVE_PROFILE || 'live';
   const toProfile = plan?.canaryProfile || 'canary';
@@ -183,28 +145,25 @@ export async function defaultRunDrills(plan, deps = {}) {
   // one (deps.spawnFn), leaving spawn-control.js's own default to engage in production.
   const injectedSpawnFn = deps.spawnFn;
 
+  // QF-20260724-335 (parallel fleet fix, reconciled here): an explicit, intentional run-correlator
+  // stamped on all 3 leg fleet_verb events of this single --live invocation -- timing/session-proximity
+  // alone is insufficient (a stray dry-run/accidental-spawn batch can collide with a real run); Solomon's
+  // S7 acceptance requires a unique intentional binding of the 3 legs to one CP3 run.
+  const sdKey = deps.sdKey || 'CHECKPOINT-3';
+
   // G1a kill-supervisor -> fleet_verb_restart (canary-guarded). Requires an EXISTING live canary
   // session to target -- reports the gap explicitly (never silently swallowed) when none exists yet.
-  const g1aStartedAt = new Date().toISOString();
   const g1a = targetCallsign
-    ? await Promise.resolve(canaryRestart(targetCallsign, { supabaseClient: supabase, spawnFn: injectedSpawnFn })).catch((e) => ({ error: e && e.message }))
+    ? await Promise.resolve(canaryRestart(targetCallsign, { supabaseClient: supabase, spawnFn: injectedSpawnFn, sdKey })).catch((e) => ({ error: e && e.message }))
     : { ok: false, reason: 'no_live_canary_session' };
 
-  // DURABLE FIX: G1a's own restart releases the old target + spawns a fresh, unstamped replacement --
-  // self-stamp it NOW (before the reboot leg spawns its own separate Canary-pilot session) so G3/U4's
-  // target resolution finds a live, correctly-identified canary instead of racing the replacement's
-  // self-registration. Also refresh `sessionId` to the fresh replacement -- U4's event_log_presence
-  // check queries coordination_events by session_id, and relaunch_under_profile's own emitted event
-  // carries the (now-current) session's id, not the pre-G1a snapshot this variable held until here.
-  // Injectable for tests; a no-op when g1a didn't actually respawn anything.
-  if (g1a && g1a.ok && targetCallsign) {
-    const pollFn = deps.pollNewCanarySession || pollForFreshUnstampedCanary;
-    const restampFn = deps.restampCanary || restampCanary;
-    const freshSessionId = await pollFn(supabase, g1aStartedAt).catch(() => null);
-    if (freshSessionId) {
-      await restampFn(supabase, freshSessionId, targetCallsign).catch(() => {});
-      sessionId = freshSessionId;
-    }
+  // SELF-STAMP RECONCILED (cp3-do-it-right-20260724 + parallel QF-20260724-295): canary-guard.js's
+  // canaryRestart now self-stamps the fresh respawn itself (PID-keyed, more robust than this file's
+  // earlier timestamp-window poll, which is removed) -- the ONE thing still needed here is refreshing
+  // `sessionId` for U4's own event_log_presence query, since QF-20260724-739 now threads the bound
+  // session_id straight through spawn()'s return value (spawnResult.session_id), no extra lookup needed.
+  if (g1a && g1a.ok && g1a.spawnResult && g1a.spawnResult.session_id) {
+    sessionId = g1a.spawnResult.session_id;
   }
 
   // (3) G1b+G2 reboot-respawn -> fleet_verb_respawn (real client, not null). SECURITY FENCE (bug1):
@@ -229,33 +188,19 @@ export async function defaultRunDrills(plan, deps = {}) {
   // deps.rebootQueryEventsFn -- closes the "respawn_events_present always fails on a genuine live
   // run" gap even when the underlying respawn succeeded.
   const reboot = await runRebootRespawnDrill({
-    supabase, live: true, loadFn: canaryOnlyLoadFn, spawnFn: canarySpawnFn, queryEventsFn: rebootQueryEventsFn,
+    supabase, live: true, loadFn: canaryOnlyLoadFn, spawnFn: canarySpawnFn, queryEventsFn: rebootQueryEventsFn, opts: { sdKey },
   }).catch((e) => ({ error: e && e.message }));
 
   // (2) G3+U4 relaunch-under-profile -> fleet_verb_relaunch_under_profile (bug2 fix: supabaseClient
-  // key + callsign string). Same explicit no-target reporting as G1a.
-  const u4StartedAt = new Date().toISOString();
+  // key + callsign string). Same explicit no-target reporting as G1a. canaryRelaunchUnderProfile
+  // self-stamps its own fresh respawn the same way canaryRestart does -- no extra step needed here.
   const u4 = targetCallsign
     ? await runU4Drill({
         target: targetCallsign, fromProfile, toProfile, sessionId,
         relaunchFn: canaryRelaunchUnderProfile, resolveFn: resolveProfileDir, queryEventsFn,
-        opts: { supabaseClient: supabase, spawnFn: injectedSpawnFn },
+        opts: { supabaseClient: supabase, spawnFn: injectedSpawnFn, sdKey },
       }).catch((e) => ({ error: e && e.message }))
     : { pass: false, checks: [{ name: 'target_resolution', pass: false, detail: 'no live canary session to target (account_profile=canary)' }] };
-
-  // DURABLE FIX (part 2): relaunchUnderProfile follows the SAME release-old/spawn-fresh pattern as
-  // G1a's restart -- a successful U4 leg also orphans the canary identity onto a new, unstamped
-  // session. Self-stamp it too so the canary survives between separate drill invocations, not just
-  // within a single one (nothing runs after U4 in THIS call, but the next --live invocation needs a
-  // live target to resolve against).
-  const u4Succeeded = !!(u4 && Array.isArray(u4.checks)
-    && u4.checks.find((c) => c.name === 'supervisor_env_invariant')?.result?.ok === true);
-  if (u4Succeeded && targetCallsign) {
-    const pollFn = deps.pollNewCanarySession || pollForFreshUnstampedCanary;
-    const restampFn = deps.restampCanary || restampCanary;
-    const freshSessionId = await pollFn(supabase, u4StartedAt).catch(() => null);
-    if (freshSessionId) await restampFn(supabase, freshSessionId, targetCallsign).catch(() => {});
-  }
 
   return { g1a, reboot, u4 };
 }
