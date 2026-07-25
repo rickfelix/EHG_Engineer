@@ -59,7 +59,11 @@ describe('extractDirectedSd — structured directed fields only (finding #2)', (
 
 // resolveCheckin seam 1 — fake sb: session holds mySd; an unread WORK_ASSIGNMENT targets a
 // different SD. The assignment must surface on the resume result without dropping the claim.
-function fakeSb({ heldSd, assignmentSd, windDown, sdRow, qfRow }) {
+// NOTE: callers pass `assignmentSd` for readability at the call site, but the fixture never
+// consults it (the assignment is injected via the ws.getMessagesForSession stub instead), so it
+// is deliberately not destructured here — doing so tripped no-unused-vars once this file was
+// touched. Extra keys in the caller's object literal are simply ignored.
+function fakeSb({ heldSd, windDown, sdRow, qfRow }) {
   return {
     rpc: () => Promise.resolve({ data: { success: true }, error: null }),
     from(table) {
