@@ -14,7 +14,6 @@
 import { describe, it, expect } from 'vitest';
 import { fileURLToPath } from 'node:url';
 import { dirname, resolve } from 'node:path';
-import { readFileSync } from 'node:fs';
 import { execFileSync } from 'node:child_process';
 import { createRequire } from 'node:module';
 
