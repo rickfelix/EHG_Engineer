@@ -99,8 +99,10 @@ describe('defaultRunDrills — rebootQueryEventsFn wiring (QF-20260724-113)', ()
   it('the default rebootQueryEventsFn queries fleet_verb_respawn events with no required argument', async () => {
     const eq = vi.fn().mockReturnThis();
     const order = vi.fn().mockReturnThis();
+    // QF-20260725-076: the query is now RUN-SCOPED, so the chain includes .gte('created_at', ...).
+    const gte = vi.fn().mockReturnThis();
     const limit = vi.fn().mockResolvedValue({ data: [{ event_type: 'fleet_verb_respawn' }, { event_type: 'fleet_verb_respawn' }] });
-    const select = vi.fn(() => ({ eq, order, limit }));
+    const select = vi.fn(() => ({ eq, order, gte, limit }));
     const supabase = { from: vi.fn(() => ({ select })) };
     const target = { session_id: 'canary-sess-1', metadata: { account_profile: 'canary' } };
     const resolveCanaryTarget = vi.fn(async () => target);
@@ -122,6 +124,67 @@ describe('defaultRunDrills — rebootQueryEventsFn wiring (QF-20260724-113)', ()
     expect(eq).toHaveBeenCalledWith('event_type', 'fleet_verb_respawn');
     expect(res.reboot.pass).toBe(true);
   });
+
+  // QF-20260725-076: the query must describe THIS RUN. Unscoped, it returned the 50 most recent
+  // respawn events in ALL OF HISTORY and the checks reasoned over them as if they were this run —
+  // making check 5 permanently unpassable (auditedCount === boundSessionIds.length evaluated
+  // 0 === 4 against four stale bound rows, and a flawless run only made it 1 === 5) while check 4
+  // could pass VACUOUSLY on those same stale rows even if this run emitted nothing.
+  it('scopes respawn events to THIS RUN by created_at, and to the run correlator', async () => {
+    const eq = vi.fn().mockReturnThis();
+    const order = vi.fn().mockReturnThis();
+    const gte = vi.fn().mockReturnThis();
+    const limit = vi.fn().mockResolvedValue({ data: [] });
+    const select = vi.fn(() => ({ eq, order, gte, limit }));
+    const supabase = { from: vi.fn(() => ({ select })) };
+    const target = { session_id: 'canary-sess-1', metadata: { account_profile: 'canary' } };
+    const runRebootRespawnDrill = vi.fn(async (args) => { await args.queryEventsFn(); return { pass: true, checks: [] }; });
+
+    const before = new Date().toISOString();
+    await defaultRunDrills({ canaryProfile: 'canary', cwd: 'R:\\r', legs: [] }, {
+      supabase,
+      resolveCanaryTarget: vi.fn(async () => target),
+      canaryRestart: vi.fn(async () => ({ outcome: 'ok' })),
+      canaryRelaunchUnderProfile: vi.fn(async () => ({ outcome: 'ok' })),
+      runRebootRespawnDrill,
+      runU4Drill: vi.fn(async () => ({ pass: true })),
+    });
+
+    // A created_at lower bound exists and is not some historical constant — it is >= the instant
+    // this run began, which is what makes "this run" actually mean this run.
+    const gteCall = gte.mock.calls.find((c) => c[0] === 'created_at');
+    expect(gteCall, 'expected a .gte("created_at", ...) run scope').toBeTruthy();
+    expect(Date.parse(gteCall[1])).toBeGreaterThanOrEqual(Date.parse(before) - 1000);
+    // …and the intentional run correlator is still applied (QF-20260724-335).
+    expect(eq).toHaveBeenCalledWith('sd_key', 'CHECKPOINT-3');
+  });
+
+  it('FAILS LOUD on a query error instead of returning [] (an empty set would read as "no events")', async () => {
+    const eq = vi.fn().mockReturnThis();
+    const order = vi.fn().mockReturnThis();
+    const gte = vi.fn().mockReturnThis();
+    const limit = vi.fn().mockResolvedValue({ data: null, error: { message: 'boom' } });
+    const select = vi.fn(() => ({ eq, order, gte, limit }));
+    const supabase = { from: vi.fn(() => ({ select })) };
+    const target = { session_id: 'canary-sess-1', metadata: { account_profile: 'canary' } };
+    let caught = null;
+    const runRebootRespawnDrill = vi.fn(async (args) => {
+      try { await args.queryEventsFn(); } catch (e) { caught = e; }
+      return { pass: true, checks: [] };
+    });
+
+    await defaultRunDrills({ canaryProfile: 'canary', cwd: 'R:\\r', legs: [] }, {
+      supabase,
+      resolveCanaryTarget: vi.fn(async () => target),
+      canaryRestart: vi.fn(async () => ({ outcome: 'ok' })),
+      canaryRelaunchUnderProfile: vi.fn(async () => ({ outcome: 'ok' })),
+      runRebootRespawnDrill,
+      runU4Drill: vi.fn(async () => ({ pass: true })),
+    });
+
+    expect(caught, 'a failed lookup must not be swallowed into an empty event set').toBeTruthy();
+    expect(caught.message).toMatch(/lookup failed/);
+  });
 });
 
 // QF-20260724-070: the live drill must be wired with a queryLifecycleEventsFn so the new
@@ -130,8 +193,10 @@ describe('defaultRunDrills — rebootQueryLifecycleEventsFn wiring (QF-20260724-
   it('threads a default queryLifecycleEventsFn into runRebootRespawnDrill that reads RESPAWN_BIND_VERIFIED rows', async () => {
     const eq = vi.fn().mockReturnThis();
     const order = vi.fn().mockReturnThis();
+    // QF-20260725-076: run-scoped too — BOTH sides of check 5's equality must describe the same run.
+    const gte = vi.fn().mockReturnThis();
     const limit = vi.fn().mockResolvedValue({ data: [{ event_type: 'RESPAWN_BIND_VERIFIED', session_id: 's-1' }] });
-    const select = vi.fn(() => ({ eq, order, limit }));
+    const select = vi.fn(() => ({ eq, order, gte, limit }));
     const supabase = { from: vi.fn(() => ({ select })) };
     const target = { session_id: 'canary-sess-1', metadata: { account_profile: 'canary' } };
     const resolveCanaryTarget = vi.fn(async () => target);
@@ -151,6 +216,11 @@ describe('defaultRunDrills — rebootQueryLifecycleEventsFn wiring (QF-20260724-
     expect(select).toHaveBeenCalledWith('event_type,session_id');
     expect(eq).toHaveBeenCalledWith('event_type', 'RESPAWN_BIND_VERIFIED');
     expect(res.reboot.pass).toBe(true);
+    // QF-20260725-076: the audited-bind side is run-scoped as well. Without this, check 5 compared
+    // an all-history audited count against an all-history bound count — and since
+    // RESPAWN_BIND_VERIFIED had ZERO rows all-time while four stale bound rows sat in the window,
+    // no drill outcome whatsoever could satisfy it.
+    expect(gte).toHaveBeenCalledWith('created_at', expect.any(String));
   });
 });
 

@@ -103,29 +103,65 @@ export async function defaultRunDrills(plan, deps = {}) {
       .eq('session_id', sid).like('event_type', 'fleet_verb_%');
     return data || [];
   });
-  // QF-20260724-113 (FR-b): reboot-respawn's respawn_events_present check takes a NO-ARG
-  // queryEventsFn (unlike U4's session-scoped one, since reboot-respawn creates one replacement
-  // session PER slot, not a single target) -- without this the live CLI path always failed
-  // respawn_events_present ("no queryEventsFn supplied") even on a genuinely successful respawn.
-  const rebootQueryEventsFn = deps.rebootQueryEventsFn || (async () => {
-    const { data } = await supabase.from('coordination_events').select('event_type,payload,session_id')
-      .eq('event_type', 'fleet_verb_respawn').order('created_at', { ascending: false }).limit(50);
-    return data || [];
-  });
-  // QF-20260724-070: wire the durable-bind-audit query so the live drill's respawn_bind_audited check
-  // (a real heartbeat proof recorded AT BIND TIME, surviving the session later ghosting) has real
-  // evidence to read -- without this the check would fail-closed on every genuine live bind.
-  const rebootQueryLifecycleEventsFn = deps.rebootQueryLifecycleEventsFn || (async () => {
-    const { data } = await supabase.from('session_lifecycle_events').select('event_type,session_id')
-      .eq('event_type', 'RESPAWN_BIND_VERIFIED').order('created_at', { ascending: false }).limit(50);
-    return data || [];
-  });
+  // QF-20260725-076: SCOPE THE REBOOT QUERIES TO THE RUN. Both selected the 50 most recent rows IN
+  // ALL OF HISTORY, and the checks then reasoned over them as if they were this run. One cause, two
+  // opposite breakages:
+  //   - CERTAIN FALSE FAIL on check 5 (respawn_bind_audited): four bound-but-unaudited respawns from
+  //     2026-07-25T00:17Z sit in the window while RESPAWN_BIND_VERIFIED is 0 rows ALL-TIME, so the
+  //     check evaluated auditedCount === boundSessionIds.length as 0 === 4. A flawless run did not
+  //     save it — one perfect new bind made it 1 === 5, still red. NO drill outcome could pass.
+  //   - FALSE PASS on check 4 (respawn_events_present): those same historical rows counted toward
+  //     respawnEvents >= slots.length, so it could go green even if this run emitted nothing.
+  // QF-20260724-828 hardened the PREDICATE and left the POPULATION — tightening what counts as a
+  // valid row does nothing when the row set is the wrong row set.
+  //
+  // The correlator is a run-start TIMESTAMP, not sdKey alone: sdKey defaults to the constant
+  // 'CHECKPOINT-3' and is stamped on every CP3 run ever, so filtering on it would still admit prior
+  // runs. Events from THIS invocation can only be created after this instant.
+  const runStartedAt = deps.runStartedAt || new Date().toISOString();
 
   // QF-20260724-335: an explicit, intentional run-correlator stamped on all 3 leg fleet_verb events
   // of this single --live invocation. Timing/session-proximity correlation is insufficient (a stray
   // dry-run/accidental-spawn batch can collide with a real run) -- Solomon's S7 acceptance requires a
   // unique intentional binding of the 3 legs to one CP3 run.
+  // QF-20260725-076 moved this ABOVE the reboot query closures that now read it. It previously sat
+  // below them and worked only because those closures are invoked later; any earlier call would have
+  // thrown a TDZ ReferenceError. Declaring it before its consumers removes the trap.
   const sdKey = deps.sdKey || 'CHECKPOINT-3';
+
+  // QF-20260724-113 (FR-b): reboot-respawn's respawn_events_present check takes a NO-ARG
+  // queryEventsFn (unlike U4's session-scoped one, since reboot-respawn creates one replacement
+  // session PER slot, not a single target) -- without this the live CLI path always failed
+  // respawn_events_present ("no queryEventsFn supplied") even on a genuinely successful respawn.
+  const rebootQueryEventsFn = deps.rebootQueryEventsFn || (async () => {
+    const { data, error } = await supabase.from('coordination_events').select('event_type,payload,session_id')
+      .eq('event_type', 'fleet_verb_respawn')
+      .eq('sd_key', sdKey)                     // intentional run correlator (QF-20260724-335)
+      .gte('created_at', runStartedAt)         // THIS run only (QF-20260725-076)
+      .order('created_at', { ascending: false }).limit(50);
+    // A FAILED query is not "no events": returning [] on error would let a broken lookup read as
+    // "this run emitted nothing" and fail the drill for the wrong reason. Surface it instead.
+    if (error) throw new Error(`rebootQueryEventsFn: coordination_events lookup failed: ${error.message}`);
+    return data || [];
+  });
+  // QF-20260724-070: wire the durable-bind-audit query so the live drill's respawn_bind_audited check
+  // (a real heartbeat proof recorded AT BIND TIME, surviving the session later ghosting) has real
+  // evidence to read -- without this the check would fail-closed on every genuine live bind.
+  // QF-20260725-076: run-scoped for the SAME reason as the events query above, and this is the half
+  // that made check 5 unsatisfiable. It counts audited binds; pairing an all-history audited count
+  // with an all-history bound count is what made the equality impossible to satisfy. Scoping BOTH
+  // sides to this run is what makes auditedCount === boundSessionIds.length describe one run.
+  // session_lifecycle_events has no sd_key column, so the timestamp is the only correlator here.
+  const rebootQueryLifecycleEventsFn = deps.rebootQueryLifecycleEventsFn || (async () => {
+    const { data, error } = await supabase.from('session_lifecycle_events').select('event_type,session_id')
+      .eq('event_type', 'RESPAWN_BIND_VERIFIED')
+      .gte('created_at', runStartedAt)         // THIS run only (QF-20260725-076)
+      .order('created_at', { ascending: false }).limit(50);
+    // Same fail-loud rationale: [] on a failed lookup would understate auditedCount and fail check 5
+    // as if the binds were unaudited — the exact defect this QF exists to remove.
+    if (error) throw new Error(`rebootQueryLifecycleEventsFn: session_lifecycle_events lookup failed: ${error.message}`);
+    return data || [];
+  });
 
   // QF-20260724-499: defaultRunDrills only ever runs after main()'s `if (!live) return` gate, so
   // live is ALREADY known true here -- pass it explicitly on every leg (as reboot already did)
