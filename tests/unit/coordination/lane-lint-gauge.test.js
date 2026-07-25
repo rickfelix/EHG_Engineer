@@ -17,6 +17,7 @@ const {
   runLaneLintGauge,
   RESURFACE_KIND,
   DIGEST_KIND,
+  RESURFACE_KINDS,
 } = require('../../../lib/coordination/lane-lint-gauge.cjs');
 
 function cleanRow(overrides = {}) {
@@ -173,6 +174,28 @@ describe('computeResurfaceDedupDrift — instance 9', () => {
   it('FR-4: legacy singular rows still behave identically (no regression)', () => {
     expect(computeResurfaceDedupDrift([resurfaceRow('l1', false), resurfaceRow('l1', false)])).toBe(1);
     expect(computeResurfaceDedupDrift([resurfaceRow('l1', false), resurfaceRow('l2', false)])).toBe(0);
+  });
+
+  // FR-4 AC-1. The gauge's kind filter is applied SERVER-SIDE and this module is fail-open, so
+  // dropping the legacy kind here would silently stop counting the legacy rows that populate the
+  // 30-day window during cutover -- with no test failure and no observable symptom. Pinning the
+  // array contents is the only thing that kills that mutant.
+  it('FR-4 AC-1: RESURFACE_KINDS spans BOTH the legacy and the digest kind', () => {
+    expect(RESURFACE_KINDS).toContain(RESURFACE_KIND);
+    expect(RESURFACE_KINDS).toContain(DIGEST_KIND);
+    expect(RESURFACE_KINDS).toHaveLength(2);
+  });
+
+  // GAP-1: DIGEST_KIND is a duplicated string literal in the PRODUCER
+  // (scripts/solomon-ledger-pending-resurface.cjs) and this CONSUMER. Asserting the constant
+  // against itself is tautological -- editing the producer's literal would leave every suite
+  // green while the server-side, fail-open filter silently reads drift 0 forever, which is
+  // precisely the hazard FR-4 exists to close. This pins the two modules to each other.
+  it('GAP-1: the producer and the gauge agree on the digest kind string (cross-module pin)', () => {
+    const producer = require('../../../scripts/solomon-ledger-pending-resurface.cjs');
+    expect(DIGEST_KIND).toBe(producer.DIGEST_KIND);
+    expect(RESURFACE_KIND).toBe(producer.RESURFACE_KIND);
+    expect(DIGEST_KIND).toBe('solomon_ledger_pending_digest'); // literal, so BOTH sides moving is still caught
   });
 });
 

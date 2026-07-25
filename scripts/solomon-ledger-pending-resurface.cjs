@@ -90,9 +90,22 @@ function buildDigest(candidates, { nowMs = Date.now(), maxItems = DEFAULT_DIGEST
     correlation_id: r.correlation_id ?? null,
     sd_key: r.sd_key ?? null,
     age_hours: Math.floor((nowMs - new Date(r.created_at).getTime()) / (60 * 60 * 1000)),
-    summary: String(r.proposal_summary || '').slice(0, SUMMARY_MAX_CHARS),
+    // Collapse ALL whitespace before truncating. The digest body is a multi-line list, so an
+    // unsanitised newline inside a summary would let that text forge an extra "- [id] aged Nh"
+    // member line, or a fake "NOTE: list truncated ..." line, inside an otherwise-trustworthy
+    // row. This class did not exist pre-digest (one item per row = no peer list to forge into).
+    // The structured payload was never forgeable -- a newline stays JSON-escaped inside
+    // items[].summary and cannot manufacture a ledger_ids[] entry -- but the body IS rendered
+    // raw into an Adam model context by scripts/hooks/coordination-inbox.cjs, so it is sanitised
+    // at the producer, once, for every consumer.
+    summary: String(r.proposal_summary || '').replace(/\s+/g, ' ').trim().slice(0, SUMMARY_MAX_CHARS),
   }));
   const ledgerIds = items.map((i) => i.ledger_id);
+  // The FULL member set, BEFORE the cap. The dedup key must hash this, not the truncated
+  // `ledgerIds` -- otherwise a stable first-100 with churn beyond the cap yields an unchanging
+  // key and no digest ever re-issues, which is a bounded re-run of the very FR-3 starvation
+  // class the content hash exists to prevent.
+  const allLedgerIds = all.map((r) => r.id);
   const oldestAge = items.length ? Math.max(...items.map((i) => i.age_hours)) : 0;
   const lines = items.map((i) => `- [${i.ledger_id}] aged ${i.age_hours}h${i.sd_key ? ` (${i.sd_key})` : ''}: ${i.summary}`);
   // Non-empty body is REQUIRED: lane-contract readCanonicalBody counts a bodyless row as
@@ -105,7 +118,7 @@ function buildDigest(candidates, { nowMs = Date.now(), maxItems = DEFAULT_DIGEST
     ...(truncated ? ['', `NOTE: list truncated to ${maxItems} of ${all.length} pending items; ${all.length - kept.length} omitted.`] : []),
   ].join('\n');
   const subject = `[SOLOMON_LEDGER_PENDING_DIGEST] ${items.length} pending, oldest ${oldestAge}h${truncated ? ` (truncated from ${all.length})` : ''}`;
-  return { items, ledgerIds, body, subject, truncated, totalCandidates: all.length, oldestAge };
+  return { items, ledgerIds, allLedgerIds, body, subject, truncated, totalCandidates: all.length, oldestAge };
 }
 
 /**
@@ -193,7 +206,8 @@ async function resurfaceStalePending(supabase, adamId, { thresholdHours = DEFAUL
   }
 
   const digest = buildDigest(members, { nowMs, maxItems });
-  const key = digestDedupKey(digest.ledgerIds);
+  // Hash the FULL member set, not the post-cap slice -- see buildDigest's allLedgerIds note.
+  const key = digestDedupKey(digest.allLedgerIds);
 
   // Content-hash dedup: an unchanged member set is a no-op; a changed set re-issues NOW.
   const { data: existing } = await supabase.from('session_coordination').select('id')
