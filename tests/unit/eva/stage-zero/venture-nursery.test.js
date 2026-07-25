@@ -19,6 +19,8 @@ import {
   recordSynthesisFeedback,
   checkNurseryTriggers,
   applyPendingNurseryPredicate,
+  recordNurseryEvaluation,
+  NURSERY_EVAL_TRIGGER_TYPES,
   getNurseryHealth,
   toNurseryMaturityLevel,
   toNurserySourceType,
@@ -379,6 +381,76 @@ describe('checkNurseryTriggers (FR-2: next_evaluation_at + promoted_to_venture_i
     const { supabase, captured } = captureSb({ selectData: [] });
     await checkNurseryTriggers({ supabase, logger: silentLogger, now: new Date('2030-01-01T00:00:00.000Z') });
     expect(captured.ors.join(' ')).toContain('next_evaluation_at.lte.2030-01-01T00:00:00.000Z');
+  });
+});
+
+describe('recordNurseryEvaluation (FR-4: the witness writer that never existed)', () => {
+  test('throws on missing supabase and on missing nurseryId', async () => {
+    await expect(recordNurseryEvaluation({ nurseryId: 'n1', triggerType: 'manual' }, {}))
+      .rejects.toThrow('supabase client is required');
+    const { supabase } = captureSb();
+    await expect(recordNurseryEvaluation({ triggerType: 'manual' }, { supabase, logger: silentLogger }))
+      .rejects.toThrow('nurseryId is required');
+  });
+
+  test('REJECTS nursery_reeval — the value the strategy uses is NOT a legal trigger_type', async () => {
+    const { supabase } = captureSb();
+    // The queue strategy is called nursery_reeval, so reaching for it here is the natural
+    // mistake; the CHECK constraint does not admit it. Failing in JS names the legal set
+    // instead of surfacing an opaque constraint violation from the driver.
+    await expect(recordNurseryEvaluation({ nurseryId: 'n1', triggerType: 'nursery_reeval' }, { supabase, logger: silentLogger }))
+      .rejects.toThrow(/nursery_reeval is NOT a valid member/);
+  });
+
+  test.each(['capability_added', 'market_shift', 'portfolio_gap', 'related_outcome', 'periodic_review', 'manual'])(
+    'accepts the live CHECK member %s',
+    async (triggerType) => {
+      const { supabase, captured } = captureSb();
+      await recordNurseryEvaluation({ nurseryId: 'n1', triggerType }, { supabase, logger: silentLogger });
+      expect(captured.inserts[0].payload.trigger_type).toBe(triggerType);
+    }
+  );
+
+  test('the mirror list matches the live CHECK constraint exactly', () => {
+    // A mirror, never a source of truth: adding a member here without the chairman-gated
+    // DDL would produce inserts the database rejects.
+    expect([...NURSERY_EVAL_TRIGGER_TYPES].sort()).toEqual(
+      ['capability_added', 'manual', 'market_shift', 'periodic_review', 'portfolio_gap', 'related_outcome']
+    );
+    expect(NURSERY_EVAL_TRIGGER_TYPES).not.toContain('nursery_reeval');
+  });
+
+  test('trigger type is a PARAMETER — a manual demo is not labelled a periodic firing', async () => {
+    const { supabase, captured } = captureSb();
+    await recordNurseryEvaluation({ nurseryId: 'n1', triggerType: 'manual' }, { supabase, logger: silentLogger });
+    await recordNurseryEvaluation({ nurseryId: 'n2', triggerType: 'periodic_review' }, { supabase, logger: silentLogger });
+    expect(captured.inserts.map((i) => i.payload.trigger_type)).toEqual(['manual', 'periodic_review']);
+  });
+
+  test('writes only live columns, and leaves evaluated_by to the DEFAULT unless named', async () => {
+    const LIVE_LOG_COLUMNS = new Set([
+      'nursery_id', 'trigger_type', 'trigger_details', 'previous_score', 'new_score',
+      'previous_maturity', 'new_maturity', 'evaluation_notes', 'evaluated_by',
+    ]);
+    const { supabase, captured } = captureSb();
+    await recordNurseryEvaluation({ nurseryId: 'n1', triggerType: 'manual', previousScore: 90, newScore: 92, notes: 'n' }, { supabase, logger: silentLogger });
+    const payload = captured.inserts[0].payload;
+    for (const k of Object.keys(payload)) expect(LIVE_LOG_COLUMNS.has(k), `phantom column: ${k}`).toBe(true);
+    expect(payload).not.toHaveProperty('evaluated_by'); // column DEFAULT stage0_engine
+    expect(payload).toMatchObject({ nursery_id: 'n1', previous_score: 90, new_score: 92, evaluation_notes: 'n' });
+  });
+
+  test('records a named actor when one is supplied', async () => {
+    const { supabase, captured } = captureSb();
+    await recordNurseryEvaluation({ nurseryId: 'n1', triggerType: 'manual', evaluatedBy: 'alpha-2-demo' }, { supabase, logger: silentLogger });
+    expect(captured.inserts[0].payload.evaluated_by).toBe('alpha-2-demo');
+  });
+
+  test('non-numeric scores become NULL rather than NaN', async () => {
+    const { supabase, captured } = captureSb();
+    await recordNurseryEvaluation({ nurseryId: 'n1', triggerType: 'manual', previousScore: undefined, newScore: 'x' }, { supabase, logger: silentLogger });
+    expect(captured.inserts[0].payload.previous_score).toBeNull();
+    expect(captured.inserts[0].payload.new_score).toBeNull();
   });
 });
 
