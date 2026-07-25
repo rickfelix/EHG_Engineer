@@ -27,10 +27,19 @@
  * instead of a re-run. Discoverability closes when FR-3 fixes correlation and stamps the fresh-spawn
  * path; this CLI is its prerequisite and its instrument, not its completion.
  *
- * SAFETY: dry-run is the DEFAULT. --live is an explicit opt-in that this module never infers, and it
- * only reaches spawn-control, which self-gates behind FLEET_SPAWN_CONTROL_LIVE. Running the CP3 drill
- * is NOT in scope and this file cannot start one — it never imports start-cp3-drills.js, canaryRestart,
- * runRebootRespawnDrill or runU4Drill.
+ * SAFETY: dry-run is the DEFAULT. --live is an explicit opt-in that this module never infers.
+ *
+ * CORRECTION (SECURITY adversarial review, SEC-CANHOST-02): an earlier version of this comment claimed
+ * --live "only reaches spawn-control, which self-gates behind FLEET_SPAWN_CONTROL_LIVE". THAT WAS FALSE
+ * and it was the dangerous kind of false — a safety claim on an operator-facing CLI. canary-provision.js
+ * forwards `live` as opts.live, and spawn-control.js reads `opts.live ?? isLiveEnabled()`, so an explicit
+ * opt OVERRIDES the env gate. `provision-canary.mjs --live` really did spawn with
+ * FLEET_SPAWN_CONTROL_LIVE unset. The `??` override is pre-existing and used deliberately elsewhere, so
+ * rather than change that shared semantic, THIS CLI now requires BOTH: the --live flag AND
+ * FLEET_SPAWN_CONTROL_LIVE=true. The comment is now true of this entrypoint because the code enforces it.
+ *
+ * Running the CP3 drill is NOT in scope and this file cannot start one — it never imports
+ * start-cp3-drills.js, canaryRestart, runRebootRespawnDrill or runU4Drill.
  */
 import { realpathSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
@@ -87,8 +96,21 @@ export function classifyProvisionOutcome(result) {
  */
 export async function main(argv = process.argv.slice(2), deps = {}) {
   const log = deps.log || ((m) => console.log(m));
-  const live = argv.includes('--live');
   const provision = deps.provisionFn || provisionCanary;
+
+  // SEC-CANHOST-02: BOTH conditions required. --live alone would override spawn-control's env gate
+  // (`opts.live ?? isLiveEnabled()`), so the flag by itself is not the second factor it reads as.
+  const env = deps.env || process.env;
+  const requestedLive = argv.includes('--live');
+  const envAllowsLive = String(env.FLEET_SPAWN_CONTROL_LIVE || '').toLowerCase() === 'true';
+  const live = requestedLive && envAllowsLive;
+  if (requestedLive && !envAllowsLive) {
+    // Refuse rather than silently downgrading to dry-run: an operator who typed --live and got a
+    // "DRY-RUN" line could easily read it as "it ran". Say exactly which factor is missing.
+    log('[provision-canary] REFUSING --live: FLEET_SPAWN_CONTROL_LIVE is not set to true.');
+    log('[provision-canary] Both are required. Nothing was spawned.');
+    return { ok: false, exitCode: EXIT.INFRA, status: 'infra', reason: 'live_requires_env_gate' };
+  }
 
   // Client is constructed INSIDE main and only when not injected — the unit project does not load
   // .env and CI has no secrets, so a module-scope client would red the whole file in CI.

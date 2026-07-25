@@ -109,22 +109,53 @@ describe('runRebootRespawn (QF-20260724-911): payload.live is ground-truth-recon
     return {
       from: (table) => {
         if (table !== 'claude_sessions') throw new Error(`unexpected table: ${table}`);
-        return { select: () => ({ eq: (_col, pid) => ({ maybeSingle: async () => ({ data: sessionsByPid[pid] || null }) }) }) };
+        // FR-3 follow-up (TESTING adversarial review F2): this fake USED to be `eq: (_col, pid)`,
+        // discarding the column name. A mutation to .eq('utterly_bogus_column_xyz', pid) stayed 13/13
+        // GREEN, so no test on this path could detect a join-column error -- which is exactly why the
+        // dead pid join here survived FR-3. Recording the column makes that detectable.
+        return { select: () => ({ eq: (col, val) => ({ maybeSingle: async () => {
+          if (col !== 'session_id' && col !== 'pid') throw new Error(`unexpected join column: ${col}`);
+          const row = col === 'session_id'
+            ? Object.values(sessionsByPid).find((r) => r && r.session_id === val)
+            : sessionsByPid[val];
+          return { data: row || null };
+        } }) }) };
       },
     };
   }
 
+  it('F1: reconciles by the MINTED session id, not by the wt.exe launcher pid', async () => {
+    // THE DISCRIMINATING FIXTURE, and the reason F1 went unnoticed: every other fixture in this file
+    // keys the row on the SAME pid spawnFn returns, so a pid join and a session_id join give identical
+    // results and no test can tell them apart. Here they DISAGREE -- the row carries a different pid,
+    // which is the real-world case (wt.exe exits; claude_sessions.pid is the Claude Code pid). A pid
+    // join finds nothing and reports respawn_unbound; the minted-id join binds.
+    const nowMs = 1_800_000_000_000;
+    const supabase = makeFakeSupabase({
+      999999: { session_id: MINTED, heartbeat_at: new Date(nowMs - 1000).toISOString(), loop_state: 'active' },
+    });
+    const events = [];
+    const res = await runRebootRespawn({
+      supabase, loadFn: async () => [SLOTS[1]], // slot 2 has no resume token -> an id IS minted
+      spawnFn: vi.fn(() => ({ pid: 111 })),     // launcher pid 111 != the row's pid 999999
+      logFn: vi.fn(async (_s, ev) => { events.push(ev); return { ok: true }; }),
+      live: true, now: () => 'iso', sleepFn: vi.fn(), nowMs, uuidFn: () => MINTED,
+    });
+    expect(res.results[0]).toMatchObject({ spawned: true, live: true, session_id: MINTED });
+    expect(events[0].payload).toMatchObject({ live: true, outcome: 'ok' });
+  });
+
   it('binds session_id + live:true + outcome:ok when the spawned pid reconciles to a fresh, heartbeating session', async () => {
     const nowMs = 1_800_000_000_000;
-    const supabase = makeFakeSupabase({ 111: { session_id: 's-new', heartbeat_at: new Date(nowMs - 1000).toISOString(), loop_state: 'active' } });
+    const supabase = makeFakeSupabase({ 111: { session_id: 'u-1', heartbeat_at: new Date(nowMs - 1000).toISOString(), loop_state: 'active' } });
     const spawnFn = vi.fn(() => ({ pid: 111 }));
     const events = [];
     const logFn = vi.fn(async (_s, ev) => { events.push(ev); return { ok: true }; });
     const res = await runRebootRespawn({
       supabase, loadFn: async () => [SLOTS[0]], spawnFn, logFn, live: true, now: () => 'iso', sleepFn: vi.fn(), nowMs,
     });
-    expect(res.results[0]).toMatchObject({ spawned: true, live: true, session_id: 's-new' });
-    expect(events[0].session_id).toBe('s-new');
+    expect(res.results[0]).toMatchObject({ spawned: true, live: true, session_id: 'u-1' });
+    expect(events[0].session_id).toBe('u-1');
     expect(events[0].payload).toMatchObject({ live: true, outcome: 'ok' });
   });
 
@@ -184,14 +215,24 @@ describe('runRebootRespawn (QF-20260724-070): durable bind-time audit row', () =
     return {
       from: (table) => {
         if (table !== 'claude_sessions') throw new Error(`unexpected table: ${table}`);
-        return { select: () => ({ eq: (_col, pid) => ({ maybeSingle: async () => ({ data: sessionsByPid[pid] || null }) }) }) };
+        // FR-3 follow-up (TESTING adversarial review F2): this fake USED to be `eq: (_col, pid)`,
+        // discarding the column name. A mutation to .eq('utterly_bogus_column_xyz', pid) stayed 13/13
+        // GREEN, so no test on this path could detect a join-column error -- which is exactly why the
+        // dead pid join here survived FR-3. Recording the column makes that detectable.
+        return { select: () => ({ eq: (col, val) => ({ maybeSingle: async () => {
+          if (col !== 'session_id' && col !== 'pid') throw new Error(`unexpected join column: ${col}`);
+          const row = col === 'session_id'
+            ? Object.values(sessionsByPid).find((r) => r && r.session_id === val)
+            : sessionsByPid[val];
+          return { data: row || null };
+        } }) }) };
       },
     };
   }
 
   it('writes an immutable RESPAWN_BIND_VERIFIED session_lifecycle_events row the instant the bind is confirmed healthy', async () => {
     const nowMs = 1_800_000_000_000;
-    const supabase = makeFakeSupabase({ 111: { session_id: 's-new', heartbeat_at: new Date(nowMs - 1000).toISOString(), loop_state: 'active' } });
+    const supabase = makeFakeSupabase({ 111: { session_id: 'u-1', heartbeat_at: new Date(nowMs - 1000).toISOString(), loop_state: 'active' } });
     const spawnFn = vi.fn(() => ({ pid: 111 }));
     const auditEvents = [];
     const writeLifecycleEventFn = vi.fn(async (_s, ev) => { auditEvents.push(ev); return true; });
@@ -201,7 +242,7 @@ describe('runRebootRespawn (QF-20260724-070): durable bind-time audit row', () =
     });
     expect(auditEvents).toHaveLength(1);
     expect(auditEvents[0]).toMatchObject({
-      event_type: 'RESPAWN_BIND_VERIFIED', session_id: 's-new', pid: 111,
+      event_type: 'RESPAWN_BIND_VERIFIED', session_id: 'u-1', pid: 111,
       metadata: { heartbeat_at: expect.any(String), loop_state: 'active', sd_key: 'CHECKPOINT-3', checked_at: 'iso-checked-at' },
     });
   });

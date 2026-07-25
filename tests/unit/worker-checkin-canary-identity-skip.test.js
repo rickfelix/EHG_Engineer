@@ -30,7 +30,7 @@ const HERE = path.dirname(fileURLToPath(import.meta.url));
  * Fake covering only the shapes this function touches. RECORDS every update so a silent rename is
  * detectable -- asserting the return value alone would miss a write that clobbers the stored identity.
  */
-function fakeClient(metadata, { live = [] } = {}) {
+function fakeClient(metadata, { live = [], onLiveQuery } = {}) {
   const updates = [];
   return {
     updates,
@@ -39,10 +39,13 @@ function fakeClient(metadata, { live = [] } = {}) {
         select: () => builder,
         eq: () => builder,
         neq: () => builder,
-        gte: async () => ({ data: live }),
+        // The slot-picking query over live sessions. Instrumented because REACHING it is what
+        // distinguishes "fell through to re-derive" from "short-circuited by the canary branch" --
+        // the returned callsign cannot tell those apart.
+        gte: async () => { if (onLiveQuery) onLiveQuery(); return { data: live }; },
         maybeSingle: async () => ({ data: { metadata }, error: null }),
         update: (patch) => { updates.push(patch); return { eq: async () => ({ error: null }) }; },
-        then: (resolve) => Promise.resolve({ data: live, error: null }).then(resolve),
+        then: (resolve) => { if (onLiveQuery) onLiveQuery(); return Promise.resolve({ data: live, error: null }).then(resolve); },
       };
       return builder;
     },
@@ -108,14 +111,35 @@ describe('FR-6 canary identity skip — the second clobber writer', () => {
     expect(canaryLine).toBeLessThan(tierBandLine);
   });
 
-  it('does NOT skip an ordinary worker (the guard must stay narrow)', async () => {
-    // Negative control: an over-broad guard would freeze every worker's identity and silently disable
-    // the tier-band self-heal this function exists to perform.
-    const client = fakeClient({ fleet_identity: { callsign: 'Delta', color: 'red' }, tier_rank: 1 });
-    const r = await assignFleetIdentityAtCheckin(client, 'sess-worker-1', null);
-    // Either it returned the in-band identity, or it re-derived -- but it must NOT be short-circuited
-    // by the canary branch, which would return 'Delta' without consulting the tier band at all.
-    expect(r === null || typeof r.callsign === 'string').toBe(true);
-    expect(r?.callsign).not.toBe('Canary-1');
+  it('does NOT skip an ordinary worker — the guard must stay narrow', async () => {
+    // THIS CONTROL WAS VACUOUS AND A TESTING REVIEW PROVED IT. The original asserted
+    //   expect(r === null || typeof r.callsign === 'string').toBe(true)   // tautology
+    //   expect(r?.callsign).not.toBe('Canary-1')                          // never true for a 'Delta' fixture
+    // Widening the guard to `if (existing || ...)` — which freezes EVERY worker's identity and disables
+    // the tier-band self-heal this function exists to perform — still passed 5/5. A negative control
+    // that cannot fail is worse than none: it advertises coverage that does not exist.
+    //
+    // The real discriminator is REACHABILITY, not the returned value. The canary branch returns BEFORE
+    // the live-identity query used to pick a free slot; an ordinary worker must reach that query. So we
+    // record whether it happened rather than inspecting the callsign.
+    let reachedLiveQuery = false;
+    const client = fakeClient(
+      { fleet_identity: { callsign: 'Delta', color: 'red' }, tier_rank: 1 },
+      { onLiveQuery: () => { reachedLiveQuery = true; } },
+    );
+    await assignFleetIdentityAtCheckin(client, 'sess-worker-1', null);
+    expect(reachedLiveQuery, 'an ordinary worker must NOT be short-circuited by the canary branch').toBe(true);
+  });
+
+  it('a CANARY is short-circuited before that same query (the positive half of the control)', async () => {
+    // Pairs with the test above: same instrumentation, opposite expectation. Together they pin that the
+    // branch is taken for exactly one of the two, which neither test alone establishes.
+    let reachedLiveQuery = false;
+    const client = fakeClient(
+      { fleet_identity: { callsign: 'Canary-1', color: 'yellow' }, tier_rank: 1 },
+      { onLiveQuery: () => { reachedLiveQuery = true; } },
+    );
+    await assignFleetIdentityAtCheckin(client, CANARY_ID, null);
+    expect(reachedLiveQuery, 'a canary must return before the slot-picking query').toBe(false);
   });
 });

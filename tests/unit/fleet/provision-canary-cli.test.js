@@ -100,14 +100,44 @@ describe('FR-1 provision-canary — real resolution, not a stubbed verdict', () 
     expect(r.exitCode).toBe(EXIT.GATE_UNMET);
   });
 
-  it('passes live:true through only when --live is given explicitly', async () => {
+  it('passes live:true only when --live AND FLEET_SPAWN_CONTROL_LIVE are BOTH present', async () => {
     let seenLive = null;
     await main(['--live'], {
       supabase: fakeSupabase({ sessions: [], slots: [CANARY_SLOT] }),
+      env: { FLEET_SPAWN_CONTROL_LIVE: 'true' },
       provisionFn: async (args) => { seenLive = args.live; return { ok: true, reason: 'provisioned' }; },
       log: silent,
     });
     expect(seenLive).toBe(true);
+  });
+
+  it('SEC-CANHOST-02: REFUSES --live when FLEET_SPAWN_CONTROL_LIVE is unset, and never reaches provision', async () => {
+    // The original docstring claimed --live "only reaches spawn-control, which self-gates behind
+    // FLEET_SPAWN_CONTROL_LIVE". That was FALSE: canary-provision forwards live as opts.live and
+    // spawn-control reads `opts.live ?? isLiveEnabled()`, so the explicit opt OVERRIDES the env gate --
+    // `--live` alone really did spawn. A false safety claim on an operator-facing CLI is the dangerous
+    // kind. This CLI now enforces both factors, which is what makes the comment true.
+    let reachedProvision = false;
+    const r = await main(['--live'], {
+      supabase: fakeSupabase({ sessions: [], slots: [CANARY_SLOT] }),
+      env: {}, // FLEET_SPAWN_CONTROL_LIVE unset
+      provisionFn: async () => { reachedProvision = true; return { ok: true, reason: 'provisioned' }; },
+      log: silent,
+    });
+    expect(reachedProvision, 'must not spawn when only one factor is present').toBe(false);
+    expect(r.reason).toBe('live_requires_env_gate');
+    expect(r.exitCode).toBe(EXIT.INFRA);
+  });
+
+  it('SEC-CANHOST-02: REFUSES rather than silently downgrading to dry-run', async () => {
+    // Downgrading would be the tempting fail-safe, but an operator who typed --live and saw "DRY-RUN"
+    // could reasonably read it as "it ran". A non-zero exit and an explicit refusal cannot be misread.
+    const r = await main(['--live'], {
+      supabase: fakeSupabase({ sessions: [], slots: [CANARY_SLOT] }),
+      env: {}, provisionFn: async () => ({ ok: false, reason: 'dry_run' }), log: silent,
+    });
+    expect(r.reason).not.toBe('dry_run');
+    expect(r.ok).toBe(false);
   });
 });
 
