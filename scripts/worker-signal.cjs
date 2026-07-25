@@ -477,7 +477,7 @@ function isSolomonConsultEnabled() {
  * expect an eventual answer, so it is chase-eligible) + a computed reply_expected_by
  * window (SD-LEO-INFRA-ROLE-BASED-COMMS-ROUTING-PROTOCOL-001-C).
  */
-function buildSolomonConsultPayload({ correlationId, body, senderCallsign, repo, severity, sdKey, triageScore, triageReason, isAwait, replyWindowMs, now }) {
+function buildSolomonConsultPayload({ correlationId, body, senderCallsign, repo, severity, sdKey, triageScore, triageReason, isAwait, replyWindowMs, now, consultPurpose }) {
   const replyClass = isAwait ? 'live-handshake' : 'reply-needed';
   const payload = {
     kind: PAYLOAD_KINDS.SOLOMON_CONSULT,   // 'solomon_consult' (SSOT constant, never a literal)
@@ -493,6 +493,12 @@ function buildSolomonConsultPayload({ correlationId, body, senderCallsign, repo,
     oracle_consult: true
   };
   if (body) payload.body = capBody(body);
+  // SD-LEO-INFRA-SOLOMON-CONSULT-CANNOT-DELIVER-001 FR-2: structural discriminator for consult
+  // sub-kinds (e.g. 'pre_send'). Before this, the ONLY thing distinguishing an Adam pre-send
+  // consult from any other solomon_consult was the literal '[PRE-SEND CONSULT]' body prefix
+  // (adam-advisory.cjs:98-99), so a late-verdict reconciler would have had to match on prose.
+  // Omitted when not supplied, so every existing caller's payload is byte-identical.
+  if (consultPurpose) payload.consult_purpose = consultPurpose;
   if (replyClass === 'reply-needed') payload.reply_expected_by = computeReplyExpectedBy(now, replyWindowMs);
   // INVARIANT: no signal_type / no intent_action on consult rows (off the friction router + intent sweep).
   return payload;
