@@ -13,8 +13,13 @@ import { createRequire } from 'module';
 const require = createRequire(import.meta.url);
 const { countDispatchableBacklog } = require('../../../lib/fleet/belt-depth.cjs');
 
-/** Minimal builder covering exactly the chain the gauge uses, including .range() pagination. */
-function fakeClient(rows) {
+/**
+ * Minimal builder covering exactly the chain the gauge uses, including .range() pagination.
+ * QF-20260725-879: `.or()` added — the dependency gate resolves refs with a single
+ * `.select(...).or(sd_key.in.(...),id.in.(...))`. depRows is what that lookup returns; it is
+ * only ever reached for rows that actually carry dependency refs.
+ */
+function fakeClient(rows, depRows = []) {
   return {
     from: () => ({
       select: () => ({
@@ -23,6 +28,7 @@ function fakeClient(rows) {
             range: (from, to) => Promise.resolve({ data: rows.slice(from, to + 1), error: null }),
           }),
         }),
+        or: () => Promise.resolve({ data: depRows, error: null }),
       }),
     }),
   };
@@ -60,6 +66,40 @@ describe('countDispatchableBacklog', () => {
 
   it('reports an empty belt as 0 without inventing depth', async () => {
     expect(await countDispatchableBacklog(fakeClient([]))).toMatchObject({ dispatchable: 0, raw: 0 });
+  });
+
+  it('REGRESSION QF-20260725-879: a dep-blocked draft is NOT counted as dispatchable', async () => {
+    // The exact live shape: one unclaimed draft whose dependencies are incomplete. The sync
+    // classifier is DB-blind and passes it, so the gauge used to emit dispatchable=1 while the
+    // dispatcher and the sweep both said dep_blocked — recomputed=1 vs self_reported=0,
+    // integrity_ok=false, falsely indicting the coordinator.
+    const rows = [{ id: 'd1', sd_key: 'SD-DEP-BLOCKED', status: 'draft', metadata: {}, dependencies: ['SD-BLOCKER'] }];
+    const depRows = [{ id: 'b1', sd_key: 'SD-BLOCKER', status: 'in_progress' }]; // NOT completed
+    const result = await countDispatchableBacklog(fakeClient(rows, depRows));
+    expect(result.dispatchable).toBe(0);
+    expect(result.raw).toBe(1);
+    expect(result.ineligible.dep_blocked).toBe(1);
+  });
+
+  it('counts a draft whose dependencies are all completed', async () => {
+    const rows = [{ id: 'd1', sd_key: 'SD-DEP-OK', status: 'draft', metadata: {}, dependencies: ['SD-BLOCKER'] }];
+    const depRows = [{ id: 'b1', sd_key: 'SD-BLOCKER', status: 'completed' }];
+    const result = await countDispatchableBacklog(fakeClient(rows, depRows));
+    expect(result.dispatchable).toBe(1);
+    expect(result.ineligible).toEqual({});
+  });
+
+  it('does not query the dep gate at all for dependency-free rows (cost guard)', async () => {
+    // Keeps the gauge cheap: the dep lookup must short-circuit before any query when a row
+    // carries no refs. A client whose .or() throws proves the path is never taken.
+    const exploding = fakeClient([free(1), free(2)]);
+    exploding.from = () => ({
+      select: () => ({
+        eq: () => ({ is: () => ({ range: (f, t) => Promise.resolve({ data: [free(1), free(2)].slice(f, t + 1), error: null }) }) }),
+        or: () => { throw new Error('dep query must not run for dependency-free rows'); },
+      }),
+    });
+    await expect(countDispatchableBacklog(exploding)).resolves.toMatchObject({ dispatchable: 2 });
   });
 
   it('paginates past the PostgREST cap instead of under-reporting depth', async () => {
