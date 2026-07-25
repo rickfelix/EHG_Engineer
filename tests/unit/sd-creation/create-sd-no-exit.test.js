@@ -121,4 +121,40 @@ describe('SD-ARCH-HOTSPOT-LEO-CREATE-001: lib/sd-creation contains no process.ex
       expect(src.includes(needle), `${path.relative(root, file)} must not contain ${needle}`).toBe(false);
     }
   });
+
+  // SD-LEO-INFRA-ROADMAP-LINK-COUNTED-EXCEPTION-001 (FR-1): the scan above walks ONLY
+  // lib/sd-creation/, but the register-first predicate and the roadmap-link exception builder it
+  // now calls live in lib/sourcing-engine/. A refusal added there would run on the creation path
+  // and be invisible to the walk above — the blind spot is the point of this second assertion.
+  it('the sourcing-engine modules on the creation path contain no process.exit invocation', () => {
+    const __dirname = path.dirname(fileURLToPath(import.meta.url));
+    // Walk the DIRECTORY rather than hard-coding filenames — the sibling scan above walks, and a
+    // hard-coded list silently stops covering any module added to this path later.
+    const root = path.resolve(__dirname, '../../../lib/sourcing-engine');
+    const files = [];
+    const walk = (dir) => {
+      for (const entry of fs.readdirSync(dir, { withFileTypes: true })) {
+        const full = path.join(dir, entry.name);
+        if (entry.isDirectory()) walk(full);
+        else if (/\.(js|mjs|cjs)$/.test(entry.name)) files.push(full);
+      }
+    };
+    walk(root);
+    expect(files.length).toBeGreaterThanOrEqual(2);
+    const needle = 'process.' + 'exit(';
+    for (const file of files) {
+      const src = fs.readFileSync(file, 'utf8');
+      expect(src.includes(needle), `${path.relative(root, file)} must not contain ${needle}`).toBe(false);
+    }
+
+    // FR-1 also forbids a THROWN refusal from the exception seam. Scan CODE ONLY: a naive
+    // src.includes('throw ') matches the module's own prose ("may throw, exit, or refuse") and
+    // fails on a comment edit — it did exactly that once. Strip comments first so the assertion
+    // tracks behaviour rather than wording.
+    const target = path.join(root, 'roadmap-link-exception.js');
+    const codeOnly = fs.readFileSync(target, 'utf8')
+      .replace(/\/\*[\s\S]*?\*\//g, '')      // block comments (incl. JSDoc)
+      .split('\n').filter((l) => !l.trim().startsWith('//')).join('\n');
+    expect(/\bthrow\b/.test(codeOnly), 'roadmap-link-exception.js must not throw — FR-1 forbids any refusal path').toBe(false);
+  });
 });

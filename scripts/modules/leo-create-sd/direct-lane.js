@@ -38,7 +38,13 @@ export async function runDirectCreation(args) {
     '--migration-reviewed', '--security-reviewed', '--yes', '-y',
     // SD-LEO-INFRA-ROADMAP-FOLD-SEAM-001 (FR-2): wave disposition flags,
     // required when the direct lane creates an orchestrator parent.
-    '--wave', '--no-wave'
+    '--wave', '--no-wave',
+    // SD-LEO-INFRA-ROADMAP-LINK-COUNTED-EXCEPTION-001 (FR-2): OPTIONAL operator reason for
+    // creating without a preceding roadmap registration. Never required — omitting it records an
+    // explicit no-reason marker so the gap is COUNTED rather than silent. Deliberately separate
+    // from --no-wave: that one writes metadata.wave_disposition, which the linkage gauge reads as
+    // LINKED, so reusing it would inflate the coverage number this exception is measured beside.
+    '--roadmap-link-reason'
   ]);
   const unknownFlags = args.filter(a => a.startsWith('-') && !knownDirectFlags.has(a));
   if (unknownFlags.length > 0) {
@@ -56,7 +62,15 @@ export async function runDirectCreation(args) {
   const [source, type, ...titleParts] = args;
   // Strip flags and their values from the title (SD-DISTILLTOBRAINSTORM quality fix)
   // Without this, --vision-key VALUE --arch-key VALUE leak into the title text
-  const flagsWithValues = new Set(['--venture', '--vision-key', '--arch-key', '--target-repos']);
+  // SD-LEO-INFRA-ROADMAP-LINK-COUNTED-EXCEPTION-001: --roadmap-link-reason takes a free-text
+  // value, so it MUST be listed here or the reason text is swallowed into the SD title.
+  // Adding --wave/--no-wave at the same time: they take values too and were never listed, so
+  // their values have been leaking into titles since SD-LEO-INFRA-ROADMAP-FOLD-SEAM-001. Same
+  // one-line set, strictly a fix — found while wiring the flag beside them.
+  const flagsWithValues = new Set([
+    '--venture', '--vision-key', '--arch-key', '--target-repos',
+    '--wave', '--no-wave', '--roadmap-link-reason',
+  ]);
   const cleanedTitleParts = [];
   for (let i = 0; i < titleParts.length; i++) {
     if (flagsWithValues.has(titleParts[i])) {
@@ -356,12 +370,18 @@ export async function runDirectCreation(args) {
     ? { waveId: args[directWaveIdx + 1] }
     : (directNoWaveIdx !== -1 ? { noWave: args[directNoWaveIdx + 1] } : null);
 
+  // SD-LEO-INFRA-ROADMAP-LINK-COUNTED-EXCEPTION-001 (FR-2): optional; absent is legal and
+  // records the explicit no-reason marker rather than refusing.
+  const directRoadmapLinkIdx = args.indexOf('--roadmap-link-reason');
+  const directRoadmapLinkReason = directRoadmapLinkIdx !== -1 ? args[directRoadmapLinkIdx + 1] : null;
+
   const createRes = await createSD({
     sdKey,
     title,
     description: enriched?.description || title,
     type,
     wave_disposition: directWaveDisposition,
+    roadmap_link_reason: directRoadmapLinkReason,
     rationale: enriched?.rationale || 'Created via /leo create',
     success_criteria: enriched?.success_criteria || null,
     key_changes: enriched?.key_changes || null,
