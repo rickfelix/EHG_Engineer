@@ -69,7 +69,7 @@ function getDispatchAuthMode() {
 }
 // SD-LEO-INFRA-COMPLEXITY-TIERED-WORKER-ASSIGNMENT-001 (FR-3): WORK-DOWN-NEVER-UP on the PULL path.
 // SD-LEO-INFRA-AUTO-TIERING-ACTIVATION-001-B (FR-3): --model/--effort capture at check-in.
-const { resolveWorkerTierRank, isTieringActive, normalizeModel, normalizeEffort, rankForModelEffort, ladderTopRank } = require('../lib/fleet/tier-ladder.cjs');
+const { resolveWorkerTierRank, isTieringActive, normalizeModel, normalizeEffort, rankForModelEffort, ladderTopRank, familyFromModelId, seatCapabilityIsVerified } = require('../lib/fleet/tier-ladder.cjs');
 // SD-LEO-INFRA-BELT-TIER-AWARE-CLAIMABILITY-001 (FR-2): tier-aware "claimable-to-MY-rung" rollup.
 const { claimableForTier, claimableForRepo } = require('../lib/fleet/tier-claimable.cjs');
 // SD-LEO-INFRA-AUTO-TIERING-ACTIVATION-001-E (FR-6): backlog-gated downward claims. The fetcher is
@@ -1493,8 +1493,41 @@ function mergeCheckinModelEffort(sessionMetadata, { model: cliModel = null, effo
   let changed = false;
 
   if (cliModel) {
-    const normalized = normalizeModel(cliModel);
-    if (next.model !== normalized) { next.model = normalized; changed = true; }
+    // SD-LEO-INFRA-FLEET-MODEL-REGISTRY-001 FR-1: persist the EXACT self-reported id.
+    // This line used to be `next.model = normalizeModel(cliModel)`, and normalizeModel
+    // returns a KEY of MODEL_STRENGTH — a bare family. That is where the fleet's model
+    // version was destroyed: a seat reporting 'claude-opus-5[1m]' was recorded as
+    // 'opus', so nothing downstream could tell Opus 5 from Opus 4.8. Registration
+    // (capture-session-id.cjs) already stored the raw id; this writer then overwrote
+    // it, which is why a seat carrying registration's cc_pid/source signature still
+    // read 'opus'. The family is preserved SEPARATELY in model_family so every
+    // family-keyed consumer keeps a stable value to read.
+    const exact = String(cliModel).toLowerCase().trim();
+    if (next.model !== exact) { next.model = exact; changed = true; }
+
+    const family = familyFromModelId(cliModel);
+    if (family) {
+      if (next.model_family !== family) { next.model_family = family; changed = true; }
+    } else if ('model_family' in next) {
+      // An id naming no known family must CLEAR any previous stamp rather than leave
+      // it standing. A stale family would otherwise outlive the model it described and
+      // launder an unrecognized seat straight through the family-keyed door gate — the
+      // fail-closed check reads model_family first.
+      delete next.model_family;
+      changed = true;
+    }
+
+    // FR-2: provenance. Mirrors the effort_source precedence below — an externally
+    // stamped source (coordinator/chairman, or the pre-existing free-text value) is
+    // never silently overwritten by a self-report. The two automatic sources
+    // (worker_self_report, sessionstart_observed) may replace each other.
+    const priorSource = current.model_source;
+    const externallyStamped = priorSource
+      && priorSource !== 'worker_self_report' && priorSource !== 'sessionstart_observed';
+    if (!externallyStamped && next.model_source !== 'worker_self_report') {
+      next.model_source = 'worker_self_report';
+      changed = true;
+    }
   }
 
   if (cliEffort) {
@@ -1516,7 +1549,12 @@ function mergeCheckinModelEffort(sessionMetadata, { model: cliModel = null, effo
       // clamp() bound it to the process-cached live top rank — a live-shrunk cache
       // (K=3 fleet) collapsed a fable/xhigh self-report to 3, below statically-stamped
       // min_tier_rank=4 SDs, clobbering coordinator rank stamps on every checkin.
-      const rank = rankForModelEffort(finalModel, finalEffort);
+      // FR-1: finalModel is now an EXACT id, so resolve the family explicitly before
+      // ranking. capabilityScore normalizes internally today, which would mask this —
+      // but the moment a seat-scoped resolver is routed through that path the two
+      // would diverge, and tier-ladder-fable-rungs pins that the cron writer and this
+      // writer agree on every known pair. Pass the family we already derived.
+      const rank = rankForModelEffort(familyFromModelId(finalModel) || finalModel, finalEffort);
       if (next.tier_rank !== rank) next.tier_rank = rank;
     }
   }
@@ -1597,7 +1635,7 @@ async function main() {
 // Steps destructure what they need from ctx.helpers instead of require()ing this file (which
 // would be circular). Every name below is either defined above in this file or imported at the
 // top (imports are referenced directly — never re-derived).
-const CHECKIN_HELPERS = { ws, tryClaim, ackMessage, extractSdFromAssignment, extractDirectedSd, isInformationalNudge, classifyDispatchIneligibility, coordinatorReservation, isSeatBusyOnDirectedWork, registerRollCall, rehydrateCallsign, selfClearQuarantine, mergeCheckinModelEffort, recoverStrandedFinal, adoptOrphanInProgress, isSelfClaimDisabled, isGlobalStandDownActive, isBuildForbiddenSession, ensureActiveBaseline, isCriticalQfJumpEligible, tryClaimDraftCandidate, baselinedCandidateEligible, isSdInFlight, selfClaimQuickFix, selfHealStaleClaim, findOwnSdClaim, healOwnClaimPointer, confirmRowGone, surfaceCoordinatorMessages, fetchDraftCandidates, fetchNewestDraftCandidates, fetchFleetCriticalCandidates, fetchRankedCandidates, sortByDispatchRank, resolveWorkerTierRank, isTieringActive, fetchLowerTierBacklogData, ladderTopRank, fetchFableWindowActive, claimableForTier, claimableForRepo, getCommsActivitySignals, computeAdaptiveCadence, antiWinddownDirective, ASSIGNMENT_RECENCY_WINDOW_MS, TERMINAL_CLAIM_ERRORS, QF_CANDIDATE_LIMIT, SELF_CLAIM_CANDIDATE_LIMIT, DEFAULT_IDLE_WAKEUP_SECONDS };
+const CHECKIN_HELPERS = { ws, tryClaim, ackMessage, extractSdFromAssignment, extractDirectedSd, isInformationalNudge, classifyDispatchIneligibility, coordinatorReservation, isSeatBusyOnDirectedWork, registerRollCall, rehydrateCallsign, selfClearQuarantine, mergeCheckinModelEffort, recoverStrandedFinal, adoptOrphanInProgress, isSelfClaimDisabled, isGlobalStandDownActive, isBuildForbiddenSession, ensureActiveBaseline, isCriticalQfJumpEligible, tryClaimDraftCandidate, baselinedCandidateEligible, isSdInFlight, selfClaimQuickFix, selfHealStaleClaim, findOwnSdClaim, healOwnClaimPointer, confirmRowGone, surfaceCoordinatorMessages, fetchDraftCandidates, fetchNewestDraftCandidates, fetchFleetCriticalCandidates, fetchRankedCandidates, sortByDispatchRank, resolveWorkerTierRank, isTieringActive, fetchLowerTierBacklogData, ladderTopRank, seatCapabilityIsVerified, fetchFableWindowActive, claimableForTier, claimableForRepo, getCommsActivitySignals, computeAdaptiveCadence, antiWinddownDirective, ASSIGNMENT_RECENCY_WINDOW_MS, TERMINAL_CLAIM_ERRORS, QF_CANDIDATE_LIMIT, SELF_CLAIM_CANDIDATE_LIMIT, DEFAULT_IDLE_WAKEUP_SECONDS };
 
 module.exports = { extractSdFromAssignment, extractDirectedSd, isInformationalNudge, tryClaim, registerRollCall, ackMessage, isCoordinatorPush, surfaceCoordinatorMessages, rehydrateCallsign, runCheckin, resolveCheckin, assignFleetIdentityAtCheckin, selfClaimQuickFix, isAutoStartableQF, sortQfCandidatesBySeverity, QF_SEVERITY_RANK, isCriticalQfJumpEligible, CRITICAL_QF_JUMP_GRACE_MS, selfClaimDraftSd, fetchDraftCandidates, fetchNewestDraftCandidates, fetchFleetCriticalCandidates, fetchRankedCandidates, tryClaimDraftCandidate, draftDepsSatisfied, baselinedCandidateEligible, recoverStrandedFinal, adoptOrphanInProgress, pendingDirectedAssignmentBlocksAdoption, isSelfClaimDisabled, isQuarantined, isParked, selfClearQuarantine, isGlobalStandDownActive, isSdInFlight, isForeignSessionLive, foreignClaimantBlocksSteal, selfHealStaleClaim, findOwnSdClaim, healOwnClaimPointer, confirmRowGone, orderByRankMap, orderByFleetCriticalThenRank, sortByDispatchRank, DISPATCH_RANK_TTL_MS, PRIORITY_RANK, SD_KEY_RE, DEFAULT_IDLE_WAKEUP_SECONDS, STALE_QF_DAYS, antiWinddownDirective, mergeCheckinModelEffort, parseCheckinArgs };
 

@@ -303,6 +303,31 @@ function buildSessionMetadata(existingMetadata, ccPid, source, model) {
   const merged = { ...base, cc_pid: ccPid, source: source || 'unknown' };
   if (model) {
     merged.model = model;
+    // SD-LEO-INFRA-FLEET-MODEL-REGISTRY-001 FR-1/FR-2: stamp the derived family and the
+    // provenance beside the raw id, so both writers populate the same triple and
+    // family-keyed consumers (notably the one-way-door gate) have a stable field to
+    // read. These MUST stay inside this `if (model)` block: the no-model path is
+    // pinned to exactly {cc_pid, source}, and an unconditional key would break it as
+    // well as the no-clobber contract above. coarseModelAlias is reused rather than
+    // importing a second resolver into this latency-sensitive SessionStart hook; it
+    // passes an unrecognized id through untouched, so guard on a real family match.
+    const family = coarseModelAlias(model);
+    if (family && family !== model) merged.model_family = family;
+    else if (MODEL_ALIAS_ORDER.includes(String(model).toLowerCase())) merged.model_family = String(model).toLowerCase();
+    // SEC-01 (adversarial security review of this SD): an id naming NO known family must
+    // CLEAR any inherited stamp, exactly as the check-in writer does. Setting-without-
+    // clearing let a stale family outlive the model it described: a seat stamped 'fable'
+    // that later ran an unrecognized id kept model_family='fable', and declaredSeatFamily
+    // reads model_family FIRST — so it walked straight through the Fable-exclusive
+    // one-way door that is supposed to fail closed on unknown. This branch introduced
+    // that field, so it introduced that hole; the two writers must agree.
+    else delete merged.model_family;
+    // Auto-observed from Claude Code's own identifier. An externally stamped source
+    // (coordinator/chairman) is authoritative and is never overwritten here.
+    const priorSource = base.model_source;
+    const externallyStamped = priorSource
+      && priorSource !== 'worker_self_report' && priorSource !== 'sessionstart_observed';
+    if (!externallyStamped) merged.model_source = 'sessionstart_observed';
     // QF-20260710-406: a genuine model CHANGE observed at a real SessionStart event
     // (startup/resume/clear/compact — the only moments this field is populated) must
     // re-derive tier_rank, so a mid-session /model switch self-heals on the next

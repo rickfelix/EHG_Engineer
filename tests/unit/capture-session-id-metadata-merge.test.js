@@ -90,3 +90,60 @@ describe('QF-20260627-531: buildSessionMetadata merge-preserves stamped fields',
     });
   });
 });
+
+// ── SD-LEO-INFRA-FLEET-MODEL-REGISTRY-001 FR-1/FR-2 ─────────────────────────────
+// This writer already stored the RAW model id; it now also stamps the derived family
+// and the provenance so both writers populate the same triple. The new keys live
+// strictly inside the `if (model)` branch — the no-model path is pinned to exactly
+// { cc_pid, source } above, and the no-clobber contract must survive.
+describe('FR-1/FR-2: buildSessionMetadata stamps model_family and model_source', () => {
+  it('stamps the derived family beside a versioned raw id', () => {
+    const merged = buildSessionMetadata({}, '9', 'startup', 'claude-opus-5[1m]');
+    expect(merged.model).toBe('claude-opus-5[1m]');
+    expect(merged.model_family).toBe('opus');
+    expect(merged.model_source).toBe('sessionstart_observed');
+  });
+
+  it('stamps family for a bare-family id too', () => {
+    const merged = buildSessionMetadata({}, '9', 'startup', 'opus');
+    expect(merged.model).toBe('opus');
+    expect(merged.model_family).toBe('opus');
+  });
+
+  it('adds NO model_family/model_source key when no model is supplied', () => {
+    // Guards the exact-shape assertion this file already pins for the no-model path.
+    const merged = buildSessionMetadata({}, '9', 'startup');
+    expect('model_family' in merged).toBe(false);
+    expect('model_source' in merged).toBe(false);
+  });
+
+  it('does not overwrite an externally stamped model_source', () => {
+    const merged = buildSessionMetadata({ model_source: 'chairman' }, '9', 'startup', 'opus');
+    expect(merged.model_source).toBe('chairman');
+  });
+});
+
+// SEC-01 — found by the adversarial SECURITY review of this SD, and it was a hole this
+// branch itself opened: buildSessionMetadata SET model_family but never CLEARED it, while
+// the check-in writer did. declaredSeatFamily reads model_family FIRST, so a stale value
+// outliving the model it described walked a non-Fable seat through the Fable-exclusive
+// one-way door — the gate that is supposed to fail CLOSED on an unknown model.
+describe('SEC-01: an unrecognized model CLEARS a stale model_family (both writers must agree)', () => {
+  it('does not let a fable stamp survive onto an unrecognized model id', () => {
+    const stale = { model: 'fable', model_family: 'fable' };
+    const merged = buildSessionMetadata(stale, '9', 'startup', 'gpt-5.2');
+    expect(merged.model).toBe('gpt-5.2');
+    expect('model_family' in merged).toBe(false);
+  });
+
+  it('the resolved seat family for that row is no longer fable', () => {
+    const { declaredSeatFamily } = require('../../lib/fleet/tier-ladder.cjs');
+    const merged = buildSessionMetadata({ model: 'fable', model_family: 'fable' }, '9', 'startup', 'gpt-5.2');
+    expect(declaredSeatFamily(merged)).toBeNull();
+  });
+
+  it('a recognizable id still REPLACES a prior family rather than clearing it', () => {
+    const merged = buildSessionMetadata({ model: 'fable', model_family: 'fable' }, '9', 'startup', 'claude-opus-5[1m]');
+    expect(merged.model_family).toBe('opus');
+  });
+});

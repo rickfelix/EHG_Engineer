@@ -90,3 +90,27 @@ describe('computeSessionBadge (design vocab — SD-...-SHELL-001-D / mockup-1 FR
     }
   });
 });
+
+// SD-LEO-INFRA-FLEET-MODEL-REGISTRY-001 (GAP-1, found by the TESTING review): these badge
+// branches compared metadata.model by EXACT equality against a bare family. That held only
+// while the check-in writer coarsened every model before storing it. Once the exact API id
+// is persisted, 'claude-opus-5[1m]' !== 'opus' and DEEP WORK silently never fires again —
+// and every existing case in this file seeds a bare family, so the suite stayed green while
+// the live dashboard degraded. Same latent-blindspot shape as the door gate.
+describe('badge model matching is version-tolerant (SD-LEO-INFRA-FLEET-MODEL-REGISTRY-001)', () => {
+  const live = { loop_state: 'working', p_alive: 0.99, computed_status: 'active' };
+  it('DEEP WORK fires on a VERSIONED opus id, not just the bare family', () => {
+    expect(computeSessionBadge({ ...live, model: 'claude-opus-5[1m]', effort: 'high' })).toBe('DEEP WORK');
+    expect(computeSessionBadge({ ...live, model: 'opus', effort: 'high' })).toBe('DEEP WORK');
+  });
+
+  it('MECHANICAL fires on a VERSIONED haiku id', () => {
+    expect(computeSessionBadge({ ...live, model: 'claude-haiku-4-5-20251001', effort: 'high' })).toBe('MECHANICAL');
+  });
+
+  it('an UNRECOGNIZED model matches neither branch rather than being coerced', () => {
+    const badge = computeSessionBadge({ ...live, model: 'gpt-5.2', effort: 'high' });
+    expect(badge).not.toBe('DEEP WORK');
+    expect(badge).not.toBe('MECHANICAL');
+  });
+});
