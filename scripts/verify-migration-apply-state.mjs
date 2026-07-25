@@ -86,9 +86,35 @@ export function isRecent(file, cutoff = RETIRED_BEFORE) {
   return token !== null && token.slice(0, 8) >= String(cutoff).slice(0, 8);
 }
 
-/** Filter a gaps array (objects with a .file) to only the RECENT ones — the strict-gate fail set. */
-export function partitionRecentGaps(gaps, cutoff = RETIRED_BEFORE) {
-  return (gaps || []).filter((g) => isRecent(g.file, cutoff));
+/**
+ * Basename of a gap's file, tolerating both path separators.
+ *
+ * Deliberately a local 1-liner rather than an import of gapBasename() from
+ * scripts/lib/migration-disposition-ledger.mjs: partitionRecentGaps is a PURE exported
+ * predicate that tests import directly, and the verifier must not carry a static
+ * dependency on the ledger module (see the dynamic-import rationale in main()).
+ */
+const gapFileBasename = (g) => String((g && g.file) || '').replace(/^.*[\\/]/, '');
+
+/**
+ * Filter a gaps array (objects with a .file) to only the RECENT ones — the strict-gate fail set.
+ *
+ * SD-LEO-INFRA-MIGRATION-APPLY-STATE-TRIAGE-001 FR-6: `suppressed` is an OPTIONAL THIRD
+ * parameter carrying basenames the disposition ledger has legitimately retired or deferred.
+ * It defaults to an empty Set, so every existing 1-arg and 2-arg call site — and the whole
+ * no-ledger path — behaves byte-identically to before this SD.
+ *
+ * isRecent is RETAINED as the fallback rather than replaced: RETIRED_BEFORE still governs
+ * which gaps can turn the gate red while the ledger fills. Suppression only ever REMOVES
+ * from the fail set; it can never admit a legacy gap into it.
+ *
+ * @param {Array<{file:string}>} gaps
+ * @param {string} [cutoff]
+ * @param {Set<string>} [suppressed] basenames with a valid RETIRED/DEFERRED disposition
+ */
+export function partitionRecentGaps(gaps, cutoff = RETIRED_BEFORE, suppressed = new Set()) {
+  const skip = suppressed instanceof Set ? suppressed : new Set();
+  return (gaps || []).filter((g) => isRecent(g.file, cutoff) && !skip.has(gapFileBasename(g)));
 }
 
 // ── Stage 1: list + deterministic order ──────────────────────────────────────
@@ -375,6 +401,31 @@ async function main() {
   }));
   const { expected, droppedLater, perFile } = foldLifecycle(fileFacts);
 
+  // ── Disposition ledger (FR-6) — loaded BEFORE the DB try, deliberately ──────
+  //
+  // CI FALSE-PASS GUARD. Inside the try below, ANY throw prints
+  // MIGRATION_APPLY_STATE_INFRA_ERROR, which migration-deploy-drift-guard.yml greps and
+  // converts to exit 0. A corrupt ledger reaching that path would turn the gate
+  // permanently and SILENTLY GREEN — the precise inversion of fail-open. So the ledger is
+  // read here, in its own guarded block that emits NO outcome marker: a failure degrades to
+  // zero suppression (all drift still reported) and the run continues to the real DB check.
+  //
+  // The import is DYNAMIC for the same reason. A static import that failed to resolve would
+  // reject before main() ever ran and be caught by the entry .catch, which also prints
+  // INFRA_ERROR — reintroducing the false-pass one layer up.
+  let ledger = new Map();
+  let ledgerApi = null;
+  let ledgerLoadError = null;
+  try {
+    ledgerApi = await import('./lib/migration-disposition-ledger.mjs');
+    ledger = ledgerApi.loadLedger(path.resolve(__dirname, '..', ledgerApi.DEFAULT_LEDGER_PATH));
+  } catch (e) {
+    ledgerLoadError = e.message; // stderr only, below — never an OUTCOME marker.
+    ledgerApi = null;
+    ledger = new Map();
+  }
+  if (ledgerLoadError) console.error(`Disposition ledger unavailable (suppressing nothing): ${ledgerLoadError}`);
+
   let live;
   let client;
   try {
@@ -418,12 +469,31 @@ async function main() {
   const gaps = results.filter((r) => r.status === 'PARTIAL' || r.status === 'NOT_APPLIED').reverse(); // newest first
 
   // FR-2 recent-vs-legacy partition. failSet drives the --strict exit + GAPS marker + alert.
-  const recentGaps = partitionRecentGaps(gaps, cutoff);
-  const legacyGaps = gaps.filter((g) => !isRecent(g.file, cutoff));
-  const failSet = recentOnly ? recentGaps : gaps;
+  // FR-6 layers ledger suppression on top: with no (or a broken) ledger every set below is
+  // byte-identical to the pre-SD behaviour, because suppressedSet is empty.
+  const suppressedSet = ledgerApi ? ledgerApi.suppressedBasenames(ledger) : new Set();
+  const suppressedGaps = gaps.filter((g) => suppressedSet.has(gapFileBasename(g)));
+  const activeGaps = gaps.filter((g) => !suppressedSet.has(gapFileBasename(g)));
+  const recentGaps = partitionRecentGaps(gaps, cutoff, suppressedSet);
+  const legacyGaps = activeGaps.filter((g) => !isRecent(g.file, cutoff));
+  const failSet = recentOnly ? recentGaps : activeGaps;
+
+  // FR-3: the machine-checkable definition of done. 117 of the 126 gap files sit behind
+  // RETIRED_BEFORE and can NEVER turn the gate red, so "every file has a decision" is
+  // invisible to a PASS/GAPS exit for 93% of the corpus. This count is computed over ALL
+  // gaps — recent and legacy alike — so completion is provable independently of the marker.
+  const undispositioned = ledgerApi ? ledgerApi.undispositionedBasenames(gaps, ledger) : gaps.map(gapFileBasename);
+  const dispositions = {
+    ledger_entries: ledger.size,
+    ledger_available: Boolean(ledgerApi) && !ledgerLoadError,
+    suppressed: suppressedGaps.length,
+    suppressed_files: suppressedGaps.map(gapFileBasename),
+    undispositioned: undispositioned.length,
+    undispositioned_files: undispositioned,
+  };
 
   if (asJson) {
-    console.log(JSON.stringify({ summary, gaps, recentGaps, legacyGaps, cutoff, recentOnly, droppedLater, files: results }, null, 2));
+    console.log(JSON.stringify({ summary, gaps, recentGaps, legacyGaps, dispositions, cutoff, recentOnly, droppedLater, files: results }, null, 2));
   } else {
     console.log('MIGRATION APPLY-STATE REPORT (advisory, read-only)');
     console.log(`  ordering: legacy non-dated files first (lexical), then date-prefixed (chronological)`);
@@ -443,13 +513,25 @@ async function main() {
           console.log(`  LEGACY gaps suppressed from the fail set (advisory): ${legacyGaps.map((g) => g.file).join(', ')}`);
         }
       } else {
-        console.log(`\n  COMMITTED-NOT-DEPLOYED GAPS (${gaps.length} file(s), newest first):`);
-        for (const g of gaps) {
+        console.log(`\n  COMMITTED-NOT-DEPLOYED GAPS (${activeGaps.length} file(s), newest first):`);
+        for (const g of activeGaps) {
           console.log(`   ${g.status.padEnd(12)} ${g.file}`);
           for (const m of g.missing) console.log(`     missing ${m.cls}: ${m.name}`);
         }
       }
+      // FR-6: suppressed files are dropped from BOTH recentGaps and legacyGaps, so without
+      // this line they would vanish from the report entirely — silent suppression is the
+      // failure mode this SD exists to prevent. BASENAMES ONLY: the ledger's `reason` is
+      // author-controlled text, and echoing it here could emit either OUTCOME literal, which
+      // migration-deploy-drift-guard.yml greps for — letting a reason string steer the gate.
+      if (suppressedGaps.length) {
+        console.log(`\n  SUPPRESSED BY LEDGER (${suppressedGaps.length}): ${suppressedGaps.map(gapFileBasename).join(', ')}`);
+        console.log(`  (reasons are recorded in the ledger and in audit_log; run --json for the machine-readable set)`);
+      }
     }
+    // FR-3: printed unconditionally — "0 undispositioned" is the completion signal, and a
+    // line that only appears when non-zero cannot be used to prove the zero.
+    console.log(`\n  DISPOSITIONS: ${dispositions.undispositioned} of ${gaps.length} gap file(s) undispositioned; ${dispositions.suppressed} suppressed; ledger entries=${dispositions.ledger_entries}${dispositions.ledger_available ? '' : ' (LEDGER UNAVAILABLE — suppressing nothing)'}`);
   }
 
   // SD-LEO-INFRA-BREAKAGE-DETECTOR-SURFACE-001-C (FR-C2): surface a committed-not-deployed migration gap
