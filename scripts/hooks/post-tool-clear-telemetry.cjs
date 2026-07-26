@@ -34,9 +34,32 @@ const { drainAndExit } = require('../../lib/hooks/drain-undici.cjs'); // QF-2026
 
     // ── Step 1: read current session state (for last_git_metric_at throttle
     //    and claimed_at for the git query time-window).
-    const state = await readSessionState(sessionId);
+    // QF-20260725-630: this branch is a PERMANENT, SILENT DEGRADATION and its old comment
+    // ("No DB connection or no session row") named two very different causes and treated them
+    // identically. clearToolState writes the tool clock but NEVER calls collectGitMetrics, so a
+    // seat that lands here reports last_tool_at forever while commits_since_claim stays 0 — which
+    // reads exactly like "this seat did no work", not like "this seat could not be measured".
+    //
+    // MEASURED 2026-07-26: I reproduced the fleet-wide commits_since_claim=0 symptom purely by
+    // running the hook where getSupabaseConfig() returned null (no SUPABASE_SERVICE_ROLE_KEY in
+    // the process env — hooks do NOT load dotenv themselves, they rely on injected env). With
+    // creds present the whole path works end to end (13 commits / 15 files persisted). So the
+    // no-creds case is not hypothetical: it is indistinguishable from a healthy seat that happens
+    // to have no commits.
+    //
+    // Same defect family as QF-20260725-868: a could-not-determine collapsed into a verdict, with
+    // the direction chosen by the code path rather than by the evidence. Fixed the same way — give
+    // the third state a representation. The reason is NAMED so a consumer can tell the cases apart;
+    // it stays FAIL-SOFT (a telemetry hook must never block a tool call), and the log is
+    // debug-gated because this runs on EVERY tool call and unconditional stderr would be spam.
+    const { state, reason } = await readSessionState(sessionId);
     if (!state) {
-      // No DB connection or no session row — best-effort clear still useful
+      if (process.env.LEO_TELEMETRY_DEBUG === '1') {
+        process.stderr.write(
+          `[post-tool-clear-telemetry] degraded to tool-clock-only (${reason}) — ` +
+          'commits_since_claim/files_modified_since_claim will NOT be collected this call\n'
+        );
+      }
       await clearToolState(sessionId, nowMs);
       return;
     }
@@ -81,9 +104,20 @@ const { drainAndExit } = require('../../lib/hooks/drain-undici.cjs'); // QF-2026
 
 // ── Helpers ──────────────────────────────────────────────────────────────────
 
+/**
+ * QF-20260725-630: returns {state, reason} rather than a bare null, because the caller must be able
+ * to tell WHY it has no state. The four outcomes are genuinely different and only one of them is
+ * benign:
+ *   no_config    — no SUPABASE_URL / SUPABASE_SERVICE_ROLE_KEY in this hook process. PERMANENT for
+ *                  that seat: git metrics will never be collected, silently, forever.
+ *   http_<code>  — reachable but refused (auth/RLS/schema). Also effectively permanent.
+ *   fetch_failed — network/abort (the 1500ms budget). TRANSIENT; self-heals next tool call.
+ *   no_row       — genuinely no claude_sessions row for this session. The only benign case.
+ * Never throws; every path resolves to a reason string so the caller cannot mistake one for another.
+ */
 async function readSessionState(sessionId) {
   const cfg = getSupabaseConfig();
-  if (!cfg) return null;
+  if (!cfg) return { state: null, reason: 'no_config' };
   try {
     const url =
       `${cfg.url.replace(/\/$/, '')}/rest/v1/claude_sessions` +
@@ -93,11 +127,13 @@ async function readSessionState(sessionId) {
       method: 'GET',
       headers: authHeaders(cfg.key),
     }, 1500);
-    if (!res || !res.ok) return null;
+    if (!res) return { state: null, reason: 'fetch_failed' };
+    if (!res.ok) return { state: null, reason: `http_${res.status}` };
     const rows = await res.json();
-    return Array.isArray(rows) && rows.length ? rows[0] : null;
-  } catch {
-    return null;
+    if (Array.isArray(rows) && rows.length) return { state: rows[0], reason: null };
+    return { state: null, reason: 'no_row' };
+  } catch (e) {
+    return { state: null, reason: `fetch_failed:${(e && e.name) || 'unknown'}` };
   }
 }
 
