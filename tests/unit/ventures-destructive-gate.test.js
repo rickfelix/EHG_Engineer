@@ -35,12 +35,35 @@ vi.mock('../../server/config.js', () => ({ dbLoader: {} }));
 
 const VENTURE_IDS = ['11111111-1111-4111-8111-111111111111', '22222222-2222-4222-8222-222222222222'];
 
-// Minimal stub client: only the `from('ventures').select('id')` path master-reset uses.
-function stubClient() {
-  return { from: () => ({ select: async () => ({ data: VENTURE_IDS.map(id => ({ id })), error: null }) }) };
+/**
+ * Minimal stub client covering the two tables these handlers touch: the
+ * `from('ventures').select('id')` master-reset uses, and the operations_audit_log inserts
+ * FR-3 added. Audit rows are captured so tests can assert on them rather than just on the
+ * absence of an error.
+ *
+ * `auditFails` makes every audit insert return an error, which is how the fail-closed
+ * behaviour is exercised without touching any real table.
+ */
+function stubClient({ auditFails = false } = {}) {
+  const auditRows = [];
+  return {
+    auditRows,
+    from(table) {
+      if (table === 'operations_audit_log') {
+        return {
+          insert: async row => {
+            if (auditFails) return { error: { message: 'audit sink unavailable' } };
+            auditRows.push(row);
+            return { error: null };
+          },
+        };
+      }
+      return { select: async () => ({ data: VENTURE_IDS.map(id => ({ id })), error: null }) };
+    },
+  };
 }
 
-async function makeApp() {
+async function makeApp(clientOpts) {
   const { default: venturesRoutes } = await import('../../server/routes/ventures.js');
   const app = express();
   // NOTE, coverage boundary: express.json() is deliberately NOT installed. Driving a
@@ -50,7 +73,7 @@ async function makeApp() {
   // run of this suite had express.json() and the CONTROL tests failed with 428/400,
   // which is the only reason the missing body was noticed: the three refusal tests
   // passed happily with no body at all.
-  app.locals.supabase = stubClient();
+  app.locals.supabase = stubClient(clientOpts);
   // Both mounts, exactly as server/index.js:191-192 does it — one shared router object.
   app.use('/api/ventures', venturesRoutes);
   app.use('/api/competitor-analysis', venturesRoutes);
@@ -165,5 +188,71 @@ describe('FR-4: fails CLOSED at the route when confirmation is unconfigured', ()
     } finally {
       if (priorInternal !== undefined) process.env.INTERNAL_API_KEY = priorInternal;
     }
+  });
+});
+
+describe('FR-3: the teardown is bracketed by audit rows, and refuses when it cannot be audited', () => {
+  async function confirmAndRun(app, url = '/api/ventures/master-reset') {
+    const preview = await request(app, { url, body: {} });
+    return request(app, {
+      url,
+      body: {
+        confirmation_token: preview.body.confirmation_token,
+        acknowledgement: preview.body.acknowledgement_required,
+        expected_count: preview.body.expected_count,
+      },
+    });
+  }
+
+  it('writes a started row BEFORE and a completed row AFTER, using only live columns', async () => {
+    const app = await makeApp();
+    const res = await confirmAndRun(app);
+    const rows = app.locals.supabase.auditRows;
+
+    expect(res.status).toBe(200);
+    expect(rows.map(r => r.action)).toEqual(['master-reset.started', 'master-reset.completed']);
+
+    // Column contract: operations_audit_log has exactly these 9 columns. The insert in
+    // lib/cleanup/archive.js:303-312 uses operation_type/details, which do not exist and
+    // hard-error — this asserts we did not inherit that bug.
+    const LIVE = ['entity_type', 'entity_id', 'action', 'performed_by', 'performed_at', 'module', 'severity', 'metadata'];
+    for (const row of rows) {
+      expect(Object.keys(row).every(k => LIVE.includes(k))).toBe(true);
+      expect(row).not.toHaveProperty('operation_type');
+      expect(row).not.toHaveProperty('details');
+    }
+    // The full target set survives even though entity_id cannot hold more than one id.
+    expect(rows[0].metadata.target_ids).toEqual(VENTURE_IDS);
+    expect(rows[1].metadata.succeeded).toBe(VENTURE_IDS.length);
+  });
+
+  it('FAILS CLOSED: an unwritable audit sink refuses the teardown entirely', async () => {
+    const app = await makeApp({ auditFails: true });
+
+    // The PRE-write throws, asyncHandler forwards it via next(err), and in production the
+    // error middleware turns that into a 5xx. This harness mounts no error middleware, so
+    // the rejection surfaces here instead — asserting a status code would be asserting a
+    // property of the harness, not of the handler. What matters is below.
+    await expect(confirmAndRun(app)).rejects.toThrow(/audit write failed/);
+
+    // The load-bearing assertion: an irreversible teardown that cannot be recorded does
+    // not run. Refusing costs a retry; proceeding unaudited costs the ability to ever know
+    // what happened.
+    expect(deleteVentureFullyMock).toHaveBeenCalledTimes(0);
+  });
+
+  it('writes a FAILED row when the teardown throws partway, so the trail is never started-never-finished', async () => {
+    const app = await makeApp();
+    deleteVentureFullyMock.mockImplementationOnce(async id => ({ success: true, venture: { id }, phases: {} }));
+    deleteVentureFullyMock.mockImplementationOnce(async () => { throw new Error('teardown exploded at venture 2'); });
+
+    await confirmAndRun(app).catch(() => {});
+    const actions = app.locals.supabase.auditRows.map(r => r.action);
+
+    expect(actions).toContain('master-reset.started');
+    expect(actions).toContain('master-reset.failed');
+    expect(actions).not.toContain('master-reset.completed');
+    const failed = app.locals.supabase.auditRows.find(r => r.action === 'master-reset.failed');
+    expect(failed.metadata.error).toMatch(/exploded/);
   });
 });

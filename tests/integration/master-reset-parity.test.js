@@ -92,13 +92,20 @@ function buildSupabaseMock({ ventures = [], orphans = [] } = {}) {
   const orphanIs = vi.fn(() => ({ select: orphanSelect }));
   const orphanDelete = vi.fn(() => ({ is: orphanIs }));
   const venturesSelect = vi.fn(() => Promise.resolve({ data: ventures, error: null }));
+  // SD-LEO-INFRA-DESTRUCTIVE-ACTION-SAFETY-001 FR-3 added audit rows around the teardown.
+  // Without this branch every handler here would refuse — correctly, since a failed audit
+  // write fails closed — so the mock now covers the audit sink and captures the rows.
+  const auditRows = [];
+  const auditInsert = vi.fn((row) => { auditRows.push(row); return Promise.resolve({ error: null }); });
   return {
     from: vi.fn((table) => {
       if (table === 'ventures') return { select: venturesSelect };
       if (table === 'stage_zero_requests') return { delete: orphanDelete };
+      if (table === 'operations_audit_log') return { insert: auditInsert };
       return {};
     }),
     _orphanDelete: orphanDelete,
+    _auditRows: auditRows,
   };
 }
 

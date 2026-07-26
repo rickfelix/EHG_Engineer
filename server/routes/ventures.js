@@ -11,6 +11,7 @@ import { asyncHandler } from '../../lib/middleware/eva-error-handler.js';
 import { isValidUuid, validateUuidParam, isValidStringLength } from '../middleware/validate.js';
 import { deleteVentureFully } from '../../lib/deleteVentureFully.js';
 import { evaluateConfirmation } from '../../lib/destructive-confirmation.js';
+import { withDestructiveAudit, resolvePerformedBy } from '../../lib/destructive-audit.js';
 
 const router = Router();
 
@@ -328,11 +329,21 @@ router.post('/master-reset', asyncHandler(async (req, res) => {
   const gate = evaluateConfirmation({ body: req.body, operation: 'master-reset', targetIds: ventureIds });
   if (!gate.ok) return res.status(gate.status).json(gate.body);
 
-  // Loop the shared full-teardown helper per venture.
-  const results = [];
-  for (const id of ventureIds) {
-    results.push(await deleteVentureFully(id, { supabase }));
-  }
+  // SD-LEO-INFRA-DESTRUCTIVE-ACTION-SAFETY-001 FR-3 — bracket the irreversible loop with
+  // audit rows. A failed PRE-write refuses the operation outright (fail-closed: an
+  // irreversible teardown that cannot be recorded must not run), and a throw partway
+  // still writes a POST row so the trail never reads started-never-finished.
+  const results = await withDestructiveAudit(
+    supabase,
+    { operation: 'master-reset', targetIds: ventureIds, performedBy: resolvePerformedBy(req) },
+    async () => {
+      const out = [];
+      for (const id of ventureIds) {
+        out.push(await deleteVentureFully(id, { supabase }));
+      }
+      return out;
+    },
+  );
 
   // Preserve the one master_reset_portfolio step per-venture delete does not
   // cover: sweep orphan stage_zero_requests with no venture_id. Non-fatal.
@@ -370,7 +381,11 @@ router.post('/:id/full-delete', validateUuidParam('id'), asyncHandler(async (req
   if (!gate.ok) return res.status(gate.status).json(gate.body);
 
   const supabase = resolveServiceClient(req);
-  const result = await deleteVentureFully(req.params.id, { supabase });
+  const result = await withDestructiveAudit(
+    supabase,
+    { operation: 'full-delete', targetIds: [req.params.id], performedBy: resolvePerformedBy(req) },
+    () => deleteVentureFully(req.params.id, { supabase }),
+  );
   return res.status(result.success ? 200 : 500).json(result);
 }));
 
@@ -392,10 +407,17 @@ router.post('/bulk-full-delete', asyncHandler(async (req, res) => {
   if (!gate.ok) return res.status(gate.status).json(gate.body);
 
   const supabase = resolveServiceClient(req);
-  const results = [];
-  for (const id of ids) {
-    results.push(await deleteVentureFully(id, { supabase }));
-  }
+  const results = await withDestructiveAudit(
+    supabase,
+    { operation: 'bulk-full-delete', targetIds: ids, performedBy: resolvePerformedBy(req) },
+    async () => {
+      const out = [];
+      for (const id of ids) {
+        out.push(await deleteVentureFully(id, { supabase }));
+      }
+      return out;
+    },
+  );
   const succeeded = results.filter(r => r.success).length;
   const failed = results.length - succeeded;
   return res.json({ success: failed === 0, succeeded, failed, results });
