@@ -51,6 +51,10 @@ function readState(statePath) {
       last_result: parsed.last_result || null,
       last_pid: Number.isInteger(parsed.last_pid) ? parsed.last_pid : null,
       last_spawn_at: parsed.last_spawn_at || null,
+      // QF-20260726-794: additive like last_pid (schema stays v1). This whitelist is what
+      // makes the field durable — a key absent here is silently dropped on every read, so
+      // the streak could never accumulate. Missing in an old state file reads as 0 via `|| 0`.
+      consecutive_refusals: Number.isFinite(parsed.consecutive_refusals) ? parsed.consecutive_refusals : 0,
     };
   } catch {
     return { schema_version: STATE_SCHEMA_VERSION, sweep_counter: 0, last_run_at: null, last_result: null, last_pid: null, last_spawn_at: null };
@@ -263,12 +267,34 @@ function tick(opts = {}) {
       ...(opts.currencyRunner ? { runner: opts.currencyRunner } : {}),
       ...(opts.currencyEnv ? { env: opts.currencyEnv } : {}),
     });
+    state.consecutive_refusals = 0; // currency restored — the refusal streak ends here
   } catch (err) {
+    // QF-20260726-794 — REFUSE TO REAP, BUT STILL REPORT.
+    //
+    // Two correct rules that were never checked against each other: the reaper must not
+    // mutate a shared root (allowSelfHeal:false, load-bearing), and QFs are worked ON main
+    // so the root is dirty ~continuously. The reaper therefore refuses on ANY behind>0, and
+    // the root goes behind within minutes of a peer merge — so it refuses essentially every
+    // tick. Nothing alerted, because each individual refusal is a correct, well-logged
+    // decision; the cost was only ever visible in the ACCUMULATED count.
+    //
+    // The reason nobody watched that count is mechanical, not cultural: the pool watchdog
+    // that reports utilization lives DOWNSTREAM of this early return, so a refusing tick
+    // never reached it. The census is non-destructive and therefore safe to run on a stale
+    // tree — unlike reaping, which is why the refusal itself stays exactly as it was.
+    state.consecutive_refusals = (state.consecutive_refusals || 0) + 1;
+    const used = countActiveWorktrees(repoRoot);
+    const pool = poolWatchdogDecision({ used, cap: MAX_WORKTREE_COUNT, threshold: resolvePoolThreshold() });
+    const poolLabel = pool.used == null ? 'unknown (git failed)' : `${pool.used}/${pool.cap} (${pool.percent}%)`;
     logger(`WORKTREE REAPER TICK: sweep=${state.sweep_counter} — REFUSING TO REAP: ${err && err.message ? err.message : 'currency check failed'}`);
+    logger(`WORKTREE REAPER BACKLOG: pool ${poolLabel} — UNREAPED for ${state.consecutive_refusals} consecutive tick(s)${pool.triggered ? ` — AT/OVER ${Math.round(pool.threshold * 100)}% THRESHOLD and reclaim is BLOCKED` : ''}`);
     state.last_run_at = new Date().toISOString();
     state.last_result = 'refused_stale_tree';
     writeState(statePath, state);
-    return { invoked: false, counter: state.sweep_counter, cadence, result: 'refused_stale_tree', enabled: true };
+    return {
+      invoked: false, counter: state.sweep_counter, cadence, result: 'refused_stale_tree', enabled: true,
+      consecutiveRefusals: state.consecutive_refusals, pool,
+    };
   }
 
   // Single-flight guard: if the previous reaper is still running, do not stack a
