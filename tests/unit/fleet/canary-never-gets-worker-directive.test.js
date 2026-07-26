@@ -142,3 +142,38 @@ describe('CANARY MUST NEVER RECEIVE THE WORKER DIRECTIVE — all three prompt-de
     expect(worker.prompt).toBe(FLEET_WORKER_STARTUP_PROMPT); // control arm
   });
 });
+
+describe('F1 — the CHOKE POINT refuses, so a FOURTH spawner inherits the guarantee', () => {
+  // Every spawner routes through buildSessionLaunch, which receives both the callsign and the
+  // prompt. Before this, the invariant was enforced only by convention at the three call sites, and
+  // a PLAN verification probe called this function directly with a Canary- callsign and the worker
+  // directive: 1406 bytes written, byte-identical to the f060c6fb42b hazard. The three-site test
+  // above hardcodes three sites and would not have caught a fourth.
+  const { buildSessionLaunch } = require('../../../lib/fleet/build-session-launch.cjs');
+  const os = require('node:os');
+  const path = require('node:path');
+  const tmp = () => fs.mkdtempSync(path.join(os.tmpdir(), 'f1-'));
+
+  it('REFUSES a canary-namespace callsign carrying the worker directive', () => {
+    expect(() => buildSessionLaunch({
+      role: 'worker', callsign: 'Canary-pilot', cwd: tmp(), startupPrompt: FLEET_WORKER_STARTUP_PROMPT,
+    })).toThrow(/refusing to launch canary-namespace/);
+  });
+
+  it('catches the case-mismatched spelling too (SEC-1 parity at the choke point)', () => {
+    expect(() => buildSessionLaunch({
+      role: 'worker', callsign: 'canary-pilot', cwd: tmp(), startupPrompt: FLEET_WORKER_STARTUP_PROMPT,
+    })).toThrow(/refusing to launch canary-namespace/);
+  });
+
+  it('CONTROL: a worker with the directive still builds, and a canary with a NON-worker prompt still builds', () => {
+    // Without these the guard could be always-on and the test above would still pass.
+    expect(() => buildSessionLaunch({
+      role: 'worker', callsign: 'Charlie', cwd: tmp(), startupPrompt: FLEET_WORKER_STARTUP_PROMPT,
+    })).not.toThrow();
+    // The documented explicit-prompt opt-out is deliberately NOT broken for other payloads.
+    expect(() => buildSessionLaunch({
+      role: 'worker', callsign: 'Canary-pilot', cwd: tmp(), startupPrompt: 'some benign canary instruction',
+    })).not.toThrow();
+  });
+});

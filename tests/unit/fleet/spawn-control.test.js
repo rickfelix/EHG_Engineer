@@ -226,8 +226,13 @@ describe('spawn — the deleted env carrier (FR-2)', () => {
   // two "fixes" (QF-20260724-290, QF-20260725-757), each of which moved the drop one hop later.
   //
   // So they now pin the carrier's ABSENCE. Re-adding the write turns these RED.
+  // FIXTURE IS A WORKER, AND THAT IS THE WHOLE POINT. This used to spawn 'Canary-pilot', which now
+  // resolves to a NULL prompt — so the assertion passed GREEN even with the env carrier fully
+  // restored, proving nothing. Found by PLAN verification (F3). A worker actually resolves a prompt,
+  // so the carrier's absence is now a real observation rather than a side effect of there being
+  // nothing to carry. Same vacuity class this file's own comment below claims to have fixed.
   it('does NOT set the unread FLEET_WORKER_STARTUP_PROMPT env carrier', async () => {
-    const result = await spawn({ role: 'worker', callsign: 'Canary-pilot' }, { live: false });
+    const result = await spawn({ role: 'worker', callsign: 'Charlie' }, { live: false });
     expect(result.invocation.env.FLEET_WORKER_STARTUP_PROMPT).toBeUndefined();
     expect(Object.keys(result.invocation.env)).not.toContain('FLEET_WORKER_STARTUP_PROMPT');
   });
