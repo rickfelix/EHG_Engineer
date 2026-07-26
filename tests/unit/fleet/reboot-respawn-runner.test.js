@@ -38,10 +38,15 @@ describe('runRebootRespawn dry-run (FR-5) — default INERT', () => {
     expect(events[0].payload).toMatchObject({ verb: 'respawn', callsign: 'Worker-1', resume_uuid: 'u-1', live: false });
 
     // The per-slot invocation carries the correct --resume token (slot 1) / no token (slot 2).
-    expect(res.results[0].invocation.args).toEqual(['-w', 'new', 'new-tab', '-d', resolveRepoRoot(), '--', resolveClaudeCmd(), '--resume', 'u-1']);
+    // FR-1: a trailing single-line POINTER positional now follows. It embeds an absolute path, so
+    // it is asserted by SHAPE — exact-matching a machine-specific path would be brittle without
+    // testing anything more. The prefix is still pinned exactly.
+    expect(res.results[0].invocation.args.slice(0, 9))
+      .toEqual(['-w', 'new', 'new-tab', '-d', resolveRepoRoot(), '--', resolveClaudeCmd(), '--resume', 'u-1']);
     // FR-3: a slot with no resume token gets a MINTED --session-id instead, so the spawner knows in
     // advance the id the child will register under. Injected via uuidFn for determinism.
-    expect(res.results[1].invocation.args).toEqual(['-w', 'new', 'new-tab', '-d', resolveRepoRoot(), '--', resolveClaudeCmd(), '--session-id', MINTED]);
+    expect(res.results[1].invocation.args.slice(0, 9))
+      .toEqual(['-w', 'new', 'new-tab', '-d', resolveRepoRoot(), '--', resolveClaudeCmd(), '--session-id', MINTED]);
   });
 
   // QF-20260724-335: opts.sdKey stamps every fleet_verb_respawn event with an explicit run-correlator
@@ -75,8 +80,17 @@ describe('runRebootRespawn live (FR-5)', () => {
     });
     expect(res.live).toBe(true);
     expect(spawnFn).toHaveBeenCalledTimes(2);
-    expect(spawnCalls[0]).toEqual({ program: 'wt.exe', args: ['-w', 'new', 'new-tab', '-d', resolveRepoRoot(), '--', resolveClaudeCmd(), '--resume', 'u-1'] });
-    expect(spawnCalls[1].args).toEqual(['-w', 'new', 'new-tab', '-d', resolveRepoRoot(), '--', resolveClaudeCmd(), '--session-id', MINTED]); // slot 2 had no resume token -> minted id
+    expect(spawnCalls[0].program).toBe('wt.exe');
+    expect(spawnCalls[0].args.slice(0, 9))
+      .toEqual(['-w', 'new', 'new-tab', '-d', resolveRepoRoot(), '--', resolveClaudeCmd(), '--resume', 'u-1']);
+    expect(spawnCalls[1].args.slice(0, 9))
+      .toEqual(['-w', 'new', 'new-tab', '-d', resolveRepoRoot(), '--', resolveClaudeCmd(), '--session-id', MINTED]); // slot 2 had no resume token -> minted id
+    // FR-1: whatever follows is the single-line pointer positional, asserted by shape below.
+    for (const c of spawnCalls) {
+      const last = c.args[c.args.length - 1];
+      expect(last).toMatch(/follow the instructions in it exactly/);
+      expect(last.split(/[\r\n]/).length, 'the positional must never be multi-line').toBe(1);
+    }
     expect(res.results.map((r) => r.spawned)).toEqual([true, true]);
   });
 
@@ -260,29 +274,36 @@ describe('runRebootRespawn (QF-20260724-070): durable bind-time audit row', () =
 });
 
 /**
- * QF-20260724-290 — the keepalive prompt must survive BOTH hops (runner -> buildLiveSpawnInvocation
- * -> buildSessionLaunch) and land in the spawned child's env. Asserted on the env the REAL spawnFn
- * seam receives, not on an intermediate call arg: a prompt that is passed but silently discarded one
- * hop later is exactly the ghost this fixes, and an arg-level assertion would not have caught it.
+ * QF-20260724-290 asserted the keepalive prompt survived BOTH hops (runner ->
+ * buildLiveSpawnInvocation -> buildSessionLaunch) and landed in the spawned child's env. Its
+ * reasoning was explicitly right — assert at the spawnFn seam, not an intermediate call arg,
+ * because "passed but discarded one hop later" is the actual ghost.
+ *
+ * FR-2: it stopped ONE HOP TOO EARLY. The child env was not the consumer either. Nothing reads
+ * `FLEET_WORKER_STARTUP_PROMPT` — no SessionStart hook, no code path, verified repo-wide — so the
+ * prompt died in the env it had just been proven to reach. The right instinct, applied to the
+ * wrong endpoint: the seam that mattered was the SPAWNED SESSION'S FIRST MESSAGE, and no unit test
+ * can reach it. Hence the SD's acceptance criterion is a transcript read, not an argv assertion.
  */
-describe('runRebootRespawn keepalive prompt plumbing (QF-20260724-290)', () => {
-  it('forwards the canonical FLEET_WORKER_STARTUP_PROMPT into the respawned child env', async () => {
-    const { FLEET_WORKER_STARTUP_PROMPT } = await import('../../../lib/coordinator/coordination-events.cjs');
+describe('runRebootRespawn — the deleted env carrier (FR-2)', () => {
+  it('does NOT write the unread FLEET_WORKER_STARTUP_PROMPT into the respawned child env', async () => {
     let childEnv = null;
     await runRebootRespawn({
       supabase: null, loadFn: async () => [SLOTS[0]], logFn: async () => ({ ok: true }), live: true,
       spawnFn: (_p, _a, env) => { childEnv = env; return { pid: 0 }; },
     });
-    expect(childEnv.FLEET_WORKER_STARTUP_PROMPT).toBe(FLEET_WORKER_STARTUP_PROMPT);
-    expect(childEnv.FLEET_WORKER_STARTUP_PROMPT.length).toBeGreaterThan(0);
+    expect(childEnv).not.toBeNull(); // guard: a null env would make the assertion below vacuous
+    expect(childEnv.FLEET_WORKER_STARTUP_PROMPT).toBeUndefined();
   });
 
-  it('honors an explicit startupPrompt:null opt-out (env var left unset)', async () => {
+  it('does not smuggle an explicit prompt into the child env under any key', async () => {
+    const SENTINEL = 'explicit-keepalive-sentinel';
     let childEnv = null;
     await runRebootRespawn({
       supabase: null, loadFn: async () => [SLOTS[0]], logFn: async () => ({ ok: true }), live: true,
-      startupPrompt: null, spawnFn: (_p, _a, env) => { childEnv = env; return { pid: 0 }; },
+      startupPrompt: SENTINEL, spawnFn: (_p, _a, env) => { childEnv = env; return { pid: 0 }; },
     });
-    expect(childEnv.FLEET_WORKER_STARTUP_PROMPT).toBeUndefined();
+    expect(childEnv).not.toBeNull();
+    expect(Object.values(childEnv).filter((v) => String(v).includes(SENTINEL))).toEqual([]);
   });
 });
