@@ -55,7 +55,9 @@ function sessionIdentityKind(meta = {}) {
   return null;                          // no identity at all -> ghost
 }
 
-function formatSessionRow(row) {
+// QF-20260726-642: exported (additively, no behaviour change) so the per-session account fields
+// below are unit-testable. An emitted field with no test is how element 5 got dropped the first time.
+export function formatSessionRow(row) {
   const meta = row.metadata || {};
   const identity = meta.fleet_identity || {};
   const model = meta.model || '--';
@@ -70,6 +72,20 @@ function formatSessionRow(row) {
     color: identity.color || null,
     role: identity.role || null,
     account: identity.accountUuid8 || null,
+    // QF-20260726-642 element 5 — the per-session ACCOUNT the chairman named. The published
+    // artifact renders a NAME ("Deep Soul Sessions", "Rick Felix 2000"), so the display value is
+    // account_org_name FIRST and account_email only as a fallback; `account` above is an
+    // accountUuid8 fragment and was never a name. Written per session by
+    // scripts/hooks/session-register.cjs (QF-20260726-514, merged 13:22Z), resolved via
+    // CLAUDE_CONFIG_DIR — deliberately NOT .account-identity-last.json, which is host-global and
+    // last-writer-wins and would render every row identically.
+    //
+    // NULL IS EXPECTED, NOT BROKEN: the field stamps at SessionStart with no backfill, so every
+    // session that predates the merge reports null until it restarts. The UI must render that as
+    // "not captured" rather than a blank — a session predating the writer is not an account-less
+    // session. No placeholder is invented here; null is passed through honestly.
+    account_email: meta.account_email || null,
+    account_org_name: meta.account_org_name || null,
     model_effort: `${model}/${effort}`,
     status: row.computed_status || 'unknown',
     sd_key: row.sd_key || null,
