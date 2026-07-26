@@ -110,12 +110,92 @@ describe('markResourcesCleaned', () => {
     expect(count).toBe(0);
   });
 
-  it('should return 0 on error', async () => {
+  // SD-LEO-INFRA-DESTRUCTIVE-ACTION-SAFETY-001 FR-2 — DELIBERATE BEHAVIOUR CHANGE.
+  // This previously asserted "should return 0 on error". That assertion pinned the
+  // defect: returning 0 makes a FAILED WRITE indistinguishable from "nothing to clean",
+  // so a broken teardown reported success. The sole production caller (deleteVentureFully
+  // phase 3) wraps this in try/catch and is explicitly non-blocking, so throwing surfaces
+  // the failure as phases.resources_error without changing control flow anywhere.
+  it('THROWS on error rather than returning 0, so a failed write is not silent', async () => {
     mockSelect.mockResolvedValue({ data: null, error: { message: 'connection error' } });
     const { markResourcesCleaned } = await import('../../lib/venture-resources.js');
 
-    const count = await markResourcesCleaned('venture-123');
-    expect(count).toBe(0);
+    await expect(markResourcesCleaned('venture-123')).rejects.toThrow(/cleanup failed: connection error/);
+  });
+});
+
+/**
+ * SD-LEO-INFRA-DESTRUCTIVE-ACTION-SAFETY-001 FR-2.
+ *
+ * These use an INJECTED stub client rather than the module-level supabase mock, because
+ * the injection seam is precisely what FR-2 adds — before this change the function built
+ * its own service client from process.env and could not be reached by a stub at all.
+ * Every assertion below is about writes NOT happening, so the stub records each call.
+ */
+describe('markResourcesCleaned — dryRun is side-effect-free (FR-2)', () => {
+  function makeStub({ rows = [{ id: '1' }, { id: '2' }], error = null } = {}) {
+    const calls = { update: 0, select: 0, from: [] };
+    const result = Promise.resolve({ data: rows, error });
+    const chain = {
+      eq: () => chain,
+      select: () => { calls.select++; return chain; },
+      then: (...a) => result.then(...a),
+    };
+    return {
+      calls,
+      from(table) {
+        calls.from.push(table);
+        return {
+          select: () => { calls.select++; return chain; },
+          update: (...args) => { calls.update++; calls.updateArgs = args; return chain; },
+        };
+      },
+    };
+  }
+
+  it('issues NO update when dryRun is true, and still reports the count', async () => {
+    const stub = makeStub();
+    const { markResourcesCleaned } = await import('../../lib/venture-resources.js');
+
+    const count = await markResourcesCleaned('venture-123', { dryRun: true, supabase: stub });
+
+    expect(stub.calls.update).toBe(0);   // the whole point: preview must not write
+    expect(stub.calls.from).toContain('venture_resources');
+    expect(count).toBe(2);
+  });
+
+  it('DOES update when dryRun is false, so the test above could have failed', async () => {
+    // Control case. Without this, "update was never called" would also pass if the
+    // function were broken and never called anything at all.
+    const stub = makeStub();
+    const { markResourcesCleaned } = await import('../../lib/venture-resources.js');
+
+    const count = await markResourcesCleaned('venture-123', { dryRun: false, supabase: stub });
+
+    expect(stub.calls.update).toBe(1);
+    expect(stub.calls.updateArgs[0]).toEqual({ status: 'cleaned' });
+    expect(count).toBe(2);
+  });
+
+  it('uses the INJECTED client, not a self-built service client', async () => {
+    // Before FR-2 this function called createSupabaseServiceClient() unconditionally,
+    // so an injected stub was ignored and the real table was hit. If the injection seam
+    // regresses, the stub records nothing and this fails.
+    const stub = makeStub();
+    const { markResourcesCleaned } = await import('../../lib/venture-resources.js');
+
+    await markResourcesCleaned('venture-123', { dryRun: true, supabase: stub });
+
+    expect(stub.calls.from).toEqual(['venture_resources']);
+  });
+
+  it('throws on a dry-run query error rather than reporting a false zero', async () => {
+    const stub = makeStub({ rows: null, error: { message: 'boom' } });
+    const { markResourcesCleaned } = await import('../../lib/venture-resources.js');
+
+    await expect(
+      markResourcesCleaned('venture-123', { dryRun: true, supabase: stub }),
+    ).rejects.toThrow(/dry-run count failed: boom/);
   });
 });
 
