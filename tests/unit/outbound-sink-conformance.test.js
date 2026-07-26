@@ -59,7 +59,6 @@ const DISCOVERY_ROOTS = [
  *  than by widening the roots, which would reintroduce the hub-escape collapse. */
 const ADDITIONAL_SCOPE = [
   { path: 'lib/integrations/todoist/chairman-notify.js', reason: 'Third outbound channel (Todoist) reached from the chairman lane; emits via raw fetch, so it is both a target and in-scope.' },
-  { path: 'lib/switch-automation/switchon-decision-packet.js', reason: 'Lib-layer originator of the second decision-packet stack; missed entirely if only entrypoints are enumerated.' },
   { path: 'scripts/adam-decision-email.mjs', reason: 'Reaches the email transport only via the pathToFileURL dynamic-import idiom.' },
   { path: 'scripts/adam-exec-summary.mjs', reason: 'Reaches the email transport only via the pathToFileURL dynamic-import idiom.' },
   { path: 'scripts/adam-heartbeat-email.mjs', reason: 'Reaches the email transport only via the pathToFileURL dynamic-import idiom.' },
@@ -102,17 +101,12 @@ const NOT_A_SINK = [
  * that constrains the transports themselves.
  */
 const KNOWN_DEBT = [
-  { path: 'lib/adam/stall-alert.js', reason: 'Reaches a transport without the consult gate. Pre-existing at census authoring.', linked_ref: 'SD-LEO-INFRA-OUTBOUND-SINK-CONFORMANCE-001' },
-  { path: 'lib/chairman/record-pending-decision.mjs', reason: 'LIB-LAYER originator reaching a transport without the consult gate; invisible to grep because it holds no transport literal.', linked_ref: 'SD-LEO-INFRA-OUTBOUND-SINK-CONFORMANCE-001' },
   { path: 'lib/chairman/sms-bridge.js', reason: 'Static import of the Twilio provider, no consult gate. Pre-existing at census authoring.', linked_ref: 'SD-LEO-INFRA-OUTBOUND-SINK-CONFORMANCE-001' },
   { path: 'lib/chairman/sms-channel-health.js', reason: 'Reaches the SMS transport without the consult gate. Pre-existing at census authoring.', linked_ref: 'SD-LEO-INFRA-OUTBOUND-SINK-CONFORMANCE-001' },
   { path: 'lib/chairman/sms-outbound-worker.js', reason: 'Static import of the Twilio provider, no consult gate. Pre-existing at census authoring.', linked_ref: 'SD-LEO-INFRA-OUTBOUND-SINK-CONFORMANCE-001' },
-  { path: 'lib/comms/adam-outbound/chairman-sms-gate/index.js', reason: 'Reaches the email transport via a literal dynamic import, no consult gate — and its own comment notes the gate "was absent here".', linked_ref: 'SD-LEO-INFRA-OUTBOUND-SINK-CONFORMANCE-001' },
-  { path: 'lib/comms/adam-outbound/decision-scheduler/index.js', reason: 'Reaches a transport without the consult gate. Pre-existing at census authoring.', linked_ref: 'SD-LEO-INFRA-OUTBOUND-SINK-CONFORMANCE-001' },
   { path: 'lib/notifications/channel-health-recorder.js', reason: 'Reaches the email transport without the consult gate. Pre-existing at census authoring.', linked_ref: 'SD-LEO-INFRA-OUTBOUND-SINK-CONFORMANCE-001' },
   { path: 'lib/notifications/orchestrator.js', reason: 'Static consumer of the Resend adapter, no consult gate. Pre-existing at census authoring.', linked_ref: 'SD-LEO-INFRA-OUTBOUND-SINK-CONFORMANCE-001' },
   { path: 'lib/notifications/scheduler.js', reason: 'Reaches the email transport without the consult gate. Pre-existing at census authoring.', linked_ref: 'SD-LEO-INFRA-OUTBOUND-SINK-CONFORMANCE-001' },
-  { path: 'lib/switch-automation/switchon-decision-packet.js', reason: 'LIB-LAYER originator of the second decision-packet stack; missed entirely by entrypoint-only enumeration.', linked_ref: 'SD-LEO-INFRA-OUTBOUND-SINK-CONFORMANCE-001' },
   { path: 'scripts/adam-decision-email.mjs', reason: 'Reaches the email transport only via the pathToFileURL dynamic-import idiom; invisible to the census until that idiom was resolved.', linked_ref: 'SD-LEO-INFRA-OUTBOUND-SINK-CONFORMANCE-001' },
   { path: 'scripts/adam-exec-summary.mjs', reason: 'Reaches the email transport only via the pathToFileURL dynamic-import idiom.', linked_ref: 'SD-LEO-INFRA-OUTBOUND-SINK-CONFORMANCE-001' },
   { path: 'scripts/adam-heartbeat-email.mjs', reason: 'Reaches the email transport only via the pathToFileURL dynamic-import idiom.', linked_ref: 'SD-LEO-INFRA-OUTBOUND-SINK-CONFORMANCE-001' },
@@ -134,18 +128,24 @@ const KNOWN_DEBT_CEILING = 14;
  * Shrinking this is legitimate ONLY when the sink genuinely inherits the consult gate
  * (or the module is gone).
  */
+/* QF-20260725-972 RETIRED FIVE ENTRIES — they now genuinely INHERIT the consult gate, which is
+ * the shrink this file's own rule permits. That QF wired the pre-send Solomon-consult gate into
+ * lib/comms/adam-outbound/chairman-sms-gate/index.js — the single choke both chairman CLIs funnel
+ * through — so every sink whose path to a transport runs through sendChairmanSMS now reaches
+ * lib/adam/should-consult-solomon.js. Measured: the census went from 14 non-conformant to 9.
+ * Retired: lib/adam/stall-alert.js, lib/chairman/record-pending-decision.mjs,
+ * lib/comms/adam-outbound/chairman-sms-gate/index.js (whose debt reason literally said the gate
+ * 'was absent here'), lib/comms/adam-outbound/decision-scheduler/index.js,
+ * lib/switch-automation/switchon-decision-packet.js. The remaining 9 are untouched: they reach a
+ * transport by a path that does NOT pass through sendChairmanSMS (raw Twilio/email adapters and
+ * the adam-*.mjs email scripts), so their debt is real and still owed. */
 const EXPECTED_NON_CONFORMANT = [
-  'lib/adam/stall-alert.js',
-  'lib/chairman/record-pending-decision.mjs',
   'lib/chairman/sms-bridge.js',
   'lib/chairman/sms-channel-health.js',
   'lib/chairman/sms-outbound-worker.js',
-  'lib/comms/adam-outbound/chairman-sms-gate/index.js',
-  'lib/comms/adam-outbound/decision-scheduler/index.js',
   'lib/notifications/channel-health-recorder.js',
   'lib/notifications/orchestrator.js',
   'lib/notifications/scheduler.js',
-  'lib/switch-automation/switchon-decision-packet.js',
   'scripts/adam-decision-email.mjs',
   'scripts/adam-exec-summary.mjs',
   'scripts/adam-heartbeat-email.mjs',
