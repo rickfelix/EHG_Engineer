@@ -81,4 +81,50 @@ describe('assertRoleCallsignCompatible — coordinator-pointer hijack (FR-2, TS-
       expect(assertRoleCallsignCompatible(role, 'Alpha-2').ok).toBe(true);
     }
   });
+
+  // The bypasses a SECURITY review MEASURED against the first shipped version of this guard. Each
+  // one delivered '/coordinator start' to a canary. They are pinned individually rather than as a
+  // loop over one spelling, because one spelling is exactly how the gap survived review the
+  // first time.
+  it.each(['canary-pilot', 'CANARY-pilot', 'CaNaRy-pilot', 'canary-', '  Canary-pilot  '])(
+    'refuses canary-namespace callsign %j regardless of case or padding',
+    (callsign) => {
+      expect(assertRoleCallsignCompatible('coordinator', callsign).ok).toBe(false);
+    },
+  );
+
+  it('still allows those same spellings with role=worker — canaries ARE workers', () => {
+    // Control arm. Without it, a guard that simply refused every canary-ish callsign would pass
+    // the block above while breaking canary provisioning outright.
+    for (const callsign of ['canary-pilot', 'CANARY-pilot', 'Canary-pilot']) {
+      expect(assertRoleCallsignCompatible('worker', callsign).ok).toBe(true);
+    }
+  });
+
+  it('refuses an UNIDENTIFIABLE callsign for a privileged role', () => {
+    // These classify as 'unidentifiable', not 'canary', so a kind==='canary' branch let them
+    // through. The array form is a literal laundering of the value blocked above.
+    for (const callsign of [['Canary-pilot'], {}, '   ', '', null, undefined, 123]) {
+      const verdict = assertRoleCallsignCompatible('coordinator', callsign);
+      expect(verdict.ok, `expected refusal for ${JSON.stringify(callsign)}`).toBe(false);
+    }
+  });
+
+  it('does not refuse an ordinary callsign as unidentifiable', () => {
+    // Pairs with the above so the refusal cannot be over-broad and pass by refusing everything.
+    expect(assertRoleCallsignCompatible('coordinator', 'Coordinator-1').ok).toBe(true);
+  });
+});
+
+describe('resolveRoleSpawnOpts — prototype-chain keys (latent pointer suppression)', () => {
+  it('OMITS the key for inherited Object.prototype members', () => {
+    // ROLE_STARTUP_PROMPTS is a plain literal, so a bare lookup returned
+    // { startupPrompt: <Function> } for these — key PRESENT, which is precisely the
+    // pointer-suppression defect this function exists to prevent. Not reachable through the route
+    // (the allowlist runs first), but the exported function carries no allowlist of its own.
+    for (const key of ['constructor', 'toString', 'valueOf', 'hasOwnProperty', '__proto__']) {
+      const opts = resolveRoleSpawnOpts(key);
+      expect(Object.hasOwn(opts, 'startupPrompt'), `leaked via ${key}`).toBe(false);
+    }
+  });
 });
