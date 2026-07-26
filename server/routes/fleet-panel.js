@@ -90,6 +90,15 @@ export function formatSessionRow(row) {
     status: row.computed_status || 'unknown',
     sd_key: row.sd_key || null,
     heartbeat_age_human: row.heartbeat_age_human || null,
+    // SD-LEO-FEAT-FLEET-COLD-START-UX-001 FR-3. The numeric age was already SELECTed and used for
+    // ordering and the LIVE_WINDOW_SECONDS filter, but never emitted — so the client had only
+    // heartbeat_age_human, a DISPLAY STRING ('5s ago'). The cold-start control needs to tell a
+    // LIVE coordinator from a STALE one, and the live window is a generous 3600s while heartbeat
+    // is known to keep advancing on dead processes. Without this field that distinction could only
+    // be tested against a fabricated row — a guaranteed mock-pass. Emitted so the client compares a
+    // number rather than parsing prose. Null-safe: `?? null` not `|| null`, because 0 is a
+    // legitimate age and the falsy form would report a just-heartbeated session as unknown.
+    heartbeat_age_seconds: row.heartbeat_age_seconds ?? null,
     badge: computeSessionBadge({
       loopState: meta.loop_state,
       pAlive: meta.p_alive,
