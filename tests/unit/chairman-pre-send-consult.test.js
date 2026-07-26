@@ -4,6 +4,18 @@
  * consequential Adam->chairman recommendation reached the chairman unconsulted.
  */
 import { describe, it, expect, vi } from 'vitest';
+
+// DB-TEST GUARD (scripts/audit-db-test-guards.mjs). This file names process.env.SUPABASE_URL in
+// the lane-absent test, which trips DB_IMPORT_SIGNAL and marked the file as an UNGUARDED
+// DB-touching unit test — the ratchet caught it on PR 6452 (1 new violation against baseline 20).
+// Mocking the supabase client module is the scanner's own prescribed fix AND is the better test:
+// the lane-absent case previously relied only on deleting env vars, so a regression that made
+// isConsultLaneAvailable() construct a client anyway would have reached for a real connection.
+// Now it cannot — the live client is unreachable from this file by construction.
+vi.mock('../../lib/supabase-client.js', () => ({
+  createSupabaseClient: () => { throw new Error('unit test must not construct a real Supabase client'); },
+}));
+
 import { buildChairmanGateInput, runChairmanPreSendConsult } from '../../lib/adam/chairman-pre-send-consult.mjs';
 import { sendChairmanSMS } from '../../lib/comms/adam-outbound/chairman-sms-gate/index.js';
 
