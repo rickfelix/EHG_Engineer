@@ -137,12 +137,80 @@ describe('parkFailedCandidate — LIVE venture_nursery schema (FR-3 / criterion 
     expect(inserted[0].table).toBe('venture_nursery');
     const row = inserted[0].row;
     // Live schema columns only (the drifted parkVenture columns must NOT appear).
-    expect(Object.keys(row).sort()).toEqual(['current_score', 'description', 'maturity_level', 'name', 'source_ref', 'source_type', 'trigger_conditions']);
+    // next_evaluation_at added by SD-EHG-IDEATION-PIPELINE-SEAMS-001 FR-2 (the writer
+    // asymmetry). evaluation_interval_days is deliberately still absent: the column
+    // DEFAULT is 30 and every live row already reads 30, so writing it is a no-op.
+    expect(Object.keys(row).sort()).toEqual(['current_score', 'description', 'maturity_level', 'name', 'next_evaluation_at', 'source_ref', 'source_type', 'trigger_conditions']);
     expect(row.maturity_level).toBe('seed');            // live CHECK: seed|sprout|ready
     expect(row.source_type).toBe('discovery_mode');     // live CHECK includes discovery_mode
     expect(row.trigger_conditions[0]).toMatchObject({ type: 'capability_ships', capability: 'shopify integration' });
     expect(row.source_ref.gate).toBe('traversability');
     expect(row.source_ref.posture_version).toBe('phase_1_process_proving@v1');
+  });
+
+  // SD-EHG-IDEATION-PIPELINE-SEAMS-001 FR-2. These assert the COLUMN VALUE on a row this
+  // writer actually produced. Both weaker forms were considered and rejected:
+  //   - asserting only "the row is eligible" is VACUOUS, because the selector admits NULL
+  //     via its IS NULL branch, so such a test passes against completely unmodified code;
+  //   - asserting on a hand-built row would pass with parkFailedCandidate untouched —
+  //     the right property measured on the wrong producer.
+  describe('FR-2: parkFailedCandidate writes an IMMEDIATELY-eligible next_evaluation_at', () => {
+    function captureInsert() {
+      const inserted = [];
+      const supabase = {
+        from: vi.fn(() => ({
+          insert: vi.fn((row) => {
+            inserted.push(row);
+            return { select: vi.fn().mockReturnValue({ single: vi.fn().mockResolvedValue({ data: { id: 'n1', ...row }, error: null }) }) };
+          }),
+        })),
+      };
+      return { supabase, inserted };
+    }
+    const failure = {
+      candidate: { name: 'X', problem_statement: 'p', solution: 's', composite_score: 90, required_capabilities: [] },
+      missing: [{ name: 'cap', kind: 'integration' }],
+      resurfacing_conditions: [],
+    };
+
+    test('writes a NON-NULL next_evaluation_at that is already <= now — the selector predicate', async () => {
+      const now = new Date('2026-07-25T12:00:00.000Z');
+      const { supabase, inserted } = captureInsert();
+      await parkFailedCandidate(failure, {}, { supabase, logger: silentLogger, now });
+      const written = inserted[0].next_evaluation_at;
+      expect(written).not.toBeNull();
+      expect(written).toBe('2026-07-25T12:00:00.000Z');
+      expect(new Date(written).getTime()).toBeLessThanOrEqual(now.getTime());
+    });
+
+    test('REGRESSION GUARD: does NOT write a future date — now+90d would hide the row for 90 days', async () => {
+      const now = new Date('2026-07-25T12:00:00.000Z');
+      const { supabase, inserted } = captureInsert();
+      await parkFailedCandidate(failure, {}, { supabase, logger: silentLogger, now });
+      const written = new Date(inserted[0].next_evaluation_at).getTime();
+      // parkVenture's calculateNextReview('90d') would land here. The selector admits
+      // only `IS NULL OR <= now()`, so a row written that way is INVISIBLE — and the 15
+      // currently-visible rows are visible precisely BECAUSE the column is NULL. Copying
+      // that convention would have emptied the selector and caused this SD's own outage.
+      const ninetyDaysOut = now.getTime() + 90 * 86400000;
+      expect(written).toBeLessThan(ninetyDaysOut);
+      expect(written).toBeLessThanOrEqual(now.getTime());
+    });
+
+    test('does NOT write evaluation_interval_days — the column DEFAULT already supplies 30', async () => {
+      const { supabase, inserted } = captureInsert();
+      await parkFailedCandidate(failure, {}, { supabase, logger: silentLogger });
+      expect(inserted[0]).not.toHaveProperty('evaluation_interval_days');
+    });
+
+    test('defaults to the real clock when none is injected, and still lands in the past', async () => {
+      const before = Date.now();
+      const { supabase, inserted } = captureInsert();
+      await parkFailedCandidate(failure, {}, { supabase, logger: silentLogger });
+      const written = new Date(inserted[0].next_evaluation_at).getTime();
+      expect(written).toBeGreaterThanOrEqual(before);
+      expect(written).toBeLessThanOrEqual(Date.now());
+    });
   });
 
   // QF-20260711-607: parkFailedCandidate's persisted candidate snapshot previously

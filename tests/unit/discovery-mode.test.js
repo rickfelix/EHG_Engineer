@@ -135,18 +135,23 @@ function createMockSupabase({ strategies = STRATEGY_CONFIGS, nurseryItems = DEFA
       if (table === 'venture_nursery') {
         // SD-LEO-INFRA-STAGE0-NURSERY-PARK-PATH-001: the live SELECT filters
         // promoted_to_venture_id via .is() (the phantom .eq('status') is gone).
-        return {
-          select: vi.fn().mockReturnValue({
-            is: vi.fn().mockReturnValue({
-              order: vi.fn().mockReturnValue({
-                limit: vi.fn().mockResolvedValue({
-                  data: nurseryError ? null : nurseryItems,
-                  error: nurseryError,
-                }),
-              }),
-            }),
+        //
+        // SD-EHG-IDEATION-PIPELINE-SEAMS-001 FR-1: rebuilt as a SELF-RETURNING chain.
+        // The reader now routes through applyPendingNurseryPredicate, which adds .or()
+        // for the NULL-means-eligible-now branch and THREE .order() calls for the stable
+        // score-first tiebreak. The previous nested-return shape hard-coded exactly one
+        // .order() and had no .or() at all, so it threw before reaching .limit().
+        const chain = {
+          select: vi.fn(() => chain),
+          is: vi.fn(() => chain),
+          or: vi.fn(() => chain),
+          order: vi.fn(() => chain),
+          limit: vi.fn().mockResolvedValue({
+            data: nurseryError ? null : nurseryItems,
+            error: nurseryError,
           }),
         };
+        return chain;
       }
       return { select: vi.fn().mockReturnValue({ eq: vi.fn() }) };
     }),

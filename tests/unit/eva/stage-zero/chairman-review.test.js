@@ -736,6 +736,47 @@ describe('ChairmanReview', () => {
       );
     });
 
+    // SD-EHG-IDEATION-PIPELINE-SEAMS-001 FR-3. The WIP wall cannot be cleared honestly:
+    // all 46 counted rows were enumerated, 44 are fixtures and exactly two are real, so
+    // the floor is 2 against a limit of 2 and the gate compares with >=. That residual is
+    // a PORTFOLIO decision. The standing pressure is therefore to widen this list until
+    // the count drops — these tests exist so that widening cannot silently swallow a real
+    // venture, and the two are named by UUID in the PRD for the same reason.
+    describe('FR-3: fixture prefixes must never match a REAL venture', () => {
+      const matchesAnyPrefix = (name) =>
+        TEST_FIXTURE_NAME_PREFIXES.some((p) => name.toLowerCase().startsWith(p.toLowerCase()));
+
+      it.each([
+        ['ApexNiche AI', '809ec7e7'],
+        ['Image Alt Text Generator', '50763b6a'],
+      ])('does not classify %s (%s) as a test fixture', (name) => {
+        expect(matchesAnyPrefix(name)).toBe(false);
+      });
+
+      it('DOES classify every known fixture family, so the count reflects the real portfolio', () => {
+        for (const name of [
+          'artifact-gate-test-1784287687683',
+          'HCGate-RealDB-daemon-advisory-1784238026383',
+          'ProductReviewGate-RealDB-adv-1784287676240',
+          'StageArtifactGate-RealDB-complete-1784287689752',
+          'Pipeline-Test-1784249314251',
+          'Test Venture for Owned-Audience Loop',
+          '__e2e_thing', 'TEST-HARNESS-thing', 'parity-test-thing', 'TS-fixture-thing',
+        ]) {
+          expect(matchesAnyPrefix(name), `should be a fixture: ${name}`).toBe(true);
+        }
+      });
+
+      it('no prefix is broad enough to swallow an ordinary venture name', () => {
+        // A prefix like "Test" or "" would match real work. Guarding the shape rather than
+        // only the two known names keeps this honest as the portfolio grows.
+        for (const name of ['Alt Text Generator', 'Apex Analytics', 'Testimonial Engine', 'Venture One']) {
+          expect(matchesAnyPrefix(name), `must not be a fixture: ${name}`).toBe(false);
+        }
+        for (const p of TEST_FIXTURE_NAME_PREFIXES) expect(p.length).toBeGreaterThan(5);
+      });
+    });
+
     it('same-name idempotent re-run returns the existing venture BEFORE the WIP gate', async () => {
       const existing = { id: 'v-existing', name: 'TestVenture', status: 'active' };
       const ventures = {

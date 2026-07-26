@@ -56,6 +56,9 @@ function createMockSupabase(strategyData = null, nurseryItems = []) {
     select: vi.fn().mockReturnThis(),
     eq: vi.fn().mockReturnThis(),
     is: vi.fn().mockReturnThis(),
+    // SD-EHG-IDEATION-PIPELINE-SEAMS-001 FR-1: shared nursery predicate adds .or()
+    // for the NULL-means-eligible-now branch.
+    or: vi.fn().mockReturnThis(),
     single: vi.fn().mockResolvedValue({ data: strategyData, error: strategyData ? null : { message: 'not found' } }),
     order: vi.fn().mockReturnThis(),
     limit: vi.fn().mockResolvedValue({ data: nurseryItems, error: null }),
