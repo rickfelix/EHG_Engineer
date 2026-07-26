@@ -12,7 +12,7 @@
  */
 
 import { execSync } from 'child_process';
-import { COMPLETION_FLAG } from '../../../lib/governance/completion-flag-keys.js';
+import { COMPLETION_FLAG, WITNESS_INDETERMINATE, isWitnessIndeterminate } from '../../../lib/governance/completion-flag-keys.js';
 
 /**
  * SD-LEO-INFRA-COMPLETION-FLAGS-DURABLE-001 / FR-4 + TR-6.
@@ -54,8 +54,46 @@ async function _checkCompletionFlagsWitness(supabase, sdKey) {
     }
 
     return null;
+  } catch (e) {
+    // QF-20260725-868: this catch used to `return null` — BYTE-IDENTICAL to the success path above,
+    // so a CRASHED witness reported VERIFIED-CLEAN and no caller could tell the difference. The
+    // mechanism built to prove the post-completion tail ran could not detect its own failure to run.
+    //
+    // It stays FAIL-SOFT (coordinator decision a59441f4): this is a witness inside a Stop hook
+    // standing between every worker and "done". Blocking on a crash would turn an observability gap
+    // into an availability outage — one transient Supabase error would wedge the fleet. The fix is
+    // to make the state DISTINGUISHABLE, not to make it blocking.
+    await _recordIndeterminate(supabase, sdKey, e);
+    return WITNESS_INDETERMINATE.STATE;
+  }
+}
+
+/**
+ * QF-20260725-868: make could-not-determine COUNTABLE, not merely logged.
+ *
+ * "A non-blocking marker nobody can count is the same defect wearing a different value" — all four
+ * AEGIS adapters already logged, and logging is exactly what let that class persist unnoticed. This
+ * writes one queryable row per occurrence so the rate can be checked later.
+ *
+ * Best-effort by construction: it is wrapped so it can NEVER throw. A telemetry failure must not
+ * escalate into the blocking path we just decided against — that would reintroduce the availability
+ * risk through the back door.
+ */
+async function _recordIndeterminate(supabase, sdKey, err) {
+  try {
+    console.error(`   ⚠️  COMPLETION_FLAGS witness could NOT be determined for ${sdKey} (${err && err.message}) — surfaced, not blocking`);
+    if (!supabase) return;
+    await supabase.from('feedback').insert({
+      type: 'harness',
+      category: WITNESS_INDETERMINATE.FEEDBACK_CATEGORY,
+      severity: 'medium',
+      title: `completion-flags witness indeterminate for ${sdKey}`,
+      description: `The completion-flags witness threw and could not determine whether the post-completion tail ran. Surfaced non-blocking per QF-20260725-868. Error: ${err && err.message}`,
+      error_message: String((err && err.message) || err || 'unknown'),
+      metadata: { sd_key: sdKey, state: WITNESS_INDETERMINATE.STATE, qf: 'QF-20260725-868' },
+    });
   } catch {
-    return null; // fail-soft
+    // Deliberately swallowed — telemetry must never affect the hook's decision.
   }
 }
 
@@ -112,11 +150,19 @@ export async function validatePostCompletion(supabase, sd, sdKey) {
           missingRequired.push('SHIP');
         }
       }
-    } catch {
-      // If diff fails (branch deleted after merge, or on main), don't assume ship is needed
-      // The completion_date check above should handle completed/shipped SDs
-      // Only log for debugging - don't block
-      console.error(`   ℹ️  Git diff failed for ${sdKey} - branch may already be merged`);
+    } catch (e) {
+      // QF-20260725-868, SECOND SITE, same shape as the witness catch. This silently SKIPS
+      // missingRequired.push('SHIP'), so a git error RETIRES A SHIP REQUIREMENT inside the
+      // enforcement path — and the original comment rationalised the skip, which is exactly why it
+      // read as intentional rather than as a swallowed unknown.
+      //
+      // The skip itself is KEPT deliberately: pushing SHIP here would put an indeterminate state on
+      // the BLOCKING path (missingRequired triggers exit 2), which is the failure mode the
+      // coordinator decision forbids — a git hiccup would wedge completion. What changes is that the
+      // unknown is now NAMED and surfaced under its own non-blocking label instead of vanishing into
+      // an informational log that nobody counts.
+      console.error(`   ⚠️  Git diff could NOT be determined for ${sdKey} (${e && e.message}) — SHIP requirement not evaluated; surfaced, not blocking`);
+      missingRecommended.push('SHIP_CHECK_INDETERMINATE');
     }
   }
 
@@ -134,14 +180,37 @@ export async function validatePostCompletion(supabase, sd, sdKey) {
     const healSkipSources = ['heal', 'corrective'];
     const sdSource = (sd.source || '').toLowerCase();
     if (!healSkipSources.includes(sdSource)) {
-      const { data: healScores } = await supabase
-        .from('eva_heal_scores')
+      // QF-20260725-868, THIRD SITE in this same function. This queried `eva_heal_scores`
+      // .eq('sd_key', ...) — a table that DOES NOT EXIST and, per `git grep`, never did: no
+      // migration anywhere in the repo, and this was its only reference in the codebase. The probe
+      // therefore errored on every run, `data` came back null, `hasHeal` was false, and 'HEAL' was
+      // pushed for EVERY code-producing SD whether /heal ran or not.
+      //
+      // Same defect as the two catches above, inverted: a check that COULD NOT SEE the constraint
+      // still reported a verdict, with the direction picked by the code path rather than by evidence.
+      // It is also the pattern completion-flag-keys.js's own docblock names —
+      // PAT-LEO-INFRA-WRITER-CONSUMER-ASYMMETRY-001 — as TABLE-name drift instead of metadata-key
+      // drift: writer and consumer never met.
+      //
+      // The real writer is scripts/eva/heal-command.mjs: `/heal sd` inserts into `eva_vision_scores`
+      // with `sd_id: sdScore.sd_key` and `rubric_snapshot.mode = 'sd-heal'`, and `/heal status` reads
+      // "latest SD heal scores" back from that same table via `sd_id IS NOT NULL`. NOTE THE TRAP:
+      // `eva_vision_scores.sd_id` holds the SD *KEY* string, not a UUID FK (portfolio-level vision
+      // scores are the rows where it is NULL) — so this filters on sdKey, not sd.id.
+      //
+      // The error is now CAPTURED rather than discarded, so an unreachable table can no longer
+      // masquerade as "HEAL missing". Consistent with the decision above, indeterminate SURFACES
+      // under its own label and never blocks.
+      const { data: healScores, error: healErr } = await supabase
+        .from('eva_vision_scores')
         .select('id')
-        .eq('sd_key', sdKey)
+        .eq('sd_id', sdKey)
         .limit(1);
 
-      const hasHeal = healScores && healScores.length > 0;
-      if (!hasHeal) {
+      if (healErr) {
+        console.error(`   ⚠️  HEAL witness could NOT be determined for ${sdKey} (${healErr.message}) — surfaced, not blocking`);
+        missingRecommended.push('HEAL_CHECK_INDETERMINATE');
+      } else if (!healScores || healScores.length === 0) {
         missingRecommended.push('HEAL');
       }
     }
@@ -161,8 +230,17 @@ export async function validatePostCompletion(supabase, sd, sdKey) {
   // including orchestrators and non-code SDs) should carry the durable completion-flags record.
   // Reminder-first: this only ever appends to missingRecommended (never missingRequired), so it
   // can never trigger the process.exit(2) BLOCK path below.
+  // QF-20260725-868: THREE states, tested by identity — never by truthiness.
+  //   null                        -> verified clean
+  //   WITNESS_INDETERMINATE.STATE -> the witness crashed; we do NOT know either way
+  //   any other string            -> a genuine reason the record is missing/incomplete
+  // Collapsing indeterminate into "missing" would be the same defect inverted: asserting a finding
+  // from a check that never produced one. It is surfaced under its own label instead, and remains
+  // non-blocking (missingRecommended never reaches the exit-2 path below).
   const completionFlagsWarn = await _checkCompletionFlagsWitness(supabase, sdKey);
-  if (completionFlagsWarn) {
+  if (isWitnessIndeterminate(completionFlagsWarn)) {
+    missingRecommended.push('COMPLETION_FLAGS_WITNESS_INDETERMINATE');
+  } else if (completionFlagsWarn) {
     missingRecommended.push('COMPLETION_FLAGS');
   }
 
