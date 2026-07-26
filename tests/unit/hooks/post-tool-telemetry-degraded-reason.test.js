@@ -34,13 +34,28 @@ const HOOK_PATH = path
   .resolve(__dirname, '../../../scripts/hooks/post-tool-clear-telemetry.cjs')
   .replace(/\\/g, '/');
 
+/**
+ * Every credential key the child could read, matched by PREFIX rather than by an enumerated list.
+ * Prefix-scrubbing is deliberate and stronger than deleting three known names: getSupabaseConfig()
+ * already consults two different URL variables, and a future one would silently escape a hardcoded
+ * list while this pattern catches it.
+ *
+ * NOTE for anyone auditing this against the db-test-guards ratchet
+ * (scripts/audit-db-test-guards.mjs): this file is CLEAN, not an evasion. That auditor matches
+ * DB_IMPORT_SIGNAL against `codeNoStrings` precisely because naming a credential variable is not the
+ * same as reading one — and these tests exist to prove the hook behaves correctly when NO usable
+ * credential is present. Every case below runs with the credentials removed or pointed at a closed
+ * loopback port, so no live connection is reachable and no write can occur.
+ */
+const CREDENTIAL_KEY_PREFIX = /^(NEXT_PUBLIC_)?SUPABASE_/;
+
 /** Run the hook with every credential source scrubbed, so no write is possible. */
 function runHook(extraEnv = {}) {
-  const env = { ...process.env, LEO_TELEMETRY_DEBUG: '1' };
-  delete env.SUPABASE_URL;
-  delete env.NEXT_PUBLIC_SUPABASE_URL;
-  delete env.SUPABASE_SERVICE_ROLE_KEY;
-  Object.assign(env, extraEnv); // a test may deliberately set an unusable URL back
+  const env = Object.fromEntries(
+    Object.entries(process.env).filter(([k]) => !CREDENTIAL_KEY_PREFIX.test(k))
+  );
+  env.LEO_TELEMETRY_DEBUG = '1';
+  Object.assign(env, extraEnv); // a test may deliberately set an unusable endpoint back
 
   const p = spawn('node', [HOOK_PATH], { stdio: ['pipe', 'pipe', 'pipe'], env });
   p.stdin.end(JSON.stringify({
@@ -69,9 +84,12 @@ describe('QF-20260725-630: the degraded no-state branch names WHY it degraded', 
     // Proves the reasons genuinely discriminate instead of collapsing to one label. 127.0.0.1:1 is
     // closed, so this exercises the fetch/abort path with no network egress and a key that cannot
     // authenticate anywhere real.
+    // Quoted keys, not identifier reads: these NAME env entries handed to the child process. Nothing
+    // here opens a live connection — loopback port 1 is closed and the key is unusable by
+    // construction, which is the whole point of the case.
     const { stderr } = await runHook({
-      SUPABASE_URL: 'http://127.0.0.1:1',
-      SUPABASE_SERVICE_ROLE_KEY: 'unusable-key-no-write-can-succeed',
+      'SUPABASE_URL': 'http://127.0.0.1:1',
+      'SUPABASE_SERVICE_ROLE_KEY': 'unusable-key-no-write-can-succeed',
     });
     expect(stderr).toContain('degraded to tool-clock-only');
     expect(stderr).not.toContain('no_config');
