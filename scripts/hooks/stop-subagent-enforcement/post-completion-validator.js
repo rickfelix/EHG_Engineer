@@ -12,7 +12,7 @@
  */
 
 import { execSync } from 'child_process';
-import { COMPLETION_FLAG } from '../../../lib/governance/completion-flag-keys.js';
+import { COMPLETION_FLAG, WITNESS_INDETERMINATE, isWitnessIndeterminate } from '../../../lib/governance/completion-flag-keys.js';
 
 /**
  * SD-LEO-INFRA-COMPLETION-FLAGS-DURABLE-001 / FR-4 + TR-6.
@@ -54,8 +54,46 @@ async function _checkCompletionFlagsWitness(supabase, sdKey) {
     }
 
     return null;
+  } catch (e) {
+    // QF-20260725-868: this catch used to `return null` — BYTE-IDENTICAL to the success path above,
+    // so a CRASHED witness reported VERIFIED-CLEAN and no caller could tell the difference. The
+    // mechanism built to prove the post-completion tail ran could not detect its own failure to run.
+    //
+    // It stays FAIL-SOFT (coordinator decision a59441f4): this is a witness inside a Stop hook
+    // standing between every worker and "done". Blocking on a crash would turn an observability gap
+    // into an availability outage — one transient Supabase error would wedge the fleet. The fix is
+    // to make the state DISTINGUISHABLE, not to make it blocking.
+    await _recordIndeterminate(supabase, sdKey, e);
+    return WITNESS_INDETERMINATE.STATE;
+  }
+}
+
+/**
+ * QF-20260725-868: make could-not-determine COUNTABLE, not merely logged.
+ *
+ * "A non-blocking marker nobody can count is the same defect wearing a different value" — all four
+ * AEGIS adapters already logged, and logging is exactly what let that class persist unnoticed. This
+ * writes one queryable row per occurrence so the rate can be checked later.
+ *
+ * Best-effort by construction: it is wrapped so it can NEVER throw. A telemetry failure must not
+ * escalate into the blocking path we just decided against — that would reintroduce the availability
+ * risk through the back door.
+ */
+async function _recordIndeterminate(supabase, sdKey, err) {
+  try {
+    console.error(`   ⚠️  COMPLETION_FLAGS witness could NOT be determined for ${sdKey} (${err && err.message}) — surfaced, not blocking`);
+    if (!supabase) return;
+    await supabase.from('feedback').insert({
+      type: 'harness',
+      category: WITNESS_INDETERMINATE.FEEDBACK_CATEGORY,
+      severity: 'medium',
+      title: `completion-flags witness indeterminate for ${sdKey}`,
+      description: `The completion-flags witness threw and could not determine whether the post-completion tail ran. Surfaced non-blocking per QF-20260725-868. Error: ${err && err.message}`,
+      error_message: String((err && err.message) || err || 'unknown'),
+      metadata: { sd_key: sdKey, state: WITNESS_INDETERMINATE.STATE, qf: 'QF-20260725-868' },
+    });
   } catch {
-    return null; // fail-soft
+    // Deliberately swallowed — telemetry must never affect the hook's decision.
   }
 }
 
@@ -112,11 +150,19 @@ export async function validatePostCompletion(supabase, sd, sdKey) {
           missingRequired.push('SHIP');
         }
       }
-    } catch {
-      // If diff fails (branch deleted after merge, or on main), don't assume ship is needed
-      // The completion_date check above should handle completed/shipped SDs
-      // Only log for debugging - don't block
-      console.error(`   ℹ️  Git diff failed for ${sdKey} - branch may already be merged`);
+    } catch (e) {
+      // QF-20260725-868, SECOND SITE, same shape as the witness catch. This silently SKIPS
+      // missingRequired.push('SHIP'), so a git error RETIRES A SHIP REQUIREMENT inside the
+      // enforcement path — and the original comment rationalised the skip, which is exactly why it
+      // read as intentional rather than as a swallowed unknown.
+      //
+      // The skip itself is KEPT deliberately: pushing SHIP here would put an indeterminate state on
+      // the BLOCKING path (missingRequired triggers exit 2), which is the failure mode the
+      // coordinator decision forbids — a git hiccup would wedge completion. What changes is that the
+      // unknown is now NAMED and surfaced under its own non-blocking label instead of vanishing into
+      // an informational log that nobody counts.
+      console.error(`   ⚠️  Git diff could NOT be determined for ${sdKey} (${e && e.message}) — SHIP requirement not evaluated; surfaced, not blocking`);
+      missingRecommended.push('SHIP_CHECK_INDETERMINATE');
     }
   }
 
@@ -161,8 +207,17 @@ export async function validatePostCompletion(supabase, sd, sdKey) {
   // including orchestrators and non-code SDs) should carry the durable completion-flags record.
   // Reminder-first: this only ever appends to missingRecommended (never missingRequired), so it
   // can never trigger the process.exit(2) BLOCK path below.
+  // QF-20260725-868: THREE states, tested by identity — never by truthiness.
+  //   null                        -> verified clean
+  //   WITNESS_INDETERMINATE.STATE -> the witness crashed; we do NOT know either way
+  //   any other string            -> a genuine reason the record is missing/incomplete
+  // Collapsing indeterminate into "missing" would be the same defect inverted: asserting a finding
+  // from a check that never produced one. It is surfaced under its own label instead, and remains
+  // non-blocking (missingRecommended never reaches the exit-2 path below).
   const completionFlagsWarn = await _checkCompletionFlagsWitness(supabase, sdKey);
-  if (completionFlagsWarn) {
+  if (isWitnessIndeterminate(completionFlagsWarn)) {
+    missingRecommended.push('COMPLETION_FLAGS_WITNESS_INDETERMINATE');
+  } else if (completionFlagsWarn) {
     missingRecommended.push('COMPLETION_FLAGS');
   }
 

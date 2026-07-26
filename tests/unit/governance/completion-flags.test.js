@@ -20,7 +20,7 @@ import {
   captureCompletionFlags,
   formatCompletionFlagsBlock,
 } from '../../../scripts/capture-completion-flags.js';
-import { COMPLETION_FLAG } from '../../../lib/governance/completion-flag-keys.js';
+import { COMPLETION_FLAG, WITNESS_INDETERMINATE, isWitnessIndeterminate } from '../../../lib/governance/completion-flag-keys.js';
 import { emitFeedback } from '../../../lib/governance/emit-feedback.js';
 
 // REAL consumer functions (TS-3) — assert the witness tuple against actual behavior.
@@ -268,6 +268,91 @@ describe('TS-4 validator placement (reminder-first, never exit(2))', () => {
     expect(exitSpy).not.toHaveBeenCalled();
     const advisories = errSpy.mock.calls.map(c => String(c[0])).join('\n');
     expect(advisories).not.toMatch(/completion-flags record (missing|incomplete)/i);
+  });
+
+  // QF-20260725-868 — the witness could not detect its OWN failure to run. Its catch returned null,
+  // byte-identical to the success path, so a CRASH reported VERIFIED-CLEAN.
+  //
+  // The QF's acceptance is explicit: demonstrate AT THE CONSUMER that a thrown validator is observed
+  // as could-not-determine AND that completion is NOT blocked. A green CI shows neither half, so
+  // these force the throw rather than asserting on the predicate in isolation.
+  describe('QF-20260725-868: a crashed witness is distinguishable from a clean one, and never blocks', () => {
+    /** A client whose completion-flags probe THROWS, with every other path intact. */
+    function buildThrowingWitnessSupabase() {
+      const base = buildValidatorSupabase({ feedbackRows: [] });
+      const inserted = [];
+      return {
+        _inserted: inserted,
+        from(table) {
+          if (table === 'feedback') {
+            return {
+              // The witness read path explodes...
+              select: () => { throw new Error('supabase exploded'); },
+              // ...but the countability write path must still be reachable.
+              insert: (row) => { inserted.push(row); return Promise.resolve({ data: null, error: null }); },
+            };
+          }
+          return base.from(table);
+        },
+      };
+    }
+
+    it('HALF 1 — the crash is OBSERVED as indeterminate, not silently reported clean', async () => {
+      const supabase = buildThrowingWitnessSupabase();
+      await validatePostCompletion(supabase, sd, 'SD-INFRA-XYZ-001');
+      const advisories = errSpy.mock.calls.map(c => String(c[0])).join('\n');
+      expect(advisories).toMatch(/could NOT be determined/i);
+      expect(advisories).toContain('COMPLETION_FLAGS_WITNESS_INDETERMINATE');
+      // It must NOT masquerade as a genuine "record missing" finding — that would be the same
+      // defect inverted: asserting a result from a check that never produced one.
+      expect(advisories).not.toMatch(/completion-flags record missing/i);
+    });
+
+    it('HALF 2 — completion is NOT blocked (surface, never block)', async () => {
+      const supabase = buildThrowingWitnessSupabase();
+      await validatePostCompletion(supabase, sd, 'SD-INFRA-XYZ-001');
+      // A witness that blocks when it fails turns an observability gap into an availability outage:
+      // this sits in a Stop hook between every worker and done, so one transient DB error would
+      // wedge the fleet. exit(2) is the blocking path.
+      expect(exitSpy).not.toHaveBeenCalled();
+    });
+
+    it('the indeterminate state is COUNTABLE, not merely logged', async () => {
+      const supabase = buildThrowingWitnessSupabase();
+      await validatePostCompletion(supabase, sd, 'SD-INFRA-XYZ-001');
+      // "A non-blocking marker nobody can count is the same defect wearing a different value."
+      const row = supabase._inserted.find(r => r?.category === WITNESS_INDETERMINATE.FEEDBACK_CATEGORY);
+      expect(row, 'expected a queryable feedback row for the indeterminate state').toBeTruthy();
+      expect(row.metadata.sd_key).toBe('SD-INFRA-XYZ-001');
+      expect(row.metadata.state).toBe(WITNESS_INDETERMINATE.STATE);
+    });
+
+    it('telemetry failure cannot escalate into the blocking path', async () => {
+      // If recording the crash also throws, the hook must still not block — otherwise the
+      // availability risk we just rejected returns through the back door.
+      const base = buildValidatorSupabase({ feedbackRows: [] });
+      const supabase = {
+        from(table) {
+          if (table === 'feedback') {
+            return {
+              select: () => { throw new Error('read exploded'); },
+              insert: () => { throw new Error('write exploded too'); },
+            };
+          }
+          return base.from(table);
+        },
+      };
+      await expect(validatePostCompletion(supabase, sd, 'SD-INFRA-XYZ-001')).resolves.not.toThrow();
+      expect(exitSpy).not.toHaveBeenCalled();
+    });
+
+    it('the sentinel is tested by IDENTITY, never truthiness', () => {
+      // A genuine reason string is also truthy; only the sentinel is could-not-determine.
+      expect(isWitnessIndeterminate(WITNESS_INDETERMINATE.STATE)).toBe(true);
+      expect(isWitnessIndeterminate('completion-flags record missing for SD-X')).toBe(false);
+      expect(isWitnessIndeterminate(null)).toBe(false);
+      expect(isWitnessIndeterminate(undefined)).toBe(false);
+    });
   });
 });
 
