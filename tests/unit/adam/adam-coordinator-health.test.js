@@ -307,6 +307,66 @@ describe('classifyBreach + advisory (TS-4, TS-8)', () => {
     expect(coordinatorRow.message_type).toBe('INFO');
     expect(JSON.stringify(coordinatorRow)).not.toMatch(/claim_sd|sd-start/);
   });
+
+  /**
+   * QF-20260726-536 — sender_session was omitted, so advisories arrived unattributed
+   * and could never be acked. resolveAdvisorySingleton
+   * (lib/coordinator/adam-advisory-store.cjs:110) returns early when sender_session is
+   * absent, so the row is permanently un-retireable and resurfaces forever — one
+   * permanent resident per health probe.
+   */
+  describe('advisory attribution (QF-20260726-536)', () => {
+    const reading = {
+      timestamp: '2026-07-26T05:00:00Z',
+      utilization: { idle: 1, dispatchable_backlog_size: 2 },
+      plan_adherence: unmeasurable,
+      integrity: okIntegrity,
+      breach: { breach: true, idleWithBacklog: true },
+    };
+
+    it('sets sender_session so the row is attributable and ACKABLE', () => {
+      const { coordinatorRow } = buildCoordinatorHealthAdvisoryRows(reading, {
+        coordinatorId: 'c1',
+        senderSession: 'sess-adam-1',
+      });
+      expect(coordinatorRow.sender_session).toBe('sess-adam-1');
+    });
+
+    it('falls back to a STABLE named sender when no session env is present — never null/undefined', () => {
+      const { coordinatorRow } = buildCoordinatorHealthAdvisoryRows(reading, {
+        coordinatorId: 'c1',
+        senderSession: undefined || 'adam-coordinator-health-cron',
+      });
+      // The precise assertion that matters: absent is what made rows immortal.
+      expect(coordinatorRow.sender_session).toBeTruthy();
+      expect('sender_session' in coordinatorRow).toBe(true);
+    });
+
+    it('satisfies the singleton-resolution precondition (target_session AND sender_session both present)', () => {
+      const { coordinatorRow } = buildCoordinatorHealthAdvisoryRows(reading, { coordinatorId: 'c1' });
+      // Mirrors adam-advisory-store.cjs:110 — the early-return that made these un-ackable.
+      const wouldResolve = Boolean(coordinatorRow.target_session && coordinatorRow.sender_session);
+      expect(wouldResolve).toBe(true);
+    });
+
+    it('also populates the TOP-LEVEL body column, matching payload.body (a copy, not new content)', () => {
+      const { coordinatorRow } = buildCoordinatorHealthAdvisoryRows(reading, { coordinatorId: 'c1' });
+      expect(coordinatorRow.body).toBeTruthy();
+      expect(coordinatorRow.body).toBe(coordinatorRow.payload.body);
+      // The bodies were NEVER empty — only the column was unset. Guard that the
+      // diagnostic content is genuinely there, so this is not read as an empty-body fix.
+      expect(coordinatorRow.body).toContain('Propose-only advisory');
+    });
+
+    it('carries attribution through the real insert path, not just the pure builder', async () => {
+      const inserted = [];
+      const supabase = makeFakeSupabase({ session_coordination: [] }, { onInsert: (t, r) => inserted.push({ t, r }) });
+      await pushCoordinatorHealthAdvisory(supabase, reading, { coordinatorId: 'c1', senderSession: 'sess-adam-2' });
+      expect(inserted.length).toBe(1);
+      expect(inserted[0].r.sender_session).toBe('sess-adam-2');
+      expect(inserted[0].r.body).toBeTruthy();
+    });
+  });
 });
 
 describe('persistReading (TS-6)', () => {

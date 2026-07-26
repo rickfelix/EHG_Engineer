@@ -27,9 +27,50 @@
 const TELEMETRY_TABLE = 'claude_sessions';
 const TELEMETRY_FETCH_TIMEOUT_MS = 1500;
 
+// QF-20260726-163: every telemetry write silently no-opped fleet-wide because this
+// resolver read process.env ONLY. Claude Code does not propagate SUPABASE_* into
+// PostToolUse subprocesses, so getSupabaseConfig() returned null on every tool call,
+// the PATCH was never sent, and `Prefer: return=minimal` made the no-op indistinguishable
+// from success — last_tool_at sat NULL on 0-of-15 seats and expected_silence_until never
+// cleared, which is why a PARKED worker looked identical to a working one.
+// The arm-side writer (loop-state-tracker.cjs -> lib/supabase-client.cjs) always worked
+// precisely because that helper walks ancestors for .env. We must NOT require() that
+// helper here: it pulls the ~3MB Supabase SDK onto a per-tool hot path (see header).
+// So: keep the raw-fetch design and load .env ourselves, ONLY on the miss path.
+// Ancestor walk rather than plain dotenv.config() (the sibling fallback in
+// claim-heartbeat-on-tool.cjs) because workers run in .worktrees/* which have NO .env.
+let envFallbackTried = false;
+function loadEnvFallback() {
+  if (envFallbackTried) return;
+  envFallbackTried = true; // once per process — hooks are short-lived, never retry
+  try {
+    const fs = require('fs');
+    const path = require('path');
+    const starts = [process.env.CLAUDE_PROJECT_DIR, process.cwd(), __dirname].filter(Boolean);
+    for (const start of starts) {
+      let dir = path.resolve(start);
+      for (let i = 0; i < 8; i++) {
+        const envFile = path.join(dir, '.env');
+        if (fs.existsSync(envFile)) {
+          require('dotenv').config({ path: envFile, override: false, quiet: true });
+          if (process.env.SUPABASE_URL || process.env.NEXT_PUBLIC_SUPABASE_URL) return;
+        }
+        const parent = path.dirname(dir);
+        if (parent === dir) break;
+        dir = parent;
+      }
+    }
+  } catch { /* best-effort: telemetry must never break a tool call */ }
+}
+
 function getSupabaseConfig() {
-  const url = process.env.SUPABASE_URL || process.env.NEXT_PUBLIC_SUPABASE_URL;
-  const key = process.env.SUPABASE_SERVICE_ROLE_KEY;
+  let url = process.env.SUPABASE_URL || process.env.NEXT_PUBLIC_SUPABASE_URL;
+  let key = process.env.SUPABASE_SERVICE_ROLE_KEY;
+  if (!url || !key) {
+    loadEnvFallback();
+    url = process.env.SUPABASE_URL || process.env.NEXT_PUBLIC_SUPABASE_URL;
+    key = process.env.SUPABASE_SERVICE_ROLE_KEY;
+  }
   if (!url || !key) return null;
   return { url, key };
 }
@@ -151,6 +192,15 @@ async function writeTelemetryAwait(sessionId, patch, options) {
     'current_branch', // SD-LEO-INFRA-SESSION-CURRENT-BRANCH-001 — see
                       // writeTelemetry whitelist for rationale.
   ]);
+  // QF-20260726-163: last_tool_at stays OUT of the set above on purpose — this is
+  // session-tick's path, and a tick-written tool clock would recreate the
+  // heartbeat_at/process_alive_at contamination. But the ONE writer that legitimately
+  // owns the clock (post-tool-clear-telemetry) must AWAIT its write: it is a
+  // short-lived hook process, so the fire-and-forget variant it used before was
+  // discarded when the process exited (measured: expected_silence_until cleared via
+  // the awaited call, last_activity_kind never moved via the unawaited one). Explicit
+  // per-call opt-in, so the tick — which never passes it — still cannot write it.
+  if (options?.allowToolClock === true) allowed.add('last_tool_at');
 
   const body = {};
   for (const [k, v] of Object.entries(patch)) {
@@ -188,9 +238,45 @@ async function writeTelemetryAwait(sessionId, patch, options) {
   }
 }
 
+/**
+ * QF-20260726-163: read a session's metadata so a caller can MERGE into it. A raw PATCH
+ * of `metadata` REPLACES the whole JSONB, which would silently drop sibling keys
+ * (e.g. last_git_metric_at_ms). Callers writing metadata must read-modify-write.
+ * Returns NULL when the metadata could not be read, and an object (possibly empty) only
+ * when it genuinely was. The distinction is load-bearing: a caller that cannot see the
+ * existing keys MUST NOT write metadata at all, or it silently destroys siblings it never
+ * saw — on a live seat that means wiping model/effort/tier_rank and rendering it
+ * undispatchable. Never collapse the two cases into {}.
+ */
+async function readSessionMetadata(sessionId) {
+  const cfg = getSupabaseConfig();
+  if (!cfg || !sessionId) return null;
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), TELEMETRY_FETCH_TIMEOUT_MS);
+  try {
+    const url = `${cfg.url.replace(/\/$/, '')}/rest/v1/${TELEMETRY_TABLE}`
+      + `?session_id=eq.${encodeURIComponent(sessionId)}&select=metadata`;
+    const res = await fetch(url, {
+      headers: { apikey: cfg.key, Authorization: `Bearer ${cfg.key}` },
+      signal: controller.signal,
+    });
+    if (!res.ok) return null;
+    const rows = await res.json();
+    if (!Array.isArray(rows) || !rows.length) return null;
+    const md = rows[0].metadata;
+    if (md == null) return {};                       // row exists, metadata genuinely empty
+    return typeof md === 'object' && !Array.isArray(md) ? md : null;
+  } catch {
+    return null;
+  } finally {
+    clearTimeout(timer);
+  }
+}
+
 module.exports = {
   writeTelemetry,
   writeTelemetryAwait,
+  readSessionMetadata,
   TELEMETRY_TABLE,
   TELEMETRY_FETCH_TIMEOUT_MS,
 };

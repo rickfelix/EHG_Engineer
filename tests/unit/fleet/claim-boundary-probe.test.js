@@ -247,6 +247,26 @@ describe('single-writer contract canary (SECURITY condition 1)', () => {
     const fireAndForget = src.slice(src.indexOf('function writeTelemetry('), src.indexOf('async function writeTelemetryAwait('));
     const awaitVariant = src.slice(src.indexOf('async function writeTelemetryAwait('));
     expect(fireAndForget).toContain("'last_tool_at'");
-    expect(awaitVariant).not.toContain("'last_tool_at'");
+    // QF-20260726-163: the await variant no longer drops last_tool_at UNCONDITIONALLY —
+    // post-tool-clear-telemetry must await its write (a fire-and-forget PATCH from a
+    // short-lived hook process was discarded at exit, which is why last_tool_at read NULL
+    // fleet-wide). The contamination guard is now an explicit per-call opt-in rather than
+    // a blanket omission, so assert the GUARD, not the mere absence of the string.
+    expect(awaitVariant).not.toMatch(/allowed = new Set\(\[[^\]]*'last_tool_at'/s);
+    expect(awaitVariant).toMatch(/options\?\.allowToolClock === true\)\s*allowed\.add\('last_tool_at'\)/);
+  });
+
+  it('ONLY post-tool-clear-telemetry opts into the tool clock (session-tick et al must not)', () => {
+    // The real invariant behind the canary above: last_tool_at has exactly ONE writer.
+    // Assert it at every call site rather than trusting the allowlist, so a future hook
+    // that starts passing allowToolClock fails here instead of silently contaminating
+    // the tick-immune clock.
+    const fs = require('node:fs');
+    const path = require('node:path');
+    const hookDir = path.resolve(__dirname, '../../../scripts/hooks');
+    const optedIn = fs.readdirSync(hookDir)
+      .filter((f) => f.endsWith('.cjs') || f.endsWith('.js'))
+      .filter((f) => /allowToolClock\s*:\s*true/.test(fs.readFileSync(path.join(hookDir, f), 'utf8')));
+    expect(optedIn).toEqual(['post-tool-clear-telemetry.cjs']);
   });
 });

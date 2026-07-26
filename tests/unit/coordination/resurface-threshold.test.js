@@ -32,11 +32,46 @@ describe('QF-20260725-342 — resurface threshold reaches EVERY invocation site'
     expect(thresholdArgs()).toEqual(['--threshold-hours', String(OPERATING_THRESHOLD_HOURS)]);
   });
 
-  it('the operating threshold is NOT the script default (otherwise the flag proves nothing)', () => {
-    // If these ever coincide, every assertion below passes vacuously — a missing flag would be
-    // indistinguishable from a present one. Guard the guard.
+  // QF-20260725-027 RE-AIMED THIS ASSERTION — it previously required the two to DIFFER
+  // (`expect(OPERATING_THRESHOLD_HOURS).not.toBe(DEFAULT_THRESHOLD_HOURS)`), which pinned the very
+  // defect 027 fixes: while they differed, every bare invocation silently ran at 24h.
+  //
+  // Its stated intent was "guard the guard" — keep the flag assertions below discriminating, since a
+  // missing flag would otherwise be indistinguishable from a present one. That intent is now served
+  // differently and better: with the default correct BY CONSTRUCTION, a missing flag no longer
+  // produces a wrong answer, so the flag assertions become redundant rather than load-bearing. The
+  // property worth defending is no longer "the flag is present everywhere" but "there is ONE
+  // threshold and the bare path already has it".
+  //
+  // Kept and inverted rather than deleted: this is the assertion that fails if anyone reintroduces a
+  // separate literal default.
+  it('the script default IS the operating threshold — one value, no second source', () => {
     const { DEFAULT_THRESHOLD_HOURS } = require(join(REPO, 'scripts/solomon-ledger-pending-resurface.cjs'));
-    expect(OPERATING_THRESHOLD_HOURS).not.toBe(DEFAULT_THRESHOLD_HOURS);
+    expect(DEFAULT_THRESHOLD_HOURS).toBe(OPERATING_THRESHOLD_HOURS);
+  });
+
+  it('the BARE invocation resolves to the operating threshold (the unenumerable 4th call site)', () => {
+    // THE ACTUAL ACCEPTANCE. QF-342's tests were all source-scans of call sites, because with a wrong
+    // default the defect was only visible at an invocation. Now that the default is correct, the bare
+    // path IS testable in-process — and it is the one "call site" no inventory can enumerate.
+    const { parseThresholdHours } = require(join(REPO, 'scripts/solomon-ledger-pending-resurface.cjs'));
+    expect(parseThresholdHours([])).toBe(OPERATING_THRESHOLD_HOURS);
+    // Malformed / missing values must fall back to the operating threshold too, never to a stale 24.
+    expect(parseThresholdHours(['--threshold-hours'])).toBe(OPERATING_THRESHOLD_HOURS);
+    expect(parseThresholdHours(['--threshold-hours', 'abc'])).toBe(OPERATING_THRESHOLD_HOURS);
+    expect(parseThresholdHours(['--some-other-flag', '5'])).toBe(OPERATING_THRESHOLD_HOURS);
+    // An EXPLICIT value must still win — the fix must not hardcode past a deliberate override.
+    expect(parseThresholdHours(['--threshold-hours', '12'])).toBe(12);
+    expect(parseThresholdHours(['--threshold-hours', '0'])).toBe(0);
+  });
+
+  it('no separate numeric default literal survives in the script', () => {
+    // Pins the SEMANTIC (single source), not the number: the default must be DERIVED from the shared
+    // constant, so a future edit cannot quietly reintroduce a second value that only the bare path
+    // sees. Asserting on 72 instead would pass just as happily against a re-typed literal.
+    const src = read('scripts/solomon-ledger-pending-resurface.cjs');
+    expect(src).toContain('../lib/coordination/resurface-threshold.cjs');
+    expect(src).toMatch(/const DEFAULT_THRESHOLD_HOURS = OPERATING_THRESHOLD_HOURS;/);
   });
 
   it('coordinator-quiet-tick sources the threshold from the shared constant, not a literal', () => {

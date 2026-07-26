@@ -76,14 +76,46 @@ function isOff(v) {
         // computeSilenceMinutes is pre-clamped to lib/fleet/silence-cap.cjs
         // SILENCE_HARD_CAP_MIN (writer<=reader); undefined wake => safe DEFAULT, still capped.
         const { computeSilenceMinutes } = require('../park-worker.cjs');
-        const { writeTelemetryAwait } = require('./lib/session-telemetry-writer.cjs');
+        const { writeTelemetryAwait, readSessionMetadata } = require('./lib/session-telemetry-writer.cjs');
         const silenceMin = computeSilenceMinutes(wakeMinutes);
         const nowMs = Date.now();
-        await writeTelemetryAwait(sessionId, {
+
+        // QF-20260726-163: record the UNCLAMPED expected wake instant, separately from
+        // expected_silence_until. Those answer DIFFERENT questions and must not be
+        // conflated: expected_silence_until is a do-not-sweep-me PERMISSION and is
+        // deliberately clamped by computeSilenceMinutes, which makes it useless as a
+        // deadline. expected_wake_at is a should-have-ticked-by-now DEADLINE, so it
+        // carries the true delay. Without it there is no instrument for "this seat armed
+        // a wakeup that never fired" — the failure that parked ten seats for 4-17h while
+        // every one of them looked healthy (status=active, heartbeat 0m old).
+        // Stored in the existing metadata JSONB deliberately: no DDL, so this stays out
+        // of schema-change routing. READ-MODIFY-WRITE because a metadata PATCH replaces
+        // the whole object and would drop sibling keys such as last_git_metric_at_ms.
+        // NOTE: this is only the ARM half. A detector must AND it with proof the seat
+        // acted after the arm, or it flags every seat that armed and then resumed —
+        // loop_state=awaiting_tick is a one-way latch that nothing clears on resume.
+        const patch = {
           heartbeat_at: new Date(nowMs).toISOString(),
           expected_silence_until: new Date(nowMs + silenceMin * 60000).toISOString(),
           last_activity_kind: 'idle',
-        });
+        };
+        // Only touch metadata when we could actually READ it (null => read failed) AND we
+        // have a real delay to record. Writing a merge over an unread object would destroy
+        // siblings we never saw — model/effort/tier_rank live there, and losing them makes
+        // the seat undispatchable. The silence/heartbeat columns above are unaffected, so a
+        // failed read costs us the deadline, never the existing state.
+        const priorMeta = typeof readSessionMetadata === 'function'
+          ? await readSessionMetadata(sessionId)
+          : null;
+        if (priorMeta && Number.isFinite(delaySeconds) && delaySeconds > 0) {
+          patch.metadata = {
+            ...priorMeta,
+            wake_armed_at: new Date(nowMs).toISOString(),
+            wake_delay_seconds: delaySeconds,
+            expected_wake_at: new Date(nowMs + delaySeconds * 1000).toISOString(),
+          };
+        }
+        await writeTelemetryAwait(sessionId, patch);
       } catch (e2) {
         process.stderr.write(`[post-tool-loop-state] silence-arm (non-fatal): ${e2.message}\n`);
       }
