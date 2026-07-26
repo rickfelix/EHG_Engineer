@@ -154,6 +154,89 @@ async function emitSessionCreated(supabase, { sessionId, payload, prior }) {
   }
 }
 
+/**
+ * QF-20260726-514: capture WHICH ACCOUNT THIS SESSION IS ON, per session, at registration.
+ *
+ * The only prior instrument was .account-identity-last.json — HOST-GLOBAL and
+ * LAST-WRITER-WINS, one email for the whole machine. It answers "which account did this
+ * host last see", and the Sessions UI needs "which account is THIS session on". Reading it
+ * per-row would render every session with the same account and would look right exactly
+ * until the fleet splits across accounts, which is when it matters. So this writes the fact
+ * onto the session row instead.
+ *
+ * `claude auth status --json` is non-interactive and RESPECTS CLAUDE_CONFIG_DIR, which is the
+ * load-bearing part: the spawn path already sets childEnv.CLAUDE_CONFIG_DIR per profile
+ * (build-session-launch.cjs resolveProfileDir), so each session resolves ITS OWN account.
+ * Verified with a control — a nonexistent CLAUDE_CONFIG_DIR returns loggedIn:false, so a
+ * positive read is a real signal rather than a constant.
+ *
+ * Returns null unless we positively identified a logged-in account. We never write a
+ * placeholder: a null/unknown account stored as a value would be indistinguishable from a
+ * real answer downstream, and this whole defect family is honest values answering the wrong
+ * question. Absent is the honest representation of "not determined".
+ */
+function resolveAccountIdentity() {
+  try {
+    // execSync with a single command string, matching lib/simplifier/plugin-bridge.js — the
+    // in-repo idiom for invoking this CLI. NOT execFileSync('claude', [...]): on Windows
+    // `claude` is a .cmd shim, so that spawn fails ENOENT (measured), and passing an args
+    // array with shell:true trips DEP0190. The command is a fixed literal with no
+    // interpolation, so there is no injection surface here.
+    // Env is INHERITED deliberately — CLAUDE_CONFIG_DIR is what scopes this to THIS session's
+    // profile. Overriding or clearing it would silently collapse every seat onto the default
+    // account, reintroducing the host-global defect through a different door.
+    const { execSync } = require('child_process');
+    const raw = execSync('claude auth status --json', {
+      encoding: 'utf8',
+      timeout: 10000,
+      stdio: ['ignore', 'pipe', 'ignore'],
+      windowsHide: true,
+    });
+    const j = JSON.parse(raw);
+    if (!j || j.loggedIn !== true || !j.email) return null;
+    return {
+      account_email: j.email,
+      account_org_name: j.orgName || null,
+      account_org_id: j.orgId || null,
+      account_subscription_type: j.subscriptionType || null,
+      account_auth_method: j.authMethod || null,
+      account_captured_at: new Date().toISOString(),
+    };
+  } catch {
+    return null; // never abort SessionStart for telemetry
+  }
+}
+
+/**
+ * Merge the account identity into claude_sessions.metadata, READ-MODIFY-WRITE.
+ *
+ * A metadata PATCH REPLACES the whole JSONB, and the live row carries model, effort and
+ * tier_rank — losing those makes the seat undispatchable. So we never write metadata we
+ * could not first read: a failed read means we skip, not that we clobber. Deliberately kept
+ * OUT of the upsert payload above for the same reason (that upsert also runs on every resume
+ * and compaction, where it would overwrite metadata wholesale).
+ *
+ * Capture-if-absent: the account for a given session does not change, so re-running the CLI
+ * on every resume would spend a subprocess to rewrite the same value.
+ */
+async function captureAccountIdentity(supabase, sessionId) {
+  try {
+    const { data, error } = await supabase
+      .from('claude_sessions').select('metadata').eq('session_id', sessionId).maybeSingle();
+    if (error || !data) return;                       // could not read => do not write
+    const meta = data.metadata && typeof data.metadata === 'object' && !Array.isArray(data.metadata)
+      ? data.metadata : {};
+    if (meta.account_email) return;                   // already captured — nothing to do
+    const acct = resolveAccountIdentity();
+    if (!acct) return;                                // unresolved => leave ABSENT, not null
+    await supabase.from('claude_sessions')
+      .update({ metadata: { ...meta, ...acct } })
+      .eq('session_id', sessionId);
+  } catch {
+    // telemetry — never abort SessionStart
+  }
+}
+
 async function main() {
   let supabase;
   try {
@@ -198,6 +281,8 @@ async function main() {
   if (!error) {
     console.log(`session-register: registered ${sessionId.slice(0, 12)}...`);
     await emitSessionCreated(supabase, { sessionId, payload, prior });
+    // QF-20260726-514: after the row exists, stamp which account this session is on.
+    await captureAccountIdentity(supabase, sessionId);
   } else {
     process.stderr.write(`[session-register] upsert.failed session=${sessionId.slice(0, 12)} error=${error.message}\n`);
   }
@@ -280,4 +365,8 @@ if (require.main === module) {
  * deleting the other would have been the inconsistency.
  */
 
-module.exports = { getCurrentSessionId, main, emitSessionCreated };
+module.exports = {
+  getCurrentSessionId, main, emitSessionCreated,
+  // QF-20260726-514 — exported so the account capture is testable without running SessionStart.
+  resolveAccountIdentity, captureAccountIdentity,
+};
