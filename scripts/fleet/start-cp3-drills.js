@@ -72,7 +72,55 @@ export async function main(argv = process.argv.slice(2), deps = {}) {
   }
   const run = deps.runDrills || defaultRunDrills;
   const results = await run(plan, deps);
-  return { ok: true, live: true, legs: plan.legs, results };
+  // QF-20260725-790: `ok` was hardcoded TRUE here, so a --live run reported success no matter what the
+  // legs actually did. Combined with the CLI discarding the results object entirely, the 00:15Z
+  // acceptance attempt executed almost nothing and still exited 0 with no output. Fixing the leg
+  // CHECKS without fixing this would have left the false pass fully intact at the exit code — the
+  // verdict has to be derived from the legs, not asserted.
+  //
+  // A leg counts as passing only if it explicitly says so. A leg that threw is captured by its
+  // .catch() as {error} and has no `pass`, so it must read as FAILURE, not as "no opinion".
+  const legVerdicts = summarizeLegVerdicts(results);
+  return { ok: legVerdicts.every((l) => l.pass), live: true, legs: plan.legs, results, legVerdicts };
+}
+
+/**
+ * QF-20260725-790: flatten the drill results into one inspectable verdict list.
+ * Fail-closed by construction: an unrecognized/errored leg yields pass:false rather than being skipped,
+ * so a leg that never ran can never silently drop out of the verdict.
+ */
+export function summarizeLegVerdicts(results) {
+  const out = [];
+  for (const [leg, r] of Object.entries(results || {})) {
+    if (!r || typeof r !== 'object') { out.push({ leg, pass: false, detail: 'no result object' }); continue; }
+    if (r.error) { out.push({ leg, pass: false, detail: `ERROR: ${r.error}` }); continue; }
+    if (Array.isArray(r.checks)) {
+      for (const c of r.checks) out.push({ leg, check: c.name, pass: c.pass === true, detail: c.detail });
+      // A leg reporting zero checks has demonstrated nothing — do not let it count as a pass.
+      if (r.checks.length === 0) out.push({ leg, pass: false, detail: 'leg reported ZERO checks' });
+      continue;
+    }
+    // Legs without a checks[] (e.g. canaryRestart) state their verdict directly instead. Accept only
+    // an EXPLICIT affirmative — pass:true, ok:true, or outcome:'ok'. Anything else (including a leg
+    // that simply says nothing) is a failure, so silence can never be mistaken for success.
+    const ok = r.pass === true || r.ok === true || r.outcome === 'ok';
+    out.push({ leg, pass: ok, detail: r.outcome ? `outcome=${r.outcome}` : JSON.stringify(r).slice(0, 160) });
+  }
+  return out;
+}
+
+/**
+ * QF-20260725-790: render the verdict so it is INSPECTABLE rather than inferred from an exit code.
+ * The CLI previously did main().then(r => process.exit(r.ok ? 0 : 1)), discarding every check.
+ */
+export function formatDrillReport(r) {
+  const lines = [`[start-cp3-drills] RESULT ok=${r.ok === true} live=${r.live === true}`];
+  if (r.error) lines.push(`  ERROR: ${r.error}`);
+  for (const v of r.legVerdicts || []) {
+    lines.push(`  ${v.pass ? 'PASS' : 'FAIL'}  ${v.leg}${v.check ? '/' + v.check : ''} — ${v.detail || ''}`);
+  }
+  if (!r.legVerdicts || r.legVerdicts.length === 0) lines.push('  (no leg verdicts — nothing executed)');
+  return lines.join('\n');
 }
 
 /**
@@ -173,5 +221,11 @@ export async function defaultRunDrills(plan, deps = {}) {
 
 const isMain = process.argv[1] && realpathSync(fileURLToPath(import.meta.url)) === realpathSync(process.argv[1]);
 if (isMain) {
-  main().then((r) => process.exit(r.ok ? 0 : 1)).catch((e) => { console.error('[start-cp3-drills] FATAL', e && e.message); process.exit(1); });
+  // QF-20260725-790: PRINT the results object before exiting. The old form discarded `r` entirely, so
+  // a run that executed almost nothing produced no artifact anyone could inspect and looked clean from
+  // the outside. The exit code alone is not a verdict.
+  main().then((r) => {
+    console.log(formatDrillReport(r));
+    process.exit(r.ok ? 0 : 1);
+  }).catch((e) => { console.error('[start-cp3-drills] FATAL', e && e.message); process.exit(1); });
 }
