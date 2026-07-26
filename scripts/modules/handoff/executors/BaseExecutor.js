@@ -195,7 +195,48 @@ export class BaseExecutor {
           const refetched = await this.sdRepo.getById(sdId).catch(() => null);
           if (refetched) freshSdForGate = refetched;
         }
-        const noClaim = evaluateClaimCheckForHandoff(claimCheck, sdKeyForGate, exemptionEligible ? freshSdForGate?.status : undefined);
+        let noClaim = evaluateClaimCheckForHandoff(claimCheck, sdKeyForGate, exemptionEligible ? freshSdForGate?.status : undefined);
+
+        // QF-20260726-593: the self-live re-acquire net existed but was UNREACHABLE.
+        // It ran only inside _claimSDForSession (Step 2.5), which this NO_CLAIM branch
+        // returns before ever reaching — so the one path that recovers a mechanically
+        // lost claim never fired for the case it was written for. release_sd is
+        // SESSION-scoped and takes no SD argument (20260502_release_clear_worktree_state.sql:24),
+        // so running sd-start against one SD silently releases a live claim on another;
+        // this is where that damage must be undone.
+        //
+        // Safe at a blocking gate because reacquireSelfLiveClaim is fail-CLOSED: it
+        // re-acquires only on a positive self-ownership witness (cwd inside the SD's
+        // registered worktree, or a deterministic own-session whose sd_key matches) and
+        // its CAS refuses to clobber a live foreign claim. Note release_sd nulls
+        // claude_sessions.worktree_path but NOT strategic_directives_v2.worktree_path —
+        // which is the column the witness reads — so the primary witness survives a
+        // release even though the session-sd_key fallback does not.
+        //
+        // Re-evaluated, never assumed: we only clear the gate if a FRESH assertValidClaim
+        // agrees. A failed re-acquire falls through to the original NO_CLAIM failure.
+        if (noClaim.block) {
+          const recovered = await this._reacquireSelfLiveClaimIfReleased(sdId, sd, sdKeyForGate);
+          if (recovered) {
+            try {
+              const recheck = await assertValidClaim(this.supabase, sdKeyForGate, {
+                operation: `handoff_${this.handoffType}`,
+                allowMainRepoForAcquisition: isOrchestrator
+              });
+              const after = evaluateClaimCheckForHandoff(recheck, sdKeyForGate, exemptionEligible ? freshSdForGate?.status : undefined);
+              if (!after.block) {
+                console.log(`   [claim-gate] ♻️  NO_CLAIM cleared by self-live re-acquire on ${sdKeyForGate} — claim was mechanically released (see QF-20260726-593), not deliberately.`);
+                claimCheck = recheck;
+                noClaim = after;
+              }
+            } catch (recheckErr) {
+              // Re-check failed — keep the original NO_CLAIM decision rather than
+              // inferring success from a re-acquire we could not confirm.
+              console.debug('[BaseExecutor] post-reacquire claim re-check suppressed:', recheckErr?.message || recheckErr);
+            }
+          }
+        }
+
         if (noClaim.block) {
           console.error(`❌ NO_CLAIM: ${noClaim.detail}`);
           try { endSpan(rootSpan, { result: 'claim_validity_gate_blocked' }); persist(traceCtx, { supabase: this.supabase }); } catch (_) { /* telemetry non-fatal */ }
@@ -1205,10 +1246,14 @@ export class BaseExecutor {
       if (result?.reacquired) {
         console.log(`   [Claim] ♻️  Re-acquired sweep-released claim for ${result.sessionId ? result.sessionId.slice(0, 8) : 'self'} on ${claimId} (via ${result.via})`);
       }
+      // QF-20260726-593: report the outcome so the NO_CLAIM gate can re-evaluate
+      // instead of blocking on a claim that was just legitimately recovered.
+      return result?.reacquired === true;
     } catch (e) {
       // Non-fatal — degrade to today's behavior. The downstream claim flow and
       // the DB enforce-trigger remain the safety net.
       console.debug('[BaseExecutor] reacquire-self-live suppressed:', e?.message || e);
+      return false;
     }
   }
 
