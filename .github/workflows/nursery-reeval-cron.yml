@@ -15,15 +15,23 @@ name: "Nursery re-evaluation invoker (cron)"
 # suppresses a second, because enqueueing does not advance next_evaluation_at and an
 # unguarded scheduler would queue a duplicate on every tick.
 #
-# *** READ BEFORE STARTING THE STAGE-ZERO QUEUE PROCESSOR ***
-# Enqueueing is INERT TODAY: config/workers.json registers stage-zero-processor enabled=true
-# polling every 30s, but it is NOT RUNNING (verified 2026-07-26 — zero matching node processes;
-# .pids/stage-zero.pid holds a recycled PID now owned by an unrelated process, logged separately
-# as a health_check type=pid false-positive). A queued request therefore SITS until that worker
-# is started, and DRAINING IT RUNS THE CREDENTIALED TRAVERSAL — roughly 16 live LLM calls that
-# promote a nursery row into a live venture. THAT step is chairman-gated and was NOT authorised
-# as of this commit. Whoever starts that processor should confirm the promotion is authorised
-# first, or clear pending nursery_reeval rows.
+# *** THIS WORKFLOW IS OFF UNTIL SOMEONE DELIBERATELY TURNS IT ON. ***
+# The job is gated on repository variable NURSERY_REEVAL_ENABLED == 'true', which is UNSET.
+# Merging this file therefore arms NOTHING; enabling is a separate, auditable act.
+#
+# SECURITY REVIEW SEC-1 (HIGH) — why the gate exists, recorded so nobody removes it as noise.
+# The first version of this file relied on the stage-zero queue processor not currently running.
+# That is a COINCIDENCE, NOT A CONTROL: config/workers.json marks it enabled=true and
+# `leo-stack restart` is a documented Essential Command, so any routine fleet restart re-arms
+# the drain path. Worse, the dry-run escape hatch did not apply to the case that mattered —
+# GitHub evaluates `schedule` events from the DEFAULT BRANCH with an EMPTY `inputs` context, so
+# `${{ inputs.dry_run && '1' || '0' }}` yields '0' (LIVE) on every scheduled run. Merging would
+# have armed a live 6-hourly enqueue against 16-of-16 eligible nursery rows.
+#
+# DRAINING AN ENQUEUED REQUEST RUNS THE CREDENTIALED TRAVERSAL — roughly 16 live LLM calls that
+# promote a nursery row into a live venture, and stage-zero-queue-processor dispatches it with
+# nonInteractive:true, so there is NO chairman gate in the drain path itself. That authorisation
+# is the ONLY thing this gate is standing in for. Do not set the variable until it is granted.
 #
 # Not fail-softed: a genuinely broken invoker must go red. Exit 0 covers every expected outcome
 # (enqueued / nothing due / already queued); exit 1 is reserved for real faults.
@@ -54,9 +62,17 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 10
 
+    # SEC-1 KILL SWITCH. Unset variable => this job never runs, on any trigger. Deliberately a
+    # repository VARIABLE rather than a code constant: turning it on is a recorded act outside
+    # this diff, so "who authorised the first live enqueue" is answerable afterwards.
+    if: vars.NURSERY_REEVAL_ENABLED == 'true'
+
     env:
       SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
       SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
+      # `inputs` is EMPTY on schedule events, so this yields '0' (live) for scheduled runs by
+      # design — which is safe ONLY because the job gate above is the real control. Manual
+      # dispatch can still request a dry run explicitly.
       NURSERY_REEVAL_DRY_RUN: ${{ inputs.dry_run && '1' || '0' }}
 
     steps:
