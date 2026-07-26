@@ -248,7 +248,25 @@ export function classifyBreach({ utilization, planAdherence, integrity }) {
  * chairman-facing surface (single pane of glass); there is no separate resolvable "chairman
  * session".
  */
-export function buildCoordinatorHealthAdvisoryRows(reading, { coordinatorId }) {
+export function buildCoordinatorHealthAdvisoryRows(
+  reading,
+  {
+    coordinatorId,
+    // QF-20260726-536: sender_session was OMITTED, so every advisory arrived
+    // UNATTRIBUTED and therefore PERMANENTLY UN-ACKABLE — resolveAdvisorySingleton
+    // (lib/coordinator/adam-advisory-store.cjs:110) returns early when
+    // sender_session is absent, so the row can never be grouped or retired and
+    // sits in the resurface pool forever. Against a lane with per-row manual
+    // acking that is not noise, it is noise that CANNOT be cleared, and it
+    // accumulates monotonically — one permanent resident per health probe.
+    //
+    // Same default-parameter shape as the sibling Adam writer
+    // (adam-adherence-staleness-check.mjs:90): the env session when present, a
+    // stable named fallback otherwise, so cron-driven runs are attributed and
+    // ackable too rather than falling back to null.
+    senderSession = process.env.CLAUDE_SESSION_ID || 'adam-coordinator-health-cron',
+  }
+) {
   const which = [
     reading.breach.idleWithBacklog && 'idle workers + non-empty dispatchable backlog',
     reading.breach.integrityBreach && `fail-loud integrity divergence (${(reading.integrity.divergent_fields || []).join(', ')})`,
@@ -267,6 +285,14 @@ export function buildCoordinatorHealthAdvisoryRows(reading, { coordinatorId }) {
     target_session: coordinatorId || 'broadcast-coordinator',
     subject,
     sender_type: 'adam-coordinator-health',
+    // QF-20260726-536: THE FIX — without this the row is un-ackable and immortal.
+    sender_session: senderSession,
+    // Top-level column too, so readers querying .body (the ack path selects it —
+    // lib/coordinator/adam-action-ack.cjs:247) see the diagnostic instead of null.
+    // This is a COPY of the string already in payload.body, not new content: the
+    // bodies were never empty, only the column was unset, and reading .body while
+    // the report sits in payload.body is a wrong-field read, not a missing body.
+    body,
     payload,
   };
   return { coordinatorRow };
