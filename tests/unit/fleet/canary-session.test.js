@@ -108,6 +108,63 @@ describe('isCanarySession — FR-1 disjunction', () => {
   });
 });
 
+/**
+ * FR-4 AC-1 / TS-6 — THE PIN PRD risks[3] NAMES AS ITS SOLE MITIGATION, and which a VALIDATION review
+ * found had no assertion anywhere.
+ *
+ * The trigger key was chosen to be a NEW key rather than reusing non_fleet / role='adam' /
+ * is_coordinator precisely because those trip isDispatchableFleetMember and isFleetWorker — which would
+ * hide the canary from fleet-dashboard, rollcall, capacity-forecast and the liveness set, and (sharpest)
+ * make the coordinator HARD-REFUSE to dispatch at it. A probe whose whole value is being reachable by
+ * the same paths as a real worker must stay addressable.
+ *
+ * The safety argument was that every one of those predicates is a CLOSED ALLOWLIST of named keys, so a
+ * new key cannot trip them. That argument is only worth as much as this test: it is asserted against the
+ * REAL shipped predicates, so if any of them ever switches to a generic truthiness sweep of metadata,
+ * this fails instead of the canary silently vanishing from the fleet's view of itself.
+ */
+describe('FR-4 AC-1: the trigger key must not trip any fleet-membership predicate', () => {
+  // DIFFERENTIAL, not absolute — and my first draft got this wrong in a way worth recording. I asserted
+  // isFleetWorker(canary) === true; it is false, because that predicate requires everClaimed and a fresh
+  // canary has never claimed. That has nothing to do with the trigger key. The property that actually
+  // matters is INERTNESS: adding the key must not CHANGE any verdict. So each case compares the same
+  // session with and without it.
+  const base = {
+    session_id: 's-canary', status: 'active', heartbeat_at: new Date().toISOString(),
+    metadata: { account_profile: 'canary', role: 'worker', fleet_identity: { callsign: 'Canary-1' } },
+  };
+  const withKey = { ...base, metadata: { ...base.metadata, [CANARY_TRIGGER_KEY]: true } };
+
+  it('is INERT for isFleetWorker and isDispatchableFleetMember', async () => {
+    const preds = await import('../../../lib/fleet/session-predicates.mjs');
+    expect(preds.isFleetWorker(withKey)).toBe(preds.isFleetWorker(base));
+    expect(preds.isDispatchableFleetMember(withKey)).toBe(preds.isDispatchableFleetMember(base));
+    // And pin the one that carries the FR's actual argument: a canary must stay DISPATCHABLE, or the
+    // probe cannot exercise the paths a real worker does — which is the whole point of running one.
+    expect(preds.isDispatchableFleetMember(withKey)).toBe(true);
+  });
+
+  it('is INERT for the claim-side build-forbidden predicate', async () => {
+    // NOTE THE SIGNATURE: isBuildForbiddenSession takes METADATA, not a session row. My first draft
+    // passed a session object, so `md.non_fleet` was undefined and the assertion passed VACUOUSLY —
+    // caught only because the control below then failed. That is the control earning its place.
+    const { isBuildForbiddenSession } = await import('../../../lib/claim/build-forbidden-session.cjs');
+    expect(isBuildForbiddenSession(withKey.metadata)).toBe(isBuildForbiddenSession(base.metadata));
+    expect(isBuildForbiddenSession(withKey.metadata)).toBe(false); // fenced by the CLAIM FENCE, not by reclassification
+  });
+
+  it('CONTROL — the keys we deliberately did NOT reuse really do trip these predicates', async () => {
+    // Without this, the inertness above could hold simply because the predicates ignore everything,
+    // proving nothing about the key choice. This shows the hazard is real and the choice avoided it.
+    const { isBuildForbiddenSession } = await import('../../../lib/claim/build-forbidden-session.cjs');
+    expect(isBuildForbiddenSession({ non_fleet: true, role: 'worker' })).toBe(true);
+    expect(isBuildForbiddenSession({ role: 'adam' })).toBe(true);
+    expect(isBuildForbiddenSession({ is_coordinator: true })).toBe(true);
+    const preds = await import('../../../lib/fleet/session-predicates.mjs');
+    expect(preds.isDispatchableFleetMember({ ...base, metadata: { ...base.metadata, role: 'adam' } })).toBe(false);
+  });
+});
+
 describe('FR-1 anti-regression: the predicate must never read env for canary identity', () => {
   it('reads NO process.env at all in the source', () => {
     // The original FR-1 named process.env.FLEET_WORKER_CALLSIGN as the primary signal. It is DEAD

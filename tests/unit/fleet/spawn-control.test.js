@@ -56,6 +56,7 @@ const CURRENT_RUNNER = (args) => {
 const { logCoordinationEvent } = await import('../../../lib/coordinator/coordination-events.cjs');
 const { sequenceSingletonRefresh } = await import('../../../lib/coordinator/singleton-refresh-sequencer.cjs');
 const { spawn: childProcessSpawnSpy } = await import('node:child_process');
+const canarySession = await import('../../../lib/fleet/canary-session.js');
 
 /**
  * FR-3: the spawner MINTS the session id and passes it as `claude --session-id <uuid>`, so the child
@@ -136,7 +137,9 @@ describe('module surface (TS-10: exactly six named verbs, no more)', () => {
     // wall-clock; they are values, not verbs, so they belong on this allowlist.
     const helperNames = ['roleOf', 'isSingletonRole', 'resolveProfileDir', 'isLiveEnabled', 'buildLiveSpawnInvocation',
       'SESSION_BIND_MAX_ATTEMPTS', 'SESSION_BIND_DELAY_MS',
-      'CANARY_PROFILE', 'CANARY_CALLSIGN_PREFIX'];
+      'CANARY_PROFILE', 'CANARY_CALLSIGN_PREFIX',
+      // FR-4: third cycle-forced constant (see the drift pin). A value, not a verb.
+      'CANARY_TRIGGER_KEY'];
     const unexpected = Object.keys(mod).filter((k) => !verbNames.includes(k) && !helperNames.includes(k));
     expect(unexpected).toEqual([]);
   });
@@ -603,6 +606,47 @@ describe('spawn (FR-1)', () => {
     expect(guard.isCanaryCallsign(`${mod.CANARY_CALLSIGN_PREFIX}1`)).toBe(true);
     expect(guard.isCanaryCallsign('Bravo')).toBe(false);
     expect(mod.CANARY_PROFILE).toBe('canary');
+    // SD-LEO-INFRA-SESSION-SPAWN-AND-PROMPT-LIBRARY-001-E FR-4: the trigger key is duplicated here for
+    // the same cycle reason, so it joins the same drift pin — against the canonical module this time,
+    // since that is what READS the key out of metadata. A rename on either side breaks this.
+    expect(mod.CANARY_TRIGGER_KEY).toBe(canarySession.CANARY_TRIGGER_KEY);
+    expect(canarySession.isCanaryMetadata({ [mod.CANARY_TRIGGER_KEY]: true })).toBe(true);
+  });
+
+  it('FR-4: the stamped trigger key is REACHABLE — a canary spawn writes it into metadata', async () => {
+    // A VALIDATION review found CANARY_TRIGGER_KEY was read by isCanaryMetadata and mirrored into the
+    // marker payload but written to claude_sessions.metadata NOWHERE — an unreachable disjunct, which is
+    // exactly what canary-session.js's own header forbids. This asserts the write happens, so the
+    // disjunct cannot silently become decorative again.
+    const nowMs = 1_800_000_000_000;
+    const supabaseClient = makeFakeSupabase({
+      sessions: [{ session_id: MINTED_SESSION_ID, pid: 4242, status: 'active', created_at: new Date(nowMs).toISOString(), metadata: {} }],
+    });
+    await spawn({ role: 'worker', callsign: 'Canary-pilot', accountProfile: 'canary' }, {
+      live: true, spawnFn: vi.fn(() => ({ pid: 4242, unref: vi.fn() })), supabaseClient,
+      currencyRunner: CURRENT_RUNNER, execFn: enumExec(), sleepFn: vi.fn(), nowMs,
+      baseDir: 'C:\\fleet\\profiles', uuidFn: () => MINTED_SESSION_ID,
+    });
+    const md = supabaseClient._store.get(MINTED_SESSION_ID).metadata;
+    expect(md[canarySession.CANARY_TRIGGER_KEY]).toBe(true);
+    expect(canarySession.isCanaryMetadata(md)).toBe(true);
+  });
+
+  it('FR-4 NEGATIVE CONTROL: an ORDINARY spawn does not get the trigger key', async () => {
+    // Without this the stamp could be unconditional, marking every worker a canary — which the claim
+    // fence would then read as "nobody may claim anything".
+    const nowMs = 1_800_000_000_000;
+    const supabaseClient = makeFakeSupabase({
+      sessions: [{ session_id: MINTED_SESSION_ID, pid: 4242, status: 'active', created_at: new Date(nowMs).toISOString(), metadata: {} }],
+    });
+    await spawn({ role: 'worker', callsign: 'Bravo' }, {
+      live: true, spawnFn: vi.fn(() => ({ pid: 4242, unref: vi.fn() })), supabaseClient,
+      currencyRunner: CURRENT_RUNNER, execFn: enumExec(), sleepFn: vi.fn(), nowMs,
+      uuidFn: () => MINTED_SESSION_ID,
+    });
+    const md = supabaseClient._store.get(MINTED_SESSION_ID).metadata;
+    expect(md[canarySession.CANARY_TRIGGER_KEY]).toBeUndefined();
+    expect(canarySession.isCanaryMetadata(md)).toBe(false);
   });
 
   it('FR-1/FR-3: does NOT stamp account_profile when none was requested', async () => {
