@@ -32,6 +32,31 @@ vi.mock('../../server/middleware/validate.js', () => ({
 vi.mock('../../server/config.js', () => ({ dbLoader: { supabase: {} } }));
 
 // The shared teardown helper — mocked so no real teardown/DB/shell happens.
+import { issueToken, CONFIRM_ACK_PHRASE } from '../../lib/destructive-confirmation.js';
+
+/**
+ * SD-LEO-INFRA-DESTRUCTIVE-ACTION-SAFETY-001 FR-1 added a confirmation gate to all three
+ * destructive handlers, so requests that previously executed now refuse with 428 unless
+ * confirmed. The parity/aggregation assertions below are NOT weakened by that change —
+ * they still guard exactly what they were written to guard. Each request simply supplies
+ * a valid confirmation first, so the handler reaches the teardown logic under test.
+ *
+ * The gate itself is covered separately (tests/unit/destructive-confirmation.test.js for
+ * the logic, tests/unit/ventures-destructive-gate.test.js for the wiring on both mounts);
+ * this file keeps its original job of guarding the master-reset refactor.
+ */
+const CONFIRM_SECRET = 'parity-test-secret';
+
+/** Build a request body carrying a valid confirmation for the given target set. */
+function confirmed(operation, targetIds, extra = {}) {
+  return {
+    ...extra,
+    confirmation_token: issueToken({ operation, targetIds, issuedAtMs: Date.now(), secret: CONFIRM_SECRET }),
+    acknowledgement: CONFIRM_ACK_PHRASE,
+    expected_count: targetIds.length,
+  };
+}
+
 const deleteVentureFullyMock = vi.fn();
 vi.mock('../../lib/deleteVentureFully.js', () => ({
   deleteVentureFully: (...a) => deleteVentureFullyMock(...a),
@@ -106,6 +131,7 @@ async function runHandlerChain(handlers, req, res) {
 
 beforeEach(() => {
   vi.clearAllMocks();
+  process.env.DESTRUCTIVE_CONFIRM_SECRET = CONFIRM_SECRET;
   deleteVentureFullyMock.mockImplementation((id) => Promise.resolve(okResult(id)));
 });
 
@@ -117,7 +143,7 @@ describe('master-reset refactor (FR-5 regression guard)', () => {
       ventures: [{ id: 'v1' }, { id: 'v2' }, { id: 'v3' }],
       orphans: [{ id: 'o1' }, { id: 'o2' }],
     });
-    const req = createMockReq({}, {}, supabase);
+    const req = createMockReq({}, confirmed('master-reset', ['v1', 'v2', 'v3']), supabase);
     const res = createMockRes();
 
     await runHandlerChain(handlers, req, res);
@@ -146,12 +172,28 @@ describe('master-reset refactor (FR-5 regression guard)', () => {
 
   it('reports an empty portfolio as count 0 without error', async () => {
     const supabase = buildSupabaseMock({ ventures: [], orphans: [] });
-    const req = createMockReq({}, {}, supabase);
+    const req = createMockReq({}, confirmed('master-reset', []), supabase);
     const res = createMockRes();
     await runHandlerChain(handlers, req, res);
     expect(deleteVentureFullyMock).not.toHaveBeenCalled();
     expect(res.jsonData.count).toBe(0);
     expect(res.jsonData.success).toBe(true);
+  });
+
+  // SD-LEO-INFRA-DESTRUCTIVE-ACTION-SAFETY-001 FR-1. Every other test in this file now
+  // supplies a confirmation, which would let the gate be deleted entirely without any of
+  // them failing. This one pins the new contract in the same file that guards these
+  // routes: an UNCONFIRMED request must refuse and must not reach the teardown.
+  it('refuses an UNCONFIRMED master-reset and never reaches the teardown', async () => {
+    const supabase = buildSupabaseMock({ ventures: [{ id: 'v1' }, { id: 'v2' }], orphans: [] });
+    const req = createMockReq({}, {}, supabase);
+    const res = createMockRes();
+
+    await runHandlerChain(handlers, req, res);
+
+    expect(res.statusCode).toBe(428);
+    expect(res.jsonData.code).toBe('CONFIRMATION_REQUIRED');
+    expect(deleteVentureFullyMock).not.toHaveBeenCalled();
   });
 });
 
@@ -159,7 +201,7 @@ describe('POST /:id/full-delete', () => {
   const handlers = findRoute('post', '/:id/full-delete');
 
   it('delegates to deleteVentureFully and returns 200 on success', async () => {
-    const req = createMockReq({ id: 'v1' });
+    const req = createMockReq({ id: 'v1' }, confirmed('full-delete', ['v1']));
     const res = createMockRes();
     await runHandlerChain(handlers, req, res);
     expect(deleteVentureFullyMock).toHaveBeenCalledWith('v1', { supabase: req.app.locals.supabase });
@@ -169,7 +211,7 @@ describe('POST /:id/full-delete', () => {
 
   it('returns 500 when the helper reports failure', async () => {
     deleteVentureFullyMock.mockResolvedValueOnce(failResult('v9'));
-    const req = createMockReq({ id: 'v9' });
+    const req = createMockReq({ id: 'v9' }, confirmed('full-delete', ['v9']));
     const res = createMockRes();
     await runHandlerChain(handlers, req, res);
     expect(res.statusCode).toBe(500);
@@ -183,7 +225,7 @@ describe('POST /bulk-full-delete', () => {
   it('aggregates per-venture results and tolerates partial failure', async () => {
     deleteVentureFullyMock.mockImplementation((id) =>
       Promise.resolve(id === 'bad' ? failResult(id) : okResult(id)));
-    const req = createMockReq({}, { ids: ['v1', 'bad', 'v2'] });
+    const req = createMockReq({}, confirmed('bulk-full-delete', ['v1', 'bad', 'v2'], { ids: ['v1', 'bad', 'v2'] }));
     const res = createMockRes();
     await runHandlerChain(handlers, req, res);
     expect(deleteVentureFullyMock).toHaveBeenCalledTimes(3);
