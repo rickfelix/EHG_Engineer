@@ -94,12 +94,19 @@ describe('runRebootRespawn live (FR-5)', () => {
     expect(res.results.map((r) => r.spawned)).toEqual([true, true]);
   });
 
+  // SD-LEO-INFRA-SESSION-SPAWN-AND-PROMPT-LIBRARY-001-E FR-4: a canary slot now writes a spawn-time
+  // pre-registration marker before spawnFn and REFUSES the slot if that write fails (an unmarked canary
+  // passes the claim fence and takes real work). `supabase: {}` has no .from, so it read as a failed
+  // write. Both production entry points supply a real service client — reboot-respawn.cjs:29 and the
+  // drill runner — so modelling the insert here matches production rather than papering over it.
+  const canaryMarkerOk = () => ({ from: () => ({ insert: async () => ({ error: null }) }) });
+
   it('resolves account_profile into CLAUDE_CONFIG_DIR via the injected resolver, and is fail-soft if it throws', async () => {
     const okResolver = (name) => `C:\\profiles\\${name}`;
     const spawnCalls = [];
     const spawnFn = (program, args, env) => { spawnCalls.push(env); return { pid: 1 }; };
     const res = await runRebootRespawn({
-      supabase: {}, loadFn: async () => [{ name: 'Canary-1', role: 'worker', account_profile: 'canary', resume_uuid: 'u-c' }],
+      supabase: canaryMarkerOk(), loadFn: async () => [{ name: 'Canary-1', role: 'worker', account_profile: 'canary', resume_uuid: 'u-c' }],
       spawnFn, logFn: async () => ({ ok: true }), live: true, resolveProfileDirFn: okResolver, sleepFn: vi.fn(),
     });
     expect(spawnCalls[0].CLAUDE_CONFIG_DIR).toBe('C:\\profiles\\canary');

@@ -18,7 +18,8 @@ const {
   filterOutGhostSessions,
   isTestSessionId,
   dedupeAssignedCallsigns,
-  reserveParkedIdentities
+  reserveParkedIdentities,
+  classifyWorkerNaming
 } = require('../../scripts/assign-fleet-identities.cjs');
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
@@ -348,24 +349,47 @@ describe('filterOutGhostSessions + shared isFixtureSession (SD-FDBK-INFRA-SHARED
 // canary sessions from tier-band reassignment entirely, mirroring the fixture/probe skip
 // in filterOutGhostSessions. main() is not exported (only called via require.main), so this
 // is a source-pin regex test on the call site, matching the pattern used above.
+// RETARGETED, not weakened (SD-LEO-INFRA-SESSION-SPAWN-AND-PROMPT-LIBRARY-001-E FR-7). These two
+// cases were source-pin regexes on the inline condition, because main() was not exported. The loop
+// body is now the exported pure `classifyWorkerNaming`, so the QF's actual invariant — a canary is
+// never sent to tier-band reassignment — is asserted by BEHAVIOUR instead of by text.
+//
+// The old pins had to go, and not merely because the text moved: mutation testing showed they could
+// not fail. Wrapping the guard in `false &&` left both regexes matching and the whole suite green. The
+// literals they searched for are also gone on purpose — the metadata test is delegated to the
+// canonical isCanaryMetadata (which spells it with a CANARY_PROFILE constant) rather than being a
+// sixth hand-rolled copy of `startsWith('Canary-')`.
 describe('QF-20260724-521: canary sessions are skipped from callsign reassignment', () => {
-  const src = readFileSync(ASSIGNER, 'utf8');
+  const isCanaryMd = (m) => m?.account_profile === 'canary' || !!m?.fleet_identity?.callsign?.startsWith('Canary-');
+  const worker = (metadata) => ({ session_id: 's-canary', metadata });
 
-  it('the assignedRaw/needsAssignment loop checks account_profile===canary or a Canary- callsign', () => {
-    expect(src).toMatch(/account_profile\s*===\s*['"]canary['"]/);
-    expect(src).toMatch(/callsign\?\.startsWith\(['"]Canary-['"]\)/);
+  it('a Canary- callsign is kept, never sent to tier-band reassignment', () => {
+    // 'Canary-1' is in no NATO tier band, so before the skip existed it always fell to
+    // needsAssignment and was renamed to a band callsign (the original Charlie clobber).
+    const out = classifyWorkerNaming(
+      worker({ fleet_identity: { callsign: 'Canary-1', color: 'yellow' }, tier_rank: 1 }),
+      new Set(), false, isCanaryMd,
+    );
+    expect(out).toBe('canary_metadata');
   });
 
-  it('the canary check pushes straight to assignedRaw and continues, BEFORE the tier-band check', () => {
-    const loopStart = src.indexOf('const assignedRaw = [];');
-    const canaryCheckIdx = src.indexOf("account_profile === 'canary'", loopStart);
-    const tierBandCheckIdx = src.indexOf('callsignInTierBand(identity.callsign, tierRankOf(worker))', loopStart);
-    expect(loopStart).toBeGreaterThan(-1);
-    expect(canaryCheckIdx).toBeGreaterThan(loopStart);
-    expect(tierBandCheckIdx).toBeGreaterThan(canaryCheckIdx); // canary skip runs first
-    // the canary branch must `continue` (skip the tier-band check for that worker), not fall through
-    const canaryBlock = src.slice(canaryCheckIdx, tierBandCheckIdx);
-    expect(canaryBlock).toContain('assignedRaw.push(worker)');
-    expect(canaryBlock).toContain('continue;');
+  it('the account_profile stamp alone is enough, even with a NATO callsign', () => {
+    // Defence-in-depth alongside the callsign: a canary already renamed by an earlier clobber must
+    // still be recognised and left alone.
+    const out = classifyWorkerNaming(
+      worker({ account_profile: 'canary', fleet_identity: { callsign: 'Charlie', color: 'blue' }, tier_rank: 1 }),
+      new Set(), false, isCanaryMd,
+    );
+    expect(out).toBe('canary_metadata');
+  });
+
+  it('NEGATIVE CONTROL — the same out-of-band callsign IS reassigned for a non-canary', () => {
+    // Proves the verdict above comes from the canary signal and not from the callsign being
+    // out-of-band. Without this, a guard that protected every worker would pass both cases.
+    const out = classifyWorkerNaming(
+      { session_id: 's-plain', metadata: { fleet_identity: { callsign: 'Canary-1', color: 'yellow' }, tier_rank: 1 } },
+      new Set(), false, () => false,
+    );
+    expect(out).toBe('needs_assignment');
   });
 });

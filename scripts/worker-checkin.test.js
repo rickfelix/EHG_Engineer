@@ -72,6 +72,17 @@ function makeStub(cfg) {
       if (table === 'session_coordination') {
         // recent roll_calls dedup query (sender_session filter) vs messages query (target_session)
         if ('sender_session' in state.filters) return Promise.resolve({ data: cfg.recentRollCalls || [], error: null });
+        // SD-LEO-INFRA-SESSION-SPAWN-AND-PROMPT-LIBRARY-001-E: HONOUR payload->>kind.
+        //
+        // This stub previously returned cfg.messages for ANY target_session query, ignoring further
+        // filters. That is not a harmless simplification: the FR-1 canary lookup filters
+        // target_session + payload->>kind, so it received the seeded WORK_ASSIGNMENT row, concluded a
+        // marker existed, and the claim fence fired on an ORDINARY worker — the pipeline returned
+        // 'idle' instead of 'claimed_assignment'. Production is unaffected (PostgREST applies the
+        // filter), so this was pure stub infidelity, and it produced a red test that pointed at the
+        // wrong thing. A stub that drops discriminants makes every predicate keyed on one over-fire.
+        const kind = state.filters['payload->>kind'];
+        if (kind) return Promise.resolve({ data: (cfg.coordinationByKind && cfg.coordinationByKind[kind]) || [], error: null });
         return Promise.resolve({ data: cfg.messages || [], error: null });
       }
       if (table === 'v_sd_next_candidates') return Promise.resolve({ data: cfg.candidates || [], error: null });

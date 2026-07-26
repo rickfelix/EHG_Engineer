@@ -1384,7 +1384,33 @@ async function assignFleetIdentityAtCheckin(sb, sessionId, claimSd) {
     // Two independent conditions, matching the cron's: the account_profile stamp (authoritative, but
     // written only once FR-1/FR-3 land) OR the 'Canary-' callsign prefix (works today). Deliberately
     // an OR so this is NOT inert while the stamp is still being wired.
-    if (myMeta.account_profile === 'canary' || (existing && typeof existing.callsign === 'string' && existing.callsign.startsWith('Canary-'))) {
+    // FR-7 (SD-LEO-INFRA-SESSION-SPAWN-AND-PROMPT-LIBRARY-001-E): both conditions above are LATE —
+    // account_profile and fleet_identity.callsign are written by ONE metadata update inside the
+    // session-bind loop (spawn-control.js:326-389, up to 10s post-launch), and reboot-respawn-runner.js
+    // writes neither, ever. So mid-registration NEITHER holds, the skip misses, and the canary is
+    // renamed to a NATO callsign — PERMANENTLY, since stampRespawnedCanary only carries a callsign
+    // forward when the incoming one is already canary-shaped. Delegating to isCanarySession adds the
+    // spawn-time pre-registered marker (keyed on the minted session id, readable from instruction zero)
+    // and drops one more hand-rolled copy of the 'Canary-' prefix test.
+    let canaryVerdict = null;
+    try {
+      const { isCanarySession } = await import('../lib/fleet/canary-session.js');
+      canaryVerdict = await isCanarySession(sb, { sessionId, metadata: myMeta });
+    } catch {
+      const nameless = !(existing && existing.callsign);
+      canaryVerdict = { isCanary: nameless, reason: nameless ? 'canary_check_unavailable_nameless' : 'canary_check_unavailable_established' };
+    }
+    // FAIL-CLOSED BUT SCOPED, and the scoping is load-bearing. The predicate defaults an indeterminate
+    // check to isCanary:true, which is right for the claim fence but wrong here: blanket fail-closed
+    // would freeze naming FLEET-WIDE on any lookup fault, and "every worker unnamed" reads as a quiet
+    // fleet rather than a broken one. isCanaryMetadata runs first and needs no I/O, so a stamped canary
+    // never depends on the lookup; of the rest, only a NAMELESS session can be an unstamped canary
+    // mid-registration. A session already holding a callsign is an established worker — renaming it
+    // destroys no canary signal, so it proceeds even while the check is unreadable.
+    if (canaryVerdict && canaryVerdict.indeterminate && existing && existing.callsign) {
+      canaryVerdict = { isCanary: false, reason: 'canary_check_indeterminate_established' };
+    }
+    if (canaryVerdict && canaryVerdict.isCanary) {
       return existing && existing.callsign && existing.color
         ? { callsign: existing.callsign, color: existing.color }
         : null;

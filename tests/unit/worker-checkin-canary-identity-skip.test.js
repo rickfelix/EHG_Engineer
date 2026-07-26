@@ -30,7 +30,7 @@ const HERE = path.dirname(fileURLToPath(import.meta.url));
  * Fake covering only the shapes this function touches. RECORDS every update so a silent rename is
  * detectable -- asserting the return value alone would miss a write that clobbers the stored identity.
  */
-function fakeClient(metadata, { live = [], onLiveQuery } = {}) {
+function fakeClient(metadata, { live = [], onLiveQuery, preRegRows = [], preRegBroken = false } = {}) {
   const updates = [];
   return {
     updates,
@@ -39,6 +39,12 @@ function fakeClient(metadata, { live = [], onLiveQuery } = {}) {
         select: () => builder,
         eq: () => builder,
         neq: () => builder,
+        // The FR-7 pre-registration lookup terminates in .limit(). Modelling it explicitly (rather
+        // than letting an undefined method throw) is what makes "lookup worked and found nothing"
+        // testable as a state DISTINCT from "lookup broken" — the two must not behave alike.
+        limit: () => Promise.resolve(
+          preRegBroken ? { data: null, error: { message: 'lookup down' } } : { data: preRegRows, error: null },
+        ),
         // The slot-picking query over live sessions. Instrumented because REACHING it is what
         // distinguishes "fell through to re-derive" from "short-circuited by the canary branch" --
         // the returned callsign cannot tell those apart.
@@ -96,15 +102,29 @@ describe('FR-6 canary identity skip — the second clobber writer', () => {
     const source = fs.readFileSync(path.join(HERE, '../../scripts/worker-checkin.cjs'), 'utf8');
     const fnStart = source.indexOf('async function assignFleetIdentityAtCheckin');
     expect(fnStart).toBeGreaterThan(-1);
-    // CODE LINES ONLY. The first version of this assertion scanned raw text and matched
-    // "callsignInTierBand" inside the explanatory COMMENT above the guard, reporting the guard as
-    // mis-ordered when it was correct. Comments describe the code they sit next to, so any
-    // position assertion over raw source will eventually match prose instead of behaviour.
+    // SCOPE TO THE ACTUAL FUNCTION, not a magic byte count. This originally sliced a fixed 4000
+    // chars, which silently became too small when the guard grew: the window fell BETWEEN the two
+    // markers, tierBandLine went to -1, and the failure read as "tier-band check not found" — a
+    // missing-code message for code that was present and correctly ordered. A bound that can drift
+    // out from under the invariant it protects is a false failure waiting to happen (and, had the
+    // clipping gone the other way, a false PASS: two -1s compare equal-ish and the order assertion
+    // would never have run). The function's own closing brace cannot drift.
+    const rel = /\r?\n\}\r?\n/.exec(source.slice(fnStart));
+    expect(rel, 'could not find the end of assignFleetIdentityAtCheckin').not.toBeNull();
+    // CODE LINES ONLY. An earlier version scanned raw text and matched "callsignInTierBand" inside
+    // the explanatory COMMENT above the guard, reporting the guard as mis-ordered when it was
+    // correct. Comments describe the code they sit next to, so any position assertion over raw
+    // source will eventually match prose instead of behaviour.
     const codeLines = source
-      .slice(fnStart, fnStart + 4000)
+      .slice(fnStart, fnStart + rel.index)
       .split('\n')
       .filter((l) => !l.trim().startsWith('//') && !l.trim().startsWith('*') && !l.trim().startsWith('/*'));
-    const canaryLine = codeLines.findIndex((l) => l.includes("startsWith('Canary-')"));
+    // SD-LEO-INFRA-SESSION-SPAWN-AND-PROMPT-LIBRARY-001-E FR-7: the guard no longer hand-rolls
+    // startsWith('Canary-') — it delegates to the canonical isCanarySession predicate, which adds the
+    // spawn-time pre-registration disjunct so an UNSTAMPED canary (0-10s window, or reboot-respawn
+    // where metadata is never written) is recognised before it can be renamed. This pin tracks the
+    // delegation call instead of the removed literal; the ORDERING invariant it protects is unchanged.
+    const canaryLine = codeLines.findIndex((l) => l.includes('isCanarySession(sb,'));
     const tierBandLine = codeLines.findIndex((l) => l.includes('callsignInTierBand('));
     expect(canaryLine, 'canary guard not found in code').toBeGreaterThan(-1);
     expect(tierBandLine, 'tier-band check not found in code').toBeGreaterThan(-1);
@@ -129,6 +149,45 @@ describe('FR-6 canary identity skip — the second clobber writer', () => {
     );
     await assignFleetIdentityAtCheckin(client, 'sess-worker-1', null);
     expect(reachedLiveQuery, 'an ordinary worker must NOT be short-circuited by the canary branch').toBe(true);
+  });
+
+  it('FR-7: an UNSTAMPED canary is protected by the pre-registration alone', async () => {
+    // The state the old two-signal skip could not see: metadata carries nothing, because both stamps
+    // land later in the session-bind loop (and never at all on the reboot-respawn path).
+    let reachedLiveQuery = false;
+    const client = fakeClient(
+      { tier_rank: 1 },
+      { preRegRows: [{ id: 'pre-1' }], onLiveQuery: () => { reachedLiveQuery = true; } },
+    );
+    await assignFleetIdentityAtCheckin(client, CANARY_ID, null);
+    expect(reachedLiveQuery, 'a pre-registered canary must not reach the rename path').toBe(false);
+    expect(client.updates).toHaveLength(0);
+  });
+
+  it('FR-7: a NAMELESS session is protected when the check is INDETERMINATE (fail-closed)', async () => {
+    // Renaming is irreversible, so an unreadable check must not rename a session that could still be
+    // an unstamped canary. "Nameless" is the at-risk set: a session with no callsign at all.
+    let reachedLiveQuery = false;
+    const client = fakeClient(
+      { tier_rank: 1 },
+      { preRegBroken: true, onLiveQuery: () => { reachedLiveQuery = true; } },
+    );
+    await assignFleetIdentityAtCheckin(client, 'sess-unknown', null);
+    expect(reachedLiveQuery, 'an indeterminate check must not rename a nameless session').toBe(false);
+  });
+
+  it('FR-7: but an ESTABLISHED worker still gets named when the check is indeterminate', async () => {
+    // The other half, and the reason the fail-closed is SCOPED rather than blanket. A blanket version
+    // would freeze naming for the entire fleet on any transient DB fault — and "every worker unnamed"
+    // reads as a quiet cron rather than a broken one. This pair pins the boundary in both directions;
+    // either test alone is satisfied by a guard that is simply always-on or always-off.
+    let reachedLiveQuery = false;
+    const client = fakeClient(
+      { fleet_identity: { callsign: 'Delta', color: 'red' }, tier_rank: 1 },
+      { preRegBroken: true, onLiveQuery: () => { reachedLiveQuery = true; } },
+    );
+    await assignFleetIdentityAtCheckin(client, 'sess-worker-2', null);
+    expect(reachedLiveQuery, 'an established worker must not be frozen by an unreadable check').toBe(true);
   });
 
   it('a CANARY is short-circuited before that same query (the positive half of the control)', async () => {

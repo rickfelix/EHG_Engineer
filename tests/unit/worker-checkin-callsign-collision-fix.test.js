@@ -31,12 +31,19 @@ function stub(cfg = {}) {
     const st = { op: 'select', payload: null };
     const chain = {
       select() { return chain; }, eq() { return chain; }, gte() { return chain; }, neq() { return chain; },
+      // SD-LEO-INFRA-SESSION-SPAWN-AND-PROMPT-LIBRARY-001-E (FR-7): the canary pre-registration
+      // lookup terminates in .limit(). Without it the call THREW, and because that check fails
+      // closed for a session with no callsign, these first-time-assignment cases were fenced and
+      // stopped assigning at all. Modelling the query means the default here is "lookup succeeded
+      // and found no marker" — an ordinary worker — instead of "lookup broken".
+      limit() { return chain; },
       update(p) { st.op = 'update'; st.payload = p; return chain; },
       insert(p) { st.op = 'insert'; st.payload = p; return chain; },
       maybeSingle() { return Promise.resolve({ data: cfg.selfRow ?? null, error: null }); },
       then(res, rej) {
         let out;
-        if (table === 'claude_sessions' && st.op === 'select') out = { data: cfg.live ?? [], error: null };
+        if (table === 'session_coordination' && st.op === 'select') out = { data: cfg.preReg ?? [], error: null };
+        else if (table === 'claude_sessions' && st.op === 'select') out = { data: cfg.live ?? [], error: null };
         else if (table === 'claude_sessions' && st.op === 'update') { rec.update = st.payload; out = { data: null, error: null }; }
         else if (table === 'session_coordination' && st.op === 'insert') { rec.insert = st.payload; out = { data: { id: 'm' }, error: null }; }
         else out = { data: null, error: null };

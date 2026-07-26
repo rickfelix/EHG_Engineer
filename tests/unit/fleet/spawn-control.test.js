@@ -56,6 +56,7 @@ const CURRENT_RUNNER = (args) => {
 const { logCoordinationEvent } = await import('../../../lib/coordinator/coordination-events.cjs');
 const { sequenceSingletonRefresh } = await import('../../../lib/coordinator/singleton-refresh-sequencer.cjs');
 const { spawn: childProcessSpawnSpy } = await import('node:child_process');
+const canarySession = await import('../../../lib/fleet/canary-session.js');
 
 /**
  * FR-3: the spawner MINTS the session id and passes it as `claude --session-id <uuid>`, so the child
@@ -82,10 +83,12 @@ function enumExec(handle = 131074) {
 }
 
 /** Minimal in-memory fake covering exactly the claude_sessions/session_coordination shapes spawn-control.js touches. */
-function makeFakeSupabase({ sessions = [] } = {}) {
+function makeFakeSupabase({ sessions = [], coordinationInsertError = null } = {}) {
   const store = new Map(sessions.map((s) => [s.session_id, { ...s }]));
+  const coordinationInserts = [];
   return {
     _store: store,
+    _coordinationInserts: coordinationInserts,
     from(table) {
       if (table === 'claude_sessions') {
         return {
@@ -109,7 +112,14 @@ function makeFakeSupabase({ sessions = [] } = {}) {
         };
       }
       if (table === 'session_coordination') {
-        return { select: () => ({ eq: () => ({ gte: async () => ({ count: 0 }) }) }) };
+        return {
+          select: () => ({ eq: () => ({ gte: async () => ({ count: 0 }) }) }),
+          // SD-LEO-INFRA-SESSION-SPAWN-AND-PROMPT-LIBRARY-001-E FR-4: canary spawns now write a
+          // spawn-time pre-registration marker here BEFORE spawning, and refuse the spawn if it
+          // cannot be written (an unmarked canary would pass the claim fence and take real work).
+          // Recorded rather than swallowed so tests can assert the marker and its ordering.
+          insert: async (row) => { coordinationInserts.push(row); return { error: coordinationInsertError }; },
+        };
       }
       throw new Error(`unexpected table: ${table}`);
     },
@@ -633,6 +643,48 @@ describe('spawn (FR-1)', () => {
     expect(guard.isCanaryCallsign(`${mod.CANARY_CALLSIGN_PREFIX}1`)).toBe(true);
     expect(guard.isCanaryCallsign('Bravo')).toBe(false);
     expect(mod.CANARY_PROFILE).toBe('canary');
+    // FR-4: the trigger key is NO LONGER duplicated — origin/main extracted the namespace predicate
+    // into the pure startup-prompt-selection.js, so canary-session.js closes no cycle and both this
+    // module and canary-guard.js now IMPORT the key from it. There is nothing left to drift, which is
+    // strictly better than pinning a third copy. What still needs asserting is that the key the
+    // writers stamp is the one the predicate reads:
+    expect(canarySession.isCanaryMetadata({ [canarySession.CANARY_TRIGGER_KEY]: true })).toBe(true);
+  });
+
+  it('FR-4: the stamped trigger key is REACHABLE — a canary spawn writes it into metadata', async () => {
+    // A VALIDATION review found CANARY_TRIGGER_KEY was read by isCanaryMetadata and mirrored into the
+    // marker payload but written to claude_sessions.metadata NOWHERE — an unreachable disjunct, which is
+    // exactly what canary-session.js's own header forbids. This asserts the write happens, so the
+    // disjunct cannot silently become decorative again.
+    const nowMs = 1_800_000_000_000;
+    const supabaseClient = makeFakeSupabase({
+      sessions: [{ session_id: MINTED_SESSION_ID, pid: 4242, status: 'active', created_at: new Date(nowMs).toISOString(), metadata: {} }],
+    });
+    await spawn({ role: 'worker', callsign: 'Canary-pilot', accountProfile: 'canary' }, {
+      live: true, spawnFn: vi.fn(() => ({ pid: 4242, unref: vi.fn() })), supabaseClient,
+      currencyRunner: CURRENT_RUNNER, execFn: enumExec(), sleepFn: vi.fn(), nowMs,
+      baseDir: 'C:\\fleet\\profiles', uuidFn: () => MINTED_SESSION_ID,
+    });
+    const md = supabaseClient._store.get(MINTED_SESSION_ID).metadata;
+    expect(md[canarySession.CANARY_TRIGGER_KEY]).toBe(true);
+    expect(canarySession.isCanaryMetadata(md)).toBe(true);
+  });
+
+  it('FR-4 NEGATIVE CONTROL: an ORDINARY spawn does not get the trigger key', async () => {
+    // Without this the stamp could be unconditional, marking every worker a canary — which the claim
+    // fence would then read as "nobody may claim anything".
+    const nowMs = 1_800_000_000_000;
+    const supabaseClient = makeFakeSupabase({
+      sessions: [{ session_id: MINTED_SESSION_ID, pid: 4242, status: 'active', created_at: new Date(nowMs).toISOString(), metadata: {} }],
+    });
+    await spawn({ role: 'worker', callsign: 'Bravo' }, {
+      live: true, spawnFn: vi.fn(() => ({ pid: 4242, unref: vi.fn() })), supabaseClient,
+      currencyRunner: CURRENT_RUNNER, execFn: enumExec(), sleepFn: vi.fn(), nowMs,
+      uuidFn: () => MINTED_SESSION_ID,
+    });
+    const md = supabaseClient._store.get(MINTED_SESSION_ID).metadata;
+    expect(md[canarySession.CANARY_TRIGGER_KEY]).toBeUndefined();
+    expect(canarySession.isCanaryMetadata(md)).toBe(false);
   });
 
   it('FR-1/FR-3: does NOT stamp account_profile when none was requested', async () => {
@@ -788,6 +840,60 @@ describe('restart (FR-4 singleton-serial / FR-5 worker-parallel)', () => {
     expect(result.role).toBe('worker');
     expect(sequenceSingletonRefresh).not.toHaveBeenCalled();
     expect(supabaseClient._store.get('s1').status).toBe('released');
+  });
+
+  // SD-LEO-INFRA-SESSION-SPAWN-AND-PROMPT-LIBRARY-001-E (FR-5 / FR-6).
+  it('FR-5: threads the old session account_profile into the replacement (was DROPPED)', async () => {
+    // Asserting the value that REACHES the child launch, not merely that spawnReplacement was
+    // called — a "was called" assertion passes against the exact bug this fixes. accountProfile
+    // drives CLAUDE_CONFIG_DIR isolation, so the proof is that the profile dir lands in the env.
+    const spawnFn = vi.fn().mockReturnValue({ pid: 5150 });
+    const supabaseClient = makeFakeSupabase({
+      sessions: [{ session_id: 's1', status: 'active', metadata: { fleet_identity: { callsign: 'Canary-1' }, role: 'worker', account_profile: 'canary' } }],
+    });
+
+    const result = await restart('Canary-1', {
+      supabaseClient, live: true, currencyRunner: CURRENT_RUNNER, spawnFn, execFn: enumExec(),
+      sleepFn: vi.fn(), baseDir: 'C:\\fleet\\profiles',
+    });
+
+    expect(result.ok).toBe(true);
+    const env = spawnFn.mock.calls[0][2]; // spawnFn(program, args, env) — arg[2] IS the env
+    expect(env.CLAUDE_CONFIG_DIR).toBe('C:\\fleet\\profiles\\canary');
+  });
+
+  it('FR-5: a session with NO account_profile still restarts normally (negative control)', async () => {
+    // Proves the threading is conditional, not a blanket requirement — otherwise every ordinary
+    // worker restart would start demanding a profile dir.
+    const spawnFn = vi.fn().mockReturnValue({ pid: 5151 });
+    const supabaseClient = makeFakeSupabase({
+      sessions: [{ session_id: 's1', status: 'active', metadata: { fleet_identity: { callsign: 'Alpha-5' }, role: 'worker' } }],
+    });
+
+    const result = await restart('Alpha-5', {
+      supabaseClient, live: true, currencyRunner: CURRENT_RUNNER, spawnFn, execFn: enumExec(), sleepFn: vi.fn(),
+    });
+
+    expect(result.ok).toBe(true);
+    const env = spawnFn.mock.calls[0][2]; // spawnFn(program, args, env) — arg[2] IS the env
+    expect(env.CLAUDE_CONFIG_DIR).toBeUndefined();
+  });
+
+  it('FR-6: restarting a profile-stamped session with NO profiles dir configured FAILS LOUD', async () => {
+    // The behaviour change this FR accepts deliberately. resolveProfileDir throws when
+    // FLEET_ACCOUNT_PROFILES_DIR is unset; restart() never reached that path before. Measured
+    // blast radius: 1 of 16 live sessions carries account_profile, and it is the canary. Degrading
+    // to the un-isolated path instead would silently reinstate the defect FR-5 fixes — a canary
+    // without its profile isolation is not a canary.
+    const spawnFn = vi.fn().mockReturnValue({ pid: 5152 });
+    const supabaseClient = makeFakeSupabase({
+      sessions: [{ session_id: 's1', status: 'active', metadata: { fleet_identity: { callsign: 'Canary-1' }, role: 'worker', account_profile: 'canary' } }],
+    });
+
+    await expect(restart('Canary-1', {
+      supabaseClient, live: true, currencyRunner: CURRENT_RUNNER, spawnFn, execFn: enumExec(),
+      sleepFn: vi.fn(), baseDir: null,
+    })).rejects.toThrow(/FLEET_ACCOUNT_PROFILES_DIR/);
   });
 
   it('singleton path defers until a newSessionId is supplied (never a bespoke retire-first sequence)', async () => {
