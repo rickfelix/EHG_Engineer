@@ -61,7 +61,7 @@ const { routeFraming, FRAMING_ROUTES } = require('../lib/governance/fw3-framing-
 // primary, body-column fallback) — closes instance 4, the coordinator_request body-drop below.
 const { readCanonicalBody } = require('../lib/coordination/lane-contract.cjs');
 // SD-LEO-INFRA-ROLE-BASED-COMMS-ROUTING-PROTOCOL-001-C: sender-stamped reply_class SSOT.
-const { REPLY_CLASSES, isValidReplyClass, computeReplyExpectedBy, checkAndPingOverdueReplies } = require('../lib/coordinator/reply-class.cjs');
+const { REPLY_CLASSES, isValidReplyClass, computeReplyExpectedBy, checkAndPingOverdueReplies, reconcileLateVerdicts } = require('../lib/coordinator/reply-class.cjs');
 // SD-LEO-FIX-ADAM-INBOX-FULL-LANE-001: reuse the canonical Adam-session resolver for the unattended
 // full-lane tick (env vars are not reliably propagated to cron subprocesses).
 const { resolveAdamSessionId } = require('./read-adam-directives.cjs');
@@ -872,6 +872,39 @@ async function main() {
     if (pingResult.pinged > 0) {
       console.warn(`⚠ PING-ON-SILENCE: ${pingResult.pinged} reply-needed advisor${pingResult.pinged === 1 ? 'y' : 'ies'} unanswered past window — pinged (ids: ${pingResult.pingedIds.join(', ')})`);
     }
+    // SD-LEO-INFRA-SOLOMON-CONSULT-CANNOT-DELIVER-001 FR-4: LATE-VERDICT RECONCILIATION — the
+    // exact INVERSE of the ping sweep above, over the same candidate set: ping finds reply-needed
+    // rows with NO answer, this finds ones WITH an answer nobody consumed. A Solomon verdict lands
+    // 135-600s after the pre-send consult, long after the emitting process exited, so without this
+    // the verdict correlates perfectly and is then dropped on the floor.
+    // Fail-open: a reconciliation fault must never disturb the inbox drain.
+    try {
+      const { recordDisposition } = await import('../lib/decision-binding/disposition.js');
+      const { detectVerdictDelta } = await import('../lib/adam/should-consult-solomon.js');
+      const rec = await reconcileLateVerdicts(supabase, {
+        recordDisposition: (args) => recordDisposition(supabase, {
+          decisionType: args.decisionType,
+          subject: args.subject,
+          answerPayload: args.payload,
+        }),
+        detectVerdictDelta,
+        captureNearMiss: async (nm) => {
+          await supabase.from('issue_patterns').insert({
+            pattern_id: `NEARMISS-ADAM-CONSULT-LATE-${Date.now()}`,
+            category: 'governance_near_miss',
+            severity: 'high',
+            issue_summary: redact(`${nm.summary}${nm.title ? ` [${String(nm.title).slice(0, 80)}]` : ''}`),
+            source: 'adam_pre_send_consult',
+            metadata: { class: 'near_miss', catch_layer: 'solomon', hardening_ref: null, source_sd: 'SD-LEO-INFRA-SOLOMON-CONSULT-CANNOT-DELIVER-001', origin: 'late_verdict_delta' },
+          });
+        },
+      });
+      if (rec.reconciled > 0) {
+        console.warn(`✓ LATE-VERDICT RECONCILED: ${rec.reconciled} Solomon verdict(s) that arrived after the send are now on record${rec.nearMisses > 0 ? ` (${rec.nearMisses} near-miss captured)` : ''}.`);
+      }
+    } catch (e) {
+      console.warn(`[adam-advisory] late-verdict reconciliation skipped (non-fatal): ${(e && e.message) || e}`);
+    }
     // QF-20260703-946: `--sweep [--window 24h]` — CLAUDE_ADAM.md FULL-INBOX SWEEP mandate.
     // Additive, read-only: lists ALL directed rows in the window regardless of read/ack stamps,
     // so a re-targeted-but-already-stamped backlog can't hide behind the normal read_at filter.
@@ -1084,46 +1117,49 @@ async function main() {
   // fails OPEN so a gate bug can never block Adam's send (Adam is never hard-blocked on Solomon).
   if ((process.env.ADAM_PRE_SEND_CONSULT || 'on') !== 'off' && peerArg !== 'solomon') {
     try {
+      // SD-LEO-INFRA-SOLOMON-CONSULT-CANNOT-DELIVER-001 FR-6: the ~50 inline lines that used to
+      // live here now live in lib/adam/presend-consult-lane.cjs, where they are unit-testable.
+      // main() is not exported and is require.main-guarded, so while this logic sat inline NOTHING
+      // could assert on the live path — which is how an 8s bounded wait survived a 100% failure
+      // rate (197/197 timeout-proceed over 30d) with a fully green suite. Keep this call thin.
       const { evaluatePreSendConsult, performBoundedConsult } = await import('../lib/adam/should-consult-solomon.js');
+      const { runPreSendConsultLane } = require('../lib/adam/presend-consult-lane.cjs');
       // Adam advisories target the coordinator/Solomon, never the chairman directly, so this
       // send path is not chairman-targeted (a chairman-facing send path would pass true).
-      const gateInput = { title: subject, body: payload.body, isChairmanTargeted: false };
-      if (evaluatePreSendConsult(gateInput).action === 'consult-then-send') {
-        const consultTimeoutMs = Number(process.env.ADAM_PRE_SEND_CONSULT_TIMEOUT_MS) || 8000;
-        const outcome = await performBoundedConsult(gateInput, {
-          timeoutMs: consultTimeoutMs,
-          // deps.consult — the REAL solomon_consult lane (buildSolomonConsultPayload + insert),
-          // bounded by awaitCoordinatorReply; null on timeout/absence => module fails OPEN.
-          consult: async () => {
-            let solomonId = null;
-            try { solomonId = await getActiveSolomonId(supabase); } catch { solomonId = null; }
-            const correlationId = crypto.randomUUID();
-            const cp = buildSolomonConsultPayload({ correlationId, body: buildPreSendConsultBody(payload.body), senderCallsign, repo: process.cwd(), severity: 'high', isAwait: true });
-            await insertCoordinationRow(supabase, { sender_session: sessionId, sender_type: 'adam', target_session: solomonId || 'broadcast-solomon', message_type: 'INFO', subject: `[SOLOMON_CONSULT] pre-send`, body: cp.body, payload: cp, expires_at: expiresAt }, { targetRoleHint: 'solomon' });
-            const reply = await awaitCoordinatorReply(supabase, { sessionId, correlationId, timeoutMs: consultTimeoutMs });
-            return reply.timedOut ? null : ((reply.reply && (readCanonicalBody(reply.reply) || reply.reply.body)) || { received: true });
-          },
+      const outcome = await runPreSendConsultLane(
+        { subject, body: payload.body, senderCallsign, sessionId, repo: process.cwd(), expiresAt, isChairmanTargeted: false },
+        {
+          evaluatePreSendConsult,
+          performBoundedConsult,
+          getActiveSolomonId: () => getActiveSolomonId(supabase),
+          buildSolomonConsultPayload,
+          buildPreSendConsultBody,
+          insertCoordinationRow: (row, opts) => insertCoordinationRow(supabase, row, opts),
           // deps.recordLedger — adam_adherence_ledger capture (existing columns, no new ones).
           recordLedger: async (l) => { await supabase.from('adam_adherence_ledger').insert({ run_id: crypto.randomUUID(), probe: l.probe, duty: l.duty || 'pre_send_consult', verdict: l.verdict, detail: l.detail, remediation_ref: l.remediation_ref || null }); },
-          // FR-6: near-miss feeder — a verdict-delta writes a governance situation to the
-          // shared issue_patterns ledger (the sink SD-2's learning loop rides), using SD-2's
-          // metadata convention {class, catch_layer}. catch_layer='solomon' (Solomon caught it).
+          // near-miss feeder — a verdict-delta writes a governance situation to the shared
+          // issue_patterns ledger using the {class, catch_layer} convention. Retained for the
+          // SYNCHRONOUS path; the late-verdict path re-fires it from the reconciler (FR-8).
           captureNearMiss: async (nm) => {
             await supabase.from('issue_patterns').insert({
               pattern_id: `NEARMISS-ADAM-CONSULT-${Date.now()}`,
               category: 'governance_near_miss',
               severity: 'high',
-              // redact() so no secret from the raw subject/body leaks into the ledger (parity with the consult lane).
+              // redact() so no secret from the raw subject/body leaks into the ledger.
               issue_summary: redact(`${nm.summary}${nm.title ? ` [${String(nm.title).slice(0, 80)}]` : ''}`),
               source: 'adam_pre_send_consult',
               metadata: { class: 'near_miss', catch_layer: 'solomon', hardening_ref: null, source_sd: 'SD-LEO-INFRA-ADAM-PRE-SEND-001', origin: 'verdict_delta' },
             });
           },
-        });
-        if (outcome.action === 'hold-and-surface') { console.error('[adam-advisory] ⛔ PRE-SEND HOLD: consequential chairman-surface send held pending Solomon (degraded) — re-send once the consult resolves.'); process.exit(3); }
-        if (outcome.degraded) console.warn('[adam-advisory] ⚠ PRE-SEND DEGRADED-PROCEED: Solomon consult timed out; proceeding with caution — adam_adherence_ledger capture on record + consult row queued for async review.');
-        else console.log('[adam-advisory] ✓ PRE-SEND CONSULT recorded — Solomon verdict received; sending.');
-      }
+        }
+      );
+      if (outcome.action === 'hold-and-surface') { console.error('[adam-advisory] ⛔ PRE-SEND HOLD: consequential chairman-surface send held pending Solomon (degraded) — re-send once the consult resolves.'); process.exit(3); }
+      // FR-1: the consult no longer BLOCKS, so the normal path is now "queued for async review"
+      // rather than "timed out". The verdict is reconciled later against the ledger row stamped
+      // with this correlation id (FR-0/FR-3) instead of being waited on and lost.
+      if (outcome.pendingReconcile) console.log(`[adam-advisory] ✓ PRE-SEND CONSULT QUEUED (non-blocking) — Solomon verdict will be reconciled on arrival (corr: ${outcome.correlationId}).`);
+      else if (outcome.degraded) console.warn('[adam-advisory] ⚠ PRE-SEND DEGRADED-PROCEED: Solomon consult unavailable; proceeding with caution — adam_adherence_ledger capture on record.');
+      else if (outcome.action === 'send') console.log('[adam-advisory] ✓ PRE-SEND CONSULT recorded — Solomon verdict received; sending.');
     } catch (e) {
       console.warn(`[adam-advisory] pre-send consult gate error (failing OPEN, send proceeds): ${(e && e.message) || e}`);
     }
