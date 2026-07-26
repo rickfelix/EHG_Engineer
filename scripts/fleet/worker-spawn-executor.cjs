@@ -42,8 +42,12 @@ function isLiveEnabled(env = process.env) {
 // SD-LEO-INFRA-LEO-APP-LAUNCHER-001 (FR-2): delegate to THE canonical buildSessionLaunch so worker
 // revival uses the SAME launch contract as every other path — a PERSISTENT wt.exe session (NOT the
 // old headless `claude -p`, which does not reliably register/persist in claude_sessions) with the full
-// claude.cmd path + explicit repo-root cwd + fail-loud. The /loop startup prompt is carried in the
-// child env (FLEET_WORKER_STARTUP_PROMPT) for the SessionStart hook to seed into the persistent session.
+// claude.cmd path + explicit repo-root cwd + fail-loud.
+//
+// FR-2: the /loop startup prompt used to be described as "carried in the child env
+// (FLEET_WORKER_STARTUP_PROMPT) for the SessionStart hook to seed". There is no such hook and no
+// reader of that variable anywhere in the repo, so the prompt was never delivered — which is why
+// executor-spawned sessions came up idle. The carrier is deleted; FR-1 supplies the real transport.
 const { buildSessionLaunch } = require('../../lib/fleet/build-session-launch.cjs');
 function buildSpawnInvocation(callsign, prompt) {
   return buildSessionLaunch({ callsign, startupPrompt: prompt });

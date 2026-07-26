@@ -134,7 +134,10 @@ describe('config + invocation helpers (FR-3)', () => {
     expect(Array.isArray(inv.args)).toBe(true);
     expect(inv.args).not.toContain('-p'); // never headless
     expect(inv.persistent).toBe(true);
-    expect(inv.env.FLEET_WORKER_STARTUP_PROMPT).toBe('PROMPT'); // /loop prompt carried in env for the SessionStart hook to seed
+    // FR-2: was `toBe('PROMPT')`, described as "carried in env for the SessionStart hook to seed".
+    // No such hook exists and nothing reads the variable, so this asserted a write that no consumer
+    // ever observed. The carrier is deleted; the prompt has no delivery path until FR-1.
+    expect(inv.env.FLEET_WORKER_STARTUP_PROMPT).toBeUndefined();
     expect(inv.env.FLEET_WORKER_CALLSIGN).toBe('Echo');
   });
 });

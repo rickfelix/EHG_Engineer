@@ -215,24 +215,46 @@ describe('buildLiveSpawnInvocation (FR-7: env isolation)', () => {
   });
 });
 
-describe('spawn (FR-1) — keepalive forwarding (QF-20260725-757)', () => {
-  // spawn() was the THIRD hop of the QF-20260724-290 keepalive drop: that QF fixed
-  // buildLiveSpawnInvocation and the respawn runner, but spawn() built its invocation with NO
-  // startupPrompt, so every session created through the generic spawn verb came up with nothing to
-  // do, heartbeat once, and ghosted. This is why provisioned canaries kept dying.
-  it('REGRESSION: forwards the canonical keepalive prompt into the invocation env', async () => {
+describe('spawn — the deleted env carrier (FR-2)', () => {
+  // THESE TESTS USED TO ASSERT THE OPPOSITE, AND THAT IS THE LESSON.
+  //
+  // They asserted `invocation.env.FLEET_WORKER_STARTUP_PROMPT` was populated, and passed, and were
+  // cited as proof the keepalive reached the spawned session. It never did: no SessionStart hook
+  // and no code anywhere reads that variable (verified repo-wide — the only occurrences are the
+  // constant, writes, comments and these assertions). The tests confirmed a WRITE and were read as
+  // confirming DELIVERY. A green test on an unread env var is what kept this defect alive across
+  // two "fixes" (QF-20260724-290, QF-20260725-757), each of which moved the drop one hop later.
+  //
+  // So they now pin the carrier's ABSENCE. Re-adding the write turns these RED.
+  it('does NOT set the unread FLEET_WORKER_STARTUP_PROMPT env carrier', async () => {
     const result = await spawn({ role: 'worker', callsign: 'Canary-pilot' }, { live: false });
-    expect(result.invocation.env.FLEET_WORKER_STARTUP_PROMPT).toBeTruthy();
-  });
-
-  it('honours an explicit startupPrompt override', async () => {
-    const result = await spawn({ role: 'worker', callsign: 'Canary-pilot' }, { live: false, startupPrompt: 'custom-keepalive' });
-    expect(result.invocation.env.FLEET_WORKER_STARTUP_PROMPT).toBe('custom-keepalive');
-  });
-
-  it('honours an explicit null as a deliberate no-keepalive opt-out (respawn-runner parity)', async () => {
-    const result = await spawn({ role: 'worker', callsign: 'Canary-pilot' }, { live: false, startupPrompt: null });
     expect(result.invocation.env.FLEET_WORKER_STARTUP_PROMPT).toBeUndefined();
+    expect(Object.keys(result.invocation.env)).not.toContain('FLEET_WORKER_STARTUP_PROMPT');
+  });
+
+  it('does not smuggle an explicit startupPrompt into the env under any key', async () => {
+    const SENTINEL = 'custom-keepalive-sentinel';
+    const result = await spawn(
+      { role: 'worker', callsign: 'Canary-pilot' },
+      { live: false, startupPrompt: SENTINEL },
+    );
+    // Key-agnostic: catches a rename as well as a reinstatement.
+    expect(Object.values(result.invocation.env).filter((v) => String(v).includes(SENTINEL))).toEqual([]);
+  });
+
+  // FR-1 TRIPWIRE — DELETE THIS TEST WHEN THE POINTER TRANSPORT LANDS, DELIBERATELY.
+  // Today the prompt reaches NO part of the invocation: not env, not args. That is the real gap
+  // the env carrier was concealing, so it is pinned rather than left implicit. FR-1 adding the
+  // single-line pointer positional MUST turn this RED — that is the point of it.
+  it('PINS THE FR-1 GAP: the prompt currently reaches no part of the invocation', async () => {
+    const SENTINEL = 'pointer-transport-not-built-yet';
+    const result = await spawn(
+      { role: 'worker', callsign: 'Canary-pilot' },
+      { live: false, startupPrompt: SENTINEL },
+    );
+    const inv = result.invocation;
+    const surfaces = [...Object.values(inv.env || {}), ...(inv.args || [])].map(String);
+    expect(surfaces.some((s) => s.includes(SENTINEL))).toBe(false);
   });
 });
 
