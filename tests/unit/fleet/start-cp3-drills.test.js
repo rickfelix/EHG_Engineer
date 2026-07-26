@@ -1,6 +1,6 @@
 // SD-LEO-INFRA-LEO-APP-LAUNCHER-001 (FR-4) — worker-startable CP3 drill starter.
 import { describe, it, expect, vi } from 'vitest';
-import { planDrills, main, defaultRunDrills } from '../../../scripts/fleet/start-cp3-drills.js';
+import { planDrills, main, defaultRunDrills, summarizeLegVerdicts, formatDrillReport } from '../../../scripts/fleet/start-cp3-drills.js';
 import { LaunchResolveError } from '../../../lib/fleet/build-session-launch.cjs';
 
 const OKENV = { FLEET_ACCOUNT_PROFILES_DIR: 'C:\\fleet\\profiles' };
@@ -48,6 +48,57 @@ describe('main — worker-startable, dry-run default', () => {
     expect(r.error).toMatch(/REFUSED/);
     expect(r.error).toMatch(/runDrills/);
     expect(logs.join('\n')).toMatch(/REFUSED/);
+  });
+});
+
+// QF-20260725-790: the OTHER half of the false pass. main() hardcoded ok:true for every --live run and
+// the CLI did main().then(r => process.exit(r.ok ? 0 : 1)), discarding the entire results object. So the
+// 2026-07-26T00:15Z acceptance attempt executed almost nothing, printed nothing, and exited 0.
+// Fixing only the leg CHECKS would have left the false pass intact at the exit code.
+describe('QF-20260725-790: the verdict is DERIVED from the legs and is inspectable', () => {
+  it('ok is FALSE when a leg fails, instead of hardcoded true', async () => {
+    const runDrills = vi.fn(async () => ({
+      g1a: { outcome: 'ok' },
+      reboot: { pass: false, checks: [{ name: 'respawn_events_present', pass: false, detail: 'no bound respawn' }] },
+      u4: { pass: true, checks: [{ name: 'u4', pass: true, detail: 'ok' }] },
+    }));
+    const r = await main(['--live'], { env: OKENV, log: () => {}, runDrills });
+    expect(r.ok).toBe(false);
+  });
+
+  it('a leg that THREW (captured as {error}) reads as FAILURE, never as no-opinion', async () => {
+    const runDrills = vi.fn(async () => ({ g1a: { outcome: 'ok' }, reboot: { error: 'boom' }, u4: { pass: true } }));
+    const r = await main(['--live'], { env: OKENV, log: () => {}, runDrills });
+    expect(r.ok).toBe(false);
+    expect(r.legVerdicts.find((v) => v.leg === 'reboot').detail).toMatch(/ERROR: boom/);
+  });
+
+  it('a leg reporting ZERO checks does not count as a pass (it demonstrated nothing)', async () => {
+    const runDrills = vi.fn(async () => ({ reboot: { pass: true, checks: [] } }));
+    const r = await main(['--live'], { env: OKENV, log: () => {}, runDrills });
+    expect(r.ok).toBe(false);
+    expect(r.legVerdicts.some((v) => /ZERO checks/.test(v.detail || ''))).toBe(true);
+  });
+
+  it('ok is TRUE when every leg genuinely passes (not a blanket fail)', async () => {
+    const runDrills = vi.fn(async () => ({
+      g1a: { outcome: 'ok' },
+      reboot: { pass: true, checks: [{ name: 'respawn_events_present', pass: true, detail: 'bound' }] },
+      u4: { pass: true, checks: [{ name: 'u4', pass: true, detail: 'ok' }] },
+    }));
+    const r = await main(['--live'], { env: OKENV, log: () => {}, runDrills });
+    expect(r.ok).toBe(true);
+  });
+
+  it('formatDrillReport renders every check name and verdict, so the result is not inferred from an exit code', async () => {
+    const runDrills = vi.fn(async () => ({
+      reboot: { pass: false, checks: [{ name: 'respawn_bind_audited', pass: false, detail: 'absence is not a pass' }] },
+    }));
+    const r = await main(['--live'], { env: OKENV, log: () => {}, runDrills });
+    const text = formatDrillReport(r);
+    expect(text).toMatch(/ok=false/);
+    expect(text).toMatch(/FAIL {2}reboot\/respawn_bind_audited/);
+    expect(text).toMatch(/absence is not a pass/);
   });
 });
 

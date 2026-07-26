@@ -34,6 +34,80 @@ describe('runRebootRespawnDrill (FR-7)', () => {
     expect(checks.every((c) => c.pass)).toBe(true);
   });
 
+  // QF-20260725-790: the false pass that made every other defect in the 2026-07-26T00:15Z CP3
+  // acceptance attempt invisible. That run emitted exactly ONE row — fleet_verb_respawn with
+  // live:false, outcome:'dry_run', session_id:null — and zero session_lifecycle_events. Two legs never
+  // executed, yet BOTH guard checks went green: check 4 counted the dry_run row (1 >= 1) and check 5
+  // passed trivially at 0 === 0 because a null session_id never enters the bound population.
+  // These reproduce that exact population and assert it now goes RED under --live.
+  describe('QF-20260725-790: a dry_run row is NOT leg evidence under --live', () => {
+    const DRY_RUN_ROW = { event_type: 'fleet_verb_respawn', session_id: null, payload: { live: false, outcome: 'dry_run' } };
+
+    it('check 4 REJECTS dry_run rows under live (was N >= N PASS on a run that did nothing)', async () => {
+      // Supply ONE dry_run row PER SLOT. With fewer rows than slots the check would fail on the count
+      // alone and this test would go red for a reason unrelated to the fix — verified: an earlier
+      // single-row version passed against the UNFIXED code, which is no evidence at all. Saturating
+      // the count isolates the population filter as the only thing that can turn it red.
+      const rows = SLOTS.map(() => ({ ...DRY_RUN_ROW }));
+      const { checks, pass } = await runRebootRespawnDrill({
+        supabase: {}, loadFn: async () => SLOTS, spawnFn: () => ({ pid: 1 }),
+        logFn: async () => ({ ok: true }), queryEventsFn: async () => rows,
+        queryLifecycleEventsFn: async () => [], live: true,
+      });
+      expect(checks.find((c) => c.name === 'respawn_events_present').pass).toBe(false);
+      expect(pass).toBe(false);
+    });
+
+    it('check 5 does NOT pass trivially on an EMPTY bound population under live (was 0 === 0)', async () => {
+      const { checks } = await runRebootRespawnDrill({
+        supabase: {}, loadFn: async () => SLOTS, spawnFn: () => ({ pid: 1 }),
+        logFn: async () => ({ ok: true }), queryEventsFn: async () => [DRY_RUN_ROW],
+        queryLifecycleEventsFn: async () => [], live: true,
+      });
+      const c5 = checks.find((c) => c.name === 'respawn_bind_audited');
+      expect(c5.pass).toBe(false);
+      expect(c5.detail).toMatch(/absence is not a pass/);
+    });
+
+    it('a row the emitter stamped live:false is rejected under live even if its outcome looks ok', async () => {
+      // Count-saturated for the same reason, and each row is fully bind-audited — so under the UNFIXED
+      // code every other signal is green and ONLY the live:false stamp can fail it.
+      const rows = SLOTS.map((_, i) => ({ event_type: 'fleet_verb_respawn', session_id: `s-${i}`, payload: { live: false, outcome: 'ok' } }));
+      const { checks } = await runRebootRespawnDrill({
+        supabase: {}, loadFn: async () => SLOTS, spawnFn: () => ({ pid: 1 }),
+        logFn: async () => ({ ok: true }),
+        queryEventsFn: async () => rows,
+        queryLifecycleEventsFn: async () => SLOTS.map((_, i) => ({ event_type: 'RESPAWN_BIND_VERIFIED', session_id: `s-${i}` })),
+        live: true,
+      });
+      expect(checks.find((c) => c.name === 'respawn_events_present').pass).toBe(false);
+    });
+
+    // BOTH DIRECTIONS. The dry_run exemption is still CORRECT for a mechanism/dry-run drill — there is
+    // no live session by design — so gating it on `live` must not break the dry-run path.
+    it('the dry_run exemption is PRESERVED for a non-live mechanism drill (no over-correction)', async () => {
+      const { logFn, queryEventsFn } = makeEventSeams();
+      const { pass, checks } = await runRebootRespawnDrill({
+        supabase: {}, loadFn: async () => SLOTS, spawnFn: () => ({ pid: 1 }), logFn, queryEventsFn, live: false,
+      });
+      expect(checks.find((c) => c.name === 'respawn_events_present').pass).toBe(true);
+      expect(checks.find((c) => c.name === 'respawn_bind_audited').pass).toBe(true);
+      expect(pass).toBe(true);
+    });
+
+    it('a GENUINELY bound + audited live respawn still PASSES (the fix is not a blanket live-fail)', async () => {
+      const bound = SLOTS.map((_, i) => ({ event_type: 'fleet_verb_respawn', session_id: `s-${i}`, payload: { live: true, outcome: 'ok' } }));
+      const { checks } = await runRebootRespawnDrill({
+        supabase: {}, loadFn: async () => SLOTS, spawnFn: () => ({ pid: 1 }),
+        logFn: async () => ({ ok: true }), queryEventsFn: async () => bound,
+        queryLifecycleEventsFn: async () => SLOTS.map((_, i) => ({ event_type: 'RESPAWN_BIND_VERIFIED', session_id: `s-${i}` })),
+        live: true,
+      });
+      expect(checks.find((c) => c.name === 'respawn_events_present').pass).toBe(true);
+      expect(checks.find((c) => c.name === 'respawn_bind_audited').pass).toBe(true);
+    });
+  });
+
   it('FAILs overall when no fleet_verb_respawn events are observed (log-before-action violated)', async () => {
     const { pass, checks } = await runRebootRespawnDrill({
       supabase: {}, loadFn: async () => SLOTS, spawnFn: () => ({ pid: 1 }),
