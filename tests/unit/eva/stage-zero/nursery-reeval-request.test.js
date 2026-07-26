@@ -18,15 +18,42 @@ const CHAIRMAN_HUMAN_UID = '69c8aa7a-7661-48ed-9779-746fa6290873';
 const FAKE_PRINCIPAL = '00000000-0000-4000-8000-00000000dead';
 const withPrincipal = { registeredPrincipals: [FAKE_PRINCIPAL] };
 
+// svc-stage-zero-invoker@ehg.dev — the provisioned non-human enqueue identity (AC-10).
+// Pinned here so a change to the production registry has to be made deliberately in two
+// places, not slipped in by editing the module alone.
+const SERVICE_PRINCIPAL = '27e0e91e-35f7-4617-bbb9-932408db80f1';
+
 describe('buildNurseryReevalRequest — AC-9 attribution guard', () => {
-  it('refuses every request while the production registry is empty', () => {
-    // Not an incidental assertion: the empty registry IS the current state, and this test
-    // is what makes "FR-5 has no honest author yet" fail loudly instead of silently
-    // defaulting to whatever uid a caller happens to pass.
-    expect(REGISTERED_SERVICE_PRINCIPALS).toHaveLength(0);
+  // The registry was empty until 2026-07-26 and this test asserted toHaveLength(0). The
+  // principal is now provisioned, so that assertion is retired — but NOT loosened. What it
+  // was protecting (an unregistered caller cannot enqueue) is asserted below and is now
+  // strictly harder to satisfy, because the registry holds a real id rather than nothing.
+  it('registers exactly one NON-HUMAN principal, and never the chairman', () => {
+    expect(REGISTERED_SERVICE_PRINCIPALS).toEqual([SERVICE_PRINCIPAL]);
+    expect(REGISTERED_SERVICE_PRINCIPALS).not.toContain(CHAIRMAN_HUMAN_UID);
+    // Runtime-append would defeat an allowlist; the registry must stay a reviewable diff.
+    expect(Object.isFrozen(REGISTERED_SERVICE_PRINCIPALS)).toBe(true);
+  });
+
+  it('still refuses an unregistered caller against the PRODUCTION registry', () => {
+    // No deps injected — this exercises the real allowlist, not a test fixture. It passed
+    // when the registry was empty (everything was refused) and it must keep passing now
+    // that it is populated, which is the stronger of the two states.
     expect(() =>
       buildNurseryReevalRequest({ requestedBy: FAKE_PRINCIPAL, nurseryId: HEADLINE_TRANSFORMER })
     ).toThrow(UnregisteredPrincipalError);
+  });
+
+  it('admits the registered principal against the PRODUCTION registry', () => {
+    // The other direction, which was unprovable while the registry was empty: the guard
+    // must not be a brick. A test that only ever asserts refusal cannot tell a working
+    // allowlist from a permanently-closed door.
+    const row = buildNurseryReevalRequest({
+      requestedBy: SERVICE_PRINCIPAL,
+      nurseryId: HEADLINE_TRANSFORMER,
+    });
+    expect(row.requested_by).toBe(SERVICE_PRINCIPAL);
+    expect(row.metadata.nursery_id).toBe(HEADLINE_TRANSFORMER);
   });
 
   it('refuses the chairman human account even when other principals are registered', () => {
