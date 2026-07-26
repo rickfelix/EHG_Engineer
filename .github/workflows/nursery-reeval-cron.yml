@@ -1,0 +1,76 @@
+name: "Nursery re-evaluation invoker (cron)"
+
+# SD-EHG-IDEATION-PIPELINE-SEAMS-001 FR-6 — the scheduler the nursery never had.
+#
+# BREAK 3's measured root cause: no workflow, npm script or config/workers.json worker touched
+# venture_nursery. venture-monitor.js registers a job literally NAMED nursery_reevaluation that
+# queries eva_ventures instead, from an archived entry point nothing references. The only wired
+# traversal was a manual UI dialog nobody triggered — one promotion in 15 days, and
+# next_evaluation_at NULL on 16 of 16 rows, which is an empty selection forever rather than a
+# healthy zero. This is the "without a human" half of FR-6's acceptance criterion.
+#
+# WHAT A RUN DOES: selects the top due candidate through the FR-1 authoritative predicate and
+# enqueues ONE correctly-shaped stage_zero_requests row attributed to the dedicated service
+# principal (AC-10). It is idempotent by design — an open request for the same candidate
+# suppresses a second, because enqueueing does not advance next_evaluation_at and an
+# unguarded scheduler would queue a duplicate on every tick.
+#
+# *** READ BEFORE STARTING THE STAGE-ZERO QUEUE PROCESSOR ***
+# Enqueueing is INERT TODAY: config/workers.json registers stage-zero-processor enabled=true
+# polling every 30s, but it is NOT RUNNING (verified 2026-07-26 — zero matching node processes;
+# .pids/stage-zero.pid holds a recycled PID now owned by an unrelated process, logged separately
+# as a health_check type=pid false-positive). A queued request therefore SITS until that worker
+# is started, and DRAINING IT RUNS THE CREDENTIALED TRAVERSAL — roughly 16 live LLM calls that
+# promote a nursery row into a live venture. THAT step is chairman-gated and was NOT authorised
+# as of this commit. Whoever starts that processor should confirm the promotion is authorised
+# first, or clear pending nursery_reeval rows.
+#
+# Not fail-softed: a genuinely broken invoker must go red. Exit 0 covers every expected outcome
+# (enqueued / nothing due / already queued); exit 1 is reserved for real faults.
+
+on:
+  schedule:
+    # Every 6 hours at :17 — off-minute to spread fleet cron load, matching the adam-*-cron family.
+    - cron: '17 */6 * * *'
+  workflow_dispatch:
+    inputs:
+      dry_run:
+        description: 'Resolve and validate the request without enqueuing it'
+        type: boolean
+        default: false
+
+permissions:
+  contents: read
+
+concurrency:
+  # A second invoker racing the first could defeat the dedupe read (both see zero open requests
+  # before either inserts). Serialise the workflow rather than relying on the check alone.
+  group: ${{ github.workflow }}
+  cancel-in-progress: false
+
+jobs:
+  nursery-reeval-invoke:
+    name: Nursery re-evaluation invoker
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+
+    env:
+      SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+      SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
+      NURSERY_REEVAL_DRY_RUN: ${{ inputs.dry_run && '1' || '0' }}
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: 'npm'
+
+      - name: Install dependencies
+        run: npm ci --ignore-scripts
+
+      - name: Invoke nursery re-evaluation (idempotent enqueue)
+        run: node scripts/nursery-reeval-invoker.mjs

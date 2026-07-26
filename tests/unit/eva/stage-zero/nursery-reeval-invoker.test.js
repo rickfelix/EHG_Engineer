@@ -134,7 +134,16 @@ describe('hasOpenRequestFor — dedupe key', () => {
     expect(hasOpenRequestFor(null, HEADLINE_TRANSFORMER)).toBe(false);
   });
 
-  it('treats processing as still-open, not just pending', () => {
-    expect(OPEN_REQUEST_STATUSES).toEqual(['pending', 'processing']);
+  it('uses only REAL stage_zero_status enum members', () => {
+    // This assertion previously read ['pending','processing'] and passed, while Postgres
+    // rejected the query with: invalid input value for enum stage_zero_status: "processing".
+    // The suite mocks .in(), so it could only ever confirm the constant matched itself — a
+    // mocked seam cannot see a schema constraint. Caught by running the real CLI, not here.
+    // Probed live: the enum admits pending, claimed, in_progress, completed, dismissed,
+    // failed. 'processing' and 'running' are NOT members.
+    const REAL_ENUM = ['pending', 'claimed', 'in_progress', 'completed', 'dismissed', 'failed'];
+    for (const s of OPEN_REQUEST_STATUSES) expect(REAL_ENUM).toContain(s);
+    // and it must cover every non-terminal one, or a live request stops suppressing duplicates
+    expect([...OPEN_REQUEST_STATUSES].sort()).toEqual(['claimed', 'in_progress', 'pending']);
   });
 });
