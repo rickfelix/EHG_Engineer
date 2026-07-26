@@ -20,6 +20,12 @@ describe('checkin step registry (lib/checkin/steps/index.cjs)', () => {
       'release-request',
       'resume',
       'build-forbidden-guard',
+      // SD-LEO-INFRA-SESSION-SPAWN-AND-PROMPT-LIBRARY-001-E FR-3: canary probes must never acquire
+      // real work. This ONE slot gates every acquisition tier (directed-assignment,
+      // recover-stranded-final, adopt-orphan, critical-qf-jump, merged-pool-self-claim,
+      // self-claim-qf); resume sits above it deliberately, being reachable only when a claim is
+      // already held. Demoting it below directed-assignment silently un-fences coordinator dispatch.
+      'canary-claim-fence',
       'directed-assignment',
       'seat-busy-fence',
       'recover-stranded-final',
