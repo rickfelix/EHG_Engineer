@@ -156,9 +156,16 @@ export async function getFleetPanel(req, res) {
   // session list, the chips, everything — not just the strip. getAccountUsage is written never to
   // throw, so this is defense in depth rather than a known path; the fallback still names every
   // account, because a silently absent strip is the invisible failure this SD exists to prevent.
+  // ?refreshUsage=1 bypasses the reader's 60s cache. The cache exists to stop the page's 15s POLL
+  // from hammering an undocumented endpoint — it was never meant to block a DELIBERATE re-read.
+  // This is the path behind the strip's Refresh control: after an operator re-authenticates an
+  // account they need to confirm it NOW, and being told to wait out a cache would undercut the
+  // whole point of showing them the failure.
+  const refreshUsage = String(req?.query?.refreshUsage ?? '') === '1';
+
   let accountUsage;
   try {
-    accountUsage = await getAccountUsage();
+    accountUsage = await getAccountUsage(refreshUsage ? { noCache: true } : {});
   } catch {
     accountUsage = allUnavailable('unreachable');
   }

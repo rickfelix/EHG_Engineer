@@ -264,6 +264,19 @@ describe('GET /api/fleet-panel', () => {
     expect(payload.accountChips.map((c) => c.name)).toEqual(['Deep Soul', 'Rick Felix', 'CodeStreet']);
   });
 
+  it('?refreshUsage=1 bypasses the usage cache; the ordinary poll does not', async () => {
+    // The 60s cache protects an undocumented endpoint from the 15s poll. A deliberate operator
+    // refresh must not be held behind it — otherwise "your sign-in expired" is un-actionable.
+    const plain = mockRes();
+    await getFleetPanel(mockReq(mockSupabase([LIVE_WORKER])), plain);
+    expect(usageMock).toHaveBeenLastCalledWith({});
+
+    const refreshed = mockRes();
+    await getFleetPanel(mockReq(mockSupabase([LIVE_WORKER]), { refreshUsage: '1' }), refreshed);
+    expect(usageMock).toHaveBeenLastCalledWith({ noCache: true });
+    expect(refreshed.json.mock.calls[0][0].accountUsage).toHaveLength(3);
+  });
+
   it('TS-4 at the ROUTE — a throwing usage reader still returns a response, naming every account', async () => {
     // The reader is written never to throw, so this is the route's defense in depth. It matters
     // because THIS was the only await in the handler reaching an external service: unguarded, one
