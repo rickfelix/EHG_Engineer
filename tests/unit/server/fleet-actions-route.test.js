@@ -202,15 +202,28 @@ describe('POST /api/fleet-actions/add-session', () => {
   // QF-20260726-607 x COLD-START-UX-001 FR-2 — the seam between the two SDs, where a careless
   // merge would have silently widened a security guard.
   describe('the mint does not widen assertRoleCallsignCompatible', () => {
-    it('still refuses a callsign-less coordinator instead of minting it a worker-pool name', async () => {
-      // If the mint ran for every role, a NATO name would satisfy the 'unidentifiable' arm and a
-      // coordinator would reach spawn un-namespaced -- walking through the guard that exists to
-      // stop a canary/unidentified session receiving '/coordinator start'.
+    it('mints a callsign-less coordinator its ROLE NAME, not a worker-pool NATO name', async () => {
+      // The singleton roles already run under callsign === role name; a NATO name would invent a
+      // second convention for a seat that has one.
       const res = mockRes();
       await addSession(mockReq({ role: 'coordinator' }), res);
 
-      expect(res.status).toHaveBeenCalledWith(400);
-      expect(spawn.mock.calls.at(-1)[0].role).not.toBe('coordinator');
+      expect(res.status).not.toHaveBeenCalledWith(400);
+      expect(spawn.mock.calls.at(-1)[0].callsign).toBe('coordinator');
+      expect(NATO).not.toContain(spawn.mock.calls.at(-1)[0].callsign);
+    });
+
+    it('never mints an UNIDENTIFIABLE callsign — the guard that gates privileged directives', async () => {
+      // The refusal arm is a security control: an unnamespaced session must not receive
+      // '/coordinator start'. Whatever the mint produces has to satisfy it, not bypass it.
+      for (const role of ['coordinator', 'solomon', 'adam', 'worker']) {
+        const res = mockRes();
+        await addSession(mockReq({ role }), res);
+        expect(res.status).not.toHaveBeenCalledWith(400);
+        const minted = spawn.mock.calls.at(-1)[0].callsign;
+        expect(typeof minted).toBe('string');
+        expect(minted.trim()).not.toBe('');
+      }
     });
 
     it('checks compatibility against the MINTED callsign, not the absent request one', async () => {

@@ -132,15 +132,23 @@ export async function addSession(req, res) {
     return;
   }
 
-  // QF-20260726-607 x COLD-START-UX-001 FR-2 — MINT ONLY FOR 'worker', DELIBERATELY.
-  // assertRoleCallsignCompatible refuses a callsign-less privileged role via its 'unidentifiable'
-  // arm, and that refusal is a SECURITY guard, not an ergonomic wart: it is the only thing stopping
-  // role='coordinator' from reaching spawn without an identifiable namespace. Minting a NATO name
-  // for a coordinator would hand it a worker-namespace identity AND walk straight through the guard
-  // that exists to stop exactly that. So the mint is scoped to the role whose pool NATO actually
-  // is, and every other role still has to be named explicitly.
+  // QF-20260726-607 x COLD-START-UX-001 FR-2 — the mint is ROLE-AWARE, and deliberately so.
+  //
+  // A NATO name is right for a worker and WRONG for everything else: the singleton roles already
+  // run under callsign === their role name ('coordinator', 'solomon', 'adam'), which is what
+  // fleet-panel reports for the live rows today. Minting 'Charlie' for a coordinator would invent a
+  // second naming convention for a seat that already has one.
+  //
+  // Both branches must still produce an IDENTIFIABLE callsign, because assertRoleCallsignCompatible
+  // below refuses a callsign-less privileged role through its 'unidentifiable' arm — that refusal is
+  // a security guard (it is what stops an unnamespaced session receiving '/coordinator start'), so
+  // the mint must satisfy it rather than route around it. Verified: classifySessionByCallsign
+  // returns an identifiable kind for every role name, so neither branch weakens the guard.
+  //
+  // A second coordinator therefore comes back from spawn()'s dedup as skipped:already_live, which is
+  // the honest answer for a singleton and is already rendered by describeSpawn.
   const supplied = typeof callsign === 'string' ? callsign.trim() : '';
-  const resolvedCallsign = supplied || (role === 'worker' ? await mintCallsign(supabase) : callsign);
+  const resolvedCallsign = supplied || (role === 'worker' ? await mintCallsign(supabase) : role);
 
   // Compatibility is checked on the RESOLVED callsign, not the request's — a minted name must face
   // the same guard a typed one does.
