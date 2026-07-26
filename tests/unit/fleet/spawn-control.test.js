@@ -263,6 +263,46 @@ describe('spawn (FR-1)', () => {
     expect(result.handleCaptureFailed).toBe(false);
   });
 
+  // SD-LEO-INFRA-SESSION-SPAWN-AND-PROMPT-LIBRARY-001-F — MUTATION-KILLING seam test (condition C1).
+  //
+  // spawn() now asserts the launch contract immediately before the spawner. Without this test that
+  // enforcement could be DELETED OUTRIGHT and the entire suite would still pass — the EXEC-phase
+  // review demonstrated exactly that. An enforcement that can be silently removed while still being
+  // reported as present is the shipped-but-inert shape this SD exists to eliminate, so leaving it
+  // unpinned would have reproduced the SD's own defect inside the SD's own fix.
+  //
+  // Same corrective precedent as tests/unit/fleet/tree-currency.test.js, which added a
+  // mutation-killing block for this same function after the identical finding.
+  //
+  // FLEET_CLAUDE_CMD is the lever because it is the ONE operator-reachable clause today:
+  // resolveClaudeCmd returns it verbatim and the token regex requires a claude basename.
+  it('C1: spawn() REFUSES a contract-violating invocation — deleting the assert makes this fail', async () => {
+    const spawnFn = vi.fn();
+    await expect(spawn(
+      { role: 'worker', callsign: 'Probe-A' },
+      {
+        live: true, currencyRunner: CURRENT_RUNNER, spawnFn, execFn: enumExec(), sleepFn: vi.fn(),
+        supabaseClient: makeFakeSupabase({ sessions: [] }), skipDedup: true,
+        env: { FLEET_CLAUDE_CMD: 'C:\\tools\\node.exe' }, // not a claude launcher token
+      },
+    )).rejects.toThrow(/LAUNCH CONTRACT VIOLATION/);
+    // The refusal must happen BEFORE the process is launched, not be reported after the fact.
+    expect(spawnFn).not.toHaveBeenCalled();
+  });
+
+  it('C1 control: the SAME call without the override spawns (the refusal is not incidental)', async () => {
+    const spawnFn = vi.fn().mockReturnValue({ pid: 4242 });
+    const result = await spawn(
+      { role: 'worker', callsign: 'Probe-A' },
+      {
+        live: true, currencyRunner: CURRENT_RUNNER, spawnFn, execFn: enumExec(), sleepFn: vi.fn(),
+        supabaseClient: makeFakeSupabase({ sessions: [] }), skipDedup: true,
+      },
+    );
+    expect(spawnFn).toHaveBeenCalledTimes(1);
+    expect(result.live).toBe(true);
+  });
+
   it('ADVERSARIAL-REVIEW FIX: merges the captured handle into existing metadata, never overwrites the whole blob', async () => {
     const nowMs = 1_800_000_000_000;
     const child = { pid: 4242 };
