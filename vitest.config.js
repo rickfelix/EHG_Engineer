@@ -99,9 +99,28 @@ const DB_INCLUDE = [
   '**/tests/database/**/*.test.js',
   '**/tests/db-invariants/**/*.test.js',
   '**/tests/migration-readiness/**/*.test.js',
-  '**/tests/smoke.test.js',
   '**/*.db.test.js',
 ];
+
+/**
+ * The pre-commit smoke gate, in its OWN project — deliberately NOT part of DB_INCLUDE.
+ *
+ * WHY IT IS SEPARATE: QF-20260726-459 Part 1b (d031c798f86) gated the whole db PROJECT behind
+ * DB_TARGET.allowed, which was correct for the 225 DB suites. But tests/smoke.test.js was a member
+ * of DB_INCLUDE, so gating the project made it a member of ZERO projects — and `.husky/pre-commit`
+ * runs `vitest run tests/smoke.test.js` unconditionally. A filter that matches no file exits 1, so
+ * EVERY commit in the repo failed from 2026-07-26 10:56 onward. The outage was invisible in CI
+ * because it only manifests through the commit hook.
+ *
+ * This project is UNGATED on purpose: the gate belongs at runtime, inside the suite, not at file
+ * discovery. The file must always be FOUND (so the hook can run it and exit 0); whether it executes
+ * live queries is decided by the shared production-ref-aware predicate it imports.
+ *
+ * It stays out of the `unit` tier — see the unit project's exclude, which lists this constant. The
+ * suite calls dotenv.config() at module top level regardless of setupFiles, so admitting it to
+ * `unit` would leak real credentials into the unit tier.
+ */
+const SMOKE_INCLUDE = ['**/tests/smoke.test.js'];
 
 // ─── QF-20260726-459 Part 1b: gate the PROJECT, not the individual files ────────────────────────
 //
@@ -216,7 +235,10 @@ export default defineConfig({
           ],
           // QUARANTINE_EXCLUDE: tracked red files (tests/quarantine-manifest.json)
           // — SD-LEO-FIX-GREEN-MAIN-TRIAGE-001. The manifest is the debt register.
-          exclude: [...SHARED_EXCLUDE, ...DB_INCLUDE, ...QUARANTINE_EXCLUDE],
+          // SMOKE_INCLUDE is listed explicitly: it used to be covered by DB_INCLUDE, and removing
+          // it from there must not silently admit the smoke suite (and its real credentials) into
+          // the unit tier.
+          exclude: [...SHARED_EXCLUDE, ...DB_INCLUDE, ...SMOKE_INCLUDE, ...QUARANTINE_EXCLUDE],
         },
       },
       {
@@ -231,6 +253,20 @@ export default defineConfig({
           exclude: SHARED_EXCLUDE,
           // A gated-empty project must not fail the run: skipping IS the safe end state here.
           passWithNoTests: true,
+        },
+      },
+      {
+        extends: true,
+        test: {
+          name: 'smoke',
+          // Same real-credential setup as the db tier — the suite is read-only and gates itself at
+          // runtime on the shared designated-target predicate, so pointing at an undesignated
+          // target makes it SKIP, not run.
+          setupFiles: ['./tests/setup.db.js'],
+          // UNGATED by design. See SMOKE_INCLUDE: the pre-commit hook filters to this exact file,
+          // and a filter that resolves to zero files exits 1 and blocks every commit in the repo.
+          include: SMOKE_INCLUDE,
+          exclude: SHARED_EXCLUDE,
         },
       },
     ],

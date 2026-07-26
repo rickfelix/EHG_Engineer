@@ -11,15 +11,19 @@ import dotenv from 'dotenv';
 dotenv.config();
 
 
-// Gate on a real database. CI without secrets sets the synthetic
-// 'test.invalid.local' URL via tests/setup.js — every assertion that touches
-// a real Supabase table fails (or worse, passes vacuously after a soft-error
-// from the JS client) under that URL. SD-LEO-INFRA-COVERAGE-CI-TRIAGE-001
-// CAPA CA-1: gate the suite so CI skips cleanly.
-const HAS_REAL_DB = process.env.SUPABASE_URL
-  && !process.env.SUPABASE_URL.includes('test.invalid.local')
-  && process.env.SUPABASE_SERVICE_ROLE_KEY
-  && !process.env.SUPABASE_SERVICE_ROLE_KEY.includes('test-service-role-key-not-real');
+// Gate on a DESIGNATED non-production database — imported, never re-derived.
+//
+// This file used to carry its own copy of the gate: a NEGATIVE check asserting the URL was not
+// 'test.invalid.local' and the key was not 'test-service-role-key-not-real'. That predicate is
+// exactly the defect QF-20260726-459 was raised to close, because it evaluates TRUE AGAINST
+// PRODUCTION — a real URL and a real key satisfy "is not the fake sentinel". tests/helpers/
+// db-available.js re-pointed HAS_REAL_DB at the positive designated-target predicate for the 119
+// call sites that gate on it directly; this file was never migrated and kept the old logic.
+//
+// It matters more here than anywhere else: this suite runs on EVERY commit via .husky/pre-commit,
+// so an unsafe predicate here reads live production on every commit in the repo. Re-deriving the
+// check locally is precisely how the original defect survived its own test suite.
+import { HAS_REAL_DB } from './helpers/db-available.js';
 describe.skipIf(!HAS_REAL_DB)('Smoke Tests - Critical System Validation', () => {
   describe('Environment Configuration', () => {
     test('should have Supabase URL configured', () => {
