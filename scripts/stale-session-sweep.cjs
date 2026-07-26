@@ -533,34 +533,12 @@ const supabase = createSupabaseServiceClient();
  * @param {string} [sessionId] - Used for UUID-format pid-*.json lookup
  * @returns {number|null} numeric PID or null when no match
  */
-function resolveCcPidFromTerminalId(terminalId, sessionId) {
-  if (!terminalId || typeof terminalId !== 'string') return null;
-  // Format 1: win-cc-PORT-PID (CLI)
-  const cliMatch = /^win-cc-\d+-(\d+)$/.exec(terminalId);
-  if (cliMatch) return Number(cliMatch[1]);
-  // Format 2: win-PID (Desktop)
-  const dtMatch = /^win-(\d+)$/.exec(terminalId);
-  if (dtMatch) return Number(dtMatch[1]);
-  // Format 3: UUID — scan .claude/session-identity/pid-*.json by session_id match
-  try {
-    const markerDir = path.resolve(__dirname, '..', '.claude', 'session-identity');
-    if (!fs.existsSync(markerDir)) return null;
-    const files = fs.readdirSync(markerDir)
-      .filter(f => /^pid-\d+\.json$/.test(f));
-    for (const file of files) {
-      try {
-        const data = JSON.parse(fs.readFileSync(path.join(markerDir, file), 'utf8'));
-        if (data?.cc_pid && (
-          data.session_id === sessionId
-          || data.session_id === terminalId
-        )) {
-          return Number(data.cc_pid);
-        }
-      } catch { /* skip malformed */ }
-    }
-  } catch { /* directory missing or unreadable */ }
-  return null;
-}
+// SD-LEO-INFRA-PID-LIVENESS-DURABLE-VENUE-001 (C2): the implementation MOVED to
+// lib/fleet/resolve-cc-pid.cjs so hasPidAlive consumes the same resolver this sweep does.
+// Re-exported here unchanged so the existing consumers keep working by their current import
+// path (scripts/coordinator-charter-audit.mjs:76 and tests/unit/stale-session-sweep-terminal-parser.test.js).
+// Behavior is identical — only the home moved. Do NOT reintroduce a local copy.
+const { resolveCcPidFromTerminalId } = require('../lib/fleet/resolve-cc-pid.cjs');
 module.exports.resolveCcPidFromTerminalId = resolveCcPidFromTerminalId;
 
 // SD-FDBK-INFRA-EXEC-CONTEXT-GUARD-001 (FR-3): lazy-load the ESM exec-context-guard
@@ -2010,7 +1988,15 @@ async function main() {
     // than naive last-segment-of-hyphen-split (which silently mis-classified UUID-format
     // terminal_ids as having last-segment hex chars instead of a real PID).
     let hasPidAlive = false;
-    if (s.terminal_id) {
+    // SD-LEO-INFRA-PID-LIVENESS-DURABLE-VENUE-001 (C2): the guard here used to be
+    // `if (s.terminal_id)`, which skipped resolution entirely for rows with no terminal_id.
+    // That is now wrong: resolveCcPidFromTerminalId matches pid-*.json markers by SESSION_ID, so a
+    // NULL terminal_id is resolvable whenever a marker carries the session. MEASURED on the full
+    // live population (exact head-count 12 == 12 examined): 3 rows have terminal_id NULL and ALL
+    // THREE have a resolvable marker — including the fleet coordinator. Gating on terminal_id left
+    // this sweep blind to 25% of live sessions while the answer sat on disk. Resolve on EITHER
+    // identifier; the resolver itself returns null when neither can match.
+    if (s.terminal_id || s.session_id) {
       const ccPid = resolveCcPidFromTerminalId(s.terminal_id, s.session_id);
       if (ccPid != null) {
         hasPidAlive = aliveCcPids.has(String(ccPid));
