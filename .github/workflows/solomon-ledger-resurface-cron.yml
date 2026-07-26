@@ -43,8 +43,17 @@ jobs:
 
       - name: Resurface aged Solomon ledger rows
         # QF-20260725-743 — INTERIM 72h override, EXPIRES ~2026-07-27T09:59Z.
-        # Explicit at the call site (NOT a change to DEFAULT_THRESHOLD_HOURS, which stays 24)
-        # so the mitigation is visible and trivially reversible — delete the flag to revert.
+        # QF-20260725-027 CORRECTED THIS COMMENT: it used to claim "NOT a change to
+        # DEFAULT_THRESHOLD_HOURS, which stays 24". Leaving the default at 24 was the actual
+        # defect — the bare invocation (an unenumerable call site: cron prompt bodies, human
+        # batches, ad-hoc runs) silently ran at 24h and inserted 100%-sub-threshold digests into
+        # the Adam inbox. Measured live 2026-07-26: 84 candidates at 24h, ZERO at 72h.
+        # The default is now DERIVED from lib/coordination/resurface-threshold.cjs, so there is
+        # exactly ONE threshold and no second source only the bare path can see.
+        # This flag is KEPT DELIBERATELY, now redundant-but-consistent rather than load-bearing:
+        # YAML cannot import the JS constant, and an explicit value keeps the mitigation visible
+        # and trivially reversible here. If the expiry below is actioned, change
+        # OPERATING_THRESHOLD_HOURS and this literal together — the test pins them equal.
         # Grounding: Solomon measured disposition latency p50 37.5h / p75 77.2h, with only 26%
         # of 507 disposed rows clearing within 24h; 72h tracks p75. At 24h, ~28 rows/day
         # resurfaced into a 50-row oldest-first window and displaced live directed messages
