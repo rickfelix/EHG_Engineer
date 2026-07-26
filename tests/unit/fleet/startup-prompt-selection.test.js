@@ -55,6 +55,35 @@ describe('classifySessionByCallsign — three arms, and the third is the point',
   });
 });
 
+describe('FR-4 — the canary prefix has exactly ONE declaration', () => {
+  // The prefix was declared in four places. The duplication was deliberate and documented:
+  // canary-guard.js imports from spawn-control.js, so importing back would be a cycle, and a test
+  // asserted the copies AGREED. That test could only ever catch drift AFTER it was written into a
+  // copy — it made duplication survivable rather than removing it.
+  //
+  // startup-prompt-selection.js imports nothing, so it cannot close that cycle: one real source.
+  // This asserts the property directly (no other declaration exists) instead of comparing copies.
+  const FLEET_DIR = new URL('../../../lib/fleet/', import.meta.url);
+  const fs = require('node:fs');
+  const DECL = /(?:const|let|var)\s+CANARY_CALLSIGN_PREFIX\s*=\s*['"]/;
+
+  it('no module outside startup-prompt-selection.js declares its own CANARY_CALLSIGN_PREFIX', () => {
+    const files = fs.readdirSync(FLEET_DIR).filter((f) => /\.(js|cjs|mjs)$/.test(f));
+    expect(files.length).toBeGreaterThan(3); // guard: an empty listing would pass vacuously
+
+    const offenders = files.filter((f) => {
+      if (f === 'startup-prompt-selection.js') return false;
+      return DECL.test(fs.readFileSync(new URL(f, FLEET_DIR), 'utf8'));
+    });
+    expect(offenders, `these re-declare the prefix instead of importing it: ${offenders.join(', ')}`).toEqual([]);
+  });
+
+  it('and the one declaration is actually there (so the scan above cannot pass by finding nothing)', () => {
+    const src = fs.readFileSync(new URL('startup-prompt-selection.js', FLEET_DIR), 'utf8');
+    expect(DECL.test(src.replace('export ', ''))).toBe(true);
+  });
+});
+
 describe('assertSingleLinePrompt — the newline tripwire', () => {
   it('passes a single-line prompt through unchanged', () => {
     const p = 'Read .claude/fleet-prompts/abc.txt and follow it exactly.';
