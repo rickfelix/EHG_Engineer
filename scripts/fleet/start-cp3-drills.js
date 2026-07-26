@@ -169,8 +169,30 @@ export async function defaultRunDrills(plan, deps = {}) {
   const supabase = deps.supabase || (await import('../../lib/supabase-client.cjs')).createSupabaseServiceClient();
 
   // Resolve the live canary session (canary-guard fail-closes if none / not a real canary).
-  const target = await resolveCanary(supabase, { by: 'account_profile', value: 'canary' });
-  const sessionId = target && (target.session_id || target.id);
+  // QF-20260725-985: resolveCanaryTarget returns a RESOLUTION WRAPPER {resolved, identity, reason},
+  // not an identity. The old code passed that wrapper on as `target` and read `target.session_id`,
+  // which is undefined because those fields live on `.identity`. Downstream, guardedVerb re-resolves
+  // via resolveSessionIdentity, whose match is `j[by] === value` — a STRICT SCALAR comparison — so an
+  // object value can never match and every target-scoped leg was rejected with not_found. G1a and
+  // G3+U4 emitted ZERO fleet_verb_* rows. The guard was right; it was handed nonsense and fail-closed
+  // exactly as designed, which is why the run still looked clean.
+  //
+  // NOTE the fix is `identity.callsign`, NOT `identity` — guardedVerb defaults to by:'callsign' and
+  // compares scalars, so passing the identity OBJECT (the literal remedy named in the QF) would fail
+  // in exactly the same way. Verified against resolveSessionIdentity (lib/fleet/session-registry.js:47).
+  const resolution = await resolveCanary(supabase, { by: 'account_profile', value: 'canary' });
+  const identity = (resolution && resolution.identity) || null;
+  const target = identity && identity.callsign;
+  const sessionId = identity && identity.session_id;
+  // Fail LOUD rather than proceeding with undefined identifiers: an unresolved canary previously
+  // sailed on and produced an empty-but-successful-looking run, which is the failure mode this QF
+  // and its companion acceptance-integrity QF both exist to end.
+  if (!resolution || resolution.resolved !== true || !target) {
+    return {
+      ok: false,
+      error: `canary target unresolved (${(resolution && resolution.reason) || 'no_resolution'}) — refusing to run drills that could emit no evidence`,
+    };
+  }
   const fromProfile = process.env.FLEET_LIVE_PROFILE || 'live';
   const toProfile = plan?.canaryProfile || 'canary';
   const queryEventsFn = deps.queryEventsFn || (async (sid) => {
