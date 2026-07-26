@@ -95,7 +95,7 @@ export function summarizeLegVerdicts(results) {
     if (!r || typeof r !== 'object') { out.push({ leg, pass: false, detail: 'no result object' }); continue; }
     if (r.error) { out.push({ leg, pass: false, detail: `ERROR: ${r.error}` }); continue; }
     if (Array.isArray(r.checks)) {
-      for (const c of r.checks) out.push({ leg, check: c.name, pass: c.pass === true, detail: c.detail });
+      for (const c of r.checks) out.push({ leg, check: c.name, pass: c.pass === true, detail: c.detail, evidence: c.evidence });
       // A leg reporting zero checks has demonstrated nothing — do not let it count as a pass.
       if (r.checks.length === 0) out.push({ leg, pass: false, detail: 'leg reported ZERO checks' });
       continue;
@@ -113,11 +113,38 @@ export function summarizeLegVerdicts(results) {
  * QF-20260725-790: render the verdict so it is INSPECTABLE rather than inferred from an exit code.
  * The CLI previously did main().then(r => process.exit(r.ok ? 0 : 1)), discarding every check.
  */
+/**
+ * QF-20260725-790 (scope part 2): render a check's evidence rows as inspectable lines.
+ * Shape-tolerant by design — check 4 attaches an array of event rows, check 5 an object with
+ * audit_rows + unaudited_bound_sessions, and most checks attach nothing at all. An unrecognised
+ * shape is stringified rather than dropped: silently omitting evidence is the failure mode this
+ * whole QF exists to remove.
+ */
+export function formatEvidenceLines(evidence) {
+  if (!evidence) return [];
+  if (Array.isArray(evidence)) {
+    if (evidence.length === 0) return ['evidence: (no rows in this run\'s window)'];
+    return evidence.map((e) => `evidence row ${e.id ?? '<no id>'} session=${e.session_id ?? 'null'} outcome=${e.outcome ?? 'null'} live=${e.live ?? 'null'} counted=${e.counted === true}`);
+  }
+  if (typeof evidence === 'object') {
+    const lines = [];
+    for (const a of evidence.audit_rows || []) lines.push(`audit row ${a.id ?? '<no id>'} session=${a.session_id ?? 'null'}`);
+    for (const s of evidence.unaudited_bound_sessions || []) lines.push(`UNAUDITED bound session=${s}`);
+    if (lines.length === 0) lines.push('evidence: (no audit rows in this run\'s window)');
+    return lines;
+  }
+  return [`evidence: ${String(evidence)}`];
+}
+
 export function formatDrillReport(r) {
   const lines = [`[start-cp3-drills] RESULT ok=${r.ok === true} live=${r.live === true}`];
   if (r.error) lines.push(`  ERROR: ${r.error}`);
   for (const v of r.legVerdicts || []) {
     lines.push(`  ${v.pass ? 'PASS' : 'FAIL'}  ${v.leg}${v.check ? '/' + v.check : ''} — ${v.detail || ''}`);
+    // QF-20260725-790 (scope part 2): print the EVIDENCE ROW IDS under their check. On the 00:15Z run
+    // the unanswerable question was "which row satisfied this?" — rows are listed with whether they
+    // were COUNTED, so a rejected dry_run row is visible rather than silently absent.
+    for (const ev of formatEvidenceLines(v.evidence)) lines.push(`        ${ev}`);
   }
   if (!r.legVerdicts || r.legVerdicts.length === 0) lines.push('  (no leg verdicts — nothing executed)');
   return lines.join('\n');
@@ -176,8 +203,11 @@ export async function defaultRunDrills(plan, deps = {}) {
   // queryEventsFn (unlike U4's session-scoped one, since reboot-respawn creates one replacement
   // session PER slot, not a single target) -- without this the live CLI path always failed
   // respawn_events_present ("no queryEventsFn supplied") even on a genuinely successful respawn.
+  // QF-20260725-790 (scope part 2): select `id` so the printed verdict can name the EVIDENCE ROW,
+  // not just the check outcome. Without a row id the report says a leg failed but gives the reader no
+  // way to go look at what it actually saw — which is the inspectability the QF asked for.
   const rebootQueryEventsFn = deps.rebootQueryEventsFn || (async () => {
-    const { data } = await supabase.from('coordination_events').select('event_type,payload,session_id')
+    const { data } = await supabase.from('coordination_events').select('id,event_type,payload,session_id')
       .eq('event_type', 'fleet_verb_respawn').gte('created_at', runStartedAt)
       .order('created_at', { ascending: false }).limit(50);
     return data || [];
@@ -188,7 +218,8 @@ export async function defaultRunDrills(plan, deps = {}) {
   // QF-20260725-139: scoped to this run for the SAME reason -- an audit row from an earlier run must
   // never be able to satisfy a bind performed by this one.
   const rebootQueryLifecycleEventsFn = deps.rebootQueryLifecycleEventsFn || (async () => {
-    const { data } = await supabase.from('session_lifecycle_events').select('event_type,session_id')
+    // QF-20260725-790 (scope part 2): `id` for the same reason as the events query above.
+    const { data } = await supabase.from('session_lifecycle_events').select('id,event_type,session_id')
       .eq('event_type', 'RESPAWN_BIND_VERIFIED').gte('created_at', runStartedAt)
       .order('created_at', { ascending: false }).limit(50);
     return data || [];
