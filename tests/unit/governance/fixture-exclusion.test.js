@@ -159,3 +159,44 @@ describe('worker-facing loaders exclude fixtures (TS-3, TS-4)', () => {
     expect(allSDs.has('TEST-F3-RACE-1784287684096-bl1')).toBe(false);
   });
 });
+
+// QF-20260726-031: the pattern had drifted from the fixtures. These keys are ENUMERATED FROM
+// ACTUAL USE (grepped out of tests/integration, tests/database and tests/db-invariants) rather
+// than from the shapes anyone remembered — a hand-maintained pattern cannot detect a key nobody
+// added to it, so the enumeration is the durable mechanism and this test is where drift surfaces.
+describe('QF-031: fixture keys in ACTUAL USE by db-project tests (drift pin)', () => {
+  // Six of these did not match before this QF: the SD-FAKE-* family and both QF-00000000-* keys.
+  const IN_USE_FIXTURE_KEYS = [
+    'SD-FAKE-001', 'SD-FAKE-TEST-001', 'SD-FAKE-PROBE-000',
+    'SD-FAKE-FOR-CLI-TEST', 'SD-FAKE-SWITCH-TARGET-000', 'SD-FAKE-PROBE-PHANTOM-GUARD-000',
+    'QF-00000000-000', 'QF-00000000-switch',
+    'SD-FIXTURE', 'SD-FIXTURE-HOLD-SWEEP', 'SD-FIXTURE-EXEC-BOUNDARY-HOLD', 'QF-FIXTURE-LEAK',
+  ];
+
+  test.each(IN_USE_FIXTURE_KEYS)('%s is recognised as fixture residue', (key) => {
+    expect(FIXTURE_KEY_RE.test(key)).toBe(true);
+  });
+
+  // THE CONTROL, and it is what makes the block above evidence instead of an inert pattern that
+  // returns true for everything. All four are REAL COMPLETED SDs verified against the live DB.
+  // They contain TEST/TESTS, which is precisely why fixture-ness must never be inferred from that
+  // word: broadening this predicate toward "contains TEST" is the over-exclusion PR #6186 reverted,
+  // and an excluded real row silently loses shipped work.
+  test.each([
+    'SD-EVA-QUALITY-VISION-GOVERNANCE-TESTS-001',
+    'SD-MAN-INFRA-E2E-REGRESSION-TEST-001',
+    'SD-FDBK-ENH-S17-PARITY-TEST-001',
+    'SD-LEO-INFRA-BLOCK-TEST-SESSION-001',
+  ])('REAL completed SD %s is NOT excluded', (key) => {
+    expect(FIXTURE_KEY_RE.test(key)).toBe(false);
+  });
+
+  // Guard the new shapes against over-reach: a plausible REAL key that merely starts similarly
+  // must not match, so the anchors are doing work rather than the substring.
+  test('new shapes are prefix-anchored, not substring matches', () => {
+    expect(FIXTURE_KEY_RE.test('SD-FAKEOUT-DETECTION-001')).toBe(false); // FAKE- boundary required
+    expect(FIXTURE_KEY_RE.test('SD-FIXTURES-LIBRARY-001')).toBe(false);  // FIXTURE boundary required
+    expect(FIXTURE_KEY_RE.test('QF-20260726-031')).toBe(false);          // a real dated QF id
+    expect(FIXTURE_KEY_RE.test('SD-LEO-INFRA-FAKE-DATA-DETECTOR-001')).toBe(false); // not at prefix
+  });
+});

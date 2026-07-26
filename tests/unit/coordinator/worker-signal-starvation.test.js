@@ -1,0 +1,123 @@
+// QF-20260726-921 — worker-signal starvation counter in the sweep tick line.
+//
+// The incident: 16 of 17 coordinator replies went to Adam, ZERO to workers, while a worker sat blocked
+// 80 minutes. The coordinator never queried the worker lane, and `SIGNAL ROUTER: promoted=0` read as
+// "nothing needs attention" when it only meant "nothing AUTO-promoted" — an empty queue and a queue of
+// hand-needing signals printed identically.
+//
+// These tests pin the properties that make starvation VISIBLE. The load-bearing one is the =0 case:
+// a counter that only appears when non-zero reproduces the exact ambiguity that hid the incident.
+import { describe, it, expect, vi } from 'vitest';
+import { createRequire } from 'node:module';
+const require = createRequire(import.meta.url);
+
+const { reportWorkerSignalStarvation, resolveThresholdMs, DEFAULT_THRESHOLD_SEC } =
+  require('../../../lib/coordinator/worker-signal-starvation.cjs');
+
+const NOW = Date.parse('2026-07-26T05:00:00.000Z');
+const minsAgo = (m) => new Date(NOW - m * 60000).toISOString();
+
+/** supabase stub whose builder resolves the supplied rows. */
+function fakeSupabase(rows, { throwOn = false } = {}) {
+  const api = {
+    select() { return api; },
+    gte() { return api; },
+    order() { return api; },
+    limit() {
+      if (throwOn) return Promise.reject(new Error('boom'));
+      return Promise.resolve({ data: rows });
+    },
+  };
+  return { from: vi.fn(() => api) };
+}
+
+function capture() {
+  const lines = [];
+  return { lines, log: (m) => lines.push(m) };
+}
+
+describe('reportWorkerSignalStarvation', () => {
+  it('LOAD-BEARING: prints an explicit =0 when nothing is starved, so measured-and-empty is distinguishable from unmeasured', async () => {
+    const { lines, log } = capture();
+    const r = await reportWorkerSignalStarvation(fakeSupabase([]), { now: NOW, log, env: {} });
+    const line = lines.find((l) => l.startsWith('WORKER SIGNALS:'));
+    expect(line).toBeDefined();               // it MUST print even with nothing to report
+    expect(line).toContain('unanswered_over_30m=0');
+    expect(line).not.toContain('NOT MEASURED');
+    expect(r).toMatchObject({ measured: true, starved: 0 });
+  });
+
+  it('counts an unanswered worker signal past the threshold and reports the oldest age', async () => {
+    const { lines, log } = capture();
+    const r = await reportWorkerSignalStarvation(fakeSupabase([
+      { id: 's-old', sender_session: 'w1', sender_type: 'worker', created_at: minsAgo(80), payload: {} },
+      { id: 's-mid', sender_session: 'w2', sender_type: 'worker', created_at: minsAgo(45), payload: {} },
+    ]), { now: NOW, log, env: {} });
+    expect(r.starved).toBe(2);
+    expect(r.oldestMin).toBe(80);
+    const line = lines.find((l) => l.startsWith('WORKER SIGNALS:'));
+    expect(line).toContain('unanswered_over_30m=2');
+    expect(line).toContain('oldest=80m');
+    // sample lines make it actionable, not just a number
+    expect(lines.filter((l) => l.includes('WORKER_SIGNAL_UNANSWERED')).length).toBe(2);
+  });
+
+  it('does NOT count signals that are answered, read, routed, or under threshold, or non-worker senders', async () => {
+    const { log } = capture();
+    const r = await reportWorkerSignalStarvation(fakeSupabase([
+      { id: 'a', sender_session: 'w', sender_type: 'worker', created_at: minsAgo(90), acknowledged_at: minsAgo(5), payload: {} },
+      { id: 'b', sender_session: 'w', sender_type: 'worker', created_at: minsAgo(90), read_at: minsAgo(5), payload: {} },
+      { id: 'c', sender_session: 'w', sender_type: 'worker', created_at: minsAgo(90), payload: { routed_to_feedback_id: 'f-1' } },
+      { id: 'd', sender_session: 'w', sender_type: 'worker', created_at: minsAgo(10), payload: {} },   // too young
+      { id: 'e', sender_session: 'adam', sender_type: 'adam', created_at: minsAgo(90), payload: {} },  // not a worker
+    ]), { now: NOW, log, env: {} });
+    expect(r.starved).toBe(0);
+  });
+
+  it('REGRESSION: fails OPEN but says NOT MEASURED out loud — a silent catch would recreate the bug', async () => {
+    const { lines, log } = capture();
+    const r = await reportWorkerSignalStarvation(fakeSupabase([], { throwOn: true }), { now: NOW, log, env: {} });
+    expect(r.measured).toBe(false);
+    const line = lines.find((l) => l.startsWith('WORKER SIGNALS:'));
+    expect(line).toContain('NOT MEASURED');
+    // and it must NOT masquerade as a clean zero
+    expect(line).not.toContain('unanswered_over_30m=0');
+  });
+
+  it('CONTRACT: runs regardless of COORD_DETECTORS_V2 — a visibility counter behind a default-off flag is not visibility', async () => {
+    const { lines, log } = capture();
+    // COORD_DETECTORS_V2 explicitly off (its real default) — the counter must still report.
+    await reportWorkerSignalStarvation(fakeSupabase([
+      { id: 'z', sender_session: 'w', sender_type: 'worker', created_at: minsAgo(99), payload: {} },
+    ]), { now: NOW, log, env: { COORD_DETECTORS_V2: 'false' } });
+    expect(lines.find((l) => l.startsWith('WORKER SIGNALS:'))).toContain('unanswered_over_30m=1');
+  });
+
+  it('threshold is env-tunable and defaults to the detector default (30m)', () => {
+    expect(DEFAULT_THRESHOLD_SEC).toBe(1800);
+    expect(resolveThresholdMs({})).toBe(1800 * 1000);
+    expect(resolveThresholdMs({ COORD_REPLY_STARVATION_SEC: '600' })).toBe(600 * 1000);
+  });
+
+  it('is READ-ONLY: only session_coordination is read, and no write verb is ever invoked', async () => {
+    const { log } = capture();
+    const sb = fakeSupabase([]);
+    await reportWorkerSignalStarvation(sb, { now: NOW, log, env: {} });
+    expect(sb.from).toHaveBeenCalledWith('session_coordination');
+    expect(sb.from).toHaveBeenCalledTimes(1);
+  });
+});
+
+describe('both sweep twins report the counter (QF-20260726-921 parity)', () => {
+  it('the pass AND the SWEEP_PASS_REGISTRY=off legacy fallback both call the shared helper', () => {
+    // Pinning the require + call in BOTH twins: the parity test in tests/ci only counts five other
+    // functions, so nothing else would catch a one-sided addition here.
+    const fs = require('node:fs');
+    const pass = fs.readFileSync('lib/sweep/passes/coordination-detectors.cjs', 'utf8');
+    const legacy = fs.readFileSync('lib/sweep/legacy-fallback.cjs', 'utf8');
+    for (const [name, src] of [['pass', pass], ['legacy-fallback', legacy]]) {
+      expect(src, name + ' must require the shared helper').toContain('worker-signal-starvation.cjs');
+      expect(src, name + ' must call it').toContain('reportWorkerSignalStarvation(supabase)');
+    }
+  });
+});

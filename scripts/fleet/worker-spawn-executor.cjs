@@ -42,8 +42,14 @@ function isLiveEnabled(env = process.env) {
 // SD-LEO-INFRA-LEO-APP-LAUNCHER-001 (FR-2): delegate to THE canonical buildSessionLaunch so worker
 // revival uses the SAME launch contract as every other path — a PERSISTENT wt.exe session (NOT the
 // old headless `claude -p`, which does not reliably register/persist in claude_sessions) with the full
-// claude.cmd path + explicit repo-root cwd + fail-loud. The /loop startup prompt is carried in the
-// child env (FLEET_WORKER_STARTUP_PROMPT) for the SessionStart hook to seed into the persistent session.
+// claude.cmd path + explicit repo-root cwd + fail-loud.
+//
+// MERGE NOTE (slice D x slice F): origin/main's version of this comment still said the /loop prompt
+// is "carried in the child env (FLEET_WORKER_STARTUP_PROMPT) for the SessionStart hook to seed".
+// That is the claim slice D disproved — no such hook exists and nothing reads that variable
+// anywhere in the repo, which is why executor-spawned sessions came up idle. D's corrected comment
+// is kept; F's assertLaunchContract import is kept because F's execution-seam assertion needs it.
+// Both sides of this conflict were load-bearing in different ways.
 const { buildSessionLaunch, assertLaunchContract } = require('../../lib/fleet/build-session-launch.cjs');
 function buildSpawnInvocation(callsign, prompt) {
   return buildSessionLaunch({ callsign, startupPrompt: prompt });
@@ -82,7 +88,21 @@ async function runExecutor(o) {
   let spawned = 0;
   let errors = 0;
   for (const req of decisions.toSpawn) {
-    const invocation = buildSpawnInvocation(req.requested_callsign, o.prompt);
+    // SD-...-PROMPT-LIBRARY-001-D FR-3, THIRD PROMPT-DECISION SITE. o.prompt is a SINGLE prompt
+    // resolved once for the whole executor run and previously applied to every request regardless
+    // of callsign — the same hoist shape as the respawn runner, and equally wrong once the prompt
+    // is keyed on the callsign namespace. The callsign is right here on the request, so resolve
+    // per request: a canary must never receive the claiming-worker directive.
+    const { resolveStartupPromptForCallsign } = require('../../lib/fleet/startup-prompt-selection.js');
+    const { prompt: perCallsignPrompt } = resolveStartupPromptForCallsign(req.requested_callsign, {
+      workerPrompt: o.prompt,
+      canaryPrompt: null, // outstanding: no canary constant exists yet (chairman-authored content)
+      logFn: log,
+    });
+    // Seam, matching the sibling spawners (reboot-respawn-runner's buildInvocationFn): lets this
+    // decision site be asserted without a real launch. Defaults to the production builder.
+    const buildFn = o.buildInvocationFn || buildSpawnInvocation;
+    const invocation = buildFn(req.requested_callsign, perCallsignPrompt);
     if (!o.live) {
       log(`[spawn-exec] DRY-RUN would spawn ${req.requested_callsign} (${req.id}): ${invocation.program} ${(invocation.args || []).join(' ').slice(0, 40)}… — row left pending (set WORKER_SPAWN_EXECUTOR_LIVE=true after host-validation to enable)`);
       continue;

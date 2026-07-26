@@ -180,7 +180,10 @@ describe('FR-1 anti-regression: the predicate must never read env for canary ide
   it('reuses the shipped isCanaryCallsign rather than re-implementing the prefix test', () => {
     // There are already five inline copies of this check in the repo; a sixth is how they drift.
     const src = readFileSync(SRC, 'utf8');
-    expect(src).toMatch(/import\s*\{[^}]*isCanaryCallsign[^}]*\}\s*from\s*'\.\/canary-guard\.js'/);
+    // Post-merge: the canonical source moved to the PURE startup-prompt-selection.js (it imports
+    // nothing), which is what lets this module avoid the canary-guard -> spawn-control cycle entirely.
+    // Still pinned to A canonical source — the point is that the prefix test is never re-implemented.
+    expect(src).toMatch(/import\s*\{[^}]*isCanaryCallsign[^}]*\}\s*from\s*'\.\/startup-prompt-selection\.js'/);
     const code = src.replace(/\/\*\*[\s\S]*?\*\//g, '').replace(/^\s*\/\/.*$/gm, '');
     expect(code).not.toMatch(/startsWith\(\s*['"]Canary-/);
   });

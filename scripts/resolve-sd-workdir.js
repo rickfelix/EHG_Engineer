@@ -90,6 +90,29 @@ function isValidWorktree(wtPath) {
       return false; // Directory exists but is not a registered worktree
     }
 
+    // QF-20260726-956: THE DIRECTORY MUST BIND TO **ITSELF**, NOT UPWARD TO MAIN.
+    //
+    // Registration and the .git pointer live in two different places — registration in
+    // .git/worktrees/<name>/, the pointer in <worktree>/.git — and they DESYNC. When the
+    // pointer file is lost, git does not fail: because .worktrees/ is nested INSIDE the main
+    // checkout, it walks UP and silently binds to the MAIN repo. Every check above still
+    // passes (is-inside-work-tree is true, and `git worktree list` run from here reports the
+    // MAIN repo's registry, which still contains this path), so this function returned true
+    // for a directory whose every git verb targets the shared root.
+    //
+    // That is not theoretical: it deleted two source files out of the shared root when a
+    // routine `git restore` ran against MAIN's HEAD/index instead of the worktree's.
+    // Reproduced in an isolated repo — delete <worktree>/.git and --show-toplevel flips to
+    // the parent while registration is untouched.
+    //
+    // This is the one check that cannot be satisfied by the wrong repo, so it fails closed.
+    const toplevel = execSync('git rev-parse --show-toplevel', {
+      cwd: wtPath, encoding: 'utf8', stdio: 'pipe'
+    }).trim().replace(/\\/g, '/');
+    if (toplevel !== absPath) {
+      return false; // Lost .git pointer — bound to an ancestor repo, not this worktree
+    }
+
     return true;
   } catch {
     return false;
@@ -829,4 +852,6 @@ if (isMainScript) {
   });
 }
 
-export { resolve, resolveFromDB, resolveFromScan, validateWorktreePath, resolveVentureRepoRoot, resolveExistingBranch, rejectDescendantBranch };
+// isValidWorktree is exported for QF-20260726-956's binding test: the lost-pointer case is
+// only observable against a real on-disk repo, so the test builds one rather than mocking git.
+export { resolve, resolveFromDB, resolveFromScan, validateWorktreePath, resolveVentureRepoRoot, resolveExistingBranch, rejectDescendantBranch, isValidWorktree };

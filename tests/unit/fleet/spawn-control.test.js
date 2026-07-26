@@ -137,9 +137,7 @@ describe('module surface (TS-10: exactly six named verbs, no more)', () => {
     // wall-clock; they are values, not verbs, so they belong on this allowlist.
     const helperNames = ['roleOf', 'isSingletonRole', 'resolveProfileDir', 'isLiveEnabled', 'buildLiveSpawnInvocation',
       'SESSION_BIND_MAX_ATTEMPTS', 'SESSION_BIND_DELAY_MS',
-      'CANARY_PROFILE', 'CANARY_CALLSIGN_PREFIX',
-      // FR-4: third cycle-forced constant (see the drift pin). A value, not a verb.
-      'CANARY_TRIGGER_KEY'];
+      'CANARY_PROFILE', 'CANARY_CALLSIGN_PREFIX'];
     const unexpected = Object.keys(mod).filter((k) => !verbNames.includes(k) && !helperNames.includes(k));
     expect(unexpected).toEqual([]);
   });
@@ -227,24 +225,63 @@ describe('buildLiveSpawnInvocation (FR-7: env isolation)', () => {
   });
 });
 
-describe('spawn (FR-1) — keepalive forwarding (QF-20260725-757)', () => {
-  // spawn() was the THIRD hop of the QF-20260724-290 keepalive drop: that QF fixed
-  // buildLiveSpawnInvocation and the respawn runner, but spawn() built its invocation with NO
-  // startupPrompt, so every session created through the generic spawn verb came up with nothing to
-  // do, heartbeat once, and ghosted. This is why provisioned canaries kept dying.
-  it('REGRESSION: forwards the canonical keepalive prompt into the invocation env', async () => {
-    const result = await spawn({ role: 'worker', callsign: 'Canary-pilot' }, { live: false });
-    expect(result.invocation.env.FLEET_WORKER_STARTUP_PROMPT).toBeTruthy();
-  });
-
-  it('honours an explicit startupPrompt override', async () => {
-    const result = await spawn({ role: 'worker', callsign: 'Canary-pilot' }, { live: false, startupPrompt: 'custom-keepalive' });
-    expect(result.invocation.env.FLEET_WORKER_STARTUP_PROMPT).toBe('custom-keepalive');
-  });
-
-  it('honours an explicit null as a deliberate no-keepalive opt-out (respawn-runner parity)', async () => {
-    const result = await spawn({ role: 'worker', callsign: 'Canary-pilot' }, { live: false, startupPrompt: null });
+describe('spawn — the deleted env carrier (FR-2)', () => {
+  // THESE TESTS USED TO ASSERT THE OPPOSITE, AND THAT IS THE LESSON.
+  //
+  // They asserted `invocation.env.FLEET_WORKER_STARTUP_PROMPT` was populated, and passed, and were
+  // cited as proof the keepalive reached the spawned session. It never did: no SessionStart hook
+  // and no code anywhere reads that variable (verified repo-wide — the only occurrences are the
+  // constant, writes, comments and these assertions). The tests confirmed a WRITE and were read as
+  // confirming DELIVERY. A green test on an unread env var is what kept this defect alive across
+  // two "fixes" (QF-20260724-290, QF-20260725-757), each of which moved the drop one hop later.
+  //
+  // So they now pin the carrier's ABSENCE. Re-adding the write turns these RED.
+  // FIXTURE IS A WORKER, AND THAT IS THE WHOLE POINT. This used to spawn 'Canary-pilot', which now
+  // resolves to a NULL prompt — so the assertion passed GREEN even with the env carrier fully
+  // restored, proving nothing. Found by PLAN verification (F3). A worker actually resolves a prompt,
+  // so the carrier's absence is now a real observation rather than a side effect of there being
+  // nothing to carry. Same vacuity class this file's own comment below claims to have fixed.
+  it('does NOT set the unread FLEET_WORKER_STARTUP_PROMPT env carrier', async () => {
+    const result = await spawn({ role: 'worker', callsign: 'Charlie' }, { live: false });
     expect(result.invocation.env.FLEET_WORKER_STARTUP_PROMPT).toBeUndefined();
+    expect(Object.keys(result.invocation.env)).not.toContain('FLEET_WORKER_STARTUP_PROMPT');
+  });
+
+  it('does not smuggle an explicit startupPrompt into the env under any key', async () => {
+    const SENTINEL = 'custom-keepalive-sentinel';
+    const result = await spawn(
+      { role: 'worker', callsign: 'Canary-pilot' },
+      { live: false, startupPrompt: SENTINEL },
+    );
+    // Key-agnostic: catches a rename as well as a reinstatement.
+    expect(Object.values(result.invocation.env).filter((v) => String(v).includes(SENTINEL))).toEqual([]);
+  });
+
+  // FR-5 — this replaces the earlier "PINS THE FR-1 GAP" test, which asserted the prompt reached
+  // NO part of the invocation. FR-1 has landed, so that name now describes the opposite of what
+  // the code does; it kept passing only because the fixture used a CANARY callsign, which resolves
+  // to a null prompt while no canary prompt exists. A test that passes for a different reason than
+  // its name claims is worse than no test — it reads as coverage.
+  it('FR-1 DELIVERS-IN-ARGV: a WORKER spawn carries the pointer as the trailing positional', async () => {
+    const result = await spawn({ role: 'worker', callsign: 'Charlie' }, { live: false });
+    const args = result.invocation.args;
+    const last = args[args.length - 1];
+
+    // The assertion FR-5 asks for: it must FAIL if the positional is disabled. A bare "last arg is
+    // non-empty" check would be satisfied by the minted --session-id UUID and prove nothing.
+    expect(last).toMatch(/follow the instructions in it exactly/);
+    expect(last).not.toMatch(/^[0-9a-f-]{36}$/i); // explicitly not just the minted UUID
+    expect(last.split(/[\r\n]/).length).toBe(1);
+  });
+
+  it('and a CANARY spawn carries NO positional — the canary prompt does not exist yet', async () => {
+    const result = await spawn({ role: 'worker', callsign: 'Canary-pilot' }, { live: false });
+    const args = result.invocation.args;
+    expect(args.some((a) => /follow the instructions in it exactly/.test(String(a)))).toBe(false);
+    // The safe direction while the canary prompt is outstanding: a canary that receives nothing
+    // ghosts, which cannot claim work. It must NEVER receive the worker directive by fallthrough.
+    const { FLEET_WORKER_STARTUP_PROMPT } = require('../../../lib/coordinator/coordination-events.cjs');
+    expect(args.some((a) => String(a).includes(FLEET_WORKER_STARTUP_PROMPT.split('\n')[0]))).toBe(false);
   });
 });
 
@@ -606,11 +643,12 @@ describe('spawn (FR-1)', () => {
     expect(guard.isCanaryCallsign(`${mod.CANARY_CALLSIGN_PREFIX}1`)).toBe(true);
     expect(guard.isCanaryCallsign('Bravo')).toBe(false);
     expect(mod.CANARY_PROFILE).toBe('canary');
-    // SD-LEO-INFRA-SESSION-SPAWN-AND-PROMPT-LIBRARY-001-E FR-4: the trigger key is duplicated here for
-    // the same cycle reason, so it joins the same drift pin — against the canonical module this time,
-    // since that is what READS the key out of metadata. A rename on either side breaks this.
-    expect(mod.CANARY_TRIGGER_KEY).toBe(canarySession.CANARY_TRIGGER_KEY);
-    expect(canarySession.isCanaryMetadata({ [mod.CANARY_TRIGGER_KEY]: true })).toBe(true);
+    // FR-4: the trigger key is NO LONGER duplicated — origin/main extracted the namespace predicate
+    // into the pure startup-prompt-selection.js, so canary-session.js closes no cycle and both this
+    // module and canary-guard.js now IMPORT the key from it. There is nothing left to drift, which is
+    // strictly better than pinning a third copy. What still needs asserting is that the key the
+    // writers stamp is the one the predicate reads:
+    expect(canarySession.isCanaryMetadata({ [canarySession.CANARY_TRIGGER_KEY]: true })).toBe(true);
   });
 
   it('FR-4: the stamped trigger key is REACHABLE — a canary spawn writes it into metadata', async () => {

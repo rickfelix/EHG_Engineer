@@ -45,6 +45,10 @@ function nurserySupabase(items) {
         select: vi.fn().mockReturnThis(),
         eq: vi.fn().mockReturnThis(),
         is: vi.fn().mockReturnThis(),
+        // SD-EHG-IDEATION-PIPELINE-SEAMS-001 FR-1: the reader now routes through the
+        // shared applyPendingNurseryPredicate, which adds .or() for the
+        // "NULL means never scheduled, so eligible now" branch.
+        or: vi.fn().mockReturnThis(),
         order: vi.fn().mockReturnThis(),
         limit: vi.fn().mockResolvedValue({ data: items, error: null }),
       };

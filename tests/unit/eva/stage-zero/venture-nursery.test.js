@@ -18,6 +18,10 @@ import {
   reactivateVenture,
   recordSynthesisFeedback,
   checkNurseryTriggers,
+  applyPendingNurseryPredicate,
+  recordNurseryEvaluation,
+  advanceNurserySchedule,
+  NURSERY_EVAL_TRIGGER_TYPES,
   getNurseryHealth,
   toNurseryMaturityLevel,
   toNurserySourceType,
@@ -55,7 +59,7 @@ const LIVE_COLUMNS = new Set([
 
 /** Capturing mock: records insert/update payloads + select cols; FIFO list/single data. */
 function captureSb({ selectData = [], singleData = undefined, insertResult = undefined } = {}) {
-  const captured = { inserts: [], updates: [], selects: [] };
+  const captured = { inserts: [], updates: [], selects: [], ors: [], orders: [], filters: [] };
   const supabase = { from: (table) => {
     const state = { table, filters: [] };
     const c = {
@@ -63,8 +67,11 @@ function captureSb({ selectData = [], singleData = undefined, insertResult = und
       update: (payload) => { captured.updates.push({ table, payload, filters: state.filters }); return c; },
       select: (cols) => { captured.selects.push({ table, cols }); return c; },
       eq: (col, v) => { state.filters.push(['eq', col, v]); return c; },
-      is: (col, v) => { state.filters.push(['is', col, v]); return c; },
-      order: () => c,
+      is: (col, v) => { state.filters.push(['is', col, v]); captured.filters.push(['is', col, v]); return c; },
+      // SD-EHG-IDEATION-PIPELINE-SEAMS-001 FR-1: the eligibility filter moved from JS
+      // into the QUERY, so the mock must record .or() or the predicate is untestable.
+      or: (expr) => { captured.ors.push(expr); return c; },
+      order: (col, opts) => { captured.orders.push([col, opts]); return c; },
       limit: () => c,
       // fetch-all-paginated (FR-6) awaits .range() as the paginated terminal.
       range: () => Promise.resolve({ data: selectData, error: null }),
@@ -326,20 +333,231 @@ describe('checkNurseryTriggers (FR-2: next_evaluation_at + promoted_to_venture_i
     expect(await checkNurseryTriggers({ supabase, logger: silentLogger })).toEqual([]);
   });
 
-  test('returns items whose next_evaluation_at has passed; live columns only', async () => {
+  // SD-EHG-IDEATION-PIPELINE-SEAMS-001 FR-1. Eligibility filtering moved from JS into
+  // the QUERY, so these assert the PREDICATE rather than post-fetch filtering. That is
+  // deliberate and it is the honest unit-level claim: a mock cannot evaluate SQL, so a
+  // test that fed it two rows and expected one back would only be re-testing the mock.
+  // Whether the database actually returns the right rows is TS-1, an integration test.
+  test('admits NULL next_evaluation_at — the "empty selection forever" regression guard', async () => {
+    const { supabase, captured } = captureSb({ selectData: [] });
+    await checkNurseryTriggers({ supabase, logger: silentLogger });
+    const or = captured.ors.join(' ');
+    // The old code filtered `nextReview && nextReview <= now` in JS. That `&&` excluded
+    // NULL, and all 16 live rows are NULL, so it returned empty PERMANENTLY.
+    expect(or).toContain('next_evaluation_at.is.null');
+    expect(or).toContain('next_evaluation_at.lte.');
+    expect(captured.filters).toContainEqual(['is', 'promoted_to_venture_id', null]);
+  });
+
+  test('orders score-first with a STABLE tiebreak — five live rows tie at 90', async () => {
+    const { supabase, captured } = captureSb({ selectData: [] });
+    await checkNurseryTriggers({ supabase, logger: silentLogger });
+    const cols = captured.orders.map(([c]) => c);
+    expect(cols[0]).toBe('current_score');
+    expect(captured.orders[0][1]).toMatchObject({ ascending: false });
+    // Score alone is non-deterministic across the five 90s; created_at then id fixes it.
+    expect(cols).toEqual(['current_score', 'created_at', 'id']);
+  });
+
+  test('distinguishes never_scheduled from scheduled_review, and selects live columns only', async () => {
     const pastDate = new Date(Date.now() - 86400000).toISOString();
-    const futureDate = new Date(Date.now() + 86400000 * 30).toISOString();
     const { supabase, captured } = captureSb({ selectData: [
-      { id: 'n1', name: 'Ready', next_evaluation_at: pastDate, trigger_conditions: ['market_shift'] },
-      { id: 'n2', name: 'Not Ready', next_evaluation_at: futureDate, trigger_conditions: [] },
+      { id: 'n1', name: 'Scheduled', next_evaluation_at: pastDate, current_score: 90, trigger_conditions: ['market_shift'] },
+      { id: 'n2', name: 'Never scheduled', next_evaluation_at: null, current_score: 74, trigger_conditions: [] },
     ] });
     const result = await checkNurseryTriggers({ supabase, logger: silentLogger });
-    expect(result).toHaveLength(1);
+    expect(result).toHaveLength(2);
     expect(result[0]).toMatchObject({ id: 'n1', reason: 'scheduled_review', trigger_conditions: ['market_shift'] });
+    // A NULL schedule is not a scheduled review — it was never scheduled at all, and
+    // keeping the two causes separable is what made the original defect diagnosable.
+    expect(result[1]).toMatchObject({ id: 'n2', reason: 'never_scheduled', next_review_date: null });
     const sel = captured.selects.find((s) => s.table === 'venture_nursery');
     expect(sel.cols).toContain('next_evaluation_at');
+    expect(sel.cols).toContain('current_score');
     expect(sel.cols).not.toContain('metadata');
     expect(sel.cols).not.toContain('status');
+  });
+
+  test('the injected clock reaches the predicate, so eligibility is testable without waiting', async () => {
+    const { supabase, captured } = captureSb({ selectData: [] });
+    await checkNurseryTriggers({ supabase, logger: silentLogger, now: new Date('2030-01-01T00:00:00.000Z') });
+    expect(captured.ors.join(' ')).toContain('next_evaluation_at.lte.2030-01-01T00:00:00.000Z');
+  });
+});
+
+describe('recordNurseryEvaluation (FR-4: the witness writer that never existed)', () => {
+  test('throws on missing supabase and on missing nurseryId', async () => {
+    await expect(recordNurseryEvaluation({ nurseryId: 'n1', triggerType: 'manual' }, {}))
+      .rejects.toThrow('supabase client is required');
+    const { supabase } = captureSb();
+    await expect(recordNurseryEvaluation({ triggerType: 'manual' }, { supabase, logger: silentLogger }))
+      .rejects.toThrow('nurseryId is required');
+  });
+
+  test('REJECTS nursery_reeval — the value the strategy uses is NOT a legal trigger_type', async () => {
+    const { supabase } = captureSb();
+    // The queue strategy is called nursery_reeval, so reaching for it here is the natural
+    // mistake; the CHECK constraint does not admit it. Failing in JS names the legal set
+    // instead of surfacing an opaque constraint violation from the driver.
+    await expect(recordNurseryEvaluation({ nurseryId: 'n1', triggerType: 'nursery_reeval' }, { supabase, logger: silentLogger }))
+      .rejects.toThrow(/nursery_reeval is NOT a valid member/);
+  });
+
+  test.each(['capability_added', 'market_shift', 'portfolio_gap', 'related_outcome', 'periodic_review', 'manual'])(
+    'accepts the live CHECK member %s',
+    async (triggerType) => {
+      const { supabase, captured } = captureSb();
+      await recordNurseryEvaluation({ nurseryId: 'n1', triggerType }, { supabase, logger: silentLogger });
+      expect(captured.inserts[0].payload.trigger_type).toBe(triggerType);
+    }
+  );
+
+  test('the mirror list matches the live CHECK constraint exactly', () => {
+    // A mirror, never a source of truth: adding a member here without the chairman-gated
+    // DDL would produce inserts the database rejects.
+    expect([...NURSERY_EVAL_TRIGGER_TYPES].sort()).toEqual(
+      ['capability_added', 'manual', 'market_shift', 'periodic_review', 'portfolio_gap', 'related_outcome']
+    );
+    expect(NURSERY_EVAL_TRIGGER_TYPES).not.toContain('nursery_reeval');
+  });
+
+  test('trigger type is a PARAMETER — a manual demo is not labelled a periodic firing', async () => {
+    const { supabase, captured } = captureSb();
+    await recordNurseryEvaluation({ nurseryId: 'n1', triggerType: 'manual' }, { supabase, logger: silentLogger });
+    await recordNurseryEvaluation({ nurseryId: 'n2', triggerType: 'periodic_review' }, { supabase, logger: silentLogger });
+    expect(captured.inserts.map((i) => i.payload.trigger_type)).toEqual(['manual', 'periodic_review']);
+  });
+
+  test('writes only live columns, and leaves evaluated_by to the DEFAULT unless named', async () => {
+    const LIVE_LOG_COLUMNS = new Set([
+      'nursery_id', 'trigger_type', 'trigger_details', 'previous_score', 'new_score',
+      'previous_maturity', 'new_maturity', 'evaluation_notes', 'evaluated_by',
+    ]);
+    const { supabase, captured } = captureSb();
+    await recordNurseryEvaluation({ nurseryId: 'n1', triggerType: 'manual', previousScore: 90, newScore: 92, notes: 'n' }, { supabase, logger: silentLogger });
+    const payload = captured.inserts[0].payload;
+    for (const k of Object.keys(payload)) expect(LIVE_LOG_COLUMNS.has(k), `phantom column: ${k}`).toBe(true);
+    expect(payload).not.toHaveProperty('evaluated_by'); // column DEFAULT stage0_engine
+    expect(payload).toMatchObject({ nursery_id: 'n1', previous_score: 90, new_score: 92, evaluation_notes: 'n' });
+  });
+
+  test('records a named actor when one is supplied', async () => {
+    const { supabase, captured } = captureSb();
+    await recordNurseryEvaluation({ nurseryId: 'n1', triggerType: 'manual', evaluatedBy: 'alpha-2-demo' }, { supabase, logger: silentLogger });
+    expect(captured.inserts[0].payload.evaluated_by).toBe('alpha-2-demo');
+  });
+
+  test('non-numeric scores become NULL rather than NaN', async () => {
+    const { supabase, captured } = captureSb();
+    await recordNurseryEvaluation({ nurseryId: 'n1', triggerType: 'manual', previousScore: undefined, newScore: 'x' }, { supabase, logger: silentLogger });
+    expect(captured.inserts[0].payload.previous_score).toBeNull();
+    expect(captured.inserts[0].payload.new_score).toBeNull();
+  });
+});
+
+// COND-2 from adversarial review, found by grepping the whole write surface for an
+// ABSENCE: exactly ONE write to next_evaluation_at exists (parkVenture's INSERT) and no
+// UPDATE of it anywhere, so the column is WRITE-ONCE. Harmless while nothing consumes the
+// predicate on a schedule; a live defect the moment FR-6 wires a sweep, because every row
+// eligible once stays eligible forever and each sweep re-enqueues a ~16-LLM-call chain.
+describe('advanceNurserySchedule (COND-2: the write-once lifecycle gap)', () => {
+  test('throws on missing supabase or nurseryId', async () => {
+    await expect(advanceNurserySchedule('n1', {})).rejects.toThrow('supabase client is required');
+    const { supabase } = captureSb({ singleData: { evaluation_interval_days: 30 } });
+    await expect(advanceNurserySchedule(null, { supabase, logger: silentLogger })).rejects.toThrow('nurseryId is required');
+  });
+
+  test('moves next_evaluation_at INTO THE FUTURE by the row interval, and stamps last_evaluated_at', async () => {
+    const now = new Date('2026-07-25T00:00:00.000Z');
+    const { supabase, captured } = captureSb({ singleData: { evaluation_interval_days: 30 } });
+    const out = await advanceNurserySchedule('n1', { supabase, logger: silentLogger, now });
+    expect(out).toEqual({ next_evaluation_at: '2026-08-24T00:00:00.000Z', interval_days: 30 });
+    const upd = captured.updates.find((u) => u.table === 'venture_nursery');
+    expect(upd.payload.next_evaluation_at).toBe('2026-08-24T00:00:00.000Z');
+    expect(upd.payload.last_evaluated_at).toBe('2026-07-25T00:00:00.000Z');
+    // The whole point: after advancing, the row is NO LONGER eligible under the selector.
+    expect(new Date(upd.payload.next_evaluation_at).getTime()).toBeGreaterThan(now.getTime());
+  });
+
+  test('honours a non-default interval', async () => {
+    const now = new Date('2026-07-25T00:00:00.000Z');
+    const { supabase, captured } = captureSb({ singleData: { evaluation_interval_days: 7 } });
+    await advanceNurserySchedule('n1', { supabase, logger: silentLogger, now });
+    expect(captured.updates[0].payload.next_evaluation_at).toBe('2026-08-01T00:00:00.000Z');
+  });
+
+  test.each([[0], [null], [undefined], [-5], ['x']])(
+    'falls back to the 30d DEFAULT for a non-positive/absent interval (%s) rather than rescheduling to now',
+    async (evaluation_interval_days) => {
+      const now = new Date('2026-07-25T00:00:00.000Z');
+      const { supabase, captured } = captureSb({ singleData: { evaluation_interval_days } });
+      await advanceNurserySchedule('n1', { supabase, logger: silentLogger, now });
+      // A zero interval would reschedule to NOW and reproduce permanent eligibility —
+      // the exact bug this function closes.
+      expect(captured.updates[0].payload.next_evaluation_at).toBe('2026-08-24T00:00:00.000Z');
+      expect(new Date(captured.updates[0].payload.next_evaluation_at).getTime()).toBeGreaterThan(now.getTime());
+    }
+  );
+
+  test('TWO-RUN GUARD: recording an evaluation advances the schedule, so a second sweep skips the row', async () => {
+    const now = new Date('2026-07-25T00:00:00.000Z');
+    const { supabase, captured } = captureSb({ singleData: { evaluation_interval_days: 30 } });
+    await recordNurseryEvaluation({ nurseryId: 'n1', triggerType: 'periodic_review' }, { supabase, logger: silentLogger, now });
+    const upd = captured.updates.find((u) => u.table === 'venture_nursery');
+    expect(upd, 'recording an evaluation MUST advance the schedule').toBeDefined();
+    // Single-run tests cannot see this defect — it only appears on the second sweep, when
+    // an unadvanced row is re-selected and re-enqueued.
+    expect(new Date(upd.payload.next_evaluation_at).getTime()).toBeGreaterThan(now.getTime());
+  });
+
+  test('advancement is NOT opt-in — the failure mode is a caller that forgets', async () => {
+    const { supabase, captured } = captureSb({ singleData: { evaluation_interval_days: 30 } });
+    await recordNurseryEvaluation({ nurseryId: 'n1', triggerType: 'manual' }, { supabase, logger: silentLogger });
+    expect(captured.updates.some((u) => u.table === 'venture_nursery')).toBe(true);
+  });
+
+  test('an evaluation that happened is still recorded even if the reschedule write fails', async () => {
+    // Fail-soft: the evaluation is a true fact worth keeping. Losing the log row because
+    // the follow-up UPDATE failed would discard evidence to protect a schedule.
+    const supabase = { from: (table) => ({
+      insert: () => ({ select: () => ({ single: async () => ({ data: { id: 'log-1' }, error: null }) }) }),
+      select: () => ({ eq: () => ({ single: async () => ({ data: null, error: { message: 'read boom' } }) }) }),
+      update: () => ({ eq: async () => ({ error: { message: 'boom' } }) }),
+      _t: table,
+    }) };
+    const warn = vi.fn();
+    const result = await recordNurseryEvaluation(
+      { nurseryId: 'n1', triggerType: 'manual' },
+      { supabase, logger: { log: vi.fn(), warn } }
+    );
+    expect(result).toMatchObject({ id: 'log-1' });
+    expect(warn).toHaveBeenCalledWith(expect.stringContaining('reschedule failed'));
+  });
+});
+
+describe('applyPendingNurseryPredicate (FR-1: the single authoritative selector)', () => {
+  function fakeQuery(sink) {
+    const q = {
+      is: (c, v) => { sink.filters.push(['is', c, v]); return q; },
+      or: (e) => { sink.ors.push(e); return q; },
+      order: (c, o) => { sink.orders.push([c, o]); return q; },
+    };
+    return q;
+  }
+
+  test('excludes promoted rows, admits NULL schedules, and orders deterministically', () => {
+    const sink = { filters: [], ors: [], orders: [] };
+    applyPendingNurseryPredicate(fakeQuery(sink), { now: new Date('2026-07-25T00:00:00.000Z') });
+    expect(sink.filters).toContainEqual(['is', 'promoted_to_venture_id', null]);
+    expect(sink.ors[0]).toBe('next_evaluation_at.is.null,next_evaluation_at.lte.2026-07-25T00:00:00.000Z');
+    expect(sink.orders.map(([c]) => c)).toEqual(['current_score', 'created_at', 'id']);
+    expect(sink.orders[0][1]).toEqual({ ascending: false, nullsFirst: false });
+  });
+
+  test('returns the query so it composes with .limit() and with fetchAllPaginated', () => {
+    const sink = { filters: [], ors: [], orders: [] };
+    const q = fakeQuery(sink);
+    expect(applyPendingNurseryPredicate(q, {})).toBe(q);
   });
 });
 
@@ -390,10 +608,30 @@ describe('source pins (FR-2: phantom columns gone from BOTH files)', () => {
   it("discovery-mode's nursery_reeval SELECT is live-schema and the KNOWN-BROKEN pragma is GONE", () => {
     const start = discoverySrc.indexOf('async function runNurseryReeval');
     const reevalBlock = discoverySrc.slice(start, start + 3500);
-    expect(reevalBlock).toContain("is('promoted_to_venture_id', null)");
-    expect(reevalBlock).toContain('source_ref');
+    // SD-EHG-IDEATION-PIPELINE-SEAMS-001 FR-1: the promoted-row filter moved OUT of this
+    // block and into applyPendingNurseryPredicate. Pinning the shared selector is a
+    // STRONGER assertion than the old inline-literal pin — it fails if this reader ever
+    // re-grows its own private predicate, which is the drift that caused the three
+    // disagreeing selectors in the first place.
+    expect(reevalBlock).toContain('applyPendingNurseryPredicate');
+    expect(reevalBlock).toContain('NURSERY_PENDING_COLUMNS');
+    expect(reevalBlock).not.toContain("is('promoted_to_venture_id', null)");
     expect(reevalBlock).not.toContain('schema-lint-disable-line');
     expect(reevalBlock).not.toContain('original_score');
     expect(reevalBlock).not.toContain("eq('status'");
+  });
+
+  it('the authoritative predicate lives in exactly ONE place', () => {
+    // The whole point of FR-1. If a second module grows its own eligibility filter, the
+    // "empty selection forever" class returns. NURSERY_PENDING_COLUMNS must carry
+    // current_score, since score-first ordering is what surfaces the 90s.
+    expect(nurserySrc).toContain('export function applyPendingNurseryPredicate');
+    expect(nurserySrc).toMatch(/next_evaluation_at\.is\.null/);
+    expect(nurserySrc).toContain('current_score');
+    // The JS-side truthiness guard that excluded NULL must not come back. Comments are
+    // stripped first: the header deliberately QUOTES the old broken expression to explain
+    // the defect, and a naive source scan would flag that documentation as the bug itself.
+    const codeOnly = nurserySrc.replace(/\/\*[\s\S]*?\*\//g, '').replace(/^\s*\/\/.*$/gm, '');
+    expect(codeOnly).not.toMatch(/nextReview\s*&&/);
   });
 });
