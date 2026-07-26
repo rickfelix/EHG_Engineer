@@ -46,8 +46,10 @@ const CURRENT_RUNNER = (args) => {
 /** Same in-memory fake shape as spawn-control.test.js / canary-guard.test.js. */
 function makeFakeSupabase({ sessions = [] } = {}) {
   const store = new Map(sessions.map((s) => [s.session_id, { ...s }]));
+  const coordinationInserts = [];
   return {
     _store: store,
+    _coordinationInserts: coordinationInserts,
     from(table) {
       if (table === 'claude_sessions') {
         return {
@@ -71,7 +73,14 @@ function makeFakeSupabase({ sessions = [] } = {}) {
         };
       }
       if (table === 'session_coordination') {
-        return { select: () => ({ eq: () => ({ gte: async () => ({ count: 0 }) }) }) };
+        return {
+          select: () => ({ eq: () => ({ gte: async () => ({ count: 0 }) }) }),
+          // SD-LEO-INFRA-SESSION-SPAWN-AND-PROMPT-LIBRARY-001-E FR-4: a canary spawn writes its
+          // spawn-time marker here BEFORE spawning and refuses the spawn if the write fails. Without
+          // this the restart/relaunch legs read as a failed marker write and reported live=false —
+          // the assertion these tests exist to make.
+          insert: async (row) => { coordinationInserts.push(row); return { error: null }; },
+        };
       }
       throw new Error(`unexpected table: ${table}`);
     },

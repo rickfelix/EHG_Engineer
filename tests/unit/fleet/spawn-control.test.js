@@ -82,10 +82,12 @@ function enumExec(handle = 131074) {
 }
 
 /** Minimal in-memory fake covering exactly the claude_sessions/session_coordination shapes spawn-control.js touches. */
-function makeFakeSupabase({ sessions = [] } = {}) {
+function makeFakeSupabase({ sessions = [], coordinationInsertError = null } = {}) {
   const store = new Map(sessions.map((s) => [s.session_id, { ...s }]));
+  const coordinationInserts = [];
   return {
     _store: store,
+    _coordinationInserts: coordinationInserts,
     from(table) {
       if (table === 'claude_sessions') {
         return {
@@ -109,7 +111,14 @@ function makeFakeSupabase({ sessions = [] } = {}) {
         };
       }
       if (table === 'session_coordination') {
-        return { select: () => ({ eq: () => ({ gte: async () => ({ count: 0 }) }) }) };
+        return {
+          select: () => ({ eq: () => ({ gte: async () => ({ count: 0 }) }) }),
+          // SD-LEO-INFRA-SESSION-SPAWN-AND-PROMPT-LIBRARY-001-E FR-4: canary spawns now write a
+          // spawn-time pre-registration marker here BEFORE spawning, and refuse the spawn if it
+          // cannot be written (an unmarked canary would pass the claim fence and take real work).
+          // Recorded rather than swallowed so tests can assert the marker and its ordering.
+          insert: async (row) => { coordinationInserts.push(row); return { error: coordinationInsertError }; },
+        };
       }
       throw new Error(`unexpected table: ${table}`);
     },
