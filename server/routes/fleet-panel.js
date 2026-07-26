@@ -13,7 +13,7 @@ import { createClient } from '@supabase/supabase-js';
 import { computeSessionBadge } from '../../lib/fleet/fleet-view-badges.cjs';
 import { getAttentionFlaggedSessions } from '../../lib/fleet/attention-flag-writer.js';
 import { loadStore, buildNamedAccountChips } from '../../lib/fleet/account-capacity-gauge.cjs';
-import { getAccountUsage } from '../../lib/fleet/account-usage-reader.cjs';
+import { getAccountUsage, allUnavailable } from '../../lib/fleet/account-usage-reader.cjs';
 
 const router = Router();
 
@@ -151,7 +151,17 @@ export async function getFleetPanel(req, res) {
   // by the standalone vanilla panel (server/public/fleet-ui/fleet-panel.js) and reshaping it would
   // break a live surface. Follows the same boundary as accountChips above — the server reads
   // privileged local state and the browser receives only a computed percentage, never a token.
-  const accountUsage = await getAccountUsage();
+  // GUARDED, matching getAttentionFlaggedSessions below: this is the only await in the handler that
+  // reaches an external service, and an unguarded throw here would 500 the WHOLE endpoint — the
+  // session list, the chips, everything — not just the strip. getAccountUsage is written never to
+  // throw, so this is defense in depth rather than a known path; the fallback still names every
+  // account, because a silently absent strip is the invisible failure this SD exists to prevent.
+  let accountUsage;
+  try {
+    accountUsage = await getAccountUsage();
+  } catch {
+    accountUsage = allUnavailable('unreachable');
+  }
 
   let attentionStrip = [];
   try {

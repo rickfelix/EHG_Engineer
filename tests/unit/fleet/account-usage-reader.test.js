@@ -108,16 +108,24 @@ describe('account registry (FR-1)', () => {
     expect(profilesBaseDir({ ...ENV, FLEET_ACCOUNT_PROFILES_DIR: 'D:\\p' })).toBe('D:\\p');
   });
 
-  it('does NOT depend on orgName regexes — the honest-value-wrong-question defect', async () => {
-    // account-capacity-gauge.cjs matches /rick\s*felix/i against orgName. The canary profile's
-    // real orgName is "Richard Felix" (verified on host), which that regex MISSES. Identity here
-    // comes from WHICH DIRECTORY supplied the token, so orgName cannot make it drift.
-    const gauge = await import('../../../lib/fleet/account-capacity-gauge.cjs');
-    const rickFelixRegex = gauge.default?.NAMED_ACCOUNT_REGISTRY ?? null;
-    expect(rickFelixRegex).toBeNull(); // not exported — proving we cannot have reused it
-    expect(/rick\s*felix/i.test('Richard Felix')).toBe(false); // the live-value control
-    const src = ACCOUNT_REGISTRY.map((e) => JSON.stringify(e)).join('');
-    expect(src).not.toMatch(/orgName|match|regex/i);
+  it('does NOT depend on orgName at all — the honest-value-wrong-question defect', async () => {
+    // account-capacity-gauge.cjs matches /rick\s*felix/i against orgName, which MISSES the canary
+    // profile's real orgName "Richard Felix" (verified on host). Identity here comes from WHICH
+    // DIRECTORY supplied the token, so no orgName value can make it drift.
+    //
+    // NARROWED DELIBERATELY: this case used to also assert that NAMED_ACCOUNT_REGISTRY is not
+    // exported and that /rick\s*felix/i fails on 'Richard Felix'. Neither could fail from any
+    // change to the module under test — one describes a different module, the other tests a regex
+    // the test itself wrote. What remains has a real failure mode: reintroducing name-matching.
+    const entryKeys = new Set(ACCOUNT_REGISTRY.flatMap((e) => Object.keys(e)));
+    expect([...entryKeys].sort()).toEqual(['hostDefault', 'name', 'profile']);
+    for (const key of entryKeys) expect(key).not.toMatch(/orgName|match|regex|email/i);
+
+    // And resolution is blind to identity: attaching orgName/email to an entry — including the
+    // exact value that defeats the old regex — cannot change which directory is read.
+    const plain = { name: 'Rick Felix 2000', profile: 'canary' };
+    const withIdentity = { ...plain, orgName: 'Richard Felix', email: 'rickfelix2000@gmail.com' };
+    expect(resolveAccountConfigDir(withIdentity, ENV)).toBe(resolveAccountConfigDir(plain, ENV));
   });
 
   it('rejects a traversal/absolute profile name rather than joining it', () => {
@@ -152,6 +160,15 @@ describe('utilization coercion', () => {
       expect(toPct(bad)).toBeNull();
     }
   });
+
+  it('ADMITS a genuine 0 and a genuine 100 — the boundaries, not just the middle', () => {
+    // 0 is the sharpest case in this SD: a real 0%-used account must render as 0%, while an
+    // UNREADABLE one must never render as 0. That distinction only holds if toPct accepts 0.
+    // A future tidy-up to `if (!value) return null` would silently convert a genuinely idle
+    // account into unexpected_shape, and nothing else here would catch it.
+    expect(toPct(0)).toBe(0);
+    expect(toPct(100)).toBe(100);
+  });
 });
 
 describe('per-account read', () => {
@@ -166,7 +183,8 @@ describe('per-account read', () => {
       state: 'ok',
       weeklyPct: 54,
       fiveHourPct: 11,
-      weeklyResetsAt: '2026-08-02T00:00:00Z',
+      // Canonical ISO, re-derived rather than echoed from upstream (see toIsoOrNull).
+      weeklyResetsAt: '2026-08-02T00:00:00.000Z',
     });
     expect(result.reason).toBeUndefined();
     expect(result.fetchedAt).toBe(new Date(1_000_000).toISOString());
@@ -214,6 +232,55 @@ describe('per-account read', () => {
       expect(result.reason).toBe(UNAVAILABLE_REASONS.UNEXPECTED_SHAPE);
       expect('weeklyPct' in result).toBe(false);
     }
+  });
+
+  it('TS-2b — HTTP 403 is unauthorized too, not lumped into unreachable', async () => {
+    const result = await readOneAccount(ANY_ENTRY, {
+      env: ENV,
+      fs: fsWithTokens({ [CANARY_DIR]: 'tok' }),
+      fetchImpl: async () => ({ ok: false, status: 403, json: async () => ({}) }),
+    });
+    expect(result.reason).toBe(UNAVAILABLE_REASONS.UNAUTHORIZED);
+  });
+
+  it('admits a real 0% reading as ok — never confused with an unreadable account', async () => {
+    const result = await readOneAccount(ANY_ENTRY, {
+      env: ENV,
+      fs: fsWithTokens({ [CANARY_DIR]: 'tok' }),
+      fetchImpl: async () => okResponse(usageBody(0, 0)),
+    });
+    expect(result).toMatchObject({ state: 'ok', weeklyPct: 0, fiveHourPct: 0 });
+    expect(result.reason).toBeUndefined();
+  });
+
+  it('degrades a MISSING resets_at to null without failing the reading', async () => {
+    // The reader documents this as a decision rather than an oversight: the percentage is the
+    // load-bearing value, so losing the display timestamp must not discard a good reading.
+    const result = await readOneAccount(ANY_ENTRY, {
+      env: ENV,
+      fs: fsWithTokens({ [CANARY_DIR]: 'tok' }),
+      fetchImpl: async () => okResponse({
+        seven_day: { utilization: 54 },
+        five_hour: { utilization: 11, resets_at: 'not-a-date' },
+      }),
+    });
+    expect(result).toMatchObject({ state: 'ok', weeklyPct: 54, weeklyResetsAt: null, fiveHourResetsAt: null });
+  });
+
+  it('re-derives resets_at to canonical ISO rather than echoing the upstream string', async () => {
+    // V8's legacy date parser treats parenthesized trailing text as a comment, so this string
+    // parses successfully. Echoing it through would put upstream text in a browser-bound field.
+    const result = await readOneAccount(ANY_ENTRY, {
+      env: ENV,
+      fs: fsWithTokens({ [CANARY_DIR]: 'tok' }),
+      fetchImpl: async () => okResponse({
+        seven_day: { utilization: 54, resets_at: 'Dec 25 1995 (<script>alert(1)</script>)' },
+        five_hour: { utilization: 11, resets_at: '2026-07-27T01:00:00Z' },
+      }),
+    });
+    expect(result.state).toBe('ok');
+    expect(result.weeklyResetsAt).not.toContain('script');
+    expect(result.weeklyResetsAt).toBe(new Date('Dec 25 1995').toISOString());
   });
 
   it('TS-3b — a non-JSON 200 body is unexpected_shape, not a crash', async () => {
