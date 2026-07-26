@@ -333,6 +333,11 @@ router.post('/master-reset', asyncHandler(async (req, res) => {
   // audit rows. A failed PRE-write refuses the operation outright (fail-closed: an
   // irreversible teardown that cannot be recorded must not run), and a throw partway
   // still writes a POST row so the trail never reads started-never-finished.
+  // The orphan sweep is DELIBERATELY inside the audited span. It deletes rows, so running it
+  // after withDestructiveAudit returned would mean destructive work happening after the
+  // 'completed' audit row was already written — the trail would claim the operation had
+  // finished while it was still deleting.
+  let orphansCleaned = 0;
   const results = await withDestructiveAudit(
     supabase,
     { operation: 'master-reset', targetIds: ventureIds, performedBy: resolvePerformedBy(req) },
@@ -341,23 +346,23 @@ router.post('/master-reset', asyncHandler(async (req, res) => {
       for (const id of ventureIds) {
         out.push(await deleteVentureFully(id, { supabase }));
       }
+
+      // Preserve the one master_reset_portfolio step per-venture delete does not
+      // cover: sweep orphan stage_zero_requests with no venture_id. Non-fatal.
+      try {
+        const { data: orphans } = await supabase
+          .from('stage_zero_requests')
+          .delete()
+          .is('venture_id', null)
+          .select('id');
+        orphansCleaned = orphans?.length || 0;
+      } catch (orphanErr) {
+        console.error('[master-reset] orphan stage_zero_requests cleanup non-fatal:', orphanErr.message);
+      }
+
       return out;
     },
   );
-
-  // Preserve the one master_reset_portfolio step per-venture delete does not
-  // cover: sweep orphan stage_zero_requests with no venture_id. Non-fatal.
-  let orphansCleaned = 0;
-  try {
-    const { data: orphans } = await supabase
-      .from('stage_zero_requests')
-      .delete()
-      .is('venture_id', null)
-      .select('id');
-    orphansCleaned = orphans?.length || 0;
-  } catch (orphanErr) {
-    console.error('[master-reset] orphan stage_zero_requests cleanup non-fatal:', orphanErr.message);
-  }
 
   const succeeded = results.filter(r => r.success).length;
 

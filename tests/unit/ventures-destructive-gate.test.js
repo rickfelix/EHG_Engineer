@@ -241,7 +241,33 @@ describe('FR-3: the teardown is bracketed by audit rows, and refuses when it can
     expect(deleteVentureFullyMock).toHaveBeenCalledTimes(0);
   });
 
-  it('writes a FAILED row when the teardown throws partway, so the trail is never started-never-finished', async () => {
+  it('REAL partial failure: a completed row carrying failed=N (deleteVentureFully does not throw)', async () => {
+    // This is the shape an operator actually sees after a bad teardown, and the test below
+    // was NOT covering it. lib/deleteVentureFully.js catches every phase internally and
+    // phase 5 RETURNS {success:false} rather than throwing, so a realistic partial failure
+    // never reaches the catch in withDestructiveAudit — it produces a 'completed' row with
+    // metadata.failed set. Asserting only the throw path meant asserting a behaviour the
+    // real callee cannot exhibit (stubbed-writer blindness).
+    const app = await makeApp();
+    deleteVentureFullyMock.mockImplementationOnce(async id => ({ success: true, venture: { id }, phases: {} }));
+    deleteVentureFullyMock.mockImplementationOnce(async id => ({ success: false, venture: { id }, phases: { db: { success: false, error: 'cascade blocked' } } }));
+
+    const res = await confirmAndRun(app);
+    const rows = app.locals.supabase.auditRows;
+    const completed = rows.find(r => r.action === 'master-reset.completed');
+
+    expect(res.status).toBe(200);
+    expect(rows.map(r => r.action)).toEqual(['master-reset.started', 'master-reset.completed']);
+    expect(completed.metadata.succeeded).toBe(1);
+    expect(completed.metadata.failed).toBe(1);
+    // No 'failed' row for this shape — the trail records partial success, not an abort.
+    expect(rows.some(r => r.action === 'master-reset.failed')).toBe(false);
+  });
+
+  it('DEFENSIVE throw path: writes a FAILED row so the trail is never started-never-finished', async () => {
+    // Retained deliberately even though deleteVentureFully cannot currently throw: an audit
+    // wrapper that assumes its callee never throws is one refactor away from reopening the
+    // started-never-finished hole. Labelled defensive so nobody reads it as the normal path.
     const app = await makeApp();
     deleteVentureFullyMock.mockImplementationOnce(async id => ({ success: true, venture: { id }, phases: {} }));
     deleteVentureFullyMock.mockImplementationOnce(async () => { throw new Error('teardown exploded at venture 2'); });

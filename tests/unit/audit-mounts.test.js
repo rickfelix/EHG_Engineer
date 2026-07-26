@@ -47,6 +47,26 @@ function buildRouteInventory() {
 const routeInventory = buildRouteInventory();
 
 describe('FR-5: auditMounts on the REAL server/index.js', () => {
+  it('actually examined the router-mounted routes, not just the direct mounts', () => {
+    // GUARDS THE GUARD. All three findings below come from DIRECT app.all() mounts, which
+    // need no route inventory at all — so running with routeInventory:{} produces a
+    // BYTE-IDENTICAL finding set, and mountsScanned is 30 either way. If buildRouteInventory
+    // ever silently resolves nothing (a moved file, a changed import form), the exact-match
+    // test would stay green while ~89% of mutating routes — including all three destructive
+    // venture endpoints — went unexamined. mutatingRoutesChecked is the only value that
+    // distinguishes the two runs: 46 with the inventory, 5 without.
+    //
+    // This also qualifies the "cannot UNDER-report" claim in lib/audit-mounts.js: that holds
+    // for auditMounts GIVEN a complete inventory, not for the pipeline as assembled here,
+    // because auditMounts skips unresolvable mounts silently.
+    const withInventory = auditMounts({ indexSource, routeInventory });
+    const withoutInventory = auditMounts({ indexSource, routeInventory: {} });
+
+    expect(withInventory.mutatingRoutesChecked).toBeGreaterThan(40);
+    expect(withoutInventory.mutatingRoutesChecked).toBeLessThan(10);
+    expect(Object.keys(routeInventory).length).toBeGreaterThan(20);
+  });
+
   it('flags exactly the three signature-verified webhooks and nothing else', () => {
     const { findings, mountsScanned } = auditMounts({ indexSource, routeInventory });
 
