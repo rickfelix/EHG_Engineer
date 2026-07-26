@@ -180,14 +180,37 @@ export async function validatePostCompletion(supabase, sd, sdKey) {
     const healSkipSources = ['heal', 'corrective'];
     const sdSource = (sd.source || '').toLowerCase();
     if (!healSkipSources.includes(sdSource)) {
-      const { data: healScores } = await supabase
-        .from('eva_heal_scores')
+      // QF-20260725-868, THIRD SITE in this same function. This queried `eva_heal_scores`
+      // .eq('sd_key', ...) — a table that DOES NOT EXIST and, per `git grep`, never did: no
+      // migration anywhere in the repo, and this was its only reference in the codebase. The probe
+      // therefore errored on every run, `data` came back null, `hasHeal` was false, and 'HEAL' was
+      // pushed for EVERY code-producing SD whether /heal ran or not.
+      //
+      // Same defect as the two catches above, inverted: a check that COULD NOT SEE the constraint
+      // still reported a verdict, with the direction picked by the code path rather than by evidence.
+      // It is also the pattern completion-flag-keys.js's own docblock names —
+      // PAT-LEO-INFRA-WRITER-CONSUMER-ASYMMETRY-001 — as TABLE-name drift instead of metadata-key
+      // drift: writer and consumer never met.
+      //
+      // The real writer is scripts/eva/heal-command.mjs: `/heal sd` inserts into `eva_vision_scores`
+      // with `sd_id: sdScore.sd_key` and `rubric_snapshot.mode = 'sd-heal'`, and `/heal status` reads
+      // "latest SD heal scores" back from that same table via `sd_id IS NOT NULL`. NOTE THE TRAP:
+      // `eva_vision_scores.sd_id` holds the SD *KEY* string, not a UUID FK (portfolio-level vision
+      // scores are the rows where it is NULL) — so this filters on sdKey, not sd.id.
+      //
+      // The error is now CAPTURED rather than discarded, so an unreachable table can no longer
+      // masquerade as "HEAL missing". Consistent with the decision above, indeterminate SURFACES
+      // under its own label and never blocks.
+      const { data: healScores, error: healErr } = await supabase
+        .from('eva_vision_scores')
         .select('id')
-        .eq('sd_key', sdKey)
+        .eq('sd_id', sdKey)
         .limit(1);
 
-      const hasHeal = healScores && healScores.length > 0;
-      if (!hasHeal) {
+      if (healErr) {
+        console.error(`   ⚠️  HEAL witness could NOT be determined for ${sdKey} (${healErr.message}) — surfaced, not blocking`);
+        missingRecommended.push('HEAL_CHECK_INDETERMINATE');
+      } else if (!healScores || healScores.length === 0) {
         missingRecommended.push('HEAL');
       }
     }
