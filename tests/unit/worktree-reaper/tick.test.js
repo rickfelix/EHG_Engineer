@@ -341,3 +341,110 @@ describe('FR-3: the reaper refuses to reap from a tree it cannot prove is curren
     expect(path.resolve(seen[0])).toBe(path.resolve(tickModPath, '..', '..', '..'));
   });
 });
+
+/**
+ * QF-20260726-794 — A REFUSING TICK MUST STILL REPORT THE BACKLOG.
+ *
+ * Two correct rules collided: the reaper must not mutate a shared root, and QFs are worked
+ * ON main so the root is dirty ~continuously. The reaper refuses on ANY behind>0, and the
+ * root goes behind within minutes of a peer merge — so it refused essentially every tick.
+ * Nothing alerted, because each refusal is individually correct and well-logged. The cost
+ * was visible only in the ACCUMULATED count, and the pool watchdog that reports that count
+ * sat DOWNSTREAM of the refusal's early return, so a refusing tick never reached it.
+ *
+ * The refusal itself is unchanged and load-bearing — these tests assert it still holds.
+ */
+describe('QF-20260726-794: a refusal surfaces the accumulating backlog', () => {
+  const origEnv = { ...process.env };
+  let tmpRoot;
+
+  const staleRunner = (args) => {
+    if (args[0] === 'fetch') return '';
+    if (args.includes('--abbrev-ref')) return 'main\n';
+    if (args[0] === 'status') return 'M some-file\n'; // dirty: exactly the QF scenario
+    if (args[0] === 'rev-list') return '7\n';
+    if (args[0] === 'pull') throw new Error('pull must never be attempted by the reaper');
+    return '';
+  };
+
+  function writeSentinelReaper(root) {
+    const dir = path.join(root, 'scripts');
+    fs.mkdirSync(dir, { recursive: true });
+    const sentinel = JSON.stringify(path.join(root, 'REAPER_RAN.sentinel'));
+    fs.writeFileSync(
+      path.join(dir, 'worktree-reaper.mjs'),
+      `import fs from 'node:fs'; fs.writeFileSync(${sentinel}, 'ran'); process.exit(0);\n`,
+    );
+  }
+
+  const readStateFile = () => JSON.parse(
+    fs.readFileSync(path.join(tmpRoot, '.claude', 'worktree-reaper-state.json'), 'utf8'),
+  );
+
+  beforeEach(() => {
+    tmpRoot = fs.mkdtempSync(path.join(os.tmpdir(), 'reaper-backlog-'));
+    fs.mkdirSync(path.join(tmpRoot, '.claude'), { recursive: true });
+    process.env.WORKTREE_REAPER_ENABLED = 'true';
+    writeSentinelReaper(tmpRoot);
+  });
+  afterEach(() => {
+    try { fs.rmSync(tmpRoot, { recursive: true, force: true }); } catch { /* ignore */ }
+    process.env = { ...origEnv };
+  });
+
+  const runRefusal = (logs) => loadTickModule().tick({
+    repoRoot: tmpRoot, cadence: 3, force: true,
+    logger: (m) => logs.push(m), currencyRunner: staleRunner, currencyEnv: {},
+  });
+
+  it('emits a BACKLOG line on a refusal — the refusal is no longer silent about its cost', () => {
+    const logs = [];
+    const res = runRefusal(logs);
+    expect(res.result).toBe('refused_stale_tree');
+    const backlog = logs.find((m) => m.includes('WORKTREE REAPER BACKLOG'));
+    expect(backlog).toBeDefined();
+    expect(backlog).toContain('UNREAPED for 1 consecutive tick(s)');
+  });
+
+  it('STILL REFUSES — surfacing must not have relaxed the protection', async () => {
+    const logs = [];
+    const res = runRefusal(logs);
+    expect(res.invoked).toBe(false);
+    // The load-bearing assertion: reporting is non-destructive, reaping never happened.
+    await new Promise((r) => setTimeout(r, 60));
+    expect(fs.existsSync(path.join(tmpRoot, 'REAPER_RAN.sentinel'))).toBe(false);
+  });
+
+  it('ACCUMULATES the streak across ticks — this is what makes it a backlog, not a blip', () => {
+    const logs = [];
+    expect(runRefusal(logs).consecutiveRefusals).toBe(1);
+    expect(runRefusal(logs).consecutiveRefusals).toBe(2);
+    expect(runRefusal(logs).consecutiveRefusals).toBe(3);
+    // Durability through the state file is the real assertion: readState whitelists fields,
+    // so a key it does not carry is silently dropped on every read and could never add up.
+    expect(readStateFile().consecutive_refusals).toBe(3);
+  });
+
+  it('RESETS the streak once the tree is current again', () => {
+    const logs = [];
+    runRefusal(logs);
+    runRefusal(logs);
+    expect(readStateFile().consecutive_refusals).toBe(2);
+    loadTickModule().tick({
+      repoRoot: tmpRoot, cadence: 3, force: true,
+      logger: () => {}, currencyRunner: CURRENT_RUNNER, currencyEnv: {},
+    });
+    expect(readStateFile().consecutive_refusals).toBe(0);
+  });
+
+  it('a FAILED worktree count reports "unknown", never a healthy-looking 0/28 (0%)', () => {
+    // tmpRoot is not a git repo, so countActiveWorktrees returns null. Rendering that as
+    // "0/28 (0%)" would read as a comfortably empty pool — a not-measured state displayed
+    // identically to a measured one, which is the exact class of defect this QF came from.
+    const logs = [];
+    runRefusal(logs);
+    const backlog = logs.find((m) => m.includes('WORKTREE REAPER BACKLOG'));
+    expect(backlog).toContain('unknown (git failed)');
+    expect(backlog).not.toContain('(0%)');
+  });
+});
