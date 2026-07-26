@@ -295,6 +295,27 @@ describe('FR-2: enforceTreeCurrency self-heals or REFUSES', () => {
     expect(msg).toContain('clobbering a peer worktree');
   });
 
+  // Caught in self-review of this very change: the clean+on-main fall-through is reached ONLY
+  // when the CALLER forbade healing (the reaper's allowSelfHeal:false). An earlier draft of the
+  // message said "self-heal was permitted" there, which is exactly backwards for the only caller
+  // that gets here — the failed-fast-forward and did-not-converge cases throw earlier.
+  it('a clean on-main tree refused because the CALLER may not heal says so, and does not claim self-heal was permitted', () => {
+    const calls = [];
+    let msg = '';
+    try {
+      enforceTreeCurrency({
+        dir: '/x', runner: runnerFor({ behind: '5', calls }), env: {}, logger: silent, allowSelfHeal: false,
+      });
+    } catch (e) { msg = e.message; }
+    expect(msg).toContain('THE FAULT IS BEING BEHIND');
+    expect(msg).toContain('may not heal');
+    expect(msg).toContain('allowSelfHeal=false');
+    expect(msg).not.toContain('Self-heal was permitted');
+    expect(msg).not.toContain('the tree is DIRTY');       // it is clean; do not blame dirt
+    // and it must genuinely not have mutated the tree
+    expect(calls.some((c) => c.startsWith('pull'))).toBe(false);
+  });
+
   it('the OFF-MAIN refusal names the BRANCH as the blocker and does not blame dirt', () => {
     let msg = '';
     try {
