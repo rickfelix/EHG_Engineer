@@ -126,12 +126,19 @@ describe('CANARY MUST NEVER RECEIVE THE WORKER DIRECTIVE — all three prompt-de
       supabase: null,
     });
 
+    // POPULATION ASSERTION FIRST, and it is not decoration. This previously read
+    //   if (canary) expect(canary.prompt).not.toBe(...)
+    // guarded by expect(built.length).toBeGreaterThan(0). A TESTING sub-agent mutation proved that
+    // vacuous: make the executor silently DROP every Canary- request and the test stayed GREEN —
+    // built.length is still 1 from the worker, so the guard passed while the canary assertion was
+    // skipped entirely. A conditional assertion plus a count guard is NOT a covered case.
+    // Asserting the exact built set makes a dropped canary a failure instead of a skip.
+    expect(built.map((b) => b.callsign).sort()).toEqual(['Canary-pilot', 'Charlie']);
+
     // The executor resolves per request; a hoisted single prompt would give BOTH the directive.
     const canary = built.find((b) => b.callsign === 'Canary-pilot');
     const worker = built.find((b) => b.callsign === 'Charlie');
-    if (canary) expect(canary.prompt).not.toBe(FLEET_WORKER_STARTUP_PROMPT);
-    if (worker) expect(worker.prompt).toBe(FLEET_WORKER_STARTUP_PROMPT); // control arm
-    // Guard: if the executor skipped both requests this test would pass vacuously.
-    expect(built.length, 'executor built no invocations — assertions above were vacuous').toBeGreaterThan(0);
+    expect(canary.prompt).not.toBe(FLEET_WORKER_STARTUP_PROMPT);
+    expect(worker.prompt).toBe(FLEET_WORKER_STARTUP_PROMPT); // control arm
   });
 });
