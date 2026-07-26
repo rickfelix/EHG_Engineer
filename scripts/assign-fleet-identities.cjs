@@ -239,6 +239,46 @@ function reserveParkedIdentities(usedCallsigns, usedColors, recentSessions, acti
 // last one actually broadcast (metadata.fleet_identity_last_sent, distinct from fleet_identity
 // itself so a partially-failed send is retried next tick) — true means re-send is due.
 /**
+ * Reserve the labels a PROTECTED CANARY already holds, so they are not also handed to a real worker.
+ *
+ * A protected canary is not named by this cron, so it never reaches the `assigned` set that seeds
+ * usedCallsigns/usedColors. Without this, a canary that an earlier clobber renamed to a NATO callsign —
+ * still protected, because the spawn-time marker survives the rename — would have that callsign issued
+ * to a second session as well, trading the rename bug for a duplicate-identity bug.
+ *
+ * Extracted (R6) because the inline version was unverified: removing the add() left the whole suite
+ * green. Mirrors reserveParkedIdentities' mutate-the-sets shape deliberately. Pure + DB-free.
+ */
+function reserveCanaryLabels(usedCallsigns, usedColors, canaryProtected) {
+  for (const c of canaryProtected || []) {
+    const cs = c && c.metadata && c.metadata.fleet_identity && c.metadata.fleet_identity.callsign;
+    const col = c && c.metadata && c.metadata.fleet_identity && c.metadata.fleet_identity.color;
+    if (cs) usedCallsigns.add(cs);
+    if (col) usedColors.add(col);
+  }
+  return { usedCallsigns, usedColors };
+}
+
+/**
+ * Plan a naming run: read the markers, then bucket the workers. Returns `skip:true` when the marker
+ * lookup failed, in which case NOBODY may be named this run.
+ *
+ * WHY THIS EXISTS (R3). The loader already reported ok:false correctly, but nothing proved main() ACTED
+ * on it — deleting the fail-closed `return` left the entire suite green. That is the identical shape as
+ * F2 earlier in this SD (a correct decision whose consumer silently discarded it), and it is the reason
+ * this SD needed a second review pass at all. Combining the two steps here makes the CONSEQUENCE
+ * testable rather than the flag: on a failed lookup this returns no buckets at all, so there is no list
+ * a caller could name from even if it ignored `skip`.
+ *
+ * @returns {Promise<{skip:true, error:string}|{skip:false, canaryProtected:Array, assignedRaw:Array, needsAssignment:Array}>}
+ */
+async function planNamingRun(supabase, workers, kind, forceReassign, isCanaryMd, chunkSize = 50) {
+  const preReg = await loadPreRegisteredCanaries(supabase, (workers || []).map((w) => w && w.session_id), kind, chunkSize);
+  if (!preReg.ok) return { skip: true, error: preReg.error };
+  return { skip: false, ...partitionWorkersForNaming(workers, preReg.canaries, forceReassign, isCanaryMd) };
+}
+
+/**
  * Split the worker set into the three naming buckets. EXTRACTED so the load-bearing property is
  * TESTABLE: a canary must never enter `assignedRaw`.
  *
@@ -500,15 +540,14 @@ async function main() {
   // N+1 against a table this cron already reads in bulk.
   const mod = await import('../lib/fleet/canary-session.js');
   const isCanaryMetadata = mod.isCanaryMetadata;
-  const preReg = await loadPreRegisteredCanaries(supabase, uniqueWorkers.map((w) => w.session_id), mod.CANARY_PRE_REGISTRATION_KIND);
-  if (!preReg.ok) {
+  const plan = await planNamingRun(supabase, uniqueWorkers, mod.CANARY_PRE_REGISTRATION_KIND, forceReassign, isCanaryMetadata);
+  if (plan.skip) {
     // FAIL CLOSED on this one axis: renaming is IRREVERSIBLE, so if the marker set cannot be read we
     // must not rename anyone this run. Skipping a genuine worker costs one unnamed cron tick; renaming
     // a canary destroys the discriminator for good.
-    console.log(`[assign-fleet-identities] canary pre-registration lookup FAILED (${preReg.error}) — skipping all naming this run rather than risk renaming a canary`);
+    console.log(`[assign-fleet-identities] canary pre-registration lookup FAILED (${plan.error}) — skipping all naming this run rather than risk renaming a canary`);
     return;
   }
-  const preRegisteredCanaries = preReg.canaries;
 
   // CANARIES GO IN THEIR OWN BUCKET, not into assignedRaw. A TESTING review proved the earlier version
   // was INERT for the exact case FR-7 added: classifyWorkerNaming correctly returned a canary verdict,
@@ -521,10 +560,9 @@ async function main() {
   //
   // Canaries live outside the NATO tier-band scheme entirely, so they must not participate in
   // band-dedupe at all: this bucket is simply left alone.
-  const parts = partitionWorkersForNaming(uniqueWorkers, preRegisteredCanaries, forceReassign, isCanaryMetadata);
-  const canaryProtected = parts.canaryProtected;
-  assignedRaw.push(...parts.assignedRaw);
-  needsAssignment.push(...parts.needsAssignment);
+  const canaryProtected = plan.canaryProtected;
+  assignedRaw.push(...plan.assignedRaw);
+  needsAssignment.push(...plan.needsAssignment);
 
   // QF-20260528-581 (Bug A): resolve duplicate callsigns within the assigned set
   // (e.g. "Alpha" on two sessions after session_id rotation). Keep the most-recent
@@ -543,16 +581,7 @@ async function main() {
   const usedCallsigns = new Set(assigned.map(w => w.metadata.fleet_identity.callsign));
   const usedColors = new Set(assigned.map(w => w.metadata.fleet_identity.color));
 
-  // A protected canary is not named by this cron, but any label it ALREADY holds must stay reserved.
-  // Otherwise a canary that an earlier clobber renamed to a NATO callsign (still protected, because the
-  // spawn-time marker survives the rename) would have that callsign handed to a second worker as well —
-  // trading a rename bug for a duplicate-identity bug.
-  for (const c of canaryProtected) {
-    const cs = c.metadata?.fleet_identity?.callsign;
-    const col = c.metadata?.fleet_identity?.color;
-    if (cs) usedCallsigns.add(cs);
-    if (col) usedColors.add(col);
-  }
+  reserveCanaryLabels(usedCallsigns, usedColors, canaryProtected);
 
   // SD-FDBK-ENH-COORDINATOR-TOOLING-DELTA-001: also reserve callsigns/colors of recently-seen,
   // non-terminated sessions that are temporarily OUT of the 5-min active-view (parked between SDs
@@ -730,7 +759,7 @@ function identityAccountUuid8(metadata, accountIdentity) {
   return (accountIdentity && accountIdentity.accountUuid8) || null;
 }
 
-module.exports = { filterOutCoordinators, filterOutGhostSessions, isTestSessionId, dedupeAssignedCallsigns, reserveParkedIdentities, NATO, COLORS, nextAvailable, extendCallsign, buildTierCallsignBands, tierRankOf, pickCallsignForTier, callsignInTierBand, classifyWorkerNaming, loadPreRegisteredCanaries, partitionWorkersForNaming, identityNeedsRebroadcast, identityAccountUuid8 };
+module.exports = { filterOutCoordinators, filterOutGhostSessions, isTestSessionId, dedupeAssignedCallsigns, reserveParkedIdentities, NATO, COLORS, nextAvailable, extendCallsign, buildTierCallsignBands, tierRankOf, pickCallsignForTier, callsignInTierBand, classifyWorkerNaming, loadPreRegisteredCanaries, partitionWorkersForNaming, planNamingRun, reserveCanaryLabels, identityNeedsRebroadcast, identityAccountUuid8 };
 
 if (require.main === module) {
   main().then(async () => {

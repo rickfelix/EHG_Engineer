@@ -27,7 +27,8 @@ const __dirname = dirname(fileURLToPath(import.meta.url));
 const CHECKIN = resolve(__dirname, '../../../scripts/worker-checkin.cjs');
 const CRON = resolve(__dirname, '../../../scripts/assign-fleet-identities.cjs');
 const { classifyWorkerNaming, pickCallsignForTier, callsignInTierBand, NATO,
-  partitionWorkersForNaming, loadPreRegisteredCanaries, dedupeAssignedCallsigns } =
+  partitionWorkersForNaming, loadPreRegisteredCanaries, dedupeAssignedCallsigns,
+  planNamingRun, reserveCanaryLabels } =
   createRequire(import.meta.url)('../../../scripts/assign-fleet-identities.cjs');
 
 function sbWith(rows, error = null) {
@@ -203,6 +204,85 @@ describe('F3: loadPreRegisteredCanaries — the marker lookup itself', () => {
     const out = await loadPreRegisteredCanaries(api, [null, undefined, ''], 'k');
     expect(out.ok).toBe(true);
     expect(calls).toHaveLength(0);
+  });
+});
+
+/**
+ * R3 — the fail-closed CONSEQUENCE, not the flag. The loader reported ok:false correctly, but nothing
+ * proved the caller acted on it: deleting the fail-closed `return` left the whole suite green. That is
+ * the same "correct decision, unverified consumer" shape as F2, which is why this SD needed a second
+ * review pass. planNamingRun makes the consequence structural — on a failed lookup there are no buckets
+ * at all, so there is no list to name anyone from even if a caller ignored `skip`.
+ */
+describe('R3: a failed marker lookup yields NO nameable buckets', () => {
+  const canaryMd = () => false;
+  const brokenSb = () => ({
+    from() { return this; }, select() { return this; }, in() { return this; },
+    eq() { return Promise.resolve({ data: null, error: { code: '42501' } }); },
+  });
+
+  it('returns skip:true AND withholds every bucket', async () => {
+    const workers = [{ session_id: 's-1', metadata: {} }, { session_id: 's-2', metadata: {} }];
+    const plan = await planNamingRun(brokenSb(), workers, 'k', false, canaryMd);
+    expect(plan.skip).toBe(true);
+    expect(plan.error).toBe('42501');
+    // The point: even a caller that ignored `skip` has nothing to iterate.
+    expect(plan.assignedRaw).toBeUndefined();
+    expect(plan.needsAssignment).toBeUndefined();
+  });
+
+  it('NEGATIVE CONTROL — a healthy lookup does produce buckets', async () => {
+    // Without this, a planner hardcoded to skip would pass the test above and freeze all naming.
+    const okSb = {
+      from() { return this; }, select() { return this; }, in() { return this; },
+      eq() { return Promise.resolve({ data: [{ target_session: 's-1' }], error: null }); },
+    };
+    const workers = [{ session_id: 's-1', metadata: {} }, { session_id: 's-2', metadata: {} }];
+    const plan = await planNamingRun(okSb, workers, 'k', false, canaryMd);
+    expect(plan.skip).toBe(false);
+    expect(plan.canaryProtected.map((w) => w.session_id)).toEqual(['s-1']); // marker honoured
+    expect(plan.needsAssignment.map((w) => w.session_id)).toEqual(['s-2']); // ordinary still named
+  });
+});
+
+/**
+ * R6 — the duplicate-identity mitigation, which was itself unverified: removing the reservation left the
+ * whole suite green. A protected canary never reaches the `assigned` set that seeds usedCallsigns, so
+ * without this its held label would be issued to a second session as well.
+ */
+describe('R6: labels held by a protected canary stay reserved', () => {
+  it('reserves the callsign and colour of an already-clobbered canary', () => {
+    // The realistic case: an earlier clobber renamed this canary to 'Bravo'. It is still protected
+    // (the spawn-time marker survives a rename), so 'Bravo' must not be handed out again.
+    const used = new Set(['Alpha']);
+    const colors = new Set(['blue']);
+    reserveCanaryLabels(used, colors, [
+      { session_id: 's-c', metadata: { fleet_identity: { callsign: 'Bravo', color: 'yellow' } } },
+    ]);
+    expect(used.has('Bravo')).toBe(true);
+    expect(colors.has('yellow')).toBe(true);
+    expect(used.has('Alpha')).toBe(true); // pre-existing entries untouched
+  });
+
+  it('tolerates a canary with NO identity yet (the unstamped case) without polluting the sets', () => {
+    // The primary FR-7 target has no callsign at all; reserving `undefined` would poison nextAvailable.
+    const used = new Set();
+    const colors = new Set();
+    reserveCanaryLabels(used, colors, [{ session_id: 's-c', metadata: {} }, null, undefined]);
+    expect(used.size).toBe(0);
+    expect(colors.size).toBe(0);
+  });
+
+  it('END-TO-END: a reserved canary label is not reissued by the real allocator', () => {
+    // Drives the ACTUAL pickCallsignForTier, so this fails if the reservation is dropped — rather than
+    // asserting only that a Set was mutated.
+    const rank = 1;
+    const held = pickCallsignForTier(rank, new Set()); // the label the allocator would hand out next
+    const used = new Set();
+    reserveCanaryLabels(used, new Set(), [
+      { session_id: 's-c', metadata: { fleet_identity: { callsign: held, color: 'yellow' } } },
+    ]);
+    expect(pickCallsignForTier(rank, used)).not.toBe(held);
   });
 });
 
