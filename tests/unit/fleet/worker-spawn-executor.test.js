@@ -117,6 +117,52 @@ describe('runExecutor (FR-2, dry-run vs live)', () => {
     expect(invocation.args).not.toContain('--resume');
   });
 
+  // MUTATION-KILLING seam test (EXEC-phase adversarial review, condition C2).
+  //
+  // TS-3 above proves the seam does not FALSELY reject. It does NOT prove the seam exists: reverting
+  // the assertion entirely leaves TS-3 green, because with no assert the spawner is simply called.
+  // The review demonstrated that this seam and the spawn-control one could BOTH be deleted outright
+  // with the whole suite still passing — which is precisely the shipped-but-inert shape this SD was
+  // written to eliminate, reproduced in the SD's own delivery. This test kills that mutation.
+  //
+  // Precedent: tests/unit/fleet/tree-currency.test.js added an equivalent mutation-killing block for
+  // the same function after the identical finding.
+  //
+  // FLEET_CLAUDE_CMD is used because it is the ONE operator-reachable clause today —
+  // resolveClaudeCmd returns it verbatim and the token regex rejects a non-claude basename.
+  it('C2: the seam REFUSES a contract-violating invocation — deleting the assert makes this fail', async () => {
+    const prior = process.env.FLEET_CLAUDE_CMD;
+    process.env.FLEET_CLAUDE_CMD = 'C:\\tools\\node.exe'; // not a claude launcher token
+    try {
+      const spawner = vi.fn().mockResolvedValue(undefined);
+      const stampFulfilled = vi.fn().mockResolvedValue(undefined);
+      const r = await runExecutor({
+        pendingRequests: [req('a', 'Echo')],
+        liveCallsigns: new Set(), nowMs: NOW, perTickCap: 5,
+        live: true, spawner, stampFulfilled, prompt: 'PROMPT',
+      });
+      expect(spawner).not.toHaveBeenCalled();
+      expect(r.spawned).toBe(0);
+      expect(r.errors).toBe(1);
+      // The row must stay pending — a refused spawn must never be recorded as fulfilled.
+      expect(stampFulfilled).not.toHaveBeenCalled();
+    } finally {
+      if (prior === undefined) delete process.env.FLEET_CLAUDE_CMD;
+      else process.env.FLEET_CLAUDE_CMD = prior;
+    }
+  });
+
+  it('C2 control: the SAME call with no override spawns normally (the refusal is not incidental)', async () => {
+    const spawner = vi.fn().mockResolvedValue(undefined);
+    const r = await runExecutor({
+      pendingRequests: [req('a', 'Echo')],
+      liveCallsigns: new Set(), nowMs: NOW, perTickCap: 5,
+      live: true, spawner, stampFulfilled: vi.fn().mockResolvedValue(undefined), prompt: 'PROMPT',
+    });
+    expect(spawner).toHaveBeenCalledTimes(1);
+    expect(r.errors).toBe(0);
+  });
+
   it('TS-1: the invocation reaching the spawner is contract-conformant (argv unchanged by the assert)', async () => {
     const spawner = vi.fn().mockResolvedValue(undefined);
     await runExecutor({
