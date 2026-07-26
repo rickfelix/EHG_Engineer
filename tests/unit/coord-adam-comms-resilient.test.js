@@ -487,3 +487,80 @@ describe('full-lane safety net: read-adam-directives covers EVERY directive send
     expect(DIRECTIVE_SENDERS).toContain('orchestrator');
   });
 });
+
+// ─────────── QF-20260726-253 — existence, not SD-claim membership ───────────
+//
+// planDeadLetters treating an ABSENT target as gone is correct and stays (FR-4 above pins it).
+// The defect was the SET: it came from the claim-holder query (.not('sd_key','is',null)), so the
+// coordinator, Adam, Solomon and every IDLE worker — none of which hold an SD by design — read as
+// gone. 146 of 162 machine messages to the coordinator were destroyed, including an ACCOUNT_SWITCH
+// notice whose loss produced a wrong fleet-wide root-cause diagnosis.
+describe('QF-20260726-253: the live-session set is existence-based, not claim-based', () => {
+  const IDLE_NO_SD = 'aaaaaaaa-1111-4222-8333-444444444444';
+  const CLAIM_HOLDER = 'bbbbbbbb-1111-4222-8333-444444444444';
+
+  // Minimal builder for the .select().or().order().range() chain fetchAllPaginated drives.
+  // `orArg` is captured so the liveness filter itself can be asserted, not just its output.
+  const captured = {};
+  const sbReturning = (rows, { fail = false } = {}) => ({
+    from() {
+      return {
+        select() { return this; },
+        or(expr) { captured.or = expr; return this; },
+        order() { return this; },
+        range() {
+          return fail
+            ? Promise.resolve({ data: null, error: { message: 'view unreadable' } })
+            : Promise.resolve({ data: rows, error: null });
+        },
+      };
+    },
+  });
+
+  it('includes a live session that holds NO sd_key — the whole point of the fix', async () => {
+    const ids = await sweep.loadLiveSessionIds(sbReturning([
+      { session_id: IDLE_NO_SD, computed_status: 'idle' },   // coordinator / Adam / idle worker
+      { session_id: CLAIM_HOLDER, computed_status: 'active' },
+    ]));
+    expect(ids).toBeInstanceOf(Set);
+    expect(ids.has(IDLE_NO_SD)).toBe(true);
+    expect(ids.has(CLAIM_HOLDER)).toBe(true);
+  });
+
+  it('an alive-but-unclaimed session keeps its mail (the 146-of-162 regression)', async () => {
+    const ids = await sweep.loadLiveSessionIds(sbReturning([{ session_id: IDLE_NO_SD, computed_status: 'idle' }]));
+    const plan = sweep.planDeadLetters(
+      [{ id: 'm1', target_session: IDLE_NO_SD, message_type: 'INFO', payload: { kind: 'ACCOUNT_SWITCH' }, expires_at: null }],
+      { allSessionIds: ids, deadIds: new Set() },
+      NOW,
+    );
+    expect(plan).toHaveLength(0);
+  });
+
+  it('a STALE target is still dead-lettered — FR-4 preserved, not relaxed into never firing', async () => {
+    // The stale session is excluded server-side by the liveness filter, so it never reaches the
+    // Set and remains "gone" to planDeadLetters. Measured live: 5911 of 5926 rows are stale, so a
+    // set keyed on mere existence would have made dead-lettering fire essentially never.
+    const ids = await sweep.loadLiveSessionIds(sbReturning([{ session_id: CLAIM_HOLDER, computed_status: 'active' }]));
+    const plan = sweep.planDeadLetters(
+      [{ id: 'm1', target_session: IDLE_NO_SD, message_type: 'INFO', payload: {}, expires_at: null }],
+      { allSessionIds: ids, deadIds: new Set() },
+      NOW,
+    );
+    expect(plan).toHaveLength(1);
+  });
+
+  it('filters by EXCLUDING the dead status, so an unknown/NULL status keeps its mail', async () => {
+    await sweep.loadLiveSessionIds(sbReturning([]));
+    // An allow-list of active/idle would silently destroy mail for any future status; the
+    // exclusion form retains it. Pin the direction, not just today's result.
+    expect(captured.or).toBe('computed_status.is.null,computed_status.neq.stale');
+  });
+
+  it('returns null when the view cannot be read — callers skip rather than guess', async () => {
+    // A set we could not read is not evidence its members are gone, and falling back to the
+    // claim-filtered set is exactly how live mail got destroyed. Fail toward DELIVERY.
+    expect(await sweep.loadLiveSessionIds(sbReturning(null, { fail: true }))).toBeNull();
+    expect(await sweep.loadLiveSessionIds({ from() { throw new Error('boom'); } })).toBeNull();
+  });
+});
