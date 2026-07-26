@@ -10,6 +10,7 @@ import { dbLoader } from '../config.js';
 import { asyncHandler } from '../../lib/middleware/eva-error-handler.js';
 import { isValidUuid, validateUuidParam, isValidStringLength } from '../middleware/validate.js';
 import { deleteVentureFully } from '../../lib/deleteVentureFully.js';
+import { evaluateConfirmation } from '../../lib/destructive-confirmation.js';
 
 const router = Router();
 
@@ -318,6 +319,15 @@ router.post('/master-reset', asyncHandler(async (req, res) => {
   }
   const ventureIds = (ventures || []).map(v => v.id).filter(Boolean);
 
+  // SD-LEO-INFRA-DESTRUCTIVE-ACTION-SAFETY-001 FR-1 — confirmation gate.
+  // Placed AFTER the venture list is known (the token binds to the exact target set)
+  // and BEFORE the teardown loop. It lives in the HANDLER BODY, not in mount
+  // middleware, because server/index.js:191 and :192 mount this SAME router object at
+  // both /api/ventures and /api/competitor-analysis — a mount-level guard would cover
+  // one path and silently leave the other open.
+  const gate = evaluateConfirmation({ body: req.body, operation: 'master-reset', targetIds: ventureIds });
+  if (!gate.ok) return res.status(gate.status).json(gate.body);
+
   // Loop the shared full-teardown helper per venture.
   const results = [];
   for (const id of ventureIds) {
@@ -355,6 +365,10 @@ router.post('/master-reset', asyncHandler(async (req, res) => {
 // ── Single-venture full teardown ───────────────────────────────────
 // SD-SINGLEVENTURE-AND-BULK-DELETE-ORCH-001-B
 router.post('/:id/full-delete', validateUuidParam('id'), asyncHandler(async (req, res) => {
+  // FR-1: same irreversible helper, so the same gate. n=1 is still unrecoverable.
+  const gate = evaluateConfirmation({ body: req.body, operation: 'full-delete', targetIds: [req.params.id] });
+  if (!gate.ok) return res.status(gate.status).json(gate.body);
+
   const supabase = resolveServiceClient(req);
   const result = await deleteVentureFully(req.params.id, { supabase });
   return res.status(result.success ? 200 : 500).json(result);
@@ -367,6 +381,16 @@ router.post('/bulk-full-delete', asyncHandler(async (req, res) => {
   if (!ids || ids.length === 0) {
     return res.status(400).json({ success: false, error: 'Request body must include a non-empty ids[] array' });
   }
+
+  // FR-1: this route is the reason the gate could not be scoped to master-reset alone.
+  // It accepts an ARBITRARY ids[] array and loops the identical teardown helper, so one
+  // authenticated POST carrying every venture id is equivalent in effect to a full
+  // master reset. Gating only /master-reset would have left the SD acceptance criterion
+  // ("no single authenticated request can trigger a full portfolio teardown") provably
+  // unmet while every test passed.
+  const gate = evaluateConfirmation({ body: req.body, operation: 'bulk-full-delete', targetIds: ids });
+  if (!gate.ok) return res.status(gate.status).json(gate.body);
+
   const supabase = resolveServiceClient(req);
   const results = [];
   for (const id of ids) {
