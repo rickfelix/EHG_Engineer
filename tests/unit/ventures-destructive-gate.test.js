@@ -189,6 +189,73 @@ describe('FR-4: fails CLOSED at the route when confirmation is unconfigured', ()
       if (priorInternal !== undefined) process.env.INTERNAL_API_KEY = priorInternal;
     }
   });
+
+  // FR-4 BLAST RADIUS — the acceptance criterion that was ARGUED BUT NEVER MEASURED.
+  //
+  // metadata lists FR-4 as CRITICAL: "fail CLOSED on the destructive path, with a BOUNDED BLAST
+  // RADIUS". Failing closed was covered by the test above; the BOUND was not. A grep for
+  // unrelated/blast/non-destructive across both gate suites returned zero hits, so nothing
+  // asserted that the confirmation subsystem's failure stays confined to the destructive routes.
+  //
+  // That distinction is the whole point: "refuses everything" also satisfies "refuses the
+  // destructive route". Without this arm, a change that took the entire router down under the
+  // same condition would still pass FR-4 — the safe-looking result and the catastrophic one are
+  // indistinguishable. In an SD about safety controls, that is the wrong half to leave unpinned.
+  //
+  // Found post-hoc by the RETRO reconstruction; added by the adopting session.
+  // MEASURED AS A DIFFERENTIAL, deliberately. The obvious form — "assert the listing route returns
+  // 200 while the destructive route 503s" — is NOT available here and it took a failing test to
+  // see why: this suite mocks server/config.js to `{ dbLoader: {} }` (line 34), and the
+  // non-destructive routes read `dbLoader.supabase` while only the three destructive routes go
+  // through resolveServiceClient(req) and see the injected stub. So no non-destructive route can
+  // succeed in this harness, and an absolute assertion about its status would be asserting the
+  // mock, not the product.
+  //
+  // The differential IS the claim: if the confirmation subsystem's state changed anything outside
+  // the destructive path, the unrelated route would behave DIFFERENTLY with the secret present
+  // versus absent. Identical behaviour in both states is exactly "bounded blast radius", and it is
+  // measurable without touching the shared mock.
+  it('BOUNDED: an UNRELATED route behaves IDENTICALLY whether or not confirmation is configured', async () => {
+    const priorSecret = process.env.DESTRUCTIVE_CONFIRM_SECRET;
+    const priorInternal = process.env.INTERNAL_API_KEY;
+
+    // The suite-wide mock leaves dbLoader EMPTY (line 34) because only the destructive routes were
+    // ever exercised. Give it the minimum the listing route needs, set on the mocked object at
+    // runtime and removed in the finally, so the shared mock — and the other 13 tests — are
+    // untouched. Without this the route throws before responding and the request helper REJECTS,
+    // so the test would fail on a harness gap rather than on the property under test.
+    const { dbLoader } = await import('../../server/config.js');
+    const listQuery = { or: () => listQuery, then: (r) => r({ data: [], error: null }) };
+    dbLoader.supabase = { from: () => ({ select: () => ({ order: () => listQuery }) }) };
+
+    try {
+      // ARM 1 — confirmation UNCONFIGURED. Destructive route refuses.
+      delete process.env.DESTRUCTIVE_CONFIRM_SECRET;
+      delete process.env.INTERNAL_API_KEY;
+      const brokenApp = await makeApp();
+      const destructive = await request(brokenApp, { url: '/api/ventures/master-reset', body: {} });
+      expect(destructive.status).toBe(503);
+      expect(destructive.body.code).toBe('CONFIRMATION_UNAVAILABLE');
+      const unrelatedWhileBroken = await request(brokenApp, { method: 'GET', url: '/api/ventures' });
+
+      // ARM 2 — confirmation CONFIGURED (the control). Same unrelated route, same app shape.
+      process.env.DESTRUCTIVE_CONFIRM_SECRET = 'blast-radius-control-secret';
+      const healthyApp = await makeApp();
+      const unrelatedWhileHealthy = await request(healthyApp, { method: 'GET', url: '/api/ventures' });
+
+      // The unrelated route is untouched by the confirmation subsystem's state.
+      expect(unrelatedWhileBroken.status, 'confirmation state must not change unrelated routes')
+        .toBe(unrelatedWhileHealthy.status);
+      // And it is never intercepted BY the gate — whatever it returns is its own, not the gate's.
+      expect(unrelatedWhileBroken.body?.code).not.toBe('CONFIRMATION_UNAVAILABLE');
+      expect(deleteVentureFullyMock).toHaveBeenCalledTimes(0);
+    } finally {
+      if (priorSecret !== undefined) process.env.DESTRUCTIVE_CONFIRM_SECRET = priorSecret;
+      else delete process.env.DESTRUCTIVE_CONFIRM_SECRET;
+      if (priorInternal !== undefined) process.env.INTERNAL_API_KEY = priorInternal;
+      delete dbLoader.supabase; // restore the empty mock the rest of the suite relies on
+    }
+  });
 });
 
 describe('FR-3: the teardown is bracketed by audit rows, and refuses when it cannot be audited', () => {
