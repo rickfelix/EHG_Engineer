@@ -70,5 +70,34 @@ jobs:
           node-version: '20'
           cache: npm
       - run: npm ci --no-audit --no-fund
+      # See test-sd-creation.yml for the full rationale. Since d031c798 the vitest `db`
+      # project's include is [] whenever assessDbTarget is not allowed, and
+      # tests/integration/** resolves ONLY under that project — so this step resolved zero
+      # files and exited 1, red on main from 15:41Z. Gate it so a gated-off db tier SKIPS
+      # visibly instead of failing misleadingly.
+      - name: Assess db-tier target
+        id: dbgate
+        env:
+          SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+          NEXT_PUBLIC_SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+        run: |
+          node --input-type=module -e "
+          import { assessDbTarget } from './tests/helpers/db-target.js';
+          import fs from 'node:fs';
+          const r = assessDbTarget();
+          console.log('db target assessment: ' + JSON.stringify(r));
+          fs.appendFileSync(process.env.GITHUB_OUTPUT, 'allowed=' + (r.allowed ? 'true' : 'false') + '\n');
+          fs.appendFileSync(process.env.GITHUB_OUTPUT, 'reason=' + (r.reason || '') + '\n');
+          "
+
       - name: Run RPC equivalence tests
+        if: steps.dbgate.outputs.allowed == 'true'
         run: npx vitest run tests/integration/eva/can-auto-advance-equivalence.test.js
+
+      # Deliberately LOUD — absent coverage must not read as success. Real fix: designate a
+      # non-production ref. Do NOT aim VITEST_DB_ALLOW_REF at production.
+      - name: DB tier gated off — RPC equivalence tests SKIPPED
+        if: steps.dbgate.outputs.allowed != 'true'
+        run: |
+          echo "::warning title=RPC equivalence tests SKIPPED::db tier gated off (reason: ${{ steps.dbgate.outputs.reason }}). No designated non-production Supabase ref, so these suites did not run. STOPGAP from PR #6527."
+          echo "SKIPPED: db tier not allowed (${{ steps.dbgate.outputs.reason }})" >> "$GITHUB_STEP_SUMMARY"
