@@ -13,6 +13,7 @@ import { createClient } from '@supabase/supabase-js';
 import { computeSessionBadge } from '../../lib/fleet/fleet-view-badges.cjs';
 import { getAttentionFlaggedSessions } from '../../lib/fleet/attention-flag-writer.js';
 import { loadStore, buildNamedAccountChips } from '../../lib/fleet/account-capacity-gauge.cjs';
+import { getAccountUsage } from '../../lib/fleet/account-usage-reader.cjs';
 
 const router = Router();
 
@@ -145,6 +146,13 @@ export async function getFleetPanel(req, res) {
   // capacity store is empty/partial (unmatched accounts render 'wk --%').
   const accountChips = buildNamedAccountChips(loadStore());
 
+  // SD-LEO-FEAT-ACCOUNT-USAGE-STRIP-001 (FR-4): live per-account quota usage, read server-side.
+  // ADDITIVE — deliberately a NEW field rather than a richer accountChips: that field is consumed
+  // by the standalone vanilla panel (server/public/fleet-ui/fleet-panel.js) and reshaping it would
+  // break a live surface. Follows the same boundary as accountChips above — the server reads
+  // privileged local state and the browser receives only a computed percentage, never a token.
+  const accountUsage = await getAccountUsage();
+
   let attentionStrip = [];
   try {
     attentionStrip = await getAttentionFlaggedSessions({ supabase });
@@ -155,6 +163,7 @@ export async function getFleetPanel(req, res) {
   res.json({
     sessions,
     accountChips,
+    accountUsage,
     attentionStrip,
     filter: { liveOnly: !showAll, windowSeconds, truncated, ghostsHidden },
   });

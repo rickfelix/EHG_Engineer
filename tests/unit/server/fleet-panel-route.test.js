@@ -20,6 +20,18 @@ vi.mock('../../../lib/fleet/account-capacity-gauge.cjs', async (importActual) =>
   return { ...actual, loadStore: vi.fn(() => ({})) };
 });
 
+// SD-LEO-FEAT-ACCOUNT-USAGE-STRIP-001: the usage reader is mocked at the ROUTE boundary only —
+// it reads real credentials off disk and calls a live endpoint, neither of which belongs in a unit
+// test. Its own behaviour (every failure mode) is covered in tests/unit/fleet/account-usage-reader.
+const MOCK_USAGE = [
+  { name: 'Deep Soul Sessions', state: 'unavailable', reason: 'not_configured', fetchedAt: '2026-07-26T21:00:00.000Z' },
+  { name: 'Code Street Labs', state: 'ok', weeklyPct: 54, fiveHourPct: 11, weeklyResetsAt: '2026-08-02T00:00:00Z', fiveHourResetsAt: null, fetchedAt: '2026-07-26T21:00:00.000Z' },
+  { name: 'Rick Felix 2000', state: 'ok', weeklyPct: 11, fiveHourPct: 3, weeklyResetsAt: null, fiveHourResetsAt: null, fetchedAt: '2026-07-26T21:00:00.000Z' },
+];
+vi.mock('../../../lib/fleet/account-usage-reader.cjs', () => ({
+  getAccountUsage: vi.fn(async () => MOCK_USAGE),
+}));
+
 const { getFleetPanel } = await import('../../../server/routes/fleet-panel.js');
 
 function mockRes() {
@@ -224,6 +236,27 @@ describe('GET /api/fleet-panel', () => {
     const payload = res.json.mock.calls[0][0];
     expect(payload.sessions[0].model_effort).toBe('opus/--');
     expect(payload.sessions[0].callsign).toBeNull();
+  });
+
+  it('FR-4 — exposes accountUsage additively without reshaping the legacy accountChips (TS-10)', async () => {
+    const res = mockRes();
+    await getFleetPanel(mockReq(mockSupabase([LIVE_WORKER])), res);
+    const payload = res.json.mock.calls[0][0];
+
+    // The new field carries one entry per named account, each with an explicit state.
+    expect(payload.accountUsage.map((a) => a.name)).toEqual([
+      'Deep Soul Sessions', 'Code Street Labs', 'Rick Felix 2000',
+    ]);
+    expect(payload.accountUsage.every((a) => a.state === 'ok' || a.state === 'unavailable')).toBe(true);
+
+    // TS-10: the vanilla panel (server/public/fleet-ui/fleet-panel.js) still gets EXACTLY the
+    // {name, wkPct} shape it parses. Reshaping accountChips instead of adding a field would have
+    // broken that live surface silently.
+    expect(payload.accountChips).toHaveLength(3);
+    for (const chip of payload.accountChips) {
+      expect(Object.keys(chip).sort()).toEqual(['name', 'wkPct']);
+    }
+    expect(payload.accountChips.map((c) => c.name)).toEqual(['Deep Soul', 'Rick Felix', 'CodeStreet']);
   });
 
   it('returns an empty attentionStrip array (not an error) when zero sessions are flagged', async () => {
