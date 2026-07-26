@@ -10,7 +10,7 @@
  */
 import { describe, it, expect } from 'vitest';
 import { isUnguardedDbTest, DB_IMPORT_SIGNAL, GUARD_SIGNAL } from '../../scripts/audit-db-test-guards.mjs';
-import { HAS_REAL_DB, describeDb, itDb } from '../helpers/db-available.js';
+import { HAS_REAL_DB, describeDb, itDb, DB_TARGET_IS_DESIGNATED, assessDbTarget } from '../helpers/db-available.js';
 
 describe('FR-3 audit: isUnguardedDbTest', () => {
   it('flags a DB-touching test with no skip guard (TS-3)', () => {
@@ -67,12 +67,29 @@ describe('FR-1 shared helper: tests/helpers/db-available.js', () => {
     expect(typeof itDb).toBe('function');
   });
 
-  it('HAS_REAL_DB agrees with the sentinel contract for the current env', () => {
-    const url = process.env.SUPABASE_URL || '';
-    const key = process.env.SUPABASE_SERVICE_ROLE_KEY || '';
-    const expected = Boolean(
-      url && !url.includes('test.invalid.local') && key && !key.includes('test-service-role-key-not-real')
-    );
-    expect(HAS_REAL_DB).toBe(expected);
+  it('HAS_REAL_DB agrees with the SAFETY predicate for the current env (QF-20260726-459)', () => {
+    // REPLACED, not patched around. This assertion used to RE-DERIVE the old sentinel predicate
+    // inline —
+    //   Boolean(url && !url.includes('test.invalid.local') && key && !key.includes('...not-real'))
+    // — and assert HAS_REAL_DB matched it. Two problems, and the second is why the defect survived:
+    //   1. it pinned the DEFECT. That predicate answers "is a real DB reachable?", which is TRUE for
+    //      production, so the assertion actively certified the behaviour QF-459 exists to remove.
+    //   2. it was a PARALLEL RE-DERIVATION of the thing under test. Re-implementing the predicate in
+    //      the test means the test agrees with the implementation by construction and can never
+    //      detect that the implementation asks the wrong question.
+    // The subject of this test is the guard itself, so when the guard's contract deliberately
+    // changed, this had to change with it. It now asserts the identity that actually matters.
+    expect(HAS_REAL_DB).toBe(DB_TARGET_IS_DESIGNATED);
+    expect(HAS_REAL_DB).toBe(assessDbTarget(process.env).allowed);
+  });
+
+  it('fails closed in this environment: no designated target means no DB tests run', () => {
+    // The unit project injects the synthetic sentinel, so the target is unrecognisable and the
+    // guard must refuse. Pinning the REASON, not just the false, so a future always-skip regression
+    // (which would also produce false) is distinguishable from a correct refusal.
+    const r = assessDbTarget(process.env);
+    expect(r.allowed).toBe(false);
+    expect(['unrecognised_target', 'no_designated_target', 'no_supabase_url', 'no_service_role_key'])
+      .toContain(r.reason);
   });
 });
