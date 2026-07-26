@@ -15,6 +15,7 @@ import {
   MultilinePromptError,
 } from '../../../lib/fleet/startup-prompt-selection.js';
 import { createRequire } from 'node:module';
+import fs from 'node:fs';
 
 const require = createRequire(import.meta.url);
 
@@ -42,9 +43,11 @@ describe('classifySessionByCallsign — three arms, and the third is the point',
     expect(kinds.every((k) => ['canary', 'worker', 'unidentifiable'].includes(k))).toBe(true);
   });
 
-  it('is not case- or whitespace-fooled into losing the canary namespace', () => {
+  it('is not whitespace-fooled into losing the canary namespace', () => {
     expect(classifySessionByCallsign('  Canary-pilot  ').kind).toBe('canary');
-    // lower-case 'canary-' is deliberately NOT the namespace — the prefix is exact.
+    // classify stays EXACT-match: it is the TARGETING predicate, and over-matching there would let
+    // a drill or kill surface aim at the wrong session. The case-insensitive DENY lives in
+    // resolveStartupPromptForCallsign, where under-matching is the dangerous direction. See SEC-1.
     expect(classifySessionByCallsign('canary-pilot').kind).toBe('worker');
   });
 
@@ -81,6 +84,61 @@ describe('FR-4 — the canary prefix has exactly ONE declaration', () => {
   it('and the one declaration is actually there (so the scan above cannot pass by finding nothing)', () => {
     const src = fs.readFileSync(new URL('startup-prompt-selection.js', FLEET_DIR), 'utf8');
     expect(DECL.test(src.replace('export ', ''))).toBe(true);
+  });
+});
+
+describe('SEC-1 — a case-mismatched canary is DENIED the worker directive', () => {
+  const { resolveStartupPromptForCallsign } = require('../../../lib/fleet/startup-prompt-selection.js');
+  const { FLEET_WORKER_STARTUP_PROMPT } = require('../../../lib/coordinator/coordination-events.cjs');
+  const resolve = (cs) => resolveStartupPromptForCallsign(cs, {
+    workerPrompt: FLEET_WORKER_STARTUP_PROMPT, canaryPrompt: null, logFn: () => {},
+  });
+
+  // MEASURED by the SECURITY review at all three sites, with a control arm: before this fix,
+  // 'canary-pilot' and 'CANARY-pilot' each received the full 1406-byte claiming directive. A
+  // one-character typo in a slot name reaches it, and assessCanarySlotNaming is fail-open.
+  it.each(['canary-pilot', 'CANARY-pilot', 'CaNaRy-pilot', '  canary-x  '])(
+    'denies %j — a misnamed canary must not be able to claim work', (cs) => {
+      const r = resolve(cs);
+      expect(r.prompt).toBeNull();
+      expect(r.prompt).not.toBe(FLEET_WORKER_STARTUP_PROMPT);
+      expect(r.reason).toBe('canary_namespace_case_mismatch');
+    },
+  );
+
+  it('CONTROL: an ordinary worker still receives the directive (the deny is not blanket)', () => {
+    expect(resolve('Charlie').prompt).toBe(FLEET_WORKER_STARTUP_PROMPT);
+    // and a name merely CONTAINING "canary" is not swept up — the deny is prefix-anchored.
+    expect(resolve('Bravo-canary-adjacent').prompt).toBe(FLEET_WORKER_STARTUP_PROMPT);
+  });
+
+  it('the exact-prefix canary still resolves through the canary arm, not the mismatch arm', () => {
+    const r = resolve('Canary-pilot');
+    expect(r.prompt).toBeNull();
+    expect(r.reason).toBe('no_canary_prompt_available');
+  });
+});
+
+describe('SEC-2 — an unsafe sessionId is refused on BOTH path-construction branches', () => {
+  const { buildSessionLaunch } = require('../../../lib/fleet/build-session-launch.cjs');
+  const os = require('node:os');
+  const nodePath = require('node:path');
+
+  // The missing-root branch built the prompt path inline with no charset check, and sessionId can
+  // be a DB-sourced resumeUuid. Both branches must refuse.
+  it('refuses on the MISSING-root branch (the one that was unguarded)', () => {
+    expect(() => buildSessionLaunch({
+      role: 'worker', callsign: 'Charlie', startupPrompt: 'x',
+      cwd: nodePath.join(os.tmpdir(), '__definitely_missing_dir__'), resumeUuid: '../../../../pwn',
+    })).toThrow(/unsafe sessionId/);
+  });
+
+  it('CONTROL: a legitimate uuid still builds (the guard is not always-on)', () => {
+    const cwd = fs.mkdtempSync(nodePath.join(os.tmpdir(), 'sec2-'));
+    expect(() => buildSessionLaunch({
+      role: 'worker', callsign: 'Charlie', startupPrompt: 'x', cwd,
+      sessionId: '11111111-2222-4333-8444-555555555555',
+    })).not.toThrow();
   });
 });
 
