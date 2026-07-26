@@ -14,7 +14,6 @@
 import { describe, it, expect } from 'vitest';
 import { fileURLToPath } from 'node:url';
 import { dirname, resolve } from 'node:path';
-import { readFileSync } from 'node:fs';
 import { execFileSync } from 'node:child_process';
 import { createRequire } from 'node:module';
 
@@ -121,5 +120,41 @@ describe('Phase D — BYTE-IDENTICAL flag-off inertness (subprocess)', () => {
     }
     expect(code).toBe(0);
     expect(stdout).toMatch(/Solomon dormant/i);
+  });
+});
+
+/**
+ * SD-LEO-INFRA-SOLOMON-CONSULT-CANNOT-DELIVER-001 FR-2 — the consult_purpose discriminator, pinned
+ * against the REAL builder.
+ *
+ * Why this block exists: the lane test (tests/unit/adam/presend-consult-lane.test.js) asserts the
+ * discriminator against a hand-written FAKE builder that performs the consultPurpose→consult_purpose
+ * mapping itself, so it proves the fake, not the shipped code. The real mapping at
+ * worker-signal.cjs had ZERO coverage. That is a silent-forever failure mode: reconcileLateVerdicts
+ * SELECTS on payload->>consult_purpose, and the cron deliberately treats reconciled=0 as a healthy
+ * exit 0 — so if this key stopped being emitted, the reconciler would match nothing and every signal
+ * would still read green. That is the exact shape of the original defect this SD fixes.
+ */
+describe('FR-2 — consult_purpose emitted by the REAL buildSolomonConsultPayload', () => {
+  const base = { correlationId: 'corr-1', body: 'packet', senderCallsign: 'Bravo' };
+
+  it('maps consultPurpose → payload.consult_purpose', () => {
+    const p = ws.buildSolomonConsultPayload({ ...base, consultPurpose: 'pre_send' });
+    expect(p.consult_purpose).toBe('pre_send');
+    // The reconciler's candidate query pairs this with kind, so both must be right together.
+    expect(p.kind).toBe(PAYLOAD_KINDS.SOLOMON_CONSULT);
+  });
+
+  it('OMITS the key entirely when no purpose is supplied (byte-identical for existing callers)', () => {
+    const p = ws.buildSolomonConsultPayload(base);
+    expect('consult_purpose' in p).toBe(false);
+  });
+
+  it('a pre_send payload satisfies the reconciler predicate; a plain consult does not', () => {
+    // Encodes the actual coupling rather than restating the assignment: matches
+    // .eq(kind).eq(consult_purpose,'pre_send') in lib/coordinator/reply-class.cjs.
+    const matches = (p) => p.kind === PAYLOAD_KINDS.SOLOMON_CONSULT && p.consult_purpose === 'pre_send';
+    expect(matches(ws.buildSolomonConsultPayload({ ...base, consultPurpose: 'pre_send' }))).toBe(true);
+    expect(matches(ws.buildSolomonConsultPayload(base))).toBe(false);
   });
 });

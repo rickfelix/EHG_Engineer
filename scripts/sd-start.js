@@ -1325,7 +1325,10 @@ async function main() {
       // SD-LEO-INFRA-CLAIM-FITNESS-FAILOPEN-BYPASS-001 (FR-1/FR-3): best-effort release (never throws),
       // then UNCONDITIONALLY block the claim. (Was `.rpc(...).catch(() => {})` — the .catch threw on the
       // non-.catch-able builder before this exit, and the outer catch swallowed it as fail-open.)
-      await bestEffortReleaseSd(supabase, session.session_id);
+      // QF-20260726-593: SD-scoped + mechanism-named. release_sd is session-scoped and
+      // would otherwise drop whatever this session holds — which may be an unrelated,
+      // live SD, not the one being blocked here.
+      await bestEffortReleaseSd(supabase, session.session_id, 'crosscheck_block', console.error, { expectedSdKey: sd.sd_key || effectiveId });
       process.exit(1);
     }
   } catch (ccErr) {
@@ -1363,7 +1366,8 @@ async function main() {
       // UNCONDITIONALLY block the claim + exit. The prior `.rpc(...).catch(() => {})` threw on the
       // non-.catch-able PostgREST builder BEFORE this exit, the outer catch swallowed it as 'fail-open',
       // and a positively-determined UNFIT (e.g. wrong-target_application) SD got claimed anyway.
-      await bestEffortReleaseSd(supabase, session.session_id);
+      // QF-20260726-593: SD-scoped + mechanism-named (see crosscheck site above).
+      await bestEffortReleaseSd(supabase, session.session_id, `unfit:${fitVerdict.blockClass}`, console.error, { expectedSdKey: sd.sd_key || effectiveId });
       process.exit(1);
     }
   } catch (fitErr) {
@@ -1374,7 +1378,8 @@ async function main() {
     // NEVER throws, so that fail-open is the fleet-wide-stall guard. This outer catch therefore only fires
     // on a truly-novel error, where blocking the claim (not silently claiming wrong work) is correct.
     console.error(`${colors.red}   ❌ [fitness] UNEXPECTED error — failing CLOSED (blocking the claim): ${fitErr.message}${colors.reset}`);
-    await bestEffortReleaseSd(supabase, session.session_id);
+    // QF-20260726-593: SD-scoped + mechanism-named (see crosscheck site above).
+    await bestEffortReleaseSd(supabase, session.session_id, 'fitness_unexpected_error', console.error, { expectedSdKey: sd.sd_key || effectiveId });
     process.exit(1);
   }
 

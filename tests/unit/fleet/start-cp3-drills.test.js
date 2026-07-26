@@ -1,6 +1,6 @@
 // SD-LEO-INFRA-LEO-APP-LAUNCHER-001 (FR-4) — worker-startable CP3 drill starter.
 import { describe, it, expect, vi } from 'vitest';
-import { planDrills, main, defaultRunDrills } from '../../../scripts/fleet/start-cp3-drills.js';
+import { planDrills, main, defaultRunDrills, summarizeLegVerdicts, formatDrillReport, formatEvidenceLines } from '../../../scripts/fleet/start-cp3-drills.js';
 import { LaunchResolveError } from '../../../lib/fleet/build-session-launch.cjs';
 
 const OKENV = { FLEET_ACCOUNT_PROFILES_DIR: 'C:\\fleet\\profiles' };
@@ -51,11 +51,159 @@ describe('main — worker-startable, dry-run default', () => {
   });
 });
 
+// QF-20260725-790: the OTHER half of the false pass. main() hardcoded ok:true for every --live run and
+// the CLI did main().then(r => process.exit(r.ok ? 0 : 1)), discarding the entire results object. So the
+// 2026-07-26T00:15Z acceptance attempt executed almost nothing, printed nothing, and exited 0.
+// Fixing only the leg CHECKS would have left the false pass intact at the exit code.
+describe('QF-20260725-790: the verdict is DERIVED from the legs and is inspectable', () => {
+  it('ok is FALSE when a leg fails, instead of hardcoded true', async () => {
+    const runDrills = vi.fn(async () => ({
+      g1a: { outcome: 'ok' },
+      reboot: { pass: false, checks: [{ name: 'respawn_events_present', pass: false, detail: 'no bound respawn' }] },
+      u4: { pass: true, checks: [{ name: 'u4', pass: true, detail: 'ok' }] },
+    }));
+    const r = await main(['--live'], { env: OKENV, log: () => {}, runDrills });
+    expect(r.ok).toBe(false);
+  });
+
+  it('a leg that THREW (captured as {error}) reads as FAILURE, never as no-opinion', async () => {
+    const runDrills = vi.fn(async () => ({ g1a: { outcome: 'ok' }, reboot: { error: 'boom' }, u4: { pass: true } }));
+    const r = await main(['--live'], { env: OKENV, log: () => {}, runDrills });
+    expect(r.ok).toBe(false);
+    expect(r.legVerdicts.find((v) => v.leg === 'reboot').detail).toMatch(/ERROR: boom/);
+  });
+
+  it('a leg reporting ZERO checks does not count as a pass (it demonstrated nothing)', async () => {
+    const runDrills = vi.fn(async () => ({ reboot: { pass: true, checks: [] } }));
+    const r = await main(['--live'], { env: OKENV, log: () => {}, runDrills });
+    expect(r.ok).toBe(false);
+    expect(r.legVerdicts.some((v) => /ZERO checks/.test(v.detail || ''))).toBe(true);
+  });
+
+  it('ok is TRUE when every leg genuinely passes (not a blanket fail)', async () => {
+    const runDrills = vi.fn(async () => ({
+      g1a: { outcome: 'ok' },
+      reboot: { pass: true, checks: [{ name: 'respawn_events_present', pass: true, detail: 'bound' }] },
+      u4: { pass: true, checks: [{ name: 'u4', pass: true, detail: 'ok' }] },
+    }));
+    const r = await main(['--live'], { env: OKENV, log: () => {}, runDrills });
+    expect(r.ok).toBe(true);
+  });
+
+  it('formatDrillReport prints the EVIDENCE ROW IDS under their check (scope part 2)', async () => {
+    const runDrills = vi.fn(async () => ({
+      reboot: {
+        pass: false,
+        checks: [
+          {
+            name: 'respawn_events_present',
+            pass: false,
+            detail: 'session-bound fleet_verb_respawn events: 0 (need >= 1)',
+            evidence: [{ id: 'evt-dry', session_id: null, outcome: 'dry_run', live: false, counted: false }],
+          },
+          {
+            name: 'respawn_bind_audited',
+            pass: false,
+            detail: '0/1 bound session(s) audited',
+            evidence: { audit_rows: [], unaudited_bound_sessions: ['s-9'] },
+          },
+        ],
+      },
+    }));
+    const r = await main(['--live'], { env: OKENV, log: () => {}, runDrills });
+    const text = formatDrillReport(r);
+    // The rejected row is NAMED, with why it did not count — the 00:15Z question was "which row?".
+    expect(text).toMatch(/evidence row evt-dry/);
+    expect(text).toMatch(/outcome=dry_run/);
+    expect(text).toMatch(/counted=false/);
+    // And the unproven bind is named, not just counted.
+    expect(text).toMatch(/UNAUDITED bound session=s-9/);
+  });
+
+  it('formatEvidenceLines never silently drops an unrecognised evidence shape', () => {
+    // Dropping evidence is the exact failure class this QF removes, so an unknown shape is
+    // stringified rather than omitted.
+    expect(formatEvidenceLines(undefined)).toEqual([]);
+    expect(formatEvidenceLines([])).toEqual(["evidence: (no rows in this run's window)"]);
+    expect(formatEvidenceLines('weird')).toEqual(['evidence: weird']);
+  });
+
+  it('formatDrillReport renders every check name and verdict, so the result is not inferred from an exit code', async () => {
+    const runDrills = vi.fn(async () => ({
+      reboot: { pass: false, checks: [{ name: 'respawn_bind_audited', pass: false, detail: 'absence is not a pass' }] },
+    }));
+    const r = await main(['--live'], { env: OKENV, log: () => {}, runDrills });
+    const text = formatDrillReport(r);
+    expect(text).toMatch(/ok=false/);
+    expect(text).toMatch(/FAIL {2}reboot\/respawn_bind_audited/);
+    expect(text).toMatch(/absence is not a pass/);
+  });
+});
+
+// QF-20260725-985: the wrapper-vs-identity defect and its fail-loud guard.
+describe('defaultRunDrills — canary target resolution (QF-20260725-985)', () => {
+  const legs = { canaryRestart: null, runRebootRespawnDrill: null, runU4Drill: null };
+
+  it('an UNRESOLVED canary aborts loudly instead of running drills that emit nothing', async () => {
+    // THE POINT OF THIS SD. Previously an unresolved canary sailed straight on: sessionId was
+    // undefined, guardedVerb fail-closed with not_found, and G1a + G3+U4 emitted ZERO fleet_verb_*
+    // rows — while the run still exited looking clean. An empty run that reports success is worse
+    // than a red one, because it sends someone hunting a defect in the verbs that does not exist.
+    const supabase = { from: vi.fn() };
+    const resolveCanaryTarget = vi.fn(async () => ({ resolved: false, reason: 'not_found' }));
+    const canaryRestart = vi.fn();
+    const runRebootRespawnDrill = vi.fn();
+    const runU4Drill = vi.fn();
+
+    const out = await defaultRunDrills({ canaryProfile: 'canary', cwd: 'R:\\r', legs: [] }, {
+      supabase, resolveCanaryTarget, canaryRestart,
+      canaryRelaunchUnderProfile: vi.fn(), runRebootRespawnDrill, runU4Drill,
+    });
+
+    expect(out.ok).toBe(false);
+    expect(out.error).toMatch(/not_found/);
+    // No leg may run: each would have been rejected at the guard and emitted nothing anyway.
+    expect(canaryRestart).not.toHaveBeenCalled();
+    expect(runRebootRespawnDrill).not.toHaveBeenCalled();
+    expect(runU4Drill).not.toHaveBeenCalled();
+    void legs;
+  });
+
+  it('never passes the resolution WRAPPER (or the identity object) to a verb', async () => {
+    // Regression guard on the exact defect. guardedVerb compares `j[by] === value` with by='callsign',
+    // so ANY object — wrapper or identity — can only ever resolve not_found. The literal remedy named
+    // in the QF ("pass target.identity") would therefore NOT have fixed it; the value must be scalar.
+    const supabase = { from: vi.fn() };
+    const identity = { session_id: 'canary-sess-9', callsign: 'Canary-9', account_profile: 'canary' };
+    const resolution = { resolved: true, identity };
+    const canaryRestart = vi.fn(async () => ({ outcome: 'ok' }));
+
+    await defaultRunDrills({ canaryProfile: 'canary', cwd: 'R:\\r', legs: [] }, {
+      supabase,
+      resolveCanaryTarget: vi.fn(async () => resolution),
+      canaryRestart,
+      canaryRelaunchUnderProfile: vi.fn(async () => ({ outcome: 'ok' })),
+      runRebootRespawnDrill: vi.fn(async () => ({ pass: true })),
+      runU4Drill: vi.fn(async () => ({ pass: true })),
+    });
+
+    const passed = canaryRestart.mock.calls[0][0];
+    expect(typeof passed).toBe('string');
+    expect(passed).toBe('Canary-9');
+    expect(passed).not.toBe(resolution);
+    expect(passed).not.toBe(identity);
+  });
+});
+
 // QF-20260724-923: the live path must WIRE all 3 legs to emit real fleet_verb_* evidence (was a stub).
 describe('defaultRunDrills — wired live path (QF-20260724-923)', () => {
   it('uses a real supabase client, resolves the canary, and calls all 3 legs with the required args', async () => {
     const supabase = { from: vi.fn() };
-    const target = { session_id: 'canary-sess-1', metadata: { account_profile: 'canary' } };
+    // QF-20260725-985: the REAL resolveCanaryTarget returns a WRAPPER {resolved, identity} — never a
+    // bare session row. The old fixture invented {session_id, metadata}, a shape production never
+    // produces, so these tests certified a caller that could not work and the defect shipped green.
+    const identity = { session_id: 'canary-sess-1', callsign: 'Canary-1', account_profile: 'canary' };
+    const target = { resolved: true, identity };
     const resolveCanaryTarget = vi.fn(async () => target);
     const canaryRestart = vi.fn(async () => ({ verb: 'fleet_verb_restart', outcome: 'ok' }));
     const canaryRelaunchUnderProfile = vi.fn(async () => ({ verb: 'fleet_verb_relaunch_under_profile', outcome: 'ok' }));
@@ -71,7 +219,11 @@ describe('defaultRunDrills — wired live path (QF-20260724-923)', () => {
     expect(resolveCanaryTarget).toHaveBeenCalledWith(supabase, { by: 'account_profile', value: 'canary' });
     // G1a kill-supervisor -> fleet_verb_restart. QF-20260724-499: live:true explicit (was missing,
     // causing restart to fall through to spawn-control's isLiveEnabled() and dry-run).
-    expect(canaryRestart).toHaveBeenCalledWith(target, { supabase, sdKey: 'CHECKPOINT-3', live: true });
+    // QF-20260725-985: the verb must receive the CALLSIGN, not the wrapper and not the identity
+    // object. guardedVerb re-resolves via resolveSessionIdentity, whose match is `j[by] === value`
+    // with by defaulting to 'callsign' — a strict SCALAR comparison, so any object fails not_found
+    // and the leg emits nothing while the guard looks like it behaved correctly (it did).
+    expect(canaryRestart).toHaveBeenCalledWith('Canary-1', { supabase, sdKey: 'CHECKPOINT-3', live: true });
     // G1b+G2 reboot-respawn gets a REAL client + live:true (was supabase=null) + a queryEventsFn
     // (QF-20260724-113 FR-b: without one, respawn_events_present always fails on a live run).
     const rebootArgs = runRebootRespawnDrill.mock.calls[0][0];
@@ -80,7 +232,9 @@ describe('defaultRunDrills — wired live path (QF-20260724-923)', () => {
     expect(typeof rebootArgs.queryEventsFn).toBe('function');
     // G3+U4 gets the REQUIRED args (was only {opts:{}} -> no-op): target, sessionId, relaunchFn, resolveFn, queryEventsFn.
     const u4Args = runU4Drill.mock.calls[0][0];
-    expect(u4Args.target).toBe(target);
+    expect(u4Args.target).toBe('Canary-1');
+    // The sessionId that used to be undefined — the field that made two legs emit zero rows.
+    expect(u4Args.sessionId).toBe('canary-sess-1');
     expect(u4Args.sessionId).toBe('canary-sess-1');
     expect(u4Args.toProfile).toBe('canary');
     expect(typeof u4Args.relaunchFn).toBe('function');
@@ -103,7 +257,11 @@ describe('defaultRunDrills — rebootQueryEventsFn wiring (QF-20260724-113)', ()
     const limit = vi.fn().mockResolvedValue({ data: [{ event_type: 'fleet_verb_respawn' }, { event_type: 'fleet_verb_respawn' }] });
     const select = vi.fn(() => ({ eq, gte, order, limit }));
     const supabase = { from: vi.fn(() => ({ select })) };
-    const target = { session_id: 'canary-sess-1', metadata: { account_profile: 'canary' } };
+    // QF-20260725-985: the REAL resolveCanaryTarget returns a WRAPPER {resolved, identity} — never a
+    // bare session row. The old fixture invented {session_id, metadata}, a shape production never
+    // produces, so these tests certified a caller that could not work and the defect shipped green.
+    const identity = { session_id: 'canary-sess-1', callsign: 'Canary-1', account_profile: 'canary' };
+    const target = { resolved: true, identity };
     const resolveCanaryTarget = vi.fn(async () => target);
     const canaryRestart = vi.fn(async () => ({ verb: 'fleet_verb_restart', outcome: 'ok' }));
     const canaryRelaunchUnderProfile = vi.fn(async () => ({ verb: 'fleet_verb_relaunch_under_profile', outcome: 'ok' }));
@@ -119,7 +277,12 @@ describe('defaultRunDrills — rebootQueryEventsFn wiring (QF-20260724-113)', ()
       supabase, resolveCanaryTarget, canaryRestart, canaryRelaunchUnderProfile, runRebootRespawnDrill, runU4Drill,
     });
 
-    expect(select).toHaveBeenCalledWith('event_type,payload,session_id');
+    // QF-20260725-790: re-aimed from an exact-string select pin to a REQUIRED-COLUMNS pin. The query
+    // gained `id` so the printed verdict can name the evidence row; pinning the literal column list
+    // made a correct addition fail. What actually matters is that every column the checks and the
+    // report read is selected — an under-selected query degrades them silently.
+    const projection = select.mock.calls[0][0];
+    for (const col of ['event_type', 'payload', 'session_id', 'id']) expect(projection).toContain(col);
     expect(eq).toHaveBeenCalledWith('event_type', 'fleet_verb_respawn');
     expect(res.reboot.pass).toBe(true);
   });
@@ -135,7 +298,11 @@ describe('defaultRunDrills — rebootQueryLifecycleEventsFn wiring (QF-20260724-
     const limit = vi.fn().mockResolvedValue({ data: [{ event_type: 'RESPAWN_BIND_VERIFIED', session_id: 's-1' }] });
     const select = vi.fn(() => ({ eq, gte, order, limit }));
     const supabase = { from: vi.fn(() => ({ select })) };
-    const target = { session_id: 'canary-sess-1', metadata: { account_profile: 'canary' } };
+    // QF-20260725-985: the REAL resolveCanaryTarget returns a WRAPPER {resolved, identity} — never a
+    // bare session row. The old fixture invented {session_id, metadata}, a shape production never
+    // produces, so these tests certified a caller that could not work and the defect shipped green.
+    const identity = { session_id: 'canary-sess-1', callsign: 'Canary-1', account_profile: 'canary' };
+    const target = { resolved: true, identity };
     const resolveCanaryTarget = vi.fn(async () => target);
     const canaryRestart = vi.fn(async () => ({ verb: 'fleet_verb_restart', outcome: 'ok' }));
     const canaryRelaunchUnderProfile = vi.fn(async () => ({ verb: 'fleet_verb_relaunch_under_profile', outcome: 'ok' }));
@@ -150,7 +317,9 @@ describe('defaultRunDrills — rebootQueryLifecycleEventsFn wiring (QF-20260724-
       supabase, resolveCanaryTarget, canaryRestart, canaryRelaunchUnderProfile, runRebootRespawnDrill, runU4Drill,
     });
 
-    expect(select).toHaveBeenCalledWith('event_type,session_id');
+    // QF-20260725-790: required-columns pin, same reasoning as the events query above (gained `id`).
+    const lcProjection = select.mock.calls[0][0];
+    for (const col of ['event_type', 'session_id', 'id']) expect(lcProjection).toContain(col);
     expect(eq).toHaveBeenCalledWith('event_type', 'RESPAWN_BIND_VERIFIED');
     expect(res.reboot.pass).toBe(true);
   });
@@ -195,7 +364,11 @@ describe('defaultRunDrills — reboot audit queries are scoped to THIS run (QF-2
   }
 
   function harness(tables) {
-    const target = { session_id: 'canary-sess-1', metadata: { account_profile: 'canary' } };
+    // QF-20260725-985: the REAL resolveCanaryTarget returns a WRAPPER {resolved, identity} — never a
+    // bare session row. The old fixture invented {session_id, metadata}, a shape production never
+    // produces, so these tests certified a caller that could not work and the defect shipped green.
+    const identity = { session_id: 'canary-sess-1', callsign: 'Canary-1', account_profile: 'canary' };
+    const target = { resolved: true, identity };
     return {
       supabase: filteringSupabase(tables),
       runStartedAt: RUN_STARTED_AT,
@@ -258,7 +431,11 @@ describe('defaultRunDrills — reboot audit queries are scoped to THIS run (QF-2
 describe('defaultRunDrills — run-correlator stamped on all 3 legs (QF-20260724-335)', () => {
   it('passes the SAME sdKey to canaryRestart, runRebootRespawnDrill, and runU4Drill', async () => {
     const supabase = { from: vi.fn() };
-    const target = { session_id: 'canary-sess-1', metadata: { account_profile: 'canary' } };
+    // QF-20260725-985: the REAL resolveCanaryTarget returns a WRAPPER {resolved, identity} — never a
+    // bare session row. The old fixture invented {session_id, metadata}, a shape production never
+    // produces, so these tests certified a caller that could not work and the defect shipped green.
+    const identity = { session_id: 'canary-sess-1', callsign: 'Canary-1', account_profile: 'canary' };
+    const target = { resolved: true, identity };
     const resolveCanaryTarget = vi.fn(async () => target);
     const canaryRestart = vi.fn(async () => ({ verb: 'fleet_verb_restart', outcome: 'ok' }));
     const canaryRelaunchUnderProfile = vi.fn(async () => ({ verb: 'fleet_verb_relaunch_under_profile', outcome: 'ok' }));
@@ -278,7 +455,11 @@ describe('defaultRunDrills — run-correlator stamped on all 3 legs (QF-20260724
 
   it('honors an injected deps.sdKey override (e.g. a per-invocation run_id) for all 3 legs', async () => {
     const supabase = { from: vi.fn() };
-    const target = { session_id: 'canary-sess-1', metadata: { account_profile: 'canary' } };
+    // QF-20260725-985: the REAL resolveCanaryTarget returns a WRAPPER {resolved, identity} — never a
+    // bare session row. The old fixture invented {session_id, metadata}, a shape production never
+    // produces, so these tests certified a caller that could not work and the defect shipped green.
+    const identity = { session_id: 'canary-sess-1', callsign: 'Canary-1', account_profile: 'canary' };
+    const target = { resolved: true, identity };
     const resolveCanaryTarget = vi.fn(async () => target);
     const canaryRestart = vi.fn(async () => ({ verb: 'fleet_verb_restart', outcome: 'ok' }));
     const canaryRelaunchUnderProfile = vi.fn(async () => ({ verb: 'fleet_verb_relaunch_under_profile', outcome: 'ok' }));

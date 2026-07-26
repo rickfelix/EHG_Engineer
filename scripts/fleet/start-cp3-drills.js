@@ -72,7 +72,82 @@ export async function main(argv = process.argv.slice(2), deps = {}) {
   }
   const run = deps.runDrills || defaultRunDrills;
   const results = await run(plan, deps);
-  return { ok: true, live: true, legs: plan.legs, results };
+  // QF-20260725-790: `ok` was hardcoded TRUE here, so a --live run reported success no matter what the
+  // legs actually did. Combined with the CLI discarding the results object entirely, the 00:15Z
+  // acceptance attempt executed almost nothing and still exited 0 with no output. Fixing the leg
+  // CHECKS without fixing this would have left the false pass fully intact at the exit code — the
+  // verdict has to be derived from the legs, not asserted.
+  //
+  // A leg counts as passing only if it explicitly says so. A leg that threw is captured by its
+  // .catch() as {error} and has no `pass`, so it must read as FAILURE, not as "no opinion".
+  const legVerdicts = summarizeLegVerdicts(results);
+  return { ok: legVerdicts.every((l) => l.pass), live: true, legs: plan.legs, results, legVerdicts };
+}
+
+/**
+ * QF-20260725-790: flatten the drill results into one inspectable verdict list.
+ * Fail-closed by construction: an unrecognized/errored leg yields pass:false rather than being skipped,
+ * so a leg that never ran can never silently drop out of the verdict.
+ */
+export function summarizeLegVerdicts(results) {
+  const out = [];
+  for (const [leg, r] of Object.entries(results || {})) {
+    if (!r || typeof r !== 'object') { out.push({ leg, pass: false, detail: 'no result object' }); continue; }
+    if (r.error) { out.push({ leg, pass: false, detail: `ERROR: ${r.error}` }); continue; }
+    if (Array.isArray(r.checks)) {
+      for (const c of r.checks) out.push({ leg, check: c.name, pass: c.pass === true, detail: c.detail, evidence: c.evidence });
+      // A leg reporting zero checks has demonstrated nothing — do not let it count as a pass.
+      if (r.checks.length === 0) out.push({ leg, pass: false, detail: 'leg reported ZERO checks' });
+      continue;
+    }
+    // Legs without a checks[] (e.g. canaryRestart) state their verdict directly instead. Accept only
+    // an EXPLICIT affirmative — pass:true, ok:true, or outcome:'ok'. Anything else (including a leg
+    // that simply says nothing) is a failure, so silence can never be mistaken for success.
+    const ok = r.pass === true || r.ok === true || r.outcome === 'ok';
+    out.push({ leg, pass: ok, detail: r.outcome ? `outcome=${r.outcome}` : JSON.stringify(r).slice(0, 160) });
+  }
+  return out;
+}
+
+/**
+ * QF-20260725-790: render the verdict so it is INSPECTABLE rather than inferred from an exit code.
+ * The CLI previously did main().then(r => process.exit(r.ok ? 0 : 1)), discarding every check.
+ */
+/**
+ * QF-20260725-790 (scope part 2): render a check's evidence rows as inspectable lines.
+ * Shape-tolerant by design — check 4 attaches an array of event rows, check 5 an object with
+ * audit_rows + unaudited_bound_sessions, and most checks attach nothing at all. An unrecognised
+ * shape is stringified rather than dropped: silently omitting evidence is the failure mode this
+ * whole QF exists to remove.
+ */
+export function formatEvidenceLines(evidence) {
+  if (!evidence) return [];
+  if (Array.isArray(evidence)) {
+    if (evidence.length === 0) return ['evidence: (no rows in this run\'s window)'];
+    return evidence.map((e) => `evidence row ${e.id ?? '<no id>'} session=${e.session_id ?? 'null'} outcome=${e.outcome ?? 'null'} live=${e.live ?? 'null'} counted=${e.counted === true}`);
+  }
+  if (typeof evidence === 'object') {
+    const lines = [];
+    for (const a of evidence.audit_rows || []) lines.push(`audit row ${a.id ?? '<no id>'} session=${a.session_id ?? 'null'}`);
+    for (const s of evidence.unaudited_bound_sessions || []) lines.push(`UNAUDITED bound session=${s}`);
+    if (lines.length === 0) lines.push('evidence: (no audit rows in this run\'s window)');
+    return lines;
+  }
+  return [`evidence: ${String(evidence)}`];
+}
+
+export function formatDrillReport(r) {
+  const lines = [`[start-cp3-drills] RESULT ok=${r.ok === true} live=${r.live === true}`];
+  if (r.error) lines.push(`  ERROR: ${r.error}`);
+  for (const v of r.legVerdicts || []) {
+    lines.push(`  ${v.pass ? 'PASS' : 'FAIL'}  ${v.leg}${v.check ? '/' + v.check : ''} — ${v.detail || ''}`);
+    // QF-20260725-790 (scope part 2): print the EVIDENCE ROW IDS under their check. On the 00:15Z run
+    // the unanswerable question was "which row satisfied this?" — rows are listed with whether they
+    // were COUNTED, so a rejected dry_run row is visible rather than silently absent.
+    for (const ev of formatEvidenceLines(v.evidence)) lines.push(`        ${ev}`);
+  }
+  if (!r.legVerdicts || r.legVerdicts.length === 0) lines.push('  (no leg verdicts — nothing executed)');
+  return lines.join('\n');
 }
 
 /**
@@ -94,8 +169,30 @@ export async function defaultRunDrills(plan, deps = {}) {
   const supabase = deps.supabase || (await import('../../lib/supabase-client.cjs')).createSupabaseServiceClient();
 
   // Resolve the live canary session (canary-guard fail-closes if none / not a real canary).
-  const target = await resolveCanary(supabase, { by: 'account_profile', value: 'canary' });
-  const sessionId = target && (target.session_id || target.id);
+  // QF-20260725-985: resolveCanaryTarget returns a RESOLUTION WRAPPER {resolved, identity, reason},
+  // not an identity. The old code passed that wrapper on as `target` and read `target.session_id`,
+  // which is undefined because those fields live on `.identity`. Downstream, guardedVerb re-resolves
+  // via resolveSessionIdentity, whose match is `j[by] === value` — a STRICT SCALAR comparison — so an
+  // object value can never match and every target-scoped leg was rejected with not_found. G1a and
+  // G3+U4 emitted ZERO fleet_verb_* rows. The guard was right; it was handed nonsense and fail-closed
+  // exactly as designed, which is why the run still looked clean.
+  //
+  // NOTE the fix is `identity.callsign`, NOT `identity` — guardedVerb defaults to by:'callsign' and
+  // compares scalars, so passing the identity OBJECT (the literal remedy named in the QF) would fail
+  // in exactly the same way. Verified against resolveSessionIdentity (lib/fleet/session-registry.js:47).
+  const resolution = await resolveCanary(supabase, { by: 'account_profile', value: 'canary' });
+  const identity = (resolution && resolution.identity) || null;
+  const target = identity && identity.callsign;
+  const sessionId = identity && identity.session_id;
+  // Fail LOUD rather than proceeding with undefined identifiers: an unresolved canary previously
+  // sailed on and produced an empty-but-successful-looking run, which is the failure mode this QF
+  // and its companion acceptance-integrity QF both exist to end.
+  if (!resolution || resolution.resolved !== true || !target) {
+    return {
+      ok: false,
+      error: `canary target unresolved (${(resolution && resolution.reason) || 'no_resolution'}) — refusing to run drills that could emit no evidence`,
+    };
+  }
   const fromProfile = process.env.FLEET_LIVE_PROFILE || 'live';
   const toProfile = plan?.canaryProfile || 'canary';
   const queryEventsFn = deps.queryEventsFn || (async (sid) => {
@@ -128,8 +225,11 @@ export async function defaultRunDrills(plan, deps = {}) {
   // queryEventsFn (unlike U4's session-scoped one, since reboot-respawn creates one replacement
   // session PER slot, not a single target) -- without this the live CLI path always failed
   // respawn_events_present ("no queryEventsFn supplied") even on a genuinely successful respawn.
+  // QF-20260725-790 (scope part 2): select `id` so the printed verdict can name the EVIDENCE ROW,
+  // not just the check outcome. Without a row id the report says a leg failed but gives the reader no
+  // way to go look at what it actually saw — which is the inspectability the QF asked for.
   const rebootQueryEventsFn = deps.rebootQueryEventsFn || (async () => {
-    const { data } = await supabase.from('coordination_events').select('event_type,payload,session_id')
+    const { data } = await supabase.from('coordination_events').select('id,event_type,payload,session_id')
       .eq('event_type', 'fleet_verb_respawn').gte('created_at', runStartedAt)
       .order('created_at', { ascending: false }).limit(50);
     return data || [];
@@ -140,7 +240,8 @@ export async function defaultRunDrills(plan, deps = {}) {
   // QF-20260725-139: scoped to this run for the SAME reason -- an audit row from an earlier run must
   // never be able to satisfy a bind performed by this one.
   const rebootQueryLifecycleEventsFn = deps.rebootQueryLifecycleEventsFn || (async () => {
-    const { data } = await supabase.from('session_lifecycle_events').select('event_type,session_id')
+    // QF-20260725-790 (scope part 2): `id` for the same reason as the events query above.
+    const { data } = await supabase.from('session_lifecycle_events').select('id,event_type,session_id')
       .eq('event_type', 'RESPAWN_BIND_VERIFIED').gte('created_at', runStartedAt)
       .order('created_at', { ascending: false }).limit(50);
     return data || [];
@@ -173,5 +274,11 @@ export async function defaultRunDrills(plan, deps = {}) {
 
 const isMain = process.argv[1] && realpathSync(fileURLToPath(import.meta.url)) === realpathSync(process.argv[1]);
 if (isMain) {
-  main().then((r) => process.exit(r.ok ? 0 : 1)).catch((e) => { console.error('[start-cp3-drills] FATAL', e && e.message); process.exit(1); });
+  // QF-20260725-790: PRINT the results object before exiting. The old form discarded `r` entirely, so
+  // a run that executed almost nothing produced no artifact anyone could inspect and looked clean from
+  // the outside. The exit code alone is not a verdict.
+  main().then((r) => {
+    console.log(formatDrillReport(r));
+    process.exit(r.ok ? 0 : 1);
+  }).catch((e) => { console.error('[start-cp3-drills] FATAL', e && e.message); process.exit(1); });
 }
