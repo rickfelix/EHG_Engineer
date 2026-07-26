@@ -42,71 +42,12 @@
  *   describeDb('queries the venture table', () => { ... });  // skipped unless the target is designated
  */
 import { describe, it } from 'vitest';
+// QF-20260726-459 Part 1b: the predicate moved to a vitest-free module so vitest.config.js can
+// import it too (see db-target.js for why). Re-exported here so every existing consumer — 119
+// files gate on HAS_REAL_DB directly — keeps working unchanged. ONE definition site, not two.
+import { assessDbTarget, projectRefOf, DESIGNATED_NON_PROD_REFS } from './db-target.js';
 
-/**
- * Project refs explicitly designated NON-PRODUCTION and safe for destructive test traffic.
- *
- * INTENTIONALLY EMPTY: no non-production Supabase project exists yet (Part 2). An empty allowlist
- * means the only route to running DB tests is the deliberate, target-naming opt-in below — which
- * cannot be taken by accident.
- */
-export const DESIGNATED_NON_PROD_REFS = Object.freeze([]);
-
-/** Extract the Supabase project ref from a URL, or null when it is not a recognisable project URL. */
-export function projectRefOf(url) {
-  if (typeof url !== 'string') return null;
-  const m = url.match(/^https?:\/\/([a-z0-9-]+)\.supabase\.(?:co|in)\b/i);
-  return m ? m[1].toLowerCase() : null;
-}
-
-/**
- * THE POSITIVE SAFETY PREDICATE. Pure — it takes an env bag, so the discrimination tests can prove
- * BOTH arms (skip AND allow) directly, with no module-cache games. A guard that can only be shown
- * to skip is indistinguishable from a guard that always skips, and the second one silently deletes
- * all DB coverage while passing every test anyone would think to write.
- *
- * A target is usable only when ALL of these hold:
- *   1. a service-role key is present at all (nothing can connect otherwise);
- *   2. the URL parses to a real Supabase project ref;
- *   3. that ref is EITHER on the designated non-prod allowlist, OR named explicitly by
- *      VITEST_DB_ALLOW_REF;
- *   4. and when the opt-in is used, the named ref MATCHES the ref the URL actually points at.
- *
- * (4) is what makes the opt-in an authorisation rather than a rubber stamp: you cannot authorise
- * "some test project" and be silently pointed at production, because the authorisation names an
- * exact ref and is checked against reality. Opting in to production therefore requires typing the
- * production ref yourself — a deliberate act, not an accident.
- *
- * Returns a REASON alongside the verdict so a skip is never mysterious: "there was no DB coverage"
- * and "DB coverage silently vanished" look identical in a green run, and the reason is what
- * separates them.
- *
- * @param {Record<string,string|undefined>} env
- * @returns {{ allowed: boolean, reason: string, ref: string|null }}
- */
-export function assessDbTarget(env = process.env) {
-  const url = env.SUPABASE_URL;
-  const key = env.SUPABASE_SERVICE_ROLE_KEY;
-
-  if (!url) return { allowed: false, reason: 'no_supabase_url', ref: null };
-  if (!key) return { allowed: false, reason: 'no_service_role_key', ref: null };
-
-  const ref = projectRefOf(url);
-  // Unparseable (including the synthetic test.invalid.local sentinel) → fail closed. Note we never
-  // name that sentinel: anything not positively identified is refused by construction, which is the
-  // whole point of inverting the predicate.
-  if (!ref) return { allowed: false, reason: 'unrecognised_target', ref: null };
-
-  if (DESIGNATED_NON_PROD_REFS.includes(ref)) {
-    return { allowed: true, reason: 'allowlisted_non_prod_ref', ref };
-  }
-
-  const optIn = (env.VITEST_DB_ALLOW_REF || '').trim().toLowerCase();
-  if (!optIn) return { allowed: false, reason: 'no_designated_target', ref };
-  if (optIn !== ref) return { allowed: false, reason: 'opt_in_ref_mismatch', ref };
-
-  return { allowed: true, reason: 'explicit_opt_in_matches_target', ref };
-}
+export { assessDbTarget, projectRefOf, DESIGNATED_NON_PROD_REFS };
 
 /** The assessment for the current process env, computed once at import. */
 export const DB_TARGET = assessDbTarget(process.env);
