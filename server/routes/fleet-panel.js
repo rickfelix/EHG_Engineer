@@ -13,6 +13,7 @@ import { createClient } from '@supabase/supabase-js';
 import { computeSessionBadge } from '../../lib/fleet/fleet-view-badges.cjs';
 import { getAttentionFlaggedSessions } from '../../lib/fleet/attention-flag-writer.js';
 import { loadStore, buildNamedAccountChips } from '../../lib/fleet/account-capacity-gauge.cjs';
+import { getAccountUsage, allUnavailable } from '../../lib/fleet/account-usage-reader.cjs';
 
 const router = Router();
 
@@ -154,6 +155,30 @@ export async function getFleetPanel(req, res) {
   // capacity store is empty/partial (unmatched accounts render 'wk --%').
   const accountChips = buildNamedAccountChips(loadStore());
 
+  // SD-LEO-FEAT-ACCOUNT-USAGE-STRIP-001 (FR-4): live per-account quota usage, read server-side.
+  // ADDITIVE — deliberately a NEW field rather than a richer accountChips: that field is consumed
+  // by the standalone vanilla panel (server/public/fleet-ui/fleet-panel.js) and reshaping it would
+  // break a live surface. Follows the same boundary as accountChips above — the server reads
+  // privileged local state and the browser receives only a computed percentage, never a token.
+  // GUARDED, matching getAttentionFlaggedSessions below: this is the only await in the handler that
+  // reaches an external service, and an unguarded throw here would 500 the WHOLE endpoint — the
+  // session list, the chips, everything — not just the strip. getAccountUsage is written never to
+  // throw, so this is defense in depth rather than a known path; the fallback still names every
+  // account, because a silently absent strip is the invisible failure this SD exists to prevent.
+  // ?refreshUsage=1 bypasses the reader's 60s cache. The cache exists to stop the page's 15s POLL
+  // from hammering an undocumented endpoint — it was never meant to block a DELIBERATE re-read.
+  // This is the path behind the strip's Refresh control: after an operator re-authenticates an
+  // account they need to confirm it NOW, and being told to wait out a cache would undercut the
+  // whole point of showing them the failure.
+  const refreshUsage = String(req?.query?.refreshUsage ?? '') === '1';
+
+  let accountUsage;
+  try {
+    accountUsage = await getAccountUsage(refreshUsage ? { noCache: true } : {});
+  } catch {
+    accountUsage = allUnavailable('unreachable');
+  }
+
   let attentionStrip = [];
   try {
     attentionStrip = await getAttentionFlaggedSessions({ supabase });
@@ -164,6 +189,7 @@ export async function getFleetPanel(req, res) {
   res.json({
     sessions,
     accountChips,
+    accountUsage,
     attentionStrip,
     filter: { liveOnly: !showAll, windowSeconds, truncated, ghostsHidden },
   });
