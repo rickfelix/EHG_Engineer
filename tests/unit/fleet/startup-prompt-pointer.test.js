@@ -137,3 +137,36 @@ describe('FR-1 — the sweep must not delete a PENDING session\'s pointer', () =
     expect(() => sweepStartupPromptFiles({ repoRoot: path.join(root, 'nope') })).not.toThrow();
   });
 });
+
+describe('F2 — a resolved prompt is never discarded SILENTLY', () => {
+  // PLAN verification found this SD reintroducing its own defect class: a non-UUID sessionId is
+  // dropped (correctly), but the transport is gated on `startupPrompt && sessionId`, so the prompt
+  // was thrown away with no throw and NO LOG — the spawned session comes up idle and nothing says
+  // why. Warn, do not throw: losing the directive is recoverable, failing the launch is not.
+  const { buildSessionLaunch } = require('../../../lib/fleet/build-session-launch.cjs');
+
+  it('WARNS when a prompt is resolved but no usable session id exists', () => {
+    const lines = [];
+    buildSessionLaunch(
+      // spec.sessionId, NOT resumeUuid: the resumeUuid branch assigns sessionId unconditionally, so
+      // it never reaches the drop. The drop is on the MINTED branch, where a non-UUID is discarded.
+      // My first version of this test used resumeUuid and failed — the test was wrong, not the code.
+      { role: 'worker', callsign: 'Charlie', cwd: root, startupPrompt: 'the directive', sessionId: 'not-a-uuid' },
+      { logFn: (m) => lines.push(String(m)) },
+    );
+    expect(lines.join('\n')).toMatch(/NO usable session id/i);
+    expect(lines.join('\n')).toMatch(/idle/i);
+  });
+
+  it('CONTROL: says nothing when the transport actually works', () => {
+    // Without this the test above would pass even if the warning fired unconditionally.
+    const lines = [];
+    const inv = buildSessionLaunch(
+      { role: 'worker', callsign: 'Charlie', cwd: root, startupPrompt: 'the directive',
+        sessionId: '11111111-2222-4333-8444-555555555555' },
+      { logFn: (m) => lines.push(String(m)) },
+    );
+    expect(inv.promptFilePath).toBeTruthy();
+    expect(lines.join('\n')).not.toMatch(/NO usable session id/i);
+  });
+});
