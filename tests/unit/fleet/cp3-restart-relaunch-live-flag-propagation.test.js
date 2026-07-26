@@ -95,7 +95,12 @@ describe('QF-20260724-499: restart/relaunch honor an explicit opts.live even whe
     const supabase = makeFakeSupabase({ sessions: [canaryWorker] });
 
     const result = await canaryRestart('Canary-Alpha-1', {
-      supabase, by: 'callsign', env: GUARD_ENV, live: true, currencyRunner: CURRENT_RUNNER, spawnFn, execFn, sleepFn: vi.fn(),
+      // SD-LEO-INFRA-SESSION-SPAWN-AND-PROMPT-LIBRARY-001-E FR-5/FR-6: restart() now threads the old
+      // session's account_profile, so restarting a PROFILE-STAMPED session resolves a profile dir.
+      // resolveProfileDir fails loud when unconfigured (that is the accepted FR-6 decision), so a canary
+      // restart must supply baseDir. This is incidental setup — these cases assert live-flag
+      // propagation, not profile behaviour, and the assertions below are unchanged.
+      supabase, by: 'callsign', env: GUARD_ENV, live: true, currencyRunner: CURRENT_RUNNER, spawnFn, execFn, sleepFn: vi.fn(), baseDir: 'C:\fleet\profiles',
     });
 
     expect(result.ok).toBe(true);
@@ -110,7 +115,12 @@ describe('QF-20260724-499: restart/relaunch honor an explicit opts.live even whe
     const supabase = makeFakeSupabase({ sessions: [{ ...canaryWorker, session_id: 's-canary-worker-2' }] });
 
     const result = await canaryRestart('Canary-Alpha-1', {
-      supabase, by: 'callsign', env: GUARD_ENV, spawnFn, execFn, sleepFn: vi.fn(),
+      // SD-LEO-INFRA-SESSION-SPAWN-AND-PROMPT-LIBRARY-001-E FR-5/FR-6: restart() now threads the old
+      // session's account_profile, so restarting a PROFILE-STAMPED session resolves a profile dir.
+      // resolveProfileDir fails loud when unconfigured (that is the accepted FR-6 decision), so a canary
+      // restart must supply baseDir. This is incidental setup — these cases assert live-flag
+      // propagation, not profile behaviour, and the assertions below are unchanged.
+      supabase, by: 'callsign', env: GUARD_ENV, spawnFn, execFn, sleepFn: vi.fn(), baseDir: 'C:\fleet\profiles',
     });
 
     expect(spawnFn).not.toHaveBeenCalled(); // dry-run: opts.live undefined -> isLiveEnabled() (env unset) -> false

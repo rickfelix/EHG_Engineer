@@ -751,6 +751,60 @@ describe('restart (FR-4 singleton-serial / FR-5 worker-parallel)', () => {
     expect(supabaseClient._store.get('s1').status).toBe('released');
   });
 
+  // SD-LEO-INFRA-SESSION-SPAWN-AND-PROMPT-LIBRARY-001-E (FR-5 / FR-6).
+  it('FR-5: threads the old session account_profile into the replacement (was DROPPED)', async () => {
+    // Asserting the value that REACHES the child launch, not merely that spawnReplacement was
+    // called — a "was called" assertion passes against the exact bug this fixes. accountProfile
+    // drives CLAUDE_CONFIG_DIR isolation, so the proof is that the profile dir lands in the env.
+    const spawnFn = vi.fn().mockReturnValue({ pid: 5150 });
+    const supabaseClient = makeFakeSupabase({
+      sessions: [{ session_id: 's1', status: 'active', metadata: { fleet_identity: { callsign: 'Canary-1' }, role: 'worker', account_profile: 'canary' } }],
+    });
+
+    const result = await restart('Canary-1', {
+      supabaseClient, live: true, currencyRunner: CURRENT_RUNNER, spawnFn, execFn: enumExec(),
+      sleepFn: vi.fn(), baseDir: 'C:\\fleet\\profiles',
+    });
+
+    expect(result.ok).toBe(true);
+    const env = spawnFn.mock.calls[0][2]; // spawnFn(program, args, env) — arg[2] IS the env
+    expect(env.CLAUDE_CONFIG_DIR).toBe('C:\\fleet\\profiles\\canary');
+  });
+
+  it('FR-5: a session with NO account_profile still restarts normally (negative control)', async () => {
+    // Proves the threading is conditional, not a blanket requirement — otherwise every ordinary
+    // worker restart would start demanding a profile dir.
+    const spawnFn = vi.fn().mockReturnValue({ pid: 5151 });
+    const supabaseClient = makeFakeSupabase({
+      sessions: [{ session_id: 's1', status: 'active', metadata: { fleet_identity: { callsign: 'Alpha-5' }, role: 'worker' } }],
+    });
+
+    const result = await restart('Alpha-5', {
+      supabaseClient, live: true, currencyRunner: CURRENT_RUNNER, spawnFn, execFn: enumExec(), sleepFn: vi.fn(),
+    });
+
+    expect(result.ok).toBe(true);
+    const env = spawnFn.mock.calls[0][2]; // spawnFn(program, args, env) — arg[2] IS the env
+    expect(env.CLAUDE_CONFIG_DIR).toBeUndefined();
+  });
+
+  it('FR-6: restarting a profile-stamped session with NO profiles dir configured FAILS LOUD', async () => {
+    // The behaviour change this FR accepts deliberately. resolveProfileDir throws when
+    // FLEET_ACCOUNT_PROFILES_DIR is unset; restart() never reached that path before. Measured
+    // blast radius: 1 of 16 live sessions carries account_profile, and it is the canary. Degrading
+    // to the un-isolated path instead would silently reinstate the defect FR-5 fixes — a canary
+    // without its profile isolation is not a canary.
+    const spawnFn = vi.fn().mockReturnValue({ pid: 5152 });
+    const supabaseClient = makeFakeSupabase({
+      sessions: [{ session_id: 's1', status: 'active', metadata: { fleet_identity: { callsign: 'Canary-1' }, role: 'worker', account_profile: 'canary' } }],
+    });
+
+    await expect(restart('Canary-1', {
+      supabaseClient, live: true, currencyRunner: CURRENT_RUNNER, spawnFn, execFn: enumExec(),
+      sleepFn: vi.fn(), baseDir: null,
+    })).rejects.toThrow(/FLEET_ACCOUNT_PROFILES_DIR/);
+  });
+
   it('singleton path defers until a newSessionId is supplied (never a bespoke retire-first sequence)', async () => {
     const supabaseClient = makeFakeSupabase({
       sessions: [{ session_id: 's1', status: 'active', metadata: { role: 'coordinator', is_coordinator: 'true' } }],
