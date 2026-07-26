@@ -108,6 +108,62 @@ describe('runRebootRespawnDrill (FR-7)', () => {
     });
   });
 
+  // QF-20260725-790 scope part 2: "print every check name, verdict AND THE EVIDENCE ROW ID". The first
+  // pass shipped name+verdict only; these cover the row-id half. On the 00:15Z run the unanswerable
+  // question was "which row satisfied this check?" — the verdict has to name its evidence.
+  describe('QF-20260725-790: checks carry the EVIDENCE ROW IDS their verdict was computed from', () => {
+    it('check 4 lists every row in the window, including ones it REJECTED and why', async () => {
+      const rows = [
+        { id: 'evt-dry', event_type: 'fleet_verb_respawn', session_id: null, payload: { live: false, outcome: 'dry_run' } },
+        { id: 'evt-ok', event_type: 'fleet_verb_respawn', session_id: 's-1', payload: { live: true, outcome: 'ok' } },
+      ];
+      const { checks } = await runRebootRespawnDrill({
+        supabase: {}, loadFn: async () => SLOTS, spawnFn: () => ({ pid: 1 }),
+        logFn: async () => ({ ok: true }), queryEventsFn: async () => rows,
+        queryLifecycleEventsFn: async () => [], live: true,
+      });
+      const ev = checks.find((c) => c.name === 'respawn_events_present').evidence;
+      expect(ev.map((e) => e.id)).toEqual(['evt-dry', 'evt-ok']);
+      // The REJECTED row must still appear — a report that hid it would hide the false pass itself.
+      expect(ev.find((e) => e.id === 'evt-dry').counted).toBe(false);
+      expect(ev.find((e) => e.id === 'evt-ok').counted).toBe(true);
+    });
+
+    it('the evidence list agrees with the COUNT — one predicate, not two re-derivations', async () => {
+      const rows = [
+        { id: 'a', event_type: 'fleet_verb_respawn', session_id: 's-1', payload: { live: true, outcome: 'ok' } },
+        { id: 'b', event_type: 'fleet_verb_respawn', session_id: null, payload: { live: true, outcome: 'respawn_unbound' } },
+        { id: 'c', event_type: 'fleet_verb_respawn', session_id: 's-2', payload: { live: true, outcome: 'ok' } },
+      ];
+      const { checks } = await runRebootRespawnDrill({
+        supabase: {}, loadFn: async () => SLOTS, spawnFn: () => ({ pid: 1 }),
+        logFn: async () => ({ ok: true }), queryEventsFn: async () => rows,
+        queryLifecycleEventsFn: async () => SLOTS.map((_, i) => ({ id: `au-${i}`, event_type: 'RESPAWN_BIND_VERIFIED', session_id: `s-${i + 1}` })),
+        live: true,
+      });
+      const c4 = checks.find((c) => c.name === 'respawn_events_present');
+      const countedInEvidence = c4.evidence.filter((e) => e.counted).length;
+      // The detail string states the count the verdict used; the evidence must not contradict it.
+      expect(c4.detail).toContain(`events: ${countedInEvidence}`);
+      expect(countedInEvidence).toBe(2);
+    });
+
+    it('check 5 names the audit rows AND the bound sessions that have NO audit row', async () => {
+      const { checks } = await runRebootRespawnDrill({
+        supabase: {}, loadFn: async () => SLOTS, spawnFn: () => ({ pid: 1 }),
+        logFn: async () => ({ ok: true }),
+        queryEventsFn: async () => SLOTS.map((_, i) => ({ id: `e-${i}`, event_type: 'fleet_verb_respawn', session_id: `s-${i}`, payload: { live: true, outcome: 'ok' } })),
+        queryLifecycleEventsFn: async () => [{ id: 'audit-0', event_type: 'RESPAWN_BIND_VERIFIED', session_id: 's-0' }],
+        live: true,
+      });
+      const c5 = checks.find((c) => c.name === 'respawn_bind_audited');
+      expect(c5.pass).toBe(false);
+      expect(c5.evidence.audit_rows).toEqual([{ id: 'audit-0', session_id: 's-0' }]);
+      // The actionable half: WHICH bind is unproven, not just "1/2".
+      expect(c5.evidence.unaudited_bound_sessions).toEqual(['s-1']);
+    });
+  });
+
   it('FAILs overall when no fleet_verb_respawn events are observed (log-before-action violated)', async () => {
     const { pass, checks } = await runRebootRespawnDrill({
       supabase: {}, loadFn: async () => SLOTS, spawnFn: () => ({ pid: 1 }),

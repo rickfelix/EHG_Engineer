@@ -1,6 +1,6 @@
 // SD-LEO-INFRA-LEO-APP-LAUNCHER-001 (FR-4) — worker-startable CP3 drill starter.
 import { describe, it, expect, vi } from 'vitest';
-import { planDrills, main, defaultRunDrills, summarizeLegVerdicts, formatDrillReport } from '../../../scripts/fleet/start-cp3-drills.js';
+import { planDrills, main, defaultRunDrills, summarizeLegVerdicts, formatDrillReport, formatEvidenceLines } from '../../../scripts/fleet/start-cp3-drills.js';
 import { LaunchResolveError } from '../../../lib/fleet/build-session-launch.cjs';
 
 const OKENV = { FLEET_ACCOUNT_PROFILES_DIR: 'C:\\fleet\\profiles' };
@@ -90,6 +90,44 @@ describe('QF-20260725-790: the verdict is DERIVED from the legs and is inspectab
     expect(r.ok).toBe(true);
   });
 
+  it('formatDrillReport prints the EVIDENCE ROW IDS under their check (scope part 2)', async () => {
+    const runDrills = vi.fn(async () => ({
+      reboot: {
+        pass: false,
+        checks: [
+          {
+            name: 'respawn_events_present',
+            pass: false,
+            detail: 'session-bound fleet_verb_respawn events: 0 (need >= 1)',
+            evidence: [{ id: 'evt-dry', session_id: null, outcome: 'dry_run', live: false, counted: false }],
+          },
+          {
+            name: 'respawn_bind_audited',
+            pass: false,
+            detail: '0/1 bound session(s) audited',
+            evidence: { audit_rows: [], unaudited_bound_sessions: ['s-9'] },
+          },
+        ],
+      },
+    }));
+    const r = await main(['--live'], { env: OKENV, log: () => {}, runDrills });
+    const text = formatDrillReport(r);
+    // The rejected row is NAMED, with why it did not count — the 00:15Z question was "which row?".
+    expect(text).toMatch(/evidence row evt-dry/);
+    expect(text).toMatch(/outcome=dry_run/);
+    expect(text).toMatch(/counted=false/);
+    // And the unproven bind is named, not just counted.
+    expect(text).toMatch(/UNAUDITED bound session=s-9/);
+  });
+
+  it('formatEvidenceLines never silently drops an unrecognised evidence shape', () => {
+    // Dropping evidence is the exact failure class this QF removes, so an unknown shape is
+    // stringified rather than omitted.
+    expect(formatEvidenceLines(undefined)).toEqual([]);
+    expect(formatEvidenceLines([])).toEqual(["evidence: (no rows in this run's window)"]);
+    expect(formatEvidenceLines('weird')).toEqual(['evidence: weird']);
+  });
+
   it('formatDrillReport renders every check name and verdict, so the result is not inferred from an exit code', async () => {
     const runDrills = vi.fn(async () => ({
       reboot: { pass: false, checks: [{ name: 'respawn_bind_audited', pass: false, detail: 'absence is not a pass' }] },
@@ -170,7 +208,12 @@ describe('defaultRunDrills — rebootQueryEventsFn wiring (QF-20260724-113)', ()
       supabase, resolveCanaryTarget, canaryRestart, canaryRelaunchUnderProfile, runRebootRespawnDrill, runU4Drill,
     });
 
-    expect(select).toHaveBeenCalledWith('event_type,payload,session_id');
+    // QF-20260725-790: re-aimed from an exact-string select pin to a REQUIRED-COLUMNS pin. The query
+    // gained `id` so the printed verdict can name the evidence row; pinning the literal column list
+    // made a correct addition fail. What actually matters is that every column the checks and the
+    // report read is selected — an under-selected query degrades them silently.
+    const projection = select.mock.calls[0][0];
+    for (const col of ['event_type', 'payload', 'session_id', 'id']) expect(projection).toContain(col);
     expect(eq).toHaveBeenCalledWith('event_type', 'fleet_verb_respawn');
     expect(res.reboot.pass).toBe(true);
   });
@@ -201,7 +244,9 @@ describe('defaultRunDrills — rebootQueryLifecycleEventsFn wiring (QF-20260724-
       supabase, resolveCanaryTarget, canaryRestart, canaryRelaunchUnderProfile, runRebootRespawnDrill, runU4Drill,
     });
 
-    expect(select).toHaveBeenCalledWith('event_type,session_id');
+    // QF-20260725-790: required-columns pin, same reasoning as the events query above (gained `id`).
+    const lcProjection = select.mock.calls[0][0];
+    for (const col of ['event_type', 'session_id', 'id']) expect(lcProjection).toContain(col);
     expect(eq).toHaveBeenCalledWith('event_type', 'RESPAWN_BIND_VERIFIED');
     expect(res.reboot.pass).toBe(true);
   });
