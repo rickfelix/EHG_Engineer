@@ -188,11 +188,7 @@ app.use('/fleet-ui', express.static(path.join(PROJECT_ROOT, 'server', 'public', 
 app.use('/api/backlog', optionalAuth, backlogRoutes);
 app.use('/api/feedback', requireAuth, feedbackRoutes);
 app.use('/api/testing/campaign', requireAuth, testingCampaignRoutes);
-app.use('/api/ventures', (req, res, next) => {
-  // Master reset uses service-role client internally — auth at RPC level (chairman check)
-  if (req.method === 'POST' && req.path === '/master-reset') return optionalAuth(req, res, next);
-  return requireAuth(req, res, next);
-}, venturesRoutes);
+app.use('/api/ventures', requireAuth, venturesRoutes);
 app.use('/api/competitor-analysis', requireAuth, venturesRoutes);
 app.use('/api/v2', requireAuth, v2ApiRoutes);
 app.use('/api/chairman', requireAuth, createChairmanScopeGuard({ blocking: true }), chairmanRoutes);
