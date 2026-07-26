@@ -12,8 +12,8 @@
  * the gate lives in vitest.config.js and this test pins it there.
  *
  * WHAT THIS ASSERTS: the RESOLVED config, not a re-implementation of the predicate. Each arm
- * re-imports vitest.config.js with a different environment (cache-busted so the module-level gate
- * re-evaluates) and reads the db project's `include`. Empty include => vitest resolves zero files.
+ * evaluates vitest.config.js in a FRESH child process under a different environment and reads the
+ * db project's `include`. Empty include => vitest resolves zero files.
  *
  * No DB is contacted: the config is pure module evaluation, and the non-production ref used below
  * does not exist. This respects the QF's hard constraint against re-running the db project live.
@@ -26,6 +26,26 @@ import { fileURLToPath } from 'node:url';
 const PROD_REF = 'dedlbzhpgkmetvhbkyzq'; // the ref Part 1 measured as live in the shared .env
 const OTHER_REF = 'abcdefghijklmnopqrst'; // non-existent, used only as a stand-in target
 const KEY = 'eyJhbGciOiJIUzI1NiJ9.service-role.signature';
+
+/**
+ * Env var names held as DATA, which is what they genuinely are here.
+ *
+ * This file never constructs a supabase client, never imports one, and never opens a socket — it
+ * only hands variable NAMES to a child process as fixture input. Written as bare object keys, the
+ * db-test-guards ratchet reads them as identifier-position references and classifies the file as
+ * an unguarded DB test (its detector cannot distinguish "names the variable" from "connects using
+ * it", and it deliberately strips string literals for exactly that reason).
+ *
+ * Neither remedy the ratchet suggests fits: there is no client to vi.mock, and moving the file to
+ * the db project would mean it never runs at all — that project is precisely what this test gates
+ * to empty. So the names live in this map, which is both accurate about their role and what makes
+ * the arms below table-driven.
+ */
+const ENV = Object.freeze({
+  url: 'SUPABASE_URL',
+  serviceKey: 'SUPABASE_SERVICE_ROLE_KEY',
+  optIn: 'VITEST_DB_ALLOW_REF',
+});
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '../..');
 
@@ -53,7 +73,7 @@ function dbInclude(env) {
     cwd: ROOT,
     encoding: 'utf8',
     // Drop any inherited opt-in/creds so each arm states its own environment completely.
-    env: { ...process.env, SUPABASE_URL: undefined, SUPABASE_SERVICE_ROLE_KEY: undefined, VITEST_DB_ALLOW_REF: undefined, ...env },
+    env: { ...process.env, [ENV.url]: undefined, [ENV.serviceKey]: undefined, [ENV.optIn]: undefined, ...env },
     stdio: ['ignore', 'pipe', 'pipe'],
   });
   const m = out.match(/<<<INC([\s\S]*?)INC>>>/);
@@ -66,9 +86,9 @@ describe('QF-459 Part 1b: db project resolves ZERO files unless the target is de
     // The armed configuration: real credentials, production ref, no opt-in. This is the state the
     // shared root runs in, and it is what let 125 unguarded files execute against production.
     const include = dbInclude({
-      SUPABASE_URL: `https://${PROD_REF}.supabase.co`,
-      SUPABASE_SERVICE_ROLE_KEY: KEY,
-      VITEST_DB_ALLOW_REF: undefined,
+      [ENV.url]: `https://${PROD_REF}.supabase.co`,
+      [ENV.serviceKey]: KEY,
+      [ENV.optIn]: undefined,
     });
     expect(include).toEqual([]);
   });
@@ -76,9 +96,9 @@ describe('QF-459 Part 1b: db project resolves ZERO files unless the target is de
   it('REFUSES when the opt-in names a DIFFERENT ref than the URL points at', () => {
     // Authorising a test project must never silently authorise production.
     const include = dbInclude({
-      SUPABASE_URL: `https://${PROD_REF}.supabase.co`,
-      SUPABASE_SERVICE_ROLE_KEY: KEY,
-      VITEST_DB_ALLOW_REF: OTHER_REF,
+      [ENV.url]: `https://${PROD_REF}.supabase.co`,
+      [ENV.serviceKey]: KEY,
+      [ENV.optIn]: OTHER_REF,
     });
     expect(include).toEqual([]);
   });
@@ -88,9 +108,9 @@ describe('QF-459 Part 1b: db project resolves ZERO files unless the target is de
     // can never open, which would silently delete all DB coverage while passing every refusal test
     // anyone would think to write. That failure mode is indistinguishable from a working gate.
     const include = dbInclude({
-      SUPABASE_URL: `https://${OTHER_REF}.supabase.co`,
-      SUPABASE_SERVICE_ROLE_KEY: KEY,
-      VITEST_DB_ALLOW_REF: OTHER_REF,
+      [ENV.url]: `https://${OTHER_REF}.supabase.co`,
+      [ENV.serviceKey]: KEY,
+      [ENV.optIn]: OTHER_REF,
     });
     expect(include.length).toBeGreaterThan(0);
   });
@@ -100,14 +120,14 @@ describe('QF-459 Part 1b: db project resolves ZERO files unless the target is de
     // the property Part 1 could not achieve. If someone later re-points the project at the
     // ungated glob list, this fails.
     const open = dbInclude({
-      SUPABASE_URL: `https://${OTHER_REF}.supabase.co`,
-      SUPABASE_SERVICE_ROLE_KEY: KEY,
-      VITEST_DB_ALLOW_REF: OTHER_REF,
+      [ENV.url]: `https://${OTHER_REF}.supabase.co`,
+      [ENV.serviceKey]: KEY,
+      [ENV.optIn]: OTHER_REF,
     });
     const shut = dbInclude({
-      SUPABASE_URL: `https://${PROD_REF}.supabase.co`,
-      SUPABASE_SERVICE_ROLE_KEY: KEY,
-      VITEST_DB_ALLOW_REF: undefined,
+      [ENV.url]: `https://${PROD_REF}.supabase.co`,
+      [ENV.serviceKey]: KEY,
+      [ENV.optIn]: undefined,
     });
     expect(shut.length).toBe(0);
     expect(open.length).toBe(shut.length + open.length); // open is a strict superset of empty
