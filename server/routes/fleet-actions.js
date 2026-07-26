@@ -14,6 +14,12 @@ import { createClient } from '@supabase/supabase-js';
 import { spawn, relaunchUnderProfile, isLiveEnabled } from '../../lib/fleet/spawn-control.js';
 import { loadDesiredSlots } from '../../lib/fleet/desired-slots-store.js';
 import { computeLiveSlotDrift } from '../../lib/fleet/session-registry-adapter.js';
+import {
+  SPAWNABLE_ROLES,
+  isSpawnableRole,
+  resolveRoleSpawnOpts,
+  assertRoleCallsignCompatible,
+} from '../../lib/fleet/role-startup-prompt.js';
 
 const router = Router();
 
@@ -81,7 +87,27 @@ export async function addSession(req, res) {
     res.status(400).json({ ok: false, reason: 'role and callsign are required' });
     return;
   }
-  const result = await spawn({ role, callsign, accountProfile }, { supabaseClient: supabase });
+  // SD-LEO-FEAT-FLEET-COLD-START-UX-001 FR-2: role was previously validated for TRUTHINESS ONLY,
+  // so any non-empty string was accepted and none was honoured. Now that roles carry startup
+  // prompts (FR-1) an unrecognised role must be refused with a stated reason rather than silently
+  // becoming a worker. respawnFleet is deliberately NOT allowlisted — its roles come from
+  // fleet_desired_slots, not from an operator.
+  if (!isSpawnableRole(role)) {
+    res.status(400).json({ ok: false, reason: `role must be one of ${SPAWNABLE_ROLES.join(', ')}` });
+    return;
+  }
+  const compatible = assertRoleCallsignCompatible(role, callsign);
+  if (!compatible.ok) {
+    res.status(400).json({ ok: false, reason: compatible.reason });
+    return;
+  }
+  // FR-1: spread CONDITIONALLY. resolveRoleSpawnOpts returns {} for 'worker' so the key is ABSENT,
+  // which is what makes spawn() fall through to callsign-namespace selection. Passing
+  // `startupPrompt: undefined` would make the key present and suppress the pointer entirely.
+  const result = await spawn(
+    { role, callsign, accountProfile },
+    { supabaseClient: supabase, ...resolveRoleSpawnOpts(role) },
+  );
   res.json({ live: isLiveEnabled(), ...result });
 }
 
