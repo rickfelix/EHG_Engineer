@@ -2,6 +2,19 @@ import { defineConfig } from 'vitest/config';
 import fs from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
+import { config as loadEnv } from 'dotenv';
+// QF-20260726-459 Part 1b. The predicate is imported, never re-derived — see db-target.js.
+import { assessDbTarget } from './tests/helpers/db-target.js';
+
+// The db gate is evaluated HERE, at config load, but `.env` is normally loaded by the db project's
+// setupFiles INSIDE the worker — so without this, process.env has no SUPABASE_URL at gate time and
+// the project would be disabled unconditionally. An always-off gate is safe but wrong: it is
+// indistinguishable from a working one while silently deleting all DB coverage, and it would make
+// a legitimate VITEST_DB_ALLOW_REF opt-in impossible. Mirror setup.db.js so the gate assesses the
+// SAME environment the tests would actually run against. Shell env still wins (dotenv never
+// overrides an existing value).
+loadEnv({ path: '.env' });
+loadEnv({ path: '.env.test' });
 
 /**
  * Quarantine manifest — SD-LEO-FIX-GREEN-MAIN-TRIAGE-001.
@@ -89,6 +102,39 @@ const DB_INCLUDE = [
   '**/tests/smoke.test.js',
   '**/*.db.test.js',
 ];
+
+// ─── QF-20260726-459 Part 1b: gate the PROJECT, not the individual files ────────────────────────
+//
+// Part 1 made tests/helpers/db-available.js fail closed. That was necessary and insufficient:
+// measured statically, the db project resolves 225 files and only 100 reference the guard in any
+// form. THE OTHER 125 NEVER IMPORT IT, so no change to that helper can gate them — and the db
+// project's setupFiles load the REAL .env. The QF's own title claim stayed true for those files.
+//
+// A per-file fix does not scale to 125 files and, worse, silently un-fixes itself the moment
+// someone adds file 226. The only place that covers every file regardless of what it imports is
+// the project definition, so the gate goes here: when the configured target is not an explicitly
+// designated non-production database, the db project resolves to ZERO test files.
+//
+// This is the same predicate the helper uses, imported — NOT re-derived. Re-implementing it here
+// is precisely how the original defect survived its own test suite.
+const DB_TARGET = assessDbTarget(process.env);
+
+if (!DB_TARGET.allowed) {
+  // Loud, because "there was no DB coverage" and "DB coverage silently vanished" look identical in
+  // a green run. Anyone who expected these tests to execute must be told why they did not.
+  console.warn(
+    `[vitest] db project DISABLED — no designated non-production target (reason: ${DB_TARGET.reason}` +
+      `${DB_TARGET.ref ? `, target ref: ${DB_TARGET.ref}` : ''}). 0 of ${''}db tests will run.\n` +
+      '[vitest] These suites write to whatever they point at, and 125 of 225 do not self-guard.\n' +
+      '[vitest] To run them, set VITEST_DB_ALLOW_REF=<project-ref> naming the ref your SUPABASE_URL\n' +
+      '[vitest] actually points at — an authorisation, not a rubber stamp. Never name production.',
+  );
+}
+
+// Empty include => vitest resolves no files for this project. Skipping is the intended end state
+// (per the QF: "fail-closed-with-nothing-to-allow is a safe end state; every DB test skips, which
+// is strictly better than running against production"), so this must not turn every run red.
+const DB_INCLUDE_GATED = DB_TARGET.allowed ? DB_INCLUDE : [];
 
 export default defineConfig({
   plugins: [stripShebangPlugin()],
@@ -179,8 +225,12 @@ export default defineConfig({
           name: 'db',
           // Loads .env + .env.test (real credentials) — opt-in DB tier only.
           setupFiles: ['./tests/setup.db.js'],
-          include: DB_INCLUDE,
+          // QF-20260726-459 Part 1b: gated — empty unless the target is an explicitly designated
+          // non-production database. See DB_INCLUDE_GATED above.
+          include: DB_INCLUDE_GATED,
           exclude: SHARED_EXCLUDE,
+          // A gated-empty project must not fail the run: skipping IS the safe end state here.
+          passWithNoTests: true,
         },
       },
     ],
