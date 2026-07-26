@@ -238,6 +238,40 @@ function reserveParkedIdentities(usedCallsigns, usedColors, recentSessions, acti
 // forever — the chairman saw 3x "Charlie". Compares the CURRENTLY-desired identity against the
 // last one actually broadcast (metadata.fleet_identity_last_sent, distinct from fleet_identity
 // itself so a partially-failed send is retried next tick) — true means re-send is due.
+/**
+ * Decide whether a worker keeps its identity or gets (re)named. EXTRACTED FROM main() so it can be
+ * tested: while this lived inline, the only available assertion was a source regex for
+ * `preRegisteredCanaries.has(...)`, and a mutation wrapping that call in `false &&` left the regex
+ * matching and every test green. A guard whose only observer is a text match is not covered — the
+ * text is present in the broken version too.
+ *
+ * `isCanaryMd` is INJECTED rather than imported: this is a .cjs file and lib/fleet/canary-session.js
+ * is ESM, so main() dynamic-imports it once and passes it down. That also keeps this function pure.
+ *
+ * @returns {'canary_marker'|'canary_metadata'|'in_band'|'needs_assignment'} — distinct
+ *   reasons, not a bare boolean, so a test can tell WHICH guard fired. Collapsing them would let the
+ *   pre-registration guard rot undetected behind the late metadata guard.
+ */
+function classifyWorkerNaming(worker, preRegisteredCanaries, forceReassign, isCanaryMd) {
+  const identity = worker.metadata?.fleet_identity;
+  // FR-7: the spawn-time marker is FIRST because it is the only signal readable during the 0-10s
+  // registration window and on the reboot-respawn path, where both metadata signals below are absent.
+  if (preRegisteredCanaries.has(worker.session_id)) return 'canary_marker';
+  // QF-20260724-521: canaries live outside the NATO tier-band scheme entirely — canary-guard requires
+  // a 'Canary-' callsign, so 'Canary-1' is in no band and would fail the tier check below and be
+  // renamed mid-drill. Delegated to the canonical predicate instead of re-typing the prefix test,
+  // which already exists in five other places in this repo.
+  if (isCanaryMd(worker.metadata)) return 'canary_metadata';
+  // QF-20260627-108 (FR-1): a worker is "assigned" ONLY if its callsign is in its tier band
+  // (effort-encoded SoT). A callsign from the wrong band (e.g. a tier-2 worker still holding
+  // "Bravo") is re-derived, so the chairman scheme self-heals instead of being preserved-wrong.
+  if (identity?.callsign && identity?.color && !forceReassign
+      && callsignInTierBand(identity.callsign, tierRankOf(worker))) {
+    return 'in_band';
+  }
+  return 'needs_assignment';
+}
+
 function identityNeedsRebroadcast(worker, expectedIdentity) {
   const lastSent = worker?.metadata?.fleet_identity_last_sent;
   if (!lastSent) return true;
@@ -391,26 +425,41 @@ async function main() {
   const assignedRaw = [];
   const needsAssignment = [];
 
+  // SD-LEO-INFRA-SESSION-SPAWN-AND-PROMPT-LIBRARY-001-E (FR-7): the skip below relies on two LATE
+  // signals (account_profile / 'Canary-' callsign) that are both written inside the session-bind loop
+  // and are both ABSENT during the 0-10s registration window and on the reboot-respawn path. This
+  // cron would therefore rename an unstamped canary to a NATO callsign, permanently destroying the
+  // namespace discriminator. Batch-fetch the spawn-time PRE-REGISTERED markers ONCE (keyed on the
+  // spawner-minted session id) rather than one lookup per worker — a per-worker await here would be an
+  // N+1 against a table this cron already reads in bulk.
+  const preRegisteredCanaries = new Set();
+  let isCanaryMetadata;
+  try {
+    const mod = await import('../lib/fleet/canary-session.js');
+    const { CANARY_PRE_REGISTRATION_KIND } = mod;
+    isCanaryMetadata = mod.isCanaryMetadata;
+    const ids = uniqueWorkers.map((w) => w.session_id).filter(Boolean);
+    if (ids.length) {
+      const { data, error } = await supabase
+        .from('session_coordination')
+        .select('target_session')
+        .in('target_session', ids)
+        .eq('payload->>kind', CANARY_PRE_REGISTRATION_KIND);
+      if (error) throw error;
+      for (const row of (data || [])) preRegisteredCanaries.add(row.target_session);
+    }
+  } catch (e) {
+    // FAIL CLOSED on this one axis: renaming is IRREVERSIBLE, so if the marker set cannot be read we
+    // must not rename anyone this run. Skipping a genuine worker costs one unnamed cron tick; renaming
+    // a canary destroys the discriminator for good.
+    console.log(`[assign-fleet-identities] canary pre-registration lookup FAILED (${e?.message}) — skipping all naming this run rather than risk renaming a canary`);
+    return;
+  }
+
   for (const worker of uniqueWorkers) {
-    const identity = worker.metadata?.fleet_identity;
-    // QF-20260724-521: canary sessions (account_profile='canary', callsign 'Canary-N') live
-    // outside the NATO tier-band scheme entirely -- canary-guard requires the callsign to
-    // start with 'Canary-'. Without this skip, the tier-band check below always fails for
-    // them (Canary-1 is never in any NATO band), so they get demoted to needsAssignment and
-    // reassigned a NATO callsign, breaking canary-guard mid-drill.
-    if (worker.metadata?.account_profile === 'canary' || identity?.callsign?.startsWith('Canary-')) {
-      assignedRaw.push(worker);
-      continue;
-    }
-    // QF-20260627-108 (FR-1): a worker is "assigned" ONLY if its callsign is in its tier band
-    // (effort-encoded SoT). A callsign from the wrong band (e.g. a tier-2 worker still holding
-    // "Bravo") is re-derived, so the chairman scheme self-heals instead of being preserved-wrong.
-    if (identity?.callsign && identity?.color && !forceReassign
-        && callsignInTierBand(identity.callsign, tierRankOf(worker))) {
-      assignedRaw.push(worker);
-    } else {
-      needsAssignment.push(worker);
-    }
+    const verdict = classifyWorkerNaming(worker, preRegisteredCanaries, forceReassign, isCanaryMetadata);
+    if (verdict === 'needs_assignment') needsAssignment.push(worker);
+    else assignedRaw.push(worker);
   }
 
   // QF-20260528-581 (Bug A): resolve duplicate callsigns within the assigned set
@@ -604,7 +653,7 @@ function identityAccountUuid8(metadata, accountIdentity) {
   return (accountIdentity && accountIdentity.accountUuid8) || null;
 }
 
-module.exports = { filterOutCoordinators, filterOutGhostSessions, isTestSessionId, dedupeAssignedCallsigns, reserveParkedIdentities, NATO, COLORS, nextAvailable, extendCallsign, buildTierCallsignBands, tierRankOf, pickCallsignForTier, callsignInTierBand, identityNeedsRebroadcast, identityAccountUuid8 };
+module.exports = { filterOutCoordinators, filterOutGhostSessions, isTestSessionId, dedupeAssignedCallsigns, reserveParkedIdentities, NATO, COLORS, nextAvailable, extendCallsign, buildTierCallsignBands, tierRankOf, pickCallsignForTier, callsignInTierBand, classifyWorkerNaming, identityNeedsRebroadcast, identityAccountUuid8 };
 
 if (require.main === module) {
   main().then(async () => {

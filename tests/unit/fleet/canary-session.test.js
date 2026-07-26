@@ -60,7 +60,7 @@ describe('isCanarySession — FR-1 disjunction', () => {
     // metadata signal is blind. Only the spawner-minted-id marker can see it.
     const { api, seen } = fakeSb({ rows: [{ id: 'pre-1' }] });
     const out = await isCanarySession(api, { sessionId: 'sess-canary', metadata: {} });
-    expect(out).toEqual({ isCanary: true, reason: 'canary_pre_registration' });
+    expect(out).toMatchObject({ isCanary: true, reason: 'canary_pre_registration', indeterminate: false });
     expect(seen.table).toBe('session_coordination');
     expect(seen.target_session).toBe('sess-canary');
     expect(seen['payload->>kind']).toBe(CANARY_PRE_REGISTRATION_KIND);
@@ -80,7 +80,7 @@ describe('isCanarySession — FR-1 disjunction', () => {
       sessionId: 'sess-bravo',
       metadata: { account_profile: 'live', fleet_identity: { callsign: 'Bravo' } },
     });
-    expect(out).toEqual({ isCanary: false, reason: 'not_canary' });
+    expect(out).toMatchObject({ isCanary: false, reason: 'not_canary', indeterminate: false });
   });
 
   it('FR-2: a FAILED lookup fences (fail-closed), and says so distinctly', async () => {
@@ -88,7 +88,7 @@ describe('isCanarySession — FR-1 disjunction', () => {
     // reason string is distinct so an operator can tell a real canary from an indeterminate check.
     const { api } = fakeSb({ error: { message: 'boom' } });
     const out = await isCanarySession(api, { sessionId: 's', metadata: {} });
-    expect(out).toEqual({ isCanary: true, reason: 'canary_check_indeterminate_fail_closed' });
+    expect(out).toMatchObject({ isCanary: true, reason: 'canary_check_indeterminate_fail_closed', indeterminate: true });
   });
 
   it('FR-2: a THROWING transport also fences, never returns false', async () => {
