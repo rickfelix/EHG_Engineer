@@ -1267,8 +1267,13 @@ async function selfHealStaleClaim(sb, sessionId, sdKey) {
 /**
  * SD-LEO-INFRA-CHECKIN-OWN-CLAIM-DETECT-001: the authoritative query — does strategic_directives_v2
  * (the same columns sd:next and the coordinator read) say THIS session holds a live, unworked claim?
- * claude_sessions.sd_key is only ever a cache of this; this is the source of truth. Fail-open (null on
- * any error) so a query hiccup never turns a checkin into action=error.
+ * This is an OWNERSHIP question, so SDv2 governs it — see the ratified precedence rule in
+ * docs/protocol/claim-ownership-vs-liveness.md (SD-LEO-INFRA-PARKED-WORKER-CLAIM-LAPSE-001 FR-5).
+ * NOTE: this comment used to say "claude_sessions.sd_key is only ever a cache of this", which read as
+ * a universal rule and contradicted coordinator-email-summary.mjs. It is not a cache — it answers a
+ * DIFFERENT question (is a worker currently BUILDING), and the two surfaces diverge legitimately in
+ * both directions. Do not consult sd_key here; do not consult claiming_session_id for liveness.
+ * Fail-open (null on any error) so a query hiccup never turns a checkin into action=error.
  * @returns {Promise<string|null>} the sd_key of the owned claim, or null
  */
 async function findOwnSdClaim(sb, sessionId) {
@@ -1364,6 +1369,26 @@ async function assignFleetIdentityAtCheckin(sb, sessionId, claimSd) {
       if (isFixtureSession(sessionId)) return null;
     } catch { /* superset unavailable — retained isTestSessionId pre-filter still guards */ }
     const existing = myMeta.fleet_identity;
+    // SD-LEO-INFRA-LAUNCHER-CAN-HOST-001 FR-6: the SECOND, previously unguarded clobber writer.
+    // QF-20260724-521 added this canary skip to assign-fleet-identities.cjs:401 (the cron path) but
+    // NOT here, and this function applies the identical callsignInTierBand gate below. Canary sessions
+    // live outside the NATO tier-band scheme entirely -- canary-guard fail-closed REQUIRES a callsign
+    // starting with 'Canary-' -- so 'Canary-1' is in no NATO band, falls through to re-derive, and the
+    // canary is silently renamed to a NATO callsign mid-drill. Both writers must skip, or closing one
+    // just moves the clobber to the other.
+    //
+    // MUST be checked BEFORE the tier-band idempotency check below: that check returns early only for
+    // an in-band callsign, so placing this after it would let every canary reach the re-derive path
+    // first and the guard would never fire. Ordering is pinned by a test.
+    //
+    // Two independent conditions, matching the cron's: the account_profile stamp (authoritative, but
+    // written only once FR-1/FR-3 land) OR the 'Canary-' callsign prefix (works today). Deliberately
+    // an OR so this is NOT inert while the stamp is still being wired.
+    if (myMeta.account_profile === 'canary' || (existing && typeof existing.callsign === 'string' && existing.callsign.startsWith('Canary-'))) {
+      return existing && existing.callsign && existing.color
+        ? { callsign: existing.callsign, color: existing.color }
+        : null;
+    }
     // QF-20260627-108: idempotent ONLY when the existing callsign is in this worker's tier band
     // (effort-encoded SoT). A wrong-band callsign (e.g. a tier-2 worker still holding "Bravo") falls
     // through to re-derive, so check-in self-heals to the scheme just like the cron.

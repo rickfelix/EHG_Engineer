@@ -28,6 +28,21 @@ vi.mock('../../../lib/coordinator/singleton-refresh-sequencer.cjs', () => ({
 
 const { canaryRestart, canaryRelaunchUnderProfile } = await import('../../../lib/fleet/canary-guard.js');
 
+/**
+ * FR-2 tree-currency seam (post-CI RCA). See the fuller rationale in spawn-control.test.js.
+ * These two canary legs reach a live spawn, so they cross the guard and would otherwise run
+ * real git -- in CI that meant a 15-SECOND `git fetch` timeout each (DEFAULT_TIMEOUT_MS),
+ * because vitest's forked pool had several workers fetching concurrently into one shallow
+ * .git. Slow AND nondeterministic, on top of the detached-HEAD refusal.
+ */
+const CURRENT_RUNNER = (args) => {
+  if (args[0] === 'fetch') return '';
+  if (args.includes('--abbrev-ref')) return 'main\n';
+  if (args[0] === 'status') return '';
+  if (args[0] === 'rev-list') return '0\n';
+  return '';
+};
+
 /** Same in-memory fake shape as spawn-control.test.js / canary-guard.test.js. */
 function makeFakeSupabase({ sessions = [] } = {}) {
   const store = new Map(sessions.map((s) => [s.session_id, { ...s }]));
@@ -80,7 +95,7 @@ describe('QF-20260724-499: restart/relaunch honor an explicit opts.live even whe
     const supabase = makeFakeSupabase({ sessions: [canaryWorker] });
 
     const result = await canaryRestart('Canary-Alpha-1', {
-      supabase, by: 'callsign', env: GUARD_ENV, live: true, spawnFn, execFn, sleepFn: vi.fn(),
+      supabase, by: 'callsign', env: GUARD_ENV, live: true, currencyRunner: CURRENT_RUNNER, spawnFn, execFn, sleepFn: vi.fn(),
     });
 
     expect(result.ok).toBe(true);
@@ -111,7 +126,7 @@ describe('QF-20260724-499: restart/relaunch honor an explicit opts.live even whe
     const supabase = makeFakeSupabase({ sessions: [{ ...canaryWorker, session_id: 's-canary-worker-3' }] });
 
     const result = await canaryRelaunchUnderProfile('Canary-Alpha-1', 'canary', {
-      supabase, by: 'callsign', env: GUARD_ENV, baseDir: 'C:\\profiles', live: true, spawnFn, execFn, sleepFn: vi.fn(),
+      supabase, by: 'callsign', env: GUARD_ENV, baseDir: 'C:\\profiles', live: true, currencyRunner: CURRENT_RUNNER, spawnFn, execFn, sleepFn: vi.fn(),
     });
 
     expect(result.ok).toBe(true);
@@ -140,7 +155,7 @@ describe('QF-20260724-499: restart/relaunch honor an explicit opts.live even whe
       sessions: [{ session_id: 's-prod', status: 'active', metadata: { fleet_identity: { callsign: 'Alpha-5' }, account_profile: 'default', role: 'worker' } }],
     });
 
-    const result = await canaryRestart('Alpha-5', { supabase, by: 'callsign', env: GUARD_ENV, live: true, spawnFn });
+    const result = await canaryRestart('Alpha-5', { supabase, by: 'callsign', env: GUARD_ENV, live: true, currencyRunner: CURRENT_RUNNER, spawnFn });
 
     expect(result.ok).toBe(false);
     expect(result.reason).toBe('not_canary_profile');

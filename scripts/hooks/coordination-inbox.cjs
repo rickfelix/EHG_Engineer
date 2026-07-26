@@ -83,6 +83,27 @@ function getIdentityFile(resolvedSessionId) {
 // sessions = 24/min, well below capacity.
 const CHECK_INTERVAL_MS = parseInt(process.env.COORDINATION_CHECK_INTERVAL_MS, 10) || 15_000;
 const HEARTBEAT_INTERVAL_MS = 30_000; // Update heartbeat every 30 seconds
+// SD-LEO-INFRA-PARKED-WORKER-CLAIM-LAPSE-001 FR-4: how fresh a session heartbeat must be for that
+// session to count as a live builder holding its sd_key. 15min matches the claim TTL the fleet
+// already uses (chairman_dashboard_config), so a parked /loop worker on a 900-1800s wake cadence
+// is still recognised as building between ticks rather than having its SD advertised out from
+// under it. Deliberately generous: a false "held" only delays a dispatch, a false "free" causes
+// the second-dispatch collision this SD exists to prevent.
+// Retained for back-compat with callers/tests that import it. Liveness itself is NOT decided here
+// — selectAvailableSds delegates to the lib/fleet/session-liveness.cjs SSOT, which owns the
+// heartbeat threshold (LIVENESS_HEARTBEAT_SEC), the tick window and the armed-silence cap. Do not
+// re-derive any of those locally; that fork is what DEFECT-7 of this SD was.
+const SESSION_LIVENESS_WINDOW_MS = 15 * 60 * 1000;
+// The READ-TIME liveness SSOT. Guarded require so an unavailable lib degrades to a conservative
+// hold (see selectAvailableSds) rather than crashing the hook.
+let isSessionAlive;
+try {
+  ({ isSessionAlive } = require(path.resolve(__dirname, '../../lib/fleet/session-liveness.cjs')));
+} catch {
+  // Fail CLOSED: with no liveness oracle we cannot prove any worker is gone, so treat every
+  // session that names an SD as holding it. Suppresses dispatch rather than risking a collision.
+  isSessionAlive = () => ({ alive: true, reason: 'liveness_ssot_unavailable' });
+}
 const ACTIONABLE_TYPES = ['WORK_ASSIGNMENT', 'CLAIM_RELEASED', 'CLAIM_REMINDER'];
 // SD-FDBK-FIX-WORKER-CHECK-SURFACES-001 (adversarial-review finding #1): only WORK_ASSIGNMENT
 // has a worker-side CLOSURE path for a busy worker (claim_sd/ackMessage stamps read_at when the
@@ -768,14 +789,98 @@ async function main() {
         .order('priority_score', { ascending: false })
         .limit(3);
 
-      if (availableSDs && availableSDs.length > 0) {
+      // SD-LEO-INFRA-PARKED-WORKER-CLAIM-LAPSE-001 FR-4: claiming_session_id alone is NOT
+      // evidence an SD is free. A live worker parked on ScheduleWakeup can have its claim
+      // transiently cleared while it is still building, and this query would then advertise
+      // its SD for auto-claim — the second-dispatch risk this SD exists to close. Cross-check
+      // against the session side, the pattern coordinator-email-summary.mjs:64-66 already uses
+      // ("claiming_session_id drifts to NULL after a claim-sweep even while the worker keeps
+      // building"). That workaround existed in the email path and was never propagated here.
+      // Every column the session-liveness SSOT reads must be selected, or the cross-check silently
+      // degrades to whichever signals happen to be present — a PARKED worker stops heartbeating on
+      // purpose, and a busy one mid sub-agent call emits no heartbeat either, so heartbeat_at alone
+      // is not evidence that nobody is building. is_alive / terminal_id / process_alive_at carry the
+      // raw, PID and tick signals respectively.
+      const { data: liveSessions, error: liveSessionsErr } = await supabase
+        .from('claude_sessions')
+        .select('sd_key, heartbeat_at, expected_silence_until, is_alive, terminal_id, process_alive_at')
+        .not('sd_key', 'is', null);
+      if (liveSessionsErr) {
+        // The consequence is already safe (data is null on error → selectAvailableSds fails closed
+        // → nothing advertised), but the surrounding block swallows exceptions, so a persistent
+        // claude_sessions failure would suppress dispatch INDEFINITELY and look identical to
+        // "nothing available". Given this fleet's belt-starvation history, make it observable.
+        console.error(`[coordination-inbox] live-session cross-check FAILED (${liveSessionsErr.message}) — suppressing auto-claim dispatch this tick (fail-closed).`);
+      }
+
+      const claimable = selectAvailableSds(availableSDs, liveSessions);
+      if (claimable.length > 0) {
         emitAutoClaimDirective(
-          availableSDs[0].sd_key,
-          availableSDs.map(sd => sd.sd_key)
+          claimable[0].sd_key,
+          claimable.map(sd => sd.sd_key)
         );
       }
     } catch { /* fail silently */ }
   }
+}
+
+/**
+ * SD-LEO-INFRA-PARKED-WORKER-CLAIM-LAPSE-001 FR-7/FR-4 — the dispatch-availability predicate,
+ * extracted from main() so it can be asserted directly. It previously lived inline, which meant
+ * any test of it could only have mocked the query it was supposed to be testing.
+ *
+ * PURE. Returns the SDs that are genuinely claimable: those whose sd_key is NOT held by a live
+ * session. Fails CLOSED on an unusable session list — if we cannot prove nobody is building an
+ * SD, we do not advertise it. (Emptiness is not proof of absence: an unchecked query error
+ * returning null was the root cause of the claim lapse this SD came from.)
+ *
+ * @param {Array<{sd_key:string}>|null} sdRows        candidate SDs (claiming_session_id IS NULL)
+ * @param {Array<{sd_key:string, heartbeat_at:string}>|null} liveSessions  sessions holding an sd_key
+ * @param {{nowMs?:number, livenessWindowMs?:number}} [opts]
+ * @returns {Array<{sd_key:string}>}
+ */
+function selectAvailableSds(sdRows, liveSessions, opts = {}) {
+  const rows = Array.isArray(sdRows) ? sdRows : [];
+  if (rows.length === 0) return [];
+  // Fail closed: a null/undefined session list means the cross-check could not run.
+  if (!Array.isArray(liveSessions)) return [];
+  const nowMs = opts.nowMs ?? Date.now();
+
+  // Liveness is delegated to the READ-TIME SSOT (lib/fleet/session-liveness.cjs), which declares
+  // itself "used by EVERY consumer" and covers FIVE signals: raw is_alive, fresh heartbeat, live
+  // PID marker, fresh process_alive_at tick, and an armed expected_silence_until window.
+  //
+  // This predicate first shipped with a hand-rolled two-signal check (heartbeat + silence). That
+  // left a worker which is PID-alive and tick-fresh but heartbeat-stale INVISIBLE here, so its SD
+  // was still advertised for auto-claim — the COLLISION direction, which is the harmful one. The
+  // omission is notable because FR-2 of this same SD went out of its way to compute an alive-PID
+  // set locally for the sweep, on the explicit reasoning that dropping the PID signal "would
+  // silently degrade shouldHoldClaim to heartbeat-only and lose exactly the PID-aliveness signal
+  // that distinguishes a parked-but-live worker from a dead one". That reasoning was correct and
+  // simply had not been carried one file over. Re-deriving liveness locally also forked a second
+  // heartbeat threshold and a fourth cap-constant name away from the SSOT.
+  //
+  // The SSOT's ONE-DIRECTIONAL contract is what makes it safe here: it can only ever read MORE
+  // alive than the raw flag, never less. For a dispatch-advertisement guard that is the correct
+  // asymmetry — a false HOLD costs a little dispatch delay, while a false FREE costs a collision
+  // with a live builder, which is the failure this SD exists to prevent.
+  //
+  // A dead session does not hold its SD forever: the sweep independently writes is_alive=false
+  // for genuinely dead sessions, which retires every raw/PID/tick signal here.
+  const aliveCcPids = opts.aliveCcPids ?? null;
+  const isHolding = (s) => {
+    if (!s || !s.sd_key) return false;
+    try {
+      return isSessionAlive(s, { nowMs, aliveCcPids }).alive === true;
+    } catch {
+      // Fail CLOSED for this row: if liveness cannot be determined we must not conclude the
+      // worker is gone. Treating an unanswerable check as "free" is the root-cause pattern.
+      return true;
+    }
+  };
+
+  const heldByLive = new Set(liveSessions.filter(isHolding).map((s) => s.sd_key));
+  return rows.filter((sd) => sd && sd.sd_key && !heldByLive.has(sd.sd_key));
 }
 
 if (require.main === module) {
@@ -783,6 +888,10 @@ if (require.main === module) {
 }
 
 module.exports = {
+  // SD-LEO-INFRA-PARKED-WORKER-CLAIM-LAPSE-001 FR-7: exported so the dispatch-availability
+  // predicate can be asserted directly instead of through a mock of its own query.
+  selectAvailableSds,
+  SESSION_LIVENESS_WINDOW_MS,
   getCurrentSessionId,
   readSessionIdFromStdin,
   // QF-20260504-912 — exposed for per-session throttle/heartbeat tests

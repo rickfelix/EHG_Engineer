@@ -71,7 +71,13 @@ describe('FR-2: QF-aware orphan path + claim-age grace', () => {
     expect(fr2).toMatch(/ageSec < QF_CLAIM_GRACE_SECONDS/);
   });
   it('excludes held QF claims from orphanedClaims (the real fix)', () => {
-    expect(SRC).toMatch(/const orphanedClaims = classified\.filter\(s => !sdStatusMap\[s\.sd_key\] && !isHeldQfClaim\(s\)\)/);
+    // SD-LEO-INFRA-PARKED-WORKER-CLAIM-LAPSE-001 re-pinned this: the filter was rewritten from a
+    // one-line expression to a block that ALSO fail-closes on an untrustworthy SD lookup (TS-9)
+    // and consults shouldHoldClaim (TS-8). The QF-exclusion SEMANTIC this test protects is
+    // unchanged — held QF claims still short-circuit to `return false` — so the assertion is
+    // re-aimed at that semantic rather than at the old single-expression syntax.
+    const orphanBlock = SRC.slice(SRC.indexOf('const orphanedClaims ='), SRC.indexOf('const orphanedClaims =') + 900);
+    expect(orphanBlock).toMatch(/if \(sdStatusMap\[s\.sd_key\] \|\| isHeldQfClaim\(s\)\) return false;/);
   });
   it('grace window is env-tunable via QF_CLAIM_GRACE_SECONDS', () => {
     expect(fr2).toMatch(/process\.env\.QF_CLAIM_GRACE_SECONDS/);

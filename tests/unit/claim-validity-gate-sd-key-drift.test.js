@@ -9,6 +9,7 @@
  */
 
 import { describe, it, expect } from 'vitest';
+import { shouldReleaseStaleOwner } from '../../lib/claim-validity-gate.js';
 import { readFileSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import { dirname, resolve } from 'node:path';
@@ -52,9 +53,29 @@ describe('FR-2 fallthrough: sd_key drift triggers auto-release alongside ownerIs
     // inline condition into the pure shouldReleaseStaleOwner() and ADDED the !ownerPidAlive escape
     // (a busy worker mid Task() sub-agent call has a live PID and must not be reaped). The release is
     // now driven by that helper; the pure function still encodes drift-always / (dead && !silenced && !pid-alive).
-    expect(src).toMatch(/if\s*\(\s*shouldReleaseStaleOwner\(\s*\{\s*ownerHasSdKeyDrifted,\s*ownerIsDead,\s*ownerIsSilenced,\s*ownerPidAlive\s*\}\s*\)\s*\)/);
+    // SD-LEO-INFRA-PARKED-WORKER-CLAIM-LAPSE-001 FR-3 added a 5th signal, ownerSdKeyMissing, so
+    // an AMBIGUOUS drift (owner.sd_key === null) can be distinguished from a genuine one (owner
+    // moved to another SD). The semantic this test pins — the auto-release decision routes through
+    // shouldReleaseStaleOwner carrying the liveness signals — is unchanged and now stronger.
+    // SD-LEO-INFRA-PARKED-WORKER-CLAIM-LAPSE-001 FR-1 (2nd pass): this assertion previously pinned
+    // the ENTIRE `if (...)` including its opening paren, so it broke when the release site gained a
+    // fail-closed `!ownerLookupFailed &&` conjunct — a correct change (a discarded owner-lookup
+    // error was letting a failed query read as "owner is dead" and reap a LIVE claim). This is the
+    // 5th syntax pin in this repo to fail on a correct edit. Re-aimed at the SEMANTIC: the release
+    // decision routes through shouldReleaseStaleOwner carrying all five liveness signals. Any
+    // ADDITIONAL guard in front of it is by definition more conservative and must not fail here.
+    expect(src).toMatch(/shouldReleaseStaleOwner\(\s*\{\s*ownerHasSdKeyDrifted,\s*ownerIsDead,\s*ownerIsSilenced,\s*ownerPidAlive,\s*ownerSdKeyMissing\s*\}\s*\)/);
+    // …and the release is still gated by an `if`, not evaluated for side effects.
+    expect(src).toMatch(/if\s*\([^)]*shouldReleaseStaleOwner\(/);
+    // FR-1: an ERRORED owner lookup must suppress the release (a failed query is not an answer).
+    expect(src).toMatch(/!ownerLookupFailed\s*&&\s*shouldReleaseStaleOwner/);
+    expect(src).toMatch(/const ownerLookupFailed = Boolean\(ownerErr\)/);
     expect(src).toMatch(/function shouldReleaseStaleOwner/);
-    expect(src).toMatch(/if\s*\(\s*ownerHasSdKeyDrifted\s*\)\s*return true/);
+    // FR-3: the drift arm is now a BLOCK, not a bare `return true` — it releases unconditionally
+    // only when the owner is verifiably on ANOTHER sd_key, and requires a negative liveness signal
+    // when the sd_key is merely null (the ambiguous case that was evicting live owners).
+    expect(src).toMatch(/if\s*\(\s*ownerHasSdKeyDrifted\s*\)\s*\{/);
+    expect(src).toMatch(/if\s*\(\s*!ownerSdKeyMissing\s*\)\s*return true;/);
     expect(src).toMatch(/Boolean\(ownerIsDead\)\s*&&\s*!ownerIsSilenced\s*&&\s*!ownerPidAlive/);
   });
 
@@ -126,5 +147,44 @@ describe('cross-cutting: no claim_version usage (validation-agent P1)', () => {
   it('active code does NOT introduce claim_version (Option B compare-and-set lives in lifecycle helper)', () => {
     const codeOnly = src.replace(/\/\*[\s\S]*?\*\//g, '').replace(/\/\/.*$/gm, '');
     expect(codeOnly).not.toMatch(/claim_version/);
+  });
+});
+
+/**
+ * SD-LEO-INFRA-PARKED-WORKER-CLAIM-LAPSE-001 FR-3 (TS-2 / TS-3) — behavioural, against the REAL
+ * exported predicate (no mocks: shouldReleaseStaleOwner is pure).
+ *
+ * Drift used to release UNCONDITIONALLY, which made this a liveness-free claim steal: any path
+ * that nulled the session-side sd_key evicted a LIVE, heartbeating, PID-alive, silence-armed
+ * owner. But 'drift' covers two materially different situations, and collapsing them is what
+ * caused the harm — so these tests pin BOTH directions. Over-correcting here would be a claim
+ * leak that starves the belt, which TS-3 exists to prevent.
+ */
+describe('FR-3: sd_key drift must not evict a live owner (TS-2/TS-3)', () => {
+  it('TS-2: a NULL sd_key does NOT release a PID-alive owner', () => {
+    expect(shouldReleaseStaleOwner({ ownerHasSdKeyDrifted: true, ownerSdKeyMissing: true, ownerPidAlive: true, ownerIsDead: true })).toBe(false);
+  });
+
+  it('TS-2: a NULL sd_key does NOT release a silence-armed owner', () => {
+    expect(shouldReleaseStaleOwner({ ownerHasSdKeyDrifted: true, ownerSdKeyMissing: true, ownerIsSilenced: true, ownerIsDead: true })).toBe(false);
+  });
+
+  it('TS-3: a NULL sd_key STILL releases an owner with no liveness signal (no claim leak)', () => {
+    expect(shouldReleaseStaleOwner({ ownerHasSdKeyDrifted: true, ownerSdKeyMissing: true, ownerPidAlive: false, ownerIsSilenced: false })).toBe(true);
+  });
+
+  it('TS-3: an owner verifiably on ANOTHER sd_key still releases unconditionally — the genuine signal is preserved', () => {
+    expect(shouldReleaseStaleOwner({ ownerHasSdKeyDrifted: true, ownerSdKeyMissing: false, ownerPidAlive: true, ownerIsSilenced: true })).toBe(true);
+  });
+
+  it('the non-drift dead-owner path is unchanged (silence and pid-alive still suppress)', () => {
+    expect(shouldReleaseStaleOwner({ ownerIsDead: true })).toBe(true);
+    expect(shouldReleaseStaleOwner({ ownerIsDead: true, ownerIsSilenced: true })).toBe(false);
+    expect(shouldReleaseStaleOwner({ ownerIsDead: true, ownerPidAlive: true })).toBe(false);
+    expect(shouldReleaseStaleOwner({ ownerIsDead: false })).toBe(false);
+  });
+
+  it('the call site distinguishes a null sd_key from a moved one', () => {
+    expect(src).toMatch(/const ownerSdKeyMissing = Boolean\(owner\) && !owner\.sd_key/);
   });
 });

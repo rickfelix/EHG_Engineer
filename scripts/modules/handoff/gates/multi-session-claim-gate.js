@@ -161,10 +161,18 @@ export async function validateMultiSessionClaim(supabase, sdId, options = {}) {
     const ownerPidAlive = isOwnerProcessAlive(ownerSessionId);
     // Owner's OWN session-side sd_key no longer points at this SD → they've moved on (drift).
     const ownerHasSdKeyDrifted = !!ownerRow && ownerRow.sd_key !== sdId;
+    // SD-LEO-INFRA-PARKED-WORKER-CLAIM-LAPSE-001 FR-3: the predicate above is ALSO true when
+    // sd_key is NULL, which is ambiguous (a parked/live owner) rather than a genuine "moved on"
+    // signal. Omitting ownerSdKeyMissing here left it undefined, so shouldReleaseStaleOwner
+    // short-circuited on `if (!ownerSdKeyMissing) return true` and this gate reported "no real
+    // conflict" — passing a handoff against a LIVE, PID-alive, silence-armed owner. That is the
+    // exact harm FR-3 fixed at lib/claim-validity-gate.js; this is its second consumer and the
+    // fix had not been propagated. See docs/protocol/claim-ownership-vs-liveness.md.
+    const ownerSdKeyMissing = !!ownerRow && !ownerRow.sd_key;
 
-    if (shouldReleaseStaleOwner({ ownerHasSdKeyDrifted, ownerIsDead, ownerIsSilenced, ownerPidAlive })) {
+    if (shouldReleaseStaleOwner({ ownerHasSdKeyDrifted, ownerIsDead, ownerIsSilenced, ownerPidAlive, ownerSdKeyMissing })) {
       console.log(`   ✅ Surface-A owner ${ownerSessionId.substring(0, 24)}... is dead/drifted (delegated liveness check) — no real conflict, passing`);
-      console.log(`      (ownerIsDead=${ownerIsDead}, ownerIsSilenced=${ownerIsSilenced}, ownerPidAlive=${ownerPidAlive}, sdKeyDrifted=${ownerHasSdKeyDrifted})`);
+      console.log(`      (ownerIsDead=${ownerIsDead}, ownerIsSilenced=${ownerIsSilenced}, ownerPidAlive=${ownerPidAlive}, sdKeyDrifted=${ownerHasSdKeyDrifted}, sdKeyMissing=${ownerSdKeyMissing})`);
       return {
         pass: true,
         score: 100,

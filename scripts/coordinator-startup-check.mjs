@@ -21,6 +21,9 @@ import { resolve, dirname } from 'path';
 import { fileURLToPath } from 'url';
 // SD-LEO-INFRA-FLEET-FRESHNESS-GUARD-001: advisory, fail-open checkout-freshness badge.
 import { checkoutFreshness, freshnessBadge, CRITICAL_PROTOCOL_FILES } from '../lib/governance/checkout-freshness.js';
+// QF-20260725-342: single source of truth for the resurface threshold (see that module's header).
+import { createRequire as _createRequireQF342 } from 'node:module';
+const { OPERATING_THRESHOLD_HOURS } = _createRequireQF342(import.meta.url)('../lib/coordination/resurface-threshold.cjs');
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const REPO_ROOT = resolve(__dirname, '..');
@@ -314,9 +317,12 @@ export const STANDARD_LOOPS = [
   // + per-row dedup check), fail-open (no active Adam session -> no-op), and self-rate-limits
   // to once per stale ledger row per day via its own payload.dedup_key, so a frequent tick is
   // safe. Also composed into scripts/coordinator-quiet-tick.mjs's COMPOSED_CORES.
+  // QF-20260725-342: this prompt carried NO --threshold-hours, so the registered loop ran at the
+  // script's 24h DEFAULT while only the GHA cron honored the 72h operating threshold. Built from
+  // the shared constant so a future threshold change reaches every invoker at once.
   { key: 'solomon-ledger-resurface', label: 'Solomon ledger-pending resurface (aged advice-outcome rows -> Adam inbox)', script: 'solomon-ledger-pending-resurface.cjs', cron: '13,43 * * * *',
     gha_backed: true,
-    prompt: 'node scripts/solomon-ledger-pending-resurface.cjs' },
+    prompt: `node scripts/solomon-ledger-pending-resurface.cjs --threshold-hours ${OPERATING_THRESHOLD_HOURS}` },
   // QF-20260720-638 (Solomon-designed, Adam-sourced): encodes the coordinator's manual
   // idle-QF claim-hint intervention as standing behavior. PROPOSE-ONLY (advisory hint row per
   // idle worker, never claims/mutates quick_fixes); belt-and-suspenders chairman-gated
