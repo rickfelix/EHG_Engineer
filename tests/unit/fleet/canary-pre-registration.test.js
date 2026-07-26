@@ -14,7 +14,7 @@
  * never treat it as one.
  */
 import { describe, it, expect, vi } from 'vitest';
-import { writeCanaryPreRegistration, CANARY_PRE_REGISTRATION_KIND, CANARY_TRIGGER_KEY } from '../../../lib/fleet/canary-session.js';
+import { writeCanaryPreRegistration, findCanaryPreRegistration, CANARY_PRE_REGISTRATION_KIND, CANARY_TRIGGER_KEY } from '../../../lib/fleet/canary-session.js';
 
 /** Records inserts so the ROW SHAPE can be asserted, not just the fact of a call. */
 function insertRecorder({ error = null, throws = false } = {}) {
@@ -70,7 +70,9 @@ describe('writeCanaryPreRegistration — FR-4 writer', () => {
     const sb = insertRecorder({ error: { message: 'insert denied' } });
     const out = await writeCanaryPreRegistration(sb, 'minted-uuid-4', {});
     expect(out.ok).toBe(false);
-    expect(out.error).toBe('insert denied');
+    // A code-less driver error degrades to a fixed sentinel rather than passing the message through —
+    // see the log-leakage case in the SEC-1 block below. What matters here is ok:false, not the text.
+    expect(out.error).toBe('insert_failed');
   });
 
   it('also reports (not throws) when the transport itself explodes', async () => {
@@ -88,6 +90,71 @@ describe('writeCanaryPreRegistration — FR-4 writer', () => {
     expect((await writeCanaryPreRegistration(sb, '', {})).ok).toBe(false);
     expect(sb.rows).toHaveLength(0);
     expect((await writeCanaryPreRegistration(null, 'minted-uuid-6', {})).ok).toBe(false);
+  });
+});
+
+/**
+ * SEC-1 REGRESSION. The first version of this writer omitted expires_at, and the column DEFAULTS to
+ * now() + 1 hour; cleanup_expired_coordination() then DELETEs any row WHERE expires_at < now() AND
+ * acknowledged_at IS NOT NULL. Roll-call (checkin step 4) runs BEFORE this fence (step 8) and stamps
+ * read_at then acknowledged_at on a non-directive INFO row, so the canary's OWN check-ins armed the
+ * deletion of its own safety marker. ~1h after spawn the lookup returned {found:false,
+ * lookupFailed:false} — indistinguishable from "never was a canary" — and the fence silently opened.
+ *
+ * These pin BOTH halves: the writer makes the row un-reapable, and the reader stays blind to the
+ * lifecycle columns. Either half alone is insufficient — a later "tidy-up" adding
+ * `.is('acknowledged_at', null)` to the reader would match zero rows and disable the fence fleet-wide.
+ */
+describe('SEC-1: the marker is a REGISTRY row, not a message — it must not be reapable', () => {
+  it('writes expires_at:null so `expires_at < now()` can never be true', async () => {
+    const sb = insertRecorder();
+    await writeCanaryPreRegistration(sb, 'minted-ttl', { callsign: 'Canary-pilot' });
+    // NOT merely "some future timestamp" — a TTL of any length reopens the fence when it lapses.
+    expect(sb.rows[0]).toHaveProperty('expires_at');
+    expect(sb.rows[0].expires_at).toBeNull();
+  });
+
+  it('pre-stamps read_at and acknowledged_at so no lane ever delivers or reaps it', async () => {
+    // Pre-stamping takes the row out of the coordinator push lane (it is not a message) and out of
+    // the dead-letter pass, which selects on both being NULL.
+    const sb = insertRecorder();
+    await writeCanaryPreRegistration(sb, 'minted-ack', {});
+    expect(sb.rows[0].read_at).toBeTruthy();
+    expect(sb.rows[0].acknowledged_at).toBeTruthy();
+  });
+
+  it('the READER still finds a row that is read, acknowledged, expired AND dead-lettered', async () => {
+    // The lifecycle-blindness is load-bearing: "this session id is a probe" does not stop being true
+    // because something stamped the row. A reader that filtered on any of these would see zero rows.
+    const seen = {};
+    const api = {
+      from(t) { seen.table = t; return api; },
+      select() { return api; },
+      eq(col, val) { seen[col] = val; return api; },
+      limit() {
+        return Promise.resolve({
+          data: [{
+            id: 'pre-1', read_at: '2020-01-01T00:00:00Z', acknowledged_at: '2020-01-01T00:00:00Z',
+            expires_at: '2020-01-01T00:00:00Z', dead_letter: true,
+          }],
+          error: null,
+        });
+      },
+    };
+    const out = await findCanaryPreRegistration(api, 'sess-x');
+    expect(out).toEqual({ found: true, lookupFailed: false });
+    // And prove the query itself carries no lifecycle predicate that could exclude such a row.
+    expect(Object.keys(seen)).toEqual(['table', 'target_session', 'payload->>kind']);
+  });
+
+  it('reports an insert failure by CODE, never the driver message', async () => {
+    // Postgres embeds row content ("Failing row contains (…)", carrying the whole JSONB) in the error,
+    // and this string travels outward through spawn()'s `reason` into shared logs.
+    const sb = insertRecorder({ error: { code: '23505', message: 'duplicate key ... Failing row contains (secret-payload)' } });
+    const out = await writeCanaryPreRegistration(sb, 'minted-err', {});
+    expect(out.ok).toBe(false);
+    expect(out.error).toBe('23505');
+    expect(out.error).not.toMatch(/Failing row contains/);
   });
 });
 

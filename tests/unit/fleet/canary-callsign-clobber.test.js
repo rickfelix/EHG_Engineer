@@ -26,7 +26,8 @@ import { isCanarySession, CANARY_PRE_REGISTRATION_KIND } from '../../../lib/flee
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const CHECKIN = resolve(__dirname, '../../../scripts/worker-checkin.cjs');
 const CRON = resolve(__dirname, '../../../scripts/assign-fleet-identities.cjs');
-const { classifyWorkerNaming, pickCallsignForTier, callsignInTierBand, NATO } =
+const { classifyWorkerNaming, pickCallsignForTier, callsignInTierBand, NATO,
+  partitionWorkersForNaming, loadPreRegisteredCanaries, dedupeAssignedCallsigns } =
   createRequire(import.meta.url)('../../../scripts/assign-fleet-identities.cjs');
 
 function sbWith(rows, error = null) {
@@ -73,13 +74,14 @@ describe('FR-7: both writers consult the canonical predicate', () => {
     expect(src).toMatch(/isCanary: nameless/);
   });
 
-  it('assign-fleet-identities.cjs batches the markers and FAILS CLOSED', () => {
+  it('assign-fleet-identities.cjs consults the shared kind constant and can refuse the run', () => {
     const src = readFileSync(CRON, 'utf8');
     expect(src).toMatch(/CANARY_PRE_REGISTRATION_KIND/);
-    // Batched, not per-worker: a per-worker await in that loop would be an N+1 against a table the
-    // cron already reads in bulk.
-    expect(src).toMatch(/\.in\('target_session', ids\)/);
-    // On lookup failure it returns rather than naming anyone this run.
+    // The fail-closed BRANCH is asserted here only as "this message still exists"; what actually
+    // protects it is the behavioural ok:false case in the loadPreRegisteredCanaries block below. The
+    // batching/no-N+1 property used to be pinned by a regex for `.in('target_session', ids)` — that
+    // literal is gone now the lookup is chunked, and a regex could not have told a 50-per-request
+    // chunk from one oversized query anyway. Both properties moved to real assertions.
     expect(src).toMatch(/skipping all naming this run rather than risk renaming a canary/);
   });
 
@@ -97,6 +99,113 @@ describe('FR-7: both writers consult the canonical predicate', () => {
  * covered, which is the same defect shape as a stubbed writer or an unasserted counter. These drive
  * the extracted decision directly so the classification itself has to be right.
  */
+/**
+ * F2 REGRESSION — the fix that was INERT. A TESTING review proved the first version of FR-7's cron half
+ * protected nothing: classifyWorkerNaming returned the right canary verdict, the worker went into
+ * assignedRaw, and then dedupeAssignedCallsigns — which treats a worker with no
+ * metadata.fleet_identity.callsign as "not really assigned" — demoted it back into needsAssignment,
+ * where it was renamed and broadcast. An unstamped canary has no callsign by definition, so EVERY newly
+ * protected case was demoted; only the case that already worked before FR-7 survived.
+ *
+ * So the property under test is the BUCKET, not the verdict: a canary must never enter assignedRaw,
+ * because everything downstream of that list can undo the decision. Asserting the verdict alone is
+ * exactly the mistake that shipped.
+ */
+describe('F2: a canary must never enter the list that dedupe can demote', () => {
+  const canaryMd = (m) => m?.account_profile === 'canary' || !!m?.fleet_identity?.callsign?.startsWith('Canary-');
+
+  it('a pre-registered, CALLSIGN-LESS canary is bucketed away from assignedRaw entirely', () => {
+    const w = { session_id: 's-canary', metadata: {} };
+    const parts = partitionWorkersForNaming([w], new Set(['s-canary']), false, canaryMd);
+    expect(parts.canaryProtected).toHaveLength(1);
+    expect(parts.assignedRaw).toHaveLength(0);      // <- the inert version put it HERE
+    expect(parts.needsAssignment).toHaveLength(0);
+  });
+
+  it('END-TO-END of the regression: running the real dedupe over the buckets cannot demote it', () => {
+    // This is the assertion whose absence let the inert version ship. It drives the ACTUAL
+    // dedupeAssignedCallsigns over the ACTUAL partition output, rather than trusting the verdict.
+    const canary = { session_id: 's-canary', metadata: {} };
+    const worker = { session_id: 's-worker', metadata: { fleet_identity: { callsign: 'Zulu', color: 'blue' }, tier_rank: 1 } };
+    const parts = partitionWorkersForNaming([canary, worker], new Set(['s-canary']), false, canaryMd);
+    const { demoted } = dedupeAssignedCallsigns(parts.assignedRaw);
+    expect(demoted.map((d) => d.session_id)).not.toContain('s-canary');
+    // And the control: had it been placed in assignedRaw, dedupe WOULD have demoted it — proving the
+    // hazard is real and the bucket is what avoids it, not some property of the canary itself.
+    expect(dedupeAssignedCallsigns([canary]).demoted.map((d) => d.session_id)).toContain('s-canary');
+  });
+
+  it('an account_profile-stamped canary with no callsign is also protected', () => {
+    const w = { session_id: 's-c2', metadata: { account_profile: 'canary' } };
+    const parts = partitionWorkersForNaming([w], new Set(), false, canaryMd);
+    expect(parts.canaryProtected.map((c) => c.session_id)).toEqual(['s-c2']);
+    expect(parts.assignedRaw).toHaveLength(0);
+  });
+
+  it('NEGATIVE CONTROL — ordinary workers still flow to their normal buckets', () => {
+    // Without this the partition could route EVERYTHING to canaryProtected, freezing all naming, and
+    // both tests above would still pass.
+    const inBandCallsign = pickCallsignForTier(1, new Set());
+    const inBand = { session_id: 's-a', metadata: { fleet_identity: { callsign: inBandCallsign, color: 'blue' }, tier_rank: 1 } };
+    const unnamed = { session_id: 's-b', metadata: {} };
+    const parts = partitionWorkersForNaming([inBand, unnamed], new Set(), false, canaryMd);
+    expect(parts.canaryProtected).toHaveLength(0);
+    expect(parts.assignedRaw.map((w) => w.session_id)).toEqual(['s-a']);
+    expect(parts.needsAssignment.map((w) => w.session_id)).toEqual(['s-b']);
+  });
+});
+
+/**
+ * F3 — the DB→Set path. While this lived inline in main() it had NO reachable assertion: three separate
+ * mutations stayed green across the whole suite (deleting the fail-closed return, deleting
+ * `if (error) throw error`, and making the Set-population loop a no-op, which disables FR-7's cron
+ * protection outright). The only thing pointing at it was a regex matching the console.log STRING.
+ */
+describe('F3: loadPreRegisteredCanaries — the marker lookup itself', () => {
+  function fakeSb({ pages = [[]], error = null } = {}) {
+    const calls = [];
+    let i = 0;
+    const api = {
+      from() { return api; },
+      select() { return api; },
+      in(col, vals) { calls.push(vals); return api; },
+      eq() { return Promise.resolve({ data: error ? null : (pages[i++] || []), error }); },
+    };
+    return { api, calls };
+  }
+
+  it('populates the Set from the rows returned', async () => {
+    const { api } = fakeSb({ pages: [[{ target_session: 'a' }, { target_session: 'b' }]] });
+    const out = await loadPreRegisteredCanaries(api, ['a', 'b', 'c'], 'canary_pre_registration');
+    expect(out.ok).toBe(true);
+    expect([...out.canaries].sort()).toEqual(['a', 'b']);
+  });
+
+  it('CHUNKS the id list so a large fleet cannot 414 into the fleet-wide fail-closed', async () => {
+    // Unchunked, the fail-closed quietly becomes fail-ALWAYS as the fleet grows — and it presents as
+    // an idle cron, not an error.
+    const ids = Array.from({ length: 120 }, (_, n) => `s-${n}`);
+    const { api, calls } = fakeSb({ pages: [[], [], []] });
+    const out = await loadPreRegisteredCanaries(api, ids, 'k', 50);
+    expect(out.ok).toBe(true);
+    expect(calls.map((c) => c.length)).toEqual([50, 50, 20]);
+  });
+
+  it('reports ok:false on a query error so the caller names NOBODY that run', async () => {
+    const { api } = fakeSb({ error: { code: '42501', message: 'permission denied for relation ...' } });
+    const out = await loadPreRegisteredCanaries(api, ['a'], 'k');
+    expect(out.ok).toBe(false);
+    expect(out.error).toBe('42501'); // code, not the driver message
+  });
+
+  it('skips falsy ids and makes no query at all for an empty fleet', async () => {
+    const { api, calls } = fakeSb();
+    const out = await loadPreRegisteredCanaries(api, [null, undefined, ''], 'k');
+    expect(out.ok).toBe(true);
+    expect(calls).toHaveLength(0);
+  });
+});
+
 describe('FR-7: classifyWorkerNaming — the cron decision, exercised not grepped', () => {
   const md = (metadata) => ({ session_id: 's-1', metadata });
   const canaryMd = (m) => m?.account_profile === 'canary' || !!m?.fleet_identity?.callsign?.startsWith('Canary-');

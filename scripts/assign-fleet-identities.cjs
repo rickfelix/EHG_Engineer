@@ -239,6 +239,72 @@ function reserveParkedIdentities(usedCallsigns, usedColors, recentSessions, acti
 // last one actually broadcast (metadata.fleet_identity_last_sent, distinct from fleet_identity
 // itself so a partially-failed send is retried next tick) — true means re-send is due.
 /**
+ * Split the worker set into the three naming buckets. EXTRACTED so the load-bearing property is
+ * TESTABLE: a canary must never enter `assignedRaw`.
+ *
+ * WHY THAT SPECIFIC PROPERTY. The first version of FR-7 put canaries in assignedRaw, which looked
+ * right — they are "already assigned", they keep their identity. A TESTING review then showed it was
+ * INERT for every case FR-7 had just added: dedupeAssignedCallsigns treats a worker with no
+ * metadata.fleet_identity.callsign as "not really assigned" and DEMOTES it into needsAssignment, where
+ * it is renamed to a NATO callsign and broadcast. An unstamped canary has no callsign by definition,
+ * so the pre-registration disjunct bought nothing — only the case that already worked before FR-7 (a
+ * canary already holding 'Canary-N') survived. The verdict was correct and the pipeline overrode it
+ * two steps later, which is why the assertion has to be about the BUCKET, not the verdict.
+ *
+ * @returns {{canaryProtected:Array, assignedRaw:Array, needsAssignment:Array}}
+ */
+function partitionWorkersForNaming(workers, preRegisteredCanaries, forceReassign, isCanaryMd) {
+  const canaryProtected = [];
+  const assignedRaw = [];
+  const needsAssignment = [];
+  for (const worker of workers || []) {
+    const verdict = classifyWorkerNaming(worker, preRegisteredCanaries, forceReassign, isCanaryMd);
+    if (verdict === 'canary_marker' || verdict === 'canary_metadata') canaryProtected.push(worker);
+    else if (verdict === 'needs_assignment') needsAssignment.push(worker);
+    else assignedRaw.push(worker);
+  }
+  return { canaryProtected, assignedRaw, needsAssignment };
+}
+
+/**
+ * Load the set of session ids carrying a spawn-time canary pre-registration marker (FR-7).
+ *
+ * EXTRACTED FROM main() BECAUSE IT WAS UNTESTABLE THERE, and a TESTING review proved that mattered:
+ * with this inline, three separate mutations stayed green across the whole suite — deleting the
+ * fail-closed `return`, deleting `if (error) throw error`, and making the Set-population loop a no-op
+ * (which disables FR-7's cron protection entirely). The only assertion reaching any of it was a regex
+ * that matched the console.log STRING, not the control flow. The classifier was always driven with a
+ * hand-built Set, so nothing ever exercised DB → Set.
+ *
+ * CHUNKED: a single `.in()` over every worker builds one long URL and PostgREST/proxies answer an
+ * oversized query string with 414 — which would land in the fail-closed path and name NOBODY. That
+ * gets likelier as the fleet grows and presents as an idle cron rather than an error, so an unchunked
+ * fail-closed quietly becomes fail-always at scale.
+ *
+ * @returns {Promise<{ok:boolean, canaries:Set<string>, error?:string}>} ok:false means the caller must
+ *   NOT rename anyone this run. Reports rather than throws so the policy stays visible at the call site.
+ */
+async function loadPreRegisteredCanaries(supabase, sessionIds, kind, chunkSize = 50) {
+  const canaries = new Set();
+  const ids = (sessionIds || []).filter(Boolean);
+  try {
+    for (let i = 0; i < ids.length; i += chunkSize) {
+      const { data, error } = await supabase
+        .from('session_coordination')
+        .select('target_session')
+        .in('target_session', ids.slice(i, i + chunkSize))
+        .eq('payload->>kind', kind);
+      if (error) throw error;
+      for (const row of (data || [])) canaries.add(row.target_session);
+    }
+    return { ok: true, canaries };
+  } catch (e) {
+    // CODE before message: a driver error string can carry row content outward into a shared log.
+    return { ok: false, canaries, error: (e && (e.code || e.message)) || 'lookup_failed' };
+  }
+}
+
+/**
  * Decide whether a worker keeps its identity or gets (re)named. EXTRACTED FROM main() so it can be
  * tested: while this lived inline, the only available assertion was a source regex for
  * `preRegisteredCanaries.has(...)`, and a mutation wrapping that call in `false &&` left the regex
@@ -432,35 +498,33 @@ async function main() {
   // namespace discriminator. Batch-fetch the spawn-time PRE-REGISTERED markers ONCE (keyed on the
   // spawner-minted session id) rather than one lookup per worker — a per-worker await here would be an
   // N+1 against a table this cron already reads in bulk.
-  const preRegisteredCanaries = new Set();
-  let isCanaryMetadata;
-  try {
-    const mod = await import('../lib/fleet/canary-session.js');
-    const { CANARY_PRE_REGISTRATION_KIND } = mod;
-    isCanaryMetadata = mod.isCanaryMetadata;
-    const ids = uniqueWorkers.map((w) => w.session_id).filter(Boolean);
-    if (ids.length) {
-      const { data, error } = await supabase
-        .from('session_coordination')
-        .select('target_session')
-        .in('target_session', ids)
-        .eq('payload->>kind', CANARY_PRE_REGISTRATION_KIND);
-      if (error) throw error;
-      for (const row of (data || [])) preRegisteredCanaries.add(row.target_session);
-    }
-  } catch (e) {
+  const mod = await import('../lib/fleet/canary-session.js');
+  const isCanaryMetadata = mod.isCanaryMetadata;
+  const preReg = await loadPreRegisteredCanaries(supabase, uniqueWorkers.map((w) => w.session_id), mod.CANARY_PRE_REGISTRATION_KIND);
+  if (!preReg.ok) {
     // FAIL CLOSED on this one axis: renaming is IRREVERSIBLE, so if the marker set cannot be read we
     // must not rename anyone this run. Skipping a genuine worker costs one unnamed cron tick; renaming
     // a canary destroys the discriminator for good.
-    console.log(`[assign-fleet-identities] canary pre-registration lookup FAILED (${e?.message}) — skipping all naming this run rather than risk renaming a canary`);
+    console.log(`[assign-fleet-identities] canary pre-registration lookup FAILED (${preReg.error}) — skipping all naming this run rather than risk renaming a canary`);
     return;
   }
+  const preRegisteredCanaries = preReg.canaries;
 
-  for (const worker of uniqueWorkers) {
-    const verdict = classifyWorkerNaming(worker, preRegisteredCanaries, forceReassign, isCanaryMetadata);
-    if (verdict === 'needs_assignment') needsAssignment.push(worker);
-    else assignedRaw.push(worker);
-  }
+  // CANARIES GO IN THEIR OWN BUCKET, not into assignedRaw. A TESTING review proved the earlier version
+  // was INERT for the exact case FR-7 added: classifyWorkerNaming correctly returned a canary verdict,
+  // the worker went into assignedRaw, and then dedupeAssignedCallsigns — which treats any worker with
+  // no metadata.fleet_identity.callsign as "not really assigned" — DEMOTED it straight back into
+  // needsAssignment, where it was renamed to a NATO callsign and broadcast. An unstamped canary has no
+  // callsign by definition, so every newly-protected case was demoted and only the case that already
+  // worked before FR-7 (one already holding 'Canary-N') survived. The verdict was right and the
+  // pipeline overrode it downstream — a fix verified at the decision instead of at the consumer.
+  //
+  // Canaries live outside the NATO tier-band scheme entirely, so they must not participate in
+  // band-dedupe at all: this bucket is simply left alone.
+  const parts = partitionWorkersForNaming(uniqueWorkers, preRegisteredCanaries, forceReassign, isCanaryMetadata);
+  const canaryProtected = parts.canaryProtected;
+  assignedRaw.push(...parts.assignedRaw);
+  needsAssignment.push(...parts.needsAssignment);
 
   // QF-20260528-581 (Bug A): resolve duplicate callsigns within the assigned set
   // (e.g. "Alpha" on two sessions after session_id rotation). Keep the most-recent
@@ -478,6 +542,17 @@ async function main() {
   // so a demoted duplicate's callsign/color is free for reassignment.
   const usedCallsigns = new Set(assigned.map(w => w.metadata.fleet_identity.callsign));
   const usedColors = new Set(assigned.map(w => w.metadata.fleet_identity.color));
+
+  // A protected canary is not named by this cron, but any label it ALREADY holds must stay reserved.
+  // Otherwise a canary that an earlier clobber renamed to a NATO callsign (still protected, because the
+  // spawn-time marker survives the rename) would have that callsign handed to a second worker as well —
+  // trading a rename bug for a duplicate-identity bug.
+  for (const c of canaryProtected) {
+    const cs = c.metadata?.fleet_identity?.callsign;
+    const col = c.metadata?.fleet_identity?.color;
+    if (cs) usedCallsigns.add(cs);
+    if (col) usedColors.add(col);
+  }
 
   // SD-FDBK-ENH-COORDINATOR-TOOLING-DELTA-001: also reserve callsigns/colors of recently-seen,
   // non-terminated sessions that are temporarily OUT of the 5-min active-view (parked between SDs
@@ -515,6 +590,7 @@ async function main() {
         .update({ metadata })
         .eq('session_id', w.session_id);
       // Send updated identity message so worker's local file refreshes
+      // eslint-disable-next-line session-coordination-insert-classguard/no-raw-session-coordination-insert -- PRE-EXISTING site, not introduced by this SD; flagged only because --diff mode lints whole changed files and SD-LEO-INFRA-SESSION-SPAWN-AND-PROMPT-LIBRARY-001-E (FR-7) touches this file. It is part of the ~28-site backlog this lint deliberately does not convert en masse (see its header), and the DB-level advisory trigger in 20260702_session_coordination_insert_lint.sql covers it regardless. Converting SET_IDENTITY broadcast semantics to insertCoordinationRow would add assertValidTarget THROW-on-lookup-failure into this naming loop, which can abort naming mid-run — a real behaviour change that belongs in its own SD, not smuggled into a canary-fence change.
       await supabase
         .from('session_coordination')
         .insert({
@@ -609,6 +685,7 @@ async function main() {
     }
 
     // Send SET_IDENTITY coordination message
+    // eslint-disable-next-line session-coordination-insert-classguard/no-raw-session-coordination-insert -- PRE-EXISTING site, not introduced by this SD; flagged only because --diff mode lints whole changed files and SD-LEO-INFRA-SESSION-SPAWN-AND-PROMPT-LIBRARY-001-E (FR-7) touches this file. It is part of the ~28-site backlog this lint deliberately does not convert en masse (see its header), and the DB-level advisory trigger in 20260702_session_coordination_insert_lint.sql covers it regardless. Converting SET_IDENTITY broadcast semantics to insertCoordinationRow would add assertValidTarget THROW-on-lookup-failure into this naming loop, which can abort naming mid-run — a real behaviour change that belongs in its own SD, not smuggled into a canary-fence change.
     const { error: msgErr } = await supabase
       .from('session_coordination')
       .insert({
@@ -653,7 +730,7 @@ function identityAccountUuid8(metadata, accountIdentity) {
   return (accountIdentity && accountIdentity.accountUuid8) || null;
 }
 
-module.exports = { filterOutCoordinators, filterOutGhostSessions, isTestSessionId, dedupeAssignedCallsigns, reserveParkedIdentities, NATO, COLORS, nextAvailable, extendCallsign, buildTierCallsignBands, tierRankOf, pickCallsignForTier, callsignInTierBand, classifyWorkerNaming, identityNeedsRebroadcast, identityAccountUuid8 };
+module.exports = { filterOutCoordinators, filterOutGhostSessions, isTestSessionId, dedupeAssignedCallsigns, reserveParkedIdentities, NATO, COLORS, nextAvailable, extendCallsign, buildTierCallsignBands, tierRankOf, pickCallsignForTier, callsignInTierBand, classifyWorkerNaming, loadPreRegisteredCanaries, partitionWorkersForNaming, identityNeedsRebroadcast, identityAccountUuid8 };
 
 if (require.main === module) {
   main().then(async () => {
