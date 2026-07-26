@@ -238,9 +238,45 @@ async function writeTelemetryAwait(sessionId, patch, options) {
   }
 }
 
+/**
+ * QF-20260726-163: read a session's metadata so a caller can MERGE into it. A raw PATCH
+ * of `metadata` REPLACES the whole JSONB, which would silently drop sibling keys
+ * (e.g. last_git_metric_at_ms). Callers writing metadata must read-modify-write.
+ * Returns NULL when the metadata could not be read, and an object (possibly empty) only
+ * when it genuinely was. The distinction is load-bearing: a caller that cannot see the
+ * existing keys MUST NOT write metadata at all, or it silently destroys siblings it never
+ * saw — on a live seat that means wiping model/effort/tier_rank and rendering it
+ * undispatchable. Never collapse the two cases into {}.
+ */
+async function readSessionMetadata(sessionId) {
+  const cfg = getSupabaseConfig();
+  if (!cfg || !sessionId) return null;
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), TELEMETRY_FETCH_TIMEOUT_MS);
+  try {
+    const url = `${cfg.url.replace(/\/$/, '')}/rest/v1/${TELEMETRY_TABLE}`
+      + `?session_id=eq.${encodeURIComponent(sessionId)}&select=metadata`;
+    const res = await fetch(url, {
+      headers: { apikey: cfg.key, Authorization: `Bearer ${cfg.key}` },
+      signal: controller.signal,
+    });
+    if (!res.ok) return null;
+    const rows = await res.json();
+    if (!Array.isArray(rows) || !rows.length) return null;
+    const md = rows[0].metadata;
+    if (md == null) return {};                       // row exists, metadata genuinely empty
+    return typeof md === 'object' && !Array.isArray(md) ? md : null;
+  } catch {
+    return null;
+  } finally {
+    clearTimeout(timer);
+  }
+}
+
 module.exports = {
   writeTelemetry,
   writeTelemetryAwait,
+  readSessionMetadata,
   TELEMETRY_TABLE,
   TELEMETRY_FETCH_TIMEOUT_MS,
 };
