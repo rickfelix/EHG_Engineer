@@ -31,6 +31,47 @@ const { FLEET_WORKER_STARTUP_PROMPT } = require('../../../lib/coordinator/coordi
  */
 const gotAPrompt = (invocation) => Boolean(invocation && invocation.promptFilePath);
 
+describe('ACCEPTANCE STEP 2 — PAYLOAD HOP: the FILE bytes, per callsign class', () => {
+  // smoke_test_steps step 2 asks for the bytes of the file the pointer names, not just that a
+  // prompt was selected. That needs a start dir that EXISTS (buildSessionLaunch refuses to
+  // fabricate one), so cwd is an explicit temp dir here rather than the vitest repo root, which
+  // resolves to tests/fixtures/__no_such_tree__.
+  const os = require('node:os');
+  const path = require('node:path');
+  const { buildSessionLaunch } = require('../../../lib/fleet/build-session-launch.cjs');
+  const { resolveStartupPromptForCallsign } = require('../../../lib/fleet/startup-prompt-selection.js');
+
+  const launchFor = (callsign) => {
+    const cwd = fs.mkdtempSync(path.join(os.tmpdir(), 'payload-'));
+    const { prompt } = resolveStartupPromptForCallsign(callsign, {
+      workerPrompt: FLEET_WORKER_STARTUP_PROMPT, canaryPrompt: null, logFn: () => {},
+    });
+    const inv = buildSessionLaunch({ role: 'worker', callsign, cwd, startupPrompt: prompt });
+    return { inv, prompt, cwd };
+  };
+
+  it('WORKER: the file on disk is BYTE-EQUAL to the source constant', () => {
+    const { inv } = launchFor('Charlie');
+    expect(inv.promptFilePath).toBeTruthy();
+    expect(fs.existsSync(inv.promptFilePath)).toBe(true);
+    expect(fs.readFileSync(inv.promptFilePath, 'utf8')).toBe(FLEET_WORKER_STARTUP_PROMPT);
+  });
+
+  it('CANARY: no prompt, no file — absence asserted explicitly, with the worker as control', () => {
+    const canary = launchFor('Canary-pilot');
+    expect(canary.prompt).toBeNull();
+    expect(canary.inv.promptFilePath).toBeNull();
+    // CONTROL: absence-because-nobody-got-anything must not be able to pass.
+    expect(launchFor('Charlie').prompt).toBe(FLEET_WORKER_STARTUP_PROMPT);
+  });
+
+  it('UNIDENTIFIABLE: no prompt, no file', () => {
+    const { inv, prompt } = launchFor('');
+    expect(prompt).toBeNull();
+    expect(inv.promptFilePath).toBeNull();
+  });
+});
+
 describe('CANARY MUST NEVER RECEIVE THE WORKER DIRECTIVE — all three prompt-decision sites', () => {
   it('SITE 1 spawn-control.spawn()', async () => {
     const { spawn } = await import('../../../lib/fleet/spawn-control.js');
