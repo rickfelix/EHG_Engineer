@@ -215,24 +215,63 @@ describe('buildLiveSpawnInvocation (FR-7: env isolation)', () => {
   });
 });
 
-describe('spawn (FR-1) — keepalive forwarding (QF-20260725-757)', () => {
-  // spawn() was the THIRD hop of the QF-20260724-290 keepalive drop: that QF fixed
-  // buildLiveSpawnInvocation and the respawn runner, but spawn() built its invocation with NO
-  // startupPrompt, so every session created through the generic spawn verb came up with nothing to
-  // do, heartbeat once, and ghosted. This is why provisioned canaries kept dying.
-  it('REGRESSION: forwards the canonical keepalive prompt into the invocation env', async () => {
-    const result = await spawn({ role: 'worker', callsign: 'Canary-pilot' }, { live: false });
-    expect(result.invocation.env.FLEET_WORKER_STARTUP_PROMPT).toBeTruthy();
-  });
-
-  it('honours an explicit startupPrompt override', async () => {
-    const result = await spawn({ role: 'worker', callsign: 'Canary-pilot' }, { live: false, startupPrompt: 'custom-keepalive' });
-    expect(result.invocation.env.FLEET_WORKER_STARTUP_PROMPT).toBe('custom-keepalive');
-  });
-
-  it('honours an explicit null as a deliberate no-keepalive opt-out (respawn-runner parity)', async () => {
-    const result = await spawn({ role: 'worker', callsign: 'Canary-pilot' }, { live: false, startupPrompt: null });
+describe('spawn — the deleted env carrier (FR-2)', () => {
+  // THESE TESTS USED TO ASSERT THE OPPOSITE, AND THAT IS THE LESSON.
+  //
+  // They asserted `invocation.env.FLEET_WORKER_STARTUP_PROMPT` was populated, and passed, and were
+  // cited as proof the keepalive reached the spawned session. It never did: no SessionStart hook
+  // and no code anywhere reads that variable (verified repo-wide — the only occurrences are the
+  // constant, writes, comments and these assertions). The tests confirmed a WRITE and were read as
+  // confirming DELIVERY. A green test on an unread env var is what kept this defect alive across
+  // two "fixes" (QF-20260724-290, QF-20260725-757), each of which moved the drop one hop later.
+  //
+  // So they now pin the carrier's ABSENCE. Re-adding the write turns these RED.
+  // FIXTURE IS A WORKER, AND THAT IS THE WHOLE POINT. This used to spawn 'Canary-pilot', which now
+  // resolves to a NULL prompt — so the assertion passed GREEN even with the env carrier fully
+  // restored, proving nothing. Found by PLAN verification (F3). A worker actually resolves a prompt,
+  // so the carrier's absence is now a real observation rather than a side effect of there being
+  // nothing to carry. Same vacuity class this file's own comment below claims to have fixed.
+  it('does NOT set the unread FLEET_WORKER_STARTUP_PROMPT env carrier', async () => {
+    const result = await spawn({ role: 'worker', callsign: 'Charlie' }, { live: false });
     expect(result.invocation.env.FLEET_WORKER_STARTUP_PROMPT).toBeUndefined();
+    expect(Object.keys(result.invocation.env)).not.toContain('FLEET_WORKER_STARTUP_PROMPT');
+  });
+
+  it('does not smuggle an explicit startupPrompt into the env under any key', async () => {
+    const SENTINEL = 'custom-keepalive-sentinel';
+    const result = await spawn(
+      { role: 'worker', callsign: 'Canary-pilot' },
+      { live: false, startupPrompt: SENTINEL },
+    );
+    // Key-agnostic: catches a rename as well as a reinstatement.
+    expect(Object.values(result.invocation.env).filter((v) => String(v).includes(SENTINEL))).toEqual([]);
+  });
+
+  // FR-5 — this replaces the earlier "PINS THE FR-1 GAP" test, which asserted the prompt reached
+  // NO part of the invocation. FR-1 has landed, so that name now describes the opposite of what
+  // the code does; it kept passing only because the fixture used a CANARY callsign, which resolves
+  // to a null prompt while no canary prompt exists. A test that passes for a different reason than
+  // its name claims is worse than no test — it reads as coverage.
+  it('FR-1 DELIVERS-IN-ARGV: a WORKER spawn carries the pointer as the trailing positional', async () => {
+    const result = await spawn({ role: 'worker', callsign: 'Charlie' }, { live: false });
+    const args = result.invocation.args;
+    const last = args[args.length - 1];
+
+    // The assertion FR-5 asks for: it must FAIL if the positional is disabled. A bare "last arg is
+    // non-empty" check would be satisfied by the minted --session-id UUID and prove nothing.
+    expect(last).toMatch(/follow the instructions in it exactly/);
+    expect(last).not.toMatch(/^[0-9a-f-]{36}$/i); // explicitly not just the minted UUID
+    expect(last.split(/[\r\n]/).length).toBe(1);
+  });
+
+  it('and a CANARY spawn carries NO positional — the canary prompt does not exist yet', async () => {
+    const result = await spawn({ role: 'worker', callsign: 'Canary-pilot' }, { live: false });
+    const args = result.invocation.args;
+    expect(args.some((a) => /follow the instructions in it exactly/.test(String(a)))).toBe(false);
+    // The safe direction while the canary prompt is outstanding: a canary that receives nothing
+    // ghosts, which cannot claim work. It must NEVER receive the worker directive by fallthrough.
+    const { FLEET_WORKER_STARTUP_PROMPT } = require('../../../lib/coordinator/coordination-events.cjs');
+    expect(args.some((a) => String(a).includes(FLEET_WORKER_STARTUP_PROMPT.split('\n')[0]))).toBe(false);
   });
 });
 
@@ -261,6 +300,46 @@ describe('spawn (FR-1)', () => {
     expect(result.live).toBe(true);
     expect(result.handle).toBe(131074);
     expect(result.handleCaptureFailed).toBe(false);
+  });
+
+  // SD-LEO-INFRA-SESSION-SPAWN-AND-PROMPT-LIBRARY-001-F — MUTATION-KILLING seam test (condition C1).
+  //
+  // spawn() now asserts the launch contract immediately before the spawner. Without this test that
+  // enforcement could be DELETED OUTRIGHT and the entire suite would still pass — the EXEC-phase
+  // review demonstrated exactly that. An enforcement that can be silently removed while still being
+  // reported as present is the shipped-but-inert shape this SD exists to eliminate, so leaving it
+  // unpinned would have reproduced the SD's own defect inside the SD's own fix.
+  //
+  // Same corrective precedent as tests/unit/fleet/tree-currency.test.js, which added a
+  // mutation-killing block for this same function after the identical finding.
+  //
+  // FLEET_CLAUDE_CMD is the lever because it is the ONE operator-reachable clause today:
+  // resolveClaudeCmd returns it verbatim and the token regex requires a claude basename.
+  it('C1: spawn() REFUSES a contract-violating invocation — deleting the assert makes this fail', async () => {
+    const spawnFn = vi.fn();
+    await expect(spawn(
+      { role: 'worker', callsign: 'Probe-A' },
+      {
+        live: true, currencyRunner: CURRENT_RUNNER, spawnFn, execFn: enumExec(), sleepFn: vi.fn(),
+        supabaseClient: makeFakeSupabase({ sessions: [] }), skipDedup: true,
+        env: { FLEET_CLAUDE_CMD: 'C:\\tools\\node.exe' }, // not a claude launcher token
+      },
+    )).rejects.toThrow(/LAUNCH CONTRACT VIOLATION/);
+    // The refusal must happen BEFORE the process is launched, not be reported after the fact.
+    expect(spawnFn).not.toHaveBeenCalled();
+  });
+
+  it('C1 control: the SAME call without the override spawns (the refusal is not incidental)', async () => {
+    const spawnFn = vi.fn().mockReturnValue({ pid: 4242 });
+    const result = await spawn(
+      { role: 'worker', callsign: 'Probe-A' },
+      {
+        live: true, currencyRunner: CURRENT_RUNNER, spawnFn, execFn: enumExec(), sleepFn: vi.fn(),
+        supabaseClient: makeFakeSupabase({ sessions: [] }), skipDedup: true,
+      },
+    );
+    expect(spawnFn).toHaveBeenCalledTimes(1);
+    expect(result.live).toBe(true);
   });
 
   it('ADVERSARIAL-REVIEW FIX: merges the captured handle into existing metadata, never overwrites the whole blob', async () => {

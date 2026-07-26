@@ -8,14 +8,34 @@
  * ledger rows pending longer than the threshold and resurfaces each into Adam's inbox at most
  * once per row per day (payload.dedup_key checked before insert). Stamps nothing on the ledger
  * row itself -- it stays visible every day until a real decision is recorded.
- * Usage: node scripts/solomon-ledger-pending-resurface.cjs [--threshold-hours 24]
+ * Usage: node scripts/solomon-ledger-pending-resurface.cjs [--threshold-hours 72]
  */
 require('dotenv').config();
 const crypto = require('node:crypto');
 const { createSupabaseServiceClient } = require('../lib/supabase-client.cjs');
 const { getActiveAdamId } = require('../lib/coordinator/adam-identity.cjs');
+// QF-20260725-027: the default IS the operating threshold, sourced from the shared constant.
+const { OPERATING_THRESHOLD_HOURS } = require('../lib/coordination/resurface-threshold.cjs');
 
-const DEFAULT_THRESHOLD_HOURS = 24;
+// QF-20260725-027. This was the literal 24 while the operating threshold was 72, and QF-20260725-342
+// "fixed" that by passing --threshold-hours 72 at the three call sites it could FIND — leaving the
+// default those sites fall back to still disagreeing with them.
+//
+// WHY THAT COULD NOT WORK: the bare invocation is an UNENUMERABLE FOURTH CALL SITE. Cron prompt
+// bodies, human batches, ad-hoc debugging and any future caller get the wrong answer, and you cannot
+// fix that by enumerating callers because the failing one is every invocation nobody wrote down. A
+// hand-maintained inventory of call sites cannot detect a call site nobody added to it.
+//
+// OBSERVED, twice in ~40 minutes: a bare invocation inserted digests of 64 then 65 members. At 72h
+// the same query returns ZERO, so those were 100% sub-threshold noise landing in the Adam inbox
+// looking exactly like a genuine backlog spike. The dedupe is CONTENT-HASHED, so one new ledger
+// member changes the key and a whole new digest is inserted — the wrong default therefore re-fires on
+// every growth tick rather than emitting once. The unchanged-or-already-notified guard stops a repeat
+// of the IDENTICAL set and nothing else.
+//
+// Sourcing the default FROM the shared constant (rather than typing 72 here) makes the two unable to
+// drift apart again — a re-divergence would now require deliberately reintroducing a literal.
+const DEFAULT_THRESHOLD_HOURS = OPERATING_THRESHOLD_HOURS;
 const DEFAULT_PAGE_SIZE = 50;
 // Safety cap on pages per invocation (10 * 50 = 500 rows/run) -- bounds worst-case query
 // volume for a sweep script without reintroducing the head-of-queue starvation this fixes.

@@ -3451,6 +3451,54 @@ function planDeadLetters(unreadMsgs, { allSessionIds, deadIds }, nowMs) {
     }));
 }
 
+/**
+ * QF-20260726-253 — the "does this message's target still exist?" set.
+ *
+ * planDeadLetters treats a target ABSENT from allSessionIds as gone, which is correct and
+ * deliberate (SD-LEO-INFRA-COORD-ADAM-COMMS-RESILIENT-001 FR-4). The defect was the SET it
+ * was handed: main()'s session query filters `.not('sd_key','is',null)` because its OTHER
+ * consumers are claim logic, so the set is CLAIM-HOLDERS, not sessions-that-exist. Dead-letter
+ * planning consumed it anyway, silently equating "holds no SD" with "dead or gone".
+ *
+ * The coordinator, Adam, Solomon and every IDLE worker hold no SD by design and are therefore
+ * permanently outside that set — 146 of 162 machine messages addressed to the coordinator were
+ * destroyed, including an ACCOUNT_SWITCH notice whose loss produced a wrong fleet-wide
+ * root-cause diagnosis. Fixing the predicate's COVERAGE (allow-listing the role sessions by
+ * name) would leave every idle worker still being dead-lettered, and idle is exactly when a
+ * worker most needs to receive a dispatch. So the set is widened instead.
+ *
+ * LIVENESS, NOT MERE EXISTENCE — measured before choosing the predicate. v_active_sessions holds
+ * 5926 rows, of which computed_status is 'stale' for 5911; only 15 are 'active'/'idle' (matching
+ * the count with a heartbeat under the sweep's own 15-min definitely-dead bound) and only 9 hold
+ * an sd_key. So keying on "present in the view" would have made dead-lettering fire essentially
+ * never and quietly gutted FR-4, trading one silent failure for another. The live set is 15 vs
+ * the old 9: it adds exactly the alive-but-unclaimed sessions (coordinator, Adam, Solomon, idle
+ * workers) and still dead-letters mail aimed at the 5911 stale ones.
+ *
+ * The filter is EXCLUSION-based (drop the known-dead status) rather than an allow-list of
+ * 'active','idle'. Both give the same 15 today, but they fail in opposite directions: an
+ * unrecognised or NULL future status would drop out of an allow-list and have its mail
+ * destroyed, whereas here it is retained. Toward delivery, always.
+ *
+ * Returns null when liveness could not be established. Callers MUST skip the pass on null and
+ * never fall back to the claim-filtered set: a set we failed to read is not evidence that its
+ * members are gone, and the cost of guessing here is destroying live mail.
+ */
+const DEAD_SESSION_STATUS = 'stale';
+async function loadLiveSessionIds(supabase) {
+  try {
+    const rows = await fapPaginate(() => supabase
+      .from('v_active_sessions')
+      .select('session_id, computed_status')
+      .or(`computed_status.is.null,computed_status.neq.${DEAD_SESSION_STATUS}`)
+      .order('session_id', { ascending: true })); // unique tiebreaker (FR-6)
+    if (!Array.isArray(rows)) return null;
+    return new Set(rows.map((r) => r && r.session_id).filter(Boolean));
+  } catch {
+    return null;
+  }
+}
+
 // SD-FDBK-ENH-CENTRAL-LIVENESS-STAMPER-001 (FR-3): stamp on every successful sweep tick,
 // regardless of which internal early-return branch main() took (e.g. the "no sessions with
 // claims" all-clear path) — this reflects loop liveness (the tick ran to completion), not
@@ -3520,6 +3568,10 @@ module.exports.__setExecContextGuardForTest = (mock) => { _execContextGuardCache
 // implementation (no duplicate logic — see each wrapper's header comment).
 module.exports.clearStaleQfClaims = clearStaleQfClaims;
 module.exports.splitCollidingSessions = splitCollidingSessions;
+// QF-20260726-253: exported so BOTH dead-letter twins (lib/sweep/passes/dead-letter-planning.cjs
+// and the SWEEP_PASS_REGISTRY=off lib/sweep/legacy-fallback.cjs) resolve the live-session set
+// through one implementation — parity here is structural, not a thing a reviewer must remember.
+module.exports.loadLiveSessionIds = loadLiveSessionIds;
 
 // SD-LEO-INFRA-ROLE-SESSION-HANDOFF-PROTOCOL-001-B / FR-2 (Finding 3): export the guarded
 // WORK_ASSIGNMENT dispatch so the single-writer gate is unit-testable (assert NO sender_type:'sweep'

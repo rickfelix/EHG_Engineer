@@ -40,6 +40,11 @@ function makeSupabaseSpy({ unreadMsgs = [] } = {}) {
       return {
         select() { return this; },
         is() { return this; },
+        // QF-20260726-253: the dead-letter twins now resolve their live-session set via
+        // sweepModule.loadLiveSessionIds, which adds an .or() liveness filter. Without this the
+        // builder throws, both twins take their fail-safe skip, and the fixture stops exercising
+        // the dead-letter path at all (parity still held — it was the sanity assertion that caught it).
+        or() { return this; },
         // FR-6 batch 8: the dead-letter read now paginates via fetchAllPaginated, which appends
         // .order() and applies .range() itself — extend the builder mock to support both. .range()
         // resolves the SAME { data, error } the prior `await builder` (then) produced.

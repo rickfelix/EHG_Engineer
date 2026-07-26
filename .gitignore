@@ -303,6 +303,11 @@ src/client/dist/
 # RELATIONSHIPAWARE-ORCH-001-B) can be tracked.
 .claude/session-identity/*
 !.claude/session-identity/README.md
+# SD-...-PROMPT-LIBRARY-001-D FR-1 — startup-prompt pointer files, one per spawned session.
+# MUST be ignored: these are written on every spawn, so if they were tracked each spawn would
+# dirty the worktree and could be swept into an unrelated commit.
+.claude/fleet-prompts/*
+!.claude/fleet-prompts/README.md
 .claude/fleet-identity*.json
 .claude/scheduled_tasks.lock
 
