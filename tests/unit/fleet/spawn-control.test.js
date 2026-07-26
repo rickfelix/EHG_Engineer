@@ -242,19 +242,31 @@ describe('spawn — the deleted env carrier (FR-2)', () => {
     expect(Object.values(result.invocation.env).filter((v) => String(v).includes(SENTINEL))).toEqual([]);
   });
 
-  // FR-1 TRIPWIRE — DELETE THIS TEST WHEN THE POINTER TRANSPORT LANDS, DELIBERATELY.
-  // Today the prompt reaches NO part of the invocation: not env, not args. That is the real gap
-  // the env carrier was concealing, so it is pinned rather than left implicit. FR-1 adding the
-  // single-line pointer positional MUST turn this RED — that is the point of it.
-  it('PINS THE FR-1 GAP: the prompt currently reaches no part of the invocation', async () => {
-    const SENTINEL = 'pointer-transport-not-built-yet';
-    const result = await spawn(
-      { role: 'worker', callsign: 'Canary-pilot' },
-      { live: false, startupPrompt: SENTINEL },
-    );
-    const inv = result.invocation;
-    const surfaces = [...Object.values(inv.env || {}), ...(inv.args || [])].map(String);
-    expect(surfaces.some((s) => s.includes(SENTINEL))).toBe(false);
+  // FR-5 — this replaces the earlier "PINS THE FR-1 GAP" test, which asserted the prompt reached
+  // NO part of the invocation. FR-1 has landed, so that name now describes the opposite of what
+  // the code does; it kept passing only because the fixture used a CANARY callsign, which resolves
+  // to a null prompt while no canary prompt exists. A test that passes for a different reason than
+  // its name claims is worse than no test — it reads as coverage.
+  it('FR-1 DELIVERS-IN-ARGV: a WORKER spawn carries the pointer as the trailing positional', async () => {
+    const result = await spawn({ role: 'worker', callsign: 'Charlie' }, { live: false });
+    const args = result.invocation.args;
+    const last = args[args.length - 1];
+
+    // The assertion FR-5 asks for: it must FAIL if the positional is disabled. A bare "last arg is
+    // non-empty" check would be satisfied by the minted --session-id UUID and prove nothing.
+    expect(last).toMatch(/follow the instructions in it exactly/);
+    expect(last).not.toMatch(/^[0-9a-f-]{36}$/i); // explicitly not just the minted UUID
+    expect(last.split(/[\r\n]/).length).toBe(1);
+  });
+
+  it('and a CANARY spawn carries NO positional — the canary prompt does not exist yet', async () => {
+    const result = await spawn({ role: 'worker', callsign: 'Canary-pilot' }, { live: false });
+    const args = result.invocation.args;
+    expect(args.some((a) => /follow the instructions in it exactly/.test(String(a)))).toBe(false);
+    // The safe direction while the canary prompt is outstanding: a canary that receives nothing
+    // ghosts, which cannot claim work. It must NEVER receive the worker directive by fallthrough.
+    const { FLEET_WORKER_STARTUP_PROMPT } = require('../../../lib/coordinator/coordination-events.cjs');
+    expect(args.some((a) => String(a).includes(FLEET_WORKER_STARTUP_PROMPT.split('\n')[0]))).toBe(false);
   });
 });
 

@@ -86,7 +86,21 @@ async function runExecutor(o) {
   let spawned = 0;
   let errors = 0;
   for (const req of decisions.toSpawn) {
-    const invocation = buildSpawnInvocation(req.requested_callsign, o.prompt);
+    // SD-...-PROMPT-LIBRARY-001-D FR-3, THIRD PROMPT-DECISION SITE. o.prompt is a SINGLE prompt
+    // resolved once for the whole executor run and previously applied to every request regardless
+    // of callsign — the same hoist shape as the respawn runner, and equally wrong once the prompt
+    // is keyed on the callsign namespace. The callsign is right here on the request, so resolve
+    // per request: a canary must never receive the claiming-worker directive.
+    const { resolveStartupPromptForCallsign } = require('../../lib/fleet/startup-prompt-selection.js');
+    const { prompt: perCallsignPrompt } = resolveStartupPromptForCallsign(req.requested_callsign, {
+      workerPrompt: o.prompt,
+      canaryPrompt: null, // outstanding: no canary constant exists yet (chairman-authored content)
+      logFn: log,
+    });
+    // Seam, matching the sibling spawners (reboot-respawn-runner's buildInvocationFn): lets this
+    // decision site be asserted without a real launch. Defaults to the production builder.
+    const buildFn = o.buildInvocationFn || buildSpawnInvocation;
+    const invocation = buildFn(req.requested_callsign, perCallsignPrompt);
     if (!o.live) {
       log(`[spawn-exec] DRY-RUN would spawn ${req.requested_callsign} (${req.id}): ${invocation.program} ${(invocation.args || []).join(' ').slice(0, 40)}… — row left pending (set WORKER_SPAWN_EXECUTOR_LIVE=true after host-validation to enable)`);
       continue;
