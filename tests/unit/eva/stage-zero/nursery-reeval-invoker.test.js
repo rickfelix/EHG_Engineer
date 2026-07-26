@@ -17,7 +17,7 @@ const CHAIRMAN_HUMAN_UID = '69c8aa7a-7661-48ed-9779-746fa6290873';
  * and the test fails, which is the point.
  */
 function makeSupabase({ due = [], open = [], insertResult = { id: 'req-1' }, openError = null, dueError = null } = {}) {
-  const calls = { inserted: null, predicateOps: [] };
+  const calls = { inserted: null, predicateOps: [], dedupeFilters: [], dedupeStatuses: null };
   const nurseryQuery = {
     is(...a) { calls.predicateOps.push('is'); return this; },
     or(...a) { calls.predicateOps.push('or'); return this; },
@@ -30,9 +30,17 @@ function makeSupabase({ due = [], open = [], insertResult = { id: 'req-1' }, ope
       if (table === 'venture_nursery') return { select: () => nurseryQuery };
       if (table === 'stage_zero_requests') {
         return {
-          select: () => ({
-            in: () => Promise.resolve({ data: open, error: openError }),
-          }),
+          select: () => {
+            // SEC-6: the dedupe read is now scoped SERVER-SIDE. Record the filters so a
+            // regression to "fetch every open request and filter in JS" fails here rather
+            // than silently reintroducing the 1000-row truncation.
+            const q = {
+              in(_col, statuses) { calls.dedupeStatuses = statuses; return this; },
+              eq(col, val) { calls.dedupeFilters.push([col, val]); return this; },
+              limit() { return Promise.resolve({ data: open, error: openError }); },
+            };
+            return q;
+          },
           insert: (row) => {
             calls.inserted = row;
             return { select: () => ({ single: () => Promise.resolve({ data: insertResult, error: null }) }) };
@@ -108,6 +116,19 @@ describe('invokeNurseryReeval — FR-6 scheduled invoker', () => {
     const out = await invokeNurseryReeval({}, { supabase: sb, ...withPrincipal });
     expect(out).toEqual({ enqueued: false, reason: 'no_due_candidates' });
     expect(sb.calls.inserted).toBeNull();
+  });
+
+  it('scopes the dedupe read SERVER-SIDE so the 1000-row cap is unreachable', async () => {
+    // SEC-6: this previously fetched EVERY open request and filtered in JS. A truncated read
+    // reports "no duplicate" for a duplicate that exists, which revives the unbounded queue the
+    // check is the only guard against. Assert the narrowing filters are actually applied.
+    const sb = makeSupabase({ due: [candidate] });
+    await invokeNurseryReeval({}, { supabase: sb, ...withPrincipal, logger: { log() {} } });
+    expect(sb.calls.dedupeStatuses).toEqual(['pending', 'claimed', 'in_progress']);
+    expect(sb.calls.dedupeFilters).toEqual([
+      ['metadata->>strategy', NURSERY_REEVAL_STRATEGY],
+      ['metadata->>nursery_id', HEADLINE_TRANSFORMER],
+    ]);
   });
 
   it('dryRun builds and validates the row but writes nothing', async () => {
