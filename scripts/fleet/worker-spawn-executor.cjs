@@ -44,7 +44,7 @@ function isLiveEnabled(env = process.env) {
 // old headless `claude -p`, which does not reliably register/persist in claude_sessions) with the full
 // claude.cmd path + explicit repo-root cwd + fail-loud. The /loop startup prompt is carried in the
 // child env (FLEET_WORKER_STARTUP_PROMPT) for the SessionStart hook to seed into the persistent session.
-const { buildSessionLaunch } = require('../../lib/fleet/build-session-launch.cjs');
+const { buildSessionLaunch, assertLaunchContract } = require('../../lib/fleet/build-session-launch.cjs');
 function buildSpawnInvocation(callsign, prompt) {
   return buildSessionLaunch({ callsign, startupPrompt: prompt });
 }
@@ -88,6 +88,23 @@ async function runExecutor(o) {
       continue;
     }
     try {
+      // SD-LEO-INFRA-SESSION-SPAWN-AND-PROMPT-LIBRARY-001-F (FR-1): enforce the launch contract at
+      // the EXECUTION seam. Deliberately HERE and not at the inline spawner inside main() — that
+      // closure is require.main-guarded and not exported, so every unit test injects its own spawner
+      // and an assertion there would execute in ZERO tests. main() routes through runExecutor, so
+      // this line still covers the live path while remaining reachable by the suite. A guard whose
+      // tests cannot reach it is not a guard.
+      //
+      // FR-2: STRUCTURAL clauses only. This path legitimately builds WITHOUT a profile or resume
+      // token (buildSpawnInvocation passes neither), so expectProfile/expectResume stay FALSE —
+      // demanding them here would turn every worker revival red.
+      //
+      // The check inspects the DECLARED invocation.env, not the merged child env (the spawner
+      // spreads process.env under it). It proves declared intent.
+      const contract = assertLaunchContract(invocation);
+      if (!contract.ok) {
+        throw new Error(`LAUNCH CONTRACT VIOLATION — refusing to spawn ${req.requested_callsign}: ${contract.violations.join('; ')}`);
+      }
       await o.spawner(invocation, req);
       await o.stampFulfilled(req);
       spawned++;

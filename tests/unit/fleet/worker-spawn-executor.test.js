@@ -8,6 +8,7 @@ import { createRequire } from 'node:module';
 const require = createRequire(import.meta.url);
 const { resolveSpawnDecisions } = require('../../../lib/fleet/spawn-executor-core.cjs');
 const { runExecutor, buildSpawnInvocation, resolvePerTickCap, isLiveEnabled } = require('../../../scripts/fleet/worker-spawn-executor.cjs');
+const { assertLaunchContract } = require('../../../lib/fleet/build-session-launch.cjs');
 
 const NOW = 1_000_000_000_000;
 const future = () => new Date(NOW + 60 * 60 * 1000).toISOString();
@@ -84,6 +85,51 @@ describe('runExecutor (FR-2, dry-run vs live)', () => {
     expect(stampFulfilled).toHaveBeenCalledTimes(2);
     expect(r.spawned).toBe(2);
     expect(r.errors).toBe(0);
+  });
+
+  // SD-LEO-INFRA-SESSION-SPAWN-AND-PROMPT-LIBRARY-001-F — TS-3, the LOAD-BEARING guard for FR-2.
+  //
+  // The launch contract is now asserted at the execution seam in runExecutor. FR-2 requires that the
+  // seam checks STRUCTURAL clauses only, with expectProfile/expectResume FALSE. This path legitimately
+  // builds without a profile or resume token, so if a future edit hardcoded those expectations true,
+  // EVERY worker revival would stop spawning. This test is the tripwire for that.
+  //
+  // WHY THE SEAM MOVED: an earlier draft placed the assertion inside main()'s inline spawner closure,
+  // which is require.main-guarded and not exported — every test here injects its own spawner, so an
+  // assertion there would run in ZERO tests and this guard would be green against a correct AND a
+  // broken implementation. Verified RED against a hardcoded expectProfile/expectResume:true build
+  // (spawner not called, errors=1); GREEN as written.
+  it('TS-3: a no-profile / no-resume revival still spawns — the launch assert is structural-only', async () => {
+    const spawner = vi.fn().mockResolvedValue(undefined);
+    const stampFulfilled = vi.fn().mockResolvedValue(undefined);
+    const r = await runExecutor({
+      pendingRequests: [req('a', 'Echo')],
+      liveCallsigns: new Set(), nowMs: NOW, perTickCap: 5,
+      live: true, spawner, stampFulfilled, prompt: 'PROMPT',
+    });
+    // buildSpawnInvocation supplies neither CLAUDE_CONFIG_DIR nor a resume token — that is the
+    // legitimate shape this fleet revives workers with, and it must remain spawnable.
+    expect(spawner).toHaveBeenCalledTimes(1);
+    expect(r.spawned).toBe(1);
+    expect(r.errors).toBe(0);
+    const [invocation] = spawner.mock.calls[0];
+    expect(invocation.env?.CLAUDE_CONFIG_DIR).toBeUndefined();
+    expect(invocation.args).not.toContain('--resume');
+  });
+
+  it('TS-1: the invocation reaching the spawner is contract-conformant (argv unchanged by the assert)', async () => {
+    const spawner = vi.fn().mockResolvedValue(undefined);
+    await runExecutor({
+      pendingRequests: [req('a', 'Echo')],
+      liveCallsigns: new Set(), nowMs: NOW, perTickCap: 5,
+      live: true, spawner, stampFulfilled: vi.fn().mockResolvedValue(undefined), prompt: 'PROMPT',
+    });
+    const [invocation] = spawner.mock.calls[0];
+    // assertLaunchContract reads and returns {ok, violations}; it mutates nothing. Pin that the
+    // spawner still receives the same structural shape it did before enforcement was added.
+    expect(assertLaunchContract(invocation).ok).toBe(true);
+    expect(invocation.program).toBe('wt.exe');
+    expect(invocation.args).not.toContain('-p');
   });
 
   it('LIVE: a spawner error leaves the row un-fulfilled (no false fulfillment)', async () => {
