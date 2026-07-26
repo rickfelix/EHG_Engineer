@@ -103,10 +103,16 @@ async function readSessionState(sessionId) {
 
 async function writePatch(sessionId, patch) {
   try {
-    const { writeTelemetry } = require('./lib/session-telemetry-writer.cjs');
-    writeTelemetry(sessionId, patch);
+    // QF-20260726-163: MUST await. This is a short-lived PostToolUse process, so the
+    // fire-and-forget writeTelemetry() returned before its fetch flushed and the
+    // process exited with the PATCH still pending — every write was silently lost,
+    // which is why last_tool_at read NULL on 0-of-15 seats and a parked worker was
+    // indistinguishable from a working one. allowToolClock opts this ONE legitimate
+    // owner into writing last_tool_at without opening it to session-tick.
+    const { writeTelemetryAwait } = require('./lib/session-telemetry-writer.cjs');
+    await writeTelemetryAwait(sessionId, patch, { allowToolClock: true });
   } catch {
-    // best effort
+    // best effort — telemetry must never break a tool call
   }
 }
 
