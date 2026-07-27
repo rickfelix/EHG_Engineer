@@ -1,0 +1,49 @@
+name: Mocked-SUT Import Lint
+
+# SD-PAT-FIX-STUBBED-WRITER-BLINDNESS-001 (FR-3)
+#
+# Surfaces test files that BOTH vi.mock/jest.mock a RELATIVE specifier AND import a binding from
+# that same specifier — the signature of STUBBED-WRITER BLINDNESS
+# (PAT-TEST-STUBBED-WRITER-UNVERIFIED-001): the suite asserts against the stub it installed, so the
+# real module's contract is unverified whatever colour the suite reports.
+#
+# WHY THIS WORKFLOW EXISTS AT ALL, and it is the same reason the sibling class-guard workflows do:
+# this repo's `npm run lint` (the eslint.config.js flat-config run) is not invoked by any other CI
+# workflow, and this rule is deliberately NOT registered there. Without a dedicated workflow the
+# driver would only ever execute inside its own unit test — a detection control that never runs
+# unattended, which for THIS SD would be self-refuting. Caught in security review of PR #6568.
+#
+# NON-BLOCKING BY DESIGN THIS INCREMENT: the driver exits 0 unless BOTH --diff mode and
+# NO_MOCKED_SUT_IMPORT_MODE=block are set, and this job sets neither. 165 pre-existing findings
+# across 2806 test files mean day-one blocking would fail unrelated PRs that merely touch an
+# offending file. The findings are printed to the job log so they are VISIBLE while the backlog is
+# burned down; promote by adding `env: NO_MOCKED_SUT_IMPORT_MODE: block` below.
+
+on:
+  pull_request:
+    paths:
+      - 'tests/**'
+      - 'eslint-rules/no-mocked-sut-import.js'
+      - 'scripts/lint/no-mocked-sut-import-lint.mjs'
+      - '.github/workflows/no-mocked-sut-import-lint.yml'
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  no-mocked-sut-import-lint:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          # Full history so `git merge-base HEAD origin/main` resolves; a shallow clone would make
+          # the driver degrade to an --all sweep and re-surface the whole 165-finding backlog on
+          # every PR instead of just this PR's changed test files.
+          fetch-depth: 0
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+      - run: npm ci
+      - name: Detect tests that mock their own subject (changed files only, warn-only)
+        run: node scripts/lint/no-mocked-sut-import-lint.mjs

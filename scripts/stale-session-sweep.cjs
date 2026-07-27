@@ -1092,7 +1092,10 @@ async function clearStaleQfClaims(supabase, now, actions, warnings) {
       try {
         holderRows = await fapPaginate(() => supabase
           .from('claude_sessions')
-          .select('session_id, heartbeat_at')
+          // Widened for the liveness SSOT: isSessionAlive reads is_alive, heartbeat_at,
+          // terminal_id (PID), process_alive_at (tick) and expected_silence_until (armed silence).
+          // Selecting heartbeat_at ALONE is what reduced this decider to a single signal.
+          .select('session_id, heartbeat_at, is_alive, terminal_id, process_alive_at, expected_silence_until')
           .in('session_id', holderIds)
           .order('session_id', { ascending: true })); // unique tiebreaker (FR-6)
       } catch (guardErr) {
@@ -1100,19 +1103,78 @@ async function clearStaleQfClaims(supabase, now, actions, warnings) {
         return;
       }
       const hbAgeBySession = new Map();
+      const holderBySession = new Map();
       for (const r of (holderRows || [])) {
         hbAgeBySession.set(r.session_id, r.heartbeat_at ? (now.getTime() - Date.parse(r.heartbeat_at)) / 1000 : Infinity);
+        holderBySession.set(r.session_id, r);
       }
+      // SD-LEO-INFRA-DISPATCH-DELIVERY-INTEGRITY-001: ADOPT THE LIVENESS SSOT AT THIS DECIDER.
+      //
+      // This path used a heartbeat-only threshold (900s, commented "definitely dead") and inferred
+      // DEATH FROM A SINGLE ABSENT SIGNAL. On 2026-07-27 Golf-3 went QUIET at 935s — parked, not
+      // dead — and this loop took all three of its claims, one of them severity=critical. The
+      // reverting half of that incident is what FR-1/FR-3 fix; THIS is why the clear happened at all.
+      //
+      // lib/fleet/session-liveness.cjs isSessionAlive() only ACCUMULATES REASONS TO BE ALIVE —
+      // raw is_alive, fresh heartbeat, live PID, process tick, armed silence — and is already the
+      // named SSOT for claim-release-guard. Its armed-silence branch (capped at ARMED_SILENCE_MAX_MS
+      // so a stale declaration cannot shield a corpse forever) is the one that classifies a parked
+      // worker correctly, and it is precisely the signal a heartbeat-only check cannot see.
+      //
+      // Note it is used ONLY to HOLD a claim, never to reap one: is_alive=false is not treated as
+      // evidence of death anywhere here. claim-validity-gate.js:220-224 and :266-270 document that a
+      // live worker can transiently read is_alive=false and that reaping on it alone caused
+      // GATE_CLAIM_VALIDITY_FAILED twice, so inverting this would rebuild that defect.
+      const { isSessionAlive } = require('../lib/fleet/session-liveness.cjs');
+      // Computed ONCE for the whole loop. hasPidAlive falls back to reading PID markers fresh when
+      // this is null, and that read walks host-local marker files — per-QF it would repeat the same
+      // scan for every claimed row. Fail-soft to null: the SSOT then simply drops the pid signal and
+      // still evaluates heartbeat, tick and armed silence.
+      let qfSweepAliveCcPids = null;
+      try {
+        qfSweepAliveCcPids = new Set((detectIdentityCollisions().aliveMarkers || []).map((m) => String(m.pid)));
+      } catch { qfSweepAliveCcPids = null; }
       for (const qf of claimedQfs) {
         const ageSec = hbAgeBySession.has(qf.claiming_session_id) ? hbAgeBySession.get(qf.claiming_session_id) : Infinity;
-        if (ageSec <= veryStaleSeconds) continue; // holder alive/recent — leave claimed
-        const { error } = await supabase
-          .from('quick_fixes')
-          .update({ claiming_session_id: null })
-          .eq('id', qf.id)
-          .eq('claiming_session_id', qf.claiming_session_id); // race guard: only if still held by the same dead session
-        if (!error) {
-          actions.push('QF: cleared stale claiming_session_id on ' + qf.status + ' ' + qf.id + ' (holder ' + String(qf.claiming_session_id).slice(0, 8) + ' hb ' + (ageSec === Infinity ? 'gone' : Math.round(ageSec) + 's') + ')');
+        const holder = holderBySession.get(qf.claiming_session_id) || null;
+        const liveness = isSessionAlive(holder, { nowMs: now.getTime(), aliveCcPids: qfSweepAliveCcPids });
+        if (liveness.alive) continue;         // SSOT says alive (incl. parked) — leave claimed
+        if (ageSec <= veryStaleSeconds) continue; // holder recent — leave claimed
+        // SD-LEO-INFRA-DISPATCH-DELIVERY-INTEGRITY-001 (FR-3): clear AND reopen in ONE call.
+        // Clearing alone left the row at status='in_progress' with a NULL claimant — invisible to
+        // all five open-only chokepoints while two supply gauges still counted it, so the work
+        // silently left the belt. The helper keeps the race guard (CAS on the same dead holder, so
+        // a live re-claim is never clobbered) and refuses any row carrying real work.
+        // Dynamic import: this file is CJS and the helper is ESM. Same pattern already used for
+        // bestEffortReleaseSd from this very module at the claim-boundary probe above.
+        const { clearAndReopenQf } = await import('../lib/fleet/best-effort-release.mjs');
+        const { changed } = await clearAndReopenQf(supabase, qf.id, {
+          expectedHolder: qf.claiming_session_id,
+          // APPEND-ONLY DETECTION RECORD, one row per detection. The acceptance criterion is
+          // "zero NEW class-A detections over N hours of continuous sampling" — a COUNT over time —
+          // and a column cannot answer it: a row that strands, is reverted, and strands again
+          // overwrites its own timestamp. Multiplicity is the whole requirement, so an existing
+          // append-only surface is sufficient and no migration is needed.
+          onDetect: async (record) => {
+            await supabase.from('feedback').insert({
+              category: 'harness_backlog',
+              severity: 'high',
+              title: `STRANDED-QF DETECTION ${record.qf_id} at ${record.detected_at}`,
+              description:
+                `SD-LEO-INFRA-DISPATCH-DELIVERY-INTEGRITY-001 class-A detection. A quick-fix was found `
+                + `cleared-but-not-reopened (unreachable by all five open-only chokepoints while the supply `
+                + `gauges still counted it) and was reverted to open by the stale-claim sweep.\n`
+                + `Column values AS MATCHED at detection: status=${record.status} `
+                + `claiming_session_id=${record.claiming_session_id} pr_url=${record.pr_url} `
+                + `commit_sha=${record.commit_sha}\n`
+                + `Recorded because the revert makes the row unattributable afterwards, and because the `
+                + `acceptance criterion counts detections over a window rather than sampling a live query.`,
+              metadata: { detection_class: 'stranded_qf_class_a', ...record },
+            });
+          },
+        });
+        if (changed) {
+          actions.push('QF: cleared stale claim AND reopened ' + qf.id + ' (holder ' + String(qf.claiming_session_id).slice(0, 8) + ' hb ' + (ageSec === Infinity ? 'gone' : Math.round(ageSec) + 's') + ')');
         }
       }
     }
@@ -2596,6 +2658,20 @@ async function main() {
       if (!error) {
         const tag = evict.status === 'ACTIVE' ? ' (was active)' : '';
         await resetSdPhaseOnRelease(sdId, 'SWEEP_CONFLICT_RESOLUTION');
+        // SD-LEO-INFRA-DISPATCH-DELIVERY-INTEGRITY-001: THE MIRROR OF THE STRANDING CLASS.
+        // The UPDATE above clears the SEAT POINTER (claude_sessions.sd_key) and
+        // resetSdPhaseOnRelease handles strategic_directives_v2 — NEITHER touches
+        // quick_fixes.claiming_session_id. So evicting a QF claimant left the seat reading IDLE
+        // while still formally HOLDING the quick-fix: the worker looks free to the self-claim path
+        // and the idle-QF hint, and can take a second item while owning the first (double-hold).
+        // Same invariant as the strand, opposite direction — two surfaces record one claim and are
+        // written by different legs. Observed live 2026-07-27 on QF-20260726-757.
+        if (/^QF-/.test(sdId)) {
+          const { clearAndReopenQf } = await import('../lib/fleet/best-effort-release.mjs');
+          // CAS on the EVICTED holder so a concurrent re-claim by the keeper is never clobbered.
+          // The four-column guard still refuses any row carrying real work.
+          await clearAndReopenQf(supabase, sdId, { expectedHolder: evict.session_id });
+        }
         actions.push('CONFLICT on ' + sdId + ': released ' + evict.session_id + tag + ' (kept ' + keeper.session_id + ')');
 
         // Send coordination message to the evicted session so it picks up other work

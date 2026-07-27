@@ -28,6 +28,9 @@ import { preclaimFeedbackRows, resolveFeedbackIds, findFeedbackRefConflicts } fr
 import { releasePreclaim } from '../lib/feedback/release-preclaim.js';
 import { armCliTeardown } from '../lib/cli-graceful-exit.js';
 import { checkFeedbackPremiseLiveness, logForceLivenessOverride } from '../lib/eva/feedback-premise-adapter.js';
+// SD-LEO-INFRA-CORRECTION-DELIVERY-PATH-001-E FR-3: reuse the existing UTC
+// normalizer (one of three already in this repo) — do not add a fourth copy.
+import { normalizeToUTC } from './hooks/stop-subagent-enforcement/time-utils.js';
 import { renderCount } from '../lib/db/fetch-all-paginated.mjs';
 import { loadActiveApplications, validateTargetApplication, detectMisdesignation } from '../lib/fleet/qf-target-application.js';
 
@@ -240,13 +243,36 @@ async function createQuickFix(options = {}) {
     if (!options.forceLiveness) {
       try {
         const { data: freshFb } = await supabase
-          .from('feedback').select('id, title, description, category, severity')
+          // SD-LEO-INFRA-CORRECTION-DELIVERY-PATH-001-E FR-2: `metadata` is required
+          // here — the measurement provenance lives there, and omitting the column
+          // would silently strip it before the descriptor is ever built, leaving the
+          // STALE refusal unable to say when/against-what the premise was measured.
+          .from('feedback').select('id, title, description, category, severity, metadata')
           .in('id', resolvedFeedbackIds);
         for (const fb of freshFb || []) {
           const verdict = await checkFeedbackPremiseLiveness(fb, { supabase });
           if (verdict.status === 'STALE') {
             console.error(`\n❌ [STALE_PREMISE] feedback ${fb.id} (${(fb.title || '').slice(0, 60)}) already fixed:`);
             for (const e of verdict.evidence || []) console.error(`     ${e}`);
+            // SD-LEO-INFRA-CORRECTION-DELIVERY-PATH-001-E FR-2: report the measurement's
+            // own provenance alongside the verdict. Without this the operator sees THAT
+            // the premise expired but not WHEN it was taken or against WHICH ref — the
+            // exact gap that let a 25-minute-old measurement keep driving decisions.
+            // Absent for legacy rows recorded before provenance stamping existed.
+            const prov = fb.metadata && typeof fb.metadata === 'object' ? fb.metadata : {};
+            if (prov.measured_at || prov.git_sha || prov.git_ref) {
+              // FR-3: age MUST be timezone-independent. measured_at is written with an
+              // explicit offset, but a legacy or hand-written naive value would be
+              // parsed as LOCAL by a bare new Date() — the documented four-hour-shift
+              // bug class. Reuse the EXISTING normalizer (already implemented three
+              // times in this repo) rather than adding a fourth copy.
+              const measuredAtUTC = normalizeToUTC(prov.measured_at);
+              const ageMs = measuredAtUTC ? Date.now() - measuredAtUTC.getTime() : null;
+              const ageTxt = Number.isFinite(ageMs) ? ` (${Math.max(0, Math.round(ageMs / 60000))} min old)` : '';
+              console.error(`     measured_at: ${prov.measured_at || 'unknown'}${ageTxt}`);
+              console.error(`     measured against: ${prov.git_ref || 'unknown-ref'} @ ${prov.git_sha ? String(prov.git_sha).slice(0, 12) : 'unknown-sha'}`);
+              if (prov.timezone) console.error(`     recorded in timezone: ${prov.timezone}`);
+            }
             console.error('   Override (audited): --force-liveness "<reason>"');
             process.exit(1);
           }

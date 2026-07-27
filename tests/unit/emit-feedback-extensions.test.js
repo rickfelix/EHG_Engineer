@@ -170,6 +170,44 @@ describe('FR-2: emitFeedbackBatch', () => {
     expect(sb.insertCalls).toEqual([]);
   });
 
+  // SD-LEO-INFRA-CORRECTION-DELIVERY-PATH-001-E: the batch path shares _buildRowObject
+  // with the singleton, so it inherits provenance stamping BY CONSTRUCTION — but
+  // "by construction" is exactly the kind of claim that silently stops being true.
+  // These assert it directly (closes gap G2 raised by the EXEC-TO-PLAN TESTING review).
+  it('stamps measurement provenance on EVERY row in a batch', async () => {
+    const sb = makeMockSupabase();
+    const fixed = new Date('2026-07-27T16:30:00.000Z');
+    const okGit = (args) => (args.includes('--abbrev-ref') ? 'main' : 'abc123def4567890');
+    await emitFeedbackBatch({
+      supabase: sb,
+      items: [
+        { title: 'b1', description: 'd1', dedup_key: 'k1' },
+        { title: 'b2', description: 'd2', dedup_key: 'k2' },
+      ],
+      shared: { provenanceDeps: { git: okGit, now: () => fixed } },
+    });
+    const rows = sb.insertCalls.filter(p => Array.isArray(p))[0];
+    expect(rows).toHaveLength(2);
+    for (const row of rows) {
+      expect(row.metadata.measured_at).toBe('2026-07-27T16:30:00.000Z');
+      expect(row.metadata.git_sha).toBe('abc123def4567890');
+      expect(row.metadata.git_ref).toBe('main');
+    }
+  });
+
+  it('batch: a per-item caller-supplied measured_at cannot spoof the stamp', async () => {
+    const sb = makeMockSupabase();
+    const fixed = new Date('2026-07-27T16:30:00.000Z');
+    const okGit = (args) => (args.includes('--abbrev-ref') ? 'main' : 'abc123def4567890');
+    await emitFeedbackBatch({
+      supabase: sb,
+      items: [{ title: 'spoof', description: 'd', dedup_key: 'k', metadata: { measured_at: '1999-01-01T00:00:00.000Z' } }],
+      shared: { provenanceDeps: { git: okGit, now: () => fixed } },
+    });
+    const rows = sb.insertCalls.filter(p => Array.isArray(p))[0];
+    expect(rows[0].metadata.measured_at).toBe('2026-07-27T16:30:00.000Z');
+  });
+
   it('throws BATCH_ITEM_INVALID:<idx> for missing title or description', async () => {
     const sb = makeMockSupabase();
     await expect(

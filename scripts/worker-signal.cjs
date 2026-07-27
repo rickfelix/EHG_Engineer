@@ -38,22 +38,14 @@ const { warnIfCheckoutStale } = require('../lib/coordinator/checkout-staleness.c
 // signal_type-agnostic, so aggregation/promotion works without router changes.
 const SIGNAL_TYPES = ['stuck', 'need-sweep', 'prd-ambiguous', 'gate-bug', 'spec-conflict', 'harness-bug', 'feedback', 'unfit', 'other'];
 const SEVERITIES = ['low', 'medium', 'high', 'critical'];
-const BODY_HARD_CAP = 4096;
 
-// QF-20260710-560: M2 used to silently .slice(0, BODY_HARD_CAP), dropping content with no
-// signal (Solomon's FW-3 advisory tail was clipped this way — a loss-proof-channel violation).
-// Hard-error instead: caller must split the message, never lose the tail silently.
-function capBody(rawBody) {
-  const redacted = redact(String(rawBody));
-  if (redacted.length > BODY_HARD_CAP) {
-    const err = new Error(
-      `body exceeds ${BODY_HARD_CAP}-char hard cap (${redacted.length} chars after redaction) — split into ordered parts, do not send oversized`
-    );
-    err.code = 'BODY_TOO_LONG';
-    throw err;
-  }
-  return redacted;
-}
+// SD-LEO-INFRA-CORRECTION-DELIVERY-PATH-001-A / FR-1: BODY_HARD_CAP / REDACTION_PATTERNS /
+// redact / capBody MOVED to lib/shared/body-cap.cjs (bodies unchanged) so the INBOUND
+// aggregation hop (lib/coordinator/signal-router.cjs) enforces the SAME policy instead of
+// its own silent .slice(). QF-20260710-560 fixed truncation here; that fix never travelled
+// one hop inward, which is how a 3145-char CRITICAL correction was later carried as 611
+// chars. Re-exported below unchanged, so this module's public contract is byte-identical.
+const { BODY_HARD_CAP, REDACTION_PATTERNS, redact, capBody } = require('../lib/shared/body-cap.cjs');
 
 // SD-FDBK-INFRA-CROSS-SESSION-CONFLICTION-001 / FR-1 — typed INTENT broadcast.
 // Default-OFF feature flag. When OFF, the `intent` subcommand refuses to write so
@@ -114,30 +106,6 @@ function normalizeLinksSd(raw) {
   if (typeof raw !== 'string') return null;
   const v = raw.trim().toUpperCase();
   return LINKS_SD_RE.test(v) ? v : null;
-}
-
-const REDACTION_PATTERNS = [
-  // AWS access key id
-  { re: /AKIA[0-9A-Z]{16}/g, label: 'AWS_KEY' },
-  // GitHub fine-grained / classic / oauth tokens
-  { re: /gh[pousr]_[A-Za-z0-9]{36,}/g, label: 'GH_TOKEN' },
-  // Anthropic / OpenAI keys
-  { re: /sk-[A-Za-z0-9_-]{20,}/g, label: 'PROVIDER_KEY' },
-  // JWTs (3 base64-url segments). Catches Supabase service-role plus generic.
-  { re: /eyJ[A-Za-z0-9_-]+\.eyJ[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+/g, label: 'JWT' },
-  // password=... in connection strings or query strings
-  { re: /password\s*[=:]\s*[^&\s"']+/gi, label: 'PASSWORD' },
-  // Postgres connection string with embedded creds
-  { re: /postgres(?:ql)?:\/\/[^:@\s]+:[^@\s]+@/g, label: 'PG_CONN_STRING' }
-];
-
-function redact(input) {
-  if (typeof input !== 'string') return input;
-  let out = input;
-  for (const { re, label } of REDACTION_PATTERNS) {
-    out = out.replace(re, `[REDACTED:${label}]`);
-  }
-  return out;
 }
 
 function parseArgs(argv) {
