@@ -209,10 +209,36 @@ describe('GET /api/fleet-panel', () => {
     const payload = res.json.mock.calls[0][0];
     expect(payload.filter.ghostsHidden).toBe(0);
     expect(payload.sessions).toHaveLength(2);
-    // A role session reads as itself rather than as a blank row.
-    expect(payload.sessions[0]).toMatchObject({ callsign: 'solomon', identity_kind: 'solomon' });
+    // A role session reads as itself rather than as a blank row. QF-20260726-222: the DISPLAY name
+    // is capitalized to match worker callsigns, while identity_kind stays the lowercase machine key.
+    expect(payload.sessions[0]).toMatchObject({ callsign: 'Solomon', identity_kind: 'solomon' });
     // A freshly spawned worker has no callsign yet — that is honest, not a ghost.
     expect(payload.sessions[1]).toMatchObject({ callsign: null, identity_kind: 'unstamped' });
+  });
+
+  it('QF-222 — capitalizes the role DISPLAY name while leaving identity_kind lowercase', async () => {
+    // Chairman-reported: workers render Foxtrot/Alpha-4 but roles rendered adam/solomon/coordinator.
+    const roleRow = (id, meta) => ({
+      session_id: id, sd_key: null, computed_status: 'active',
+      heartbeat_age_human: '2s ago', heartbeat_age_seconds: 2, metadata: meta,
+    });
+    const res = mockRes();
+    await getFleetPanel(mockReq(mockSupabase([
+      roleRow('r-adam', { role: 'adam' }),
+      roleRow('r-sol', { role: 'solomon' }),
+      roleRow('r-coord', { is_coordinator: true }),
+      // A real worker: its stamped callsign must pass through UNCHANGED, not be re-capitalized.
+      roleRow('w-1', { fleet_identity: { callsign: 'Alpha-4' }, model: 'opus', effort: 'xhigh' }),
+    ])), res);
+    const rows = res.json.mock.calls[0][0].sessions;
+
+    expect(rows.map((r) => r.callsign)).toEqual(['Adam', 'Solomon', 'Coordinator', 'Alpha-4']);
+
+    // THE LOAD-BEARING HALF, and the reason this is not a one-liner: identity_kind must stay
+    // lowercase. Verified at the consumer — ehg useFleetSessions.ts:318 does
+    // String(r.identity_kind) === 'coordinator' (exact lowercase match) and :284-285 filter and sort
+    // the ROLES group by it. Capitalizing the key to fix a label would silently break grouping.
+    expect(rows.map((r) => r.identity_kind)).toEqual(['adam', 'solomon', 'coordinator', 'worker']);
   });
 
   it('reports truncated=true when the page hits the row cap, false otherwise', async () => {
