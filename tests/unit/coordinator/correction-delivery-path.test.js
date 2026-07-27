@@ -132,6 +132,19 @@ describe('buildAdvisoryPayload — correction discriminator (FR-1, FR-4, AC-4)',
       .toThrow(/INVALID_MESSAGE_KIND/);
   });
 
+  it('rejects a part_total above MAX_PARTS (the relaxed bound must stay finite)', () => {
+    // Security review of PR #6553: the part dimension deliberately relaxes "one answer per
+    // correlation". Unbounded, that is not a narrowing at all — a sender could post arbitrarily many
+    // rows on one correlation just by incrementing part_index. Enforced in the builder, not only in
+    // the CLI, because buildAdvisoryPayload is exported and the CLI is not its only caller.
+    expect(() => solomon.buildAdvisoryPayload({ body: 'x', replyTo: 'c1', partIndex: 1, partTotal: 5000 }))
+      .toThrow(/INVALID_PART/);
+    expect(() => solomon.buildAdvisoryPayload({ body: 'x', replyTo: 'c1', partIndex: 3, partTotal: 2 }))
+      .toThrow(/INVALID_PART/);
+    // The boundary itself stays legal.
+    expect(solomon.buildAdvisoryPayload({ body: 'x', replyTo: 'c1', partIndex: 1, partTotal: 20 }).part_total).toBe(20);
+  });
+
   it('stamps part_index/part_total only when BOTH are supplied', () => {
     const both = solomon.buildAdvisoryPayload({ body: 'x', replyTo: 'c1', partIndex: 2, partTotal: 2 });
     expect(both.part_index).toBe(2);
@@ -177,6 +190,69 @@ describe('groupMultiPartAdvisories — one correlation, no subject regex (FR-3, 
     const groups = groupMultiPartAdvisories(rows);
     expect(groups).toHaveLength(1);
     expect(groups[0].isComplete).toBe(true);
+  });
+});
+
+describe('relay-drain payload boundary — explicit pick, never a spread (FR-4)', () => {
+  const { makeSendRelay } = require_('../../../scripts/coordinator-relay-drain.cjs');
+
+  /** Captures the row handed to session_coordination.insert(). */
+  function capturingSb(sink) {
+    return { from: () => ({ insert: async (row) => { sink.push(row); return { error: null }; } }) };
+  }
+
+  /** Forces the SESSION-class branch — the one that actually performs the relay insert. */
+  const sessionResolver = async () => ({ kind: 'session', target: 'peer-session-1', peer: 'adam', live: true });
+
+  it('forwards the correction discriminators across the relay hop', async () => {
+    const inserted = [];
+    const sendRelay = makeSendRelay(capturingSb(inserted), { resolvePeerTarget: sessionResolver });
+    const res = await sendRelay({
+      sender_session: 'origin-session',
+      target_session: 'coordinator-session',
+      payload: { relay_to: 'adam', body: 'retracting the earlier prescription', correlation_id: 'corr-1', message_kind: 'retraction', part_index: 1, part_total: 2 },
+    });
+    expect(res.ok).toBe(true);
+    expect(inserted).toHaveLength(1);
+    expect(inserted[0].payload.kind).toBe('adam_advisory');
+    expect(inserted[0].payload.message_kind).toBe('retraction');
+    expect(inserted[0].payload.part_index).toBe(1);
+    expect(inserted[0].payload.part_total).toBe(2);
+  });
+
+  it('DROPS fields that must not cross the boundary, even when present on the queued row', async () => {
+    // The relayed row is stamped sender_type='coordinator', so a forwarded field impersonates
+    // COORDINATOR INTENT rather than merely carrying bad body text. drainRelayQueue performs no
+    // sender-role check at drain time, so row.payload is untrusted input. signal_type/intent_action
+    // are the sharpest: buildAdvisoryPayload documents "no signal_type, no intent_action" as an
+    // invariant precisely because the friction-signal router and deconfliction sweep scoop them.
+    const inserted = [];
+    const sendRelay = makeSendRelay(capturingSb(inserted), { resolvePeerTarget: sessionResolver });
+    await sendRelay({
+      sender_session: 'origin-session',
+      target_session: 'coordinator-session',
+      payload: {
+        relay_to: 'adam', body: 'b', correlation_id: 'corr-2',
+        signal_type: 'stuck', intent_action: 'escalate', expects_reply: true,
+        oracle: true, via: 'direct', sender_callsign: 'spoofed', reply_class: 'live-handshake',
+      },
+    });
+    const p = inserted[0].payload;
+    for (const forbidden of ['signal_type', 'intent_action', 'expects_reply', 'oracle', 'via', 'sender_callsign', 'reply_class', 'relay_to']) {
+      expect(p, `${forbidden} must not cross the relay boundary`).not.toHaveProperty(forbidden);
+    }
+    // The intended fields still arrive.
+    expect(p.kind).toBe('adam_advisory');
+    expect(p.correlation_id).toBe('corr-2');
+    expect(p.relayed_from).toBe('origin-session');
+  });
+
+  it('a relay-class peer short-circuits before any insert (unchanged behaviour)', async () => {
+    const inserted = [];
+    const sendRelay = makeSendRelay(capturingSb(inserted), { resolvePeerTarget: async () => ({ kind: 'relay', target: null }) });
+    const res = await sendRelay({ sender_session: 's', target_session: 't', payload: { relay_to: 'eva', body: 'b', correlation_id: 'c' } });
+    expect(res.ok).toBe(true);
+    expect(inserted).toHaveLength(0);
   });
 });
 

@@ -83,6 +83,13 @@ const SOLOMON_CONSULT_KIND = 'solomon_consult';
 const MESSAGE_KINDS = Object.freeze(['retraction', 'amend', 'supersede']);
 const MESSAGE_KIND_SET = new Set(MESSAGE_KINDS);
 
+// Ceiling on ordered parts per reply. The part dimension deliberately relaxes the "one answer per
+// correlation" invariant (that is the point — see FR-3), but an UNBOUNDED relaxation is not a
+// narrowing at all: a sender could post arbitrarily many rows on one correlation just by
+// incrementing part_index. MAX_PARTS keeps the relaxed bound finite and small, so the worst case is
+// MESSAGE_KINDS.length x MAX_PARTS rows per correlation rather than unlimited.
+const MAX_PARTS = 20;
+
 const ADVISORY_TTL_MS = 24 * 60 * 60_000; // 24h durable delivery window (mirrors the Adam lane).
 function advisoryExpiresAt(nowMs) {
   const base = Number.isFinite(nowMs) ? nowMs : Date.now();
@@ -152,8 +159,15 @@ function buildAdvisoryPayload({ body, senderCallsign, repo, correlationId, expec
   // hand the reader a fragment it cannot order. Retires the subject-line N/M regex workaround
   // documented in lib/coordinator/multi-part-reply.cjs.
   if (partIndex != null && partTotal != null) {
-    payload.part_index = Number(partIndex);
-    payload.part_total = Number(partTotal);
+    const pi = Number(partIndex);
+    const pt = Number(partTotal);
+    // Enforced HERE as well as at the CLI, because buildAdvisoryPayload is exported and the CLI is
+    // not its only caller. A bound checked only at the outermost layer is not a bound.
+    if (!Number.isInteger(pi) || !Number.isInteger(pt) || pi < 1 || pt < 1 || pi > pt || pt > MAX_PARTS) {
+      throw new Error(`INVALID_PART: expected integers 1 <= part_index <= part_total <= ${MAX_PARTS} (got ${partIndex}/${partTotal}).`);
+    }
+    payload.part_index = pi;
+    payload.part_total = pt;
   }
   if (body) payload.body = capBody(String(body));
   if (correlationId) payload.correlation_id = correlationId; // replyable (always)
@@ -830,6 +844,15 @@ async function main() {
     partTotalArg = Number(m[2]);
     if (partIndexArg < 1 || partTotalArg < 1 || partIndexArg > partTotalArg) {
       console.error(`ERROR: --part N/M requires 1 <= N <= M (got "${partIndexArg}/${partTotalArg}").`);
+      process.exit(2);
+    }
+    // The part dimension necessarily relaxes "one answer per correlation" — without a ceiling a
+    // sender could post unboundedly many rows on one correlation just by incrementing N, defeating
+    // the invariant this guard exists to hold. MAX_PARTS keeps the relaxation finite: at most
+    // MAX_PARTS rows per (correlation, discriminator). A reply needing more than this many parts is
+    // a signal the body belongs in an artifact, not the message lane.
+    if (partTotalArg > MAX_PARTS) {
+      console.error(`ERROR: --part total exceeds MAX_PARTS (${MAX_PARTS}); got ${partTotalArg}. Link an artifact instead of splitting further.`);
       process.exit(2);
     }
   }

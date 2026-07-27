@@ -45,12 +45,20 @@ function getSupabase() {
  * @param {object} supabase
  * @returns {(row:object) => Promise<{ok:boolean, error?:string}>}
  */
-function makeSendRelay(supabase) {
+/**
+ * @param {object} supabase
+ * @param {object} [deps] - injectable resolver, defaulting to the real module. Same "testable seam"
+ *   convention peer-target.cjs itself documents (inject a fixture resolver rather than mocking
+ *   nested CJS requires). Added by SD-LEO-INFRA-CORRECTION-DELIVERY-PATH-001-C: without it the
+ *   session-class branch below — the one that actually performs the relay insert — was unreachable
+ *   from any test, which is why a payload-construction regression here went undetected.
+ */
+function makeSendRelay(supabase, { resolvePeerTarget: resolvePeer = resolvePeerTarget } = {}) {
   return async function sendRelay(row) {
     const peer = row.payload && row.payload.relay_to;
     if (!peer) return { ok: false, error: 'row has no payload.relay_to' };
     try {
-      const resolved = await resolvePeerTarget(supabase, peer, {});
+      const resolved = await resolvePeer(supabase, peer, {});
       if (resolved.kind === 'relay') {
         return { ok: true };
       }
@@ -68,16 +76,25 @@ function makeSendRelay(supabase) {
           body: row.payload.body || null,
           // SD-LEO-INFRA-CORRECTION-DELIVERY-PATH-001-C / FR-4: kind stays adam_advisory (that IS the
           // lane every reader drains), but the correction sub-discriminators must SURVIVE the relay.
-          // Rebuilding the payload from scratch previously dropped message_kind/part_*, so a
-          // retraction relayed to a peer arrived indistinguishable from an ordinary advisory — the
-          // correction silently lost its identity on exactly the hop that carries it furthest.
-          // Spread-then-pin: forward everything, then re-assert the fields this relay owns.
+          //
+          // EXPLICIT PICK, NEVER A SPREAD. This payload is rebuilt field-by-field on purpose: the
+          // literal IS the allowlist. drainRelayQueue accepts any row with kind='relay_request' and
+          // performs no sender-role check at drain time (role gating happens only at the CLI enqueue
+          // call site), so `row.payload` is not trusted input here. Spreading it would forward
+          // whatever the enqueuer put there — including `signal_type`/`intent_action`, which
+          // buildAdvisoryPayload documents as a hard invariant precisely because the friction-signal
+          // router and deconfliction sweep scoop those fields. The relayed row is stamped
+          // sender_type='coordinator', so a forged field would impersonate coordinator intent, not
+          // merely carry bad body text. Add a field below only when it is meant to cross this
+          // boundary. (Caught in security review of PR #6553 before merge.)
           payload: {
-            ...row.payload,
             kind: 'adam_advisory',
             body: row.payload.body || null,
             correlation_id: row.payload.correlation_id,
             relayed_from: row.sender_session,
+            ...(row.payload.message_kind != null ? { message_kind: row.payload.message_kind } : {}),
+            ...(row.payload.part_index != null ? { part_index: row.payload.part_index } : {}),
+            ...(row.payload.part_total != null ? { part_total: row.payload.part_total } : {}),
           },
         });
       if (error) return { ok: false, error: error.message };
