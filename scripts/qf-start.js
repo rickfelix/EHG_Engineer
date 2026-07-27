@@ -75,6 +75,27 @@ async function main() {
     }
   } catch { /* fail-open — the gate must never wedge ungated claims */ }
 
+  // SD-LEO-INFRA-CLAIM-LIVENESS-FENCE-001 FR-3: refuse if THIS session is not actually alive.
+  //
+  // Runs before claim_sd because the RPC arbitrates ownership, not claimant liveness — it will
+  // happily hand a QF to a session whose claude process is gone, which is exactly how
+  // QF-20260726-529/-030/-607 ended up pinned. Fail-open by contract: only a self-declared tick
+  // pidfile naming a dead pid produces DEAD; anything ambiguous passes, because falsely fencing a
+  // live worker is the more expensive error.
+  try {
+    const { claimantLivenessFence } = await import('../lib/fleet/claimant-liveness.cjs');
+    const { reason, detail } = await claimantLivenessFence(supabase, sessionId);
+    if (reason) {
+      console.error(`✗ Quick-fix ${qfId} NOT claimed: ${reason}`);
+      console.error(`  ${JSON.stringify(detail)}`);
+      console.error('  This session looks dead to the fence. If that is wrong, check .claude/pids/tick-<session>.json.');
+      await safeExit(4);
+    }
+  } catch (e) {
+    // Never let the fence itself block a claim — a broken probe must not wedge the fleet.
+    console.warn(`[qf-start] liveness fence skipped (failing open): ${e && e.message}`);
+  }
+
   const { data, error } = await supabase.rpc('claim_sd', {
     p_sd_id: qfId,
     p_session_id: sessionId,
