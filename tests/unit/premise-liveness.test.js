@@ -3,7 +3,8 @@
 // exists; LIVE when recent >= threshold; LIVE-but-warn on ambiguity (NEVER STALE). The leo-create-sd
 // stale-guard skips STALE diagnostic proposals (no SD created) and fails OPEN on any checker error.
 import { describe, it, expect } from 'vitest';
-import { checkPremiseLiveness } from '../../lib/eva/premise-liveness.js';
+import { checkPremiseLiveness, sanitizeOrToken } from '../../lib/eva/premise-liveness.js';
+import { extractWorkIdentifiers } from '../../lib/eva/feedback-premise-adapter.js';
 import { ingestProposalObject } from '../../scripts/leo-create-sd.js';
 
 const NOW = Date.parse('2026-06-23T00:00:00Z');
@@ -217,5 +218,54 @@ describe('checkPremiseLiveness — completed-SD lookup must surface query failur
       { supabase: mockSb({ handoffs: [rejection(GATE)], completed: [] }), git: noGit, nowMs: NOW }
     );
     expect(res.evidence.join(' | ')).not.toMatch(/Completed-SD check (skipped|failed|unavailable)/i);
+  });
+});
+
+// SD-LEO-INFRA-SIGNAL-PROMOTION-RESOLUTION-CHECK-001 (FR-2) — the lookup token must be safe to
+// interpolate into a PostgREST .or() logic tree, and structured work identifiers named inline in
+// worker prose must be usable as exact lookup keys.
+describe('sanitizeOrToken + identifier extraction (FR-2)', () => {
+  // This is a REAL cohort title, taken verbatim from a promoted feedback row. Its parenthesis and
+  // comma are what produced "failed to parse logic tree" on 785/973 rows of the live pool.
+  const REAL = 'FOLLOW-UP on signal c6bfe6dc (venture_user_select_feedback anon-RLS exposure, P0';
+
+  it('strips the logic-tree metacharacters that break the query', () => {
+    const safe = sanitizeOrToken(REAL);
+    expect(safe).not.toMatch(/[(),"\*]/);
+    expect(safe).toMatch(/FOLLOW-UP on signal c6bfe6dc/);
+  });
+
+  it('is total — never returns null/undefined, and yields empty string for empty input', () => {
+    for (const input of [null, undefined, '', '   ', '(),"']) {
+      expect(typeof sanitizeOrToken(input)).toBe('string');
+    }
+    expect(sanitizeOrToken('(),"')).toBe('');
+  });
+
+  it('extracts SD keys and QF ids named inline in prose, deduped', () => {
+    const ids = extractWorkIdentifiers('MOOT — duplicate of QF-20260713-175, already covered by SD-LEO-INFRA-FIX-WINDOWS-SESSION-001 and QF-20260713-175 again');
+    expect(ids).toContain('QF-20260713-175');
+    expect(ids).toContain('SD-LEO-INFRA-FIX-WINDOWS-SESSION-001');
+    expect(ids.filter(i => i === 'QF-20260713-175')).toHaveLength(1);
+  });
+
+  it('returns no identifiers for prose that names none', () => {
+    expect(extractWorkIdentifiers('the coordinator inbox is noisy tonight')).toEqual([]);
+  });
+
+  it('a signal naming an already-completed SD is treated as an already-shipped fix', async () => {
+    const sb = {
+      from: () => ({
+        select: () => ({
+          eq: () => ({ gte: () => ({ or: () => ({ limit: () => Promise.resolve({ data: [], error: null }) }) }) }),
+          in: () => ({ eq: () => ({ limit: () => Promise.resolve({ data: [{ sd_key: 'SD-LEO-INFRA-FIX-WINDOWS-SESSION-001' }], error: null }) }) }),
+        }),
+      }),
+    };
+    const res = await checkPremiseLiveness(
+      { cluster_reason: 'some prose', identifiers: ['SD-LEO-INFRA-FIX-WINDOWS-SESSION-001'] },
+      { supabase: sb, git: noGit, nowMs: NOW }
+    );
+    expect(res.evidence.join(' | ')).toMatch(/names already-completed SD/i);
   });
 });
