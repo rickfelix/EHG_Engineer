@@ -224,27 +224,53 @@ describe('SECURITY cbe69100 F1: the patch is allowlisted, not passed through', (
   it('still allows the three legitimate amendable fields', async () => {
     for (const col of ['description', 'scope', 'metadata']) {
       const sb = makeSb({ sd: activeSd(), prds: [] });
-      const res = await amendSd(sb, 'SD-TEST-AMEND-001', { [col]: col === 'metadata' ? {} : 'text' }, {});
+      const res = await amendSd(sb, 'SD-TEST-AMEND-001', { [col]: col === 'metadata' ? { k: 1 } : 'text' }, {
+        // metadata takes the atomic-merge path, so it needs the seam rather than the column update.
+        mergeMetadata: async (key) => ({ merged: true, sdKey: key }),
+      });
       expect(res.sdUpdated).toBe(true);
       expect(res.errorCode).toBeNull();
     }
   });
 });
 
-describe('PR #6559 adversarial CRITICAL: metadata is merged, never replaced', () => {
-  it('preserves a fail-open governance hold that a JSONB replace would have deleted', async () => {
-    // chairman_ratified===false BLOCKS belt-claim, and ABSENCE is fail-open — so dropping the key
-    // silently makes an unratified SD claimable. This is the exact bug the review caught.
+describe('PR #6559 adversarial CRITICAL: metadata is merged atomically, never replaced', () => {
+  it('routes metadata through the atomic DB-side merge, never a read-spread-write', async () => {
+    // Round 2 finding: a JS spread built from a snapshot resurrects a hold a concurrent process
+    // just cleared. lib/coordinator/safe-metadata-merge.mjs exists to prevent exactly that, so the
+    // contract under test is "metadata never rides the column .update()".
+    const merged = [];
     const sd = activeSd({ metadata: { chairman_ratified: false, note: 'keep me' } });
     const sb = makeSb({ sd, prds: [] });
 
-    const res = await amendSd(sb, 'SD-TEST-AMEND-001', { metadata: { extra: 1 } }, {});
+    const res = await amendSd(sb, 'SD-TEST-AMEND-001', { metadata: { extra: 1 } }, {
+      mergeMetadata: async (key, patch) => { merged.push({ key, patch }); return { merged: true, sdKey: key }; },
+    });
 
     expect(res.sdUpdated).toBe(true);
-    const written = sb.updates.at(-1).patch.metadata;
-    expect(written.chairman_ratified).toBe(false); // hold survived
-    expect(written.note).toBe('keep me');          // unrelated key survived
-    expect(written.extra).toBe(1);                 // new key applied
+    // Only the keys the caller asked for are sent; every other key is untouched BY THE DB, so no
+    // snapshot of chairman_ratified is ever written back.
+    expect(merged).toEqual([{ key: 'SD-TEST-AMEND-001', patch: { extra: 1 } }]);
+    // And metadata must NOT have gone through the column update path at all.
+    expect(sb.updates).toHaveLength(0);
+  });
+
+  it('reports failure when the atomic merge matches no rows', async () => {
+    const sb = makeSb({ sd: activeSd(), prds: [] });
+    const res = await amendSd(sb, 'SD-TEST-AMEND-001', { metadata: { a: 1 } }, {
+      mergeMetadata: async () => ({ merged: false, sdKey: 'x', error: 'no rows' }),
+    });
+    expect(res.sdUpdated).toBe(false);
+    expect(res.errorCode).toBe('AMEND_METADATA_MERGE_FAILED');
+  });
+
+  it('refuses an explicit undefined value, which serialization would silently drop', async () => {
+    const sb = makeSb({ sd: activeSd(), prds: [] });
+    const res = await amendSd(sb, 'SD-TEST-AMEND-001', { metadata: { note: undefined } }, {
+      mergeMetadata: async () => { throw new Error('must not merge'); },
+    });
+    expect(res.sdUpdated).toBe(false);
+    expect(res.errorCode).toBe('AMEND_METADATA_UNDEFINED_VALUE');
   });
 
   it.each([...PROTECTED_METADATA_KEYS])('refuses to write the governance key %s at all', async (key) => {
