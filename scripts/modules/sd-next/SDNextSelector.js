@@ -81,6 +81,7 @@ import {
   isOrchestratorBlocked,
   displayTelemetryFindings,
   classifyQuickFixes,
+  computeInFlightQfIds,
   displayRoadmapAwareness,
   displayBrainstormPipelineAdvisory
 } from './display/index.js';
@@ -481,7 +482,11 @@ export class SDNextSelector {
       currentSession: this.currentSession,
       activeSessions: this.activeSessions,
       localSignals: this.localSignals, // SD-LEO-INFRA-SESSION-COMPACTION-CLAIM-001
-      supabase: this.supabase // Needed for auto-release of stale dead claims
+      supabase: this.supabase, // Needed for auto-release of stale dead claims
+      // SD-LEO-INFRA-CORRECTION-DELIVERY-PATH-001-B FR-3: quick-fixes already in flight in git.
+      // Populated on the instance by displayTracks() before it classifies, because this getter is
+      // synchronous and shared. An unset field is an empty Set — withholds nothing, fail-open.
+      inFlightQfIds: this.inFlightQfIds || new Set()
     };
   }
 
@@ -902,6 +907,12 @@ export class SDNextSelector {
 
     // SD-LEO-INFRA-UNIFY-QUICK-FIX-001 Phase 3: classify QFs, tag with kind='qf',
     // feed into rankItems alongside SDs so they interleave in the track sections.
+    // SD-LEO-INFRA-CORRECTION-DELIVERY-PATH-001-B FR-3: THIS is the live sd:next render path —
+    // showFallbackQueue only runs when there is no baseline or the actionable set is exhausted,
+    // and v_sd_next_candidates is currently non-empty, so wiring the producer only there left
+    // this (the reachable) call site unwired. Populated before classifying; fail-open to an empty
+    // Set, which withholds nothing.
+    this.inFlightQfIds = await computeInFlightQfIds(this.openQuickFixes);
     const { summary: qfSummary, classified: classifiedQFs } = classifyQuickFixes(
       this.openQuickFixes, this.qfTriageResults, this.getSessionContext()
     );

@@ -637,7 +637,12 @@ async function selfClaimQuickFix(sb, sessionId, base, sessionModel) {
     // (self-heals with no follow-up code change). The pragma below MUST stay on the same physical
     // line as .select( -- schema-reference-extract.mjs's pragmaAt() only checks the line
     // containing the .select( match itself.
-    const QF_CANDIDATE_COLUMNS = 'id, status, pr_url, commit_sha, created_at, routing_tier, title, description, severity, not_before, factory_lane, owner, release_condition'; // schema-lint-disable-line: factory_lane staged, see comment above
+    // target_application: required by the in-flight git probe's per-repo grouping
+// (SD-LEO-INFRA-CORRECTION-DELIVERY-PATH-001-B FR-3/FR-7). Without it every row reads undefined,
+// the batch collapses into one group and is probed against EHG_Engineer regardless of target —
+// a wrong-repo false CLEAR. Zero live impact today only because the one non-Engineer QF is
+// in_progress while this lane filters status='open'; correct by luck is not correct.
+const QF_CANDIDATE_COLUMNS = 'id, status, pr_url, commit_sha, created_at, routing_tier, title, description, severity, not_before, factory_lane, owner, release_condition, target_application'; // schema-lint-disable-line: factory_lane staged, see comment above
     let { data: qfs, error: qfErr } = await sb
       .from('quick_fixes')
       .select(QF_CANDIDATE_COLUMNS)

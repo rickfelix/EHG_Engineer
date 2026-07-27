@@ -40,7 +40,7 @@ import { isLeadDecisionPaused } from '../status-helpers.js';
  * short-circuit, no-network-under-VITEST, and fail-open on every fault. An empty Set withholds
  * nothing, which is exactly the pre-existing behaviour.
  */
-async function computeInFlightQfIds(quickFixes) {
+export async function computeInFlightQfIds(quickFixes) {
   const ids = new Set();
   if (!Array.isArray(quickFixes) || quickFixes.length === 0) return ids;
   try {
