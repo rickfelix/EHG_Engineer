@@ -85,6 +85,11 @@ const markerPath = path.join(pidsDir, `tick-${sessionId}.json`);
 
 // ── Marker management ────────────────────────────────────────────────────────
 
+// Captured ONCE. The marker is rewritten on parent-PID adoption (see parentInterval below), and
+// started_at means "when this tick daemon started" — recomputing it per write would silently
+// convert it into "time of last rewrite" for any reader that treats it as a daemon age.
+const markerStartedAt = new Date().toISOString();
+
 function writeMarker() {
   try {
     fs.mkdirSync(pidsDir, { recursive: true });
@@ -92,7 +97,7 @@ function writeMarker() {
       session_id: sessionId,
       tick_pid: process.pid,
       cc_parent_pid: parentPid,
-      started_at: new Date().toISOString(),
+      started_at: markerStartedAt,
       hostname: require('os').hostname(),
     };
     fs.writeFileSync(markerPath, JSON.stringify(marker, null, 2));
@@ -518,6 +523,16 @@ const parentInterval = setInterval(async () => {
   }
   if (rediscovered) {
     parentPid = rediscovered; // adopt the live PID; keep ticking
+    // QF-20260727-703: PERSIST the adoption. lib/fleet/claimant-liveness.cjs treats this marker's
+    // cc_parent_pid as its STRONGEST signal ("the only artifact that ties a pid back to the session
+    // that owns it") and it is that classifier's ONLY path to a DEAD verdict — every other path
+    // fails open to INDETERMINATE precisely because a recorded pid goes stale on rotation. The
+    // marker was written once at spawn, so adopting in memory alone left it naming the DEAD pid:
+    // a session that survives a /clear, reconnect or compaction then classified DEAD while alive,
+    // and its claims refused or reaped. Only long-lived sessions rotate their PID, so the failure
+    // was INVERTED WITH USEFULNESS — the more work a seat did, the likelier it got reaped.
+    // rediscoverParentPid() has already verified this pid is live, so the value written is sound.
+    writeMarker();
     parentMissCount = 0;
     return;
   }
