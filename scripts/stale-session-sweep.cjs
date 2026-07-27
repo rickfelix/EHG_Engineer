@@ -2601,6 +2601,20 @@ async function main() {
       if (!error) {
         const tag = evict.status === 'ACTIVE' ? ' (was active)' : '';
         await resetSdPhaseOnRelease(sdId, 'SWEEP_CONFLICT_RESOLUTION');
+        // SD-LEO-INFRA-DISPATCH-DELIVERY-INTEGRITY-001: THE MIRROR OF THE STRANDING CLASS.
+        // The UPDATE above clears the SEAT POINTER (claude_sessions.sd_key) and
+        // resetSdPhaseOnRelease handles strategic_directives_v2 — NEITHER touches
+        // quick_fixes.claiming_session_id. So evicting a QF claimant left the seat reading IDLE
+        // while still formally HOLDING the quick-fix: the worker looks free to the self-claim path
+        // and the idle-QF hint, and can take a second item while owning the first (double-hold).
+        // Same invariant as the strand, opposite direction — two surfaces record one claim and are
+        // written by different legs. Observed live 2026-07-27 on QF-20260726-757.
+        if (/^QF-/.test(sdId)) {
+          const { clearAndReopenQf } = await import('../lib/fleet/best-effort-release.mjs');
+          // CAS on the EVICTED holder so a concurrent re-claim by the keeper is never clobbered.
+          // The four-column guard still refuses any row carrying real work.
+          await clearAndReopenQf(supabase, sdId, { expectedHolder: evict.session_id });
+        }
         actions.push('CONFLICT on ' + sdId + ': released ' + evict.session_id + tag + ' (kept ' + keeper.session_id + ')');
 
         // Send coordination message to the evicted session so it picks up other work
