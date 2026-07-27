@@ -36,8 +36,37 @@
 -- deliberately distinct from the 300s liveness/claim threshold in
 -- lib/claim/stale-threshold.js (two-threshold model, SD-LEO-INFRA-EXPOSE-CLAIM-OWNER-001 FR-2).
 --
--- Rollback: replay 20260526_v_active_sessions_expose_liveness.sql verbatim.
+-- Rollback: replay 20260727_v_active_sessions_no_qf_fanout.sql verbatim (NOT the 20260526 file --
+-- see the rebase note below; rolling back to 20260526 would re-open the QF fan-out).
 -- No data migration (read-model view only).
+--
+-- ─────────────────────────────────────────────────────────────────────────────────────────────
+-- REBASED 2026-07-27 ONTO QF-20260727-574, WHICH LANDED ON MAIN WHILE THIS SD WAS IN FLIGHT.
+--
+-- TWO FULL `CREATE OR REPLACE VIEW v_active_sessions` STATEMENTS, SAME DAY, SAME VIEW. Git merged
+-- them without a conflict because they are SEPARATE FILES -- but a view has ONE definition, so
+-- whichever is applied last wins OUTRIGHT. This file previously carried the pre-fanout-fix body
+-- (a plain `LEFT JOIN quick_fixes qf_active`), so applying it after QF-20260727-574 would have
+-- SILENTLY REVERTED that fix and restored duplicate sessions on the chairman's page. A clean
+-- git merge is not evidence of semantic compatibility.
+--
+-- MEASURED, NOT ASSUMED. Read live at 2026-07-27T20:5xZ, BEFORE editing:
+--   process_alive_at / updated_at / expected_silence_until / pid_validated_at -> ALL MISSING
+--   qf_id / qf_title / qf_status                                             -> PRESENT
+--   duplicated session_ids in 1000 sampled rows                              -> 0
+-- i.e. the live view is QF-20260727-574's definition, and FR-2d IS NOT APPLIED. The ladder is
+-- still silently degraded in production right now.
+--
+-- WHY THAT MATTERS FOR THIS SD SPECIFICALLY. The FR-2d test asserts the migration TEXT (hermetic)
+-- and its live-parity block ABSTAINS with no designated non-prod target, so NOTHING in CI can
+-- observe whether this view was ever applied. Shipping on a green suite alone would reproduce, in
+-- this SD, the exact failure it was written to eliminate: a documented partial that reads complete.
+-- THIS FILE BEING MERGED IS NOT THE FIX TAKING EFFECT -- it must be APPLIED to the database.
+--
+-- The composition below is the sibling's LATERAL body with FR-2d's four `_cs.*` columns
+-- tail-appended. Both prior definitions descend from 20260526 and are otherwise character-identical,
+-- so this is the union of the two, not a third variant.
+-- ─────────────────────────────────────────────────────────────────────────────────────────────
 
 CREATE OR REPLACE VIEW v_active_sessions AS
 SELECT _v.id,
@@ -135,7 +164,18 @@ SELECT _v.id,
            FROM claude_sessions cs
              LEFT JOIN strategic_directives_v2 sd ON cs.sd_key = sd.sd_key
              LEFT JOIN quick_fixes qf ON cs.sd_key = qf.id
-             LEFT JOIN quick_fixes qf_active ON qf_active.claiming_session_id = cs.session_id AND (qf_active.status = ANY (ARRAY['open'::text, 'in_progress'::text]))
+             -- REBASED ONTO QF-20260727-574 (see header). This LATERAL ... LIMIT 1 is that fix,
+             -- carried VERBATIM. It was a plain `LEFT JOIN quick_fixes qf_active ON ...` here until
+             -- 2026-07-27; against a non-unique right side that multiplies rows, so a session
+             -- holding N open QFs rendered N times on the chairman's page.
+             LEFT JOIN LATERAL (
+                            SELECT q.id, q.title, q.status
+                              FROM quick_fixes q
+                             WHERE q.claiming_session_id = cs.session_id
+                               AND q.status = ANY (ARRAY['open'::text, 'in_progress'::text])
+                             ORDER BY (q.status = 'in_progress'::text) DESC, q.created_at ASC, q.id ASC
+                             LIMIT 1
+                          ) qf_active ON true
           WHERE cs.status <> 'released'::text
           ORDER BY cs.track, cs.claimed_at DESC) _v
      LEFT JOIN claude_sessions _cs ON _cs.session_id = _v.session_id;
