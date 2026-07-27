@@ -173,6 +173,65 @@ function parseArgs(argv) {
   return { flags, positional };
 }
 
+/**
+ * QF-20260727-380: send the coordinator's reply and VERIFY delivery, before anything retires the
+ * advisory. Any failure exits non-zero with the advisory still unactioned — a dropped body must
+ * never be indistinguishable from an answered one.
+ *
+ * (B) NON-UUID SENDERS ARE REPLIABLE NOW. Advisories are not all session-emitted: measured over a
+ * 500-row sample (a FLOOR, not the population — PostgREST caps at 1000 and the sample was not
+ * paginated), 73 adam_advisory rows carried sender_session=null and 4 carried the literal
+ * 'adam-coordinator-health-cron' — ~15% with no repliable sender. The old guard ran isFullUuid on
+ * the ORIGINATOR and refused outright, which made the coordinator structurally unable to answer its
+ * own governance probes through the lane they arrive on. resolveAdamReplyTarget already resolves the
+ * live Adam via getActiveAdamId and only falls back to the originator, so the fix is simply to
+ * validate the RESOLVED TARGET instead of the originator.
+ *
+ * Deliberately NOT done (the QF names this as the wrong fix): widening coordinator-reply.cjs to
+ * accept a non-UUID target. That would write a row nothing can deliver — converting a loud refusal
+ * into the silent drop this whole change exists to remove. When no live Adam can be resolved we
+ * fail LOUD and leave the advisory unactioned.
+ *
+ * @returns {Promise<{replyId:string, adamSession:string, correlationId:string}>}
+ */
+async function deliverReplyOrExit(supabase, { adv, replyBody, coordinatorSession }) {
+  if (!replyBody) { console.error('ERROR: --reply requires a body.'); process.exit(2); }
+  const originator = adv.sender_session;
+  const correlationId = adv.payload && adv.payload.correlation_id;
+  if (!correlationId) { console.error('ERROR: advisory carries no payload.correlation_id (not replyable).'); process.exit(1); }
+
+  // FR-1: target the CURRENT live Adam, never a stale originating session.
+  const { target: adamSession, retargeted } = await resolveAdamReplyTarget(supabase, originator);
+  if (!isFullUuid(adamSession)) {
+    console.error(
+      `ERROR: no live Adam session to reply to (advisory sender_session ${JSON.stringify(originator)} `
+      + 'is not a full UUID, and no session with role=adam is currently live). '
+      + 'The advisory was NOT actioned and the reply body was NOT discarded — re-run once an Adam session is up.'
+    );
+    process.exit(1);
+  }
+  if (retargeted) {
+    console.log(`  ↻ re-targeted from ${isFullUuid(originator) ? 'stale originator' : 'non-session sender'} ${JSON.stringify(originator)} → live Adam ${adamSession}`);
+    // FR-2: recover any prior unread inbound stuck at the stale originator. Only meaningful for a
+    // real session id — a cron sender string was never a deliverable target to begin with.
+    if (isFullUuid(originator)) {
+      const rec = await retargetStaleAdamInbound(supabase, { staleOriginator: originator, liveAdam: adamSession });
+      if (rec.error) console.error('  WARN: stuck-inbound recovery error:', rec.error);
+      else if (rec.retargeted > 0) console.log(`  ↻ recovered ${rec.retargeted} prior unread message(s) to the live Adam`);
+    }
+  }
+
+  const { data, error } = await sendCoordinatorReply(supabase, { coordinatorSession, workerSession: adamSession, correlationId, body: replyBody });
+  if (error) { console.error('ERROR: failed to send reply (advisory NOT actioned):', error.message); process.exit(1); }
+  // FR-3: verify delivery (send != delivered) — fail loud if the row cannot be confirmed.
+  const delivered = await verifyReplyDelivered(supabase, data && data.id);
+  if (!delivered) {
+    console.error('ERROR: reply send reported success but the row could not be confirmed (delivery NOT verified) — failing loud, advisory NOT actioned.');
+    process.exit(1);
+  }
+  return { replyId: data.id, adamSession, correlationId };
+}
+
 async function main() {
   const { flags, positional } = parseArgs(process.argv);
   const advisoryId = typeof flags.advisory === 'string' ? flags.advisory : null;
@@ -195,6 +254,19 @@ async function main() {
   const { row: adv, error: fErr } = await fetchAdvisory(supabase, advisoryId);
   if (fErr) { console.error('ERROR: advisory lookup failed:', fErr.message); process.exit(1); }
   if (!adv) { console.error('ERROR: advisory not found:', advisoryId); process.exit(1); }
+
+  // QF-20260727-380 (A) DELIVER BEFORE RETIRING. actioned_at used to be stamped first and the
+  // reply attempted second, so a failed reply left the advisory reading ACTIONED to every gauge
+  // (the drain loop, the QF-298 gauge, the relay-drop gauge) with the response body discarded —
+  // a ~2000-char substantive answer was lost that way on 2026-07-27. "Actioned" must never mean
+  // "answered" by accident, so when a reply is requested the delivery is verified FIRST and any
+  // failure exits non-zero with the advisory STILL UNACTIONED for the drain loop to retry.
+  // The reply-less ack path and the COORDINATOR_TWOWAY_V2=off path are deliberately unchanged.
+  const twoWayEnabled = isTwoWayV2Enabled();
+  let replyOutcome = null;
+  if (wantsReply && twoWayEnabled) {
+    replyOutcome = await deliverReplyOrExit(supabase, { adv, replyBody, coordinatorSession });
+  }
 
   // Stage 2: stamp actioned_at — the only thing that retires the advisory (idempotent).
   // SD-LEO-FIX-SOLOMON-MULTI-PART-001 (FR-3): resolve the FULL multi-part group this
@@ -241,33 +313,15 @@ async function main() {
   }
 
   if (wantsReply) {
-    if (!isTwoWayV2Enabled()) {
+    if (!twoWayEnabled) {
       console.error('NOTE: --reply skipped — COORDINATOR_TWOWAY_V2 is OFF (advisory was still actioned).');
       process.exit(0);
     }
-    if (!replyBody) { console.error('ERROR: --reply requires a body.'); process.exit(2); }
-    const originator = adv.sender_session;
-    const correlationId = adv.payload && adv.payload.correlation_id;
-    if (!isFullUuid(originator)) { console.error('ERROR: advisory sender_session is not a full UUID:', JSON.stringify(originator)); process.exit(1); }
-    if (!correlationId) { console.error('ERROR: advisory carries no payload.correlation_id (not replyable).'); process.exit(1); }
-    // FR-1: target the CURRENT live Adam, never a stale originating session.
-    const { target: adamSession, retargeted } = await resolveAdamReplyTarget(supabase, originator);
-    if (retargeted) {
-      console.log(`  ↻ re-targeted from stale originator ${originator} → live Adam ${adamSession}`);
-      // FR-2: recover any prior unread inbound stuck at the stale originator.
-      const rec = await retargetStaleAdamInbound(supabase, { staleOriginator: originator, liveAdam: adamSession });
-      if (rec.error) console.error('  WARN: stuck-inbound recovery error:', rec.error);
-      else if (rec.retargeted > 0) console.log(`  ↻ recovered ${rec.retargeted} prior unread message(s) to the live Adam`);
-    }
-    const { data, error } = await sendCoordinatorReply(supabase, { coordinatorSession, workerSession: adamSession, correlationId, body: replyBody });
-    if (error) { console.error('ERROR: failed to send reply:', error.message); process.exit(1); }
-    // FR-3: verify delivery (send != delivered) — fail loud if the row cannot be confirmed.
-    const delivered = await verifyReplyDelivered(supabase, data && data.id);
-    if (!delivered) { console.error('ERROR: reply send reported success but the row could not be confirmed (delivery NOT verified) — failing loud.'); process.exit(1); }
+    // The send + delivery verification already happened above, BEFORE the advisory was retired.
     console.log('✓ Coordinator reply sent to Adam (delivery verified)');
-    console.log('  reply_id:', data.id);
-    console.log('  to_adam:', adamSession);
-    console.log('  reply_to:', correlationId);
+    console.log('  reply_id:', replyOutcome.replyId);
+    console.log('  to_adam:', replyOutcome.adamSession);
+    console.log('  reply_to:', replyOutcome.correlationId);
   }
 }
 
