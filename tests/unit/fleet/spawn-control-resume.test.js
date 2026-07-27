@@ -11,7 +11,7 @@ import { resolveClaudeCmd, resolveRepoRoot } from '../../../lib/fleet/build-sess
 describe('buildLiveSpawnInvocation --resume (via canonical buildSessionLaunch)', () => {
   it('appends [--resume, <uuid>] after the base argv (new-tab -d <root> -- <claude>)', () => {
     const inv = buildLiveSpawnInvocation({ role: 'worker', callsign: 'Worker-1', resumeUuid: 'abc-123' });
-    expect(inv.args).toEqual(['-w', 'new', 'new-tab', '-d', resolveRepoRoot(), '--', resolveClaudeCmd(), '--resume', 'abc-123']);
+    expect(inv.args).toEqual(['-w', 'new', 'new-tab', '-d', resolveRepoRoot(), '--', resolveClaudeCmd(), '--permission-mode', 'auto', '--resume', 'abc-123']);
     expect(inv.program).toBe('wt.exe');
   });
 
@@ -20,7 +20,7 @@ describe('buildLiveSpawnInvocation --resume (via canonical buildSessionLaunch)',
     // what the child will register as. uuidFn is injected purely for determinism.
     const MINTED = '11111111-2222-4333-8444-555555555555';
     const inv = buildLiveSpawnInvocation({ role: 'worker', callsign: 'Worker-1' }, { uuidFn: () => MINTED });
-    expect(inv.args).toEqual(['-w', 'new', 'new-tab', '-d', resolveRepoRoot(), '--', resolveClaudeCmd(), '--session-id', MINTED]);
+    expect(inv.args).toEqual(['-w', 'new', 'new-tab', '-d', resolveRepoRoot(), '--', resolveClaudeCmd(), '--permission-mode', 'auto', '--session-id', MINTED]);
     expect(inv.sessionId).toBe(MINTED);
     expect(inv.cwd).toBe(resolveRepoRoot());
     expect(inv.persistent).toBe(true);
@@ -50,7 +50,7 @@ describe('buildLiveSpawnInvocation --resume (via canonical buildSessionLaunch)',
 
   it('coerces a non-string resume token via String() (never leaks a raw object into argv)', () => {
     const inv = buildLiveSpawnInvocation({ callsign: 'W', resumeUuid: 42 });
-    expect(inv.args).toEqual(['-w', 'new', 'new-tab', '-d', resolveRepoRoot(), '--', resolveClaudeCmd(), '--resume', '42']);
+    expect(inv.args).toEqual(['-w', 'new', 'new-tab', '-d', resolveRepoRoot(), '--', resolveClaudeCmd(), '--permission-mode', 'auto', '--resume', '42']);
   });
 
   it('injects CLAUDE_CONFIG_DIR only into the returned env, never process.env, and never as an argv token', () => {
