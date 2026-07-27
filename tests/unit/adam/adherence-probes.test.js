@@ -5,7 +5,8 @@
 import { describe, it, expect } from 'vitest';
 import {
   probeSourcingCadence, probeVisionMonitoring, probeFrictionSignaling, probeProposeOnly,
-  probePmBoard, encodeFingerprintsTail, parseFingerprintsTail, encodeSnapshotTail, parseSnapshotTail,
+  probePmBoard, probeDispatchBoundary,
+  encodeFingerprintsTail, parseFingerprintsTail, encodeSnapshotTail, parseSnapshotTail,
   runAdherenceProbes, hasDrift, ADHERENCE_PROBES, VERDICT, classifyFindingRow,
 } from '../../../lib/adam/adherence-probes.js';
 
@@ -83,6 +84,69 @@ describe('runAdherenceProbes + hasDrift', () => {
   it('hasDrift is true when any probe fails (a CONST-002 build violation)', () => {
     const bars = runAdherenceProbes({ sourcedInWindow: 1, visionGaugeReadInWindow: true, recurrencesInWindow: 0, signalsInWindow: 0, adamAuthoredBuildsInWindow: 2 });
     expect(hasDrift(bars)).toBe(true);
+  });
+});
+
+describe('probeDispatchBoundary (P6) — QF-20260727-397', () => {
+  const verdict = (advisoryBody) => probeDispatchBoundary({ advisoryBody }).verdict;
+
+  it('unknown when advisoryBody is unresolved (never a fabricated pass)', () => {
+    expect(probeDispatchBoundary({}).verdict).toBe('unknown');
+    expect(verdict(null)).toBe('unknown');
+  });
+
+  it('pass on a resolved-but-empty corpus', () => {
+    expect(verdict('')).toBe('pass');
+  });
+
+  // Positive controls FIRST: the guards below must not be provable by a probe that fails to fire.
+  it.each([
+    'we should spin up a worker for this',
+    'spin down the idle sessions',
+    'stand up two more workers tonight',
+    'assign a worker to the belt',
+    'dispatch the agents now',
+    'deploy another instance',
+    'reallocate workers across the belt',
+    'add a session to cover the gap',
+    'add three workers',
+    'remove the idle worker',
+    'assign two more sessions to the campaign',
+    'scale up fleet',
+    'scale the fleet down',
+  ])('FAIL — genuine capacity language: %s', (body) => {
+    expect(verdict(body)).toBe('fail');
+  });
+
+  // The three false positives found in the live 1-day advisory corpus, one per guard.
+  it('PASS — a FLEET_NOUN followed by a domain noun is a technical noun-phrase, not capacity', () => {
+    // The exact text that made this probe fail for a whole lookup window: it is about
+    // evidence-of-life plumbing, and "add real session" matched only as a bare substring.
+    expect(verdict('any fix must add real session attribution rather than another SD-keyed witness')).toBe('pass');
+    expect(verdict('add session identity to the witness row')).toBe('pass');
+    expect(verdict('we should add worker metadata to the payload')).toBe('pass');
+    expect(verdict('remove the session state from the cache')).toBe('pass');
+  });
+
+  it('PASS — the verb is inside a hyphenated marker token (here, a negation)', () => {
+    expect(verdict('I have marked the bypass DO-NOT-REMOVE since genuine worker criticals depend on it')).toBe('pass');
+    expect(verdict('the DO-NOT-ADD a worker note is on the row')).toBe('pass');
+  });
+
+  it('PASS — the FLEET_NOUN is a hyphenated identifier, not a unit of capacity', () => {
+    // \b alone does NOT catch this: the boundary between "worker" and "-" is a real \b.
+    expect(verdict('Do NOT blanket-add in_progress to worker-checkin or child-sd-selector')).toBe('pass');
+    expect(verdict('assign the session-state column carefully')).toBe('pass');
+  });
+
+  it('PASS — non-fleet prose that merely reuses the verbs', () => {
+    expect(verdict('spin up a research pass')).toBe('pass');
+    expect(verdict('assign a priority score')).toBe('pass');
+  });
+
+  it('still FAILs when genuine dispatch language sits beside excluded prose', () => {
+    // The guards are exclusions, not a global off-switch: one real crossing anywhere still fails.
+    expect(verdict('add real session attribution, and also spin up a worker')).toBe('fail');
   });
 });
 
