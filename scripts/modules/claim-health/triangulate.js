@@ -370,6 +370,53 @@ export async function triangulate(supabase, sdKey = null, opts = {}) {
     if (signals.pidAlive) evidenceOfLifeSignals.push('pid_alive');
     const hasEvidenceOfLife = evidenceOfLifeSignals.length > 0;
 
+    // SD-LEO-INFRA-RECLAIMSAFE-CANNOT-TELL-001 / FR-1: report ATTRIBUTION, not just presence.
+    //
+    // hasEvidenceOfLife above answers "was SOMEONE alive on this SD". Callers were consuming it
+    // as "is it safe for THIS session to reclaim" — a different question — because three of the
+    // witnesses are keyed on the SD and carry no session identity at all: branch_present and
+    // plan_file_present come from SD-keyed name matching, and recent_sub_agent_activity comes
+    // from a query that selects only sd_id (sub_agent_execution_results has no session column).
+    // That conflation fails BOTH ways: a session is blocked from reclaiming its own claim
+    // because its own branch reads as somebody else's life, and the protection is absent
+    // precisely when no branch exists yet — early in a claim, when a strand is most likely.
+    //
+    // This block is deliberately ADDITIVE. reclaimSafe and evidenceOfLifeSignals keep their
+    // existing values and meaning so every current consumer behaves identically; the new
+    // question is answered by new fields, and the CONSUMERS decide (see FR-2 / FR-3). If you
+    // find yourself changing either of those two, stop — that is redefining the field in place,
+    // which this SD explicitly rejects.
+    const attributedEvidence = [];
+    const unattributedEvidence = [];
+    const evidenceSessionIds = new Set();
+    // SD-keyed witnesses: they prove activity exists, never whose it is.
+    for (const sig of ['branch_present', 'plan_file_present', 'recent_sub_agent_activity']) {
+      if (evidenceOfLifeSignals.includes(sig)) unattributedEvidence.push(sig);
+    }
+    // Session-attributed witnesses. sibling_session_on_branch already carries session ids via
+    // buildSiblingSessionMap (and already excludes mySessionId); tick_recent / pid_alive are
+    // derived from the claim holder's own row, so they attribute to that session.
+    if (evidenceOfLifeSignals.includes('sibling_session_on_branch')) {
+      attributedEvidence.push('sibling_session_on_branch');
+      for (const s of otherSiblings) evidenceSessionIds.add(s);
+    }
+    for (const sig of ['tick_recent', 'pid_alive']) {
+      if (evidenceOfLifeSignals.includes(sig)) {
+        attributedEvidence.push(sig);
+        if (sessionClaim?.session_id) evidenceSessionIds.add(sessionClaim.session_id);
+      }
+    }
+    const evidenceAttribution = {
+      attributed: attributedEvidence,
+      unattributed: unattributedEvidence,
+      // Sessions the attributable evidence points at. mySessionId is already excluded from the
+      // sibling set upstream, so a non-empty list here means SOMEONE ELSE is demonstrably alive.
+      sessionIds: [...evidenceSessionIds],
+      // True when evidence exists but NONE of it identifies a session — the case where the old
+      // predicate silently answered a question it could not actually answer.
+      allUnattributed: hasEvidenceOfLife && attributedEvidence.length === 0
+    };
+
     const entry = {
       sdKey: key,
       signals,
@@ -383,6 +430,7 @@ export async function triangulate(supabase, sdKey = null, opts = {}) {
       worktreePath: worktree?.path || null,
       worktreeHasChanges: worktree?.hasChanges || false,
       evidenceOfLifeSignals,           // FR1: surfaces which signals fired
+      evidenceAttribution,             // SD-...-RECLAIMSAFE-CANNOT-TELL-001 FR-1: WHOSE life, additive
       siblingSessionIds: [...otherSiblings]
     };
 
@@ -471,6 +519,10 @@ export async function checkPreClaimEvidence(supabase, sdKey, opts = {}) {
       allowReclaim: allow,
       evidence,
       classification: entry.category,
+      // SD-LEO-INFRA-RECLAIMSAFE-CANNOT-TELL-001 / FR-1: surfaced at the gate's own return so
+      // the two unwired consumers (sd-start.js, stale-session-sweep.cjs) do not have to reach
+      // into `entry` to learn WHOSE evidence blocked them. allowReclaim is UNCHANGED.
+      evidenceAttribution: entry.evidenceAttribution || null,
       entry
     };
   }
@@ -479,6 +531,7 @@ export async function checkPreClaimEvidence(supabase, sdKey, opts = {}) {
     allowReclaim: true,
     evidence: [],
     classification: null,
+    evidenceAttribution: null,
     entry: null
   };
 }

@@ -89,7 +89,18 @@ describe('triangulate() — AC1 + AC4: evidence-of-life prevents hostile reclaim
     expect(result.ghost).toHaveLength(0);
     const orph = result.orphaned.find(o => o.sdKey === SD_KEY);
     expect(orph).toBeTruthy();
+    // SD-LEO-INFRA-RECLAIMSAFE-CANNOT-TELL-001 (FR-4): this assertion is STILL CORRECT after
+    // that SD, and must not be flipped. That SD is about the fact that
+    // recent_sub_agent_activity cannot say WHOSE activity it is (it comes from a query
+    // selecting only sd_id), so `reclaimSafe` here answers "was someone alive", not "may I
+    // reclaim". The fix is ADDITIVE — entry.evidenceAttribution now reports that this witness
+    // is UNATTRIBUTED, and the CONSUMERS (sd-start.js, stale-session-sweep.cjs) decide from
+    // that. reclaimSafe deliberately keeps its old value and meaning, because BaseExecutor
+    // consumes the same computation. If a change makes this line fail, the additive premise
+    // has been violated — stop rather than editing the expected value.
     expect(orph.reclaimSafe).toBe(false);
+    expect(orph.evidenceAttribution.unattributed).toContain('recent_sub_agent_activity');
+    expect(orph.evidenceAttribution.allUnattributed).toBe(true);
     expect(orph.autoReleasable).toBe(false);
     expect(orph.signals.recentSubAgentActivity).toBe(true);
     expect(orph.evidenceOfLifeSignals).toContain('recent_sub_agent_activity');
@@ -109,7 +120,13 @@ describe('triangulate() — AC1 + AC4: evidence-of-life prevents hostile reclaim
     const result = await triangulate(supabase, SD_KEY, { mySessionId: 'reclaimer-sess' });
     const orph = result.orphaned.find(o => o.sdKey === SD_KEY);
     expect(orph).toBeTruthy();
+    // SD-LEO-INFRA-RECLAIMSAFE-CANNOT-TELL-001 (FR-4): also still correct, and also must not be
+    // flipped. Note this is the FALSE-POSITIVE direction that SD names — protection is absent
+    // here (reclaimSafe=true) precisely because no branch/plan/activity exists yet, which is
+    // early in a claim, when a strand is most likely. The gate cannot fix that alone; the
+    // consumer-side fail-closed CAS is what actually prevents a steal.
     expect(orph.reclaimSafe).toBe(true);
+    expect(orph.evidenceAttribution.allUnattributed).toBe(false);
     expect(orph.autoReleasable).toBe(true);
     expect(orph.action).toMatch(/Re-claim with: npm run sd:start/);
   });

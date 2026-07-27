@@ -2613,12 +2613,48 @@ async function main() {
         const { checkPreClaimEvidence } = await import('./modules/claim-health/triangulate.js');
         const evidence = await checkPreClaimEvidence(supabase, s.sd_key, { mySessionId: s.session_id });
         if (!evidence.allowReclaim) {
+          // SD-LEO-INFRA-RECLAIMSAFE-CANNOT-TELL-001 / FR-3: the sweep asks a DIFFERENT question
+          // from every other consumer of this gate. It is not asking "may I take this" — it is
+          // iterating OTHER sessions' claims asking "may I release THIS one". So the relevant
+          // question is not whether evidence exists, but whether the evidence was produced by a
+          // session OTHER than the dead one under evaluation.
+          //
+          // Three of the gate's witnesses are SD-keyed and name nobody (branch/plan/sub-agent
+          // activity). Holding on those alone means a verifiably dead session's claim stays held
+          // by its OWN leftover footprint — the strand this SD is about, seen from the reaper
+          // side. Conversely, evidence attributed to a live PEER must still hold.
+          //
+          // NOTE: resolveSelfOwnership (used by sd-start and BaseExecutor) is deliberately NOT
+          // used here. It answers "am I the owner", but this loop's cwd has no relationship to
+          // the SDs it evaluates — applying it would be a category error.
+          //
+          // Sibling attribution is liveness-filtered upstream (buildSiblingSessionMap selects
+          // only sessions with a recent heartbeat), so a named peer is a live peer.
+          // Decision lives in lib/claim/evidence-attribution-decisions.mjs so the tests
+          // exercise THIS function rather than a copy of it. An earlier cut inlined it and
+          // tested a re-implementation; a negative control showed that reverting this whole
+          // block produced ZERO test failures — green tests protecting nothing.
+          const { sweepShouldHoldRelease } = await import('../lib/claim/evidence-attribution-decisions.mjs');
+          const att = evidence.evidenceAttribution;
+          const otherLiveSessions = (att?.sessionIds || []).filter(id => id !== s.session_id);
+          if (sweepShouldHoldRelease({ evaluatedSessionId: s.session_id, evidenceAttribution: att })) {
+            warnings.push(
+              'WIP_GUARD_CROSS_SIGNAL: ' + s.session_id + ' SD=' + s.sd_key +
+              ' has evidence-of-life (' + (evidence.evidence || []).join(',') +
+              ') attributed to LIVE peer(s) [' + otherLiveSessions.join(',') + ']' +
+              ' classification=' + evidence.classification + ' — HOLDING release (SD-LEO-FIX-CROSS-SIGNAL-CLAIM-001)'
+            );
+            continue;
+          }
+          // Nothing that fired names a session other than the dead one under evaluation. The
+          // heartbeat / PID / MC gates above already established THIS session is gone, so the
+          // remaining evidence is its own residue and must not keep its claim held.
           warnings.push(
-            'WIP_GUARD_CROSS_SIGNAL: ' + s.session_id + ' SD=' + s.sd_key +
-            ' has evidence-of-life (' + (evidence.evidence || []).join(',') +
-            ') classification=' + evidence.classification + ' — HOLDING release (SD-LEO-FIX-CROSS-SIGNAL-CLAIM-001)'
+            'CROSS_SIGNAL_UNATTRIBUTED: ' + s.session_id + ' SD=' + s.sd_key +
+            ' evidence (' + (evidence.evidence || []).join(',') + ') names no OTHER live session' +
+            ' [unattributed: ' + ((att?.unattributed || []).join(',') || 'none') + '] —' +
+            ' proceeding with release (SD-LEO-INFRA-RECLAIMSAFE-CANNOT-TELL-001 FR-3)'
           );
-          continue;
         }
       } catch (egErr) {
         // Evidence gate must fail-open: if the import or query fails, fall through to
