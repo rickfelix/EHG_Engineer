@@ -22,10 +22,16 @@
 import { execFile } from 'node:child_process';
 import { promisify } from 'node:util';
 import { reapEmptyConsoles } from '../lib/fleet/console-reaper.mjs';
-import { buildParentageRecord } from '../lib/fleet/console-parentage.mjs';
+import { buildParentageRecord, persistParentageRecords } from '../lib/fleet/console-parentage.mjs';
+import { appendFileSync, readFileSync, existsSync } from 'node:fs';
+import path from 'node:path';
+import { fileURLToPath } from 'node:url';
 
 const execFileAsync = promisify(execFile);
 const TAG = '[console-reaper]';
+const REPO_ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
+/** Append-only parentage log. Durable across the parent's exit, which is the entire requirement. */
+export const PARENTAGE_LOG = path.join(REPO_ROOT, '.claude', 'console-parentage.jsonl');
 export const CONSOLE_IMAGE = 'OpenConsole.exe';
 /** Generous: the FR-5a lesson is that a tight margin on a ~5s enumeration fails 2 runs in 3. */
 export const PROBE_TIMEOUT_MS = 20000;
@@ -109,6 +115,9 @@ export async function runReaperOnce(deps = {}) {
     onLog = (m) => console.log(`${TAG} ${m}`),
     nowIso = new Date().toISOString(),
     dryRun = false,
+    persistParentage = (records) => persistParentageRecords(records, {
+      filePath: PARENTAGE_LOG, appendFileSync, readFileSync, existsSync,
+    }),
   } = deps;
 
   if (!isConsoleReaperEnabled(env)) {
@@ -127,7 +136,11 @@ export async function runReaperOnce(deps = {}) {
   // unidentified, and a console that is occupied now is exactly the one worth attributing.
   const parentage = consoles.map((c) => parentageFor(c, snap.processes, nowIso));
   const attributed = parentage.filter((p) => p.ok).length;
-  onLog(`observed ${consoles.length} console(s); parentage attributed for ${attributed}/${consoles.length}`);
+  // PERSIST NOW, before any kill. Capturing without writing achieves nothing: the record has to
+  // outlive the parent, and the parent is usually gone by the time anyone looks. Fail-open — a
+  // logging failure must never stop a reap.
+  const persisted = persistParentage(parentage);
+  onLog(`observed ${consoles.length} console(s); parentage attributed for ${attributed}/${consoles.length}; persisted ${persisted.written} new`);
 
   const candidates = consoles
     .filter((c) => descendantCountOf(c.pid, snap.processes) === 0)
@@ -135,10 +148,13 @@ export async function runReaperOnce(deps = {}) {
 
   if (dryRun) {
     onLog(`DRY RUN — would reap ${candidates.length} empty console(s): ${candidates.map((c) => c.pid).join(', ') || 'none'}`);
-    return { ran: true, dryRun: true, observed: consoles.length, candidates: candidates.length, parentage };
+    return { ran: true, dryRun: true, observed: consoles.length, candidates: candidates.length, parentage, persisted };
   }
 
   const result = await reapEmptyConsoles(candidates, {
+    // Thread the SAME env the runner gated on, so the primitive's own gate agrees with it
+    // instead of reading a different process.env.
+    env,
     // Re-observe RIGHT BEFORE each kill, from a FRESH snapshot — the whole point is that the scan
     // above is already stale by the time we act on it.
     recheckDescendants: async (pid) => {
@@ -150,7 +166,7 @@ export async function runReaperOnce(deps = {}) {
     onLog,
   });
 
-  return { ran: true, observed: consoles.length, parentage, ...result };
+  return { ran: true, observed: consoles.length, parentage, persisted, ...result };
 }
 
 async function main() {

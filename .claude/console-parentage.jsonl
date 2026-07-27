@@ -1,0 +1,2 @@
+{"console_pid":100,"observed_at":"2026-07-27T16:31:38.716Z","parent_pid":20,"parent_image":"powershell.exe","parent_command_line":"powershell -c ...","grandparent_pid":10,"grandparent_image":"Cursor.exe","attribution":"powershell.exe (via Cursor.exe)"}
+{"console_pid":200,"observed_at":"2026-07-27T16:31:38.716Z","parent_pid":20,"parent_image":"powershell.exe","parent_command_line":"powershell -c ...","grandparent_pid":10,"grandparent_image":"Cursor.exe","attribution":"powershell.exe (via Cursor.exe)"}
