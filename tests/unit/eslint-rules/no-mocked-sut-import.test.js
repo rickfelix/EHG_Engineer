@@ -113,6 +113,17 @@ ruleTester.run('no-mocked-sut-import', rule, {
       errors: [{ messageId: 'pragmaMissingReason' }],
     },
     {
+      name: 'vi.doMock is treated the same as vi.mock',
+      // Shares the same conditional as vi.mock in the rule, but "shares a branch" is an argument,
+      // not evidence — pinned so a future narrowing of that condition is caught.
+      code: [
+        "vi.doMock('./deferred.js', () => ({ run: () => {} }));",
+        "import { run } from './deferred.js';",
+        'export const r = run;',
+      ].join('\n'),
+      errors: [{ messageId: 'mockedSutImport' }],
+    },
+    {
       name: 'jest.mock is treated the same as vi.mock',
       code: [
         "jest.mock('./legacy.js', () => ({ doThing: () => {} }));",

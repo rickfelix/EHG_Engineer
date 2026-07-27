@@ -26,9 +26,21 @@
  * one provably used in an assertion — "used in an assertion" is not decidable from the AST alone.
  * That is why the escape hatch exists and why the rollout is warn-only.
  *
+ * KNOWN BLIND SPOTS beyond the DI case above — real, and listed so nobody assumes wider coverage:
+ *   - DYNAMIC import('./foo.js') is invisible: only static ImportDeclaration nodes are visited.
+ *   - SPECIFIER MISMATCH BY EXTENSION escapes: matching is exact string equality, so
+ *     vi.mock('./foo') paired with import { x } from './foo.js' is missed even though Vitest
+ *     resolves them to the same module. Widening this needs real resolution, not string munging.
+ * Both are untested and unimplemented on purpose — they widen the rule, and widening a heuristic
+ * with a 165-finding backlog is a separate decision from shipping it.
+ *
  * Same 3-part class-guard shape as no-raw-session-coordination-insert.js: rule + driver script
  * (scripts/lint/no-mocked-sut-import-lint.mjs) + dedicated tests. Deliberately NOT registered in
- * eslint.config.js — every sibling class-guard rule is standalone and enforced only via its driver.
+ * eslint.config.js — this repo's `npm run lint` is not invoked by any CI workflow, so registering
+ * it there would enforce nothing. Real enforcement is `npm run lint:mocked-sut-import` and
+ * .github/workflows/no-mocked-sut-import-lint.yml, which runs the driver on every PR touching
+ * tests/. Without that workflow the driver would execute only inside its own unit test — a
+ * detection control that never runs unattended, which for THIS rule would be self-refuting.
  *
  * Escape hatch (REQUIRES a non-empty REASON after the `--` separator):
  *

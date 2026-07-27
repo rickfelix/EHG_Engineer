@@ -21,7 +21,7 @@
  */
 
 import { Linter } from 'eslint';
-import { execSync } from 'node:child_process';
+import { execFileSync } from 'node:child_process';
 import fs from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -75,8 +75,12 @@ function candidateFilesAll(root) {
 }
 
 function candidateFilesDiff(root) {
-  const base = execSync('git merge-base HEAD origin/main', { cwd: root, encoding: 'utf8' }).trim();
-  const names = execSync(`git diff --name-only ${base}...HEAD`, { cwd: root, encoding: 'utf8' })
+  // execFileSync, not execSync: neither command needs shell features, so there is no reason to hand
+  // an interpolated string to a shell at all. `base` is git's own SHA output and not attacker-
+  // controlled today, but "safe because of what the output happens to look like" is a weaker
+  // guarantee than "no shell is involved". Matches how this driver's own test invokes it.
+  const base = execFileSync('git', ['merge-base', 'HEAD', 'origin/main'], { cwd: root, encoding: 'utf8' }).trim();
+  const names = execFileSync('git', ['diff', '--name-only', `${base}...HEAD`], { cwd: root, encoding: 'utf8' })
     .split('\n').map((s) => s.trim()).filter(Boolean);
   return names
     .filter((n) => TEST_FILE_RE.test(n) && SCAN_DIRS.some((d) => n.startsWith(`${d}/`)))
