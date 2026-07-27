@@ -13,13 +13,20 @@ import { Router } from 'express';
 import { createClient } from '@supabase/supabase-js';
 import { spawn, relaunchUnderProfile, isLiveEnabled } from '../../lib/fleet/spawn-control.js';
 import { loadDesiredSlots } from '../../lib/fleet/desired-slots-store.js';
-import { computeLiveSlotDrift } from '../../lib/fleet/session-registry-adapter.js';
+import { computeLiveSlotDrift, loadLiveSessionIdentity } from '../../lib/fleet/session-registry-adapter.js';
 import {
   SPAWNABLE_ROLES,
   isSpawnableRole,
   resolveRoleSpawnOpts,
   assertRoleCallsignCompatible,
 } from '../../lib/fleet/role-startup-prompt.js';
+import fleetIdentityPool from '../../scripts/assign-fleet-identities.cjs';
+
+// QF-20260726-607: reuse the coordinator cron's pool + picker rather than inventing a second
+// naming path. assign-fleet-identities.cjs:119-122 states outright that nextAvailable was hoisted
+// and exported so every writer allocates IDENTICALLY -- if two writers diverge,
+// dedupeAssignedCallsigns' string equality breaks and duplicate identities stop reconciling.
+const { NATO, nextAvailable } = fleetIdentityPool;
 
 const router = Router();
 
@@ -77,14 +84,42 @@ export async function relaunchSessionUnderProfile(req, res) {
 }
 
 /**
+ * QF-20260726-607: mint a PROVISIONAL callsign for a spawn the operator did not name.
+ *
+ * Provisional, not authoritative. worker-checkin.cjs (assignFleetIdentityAtCheckin) already mints
+ * the real identity at first check-in via pickCallsignForTier + SET_IDENTITY, and callsignInTierBand
+ * RE-DERIVES a callsign sitting in the wrong tier band -- so a bootstrap name self-heals rather than
+ * sticking as a wrong-tier identity. This exists solely to break a chicken-and-egg: a session with
+ * no callsign gets prompt:null from startup-prompt-selection (the 'unidentifiable' arm, "an
+ * unidentified session must not claim work"), so it never runs /checkin, so it never reaches the
+ * self-assign that would have named it. spawn-control.js:186-188 documents the result in its own
+ * words -- such sessions "came up with nothing to do, heartbeat once, and ghosted".
+ *
+ * Allocates against the SAME live-callsign set spawn() dedups on (spawn-control.js:197-199), so a
+ * minted name can never come back as skipped:already_live -- which would make the button a silent
+ * no-op.
+ */
+export async function mintCallsign(supabase) {
+  const { callsignBySession } = await loadLiveSessionIdentity(supabase);
+  const used = new Set(Object.values(callsignBySession || {}).filter(Boolean));
+  return nextAvailable(NATO, used);
+}
+
+/**
  * POST /api/fleet-actions/add-session — "Add session".
  * Maps 1:1 to spawn-control.js's spawn() for a single ad-hoc (non-manifest) session.
+ *
+ * QF-20260726-607 (chairman): callsign is no longer an operator input. Callsigns are ASSIGNED, not
+ * chosen -- a hand-typed one either collides with a live worker or is silently replaced at first
+ * check-in, and the operator watching the name he typed disappear reasonably concludes the spawn
+ * failed. An explicitly supplied callsign is still honoured for the manifest/canary callers that
+ * legitimately name their slots; only the requirement is dropped.
  */
 export async function addSession(req, res) {
   const supabase = resolveServiceClient(req);
   const { role, callsign, accountProfile } = req.body || {};
-  if (!role || !callsign) {
-    res.status(400).json({ ok: false, reason: 'role and callsign are required' });
+  if (!role) {
+    res.status(400).json({ ok: false, reason: 'role is required' });
     return;
   }
   // SD-LEO-FEAT-FLEET-COLD-START-UX-001 FR-2: role was previously validated for TRUTHINESS ONLY,
@@ -96,7 +131,28 @@ export async function addSession(req, res) {
     res.status(400).json({ ok: false, reason: `role must be one of ${SPAWNABLE_ROLES.join(', ')}` });
     return;
   }
-  const compatible = assertRoleCallsignCompatible(role, callsign);
+
+  // QF-20260726-607 x COLD-START-UX-001 FR-2 — the mint is ROLE-AWARE, and deliberately so.
+  //
+  // A NATO name is right for a worker and WRONG for everything else: the singleton roles already
+  // run under callsign === their role name ('coordinator', 'solomon', 'adam'), which is what
+  // fleet-panel reports for the live rows today. Minting 'Charlie' for a coordinator would invent a
+  // second naming convention for a seat that already has one.
+  //
+  // Both branches must still produce an IDENTIFIABLE callsign, because assertRoleCallsignCompatible
+  // below refuses a callsign-less privileged role through its 'unidentifiable' arm — that refusal is
+  // a security guard (it is what stops an unnamespaced session receiving '/coordinator start'), so
+  // the mint must satisfy it rather than route around it. Verified: classifySessionByCallsign
+  // returns an identifiable kind for every role name, so neither branch weakens the guard.
+  //
+  // A second coordinator therefore comes back from spawn()'s dedup as skipped:already_live, which is
+  // the honest answer for a singleton and is already rendered by describeSpawn.
+  const supplied = typeof callsign === 'string' ? callsign.trim() : '';
+  const resolvedCallsign = supplied || (role === 'worker' ? await mintCallsign(supabase) : role);
+
+  // Compatibility is checked on the RESOLVED callsign, not the request's — a minted name must face
+  // the same guard a typed one does.
+  const compatible = assertRoleCallsignCompatible(role, resolvedCallsign);
   if (!compatible.ok) {
     res.status(400).json({ ok: false, reason: compatible.reason });
     return;
@@ -105,10 +161,12 @@ export async function addSession(req, res) {
   // which is what makes spawn() fall through to callsign-namespace selection. Passing
   // `startupPrompt: undefined` would make the key present and suppress the pointer entirely.
   const result = await spawn(
-    { role, callsign, accountProfile },
+    { role, callsign: resolvedCallsign, accountProfile },
     { supabaseClient: supabase, ...resolveRoleSpawnOpts(role) },
   );
-  res.json({ live: isLiveEnabled(), ...result });
+  // callsign LAST and authoritative: the UI must report the name that was actually spawned, not the
+  // (now absent) one the operator typed.
+  res.json({ live: isLiveEnabled(), ...result, callsign: resolvedCallsign, callsign_minted: !supplied });
 }
 
 /**
