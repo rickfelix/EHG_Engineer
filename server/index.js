@@ -180,6 +180,24 @@ app.use(express.json());
 // DELETES NOTHING. server/public/fleet-ui/session-view.js stays on disk (its unit test still
 // imports it), and rollback is removing this block — one commit, no file resurrection.
 app.all(/^\/fleet-ui\/session-view\.[^/]*$/, (req, res) => {
+  // QF-20260727-484 — WITHOUT THIS LINE THE SOAK CANNOT PRODUCE EVIDENCE. The retirement above
+  // is dispositioned by a seven-day soak in which SILENCE IS THE EVIDENCE, but this server has no
+  // request logging of any kind (no morgan — it is not even a dependency), so a 410 hit wrote
+  // nothing anywhere. Silence was therefore GUARANTEED: at day 7 nobody could distinguish "nobody
+  // hit it" from "we could never have seen it". QF-20260725-096 already carried the warning that
+  // a zero from a file that could not be opened is not a zero — but pinned it on locked browser
+  // history. The real blind spot was server-side and total.
+  //
+  // Scoped to THIS handler on purpose: general request logging on /fleet-ui or on the app is a
+  // different change with a different justification (volume, privacy, noise) and is NOT in scope.
+  // stdout is durable here — scripts/leo-stack.ps1:171 runs the server as `node server.js >
+  // .logs/engineer-<timestamp>.log 2>&1` — so the soak reader has exactly one command:
+  //   grep fleet-ui-410 .logs/engineer-*.log
+  // An empty result now means genuinely unhit, which is the whole point.
+  console.log(
+    `[fleet-ui-410] ${new Date().toISOString()} ${req.method} ${req.originalUrl} ` +
+    `referer=${req.get('referer') || '-'}`
+  );
   res.status(410).type('text/plain').send(
     'Gone — the standalone fleet-ui session view was retired on 2026-07-27 (QF-20260725-096).\n\n' +
     'Session list: the Builder Sessions page in EHG.\n' +
