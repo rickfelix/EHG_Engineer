@@ -1,123 +1,123 @@
 {
-  "generated_at": "2026-07-20T19:47:06.145Z",
-  "git_commit": "9c631a0a",
-  "db_snapshot_hash": "15274e313a3b8c43",
+  "generated_at": "2026-07-27T08:05:26.344Z",
+  "git_commit": "690bf02e",
+  "db_snapshot_hash": "7eabaf04b99ecbde",
   "files": {
     "CLAUDE.md": {
       "type": "full",
       "chars": 19564,
       "estimated_tokens": 4891,
-      "content_hash": "f52ce73a5849af56",
-      "path": "C:\\Users\\rickf\\Projects\\_EHG\\EHG_Engineer\\.worktrees\\qf\\QF-20260720-531\\CLAUDE.md"
+      "content_hash": "6f165f20c4aaf9e0",
+      "path": "C:\\Users\\rickf\\Projects\\_EHG\\EHG_Engineer\\.worktrees\\SD-LEO-INFRA-BLOCKED-WORKER-SELF-RECHECK-001\\CLAUDE.md"
     },
     "CLAUDE_CORE.md": {
       "type": "full",
-      "chars": 92157,
-      "estimated_tokens": 23040,
-      "content_hash": "9b520aa8eb7a1f97",
-      "path": "C:\\Users\\rickf\\Projects\\_EHG\\EHG_Engineer\\.worktrees\\qf\\QF-20260720-531\\CLAUDE_CORE.md"
+      "chars": 92927,
+      "estimated_tokens": 23232,
+      "content_hash": "e88f84c41dd1340f",
+      "path": "C:\\Users\\rickf\\Projects\\_EHG\\EHG_Engineer\\.worktrees\\SD-LEO-INFRA-BLOCKED-WORKER-SELF-RECHECK-001\\CLAUDE_CORE.md"
     },
     "CLAUDE_LEAD.md": {
       "type": "full",
       "chars": 65998,
       "estimated_tokens": 16500,
-      "content_hash": "acb54c2d7e0181c2",
-      "path": "C:\\Users\\rickf\\Projects\\_EHG\\EHG_Engineer\\.worktrees\\qf\\QF-20260720-531\\CLAUDE_LEAD.md"
+      "content_hash": "8034f69fdc01b97e",
+      "path": "C:\\Users\\rickf\\Projects\\_EHG\\EHG_Engineer\\.worktrees\\SD-LEO-INFRA-BLOCKED-WORKER-SELF-RECHECK-001\\CLAUDE_LEAD.md"
     },
     "CLAUDE_PLAN.md": {
       "type": "full",
       "chars": 91830,
       "estimated_tokens": 22958,
-      "content_hash": "f5b7c7b262300a7c",
-      "path": "C:\\Users\\rickf\\Projects\\_EHG\\EHG_Engineer\\.worktrees\\qf\\QF-20260720-531\\CLAUDE_PLAN.md"
+      "content_hash": "82873be09b54ffea",
+      "path": "C:\\Users\\rickf\\Projects\\_EHG\\EHG_Engineer\\.worktrees\\SD-LEO-INFRA-BLOCKED-WORKER-SELF-RECHECK-001\\CLAUDE_PLAN.md"
     },
     "CLAUDE_EXEC.md": {
       "type": "full",
-      "chars": 88941,
-      "estimated_tokens": 22236,
-      "content_hash": "8d09272f0012e071",
-      "path": "C:\\Users\\rickf\\Projects\\_EHG\\EHG_Engineer\\.worktrees\\qf\\QF-20260720-531\\CLAUDE_EXEC.md"
+      "chars": 89641,
+      "estimated_tokens": 22411,
+      "content_hash": "5c0cc943bc7998cd",
+      "path": "C:\\Users\\rickf\\Projects\\_EHG\\EHG_Engineer\\.worktrees\\SD-LEO-INFRA-BLOCKED-WORKER-SELF-RECHECK-001\\CLAUDE_EXEC.md"
     },
     "CLAUDE_ADAM.md": {
       "type": "full",
-      "chars": 97225,
-      "estimated_tokens": 24307,
-      "content_hash": "15432e677382b095",
-      "path": "C:\\Users\\rickf\\Projects\\_EHG\\EHG_Engineer\\.worktrees\\qf\\QF-20260720-531\\CLAUDE_ADAM.md"
+      "chars": 98187,
+      "estimated_tokens": 24547,
+      "content_hash": "bee9825614ec0710",
+      "path": "C:\\Users\\rickf\\Projects\\_EHG\\EHG_Engineer\\.worktrees\\SD-LEO-INFRA-BLOCKED-WORKER-SELF-RECHECK-001\\CLAUDE_ADAM.md"
     },
     "CLAUDE_COORDINATOR.md": {
       "type": "full",
       "chars": 25316,
       "estimated_tokens": 6329,
-      "content_hash": "0bc009e9cd2c00d1",
-      "path": "C:\\Users\\rickf\\Projects\\_EHG\\EHG_Engineer\\.worktrees\\qf\\QF-20260720-531\\CLAUDE_COORDINATOR.md"
+      "content_hash": "fb3e9f3929b44e4e",
+      "path": "C:\\Users\\rickf\\Projects\\_EHG\\EHG_Engineer\\.worktrees\\SD-LEO-INFRA-BLOCKED-WORKER-SELF-RECHECK-001\\CLAUDE_COORDINATOR.md"
     },
     "CLAUDE_SOLOMON.md": {
       "type": "full",
       "chars": 61340,
       "estimated_tokens": 15335,
-      "content_hash": "6639bbb74a70eaaa",
-      "path": "C:\\Users\\rickf\\Projects\\_EHG\\EHG_Engineer\\.worktrees\\qf\\QF-20260720-531\\CLAUDE_SOLOMON.md"
+      "content_hash": "8da186a0a2b90494",
+      "path": "C:\\Users\\rickf\\Projects\\_EHG\\EHG_Engineer\\.worktrees\\SD-LEO-INFRA-BLOCKED-WORKER-SELF-RECHECK-001\\CLAUDE_SOLOMON.md"
     },
     "CLAUDE_DIGEST.md": {
       "type": "digest",
       "chars": 9611,
       "estimated_tokens": 2403,
-      "content_hash": "510d9aa246bbb014",
-      "path": "C:\\Users\\rickf\\Projects\\_EHG\\EHG_Engineer\\.worktrees\\qf\\QF-20260720-531\\CLAUDE_DIGEST.md"
+      "content_hash": "3f371a76a6593687",
+      "path": "C:\\Users\\rickf\\Projects\\_EHG\\EHG_Engineer\\.worktrees\\SD-LEO-INFRA-BLOCKED-WORKER-SELF-RECHECK-001\\CLAUDE_DIGEST.md"
     },
     "CLAUDE_CORE_DIGEST.md": {
       "type": "digest",
       "chars": 11664,
       "estimated_tokens": 2916,
-      "content_hash": "a66795c1ec87c51d",
-      "path": "C:\\Users\\rickf\\Projects\\_EHG\\EHG_Engineer\\.worktrees\\qf\\QF-20260720-531\\CLAUDE_CORE_DIGEST.md"
+      "content_hash": "cac6d93971946448",
+      "path": "C:\\Users\\rickf\\Projects\\_EHG\\EHG_Engineer\\.worktrees\\SD-LEO-INFRA-BLOCKED-WORKER-SELF-RECHECK-001\\CLAUDE_CORE_DIGEST.md"
     },
     "CLAUDE_LEAD_DIGEST.md": {
       "type": "digest",
       "chars": 5551,
       "estimated_tokens": 1388,
-      "content_hash": "aea95e0cd92214b0",
-      "path": "C:\\Users\\rickf\\Projects\\_EHG\\EHG_Engineer\\.worktrees\\qf\\QF-20260720-531\\CLAUDE_LEAD_DIGEST.md"
+      "content_hash": "086edde9d10a7d00",
+      "path": "C:\\Users\\rickf\\Projects\\_EHG\\EHG_Engineer\\.worktrees\\SD-LEO-INFRA-BLOCKED-WORKER-SELF-RECHECK-001\\CLAUDE_LEAD_DIGEST.md"
     },
     "CLAUDE_PLAN_DIGEST.md": {
       "type": "digest",
       "chars": 8541,
       "estimated_tokens": 2136,
-      "content_hash": "69c51c5971e8a7e8",
-      "path": "C:\\Users\\rickf\\Projects\\_EHG\\EHG_Engineer\\.worktrees\\qf\\QF-20260720-531\\CLAUDE_PLAN_DIGEST.md"
+      "content_hash": "88f181d9934569d6",
+      "path": "C:\\Users\\rickf\\Projects\\_EHG\\EHG_Engineer\\.worktrees\\SD-LEO-INFRA-BLOCKED-WORKER-SELF-RECHECK-001\\CLAUDE_PLAN_DIGEST.md"
     },
     "CLAUDE_EXEC_DIGEST.md": {
       "type": "digest",
       "chars": 10964,
       "estimated_tokens": 2741,
-      "content_hash": "eb9d10bae2a2aa88",
-      "path": "C:\\Users\\rickf\\Projects\\_EHG\\EHG_Engineer\\.worktrees\\qf\\QF-20260720-531\\CLAUDE_EXEC_DIGEST.md"
+      "content_hash": "12bde5dbbfd1f917",
+      "path": "C:\\Users\\rickf\\Projects\\_EHG\\EHG_Engineer\\.worktrees\\SD-LEO-INFRA-BLOCKED-WORKER-SELF-RECHECK-001\\CLAUDE_EXEC_DIGEST.md"
     },
     "CLAUDE_ADAM_DIGEST.md": {
       "type": "digest",
       "chars": 18755,
       "estimated_tokens": 4689,
-      "content_hash": "fce8c69cd03013bd",
-      "path": "C:\\Users\\rickf\\Projects\\_EHG\\EHG_Engineer\\.worktrees\\qf\\QF-20260720-531\\CLAUDE_ADAM_DIGEST.md"
+      "content_hash": "9c99604f3de89177",
+      "path": "C:\\Users\\rickf\\Projects\\_EHG\\EHG_Engineer\\.worktrees\\SD-LEO-INFRA-BLOCKED-WORKER-SELF-RECHECK-001\\CLAUDE_ADAM_DIGEST.md"
     },
     "CLAUDE_COORDINATOR_DIGEST.md": {
       "type": "digest",
       "chars": 6076,
       "estimated_tokens": 1519,
-      "content_hash": "fc87f0c0f8410e24",
-      "path": "C:\\Users\\rickf\\Projects\\_EHG\\EHG_Engineer\\.worktrees\\qf\\QF-20260720-531\\CLAUDE_COORDINATOR_DIGEST.md"
+      "content_hash": "0521d0debf16b761",
+      "path": "C:\\Users\\rickf\\Projects\\_EHG\\EHG_Engineer\\.worktrees\\SD-LEO-INFRA-BLOCKED-WORKER-SELF-RECHECK-001\\CLAUDE_COORDINATOR_DIGEST.md"
     },
     "CLAUDE_SOLOMON_DIGEST.md": {
       "type": "digest",
       "chars": 4705,
       "estimated_tokens": 1177,
-      "content_hash": "62e4fe784e029d55",
-      "path": "C:\\Users\\rickf\\Projects\\_EHG\\EHG_Engineer\\.worktrees\\qf\\QF-20260720-531\\CLAUDE_SOLOMON_DIGEST.md"
+      "content_hash": "3aefd05e33b486b5",
+      "path": "C:\\Users\\rickf\\Projects\\_EHG\\EHG_Engineer\\.worktrees\\SD-LEO-INFRA-BLOCKED-WORKER-SELF-RECHECK-001\\CLAUDE_SOLOMON_DIGEST.md"
     }
   },
   "section_digests": {
-    "global": "cf0e58a7feb9e06c",
+    "global": "22b8eee6b0afdb1b",
     "byId": {
       "94": "ef2f1e7ed617b5e0",
       "189": "6398659126897bbb",
@@ -371,9 +371,9 @@
       "596": "0251044882a17550",
       "597": "ca5efc991922f3b8",
       "599": "7ddd3e2178799aa8",
-      "601": "a924ab00af440778",
+      "601": "19431e007898abfa",
       "602": "ad0aecae8cdc6cb3",
-      "603": "ea1eddc2cef94c83",
+      "603": "98d7b093d064f76a",
       "604": "a35e66b64599f81d",
       "605": "4a13b33776eb8b21",
       "606": "7303c149fceda758",
