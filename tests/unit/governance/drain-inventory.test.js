@@ -220,7 +220,7 @@ describe('buildInventoryRow surfaces the declared contract fields', () => {
 
 describe('paginateAll — truncation reads YOUNG, which suppresses the alarm (TS-12)', () => {
   // Fake ordered page source: rows[0] is the oldest, matching an ORDER BY created_at ASC.
-  const makeSource = (total, pageSize) => {
+  const makeSource = (total) => {
     const all = Array.from({ length: total }, (_, i) => ago((total - i) * 60_000));
     const calls = [];
     return {
@@ -234,7 +234,7 @@ describe('paginateAll — truncation reads YOUNG, which suppresses the alarm (TS
   };
 
   it('pages past the 1000-row cap over a 4,235-row population', async () => {
-    const src = makeSource(4235, 1000);
+    const src = makeSource(4235);
     const res = await paginateAll(src.fetchPage, { pageSize: 1000 });
     expect(res.rows).toHaveLength(4235);
     expect(src.calls).toHaveLength(5); // 4 full pages + a short final page
@@ -245,21 +245,21 @@ describe('paginateAll — truncation reads YOUNG, which suppresses the alarm (TS
 
   it('does not stop one page early when the total is an exact multiple of the page size', async () => {
     // A `<=` where `<` belongs drops the tail silently and reports a younger oldest-age.
-    const src = makeSource(2000, 1000);
+    const src = makeSource(2000);
     const res = await paginateAll(src.fetchPage, { pageSize: 1000 });
     expect(res.rows).toHaveLength(2000);
     expect(src.calls).toHaveLength(3); // must probe once more to learn the set ended
   });
 
   it('returns a single page without over-fetching', async () => {
-    const src = makeSource(10, 1000);
+    const src = makeSource(10);
     const res = await paginateAll(src.fetchPage, { pageSize: 1000 });
     expect(res.rows).toHaveLength(10);
     expect(src.calls).toHaveLength(1);
   });
 
   it('REFUSES to report a truncated population as complete when the page budget is exhausted', async () => {
-    const src = makeSource(5000, 1000);
+    const src = makeSource(5000);
     const res = await paginateAll(src.fetchPage, { pageSize: 1000, maxPages: 2 });
     // Must NOT return the 2000 rows it managed to read as if that were the whole set — a partial
     // read rendered as complete is precisely an alarm-suppressing under-report.
@@ -283,7 +283,7 @@ describe('paginateAll — truncation reads YOUNG, which suppresses the alarm (TS
     // A write-spy over the injected fetcher: pagination must only ever read.
     const forbidden = ['insert', 'update', 'delete', 'upsert'];
     const seen = [];
-    const spy = new Proxy(async (from, to) => ({ rows: from === 0 ? [ago(DAY)] : [] }), {
+    const spy = new Proxy(async (from) => ({ rows: from === 0 ? [ago(DAY)] : [] }), {
       get(target, prop) { if (forbidden.includes(String(prop))) seen.push(prop); return target[prop]; },
     });
     const res = await paginateAll(spy, { pageSize: 1000 });
