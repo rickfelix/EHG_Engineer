@@ -2907,12 +2907,35 @@ async function main() {
             .eq('sd_key', s.sd_key); // race guard: only clear if still pointing at this SD
           actions.push('CLAIM_FIX: cleared stale sd_key binding on session ' + s.session_id.substring(0, 20) + ' (SD ' + s.sd_key + ' authoritatively claimed by live session ' + sd.claiming_session_id.substring(0, 20) + ')');
         } else {
-          await supabase
-            .from('strategic_directives_v2')
-            .update({ claiming_session_id: s.session_id, is_working_on: true })
-            .eq('sd_key', s.sd_key)
-            .select();
-          actions.push('CLAIM_FIX: set claiming_session_id on ' + s.sd_key + ' → ' + s.session_id.substring(0, 20));
+          // SD-LEO-INFRA-CLAIM-LIVENESS-FENCE-001 FR-2: do NOT re-issue a claim to a dead session.
+          //
+          // This branch re-attaches an unclaimed SD to whatever session still has it in its sd_key
+          // binding. If that session's process is gone, THE SWEEP ITSELF pins the SD to a corpse —
+          // the exact mechanism this SD exists to stop, performed by the machinery meant to prevent
+          // it, and the result is camouflaged (status=in_progress WITH a claimant).
+          //
+          // This file's own liveness helpers cannot be reused here: isProcessRunning (:687-697) is a
+          // bare process.kill(pid,0) with no name match, and anyClaudeProcessRunning (:699-709) is
+          // HOST-WIDE existence — neither can tell that a SPECIFIC pid is claude, which is what pid
+          // recycling defeats.
+          let livenessRefusal = null;
+          try {
+            const { claimantLivenessFence } = require('../lib/fleet/claimant-liveness.cjs');
+            const { reason, detail } = await claimantLivenessFence(supabase, s.session_id);
+            if (reason) livenessRefusal = detail;
+          } catch { /* fail open — a broken probe must never stop the sweep from doing its job */ }
+
+          if (livenessRefusal) {
+            actions.push('CLAIM_FIX SKIPPED: refused to re-issue ' + s.sd_key + ' to ' + s.session_id.substring(0, 20)
+              + ' — claimant not live (' + livenessRefusal.deciding_signal + ')');
+          } else {
+            await supabase
+              .from('strategic_directives_v2')
+              .update({ claiming_session_id: s.session_id, is_working_on: true })
+              .eq('sd_key', s.sd_key)
+              .select();
+            actions.push('CLAIM_FIX: set claiming_session_id on ' + s.sd_key + ' → ' + s.session_id.substring(0, 20));
+          }
         }
       } else if (!sd.is_working_on) {
         // Fix incomplete claim: claiming_session_id matches but is_working_on is false

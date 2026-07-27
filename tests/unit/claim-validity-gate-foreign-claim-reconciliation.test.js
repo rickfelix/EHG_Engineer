@@ -68,9 +68,16 @@ describe('TS-4: foreign_claim reconciliation fires BEFORE the hard-fail throw', 
 
   it('is fail-safe: the whole reconciliation attempt is wrapped in try/catch so any error falls through to the original hard-fail', () => {
     const idx = src.indexOf('foreign_claim reconciliation');
-    // Window widened 3600->5600 for the QF-20260711-063 worktree-containment guard inserted
-    // inside the same try block; the catch it pins is unchanged.
-    const surrounding = src.slice(idx, idx + 5600);
+    // SEMANTIC WINDOW, not a byte count. This was a fixed slice (3600, then widened to 5600 for the
+    // QF-20260711-063 containment guard, then broken again by the
+    // SD-LEO-INFRA-CLAIM-LIVENESS-FENCE-001 liveness check — both legitimate insertions INSIDE the
+    // same try block). A character budget makes this test fail on unrelated edits while proving
+    // nothing extra: the invariant is that a fail-safe catch sits BETWEEN the reconciliation attempt
+    // and the original hard-fail throw, so bound the window by that throw instead. Insertions inside
+    // the try block no longer matter; removing the catch still fails.
+    const hardFailIdx = src.indexOf("reason: 'foreign_claim',", idx);
+    expect(hardFailIdx, 'the original hard-fail throw must still follow the reconciliation attempt').toBeGreaterThan(idx);
+    const surrounding = src.slice(idx, hardFailIdx);
     expect(surrounding).toMatch(/try\s*\{/);
     expect(surrounding).toMatch(/\}\s*catch\s*\{\s*\/\*\s*fail-safe/i);
   });

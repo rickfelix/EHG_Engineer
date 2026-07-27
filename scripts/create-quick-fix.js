@@ -521,6 +521,24 @@ async function createQuickFix(options = {}) {
       return printNextSteps(qfId, false, null);
     }
 
+    // SD-LEO-INFRA-CLAIM-LIVENESS-FENCE-001 FR-3: this is the third QF claim-write surface.
+    //
+    // Honest note on value: a session running THIS script is alive by construction, so a DEAD
+    // verdict here is far more likely to be a stale pidfile than a real corpse. It is fenced anyway
+    // for one reason — an inventory with a documented exception rots, and the surface-inventory test
+    // (FR-2) treats an unfenced claiming_session_id writer as a defect regardless of how unlikely
+    // the path is. Fail-open keeps the downside identical to every other surface.
+    try {
+      const { claimantLivenessFence } = await import('../lib/fleet/claimant-liveness.cjs');
+      const { reason, detail } = await claimantLivenessFence(supabase, creatorSessionId);
+      if (reason) {
+        console.log(`   ⚠️  Not claiming QF — ${reason}: ${JSON.stringify(detail)}`);
+        return printNextSteps(qfId, false, null);
+      }
+    } catch (e) {
+      console.warn(`[create-quick-fix] liveness fence skipped (failing open): ${e && e.message}`);
+    }
+
     // Atomically set claiming_session_id; if another session already holds it, bail.
     const { data: claimed } = await supabase
       .from('quick_fixes')

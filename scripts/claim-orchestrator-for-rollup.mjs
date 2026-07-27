@@ -96,6 +96,19 @@ export async function claimOrchestratorForRollup(supabase, { sdKey, sessionId, r
     }
   }
 
+  // SD-LEO-INFRA-CLAIM-LIVENESS-FENCE-001 FR-2. Note what this file's own liveness check above is:
+  // status === 'active' AND a heartbeat window. Both are things a DEAD session keeps producing — a
+  // dead seat sits at status=active, and heartbeat_at has 23+ writers including a cross-session one
+  // keyed on sd_key. So the existing check can refuse a live peer while happily admitting a corpse.
+  // This adds the process-level signal it lacks; fail-open, so ambiguity still passes.
+  try {
+    const { claimantLivenessFence } = await import('../lib/fleet/claimant-liveness.cjs');
+    const { reason, detail } = await claimantLivenessFence(supabase, sessionId);
+    if (reason) {
+      return { ok: false, action: 'refused', reason: `${reason}: ${JSON.stringify(detail)}`, sdKey: sd.sd_key };
+    }
+  } catch { /* fail open */ }
+
   const { error } = await supabase
     .from('strategic_directives_v2')
     .update({ is_working_on: true, claiming_session_id: sessionId })
