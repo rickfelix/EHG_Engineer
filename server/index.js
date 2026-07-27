@@ -309,6 +309,31 @@ async function startServer() {
     console.log('🎯 STORY Agent initialized');
   }
 
+  // QF-20260726-175 (b) — PROCESS-LEVEL BACKSTOP. Registered BEFORE listen, so it covers startup
+  // rejections too, and before RCA monitoring specifically because that subsystem caused the
+  // outage this fixes.
+  //
+  // WHY THIS EXISTS: on 2026-07-26 a single unhandled rejection — an RLS denial on a DIAGNOSTIC
+  // side-write into root_cause_reports — terminated this entire API process for 1h45m under
+  // Node's default --unhandled-rejections=throw. Part (a) fixes that one call path; this fixes
+  // the CLASS, so the next un-caught await anywhere in the server cannot kill the control plane.
+  //
+  // DELIBERATELY REJECTIONS ONLY, NOT uncaughtException. lib/feedback-capture.js
+  // initializeErrorHandlers() would install both, but its uncaughtException arm swallows the
+  // error with the re-throw commented out — and resuming after a genuine uncaught exception can
+  // continue from corrupt state, which is a different and riskier trade than the one this QF
+  // asks for. (Separately: that function is never called anywhere in the repo — a crash backstop
+  // built and never wired. Reported as its own finding rather than silently adopted here.)
+  process.on('unhandledRejection', (reason) => {
+    const err = reason instanceof Error ? reason : new Error(String(reason));
+    console.error(
+      '[server] UNHANDLED REJECTION — logged, NOT fatal. The API stays up deliberately; '
+      + 'investigate this, it is a real defect.\n'
+      + `  code=${err?.code ?? '<none>'} message=${err?.message ?? String(err)}\n`
+      + `  stack=${err?.stack ?? '<no stack>'}`,
+    );
+  });
+
   // Initialize RCA runtime monitoring (SD-RCA-001)
   await bootstrapRCAMonitoring();
   registerRCAShutdownHandlers();

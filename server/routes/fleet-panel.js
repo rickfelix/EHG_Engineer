@@ -50,9 +50,28 @@ function resolveServiceClient(req) {
  * they heartbeat; the absence of ANY identity is what distinguishes them.
  */
 function sessionIdentityKind(meta = {}) {
-  if (meta.fleet_identity?.callsign) return 'worker';
+  // QF-20260727-205: A ROLE STAMP OUTRANKS A WORKER CALLSIGN — this is branch ORDER, nothing else.
+  // The callsign branch used to run FIRST and return unconditionally, so any row carrying BOTH a
+  // fleet callsign and is_coordinator resolved to 'worker' and the coordinator branch was
+  // unreachable. identity_kind is the machine key ehg groups on (useFleetSessions.ts:318 does an
+  // exact === 'coordinator' match), so the live coordinator landed in workers[] and the Sessions
+  // page rendered ROLES 0 / "No coordinator is live" while 1449a046 WAS the registered active
+  // coordinator (chairman-observed 2026-07-27, screenshot-confirmed).
+  //
+  // The contradictory pair is reachable by RACE, not merely operator error:
+  // assign-fleet-identities.cjs stamps a NATO callsign onto any live session in the worker cohort,
+  // and its filterOutCoordinators() (QF-20260508-648) can only exclude rows ALREADY flagged
+  // is_coordinator. A session that registers, gets stamped, and only LATER runs /coordinator start
+  // keeps the worker stamp permanently. Measured in the incident: registered 10:00:47Z, stamped
+  // 'Alpha' 10:01:31Z (44s later), became coordinator ~10:20Z. The identity cron ticks every 5
+  // minutes, so any /coordinator start whose priming reads outlast one tick opens the window.
+  //
+  // Note the symmetry, which is the actual lesson: QF-20260508-648 fixed this SAME writer/consumer
+  // asymmetry on the WRITER side, and its own comment names it. This READER carried the identical
+  // asymmetry and was never fixed. Fixing one side of a two-sided asymmetry is what left it live.
   if (meta.is_coordinator) return 'coordinator';
   if (meta.role) return String(meta.role);
+  if (meta.fleet_identity?.callsign) return 'worker';
   if (meta.model) return 'unstamped';   // real session, identity not yet assigned
   return null;                          // no identity at all -> ghost
 }
