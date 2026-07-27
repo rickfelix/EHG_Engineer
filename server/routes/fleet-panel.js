@@ -14,6 +14,7 @@ import { computeSessionBadge } from '../../lib/fleet/fleet-view-badges.cjs';
 import { getAttentionFlaggedSessions } from '../../lib/fleet/attention-flag-writer.js';
 import { loadStore, buildNamedAccountChips } from '../../lib/fleet/account-capacity-gauge.cjs';
 import { getAccountUsage, allUnavailable } from '../../lib/fleet/account-usage-reader.cjs';
+import { isLiveEnabled } from '../../lib/fleet/spawn-control.js';
 
 const router = Router();
 
@@ -179,6 +180,16 @@ export async function getFleetPanel(req, res) {
     accountUsage = allUnavailable('unreachable');
   }
 
+  // QF-20260726-575: the RESOLVED spawn live-state, so "is the live OS spawn armed on this host"
+  // is answerable by OBSERVATION instead of by reading a static docblock that cannot track an env
+  // var. spawn-control.js opened "STAGED / INERT BY DEFAULT" on a host where the flag was SET, so a
+  // reader got the wrong answer in the PERMISSIVE direction — and a bare process.env read is the
+  // same error by a second route, because FLEET_SPAWN_CONTROL_LIVE lives in .env and reads as
+  // undefined until it is loaded. This server always has env loaded, which is what makes it the
+  // authoritative answer. Calls the SAME exported predicate the verbs gate on — deliberately not a
+  // re-implemented env read, which would be free to drift from the thing it claims to describe.
+  const spawnControl = { live: isLiveEnabled() };
+
   let attentionStrip = [];
   try {
     attentionStrip = await getAttentionFlaggedSessions({ supabase });
@@ -190,6 +201,7 @@ export async function getFleetPanel(req, res) {
     sessions,
     accountChips,
     accountUsage,
+    spawnControl,
     attentionStrip,
     filter: { liveOnly: !showAll, windowSeconds, truncated, ghostsHidden },
   });
