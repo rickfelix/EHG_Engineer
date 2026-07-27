@@ -1205,6 +1205,126 @@ export function createPhaseCoverageExitGate(supabase) {
  * @param {Object} sd - Strategic Directive (optional, for SD Start Gate)
  * @returns {Array} Array of gate definitions
  */
+/**
+ * SD-LEO-INFRA-CHAIRMAN-APPLY-FLAG-001 — make metadata.requires_chairman_apply mean something.
+ *
+ * The flag READ as protection and provided none. Its only functional consumer was
+ * check-migration-readiness.mjs, which uses it to make a PR-time drift detector QUIETER, and
+ * this executor could not see it at all (verified: zero matches for the flag across the whole
+ * lead-final-approval tree, against a populated 31-file/17-gate negative control, plus a live
+ * dry-run manifest of 30 gates with none migration-related). So a chairman-gated SD parked at
+ * pending_approval/LEAD_FINAL was one adopt-and-auto-chain away from being marked completed
+ * with its production migration never applied.
+ *
+ * THREE migration checks already existed and NOT ONE enforced: verify-migration-apply-state.mjs
+ * (mature classifier, CI-only, behind a wrapper that converts errors to exit 0),
+ * pending-migrations-check.js (wired into every handoff but defaulted to warn), and
+ * LeadFinalApprovalExecutor.verifyMigrationsApplied() (runs here, but CREATE-TABLE-only and
+ * fail-open). This gate is the reconciliation, not a fourth mechanism: it REUSES the mature
+ * classifier verbatim, by invoking it, and adds the one thing missing — refusal.
+ *
+ * @returns {Object} Gate definition
+ */
+export function createChairmanApplyVerificationGate() {
+  return {
+    name: 'CHAIRMAN_APPLY_VERIFICATION',
+    validator: async (ctx) => {
+      console.log('\n🔒 GATE: Chairman-Apply Verification');
+      console.log('-'.repeat(50));
+
+      const sd = ctx.sd || {};
+      const sdKey = sd.sd_key || sd.id || 'unknown';
+      const gated = sd.metadata?.requires_chairman_apply === true;
+
+      // Not flagged → not applicable. Unflagged SDs must see no behaviour change at all.
+      if (!gated) {
+        console.log('   ℹ️  metadata.requires_chairman_apply not set — not applicable');
+        return {
+          passed: true, score: 100, max_score: 100, issues: [], warnings: [],
+          details: { applicable: false }
+        };
+      }
+
+      try {
+        // Which migration(s) does this SD own? Deliberately does NOT reuse or improve
+        // pending-migrations-check.js's filename-substring heuristic — sharpening that
+        // matching pushes more work into execute-manual-migrations.js, which has no
+        // chairman-gate awareness and could auto-apply the very migration being gated.
+        // Prefer an explicit declaration; fall back to an SD-key-bearing filename.
+        const declared = Array.isArray(sd.metadata?.migration_files) ? sd.metadata.migration_files : [];
+        const { classifyMigrationApplyState } = await import('./chairman-apply-state.js');
+        const { files, error } = await classifyMigrationApplyState();
+
+        if (error) {
+          // FR-3: could-not-determine BLOCKS. Verification failure is not verification success —
+          // the same lesson PR_MERGE_VERIFICATION records above, and the reason the CI wrapper's
+          // error-to-exit-0 conversion is deliberately NOT inherited here.
+          return failClosed(`apply-state could not be determined: ${error}`, sdKey);
+        }
+
+        const owned = declared.length
+          ? files.filter(f => declared.includes(f.file))
+          : files.filter(f => f.file.includes(sdKey));
+
+        if (!owned.length) {
+          return failClosed(
+            declared.length
+              ? `declared migration(s) ${declared.join(', ')} not found in the migration corpus`
+              : `no migration file could be associated with ${sdKey}`,
+            sdKey,
+            ['Declare the SD\'s migration(s) in metadata.migration_files so this gate can verify them.']
+          );
+        }
+
+        // PARTIAL is not APPLIED. A half-applied migration is precisely the state this gate exists
+        // to refuse, and treating it as good would rebuild the fail-open it replaces.
+        const unapplied = owned.filter(f => f.status !== 'APPLIED' && f.status !== 'NO_DDL');
+        if (unapplied.length) {
+          console.log(`   ❌ ${unapplied.length} migration(s) not applied`);
+          return {
+            passed: false, score: 0, max_score: 100,
+            issues: [
+              `${sdKey} is chairman-gated but its migration is NOT applied to the live database.`,
+              ...unapplied.map(f => `  ${f.file} → ${f.status}${f.missing?.length ? ` (missing: ${f.missing.slice(0, 3).join(', ')})` : ''}`),
+              '',
+              'REMEDIATION: obtain the chairman GO and apply the migration, then re-run this handoff.',
+              'Completing now would mark the SD done against a production migration that was never applied.'
+            ],
+            warnings: [],
+            details: { applicable: true, unapplied: unapplied.map(f => ({ file: f.file, status: f.status })) }
+          };
+        }
+
+        console.log(`   ✅ ${owned.length} chairman-gated migration(s) verified applied`);
+        return {
+          passed: true, score: 100, max_score: 100, issues: [], warnings: [],
+          details: { applicable: true, verified: owned.map(f => f.file) }
+        };
+      } catch (e) {
+        return failClosed(e.message, sdKey);
+      }
+    },
+    required: true
+  };
+}
+
+/** Shared fail-closed shape for CHAIRMAN_APPLY_VERIFICATION (FR-3). */
+function failClosed(reason, sdKey, extra = []) {
+  console.log(`   ❌ Chairman-apply verification could not run: ${reason}`);
+  return {
+    passed: false, score: 0, max_score: 100,
+    issues: [
+      `Chairman-apply verification could not be completed for ${sdKey}: ${reason}`,
+      'This BLOCKS rather than passes: an unverifiable migration is not a verified one.',
+      ...extra,
+      '',
+      'Bypass available for documented emergencies: --bypass-validation --bypass-reason "<reason>"'
+    ],
+    warnings: [],
+    details: { failed: true, reason, fail_closed: true }
+  };
+}
+
 export function getRequiredGates(supabase, prdRepo, sd = null) {
   const gates = [];
 
@@ -1220,6 +1340,13 @@ export function getRequiredGates(supabase, prdRepo, sd = null) {
   gates.push(createUserStoriesCompleteGate(supabase, prdRepo));
   gates.push(createRetrospectiveExistsGate(supabase));
   gates.push(createPRMergeVerificationGate());
+
+  // Chairman-Apply Verification (SD-LEO-INFRA-CHAIRMAN-APPLY-FLAG-001) — refuses completion of
+  // a chairman-gated SD whose staged migration was never applied. Registration is a manual push
+  // (there is no directory scan here), so a gate that is written but not pushed silently does
+  // nothing — which is how the flag it enforces became decorative in the first place.
+  gates.push(createChairmanApplyVerificationGate());
+
   gates.push(createPipelineFlowGate());
 
   // FR Delivery Verification (CONST-012 — SD-MAN-ORCH-SCOPE-INTEGRITY-CONSTITUTIONAL-001-C)
