@@ -163,6 +163,78 @@ describe('FR-4 BINDING ACCEPTANCE — one run, both verdicts', () => {
   });
 });
 
+/**
+ * PLAN/VERIFY VALIDATION finding 659e163f (verdict FAIL, and it was a fair hit): the block above
+ * proves both verdicts at hasPidAlive() — ONE RUNG of the ladder — but never at isSessionAlive(),
+ * which is the read-time SSOT every consumer actually calls, and never at a consumer that ACTS on
+ * the verdict. A rung agreeing with reality is not the same as the decision layer agreeing with
+ * reality, and it is the decision layer that releases claims.
+ *
+ * These cases close that gap at both higher layers, in one run, with the same real processes.
+ *
+ * They use the win-cc-{port}-{pid} terminal_id form, which the resolver decodes WITHOUT touching
+ * the marker directory — so the SSOT and its consumer can be driven with genuinely spawned and
+ * killed pids without pointing production code at a fixture dir or writing fabricated markers into
+ * the live fleet's .claude/session-identity. The UUID-marker path above remains the thing that
+ * binds C2; this binds the layers above it.
+ *
+ * THE DEAD-SEAT ROW SHAPE IS THE REALISTIC ONE, not a contrived one. is_alive is false because
+ * stale-session-sweep.cjs:2444 atomically clears it (the reason the FR-2a contract amendment was
+ * withdrawn — is_alive is NOT sticky), heartbeat is long stale, no tick, no armed silence. That is
+ * what a genuinely dead seat looks like by the time anything is entitled to act on it.
+ */
+describe('FR-4 both verdicts AT THE SSOT and at the consumer that acts on them', () => {
+  const nowMs = Date.parse('2026-07-27T12:00:00.000Z');
+  const STALE = new Date(nowMs - 60 * 60 * 1000).toISOString();
+  const seat = (pid) => ({
+    session_id: `seat-${pid}`,
+    terminal_id: `win-cc-1234-${pid}`,
+    is_alive: false,          // the sweep clears this; it is not sticky
+    heartbeat_at: STALE,
+    process_alive_at: null,
+    expected_silence_until: null,
+  });
+
+  it('isSessionAlive: ALIVE for the live seat, DEAD for the killed seat, in ONE run', () => {
+    const live = isSessionAlive(seat(livePid), { nowMs });
+    const dead = isSessionAlive(seat(deadPid), { nowMs });
+    expect(
+      { live: live.alive, dead: dead.alive },
+      'the SSOT must produce BOTH verdicts — one direction only is a FAIL'
+    ).toEqual({ live: true, dead: false });
+    // The live seat is alive VIA THE PID RUNG specifically — not rescued by a stale heartbeat or
+    // a raw flag, both of which are deliberately negative in this row shape.
+    expect(live.reason).toBe('pid_alive');
+    expect(dead.reason).toBeNull();
+  });
+
+  it('shouldHoldClaim: the live seat KEEPS its claim and the dead seat RELEASES it, in ONE run', () => {
+    // claim-release-guard is the consumer that converts a dead verdict straight into a release —
+    // hold=false orphans an in-flight SD. This is where being wrong actually costs something, so
+    // this is where both directions have to be demonstrated.
+    const { shouldHoldClaim } = require('../../../lib/fleet/claim-release-guard.cjs');
+    const liveHold = shouldHoldClaim(seat(livePid));
+    const deadHold = shouldHoldClaim(seat(deadPid));
+    expect(
+      { live: liveHold.hold, dead: deadHold.hold },
+      'the destructive consumer must produce BOTH outcomes in one run'
+    ).toEqual({ live: true, dead: false });
+  });
+
+  it('COULD-NOT-DETERMINE does not release a claim', () => {
+    // The invariant, asserted at the layer that can do damage: a seat whose pid is unresolvable is
+    // NOT the same as a seat whose pid is confirmed gone. All five prior builds collapsed these.
+    const unresolvable = { ...seat(deadPid), terminal_id: null, session_id: null };
+    const verdict = isSessionAlive(unresolvable, { nowMs });
+    expect(verdict.alive).toBe(false);
+    // ...and that is exactly why the abstention must be caught UPSTREAM, at the venue (FR-3a),
+    // rather than here: by the time a row reaches the SSOT with nothing resolvable on it, the
+    // ladder has no way to tell "gone" from "never asked". pid-venue.cjs is what keeps a blind
+    // venue from ever presenting this row shape as a death.
+    expect(pidVenueCapability({ markerDir: absentDir }).capable).toBe(false);
+  });
+});
+
 describe('FR-4 the test obeys its own constraints', () => {
   it('makes NO assertion on stale_reason / stale_at / released_reason', () => {
     // Enforced against this file's own source rather than by reviewer discipline. Those columns
