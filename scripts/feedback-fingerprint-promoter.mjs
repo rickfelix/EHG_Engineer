@@ -53,6 +53,18 @@ try {
     .eq('category', 'harness_backlog')
     .is('archived_at', null)
     .gte('created_at', cutoff)
+    // SD-LEO-INFRA-SIGNAL-PROMOTION-RESOLUTION-CHECK-001 (FR-4): this predicate had NO status
+    // filter at all, so a row already marked resolved stayed promotion-eligible for its whole
+    // 14-day window. Measured live at authoring time: 38 resolved + 1 invalid in-window rows were
+    // still eligible to be minted into fresh QFs.
+    //
+    // Written as "null OR not-in(terminal)" rather than an allow-list of good statuses, for two
+    // reasons. (1) SQL semantics: `status NOT IN (...)` evaluates to NULL for a NULL status, which
+    // would silently DROP those rows — the fail-closed direction, and dropping real work is the
+    // dangerous one here. (2) An allow-list would silently exclude any status added later, failing
+    // closed by default. Only known-terminal statuses are excluded; everything else, including
+    // NULL and any future value, still promotes exactly as before.
+    .or('status.is.null,status.not.in.(resolved,invalid)')
     .order('id', { ascending: true })); // unique tiebreaker (FR-6)
 } catch (e) {
   console.error('ERROR (select):', JSON.stringify({ message: e.message }));
