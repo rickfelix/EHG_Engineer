@@ -148,6 +148,55 @@ describe('FR-1: the guard refuses rows it must not touch', () => {
   });
 });
 
+describe('FR-3: the sweep shape — clear a HELD claim and reopen in one call', () => {
+  it('clears and reopens when the holder matches (CAS)', async () => {
+    // The stale-session-sweep case: the claim is still held by a session whose heartbeat died.
+    // Clearing alone is what stranded the row, so clear+reopen must happen together.
+    const row = { ...STRANDED(), claiming_session_id: 'dead-session' };
+    const res = await clearAndReopenQf(fakeDb(row), row.id, { expectedHolder: 'dead-session' });
+    expect(res.changed).toBe(true);
+    expect(row.status).toBe('open');
+    expect(row.claiming_session_id).toBeNull();
+    expect(isAutoStartableQF(row, Date.now())).toBe(true);   // reachable, in one operation
+  });
+
+  it('REFUSES when a different session now holds it — a live re-claim is never clobbered', async () => {
+    // Why the CAS matters: between the sweep's read and its write, another worker can claim the
+    // row. Reopening it then would yank work out from under a live holder.
+    const row = { ...STRANDED(), claiming_session_id: 'someone-else' };
+    const res = await clearAndReopenQf(fakeDb(row), row.id, { expectedHolder: 'dead-session' });
+    expect(res.changed).toBe(false);
+    expect(row.claiming_session_id).toBe('someone-else');
+    expect(row.status).toBe('in_progress');
+  });
+
+  it('still refuses a held row that carries real work', async () => {
+    // The CAS variant must not be a weaker guard than the default one — same exclusions apply.
+    const row = { ...STRANDED(), claiming_session_id: 'dead-session', pr_url: 'https://x/pull/9' };
+    expect((await clearAndReopenQf(fakeDb(row), row.id, { expectedHolder: 'dead-session' })).changed).toBe(false);
+    expect(row.status).toBe('in_progress');
+  });
+});
+
+describe('FR-3: the merge-witness path must NOT be routed through this helper', () => {
+  it('leaves a merge-witnessed row alone — it is deliberately non-terminal, not stranded', async () => {
+    // scripts/modules/complete-quick-fix/orchestrator.js writes {status:'in_progress',
+    // claiming_session_id:null} together with pr_url/commit_sha when a PR merged but scope was not
+    // attested (QF-20260725-691). That row LOOKS like the stranded signature and is not: it is
+    // "discoverable rather than closed", awaiting attestation. Measured live: 9 rows are
+    // in_progress+unclaimed, and exactly 2 are this case. Reopening them would destroy the
+    // attestation gate, so the guard's pr_url/commit_sha exclusion is what keeps that site
+    // correctly OUT of scope — pinned here so nobody "completes" FR-3 by wiring it in.
+    const row = {
+      ...STRANDED(),
+      pr_url: 'https://github.com/x/y/pull/123',
+      commit_sha: 'deadbee',
+    };
+    expect((await clearAndReopenQf(fakeDb(row), row.id)).changed).toBe(false);
+    expect(row.status).toBe('in_progress');
+  });
+});
+
 describe('FR-1: reports failure instead of hiding it', () => {
   it('is fail-soft on a database error and says why', async () => {
     // A release path must not throw because the reopen half failed — but it must not report

@@ -1125,13 +1125,17 @@ async function clearStaleQfClaims(supabase, now, actions, warnings) {
       for (const qf of claimedQfs) {
         const ageSec = hbAgeBySession.has(qf.claiming_session_id) ? hbAgeBySession.get(qf.claiming_session_id) : Infinity;
         if (ageSec <= veryStaleSeconds) continue; // holder alive/recent — leave claimed
-        const { error } = await supabase
-          .from('quick_fixes')
-          .update({ claiming_session_id: null })
-          .eq('id', qf.id)
-          .eq('claiming_session_id', qf.claiming_session_id); // race guard: only if still held by the same dead session
-        if (!error) {
-          actions.push('QF: cleared stale claiming_session_id on ' + qf.status + ' ' + qf.id + ' (holder ' + String(qf.claiming_session_id).slice(0, 8) + ' hb ' + (ageSec === Infinity ? 'gone' : Math.round(ageSec) + 's') + ')');
+        // SD-LEO-INFRA-DISPATCH-DELIVERY-INTEGRITY-001 (FR-3): clear AND reopen in ONE call.
+        // Clearing alone left the row at status='in_progress' with a NULL claimant — invisible to
+        // all five open-only chokepoints while two supply gauges still counted it, so the work
+        // silently left the belt. The helper keeps the race guard (CAS on the same dead holder, so
+        // a live re-claim is never clobbered) and refuses any row carrying real work.
+        // Dynamic import: this file is CJS and the helper is ESM. Same pattern already used for
+        // bestEffortReleaseSd from this very module at the claim-boundary probe above.
+        const { clearAndReopenQf } = await import('../lib/fleet/best-effort-release.mjs');
+        const { changed } = await clearAndReopenQf(supabase, qf.id, { expectedHolder: qf.claiming_session_id });
+        if (changed) {
+          actions.push('QF: cleared stale claim AND reopened ' + qf.id + ' (holder ' + String(qf.claiming_session_id).slice(0, 8) + ' hb ' + (ageSec === Infinity ? 'gone' : Math.round(ageSec) + 's') + ')');
         }
       }
     }
