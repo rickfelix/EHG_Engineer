@@ -416,6 +416,13 @@ async function stampSurfaced(supabase, ids, { background = false } = {}) {
  * sanctioned action-time stamp for the Adam lane (chairman directives keep
  * scripts/ack-chairman-directive.cjs). Stamps acknowledged_at (only where NULL) and
  * backfills read_at where NULL (an actioned row was necessarily seen). Idempotent.
+ *
+ * QF-20260727-454 (part b, WARN strictness): the UPDATE...RETURNING now also reads back
+ * payload/body — the SAME atomic operation that stamps the ack now surfaces the content it
+ * acked, instead of confirming a bare id. This is a batch, multi-id CLI (cron + interactive
+ * callers ack legitimate rows that occasionally carry no readable body), so an empty body WARNS
+ * rather than refuses — refusing here would break real callers; ack-chairman-directive.cjs (a
+ * single, high-stakes, always-has-a-body chairman lane) is where this class hard-refuses instead.
  */
 async function ackRows(supabase, ids, { expectedTarget = null } = {}) {
   const now = new Date().toISOString();
@@ -430,14 +437,19 @@ async function ackRows(supabase, ids, { expectedTarget = null } = {}) {
       .eq('id', id)
       .is('acknowledged_at', null);
     if (expectedTarget) q = q.eq('target_session', expectedTarget);
-    const { data, error } = await q.select('id, read_at');
+    const { data, error } = await q.select('id, read_at, payload, body');
     if (error) { console.error(`ERROR: ack failed for ${id}: ${error.message}`); continue; }
     if (data && data.length > 0) {
       acked += 1;
       if (data[0].read_at == null) {
         await supabase.from('session_coordination').update({ read_at: now }).eq('id', id).is('read_at', null);
       }
-      console.log(`  ✓ acked ${id}`);
+      const bodyText = (data[0].payload && data[0].payload.body) || data[0].body || '';
+      if (bodyText) {
+        console.log(`  ✓ acked ${id} — body read (${String(bodyText).length} chars): ${String(bodyText).slice(0, 120)}${String(bodyText).length > 120 ? '…' : ''}`);
+      } else {
+        console.warn(`  ⚠ acked ${id} but it carries no readable body/payload.body — could not surface content to confirm against`);
+      }
     } else {
       console.log(`  • ${id} already acked, not found, or not targeted at this Adam session — no-op`);
     }
