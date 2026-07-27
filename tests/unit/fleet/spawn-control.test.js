@@ -890,9 +890,17 @@ describe('restart (FR-4 singleton-serial / FR-5 worker-parallel)', () => {
       sessions: [{ session_id: 's1', status: 'active', metadata: { fleet_identity: { callsign: 'Canary-1' }, role: 'worker', account_profile: 'canary' } }],
     });
 
+    // SD-LEO-INFRA-THREE-REFUSAL-TESTS-001 FR-1: baseDir was `null` here, which never created
+    // the "NO profiles dir configured" precondition this test's own name claims. resolveProfileDir
+    // (lib/fleet/spawn-control.js:103) is `opts.baseDir ?? process.env.FLEET_ACCOUNT_PROFILES_DIR
+    // ?? null`, and `??` treats an explicit null as ABSENT — so on any host that sets the env var
+    // (this repo's .env does) the caller's "none" was discarded, the fail-loud never armed, and
+    // restart() resolved { ok: true }. '' is falsy but NOT nullish: it survives `??` and trips the
+    // `if (!baseDir)` guard on the next line, so the refusal is now asserted on every host rather
+    // than borrowed from operator environment. The assertion below is deliberately unchanged.
     await expect(restart('Canary-1', {
       supabaseClient, live: true, currencyRunner: CURRENT_RUNNER, spawnFn, execFn: enumExec(),
-      sleepFn: vi.fn(), baseDir: null,
+      sleepFn: vi.fn(), baseDir: '',
     })).rejects.toThrow(/FLEET_ACCOUNT_PROFILES_DIR/);
   });
 

@@ -216,7 +216,38 @@ export default defineConfig({
           // inject opts.currencyRunner now fails FAST and IDENTICALLY on every machine.
           // This is deliberately not a bypass: it makes nothing pass that would otherwise
           // fail. It converts a hidden environmental accident into a loud, uniform one.
-          env: { FLEET_REPO_ROOT: './tests/fixtures/__no_such_tree__' },
+          //
+          // SD-LEO-INFRA-THREE-REFUSAL-TESTS-001 FR-2 — same class, same remedy, three more
+          // vars. The unit tier still inherits the operator's real .env DESPITE line 201's
+          // intent: vitest.config.js:16-17 loads .env in the PARENT process (for DB-target
+          // gating), and `pool: 'forks'` means every worker inherits that process.env before
+          // setup.unit.js can do anything about it. Not loading .env in the project is not
+          // the same as the project not HAVING it.
+          //
+          // What that cost: three REFUSAL tests in tests/unit/fleet/ took their verdict from
+          // whether an operator happened to export a variable. They assert "no profiles dir
+          // configured" / "spawn-control live flag off" by passing a nullish option, but
+          // lib/fleet/spawn-control.js resolves `opts.X ?? process.env.Y` — and `??` treats an
+          // explicit null as ABSENT, so the caller's "none" is discarded in favour of the env
+          // var. Measured on one commit, unmodified tests and source: ambient env gave
+          // 3 failed / 66 passed; `FLEET_SPAWN_CONTROL_LIVE= FLEET_ACCOUNT_PROFILES_DIR=` gave
+          // 69 passed. The guards were never broken — they were never EXERCISED.
+          //
+          // Empty string, not delete: '' is falsy but NOT nullish, so it survives `??` and
+          // still trips the `if (!baseDir)` / `=== 'true'` guards. Deleting the key would let
+          // `??` fall through to the next candidate again, which is the whole defect.
+          //
+          // FLEET_CANARY_KILL_ENABLED is deliberately NOT listed: every call site passes it
+          // explicitly via opts.env, so it has no ambient-fallback path to close.
+          env: {
+            FLEET_REPO_ROOT: './tests/fixtures/__no_such_tree__',
+            FLEET_ACCOUNT_PROFILES_DIR: '',
+            FLEET_SPAWN_CONTROL_LIVE: '',
+            // Unset on this host today, so neutralising it is a no-op here — which is exactly
+            // why it belongs: tests/unit/fleet/browser-control.test.js currently passes by
+            // accident and would go red for any operator who exports it.
+            FLEET_BROWSER_PROFILES_DIR: '',
+          },
           include: [
             '**/__tests__/**/*.test.js',
             '**/*.test.js',
