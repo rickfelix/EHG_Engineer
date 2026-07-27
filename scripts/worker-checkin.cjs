@@ -374,7 +374,11 @@ async function tryClaim(sb, sdKey, sessionId, track) {
     // QF-20260711-272: live coordinator-authority fence check at the claim-WRITE boundary —
     // covers EVERY checkin claim lane (resume_final, orphan-adopt, draft self-claim, directed
     // assignment) with one re-fetch, closing the stale-candidate-row race. Fail-closed.
-    const fence = await liveClaimWriteFenceReason(sb, sdKey);
+    // SD-LEO-INFRA-CLAIM-LIVENESS-FENCE-001 FR-2: the third argument is what activates the liveness
+    // sub-check. Without it the call still runs the SD-axis fences but skips liveness entirely, so
+    // every check-in claim lane (resume_final, orphan-adopt, draft self-claim, directed assignment)
+    // would keep admitting dead claimants.
+    const fence = await liveClaimWriteFenceReason(sb, sdKey, sessionId);
     if (fence) return { ok: false, error: `claim_fenced:${fence}` };
     const p_track = await resolveTrack(sb, sdKey, track);
     const { data, error } = await sb.rpc('claim_sd', { p_sd_id: sdKey, p_session_id: sessionId, p_track });

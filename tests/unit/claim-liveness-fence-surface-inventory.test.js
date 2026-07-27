@@ -103,6 +103,51 @@ describe('FR-2 — claim-write surface inventory (anti-rot)', () => {
     }
   });
 
+  it('every liveClaimWriteFenceReason call passes the CLAIMANT — presence is not enforcement', () => {
+    // THIS TEST EXISTS BECAUSE THE ONE ABOVE WAS NOT ENOUGH. The fence-reference check is textual,
+    // so lib/claim-guard.mjs and scripts/worker-checkin.cjs both "passed" it while calling
+    // liveClaimWriteFenceReason(sb, sdKey) with only two arguments — the claimantSessionId
+    // parameter defaults to null and the liveness sub-check is SKIPPED ENTIRELY. Two independent
+    // sub-agent reviews found that inert state; this test is what would have caught it.
+    // EXPLICIT EXCEPTIONS, not a tolerance threshold. Both of these call the fence for its SD-AXIS
+    // purpose (authority holds), not to guard a claim write, so the claimant argument is genuinely
+    // not applicable:
+    //   BaseExecutor.js  — a HANDOFF-boundary authority fence. It writes no claim at all.
+    //   sd-start.js      — a candidate PRE-FILTER in the fallback lane. sd-start has zero direct
+    //                      claim writes; its actual claim goes through claimGuard, which IS fenced,
+    //                      so liveness is enforced there rather than duplicated here.
+    // Listing them by path means a NEW two-argument call still fails this test.
+    const AXIS_ONLY_CALLERS = new Set([
+      'scripts/modules/handoff/executors/BaseExecutor.js',
+      'scripts/sd-start.js',
+    ]);
+
+    const offenders = [];
+    for (const dir of SCAN_DIRS) {
+      for (const file of walk(path.join(ROOT, dir))) {
+        const src = fs.readFileSync(file, 'utf8');
+        const rel = path.relative(ROOT, file).replace(/\\/g, '/');
+        if (AXIS_ONLY_CALLERS.has(rel)) continue;
+        // Skip the definition itself and any doc/prose mention.
+        const callRe = /liveClaimWriteFenceReason\s*\(([^)]*)\)/g;
+        let m;
+        while ((m = callRe.exec(src)) !== null) {
+          const args = m[1].trim();
+          if (!args || /^\{/.test(args)) continue; // destructuring import, not a call
+          const argCount = args.split(',').length;
+          if (argCount < 3) offenders.push(`${rel}: liveClaimWriteFenceReason(${args})`);
+        }
+      }
+    }
+
+    expect(
+      offenders,
+      'These calls omit the third argument (claimantSessionId), so the liveness sub-check silently '
+      + 'does not run — the SD-axis fences still work, which is what makes this so easy to miss. '
+      + 'Pass the claiming session id.',
+    ).toEqual([]);
+  });
+
   it('the detector can actually fail — negative control', () => {
     // Without this, a broken parser would report "no unfenced writers" forever and look green.
     const fakeClaim = 'await sb.from(\'quick_fixes\').update({ claiming_session_id: sessionId, status: \'x\' }).eq(\'id\', id);';
