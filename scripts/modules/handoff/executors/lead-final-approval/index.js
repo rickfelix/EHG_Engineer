@@ -1071,6 +1071,31 @@ export class LeadFinalApprovalExecutor extends BaseExecutor {
    * @param {Object} sd - Strategic directive object
    * @returns {{hasMigrations: boolean, migrationFiles: string[], foundTables: string[], missingTables: string[]}}
    */
+  /**
+   * ADVISORY ONLY. THIS IS NOT THE APPLY-STATE AUTHORITY.
+   * SD-LEO-INFRA-CHAIRMAN-APPLY-FLAG-001.
+   *
+   * The authority for "was this SD's migration actually applied" is the
+   * CHAIRMAN_APPLY_VERIFICATION gate (gates.js), which reuses
+   * scripts/verify-migration-apply-state.mjs and fails CLOSED when it cannot tell.
+   *
+   * Be precise about what this method does, because the imprecise version is the bug: it DOES
+   * reject (UNAPPLIED_MIGRATIONS, index.js:431) when it finds a missing table — it is not
+   * warn-and-proceed. Its fail-open is narrower and easier to miss: it blocks only on what it
+   * can SEE, and it sees very little. Unreadable files are swallowed, anything that is not a
+   * CREATE TABLE is invisible, and it never reads metadata.requires_chairman_apply. A migration
+   * that only adds a function, trigger, index, constraint or column passes it silently.
+   *
+   * IT IS KEPT, NOT SUBSUMED, AND THE REASON IS COVERAGE — the two are not interchangeable:
+   *   - this method scans EVERY implementation repo across database/migrations,
+   *     supabase/migrations and migrations/, but only understands CREATE TABLE;
+   *   - the authoritative classifier understands tables, views, matviews, functions, triggers,
+   *     indexes, constraints and columns, but is hard-scoped to EHG_Engineer/database/migrations
+   *     (MIGRATIONS_DIR, verify-migration-apply-state.mjs:30).
+   * Collapsing this into the gate would have silently dropped cross-repo and alternate-directory
+   * migrations from any check at all. Broad-but-shallow advisory here; narrow-but-deep enforcement
+   * there. If the classifier ever becomes multi-repo, retire this method rather than leaving two.
+   */
   async verifyMigrationsApplied(sd) {
     const { existsSync } = await import('fs');
     const { readdir, readFile } = await import('fs/promises');
