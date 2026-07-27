@@ -111,3 +111,7 @@ export {
   resolveEffectiveMinScore,
   createVerifierParityGate
 } from './verifier-parity.js';
+
+// QF-20260727-982: an endorsement chain is not evidence — a spine naming a file+function
+// must name who read it and at what file:line.
+export { createMechanismClaimVerifierGate, validateMechanismClaims } from './mechanism-claim-verifier.js';
