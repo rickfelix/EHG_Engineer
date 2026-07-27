@@ -1,64 +1,75 @@
 /**
- * SD-LEO-FEAT-FLEET-SESSION-LIFECYCLE-001 / FR-3 — resume threading through the choke point.
+ * SD-LEO-FEAT-FLEET-SESSION-LIFECYCLE-001 / FR-3 — resume threading, asserted BEHAVIOURALLY.
  *
- * Static source assertions. spawn() launches a detached process and writes claude_sessions, so
- * executing it in a unit test would either mock away the very wiring under test or touch the DB.
- * The invariants here are about WHAT IS PASSED, which the source states exactly.
+ * THIS FILE PREVIOUSLY ASSERTED SOURCE TEXT AND WAS WRONG ABOUT REALITY. It matched
+ * `sessionId: opts.sessionId` in spawn-control.js and claimed "so a FORK can carry a fresh
+ * identity". The threading was real; the FORK was not. build-session-launch.cjs treated --resume
+ * and --session-id as MUTUALLY EXCLUSIVE, so the sessionId was silently dropped and every "fork"
+ * emitted a plain --resume that reused the OLD id — precisely the case FR-3 forbids, because
+ * re-registering under the old id lets a health check pass against the dead row's warm heartbeat.
+ *
+ * The test passed the whole time. That is the accepted-but-unread class this SD documents four
+ * times about OTHER code, committed here in its own verification. Caught by the EXEC TESTING pass.
+ *
+ * The builder is PURE and INJECTABLE, so there was never a reason to substitute source-matching
+ * for execution here. Now it executes and asserts the ACTUAL EMITTED ARGV.
  */
 
 import { describe, it, expect } from 'vitest';
-import { readFileSync } from 'node:fs';
-import { fileURLToPath } from 'node:url';
-import path from 'node:path';
+import { buildLiveSpawnInvocation } from '../../../lib/fleet/spawn-control.js';
 
-const HERE = path.dirname(fileURLToPath(import.meta.url));
-const SOURCE = readFileSync(path.resolve(HERE, '../../../lib/fleet/spawn-control.js'), 'utf8');
+const OLD = '11111111-1111-4111-8111-111111111111';
+const NEW = '22222222-2222-4222-8222-222222222222';
+const base = { role: 'worker', callsign: 'Alpha-1' };
 
-describe('FR3-THREAD: resumeUuid reaches the launch builder', () => {
-  it('spawn() FORWARDS resumeUuid — it was accepted by the builder but never passed', () => {
-    // buildLiveSpawnInvocation has always accepted resumeUuid. spawn() did not forward it, so a
-    // caller could set opts.resumeUuid and have it silently ignored: the launch came up cold
-    // while every signature looked correct.
-    const call = SOURCE.match(/buildLiveSpawnInvocation\(\{[\s\S]{0,320}?\}, opts\)/);
-    expect(call, 'buildLiveSpawnInvocation call not found').toBeTruthy();
-    expect(call[0]).toMatch(/resumeUuid:\s*opts\.resumeUuid/);
+/** Index of a flag's value in argv. */
+const valueAfter = (args, flag) => args[args.indexOf(flag) + 1];
+
+describe('FR3-FORK: a fork carries BOTH the old conversation and a NEW identity', () => {
+  it('emits --fork-session, --resume <old> AND --session-id <new>', () => {
+    const { args } = buildLiveSpawnInvocation({ ...base, resumeUuid: OLD, sessionId: NEW, forkSession: true }, {});
+    expect(args).toContain('--fork-session');
+    expect(valueAfter(args, '--resume')).toBe(OLD);
+    expect(valueAfter(args, '--session-id')).toBe(NEW);
   });
 
-  it('spawn() also forwards sessionId, so a FORK can carry a fresh identity', () => {
-    const call = SOURCE.match(/buildLiveSpawnInvocation\(\{[\s\S]{0,320}?\}, opts\)/);
-    expect(call[0]).toMatch(/sessionId:\s*opts\.sessionId/);
-  });
-});
-
-describe('FR3-CWD: the replacement resumes where the OLD seat lived', () => {
-  it('spawnReplacement reads launch_cwd off the OLD session, not this process cwd', () => {
-    const fn = SOURCE.slice(SOURCE.indexOf('async function spawnReplacement'));
-    expect(fn).toMatch(/oldSession\.metadata\.launch_cwd/);
-    expect(fn).toMatch(/cwd:\s*launchCwd/);
+  it('does NOT reuse the old id as the new identity', () => {
+    // The specific defect: re-registering under the OLD id lets a health check pass against the
+    // dead row's still-warm heartbeat, so a dead seat reads as alive.
+    const inv = buildLiveSpawnInvocation({ ...base, resumeUuid: OLD, sessionId: NEW, forkSession: true }, {});
+    expect(inv.sessionId).toBe(NEW);
+    expect(inv.sessionId).not.toBe(OLD);
   });
 
-  it('spawnReplacement threads resumeUuid through rather than dropping it', () => {
-    const fn = SOURCE.slice(SOURCE.indexOf('async function spawnReplacement'));
-    expect(fn).toMatch(/resumeUuid:\s*opts\.resumeUuid/);
-  });
-
-  it('spawn() PERSISTS launch_cwd, so the read above has something to find', () => {
-    // Threading without persisting would leave the read permanently undefined — wiring that
-    // looks complete and does nothing.
-    expect(SOURCE).toMatch(/launch_cwd:\s*invocation\.cwd/);
-  });
-
-  it('launch_cwd is stamped from the INVOCATION, never process.cwd()', () => {
-    const stamp = SOURCE.match(/launch_cwd:[^\n,}]*/)[0];
-    expect(stamp).not.toMatch(/process\.cwd/);
+  it('REFUSES a fork without a valid new UUID rather than silently degrading to plain resume', () => {
+    // Silent degradation is exactly how the original defect stayed invisible.
+    expect(() => buildLiveSpawnInvocation({ ...base, resumeUuid: OLD, sessionId: 'not-a-uuid', forkSession: true }, {}))
+      .toThrow(/forkSession requires a valid UUID/);
+    expect(() => buildLiveSpawnInvocation({ ...base, resumeUuid: OLD, forkSession: true }, {}))
+      .toThrow(/forkSession requires a valid UUID/);
   });
 });
 
-describe('FR3-TOKEN: metadata.resume_uuid is not the token', () => {
-  it('spawn-control never reads metadata.resume_uuid', () => {
-    // Populated on 1 of 13,025 rows. Comments are stripped first so the guard tests CODE, not
-    // the rationale that explains why the field must not be read.
-    const code = SOURCE.replace(/\/\*[\s\S]*?\*\//g, '').replace(/(^|[^:])\/\/.*$/gm, '$1');
-    expect(code).not.toMatch(/metadata\s*[.[]\s*['"]?resume_uuid/);
+describe('FR3-RESUME: plain resume is unchanged', () => {
+  it('emits --resume alone and adopts the existing id', () => {
+    const inv = buildLiveSpawnInvocation({ ...base, resumeUuid: OLD }, {});
+    expect(inv.args).not.toContain('--fork-session');
+    expect(inv.args).not.toContain('--session-id');
+    expect(inv.sessionId).toBe(OLD);
+  });
+
+  it('a cold start mints a fresh --session-id and never resumes', () => {
+    const inv = buildLiveSpawnInvocation({ ...base, sessionId: NEW }, { uuidFn: () => NEW });
+    expect(inv.args).not.toContain('--resume');
+    expect(inv.args).not.toContain('--fork-session');
+    expect(valueAfter(inv.args, '--session-id')).toBe(NEW);
+  });
+});
+
+describe('FR3-CWD: launch_cwd, asserted through the invocation', () => {
+  it('the resolved cwd is what the process will be given', () => {
+    const wt = 'C:/Users/rickf/Projects/_EHG/EHG_Engineer/.worktrees/SD-X';
+    const inv = buildLiveSpawnInvocation({ ...base, cwd: wt }, {});
+    expect(inv.cwd).toBe(wt);
   });
 });
