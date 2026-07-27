@@ -68,7 +68,7 @@ describe('FR-2d negative control — the four columns are load-bearing', () => {
   });
 
   it('THE CONTROL: the SAME row reads DEAD once process_alive_at is hidden', () => {
-    const { process_alive_at, ...viewShapedRow } = tickOnlyRow;
+    const { process_alive_at: _omitted, ...viewShapedRow } = tickOnlyRow;
     const v = isSessionAlive(viewShapedRow, { nowMs });
     // Not "a different reason" — a flat-out opposite verdict. This is the degradation the
     // pre-FR-2d view inflicted on every consumer that read through it.
@@ -86,7 +86,7 @@ describe('FR-2d negative control — the four columns are load-bearing', () => {
     };
     expect(isSessionAlive(parkedRow, { nowMs })).toEqual({ alive: true, reason: 'armed_silence' });
 
-    const { expected_silence_until, ...viewShapedRow } = parkedRow;
+    const { expected_silence_until: _omitted, ...viewShapedRow } = parkedRow;
     expect(isSessionAlive(viewShapedRow, { nowMs }).alive).toBe(false);
     // A parked /loop worker read as dead is the exact false-DEAD failure claim-release-guard
     // converts straight into a claim release. Hiding the column caused it.
@@ -121,7 +121,6 @@ describe.skipIf(!HAS_REAL_DB)('FR-2d live parity — view row vs table row', () 
     // examined nothing is indistinguishable from one that passed, and this SD exists because five
     // prior builds shipped exactly that.
     const examined = viewRows?.length ?? 0;
-    // eslint-disable-next-line no-console
     console.log(`[FR-2d] live parity examined ${examined} v_active_sessions row(s)`);
     expect(examined, 'zero rows examined — the parity check proved nothing').toBeGreaterThan(0);
 
