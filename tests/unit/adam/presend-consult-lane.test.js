@@ -117,4 +117,38 @@ describe('runPreSendConsultLane — FR-1 non-blocking + FR-2 discriminator', () 
     expect(out.action).toBe('hold-and-surface');
     expect(ledger).toHaveLength(0); // chairman branch deliberately writes no ledger row
   });
+
+  // ── QF-20260727-709 ──────────────────────────────────────────────────────────────────────────
+  // The lane must FORWARD the addressee, not merely tolerate one. Note the default fake above is
+  // `(b) => ...` — single-arg, so it silently discards a second argument. A test written against
+  // that fake would pass whether or not the lane threads the value, which is precisely the shape
+  // of the bug this QF exists to fix. These use a CAPTURING fake instead.
+  it('forwards the resolved addressee into the consult envelope', async () => {
+    const seen = [];
+    const { deps, inserted } = makeDeps({
+      buildPreSendConsultBody: (b, addressee) => {
+        seen.push(addressee);
+        return `[PRE-SEND CONSULT -> ${addressee?.role} ${String(addressee?.sessionId).slice(0, 8)}] ${b}`;
+      },
+    });
+    const addressee = { role: 'coordinator', sessionId: '1449a046-0f83-4b8e-b6f2-ad26510d0c05' };
+    await runPreSendConsultLane({ ...INPUT, addressee }, deps);
+
+    expect(seen).toHaveLength(1);
+    expect(seen[0]).toEqual(addressee);            // the value ARRIVED, not just the parameter slot
+    expect(inserted[0].row.payload.body).toContain('coordinator');
+    expect(inserted[0].row.payload.body).toContain('1449a046');
+  });
+
+  it('omitting the addressee passes undefined rather than inventing one', async () => {
+    // The degrade path: no addressee resolved upstream must not fabricate a plausible-looking one,
+    // because a WRONG addressee is worse than none — it would re-point the pronouns confidently.
+    const seen = [];
+    const { deps } = makeDeps({
+      buildPreSendConsultBody: (b, addressee) => { seen.push(addressee); return `[PRE-SEND CONSULT] ${b}`; },
+    });
+    await runPreSendConsultLane({ ...INPUT }, deps);
+    expect(seen).toHaveLength(1);
+    expect(seen[0]).toBeNull();
+  });
 });
