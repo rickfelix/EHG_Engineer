@@ -202,3 +202,55 @@ describe('isFlagEnabled (ADAM_SELF_SCORE_CADENCE)', () => {
     expect(isFlagEnabled({ ADAM_SELF_SCORE_CADENCE: 'TRUE' })).toBe(true);
   });
 });
+
+describe('computeAdvisoryDeliverability (QF-20260726-409)', () => {
+  // NB: payload is built LAST. Spreading `over` after it would re-add the caller's raw payload and
+  // silently drop kind:'adam_advisory', so every fixture would be filtered out and the tests would
+  // pass for the wrong reason.
+  const adv = (over = {}) => ({ ...over, payload: { kind: 'adam_advisory', ...(over.payload || {}) } });
+
+  it('THE REGRESSION GUARD: a dead-lettered advisory is NOT delivered even though it was read', () => {
+    // The exact live shape that inverted D8 — all 27 dead-lettered rows in the sample carried a
+    // non-null read_at, so the old `read_at != null` predicate scored every delivery FAILURE as a
+    // success. A read-rate implementation passes this file's other cases but fails this one.
+    const rows = [
+      adv({ read_at: '2026-07-26T00:00:00Z', payload: { dead_letter: true, dead_letter_reason: 'target_dead' } }),
+      adv({ read_at: '2026-07-26T00:00:00Z' }),
+    ];
+    expect(core.computeAdvisoryDeliverability(rows)).toBe(0.5);
+  });
+
+  it('an UNREAD but successfully delivered advisory counts as delivered', () => {
+    // The other half of the old defect: a freshly-sent advisory was counted as a failure until the
+    // recipient got round to reading it, so sending more advisories lowered the score.
+    const rows = [adv({ read_at: null }), adv({ read_at: null })];
+    expect(core.computeAdvisoryDeliverability(rows)).toBe(1);
+  });
+
+  it('ignores rows that are not adam advisories', () => {
+    const rows = [
+      adv({ read_at: null }),
+      { read_at: null, payload: { kind: 'coordinator_request' } },
+      { read_at: null, payload: null },
+    ];
+    expect(core.computeAdvisoryDeliverability(rows)).toBe(1);
+  });
+
+  it('returns null (inconclusive) rather than a fabricated 1.0 when there are no advisories', () => {
+    expect(core.computeAdvisoryDeliverability([])).toBeNull();
+    expect(core.computeAdvisoryDeliverability([{ payload: { kind: 'other' } }])).toBeNull();
+    expect(core.computeAdvisoryDeliverability(null)).toBeNull();
+  });
+
+  it('does not truthy-coerce dead_letter — only a strict true marks an advisory undelivered', () => {
+    const rows = [adv({ payload: { dead_letter: false } }), adv({ payload: { dead_letter: 'no' } })];
+    expect(core.computeAdvisoryDeliverability(rows)).toBe(1);
+  });
+
+  it('CONTROL: the D8 scorer still bands the value it is given, unchanged', () => {
+    // Proves the tests above are not passing because scoring stopped happening.
+    expect(core.SCORERS.D8_interface_clarity({ advisory_deliverability: 0.876 }).score).toBe(3);
+    expect(core.SCORERS.D8_interface_clarity({ advisory_deliverability: 0.99 }).score).toBe(5);
+    expect(core.SCORERS.D8_interface_clarity({ advisory_deliverability: null }).score).toBeNull();
+  });
+});

@@ -14,6 +14,7 @@ import { computeSessionBadge } from '../../lib/fleet/fleet-view-badges.cjs';
 import { getAttentionFlaggedSessions } from '../../lib/fleet/attention-flag-writer.js';
 import { loadStore, buildNamedAccountChips } from '../../lib/fleet/account-capacity-gauge.cjs';
 import { getAccountUsage, allUnavailable } from '../../lib/fleet/account-usage-reader.cjs';
+import { isLiveEnabled } from '../../lib/fleet/spawn-control.js';
 
 const router = Router();
 
@@ -56,6 +57,26 @@ function sessionIdentityKind(meta = {}) {
   return null;                          // no identity at all -> ghost
 }
 
+/**
+ * QF-20260726-222 — capitalize a role name for DISPLAY only.
+ *
+ * Chairman-reported: workers render Foxtrot / Alpha-4 / Golf-2 while the three role rows rendered
+ * adam / solomon / coordinator — one column, two capitalization conventions. The docblock on the
+ * callsign fallback below already SAID "coordinator/Adam/Solomon"; the string was just passed
+ * through raw.
+ *
+ * *** DISPLAY LAYER ONLY. This must never touch identity_kind. *** identity_kind is the MACHINE KEY
+ * the frontend groups, filters and sorts roles on — verified at the consumer, not assumed:
+ * ehg useFleetSessions.ts:318 does String(r.identity_kind) === 'coordinator' (an exact lowercase
+ * match) and :284-285 filter and sort the role group by it. Capitalizing the key to fix a label is
+ * how a cosmetic change becomes a grouping bug. Nothing compares `callsign` to a lowercase role
+ * literal anywhere in EHG_Engineer or ehg, which is what makes the display fix safe.
+ */
+function capitalizeRoleLabel(value) {
+  if (typeof value !== 'string' || value.length === 0) return value;
+  return value.charAt(0).toUpperCase() + value.slice(1);
+}
+
 // QF-20260726-642: exported (additively, no behaviour change) so the per-session account fields
 // below are unit-testable. An emitted field with no test is how element 5 got dropped the first time.
 export function formatSessionRow(row) {
@@ -68,7 +89,8 @@ export function formatSessionRow(row) {
     session_id: row.session_id,
     // Fall back to the role name so the coordinator/Adam/Solomon rows read as themselves
     // instead of as blanks. Fleet callsign still wins when present.
-    callsign: identity.callsign || (kind && kind !== 'unstamped' ? kind : null),
+    callsign: identity.callsign || (kind && kind !== 'unstamped' ? capitalizeRoleLabel(kind) : null),
+    // NOT capitalized, deliberately — this is the machine key the frontend groups/sorts on.
     identity_kind: kind,
     color: identity.color || null,
     role: identity.role || null,
@@ -179,6 +201,16 @@ export async function getFleetPanel(req, res) {
     accountUsage = allUnavailable('unreachable');
   }
 
+  // QF-20260726-575: the RESOLVED spawn live-state, so "is the live OS spawn armed on this host"
+  // is answerable by OBSERVATION instead of by reading a static docblock that cannot track an env
+  // var. spawn-control.js opened "STAGED / INERT BY DEFAULT" on a host where the flag was SET, so a
+  // reader got the wrong answer in the PERMISSIVE direction — and a bare process.env read is the
+  // same error by a second route, because FLEET_SPAWN_CONTROL_LIVE lives in .env and reads as
+  // undefined until it is loaded. This server always has env loaded, which is what makes it the
+  // authoritative answer. Calls the SAME exported predicate the verbs gate on — deliberately not a
+  // re-implemented env read, which would be free to drift from the thing it claims to describe.
+  const spawnControl = { live: isLiveEnabled() };
+
   let attentionStrip = [];
   try {
     attentionStrip = await getAttentionFlaggedSessions({ supabase });
@@ -190,6 +222,7 @@ export async function getFleetPanel(req, res) {
     sessions,
     accountChips,
     accountUsage,
+    spawnControl,
     attentionStrip,
     filter: { liveOnly: !showAll, windowSeconds, truncated, ghostsHidden },
   });

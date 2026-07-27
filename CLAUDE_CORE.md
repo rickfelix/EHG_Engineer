@@ -1,8 +1,8 @@
-<!-- file_content_hash: b9828955c2689be0 -->
+<!-- file_content_hash: fc093ac06a8367ff -->
 <!-- GENERATED FILE - DO NOT EDIT DIRECTLY. Source of truth: leo_protocol_sections (DB). Regenerate: node scripts/generate-claude-md-from-db.js. Drift check: node scripts/check-claude-md-drift.cjs -->
 # CLAUDE_CORE.md - LEO Protocol Core Context
 
-**Generated**: 2026-07-20 3:47:06 PM
+**Generated**: 2026-07-27 4:05:26 AM
 **Protocol**: LEO 4.4.1
 **Purpose**: Essential workflow context for all sessions
 **Effort**: medium (core context; phase-specific files tag their own effort for phase work)
@@ -1295,7 +1295,7 @@ The WORKER analog of CLAUDE.md "Canonical Pause Points — THE ONLY REASONS TO S
 
 **Every other condition is a CONTINUE — re-arm a ScheduleWakeup and re-run the loop. Four enforced exit-modes:**
 - **(4a) Post-ship**: you just shipped an SD → /signal a fleet-retro → /checkin → claim the next workable SD (READY > EXEC > PLANNING > DRAFT) in the SAME turn. Shipping is the START of the next iteration, not the end of the loop (the #1 wrong-stop).
-- **(4b) Blocked claim**: your SD hit a chairman gate/blocker while unblocked belt work exists → STAY on that SD, park WIP (push the branch + set metadata.blocker.status), /signal the specific blocker, and COORDINATE with the coordinator to RESOLVE the block (via /signal, re-poll session_coordination by correlation_id on each wakeup; the bare two-way request lane has no coordinator inbox surface yet, so use /signal until that ships) — do NOT hop to a different SD. The coordinator does due diligence, then decides + approves how you proceed; for a migration you MAY apply it yourself ONLY after explicit coordinator sign-off (never self-apply a prod migration without it). Never idle silently. Escalation runs Coordinator -> Adam -> chairman. (chairman directive 2026-06-24; canonical: docs/protocol/fleet-coordinator-and-worker-behavior.md "Blocked-claim resolution protocol".)
+- **(4b) Blocked claim**: your SD hit a chairman gate/blocker while unblocked belt work exists → STAY on that SD, park WIP (push the branch + set metadata.blocker.status), /signal the specific blocker, and COORDINATE with the coordinator to RESOLVE the block. *** ON EVERY WAKEUP, BEFORE YOU RE-POLL OR RE-REPORT: RE-RUN YOUR OWN BLOCKER CHECK. *** Blockers self-resolve silently and nobody tells you — two seats burned 5h23m and 9h41m on conditions that had already cleared, while awake and emitting 66 and 74 rows, because a stuck signal is a one-shot message into a queue nobody re-evaluates. The re-check is one command: RESYNC_REQUIRED is git fetch origin main && git log --oneline HEAD..origin/main -- scripts/sd-start.js; a peer-dirty tree is git status --porcelain. If it now passes, RESUME IMMEDIATELY. Re-report ONLY when the condition has materially changed (cleared, or changed in kind) — an UNCHANGED blocker is re-checked SILENTLY and never re-sent; do not invent a re-send timer. (via /signal, re-poll session_coordination by correlation_id on each wakeup; the bare two-way request lane has no coordinator inbox surface yet, so use /signal until that ships) — do NOT hop to a different SD. The coordinator does due diligence, then decides + approves how you proceed; for a migration you MAY apply it yourself ONLY after explicit coordinator sign-off (never self-apply a prod migration without it). Never idle silently. Escalation runs Coordinator -> Adam -> chairman. (chairman directive 2026-06-24; canonical: docs/protocol/fleet-coordinator-and-worker-behavior.md.)
 - **(4c) No wind-down handshake**: never exit silently → /signal feedback "winding down — finished <SD>, anything queued? idling ~180s", arm a SHORT (~180s) grace ScheduleWakeup, re-check the inbox on that tick, THEN settle into the ~300s idle cadence.
 - **(4d) Transient error**: a connectivity/API/tool blip is NOT a stop → re-arm a ScheduleWakeup and resume (retry ≤2, then invoke the RCA sub-agent). Never treat a transient error as terminal.
 
@@ -1620,29 +1620,7 @@ Each SD should trace upward through this hierarchy. When evaluating or creating 
 
 **From Published Retrospectives** - Apply these learnings proactively.
 
-### 1. SD-LEO-INFRA-TELEMETRY-AUDIENCE-ROUTING-001 Retrospective [QUALITY]
-**Category**: PROCESS_IMPROVEMENT | **Date**: 7/10/2026 | **Score**: 100
-
-**Key Improvements**:
-- The scope-drift defect (SQL migration not updated when JS allowlist was narrowed) should have been c...
-- TESTING sub-agent flagged 3 legitimate non-blocking follow-ups: (1) concurrent-write race behavior i...
-
-**Action Items**:
-- [ ] Merge PR #5877 (implementation) and #5881 (scope-drift correction) via ship lane
-- [ ] File a QF for a lockstep CI assertion tying lib/governance/feedback-audience.js'...
-
-### 2. Retrospective: SD-LEO-INFRA-CHAIRMAN-GAUGE-FABRICATIONS-FIX4-001 — Closing B3/B4/B5/C6 in the Gauge-Trust Fabrication Series [QUALITY]
-**Category**: APPLICATION_ISSUE | **Date**: 7/11/2026 | **Score**: 100
-
-**Key Improvements**:
-- B5's first implementation pass only covered PortfolioSummary.tsx's two completedStages consumers; a ...
-- The first EXEC-TO-PLAN handoff attempt was rejected at 0% by GATE2_IMPLEMENTATION_FIDELITY ("[PREFLI...
-
-**Action Items**:
-- [ ] B5's original fix correctly handled two of three completedStages consumers; the ...
-- [ ] Two same-day false-positive trips on this exact check (this SD's doc comment, an...
-
-### 3. Retrospective: SD-LEO-INFRA-CHAIRMAN-DECISION-SURFACING-001 — widen escalation to any raiser, arm the dormant SLA sweep notify-only [QUALITY]
+### 1. Retrospective: SD-LEO-INFRA-CHAIRMAN-DECISION-SURFACING-001 — widen escalation to any raiser, arm the dormant SLA sweep notify-only [QUALITY]
 **Category**: APPLICATION_ISSUE | **Date**: 7/10/2026 | **Score**: 100
 
 **Key Improvements**:
@@ -1653,27 +1631,49 @@ Each SD should trace upward through this hierarchy. When evaluating or creating 
 - [ ] When arming a "registered but never dispatched" module (C2 dormant-machinery cla...
 - [ ] When a predicate change (e.g. shouldAutoEscalate) widens WHO triggers a downstre...
 
-### 4. SD-LEO-FIX-ORCHESTRATOR-LEAF-ROUTER-001 Comprehensive Retrospective [QUALITY]
-**Category**: APPLICATION_ISSUE | **Date**: 7/10/2026 | **Score**: 100
+### 2. SD-LEO-INFRA-SESSION-SPAWN-AND-PROMPT-LIBRARY-001-F: wiring assertLaunchContract at three spawn seams — and the SD reproducing its own defect (deletable enforcement) [QUALITY]
+**Category**: PROCESS_IMPROVEMENT | **Date**: 7/26/2026 | **Score**: 100
 
 **Key Improvements**:
-- Multi-worker race on a self-claimed QF: a concurrent fleet worker merged QF-20260710-491's PR #5867 ...
-- Live regression window: from QF-20260710-491's merge until this SD's migration is applied, the JS-la...
+- THE SD REPRODUCED ITS OWN DEFECT. Its thesis is "a predicate nobody calls is not enforcement." The E...
+- The precedent for exactly this failure already existed for exactly this function: tests/unit/fleet/t...
 
 **Action Items**:
-- [ ] Apply SD-LEO-FIX-ORCHESTRATOR-LEAF-ROUTER-001's migration once chairman-apply is...
-- [ ] Audit other DB functions/triggers with hardcoded success/completion narratives f...
+- [ ] File a work item covering the three spawn surfaces that never reach buildSession...
+- [ ] Document FLEET_CLAUDE_CMD and CLAUDE_CLI_PATH — neither appears in any doc today...
 
-### 5. Retrospective: SD-LEO-FIX-EVA-DECISIONS-CANNOT-001 — canonical resolver now stamps decided_by/context required by the stage-16 chairman_decisions trigger [QUALITY]
-**Category**: APPLICATION_ISSUE | **Date**: 7/10/2026 | **Score**: 100
+### 3. SD-LEO-INFRA-FOLD-LEO-INTO-EHG-001 Retrospective — Fleet Sessions inside EHG (spawn, see, open) [QUALITY]
+**Category**: PROCESS_IMPROVEMENT | **Date**: 7/25/2026 | **Score**: 100
 
 **Key Improvements**:
-- The RPC-based chairman_decisions writers lib/eva/eva-orchestrator.js and lib/eva/stage-execution-wor...
-- The trigger's chairman-authority check is a loose substring match (LOWER(decided_by) LIKE '%chairman...
+- TEST-MASKING NEARLY SHIPPED, INTRODUCED BY EXEC ITSELF. The first version of the hook tests re-imple...
+- A VITEST FOOTGUN COST REAL DEBUGGING TIME. `beforeEach(() => mock.mockReset())` — the concise arrow ...
 
 **Action Items**:
-- [ ] lib/eva/eva-orchestrator.js and lib/eva/stage-execution-worker.js write to chair...
-- [ ] The trigger's chairman path only requires LOWER(decided_by) LIKE '%chairman%' wi...
+- [ ] MERGE THE BRANCH (or stand up a worktree dev server) so http://localhost:8080/bu...
+- [ ] RECORD A PR-SIZE JUSTIFICATION IN THE SD (880 LOC total, ~437 source, vs a 400-L...
+
+### 4. SD-LEO-INFRA-LAUNCHER-CAN-HOST-001 Retrospective [QUALITY]
+**Category**: APPLICATION_ISSUE | **Date**: 7/25/2026 | **Score**: 100
+
+**Key Improvements**:
+- C4 (provisioning reachable FROM THE DRILL PATH) is NOT MET. FR-1 shipped as a standalone CLI; script...
+- C5 (Open raises a window) is UNVERIFIED. Every prerequisite checks out; SetForegroundWindow itself w...
+
+**Action Items**:
+- [ ] WIRE PROVISIONING INTO THE DRILL PATH (closes C4): add the provisionCanary call ...
+- [ ] VERIFY C5 (Open raises a window) with an actual observation of SetForegroundWind...
+
+### 5. SD-LEO-INFRA-SESSION-SPAWN-AND-PROMPT-LIBRARY-001-D: pointer-file startup transport + callsign-keyed prompt selection — and six ways a 1096-green suite lied [QUALITY]
+**Category**: PROCESS_IMPROVEMENT | **Date**: 7/26/2026 | **Score**: 100
+
+**Key Improvements**:
+- THE SD's OWN HEADLINE HAZARD WENT LIVE ON ITS OWN BRANCH, ARMED BY ITS OWN ENABLING COMMIT. FR-3 req...
+- NO GATE, TEST OR CHECKLIST RE-CHECKED THE EARLIER WORK AT THE MOMENT REACHABILITY CHANGED. 'Not reac...
+
+**Action Items**:
+- [ ] Adopt ARMING-COMMIT RE-CHECK as a standing EXEC rule: when a commit converts unr...
+- [ ] Adopt PAIRED-CONTROL FOR ABSENCE ASSERTIONS as a standing TESTING rule: every ne...
 
 
 *Lessons auto-generated from `retrospectives` table. Query for full details.*
@@ -1740,7 +1740,7 @@ Results MUST be persisted to `sub_agent_execution_results` table.
 
 ---
 
-*Generated from database: 2026-07-20*
+*Generated from database: 2026-07-27*
 *Protocol Version: 4.4.1*
 *Includes: Proposals (0) + Hot Patterns (5) + Lessons (5)*
 *Load this file first in all sessions*
