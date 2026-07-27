@@ -79,6 +79,46 @@ export function tierFitOk(qf, workerSession) {
 }
 
 /** Pure: idle, past-spin-up fleet workers eligible to receive a hint this tick. */
+/**
+ * Delivery ratio for a hint pass — SD-LEO-INFRA-DISPATCH-DELIVERY-INTEGRITY-001 (FR-6).
+ *
+ * A LOGGED SKIP COUNT IS NOT A CONTROL, IT IS A RECORD NOBODY READS. `hinted=N` is internally
+ * self-consistent at 1-of-10, 9-of-10, 10-of-10 and 0-of-1 alike: with no denominator, no case can
+ * contradict another, so the metric can never fail and therefore can never detect. Carrying
+ * `attempted` is what makes a degraded pass observable.
+ *
+ * Pure, and shaped after lib/chairman/sms-channel-health.js — the one existing in-repo
+ * ratio-with-alarm — so this is not a new pattern to maintain.
+ *
+ * @param {{delivered:number, attempted:number}} counts
+ * @returns {{ratio:number|null, delivered:number, attempted:number}} ratio null when nothing was attempted
+ */
+export function computeDeliveryRatio({ delivered = 0, attempted = 0 } = {}) {
+  // attempted === 0 is an IDLE tick (no eligible workers), not a failure. Returning null rather
+  // than 0 or NaN keeps "nothing to do" distinguishable from "delivered to nobody".
+  if (!attempted) return { ratio: null, delivered: 0, attempted: 0 };
+  return { ratio: delivered / attempted, delivered, attempted };
+}
+
+/** Minimum attempts before a ratio may raise an alarm — suppresses the 0-of-1 tick. */
+export const DELIVERY_MIN_SAMPLE = 3;
+/** Below this delivered/attempted ratio the pass is degraded. */
+export const DELIVERY_ALARM_THRESHOLD = 0.8;
+
+/**
+ * Should a degraded-delivery alarm fire for this pass? (FR-6)
+ *
+ * The minSample floor is why 0-of-1 is silent while 0-of-10 is not: a single undeliverable target
+ * on a quiet tick is noise, ten of them is an outage. Without the floor the alarm cries wolf on
+ * every one-worker tick and gets ignored, which returns us to a metric nobody reads.
+ */
+export function shouldAlarmDelivery({ delivered = 0, attempted = 0, threshold = DELIVERY_ALARM_THRESHOLD, minSample = DELIVERY_MIN_SAMPLE } = {}) {
+  const { ratio } = computeDeliveryRatio({ delivered, attempted });
+  if (ratio === null) return false;          // idle tick
+  if (attempted < minSample) return false;   // too few attempts to mean anything
+  return ratio < threshold;
+}
+
 export function eligibleIdleWorkers(liveWorkers, nowMs) {
   return (liveWorkers || []).filter((w) => {
     if (w.sd_key) return false; // already claiming something — not idle
@@ -109,7 +149,11 @@ function buildHintRow({ qf, coordinatorId, targetSession }) {
 }
 
 export async function runIdleQfHintCore(supabase, { nowMs = Date.now(), dryRun = false } = {}) {
-  const summary = { idleWorkers: 0, hinted: 0, skippedGated: 0 };
+  // SD-LEO-INFRA-DISPATCH-DELIVERY-INTEGRITY-001 (FR-5/FR-6): `attempted` and `undelivered` are the
+  // denominator half. `hinted` alone cannot separate 1-of-10 from 9-of-10 — a pass that reports
+  // completion while reaching a minority is the same camouflage as a stranded QF that the gauge
+  // still counts, which is the other half of this SD.
+  const summary = { idleWorkers: 0, hinted: 0, skippedGated: 0, attempted: 0, undelivered: 0, undeliveredReasons: [] };
 
   // SD-LEO-INFRA-COUNT-TRUNCATION-DISCIPLINE-001 FR-6 batch 9: claude_sessions is unbounded and this
   // read has no heartbeat/status filter at all (the QF-763 `.order()` only avoids a STALENESS bias
@@ -147,6 +191,25 @@ export async function runIdleQfHintCore(supabase, { nowMs = Date.now(), dryRun =
   summary.skippedGated = (qfs || []).length - ranked.length;
   if (ranked.length === 0) return summary;
 
+  return deliverHints(idle, ranked, { summary, supabase, coordinatorId, dryRun });
+}
+
+/**
+ * Deliver one hint per worker, skipping addressees that cannot be reached.
+ * SD-LEO-INFRA-DISPATCH-DELIVERY-INTEGRITY-001 (FR-5/FR-6).
+ *
+ * SPLIT OUT FROM runIdleQfHintCore SO THE DELIVERY CONTRACT IS TESTABLE WITHOUT A DATABASE. The
+ * gathering half needs claude_sessions and quick_fixes; the delivery half — the half that broke —
+ * needs neither. Faking the whole fetch layer to reach this loop would have produced a test more
+ * complicated than the code, and the FR-5 regression is precisely a LOOP-CONTROL property.
+ *
+ * `insertRow` is injectable and defaults to the real writer, so production behaviour is unchanged.
+ *
+ * @param {Array} idle - eligible idle workers
+ * @param {Array} ranked - hintable QFs, best first
+ * @param {{summary:object, supabase:object, coordinatorId:string, dryRun:boolean, insertRow?:Function}} deps
+ */
+export async function deliverHints(idle, ranked, { summary, supabase, coordinatorId, dryRun = false, insertRow = insertCoordinationRow } = {}) {
   // One-hint-per-worker, one-QF-per-hint this tick: consume the ranked list as we go so no QF
   // is double-hinted and no worker gets more than one suggestion.
   const remaining = [...ranked];
@@ -157,8 +220,29 @@ export async function runIdleQfHintCore(supabase, { nowMs = Date.now(), dryRun =
     );
     if (idx === -1) continue;
     const [qf] = remaining.splice(idx, 1);
+    summary.attempted += 1;
     if (!dryRun) {
-      await insertCoordinationRow(supabase, buildHintRow({ qf, coordinatorId, targetSession: worker.session_id }));
+      // FR-5: SKIP-AND-CONTINUE. insertCoordinationRow -> assertDispatchTarget FAILS CLOSED and
+      // THROWS (DISPATCH_TARGET_INVALID / UNKNOWN / LOOKUP_FAILED). Bare, that propagates out of
+      // this function to main().catch and exits the process — so ONE seat whose heartbeat aged past
+      // the cutoff starved every worker later in this loop, fleet-wide. Observed 2026-07-26.
+      //
+      // Skipping costs nothing and that was VERIFIED, not assumed: eligibleIdleWorkers is a PURE
+      // function over live state with no persistence, no backoff and no memory of who was hinted,
+      // so the candidate list is rebuilt from scratch and a skipped target is re-evaluated on the
+      // NEXT tick. Had that not held, skip would have converted one loud outage into permanent
+      // silent starvation for that seat, and aborting would have been the safer choice.
+      try {
+        await insertRow(supabase, buildHintRow({ qf, coordinatorId, targetSession: worker.session_id }));
+      } catch (e) {
+        summary.undelivered += 1;
+        summary.undeliveredReasons.push(`${String(worker.session_id).slice(0, 8)}:${e && e.code ? e.code : (e && e.message) || 'unknown'}`);
+        // Put the QF back: this worker could not be reached, but the work is still unhinted and
+        // another worker in THIS pass may fit it. Dropping it would silently reduce supply — the
+        // exact failure mode the rest of this SD exists to remove.
+        remaining.splice(idx, 0, qf);
+        continue;
+      }
     }
     summary.hinted += 1;
   }
@@ -175,7 +259,21 @@ async function main() {
   const supabase = createClient(url, key);
   const dryRun = process.argv.includes('--dry-run');
   const summary = await runIdleQfHintCore(supabase, { dryRun });
-  console.log(`IDLE_QF_HINT idleWorkers=${summary.idleWorkers} hinted=${summary.hinted} skippedGated=${summary.skippedGated}${dryRun ? ' (dry-run)' : ''}`);
+  // FR-6: BOTH numbers, never one. delivered/attempted is what separates 1-of-10 from 9-of-10;
+  // `hinted` alone reports "done" in both cases.
+  const { ratio } = computeDeliveryRatio({ delivered: summary.hinted, attempted: summary.attempted });
+  const pct = ratio === null ? 'n/a' : `${Math.round(ratio * 100)}%`;
+  console.log(
+    `IDLE_QF_HINT idleWorkers=${summary.idleWorkers} delivered=${summary.hinted} attempted=${summary.attempted}`
+    + ` ratio=${pct} undelivered=${summary.undelivered} skippedGated=${summary.skippedGated}${dryRun ? ' (dry-run)' : ''}`,
+  );
+  if (shouldAlarmDelivery({ delivered: summary.hinted, attempted: summary.attempted })) {
+    // Loud on stderr AND a stable token, so this is greppable rather than buried in a count.
+    console.error(
+      `[coordinator-idle-qf-hint] DELIVERY_DEGRADED ratio=${pct} delivered=${summary.hinted}/${summary.attempted}`
+      + ` threshold=${DELIVERY_ALARM_THRESHOLD} undelivered=[${summary.undeliveredReasons.join(', ')}]`,
+    );
+  }
 }
 
 if (isMainModule(import.meta.url)) {
