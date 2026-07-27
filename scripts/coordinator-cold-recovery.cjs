@@ -99,6 +99,15 @@ async function alreadyRedispatched(supabase, sdKey, { nowMs }) {
  * otherwise the belt keeps seeing the SD as CLAIMED (SD-LEO-FIX-CLAIM-RELEASE-DESYNC-001).
  * Holder-pinned CAS also prevents clobbering a peer that legitimately took over. */
 async function releaseClaim(supabase, sd) {
+  // SD-LEO-FEAT-FLEET-SESSION-LIFECYCLE-001 / FR-1b — EXEMPT from releaseWorkItemOnSessionEnd's
+  // SD phase rewind, recorded because FR-1 requires every release path to either call the shared
+  // helper or carry a written reason it must not.
+  // THE REASON is the docblock above: this path PRESERVES current_phase + progress (resume, not
+  // restart). The helper's rewind would send the SD back to a phase boundary, converting the
+  // resume this function exists to enable into a restart and discarding the progress it protects.
+  // That is exactly why the helper makes rewindPhase OPT-IN (default false) rather than
+  // automatic. If a QF ever reaches this path, wiring the QF-only hand-back would be safe — but
+  // cold recovery operates on strategic_directives_v2 rows, so there is nothing to hand back.
   const { releaseClaimBothSurfaces } = await import('../lib/claim/release-claim-both-surfaces.mjs');
   const r = await releaseClaimBothSurfaces(supabase, {
     sdKey: sd.sd_key,

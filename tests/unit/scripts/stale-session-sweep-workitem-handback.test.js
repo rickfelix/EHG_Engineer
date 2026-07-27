@@ -49,6 +49,15 @@ describe('FR-1b slice 2 — the sweep delegates its work-item handback to the sh
     expect(SOURCE).toMatch(/work-item handback failed/);
   });
 
+  it('OPTS IN to the phase rewind — the helper default preserves the phase for resume', () => {
+    // rewindPhase defaults FALSE because cold-recovery and claim-validity-gate deliberately
+    // preserve current_phase for resume. The sweep is the one site that MUST rewind (its
+    // PHASE_RESET_MAP exists so an SD is not left in mid-phase limbo with no claimer), so it
+    // has to ask explicitly. Drop this option and the sweep silently stops rewinding — in an
+    // UNFLAGGED path, so nothing would switch the behaviour back on.
+    expect(SOURCE).toMatch(/rewindPhase:\s*true/);
+  });
+
   it('the remaining resetSdPhaseOnRelease call sites are untouched by this slice', () => {
     // Slice 2 converts ONLY the CLAIM_BOUNDARY_PROBE site. The sweep's other three
     // phase-reset callers still route through resetSdPhaseOnRelease; converging them is a

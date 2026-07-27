@@ -237,8 +237,14 @@ async function runClaimBoundaryProbe(supabase, classified, telemetryMap, now, ac
       // gating it would mean the default-OFF flag SILENTLY DISABLES live fleet protection —
       // a refactor that turns a working guard off is not a refactor.
       const { releaseWorkItemOnSessionEnd } = await import('../lib/fleet/release-work-item.mjs');
+      // rewindPhase:true is REQUIRED here and is not the helper's default. The sweep's
+      // PHASE_RESET_MAP exists precisely so an SD is not left in mid-phase limbo with no active
+      // claimer, so this site must keep rewinding. Other release paths (cold-recovery,
+      // claim-validity-gate) deliberately PRESERVE the phase for resume — which is why the
+      // helper makes the rewind opt-in rather than automatic.
       const handback = await releaseWorkItemOnSessionEnd(
-        supabase, releasedSd, 'CLAIM_BOUNDARY_PROBE', { onLog: (m) => console.log('  ' + m) });
+        supabase, releasedSd, 'CLAIM_BOUNDARY_PROBE',
+        { rewindPhase: true, onLog: (m) => console.log('  ' + m) });
       if (!handback.ok) {
         warnings.push('CLAIM_BOUNDARY_PROBE: work-item handback failed for ' + releasedSd + ' — ' + handback.detail);
       }
