@@ -22,8 +22,16 @@
  *      If this ever stops flipping, the parity assertion below has gone vacuous and must be fixed,
  *      not deleted.
  *   2. MIGRATION TEXT (hermetic) — the DDL actually selects all four through the _cs outer join.
- *   3. LIVE PARITY (skipIf no DB) — field-level equality for all four columns AND verdict equality,
- *      over the whole population, STATING THE ROW COUNT. Zero rows examined is a FAIL, not a pass.
+ *   3. LIVE PARITY (skipIf the target is not an explicitly DESIGNATED non-prod DB) — field-level
+ *      equality for all four columns AND verdict equality, over the whole population, STATING THE
+ *      ROW COUNT. Zero rows examined is a FAIL, not a pass.
+ *
+ * WHAT ACTUALLY RUNS IN CI, STATED PLAINLY RATHER THAN IMPLIED. DESIGNATED_NON_PROD_REFS is
+ * deliberately EMPTY today (QF-20260726-459 Part 2 is a provisioning DECISION, not a fix), so
+ * block 3 currently ABSTAINS in every venue — CI and dev alike. Blocks 1 and 2 are hermetic and
+ * carry the load everywhere. The live parity claim for this SD rests on the separate re-measurement
+ * evidence on this branch, NOT on this block having run in CI. Do not read a green suite here as
+ * "parity was verified against a live view".
  */
 
 import fs from 'node:fs';
@@ -31,6 +39,7 @@ import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { createRequire } from 'node:module';
 import { describe, it, expect } from 'vitest';
+import { DB_TARGET_IS_DESIGNATED } from '../../helpers/db-available.js';
 
 const require = createRequire(import.meta.url);
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
@@ -46,7 +55,16 @@ const MIGRATION = path.join(
   'database/migrations/20260727_v_active_sessions_expose_tick_and_silence.sql'
 );
 
-const HAS_REAL_DB = Boolean(process.env.SUPABASE_URL && process.env.SUPABASE_SERVICE_ROLE_KEY);
+// THIS FILE'S OWN GUARD WAS THE DEFECT IT EXISTS TO DESCRIBE. It was:
+//   Boolean(process.env.SUPABASE_URL && process.env.SUPABASE_SERVICE_ROLE_KEY)
+// which answers "IS AN ENV VAR SET?" — not "IS THE EVIDENCE REACHABLE?". The unit tier sets BOTH
+// vars to placeholders (tests/setup.js → https://test.invalid.local), so the guard voted "real DB
+// present", the suite ran, and the read died on getaddrinfo EAI_AGAIN. A venue that cannot see the
+// evidence must ABSTAIN rather than vote — the exact rule lib/fleet/pid-venue.cjs enforces for the
+// PID rung in this same SD, applied here to the test's own venue check.
+// Gate on the canonical helper (tests/helpers/db-available.js, QF-20260726-459), which is POSITIVE
+// — a target runs only if explicitly designated, everything else fails closed.
+const HAS_REAL_DB = DB_TARGET_IS_DESIGNATED;
 
 describe('FR-2d negative control — the four columns are load-bearing', () => {
   // A session that is alive ONLY via the tick rung: raw flag false, heartbeat long stale, no
