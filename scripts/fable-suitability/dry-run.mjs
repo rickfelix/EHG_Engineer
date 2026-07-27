@@ -1,7 +1,17 @@
 #!/usr/bin/env node
 /**
- * dry-run.mjs — INERT-BUT-REACHABLE Fable-suitability entrypoint.
+ * dry-run.mjs — PARKED Fable-suitability entrypoint (was INERT-BUT-REACHABLE).
  * SD-LEO-INFRA-FABLE-SUITABILITY-MAP-001-C (FR-4).
+ *
+ * PARKED per QF-20260727-923 (Adam decision 2026-07-27, on Solomon's own counted finding):
+ * fable_suitability_map held exactly one row — the artifact of a single no-arg run of THIS script
+ * against its own --dir default (lib/fable-suitability), i.e. a self-referential smoke-test row, not
+ * usable fuel. readModeBCandidates (lib/fable-suitability/mode-b-seam.mjs) has zero production
+ * callers. The contract was AMENDED rather than this scorer PROMOTED — see leo_protocol_sections
+ * id=611 (Solomon Role Contract) §"Operating Posture" P1a for the full reasoning, the named unpark
+ * trigger, and the bounded supporting statistic. Do NOT re-derive this analysis from scratch in a
+ * future session — read P1a first. This file is deliberately NOT deleted (do not delete it): it
+ * remains reachable so a future unpark can pick it up without re-proving the path works.
  *
  * Proves the whole path is REACHABLE (RISK R3 anti dark-ship): it ACTUALLY scans a real slice of the
  * live codebase, derives regions, runs child B's scorers, attempts to persist via child A's writer,
