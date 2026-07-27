@@ -119,6 +119,12 @@ export async function showFallbackQueue(supabase, options = {}) {
     const sdUUIDs = sds.map(s => s.id);
     const { data: krAlignments } = await supabase
       .from('sd_key_result_alignment')
+      // schema-lint-disable-line: key_results!inner is a PostgREST EMBEDDED RESOURCE, not a column
+      // on sd_key_result_alignment — schema-reference-lint parses it as the latter and reports it
+      // missing. Pre-existing line (unchanged since origin/main); it only trips the diff-scoped
+      // lint because edits elsewhere in this file pulled it into the changed set. Verified against
+      // the live DB before suppressing: this exact select returns rows, and both
+      // sd_key_result_alignment and key_results are present in the snapshot.
       .select('sd_id, key_result_id, contribution_type, contribution_weight, key_results!inner(id, status)')
       .in('sd_id', sdUUIDs);
 
