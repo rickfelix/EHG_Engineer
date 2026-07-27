@@ -243,6 +243,49 @@ test('TS-3b (negative): tick still exits when no live pid can be discovered', { 
   }
 });
 
+// ── TS-3c: the self-relatch (SD-LEO-INFRA-PID-LIVENESS-DURABLE-VENUE-001 C1) ─
+
+/**
+ * THE headline defect: a dead session reporting fresh heartbeats for 21+ minutes after the OS
+ * confirmed its Claude Code parent was gone.
+ *
+ * session-tick.cjs's first-tick POST writes `pid: process.pid` — THE DAEMON'S OWN pid — so
+ * whenever the tick (rather than capture-session-id.cjs) won the row-creation race, that column
+ * holds the tick's pid. On parent death rediscoverParentPid re-reads it, sees
+ * candidate !== parentPid (true, it is us), and process.kill(candidate, 0) ALWAYS succeeds
+ * against ourselves — so the daemon adopts itself, resets parentMissCount, never reaches
+ * MAX_PARENT_MISSES, and stamps heartbeat_at/process_alive_at forever for a dead session.
+ *
+ * This is the mirror of TS-3: there the adopted candidate is a genuinely-live THIRD process and
+ * adoption is CORRECT; here it is the daemon itself and adoption is the bug. Both must hold at
+ * once — that is the false-life/false-death seam every prior attempt fell down.
+ */
+test('TS-3c (self-relatch): tick refuses to adopt its OWN pid and still exits', { timeout: 10000 }, async () => {
+  const state = { exists: true, status: 'active', pid: 0, lastPatchAt: 0 };
+  const server = await startMockServer(state);
+  const oldParent = spawnFakeParent();
+  const tick = spawnTick({ port: server.address().port, ccParentPid: oldParent.pid });
+  try {
+    // Exactly what the first-tick POST leaves behind when the tick created the row.
+    state.pid = tick.pid;
+
+    const gotFirstPatch = await waitUntil(() => state.lastPatchAt > 0);
+    assert.ok(gotFirstPatch, 'expected at least one successful PATCH before parent death');
+
+    await stopAll(oldParent);
+    const exited = await waitUntil(() => tick.exitCode !== null, { timeoutMs: 6000 });
+    assert.ok(
+      exited,
+      'tick must NOT adopt its own pid: kill(self,0) always succeeds, so adopting it resets '
+      + 'parentMissCount, makes MAX_PARENT_MISSES unreachable, and leaves the daemon immortal '
+      + 'stamping liveness for a session whose parent is gone'
+    );
+  } finally {
+    await stopAll(tick, oldParent);
+    server.close();
+  }
+});
+
 // ── TS-4: first-tick does not resurrect a released row ──────────────────────
 
 test('TS-4: a first-tick fire against a pre-released row does not resurrect it', { timeout: 10000 }, async () => {
