@@ -26,6 +26,9 @@ import { pathToFileURL } from 'node:url';
 
 const require = createRequire(import.meta.url);
 const { hasFreshHeartbeat, hasTickAlive, hasPidAlive } = require('../lib/fleet/session-liveness.cjs');
+// FR-3a: same venue predicate the sweep uses (stale-session-sweep.cjs:545), so both consumers
+// abstain on the same evidence rather than each deciding for itself what "no answer" means.
+const { pidVenueCapability } = require('../lib/fleet/pid-venue.cjs');
 import { parseLivenessClasses, partitionRowsByClasses } from '../lib/periodic-liveness/class-split.mjs';
 import { resolveOwnerTarget } from '../lib/periodic-liveness/owner-target-resolver.mjs';
 import { climbLadder, resetConsecutiveMiss, emitLadderDigest } from '../lib/periodic-liveness/ladder-escalation.mjs';
@@ -81,7 +84,7 @@ const ALLOWED_METADATA_FILTER_KEYS = new Set(['role', 'is_coordinator']);
 // is that the answer is now derived from ALL seats, the per-seat dead ones are named rather than
 // silently skipped, and the row count examined is stated so "found nothing" can never again be
 // mistaken for "looked at everything".
-async function resolveRoleSession(row) {
+async function resolveRoleSession(row, pidVenue = pidVenueCapability()) {
   const empty = { lastFiredAt: null, signals: {}, evaluableCount: 0, examined: 0, seats: [] };
   const filter = row.liveness_source_ref?.metadata_filter;
   if (!filter) return empty;
@@ -99,13 +102,34 @@ async function resolveRoleSession(row) {
   if (error || !data || data.length === 0) return empty;
 
   const nowMs = Date.now();
+  // FR-3a IN THIS FILE TOO. stale-session-sweep.cjs:2165 already derives `pidUnverifiable =
+  // !pidVenue.capable` — "not 'the PID is not alive', but 'we are somewhere the answer was never
+  // written'". The watcher had NO such gate, so in a PID-blind venue every stale-heartbeat seat
+  // produced a hard pidAlive=false that COUNTED AS A CORROBORATING STALE SIGNAL.
+  //
+  // Why the per-seat guard below cannot carry this on its own: session_id is TEXT NOT NULL UNIQUE
+  // (20251204_multi_session_coordination.sql), so `terminal_id != null || session_id != null` is
+  // ALWAYS TRUE on a production row. The ternary could therefore never yield null, and hasPidAlive
+  // returns a bare false for BOTH "marker says the process is gone" (a real negative) and "no
+  // marker exists anywhere" (no answer at all). Conflating those is exactly the defect this SD
+  // exists to eliminate, and it was live in the file implementing FR-3c.
+  //
+  // `pidVenue` is a PARAMETER with a live default rather than a call here, because
+  // lib/fleet/pid-venue.cjs loads through createRequire() and vi.mock() is a silent no-op on that
+  // path (this file's test header documents the same trap for session-liveness.cjs). An injected
+  // seam is the only way a hermetic test can drive BOTH venue verdicts; production is unchanged.
   const seats = data.map((seat) => {
     const s = {
       heartbeatFresh: seat.heartbeat_at != null ? hasFreshHeartbeat(seat, nowMs) : null,
       // FR-1 (C2) made hasPidAlive resolvable from session_id alone, so a NULL terminal_id is no
       // longer a reason to skip the PID rung — gating on terminal_id here would discard a real
       // answer for the 25% of live rows that carry no terminal_id but do have a marker.
-      pidAlive: (seat.terminal_id != null || seat.session_id != null) ? hasPidAlive(seat) : null,
+      // The venue check is the OUTER gate: where no marker was ever written, the rung ABSTAINS
+      // (null) rather than voting. Where markers DO exist, "no marker for this seat" stays a real
+      // negative the class verdict may act on — the distinction pid-venue.cjs:59 draws deliberately.
+      pidAlive: !pidVenue.capable
+        ? null
+        : (seat.terminal_id != null || seat.session_id != null) ? hasPidAlive(seat) : null,
       tickAlive: seat.process_alive_at != null ? hasTickAlive(seat, nowMs) : null,
     };
     return {
@@ -179,7 +203,7 @@ async function evaluateRow(row, ctx = {}) {
     }
     lastFiredAt = decision.ranAtIso;
   } else if (row.liveness_source === 'claude_sessions_heartbeat') {
-    const resolved = await resolveRoleSession(row);
+    const resolved = await resolveRoleSession(row, ctx.pidVenue);
     lastFiredAt = resolved.lastFiredAt;
     const staleSignals = Object.entries(resolved.signals).filter(([, v]) => v === false).length;
     const freshSignals = Object.entries(resolved.signals).filter(([, v]) => v === true).length;

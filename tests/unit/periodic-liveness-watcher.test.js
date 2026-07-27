@@ -113,6 +113,15 @@ function selfStampedRow(overrides = {}) {
 const OLD_TS = '2020-01-01T00:00:00Z'; // unambiguously stale for every signal type
 const FRESH_TS = () => new Date().toISOString();
 
+// SD-LEO-INFRA-PID-LIVENESS-DURABLE-VENUE-001 (FR-3a in the watcher).
+// pid-venue.cjs also loads via createRequire(), so vi.mock() is a silent no-op on it for the same
+// reason the header documents for session-liveness.cjs. evaluateRow therefore accepts an INJECTED
+// venue (ctx.pidVenue) so both verdicts are drivable hermetically instead of inheriting whatever
+// the machine running the suite happens to have on disk. Without this, every PID-rung assertion
+// below is environment-dependent: green on a dev box with markers, red in CI without them.
+const CAPABLE_VENUE = { capable: true, reason: 'marker_dir_present', markerDir: '/fake/markers', markerCount: 3 };
+const BLIND_VENUE = { capable: false, reason: 'marker_dir_absent', markerDir: '/fake/markers', markerCount: 0 };
+
 describe('evaluateRow', () => {
   beforeEach(() => {
     state.claudeSessionsRow = null;
@@ -141,7 +150,50 @@ describe('evaluateRow', () => {
   it('role_session: heartbeat + terminal_id populated, both genuinely stale -> OVERDUE', async () => {
     state.claudeSessionsRow = { heartbeat_at: OLD_TS, terminal_id: 'win-cc-1234-999999', tty: null, process_alive_at: null, is_alive: false };
     const row = roleSessionRow();
-    const result = await evaluateRow(row);
+    // Venue pinned CAPABLE: in a venue where markers DO exist, "no marker for this seat" is a real
+    // negative and OVERDUE is the correct verdict. Left unpinned this assertion would silently
+    // become a test of the runner's own .claude/session-identity directory.
+    const result = await evaluateRow(row, { pidVenue: CAPABLE_VENUE });
+    expect(result.state).toBe(STATE.OVERDUE);
+  });
+
+  // ── FR-3a REGRESSION GUARD (adversarial review of PR #6537, CRITICAL) ────────────────────────
+  // The PID rung's guard was `(seat.terminal_id != null || seat.session_id != null)`. session_id is
+  // TEXT NOT NULL UNIQUE, so on a PRODUCTION row that condition is ALWAYS TRUE -- pidAlive could
+  // never be null, and hasPidAlive() returns a bare false for "no marker exists anywhere" exactly
+  // as it does for "the marker says the process is gone". The unanswerable case therefore counted
+  // as a corroborating STALE signal, pushing evaluableCount to 2 and converting an honest
+  // UNVERIFIED into OVERDUE -- could-not-determine coerced into death, in the very file
+  // implementing FR-3c.
+  //
+  // The pre-existing suite could not catch it: its fixtures omit session_id, a row shape that
+  // cannot occur in production. Both cases below carry session_id for that reason.
+  it('FR-3a: PID-BLIND venue + production row shape (session_id present) -> UNVERIFIED, never OVERDUE', async () => {
+    state.claudeSessionsRow = {
+      // Synthetic and unresolvable ON PURPOSE. A first draft of this test used the authoring
+      // session's REAL uuid -- which has a live marker on disk, so the capable-venue control
+      // resolved a running pid and returned OK instead of OVERDUE. The negative control caught it.
+      // hasPidAlive() reaches the real resolver here (createRequire bypasses vi.mock), so the id
+      // must be one no marker can ever match.
+      session_id: '00000000-0000-0000-0000-00000000dead', // NOT NULL in claude_sessions
+      heartbeat_at: OLD_TS, terminal_id: null, tty: null, process_alive_at: null, is_alive: false,
+    };
+    const result = await evaluateRow(roleSessionRow(), { pidVenue: BLIND_VENUE });
+    // Where no marker was ever written, the rung has NO ANSWER -- so heartbeat is the only
+    // evaluable signal and the 2-signal death gate must hold.
+    expect(result.state).toBe(STATE.UNVERIFIED);
+    expect(result.reason).toMatch(/^fewer_than_2_evaluable_signals/);
+  });
+
+  it('FR-3a NEGATIVE CONTROL: the SAME row in a CAPABLE venue does reach OVERDUE', async () => {
+    // Proves the assertion above is load-bearing rather than vacuous: the only thing that changed
+    // is venue capability, and the verdict flips. If this ever stops flipping, the abstention test
+    // has gone vacuous and must be fixed, not deleted.
+    state.claudeSessionsRow = {
+      session_id: '00000000-0000-0000-0000-00000000dead',
+      heartbeat_at: OLD_TS, terminal_id: null, tty: null, process_alive_at: null, is_alive: false,
+    };
+    const result = await evaluateRow(roleSessionRow(), { pidVenue: CAPABLE_VENUE });
     expect(result.state).toBe(STATE.OVERDUE);
   });
 
