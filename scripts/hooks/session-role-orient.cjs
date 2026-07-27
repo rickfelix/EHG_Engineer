@@ -28,8 +28,34 @@ const workerLines = (callsign, coordShort) => [
   '[ROLE] WIND-DOWN HANDSHAKE (before you finish an SD or go idle): (1) NEVER drop an in-progress SD to claim another — FINISH it or hand it off explicitly (a half-done unclaimed SD is an orphan); (2) before going quiet, /signal feedback "winding down — finished <SD>, anything queued for me? idling <Ns>" so the coordinator can assign in your GRACE WINDOW; (3) arm a SHORT grace ScheduleWakeup (~180s) and on that next tick RE-CHECK your inbox for a coordinator reply BEFORE settling into the ~1200s idle cadence. Announce, give the grace window, then idle — do not vanish mid-stream.'
 ];
 
+/**
+ * QF-20260727-391. This used to be a bare JSON.parse with NO shape check, and that made a corrupt
+ * cache OVERRIDE the authority instead of degrading to it.
+ *
+ * A bare JSON string (e.g. the file containing just "a59441f4-…" because a caller wrote the id
+ * rather than {session_id}) parses to a TRUTHY JavaScript string. The `if (!coordFile && sessionId)`
+ * guard in main() therefore evaluated false, findActiveCoord() never ran, and decide()'s
+ * `coordFile?.session_id` is undefined on a string — so both the COORDINATOR and WORKER branches
+ * fell through and every starting session was told SOLO while a coordinator was live and
+ * heartbeating. Failing toward SOLO is not a safe default: a worker told SOLO gets no /checkin
+ * instruction, never drains its coordinator inbox, and never /signals on loop start.
+ *
+ * Delegating to lib/coordinator/resolve.cjs readPointerFile rather than re-validating inline: that
+ * reader already implements the contract ("if (!data || typeof data.session_id !== 'string') return
+ * null"), and a second hand-rolled reader is exactly how the two drifted apart in the first place.
+ * It is cheap enough for a SessionStart hook — resolve.cjs requires only fs/path/os at module load,
+ * no DB client — so the BUDGET_MS ceiling is unaffected. Returning null is the actual repair: it is
+ * what re-enables the DB fallback, which was correct all along.
+ */
 function readCoordFile() {
-  try { return fs.existsSync(COORD_FILE) ? JSON.parse(fs.readFileSync(COORD_FILE, 'utf8')) : null; } catch { return null; }
+  try {
+    const { readPointerFile } = require('../../lib/coordinator/resolve.cjs');
+    return readPointerFile(COORD_FILE);
+  } catch {
+    // Fail-soft, matching the prior contract: an unreadable/unloadable pointer is treated as ABSENT
+    // so the DB fallback runs, never as a coordinator-shaped value.
+    return null;
+  }
 }
 async function pgGet(qs) {
   const url = process.env.SUPABASE_URL || process.env.NEXT_PUBLIC_SUPABASE_URL;
