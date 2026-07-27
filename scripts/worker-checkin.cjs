@@ -430,6 +430,20 @@ async function registerRollCall(sb, { sessionId, coordinatorId, callsign, mySd }
   }
 }
 
+// QF-20260727-978: stamp metadata.directed_assignment on an SD claimed via a directed
+// WORK_ASSIGNMENT. The coordinator-health gauge READS this key in two places and, until now,
+// nothing in the repo wrote it — so its direct_dispatch counter could only ever report 0.
+// Goes through the atomic jsonb-merge helper, never a read-spread-write: metadata is a shared
+// blob (claim_history, coordinator hold flags) and a full-blob write from a snapshot clobbers
+// siblings (QF-20260720-597). Lives here rather than inline in the step so it reaches the step
+// through ctx.helpers — the pipeline's injection seam, which also makes it testable without a
+// live pg connection (safe-metadata-merge is ESM; a dynamic import inside the CJS step cannot
+// be intercepted by the test runner's module registry).
+async function stampDirectedAssignment(sdKey) {
+  const { mergeMetadataKeys } = await import('../lib/coordinator/safe-metadata-merge.mjs');
+  return mergeMetadataKeys(sdKey, { directed_assignment: true });
+}
+
 async function ackMessage(sb, id, opts = {}) {
   try {
     const now = new Date().toISOString();
@@ -1702,9 +1716,9 @@ async function main() {
 // Steps destructure what they need from ctx.helpers instead of require()ing this file (which
 // would be circular). Every name below is either defined above in this file or imported at the
 // top (imports are referenced directly — never re-derived).
-const CHECKIN_HELPERS = { ws, tryClaim, ackMessage, extractSdFromAssignment, extractDirectedSd, isInformationalNudge, classifyDispatchIneligibility, coordinatorReservation, isSeatBusyOnDirectedWork, registerRollCall, rehydrateCallsign, selfClearQuarantine, mergeCheckinModelEffort, recoverStrandedFinal, adoptOrphanInProgress, isSelfClaimDisabled, isGlobalStandDownActive, isBuildForbiddenSession, ensureActiveBaseline, isCriticalQfJumpEligible, tryClaimDraftCandidate, baselinedCandidateEligible, isSdInFlight, selfClaimQuickFix, selfHealStaleClaim, findOwnSdClaim, healOwnClaimPointer, confirmRowGone, surfaceCoordinatorMessages, fetchDraftCandidates, fetchNewestDraftCandidates, fetchFleetCriticalCandidates, fetchRankedCandidates, sortByDispatchRank, resolveWorkerTierRank, isTieringActive, fetchLowerTierBacklogData, ladderTopRank, seatCapabilityIsVerified, fetchFableWindowActive, claimableForTier, claimableForRepo, getCommsActivitySignals, computeAdaptiveCadence, antiWinddownDirective, ASSIGNMENT_RECENCY_WINDOW_MS, TERMINAL_CLAIM_ERRORS, QF_CANDIDATE_LIMIT, SELF_CLAIM_CANDIDATE_LIMIT, DEFAULT_IDLE_WAKEUP_SECONDS };
+const CHECKIN_HELPERS = { ws, tryClaim, stampDirectedAssignment, ackMessage, extractSdFromAssignment, extractDirectedSd, isInformationalNudge, classifyDispatchIneligibility, coordinatorReservation, isSeatBusyOnDirectedWork, registerRollCall, rehydrateCallsign, selfClearQuarantine, mergeCheckinModelEffort, recoverStrandedFinal, adoptOrphanInProgress, isSelfClaimDisabled, isGlobalStandDownActive, isBuildForbiddenSession, ensureActiveBaseline, isCriticalQfJumpEligible, tryClaimDraftCandidate, baselinedCandidateEligible, isSdInFlight, selfClaimQuickFix, selfHealStaleClaim, findOwnSdClaim, healOwnClaimPointer, confirmRowGone, surfaceCoordinatorMessages, fetchDraftCandidates, fetchNewestDraftCandidates, fetchFleetCriticalCandidates, fetchRankedCandidates, sortByDispatchRank, resolveWorkerTierRank, isTieringActive, fetchLowerTierBacklogData, ladderTopRank, seatCapabilityIsVerified, fetchFableWindowActive, claimableForTier, claimableForRepo, getCommsActivitySignals, computeAdaptiveCadence, antiWinddownDirective, ASSIGNMENT_RECENCY_WINDOW_MS, TERMINAL_CLAIM_ERRORS, QF_CANDIDATE_LIMIT, SELF_CLAIM_CANDIDATE_LIMIT, DEFAULT_IDLE_WAKEUP_SECONDS };
 
-module.exports = { extractSdFromAssignment, extractDirectedSd, isInformationalNudge, tryClaim, registerRollCall, ackMessage, isCoordinatorPush, surfaceCoordinatorMessages, rehydrateCallsign, runCheckin, resolveCheckin, assignFleetIdentityAtCheckin, selfClaimQuickFix, isAutoStartableQF, sortQfCandidatesBySeverity, QF_SEVERITY_RANK, isCriticalQfJumpEligible, CRITICAL_QF_JUMP_GRACE_MS, selfClaimDraftSd, fetchDraftCandidates, fetchNewestDraftCandidates, fetchFleetCriticalCandidates, fetchRankedCandidates, tryClaimDraftCandidate, draftDepsSatisfied, baselinedCandidateEligible, recoverStrandedFinal, adoptOrphanInProgress, pendingDirectedAssignmentBlocksAdoption, isSelfClaimDisabled, isQuarantined, isParked, selfClearQuarantine, isGlobalStandDownActive, isSdInFlight, isForeignSessionLive, foreignClaimantBlocksSteal, selfHealStaleClaim, findOwnSdClaim, healOwnClaimPointer, confirmRowGone, orderByRankMap, orderByFleetCriticalThenRank, sortByDispatchRank, DISPATCH_RANK_TTL_MS, PRIORITY_RANK, SD_KEY_RE, DEFAULT_IDLE_WAKEUP_SECONDS, STALE_QF_DAYS, antiWinddownDirective, mergeCheckinModelEffort, parseCheckinArgs };
+module.exports = { CHECKIN_HELPERS, stampDirectedAssignment, extractSdFromAssignment, extractDirectedSd, isInformationalNudge, tryClaim, registerRollCall, ackMessage, isCoordinatorPush, surfaceCoordinatorMessages, rehydrateCallsign, runCheckin, resolveCheckin, assignFleetIdentityAtCheckin, selfClaimQuickFix, isAutoStartableQF, sortQfCandidatesBySeverity, QF_SEVERITY_RANK, isCriticalQfJumpEligible, CRITICAL_QF_JUMP_GRACE_MS, selfClaimDraftSd, fetchDraftCandidates, fetchNewestDraftCandidates, fetchFleetCriticalCandidates, fetchRankedCandidates, tryClaimDraftCandidate, draftDepsSatisfied, baselinedCandidateEligible, recoverStrandedFinal, adoptOrphanInProgress, pendingDirectedAssignmentBlocksAdoption, isSelfClaimDisabled, isQuarantined, isParked, selfClearQuarantine, isGlobalStandDownActive, isSdInFlight, isForeignSessionLive, foreignClaimantBlocksSteal, selfHealStaleClaim, findOwnSdClaim, healOwnClaimPointer, confirmRowGone, orderByRankMap, orderByFleetCriticalThenRank, sortByDispatchRank, DISPATCH_RANK_TTL_MS, PRIORITY_RANK, SD_KEY_RE, DEFAULT_IDLE_WAKEUP_SECONDS, STALE_QF_DAYS, antiWinddownDirective, mergeCheckinModelEffort, parseCheckinArgs };
 
 if (require.main === module) {
   main().catch(err => {

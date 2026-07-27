@@ -8,36 +8,41 @@
  * surrounding comment says self-claim is the ~95% majority.
  *
  * The reader half was already covered. THIS file covers the WRITER, which is the half that was
- * actually missing: assert that the directed-dispatch path stamps the marker on a real claim.
- * Without these, the fix would be the "half-fix that reads as complete" the row warns about —
- * a gauge made writeable but with nothing proving anything can write it.
+ * actually missing. Without it the fix would be the "half-fix that reads as complete" the row
+ * warns about: a gauge made writeable, with nothing proving anything can write it.
+ *
+ * The write MUST go through the atomic jsonb-merge helper. strategic_directives_v2.metadata is
+ * a shared blob (claim_history, coordinator hold flags, provenance) and a read-spread-write
+ * built from a snapshot silently clobbers or resurrects sibling keys — QF-20260720-597, which
+ * safe-metadata-merge.mjs exists to prevent. The last test pins that mechanic so a future edit
+ * cannot quietly regress to `.update({ metadata: {...spread} })`.
  */
-import { describe, it, expect } from 'vitest';
+import { describe, it, expect, beforeEach, afterAll } from 'vitest';
 import { createRequire } from 'node:module';
-const require = createRequire(import.meta.url);
-const { resolveCheckin } = require('../../../scripts/worker-checkin.cjs');
 
-/**
- * @param {object} opts
- * @param {object|null} opts.sdRow - what strategic_directives_v2 returns for the assigned key
- * @param {object[]} opts.updates  - sink; every .update() payload is recorded here
- */
+const require = createRequire(import.meta.url);
+const { resolveCheckin, CHECKIN_HELPERS } = require('../../../scripts/worker-checkin.cjs');
+
+// Override on the shared helpers object the pipeline injects as ctx.helpers — the same
+// override pattern the sibling checkin tests use for ws.getMessagesForSession. Necessary
+// rather than stylistic: the real helper reaches safe-metadata-merge.mjs (ESM) through a
+// dynamic import inside a CJS module, which the runner's module registry cannot intercept,
+// so a vi.mock would silently no-op and the call would attempt a live pg connection.
+const mergeCalls = [];
+const realStamp = CHECKIN_HELPERS.stampDirectedAssignment;
+CHECKIN_HELPERS.stampDirectedAssignment = async (sdKey, patch = { directed_assignment: true }) => {
+  mergeCalls.push({ sdKey, patch });
+  return { merged: true, sdKey };
+};
+afterAll(() => { CHECKIN_HELPERS.stampDirectedAssignment = realStamp; });
+
 function fakeSb({ sdRow, assignedKey, updates }) {
-  // Model the SD row as SERVER-SIDE state with last-write-wins semantics, rather than handing
-  // back one shared object. That distinction is the whole point: claim_sd appends claim_history
-  // server-side during tryClaim, so a writer that merges into its own PRE-claim snapshot would
-  // clobber that entry. A shared-reference fake hides the clobber (the mutation is visible to
-  // everyone); this one surfaces it, because a stale-snapshot merge really does drop keys.
-  let serverMetadata = sdRow ? { ...(sdRow.metadata || {}) } : null;
   return {
-    // claim_sd succeeds; the claim_history append that makes the pre-claim snapshot stale is
-    // issued by tryClaim as its own .update() below, so it flows through serverMetadata
-    // naturally — no need to simulate it here as well.
     rpc: () => Promise.resolve({ data: { success: true }, error: null }),
     from(table) {
       // Track the eq() filters: the directed-assignment step looks the SD up BY sd_key, while
-      // earlier pipeline steps (e.g. resume) query the same table on other columns. Returning
-      // sdRow for every query on strategic_directives_v2 makes resume match first and the run
+      // earlier pipeline steps (e.g. resume) query the same table on other columns. Serving
+      // sdRow for every strategic_directives_v2 query makes resume match first and the run
       // never reaches the branch under test — so the row is served only for the sd_key lookup.
       const filters = {};
       return {
@@ -48,24 +53,14 @@ function fakeSb({ sdRow, assignedKey, updates }) {
           if (table === 'claude_sessions') return Promise.resolve({ data: { metadata: { role: 'worker' }, sd_key: null }, error: null });
           if (table === 'strategic_directives_v2') {
             if (filters.sd_key !== assignedKey || !sdRow) return Promise.resolve({ data: null, error: null });
-            // DEEP COPY per fetch. A real supabase-js client deserializes fresh objects, so two
-            // fetches never share references. Handing out one shared object instead would let an
-            // in-place mutation by an intervening writer (tryClaim appends claim_history that
-            // way) retroactively "update" an older snapshot — which silently hides the very
-            // stale-read bug these assertions exist to catch.
-            return Promise.resolve({ data: { ...sdRow, metadata: structuredClone(serverMetadata) }, error: null });
+            return Promise.resolve({ data: structuredClone(sdRow), error: null });
           }
           return Promise.resolve({ data: null, error: null });
         },
         insert() { return Promise.resolve({ error: null }); },
-        update(payload) {
-          updates.push({ table, payload });
-          if (table === 'strategic_directives_v2' && payload && payload.metadata) serverMetadata = payload.metadata;
-          return { eq() { return Promise.resolve({ error: null }); } };
-        },
+        update(payload) { updates.push({ table, payload }); return { eq() { return Promise.resolve({ error: null }); } }; },
       };
     },
-    finalMetadata: () => serverMetadata,
   };
 }
 
@@ -79,53 +74,59 @@ async function runDirectedClaim({ sdRow, assignedKey }) {
   ];
   try {
     const res = await resolveCheckin(sb, 'sess-worker-1', { getCoordinator: async () => null });
-    return { res, updates, finalMetadata: sb.finalMetadata() };
+    return { res, updates };
   } finally {
     ws.getMessagesForSession = orig;
   }
 }
 
+const SD_ROW = (key, metadata = {}) => ({
+  status: 'in_progress', sd_type: 'feature', sd_key: key, target_application: null, metadata,
+});
+
 describe('directed-assignment step writes the directed_assignment marker (QF-20260727-978)', () => {
+  beforeEach(() => { mergeCalls.length = 0; });
+
   it('stamps directed_assignment=true on the SD when a directed WORK_ASSIGNMENT is claimed', async () => {
-    const { res, finalMetadata } = await runDirectedClaim({
-      assignedKey: 'SD-DIRECTED-001',
-      sdRow: { status: 'in_progress', sd_type: 'feature', sd_key: 'SD-DIRECTED-001', metadata: {}, target_application: null },
-    });
+    const { res } = await runDirectedClaim({ assignedKey: 'SD-DIRECTED-001', sdRow: SD_ROW('SD-DIRECTED-001') });
     expect(res.action).toBe('claimed_assignment');
-    // Assert the SETTLED row, not just that some update was issued — what the gauge later reads
-    // is the final state, and several writes land on this row during one claim.
-    expect(finalMetadata.directed_assignment, 'the directed path must write the marker the gauge reads').toBe(true);
+    expect(mergeCalls, 'the directed path must write the marker the gauge reads').toHaveLength(1);
+    expect(mergeCalls[0].sdKey).toBe('SD-DIRECTED-001');
+    expect(mergeCalls[0].patch.directed_assignment).toBe(true);
   });
 
-  it('MERGES into the POST-claim metadata, preserving the claim_history claim_sd just appended', async () => {
-    // metadata carries claim_history, target_repos, do_not_accept and much else. Two ways to
-    // break it: a bare { directed_assignment: true } write, or — subtler and the one that bit
-    // during development — merging into the snapshot fetched BEFORE tryClaim, which drops the
-    // claim-history entry claim_sd wrote server-side in between.
-    const { finalMetadata } = await runDirectedClaim({
+  it('patches ONLY that key — never a full-blob write that could clobber siblings', async () => {
+    // The hazard is concrete: claim_sd appends claim_history server-side during the tryClaim
+    // immediately before this, and coordinator hold flags can clear concurrently. A patch
+    // carrying anything beyond the marker means someone rebuilt the blob from a snapshot.
+    await runDirectedClaim({
       assignedKey: 'SD-DIRECTED-002',
-      sdRow: {
-        status: 'in_progress', sd_type: 'feature', sd_key: 'SD-DIRECTED-002', target_application: null,
-        metadata: { claim_history: [{ session_id: 'prior' }], sourced_by: 'adam', dispatch_reason_band: 'chairman-directed' },
-      },
+      sdRow: SD_ROW('SD-DIRECTED-002', {
+        claim_history: [{ session_id: 'prior' }], sourced_by: 'adam',
+        dispatch_reason_band: 'chairman-directed', needs_coordinator_review: false,
+      }),
     });
-    expect(finalMetadata.directed_assignment).toBe(true);
-    expect(finalMetadata.sourced_by).toBe('adam');
-    expect(finalMetadata.dispatch_reason_band).toBe('chairman-directed');
-    // Both the pre-existing entry AND the one appended by the claim must survive. Merging into
-    // the pre-claim snapshot instead would leave only the 'prior' entry — this is the assertion
-    // that fails on the stale-snapshot version of the writer.
-    expect(finalMetadata.claim_history).toHaveLength(2);
-    expect(finalMetadata.claim_history[0]).toEqual({ session_id: 'prior' });
-    expect(finalMetadata.claim_history[1].session_id).toBe('sess-worker-1');
+    expect(mergeCalls).toHaveLength(1);
+    expect(Object.keys(mergeCalls[0].patch)).toEqual(['directed_assignment']);
   });
 
   it('does NOT attempt the stamp for a directed QUICK-FIX assignment', async () => {
     // A QF key genuinely misses in strategic_directives_v2 (no row, no error), and quick_fixes
     // has no metadata column to carry the marker. Writing anything here would be inventing a
     // row. This is exactly the population limit deriveDispatchReasons now names out loud.
-    const { res, updates } = await runDirectedClaim({ assignedKey: 'QF-20260727-978', sdRow: null });
+    const { res } = await runDirectedClaim({ assignedKey: 'QF-20260727-978', sdRow: null });
     expect(res.action).toBe('claimed_assignment');
-    expect(updates.find(u => u.table === 'strategic_directives_v2' && u.payload?.metadata)).toBeUndefined();
+    expect(mergeCalls).toHaveLength(0);
+  });
+
+  it('does not reintroduce a read-spread-write of the metadata blob', async () => {
+    // Regression pin for the mandated mechanic (QF-20260720-597): the marker must never be
+    // written by a .update({ metadata: ... }) issued from this step. tryClaim legitimately
+    // writes claim_history that way; what must not appear is a SECOND metadata write carrying
+    // directed_assignment.
+    const { updates } = await runDirectedClaim({ assignedKey: 'SD-DIRECTED-003', sdRow: SD_ROW('SD-DIRECTED-003') });
+    const blobWrites = updates.filter(u => u.table === 'strategic_directives_v2'
+      && u.payload?.metadata && 'directed_assignment' in u.payload.metadata);
+    expect(blobWrites).toEqual([]);
   });
 });
