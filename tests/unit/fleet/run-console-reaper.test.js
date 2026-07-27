@@ -1,6 +1,6 @@
 // SD-LEO-FEAT-FLEET-SESSION-LIFECYCLE-001 / FR-5 — the reaper runner.
 
-import { describe, it, expect, vi } from 'vitest';
+import { describe, it, expect, vi, beforeEach } from 'vitest';
 import {
   runReaperOnce,
   parseProcessCsv,
@@ -22,11 +22,18 @@ const PROCS = [
 ];
 const okSnap = async () => ({ ok: true, processes: PROCS, error: null });
 
+// Persistence is ALWAYS injected here. Without it the default writer appends to the REAL
+// .claude/console-parentage.jsonl — a unit test writing fixture data into the repo, which is
+// how an empty log file ended up staged in the first place. Captured so it can be asserted.
+let persistedCalls;
+const noPersist = (records) => { persistedCalls.push(records); return { written: records.length, skipped: 0, error: null }; };
+beforeEach(() => { persistedCalls = []; });
+
 describe('FR5-RUN: the flag is opt-in', () => {
   it('does nothing unless FLEET_CONSOLE_REAPER_ENABLED is exactly "on"', async () => {
     expect(isConsoleReaperEnabled({})).toBe(false);
     expect(isConsoleReaperEnabled({ FLEET_CONSOLE_REAPER_ENABLED: 'true' })).toBe(false);
-    const r = await runReaperOnce({ env: {}, snapshot: okSnap, kill: vi.fn() });
+    const r = await runReaperOnce({ env: {}, snapshot: okSnap, kill: vi.fn(), persistParentage: noPersist });
     expect(r.ran).toBe(false);
   });
 });
@@ -39,7 +46,7 @@ describe('FR5-RUN: FAIL-CLOSED — "could not look" never becomes "nothing to se
     const r = await runReaperOnce({
       env: ON,
       snapshot: async () => ({ ok: false, processes: null, error: { code: 'GUARD_UNAVAILABLE', timedOut: true, message: 'timeout' } }),
-      kill,
+      kill, persistParentage: noPersist,
     });
     expect(r.ran).toBe(false);
     expect(r.reason).toBe('GUARD_UNAVAILABLE');
@@ -52,7 +59,7 @@ describe('FR5-RUN: FAIL-CLOSED — "could not look" never becomes "nothing to se
     const snapshot = async () => (n++ === 0
       ? { ok: true, processes: PROCS, error: null }
       : { ok: false, processes: null, error: { code: 'GUARD_UNAVAILABLE', timedOut: false, message: 'wmi down' } });
-    const r = await runReaperOnce({ env: ON, snapshot, kill });
+    const r = await runReaperOnce({ env: ON, snapshot, kill, persistParentage: noPersist });
     expect(kill).not.toHaveBeenCalled();
     expect(r.spared[0].why).toMatch(/not actually observed/);
   });
@@ -61,7 +68,7 @@ describe('FR5-RUN: FAIL-CLOSED — "could not look" never becomes "nothing to se
 describe('FR5-RUN: only zero-descendant consoles, re-checked immediately before the kill', () => {
   it('kills the empty console and spares the occupied one', async () => {
     const kill = vi.fn(async () => {});
-    const r = await runReaperOnce({ env: ON, snapshot: okSnap, kill });
+    const r = await runReaperOnce({ env: ON, snapshot: okSnap, kill, persistParentage: noPersist });
     expect(r.killed).toEqual([100]);
     expect(kill).toHaveBeenCalledTimes(1);
     expect(kill).toHaveBeenCalledWith(100);
@@ -75,14 +82,14 @@ describe('FR5-RUN: only zero-descendant consoles, re-checked immediately before 
       if (n === 1) return { ok: true, processes: PROCS, error: null };
       return { ok: true, processes: [...PROCS, { pid: 101, ppid: 100, name: 'claude.exe', cmd: 'c' }], error: null };
     };
-    const r = await runReaperOnce({ env: ON, snapshot, kill });
+    const r = await runReaperOnce({ env: ON, snapshot, kill, persistParentage: noPersist });
     expect(kill).not.toHaveBeenCalled();
     expect(r.killed).toEqual([]);
   });
 
   it('--dry-run reports candidates and kills nothing', async () => {
     const kill = vi.fn();
-    const r = await runReaperOnce({ env: ON, snapshot: okSnap, kill, dryRun: true });
+    const r = await runReaperOnce({ env: ON, snapshot: okSnap, kill, dryRun: true, persistParentage: noPersist });
     expect(r.dryRun).toBe(true);
     expect(r.candidates).toBe(1);
     expect(kill).not.toHaveBeenCalled();
@@ -91,7 +98,7 @@ describe('FR5-RUN: only zero-descendant consoles, re-checked immediately before 
 
 describe('FR5-RUN: parentage is captured for EVERY console, not only the reaped ones', () => {
   it('attributes both consoles, including the occupied one', async () => {
-    const r = await runReaperOnce({ env: ON, snapshot: okSnap, kill: vi.fn(async () => {}) });
+    const r = await runReaperOnce({ env: ON, snapshot: okSnap, kill: vi.fn(async () => {}), persistParentage: noPersist });
     expect(r.parentage).toHaveLength(2);
     expect(r.parentage.every((p) => p.ok)).toBe(true);
   });
@@ -121,5 +128,18 @@ describe('FR5-RUN: CSV parsing', () => {
     expect(descendantCountOf(200, PROCS)).toBe(1);
     expect(descendantCountOf(100, PROCS)).toBe(0);
     expect(findConsoles(PROCS).map((c) => c.pid)).toEqual([100, 200]);
+  });
+});
+
+describe('FR5-RUN: parentage is PERSISTED before any kill', () => {
+  it('hands every observed console to the persister', async () => {
+    await runReaperOnce({ env: ON, snapshot: okSnap, kill: vi.fn(async () => {}), persistParentage: noPersist });
+    expect(persistedCalls).toHaveLength(1);
+    expect(persistedCalls[0]).toHaveLength(2); // both consoles, occupied one included
+  });
+
+  it('persists even on a dry run — attribution is the point, not the reap', async () => {
+    await runReaperOnce({ env: ON, snapshot: okSnap, kill: vi.fn(), dryRun: true, persistParentage: noPersist });
+    expect(persistedCalls).toHaveLength(1);
   });
 });
