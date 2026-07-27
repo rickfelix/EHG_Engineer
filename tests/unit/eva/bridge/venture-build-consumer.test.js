@@ -6,8 +6,8 @@ import { readFileSync } from 'fs';
 import { fileURLToPath } from 'url';
 import { dirname, resolve } from 'path';
 import {
-  runConsume, computeWorkableLeaves, isTreeComplete, fetchDescendants,
-  ventureEligibility, maybeIdleNudge, tryAdvisoryLock, finalizeConsume, TERMINAL, NON_TERMINAL,
+  runConsume, computeWorkableLeaves, isTreeComplete,
+  maybeIdleNudge, tryAdvisoryLock, finalizeConsume, TERMINAL,
   // SD-LEO-FIX-STAGE-BUILD-CONSOLIDATE-001
   consolidateGeneratedTests, detectPackageManager, enumerateChildWorktrees, resolveVentureRepoPath,
 } from '../../../../lib/eva/bridge/venture-build-consumer.js';
@@ -123,6 +123,44 @@ describe('venture-build-consumer — introspection', () => {
     expect(isTreeComplete(sds)).toBe(false);
     sds.forEach((s) => { s.status = 'completed'; });
     expect(isTreeComplete(sds)).toBe(true);
+  });
+
+  // QF-20260727-846. isTreeComplete used to ask "is any descendant still draft/active?" — an
+  // ALLOWLIST OF STILL-WORKING STATES, so every status the author did not enumerate defaulted to
+  // COMPLETE. 'in_progress' is in neither NON_TERMINAL nor TERMINAL, and it is now the overwhelmingly
+  // common in-flight status (POST_HANDOFF_SD_STATE force-normalizes every handoff outcome to
+  // in_progress; the audit table shows pre_active writes falling 125 -> 5 -> 12 -> ZERO across
+  // 2026-04..07). So a venture whose entire tree was actively building read as finished and could be
+  // marked done=SHIPPED mid-build.
+  //
+  // The fix inverts the predicate to test TERMINAL membership, which makes the failure direction safe
+  // BY CONSTRUCTION: an unrecognised status counts as NOT complete. These assertions therefore pin the
+  // DEFAULT DIRECTION, not just the one status that exposed it — a future 'blocked'/'on_hold' must not
+  // silently re-create the bug.
+  it('isTreeComplete blocks on any status that is not TERMINAL, including unknown ones', () => {
+    const sds = nestedTree({ children: 1, grandkidsEach: 2 }).filter((s) => s.id !== 'orch-top');
+
+    // The exact reported defect: a tree that is entirely in_progress is NOT complete.
+    sds.forEach((s) => { s.status = 'in_progress'; });
+    expect(isTreeComplete(sds)).toBe(false);
+
+    // The defect CLASS: a status nobody has invented yet must also block completion.
+    sds.forEach((s) => { s.status = 'some_future_status_nobody_enumerated'; });
+    expect(isTreeComplete(sds)).toBe(false);
+
+    // A single non-terminal descendant is enough to block an otherwise-finished tree.
+    sds.forEach((s) => { s.status = 'completed'; });
+    sds[sds.length - 1].status = 'in_progress';
+    expect(isTreeComplete(sds)).toBe(false);
+
+    // Every TERMINAL member still counts as complete (the fix must not over-block).
+    for (const terminal of TERMINAL) {
+      sds.forEach((s) => { s.status = terminal; });
+      expect(isTreeComplete(sds), `${terminal} should count as complete`).toBe(true);
+    }
+
+    // Degenerate case: no descendants is vacuously complete (unchanged by the inversion).
+    expect(isTreeComplete([])).toBe(true);
   });
 });
 
