@@ -1,15 +1,31 @@
 /**
  * SD-LEO-INFRA-PID-LIVENESS-DURABLE-VENUE-001 (C1 pre-amendment guard rail)
  *
- * WHY THIS EXISTS BEFORE THE CONTRACT AMENDMENT, NOT AFTER.
+ * WHY THIS EXISTS — AND WHY THE AMENDMENT IT WAS WRITTEN FOR IS NO LONGER COMING.
  *
- * C1 will amend the one-directional contract at lib/fleet/session-liveness.cjs:12-15 so that
- * isSessionAlive CAN return alive=false for a session whose raw is_alive flag says true. That is
- * necessary — while the contract stands, no fix in this SD can ever produce a dead verdict, which
- * makes every other change cosmetic.
+ * ORIGINAL PREMISE (SUPERSEDED, 2026-07-27): this file was written as a pre-amendment guard rail
+ * for a planned change to the one-directional contract at lib/fleet/session-liveness.cjs:12-15,
+ * letting isSessionAlive return alive=false for a session whose raw is_alive flag says true.
+ * THAT AMENDMENT IS WITHDRAWN. The rationale for it was that is_alive is "sticky; survives kill -9"
+ * (lib/claim/reacquire-self-live.mjs:54-55), so ranking it first imports a false-alive failure.
+ * Both halves of that rationale turned out to be wrong on the live code:
+ *   - NOT STICKY: stale-session-sweep.cjs:2444 atomically sets is_alive=false
+ *     (SD-LEO-INFRA-SESSION-LIFECYCLE-CLEANUP-001, FR-1/FR-2).
+ *   - THE DOCUMENTED FAILURE RUNS THE OTHER WAY: claim-validity-gate.js:220-224 and :266-270 record
+ *     that a LIVE, actively-heartbeating /loop worker transiently reads is_alive=false, and reaping
+ *     on that alone caused claim/release thrash and GATE_CLAIM_VALIDITY_FAILED — hit 2x in one
+ *     session. False-DEAD is the failure this system actually suffers; the short-circuit at :103 is
+ *     load-bearing protection against it, not a defect.
+ * So :103 stays. The remaining liveness scope is adoption of isSessionAlive() at the deciders that
+ * rolled their own answer — NOT a change to the predicate itself.
  *
- * It is also the single most dangerous edit in the SD, because a dead verdict is ACTED ON
- * destructively:
+ * THESE TESTS STILL EARN THEIR PLACE. They pin the invariant below against the CURRENT predicate,
+ * and that invariant is exactly what the withdrawn amendment would have put at risk. They are the
+ * regression net for any future attempt to revive it — and one was proposed and retracted within a
+ * single hour, so a future attempt is likely.
+ *
+ * The reason the amendment was dangerous is unchanged, and is why the invariant matters: a dead
+ * verdict is ACTED ON destructively:
  *   - lib/fleet/claim-release-guard.cjs shouldHoldClaim() returns hold=false when the holder is
  *     not alive, and hold=false RELEASES the claim — orphaning an in-flight SD.
  *   - scripts/worktree-reaper.mjs and lib/worktree-reaper/live-claim-guard.js gate worktree
@@ -24,9 +40,8 @@
  * this defect class collapsed — they turned an absent signal into a verdict, traded false-life for
  * false-death, and got reverted.
  *
- * These tests pin that invariant against TODAY's behaviour so the amendment cannot silently
- * violate it. They are expected to keep passing after the amendment lands; if the amendment breaks
- * one of them, the amendment is wrong, not the test.
+ * These tests pin that invariant against TODAY's behaviour. If any future change breaks one of
+ * them, that change is wrong, not the test.
  */
 
 import path from 'node:path';
