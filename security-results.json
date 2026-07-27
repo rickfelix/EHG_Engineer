@@ -1,0 +1,129 @@
+{
+  "status": "warning",
+  "confidence_score": 88,
+  "verdict": "PASS_WITH_CONCERNS",
+  "summary": "SR-1/SR-2/SR-3 PASS and SR-1 passes more strongly than the SD assumed: no item id ever reaches argv at all (branchForItem output is used only for Set membership in classifyItem), so the command-injection premise the SD guarded against is closed by construction, not merely by argument arrays. shell:false is explicit on the sole spawn site and was verified at RUNTIME via a child_process-level seam (4/4 captured spawnSync calls: shell===false, argv arrays of strings, ambient env, read-only subcommands only). The new module does not call wip-detector's shell:true-on-win32 runners. SR-4 is only PARTIALLY met, and two durability controls have real holes. BLOCKING: (1) the shipped default always runs `git ls-remote` and gates the entire snapshot on it, yet DISCARDS its output unless includeBranchOnly===true - measured 380-4163ms over 8 warm samples with 1/8 exceeding the 4000ms budget, and the first cold live snapshot returned UNAVAILABLE/timeout at 4028ms while the authoritative gh half completes in 426-1042ms; that UNAVAILABLE is then cached 60s, so a probe nobody reads silently disables the guard - the exact always-claimable outcome SR-4 exists to prevent. (2) the SR-1 regression test (TS-6) CANNOT FAIL: three unsafe refactors were demonstrated to still pass it, including the exact wip-detector pattern (const IS_WIN = process.platform === 'win32'; shell: IS_WIN), an execSync command-string build (/exec\\(/ does not match execSync(), and shell:true beside a decoy {shell:false} const. Additionally two of the four claimed FR-3 lanes are inert: no production caller populates ctx.inflight_git_state or sessionContext.inFlightQfIds.",
+  "findings": [
+    {
+      "id": "F1",
+      "severity": "high",
+      "requirement": "SR-4",
+      "title": "The default path gates the whole snapshot on a git probe whose output it discards, producing a silent always-claimable guard",
+      "location": "lib/fleet/inflight-git-state.cjs:168-176 (git probe), :202-205 (result discarded when includeBranchOnly!==true), :233-242 (UNAVAILABLE cached for TTL)",
+      "detail": "collectInflightSnapshot unconditionally runs `git ls-remote --heads origin` and returns UNAVAILABLE on its spawnError or non-zero exit BEFORE evaluating countBranchOnly. With the shipped default (includeBranchOnly !== true) headRefs is built from prRefs alone, so branchRefs is computed and thrown away. Measured on the live repo (win32, gh 2.78.0, git 2.50.1): git ls-remote = 292798 bytes / 3061 refs, latency min=380 med=531 max=4163 ms over 8 warm samples -> 1/8 EXCEEDED PROBE_TIMEOUT_MS (4000). The first cold snapshot against the live repo returned status=UNAVAILABLE reason=timeout at 4028ms while the authoritative gh half needs only 426-1042ms. getInflightSnapshot caches the failed snapshot unconditionally, so one slow ls-remote disables the guard for a full 60s TTL. Net effect: the dominant real-world failure mode of this guard is caused by a probe the default path does not use.",
+      "recommendation": "Run the git probe only when opts.includeBranchOnly === true. Halves latency, removes the largest timeout contributor, removes 286KB of buffer pressure, and eliminates a whole class of silent fail-open, with zero behavior change on the default path. Optionally do not cache UNAVAILABLE for the full TTL (use a short negative-cache window).",
+      "blocking": true
+    },
+    {
+      "id": "F2",
+      "severity": "high",
+      "requirement": "SR-1",
+      "title": "The SR-1 regression test is incapable of failing on the defect it names",
+      "location": "tests/unit/fleet/inflight-git-state.test.js:205-246 (TS-6)",
+      "detail": "TS-6 asserts against comment-stripped SOURCE TEXT. Demonstrated bypasses, all of which still report TS-6 PASSES: (a) `const IS_WIN = process.platform === 'win32'` hoisted out, `shell: IS_WIN` at the spawn site, plus any surviving `{ shell: false }` literal - this is precisely the wip-detector bug the module was written to avoid; (b) `execSync(bin + ' ' + args.join(' '))` - the assertion /exec\\(/ does not match `execSync(`, so a shell command-string build passes the 'never builds a command string' test; (c) `shell: true` at the spawn site with a decoy `const SAFE_DEFAULTS = { shell: false }`. The `toMatch(/shell:\\s*false/)` assertion only requires the string to appear SOMEWHERE, never ties it to the spawn call. Also `not.toContain(\"'pr', 'create'\")` is whitespace-sensitive (`'pr','create'` passes). The module docblock's premise ('a seam-injected test cannot observe this property, because the seam replaces the very code that decides it') is true of the runGit/runGh seam but is a false dichotomy: runSafe does `require('child_process')` LAZILY ON EVERY CALL, so the cached spawnSync is patchable - a seam BELOW the deciding code. The docblock itself prescribes asserting 'the DEFAULT runners' OPTIONS'; the test asserts text instead.",
+      "recommendation": "Replace the source-text assertions with a runtime assertion at the child_process seam. Verified working: capture cp.spawnSync, call defaultRunGh/defaultRunGit and collectInflightSnapshot, restore, then assert every captured call has opts.shell === false, Array.isArray(args), args.every(a=>typeof a==='string'), and args[0] in an allowlist {'pr','ls-remote'}. This ran green against the shipped code (4 calls captured, all shell===false) and fails on all three bypasses above. Keep one source-text check only as a cheap secondary if desired.",
+      "blocking": true
+    },
+    {
+      "id": "F3",
+      "severity": "medium",
+      "requirement": "SR-4 / FR-3 completeness",
+      "title": "Two of the four FR-3 lanes are inert - no production caller populates their inputs",
+      "location": "lib/fleet/claim-eligibility.cjs:401-409 (inflightGitAxes); scripts/modules/sd-next/display/quick-fixes.js:176-181 (topStartableQF)",
+      "detail": "Repo-wide grep across .js/.cjs/.mjs: the ONLY writers of ctx.inflight_git_state are tests/unit/fleet/claim-eligibility-inflight-axis.test.js, so the SD-row axis never engages in production. sessionContext.inFlightQfIds has no producer either - the only other occurrence of that identifier is an unrelated local in lib/quality/assist-engine.js:233 (a DB-status set that is never passed to classifyQuickFixes). All three real callers (display/fallback-queue.js:66, :109 and SDNextSelector.js:905) pass a sessionContext without it. Only the two withheldFilteredQfs lanes (critical-qf-jump.cjs and worker-checkin.cjs:670) are live. An unwired guard is silently always-claimable and, unlike the live lanes, emits no log at all - the same SR-4 failure shape.",
+      "recommendation": "Either wire the two producers (precompute the snapshot once per tick and pass it through), or explicitly descope them in the SD as opt-in seams for a follow-on so the completion claim matches reality.",
+      "blocking": true
+    },
+    {
+      "id": "F4",
+      "severity": "medium",
+      "requirement": "SR-4 / DoS-resource",
+      "title": "spawnSync maxBuffer is unset; live payload is at 28% of the 1 MiB default and the repo does not prune refs",
+      "location": "lib/fleet/inflight-git-state.cjs:85-105 (runSafe)",
+      "detail": "runSafe never sets maxBuffer, so Node's 1 MiB default applies. Live `git ls-remote --heads origin` = 292798 bytes across 3061 refs = 27.9% of 1 MiB, and the module's own docblock notes the repo squash-merges without pruning. Failure shape verified empirically at maxBuffer:50KB: spawnSync returns status=null with error.code='ENOBUFS'; runSafe maps that to spawnError='ENOBUFS' -> UNAVAILABLE -> fail-open. Once ref growth crosses 1 MiB the guard turns off silently and permanently. gh's payload is bounded and small (1774 bytes at --limit 200 / 33 open PRs).",
+      "recommendation": "Set an explicit maxBuffer on runSafe (e.g. 8-16 MiB) and surface ENOBUFS as a distinct reason token. F1's fix removes this exposure entirely on the default path.",
+      "blocking": false
+    },
+    {
+      "id": "F5",
+      "severity": "medium",
+      "requirement": "SR-4",
+      "title": "SR-4 reason tokens are computed then discarded at the only place an operator can see them",
+      "location": "lib/fleet/inflight-git-state.cjs:264-284 (filterOutInFlight returns snapshotStatus only); lib/checkin/steps/critical-qf-jump.cjs:38-42",
+      "detail": "The three-state design and the REASON token set are the right shape for SR-4, and the tokens are unit-tested inside the module. But filterOutInFlight returns {kept, withheld, snapshotStatus} and drops snapshot.reason, so the production log line is the static string '[critical-qf-jump] in-flight probe UNAVAILABLE - not withholding (fail-open)'. gh_exit_nonzero (auth misconfiguration), timeout (network/latency - the case F1 shows is most likely), parse_error and ENOBUFS are therefore INDISTINGUISHABLE in logs. SR-4 asks specifically that an auth/network failure be distinguishable; today only 'UNAVAILABLE vs withheld vs silent' is distinguishable, not the cause. The corresponding test (critical-qf-jump-inflight.test.js:100-108) only asserts the substring 'UNAVAILABLE', so it locks in the weaker property.",
+      "recommendation": "Return snapshot.reason from filterOutInFlight and interpolate it into the log line, then strengthen the test to assert the specific token (e.g. 'gh_exit_nonzero') rather than the bare word UNAVAILABLE. One-line change, closes the stated SR-4 requirement.",
+      "blocking": false
+    },
+    {
+      "id": "F6",
+      "severity": "low",
+      "requirement": "SR-3 hardening",
+      "title": "Unrestricted git/gh runners are exported from a module whose contract is read-only",
+      "location": "lib/fleet/inflight-git-state.cjs:299-300 (defaultRunGit/defaultRunGh in module.exports)",
+      "detail": "Both default runners accept arbitrary argv and are exported, with no subcommand allowlist inside runSafe. They are used by no consumer and by no test (the test file destructures ten other names, not these). Any future importer would get a general-purpose git/gh subprocess runner from a module documented as read-only - a quiet widening of the SR-3 boundary.",
+      "recommendation": "Drop the two exports, or add an allowlist in runSafe rejecting anything but args[0] in {'pr','ls-remote'} (with 'pr' additionally requiring args[1]==='list' when --repo splicing is not in play). Defense in depth; makes SR-3 structurally enforced rather than conventional.",
+      "blocking": false
+    },
+    {
+      "id": "F7",
+      "severity": "low",
+      "requirement": "correctness / silent false-negative",
+      "title": "--limit 200 is a silent correctness ceiling",
+      "location": "lib/fleet/inflight-git-state.cjs:53, :151",
+      "detail": "33 open PRs measured today, so 200 is ample. But if open PRs ever exceed 200, gh returns one page and every PR beyond it reads as CLEAR -> duplicate builds, with no signal at all. The docblock calls a false negative 'the most dangerous failure mode here because it looks exactly like a working guard'; this is one.",
+      "recommendation": "If parsed.length === Number(PR_LIST_LIMIT), treat the snapshot as UNAVAILABLE with a distinct reason (or paginate). Makes the ceiling loud instead of silent.",
+      "blocking": false
+    },
+    {
+      "id": "F8",
+      "severity": "low",
+      "requirement": "correctness / wrong-repo false negative",
+      "title": "Repo resolution is hardcoded by accident and is first-item-wins",
+      "location": "lib/checkin/steps/critical-qf-jump.cjs:25 vs the select at :69",
+      "detail": "repo = resolveGitHubRepo(list[0]?.target_application || 'EHG_Engineer'), but the lane's own select ('id, status, pr_url, commit_sha, created_at, routing_tier, title, severity, not_before') does NOT include target_application, so it is always undefined and the value is always 'EHG_Engineer'. Correct today only by accident. If the select is widened later, ONE item's application silently decides the repo for the WHOLE candidate list and mismatched items get probed against the wrong repo -> false CLEAR. resolveGitHubRepo also returns null for an unregistered app, which falls through to cwd inference. Note scripts/worker-checkin.cjs:670 passes {} and lands on the same 'EHG_Engineer' default, which is fine for that lane.",
+      "recommendation": "Group candidates by resolved repo and take one snapshot per repo, or assert the single-repo assumption explicitly. Add target_application to the select if the multi-repo behavior is intended.",
+      "blocking": false
+    },
+    {
+      "id": "F9",
+      "severity": "info",
+      "requirement": "SR-1 - verified strong",
+      "title": "The injection surface is closed by construction: no item id reaches argv",
+      "location": "lib/fleet/inflight-git-state.cjs:112-115, :151-152, :170, :212-223",
+      "detail": "Traced end-to-end. branchForItem(itemId) output is consumed ONLY by snapshot.headRefs.has(branch) / prRefs.has(branch) - pure Set membership. The gh argv is a fixed literal array plus an optional ['--repo', opts.repo] pair; the git argv is fully constant ['ls-remote','--heads','origin']. The only dynamic argv element is opts.repo, which comes from resolveGitHubRepo() - an allowlist returning either the literal 'rickfelix/EHG_Engineer', a github_repo from the validated applications/registry.json, or null - and it occupies the VALUE position immediately after --repo, so it cannot be reinterpreted as a flag. Consequences: a leading-dash id, a '--', an embedded newline, or shell metacharacters cannot change command semantics, because such an id is never executed. branchForItem additionally always prefixes 'qf/' or 'feat/', so its output can never begin with '-' even hypothetically. This is stronger than SR-1 required and stronger than the SD's own threat model assumed.",
+      "recommendation": "None required. If ids ever do start flowing into argv, add a /^[A-Za-z0-9][A-Za-z0-9._-]*$/ validation at branchForItem and use the '--' end-of-options separator.",
+      "blocking": false
+    },
+    {
+      "id": "F10",
+      "severity": "info",
+      "requirement": "SR-1 - platform verification",
+      "title": "shell:false actually resolves gh and git on this win32 fleet, and the gh arg-splice order is accepted",
+      "location": "verified empirically",
+      "detail": "The concern that shell:false might break binary resolution on Windows (the likely reason wip-detector.cjs:40 set shell:true) does NOT apply: spawnSync('gh',['--version'],{shell:false}) -> status=0, gh 2.78.0; spawnSync('git',['--version'],{shell:false}) -> status=0, git 2.50.1.windows.1 (node v24.12.0). Separately, the args.splice(1,0,'--repo',repo) ordering produces `gh pr --repo <r> list --state open --limit 200 --json headRefName`, which gh 2.78.0 accepts (status=0, valid JSON) - not a latent breakage. So SR-1 is functional here, not merely nominal, and the guard is not silently ENOENT-inert.",
+      "recommendation": "None.",
+      "blocking": false
+    },
+    {
+      "id": "F11",
+      "severity": "info",
+      "requirement": "SR-2",
+      "title": "Token hygiene is clean end-to-end",
+      "location": "lib/fleet/inflight-git-state.cjs (whole file); lib/checkin/steps/critical-qf-jump.cjs:33-42",
+      "detail": "No GH_TOKEN/GITHUB_TOKEN/process.env reference anywhere in the module. runSafe passes no `env` option, so the child inherits ambient credentials - exactly SR-2's 'use ambient gh auth'. stderr IS captured into the runner's return value but is never logged, never returned to callers, and never folded into a reason: reason values are fixed constants from REASON plus errno strings from res.error.code. The SR-4 log lines in critical-qf-jump.cjs emit only item ids and fixed reason tokens plus a static message - no stderr, so an authentication error message containing a token fragment cannot reach the log. Residual (theoretical): ids are echoed to console unsanitized, so a terminal-control-sequence id would be a log-injection vector; QF/SD ids are machine-generated and constrained, so this is not actionable.",
+      "recommendation": "None.",
+      "blocking": false
+    }
+  ],
+  "blocking": [
+    "F1 (SR-4, high): collectInflightSnapshot gates the whole snapshot on `git ls-remote` while discarding its output on the default path (includeBranchOnly !== true). Measured 1/8 warm samples over the 4000ms budget (max 4163ms) and the first cold live snapshot returned UNAVAILABLE/timeout at 4028ms, then cached that failure for the full 60s TTL - a silent always-claimable guard caused by a probe nobody reads. Fix: run the git probe only when includeBranchOnly === true.",
+    "F2 (SR-1, high): TS-6 in tests/unit/fleet/inflight-git-state.test.js cannot fail. Three unsafe refactors were demonstrated to pass it, including the exact wip-detector pattern (const IS_WIN = process.platform === 'win32'; shell: IS_WIN), execSync with a concatenated command string, and shell:true beside a decoy {shell:false}. The code is correct today; the control preventing it from becoming incorrect is not. Fix: assert at the child_process seam (proven available - runSafe requires child_process lazily per call) that every captured spawnSync has shell===false, an argv array of strings, and a read-only args[0].",
+    "F3 (FR-3 completeness, medium): claim-eligibility.cjs inflightGitAxes and quick-fixes.js topStartableQF are gated on ctx.inflight_git_state / sessionContext.inFlightQfIds, and repo-wide grep shows NO production writer for either - only tests. Two of the four claimed lanes are inert and emit no log. Fix: wire the producers, or descope them explicitly in the SD."
+  ],
+  "sr_compliance": {
+    "SR-1": "PASS (verified at runtime, not by source text). shell:false is explicit on runSafe, the sole spawn site; 4/4 spawnSync calls captured via a child_process seam had shell===false with argv arrays of all-string elements. The module does not call wip-detector's runners (references it only in prose) and correctly does not inherit its shell:process.platform==='win32' default; shell:false was confirmed to resolve gh 2.78.0 and git 2.50.1 on this win32 box. Stronger than required: no item id reaches argv at all - branchForItem output is used only for Set membership, so leading-dash / '--' / newline / metacharacter ids cannot alter command semantics. The only dynamic argv element is opts.repo, sourced from the resolveGitHubRepo allowlist and pinned to a flag-VALUE position. CAVEAT: the regression test guarding this property cannot fail (F2, blocking).",
+    "SR-2": "PASS. No token is read, embedded, or logged. No env override, so ambient gh auth is used as specified. stderr is captured but never logged, never returned to callers, and never folded into a reason token; reason values are fixed constants plus errno strings. The SR-4 log lines in critical-qf-jump.cjs emit only item ids and fixed tokens, so a credential-bearing stderr cannot leak through them.",
+    "SR-3": "PASS. Only `gh pr list --state open --limit 200 --json headRefName` and `git ls-remote --heads origin` are invoked - confirmed by runtime argv capture, not just by reading. No write subcommand exists on any path and nothing can mutate the repo or the remote. Hardening (F6, non-blocking): defaultRunGit/defaultRunGh are exported with no subcommand allowlist and are consumed by nobody, quietly widening the read-only boundary for future importers.",
+    "SR-4": "PARTIAL - the weakest of the four. The three-state IN_FLIGHT/CLEAR/UNAVAILABLE design and the discriminating REASON token set are the correct shape and the fail-open contract is preserved everywhere (verified: unauthenticated gh exit 4, throwing runner, non-array input, missing snapshot all withhold nothing). But the requirement is that an auth/network failure be DISTINGUISHABLE IN LOGS from a genuine not-in-flight verdict, and filterOutInFlight discards snapshot.reason, so the production log line is a static string in which gh_exit_nonzero (auth), timeout (network), parse_error and ENOBUFS are indistinguishable (F5). Compounding this, F1 shows the most probable UNAVAILABLE cause in practice is a timeout on a probe the default path does not even use, cached for 60s - i.e. a misconfiguration-equivalent condition that today IS silently read as always-claimable, which is exactly what SR-4 was written to prevent. Two further lanes are inert and emit no log at all (F3)."
+  }
+}

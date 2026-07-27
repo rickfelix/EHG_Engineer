@@ -131,11 +131,18 @@ describe('TS-3/TS-8 — UNAVAILABLE is reached, distinguishable, and never block
     expect(classifyItem(QF, snap).verdict).not.toBe(CLEAR);
   });
 
-  it('a failing git half does not serve a half-snapshot as CLEAR', () => {
+  it('a failing git half is IGNORED by default (its answer is unused) but fails closed when opted in', () => {
     const runGit = () => ({ stdout: '', stderr: 'fatal', code: 128, spawnError: null });
-    const snap = collectInflightSnapshot({ runGh: okGh([]), runGit, repo: 'o/r' });
-    expect(snap.status).toBe(UNAVAILABLE);
-    expect(snap.reason).toBe(REASON.GIT_EXIT_NONZERO);
+    // Default: git is never probed, so a git outage cannot disable the PR-based guard. Measured
+    // ls-remote at 380-4163ms with 1/8 over the 4s budget — one slow run used to blank the
+    // snapshot for a full 60s TTL, which is the always-claimable outcome SR-4 exists to prevent.
+    const off = collectInflightSnapshot({ runGh: okGh([]), runGit, repo: 'o/r' });
+    expect(off.status).toBe('OK');
+
+    // Opted in, git's answer IS load-bearing, so a failure must not serve a half-snapshot.
+    const on = collectInflightSnapshot({ runGh: okGh([]), runGit, repo: 'o/r', includeBranchOnly: true });
+    expect(on.status).toBe(UNAVAILABLE);
+    expect(on.reason).toBe(REASON.GIT_EXIT_NONZERO);
   });
 
   it('a missing snapshot classifies UNAVAILABLE, never CLEAR', () => {
@@ -146,14 +153,24 @@ describe('TS-3/TS-8 — UNAVAILABLE is reached, distinguishable, and never block
 
 // ── TS-5: batching ──────────────────────────────────────────────────────────
 describe('TS-5 — one gh call and one git call regardless of candidate count', () => {
-  it('classifying 20 items consumes exactly one probe pair', () => {
+  it('classifying 20 items consumes ONE gh call and ZERO git calls by default', () => {
     const runGh = vi.fn(okGh([`qf/${QF}`]));
     const runGit = vi.fn(okGit(['main']));
     const snap = collectInflightSnapshot({ runGh, runGit, repo: 'o/r' });
     const ids = Array.from({ length: 20 }, (_, i) => `QF-2026072${i % 10}-${i}`);
     ids.forEach((id) => classifyItem(id, snap));
-    // Call COUNT is the real invariant — a wall-clock assertion is vacuous against fakes,
-    // which return instantly.
+    // Call COUNT is the real invariant — a wall-clock assertion is vacuous against fakes.
+    expect(runGh).toHaveBeenCalledTimes(1);
+    // Zero, not one: the default discards branchRefs, so probing git would be pure cost plus a
+    // failure mode (a slow ls-remote blanking the snapshot for a 60s TTL).
+    expect(runGit).toHaveBeenCalledTimes(0);
+  });
+
+  it('opting into branch-only adds exactly one git call, still not per-item', () => {
+    const runGh = vi.fn(okGh([]));
+    const runGit = vi.fn(okGit([`qf/${QF}`]));
+    const snap = collectInflightSnapshot({ runGh, runGit, repo: 'o/r', includeBranchOnly: true });
+    Array.from({ length: 20 }, (_, i) => `QF-2026072${i % 10}-${i}`).forEach((id) => classifyItem(id, snap));
     expect(runGh).toHaveBeenCalledTimes(1);
     expect(runGit).toHaveBeenCalledTimes(1);
   });
@@ -211,11 +228,39 @@ describe('TS-6 — SR-1 safe invocation, asserted where a seam cannot see it', (
   // assertion that cannot distinguish code from prose is not evidence about the code.
   const src = raw.replace(/\/\*[\s\S]*?\*\//g, '').replace(/(^|[^:])\/\/.*$/gm, '$1');
 
-  it('the default runners set shell:false explicitly', () => {
-    // wip-detector.cjs:40 sets `shell: process.platform === 'win32'` and this fleet runs on
-    // Windows. An injected seam REPLACES the code that decides `shell`, so this property is
-    // unobservable through the seam and must be asserted against the source of the real runner.
-    expect(src).toMatch(/shell:\s*false/);
+  it('the default runners spawn with shell:false — asserted on the REAL spawnSync call', () => {
+    // SECURITY d1622fdc / B2 falsified the earlier source-text version of this test: three
+    // unsafe refactors all passed it — (a) `const IS_WIN = process.platform === 'win32'` hoisted
+    // out with `shell: IS_WIN` at the spawn site (the exact wip-detector bug), (b) `execSync(bin
+    // + ' ' + args.join(' '))`, because /exec\(/ does not match `execSync(`, and (c) `shell: true`
+    // beside a decoy `const SAFE_DEFAULTS = { shell: false }`. `toMatch(/shell:\s*false/)` only
+    // requires the string to exist SOMEWHERE and never ties it to the call.
+    //
+    // My "a seam is structurally blind to shell" reasoning was a false dichotomy: it holds for
+    // the runGit/runGh seam, but runSafe does require('child_process') LAZILY ON EVERY CALL, so
+    // the cached module is a seam BELOW the deciding code. Assert the real options instead.
+    const cp = require_('node:child_process');
+    const calls = [];
+    const orig = cp.spawnSync;
+    cp.spawnSync = (bin, args, opts) => { calls.push({ bin, args, opts }); return { stdout: '[]', stderr: '', status: 0 }; };
+    try {
+      mod.defaultRunGh(['pr', 'list', '--json', 'headRefName'], {});
+      mod.defaultRunGit(['ls-remote', '--heads', 'origin'], {});
+    } finally {
+      cp.spawnSync = orig;
+    }
+    expect(calls).toHaveLength(2);
+    for (const c of calls) {
+      expect(c.opts.shell).toBe(false);              // never truthy, never platform-derived
+      expect(Array.isArray(c.args)).toBe(true);      // argv array, never a command string
+      expect(c.args.every((a) => typeof a === 'string')).toBe(true);
+      expect(c.opts.timeout).toBeGreaterThan(0);     // every probe is bounded
+      expect(c.opts.env).toBeUndefined();            // SR-2: ambient auth, no injected token
+    }
+    expect(calls.map((c) => c.bin)).toEqual(['gh', 'git']);
+  });
+
+  it('source still carries no platform-derived shell (defence in depth)', () => {
     expect(src).not.toMatch(/shell:\s*process\.platform/);
   });
 

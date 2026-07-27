@@ -81,8 +81,12 @@ describe('AC-3 — the lane never starves dispatch when the probe cannot run', (
   });
 
   it('an empty or non-array candidate list is handled without throwing', async () => {
-    expect(await withheldFilteredQfs([], {})).toEqual([]);
-    expect(await withheldFilteredQfs(null, {})).toEqual([]);
+    // Seam supplied deliberately. Passing {} made this hit LIVE gh/git (measured 1569ms vs ~2ms)
+    // because filterOutInFlight probes BEFORE iterating, so even an empty list triggered it —
+    // contradicting this file's own "no network, no gh auth" docblock. TESTING 94001fa5.
+    const seam = { inflightProbe: { runGh: okGh([]), runGit: okGit([]), repo: 'o/r' } };
+    expect(await withheldFilteredQfs([], seam)).toEqual([]);
+    expect(await withheldFilteredQfs(null, seam)).toEqual([]);
   });
 });
 
