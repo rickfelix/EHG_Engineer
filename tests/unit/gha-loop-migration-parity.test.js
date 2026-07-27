@@ -166,3 +166,42 @@ describe('GHA loop migration — concurrency-group uniqueness across all workflo
     }
   });
 });
+
+// ── QF-20260727-064: the chairman's inbound SMS drain is session-armed AS WELL AS GHA-backed ──
+//
+// sms-relay-drain-cron.yml declares '*/5 * * * *' and every run reports SUCCESS, but GitHub
+// Actions deprioritises scheduled workflows on a busy repo. Measured gaps between consecutive
+// run starts (UTC 2026-07-26/27): 54, 59, 60, 60, 97, 221, 220, 197, 176 minutes — hourly at
+// best, 3.7h at worst, never 5. A chairman text sat undrained for over 2 hours while the lane
+// reported healthy. It is therefore ALSO armed as a coordinator STANDARD_LOOPS entry, which is
+// the "harmless redundant backup" posture the registry header already sanctions.
+//
+// MIGRATED_KEYS is the historical FR-2 batch record and is deliberately NOT extended here, so
+// these assertions pin the new entry explicitly instead of mutating that batch's meaning.
+describe('QF-20260727-064 — sms-relay-drain loop/workflow parity', () => {
+  const KEY = 'sms-relay-drain';
+
+  it('is registered in STANDARD_LOOPS and points at the real runner', () => {
+    const loop = loopByKey(KEY);
+    expect(loop.script).toBe('sms-relay-drain.cjs');
+    expect(loop.prompt).toContain('scripts/sms-relay-drain.cjs');
+  });
+
+  it('its cron matches the workflow exactly (the whole point — a 5-minute contract on both sides)', () => {
+    const doc = loadWorkflow(KEY); // resolves .github/workflows/sms-relay-drain-cron.yml
+    const crons = (doc.on.schedule || []).map((s) => s.cron);
+    expect(crons).toHaveLength(1);
+    expect(crons[0]).toBe(loopByKey(KEY).cron);
+    expect(loopByKey(KEY).cron).toBe('*/5 * * * *');
+  });
+
+  it('is marked gha_backed (the workflow is real and does fire — it is the CADENCE that is unreliable)', () => {
+    expect(loopByKey(KEY).gha_backed).toBe(true);
+  });
+
+  it('does not disturb the FR-2 batch pin — those 13 keys are still all gha_backed', () => {
+    const flagged = STANDARD_LOOPS.filter((l) => l.gha_backed === true).map((l) => l.key);
+    for (const key of MIGRATED_KEYS) expect(flagged).toContain(key);
+    expect(flagged).toContain(KEY);
+  });
+});
