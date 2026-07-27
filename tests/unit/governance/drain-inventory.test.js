@@ -210,6 +210,18 @@ describe('buildInventoryRow surfaces the declared contract fields', () => {
     expect(row.count).toBe(4);
   });
 
+  it('carries measuredBy and oldestAt onto the row', () => {
+    // Both survived mutation as unasserted plumbing. measuredBy is what keeps unkeyable work from
+    // reading as neglect in --json output; oldestAt is the absolute timestamp behind the relative
+    // age, and an unpinned field is one nobody notices going null.
+    const row = buildInventoryRow('m', { measuredBy: 'a different instrument' }, undefined);
+    expect(row.measuredBy).toBe('a different instrument');
+    expect(row.verdict).toBe(VERDICT.MEASURED_ELSEWHERE);
+
+    const { oldestAt } = computeOldestUndrainedAge([ago(2 * DAY)], NOW);
+    expect(oldestAt).toBe(new Date(NOW - 2 * DAY).toISOString());
+  });
+
   it('propagates the failure reason so an UNAVAILABLE entry explains itself', () => {
     const row = buildInventoryRow('u', { consumer: 'c', closingPath: 'p' },
       { noData: true, reason: 'feedback read failed: boom' });

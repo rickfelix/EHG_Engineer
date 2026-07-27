@@ -22,7 +22,14 @@ import {
 
 const PROCESS_KEY = 'standard_loop:drain-inventory';
 const UNDRAINED_STATUSES = ['new', 'triaged']; // canonical, per feedback-sla-gauge.cjs:20
+
+// SEC-DRAIN-002: keep PAGE at ~1e3. paginateAll spreads a page into an accumulator, and a
+// six-figure page size would turn a tuning change into a RangeError rather than a slow query.
 const PAGE = 1000;
+
+// SEC-DRAIN-001 allow-list — every relation this CLI may name. Additions belong here, not in a
+// descriptor, so adding a drain descriptor can never widen which tables the service-role key reaches.
+const CLOSING_PATH_TABLES = new Set(['gauge_finding_dispositions']);
 
 /**
  * Ordered, paginated read. PostgREST caps a response at 1000 rows; the largest population here is
@@ -55,6 +62,14 @@ async function readDescriptor(supabase, descriptor, nowMs) {
     // dispositions table with zero rows EVER written) render as PASS — this inventory reporting
     // health over exactly the defect it exists to detect.
     if (descriptor.closingPathTable) {
+      // SEC-DRAIN-001: allow-list the relation name. postgrest-js does NOT encode the relation it
+      // interpolates into the request URL, and new URL() normalizes traversal — so a descriptor
+      // carrying '../../auth/v1/admin/users' would send the SERVICE-ROLE key to a non-PostgREST
+      // path on the same host. Unreachable today (this map is frozen code-config with one entry),
+      // but the `table` kind below is already guarded by strict equality and this sink was not.
+      if (!CLOSING_PATH_TABLES.has(descriptor.closingPathTable)) {
+        return { noData: true, reason: `closing-path table not allow-listed: ${descriptor.closingPathTable}` };
+      }
       const { count, error } = await supabase.from(descriptor.closingPathTable)
         .select('*', { count: 'exact', head: true });
       if (error) return { noData: true, reason: `closing-path probe failed: ${error.message}` };
