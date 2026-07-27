@@ -32,6 +32,57 @@ describe('rationaleBar — advisory rationale bar (FR-2 / TS-1, TS-2)', () => {
     expect(r.checks.rationaleBar.pass).toBe(false);
     expect(r.checks.rationaleBar.reason).toMatch(/manipulative|CONST-010/i);
   });
+  // ── QF-20260727-129: the guard must key on FRAMING, not on tokens that are also DATA ──
+  //
+  // Both cases below were witnessed on chairman-directed messages in one session
+  // (2026-07-27). The first blocked a chairman-directed sessions-page inventory TWICE.
+  describe('QF-20260727-129 — enum values and neutral temporal words are not manipulation', () => {
+    it('a priority/severity ENUM VALUE passes (measured: 4 live columns use {critical,high,medium,low})', () => {
+      const body = 'SD-X in_progress / PLAN_PRD / critical — reporting because the belt shows it unclaimed; rationale: priority audit.';
+      expect(MANIPULATIVE_PATTERNS.test(body)).toBe(false);
+      const r = checkAdamOutbound({ body, kind: ADVISORY });
+      expect(r.checks.rationaleBar.pass).toBe(true);
+    });
+
+    it('bare severity reporting in any of the live shapes passes', () => {
+      for (const body of [
+        'priority: critical',
+        'severity=critical',
+        '3 critical QFs and 2 high, because the sweep found them; rationale: inventory.',
+        'QF-20260726-996 critical open — evidence: measured live.',
+      ]) {
+        expect(MANIPULATIVE_PATTERNS.test(body)).toBe(false);
+      }
+    });
+
+    it('the neutral temporal adverb passes when it describes WHEN, not an action demanded', () => {
+      const body = 'Re-read the row immediately before the handoff, because the claim can lapse; rationale: staleness.';
+      expect(MANIPULATIVE_PATTERNS.test(body)).toBe(false);
+    });
+
+    it('STILL blocks genuine urgency framing around the same two words', () => {
+      for (const body of [
+        'act immediately',
+        'respond immediately',
+        'approve immediately',
+        'this is critically important',
+        'it is critical that you approve this',
+      ]) {
+        expect(MANIPULATIVE_PATTERNS.test(body)).toBe(true);
+      }
+    });
+
+    it('leaves every untouched alternative blocking (no collateral weakening)', () => {
+      for (const body of [
+        'urgent', 'urgently', 'act now', 'act fast', 'must act',
+        'guaranteed', 'certainly', 'definitely', 'absolutely',
+        'you need to', 'you have to', "don't miss", 'dont miss', 'last chance',
+      ]) {
+        expect(MANIPULATIVE_PATTERNS.test(body)).toBe(true);
+      }
+    });
+  });
+
   it('passes a well-reasoned advisory', () => {
     const r = checkAdamOutbound({ body: 'Recommend parking Alt-Text because demand-test CHECK forbids truth_ metrics; rationale: no live anchor.', kind: ADVISORY });
     expect(r.checks.rationaleBar.pass).toBe(true);
