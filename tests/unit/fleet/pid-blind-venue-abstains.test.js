@@ -46,12 +46,34 @@ describe('FR-3a venue capability', () => {
     expect(v.reason).toBe('marker_dir_absent');
   });
 
-  it('THE CONTROL: a PRESENT-but-EMPTY directory IS capable — "no marker" is a real answer there', () => {
+  it('a PRESENT-but-EMPTY directory is NOT capable — CORRECTED BY MEASUREMENT', () => {
+    // THIS ASSERTION USED TO SAY THE OPPOSITE, and the original reasoning was wrong.
+    // It argued that if the directory exists, "no marker for this session" is a real negative the
+    // sweep may act on. Then the sweep was run from this SD's own worktree and printed:
+    //   "PID venue OK ... Examined 9 row(s); 0 resolved to a live PID"
+    // The directory existed, so the existence-only check passed — while the markers real sessions
+    // had written lived in a different checkout entirely (main repo 12 markers, that worktree 1).
+    // Markers are written per-checkout by capture-session-id.cjs:497 but describe host-wide
+    // processes, so "directory exists" never implied "the answers are in it".
+    // Zero markers is therefore the ABSENCE of any answer, not a negative one, and treating it as
+    // "nobody is alive" across a very-stale population is a false-death vector.
     const v = pidVenueCapability({ markerDir: presentDir });
+    expect(v.capable).toBe(false);
+    expect(v.reason).toBe('marker_dir_empty');
+  });
+
+  it('THE CONTROL: a directory with markers IS capable, even when none match this session', () => {
+    // This preserves the boundary the original test was reaching for. Where markers DO exist,
+    // "no marker for you" is a real negative. Without this half the check could be satisfied by
+    // something that always answers "blind", disabling the sweep everywhere rather than only
+    // where it is genuinely blind.
+    const populated = path.join(tmpRoot, 'populated');
+    fs.mkdirSync(populated, { recursive: true });
+    fs.writeFileSync(path.join(populated, 'pid-4242.json'), JSON.stringify({ cc_pid: 4242, session_id: 'someone-else' }));
+    const v = pidVenueCapability({ markerDir: populated });
     expect(v.capable).toBe(true);
     expect(v.reason).toBe('marker_dir_present');
-    // Without this half the check could be satisfied by something that always returns
-    // "blind", which would disable the sweep everywhere instead of only where it is blind.
+    expect(v.markerCount).toBe(1);
   });
 
   it('a FILE where the directory should be is not capable (unreadable == absent, fail to abstain)', () => {
