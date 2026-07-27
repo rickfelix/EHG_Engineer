@@ -1266,6 +1266,21 @@ async function selfHealStaleClaim(sb, sessionId, sdKey) {
       .eq('sd_key', sdKey)
       .eq('claiming_session_id', sessionId); // CAS: only while the SD is still ours
   } catch { /* fail-open */ }
+  // SD-LEO-FEAT-FLEET-SESSION-LIFECYCLE-001 / FR-1b slice 5, behind
+  // LEO_RELEASE_WORKITEM_RESET (default OFF). A genuine hand-back: this session is abandoning
+  // a stale pointer, so the item belongs back in the pool.
+  // sdKey here CAN be a quick-fix — self_claimed_qf writes a QF id into claude_sessions.sd_key
+  // — and the QF is exactly the case that needs it: the SDv2 update above no-ops for a QF (no
+  // such row), so without this the QF stays at status='in_progress' with no claimant, invisible
+  // to the very open-QF picker this check-in is about to run. Fail-open, matching both clears
+  // above: a failed hand-back must never block self-claim.
+  try {
+    const { releaseWorkItemOnSessionEnd, isReleaseWorkItemResetEnabled } =
+      await import('../lib/fleet/release-work-item.mjs');
+    if (isReleaseWorkItemResetEnabled()) {
+      await releaseWorkItemOnSessionEnd(sb, sdKey, 'checkin_self_heal_stale_claim');
+    }
+  } catch { /* fail-open */ }
 }
 
 /**
