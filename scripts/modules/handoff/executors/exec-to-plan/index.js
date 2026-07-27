@@ -518,10 +518,23 @@ export class ExecToPlanExecutor extends BaseExecutor {
       console.log('\n📊 Step 1.5: AnalysisStep — EXEC Phase Intelligence Synthesis');
       console.log('-'.repeat(50));
 
-      // Fetch PLAN-TO-EXEC handoff for this SD
-      const { data: planHandoff } = await this.supabase
+      // Fetch PLAN-TO-EXEC handoff for this SD.
+      //
+      // SD-PAT-FIX-STUBBED-WRITER-BLINDNESS-001: this select named TWO columns that do not exist on
+      // sd_phase_handoffs — `score` (the real column is validation_score) and `output_artifact`.
+      // PostgREST rejects the whole query on an unknown column, so `data` was ALWAYS null; the
+      // destructure discarded `error`; and the guard below then reported "No PLAN-TO-EXEC handoff
+      // found" and returned null. _synthesizeExecAnalysis was therefore a permanent no-op for EVERY
+      // SD since the phantom names were introduced, while logging a benign, plausible reason.
+      //
+      // That is this SD's own pattern one level up: a swallowed error is indistinguishable from a
+      // genuine absence. The fix is both halves — correct the column names AND stop discarding the
+      // error, so a future schema change fails loudly instead of silently disabling the feature.
+      // Verified against the live DB: the corrected select returns a real row (validation_score=97
+      // on this SD's own PLAN-TO-EXEC handoff), so the data was always there.
+      const { data: planHandoff, error: planHandoffError } = await this.supabase
         .from('sd_phase_handoffs')
-        .select('score, validation_details, output_artifact, created_at')
+        .select('validation_score, validation_details, created_at')
         .eq('sd_id', sd.id)
         .eq('handoff_type', 'PLAN-TO-EXEC')
         .eq('status', 'accepted')
@@ -529,12 +542,19 @@ export class ExecToPlanExecutor extends BaseExecutor {
         .limit(1)
         .single();
 
+      // PGRST116 is "no rows" from .single() — a genuine absence, and the expected quiet path.
+      // Anything else is a real fault and must NOT masquerade as "nothing to analyse".
+      if (planHandoffError && planHandoffError.code !== 'PGRST116') {
+        console.log(`   ⚠️  PLAN-TO-EXEC handoff query FAILED (${planHandoffError.message}) — analysisStep skipped. This is a fault, not an absence.`);
+        return null;
+      }
+
       if (!planHandoff) {
         console.log('   ℹ️  No PLAN-TO-EXEC handoff found — skipping analysisStep');
         return null;
       }
 
-      const planScore = planHandoff.score;
+      const planScore = planHandoff.validation_score;
       const validationDetails = planHandoff.validation_details || {};
 
       const analysisStep = {
