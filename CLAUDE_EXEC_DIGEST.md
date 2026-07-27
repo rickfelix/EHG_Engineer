@@ -1,7 +1,7 @@
 <!-- GENERATED FILE - DO NOT EDIT DIRECTLY. Source of truth: leo_protocol_sections (DB). Regenerate: node scripts/generate-claude-md-from-db.js. Drift check: node scripts/check-claude-md-drift.cjs -->
 <!-- DIGEST FILE - Enforcement-focused protocol content -->
-<!-- generated_at: 2026-07-27T17:30:53.431Z -->
-<!-- git_commit: 77197c5a -->
+<!-- generated_at: 2026-07-27T17:59:15.625Z -->
+<!-- git_commit: 41158d63 -->
 <!-- db_snapshot_hash: 7eabaf04b99ecbde -->
 <!-- file_content_hash: 99c578d3ca799133 -->
 
@@ -217,5 +217,5 @@ When starting implementation:
 
 ---
 
-*DIGEST generated: 2026-07-27 1:30:53 PM*
+*DIGEST generated: 2026-07-27 1:59:15 PM*
 *Protocol: 4.4.1*
