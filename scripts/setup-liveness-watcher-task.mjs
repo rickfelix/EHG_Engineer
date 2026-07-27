@@ -22,23 +22,33 @@
  * in place as a redundant backup — the watcher is idempotent, so an occasional double-fire is safe
  * (the same belt-and-braces pattern sweep-cron.yml already uses).
  *
+ * THE SWEEP GETS THE SAME TREATMENT, and not as an afterthought. FR-3a made the GHA sweep ABSTAIN
+ * whenever it cannot see PIDs — correct, but on its own it would leave stale-session-sweep.cjs with
+ * no durable PID-capable venue at all, its only one being the same session-bound STANDARD_LOOPS
+ * entry this SD exists to stop relying on. Fixing the watcher's venue and not the sweep's would be
+ * a fifth instance of "the half that could be reached got fixed". So this registrar stands up BOTH.
+ *
  * DURABILITY IS DEMONSTRATED, NOT ASSERTED — and the demonstration has a stated limit.
- * The task is registered from an XML definition carrying a BootTrigger, so the OS's own persisted
- * task store contains a trigger that fires at boot. `--verify` reads that definition BACK out of
- * the OS in a separate process and asserts the BootTrigger is present and enabled. That is
- * OS-attested evidence surviving this process's exit.
- * WHAT IT IS NOT: nobody rebooted the fleet host to watch it come back — rebooting the machine the
- * whole fleet runs on is not an available experiment. The claim proven here is "the OS holds a
- * boot-triggered, enabled, repeating definition", which is the durability property; the reboot
- * itself remains inferred from Task Scheduler's documented behaviour. Saying so is the point:
+ * Registration uses schtasks /SC, NOT /XML: MEASURED on this host, unelevated, /Create /XML returns
+ * "Access is denied" regardless of the XML's contents (an explicit least-privilege <Principals>
+ * block did not change it), while /SC MINUTE succeeds. /SC ONLOGON and /SC ONSTART are ALSO denied
+ * unelevated, so the startup companion is best-effort and the durability property is carried by the
+ * cadence task, whose definition Task Scheduler persists to disk and re-arms after boot.
+ * `--verify` reads the definitions BACK out of the OS in a separate process — never comparing
+ * anything we submitted to itself — and reports the on-disk task-store files, which are the
+ * artefacts that survive a power cycle.
+ * WHAT IT IS NOT: nobody rebooted the fleet host to watch it come back — power-cycling the machine
+ * the whole fleet runs on is not an available experiment. That Task Scheduler re-arms a persisted
+ * repeating trigger after boot is relied on as documented OS behaviour. Saying so is the point:
  * QF-20260705-533 in this SD's own history shipped a watcher-of-watchers with NO scheduled invoker
  * at all and read as complete.
  *
  * Usage:
  *   node scripts/setup-liveness-watcher-task.mjs             # register/refresh (idempotent)
- *   node scripts/setup-liveness-watcher-task.mjs --verify    # read the definition back from the OS
+ *   node scripts/setup-liveness-watcher-task.mjs --verify    # read the definitions back from the OS
  *   node scripts/setup-liveness-watcher-task.mjs --status    # human-readable query
- *   node scripts/setup-liveness-watcher-task.mjs --remove    # delete the task
+ *   node scripts/setup-liveness-watcher-task.mjs --remove    # delete the tasks
+ *   node scripts/setup-liveness-watcher-task.mjs --boot      # ONSTART instead of ONLOGON (needs admin)
  *   node scripts/setup-liveness-watcher-task.mjs --dry-run   # print, mutate nothing
  *
  * win32-only (schtasks). On POSIX it exits 2 with the equivalent cron line + @reboot entry.
@@ -52,6 +62,17 @@ import { getRepoRoot } from '../lib/repo-paths.js';
 
 export const TASK_NAME = 'EHG LEO Liveness Watcher (PID classes)';
 export const STARTUP_TASK_NAME = 'EHG LEO Liveness Watcher (startup arm)';
+// SECURITY review finding (EXEC, b0956042), and it is the SD's own recurring pattern rather than
+// a new idea: FR-3a made the GHA sweep ABSTAIN whenever it cannot see PIDs, which is correct — but
+// it leaves scripts/stale-session-sweep.cjs with NO durable venue that CAN see them. Its only
+// PID-capable invoker is the session-bound STANDARD_LOOPS 'sweep' entry, exactly the fragility
+// this SD was filed to end for the watcher. Fixing the watcher's venue and not the sweep's would
+// be a fifth instance of "the half that could be reached was fixed" — so the sweep gets the same
+// host-local home here.
+export const SWEEP_TASK_NAME = 'EHG LEO Stale-Session Sweep (host-local, PID-capable)';
+export const SWEEP_WRAPPER_REL_PATH = path.join('scripts', 'cron', 'stale-session-sweep-task.cmd');
+export const SWEEP_SCRIPT = 'scripts/stale-session-sweep.cjs';
+const SWEEP_INTERVAL_MINUTES = 5; // matches sweep-cron.yml's cadence
 export const WRAPPER_REL_PATH = path.join('scripts', 'cron', 'liveness-watcher-task.cmd');
 export const XML_REL_PATH = path.join('scripts', 'cron', 'liveness-watcher-task.xml');
 // The PID-anchored class, and ONLY that class — the others already have a correct CI home and
@@ -242,7 +263,7 @@ export function verifyPersistedDefinition(cadenceXml, startupXml) {
  * path and size turns "it will survive a reboot" from an assertion about Task Scheduler's
  * documented behaviour into an observation about a durable artefact that exists right now.
  */
-export function taskStorePaths(names = [TASK_NAME, STARTUP_TASK_NAME]) {
+export function taskStorePaths(names = [TASK_NAME, STARTUP_TASK_NAME, SWEEP_TASK_NAME]) {
   const root = path.join(process.env.SystemRoot || 'C:\\Windows', 'System32', 'Tasks');
   return names.map((n) => {
     const p = path.join(root, n);
@@ -365,17 +386,26 @@ export async function main(argv = process.argv, deps = {}) {
   const wrapperContent = buildWrapperScript({ repoRoot });
   const cadenceArgs = buildCreateArgs({ wrapperPath });
   const startupArgs = buildStartupCreateArgs({ wrapperPath, boot: args.boot });
+  // The sweep's host-local venue (see SWEEP_TASK_NAME). No LIVENESS_CLASSES — the sweep takes no
+  // class filter; what it needs from this venue is simply a host that can read the pid markers.
+  const sweepWrapperPath = path.join(repoRoot, SWEEP_WRAPPER_REL_PATH);
+  const sweepWrapperContent = buildWrapperScript({ repoRoot, env: {}, script: SWEEP_SCRIPT });
+  const sweepArgs = buildCreateArgs({ taskName: SWEEP_TASK_NAME, wrapperPath: sweepWrapperPath, intervalMinutes: SWEEP_INTERVAL_MINUTES });
   if (args.dryRun) {
     logger.log(`${tag} DRY RUN — wrapper ${wrapperPath}:`);
     logger.log(wrapperContent.replace(/\r\n/g, '\n'));
     logger.log(`${tag} would run: schtasks ${cadenceArgs.join(' ')}`);
     logger.log(`${tag} would run: schtasks ${startupArgs.join(' ')}`);
-    return { exitCode: 0, action: 'dry_run_register', wrapperPath };
+    logger.log(`${tag} DRY RUN — sweep wrapper ${sweepWrapperPath}:`);
+    logger.log(sweepWrapperContent.replace(/\r\n/g, '\n'));
+    logger.log(`${tag} would run: schtasks ${sweepArgs.join(' ')}`);
+    return { exitCode: 0, action: 'dry_run_register', wrapperPath, sweepWrapperPath };
   }
 
   try {
     fs.mkdirSync(path.dirname(wrapperPath), { recursive: true });
     fs.writeFileSync(wrapperPath, wrapperContent, 'utf8');
+    fs.writeFileSync(sweepWrapperPath, sweepWrapperContent, 'utf8');
   } catch (err) {
     logger.error(`${tag} could not write wrapper ${wrapperPath}: ${err.message}`);
     return { exitCode: 1, action: 'file_write_failed' };
@@ -402,8 +432,16 @@ export async function main(argv = process.argv, deps = {}) {
   // companion only makes the first post-boot run prompt. MEASURED: ONLOGON and ONSTART both
   // require elevation on this host, so demanding it would make the whole venue uninstallable for
   // a gain of "up to 30 minutes sooner, once, after a reboot".
+  const sweep = runSchtasks(sweepArgs);
+  if (sweep.ok) {
+    clearBatterySettings(SWEEP_TASK_NAME);
+  } else {
+    logger.warn(`${tag} sweep venue NOT registered (${sweep.stderr.trim()}) — stale-session-sweep.cjs keeps only its session-bound PID-capable invoker.`);
+  }
+
   const startup = runSchtasks(startupArgs);
   logger.log(`${tag} registered '${TASK_NAME}' — every ${DEFAULT_INTERVAL_MINUTES} min → ${WRAPPER_REL_PATH}`);
+  if (sweep.ok) logger.log(`${tag} registered '${SWEEP_TASK_NAME}' — every ${SWEEP_INTERVAL_MINUTES} min → ${SWEEP_WRAPPER_REL_PATH}`);
   if (startup.ok) {
     logger.log(`${tag} registered '${STARTUP_TASK_NAME}' — ${args.boot ? 'ONSTART' : 'ONLOGON'} arm`);
   } else {

@@ -17,6 +17,8 @@ import { describe, it, expect } from 'vitest';
 import {
   TASK_NAME,
   STARTUP_TASK_NAME,
+  SWEEP_TASK_NAME,
+  SWEEP_SCRIPT,
   buildWrapperScript,
   buildCreateArgs,
   buildStartupCreateArgs,
@@ -75,6 +77,33 @@ describe('FR-3b registration uses the argv form that works unelevated', () => {
   it('--boot is opt-in, not the default', () => {
     expect(parseArgs(['node', 'x']).boot).toBe(false);
     expect(parseArgs(['node', 'x', '--boot']).boot).toBe(true);
+  });
+});
+
+describe('FR-3b the SWEEP gets a durable PID-capable venue too', () => {
+  // SECURITY review finding (EXEC evidence b0956042): FR-3a makes the GHA sweep abstain whenever
+  // it cannot see PIDs, which is right — but on its own it would leave stale-session-sweep.cjs
+  // with NO durable PID-capable venue, its only one being the same session-bound STANDARD_LOOPS
+  // entry this SD exists to stop depending on. Hardening the watcher's venue and not the sweep's
+  // would be a fifth instance of "the half that could be reached got fixed".
+  it('registers a sweep venue distinct from the watcher venue', () => {
+    expect(SWEEP_TASK_NAME).not.toBe(TASK_NAME);
+    expect(SWEEP_TASK_NAME).not.toBe(STARTUP_TASK_NAME);
+  });
+
+  it('the sweep wrapper runs the sweep, with NO class filter', () => {
+    const s = buildWrapperScript({ repoRoot: REPO, env: {}, script: SWEEP_SCRIPT });
+    expect(s).toMatch(/call node scripts\/stale-session-sweep\.cjs/);
+    // The sweep takes no class filter; leaking LIVENESS_CLASSES into its env would be cargo-culted
+    // from the watcher and could confuse a future reader into thinking it honours one.
+    expect(s).not.toMatch(/LIVENESS_CLASSES/);
+  });
+
+  it('runs the sweep on a tighter cadence than the watcher, matching sweep-cron.yml', () => {
+    const sweep = buildCreateArgs({ taskName: SWEEP_TASK_NAME, wrapperPath: 'x', intervalMinutes: 5 });
+    expect(sweep[sweep.indexOf('/MO') + 1]).toBe('5');
+    const watcher = buildCreateArgs({ wrapperPath: 'x' });
+    expect(Number(watcher[watcher.indexOf('/MO') + 1])).toBeGreaterThan(5);
   });
 });
 
