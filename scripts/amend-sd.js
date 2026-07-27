@@ -90,8 +90,12 @@ async function main() {
   if (res.warning) console.log(`   ⚠️  ${res.warning}`);
   if (res.errorCode) console.log(`   error_code       : ${res.errorCode}`);
 
-  // Loud, not silent: a required-but-undelivered notice is a failure even though the row changed.
-  const failed = !res.sdUpdated || (res.noticeRequired && !res.noticeDelivered);
+  // Loud, not silent. errorCode is the primary failure signal: it is null on every success path and
+  // non-null on every failure path, which makes it strictly more correct than the compound boolean
+  // alone. Without it a PARTIAL patch — description column written, metadata merge failed — returns
+  // sdUpdated:true with noticeRequired never reached, and the old expression exited 0 on a
+  // half-applied amendment. Found by the deep-tier review of PR #6559.
+  const failed = !res.sdUpdated || res.errorCode !== null || (res.noticeRequired && !res.noticeDelivered);
   process.exit(failed ? 1 : 0);
 }
 
