@@ -1274,8 +1274,8 @@ async function dispatchWorkAssignmentsIfAllowed(supabase, activeSessions, availa
 // migration. Called from main() via the shared sweepPassCtx (supabase/now/classified/
 // actions), same ctx bag MAIN_PASSES already reuses.
 async function runQaFixtureScan(ctx) {
-  // `warnings` was already carried on sweepPassCtx but never destructured here; FIX #3's
-  // fail-closed guards report through it, so it is pulled in rather than routed into `actions`
+  // `warnings` was already carried on sweepPassCtx but never destructured here; the
+  // half-released-claim guards report through it, so it is pulled in rather than routed into `actions`
   // (a skipped safety guard is not an action taken). Defaulted so a caller that omits it cannot
   // turn a guard message into a ReferenceError mid-sweep.
   const { supabase, now, classified, actions, warnings = [] } = ctx;
@@ -1577,7 +1577,7 @@ async function runQaFixtureScan(ctx) {
     }
   }
 
-  // FIX #3 (QF-20260727-031): SD-SIDE HALF-RELEASED CLAIM.
+  // SD-SIDE HALF-RELEASED CLAIM (QF-20260727-031).
   // A claim is a TWO-SIDED FACT, and every detector above scans only the SESSION side. When the
   // session half of a release completes (status=released, sd_key=null) but the SD half does not,
   // there is NO ROW LEFT FOR THE SWEEP TO ITERATE — this is not a threshold being too slow, it is
@@ -1586,16 +1586,29 @@ async function runQaFixtureScan(ctx) {
   // orphan path requires claiming_session_id IS NULL while this row's pointer is NON-null — the
   // rescue is gated on the exact field that is wrong. The row therefore reads CLAIMED to every
   // dispatch surface, is worked by nobody, and is adoptable by nothing: invisible both ways at once.
-  const halfReleasedClaims = await clearHalfReleasedSdClaims(supabase, actions, warnings);
+  // Deliberately NOT added to the return below: nothing at the call site consumes it, and
+  // tests/unit/lib/sweep/pass-registry.test.js pins that return to EXACTLY the five
+  // formerly-main()-scoped locals. Widening a pinned contract for an unread value is a bad trade.
+  await clearHalfReleasedSdClaims(supabase, actions, warnings);
 
   // Adversarial-review fix (PR #5755): main() still consumes these five locals after the
   // hoist (dead-release cross-signal gate, CLAIM_RELEASED announce, QA summary) — return
   // them so the call site can rebind what used to be main()-scoped declarations.
-  return { sdStatusMap, workingOnCompleted, orphanedClaims, stuckApproval, terminalWithClaims, halfReleasedClaims };
+  return { sdStatusMap, workingOnCompleted, orphanedClaims, stuckApproval, terminalWithClaims };
 }
 
 /**
- * FIX #3 (QF-20260727-031): clear SD-side HALF-RELEASED claims.
+ * SD-SIDE HALF-RELEASED CLAIM (QF-20260727-031): clear an SD pointing at a dead session.
+ *
+ * DELIBERATELY NOT LABELLED WITH THE NUMBERED "FIX #<n>" SCHEME USED ELSEWHERE IN THIS FILE.
+ * That namespace is load-bearing: tests/unit/coord-adam-comms-resilient.test.js isolates the
+ * dead/gone-session cleanup section by indexOf() on one of those literal labels. A second
+ * occurrence EARLIER in the file silently captures the anchor, and the pin then asserts against
+ * the wrong section entirely — which is exactly what this change did on its first CI run.
+ *
+ * Note the second-order trap, since it cost a round too: a comment EXPLAINING the collision must
+ * not itself contain the literal token, or it becomes the earlier occurrence it warns about.
+ * Hence the periphrasis here. Named rather than numbered, so neither can recur.
  *
  * Its own function, mirroring clearStaleQfClaims, so the regression test can drive the REAL code
  * path against a fake client instead of asserting on a re-implementation.
