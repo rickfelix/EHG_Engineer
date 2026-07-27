@@ -1013,7 +1013,55 @@ async function main() {
       const evidenceCheck = await checkPreClaimEvidence(supabase, effectiveId, {
         mySessionId: session.session_id
       });
+
+      // SD-LEO-INFRA-RECLAIMSAFE-CANNOT-TELL-001 / FR-2: before blocking, ask whether the
+      // evidence that is blocking us is OUR OWN.
+      //
+      // The gate's witnesses are mostly SD-keyed (branch/plan/sub-agent-activity), so this
+      // session's own branch reads as somebody else's "evidence of life" and locks it out of
+      // reclaiming a claim it demonstrably owns — the strand this SD exists to fix.
+      //
+      // The override is deliberately NARROW. It fires only when BOTH hold:
+      //   1. self-ownership is PROVEN (cwd inside the SD's worktree, or a deterministic
+      //      resolveOwnSession whose sd_key already equals this SD), and
+      //   2. the blocking evidence is entirely UNATTRIBUTED — i.e. nothing that fired names
+      //      any session. If any witness points at a live session, we still block.
+      // So a genuinely live foreign holder is refused exactly as before.
+      //
+      // HONEST LIMIT (do not read this as parity with BaseExecutor): sd-start is the one
+      // operation legitimately run from the MAIN REPO, usually BEFORE a worktree exists, so
+      // the cwd-in-worktree witness rarely fires here and the deterministic fallback carries
+      // most real cases. It only succeeds when this session's claude_sessions.sd_key is
+      // already stamped to this SD — the resume-after-compaction case.
+      //
+      // BACKSTOP (TR-2): this only relaxes a PRE-claim filter. The heartbeat-TTL check below
+      // (QF-20260722-842 / classifyOwnerLiveness) still refuses to release a provably-live
+      // owner, so passing this gate is not sufficient to take an active claim.
+      let selfOwnership = { selfOwned: false, via: 'none', sessionId: null };
       if (!evidenceCheck.allowReclaim && !forceReclaim) {
+        try {
+          const { resolveSelfOwnership } = await import('../lib/claim/reacquire-self-live.mjs');
+          selfOwnership = await resolveSelfOwnership({
+            sd, cwd: process.cwd(), resolveSession: resolveOwnSession
+          });
+        } catch (ownErr) {
+          console.log(`${colors.dim}(self-ownership probe skipped: ${ownErr.message})${colors.reset}`);
+        }
+      }
+      const blockingEvidenceIsAllMine = selfOwnership.selfOwned
+        && evidenceCheck.evidenceAttribution?.allUnattributed === true;
+      if (blockingEvidenceIsAllMine) {
+        console.log(
+          `${colors.yellow}⚠️  Evidence-of-life gate OVERRIDDEN — self-ownership proven (via ${selfOwnership.via}).${colors.reset}`
+        );
+        console.log(
+          `   Blocking evidence [${(evidenceCheck.evidence || []).join(', ')}] is entirely UNATTRIBUTED —`
+        );
+        console.log('   it names no session, and this session owns the SD, so it is our own footprint.');
+        console.log('   (SD-LEO-INFRA-RECLAIMSAFE-CANNOT-TELL-001 FR-2. Heartbeat-TTL guard below still applies.)');
+      }
+
+      if (!evidenceCheck.allowReclaim && !forceReclaim && !blockingEvidenceIsAllMine) {
         const evidenceList = (evidenceCheck.evidence || []).join(', ') || 'unknown';
         console.log(
           `\n${colors.red}═══════════════════════════════════════════════════════════════════${colors.reset}`
@@ -1027,6 +1075,14 @@ async function main() {
         console.log(`  SD:             ${effectiveId}`);
         console.log(`  Classification: ${evidenceCheck.classification}`);
         console.log(`  Evidence:       ${evidenceList}`);
+        // SD-LEO-INFRA-RECLAIMSAFE-CANNOT-TELL-001 FR-1: say WHOSE evidence blocked, so a
+        // strand is diagnosable from the record instead of re-derived later.
+        const att = evidenceCheck.evidenceAttribution;
+        if (att) {
+          console.log(`  Attributed to:  ${att.sessionIds.length ? att.sessionIds.join(', ') : '(no session — evidence names nobody)'}`);
+          console.log(`  Unattributed:   ${att.unattributed.length ? att.unattributed.join(', ') : '(none)'}`);
+          console.log(`  Self-owned:     ${selfOwnership.selfOwned ? `yes (via ${selfOwnership.via})` : 'no — could not prove this session owns the SD'}`);
+        }
         console.log(`  My session:     ${session.session_id}`);
         console.log(`  Owner session:  ${claimResult.owner?.session_id || '(none)'}`);
         console.log('');
