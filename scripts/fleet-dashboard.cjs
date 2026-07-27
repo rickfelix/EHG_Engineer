@@ -372,6 +372,31 @@ async function loadData() {
     (extraSds || []).forEach(sd => { sdStatusMap[sd.sd_key] = sd; });
   }
 
+  // QF-20260727-713: a claim key can be a QUICK-FIX id, which lives in quick_fixes and NEVER in
+  // strategic_directives_v2. Resolving only against the SD table made every QF-claiming worker a
+  // false ORPHAN (measured 2026-07-27: 4 of 4 flagged keys present in quick_fixes with the correct
+  // claiming_session_id, 0 of 4 in strategic_directives_v2), which in turn made a REAL orphan
+  // undetectable — the false positives are indistinguishable from a true one.
+  //
+  // Kept as a SEPARATE map rather than merged into sdStatusMap: the other QA checks read
+  // sdStatusMap for SD-shaped fields (progress_percentage, completion_date) that quick_fixes does
+  // not have, so merging would silently change their behaviour. This map is consulted only by the
+  // ORPHAN check.
+  //
+  // Deliberately UNFILTERED by status (unlike the open/in_progress QUICK FIXES section below): a
+  // worker holding a completed/closed/cancelled QF is not an orphan — the key still resolves.
+  let qfStatusMap = {};
+  const qfClaimKeys = allSdKeys.filter(k => !sdStatusMap[k] && /^QF-/i.test(k));
+  if (qfClaimKeys.length > 0) {
+    try {
+      const { data: qfClaimRows } = await supabase
+        .from('quick_fixes')
+        .select('id, title, status')
+        .in('id', qfClaimKeys);
+      (qfClaimRows || []).forEach(qf => { qfStatusMap[qf.id] = qf; });
+    } catch { /* degrade-safe: unresolved keys stay ORPHAN, i.e. exactly the pre-fix behaviour */ }
+  }
+
   // Detect bare-shell SDs: title == description, no real scope, not child stubs
   const pendingKeys = workable.map(sd => sd.sd_key);
   let bareShells = [];
@@ -430,7 +455,7 @@ async function loadData() {
   } catch { /* degrade-safe: empty QF section */ }
 
   return {
-    sessions, allSessions, children, workable, coordMessages, rawSessions, sdStatusMap,
+    sessions, allSessions, children, workable, coordMessages, rawSessions, sdStatusMap, qfStatusMap,
     claimedSdIds, activeSessions, staleSessions, idleSessions,
     completedChildren, totalChildren, orchPct,
     unclaimedChildren, unclaimedStandalone, bareShellSDs: bareShells,
@@ -981,12 +1006,15 @@ function printQA(d) {
     });
   });
 
-  // QA 3: Orphaned claims (SD not in DB)
-  recentRaw.filter(s => !d.sdStatusMap[s.sd_key]).forEach(s => {
+  // QA 3: Orphaned claims (claim key resolves in NEITHER strategic_directives_v2 NOR quick_fixes).
+  // QF-20260727-713: a QF id is a valid claim key; checking only sdStatusMap flagged every
+  // QF-holding worker as an orphan and buried any genuine one in the noise.
+  const qfMap = d.qfStatusMap || {};
+  recentRaw.filter(s => !d.sdStatusMap[s.sd_key] && !qfMap[s.sd_key]).forEach(s => {
     issues.push({
       severity: 'MED',
       check: 'ORPHAN',
-      msg: s.tty + ' claims ' + s.sd_key.substring(0, 30) + '… — SD not found in DB'
+      msg: s.tty + ' claims ' + s.sd_key.substring(0, 30) + '… — key not found in strategic_directives_v2 or quick_fixes'
     });
   });
 
@@ -2560,7 +2588,7 @@ async function main() {
 }
 
 // Export read-only renderers for unit testing (SD-LEO-INFRA-COORDINATOR-DASHBOARD-SURFACES-001).
-module.exports = { printFeedback, reconcilePAliveWithLiveness, computeSolomonLedgerRollup, printWorkers, printChairmanEmailChannelHealth, printAvailable, printWorkerInbox, resolveInboxAudience, printAttentionStrip };
+module.exports = { printFeedback, reconcilePAliveWithLiveness, computeSolomonLedgerRollup, printWorkers, printChairmanEmailChannelHealth, printAvailable, printWorkerInbox, resolveInboxAudience, printAttentionStrip, printQA };
 
 // Only run the CLI when invoked directly, so requiring this module in a test does
 // not execute main() against the live database.
