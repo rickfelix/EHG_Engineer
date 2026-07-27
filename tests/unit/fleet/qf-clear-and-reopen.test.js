@@ -197,6 +197,68 @@ describe('FR-3: the merge-witness path must NOT be routed through this helper', 
   });
 });
 
+describe('AMENDMENT: each reopen emits an append-only DETECTION record', () => {
+  it('emits exactly ONE record per reopen, with the four column values as matched', async () => {
+    // The revert is what makes a stranded row unattributable afterwards. Without a detection record
+    // nobody can prove what produced a given night's stranded set — which is exactly what happened
+    // on 2026-07-26, when the rows were reverted before anyone could attribute them.
+    const seen = [];
+    const row = STRANDED();
+    await clearAndReopenQf(fakeDb(row), row.id, { onDetect: (r) => { seen.push(r); } });
+    expect(seen).toHaveLength(1);
+    expect(seen[0].qf_id).toBe(row.id);
+    expect(seen[0].detected_at).toMatch(/^\d{4}-\d{2}-\d{2}T/);
+    // Values AS MATCHED, not re-read: a second query after the write would capture the POST-revert
+    // state, which is the mistake this capture exists to avoid.
+    expect(seen[0].status).toBe('in_progress');
+    expect(seen[0].pr_url).toBeNull();
+    expect(seen[0].commit_sha).toBeNull();
+  });
+
+  it('emits NOTHING when the guard refuses — a refusal is not a detection', async () => {
+    // Otherwise the log would count rows that were never stranded, and "zero new detections" could
+    // never be reached even by a perfect fix.
+    const seen = [];
+    const row = { ...STRANDED(), pr_url: 'https://x/pull/1' };
+    await clearAndReopenQf(fakeDb(row), row.id, { onDetect: (r) => { seen.push(r); } });
+    expect(seen).toHaveLength(0);
+  });
+
+  it('records the dead holder on the sweep path', async () => {
+    const seen = [];
+    const row = { ...STRANDED(), claiming_session_id: 'dead-session' };
+    await clearAndReopenQf(fakeDb(row), row.id, { expectedHolder: 'dead-session', onDetect: (r) => { seen.push(r); } });
+    expect(seen[0].claiming_session_id).toBe('dead-session');
+  });
+
+  it('is FAIL-SOFT — losing a detection record never fails the release', async () => {
+    // The record is evidence, not a precondition. If the log write throws, the row must still be
+    // reopened: refusing to release because we could not journal it would turn an observability
+    // gap into an outage.
+    const row = STRANDED();
+    const res = await clearAndReopenQf(fakeDb(row), row.id, {
+      onDetect: () => { throw new Error('log surface down'); },
+    });
+    expect(res.changed).toBe(true);
+    expect(row.status).toBe('open');
+  });
+
+  it('MULTIPLICITY: a row stranded twice yields TWO records', async () => {
+    // The entire reason the capture is append-only rather than a column. The acceptance criterion
+    // COUNTS detections over a window; a single timestamp column would be overwritten by the second
+    // stranding and read as one detection — unable to answer the question the SD exists to answer.
+    const seen = [];
+    const row = STRANDED();
+    await clearAndReopenQf(fakeDb(row), row.id, { onDetect: (r) => { seen.push(r); } });
+    row.status = 'in_progress';                       // stranded again
+    row.claiming_session_id = null;
+    await clearAndReopenQf(fakeDb(row), row.id, { onDetect: (r) => { seen.push(r); } });
+    expect(seen).toHaveLength(2);
+    expect(seen[0].detected_at).toBeTruthy();
+    expect(seen[1].detected_at).toBeTruthy();
+  });
+});
+
 describe('FR-1: reports failure instead of hiding it', () => {
   it('is fail-soft on a database error and says why', async () => {
     // A release path must not throw because the reopen half failed — but it must not report

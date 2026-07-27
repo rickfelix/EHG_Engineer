@@ -1133,7 +1133,31 @@ async function clearStaleQfClaims(supabase, now, actions, warnings) {
         // Dynamic import: this file is CJS and the helper is ESM. Same pattern already used for
         // bestEffortReleaseSd from this very module at the claim-boundary probe above.
         const { clearAndReopenQf } = await import('../lib/fleet/best-effort-release.mjs');
-        const { changed } = await clearAndReopenQf(supabase, qf.id, { expectedHolder: qf.claiming_session_id });
+        const { changed } = await clearAndReopenQf(supabase, qf.id, {
+          expectedHolder: qf.claiming_session_id,
+          // APPEND-ONLY DETECTION RECORD, one row per detection. The acceptance criterion is
+          // "zero NEW class-A detections over N hours of continuous sampling" — a COUNT over time —
+          // and a column cannot answer it: a row that strands, is reverted, and strands again
+          // overwrites its own timestamp. Multiplicity is the whole requirement, so an existing
+          // append-only surface is sufficient and no migration is needed.
+          onDetect: async (record) => {
+            await supabase.from('feedback').insert({
+              category: 'harness_backlog',
+              severity: 'high',
+              title: `STRANDED-QF DETECTION ${record.qf_id} at ${record.detected_at}`,
+              description:
+                `SD-LEO-INFRA-DISPATCH-DELIVERY-INTEGRITY-001 class-A detection. A quick-fix was found `
+                + `cleared-but-not-reopened (unreachable by all five open-only chokepoints while the supply `
+                + `gauges still counted it) and was reverted to open by the stale-claim sweep.\n`
+                + `Column values AS MATCHED at detection: status=${record.status} `
+                + `claiming_session_id=${record.claiming_session_id} pr_url=${record.pr_url} `
+                + `commit_sha=${record.commit_sha}\n`
+                + `Recorded because the revert makes the row unattributable afterwards, and because the `
+                + `acceptance criterion counts detections over a window rather than sampling a live query.`,
+              metadata: { detection_class: 'stranded_qf_class_a', ...record },
+            });
+          },
+        });
         if (changed) {
           actions.push('QF: cleared stale claim AND reopened ' + qf.id + ' (holder ' + String(qf.claiming_session_id).slice(0, 8) + ' hb ' + (ageSec === Infinity ? 'gone' : Math.round(ageSec) + 's') + ')');
         }
