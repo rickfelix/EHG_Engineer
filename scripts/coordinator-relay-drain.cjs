@@ -66,7 +66,19 @@ function makeSendRelay(supabase) {
           message_type: 'INFO',
           subject: `[RELAYED] ${String(row.payload.body || '').slice(0, 60)}`,
           body: row.payload.body || null,
-          payload: { kind: 'adam_advisory', body: row.payload.body || null, correlation_id: row.payload.correlation_id, relayed_from: row.sender_session },
+          // SD-LEO-INFRA-CORRECTION-DELIVERY-PATH-001-C / FR-4: kind stays adam_advisory (that IS the
+          // lane every reader drains), but the correction sub-discriminators must SURVIVE the relay.
+          // Rebuilding the payload from scratch previously dropped message_kind/part_*, so a
+          // retraction relayed to a peer arrived indistinguishable from an ordinary advisory — the
+          // correction silently lost its identity on exactly the hop that carries it furthest.
+          // Spread-then-pin: forward everything, then re-assert the fields this relay owns.
+          payload: {
+            ...row.payload,
+            kind: 'adam_advisory',
+            body: row.payload.body || null,
+            correlation_id: row.payload.correlation_id,
+            relayed_from: row.sender_session,
+          },
         });
       if (error) return { ok: false, error: error.message };
       return { ok: true };
