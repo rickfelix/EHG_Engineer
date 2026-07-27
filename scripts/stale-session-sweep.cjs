@@ -1274,7 +1274,11 @@ async function dispatchWorkAssignmentsIfAllowed(supabase, activeSessions, availa
 // migration. Called from main() via the shared sweepPassCtx (supabase/now/classified/
 // actions), same ctx bag MAIN_PASSES already reuses.
 async function runQaFixtureScan(ctx) {
-  const { supabase, now, classified, actions } = ctx;
+  // `warnings` was already carried on sweepPassCtx but never destructured here; the
+  // half-released-claim guards report through it, so it is pulled in rather than routed into `actions`
+  // (a skipped safety guard is not an action taken). Defaulted so a caller that omits it cannot
+  // turn a guard message into a ReferenceError mid-sweep.
+  const { supabase, now, classified, actions, warnings = [] } = ctx;
 
   // 3b. QA — detect sessions working on completed SDs
   const claimedSdKeys = [...new Set(classified.map(s => s.sd_key).filter(Boolean))];
@@ -1573,10 +1577,107 @@ async function runQaFixtureScan(ctx) {
     }
   }
 
+  // SD-SIDE HALF-RELEASED CLAIM (QF-20260727-031).
+  // A claim is a TWO-SIDED FACT, and every detector above scans only the SESSION side. When the
+  // session half of a release completes (status=released, sd_key=null) but the SD half does not,
+  // there is NO ROW LEFT FOR THE SWEEP TO ITERATE — this is not a threshold being too slow, it is
+  // a population the scan never visits. Measured: the founding instance survived FIVE consecutive
+  // sweeps under direct observation. adoptOrphanInProgress cannot rescue it either, because its
+  // orphan path requires claiming_session_id IS NULL while this row's pointer is NON-null — the
+  // rescue is gated on the exact field that is wrong. The row therefore reads CLAIMED to every
+  // dispatch surface, is worked by nobody, and is adoptable by nothing: invisible both ways at once.
+  // Deliberately NOT added to the return below: nothing at the call site consumes it, and
+  // tests/unit/lib/sweep/pass-registry.test.js pins that return to EXACTLY the five
+  // formerly-main()-scoped locals. Widening a pinned contract for an unread value is a bad trade.
+  await clearHalfReleasedSdClaims(supabase, actions, warnings);
+
   // Adversarial-review fix (PR #5755): main() still consumes these five locals after the
   // hoist (dead-release cross-signal gate, CLAIM_RELEASED announce, QA summary) — return
   // them so the call site can rebind what used to be main()-scoped declarations.
   return { sdStatusMap, workingOnCompleted, orphanedClaims, stuckApproval, terminalWithClaims };
+}
+
+/**
+ * SD-SIDE HALF-RELEASED CLAIM (QF-20260727-031): clear an SD pointing at a dead session.
+ *
+ * DELIBERATELY NOT LABELLED WITH THE NUMBERED "FIX #<n>" SCHEME USED ELSEWHERE IN THIS FILE.
+ * That namespace is load-bearing: tests/unit/coord-adam-comms-resilient.test.js isolates the
+ * dead/gone-session cleanup section by indexOf() on one of those literal labels. A second
+ * occurrence EARLIER in the file silently captures the anchor, and the pin then asserts against
+ * the wrong section entirely — which is exactly what this change did on its first CI run.
+ *
+ * Note the second-order trap, since it cost a round too: a comment EXPLAINING the collision must
+ * not itself contain the literal token, or it becomes the earlier occurrence it warns about.
+ * Hence the periphrasis here. Named rather than numbered, so neither can recur.
+ *
+ * Its own function, mirroring clearStaleQfClaims, so the regression test can drive the REAL code
+ * path against a fake client instead of asserting on a re-implementation.
+ *
+ * @param {object} supabase
+ * @param {string[]} actions - appended: one line per cleared row
+ * @param {string[]} warnings - appended: one line when the guard makes it skip the tick
+ * @returns {Promise<Array>} the rows it judged half-released (empty when it skipped)
+ */
+async function clearHalfReleasedSdClaims(supabase, actions, warnings) {
+  let halfReleasedClaims = [];
+  try {
+    // CANONICAL LIVENESS, NOT A SECOND DEFINITION. loadLiveSessionIds is exported precisely so
+    // every consumer resolves the live-session set through ONE implementation; a private cutoff
+    // here would drift from the session-side releases and convert this gap into a split-brain —
+    // the two halves disagreeing about who is alive is strictly worse than the hole it patches.
+    // It returns null (never an empty Set) when it cannot measure, so null is already fail-closed.
+    const liveSessions = await loadLiveSessionIds(supabase);
+
+    // FAIL CLOSED ON UNREADABLE *OR* EMPTY. If the live set cannot be measured, every claim in the
+    // fleet looks dead and this loop would clear all of them. The asymmetry decides it: skipping
+    // costs one delayed cleanup the next tick repeats, while proceeding on a bad read could strip
+    // every active claim at once. Empty means "cannot measure", never "nobody is alive".
+    // Both branches fail closed, but they are DIFFERENT facts and an operator needs to know which:
+    // null means the read failed (loadLiveSessionIds swallows its own cause and returns null),
+    // while an empty Set means the read SUCCEEDED and measured nobody alive. Collapsing them into
+    // one message would hide a broken liveness read behind a plausible-looking quiet-fleet report.
+    if (!liveSessions) {
+      warnings.push('GUARD_UNAVAILABLE: SD-side half-released-claim check skipped this tick — live-session set UNREADABLE (loadLiveSessionIds returned null)');
+    } else if (liveSessions.size === 0) {
+      warnings.push('GUARD_UNAVAILABLE: SD-side half-released-claim check skipped this tick — live-session set measured EMPTY (treated as unmeasurable, never as all-dead)');
+    } else {
+      const claimed = await fapPaginate(() => supabase
+        .from('strategic_directives_v2')
+        .select('sd_key, status, claiming_session_id, metadata')
+        .not('status', 'in', '(completed,cancelled)') // terminal rows are FIX #2's job
+        .not('claiming_session_id', 'is', null)
+        .not('sd_key', 'like', TEST_FIXTURE_SD_KEY_LIKE) // FR-3: never touch SD-TEST-* fixtures
+        .order('sd_key', { ascending: true })); // unique tiebreaker (FR-6)
+      halfReleasedClaims = (claimed || []).filter((sd) => !liveSessions.has(sd.claiming_session_id));
+    }
+  } catch (e) {
+    halfReleasedClaims = []; // fail-closed: a failed read clears nothing
+    warnings.push('GUARD_UNAVAILABLE: SD-side half-released-claim check skipped this tick — read failed (' + ((e && e.message) || 'unknown') + ')');
+  }
+
+  for (const sd of halfReleasedClaims) {
+    const { error } = await supabase
+      .from('strategic_directives_v2')
+      // Preserve the prior claim for reversibility, matching the provenance convention the sweep's
+      // other release paths already use rather than inventing a second shape.
+      .update({
+        claiming_session_id: null,
+        active_session_id: null,
+        is_working_on: false,
+        metadata: { ...(sd.metadata || {}), half_released_prior_claim: sd.claiming_session_id }
+      })
+      .eq('sd_key', sd.sd_key)
+      // CAS on the claimant we actually read: a live session may have re-claimed this row between
+      // the read and this write, and clearing that would recreate the stranding from the other side.
+      .eq('claiming_session_id', sd.claiming_session_id)
+      .select();
+
+    if (!error) {
+      actions.push('QA: cleared half-released claim on ' + sd.sd_key + ' — claimant ' + String(sd.claiming_session_id).slice(0, 8) + ' has no live session');
+    }
+  }
+
+  return halfReleasedClaims;
 }
 
 // SD-ARCH-HOTSPOT-SWEEP-001 (main()-line-count acceptance criterion): the tail-of-tick
@@ -3684,3 +3785,7 @@ module.exports.reapPhantomSessionClaims = reapPhantomSessionClaims;
 // SD-LEO-INFRA-SWEEP-LEGACY-KILL-SWITCH-RETIRE-001: exported so its shape (owner/condition/
 // retirement_action all present and non-empty) is unit-testable.
 module.exports.SWEEP_PASS_REGISTRY_RETIREMENT = SWEEP_PASS_REGISTRY_RETIREMENT;
+
+// QF-20260727-031: exported so the regression test drives the REAL SD-side half-released-claim
+// detector (fake client, real code path) rather than asserting against a re-implementation.
+module.exports.clearHalfReleasedSdClaims = clearHalfReleasedSdClaims;
