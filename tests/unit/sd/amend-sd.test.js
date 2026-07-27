@@ -14,7 +14,7 @@
  */
 
 import { describe, it, expect } from 'vitest';
-import { amendSd, isInActiveBuildPhase, ACTIVE_BUILD_PHASES } from '../../../lib/sd/amend-sd.js';
+import { amendSd, isInActiveBuildPhase, ACTIVE_BUILD_PHASES, PROTECTED_METADATA_KEYS } from '../../../lib/sd/amend-sd.js';
 import { extractSdFrs } from '../../../scripts/modules/handoff/executors/plan-to-exec/gates/sd-prd-drift.js';
 import { DIRECTIVE_KINDS, PAYLOAD_KINDS } from '../../../lib/fleet/worker-status.cjs';
 
@@ -25,7 +25,7 @@ const CLAIM_SESSION = 'aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee';
  * Minimal supabase stub. `sd` is the row returned for strategic_directives_v2;
  * `prds` is what product_requirements_v2 returns; updates are recorded.
  */
-function makeSb({ sd, prds = [{ id: 'prd-1' }], updateError = null }) {
+function makeSb({ sd, prds = [{ id: 'prd-1' }], updateError = null, updatedRows = [{ sd_key: 'SD-TEST-AMEND-001' }] }) {
   const updates = [];
   return {
     updates,
@@ -42,7 +42,8 @@ function makeSb({ sd, prds = [{ id: 'prd-1' }], updateError = null }) {
         maybeSingle() { return Promise.resolve({ data: sd, error: null }); },
         update(patch) {
           updates.push({ table: api._table, patch });
-          return { eq: () => Promise.resolve({ error: updateError }) };
+          // Mirrors the real chain: .update(...).eq(...).select(...) resolves to the affected rows.
+          return { eq: () => ({ select: () => Promise.resolve({ data: updatedRows, error: updateError }) }) };
         },
       };
       return api;
@@ -227,6 +228,57 @@ describe('SECURITY cbe69100 F1: the patch is allowlisted, not passed through', (
       expect(res.sdUpdated).toBe(true);
       expect(res.errorCode).toBeNull();
     }
+  });
+});
+
+describe('PR #6559 adversarial CRITICAL: metadata is merged, never replaced', () => {
+  it('preserves a fail-open governance hold that a JSONB replace would have deleted', async () => {
+    // chairman_ratified===false BLOCKS belt-claim, and ABSENCE is fail-open — so dropping the key
+    // silently makes an unratified SD claimable. This is the exact bug the review caught.
+    const sd = activeSd({ metadata: { chairman_ratified: false, note: 'keep me' } });
+    const sb = makeSb({ sd, prds: [] });
+
+    const res = await amendSd(sb, 'SD-TEST-AMEND-001', { metadata: { extra: 1 } }, {});
+
+    expect(res.sdUpdated).toBe(true);
+    const written = sb.updates.at(-1).patch.metadata;
+    expect(written.chairman_ratified).toBe(false); // hold survived
+    expect(written.note).toBe('keep me');          // unrelated key survived
+    expect(written.extra).toBe(1);                 // new key applied
+  });
+
+  it.each([...PROTECTED_METADATA_KEYS])('refuses to write the governance key %s at all', async (key) => {
+    const sb = makeSb({ sd: activeSd({ metadata: {} }), prds: [] });
+    const res = await amendSd(sb, 'SD-TEST-AMEND-001', { metadata: { [key]: 'anything' } }, {});
+
+    expect(res.sdUpdated).toBe(false);
+    expect(res.errorCode).toBe('AMEND_PROTECTED_METADATA_KEY');
+    expect(sb.updates).toHaveLength(0);
+  });
+
+  it('rejects a non-object metadata rather than replacing the column with it', async () => {
+    for (const bad of ['a string', 42, ['an', 'array'], null]) {
+      const sb = makeSb({ sd: activeSd(), prds: [] });
+      const res = await amendSd(sb, 'SD-TEST-AMEND-001', { metadata: bad }, {});
+      expect(res.sdUpdated).toBe(false);
+      expect(sb.updates).toHaveLength(0);
+    }
+  });
+});
+
+describe('PR #6559 adversarial WARNING: a zero-row UPDATE is not a success', () => {
+  it('reports AMEND_NO_ROWS_UPDATED instead of claiming the write happened', async () => {
+    const sent = [];
+    // PostgREST returns no error when nothing matched — only the returned row set reveals it.
+    const sb = makeSb({ sd: activeSd(), updatedRows: [] });
+    const res = await amendSd(sb, 'SD-TEST-AMEND-001', { description: 'x' }, {
+      dispatch: async (_sb, row) => { sent.push(row); },
+    });
+
+    expect(res.sdUpdated).toBe(false);
+    expect(res.errorCode).toBe('AMEND_NO_ROWS_UPDATED');
+    // And crucially: no notice claiming a change that never landed.
+    expect(sent).toHaveLength(0);
   });
 });
 

@@ -34,15 +34,28 @@ function arg(flag) {
 }
 
 async function main() {
-  const sdKey = process.argv.slice(2).find((a) => !a.startsWith('--') && a !== arg('--append')
-    && a !== arg('--description') && a !== arg('--scope') && a !== arg('--reason'));
+  // The SD key is the FIRST positional argument, full stop. The earlier version derived it by
+  // filtering out tokens equal to any flag's VALUE, which the deep-tier adversarial review broke:
+  // an unquoted multi-word --description that happens to begin with the SD's own key fragments into
+  // stray positionals, the real key gets filtered out by value, and the NEXT stray word is picked —
+  // silently amending a different SD and notifying its unrelated worker. Positional-by-index cannot
+  // do that.
+  const sdKey = process.argv[2];
   const append = arg('--append');
   const description = arg('--description');
   const scope = arg('--scope');
   const reason = arg('--reason');
 
-  if (!sdKey || (!append && !description && !scope)) {
+  if (!sdKey || sdKey.startsWith('--') || (!append && !description && !scope)) {
     console.error('Usage: node scripts/amend-sd.js <SD-KEY> (--append|--description|--scope) "<text>" [--reason "<why>"]');
+    console.error('       <SD-KEY> must be the FIRST argument. Quote multi-word values.');
+    process.exit(2);
+  }
+
+  // Refuse ambiguity rather than silently dropping a value: the old code let --append quietly win
+  // over a simultaneously-supplied --description.
+  if (append && (description || scope)) {
+    console.error('[amend-sd] --append cannot be combined with --description/--scope — pick one.');
     process.exit(2);
   }
 
