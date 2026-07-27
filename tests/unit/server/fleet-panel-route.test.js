@@ -37,6 +37,15 @@ vi.mock('../../../lib/fleet/account-usage-reader.cjs', () => ({
     .map((name) => ({ name, state: 'unavailable', reason, fetchedAt: '2026-07-26T21:00:00.000Z' })),
 }));
 
+// QF-20260726-575: isLiveEnabled is mocked so the test can drive BOTH arms. Importing the real one
+// would make the assertion depend on whether THIS host happens to have FLEET_SPAWN_CONTROL_LIVE set
+// — i.e. the test would agree with the host instead of checking the route, and would pass just as
+// happily against a hardcoded `live: true`.
+const liveEnabledMock = vi.fn(() => false);
+vi.mock('../../../lib/fleet/spawn-control.js', () => ({
+  isLiveEnabled: (...args) => liveEnabledMock(...args),
+}));
+
 const { getFleetPanel } = await import('../../../server/routes/fleet-panel.js');
 
 function mockRes() {
@@ -296,6 +305,43 @@ describe('GET /api/fleet-panel', () => {
     expect(payload.accountUsage.every((a) => a.state === 'unavailable')).toBe(true);
     expect(payload.accountUsage.some((a) => 'weeklyPct' in a)).toBe(false);
     usageMock.mockResolvedValue(MOCK_USAGE);
+  });
+
+  it('QF-575 — reports the RESOLVED spawn live-state, tracking the predicate in both directions', async () => {
+    // The defect this closes: spawn-control.js asserted "STAGED / INERT BY DEFAULT" in a static
+    // docblock while the flag was SET on the host, so a reader answering "is spawning armed" got
+    // the wrong answer in the PERMISSIVE direction. Observation replaces prose.
+    liveEnabledMock.mockReturnValue(true);
+    const armed = mockRes();
+    await getFleetPanel(mockReq(mockSupabase([LIVE_WORKER])), armed);
+    expect(armed.json.mock.calls[0][0].spawnControl).toEqual({ live: true });
+
+    // THE CONTROL THAT MATTERS: it must be able to say false. Without this, the assertion above
+    // passes identically against a hardcoded `live: true`, which is the same class of always-on
+    // reading the docblock defect was made of.
+    liveEnabledMock.mockReturnValue(false);
+    const inert = mockRes();
+    await getFleetPanel(mockReq(mockSupabase([LIVE_WORKER])), inert);
+    expect(inert.json.mock.calls[0][0].spawnControl).toEqual({ live: false });
+
+    // And it is the module's own exported predicate being consulted, not a re-derived env read that
+    // would be free to drift from the gate the verbs actually use.
+    expect(liveEnabledMock).toHaveBeenCalled();
+    liveEnabledMock.mockReturnValue(false);
+  });
+
+  it('QF-575 — spawnControl is additive: it does not disturb the existing payload fields', async () => {
+    const res = mockRes();
+    await getFleetPanel(mockReq(mockSupabase([LIVE_WORKER])), res);
+    const payload = res.json.mock.calls[0][0];
+
+    expect(payload.sessions).toHaveLength(1);
+    expect(payload.accountChips).toHaveLength(3);
+    expect(payload.accountUsage).toHaveLength(3);
+    expect(payload.filter).toMatchObject({ liveOnly: true });
+    // Present on every response, never conditional — an absent field reads as "not armed".
+    expect(payload.spawnControl).toBeDefined();
+    expect(typeof payload.spawnControl.live).toBe('boolean');
   });
 
   it('returns an empty attentionStrip array (not an error) when zero sessions are flagged', async () => {
