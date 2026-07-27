@@ -1111,7 +1111,10 @@ async function clearStaleQfClaims(supabase, now, actions, warnings) {
       try {
         holderRows = await fapPaginate(() => supabase
           .from('claude_sessions')
-          .select('session_id, heartbeat_at')
+          // Widened for the liveness SSOT: isSessionAlive reads is_alive, heartbeat_at,
+          // terminal_id (PID), process_alive_at (tick) and expected_silence_until (armed silence).
+          // Selecting heartbeat_at ALONE is what reduced this decider to a single signal.
+          .select('session_id, heartbeat_at, is_alive, terminal_id, process_alive_at, expected_silence_until')
           .in('session_id', holderIds)
           .order('session_id', { ascending: true })); // unique tiebreaker (FR-6)
       } catch (guardErr) {
@@ -1119,12 +1122,43 @@ async function clearStaleQfClaims(supabase, now, actions, warnings) {
         return;
       }
       const hbAgeBySession = new Map();
+      const holderBySession = new Map();
       for (const r of (holderRows || [])) {
         hbAgeBySession.set(r.session_id, r.heartbeat_at ? (now.getTime() - Date.parse(r.heartbeat_at)) / 1000 : Infinity);
+        holderBySession.set(r.session_id, r);
       }
+      // SD-LEO-INFRA-DISPATCH-DELIVERY-INTEGRITY-001: ADOPT THE LIVENESS SSOT AT THIS DECIDER.
+      //
+      // This path used a heartbeat-only threshold (900s, commented "definitely dead") and inferred
+      // DEATH FROM A SINGLE ABSENT SIGNAL. On 2026-07-27 Golf-3 went QUIET at 935s — parked, not
+      // dead — and this loop took all three of its claims, one of them severity=critical. The
+      // reverting half of that incident is what FR-1/FR-3 fix; THIS is why the clear happened at all.
+      //
+      // lib/fleet/session-liveness.cjs isSessionAlive() only ACCUMULATES REASONS TO BE ALIVE —
+      // raw is_alive, fresh heartbeat, live PID, process tick, armed silence — and is already the
+      // named SSOT for claim-release-guard. Its armed-silence branch (capped at ARMED_SILENCE_MAX_MS
+      // so a stale declaration cannot shield a corpse forever) is the one that classifies a parked
+      // worker correctly, and it is precisely the signal a heartbeat-only check cannot see.
+      //
+      // Note it is used ONLY to HOLD a claim, never to reap one: is_alive=false is not treated as
+      // evidence of death anywhere here. claim-validity-gate.js:220-224 and :266-270 document that a
+      // live worker can transiently read is_alive=false and that reaping on it alone caused
+      // GATE_CLAIM_VALIDITY_FAILED twice, so inverting this would rebuild that defect.
+      const { isSessionAlive } = require('../lib/fleet/session-liveness.cjs');
+      // Computed ONCE for the whole loop. hasPidAlive falls back to reading PID markers fresh when
+      // this is null, and that read walks host-local marker files — per-QF it would repeat the same
+      // scan for every claimed row. Fail-soft to null: the SSOT then simply drops the pid signal and
+      // still evaluates heartbeat, tick and armed silence.
+      let qfSweepAliveCcPids = null;
+      try {
+        qfSweepAliveCcPids = new Set((detectIdentityCollisions().aliveMarkers || []).map((m) => String(m.pid)));
+      } catch { qfSweepAliveCcPids = null; }
       for (const qf of claimedQfs) {
         const ageSec = hbAgeBySession.has(qf.claiming_session_id) ? hbAgeBySession.get(qf.claiming_session_id) : Infinity;
-        if (ageSec <= veryStaleSeconds) continue; // holder alive/recent — leave claimed
+        const holder = holderBySession.get(qf.claiming_session_id) || null;
+        const liveness = isSessionAlive(holder, { nowMs: now.getTime(), aliveCcPids: qfSweepAliveCcPids });
+        if (liveness.alive) continue;         // SSOT says alive (incl. parked) — leave claimed
+        if (ageSec <= veryStaleSeconds) continue; // holder recent — leave claimed
         // SD-LEO-INFRA-DISPATCH-DELIVERY-INTEGRITY-001 (FR-3): clear AND reopen in ONE call.
         // Clearing alone left the row at status='in_progress' with a NULL claimant — invisible to
         // all five open-only chokepoints while two supply gauges still counted it, so the work
