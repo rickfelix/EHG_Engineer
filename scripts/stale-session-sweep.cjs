@@ -2630,9 +2630,14 @@ async function main() {
           //
           // Sibling attribution is liveness-filtered upstream (buildSiblingSessionMap selects
           // only sessions with a recent heartbeat), so a named peer is a live peer.
+          // Decision lives in lib/claim/evidence-attribution-decisions.mjs so the tests
+          // exercise THIS function rather than a copy of it. An earlier cut inlined it and
+          // tested a re-implementation; a negative control showed that reverting this whole
+          // block produced ZERO test failures — green tests protecting nothing.
+          const { sweepShouldHoldRelease } = await import('../lib/claim/evidence-attribution-decisions.mjs');
           const att = evidence.evidenceAttribution;
           const otherLiveSessions = (att?.sessionIds || []).filter(id => id !== s.session_id);
-          if (otherLiveSessions.length > 0) {
+          if (sweepShouldHoldRelease({ evaluatedSessionId: s.session_id, evidenceAttribution: att })) {
             warnings.push(
               'WIP_GUARD_CROSS_SIGNAL: ' + s.session_id + ' SD=' + s.sd_key +
               ' has evidence-of-life (' + (evidence.evidence || []).join(',') +

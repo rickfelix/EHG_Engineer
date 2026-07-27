@@ -17,23 +17,23 @@ import { describe, it, expect } from 'vitest';
 import { readFileSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import path from 'node:path';
+// IMPORT THE SHIPPED PREDICATES — do not re-implement them here.
+// The first cut of this file defined local copies. They were logically identical to the real
+// code and all green, and a negative control showed that reverting stale-session-sweep.cjs
+// produced ZERO failures while reverting sd-start.js failed only a string-grep. Testing a copy
+// of the logic proves the copy works; it says nothing about what ships.
+import {
+  selfOwnedOverridesEvidenceGate,
+  sweepShouldHoldRelease,
+} from '../../lib/claim/evidence-attribution-decisions.mjs';
 
 const repoRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '../..');
 
-// ── FR-2: sd-start override predicate ────────────────────────────────────────
-// Mirrors scripts/sd-start.js: override iff self-ownership is PROVEN and the blocking
-// evidence is entirely unattributed.
-function sdStartOverrides({ selfOwned, attribution }) {
-  return Boolean(selfOwned) && attribution?.allUnattributed === true;
-}
+const sdStartOverrides = ({ selfOwned, attribution }) =>
+  selfOwnedOverridesEvidenceGate({ selfOwned, evidenceAttribution: attribution });
 
-// ── FR-3: sweep hold predicate ───────────────────────────────────────────────
-// Mirrors scripts/stale-session-sweep.cjs: hold iff evidence names a live session OTHER
-// than the (already-established-dead) session under evaluation.
-function sweepHolds({ evaluatedSessionId, attribution }) {
-  const others = (attribution?.sessionIds || []).filter(id => id !== evaluatedSessionId);
-  return others.length > 0;
-}
+const sweepHolds = ({ evaluatedSessionId, attribution }) =>
+  sweepShouldHoldRelease({ evaluatedSessionId, evidenceAttribution: attribution });
 
 const UNATTRIBUTED_ONLY = {
   attributed: [], unattributed: ['branch_present', 'recent_sub_agent_activity'],
@@ -114,5 +114,30 @@ describe('TS-16: the sweep must not reach for the self-ownership primitive', () 
     // trivially passing because the symbol appears nowhere in the repo.
     const src = readFileSync(path.join(repoRoot, 'scripts/sd-start.js'), 'utf8');
     expect(src).toContain('resolveSelfOwnership');
+  });
+});
+
+describe('the shipped consumers are actually WIRED to these decisions', () => {
+  // Testing the predicates proves the predicates work. These assertions prove the two
+  // consumers still CALL them — the gap a negative control exposed, where reverting
+  // stale-session-sweep.cjs wholesale broke no test at all. Deleting either call site now
+  // fails here instead of passing silently.
+  it('sd-start.js calls selfOwnedOverridesEvidenceGate', () => {
+    const src = readFileSync(path.join(repoRoot, 'scripts/sd-start.js'), 'utf8');
+    expect(src).toContain('selfOwnedOverridesEvidenceGate');
+    expect(src).toContain('lib/claim/evidence-attribution-decisions.mjs');
+  });
+
+  it('stale-session-sweep.cjs calls sweepShouldHoldRelease', () => {
+    const src = readFileSync(path.join(repoRoot, 'scripts/stale-session-sweep.cjs'), 'utf8');
+    expect(src).toContain('sweepShouldHoldRelease');
+    expect(src).toContain('lib/claim/evidence-attribution-decisions.mjs');
+  });
+
+  it('the sweep consumes evidenceAttribution, not a bare allowReclaim boolean', () => {
+    // The defect was consuming one undifferentiated boolean. Pin that the sweep reads the
+    // attribution, so a revert to `if (!evidence.allowReclaim) { hold }` fails here.
+    const src = readFileSync(path.join(repoRoot, 'scripts/stale-session-sweep.cjs'), 'utf8');
+    expect(src).toContain('evidenceAttribution');
   });
 });

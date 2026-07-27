@@ -41,6 +41,9 @@ import { checkClaimGateFreshness } from '../lib/claim/gate-freshness-check.mjs';
 // when the prior session has been released but its CC conversation is still active
 // under a rotated session_id (the 2026-04-24 incident class).
 import { checkPreClaimEvidence } from './modules/claim-health/triangulate.js';
+// SD-LEO-INFRA-RECLAIMSAFE-CANNOT-TELL-001 FR-2: the self-ownership override decision, shared
+// with its tests so the shipped predicate is the one under test.
+import { selfOwnedOverridesEvidenceGate } from '../lib/claim/evidence-attribution-decisions.mjs';
 import { isSDClaimed } from '../lib/session-conflict-checker.mjs';
 import { isProcessRunning, startHeartbeat, stopHeartbeat } from '../lib/heartbeat-manager.mjs';
 import { classifyOwnerLiveness } from '../lib/claim/owner-liveness.js';
@@ -1048,8 +1051,13 @@ async function main() {
           console.log(`${colors.dim}(self-ownership probe skipped: ${ownErr.message})${colors.reset}`);
         }
       }
-      const blockingEvidenceIsAllMine = selfOwnership.selfOwned
-        && evidenceCheck.evidenceAttribution?.allUnattributed === true;
+      // Decision lives in lib/claim/evidence-attribution-decisions.mjs so the tests exercise
+      // THIS function rather than a copy of it. An earlier cut inlined it and tested a
+      // re-implementation; a negative control showed reverting this block broke nothing.
+      const blockingEvidenceIsAllMine = selfOwnedOverridesEvidenceGate({
+        selfOwned: selfOwnership.selfOwned,
+        evidenceAttribution: evidenceCheck.evidenceAttribution
+      });
       if (blockingEvidenceIsAllMine) {
         console.log(
           `${colors.yellow}⚠️  Evidence-of-life gate OVERRIDDEN — self-ownership proven (via ${selfOwnership.via}).${colors.reset}`
