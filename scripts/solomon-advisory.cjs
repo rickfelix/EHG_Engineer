@@ -440,6 +440,12 @@ async function stampSurfaced(supabase, ids, { background = false } = {}) {
  * QF-20260710-593 (mirrors adam-advisory.ackRows) — the single sanctioned action-time stamp for
  * the Solomon lane. Stamps acknowledged_at (only where NULL) and backfills read_at where NULL (an
  * actioned row was necessarily seen). Ownership-scoped when expectedTarget is given. Idempotent.
+ *
+ * QF-20260727-454 (part b, WARN strictness — mirrors adam-advisory.ackRows): the
+ * UPDATE...RETURNING now also reads back payload/body, so the SAME atomic call that stamps the
+ * ack surfaces the content it acked. Batch/multi-id CLI (cron + interactive) — an empty body
+ * WARNS rather than refuses, since a hard refusal here would break legitimate callers acking a
+ * row that happens to carry no readable body.
  */
 async function ackRows(supabase, ids, { expectedTarget = null } = {}) {
   const now = new Date().toISOString();
@@ -454,14 +460,19 @@ async function ackRows(supabase, ids, { expectedTarget = null } = {}) {
     // sentinel lane (Solomon is that sentinel's intended consumer), so the ownership scope
     // must admit those rows too or a surfaced fallback row could never be acked.
     if (expectedTarget) q = q.in('target_session', [expectedTarget, 'broadcast-solomon']);
-    const { data, error } = await q.select('id, read_at');
+    const { data, error } = await q.select('id, read_at, payload, body');
     if (error) { console.error(`ERROR: ack failed for ${id}: ${error.message}`); continue; }
     if (data && data.length > 0) {
       acked += 1;
       if (data[0].read_at == null) {
         await supabase.from('session_coordination').update({ read_at: now }).eq('id', id).is('read_at', null);
       }
-      console.log(`  ✓ acked ${id}`);
+      const bodyText = (data[0].payload && data[0].payload.body) || data[0].body || '';
+      if (bodyText) {
+        console.log(`  ✓ acked ${id} — body read (${String(bodyText).length} chars): ${String(bodyText).slice(0, 120)}${String(bodyText).length > 120 ? '…' : ''}`);
+      } else {
+        console.warn(`  ⚠ acked ${id} but it carries no readable body/payload.body — could not surface content to confirm against`);
+      }
     } else {
       console.log(`  • ${id} already acked, not found, or not targeted at this Solomon session — no-op`);
     }
