@@ -855,12 +855,21 @@ export class LeadFinalApprovalExecutor extends BaseExecutor {
       console.log('\n🌲 Worktree Cleanup');
       console.log('-'.repeat(50));
       worktreeCleanupResult = cleanupWorktree(sdKey);
-      if (worktreeCleanupResult.cleaned) {
+      // SD-LEO-INFRA-WORKTREE-LIFECYCLE-FAILS-001 (FR-3): never tell the operator a worktree
+      // was "removed" when it was ARCHIVED. cleanupWorktree used to infer success from
+      // `git worktree list` containment, so an archived (MOVED) directory read as removed and
+      // this line printed a flat success. The library now reports the archive; surface it here
+      // with the path and the trigger, so "removed" means removed and nothing else does.
+      if (worktreeCleanupResult.archived && worktreeCleanupResult.archivePath) {
+        console.warn(`   ⚠️  Worktree NOT removed — archived to ${worktreeCleanupResult.archivePath} (${worktreeCleanupResult.reason}). The code is preserved there, not deleted.`);
+      } else if (worktreeCleanupResult.cleaned) {
         console.log(`   ✅ Worktree .worktrees/${sdKey} removed`);
       } else if (worktreeCleanupResult.reason === 'worktree_not_found') {
         console.log(`   ℹ️  No worktree found for ${sdKey} (may not have been created)`);
       } else if (worktreeCleanupResult.reason === 'dirty_worktree') {
         console.warn('   ⚠️  Worktree has uncommitted changes — run /ship first, then re-run LEAD-FINAL-APPROVAL');
+      } else if (worktreeCleanupResult.reason === 'husk_directory_remains') {
+        console.warn(`   ⚠️  Husk: ${sdKey} was deregistered from git but its directory remains at ${worktreeCleanupResult.worktreePath || `.worktrees/${sdKey}`} — invisible to git-based sweeps, safe to delete manually.`);
       } else {
         console.warn(`   ⚠️  Worktree cleanup incomplete: ${worktreeCleanupResult.reason}`);
       }
