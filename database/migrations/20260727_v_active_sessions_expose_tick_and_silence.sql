@@ -50,10 +50,31 @@
 -- line that is wrong is worse than no rollback line, because it is trusted under pressure at exactly
 -- the moment nobody re-derives it.
 --
--- AND A REPLAY CANNOT ROLL THIS BACK ANYWAY. `CREATE OR REPLACE VIEW` cannot DROP columns, so going
--- 41 -> 37 raises "cannot drop columns from view". A genuine rollback needs `DROP VIEW ... CASCADE`,
--- which also drops v_sd_parallel_opportunities and the claim-guard functions that depend on this
--- view; those must be recreated in the same transaction. Budget for that before applying, not after.
+-- AND A REPLAY ALONE CANNOT ROLL THIS BACK. `CREATE OR REPLACE VIEW` cannot DROP columns, so going
+-- 41 -> 37 raises "cannot drop columns from view".
+--
+-- THE ACTUAL ROLLBACK, both steps, in order:
+--     DROP VIEW public.v_active_sessions;
+--     -- then replay 20260526_v_active_sessions_expose_liveness.sql verbatim
+--
+-- NO `CASCADE`, AND DO NOT ADD ONE. Measured 2026-07-27T23:1xZ against pg_catalog: this view has
+-- ZERO dependent objects — pg_depend/pg_rewrite returns only its own _RETURN rule, and 0 of the 746
+-- public functions reference it. Negative control on the same queries: claude_sessions returns 4
+-- dependents and 17 functions, so the probes can see dependents when they exist.
+-- Plain `DROP VIEW` is therefore the SAFER verb: it succeeds today, and if a dependent is ever added
+-- it FAILS LOUDLY instead of silently destroying it. `CASCADE` would trade a loud stop for quiet
+-- collateral damage at precisely the wrong moment.
+--
+-- AN EARLIER REVISION OF THIS PARAGRAPH CLAIMED THE DROP WOULD ALSO TAKE OUT
+-- v_sd_parallel_opportunities AND "the claim-guard functions". BOTH WERE FALSE:
+-- v_sd_parallel_opportunities DOES NOT EXIST IN THE DATABASE (it is itself an unapplied migration,
+-- 20251204_multi_session_coordination.sql), and the real claim-guard functions read the
+-- claude_sessions TABLE, not this view. Postgres also does not record function-body references in
+-- pg_depend at all, so CASCADE could not have dropped a function even if one did reference it.
+-- Recorded rather than quietly deleted, because of HOW it got here: it was inherited from an
+-- upstream message and written down as fact WITHOUT being checked against pg_catalog — in the same
+-- edit that corrected a different unverified claim, in the file whose entire subject is checks that
+-- cannot see what they certify. Verify dependents before naming them; the query is three lines.
 --
 -- No data migration (read-model view only).
 --
