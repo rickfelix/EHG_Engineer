@@ -70,10 +70,15 @@ describe('TS-1/TS-2 — in-flight verdict comes from live git state, not stored 
   });
 
   it('TS-1: branch-only is NOT in-flight by default, and IS when opted in', () => {
-    // Measured before shipping: branch-only would withhold 6 of 24 draft/in_progress SDs (~25%
-    // of the belt) on stale refs — this repo squash-merges and does not prune (3059 refs).
-    // A false withhold blocks an item indefinitely and looks like an empty queue, which is worse
-    // than the duplicate build being prevented. An open PR is authoritative; a bare ref is not.
+    // Default is PR-only. NOT because branch-only is mostly wrong — the partition says otherwise:
+    // of 7 branch-only items (across 57 non-terminal EHG_Engineer items, excluding escalated),
+    // 5 are genuine never-PR'd WIP and 2 are stale merged refs, i.e. ~71% precise. An earlier
+    // comment here read "~25% of the belt on stale refs"; that conflated would-withhold with
+    // would-FALSELY-withhold and is retracted.
+    // The default is PR-only because an open PR is unambiguous, all four ACs hold on it alone,
+    // and a false withhold is the worse error — it blocks an item indefinitely and reads as an
+    // empty queue. See the collectInflightSnapshot docblock for the full rationale, including
+    // what this default deliberately does NOT cover (the push-to-open-PR window).
     const off = collectInflightSnapshot({ runGh: okGh([]), runGit: okGit([`qf/${QF}`]), repo: 'o/r' });
     expect(classifyItem(QF, off).verdict).toBe(CLEAR);
 

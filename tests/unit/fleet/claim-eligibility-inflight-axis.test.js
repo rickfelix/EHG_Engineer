@@ -40,8 +40,10 @@ describe('FR-3 — an SD with an open PR is withheld from dispatch', () => {
   });
 
   it('a bare remote branch does NOT withhold by default, but does when opted in', () => {
-    // Measured: 6 of 24 draft/in_progress SDs are branch-only. Withholding on those would starve
-    // ~25% of the belt on refs this repo never prunes.
+    // Default is PR-only. Partition (TESTING 725a71bf, reproduced exactly): of 7 branch-only
+    // items, 5 are genuine never-PR'd WIP and 2 are stale merged refs — ~71% precise, NOT the
+    // "~25% belt starvation" an earlier version of this comment claimed. That framing conflated
+    // would-withhold with would-falsely-withhold and is retracted.
     const off = collectInflightSnapshot({ runGh: okGh([]), runGit: okGit([`feat/${IN_FLIGHT_SD}`]), repo: 'o/r' });
     expect(classifyDispatchIneligibility(row(IN_FLIGHT_SD), { inflight_git_state: off })).toBeNull();
 
