@@ -4,7 +4,8 @@
     "tests/unit/venture-email/provision-venture-email.test.mjs": "vitest unit project include (vitest.config.js **/tests/unit/venture-email/**/*.test.mjs)",
     "tests/unit/session-tick-heartbeat.test.mjs": "npm run test:session-tick (.github/workflows/unit-tier.yml)",
     "tests/unit/session-tick-release-on-exit.test.mjs": "npm run test:session-tick (.github/workflows/unit-tier.yml)",
-    "tests/unit/session-tick-spawn-observe.test.mjs": "npm run test:session-tick (.github/workflows/unit-tier.yml)"
+    "tests/unit/session-tick-spawn-observe.test.mjs": "npm run test:session-tick (.github/workflows/unit-tier.yml)",
+    "tests/unit/session-tick-marker-pid-refresh.test.mjs": "npm run test:session-tick (.github/workflows/unit-tier.yml)"
   },
   "legacy_unaudited": {
     "_doc": "DEBT REGISTER (pre-QF-20260712-023 files with no verified CI runner at seeding time — audit each: wire a lane and move it to lanes{}, or archive the file). Adding NEW entries here defeats the check's purpose.",
