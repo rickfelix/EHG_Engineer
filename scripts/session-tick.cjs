@@ -161,6 +161,28 @@ async function rediscoverParentPid() {
     const rows = await res.json();
     const candidate = Array.isArray(rows) && rows[0] ? Number(rows[0].pid) : 0;
     if (!candidate || candidate === parentPid) return 0;
+    // SD-LEO-INFRA-PID-LIVENESS-DURABLE-VENUE-001 (C1): NEVER ADOPT OUR OWN PID.
+    //
+    // This is the self-relatch that made a dead session report fresh heartbeats for 21+ minutes
+    // after the OS confirmed its Claude Code parent was gone. The first-tick POST below (~:232)
+    // writes `pid: process.pid` — THIS DAEMON'S pid, not the parent's. When the tick created the
+    // row, the column therefore holds our own pid. On parent death we re-read it here, see
+    // candidate !== parentPid (true — it is us), call process.kill(candidate, 0) which ALWAYS
+    // succeeds against ourselves, adopt it, and reset parentMissCount. MAX_PARENT_MISSES is then
+    // unreachable and the daemon becomes immortal, stamping heartbeat_at and process_alive_at
+    // forever for a session whose parent no longer exists.
+    //
+    // CONDITIONAL, and the condition matters for scoping: the every-tick PATCH writes ONLY the
+    // two timestamps and never `pid`, and the first-tick POST carries
+    // Prefer: resolution=ignore-duplicates. So our pid lands in that column ONLY when the tick
+    // won the row-creation race. If capture-session-id.cjs created the row first, the column
+    // holds the real parent pid, rediscovery gets ESRCH, and the exit path works correctly.
+    //
+    // DO NOT "fix" this by deleting rediscovery. It exists to survive legitimate Claude Code
+    // parent-PID rotation across /clear, reconnect and compaction
+    // (SD-FDBK-FIX-PARKED-LOOP-WORKER-001); removing it re-breaks parked workers and trades
+    // false-life for false-death — the seam all five prior attempts at this defect fell down.
+    if (candidate === process.pid) return 0;
     // Only adopt a PID that is actually alive and different from the one we already track —
     // the caller debounces a genuine miss with MAX_PARENT_MISSES.
     try {

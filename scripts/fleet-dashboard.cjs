@@ -10,7 +10,7 @@ const { spawnSync } = require('child_process');
 const { createSupabaseServiceClient } = require('../lib/supabase-client.cjs');
 // SD-LEO-INFRA-IS-ALIVE-LIVENESS-SSOT-001 (FR-2): the read-time liveness SSOT — the gauge reconcile
 // wraps isSessionAlive so the P(alive) override and the authoritative-liveness definition can never diverge.
-const { isSessionAlive } = require('../lib/fleet/session-liveness.cjs');
+const { isSessionAlive, hasPidAlive: sharedHasPidAlive } = require('../lib/fleet/session-liveness.cjs');
 
 // Idle-fleet diff suppression — coordinator was generating ~120 identical
 // dashboard renders overnight. After N consecutive identical renders, emit a
@@ -277,11 +277,15 @@ async function loadData() {
   // A session with stale heartbeat but living CC PID is loading context or between tool calls.
   // terminal_id format: "win-cc-{port}-{ccPid}" — extract ccPid and check marker files.
   const aliveCcPids = getAliveCcPids();
-  const hasPidAlive = (s) => {
-    if (!s.terminal_id) return false;
-    const parts = s.terminal_id.split('-');
-    return aliveCcPids.has(parts[parts.length - 1]);
-  };
+  // SD-LEO-INFRA-PID-LIVENESS-DURABLE-VENUE-001 (C2): this WAS a local re-implementation doing
+  // s.terminal_id.split('-') and taking the last segment — a third copy of logic that is simply
+  // wrong for the bare-UUID terminal_ids sessions actually write (the last segment is a hex group,
+  // never a PID), so this dashboard's PID rung resolved nothing. Unlike scripts/stale-session-sweep.cjs
+  // (which already calls the shared resolver), this shadow was NOT reached by the C2 migration.
+  // Now delegates to the canonical predicate so the dashboard cannot disagree with the SSOT.
+  // Wrapped to preserve the existing single-argument call sites below and to keep injecting the
+  // already-computed aliveCcPids set rather than re-reading the markers per row.
+  const hasPidAlive = (s) => sharedHasPidAlive(s, aliveCcPids);
   // ── SD-LEO-INFRA-WORKER-SOURCE-SIDE-001: source-side telemetry merge ──
   const telemetryById = new Map();
   try {

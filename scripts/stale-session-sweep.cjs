@@ -533,35 +533,16 @@ const supabase = createSupabaseServiceClient();
  * @param {string} [sessionId] - Used for UUID-format pid-*.json lookup
  * @returns {number|null} numeric PID or null when no match
  */
-function resolveCcPidFromTerminalId(terminalId, sessionId) {
-  if (!terminalId || typeof terminalId !== 'string') return null;
-  // Format 1: win-cc-PORT-PID (CLI)
-  const cliMatch = /^win-cc-\d+-(\d+)$/.exec(terminalId);
-  if (cliMatch) return Number(cliMatch[1]);
-  // Format 2: win-PID (Desktop)
-  const dtMatch = /^win-(\d+)$/.exec(terminalId);
-  if (dtMatch) return Number(dtMatch[1]);
-  // Format 3: UUID — scan .claude/session-identity/pid-*.json by session_id match
-  try {
-    const markerDir = path.resolve(__dirname, '..', '.claude', 'session-identity');
-    if (!fs.existsSync(markerDir)) return null;
-    const files = fs.readdirSync(markerDir)
-      .filter(f => /^pid-\d+\.json$/.test(f));
-    for (const file of files) {
-      try {
-        const data = JSON.parse(fs.readFileSync(path.join(markerDir, file), 'utf8'));
-        if (data?.cc_pid && (
-          data.session_id === sessionId
-          || data.session_id === terminalId
-        )) {
-          return Number(data.cc_pid);
-        }
-      } catch { /* skip malformed */ }
-    }
-  } catch { /* directory missing or unreadable */ }
-  return null;
-}
+// SD-LEO-INFRA-PID-LIVENESS-DURABLE-VENUE-001 (C2): the implementation MOVED to
+// lib/fleet/resolve-cc-pid.cjs so hasPidAlive consumes the same resolver this sweep does.
+// Re-exported here unchanged so the existing consumers keep working by their current import
+// path (scripts/coordinator-charter-audit.mjs:76 and tests/unit/stale-session-sweep-terminal-parser.test.js).
+// Behavior is identical — only the home moved. Do NOT reintroduce a local copy.
+const { resolveCcPidFromTerminalId } = require('../lib/fleet/resolve-cc-pid.cjs');
 module.exports.resolveCcPidFromTerminalId = resolveCcPidFromTerminalId;
+
+// SD-LEO-INFRA-PID-LIVENESS-DURABLE-VENUE-001 (FR-3a): whether THIS venue can see PIDs at all.
+const { pidVenueCapability, pidBlindNotice } = require('../lib/fleet/pid-venue.cjs');
 
 // SD-FDBK-INFRA-EXEC-CONTEXT-GUARD-001 (FR-3): lazy-load the ESM exec-context-guard
 // from this CJS module. Cached after first import to avoid repeated module
@@ -2106,6 +2087,13 @@ async function main() {
   // Match by extracting the last segment from terminal_id and checking the alive set.
   const aliveCcPids = new Set(aliveMarkers.map(m => String(m.pid)));
 
+  // SD-LEO-INFRA-PID-LIVENESS-DURABLE-VENUE-001 (FR-3a): resolved ONCE per sweep, because it is a
+  // property of the venue, not of any row. When the marker directory is absent — which is every
+  // scheduled run of .github/workflows/sweep-cron.yml, since .claude/session-identity is host-local
+  // and gitignored — the PID rung cannot be asked, and `hasPidAlive === false` below is an artefact
+  // of where we are standing rather than a fact about the process.
+  const pidVenue = pidVenueCapability();
+
   // ── SD-LEO-INFRA-WORKER-SOURCE-SIDE-001: source-side telemetry lookup ────────
   // Fetch process_alive_at / expected_silence_until / current_tool_expected_end_at
   // for all session_ids in this sweep. These signals take precedence over
@@ -2173,7 +2161,17 @@ async function main() {
     // than naive last-segment-of-hyphen-split (which silently mis-classified UUID-format
     // terminal_ids as having last-segment hex chars instead of a real PID).
     let hasPidAlive = false;
-    if (s.terminal_id) {
+    // FR-3a: not "the PID is not alive" — "we are somewhere the answer was never written".
+    const pidUnverifiable = !pidVenue.capable;
+    // SD-LEO-INFRA-PID-LIVENESS-DURABLE-VENUE-001 (C2): the guard here used to be
+    // `if (s.terminal_id)`, which skipped resolution entirely for rows with no terminal_id.
+    // That is now wrong: resolveCcPidFromTerminalId matches pid-*.json markers by SESSION_ID, so a
+    // NULL terminal_id is resolvable whenever a marker carries the session. MEASURED on the full
+    // live population (exact head-count 12 == 12 examined): 3 rows have terminal_id NULL and ALL
+    // THREE have a resolvable marker — including the fleet coordinator. Gating on terminal_id left
+    // this sweep blind to 25% of live sessions while the answer sat on disk. Resolve on EITHER
+    // identifier; the resolver itself returns null when neither can match.
+    if (s.terminal_id || s.session_id) {
       const ccPid = resolveCcPidFromTerminalId(s.terminal_id, s.session_id);
       if (ccPid != null) {
         hasPidAlive = aliveCcPids.has(String(ccPid));
@@ -2209,6 +2207,12 @@ async function main() {
       // PID is alive but heartbeat is stale — session is loading context,
       // compacting, or between tool calls. NOT stale.
       status = 'ALIVE_NO_HEARTBEAT';
+    } else if (pidUnverifiable) {
+      // SD-LEO-INFRA-PID-LIVENESS-DURABLE-VENUE-001 (FR-3a): this venue cannot see the PID
+      // marker directory at all, so hasPidAlive===false above is NOT-ASKED, not NO. Every
+      // branch below states "...AND no living PID" as part of its meaning; none of them may be
+      // reached on an answer we never obtained. Abstain explicitly instead.
+      status = 'PID_UNVERIFIABLE';
     } else if (isVeryStale || exceedsDesktopCap) {
       status = 'DEAD'; // No heartbeat for 15min+ (CLI) or 30min+ (Desktop) AND no living PID
     } else {
@@ -2227,12 +2231,31 @@ async function main() {
 
     return {
       ...s,
-      isStale: isStale && !hasPidAlive && !(sourceSide && sourceSide.alive),
+      // FR-3a: `!hasPidAlive` is only a REASON to call something stale when the PID leg was
+      // actually askable. In a PID-blind venue it is an artefact of the venue, so it must not
+      // carry a death verdict — releases downstream key off isStale.
+      isStale: isStale && !hasPidAlive && !pidUnverifiable && !(sourceSide && sourceSide.alive),
       status,
       sourceSideReason: sourceSide?.reason || null,
       hasPidAlive, // QF-20260426-SWEEP-HARDCAP-PIDALIVE: preserve for hard-cap guard
+      pidUnverifiable, // FR-3a: true => this row's PID leg abstained (venue blind), never "dead"
     };
   });
+
+  // SD-LEO-INFRA-PID-LIVENESS-DURABLE-VENUE-001 (FR-3a + FR-3c): SAY the abstention out loud, and
+  // STATE THE ROW COUNT either way. A sweep that quietly examined nothing, and a sweep that
+  // examined everything and found nothing, print the same "All clear" — that ambiguity is how the
+  // 5-of-11 dead-seat population stayed invisible across four prior builds of this fix.
+  if (!pidVenue.capable) {
+    console.warn(pidBlindNotice(pidVenue, { examined: classified.length }));
+  } else {
+    const withPidVerdict = classified.filter(s => s.hasPidAlive).length;
+    console.log(
+      `[sweep] PID venue OK (${pidVenue.markerDir}). Examined ${classified.length} row(s); ` +
+      `${withPidVerdict} resolved to a live PID.`
+    );
+  }
+
   // SD-ARCH-HOTSPOT-SWEEP-001: shared ctx bag for MAIN_PASSES (lib/sweep/pass-registry.cjs).
   // Built once here (right after classification) and reused at each later registry
   // call site in main() — same actions/warnings/collisionsDetected arrays, mutated
