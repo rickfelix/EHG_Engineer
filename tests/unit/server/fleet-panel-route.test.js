@@ -20,6 +20,23 @@ vi.mock('../../../lib/fleet/account-capacity-gauge.cjs', async (importActual) =>
   return { ...actual, loadStore: vi.fn(() => ({})) };
 });
 
+// SD-LEO-FEAT-ACCOUNT-USAGE-STRIP-001: the usage reader is mocked at the ROUTE boundary only —
+// it reads real credentials off disk and calls a live endpoint, neither of which belongs in a unit
+// test. Its own behaviour (every failure mode) is covered in tests/unit/fleet/account-usage-reader.
+const MOCK_USAGE = [
+  { name: 'Deep Soul Sessions', state: 'unavailable', reason: 'not_configured', fetchedAt: '2026-07-26T21:00:00.000Z' },
+  { name: 'Code Street Labs', state: 'ok', weeklyPct: 54, fiveHourPct: 11, weeklyResetsAt: '2026-08-02T00:00:00Z', fiveHourResetsAt: null, fetchedAt: '2026-07-26T21:00:00.000Z' },
+  { name: 'Rick Felix 2000', state: 'ok', weeklyPct: 11, fiveHourPct: 3, weeklyResetsAt: null, fiveHourResetsAt: null, fetchedAt: '2026-07-26T21:00:00.000Z' },
+];
+const usageMock = vi.fn(async () => MOCK_USAGE);
+vi.mock('../../../lib/fleet/account-usage-reader.cjs', () => ({
+  getAccountUsage: (...args) => usageMock(...args),
+  // The real helper's behaviour (one entry per registry account) is what the route's safety net
+  // depends on, so the mock mirrors it rather than returning an empty array.
+  allUnavailable: (reason) => ['Deep Soul Sessions', 'Code Street Labs', 'Rick Felix 2000']
+    .map((name) => ({ name, state: 'unavailable', reason, fetchedAt: '2026-07-26T21:00:00.000Z' })),
+}));
+
 const { getFleetPanel } = await import('../../../server/routes/fleet-panel.js');
 
 function mockRes() {
@@ -224,6 +241,61 @@ describe('GET /api/fleet-panel', () => {
     const payload = res.json.mock.calls[0][0];
     expect(payload.sessions[0].model_effort).toBe('opus/--');
     expect(payload.sessions[0].callsign).toBeNull();
+  });
+
+  it('FR-4 — exposes accountUsage additively without reshaping the legacy accountChips (TS-10)', async () => {
+    const res = mockRes();
+    await getFleetPanel(mockReq(mockSupabase([LIVE_WORKER])), res);
+    const payload = res.json.mock.calls[0][0];
+
+    // The new field carries one entry per named account, each with an explicit state.
+    expect(payload.accountUsage.map((a) => a.name)).toEqual([
+      'Deep Soul Sessions', 'Code Street Labs', 'Rick Felix 2000',
+    ]);
+    expect(payload.accountUsage.every((a) => a.state === 'ok' || a.state === 'unavailable')).toBe(true);
+
+    // TS-10: the vanilla panel (server/public/fleet-ui/fleet-panel.js) still gets EXACTLY the
+    // {name, wkPct} shape it parses. Reshaping accountChips instead of adding a field would have
+    // broken that live surface silently.
+    expect(payload.accountChips).toHaveLength(3);
+    for (const chip of payload.accountChips) {
+      expect(Object.keys(chip).sort()).toEqual(['name', 'wkPct']);
+    }
+    expect(payload.accountChips.map((c) => c.name)).toEqual(['Deep Soul', 'Rick Felix', 'CodeStreet']);
+  });
+
+  it('?refreshUsage=1 bypasses the usage cache; the ordinary poll does not', async () => {
+    // The 60s cache protects an undocumented endpoint from the 15s poll. A deliberate operator
+    // refresh must not be held behind it — otherwise "your sign-in expired" is un-actionable.
+    const plain = mockRes();
+    await getFleetPanel(mockReq(mockSupabase([LIVE_WORKER])), plain);
+    expect(usageMock).toHaveBeenLastCalledWith({});
+
+    const refreshed = mockRes();
+    await getFleetPanel(mockReq(mockSupabase([LIVE_WORKER]), { refreshUsage: '1' }), refreshed);
+    expect(usageMock).toHaveBeenLastCalledWith({ noCache: true });
+    expect(refreshed.json.mock.calls[0][0].accountUsage).toHaveLength(3);
+  });
+
+  it('TS-4 at the ROUTE — a throwing usage reader still returns a response, naming every account', async () => {
+    // The reader is written never to throw, so this is the route's defense in depth. It matters
+    // because THIS was the only await in the handler reaching an external service: unguarded, one
+    // throw would 500 the entire endpoint — sessions, chips and all — not merely the strip.
+    usageMock.mockRejectedValueOnce(new Error('reader blew up'));
+    const res = mockRes();
+    await getFleetPanel(mockReq(mockSupabase([LIVE_WORKER])), res);
+
+    expect(res.json).toHaveBeenCalledTimes(1);
+    const payload = res.json.mock.calls[0][0];
+    // The rest of the payload survives intact...
+    expect(payload.sessions).toHaveLength(1);
+    // ...and the strip degrades to a named, explicit unavailable rather than vanishing.
+    expect(payload.accountUsage.map((a) => a.name)).toEqual([
+      'Deep Soul Sessions', 'Code Street Labs', 'Rick Felix 2000',
+    ]);
+    expect(payload.accountUsage.every((a) => a.state === 'unavailable')).toBe(true);
+    expect(payload.accountUsage.some((a) => 'weeklyPct' in a)).toBe(false);
+    usageMock.mockResolvedValue(MOCK_USAGE);
   });
 
   it('returns an empty attentionStrip array (not an error) when zero sessions are flagged', async () => {

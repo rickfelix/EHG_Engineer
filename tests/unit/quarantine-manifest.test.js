@@ -76,7 +76,17 @@ describe('quarantine-manifest shape (debt register integrity)', () => {
     expect(config).toContain('quarantine-manifest.json');
     expect(config).toContain('QUARANTINE_EXCLUDE');
     // The unit project's exclude must include the quarantine list.
-    expect(config).toMatch(/exclude:\s*\[\.\.\.SHARED_EXCLUDE,\s*\.\.\.DB_INCLUDE,\s*\.\.\.QUARANTINE_EXCLUDE\]/);
+    //
+    // Matches the required spreads IN ORDER but tolerates additional ones between them, rather than
+    // pinning the exact adjacency. The old regex demanded literally
+    // [...SHARED_EXCLUDE, ...DB_INCLUDE, ...QUARANTINE_EXCLUDE] and so failed the moment a fourth
+    // legitimate spread was added (...SMOKE_INCLUDE, restoring the pre-commit smoke gate) — a
+    // source-pin breaking on an unrelated edit, not a real regression. The INVARIANT this test
+    // exists to protect is unchanged and still enforced: removing QUARANTINE_EXCLUDE from the unit
+    // project's exclude still fails here.
+    expect(config).toMatch(
+      /exclude:\s*\[[^\]]*\.\.\.SHARED_EXCLUDE[^\]]*\.\.\.DB_INCLUDE[^\]]*\.\.\.QUARANTINE_EXCLUDE[^\]]*\]/,
+    );
   });
 
   it('this test file itself is not quarantined (self-hosting guard)', () => {

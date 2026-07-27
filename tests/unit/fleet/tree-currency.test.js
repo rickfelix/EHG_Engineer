@@ -194,6 +194,19 @@ describe('TS-3: the decision table (injected runner)', () => {
     expect(r.selfHealable).toBe(false);
   });
 
+  // QF-20260726-423(b): DIRT IS NOT THE FAULT — BEING BEHIND IS.
+  //
+  // This is the semantic the commissioning row got wrong: it described the guard as one that
+  // "refuses a spawn from the chronically-dirty shared root" and asked whether "spawn should
+  // not require a clean root". Spawn never required a clean root. Pinning it here so the next
+  // reader cannot re-derive the same wrong conclusion from prose.
+  it('LOAD-BEARING: a DIRTY tree that is CURRENT passes — dirt alone never fails the check', () => {
+    const r = assessTreeCurrency({ dir: '/x', runner: runnerFor({ behind: '0', dirty: ' M a.txt\n M b.txt\n' }) });
+    expect(r.current).toBe(true);   // <-- dirt is irrelevant when behind === 0
+    expect(r.dirty).toBe(true);
+    expect(r.reason).toBe('current');
+  });
+
   it('behind + OFF-MAIN => NOT-CURRENT and NOT self-healable', () => {
     const r = assessTreeCurrency({ dir: '/x', runner: runnerFor({ behind: '4', branch: 'feat/x' }) });
     expect(r.current).toBe(false);
@@ -262,6 +275,57 @@ describe('FR-2: enforceTreeCurrency self-heals or REFUSES', () => {
       dir: '/x', runner: runnerFor({ behind: '4', branch: 'feat/x', calls }), env: {}, logger: silent,
     })).toThrow(/REFUSED/);
     expect(calls.some((c) => c.startsWith('pull'))).toBe(false);
+  });
+
+  // QF-20260726-423(b): the refusal message must SEPARATE the fault from the remedy-blocker.
+  // The old wording ran them together and read as though dirt failed the check; that misreading
+  // is on the record — it is how the commissioning row framed the whole problem.
+  it('the DIRTY refusal names BEING BEHIND as the fault and says dirt alone never fails the check', () => {
+    let msg = '';
+    try {
+      enforceTreeCurrency({
+        dir: '/x', runner: runnerFor({ behind: '4', dirty: ' M a.txt\n' }), env: {}, logger: silent,
+      });
+    } catch (e) { msg = e.message; }
+    expect(msg).toContain('THE FAULT IS BEING BEHIND');
+    expect(msg).toContain('4 commit(s) behind');
+    expect(msg).toContain('the tree is DIRTY');            // named as the BLOCKER, not the fault
+    expect(msg).toContain('dirt alone never fails this check');
+    // still states the real hazard it refuses to risk
+    expect(msg).toContain('clobbering a peer worktree');
+  });
+
+  // Caught in self-review of this very change: the clean+on-main fall-through is reached ONLY
+  // when the CALLER forbade healing (the reaper's allowSelfHeal:false). An earlier draft of the
+  // message said "self-heal was permitted" there, which is exactly backwards for the only caller
+  // that gets here — the failed-fast-forward and did-not-converge cases throw earlier.
+  it('a clean on-main tree refused because the CALLER may not heal says so, and does not claim self-heal was permitted', () => {
+    const calls = [];
+    let msg = '';
+    try {
+      enforceTreeCurrency({
+        dir: '/x', runner: runnerFor({ behind: '5', calls }), env: {}, logger: silent, allowSelfHeal: false,
+      });
+    } catch (e) { msg = e.message; }
+    expect(msg).toContain('THE FAULT IS BEING BEHIND');
+    expect(msg).toContain('may not heal');
+    expect(msg).toContain('allowSelfHeal=false');
+    expect(msg).not.toContain('Self-heal was permitted');
+    expect(msg).not.toContain('the tree is DIRTY');       // it is clean; do not blame dirt
+    // and it must genuinely not have mutated the tree
+    expect(calls.some((c) => c.startsWith('pull'))).toBe(false);
+  });
+
+  it('the OFF-MAIN refusal names the BRANCH as the blocker and does not blame dirt', () => {
+    let msg = '';
+    try {
+      enforceTreeCurrency({
+        dir: '/x', runner: runnerFor({ behind: '2', branch: 'feat/x' }), env: {}, logger: silent,
+      });
+    } catch (e) { msg = e.message; }
+    expect(msg).toContain('THE FAULT IS BEING BEHIND');
+    expect(msg).toContain("on 'feat/x' rather than 'main'");
+    expect(msg).not.toContain('the tree is DIRTY');        // clean tree must not be called dirty
   });
 
   it('a git ERROR REFUSES — fail closed, never proceed on uncertainty', () => {
