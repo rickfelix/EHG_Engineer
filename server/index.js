@@ -161,6 +161,34 @@ app.all('/api/webhooks/twilio-status', express.urlencoded({ extended: false }), 
 
 app.use(express.json());
 
+// QF-20260725-096 — the standalone /fleet-ui session view is RETIRED (chairman-ratified
+// 2026-07-27). EHG's BuilderSessionsPage is the session list, and the terminal is the detail
+// surface. Registered AHEAD of the static mount below because that is the only thing serving
+// these files; anything after it never runs.
+//
+// FILE-SCOPED, NOT ROUTE-SCOPED, and that distinction is the whole point: session-view.*,
+// fleet-panel.* and vision.* all live under the SAME /fleet-ui static mount, so retiring the
+// mount — or matching a prefix any looser than this — would take the other two pages down with
+// it. The anchored regex matches session-view.<ext> and nothing else: not fleet-panel.html, not
+// vision.html, and not a nested path, because [^/]* cannot cross a segment boundary.
+// A raw RegExp rather than a string pattern: this is Express 5 (path-to-regexp v8), where the
+// old '*' string wildcard no longer means what it did in v4.
+//
+// 410 Gone, deliberately, not 404: it asserts the resource was real and is intentionally
+// withdrawn, so a hit shows up as a decision rather than a broken link. That matters because
+// the disposition depends on watching for hits during the soak — silence is the evidence.
+// DELETES NOTHING. server/public/fleet-ui/session-view.js stays on disk (its unit test still
+// imports it), and rollback is removing this block — one commit, no file resurrection.
+app.all(/^\/fleet-ui\/session-view\.[^/]*$/, (req, res) => {
+  res.status(410).type('text/plain').send(
+    'Gone — the standalone fleet-ui session view was retired on 2026-07-27 (QF-20260725-096).\n\n' +
+    'Session list: the Builder Sessions page in EHG.\n' +
+    'Session detail (TTY, narration, agent-browser, takeover/hand-back): use the terminal.\n\n' +
+    'This capability is knowingly unavailable from the web surface. If you needed this page,\n' +
+    'that is a signal worth raising — the retirement is reversible.\n'
+  );
+});
+
 // Fleet-launcher operator UI static assets (SD-LEO-INFRA-LEO-LAUNCHER-SHELL-001-B): the
 // Session View pane fragment, mountable into the parent shell. See the ARCH-007 exception
 // note at the top of this file.
