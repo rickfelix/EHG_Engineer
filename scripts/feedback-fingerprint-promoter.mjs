@@ -29,6 +29,7 @@ import { execFileSync } from 'node:child_process';
 import { createClient } from '@supabase/supabase-js';
 import { groupByFingerprint, shouldPromote } from '../lib/shared/content-fingerprint.cjs';
 import { fetchAllPaginated } from '../lib/db/fetch-all-paginated.mjs';
+import { derivePromotedSeverity } from '../lib/feedback/promoted-severity.js';
 
 const apply = process.argv.includes('--apply');
 const WINDOW_DAYS = 14;
@@ -53,6 +54,18 @@ try {
     .eq('category', 'harness_backlog')
     .is('archived_at', null)
     .gte('created_at', cutoff)
+    // SD-LEO-INFRA-SIGNAL-PROMOTION-RESOLUTION-CHECK-001 (FR-4): this predicate had NO status
+    // filter at all, so a row already marked resolved stayed promotion-eligible for its whole
+    // 14-day window. Measured live at authoring time: 38 resolved + 1 invalid in-window rows were
+    // still eligible to be minted into fresh QFs.
+    //
+    // Written as "null OR not-in(terminal)" rather than an allow-list of good statuses, for two
+    // reasons. (1) SQL semantics: `status NOT IN (...)` evaluates to NULL for a NULL status, which
+    // would silently DROP those rows — the fail-closed direction, and dropping real work is the
+    // dangerous one here. (2) An allow-list would silently exclude any status added later, failing
+    // closed by default. Only known-terminal statuses are excluded; everything else, including
+    // NULL and any future value, still promotes exactly as before.
+    .or('status.is.null,status.not.in.(resolved,invalid)')
     .order('id', { ascending: true })); // unique tiebreaker (FR-6)
 } catch (e) {
   console.error('ERROR (select):', JSON.stringify({ message: e.message }));
@@ -95,14 +108,28 @@ for (const group of groups.values()) {
   }
 
   const title = `[Fingerprint x${sourceIds.length}] ${(group.sample_body.split('\n')[0] || group.fingerprint).slice(0, 100)}`;
-  const description = `Auto-promoted from ${sourceIds.length} harness_backlog occurrences sharing fingerprint ${group.fingerprint} within a ${WINDOW_DAYS}-day window. Source feedback row ids: ${sourceIds.join(', ')}.`;
+
+  // SD-LEO-INFRA-SIGNAL-PROMOTION-RESOLUTION-CHECK-001 (FR-5): derive the severity the QF enters
+  // the belt with rather than inheriting the reporter's own adjective. Corroboration is counted
+  // from the distinct callsigns signal-router stamped across the contributing rows.
+  const callsigns = new Set();
+  for (const r of group.rows) for (const c of (r.metadata?.contributing_callsigns || [])) callsigns.add(c);
+  const sev = derivePromotedSeverity({
+    declared: group.max_severity,
+    callsigns: callsigns.size,
+    occurrences: sourceIds.length,
+  });
+  if (sev.derived) console.log(`  [SEVERITY] ${group.max_severity} -> ${sev.severity}: ${sev.reason}`);
+
+  const description = `Auto-promoted from ${sourceIds.length} harness_backlog occurrences sharing fingerprint ${group.fingerprint} within a ${WINDOW_DAYS}-day window. Source feedback row ids: ${sourceIds.join(', ')}.`
+    + (sev.derived ? ` Severity derived: reported ${group.max_severity}, promoted ${sev.severity} — ${sev.reason}` : '');
 
   try {
     execFileSync('node', [
       'scripts/create-quick-fix.js',
       '--title', title,
       '--type', 'bug',
-      '--severity', group.max_severity,
+      '--severity', sev.severity,
       '--description', description,
       '--feedback-id', sourceIds.join(','),
     ], { stdio: 'inherit' });
