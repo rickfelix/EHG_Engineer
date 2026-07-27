@@ -33,12 +33,23 @@ describe('TS-3: an SD without the flag is completely unaffected', () => {
     expect(classifyMigrationApplyState).not.toHaveBeenCalled();
   });
 
-  it('treats a non-true flag value as not applicable', async () => {
-    for (const v of [false, 'true', 1, null, undefined]) {
+  it('treats a non-affirmative flag value as not applicable', async () => {
+    for (const v of [false, 'false', 1, null, undefined, 'yes']) {
       const r = await gate().validator(sdWith({ requires_chairman_apply: v }));
       expect(r.passed).toBe(true);
       expect(r.details.applicable).toBe(false);
     }
+  });
+
+  it('treats the STRING "true" as gated, matching the flag\'s other consumer', async () => {
+    // check-migration-readiness.mjs resolveSdGated() guards `=== 'true' || === true` because it
+    // reads via raw SQL ->> which always returns text. This gate blocks completion where that one
+    // only quiets a warning, so it must not be the less tolerant of the two: a string-valued flag
+    // must still gate. Erring toward gating is safe; erring toward skipping is the incident.
+    classifyMigrationApplyState.mockResolvedValue({ files: [], error: null });
+    const r = await gate().validator(sdWith({ requires_chairman_apply: 'true' }));
+    expect(r.passed).toBe(false);
+    expect(classifyMigrationApplyState).toHaveBeenCalled();
   });
 });
 
@@ -177,6 +188,63 @@ describe('association falls back to the SD key without sharpening the shared heu
     const r = await gate().validator(sdWith({ requires_chairman_apply: true }));
     expect(r.passed).toBe(false);
     expect(r.issues.join('\n')).toContain('20260101_SD-TEST-001_add_thing.sql');
+  });
+});
+
+describe('a declaration can only ADD to what is checked - never subtract (shadow-bypass guard)', () => {
+  it('still blocks when a declared APPLIED decoy sits alongside an undeclared SD-key NOT_APPLIED file', async () => {
+    // The bypass both EXEC reviews found independently. An earlier cut used an EXCLUSIVE branch
+    // (declared.length ? filter(declared) : filter(sdKey)), so declaring one already-applied file
+    // skipped the SD-key fallback entirely and the real unapplied migration passed unexamined -
+    // while sitting in the very files[] the gate already had. metadata is a DATABASE write, not
+    // part of any git diff, so this would have been invisible to PR review.
+    classifyMigrationApplyState.mockResolvedValue({
+      files: [
+        { file: '20260102_unrelated.sql', status: 'APPLIED' },
+        { file: '20260101_SD-TEST-001_add_thing.sql', status: 'NOT_APPLIED', missing: [] }
+      ],
+      error: null
+    });
+    const r = await gate().validator(sdWith({
+      requires_chairman_apply: true,
+      migration_files: ['20260102_unrelated.sql']
+    }));
+    expect(r.passed).toBe(false);
+    expect(r.issues.join('\n')).toContain('20260101_SD-TEST-001_add_thing.sql');
+  });
+
+  it('blocks a PARTIAL declaration rather than silently checking only the entries it found', async () => {
+    // declared ['real','typo'] previously checked only `real` and dropped `typo` without a word -
+    // a partial match reported as a full pass.
+    classifyMigrationApplyState.mockResolvedValue({
+      files: [{ file: '20260101_real.sql', status: 'APPLIED' }],
+      error: null
+    });
+    const r = await gate().validator(sdWith({
+      requires_chairman_apply: true,
+      migration_files: ['20260101_real.sql', '20260101_typo.sql']
+    }));
+    expect(r.passed).toBe(false);
+    expect(r.details.fail_closed).toBe(true);
+    expect(r.issues.join('\n')).toContain('20260101_typo.sql');
+  });
+
+  it('still passes when the declaration and the SD-key file are both applied', async () => {
+    // The union must not over-block: adding the fallback back in cannot turn a legitimately
+    // fully-applied SD into a failure.
+    classifyMigrationApplyState.mockResolvedValue({
+      files: [
+        { file: '20260102_declared.sql', status: 'APPLIED' },
+        { file: '20260101_SD-TEST-001_add_thing.sql', status: 'APPLIED' }
+      ],
+      error: null
+    });
+    const r = await gate().validator(sdWith({
+      requires_chairman_apply: true,
+      migration_files: ['20260102_declared.sql']
+    }));
+    expect(r.passed).toBe(true);
+    expect(r.details.verified).toHaveLength(2);
   });
 });
 

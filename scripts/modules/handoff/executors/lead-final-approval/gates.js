@@ -1234,7 +1234,15 @@ export function createChairmanApplyVerificationGate() {
 
       const sd = ctx.sd || {};
       const sdKey = sd.sd_key || sd.id || 'unknown';
-      const gated = sd.metadata?.requires_chairman_apply === true;
+      // Accept the string 'true' as well as the boolean. Not defensive clutter: the flag's
+      // sibling consumer check-migration-readiness.mjs resolveSdGated() (:141) already guards
+      // `flag === 'true' || flag === true`, because it reads via raw SQL ->> which always
+      // returns text — in-repo evidence that this field demonstrably arrives as a string on
+      // some paths. This gate is the HIGHER-consequence consumer (it blocks completion, that
+      // one only quiets a warning), so it must not be the LESS tolerant of the two. Erring
+      // toward gating is the safe direction; erring toward skipping is the incident.
+      const rawFlag = sd.metadata?.requires_chairman_apply;
+      const gated = rawFlag === true || rawFlag === 'true';
 
       // Not flagged → not applicable. Unflagged SDs must see no behaviour change at all.
       if (!gated) {
@@ -1262,18 +1270,33 @@ export function createChairmanApplyVerificationGate() {
           return failClosed(`apply-state could not be determined: ${error}`, sdKey);
         }
 
-        const owned = declared.length
-          ? files.filter(f => declared.includes(f.file))
-          : files.filter(f => f.file.includes(sdKey));
+        // UNION, never an exclusive branch. An earlier cut used
+        //   declared.length ? filter(declared) : filter(sdKey)
+        // which the EXEC security and testing reviews independently broke: the moment
+        // metadata.migration_files was non-empty — honest partial declaration, stale
+        // copy-paste, or a deliberate decoy — the SD-key fallback was SKIPPED ENTIRELY, so a
+        // declared already-APPLIED file passed the gate while the real SD-key-named
+        // NOT_APPLIED migration sat untouched in the same files[] the gate already held.
+        // metadata is a DATABASE WRITE, not part of any git diff, so that bypass would have
+        // been invisible to review of the PR that introduced it. A declaration may only ever
+        // ADD to what is checked; it can never subtract.
+        const owned = files.filter(f => declared.includes(f.file) || f.file.includes(sdKey));
+
+        // A declaration that names a file the corpus does not contain is itself unverifiable.
+        // Without this, declaring ['real.sql','typo.sql'] checked only real.sql and silently
+        // dropped the other — a partial match reported as a full pass.
+        const missingDeclared = declared.filter(d => !files.some(f => f.file === d));
+        if (missingDeclared.length) {
+          return failClosed(
+            `declared migration(s) not found in the migration corpus: ${missingDeclared.join(', ')}`,
+            sdKey,
+            ['Correct metadata.migration_files, or remove entries that no longer exist.']
+          );
+        }
 
         if (!owned.length) {
-          return failClosed(
-            declared.length
-              ? `declared migration(s) ${declared.join(', ')} not found in the migration corpus`
-              : `no migration file could be associated with ${sdKey}`,
-            sdKey,
-            ['Declare the SD\'s migration(s) in metadata.migration_files so this gate can verify them.']
-          );
+          return failClosed(`no migration file could be associated with ${sdKey}`, sdKey,
+            ['Declare the SD\'s migration(s) in metadata.migration_files so this gate can verify them.']);
         }
 
         // PARTIAL is not APPLIED. A half-applied migration is precisely the state this gate exists
