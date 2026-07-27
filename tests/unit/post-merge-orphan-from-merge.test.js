@@ -4,7 +4,8 @@
  * Verifies the NEW seam wiring the previously-dead detectOrphanWorktreeFromMerge
  * detector into the claim-aware post-merge cleanup:
  *   TS-6 positive: orphan detected + live claim → routed through cleanupWorktreeByPath
- *                  → archive-not-delete (NOT a hard delete).
+ *                  → left in place (NOT moved/archived, NOT hard-deleted). P0 fix 65ef1075:
+ *                  a live claim must not be relocated out from under the active session.
  *   TS-7 negative: merge output with no deleted branch → no_orphan_detected.
  *   mapping: feat/<SD> → .worktrees/<SD>; qf/<QF> → .worktrees/qf/<QF>.
  *   advisory: function returns a result object and never throws on the
@@ -73,7 +74,7 @@ describe('cleanupOrphanFromMergeOutput (FR-2 detector wiring)', () => {
     expect(res.candidate.replace(/\\/g, '/')).toMatch(/\.worktrees\/qf\/QF-20260101-001$/);
   });
 
-  it('TS-6: orphan detected + live claim → archived (claim-aware, NOT hard-deleted)', async () => {
+  it('TS-6: orphan detected + live claim → left in place (claim-aware, NOT moved/archived)', async () => {
     const mainRepoPath = makeTmpRepo();
     const wt = path.join(mainRepoPath, '.worktrees', 'SD-FOO-001');
     fs.mkdirSync(wt, { recursive: true });
@@ -93,14 +94,17 @@ describe('cleanupOrphanFromMergeOutput (FR-2 detector wiring)', () => {
       { mainRepoPath, supabase }
     );
 
-    // Routed through claim-aware cleanup → archived, not deleted.
+    // Routed through claim-aware cleanup → LEFT IN PLACE (P0 fix, feedback 65ef1075).
+    // A live claim must never be moved/archived: archiveWorktree() relocates the tree
+    // and prunes it from git, yanking the active session's working dir out from under
+    // it. The orphan detector inherits this via cleanupWorktreeByPath.
     expect(res.cleaned).toBe(false);
     expect(res.reason).toBe('active_claim_protect');
-    expect(res.archived).toBe(true);
+    expect(res.archived).toBeFalsy();
+    expect(res.archivePath).toBeUndefined();
     expect(res.source).toBe('merge_output_detector');
-    // Original worktree dir moved out (archived), not left in place or hard-removed silently.
-    expect(fs.existsSync(wt)).toBe(false);
-    expect(fs.existsSync(res.archivePath)).toBe(true);
+    // Original worktree dir left untouched at its original path.
+    expect(fs.existsSync(wt)).toBe(true);
   });
 
   it('advisory: never throws on negative/absent inputs (does not hard-fail /ship)', async () => {
