@@ -31,6 +31,7 @@
  */
 import 'dotenv/config';
 import fs from 'fs';
+import os from 'os';
 import path from 'path';
 import { fileURLToPath, pathToFileURL } from 'url';
 import { execFileSync } from 'child_process';
@@ -44,6 +45,35 @@ export const TASK_ENV = Object.freeze({
   OKR_REQUIRE_ACCEPTANCE: 'true',
 });
 const DEFAULT_INTERVAL_MINUTES = 5;
+
+/**
+ * QF-20260726-677 — schtasks /Create WITHOUT /RU registers the task under the current user with
+ * Principal.LogonType=Interactive. In an attended session that materialises a visible OpenConsole.exe
+ * window on every 5-minute fire (measured: 148 orphaned zero-descendant consoles). The fix is a /RU
+ * principal, same shape as the fork at scripts/setup-reboot-respawn-task.mjs:76 — but a DIFFERENT
+ * default: that fork defaults /RU to SYSTEM (needs elevation to register, loses the user's PATH/profile,
+ * which this wrapper's `call npm run ...` depends on). This module defaults to an S4U logon as the
+ * CURRENT user instead (/RU <user> /NP): non-interactive, session 0, no window, keeps the profile/PATH,
+ * and normally needs no elevation to register. SYSTEM (or another account) remains available via --ru.
+ */
+function resolveDefaultRunAs() {
+  try {
+    return process.env.USERNAME || process.env.USER || os.userInfo().username || null;
+  } catch {
+    return null;
+  }
+}
+export const DEFAULT_RUN_AS = resolveDefaultRunAs();
+
+/** Well-known service accounts don't take /NP (S4U "no stored password") — they already run without one. */
+const WELL_KNOWN_SERVICE_ACCOUNTS = new Set([
+  'SYSTEM', 'NT AUTHORITY\\SYSTEM',
+  'LOCALSERVICE', 'LOCAL SERVICE', 'NT AUTHORITY\\LOCAL SERVICE',
+  'NETWORKSERVICE', 'NETWORK SERVICE', 'NT AUTHORITY\\NETWORK SERVICE',
+]);
+function isWellKnownServiceAccount(runAs) {
+  return typeof runAs === 'string' && WELL_KNOWN_SERVICE_ACCOUNTS.has(runAs.toUpperCase());
+}
 
 /**
  * Build the wrapper .cmd content (PURE). Sets the safety flags, cd's to the repo root, and
@@ -64,11 +94,20 @@ export function buildWrapperScript({ repoRoot, npmCommand = NPM_COMMAND, env = T
  * containing spaces). Every-N-minutes trigger via /SC MINUTE /MO <n>; /F overwrites an existing
  * task so re-running is idempotent. The /TR target is the wrapper batch (which carries the env).
  */
-export function buildSchtasksArgs({ taskName = TASK_NAME, wrapperPath, intervalMinutes = DEFAULT_INTERVAL_MINUTES, extraArgs = [] } = {}) {
+export function buildSchtasksArgs({ taskName = TASK_NAME, wrapperPath, intervalMinutes = DEFAULT_INTERVAL_MINUTES, runAs = DEFAULT_RUN_AS, extraArgs = [] } = {}) {
   if (!wrapperPath) throw new Error('buildSchtasksArgs: wrapperPath required');
   const mo = parseInt(intervalMinutes, 10);
   if (!Number.isFinite(mo) || mo < 1) throw new Error(`buildSchtasksArgs: invalid intervalMinutes ${intervalMinutes}`);
-  return ['/Create', '/TN', taskName, '/TR', wrapperPath, '/SC', 'MINUTE', '/MO', String(mo), '/F', ...extraArgs];
+  const args = ['/Create', '/TN', taskName, '/TR', wrapperPath, '/SC', 'MINUTE', '/MO', String(mo), '/F'];
+  // QF-20260726-677: without /RU, schtasks registers LogonType=Interactive and every fire opens a
+  // visible console. /RU <user> /NP is an S4U logon (non-interactive, session 0, no window, keeps the
+  // profile/PATH this wrapper's `call npm run` needs) — /NP is skipped for well-known service accounts
+  // (e.g. an explicit --ru SYSTEM override), which don't take it.
+  if (runAs) {
+    args.push('/RU', runAs);
+    if (!isWellKnownServiceAccount(runAs)) args.push('/NP');
+  }
+  return [...args, ...extraArgs];
 }
 
 export function buildRemoveArgs(taskName = TASK_NAME) {
@@ -89,18 +128,19 @@ function runSchtasks(args, { logger = console } = {}) {
 }
 
 export function parseArgs(argv) {
-  const args = { mode: 'register', dryRun: false, help: false };
+  const args = { mode: 'register', dryRun: false, help: false, runAs: undefined };
   for (let i = 2; i < argv.length; i++) {
     const a = argv[i];
     if (a === '--remove' || a === '--delete') args.mode = 'remove';
     else if (a === '--status' || a === '--query') args.mode = 'status';
     else if (a === '--dry-run') args.dryRun = true;
+    else if (a === '--ru') { args.runAs = argv[i + 1]; i++; }
     else if (a === '--help' || a === '-h') args.help = true;
   }
   return args;
 }
 
-const USAGE = 'setup-eva-watcher-task [--status|--remove|--dry-run]  (Windows Task Scheduler host for the EVA watcher)';
+const USAGE = 'setup-eva-watcher-task [--status|--remove|--dry-run] [--ru <user>]  (Windows Task Scheduler host for the EVA watcher; /RU defaults to the current user via S4U — see QF-20260726-677)';
 
 export async function main(argv = process.argv, deps = {}) {
   const args = parseArgs(argv);
@@ -135,7 +175,8 @@ export async function main(argv = process.argv, deps = {}) {
 
   // register (default): write the wrapper, then create/refresh the task.
   const wrapperContent = buildWrapperScript({ repoRoot });
-  const schtasksArgs = buildSchtasksArgs({ wrapperPath });
+  const schtasksArgs = buildSchtasksArgs({ wrapperPath, runAs: args.runAs });
+  const effectiveRunAs = args.runAs || DEFAULT_RUN_AS;
   if (args.dryRun) {
     logger.log(`${tag} DRY RUN — would write wrapper ${wrapperPath}:`);
     logger.log(wrapperContent.replace(/\r\n/g, '\n'));
@@ -156,9 +197,9 @@ export async function main(argv = process.argv, deps = {}) {
     logger.error(`${tag} schtasks /Create failed (code ${res.code}): ${res.stderr}`);
     return { exitCode: 1, action: 'create_failed' };
   }
-  logger.log(`${tag} registered '${TASK_NAME}' — every ${DEFAULT_INTERVAL_MINUTES} min → ${WRAPPER_REL_PATH}`);
+  logger.log(`${tag} registered '${TASK_NAME}' — every ${DEFAULT_INTERVAL_MINUTES} min, /RU ${effectiveRunAs || '(none — Interactive logon, will leak a console; pass --ru)'} → ${WRAPPER_REL_PATH}`);
   logger.log(`${tag} env: EVA_SCHEDULER_OBSERVE_ONLY=true OKR_REQUIRE_ACCEPTANCE=true (observe-only bring-up; full-dispatch needs chairman GO)`);
-  return { exitCode: 0, action: 'registered', wrapperPath };
+  return { exitCode: 0, action: 'registered', wrapperPath, runAs: effectiveRunAs };
 }
 
 const isMain = !!process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href;
