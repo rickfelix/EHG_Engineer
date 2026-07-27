@@ -11,7 +11,7 @@ const NOW = Date.parse('2026-06-23T00:00:00Z');
 // Configurable supabase double supporting both query chains the checker uses:
 //   sd_phase_handoffs: select → eq → gte → order → range (paginated, FR-6 batch 7)
 //   strategic_directives_v2: select → eq → gte → or → limit
-function mockSb({ handoffs = [], handoffsError = null, completed = [] } = {}) {
+function mockSb({ handoffs = [], handoffsError = null, completed = [], completedError = null } = {}) {
   return {
     from(table) {
       if (table === 'sd_phase_handoffs') {
@@ -24,7 +24,7 @@ function mockSb({ handoffs = [], handoffsError = null, completed = [] } = {}) {
         return b;
       }
       if (table === 'strategic_directives_v2') {
-        return { select: () => ({ eq: () => ({ gte: () => ({ or: () => ({ limit: () => Promise.resolve({ data: completed, error: null }) }) }) }) }) };
+        return { select: () => ({ eq: () => ({ gte: () => ({ or: () => ({ limit: () => Promise.resolve({ data: completedError ? null : completed, error: completedError }) }) }) }) }) };
       }
       return null;
     },
@@ -173,5 +173,49 @@ describe('ingestProposalObject stale-guard (FR-2)', () => {
       { deps: { keyExists: async () => true, createSD: async () => {} } }
     );
     expect(res.action).toBe('skipped');
+  });
+});
+
+// SD-LEO-INFRA-SIGNAL-PROMOTION-RESOLUTION-CHECK-001 (FR-1) — the completed-SD lookup must not
+// FAIL GREEN. premise-liveness.js:103 destructured only { data } from the strategic_directives_v2
+// .or(title.ilike,description.ilike) call, discarding { error }. PostgREST rejects the logic tree
+// whenever the interpolated token contains a comma or parenthesis — and the token is
+// feedback.title.slice(0,80), i.e. raw worker prose (measured avg 117 chars). With the error
+// discarded nothing throws, the catch never runs, no evidence line is emitted, and the verdict
+// still reads like a considered LIVE. Measured inert on 785/973 (81%) of the live 14-day pool.
+//
+// Failing OPEN to LIVE is the correct DIRECTION and is deliberately preserved here — dropping a
+// real premise is the dangerous direction. What this asserts is that the failure is OBSERVABLE:
+// an operator (and the promotion path that consumes this verdict) must be able to tell "the
+// resolution check could not run" apart from "the resolution check ran and found nothing".
+describe('checkPremiseLiveness — completed-SD lookup must surface query failure (FR-1)', () => {
+  const logicTreeError = { message: 'failed to parse logic tree ((title.ilike.%FOLLOW-UP on signal c6bfe6dc (venture_user_select%))' };
+
+  it('surfaces the failed completed-SD lookup in evidence instead of silently reporting nothing', async () => {
+    const res = await checkPremiseLiveness(
+      { gate_name: GATE },
+      { supabase: mockSb({ handoffs: [rejection(GATE)], completedError: logicTreeError }), git: noGit, nowMs: NOW }
+    );
+    const joined = res.evidence.join(' | ');
+    expect(joined).toMatch(/Completed-SD check (skipped|failed|unavailable)/i);
+    expect(joined).toMatch(/logic tree/i);
+  });
+
+  it('still fails OPEN to LIVE on lookup failure — never STALE (a failed check must not drop real work)', async () => {
+    const res = await checkPremiseLiveness(
+      { gate_name: GATE },
+      { supabase: mockSb({ handoffs: [], completedError: logicTreeError }), git: gitWithCommits, nowMs: NOW }
+    );
+    // recentCount===0 AND a git fix "found" would otherwise satisfy the STALE branch; an
+    // indeterminate SD lookup must not be allowed to help manufacture a STALE verdict.
+    expect(res.status).toBe('LIVE');
+  });
+
+  it('a successful lookup that genuinely finds nothing is DISTINGUISHABLE from a failed one', async () => {
+    const res = await checkPremiseLiveness(
+      { gate_name: GATE },
+      { supabase: mockSb({ handoffs: [rejection(GATE)], completed: [] }), git: noGit, nowMs: NOW }
+    );
+    expect(res.evidence.join(' | ')).not.toMatch(/Completed-SD check (skipped|failed|unavailable)/i);
   });
 });
