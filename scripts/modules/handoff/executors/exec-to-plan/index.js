@@ -37,6 +37,7 @@ import {
   createWiringValidationGate,
   // Advisory wire-reachability check (SD-FDBK-ENH-WIRE-CHECK-GATE-002)
   createWireCheckAdvisoryGate,
+  createRealCalleeAttestationGate,
   // Consumer Impact advisory (SD-LEO-INFRA-FIRST-PARTY-CODEBASE-STRUCTURAL-ANALYSIS-001)
   createConsumerImpactGate,
   // UI Interactivity Check (SD-MAN-INFRA-LEO-GATE-IMPROVEMENTS-001)
@@ -357,6 +358,15 @@ export class ExecToPlanExecutor extends BaseExecutor {
     // wiring it sees the gap here (and can fix it in the same PR) instead of being
     // blocked at the FINAL handoff and forced to open a 2nd PR.
     gates.push(createWireCheckAdvisoryGate(this.supabase));
+
+    // Real-callee attestation (SD-PAT-FIX-STUBBED-WRITER-BLINDNESS-001 / FR-1)
+    // Non-blocking (required:false): asks the author to name the test that drives each REAL
+    // callee, or to declare the integration UNTESTED. PRESENCE only — the literal "none" is a
+    // valid answer, because a gate that graded the answer would be guessing and would get
+    // bypassed. Its job is to make "untested" something someone had to type rather than a
+    // silence. This is the only control here that reaches DEPENDENCY-INJECTION stubbing, which
+    // a mock-detecting lint cannot see.
+    gates.push(createRealCalleeAttestationGate(this.supabase));
 
     // Consumer Impact advisory (SD-LEO-INFRA-FIRST-PARTY-CODEBASE-STRUCTURAL-ANALYSIS-001)
     // Non-blocking (required:false): blast-radius of modified/removed exported

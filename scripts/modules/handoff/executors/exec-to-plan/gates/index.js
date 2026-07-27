@@ -38,6 +38,12 @@ export { createCrossChildIntegrationGate } from './cross-child-integration-gate.
 // Wiring Validation (SD-LEO-WIRING-VERIFICATION-FRAMEWORK-ORCH-001-D)
 export { createWiringValidationGate } from './wiring-validation.js';
 
+// Real-callee attestation (SD-PAT-FIX-STUBBED-WRITER-BLINDNESS-001 / FR-1)
+// Presence-only check that the author named the test driving each REAL callee, or
+// declared it UNTESTED. The one control covering DEPENDENCY-INJECTION stubbing, which
+// eslint-rules/no-mocked-sut-import.js is structurally blind to.
+export { createRealCalleeAttestationGate, classifyAttestation } from './real-callee-attestation.js';
+
 // Advisory wire-reachability check (SD-FDBK-ENH-WIRE-CHECK-GATE-002)
 // Non-blocking early twin of the LEAD-FINAL WIRE_CHECK_GATE — surfaces unwired
 // new CLIs at EXEC-TO-PLAN so they are fixed before the blocking final gate.
