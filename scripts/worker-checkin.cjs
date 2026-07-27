@@ -663,7 +663,14 @@ async function selfClaimQuickFix(sb, sessionId, base, sessionModel) {
     // module; no-op unless the session model is restricted (fable). Fenced QFs are surfaced
     // via base.work_class_fenced, never silently skipped (C-STARVE observability).
     const { workClassIneligibilityReason, deriveWorkClass } = require('../lib/fleet/work-class.cjs');
-    for (const qf of sortQfCandidatesBySeverity(qfs)) {
+    // SD-LEO-INFRA-CORRECTION-DELIVERY-PATH-001-B FR-3: withhold QFs already in flight in git.
+    // isAutoStartableQF's `if (qf.pr_url || qf.commit_sha) return false` is blind in the measured
+    // shape — both columns are NULL for 23/30 (77%) of non-terminal QFs while a real PR is open.
+    // Fail-open throughout: any fault leaves the candidate list untouched, so a gh/auth outage
+    // can never present as an empty belt (AC-3).
+    const { withheldFilteredQfs } = require('../lib/checkin/steps/critical-qf-jump.cjs');
+    const qfCandidates = await withheldFilteredQfs(sortQfCandidatesBySeverity(qfs), {});
+    for (const qf of qfCandidates) {
       if (!isAutoStartableQF(qf, nowMs)) continue;
       const wcReason = typeof sessionModel === 'string' ? workClassIneligibilityReason(qf, sessionModel) : null;
       if (wcReason) {

@@ -42,8 +42,17 @@ describe('FR-3 / AC-1 / AC-2 — the incident lane withholds in-flight quick-fix
     expect(kept.map((q) => q.id)).toEqual([FREE_QF]);
   });
 
-  it('withholds a QF with a pushed branch and NO open PR', async () => {
+  it('does NOT withhold on a bare remote branch by default (stale-ref protection)', async () => {
+    // Measured: 6 of 24 draft/in_progress SDs carry a branch with no open PR, and this repo
+    // squash-merges without pruning — QF-20260727-703's ref survived its own merge. Withholding
+    // on a bare ref would starve ~25% of the belt, which is worse than the duplicate it prevents.
     const ctx = { inflightProbe: { runGh: okGh([]), runGit: okGit([`qf/${IN_FLIGHT_QF}`]), repo: 'o/r' } };
+    const kept = await withheldFilteredQfs([qf(IN_FLIGHT_QF), qf(FREE_QF)], ctx);
+    expect(kept.map((q) => q.id)).toEqual([IN_FLIGHT_QF, FREE_QF]);
+  });
+
+  it('withholds on a bare remote branch when the caller opts in', async () => {
+    const ctx = { inflightProbe: { runGh: okGh([]), runGit: okGit([`qf/${IN_FLIGHT_QF}`]), repo: 'o/r', includeBranchOnly: true } };
     const kept = await withheldFilteredQfs([qf(IN_FLIGHT_QF), qf(FREE_QF)], ctx);
     expect(kept.map((q) => q.id)).toEqual([FREE_QF]);
   });

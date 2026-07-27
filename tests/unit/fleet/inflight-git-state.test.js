@@ -69,9 +69,16 @@ describe('TS-1/TS-2 — in-flight verdict comes from live git state, not stored 
     expect(v.reason).toBe(REASON.OPEN_PR);
   });
 
-  it('TS-1: a pushed remote branch with NO open PR still => IN_FLIGHT', () => {
-    const snap = collectInflightSnapshot({ runGh: okGh([]), runGit: okGit([`qf/${QF}`]), repo: 'o/r' });
-    const v = classifyItem(QF, snap);
+  it('TS-1: branch-only is NOT in-flight by default, and IS when opted in', () => {
+    // Measured before shipping: branch-only would withhold 6 of 24 draft/in_progress SDs (~25%
+    // of the belt) on stale refs — this repo squash-merges and does not prune (3059 refs).
+    // A false withhold blocks an item indefinitely and looks like an empty queue, which is worse
+    // than the duplicate build being prevented. An open PR is authoritative; a bare ref is not.
+    const off = collectInflightSnapshot({ runGh: okGh([]), runGit: okGit([`qf/${QF}`]), repo: 'o/r' });
+    expect(classifyItem(QF, off).verdict).toBe(CLEAR);
+
+    const on = collectInflightSnapshot({ runGh: okGh([]), runGit: okGit([`qf/${QF}`]), repo: 'o/r', includeBranchOnly: true });
+    const v = classifyItem(QF, on);
     expect(v.verdict).toBe(IN_FLIGHT);
     expect(v.reason).toBe(REASON.REMOTE_BRANCH);
   });
