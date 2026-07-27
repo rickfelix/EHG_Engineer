@@ -50,9 +50,39 @@ async function main() {
   // Scope every assertion to the QF branch. Checking the whole body would let the SD branch's own
   // CAS satisfy the CAS check — the wrong-referent mistake this SD is full of examples of.
   const start = def.indexOf("IF v_sd_key LIKE 'QF-%' THEN");
-  const end = def.indexOf('ELSE', start);
+
+  // BOUNDARY FIX — the scoping INTENT above was right; the boundary TOKEN was not.
+  //
+  // This previously ended the window at def.indexOf('ELSE', start). The FR-2 fix introduces
+  //     status = CASE WHEN ... THEN 'open' ELSE status END
+  // and that inline "ELSE status" is the FIRST literal 'ELSE' after the branch start — so the
+  // window truncated mid-CASE, BEFORE the holder CAS that follows it. The check therefore reported
+  // "holder CAS on the QF branch: FAIL" against a live function carrying the CAS verbatim.
+  //
+  // Worth naming precisely, because it is this SD's own defect class: the check was UNSATISFIABLE
+  // BY CONSTRUCTION on the very fix it exists to verify. It could only ever report a full pass
+  // against a release_sd containing no CASE at all — i.e. the UNFIXED one. A verifier that goes
+  // green only while the fix is absent is worse than no verifier, because it is trusted.
+  //
+  // 'UPDATE strategic_directives_v2' is the SD branch's first statement and cannot occur inside the
+  // QF branch, so it is a boundary the QF branch's own contents can never move.
+  const end = def.indexOf('UPDATE strategic_directives_v2', start);
   if (start < 0 || end < 0) { console.error('FAIL: could not isolate the QF branch in the live definition.'); process.exit(1); }
   const branch = def.slice(start, end);
+
+  // SELF-TEST THE WINDOW BEFORE TRUSTING WHAT IT SAYS. A mis-scoped window fails silently in both
+  // directions, and each direction lies differently: over-capture lets the SD branch's CAS satisfy
+  // the CAS check (false PASS), under-capture hides the QF branch's own CAS (false FAIL — the bug
+  // that was actually here). Guard the first, then prove the CAS check can still FAIL at all.
+  if (branch.includes('strategic_directives_v2')) {
+    console.error('FAIL: window over-captured into the SD branch — its CAS would satisfy the CAS check.');
+    process.exit(1);
+  }
+  const casCheck = CHECKS.find((c) => c.name.startsWith('holder CAS'));
+  if (casCheck.re.test(branch.replace(/AND\s+claiming_session_id\s*=\s*p_session_id/, ''))) {
+    console.error('FAIL: negative control — the CAS check still matches after the CAS is removed. It cannot fail, so it cannot detect.');
+    process.exit(1);
+  }
 
   let failed = 0;
   for (const c of CHECKS) {

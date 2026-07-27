@@ -1,5 +1,19 @@
 -- 20260727_release_sd_qf_reopen.sql
 -- SD-LEO-INFRA-DISPATCH-DELIVERY-INTEGRITY-001 (FR-2)
+-- Date: 2026-07-27
+-- @approved-by: codestreetlabs@gmail.com
+--
+-- CHAIRMAN APPLY-GO: verbal, 2026-07-27T14:32:39Z, granted by the chairman (Rick Felix,
+-- codestreetlabs@gmail.com) and recorded durably on the SD row as metadata.chairman_apply_go
+-- (scribe: adam session af78b5da-b6a1-4aa2-95a4-8c4ebf8edf0d). Stamped by the LEO worker as
+-- SCRIBE under the 2026-07-11 policy: the chairman approves, a session runs the ceremony.
+--
+-- CONTENT BINDING VERIFIED before stamping, because an approval binds to exact content. The
+-- reviewed artifact hashed to 3d867f110a8da4cae999be3caf6c9073562f3fadab953c70e233cace306a2be3
+-- while origin/main stored e318f905eb782e8545127dab84fa5316506150bf8a4dfdb0dadbdfbe4670b12a.
+-- That gap is LINE ENDINGS ONLY, not a post-review edit: git stores LF and checks out CRLF on
+-- Windows, and a fresh checkout of origin/main reproduces the reviewed hash exactly on disk.
+-- (The chairman moved this fleet off Cursor to native Windows terminals the same day.)
 --
 -- THE ROOT OF PART A. release_sd's QF branch cleared claiming_session_id and left status alone:
 --
