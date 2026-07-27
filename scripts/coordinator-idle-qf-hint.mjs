@@ -40,6 +40,7 @@ import { fetchAllPaginated } from '../lib/db/fetch-all-paginated.mjs';
 
 const require = createRequire(import.meta.url);
 const { insertCoordinationRow } = require('../lib/coordinator/dispatch.cjs');
+const { logCoordinationEvent } = require('../lib/coordinator/coordination-events.cjs');
 const { isAutoStartableQF, sortQfCandidatesBySeverity } = require('./worker-checkin.cjs');
 const { resolveWorkerTierRank } = require('../lib/fleet/tier-ladder.cjs');
 const { workClassIneligibilityReason } = require('../lib/fleet/work-class.cjs');
@@ -119,6 +120,88 @@ export function shouldAlarmDelivery({ delivered = 0, attempted = 0, threshold = 
   return ratio < threshold;
 }
 
+/** Event type for the durable degraded-delivery alarm (FR-6). Stable and greppable. */
+export const DELIVERY_ALARM_EVENT = 'IDLE_QF_HINT_DELIVERY_DEGRADED';
+/** Dedup bucket for the alarm — one durable record per window per degraded condition. */
+export const DELIVERY_ALARM_WINDOW_MS = 60 * 60 * 1000; // 1h
+
+/** Stable per-window dedup key, so a condition that persists across ticks records ONCE. */
+export function deliveryAlarmDedupKey(now = Date.now(), windowMs = DELIVERY_ALARM_WINDOW_MS) {
+  return `idle-qf-hint-delivery-degraded:${Math.floor(now / windowMs)}`;
+}
+
+/** Default dedup probe: has this window's alarm already been recorded? Throws on a read fault. */
+async function defaultHasPriorAlarm(supabase, dedupKey, sinceIso) {
+  const res = await supabase
+    .from('coordination_events')
+    .select('id')
+    .eq('event_type', DELIVERY_ALARM_EVENT)
+    .gte('created_at', sinceIso)
+    .contains('payload', { dedup_key: dedupKey })
+    .limit(1);
+  if (res && res.error) throw new Error(res.error.message);
+  return Boolean(res && res.data && res.data.length);
+}
+
+/**
+ * Raise a DURABLE degraded-delivery alarm (FR-6).
+ *
+ * WHY console.error WAS NOT ENOUGH, IN THIS SD'S OWN TERMS. FR-6 opens "a logged skip count is a
+ * record nobody reads" — and a stderr line in an unattended coordinator tick is exactly that. The
+ * alarm has to land somewhere queryable or the metric repeats the defect it was built to detect.
+ * Shaped after lib/chairman/sms-channel-health.js:66-115 (the one existing in-repo ratio-with-alarm)
+ * and emitted through the EXISTING bus, logCoordinationEvent, rather than inventing a channel.
+ *
+ * @returns {Promise<{alarmed:boolean, ratio?:number|null, reason?:string, dedup_key?:string, event_id?:string}>}
+ */
+export async function emitDeliveryAlarm(supabase, {
+  delivered = 0, attempted = 0, undelivered = 0, undeliveredReasons = [],
+  threshold = DELIVERY_ALARM_THRESHOLD, minSample = DELIVERY_MIN_SAMPLE,
+  windowMs = DELIVERY_ALARM_WINDOW_MS, now = Date.now(),
+  emit = logCoordinationEvent, hasPriorAlarm = defaultHasPriorAlarm, logger = console,
+} = {}) {
+  if (!shouldAlarmDelivery({ delivered, attempted, threshold, minSample })) {
+    return { alarmed: false, reason: 'not_degraded' };
+  }
+  const { ratio } = computeDeliveryRatio({ delivered, attempted });
+  const dedupKey = deliveryAlarmDedupKey(now, windowMs);
+
+  // DEDUP FAILS OPEN, DELIBERATELY. A degraded condition persists across ticks, so without
+  // suppression the bus fills with identical rows and the alarm becomes the noise it exists to cut
+  // through. But a dedup READ that faults must never swallow the alarm: a duplicate record is
+  // cheap, a lost outage signal is the whole failure class of this SD.
+  try {
+    if (await hasPriorAlarm(supabase, dedupKey, new Date(now - windowMs).toISOString())) {
+      return { alarmed: false, ratio, reason: 'deduped', dedup_key: dedupKey };
+    }
+  } catch { /* fail open — emit anyway */ }
+
+  const res = await emit(supabase, {
+    event_type: DELIVERY_ALARM_EVENT,
+    severity: 'warning',
+    payload: {
+      dedup_key: dedupKey,
+      ratio, delivered, attempted, undelivered,
+      threshold, min_sample: minSample, window_ms: windowMs,
+      undelivered_reasons: (undeliveredReasons || []).slice(0, 20),
+      sd: 'SD-LEO-INFRA-DISPATCH-DELIVERY-INTEGRITY-001',
+    },
+  });
+
+  // FAIL-SOFT BUT NEVER SILENT. logCoordinationEvent is fail-open BY CONTRACT — it returns
+  // {ok:false} instead of throwing. An unchecked call would therefore report a degraded pass as
+  // "alarmed" while nothing was written: reporting success having delivered nothing, one layer up
+  // from the bug this SD removes. Mirrors the CANARY warn in lib/chairman/sms-channel-health.js.
+  if (!res || !res.ok) {
+    logger.warn?.(
+      `[coordinator-idle-qf-hint] CANARY: degraded-delivery alarm write FAILED (${(res && res.error) || 'unknown'})`
+      + ` — ratio ${delivered}/${attempted} remains UNRECORDED.`,
+    );
+    return { alarmed: false, ratio, reason: 'alarm_write_failed', dedup_key: dedupKey };
+  }
+  return { alarmed: true, ratio, dedup_key: dedupKey, event_id: res.id };
+}
+
 export function eligibleIdleWorkers(liveWorkers, nowMs) {
   return (liveWorkers || []).filter((w) => {
     if (w.sd_key) return false; // already claiming something — not idle
@@ -194,6 +277,12 @@ export async function runIdleQfHintCore(supabase, { nowMs = Date.now(), dryRun =
   return deliverHints(idle, ranked, { summary, supabase, coordinatorId, dryRun });
 }
 
+/** One place both non-delivery shapes (thrown, and resolved-with-error) record themselves. */
+function recordUndelivered(summary, worker, reason) {
+  summary.undelivered += 1;
+  summary.undeliveredReasons.push(`${String(worker.session_id).slice(0, 8)}:${reason}`);
+}
+
 /**
  * Deliver one hint per worker, skipping addressees that cannot be reached.
  * SD-LEO-INFRA-DISPATCH-DELIVERY-INTEGRITY-001 (FR-5/FR-6).
@@ -232,15 +321,28 @@ export async function deliverHints(idle, ranked, { summary, supabase, coordinato
       // so the candidate list is rebuilt from scratch and a skipped target is re-evaluated on the
       // NEXT tick. Had that not held, skip would have converted one loud outage into permanent
       // silent starvation for that seat, and aborting would have been the safer choice.
+      let res;
       try {
-        await insertRow(supabase, buildHintRow({ qf, coordinatorId, targetSession: worker.session_id }));
+        res = await insertRow(supabase, buildHintRow({ qf, coordinatorId, targetSession: worker.session_id }));
       } catch (e) {
-        summary.undelivered += 1;
-        summary.undeliveredReasons.push(`${String(worker.session_id).slice(0, 8)}:${e && e.code ? e.code : (e && e.message) || 'unknown'}`);
+        recordUndelivered(summary, worker, e && e.code ? e.code : (e && e.message) || 'unknown');
         // Put the QF back: this worker could not be reached, but the work is still unhinted and
         // another worker in THIS pass may fit it. Dropping it would silently reduce supply — the
         // exact failure mode the rest of this SD exists to remove.
         remaining.splice(idx, 0, qf);
+        continue;
+      }
+      // A RESOLVED FAILURE IS STILL A FAILURE — AND IT IS THE COMMON ONE. insertCoordinationRow
+      // throws on exactly ONE class (the enum violation, QF-20260725-367) and deliberately returns
+      // {data, error} for everything else, "so callers that legitimately inspect {data, error} for
+      // transient faults keep today's behaviour" (lib/coordinator/dispatch.cjs). This IS such a
+      // caller, so catching only throws counts an RLS denial or a transient insert fault as a
+      // DELIVERY. That would seat this SD's own camouflage inside the metric built to detect it:
+      // the ratio reads a confident 10-of-10 while every row was dropped. Both fail-shapes have to
+      // land in the same denominator or the denominator is decorative.
+      if (res && res.error) {
+        recordUndelivered(summary, worker, res.error.code || 'INSERT_ERROR');
+        remaining.splice(idx, 0, qf); // same reasoning as the throw path above
         continue;
       }
     }
@@ -267,11 +369,20 @@ async function main() {
     `IDLE_QF_HINT idleWorkers=${summary.idleWorkers} delivered=${summary.hinted} attempted=${summary.attempted}`
     + ` ratio=${pct} undelivered=${summary.undelivered} skippedGated=${summary.skippedGated}${dryRun ? ' (dry-run)' : ''}`,
   );
-  if (shouldAlarmDelivery({ delivered: summary.hinted, attempted: summary.attempted })) {
-    // Loud on stderr AND a stable token, so this is greppable rather than buried in a count.
+  // FR-6: the alarm must be DURABLE, not just loud. emitDeliveryAlarm no-ops unless the pass is
+  // genuinely degraded (threshold + minSample floor both applied inside).
+  const alarm = await emitDeliveryAlarm(supabase, {
+    delivered: summary.hinted, attempted: summary.attempted,
+    undelivered: summary.undelivered, undeliveredReasons: summary.undeliveredReasons,
+  });
+  if (alarm.reason !== 'not_degraded') {
+    // Loud on stderr AND a stable token, so this is greppable rather than buried in a count. The
+    // `durable=` field states whether the queryable record actually landed — never let the stderr
+    // line imply a durable alarm that failed to write.
     console.error(
       `[coordinator-idle-qf-hint] DELIVERY_DEGRADED ratio=${pct} delivered=${summary.hinted}/${summary.attempted}`
-      + ` threshold=${DELIVERY_ALARM_THRESHOLD} undelivered=[${summary.undeliveredReasons.join(', ')}]`,
+      + ` threshold=${DELIVERY_ALARM_THRESHOLD} durable=${alarm.alarmed ? alarm.event_id : alarm.reason}`
+      + ` undelivered=[${summary.undeliveredReasons.join(', ')}]`,
     );
   }
 }

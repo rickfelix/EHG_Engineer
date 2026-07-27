@@ -20,8 +20,11 @@ import {
   computeDeliveryRatio,
   shouldAlarmDelivery,
   deliverHints,
+  emitDeliveryAlarm,
+  deliveryAlarmDedupKey,
   DELIVERY_MIN_SAMPLE,
   DELIVERY_ALARM_THRESHOLD,
+  DELIVERY_ALARM_EVENT,
 } from '../../../scripts/coordinator-idle-qf-hint.mjs';
 
 const worker = (id) => ({ session_id: id, metadata: {} });
@@ -145,5 +148,151 @@ describe('FR-6: the alarm fires on a degraded ratio', () => {
     // and start alarming on healthy passes.
     expect(shouldAlarmDelivery({ delivered: 8, attempted: 10, threshold: 0.8 })).toBe(false);
     expect(shouldAlarmDelivery({ delivered: 7, attempted: 10, threshold: 0.8 })).toBe(true);
+  });
+});
+
+describe('FR-5/FR-6: a RESOLVED failure counts against the ratio, never toward it', () => {
+  it('counts a {error} result as UNDELIVERED — the shape insertCoordinationRow actually returns', async () => {
+    // THE GAP THIS CLOSES. insertCoordinationRow throws on exactly ONE class (the enum violation,
+    // QF-20260725-367) and deliberately RETURNS {data, error} for everything else, so that callers
+    // "that legitimately inspect {data, error} for transient faults keep today's behaviour". This
+    // is such a caller. Catching only throws therefore books an RLS denial as a DELIVERY, and the
+    // ratio reports a confident 3-of-3 while a row was dropped — this SD's own camouflage,
+    // reassembled inside the metric built to detect it.
+    const summary = newSummary();
+    const insertRow = async (_sb, row) => (row.target_session === 'w2'
+      ? { data: null, error: { code: '42501', message: 'permission denied for table session_coordination' } }
+      : { data: { id: 'ok' }, error: null });
+
+    await deliverHints([worker('w1'), worker('w2'), worker('w3')], [qf('QF-A'), qf('QF-B'), qf('QF-C')],
+      { summary, supabase: {}, coordinatorId: 'coord', insertRow });
+
+    expect(summary.hinted).toBe(2);        // NOT 3 — pre-fix this read 3
+    expect(summary.attempted).toBe(3);
+    expect(summary.undelivered).toBe(1);
+    expect(summary.undeliveredReasons[0]).toMatch(/42501/);
+  });
+
+  it('puts BOTH fail-shapes in the SAME denominator', async () => {
+    // A thrown fault and a resolved-with-error fault are the same event to the fleet. If only one
+    // reaches `undelivered`, the ratio silently under-reports an entire class of failure — and the
+    // class it drops is the more common one.
+    const summary = newSummary();
+    const insertRow = async (_sb, row) => {
+      if (row.target_session === 'w1') { const e = new Error('stale'); e.code = 'DISPATCH_TARGET_INVALID'; throw e; }
+      if (row.target_session === 'w2') return { data: null, error: { code: 'RLS_DENIED', message: 'denied' } };
+      return { data: { id: 'ok' }, error: null };
+    };
+
+    await deliverHints([worker('w1'), worker('w2'), worker('w3')], [qf('QF-A'), qf('QF-B'), qf('QF-C')],
+      { summary, supabase: {}, coordinatorId: 'coord', insertRow });
+
+    expect(summary.undelivered).toBe(2);
+    expect(summary.hinted).toBe(1);
+    expect(summary.attempted).toBe(3);
+    const reasons = summary.undeliveredReasons.join(',');
+    expect(reasons).toMatch(/DISPATCH_TARGET_INVALID/);
+    expect(reasons).toMatch(/RLS_DENIED/);
+  });
+
+  it('does not swallow the QF when the failure was a resolved error', async () => {
+    // Same supply-preservation contract as the throw path: an unreachable seat must not consume
+    // the work item, or one bad addressee silently reduces fleet supply.
+    const summary = newSummary();
+    const insertRow = async (_sb, row) => (row.target_session === 'w1'
+      ? { data: null, error: { code: 'RLS_DENIED', message: 'denied' } }
+      : { data: { id: 'ok' }, error: null });
+
+    await deliverHints([worker('w1'), worker('w2')], [qf('QF-ONLY')],
+      { summary, supabase: {}, coordinatorId: 'coord', insertRow });
+
+    expect(summary.hinted).toBe(1);   // w2 still received the one available QF
+    expect(summary.attempted).toBe(2);
+  });
+
+  it('still treats a void-returning writer as success — production and fakes unchanged', async () => {
+    // Guards the compatibility direction: the new check keys on a PRESENT error, not on a truthy
+    // return, so writers that resolve undefined keep their existing meaning.
+    const summary = newSummary();
+    await deliverHints([worker('w1')], [qf('QF-A')],
+      { summary, supabase: {}, coordinatorId: 'coord', insertRow: async () => undefined });
+    expect(summary.hinted).toBe(1);
+    expect(summary.undelivered).toBe(0);
+  });
+});
+
+describe('FR-6: the alarm is DURABLE, not merely loud', () => {
+  const degraded = { delivered: 1, attempted: 10 };
+
+  it('writes ONE queryable record, carrying the ratio AND its parts', async () => {
+    // FR-6 opens "a logged skip count is a record nobody reads" — so a console.error alarm in an
+    // unattended coordinator tick reproduces the very defect. And a durable record naming only
+    // "degraded" without its numbers would repeat the denominator-less failure in stored form.
+    const events = [];
+    const r = await emitDeliveryAlarm({}, {
+      ...degraded,
+      emit: async (_sb, ev) => { events.push(ev); return { ok: true, id: 'evt-1' }; },
+      hasPriorAlarm: async () => false,
+    });
+
+    expect(r.alarmed).toBe(true);
+    expect(r.event_id).toBe('evt-1');
+    expect(events).toHaveLength(1);
+    expect(events[0].event_type).toBe(DELIVERY_ALARM_EVENT);
+    expect(events[0].payload).toMatchObject({ delivered: 1, attempted: 10, threshold: DELIVERY_ALARM_THRESHOLD });
+    expect(events[0].payload.ratio).toBeCloseTo(0.1);
+    expect(events[0].payload.dedup_key).toBeTruthy();
+  });
+
+  it('writes NOTHING at full delivery or below the minSample floor', async () => {
+    let calls = 0;
+    const emit = async () => { calls += 1; return { ok: true, id: 'x' }; };
+    const full = await emitDeliveryAlarm({}, { delivered: 10, attempted: 10, emit, hasPriorAlarm: async () => false });
+    const tiny = await emitDeliveryAlarm({}, { delivered: 0, attempted: 1, emit, hasPriorAlarm: async () => false });
+    expect(full.alarmed).toBe(false);
+    expect(tiny.alarmed).toBe(false);
+    expect(calls).toBe(0);            // the floor and the threshold gate the WRITE, not just a flag
+  });
+
+  it('does NOT claim to have alarmed when the write failed', async () => {
+    // logCoordinationEvent is fail-open BY CONTRACT — {ok:false}, never a throw. An unchecked call
+    // would report a degraded pass as alarmed while nothing was recorded: reporting success having
+    // delivered nothing, one layer above the bug this SD removes.
+    const warned = [];
+    const r = await emitDeliveryAlarm({}, {
+      ...degraded,
+      emit: async () => ({ ok: false, error: 'insert failed' }),
+      hasPriorAlarm: async () => false,
+      logger: { warn: (m) => warned.push(m) },
+    });
+    expect(r.alarmed).toBe(false);
+    expect(r.reason).toBe('alarm_write_failed');
+    expect(warned.join(' ')).toMatch(/UNRECORDED/);
+  });
+
+  it('suppresses a repeat in-window, but FAILS OPEN when the dedup read faults', async () => {
+    // Paired deliberately. Suppression stops a persistent condition flooding the bus; but a dedup
+    // read that errors must never swallow the alarm. A duplicate record is cheap; a lost outage
+    // signal is this SD's entire failure class. An implementation that fails CLOSED here would
+    // pass the suppression arm alone.
+    let emitted = 0;
+    const emit = async () => { emitted += 1; return { ok: true, id: 'e' }; };
+
+    const dup = await emitDeliveryAlarm({}, { ...degraded, emit, hasPriorAlarm: async () => true });
+    expect(dup.alarmed).toBe(false);
+    expect(dup.reason).toBe('deduped');
+    expect(emitted).toBe(0);
+
+    const faulted = await emitDeliveryAlarm({}, {
+      ...degraded, emit, hasPriorAlarm: async () => { throw new Error('read failed'); },
+    });
+    expect(faulted.alarmed).toBe(true);
+    expect(emitted).toBe(1);
+  });
+
+  it('keys dedup per WINDOW, so a persistent condition alarms again next window', () => {
+    const w = 60 * 60 * 1000;
+    expect(deliveryAlarmDedupKey(0, w)).toBe(deliveryAlarmDedupKey(w - 1, w));
+    expect(deliveryAlarmDedupKey(0, w)).not.toBe(deliveryAlarmDedupKey(w, w));
   });
 });
