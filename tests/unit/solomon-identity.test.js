@@ -321,3 +321,32 @@ describe('retargetStaleSolomonInbound', () => {
     expect(patch).toEqual({ target_session: 'live' });
   });
 });
+
+// ── QF-20260727-862: nil-UUID guard on the Solomon election ──────────────────
+// The 2026-07-27 ghost row (all-zero session_id, no backing process) was flagged by BOTH
+// set_coordinator_flag and set_solomon_flag. It deposed the live coordinator AND outranked the real
+// Solomon session. '00000000-…' sorts first in the session_id ASC tiebreak, so it wins on any tie.
+describe('pickCanonicalSolomon — nil-UUID guard (QF-20260727-862)', () => {
+  const NIL = '00000000-0000-0000-0000-000000000000';
+
+  it('skips the nil UUID even when it carries the freshest solomon_since', () => {
+    const winner = pickCanonicalSolomon([
+      { session_id: 'live-solomon', metadata: { solomon_since: '2026-07-27T01:00:00Z' } },
+      { session_id: NIL, metadata: { solomon_since: '2026-07-27T02:00:08Z' } }
+    ]);
+    expect(winner).not.toBeNull();
+    expect(winner.session_id).toBe('live-solomon');
+  });
+
+  it('nil UUID cannot win the session_id ASC tiebreak', () => {
+    const winner = pickCanonicalSolomon([
+      { session_id: 'zzz-real-solomon', metadata: {} },
+      { session_id: NIL, metadata: {} }
+    ]);
+    expect(winner.session_id).toBe('zzz-real-solomon');
+  });
+
+  it('a nil-UUID-only candidate set elects NOBODY rather than a ghost', () => {
+    expect(pickCanonicalSolomon([{ session_id: NIL, metadata: {} }])).toBeNull();
+  });
+});

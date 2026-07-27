@@ -192,6 +192,36 @@ describe('FR-1 setup-eva-watcher-task builders', () => {
     expect(args[args.indexOf('/TR') + 1]).toContain('eva-watcher-task.cmd');
   });
 
+  // QF-20260726-677: without /RU, schtasks /Create registers LogonType=Interactive, which is what
+  // materialised a visible OpenConsole.exe window on every 5-minute fire (148 orphaned consoles
+  // measured on the chairman's desktop). Assert the principal flag is present so this regression
+  // cannot re-land silently — the generated wrapper .cmd is gitignored, so this test + the builder
+  // are the only durable place the fix lives.
+  it('schtasks argv carries a /RU principal by default (non-interactive S4U logon, not Interactive)', () => {
+    const args = buildSchtasksArgs({ wrapperPath: 'C:\\repo\\EHG\\scripts\\cron\\eva-watcher-task.cmd' });
+    expect(args).toContain('/RU');
+    const runAs = args[args.indexOf('/RU') + 1];
+    expect(typeof runAs).toBe('string');
+    expect(runAs.length).toBeGreaterThan(0);
+    // Default must be the current user (S4U), NOT SYSTEM — SYSTEM needs elevation to register and
+    // drops the user profile/PATH that `call npm run ...` in the wrapper depends on.
+    expect(runAs.toUpperCase()).not.toBe('SYSTEM');
+    // S4U ("no stored password") logon — non-interactive, session 0, no console window.
+    expect(args).toContain('/NP');
+  });
+
+  it('honors an explicit --ru override (e.g. SYSTEM) and skips /NP for well-known service accounts', () => {
+    const args = buildSchtasksArgs({ wrapperPath: 'x', runAs: 'SYSTEM' });
+    expect(args[args.indexOf('/RU') + 1]).toBe('SYSTEM');
+    expect(args).not.toContain('/NP');
+  });
+
+  it('honors an explicit --ru override to a named user and still appends /NP', () => {
+    const args = buildSchtasksArgs({ wrapperPath: 'x', runAs: 'CUSTOMUSER' });
+    expect(args[args.indexOf('/RU') + 1]).toBe('CUSTOMUSER');
+    expect(args).toContain('/NP');
+  });
+
   it('honors a custom interval and rejects an invalid one', () => {
     expect(buildSchtasksArgs({ wrapperPath: 'x', intervalMinutes: 3 }).join(' ')).toContain('/MO 3');
     expect(() => buildSchtasksArgs({ wrapperPath: 'x', intervalMinutes: 0 })).toThrow();
@@ -212,6 +242,7 @@ describe('FR-1 setup-eva-watcher-task builders', () => {
     expect(parseTaskArgs(['node', 'x', '--remove']).mode).toBe('remove');
     expect(parseTaskArgs(['node', 'x', '--status']).mode).toBe('status');
     expect(parseTaskArgs(['node', 'x', '--dry-run']).dryRun).toBe(true);
+    expect(parseTaskArgs(['node', 'x', '--ru', 'SYSTEM']).runAs).toBe('SYSTEM');
   });
 });
 

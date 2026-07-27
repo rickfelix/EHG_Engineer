@@ -269,14 +269,15 @@ class CLAUDEMDGeneratorV3 {
       content = `${GENERATED_BANNER}\n${content}`;
     }
 
-    // file_content_hash: body = content minus the hash line; header = sha256(body)[:16].
+    // file_content_hash: body = content minus every VOLATILE line (see stripVolatileLines);
+    // header = sha256(body)[:16]. QF-20260727-510 — the hash previously excluded only its own
+    // line, so the generation timestamp sat INSIDE the hashed region and the hash could never
+    // answer "did the content actually change?" with no. The guard defeated itself.
     const HASH_LINE_RE = /^<!-- file_content_hash: [^>]*-->\r?\n/m;
+    const bodyHash = this.computeHash(stripVolatileLines(content));
     if (HASH_LINE_RE.test(content)) {
-      const body = content.replace(HASH_LINE_RE, '');
-      const bodyHash = this.computeHash(body);
       content = content.replace(HASH_LINE_RE, `<!-- file_content_hash: ${bodyHash} -->\n`);
     } else {
-      const bodyHash = this.computeHash(content);
       content = `<!-- file_content_hash: ${bodyHash} -->\n${content}`;
     }
     return content;
@@ -377,9 +378,37 @@ class CLAUDEMDGeneratorV3 {
     // (FR-5 banner + file_content_hash injection) — byte-identical to renderAll()'s
     // output, so the drift check can never diverge from what is written here.
     const content = this.renderFileContent(generatorFn, data);
-    const contentHash = this.computeHash(content);
+    // QF-20260727-510 (c): hash the STRIPPED body, not the raw render. This value is stored as
+    // the manifest's per-file content_hash, and hashing the timestamped render made all 16
+    // entries change on every run — which churned the manifest even once the .md files
+    // themselves had stopped moving. Measured: two consecutive runs differed ONLY in
+    // generated_at and all 16 content_hash values. Same input as the header hash, so the two
+    // now agree by construction instead of by coincidence.
+    const contentHash = this.computeHash(stripVolatileLines(content));
 
-    writeFileAtomic(filePath, content);
+    // QF-20260727-510 (b) — SKIP THE WRITE when the substantive body is unchanged.
+    //
+    // (a) alone makes the hash HONEST; it does not stop the churn, because the rendered
+    // content still carries a fresh timestamp and writing it still dirties the file. This is
+    // the half that actually keeps the shared root clean: regeneration with no DB change
+    // becomes a true no-op, so `git status --porcelain` stays clean, shared-root-freshness can
+    // pull again, and tree-currency stops refusing spawns from an un-healable tree.
+    //
+    // Compared on the STRIPPED body, so a differing timestamp alone is not a reason to write.
+    // Fail-OPEN by design: any read problem (missing file, unreadable, first generation) falls
+    // through to the write. A generator that silently skipped writing because it could not read
+    // the old file would be a far worse defect than an extra write.
+    let unchanged = false;
+    try {
+      if (fs.existsSync(filePath)) {
+        const onDisk = fs.readFileSync(filePath, 'utf-8');
+        unchanged = this.computeHash(stripVolatileLines(onDisk)) === this.computeHash(stripVolatileLines(content));
+      }
+    } catch {
+      unchanged = false; // unreadable -> write
+    }
+
+    if (!unchanged) writeFileAtomic(filePath, content);
 
     const size = (content.length / 1024).toFixed(1);
     const charCount = content.length;
@@ -402,7 +431,58 @@ class CLAUDEMDGeneratorV3 {
    */
   writeManifest() {
     const manifestPath = path.join(this.baseDir, 'claude-generation-manifest.json');
-    writeFileAtomic(manifestPath, JSON.stringify(this.manifest, null, 2));
+
+    // QF-20260727-510 (c) — the manifest churned 34+34 lines per run for the same reason the
+    // .md files did: it stores the self-invalidating hashes plus its own volatile stamps. With
+    // (a) the per-file hashes are now stable, so the only remaining churn is metadata that
+    // carries no information about whether the protocol content changed.
+    //
+    // `path` is included in the ignore set deliberately, and it is NOT in the row: the manifest
+    // records ABSOLUTE paths, so regenerating from any linked worktree rewrites all 16 of them
+    // to that worktree's location and dirties the tracked file in the shared root. Comparing
+    // without them stops a worktree run from claiming the shared root's manifest. The values are
+    // still written whenever a real change lands; they are only excluded from the "did anything
+    // meaningful change?" decision.
+    //
+    // Same fail-OPEN posture as the file write: any read/parse problem falls through to writing.
+    // Canonical (key-ORDER-independent) serialisation. JSON.stringify preserves insertion
+    // order, so the parsed on-disk object and the freshly-built one can hold identical content
+    // yet stringify differently — which silently defeated the skip on the first attempt and
+    // rewrote the manifest every run for a differing `generated_at` alone. Sort keys so the
+    // comparison is about CONTENT, not construction order.
+    const canonical = (v) => {
+      if (Array.isArray(v)) return `[${v.map(canonical).join(',')}]`;
+      if (v && typeof v === 'object') {
+        return `{${Object.keys(v).sort().map((k) => `${JSON.stringify(k)}:${canonical(v[k])}`).join(',')}}`;
+      }
+      return JSON.stringify(v);
+    };
+    const stripManifestVolatile = (m) => {
+      try {
+        const { generated_at: _g, git_commit: _c, ...rest } = m || {};
+        const files = Object.fromEntries(
+          Object.entries(rest.files || {}).map(([k, v]) => {
+            const { path: _p, ...fileRest } = v || {};
+            return [k, fileRest];
+          }),
+        );
+        return canonical({ ...rest, files });
+      } catch { return null; }
+    };
+
+    let manifestUnchanged = false;
+    try {
+      if (fs.existsSync(manifestPath)) {
+        const onDisk = JSON.parse(fs.readFileSync(manifestPath, 'utf-8'));
+        const a = stripManifestVolatile(onDisk);
+        const b = stripManifestVolatile(this.manifest);
+        manifestUnchanged = a !== null && b !== null && a === b;
+      }
+    } catch {
+      manifestUnchanged = false;
+    }
+
+    if (!manifestUnchanged) writeFileAtomic(manifestPath, JSON.stringify(this.manifest, null, 2));
     console.log('\nManifest written: claude-generation-manifest.json');
   }
 }
@@ -463,12 +543,61 @@ export function computeSectionDigests(sections) {
   return { global, byId, meta };
 }
 
+/**
+ * QF-20260727-510 — strip every line whose value changes on EVERY regeneration regardless of
+ * whether the DB content changed, so file_content_hash means what it claims: "did the
+ * substantive body change?"
+ *
+ * THE SELF-DEFEATING GUARD THIS FIXES. The hash previously excluded only its own line, so the
+ * generation timestamp was INSIDE the hashed region. Every regeneration therefore produced a
+ * different hash even when the protocol text was byte-identical, which dirtied ~17 tracked
+ * files (CLAUDE.md + the CLAUDE_* family + their _DIGEST siblings + the manifest) on every run.
+ *
+ * THAT NOISE BROKE TWO SAFETY MECHANISMS AND ONE OPERATOR ACTION:
+ *   - shared-root-freshness pulls only when `git status --porcelain` is clean, so it could
+ *     NEVER pull and the shared root could not self-heal;
+ *   - tree-currency refuses to spawn from a stale tree that is not safely healable, and
+ *     dirty=true is exactly what makes it unhealable;
+ *   - observed live: the chairman clicked "Start the coordinator" and got
+ *     "[tree-currency] REFUSED ... NOT safely healable (dirty=true)". The guard was working
+ *     correctly on a tree a generator had made permanently un-healable.
+ *
+ * The line shapes below were ENUMERATED FROM THE LIVE GENERATED FILES, not guessed:
+ *   <!-- file_content_hash: … -->   the hash's own line (cannot hash itself)
+ *   <!-- generated_at: … -->        DIGEST header timestamp
+ *   <!-- git_commit: … -->          DIGEST header commit stamp — changes with HEAD, not content
+ *   **Generated**: …                CLAUDE_CORE and siblings
+ *   *DIGEST generated: …*           DIGEST footer
+ *   *Generated: … | Protocol: … | Source: Database*   CLAUDE.md footer
+ *
+ * The timestamp is deliberately NOT removed from the files — the row forbids that without
+ * checking readers. It stays visible; it simply stops being hashed.
+ *
+ * MUST be shared by the compute and verify sides. If they ever strip different sets, the drift
+ * check (scripts/check-claude-md-drift.cjs) reports drift on every file forever.
+ */
+const VOLATILE_LINE_RE = new RegExp(
+  [
+    String.raw`^<!-- file_content_hash: [^>]*-->\r?\n?`,
+    String.raw`^<!-- generated_at: [^>]*-->\r?\n?`,
+    String.raw`^<!-- git_commit: [^>]*-->\r?\n?`,
+    String.raw`^\*\*Generated\*\*:.*\r?\n?`,
+    String.raw`^\*DIGEST generated:.*\r?\n?`,
+    String.raw`^\*Generated:.*\r?\n?`,
+  ].join('|'),
+  'gm',
+);
+
+export function stripVolatileLines(content) {
+  return String(content == null ? '' : content).replace(VOLATILE_LINE_RE, '');
+}
+
 export function verifyFileContentHash(filePath) {
   const content = fs.readFileSync(filePath, 'utf-8');
   const m = content.match(/^<!-- file_content_hash: ([0-9a-f]{16}) -->\r?\n/m);
   if (!m) return { ok: false, expected: null, actual: null };
-  const body = content.replace(/^<!-- file_content_hash: [^>]*-->\r?\n/m, '');
-  const expected = crypto.createHash('sha256').update(body).digest('hex').substring(0, 16);
+  // Same stripping as the compute side — see stripVolatileLines. These MUST agree.
+  const expected = crypto.createHash('sha256').update(stripVolatileLines(content)).digest('hex').substring(0, 16);
   return { ok: expected === m[1], expected, actual: m[1] };
 }
 
