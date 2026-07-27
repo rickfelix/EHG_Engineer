@@ -14,11 +14,21 @@
  *   - When there is NO stale stamp, NO metadata write is issued at all (keeps the lost-update
  *     window closed on the common promotion).
  */
-import { describe, it, expect, beforeEach, afterEach } from 'vitest';
+import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import { createRequire } from 'node:module';
 
 const req = createRequire(import.meta.url);
 const { setActiveCoordinator, clearFleetIdentityFromSession } = req('../../lib/coordinator/resolve.cjs');
+
+// setActiveCoordinator also writes the real .claude/active-coordinator.json pointer, whose path is a
+// module const with no injection seam. lib/coordinator/resolve.test.js round-trips that same default
+// path, so any suite that promotes a coordinator races it (a pre-existing flake — the already-merged
+// coordinator-flag-rpc-fallback.test.js hits it too). Stub the write: this suite asserts on metadata,
+// never on the pointer file. `require('fs')` so we spy the exact object resolve.cjs holds.
+const fs = req('fs');
+let writeSpy;
+beforeEach(() => { writeSpy = vi.spyOn(fs, 'writeFileSync').mockImplementation(() => {}); });
+afterEach(() => { writeSpy.mockRestore(); });
 
 // Mirrors tests/unit/coordinator-flag-rpc-fallback.test.js, plus an ordered `seq` log and
 // order/range so the Step-3 incumbent snapshot resolves to [] instead of throwing.
