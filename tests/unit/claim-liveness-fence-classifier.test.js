@@ -159,3 +159,36 @@ describe('FR-1 AC5 — the classifier must not consult the forbidden fields', ()
     expect(shouldRefuseClaim(INDETERMINATE)).toBe(false);
   });
 });
+
+describe('S2 — a session id is interpolated into a file path, so validate it', () => {
+  // THE FIRST DRAFT OF THIS BLOCK WAS VACUOUS, and a mutation test caught it. It called
+  // readTickPidfile with a traversal id and asserted null — but WITHOUT the guard it ALSO returns
+  // null, because the read just ENOENTs into the catch. It passed with the guard removed, which
+  // means it proved nothing. An assertion that cannot fail is decoration. So test the guard
+  // predicate directly, where removing it genuinely changes the answer.
+  const { isValidSessionId } = require('../../lib/fleet/claimant-liveness.cjs');
+
+  it('rejects traversal-shaped and malformed session ids', () => {
+    const hostile = [
+      '../../../../etc/passwd', // path.join does NOT neutralise a ../ inside one argument
+      'a/../../b',
+      '\u0000',                 // NUL truncates a path in some syscalls
+      '',
+      '.',
+      '..',
+      'a b',
+      'x'.repeat(129),          // past the 128-char bound
+    ];
+    for (const id of hostile) {
+      expect(isValidSessionId(id), `must reject ${JSON.stringify(id)}`).toBe(false);
+    }
+    for (const bad of [null, undefined, 42, {}, []]) {
+      expect(isValidSessionId(bad)).toBe(false);
+    }
+  });
+
+  it('accepts a normal uuid-shaped session id', () => {
+    expect(isValidSessionId('24ca166f-1a46-4584-99a7-35c791b28663')).toBe(true);
+    expect(isValidSessionId('sess_ABC-123')).toBe(true);
+  });
+});
