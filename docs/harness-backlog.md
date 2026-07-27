@@ -72,6 +72,31 @@ Three category values are write-time-terminal — a row landing in one of them i
 
 Any reader that excludes `category='harness_backlog'` to build an "actionable" view **must** also exclude these three, or fresh terminal-category rows leak straight back into that view. Import `TERMINAL_CATEGORIES` from the canonical module rather than hand-rolling the exclusion list.
 
+### Worker-signal promotion (the inbound hop)
+
+`lib/coordinator/signal-router.cjs` `aggregateSignals()` runs on every coordinator sweep tick and writes the `harness_backlog` rows the sections below then act on. It groups `session_coordination` rows carrying `payload.signal_type` by content fingerprint over a 60-minute window and promotes a group on 3+ distinct callsigns **or** a single `critical` signal.
+
+What a promoted row is guaranteed to carry (SD-LEO-INFRA-CORRECTION-DELIVERY-PATH-001-A):
+
+| Field | Contract |
+|---|---|
+| `description` | The **full** signal body, up to `BODY_HARD_CAP` (4096), redacted via `lib/shared/body-cap.cjs` — the same policy the outbound hop (`scripts/worker-signal.cjs`) enforces. `description` is unbounded `text`. |
+| `title` | The body's **first line**, bounded to 255 chars on a word boundary with an explicit `…` marker. `feedback.title` is `varchar(255)` — it is **not** unbounded like `description`; an over-length title fails the INSERT outright. |
+| `metadata.contributing_signal_ids` | **Forward link** — every contributing `session_coordination.id`. This is the supported way to recover the original text. |
+| `payload.routed_to_feedback_id` | Reverse link, stamped on each source row (unchanged). |
+
+**Recovering the original signal body** — one query, no reverse walk:
+
+```sql
+SELECT body FROM session_coordination
+WHERE id = ANY (
+  SELECT jsonb_array_elements_text(metadata->'contributing_signal_ids')::uuid
+  FROM feedback WHERE id = '<feedback-id>'
+);
+```
+
+Two behaviours worth knowing when reading these rows: the body used to be silently cut at 500 characters, which destroyed a 3145-character correction down to 611 chars mid-word while still stamping it `critical` (QF-20260726-425) — rows promoted before that fix are truncated and their tails are only recoverable via the reverse link. And each fingerprint group is now processed in its own `try/catch`: a group that fails is logged with its fingerprint and `signal_type` rather than silently skipped, and cannot block the groups behind it in the same tick.
+
 ### Fingerprint promotion
 
 `scripts/feedback-fingerprint-promoter.mjs` (scheduled via `.github/workflows/clockwork-feedback-fingerprint-promoter.yml`, every 6h) groups open `harness_backlog` rows by content fingerprint (`lib/shared/content-fingerprint.cjs` — the same primitive `lib/coordinator/signal-router.cjs` uses for worker-signal aggregation). A fingerprint with 3+ occurrences within a rolling 14-day window is promoted to exactly one QF-candidate via `scripts/create-quick-fix.js`, citing the fingerprint, occurrence count, and source row ids. Idempotent via `metadata.promoted_to_qf` on the source rows.

@@ -81,6 +81,7 @@ import {
   isOrchestratorBlocked,
   displayTelemetryFindings,
   classifyQuickFixes,
+  computeInFlightQfIds,
   displayRoadmapAwareness,
   displayBrainstormPipelineAdvisory
 } from './display/index.js';
@@ -481,7 +482,11 @@ export class SDNextSelector {
       currentSession: this.currentSession,
       activeSessions: this.activeSessions,
       localSignals: this.localSignals, // SD-LEO-INFRA-SESSION-COMPACTION-CLAIM-001
-      supabase: this.supabase // Needed for auto-release of stale dead claims
+      supabase: this.supabase, // Needed for auto-release of stale dead claims
+      // SD-LEO-INFRA-CORRECTION-DELIVERY-PATH-001-B FR-3: quick-fixes already in flight in git.
+      // Populated on the instance by displayTracks() before it classifies, because this getter is
+      // synchronous and shared. An unset field is an empty Set — withholds nothing, fail-open.
+      inFlightQfIds: this.inFlightQfIds || new Set()
     };
   }
 
@@ -902,6 +907,18 @@ export class SDNextSelector {
 
     // SD-LEO-INFRA-UNIFY-QUICK-FIX-001 Phase 3: classify QFs, tag with kind='qf',
     // feed into rankItems alongside SDs so they interleave in the track sections.
+    // SD-LEO-INFRA-CORRECTION-DELIVERY-PATH-001-B FR-3.
+    //
+    // BOTH render branches must produce this, which is the whole point: the first cut wired only
+    // showFallbackQueue and left this one inert. An earlier version of this comment claimed
+    // displayTracks was "the live path" — that was measured BACKWARDS and is corrected here.
+    // Live measurement (TESTING 725a71bf): baseline PRESENT but actionableCount===0, so an
+    // unforced `node scripts/sd-next.js` takes showFallbackQueue and never reaches displayTracks.
+    // Which branch is live depends on belt state and flips over time, so neither may be assumed —
+    // that assumption is exactly what left a lane unwired.
+    //
+    // Populated before classifying; fail-open to an empty Set, which withholds nothing.
+    this.inFlightQfIds = await computeInFlightQfIds(this.openQuickFixes);
     const { summary: qfSummary, classified: classifiedQFs } = classifyQuickFixes(
       this.openQuickFixes, this.qfTriageResults, this.getSessionContext()
     );

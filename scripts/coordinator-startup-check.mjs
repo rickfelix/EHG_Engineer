@@ -73,6 +73,7 @@ export const RESPONSIBILITIES = [
 //   unranked-gauge             | SCRIPT-SHAPED  | pending (FR-2 batch)      | deterministic invariant gauge
 //   singleton-relaunch          | SCRIPT-SHAPED  | pending (FR-2 batch)      | deterministic detection+scheduling only
 //   relay-drain                | SCRIPT-SHAPED  | pending (FR-2 batch)      | deterministic queue drain
+//   sms-relay-drain             | SCRIPT-SHAPED  | YES (sms-relay-drain-cron.yml) | QF-20260727-064: GHA-backed but session-armed ANYWAY — the workflow declares */5 and reports green while Actions deprioritisation makes the real cadence 1-3.7h (measured). The chairman's inbound lane cannot depend on a deprioritised runner.
 //   relay-drop-gauge           | SCRIPT-SHAPED  | pending (FR-2 batch)      | deterministic invariant gauge
 //   fleet-retro                | SCRIPT-SHAPED  | pending (FR-2 batch)      | capture is deterministic (label says capture/synthesis — FR-2 scopes strictly to the capture path; any judgment-shaped synthesis stays session-armed)
 //   row-growth                 | SCRIPT-SHAPED  | pending (FR-2 batch)      | deterministic daily snapshot
@@ -103,6 +104,7 @@ export const RESPONSIBILITIES = [
 //   unranked-gauge            | SAFE    | gauge-unranked-claimable-leaves.mjs is read + log only (no .insert/.upsert calls) — a pure gauge has nothing to duplicate
 //   singleton-relaunch        | SAFE    | singleton-relaunch-scheduler.mjs defaults to dry-run/report-only (SINGLETON_RELAUNCH_SCHEDULING_ENABLED gate) and guards real writes behind its own stampLastFired marker
 //   relay-drain                | SAFE    | coordinator-relay-drain.cjs only selects UNDRAINED relay_request rows (relay-queue.cjs's drainOne marks a row drained as part of processing it) — a second concurrent run finds nothing left to drain
+//   sms-relay-drain             | SAFE    | QF-20260727-064. Verified IN THIS SCRIPT, not by analogy to relay-drain above (this table's own rule): lib/chairman/sms-bridge.js drainSmsRelayStaging selects `.is('drained_at', null)` (:803) and stamps `.update({drained_at})` per row as part of processing it (:817-819), so a redundant fire finds nothing left to drain. Additionally gated: the runner is a NO-OP unless SMS_RELAY_DRAIN_ENABLED is truthy, and is fail-soft (a drain error logs and exits 0)
 //   relay-drop-gauge          | SAFE    | coordinator-relay-drop-gauge.cjs's own header: "Idempotent per (correlationId): a row already flagged for the same correlation is [skipped]"
 //   fleet-retro               | SAFE    | coordinator-fleet-retro.mjs's insert uses an explicit dedup key on the capture path (source_id/type-scoped)
 //   row-growth                | SAFE    | row-growth-snapshot.cjs is internally due-gated (~22h) per its own STANDARD_LOOPS comment above — an extra run inside the gate window is a documented no-op
@@ -209,6 +211,32 @@ export const STANDARD_LOOPS = [
   { key: 'relay-drain', label: 'Relay-request queue drain + confirm-on-relay', script: 'coordinator-relay-drain.cjs', cron: '1,16,31,46 * * * *',
     gha_backed: true,
     prompt: 'node scripts/coordinator-relay-drain.cjs' },
+  // QF-20260727-064: the CHAIRMAN's inbound SMS drain. sms-relay-drain-cron.yml declares
+  // '*/5 * * * *' and every run reports SUCCESS, but GitHub Actions DEPRIORITISES scheduled
+  // workflows on a busy repo, so the real cadence is nothing like 5 minutes. Measured run
+  // starts (UTC 2026-07-26/27) 19:50, 20:44, 21:43, 22:43, 23:43, 01:20, 05:01, 08:41,
+  // 11:59, 14:55 — gaps of 54, 59, 60, 60, 97, 221, 220, 197, 176 minutes. Hourly at best,
+  // 3.7h at worst, never 5 minutes. Live consequence 2026-07-27: the chairman texted ~09:45Z,
+  // the last drain had run 08:41Z, and at 11:47Z the row was STILL undrained.
+  //
+  // This is the fails-green class — flag on, workflow green, outcome absent — so it stays
+  // gha_backed:true (the workflow is real and does fire) while ALSO being session-armed here,
+  // exactly the "harmless redundant backup" posture the header table already sanctions for
+  // GHA-backed loops. A live coordinator ticks far more reliably than a deprioritised runner.
+  //
+  // This also REPAIRS THE FR-3 ALARM rather than retuning it away. sms-relay-drain.cjs's
+  // backlog-stall signal fires on rows undrained > SMS_RELAY_DRAIN_STALL_MINUTES (default 15).
+  // Under a 1-3.7h effective cadence that threshold is breached by NORMAL operation, so the
+  // alarm was either permanently firing or tuned to ignore the real failure. Restoring a true
+  // ~5-minute cadence makes 15 minutes meaningful again — the honest fix, versus relaxing the
+  // threshold to match a broken cadence and calling the silence health.
+  //
+  // NOT FIXED HERE, and deliberately so: draining a text into chairman_decisions is not the
+  // same as ANSWERING it. A live Adam session must still read and reply, so out-of-session
+  // inbound remains unanswered even at a correct cadence. The row says so explicitly.
+  { key: 'sms-relay-drain', label: 'Chairman inbound SMS relay-staging drain', script: 'sms-relay-drain.cjs', cron: '*/5 * * * *',
+    gha_backed: true,
+    prompt: 'node scripts/sms-relay-drain.cjs' },
   // FR-3: the drop-gauge — flags any inbound RELAY/DECISION/REVIEW row with no matching
   // outbound within the window (default ~15min). Offset from relay-drain so it observes a
   // just-drained queue rather than racing it.

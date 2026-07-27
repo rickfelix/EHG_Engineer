@@ -12,7 +12,6 @@
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import fs from 'node:fs';
 import path from 'node:path';
-import os from 'node:os';
 
 const HOOK_PATH = path.resolve(__dirname, '../session-role-orient.cjs');
 
@@ -95,6 +94,28 @@ describe('readCoordFile()', () => {
     fs.mkdirSync(path.dirname(COORD_PATH), { recursive: true });
     fs.writeFileSync(COORD_PATH, '{not json');
     expect(readCoordFile()).toBeNull();
+  });
+
+  // QF-20260727-391 — the regression that mattered. These are VALID JSON, so the pre-fix
+  // `JSON.parse` inside try/catch returned them happily; the bare string in particular is TRUTHY,
+  // which made `if (!coordFile && sessionId)` false in main(), skipped findActiveCoord() entirely,
+  // and left decide() reading `undefined` off a string — so every starting session was told SOLO
+  // while a coordinator was live. A corrupt CACHE must degrade to the AUTHORITY, never override it,
+  // and returning null is precisely what re-enables the DB fallback.
+  it('returns null for a bare JSON string — truthy, valid JSON, and NOT a pointer', () => {
+    fs.mkdirSync(path.dirname(COORD_PATH), { recursive: true });
+    fs.writeFileSync(COORD_PATH, JSON.stringify('a59441f4-da45-4505-bb29-2b0d00cc70e1'));
+    // Sanity: this parses to a truthy value, which is exactly why the old reader was fooled.
+    expect(JSON.parse(fs.readFileSync(COORD_PATH, 'utf8'))).toBeTruthy();
+    expect(readCoordFile()).toBeNull();
+  });
+
+  it('returns null for other truthy-but-shapeless payloads (number, array, object without session_id)', () => {
+    fs.mkdirSync(path.dirname(COORD_PATH), { recursive: true });
+    for (const payload of [42, ['a59441f4'], { started_at: 'now', host: 'h' }, { session_id: 123 }]) {
+      fs.writeFileSync(COORD_PATH, JSON.stringify(payload));
+      expect(readCoordFile(), `${JSON.stringify(payload)} must read as ABSENT`).toBeNull();
+    }
   });
 });
 

@@ -95,8 +95,35 @@ function advisoryExpiresAt(nowMs) {
 // body ('your packet ends mid-sentence at Two; the findings this consult exists FOR are invisible
 // to me' — Solomon advisory 97cf4e3e, recurred ~9x). The prefix is inside the cap so the tail the
 // consult exists to check is never dropped. PURE + exported for tests.
-function buildPreSendConsultBody(body) {
-  return capBody(`[PRE-SEND CONSULT] ${body ?? ''}`);
+// QF-20260727-709: the envelope also has to say WHO THE MESSAGE IS FOR. Forwarding only the raw
+// body hands the reviewer second-person prose written to a DIFFERENT party, with no field that
+// disambiguates it — so every "you"/"your" silently re-points at the reviewer. Witnessed live: an
+// advisory correctly addressed to the coordinator was read by Solomon as crediting HIM with editing
+// SD row descriptions. He is propose-only under CONST-002 and has edited zero rows, so the omission
+// manufactured a false governance-violation record against the oracle, stripped credit from the
+// party who actually did the work, and burned a consult round-trip on a problem that did not exist.
+// THE REVIEWER CANNOT RECOVER THIS ON HIS OWN: no amount of care recovers a field never transmitted.
+//
+// `addressee` is OPTIONAL and the no-arg call is byte-identical to before, so existing callers and
+// tests are unaffected. The header sits INSIDE capBody for the same reason the prefix does
+// (QF-20260720-729): anything outside the cap can be the thing that gets dropped.
+function formatConsultAddressee(addressee) {
+  if (!addressee) return '';
+  const role = typeof addressee === 'string' ? addressee : addressee.role;
+  const sessionId = typeof addressee === 'string' ? null : addressee.sessionId;
+  if (!role && !sessionId) return '';
+  const idPrefix = typeof sessionId === 'string' && sessionId.length > 0 ? ` ${sessionId.slice(0, 8)}` : '';
+  return ` -> ${role || 'unknown-role'}${idPrefix}`;
+}
+
+function buildPreSendConsultBody(body, addressee) {
+  const to = formatConsultAddressee(addressee);
+  // The pronoun note is not padding: the reviewer's failure mode was resolving second person to
+  // himself, and naming the addressee alone still leaves that reading available on a skim.
+  const orientation = to
+    ? `[PRE-SEND CONSULT${to}] (second-person pronouns below refer to the ADDRESSEE, not to you) `
+    : '[PRE-SEND CONSULT] ';
+  return capBody(`${orientation}${body ?? ''}`);
 }
 
 // SD-REFILL-00XK256L: the 2-hypothesis-bar guard for Adam urgent operational broadcasts. Adam's web-
@@ -389,6 +416,13 @@ async function stampSurfaced(supabase, ids, { background = false } = {}) {
  * sanctioned action-time stamp for the Adam lane (chairman directives keep
  * scripts/ack-chairman-directive.cjs). Stamps acknowledged_at (only where NULL) and
  * backfills read_at where NULL (an actioned row was necessarily seen). Idempotent.
+ *
+ * QF-20260727-454 (part b, WARN strictness): the UPDATE...RETURNING now also reads back
+ * payload/body — the SAME atomic operation that stamps the ack now surfaces the content it
+ * acked, instead of confirming a bare id. This is a batch, multi-id CLI (cron + interactive
+ * callers ack legitimate rows that occasionally carry no readable body), so an empty body WARNS
+ * rather than refuses — refusing here would break real callers; ack-chairman-directive.cjs (a
+ * single, high-stakes, always-has-a-body chairman lane) is where this class hard-refuses instead.
  */
 async function ackRows(supabase, ids, { expectedTarget = null } = {}) {
   const now = new Date().toISOString();
@@ -403,14 +437,19 @@ async function ackRows(supabase, ids, { expectedTarget = null } = {}) {
       .eq('id', id)
       .is('acknowledged_at', null);
     if (expectedTarget) q = q.eq('target_session', expectedTarget);
-    const { data, error } = await q.select('id, read_at');
+    const { data, error } = await q.select('id, read_at, payload, body');
     if (error) { console.error(`ERROR: ack failed for ${id}: ${error.message}`); continue; }
     if (data && data.length > 0) {
       acked += 1;
       if (data[0].read_at == null) {
         await supabase.from('session_coordination').update({ read_at: now }).eq('id', id).is('read_at', null);
       }
-      console.log(`  ✓ acked ${id}`);
+      const bodyText = (data[0].payload && data[0].payload.body) || data[0].body || '';
+      if (bodyText) {
+        console.log(`  ✓ acked ${id} — body read (${String(bodyText).length} chars): ${String(bodyText).slice(0, 120)}${String(bodyText).length > 120 ? '…' : ''}`);
+      } else {
+        console.warn(`  ⚠ acked ${id} but it carries no readable body/payload.body — could not surface content to confirm against`);
+      }
     } else {
       console.log(`  • ${id} already acked, not found, or not targeted at this Adam session — no-op`);
     }
@@ -1127,7 +1166,19 @@ async function main() {
       // Adam advisories target the coordinator/Solomon, never the chairman directly, so this
       // send path is not chairman-targeted (a chairman-facing send path would pass true).
       const outcome = await runPreSendConsultLane(
-        { subject, body: payload.body, senderCallsign, sessionId, repo: process.cwd(), expiresAt, isChairmanTargeted: false },
+        // QF-20260727-709: pass the resolved ADDRESSEE so the reviewer can resolve second-person
+        // pronouns in the body. `target` and the role are already computed above for the send
+        // itself; this threads them, it does not re-derive them.
+        {
+          subject,
+          body: payload.body,
+          senderCallsign,
+          sessionId,
+          repo: process.cwd(),
+          expiresAt,
+          isChairmanTargeted: false,
+          addressee: { role: isDirectTarget ? peerArg : (toSolomon ? 'solomon' : 'coordinator'), sessionId: target },
+        },
         {
           evaluatePreSendConsult,
           performBoundedConsult,

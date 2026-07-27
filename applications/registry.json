@@ -80,12 +80,60 @@
       "local_path": "C:/Users/rickf/Projects/_EHG/marketlens",
       "note": "MarketLens venture — canary pilot SD-MARKETLENS-LEO-ORCH-SPRINT-2026-001-A1",
       "venture_id": "ecbba50e-3c98-4493-9e77-1719cf6b6f00"
+    },
+    "APP007": {
+      "id": "APP007",
+      "name": "e2e-verdict-engine-1784317172624",
+      "github_repo": "rickfelix/e2e-verdict-engine-1784317172624",
+      "supabase_project_id": "pending",
+      "supabase_url": "pending",
+      "status": "active",
+      "environment": "development",
+      "registered_at": "2026-07-26T01:11:11.343Z",
+      "registered_by": "venture-provisioner",
+      "local_path": "C:/Users/rickf/Projects/_EHG/e2e-verdict-engine-1784317172624"
+    },
+    "APP008": {
+      "id": "APP008",
+      "name": "e2e-verdict-engine-1784582706454",
+      "github_repo": "rickfelix/e2e-verdict-engine-1784582706454",
+      "supabase_project_id": "pending",
+      "supabase_url": "pending",
+      "status": "active",
+      "environment": "development",
+      "registered_at": "2026-07-26T01:11:19.957Z",
+      "registered_by": "venture-provisioner",
+      "local_path": "C:/Users/rickf/Projects/_EHG/e2e-verdict-engine-1784582706454"
+    },
+    "APP009": {
+      "id": "APP009",
+      "name": "e2e-verdict-engine-1784321045564",
+      "github_repo": "rickfelix/e2e-verdict-engine-1784321045564",
+      "supabase_project_id": "pending",
+      "supabase_url": "pending",
+      "status": "active",
+      "environment": "development",
+      "registered_at": "2026-07-26T01:12:09.173Z",
+      "registered_by": "venture-provisioner",
+      "local_path": "C:/Users/rickf/Projects/_EHG/e2e-verdict-engine-1784321045564"
+    },
+    "APP010": {
+      "id": "APP010",
+      "name": "e2e-verdict-engine-1784286487799",
+      "github_repo": "rickfelix/e2e-verdict-engine-1784286487799",
+      "supabase_project_id": "pending",
+      "supabase_url": "pending",
+      "status": "active",
+      "environment": "development",
+      "registered_at": "2026-07-26T01:12:17.218Z",
+      "registered_by": "venture-provisioner",
+      "local_path": "C:/Users/rickf/Projects/_EHG/e2e-verdict-engine-1784286487799"
     }
   },
   "metadata": {
-    "total_apps": 6,
-    "active_apps": 6,
-    "last_updated": "2026-07-02T22:00:00.000Z",
+    "total_apps": 10,
+    "active_apps": 10,
+    "last_updated": "2026-07-26T01:12:17.218Z",
     "last_sync": null
   },
   "settings": {

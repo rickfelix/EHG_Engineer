@@ -50,8 +50,8 @@ describe('reportWorkerSignalStarvation', () => {
   it('counts an unanswered worker signal past the threshold and reports the oldest age', async () => {
     const { lines, log } = capture();
     const r = await reportWorkerSignalStarvation(fakeSupabase([
-      { id: 's-old', sender_session: 'w1', sender_type: 'worker', created_at: minsAgo(80), payload: {} },
-      { id: 's-mid', sender_session: 'w2', sender_type: 'worker', created_at: minsAgo(45), payload: {} },
+      { id: 's-old', sender_session: 'w1', sender_type: 'worker', created_at: minsAgo(80), payload: { signal_type: 'stuck' } },
+      { id: 's-mid', sender_session: 'w2', sender_type: 'worker', created_at: minsAgo(45), payload: { signal_type: 'stuck' } },
     ]), { now: NOW, log, env: {} });
     expect(r.starved).toBe(2);
     expect(r.oldestMin).toBe(80);
@@ -65,13 +65,37 @@ describe('reportWorkerSignalStarvation', () => {
   it('does NOT count signals that are answered, read, routed, or under threshold, or non-worker senders', async () => {
     const { log } = capture();
     const r = await reportWorkerSignalStarvation(fakeSupabase([
-      { id: 'a', sender_session: 'w', sender_type: 'worker', created_at: minsAgo(90), acknowledged_at: minsAgo(5), payload: {} },
-      { id: 'b', sender_session: 'w', sender_type: 'worker', created_at: minsAgo(90), read_at: minsAgo(5), payload: {} },
-      { id: 'c', sender_session: 'w', sender_type: 'worker', created_at: minsAgo(90), payload: { routed_to_feedback_id: 'f-1' } },
-      { id: 'd', sender_session: 'w', sender_type: 'worker', created_at: minsAgo(10), payload: {} },   // too young
-      { id: 'e', sender_session: 'adam', sender_type: 'adam', created_at: minsAgo(90), payload: {} },  // not a worker
+      { id: 'a', sender_session: 'w', sender_type: 'worker', created_at: minsAgo(90), acknowledged_at: minsAgo(5), payload: { signal_type: 'stuck' } },
+      { id: 'b', sender_session: 'w', sender_type: 'worker', created_at: minsAgo(90), read_at: minsAgo(5), payload: { signal_type: 'stuck' } },
+      { id: 'c', sender_session: 'w', sender_type: 'worker', created_at: minsAgo(90), payload: { signal_type: 'stuck', routed_to_feedback_id: 'f-1' } },
+      { id: 'd', sender_session: 'w', sender_type: 'worker', created_at: minsAgo(10), payload: { signal_type: 'stuck' } },   // too young
+      { id: 'e', sender_session: 'adam', sender_type: 'adam', created_at: minsAgo(90), payload: { signal_type: 'stuck' } },  // not a worker
     ]), { now: NOW, log, env: {} });
     expect(r.starved).toBe(0);
+  });
+
+  // QF-20260727-683: every /checkin emits a fresh payload.kind='roll_call' availability
+  // ping with an empty body and deliberately NO payload.signal_type (contract stated in
+  // .claude/commands/checkin.md). The sweep counted these as WORKER_SIGNAL_UNANSWERED
+  // anyway, so the gauge could never reach zero — measured: 4 of 5 rows named on one tick
+  // were roll_calls. This exercises the fix end-to-end through the reporter, not just the
+  // pure detector (see tests/unit/coordinator/detectors.test.js for the predicate-level cases).
+  it('QF-20260727-683: does NOT count empty-bodied roll_call rows, but still counts a real payload.signal_type row', async () => {
+    const { lines, log } = capture();
+    const r = await reportWorkerSignalStarvation(fakeSupabase([
+      { id: 'rc-1', sender_session: 'w1', sender_type: 'worker', created_at: minsAgo(80), body: null, payload: { kind: 'roll_call', sender_callsign: 'Bravo', available: true } },
+      { id: 'rc-2', sender_session: 'w1', sender_type: 'worker', created_at: minsAgo(60), body: null, payload: { kind: 'roll_call', sender_callsign: 'Bravo', available: true } },
+      { id: 'bare-1', sender_session: 'w1', sender_type: 'worker', created_at: minsAgo(50), body: null, payload: {} }, // neither kind nor signal_type
+      { id: 'sig-1', sender_session: 'w2', sender_type: 'worker', created_at: minsAgo(117), body: 'handing off a utilization decision', payload: { signal_type: 'feedback', sender_callsign: 'Charlie' } },
+    ]), { now: NOW, log, env: {} });
+    expect(r.starved).toBe(1);
+    expect(r.oldestMin).toBe(117);
+    const line = lines.find((l) => l.startsWith('WORKER SIGNALS:'));
+    expect(line).toContain('unanswered_over_30m=1');
+    expect(lines.some((l) => l.includes('WORKER_SIGNAL_UNANSWERED: id=sig-1'))).toBe(true);
+    expect(lines.some((l) => l.includes('WORKER_SIGNAL_UNANSWERED: id=rc-1'))).toBe(false);
+    expect(lines.some((l) => l.includes('WORKER_SIGNAL_UNANSWERED: id=rc-2'))).toBe(false);
+    expect(lines.some((l) => l.includes('WORKER_SIGNAL_UNANSWERED: id=bare-1'))).toBe(false);
   });
 
   it('REGRESSION: fails OPEN but says NOT MEASURED out loud — a silent catch would recreate the bug', async () => {
@@ -88,7 +112,7 @@ describe('reportWorkerSignalStarvation', () => {
     const { lines, log } = capture();
     // COORD_DETECTORS_V2 explicitly off (its real default) — the counter must still report.
     await reportWorkerSignalStarvation(fakeSupabase([
-      { id: 'z', sender_session: 'w', sender_type: 'worker', created_at: minsAgo(99), payload: {} },
+      { id: 'z', sender_session: 'w', sender_type: 'worker', created_at: minsAgo(99), payload: { signal_type: 'stuck' } },
     ]), { now: NOW, log, env: { COORD_DETECTORS_V2: 'false' } });
     expect(lines.find((l) => l.startsWith('WORKER SIGNALS:'))).toContain('unanswered_over_30m=1');
   });

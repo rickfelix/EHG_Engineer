@@ -41,12 +41,12 @@ describe('runRebootRespawn dry-run (FR-5) — default INERT', () => {
     // FR-1: a trailing single-line POINTER positional now follows. It embeds an absolute path, so
     // it is asserted by SHAPE — exact-matching a machine-specific path would be brittle without
     // testing anything more. The prefix is still pinned exactly.
-    expect(res.results[0].invocation.args.slice(0, 9))
-      .toEqual(['-w', 'new', 'new-tab', '-d', resolveRepoRoot(), '--', resolveClaudeCmd(), '--resume', 'u-1']);
+    expect(res.results[0].invocation.args.slice(0, 11))
+      .toEqual(['-w', 'new', 'new-tab', '-d', resolveRepoRoot(), '--', resolveClaudeCmd(), '--permission-mode', 'auto', '--resume', 'u-1']);
     // FR-3: a slot with no resume token gets a MINTED --session-id instead, so the spawner knows in
     // advance the id the child will register under. Injected via uuidFn for determinism.
-    expect(res.results[1].invocation.args.slice(0, 9))
-      .toEqual(['-w', 'new', 'new-tab', '-d', resolveRepoRoot(), '--', resolveClaudeCmd(), '--session-id', MINTED]);
+    expect(res.results[1].invocation.args.slice(0, 11))
+      .toEqual(['-w', 'new', 'new-tab', '-d', resolveRepoRoot(), '--', resolveClaudeCmd(), '--permission-mode', 'auto', '--session-id', MINTED]);
   });
 
   // QF-20260724-335: opts.sdKey stamps every fleet_verb_respawn event with an explicit run-correlator
@@ -81,10 +81,10 @@ describe('runRebootRespawn live (FR-5)', () => {
     expect(res.live).toBe(true);
     expect(spawnFn).toHaveBeenCalledTimes(2);
     expect(spawnCalls[0].program).toBe('wt.exe');
-    expect(spawnCalls[0].args.slice(0, 9))
-      .toEqual(['-w', 'new', 'new-tab', '-d', resolveRepoRoot(), '--', resolveClaudeCmd(), '--resume', 'u-1']);
-    expect(spawnCalls[1].args.slice(0, 9))
-      .toEqual(['-w', 'new', 'new-tab', '-d', resolveRepoRoot(), '--', resolveClaudeCmd(), '--session-id', MINTED]); // slot 2 had no resume token -> minted id
+    expect(spawnCalls[0].args.slice(0, 11))
+      .toEqual(['-w', 'new', 'new-tab', '-d', resolveRepoRoot(), '--', resolveClaudeCmd(), '--permission-mode', 'auto', '--resume', 'u-1']);
+    expect(spawnCalls[1].args.slice(0, 11))
+      .toEqual(['-w', 'new', 'new-tab', '-d', resolveRepoRoot(), '--', resolveClaudeCmd(), '--permission-mode', 'auto', '--session-id', MINTED]); // slot 2 had no resume token -> minted id
     // FR-1: whatever follows is the single-line pointer positional, asserted by shape below.
     for (const c of spawnCalls) {
       const last = c.args[c.args.length - 1];

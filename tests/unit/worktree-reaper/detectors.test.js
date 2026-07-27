@@ -114,7 +114,10 @@ describe('hasOrphanSD (AC3)', () => {
     const res = hasOrphanSD(
       { path: '/repo/.worktrees/SD-GHOST', key: 'SD-GHOST' },
       {
-        sdMap: new Set(),
+        // QF-20260727-733: the map must be NON-EMPTY for this assertion to mean
+        // "this key is unknown". An empty map now means "lookup unavailable" and
+        // fails CLOSED (keep) — this test's intent was always the former.
+        sdMap: new Set(['SD-SOMETHING-ELSE']),
         qfMap: new Set(),
         readFile: readFileStub(null),
       },
@@ -164,11 +167,76 @@ describe('hasOrphanSD (AC3)', () => {
   it('matches when basename is a non-SD name and no metadata resolves it (conservative orphan)', () => {
     const res = hasOrphanSD(
       { path: '/repo/.worktrees/random-dir', key: 'random-dir' },
-      { sdMap: new Set(), qfMap: new Set(), readFile: readFileStub(null) },
+      // Non-empty map per QF-20260727-733 — see note above.
+      { sdMap: new Set(['SD-SOMETHING-ELSE']), qfMap: new Set(), readFile: readFileStub(null) },
     );
     expect(res.matched).toBe(true);
     expect(res.reason).toBe('sdkey_not_in_db');
     expect(res.evidence.candidates).toContain('random-dir');
+  });
+
+  // ── QF-20260727-733 regression: branch ref is authoritative, not the dir basename ──
+  //
+  // Live incident: three worktrees with SHORTENED directory names
+  // (.worktrees/QF-757 on branch refs/heads/qf/QF-20260726-757, likewise QF-908 and
+  // QF-425) were classified orphan-sd / sdkey_not_in_db and routed to stage2_remove
+  // while all three QFs were LIVE in the DB — discovered at 86% pool utilization,
+  // exactly when someone reclaims slots. The classifier never asked the branch.
+
+  it('does NOT flag a live QF whose worktree dir is shortened relative to its branch key', () => {
+    const res = hasOrphanSD(
+      { path: '/repo/.worktrees/QF-757', branch: 'refs/heads/qf/QF-20260726-757' },
+      {
+        sdMap: new Set(),
+        qfMap: new Set(['QF-20260726-757']),
+        readFile: readFileStub(null),
+      },
+    );
+    expect(res.matched).toBe(false);
+    expect(res.reason).toBe('sdkey_found');
+    expect(res.evidence.matched_key).toBe('QF-20260726-757');
+    expect(res.evidence.source).toBe('qf');
+  });
+
+  it('resolves an SD worktree from a feat/ branch when the dir is shortened', () => {
+    const res = hasOrphanSD(
+      { path: '/repo/.worktrees/SD-SHORT', branch: 'refs/heads/feat/SD-LEO-INFRA-EXAMPLE-001' },
+      {
+        sdMap: new Set(['SD-LEO-INFRA-EXAMPLE-001']),
+        qfMap: new Set(),
+        readFile: readFileStub(null),
+      },
+    );
+    expect(res.matched).toBe(false);
+    expect(res.evidence.matched_key).toBe('SD-LEO-INFRA-EXAMPLE-001');
+  });
+
+  it('surfaces the branch-derived key in evidence so a misroute is visible in the JSON', () => {
+    const res = hasOrphanSD(
+      { path: '/repo/.worktrees/QF-999', branch: 'refs/heads/qf/QF-20260726-999' },
+      { sdMap: new Set(['SD-OTHER']), qfMap: new Set(), readFile: readFileStub(null) },
+    );
+    expect(res.matched).toBe(true);
+    expect(res.evidence.branch_key).toBe('QF-20260726-999');
+    expect(res.evidence.candidates).toContain('QF-20260726-999');
+  });
+
+  it('still uses the basename when the branch carries no parseable key (e.g. main)', () => {
+    const res = hasOrphanSD(
+      { path: '/repo/.worktrees/SD-REAL', branch: 'refs/heads/main' },
+      { sdMap: new Set(['SD-REAL']), qfMap: new Set(), readFile: readFileStub(null) },
+    );
+    expect(res.matched).toBe(false);
+    expect(res.evidence.matched_key).toBe('SD-REAL');
+  });
+
+  it('FAILS CLOSED (keep) when the lookup maps are unavailable — never orphan the whole pool', () => {
+    const res = hasOrphanSD(
+      { path: '/repo/.worktrees/QF-757', branch: 'refs/heads/qf/QF-20260726-757' },
+      { sdMap: new Set(), qfMap: new Set(), readFile: readFileStub(null) },
+    );
+    expect(res.matched).toBe(false);
+    expect(res.reason).toBe('lookup_unavailable');
   });
 
   it('matches basename <sd_key>-<suffix> via prefix fallback (multi-worktree SD)', () => {

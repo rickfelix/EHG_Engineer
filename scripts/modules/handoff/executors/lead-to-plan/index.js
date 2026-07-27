@@ -16,6 +16,7 @@ import {
   createBaselineDebtGate,
   createSmokeTestSpecificationGate,
   createPlaceholderContentGate,
+  createMechanismClaimVerifierGate,
   // SD-LEO-PROTOCOL-INFRASTRUCTURE-RELATIONSHIPAWARE-ORCH-001-D Fix 1
   createSdMetricsSufficiencyGate,
   createVisionScoreGate,
@@ -130,6 +131,12 @@ export class LeadToPlanExecutor extends BaseExecutor {
     // Placeholder Content Detection Gate (SD-LEO-INFRA-PROTOCOL-FILE-STATE-001)
     // Warning-only: detects default template text from leo-create-sd.js
     gates.push(createPlaceholderContentGate());
+
+    // Mechanism-Claim Verifier Gate (QF-20260727-982). BLOCKING, but only for spines that
+    // actually assert a mechanism (a named file AND a named function). An SD that claims no
+    // mechanism has nothing to cite and is untouched. Enforced at ACCEPTANCE, not authoring:
+    // authoring-time nags are advice, acceptance is where the record becomes load-bearing.
+    gates.push(createMechanismClaimVerifierGate());
 
     // SD Quality Gate (SD-LEO-FEAT-TRANSLATION-FIDELITY-GATES-001-A)
     // BLOCKING: validates field completeness, content depth, structural correctness

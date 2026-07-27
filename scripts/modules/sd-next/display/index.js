@@ -19,7 +19,8 @@ export {
 export { displayParallelOpportunities } from './parallel.js';
 export {
   showFallbackQueue,
-  showExhaustedBaselineMessage
+  showExhaustedBaselineMessage,
+  computeInFlightQfIds
 } from './fallback-queue.js';
 export {
   displayBlockedStateBanner,

@@ -9,7 +9,7 @@ import { readFileSync } from 'fs';
 import { fileURLToPath } from 'url';
 import { dirname, resolve } from 'path';
 import { createRequire } from 'module';
-import { evaluateDependencyGate } from '../../../../lib/sd-start/dependency-gate.mjs';
+import { evaluateDependencyGate, formatDependencyRefusal } from '../../../../lib/sd-start/dependency-gate.mjs';
 
 const require = createRequire(import.meta.url);
 const {
@@ -166,6 +166,119 @@ describe('FR-1 superset (SD-LEO-INFRA-MAKE-WSJF-SELF-001) — metadata dep sourc
     expect(v.queryError).toBeNull();
     expect(v.blocking.map((d) => d.sd_id)).toEqual(['SD-SELF-001']);
     expect(depsSatisfiedFromVerdict(v)).toBe(false);
+  });
+});
+
+// ── QF-20260727-168: QF-aware dependency resolution ────────────────────────────
+//
+// A dependency ref may name a QUICK-FIX. Resolving only against
+// strategic_directives_v2 meant such a ref could NEVER resolve, and the two callers then
+// diverged: sd-start warned and proceeded, worker-checkin failed CLOSED. The SD stayed
+// hand-claimable but never SELF-claimable, sitting in the belt as "BLOCKED (deps unmet)"
+// forever (live: SD-LEO-FEAT-FLEET-SESSION-LIFECYCLE-001, 3 of 4 refs are QF ids).
+//
+// This mock is table-AWARE on purpose: the shared makeSb above returns the same rows for
+// every .from(), which cannot express "absent from SDs but present in quick_fixes" — the
+// exact condition under test. A table-blind mock would pass either way.
+function makeSbByTable({ sds = [], qfs = [], depsRow, qfFailWith = null } = {}) {
+  return {
+    from(table) {
+      const rows = table === 'quick_fixes' ? qfs : sds;
+      const fail = table === 'quick_fixes' ? qfFailWith : null;
+      const builder = {
+        select() { return builder; },
+        or() { return builder; },
+        in() { return builder; },
+        maybeSingle() { return Promise.resolve({ data: depsRow !== undefined ? depsRow : null, error: null }); },
+        then(res, rej) {
+          if (fail) return Promise.resolve({ data: null, error: { message: fail } }).then(res, rej);
+          return Promise.resolve({ data: rows, error: null }).then(res, rej);
+        },
+      };
+      return builder;
+    },
+  };
+}
+
+describe('QF-20260727-168 — dependency refs that name a quick-fix', () => {
+  it('a COMPLETED quick-fix dependency is SATISFIED (was permanently unresolved)', async () => {
+    const sb = makeSbByTable({ sds: [], qfs: [{ id: 'QF-20260725-096', status: 'completed' }] });
+    const v = await evaluateClaimDependencyGate(sb, sdWith([{ sd_key: 'QF-20260725-096' }]));
+    expect(v.unresolved).toEqual([]);
+    expect(v.satisfied.map((d) => d.sd_id)).toEqual(['QF-20260725-096']);
+    // The whole point: worker-checkin can now SELF-claim this SD.
+    expect(depsSatisfiedFromVerdict(v)).toBe(true);
+  });
+
+  it('an OPEN quick-fix dependency BLOCKS — resolved, and legitimately unsatisfied', async () => {
+    const sb = makeSbByTable({ sds: [], qfs: [{ id: 'QF-20260726-677', status: 'open' }] });
+    const v = await evaluateClaimDependencyGate(sb, sdWith([{ sd_key: 'QF-20260726-677' }]));
+    // Resolved (so no false "deleted or typo") but blocking — a real, live dependency.
+    expect(v.unresolved).toEqual([]);
+    expect(v.blocking.map((d) => d.sd_id)).toEqual(['QF-20260726-677']);
+    expect(depsSatisfiedFromVerdict(v)).toBe(false);
+  });
+
+  it('mixed SD + QF refs each resolve against their own table', async () => {
+    const sb = makeSbByTable({
+      sds: [{ id: 'u-a', sd_key: 'SD-A-001', status: 'completed' }],
+      qfs: [{ id: 'QF-20260726-641', status: 'completed' }],
+    });
+    const v = await evaluateClaimDependencyGate(sb, sdWith([{ sd_key: 'SD-A-001' }, { sd_key: 'QF-20260726-641' }]));
+    expect(v.unresolved).toEqual([]);
+    expect(v.satisfied.map((d) => d.sd_id).sort()).toEqual(['QF-20260726-641', 'SD-A-001']);
+    expect(depsSatisfiedFromVerdict(v)).toBe(true);
+  });
+
+  it('SD resolution WINS — the QF lookup is additive and cannot override an SD hit', async () => {
+    // Same id present in both tables with different statuses. The SD meaning must survive.
+    const sb = makeSbByTable({
+      sds: [{ id: 'DUPE-001', sd_key: 'DUPE-001', status: 'in_progress' }],
+      qfs: [{ id: 'DUPE-001', status: 'completed' }],
+    });
+    const v = await evaluateClaimDependencyGate(sb, sdWith([{ sd_key: 'DUPE-001' }]));
+    expect(v.blocking.map((d) => d.sd_id)).toEqual(['DUPE-001']);
+    expect(v.satisfied).toEqual([]);
+  });
+
+  it('a ref in NEITHER table is still unresolved (fail-closed for checkin preserved)', async () => {
+    const sb = makeSbByTable({ sds: [], qfs: [] });
+    const v = await evaluateClaimDependencyGate(sb, sdWith([{ sd_key: 'QF-99999999-000' }]));
+    expect(v.unresolved.map((d) => d.sd_id)).toEqual(['QF-99999999-000']);
+    expect(depsSatisfiedFromVerdict(v)).toBe(false);
+  });
+
+  it('a quick_fixes query error surfaces as queryError, not as a silent "satisfied"', async () => {
+    const sb = makeSbByTable({ sds: [], qfs: [], qfFailWith: 'qf lookup exploded' });
+    const v = await evaluateClaimDependencyGate(sb, sdWith([{ sd_key: 'QF-20260725-096' }]));
+    expect(v.queryError).toBeTruthy();
+    expect(depsSatisfiedFromVerdict(v)).toBe(false);
+  });
+
+  it('does NOT hit quick_fixes when every ref already resolved as an SD (no wasted query)', async () => {
+    const tables = [];
+    const base = makeSbByTable({ sds: [{ id: 'u-a', sd_key: 'SD-A-001', status: 'completed' }] });
+    const sb = { from(t) { tables.push(t); return base.from(t); } };
+    const v = await evaluateClaimDependencyGate(sb, sdWith([{ sd_key: 'SD-A-001' }]));
+    expect(v.satisfied.map((d) => d.sd_id)).toEqual(['SD-A-001']);
+    expect(tables).not.toContain('quick_fixes');
+  });
+});
+
+describe('QF-20260727-168 — the unresolved message must not assert a diagnosis', () => {
+  it('names the scope actually searched instead of claiming deletion', () => {
+    const out = formatDependencyRefusal([], [{ sd_id: 'QF-20260725-096', status: null }]);
+    // The old text asserted "could not resolve (deleted or typo?)" for rows that existed —
+    // it sent readers hunting a data-integrity bug that was not there.
+    expect(out).not.toMatch(/deleted or typo\?/);
+    expect(out).toMatch(/strategic_directives_v2/);
+    expect(out).toMatch(/quick_fixes/);
+    expect(out).toMatch(/QF-20260725-096/);
+  });
+
+  it('still reports a blocking dep with its real status', () => {
+    const out = formatDependencyRefusal([{ sd_id: 'SD-A-001', status: 'in_progress' }], []);
+    expect(out).toMatch(/status='in_progress'/);
   });
 });
 

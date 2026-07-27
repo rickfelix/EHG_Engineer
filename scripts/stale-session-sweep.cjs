@@ -1111,7 +1111,10 @@ async function clearStaleQfClaims(supabase, now, actions, warnings) {
       try {
         holderRows = await fapPaginate(() => supabase
           .from('claude_sessions')
-          .select('session_id, heartbeat_at')
+          // Widened for the liveness SSOT: isSessionAlive reads is_alive, heartbeat_at,
+          // terminal_id (PID), process_alive_at (tick) and expected_silence_until (armed silence).
+          // Selecting heartbeat_at ALONE is what reduced this decider to a single signal.
+          .select('session_id, heartbeat_at, is_alive, terminal_id, process_alive_at, expected_silence_until')
           .in('session_id', holderIds)
           .order('session_id', { ascending: true })); // unique tiebreaker (FR-6)
       } catch (guardErr) {
@@ -1119,19 +1122,78 @@ async function clearStaleQfClaims(supabase, now, actions, warnings) {
         return;
       }
       const hbAgeBySession = new Map();
+      const holderBySession = new Map();
       for (const r of (holderRows || [])) {
         hbAgeBySession.set(r.session_id, r.heartbeat_at ? (now.getTime() - Date.parse(r.heartbeat_at)) / 1000 : Infinity);
+        holderBySession.set(r.session_id, r);
       }
+      // SD-LEO-INFRA-DISPATCH-DELIVERY-INTEGRITY-001: ADOPT THE LIVENESS SSOT AT THIS DECIDER.
+      //
+      // This path used a heartbeat-only threshold (900s, commented "definitely dead") and inferred
+      // DEATH FROM A SINGLE ABSENT SIGNAL. On 2026-07-27 Golf-3 went QUIET at 935s — parked, not
+      // dead — and this loop took all three of its claims, one of them severity=critical. The
+      // reverting half of that incident is what FR-1/FR-3 fix; THIS is why the clear happened at all.
+      //
+      // lib/fleet/session-liveness.cjs isSessionAlive() only ACCUMULATES REASONS TO BE ALIVE —
+      // raw is_alive, fresh heartbeat, live PID, process tick, armed silence — and is already the
+      // named SSOT for claim-release-guard. Its armed-silence branch (capped at ARMED_SILENCE_MAX_MS
+      // so a stale declaration cannot shield a corpse forever) is the one that classifies a parked
+      // worker correctly, and it is precisely the signal a heartbeat-only check cannot see.
+      //
+      // Note it is used ONLY to HOLD a claim, never to reap one: is_alive=false is not treated as
+      // evidence of death anywhere here. claim-validity-gate.js:220-224 and :266-270 document that a
+      // live worker can transiently read is_alive=false and that reaping on it alone caused
+      // GATE_CLAIM_VALIDITY_FAILED twice, so inverting this would rebuild that defect.
+      const { isSessionAlive } = require('../lib/fleet/session-liveness.cjs');
+      // Computed ONCE for the whole loop. hasPidAlive falls back to reading PID markers fresh when
+      // this is null, and that read walks host-local marker files — per-QF it would repeat the same
+      // scan for every claimed row. Fail-soft to null: the SSOT then simply drops the pid signal and
+      // still evaluates heartbeat, tick and armed silence.
+      let qfSweepAliveCcPids = null;
+      try {
+        qfSweepAliveCcPids = new Set((detectIdentityCollisions().aliveMarkers || []).map((m) => String(m.pid)));
+      } catch { qfSweepAliveCcPids = null; }
       for (const qf of claimedQfs) {
         const ageSec = hbAgeBySession.has(qf.claiming_session_id) ? hbAgeBySession.get(qf.claiming_session_id) : Infinity;
-        if (ageSec <= veryStaleSeconds) continue; // holder alive/recent — leave claimed
-        const { error } = await supabase
-          .from('quick_fixes')
-          .update({ claiming_session_id: null })
-          .eq('id', qf.id)
-          .eq('claiming_session_id', qf.claiming_session_id); // race guard: only if still held by the same dead session
-        if (!error) {
-          actions.push('QF: cleared stale claiming_session_id on ' + qf.status + ' ' + qf.id + ' (holder ' + String(qf.claiming_session_id).slice(0, 8) + ' hb ' + (ageSec === Infinity ? 'gone' : Math.round(ageSec) + 's') + ')');
+        const holder = holderBySession.get(qf.claiming_session_id) || null;
+        const liveness = isSessionAlive(holder, { nowMs: now.getTime(), aliveCcPids: qfSweepAliveCcPids });
+        if (liveness.alive) continue;         // SSOT says alive (incl. parked) — leave claimed
+        if (ageSec <= veryStaleSeconds) continue; // holder recent — leave claimed
+        // SD-LEO-INFRA-DISPATCH-DELIVERY-INTEGRITY-001 (FR-3): clear AND reopen in ONE call.
+        // Clearing alone left the row at status='in_progress' with a NULL claimant — invisible to
+        // all five open-only chokepoints while two supply gauges still counted it, so the work
+        // silently left the belt. The helper keeps the race guard (CAS on the same dead holder, so
+        // a live re-claim is never clobbered) and refuses any row carrying real work.
+        // Dynamic import: this file is CJS and the helper is ESM. Same pattern already used for
+        // bestEffortReleaseSd from this very module at the claim-boundary probe above.
+        const { clearAndReopenQf } = await import('../lib/fleet/best-effort-release.mjs');
+        const { changed } = await clearAndReopenQf(supabase, qf.id, {
+          expectedHolder: qf.claiming_session_id,
+          // APPEND-ONLY DETECTION RECORD, one row per detection. The acceptance criterion is
+          // "zero NEW class-A detections over N hours of continuous sampling" — a COUNT over time —
+          // and a column cannot answer it: a row that strands, is reverted, and strands again
+          // overwrites its own timestamp. Multiplicity is the whole requirement, so an existing
+          // append-only surface is sufficient and no migration is needed.
+          onDetect: async (record) => {
+            await supabase.from('feedback').insert({
+              category: 'harness_backlog',
+              severity: 'high',
+              title: `STRANDED-QF DETECTION ${record.qf_id} at ${record.detected_at}`,
+              description:
+                `SD-LEO-INFRA-DISPATCH-DELIVERY-INTEGRITY-001 class-A detection. A quick-fix was found `
+                + `cleared-but-not-reopened (unreachable by all five open-only chokepoints while the supply `
+                + `gauges still counted it) and was reverted to open by the stale-claim sweep.\n`
+                + `Column values AS MATCHED at detection: status=${record.status} `
+                + `claiming_session_id=${record.claiming_session_id} pr_url=${record.pr_url} `
+                + `commit_sha=${record.commit_sha}\n`
+                + `Recorded because the revert makes the row unattributable afterwards, and because the `
+                + `acceptance criterion counts detections over a window rather than sampling a live query.`,
+              metadata: { detection_class: 'stranded_qf_class_a', ...record },
+            });
+          },
+        });
+        if (changed) {
+          actions.push('QF: cleared stale claim AND reopened ' + qf.id + ' (holder ' + String(qf.claiming_session_id).slice(0, 8) + ' hb ' + (ageSec === Infinity ? 'gone' : Math.round(ageSec) + 's') + ')');
         }
       }
     }
@@ -1212,7 +1274,11 @@ async function dispatchWorkAssignmentsIfAllowed(supabase, activeSessions, availa
 // migration. Called from main() via the shared sweepPassCtx (supabase/now/classified/
 // actions), same ctx bag MAIN_PASSES already reuses.
 async function runQaFixtureScan(ctx) {
-  const { supabase, now, classified, actions } = ctx;
+  // `warnings` was already carried on sweepPassCtx but never destructured here; the
+  // half-released-claim guards report through it, so it is pulled in rather than routed into `actions`
+  // (a skipped safety guard is not an action taken). Defaulted so a caller that omits it cannot
+  // turn a guard message into a ReferenceError mid-sweep.
+  const { supabase, now, classified, actions, warnings = [] } = ctx;
 
   // 3b. QA — detect sessions working on completed SDs
   const claimedSdKeys = [...new Set(classified.map(s => s.sd_key).filter(Boolean))];
@@ -1511,10 +1577,107 @@ async function runQaFixtureScan(ctx) {
     }
   }
 
+  // SD-SIDE HALF-RELEASED CLAIM (QF-20260727-031).
+  // A claim is a TWO-SIDED FACT, and every detector above scans only the SESSION side. When the
+  // session half of a release completes (status=released, sd_key=null) but the SD half does not,
+  // there is NO ROW LEFT FOR THE SWEEP TO ITERATE — this is not a threshold being too slow, it is
+  // a population the scan never visits. Measured: the founding instance survived FIVE consecutive
+  // sweeps under direct observation. adoptOrphanInProgress cannot rescue it either, because its
+  // orphan path requires claiming_session_id IS NULL while this row's pointer is NON-null — the
+  // rescue is gated on the exact field that is wrong. The row therefore reads CLAIMED to every
+  // dispatch surface, is worked by nobody, and is adoptable by nothing: invisible both ways at once.
+  // Deliberately NOT added to the return below: nothing at the call site consumes it, and
+  // tests/unit/lib/sweep/pass-registry.test.js pins that return to EXACTLY the five
+  // formerly-main()-scoped locals. Widening a pinned contract for an unread value is a bad trade.
+  await clearHalfReleasedSdClaims(supabase, actions, warnings);
+
   // Adversarial-review fix (PR #5755): main() still consumes these five locals after the
   // hoist (dead-release cross-signal gate, CLAIM_RELEASED announce, QA summary) — return
   // them so the call site can rebind what used to be main()-scoped declarations.
   return { sdStatusMap, workingOnCompleted, orphanedClaims, stuckApproval, terminalWithClaims };
+}
+
+/**
+ * SD-SIDE HALF-RELEASED CLAIM (QF-20260727-031): clear an SD pointing at a dead session.
+ *
+ * DELIBERATELY NOT LABELLED WITH THE NUMBERED "FIX #<n>" SCHEME USED ELSEWHERE IN THIS FILE.
+ * That namespace is load-bearing: tests/unit/coord-adam-comms-resilient.test.js isolates the
+ * dead/gone-session cleanup section by indexOf() on one of those literal labels. A second
+ * occurrence EARLIER in the file silently captures the anchor, and the pin then asserts against
+ * the wrong section entirely — which is exactly what this change did on its first CI run.
+ *
+ * Note the second-order trap, since it cost a round too: a comment EXPLAINING the collision must
+ * not itself contain the literal token, or it becomes the earlier occurrence it warns about.
+ * Hence the periphrasis here. Named rather than numbered, so neither can recur.
+ *
+ * Its own function, mirroring clearStaleQfClaims, so the regression test can drive the REAL code
+ * path against a fake client instead of asserting on a re-implementation.
+ *
+ * @param {object} supabase
+ * @param {string[]} actions - appended: one line per cleared row
+ * @param {string[]} warnings - appended: one line when the guard makes it skip the tick
+ * @returns {Promise<Array>} the rows it judged half-released (empty when it skipped)
+ */
+async function clearHalfReleasedSdClaims(supabase, actions, warnings) {
+  let halfReleasedClaims = [];
+  try {
+    // CANONICAL LIVENESS, NOT A SECOND DEFINITION. loadLiveSessionIds is exported precisely so
+    // every consumer resolves the live-session set through ONE implementation; a private cutoff
+    // here would drift from the session-side releases and convert this gap into a split-brain —
+    // the two halves disagreeing about who is alive is strictly worse than the hole it patches.
+    // It returns null (never an empty Set) when it cannot measure, so null is already fail-closed.
+    const liveSessions = await loadLiveSessionIds(supabase);
+
+    // FAIL CLOSED ON UNREADABLE *OR* EMPTY. If the live set cannot be measured, every claim in the
+    // fleet looks dead and this loop would clear all of them. The asymmetry decides it: skipping
+    // costs one delayed cleanup the next tick repeats, while proceeding on a bad read could strip
+    // every active claim at once. Empty means "cannot measure", never "nobody is alive".
+    // Both branches fail closed, but they are DIFFERENT facts and an operator needs to know which:
+    // null means the read failed (loadLiveSessionIds swallows its own cause and returns null),
+    // while an empty Set means the read SUCCEEDED and measured nobody alive. Collapsing them into
+    // one message would hide a broken liveness read behind a plausible-looking quiet-fleet report.
+    if (!liveSessions) {
+      warnings.push('GUARD_UNAVAILABLE: SD-side half-released-claim check skipped this tick — live-session set UNREADABLE (loadLiveSessionIds returned null)');
+    } else if (liveSessions.size === 0) {
+      warnings.push('GUARD_UNAVAILABLE: SD-side half-released-claim check skipped this tick — live-session set measured EMPTY (treated as unmeasurable, never as all-dead)');
+    } else {
+      const claimed = await fapPaginate(() => supabase
+        .from('strategic_directives_v2')
+        .select('sd_key, status, claiming_session_id, metadata')
+        .not('status', 'in', '(completed,cancelled)') // terminal rows are FIX #2's job
+        .not('claiming_session_id', 'is', null)
+        .not('sd_key', 'like', TEST_FIXTURE_SD_KEY_LIKE) // FR-3: never touch SD-TEST-* fixtures
+        .order('sd_key', { ascending: true })); // unique tiebreaker (FR-6)
+      halfReleasedClaims = (claimed || []).filter((sd) => !liveSessions.has(sd.claiming_session_id));
+    }
+  } catch (e) {
+    halfReleasedClaims = []; // fail-closed: a failed read clears nothing
+    warnings.push('GUARD_UNAVAILABLE: SD-side half-released-claim check skipped this tick — read failed (' + ((e && e.message) || 'unknown') + ')');
+  }
+
+  for (const sd of halfReleasedClaims) {
+    const { error } = await supabase
+      .from('strategic_directives_v2')
+      // Preserve the prior claim for reversibility, matching the provenance convention the sweep's
+      // other release paths already use rather than inventing a second shape.
+      .update({
+        claiming_session_id: null,
+        active_session_id: null,
+        is_working_on: false,
+        metadata: { ...(sd.metadata || {}), half_released_prior_claim: sd.claiming_session_id }
+      })
+      .eq('sd_key', sd.sd_key)
+      // CAS on the claimant we actually read: a live session may have re-claimed this row between
+      // the read and this write, and clearing that would recreate the stranding from the other side.
+      .eq('claiming_session_id', sd.claiming_session_id)
+      .select();
+
+    if (!error) {
+      actions.push('QA: cleared half-released claim on ' + sd.sd_key + ' — claimant ' + String(sd.claiming_session_id).slice(0, 8) + ' has no live session');
+    }
+  }
+
+  return halfReleasedClaims;
 }
 
 // SD-ARCH-HOTSPOT-SWEEP-001 (main()-line-count acceptance criterion): the tail-of-tick
@@ -2573,6 +2736,20 @@ async function main() {
       if (!error) {
         const tag = evict.status === 'ACTIVE' ? ' (was active)' : '';
         await resetSdPhaseOnRelease(sdId, 'SWEEP_CONFLICT_RESOLUTION');
+        // SD-LEO-INFRA-DISPATCH-DELIVERY-INTEGRITY-001: THE MIRROR OF THE STRANDING CLASS.
+        // The UPDATE above clears the SEAT POINTER (claude_sessions.sd_key) and
+        // resetSdPhaseOnRelease handles strategic_directives_v2 — NEITHER touches
+        // quick_fixes.claiming_session_id. So evicting a QF claimant left the seat reading IDLE
+        // while still formally HOLDING the quick-fix: the worker looks free to the self-claim path
+        // and the idle-QF hint, and can take a second item while owning the first (double-hold).
+        // Same invariant as the strand, opposite direction — two surfaces record one claim and are
+        // written by different legs. Observed live 2026-07-27 on QF-20260726-757.
+        if (/^QF-/.test(sdId)) {
+          const { clearAndReopenQf } = await import('../lib/fleet/best-effort-release.mjs');
+          // CAS on the EVICTED holder so a concurrent re-claim by the keeper is never clobbered.
+          // The four-column guard still refuses any row carrying real work.
+          await clearAndReopenQf(supabase, sdId, { expectedHolder: evict.session_id });
+        }
         actions.push('CONFLICT on ' + sdId + ': released ' + evict.session_id + tag + ' (kept ' + keeper.session_id + ')');
 
         // Send coordination message to the evicted session so it picks up other work
@@ -3608,3 +3785,7 @@ module.exports.reapPhantomSessionClaims = reapPhantomSessionClaims;
 // SD-LEO-INFRA-SWEEP-LEGACY-KILL-SWITCH-RETIRE-001: exported so its shape (owner/condition/
 // retirement_action all present and non-empty) is unit-testable.
 module.exports.SWEEP_PASS_REGISTRY_RETIREMENT = SWEEP_PASS_REGISTRY_RETIREMENT;
+
+// QF-20260727-031: exported so the regression test drives the REAL SD-side half-released-claim
+// detector (fake client, real code path) rather than asserting against a re-implementation.
+module.exports.clearHalfReleasedSdClaims = clearHalfReleasedSdClaims;

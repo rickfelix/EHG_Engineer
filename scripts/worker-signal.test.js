@@ -82,8 +82,13 @@ describe('WS-10: type vocabulary fixed at 9 types + severity at 4 levels', () =>
     expect(SIGNAL_TYPES).toEqual(['stuck', 'need-sweep', 'prd-ambiguous', 'gate-bug', 'spec-conflict', 'harness-bug', 'feedback', 'unfit', 'other']);
     expect(SEVERITIES).toEqual(['low', 'medium', 'high', 'critical']);
     expect(BODY_HARD_CAP).toBe(4096);
-    // Sanity: redaction patterns count
-    expect(REDACTION_PATTERNS).toHaveLength(6);
+    // Sanity: redaction patterns count. 7 since SD-LEO-INFRA-CORRECTION-DELIVERY-PATH-001-A
+    // restored the CREDENTIAL keyword pattern (passwd|pwd|secret|token|api_key) that the
+    // original SECURITY review of this family mandated but which only ever shipped as
+    // `password`. Counted here deliberately — a silently shrinking redaction set is exactly
+    // how that control went missing the first time.
+    expect(REDACTION_PATTERNS).toHaveLength(7);
+    expect(REDACTION_PATTERNS.map(p => p.label)).toContain('CREDENTIAL');
   });
 });
 
