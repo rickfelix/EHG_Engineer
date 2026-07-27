@@ -10,8 +10,16 @@
 --
 -- DATA-SAFETY: additive. Applying creates two functions and modifies NO real rows (the DO $verify$
 -- block seeds + deletes a synthetic session inside the transaction). Reversible via DROP FUNCTION
--- (see the _DOWN companion). Chairman-gated for prod-apply (NO -- @approved-by): the JS writer
+-- (see the _DOWN companion). Chairman-gated for prod-apply: the JS writer
 -- (FR-3) fail-softs when the RPC is absent, so the feature is dormant-but-safe until apply.
+--
+-- @approved-by: codestreetlabs@gmail.com
+-- Chairman approval given verbally 2026-07-27 via SMS, verbatim: "proceed with all your
+-- recommendations. Apply the migrations." Approval covers the three role-handoff atomic flag
+-- migrations (coordinator / adam / solomon) as a set. Context he was given before approving:
+-- all six functions were measured ABSENT from the live database, so all three roles were running
+-- the non-atomic JS read-merge-write and none was protected — not Adam alone, as an earlier
+-- Adam writeup had wrongly claimed. Recorded by Adam; the approval is his, the wording is mine.
 
 -- ── clear_adam_flag ───────────────────────────────────────────────────────────────────────────
 -- Atomically remove the Adam tag keys from one session's metadata. Sibling keys (callsign,
