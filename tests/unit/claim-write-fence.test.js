@@ -89,7 +89,13 @@ describe('claimGuard acquire lane consults the fence (QF-20260711-937 — orches
   it('consults the fence BEFORE the acquire claim_sd RPC (Case 3), refusing with the fence named', () => {
     const caseThree = src.indexOf('// Case 3: No active claim');
     expect(caseThree).toBeGreaterThan(-1);
-    const fenceCall = src.indexOf('await liveClaimWriteFenceReason(supabase, sdKey)', caseThree);
+    // Match the CALL, not its argument list. This pinned the exact string
+    // 'await liveClaimWriteFenceReason(supabase, sdKey)' and broke when
+    // SD-LEO-INFRA-CLAIM-LIVENESS-FENCE-001 added a third argument (the claimant session id) — a
+    // legitimate signature change, not a regression in what this test protects. The invariant here
+    // is ORDERING: the fence must be consulted before the acquire RPC. Anchoring on the callee name
+    // keeps that intact and stops the test breaking every time the signature grows.
+    const fenceCall = src.indexOf('await liveClaimWriteFenceReason(', caseThree);
     const acquireRpc = src.indexOf("rpc('claim_sd'", caseThree);
     expect(fenceCall).toBeGreaterThan(-1);
     expect(acquireRpc).toBeGreaterThan(-1);
