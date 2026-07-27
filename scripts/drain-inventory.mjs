@@ -17,7 +17,7 @@ import { createClient } from '@supabase/supabase-js';
 import { DRAIN_DESCRIPTORS } from '../lib/governance/gauge-registry.js';
 import { stampLastFired } from '../lib/periodic-liveness/stamp-last-fired.js';
 import {
-  VERDICT, buildInventoryRow, classifyStructural, exitCodeFor, computeOldestUndrainedAge,
+  VERDICT, buildInventoryRow, classifyStructural, exitCodeFor, computeOldestUndrainedAge, paginateAll,
 } from '../lib/governance/drain-inventory.js';
 
 const PROCESS_KEY = 'standard_loop:drain-inventory';
@@ -31,16 +31,14 @@ const PAGE = 1000;
  * this inventory exists to detect. So always order by created_at and page to exhaustion.
  */
 async function readOldest(supabase, table, applyFilters) {
-  const rows = [];
-  for (let from = 0; ; from += PAGE) {
+  // Loop bound + truncation refusal live in paginateAll (lib/governance/drain-inventory.js) so the
+  // alarm-suppressing failure mode is unit-testable; this function only builds the ordered query.
+  return paginateAll(async (from, to) => {
     let q = supabase.from(table).select('created_at').order('created_at', { ascending: true });
-    q = applyFilters(q).range(from, from + PAGE - 1);
-    const { data, error } = await q;
-    if (error) return { noData: true, reason: `${table} read failed: ${error.message}` };
-    rows.push(...(data || []));
-    if (!data || data.length < PAGE) break;
-  }
-  return { rows };
+    const { data, error } = await applyFilters(q).range(from, to);
+    if (error) return { error: `${table} read failed: ${error.message}` };
+    return { rows: data || [] };
+  }, { pageSize: PAGE });
 }
 
 async function readDescriptor(supabase, descriptor, nowMs) {
@@ -120,14 +118,11 @@ async function main() {
     const readable = structural !== VERDICT.MEASURED_ELSEWHERE;
     const reading = readable ? await readDescriptor(supabase, descriptor, nowMs) : undefined;
 
-    const row = buildInventoryRow(id, descriptor, reading);
-    // buildInventoryRow maps an unreadable source to UNAVAILABLE; for a source whose STRUCTURAL
-    // verdict is already a finding, keep the finding and simply carry whatever age we could read.
-    if (structural !== null && row.verdict === VERDICT.UNAVAILABLE) {
-      row.verdict = structural;
-      row.failing = structural !== VERDICT.MEASURED_ELSEWHERE;
-    }
-    rows.push(row);
+    // No structural-vs-UNAVAILABLE reconciliation is needed here: buildInventoryRow yields
+    // UNAVAILABLE only when classifyStructural returns null, so a structural finding can never be
+    // overwritten by one. An earlier guard for that case was provably unreachable (0 of 84
+    // descriptor x reading combinations) and has been removed rather than left as dead defence.
+    rows.push(buildInventoryRow(id, descriptor, reading));
   }
 
   const code = exitCodeFor(rows.map((r) => r.verdict));

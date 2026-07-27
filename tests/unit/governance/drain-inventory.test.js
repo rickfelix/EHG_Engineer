@@ -14,7 +14,7 @@ import { describe, it, expect } from 'vitest';
 import {
   VERDICT, FAILING_VERDICTS, isFailing,
   computeOldestUndrainedAge, classifyStructural, classifyObserved,
-  assertThresholdBelowRetention, exitCodeFor, buildInventoryRow,
+  assertThresholdBelowRetention, exitCodeFor, buildInventoryRow, paginateAll,
 } from '../../../lib/governance/drain-inventory.js';
 import { DRAIN_DESCRIPTORS, GAUGE_REGISTRY } from '../../../lib/governance/gauge-registry.js';
 
@@ -182,6 +182,114 @@ describe('buildInventoryRow surfaces the declared contract fields', () => {
     expect(buildInventoryRow('y', { consumer: 'c', closingPath: 'p' }).verdict).toBe(VERDICT.UNAVAILABLE);
     expect(buildInventoryRow('z', { closingPath: 'p' }).verdict).toBe(VERDICT.NO_CONSUMER);
   });
+
+  it('sets row.failing TRUE on every failing verdict — the CLI renders findings from this flag', () => {
+    // Mutation found this: forcing row.failing=false survived the whole suite, because the true
+    // case was only ever checked through isFailing() directly. The CLI reads r.failing for the
+    // !! marker, the FAILING count and the banner, so that defect would print "0 FAILING" while
+    // still exiting 1 — findings rendered as blank cells, the exact thing this SD exists to stop.
+    expect(buildInventoryRow('a', { closingPath: 'p' }).failing).toBe(true);              // NO_CONSUMER
+    expect(buildInventoryRow('b', { consumer: 'c' }).failing).toBe(true);                 // NO_CLOSING_PATH
+    expect(buildInventoryRow('c', null).failing).toBe(true);                              // UNDECLARED
+    expect(buildInventoryRow('d', { measuredBy: 'other instrument' }).failing).toBe(false);
+    expect(buildInventoryRow('e', { consumer: 'c', closingPath: 'p' },
+      { count: 1, closingPathUses: 1 }).failing).toBe(false);                             // PASS
+  });
+
+  it('carries identity and evidence fields onto the row so the report cannot silently blank them', () => {
+    const row = buildInventoryRow('my-id', {
+      consumer: 'someone', closingPath: 'a -> b', accumulationSignal: 'series alarm',
+      fieldQuestion: 'what it really answers',
+    }, { count: 4, oldestAgeMs: DAY, closingPathUses: 2 });
+
+    expect(row.id).toBe('my-id');
+    expect(row.consumer).toBe('someone');
+    expect(row.closingPath).toBe('a -> b');
+    expect(row.accumulationSignal).toBe('series alarm');
+    expect(row.fieldQuestion).toBe('what it really answers');
+    expect(row.count).toBe(4);
+  });
+
+  it('propagates the failure reason so an UNAVAILABLE entry explains itself', () => {
+    const row = buildInventoryRow('u', { consumer: 'c', closingPath: 'p' },
+      { noData: true, reason: 'feedback read failed: boom' });
+    expect(row.verdict).toBe(VERDICT.UNAVAILABLE);
+    expect(row.reason).toMatch(/boom/);
+  });
+});
+
+describe('paginateAll — truncation reads YOUNG, which suppresses the alarm (TS-12)', () => {
+  // Fake ordered page source: rows[0] is the oldest, matching an ORDER BY created_at ASC.
+  const makeSource = (total, pageSize) => {
+    const all = Array.from({ length: total }, (_, i) => ago((total - i) * 60_000));
+    const calls = [];
+    return {
+      all,
+      calls,
+      fetchPage: async (from, to) => {
+        calls.push([from, to]);
+        return { rows: all.slice(from, to + 1) };
+      },
+    };
+  };
+
+  it('pages past the 1000-row cap over a 4,235-row population', async () => {
+    const src = makeSource(4235, 1000);
+    const res = await paginateAll(src.fetchPage, { pageSize: 1000 });
+    expect(res.rows).toHaveLength(4235);
+    expect(src.calls).toHaveLength(5); // 4 full pages + a short final page
+    // The whole point: the true oldest row must survive pagination.
+    const { oldestAgeMs } = computeOldestUndrainedAge(res.rows, NOW);
+    expect(oldestAgeMs).toBe(4235 * 60_000);
+  });
+
+  it('does not stop one page early when the total is an exact multiple of the page size', async () => {
+    // A `<=` where `<` belongs drops the tail silently and reports a younger oldest-age.
+    const src = makeSource(2000, 1000);
+    const res = await paginateAll(src.fetchPage, { pageSize: 1000 });
+    expect(res.rows).toHaveLength(2000);
+    expect(src.calls).toHaveLength(3); // must probe once more to learn the set ended
+  });
+
+  it('returns a single page without over-fetching', async () => {
+    const src = makeSource(10, 1000);
+    const res = await paginateAll(src.fetchPage, { pageSize: 1000 });
+    expect(res.rows).toHaveLength(10);
+    expect(src.calls).toHaveLength(1);
+  });
+
+  it('REFUSES to report a truncated population as complete when the page budget is exhausted', async () => {
+    const src = makeSource(5000, 1000);
+    const res = await paginateAll(src.fetchPage, { pageSize: 1000, maxPages: 2 });
+    // Must NOT return the 2000 rows it managed to read as if that were the whole set — a partial
+    // read rendered as complete is precisely an alarm-suppressing under-report.
+    expect(res.noData).toBe(true);
+    expect(res.reason).toMatch(/truncated|exceeded/i);
+    expect(res.rows).toBeUndefined();
+  });
+
+  it('surfaces a page error as noData rather than a short, healthy-looking result', async () => {
+    const res = await paginateAll(async () => ({ error: 'connection reset' }), { pageSize: 1000 });
+    expect(res.noData).toBe(true);
+    expect(res.reason).toMatch(/connection reset/);
+  });
+
+  it('treats a nothing-returned fetcher as noData, never as an empty (healthy) drain', async () => {
+    const res = await paginateAll(async () => undefined, { pageSize: 1000 });
+    expect(res.noData).toBe(true);
+  });
+
+  it('is read-only — it never asks the source to write (TS-13)', async () => {
+    // A write-spy over the injected fetcher: pagination must only ever read.
+    const forbidden = ['insert', 'update', 'delete', 'upsert'];
+    const seen = [];
+    const spy = new Proxy(async (from, to) => ({ rows: from === 0 ? [ago(DAY)] : [] }), {
+      get(target, prop) { if (forbidden.includes(String(prop))) seen.push(prop); return target[prop]; },
+    });
+    const res = await paginateAll(spy, { pageSize: 1000 });
+    expect(res.rows).toHaveLength(1);
+    expect(seen).toEqual([]);
+  });
 });
 
 describe('DRAIN_DESCRIPTORS — the populated inventory discriminates (FR-4)', () => {
@@ -231,7 +339,11 @@ describe('DRAIN_DESCRIPTORS — the populated inventory discriminates (FR-4)', (
   });
 
   it('every descriptor names a predicate or is explicitly unkeyable', () => {
-    for (const [id, d] of Object.entries(DRAIN_DESCRIPTORS)) {
+    // Non-emptiness guard first: without it this loop passes vacuously over an empty map, which a
+    // mutation run confirmed. A test that cannot fail is not a test.
+    const entries = Object.entries(DRAIN_DESCRIPTORS);
+    expect(entries.length).toBeGreaterThanOrEqual(10);
+    for (const [id, d] of entries) {
       const named = Boolean(d.predicate) || d.source?.kind === 'unkeyable';
       expect(named, `${id} must name its predicate (owed vs merely delivered)`).toBe(true);
     }
