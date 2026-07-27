@@ -49,7 +49,7 @@ export function principalSpecFor(runAs, { interactive = false } = {}) {
  * THROWS on an unsafe principal rather than emitting argv a caller might run anyway: the guard
  * has to sit where the command is CONSTRUCTED, not merely where it is documented.
  */
-export function buildReaperSchtasksArgs({ runAs = 'SYSTEM', intervalMinutes = 30, interactive = false, nodePath = 'node', requireRunner = true } = {}) {
+export function buildReaperSchtasksArgs({ runAs = 'SYSTEM', intervalMinutes = 30, interactive = false, nodePath = 'node', requireRunner = true, runnerPath = null } = {}) {
   const verdict = validateScheduledTaskPrincipal(principalSpecFor(runAs, { interactive }));
   if (!verdict.ok) {
     throw new Error(`${TAG} refusing to register: ${verdict.reason}`);
@@ -58,7 +58,10 @@ export function buildReaperSchtasksArgs({ runAs = 'SYSTEM', intervalMinutes = 30
   if (!Number.isInteger(minutes) || minutes < 1 || minutes > 1439) {
     throw new Error(`${TAG} --interval-minutes must be an integer 1..1439 (got ${intervalMinutes})`);
   }
-  const runner = path.join(REPO_ROOT, 'scripts', 'run-console-reaper.mjs');
+  // runnerPath is injectable ONLY so the guard is testable in BOTH directions without
+  // depending on whether a sibling file happens to exist in the checkout — a test whose meaning
+  // flips when an unrelated file lands is not a test.
+  const runner = runnerPath || path.join(REPO_ROOT, 'scripts', 'run-console-reaper.mjs');
   // A task pointing at a MISSING runner registers happily and then fails silently every
   // interval — the same accepted-but-unread shape this SD has hit four times already
   // (FLEET_WORKER_ROLE with no readers; enumerateWindows returning []; spawn() dropping

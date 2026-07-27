@@ -33,9 +33,14 @@ describe('FR5-TASK: the reaper must never be registered interactively', () => {
 
   it('REFUSES to build a command pointing at a MISSING runner', () => {
     // Registering a task whose target does not exist succeeds, then fails silently every
-    // interval — the accepted-but-unread shape this SD has now hit five times.
-    expect(() => buildReaperSchtasksArgs({ requireRunner: true }))
+    // interval — the accepted-but-unread shape this SD has now hit five times. The path is
+    // injected so this asserts the GUARD, not the incidental presence of a sibling file.
+    expect(() => buildReaperSchtasksArgs({ requireRunner: true, runnerPath: 'C:/nope/missing-runner.mjs' }))
       .toThrow(/runner not found/);
+  });
+
+  it('ACCEPTS the real runner, which now exists — the gate releases', () => {
+    expect(() => buildReaperSchtasksArgs({ requireRunner: true })).not.toThrow();
   });
 
   it('maps run-as to the principal spec the shared validator understands', () => {
