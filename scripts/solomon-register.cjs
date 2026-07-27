@@ -142,6 +142,37 @@ async function registerSolomon(supabase, sessionId, opts = {}) {
     action = 'tagged_fallback';
     fallbackReason = wrote.reason;
   }
+
+  // QF-20260727-909: stamp model/effort on this role session. CHAIRMAN-REPORTED — the sessions
+  // page rendered adam/solomon as '--/--' PERMANENTLY, because the only two writers of
+  // metadata.model are the SessionStart hook (stamps only when stdin carries a model) and
+  // worker-checkin's --model self-report, which ONLY workers run. A non_fleet role session runs
+  // neither, so no path would EVER populate it. Distinct from the neighbouring account column,
+  // where a blank self-heals on restart; this one does not.
+  //
+  // Reuses the worker path's EXISTING writer rather than adding a third. The QF asked to
+  // establish how the coordinator gets a stamp before inventing one — measured: its
+  // effort_source reads 'worker_self_report', i.e. it has no special role-stamping path, it
+  // simply runs the worker check-in. So there was nothing to copy, only this writer to share.
+  //
+  // Placed AFTER the role tag is persisted and OUTSIDE the RPC/fallback branch, deliberately:
+  // the set_solomon_flag RPC is the PRIMARY path and the JS merge only its fail-soft, so
+  // stamping inside the fallback would become dead code the moment the chairman-approved
+  // migration lands.
+  //
+  // Fail-soft throughout — a missing model stamp must never block role registration.
+  try {
+    const { parseCheckinArgs, mergeCheckinModelEffort } = require('./worker-checkin.cjs');
+    const { model, effort } = parseCheckinArgs(process.argv.slice(2));
+    if (model || effort) {
+      const { data: cur } = await supabase.from('claude_sessions')
+        .select('metadata').eq('session_id', sessionId).maybeSingle();
+      const { metadata: stamped, changed } = mergeCheckinModelEffort(cur?.metadata || {}, { model, effort });
+      if (changed) {
+        await supabase.from('claude_sessions').update({ metadata: stamped }).eq('session_id', sessionId);
+      }
+    }
+  } catch { /* never block registration on a stamp */ }
   // Retire stale priors — but RE-VALIDATE freshness right before clearing each, so a prior that
   // became fresh since the decision (a racing restart) is NEVER cleared (the deliberate divergence
   // holds even under a race). Residual: two simultaneous STALE restarts can both register briefly.
