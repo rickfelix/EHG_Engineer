@@ -198,6 +198,38 @@ describe('TS-4: no false blockers', () => {
   });
 });
 
+describe('SECURITY cbe69100 F1: the patch is allowlisted, not passed through', () => {
+  it.each(['claiming_session_id', 'status', 'sd_type', 'is_active'])(
+    'refuses to write %s and does NOT touch the table',
+    async (col) => {
+      const sb = makeSb({ sd: activeSd() });
+      const res = await amendSd(sb, 'SD-TEST-AMEND-001', { [col]: 'x' }, {});
+
+      expect(res.sdUpdated).toBe(false);
+      expect(res.errorCode).toBe('AMEND_FIELD_NOT_AMENDABLE');
+      // Fails CLOSED — the column is refused, never silently dropped while reporting success.
+      expect(sb.updates).toHaveLength(0);
+    }
+  );
+
+  it('refuses a mixed patch outright rather than applying only the legal half', async () => {
+    const sb = makeSb({ sd: activeSd() });
+    const res = await amendSd(sb, 'SD-TEST-AMEND-001', { description: 'ok', claiming_session_id: null }, {});
+    expect(res.sdUpdated).toBe(false);
+    expect(res.warning).toMatch(/claim_sd\/release_sd/);
+    expect(sb.updates).toHaveLength(0);
+  });
+
+  it('still allows the three legitimate amendable fields', async () => {
+    for (const col of ['description', 'scope', 'metadata']) {
+      const sb = makeSb({ sd: activeSd(), prds: [] });
+      const res = await amendSd(sb, 'SD-TEST-AMEND-001', { [col]: col === 'metadata' ? {} : 'text' }, {});
+      expect(res.sdUpdated).toBe(true);
+      expect(res.errorCode).toBeNull();
+    }
+  });
+});
+
 describe('TS-5 / FR-1 AC-4 (TC-5): no NEW payload kind is introduced', () => {
   it('reuses a kind already registered in DIRECTIVE_KINDS', () => {
     // The whole reuse-vs-mint argument rests on this: fence_notice is already a directive kind,
