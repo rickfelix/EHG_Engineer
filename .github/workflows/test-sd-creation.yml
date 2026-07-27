@@ -44,12 +44,44 @@ jobs:
       - name: Install dependencies
         run: npm ci
 
+      # QF-20260726-459 Part 1b (d031c798) gated the vitest `db` project's include to []
+      # whenever assessDbTarget is not allowed. tests/integration/** lives ONLY in that
+      # project, so this step's filter resolved zero files and vitest exited 1 — turning
+      # this check permanently red on main from 15:41Z onward. Evaluate the gate FIRST so a
+      # gated-off db tier produces an honest, visible SKIP rather than a misleading failure.
+      - name: Assess db-tier target
+        id: dbgate
+        env:
+          SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+          NEXT_PUBLIC_SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+        run: |
+          node --input-type=module -e "
+          import { assessDbTarget } from './tests/helpers/db-target.js';
+          import fs from 'node:fs';
+          const r = assessDbTarget();
+          console.log('db target assessment: ' + JSON.stringify(r));
+          fs.appendFileSync(process.env.GITHUB_OUTPUT, 'allowed=' + (r.allowed ? 'true' : 'false') + '\n');
+          fs.appendFileSync(process.env.GITHUB_OUTPUT, 'reason=' + (r.reason || '') + '\n');
+          "
+
       - name: Run SD creation integration tests
+        if: steps.dbgate.outputs.allowed == 'true'
         env:
           SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
           SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
           NEXT_PUBLIC_SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
         run: npm run test:integration:sd-creation
+
+      # Deliberately LOUD. This coverage is not running, and that must not read as success.
+      # The real fix is to designate a non-production ref for CI (tests/helpers/db-target.js
+      # DESIGNATED_NON_PROD_REFS is an empty frozen array). Do NOT "fix" this by pointing
+      # VITEST_DB_ALLOW_REF at the production ref — these suites write to whatever they are
+      # aimed at, and 125 of 225 db-tier files do not self-guard.
+      - name: DB tier gated off — integration tests SKIPPED
+        if: steps.dbgate.outputs.allowed != 'true'
+        run: |
+          echo "::warning title=SD-creation integration tests SKIPPED::db tier gated off (reason: ${{ steps.dbgate.outputs.reason }}). No designated non-production Supabase ref, so these suites did not run. This is a STOPGAP from PR #6527 — designate a non-prod ref to restore the coverage."
+          echo "SKIPPED: db tier not allowed (${{ steps.dbgate.outputs.reason }})" >> "$GITHUB_STEP_SUMMARY"
 
       - name: Summary
         if: always()
