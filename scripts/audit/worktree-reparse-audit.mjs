@@ -84,6 +84,16 @@ export function collectWorktrees(rootDir, fsImpl = fs, depth = 0) {
   return out;
 }
 
+/**
+ * Walk out of a worktree to the main repo root. `.worktrees/<name>` is nested INSIDE the main
+ * checkout, so truncating at that segment is sufficient and needs no git invocation.
+ */
+export function resolveMainRepoRoot(cwd) {
+  const norm = String(cwd).split(path.sep).join('/');
+  const idx = norm.indexOf('/.worktrees/');
+  return idx === -1 ? cwd : norm.slice(0, idx);
+}
+
 /** NEGATIVE CONTROL. A zero from a blind detector reads exactly like a zero from a clean tree. */
 function selfTest() {
   const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'reparse-selftest-'));
@@ -109,7 +119,11 @@ function selfTest() {
 function main() {
   const json = process.argv.includes('--json');
   const selfOnly = process.argv.includes('--self-test');
-  const repoRoot = process.cwd();
+  // Resolve the MAIN repo root, never process.cwd(). Run from inside a worktree, cwd has no
+  // .worktrees dir, so the audit measured an empty population and correctly refused with
+  // FAILED_TO_MEASURE — right behaviour, wrong question. A guard whose answer depends on where the
+  // caller happens to stand is not instrument-independent, which is the whole point of TR-1.
+  const repoRoot = resolveMainRepoRoot(process.cwd());
   const worktreesDir = path.join(repoRoot, '.worktrees');
 
   if (!json) console.log('\nWORKTREE REPARSE AUDIT (FR-5 regression guard)\n');

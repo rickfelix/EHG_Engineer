@@ -57,7 +57,7 @@ describe('validateWorktreeSubstrate — population, not presence (FR-4)', () => 
 });
 
 describe('TS-7 — a JUNCTION must NOT be read through (PR #3488 finding 1)', () => {
-  it('accepts a symlinked node_modules whose target is EMPTY', () => {
+  it('accepts a symlinked node_modules whose target is EMPTY', (ctx) => {
     // Reading through would see an empty target and declare the worktree incomplete. Under a real
     // concurrent .staging swap that target is transiently absent, so a read-through check would
     // tear down a healthy worktree exactly when the store is busiest.
@@ -66,7 +66,9 @@ describe('TS-7 — a JUNCTION must NOT be read through (PR #3488 finding 1)', ()
     try {
       fs.symlinkSync(target, path.join(dir, 'node_modules'), 'junction');
     } catch {
-      return; // symlink/junction creation unavailable in this environment — skip rather than false-pass
+      // ctx.skip(), NOT a bare return: vitest reports an early return as PASSED, so on a host that
+      // cannot create junctions this becomes a SILENT GREEN on the exact regression it guards.
+      ctx.skip();
     }
     const res = validateWorktreeSubstrate(dir, ['node_modules']);
     expect(res.missing).not.toContain('node_modules');

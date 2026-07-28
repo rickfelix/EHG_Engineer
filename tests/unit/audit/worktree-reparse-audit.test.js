@@ -34,7 +34,7 @@ describe('classifyAudit — 0/0 is a FAILURE TO MEASURE, never a pass', () => {
 });
 
 describe('isReparsePoint — lstat, never stat', () => {
-  it('detects a REAL junction', () => {
+  it('detects a REAL junction', (ctx) => {
     // NEGATIVE CONTROL as a unit test: if this cannot fire, every zero the audit prints is
     // meaningless. The CLI runs the same check as a --self-test before it will report anything.
     const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'reparse-unit-'));
@@ -43,7 +43,9 @@ describe('isReparsePoint — lstat, never stat', () => {
     try {
       fs.symlinkSync(target, link, 'junction');
     } catch {
-      return; // environment cannot create junctions — skip rather than false-pass
+      // ctx.skip(), NOT a bare return: vitest reports an early return as PASSED, so on a host that
+      // cannot create junctions this becomes a SILENT GREEN on the exact regression it guards.
+      ctx.skip();
     }
     expect(isReparsePoint(link)).toBe(true);
     fs.unlinkSync(link);

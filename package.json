@@ -43,6 +43,8 @@
     "audit:generate-sds": "node scripts/audit-to-sd.mjs",
     "audit:retro": "node scripts/audit-retro.mjs",
     "audit:rpc-grants": "node scripts/audit-rpc-execute-grants.mjs",
+    "audit:worktree-reparse": "node scripts/audit/worktree-reparse-audit.mjs",
+    "audit:worktree-reparse:self-test": "node scripts/audit/worktree-reparse-audit.mjs --self-test",
     "audit:orphan-prs": "node scripts/audit-orphan-prs.mjs",
     "audit:unrouted-branches": "node scripts/audit-unrouted-branches.mjs",
     "audit:shared-tables": "node scripts/audit-shared-tables-residue.cjs",
