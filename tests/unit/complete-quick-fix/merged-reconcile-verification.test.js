@@ -375,3 +375,53 @@ describe('cli.parseArguments -> completionStampFromOptions (cross-module contrac
     expect(o.declared).toBeUndefined();
   });
 });
+
+// ── THE PIN THAT WAS MISSING, and the reason it was missing ──────────────────────────────────────
+//
+// buildMergedReconcileUpdate declared runtimeObservation/observationMethod and its SOLE production
+// call site passed NEITHER. So on the reconcile path a real --runtime-observation was dropped and
+// the row recorded declared:false — a MANUFACTURED FALSE ABSENCE over an operator's actual
+// declaration, made permanent by the never-clobber guard. Strictly worse than a null: FR-1 exists
+// so that absence is honest, and this asserted an absence that was false.
+//
+// The existing FR-1 pins could not catch it because they pass `observation:` BY HAND, reproducing
+// in the test the exact plumbing production omitted — the same "unit verified, consumer not"
+// failure as the FR-2 call-site bug, committed one function over while fixing that one.
+//
+// These drive the REAL parser into the REAL builder and assert on the ASSEMBLED payload.
+describe('reconcile path carries FR-1 through from parsed argv (regression)', () => {
+  const base = { qf: {}, prUrl: 'https://github.com/x/y/pull/1', nowIso: '2026-07-28T12:00:00.000Z' };
+
+  it('a real --runtime-observation reaches the assembled reconcile payload', async () => {
+    const { parseArguments } = await import('../../../scripts/modules/complete-quick-fix/cli.js');
+    const { options } = parseArguments(['QF-1', '--runtime-observation', 'GET /health -> 200', '--observation-method', 'http_probe']);
+    const u = buildMergedReconcileUpdate({ ...base, scopeAcceptedBy: 'Alpha-4 — why', options });
+    expect(u.runtime_observation.observation).toBe('GET /health -> 200');
+    expect(u.runtime_observation.method).toBe('http_probe');
+    // The precise regression: a real declaration must NEVER be recorded as an absence.
+    expect(u.runtime_observation.declared).toBeUndefined();
+  });
+
+  it('still records EXPLICIT absence when the operator genuinely declared nothing', async () => {
+    const { parseArguments } = await import('../../../scripts/modules/complete-quick-fix/cli.js');
+    const { options } = parseArguments(['QF-1', '--pr-url', 'https://github.com/x/y/pull/1']);
+    const u = buildMergedReconcileUpdate({ ...base, scopeAcceptedBy: 'Alpha-4 — why', options });
+    expect(u.runtime_observation.declared).toBe(false);
+  });
+
+  it('the field exists at all — deleting it from the payload must fail a test', () => {
+    // Coverage guard: before this, removing runtime_observation from the reconcile builder failed
+    // ZERO tests. An FR deliverable that can be deleted invisibly is not delivered.
+    const u = buildMergedReconcileUpdate({ ...base, scopeAcceptedBy: 'Alpha-4 — why' });
+    expect(u).toHaveProperty('runtime_observation');
+    expect(u.runtime_observation).not.toBeNull();
+  });
+
+  it('explicit args still win over options, so callers that pass them directly are unaffected', () => {
+    const u = buildMergedReconcileUpdate({
+      ...base, scopeAcceptedBy: 'Alpha-4 — why',
+      runtimeObservation: 'explicit', options: { runtimeObservation: 'from-options' }
+    });
+    expect(u.runtime_observation.observation).toBe('explicit');
+  });
+});
