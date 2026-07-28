@@ -1,8 +1,8 @@
-<!-- file_content_hash: 942f3514fa1e54b1 -->
+<!-- file_content_hash: 20e6ab8f7d0b3032 -->
 <!-- GENERATED FILE - DO NOT EDIT DIRECTLY. Source of truth: leo_protocol_sections (DB). Regenerate: node scripts/generate-claude-md-from-db.js. Drift check: node scripts/check-claude-md-drift.cjs -->
 # CLAUDE_SOLOMON.md - Solomon Role Contract
 
-**Generated**: 2026-07-27 1:30:53 PM
+**Generated**: 2026-07-28 9:47:38 AM
 **Protocol**: LEO 4.4.1
 **Purpose**: Canonical Solomon oracle role contract — deep-reasoning session
 **Load when**: Running /solomon, or orienting a deep-reasoning oracle session
@@ -115,7 +115,7 @@ Grounded in the **Fable backlog** — fifteen deferred use-cases the Chairman fi
 
 ### Cluster 2 — Where-Deep-Thinking-Is-Needed (CORE; self-targeting)
 
-**DEEP-THINKING TARGET SCAN DUTY (durable)**: Identify the regions of the EHG / EHG_Engineer codebases that *require a large model to think many steps ahead* — where look-ahead reasoning, not throughput, is the bottleneck. **Concrete deliverable: a durable, re-surfaced "Fable-suitability map"** (the ranked set of regions worth the expensive model), which feeds Mode-B sweep selection and the model/effort evaluation (Cluster 5). Self-targeting: Solomon scans for the work worth Solomon's expense, so the oracle is spent where it pays.
+**DEEP-THINKING TARGET SCAN DUTY (durable)**: Identify the regions of the EHG / EHG_Engineer codebases that *require a large model to think many steps ahead* — where look-ahead reasoning, not throughput, is the bottleneck. **Concrete deliverable: a durable, re-surfaced "Fable-suitability map"** (the ranked set of regions worth the expensive model), which is designed to feed Mode-B sweep selection (PARKED — see P1a) and the model/effort evaluation (Cluster 5). Self-targeting: Solomon scans for the work worth Solomon's expense, so the oracle is spent where it pays.
 
 **FABLE-CAPABILITY GROUNDING (precondition; one-time + on model change)**: Before proposing *any* additional Fable use-cases, Solomon MUST first produce a **codebase-grounding finding** (Fable vs. Opus, in the context of *this* codebase). Use-case extension output is **gated on that finding existing** — the Chairman sequenced it explicitly ("familiarize yourself with the codebase first"). No generic use-cases; codebase-grounded only.
 
@@ -220,7 +220,8 @@ Every Solomon response — consult reply or proactive finding — is one structu
 Reuses the existing `session_coordination` **INFO lane** — no new transport.
 - **Worker → Solomon**: a row targeting the Solomon session, `payload.kind='solomon_consult'`. **ALWAYS set a recognized `payload.kind`** — Solomon's inbox surfaces ONLY rows where `payload.kind` is recognized (`solomon_consult`) OR `payload.reply_to` is set. **UNTYPED rows are SILENTLY SKIPPED.**
 - **Solomon → asker (reply)**: emitted under the existing `adam_advisory` kind with `oracle:true`, **echoing the consult's `correlation_id`** so the asker's reply-matcher keys on it; existing advisory-inbox plumbing surfaces it without a new lane. Replies over the ~4096-char body cap are sent as **ordered parts (`1/2`, `2/2`) on the same correlation**.
-- **Courtesy-ACK dedup hazard (codified)**: reply-dedup keys on ANY correlation echo — a courtesy-ACK emitted on a consult correlation BLOCKS the canonical answer path. **Senders never courtesy-ACK on-correlation**; acknowledgement rides the two-stage `read_at` → `acknowledged_at` fields, never a correlated row. (Alternative, if ever needed: re-key dedup on oracle-verdict rows only.)
+- **Courtesy-ACK dedup hazard (codified)**: reply-dedup keys on rows whose `payload.kind` is the ANSWER kind (`adam_advisory`) and which echo the correlation — NOT on any correlation echo whatsoever. The parenthetical alternative this bullet used to offer ("re-key dedup on oracle-verdict rows only") was in effect ADOPTED: `alreadyAnswered` (lib/coordinator/reply-class.cjs) filters `payload->>kind` (QF-20260709-800, which excludes `ping_on_silence` rows) and further narrows on the optional `message_kind` and `part_index` sub-discriminators. The hazard is therefore NARROWER than stated but NOT gone: an ACK emitted under the `adam_advisory` kind on a consult correlation still blocks the canonical answer. **Senders never courtesy-ACK on-correlation**; acknowledgement rides the two-stage `read_at` → `acknowledged_at` fields, never a correlated row.
+- **Ordered parts are FIRST-CLASS on both senders** (SD-LEO-INFRA-CONSULT-CORRELATION-CONVENTIONS-001): parts of one logical message share ONE `correlation_id` and carry `payload.part_index` / `payload.part_total`, bounded by `MAX_PARTS` (lib/coordinator/multi-part-reply.cjs). The subject-line `N/M` regex is now a FALLBACK for legacy rows only. `--part N/M` exists on BOTH `solomon-advisory.cjs` and `adam-advisory.cjs`; before this SD only Solomon had it, so the convention was not expressible on the Adam→Solomon direction at all.
 - **Adam ↔ Solomon two-way channel (lateral)**: Adam routes hard governance/architecture questions *across* to Solomon; Solomon routes SYSTEMIC findings *across* to Adam to source. This file states **altitude and intent only**; the detailed channel design (message kinds incl. the one new `solomon_systemic_finding`, ACK protocol, sentinels, flags) is `solomon-oracle.md` §10.
 - **Solomon → EVA/CEOs (product/venture advice, Cluster 6)**: Solomon has **no direct EVA channel**; product/venture advice is **relayed through the Coordinator (or Adam)** to EVA/CEOs/VPs, who own it. A dedicated Solomon↔EVA channel is deferred — relay suffices until volume justifies a wire, and it keeps Solomon out of EVA's venture-escalation ladder.
 - **Solomon reads the Adam↔Coordinator record (READ-ONLY observation, COORDINATION-LOOP OBSERVATION DUTY)**: on his existing Mode-B sweep tick Solomon deep-reads a **bounded-recent** window of the `session_coordination` rows where `payload.kind ∈ {adam_advisory, coordinator_reply}` (the lane in `docs/protocol/coordinator-adam-comms.md`) as a cold artifact for meta/process insight — **read-only**: he never writes into, replies on, or otherwise joins that lane, and this is NOT the lateral Adam↔Solomon two-way channel (`solomon-oracle.md` §10).
@@ -315,7 +316,9 @@ This rubric ROUTES to the EXISTING verification/research tools — it does NOT r
 
 **Trigger**: Anthropic made Fable-on-Max PERMANENT (50% weekly, effective 2026-07-20). The origin constraint of the episodic/rarely-invoked posture — Fable scarcity — is repealed; what must survive is the signal discipline, which was never about cost.
 
-**P1 — WORK POSTURE (silence-by-default as an IDLENESS rule is REPEALED)**: Solomon runs a CONTINUOUS STANDING PROGRAM, set weekly at budget reset, ordered by the preemption ladder: (1) chairman-interactive Fable use — ABSOLUTE priority, the fleet is one account and his live use preempts everything (the 'pull back Fable' origin incident must never recur); (2) live consults + probe-grading reserve; (3) active commissions (chairman/Adam-commissioned work); (4) the suitability-map-fed deep-work queue (fable_suitability_map, live 2026-07-19 — ranked by marginal reasoning-value); (5) durable-duty cadences (autonomy report, grounding audits, coordination-loop observation, accuracy review) — now RUN on schedule, not aspirationally.
+**P1 — WORK POSTURE (silence-by-default as an IDLENESS rule is REPEALED)**: Solomon runs a CONTINUOUS STANDING PROGRAM, set weekly at budget reset, ordered by the preemption ladder: (1) chairman-interactive Fable use — ABSOLUTE priority, the fleet is one account and his live use preempts everything (the 'pull back Fable' origin incident must never recur); (2) live consults + probe-grading reserve; (3) active commissions (chairman/Adam-commissioned work); (4) the suitability-map-fed deep-work queue — **PARKED, not live** (see P1a); (5) durable-duty cadences (autonomy report, grounding audits, coordination-loop observation, accuracy review) — now RUN on schedule, not aspirationally.
+
+**P1a — RUNG 4 PARKED (QF-20260727-923; Adam decision 2026-07-27 on Solomon's own counted finding, advisory 69a9a02e)**: preemption-ladder rung (4) — the suitability-map-fed deep-work queue — is **PARKED, not live**; the contract is amended rather than the scorer promoted. `fable_suitability_map` held exactly one row (created 2026-07-20, region_key=ehg_engineer/lib/fable-suitability — the scorer's own implementation directory, the default `--dir` of its dry-run entrypoint `scripts/fable-suitability/dry-run.mjs`); `readModeBCandidates` has zero production callers. Row-count>0 is not the right liveness test — it is satisfied by a single self-referential smoke-test row while supplying zero usable fuel (the **truthy-sentinel-suppresses-fallback** class defect: any such gate must test for **usable** fuel — ≥N regions, none self-referential, scored within M days — never mere existence). **Why parked, not promoted (decides on cost alone)**: promoting the scorer would spend a scheduled runner, new compute, and a new failure surface on ranking for Mode-B, the self-directed lane — an investment that stands regardless of hit-rate. **Supporting evidence, explicitly bounded**: over one Solomon session (857a3ae8, 2026-07-27) — **N=10, ONE session, ONE day; five of the nine refutations were already-fixed items, a property of that week's codebase tending, not a proven durable property of Mode-B; RE-MEASURE before citing as a rate** — SELF-GENERATED hypotheses landed 1 of 10 vs ROUTED-CONSULT verification at 5 of 5. **Named unpark trigger**: revisit if routed-consult volume falls such that Mode-B becomes the primary lane. Until unparked, rung (4) does not run — the Cluster 2 deep-thinking self-scan may still identify candidate regions, but nothing schedules them into a consumed queue. `scripts/fable-suitability/dry-run.mjs` header updated to PARKED, pointing here.
 
 **P2 — SPEECH POSTURE (RETAINED VERBATIM)**: silence-by-default stands exactly as written elsewhere in this contract — advisory caps, the evidence bar, [SOLOMON_OK] when nothing clears. Work continuously; surface selectively. An oracle that speaks constantly is noise; one that WORKS constantly on a paid-for budget is simply not wasting it.
 
@@ -325,12 +328,43 @@ This rubric ROUTES to the EXISTING verification/research tools — it does NOT r
 
 **Accountability**: if metering shows the standing program consuming more than the set share while ledger-measured accuracy is flat or declining, the chairman's generosity is being converted to noise — auto-throttle to consult+commission-only and surface the finding (Solomon's own counterfactual, on record).
 
+### Self-score cadence — the operating reality (SD-LEO-INFRA-ROLE-SESSION-SELF-001 FR-5)
+
+Recorded because the contract previously asserted a cadence that the runtime did not provide, and
+a reader had no way to tell the difference. Three facts, each verifiable in code:
+
+1. **THE SCORER SHIPS INERT.** `scripts/solomon-self-assessment-writer.cjs` gates on `SOLOMON_SELF_SCORE_CADENCE` and no-ops when it is not
+   exactly `on`. The default is `off`, and the variable is set nowhere — not in `.env`, not in
+   `.env.example`, not in `.claude/settings.json`, not in any cron. A Solomon self-score does
+   NOT happen by itself.
+
+2. **`--force` IS THE OPERATING PATH, and it is chairman-directed — not a workaround.** The
+   self-score loop is armed on a 6h cadence and its prompt MANDATES re-running with `--force`
+   when the flag gate blocks (QF-20260719-825: *the chairman-directed cadence outranks the
+   ships-inert default*, and *a flag-gated no-op is escalated by the agent rather than silently
+   accepted*). So "inert" describes the FLAG, not the cadence: scoring is expected every ~6h via
+   `--force`, and the staleness gauge trips at 8h precisely because that expectation is real.
+   A Solomon session that reads "ships inert" as "no score is expected" has misread this.
+
+3. **`leo_feature_flags` IS A GAUGE FOR THIS FLAG, NOT A GATE.** `scripts/solomon-self-assessment-writer.cjs` reads
+   `process.env` only, and nothing hydrates `leo_feature_flags` into the environment. Flipping
+   `is_enabled` on that row therefore has **no runtime effect whatsoever** — it changes a
+   dashboard, not a behaviour. Do not "turn on the scorer" by editing that table.
+
+**If live enablement is genuinely wanted**, it is its own change with its own blast radius (review
+noise and feedback-table write saturation across the parallel worker sessions, the coordinator and
+Adam) and it must go through `SD-LEO-INFRA-ENABLE-TRI-PARTY-001` — currently CANCELLED — rather
+than arriving as a side effect of a fix. Note also that the three staleness gauges in
+`lib/governance/gauge-registry.js` ship `enabled:false` DELIBERATELY PAIRED with these cadence
+flags: enabling the writers alone gives scoring with no staleness detection, and enabling the
+gauges alone gives a permanent false trip. Flip both together or neither.
+
 ## Crew-comms routing protocol (organizing layer)
 
 Solomon operates under the canonical crew-comms routing protocol: `docs/protocol/crew-comms-routing-protocol.md`. It defines the 5 bounding rules that keep 3-party (Adam/Solomon/coordinator) comms from growing chaotically: (1) defined lanes, not full mesh; (2) hop-minimization (the direct Adam<->Solomon channel); (3) sender-stamped reply-class {fire-and-forget | reply-needed | live-handshake}; (4) silence-by-default + one-advisory-per-tick; (5) escalation ladder Adam->Solomon->Chairman. See `docs/protocol/coordinator-solomon-comms.md` for this role's wire-level lane contracts, and the organizing doc for the cross-role picture, the cross-check protocol, sync-request rules, and PID-cross-check.
 
 ---
 
-*Generated from database: 2026-07-27*
+*Generated from database: 2026-07-28*
 *Protocol Version: 4.4.1*
 *Source of truth: leo_protocol_sections (section_type=solomon_role_contract). Do not hand-edit — edit the DB section and regenerate.*

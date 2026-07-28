@@ -155,21 +155,38 @@ async function main() {
   }
 
   if (repair) {
-    // Only LINK_DROPPED is repaired. NEVER_CREATED is deliberately untouched: inventing a link
-    // would convert "nobody picked this up" into "handled", which is the exact false-completion
-    // shape this SD exists to stop.
-    let repaired = 0;
-    for (const f of dropped) {
-      const target = f.referencing_sds[0].sd_key;
-      const { error: uErr } = await supabase
-        .from('quick_fixes')
-        .update({ escalated_to_sd_id: target })
-        .eq('id', f.id)
-        .is('escalated_to_sd_id', null); // guarded: never clobber a link written since the read
-      if (uErr) console.error(`  repair FAILED ${f.id}: ${uErr.message}`);
-      else { repaired++; console.log(`  linked ${f.id} -> ${target}`); }
-    }
-    console.log(`\n  repaired ${repaired} of ${dropped.length} link-dropped orphans; ${never.length} never-created left for materialisation.`);
+    // ── DISABLED. The SECURITY sub-agent found this write to be WRONG, not merely risky. ────────
+    //
+    // It was never run in production. It is disabled rather than deleted so the reasoning survives
+    // next to the code, and re-enabling requires answering the three defects below.
+    //
+    // S1 (HIGH) — IT WROTE A FALSE INHERITANCE. classifyOrphan treats "an SD is referenced" as
+    // "an SD inherits this work", but sdKeysNamedInQf() evidences only that a QF MENTIONS an SD.
+    // Simulated read-only over the real 18 orphans: 12 resolvable pairs, ALL targeting SDs with
+    // status='completed', of which exactly ONE would have landed —
+    // QF-20260722-214 -> SD-LEARN-FIX-ADDRESS-SAL-SECURITY-001 — and it is BACKWARDS: that QF was
+    // auto-promoted FROM that SD's retrospective, six hours AFTER it, and its work is to re-run
+    // that SD's blocking sub-agents. So the single successful "repair" would have converted
+    // "nobody picked this up" into "handled" — verbatim what the comment below promises to avoid.
+    // A report written to detect false completion contained a repair that manufactured it.
+    //
+    // S2 (HIGH) — WRONG KEY SPACE. escalated_to_sd_id is TEXT with an FK to
+    // strategic_directives_v2(id); all 41 existing values are UUID-shaped. This wrote .sd_key,
+    // which succeeds ONLY on legacy rows where id == sd_key, depositing a second dialect beside
+    // the UUIDs. The FK rejected 11 of 12 — correctness by accident. Worse, failures only printed:
+    // the exit code keyed off criticalNever alone, so 11 failed writes still exited 0.
+    //
+    // Also unresolved: 4 QFs resolve MORE THAN ONE candidate SD, and [0] picked from an unordered
+    // .limit(5) query is arbitrary.
+    //
+    // TO RE-ENABLE, all three must hold: write .id not .sd_key; take the target from a real
+    // inheritance signal rather than a text mention; refuse when the target is completed/cancelled
+    // or when >1 candidate resolves. Failures must also reach the exit code.
+    console.error('\n  --repair-links is DISABLED (see the comment in this file).');
+    console.error('  It wrote a MENTION as if it were an INHERITANCE, and wrote sd_key into a column whose FK targets id.');
+    console.error('  Simulated over the live data: 1 write would land and it is backwards; 11 of 12 would fail while still exiting 0.');
+    console.error(`  ${dropped.length} link-dropped and ${never.length} never-created orphans remain, unmodified and still listed above.`);
+    process.exit(3);
   }
 
   // Exit non-zero when a CRITICAL orphan is unreferenced — a report nobody notices is the failure

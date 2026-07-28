@@ -39,7 +39,10 @@ describe('assembleScore via the shared core (role=solomon)', () => {
     expect(score.review_key).toBe('solomon:cycle2:2026-07-03');
     expect(score.threshold).toBe(4);
     expect(score.generated_by).toBe('solomon-self-assessment-writer');
-    expect(score.overall).toBe('5/5 (5.0/5)');
+    // FR-1: Solomon scores 1 of 5 dimensions. The average stays 5.0 — unmeasured is NOT zero, and
+    // dividing by total would render an honest single excellent reading as a failing 1.0/5 — while
+    // the coverage is now stated rather than implied by a full-looking denominator.
+    expect(score.overall).toBe('5/5 (5.0/5) — 1 of 5 dimensions measured');
     const verdict = validateScoreContract({ current: score, prior: null, priorStreak: 0 });
     expect(verdict.valid).toBe(true); // nothing below-threshold -> no committed_actions required
   });

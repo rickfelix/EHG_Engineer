@@ -8,7 +8,11 @@
 import { createClient } from '@supabase/supabase-js';
 import dotenv from 'dotenv';
 import path from 'path';
+import { createRequire } from 'module';
 import { fileURLToPath, pathToFileURL } from 'url';
+// Reuse the SAME redaction the coordination channel already applies, rather than rolling a second
+// set of patterns that would drift from it (lib/shared/body-cap.cjs is CJS, hence createRequire).
+const { redact, capBodySafe, BODY_HARD_CAP } = createRequire(import.meta.url)('../../../lib/shared/body-cap.cjs');
 import { restartLeoStack } from '../../../lib/server-manager.js';
 import { runSelfVerification } from '../../../lib/quickfix-self-verifier.js';
 import {
@@ -115,7 +119,108 @@ export function completionModeStamp({ forceComplete = false, scopeAcceptedBy = n
   return who ? `${who} (${mode})` : mode;
 }
 
-export function buildMergedReconcileUpdate({ qf = {}, prUrl, mergeSha = null, nowIso, scopeAcceptedBy = null }) {
+/**
+ * Bridge the CLI options object to completionModeStamp, and pin the property NAME.
+ *
+ * THIS EXISTS BECAUSE THE NAME WAS WRONG IN SHIPPED CODE. FR-2 read `options.scopeAcceptedBy`
+ * while cli.js has always produced `options.scopeAccepted`, so the value was permanently
+ * `undefined` and the documented precedence — prefer the scope-accepter over the operator session
+ * — COULD NEVER FIRE. It degraded silently to the session id, which looks like a working stamp.
+ *
+ * The FR-2 pins did not catch it because they call completionModeStamp DIRECTLY with explicit
+ * arguments: the function was correct, the CALL SITE handed it the wrong key. Unit verified,
+ * consumer not. Routing both call sites through one exported bridge makes the option name an
+ * executable contract that a test can drive with a REAL parsed-argv options object, instead of a
+ * spelling that has to be re-checked by eye at every call site.
+ *
+ * @param {object} options - the options object built by cli.js
+ * @param {string|null} sessionId
+ * @returns {string}
+ */
+export function completionStampFromOptions(options = {}, sessionId = null) {
+  return completionModeStamp({
+    forceComplete: options.forceComplete,
+    scopeAcceptedBy: options.scopeAccepted,
+    sessionId
+  });
+}
+
+/**
+ * SD-LEO-INFRA-COMPLETION-EVIDENCE-RUNTIME-001 FR-1 — build the runtime_observation value.
+ *
+ * WHAT THIS IS FOR. commit_sha and pr_url already witness that CODE LANDED. This SD exists because
+ * landing is not running, so FR-1 wants one observation of the RUNNING system at close time. The
+ * shape is fixed by precedent, not invented here: Adam recorded the first real observation on
+ * QF-20260725-096 using {observed_at, method, observation, declared_by}, so this conforms to what
+ * is already in the column rather than introducing a second dialect one table over — which is the
+ * exact collision that ruled out compliance_details as a home in the first place.
+ *
+ * ABSENCE IS RECORDED, NOT LEFT BLANK. When nothing is declared, this returns an explicit
+ * `declared: false` record instead of null. That is the FR-1 acceptance criterion verbatim: the
+ * absence must be explicit "so silence is distinguishable from not applicable". A null column
+ * cannot carry that distinction — it reads identically whether nobody looked, nobody thought to
+ * look, or looking was genuinely irrelevant.
+ *
+ * THE HONEST LIMITATION, kept next to the code rather than in a doc nobody opens: the FR-1 trigger
+ * is worker-DECLARED, not detected. Nothing on quick_fixes can decide "this row's acceptance
+ * depends on runtime behaviour" — the LEAD survey looked and found no mechanical discriminator. So
+ * `declared: false` means NOBODY DECLARED ONE. It is not evidence that none was needed, and must
+ * never be read as an all-clear.
+ *
+ * NEVER CLOBBERS. An existing observation is returned untouched. Re-running a completion must not
+ * overwrite a probe someone actually performed with a fresh "nobody declared one" — that would
+ * destroy real evidence to record its absence, which is worse than either outcome alone.
+ *
+ * Pure: the caller passes nowIso and the identity. No clock, no env, no DB.
+ *
+ * @param {{existing?: object|null, observation?: string|null, method?: string|null,
+ *          declaredBy?: string|null, nowIso: string}} args
+ * @returns {object} always an object — the column is never left silently empty by this path
+ */
+export function buildRuntimeObservation({ existing = null, observation = null, method = null, declaredBy = null, nowIso }) {
+  // Real evidence already on the row wins over anything this close would write.
+  if (existing && typeof existing === 'object' && Object.keys(existing).length > 0) return existing;
+
+  // SECURITY S3 — REDACT AND CAP. This field is the WORSE one to leave raw, not the safer one: its
+  // own column comment and method vocabulary (http_probe, log_grep) actively invite pasting request
+  // /response and log text, which is exactly where bearer tokens and signed URLs live. The one real
+  // observation in the column is literal HTTP probe output. worker-signal.cjs already routes its
+  // bodies through the same helper; leaving this path raw was an ASYMMETRY, not a considered choice.
+  // capBody() redacts internally and THROWS over the cap; capBodySafe() adapts that to a
+  // {value, error} tuple. Neither TRUNCATES — and dropping an over-long observation would leave
+  // this function recording declared:false, manufacturing the exact false absence FR-1 exists to
+  // stop. So an over-cap observation is truncated and SAID SO in the stored text, rather than
+  // silently becoming an absence.
+  const raw = typeof observation === 'string' ? observation.trim() : '';
+  const capped = raw ? capBodySafe(raw) : { value: '', error: null };
+  const text = capped.error
+    ? `${redact(raw).slice(0, BODY_HARD_CAP - 60)} … [TRUNCATED at ${BODY_HARD_CAP} chars]`
+    : (capped.value || '');
+  if (!text) {
+    return {
+      declared: false,
+      observed_at: nowIso,
+      declared_by: declaredBy || null,
+      note: 'No runtime observation declared at close. The FR-1 trigger is worker-DECLARED, not detected — nothing on quick_fixes can decide whether acceptance depends on runtime behaviour. So this records that NOBODY DECLARED ONE; it is not evidence that none was applicable.'
+    };
+  }
+  return {
+    observed_at: nowIso,
+    method: (typeof method === 'string' && method.trim()) || 'declared',
+    observation: text,
+    declared_by: declaredBy || null
+  };
+}
+
+export function buildMergedReconcileUpdate({ qf = {}, prUrl, mergeSha = null, nowIso, scopeAcceptedBy = null, runtimeObservation = null, observationMethod = null, options = {} }) {
+  // Accept the CLI options object as a FALLBACK source for the FR-1 fields, not only explicit
+  // args. Two named params were declared here and the sole production call site passed NEITHER, so
+  // the feature was dead on this path while the unit tests passed — they supplied the args by hand,
+  // reproducing in the test the exact plumbing production omitted. Reading from `options` means the
+  // only way to break it again is to drop `options` entirely, which also breaks scopeAcceptedBy and
+  // fails loudly instead of silently recording a false absence.
+  const declaredObservation = runtimeObservation ?? options.runtimeObservation ?? null;
+  const declaredMethod = observationMethod ?? options.observationMethod ?? null;
   // QF-20260725-691: a merged PR witnesses that CODE LANDED. Terminal `completed` asserts that
   // the QF's SCOPE WAS SATISFIED. Those are different propositions and this path used to
   // substitute one for the other silently — invisible precisely because the merge really did
@@ -166,6 +271,16 @@ export function buildMergedReconcileUpdate({ qf = {}, prUrl, mergeSha = null, no
     // being ANONYMOUS. "accepted on merge evidence alone" is a legitimate value here; nothing at all
     // is not, because an empty witness is indistinguishable from a close nobody thought about.
     verified_by: witnessNameFrom(scopeAcceptedBy),
+    // SD-LEO-INFRA-COMPLETION-EVIDENCE-RUNTIME-001 FR-1. Written on EVERY terminal close, including
+    // when nothing was declared — an explicit `declared: false` record, never a silent null, so a
+    // later reader can tell "nobody declared one" from "not applicable". Existing evidence wins.
+    runtime_observation: buildRuntimeObservation({
+      existing: qf.runtime_observation,
+      observation: declaredObservation,
+      method: declaredMethod,
+      declaredBy: witnessNameFrom(scopeAcceptedBy),
+      nowIso
+    }),
     verification_notes,
     completed_at: qf.completed_at || nowIso,
     // QF-20260711-176: a completed QF has no holder. Leaving claiming_session_id set made the
@@ -286,7 +401,12 @@ export async function completeQuickFix(qfId, options = {}) {
       // SD-REFILL-00QQ60BN: preserve the verification-column stamping the
       // completed_requires_verification CHECK demands, now with the SELF-DERIVED pr_url.
       const reconcileUpdate = buildMergedReconcileUpdate({
-        qf, prUrl: probeWitness.prUrl, mergeSha, nowIso: new Date().toISOString(), scopeAcceptedBy
+        qf, prUrl: probeWitness.prUrl, mergeSha, nowIso: new Date().toISOString(), scopeAcceptedBy,
+        // THIS LINE WAS MISSING AND IT MATTERED. Without it a real --runtime-observation was
+        // dropped here and the row recorded declared:false — a MANUFACTURED FALSE ABSENCE over an
+        // operator's actual declaration, which the never-clobber guard then made permanent. Worse
+        // than a null: FR-1 exists so absence is honest, and this asserted absence that was false.
+        options
       });
       const { error: reconcileErr } = await supabase
         .from('quick_fixes')
@@ -767,10 +887,15 @@ export async function completeQuickFix(qfId, options = {}) {
       // Prefer a real identity when one exists: the scope-accepter, else the operator session that
       // ran the command. The mode is preserved as a suffix so nothing that reads these values for
       // classification loses the distinction it relied on.
-      verified_by: completionModeStamp({
-        forceComplete: options.forceComplete,
-        scopeAcceptedBy: options.scopeAcceptedBy,
-        sessionId: process.env.CLAUDE_SESSION_ID || null
+      verified_by: completionStampFromOptions(options, process.env.CLAUDE_SESSION_ID || null),
+      // FR-1, second writer — same contract as the reconcile path above: always an explicit
+      // record, existing evidence never clobbered.
+      runtime_observation: buildRuntimeObservation({
+        existing: qf?.runtime_observation,
+        observation: options.runtimeObservation,
+        method: options.observationMethod,
+        declaredBy: completionStampFromOptions(options, process.env.CLAUDE_SESSION_ID || null),
+        nowIso: new Date().toISOString()
       }),
       verification_notes: finalVerificationNotes,
       files_changed: filesChanged.length > 0 ? filesChanged : null,
