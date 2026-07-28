@@ -98,9 +98,56 @@ describe('bounded clamp: never zeroes, never inverts off-track below on-track', 
 });
 
 describe('FR-3 Q2 wave-alignment self-gating', () => {
-  it('waveAlignmentTerm is a 1.0 no-op when there are 0 waves (or no alignment)', () => {
-    expect(waveAlignmentTerm(base({ roadmap_wave_ref: 'O-GOV-1' }), { waves: [] })).toEqual({ active: false, multiplier: 1.0, aligned: null });
-    expect(waveAlignmentTerm(base(), undefined)).toEqual({ active: false, multiplier: 1.0, aligned: null });
+  it('waveAlignmentTerm is a 1.0 no-op when there are 0 waves (or no alignment), and SAYS WHY', () => {
+    // SD-LEO-INFRA-ADAM-WORK-SELECTION-001 FR-1: an inactive verdict must NAME its reason on the
+    // RETURN VALUE. The term is pure, so this is the only falsifiable channel — asserting a log
+    // line would only prove the implementation emits the string it was written to emit.
+    const noWaves = { active: false, multiplier: 1.0, aligned: null, inactive_reason: 'zero_waves_or_no_alignment' };
+    expect(waveAlignmentTerm(base({ roadmap_wave_ref: 'O-GOV-1' }), { waves: [] })).toEqual(noWaves);
+    expect(waveAlignmentTerm(base(), undefined)).toEqual(noWaves);
+  });
+
+  it('FR-1 FAILS OPEN when waves exist but NOTHING is linked — and distinguishes that from 0 waves', () => {
+    // The live defect this SD removes. Measured 2026-07-28: the LEO roadmap holds 8 waves and 0 of
+    // 261 roadmap_wave_items carry metadata.okr_linkages, so alignedOkrIds was always empty and
+    // EVERY non-urgent candidate evaluated aligned:false -> waveUnaligned -> backlog (21 consecutive
+    // `ADAM_OK cleared=0`). An unpopulated linkage table is not universal misalignment.
+    const eightWavesNoLinks = { waves: Array.from({ length: 8 }, (_, i) => ({ id: `w${i}`, okr_ids: [] })) };
+    expect(waveAlignmentTerm(base({ roadmap_wave_ref: 'O-GOV-1' }), eightWavesNoLinks))
+      .toEqual({ active: false, multiplier: 1.0, aligned: null, inactive_reason: 'empty_aligned_set' });
+    // A non-urgent candidate now CLEARS instead of being routed to backlog.
+    expect(evaluateCandidate(base({ roadmap_wave_ref: 'O-GOV-1' }), { openSdKeys: new Set(), waveAlignment: eightWavesNoLinks }).clears).toBe(true);
+  });
+
+  it('FR-1 C3 GUARD: a UUID aligned set vs a code ref DISARMS the term instead of excluding everything', () => {
+    // The scheduled-failure case. okr_linkages[].okr_id is populated on ZERO rows today, so the
+    // producer's "objective code" assumption has no live instance — while every populated analogue
+    // in the schema family is a UUID. If whoever populates it follows that convention, the
+    // empty-set fail-open stops applying at exactly that moment and EVERY candidate silently
+    // evaluates aligned:false: the route-everything-to-backlog defect, restored.
+    // No test could catch that flip, because the only okr_linkages fixture asserts the assumption.
+    // So the term now compares ID SPACES and names the mismatch rather than judging on it.
+    const uuidWaves = { waves: [{ id: 'w0', okr_ids: ['2c41bc06-9b1e-4c5a-8f3d-1a2b3c4d5e6f'] }] };
+    expect(waveAlignmentTerm(base({ roadmap_wave_ref: 'O-GOV-1' }), uuidWaves))
+      .toEqual({ active: false, multiplier: 1.0, aligned: null, inactive_reason: 'id_space_mismatch' });
+    // ...and the candidate is NOT routed to backlog on an unjudgeable comparison.
+    expect(evaluateCandidate(base({ roadmap_wave_ref: 'O-GOV-1' }), { openSdKeys: new Set(), waveAlignment: uuidWaves }).clears).toBe(true);
+    // The mirror case (code aligned set, UUID ref) is equally unjudgeable.
+    expect(waveAlignmentTerm(base({ roadmap_wave_ref: '2c41bc06-9b1e-4c5a-8f3d-1a2b3c4d5e6f' }), { waves: [{ id: 'w0', okr_ids: ['O-GOV-1'] }] }).inactive_reason)
+      .toBe('id_space_mismatch');
+    // CONSERVATIVE BY DESIGN: a MIXED aligned set is not disjoint — a match is still possible, so
+    // the term must judge normally rather than disarm on ambiguity.
+    const mixed = { waves: [{ id: 'w0', okr_ids: ['2c41bc06-9b1e-4c5a-8f3d-1a2b3c4d5e6f', 'O-GOV-1'] }] };
+    expect(waveAlignmentTerm(base({ roadmap_wave_ref: 'O-GOV-1' }), mixed).aligned).toBe(true);
+  });
+
+  it('FR-1 fail-open does NOT neuter the gate — it still excludes when it CAN judge', () => {
+    // The negative control. Without this, "fail open" is indistinguishable from "gate removed".
+    const linked = { waves: [{ id: 'w0', okr_ids: ['O-GOV-1'] }] };
+    expect(waveAlignmentTerm(base({ roadmap_wave_ref: 'O-GOV-1' }), linked).aligned).toBe(true);
+    const unmatched = base({ roadmap_wave_ref: 'O-OTHER-9' });
+    expect(waveAlignmentTerm(unmatched, linked)).toEqual({ active: true, multiplier: 1.0, aligned: false });
+    expect(evaluateCandidate(unmatched, { openSdKeys: new Set(), waveAlignment: linked }).clears).toBe(false);
   });
 
   it('selection equals baseline when the LEO Roadmap has 0 waves (no false-fire)', () => {

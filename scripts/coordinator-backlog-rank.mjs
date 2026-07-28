@@ -41,6 +41,9 @@ import { isFixtureSd, isBareShell, bareShellLastCompare, isStartedSd, stripDispa
 // handling both the [{sd_id}]/[{sd_key}] object and raw-string shapes the old hand-rolled
 // resolver coerced, while correctly dropping the sentinel the hand-rolled one mis-counted.
 import { parseSdDependencies } from '../lib/utils/parse-sd-dependencies.cjs';
+// SD-LEO-INFRA-ADAM-WORK-SELECTION-001 FR-2/FR-3: ONE roadmap-marker predicate, imported rather
+// than re-declared. A hardcoded copy here had already drifted from the reader's list by 326 SDs.
+import { isPlanLinked } from '../lib/adam/work-selection-gate.js';
 // SD-REFILL-00MFWEGZ: reuse the canonical parent-LEAD-pass dispatch gate so the ranking surface
 // mirrors what claim-eligibility actually blocks (no drift between rank-vs-claim).
 import { parentLeadPending, classifyDispatchIneligibility, resolveHoldProvenance, formatHoldProvenance } from '../lib/fleet/claim-eligibility.cjs';
@@ -132,8 +135,20 @@ export function productPivotCompare(a, b) {
 }
 // SD-LEO-INFRA-GUARANTEE-CLAIMABLE-SD-RANKED-001-C: pure helpers for the atomic JSONB merge
 // write path. Extracted so the query shape is unit-testable without a live pg connection.
-export function buildRankPatch(rank, nowIso, sessionId, reasonBand = null) {
+export function buildRankPatch(rank, nowIso, sessionId, reasonBand = null, selectionEval = null) {
   const patch = { dispatch_rank: rank, dispatch_rank_at: nowIso, dispatch_rank_by: sessionId };
+  // SD-LEO-INFRA-ADAM-WORK-SELECTION-001 FR-3: persist the roadmap evaluation ALONGSIDE the rank,
+  // so the selection decision carries its own justification. A log line is not a record — it is
+  // gone by the next tick, and "what displaced the plan" is exactly the question asked days later.
+  // Shape kept deliberately small (the three facts a reader needs) rather than the whole verdict.
+  if (selectionEval) {
+    patch.work_selection = {
+      plan_linked: selectionEval.plan_linked === true,
+      injection_kind: selectionEval.injection_kind || null,
+      displaces: selectionEval.displaces || 0,
+      evaluated_at: nowIso,
+    };
+  }
   // QF-20260719-365: stamp the dispatch reason-band AT RANK TIME so worker SELF-claims
   // inherit it (KPI-2 plan-adherence read 3.4% dishonestly because ~95% of claims are
   // self-claims where the coordinator's dispatch decision IS the rank — there was no
@@ -153,7 +168,34 @@ export function deriveReasonBand(d) {
   if (/^SD-FDBK-/.test((d && d.sd_key) || '') || m.source === 'feedback'
     || /\bfeedback\b|from-feedback|from-qf|qf-promoted|quick.?fix/.test(prov)) return 'feedback';
   if (/incident|\brca\b|corrective|postmortem/.test(prov)) return 'incident';
-  return 'now-wave-remainder';
+  // SD-LEO-INFRA-ADAM-WORK-SELECTION-001 FR-2: 'now-wave-remainder' now requires ROADMAP EVIDENCE
+  // and can no longer be produced by falling off the end of this switch.
+  //
+  // It used to be the unconditional fallthrough, which inverted every reading of the gauge: a HIGH
+  // now-wave-remainder share was what UNCLASSIFIABLE PROVENANCE produces — the null hypothesis —
+  // not evidence of plan adherence. Measured 2026-07-28 over the real population of 134 stamped
+  // SDs: 104 stamped now-wave-remainder, only 18 actually wave-linked, so 86 of 104 (82.7%) claimed
+  // roadmap-remainder while linked to NO wave. A field that cannot falsify "we are working the
+  // plan" was being reported as proof of it.
+  //
+  // This function is PURE and has no DB access, so it asserts roadmap provenance only from markers
+  // already present on the row. Anything else is 'unclassified' — an honest residual that says we
+  // do not know and cannot be mistaken for adherence.
+  //
+  // SECURITY review C4: I originally hardcoded the marker list here and claimed in a comment that
+  // it matched classifyDispatchReason's — it did not (that one also admits 'lifecycle-sd-bridge'),
+  // and the two had ALREADY drifted at ship time by 326 SDs. A "single source" with no importers
+  // is not a single source, so this now imports the real one. isPlanLinked is a pure predicate
+  // over the row, so importing it keeps this function pure and DB-free.
+  //
+  // KNOWN AND RECORDED (C2, for PLAN not for this commit): these markers are a WEAK proxy —
+  // measured against roadmap_wave_items.promoted_to_sd_key (344 real keys) the marker test yields
+  // 519 false positives and 309 false negatives, largely because 376 of 401 source∈{plan,
+  // roadmap_item} rows carry created_via 'leo-create-sd' (a creation-tool default, not roadmap
+  // provenance). The verifiable ground truth is one query away and the FR-3 call site already
+  // holds a DB client. Keeping the writer pure is a deliberate choice here, not a constraint.
+  if (isPlanLinked({ sd_key: d && d.sd_key, metadata: m })) return 'now-wave-remainder';
+  return 'unclassified';
 }
 export function buildRankMergeQuery(rankPatch, sdKey) {
   // Adversarial review (ship gate): NULL::jsonb || '{...}'::jsonb evaluates to NULL in Postgres —
@@ -530,13 +572,43 @@ async function main() {
     }
   }
 
+  // SD-LEO-INFRA-ADAM-WORK-SELECTION-001 / FR-3 — THE WORK-SELECTION CHOKE.
+  //
+  // This is the seam, chosen over the two other candidates and recorded here so the choice is not
+  // re-litigated: EVERY claimable leaf already passes through this loop every 15 minutes, the rank
+  // IS the selection decision for self-claims (~95% of claims), and buildRankPatch already computes
+  // a per-item band right here — so a roadmap evaluation is a sibling of work already being done,
+  // not new plumbing. (worker-checkin.cjs:439 is the claim-time choke but sees one item at a time,
+  // so it cannot measure DISPLACEMENT; adam-quiet-tick.mjs is genuinely empty of work-selection and
+  // would have been net-new wiring.)
+  //
+  // It NAMES WHAT INJECTION DISPLACES and does not block or reorder — ranking authority is
+  // unchanged. Injecting higher-priority work is legitimate; what was missing is that the trade was
+  // invisible, so "we are working the plan" could not be falsified.
+  //
+  // FAIL OPEN, exactly as the outbound gate does (scripts/adam-advisory.cjs:1139-1141): a gate bug
+  // must never stop the belt from being ranked.
+  let selectionGate = null;
+  try {
+    const { evaluateWorkSelection } = await import('../lib/adam/work-selection-gate.js');
+    selectionGate = evaluateWorkSelection(claimable);
+    console.log(JSON.stringify({
+      event: 'adam.work_selection.evaluated', verdict: selectionGate.verdict,
+      checks: selectionGate.checks, reasons: selectionGate.reasons,
+    }));
+  } catch (gateErr) {
+    // Recorded, not swallowed — a silently absent gate is the defect this SD exists to remove.
+    console.error(`[BACKLOG-RANK] ! work-selection gate error (failing OPEN): ${gateErr.message}`);
+  }
+  const gateByKey = new Map((selectionGate?.evaluations || []).map((e) => [e.sd_key, e]));
+
   let writes = 0, clears = 0;
   for (let i = 0; i < claimable.length; i++) {
     const d = claimable[i];
     const rank = i + 1;
     console.log(`  #${String(rank).padStart(2)}  unlocks=${String(unlockScore(d.sd_key)).padStart(2)}  ${String(d.priority || '-').padEnd(8)} ${d.sd_key}`);
     if (DRY) continue;
-    const rankPatch = buildRankPatch(rank, now, process.env.CLAUDE_SESSION_ID || 'coordinator', deriveReasonBand(d));
+    const rankPatch = buildRankPatch(rank, now, process.env.CLAUDE_SESSION_ID || 'coordinator', deriveReasonBand(d), gateByKey.get(d.sd_key) || null);
     try {
       if (pgClient) {
         const { sql, params } = buildRankMergeQuery(rankPatch, d.sd_key);

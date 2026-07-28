@@ -10,7 +10,7 @@ import {
   briefHarness,
   fetchKrByObjective,
 } from '../../../lib/adam/briefings/harness.js';
-import { evaluateCandidate, hasLiveAnchor } from '../../../lib/adam/rationale-bar.js';
+import { evaluateCandidate, hasLiveAnchor, waveAlignmentTerm } from '../../../lib/adam/rationale-bar.js';
 
 // A realistic live KR row (shape from key_results).
 const krRow = (over = {}) => ({
@@ -105,6 +105,36 @@ describe('summarizeHarness (FR-1)', () => {
       expect(e.clears).toBe(true); // legitimately clears (real anchor, non-zero score)
       expect(c.objective_kr.kr).toMatch(/^KR-GOV-/);
     }
+  });
+
+  // SD-LEO-INFRA-ADAM-WORK-SELECTION-001 FR-1 / TS-2 — PRODUCER AND CONSUMER MUST SHARE ONE KEY.
+  //
+  // This is the test whose ABSENCE let the defect live: waveAlignmentTerm reads
+  // `roadmap_wave_ref`, this producer emitted only `roadmap_id`, and every existing
+  // waveAlignment assertion used hand-rolled literals carrying `roadmap_wave_ref`. The suite was
+  // green precisely BECAUSE it never fed the real producer into the real consumer.
+  //
+  // It must use the PRODUCER (not a literal) and the same identifier space calculateAlignment
+  // builds okr_ids from — objective codes. A test that hand-populates the key it is checking
+  // passes while production stays broken, which is this SD's own failure mode.
+  it('FR-1: the real producer emits the key waveAlignmentTerm reads, in the aligned set identifier space', () => {
+    const c = buildCandidateFromSignal({
+      signalClass: 'harness-backlog',
+      objectiveCode: 'O-GOV-1',
+      krRows: [krRow()],
+      count: 3,
+      contribution_type: 'enabling',
+      confidence: 0.6,
+      dedup_key: 'dk',
+      copy: { opportunity: 'o', evidence: 'e', rationale: 'r', risk: 'k', counterfactual: 'cf' },
+    });
+    // The producer publishes it at all (was undefined on every production candidate).
+    expect(c.roadmap_wave_ref).toBe('O-GOV-1');
+    // And it is the OBJECTIVE-CODE space, not the roadmap uuid — a rename alone never matched,
+    // because roadmap_id holds 3aa2f3e2-… which is not in the aligned set's namespace.
+    expect(c.roadmap_wave_ref).not.toBe(c.roadmap_id);
+    // End to end through the real consumer: a linked wave now aligns this real candidate.
+    expect(waveAlignmentTerm(c, { waves: [{ id: 'w0', okr_ids: ['O-GOV-1'] }] }).aligned).toBe(true);
   });
 
   it('excludes the gate-tuning candidate when no recommendation is actionable (MONITOR only)', () => {
