@@ -11,7 +11,7 @@ import path from 'node:path';
 
 const require_ = createRequire(import.meta.url);
 const REPO = path.resolve(__dirname, '../../..');
-const { toSnapshotRow, persistReadings, ALLOWED_STATES, fetchLastKnown, withLastKnown } =
+const { toSnapshotRow, persistReadings, ALLOWED_STATES, fetchLastKnown, withLastKnown, isMissingTableError } =
   require_(path.join(REPO, 'lib/fleet/account-usage-snapshot-writer.cjs'));
 const { UNAVAILABLE_REASONS } = require_(path.join(REPO, 'lib/fleet/account-usage-reader.cjs'));
 
@@ -113,12 +113,28 @@ describe('fail-soft — persistence never breaks the read path', () => {
 
   it('a missing table (migration not yet applied) is flagged, not thrown', async () => {
     // The migration is chairman-gated, so this is an EXPECTED state until it lands.
+    //
+    // THE MESSAGE IS THE ONE POSTGREST ACTUALLY RETURNS — captured from a live run, not composed.
+    // The original fixture used the Postgres wording (`relation "x" does not exist`), which nothing
+    // in this path can ever produce: supabase-js talks to PostgREST, which answers about its schema
+    // cache. The test and the code agreed with each other and both disagreed with production, so
+    // the flag read false on the one run where the migration genuinely was all that was pending.
     const warn = vi.fn();
-    const client = captureClient({ error: { message: 'relation "account_usage_snapshots" does not exist' } });
+    const client = captureClient({
+      error: { message: "Could not find the table 'public.account_usage_snapshots' in the schema cache" },
+    });
     const res = await persistReadings([OK_READING], { supabase: client, logger: { warn } });
     expect(res.written).toBe(0);
-    expect(res.error).toMatch(/does not exist/);
     expect(JSON.parse(warn.mock.calls[0][0]).pending_migration).toBe(true);
+  });
+
+  it('still recognises the raw Postgres wording, and does NOT flag an unrelated failure', async () => {
+    // Both phrasings must classify as pending; a genuine fault must not, or the flag stops meaning
+    // anything and a real error gets filed as "expected".
+    expect(isMissingTableError('relation "account_usage_snapshots" does not exist')).toBe(true);
+    expect(isMissingTableError("Could not find the table 'public.x' in the schema cache")).toBe(true);
+    expect(isMissingTableError('duplicate key value violates unique constraint')).toBe(false);
+    expect(isMissingTableError('socket hang up')).toBe(false);
   });
 
   it('a thrown client error is caught, not propagated', async () => {
