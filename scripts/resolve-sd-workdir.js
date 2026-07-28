@@ -570,6 +570,55 @@ async function createWorktree(sdKey, repoRoot, opts = {}) {
  * SUBSTRATE_ITEMS membership; .env.local is opportunistic (not in the
  * substrate contract but copied if present).
  */
+/**
+ * SD-FDBK-ENH-SCOPE-REPLACE-WORKTREE-001 FR-1 / TR-6 — is this node_modules unprovisioned?
+ *
+ * REPLACES a bare `!fs.existsSync(targetModules)` guard. existsSync is true for an EMPTY
+ * directory, so once anything created <wt>/node_modules/ provisioning was skipped PERMANENTLY and
+ * never retried — ensureWorktreeEssentials runs after every successful resolution and still never
+ * re-provisioned. Vite mkdir -p's node_modules/.vite for its optimize cache, which poisoned it.
+ * Measured: affected worktrees held literally .vite/ and .vite-temp/ and nothing else, yet
+ * require.resolve succeeded by Node walking UP to the shared root — the exact coupling that makes
+ * a shared-root wipe fleet-fatal.
+ *
+ * EMPTINESS-BASED, NEVER NAME-BASED. A fix scoped to "Vite creates .vite" under-covers: an
+ * _archive worktree was found poisoned by only .rank-pass-trigger.lock, with no .vite at all. The
+ * rule is therefore "holds no package entries", not "holds a known-bad name".
+ *
+ * DOES NOT READ THROUGH A JUNCTION, deliberately. lib/worktree-manager.js:86-93 records why
+ * lstat was chosen over a read-through check (adversarial review of PR #3488, finding 1): for a
+ * junction-mode worktree the link target is TRANSIENTLY ABSENT during a concurrent npm install at
+ * the main repo (.staging atomic swap), so reading through would classify a HEALTHY junctioned
+ * worktree as unprovisioned and re-provision it under load. A symlink/junction IS provisioned by
+ * construction, so it short-circuits before any readdir. This failure mode appears only under
+ * concurrency and would not surface in a quiet test run.
+ *
+ * Pure: fs is injected so the predicate is testable without touching a real tree.
+ *
+ * @param {string} nodeModulesPath
+ * @param {{lstatSync:Function, readdirSync:Function}} [fsImpl]
+ * @returns {boolean} true when provisioning should run
+ */
+export function isNodeModulesUnprovisioned(nodeModulesPath, fsImpl = fs) {
+  let stat;
+  try {
+    stat = fsImpl.lstatSync(nodeModulesPath);
+  } catch {
+    return true; // absent (or unreadable) => provision
+  }
+  if (stat.isSymbolicLink()) return false; // junction: provisioned, and must not be read through
+  if (!stat.isDirectory()) return true;    // a FILE named node_modules is not a provisioned tree
+  let entries;
+  try {
+    entries = fsImpl.readdirSync(nodeModulesPath);
+  } catch {
+    return true;
+  }
+  // Dot-entries (.vite, .vite-temp, .package-lock.json, .bin, stray locks) are caches and
+  // metadata, never packages. A provisioned tree always carries at least one package entry.
+  return !entries.some((name) => !name.startsWith('.'));
+}
+
 function ensureWorktreeEssentials(worktreePath, repoRoot, opts = {}) {
   // SD-LEO-FIX-WORKTREE-CREATION-ATOMICITY-001 US-004: Structured error return
   // instead of swallowed catches. Best-effort semantics preserved (no throw) but
@@ -583,7 +632,9 @@ function ensureWorktreeEssentials(worktreePath, repoRoot, opts = {}) {
   if (SUBSTRATE_ITEMS.includes('node_modules')) {
     const sourceModules = path.join(repoRoot, 'node_modules');
     const targetModules = path.join(worktreePath, 'node_modules');
-    if (fs.existsSync(sourceModules) && !fs.existsSync(targetModules)) {
+    // FR-1: POPULATION, not existence. An empty node_modules (Vite's .vite cache, a stray lock)
+    // used to satisfy existsSync and suppress provisioning permanently.
+    if (fs.existsSync(sourceModules) && isNodeModulesUnprovisioned(targetModules)) {
       try {
         // SD-LEO-INFRA-SMART-PER-WORKTREE-001: isolate node_modules under concurrency
         // (immune to shared-store wipes), else junction. provision handles the
@@ -594,7 +645,12 @@ function ensureWorktreeEssentials(worktreePath, repoRoot, opts = {}) {
           mode: getIsolationMode(),
           activeSessionCount: opts.activeSessionCount,
           freeDiskBytes: getFreeDiskBytes(worktreePath),
-          deps: { log: () => {} },
+          // FR-2: the no-op logger is GONE. lib/worktree-provision.js falls back to a junction
+          // when npm install throws (180s wall-clock timeout, whose probability RISES with
+          // fleet concurrency), and logs that at :145 — but this, the highest-traffic
+          // provisioning path, swallowed it. The system could silently degrade to the shared
+          // store it was built to avoid, and no operator would see it. The failure this SD
+          // exists to prevent is one nobody observed happening.
         });
       } catch (err) {
         errors.push({ step: 'provision_node_modules', message: err.message });
