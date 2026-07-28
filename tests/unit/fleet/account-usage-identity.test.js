@@ -8,7 +8,7 @@
  * "test" against real state — but a fixture that depends on whose credentials happen to be on
  * disk is not a test, and TR-4 forbids value-specific acceptance because this host churns.
  */
-import { describe, it, expect, vi } from 'vitest';
+import { describe, it, expect, vi, afterEach } from 'vitest';
 import { createRequire } from 'node:module';
 import path from 'node:path';
 
@@ -89,8 +89,14 @@ describe('FR-2 — duplicate identity is detected across slots, never within one
 });
 
 describe('FR-2 — readAllAccounts refuses to attribute quota it cannot vouch for', () => {
+  // These tests spy on console.warn, and this project sets no global restoreMocks — so without an
+  // explicit restore the spy leaks into every later test in the file and silently swallows their
+  // output. That exact leakage produced a mystery failure on a sibling SD this session; restoring
+  // per-test is cheaper than diagnosing it twice.
+  afterEach(() => { vi.restoreAllMocks(); });
+
   it('collided slots render as duplicate_identity instead of showing a number', async () => {
-    const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
+    vi.spyOn(console, 'warn').mockImplementation(() => {});
     const out = await readAllAccounts({
       env: ENV,
       fs: fsWithTokens,
@@ -106,12 +112,11 @@ describe('FR-2 — readAllAccounts refuses to attribute quota it cannot vouch fo
       // The defect was showing a NUMBER under the wrong label. There must be no number.
       expect(r.weeklyPct).toBeUndefined();
     }
-    warn.mockRestore();
   });
 
   it('the fail-loud message names slots by LABEL and never leaks the identity', async () => {
     const lines = [];
-    const warn = vi.spyOn(console, 'warn').mockImplementation((l) => lines.push(String(l)));
+    vi.spyOn(console, 'warn').mockImplementation((l) => lines.push(String(l)));
     await readAllAccounts({
       env: ENV,
       fs: fsWithTokens,
