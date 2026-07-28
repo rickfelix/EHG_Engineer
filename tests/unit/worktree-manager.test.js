@@ -3,7 +3,7 @@
  * SD-LEO-INFRA-REFACTOR-WORKTREE-MANAGER-001
  */
 
-import { describe, it, expect, vi, beforeEach } from 'vitest';
+import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import fs from 'fs';
 import path from 'path';
 import os from 'os';
@@ -313,6 +313,69 @@ describe('Worktree Manager', () => {
 
     it('should reject invalid sdKey', () => {
       expect(() => cleanupWorktree('../bad')).toThrow('invalid sdKey');
+    });
+
+    // SD-LEO-INFRA-WORKTREE-LIFECYCLE-FAILS-001 (FR-3).
+    // cleanupWorktree used to DISCARD removeWorktree's return value and re-derive its
+    // verdict purely from `git worktree list --porcelain` containment. When removeWorktree
+    // refused and ARCHIVED instead (unpushed commits — _archiveWorktreeDir MOVES the
+    // directory), the moved path was absent from that listing, so the function reported
+    // {cleaned:true, reason:'success'} and callers told the operator the worktree had been
+    // removed while the code sat in .worktrees/_archive/. These two tests pin the fix; they
+    // are the first behavioural coverage cleanupWorktree's non-trivial branches have had.
+    describe('outcome propagation (FR-3)', () => {
+      const ROOT = process.platform === 'win32' ? 'C:\\repo' : '/repo';
+
+      // These tests spy on the real fs module. Without an explicit restore the stubs leak
+      // into every later test in this file (safeRecursiveCp then fails ENOENT against a
+      // stubbed mkdirSync/copyFileSync) — a self-inflicted failure that looks like a
+      // product regression. Restore after each.
+      afterEach(() => { vi.restoreAllMocks(); });
+
+      /** Route execSync by command so the mock does not depend on call ordering. */
+      function routeExecSync({ unpushed = '', porcelainIncludesPath = false, wtPath = '' }) {
+        execSync.mockImplementation((cmd) => {
+          const c = String(cmd);
+          if (c.includes('rev-parse --show-toplevel')) return `${ROOT}\n`;
+          if (c.includes('git log')) return unpushed;
+          if (c.includes('worktree list --porcelain')) {
+            return porcelainIncludesPath ? `worktree ${wtPath}\n` : 'worktree /other\n';
+          }
+          return '';
+        });
+      }
+
+      it('does NOT report success when removeWorktree archived instead of removing', () => {
+        const wtPath = path.join(ROOT, '.worktrees', 'sd-archived');
+        routeExecSync({ unpushed: 'abc1234 unpushed work\n', wtPath });
+        // Directory present throughout; the archive move itself is stubbed.
+        vi.spyOn(fs, 'existsSync').mockReturnValue(true);
+        vi.spyOn(fs, 'mkdirSync').mockImplementation(() => undefined);
+        vi.spyOn(fs, 'renameSync').mockImplementation(() => undefined);
+
+        const result = cleanupWorktree('sd-archived', { force: true });
+
+        // The regression this SD exists to kill:
+        expect(result.cleaned).toBe(false);
+        expect(result.reason).toBe('unpushed_commits');
+        // ...and the archive must be visible to the caller, not inferred.
+        expect(result.archived).toBe(true);
+        expect(result.reason).not.toBe('success');
+      });
+
+      it('reports a husk when the registration is gone but the directory remains', () => {
+        const wtPath = path.join(ROOT, '.worktrees', 'sd-husk');
+        // No unpushed commits, and porcelain no longer lists the path (deregistered)...
+        routeExecSync({ unpushed: '', porcelainIncludesPath: false, wtPath });
+        // ...but the directory is still on disk — the EPERM husk.
+        vi.spyOn(fs, 'existsSync').mockReturnValue(true);
+
+        const result = cleanupWorktree('sd-husk', { force: true });
+
+        expect(result.cleaned).toBe(false);
+        expect(result.reason).toBe('husk_directory_remains');
+        expect(result.husk).toBe(true);
+      });
     });
   });
 
