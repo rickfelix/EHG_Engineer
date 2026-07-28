@@ -126,10 +126,16 @@ function makeFakeSupabase({ sessions = [], coordinationInsertError = null } = {}
   };
 }
 
-describe('module surface (TS-10: exactly six named verbs, no more)', () => {
-  it('exports exactly {spawn, attach, stop, restart, relaunchUnderProfile, drainAndRestart} as the verb set', async () => {
+describe('module surface (TS-10: exactly seven named verbs, no more)', () => {
+  it('exports exactly {spawn, attach, stop, restart, relaunchUnderProfile, drainAndRestart, setSessionWindowVisibility} as the verb set', async () => {
     const mod = await import('../../../lib/fleet/spawn-control.js');
-    const verbNames = ['spawn', 'attach', 'stop', 'restart', 'relaunchUnderProfile', 'drainAndRestart'];
+    // SEVENTH VERB ADDED DELIBERATELY — SD-LEO-INFRA-SESSIONS-PAGE-TRUE-001-A FR-4.
+    // This guard exists to make growing the verb set a conscious act, and it did its job: adding
+    // setSessionWindowVisibility failed this test rather than slipping in unannounced. It is
+    // declared HERE, as a verb, and NOT added to the helper allowlist below — an operator invokes it
+    // (POST /:id/hide and /:id/show), which is exactly what distinguishes a verb from a helper, so
+    // hiding it among the helpers would have dodged the guard instead of satisfying it.
+    const verbNames = ['spawn', 'attach', 'stop', 'restart', 'relaunchUnderProfile', 'drainAndRestart', 'setSessionWindowVisibility'];
     for (const name of verbNames) expect(typeof mod[name]).toBe('function');
     // Every OTHER export must be a helper, never an undocumented 7th verb.
     // The guard exists to catch an undocumented 7th VERB, not to freeze the helper surface. The two
