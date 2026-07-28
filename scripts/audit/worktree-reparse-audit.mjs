@@ -107,7 +107,14 @@ function selfTest() {
   }
   const fired = isReparsePoint(link);
   console.log(`  self-test: deliberate junction detected = ${fired}`);
+  // ORDER IS LOAD-BEARING: unlink the junction FIRST, then remove the directory that held it.
+  // Reversing these makes the cleanup itself follow the link into `target` — the precise
+  // follow-through delete this SD exists to prevent, committed by its own guard's self-test.
+  // Same discipline as the afterEach in lib/__tests__/worktree-fallback-junction-removal.test.js.
   try { fs.unlinkSync(link); } catch { /* best-effort */ }
+  for (const tmp of [dir, target]) {
+    try { fs.rmSync(tmp, { recursive: true, force: true }); } catch { /* best-effort */ }
+  }
   if (!fired) {
     console.error('SELF-TEST FAILED: the detector did not fire on a real junction. Every zero it reports is meaningless.');
     return 3;
