@@ -36,6 +36,19 @@ describe('membership is key-presence, with value as a disposition', () => {
     expect(membershipOf({ requires_chairman_apply: false }, 'requires_chairman_apply')).not.toBeNull();
   });
 
+  it('pins the DISPOSITION LABEL at both boundaries, not just membership', () => {
+    // Membership (does the item enter the population) is pinned above. The LABEL is a separate
+    // property and was only half-covered: `ruled_out` and `prose` had fixtures, but the
+    // string-"true" -> `asserted` arm of the ternary and the empty-string boundary did not, so
+    // "always return prose" and "admit '' as prose" both survived mutation. Low severity — the
+    // population is unaffected — but the label is what a reader of the report actually sees, and
+    // an approval stored as the STRING "true" reading as prose misrepresents it as a real gate note.
+    expect(membershipOf({ chairman_gated: 'true' }, 'chairman_gated').disposition).toBe('asserted');
+    expect(membershipOf({ chairman_gated: ' YES ' }, 'chairman_gated').disposition).toBe('asserted');
+    expect(membershipOf({ chairman_gated: 'requires DDL sign-off' }, 'chairman_gated').disposition).toBe('prose');
+    expect(membershipOf({ chairman_gated: '' }, 'chairman_gated').disposition).toBe('unrecognised_shape');
+  });
+
   it('an UNRECOGNISED value shape is still a MEMBER — key-presence means key-presence', () => {
     // Returning null for unrecognised shapes survived mutation, and null EXCLUDES the item from the
     // population entirely. That silently contradicts the stated doctrine for every odd value shape
