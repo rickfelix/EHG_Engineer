@@ -8,7 +8,7 @@
 // the CHECK without fabricating uat_verified.
 
 import { describe, it, expect } from 'vitest';
-import { buildMergedReconcileUpdate, witnessNameFrom, completionModeStamp } from '../../../scripts/modules/complete-quick-fix/orchestrator.js';
+import { buildMergedReconcileUpdate, witnessNameFrom, completionModeStamp, buildRuntimeObservation, completionStampFromOptions } from '../../../scripts/modules/complete-quick-fix/orchestrator.js';
 
 // Mirror of the live completed_requires_verification CHECK predicate (asserted against the DB
 // constraint def: (tests_passing AND uat_verified) OR force_completed when status='completed').
@@ -264,5 +264,114 @@ describe('completionModeStamp — FR-2 second writer', () => {
   it('is callable with no arguments at all', () => {
     // Guards the default-parameter object: a bare call must not throw on destructuring.
     expect(completionModeStamp()).toBe('UAT_AGENT');
+  });
+});
+
+// ── SD-LEO-INFRA-COMPLETION-EVIDENCE-RUNTIME-001 FR-1 ────────────────────────────────────────────
+//
+// buildRuntimeObservation: one observation of the RUNNING system at close time. The shape is fixed
+// by PRECEDENT, not invented — Adam recorded the first real observation on QF-20260725-096 using
+// {observed_at, method, observation, declared_by}, so these pin conformance to what is already in
+// the column rather than a second dialect.
+describe('buildRuntimeObservation — FR-1', () => {
+  const nowIso = '2026-07-28T11:00:00.000Z';
+
+  it('records a declared observation in the shape already in the column', () => {
+    const o = buildRuntimeObservation({
+      observation: 'GET /fleet-ui/session-view.html -> 410', method: 'http_probe',
+      declaredBy: 'Alpha-4', nowIso
+    });
+    expect(o).toEqual({
+      observed_at: nowIso, method: 'http_probe',
+      observation: 'GET /fleet-ui/session-view.html -> 410', declared_by: 'Alpha-4'
+    });
+  });
+
+  it('records ABSENCE EXPLICITLY rather than leaving the column null', () => {
+    // The FR-1 acceptance criterion verbatim: absence must be explicit "so silence is
+    // distinguishable from not applicable". A null cannot carry that distinction.
+    const o = buildRuntimeObservation({ declaredBy: 'Alpha-4', nowIso });
+    expect(o.declared).toBe(false);
+    expect(o.observed_at).toBe(nowIso);
+    expect(o).not.toBeNull();
+  });
+
+  it('says in the row itself that absence is NOT an all-clear', () => {
+    // The trigger is worker-DECLARED, not detected. If the note ever stops saying so, a reader
+    // will mistake declared:false for "runtime evidence was not applicable here".
+    const o = buildRuntimeObservation({ nowIso });
+    expect(o.note).toMatch(/nobody declared one/i);
+    expect(o.note).toMatch(/not evidence that none was applicable/i);
+  });
+
+  it('NEVER clobbers an observation already on the row', () => {
+    // Re-running a completion must not overwrite a probe someone actually performed with a fresh
+    // "nobody declared one" — that destroys real evidence in order to record its absence.
+    const existing = { observed_at: '2026-07-28T10:35:34.327Z', method: 'http_probe', observation: 'real probe', declared_by: 'adam' };
+    expect(buildRuntimeObservation({ existing, observation: 'later text', nowIso })).toEqual(existing);
+    expect(buildRuntimeObservation({ existing, nowIso })).toEqual(existing);
+  });
+
+  it('treats an empty or whitespace-only observation as undeclared, not as a blank observation', () => {
+    for (const v of ['', '   ', null, undefined]) {
+      expect(buildRuntimeObservation({ observation: v, nowIso }).declared).toBe(false);
+    }
+  });
+
+  it('defaults method when text is given without one, and ignores a blank existing object', () => {
+    expect(buildRuntimeObservation({ observation: 'saw it', nowIso }).method).toBe('declared');
+    expect(buildRuntimeObservation({ existing: {}, observation: 'saw it', nowIso }).observation).toBe('saw it');
+  });
+});
+
+// completionStampFromOptions: the CALL-SITE contract. This is the pin that was missing.
+describe('completionStampFromOptions — the option NAME is the contract', () => {
+  it('reads the key cli.js actually produces (scopeAccepted), not scopeAcceptedBy', () => {
+    // THE SHIPPED BUG: FR-2 read options.scopeAcceptedBy while cli.js has always produced
+    // options.scopeAccepted, so the value was permanently undefined and the documented precedence
+    // could never fire — it degraded silently to the session id, which LOOKS like a working stamp.
+    // The FR-2 pins missed it because they called completionModeStamp directly with explicit args:
+    // the function was right, the call site handed it the wrong key.
+    expect(completionStampFromOptions({ forceComplete: true, scopeAccepted: 'Alpha-4 — why' }, 'sess-1'))
+      .toBe('Alpha-4 (FORCE_COMPLETE)');
+  });
+
+  it('regression guard: the misspelled key must NOT satisfy the precedence', () => {
+    // If someone reintroduces scopeAcceptedBy at the call site, this fails instead of silently
+    // falling back to the session id.
+    expect(completionStampFromOptions({ forceComplete: true, scopeAcceptedBy: 'Ghost — why' }, 'sess-1'))
+      .toBe('sess-1 (FORCE_COMPLETE)');
+  });
+
+  it('falls back to the session when no scope-accepter was supplied', () => {
+    expect(completionStampFromOptions({ forceComplete: false }, 'sess-2')).toBe('sess-2 (UAT_AGENT)');
+  });
+});
+
+// END-TO-END OPTION CONTRACT, driven by the REAL parser rather than a hand-made options object.
+// A stand-in object only proves the stand-in spells the key the way I spelled it in the test —
+// which is the same mental model that produced the bug. Importing parseArguments makes the two
+// modules agree in the test the way they must agree at runtime.
+describe('cli.parseArguments -> completionStampFromOptions (cross-module contract)', () => {
+  it('a real --scope-accepted argv reaches the stamp', async () => {
+    const { parseArguments } = await import('../../../scripts/modules/complete-quick-fix/cli.js');
+    // parseArguments returns { qfId, options } — NOT a flat object. Learned by driving the real
+    // parser: a hand-made stand-in would have encoded my wrong assumption about the return shape
+    // and passed forever. --force-complete also genuinely requires --reason.
+    const { options } = parseArguments(['QF-20260725-096', '--force-complete', '--reason', 'audit', '--scope-accepted', 'Alpha-4 — scope satisfied']);
+    expect(options.scopeAccepted).toBe('Alpha-4 — scope satisfied');
+    expect(completionStampFromOptions(options, 'sess-x')).toBe('Alpha-4 (FORCE_COMPLETE)');
+  });
+
+  it('a real --runtime-observation argv reaches buildRuntimeObservation', async () => {
+    const { parseArguments } = await import('../../../scripts/modules/complete-quick-fix/cli.js');
+    const { options } = parseArguments(['QF-20260725-096', '--runtime-observation', 'GET / -> 410', '--observation-method', 'http_probe']);
+    const o = buildRuntimeObservation({
+      observation: options.runtimeObservation, method: options.observationMethod,
+      declaredBy: 'Alpha-4', nowIso: '2026-07-28T11:00:00.000Z'
+    });
+    expect(o.observation).toBe('GET / -> 410');
+    expect(o.method).toBe('http_probe');
+    expect(o.declared).toBeUndefined();
   });
 });
