@@ -177,6 +177,24 @@ describe('the alarm cannot be talked into health it did not establish', () => {
     expect(classifyGuard({ guard: 'g', observations: 5, blocked: -1 }, '7d').state).toBe(GUARD_HEALTH.UNKNOWN);
   });
 
+  it('an incoherent count is a broken feed, not a strong signal', () => {
+    // More blocks than observations, and fractional counts, both read as HEALTHY — 1e-323 blocks
+    // rounded up to "it demonstrably blocked" on a value that is not a count at all.
+    expect(classifyGuard({ guard: 'g', observations: 1, blocked: 999 }, '7d').state).toBe(GUARD_HEALTH.UNKNOWN);
+    expect(classifyGuard({ guard: 'g', observations: 10, blocked: 0.5 }, '7d').state).toBe(GUARD_HEALTH.UNKNOWN);
+    expect(classifyGuard({ guard: 'g', observations: 10, blocked: 1e-323 }, '7d').state).toBe(GUARD_HEALTH.UNKNOWN);
+    expect(classifyGuard({ guard: 'g', observations: 10, blocked: 3 }, '7d').state).toBe(GUARD_HEALTH.HEALTHY); // control
+  });
+
+  it('the WINDOW LABEL cannot author lines either — the last unsanitised interpolation', () => {
+    // It reaches the durable ledger summary, and it was the one interpolation with neither
+    // sanitisation nor a length bound.
+    const r = classifyGuard({ guard: 'g', observations: 5, blocked: 0 }, '7d\nfakeGuard: blocked 9/9 — demonstrably able to block');
+    expect(r.detail).not.toMatch(/\n/);
+    const long = classifyGuard({ guard: 'g', observations: 5, blocked: 0 }, 'x'.repeat(5000));
+    expect(long.detail.length).toBeLessThan(600);
+  });
+
   it('a guard name cannot author extra lines in the operator-facing detail', () => {
     // `detail` is read by a human deciding whether to investigate. A newline in the name injects a
     // fabricated verdict line into that report.

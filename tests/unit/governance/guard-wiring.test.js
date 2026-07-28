@@ -268,6 +268,37 @@ describe('the registry and its patterns cannot be edited into agreement', () => 
   });
 });
 
+describe('FR-1 TURNED ON THIS SD\'S OWN LAST HOP', () => {
+  it('main() actually supplies the scan result to the outcome builder', () => {
+    // The unclaimed win. I had written that main()'s single remaining call could not be covered by
+    // unit tests "at all", and review corrected it: the mutation class I demonstrated — deleting the
+    // argument, omitting it, stubbing it to null — is a STATIC property of the call text, and
+    // deciding exactly that is what suppliesGatedInput was built for. FR-1 asks "does a production
+    // caller actually supply the input this thing needs"; the last hop of this SD was that question,
+    // unanswered, in a file this SD wrote, with the answer sitting in a module this SD shipped.
+    //
+    // What this does NOT do, so the next reader does not over-read it: it cannot prove the value
+    // passed is the RIGHT one — that needs a process-level test running the CLI, which is not cheap
+    // because the scan reads the database first. It converts "no signal whatsoever" into "signal for
+    // deletion, omission and null-stubbing".
+    const src = fs.readFileSync(path.join(repoRoot, 'scripts/adam-opportunity-scan.cjs'), 'utf8');
+    // `outcome.entry`, not `outcome`: suppliesGatedInput matches an identifier followed by a
+    // supply token (`:` `,` `}` `)` `=`), and a member access puts a `.` there instead. Naming the
+    // whole expression is the correct input here — and it only works because gatedInput is escaped
+    // as data, which is the C5 fix earning its keep one file over.
+    for (const [callee, input] of [['scanOutcome', 'result'], ['appendLedger', 'outcome.entry']]) {
+      // The call inside main(), not the definition — skip the `function <name>(` declaration.
+      const calls = [...src.matchAll(new RegExp(`(?<!function )\\b${callee}\\s*\\(([\\s\\S]{0,300})`, 'g'))]
+        .map((m) => m[1]);
+      expect(calls.length, `no call to ${callee} found`).toBeGreaterThan(0);
+      expect(
+        calls.some((text) => suppliesGatedInput(text, input)),
+        `no call to ${callee} supplies '${input}' — the last hop is unwired`,
+      ).toBe(true);
+    }
+  });
+});
+
 describe('the detector can actually see wiring — not just its absence', () => {
   it('NEGATIVE CONTROL: a synthetic wired guard is detected', () => {
     // Without this, every assertion above would also pass on a detector that finds NOTHING, which

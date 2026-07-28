@@ -211,12 +211,17 @@ function adamOkLine(scope, result) {
  * is not exported and is therefore unreachable from any unit test. Collapsing them into ONE call
  * shrinks that surface to a single hop, and every decision it makes is tested here.
  *
- * The residual is real and is stated rather than papered over: `scanOutcome(...)` is still invoked
- * from main(), and a mutation that passed it a null result would produce no unit-test signal. That
- * last hop cannot be closed by unit tests at all — it needs a process-level test that actually runs
- * the CLI, which this scan cannot have cheaply because it reads the database first. Recording the
- * boundary precisely is the honest move; claiming the hop is covered would be the third repetition
- * of the exact defect this SD exists to remove.
+ * The residual, stated precisely. `scanOutcome(...)` is invoked from main(), and nothing executes
+ * main() in a test, so the hop cannot be closed BEHAVIOURALLY — a static check cannot prove the
+ * value passed is the right one. It needs a process-level test running the CLI, which is not cheap
+ * here because the scan reads the database first.
+ *
+ * I first wrote that it "cannot be closed by unit tests at all", and that was too strong — review
+ * caught it, and the correction matters more than the code: this SD is about claims outliving their
+ * evidence, and "we established this cannot be tested" is exactly the sentence that gets inherited
+ * and stops the next person looking. It IS statically checkable that the call supplies the input,
+ * by this SD's own FR-1 machinery, and tests/unit/governance/guard-wiring.test.js now does so —
+ * catching deletion, omission and null-stubbing, which is the whole class the mutations exercised.
  */
 function scanOutcome({ result, scope, flagEnabled }) {
   const surfaced = result && result.surfaced;
