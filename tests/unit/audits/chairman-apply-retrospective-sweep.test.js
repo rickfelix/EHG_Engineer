@@ -329,6 +329,32 @@ describe('the manifest hard-fails — a manifest coverage equals its membership'
     expect(r.unseededArms).toEqual(['arm_b']);
   });
 
+  it('fails when a seed is no longer reached VIA ITS DECLARED ARM', () => {
+    // The check previously asked only `ids.has(identifier)`, so a seed that had stopped being
+    // reachable through its own arm still passed as long as some OTHER arm picked it up. Every seed
+    // is chosen because it is SOLE-REACH for its arm — an authoring-time property no control could
+    // see, which one metadata edit adding a second key silently retires.
+    // This is not hypothetical: when the arm-aware check first ran it falsified THREE of eight
+    // annotations in this repo's own manifest, each a real member reached via a different arm.
+    const r = checkManifest(
+      [{ identifier: 'A', source_arm: 'arm_a' }, { identifier: 'B', source_arm: 'arm_b' }],
+      [{ identifier: 'A', arms: ['arm_b'] }, { identifier: 'B', arms: ['arm_b'] }],
+      ARMS);
+    expect(r.ok).toBe(false);
+    expect(r.missing).toEqual([]);
+    expect(r.wrongArm.map((w) => w.identifier)).toEqual(['A']);
+    expect(r.wrongArm[0].observed_arms).toEqual(['arm_b']);
+  });
+
+  it('accepts a seed reached via its arm ALONGSIDE others', () => {
+    // Sharing an arm is not a failure; losing the declared one is.
+    const r = checkManifest(
+      [{ identifier: 'A', source_arm: 'arm_a' }, { identifier: 'B', source_arm: 'arm_b' }],
+      [{ identifier: 'A', arms: ['arm_a', 'arm_b'] }, { identifier: 'B', arms: ['arm_b'] }],
+      ARMS);
+    expect(r.ok).toBe(true);
+  });
+
   it('passes only when every member resolves AND every arm is seeded', () => {
     const r = checkManifest(
       [{ identifier: 'A', source_arm: 'arm_a' }, { identifier: 'B', source_arm: 'arm_b' }],

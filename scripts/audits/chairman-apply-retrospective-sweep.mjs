@@ -44,20 +44,29 @@ const PAGE_SIZE = 1000;
  * membership, and a seed that silently stops resolving is a coverage loss that reports as a pass.
  */
 const MANIFEST = Object.freeze([
-  { identifier: 'SD-LEO-INFRA-SECURITY-HYGIENE-RLS-SEARCHPATH-001', source_arm: 'requires_chairman_apply', note: 'flagship: artifact and live disagree' },
-  { identifier: 'SD-LEO-INFRA-NAIVE-TIMESTAMP-SKEW-001', source_arm: 'chairman_gated', note: 'PROSE value shape; the population only draft' },
-  { identifier: 'SD-LEO-INFRA-ENABLE-TRI-PARTY-001', source_arm: 'chairman_gate', note: 'cancelled â€” status is a disposition, not a filter' },
+  // EVERY source_arm below is MEASURED, not asserted. The first version of this manifest annotated
+  // arms from the PRD narrative, and when the arm-aware check landed it immediately falsified three
+  // of eight: each seed was a genuine member, just reached via a different arm than claimed. The
+  // "every seed is sole-reach for its arm" property had been an authoring-time belief that no
+  // control could see, which is exactly why the check now takes population rows rather than ids.
+  { identifier: 'SD-LEO-FIX-VENTURE-ARTIFACTS-ARTIFACT-001', source_arm: 'requires_chairman_apply', note: 'FALSE-boolean value shape (ruled_out) on a COMPLETED SD' },
+  { identifier: 'SD-LEO-FEAT-SMS-CHAIRMAN-DECISION-001-A', source_arm: 'chairman_gated_migration', note: 'migration arm' },
+  { identifier: 'SD-LEO-INFRA-NAIVE-TIMESTAMP-SKEW-001', source_arm: 'chairman_gated', note: 'PROSE value shape; the population only DRAFT' },
+  { identifier: 'SD-LEO-INFRA-SECURITY-HYGIENE-RLS-SEARCHPATH-001', source_arm: 'chairman_gated', note: 'flagship RLS case — reached via chairman_gated, NOT requires_chairman_apply as first annotated' },
+  { identifier: 'SD-LEO-INFRA-ENABLE-TRI-PARTY-001', source_arm: 'chairman_gate', note: 'CANCELLED — status is a disposition, never a filter' },
   { identifier: 'SD-LEO-INFRA-GOV-TABLE-WRITE-GRANT-REVOKE-001', source_arm: 'apply_authority', note: 'CHAIRMAN-ONLY carried as a PREFIX, not an equality' },
-  { identifier: 'SD-LEO-FIX-GUARD-UNGUARDED-UUID-001', source_arm: 'chairman_gated_migration', note: 'migration arm' },
-  { identifier: 'SD-LEO-INFRA-LEO-PROTOCOL-SECTIONS-ID-SEQ-RESYNC-001', source_arm: 'requires_chairman_apply_note', note: 'FALSE-boolean value shape' },
+  { identifier: 'SD-LEO-ORCH-OPERATING-COMPANY-SPINE-001-F', source_arm: 'requires_chairman_apply_note', note: 'prose note arm' },
   { identifier: 'QF-20260719-281', source_arm: 'quick_fixes_freetext', note: 'TS-21: the arm must RESOLVE this, not merely accept the manifest shape' },
-  { identifier: 'FEEDBACK-008c71b8-29df-48b1-9ded-ecdb464e5273', source_arm: 'completion_flag_index', note: 'the completion-flag arm; unreachable from SD metadata by construction' },
+  { identifier: 'FEEDBACK-008c71b8-29df-48b1-9ded-ecdb464e5273', source_arm: 'completion_flag_index', note: 'unreachable from SD metadata by construction' },
 ]);
 
 /** Directional floors. A count may only GROW; a non-zero check cannot see a predicate error. */
 const BASELINE = Object.freeze({
   requires_chairman_apply: 29, chairman_gated_migration: 6, chairman_gated: 3,
   chairman_gate: 2, apply_authority: 2, requires_chairman_apply_note: 2,
+  // The free-text arms are 48% of the population and previously carried NO floor, so both could
+  // have collapsed to zero with baselines.ok true and exit 0.
+  quick_fixes_freetext: 20, completion_flag_index: 19,
 });
 
 /**
@@ -107,17 +116,17 @@ async function main() {
   }
 
   const population = addCompletionFlagArm(buildPopulation(sds, qfs, METADATA_ARMS), feedbackRows);
-  const ids = population.map((p) => p.identifier);
-
-  const manifest = checkManifest(MANIFEST, ids, POPULATION_ARMS);
+  const manifest = checkManifest(MANIFEST, population, POPULATION_ARMS);
   if (!manifest.ok) {
     controlsOk = false;
     for (const m of manifest.missing) controlFailures.push(`manifest seed unreachable: ${m.identifier} (${m.source_arm})`);
     for (const a of manifest.unseededArms) controlFailures.push(`arm carries no manifest seed: ${a}`);
+    for (const w of manifest.wrongArm) controlFailures.push(
+      `manifest seed ${w.identifier} no longer reached via its arm ${w.source_arm} (observed: ${w.observed_arms.join(',')})`);
   }
 
   const observedPerArm = {};
-  for (const arm of METADATA_ARMS) observedPerArm[arm] = population.filter((p) => p.arms.includes(arm)).length;
+  for (const arm of POPULATION_ARMS) observedPerArm[arm] = population.filter((p) => p.arms.includes(arm)).length;
   const baselines = checkBaselines(observedPerArm, BASELINE);
   if (!baselines.ok) {
     controlsOk = false;
