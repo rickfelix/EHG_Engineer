@@ -18,7 +18,7 @@ const reader = require_(path.join(REPO, 'lib/fleet/account-usage-reader.cjs'));
 const {
   UNAVAILABLE_REASONS, accountConfigJsonPath, resolveSlotIdentities,
   findIdentityCollisions, readAllAccounts, ACCOUNT_REGISTRY,
-  resolveDisplayIdentities, identityDisplayMap,
+  resolveDisplayIdentities, identityDisplayMap, contestedDisplayLabels,
 } = reader;
 
 const ENV = { USERPROFILE: 'C:\\Users\\test' };
@@ -245,6 +245,35 @@ describe('FR-1 — display mapping is configuration, and unset is safe', () => {
     const contestedReadings = out.filter((r) => r.reason === UNAVAILABLE_REASONS.DUPLICATE_IDENTITY);
     expect(contestedReadings).toHaveLength(2);
     for (const r of contestedReadings) expect(r.weeklyPct).toBeUndefined();
+  });
+
+  it('A LABEL CANNOT LAND ON ANOTHER SLOT\'S OWN NAME', async () => {
+    // The label namespace includes the RAW registry names, not just the mapped ones. A label
+    // claimed by exactly one account looks uncontested by a mapped-vs-mapped check, gets applied,
+    // and lands on the name a slot without a mapping already keeps — two readings under one name,
+    // sharing a natural key in account_usage_snapshots and each other's retained figures.
+    const victim = ACCOUNT_REGISTRY[0].name; // a slot that keeps its own name
+    let i = 0;
+    const out = await readAllAccounts({
+      env: { ...ENV, FLEET_ACCOUNT_IDENTITY_MAP: JSON.stringify({ 'u-1': victim }) },
+      fs: fsWithTokens,
+      fetchImpl: fetchReturning(200, { five_hour: { utilization: 1 }, seven_day: { utilization: 1 } }),
+      getAccountIdentity: () => ({ email: 'a@b.invalid', orgName: 'O', accountUuid8: `u-${i++}` }),
+    });
+    expect(new Set(out.map((r) => r.name)).size).toBe(ACCOUNT_REGISTRY.length);
+    // The slot that rightfully owns the name is NOT penalised for someone else's config.
+    expect(out.find((r) => r.name === victim)?.reason)
+      .not.toBe(UNAVAILABLE_REASONS.DUPLICATE_IDENTITY);
+  });
+
+  it('a slot mapped to its OWN name contests nothing', () => {
+    // Self-mapping is legitimate and must not be mistaken for a collision, or a correct config
+    // would render every slot unattributable.
+    const contested = contestedDisplayLabels(
+      new Map([['Slot A', 'u-0'], ['Slot B', 'u-1']]),
+      new Map([['u-0', 'Slot A']]),
+    );
+    expect([...contested]).toEqual([]);
   });
 
   it('malformed map config never breaks the strip', async () => {
