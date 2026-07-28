@@ -41,7 +41,7 @@ import dotenv from 'dotenv';
 import {
   VERDICT, UNVERIFIABLE_REASON, POPULATION_ARMS,
   classifyItem, checkManifest, checkBaselines, reasonHistogram, exitCodeFor,
-  findUnconsumedKeys, KNOWN_SCOPE_GAPS, EXCLUDED_KEYS,
+  findUnconsumedKeys, deriveScopeGaps, EXCLUDED_KEYS,
 } from '../../lib/audits/chairman-apply-sweep.js';
 // Collectors live in lib/ because both of this module's real defects were in THEM, and the suite
 // could not reach them while they sat behind the Supabase import in this file.
@@ -151,7 +151,7 @@ async function main() {
     sds = await fetchAllReconciled(supabase, 'strategic_directives_v2', 'id,sd_key,status,metadata');
     qfs = await fetchAllReconciled(supabase, 'quick_fixes', 'id,title,description,status');
     feedbackRows = await fetchAllReconciled(supabase, 'feedback', 'id,title,description,status,category,metadata');
-    prds = await fetchAllReconciled(supabase, 'product_requirements_v2', 'id,metadata');
+    prds = await fetchAllReconciled(supabase, 'product_requirements_v2', 'id,metadata,status');
   } catch (err) {
     console.error(`CONTROL FAILURE: ${err.message}`);
     process.exitCode = 2;
@@ -159,7 +159,7 @@ async function main() {
   }
 
   const population = addCompletionFlagArm(buildPopulation(sds, qfs, METADATA_ARMS, [
-    ...prds.map((r) => ({ identifier: `PRD-${r.id}`, metadata: r.metadata, status: null, source: 'product_requirements_v2' })),
+    ...prds.map((r) => ({ identifier: `PRD-${r.id}`, metadata: r.metadata, status: r.status, source: 'product_requirements_v2' })),
     ...feedbackRows.map((r) => ({ identifier: `FEEDBACK-${r.id}`, metadata: r.metadata, status: r.status, source: 'feedback' })),
   ]), feedbackRows);
   const manifest = checkManifest(MANIFEST, population, POPULATION_ARMS);
@@ -236,7 +236,7 @@ async function main() {
     controls_ok: controlsOk,
     unconsumed_keys: unconsumed.findings,
     unreachable_members: unconsumed.unreachableMembers,
-    known_scope_gaps: KNOWN_SCOPE_GAPS,
+    scope_gaps: deriveScopeGaps(unconsumed.unreachableMembers),
     probing_implemented: probingImplemented,
     exit_1_reachable: probingImplemented,
     control_failures: controlFailures,
@@ -269,12 +269,12 @@ unconsumed-key scan: ${unconsumed.findings.length} candidate keys across `
       console.log('does NOT mean no divergence exists. Nothing has compared a live database');
       console.log('object against what a chairman approved. That comparison is FR-4, still to build.');
     }
-    const gaps = Object.keys(KNOWN_SCOPE_GAPS);
+    const gaps = deriveScopeGaps(unconsumed.unreachableMembers);
     if (gaps.length) {
-      console.log('\n*** KNOWN SCOPE GAPS (real gates the population cannot reach) ***');
-      for (const g of gaps) console.log(`  ${g}: ${KNOWN_SCOPE_GAPS[g].where}`);
-      console.log('These are NOT exclusions-on-the-merits. See KNOWN_SCOPE_GAPS for what closes each.');
+      console.log('\n*** SCOPE GAPS (real gates the population cannot reach) ***');
+      for (const g of gaps) console.log(`  ${g.source}: ${g.count} row(s) - ${g.why_unreachable}`);
     }
+
     if (!controlsOk) {
       console.log('\n*** CONTROL FAILURE — do not trust this run ***');
       for (const f of controlFailures) console.log(`  - ${f}`);

@@ -947,3 +947,76 @@ describe('the unconsumed-key detector', () => {
     expect(m.isUnconsumedKeyCandidate(null)).toBe(false);
   });
 });
+
+describe('the source seam, covering EVERY producer path', () => {
+  it('reaches its own evidence from all five row shapes, naming no source literal', async () => {
+    const c = await import('../../../lib/audits/chairman-apply-collectors.js');
+    // THIRD OCCURRENCE AT THIS SEAM, so this test enumerates producers instead of sampling them.
+    // (1) the completion-flag arm fell to approvalTextOf({}) === '' and discarded 16 .sql paths;
+    // (2) a shared SOURCE constant fixed the two literals but not the CATEGORY ASSUMPTION;
+    // (3) admitting PRD and feedback METADATA rows gave the consumer a third kind while it still
+    //     branched on two, so 12 rows — including the flagship RLS case whose PRD-borne artifact
+    //     was the entire reason for admitting PRDs — classified from an empty string and reported
+    //     NO_ARTIFACT. Each time the earlier fixture set still passed.
+    // The producer now STAMPS evidenceText, so there is no consumer branch left to get wrong; this
+    // test exists to fail if anyone reintroduces one.
+    const pop = c.buildPopulation(
+      [{ sd_key: 'SD-A', status: 'completed', metadata: { chairman_apply_note: 'ALTER TABLE t_sd per db/sd.sql' } }],
+      [{ id: 'QF-1', status: 'open', title: 'chairman-gated migration', description: 'ALTER TABLE t_qf per db/qf.sql' }],
+      ['chairman_apply_note'],
+      [
+        { identifier: 'PRD-1', status: 'completed', source: 'product_requirements_v2',
+          metadata: { chairman_apply_note: 'ALTER TABLE t_prd per db/prd.sql' } },
+        { identifier: 'FEEDBACK-META-1', status: 'new', source: 'feedback',
+          metadata: { chairman_apply_note: 'ALTER TABLE t_fb per db/fbmeta.sql' } },
+      ]);
+    const withFlags = c.addCompletionFlagArm(pop, [
+      { id: 'ft1', category: 'completion_flag', title: 'chairman-gated', description: 'unapplied migration db/fbtext.sql ALTER' },
+    ]);
+    const got = Object.fromEntries(withFlags.map((r) => [r.identifier, c.buildEvidence(r).artifact.path]));
+
+    expect(got['SD-A']).toBe('db/sd.sql');                    // SD metadata
+    expect(got['QF-1']).toBe('db/qf.sql');                    // quick-fix free text
+    expect(got['PRD-1']).toBe('db/prd.sql');                  // PRD METADATA - the SEC-27 hole
+    expect(got['FEEDBACK-META-1']).toBe('db/fbmeta.sql');     // feedback METADATA - same hole
+    expect(got['FEEDBACK-ft1']).toBe('db/fbtext.sql');        // feedback free text
+    // Not one path may silently yield null; that is what "classified from an empty string" looks like.
+    for (const [id, path] of Object.entries(got)) {
+      expect(path, `${id} must reach its own evidence`).not.toBeNull();
+    }
+  });
+
+  it('carries STATUS from every source — a null status erases NOT-APPLIED-BUT-COMPLETED', async () => {
+    const c = await import('../../../lib/audits/chairman-apply-collectors.js');
+    // The PRD select omitted `status` and the mapper wrote null, so 11 completed PRD members lost
+    // the one field that makes "shipped without being applied" expressible.
+    const pop = c.buildPopulation([], [], ['chairman_apply_note'], [
+      { identifier: 'PRD-1', status: 'completed', source: 'product_requirements_v2',
+        metadata: { chairman_apply_note: 'ALTER TABLE t per db/x.sql' } },
+    ]);
+    expect(pop[0].status).toBe('completed');
+  });
+});
+
+describe('scope gaps are DERIVED from what the run measured', () => {
+  it('reports nothing when there are no unreachable members', async () => {
+    const m = await import('../../../lib/audits/chairman-apply-sweep.js');
+    // The previous export was a static object asserting PRD/feedback gates were unreachable, which
+    // stopped being true the moment the population read every source — so one run printed
+    // "0 unreachable members" and a scope-gap warning seven lines apart. A stale warning is worse
+    // than none: it spends attention on a closed gap while implying the check is live.
+    expect(m.deriveScopeGaps([])).toEqual([]);
+  });
+
+  it('groups real unreachable members by source', async () => {
+    const m = await import('../../../lib/audits/chairman-apply-sweep.js');
+    const gaps = m.deriveScopeGaps([
+      { identifier: 'PRD-1', source: 'product_requirements_v2', arms: ['chairman_gate'] },
+      { identifier: 'PRD-2', source: 'product_requirements_v2', arms: ['chairman_gate'] },
+      { identifier: 'FB-1', source: 'feedback', arms: ['chairman_gated_ddl'] },
+    ]);
+    expect(gaps.map((g) => [g.source, g.count])).toEqual([
+      ['product_requirements_v2', 2], ['feedback', 1],
+    ]);
+  });
+});
