@@ -164,7 +164,10 @@ describe('THE ASYMMETRY — APPLIED requires three inputs (TS-24)', () => {
     // covers the approval. Omitting it is not equivalent — see the three-way test below.
     approval: { namesObjects: approvalNamesObjects, provenanceIndependent: true, declaresMoreThanArtifact: false },
     artifact: { present: true },
-    live: { probed: true, matchesArtifact: true },
+    // resolvedObjects is REQUIRED for APPLIED. This fixture previously omitted it and asserted
+    // APPLIED, which meant the suite DEFENDED the default-open hole: the correct one-character fix
+    // would have been killed by this very test. A fixture that encodes a defect protects it.
+    live: { probed: true, matchesArtifact: true, resolvedObjects: ['stage_executions'] },
   });
 
   it('NEVER returns APPLIED when no object-naming approval exists, even when artifact and live agree', () => {
@@ -187,7 +190,7 @@ describe('THE ASYMMETRY — APPLIED requires three inputs (TS-24)', () => {
     const r = classifyItem({
       approval: { namesObjects: true, provenanceIndependent: true },  // declaresMoreThanArtifact unset
       artifact: { present: true },
-      live: { probed: true, matchesArtifact: true },
+      live: { probed: true, matchesArtifact: true, resolvedObjects: ['t'] },
     });
     expect(r.verdict).toBe(VERDICT.UNVERIFIABLE);
     expect(r.reason).toBe(UNVERIFIABLE_REASON.LEDGER_SILENT);
@@ -197,7 +200,7 @@ describe('THE ASYMMETRY — APPLIED requires three inputs (TS-24)', () => {
     const r = classifyItem({
       approval: { namesObjects: true, provenanceIndependent: true, declaresMoreThanArtifact: true },
       artifact: { present: true },
-      live: { probed: true, matchesArtifact: true },
+      live: { probed: true, matchesArtifact: true, resolvedObjects: ['t'] },
     });
     expect(r.verdict).toBe(VERDICT.APPLIED_BUT_DIVERGENT);
   });
@@ -208,7 +211,7 @@ describe('THE ASYMMETRY — APPLIED requires three inputs (TS-24)', () => {
     const r = classifyItem({
       approval: { namesObjects: false },
       artifact: { present: true },
-      live: { probed: true, matchesArtifact: false },   // surplus unset
+      live: { probed: true, matchesArtifact: false, resolvedObjects: ['t'] },   // surplus unset
     });
     expect(r.surplusUnattributable).toBe(true);
   });
@@ -221,7 +224,7 @@ describe('THE ASYMMETRY — APPLIED requires three inputs (TS-24)', () => {
     const r = classifyItem({
       approval: { namesObjects: true },            // provenanceIndependent deliberately absent
       artifact: { present: true },
-      live: { probed: true, matchesArtifact: true },
+      live: { probed: true, matchesArtifact: true, resolvedObjects: ['t'] },
     });
     expect(r.verdict).toBe(VERDICT.UNVERIFIABLE);
     expect(r.reason).toBe(UNVERIFIABLE_REASON.LEDGER_SILENT);
@@ -232,7 +235,7 @@ describe('THE ASYMMETRY — APPLIED requires three inputs (TS-24)', () => {
     const r = classifyItem({
       approval: { namesObjects: true, provenanceIndependent: false },
       artifact: { present: true },
-      live: { probed: true, matchesArtifact: true },
+      live: { probed: true, matchesArtifact: true, resolvedObjects: ['t'] },
     });
     expect(r.verdict).toBe(VERDICT.UNVERIFIABLE);
     expect(r.reason).toBe(UNVERIFIABLE_REASON.LEDGER_SILENT);
@@ -243,7 +246,7 @@ describe('THE ASYMMETRY — APPLIED requires three inputs (TS-24)', () => {
     const r = classifyItem({
       approval: { namesObjects: false },
       artifact: { present: true },
-      live: { probed: true, matchesArtifact: false, surplus: true },
+      live: { probed: true, matchesArtifact: false, surplus: true, resolvedObjects: ['t'] },
     });
     expect(r.verdict).toBe(VERDICT.APPLIED_BUT_DIVERGENT);
     expect(r.surplusUnattributable).toBe(true);
@@ -253,7 +256,7 @@ describe('THE ASYMMETRY — APPLIED requires three inputs (TS-24)', () => {
     const r = classifyItem({
       approval: { namesObjects: true, provenanceIndependent: true },
       artifact: { present: true },
-      live: { probed: true, matchesArtifact: false, missing: true },
+      live: { probed: true, matchesArtifact: false, missing: true, resolvedObjects: ['t'] },
     });
     expect(r.verdict).toBe(VERDICT.NOT_APPLIED_BUT_COMPLETED);
   });
@@ -864,7 +867,7 @@ describe('the floor set is reconciled against the arm set', () => {
 });
 
 describe('the APPLIED invariant counts inputs with the SAME predicates as the verdict', () => {
-  it('throws if a non-boolean input ever reaches APPLIED', () => {
+  it('does NOT throw on a fully-formed APPLIED row', () => {
     // independentInputCount lost its only caller when the previous dead invariant was replaced,
     // leaving its three `=== true` predicates unmutatable. Both halves of the invariant are now
     // load-bearing, so a divergence between the guards and the count is caught rather than assumed.
@@ -873,5 +876,73 @@ describe('the APPLIED invariant counts inputs with the SAME predicates as the ve
       artifact: { present: true },
       live: { probed: true, matchesArtifact: true, resolvedObjects: ['t'] },
     })).not.toThrow();
+  });
+});
+
+describe('the vacuity guard requires objects AFFIRMATIVELY, not merely non-empty', () => {
+  const applied = (live) => classifyItem({
+    approval: { namesObjects: true, provenanceIndependent: true, declaresMoreThanArtifact: false },
+    artifact: { present: true },
+    live: { probed: true, matchesArtifact: true, ...live },
+  });
+
+  it('every not-affirmatively-resolved shape is UNVERIFIABLE, not just the literal []', () => {
+    // DEFAULT-OPEN, third instance in this file and landed INSIDE the fix for the second.
+    // probedObjectCount was null when resolvedObjects was ABSENT, and null === 0 is false, so it
+    // passed both the guard and the invariant. buildEvidence emits live:{probed:false} with no
+    // resolvedObjects key at all — so the day a prober flips probed true without adding the field,
+    // EVERY agreeing row goes APPLIED. Only the literal [] was ever caught.
+    for (const shape of [{}, { resolvedObjects: [] }, { resolvedObjects: null },
+      { resolvedObjects: 0 }, { resolvedObjects: {} }, { resolvedObjects: '' }]) {
+      const r = applied(shape);
+      expect(r.verdict, JSON.stringify(shape)).toBe(VERDICT.UNVERIFIABLE);
+      expect(r.reason, JSON.stringify(shape)).toBe(UNVERIFIABLE_REASON.CLASS_UNPROBEABLE);
+    }
+    expect(applied({ resolvedObjects: ['stage_executions'] }).verdict).toBe(VERDICT.APPLIED);
+  });
+
+  it('a probe that resolved NOTHING cannot produce a chairman-facing DISAGREEMENT either', () => {
+    // The guard sat only on the AGREE path, so a probe that checked nothing still yielded
+    // NOT-APPLIED-BUT-COMPLETED — exit 1, chairman-facing, fabricated. Uninformative about
+    // agreement is equally uninformative about disagreement.
+    const r = classifyItem({
+      approval: { namesObjects: true, provenanceIndependent: true, declaresMoreThanArtifact: false },
+      artifact: { present: true },
+      live: { probed: true, matchesArtifact: false, missing: true, resolvedObjects: [] },
+    });
+    expect(r.verdict).toBe(VERDICT.UNVERIFIABLE);
+    expect(r.reason).toBe(UNVERIFIABLE_REASON.CLASS_UNPROBEABLE);
+  });
+});
+
+describe('the unconsumed-key detector', () => {
+  it('flags a candidate key with sole-reach and passes one already covered', async () => {
+    const m = await import('../../../lib/audits/chairman-apply-sweep.js');
+    const rows = [
+      { identifier: 'SD-A', metadata: { requires_chairman_apply: true, chairman_apply_note: 'x' } },
+      { identifier: 'SD-B', metadata: { chairman_gated_ddl: true } },
+    ];
+    const r = m.findUnconsumedKeys(rows, ['requires_chairman_apply'], {});
+    // chairman_apply_note rides on an SD already in the population -> no sole-reach, not a failure.
+    // chairman_gated_ddl reaches SD-B, which NO consumed arm reaches -> provably incomplete.
+    expect(r.ok).toBe(false);
+    const byKey = Object.fromEntries(r.findings.map((f) => [f.key, f]));
+    expect(byKey.chairman_gated_ddl.soleReach).toBe(1);
+    expect(byKey.chairman_apply_note.soleReach).toBe(0);
+  });
+
+  it('EXCLUDED_KEYS suppresses a key entirely — so an entry is a decision, not a filter', async () => {
+    const m = await import('../../../lib/audits/chairman-apply-sweep.js');
+    const rows = [{ identifier: 'SD-B', metadata: { chairman_gated_ddl: true } }];
+    expect(m.findUnconsumedKeys(rows, [], {}).ok).toBe(false);
+    expect(m.findUnconsumedKeys(rows, [], { chairman_gated_ddl: 'reason' }).ok).toBe(true);
+  });
+
+  it('requires the qualifier, not merely the word chairman', async () => {
+    const m = await import('../../../lib/audits/chairman-apply-sweep.js');
+    expect(m.isUnconsumedKeyCandidate('chairman_gated_ddl')).toBe(true);
+    expect(m.isUnconsumedKeyCandidate('chairman_note')).toBe(false);
+    expect(m.isUnconsumedKeyCandidate('may_require_ddl')).toBe(true);
+    expect(m.isUnconsumedKeyCandidate(null)).toBe(false);
   });
 });
