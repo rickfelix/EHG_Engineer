@@ -355,11 +355,24 @@ describe('the manifest hard-fails — a manifest coverage equals its membership'
     expect(r.ok).toBe(true);
   });
 
-  it('passes only when every member resolves AND every arm is seeded', () => {
+  it('a BARE ID LIST cannot satisfy the arm check — it is a control failure, not a pass', () => {
+    // This previously asserted ok:true for bare ids, pinning the silent identifier-only fallback
+    // as correct. A single `population.map(p => p.identifier)` at the call site would then have
+    // disabled the whole arm-aware upgrade with controls_ok true — the SEC-6 defect recurring
+    // inside the SEC-6 fix, with a test defending it.
     const r = checkManifest(
       [{ identifier: 'A', source_arm: 'arm_a' }, { identifier: 'B', source_arm: 'arm_b' }],
       ['A', 'B'], ARMS);
+    expect(r.ok).toBe(false);
+    expect(r.armsUnknown.map((m) => m.identifier)).toEqual(['A', 'B']);
+  });
+
+  it('passes only when every member resolves AND every arm is seeded AND arms are checkable', () => {
+    const r = checkManifest(
+      [{ identifier: 'A', source_arm: 'arm_a' }, { identifier: 'B', source_arm: 'arm_b' }],
+      [{ identifier: 'A', arms: ['arm_a'] }, { identifier: 'B', arms: ['arm_b'] }], ARMS);
     expect(r.ok).toBe(true);
+    expect(r.armsUnknown).toEqual([]);
   });
 
   it('pins the COMPLETE arm list — every arm by name, not just distinctness and a sample', () => {
@@ -370,6 +383,8 @@ describe('the manifest hard-fails — a manifest coverage equals its membership'
     expect([...POPULATION_ARMS].sort()).toEqual([
       'apply_authority',
       'apply_to_prod_requires_user_go',
+      'chairman_authorization',
+      'chairman_authorized',
       'chairman_enum_migration_authorization',
       'chairman_gate',
       'chairman_gated',
@@ -377,6 +392,7 @@ describe('the manifest hard-fails — a manifest coverage equals its membership'
       'chairman_gated_fence_20260726',
       'chairman_gated_migration',
       'chairman_gated_migration_possible',
+      'chairman_preauthorization',
       'completion_flag_index',
       'irreversible_exec_chairman_gated',
       'may_require_ddl',

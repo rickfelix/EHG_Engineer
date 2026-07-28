@@ -43,7 +43,8 @@ import {
   isQuickFixMember, isCompletionFlagMember, buildPopulation, addCompletionFlagArm, buildEvidence,
 } from '../../lib/audits/chairman-apply-collectors.js';
 
-dotenv.config();
+// quiet: dotenv writes a banner to STDOUT, which makes --json output unparseable.
+dotenv.config({ quiet: true });
 
 const METADATA_ARMS = POPULATION_ARMS.filter(
   (a) => a !== 'quick_fixes_freetext' && a !== 'completion_flag_index');
@@ -78,6 +79,9 @@ const MANIFEST = Object.freeze([
   { identifier: 'SD-FDBK-GEN-FIX-TRG-ENFORCE-001', source_arm: 'apply_to_prod_requires_user_go', note: '' },
   { identifier: 'SD-LEO-INFRA-CLEAN-CLONE-LAUNCH-001', source_arm: 'chairman_enum_migration_authorization', note: 'ALTER TYPE venture_origin_type ADD VALUE' },
   { identifier: 'SD-LEO-INFRA-ADAM-DURABLE-STANDING-001', source_arm: 'may_require_ddl', note: 'DRAFT status' },
+  { identifier: 'SD-LEO-INFRA-SOURCING-ENGINE-ACTIVATION-001', source_arm: 'chairman_authorized', note: 'additive migrations authorised via the governed apply path' },
+  { identifier: 'SD-LEO-INFRA-ADAM-DBCHANGE-APPLY-DELEGATION-001', source_arm: 'chairman_authorization', note: 'the CHARTER of the gate this audit examines' },
+  { identifier: 'SD-LEO-ORCH-ADAM-PLAN-KEEPER-001-D', source_arm: 'chairman_preauthorization', note: 'conditional pre-authorised flip' },
   { identifier: 'QF-20260719-281', source_arm: 'quick_fixes_freetext', note: 'TS-21: the arm must RESOLVE this, not merely accept the manifest shape' },
   { identifier: 'FEEDBACK-008c71b8-29df-48b1-9ded-ecdb464e5273', source_arm: 'completion_flag_index', note: 'unreachable from SD metadata by construction' },
 ]);
@@ -94,6 +98,7 @@ const BASELINE = Object.freeze({
   irreversible_exec_chairman_gated: 1, chairman_gated_fence_20260726: 1,
   chairman_gated_migration_possible: 1, apply_to_prod_requires_user_go: 1,
   chairman_enum_migration_authorization: 1, may_require_ddl: 2,
+  chairman_authorized: 10, chairman_authorization: 3, chairman_preauthorization: 1,
 });
 
 /**
@@ -148,6 +153,8 @@ async function main() {
     controlsOk = false;
     for (const m of manifest.missing) controlFailures.push(`manifest seed unreachable: ${m.identifier} (${m.source_arm})`);
     for (const a of manifest.unseededArms) controlFailures.push(`arm carries no manifest seed: ${a}`);
+    for (const u of manifest.armsUnknown) controlFailures.push(
+      `manifest seed ${u.identifier} arm claim UNCHECKABLE (caller passed no arms)`);
     for (const w of manifest.wrongArm) controlFailures.push(
       `manifest seed ${w.identifier} no longer reached via its arm ${w.source_arm} (observed: ${w.observed_arms.join(',')})`);
   }
@@ -166,6 +173,10 @@ async function main() {
     return {
       identifier: item.identifier, source: item.source, status: item.status,
       arms: item.arms, dispositions: item.dispositions,
+      // Stamped by buildPopulation via matchesAuthorityPrefix. Emitted here because a value
+      // computed and never read is the same dead control as a function never called — the fix
+      // for that finding had only relocated the deadness from uninvoked to unread.
+      chairman_only: item.chairmanOnly === true,
       verdict: result.verdict, reason: result.reason, inputs: result.inputs,
       approval_identifiers: evidence.approval.identifiers,
       artifact_path: evidence.artifact.path,
