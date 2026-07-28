@@ -35,6 +35,32 @@ describe('membership is key-presence, with value as a disposition', () => {
     expect(membershipOf({ other: true }, 'requires_chairman_apply')).toBeNull();
     expect(membershipOf({ requires_chairman_apply: false }, 'requires_chairman_apply')).not.toBeNull();
   });
+
+  it('an UNRECOGNISED value shape is still a MEMBER — key-presence means key-presence', () => {
+    // Returning null for unrecognised shapes survived mutation, and null EXCLUDES the item from the
+    // population entirely. That silently contradicts the stated doctrine for every odd value shape
+    // a human might type: null, a number, an array, an empty string. Membership is decided by the
+    // KEY; the value only ever picks a disposition.
+    for (const value of [null, 1, ['x'], '', {}]) {
+      const m = membershipOf({ chairman_gated: value }, 'chairman_gated');
+      expect(m, `value ${JSON.stringify(value)} must remain a member`).not.toBeNull();
+      expect(m.member).toBe(true);
+    }
+  });
+
+  it('survives null / non-object metadata rather than throwing', () => {
+    // quick_fixes has NO metadata column at all — null metadata is the documented common case for
+    // 38 items, and no fixture passed it. Dropping the guard throws, which would abort the whole
+    // sweep partway and produce a partial population with no control able to notice.
+    expect(membershipOf(null, 'chairman_gated')).toBeNull();
+    expect(membershipOf(undefined, 'chairman_gated')).toBeNull();
+    expect(approvalTextOf(null)).toBe('');
+    expect(approvalTextOf(undefined)).toBe('');
+    expect(namesObjects(undefined)).toEqual({ named: false, identifiers: [] });
+    expect(namesObjects(null).named).toBe(false);
+    expect(matchesAuthorityPrefix(undefined)).toBe(false);
+    expect(matchesAuthorityPrefix(null)).toBe(false);
+  });
 });
 
 describe('apply_authority is a PREFIX match, never an equality', () => {
@@ -76,6 +102,34 @@ describe('AC-12 — the pinned object-naming predicate (TS-29)', () => {
     // The conjunction needs a fixture that isolates each half.
     expect(namesObjects('see the stage_executions dashboard for context').named).toBe(false);
     expect(namesObjects('ALTER TABLE stage_executions ADD COLUMN x').named).toBe(true);
+  });
+
+  it('pins EVERY DDL verb, not just alter — the access-control verbs are the point', () => {
+    // The conjunct's PRESENCE was pinned; its CONTENTS were not. An independent sweep showed the
+    // verb list could be narrowed to alter|create|drop, or to `alter` alone, with the suite green.
+    // Severity is higher than it looks: GRANT/REVOKE/ENABLE RLS are precisely the classes this
+    // module's own docstring says the file-level verifier cannot see and which must be probed
+    // directly. Silently losing those verbs drops the class the audit was built to cover.
+    for (const verb of ['ALTER', 'CREATE', 'DROP', 'GRANT', 'REVOKE', 'ENABLE', 'ADD']) {
+      const r = namesObjects(`${verb} on stage_executions`);
+      expect(r.named, `verb ${verb} must be recognised`).toBe(true);
+    }
+    // Negative control: a non-DDL verb with the same identifier must NOT qualify.
+    expect(namesObjects('SELECT from stage_executions').named).toBe(false);
+  });
+
+  it('does not fuse escape characters into the identifier it extracts', () => {
+    // JSON.stringify on multi-line approval prose emits a literal backslash-n, so the identifier
+    // scanner read `stage_executions` as `nstage_executions`. No verdict flips — `named` stays true
+    // — which is why it survived mutation, but the PROBE TARGET is corrupted, and a probe target is
+    // the predicate's only purpose. A follow-on prober would look up an object that does not exist
+    // and report it MISSING: a fabricated finding that reads exactly like a real one.
+    const r = namesObjects(approvalTextOf({
+      chairman_apply_note: { line1: 'ALTER TABLE', line2: '\nstage_executions ADD COLUMN x' },
+    }));
+    expect(r.named).toBe(true);
+    expect(r.identifiers).toContain('stage_executions');
+    expect(r.identifiers).not.toContain('nstage_executions');
   });
 
   it('reads APPROVAL-BEARING fields only, never the whole metadata blob', () => {
@@ -208,11 +262,38 @@ describe('THE ASYMMETRY — APPLIED requires three inputs (TS-24)', () => {
       artifact: { present: false }, secondaryArtifactSearchDone: true, secondaryArtifactFound: false,
     });
     expect(searched.verdict).toBe(VERDICT.NEVER_BOUND);
+
+    // THE THIRD STATE, previously untested despite this test's own title claiming the distinction:
+    // the search RAN and DID find an artifact elsewhere (PRD, retrospective, commit text). That is
+    // not NEVER-BOUND — the control was bound, just not via metadata. Dropping the
+    // secondaryArtifactFound conjunct survived mutation because only two of three states existed.
+    const searchedAndFound = classifyItem({
+      artifact: { present: false }, secondaryArtifactSearchDone: true, secondaryArtifactFound: true,
+    });
+    expect(searchedAndFound.verdict).toBe(VERDICT.UNVERIFIABLE);
+    expect(searchedAndFound.reason).toBe(UNVERIFIABLE_REASON.NO_ARTIFACT);
   });
 
   it('discloses per-row which inputs were available, so a two-input row cannot read as triangulated', () => {
     const r = classifyItem(agreeing(false));
     expect(r.inputs).toEqual({ approval: false, artifact: true, live: true });
+  });
+
+  it('discloses artifact:false and live:false HONESTLY — not hardcoded true', () => {
+    // Hardcoding either field survived mutation, because the only test asserting `inputs` used a
+    // row where artifact AND live were both true and approval was the sole varying field. ~63% of
+    // the live population has no artifact, so most report rows would have falsely read as
+    // triangulated — the exact misreading the disclosure exists to prevent. A field is only pinned
+    // if some fixture exercises it in BOTH states.
+    const noArtifact = classifyItem({ artifact: { present: false } });
+    expect(noArtifact.inputs).toEqual({ approval: false, artifact: false, live: false });
+
+    const artifactNoProbe = classifyItem({
+      approval: { namesObjects: true, provenanceIndependent: true },
+      artifact: { present: true },
+      live: { probed: false },
+    });
+    expect(artifactNoProbe.inputs).toEqual({ approval: true, artifact: true, live: false });
   });
 });
 
@@ -242,10 +323,22 @@ describe('the manifest hard-fails — a manifest coverage equals its membership'
     expect(r.ok).toBe(true);
   });
 
-  it('every declared population arm is a real, distinct arm', () => {
+  it('pins the COMPLETE arm list — every arm by name, not just distinctness and a sample', () => {
+    // An independent mutation sweep showed SIX OF EIGHT arms could be deleted from POPULATION_ARMS
+    // with the whole suite still green, because this test previously pinned only distinctness,
+    // size === length, and two named arms. Deleting requires_chairman_apply alone loses 28 members.
+    // Distinctness and a sample are not coverage of a list — the list itself must be the assertion.
+    expect([...POPULATION_ARMS].sort()).toEqual([
+      'apply_authority',
+      'chairman_gate',
+      'chairman_gated',
+      'chairman_gated_migration',
+      'completion_flag_index',
+      'quick_fixes_freetext',
+      'requires_chairman_apply',
+      'requires_chairman_apply_note',
+    ]);
     expect(new Set(POPULATION_ARMS).size).toBe(POPULATION_ARMS.length);
-    expect(POPULATION_ARMS).toContain('quick_fixes_freetext');
-    expect(POPULATION_ARMS).toContain('completion_flag_index');
   });
 });
 
@@ -264,6 +357,14 @@ describe('baselines are DIRECTIONAL — a count may only grow', () => {
 
   it('accepts growth', () => {
     expect(checkBaselines({ arm_a: 30 }, { arm_a: 29 }).ok).toBe(true);
+  });
+
+  it('accepts EQUALITY — the steady state of every unchanged run', () => {
+    // `got < floor` -> `got <= floor` survived mutation because the suite pinned shrink (28 v 29)
+    // and growth (30 v 29) but never equality, which is what an unchanged population returns every
+    // single run. It fails CLOSED, so it would not hide anything — it would make the control cry
+    // wolf on every invocation until someone silenced it, which is how a real control gets removed.
+    expect(checkBaselines({ arm_a: 29 }, { arm_a: 29 }).ok).toBe(true);
   });
 });
 
