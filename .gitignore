@@ -433,3 +433,5 @@ scripts/harness/.spine-verify-first-runs/
 # SD-LEO-INFRA-JAMMED-GIT-INDEX-001: per-tick carry-over state for the jammed-index detector.
 # Runtime state, not detector OUTPUT (the output is the verdict + exit code).
 .claude/index-jam-detector-state.json
+# SD-LEO-FEAT-FLEET-SESSION-LIFECYCLE-001 FR-5c: runtime parentage log, never committed
+.claude/console-parentage.jsonl

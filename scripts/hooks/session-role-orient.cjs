@@ -18,8 +18,8 @@ const COORDINATOR = [
   '[ROLE] Drain worker signals via /coordinator inbox (filtered by payload->signal_type IS NOT NULL).',
   '[ROLE] 3+ matching signals within 60min auto-promote to feedback (category=harness_backlog) → SD pipeline.'
 ];
-const workerLines = (callsign, coordShort) => [
-  `[ROLE] WORKER (${callsign ? `callsign: ${callsign}` : 'no callsign'}) under coordinator session=${coordShort}.`,
+const workerLines = (callsign, coordSessionId) => [
+  `[ROLE] WORKER (${callsign ? `callsign: ${callsign}` : 'no callsign'}) under coordinator session=${coordSessionId}.`,
   '[ROLE] /signal <type> "<body>" when ANY: recurrence (gate 2×, RCA 2×, tool 3×) | about to bypass | spec/PRD friction | harness-bug recognized | memory-trend match.',
   '[ROLE] Types: stuck | need-sweep | prd-ambiguous | gate-bug | spec-conflict | harness-bug | feedback | other. Severity --low|medium|high|critical (critical bypasses 3× threshold).',
   '[ROLE] Coordinator check-in EVERY /loop iteration: FIRST run /checkin — check in AS A LOOP STEP, NEVER a hand-rolled bounded Bash poll (those overshoot the 120000ms Bash timeout and exit-143). /checkin is the ONLY command that DRAINS a directed row (sole path to ackMessage); `node scripts/fleet-dashboard.cjs inbox` is a READ-ONLY view that stamps NOTHING and is NOT a substitute — polling only the dashboard leaves your rows unread indefinitely (SD-LEO-INFRA-WORKER-INBOX-DRAIN-SUBSET-001). Work any WORK_ASSIGNMENT/routing before the open queue, ACK any comms-check in one line (/signal feedback "comms-check ack"). An unread coordinator→worker message is a silent break. Announce /signal feedback "online" on loop start, FLEET-RETRO on loop stop.',
@@ -79,7 +79,18 @@ async function findActiveCoord() {
 function decide(sessionId, meta, coordFile) {
   if (meta?.is_coordinator) return COORDINATOR;
   if (coordFile?.session_id === sessionId) return COORDINATOR;
-  if (coordFile?.session_id) return workerLines(meta?.callsign, coordFile.session_id.slice(0, 8));
+  // SD-LEO-INFRA-SILENT-TRUNCATION-ONE-001 FR-1: this used to pass coordFile.session_id.slice(0, 8).
+  // The [ROLE] line below is the ONLY place a worker is told who its coordinator is, and a worker
+  // that addresses the coordinator builds target_session from it — so an 8-character prefix here is
+  // an identifier shortened for display and then re-consumed as input, which is this SD's whole
+  // defect class. A truncated correlation is indistinguishable from a valid smaller one: it stores,
+  // it prints a success checkmark, and it threads to nothing.
+  //
+  // Full id only, deliberately NOT `full (short: abcd1234)`. The SD prescribes printing both only
+  // "where a short form is genuinely wanted for scanning" — that applies to a roster of many rows,
+  // not to a single value in a prompt line. Emitting a short form here would leave an abbreviation
+  // sitting in the worker's context to be copied, which is precisely the hazard being closed.
+  if (coordFile?.session_id) return workerLines(meta?.callsign, coordFile.session_id);
   return SOLO;
 }
 function main() {

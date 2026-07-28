@@ -42,6 +42,9 @@ import {
 
 // Import state management
 import { loadState, dashboardState } from './state.js';
+// QF-20260725-096: retired-route matchers, kept in their own side-effect-free module so the scope
+// pins can import the real pattern without booting the server.
+import { RETIRED_SESSION_VIEW_RE } from './retired-routes.js';
 
 // Import WebSocket handler
 import { initializeWebSocket, broadcastUpdate } from './websocket.js';
@@ -174,12 +177,40 @@ app.use(express.json());
 // A raw RegExp rather than a string pattern: this is Express 5 (path-to-regexp v8), where the
 // old '*' string wildcard no longer means what it did in v4.
 //
+// *** BYPASS FIX (same QF, second pass). THE FIRST VERSION OF THIS MATCHER WAS CIRCUMVENTABLE. ***
+// It was `/^\/fleet-ui\/session-view\.[^/]*$/` — case-SENSITIVE and anchored on exactly one slash.
+// express.static resolves through a case-INSENSITIVE filesystem on this host, so it happily served
+// every one of these while the matcher never fired (all measured returning 200 against the running
+// server):
+//     /fleet-ui/Session-View.html   /fleet-ui/SESSION-VIEW.HTML   /fleet-ui/Session-View.js
+//     /FLEET-UI/session-view.html   /Fleet-UI/session-view.html
+//     /fleet-ui//session-view.html  /fleet-ui///session-view.html
+// So `i` for the case axis, and `\/+` for the repeated-slash axis. A guard that the server routes
+// around is not a guard, and it fails SILENTLY — the page kept serving and nothing recorded it.
+//
+// WORSE, AND THE REASON THIS IS CALLED OUT AT LENGTH: the QF-20260727-484 hit-logging below lives
+// INSIDE this handler, so a bypassing request logged NOTHING. The instrument inherited the guard's
+// blind spot because it was built into the guard. Seven days of that silence would have been read
+// as "nobody wanted the page" when the truth was "the page was still reachable four ways".
+//
+// HOW IT SURVIVED REVIEW: the original change shipped with a regex "proof" against nine paths —
+// every one of them lowercase and single-slash, because they were written from the same mental
+// model as the pattern. A negative control only controls for what you thought to vary. The variant
+// list is now pinned as a test (tests/unit/server/fleet-ui-410-scope.test.js) so the axes are
+// asserted rather than imagined.
+//
 // 410 Gone, deliberately, not 404: it asserts the resource was real and is intentionally
 // withdrawn, so a hit shows up as a decision rather than a broken link. That matters because
 // the disposition depends on watching for hits during the soak — silence is the evidence.
 // DELETES NOTHING. server/public/fleet-ui/session-view.js stays on disk (its unit test still
 // imports it), and rollback is removing this block — one commit, no file resurrection.
-app.all(/^\/fleet-ui\/session-view\.[^/]*$/, (req, res) => {
+//
+// The pattern lives in server/retired-routes.js so the scope pins can assert THIS regex without
+// booting the server — startServer() runs unconditionally on import of this file, so a test that
+// imported from here would open DB connections and bind a port just to check a regex. A test that
+// re-declares the pattern instead would prove only that its own copy behaves, which is exactly how
+// the circumventable first version passed review.
+app.all(RETIRED_SESSION_VIEW_RE, (req, res) => {
   // QF-20260727-484 — WITHOUT THIS LINE THE SOAK CANNOT PRODUCE EVIDENCE. The retirement above
   // is dispositioned by a seven-day soak in which SILENCE IS THE EVIDENCE, but this server has no
   // request logging of any kind (no morgan — it is not even a dependency), so a 410 hit wrote

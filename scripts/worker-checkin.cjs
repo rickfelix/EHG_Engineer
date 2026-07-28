@@ -38,6 +38,12 @@ const { getCommsActivitySignals, computeAdaptiveCadence } = require('../lib/coor
 // coordinator's dispatch code uses (target-session validation; no-op for non-WORK_ASSIGNMENT rows).
 const { insertCoordinationRow } = require('../lib/coordinator/dispatch.cjs');
 const ws = require('../lib/fleet/worker-status.cjs');
+// SD-LEO-INFRA-WORK-ASSIGNMENT-UNREADABLE-001 (FR-1/TR-1): the SHARED target registry. Imported
+// as a LEAF — it requires neither this file nor dispatch.cjs. That matters: this file already
+// top-level-requires dispatch.cjs above, so reaching the resolver *through* dispatch would form
+// a cycle, and Node resolves a circular top-level require to `undefined` rather than throwing —
+// a guard built on it would silently never run. Pinned by tests/unit/fleet/assignment-target.test.js.
+const { resolveAssignmentTargetKey } = require('../lib/fleet/assignment-target.cjs');
 const { stampClaim } = require('../lib/fleet/claim-stamp.cjs');
 // SD-FDBK-FIX-SELF-ONLY-AUTHORIZATION-001: acquisition-time guard so a propose-only
 // (non_fleet/role=adam) session never self-claims a build SD — the shared predicate
@@ -294,32 +300,23 @@ const SD_KEY_RE = /SD-[A-Z0-9]+(?:-[A-Z0-9]+)+/;
  * structured payload first, then the subject/body text. Returns null if none.
  * Exported for unit testing.
  */
+// SD-LEO-INFRA-WORK-ASSIGNMENT-UNREADABLE-001 (FR-1): this function used to own its own field
+// list, and that list grew by accretion — QF-20260704-602 added payload.qf_id here, then
+// QF-20260707-650 added payload.qf here, each after a dispatch went silently unclaimed. A third
+// shape then arrived in the TOP-LEVEL target_sd column, which this side could not see at all
+// (it was not even projected by getMessagesForSession — see FR-4 there). Every dispatch-side
+// guard reads that column, so those rows were valid to every writer check and invisible to
+// every reader: 10 of 46 inert-and-unacked assignments, measured live.
+//
+// The field list is now owned by lib/fleet/assignment-target.cjs and shared with the dispatch
+// side, so the two cannot diverge again. The 'worker' PROFILE there reproduces this function's
+// historical precedence exactly (assigned_sd -> sd_key -> qf_id -> qf -> available_sds -> text
+// -> current_sd) and appends the newly-taught locations LAST, which is what makes adoption
+// provably additive. Measured over all 121 live WORK_ASSIGNMENTs: 26 rows gained a target that
+// previously resolved to nothing, 13 multi-key rows changed from a guess to an explicit refusal
+// (FR-5), and ZERO rows changed from one key to a different key.
 function extractSdFromAssignment(msg) {
-  if (!msg) return null;
-  const p = msg.payload || {};
-  if (typeof p.assigned_sd === 'string' && p.assigned_sd) return p.assigned_sd;
-  if (typeof p.sd_key === 'string' && p.sd_key) return p.sd_key;
-  // QF-20260704-602: some dispatch paths emit a QF-specific directed assignment as
-  // payload.qf_id instead of sd_key/assigned_sd (confirmed live on QF-20260704-726's
-  // dispatch history: 4 of 6 WORK_ASSIGNMENTs carried ONLY qf_id, so this function
-  // returned null and the entire directed-assignment branch below was silently
-  // skipped -- no ack, no claim attempt -- until a later redispatch happened to use
-  // sd_key instead). claim_sd itself is already QF-aware (p_sd_id LIKE 'QF-%'); the
-  // gap was purely in this extraction step.
-  if (typeof p.qf_id === 'string' && p.qf_id) return p.qf_id;
-  // QF-20260707-650: same bug class, different field-name variant. A directed_dispatch payload
-  // sometimes carries the QF key as payload.qf instead of qf_id (confirmed live on
-  // QF-20260705-893's redispatch, session_coordination row 2a3cef4b) -- silently skipped this
-  // extraction, no ack, no claim attempt, until manually diagnosed.
-  if (typeof p.qf === 'string' && p.qf) return p.qf;
-  if (Array.isArray(p.available_sds) && p.available_sds.length) return p.available_sds[0];
-  // current_sd is what the worker is ALREADY on — only use it as a last resort
-  // when nothing else names a target (an assignment can reference the same SD).
-  const text = `${msg.subject || ''} ${msg.body || ''} ${p.body || ''}`;
-  const m = text.match(SD_KEY_RE);
-  if (m) return m[0];
-  if (typeof p.current_sd === 'string' && p.current_sd) return p.current_sd;
-  return null;
+  return resolveAssignmentTargetKey(msg, { profile: 'worker' });
 }
 
 // SD-FDBK-FIX-WORKER-CHECK-SURFACES-001 (adversarial-review finding #2): the busy-worker resume
@@ -333,12 +330,12 @@ function extractSdFromAssignment(msg) {
 // (|| row.target_sd, which getMessagesForSession does not project) — mirror that: directed iff a
 // structured assigned_sd/sd_key is present. The generic sweep advisory is consumed elsewhere (the
 // idle self-claim path / seam-2's neutral "Available SDs" render), never as a directed assignment.
+// SD-LEO-INFRA-WORK-ASSIGNMENT-UNREADABLE-001 (FR-1 / TR-2): delegates to the SAME shared
+// registry as extractSdFromAssignment but via the 'directed' PROFILE, which consults ONLY the
+// structured directed locations. The narrowness above is the whole point and is preserved
+// deliberately — sharing the field registry must not flatten the two into one precedence.
 function extractDirectedSd(msg) {
-  if (!msg) return null;
-  const p = msg.payload || {};
-  if (typeof p.assigned_sd === 'string' && p.assigned_sd) return p.assigned_sd;
-  if (typeof p.sd_key === 'string' && p.sd_key) return p.sd_key;
-  return null;
+  return resolveAssignmentTargetKey(msg, { profile: 'directed' });
 }
 
 // QF-20260705-914: an INFORMATIONAL sweep completion nudge ("Next work available when X
@@ -1291,6 +1288,21 @@ async function selfHealStaleClaim(sb, sessionId, sdKey) {
       .update({ is_working_on: false, active_session_id: null, claiming_session_id: null })
       .eq('sd_key', sdKey)
       .eq('claiming_session_id', sessionId); // CAS: only while the SD is still ours
+  } catch { /* fail-open */ }
+  // SD-LEO-FEAT-FLEET-SESSION-LIFECYCLE-001 / FR-1b slice 5, behind
+  // LEO_RELEASE_WORKITEM_RESET (default OFF). A genuine hand-back: this session is abandoning
+  // a stale pointer, so the item belongs back in the pool.
+  // sdKey here CAN be a quick-fix — self_claimed_qf writes a QF id into claude_sessions.sd_key
+  // — and the QF is exactly the case that needs it: the SDv2 update above no-ops for a QF (no
+  // such row), so without this the QF stays at status='in_progress' with no claimant, invisible
+  // to the very open-QF picker this check-in is about to run. Fail-open, matching both clears
+  // above: a failed hand-back must never block self-claim.
+  try {
+    const { releaseWorkItemOnSessionEnd, isReleaseWorkItemResetEnabled } =
+      await import('../lib/fleet/release-work-item.mjs');
+    if (isReleaseWorkItemResetEnabled()) {
+      await releaseWorkItemOnSessionEnd(sb, sdKey, 'checkin_self_heal_stale_claim');
+    }
   } catch { /* fail-open */ }
 }
 

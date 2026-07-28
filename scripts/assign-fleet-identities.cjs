@@ -392,6 +392,24 @@ const ANSI = {
   reset: '\x1b[0m', bold: '\x1b[1m', dim: '\x1b[2m'
 };
 
+/**
+ * SD-LEO-INFRA-SILENT-TRUNCATION-ONE-001 FR-1 — the Fleet Identity Roster session column.
+ *
+ * These rows used to print `session_id.substring(0, 12) + '...'` and NEVER printed the full id
+ * anywhere in the same output. That is the measured producer of a real incident: the coordinator
+ * read a roster row, completed the remaining hex BY GUESSING without noticing it had guessed, and
+ * wrote a fabricated identifier into a dispatch. It cost nothing only because the write-side choke
+ * happened to fail loud — a well-formed prefix would have passed silently, which is exactly what
+ * happened twice elsewhere with an 8-character correlation id.
+ *
+ * A UUID column is fixed-width, so printing it in full keeps the table scannable and removes the
+ * abbreviation entirely — there is no short form left in the output for anyone to copy. That is
+ * deliberately NOT `full (short: abcd1234)`: the SD prescribes printing both only where a short
+ * form is genuinely wanted, and re-emitting an abbreviation beside the full value would reinstate
+ * the copyable hazard this fix exists to remove.
+ */
+const sessionCol = (sessionId) => String(sessionId || '(unknown)');
+
 async function main() {
   require('dotenv').config();
   const fs = require('fs');
@@ -520,7 +538,7 @@ async function main() {
         .eq('session_id', worker.session_id);
 
       if (rankErr) {
-        console.error(`  Failed to refresh tier_rank for ${worker.session_id.substring(0, 12)}: ${rankErr.message}`);
+        console.error(`  Failed to refresh tier_rank for ${sessionCol(worker.session_id)}: ${rankErr.message}`);
       } else {
         worker.metadata = metadata; // keep in-memory copy fresh for this run's banding decisions
       }
@@ -572,7 +590,7 @@ async function main() {
   for (const w of demoted) {
     const dupCallsign = w.metadata?.fleet_identity?.callsign;
     const dupCount = assignedRaw.filter(a => a.metadata?.fleet_identity?.callsign === dupCallsign).length;
-    console.log(`${ANSI.dim}↻ collision: ${dupCallsign} was on ${dupCount} sessions, reassigning ${w.session_id.substring(0, 12)}...${ANSI.reset}`);
+    console.log(`${ANSI.dim}↻ collision: ${dupCallsign} was on ${dupCount} sessions, reassigning ${sessionCol(w.session_id)}${ANSI.reset}`);
     needsAssignment.push(w);
   }
 
@@ -645,7 +663,7 @@ async function main() {
       const id = w.metadata.fleet_identity;
       const ansi = ANSI[id.color] || '';
       const sdLabel = w.sd_key || 'idle';
-      console.log(`  ${ansi}\u25cf${ANSI.reset} ${id.callsign.padEnd(10)} ${ansi}${id.color.padEnd(8)}${ANSI.reset} ${w.session_id.substring(0, 12)}...  ${sdLabel}`);
+      console.log(`  ${ansi}\u25cf${ANSI.reset} ${id.callsign.padEnd(10)} ${ansi}${id.color.padEnd(8)}${ANSI.reset} ${sessionCol(w.session_id)}  ${sdLabel}`);
     }
     console.log('');
     return;
@@ -671,7 +689,7 @@ async function main() {
     const id = w.metadata.fleet_identity;
     const ansi = ANSI[id.color] || '';
     const sdLabel = w.sd_key || 'idle';
-    console.log(`  ${ansi}\u25cf${ANSI.reset} ${id.callsign.padEnd(10)} ${ansi}${id.color.padEnd(8)}${ANSI.reset} ${w.session_id.substring(0, 12)}...  ${sdLabel} ${ANSI.dim}(existing)${ANSI.reset}`);
+    console.log(`  ${ansi}\u25cf${ANSI.reset} ${id.callsign.padEnd(10)} ${ansi}${id.color.padEnd(8)}${ANSI.reset} ${sessionCol(w.session_id)}  ${sdLabel} ${ANSI.dim}(existing)${ANSI.reset}`);
   }
 
   // Assign new workers
@@ -709,7 +727,7 @@ async function main() {
       .eq('session_id', worker.session_id);
 
     if (updateErr) {
-      console.error(`  Failed to update metadata for ${worker.session_id.substring(0, 12)}: ${updateErr.message}`);
+      console.error(`  Failed to update metadata for ${sessionCol(worker.session_id)}: ${updateErr.message}`);
       continue;
     }
 
@@ -729,12 +747,12 @@ async function main() {
       });
 
     if (msgErr) {
-      console.error(`  Failed to send identity to ${worker.session_id.substring(0, 12)}: ${msgErr.message}`);
+      console.error(`  Failed to send identity to ${sessionCol(worker.session_id)}: ${msgErr.message}`);
       continue;
     }
 
     const ansi = ANSI[color] || '';
-    console.log(`  ${ansi}\u25cf${ANSI.reset} ${callsign.padEnd(10)} ${ansi}${color.padEnd(8)}${ANSI.reset} ${worker.session_id.substring(0, 12)}...  ${sdLabel} ${ANSI.bold}(NEW)${ANSI.reset}`);
+    console.log(`  ${ansi}\u25cf${ANSI.reset} ${callsign.padEnd(10)} ${ansi}${color.padEnd(8)}${ANSI.reset} ${sessionCol(worker.session_id)}  ${sdLabel} ${ANSI.bold}(NEW)${ANSI.reset}`);
     newCount++;
   }
 

@@ -340,17 +340,21 @@ async function cleanupWorktreeByPath(wtPath, options = {}) {
     return { cleaned: false, reason: 'db_error_fail_safe', error: err.message, ...archive, mainRepoPath, workKey: sdKey };
   }
   if (claim) {
-    const archive = archiveWorktree(wtPath, sdKey);
+    // SD-LEO-INFRA-WORKTREE-LIFECYCLE-FAILS-001 (FR-1): a branch whose whole purpose is to
+    // protect a LIVE holder must not move that holder's directory. archiveWorktree() is an
+    // fs.renameSync (:92) — a MOVE — so calling it here relocated a worktree the holder was
+    // standing in (witnessed: ENOENT on the holder's very next command) while this return
+    // told the caller the worktree had been 'protected'. Report the refusal, mutate nothing.
     const blockedEntry = {
       event: 'worktree.cleanup_blocked_by_claim',
       wtPath,
       sdKey,
       claim,
-      archivePath: archive.archivePath,
+      archived: false,
       timestamp: new Date().toISOString()
     };
     console.warn(JSON.stringify(blockedEntry));
-    return { cleaned: false, reason: 'active_claim_protect', claim, ...archive, mainRepoPath, workKey: sdKey };
+    return { cleaned: false, reason: 'active_claim_protect', claim, archived: false, mainRepoPath, workKey: sdKey };
   }
 
   // SD-MAN-INFRA-WORKTREE-CODE-LOSS-001 (FR-2): Block cleanup if unpushed commits
@@ -370,10 +374,44 @@ async function cleanupWorktreeByPath(wtPath, options = {}) {
     return { cleaned: false, reason: gitRemove.reason, marked: marker.written, mainRepoPath, workKey: sdKey };
   }
   if (!gitRemove.ok && fs.existsSync(wtPath)) {
-    safeRecursiveRm(wtPath);
-    execSync('git worktree prune', { cwd: mainRepoPath, stdio: 'pipe' });
+    // SD-LEO-INFRA-WORKTREE-LIFECYCLE-FAILS-001 (FR-4): this fallback previously had NO
+    // try/catch, so a locked file made safeRecursiveRm throw an uncaught EPERM instead of
+    // returning a structured refusal — and `git worktree prune` ran unconditionally on the
+    // next line without ever checking the directory actually went away.
+    //
+    // THE HUSK: `git worktree remove --force` deregisters from git before/independently of a
+    // successful directory delete (reproduced live: a foreign process resident in the worktree
+    // makes the delete fail "Permission denied" while the registration is ALREADY gone). The
+    // leftover directory is invisible to every git-based sweep. It does NOT consume a quota
+    // slot — countActiveWorktrees counts git REGISTRATIONS (lib/worktree-quota.js:174-176), so
+    // the harm is wasted disk and an operator reading .worktrees/ that cannot be trusted.
+    // Surface it explicitly rather than letting it disappear.
+    try {
+      safeRecursiveRm(wtPath);
+    } catch (err) {
+      const husk = fs.existsSync(wtPath);
+      console.warn(JSON.stringify({
+        event: husk ? 'worktree.husk_detected' : 'worktree.cleanup_rm_failed',
+        wtPath,
+        sdKey,
+        husk,
+        error: err?.message || String(err),
+        timestamp: new Date().toISOString()
+      }));
+      return {
+        cleaned: false,
+        reason: husk ? 'husk_directory_remains' : 'rm_failed',
+        husk,
+        error: err?.message || String(err),
+        mainRepoPath,
+        workKey: sdKey
+      };
+    }
+    try {
+      execSync('git worktree prune', { cwd: mainRepoPath, stdio: 'pipe' });
+    } catch { /* best effort — the directory is already gone, which is the outcome that matters */ }
   }
-  return { cleaned: true, mainRepoPath, workKey: sdKey };
+  return { cleaned: true, archived: false, mainRepoPath, workKey: sdKey };
 }
 
 /**

@@ -258,7 +258,13 @@ describe('cleanupWorktreeByPath — claim-protect integration', () => {
   beforeEach(() => { env = setupTmpRepo(); });
   afterEach(() => cleanupTmp(env));
 
-  it('archives instead of deletes when active claim matches', async () => {
+  // SD-LEO-INFRA-WORKTREE-LIFECYCLE-FAILS-001 (FR-1): this assertion is INVERTED on purpose.
+  // It previously pinned that an active-claim protect MOVED the holder's directory to _archive
+  // (fs.existsSync(wtPath) === false). That is the defect: the holder is alive and standing in
+  // that directory, so relocating it produced ENOENT on the holder's next command while the
+  // return value claimed the worktree was 'protected'. A branch that protects a live holder
+  // must leave the holder's directory exactly where it is.
+  it('does NOT touch the worktree when an active claim matches (protect means no mutation)', async () => {
     const sb = mockSupabase({
       data: [{
         session_id: 'sess-A',
@@ -273,11 +279,13 @@ describe('cleanupWorktreeByPath — claim-protect integration', () => {
     expect(result.cleaned).toBe(false);
     expect(result.reason).toBe('active_claim_protect');
     expect(result.claim?.session_id).toBe('sess-A');
-    // archive succeeded → original wtPath no longer present
-    expect(fs.existsSync(env.wtPath)).toBe(false);
-    // archive should exist under .worktrees/_archive
+    // The live holder's worktree MUST still be where it was.
+    expect(fs.existsSync(env.wtPath)).toBe(true);
+    // ...and nothing may have been archived on this path.
+    expect(result.archived).toBe(false);
+    expect(result.archivePath).toBeUndefined();
     const archiveDir = path.join(env.main, '.worktrees', '_archive');
-    expect(fs.existsSync(archiveDir)).toBe(true);
+    expect(fs.existsSync(archiveDir)).toBe(false);
   });
 
   it('proceeds with cleanup when no active claim matches', async () => {
@@ -301,6 +309,13 @@ describe('cleanupWorktreeByPath — claim-protect integration', () => {
     expect(fs.existsSync(env.wtPath)).toBe(false);
     const archiveDir = path.join(env.main, '.worktrees', '_archive');
     expect(fs.existsSync(archiveDir)).toBe(true);
+    // SD-LEO-INFRA-WORKTREE-LIFECYCLE-FAILS-001 (FR-2): archiving here is still correct
+    // (unknown DB state, work may be uncommitted) — but the RETURN must say the directory
+    // moved. A caller that sees only {cleaned:false} would reasonably assume it was left
+    // alone, which is exactly the contradiction this SD exists to remove.
+    expect(result.archived).toBe(true);
+    expect(result.archivePath).toBeTruthy();
+    expect(fs.existsSync(result.archivePath)).toBe(true);
   });
 });
 

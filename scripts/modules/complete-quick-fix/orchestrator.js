@@ -58,6 +58,32 @@ dotenv.config({ path: path.resolve(__dirname, '../../../.env') });
  * @param {{ qf?:object, prUrl:string, mergeSha?:string|null, nowIso:string }} args
  * @returns {object} the UPDATE payload
  */
+/**
+ * SD-LEO-INFRA-COMPLETION-EVIDENCE-RUNTIME-001 FR-2 — pull the WITNESS NAME out of a
+ * --scope-accepted value so verified_by holds an identity rather than a paragraph.
+ *
+ * verified_by is TEXT and every existing writer puts a short identity in it ('EXEC',
+ * 'ORPHAN_REAPER', 'FORCE_COMPLETE'). --scope-accepted is written as "<who> — <why>", where the
+ * why can run to hundreds of words. Storing the whole attestation would make the column unreadable
+ * at a glance, which defeats the point: FR-2 exists so a thin stamp's witness is VISIBLE in the
+ * row, not so the row carries more prose. The full attestation still lands in verification_notes.
+ *
+ * Falls back to the trimmed whole string when there is no separator, and caps length so a caller
+ * who ignores the convention still yields something readable rather than a wall of text.
+ * @param {string|null} scopeAcceptedBy
+ * @returns {string|null}
+ */
+export function witnessNameFrom(scopeAcceptedBy) {
+  if (!scopeAcceptedBy || typeof scopeAcceptedBy !== 'string') return null;
+  const trimmed = scopeAcceptedBy.trim();
+  if (!trimmed) return null;
+  // em-dash is the documented convention; hyphen-with-spaces accepted so a caller who cannot type
+  // an em-dash is not silently degraded to storing the entire attestation.
+  const head = trimmed.split(/\s+(?:—|--|-)\s+/)[0].trim();
+  const name = head || trimmed;
+  return name.length > 120 ? `${name.slice(0, 117)}...` : name;
+}
+
 export function buildMergedReconcileUpdate({ qf = {}, prUrl, mergeSha = null, nowIso, scopeAcceptedBy = null }) {
   // QF-20260725-691: a merged PR witnesses that CODE LANDED. Terminal `completed` asserts that
   // the QF's SCOPE WAS SATISFIED. Those are different propositions and this path used to
@@ -95,6 +121,20 @@ export function buildMergedReconcileUpdate({ qf = {}, prUrl, mergeSha = null, no
     // force_completed. UAT genuinely did not re-run here, so force_completed carries it rather
     // than fabricating uat_verified — unchanged from SD-REFILL-00QQ60BN.
     force_completed: true,
+    // SD-LEO-INFRA-COMPLETION-EVIDENCE-RUNTIME-001 FR-2. This path wrote force_completed=true with
+    // uat_verified left false and verified_by OMITTED ENTIRELY, so the row asserted a close with
+    // nobody attached to it. Measured across the table: 392 of 629 force-completed rows carry
+    // uat_verified=false AND verified_by=null — 62 percent, the majority pattern, not an exception.
+    //
+    // The fix is nearly free because the witness was ALREADY IN SCOPE: --scope-accepted is mandatory
+    // to reach this terminal branch at all, so a name exists at the moment the row is written and was
+    // simply not carried across. Defaulting to already-captured data instead of adding a prompt is
+    // deliberate — a field nobody has to fill is a field that stays accurate.
+    //
+    // The point is VISIBILITY, not blocking. FR-2 does not stop a thin close; it stops a thin close
+    // being ANONYMOUS. "accepted on merge evidence alone" is a legitimate value here; nothing at all
+    // is not, because an empty witness is indistinguishable from a close nobody thought about.
+    verified_by: witnessNameFrom(scopeAcceptedBy),
     verification_notes,
     completed_at: qf.completed_at || nowIso,
     // QF-20260711-176: a completed QF has no holder. Leaving claiming_session_id set made the
@@ -208,9 +248,9 @@ export async function completeQuickFix(qfId, options = {}) {
       } else {
         console.log(`\n📌 QF own PR ${probeWitness.prUrl} (head ${probeWitness.headBranch}) is MERGED + reachable from origin/main.`);
         console.log(`   Recording the merge and leaving ${qfId} IN_PROGRESS — a merged PR proves the code landed, NOT that this QF's scope is satisfied (QF-20260725-691).`);
-        console.log(`   Re-read the QF's stated scope. If every named surface is genuinely done, attest it:`);
+        console.log('   Re-read the QF\'s stated scope. If every named surface is genuinely done, attest it:');
         console.log(`     node scripts/complete-quick-fix.js ${qfId} --pr-url ${probeWitness.prUrl} --scope-accepted "<who/why>"`);
-        console.log(`   If only part shipped, file the remainder rather than closing this row.\n`);
+        console.log('   If only part shipped, file the remainder rather than closing this row.\n');
       }
       // SD-REFILL-00QQ60BN: preserve the verification-column stamping the
       // completed_requires_verification CHECK demands, now with the SELF-DERIVED pr_url.
@@ -690,7 +730,17 @@ export async function completeQuickFix(qfId, options = {}) {
       pr_url: finalPrUrl,
       tests_passing: testsPass,
       uat_verified: uatVerified,
-      verified_by: options.forceComplete ? 'FORCE_COMPLETE' : 'UAT_AGENT',
+      // SD-LEO-INFRA-COMPLETION-EVIDENCE-RUNTIME-001 FR-2, second writer. 'FORCE_COMPLETE' and
+      // 'UAT_AGENT' are MODE LABELS, not witnesses — they say HOW the row closed, never WHO closed
+      // it, so every forced completion in the table is attributed identically and anonymously.
+      // Prefer a real identity when one exists: the scope-accepter, else the operator session that
+      // ran the command. The mode is preserved as a suffix so nothing that reads these values for
+      // classification loses the distinction it relied on.
+      verified_by: (() => {
+        const mode = options.forceComplete ? 'FORCE_COMPLETE' : 'UAT_AGENT';
+        const who = witnessNameFrom(options.scopeAcceptedBy) || process.env.CLAUDE_SESSION_ID || null;
+        return who ? `${who} (${mode})` : mode;
+      })(),
       verification_notes: finalVerificationNotes,
       files_changed: filesChanged.length > 0 ? filesChanged : null,
       completed_at: new Date().toISOString(),
