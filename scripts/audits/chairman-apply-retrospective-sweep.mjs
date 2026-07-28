@@ -6,13 +6,26 @@
  * providing none. Remediates nothing: where a live object diverges from what a chairman approved,
  * that is chairman-facing by construction.
  *
- * EXPECTED OUTPUT SHAPE (FR-2 AC-5/AC-13/AC-14) — read this before calling a run broken. Measured
- * over the live 43-item population: an object-naming approval exists for 16 (37%), a named .sql
- * artifact for 16 (37%), metadata.migration_files for 0 (0%), and BOTH approval and artifact for
- * just 4 (9%). APPLIED requires all three inputs, so ~91% UNVERIFIABLE IS THE CORRECT ANSWER, not a
- * bug. Materially more APPLIED than 4 means a rule was implemented looser than AC-12 pins it.
- * The conclusion is robust: under all three candidate readings of the predicate APPLIED lands at
- * 11, 5 or 4 of 43, so the deliverable is a REMEDIATION BACKLOG regardless.
+ * *** THIS AUDIT HAS NOT YET CONCLUDED THAT ANYTHING IS FINE. READ BEFORE THE OUTPUT. ***
+ *
+ * Live probing (FR-4) IS NOT BUILT. `live.probed` is hardcoded false, so of five verdicts only
+ * UNVERIFIABLE is reachable and EXIT CODE 1 CANNOT OCCUR. A clean exit 0 means "no control
+ * failed", NOT "no divergence exists" -- nothing has yet compared a live database object against
+ * what a chairman approved. Every row reports the reason it is unanswerable, which is the honest
+ * state and is the whole deliverable at this stage: a REMEDIATION BACKLOG naming what must exist
+ * before each item can be judged.
+ *
+ * Stated first and this loudly because the failure mode is specific: a reader who sees 92 rows,
+ * zero findings and exit 0 concludes the gate was fine all along -- the exact false-clean this
+ * audit was commissioned to disprove.
+ *
+ * EXPECTED OUTPUT SHAPE (FR-2 AC-5/AC-13/AC-14), so a correct run is not "fixed" into a wrong one.
+ * Over the live 92-item population about 36% carry a named .sql artifact and the rest carry none,
+ * giving a histogram of roughly {NO_ARTIFACT: 59, CLASS_UNPROBEABLE: 33}. Once probing lands,
+ * APPLIED still requires an object-naming approval AND an artifact AND a live probe, and BOTH
+ * approval-and-artifact measured only 4 of the original 43 SD-arm members -- so APPLIED stays rare,
+ * and a run reporting many APPLIED has loosened a rule rather than found good news. The conclusion
+ * is robust to the predicate choice: under all three candidate readings APPLIED lands at 11, 5 or 4.
  *
  * Usage: node scripts/audits/chairman-apply-retrospective-sweep.mjs [--json] [--limit N]
  * Exit: 0 nothing actionable · 1 chairman-actionable findings · 2 a CONTROL failed (never trust the run)
@@ -160,6 +173,9 @@ async function main() {
     };
   });
 
+  // Derived from the evidence actually built, so it cannot drift from the code it describes.
+  const probingImplemented = rows.some((r) => r.inputs && r.inputs.live);
+
   const verdictCounts = {};
   for (const r of rows) verdictCounts[r.verdict] = (verdictCounts[r.verdict] || 0) + 1;
   const histogram = reasonHistogram(rows);
@@ -171,6 +187,8 @@ async function main() {
     verdicts: verdictCounts,
     unverifiable_reasons: histogram,
     controls_ok: controlsOk,
+    probing_implemented: probingImplemented,
+    exit_1_reachable: probingImplemented,
     control_failures: controlFailures,
     rows: asJson ? rows : undefined,
   };
@@ -185,6 +203,16 @@ async function main() {
     console.log(`UNVERIFIABLE by reason: ${JSON.stringify(histogram)}`);
     console.log('\nEach reason names what would have to EXIST for the item to become answerable —');
     console.log('that is what makes this a remediation backlog rather than a mostly-empty table.');
+    // Unconditional, never an else-branch on "no findings": a reader seeing zero findings and
+    // exit 0 must not read that as the gate having been fine. Nothing has compared a live object
+    // to an approval yet.
+    if (!probingImplemented) {
+      console.log('\n*** NOT A CLEAN BILL OF HEALTH ***');
+      console.log('Live probing is NOT implemented, so APPLIED / DIVERGENT / NOT-APPLIED are');
+      console.log('UNREACHABLE and exit 1 cannot occur. Exit 0 means "no control failed" -- it');
+      console.log('does NOT mean no divergence exists. Nothing has compared a live database');
+      console.log('object against what a chairman approved. That comparison is FR-4, still to build.');
+    }
     if (!controlsOk) {
       console.log('\n*** CONTROL FAILURE — do not trust this run ***');
       for (const f of controlFailures) console.log(`  - ${f}`);
