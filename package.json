@@ -106,6 +106,7 @@
     "lint:metadata-flags": "node scripts/lint/metadata-flag-lint.mjs",
     "lint:env-flags": "node scripts/lint/process-env-feature-flag-lint.mjs",
     "lint:fleet-liveness-select": "node scripts/lint/fleet-liveness-select-lint.mjs",
+    "lint:swallowed-query-error": "node scripts/lint/swallowed-query-error-lint.mjs",
     "lint:alter-defaults": "node scripts/lint/alter-default-override-lint.mjs",
     "lint:venture-artifacts": "node scripts/lint/venture-artifacts-write-lint.mjs",
     "lint:realtime-teardown": "node scripts/lint/realtime-subscribe-teardown-recursion-lint.mjs",
