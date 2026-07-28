@@ -53,6 +53,8 @@ const { detectVersionSkew } = require('../lib/coordinator/protocol-comms-version
 const { warnIfCheckoutStale } = require('../lib/coordinator/checkout-staleness.cjs');
 const { PEER_KINDS } = require('../lib/coordinator/peer-target.cjs');
 const { enqueueRelayRequest } = require('../lib/coordinator/relay-queue.cjs');
+const { bodyFromArgv } = require('../lib/coordinator/argv-body.cjs');
+const { MAX_PARTS } = require('../lib/coordinator/multi-part-reply.cjs');
 const { PAYLOAD_KINDS, DIRECTIVE_KINDS, ADAM_EXCLUDED_KINDS, DRAIN_SETS } = require('../lib/fleet/worker-status.cjs');
 // SD-LEO-INFRA-FW3-FRAMING-PLUMBING-001-C: fail-closed pick-vs-instrument routing predicate
 // (consumes the -B framing_class contract; FRAMING_CLASSES matching now lives in the router).
@@ -208,7 +210,24 @@ function extractEmbeddedPeerDirective(rawPeerArg, rawBody) {
 // filters on (lib/fleet/worker-status.cjs) -- never a second hand-maintained list.
 const KNOWN_SEND_KINDS = new Set([...Object.values(PAYLOAD_KINDS), ...DIRECTIVE_KINDS]);
 
-function buildAdvisoryPayload({ body, senderCallsign, repo, correlationId, expectsReply, scopeKey, reuseClass, appliesToScopes, replyTo, via, replyClass, replyWindowMs, now, addressee, kind }) {
+// SD-LEO-INFRA-CONSULT-CORRELATION-CONVENTIONS-001 / FR-1 — flag names, not argv indices.
+//
+// This file previously built its message body by excluding a hand-maintained Set of argv INDEXES.
+// Its list happened to be complete; Solomon's, which used the identical idiom, had drifted from its
+// parse by THREE flags (--framing-class, --message-kind, --part all shipped inside message bodies).
+// Adding --part here by extending the index list would have been mirroring the defect onto a second
+// sender rather than fixing it, so both senders now derive exclusions from the flag NAMES via one
+// shared helper. Lists are per-PATH so no path strips another's flags out of a legitimate body.
+const VALUE_FLAGS = ['--to', '--kind', '--part', '--reply-class', '--reply-to', '--reply-window-ms', '--timeout'];
+const BOOL_FLAGS = ['--direct'];
+const STATUS_VALUE_FLAGS = ['--eta'];
+const SWEEP_VALUE_FLAGS = ['--window'];
+// Bound to the send path's own lists and used verbatim at the call site — a test that supplied its
+// own lists would prove the helper works while saying nothing about whether the send path hands it
+// the right ones, which is exactly where the Solomon defect lived.
+const sendBodyFromArgv = (argv) => bodyFromArgv(argv, { valueFlags: VALUE_FLAGS, boolFlags: BOOL_FLAGS });
+
+function buildAdvisoryPayload({ body, senderCallsign, repo, correlationId, expectsReply, scopeKey, reuseClass, appliesToScopes, replyTo, via, replyClass, replyWindowMs, now, addressee, kind, partIndex, partTotal }) {
   // request mode (expectsReply) is always live-handshake (synchronous, bounded-timeout await);
   // send mode defaults to fire-and-forget unless the sender opts into reply-needed via --reply-class
   // (SD-LEO-INFRA-ROLE-BASED-COMMS-ROUTING-PROTOCOL-001-C).
@@ -237,6 +256,26 @@ function buildAdvisoryPayload({ body, senderCallsign, repo, correlationId, expec
   if (addressee) payload.addressee = addressee;
   if (reuseClass) payload.reuse_class = reuseClass;
   if (Array.isArray(appliesToScopes) && appliesToScopes.length) payload.applies_to_scopes = appliesToScopes;
+  // SD-LEO-INFRA-CONSULT-CORRELATION-CONVENTIONS-001 / FR-1: ordered parts of ONE logical consult
+  // share a correlation_id and carry first-class part_index/part_total — the capability Solomon
+  // already had and Adam did not, which is why "one correlation convention" was not expressible at
+  // all. Written to the PAYLOAD, never the session_coordination.correlation_id column: measured over
+  // the full 6435-row population, the column is populated on 6.5% and the payload on 84.2%, and
+  // nothing in the repo has ever written the column. A column-keyed version of this would ship fully
+  // green and fully inert.
+  //
+  // Both fields required together (a part_index with no total is unorderable by the reader), and the
+  // bound is enforced HERE as well as at the CLI because buildAdvisoryPayload is exported and the CLI
+  // is not its only caller. A bound checked only at the outermost layer is not a bound.
+  if (partIndex != null && partTotal != null) {
+    const pi = Number(partIndex);
+    const pt = Number(partTotal);
+    if (!Number.isInteger(pi) || !Number.isInteger(pt) || pi < 1 || pt < 1 || pi > pt || pt > MAX_PARTS) {
+      throw new Error(`INVALID_PART: expected integers 1 <= part_index <= part_total <= ${MAX_PARTS} (got ${partIndex}/${partTotal}).`);
+    }
+    payload.part_index = pi;
+    payload.part_total = pt;
+  }
   if (body) {
     // Prefix the body with [<scope_key>] so a delivered-but-ignored advisory stays
     // scannable by scope. Prefix BEFORE the hard-cap check so the tag counts against it.
@@ -999,8 +1038,30 @@ async function main() {
   const toArg = toIdx >= 0 ? (argv[toIdx + 1] || '').toLowerCase() || null : null;
   const directIdx = argv.indexOf('--direct');
   const rawPeerArg = toArg || (directIdx >= 0 ? 'solomon' : null);
-  const flagValueIdxs = new Set([tIdx, tIdx + 1, rIdx, rIdx + 1, rcIdx, rcIdx + 1, rwIdx, rwIdx + 1, toIdx, toIdx + 1, directIdx, kIdx, kIdx + 1].filter(i => i >= 0));
-  const rawBody = argv.slice(1).filter((a, i) => !flagValueIdxs.has(i + 1)).join(' ').trim();
+  // FR-1: `--part N/M` sends ordered parts of one long consult on ONE correlation_id. Parsed as a
+  // pair because a part index without a total cannot be reassembled by the reader. Mirrors
+  // solomon-advisory.cjs's parse and shares its MAX_PARTS ceiling from multi-part-reply.cjs.
+  const partIdx = argv.indexOf('--part');
+  let partIndexArg = null;
+  let partTotalArg = null;
+  if (partIdx >= 0) {
+    const m = /^(\d+)\/(\d+)$/.exec(String(argv[partIdx + 1] || ''));
+    if (!m) {
+      console.error(`ERROR: --part must look like N/M (got "${argv[partIdx + 1] || ''}").`);
+      process.exit(2);
+    }
+    partIndexArg = Number(m[1]);
+    partTotalArg = Number(m[2]);
+    if (partIndexArg < 1 || partTotalArg < 1 || partIndexArg > partTotalArg) {
+      console.error(`ERROR: --part N/M requires 1 <= N <= M (got "${partIndexArg}/${partTotalArg}").`);
+      process.exit(2);
+    }
+    if (partTotalArg > MAX_PARTS) {
+      console.error(`ERROR: --part total exceeds MAX_PARTS (${MAX_PARTS}); got ${partTotalArg}. Link an artifact instead of splitting further.`);
+      process.exit(2);
+    }
+  }
+  const rawBody = sendBodyFromArgv(argv);
   // QF-20260707-114: a caller (confirmed live: Adam) sometimes embeds `--to <peer>` / `--direct`
   // INSIDE the quoted body instead of passing it as a separate CLI arg (the whole message ends
   // in the literal trailing text "--to solomon"). argv.indexOf('--to') then finds nothing (it's
@@ -1091,7 +1152,7 @@ async function main() {
   }
   // FR-1: scope-tag the advisory from the sending repo (reuse-first, fail-soft).
   const { scopeKey, reuseClass, appliesToScopes } = await resolveScopeForSend(supabase, process.cwd());
-  const payload = buildAdvisoryPayload({ body, senderCallsign, repo: process.cwd(), correlationId, expectsReply, scopeKey, reuseClass, appliesToScopes, replyTo, via, replyClass: replyClassArg, replyWindowMs, addressee, kind: kindArg });
+  const payload = buildAdvisoryPayload({ body, senderCallsign, repo: process.cwd(), correlationId, expectsReply, scopeKey, reuseClass, appliesToScopes, replyTo, via, replyClass: replyClassArg, replyWindowMs, addressee, kind: kindArg, partIndex: partIndexArg, partTotal: partTotalArg });
   // R1 (QF-20260703-964): the addressee-vs-target divergence WARN lives ONE place — the
   // insertCoordinationRow choke point (lib/coordinator/dispatch.cjs) — not duplicated here.
   // SD-REFILL-00XK256L: the 2-hypothesis-bar GATE. Block an UNATTESTED urgent model-availability
@@ -1289,7 +1350,7 @@ async function drainAdamOutbound(supabase, { newSessionId, oldSessionIds } = {})
   }
 }
 
-module.exports = { buildAdvisoryPayload, advisoryExpiresAt, ADVISORY_TTL_MS, buildPreSendConsultBody, sanityCheckUrgentAdvisory, resolveScopeForSend, resolveReplyToCorrelation, drainReplies, isReplyRow, drainInbox, isDirectiveRow, isAdamInboxRow, ADAM_INBOX_KINDS, drainAdamOutbound, isOrphanedAdamRow, EXCLUDED_KINDS, resolveAdamAdvisoryTarget, classifyDirectTarget, extractEmbeddedPeerDirective, windowSweep, parseSweepWindowMs, DEFAULT_SWEEP_WINDOW_MS, stampSurfaced, ackRows, DEFAULT_DRAIN_WINDOW_MS, KNOWN_SEND_KINDS };
+module.exports = { buildAdvisoryPayload, sendBodyFromArgv, VALUE_FLAGS, BOOL_FLAGS, STATUS_VALUE_FLAGS, SWEEP_VALUE_FLAGS, advisoryExpiresAt, ADVISORY_TTL_MS, buildPreSendConsultBody, sanityCheckUrgentAdvisory, resolveScopeForSend, resolveReplyToCorrelation, drainReplies, isReplyRow, drainInbox, isDirectiveRow, isAdamInboxRow, ADAM_INBOX_KINDS, drainAdamOutbound, isOrphanedAdamRow, EXCLUDED_KINDS, resolveAdamAdvisoryTarget, classifyDirectTarget, extractEmbeddedPeerDirective, windowSweep, parseSweepWindowMs, DEFAULT_SWEEP_WINDOW_MS, stampSurfaced, ackRows, DEFAULT_DRAIN_WINDOW_MS, KNOWN_SEND_KINDS };
 
 if (require.main === module) {
   main().catch(err => { console.error('UNHANDLED:', err.message || err); process.exit(1); });

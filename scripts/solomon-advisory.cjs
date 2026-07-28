@@ -54,6 +54,8 @@ const { getActiveAdamId } = require('../lib/coordinator/adam-identity.cjs');
 const { assertSenderRole, assertTargetRole } = require('../lib/coordinator/role-comms-guard.cjs');
 const { PEER_KINDS } = require('../lib/coordinator/peer-target.cjs');
 const { enqueueRelayRequest } = require('../lib/coordinator/relay-queue.cjs');
+const { bodyFromArgv } = require('../lib/coordinator/argv-body.cjs');
+const { MAX_PARTS } = require('../lib/coordinator/multi-part-reply.cjs');
 // SD-LEO-INFRA-ROLE-BASED-COMMS-ROUTING-PROTOCOL-001-C: sender-stamped reply_class SSOT.
 const {
   REPLY_CLASSES, isValidReplyClass, computeReplyExpectedBy, checkAndPingOverdueReplies,
@@ -83,12 +85,9 @@ const SOLOMON_CONSULT_KIND = 'solomon_consult';
 const MESSAGE_KINDS = Object.freeze(['retraction', 'amend', 'supersede']);
 const MESSAGE_KIND_SET = new Set(MESSAGE_KINDS);
 
-// Ceiling on ordered parts per reply. The part dimension deliberately relaxes the "one answer per
-// correlation" invariant (that is the point — see FR-3), but an UNBOUNDED relaxation is not a
-// narrowing at all: a sender could post arbitrarily many rows on one correlation just by
-// incrementing part_index. MAX_PARTS keeps the relaxed bound finite and small, so the worst case is
-// MESSAGE_KINDS.length x MAX_PARTS rows per correlation rather than unlimited.
-const MAX_PARTS = 20;
+// MAX_PARTS moved to lib/coordinator/multi-part-reply.cjs (imported above) when Adam gained the same
+// --part capability: two senders enforcing the same ceiling from two local literals is a drift pair,
+// not a shared bound. The rationale for the ceiling itself now lives with the constant.
 
 const ADVISORY_TTL_MS = 24 * 60 * 60_000; // 24h durable delivery window (mirrors the Adam lane).
 function advisoryExpiresAt(nowMs) {
@@ -698,6 +697,42 @@ async function drainSolomonOutbound(supabase, { newSessionId, oldSessionIds } = 
   }
 }
 
+/**
+ * SD-LEO-INFRA-CONSULT-CORRELATION-CONVENTIONS-001 / FR-1 — derive the message body by NAME, not by
+ * a hand-maintained index list.
+ *
+ * THE DEFECT CLASS THIS REMOVES. The previous code built a Set of flag indices by hand
+ * ([tIdx, tIdx+1, rIdx, ... ]) and every new flag had to be remembered in two places: where it is
+ * parsed, and where its value is excluded from the body. --part and --message-kind were added to the
+ * first and forgotten in the second, so `send --part 2/3 --message-kind amend "real body"` shipped
+ * body === "--part 2/3 --message-kind amend real body" on the LIVE Solomon path. Proven by execution
+ * before fixing. No test caught it because every part/message-kind assertion calls
+ * buildAdvisoryPayload with NAMED ARGS and never crosses argv.
+ *
+ * Patching the list would fix this instance and leave the next flag to rediscover it. Deriving the
+ * exclusions from the flag NAMES makes the omission unrepresentable: a flag that is parsed is a flag
+ * that is stripped, because both read the same list.
+ *
+ * Exported so the argv path is testable — the parse lives in an unexported main(), which is the
+ * other half of why this went unseen.
+ */
+// ENUMERATED FROM THE SOURCE, not from memory. My first draft of this list guessed '--ref' and
+// '--reply-window' (neither exists) and omitted --framing-class and --timeout entirely — which would
+// have re-created the very leak this removes, for different flags. These are every value-consuming
+// flag the SEND path parses; a drift test pins them against the source so a newly parsed flag cannot
+// be added without appearing here.
+const VALUE_FLAGS = ['--to', '--kind', '--part', '--message-kind', '--reply-class', '--reply-to', '--reply-window-ms', '--timeout', '--framing-class'];
+const BOOL_FLAGS = ['--direct'];
+// The status sub-command has its own narrower parse. Keeping it separate stops a legitimate '--eta'
+// token inside a message body from being stripped by the send path — the same asymmetry the leak
+// caused, pointing the other way.
+const STATUS_VALUE_FLAGS = ['--eta'];
+
+// Bound to the send path's OWN lists and used verbatim at the call site. The binding is the point:
+// a test that passed its own flag lists would prove the helper strips flags while saying nothing
+// about whether the send path hands it the right ones — which is precisely where the defect lived.
+const sendBodyFromArgv = (argv) => bodyFromArgv(argv, { valueFlags: VALUE_FLAGS, boolFlags: BOOL_FLAGS });
+
 // SD-LEO-INFRA-COMMS-PRESENCE-GROUNDING-SIGNALS-001 (FR-7) — mirrors adam-advisory.cjs's printStatus
 // exactly, using the SAME shared helper (no per-role reimplementation).
 function formatPresence(p) {
@@ -712,8 +747,10 @@ async function printStatus(supabase, sessionId, argv) {
   if (workingIdx >= 0) {
     const etaIdx = argv.indexOf('--eta');
     const etaMs = etaIdx >= 0 ? Number(argv[etaIdx + 1]) || null : null;
-    const flagValueIdxs = new Set([etaIdx, etaIdx + 1].filter(i => i >= 0));
-    const body = argv.slice(workingIdx + 1).filter((a, i) => !flagValueIdxs.has(i + 1 + workingIdx)).join(' ').trim();
+    // Same helper as the send path, with this path's own narrower flag list — the last hand-built
+    // index Set in this file. Its list happened to match its parse, but only by being small enough
+    // to hold in your head, which is exactly the property the send path lost as it grew.
+    const body = bodyFromArgv(argv, { valueFlags: STATUS_VALUE_FLAGS, from: workingIdx + 1 });
     const res = await writeWorkingSignal(supabase, sessionId, { body, etaMs });
     console.log(res.persisted
       ? `Working-signal set: "${body}"${etaMs ? ` (ETA ~${Math.round(etaMs / 60000)}min)` : ''}`
@@ -880,8 +917,15 @@ async function main() {
   const toArg = toIdx >= 0 ? (argv[toIdx + 1] || '').toLowerCase() || null : null;
   const directIdx = argv.indexOf('--direct');
   const peerArg = toArg || (directIdx >= 0 ? 'adam' : null);
-  const flagValueIdxs = new Set([tIdx, tIdx + 1, rIdx, rIdx + 1, rcIdx, rcIdx + 1, rwIdx, rwIdx + 1, toIdx, toIdx + 1, directIdx, kIdx, kIdx + 1].filter((i) => i >= 0));
-  const body = argv.slice(1).filter((a, i) => !flagValueIdxs.has(i + 1)).join(' ').trim();
+  // SD-LEO-INFRA-CONSULT-CORRELATION-CONVENTIONS-001 / FR-1: partIdx and mkIdx were MISSING here,
+  // so --part and --message-kind and their values fell through into the message BODY. Proven by
+  // execution before fixing: `send --part 2/3 --message-kind amend "real body here"` produced
+  //   body === "--part 2/3 --message-kind amend real body here"
+  // Every existing part/message-kind assertion calls buildAdvisoryPayload with NAMED ARGS and never
+  // crosses argv, which is exactly why a live defect on the shipped Solomon path stayed green.
+  // Found at PLAN by TESTING while reviewing whether to MIRROR this list onto Adam — mirroring it
+  // faithfully would have propagated the leak to a second sender. Fixed at source instead.
+  const body = sendBodyFromArgv(argv);
   if (!body) { console.error('ERROR: advisory body required.'); process.exit(2); }
 
   if (mode === 'request' && !isTwoWayV2Enabled()) {
@@ -1037,6 +1081,10 @@ module.exports = {
   drainInbox, resolveReplyToCorrelation, drainSolomonOutbound, captureLedgerRow,
   checkLedgerCaptureHealth, resolveSolomonAdvisoryTarget, resolveConsultOriginator, ensureOriginatorCc,
   stampSurfaced, ackRows, KNOWN_SEND_KINDS, MESSAGE_KINDS,
+  // SD-LEO-INFRA-CONSULT-CORRELATION-CONVENTIONS-001 / FR-1: exported so the ARGV path is testable.
+  // The parse lives in an unexported main(), which is half of why the flag-leak went unseen — every
+  // existing assertion called buildAdvisoryPayload with named args and never crossed argv.
+  bodyFromArgv, sendBodyFromArgv, VALUE_FLAGS, BOOL_FLAGS, STATUS_VALUE_FLAGS,
 };
 
 if (require.main === module) {
