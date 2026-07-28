@@ -202,10 +202,19 @@ export const SOLOMON_LOOPS = [
       'autonomy-report',      // the weekly autonomy-report cadence rollup (the graded report itself
                               // rides the deep-sweep 'adam-autonomy-oversight-reporting' duty)
     ],
-    label: 'Solomon weekly program (Mon budget reset): P3 budget line, standing-program set, accuracy review, autonomy-report cadence, P4 Fable-terms re-check, seed-run ping if fable_suitability_map still empty',
+    // QF-20260727-923: the seed-run-ping step (6) is RETIRED, not repaired. fable_suitability_map
+    // is NOT empty — it holds one self-referential smoke-test row (the scorer scored its own
+    // implementation directory) — so a row-count>0 emptiness test could never fire; it was a
+    // liveness predicate satisfied by a single sentinel row while supplying zero usable fuel
+    // (truthy-sentinel-suppresses-fallback). Rung 4 (the suitability-map-fed deep-work queue) is
+    // now PARKED by contract amendment (id=611 P1a) rather than promoted, so there is nothing left
+    // for the ping to watch. Do not re-add an "is it empty" check here — if rung 4 is ever
+    // unparked, its liveness gate must test for USABLE fuel (>=N regions, none self-referential,
+    // scored within M days), never mere row-count existence.
+    label: 'Solomon weekly program (Mon budget reset): P3 budget line, standing-program set, accuracy review, autonomy-report cadence, P4 Fable-terms re-check',
     script: null, // agent-judgment tick — posture/program setting is reasoning, not a script
     cron: '23 8 * * 1',
-    prompt: 'Solomon weekly-program tick (Monday budget reset): (1) send the P3 budget line to Adam (estimated spend self-report until cost_tokens metering lands); (2) set the standing program for the week per the P1 preemption ladder; (3) run the §11 accuracy review (hit-rate by duty cluster; low-accuracy cluster -> propose-only calibration feedback flag); (4) roll up the autonomy-report cadence; (5) P4 portability re-check: verify live Fable budget terms, AUTO-REVERT to the episodic fallback posture if the budget shrank/vanished; (6) if fable_suitability_map is still EMPTY, send a seed-run ping (ping-on-silence). Propose-only throughout (CONST-002).',
+    prompt: 'Solomon weekly-program tick (Monday budget reset): (1) send the P3 budget line to Adam (estimated spend self-report until cost_tokens metering lands); (2) set the standing program for the week per the P1 preemption ladder (rung 4 PARKED — see id=611 P1a); (3) run the §11 accuracy review (hit-rate by duty cluster; low-accuracy cluster -> propose-only calibration feedback flag); (4) roll up the autonomy-report cadence; (5) P4 portability re-check: verify live Fable budget terms, AUTO-REVERT to the episodic fallback posture if the budget shrank/vanished. Propose-only throughout (CONST-002).',
   },
   {
     key: 'forecast-triggers',
