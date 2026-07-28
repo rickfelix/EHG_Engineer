@@ -2212,6 +2212,33 @@ async function printStrandAgeGauge() {
   console.log('');
 }
 
+// QF-20260727-962: surface claim burn, split by WHO burned it. The two shapes are printed as
+// SEPARATE lines on purpose — one seat retaking one item is an idempotency failure, many seats
+// bouncing off is a dependency wall, and a single combined count sends the fix the wrong way.
+async function printClaimBurnGauge() {
+  const { planClaimBurnGauge, formatClaimBurnSummary } = require('../lib/coordinator/claim-burn-gauge.cjs');
+
+  console.log('CLAIM-BURN GAUGE');
+  console.log('─'.repeat(72));
+
+  const gauge = await planClaimBurnGauge(supabase);
+  console.log('  ' + formatClaimBurnSummary(gauge));
+
+  const section = (label, rows, detail) => {
+    console.log('  ' + label + ': ' + rows.length);
+    for (const r of rows.slice(0, 5)) console.log('    • ' + r.sd_key + ' — ' + detail(r) + ' [' + r.status + ']');
+  };
+  // Idempotency first: it is the larger half on the live table (189 vs 117 SDs measured 2026-07-28)
+  // and is the one an aggregate hides, since a single holder looks like a single claim.
+  section('REPEAT-HOLDER (one seat retaking — idempotency/resume)', gauge.repeatHolder,
+    (r) => r.events + ' events, ' + r.repeatEvents + ' repeats, 1 holder');
+  section('DISTINCT-HOLDER (seats bouncing off — dependency/spec wall)', gauge.distinctHolders,
+    (r) => r.events + ' events across ' + r.distinctHolders + ' holders');
+  section('MIXED', gauge.mixed,
+    (r) => r.events + ' events, ' + r.distinctHolders + ' holders, ' + r.repeatEvents + ' repeats');
+  console.log('');
+}
+
 // SD-LEO-INFRA-RELAY-QUEUE-CONFIRM-ON-RELAY-DELIVERY-GUARANTEE-001 / FR-3: surface the
 // relay/decision/review drop gauge — mirrors printUndeliveredOutbound()'s shape. Read-only
 // + fail-open (planRelayDrops never throws).
@@ -2483,6 +2510,7 @@ async function main() {
     predictions:   async () => await printPredictions(d),
     drain:         () => printDrainAgents(d),
     strand:        async () => await printStrandAgeGauge(), // SD-LEO-INFRA-ADOPTED-RESUME-FINAL-001 (FR-2)
+    'claim-burn':  async () => await printClaimBurnGauge(), // QF-20260727-962
     inbox:         async () => {
       // SD-LEO-FIX-FLEET-WORKER-DIRECTIVE-001: the coordinator view is no longer the
       // unconditional default — a worker invoking the fallback gets ITS OWN inbox.
