@@ -82,9 +82,12 @@ describe.skipIf(!CAN_RUN)('FR-5 — the contract states the self-score operating
       it('RECONCILES the inert flag with the mandated cadence', () => {
         // "Ships inert" read as "no score is expected" would contradict a 6h armed loop and an 8h
         // staleness gauge. The contract has to hold both at once or it trades one confusion for another.
-        const c = content.get(id);
-        expect(c).toMatch(/6h/i);
-        expect(c).toMatch(/8h/i);
+        //
+        // ASSERTED AS ONE PHRASE. A bare /6h/ was vacuous on section 601: it already said "6h"
+        // twice for unrelated reasons (the delta-first judgment window and the self-adherence tick),
+        // so that half passed with or without this block. Only /8h/ was load-bearing. Requiring the
+        // two to appear TOGETHER in the reconciliation sentence is what actually bites.
+        expect(content.get(id)).toMatch(/every ~6h via[\s\S]{0,120}8h/i);
       });
     });
   }
