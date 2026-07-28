@@ -2233,7 +2233,10 @@ async function printRelayDropGauge() {
   for (const d of flagged) {
     const ageMin = Math.floor(d.ageMs / 60_000);
     const ageStr = ageMin < 60 ? ageMin + 'm' : Math.floor(ageMin / 60) + 'h';
-    console.log('  • [' + String(d.id).slice(0, 8) + '] correlation=' + String(d.correlationId).slice(0, 8) + ' | unactioned ' + ageStr + ' | ' + d.reason);
+    // SD-LEO-INFRA-SILENT-TRUNCATION-ONE-001 FR-1: byte-identical duplicate of the relay-drop line
+    // in scripts/coordinator-hourly-review.cjs. Fixed in the same change deliberately — leaving the
+    // copy truncated would keep the defect alive in the surface most people actually read.
+    console.log('  • [' + String(d.id) + '] correlation=' + String(d.correlationId) + ' | unactioned ' + ageStr + ' | ' + d.reason);
   }
   console.log('');
 }
