@@ -212,6 +212,44 @@ export function buildRuntimeObservation({ existing = null, observation = null, m
   };
 }
 
+/**
+ * QF-20260727-731 — the merged-reconcile path SILENTLY DROPPED --uat-verified and --actual-loc.
+ *
+ * The payload carried neither key, so both values vanished while the CLI exited success: the row
+ * read uat_verified=false, actual_loc=null, and that is INDISTINGUISHABLE from never having passed
+ * them. Reported independently from two separate closures (QF-20260726-575, QF-20260726-222), which
+ * is what makes it a pattern rather than an anecdote.
+ *
+ * THE TWO FLAGS GET DIFFERENT TREATMENT, deliberately, because they are different KINDS of thing.
+ *
+ * --actual-loc is HONOURED. It is a measurement carrying no truth claim about verification, so
+ * dropping it only lost data. Same for its source/test siblings.
+ *
+ * --uat-verified is REFUSED LOUDLY. UAT provably does not run on this path — that is the whole
+ * reason force_completed carries the completed_requires_verification CHECK here rather than
+ * fabricating uat_verified (see the rationale below). Honouring a BARE BOOLEAN would write an
+ * anonymous truth claim that UAT ran, on a path where it did not, with nobody named. --scope-accepted
+ * is the attestation mechanism on this path precisely because it names a witness; --uat-verified
+ * cannot, so it is rejected with a message that says where to go instead.
+ *
+ * Refusing is not a workaround for the drop: silence was the defect. A caller now learns
+ * immediately, instead of reading the row later and finding their input gone.
+ *
+ * @throws {Error} UAT_VERIFIED_UNSUPPORTED_ON_RECONCILE when --uat-verified is passed here
+ */
+export function assertReconcileFlagsSupported(options = {}) {
+  if (options.uatVerified === undefined) return;
+  const err = new Error(
+    '[UAT_VERIFIED_UNSUPPORTED_ON_RECONCILE] --uat-verified is not honoured on the already-MERGED ' +
+    'reconcile path: UAT does not re-run here, so the flag would assert that it did. This path sets ' +
+    'force_completed=true instead, which satisfies the completed_requires_verification CHECK without ' +
+    'claiming a UAT that never ran. To attest on this path use --scope-accepted "<who> — <why>", ' +
+    'which records a NAMED witness. Re-run without --uat-verified.'
+  );
+  err.code = 'UAT_VERIFIED_UNSUPPORTED_ON_RECONCILE';
+  throw err;
+}
+
 export function buildMergedReconcileUpdate({ qf = {}, prUrl, mergeSha = null, nowIso, scopeAcceptedBy = null, runtimeObservation = null, observationMethod = null, options = {} }) {
   // Accept the CLI options object as a FALLBACK source for the FR-1 fields, not only explicit
   // args. Two named params were declared here and the sole production call site passed NEITHER, so
@@ -281,6 +319,12 @@ export function buildMergedReconcileUpdate({ qf = {}, prUrl, mergeSha = null, no
       declaredBy: witnessNameFrom(scopeAcceptedBy),
       nowIso
     }),
+    // QF-20260727-731: honour the LOC measurements. They carry no truth claim about
+    // verification, so dropping them only lost data. Omitted keys are left absent rather than
+    // written as null, so a re-run without the flag cannot ERASE a value recorded earlier.
+    ...(options.actualLoc       !== undefined ? { actual_loc: options.actualLoc } : {}),
+    ...(options.actualSourceLoc !== undefined ? { actual_source_loc: options.actualSourceLoc } : {}),
+    ...(options.actualTestLoc   !== undefined ? { actual_test_loc: options.actualTestLoc } : {}),
     verification_notes,
     completed_at: qf.completed_at || nowIso,
     // QF-20260711-176: a completed QF has no holder. Leaving claiming_session_id set made the
@@ -400,6 +444,9 @@ export async function completeQuickFix(qfId, options = {}) {
       }
       // SD-REFILL-00QQ60BN: preserve the verification-column stamping the
       // completed_requires_verification CHECK demands, now with the SELF-DERIVED pr_url.
+      // QF-20260727-731: refuse BEFORE building, so the caller never gets a success exit with
+      // their input discarded. Silence was the defect; a loud failure is the fix.
+      assertReconcileFlagsSupported(options);
       const reconcileUpdate = buildMergedReconcileUpdate({
         qf, prUrl: probeWitness.prUrl, mergeSha, nowIso: new Date().toISOString(), scopeAcceptedBy,
         // THIS LINE WAS MISSING AND IT MATTERED. Without it a real --runtime-observation was
