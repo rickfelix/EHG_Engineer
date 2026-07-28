@@ -250,3 +250,39 @@ describe('GET /api/fleet-actions/snapshot-manifest', () => {
     expect(typeof payload.snapshot_at).toBe('string');
   });
 });
+
+/**
+ * SD-LEO-FIX-UNOWNED-PARENT-SLICE-001 — pin that these routes are actually AUTH-GATED.
+ *
+ * Every test above calls the exported handlers DIRECTLY with mock req/res, which is the right
+ * shape for testing composition logic but means all of them bypass requireAuth by design. So the
+ * property the fleet panel's retirement decision leans on -- "leaving these three routes in place
+ * is fine BECAUSE they are auth-gated" -- was asserted by exactly one line in server/index.js that
+ * nothing pinned. Flipping it to optionalAuth would fail no test. That is precisely how the panel
+ * itself came to be unauthenticated for its entire life.
+ *
+ * These are not read-only routes: respawn-fleet and relaunch-under-profile invoke spawn() and
+ * relaunchUnderProfile(), i.e. process execution under an account profile. requireAuth is only
+ * AUTHENTICATION -- no role check, no allowlist, no ownership check -- and EHG_Engineer and EHG
+ * share one Supabase project, so any EHG-app JWT passes here. The present bound is that EHG has
+ * no public signup surface, which is an incidental property, NOT a control.
+ *
+ * THIS IS A SOURCE-TEXT PROXY, deliberately labelled as one. server/index.js calls startServer()
+ * at import time (no main-module guard), so it cannot be imported to inspect its router. The pin
+ * therefore reads the mount line as text. It will need re-anchoring if that line is reformatted --
+ * accepted, because the regression it catches (a silent swap to optionalAuth) is the one that
+ * matters and is otherwise invisible.
+ */
+describe('SD-LEO-FIX-UNOWNED-PARENT-SLICE-001: /api/fleet-actions stays behind requireAuth', () => {
+  it('is mounted with requireAuth, not optionalAuth', async () => {
+    const fs = await import('node:fs');
+    const path = await import('node:path');
+    const src = fs.readFileSync(
+      path.join(process.cwd(), 'server', 'index.js'), 'utf8'
+    );
+    const mount = src.split('\n').find((l) => l.includes("app.use('/api/fleet-actions'"));
+    expect(mount, 'the fleet-actions mount line was not found -- re-anchor this pin').toBeTruthy();
+    expect(mount).toContain('requireAuth');
+    expect(mount).not.toContain('optionalAuth');
+  });
+});

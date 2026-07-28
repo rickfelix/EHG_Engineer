@@ -44,7 +44,7 @@ import {
 import { loadState, dashboardState } from './state.js';
 // QF-20260725-096: retired-route matchers, kept in their own side-effect-free module so the scope
 // pins can import the real pattern without booting the server.
-import { isRetiredSessionView } from './retired-routes.js';
+import { installFleetUiSurface } from './retired-routes.js';
 
 // Import WebSocket handler
 import { initializeWebSocket, broadcastUpdate } from './websocket.js';
@@ -215,43 +215,19 @@ app.use(express.json());
 // the normalisation has to happen before the decision. That is the whole reason three spellings
 // kept getting served: the guard was matching a different string than the file server resolved.
 // Registered here, still ahead of the /fleet-ui static mount below, so the retirement wins.
-app.use((req, res, next) => {
-  if (!isRetiredSessionView(req.path)) return next();
-  return retiredSessionViewHandler(req, res);
-});
-
-function retiredSessionViewHandler(req, res) {
-  // QF-20260727-484 — WITHOUT THIS LINE THE SOAK CANNOT PRODUCE EVIDENCE. The retirement above
-  // is dispositioned by a seven-day soak in which SILENCE IS THE EVIDENCE, but this server has no
-  // request logging of any kind (no morgan — it is not even a dependency), so a 410 hit wrote
-  // nothing anywhere. Silence was therefore GUARANTEED: at day 7 nobody could distinguish "nobody
-  // hit it" from "we could never have seen it". QF-20260725-096 already carried the warning that
-  // a zero from a file that could not be opened is not a zero — but pinned it on locked browser
-  // history. The real blind spot was server-side and total.
-  //
-  // Scoped to THIS handler on purpose: general request logging on /fleet-ui or on the app is a
-  // different change with a different justification (volume, privacy, noise) and is NOT in scope.
-  // stdout is durable here — scripts/leo-stack.ps1:171 runs the server as `node server.js >
-  // .logs/engineer-<timestamp>.log 2>&1` — so the soak reader has exactly one command:
-  //   grep fleet-ui-410 .logs/engineer-*.log
-  // An empty result now means genuinely unhit, which is the whole point.
-  console.log(
-    `[fleet-ui-410] ${new Date().toISOString()} ${req.method} ${req.originalUrl} ` +
-    `referer=${req.get('referer') || '-'}`
-  );
-  res.status(410).type('text/plain').send(
-    'Gone — the standalone fleet-ui session view was retired on 2026-07-27 (QF-20260725-096).\n\n' +
-    'Session list: the Builder Sessions page in EHG.\n' +
-    'Session detail (TTY, narration, agent-browser, takeover/hand-back): use the terminal.\n\n' +
-    'This capability is knowingly unavailable from the web surface. If you needed this page,\n' +
-    'that is a signal worth raising — the retirement is reversible.\n'
-  );
-}
-
+// SD-LEO-FIX-UNOWNED-PARENT-SLICE-001: the retirement guards AND the static mount are installed
+// together by one function, because THE ORDER IS THE SECURITY PROPERTY. A 410 registered after
+// express.static is shadowed, unreachable, and still reads as correct in review. While both
+// registrations lived inline here, nothing could assert the guard was even MOUNTED — deleting the
+// app.use line left every matcher unit test green while the retired page went straight back to
+// being served, because index.js calls startServer() at import so no test can import it. Behind
+// the seam, tests/unit/server/fleet-ui-410-scope.test.js builds a bare express app, calls this
+// same function, and issues real requests: ordering is EXERCISED, not asserted.
+//
 // Fleet-launcher operator UI static assets (SD-LEO-INFRA-LEO-LAUNCHER-SHELL-001-B): the
 // Session View pane fragment, mountable into the parent shell. See the ARCH-007 exception
 // note at the top of this file.
-app.use('/fleet-ui', express.static(path.join(PROJECT_ROOT, 'server', 'public', 'fleet-ui')));
+installFleetUiSurface(app, { root: path.join(PROJECT_ROOT, 'server', 'public', 'fleet-ui') });
 
 // NOTE: /api/webhooks/github-ci-status (api/webhooks/github-ci-status.js) is
 // intentionally NOT mounted here. Its ESM/CJS crash and an unauthenticated
