@@ -26,6 +26,9 @@ const path = require('path');
 const { randomUUID } = require('crypto');
 const { createSupabaseServiceClient } = require('../lib/supabase-client.cjs');
 const { PLAN_CONTENT_MARKER } = require('../lib/sd-enrichment-markers.cjs');
+// SD-LEO-INFRA-WORK-ASSIGNMENT-UNREADABLE-001 (FR-3): the readability invariant, shared with the
+// dispatch choke point this file's WORK_ASSIGNMENT insert deliberately bypasses.
+const { describeUnreadableAssignment } = require('../lib/fleet/assignment-target.cjs');
 const { parseSdDependencies } = require('../lib/utils/parse-sd-dependencies.cjs'); // QF-20260525-542
 // SD-LEO-FIX-COORDINATOR-SWEEP-CLAIMED-001: shared dispatch-eligibility predicate (same one the
 // worker self_claim path uses) so CLAIM_FIX never re-affirms an orchestrator PARENT / dep-blocked SD.
@@ -1236,6 +1239,27 @@ async function dispatchWorkAssignmentsIfAllowed(supabase, activeSessions, availa
       continue;
     }
 
+    // SD-LEO-INFRA-WORK-ASSIGNMENT-UNREADABLE-001 (FR-3): this insert deliberately BYPASSES
+    // insertCoordinationRow — an informational nudge must not acquire the tier/door/fleet-target
+    // guards the choke point applies to directed assignments. But bypassing the choke point must
+    // not mean bypassing the READABILITY invariant, or the fix ships as a choke point with a
+    // documented hole. Same shared verdict function the choke point uses; no second copy of the
+    // rule, and no other guard imported.
+    //
+    // This nudge is EXPECTED to pass: target_sd is null on purpose (QF-20260705-914, to break a
+    // release->reclaim loop), but payload.available_sds/current_sd are readable by the worker
+    // profile, so a worker can always tell what the row refers to. A warning here would mean the
+    // nudge shape had drifted into unreadability — which is worth knowing.
+    const unreadableNudge = describeUnreadableAssignment(row);
+    if (unreadableNudge) {
+      console.warn(JSON.stringify({
+        event: 'sweep.assignment_target_unresolvable',
+        mode: 'observe_only',
+        session_id: s.session_id,
+        detail: unreadableNudge.detail,
+        payload_keys: unreadableNudge.payloadKeys
+      }));
+    }
     await supabase.from('session_coordination').insert(row); // schema-lint-disable-line — `row` columns are valid; lint mis-reads the return-object keys (skipped/blocked) below as insert columns (false positive, stale snapshot)
     dispatched++;
   }
