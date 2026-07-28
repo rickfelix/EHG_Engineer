@@ -1,0 +1,339 @@
+/**
+ * SD-LEO-INFRA-JAMMED-GIT-INDEX-001 — jammed-index detector core.
+ *
+ * The load-bearing property is that PRESENCE IS NOT PERSISTENCE. Measured at PLAN: six back-to-back
+ * healthy `git add`s left a lock present at 12 of 12 ticks across FOUR distinct identities, and all
+ * six completed exit 0. A presence-only classifier reports JAMMED there. TS-17a is the negative
+ * control for exactly that and a presence-only implementation provably fails it.
+ *
+ * FILE EXTENSION IS LOAD-BEARING: this must be .test.js. The unit vitest project admits .test.mjs
+ * only under tests/unit/org/ and tests/unit/venture-email/, so naming it .test.mjs would make it
+ * CI-unreachable and SILENTLY GREEN — the same zero-coverage trap the `db` project represents.
+ */
+import { describe, it, expect } from 'vitest';
+import {
+  VERDICT, DEFAULT_DWELL_MS, DEFAULT_TICK_MS, classifyIndexHealth, lockIdentityOf, exitCodeFor, formatVerdict,
+  sanitizeState, sanitizeDwellMs, applyPersistenceDegradation,
+} from '../../../lib/git/index-jam-detector.js';
+
+const T0 = Date.parse('2026-07-28T00:00:00.000Z');
+const SEC = 1000;
+const present = (id) => ({ lockPresent: true, lockIdentity: id });
+const absent = { lockPresent: false, lockIdentity: null };
+
+/** Drive a tick sequence through the classifier, threading state exactly as the cron does. */
+function runTicks(observations, { startMs = T0, tickMs = 30 * SEC, dwellMs = DEFAULT_DWELL_MS } = {}) {
+  let state; const out = [];
+  observations.forEach((obs, i) => {
+    const r = classifyIndexHealth(obs, startMs + i * tickMs, state, { dwellMs });
+    state = r.nextState; out.push(r.verdict);
+  });
+  return out;
+}
+
+describe('classifyIndexHealth — no lock', () => {
+  it('reports HEALTHY and holds no carry-over state', () => {
+    const r = classifyIndexHealth(absent, T0, undefined);
+    expect(r.verdict).toBe(VERDICT.HEALTHY);
+    expect(r.nextState.firstBlockedAtMs).toBeNull();
+  });
+
+  it('an absent lock RESETS an accumulated counter (TS-12, FR-1 AC-6)', () => {
+    // Blocked long enough to be JAMMED, then the lock clears, then the SAME identity returns.
+    // The tick AFTER the clear is what proves the reset: asserting only the absent tick is
+    // VACUOUS — the absent branch returns HEALTHY unconditionally, so a latching implementation
+    // that carried prior state through the reset passes that weaker assertion identically.
+    // Mutation confirmed it: nextState:emptyState() -> nextState:prior survived the old test.
+    const seq = runTicks([present('A'), present('A'), present('A'), present('A'), absent, present('A')]);
+    expect(seq[3]).toBe(VERDICT.JAMMED);
+    expect(seq[4]).toBe(VERDICT.HEALTHY);
+    expect(seq[5]).toBe(VERDICT.HEALTHY); // clock restarted — a latching impl reports JAMMED here
+  });
+});
+
+describe('classifyIndexHealth — a single lock persisting (TS-3)', () => {
+  it('is HEALTHY under the dwell floor and JAMMED once it is crossed', () => {
+    // 30s ticks, 90s floor: blocked at t=0 -> JAMMED first at t=90s, the 4th tick.
+    expect(runTicks([present('A'), present('A'), present('A'), present('A')]))
+      .toEqual([VERDICT.HEALTHY, VERDICT.HEALTHY, VERDICT.HEALTHY, VERDICT.JAMMED]);
+  });
+
+  it('reports the duration it was actually held, not the tick count (TS-11, FR-2 AC-3)', () => {
+    let s;
+    let r = classifyIndexHealth(present('A'), T0, s); s = r.nextState;
+    r = classifyIndexHealth(present('A'), T0 + 120 * SEC, s);
+    expect(r.verdict).toBe(VERDICT.JAMMED);
+    expect(r.jammedForMs).toBe(120 * SEC);
+  });
+
+  it('crosses exactly AT the floor, not one tick late', () => {
+    let s;
+    let r = classifyIndexHealth(present('A'), T0, s); s = r.nextState;
+    const justUnder = classifyIndexHealth(present('A'), T0 + DEFAULT_DWELL_MS - 1, s);
+    const exactly = classifyIndexHealth(present('A'), T0 + DEFAULT_DWELL_MS, s);
+    expect(justUnder.verdict).toBe(VERDICT.HEALTHY);
+    expect(exactly.verdict).toBe(VERDICT.JAMMED);
+  });
+});
+
+describe('TS-17a — PRESENCE IS NOT PERSISTENCE (the primary negative control)', () => {
+  it('sustained healthy churn stays HEALTHY though a lock is present at EVERY tick', () => {
+    // Mirrors the measurement: lock present at every tick, identity changing as each add finishes.
+    // Ten ticks at 30s spans 270s, far beyond the 90s floor — a presence-only classifier reports
+    // JAMMED here and fails. This is the assertion that distinguishes this detector.
+    const seq = runTicks([
+      present('A'), present('A'), present('B'), present('B'),
+      present('C'), present('C'), present('D'), present('D'),
+      present('E'), present('E'),
+    ]);
+    expect(seq).toEqual(Array(10).fill(VERDICT.HEALTHY));
+  });
+
+  it('a changed identity RESETS the counter even mid-accumulation (FR-1 AC-7)', () => {
+    const seq = runTicks([present('A'), present('A'), present('A'), present('B'), present('B')]);
+    expect(seq[2]).toBe(VERDICT.HEALTHY);
+    expect(seq[3]).toBe(VERDICT.HEALTHY); // B is a new lock — clock restarts
+    expect(seq[4]).toBe(VERDICT.HEALTHY);
+  });
+
+  it('one long-lived lock JAMS while the same number of ticks of churn does NOT', () => {
+    // Same tick count, same elapsed time — the ONLY variable is identity stability.
+    const jammed = runTicks([present('A'), present('A'), present('A'), present('A')]);
+    const churn = runTicks([present('A'), present('B'), present('C'), present('D')]);
+    expect(jammed).toContain(VERDICT.JAMMED);
+    expect(churn).not.toContain(VERDICT.JAMMED);
+  });
+
+  it('a null identity is never treated as sameness', () => {
+    // Two observations that both fail to yield an identity must not be assumed to be one lock.
+    const seq = runTicks([present(null), present(null), present(null), present(null)]);
+    expect(seq).not.toContain(VERDICT.JAMMED);
+  });
+});
+
+describe('UNAVAILABLE — never health, never a reset (TS-4, TS-18, FR-1 AC-9)', () => {
+  it('an observation error reports UNAVAILABLE rather than HEALTHY', () => {
+    const r = classifyIndexHealth({ error: 'EACCES: permission denied' }, T0, undefined);
+    expect(r.verdict).toBe(VERDICT.UNAVAILABLE);
+    expect(r.verdict).not.toBe(VERDICT.HEALTHY);
+    expect(r.reason).toMatch(/EACCES/);
+  });
+
+  it('PRESERVES the counter through a blip: BLOCKED -> UNAVAILABLE -> BLOCKED still jams', () => {
+    // Without this, recurring transient stat failures mean a real jam is never reported.
+    let s;
+    let r = classifyIndexHealth(present('A'), T0, s); s = r.nextState;
+    r = classifyIndexHealth({ error: 'EBUSY' }, T0 + 30 * SEC, s); s = r.nextState;
+    expect(r.verdict).toBe(VERDICT.UNAVAILABLE);
+    r = classifyIndexHealth(present('A'), T0 + 120 * SEC, s);
+    expect(r.verdict).toBe(VERDICT.JAMMED);
+    expect(r.jammedForMs).toBe(120 * SEC); // clock ran from the ORIGINAL block, not the recovery
+  });
+
+  it('is not counted as a jam for exit-code purposes', () => {
+    expect(exitCodeFor(VERDICT.UNAVAILABLE)).toBe(0);
+  });
+});
+
+describe('lockIdentityOf', () => {
+  it('is stable for one lock and distinct between locks', () => {
+    expect(lockIdentityOf({ mtimeMs: 100, ino: 7 })).toBe(lockIdentityOf({ mtimeMs: 100, ino: 7 }));
+    expect(lockIdentityOf({ mtimeMs: 100, ino: 7 })).not.toBe(lockIdentityOf({ mtimeMs: 101, ino: 7 }));
+    expect(lockIdentityOf({ mtimeMs: 100, ino: 7 })).not.toBe(lockIdentityOf({ mtimeMs: 100, ino: 8 }));
+  });
+
+  it('does NOT derive identity from birthtime — NTFS file tunneling makes it non-unique', () => {
+    // Measured: three files created ~1.2s apart with DIFFERENT inodes reported an IDENTICAL
+    // birthtimeMs. A birthtime-based identity collapses distinct locks into one and rebuilds the
+    // presence-only false positive.
+    const a = { mtimeMs: 100, ino: 7, birthtimeMs: 5000 };
+    const b = { mtimeMs: 200, ino: 8, birthtimeMs: 5000 }; // same birthtime, different lock
+    expect(lockIdentityOf(a)).not.toBe(lockIdentityOf(b));
+  });
+
+  it('returns null for a missing stat rather than a fabricated token', () => {
+    expect(lockIdentityOf(null)).toBeNull();
+  });
+});
+
+describe('exit code contract (TS-8)', () => {
+  it('only JAMMED is non-zero', () => {
+    expect(exitCodeFor(VERDICT.JAMMED)).toBe(1);
+    expect(exitCodeFor(VERDICT.HEALTHY)).toBe(0);
+    expect(exitCodeFor(VERDICT.UNAVAILABLE)).toBe(0);
+  });
+});
+
+describe('ALARM SUPPRESSION — corrupt carry-over state must never read as healthy', () => {
+  // Each input below was CONFIRMED by experiment to hold a real jam at HEALTHY indefinitely.
+  // These are the failure direction that matters: a detector that is green during the outage.
+  it('rejects a FUTURE firstBlockedAtMs instead of suppressing forever', () => {
+    // Measured: {firstBlockedAtMs: now + 24h} gave HEALTHY on 6 of 6 ticks against a real held
+    // lock, carried forward byte-identical each tick. It never self-heals, because during a
+    // genuine jam the identity never changes.
+    const poisoned = { firstBlockedAtMs: T0 + 86_400_000, lockIdentity: 'A' };
+    const r = classifyIndexHealth(present('A'), T0, poisoned);
+    expect(r.nextState.firstBlockedAtMs).toBe(T0); // clock restarted from now, not the future
+    const later = classifyIndexHealth(present('A'), T0 + 120 * SEC, r.nextState);
+    expect(later.verdict).toBe(VERDICT.JAMMED); // and a real jam still surfaces
+  });
+
+  it('rejects a NON-NUMERIC firstBlockedAtMs (NaN comparison is always false)', () => {
+    const r = classifyIndexHealth(present('A'), T0, { firstBlockedAtMs: 'x', lockIdentity: 'A' });
+    expect(r.nextState.firstBlockedAtMs).toBe(T0);
+    expect(classifyIndexHealth(present('A'), T0 + 120 * SEC, r.nextState).verdict).toBe(VERDICT.JAMMED);
+  });
+
+  it('degrades a garbage state object to start-counting-again, never to permanently-healthy', () => {
+    // Each fixture carries lockIdentity 'A' so sameLock is TRUE on the next tick and the guard
+    // under test is actually REACHED. Without it, sameLock is false regardless and the assertion
+    // cannot fail — mutation proved a dropped `t > 0` guard survived the earlier version.
+    for (const bad of [null, undefined, 'nonsense', 42,
+      { firstBlockedAtMs: -1, lockIdentity: 'A' }, { firstBlockedAtMs: 0, lockIdentity: 'A' },
+      { firstBlockedAtMs: '5000', lockIdentity: 'A' }, { firstBlockedAtMs: Infinity, lockIdentity: 'A' }]) {
+      const r = classifyIndexHealth(present('A'), T0, bad);
+      expect(r.verdict).toBe(VERDICT.HEALTHY);
+      expect(classifyIndexHealth(present('A'), T0 + 120 * SEC, r.nextState).verdict).toBe(VERDICT.JAMMED);
+    }
+  });
+
+  it('a NaN or non-positive dwell floor falls back instead of disabling the detector', () => {
+    // Measured: --dwell-ms abc gave NaN, and `heldForMs >= NaN` is always false — 20 ticks over
+    // 10 simulated minutes of one held lock all reported HEALTHY. A 0 floor is the opposite
+    // failure: it rebuilds the presence-only false positive TS-17a disproves.
+    expect(sanitizeDwellMs(Number('abc'))).toBe(DEFAULT_DWELL_MS);
+    expect(sanitizeDwellMs(0)).toBe(DEFAULT_DWELL_MS);
+    expect(sanitizeDwellMs(-5)).toBe(DEFAULT_DWELL_MS);
+    expect(sanitizeDwellMs(45_000)).toBe(45_000); // a legitimate override still works
+
+    let s;
+    const r1 = classifyIndexHealth(present('A'), T0, s, { dwellMs: NaN }); s = r1.nextState;
+    expect(classifyIndexHealth(present('A'), T0 + 30 * SEC, s, { dwellMs: NaN }).verdict).toBe(VERDICT.HEALTHY);
+    expect(classifyIndexHealth(present('A'), T0 + 120 * SEC, s, { dwellMs: NaN }).verdict).toBe(VERDICT.JAMMED);
+  });
+
+  it('sanitizeState preserves a legitimate in-progress count', () => {
+    const good = { firstBlockedAtMs: T0 - 60 * SEC, lockIdentity: 'A' };
+    expect(sanitizeState(good, T0)).toEqual(good);
+  });
+
+  it('rejects a NUMERIC STRING timestamp — coerced comparisons would let it through', () => {
+    // '5000' > 0 and '5000' <= now are BOTH true, so only Number.isFinite catches it. Without
+    // that check the string flows into the arithmetic and yields a nonsense duration.
+    expect(sanitizeState({ firstBlockedAtMs: '5000', lockIdentity: 'A' }, T0).firstBlockedAtMs).toBeNull();
+  });
+
+  it('rejects an INFINITE dwell floor — Infinity > 0 is true, and it disables the detector', () => {
+    // Number('1e999') === Infinity and is reachable straight from the CLI. `heldForMs >= Infinity`
+    // is always false, so the detector goes silently inert exactly like the NaN case.
+    expect(sanitizeDwellMs(Infinity)).toBe(DEFAULT_DWELL_MS);
+    expect(sanitizeDwellMs(Number('1e999'))).toBe(DEFAULT_DWELL_MS);
+  });
+
+  it('ignores a NON-STRING lockIdentity rather than carrying an object that can never match', () => {
+    // An object identity is re-parsed fresh each tick, so === never holds, the counter never
+    // accumulates, and a real jam never surfaces.
+    expect(sanitizeState({ firstBlockedAtMs: T0 - SEC, lockIdentity: { a: 1 } }, T0).lockIdentity).toBeNull();
+  });
+
+  it('never jams on a null firstBlockedAtMs even when the identity matches', () => {
+    // sanitizeState deliberately ADMITS firstBlockedAtMs === null (it is the legitimate
+    // never-blocked shape). So classifyIndexHealth's own null-guard is the only thing preventing
+    // `nowMs - null` from producing a ~20,000-day duration and an instant false JAMMED.
+    const r = classifyIndexHealth(present('A'), T0, { firstBlockedAtMs: null, lockIdentity: 'A' });
+    expect(r.verdict).toBe(VERDICT.HEALTHY);
+    expect(r.nextState.firstBlockedAtMs).toBe(T0);
+  });
+});
+
+describe('applyPersistenceDegradation — the anti-suppression fix must not itself suppress', () => {
+  const healthy = { verdict: VERDICT.HEALTHY, jammedForMs: null, nextState: {} };
+  const jammed = { verdict: VERDICT.JAMMED, jammedForMs: 120 * SEC, nextState: {} };
+
+  it('passes everything through untouched when state persisted', () => {
+    expect(applyPersistenceDegradation(healthy, true)).toBe(healthy);
+    expect(applyPersistenceDegradation(jammed, true)).toBe(jammed);
+  });
+
+  it('degrades HEALTHY to UNAVAILABLE when state could NOT be persisted', () => {
+    // Because persistence is the signal, a counter that cannot reach the next tick makes the
+    // verdict worthless. Measured pre-fix: exit 0 on 4 of 4 ticks against a real held lock.
+    const r = applyPersistenceDegradation(healthy, false);
+    expect(r.verdict).toBe(VERDICT.UNAVAILABLE);
+    expect(r.reason).toMatch(/not trustworthy/i);
+  });
+
+  it('NEVER degrades a CONFIRMED jam — dropping that guard turns the fix into a suppression bug', () => {
+    // Without the verdict !== JAMMED guard, a proven jam becomes UNAVAILABLE and exits 0. An
+    // already-proven jam does not need state to stay proven.
+    const r = applyPersistenceDegradation(jammed, false);
+    expect(r.verdict).toBe(VERDICT.JAMMED);
+    expect(exitCodeFor(r.verdict)).toBe(1);
+  });
+
+  it('leaves an already-UNAVAILABLE verdict alone', () => {
+    const u = { verdict: VERDICT.UNAVAILABLE, jammedForMs: null, nextState: {}, reason: 'EACCES' };
+    expect(applyPersistenceDegradation(u, false).verdict).toBe(VERDICT.UNAVAILABLE);
+  });
+});
+
+describe('the derived dwell floor is pinned, not merely bounded', () => {
+  it('is exactly 90s — derived from a ~44.2s healthy ceiling and a 420s shortest real jam', () => {
+    // Mutation showed 75s and 61s both survived a range-only assertion. The value carries the
+    // derivation (roughly 2x headroom over healthy bulk work), so pin it.
+    expect(DEFAULT_DWELL_MS).toBe(90_000);
+  });
+
+  it('leaves ~2x headroom over the measured healthy ceiling and sits far under the shortest jam', () => {
+    const HEALTHY_CEILING_MS = 44_200; // measured: git add -A of 12000 files
+    const SHORTEST_REAL_JAM_MS = 420_000; // 7 minutes, recorded
+    expect(DEFAULT_DWELL_MS).toBeGreaterThan(HEALTHY_CEILING_MS * 2);
+    expect(DEFAULT_DWELL_MS).toBeLessThan(SHORTEST_REAL_JAM_MS);
+  });
+
+  it('TICK constant must be small enough that the shortest real jam spans multiple ticks', () => {
+    // HONESTY NOTE: this pins the CONSTANT, not the deployed cadence. The value that actually sets
+    // the tick rate is periodic_process_registry.expected_interval_seconds (60s, with the rationale
+    // recorded on the row), and no code links the two — so the deployed interval could regress with
+    // this suite green. Guarding that link needs a DB read, which the unit tier deliberately cannot
+    // do. Declared rather than left to look like coverage it is not.
+    // Detection needs the SAME identity at two consecutive ticks, so the EFFECTIVE floor is
+    // max(dwell, 2 x tick). A 1800s registered interval would make the effective floor 3600s and
+    // leave the 420s shortest recorded jam structurally undetectable — the derived 90s inert.
+    expect(DEFAULT_TICK_MS * 2).toBeLessThan(420_000);
+    expect(DEFAULT_TICK_MS * 2).toBeLessThanOrEqual(DEFAULT_DWELL_MS);
+  });
+});
+
+describe('TS-7 — the detector is not itself an undrained detector (FR-4)', () => {
+  it('has a DRAIN_DESCRIPTORS entry naming a consumer, a closing path and a predicate', async () => {
+    // PURE structural assertion — no database. drain-inventory.mjs is DB-dependent and the db
+    // vitest project resolves to ZERO files, so a DB-tier test here would never execute.
+    const { DRAIN_DESCRIPTORS } = await import('../../../lib/governance/gauge-registry.js');
+    const d = DRAIN_DESCRIPTORS['index-jam-detector'];
+    expect(d, 'the detector must be declared or the drain inventory flags it NO_CONSUMER').toBeTruthy();
+    expect(d.consumer).toBeTruthy();
+    expect(d.closingPath).toBeTruthy();
+    expect(d.predicate).toMatch(/persist/i);
+    // The shape contract must point readers at the exit code, not at parsing the message.
+    expect(d.shapeContract).toMatch(/exit code/i);
+    // And it must record that lock presence is NOT the signal — the measured correction.
+    expect(d.fieldQuestion).toMatch(/lock presence is a false signal|does NOT answer/i);
+  });
+});
+
+describe('formatVerdict (FR-2)', () => {
+  it('names the tree and the duration, and says it is a shared-resource condition', () => {
+    const msg = formatVerdict('C:/repo', { verdict: VERDICT.JAMMED, jammedForMs: 189 * 60 * SEC });
+    expect(msg).toContain('C:/repo');
+    expect(msg).toContain('189.0 min');
+    expect(msg).toMatch(/SHARED-RESOURCE/i);
+    expect(msg).toMatch(/not a fault in your command/i);
+  });
+
+  it('does not present UNAVAILABLE as a health verdict', () => {
+    const msg = formatVerdict('C:/repo', { verdict: VERDICT.UNAVAILABLE, reason: 'EACCES' });
+    expect(msg).toMatch(/UNAVAILABLE/);
+    expect(msg).toMatch(/Not a health verdict/i);
+  });
+});
