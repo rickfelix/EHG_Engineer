@@ -16,12 +16,15 @@
  */
 import { describe, it, expect } from 'vitest';
 import { fileURLToPath } from 'node:url';
+import fs from 'node:fs';
 import { parsedFlags } from './helpers/parsed-flags.js';
 import adamAdvisory from '../../scripts/adam-advisory.cjs';
 import multiPart from '../../lib/coordinator/multi-part-reply.cjs';
+import replyClass from '../../lib/coordinator/reply-class.cjs';
 
 const { buildAdvisoryPayload, sendBodyFromArgv, VALUE_FLAGS, BOOL_FLAGS, STATUS_VALUE_FLAGS, SWEEP_VALUE_FLAGS } = adamAdvisory;
 const { MAX_PARTS, readExplicitPartMarker } = multiPart;
+const { alreadyAnswered } = replyClass;
 const SRC = fileURLToPath(new URL('../../scripts/adam-advisory.cjs', import.meta.url));
 
 describe('FR-1: Adam stamps first-class part fields on the PAYLOAD', () => {
@@ -104,6 +107,54 @@ describe('FR-1: Adam enforces the SAME part bounds as Solomon', () => {
     const p = buildAdvisoryPayload({ body: 'x', senderCallsign: 'Adam' });
     expect('part_index' in p).toBe(false);
     expect('part_total' in p).toBe(false);
+  });
+});
+
+describe('FR-1 AC-2: Adam consults dedup, and it discriminates by part_index', () => {
+  // Records the filters a query applies, so we can see WHICH discriminators reached the DB.
+  function filterRecordingSb(rows = []) {
+    const filters = [];
+    const sb = {
+      from() {
+        const chain = {
+          select() { return chain; },
+          eq(col, val) { filters.push({ col, val }); return chain; },
+          limit() { return Promise.resolve({ data: rows, error: null }); },
+        };
+        return chain;
+      },
+    };
+    return { sb, filters };
+  }
+
+  it('adds the part_index filter ONLY when a part index is supplied', async () => {
+    // The discrimination is what lets FR-1's multi-part consults share one correlation without dedup
+    // eating parts 2..N. Without it, part 2 is deduped against part 1 and --part is unusable.
+    const withPart = filterRecordingSb([]);
+    await alreadyAnswered(withPart.sb, 'CORR', { messageKind: undefined, partIndex: 2 });
+    expect(withPart.filters.map((f) => f.col)).toContain('payload->>part_index');
+
+    const withoutPart = filterRecordingSb([]);
+    await alreadyAnswered(withoutPart.sb, 'CORR', {});
+    // Strictly conditional: omitting it must reproduce the legacy query exactly, because the
+    // fixed-depth stubs elsewhere in the repo mock exactly two .eq() calls before .limit().
+    expect(withoutPart.filters.map((f) => f.col)).not.toContain('payload->>part_index');
+  });
+
+  it('ADAM\'S SEND PATH passes the discriminators — the wiring, not just the capability', () => {
+    // Adam had ZERO alreadyAnswered call sites; the capability existed and Adam never used it.
+    // The call lives in an unexported main(), so this pins the call SHAPE in source rather than
+    // driving it. That is a weaker instrument than a behavioural test and worth naming as such: it
+    // proves the discriminators are passed, not that the surrounding branch behaves correctly. It is
+    // here because dropping `partIndex` from this call is a silent, one-token regression that makes
+    // --part unusable on Adam, and nothing else in the suite would notice.
+    // Solomon's equivalent wiring at solomon-advisory.cjs:1012 is likewise unpinned — stated rather
+    // than assumed covered.
+    const src = fs.readFileSync(SRC, 'utf8');
+    const call = /alreadyAnswered\(\s*supabase\s*,\s*replyTo\s*,\s*\{([^}]*)\}/.exec(src);
+    expect(call, 'Adam send path must call alreadyAnswered(supabase, replyTo, {...})').not.toBeNull();
+    expect(call[1]).toMatch(/partIndex\s*:/);
+    expect(call[1]).toMatch(/messageKind\s*:/);
   });
 });
 

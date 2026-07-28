@@ -63,7 +63,7 @@ const { routeFraming, FRAMING_ROUTES } = require('../lib/governance/fw3-framing-
 // primary, body-column fallback) — closes instance 4, the coordinator_request body-drop below.
 const { readCanonicalBody } = require('../lib/coordination/lane-contract.cjs');
 // SD-LEO-INFRA-ROLE-BASED-COMMS-ROUTING-PROTOCOL-001-C: sender-stamped reply_class SSOT.
-const { REPLY_CLASSES, isValidReplyClass, computeReplyExpectedBy, checkAndPingOverdueReplies, reconcileLateVerdicts } = require('../lib/coordinator/reply-class.cjs');
+const { REPLY_CLASSES, isValidReplyClass, computeReplyExpectedBy, checkAndPingOverdueReplies, reconcileLateVerdicts, alreadyAnswered } = require('../lib/coordinator/reply-class.cjs');
 // SD-LEO-FIX-ADAM-INBOX-FULL-LANE-001: reuse the canonical Adam-session resolver for the unattended
 // full-lane tick (env vars are not reliably propagated to cron subprocesses).
 const { resolveAdamSessionId } = require('./read-adam-directives.cjs');
@@ -1278,6 +1278,28 @@ async function main() {
   } else if ((process.env.ADAM_PRE_SEND_CONSULT || 'on') === 'off') {
     // Never let a silently-off safety gate leave no trace (security-review finding #5).
     console.warn('[adam-advisory] ⚠ PRE-SEND CONSULT GATE DISABLED (ADAM_PRE_SEND_CONSULT=off) — sending without Solomon-consult review.');
+  }
+
+  // SD-LEO-INFRA-CONSULT-CORRELATION-CONVENTIONS-001 / FR-1 (AC-2): PRE-SEND dedup, mirroring
+  // solomon-advisory.cjs:1012 verbatim in shape. Adam had NO dedup wiring at all — zero
+  // alreadyAnswered call sites — so a re-run answered the same correlation twice while Solomon's
+  // identical path short-circuited.
+  //
+  // The discriminators are the point. Passing message_kind and part_index makes the guard ask "has
+  // THIS kind of message already been posted here?" rather than "has anything been posted here?",
+  // which is what lets FR-1's multi-part consults share ONE correlation without the dedup eating
+  // parts 2..N. Omitting them would make --part unusable on Adam the moment it shipped.
+  //
+  // WHY THIS IS A GRACEFUL RETURN, NOT A THROW: I initially deferred this, arguing it added a
+  // blocking refusal to a path that never refuses, and cited QF-20260705-488. VALIDATION (evidence
+  // a499aa47) pushed back and was right — that incident was the FR-2 CHOKE-level lock swallowing
+  // ensureOriginatorCc's throw, a different layer. This check short-circuits before the insert and
+  // returns cleanly, which is the same mechanism that CLOSED that incident, not the one that caused
+  // it. Adam has no originator-CC leg to heal (grep: ensureOriginatorCc is Solomon-only), so the
+  // heal branch is deliberately absent rather than copied.
+  if (replyTo && (await alreadyAnswered(supabase, replyTo, { messageKind: payload.message_kind, partIndex: payload.part_index }))) {
+    console.log(`(dedup) consult ${String(replyTo).slice(0, 8)} already answered — not re-sending.`);
+    return;
   }
 
   // FR-6: route through the validated dispatch writer. insertCoordinationRow THROWS
