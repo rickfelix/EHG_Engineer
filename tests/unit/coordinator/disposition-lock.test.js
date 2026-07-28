@@ -15,6 +15,7 @@ import { createRequire } from 'module';
 const require = createRequire(import.meta.url);
 const { assertCorrelationNotDisposed, insertCoordinationRow } = require('../../../lib/coordinator/dispatch.cjs');
 const { CORRECTION_KINDS, MESSAGE_KINDS, DISPOSITION_KIND } = require('../../../lib/coordinator/message-kinds.cjs');
+const { MAX_PARTS } = require('../../../lib/coordinator/multi-part-reply.cjs');
 
 const LIVE_TARGET = '0f8d45d8-9531-4ab8-a1b9-6961c405e1ec';
 const CORR = 'corr-disposed-1';
@@ -128,6 +129,28 @@ describe('FR-2: the three exemptions, each guarding a documented incident', () =
   it('does NOT exempt a lone part_index with no total — that is not a series', async () => {
     const { sb } = stubSupabase({ disposed: disposedRow });
     await expect(assertCorrelationNotDisposed(sb, answer({ part_index: 2 }), silentLog)).rejects.toThrow(/DISPATCH_CORRELATION_DISPOSED/);
+  });
+
+  it('BOUNDS the part exemption by MAX_PARTS — it is not a free bypass', async () => {
+    // SECURITY sub-agent finding (evidence aa192915). The first version exempted any row with
+    // part_index and part_total > 1, so a sender could bypass the lock forever on any correlation by
+    // stamping every message --part 1/2, never using a correction path. MAX_PARTS was enforced at the
+    // CLI and in buildAdvisoryPayload but NOT at this choke — and this guard is the control. A bound
+    // checked only at the outermost layer is not a bound.
+    const { sb } = stubSupabase({ disposed: disposedRow });
+    // At the ceiling: still a legitimate series, still exempt.
+    await expect(assertCorrelationNotDisposed(sb, answer({ part_index: 1, part_total: MAX_PARTS }), silentLog)).resolves.toBeUndefined();
+    // Past it, or malformed: NOT exempt. Falls through to the lock rather than past it — the failure
+    // direction is refuse, not admit.
+    for (const bad of [
+      { part_index: 1, part_total: MAX_PARTS + 1 },
+      { part_index: 3, part_total: 2 },
+      { part_index: 0, part_total: 5 },
+      { part_index: 1.5, part_total: 5 },
+      { part_index: 1, part_total: 'many' },
+    ]) {
+      await expect(assertCorrelationNotDisposed(sb, answer(bad), silentLog)).rejects.toThrow(/DISPATCH_CORRELATION_DISPOSED/);
+    }
   });
 
   it('does NOT exempt a disposition from its own lock', async () => {

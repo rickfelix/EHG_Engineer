@@ -60,12 +60,20 @@ describe('FR-1: Adam stamps first-class part fields on the PAYLOAD', () => {
     expect(marker.prefix).not.toContain('COLUMN-VALUE');
   });
 
-  it('emits no top-level correlation_id column key — the write side of the same point', () => {
+  it('carries the part fields in the payload object the sender hands to the choke', () => {
+    // REWRITTEN after the TESTING sub-agent flagged the original (evidence f8a6bbdc). It was titled
+    // "emits no top-level correlation_id column key" but asserted hasOwnProperty(payload,
+    // 'correlation_id') === true — the payload, not the row. It therefore tested nothing about the
+    // row-vs-column distinction its name promised, and was redundant with the assertion above it.
+    // A test whose name claims more than its body checks is worse than no test: it reads as coverage.
+    //
+    // What is actually assertable here: buildAdvisoryPayload returns a PAYLOAD, so the honest claim is
+    // that every correlation field the reader needs lives inside that object and none of it depends on
+    // a sibling column. The row-level column is pinned where it belongs, at the dispatch choke, in
+    // tests/unit/coordinator/disposition-lock.test.js ("reads payload->>correlation_id, NOT the bare
+    // column") and by the divergent-value reader fixture above.
     const p = buildAdvisoryPayload({ body: 'x', senderCallsign: 'Adam', correlationId: 'CORR', partIndex: 1, partTotal: 2 });
-    // The correlation lives INSIDE the payload object. buildAdvisoryPayload returns the payload, so
-    // the assertion that matters is that it is present here — the row-level column is written by
-    // nothing in the repo, which is exactly why the payload must carry it.
-    expect(Object.prototype.hasOwnProperty.call(p, 'correlation_id')).toBe(true);
+    expect(p).toMatchObject({ correlation_id: 'CORR', part_index: 1, part_total: 2 });
   });
 });
 
