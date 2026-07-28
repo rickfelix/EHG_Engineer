@@ -19,9 +19,14 @@
  * zero findings and exit 0 concludes the gate was fine all along -- the exact false-clean this
  * audit was commissioned to disprove.
  *
+ * FR-4 (live probing) and FR-5 are UNIMPLEMENTED. That is a deferral, not a completion; see the
+ * deferral record written to the feedback channel rather than trusting this comment alone.
+ *
  * EXPECTED OUTPUT SHAPE (FR-2 AC-5/AC-13/AC-14), so a correct run is not "fixed" into a wrong one.
- * Over the live 92-item population about 36% carry a named .sql artifact and the rest carry none,
- * giving a histogram of roughly {NO_ARTIFACT: 59, CLASS_UNPROBEABLE: 33}. Once probing lands,
+ * Over the live 106-item population about 31% carry a named .sql artifact and the rest carry none,
+ * giving a histogram of roughly {NO_ARTIFACT: 73, CLASS_UNPROBEABLE: 33}. These counts are a
+ * SNAPSHOT of live tables that grow; treat a drift as a prompt to re-measure, never as evidence the
+ * population was loosened. Once probing lands,
  * APPLIED still requires an object-naming approval AND an artifact AND a live probe, and BOTH
  * approval-and-artifact measured only 4 of the original 43 SD-arm members -- so APPLIED stays rare,
  * and a run reporting many APPLIED has loosened a rule rather than found good news. The conclusion
@@ -161,7 +166,11 @@ async function main() {
 
   const observedPerArm = {};
   for (const arm of POPULATION_ARMS) observedPerArm[arm] = population.filter((p) => p.arms.includes(arm)).length;
-  const baselines = checkBaselines(observedPerArm, BASELINE);
+  const baselines = checkBaselines(observedPerArm, BASELINE, POPULATION_ARMS);
+  for (const a of baselines.armsWithoutFloor) {
+    controlsOk = false;
+    controlFailures.push(`arm has NO baseline floor: ${a}`);
+  }
   if (!baselines.ok) {
     controlsOk = false;
     for (const r of baselines.regressions) controlFailures.push(`arm ${r.arm} shrank: floor ${r.floor}, observed ${r.got}`);

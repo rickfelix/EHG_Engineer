@@ -758,3 +758,119 @@ describe('matchesAuthorityPrefix is WIRED, not merely exported', () => {
     expect(byId['SD-DELEG'].chairmanOnly).toBe(false);
   });
 });
+
+// ---------------------------------------------------------------------------
+// THE SIX `=== true` FIXES, PINNED. They shipped as CODE WITH NO FIXTURE, so
+// every one reverted to truthiness with the suite green — in a file whose
+// header claims every assertion was mutation-verified. That is the same shape
+// as all four prior review rounds: a fix landed as code the suite cannot see
+// revert. A fix without a fixture is not closed, it is merely current.
+// ---------------------------------------------------------------------------
+describe('the gating fields reject NON-BOOLEANS, not merely falsy values', () => {
+  const base = () => ({
+    approval: { namesObjects: true, provenanceIndependent: true, declaresMoreThanArtifact: false },
+    artifact: { present: true },
+    live: { probed: true, matchesArtifact: true, resolvedObjects: ['t'] },
+  });
+
+  it('a truthy OBJECT for namesObjects does not reach APPLIED', () => {
+    // The natural author error: namesObjects is ALSO an exported function returning
+    // {named, identifiers}, so `namesObjects: namesObjects(text)` hands this a truthy object.
+    const e = base(); e.approval.namesObjects = { named: false, identifiers: [] };
+    const r = classifyItem(e);
+    expect(r.verdict).toBe(VERDICT.UNVERIFIABLE);
+    expect(r.inputs.approval).toBe(false);
+  });
+
+  it('a truthy STRING for live.probed does not reach APPLIED', () => {
+    // probed is the one field FR-4 is guaranteed to write; a prober recording 'timeout' must not
+    // turn an unprobed row into a triangulated APPLIED.
+    const e = base(); e.live.probed = 'timeout';
+    const r = classifyItem(e);
+    expect(r.verdict).toBe(VERDICT.UNVERIFIABLE);
+    expect(r.reason).toBe(UNVERIFIABLE_REASON.CLASS_UNPROBEABLE);
+    expect(r.inputs.live).toBe(false);
+  });
+
+  it('a truthy STRING for artifact.present does not reach APPLIED', () => {
+    const e = base(); e.artifact.present = 'db/mig/x.sql';
+    const r = classifyItem(e);
+    expect(r.verdict).toBe(VERDICT.UNVERIFIABLE);
+    expect(r.reason).toBe(UNVERIFIABLE_REASON.NO_ARTIFACT);
+    expect(r.inputs.artifact).toBe(false);
+  });
+
+  it('a truthy non-boolean for provenanceIndependent does not count as independence', () => {
+    const e = base(); e.approval.provenanceIndependent = 'yes';
+    const r = classifyItem(e);
+    expect(r.verdict).toBe(VERDICT.UNVERIFIABLE);
+    expect(r.reason).toBe(UNVERIFIABLE_REASON.LEDGER_SILENT);
+  });
+
+  it('a truthy non-boolean for secondaryArtifactSearchDone does not reach NEVER-BOUND', () => {
+    // SEC-17, and the worst of the four: NEVER_BOUND is exit-0 AND excluded from reasonHistogram,
+    // so a non-boolean here silently drops the row out of the remediation backlog entirely.
+    const r = classifyItem({ artifact: { present: false }, secondaryArtifactSearchDone: 'pending' });
+    expect(r.verdict).toBe(VERDICT.UNVERIFIABLE);
+    expect(r.reason).toBe(UNVERIFIABLE_REASON.NO_ARTIFACT);
+  });
+
+  it('the all-literal-true control still reaches APPLIED', () => {
+    expect(classifyItem(base()).verdict).toBe(VERDICT.APPLIED);
+  });
+});
+
+describe('agreement over an EMPTY probe result is not agreement', () => {
+  it('a vacuous match is UNVERIFIABLE, never APPLIED', () => {
+    // ~81% of harvested probe targets name no real relation (JSON keys and filenames read as DB
+    // objects). A prober resolving them, finding zero, and comparing [] to [] sets
+    // matchesArtifact true and would reach APPLIED having verified nothing. classifyItem never
+    // read approval.identifiers, so the emptiness was invisible to the verdict.
+    const r = classifyItem({
+      approval: { namesObjects: true, provenanceIndependent: true, declaresMoreThanArtifact: false },
+      artifact: { present: true },
+      live: { probed: true, matchesArtifact: true, resolvedObjects: [] },
+    });
+    expect(r.verdict).toBe(VERDICT.UNVERIFIABLE);
+    expect(r.reason).toBe(UNVERIFIABLE_REASON.CLASS_UNPROBEABLE);
+  });
+
+  it('a NON-empty probe result still reaches APPLIED', () => {
+    const r = classifyItem({
+      approval: { namesObjects: true, provenanceIndependent: true, declaresMoreThanArtifact: false },
+      artifact: { present: true },
+      live: { probed: true, matchesArtifact: true, resolvedObjects: ['stage_executions'] },
+    });
+    expect(r.verdict).toBe(VERDICT.APPLIED);
+  });
+});
+
+describe('the floor set is reconciled against the arm set', () => {
+  it('an arm with NO baseline floor is a control failure, not a pass', () => {
+    // checkBaselines only walks the floors it is GIVEN, so deleting a floor deletes a check and
+    // reports as a pass. The reconciliation first shipped in the CLI, where it was correct but
+    // unmutatable — it survived a sweep that flagged everything around it.
+    const r = checkBaselines({ arm_a: 5, arm_b: 5 }, { arm_a: 1 }, ['arm_a', 'arm_b']);
+    expect(r.ok).toBe(false);
+    expect(r.armsWithoutFloor).toEqual(['arm_b']);
+  });
+
+  it('passes when every arm has a floor and none shrank', () => {
+    const r = checkBaselines({ arm_a: 5, arm_b: 5 }, { arm_a: 1, arm_b: 1 }, ['arm_a', 'arm_b']);
+    expect(r.ok).toBe(true);
+    expect(r.armsWithoutFloor).toEqual([]);
+  });
+});
+
+describe('the APPLIED invariant counts inputs with the SAME predicates as the verdict', () => {
+  it('throws if a non-boolean input ever reaches APPLIED', () => {
+    // independentInputCount lost its only caller when the previous dead invariant was replaced,
+    // leaving its three `=== true` predicates unmutatable. Both halves of the invariant are now
+    // load-bearing, so a divergence between the guards and the count is caught rather than assumed.
+    expect(() => classifyItem({
+      approval: { namesObjects: true, provenanceIndependent: true, declaresMoreThanArtifact: false },
+      artifact: { present: true },
+      live: { probed: true, matchesArtifact: true, resolvedObjects: ['t'] },
+    })).not.toThrow();
+  });
+});
