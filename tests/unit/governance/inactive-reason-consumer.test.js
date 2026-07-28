@@ -12,6 +12,10 @@ import { describe, it, expect } from 'vitest';
 import { foldTermResults, NO_DATA_REASONS } from '../../../lib/governance/inactive-reason-consumer.js';
 import { classifyGuard, GUARD_HEALTH } from '../../../lib/governance/guard-sustained-zero.js';
 import { capabilityGapTerm, waveAlignmentTerm, selectAdvisory } from '../../../lib/adam/rationale-bar.js';
+// The live consumer of guard_health — a CommonJS CLI, hence createRequire.
+import { createRequire } from 'node:module';
+
+const { buildLedgerEntry, formatGuardHealth } = createRequire(import.meta.url)('../../../scripts/adam-opportunity-scan.cjs');
 
 describe('AC-4 — capabilityGapTerm now says why, like its sibling', () => {
   // Signature is capabilityGapTerm(candidate, capabilityGap) — the CANDIDATE carries `capability`,
@@ -196,6 +200,68 @@ describe('a no-data reason and an evaluated-and-declined reason are not the same
     expect(cap.observations).toBe(out.cleared);
     // No producer sets candidate.capability, so the live reason is named rather than left blank.
     expect(cap.missingInput).toBe('candidate_has_no_capability');
+  });
+
+  it('THE 21-PASS CASE — the wave term is observed for every candidate, even when NOTHING clears', () => {
+    // Found by mutation, not by reading: deleting `waveTerm` from evaluateCandidate's return left
+    // the whole suite green, so the collection point I had just added to fix a coverage gap was
+    // itself uncovered. The remedy unguarded, one more time.
+    //
+    // The scenario is the real one. Every candidate below fails the bar (no counterfactual), so
+    // cleared === 0 — which is precisely the state that produced 21 identical ADAM_OK rows. The
+    // wave term still RAN 27 times inside evaluateCandidate, and that is what must be reported: if
+    // observations were collected only from cleared candidates, the count would be 0 in exactly the
+    // case the alarm exists to explain.
+    const waveAlignment = { waves: Array.from({ length: 8 }, () => ({ okr_ids: [] })) };  // 8 waves, 0 linked
+    const candidates = Array.from({ length: 27 }, (_, i) => ({
+      scope_key: 'governance',
+      opportunity: `op${i}`, evidence: 'ev', rationale: 'ra', risk: 'ri',   // counterfactual MISSING
+      objective_kr: { objective: 'O-GOV', kr: 'KR', kr_status: 'on_track', off_track_delta: null },
+      contribution_type: 'enabling', confidence: 0.5, okr_score: 30,
+    }));
+
+    const out = selectAdvisory(candidates, { waveAlignment });
+    expect(out.cleared).toBe(0);
+    expect(out.verdict).toBe('ADAM_OK');
+
+    const wave = out.guard_health.results.find((r) => r.guard === 'waveAlignmentTerm');
+    expect(wave.observations, 'the wave term ran 27x but was not observed').toBe(27);
+    expect(wave.state).toBe(GUARD_HEALTH.SUSPECT);
+    expect(wave.missingInput).toBe('empty_aligned_set');
+    expect(wave.detail).toContain('27x');
+  });
+
+  it('…and the operator STDOUT line names it too, not just the ledger JSON', () => {
+    // formatGuardHealth is the human-facing half. Emitted unconditionally when health exists:
+    // a line that appears only when something is wrong makes "measured and fine" and "not measured"
+    // the same observation again.
+    const line = formatGuardHealth({
+      summary: 'GUARD SUSTAINED-ZERO (this advisory pass): healthy=0 suspect=1 inert=0 unknown=1',
+      results: [{ guard: 'waveAlignmentTerm', missingInput: 'empty_aligned_set' }, { guard: 'capabilityGapTerm', missingInput: null }],
+    });
+    expect(line).toContain('suspect=1');
+    expect(line).toContain("waveAlignmentTerm could not judge: 'empty_aligned_set'");
+    expect(line).not.toContain('capabilityGapTerm could not judge');   // no missingInput, nothing to name
+    expect(formatGuardHealth(null)).toBe('');                          // degrades silently, never throws
+  });
+
+  it('AC-3 AT THE OPERATOR — the LEDGER ROW differs, not just an internal field', () => {
+    // The correction that matters most in this SD. I wired the consumer into selectAdvisory, wrote
+    // "the two were indistinguishable from outside — now they are not", and it was FALSE: nothing
+    // read `result.guard_health`, so the ledger row and stdout of pass 22 were byte-identical to the
+    // 21 before it. Computed-and-discarded is what the emit already did; moving it one level up and
+    // calling it consumed is the same defect wearing the remedy's clothes.
+    //
+    // So the assertion is on the artifact a human actually sees.
+    const health = { summary: 'GUARD SUSTAINED-ZERO (this advisory pass): healthy=0 suspect=1 inert=0 unknown=1' };
+    const withHealth = buildLedgerEntry({ scope: { scope_key: 'governance' }, verdict: 'ADAM_OK', cleared: 0, flagEnabled: true, guardHealth: health.summary });
+    const without = buildLedgerEntry({ scope: { scope_key: 'governance' }, verdict: 'ADAM_OK', cleared: 0, flagEnabled: true });
+
+    expect(withHealth.guard_health).toContain('suspect=1');
+    expect(without.guard_health).toBeUndefined();
+    // The two rows must not be mistakable for one another once the ts is set aside.
+    const strip = ({ ts, ...rest }) => rest;   // eslint-disable-line no-unused-vars
+    expect(strip(withHealth)).not.toEqual(strip(without));
   });
 
   it('degenerate input does not throw and does not invent health', () => {

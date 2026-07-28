@@ -86,25 +86,53 @@ describe('the registry is well-formed enough to act on', () => {
     }
   });
 
+  it('…and the file:line RESOLVES — a format check is not a check on the content', () => {
+    // Adversarial review found 6 of 7 line numbers wrong, including one I had just added. The
+    // assertion above only matched /:\d+$/, so every wrong number passed: a check that validates
+    // the SHAPE of an answer and never the answer is this SD's own subject, aimed at this SD's own
+    // inventory. Resolve them instead.
+    const defRe = (n) => new RegExp(
+      `^\\s*(?:export\\s+)?(?:async\\s+)?function\\s+${n}\\b`
+      + `|^\\s*(?:export\\s+)?(?:const|let|var)\\s+${n}\\s*=`
+      + `|^\\s*${n}\\s*[:(]`,
+    );
+    for (const g of GUARD_REGISTRY) {
+      const [rel, lineStr] = g.definedAt.split(/:(?=\d+$)/);
+      const abs = path.join(repoRoot, rel);
+      expect(fs.existsSync(abs), `${g.name}: ${rel} does not exist`).toBe(true);
+      const lines = fs.readFileSync(abs, 'utf8').split(/\r?\n/);
+      const re = defRe(g.name);
+      const actual = lines.findIndex((l) => re.test(l)) + 1;
+      expect(actual, `${g.name} is not defined anywhere in ${rel}`).toBeGreaterThan(0);
+      expect(Number(lineStr), `${g.name}: definedAt says :${lineStr}, actual definition is at :${actual}`).toBe(actual);
+    }
+  });
+
   it('scans a real corpus — a zero-file scan would make every assertion below vacuous', () => {
     expect(FILES.length).toBeGreaterThan(500);
   });
 
-  it('THE SCANNER ITSELF IS EXERCISED — a corpus walk nothing asserts on is not a check', () => {
+  it('THE SCANNER MUST PRODUCE BOTH VERDICTS — FR-3\'s doctrine applied to FR-1\'s own scanner', () => {
     // The gap this closes was found by adversarial review, and it is this SD's own defect class
     // aimed at this SD's own test: replacing the body of wiredCallSites() with `return []` left the
-    // ENTIRE suite green. Every assertion below either tested the pure predicates (suppliesGatedInput,
-    // isStubbedInput) or asserted that the scanner found NOTHING — and "found nothing" is exactly
-    // what a scanner that never opens a file returns. The stated control and the delivered control
-    // were at different layers, and the uncovered layer was the one doing the work.
+    // ENTIRE suite green. Every other assertion here either tested the pure predicates
+    // (suppliesGatedInput, isStubbedInput) or asserted the scanner found NOTHING — and "found
+    // nothing" is exactly what a scanner that never opens a file returns. The stated control and
+    // the delivered control were at different layers, and the uncovered layer did the work.
     //
-    // A POSITIVE control fixes it: assert the scanner finds a call site that really exists.
-    const wired = GUARD_REGISTRY.filter((g) => g.expectedWired === true);
-    expect(wired.length, 'no wired guard is registered, so nothing forces the scanner to find anything').toBeGreaterThan(0);
-    for (const g of wired) {
-      const sites = wiredCallSites(g.name, g.gatedInput, g.module);
-      expect(sites.length, `${g.name} is registered as WIRED but the scanner found no caller supplying '${g.gatedInput}'`).toBeGreaterThan(0);
-    }
+    // The fix is FR-3's rule turned on FR-1: a check never shown to produce BOTH of its verdicts
+    // cannot be cited. So the scanner is required to FIND a call site that genuinely exists, and to
+    // NOT find one for an input that is genuinely absent from that same call. Anchored on a real
+    // production wiring rather than on registry membership — my first attempt registered FR-4's
+    // consumer as a guard purely so this test would have something to find, which reviewers
+    // correctly called a category error: it is a pure fold, its starved branch reports UNKNOWN, and
+    // UNKNOWN is explicitly not the permissive answer this registry enumerates.
+    const found = wiredCallSites('foldTermResults', 'results', 'lib/governance/inactive-reason-consumer.js');
+    expect(found.length, 'the scanner found NO caller for a call site that demonstrably exists').toBeGreaterThan(0);
+    expect(found).toContain('lib/adam/rationale-bar.js');
+
+    const notFound = wiredCallSites('foldTermResults', 'spent', 'lib/governance/inactive-reason-consumer.js');
+    expect(notFound, 'the scanner reported wiring for an input that call never supplies').toEqual([]);
   });
 
   it('every required root is actually walked — narrowing SCAN_DIRS must not pass silently', () => {
@@ -218,7 +246,7 @@ describe('the registry and its patterns cannot be edited into agreement', () => 
     expect(Object.isFrozen(GUARD_REGISTRY)).toBe(true);
     expect(Object.isFrozen(GUARD_REGISTRY[0])).toBe(true);
     const before = knownUnwired().length;
-    expect(() => { GUARD_REGISTRY[0].expectedWired = !GUARD_REGISTRY[0].expectedWired; }).toThrow();
+    expect(() => { GUARD_REGISTRY[0].expectedWired = true; }).toThrow();
     expect(knownUnwired().length).toBe(before);
   });
 

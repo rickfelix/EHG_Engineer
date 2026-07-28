@@ -117,7 +117,7 @@ function appendLedger(entry) {
   return entry;
 }
 
-function buildLedgerEntry({ scope, verdict, cleared = 0, flagEnabled, detail = null, trace = null }) {
+function buildLedgerEntry({ scope, verdict, cleared = 0, flagEnabled, detail = null, trace = null, guardHealth = null }) {
   return {
     ts: new Date().toISOString(),
     scope: scope ? scope.scope_key : 'none',
@@ -127,7 +127,31 @@ function buildLedgerEntry({ scope, verdict, cleared = 0, flagEnabled, detail = n
     ...(detail ? { detail } : {}),
     // SD-LEO-INFRA-ADAM-PRIORITY-ANCHORING-001: audit the rank perturbations.
     ...(Array.isArray(trace) && trace.length ? { trace } : {}),
+    // SD-LEO-INFRA-PURE-GUARD-UNWIRED-001 FR-4. THE READ THAT MAKES THE EMIT A SIGNAL.
+    //
+    // The ledger recorded 21 consecutive `ADAM_OK cleared=0` rows while waveAlignmentTerm was
+    // failing closed on an empty linkage table — every row byte-identical, so "nothing qualified"
+    // and "the term could not judge" were the same observation from outside. Computing the health
+    // and not writing it down would leave pass 22 identical to the 21 before it, which is this
+    // SD's own defect wearing the remedy's clothes; adversarial review caught exactly that here.
+    ...(guardHealth ? { guard_health: guardHealth } : {}),
   };
+}
+
+/**
+ * Render the guard-health line for stdout — the operator-facing half of the same read.
+ *
+ * Emitted UNCONDITIONALLY when health was computed, zeros included. A line that appears only when
+ * something is wrong makes "measured and fine" indistinguishable from "not measured", which is the
+ * ambiguity this whole SD is about, one level up.
+ */
+function formatGuardHealth(health) {
+  if (!health || !health.summary) return '';
+  const named = (health.results || [])
+    .filter((r) => r.missingInput)
+    .map((r) => ` ${r.guard} could not judge: '${r.missingInput}'.`)
+    .join('');
+  return `\n  ${health.summary}${named}`;
 }
 
 // NOTE: lib/adam/* and lib/eva/* are ESM; this CommonJS CLI loads them via
@@ -266,8 +290,13 @@ async function main() {
     const result = selectAdvisory(guarded.kept, selectOpts);
 
     if (!result.surfaced) {
-      const entry = appendLedger(buildLedgerEntry({ scope, verdict: 'ADAM_OK', cleared: 0, flagEnabled: gateEnabled }));
-      process.stdout.write(`ADAM_OK scope=${scope.scope_key} (nothing cleared the bar)\n`);
+      // The 21-pass path. `guard_health` is what separates "nothing qualified" from "the terms
+      // could not judge" — without it these two rows are byte-identical.
+      const entry = appendLedger(buildLedgerEntry({
+        scope, verdict: 'ADAM_OK', cleared: 0, flagEnabled: gateEnabled,
+        guardHealth: result.guard_health ? result.guard_health.summary : null,
+      }));
+      process.stdout.write(`ADAM_OK scope=${scope.scope_key} (nothing cleared the bar)${formatGuardHealth(result.guard_health)}\n`);
       process.stdout.write(JSON.stringify(entry) + '\n');
       process.exit(0);
     }
@@ -282,7 +311,7 @@ async function main() {
     }
 
     // gate ON (env AND registry): emit exactly ONE advisory via the existing lane.
-    appendLedger(buildLedgerEntry({ scope, verdict: 'SURFACED', cleared: result.cleared, flagEnabled: gateEnabled, detail: result.surfaced.dedup_key || null, trace: result.trace }));
+    appendLedger(buildLedgerEntry({ scope, verdict: 'SURFACED', cleared: result.cleared, flagEnabled: gateEnabled, detail: result.surfaced.dedup_key || null, trace: result.trace, guardHealth: result.guard_health ? result.guard_health.summary : null }));
     const r = spawnSync('node', [ADVISORY_CLI, 'send', body], { stdio: 'inherit' });
     process.exit(r.status == null ? 0 : r.status);
   } catch (e) {
@@ -292,7 +321,7 @@ async function main() {
   }
 }
 
-module.exports = { isFlagEnabled, resolveGovernanceFlagGate, parseArgs, buildLedgerEntry, usage, LEDGER_PATH };
+module.exports = { isFlagEnabled, resolveGovernanceFlagGate, parseArgs, buildLedgerEntry, formatGuardHealth, usage, LEDGER_PATH };
 
 if (require.main === module) {
   main();
