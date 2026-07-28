@@ -2,6 +2,14 @@
  * QF-20260728-458 — the retired /fleet-ui session view must be blocked on EVERY spelling of the
  * path, not on an enumerated list of them.
  *
+ * >>> THAT HEADLINE IS NOT TRUE TODAY. READ THE "KNOWN-OPEN" BLOCK AT THE BOTTOM OF THIS FILE
+ * >>> BEFORE TRUSTING ANY GREEN RUN. NTFS 8.3 short names (FLEET-~1.HTM, SESSIO~1.HTM) serve BOTH
+ * >>> retired pages verbatim while every test here passes. 8.3 is a filesystem ALIAS resolved
+ * >>> below the path string, so no normaliser can close it — the fix is structural. Measured and
+ * >>> reproduced three times; raised separately. Bounded here (SD-LEO-FIX-UNOWNED-PARENT-SLICE-001)
+ * >>> because a green UNIVERSAL claim is worse than no claim, and this one has now been falsified
+ * >>> a fourth time by an axis the design said could not exist.
+ *
  * WHY THIS FILE EXISTS, and why it has now been rewritten twice. The matcher has been circumvented
  * three times, each by a spelling the previous fix did not enumerate:
  *   v1  exact literal                     → defeated by filename case, directory case, repeated separators
@@ -32,10 +40,13 @@
  * server/retired-routes.js rather than server/index.js because the latter calls startServer() at
  * import time, so asserting a matcher would otherwise open DB connections and bind a port.
  */
-import { describe, it, expect, beforeAll, afterAll } from 'vitest';
+import { describe, it, expect, beforeAll, afterAll, vi } from 'vitest';
 import express from 'express';
 import path from 'node:path';
 import fs from 'node:fs';
+import crypto from 'node:crypto';
+
+const FLEET_UI_ROOT_FOR_HASH = path.join(process.cwd(), 'server', 'public', 'fleet-ui');
 import {
   installFleetUiSurface,
   isRetiredFleetPanel,
@@ -79,6 +90,12 @@ const AXES = [
  * that spellings nobody has tried yet are already closed. If any of these ever needs its own case
  * added to the matcher, the normalise-then-match design has failed and a fourth enumeration pass
  * has begun.
+ *
+ * SCOPE CORRECTION (SD-LEO-FIX-UNOWNED-PARENT-SLICE-001): "already closed" holds only for axes
+ * that are SPELLINGS OF THE PATH STRING, which is all this list contains. It does NOT hold
+ * generally — NTFS 8.3 aliases resolve BELOW the string and defeat the fence today (see the
+ * KNOWN-OPEN block at the bottom). The design premise was not wrong so much as
+ * mis-scoped: normalisation terminates the spelling axis; it never addressed the aliasing axis.
  */
 const FORWARD_COVER = [
   ['encoded separator', '/fleet-ui%2Fsession-view.html'],
@@ -94,6 +111,15 @@ const FORWARD_COVER = [
  * fleet-panel.* and vision.* share the same /fleet-ui static mount, so an over-broad matcher takes
  * live sibling pages down. Normalising makes over-matching EASIER to do by accident, so this half
  * is pinned at least as hard as the bypasses.
+ *
+ * TRACKED IS NOT DEPLOYED — a correction worth keeping, because I got it wrong in both directions
+ * on the same day. The DEPLOYED mount serves 13 files; git tracks 8. vision.html, mockup.html and
+ * two icons exist and serve 200 in production but are UNTRACKED, so they are absent from a fresh
+ * worktree. I listed a worktree, found no vision.html, and concluded "that file does not exist" —
+ * generalising from a sample selected by a mechanism (git tracking) correlated with exactly what I
+ * was measuring. The original defect was real: the behavioural control WAS vacuous where it runs,
+ * because in CI the derived live-file population is n=1. Both halves matter — the control is weak
+ * in CI, and the mount is richer in production than any test here can see.
  */
 const MUST_PASS_THROUGH = [
   // NB these two are RETIRED as of SD-LEO-FIX-UNOWNED-PARENT-SLICE-001 — but by the FLEET-PANEL
@@ -275,7 +301,11 @@ describe('SD-LEO-FIX-UNOWNED-PARENT-SLICE-001: the surface is actually mounted',
   // the directory. Reading the mount is what makes the control real, so read the mount.
   const FLEET_UI_ROOT = path.join(process.cwd(), 'server', 'public', 'fleet-ui');
   const RETIRED_PREFIXES = ['fleet-panel.', 'session-view.'];
-  const LIVE_FILES = fs.readdirSync(FLEET_UI_ROOT)
+  // withFileTypes: without it a SUBDIRECTORY enumerates as a file and express.static answers 301,
+  // producing a red test that looks like a fence bug and invites loosening the assertion.
+  const LIVE_FILES = fs.readdirSync(FLEET_UI_ROOT, { withFileTypes: true })
+    .filter((d) => d.isFile())
+    .map((d) => d.name)
     .filter((f) => !RETIRED_PREFIXES.some((p) => f.toLowerCase().startsWith(p)));
 
   it('the derived pass-through list is non-empty — otherwise this control proves nothing', () => {
@@ -305,5 +335,106 @@ describe('SD-LEO-FIX-UNOWNED-PARENT-SLICE-001: the surface is actually mounted',
     // The guard is method-agnostic middleware; a route-scoped fix could easily miss this.
     const res = await fetch(base + '/fleet-ui/fleet-panel.html', { method: 'HEAD' });
     expect(res.status).toBe(410);
+  });
+
+  it('a 410 emits the soak log line — QF-20260727-484 says silence IS the evidence', async () => {
+    // That console.log is LOAD-BEARING and was unpinned: deleting it left the suite fully green
+    // while destroying the disposition mechanism for BOTH retirements, and renaming the tag
+    // silently breaks the one documented reader (grep fleet-ui-410 .logs/engineer-*.log).
+    // A routine "drop console.log from middleware" cleanup would have shipped green.
+    const seen = [];
+    const spy = vi.spyOn(console, 'log').mockImplementation((...a) => seen.push(a.join(' ')));
+    try {
+      await fetch(base + '/fleet-ui/fleet-panel.html');
+    } finally {
+      spy.mockRestore();
+    }
+    expect(seen.join('\n')).toContain('[fleet-ui-410]');
+  });
+});
+
+/**
+ * KNOWN-OPEN AXIS — NTFS 8.3 SHORT NAMES DEFEAT BOTH RETIREMENTS. Do not delete these tests to
+ * make the suite look better; they are the honest half of it.
+ *
+ * MEASURED, reproduced independently three times (two sub-agents plus a direct check), against
+ * both this app and the running server on 127.0.0.1:3000:
+ *
+ *   GET /fleet-ui/fleet-panel.html   410     the canonical spelling
+ *   GET /fleet-ui/FLEET-~1.HTM       200     THE SAME FILE, sha256-identical to the on-disk bytes
+ *   GET /fleet-ui/SESSIO~1.HTM       200     ditto, for the ALREADY-SHIPPED session-view retirement
+ *
+ * It is BROWSER-REACHABLE: the WHATWG URL parser leaves that pathname untouched, so a browser
+ * sends it verbatim. No tooling required.
+ *
+ * WHY NO NORMALISER CAN CLOSE IT, and why this file must stop claiming otherwise. 8.3 is a
+ * FILESYSTEM ALIAS resolved BELOW the path string, not another spelling of it. This module's
+ * governing thesis — "reduce the path ONCE to the form the filesystem will actually resolve,
+ * enumeration does not terminate but normalisation does" — is FALSE for this axis, and the
+ * suite's own FORWARD_COVER block above claims "spellings nobody has tried yet are already
+ * closed" while 68 tests pass green and the page is served. That green universal claim is worse
+ * than no claim, so it is bounded here rather than left to be discovered a fourth time.
+ *
+ * NOT FIXED IN THIS SD, deliberately: the real fix is structural — allow-list the mount or move
+ * retired files out of the served root — and it needs its own decision, because the deployed mount
+ * also serves untracked files (vision.html, mockup.html, icons) that a tracked-file allow-list
+ * would take down. Raised to the coordinator at high severity as its own item.
+ *
+ * These tests assert the bypass STILL EXISTS. When it is fixed they go red — which is the point:
+ * whoever closes it is told exactly which claims they may now restore.
+ */
+describe('KNOWN-OPEN: NTFS 8.3 aliases bypass the fence (asserted as OPEN, not as fixed)', () => {
+  let server;
+  let base;
+
+  beforeAll(async () => {
+    const app = express();
+    installFleetUiSurface(app, {
+      root: path.join(process.cwd(), 'server', 'public', 'fleet-ui'),
+    });
+    server = app.listen(0);
+    await new Promise((resolve) => server.once('listening', resolve));
+    base = `http://127.0.0.1:${server.address().port}`;
+  });
+
+  afterAll(() => server?.close());
+
+  it('the matcher does not see the 8.3 alias — a string normaliser structurally cannot', () => {
+    expect(isRetiredFleetPanel('/fleet-ui/FLEET-~1.HTM')).toBe(false);
+    expect(isRetiredSessionView('/fleet-ui/SESSIO~1.HTM')).toBe(false);
+  });
+
+  it('DOCUMENTS THE GAP: the 8.3 alias still serves the retired page (410 canonically, 200 aliased)', async () => {
+    // Guard first: on a volume with 8dot3 disabled the alias 404s and this axis is moot there.
+    // Skipping on 404 keeps the test honest rather than red for the wrong reason.
+    const aliased = await fetch(`${base}/fleet-ui/FLEET-~1.HTM`, { redirect: 'manual' });
+    if (aliased.status === 404) return;   // 8dot3 disabled on this volume — nothing to document
+
+    const canonical = await fetch(`${base}/fleet-ui/fleet-panel.html`, { redirect: 'manual' });
+    expect(canonical.status).toBe(410);
+    expect(aliased.status).toBe(200);
+
+    // PAYLOAD, not proxy: a 200 alone could be an error page. Compare the bytes.
+    const served = crypto.createHash('sha256')
+      .update(Buffer.from(await aliased.arrayBuffer())).digest('hex');
+    const onDisk = crypto.createHash('sha256')
+      .update(fs.readFileSync(path.join(FLEET_UI_ROOT_FOR_HASH, 'fleet-panel.html'))).digest('hex');
+    expect(served).toBe(onDisk);
+  });
+
+  it('DOCUMENTS THE GAP: the bypass emits NO soak log line, so silence cannot mean unhit', async () => {
+    const aliased0 = await fetch(`${base}/fleet-ui/FLEET-~1.HTM`, { redirect: 'manual' });
+    if (aliased0.status === 404) return;
+
+    const seen = [];
+    const spy = vi.spyOn(console, 'log').mockImplementation((...a) => seen.push(a.join(' ')));
+    try {
+      await fetch(`${base}/fleet-ui/FLEET-~1.HTM`);
+    } finally {
+      spy.mockRestore();
+    }
+    // This is the compounding failure: the soak's disposition is "silence is the evidence", and
+    // the one axis that defeats the fence is exactly the axis the instrument cannot see.
+    expect(seen.join('\n')).not.toContain('[fleet-ui-410]');
   });
 });
