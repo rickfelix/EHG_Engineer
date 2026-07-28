@@ -9,7 +9,7 @@ import { describe, it, expect } from 'vitest';
 import fs from 'fs';
 import os from 'os';
 import path from 'path';
-import { classifyAudit, isReparsePoint, collectWorktrees } from '../../../scripts/audit/worktree-reparse-audit.mjs';
+import { classifyAudit, isReparsePoint, collectWorktrees, resolveMainRepoRoot } from '../../../scripts/audit/worktree-reparse-audit.mjs';
 
 describe('classifyAudit — 0/0 is a FAILURE TO MEASURE, never a pass', () => {
   it('refuses an empty denominator', () => {
@@ -75,5 +75,35 @@ describe('collectWorktrees — the denominator is RECURSIVE (TR-1)', () => {
 
   it('returns an empty list for an absent root rather than throwing', () => {
     expect(collectWorktrees(path.join(os.tmpdir(), 'no-such-root-77a2'))).toEqual([]);
+  });
+});
+
+describe('resolveMainRepoRoot — the guard must measure the FLEET, not the caller cwd', () => {
+  // ADDED AFTER A RE-REVIEW FINDING, and the finding is worth recording: this function carried the
+  // ENTIRE fix for "the audit reports FAILED_TO_MEASURE when run from inside a worktree", and
+  // NOTHING tested it. Replacing its body with `return cwd` fully reverted that fix while 896
+  // tests stayed green. I had fixed an un-failable-pin finding by adding an unpinned function.
+  it('walks OUT of a worktree to the main repo root', () => {
+    expect(resolveMainRepoRoot('C:/repo/.worktrees/SD-X-001')).toBe('C:/repo');
+  });
+
+  it('walks out of a NESTED worktree layout too', () => {
+    // .worktrees/qf/<id> is a real layout here, and a single-level assumption missed it once already.
+    expect(resolveMainRepoRoot('C:/repo/.worktrees/qf/QF-1')).toBe('C:/repo');
+  });
+
+  it('returns the repo root UNCHANGED when already at it', () => {
+    expect(resolveMainRepoRoot('C:/repo')).toBe('C:/repo');
+  });
+
+  it('normalises Windows separators so the match is not platform-dependent', () => {
+    // String.raw, deliberately: written as a normal quoted literal the \r in \repo becomes a
+    // CARRIAGE RETURN and the test silently asserts on a different string than it appears to.
+    expect(resolveMainRepoRoot(String.raw`C:\repo\.worktrees\SD-X-001`)).toBe('C:/repo');
+  });
+
+  it('does not truncate on a path that merely CONTAINS the word worktrees', () => {
+    // Guards against matching a bare substring instead of the path segment.
+    expect(resolveMainRepoRoot('C:/repo/my-worktrees-notes')).toBe('C:/repo/my-worktrees-notes');
   });
 });
