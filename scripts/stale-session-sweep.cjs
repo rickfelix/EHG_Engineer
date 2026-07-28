@@ -223,23 +223,30 @@ async function runClaimBoundaryProbe(supabase, classified, telemetryMap, now, ac
         continue;
       }
 
-      // 2a. QF supplement: release_sd clears claiming_session_id but leaves
-      // status='in_progress', which the checkin open-QF picker (status='open')
-      // cannot see — reset it, guarded on every column so a QF with real work
-      // (PR/commit) or a new claimant is never touched.
-      if (/^QF-/.test(releasedSd)) {
-        // The status guard uses the .filter('status','eq',...) spelling (wire-identical
-        // to the .eq form) because stale-session-sweep-claim-safety.test.js anchors its
-        // "phantom in_progress scan" SD-TEST-exclusion window on the FIRST eq-form
-        // status/in_progress match in this file's source — and this quick_fixes UPDATE
-        // (id-scoped; the table has no sd_key column) is outside that guarded
-        // strategic_directives_v2 QA class.
-        await supabase.from('quick_fixes').update({ status: 'open' })
-          .eq('id', releasedSd).filter('status', 'eq', 'in_progress')
-          .is('claiming_session_id', null).is('pr_url', null).is('commit_sha', null);
-      } else {
-        // 2b. SD supplement: phase-boundary reset, parity with the dead-session release loop.
-        try { await resetSdPhaseOnRelease(releasedSd, 'CLAIM_BOUNDARY_PROBE'); } catch { /* best-effort */ }
+      // 2. Work-item supplement. release_sd clears claiming_session_id but leaves a QF at
+      // status='in_progress', which the checkin open-QF picker (status='open') cannot see;
+      // an SD is left mid-phase. Hand the item back so a picker can reach it again.
+      //
+      // SD-LEO-FEAT-FLEET-SESSION-LIFECYCLE-001 / FR-1b slice 2: this WAS the only
+      // implementation of that reset in the codebase — the "exactly ONE release path" the SD
+      // names. It now delegates to the shared lib/fleet/release-work-item.mjs helper, which
+      // owns the QF column predicate and the SD phase-boundary rewind for all sixteen sites.
+      //
+      // DELIBERATELY NOT BEHIND LEO_RELEASE_WORKITEM_RESET. That flag gates ADDING the reset
+      // to the fifteen paths that never had it. This site ALREADY HAS the behaviour, so
+      // gating it would mean the default-OFF flag SILENTLY DISABLES live fleet protection —
+      // a refactor that turns a working guard off is not a refactor.
+      const { releaseWorkItemOnSessionEnd } = await import('../lib/fleet/release-work-item.mjs');
+      // rewindPhase:true is REQUIRED here and is not the helper's default. The sweep's
+      // PHASE_RESET_MAP exists precisely so an SD is not left in mid-phase limbo with no active
+      // claimer, so this site must keep rewinding. Other release paths (cold-recovery,
+      // claim-validity-gate) deliberately PRESERVE the phase for resume — which is why the
+      // helper makes the rewind opt-in rather than automatic.
+      const handback = await releaseWorkItemOnSessionEnd(
+        supabase, releasedSd, 'CLAIM_BOUNDARY_PROBE',
+        { rewindPhase: true, onLog: (m) => console.log('  ' + m) });
+      if (!handback.ok) {
+        warnings.push('CLAIM_BOUNDARY_PROBE: work-item handback failed for ' + releasedSd + ' — ' + handback.detail);
       }
 
       // 3. Quarantine (QF-193 provenance convention). Read-modify-write on FRESH
