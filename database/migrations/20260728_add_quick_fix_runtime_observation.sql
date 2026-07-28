@@ -1,0 +1,68 @@
+-- SD-LEO-INFRA-COMPLETION-EVIDENCE-RUNTIME-001 FR-1 — a home for the runtime observation.
+--
+-- WHY A NEW COLUMN RATHER THAN AN EXISTING FIELD. Both candidates were checked and both are wrong:
+--
+--   verification_notes  TEXT, and its SHAPE ALTERNATES BY WRITER — pipe-appended prose
+--                       (orchestrator.js join(' | ')), newline-appended stamps, and whole-field
+--                       JSON.stringify overwrites. Every reader displays it verbatim; NOTHING
+--                       parses it back for a decision. A prose append after a JSON write silently
+--                       corrupts the JSON. Storing a machine-readable observation there would be a
+--                       value written in a shape its future reader cannot parse — the exact defect
+--                       class this SD family exists to name. Forbidden by this SD's own TR-2.
+--
+--   compliance_details  JSONB, but OWNED by the compliance rubric and genuinely in use: 561 of
+--                       1179 rows populated, with a stable shape
+--                       (qfId/verdict/maxScore/confidence/totalScore/categoryScores/criteriaResults).
+--                       Squatting on it would create the same shape collision one table over.
+--
+-- TIER on the repo's own classifier, run rather than assumed, and reported in full because the two
+-- verdicts differ and the difference is an artifact:
+--   the ALTER alone  -> {tier:1, reason:'all_statements_provably_additive',
+--                        matched:['add_column_nullable:quick_fixes.runtime_observation']}
+--   this whole FILE  -> {tier:2, reason:'multiple_commands_in_statement'}
+-- The TIER-2 is NOT a property of the DDL. commandVerbCount() matches COMMAND_VERBS inside
+-- single-quoted string literals, so the word "merge" in the COMMENT prose below counts as a second
+-- command. Controlled: changing ONLY that word inside the literal, every other byte identical,
+-- flips the file to TIER-1. Signalled as a harness bug (4f0d9379) — third of this family in that
+-- module after QF-20260711-804 (prose semicolons) and QF-20260725-761 (inline comments), both of
+-- which fixed their scanner the same way. The prose is left truthful rather than reworded to
+-- please the classifier; the defect is filed instead of worked around.
+-- Nullable, no default, no backfill, no constraint change: provably additive, so existing rows and
+-- every current writer are unaffected.
+--
+-- APPLIED 2026-07-28T10:21:26Z by codestreetlabs@gmail.com, success=true, recorded in
+-- schema_migrations_applied. NOT applied by the authoring worker, deliberately: TIER-1 auto-apply
+-- is not active (LEO_MIGRATION_TIER_GATE defaults OFF => classification is advisory only), so a
+-- live apply needs either the 3-factor chairman gate (-- @approved-by: <chairman email> + a 1h
+-- single-use MIGRATION_APPLY_TOKEN) or Adam's delegated path (-- @delegated-by: adam, itself behind
+-- a default-OFF kill switch). A worker holds neither and must not fake an approver header, so this
+-- file sat committed-unapplied until the approval arrived.
+--
+-- THIS COMMIT CLOSES APPLIED-BUT-UNMERGED DRIFT. The column went live in the database ~30 minutes
+-- before this file reached main, so for that window the schema was real and the repo did not record
+-- it. That is the same class as MERGED-BUT-NOT-APPLIED, just pointing the other way, and it is the
+-- more dangerous direction: a reader diffing the repo would conclude the column does not exist.
+--
+-- NO ZERO-DDL ALTERNATIVE EXISTS, checked rather than assumed: quick_fixes has NO generic `metadata`
+-- JSONB column (full column list read from the live table), so there is no unowned JSONB to nest
+-- this under the way most tables in this repo would allow.
+--
+-- WHAT GOES IN IT. One observation of the RUNNING system, made at close time — a probe, a render, a
+-- log line, a status code — with its timestamp and how it was obtained. NOT a merge SHA: commit_sha
+-- and pr_url already record that code landed, and this SD exists because landing is not running.
+-- Measured shape, so a reader can rely on it:
+--   { "observed_at": "<ISO8601>", "method": "<how — e.g. http_probe|render|log_grep|manual>",
+--     "observation": "<what was seen — e.g. 'GET /fleet-ui/session-view.html -> 410'>",
+--     "declared_by": "<who or what recorded it>" }
+--
+-- HONEST LIMITATION, recorded here because the column will outlive the discussion: nothing can
+-- verify that a recorded observation reflects a real probe rather than a plausible string. This
+-- makes the claim VISIBLE and ATTRIBUTABLE; it does not make it true. The trigger for requiring one
+-- is worker-DECLARED — no mechanical discriminator exists on quick_fixes to detect "acceptance
+-- depends on runtime behaviour" — so absence must be read as "nobody declared it", never as
+-- "not applicable".
+
+ALTER TABLE quick_fixes ADD COLUMN IF NOT EXISTS runtime_observation JSONB;
+
+COMMENT ON COLUMN quick_fixes.runtime_observation IS
+  'SD-LEO-INFRA-COMPLETION-EVIDENCE-RUNTIME-001 FR-1. One timestamped observation of the RUNNING system at close time (probe/render/log line/status code) — NOT a merge SHA; commit_sha and pr_url already witness that code landed. Shape: {observed_at, method, observation, declared_by}. Trigger is worker-declared, so NULL means "nobody declared one", never "not applicable".';
