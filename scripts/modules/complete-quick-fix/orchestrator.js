@@ -194,7 +194,15 @@ export function buildRuntimeObservation({ existing = null, observation = null, m
   };
 }
 
-export function buildMergedReconcileUpdate({ qf = {}, prUrl, mergeSha = null, nowIso, scopeAcceptedBy = null, runtimeObservation = null, observationMethod = null }) {
+export function buildMergedReconcileUpdate({ qf = {}, prUrl, mergeSha = null, nowIso, scopeAcceptedBy = null, runtimeObservation = null, observationMethod = null, options = {} }) {
+  // Accept the CLI options object as a FALLBACK source for the FR-1 fields, not only explicit
+  // args. Two named params were declared here and the sole production call site passed NEITHER, so
+  // the feature was dead on this path while the unit tests passed — they supplied the args by hand,
+  // reproducing in the test the exact plumbing production omitted. Reading from `options` means the
+  // only way to break it again is to drop `options` entirely, which also breaks scopeAcceptedBy and
+  // fails loudly instead of silently recording a false absence.
+  const declaredObservation = runtimeObservation ?? options.runtimeObservation ?? null;
+  const declaredMethod = observationMethod ?? options.observationMethod ?? null;
   // QF-20260725-691: a merged PR witnesses that CODE LANDED. Terminal `completed` asserts that
   // the QF's SCOPE WAS SATISFIED. Those are different propositions and this path used to
   // substitute one for the other silently — invisible precisely because the merge really did
@@ -250,8 +258,8 @@ export function buildMergedReconcileUpdate({ qf = {}, prUrl, mergeSha = null, no
     // later reader can tell "nobody declared one" from "not applicable". Existing evidence wins.
     runtime_observation: buildRuntimeObservation({
       existing: qf.runtime_observation,
-      observation: runtimeObservation,
-      method: observationMethod,
+      observation: declaredObservation,
+      method: declaredMethod,
       declaredBy: witnessNameFrom(scopeAcceptedBy),
       nowIso
     }),
@@ -375,7 +383,12 @@ export async function completeQuickFix(qfId, options = {}) {
       // SD-REFILL-00QQ60BN: preserve the verification-column stamping the
       // completed_requires_verification CHECK demands, now with the SELF-DERIVED pr_url.
       const reconcileUpdate = buildMergedReconcileUpdate({
-        qf, prUrl: probeWitness.prUrl, mergeSha, nowIso: new Date().toISOString(), scopeAcceptedBy
+        qf, prUrl: probeWitness.prUrl, mergeSha, nowIso: new Date().toISOString(), scopeAcceptedBy,
+        // THIS LINE WAS MISSING AND IT MATTERED. Without it a real --runtime-observation was
+        // dropped here and the row recorded declared:false — a MANUFACTURED FALSE ABSENCE over an
+        // operator's actual declaration, which the never-clobber guard then made permanent. Worse
+        // than a null: FR-1 exists so absence is honest, and this asserted absence that was false.
+        options
       });
       const { error: reconcileErr } = await supabase
         .from('quick_fixes')

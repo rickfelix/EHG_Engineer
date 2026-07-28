@@ -157,7 +157,33 @@ describe('FR-4 already-MERGED probe (witness-gated)', () => {
     // SD-REFILL-00QQ60BN: the reconcile UPDATE payload is built by buildMergedReconcileUpdate
     // (stamping the verification columns the completed_requires_verification CHECK demands) and
     // applied via .update(reconcileUpdate) — now with the SELF-DERIVED pr_url.
-    expect(orchSrc).toMatch(/buildMergedReconcileUpdate\(\{[\s\S]{0,160}qf,[\s\S]{0,160}\}\)/);
+    // RE-ANCHORED (SD-LEO-INFRA-COMPLETION-EVIDENCE-RUNTIME-001). The old bound was {0,160}, so
+    // this broke the moment the call site grew — an explanatory comment and one more argument were
+    // enough. A bounded-length SOURCE regex fails on legitimate insertions rather than on the
+    // defect it names, which is the failure mode this SD is about, in the test layer.
+    //
+    // Widened AND strengthened: `options` is now required, because its ABSENCE was a real shipped
+    // bug — FR-1 fields were declared on buildMergedReconcileUpdate and the sole call site passed
+    // none, so a real --runtime-observation was dropped and the row recorded a FALSE absence.
+    // Tolerating the new argument would have re-anchored the pin around the fix without pinning it.
+    // Slice the ACTUAL call site rather than regex-scanning the whole file. Two traps avoided,
+    // both of which I walked into while writing this:
+    //   1. a bounded-length regex ({0,160}) broke the moment the call grew by a comment and one
+    //      argument — it failed on a legitimate insertion, not on the defect it names;
+    //   2. widening it to {0,600} made it match PAST the call's closing brace, so `options` was
+    //      satisfied by a LATER line (autoDetectGitInfo(testDir, options)). Deleting the argument
+    //      under test failed NOTHING. Verified by mutation: a pin that cannot fail is decoration.
+    // Anchoring on the assignment disambiguates the CALL from the function DEFINITION, which also
+    // contains the text `buildMergedReconcileUpdate({`.
+    const callStart = orchSrc.indexOf('const reconcileUpdate = buildMergedReconcileUpdate({');
+    expect(callStart).toBeGreaterThan(-1);
+    const callText = orchSrc.slice(callStart, orchSrc.indexOf('});', callStart));
+    expect(callText).toContain('qf,');
+    // `options` MUST be threaded: its absence was a real shipped bug. FR-1 fields were declared on
+    // buildMergedReconcileUpdate while the sole call site passed none, so a real
+    // --runtime-observation was dropped and the row recorded a FALSE absence, which the
+    // never-clobber guard then made permanent.
+    expect(callText).toContain('options');
     expect(orchSrc).toMatch(/\.update\(reconcileUpdate\)[\s\S]{0,80}\.eq\('id',\s*qfId\)[\s\S]{0,80}\.neq\('status',\s*'completed'\)/);
     // The probe must return BEFORE autoDetectGitInfo (which is the next major step).
     const probeIdx = orchSrc.indexOf('probeWitness.verified');
