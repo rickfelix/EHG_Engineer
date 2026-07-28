@@ -8,7 +8,7 @@
 // the CHECK without fabricating uat_verified.
 
 import { describe, it, expect } from 'vitest';
-import { buildMergedReconcileUpdate, witnessNameFrom, completionModeStamp, buildRuntimeObservation, completionStampFromOptions } from '../../../scripts/modules/complete-quick-fix/orchestrator.js';
+import { buildMergedReconcileUpdate, witnessNameFrom, completionModeStamp, buildRuntimeObservation, completionStampFromOptions, assertReconcileFlagsSupported } from '../../../scripts/modules/complete-quick-fix/orchestrator.js';
 
 // Mirror of the live completed_requires_verification CHECK predicate (asserted against the DB
 // constraint def: (tests_passing AND uat_verified) OR force_completed when status='completed').
@@ -455,5 +455,60 @@ describe('buildRuntimeObservation over-cap handling (SECURITY S3)', () => {
     const o = buildRuntimeObservation({ observation: 'x'.repeat(9000), nowIso: '2026-07-28T13:00:00.000Z' });
     expect(o.declared).toBeUndefined();
     expect(o.observation).toMatch(/TRUNCATED at \d+ chars/);
+  });
+});
+
+// ── QF-20260727-731 — the reconcile path SILENTLY DROPPED --uat-verified and --actual-loc ────────
+// The payload carried neither key, so both values vanished while the CLI exited success. The row
+// then read uat_verified=false / actual_loc=null, INDISTINGUISHABLE from never having passed them.
+// Reported independently from two separate closures, which made it a pattern not an anecdote.
+describe('reconcile path no longer drops --actual-loc / --uat-verified (QF-20260727-731)', () => {
+  const base = { qf: {}, prUrl: 'https://github.com/x/y/pull/1', nowIso: '2026-07-28T15:00:00.000Z', scopeAcceptedBy: 'Alpha-4 — why' };
+
+  it('honours --actual-loc and its siblings from real parsed argv', async () => {
+    const { parseArguments } = await import('../../../scripts/modules/complete-quick-fix/cli.js');
+    const { options } = parseArguments(['QF-1', '--actual-loc', '42', '--actual-source-loc', '30', '--actual-test-loc', '12']);
+    const u = buildMergedReconcileUpdate({ ...base, options });
+    expect(u.actual_loc).toBe(42);
+    expect(u.actual_source_loc).toBe(30);
+    expect(u.actual_test_loc).toBe(12);
+  });
+
+  it('OMITS the keys entirely when not supplied, so a re-run cannot erase an earlier value', () => {
+    // Writing null instead of omitting would turn a bare re-run into silent data loss — the same
+    // shape as the drop this QF fixes, pointing the other way.
+    const u = buildMergedReconcileUpdate({ ...base, options: {} });
+    expect('actual_loc' in u).toBe(false);
+    expect('actual_source_loc' in u).toBe(false);
+  });
+
+  it('REFUSES --uat-verified loudly instead of discarding it', () => {
+    // UAT provably does not run on this path, so honouring a BARE BOOLEAN would write an anonymous
+    // claim that it did. force_completed carries the CHECK here precisely to avoid fabricating it.
+    expect(() => assertReconcileFlagsSupported({ uatVerified: true }))
+      .toThrow(/UAT_VERIFIED_UNSUPPORTED_ON_RECONCILE/);
+    // --uat-verified no is ALSO refused: the flag is unsupported here, not merely un-honoured when
+    // true. Silently accepting "no" would leave the caller believing the flag was read.
+    expect(() => assertReconcileFlagsSupported({ uatVerified: false }))
+      .toThrow(/UAT_VERIFIED_UNSUPPORTED_ON_RECONCILE/);
+  });
+
+  it('names the supported alternative in the refusal, not just the rejection', () => {
+    // A refusal that does not say what to do instead reproduces the original problem: the caller
+    // still cannot get their attestation recorded.
+    expect(() => assertReconcileFlagsSupported({ uatVerified: true })).toThrow(/--scope-accepted/);
+  });
+
+  it('passes through untouched when the flag was never given', () => {
+    expect(() => assertReconcileFlagsSupported({})).not.toThrow();
+    expect(() => assertReconcileFlagsSupported()).not.toThrow();
+  });
+
+  it('still sets force_completed — the CHECK contract must not regress', () => {
+    // Explicitly pinned because the QF warns against "fixing" this by dropping force_completed:
+    // that would either break completed_requires_verification or fabricate uat_verified.
+    const u = buildMergedReconcileUpdate({ ...base, options: { actualLoc: 42 } });
+    expect(u.force_completed).toBe(true);
+    expect(u.uat_verified).toBeUndefined();
   });
 });
