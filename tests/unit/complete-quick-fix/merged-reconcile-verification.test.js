@@ -8,7 +8,7 @@
 // the CHECK without fabricating uat_verified.
 
 import { describe, it, expect } from 'vitest';
-import { buildMergedReconcileUpdate, witnessNameFrom } from '../../../scripts/modules/complete-quick-fix/orchestrator.js';
+import { buildMergedReconcileUpdate, witnessNameFrom, completionModeStamp } from '../../../scripts/modules/complete-quick-fix/orchestrator.js';
 
 // Mirror of the live completed_requires_verification CHECK predicate (asserted against the DB
 // constraint def: (tests_passing AND uat_verified) OR force_completed when status='completed').
@@ -199,5 +199,70 @@ describe('FR-2: witnessNameFrom extracts an identity, not a paragraph', () => {
   it('does not choke on a hyphenated name with no separator spaces', () => {
     // "well-known" must not be split at the hyphen — only a SPACED separator delimits who from why.
     expect(witnessNameFrom('well-known-agent')).toBe('well-known-agent');
+  });
+});
+
+// SD-LEO-INFRA-COMPLETION-EVIDENCE-RUNTIME-001 FR-2, SECOND WRITER.
+//
+// FR-2 has two writers. The reconcile path above was pinned; the DIRECT completion path was not,
+// and it was unpinned in the way that hides a regression rather than merely leaving a hole.
+//
+// The value lived in an inline IIFE, so nothing could import it. The only test naming
+// FORCE_COMPLETE asserts FORCE_COMPLETE_NO_REASON — a different thing entirely. And the fallback
+// made the gap self-concealing: under test CLAUDE_SESSION_ID is unset and no --scope-accepted is
+// passed, so `who` is null and the stamp degrades to the bare mode label — EXACTLY the pre-FR-2
+// output. A test written against observed behaviour would have certified the old behaviour and
+// passed. Deleting the identity logic outright would not have failed a single test.
+//
+// Hence these pins target the branches ambient state suppresses, not the one it exposes.
+describe('completionModeStamp — FR-2 second writer', () => {
+  it('prefers the explicit scope-accepter over the operator session', () => {
+    // Precedence matters: the human/agent who attested to SCOPE outranks whoever happened to run
+    // the command. Both are present here so the test cannot pass by accident of absence.
+    expect(completionModeStamp({
+      forceComplete: true,
+      scopeAcceptedBy: 'Alpha-4 (worker 39aa8a1e) — scope satisfied across two PRs',
+      sessionId: 'session-should-not-win'
+    })).toBe('Alpha-4 (worker 39aa8a1e) (FORCE_COMPLETE)');
+  });
+
+  it('falls back to the operator session when no scope-accepter was given', () => {
+    // THE BRANCH THE ENVIRONMENT HID. With CLAUDE_SESSION_ID unset in test, live behaviour never
+    // reached this, which is why the improvement shipped unexercised.
+    expect(completionModeStamp({ forceComplete: true, sessionId: '39aa8a1e' }))
+      .toBe('39aa8a1e (FORCE_COMPLETE)');
+  });
+
+  it('carries the mode as a suffix so classification on these literals still works', () => {
+    // Anything grouping rows by how they closed must still find the mode inside the value.
+    expect(completionModeStamp({ forceComplete: false, sessionId: 'x' })).toContain('(UAT_AGENT)');
+    expect(completionModeStamp({ forceComplete: true, sessionId: 'x' })).toContain('(FORCE_COMPLETE)');
+  });
+
+  it('degrades to the bare mode label when there is no identity at all', () => {
+    // The documented fallback, pinned so it stays DELIBERATE rather than becoming the default
+    // again by accident. This is the shape FR-2 exists to make rare — not impossible.
+    expect(completionModeStamp({ forceComplete: true })).toBe('FORCE_COMPLETE');
+    expect(completionModeStamp({ forceComplete: false })).toBe('UAT_AGENT');
+  });
+
+  it('never returns null or empty — a close is always attributable to at least its mode', () => {
+    // The regression that would matter most: a close attributed to NOBODY. 392 of 629 force-
+    // completed rows already carry verified_by=null; this function must never add to that set.
+    for (const args of [{}, { forceComplete: true }, { scopeAcceptedBy: '   ' }, { sessionId: null }]) {
+      const out = completionModeStamp(args);
+      expect(out).toBeTruthy();
+      expect(typeof out).toBe('string');
+    }
+  });
+
+  it('treats a whitespace-only scope-accepter as absent rather than stamping blank', () => {
+    expect(completionModeStamp({ forceComplete: true, scopeAcceptedBy: '   ', sessionId: 's1' }))
+      .toBe('s1 (FORCE_COMPLETE)');
+  });
+
+  it('is callable with no arguments at all', () => {
+    // Guards the default-parameter object: a bare call must not throw on destructuring.
+    expect(completionModeStamp()).toBe('UAT_AGENT');
   });
 });
