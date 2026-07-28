@@ -93,7 +93,9 @@ describe('AC-12 — the pinned object-naming predicate (TS-29)', () => {
 
 describe('THE ASYMMETRY — APPLIED requires three inputs (TS-24)', () => {
   const agreeing = (approvalNamesObjects) => ({
-    approval: { namesObjects: approvalNamesObjects, provenanceIndependent: true },
+    // declaresMoreThanArtifact: false means the coverage comparison WAS performed and the artifact
+    // covers the approval. Omitting it is not equivalent — see the three-way test below.
+    approval: { namesObjects: approvalNamesObjects, provenanceIndependent: true, declaresMoreThanArtifact: false },
     artifact: { present: true },
     live: { probed: true, matchesArtifact: true },
   });
@@ -108,6 +110,40 @@ describe('THE ASYMMETRY — APPLIED requires three inputs (TS-24)', () => {
 
   it('returns APPLIED only with all three inputs present', () => {
     expect(classifyItem(agreeing(true)).verdict).toBe(VERDICT.APPLIED);
+  });
+
+  it('an UNPERFORMED coverage comparison reaches neither APPLIED nor DIVERGENT', () => {
+    // declaresMoreThanArtifact has three real states and collapsing it either way is wrong:
+    // `=== true` alone let UNDEFINED resolve toward APPLIED with the check permanently off, since
+    // no caller sets the field; `!== false` would route every unset row to DIVERGENT, which is the
+    // false-divergent mirror. Unknown means the comparison never happened.
+    const r = classifyItem({
+      approval: { namesObjects: true, provenanceIndependent: true },  // declaresMoreThanArtifact unset
+      artifact: { present: true },
+      live: { probed: true, matchesArtifact: true },
+    });
+    expect(r.verdict).toBe(VERDICT.UNVERIFIABLE);
+    expect(r.reason).toBe(UNVERIFIABLE_REASON.LEDGER_SILENT);
+  });
+
+  it('an approval that OVER-DECLARES relative to the artifact is DIVERGENT', () => {
+    const r = classifyItem({
+      approval: { namesObjects: true, provenanceIndependent: true, declaresMoreThanArtifact: true },
+      artifact: { present: true },
+      live: { probed: true, matchesArtifact: true },
+    });
+    expect(r.verdict).toBe(VERDICT.APPLIED_BUT_DIVERGENT);
+  });
+
+  it('UNKNOWN surplus is UNATTRIBUTABLE, not attributable', () => {
+    // `=== true` would let an unset field present unexplained live objects as divergence-from-
+    // approval. Polarity rule: enables a stronger claim -> `=== true`; blocks one -> `!== false`.
+    const r = classifyItem({
+      approval: { namesObjects: false },
+      artifact: { present: true },
+      live: { probed: true, matchesArtifact: false },   // surplus unset
+    });
+    expect(r.surplusUnattributable).toBe(true);
   });
 
   it('UNKNOWN provenance is not independence — it must not reach APPLIED (TS-22)', () => {

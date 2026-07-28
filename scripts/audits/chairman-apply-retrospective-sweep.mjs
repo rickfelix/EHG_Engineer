@@ -170,12 +170,27 @@ function addCompletionFlagArm(population, feedbackRows) {
 
 /** Assemble the evidence the pure classifier consumes. No verdict logic lives here. */
 function buildEvidence(item) {
-  const approvalText = item.source === 'quick_fixes'
-    ? (item.freeText || '') : approvalTextOf(item.metadata);
+  // FREE-TEXT SOURCES CARRY THEIR CONTENT IN freeText, NOT metadata. This selected on the literal
+  // 'quick_fixes', so every completion-flag row fell through to approvalTextOf({}) === '' and was
+  // verdicted from an empty string: 16 of 19 carried a .sql path that was silently discarded,
+  // including the arm's OWN manifest seed. checkManifest proved the seed IDENTIFIER resolved; it
+  // never proved the seed's EVIDENCE was read, so every control stayed green.
+  const approvalText = item.source === 'strategic_directives_v2'
+    ? approvalTextOf(item.metadata) : (item.freeText || '');
   const objects = namesObjects(approvalText);
   const artifactMatch = approvalText.match(SQL_ARTIFACT_RE);
   return {
-    approval: { namesObjects: objects.named, identifiers: objects.identifiers, provenanceIndependent: true },
+    approval: {
+      namesObjects: objects.named,
+      identifiers: objects.identifiers,
+      // NOT INDEPENDENT, and saying so is the point. Both the approval and the artifact below are
+      // extracted from THIS SAME STRING, so they share one origin — exactly the self-comparison the
+      // asymmetry exists to reject. Hardcoding `true` here asserted the flag the lib checks and
+      // silently defeated it: 21 rows would reach hasApproval with provenance never established the
+      // moment a live prober lands. Real independence requires a second source (ledger/git/commit)
+      // that FR-4 has not built yet; until then this is false, which changes ZERO rows today.
+      provenanceIndependent: false,
+    },
     artifact: { present: Boolean(artifactMatch), path: artifactMatch ? artifactMatch[0] : null },
     // Live probing is a follow-on capability; until it exists every row reports the reason that
     // says so, rather than inferring state from a file-level verifier that has no such class and
