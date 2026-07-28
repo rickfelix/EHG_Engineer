@@ -44,7 +44,7 @@ import {
 import { loadState, dashboardState } from './state.js';
 // QF-20260725-096: retired-route matchers, kept in their own side-effect-free module so the scope
 // pins can import the real pattern without booting the server.
-import { RETIRED_SESSION_VIEW_RE } from './retired-routes.js';
+import { isRetiredSessionView } from './retired-routes.js';
 
 // Import WebSocket handler
 import { initializeWebSocket, broadcastUpdate } from './websocket.js';
@@ -210,7 +210,17 @@ app.use(express.json());
 // imported from here would open DB connections and bind a port just to check a regex. A test that
 // re-declares the pattern instead would prove only that its own copy behaves, which is exactly how
 // the circumventable first version passed review.
-app.all(RETIRED_SESSION_VIEW_RE, (req, res) => {
+// QF-20260728-458: MIDDLEWARE, NOT `app.all(<regex>)`. Express matches a route regex against the
+// RAW pathname, so a normalise-then-match design cannot be expressed as a route pattern at all —
+// the normalisation has to happen before the decision. That is the whole reason three spellings
+// kept getting served: the guard was matching a different string than the file server resolved.
+// Registered here, still ahead of the /fleet-ui static mount below, so the retirement wins.
+app.use((req, res, next) => {
+  if (!isRetiredSessionView(req.path)) return next();
+  return retiredSessionViewHandler(req, res);
+});
+
+function retiredSessionViewHandler(req, res) {
   // QF-20260727-484 — WITHOUT THIS LINE THE SOAK CANNOT PRODUCE EVIDENCE. The retirement above
   // is dispositioned by a seven-day soak in which SILENCE IS THE EVIDENCE, but this server has no
   // request logging of any kind (no morgan — it is not even a dependency), so a 410 hit wrote
@@ -236,7 +246,7 @@ app.all(RETIRED_SESSION_VIEW_RE, (req, res) => {
     'This capability is knowingly unavailable from the web surface. If you needed this page,\n' +
     'that is a signal worth raising — the retirement is reversible.\n'
   );
-});
+}
 
 // Fleet-launcher operator UI static assets (SD-LEO-INFRA-LEO-LAUNCHER-SHELL-001-B): the
 // Session View pane fragment, mountable into the parent shell. See the ARCH-007 exception
