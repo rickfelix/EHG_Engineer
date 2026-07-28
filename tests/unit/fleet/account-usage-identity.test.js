@@ -18,6 +18,7 @@ const reader = require_(path.join(REPO, 'lib/fleet/account-usage-reader.cjs'));
 const {
   UNAVAILABLE_REASONS, accountConfigJsonPath, resolveSlotIdentities,
   findIdentityCollisions, readAllAccounts, ACCOUNT_REGISTRY,
+  resolveDisplayIdentities, identityDisplayMap,
 } = reader;
 
 const ENV = { USERPROFILE: 'C:\\Users\\test' };
@@ -192,6 +193,36 @@ describe('FR-1 — display mapping is configuration, and unset is safe', () => {
       getAccountIdentity: (() => { let i = 0; return () => ({ email: 'a@b.invalid', orgName: 'O', accountUuid8: `u-${i++}` }); })(),
     });
     expect(out.map((r) => r.name)).toContain('True Account Name');
+  });
+
+  it('THE KEYING PIN — display identities are keyed exactly as the readings are named', async () => {
+    // The defect this pins: identities were resolved under RAW registry slot names while the
+    // readings carried RELABELLED ones, so every consumer lookup missed and account_uuid8 was
+    // persisted NULL — but ONLY when FLEET_ACCOUNT_IDENTITY_MAP was set, i.e. only when the
+    // feature was actually configured. Invisible in production and invisible to every test that
+    // did not compare the two key spaces. Assert the invariant that was violated, not the symptom.
+    let i = 0;
+    const opts = {
+      env: { ...ENV, FLEET_ACCOUNT_IDENTITY_MAP: JSON.stringify({ 'u-0': 'True Account Name' }) },
+      fs: fsWithTokens,
+      fetchImpl: fetchReturning(200, { five_hour: { utilization: 1 }, seven_day: { utilization: 1 } }),
+      getAccountIdentity: () => ({ email: 'a@b.invalid', orgName: 'O', accountUuid8: `u-${i++}` }),
+    };
+    const readings = await readAllAccounts(opts);
+    i = 0; // same identity sequence, so the two calls describe the same fleet
+    const identities = resolveDisplayIdentities(opts);
+    expect([...identities.keys()].sort()).toEqual(readings.map((r) => r.name).sort());
+    expect([...identities.keys()]).toContain('True Account Name');
+  });
+
+  it('a display name cannot smuggle control characters into logs or the API response', () => {
+    // identityDisplayMap is operator-supplied config whose value reaches the API response AND a
+    // console.warn line. The snapshot writer sanitises only at the DB boundary, so without this
+    // the config could inject terminal escapes into fleet logs.
+    const map = identityDisplayMap({
+      FLEET_ACCOUNT_IDENTITY_MAP: JSON.stringify({ 'u-0': 'Bad\x1b[31mName\x00' }),
+    });
+    expect(map.get('u-0')).toBe('Bad[31mName');
   });
 
   it('malformed map config never breaks the strip', async () => {

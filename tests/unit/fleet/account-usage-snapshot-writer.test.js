@@ -146,28 +146,34 @@ describe('fail-soft — persistence never breaks the read path', () => {
 });
 
 /**
- * Read-side client that actually HONOURS the filters it is given.
+ * Read-side client that actually HONOURS every filter it is given: eq, in, the not-null `or`,
+ * the ordering, AND the row limit.
  *
- * A mock that ignores `.or()` and just hands back a canned array cannot detect a missing filter —
- * which is precisely how the shadowing defect below survived the first round of tests. So this fake
- * applies the not-null predicate and the ordering for real, against a supplied row set.
+ * EACH OF THOSE IS THERE BECAUSE ITS ABSENCE HID A REAL DEFECT. A canned-array mock could not see a
+ * missing `or` filter (the shadowing bug). A mock whose `limit` ignored its argument could not see
+ * a row budget shared across accounts (the crowding bug) — the same blind spot one layer in. A fake
+ * that cannot express the failure cannot witness the fix.
  */
 function readClient(result) {
   const rows = Array.isArray(result?.data) ? result.data : null;
-  const state = { orArg: null };
+  const state = { orArg: null, eq: null, in: null };
   const q = {
     state,
     select: () => q,
-    in: () => q,
+    eq: (col, val) => { if (col === 'account_name') state.eq = val; return q; },
+    in: (col, vals) => { if (col === 'account_name') state.in = vals; return q; },
     or: (expr) => { state.orArg = expr; return q; },
     order: () => q,
-    limit: async () => {
+    limit: async (n) => {
       if (!rows) return result;                       // error / null-data cases pass straight through
       let out = rows;
+      if (state.eq !== null) out = out.filter((r) => r.account_name === state.eq);
+      if (state.in !== null) out = out.filter((r) => state.in.includes(r.account_name));
       if (state.orArg && /weekly_pct\.not\.is\.null/.test(state.orArg)) {
         out = out.filter((r) => r.weekly_pct !== null || r.five_hour_pct !== null);
       }
       out = [...out].sort((a, b) => String(b.fetched_at).localeCompare(String(a.fetched_at)));
+      if (Number.isFinite(n)) out = out.slice(0, n);   // the budget is REAL, or crowding is invisible
       return { data: out, error: null };
     },
   };
@@ -200,6 +206,24 @@ describe('fetchLastKnown — the read side, equally fail-soft', () => {
     const theNumber = { ...STORED, weekly_pct: 92, fetched_at: '2026-07-28T04:00:00.000Z' };
     const map = await fetchLastKnown(readClient({ data: [justWritten, theNumber], error: null }), ['Some Account']);
     expect(map.get('Some Account')?.weekly_pct).toBe(92);
+  });
+
+  it('THE CROWDING REGRESSION — busy neighbours must not push an account out of the window', async () => {
+    // Exhaustion lasts HOURS (the 5-hour and weekly windows are the whole point), but the healthy
+    // accounts keep writing a row a minute each. Under a row budget shared across all accounts,
+    // ordered fetched_at DESC globally, the exhausted account's last number-bearing row falls out
+    // of range after roughly half an hour and the number vanishes again — the original erasure,
+    // merely delayed past the point anyone would notice it in a test.
+    const noisy = [];
+    for (let i = 0; i < 400; i++) {
+      const t = new Date(Date.parse('2026-07-28T06:00:00.000Z') + i * 60_000).toISOString();
+      noisy.push({ ...STORED, account_name: 'Busy One', weekly_pct: 5, fetched_at: t });
+      noisy.push({ ...STORED, account_name: 'Busy Two', weekly_pct: 6, fetched_at: t });
+    }
+    const staleButReal = { ...STORED, account_name: 'Quiet One', weekly_pct: 97, fetched_at: '2026-07-28T05:00:00.000Z' };
+    const map = await fetchLastKnown(readClient({ data: [...noisy, staleButReal], error: null }),
+      ['Quiet One', 'Busy One', 'Busy Two']);
+    expect(map.get('Quiet One')?.weekly_pct).toBe(97);
   });
 
   it('a run of consecutive NULL rows still resolves to the last real number', async () => {
