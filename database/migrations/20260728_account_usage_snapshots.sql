@@ -91,6 +91,10 @@ COMMENT ON TABLE account_usage_snapshots IS
 -- (rls_disabled_in_public) goes red and the table is exposed to anon/authenticated via PostgREST.
 ALTER TABLE account_usage_snapshots ENABLE ROW LEVEL SECURITY;
 
+-- Guarded so the file is actually re-runnable. The TABLE and INDEX above use IF NOT EXISTS, which
+-- advertises idempotence this statement did not have: a re-run aborted here, which for a
+-- chairman-gated migration means the failure surfaces during a supervised apply.
+DROP POLICY IF EXISTS account_usage_snapshots_service_role_all ON account_usage_snapshots;
 CREATE POLICY account_usage_snapshots_service_role_all
   ON account_usage_snapshots
   FOR ALL
