@@ -96,6 +96,12 @@ export function parseArguments(args) {
       // merged-PR witness alone proves only that code landed, so it now reconciles NON-TERMINAL;
       // this flag is what makes 'completed' truthful. Value names who/why for the audit trail.
       'scope-accepted':     { type: 'string' },
+      // SD-LEO-INFRA-COMPLETION-EVIDENCE-RUNTIME-001 FR-1: one observation of the RUNNING system at
+      // close time (a probe, a render, a status code) — NOT a merge SHA, which commit_sha already
+      // witnesses. Omitting it is allowed and is recorded EXPLICITLY as declared:false rather than
+      // left null, so a later reader can tell "nobody declared one" from "not applicable".
+      'runtime-observation': { type: 'string' },
+      'observation-method':  { type: 'string' },
       'skip-tests':         { type: 'boolean' },
       'tests-pass':         { type: 'string' },
       'skip-typecheck':     { type: 'boolean' },
@@ -209,6 +215,8 @@ export function parseArguments(args) {
     actualTestLoc:     values['actual-test-loc']   != null ? parseInt(values['actual-test-loc'], 10) : undefined,
     prUrl:             values['pr-url'],
     scopeAccepted:     values['scope-accepted'],
+    runtimeObservation: values['runtime-observation'],
+    observationMethod:  values['observation-method'],
     skipTestRun:       values['skip-tests']       || false,
     testsPass:         values['tests-pass']       != null ? values['tests-pass'].toLowerCase().startsWith('y') : undefined,
     skipTypeCheck:     values['skip-typecheck']   || false,
