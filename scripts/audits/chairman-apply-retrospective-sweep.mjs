@@ -41,6 +41,7 @@ import dotenv from 'dotenv';
 import {
   VERDICT, UNVERIFIABLE_REASON, POPULATION_ARMS,
   classifyItem, checkManifest, checkBaselines, reasonHistogram, exitCodeFor,
+  findUnconsumedKeys,
 } from '../../lib/audits/chairman-apply-sweep.js';
 // Collectors live in lib/ because both of this module's real defects were in THEM, and the suite
 // could not reach them while they sat behind the Supabase import in this file.
@@ -84,6 +85,7 @@ const MANIFEST = Object.freeze([
   { identifier: 'SD-FDBK-GEN-FIX-TRG-ENFORCE-001', source_arm: 'apply_to_prod_requires_user_go', note: '' },
   { identifier: 'SD-LEO-INFRA-CLEAN-CLONE-LAUNCH-001', source_arm: 'chairman_enum_migration_authorization', note: 'ALTER TYPE venture_origin_type ADD VALUE' },
   { identifier: 'SD-LEO-INFRA-ADAM-DURABLE-STANDING-001', source_arm: 'may_require_ddl', note: 'DRAFT status' },
+  { identifier: 'SD-LEO-INFRA-MIGRATION-DEPLOY-DRIFT-001', source_arm: 'chairman_approval', note: 'FR-1 apply of ~9 migration gaps — the member that admitted this arm' },
   { identifier: 'SD-LEO-INFRA-SOURCING-ENGINE-ACTIVATION-001', source_arm: 'chairman_authorized', note: 'additive migrations authorised via the governed apply path' },
   { identifier: 'SD-LEO-INFRA-ADAM-DBCHANGE-APPLY-DELEGATION-001', source_arm: 'chairman_authorization', note: 'the CHARTER of the gate this audit examines' },
   { identifier: 'SD-LEO-ORCH-ADAM-PLAN-KEEPER-001-D', source_arm: 'chairman_preauthorization', note: 'conditional pre-authorised flip' },
@@ -104,6 +106,7 @@ const BASELINE = Object.freeze({
   chairman_gated_migration_possible: 1, apply_to_prod_requires_user_go: 1,
   chairman_enum_migration_authorization: 1, may_require_ddl: 2,
   chairman_authorized: 10, chairman_authorization: 3, chairman_preauthorization: 1,
+  chairman_approval: 4,
 });
 
 /**
@@ -166,6 +169,17 @@ async function main() {
 
   const observedPerArm = {};
   for (const arm of POPULATION_ARMS) observedPerArm[arm] = population.filter((p) => p.arms.includes(arm)).length;
+  // FR-7 AC-3. Runs over EVERY SD, not just current members — the whole point is to see keys no
+  // arm reads. A key with sole-reach > 0 means the population is provably incomplete.
+  const unconsumed = findUnconsumedKeys(
+    sds.map((sd) => ({ identifier: sd.sd_key, metadata: sd.metadata })), POPULATION_ARMS);
+  if (!unconsumed.ok) {
+    controlsOk = false;
+    for (const f of unconsumed.findings.filter((x) => x.soleReach > 0)) {
+      controlFailures.push(
+        `UNCONSUMED_KEY ${f.key}: ${f.members} SDs, ${f.soleReach} reached by NO arm — admit it or add it to EXCLUDED_KEYS with a reason`);
+    }
+  }
   const baselines = checkBaselines(observedPerArm, BASELINE, POPULATION_ARMS);
   for (const a of baselines.armsWithoutFloor) {
     controlsOk = false;
@@ -207,6 +221,7 @@ async function main() {
     verdicts: verdictCounts,
     unverifiable_reasons: histogram,
     controls_ok: controlsOk,
+    unconsumed_keys: unconsumed.findings,
     probing_implemented: probingImplemented,
     exit_1_reachable: probingImplemented,
     control_failures: controlFailures,

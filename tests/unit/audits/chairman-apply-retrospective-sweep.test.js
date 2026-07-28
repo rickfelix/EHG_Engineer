@@ -383,6 +383,7 @@ describe('the manifest hard-fails — a manifest coverage equals its membership'
     expect([...POPULATION_ARMS].sort()).toEqual([
       'apply_authority',
       'apply_to_prod_requires_user_go',
+      'chairman_approval',
       'chairman_authorization',
       'chairman_authorized',
       'chairman_enum_migration_authorization',
