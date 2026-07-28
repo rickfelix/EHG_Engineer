@@ -716,6 +716,33 @@ describe('buildPopulation applies its predicates and accumulates arms', () => {
   });
 });
 
+describe('matchesAuthorityPrefix boundaries', () => {
+  it('CHAIRMAN-ONLY is a GATE; a chairman MENTION is not', async () => {
+    const { matchesAuthorityPrefix } = await import('../../../lib/audits/chairman-apply-sweep.js');
+    // Widening the default prefix from 'CHAIRMAN-ONLY' to 'CHAIRMAN' survived mutation, so the
+    // mention-versus-gate distinction -- argued at length in the header and pinned with two
+    // fixtures on the quick-fix arm -- was unpinned on the parameter that decides it here.
+    expect(matchesAuthorityPrefix('CHAIRMAN-ONLY non-delegatable')).toBe(true);
+    expect(matchesAuthorityPrefix('CHAIRMAN REVIEW ONLY')).toBe(false);
+    expect(matchesAuthorityPrefix('CHAIRMAN approves after PLAN')).toBe(false);
+  });
+
+  it('stamps chairmanOnly ONLY from apply_authority, even when later arms follow', async () => {
+    const { buildPopulation } = await import('../../../lib/audits/chairman-apply-collectors.js');
+    // Removing the `arm === 'apply_authority'` guard survived, and it INVERTS the control:
+    // apply_authority is processed before ten other metadata arms, so the LAST arm would win and a
+    // genuinely chairman-only SD would be stamped NOT chairman-only -- on exactly the
+    // access-control DDL rows this exists to catch. The original fixture passed a single-arm list,
+    // so it could not see the overwrite.
+    const pop = buildPopulation([{
+      sd_key: 'SD-MULTI', status: 'completed',
+      metadata: { apply_authority: 'CHAIRMAN-ONLY non-delegatable', requires_chairman_apply_note: 'see notes' },
+    }], [], ['apply_authority', 'requires_chairman_apply_note']);
+    expect(pop[0].arms).toEqual(['apply_authority', 'requires_chairman_apply_note']);
+    expect(pop[0].chairmanOnly).toBe(true);
+  });
+});
+
 describe('matchesAuthorityPrefix is WIRED, not merely exported', () => {
   it('buildPopulation stamps chairmanOnly for the apply_authority arm', async () => {
     const { buildPopulation } = await import('../../../lib/audits/chairman-apply-collectors.js');
