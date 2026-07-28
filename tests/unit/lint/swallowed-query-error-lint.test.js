@@ -10,6 +10,7 @@ import { extractSwallowedQueries, loadAllowlist, stripComments } from '../../../
 import { writeFileSync, mkdtempSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
+import { spawnSync } from 'node:child_process';
 
 describe('TS-9: the extractor flags a data-only PostgREST destructure', () => {
   it('flags the defect shape', () => {
@@ -100,5 +101,33 @@ describe('TS-10: an allowlist entry without a reason is refused', () => {
 
   it('treats a missing allowlist file as empty rather than crashing the lint', () => {
     expect(loadAllowlist('/nonexistent/path/allow.json')).toEqual({});
+  });
+});
+
+describe('the advisory-first claim is TESTED, not just asserted (TESTING 4118666a gap)', () => {
+  // "Advisory-first" is a SAFETY PROPERTY -- it is what stops this lint turning every in-flight
+  // PR red on day one over a 232-site pre-existing baseline. It had zero automated coverage and
+  // rested on one manual run, which is precisely the shape of claim this SD exists to distrust.
+  const LINT = new URL('../../../scripts/lint/swallowed-query-error-lint.mjs', import.meta.url).pathname.replace(/^\/([A-Za-z]:)/, '$1');
+
+  it('exits 0 by default even though the baseline is non-empty', () => {
+    const r = spawnSync(process.execPath, [LINT], { encoding: 'utf8' });
+    expect(r.stdout).toMatch(/ungoverned/);
+    // The load-bearing assertion: findings exist AND the exit code is still 0.
+    expect(r.stdout).not.toMatch(/0 ungoverned/);
+    expect(r.status).toBe(0);
+  });
+
+  it('exits 1 under --enforce, so the escalation path genuinely works', () => {
+    const r = spawnSync(process.execPath, [LINT, '--enforce'], { encoding: 'utf8' });
+    expect(r.status).toBe(1);
+  });
+
+  it('caps its output by default and shows everything under --list', () => {
+    // A 200-line wall every run is the kind of output people learn to scroll past.
+    const capped = spawnSync(process.execPath, [LINT], { encoding: 'utf8' }).stdout;
+    const listed = spawnSync(process.execPath, [LINT, '--list'], { encoding: 'utf8' }).stdout;
+    expect(capped).toMatch(/and \d+ more \(--list to show all\)/);
+    expect(listed.split('\n').length).toBeGreaterThan(capped.split('\n').length);
   });
 });

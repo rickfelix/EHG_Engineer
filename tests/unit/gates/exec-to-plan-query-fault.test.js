@@ -37,8 +37,42 @@ function fakeSupabase(byTable) {
   };
 }
 
-describe('TS-A2: checkHasChildren no longer answers "no children" when it could not ask', () => {
-  it('PROPAGATES a query fault instead of returning false', async () => {
+describe('TS-A2: checkHasChildren resolves an unanswerable lookup CONSERVATIVELY', () => {
+  it('assumes the SD HAS children when the lookup cannot answer — never waives the requirement', async () => {
+    // Corrected after SECURITY 66c3911c. Three possible behaviours, only one is right:
+    //   swallow -> fault reads as "no children" -> requirement WAIVED (the original defect)
+    //   propagate -> required:true unconditional gate FAILS on any blip -> fleet-wide DoS
+    //   assume-complex -> an unanswerable lookup can only ADD the requirement, never remove it
+    // This asserts the third. hasChildren=true makes the SD complex, so the gate must NOT take
+    // its "not complex - integration test check not required" shortcut.
+    const { createIntegrationTestRequirementGate } = await import(
+      '../../../scripts/modules/handoff/executors/exec-to-plan/gates/integration-test-requirement.js'
+    );
+    const gate = createIntegrationTestRequirementGate(
+      fakeSupabase({ strategic_directives_v2: { data: null, error: FAULT } })
+    );
+    const res = await gate.validator({ sd: { id: 'sd-uuid', sd_key: 'SD-X-001', sd_type: 'docs' } });
+    // Assert the DECISION directly rather than a compound negative over the whole payload — a
+    // "not (passed && /not required/)" test can pass for the wrong reason and would be exactly
+    // the vacuousness this SD is about.
+    expect(res.details.complexity.hasChildren).toBe(true);
+    expect(res.details.complexity.reasons).toContain('SD has child SDs');
+  });
+
+  it('CONTROL: a genuinely empty result still means NO children — the fault path is not just "always true"', async () => {
+    // Without this, the assertion above is satisfied by hardcoding hasChildren=true.
+    const { createIntegrationTestRequirementGate } = await import(
+      '../../../scripts/modules/handoff/executors/exec-to-plan/gates/integration-test-requirement.js'
+    );
+    const gate = createIntegrationTestRequirementGate(
+      fakeSupabase({ strategic_directives_v2: { data: [], error: null } })
+    );
+    const res = await gate.validator({ sd: { id: 'sd-uuid', sd_key: 'SD-X-001', sd_type: 'docs' } });
+    expect(res.details.complexity.hasChildren).toBe(false);
+    expect(res.details.complexity.reasons).not.toContain('SD has child SDs');
+  });
+
+  it('LEGACY SHAPE, kept for contrast: a fault must not simply propagate as a gate crash', async () => {
     // Pre-fix: `const { data }` yielded null AND the catch returned false, so a rejected query
     // read as "no children" -> one fewer complexity reason -> isComplex false -> the gate's
     // "not complex, integration test check not required" branch -> AUTOMATIC PASS.
@@ -48,9 +82,11 @@ describe('TS-A2: checkHasChildren no longer answers "no children" when it could 
     const gate = createIntegrationTestRequirementGate(
       fakeSupabase({ strategic_directives_v2: { data: null, error: FAULT } })
     );
+    // Pinning the DoS regression: this gate is required:true and unconditional, so a throw here
+    // would fail EVERY EXEC-TO-PLAN handoff on a transient blip.
     await expect(
       gate.validator({ sd: { id: 'sd-uuid', sd_key: 'SD-X-001', sd_type: 'feature' } })
-    ).rejects.toThrow(/fault-sentinel/);
+    ).resolves.toBeTruthy();
   });
 });
 
