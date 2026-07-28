@@ -13,7 +13,7 @@ import { createClient } from '@supabase/supabase-js';
 import { computeSessionBadge } from '../../lib/fleet/fleet-view-badges.cjs';
 import { getAttentionFlaggedSessions } from '../../lib/fleet/attention-flag-writer.js';
 import { loadStore, buildNamedAccountChips } from '../../lib/fleet/account-capacity-gauge.cjs';
-import { getAccountUsage, allUnavailable, resolveSlotIdentities } from '../../lib/fleet/account-usage-reader.cjs';
+import { getAccountUsage, allUnavailable, resolveDisplayIdentities } from '../../lib/fleet/account-usage-reader.cjs';
 // SD-LEO-INFRA-ACCOUNT-QUOTA-STRIP-001 (FR-4/FR-6): snapshot retention + last-known enrichment.
 import { persistReadings, fetchLastKnown, withLastKnown } from '../../lib/fleet/account-usage-snapshot-writer.cjs';
 import { isLiveEnabled } from '../../lib/fleet/spawn-control.js';
@@ -233,7 +233,10 @@ export async function getFleetPanel(req, res) {
   // unavailable the live readings still render exactly as they do today. A panel that went blank
   // because its history store was missing would be a worse defect than the one being fixed.
   try {
-    const identities = resolveSlotIdentities({});
+    // Display-keyed, NOT resolveSlotIdentities: the readings carry relabelled names whenever
+    // FLEET_ACCOUNT_IDENTITY_MAP is set, so a raw-registry-keyed map misses every lookup and
+    // writes account_uuid8 NULL exactly when identity mapping is configured.
+    const identities = resolveDisplayIdentities({});
     await persistReadings(accountUsage, { supabase, identities });
     const lastKnown = await fetchLastKnown(supabase, accountUsage.map((r) => r?.name));
     accountUsage = withLastKnown(accountUsage, lastKnown);
