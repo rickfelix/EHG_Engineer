@@ -89,6 +89,22 @@ const SHARED_EXCLUDE = [
   '**/.cursor/worktrees/**',
   '**/.claude/worktrees/**',
   '**/PATH/**',
+  // QF-20260727-884: scratch/ holds PRESERVED WORKTREE COPIES and is gitignored
+  // (.gitignore '/scratch/'), so `git ls-files scratch` returns ZERO test files and CI never sees
+  // them — while a local run collected them as live tests. MEASURED in the shared root at
+  // origin/main: 887 scratch/preserved-* directories holding exactly 14 test files, and a local
+  // unit run reporting exactly 14 failures. A 14-for-14 match.
+  //
+  // WHY THIS ONE MATTERED MORE THAN ITS SIZE: CI stayed green and local read red, both correctly,
+  // and the contradiction was unresolvable without reading the failing file paths. At least one
+  // worker read it as "main is broken" and it cost coordinator time to reconcile. A signal that
+  // means different things on two surfaces is worse than a signal that is simply wrong on both.
+  // It also blocked ship-preflight, which runs the local suite.
+  //
+  // Both forms are listed deliberately: the anchored one is the real rule, and the unanchored one
+  // also covers a preserved copy that lands outside the top-level scratch/ root.
+  'scratch/**',
+  '**/scratch/**',
 ];
 
 // Inherently DB-dependent test locations — routed to the opt-in `db` project
