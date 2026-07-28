@@ -323,7 +323,14 @@ async function main() {
     if (gauge.flagged > 0) {
       console.log('\n[HOURLY-REVIEW] RELAY/DECISION/REVIEW DROPS — ' + gauge.flagged + ' row(s) with no matching outbound within the window:');
       gauge.decisions.filter(function (d) { return d.action === 'flag'; }).slice(0, 10).forEach(function (d) {
-        console.log('  • [' + String(d.id).slice(0, 8) + '] correlation=' + String(d.correlationId).slice(0, 8) + ' | unactioned ' + Math.floor(d.ageMs / 60000) + 'm | ' + d.reason);
+        // SD-LEO-INFRA-SILENT-TRUNCATION-ONE-001 FR-1: id and correlation were printed as 8-char
+        // prefixes here. This is the most likely literal source of the twice-repeated incident in
+        // which an agent copied its own diagnostic output into a --reply-to: an 8-character
+        // correlation stores verbatim, prints a success checkmark, and threads to NOTHING. Full
+        // values only — a short form beside them would leave the copyable hazard in place.
+        // (The .slice(0, 10) on the line above caps the ARRAY to 10 rows and is untouched: it
+        // shortens no identifier.)
+        console.log('  • [' + String(d.id) + '] correlation=' + String(d.correlationId) + ' | unactioned ' + Math.floor(d.ageMs / 60000) + 'm | ' + d.reason);
       });
     }
   } catch (e) {

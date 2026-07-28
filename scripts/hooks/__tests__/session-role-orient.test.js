@@ -40,8 +40,16 @@ describe('decide()', () => {
   });
 
   it('returns workerLines when coord file points to a different session', () => {
+    // SD-LEO-INFRA-SILENT-TRUNCATION-ONE-001 FR-1: this assertion previously pinned
+    // `session=coord-uu.` — the 8-character truncation — and so ENCODED the defect. A worker
+    // addressing the coordinator builds target_session from this line, and an 8-char prefix stores,
+    // prints success, and threads to nothing. The assertion is updated because the behaviour was
+    // deliberately changed, not to chase a test green.
     const out = decide('worker-uuid', { callsign: 'Bravo' }, { session_id: 'coord-uuid-12345678' });
-    expect(out[0]).toMatch(/WORKER \(callsign: Bravo\) under coordinator session=coord-uu\./);
+    expect(out[0]).toMatch(/WORKER \(callsign: Bravo\) under coordinator session=coord-uuid-12345678\./);
+    // The negative half is the one that matters: the full id must not be accompanied by a
+    // copyable abbreviation of itself.
+    expect(out[0]).not.toMatch(/coord-uu[^i]/);
     expect(out[1]).toMatch(/\/signal <type>/);
     expect(out[2]).toMatch(/Types: stuck \| need-sweep/);
   });
