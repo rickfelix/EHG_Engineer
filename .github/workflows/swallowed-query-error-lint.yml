@@ -1,0 +1,50 @@
+name: Swallowed Query Error Lint
+
+# SD-LEO-INFRA-SWALLOWED-POSTGREST-ERROR-001 (FR-4)
+# Flags PostgREST calls in GATE/EXECUTOR code whose destructure binds only `data` (or only
+# `count`) and discards `error`. PostgREST rejects the WHOLE query on an unknown column, so `data`
+# comes back null forever and a caller that never inspects `error` reports a plausible benign
+# reason for having done nothing. Zero rows is a legal answer, so the failure is indistinguishable
+# from a real empty result — which is why this is a lint plus a wrapper, not a convention.
+#
+# Live instance this SD fixed: a gate whose PRD lookup failed reached its "no command configured —
+# advisory pass" branch. A BROKEN QUERY MADE THE GATE PASS.
+#
+# Route through lib/db/safe-query.mjs (safeQuery / safeCount), bind `error`, or allowlist
+# "<file>:<line>" WITH A REASON in scripts/lint/swallowed-query-error-allowlist.json. The reason is
+# mandatory — loadAllowlist() throws without one, because a silence you cannot explain is the
+# reflexive kind. The COUNT of allowlist entries is itself a gauge.
+#
+# ADVISORY-FIRST: `continue-on-error: true`, so it cannot turn an in-flight PR red on day one. The
+# report is always in the job log. ~232 pre-existing gate/executor sites are a TRACKED MIGRATION,
+# not this SD's scope — flip to blocking (run with --enforce, drop continue-on-error) once that
+# baseline has been worked down, not before, or the signal trains people to ignore it.
+
+on:
+  pull_request:
+    paths:
+      - 'scripts/modules/handoff/**'
+      - 'lib/gates/**'
+      - 'scripts/modules/claim-health/**'
+      - 'lib/claim/**'
+      - 'lib/oversight/**'
+      - 'lib/db/safe-query.mjs'
+      - 'scripts/lint/swallowed-query-error-lint.mjs'
+      - 'scripts/lint/swallowed-query-error-allowlist.json'
+      - '.github/workflows/swallowed-query-error-lint.yml'
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  swallowed-query-error-lint:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+      - name: Detect PostgREST reads that discard `error` in gate/executor code (advisory)
+        continue-on-error: true
+        run: node scripts/lint/swallowed-query-error-lint.mjs
