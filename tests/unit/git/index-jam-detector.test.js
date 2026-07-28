@@ -13,7 +13,7 @@
 import { describe, it, expect } from 'vitest';
 import {
   VERDICT, DEFAULT_DWELL_MS, DEFAULT_TICK_MS, classifyIndexHealth, lockIdentityOf, exitCodeFor, formatVerdict,
-  sanitizeState, sanitizeDwellMs,
+  sanitizeState, sanitizeDwellMs, applyPersistenceDegradation,
 } from '../../../lib/git/index-jam-detector.js';
 
 const T0 = Date.parse('2026-07-28T00:00:00.000Z');
@@ -246,6 +246,37 @@ describe('ALARM SUPPRESSION — corrupt carry-over state must never read as heal
   });
 });
 
+describe('applyPersistenceDegradation — the anti-suppression fix must not itself suppress', () => {
+  const healthy = { verdict: VERDICT.HEALTHY, jammedForMs: null, nextState: {} };
+  const jammed = { verdict: VERDICT.JAMMED, jammedForMs: 120 * SEC, nextState: {} };
+
+  it('passes everything through untouched when state persisted', () => {
+    expect(applyPersistenceDegradation(healthy, true)).toBe(healthy);
+    expect(applyPersistenceDegradation(jammed, true)).toBe(jammed);
+  });
+
+  it('degrades HEALTHY to UNAVAILABLE when state could NOT be persisted', () => {
+    // Because persistence is the signal, a counter that cannot reach the next tick makes the
+    // verdict worthless. Measured pre-fix: exit 0 on 4 of 4 ticks against a real held lock.
+    const r = applyPersistenceDegradation(healthy, false);
+    expect(r.verdict).toBe(VERDICT.UNAVAILABLE);
+    expect(r.reason).toMatch(/not trustworthy/i);
+  });
+
+  it('NEVER degrades a CONFIRMED jam — dropping that guard turns the fix into a suppression bug', () => {
+    // Without the verdict !== JAMMED guard, a proven jam becomes UNAVAILABLE and exits 0. An
+    // already-proven jam does not need state to stay proven.
+    const r = applyPersistenceDegradation(jammed, false);
+    expect(r.verdict).toBe(VERDICT.JAMMED);
+    expect(exitCodeFor(r.verdict)).toBe(1);
+  });
+
+  it('leaves an already-UNAVAILABLE verdict alone', () => {
+    const u = { verdict: VERDICT.UNAVAILABLE, jammedForMs: null, nextState: {}, reason: 'EACCES' };
+    expect(applyPersistenceDegradation(u, false).verdict).toBe(VERDICT.UNAVAILABLE);
+  });
+});
+
 describe('the derived dwell floor is pinned, not merely bounded', () => {
   it('is exactly 90s — derived from a ~44.2s healthy ceiling and a 420s shortest real jam', () => {
     // Mutation showed 75s and 61s both survived a range-only assertion. The value carries the
@@ -260,7 +291,12 @@ describe('the derived dwell floor is pinned, not merely bounded', () => {
     expect(DEFAULT_DWELL_MS).toBeLessThan(SHORTEST_REAL_JAM_MS);
   });
 
-  it('TICK must be small enough that the shortest real jam spans multiple ticks', () => {
+  it('TICK constant must be small enough that the shortest real jam spans multiple ticks', () => {
+    // HONESTY NOTE: this pins the CONSTANT, not the deployed cadence. The value that actually sets
+    // the tick rate is periodic_process_registry.expected_interval_seconds (60s, with the rationale
+    // recorded on the row), and no code links the two — so the deployed interval could regress with
+    // this suite green. Guarding that link needs a DB read, which the unit tier deliberately cannot
+    // do. Declared rather than left to look like coverage it is not.
     // Detection needs the SAME identity at two consecutive ticks, so the EFFECTIVE floor is
     // max(dwell, 2 x tick). A 1800s registered interval would make the effective floor 3600s and
     // leave the 420s shortest recorded jam structurally undetectable — the derived 90s inert.

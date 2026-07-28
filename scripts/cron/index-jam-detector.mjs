@@ -17,6 +17,7 @@ import { createClient } from '@supabase/supabase-js';
 import { stampLastFired } from '../../lib/periodic-liveness/stamp-last-fired.js';
 import {
   VERDICT, DEFAULT_DWELL_MS, classifyIndexHealth, lockIdentityOf, exitCodeFor, formatVerdict,
+  applyPersistenceDegradation,
 } from '../../lib/git/index-jam-detector.js';
 
 const PROCESS_KEY = 'standard_loop:index-jam-detector';
@@ -137,9 +138,7 @@ async function main() {
   // lock held continuously, exit 0 on 4 of 4 ticks. Readers key on the EXIT CODE per the shape
   // contract, so a stderr line is not the contract — the verdict itself must degrade. Note the
   // triggering scenario is CORRELATED: disk-full can both orphan an index.lock and block the write.
-  if (!saveState(repoPath, result.nextState) && result.verdict !== VERDICT.JAMMED) {
-    result = { ...result, verdict: VERDICT.UNAVAILABLE, reason: 'carry-over state could not be persisted — persistence is the signal, so this verdict is not trustworthy' };
-  }
+  result = applyPersistenceDegradation(result, saveState(repoPath, result.nextState));
 
   if (process.argv.includes('--json')) {
     console.log(JSON.stringify({ repoPath, observedAt: new Date(nowMs).toISOString(), ...result }, null, 2));
