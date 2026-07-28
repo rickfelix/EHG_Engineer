@@ -84,6 +84,37 @@ export function witnessNameFrom(scopeAcceptedBy) {
   return name.length > 120 ? `${name.slice(0, 117)}...` : name;
 }
 
+/**
+ * SD-LEO-INFRA-COMPLETION-EVIDENCE-RUNTIME-001 FR-2, second writer — build the verified_by stamp
+ * for the direct completion path.
+ *
+ * EXTRACTED FROM AN INLINE IIFE SO IT CAN BE ASSERTED, and that is the whole point of this change:
+ * the behaviour was already shipped but UNPINNED, and unpinned in the specific way that hides a
+ * regression. The only test naming FORCE_COMPLETE asserts FORCE_COMPLETE_NO_REASON — a different
+ * thing — so nothing covered this value. Worse, the fallback makes the gap invisible: under test
+ * CLAUDE_SESSION_ID is unset and no --scope-accepted is passed, so `who` is null and the function
+ * returns the bare mode label. A test written against the live behaviour would therefore have
+ * observed EXACTLY the pre-FR-2 output and passed, certifying the old behaviour while the
+ * improvement went unexercised. Reverting the identity logic entirely would not have failed a
+ * single test.
+ *
+ * Pure by construction — sessionId is a PARAMETER, not a process.env read — because a function that
+ * reaches for ambient state can only be tested by mutating the environment, and the branch that
+ * matters here is precisely the one ambient state suppresses.
+ *
+ * BEHAVIOUR IS UNCHANGED, deliberately: same precedence (explicit scope-accepter, then the operator
+ * session, then neither), same `<who> (<MODE>)` shape, same bare-mode fallback. The mode is kept as
+ * a suffix so anything classifying rows on these literals keeps the distinction it relied on.
+ *
+ * @param {{forceComplete?: boolean, scopeAcceptedBy?: string|null, sessionId?: string|null}} args
+ * @returns {string} never null — a close is always attributable to at least its mode
+ */
+export function completionModeStamp({ forceComplete = false, scopeAcceptedBy = null, sessionId = null } = {}) {
+  const mode = forceComplete ? 'FORCE_COMPLETE' : 'UAT_AGENT';
+  const who = witnessNameFrom(scopeAcceptedBy) || sessionId || null;
+  return who ? `${who} (${mode})` : mode;
+}
+
 export function buildMergedReconcileUpdate({ qf = {}, prUrl, mergeSha = null, nowIso, scopeAcceptedBy = null }) {
   // QF-20260725-691: a merged PR witnesses that CODE LANDED. Terminal `completed` asserts that
   // the QF's SCOPE WAS SATISFIED. Those are different propositions and this path used to
@@ -736,11 +767,11 @@ export async function completeQuickFix(qfId, options = {}) {
       // Prefer a real identity when one exists: the scope-accepter, else the operator session that
       // ran the command. The mode is preserved as a suffix so nothing that reads these values for
       // classification loses the distinction it relied on.
-      verified_by: (() => {
-        const mode = options.forceComplete ? 'FORCE_COMPLETE' : 'UAT_AGENT';
-        const who = witnessNameFrom(options.scopeAcceptedBy) || process.env.CLAUDE_SESSION_ID || null;
-        return who ? `${who} (${mode})` : mode;
-      })(),
+      verified_by: completionModeStamp({
+        forceComplete: options.forceComplete,
+        scopeAcceptedBy: options.scopeAcceptedBy,
+        sessionId: process.env.CLAUDE_SESSION_ID || null
+      }),
       verification_notes: finalVerificationNotes,
       files_changed: filesChanged.length > 0 ? filesChanged : null,
       completed_at: new Date().toISOString(),
