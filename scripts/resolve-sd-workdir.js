@@ -33,6 +33,7 @@ import { enforceWorktreeQuota, MAX_WORKTREE_COUNT, WORKTREE_QUOTA_HELPERS } from
 import { resolveWorktreeBaseRef, fetchBaseRef, WorktreeBaseFetchFailedError, SUBSTRATE_ITEMS, VENTURE_SUBSTRATE_ITEMS, validateWorktreeSubstrate } from '../lib/worktree-manager.js';
 import { provisionWorktreeNodeModules, getIsolationMode, getFreeDiskBytes, countActiveFreshSessions } from '../lib/worktree-provision.js';
 import { execSync } from 'child_process';
+import { isNodeModulesUnprovisioned as isUnprovisionedShared } from '../lib/node-modules-population.js';
 import fs from 'fs';
 import path from 'path';
 import dotenv from 'dotenv';
@@ -570,53 +571,12 @@ async function createWorktree(sdKey, repoRoot, opts = {}) {
  * SUBSTRATE_ITEMS membership; .env.local is opportunistic (not in the
  * substrate contract but copied if present).
  */
-/**
- * SD-FDBK-ENH-SCOPE-REPLACE-WORKTREE-001 FR-1 / TR-6 — is this node_modules unprovisioned?
- *
- * REPLACES a bare `!fs.existsSync(targetModules)` guard. existsSync is true for an EMPTY
- * directory, so once anything created <wt>/node_modules/ provisioning was skipped PERMANENTLY and
- * never retried — ensureWorktreeEssentials runs after every successful resolution and still never
- * re-provisioned. Vite mkdir -p's node_modules/.vite for its optimize cache, which poisoned it.
- * Measured: affected worktrees held literally .vite/ and .vite-temp/ and nothing else, yet
- * require.resolve succeeded by Node walking UP to the shared root — the exact coupling that makes
- * a shared-root wipe fleet-fatal.
- *
- * EMPTINESS-BASED, NEVER NAME-BASED. A fix scoped to "Vite creates .vite" under-covers: an
- * _archive worktree was found poisoned by only .rank-pass-trigger.lock, with no .vite at all. The
- * rule is therefore "holds no package entries", not "holds a known-bad name".
- *
- * DOES NOT READ THROUGH A JUNCTION, deliberately. lib/worktree-manager.js:86-93 records why
- * lstat was chosen over a read-through check (adversarial review of PR #3488, finding 1): for a
- * junction-mode worktree the link target is TRANSIENTLY ABSENT during a concurrent npm install at
- * the main repo (.staging atomic swap), so reading through would classify a HEALTHY junctioned
- * worktree as unprovisioned and re-provision it under load. A symlink/junction IS provisioned by
- * construction, so it short-circuits before any readdir. This failure mode appears only under
- * concurrency and would not surface in a quiet test run.
- *
- * Pure: fs is injected so the predicate is testable without touching a real tree.
- *
- * @param {string} nodeModulesPath
- * @param {{lstatSync:Function, readdirSync:Function}} [fsImpl]
- * @returns {boolean} true when provisioning should run
- */
+// SD-FDBK-ENH-SCOPE-REPLACE-WORKTREE-001 FR-1 / TR-6. The predicate moved to
+// lib/node-modules-population.js because FR-4's health check in lib/worktree-manager.js needs
+// the SAME rule, and two copies would drift. Re-exported here so the exported surface (and its
+// pins) stay stable.
 export function isNodeModulesUnprovisioned(nodeModulesPath, fsImpl = fs) {
-  let stat;
-  try {
-    stat = fsImpl.lstatSync(nodeModulesPath);
-  } catch {
-    return true; // absent (or unreadable) => provision
-  }
-  if (stat.isSymbolicLink()) return false; // junction: provisioned, and must not be read through
-  if (!stat.isDirectory()) return true;    // a FILE named node_modules is not a provisioned tree
-  let entries;
-  try {
-    entries = fsImpl.readdirSync(nodeModulesPath);
-  } catch {
-    return true;
-  }
-  // Dot-entries (.vite, .vite-temp, .package-lock.json, .bin, stray locks) are caches and
-  // metadata, never packages. A provisioned tree always carries at least one package entry.
-  return !entries.some((name) => !name.startsWith('.'));
+  return isUnprovisionedShared(nodeModulesPath, fsImpl);
 }
 
 function ensureWorktreeEssentials(worktreePath, repoRoot, opts = {}) {
