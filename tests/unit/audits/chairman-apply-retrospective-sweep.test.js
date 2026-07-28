@@ -1020,3 +1020,51 @@ describe('scope gaps are DERIVED from what the run measured', () => {
     ]);
   });
 });
+
+describe('the artifact pattern cannot fabricate a path', () => {
+  it('an ELISION is not a filename, and a real path in the same sentence wins', async () => {
+    const { SQL_ARTIFACT_RE, buildEvidence } = await import('../../../lib/audits/chairman-apply-collectors.js');
+    // `.` inside the character class ran straight through "20260722_DOWN_...sql" and reported it as
+    // an artifact. That file has never existed, and the two REAL migrations named in the same
+    // sentence were skipped because .match() returns the first hit. Same extraction whose
+    // IDENTIFIER half already carries the warning about fabricating a reference a prober will
+    // then report as MISSING - a fabricated finding shaped exactly like a real one.
+    expect('see 20260722_DOWN_...sql and db/real.sql'.match(SQL_ARTIFACT_RE)[0]).toBe('db/real.sql');
+    expect('...sql'.match(SQL_ARTIFACT_RE)).toBeNull();
+    // A genuine path with dots in the directory part still resolves.
+    expect('database/migrations/20260616_x.sql'.match(SQL_ARTIFACT_RE)[0])
+      .toBe('database/migrations/20260616_x.sql');
+    expect(buildEvidence({ evidenceText: 'corrected: 20260722_DOWN_...sql now runs' }).artifact.present).toBe(false);
+  });
+});
+
+describe('an EMPTY stamp is a stamp', () => {
+  it('does not fall through to the fixture path when evidenceText is an empty string', async () => {
+    const { buildEvidence } = await import('../../../lib/audits/chairman-apply-collectors.js');
+    // Reading the stamp by truthiness makes "" indistinguishable from absent, and one production
+    // row already arrives stamped "". Empty-string-is-falsy is the mechanism of the first and third
+    // occurrences at this seam; a fourth is not acceptable.
+    const e = buildEvidence({ evidenceText: '', freeText: 'ALTER TABLE t per db/should-not-be-read.sql' });
+    expect(e.artifact.present).toBe(false);
+  });
+});
+
+describe('a feedback row can be BOTH a metadata member and a completion flag', () => {
+  it('merges the two arms instead of skipping the free text', async () => {
+    const c = await import('../../../lib/audits/chairman-apply-collectors.js');
+    // Skipping meant the free text was never read - the field where 16 of 19 of this class carry
+    // their .sql path. All four controls were blind: the manifest seed carries no metadata arm key,
+    // and a new dual row never increments completion_flag_index, so no floor could catch it.
+    const pop = c.buildPopulation([], [], ['chairman_gated_ddl'], [
+      { identifier: 'FEEDBACK-dual', status: 'new', source: 'feedback',
+        metadata: { chairman_gated_ddl: true } },
+    ]);
+    const merged = c.addCompletionFlagArm(pop, [
+      { id: 'dual', category: 'completion_flag', title: 'chairman-gated',
+        description: 'unapplied migration db/dual.sql ALTER TABLE t' },
+    ]);
+    const row = merged.find((r) => r.identifier === 'FEEDBACK-dual');
+    expect(row.arms).toEqual(['chairman_gated_ddl', 'completion_flag_index']);
+    expect(c.buildEvidence(row).artifact.path).toBe('db/dual.sql');
+  });
+});
