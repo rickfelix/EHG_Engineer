@@ -369,13 +369,22 @@ describe('the manifest hard-fails — a manifest coverage equals its membership'
     // Distinctness and a sample are not coverage of a list — the list itself must be the assertion.
     expect([...POPULATION_ARMS].sort()).toEqual([
       'apply_authority',
+      'apply_to_prod_requires_user_go',
+      'chairman_enum_migration_authorization',
       'chairman_gate',
       'chairman_gated',
+      'chairman_gated_ddl',
+      'chairman_gated_fence_20260726',
       'chairman_gated_migration',
+      'chairman_gated_migration_possible',
       'completion_flag_index',
+      'irreversible_exec_chairman_gated',
+      'may_require_ddl',
+      'migration_requires_chairman_apply',
       'quick_fixes_freetext',
       'requires_chairman_apply',
       'requires_chairman_apply_note',
+      'requires_chairman_ddl',
     ]);
     expect(new Set(POPULATION_ARMS).size).toBe(POPULATION_ARMS.length);
   });
@@ -688,5 +697,21 @@ describe('buildPopulation applies its predicates and accumulates arms', () => {
     expect(pop).toHaveLength(1);
     expect(pop[0].arms).toEqual(['requires_chairman_apply', 'chairman_gated']);
     expect(pop[0].dispositions).toEqual(['asserted', 'prose']);
+  });
+});
+
+describe('matchesAuthorityPrefix is WIRED, not merely exported', () => {
+  it('buildPopulation stamps chairmanOnly for the apply_authority arm', async () => {
+    const { buildPopulation } = await import('../../../lib/audits/chairman-apply-collectors.js');
+    // It was exported, asserted by three tests, and called by NOTHING in production for the whole
+    // life of the module — a dead control reading as active coverage. Testing a helper is not
+    // testing that anything uses it, which is the same shape as the bypassable arm predicate.
+    const pop = buildPopulation([
+      { sd_key: 'SD-ONLY', status: 'completed', metadata: { apply_authority: 'CHAIRMAN-ONLY non-delegatable' } },
+      { sd_key: 'SD-DELEG', status: 'completed', metadata: { apply_authority: 'delegated to PLAN' } },
+    ], [], ['apply_authority']);
+    const byId = Object.fromEntries(pop.map((r) => [r.identifier, r]));
+    expect(byId['SD-ONLY'].chairmanOnly).toBe(true);
+    expect(byId['SD-DELEG'].chairmanOnly).toBe(false);
   });
 });

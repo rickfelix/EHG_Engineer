@@ -56,6 +56,15 @@ const MANIFEST = Object.freeze([
   { identifier: 'SD-LEO-INFRA-ENABLE-TRI-PARTY-001', source_arm: 'chairman_gate', note: 'CANCELLED — status is a disposition, never a filter' },
   { identifier: 'SD-LEO-INFRA-GOV-TABLE-WRITE-GRANT-REVOKE-001', source_arm: 'apply_authority', note: 'CHAIRMAN-ONLY carried as a PREFIX, not an equality' },
   { identifier: 'SD-LEO-ORCH-OPERATING-COMPANY-SPINE-001-F', source_arm: 'requires_chairman_apply_note', note: 'prose note arm' },
+  { identifier: 'SD-EHG-IDEATION-PIPELINE-SEAMS-001', source_arm: 'requires_chairman_ddl', note: 'in_progress' },
+  { identifier: 'SD-FDBK-FIX-FEEDBACK-SELECT-FEEDBACK-001', source_arm: 'chairman_gated_ddl', note: '' },
+  { identifier: 'SD-FDBK-FIX-ORCHESTRATOR-GHOST-COMPLETE-001', source_arm: 'migration_requires_chairman_apply', note: '' },
+  { identifier: 'SD-FDBK-ENH-EHG-OPERATING-COMPANY-001', source_arm: 'irreversible_exec_chairman_gated', note: 'status=active' },
+  { identifier: 'SD-EHG-IDEATION-PIPELINE-SEAMS-001', source_arm: 'chairman_gated_fence_20260726', note: 'same SD, second arm — a live coordinator fence' },
+  { identifier: 'SD-LEO-INFRA-SMS-CHANNEL-HARDENING-001-B', source_arm: 'chairman_gated_migration_possible', note: '' },
+  { identifier: 'SD-FDBK-GEN-FIX-TRG-ENFORCE-001', source_arm: 'apply_to_prod_requires_user_go', note: '' },
+  { identifier: 'SD-LEO-INFRA-CLEAN-CLONE-LAUNCH-001', source_arm: 'chairman_enum_migration_authorization', note: 'ALTER TYPE venture_origin_type ADD VALUE' },
+  { identifier: 'SD-LEO-INFRA-ADAM-DURABLE-STANDING-001', source_arm: 'may_require_ddl', note: 'DRAFT status' },
   { identifier: 'QF-20260719-281', source_arm: 'quick_fixes_freetext', note: 'TS-21: the arm must RESOLVE this, not merely accept the manifest shape' },
   { identifier: 'FEEDBACK-008c71b8-29df-48b1-9ded-ecdb464e5273', source_arm: 'completion_flag_index', note: 'unreachable from SD metadata by construction' },
 ]);
@@ -67,6 +76,11 @@ const BASELINE = Object.freeze({
   // The free-text arms are 48% of the population and previously carried NO floor, so both could
   // have collapsed to zero with baselines.ok true and exit 0.
   quick_fixes_freetext: 20, completion_flag_index: 19,
+  // The nine keys admitted after reading their values. Floors are the measured counts.
+  requires_chairman_ddl: 1, chairman_gated_ddl: 1, migration_requires_chairman_apply: 1,
+  irreversible_exec_chairman_gated: 1, chairman_gated_fence_20260726: 1,
+  chairman_gated_migration_possible: 1, apply_to_prod_requires_user_go: 1,
+  chairman_enum_migration_authorization: 1, may_require_ddl: 2,
 });
 
 /**
