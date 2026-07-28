@@ -132,8 +132,20 @@ export function productPivotCompare(a, b) {
 }
 // SD-LEO-INFRA-GUARANTEE-CLAIMABLE-SD-RANKED-001-C: pure helpers for the atomic JSONB merge
 // write path. Extracted so the query shape is unit-testable without a live pg connection.
-export function buildRankPatch(rank, nowIso, sessionId, reasonBand = null) {
+export function buildRankPatch(rank, nowIso, sessionId, reasonBand = null, selectionEval = null) {
   const patch = { dispatch_rank: rank, dispatch_rank_at: nowIso, dispatch_rank_by: sessionId };
+  // SD-LEO-INFRA-ADAM-WORK-SELECTION-001 FR-3: persist the roadmap evaluation ALONGSIDE the rank,
+  // so the selection decision carries its own justification. A log line is not a record — it is
+  // gone by the next tick, and "what displaced the plan" is exactly the question asked days later.
+  // Shape kept deliberately small (the three facts a reader needs) rather than the whole verdict.
+  if (selectionEval) {
+    patch.work_selection = {
+      plan_linked: selectionEval.plan_linked === true,
+      injection_kind: selectionEval.injection_kind || null,
+      displaces: selectionEval.displaces || 0,
+      evaluated_at: nowIso,
+    };
+  }
   // QF-20260719-365: stamp the dispatch reason-band AT RANK TIME so worker SELF-claims
   // inherit it (KPI-2 plan-adherence read 3.4% dishonestly because ~95% of claims are
   // self-claims where the coordinator's dispatch decision IS the rank — there was no
@@ -546,13 +558,43 @@ async function main() {
     }
   }
 
+  // SD-LEO-INFRA-ADAM-WORK-SELECTION-001 / FR-3 — THE WORK-SELECTION CHOKE.
+  //
+  // This is the seam, chosen over the two other candidates and recorded here so the choice is not
+  // re-litigated: EVERY claimable leaf already passes through this loop every 15 minutes, the rank
+  // IS the selection decision for self-claims (~95% of claims), and buildRankPatch already computes
+  // a per-item band right here — so a roadmap evaluation is a sibling of work already being done,
+  // not new plumbing. (worker-checkin.cjs:439 is the claim-time choke but sees one item at a time,
+  // so it cannot measure DISPLACEMENT; adam-quiet-tick.mjs is genuinely empty of work-selection and
+  // would have been net-new wiring.)
+  //
+  // It NAMES WHAT INJECTION DISPLACES and does not block or reorder — ranking authority is
+  // unchanged. Injecting higher-priority work is legitimate; what was missing is that the trade was
+  // invisible, so "we are working the plan" could not be falsified.
+  //
+  // FAIL OPEN, exactly as the outbound gate does (scripts/adam-advisory.cjs:1139-1141): a gate bug
+  // must never stop the belt from being ranked.
+  let selectionGate = null;
+  try {
+    const { evaluateWorkSelection } = await import('../lib/adam/work-selection-gate.js');
+    selectionGate = evaluateWorkSelection(claimable);
+    console.log(JSON.stringify({
+      event: 'adam.work_selection.evaluated', verdict: selectionGate.verdict,
+      checks: selectionGate.checks, reasons: selectionGate.reasons,
+    }));
+  } catch (gateErr) {
+    // Recorded, not swallowed — a silently absent gate is the defect this SD exists to remove.
+    console.error(`[BACKLOG-RANK] ! work-selection gate error (failing OPEN): ${gateErr.message}`);
+  }
+  const gateByKey = new Map((selectionGate?.evaluations || []).map((e) => [e.sd_key, e]));
+
   let writes = 0, clears = 0;
   for (let i = 0; i < claimable.length; i++) {
     const d = claimable[i];
     const rank = i + 1;
     console.log(`  #${String(rank).padStart(2)}  unlocks=${String(unlockScore(d.sd_key)).padStart(2)}  ${String(d.priority || '-').padEnd(8)} ${d.sd_key}`);
     if (DRY) continue;
-    const rankPatch = buildRankPatch(rank, now, process.env.CLAUDE_SESSION_ID || 'coordinator', deriveReasonBand(d));
+    const rankPatch = buildRankPatch(rank, now, process.env.CLAUDE_SESSION_ID || 'coordinator', deriveReasonBand(d), gateByKey.get(d.sd_key) || null);
     try {
       if (pgClient) {
         const { sql, params } = buildRankMergeQuery(rankPatch, d.sd_key);
