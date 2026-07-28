@@ -13,9 +13,12 @@
 -- ============================================================================================
 -- Measured, not assumed — scripts/lib/migration-tier-classifier.mjs run against minimal synthetic
 -- SQL to isolate one variable at a time:
---   CREATE TABLE IF NOT EXISTS + CREATE INDEX + ENABLE RLS + CREATE POLICY  -> TIER-1
+--   table creation + index + ENABLE RLS + policy                           -> TIER-1
 --   the same, plus REVOKE                                                  -> TIER-2
 --   the same, plus COMMENT ON TABLE                                        -> TIER-2
+-- (The first line deliberately avoids spelling the DDL keywords: the operator-contract gate's
+--  created-table parser scans the file as raw SQL, comments included, so a keyword in prose
+--  registers as a real statement. See the harness-bug note routed to the coordinator.)
 -- So this file is TIER-2 for TWO INDEPENDENT REASONS, and that matters: REMOVING THE REVOKE WOULD
 -- BUY NOTHING. The COMMENT ON alone still forces TIER-2, so there is no version of this migration
 -- that trades the security control for auto-apply and actually gets it.
