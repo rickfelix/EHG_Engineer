@@ -11,6 +11,11 @@
  * Fixes GAP-003 (zero integration tests).
  */
 
+// SD-LEO-INFRA-SWALLOWED-POSTGREST-ERROR-001 FR-1: query-error discipline, so a rejected
+// query cannot masquerade as an empty result and quietly relax this gate.
+import { safeQuery } from '../../../../../../lib/db/safe-query.mjs';
+
+
 import { existsSync, readFileSync, readdirSync, statSync, realpathSync } from 'fs';
 import { resolve, relative, extname } from 'path';
 import { execSync } from 'child_process';
@@ -208,17 +213,28 @@ function countTestCalls(files) {
  */
 async function checkHasChildren(supabase, sdId) {
   if (!supabase) return false;
-  try {
-    const { data } = await supabase
+  // SD-LEO-INFRA-SWALLOWED-POSTGREST-ERROR-001 / FR-3: THIS FUNCTION USED TO RETURN false ON A
+  // QUERY FAULT, which is indistinguishable from "this SD has no children" — and that answer
+  // flows straight into a gate verdict. Fewer complexity reasons => isComplex false => the
+  // validator's "SD is not complex - integration test check not required" branch => GATE PASSES
+  // AUTOMATICALLY. So a rejected query silently removed the integration-test requirement.
+  //
+  // Both halves were needed: safeQuery makes the fault raisable, and REMOVING THE SWALLOWING
+  // CATCH is what lets it reach the caller. Keeping the catch would have made the wrapper a no-op
+  // here, exactly as it would have at smoke-test-gate.
+  //
+  // Failing closed is the correct direction for a safety-relevant gate: ValidationOrchestrator
+  // converts an uncaught throw into an honest FAIL, so an unanswerable lookup now blocks rather
+  // than quietly waiving the requirement.
+  const rows = await safeQuery(
+    supabase
       .from('strategic_directives_v2')
       .select('id')
       .eq('parent_sd_id', sdId)
-      .limit(1);
-    return data && data.length > 0;
-  } catch (e) {
-    console.debug('[IntegrationTestReq] children check suppressed:', e?.message || e);
-    return false;
-  }
+      .limit(1),
+    { site: 'integration-test-requirement:children-check' }
+  );
+  return Array.isArray(rows) && rows.length > 0;
 }
 
 /**
