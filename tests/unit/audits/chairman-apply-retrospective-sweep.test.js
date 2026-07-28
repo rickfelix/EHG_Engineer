@@ -533,3 +533,160 @@ describe('collectors', () => {
     expect(buildPopulation(sds, [], ['requires_chairman_apply']).length).toBe(1);
   });
 });
+
+describe('the producer/consumer contract at the source seam', () => {
+  it('feeds buildPopulation OUTPUT straight into buildEvidence — no hand-built source', async () => {
+    const c = await import('../../../lib/audits/chairman-apply-collectors.js');
+    // THE SEAM. buildPopulation EMITS `source`; buildEvidence SWITCHES on it. Both halves were
+    // pinned independently and the CONTRACT between them was not pinned at all, because every
+    // fixture hand-built its own `source` value and so could not see the boundary. Changing the
+    // producer's literal silently routed SD rows down the free-text branch — evidence read from an
+    // empty string, .sql path discarded. That is this module's original shipped defect mirrored
+    // onto the other arm, with the whole suite green. This test never names a source literal.
+    const pop = c.buildPopulation(
+      [{ sd_key: 'SD-A', status: 'completed', metadata: { chairman_apply_note: 'ALTER TABLE stage_executions per db/x.sql' } }],
+      [{ id: 'QF-1', status: 'open', title: 'chairman-gated migration', description: 'ALTER TABLE t per db/qf.sql' }],
+      ['chairman_apply_note']);
+    const withFlags = c.addCompletionFlagArm(pop, [
+      { id: 'f1', category: 'completion_flag', title: 'chairman-gated', description: 'unapplied migration db/f.sql ALTER' },
+    ]);
+
+    const byId = Object.fromEntries(withFlags.map((r) => [r.identifier, c.buildEvidence(r)]));
+    // Each arm must reach ITS OWN text. If the seam breaks, the SD row silently yields null.
+    expect(byId['SD-A'].artifact.path).toBe('db/x.sql');
+    expect(byId['QF-1'].artifact.path).toBe('db/qf.sql');
+    expect(byId['FEEDBACK-f1'].artifact.path).toBe('db/f.sql');
+  });
+
+  it('the SD source literal is defined ONCE and both sides use it', async () => {
+    const c = await import('../../../lib/audits/chairman-apply-collectors.js');
+    expect(c.SOURCE.SD).toBe('strategic_directives_v2');
+    const row = c.buildPopulation(
+      [{ sd_key: 'SD-A', status: 'completed', metadata: { chairman_apply_note: 'ALTER TABLE t per db/x.sql' } }],
+      [], ['chairman_apply_note'])[0];
+    expect(row.source).toBe(c.SOURCE.SD);
+  });
+});
+
+describe('the arm predicates are conjunctions, not disjunctions', () => {
+  it('quick-fix arm: a gate phrase WITHOUT a DDL term is not a member, and vice versa', async () => {
+    const { isQuickFixMember } = await import('../../../lib/audits/chairman-apply-collectors.js');
+    // No fixture exercised gate-XOR-DDL, so AND and OR were INDISTINGUISHABLE. OR is exactly the
+    // 256-of-1184 loose reading the pin exists to reject, and both examples below are the ones
+    // named in the module's own comment as the reason for the pin.
+    expect(isQuickFixMember({ title: 'CHAIRMAN-GATED brand asset kit' })).toBe(false);
+    expect(isQuickFixMember({ title: 'ALTER TABLE ventures add column' })).toBe(false);
+    expect(isQuickFixMember({ title: 'CHAIRMAN-GATED migration for ventures' })).toBe(true);
+  });
+
+  it('completion-flag arm: same conjunction, independently', async () => {
+    const { isCompletionFlagMember } = await import('../../../lib/audits/chairman-apply-collectors.js');
+    const cat = 'completion_flag';
+    expect(isCompletionFlagMember({ category: cat, title: 'awaiting chairman signoff' })).toBe(false);
+    expect(isCompletionFlagMember({ category: cat, title: 'ALTER TABLE ventures' })).toBe(false);
+    expect(isCompletionFlagMember({ category: cat, title: 'awaiting chairman ALTER TABLE ventures' })).toBe(true);
+  });
+});
+
+describe('buildEvidence output constants are asserted WHOLE, not sampled', () => {
+  it('asserts the complete evidence object for a no-artifact row', async () => {
+    const { buildEvidence } = await import('../../../lib/audits/chairman-apply-collectors.js');
+    // The published histogram is entirely a function of four constants here and NONE were asserted:
+    // live.probed, secondaryArtifactSearchDone, secondaryArtifactFound and artifact.present.
+    // They corrupt DISJOINT halves of the population — flipping live.probed fabricates a
+    // chairman-actionable divergence on the ~37% with an artifact and changes the exit code to 1,
+    // while flipping searchDone converts every remaining row to NEVER-BOUND — so no single sampled
+    // field catches both. Asserting the whole object closes all four at once.
+    expect(buildEvidence({ source: 'quick_fixes', freeText: 'no artifact here' })).toEqual({
+      approval: { namesObjects: false, identifiers: [], provenanceIndependent: false },
+      artifact: { present: false, path: null },
+      live: { probed: false },
+      secondaryArtifactSearchDone: false,
+      secondaryArtifactFound: false,
+    });
+  });
+
+  it('asserts the complete evidence object for an artifact-bearing row', async () => {
+    const { buildEvidence } = await import('../../../lib/audits/chairman-apply-collectors.js');
+    expect(buildEvidence({ source: 'quick_fixes', freeText: 'ALTER TABLE stage_executions per db/x.sql' })).toEqual({
+      approval: { namesObjects: true, identifiers: ['stage_executions'], provenanceIndependent: false },
+      artifact: { present: true, path: 'db/x.sql' },
+      live: { probed: false },
+      secondaryArtifactSearchDone: false,
+      secondaryArtifactFound: false,
+    });
+  });
+
+  it('an artifact is a .sql file, not any cited document', async () => {
+    const { buildEvidence } = await import('../../../lib/audits/chairman-apply-collectors.js');
+    // Widening the artifact pattern to .md survived: prose citing a design doc would become an
+    // artifact, and artifact.present is one of the three inputs APPLIED requires.
+    expect(buildEvidence({ source: 'quick_fixes', freeText: 'see docs/plan.md' }).artifact.present).toBe(false);
+  });
+});
+
+describe('regex CONTENTS are pinned, not merely their presence', () => {
+  it('every gate-phrase alternative is load-bearing', async () => {
+    const { isQuickFixMember, isCompletionFlagMember } = await import('../../../lib/audits/chairman-apply-collectors.js');
+    // Third file with this shape: the presence of each regex was pinned, its contents were not.
+    // Reducing the gate phrase to just /chairman[- ]?gated/ survived, as did dropping whole DDL
+    // families. Each alternative below is a real live phrasing.
+    for (const phrase of ['CHAIRMAN-ONLY', 'chairman-gated', 'requires chairman',
+      'chairman must', 'awaiting chairman', 'chairman to apply', 'chairman approval']) {
+      expect(isQuickFixMember({ title: phrase + ' — ALTER TABLE t' }), phrase).toBe(true);
+    }
+    for (const phrase of ['CHAIRMAN-ONLY', 'requires chairman', 'awaiting chairman',
+      'unapplied migration', 'not applied']) {
+      expect(isCompletionFlagMember({ category: 'completion_flag', title: phrase + ' ALTER TABLE t' }), phrase).toBe(true);
+    }
+  });
+
+  it('every DDL term is load-bearing — including the access-control ones', async () => {
+    const { isQuickFixMember } = await import('../../../lib/audits/chairman-apply-collectors.js');
+    for (const term of ['alter', 'create', 'drop', 'grant', 'revoke', 'enable',
+      'migration', 'ddl', 'rls', 'policy']) {
+      expect(isQuickFixMember({ title: 'chairman-gated ' + term + ' change' }), term).toBe(true);
+    }
+    // Negative control: gate phrase with no DDL term at all.
+    expect(isQuickFixMember({ title: 'chairman-gated rename of a button' })).toBe(false);
+  });
+});
+
+describe('buildPopulation applies its predicates and accumulates arms', () => {
+  it('EXCLUDES a non-member quick fix — the arm predicate is applied at the CALL SITE', async () => {
+    const { buildPopulation } = await import('../../../lib/audits/chairman-apply-collectors.js');
+    // isQuickFixMember was directly tested, yet deleting the call to it inside buildPopulation
+    // survived: no fixture supplied a NON-member quick fix, so a bypass at the call site was
+    // invisible. Testing a predicate is not testing that anything USES it.
+    const pop = buildPopulation([], [
+      { id: 'QF-YES', status: 'open', title: 'chairman-gated migration' },
+      { id: 'QF-NO', status: 'open', title: 'unrelated button rename' },
+    ], []);
+    expect(pop.map((p) => p.identifier)).toEqual(['QF-YES']);
+  });
+
+  it('reads the DESCRIPTION as well as the title', async () => {
+    const { isQuickFixMember, buildPopulation } = await import('../../../lib/audits/chairman-apply-collectors.js');
+    // A bland title with a gated description is a real live shape, and every fixture had put the
+    // gate language in the title, so narrowing the read to title-only survived.
+    expect(isQuickFixMember({ title: 'Follow-up', description: 'chairman-gated migration for ventures' })).toBe(true);
+    const pop = buildPopulation([], [
+      { id: 'QF-D', status: 'open', title: 'Follow-up', description: 'chairman-gated migration' },
+    ], []);
+    expect(pop.map((p) => p.identifier)).toEqual(['QF-D']);
+  });
+
+  it('ACCUMULATES every arm and disposition for a multi-arm SD', async () => {
+    const { buildPopulation } = await import('../../../lib/audits/chairman-apply-collectors.js');
+    // `arms` was never asserted anywhere, so dropping the accumulation survived. It is not
+    // cosmetic: the arm-aware manifest check reads exactly this array, and the per-arm baseline
+    // floors are computed from it — a truncated arms list would silently shrink both.
+    const pop = buildPopulation([{
+      sd_key: 'SD-MULTI', status: 'completed',
+      metadata: { requires_chairman_apply: true, chairman_gated: 'prose gate' },
+    }], [], ['requires_chairman_apply', 'chairman_gated']);
+    expect(pop).toHaveLength(1);
+    expect(pop[0].arms).toEqual(['requires_chairman_apply', 'chairman_gated']);
+    expect(pop[0].dispositions).toEqual(['asserted', 'prose']);
+  });
+});
