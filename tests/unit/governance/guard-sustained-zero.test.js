@@ -161,8 +161,8 @@ describe('the alarm cannot be talked into health it did not establish', () => {
     // `Object.prototype.observations = 40; Object.prototype.blocked = 3` made classifyGuard report
     // a guard nobody ever watched as "blocked 3/40 — demonstrably able to block", and assessGuards
     // print healthy=3 for three empty records.
-    Object.prototype.observations = 40;   // eslint-disable-line no-extend-native
-    Object.prototype.blocked = 3;         // eslint-disable-line no-extend-native
+    Object.prototype.observations = 40;
+    Object.prototype.blocked = 3;
     try {
       expect(classifyGuard({ guard: 'unobserved' }, '7d').state).toBe(GUARD_HEALTH.UNKNOWN);
       expect(assessGuards([{ guard: 'a' }, { guard: 'b' }], '7d').summary).toContain('healthy=0');

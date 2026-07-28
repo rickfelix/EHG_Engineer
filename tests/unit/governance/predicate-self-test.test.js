@@ -123,7 +123,7 @@ describe('THE OBJECT ARM — the shape real gate predicates actually return', ()
 
   it('an INHERITED blocked flag does not count as a produced verdict', () => {
     // Otherwise a polluted prototype certifies any predicate as discriminating.
-    Object.prototype.blocked = true;   // eslint-disable-line no-extend-native
+    Object.prototype.blocked = true;
     try {
       const r = selfTestPredicate({ name: 'p', predicate: () => ({}), blockingInput: 'x', passingInput: 'y' });
       expect(r.capable).toBe(false);
@@ -136,7 +136,7 @@ describe('THE OBJECT ARM — the shape real gate predicates actually return', ()
 
 describe('it really never throws, and never quietly certifies', () => {
   it('an INHERITED predicate is not a supplied one', () => {
-    Object.prototype.predicate = (s) => s === 'x';   // eslint-disable-line no-extend-native
+    Object.prototype.predicate = (s) => s === 'x';
     try {
       const r = selfTestPredicate({ name: 'missing' });
       expect(r.capable).toBe(false);

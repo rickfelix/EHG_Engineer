@@ -15,7 +15,19 @@ import { capabilityGapTerm, waveAlignmentTerm, selectAdvisory } from '../../../l
 // The live consumer of guard_health — a CommonJS CLI, hence createRequire.
 import { createRequire } from 'node:module';
 
-const { buildLedgerEntry, formatGuardHealth } = createRequire(import.meta.url)('../../../scripts/adam-opportunity-scan.cjs');
+const {
+  buildLedgerEntry, formatGuardHealth, guardHealthForLedger, advisoryLedgerEntry, adamOkLine,
+  scanOutcome,
+} = createRequire(import.meta.url)('../../../scripts/adam-opportunity-scan.cjs');
+
+/** The live instance-3 shape: 8 waves exist, ZERO carry linkages. */
+const EMPTY_LINKAGE_ROADMAP = { waves: Array.from({ length: 8 }, () => ({ okr_ids: [] })) };
+const barredCandidates = (n) => Array.from({ length: n }, (_, i) => ({
+  scope_key: 'governance',
+  opportunity: `op${i}`, evidence: 'ev', rationale: 'ra', risk: 'ri',   // counterfactual MISSING => never clears
+  objective_kr: { objective: 'O-GOV', kr: 'KR', kr_status: 'on_track', off_track_delta: null },
+  contribution_type: 'enabling', confidence: 0.5, okr_score: 30,
+}));
 
 describe('AC-4 — capabilityGapTerm now says why, like its sibling', () => {
   // Signature is capabilityGapTerm(candidate, capabilityGap) — the CANDIDATE carries `capability`,
@@ -129,7 +141,7 @@ describe('a no-data reason and an evaluated-and-declined reason are not the same
   it('an inherited property is not a supplied one — no forged blocks', () => {
     // `active` is a generic name; a polluted Object.prototype would make every empty result count
     // as a block and drive the alarm to HEALTHY, forging the one verdict that ends enquiry.
-    Object.prototype.active = true;      // eslint-disable-line no-extend-native
+    Object.prototype.active = true;
     try {
       const folded = foldTermResults('g', [{}, {}, {}]);
       expect(folded.blocked).toBe(0);
@@ -245,6 +257,80 @@ describe('a no-data reason and an evaluated-and-declined reason are not the same
     expect(formatGuardHealth(null)).toBe('');                          // degrades silently, never throws
   });
 
+  it('THE WIRE, not just the two ends — a real selectAdvisory result reaches the ledger', () => {
+    // Both ENDS were well covered and the CONNECTION was not: the tests called buildLedgerEntry and
+    // formatGuardHealth with hand-written literals, while the call sites that pass
+    // `result.guard_health` into them lived inside an unexported main(). Deleting those arguments
+    // restored the byte-identical row and produced no test signal whatsoever.
+    //
+    // Third round in a row that the final hop was the unguarded one — the consumer didn't exist,
+    // then the caller didn't read it, then the read wasn't tested. So the entry construction is now
+    // an exported pure function driven here by a REAL selectAdvisory return, and main() holds no
+    // logic left to mutate.
+    const result = selectAdvisory(barredCandidates(27), { waveAlignment: EMPTY_LINKAGE_ROADMAP });
+    expect(result.surfaced).toBeNull();
+
+    const entry = advisoryLedgerEntry({ result, scope: { scope_key: 'governance' }, verdict: 'ADAM_OK', flagEnabled: true });
+    expect(entry.guard_health).toBeTruthy();
+    expect(entry.guard_health.summary).toContain('suspect=');
+    // ACTIONABLE, not merely distinguishable: the durable row NAMES the term and the absent input.
+    // Writing only the summary left "suspect=1" in the ledger — an auditor months later would still
+    // have to re-derive exactly what FR-2 AC-4 exists to state.
+    expect(entry.guard_health.missing).toContainEqual(
+      expect.objectContaining({ guard: 'waveAlignmentTerm', missing_input: 'empty_aligned_set', observations: 27 }),
+    );
+
+    // …and the stdout line, from the same real result.
+    expect(adamOkLine({ scope_key: 'governance' }, result)).toContain("waveAlignmentTerm could not judge: 'empty_aligned_set'");
+  });
+
+  it('ONE SEAM — every verdict decision is made by an exported function, from a real result', () => {
+    // Mutation found the three main() call sites still surviving after the builder was extracted:
+    // main() is not exported, so nothing that happens inside it is reachable from a unit test.
+    // Collapsing the branching into scanOutcome() moves every DECISION under test and leaves main()
+    // with a single call.
+    //
+    // WHAT THIS STILL DOES NOT COVER, stated rather than implied: that one remaining call. A
+    // mutation passing scanOutcome a null result would produce no unit-test signal, and no unit
+    // test can close it — that needs a process-level test running the CLI, which is not cheap here
+    // because the scan reads the database first. Bounded and named, not claimed closed.
+    const barred = selectAdvisory(barredCandidates(27), { waveAlignment: EMPTY_LINKAGE_ROADMAP });
+    const ok = scanOutcome({ result: barred, scope: { scope_key: 'governance' }, flagEnabled: true });
+    expect(ok.verdict).toBe('ADAM_OK');
+    expect(ok.entry.guard_health.missing[0]).toMatchObject({ guard: 'waveAlignmentTerm', missing_input: 'empty_aligned_set' });
+    expect(ok.stdout).toContain("could not judge: 'empty_aligned_set'");
+
+    // A result that DID surface routes by the flag, and carries health either way.
+    const surfacedResult = { surfaced: { dedup_key: 'k' }, cleared: 2, trace: [], guard_health: barred.guard_health };
+    const gateOff = scanOutcome({ result: surfacedResult, scope: { scope_key: 'governance' }, flagEnabled: false });
+    const gateOn = scanOutcome({ result: surfacedResult, scope: { scope_key: 'governance' }, flagEnabled: true });
+    expect(gateOff.verdict).toBe('SUPPRESSED_FLAG_OFF');
+    expect(gateOn.verdict).toBe('SURFACED');
+    for (const o of [gateOff, gateOn]) {
+      expect(o.entry.guard_health).toBeTruthy();
+      expect(o.entry.cleared).toBe(2);
+      expect(o.entry.detail).toBe('k');
+    }
+  });
+
+  it('EVERY verdict path records it — including the one where the terms ran but the gate was off', () => {
+    // SUPPRESSED_FLAG_OFF is reached when something DID clear, so the terms ran and their health is
+    // real; omitting it there discarded the one reading that path could offer.
+    const result = selectAdvisory(barredCandidates(3), { waveAlignment: EMPTY_LINKAGE_ROADMAP });
+    for (const verdict of ['ADAM_OK', 'SURFACED', 'SUPPRESSED_FLAG_OFF']) {
+      const e = advisoryLedgerEntry({ result, scope: { scope_key: 'governance' }, verdict, flagEnabled: false });
+      expect(e.guard_health, `${verdict} dropped guard_health`).toBeTruthy();
+    }
+  });
+
+  it('the durable form degrades honestly rather than inventing a shape', () => {
+    expect(guardHealthForLedger(null)).toBeNull();
+    expect(guardHealthForLedger({})).toBeNull();
+    // `missing` is always present — a field that appears only when non-empty makes
+    // "measured, nothing absent" and "not measured" the same row again.
+    expect(guardHealthForLedger({ summary: 's', results: [] })).toEqual({ summary: 's', missing: [] });
+  });
+
   it('AC-3 AT THE OPERATOR — the LEDGER ROW differs, not just an internal field', () => {
     // The correction that matters most in this SD. I wired the consumer into selectAdvisory, wrote
     // "the two were indistinguishable from outside — now they are not", and it was FALSE: nothing
@@ -259,8 +345,8 @@ describe('a no-data reason and an evaluated-and-declined reason are not the same
 
     expect(withHealth.guard_health).toContain('suspect=1');
     expect(without.guard_health).toBeUndefined();
-    // The two rows must not be mistakable for one another once the ts is set aside.
-    const strip = ({ ts, ...rest }) => rest;   // eslint-disable-line no-unused-vars
+    // The two rows must not be mistakable for one another once the timestamp is set aside.
+    const strip = (row) => { const c = { ...row }; delete c.ts; return c; };
     expect(strip(withHealth)).not.toEqual(strip(without));
   });
 
