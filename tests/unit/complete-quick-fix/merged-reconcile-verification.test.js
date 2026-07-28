@@ -425,3 +425,35 @@ describe('reconcile path carries FR-1 through from parsed argv (regression)', ()
     expect(u.runtime_observation.observation).toBe('explicit');
   });
 });
+
+// SECURITY S3 — the observation is redacted and capped before it is stored.
+describe('buildRuntimeObservation redacts secrets (SECURITY S3)', () => {
+  const nowIso = '2026-07-28T13:00:00.000Z';
+
+  it('does not store a bearer token pasted from probe output verbatim', () => {
+    const o = buildRuntimeObservation({
+      observation: 'curl -H "Authorization: Bearer sk-live-ABCDEF1234567890abcdef" https://api/x -> 200',
+      nowIso
+    });
+    expect(o.observation).not.toContain('sk-live-ABCDEF1234567890abcdef');
+  });
+
+  it('still records the observation — redaction must not empty it into a false absence', () => {
+    // The failure mode to avoid: redaction so aggressive the text becomes blank and the row then
+    // records declared:false, which would manufacture the very false absence FR-1 exists to stop.
+    const o = buildRuntimeObservation({ observation: 'GET /fleet-ui/session-view.html -> 410', nowIso });
+    expect(o.observation).toBe('GET /fleet-ui/session-view.html -> 410');
+    expect(o.declared).toBeUndefined();
+  });
+});
+
+describe('buildRuntimeObservation over-cap handling (SECURITY S3)', () => {
+  it('truncates and SAYS SO rather than silently becoming an absence', () => {
+    // The trap: capBody THROWS over the cap. Swallowing that would leave text empty, and the
+    // function would then record declared:false — manufacturing the exact false absence FR-1
+    // exists to stop. An over-long observation must stay an observation.
+    const o = buildRuntimeObservation({ observation: 'x'.repeat(9000), nowIso: '2026-07-28T13:00:00.000Z' });
+    expect(o.declared).toBeUndefined();
+    expect(o.observation).toMatch(/TRUNCATED at \d+ chars/);
+  });
+});

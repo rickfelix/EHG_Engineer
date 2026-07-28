@@ -8,7 +8,11 @@
 import { createClient } from '@supabase/supabase-js';
 import dotenv from 'dotenv';
 import path from 'path';
+import { createRequire } from 'module';
 import { fileURLToPath, pathToFileURL } from 'url';
+// Reuse the SAME redaction the coordination channel already applies, rather than rolling a second
+// set of patterns that would drift from it (lib/shared/body-cap.cjs is CJS, hence createRequire).
+const { redact, capBodySafe, BODY_HARD_CAP } = createRequire(import.meta.url)('../../../lib/shared/body-cap.cjs');
 import { restartLeoStack } from '../../../lib/server-manager.js';
 import { runSelfVerification } from '../../../lib/quickfix-self-verifier.js';
 import {
@@ -177,7 +181,21 @@ export function buildRuntimeObservation({ existing = null, observation = null, m
   // Real evidence already on the row wins over anything this close would write.
   if (existing && typeof existing === 'object' && Object.keys(existing).length > 0) return existing;
 
-  const text = typeof observation === 'string' ? observation.trim() : '';
+  // SECURITY S3 — REDACT AND CAP. This field is the WORSE one to leave raw, not the safer one: its
+  // own column comment and method vocabulary (http_probe, log_grep) actively invite pasting request
+  // /response and log text, which is exactly where bearer tokens and signed URLs live. The one real
+  // observation in the column is literal HTTP probe output. worker-signal.cjs already routes its
+  // bodies through the same helper; leaving this path raw was an ASYMMETRY, not a considered choice.
+  // capBody() redacts internally and THROWS over the cap; capBodySafe() adapts that to a
+  // {value, error} tuple. Neither TRUNCATES — and dropping an over-long observation would leave
+  // this function recording declared:false, manufacturing the exact false absence FR-1 exists to
+  // stop. So an over-cap observation is truncated and SAID SO in the stored text, rather than
+  // silently becoming an absence.
+  const raw = typeof observation === 'string' ? observation.trim() : '';
+  const capped = raw ? capBodySafe(raw) : { value: '', error: null };
+  const text = capped.error
+    ? `${redact(raw).slice(0, BODY_HARD_CAP - 60)} … [TRUNCATED at ${BODY_HARD_CAP} chars]`
+    : (capped.value || '');
   if (!text) {
     return {
       declared: false,
