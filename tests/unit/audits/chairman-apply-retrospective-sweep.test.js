@@ -411,3 +411,99 @@ describe('exit codes', () => {
     expect(exitCodeFor([{ verdict: VERDICT.UNVERIFIABLE }], true)).toBe(0);
   });
 });
+
+// ---------------------------------------------------------------------------
+// COLLECTORS. Both real defects this module has had were HERE, not in the
+// verdict logic, and neither was reachable while these functions sat behind the
+// Supabase import in the CLI. That is the whole reason they moved to lib/.
+// This file imports ONLY pure modules — no dotenv, no createClient — so the
+// unit tier's production-credential leak has no reachable sink.
+// ---------------------------------------------------------------------------
+describe('collectors', () => {
+  it('reads free-text sources from freeText, not from empty metadata', async () => {
+    const { buildEvidence } = await import('../../../lib/audits/chairman-apply-collectors.js');
+    // THE SHIPPED DEFECT: this selected on the literal 'quick_fixes', so completion-flag rows fell
+    // through to approvalTextOf({}) === '' and were verdicted from an empty string. 16 of 19
+    // carried a .sql path that was discarded, including the arm's own manifest seed.
+    const flag = {
+      source: 'feedback', metadata: {},
+      freeText: 'CHAIRMAN-ONLY: unapplied migration db/migrations/enable_rls.sql — ALTER TABLE audit_log',
+    };
+    const e = buildEvidence(flag);
+    expect(e.artifact.present).toBe(true);
+    expect(e.artifact.path).toBe('db/migrations/enable_rls.sql');
+    expect(e.approval.namesObjects).toBe(true);
+
+    // The SD source must still read metadata, not freeText.
+    const sd = {
+      source: 'strategic_directives_v2',
+      metadata: { chairman_apply_note: 'ALTER TABLE stage_executions per db/m.sql' },
+    };
+    expect(buildEvidence(sd).artifact.path).toBe('db/m.sql');
+  });
+
+  it('never claims independent provenance, because approval and artifact share one string', async () => {
+    const { buildEvidence } = await import('../../../lib/audits/chairman-apply-collectors.js');
+    // Hardcoding `true` here asserted the very flag the classifier checks and silently defeated the
+    // asymmetry at its only call site. Both values below come from the SAME text, so they are one
+    // origin — the self-comparison the design exists to reject.
+    const e = buildEvidence({ source: 'quick_fixes', freeText: 'ALTER TABLE t per x.sql' });
+    expect(e.approval.provenanceIndependent).toBe(false);
+  });
+
+  it('the quick-fix arm requires a gate phrase AND a DDL term, and drops retro shells', async () => {
+    const { isQuickFixMember } = await import('../../../lib/audits/chairman-apply-collectors.js');
+    expect(isQuickFixMember({ title: 'Apply 5 migrations (CHAIRMAN-GATED DDL)' })).toBe(true);
+    // A chairman MENTION is not membership — the loose reading admitted 256 of 1184 rows.
+    expect(isQuickFixMember({ title: 'Chairman decision queue flooded' })).toBe(false);
+    expect(isQuickFixMember({ title: 'EHG brand asset kit (chairman review)' })).toBe(false);
+    expect(isQuickFixMember({ title: '[Retro action items] 03020f59', description: 'chairman-gated migration' })).toBe(false);
+    expect(isQuickFixMember(null)).toBe(false);
+  });
+
+  it('the completion-flag arm is scoped by CATEGORY, not by searching all feedback', async () => {
+    const { isCompletionFlagMember } = await import('../../../lib/audits/chairman-apply-collectors.js');
+    const text = { title: 'chairman-gated migration not applied', description: 'ALTER TABLE x' };
+    expect(isCompletionFlagMember({ ...text, category: 'completion_flag' })).toBe(true);
+    expect(isCompletionFlagMember({ ...text, category: 'completion_flag_witness' })).toBe(true);
+    // Same text under any other category is NOT a completion flag. Free-texting the whole table
+    // matched 168 of 13637 rows and let this one arm supply 73% of the population: `feedback` holds
+    // every kind of feedback, so a text predicate over it is a search, not an index.
+    expect(isCompletionFlagMember({ ...text, category: 'harness_backlog' })).toBe(false);
+    expect(isCompletionFlagMember({ ...text, category: undefined })).toBe(false);
+    expect(isCompletionFlagMember(null)).toBe(false);
+  });
+
+  it('buildPopulation unions arms by key-presence and keeps free-text sources separate', async () => {
+    const { buildPopulation, addCompletionFlagArm } = await import('../../../lib/audits/chairman-apply-collectors.js');
+    const sds = [
+      { sd_key: 'SD-A', status: 'completed', metadata: { requires_chairman_apply: false } },
+      { sd_key: 'SD-B', status: 'draft', metadata: { chairman_gated: 'prose gate' } },
+      { sd_key: 'SD-C', status: 'completed', metadata: { unrelated: true } },
+    ];
+    const qfs = [{ id: 'QF-1', status: 'open', title: 'chairman-gated migration', description: 'ALTER' }];
+    const pop = buildPopulation(sds, qfs, ['requires_chairman_apply', 'chairman_gated']);
+    expect(pop.map((p) => p.identifier).sort()).toEqual(['QF-1', 'SD-A', 'SD-B']);
+    // false is a DISPOSITION, never an exclusion.
+    expect(pop.find((p) => p.identifier === 'SD-A').dispositions).toEqual(['ruled_out']);
+
+    const withFlags = addCompletionFlagArm(pop, [
+      { id: 'f1', category: 'completion_flag', title: 'chairman-gated', description: 'migration not applied' },
+      { id: 'f2', category: 'other', title: 'chairman-gated', description: 'migration not applied' },
+    ]);
+    expect(withFlags.map((p) => p.identifier)).toContain('FEEDBACK-f1');
+    expect(withFlags.map((p) => p.identifier)).not.toContain('FEEDBACK-f2');
+  });
+
+  it('an empty metadata arm list collects NO SDs — the shape that silently halved the population', async () => {
+    const { buildPopulation } = await import('../../../lib/audits/chairman-apply-collectors.js');
+    // Observed live during the collector refactor: the call site passed two arguments to a
+    // three-parameter function, metadataArms arrived undefined, and the population fell 82 -> 39
+    // with every per-arm count at zero. The baseline control caught it and exited 2. Pinned so the
+    // arity contract is a test rather than a near-miss.
+    const sds = [{ sd_key: 'SD-A', status: 'completed', metadata: { requires_chairman_apply: true } }];
+    expect(buildPopulation(sds, [], []).length).toBe(0);
+    expect(buildPopulation(sds, [], undefined).length).toBe(0);
+    expect(buildPopulation(sds, [], ['requires_chairman_apply']).length).toBe(1);
+  });
+});
