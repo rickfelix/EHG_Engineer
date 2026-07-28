@@ -12,7 +12,7 @@
  */
 import { describe, it, expect } from 'vitest';
 import {
-  VERDICT, DEFAULT_DWELL_MS, classifyIndexHealth, lockIdentityOf, exitCodeFor, formatVerdict,
+  VERDICT, DEFAULT_DWELL_MS, DEFAULT_TICK_MS, classifyIndexHealth, lockIdentityOf, exitCodeFor, formatVerdict,
   sanitizeState, sanitizeDwellMs,
 } from '../../../lib/git/index-jam-detector.js';
 
@@ -185,7 +185,12 @@ describe('ALARM SUPPRESSION — corrupt carry-over state must never read as heal
   });
 
   it('degrades a garbage state object to start-counting-again, never to permanently-healthy', () => {
-    for (const bad of [null, undefined, 'nonsense', 42, { firstBlockedAtMs: -1 }, { firstBlockedAtMs: 0 }]) {
+    // Each fixture carries lockIdentity 'A' so sameLock is TRUE on the next tick and the guard
+    // under test is actually REACHED. Without it, sameLock is false regardless and the assertion
+    // cannot fail — mutation proved a dropped `t > 0` guard survived the earlier version.
+    for (const bad of [null, undefined, 'nonsense', 42,
+      { firstBlockedAtMs: -1, lockIdentity: 'A' }, { firstBlockedAtMs: 0, lockIdentity: 'A' },
+      { firstBlockedAtMs: '5000', lockIdentity: 'A' }, { firstBlockedAtMs: Infinity, lockIdentity: 'A' }]) {
       const r = classifyIndexHealth(present('A'), T0, bad);
       expect(r.verdict).toBe(VERDICT.HEALTHY);
       expect(classifyIndexHealth(present('A'), T0 + 120 * SEC, r.nextState).verdict).toBe(VERDICT.JAMMED);
@@ -210,6 +215,57 @@ describe('ALARM SUPPRESSION — corrupt carry-over state must never read as heal
   it('sanitizeState preserves a legitimate in-progress count', () => {
     const good = { firstBlockedAtMs: T0 - 60 * SEC, lockIdentity: 'A' };
     expect(sanitizeState(good, T0)).toEqual(good);
+  });
+
+  it('rejects a NUMERIC STRING timestamp — coerced comparisons would let it through', () => {
+    // '5000' > 0 and '5000' <= now are BOTH true, so only Number.isFinite catches it. Without
+    // that check the string flows into the arithmetic and yields a nonsense duration.
+    expect(sanitizeState({ firstBlockedAtMs: '5000', lockIdentity: 'A' }, T0).firstBlockedAtMs).toBeNull();
+  });
+
+  it('rejects an INFINITE dwell floor — Infinity > 0 is true, and it disables the detector', () => {
+    // Number('1e999') === Infinity and is reachable straight from the CLI. `heldForMs >= Infinity`
+    // is always false, so the detector goes silently inert exactly like the NaN case.
+    expect(sanitizeDwellMs(Infinity)).toBe(DEFAULT_DWELL_MS);
+    expect(sanitizeDwellMs(Number('1e999'))).toBe(DEFAULT_DWELL_MS);
+  });
+
+  it('ignores a NON-STRING lockIdentity rather than carrying an object that can never match', () => {
+    // An object identity is re-parsed fresh each tick, so === never holds, the counter never
+    // accumulates, and a real jam never surfaces.
+    expect(sanitizeState({ firstBlockedAtMs: T0 - SEC, lockIdentity: { a: 1 } }, T0).lockIdentity).toBeNull();
+  });
+
+  it('never jams on a null firstBlockedAtMs even when the identity matches', () => {
+    // sanitizeState deliberately ADMITS firstBlockedAtMs === null (it is the legitimate
+    // never-blocked shape). So classifyIndexHealth's own null-guard is the only thing preventing
+    // `nowMs - null` from producing a ~20,000-day duration and an instant false JAMMED.
+    const r = classifyIndexHealth(present('A'), T0, { firstBlockedAtMs: null, lockIdentity: 'A' });
+    expect(r.verdict).toBe(VERDICT.HEALTHY);
+    expect(r.nextState.firstBlockedAtMs).toBe(T0);
+  });
+});
+
+describe('the derived dwell floor is pinned, not merely bounded', () => {
+  it('is exactly 90s — derived from a ~44.2s healthy ceiling and a 420s shortest real jam', () => {
+    // Mutation showed 75s and 61s both survived a range-only assertion. The value carries the
+    // derivation (roughly 2x headroom over healthy bulk work), so pin it.
+    expect(DEFAULT_DWELL_MS).toBe(90_000);
+  });
+
+  it('leaves ~2x headroom over the measured healthy ceiling and sits far under the shortest jam', () => {
+    const HEALTHY_CEILING_MS = 44_200; // measured: git add -A of 12000 files
+    const SHORTEST_REAL_JAM_MS = 420_000; // 7 minutes, recorded
+    expect(DEFAULT_DWELL_MS).toBeGreaterThan(HEALTHY_CEILING_MS * 2);
+    expect(DEFAULT_DWELL_MS).toBeLessThan(SHORTEST_REAL_JAM_MS);
+  });
+
+  it('TICK must be small enough that the shortest real jam spans multiple ticks', () => {
+    // Detection needs the SAME identity at two consecutive ticks, so the EFFECTIVE floor is
+    // max(dwell, 2 x tick). A 1800s registered interval would make the effective floor 3600s and
+    // leave the 420s shortest recorded jam structurally undetectable — the derived 90s inert.
+    expect(DEFAULT_TICK_MS * 2).toBeLessThan(420_000);
+    expect(DEFAULT_TICK_MS * 2).toBeLessThanOrEqual(DEFAULT_DWELL_MS);
   });
 });
 

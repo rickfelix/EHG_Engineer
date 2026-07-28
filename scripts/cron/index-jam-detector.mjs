@@ -104,8 +104,10 @@ export function saveState(repoPath, nextState, file = stateFileFor(repoPath)) {
   try {
     fs.mkdirSync(path.dirname(file), { recursive: true });
     fs.writeFileSync(file, JSON.stringify(all, null, 2));
+    return true;
   } catch (err) {
-    console.error(`[index-jam-detector] could not persist state (non-fatal): ${err.message}`);
+    console.error(`[index-jam-detector] could not persist state: ${err.message}`);
+    return false;
   }
 }
 
@@ -128,8 +130,16 @@ async function main() {
 
   const observation = observeIndexLock(repoPath);
   const prior = loadState(repoPath);
-  const result = classifyIndexHealth(observation, nowMs, prior, { dwellMs });
-  saveState(repoPath, result.nextState);
+  let result = classifyIndexHealth(observation, nowMs, prior, { dwellMs });
+
+  // If carry-over state cannot be persisted, the counter cannot survive to the next tick and the
+  // detector would report HEALTHY forever. Measured: with <repo>/.claude unwritable and a real
+  // lock held continuously, exit 0 on 4 of 4 ticks. Readers key on the EXIT CODE per the shape
+  // contract, so a stderr line is not the contract — the verdict itself must degrade. Note the
+  // triggering scenario is CORRELATED: disk-full can both orphan an index.lock and block the write.
+  if (!saveState(repoPath, result.nextState) && result.verdict !== VERDICT.JAMMED) {
+    result = { ...result, verdict: VERDICT.UNAVAILABLE, reason: 'carry-over state could not be persisted — persistence is the signal, so this verdict is not trustworthy' };
+  }
 
   if (process.argv.includes('--json')) {
     console.log(JSON.stringify({ repoPath, observedAt: new Date(nowMs).toISOString(), ...result }, null, 2));
