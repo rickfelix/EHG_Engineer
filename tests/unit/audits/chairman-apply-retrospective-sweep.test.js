@@ -1068,3 +1068,32 @@ describe('a feedback row can be BOTH a metadata member and a completion flag', (
     expect(c.buildEvidence(row).artifact.path).toBe('db/dual.sql');
   });
 });
+
+describe('escape normalisation covers EVERY form, not a list', () => {
+  it('a unicode escape cannot fuse onto a filename or an identifier', async () => {
+    const m = await import('../../../lib/audits/chairman-apply-sweep.js');
+    // The first version enumerated the eight short escapes and missed the UNICODE-ESCAPE form -- the only OTHER
+    // form JSON.stringify emits: unicode escapes for control characters, and lone surrogates from
+    // truncated emoji). A backslash is not in the artifact character class, so the match restarted
+    // one char later and the surviving uXXXX fused onto the real name: 'db/real.sql' became
+    // 'ud83ddb/real.sql' — artifact.present true, pointing at a file that never existed.
+    // Found by adversarial review, reproduced live. Closed for 8 of 9 cases is what enumerating buys.
+    const ctrl = m.approvalTextOf({ chairman_gated: { note: 'ran the\u0001migration.sql today' } });
+    expect(ctrl.match(/[\w./-]*[\w-]\.sql/i)[0]).toBe('migration.sql');
+    // Built with fromCharCode: a LONE SURROGATE written as a source literal is itself a parse
+    // error in the bundler -- a small proof of how unusual this input is, and of why the escape
+    // normalisation had never been exercised against it.
+    const lone = String.fromCharCode(0xd83d);
+    const surrogate = m.approvalTextOf({ chairman_apply: { note: `trunc${lone}db/real.sql` } });
+    expect(surrogate.match(/[\w./-]*[\w-]\.sql/i)[0]).toBe('db/real.sql');
+    // Identifiers must not fuse either.
+    const ids = m.namesObjects(m.approvalTextOf({
+      chairman_apply: { note: 'ALTER TABLE \u0001stage_executions' },
+    })).identifiers;
+    expect(ids).toContain('stage_executions');
+    expect(ids.some((i) => i.startsWith('u0001'))).toBe(false);
+    // And a clean path is untouched.
+    expect(m.approvalTextOf({ chairman_apply: { note: 'per db/real.sql' } })
+      .match(/[\w./-]*[\w-]\.sql/i)[0]).toBe('db/real.sql');
+  });
+});

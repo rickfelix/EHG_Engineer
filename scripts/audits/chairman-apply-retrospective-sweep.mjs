@@ -32,7 +32,7 @@
  * and a run reporting many APPLIED has loosened a rule rather than found good news. The conclusion
  * is robust to the predicate choice: under all three candidate readings APPLIED lands at 11, 5 or 4.
  *
- * Usage: node scripts/audits/chairman-apply-retrospective-sweep.mjs [--json] [--limit N]
+ * Usage: node scripts/audits/chairman-apply-retrospective-sweep.mjs [--json]
  * Exit: 0 nothing actionable · 1 chairman-actionable findings · 2 a CONTROL failed (never trust the run)
  */
 
@@ -128,7 +128,7 @@ async function fetchAllReconciled(supabase, table, columns) {
     if (!page.data || page.data.length < PAGE_SIZE) break;
   }
   if (rows.length !== head.count) {
-    throw new Error(`${table} RECONCILE FAILED: fetched ${rows.length} of ${head.count} â€” refusing to report on a partial read`);
+    throw new Error(`${table} RECONCILE FAILED: fetched ${rows.length} of ${head.count} (${rows.length > head.count ? 'SUPERSET - a concurrent INSERT shifted offsets mid-scan' : 'PARTIAL - a truncated or shrinking read'}) - refusing to report`);
   }
   return rows;
 }
@@ -186,7 +186,7 @@ async function main() {
     controlsOk = false;
     for (const u of unconsumed.unreachableMembers) {
       controlFailures.push(
-        `UNREACHABLE MEMBER ${u.identifier} [${u.source}] carries ${u.arms.join(',')} but NO arm reaches it — buildPopulation reads strategic_directives_v2 metadata only`);
+        `UNREACHABLE MEMBER ${u.identifier} [${u.source}] carries ${u.arms.join(',')} but no arm reaches it - the population and the detector disagree about which arms are consumed`);
     }
     for (const f of unconsumed.findings.filter((x) => x.soleReach > 0)) {
       controlFailures.push(
