@@ -128,7 +128,7 @@ async function fetchAllReconciled(supabase, table, columns) {
     if (!page.data || page.data.length < PAGE_SIZE) break;
   }
   if (rows.length !== head.count) {
-    throw new Error(`${table} RECONCILE FAILED: fetched ${rows.length} of ${head.count} (${rows.length > head.count ? 'SUPERSET - a concurrent INSERT shifted offsets mid-scan' : 'PARTIAL - a truncated or shrinking read'}) - refusing to report`);
+    throw new Error(`${table} RECONCILE FAILED: fetched ${rows.length} of ${head.count} (${rows.length > head.count ? 'SUPERSET - a concurrent write shifted offsets mid-scan' : 'PARTIAL - a truncated or shrinking read'}) - refusing to report`);
   }
   return rows;
 }
