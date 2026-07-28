@@ -270,6 +270,18 @@ describe('withLastKnown — history is ADDED, never substituted', () => {
     expect(r.weeklyPct).toBeUndefined();
   });
 
+  it('THE ATTRIBUTION INVARIANT — duplicate_identity never receives a number, not even a stored one', () => {
+    // The defect this SD was FILED for is a number under a label the system cannot vouch for.
+    // Enrichment reintroduced it: withLastKnown returned early only on state==='ok', so an
+    // unattributable reading was handed a retained percentage and the strip rendered
+    // "Unavailable · Last known 92%" — one account's usage under another's name, via the new path.
+    // The refusal lives HERE, not in the component, so the API response is honest as well.
+    const dup = { name: 'Some Account', state: 'unavailable', reason: 'duplicate_identity', fetchedAt: 'x' };
+    const [r] = withLastKnown([dup], known);
+    expect(r.lastKnownWeeklyPct).toBeUndefined();
+    expect(r).toBe(dup);
+  });
+
   it('a live reading is left untouched — a current number always wins', () => {
     const live = { name: 'Some Account', state: 'ok', weeklyPct: 12, fetchedAt: 'x' };
     expect(withLastKnown([live], known)[0]).toBe(live);

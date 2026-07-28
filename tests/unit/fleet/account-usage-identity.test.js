@@ -225,6 +225,28 @@ describe('FR-1 — display mapping is configuration, and unset is safe', () => {
     expect(map.get('u-0')).toBe('Bad[31mName');
   });
 
+  it('TWO ACCOUNTS, ONE NAME — a contested label collapses nothing and attributes nothing', async () => {
+    // findIdentityCollisions groups by uuid8, so it cannot see the mirror-image misconfiguration:
+    // two DIFFERENT accounts mapped to the SAME display name. Before this, relabelling was
+    // last-write-wins — the Map silently kept one, two accounts shared an account_name (and so a
+    // history row-space under UNIQUE(account_name, fetched_at)), and each could show the other's
+    // number. One config typo away, and invisible.
+    let i = 0;
+    const out = await readAllAccounts({
+      env: { ...ENV, FLEET_ACCOUNT_IDENTITY_MAP: JSON.stringify({ 'u-0': 'Same Name', 'u-1': 'Same Name' }) },
+      fs: fsWithTokens,
+      fetchImpl: fetchReturning(200, { five_hour: { utilization: 1 }, seven_day: { utilization: 1 } }),
+      getAccountIdentity: () => ({ email: 'a@b.invalid', orgName: 'O', accountUuid8: `u-${i++}` }),
+    });
+    // Nothing collapsed: still one reading per registry slot, under distinct names.
+    expect(out).toHaveLength(ACCOUNT_REGISTRY.length);
+    expect(new Set(out.map((r) => r.name)).size).toBe(ACCOUNT_REGISTRY.length);
+    // And the two contested slots are refused rather than shown under a name we cannot vouch for.
+    const contestedReadings = out.filter((r) => r.reason === UNAVAILABLE_REASONS.DUPLICATE_IDENTITY);
+    expect(contestedReadings).toHaveLength(2);
+    for (const r of contestedReadings) expect(r.weeklyPct).toBeUndefined();
+  });
+
   it('malformed map config never breaks the strip', async () => {
     let n = 0;
     const out = await readAllAccounts({
