@@ -20,8 +20,20 @@ import {
 } from '../../lib/git/index-jam-detector.js';
 
 const PROCESS_KEY = 'standard_loop:index-jam-detector';
-const STATE_DIR = path.resolve(process.cwd(), '.claude');
-const STATE_FILE = path.join(STATE_DIR, 'index-jam-detector-state.json');
+
+/**
+ * State lives beside the OBSERVED repo, never relative to process.cwd().
+ *
+ * Because persistence IS the signal, a state path that moves with cwd means the counter never
+ * accumulates and the detector silently never fires. Measured: same repo, same held lock, two
+ * different cwds — one tick reported JAMMED, the next reported HEALTHY mid-jam. Windows Task
+ * Scheduler defaults "Start in" to %SystemRoot%\system32, so a scheduled run would have used a
+ * different state file from every manual run. That is the single likeliest route to a detector
+ * that is green forever during a real outage.
+ */
+export function stateFileFor(repoPath) {
+  return path.join(repoPath, '.claude', 'index-jam-detector-state.json');
+}
 
 /**
  * Resolve the git dir. TR-3: `.git` as a DIRECTORY means a main root; as a FILE it is a worktree
@@ -35,7 +47,16 @@ export function resolveGitDir(repoPath) {
   const pointer = fs.readFileSync(dotGit, 'utf8').trim();
   const m = pointer.match(/^gitdir:\s*(.+)$/);
   if (!m) throw new Error(`.git file is not a gitdir pointer: ${pointer.slice(0, 60)}`);
-  return { gitDir: path.resolve(repoPath, m[1]), kind: 'worktree' };
+  const gitDir = path.resolve(repoPath, m[1]);
+  // The pointer target MUST exist and be a directory. A PRUNED worktree leaves a .git file
+  // pointing at a removed worktrees/<name>, so statting <gitDir>/index.lock returns ENOENT — which
+  // the caller would read as "successful observation, lock absent" and report HEALTHY FOREVER,
+  // indistinguishable from a genuinely healthy tree. A prunable worktree is an ordinary git state
+  // and there are 17 of them. This also bounds a relative pointer (e.g. `gitdir: ../../elsewhere`)
+  // to something that is actually a git dir rather than any directory the path resolves to.
+  const st2 = fs.statSync(gitDir); // throws -> UNAVAILABLE, which is the honest verdict
+  if (!st2.isDirectory()) throw new Error(`gitdir pointer target is not a directory: ${gitDir}`);
+  return { gitDir, kind: 'worktree' };
 }
 
 /**
@@ -69,14 +90,14 @@ export function observeIndexLock(repoPath) {
  * is a fresh process, so this cannot live in memory. Deliberately NOT a findings sink — the
  * detector's OUTPUT is the verdict and its exit code; this file is only carry-over.
  */
-export function loadState(repoPath, file = STATE_FILE) {
+export function loadState(repoPath, file = stateFileFor(repoPath)) {
   try {
     const all = JSON.parse(fs.readFileSync(file, 'utf8'));
     return all[repoPath] || undefined;
   } catch { return undefined; }
 }
 
-export function saveState(repoPath, nextState, file = STATE_FILE) {
+export function saveState(repoPath, nextState, file = stateFileFor(repoPath)) {
   let all = {};
   try { all = JSON.parse(fs.readFileSync(file, 'utf8')); } catch { /* first run */ }
   all[repoPath] = nextState;
@@ -94,7 +115,10 @@ function arg(name, fallback) {
 }
 
 async function main() {
-  const repoPath = arg('--repo', process.env.CLAUDE_PROJECT_DIR);
+  // No env fallback: observeIndexLock refuses a default path precisely so a forgetful caller
+  // cannot silently observe the shared index, and CLAUDE_PROJECT_DIR names the shared root in a
+  // shared-root session — an env default would reintroduce what the throw exists to prevent.
+  const repoPath = arg('--repo', null);
   if (!repoPath) {
     console.error('[index-jam-detector] --repo <path> is required (no cwd fallback by design)');
     process.exit(2);

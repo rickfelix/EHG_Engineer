@@ -13,6 +13,7 @@
 import { describe, it, expect } from 'vitest';
 import {
   VERDICT, DEFAULT_DWELL_MS, classifyIndexHealth, lockIdentityOf, exitCodeFor, formatVerdict,
+  sanitizeState, sanitizeDwellMs,
 } from '../../../lib/git/index-jam-detector.js';
 
 const T0 = Date.parse('2026-07-28T00:00:00.000Z');
@@ -38,10 +39,15 @@ describe('classifyIndexHealth — no lock', () => {
   });
 
   it('an absent lock RESETS an accumulated counter (TS-12, FR-1 AC-6)', () => {
-    // Blocked long enough to be JAMMED, then the lock clears: must not latch.
-    const seq = runTicks([present('A'), present('A'), present('A'), present('A'), absent]);
+    // Blocked long enough to be JAMMED, then the lock clears, then the SAME identity returns.
+    // The tick AFTER the clear is what proves the reset: asserting only the absent tick is
+    // VACUOUS — the absent branch returns HEALTHY unconditionally, so a latching implementation
+    // that carried prior state through the reset passes that weaker assertion identically.
+    // Mutation confirmed it: nextState:emptyState() -> nextState:prior survived the old test.
+    const seq = runTicks([present('A'), present('A'), present('A'), present('A'), absent, present('A')]);
     expect(seq[3]).toBe(VERDICT.JAMMED);
     expect(seq[4]).toBe(VERDICT.HEALTHY);
+    expect(seq[5]).toBe(VERDICT.HEALTHY); // clock restarted — a latching impl reports JAMMED here
   });
 });
 
@@ -155,6 +161,55 @@ describe('exit code contract (TS-8)', () => {
     expect(exitCodeFor(VERDICT.JAMMED)).toBe(1);
     expect(exitCodeFor(VERDICT.HEALTHY)).toBe(0);
     expect(exitCodeFor(VERDICT.UNAVAILABLE)).toBe(0);
+  });
+});
+
+describe('ALARM SUPPRESSION — corrupt carry-over state must never read as healthy', () => {
+  // Each input below was CONFIRMED by experiment to hold a real jam at HEALTHY indefinitely.
+  // These are the failure direction that matters: a detector that is green during the outage.
+  it('rejects a FUTURE firstBlockedAtMs instead of suppressing forever', () => {
+    // Measured: {firstBlockedAtMs: now + 24h} gave HEALTHY on 6 of 6 ticks against a real held
+    // lock, carried forward byte-identical each tick. It never self-heals, because during a
+    // genuine jam the identity never changes.
+    const poisoned = { firstBlockedAtMs: T0 + 86_400_000, lockIdentity: 'A' };
+    const r = classifyIndexHealth(present('A'), T0, poisoned);
+    expect(r.nextState.firstBlockedAtMs).toBe(T0); // clock restarted from now, not the future
+    const later = classifyIndexHealth(present('A'), T0 + 120 * SEC, r.nextState);
+    expect(later.verdict).toBe(VERDICT.JAMMED); // and a real jam still surfaces
+  });
+
+  it('rejects a NON-NUMERIC firstBlockedAtMs (NaN comparison is always false)', () => {
+    const r = classifyIndexHealth(present('A'), T0, { firstBlockedAtMs: 'x', lockIdentity: 'A' });
+    expect(r.nextState.firstBlockedAtMs).toBe(T0);
+    expect(classifyIndexHealth(present('A'), T0 + 120 * SEC, r.nextState).verdict).toBe(VERDICT.JAMMED);
+  });
+
+  it('degrades a garbage state object to start-counting-again, never to permanently-healthy', () => {
+    for (const bad of [null, undefined, 'nonsense', 42, { firstBlockedAtMs: -1 }, { firstBlockedAtMs: 0 }]) {
+      const r = classifyIndexHealth(present('A'), T0, bad);
+      expect(r.verdict).toBe(VERDICT.HEALTHY);
+      expect(classifyIndexHealth(present('A'), T0 + 120 * SEC, r.nextState).verdict).toBe(VERDICT.JAMMED);
+    }
+  });
+
+  it('a NaN or non-positive dwell floor falls back instead of disabling the detector', () => {
+    // Measured: --dwell-ms abc gave NaN, and `heldForMs >= NaN` is always false — 20 ticks over
+    // 10 simulated minutes of one held lock all reported HEALTHY. A 0 floor is the opposite
+    // failure: it rebuilds the presence-only false positive TS-17a disproves.
+    expect(sanitizeDwellMs(Number('abc'))).toBe(DEFAULT_DWELL_MS);
+    expect(sanitizeDwellMs(0)).toBe(DEFAULT_DWELL_MS);
+    expect(sanitizeDwellMs(-5)).toBe(DEFAULT_DWELL_MS);
+    expect(sanitizeDwellMs(45_000)).toBe(45_000); // a legitimate override still works
+
+    let s;
+    const r1 = classifyIndexHealth(present('A'), T0, s, { dwellMs: NaN }); s = r1.nextState;
+    expect(classifyIndexHealth(present('A'), T0 + 30 * SEC, s, { dwellMs: NaN }).verdict).toBe(VERDICT.HEALTHY);
+    expect(classifyIndexHealth(present('A'), T0 + 120 * SEC, s, { dwellMs: NaN }).verdict).toBe(VERDICT.JAMMED);
+  });
+
+  it('sanitizeState preserves a legitimate in-progress count', () => {
+    const good = { firstBlockedAtMs: T0 - 60 * SEC, lockIdentity: 'A' };
+    expect(sanitizeState(good, T0)).toEqual(good);
   });
 });
 
