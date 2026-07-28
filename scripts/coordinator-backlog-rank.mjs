@@ -41,6 +41,9 @@ import { isFixtureSd, isBareShell, bareShellLastCompare, isStartedSd, stripDispa
 // handling both the [{sd_id}]/[{sd_key}] object and raw-string shapes the old hand-rolled
 // resolver coerced, while correctly dropping the sentinel the hand-rolled one mis-counted.
 import { parseSdDependencies } from '../lib/utils/parse-sd-dependencies.cjs';
+// SD-LEO-INFRA-ADAM-WORK-SELECTION-001 FR-2/FR-3: ONE roadmap-marker predicate, imported rather
+// than re-declared. A hardcoded copy here had already drifted from the reader's list by 326 SDs.
+import { isPlanLinked } from '../lib/adam/work-selection-gate.js';
 // SD-REFILL-00MFWEGZ: reuse the canonical parent-LEAD-pass dispatch gate so the ranking surface
 // mirrors what claim-eligibility actually blocks (no drift between rank-vs-claim).
 import { parentLeadPending, classifyDispatchIneligibility, resolveHoldProvenance, formatHoldProvenance } from '../lib/fleet/claim-eligibility.cjs';
@@ -176,11 +179,22 @@ export function deriveReasonBand(d) {
   // plan" was being reported as proof of it.
   //
   // This function is PURE and has no DB access, so it asserts roadmap provenance only from markers
-  // already present on the row — the same markers classifyDispatchReason's linkage branch trusts.
-  // Anything else is now 'unclassified', which is an honest residual: it says we do not know, and
-  // it cannot be mistaken for adherence.
-  if (m.wave_id || m.roadmap_item_id || m.promoted_from_roadmap || m.plan_key || m.wave_disposition
-    || ['plan', 'roadmap_item'].includes(String(m.source || ''))) return 'now-wave-remainder';
+  // already present on the row. Anything else is 'unclassified' — an honest residual that says we
+  // do not know and cannot be mistaken for adherence.
+  //
+  // SECURITY review C4: I originally hardcoded the marker list here and claimed in a comment that
+  // it matched classifyDispatchReason's — it did not (that one also admits 'lifecycle-sd-bridge'),
+  // and the two had ALREADY drifted at ship time by 326 SDs. A "single source" with no importers
+  // is not a single source, so this now imports the real one. isPlanLinked is a pure predicate
+  // over the row, so importing it keeps this function pure and DB-free.
+  //
+  // KNOWN AND RECORDED (C2, for PLAN not for this commit): these markers are a WEAK proxy —
+  // measured against roadmap_wave_items.promoted_to_sd_key (344 real keys) the marker test yields
+  // 519 false positives and 309 false negatives, largely because 376 of 401 source∈{plan,
+  // roadmap_item} rows carry created_via 'leo-create-sd' (a creation-tool default, not roadmap
+  // provenance). The verifiable ground truth is one query away and the FR-3 call site already
+  // holds a DB client. Keeping the writer pure is a deliberate choice here, not a constraint.
+  if (isPlanLinked({ sd_key: d && d.sd_key, metadata: m })) return 'now-wave-remainder';
   return 'unclassified';
 }
 export function buildRankMergeQuery(rankPatch, sdKey) {

@@ -48,14 +48,22 @@ describe('FR-2: deriveReasonBand cannot produce now-wave-remainder by fallthroug
   });
 });
 
-describe('FR-2: observed linkage BEATS the self-asserted stamp', () => {
-  it('a row with a real wave_id classifies from LINKAGE even when the stamp contradicts it', () => {
-    // Before the fix the stamp short-circuited first, so stamping made the gauge STRICTLY BLINDER
-    // than the heuristics it was meant to improve.
+describe('FR-2: the reader is unchanged ON PURPOSE — the fix went in the writer', () => {
+  it('DOCUMENTS the live behaviour: a contradicting stamp still wins over linkage', () => {
+    // This is NOT the behaviour FR-2 originally proposed, and that is the point of pinning it.
+    // The proposal (linkage beats stamp) was implemented, measured by SECURITY over all 5441 SDs,
+    // and REVERTED: it reclassified 65 rows 100% in one direction, inflating the very
+    // now_wave_remainder share this SD exists to stop overstating. The alternative ordering broke
+    // the QF-20260719-365 contract that the rank-time stamp is authoritative over heuristics.
+    // The leverage was upstream: the WRITER no longer emits 'now-wave-remainder' by fallthrough,
+    // so the stamps this reader trusts are honest at the source (~100% -> 8.8% on the claimable
+    // cohort). Correcting the source beat teaching the reader to distrust it.
+    // A reader change may still be right once stamps are honest — it needs its own cohort
+    // simulation first, and this test is what will fail when someone tries it.
     expect(classifyDispatchReason({
       sd_key: 'SD-PLAIN-001',
       metadata: { wave_id: 'w-1', dispatch_reason_band: 'incident' },
-    })).toBe('now_wave_remainder');
+    })).toBe('incident');
   });
 
   it('the stamp still governs when there is NO linkage to observe (back-compat)', () => {
@@ -63,6 +71,18 @@ describe('FR-2: observed linkage BEATS the self-asserted stamp', () => {
     // Legacy rows stamped before this change are still understood — the reader was NOT renamed in
     // lockstep with the writer on purpose, so historical stamps keep classifying as they did.
     expect(classifyDispatchReason({ sd_key: 'SD-PLAIN-001', metadata: { dispatch_reason_band: 'now-wave-remainder' } })).toBe('now_wave_remainder');
+  });
+
+  it('C1 REGRESSION GUARD: linkage must NOT absorb chairman/feedback/incident provenance', () => {
+    // I attempted a reader reorder and REVERTED it. SECURITY C1 simulated the hoist over all 5441
+    // SDs: 65 rows reclassified, 100% in one direction (60 incident + 5 chairman_directed ->
+    // now_wave_remainder), so a change meant to stop this gauge OVERSTATING plan adherence would
+    // have made it report MORE. This pins the property that made the attempt wrong, so a future
+    // reorder cannot land it silently — provenance says where work CAME FROM and linkage must not
+    // swallow it.
+    expect(classifyDispatchReason({ sd_key: 'SD-X-001', metadata: { chairman_directed: true, wave_id: 'w-1' } })).toBe('chairman_directed');
+    expect(classifyDispatchReason({ sd_key: 'SD-FDBK-X-001', metadata: { wave_id: 'w-1' } })).toBe('feedback');
+    expect(classifyDispatchReason({ sd_key: 'QF-20260101-001', metadata: { wave_id: 'w-1' } })).toBe('incident');
   });
 
   it('the new unclassified band is recognised by the reader, not silently degraded to other', () => {
