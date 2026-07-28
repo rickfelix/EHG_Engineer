@@ -181,7 +181,7 @@ async function main() {
     const newCycle = (state.cycle || 0) + 1;
 
     const signals = await gatherSignals(sb);
-    const { dimensions, provenance } = core.scoreDimensions(signals);
+    const { dimensions, provenance, inconclusive } = core.scoreDimensions(signals);
     const belowThreshold = core.classifyBelowThreshold(dimensions);
 
     // prior cycle (most recent self-assessment row)
@@ -201,7 +201,7 @@ async function main() {
     const priorOutcomes = core.derivePriorOutcomes(priorScore, dimensions);
     const committedActions = core.generateCommittedActions(belowThreshold, provenance);
     const score = core.assembleScore({
-      dimensions, cycle: newCycle, session: sessionId, committedActions, priorOutcomes, provenance, belowThreshold, date,
+      dimensions, cycle: newCycle, session: sessionId, committedActions, priorOutcomes, provenance, belowThreshold, date, inconclusive,
     });
 
     // validate via the shipped contract (literal dynamic import — WIRE_CHECK-traceable)

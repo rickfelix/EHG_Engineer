@@ -213,7 +213,7 @@ export async function selfReviewMain() {
       };
 
       const coordState = stateSnapshot;
-      const { dimensions, provenance } = roleScoreCore.scoreDimensions(signals, COORDINATOR_CONFIG);
+      const { dimensions, provenance, inconclusive } = roleScoreCore.scoreDimensions(signals, COORDINATOR_CONFIG);
       const belowThreshold = roleScoreCore.classifyBelowThreshold(dimensions, COORDINATOR_CONFIG.belowThresholdAt);
 
       const { data: priorRows } = await db.from('feedback').select('metadata').eq('category', 'coordinator_self_assessment').order('created_at', { ascending: false }).limit(1);
@@ -223,7 +223,7 @@ export async function selfReviewMain() {
       const newCoordCycle = (coordState.coordSelfScoreCycle || 0) + 1;
       const date = new Date(t).toISOString().slice(0, 10);
       const score = roleScoreCore.assembleScore({
-        dimensions, cycle: newCoordCycle, session: me, committedActions, priorOutcomes, provenance, belowThreshold, date, config: COORDINATOR_CONFIG,
+        dimensions, cycle: newCoordCycle, session: me, committedActions, priorOutcomes, provenance, belowThreshold, date, config: COORDINATOR_CONFIG, inconclusive,
       });
 
       const { hasBlockingViolation, validateScoreContract } = await import('../lib/fleet/verify-score-contract.mjs');

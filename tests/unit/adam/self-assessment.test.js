@@ -80,7 +80,9 @@ describe('assembleScore + overallString', () => {
       cycle: 3, session: 'sess-1', committedActions: [], priorOutcomes: [], provenance: {}, belowThreshold: [], date: '2026-06-09',
     });
     expect(score).toMatchObject({ cycle: 3, session: 'sess-1', threshold: 4, review_key: 'adam:cycle3:2026-06-09' });
-    expect(score.overall).toBe('9/10 (4.5/5)');
+    // FR-1 (SD-LEO-INFRA-ROLE-SESSION-SELF-001): a 2-of-8 sample now states its coverage.
+    // The bare '9/10 (4.5/5)' was denominator-SHAPED and read as full coverage.
+    expect(score.overall).toBe('9/10 (4.5/5) — 2 of 8 dimensions measured');
     expect(Array.isArray(score.committed_actions)).toBe(true);
     expect(Array.isArray(score.prior_action_outcomes)).toBe(true);
   });
@@ -161,6 +163,9 @@ describe('golden snapshot — locks in current Adam behavior before shared-core 
       session: 'golden-sess',
       threshold: 4,
       overall: '29/40 (3.6/5)',
+      // Full coverage: the headline is unchanged, and coverage is stated explicitly (FR-1).
+      // This assertion stays an exact toEqual so a future field cannot slip in unnoticed.
+      coverage: { scored: 8, total: 8, unmeasured: [] },
       dimensions,
       below_threshold: below,
       committed_actions: committedActions,
