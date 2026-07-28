@@ -398,6 +398,7 @@ describe('the manifest hard-fails — a manifest coverage equals its membership'
       'chairman_gated_migration_possible',
       'chairman_preauthorization',
       'completion_flag_index',
+      'gated_ddl',
       'irreversible_exec_chairman_gated',
       'may_require_ddl',
       'migration_requires_chairman_apply',

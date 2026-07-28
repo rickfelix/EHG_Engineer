@@ -41,7 +41,7 @@ import dotenv from 'dotenv';
 import {
   VERDICT, UNVERIFIABLE_REASON, POPULATION_ARMS,
   classifyItem, checkManifest, checkBaselines, reasonHistogram, exitCodeFor,
-  findUnconsumedKeys, KNOWN_SCOPE_GAPS,
+  findUnconsumedKeys, KNOWN_SCOPE_GAPS, EXCLUDED_KEYS,
 } from '../../lib/audits/chairman-apply-sweep.js';
 // Collectors live in lib/ because both of this module's real defects were in THEM, and the suite
 // could not reach them while they sat behind the Supabase import in this file.
@@ -85,6 +85,7 @@ const MANIFEST = Object.freeze([
   { identifier: 'SD-FDBK-GEN-FIX-TRG-ENFORCE-001', source_arm: 'apply_to_prod_requires_user_go', note: '' },
   { identifier: 'SD-LEO-INFRA-CLEAN-CLONE-LAUNCH-001', source_arm: 'chairman_enum_migration_authorization', note: 'ALTER TYPE venture_origin_type ADD VALUE' },
   { identifier: 'SD-LEO-INFRA-ADAM-DURABLE-STANDING-001', source_arm: 'may_require_ddl', note: 'DRAFT status' },
+  { identifier: 'PRD-PRD-SD-LEO-INFRA-LAUNCH-MODE-POLICY-002', source_arm: 'gated_ddl', note: 'PRD-borne DDL gate — reachable only after the population read PRD metadata' },
   { identifier: 'SD-LEO-INFRA-MIGRATION-DEPLOY-DRIFT-001', source_arm: 'chairman_approval', note: 'FR-1 apply of ~9 migration gaps — the member that admitted this arm' },
   { identifier: 'SD-LEO-INFRA-SOURCING-ENGINE-ACTIVATION-001', source_arm: 'chairman_authorized', note: 'additive migrations authorised via the governed apply path' },
   { identifier: 'SD-LEO-INFRA-ADAM-DBCHANGE-APPLY-DELEGATION-001', source_arm: 'chairman_authorization', note: 'the CHARTER of the gate this audit examines' },
@@ -106,6 +107,7 @@ const BASELINE = Object.freeze({
   chairman_gated_migration_possible: 1, apply_to_prod_requires_user_go: 1,
   chairman_enum_migration_authorization: 1, may_require_ddl: 2,
   chairman_authorized: 10, chairman_authorization: 3, chairman_preauthorization: 1,
+  gated_ddl: 1,
   chairman_approval: 4,
 });
 
@@ -156,7 +158,10 @@ async function main() {
     return;
   }
 
-  const population = addCompletionFlagArm(buildPopulation(sds, qfs, METADATA_ARMS), feedbackRows);
+  const population = addCompletionFlagArm(buildPopulation(sds, qfs, METADATA_ARMS, [
+    ...prds.map((r) => ({ identifier: `PRD-${r.id}`, metadata: r.metadata, status: null, source: 'product_requirements_v2' })),
+    ...feedbackRows.map((r) => ({ identifier: `FEEDBACK-${r.id}`, metadata: r.metadata, status: r.status, source: 'feedback' })),
+  ]), feedbackRows);
   const manifest = checkManifest(MANIFEST, population, POPULATION_ARMS);
   if (!manifest.ok) {
     controlsOk = false;
@@ -176,9 +181,13 @@ async function main() {
     ...sds.map((sd) => ({ identifier: sd.sd_key, metadata: sd.metadata, source: 'strategic_directives_v2' })),
     ...prds.map((r) => ({ identifier: `PRD-${r.id}`, metadata: r.metadata, source: 'product_requirements_v2' })),
     ...feedbackRows.map((r) => ({ identifier: `FEEDBACK-${r.id}`, metadata: r.metadata, source: 'feedback' })),
-  ], POPULATION_ARMS);
+  ], POPULATION_ARMS, undefined, population.map((r) => r.identifier));
   if (!unconsumed.ok) {
     controlsOk = false;
+    for (const u of unconsumed.unreachableMembers) {
+      controlFailures.push(
+        `UNREACHABLE MEMBER ${u.identifier} [${u.source}] carries ${u.arms.join(',')} but NO arm reaches it — buildPopulation reads strategic_directives_v2 metadata only`);
+    }
     for (const f of unconsumed.findings.filter((x) => x.soleReach > 0)) {
       controlFailures.push(
         `UNCONSUMED_KEY ${f.key} [${f.sources.join(',')}]: ${f.members} rows, ${f.soleReach} reached by NO arm — admit it or add it to EXCLUDED_KEYS with a reason`);
@@ -226,6 +235,7 @@ async function main() {
     unverifiable_reasons: histogram,
     controls_ok: controlsOk,
     unconsumed_keys: unconsumed.findings,
+    unreachable_members: unconsumed.unreachableMembers,
     known_scope_gaps: KNOWN_SCOPE_GAPS,
     probing_implemented: probingImplemented,
     exit_1_reachable: probingImplemented,
@@ -243,6 +253,12 @@ async function main() {
     console.log(`UNVERIFIABLE by reason: ${JSON.stringify(histogram)}`);
     console.log('\nEach reason names what would have to EXIST for the item to become answerable —');
     console.log('that is what makes this a remediation backlog rather than a mostly-empty table.');
+    console.log(`
+unconsumed-key scan: ${unconsumed.findings.length} candidate keys across `
+      + `${new Set([...sds.map(()=>'sd'), ...prds.map(()=>'prd'), ...feedbackRows.map(()=>'fb')]).size} tables, `
+      + `${unconsumed.findings.filter((f) => f.soleReach > 0).length} with sole-reach, `
+      + `${unconsumed.unreachableMembers.length} unreachable members. `
+      + `${Object.keys(EXCLUDED_KEYS).length} keys suppressed by EXCLUDED_KEYS.`);
     // Unconditional, never an else-branch on "no findings": a reader seeing zero findings and
     // exit 0 must not read that as the gate having been fine. Nothing has compared a live object
     // to an approval yet.
