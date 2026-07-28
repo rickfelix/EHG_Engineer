@@ -31,9 +31,26 @@ const base = (over = {}) => ({
 
 describe('FR-2: capabilityGapTerm — pure, self-gating, bounded (mirrors waveAlignmentTerm)', () => {
   it('1.0 no-op when no data, no candidate.capability, or an unknown/excluded capability', () => {
-    expect(capabilityGapTerm(base({ capability: 'X' }), undefined)).toEqual({ active: false, multiplier: 1.0, buildPct: null });
-    expect(capabilityGapTerm(base(), { gaps: { X: 0 } })).toEqual({ active: false, multiplier: 1.0, buildPct: null }); // candidate has no capability
-    expect(capabilityGapTerm(base({ capability: 'NotMeasured' }), { gaps: { X: 0 } })).toEqual({ active: false, multiplier: 1.0, buildPct: null }); // capability excluded (unknown)
+    // SD-LEO-INFRA-PURE-GUARD-UNWIRED-001 FR-4 (AC-4) widened the no-op return with an
+    // `inactive_reason`, so this assertion moved from toEqual to an explicit two-part check:
+    // the SCORING contract must be byte-identical (unchanged 1.0 no-op — the property this test
+    // was written to protect), and the new field must name WHICH input was absent. Relaxing to a
+    // bare toMatchObject would have let a future change bury a real scoring regression under an
+    // additive key, so the scoring keys are still pinned exactly.
+    const noop = (r) => ({ active: r.active, multiplier: r.multiplier, buildPct: r.buildPct });
+    const NOOP = { active: false, multiplier: 1.0, buildPct: null };
+
+    const noGaps = capabilityGapTerm(base({ capability: 'X' }), undefined);
+    expect(noop(noGaps)).toEqual(NOOP);
+    expect(noGaps.inactive_reason).toBe('no_gaps_supplied');
+
+    const noCapability = capabilityGapTerm(base(), { gaps: { X: 0 } }); // candidate has no capability
+    expect(noop(noCapability)).toEqual(NOOP);
+    expect(noCapability.inactive_reason).toBe('candidate_has_no_capability');
+
+    const excluded = capabilityGapTerm(base({ capability: 'NotMeasured' }), { gaps: { X: 0 } }); // unknown/excluded
+    expect(noop(excluded)).toEqual(NOOP);
+    expect(excluded.inactive_reason).toBe('capability_absent_from_gap_map');
   });
 
   it('lower build% => higher multiplier, bounded by CLAMP_HI (built=1.0, unbuilt=CLAMP_HI, partial=midpoint)', () => {
