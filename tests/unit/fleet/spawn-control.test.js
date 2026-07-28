@@ -135,9 +135,13 @@ describe('module surface (TS-10: exactly six named verbs, no more)', () => {
     // The guard exists to catch an undocumented 7th VERB, not to freeze the helper surface. The two
     // session-bind constants are exported so the budget can be asserted directly instead of by
     // wall-clock; they are values, not verbs, so they belong on this allowlist.
+    // retirePredecessorProcess (FR-3 / AC-3-6) is a HELPER, not a verb: an operator never invokes
+    // it, restart() calls it internally once succession is proven. It is exported solely so its
+    // fail-closed refusals can be asserted directly — a pid whose identity cannot be confirmed must
+    // never be signalled, and that is not reachable through restart() without real processes.
     const helperNames = ['roleOf', 'isSingletonRole', 'resolveProfileDir', 'isLiveEnabled', 'buildLiveSpawnInvocation',
       'SESSION_BIND_MAX_ATTEMPTS', 'SESSION_BIND_DELAY_MS',
-      'CANARY_PROFILE', 'CANARY_CALLSIGN_PREFIX'];
+      'CANARY_PROFILE', 'CANARY_CALLSIGN_PREFIX', 'retirePredecessorProcess'];
     const unexpected = Object.keys(mod).filter((k) => !verbNames.includes(k) && !helperNames.includes(k));
     expect(unexpected).toEqual([]);
   });
