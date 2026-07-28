@@ -9,7 +9,7 @@ import { readFileSync } from 'fs';
 import { fileURLToPath } from 'url';
 import { dirname, resolve } from 'path';
 import { createRequire } from 'module';
-import { evaluateDependencyGate, formatDependencyRefusal } from '../../../../lib/sd-start/dependency-gate.mjs';
+import { evaluateDependencyGate, formatDependencyRefusal, formatScopeConstraints } from '../../../../lib/sd-start/dependency-gate.mjs';
 
 const require = createRequire(import.meta.url);
 const {
@@ -294,5 +294,90 @@ describe('module purity (FR-2 AC — D5 audit ownership + no CLI side effects)',
     expect(src).not.toMatch(/console\./);
     expect(src).not.toMatch(/process\.argv/);
     expect(src).not.toMatch(/audit_log/); // DEPENDENCY_GATE_REFUSED stays in the sd-start caller
+  });
+});
+
+/**
+ * QF-20260727-251 — RELATION SCOPES THE REFUSAL.
+ *
+ * The gate read no relation at all, so a dependency blocking ONE strategic objective refused the
+ * WHOLE claim. Measured on SD-LEO-FEAT-FLEET-SESSION-LIFECYCLE-001: four refs, relations
+ * blocks_objective_0 / sequence_after_for_FR4 / land_before_FR5 / overlaps_FR4, not one of which
+ * blocks the SD, and claim_history recorded SEVEN sessions claiming and releasing that row in one
+ * day with zero completions.
+ *
+ * The direction is the design: only EXPLICITLY recognised scope relations may downgrade. Absent or
+ * unrecognised stays claim-blocking, because a gate that turns permissive on input it does not
+ * understand is the defect class, not the fix.
+ */
+describe('QF-20260727-251 — relation scopes the refusal', () => {
+  const { classifyDependencyRelation } = require('../../../../lib/claim/gates/dependency-gate.cjs');
+
+  it('classifies the four live relation forms as scope-constraining', () => {
+    for (const rel of ['blocks_objective_0', 'blocks_objective_12', 'sequence_after_for_FR4', 'land_before_FR5', 'overlaps_FR4']) {
+      expect(classifyDependencyRelation(rel), rel).toBe('scope');
+    }
+  });
+
+  it('NEGATIVE CONTROL — absent or unrecognised relations stay CLAIM-BLOCKING', () => {
+    // Load-bearing: without it, "everything downgrades" would satisfy the assertion above while
+    // silently disabling the gate for every legacy plain-string ref in the corpus.
+    for (const rel of [undefined, null, '', 'blocks', 'depends_on', 'blocked_by', 'blocks_objective_', 'BLOCKS_OBJECTIVE_0', 42, {}]) {
+      expect(classifyDependencyRelation(rel), String(rel)).toBe('claim');
+    }
+  });
+
+  it('THE LIVE FIXTURE — four scope relations permit the claim and are reported, not dropped', async () => {
+    const sb = makeSb({ rows: [
+      { id: 'u-a', sd_key: 'SD-COLD-START-001', status: 'in_progress' },
+      { id: 'u-b', sd_key: 'SD-OTHER-001', status: 'in_progress' },
+    ] });
+    const verdict = await evaluateClaimDependencyGate(sb, sdWith([
+      { sd_key: 'SD-COLD-START-001', relation: 'sequence_after_for_FR4' },
+      { sd_key: 'SD-OTHER-001', relation: 'blocks_objective_0' },
+    ]));
+    expect(verdict.blocking).toEqual([]);
+    expect(verdict.scopeConstrained.map(d => d.sd_id)).toEqual(['SD-COLD-START-001', 'SD-OTHER-001']);
+    // The relation rides along so the caller can NAME what is constrained.
+    expect(verdict.scopeConstrained[0].relation).toBe('sequence_after_for_FR4');
+
+    // sd-start's polarity: proceed, and WARN — a silent permit would be the same ambiguity as a
+    // silent refusal, one level down.
+    const result = evaluateDependencyGate(verdict.resolved, {});
+    expect(result.verdict).toBe('proceed');
+    expect(result.warn).toBe(true);
+    expect(formatScopeConstraints(result.scopeConstrained)).toMatch(/does NOT block the claim/);
+  });
+
+  it('a claim-blocking relation still REFUSES, alongside scope-constrained ones', async () => {
+    const sb = makeSb({ rows: [
+      { id: 'u-a', sd_key: 'SD-HARD-001', status: 'in_progress' },
+      { id: 'u-b', sd_key: 'SD-SOFT-001', status: 'in_progress' },
+    ] });
+    const verdict = await evaluateClaimDependencyGate(sb, sdWith([
+      { sd_key: 'SD-HARD-001', relation: 'blocked_by' },
+      { sd_key: 'SD-SOFT-001', relation: 'overlaps_FR4' },
+    ]));
+    expect(verdict.blocking.map(d => d.sd_id)).toEqual(['SD-HARD-001']);
+    expect(verdict.scopeConstrained.map(d => d.sd_id)).toEqual(['SD-SOFT-001']);
+    expect(evaluateDependencyGate(verdict.resolved, {}).verdict).toBe('refuse');
+  });
+
+  it('worker-checkin FAIL-CLOSED polarity is preserved on the narrowed axis', async () => {
+    // A scope-constrained dep no longer skips the candidate — that is the point — but an
+    // unresolved ref or a genuinely blocking relation still does.
+    const sb = makeSb({ rows: [{ id: 'u-b', sd_key: 'SD-SOFT-001', status: 'in_progress' }] });
+    const scoped = await evaluateClaimDependencyGate(sb, sdWith([{ sd_key: 'SD-SOFT-001', relation: 'land_before_FR5' }]));
+    expect(depsSatisfiedFromVerdict(scoped)).toBe(true);
+
+    const sb2 = makeSb({ rows: [{ id: 'u-c', sd_key: 'SD-HARD-001', status: 'in_progress' }] });
+    const hard = await evaluateClaimDependencyGate(sb2, sdWith([{ sd_key: 'SD-HARD-001', relation: 'blocks' }]));
+    expect(depsSatisfiedFromVerdict(hard)).toBe(false);
+  });
+
+  it('an entry with NO claimBlocking field keeps today behaviour (older callers, hand-built fixtures)', () => {
+    const result = evaluateDependencyGate([{ sd_id: 'SD-A-001', status: 'in_progress' }], {});
+    expect(result.verdict).toBe('refuse');
+    expect(result.scopeConstrained).toEqual([]);
   });
 });

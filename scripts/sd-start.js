@@ -81,7 +81,7 @@ import { existsSync } from 'node:fs';
 import { validateTargetApplication, formatCrosscheckResult } from './modules/sd-validation/target-application-crosscheck.js';
 import { shouldShowVenturePipelinePointer, VENTURE_PIPELINE_POINTER } from '../lib/leo/venture-pipeline-pointer.js';
 // SD-FDBK-INFRA-DEPENDENCY-BLOCKS-ADVISORY-001: enforce declared dependencies at claim time.
-import { evaluateDependencyGate, formatDependencyRefusal } from '../lib/sd-start/dependency-gate.mjs';
+import { evaluateDependencyGate, formatDependencyRefusal, formatScopeConstraints } from '../lib/sd-start/dependency-gate.mjs';
 // SD-LEO-INFRA-WORKER-CLAIM-TIME-001 (FR-3): claim-time fitness fail-fast (repo-match + premise +
 // preconditions). CJS module imported as default (Node CJS interop) for its named export.
 import sdFit from '../lib/fleet/sd-executable-here.cjs';
@@ -165,6 +165,15 @@ async function enforceDependencyGate(sd, effectiveId) {
     const why = force && result.blocking.length ? '--force override' : 'unresolved reference(s)';
     console.log(`\n${colors.yellow}⚠️  Proceeding despite unmet dependencies (${why}) for ${effectiveId}:${colors.reset}`);
     console.log(`${colors.yellow}${formatDependencyRefusal(result.blocking, result.unresolved)}${colors.reset}`);
+  }
+
+  // QF-20260727-251: a dependency that constrains PART of the work permits the claim — but it is
+  // announced, never silent. The worker needs to know which objective or FR is constrained before
+  // starting, and a permit nobody can see is the same ambiguity as a refusal nobody can explain.
+  if (result.scopeConstrained?.length) {
+    console.log(`\n${colors.yellow}⚠️  Claim permitted, scope constrained for ${effectiveId}:${colors.reset}`);
+    console.log(`${colors.yellow}${formatScopeConstraints(result.scopeConstrained)}${colors.reset}`);
+    console.log(`   ${colors.dim}These relations bound part of the work, not the claim. Honour them while building.${colors.reset}`);
   }
 }
 
