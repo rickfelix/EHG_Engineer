@@ -420,6 +420,11 @@ export async function recordAdherence(supabase, runId, bar, remediationRef = nul
         duty: bar.duty,
         verdict: bar.verdict,
         detail: bar.detail,
+        // FR-2 (SD-LEO-INFRA-ROLE-SESSION-SELF-001): WHICH KIND OF GREEN THIS IS. A verdict that
+        // only proves a duty is wired must not be readable as one that observed behaviour — the
+        // originating incident was exactly that confusion. Persisted as a field, never console
+        // prose, so the distinction survives to whoever queries this row later.
+        check_class: bar.check_class,
         remediation_ref: remediationRef,
       })
       .select('id')
