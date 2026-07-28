@@ -36,15 +36,23 @@ ALTER TABLE adam_adherence_ledger
   ADD CONSTRAINT adam_adherence_ledger_check_class_check
   CHECK (check_class IS NULL OR check_class IN ('duty', 'conduct'));
 
--- 3. FORWARD guarantee, scoped by time rather than by a rewrite of history. Every row written
---    after the cutover must declare its class. NOT VALID skips the scan of existing rows, which
---    is exactly the point — those rows are legitimately unclassified and must stay that way.
-ALTER TABLE adam_adherence_ledger
-  DROP CONSTRAINT IF EXISTS adam_adherence_ledger_check_class_required_after_cutover;
-ALTER TABLE adam_adherence_ledger
-  ADD CONSTRAINT adam_adherence_ledger_check_class_required_after_cutover
-  CHECK (created_at < TIMESTAMPTZ '2026-07-28 00:00:00+00' OR check_class IS NOT NULL)
-  NOT VALID;
+-- 3. NO TIME-SCOPED "REQUIRED AFTER CUTOVER" CONSTRAINT — removed after a security review proved
+--    it wrong, and the reason generalises.
+--
+--    The original version required check_class NOT NULL for rows created after a HARDCODED
+--    2026-07-28T00:00Z. That timestamp was already in the PAST when the migration was authored, and
+--    a chairman-gated migration waits an unknown time before it applies: 36 rows already sat at or
+--    after the cutoff. Worse, the writer retries WITHOUT check_class while the column is missing
+--    (deliberately — otherwise the whole ledger stops), so it manufactures exactly the rows the
+--    constraint forbids. They would pass the NOT VALID apply and then be permanently un-updatable,
+--    and post-apply a stale PostgREST cache would route writes down the retry into a 23514 that the
+--    fail-open writer swallows SILENTLY.
+--
+--    A wall-clock cutoff chosen at authoring time is stale by the time it applies. The forward
+--    guarantee lives where it can actually hold: assertCheckClass throws at verdict construction
+--    (lib/governance/check-class.js), in-process and before any write, so an unlabelled verdict
+--    never reaches the database in the first place. A DB constraint that the system's own
+--    fail-open path violates is not a guarantee, it is a future outage.
 
 -- Index only where it is read: "show me the conduct verdicts" is the query this exists to answer,
 -- and it is pointless to index the NULL history.
