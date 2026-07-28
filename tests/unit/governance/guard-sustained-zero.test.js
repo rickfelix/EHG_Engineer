@@ -26,15 +26,22 @@ describe('SUSPECT — observed, ran, never blocked', () => {
   });
 
   it('names WHICH input was missing so a consumer need not re-derive it', () => {
-    // AC-4. "Something is wrong with waveAlignmentTerm" is not actionable; "it took the no-data
-    // branch 12x because `waves` was absent" is.
+    // "Something is wrong with this guard" is not actionable; "it took the no-data branch 12x
+    // because `spent` was absent" is.
+    //
+    // FR-5 COMPLIANCE, and I had to fix this fixture: it originally used waveAlignmentTerm with
+    // missingInput:'waves', which silently re-asserts the REFUTED claim that its caller never
+    // supplies waves. That caller has been wired since 1650f8e8cf9 (2026-06-15) and is
+    // flag-enabled live; the real mechanism is an empty okr_linkages table producing a silent
+    // fail-CLOSED. Carrying the old attribution into a test fixture is exactly how a corrected
+    // claim propagates anyway — this SD's own defect, one level out.
     const r = classifyGuard({
-      guard: 'waveAlignmentTerm', observations: 12, blocked: 0,
-      permissiveNoData: 12, missingInput: 'waves',
+      guard: 'enforceSweepBudget', observations: 12, blocked: 0,
+      permissiveNoData: 12, missingInput: 'spent',
     }, '7d');
     expect(r.state).toBe(GUARD_HEALTH.SUSPECT);
-    expect(r.missingInput).toBe('waves');
-    expect(r.detail).toContain("'waves'");
+    expect(r.missingInput).toBe('spent');
+    expect(r.detail).toContain("'spent'");
     expect(r.detail).toContain('12x');
   });
 });
