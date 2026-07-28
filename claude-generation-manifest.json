@@ -1,6 +1,6 @@
 {
-  "generated_at": "2026-07-28T11:42:15.228Z",
-  "git_commit": "db5de228",
+  "generated_at": "2026-07-28T13:47:38.366Z",
+  "git_commit": "c6572c19",
   "db_snapshot_hash": "7eabaf04b99ecbde",
   "files": {
     "CLAUDE.md": {
@@ -54,9 +54,9 @@
     },
     "CLAUDE_SOLOMON.md": {
       "type": "full",
-      "chars": 65518,
-      "estimated_tokens": 16380,
-      "content_hash": "2c473dc5abd37d67",
+      "chars": 66522,
+      "estimated_tokens": 16631,
+      "content_hash": "20e6ab8f7d0b3032",
       "path": "C:\\Users\\rickf\\Projects\\_EHG\\EHG_Engineer\\.worktrees\\SD-LEO-INFRA-ROLE-SESSION-SELF-001\\CLAUDE_SOLOMON.md"
     },
     "CLAUDE_DIGEST.md": {
@@ -117,7 +117,7 @@
     }
   },
   "section_digests": {
-    "global": "1fb199cd8ab6c438",
+    "global": "b4ca295a80207a0c",
     "byId": {
       "94": "ef2f1e7ed617b5e0",
       "189": "6398659126897bbb",
@@ -381,7 +381,7 @@
       "608": "7f99a4321502367e",
       "609": "9790a74a362ff0ca",
       "610": "34fedae699d8c9f3",
-      "611": "64a2cdca99f5b786",
+      "611": "633eeaf64343dd1c",
       "612": "13e03eddf5300bcc",
       "613": "1e1de64689c1ad82",
       "614": "a4d5064f0ffbe97c",
