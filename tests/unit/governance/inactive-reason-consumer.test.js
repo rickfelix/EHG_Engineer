@@ -96,9 +96,9 @@ describe('a no-data reason and an evaluated-and-declined reason are not the same
   it('CANNOT-JUDGE IS NO-DATA — the classification I got backwards, and what it cost', () => {
     // The first version of this test asserted the opposite: that `empty_aligned_set` meant "the
     // guard HAD its data and found nothing", so it must NOT inflate the no-data count. That is
-    // refuted by the file that emits it, twenty lines from the emit — rationale-bar.js:221 "Waves
-    // exist but NOTHING is linked => this term cannot judge alignment", and :248 "a term that
-    // cannot judge must not judge — the same doctrine as the empty-set case above."
+    // refuted by the file that emits it, in the comment directly above the emit — "Waves exist but
+    // NOTHING is linked => this term cannot judge alignment" — and again at the id-space guard:
+    // "a term that cannot judge must not judge — the same doctrine as the empty-set case above."
     //
     // The cost was measured on this SD's own flagship instance, not argued: with 8 waves, 0 of 261
     // roadmap_wave_items linked, and 27 evaluations, the fold reported permissiveNoData: 0 and
@@ -172,14 +172,14 @@ describe('a no-data reason and an evaluated-and-declined reason are not the same
 
   it('AC-2 — the consumer is reached from PRODUCTION, not only from this test', () => {
     // The finding that forced this: `foldTermResults` had zero production references. Its link to
-    // rationale-bar.js:214/:230/:252 was a DOCBLOCK COMMENT — a reference that looks like wiring and
+    // waveAlignmentTerm's no-data branches was a DOCBLOCK COMMENT — a reference that looks like wiring and
     // executes nothing, which is the precise trap FR-1 was written to catch. FR-4's own thesis is
     // "an emit with no behavioural consumer does not satisfy this FR"; shipping a consumer nothing
     // imports would have reproduced that thesis one indirection deeper, and a test asserting the
     // consumer in isolation would have passed the whole time.
     //
     // So the assertion is made through selectAdvisory — the real scoring entrypoint, reached in
-    // production from scripts/adam-opportunity-scan.cjs:266.
+    // production from the --scan path of scripts/adam-opportunity-scan.cjs.
     const out = selectAdvisory([], {});
     expect(out.guard_health).toBeTruthy();
     expect(out.guard_health.summary).toMatch(/^GUARD SUSTAINED-ZERO/);

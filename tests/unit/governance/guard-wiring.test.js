@@ -62,13 +62,24 @@ function wiredCallSites(name, gatedInput, defModule) {
   // — the stub was truncated away and the call read as wired. Silent truncation producing the
   // permissive answer, in the detector for guards that produce the permissive answer.
   const callRe = new RegExp(`\\b${name}\\s*\\(([\\s\\S]{0,400})`, 'g');
+  // The DEFINITION is not a caller — but the rest of the defining file may be, and skipping the
+  // whole file was a blind spot review caught: capabilityGapTerm is genuinely called from
+  // lib/adam/rationale-bar.js, the same file that defines it, so its "unwired" verdict was reached
+  // WITHOUT ever evaluating its one real call site. The verdict happened to be right (that call
+  // supplies the candidate, not `capability`), which is exactly how a blind spot survives review —
+  // it agrees with you. Skip the declaration line only.
+  const defRe = new RegExp(`^\\s*(?:export\\s+)?(?:async\\s+)?function\\s+${name}\\b|^\\s*(?:export\\s+)?(?:const|let|var)\\s+${name}\\s*=`);
   for (const file of FILES) {
     const rel = path.relative(repoRoot, file).replace(/\\/g, '/');
-    if (rel === defModule || rel === REGISTRY_MODULE) continue;   // definition and registry are not callers
+    if (rel === REGISTRY_MODULE) continue;   // the registry is data ABOUT guards, never a caller
     let src = '';
     try { src = fs.readFileSync(file, 'utf8'); } catch { continue; }
     if (!src.includes(name)) continue;
     for (const m of src.matchAll(callRe)) {
+      // Exclude the declaration itself, whichever file it lives in.
+      const lineStart = src.lastIndexOf('\n', m.index) + 1;
+      const line = src.slice(lineStart, src.indexOf('\n', m.index) === -1 ? undefined : src.indexOf('\n', m.index));
+      if (rel === defModule && defRe.test(line)) continue;
       if (suppliesGatedInput(m[1], gatedInput)) { hits.push(rel); break; }
     }
   }
@@ -192,8 +203,24 @@ describe('THE BASELINE — it may shrink, it must never grow', () => {
     // AC-1: the failure must name the missing input, not just the guard. This test does not fail —
     // it is the loud inventory the SD asks for. Shrinking this list is the work; the test above is
     // what stops it growing.
+    //
+    // AND IT MUST ACTUALLY PRINT. Review found the second half of AC-1 unmet: the inventory was
+    // "loud" only in a failure message, on a branch that by construction cannot fail, so it emitted
+    // nothing at all. A signal that appears only on failure, in a test that cannot fail, is FR-2's
+    // defect one level up and inside FR-1 — the very shape this SD exists to remove.
+    //
+    // WRITTEN TO stderr, NOT console.warn, and this was measured rather than assumed. My first fix
+    // used console.warn to match two sibling guards in this directory — and it emitted nothing,
+    // because tests/setup.unit.js replaces global.console with vi.fn() stubs "to reduce noise". So
+    // those siblings do not print either; their inventories have been silent all along. I nearly
+    // shipped "it is loud now" on the strength of having written a log line, which is the same
+    // unchecked claim in the same SD for the third time. A probe test confirmed stderr survives.
     const unwired = GUARD_REGISTRY.filter((g) => g.expectedWired === false);
     expect(unwired.length).toBeGreaterThan(0);
+    process.stderr.write(`[FR-1 INVENTORY] ${unwired.length} self-gating guard(s) with NO production caller supplying their gated input:\n`);
+    for (const g of unwired) {
+      process.stderr.write(`    - ${g.name} (${g.definedAt}) needs '${g.gatedInput}' — permissive means: ${g.permissiveMeans}\n`);
+    }
     for (const g of unwired) {
       const sites = wiredCallSites(g.name, g.gatedInput, g.module);
       // If one of these acquires a real caller, remove it from the baseline — that is the win.
