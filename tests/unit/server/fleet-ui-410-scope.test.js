@@ -357,12 +357,22 @@ describe('SD-LEO-FIX-UNOWNED-PARENT-SLICE-001: the surface is actually mounted',
  * KNOWN-OPEN AXIS — NTFS 8.3 SHORT NAMES DEFEAT BOTH RETIREMENTS. Do not delete these tests to
  * make the suite look better; they are the honest half of it.
  *
- * MEASURED, reproduced independently three times (two sub-agents plus a direct check), against
- * both this app and the running server on 127.0.0.1:3000:
+ * MEASURED, reproduced independently three times (two sub-agents plus a direct check). The two
+ * environments are listed SEPARATELY on purpose — an earlier draft presented one merged table
+ * "measured against both", which was false for its own first row, since this SD is not deployed
+ * and fleet-panel.html still returns 200 in production. That is the same generalise-across-
+ * environments error this file apologises for elsewhere, so it does not get to appear here.
  *
- *   GET /fleet-ui/fleet-panel.html   410     the canonical spelling
- *   GET /fleet-ui/FLEET-~1.HTM       200     THE SAME FILE, sha256-identical to the on-disk bytes
- *   GET /fleet-ui/SESSIO~1.HTM       200     ditto, for the ALREADY-SHIPPED session-view retirement
+ *   MEASURED IN PRODUCTION (127.0.0.1:3000, main) — proves the gap is LIVE, not theoretical:
+ *     GET /fleet-ui/session-view.html   410   the ALREADY-SHIPPED retirement
+ *     GET /fleet-ui/SESSIO~1.HTM        200   THE SAME FILE, sha256-identical to disk
+ *
+ *   MEASURED IN THIS APP (installFleetUiSurface at this commit):
+ *     GET /fleet-ui/fleet-panel.html    410   the canonical spelling
+ *     GET /fleet-ui/FLEET-~1.HTM        200   THE SAME FILE, sha256-identical to disk
+ *
+ * Every retired extension is affected, not just .HTM — .JS and .CSS alias identically, and
+ * SESSIO~2.JS exposes session-view.test.js, a test file living in a public static root.
  *
  * It is BROWSER-REACHABLE: the WHATWG URL parser leaves that pathname untouched, so a browser
  * sends it verbatim. No tooling required.
@@ -404,28 +414,73 @@ describe('KNOWN-OPEN: NTFS 8.3 aliases bypass the fence (asserted as OPEN, not a
     expect(isRetiredSessionView('/fleet-ui/SESSIO~1.HTM')).toBe(false);
   });
 
-  it('DOCUMENTS THE GAP: the 8.3 alias still serves the retired page (410 canonically, 200 aliased)', async () => {
-    // Guard first: on a volume with 8dot3 disabled the alias 404s and this axis is moot there.
-    // Skipping on 404 keeps the test honest rather than red for the wrong reason.
-    const aliased = await fetch(`${base}/fleet-ui/FLEET-~1.HTM`, { redirect: 'manual' });
-    if (aliased.status === 404) return;   // 8dot3 disabled on this volume — nothing to document
+  /**
+   * THE 8DOT3 PROBE — and why a bare 404 check was not one.
+   *
+   * v1 of this block did `if (alias.status === 404) return;`, which conflates two OPPOSITE
+   * states: "this volume has 8dot3 disabled, nothing to document" and "the alias is unresolvable
+   * BECAUSE SOMEONE FIXED IT". Measured consequence: of the three ways to close this gap, the
+   * block detected only the one the header argues AGAINST (teach the matcher the alias) and was
+   * blind to BOTH it recommends — allow-list the mount, or move retired files out of the root —
+   * each of which left it 53/53 green. And CI runs ubuntu-latest, where no 8.3 alias exists, so
+   * a bare `return` PASSED rather than skipped: in the tier that gates merges the honest half of
+   * this suite was three green tests executing no assertion. That is the vacuous-control shape
+   * the previous commit corrected, reproduced one level up.
+   *
+   * The discriminator is the CANARY'S OWN ALIAS. fleet-panel-format.js must stay live whatever
+   * the fix, so its alias answers "do 8.3 aliases resolve here at all?" independently of the
+   * retirement. Then:
+   *   canary alias 404  -> aliases unavailable (Linux CI, 8dot3 off). Genuinely skip, visibly.
+   *   canary 200, retired alias 200 -> the gap is still open. Assert it, by payload.
+   *   canary 200, retired alias 404/410 -> CLOSED. Go RED and say so.
+   * Nothing here hardcodes a single ~N spelling as the availability signal, which also survives
+   * 8.3 ordinals shifting on a fresh checkout.
+   */
+  const ALIAS_CANARY = '/fleet-ui/FLEET-~1.JS';        // -> fleet-panel-format.js, must stay live
+  const ALIASED_RETIRED = [
+    ['/fleet-ui/FLEET-~1.HTM', 'fleet-panel.html'],
+    ['/fleet-ui/FLEET-~1.CSS', 'fleet-panel.css'],
+    ['/fleet-ui/SESSIO~1.HTM', 'session-view.html'],
+    ['/fleet-ui/SESSIO~1.CSS', 'session-view.css'],
+  ];
 
-    const canonical = await fetch(`${base}/fleet-ui/fleet-panel.html`, { redirect: 'manual' });
-    expect(canonical.status).toBe(410);
-    expect(aliased.status).toBe(200);
+  async function aliasesResolveHere() {
+    return (await fetch(base + ALIAS_CANARY, { redirect: 'manual' })).status === 200;
+  }
 
-    // PAYLOAD, not proxy: a 200 alone could be an error page. Compare the bytes.
-    const served = crypto.createHash('sha256')
-      .update(Buffer.from(await aliased.arrayBuffer())).digest('hex');
-    const onDisk = crypto.createHash('sha256')
-      .update(fs.readFileSync(path.join(FLEET_UI_ROOT_FOR_HASH, 'fleet-panel.html'))).digest('hex');
-    expect(served).toBe(onDisk);
-  });
+  it.each(ALIASED_RETIRED)(
+    'DOCUMENTS THE GAP: %s still serves %s verbatim (RED when closed, skipped when 8.3 is off)',
+    async (aliasPath, realFile, ctx) => {
+      if (!(await aliasesResolveHere())) {
+        ctx.skip();   // visible as skipped, never a silent green
+        return;
+      }
+      const canonical = await fetch(`${base}/fleet-ui/${realFile}`, { redirect: 'manual' });
+      expect(canonical.status).toBe(410);
 
-  it('DOCUMENTS THE GAP: the bypass emits NO soak log line, so silence cannot mean unhit', async () => {
-    const aliased0 = await fetch(`${base}/fleet-ui/FLEET-~1.HTM`, { redirect: 'manual' });
-    if (aliased0.status === 404) return;
+      const aliased = await fetch(base + aliasPath, { redirect: 'manual' });
+      // Aliases DO resolve here, so a non-200 means the gap was CLOSED, not that 8.3 is absent.
+      // Failing loudly is the point: whoever closed it is told to restore the bounded claims.
+      expect(
+        aliased.status,
+        `8.3 aliases resolve on this volume but ${aliasPath} no longer serves. If you CLOSED this ` +
+        'gap: restore the universal claims in the file header and FORWARD_COVER, and delete this block.'
+      ).toBe(200);
 
+      // PAYLOAD, not proxy: a 200 alone could be an error page or a directory listing.
+      const served = crypto.createHash('sha256')
+        .update(Buffer.from(await aliased.arrayBuffer())).digest('hex');
+      const onDisk = crypto.createHash('sha256')
+        .update(fs.readFileSync(path.join(FLEET_UI_ROOT_FOR_HASH, realFile))).digest('hex');
+      expect(served).toBe(onDisk);
+    }
+  );
+
+  it('DOCUMENTS THE GAP: the bypass emits NO soak log line, so silence cannot mean unhit', async (ctx) => {
+    if (!(await aliasesResolveHere())) {
+      ctx.skip();
+      return;
+    }
     const seen = [];
     const spy = vi.spyOn(console, 'log').mockImplementation((...a) => seen.push(a.join(' ')));
     try {
@@ -433,8 +488,8 @@ describe('KNOWN-OPEN: NTFS 8.3 aliases bypass the fence (asserted as OPEN, not a
     } finally {
       spy.mockRestore();
     }
-    // This is the compounding failure: the soak's disposition is "silence is the evidence", and
-    // the one axis that defeats the fence is exactly the axis the instrument cannot see.
+    // The compounding failure: the soak's disposition is "silence is the evidence", and the one
+    // axis that defeats the fence is exactly the axis the instrument cannot see.
     expect(seen.join('\n')).not.toContain('[fleet-ui-410]');
   });
 });
