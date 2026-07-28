@@ -153,7 +153,23 @@ export function deriveReasonBand(d) {
   if (/^SD-FDBK-/.test((d && d.sd_key) || '') || m.source === 'feedback'
     || /\bfeedback\b|from-feedback|from-qf|qf-promoted|quick.?fix/.test(prov)) return 'feedback';
   if (/incident|\brca\b|corrective|postmortem/.test(prov)) return 'incident';
-  return 'now-wave-remainder';
+  // SD-LEO-INFRA-ADAM-WORK-SELECTION-001 FR-2: 'now-wave-remainder' now requires ROADMAP EVIDENCE
+  // and can no longer be produced by falling off the end of this switch.
+  //
+  // It used to be the unconditional fallthrough, which inverted every reading of the gauge: a HIGH
+  // now-wave-remainder share was what UNCLASSIFIABLE PROVENANCE produces — the null hypothesis —
+  // not evidence of plan adherence. Measured 2026-07-28 over the real population of 134 stamped
+  // SDs: 104 stamped now-wave-remainder, only 18 actually wave-linked, so 86 of 104 (82.7%) claimed
+  // roadmap-remainder while linked to NO wave. A field that cannot falsify "we are working the
+  // plan" was being reported as proof of it.
+  //
+  // This function is PURE and has no DB access, so it asserts roadmap provenance only from markers
+  // already present on the row — the same markers classifyDispatchReason's linkage branch trusts.
+  // Anything else is now 'unclassified', which is an honest residual: it says we do not know, and
+  // it cannot be mistaken for adherence.
+  if (m.wave_id || m.roadmap_item_id || m.promoted_from_roadmap || m.plan_key || m.wave_disposition
+    || ['plan', 'roadmap_item'].includes(String(m.source || ''))) return 'now-wave-remainder';
+  return 'unclassified';
 }
 export function buildRankMergeQuery(rankPatch, sdKey) {
   // Adversarial review (ship gate): NULL::jsonb || '{...}'::jsonb evaluates to NULL in Postgres —
