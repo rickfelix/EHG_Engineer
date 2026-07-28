@@ -83,6 +83,42 @@ describe('UNKNOWN — the state that stops diligence being reported as neglect',
   });
 });
 
+describe('AC-4 — FR-2 consumes FR-3: an INERT zero is not a QUIET zero', () => {
+  it('a zero from a predicate PROVEN unable to block reports INERT, not SUSPECT', () => {
+    // The distinction changes what an operator does. SUSPECT means "go find out why this never
+    // fired". INERT means "it could not have fired; fix the predicate" — a different, shorter job.
+    const r = classifyGuard({
+      guard: 'blockPattern', observations: 27, blocked: 0,
+      selfTest: { capable: false, missingVerdict: 'blocking' },
+    }, '7d');
+    expect(r.state).toBe(GUARD_HEALTH.INERT);
+    expect(r.detail).toMatch(/cannot produce its blocking verdict/);
+    expect(r.detail).toMatch(/could not have blocked/);
+  });
+
+  it('NEGATIVE CONTROL — the same zero with a CAPABLE predicate stays SUSPECT', () => {
+    // Without this, everything with a selfTest field would read as INERT and the pairing would
+    // explain away every genuine sustained zero — worse than not pairing at all.
+    const r = classifyGuard({
+      guard: 'blockPattern', observations: 27, blocked: 0,
+      selfTest: { capable: true, missingVerdict: null },
+    }, '7d');
+    expect(r.state).toBe(GUARD_HEALTH.SUSPECT);
+  });
+
+  it('no self-test at all leaves the verdict SUSPECT — absence is not exoneration', () => {
+    const r = classifyGuard({ guard: 'g', observations: 27, blocked: 0 }, '7d');
+    expect(r.state).toBe(GUARD_HEALTH.SUSPECT);
+  });
+
+  it('a capable predicate that DID block is still healthy — the self-test does not override facts', () => {
+    const r = classifyGuard({
+      guard: 'g', observations: 10, blocked: 2, selfTest: { capable: false },
+    }, '7d');
+    expect(r.state).toBe(GUARD_HEALTH.HEALTHY);
+  });
+});
+
 describe('the report emits every guard, zeros included', () => {
   it('counts are unconditional — a counter that appears only when non-zero recreates the ambiguity', () => {
     // The lesson carried from worker-signal-starvation.cjs: `promoted=0` omitted reads identically
@@ -92,7 +128,7 @@ describe('the report emits every guard, zeros included', () => {
       { guard: 'suspect1', observations: 10, blocked: 0 },
       { guard: 'unknown1' },
     ], '7d');
-    expect(a.summary).toBe('GUARD SUSTAINED-ZERO (7d): healthy=1 suspect=1 unknown=1');
+    expect(a.summary).toBe('GUARD SUSTAINED-ZERO (7d): healthy=1 suspect=1 inert=0 unknown=1');
     expect(a.results).toHaveLength(3);
   });
 
