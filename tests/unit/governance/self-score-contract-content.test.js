@@ -22,7 +22,15 @@ import { createClient } from '@supabase/supabase-js';
 
 const URL_ = process.env.SUPABASE_URL || process.env.NEXT_PUBLIC_SUPABASE_URL;
 const KEY = process.env.SUPABASE_SERVICE_ROLE_KEY;
-const CAN_RUN = Boolean(URL_ && KEY);
+
+// THE GUARD HAS TO SEE THROUGH THE TEST HARNESS'S OWN PLACEHOLDER.
+// tests/setup.unit.js does `SUPABASE_SERVICE_ROLE_KEY ||= 'test-service-role-key-not-real'`, so a
+// bare Boolean(KEY) is ALWAYS true and describe.skipIf never skips — the suite then fails in CI
+// (unit-tier.yml passes no env) for want of credentials rather than for a real defect. A guard that
+// cannot distinguish a real key from the harness's stand-in is itself a check that cannot see its
+// subject, which is the defect this SD exists to remove. Reject the known placeholder explicitly.
+const PLACEHOLDER = /not-real|placeholder|^test-/i;
+const CAN_RUN = Boolean(URL_ && KEY && !PLACEHOLDER.test(KEY) && !PLACEHOLDER.test(URL_));
 
 const SECTIONS = [
   { id: 601, role: 'Adam', flag: 'ADAM_SELF_SCORE_CADENCE' },

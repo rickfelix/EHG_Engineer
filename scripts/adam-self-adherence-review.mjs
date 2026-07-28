@@ -410,6 +410,16 @@ export async function recordVisionGaugeRead(supabase, { sessionId = null, pct = 
 }
 
 /** Insert one ledger row for a probe verdict. Returns the row id (or null, fail-soft). */
+/**
+ * True when PostgREST is telling us the column simply is not there yet.
+ * The check_class migration is chairman-gated (_STAGED), so "column missing" is an EXPECTED state
+ * between this code merging and the DDL being applied — not a fault.
+ */
+function isMissingCheckClassColumn(err) {
+  const msg = String(err?.message || err || '');
+  return /check_class/.test(msg) && /(could not find|schema cache|does not exist|42703|PGRST204)/i.test(msg);
+}
+
 export async function recordAdherence(supabase, runId, bar, remediationRef = null) {
   try {
     const { data, error } = await supabase
@@ -432,6 +442,33 @@ export async function recordAdherence(supabase, runId, bar, remediationRef = nul
     if (error) throw error;
     return data.id;
   } catch (err) {
+    // THE COLUMN MAY NOT EXIST YET, AND THAT MUST NOT STOP THE LEDGER.
+    //
+    // check_class ships behind a chairman-gated _STAGED migration, so between this code merging
+    // and the DDL being applied PostgREST rejects the whole row (PGRST204). recordAdherence is
+    // fail-open, so without this retry EVERY adherence write — all eight probes, the 6h retro and
+    // the action-time path — would silently stop, and the table would just quietly cease growing.
+    // A fix for "checks that cannot see their subject" that blinds the ledger on merge would be
+    // this SD's own defect, self-inflicted. Retry once without the column; the row still lands,
+    // simply unclassified (which is exactly what a pre-migration row honestly is).
+    if (isMissingCheckClassColumn(err)) {
+      try {
+        const { data, error } = await supabase
+          .from('adam_adherence_ledger')
+          .insert({
+            run_id: runId, probe: bar.probe, duty: bar.duty, verdict: bar.verdict,
+            detail: bar.detail, remediation_ref: remediationRef,
+          })
+          .select('id')
+          .single();
+        if (error) throw error;
+        console.warn('[adam-self-adherence] check_class column not present yet (migration pending) — row written unclassified');
+        return data.id;
+      } catch (retryErr) {
+        console.warn(`[adam-self-adherence] ledger write failed (non-blocking): ${retryErr.message}`);
+        return null;
+      }
+    }
     console.warn(`[adam-self-adherence] ledger write failed (non-blocking): ${err.message}`);
     return null;
   }

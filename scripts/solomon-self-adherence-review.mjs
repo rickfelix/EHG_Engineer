@@ -29,6 +29,32 @@ const SELF_ADHERENCE_CATEGORY = 'solomon_self_adherence';
  * durable contract duties have drifted out of SOLOMON_LOOPS. Returns { ok, drifted:[], note }.
  * ok=true means parity holds (or the contract isn't seeded yet — a skip, not a failure). Exported.
  */
+/**
+ * Run Solomon's CONDUCT probes alongside the duty-presence verdict.
+ * SD-LEO-INFRA-ROLE-SESSION-SELF-001 FR-3 — THE WIRING, without which the probes are decoration.
+ *
+ * buildSelfAdherenceVerdict below is duty-presence ONLY: pure set-membership of duty slugs, zero
+ * behaviour inputs. That is why it returned CLEAN on the night of a self-reported execution breach.
+ * Conduct is a SEPARATE question, answered separately, and labelled so the two greens can never be
+ * read as the same claim.
+ *
+ * Fail-open on the read (a resolver that cannot answer yields 'unknown', never 'pass') and
+ * fail-soft on the call itself: an audit that died because its new half threw would be worse than
+ * the blindness it replaces.
+ *
+ * @returns {Promise<Array<{probe, duty, verdict, detail, check_class}>>}
+ */
+export async function runConductVerdicts(supabase, { now = new Date() } = {}) {
+  try {
+    const { resolveSolomonConductFacts, runSolomonConductProbes } = await import('../lib/solomon/conduct-probes.js');
+    const facts = await resolveSolomonConductFacts(supabase, { now });
+    return runSolomonConductProbes(facts);
+  } catch (err) {
+    console.warn(`[solomon-self-adherence] conduct probes unavailable (non-blocking): ${err.message}`);
+    return [];
+  }
+}
+
 export function buildSelfAdherenceVerdict(repoRoot = REPO_ROOT) {
   let md = null;
   try { md = readFileSync(resolve(repoRoot, ROLE_CONTEXT_DOC), 'utf8'); } catch { md = null; }
@@ -73,7 +99,7 @@ export function selfAdherenceReviewKey(now = new Date()) {
  * @param {{ok:boolean, drifted:string[], note:string}} verdict
  * @param {{ reviewKey?: string, sessionId?: string|null, now?: Date }} [opts]
  */
-export async function persistSelfAdherenceReview(supabase, verdict, { reviewKey, sessionId = null, now = new Date() } = {}) {
+export async function persistSelfAdherenceReview(supabase, verdict, { reviewKey, sessionId = null, now = new Date(), conductVerdicts = [] } = {}) {
   const key = reviewKey || selfAdherenceReviewKey(now);
   try {
     // Idempotent on review_key — a re-run within the same 12h slot must not double-write.
@@ -105,6 +131,13 @@ export async function persistSelfAdherenceReview(supabase, verdict, { reviewKey,
         drifted,
         session_id: sessionId,
         sd: 'SD-LEO-INFRA-ROLE-MEASUREMENT-INTEGRITY-001',
+        // SD-LEO-INFRA-ROLE-SESSION-SELF-001 FR-2/FR-3: SAY WHICH KIND OF GREEN THIS `ok` IS.
+        // Everything above it is duty-presence — a set-membership check with no behaviour input —
+        // so an `ok:true` here has never meant "Solomon behaved". conduct_verdicts carries the
+        // separate, behaviour-derived answer; when it is empty the conduct question was simply not
+        // asked, which is different again from being asked and passing.
+        check_class: 'duty',
+        conduct_verdicts: Array.isArray(conductVerdicts) ? conductVerdicts : [],
       },
     };
     // A parity-holds cycle is a self-resolved AUDIT record (not an open queue item): status='resolved'
@@ -131,7 +164,9 @@ async function main() {
   if (!dryRun) {
     try {
       const supabase = createSupabaseServiceClient();
-      const id = await persistSelfAdherenceReview(supabase, verdict, { sessionId: process.env.CLAUDE_SESSION_ID || null });
+      const conductVerdicts = await runConductVerdicts(supabase);
+      for (const cv of conductVerdicts) console.log(`  conduct: ${cv.probe} = ${cv.verdict} — ${cv.detail}`);
+      const id = await persistSelfAdherenceReview(supabase, verdict, { sessionId: process.env.CLAUDE_SESSION_ID || null, conductVerdicts });
       console.log(id ? `  self-adherence cycle persisted → feedback ${id}` : '  self-adherence cycle NOT persisted (fail-soft)');
     } catch (err) {
       console.log('  solomon-self-adherence persist fail-open:', err?.message || String(err));
