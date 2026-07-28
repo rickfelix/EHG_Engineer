@@ -13,7 +13,9 @@ import { createClient } from '@supabase/supabase-js';
 import { computeSessionBadge } from '../../lib/fleet/fleet-view-badges.cjs';
 import { getAttentionFlaggedSessions } from '../../lib/fleet/attention-flag-writer.js';
 import { loadStore, buildNamedAccountChips } from '../../lib/fleet/account-capacity-gauge.cjs';
-import { getAccountUsage, allUnavailable } from '../../lib/fleet/account-usage-reader.cjs';
+import { getAccountUsage, allUnavailable, resolveSlotIdentities } from '../../lib/fleet/account-usage-reader.cjs';
+// SD-LEO-INFRA-ACCOUNT-QUOTA-STRIP-001 (FR-4/FR-6): snapshot retention + last-known enrichment.
+import { persistReadings, fetchLastKnown, withLastKnown } from '../../lib/fleet/account-usage-snapshot-writer.cjs';
 import { isLiveEnabled } from '../../lib/fleet/spawn-control.js';
 
 const router = Router();
@@ -218,6 +220,25 @@ export async function getFleetPanel(req, res) {
     accountUsage = await getAccountUsage(refreshUsage ? { noCache: true } : {});
   } catch {
     accountUsage = allUnavailable('unreachable');
+  }
+
+  // SD-LEO-INFRA-ACCOUNT-QUOTA-STRIP-001 (FR-4/FR-6): retain each reading, and attach the last
+  // known value to any account that currently has no number — so an EXHAUSTED account shows the
+  // figure that explains why the fleet stopped, with the time it was read, instead of collapsing
+  // to "Unavailable" and erasing it.
+  //
+  // WHOLLY FAIL-SOFT, IN BOTH DIRECTIONS. The snapshot migration is chairman-gated and may not be
+  // applied yet, so a missing table is an EXPECTED state rather than an error. Persistence is a
+  // side effect of rendering this strip and must never be able to break it: if history is
+  // unavailable the live readings still render exactly as they do today. A panel that went blank
+  // because its history store was missing would be a worse defect than the one being fixed.
+  try {
+    const identities = resolveSlotIdentities({});
+    await persistReadings(accountUsage, { supabase, identities });
+    const lastKnown = await fetchLastKnown(supabase, accountUsage.map((r) => r?.name));
+    accountUsage = withLastKnown(accountUsage, lastKnown);
+  } catch {
+    /* history is a nicety; the live reading is the product */
   }
 
   // QF-20260726-575: the RESOLVED spawn live-state, so "is the live OS spawn armed on this host"
