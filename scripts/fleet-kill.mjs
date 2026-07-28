@@ -73,7 +73,18 @@ export function buildKillDeps(supabase, sessionId, { reason, dryRun = false } = 
     },
     // A dry run exercises every check and stops before the irreversible step.
     kill: dryRun ? async () => {} : undefined,
-    verifyGone: dryRun ? async () => true : undefined,
+    // verifyGone MUST be supplied on the production path. It was previously left undefined here,
+    // and graceful-kill reads it as `gone = verifyGone ? await verifyGone(pid) : true` — so `gone`
+    // was unconditionally true, the SIGKILL escalation was dead code, and the verdict returned
+    // "terminated and verified absent" having verified nothing. A destructive op asserting an
+    // observation it never made is the failure mode this SD exists to remove, not one to ship.
+    //
+    // FAIL CLOSED on the tri-state, for the same reason claudeProbeToTriState refuses to flatten
+    // PROBE_FAILED: gone is true ONLY on a definitive NO_MATCH (the pid is no longer the agent).
+    // MATCH means still alive; undefined means the probe told us nothing. Neither is evidence of
+    // death, so both report not-gone — which escalates to SIGKILL and then honestly returns
+    // 'refused' rather than a status flip we cannot back up.
+    verifyGone: dryRun ? async () => true : async (pid) => claudeProbeToTriState(pidIsClaude(pid)) === false,
   };
 }
 
