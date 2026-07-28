@@ -9,7 +9,7 @@
  * "pure guard with an unwired caller" class the SD's own CLASS NOTE describes.
  */
 import { describe, it, expect, vi } from 'vitest';
-import { persistSelfAdherenceReview, runConductVerdicts } from '../../../scripts/solomon-self-adherence-review.mjs';
+import { persistSelfAdherenceReview, runConductVerdicts, runAndPersistCycle } from '../../../scripts/solomon-self-adherence-review.mjs';
 
 /** Captures the row that would be inserted; the dedup lookup finds nothing. */
 function captureDb() {
@@ -47,6 +47,28 @@ describe('the persisted review declares WHICH kind of green its ok is', () => {
     const db = captureDb();
     await persistSelfAdherenceReview(db, { ok: true, drifted: [], note: 'parity holds' }, { reviewKey: 'k3' });
     expect(db.inserted[0].metadata.conduct_verdicts).toEqual([]);
+  });
+});
+
+describe('THE JOIN — the call site that connects the two halves', () => {
+  it('runAndPersistCycle carries the conduct verdicts into the persisted row', async () => {
+    // Testing the two functions separately proved each half worked while leaving the hand-off
+    // unguarded: deleting it left every test green. This asserts the connection, not the parts.
+    const q = { select: () => q, eq: () => q, lt: async () => ({ data: [{ id: 1 }, { id: 2 }], error: null }) };
+    const inserted = [];
+    const db = {
+      from: (t) => (t === 'solomon_advice_outcome_ledger' ? { select: () => q } : {
+        select: () => ({ eq: () => ({ filter: () => ({ limit: async () => ({ data: [] }) }) }) }),
+        insert: (row) => { inserted.push(row); return { select: () => ({ single: async () => ({ data: { id: 'fb-9' }, error: null }) }) }; },
+      }),
+    };
+    const id = await runAndPersistCycle(db, { ok: true, drifted: [], note: 'parity holds' }, { log: () => {} });
+    expect(id).toBe('fb-9');
+    // Two stale advisories were seeded, so the conduct answer must be a FAIL sitting beside a
+    // duty-green — the exact combination the old row could not express.
+    expect(inserted[0].metadata.check_class).toBe('duty');
+    expect(inserted[0].metadata.ok).toBe(true);
+    expect(inserted[0].metadata.conduct_verdicts[0].verdict).toBe('fail');
   });
 });
 

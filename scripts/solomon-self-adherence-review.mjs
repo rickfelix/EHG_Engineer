@@ -55,6 +55,23 @@ export async function runConductVerdicts(supabase, { now = new Date() } = {}) {
   }
 }
 
+/**
+ * THE JOIN: run the conduct probes and persist them WITH the duty verdict, in one cycle.
+ *
+ * Extracted from main() so the join itself is testable. Testing runConductVerdicts and
+ * persistSelfAdherenceReview separately proved each half worked while leaving the CALL SITE that
+ * connects them unguarded — deleting the hand-off left every test green. That is the same
+ * tested-module/unwired-caller shape this SD exists to remove, one level up from where it removed
+ * it, so it gets a seam rather than a source-text assertion.
+ *
+ * @returns {Promise<string|null>} the persisted feedback row id, or null (fail-soft)
+ */
+export async function runAndPersistCycle(supabase, verdict, { sessionId = null, now = new Date(), log = console.log } = {}) {
+  const conductVerdicts = await runConductVerdicts(supabase, { now });
+  for (const cv of conductVerdicts) log(`  conduct: ${cv.probe} = ${cv.verdict} — ${cv.detail}`);
+  return persistSelfAdherenceReview(supabase, verdict, { sessionId, now, conductVerdicts });
+}
+
 export function buildSelfAdherenceVerdict(repoRoot = REPO_ROOT) {
   let md = null;
   try { md = readFileSync(resolve(repoRoot, ROLE_CONTEXT_DOC), 'utf8'); } catch { md = null; }
@@ -164,9 +181,7 @@ async function main() {
   if (!dryRun) {
     try {
       const supabase = createSupabaseServiceClient();
-      const conductVerdicts = await runConductVerdicts(supabase);
-      for (const cv of conductVerdicts) console.log(`  conduct: ${cv.probe} = ${cv.verdict} — ${cv.detail}`);
-      const id = await persistSelfAdherenceReview(supabase, verdict, { sessionId: process.env.CLAUDE_SESSION_ID || null, conductVerdicts });
+      const id = await runAndPersistCycle(supabase, verdict, { sessionId: process.env.CLAUDE_SESSION_ID || null });
       console.log(id ? `  self-adherence cycle persisted → feedback ${id}` : '  self-adherence cycle NOT persisted (fail-soft)');
     } catch (err) {
       console.log('  solomon-self-adherence persist fail-open:', err?.message || String(err));
