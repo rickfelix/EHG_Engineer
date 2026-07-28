@@ -56,6 +56,7 @@ const { PEER_KINDS } = require('../lib/coordinator/peer-target.cjs');
 const { enqueueRelayRequest } = require('../lib/coordinator/relay-queue.cjs');
 const { bodyFromArgv } = require('../lib/coordinator/argv-body.cjs');
 const { MAX_PARTS } = require('../lib/coordinator/multi-part-reply.cjs');
+const { MESSAGE_KINDS, MESSAGE_KIND_SET } = require('../lib/coordinator/message-kinds.cjs');
 // SD-LEO-INFRA-ROLE-BASED-COMMS-ROUTING-PROTOCOL-001-C: sender-stamped reply_class SSOT.
 const {
   REPLY_CLASSES, isValidReplyClass, computeReplyExpectedBy, checkAndPingOverdueReplies,
@@ -82,8 +83,7 @@ const SOLOMON_CONSULT_KIND = 'solomon_consult';
 // scripts/hooks/coordination-inbox.cjs) plus the per-role DRAIN_SETS allowlist. A new top-level kind
 // would post a retraction that is INVISIBLE to exactly that audience. Same reuse-with-sub-discriminator
 // pattern as framing_class below (CLAUDE_SOLOMON.md:227 names it the standing decision).
-const MESSAGE_KINDS = Object.freeze(['retraction', 'amend', 'supersede']);
-const MESSAGE_KIND_SET = new Set(MESSAGE_KINDS);
+
 
 // MAX_PARTS moved to lib/coordinator/multi-part-reply.cjs (imported above) when Adam gained the same
 // --part capability: two senders enforcing the same ceiling from two local literals is a drift pair,
