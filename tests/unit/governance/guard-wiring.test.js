@@ -89,6 +89,37 @@ describe('the registry is well-formed enough to act on', () => {
   it('scans a real corpus — a zero-file scan would make every assertion below vacuous', () => {
     expect(FILES.length).toBeGreaterThan(500);
   });
+
+  it('THE SCANNER ITSELF IS EXERCISED — a corpus walk nothing asserts on is not a check', () => {
+    // The gap this closes was found by adversarial review, and it is this SD's own defect class
+    // aimed at this SD's own test: replacing the body of wiredCallSites() with `return []` left the
+    // ENTIRE suite green. Every assertion below either tested the pure predicates (suppliesGatedInput,
+    // isStubbedInput) or asserted that the scanner found NOTHING — and "found nothing" is exactly
+    // what a scanner that never opens a file returns. The stated control and the delivered control
+    // were at different layers, and the uncovered layer was the one doing the work.
+    //
+    // A POSITIVE control fixes it: assert the scanner finds a call site that really exists.
+    const wired = GUARD_REGISTRY.filter((g) => g.expectedWired === true);
+    expect(wired.length, 'no wired guard is registered, so nothing forces the scanner to find anything').toBeGreaterThan(0);
+    for (const g of wired) {
+      const sites = wiredCallSites(g.name, g.gatedInput, g.module);
+      expect(sites.length, `${g.name} is registered as WIRED but the scanner found no caller supplying '${g.gatedInput}'`).toBeGreaterThan(0);
+    }
+  });
+
+  it('every required root is actually walked — narrowing SCAN_DIRS must not pass silently', () => {
+    // Paired with the above: a scanner can also be defeated by shrinking WHERE it looks. Dropping
+    // 'scripts' from SCAN_DIRS is invisible to a "did it find files" check (lib alone clears 500),
+    // and scripts/ is where enforceSweepBudget — the SD's motivating guard — is defined.
+    //
+    // Asserted against a HARD-CODED list, deliberately NOT against SCAN_DIRS: a check that compares
+    // the config to itself cannot fail, which is the codebase's own recorded lesson.
+    const REQUIRED_ROOTS = ['lib', 'scripts'];
+    for (const root of REQUIRED_ROOTS) {
+      const n = FILES.filter((f) => path.relative(repoRoot, f).replace(/\\/g, '/').startsWith(`${root}/`)).length;
+      expect(n, `no files scanned under ${root}/ — the corpus walk does not cover it`).toBeGreaterThan(0);
+    }
+  });
 });
 
 describe('A PROMPT STRING IS NOT A CALL SITE', () => {
@@ -163,6 +194,49 @@ describe('THE THIRD SHAPE — an input supplied as a stub is not wiring', () => 
     expect(isStubbedInput('{ getForecast: solomonForecast }', 'getForecast')).toBe(false);
     expect(suppliesGatedInput('{ getForecast: solomonForecast }', 'getForecast')).toBe(true);
     expect(suppliesGatedInput('{ getForecast: () => fetchReal() }', 'getForecast')).toBe(true);
+  });
+});
+
+describe('the registry and its patterns cannot be edited into agreement', () => {
+  it('the gated input is escaped as DATA — a regex metacharacter must not match everything', () => {
+    // `gatedInput: '.*'` reported EVERY call site as supplying it, turning the whole registry green
+    // on one plausible typo; `'('` threw a SyntaxError; a pathological value backtracked
+    // exponentially. All three land on "this guard looks wired", the answer that ends enquiry.
+    expect(suppliesGatedInput('enforceSweepBudget({}) // no data at all', '.*')).toBe(false);
+    expect(() => suppliesGatedInput('anything', '(')).not.toThrow();
+    // An escaped '.' matches a literal dot and nothing else. My first version of this assertion
+    // expected `{ a.b: 1 }` NOT to match 'a.b', which is backwards — escaping is what MAKES it
+    // match there, and match only there.
+    expect(suppliesGatedInput('{ a.b: 1 }', 'a.b')).toBe(true);
+    expect(suppliesGatedInput('{ axb: 1 }', 'a.b')).toBe(false);
+    expect(suppliesGatedInput('{ spent, budget }', 'spent')).toBe(true);   // control: still works
+  });
+
+  it('the registry is frozen DEEPLY — a shallow freeze leaves the baseline writable', () => {
+    // Object.freeze on the array left every entry mutable, so `expectedWired = true` silently shrank
+    // the known-unwired baseline this test compares against.
+    expect(Object.isFrozen(GUARD_REGISTRY)).toBe(true);
+    expect(Object.isFrozen(GUARD_REGISTRY[0])).toBe(true);
+    const before = knownUnwired().length;
+    expect(() => { GUARD_REGISTRY[0].expectedWired = !GUARD_REGISTRY[0].expectedWired; }).toThrow();
+    expect(knownUnwired().length).toBe(before);
+  });
+
+  it('mocks, fixtures and harness code are not production wiring', () => {
+    // 111 files in this tree classified as production before these patterns existed — every one a
+    // file whose entire job is to MENTION production functions. A false POSITIVE here reports an
+    // unwired guard as healthy, which is the permissive direction.
+    for (const p of [
+      'lib/mock/firewall.js', 'lib/test-helpers/build.js', 'lib/testing/harness.js',
+      'lib/apa/fixtures/sample.mjs', 'src/thing.spec.ts', 'lib/x/__mocks__/y.js',
+    ]) {
+      expect(isProductionCallSite(p), p).toBe(false);
+    }
+    // …and TypeScript IS production: excluding it made 25 files invisible, and invisible resolves
+    // to "no caller found".
+    expect(isProductionCallSite('src/app/gate.ts')).toBe(true);
+    expect(isProductionCallSite('src/app/Gate.tsx')).toBe(true);
+    expect(isProductionCallSite('lib/real/module.js')).toBe(true);
   });
 });
 

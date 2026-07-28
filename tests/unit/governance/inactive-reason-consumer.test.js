@@ -11,7 +11,7 @@
 import { describe, it, expect } from 'vitest';
 import { foldTermResults, NO_DATA_REASONS } from '../../../lib/governance/inactive-reason-consumer.js';
 import { classifyGuard, GUARD_HEALTH } from '../../../lib/governance/guard-sustained-zero.js';
-import { capabilityGapTerm } from '../../../lib/adam/rationale-bar.js';
+import { capabilityGapTerm, waveAlignmentTerm, selectAdvisory } from '../../../lib/adam/rationale-bar.js';
 
 describe('AC-4 — capabilityGapTerm now says why, like its sibling', () => {
   // Signature is capabilityGapTerm(candidate, capabilityGap) — the CANDIDATE carries `capability`,
@@ -77,17 +77,74 @@ describe('AC-3 — the consumer CHANGES BEHAVIOUR when the signal is present', (
 });
 
 describe('a no-data reason and an evaluated-and-declined reason are not the same finding', () => {
-  it('only no-data reasons count as permissive-no-data', () => {
-    // empty_aligned_set means the guard HAD its data and found nothing — chasing "why didn't it
-    // fire" there is wasted work, so it must not inflate the no-data count.
+  it('CANNOT-JUDGE IS NO-DATA — the classification I got backwards, and what it cost', () => {
+    // The first version of this test asserted the opposite: that `empty_aligned_set` meant "the
+    // guard HAD its data and found nothing", so it must NOT inflate the no-data count. That is
+    // refuted by the file that emits it, twenty lines from the emit — rationale-bar.js:221 "Waves
+    // exist but NOTHING is linked => this term cannot judge alignment", and :248 "a term that
+    // cannot judge must not judge — the same doctrine as the empty-set case above."
+    //
+    // The cost was measured on this SD's own flagship instance, not argued: with 8 waves, 0 of 261
+    // roadmap_wave_items linked, and 27 evaluations, the fold reported permissiveNoData: 0 and
+    // missingInput: null while the no-data branch had fired all 27 times. FR-2 then printed
+    // "no-data branch taken 0x" and named nothing — the alarm built to catch instance 3 was blind
+    // to instance 3, in the permissive direction, because I asserted a classification instead of
+    // reading one. Kept as the test's headline rather than quietly corrected, because it is FR-5's
+    // exact failure mode committed inside FR-5's own SD.
     const folded = foldTermResults('waveAlignmentTerm', [
       { active: false, inactive_reason: 'empty_aligned_set' },
       { active: false, inactive_reason: 'zero_waves_or_no_alignment' },
     ]);
-    expect(folded.permissiveNoData).toBe(1);
-    expect(folded.missingInput).toBe('zero_waves_or_no_alignment');
+    expect(folded.permissiveNoData).toBe(2);
     expect(folded.reasons.empty_aligned_set).toBe(1);
-    expect(NO_DATA_REASONS.has('empty_aligned_set')).toBe(false);
+    expect(NO_DATA_REASONS).toContain('empty_aligned_set');
+    expect(NO_DATA_REASONS).toContain('id_space_mismatch');
+  });
+
+  it('THE FLAGSHIP INSTANCE — 27 empty-linkage passes now name the missing input', () => {
+    // The end-to-end shape the correction exists for: what the live roadmap actually produces.
+    const results = Array.from({ length: 27 }, () => waveAlignmentTerm({}, { waves: [{ okr_ids: [] }] }));
+    expect(results[0].inactive_reason).toBe('empty_aligned_set');
+
+    const verdict = classifyGuard(foldTermResults('waveAlignmentTerm', results), '7d');
+    expect(verdict.state).toBe(GUARD_HEALTH.SUSPECT);
+    expect(verdict.detail).toContain('no-data branch taken 27x');   // was "0x" before the fix
+    expect(verdict.missingInput).toBe('empty_aligned_set');
+  });
+
+  it('an UNRECOGNISED reason counts as no-data and is surfaced, never silently dropped', () => {
+    // The direction is the decision. If a new emit defaulted to "not no-data" it would silently
+    // stop contributing — the permissive answer arriving quietly, which is the defect class itself.
+    // Counting it can at worst over-report, which is loud and gets fixed.
+    const folded = foldTermResults('newTerm', [{ active: false, inactive_reason: 'some_future_reason' }]);
+    expect(folded.permissiveNoData).toBe(1);
+    expect(folded.unclassified).toBe(1);
+    expect(folded.missingInput).toBe('some_future_reason');
+  });
+
+  it('an inherited property is not a supplied one — no forged blocks', () => {
+    // `active` is a generic name; a polluted Object.prototype would make every empty result count
+    // as a block and drive the alarm to HEALTHY, forging the one verdict that ends enquiry.
+    Object.prototype.active = true;      // eslint-disable-line no-extend-native
+    try {
+      const folded = foldTermResults('g', [{}, {}, {}]);
+      expect(folded.blocked).toBe(0);
+      expect(classifyGuard(folded, '7d').state).not.toBe(GUARD_HEALTH.HEALTHY);
+    } finally {
+      delete Object.prototype.active;
+    }
+  });
+
+  it('the reason lists cannot be emptied from outside — Object.freeze on a Set is not immutability', () => {
+    // `Object.freeze(new Set([...]))` reports isFrozen true while .add/.delete/.clear all still
+    // work. Clearing it would collapse permissiveNoData to 0 and suppress the AC-4 explanation —
+    // turning this SD's remedy into this SD's defect. Frozen ARRAYS are exported instead; the Sets
+    // are private.
+    expect(Array.isArray(NO_DATA_REASONS)).toBe(true);
+    expect(Object.isFrozen(NO_DATA_REASONS)).toBe(true);
+    expect(() => { NO_DATA_REASONS.push('x'); }).toThrow();
+    const folded = foldTermResults('g', [{ active: false, inactive_reason: 'no_gaps_supplied' }]);
+    expect(folded.permissiveNoData).toBe(1);
   });
 
   it('an ACTIVE term counts as the guard doing something', () => {
@@ -95,6 +152,50 @@ describe('a no-data reason and an evaluated-and-declined reason are not the same
     expect(folded.observations).toBe(2);
     expect(folded.blocked).toBe(1);
     expect(classifyGuard(folded, '7d').state).toBe(GUARD_HEALTH.HEALTHY);
+  });
+
+  it('AC-2 — the consumer is reached from PRODUCTION, not only from this test', () => {
+    // The finding that forced this: `foldTermResults` had zero production references. Its link to
+    // rationale-bar.js:214/:230/:252 was a DOCBLOCK COMMENT — a reference that looks like wiring and
+    // executes nothing, which is the precise trap FR-1 was written to catch. FR-4's own thesis is
+    // "an emit with no behavioural consumer does not satisfy this FR"; shipping a consumer nothing
+    // imports would have reproduced that thesis one indirection deeper, and a test asserting the
+    // consumer in isolation would have passed the whole time.
+    //
+    // So the assertion is made through selectAdvisory — the real scoring entrypoint, reached in
+    // production from scripts/adam-opportunity-scan.cjs:266.
+    const out = selectAdvisory([], {});
+    expect(out.guard_health).toBeTruthy();
+    expect(out.guard_health.summary).toMatch(/^GUARD SUSTAINED-ZERO/);
+
+    // cleared=0 is the case that hid instance 3 for 21 consecutive passes: the terms never ran, so
+    // the honest verdict is UNKNOWN — explicitly NOT health.
+    const wave = out.guard_health.results.find((r) => r.guard === 'waveAlignmentTerm');
+    expect(wave.state).toBe(GUARD_HEALTH.UNKNOWN);
+    expect(wave.detail).toMatch(/OBSERVED 0 times/);
+    expect(wave.detail).toMatch(/NOT health/);
+  });
+
+  it('…and when candidates DO clear, the health line reports what the terms actually did', () => {
+    // NEGATIVE CONTROL for the above: if guard_health were hard-coded to the UNKNOWN shape, the
+    // previous test would still pass. Here the terms genuinely run, so observations must be > 0.
+    const candidate = {
+      scope_key: 'harness',
+      opportunity: 'op', evidence: 'ev', rationale: 'ra', risk: 'ri', counterfactual: 'cf',
+      objective_kr: { objective: 'O-GOV', kr: 'KR', kr_status: 'off_track', off_track_delta: 10 },
+      contribution_type: 'enabling',
+      confidence: 0.5,
+      okr_score: 30,
+    };
+    // The gap map IS injected in production (gauge-lens readCapabilityGaps); what never arrives is
+    // candidate.capability. Passing gaps here mirrors the live call — without it the fixture would
+    // exercise a branch production never takes and report a different missing input.
+    const out = selectAdvisory([candidate], { capabilityGap: { gaps: { api: 40 } } });
+    expect(out.cleared).toBeGreaterThan(0);
+    const cap = out.guard_health.results.find((r) => r.guard === 'capabilityGapTerm');
+    expect(cap.observations).toBe(out.cleared);
+    // No producer sets candidate.capability, so the live reason is named rather than left blank.
+    expect(cap.missingInput).toBe('candidate_has_no_capability');
   });
 
   it('degenerate input does not throw and does not invent health', () => {

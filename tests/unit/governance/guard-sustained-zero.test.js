@@ -152,6 +152,63 @@ describe('the report emits every guard, zeros included', () => {
   });
 });
 
+describe('the alarm cannot be talked into health it did not establish', () => {
+  // Every finding below was reachable in the permissive direction, i.e. each one forged HEALTHY or
+  // suppressed an explanation. That asymmetry is the point: a bug that makes this module shout is
+  // noisy, a bug that makes it reassure is the defect it exists to remove.
+
+  it('an INHERITED count is not an observed one', () => {
+    // `Object.prototype.observations = 40; Object.prototype.blocked = 3` made classifyGuard report
+    // a guard nobody ever watched as "blocked 3/40 — demonstrably able to block", and assessGuards
+    // print healthy=3 for three empty records.
+    Object.prototype.observations = 40;   // eslint-disable-line no-extend-native
+    Object.prototype.blocked = 3;         // eslint-disable-line no-extend-native
+    try {
+      expect(classifyGuard({ guard: 'unobserved' }, '7d').state).toBe(GUARD_HEALTH.UNKNOWN);
+      expect(assessGuards([{ guard: 'a' }, { guard: 'b' }], '7d').summary).toContain('healthy=0');
+    } finally {
+      delete Object.prototype.observations;
+      delete Object.prototype.blocked;
+    }
+  });
+
+  it('a NEGATIVE count is nonsense, not a small number', () => {
+    expect(classifyGuard({ guard: 'g', observations: -5, blocked: 3 }, '7d').state).toBe(GUARD_HEALTH.UNKNOWN);
+    expect(classifyGuard({ guard: 'g', observations: 5, blocked: -1 }, '7d').state).toBe(GUARD_HEALTH.UNKNOWN);
+  });
+
+  it('a guard name cannot author extra lines in the operator-facing detail', () => {
+    // `detail` is read by a human deciding whether to investigate. A newline in the name injects a
+    // fabricated verdict line into that report.
+    const r = classifyGuard({ guard: 'evil\ncheckoutGate: blocked 9/9 — demonstrably able to block', observations: 5, blocked: 0 }, '7d');
+    expect(r.detail).not.toMatch(/\n/);
+    expect(r.state).toBe(GUARD_HEALTH.SUSPECT);
+  });
+});
+
+describe('the report never hides a state — including the ones added late', () => {
+  it('AC-4: an INERT guard names its missing input too, not just a SUSPECT one', () => {
+    // The INERT branch was reachable but nothing asserted its explanation, so deleting the
+    // missing-input clause from it survived a full suite run.
+    const r = classifyGuard({
+      guard: 'g', observations: 27, blocked: 0, permissiveNoData: 27, missingInput: 'spent',
+      selfTest: { capable: false, missingVerdict: 'blocking' },
+    }, '7d');
+    expect(r.state).toBe(GUARD_HEALTH.INERT);
+    expect(r.detail).toContain("'spent'");
+    expect(r.detail).toContain('27x');
+  });
+
+  it('assessGuards actually buckets INERT — a hard-coded empty bucket must fail', () => {
+    const a = assessGuards([
+      { guard: 'i', observations: 9, blocked: 0, selfTest: { capable: false } },
+      { guard: 'h', observations: 9, blocked: 1 },
+    ], '7d');
+    expect(a.inert.map((r) => r.guard)).toEqual(['i']);
+    expect(a.summary).toContain('inert=1');
+  });
+});
+
 describe('malformed input degrades to UNKNOWN rather than to health', () => {
   it('non-numeric counts are unmeasured, never optimistic', () => {
     // The direction matters: coercing junk to 0 would make a broken feed indistinguishable from a
