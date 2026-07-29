@@ -44,6 +44,17 @@ describe('pg-timestamp normalizer under a pinned non-UTC timezone', () => {
     // THIS TEST GUARDS THE OTHER TESTS. If the TZ pin silently failed to apply, the naive
     // string would parse as UTC, this expectation would fail, and the suite would tell us
     // the harness is broken rather than quietly reporting a meaningless pass.
+    //
+    // *** KNOWN LIMIT OF THIS GUARD — IT IS HOST-DEPENDENT, AND IT WAS MEASURED. ***
+    // Deleting the process.env.TZ assignment above and re-running:
+    //   ambient TZ=UTC (i.e. CI, ubuntu)          -> this test FAILS (0 vs 4), as intended
+    //   ambient already America/New_York (dev box) -> ALL 8 STILL PASS, guard silent
+    // The guard cannot distinguish "pin executed" from "pin absent, ambient happens to
+    // match". It is therefore REAL IN CI, where it matters, and DECORATIVE on an EDT/EST
+    // developer machine. So a green local run on such a host is not evidence the pin ran —
+    // only CI, or an explicit `TZ=UTC` prefix locally, actually exercises it.
+    // Recorded rather than quietly relied upon: a guard whose effectiveness depends on the
+    // environment is exactly the kind of half-check this SD exists to stop.
     const localParsed = Date.parse(NAIVE);
     const shiftHours = (localParsed - TRUE_INSTANT) / 3600000;
     expect(shiftHours).toBe(OFFSET_HOURS);
