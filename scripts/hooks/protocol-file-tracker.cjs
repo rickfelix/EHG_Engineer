@@ -196,6 +196,21 @@ function normalizeProtocolPath(filePath) {
 function processHookInput(hookInput) {
   const toolName = hookInput.tool_name || '';
   const toolInputData = hookInput.tool_input || {};
+  // SD-LEO-INFRA-ROLE-CONTRACT-READ-GATE-001 / FR-5. ADDITIVE ONLY — this does NOT touch
+  // lastReadWasPartial, whose semantics are load-bearing for protocol-file-read-gate.js:159 and
+  // therefore for all four handoff executors. A new field cannot change an existing verdict.
+  //
+  // WHY IT IS NEEDED: partial-ness is computed from the CALLER'S ARGUMENTS, so a no-argument Read of
+  // an over-cap file — which the harness silently TRUNCATES — records lastReadWasPartial=false, i.e.
+  // "confirmed full". It also never enters ranges[], because that push sits inside the isPartialRead
+  // branch. So neither the boolean nor union-coverage can see it. The only thing that can is what the
+  // read actually DELIVERED.
+  //
+  // WHETHER THE HARNESS SUPPLIES THIS IS AN OPEN QUESTION AT TIME OF WRITING: transcripts show the
+  // Read result carrying {startLine, numLines, totalLines}, but that is the transcript, not proof of
+  // the hook payload. Captured defensively — present when the harness sends it, absent otherwise, and
+  // consumers must treat absence as "unknown" rather than as "full".
+  const toolResponse = hookInput.tool_response || null;
 
   // Only track Read tool calls
   if (toolName !== 'Read') {
@@ -277,6 +292,42 @@ function processHookInput(hookInput) {
     fileStatus.lastReadWasPartial = false;
     // Note: lastPartialRead preserved for audit (FR-2)
     console.log(`[protocol-file-tracker] ✅ Full read of ${normalizedPath}${fileStatus.lastPartialRead ? ' (clears partial read flag)' : ''}`);
+  }
+
+  // SD-LEO-INFRA-ROLE-CONTRACT-READ-GATE-001 / FR-5: record what the read actually DELIVERED,
+  // independent of what the caller asked for. This is the only signal that can distinguish a genuine
+  // full read from a no-argument read the harness silently truncated — the boolean above says
+  // "confirmed full" for both, and ranges[] never sees the truncated one at all.
+  //
+  // ADDITIVE: a new field, read by the role-contract consumers only. lastReadWasPartial is untouched,
+  // so the handoff gate at protocol-file-read-gate.js:159 behaves exactly as before.
+  //
+  // ABSENT MEANS UNKNOWN, NOT COMPLETE. If the harness does not supply tool_response, no field is
+  // written and a consumer must not infer coverage from its absence — that inference is the original
+  // defect in another costume.
+  if (toolResponse && typeof toolResponse === 'object') {
+    const total = Number(toolResponse.totalLines);
+    const delivered = Number(toolResponse.numLines);
+    const start = Number(toolResponse.startLine);
+    if (Number.isFinite(total) && Number.isFinite(delivered)) {
+      fileStatus.lastDelivered = {
+        startLine: Number.isFinite(start) ? start : 1,
+        numLines: delivered,
+        totalLines: total,
+        // The load-bearing derived fact, computed once here where both numbers are in hand.
+        coveredWholeFile: delivered >= total,
+        readAt: now
+      };
+      if (!Array.isArray(fileStatus.deliveredRanges)) fileStatus.deliveredRanges = [];
+      fileStatus.deliveredRanges.push({
+        offset: Number.isFinite(start) ? start : 1,
+        limit: delivered,
+        readAt: now
+      });
+      if (delivered < total) {
+        console.log(`[protocol-file-tracker] ⚠️ TRUNCATED read of ${normalizedPath}: ${delivered} of ${total} lines delivered (caller passed no limit/offset, so this would otherwise record as a full read)`);
+      }
+    }
   }
 
   // Save updated status for ACTUAL file read only
