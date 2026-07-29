@@ -34,6 +34,9 @@ const fs = require('fs');
 const path = require('path');
 const { createSupabaseServiceClient } = require('../lib/supabase-client.cjs');
 const { resolveStateReadPath } = require('./hooks/lib/session-state-resolver.cjs');
+// SD-LEO-INFRA-ROLE-CONTRACT-READ-GATE-001 / FR-3: shared with solomon-register.cjs so both roles
+// get the same verdict from one implementation — solomon had zero coverage for this path.
+const { contractReadVerdict, contractLineCount } = require('../lib/protocol/contract-read-coverage.cjs');
 // SD-LEO-INFRA-ROLE-SESSION-HANDOFF-PROTOCOL-001-C (FR-3): single-Adam guard + atomic write.
 // fetchAllAdamsStrict (not fetchFreshAdams) so the guard sees stale priors too and classifies
 // fresh-vs-stale itself (fresh => refuse; stale-only => retire). STRICT (FR-6, count-truncation
@@ -268,11 +271,22 @@ function checkContractRead(projectDir) {
     const state = JSON.parse(fs.readFileSync(statePath, 'utf8').replace(/^\uFEFF/, ''));
     const status = state.protocolFileReadStatus && state.protocolFileReadStatus[CONTRACT_FILE];
     if (status && status.readCount > 0) {
-      result.contract_read = true;
-      result.contract_read_partial = status.lastReadWasPartial === true;
+      // SD-LEO-INFRA-ROLE-CONTRACT-READ-GATE-001 / FR-3. This used to read
+      // `status.lastReadWasPartial` — a boolean about the MOST RECENT call — and it answered
+      // backwards on a file this size: a truncating no-offset Read recorded "full", while a diligent
+      // paginated read recorded "partial". Coverage is now derived from evidence. Fixed HERE at the
+      // consumer rather than in the tracker, because that stamp also feeds
+      // protocol-file-read-gate.js:159 and therefore every handoff.
+      const verdict = contractReadVerdict(status, contractLineCount(root, CONTRACT_FILE));
+      result.contract_read = verdict.read;
+      result.contract_read_partial = !verdict.fully_read;
+      result.contract_coverage_pct = verdict.coverage_pct;
+      result.contract_read_basis = verdict.basis;
       result.contract_last_read_at = status.lastReadAt || null;
     } else if (Array.isArray(state.protocolFilesRead) && state.protocolFilesRead.includes(CONTRACT_FILE)) {
       result.contract_read = true; // legacy-array fallback (pre-FR-2 state shape)
+      result.contract_read_partial = true; // legacy shape carries no coverage evidence — not a full read
+      result.contract_read_basis = 'legacy_array';
     }
   } catch { /* fail-open: tracking unavailable must never break role activation */ }
   return result;
