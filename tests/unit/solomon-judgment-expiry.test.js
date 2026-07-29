@@ -1,0 +1,104 @@
+/**
+ * SD-LEO-INFRA-ADVICE-OUTCOME-LEDGER-001 FR-1/FR-2 — TS-1, TS-2, TS-3.
+ *
+ * Unit tier with no DB and no credentials, deliberately: the `db` vitest project is DISABLED in
+ * this repo ("0 of db tests will run"), so a credential-gated test skips SILENTLY AND GREEN. That is
+ * the same invisible-pass shape that let FR-0's phantom-column defect survive, and this SD should
+ * not reproduce it in its own tests.
+ */
+import { describe, it, expect } from 'vitest';
+import { readFileSync } from 'node:fs';
+import { resolve } from 'node:path';
+import {
+  selectExpiredJudgments,
+  expiryPatch,
+  EXPIRY_DAYS,
+  EXPIRY_ACTOR,
+  ENABLED_BY_DEFAULT,
+} from '../../lib/solomon/judgment-expiry.js';
+
+const NOW = Date.parse('2026-07-29T00:00:00Z');
+const daysAgo = (d) => new Date(NOW - d * 86_400_000).toISOString();
+
+describe('TS-1 — expiry fires only past the PINNED threshold', () => {
+  it('the threshold is 7 days, asserted against the CONSTANT not a fixture', () => {
+    // Measured on live data: 0 pending rows exceed 5d, 176 exceed 72h, oldest 4.8d. A test that let
+    // the fixture define the threshold would pass for any value, including one that expires rows
+    // history says were about to be judged.
+    expect(EXPIRY_DAYS).toBe(7);
+  });
+
+  it('stamps a row past the threshold and NOT one just inside it', () => {
+    const rows = [
+      { id: 'old', decision: 'pending', created_at: daysAgo(EXPIRY_DAYS + 0.01) },
+      { id: 'fresh', decision: 'pending', created_at: daysAgo(EXPIRY_DAYS - 0.01) },
+    ];
+    const got = selectExpiredJudgments(rows, { nowMs: NOW }).map((r) => r.id);
+    expect(got).toEqual(['old']);
+  });
+
+  it('never re-stamps a row that already expired', () => {
+    const rows = [{ id: 'a', decision: 'pending', created_at: daysAgo(30), judgment_expired_at: daysAgo(20) }];
+    expect(selectExpiredJudgments(rows, { nowMs: NOW })).toEqual([]);
+  });
+
+  it('ONLY unanswered judgments expire — an answered row is never stamped', () => {
+    // The load-bearing negative. Stamping an accepted row would assert nobody answered a question
+    // that was in fact answered, which is worse than leaving it unstamped.
+    const rows = ['accepted', 'rejected', 'partial', 'deferred'].map((decision, i) => ({
+      id: `x${i}`, decision, created_at: daysAgo(90),
+    }));
+    expect(selectExpiredJudgments(rows, { nowMs: NOW })).toEqual([]);
+  });
+
+  it('skips rows with an unusable timestamp or clock rather than guessing', () => {
+    expect(selectExpiredJudgments([{ id: 'a', decision: 'pending', created_at: 'not-a-date' }], { nowMs: NOW })).toEqual([]);
+    expect(selectExpiredJudgments([{ id: 'a', decision: 'pending', created_at: daysAgo(90) }], { nowMs: NaN })).toEqual([]);
+  });
+});
+
+describe('TS-2 — expiry does NOT touch the decision column', () => {
+  it('the patch writes only the expiry columns', () => {
+    // REPLACES the original TS-2, which asserted that a judging path could not write
+    // `expired_unjudged` — already true via VALID_DISPOSITIONS, so it asserted a no-op, AND the
+    // original FR-1 instructed adding that value to the same allow-list, which would have failed it.
+    // The real invariant now: aging changes expiry and nothing else.
+    const patch = expiryPatch({ nowIso: '2026-07-29T00:00:00Z' });
+    expect(Object.keys(patch).sort()).toEqual(['judgment_expired_at', 'judgment_expired_by']);
+    expect(patch).not.toHaveProperty('decision');
+    expect(patch).not.toHaveProperty('outcome');
+  });
+
+  it('always attributes the stamp — the DB CHECK requires it', () => {
+    // Without attribution a hand-written row is indistinguishable from one the mechanism produced,
+    // and TS-10 (did it actually RUN) becomes satisfiable by hand.
+    expect(expiryPatch({ nowIso: 'x' }).judgment_expired_by).toBe(EXPIRY_ACTOR);
+  });
+
+  it('the migration adds COLUMNS and does not alter the decision CHECK', () => {
+    const raw = readFileSync(resolve(process.cwd(), 'database/migrations/20260729_solomon_ledger_judgment_expiry.sql'), 'utf8');
+    // STRIP COMMENTS FIRST. The migration's header explains at length WHY the original
+    // `expired_unjudged` decision value was rejected, and an earlier version of this assertion read
+    // that explanation as the thing it forbids — failing on prose while the SQL was correct. That is
+    // the same mistake I made one commit earlier reading `metadata` keys as column names: an
+    // assertion that cannot tell documentation from code will eventually punish the documentation.
+    const sql = raw.replace(/^\s*--.*$/gm, '').replace(/\/\*[\s\S]*?\*\//g, '');
+    expect(sql).toMatch(/ADD COLUMN IF NOT EXISTS judgment_expired_at/);
+    expect(sql).toMatch(/ADD COLUMN IF NOT EXISTS judgment_expired_by/);
+    // The reversal, pinned: no decision-CHECK surgery, and no new decision value in executable SQL.
+    expect(sql).not.toMatch(/decision_check/);
+    expect(sql).not.toContain('expired_unjudged');
+    // ...and the rationale MUST survive in the prose, so a later reader cannot re-litigate the
+    // reversal without meeting the reason for it.
+    expect(raw).toContain('expired_unjudged');
+  });
+});
+
+describe('TS-3 — the job ships DISABLED', () => {
+  it('is off by default so the first run is a decision, not a merge side effect', () => {
+    // A scheduler entry that exists but is disabled still satisfies "an entry references it", which
+    // is why this asserts the flag rather than the entry. Aging is effectively irreversible: once a
+    // row records that nobody answered, re-judging it later cannot un-record that.
+    expect(ENABLED_BY_DEFAULT).toBe(false);
+  });
+});
