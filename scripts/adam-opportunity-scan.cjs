@@ -117,7 +117,7 @@ function appendLedger(entry) {
   return entry;
 }
 
-function buildLedgerEntry({ scope, verdict, cleared = 0, flagEnabled, detail = null, trace = null }) {
+function buildLedgerEntry({ scope, verdict, cleared = 0, flagEnabled, detail = null, trace = null, guardHealth = null }) {
   return {
     ts: new Date().toISOString(),
     scope: scope ? scope.scope_key : 'none',
@@ -127,6 +127,123 @@ function buildLedgerEntry({ scope, verdict, cleared = 0, flagEnabled, detail = n
     ...(detail ? { detail } : {}),
     // SD-LEO-INFRA-ADAM-PRIORITY-ANCHORING-001: audit the rank perturbations.
     ...(Array.isArray(trace) && trace.length ? { trace } : {}),
+    // SD-LEO-INFRA-PURE-GUARD-UNWIRED-001 FR-4. THE READ THAT MAKES THE EMIT A SIGNAL.
+    //
+    // The ledger recorded 21 consecutive `ADAM_OK cleared=0` rows while waveAlignmentTerm was
+    // failing closed on an empty linkage table — every row byte-identical, so "nothing qualified"
+    // and "the term could not judge" were the same observation from outside. Computing the health
+    // and not writing it down would leave pass 22 identical to the 21 before it, which is this
+    // SD's own defect wearing the remedy's clothes; adversarial review caught exactly that here.
+    ...(guardHealth ? { guard_health: guardHealth } : {}),
+  };
+}
+
+/**
+ * Render the guard-health line for stdout — the operator-facing half of the same read.
+ *
+ * Emitted UNCONDITIONALLY when health was computed, zeros included. A line that appears only when
+ * something is wrong makes "measured and fine" indistinguishable from "not measured", which is the
+ * ambiguity this whole SD is about, one level up.
+ */
+function formatGuardHealth(health) {
+  if (!health || !health.summary) return '';
+  const named = (health.results || [])
+    .filter((r) => r.missingInput)
+    .map((r) => ` ${r.guard} could not judge: '${r.missingInput}'.`)
+    .join('');
+  return `\n  ${health.summary}${named}`;
+}
+
+/**
+ * THE DURABLE FORM of guard health — counts AND names.
+ *
+ * Writing only `summary` made the ledger row distinguishable but not ACTIONABLE: it said
+ * "suspect=1" and named neither the term nor the absent input, so the one artifact an auditor reads
+ * months later still required re-deriving what FR-2 AC-4 exists to state. The 21-pass evidence came
+ * out of this ledger; stdout is ephemeral and is not where that reconstruction happens.
+ */
+function guardHealthForLedger(health) {
+  if (!health || !health.summary) return null;
+  return {
+    summary: health.summary,
+    // Always present, empty included — a field that appears only when non-empty makes
+    // "measured, nothing missing" and "not measured" the same row again.
+    missing: (health.results || [])
+      .filter((r) => r.missingInput)
+      .map((r) => ({ guard: r.guard, missing_input: r.missingInput, observations: r.observations })),
+  };
+}
+
+/**
+ * Build the ledger entry FROM A REAL selectAdvisory RESULT.
+ *
+ * Extracted from main() because main() is not exported and therefore not reachable from any test:
+ * both ENDS of this read were well covered — buildLedgerEntry with a literal, formatGuardHealth
+ * with a literal — while the WIRE between them was not, so deleting the argument that carries
+ * `result.guard_health` into the ledger restored the byte-identical row and produced no test
+ * signal at all. Third round running, the final hop was the unguarded one. Putting the logic in an
+ * exported pure function leaves main() with nothing worth mutating.
+ */
+function advisoryLedgerEntry({ result, scope, verdict, flagEnabled, detail = null, trace = null }) {
+  return buildLedgerEntry({
+    scope,
+    verdict,
+    cleared: verdict === 'ADAM_OK' ? 0 : ((result && result.cleared) || 0),
+    flagEnabled,
+    detail,
+    trace,
+    guardHealth: guardHealthForLedger(result && result.guard_health),
+  });
+}
+
+/** The ADAM_OK stdout line, likewise extracted so the interpolation is reachable from a test. */
+function adamOkLine(scope, result) {
+  const key = scope ? scope.scope_key : 'none';
+  return `ADAM_OK scope=${key} (nothing cleared the bar)${formatGuardHealth(result && result.guard_health)}`;
+}
+
+/**
+ * Decide the whole outcome of a scan — verdict, ledger entry and stdout — from a selectAdvisory
+ * result. main() then performs side effects and holds no branching of its own.
+ *
+ * WHY THIS SHAPE, and what it does NOT close. Mutation testing found the three call sites that
+ * passed `result` into the ledger builder still surviving, because they lived inside main(), which
+ * is not exported and is therefore unreachable from any unit test. Collapsing them into ONE call
+ * shrinks that surface to a single hop, and every decision it makes is tested here.
+ *
+ * The residual, stated precisely. `scanOutcome(...)` is invoked from main(), and nothing executes
+ * main() in a test, so the hop cannot be closed BEHAVIOURALLY — a static check cannot prove the
+ * value passed is the right one. It needs a process-level test running the CLI, which is not cheap
+ * here because the scan reads the database first.
+ *
+ * I first wrote that it "cannot be closed by unit tests at all", and that was too strong — review
+ * caught it, and the correction matters more than the code: this SD is about claims outliving their
+ * evidence, and "we established this cannot be tested" is exactly the sentence that gets inherited
+ * and stops the next person looking. It IS statically checkable that the call supplies the input,
+ * by this SD's own FR-1 machinery, and tests/unit/governance/guard-wiring.test.js now does so —
+ * catching deletion, omission and null-stubbing, which is the whole class the mutations exercised.
+ */
+function scanOutcome({ result, scope, flagEnabled }) {
+  const surfaced = result && result.surfaced;
+  if (!surfaced) {
+    return {
+      verdict: 'ADAM_OK',
+      entry: advisoryLedgerEntry({ result, scope, verdict: 'ADAM_OK', flagEnabled }),
+      stdout: adamOkLine(scope, result),
+    };
+  }
+  const detail = surfaced.dedup_key || null;
+  if (!flagEnabled) {
+    return {
+      verdict: 'SUPPRESSED_FLAG_OFF',
+      entry: advisoryLedgerEntry({ result, scope, verdict: 'SUPPRESSED_FLAG_OFF', flagEnabled, detail }),
+      stdout: null,   // main() renders this one; it needs the gate source, which is not a scan input
+    };
+  }
+  return {
+    verdict: 'SURFACED',
+    entry: advisoryLedgerEntry({ result, scope, verdict: 'SURFACED', flagEnabled, detail, trace: result.trace }),
+    stdout: null,     // the advisory body is shelled out to the advisory lane
   };
 }
 
@@ -265,24 +382,29 @@ async function main() {
 
     const result = selectAdvisory(guarded.kept, selectOpts);
 
-    if (!result.surfaced) {
-      const entry = appendLedger(buildLedgerEntry({ scope, verdict: 'ADAM_OK', cleared: 0, flagEnabled: gateEnabled }));
-      process.stdout.write(`ADAM_OK scope=${scope.scope_key} (nothing cleared the bar)\n`);
+    // ONE seam. Every verdict, ledger entry and stdout line is decided by the exported, tested
+    // scanOutcome(); what remains below is side effects. See its docblock for the one hop this
+    // still cannot cover and why.
+    const outcome = scanOutcome({ result, scope, flagEnabled: gateEnabled });
+    const entry = appendLedger(outcome.entry);
+
+    if (outcome.verdict === 'ADAM_OK') {
+      // The 21-pass path. `guard_health` is what separates "nothing qualified" from "the terms
+      // could not judge" — without it these two rows are byte-identical.
+      process.stdout.write(outcome.stdout + '\n');
       process.stdout.write(JSON.stringify(entry) + '\n');
       process.exit(0);
     }
 
     const body = formatAdvisoryBody(result.surfaced);
-    if (!gateEnabled) {
+    if (outcome.verdict === 'SUPPRESSED_FLAG_OFF') {
       // Cleared the bar, but the surfacing path is inert until the gate clears
       // (env off, or QF-20260610-863: the authoritative registry killed it).
-      appendLedger(buildLedgerEntry({ scope, verdict: 'SUPPRESSED_FLAG_OFF', cleared: result.cleared, flagEnabled: gateEnabled, detail: result.surfaced.dedup_key || null }));
       process.stdout.write(`SUPPRESSED_FLAG_OFF scope=${scope.scope_key} (1 cleared; ADAM_GOVERNANCE_HEARTBEAT_V1 gate off: ${gate.source})\n`);
       process.exit(0);
     }
 
     // gate ON (env AND registry): emit exactly ONE advisory via the existing lane.
-    appendLedger(buildLedgerEntry({ scope, verdict: 'SURFACED', cleared: result.cleared, flagEnabled: gateEnabled, detail: result.surfaced.dedup_key || null, trace: result.trace }));
     const r = spawnSync('node', [ADVISORY_CLI, 'send', body], { stdio: 'inherit' });
     process.exit(r.status == null ? 0 : r.status);
   } catch (e) {
@@ -292,7 +414,7 @@ async function main() {
   }
 }
 
-module.exports = { isFlagEnabled, resolveGovernanceFlagGate, parseArgs, buildLedgerEntry, usage, LEDGER_PATH };
+module.exports = { isFlagEnabled, resolveGovernanceFlagGate, parseArgs, buildLedgerEntry, formatGuardHealth, guardHealthForLedger, advisoryLedgerEntry, adamOkLine, scanOutcome, usage, LEDGER_PATH };
 
 if (require.main === module) {
   main();

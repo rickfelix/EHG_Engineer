@@ -267,6 +267,11 @@
             "type": "command",
             "command": "node ${CLAUDE_PROJECT_DIR}/scripts/hooks/context-compact-nudge.js",
             "timeout": 10
+          },
+          {
+            "type": "command",
+            "command": "node ${CLAUDE_PROJECT_DIR}/scripts/hooks/loop-state-resume-clear.cjs",
+            "timeout": 10
           }
         ]
       }

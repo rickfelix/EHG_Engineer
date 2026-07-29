@@ -2,6 +2,7 @@
  * SD-LEO-INFRA-FLEET-SPAWN-CONTROL-001 -- six-verb control API (TS-1..TS-10 unit-testable subset).
  */
 import { describe, it, expect, vi, beforeEach } from 'vitest';
+import { classifyHideRefusal } from '../../../lib/fleet/window-visibility-writer.js';
 
 // QF-20260725-757: spread the ORIGINAL module rather than replacing it wholesale. spawn() now reads
 // the canonical FLEET_WORKER_STARTUP_PROMPT from here (the keepalive it must forward), and a
@@ -126,10 +127,16 @@ function makeFakeSupabase({ sessions = [], coordinationInsertError = null } = {}
   };
 }
 
-describe('module surface (TS-10: exactly six named verbs, no more)', () => {
-  it('exports exactly {spawn, attach, stop, restart, relaunchUnderProfile, drainAndRestart} as the verb set', async () => {
+describe('module surface (TS-10: exactly seven named verbs, no more)', () => {
+  it('exports exactly {spawn, attach, stop, restart, relaunchUnderProfile, drainAndRestart, setSessionWindowVisibility} as the verb set', async () => {
     const mod = await import('../../../lib/fleet/spawn-control.js');
-    const verbNames = ['spawn', 'attach', 'stop', 'restart', 'relaunchUnderProfile', 'drainAndRestart'];
+    // SEVENTH VERB ADDED DELIBERATELY — SD-LEO-INFRA-SESSIONS-PAGE-TRUE-001-A FR-4.
+    // This guard exists to make growing the verb set a conscious act, and it did its job: adding
+    // setSessionWindowVisibility failed this test rather than slipping in unannounced. It is
+    // declared HERE, as a verb, and NOT added to the helper allowlist below — an operator invokes it
+    // (POST /:id/hide and /:id/show), which is exactly what distinguishes a verb from a helper, so
+    // hiding it among the helpers would have dodged the guard instead of satisfying it.
+    const verbNames = ['spawn', 'attach', 'stop', 'restart', 'relaunchUnderProfile', 'drainAndRestart', 'setSessionWindowVisibility'];
     for (const name of verbNames) expect(typeof mod[name]).toBe('function');
     // Every OTHER export must be a helper, never an undocumented 7th verb.
     // The guard exists to catch an undocumented 7th VERB, not to freeze the helper surface. The two
@@ -377,6 +384,45 @@ describe('spawn (FR-1)', () => {
     expect(merged.role).toBe('worker');
     expect(merged.window_handle).toBe(131074);
     expect(merged.handle_capture_failed).toBe(false);
+  });
+
+  it('FR-2: capture PERSISTS the owner identity — without this the whole hide feature is inert', async () => {
+    // THE BUG THIS CATCHES SHIPPED GREEN. setWindowOwner had zero production callers and
+    // selectNewWindowHandle returned a bare handle, so readWindowOwner() was null for every real
+    // session and classifyHideRefusal refused EVERY hide — while 60/60 unit tests passed. Both the
+    // TESTING and SECURITY sub-agents found it independently at EXEC.
+    //
+    // The tests that missed it asserted the pure functions in isolation. Nothing asserted the WRITE.
+    // So this drives the real spawn bind-loop and inspects the merged row, which is the only place
+    // the producer and the consumer actually meet.
+    const nowMs = 1_800_000_000_000;
+    const spawnFn = vi.fn().mockReturnValue({ pid: 4242 });
+    // Answers the enumeration calls AND the separate start-ticks read, which enumExec cannot.
+    let call = 0;
+    const execFn = vi.fn(async (_program, args) => {
+      const script = String(args?.[3] || '');
+      if (script.includes('StartTime.Ticks')) return { stdout: 'TICKS|638600000000000000' };
+      call += 1;
+      return { stdout: call === 1 ? '' : '131074|5555|WindowsTerminal|Claude Code' };
+    });
+    const supabaseClient = makeFakeSupabase({
+      sessions: [{
+        session_id: MINTED_SESSION_ID, pid: 4242, status: 'active',
+        created_at: new Date(nowMs - 5_000).toISOString(),
+        metadata: { fleet_identity: { callsign: 'Alpha-5' }, role: 'worker' },
+      }],
+    });
+    await spawn({ role: 'worker', callsign: 'Beta-1' }, { live: true, currencyRunner: CURRENT_RUNNER, spawnFn, execFn, sleepFn: vi.fn(), supabaseClient, nowMs, skipDedup: true, uuidFn: () => MINTED_SESSION_ID });
+    const merged = supabaseClient._store.get(MINTED_SESSION_ID).metadata;
+    // All THREE conjuncts, namespaced. pid alone cannot discriminate: every fleet window on this
+    // host shares one owning pid, so start time is the conjunct that does the work.
+    expect(merged.window_owner_pid).toBe(5555);
+    expect(merged.window_owner_proc).toBe('WindowsTerminal');
+    expect(merged.window_owner_start_ticks).toBe('638600000000000000');
+    // NEVER a bare `pid` key in metadata — that is the shared terminal host, not the seat process.
+    expect(merged).not.toHaveProperty('pid');
+    // And the row this produces must be one the hide guard actually accepts, end to end.
+    expect(classifyHideRefusal(merged)).toBeNull();
   });
 
   it('ADVERSARIAL-REVIEW FIX: never writes metadata for a stale/recycled pid match (created_at outside the freshness window)', async () => {

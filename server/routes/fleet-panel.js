@@ -132,6 +132,20 @@ export function formatSessionRow(row) {
     account_org_name: meta.account_org_name || null,
     model_effort: `${model}/${effort}`,
     status: row.computed_status || 'unknown',
+    // SD-LEO-INFRA-SESSIONS-PAGE-TRUE-001-A FR-5 — THE OPERATOR-TRUTH DEFECT THIS SD EXISTS FOR.
+    // Until now this formatter emitted NO window field at all, while the UI seeded its hide/show
+    // toggle from row.window_visible — a field no backend produced — and then tracked it in React
+    // state alone. With a 15-second refetch the control reverted to "Open" on every remount
+    // regardless of the real OS window state, so the operator was shown a visibility claim the
+    // system had never checked. Measured across live seats: window_handle 9/9, window_visible 0/9.
+    //
+    // THREE-VALUED ON PURPOSE, same discipline as account_email above. null means NEVER RECORDED,
+    // which is NOT the same as recorded-visible. Rendering absent as "Open" would reproduce the
+    // exact defect in a new field: a confident claim with nothing behind it. The UI must show
+    // "not recorded" for null.
+    window_visible: meta.window_visible === undefined || meta.window_visible === null
+      ? null
+      : Boolean(meta.window_visible),
     sd_key: row.sd_key || null,
     heartbeat_age_human: row.heartbeat_age_human || null,
     // SD-LEO-FEAT-FLEET-COLD-START-UX-001 FR-3. The numeric age was already SELECTed and used for

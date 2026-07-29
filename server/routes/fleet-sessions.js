@@ -26,7 +26,7 @@
  */
 import { Router } from 'express';
 import { createClient } from '@supabase/supabase-js';
-import { attach } from '../../lib/fleet/spawn-control.js';
+import { attach, setSessionWindowVisibility } from '../../lib/fleet/spawn-control.js';
 import {
   requestBrowserSession,
   signalTakeover,
@@ -155,6 +155,43 @@ router.post('/:id/open', async (req, res) => {
     res.status(500).json({ ok: false, reason: 'internal_error', message: error.message });
   }
 });
+
+// POST /:id/hide and POST /:id/show -- SD-LEO-INFRA-SESSIONS-PAGE-TRUE-001-A FR-4.
+//
+// Session-scoped on purpose: these live here rather than in fleet-actions.js because hiding is a
+// per-seat verb, and mounting it in the fleet-wide router would give it fleet-wide framing.
+//
+// A REFUSAL IS NOT A 500. setSessionWindowVisibility refuses by NAME (window_handle_absent,
+// window_handle_null, handle_capture_failed, window_owner_identity_incomplete, or an unachieved
+// flip) and the caller must be able to tell "refused because this cannot be undone" from "the
+// server broke" -- so refusals return 409 with the reason, and only genuine faults return 500.
+//
+// AUTH BOUNDARY, DECIDED RATHER THAN INHERITED: this router is mounted requireAuth only, with no
+// role or ownership check (see the header note at the top of this file, which already records that
+// as an open boundary). Hiding another operator's window is a bigger blast radius than opening one,
+// so it is called out here instead of being picked up silently. Accepted for now on the same basis
+// as /open and /takeover -- every authenticated caller is a fleet operator -- and the FR-7 sweep
+// (scripts/fleet-restore-windows.mjs) is the backstop that makes the residual recoverable.
+async function handleVisibility(req, res, show) {
+  const supabase = getSupabase();
+  const verb = show ? 'show' : 'hide';
+  try {
+    // Fresh read, never a cached snapshot: the window can die between page render and click.
+    const session = await fetchFreshSession(supabase, req.params.id);
+    if (!session) return res.status(404).json({ ok: false, reason: 'session_not_found' });
+    const result = await setSessionWindowVisibility(req.params.id, { supabaseClient: supabase, by: 'session_id', show, actor: 'fleet-api' });
+    if (!result.ok) {
+      return res.status(409).json({ ok: false, reason: result.reason, refused: Boolean(result.refused), session_id: result.session_id ?? null });
+    }
+    return res.json({ ok: true, session_id: result.session_id, window_visible: result.visible, persisted: result.persisted });
+  } catch (error) {
+    console.error(`[fleet-sessions] ${verb} failed:`, error.message);
+    return res.status(500).json({ ok: false, reason: 'internal_error', message: error.message });
+  }
+}
+
+router.post('/:id/hide', (req, res) => handleVisibility(req, res, false));
+router.post('/:id/show', (req, res) => handleVisibility(req, res, true));
 
 // POST /:id/browser-session -- FR-2: resolves sandboxed launch options; never launches a browser itself.
 router.post('/:id/browser-session', async (req, res) => {

@@ -1,0 +1,5 @@
+{
+  "_doc": "SD-LEO-INFRA-SWALLOWED-POSTGREST-ERROR-001 (FR-4). Keys are '<repo-relative-file>:<line>' (or a bare '<file>' to exempt a whole file) for a PostgREST call that binds only `data`/`count` and is INTENTIONALLY exempt. Every entry MUST carry a non-empty reason — loadAllowlist() throws otherwise, because a silence you cannot explain is the reflexive kind this SD exists to prevent. Prefer FIXING (route through lib/db/safe-query.mjs safeQuery/safeCount, or bind `error`) over allowlisting. If this file grows, that growth is itself the signal: the count of tolerated silences is a gauge.",
+  "_scope_note": "The lint currently scans GATE/EXECUTOR paths only (SCAN_PREFIXES in the lint). lib/fleet/spawn-control.js is fenced to SD-LEO-FEAT-FLEET-SESSION-LIFECYCLE-001 and has 6 genuine hits, but it is ALREADY out of scan scope, so no allowlist entry is needed today and adding one would imply protection that is not doing any work. Recorded here instead so the fence is not forgotten when SCAN_PREFIXES widens.",
+  "allow": {}
+}
