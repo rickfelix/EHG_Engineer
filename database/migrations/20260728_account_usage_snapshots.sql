@@ -1,6 +1,24 @@
 -- Account quota snapshots — retain the last-known reading per account.
 -- SD-LEO-INFRA-ACCOUNT-QUOTA-STRIP-001 (FR-4/FR-6).
 --
+-- @approved-by: codestreetlabs@gmail.com
+--
+-- PROVENANCE OF THAT HEADER, so the artifact carries the truth rather than just the token:
+-- the approval is the chairman's, given verbally 2026-07-28 ~17:26 ET in TWO parts (the table,
+-- then the GRANT/REVOKE permission changes) and recorded at chairman_decisions
+-- 642965c4-6ca9-42e1-8713-dd431eb6a435 (decision_type=ddl_approval, status=approved), then
+-- reaffirmed live at the keyboard 2026-07-29 ("I approve the migration"). The LINE was typed by
+-- adam:39b3e4f6 at his explicit direction after the guard rejected on the approver factor; Adam
+-- declined to add it unprompted and did so only when asked directly. The email is
+-- codestreetlabs@gmail.com because the guard matches this header against the INVOKER's
+-- `git config --get user.email`, not against the approver's personal address.
+--
+-- NOTE FOR WHOEVER AUDITS THIS: the approval record pins sha256
+-- 5a2c897a2da3d537fabd8c40644d6baedf7e38d7825b754a04f3e50730aeabea, computed BEFORE this header
+-- existed. That artifact could never have passed its own approver guard, so the recorded hash is
+-- necessarily stale the moment the migration becomes appliable. The hash must be re-pinned after
+-- this edit; a chairman-gated approval that pins an unappliable hash is a real gap, not a typo.
+--
 -- WHY THIS TABLE EXISTS. The sessions-page quota strip discards a reading the moment an account
 -- stops being readable, so an EXHAUSTED account collapses to "Unavailable" and the final value —
 -- the one that matters most, 100% across the board just before reset — is erased. No usage-snapshot
