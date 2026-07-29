@@ -20,6 +20,7 @@ import { join } from 'node:path';
 import {
   warnIfCheckoutStale,
   measureBehind,
+  classifyGitFailure,
   SEND_PATHS,
   BASE_REF,
 } from '../../../lib/coordinator/checkout-staleness.cjs';
@@ -158,6 +159,74 @@ describe('measureBehind', () => {
 
   it('returns the parsed count on success', () => {
     expect(measureBehind(() => '12\n', SEND_PATHS)).toEqual({ ok: true, behind: 12 });
+  });
+});
+
+describe('classifyGitFailure', () => {
+  /**
+   * *** THIS WHOLE BLOCK EXISTS BECAUSE THE FIRST IMPLEMENTATION HAD A BRANCH THAT COULD
+   * NEVER RUN. *** The runner originally used stdio ['ignore','pipe','ignore'], so a failed
+   * execFileSync threw an Error whose message was ONLY the echoed argv — git's diagnostic
+   * never reached Node. The "origin/main not available locally" branch tested for git's
+   * vocabulary in text that could not contain it, so the most actionable message the guard
+   * had was unreachable. Found in SECURITY review and reproduced directly against real git.
+   * stderr is now piped and the classification reads it.
+   */
+  it('reads git stderr — the channel that was previously discarded — to name the failure', () => {
+    const err = Object.assign(new Error('Command failed: git rev-list --count HEAD..origin/main'), {
+      stderr: "fatal: ambiguous argument 'HEAD..origin/main': unknown revision or path not in the working tree.",
+    });
+    expect(classifyGitFailure(err)).toBe(`${BASE_REF} not available locally — fetch it`);
+
+    // MUTATION THAT MUST BREAK THIS: read only err.message (the pre-fix behaviour). The
+    // message alone carries no git vocabulary, so this falls through to 'git failed'.
+  });
+
+  it('NEVER interpolates git-supplied text into the reason', () => {
+    // The earlier version returned `git error (${msg.split('\n')[0]})`, which would echo
+    // whatever git said. If this runner is ever repointed at a command that touches the
+    // network, git's stderr can carry a remote URL — and those can embed credentials.
+    const err = Object.assign(new Error('Command failed'), {
+      stderr: 'fatal: unable to access https://user:s3cr3t-token@github.com/org/repo.git/',
+    });
+    const reason = classifyGitFailure(err);
+    expect(reason).not.toContain('s3cr3t-token');
+    expect(reason).not.toContain('https://');
+    expect(reason).toBe('git failed');
+
+    // MUTATION: interpolate the git text back into the reason -> the token appears, fails.
+  });
+
+  it('classifies a timeout via signal, not only via killed', () => {
+    // err.killed is undefined on some Windows/Node builds — verified on this host — so the
+    // SIGTERM check is load-bearing rather than belt-and-braces.
+    expect(classifyGitFailure({ signal: 'SIGTERM' })).toBe('git timed out');
+    expect(classifyGitFailure({ killed: true })).toBe('git timed out');
+  });
+
+  it('classifies a missing git binary and a non-repo distinctly', () => {
+    expect(classifyGitFailure(new Error('spawn git ENOENT'))).toBe('git unavailable');
+    expect(classifyGitFailure(Object.assign(new Error('x'), { stderr: 'fatal: not a git repository' })))
+      .toBe('not a git repository');
+  });
+});
+
+describe('detached HEAD', () => {
+  /**
+   * FR-2 AC3 anticipated detached HEAD as a cannot-determine case. It no longer is, and that
+   * is the fix working rather than a gap: the referent is now the literal `origin/main`, so
+   * the measurement does not depend on HEAD having an upstream at all. Detached HEAD now
+   * MEASURES CORRECTLY and stays silent when current. Recording the real behaviour here so
+   * the AC's superseded expectation cannot be mistaken for missing coverage later.
+   * (Surfaced by TESTING, which verified it in a scratch clone.)
+   */
+  it('measures normally when HEAD is detached, because the referent no longer depends on @{u}', () => {
+    const fakeExec = vi.fn().mockReturnValue('0\n');
+    const stderrSpy = vi.spyOn(process.stderr, 'write').mockImplementation(() => true);
+    warnIfCheckoutStale('worker-signal.cjs', fakeExec);
+    expect(fakeExec.mock.calls[0][0]).toContain(`HEAD..${BASE_REF}`);
+    expect(stderrSpy).not.toHaveBeenCalled();
+    stderrSpy.mockRestore();
   });
 });
 
