@@ -35,6 +35,8 @@ import path from 'path';
 import { randomUUID } from 'crypto';
 import { createClient } from '@supabase/supabase-js';
 import { generateRemediationSdsBatch, writeAuditLog } from '../../lib/eva/quality-findings/sd-generator.js';
+import { measureDemand, recordDemandDecision, resolveDemandFloor } from '../../lib/governance/demand-gate-emit.js';
+import { formatDemandDecision, mayProduce } from '../../lib/governance/demand-gate.js';
 import { stampLastFired } from '../../lib/periodic-liveness/stamp-last-fired.js';
 
 const LOCK_NAME = 'fr_c_generator';
@@ -112,12 +114,34 @@ async function releaseLock(supabase, owner) {
   }
 }
 
+const EMPTY_BATCH = { ventures: [], totalCreated: 0, totalAppended: 0, totalSkippedRateLimited: 0, totalErrors: 0, perVenture: {} };
+
 async function runOneBatch({ supabase, dryRun }) {
   if (dryRun) {
     process.stdout.write('[fr-c-generator] --dry-run: skipping generator invocation\n');
-    return { ventures: [], totalCreated: 0, totalAppended: 0, totalSkippedRateLimited: 0, totalErrors: 0, perVenture: {} };
+    return EMPTY_BATCH;
   }
-  return await generateRemediationSdsBatch({ supabase });
+
+  // SD-LEO-INFRA-SOURCING-ENGINE-BELT-GATED-001 (FR-2/FR-3). This generator inserts
+  // status='draft' SDs with no claiming_session_id (sd-generator.js:632-654) — i.e. rows the
+  // dispatchable-backlog gauge counts one-for-one. It is a genuine belt minter, verified rather
+  // than assumed, which is why it is on BELT_DEPTH_GATED_PRODUCERS alongside refill-auto-promote.
+  //
+  // WITHHOLDING LOSES NOTHING HERE, which is what makes the gate safe on this producer: findings
+  // are selected by selectPendingFindings and stay PENDING until an SD is actually generated, so a
+  // withheld tick defers minting rather than dropping work — the next tick after the belt drains
+  // picks up the same findings. Note the existing skippedRateLimited counter is a per-venture
+  // VOLUME cap: like every cap in this SD's story it bounds how MUCH a run creates, never WHETHER
+  // it should. This is the whether.
+  const demand = await measureDemand(supabase, {
+    engine: 'fr-c-generator',
+    floor: resolveDemandFloor(process.env),
+  });
+  await recordDemandDecision(supabase, demand);
+  process.stdout.write(formatDemandDecision(demand) + '\n');
+  if (!mayProduce(demand)) return { ...EMPTY_BATCH, withheldByDemand: true, demand };
+
+  return { ...(await generateRemediationSdsBatch({ supabase })), demand };
 }
 
 async function runOnce({ args, supabase, owner, ttlSec }) {
