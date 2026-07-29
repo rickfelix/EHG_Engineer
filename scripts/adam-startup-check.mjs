@@ -504,10 +504,14 @@ export function renderSourcingStateLines({ flags = [], wave = null, backlog = nu
   // highest-blast-radius producer on or off, and this row can.
   if (arms && arms.length) {
     for (const a of arms) {
-      lines.push(`    ${a.enabled ? '🟢 on ' : '⚪ off'}  ${a.label} (DB arm — OPERATIVE${a.label === 'auto-refill' ? ', gates the hourly refill cron' : ''})`);
+      // Three states, not two: on / off / UNKNOWN (no row). Collapsing unknown into off is the
+      // same merge this SD exists to undo.
+      const mark = a.enabled === true ? '🟢 on ' : a.enabled === false ? '⚪ off' : '❔ ???';
+      const unknown = a.enabled === null ? ' — NO ROW: state unknown, not "off"' : '';
+      lines.push(`    ${mark}  ${a.label} (DB arm — OPERATIVE${a.label === 'auto-refill' ? ', gates the hourly refill cron' : ''})${unknown}`);
     }
   } else {
-    lines.push('    (DB arm states unavailable — the OPERATIVE gate could not be read)');
+    lines.push('    ⚠️  DB arm states UNREADABLE — the OPERATIVE gate could not be read; do NOT read this as "off"');
   }
   // SD-LEO-INFRA-SOURCING-ENGINE-BELT-GATED-001 (FR-3): the DEMAND VERDICT, printed immediately
   // under the flag list so the two are read together. A flag line alone cannot distinguish "on and
@@ -614,10 +618,28 @@ export async function fetchSourcingState({ supabase = null, env = process.env } 
   // FR-5: the DB arm states — the gate that actually governs the producers, as opposed to the env
   // flags above. Fail-open (null) so an unreadable row degrades to an explicit "could not read"
   // line rather than an absent section.
+  //
+  // TESTING review 57879900 (C2): this originally called readSourcingEngineFlagsFromDb, which
+  // NEVER THROWS — sourcing-engine-awareness.mjs:61-67 swallows the query error and falls back to
+  // the ENV reader, and this call site passed {}, so every arm came back enabled=false. The catch
+  // below was therefore UNREACHABLE for a DB fault, and a failed read rendered as a confident
+  // "⚪ off auto-refill (OPERATIVE)". A lie on the line labelled OPERATIVE is worse than a blank
+  // one, and it is this SD's own thesis — unreadable state must never render as a definite state.
+  // So we query the arm table DIRECTLY here and keep the error: fail-soft in the FALLBACK sense
+  // (env-derived) is right for a forecaster deciding what to do, and wrong for a badge reporting
+  // what IS.
   let arms = null;
   try {
-    const { readSourcingEngineFlagsFromDb } = await import('./lib/sourcing-engine-awareness.mjs');
-    arms = await readSourcingEngineFlagsFromDb(client, {});
+    const { SOURCING_ACTIVATION_TABLE, SOURCING_ENGINE_FLAGS } = await import('./lib/sourcing-engine-awareness.mjs');
+    const { data, error } = await client.from(SOURCING_ACTIVATION_TABLE).select('arm, enabled');
+    if (error) throw new Error(error.message);
+    const byArm = new Map((data || []).map((r) => [r.arm, r.enabled === true]));
+    // An arm with no row is genuinely unknown, not off — a missing row and a row saying false are
+    // different facts and the badge must not merge them.
+    arms = SOURCING_ENGINE_FLAGS.map((f) => ({
+      label: f.label,
+      enabled: byArm.has(f.label) ? byArm.get(f.label) : null,
+    }));
   } catch { arms = null; }
   return { wave, backlog, demand, arms };
 }

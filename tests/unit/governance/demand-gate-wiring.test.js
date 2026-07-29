@@ -18,7 +18,9 @@ import { decideDemand, normalizeGaugeReading } from '../../../lib/governance/dem
 // selectable in either arm. The TS-3b positive control is what exposed it, which is precisely the
 // job it was added to do. The real gate is item_disposition ∈ {pending, selected}
 // (refill-candidate-validity.js:98,:250) plus non-empty source_type + source_id (:274).
-// Verified: 3 of 3 valid, byReason {}.
+// Verified empirically at the default n=5: validCount=5, total=5, byReason={} (the "3 of 3" in an
+// earlier draft of this note came from a 3-row spot check and did not match the default — TESTING
+// review 57879900, W5).
 function stagedRows(n = 5) {
   return Array.from({ length: n }, (_, i) => ({
     id: `rwi-${i}`,

@@ -162,3 +162,44 @@ test('renderSourcingState is fail-open and always returns a string section', asy
   assert.equal(typeof out, 'string');
   assert.match(out, /SOURCING SSOT STATE/);
 });
+
+// ── SD-LEO-INFRA-SOURCING-ENGINE-BELT-GATED-001, TESTING review 57879900 (C2/C4) ──────────────
+// Nothing exercised fetchSourcingState -> renderSourcingState, so wiring mutants survived: nulling
+// the demand read, nulling the arms read, and deleting the no-creds synthetic payload. These cover
+// the composition, and C2 — an unreadable arm table rendering as a confident "off".
+
+/** A client whose every query REJECTS — the DB-fault case. */
+const throwingClient = () => ({ from() { throw new Error('relation unavailable'); } });
+
+test('C2: an UNREADABLE arm table must not render as "off" on the line labelled OPERATIVE', async () => {
+  const out = await renderSourcingState({ supabase: throwingClient(), env: {} });
+  // The bug this replaces: readSourcingEngineFlagsFromDb never throws — it swallows the error and
+  // falls back to the ENV reader, which with {} reports every arm disabled. Same fault, two
+  // verdicts, and the confident one was the lie.
+  assert.match(out, /UNREADABLE/);
+  assert.doesNotMatch(out, /⚪ off {2}auto-refill/);
+});
+
+test('C4: a DB fault yields UNMEASURABLE per engine — never a silent NEVER RAN', async () => {
+  const out = await renderSourcingState({ supabase: throwingClient(), env: {} });
+  // "I could not read the log" and "the engine has never run" are different facts. Collapsing them
+  // re-creates the ambiguity the whole SD removes.
+  assert.match(out, /UNMEASURABLE/);
+  assert.doesNotMatch(out, /NEVER RAN/);
+});
+
+test('C4: no credentials renders UNMEASURABLE, not NEVER RAN (the synthetic payload is load-bearing)', async () => {
+  const { demand } = await fetchSourcingState({ supabase: null, env: {} });
+  assert.equal(Array.isArray(demand), true);
+  assert.equal(demand.length > 0, true);
+  for (const d of demand) assert.equal(d.decision.decision, 'unmeasurable');
+  const out = await renderSourcingState({ supabase: null, env: {} });
+  assert.doesNotMatch(out, /NEVER RAN/);
+});
+
+test('C4: the demand section is rendered by the composed path, not only by the pure renderer', async () => {
+  // Kills "drop demand from the renderSourcingStateLines call" and "replace the read with null".
+  const out = await renderSourcingState({ supabase: null, env: {} });
+  assert.match(out, /\[demand-gate\]/);
+  for (const engine of ['refill-auto-promote', 'fr-c-generator']) assert.match(out, new RegExp(engine));
+});
