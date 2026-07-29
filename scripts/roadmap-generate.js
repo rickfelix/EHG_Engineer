@@ -395,6 +395,11 @@ async function main() {
   const forceReassign = args.includes('--force-reassign');
   // --respect-locks is ON by default; --force-reassign disables it
   const respectLocks = !forceReassign;
+  // SD-LEO-INFRA-ROADMAP-REGENERATION-DUPLICATES-001 FR-5: explicit override for --full when an
+  // active roadmap already exists. Requires --reason, and the override is audit-logged.
+  const replaceActive = args.includes('--replace-active');
+  const reasonFlag = args.indexOf('--reason');
+  const replaceReason = reasonFlag >= 0 ? args[reasonFlag + 1] : undefined;
 
   const title = titleFlag >= 0 ? args[titleFlag + 1] : 'EVA Intake Roadmap';
   const application = appFlag >= 0 ? args[appFlag + 1] : undefined;
@@ -417,6 +422,50 @@ async function main() {
     console.log('  No active (canonical) roadmap found. Refusing to auto-create one (single-writer invariant).');
     console.log('  To bootstrap the FIRST roadmap, run explicitly: node scripts/roadmap-generate.js --full');
     process.exit(1);
+  }
+
+  // SD-LEO-INFRA-ROADMAP-REGENERATION-DUPLICATES-001 FR-5: --full was an UNGUARDED escape hatch.
+  // The guard above covers only the !forceFull branch, so --full could still fork a second
+  // ACTIVE roadmap — and the moment two exist, resolveCanonicalRoadmap throws 'ambiguous' for
+  // every reader in the codebase, which is a strictly worse failure than refusing here. A guard
+  // inside one code path is not a guard on the invariant.
+  //
+  // --full keeps its stated purpose (bootstrap the FIRST roadmap, or recluster after the active
+  // one has been archived). What it no longer does is create a second one silently.
+  const existingActive = await resolveCanonicalRoadmap(supabase);
+  if (existingActive) {
+    if (!replaceActive) {
+      console.error(`  REFUSING: an active roadmap already exists — ${existingActive.id} ("${existingActive.title}").`);
+      console.error('  --full bootstraps the FIRST roadmap. Creating a second would leave the canonical');
+      console.error('  roadmap ambiguous, and every reader resolving through resolveCanonicalRoadmap()');
+      console.error('  would throw rather than pick one.');
+      console.error('');
+      console.error('  To recluster: archive the current roadmap first, then re-run --full.');
+      console.error('  To replace deliberately: --full --replace-active --reason "<why>"');
+      process.exit(1);
+    }
+    if (!replaceReason) {
+      console.error('  --replace-active requires --reason "<why>" — the override is audit-logged.');
+      process.exit(1);
+    }
+    // Audit BEFORE the write, so an override that then fails is still on the record.
+    // Best-effort: a missing audit_log table must not block a legitimate, explicitly-authorised
+    // bootstrap, but the console line always emits.
+    console.log(`  OVERRIDE: --replace-active on ${existingActive.id} — reason: ${replaceReason}`);
+    try {
+      await supabase.from('audit_log').insert({
+        event: 'ROADMAP_FULL_REPLACE_ACTIVE',
+        details: {
+          sd: 'SD-LEO-INFRA-ROADMAP-REGENERATION-DUPLICATES-001',
+          replaced_roadmap_id: existingActive.id,
+          replaced_roadmap_title: existingActive.title,
+          reason: replaceReason,
+          dry_run: dryRun,
+        },
+      });
+    } catch (e) {
+      console.log(`  (audit_log write failed, continuing: ${e && e.message ? e.message : e})`);
+    }
   }
 
   await runFull({ title, application, dryRun });
