@@ -4,7 +4,8 @@
   "original": 533,
   "proposed": 298,
   "landed": 185,
-  "needs_decision": 340
+  "needs_decision": 321,
+  "not_an_obligation": 19
  },
  "entries": [
   {
@@ -152,14 +153,16 @@
    "imperative": "Productionized: SD-LEO-INFRA-ADAM-COORDINATOR-HEALTH-AUDIT-001 + SD-LEO-INFRA-COORDINATOR-HEALTH-KPI-001 (the 5 Solomon sharpenings, shipped 2026-07-17 via PRs #6134/#6135; the oversight loop self-registers in loop_registry).",
    "match_score": 0.08,
    "carries_modal": false,
-   "disposition": "NEEDS_DECISION"
+   "disposition": "not_an_obligation",
+   "triage_reason": "citation / cross-reference"
   },
   {
    "key": "bd8416bf21ec",
    "imperative": "Full research record: memory feedback_adam_governance_oversight_of_coordinator + lane rows d4b8a579 (commission) / 1b087632 (Solomon verdict), 2026-07-16.",
    "match_score": 0.15,
    "carries_modal": false,
-   "disposition": "NEEDS_DECISION"
+   "disposition": "not_an_obligation",
+   "triage_reason": "citation / cross-reference"
   },
   {
    "key": "d32252cd9be0",
@@ -834,7 +837,8 @@
    "imperative": "## Plan-driven PROJECT MANAGEMENT — the PRIMARY lens for every \"what next\" (chairman-directed 2026-07-16, ELEVATED to contract 2026-07-17)",
    "match_score": 0.58,
    "carries_modal": false,
-   "disposition": "NEEDS_DECISION"
+   "disposition": "not_an_obligation",
+   "triage_reason": "markdown heading"
   },
   {
    "key": "5d60a13e9689",
@@ -1497,7 +1501,8 @@
    "imperative": "## Sourcing -> pre-build review routing rubric (chairman-directed 2026-06-30; coordinator-co-reviewed)",
    "match_score": 0.38,
    "carries_modal": false,
-   "disposition": "NEEDS_DECISION"
+   "disposition": "not_an_obligation",
+   "triage_reason": "markdown heading"
   },
   {
    "key": "b832b1f4b1c5",
@@ -1672,7 +1677,8 @@
    "imperative": "Rejected alternatives: a holding-tier (abuses tiering) and advisory-only (drifts).",
    "match_score": 0.14,
    "carries_modal": false,
-   "disposition": "NEEDS_DECISION"
+   "disposition": "not_an_obligation",
+   "triage_reason": "citation / cross-reference"
   },
   {
    "key": "6ae4da80d03f",
@@ -1707,7 +1713,8 @@
    "imperative": "## Blocked-claim escalation relay — Adam is the SECOND tier (chairman directive 2026-06-24)",
    "match_score": 0.5,
    "carries_modal": false,
-   "disposition": "NEEDS_DECISION"
+   "disposition": "not_an_obligation",
+   "triage_reason": "markdown heading"
   },
   {
    "key": "e713b6efa24d",
@@ -1749,14 +1756,16 @@
    "imperative": "Canonical SSOT: docs/protocol/fleet-coordinator-and-worker-behavior.md (\"Blocked-claim resolution protocol\").",
    "match_score": 0.43,
    "carries_modal": false,
-   "disposition": "NEEDS_DECISION"
+   "disposition": "not_an_obligation",
+   "triage_reason": "citation / cross-reference"
   },
   {
    "key": "bacc63457685",
    "imperative": "## Chairman escalation rubric — DECIDE-and-INFORM vs ESCALATE (chairman directive 2026-06-25)",
    "match_score": 0.29,
    "carries_modal": false,
-   "disposition": "NEEDS_DECISION"
+   "disposition": "not_an_obligation",
+   "triage_reason": "markdown heading"
   },
   {
    "key": "b36cdee3cf6d",
@@ -1924,7 +1933,8 @@
    "imperative": "## Chairman-commission relay duty (chairman-directed 2026-07-12)",
    "match_score": 0.2,
    "carries_modal": false,
-   "disposition": "NEEDS_DECISION"
+   "disposition": "not_an_obligation",
+   "triage_reason": "markdown heading"
   },
   {
    "key": "5640293ed810",
@@ -1959,7 +1969,8 @@
    "imperative": "## Evidence-durability clause (chairman-directed 2026-07-12)",
    "match_score": 0.25,
    "carries_modal": false,
-   "disposition": "NEEDS_DECISION"
+   "disposition": "not_an_obligation",
+   "triage_reason": "markdown heading"
   },
   {
    "key": "1da0720f9bd6",
@@ -1994,7 +2005,8 @@
    "imperative": "## Web Research & Source-Escalation Rubric (shared: Adam + Solomon; chairman-approved 2026-07-18)",
    "match_score": 0.57,
    "carries_modal": false,
-   "disposition": "NEEDS_DECISION"
+   "disposition": "not_an_obligation",
+   "triage_reason": "markdown heading"
   },
   {
    "key": "ece00a8a2a24",
@@ -2309,7 +2321,8 @@
    "imperative": "## Crew-comms routing protocol (organizing layer)",
    "match_score": 0.4,
    "carries_modal": false,
-   "disposition": "NEEDS_DECISION"
+   "disposition": "not_an_obligation",
+   "triage_reason": "markdown heading"
   },
   {
    "key": "c85682507e6e",
@@ -2464,7 +2477,8 @@
    "imperative": "### Prioritize what moves the rung/KR needle (SD-LEO-INFRA-PROGRESS-ROLLUP-NEEDLE-PRIORITIZATION-001)",
    "match_score": 0.4,
    "carries_modal": false,
-   "disposition": "NEEDS_DECISION"
+   "disposition": "not_an_obligation",
+   "triage_reason": "markdown heading"
   },
   {
    "key": "c043cb5ecf08",
@@ -2584,7 +2598,8 @@
    "imperative": "## SD Creation How-To + Duty Procedures (Conversion · Build-% Gauge · Escalation)",
    "match_score": 0.5,
    "carries_modal": false,
-   "disposition": "NEEDS_DECISION"
+   "disposition": "not_an_obligation",
+   "triage_reason": "markdown heading"
   },
   {
    "key": "55b8272a184c",
@@ -2842,7 +2857,8 @@
    "imperative": "(SD-LEO-INFRA-ADAM-SOURCE-FROM-SSOT-CONTRACT-001 FR-3) 1.",
    "match_score": 0,
    "carries_modal": false,
-   "disposition": "NEEDS_DECISION"
+   "disposition": "not_an_obligation",
+   "triage_reason": "SD/QF key citation"
   },
   {
    "key": "84ff7f3efbe1",
@@ -3141,7 +3157,8 @@
    "imperative": "### Decision Rubric — Execute vs Escalate (canonical 3-gate)",
    "match_score": 0.33,
    "carries_modal": false,
-   "disposition": "NEEDS_DECISION"
+   "disposition": "not_an_obligation",
+   "triage_reason": "markdown heading"
   },
   {
    "key": "4c2ed91cfdec",
@@ -3211,7 +3228,8 @@
    "imperative": "## PLAN CHECK — the chairman's status-report format (chairman-directed 2026-07-11, hardcoded at his request)",
    "match_score": 0.56,
    "carries_modal": false,
-   "disposition": "NEEDS_DECISION"
+   "disposition": "not_an_obligation",
+   "triage_reason": "markdown heading"
   },
   {
    "key": "8a34134cbb91",
@@ -3346,7 +3364,8 @@
    "imperative": "## Adam Self-Adherence Loop (recurring audit + propose-only remediation)",
    "match_score": 0.5,
    "carries_modal": false,
-   "disposition": "NEEDS_DECISION"
+   "disposition": "not_an_obligation",
+   "triage_reason": "markdown heading"
   },
   {
    "key": "dfe5b0e2c75e",
@@ -3724,7 +3743,8 @@
    "imperative": "## Coordinator ↔ Adam Autonomous Partnership (shared role contract)",
    "match_score": 0.5,
    "carries_modal": false,
-   "disposition": "NEEDS_DECISION"
+   "disposition": "not_an_obligation",
+   "triage_reason": "markdown heading"
   },
   {
    "key": "580736c77cb2",

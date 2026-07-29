@@ -21,7 +21,7 @@ const ORIGINAL = path.join(DIR, 'CLAUDE_ADAM.ORIGINAL-2026-07-29.md');
 const INVENTORY = path.join(DIR, 'imperative-inventory.json');
 
 const inv = JSON.parse(fs.readFileSync(INVENTORY, 'utf8'));
-const VALID = new Set(['landed', 'merged_into', 'deliberately_dropped', 'NEEDS_DECISION']);
+const VALID = new Set(['landed', 'merged_into', 'deliberately_dropped', 'NEEDS_DECISION', 'not_an_obligation']);
 
 describe('imperative inventory artifact (TS-2)', () => {
   it('pins the source it was derived from', () => {
@@ -68,6 +68,22 @@ describe('imperative inventory artifact (TS-2)', () => {
     const flagged = inv.entries.filter((e) => /CONFIRMED DELETION/.test(e.probe_evidence || ''));
     expect(flagged.length).toBe(1);
     expect(flagged[0].imperative).toMatch(/^\*{0,2}ACCEPTANCE-SITTING OWNERSHIP/i);
+  });
+
+  it('never retires a real rule as a non-obligation', () => {
+    // Triage shrinks the review queue by marking headings and citations. Over-marking silently
+    // retires a live rule, which is the precise harm the inventory exists to prevent — so the
+    // classifier must stay pointed at keeping things OPEN.
+    //
+    // Regression: "SOURCE-AND-GO (default — no pre-review)" is a routing RULE and was retired as
+    // a citation because its name starts with "Source". Citations carry a colon; rule names do
+    // not. A pattern matching a PREFIX is not a pattern matching a MEANING.
+    const retired = inv.entries.filter((e) => e.disposition === 'not_an_obligation');
+    for (const probe of [/SOURCE-AND-GO/i, /DECOMPOSE-WEAKEST-LAYER/i, /ACCEPTANCE-SITTING OWNERSHIP/i, /NEVER hand-insert/i]) {
+      expect(retired.filter((e) => probe.test(e.imperative))).toEqual([]);
+    }
+    // Every retirement carries its reason, so the judgement is reviewable rather than implicit.
+    expect(retired.every((e) => typeof e.triage_reason === 'string' && e.triage_reason.length > 0)).toBe(true);
   });
 
   it('CONTROL: the inventory is not vacuously satisfied', () => {
