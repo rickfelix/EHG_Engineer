@@ -138,7 +138,16 @@ async function collectNegativeRefs(supabase, { sinceMs = null } = {}) {
     // SD-LEO-INFRA-COUNT-TRUNCATION-DISCIPLINE-001 FR-6 batch 9: was .limit(2000), above the
     // PostgREST 1000-row cap (silently clamped anyway) — paginate to actually see every row.
     const data = await fapPaginate(() => {
-      let q = supabase.from('audit_log').select('event, metadata, created_at').in('event', NEGATIVE_AUDIT_EVENTS);
+      // SD-LEO-INFRA-ADVICE-OUTCOME-LEDGER-001 FR-0 — THE COLUMN IS `event_type`, NOT `event`.
+      // This read had never returned a row. `select('event')` errors with PostgREST 42703
+      // ("column audit_log.event does not exist"), and the surrounding catch is fail-open, so the
+      // failure presented as an empty result — indistinguishable from "no red merges happened".
+      // The PRODUCER had the identical bug (red-merge-detector.mjs, inserting `event:`), so the two
+      // sides agreed with each other about a column the database does not have and no test
+      // comparing them could have caught it. Measured before the fix: zero RED_MERGE_DETECTED rows
+      // have ever existed. This is the reason the ledger has never recorded a negative outcome —
+      // sparse join keys were only the second reason.
+      let q = supabase.from('audit_log').select('event_type, metadata, created_at').in('event_type', NEGATIVE_AUDIT_EVENTS);
       if (sinceMs) q = q.gte('created_at', new Date(sinceMs).toISOString());
       return q.order('created_at', { ascending: true }).order('id', { ascending: true });
     });
