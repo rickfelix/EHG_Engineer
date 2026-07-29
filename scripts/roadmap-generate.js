@@ -33,7 +33,7 @@ import {
 // roadmap never satisfied -- the confirmed root cause of every distill run forking a
 // brand-new parallel 'EVA Intake Roadmap' instead of writing into the existing one).
 import { resolveCanonicalRoadmap } from '../lib/roadmap/canonical-roadmap.js';
-import { evaluateFullCreate, roadmapsToArchive, REFUSE_REASON_REQUIRED } from '../lib/roadmap/full-create-guard.js';
+import { evaluateFullCreate, roadmapsToArchive, REFUSE_REASON_REQUIRED, AUDIT_SEVERITY } from '../lib/roadmap/full-create-guard.js';
 
 dotenv.config();
 
@@ -473,48 +473,62 @@ async function main() {
     process.exit(1);
   }
 
+  const overrideTargets = verdict.override ? roadmapsToArchive(existing) : [];
   if (verdict.override) {
-    const targets = roadmapsToArchive(existing);
-    // Audit BEFORE the write, so an override that then fails is still on the record.
-    console.log(`  OVERRIDE: --replace-active archiving ${targets.length} roadmap(s) — reason: ${replaceReason}`);
-    try {
-      await supabase.from('audit_log').insert({
+    console.log(`  OVERRIDE: --replace-active will archive ${overrideTargets.length} roadmap(s) AFTER the new one is created — reason: ${replaceReason}`);
+  }
+
+  // *** CREATE FIRST, ARCHIVE AFTER. *** The EXEC security review found that archiving first was
+  // a data-loss path, not merely an ordering preference: runFull() calls process.exit(0) at :339
+  // when there are no classified intake items — a NORMAL state, since classification is a
+  // separate prior step. So `--full --replace-active` against an empty queue archived EVERY
+  // roadmap including the plan of record, created nothing, and exited 0. There is no transaction
+  // here, so ordering is the only atomicity available: if creation does not happen, the archive
+  // must not either.
+  await runFull({ title, application, dryRun });
+
+  if (verdict.override) {
+    if (dryRun) {
+      console.log(`  [DRY-RUN] would archive after creation: ${overrideTargets.join(', ')}`);
+    } else {
+      // *** THE AUDIT ROW GATES THE ARCHIVE. *** Previously this was best-effort in a try/catch,
+      // which was dead code twice over: supabase-js RETURNS {error} rather than throwing, and the
+      // severity value I used ('high') violates audit_log_severity_check. Net effect: the
+      // override wrote NO audit row, silently, while printing "Archived N roadmap(s)". Live probe
+      // confirms 0 rows in audit_log with entity_type='strategic_roadmaps' out of 241,139.
+      // An unauditable destructive action is worse than a failed one, so a failed audit now
+      // REFUSES rather than continuing.
+      const { error: auditErr } = await supabase.from('audit_log').insert({
         event_type: 'ROADMAP_FULL_REPLACE_ACTIVE',
         entity_type: 'strategic_roadmaps',
-        entity_id: targets[0],
-        severity: 'high',
+        entity_id: overrideTargets[0],
+        severity: AUDIT_SEVERITY,
+        created_by: `roadmap-generate:${process.env.CLAUDE_SESSION_ID || process.env.USERNAME || 'unknown'}`,
         metadata: {
           sd: 'SD-LEO-INFRA-ROADMAP-REGENERATION-DUPLICATES-001',
-          replaced_roadmap_ids: targets,
+          replaced_roadmap_ids: overrideTargets,
           reason: replaceReason,
-          dry_run: dryRun,
         },
       });
-    } catch (e) {
-      console.log(`  (audit_log write failed, continuing: ${e && e.message ? e.message : e})`);
-    }
+      if (auditErr) {
+        console.error(`  REFUSING to archive: the audit row could not be written (${auditErr.message}).`);
+        console.error('  The new roadmap HAS been created; the previous one(s) are untouched.');
+        console.error(`  Resolve the audit failure, then archive manually: ${overrideTargets.join(', ')}`);
+        process.exit(1);
+      }
 
-    // *** ACTUALLY ARCHIVE THEM. *** The EXEC adversarial review caught that --replace-active
-    // wrote nothing: it created a second roadmap and left the first one live, producing exactly
-    // the duplicate state this guard exists to prevent. An override named "replace" that does not
-    // replace is worse than no override, because the operator believes the old one is gone.
-    if (dryRun) {
-      console.log(`  [DRY-RUN] would archive: ${targets.join(', ')}`);
-    } else {
       const { error: archErr } = await supabase
         .from('strategic_roadmaps')
         .update({ status: 'archived' })
-        .in('id', targets);
+        .in('id', overrideTargets);
       if (archErr) {
-        console.error(`  REFUSING to proceed: could not archive the existing roadmap(s): ${archErr.message}`);
-        console.error('  Creating a new roadmap now would leave duplicates behind.');
+        console.error(`  Could not archive the previous roadmap(s): ${archErr.message}`);
+        console.error(`  The new roadmap exists; archive these manually: ${overrideTargets.join(', ')}`);
         process.exit(1);
       }
-      console.log(`  Archived ${targets.length} roadmap(s): ${targets.join(', ')}`);
+      console.log(`  Archived ${overrideTargets.length} roadmap(s): ${overrideTargets.join(', ')}`);
     }
   }
-
-  await runFull({ title, application, dryRun });
 }
 
 main().catch(err => {
