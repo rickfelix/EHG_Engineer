@@ -136,3 +136,75 @@ describe('FR-6 — outcome_sd_key is derived when the artifact is an SD/QF key',
     expect(c.rows[0].outcome_sd_key).toBeUndefined();
   });
 });
+
+/**
+ * Findings from adversarial EXEC review — every one of these was ACCEPTED or WRONGLY REJECTED by my
+ * first two versions of the rule. Kept as a named block because each is a live hole, not a theory.
+ */
+describe('FR-5 — placeholders, sentinel near-misses, and the bounds review broke', () => {
+  it('rejects single-token PLACEHOLDERS, which are worse than the sentinel', () => {
+    // n/a is STRICTLY worse than NO_ARTIFACT: selectNegativeBackprop SKIPS a NO_ARTIFACT ref because
+    // it knows there is nothing to track, but carries 'n/a' as a genuine link that can never match.
+    // My error message steers operators straight here ("supply the identifier, or --no-artifact"),
+    // so someone with neither types this.
+    for (const ref of ['n/a', 'N/A', 'na', 'none', 'None', 'nil', 'TBD', 'todo', 'unknown', 'moot',
+      'done', 'merged', 'various', 'multiple', 'verbal', '-', '--', '...']) {
+      expect(isMatchableRef(ref), ref).toBe(false);
+    }
+  });
+
+  it('rejects NEAR-MISS spellings of the sentinel — the worst case of all', () => {
+    // The operator believes they recorded "nothing to track"; isNoArtifactRef says otherwise, so the
+    // row is billed as a real link, is permanently unmatchable, and is NOT skipped by the back-prop.
+    for (const ref of ['no_artifact', 'NO-ARTIFACT', 'no-artifact', 'No_Artifact', 'noartifact']) {
+      expect(isNoArtifactRef(ref), ref).toBe(false);       // the premise: these are NOT the sentinel
+      expect(isMatchableRef(ref), ref).toBe(false);        // ...so they must be rejected
+    }
+    // ...while the exact sentinel keeps working.
+    expect(isNoArtifactRef('NO_ARTIFACT')).toBe(true);
+  });
+
+  it('ACCEPTS a bare PR number — pr_number is one of the matcher own harvest keys', () => {
+    // False rejection found by review: my 3-char floor swallowed '#7' and '42'. Rejecting a real
+    // identifier is worse than the defect, because it blocks a legitimate accept at the CLI.
+    for (const ref of ['42', '#7', '7', '6284', '#6284']) {
+      expect(isMatchableRef(ref), ref).toBe(true);
+    }
+  });
+
+  it('ACCEPTS a long signed CI-run URL — the 200-char ceiling was too tight', () => {
+    const url = 'https://github.com/rickfelix/EHG_Engineer/actions/runs/1234567890/jobs/9876543210?check_suite_focus=true&sig=' + 'a'.repeat(120);
+    expect(url.length).toBeGreaterThan(200);
+    expect(isMatchableRef(url)).toBe(true);
+  });
+});
+
+describe('FR-6 — only SD keys, only uppercase', () => {
+  function capture() {
+    const rows = [];
+    return { rows, from: () => ({
+      upsert(r) { rows.push(r); return Promise.resolve({ error: null }); },
+      update: () => ({ in: () => Promise.resolve({ error: null }), eq: () => Promise.resolve({ error: null }) }),
+      select: () => ({ eq: () => ({ is: () => Promise.resolve({ data: [], error: null }) }) }),
+    }) };
+  }
+
+  it('does NOT derive a key from a QF ref — quick fixes are not in strategic_directives_v2', async () => {
+    // THE BLOCKER REVIEW FOUND. Only 2 of 5453 SDs carry a QF- key, so a QF-derived key never
+    // resolves: the row is re-selected by every scheduled batch forever, burning a slot and logging
+    // a skip. That is the "inert path becomes a noisy path" harm my earlier negative control was
+    // written to prevent — it covered the commit-sha case and missed the case FR-6 actually adds.
+    const m = require_('../../scripts/coordinator-ack-adam.cjs');
+    const c = capture();
+    await m.recordLedgerDecision(c, { correlationId: 'q1', disposition: 'accepted', outcomeRef: 'QF-20260728-112' });
+    expect(c.rows[0].outcome_ref).toBe('QF-20260728-112');
+    expect(c.rows[0].outcome_sd_key).toBeUndefined();
+  });
+
+  it('does NOT derive a key from a LOWERCASE sd key — sd_key is stored uppercase', async () => {
+    const m = require_('../../scripts/coordinator-ack-adam.cjs');
+    const c = capture();
+    await m.recordLedgerDecision(c, { correlationId: 'q2', disposition: 'accepted', outcomeRef: 'sd-leo-infra-advice-outcome-ledger-001' });
+    expect(c.rows[0].outcome_sd_key).toBeUndefined();
+  });
+});

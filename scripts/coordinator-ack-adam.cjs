@@ -104,11 +104,34 @@ function isNoArtifactRef(ref) {
  * @param {string} ref
  * @returns {boolean}
  */
+/**
+ * Single-token PLACEHOLDERS. Whitespace-free, so the token rule waves them through — and they are
+ * STRICTLY WORSE than the NO_ARTIFACT sentinel, which is why they need naming explicitly.
+ * selectNegativeBackprop SKIPS a NO_ARTIFACT ref (it knows there is nothing to track), but it
+ * carries 'n/a' as a genuine link that can never match. Review found the error message itself steers
+ * people here: it says "supply the identifier, or --no-artifact", so an operator with neither types
+ * 'n/a'. Fixing only the sentence case would have narrowed the starvation to single tokens rather
+ * than closing it.
+ */
+const PLACEHOLDER_REFS = Object.freeze(new Set([
+  'n/a', 'na', 'n.a.', 'none', 'nil', 'null', 'nothing', 'tbd', 'tba', 'todo', 'unknown', 'unclear',
+  'moot', 'done', 'merged', 'various', 'multiple', 'verbal', 'pending', 'n/a.', '-', '--', '...',
+]));
+
 function isMatchableRef(ref) {
   if (typeof ref !== 'string') return false;
   const s = ref.trim();
   if (!s || /\s/.test(s)) return false;              // an identifier has no spaces; a sentence does
-  if (s.length < 3 || s.length > 200) return false;  // prose runs long; a bare 'x' matches nothing useful
+  // A bare number IS a legitimate artifact id — pr_number is one of the matcher's harvest keys, and
+  // rejecting '#7' was a false rejection review caught. Length floors must not swallow it.
+  if (/^#?\d{1,7}$/.test(s)) return true;
+  if (s.length < 3 || s.length > 500) return false;  // 200 rejected a real signed CI-run URL (220 chars)
+  if (PLACEHOLDER_REFS.has(s.toLowerCase())) return false;
+  // A NEAR-MISS SPELLING OF THE SENTINEL IS THE WORST CASE OF ALL: 'no_artifact' lowercase or
+  // 'NO-ARTIFACT' hyphenated fails isNoArtifactRef, so the operator believes they recorded "nothing
+  // to track" while the row is billed as a real, permanently unmatchable link that the back-prop
+  // will NOT skip. Reject so they are told to use the exact sentinel.
+  if (/^no[-_. ]?artifact/i.test(s) && !isNoArtifactRef(s)) return false;
   return /[A-Za-z0-9]/.test(s);
 }
 
@@ -206,7 +229,20 @@ async function recordLedgerDecision(supabase, { correlationId, disposition, deci
     //
     // Derived rather than separately supplied, deliberately: a second hand-entered field would drift
     // from outcome_ref, and then two columns would disagree about which artifact a decision tracked.
-    if (resolvedOutcomeRef && !isNoArtifactRef(resolvedOutcomeRef) && /^(SD|QF)-[A-Z0-9-]+$/i.test(resolvedOutcomeRef)) {
+    // SD KEYS ONLY, AND UPPERCASE ONLY — both narrowings came from review of my first version.
+    //
+    // I originally matched /^(SD|QF)-[A-Z0-9-]+$/i. Two defects, each of which turns an inert path
+    // into a NOISY one — the exact harm my own negative control was written to prevent, which it
+    // missed because it covered the commit-sha case and not the case FR-6 actually adds:
+    //   - QF: the reconciler resolves this key against strategic_directives_v2, and QUICK FIXES DO
+    //     NOT LIVE THERE (2 of 5453 rows carry a QF- key, and those are anomalies). A QF artifact
+    //     would write a key that never resolves, so the row is re-selected by every scheduled batch
+    //     forever, burning a slot and logging a skip line each time. Measured: 13 of the 31 existing
+    //     outcome_sd_key values already fail to resolve, 4 of them QF keys.
+    //   - /i: sd_key is stored uppercase, so a lowercased ref derives a key that never matches.
+    // A key that cannot resolve is worse than no key: the forward path stays dead AND the batch is
+    // permanently polluted.
+    if (resolvedOutcomeRef && !isNoArtifactRef(resolvedOutcomeRef) && /^SD-[A-Z0-9-]+$/.test(resolvedOutcomeRef)) {
       row.outcome_sd_key = resolvedOutcomeRef;
     }
     if (disposition === 'deferred') row.defer_trigger = deferTrigger;
