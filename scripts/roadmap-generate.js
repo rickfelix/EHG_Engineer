@@ -432,13 +432,33 @@ async function main() {
   //
   // --full keeps its stated purpose (bootstrap the FIRST roadmap, or recluster after the active
   // one has been archived). What it no longer does is create a second one silently.
-  const existingActive = await resolveCanonicalRoadmap(supabase);
+  // *** CORRECTED AFTER ADVERSARIAL REVIEW: guarding on status='active' MISSED THE ACTUAL
+  // INCIDENT. *** createRoadmap() at :88 inserts status:'draft'; the flip to 'active' happens
+  // only in roadmap-manager.js:190 approveSequence, at chairman approval. So --full has never
+  // been able to fork a second ACTIVE roadmap, and a guard that only asks about active roadmaps
+  // cannot fire on the thing that actually happened here — two duplicate DRAFT rows (see
+  // scripts/one-off/archive-duplicate-roadmaps.mjs header: "2 pre-guard duplicate draft rows").
+  // Running --full twice from a bootstrap state would have reproduced a89b078b + 8ffa7fdf
+  // unimpeded through my first version of this guard.
+  //
+  // So the predicate is "does any NON-ARCHIVED roadmap already exist", which covers both the
+  // draft window and an approved plan of record.
+  const { data: liveRoadmaps, error: liveErr } = await supabase
+    .from('strategic_roadmaps')
+    .select('id, title, status')
+    .neq('status', 'archived');
+  if (liveErr) {
+    console.error(`  Could not check for existing roadmaps: ${liveErr.message}`);
+    process.exit(1);
+  }
+  const existingActive = (liveRoadmaps || [])[0];
   if (existingActive) {
     if (!replaceActive) {
-      console.error(`  REFUSING: an active roadmap already exists — ${existingActive.id} ("${existingActive.title}").`);
-      console.error('  --full bootstraps the FIRST roadmap. Creating a second would leave the canonical');
-      console.error('  roadmap ambiguous, and every reader resolving through resolveCanonicalRoadmap()');
-      console.error('  would throw rather than pick one.');
+      console.error(`  REFUSING: ${liveRoadmaps.length} non-archived roadmap(s) already exist, e.g. ${existingActive.id} ("${existingActive.title}", status=${existingActive.status}).`);
+      console.error('  --full bootstraps the FIRST roadmap. A second one forks the plan of record:');
+      console.error('  a duplicate DRAFT is exactly what happened on 2026-07-17 (a89b078b, 8ffa7fdf),');
+      console.error('  and if one is later approved you get two active rows, at which point every');
+      console.error('  reader resolving through resolveCanonicalRoadmap() throws rather than guess.');
       console.error('');
       console.error('  To recluster: archive the current roadmap first, then re-run --full.');
       console.error('  To replace deliberately: --full --replace-active --reason "<why>"');

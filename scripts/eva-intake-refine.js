@@ -99,7 +99,27 @@ async function getRoadmap() {
   // because that predicate is what created this class of bug (see its header). Routing through
   // it removes both the bad predicate and the unscoped fallback in one move.
   const roadmap = await resolveCanonicalRoadmap(supabase);
-  return roadmap || null;
+  if (roadmap) return roadmap;
+
+  // BOOTSTRAP WINDOW — restored after the EXEC adversarial review caught that removing it was a
+  // regression, not a simplification. roadmap-generate.js:88 inserts status:'draft', and the flip
+  // to 'active' happens only in roadmap-manager.js:190 approveSequence, i.e. at chairman approval.
+  // Refine runs BEFORE approval (its own closing output tells the operator to run
+  // "/distill approve --roadmap-id <id>"), so between generate and approve there is legitimately
+  // NO active roadmap. My first fix returned null there, and main() exits 0 with "No roadmap
+  // found. Run /distill first" — telling the operator to redo the step they had just done.
+  //
+  // The original fallback was not wrong to exist; it was wrong to be UNSCOPED. It ordered by
+  // created_at across every status, which is how it reached archived 8ffa7fdf. Filtering to
+  // status='draft' keeps the bootstrap path and still cannot select an archived roadmap.
+  const { data: drafts, error } = await supabase
+    .from('strategic_roadmaps')
+    .select('id, title, status, current_baseline_version')
+    .eq('status', 'draft')
+    .order('created_at', { ascending: false })
+    .limit(1);
+  if (error || !drafts || drafts.length === 0) return null;
+  return drafts[0];
 }
 
 /**
