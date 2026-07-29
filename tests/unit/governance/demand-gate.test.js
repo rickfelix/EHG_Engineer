@@ -100,6 +100,18 @@ describe('TS-2b: a non-finite FLOOR also yields unmeasurable', () => {
   it('a valid gauge with an invalid floor still reports the gauge it managed to read', () => {
     expect(decideDemand(ok(7), NaN).gauge_value).toBe(7);
   });
+
+  it('the guard converts a SILENT withhold into a LOUD unmeasurable (pins the operator hazard)', () => {
+    // RETRO 4cc2e3c1: the module comments described a `>` shape, where a NaN floor FLOODS. Under
+    // the shipped `<=`, an unguarded NaN floor yields `false` -> withheld -> the engine goes dark
+    // and reads as correctly-quiet, which is this module's founding defect. Both are worth
+    // guarding, but the REASON differs, and prose is not pinned by anything. This is:
+    expect(ok(5).value <= NaN).toBe(false);            // unguarded, the raw comparison withholds
+    const d = decideDemand(ok(5), NaN);
+    expect(d.decision).toBe(DEMAND_DECISION.UNMEASURABLE); // guarded, it is LOUD instead
+    expect(d.decision).not.toBe(DEMAND_DECISION.WITHHELD); // and specifically NOT silently quiet
+    expect(d.reason).toContain('floor');
+  });
 });
 
 describe('TS-3b: POSITIVE CONTROL — an always-withhold gate must not pass', () => {
