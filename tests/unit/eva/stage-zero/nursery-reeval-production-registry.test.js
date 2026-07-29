@@ -24,10 +24,28 @@ function makeRecordingSupabase() {
     inserts,
     from(table) {
       if (table === 'venture_nursery') {
-        // Deliberately non-empty: if the guard ever regressed, a candidate WOULD be available,
-        // so this fixture cannot mask a failure by having nothing to select.
+        // Deliberately non-empty: if the early return ever regressed, a candidate WOULD be
+        // available, so this fixture cannot mask the regression by having nothing to select.
+        //
+        // The is/or/order chain is not decoration. applyPendingNurseryPredicate() calls all
+        // three unconditionally (venture-nursery.js:457-465), so a double lacking them aborts a
+        // regressed run with "query.is is not a function" before it reaches anything meaningful.
+        // The test would still fail — but for the wrong reason, and the assertion meant to catch
+        // the regression would never be evaluated. A fixture that fails by accident is not
+        // testing what its name says it tests.
+        //
+        // WHAT ACTUALLY STOPS A REGRESSED RUN, stated precisely because the tempting one-line
+        // version of this comment is wrong: there are TWO guards, not one. Disabling the early
+        // return at invoker.js:99 does NOT produce an insert — execution proceeds to AC-10's
+        // in-path check, where buildNurseryReevalRequest is called with the empty registry and
+        // throws UnregisteredPrincipalError. The module keeps that second check deliberately
+        // ("kept in the path rather than trusted to have been checked above"). So `inserts`
+        // staying empty is defence in depth, and this fixture is what lets the run travel far
+        // enough to prove the second guard is really there rather than assumed.
         const q = {
-          select: () => q,
+          is: () => q,
+          or: () => q,
+          order: () => q,
           limit: () => Promise.resolve({
             data: [{ id: '3d95f7ea-7d6e-4ffd-ba14-2d915b65fda1', next_evaluation_at: null }],
             error: null,
@@ -36,10 +54,13 @@ function makeRecordingSupabase() {
         return { select: () => q };
       }
       if (table === 'stage_zero_requests') {
+        // Chainable through the REAL dedupe shape — .select().in().eq().eq().limit(1). A double
+        // that resolves early instead of chaining would abort a regressed run with a TypeError
+        // before it could reach .insert(), which is the only thing `inserts` can observe.
         const q = {
           select: () => q,
           eq: () => q,
-          in: () => Promise.resolve({ data: [], error: null }),
+          in: () => q,
           limit: () => Promise.resolve({ data: [], error: null }),
           insert: (row) => {
             inserts.push(row);
