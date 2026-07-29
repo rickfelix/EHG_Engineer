@@ -46,7 +46,14 @@ const PROTOCOL_FILES = [
   // Role contracts (no DIGEST variant, NOT a handoff-gate requirement — verified at
   // role activation instead: adam-register.cjs checks this read via session state)
   'CLAUDE_ADAM.md',
-  'CLAUDE_SOLOMON.md'  // role contract, not a handoff-gate requirement — verified at role activation
+  'CLAUDE_SOLOMON.md',  // role contract, not a handoff-gate requirement — verified at role activation
+  // SD-LEO-INFRA-ROLE-CONTRACT-READ-GATE-001 / FR-2 prerequisite. The coordinator was the ONLY role
+  // whose contract is small enough to read in one call (CLAUDE_COORDINATOR.md is ~25.5KB, under the
+  // 25k-token cap for any real tokenizer) and the ONLY role with no verifier of any kind — its
+  // priming requirement terminated in a self-attestation nothing checked. Adding it here is the
+  // prerequisite for checking it at all: until now a coordinator READING its contract produced no
+  // session-state record, so there was nothing for a check to consult.
+  'CLAUDE_COORDINATOR.md'
 ];
 
 // SD-LEO-INFRA-OPTIMIZE-PROTOCOL-FILE-001: Equivalence mapping for gate compatibility
