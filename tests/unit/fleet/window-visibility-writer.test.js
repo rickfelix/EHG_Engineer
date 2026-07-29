@@ -147,3 +147,45 @@ describe('TS-11: the window-owning pid is NEVER reachable from a kill path', () 
     for (const rel of KILL_PATHS) expect(fs.existsSync(root + rel), `${rel} not found`).toBe(true);
   });
 });
+
+describe('FR-2 PRODUCER: owner identity is actually CAPTURED, not just writable', () => {
+  // THE DEFECT THIS EXISTS TO CATCH, found by TESTING and SECURITY independently at EXEC:
+  // setWindowOwner had ZERO production callers and selectNewWindowHandle returned a bare handle,
+  // so readWindowOwner() was null for every real session and classifyHideRefusal refused EVERY
+  // hide — while 60/60 unit tests passed. A writer with no producer is the same silent class as a
+  // mechanism with no consumer, and a test IS a consumer, which is precisely why the suite was
+  // green. These assert the PRODUCER side, which nothing did before.
+  it('selectNewWindowHandle carries owner pid + proc out with the handle', async () => {
+    const { selectNewWindowHandle } = await import('../../../lib/fleet/window-handle.js');
+    const before = [{ handle: 1, pid: 1, proc: 'WindowsTerminal', title: 'a' }];
+    const after = [...before, { handle: 42, pid: 11340, proc: 'WindowsTerminal', title: 'b' }];
+    const sel = selectNewWindowHandle(before, after, { processName: 'WindowsTerminal' });
+    expect(sel.handle).toBe(42);
+    expect(sel.owner).toEqual({ pid: 11340, procName: 'WindowsTerminal' });
+  });
+
+  it('readProcessStartTicks returns digits, or null rather than a partial identity', async () => {
+    const { readProcessStartTicks } = await import('../../../lib/fleet/window-handle.js');
+    expect(await readProcessStartTicks(11340, { execFn: async () => 'TICKS|638600000000000000' })).toBe('638600000000000000');
+    for (const bad of ['TICKS|', 'TICKS|not-a-number', '', 'garbage']) {
+      expect(await readProcessStartTicks(11340, { execFn: async () => bad })).toBeNull();
+    }
+    expect(await readProcessStartTicks(11340, { execFn: async () => { throw new Error('gone'); } })).toBeNull();
+  });
+
+  it('THE END-TO-END SHAPE: what capture persists is what the hide guard accepts', () => {
+    // The contract that was broken: capture wrote {window_handle} only, and classifyHideRefusal
+    // requires window_owner_pid/proc/start_ticks too. Pin both ends against the SAME object so they
+    // cannot drift apart again without a test going red.
+    const persisted = {
+      window_handle: 42,
+      window_owner_pid: 11340,
+      window_owner_proc: 'WindowsTerminal',
+      window_owner_start_ticks: '638600000000000000',
+    };
+    expect(classifyHideRefusal(persisted)).toBeNull();
+    expect(readWindowOwner(persisted)).toEqual({ pid: 11340, procName: 'WindowsTerminal', startTicks: '638600000000000000' });
+    // And the pre-fix shape must still be refused, so the regression is caught if capture reverts.
+    expect(classifyHideRefusal({ window_handle: 42 })).toBe('window_owner_identity_incomplete');
+  });
+});

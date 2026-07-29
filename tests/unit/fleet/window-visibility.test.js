@@ -77,6 +77,19 @@ describe('FR-2: verification and the act are ONE invocation, with three conjunct
     expect(s).toContain('ProcessName');
   });
 
+  it('ATOMICITY, BEHAVIOURALLY: exactly ONE exec call per hide — the string check alone was vacuous', async () => {
+    // ADDED AFTER THE TESTING SUB-AGENT DEFEATED THE TEST ABOVE. That one inspects only what
+    // buildSetVisibilityCommand returns, so splitting setWindowVisibility into a validate-call and
+    // a separate act-call left all 60 tests green — the exact TOCTOU regression the PRD names as
+    // "a FAIL regardless of what the check contains". Asserting the command TEXT cannot see how many
+    // times the command is RUN, so the invocation count has to be measured directly.
+    let calls = 0;
+    const execFn = async () => { calls += 1; return 'RESULT|ok||False'; };
+    const r = await setWindowVisibility(4242, { show: false, owner: OWNER, execFn });
+    expect(r.achieved).toBe(true);
+    expect(calls, 'verification and ShowWindow must occur in ONE invocation').toBe(1);
+  });
+
   it('all THREE conjuncts are present — pid alone has zero discriminating power here', () => {
     // Measured on this host: 9 visible WindowsTerminal windows share ONE owning pid, while 9 cmd
     // windows had 9 distinct pids. A pid-equality guard therefore passes in exactly the recycled-
