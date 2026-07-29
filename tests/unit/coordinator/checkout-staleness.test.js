@@ -204,6 +204,36 @@ describe('classifyGitFailure', () => {
     expect(classifyGitFailure({ killed: true })).toBe('git timed out');
   });
 
+  /**
+   * "Never throws" is an invariant this module asserts about itself in its own docblock, and
+   * asserting it is not the same as enforcing it. Reading .stderr/.message can throw when they
+   * are accessor properties, and a raw Symbol makes template-literal coercion throw. Neither is
+   * reachable through defaultRunner — real execFileSync errors carry plain string properties —
+   * but execImpl is a PUBLIC seam, so the invariant must hold for anything a caller injects.
+   * (Gap found by TESTING fuzzing the seam after the classifier landed.)
+   */
+  it('never throws, even for adversarial error shapes that cannot come from real git', () => {
+    const throwingGetter = {};
+    Object.defineProperty(throwingGetter, 'stderr', { get() { throw new Error('boom'); } });
+    expect(() => classifyGitFailure(throwingGetter)).not.toThrow();
+    expect(classifyGitFailure(throwingGetter)).toBe('git failed (unreadable error)');
+
+    expect(() => classifyGitFailure(Symbol('nope'))).not.toThrow();
+    expect(classifyGitFailure(Symbol('nope'))).toBe('git failed (unreadable error)');
+
+    // And the invariant that actually matters — the guard itself must still SPEAK, not fall
+    // silent, when it cannot even read why git failed.
+    const stderrSpy = vi.spyOn(process.stderr, 'write').mockImplementation(() => true);
+    expect(() => warnIfCheckoutStale('worker-signal.cjs', () => { throw Symbol('nope'); })).not.toThrow();
+    expect(stderrSpy).toHaveBeenCalledTimes(1);
+    expect(stderrSpy.mock.calls[0][0]).toContain('could not determine');
+    stderrSpy.mockRestore();
+
+    // MUTATION THAT MUST BREAK THIS: remove the try/catch around the classification body.
+    // Both the throwing-getter case and the Symbol case then propagate out of
+    // warnIfCheckoutStale, breaking the module's stated never-throw contract.
+  });
+
   it('classifies a missing git binary and a non-repo distinctly', () => {
     expect(classifyGitFailure(new Error('spawn git ENOENT'))).toBe('git unavailable');
     expect(classifyGitFailure(Object.assign(new Error('x'), { stderr: 'fatal: not a git repository' })))
