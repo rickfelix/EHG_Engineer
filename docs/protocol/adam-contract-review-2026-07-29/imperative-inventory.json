@@ -3,8 +3,8 @@
  "counts": {
   "original": 533,
   "proposed": 298,
-  "landed": 192,
-  "needs_decision": 314,
+  "landed": 207,
+  "needs_decision": 299,
   "not_an_obligation": 0
  },
  "entries": [
@@ -132,7 +132,8 @@
    "imperative": "- The standing coordinator-health audit (chairman GO 2026-07-16; run every tick, not just when prompted): KPI-0 OUTCOME/FLOW (primary axis; Solomon verdict 1b087632) — claim→completion conversion + latency + reopen/rework over the first-claim cohort (a coordinator can score green on state/direction/…",
    "match_score": 0.18,
    "carries_modal": false,
-   "disposition": "NEEDS_DECISION"
+   "disposition": "landed",
+   "probe_evidence": "probe: coordinator-health audit KPI-0 outcome/flow present"
   },
   {
    "key": "785fa8e33dc1",
@@ -226,7 +227,8 @@
    "imperative": "This keeps the coordinator the decider/manager for fleet operations and Adam the proposer-and-overseer (the coordinator stays 100% accountable for every dispatch).",
    "match_score": 0.45,
    "carries_modal": false,
-   "disposition": "NEEDS_DECISION"
+   "disposition": "landed",
+   "probe_evidence": "probe: reviewer-not-safety-net, coordinator 100% accountable, present"
   },
   {
    "key": "af814ad0b674",
@@ -289,7 +291,8 @@
    "imperative": "- The standing Solomon-health check (periodic — Solomon runs a slower cadence than the fleet, so this is a recurring check-in, not an every-tick audit): verify against Solomon's OWN role contract (leo_protocol_sections id=611, section_type solomon_role_contract) that his regular operations are actua…",
    "match_score": 0.17,
    "carries_modal": true,
-   "disposition": "NEEDS_DECISION"
+   "disposition": "landed",
+   "probe_evidence": "probe: standing Solomon-health check present"
   },
   {
    "key": "0db88afbbf40",
@@ -319,7 +322,8 @@
    "imperative": "Oversight boundary (CONST-002, identical to the coordinator clause): oversight = audit + press + escalate, always OUTCOME-shaped (\"your self-adherence tick hasn't fired in N days — please confirm it's live and healthy\"), never instruction-shaped (\"run sweep X now\").",
    "match_score": 0.19,
    "carries_modal": false,
-   "disposition": "NEEDS_DECISION"
+   "disposition": "landed",
+   "probe_evidence": "probe: oversight boundary (audit+press+escalate, never dispatch-by-proxy) present"
   },
   {
    "key": "856a8cf56494",
@@ -361,7 +365,8 @@
    "imperative": "Role model — Adam provides GOVERNANCE + OVERSIGHT over the coordinator AND is the chairman's HARNESS-side interface (chairman-canonical 2026-06-08; A2 re-scoped 2026-07-12; elevated from assistant to governance/oversight 2026-07-16, assistant framing removed 2026-07-17): the value chain is chairman …",
    "match_score": 0.1,
    "carries_modal": false,
-   "disposition": "NEEDS_DECISION"
+   "disposition": "landed",
+   "probe_evidence": "probe: Adam/EVA persona split — was DELETED from the approved file, restored into section 1"
   },
   {
    "key": "605516d2cc4d",
@@ -375,7 +380,8 @@
    "imperative": "Persona split (chairman verbal 2026-07-12, A2 pick 're-scope'): Adam = the chairman's HARNESS-side interface + Chief Builder; EVA = the chairman's VENTURE-side chief-of-staff (per the ratified persona split and the spine chairman-surface).",
    "match_score": 0.13,
    "carries_modal": false,
-   "disposition": "NEEDS_DECISION"
+   "disposition": "landed",
+   "probe_evidence": "probe: Adam/EVA persona split — was DELETED from the approved file, restored into section 1"
   },
   {
    "key": "4fb82b801a98",
@@ -410,7 +416,8 @@
    "imperative": "Adam's dimensions (canonical 8 — reconciled to the live feedback cat=adam_self_assessment rows D1..D8; old→new mapping so this is a reconciliation, not a silent swap: old(2 PROPOSE-not-execute)→D2, old(5 reviewer-not-safety-net)→D3, old(1 chairman-lens canary)→D4, old(3 backlog-triage)→D7/D1, old(4 …",
    "match_score": 0.09,
    "carries_modal": false,
-   "disposition": "NEEDS_DECISION"
+   "disposition": "landed",
+   "probe_evidence": "probe: reviewer-not-safety-net, coordinator 100% accountable, present"
   },
   {
    "key": "9ddfa0cad2d8",
@@ -431,7 +438,8 @@
    "imperative": "D3 — reviewer_not_safetynet: raise the bar (canary/second-opinion); coordinator stays 100% accountable; catches trend toward zero as it matures. good: catches decline; coordinator runs fully without Adam. failure: Adam becomes load-bearing; persistent same-class catches. signal: catch-rate trend. so…",
    "match_score": 0.33,
    "carries_modal": false,
-   "disposition": "NEEDS_DECISION"
+   "disposition": "landed",
+   "probe_evidence": "probe: reviewer-not-safety-net, coordinator 100% accountable, present"
   },
   {
    "key": "e3db228ad542",
@@ -516,7 +524,8 @@
    "imperative": "Adam scores turn-triggered (~every 10 turns; cat=adam_self_assessment); the coordinator scores work-triggered (every COORD_REVIEW_EVERY completed SDs) + a ~10-turn live supplement.",
    "match_score": 0.17,
    "carries_modal": false,
-   "disposition": "NEEDS_DECISION"
+   "disposition": "landed",
+   "probe_evidence": "probe: self-score cadence present"
   },
   {
    "key": "4685e913f202",
@@ -2337,7 +2346,8 @@
    "imperative": "Adam operates under the canonical crew-comms routing protocol: docs/protocol/crew-comms-routing-protocol.md.",
    "match_score": 0.5,
    "carries_modal": false,
-   "disposition": "NEEDS_DECISION"
+   "disposition": "landed",
+   "probe_evidence": "probe: crew-comms routing protocol present"
   },
   {
    "key": "40bfb369e0c8",
@@ -2408,7 +2418,8 @@
    "imperative": "If the relevant rung-waves have no unpromoted items, distillation precedes routing — groom raw backlog (sd_backlog_map) into waved, dispositioned candidates first; do not skip straight to gauge-mining.",
    "match_score": 0.47,
    "carries_modal": false,
-   "disposition": "NEEDS_DECISION"
+   "disposition": "landed",
+   "probe_evidence": "probe: prioritize-what-moves-the-needle present"
   },
   {
    "key": "8bdb07019664",
@@ -2493,14 +2504,16 @@
    "imperative": "How progress is measured (so you can rank by it): roadmap_waves.progress_pct is populated TYPE-AWARE by the rung-progress rollup (lib/vision/rung-progress-rollup.mjs, CLI npm run vision:rung-rollup — dry-run default, --apply persists).",
    "match_score": 0.06,
    "carries_modal": false,
-   "disposition": "NEEDS_DECISION"
+   "disposition": "landed",
+   "probe_evidence": "probe: prioritize-what-moves-the-needle present"
   },
   {
    "key": "713126d68eee",
    "imperative": "BUILD rungs (the active vision rung, e.g.",
    "match_score": 0.2,
    "carries_modal": false,
-   "disposition": "NEEDS_DECISION"
+   "disposition": "landed",
+   "probe_evidence": "probe: prioritize-what-moves-the-needle present"
   },
   {
    "key": "d3a9f826b21d",
@@ -2522,14 +2535,16 @@
    "imperative": "The needle-first sourcing bar: once a candidate passes THE SOURCING BAR (real + launch/revenue-aligned), rank the remaining shortlist by needle-movement — active-rung-first, then highest-impact-on-rung-completion-first.",
    "match_score": 0.5,
    "carries_modal": false,
-   "disposition": "NEEDS_DECISION"
+   "disposition": "landed",
+   "probe_evidence": "probe: prioritize-what-moves-the-needle present"
   },
   {
    "key": "93b0d5246ec1",
    "imperative": "A candidate that closes the active build rung's remaining gap (or moves a tracked KR on an outcome rung) outranks an equally-real item that moves no rung.",
    "match_score": 0.17,
    "carries_modal": false,
-   "disposition": "NEEDS_DECISION"
+   "disposition": "landed",
+   "probe_evidence": "probe: prioritize-what-moves-the-needle present"
   },
   {
    "key": "14df4d39c7d0",

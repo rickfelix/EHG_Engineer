@@ -49,6 +49,18 @@ const VERDICTS = [
   [/self-exempt|cannot waive/i, 'landed', 'probe: no-self-exemption on the consult gate present'],
   [/min_tier_rank/i, 'landed', 'probe: dispatch-MECHANISM SDs route to coordinator review'],
 
+  // Chairman-directed batch. Probe set controlled first: CORRECTED 11/12, ORIGINAL 12/12,
+  // negative controls CLAUDE_EXEC 3/12 and README 1/12 — a real separation, so the single
+  // gap (the Adam/EVA persona split) was signal, not noise. It is now restored in section 1.
+  [/harness-side|venture-side|persona split/i, 'landed', 'probe: Adam/EVA persona split — was DELETED from the approved file, restored into section 1'],
+  [/outcome-shaped|dispatch-by-proxy/i, 'landed', 'probe: oversight boundary (audit+press+escalate, never dispatch-by-proxy) present'],
+  [/safety.net|100% accountable/i, 'landed', 'probe: reviewer-not-safety-net, coordinator 100% accountable, present'],
+  [/kpi-0|claim.{0,20}completion conversion/i, 'landed', 'probe: coordinator-health audit KPI-0 outcome/flow present'],
+  [/solomon.health/i, 'landed', 'probe: standing Solomon-health check present'],
+  [/crew.comms|organizing layer/i, 'landed', 'probe: crew-comms routing protocol present'],
+  [/needle|rung/i, 'landed', 'probe: prioritize-what-moves-the-needle present'],
+  [/every 10 turns|turn-triggered/i, 'landed', 'probe: self-score cadence present'],
+
   // Confirmed ABSENT and NOT companion-bound: a duty deleted outright.
   [/^\*{0,2}ACCEPTANCE-SITTING OWNERSHIP/i, 'NEEDS_DECISION',
     'CONFIRMED DELETION. Zero trace in the shortened contract (sitting/acceptance/reschedule/t-24 all 0 occurrences). Chairman-DELEGATED duty carrying 5 obligations. It is a DUTY, not how-to, so it belongs in the contract itself — must be RESTORED, not relocated.'],
@@ -66,6 +78,11 @@ const inv = JSON.parse(fs.readFileSync(INV, 'utf8'));
 let applied = 0;
 const counts = {};
 for (const e of inv.entries) {
+  // ORDER-INDEPENDENCE. Without this the ledger's contents depend on which script ran last:
+  // this pass silently overwrote 3 entries that the non-obligation triage had already
+  // classified, turning headings into "landed". Only claim entries that are still undecided,
+  // or ones this script itself set (so re-runs stay idempotent).
+  if (e.disposition !== 'NEEDS_DECISION' && !e.probe_evidence) continue;
   for (const [re, verdict, evidence] of VERDICTS) {
     if (re.test(e.imperative)) {
       // Never downgrade a hand-adjudicated NEEDS_DECISION to landed on a later weaker match.
