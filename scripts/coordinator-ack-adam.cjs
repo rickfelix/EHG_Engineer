@@ -75,8 +75,56 @@ function isNoArtifactRef(ref) {
  * Returns { ref } (string|null) on success, or { error } when linkage is mandatory and missing.
  * Exported for tests.
  */
+/**
+ * SD-LEO-INFRA-ADVICE-OUTCOME-LEDGER-001 FR-5 — is this ref one the matcher could ever match?
+ *
+ * THE STARVATION THIS CLOSES. The FR-4 negative back-propagation attributes ONLY through exact
+ * equality against identifiers harvested from audit metadata (NEGATIVE_REF_KEYS in
+ * solomon-ledger-reconcile.cjs: sha, commit_sha, sd_key, sd_id, ref, outcome_ref, pr, pr_url,
+ * pr_number, signature). This function's caller accepted ANY non-empty string, and the CLI's
+ * `--outcome-ref <artifact-id>` was only a hint — so operators typed sentences. Measured 2026-07-29:
+ * 158 of 170 populated refs are free English prose, median 134 chars, longest 1260. Running the
+ * production selector over the live table returns ZERO matches.
+ *
+ * A prose ref is the worst possible outcome: it LOOKS recorded, satisfies the FR-3 mandatory-linkage
+ * check, and can never match anything. The row is billed as linked and is permanently unreachable.
+ * Rejecting at write time is the whole point — the alternative is a value that fails silently
+ * forever, which is the defect class this SD exists to remove.
+ *
+ * THE RULE IS TOKEN-VS-SENTENCE, not a scheme allow-list. My first version enumerated the schemes I
+ * could think of (sha / SD|QF|PRD|US key / uuid / number / URL) and promptly rejected `PR-6284` — a
+ * perfectly matchable identifier already used in the test suite. A false rejection here is worse
+ * than the problem: it blocks a legitimate accept at the CLI and teaches operators to route around
+ * the check.
+ *
+ * The matcher compares by EXACT EQUALITY, so it does not care what scheme a token belongs to — any
+ * stable token works, including schemes nobody has invented yet. The only thing it can never match
+ * is a sentence. So the rule is exactly that: no whitespace, bounded length, and at least one
+ * alphanumeric. Cheap, and it cannot be wrong about a scheme it has never seen.
+ * @param {string} ref
+ * @returns {boolean}
+ */
+function isMatchableRef(ref) {
+  if (typeof ref !== 'string') return false;
+  const s = ref.trim();
+  if (!s || /\s/.test(s)) return false;              // an identifier has no spaces; a sentence does
+  if (s.length < 3 || s.length > 200) return false;  // prose runs long; a bare 'x' matches nothing useful
+  return /[A-Za-z0-9]/.test(s);
+}
+
 function resolveOutcomeRef(disposition, { outcomeRef = null, noArtifact = null } = {}) {
   const cleanRef = typeof outcomeRef === 'string' ? outcomeRef.trim() : (outcomeRef ? String(outcomeRef).trim() : '');
+  // FR-5: a ref the matcher can never match is worse than no ref, because it passes the linkage
+  // check while guaranteeing the negative path stays dead for that row. The NO_ARTIFACT sentinel is
+  // exempt — it is DELIBERATELY unmatchable and says so.
+  if (cleanRef && !isNoArtifactRef(cleanRef) && !isMatchableRef(cleanRef)) {
+    return {
+      error: `outcome_ref "${cleanRef.slice(0, 60)}${cleanRef.length > 60 ? '…' : ''}" is prose, not an artifact identifier. `
+        + 'The negative back-propagation matches by EXACT equality against a sha, SD/QF key, uuid, PR number or URL, '
+        + 'so a sentence here records a link that can never resolve. Supply the identifier, or --no-artifact "<reason>" '
+        + 'if there genuinely is no artifact (FR-5).',
+    };
+  }
   if (LINKAGE_REQUIRED_DISPOSITIONS.includes(disposition)) {
     if (cleanRef) return { ref: cleanRef };
     if (noArtifact) {
@@ -325,7 +373,8 @@ async function main() {
   }
 }
 
-module.exports = { parseArgs, recordLedgerDecision, inheritTailDecisions, VALID_DISPOSITIONS, resolveOutcomeRef, isNoArtifactRef, NO_ARTIFACT_MARKER, LINKAGE_REQUIRED_DISPOSITIONS };
+module.exports = {
+  isMatchableRef, parseArgs, recordLedgerDecision, inheritTailDecisions, VALID_DISPOSITIONS, resolveOutcomeRef, isNoArtifactRef, NO_ARTIFACT_MARKER, LINKAGE_REQUIRED_DISPOSITIONS };
 
 if (require.main === module) {
   main().catch(err => { console.error('UNHANDLED:', err.message || err); process.exit(1); });
