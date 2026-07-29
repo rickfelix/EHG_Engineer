@@ -93,6 +93,13 @@ describe('FR-6: the retracted claim does not survive anywhere in the artifact', 
   // The PRD requires that no code comment, response, or doc still asserts the converse is
   // undetectable. A false premise left in prose is how the next author re-derives the same blind
   // spot after the code has already been fixed.
+  //
+  // *** THIS IS A TRIPWIRE, NOT A SAFEGUARD — DO NOT MISTAKE IT FOR PROTECTION. *** It matches one
+  // literal phrasing, so it is defeatable by rewording: the TESTING sub-agent inserted "a hidden
+  // window is not observable via enumeration" and all 14 tests in this file stayed green. It is kept
+  // because it costs nothing and catches the copy-paste case, which is the likely one. The REAL
+  // safeguard is behavioural and lives above: the bidirectional drift tests fail if the second
+  // direction is dropped, whatever the comments happen to say.
   const root = fileURLToPath(new URL('../../../', import.meta.url));
   it.each([
     'lib/fleet/window-reconcile.js',
