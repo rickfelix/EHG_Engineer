@@ -448,9 +448,16 @@ describe('KNOWN-OPEN: NTFS 8.3 aliases bypass the fence (asserted as OPEN, not a
     return (await fetch(base + ALIAS_CANARY, { redirect: 'manual' })).status === 200;
   }
 
-  it.each(ALIASED_RETIRED)(
-    'DOCUMENTS THE GAP: %s still serves %s verbatim (RED when closed, skipped when 8.3 is off)',
-    async (aliasPath, realFile, ctx) => {
+  // DELIBERATELY NOT it.each. Measured on vitest 4.1.4: `it.each` passes ONLY the row values —
+  // the TestContext is never appended, for array rows and object rows alike — so `ctx.skip()`
+  // below threw TypeError instead of skipping. It threw ONLY on Linux, because this branch is
+  // unreachable wherever 8.3 aliases DO resolve: the guard added to make vacuity visible was
+  // itself never executed on the platform it was written on, and CI caught what the local run
+  // structurally could not. A plain `it` does receive the context (the soak-log test below is
+  // the in-suite control — it is the one test that skipped cleanly on ubuntu). The loop keeps
+  // one distinctly-named test per axis, which the first test in this describe pins.
+  for (const [aliasPath, realFile] of ALIASED_RETIRED) {
+    it(`DOCUMENTS THE GAP: ${aliasPath} still serves ${realFile} verbatim (RED when closed, skipped when 8.3 is off)`, async (ctx) => {
       if (!(await aliasesResolveHere())) {
         ctx.skip();   // visible as skipped, never a silent green
         return;
@@ -473,8 +480,8 @@ describe('KNOWN-OPEN: NTFS 8.3 aliases bypass the fence (asserted as OPEN, not a
       const onDisk = crypto.createHash('sha256')
         .update(fs.readFileSync(path.join(FLEET_UI_ROOT_FOR_HASH, realFile))).digest('hex');
       expect(served).toBe(onDisk);
-    }
-  );
+    });
+  }
 
   it('DOCUMENTS THE GAP: the bypass emits NO soak log line, so silence cannot mean unhit', async (ctx) => {
     if (!(await aliasesResolveHere())) {
