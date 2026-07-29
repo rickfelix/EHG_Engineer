@@ -33,6 +33,7 @@ import {
 // roadmap never satisfied -- the confirmed root cause of every distill run forking a
 // brand-new parallel 'EVA Intake Roadmap' instead of writing into the existing one).
 import { resolveCanonicalRoadmap } from '../lib/roadmap/canonical-roadmap.js';
+import { evaluateFullCreate, roadmapsToArchive, REFUSE_REASON_REQUIRED } from '../lib/roadmap/full-create-guard.js';
 
 dotenv.config();
 
@@ -451,42 +452,65 @@ async function main() {
     console.error(`  Could not check for existing roadmaps: ${liveErr.message}`);
     process.exit(1);
   }
-  const existingActive = (liveRoadmaps || [])[0];
-  if (existingActive) {
-    if (!replaceActive) {
-      console.error(`  REFUSING: ${liveRoadmaps.length} non-archived roadmap(s) already exist, e.g. ${existingActive.id} ("${existingActive.title}", status=${existingActive.status}).`);
-      console.error('  --full bootstraps the FIRST roadmap. A second one forks the plan of record:');
-      console.error('  a duplicate DRAFT is exactly what happened on 2026-07-17 (a89b078b, 8ffa7fdf),');
-      console.error('  and if one is later approved you get two active rows, at which point every');
-      console.error('  reader resolving through resolveCanonicalRoadmap() throws rather than guess.');
-      console.error('');
-      console.error('  To recluster: archive the current roadmap first, then re-run --full.');
-      console.error('  To replace deliberately: --full --replace-active --reason "<why>"');
-      process.exit(1);
-    }
-    if (!replaceReason) {
+  // Decision lives in lib/roadmap/full-create-guard.js so it can be unit-tested; this file
+  // self-invokes main() at module load, so an inline predicate is unreachable from a test.
+  const verdict = evaluateFullCreate(liveRoadmaps, { replaceActive, replaceReason });
+  const existing = verdict.existing || [];
+  if (!verdict.allow) {
+    if (verdict.refusal === REFUSE_REASON_REQUIRED) {
       console.error('  --replace-active requires --reason "<why>" — the override is audit-logged.');
       process.exit(1);
     }
+    const first = existing[0];
+    console.error(`  REFUSING: ${existing.length} non-archived roadmap(s) already exist, e.g. ${first.id} ("${first.title}", status=${first.status}).`);
+    console.error('  --full bootstraps the FIRST roadmap. A second one forks the plan of record:');
+    console.error('  a duplicate DRAFT is exactly what happened on 2026-07-17 (a89b078b, 8ffa7fdf),');
+    console.error('  and if one is later approved you get two active rows, at which point every');
+    console.error('  reader resolving through resolveCanonicalRoadmap() throws rather than guess.');
+    console.error('');
+    console.error('  To recluster: archive the current roadmap first, then re-run --full.');
+    console.error('  To replace deliberately: --full --replace-active --reason "<why>"');
+    process.exit(1);
+  }
+
+  if (verdict.override) {
+    const targets = roadmapsToArchive(existing);
     // Audit BEFORE the write, so an override that then fails is still on the record.
-    // Best-effort: a missing audit_log table must not block a legitimate, explicitly-authorised
-    // bootstrap, but the console line always emits.
-    console.log(`  OVERRIDE: --replace-active on ${existingActive.id} — reason: ${replaceReason}`);
+    console.log(`  OVERRIDE: --replace-active archiving ${targets.length} roadmap(s) — reason: ${replaceReason}`);
     try {
       await supabase.from('audit_log').insert({
         event_type: 'ROADMAP_FULL_REPLACE_ACTIVE',
         entity_type: 'strategic_roadmaps',
-        entity_id: existingActive.id,
+        entity_id: targets[0],
         severity: 'high',
         metadata: {
           sd: 'SD-LEO-INFRA-ROADMAP-REGENERATION-DUPLICATES-001',
-          replaced_roadmap_title: existingActive.title,
+          replaced_roadmap_ids: targets,
           reason: replaceReason,
           dry_run: dryRun,
         },
       });
     } catch (e) {
       console.log(`  (audit_log write failed, continuing: ${e && e.message ? e.message : e})`);
+    }
+
+    // *** ACTUALLY ARCHIVE THEM. *** The EXEC adversarial review caught that --replace-active
+    // wrote nothing: it created a second roadmap and left the first one live, producing exactly
+    // the duplicate state this guard exists to prevent. An override named "replace" that does not
+    // replace is worse than no override, because the operator believes the old one is gone.
+    if (dryRun) {
+      console.log(`  [DRY-RUN] would archive: ${targets.join(', ')}`);
+    } else {
+      const { error: archErr } = await supabase
+        .from('strategic_roadmaps')
+        .update({ status: 'archived' })
+        .in('id', targets);
+      if (archErr) {
+        console.error(`  REFUSING to proceed: could not archive the existing roadmap(s): ${archErr.message}`);
+        console.error('  Creating a new roadmap now would leave duplicates behind.');
+        process.exit(1);
+      }
+      console.log(`  Archived ${targets.length} roadmap(s): ${targets.join(', ')}`);
     }
   }
 
