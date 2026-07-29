@@ -60,6 +60,16 @@ describe('imperative inventory artifact (TS-2)', () => {
     expect(corpus).toMatch(/courtesy.{0,15}ack/i);
   });
 
+  it('attaches a deletion verdict to the DEFINING clause, never to a passing mention', () => {
+    // Regression: the first verdict regex matched any clause containing "acceptance-sitting",
+    // which tagged a DIFFERENT clause — one merely listing the duty's name while discussing the
+    // role-model correction — as a confirmed deletion. A wrong verdict in this ledger misleads
+    // every later reader, and this artifact is the control for the whole authoring pass.
+    const flagged = inv.entries.filter((e) => /CONFIRMED DELETION/.test(e.probe_evidence || ''));
+    expect(flagged.length).toBe(1);
+    expect(flagged[0].imperative).toMatch(/^\*{0,2}ACCEPTANCE-SITTING OWNERSHIP/i);
+  });
+
   it('CONTROL: the inventory is not vacuously satisfied', () => {
     // If everything were auto-marked landed, every assertion above still passes while the
     // artifact asserts nothing. Unreviewed obligations must remain visible as open work.

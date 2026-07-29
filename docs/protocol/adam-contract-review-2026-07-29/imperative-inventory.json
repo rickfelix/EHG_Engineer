@@ -3,8 +3,8 @@
  "counts": {
   "original": 533,
   "proposed": 298,
-  "landed": 151,
-  "needs_decision": 382
+  "landed": 185,
+  "needs_decision": 340
  },
  "entries": [
   {
@@ -460,7 +460,8 @@
    "imperative": "D5 — vision_alignment: anchor advisories to live mission/objective/KR/vision rows + off-track delta; honest per-scope anchoring; NEVER fabricate a KR. good: cites a live objective/KR row + delta; honest no-OKR fallback. failure: ungrounded ideas / fabricated metrics. signal: % advisories citing a li…",
    "match_score": 0.32,
    "carries_modal": true,
-   "disposition": "NEEDS_DECISION"
+   "disposition": "landed",
+   "probe_evidence": "substance probe: per-scope anchoring present"
   },
   {
    "key": "fde0f29e10e1",
@@ -551,14 +552,16 @@
    "imperative": "PER-SCOPE TASK BLOCK (fixed): (1) load a light strategy briefing (mission → active objectives[current period] → key_results → sd_key_result_alignment + protocol_constitution/AEGIS, READ-ONLY); (2) board-scan; (3) OKR/KR-stall; (4) vision-drift (objectives.needs_review_since); (5) SD-stall; (6) EVA-D…",
    "match_score": 0.4,
    "carries_modal": true,
-   "disposition": "NEEDS_DECISION"
+   "disposition": "landed",
+   "probe_evidence": "substance probe: per-scope task block present"
   },
   {
    "key": "53c540811f3f",
    "imperative": "PER-IDEA RATIONALE STRUCTURE (the bar — think critically, no noise): opportunity / objective+KR advanced with off-track delta / evidence (cite the live row) / rationale / risk + REQUIRED counterfactual / confidence.",
    "match_score": 0.72,
    "carries_modal": true,
-   "disposition": "landed"
+   "disposition": "landed",
+   "probe_evidence": "substance probe: per-idea rationale bar present"
   },
   {
    "key": "a58913bbfee7",
@@ -572,7 +575,8 @@
    "imperative": "PER-SCOPE ANCHORING (honest): harness → O-GOV objectives/KRs; platform → O-GOV-3 + the SSOT invariant (no stage KR); per-venture → the venture's chairman-approved L2 vision + a LIVE metric, OR FAIL the bar and surface the missing-OKR/data as a GAP — NEVER fabricate a KR.",
    "match_score": 0.77,
    "carries_modal": true,
-   "disposition": "landed"
+   "disposition": "landed",
+   "probe_evidence": "substance probe: per-scope anchoring present"
   },
   {
    "key": "300f251a1cfc",
@@ -726,7 +730,8 @@
    "imperative": "FULL-INBOX POLLING (D6 duty sharpened): Adam's inbound duty covers EVERY coordinator/chairman-directed session_coordination row WHERE acknowledged_at IS NULL — not only payload.kind=coordinator_reply.",
    "match_score": 0.29,
    "carries_modal": false,
-   "disposition": "NEEDS_DECISION"
+   "disposition": "landed",
+   "probe_evidence": "substance probe: full-inbox polling present"
   },
   {
    "key": "91648ff91b28",
@@ -740,21 +745,24 @@
    "imperative": "ACCEPTANCE-SITTING OWNERSHIP: when the chairman delegates acceptance sittings, Adam owns them end-to-end: decision packets prepared >=24h ahead (plain language, default recommendation per item), readiness-gate verification at T-24h, reminders via every live channel (advisory roll-up + exec-email NEE…",
    "match_score": 0.09,
    "carries_modal": false,
-   "disposition": "NEEDS_DECISION"
+   "disposition": "NEEDS_DECISION",
+   "probe_evidence": "CONFIRMED DELETION. Zero trace in the shortened contract (sitting/acceptance/reschedule/t-24 all 0 occurrences). Chairman-DELEGATED duty carrying 5 obligations. It is a DUTY, not how-to, so it belongs in the contract itself — must be RESTORED, not relocated."
   },
   {
    "key": "1022f2576567",
    "imperative": "## North-Star alignment + sourcing taper (chairman-encoded 2026-06-11)",
    "match_score": 0.33,
    "carries_modal": false,
-   "disposition": "NEEDS_DECISION"
+   "disposition": "landed",
+   "probe_evidence": "substance probe: taper rule present"
   },
   {
    "key": "76e6179225f2",
    "imperative": "THE CHAIRMAN NORTH STAR: EHG venture income replacing his Exelon day-job salary (recorded target + draft quit-threshold live in SD-LEO-ORCH-ADAM-PLAN-KEEPER-001 metadata.chairman_amendment_2026_06_11_income_replacement).",
    "match_score": 0.47,
    "carries_modal": false,
-   "disposition": "NEEDS_DECISION"
+   "disposition": "landed",
+   "probe_evidence": "substance probe: chairman north star present"
   },
   {
    "key": "71f8f5f19adc",
@@ -782,7 +790,8 @@
    "imperative": "THE TAPER RULE: harness/meta sourcing volume must DECLINE as stability approaches the solo-operator launch-readiness bar (the stability phase exit criterion: automated support intake/triage, breakage-detection-before-customers, launch-spike absorption without chairman burnout).",
    "match_score": 0.46,
    "carries_modal": false,
-   "disposition": "NEEDS_DECISION"
+   "disposition": "landed",
+   "probe_evidence": "substance probe: taper rule present"
   },
   {
    "key": "7af04b7b89b8",
@@ -796,7 +805,8 @@
    "imperative": "THE VISIBLE GAUGE: Adam exec summaries carry a META-TO-PRODUCT RATIO (harness/meta items filed+shipped vs product/venture items) and, once revenue ventures exist, a DISTANCE-TO-QUIT line (current monthly net vs quit-threshold).",
    "match_score": 0.57,
    "carries_modal": false,
-   "disposition": "NEEDS_DECISION"
+   "disposition": "landed",
+   "probe_evidence": "substance probe: chairman north star present"
   },
   {
    "key": "040eea1f4879",
@@ -831,7 +841,8 @@
    "imperative": "Chairman verbal 2026-07-17 (correcting a \"what should we do next\" answer that led with the meta-to-product ratio): \"Being able to review the project plan and say, 'Based on the project plan, here's what I think we should do,' is just as important as the meta-to-product [ratio].",
    "match_score": 0.21,
    "carries_modal": false,
-   "disposition": "NEEDS_DECISION"
+   "disposition": "landed",
+   "probe_evidence": "substance probe: taper rule present"
   },
   {
    "key": "2441cd89489f",
@@ -859,7 +870,8 @@
    "imperative": "The north-star gauges above (meta-to-product ratio, taper, distance-to-quit) are SUBORDINATE diagnostics — they inform the plan review; they never replace it as the frame.",
    "match_score": 0.64,
    "carries_modal": false,
-   "disposition": "landed"
+   "disposition": "landed",
+   "probe_evidence": "substance probe: taper rule present"
   },
   {
    "key": "0d15101dcca8",
@@ -915,7 +927,8 @@
    "imperative": "BELT COUNTDOWN DUTY (durable): while the fleet is active, Adam posts a belt-countdown one-liner every 15 minutes — ONE line, Eastern time in 12-hour format, with a rolling ETA to belt-dry (claimable-SD depth vs current fleet burn).",
    "match_score": 0.52,
    "carries_modal": false,
-   "disposition": "NEEDS_DECISION"
+   "disposition": "landed",
+   "probe_evidence": "substance probe: belt countdown duty present"
   },
   {
    "key": "d8f5e9fc1c56",
@@ -936,7 +949,8 @@
    "imperative": "BOARD RECONCILE DUTY (durable): every recurring Adam tick, reconcile the durable adam_task_ledger board against live reality (open advisory threads, sourced SDs, awaited replies) via lib/adam/task-rehydrate.js rehydrateBoard(), wired into scripts/adam-quiet-tick.mjs (not only at /adam cold start, wh…",
    "match_score": 0.34,
    "carries_modal": false,
-   "disposition": "NEEDS_DECISION"
+   "disposition": "landed",
+   "probe_evidence": "substance probe: board reconcile duty present"
   },
   {
    "key": "6d573c22dd37",
@@ -950,14 +964,16 @@
    "imperative": "This closes the same \"durable but session-fragile\" gap class the belt-countdown duty above closed.",
    "match_score": 0.22,
    "carries_modal": false,
-   "disposition": "NEEDS_DECISION"
+   "disposition": "landed",
+   "probe_evidence": "substance probe: belt countdown duty present"
   },
   {
    "key": "157ddeec4f24",
    "imperative": "DECISION-DRIVING-SWEEP DUTY (durable): every 3 hours, Adam sweeps the pending chairman-decision queue (node scripts/chairman-decisions.mjs list) and DRIVES each pending decision toward resolution — surfacing an un-surfaced decision to the chairman as an SMS decision packet (labeled options + RECOMME…",
    "match_score": 0.31,
    "carries_modal": true,
-   "disposition": "NEEDS_DECISION"
+   "disposition": "landed",
+   "probe_evidence": "substance probe: decision-driving sweep present"
   },
   {
    "key": "0a68cd51fbac",
@@ -978,7 +994,8 @@
    "imperative": "FULL-INBOX SWEEP (sharpened — never trust ack state): the known auto-ack bug stamps read_at/acknowledged_at on rows Adam never processed (QF-20260610-623, sender_type-allowlist class).",
    "match_score": 0.73,
    "carries_modal": false,
-   "disposition": "landed"
+   "disposition": "landed",
+   "probe_evidence": "substance probe: full-inbox polling present"
   },
   {
    "key": "5ccfe23ebd4d",
@@ -1034,7 +1051,8 @@
    "imperative": "(c2) RATIFIED MESSAGE FORMAT (chairman-ratified 2026-07-16, SSOT = TWO-WAY-CHAIRMAN-001 metadata.chairman_sms_decision_design — NOT optional): every SMS-decide is a self-contained decision packet: terse context → LABELED options (A/B/C multi-choice; YES/NO binary) → Adam's RECOMMENDED option named +…",
    "match_score": 0.59,
    "carries_modal": false,
-   "disposition": "NEEDS_DECISION"
+   "disposition": "landed",
+   "probe_evidence": "substance probe: ratified SMS message format present"
   },
   {
    "key": "fc4156bc1c80",
@@ -1069,35 +1087,40 @@
    "imperative": "NO-REPLY POLICY (chairman-RATIFIED 2026-07-17, supersedes the earlier silence=held-forever proposal): a sent SMS-decide with NO reply RETRIES up to TWO times at ~40-min intervals (covers telecom delay / brief absence), then AUTO-APPLIES the stated recommended default.",
    "match_score": 0.36,
    "carries_modal": false,
-   "disposition": "NEEDS_DECISION"
+   "disposition": "landed",
+   "probe_evidence": "substance probe: no-reply/auto-default policy present"
   },
   {
    "key": "34ece3ae823f",
    "imperative": "GUARDRAILS: only items carrying a genuinely SAFE stated default (reversible, non-spend) auto-proceed; an item with NO safe default STAYS HELD and escalates to email/console (never auto-defaults); ALL spend is console-only (never SMS, never auto).",
    "match_score": 0.62,
    "carries_modal": false,
-   "disposition": "landed"
+   "disposition": "landed",
+   "probe_evidence": "substance probe: no-reply/auto-default policy present"
   },
   {
    "key": "c9a1be31b4b6",
    "imperative": "QUIET-HOURS PAUSE: the retry/auto-default clock only advances during waking hours (paused 10PM-6AM ET) so a question sent at night is not silently auto-defaulted while the chairman sleeps — it resumes its clock in the morning.",
    "match_score": 0.27,
    "carries_modal": false,
-   "disposition": "NEEDS_DECISION"
+   "disposition": "landed",
+   "probe_evidence": "substance probe: quiet-hours pause present"
   },
   {
    "key": "67dec3fceb83",
    "imperative": "Each retry restates the question + notes \"auto-defaulting to <X> if no reply\".",
    "match_score": 0.71,
    "carries_modal": false,
-   "disposition": "landed"
+   "disposition": "landed",
+   "probe_evidence": "substance probe: no-reply/auto-default policy present"
   },
   {
    "key": "a66ac673fe2a",
    "imperative": "CHAIRMAN SLEEP WINDOW — STRONG HANDLING (chairman-stated 2026-07-17: \"I typically sleep 10PM-6AM Eastern and will not respond to texts then\"): the window is 22:00-06:00 America/New_York, computed with the DST-aware IANA timezone (never a hardcoded UTC offset) so it tracks EST/EDT automatically.",
    "match_score": 0.46,
    "carries_modal": false,
-   "disposition": "NEEDS_DECISION"
+   "disposition": "landed",
+   "probe_evidence": "substance probe: quiet-hours pause present"
   },
   {
    "key": "8bd139d2aaa8",
@@ -1132,14 +1155,16 @@
    "imperative": "NOTE: distinct from the older email-quiet rule (11PM-5AM ET for exec emails) — this sleep window governs the SMS channel.",
    "match_score": 0.17,
    "carries_modal": false,
-   "disposition": "NEEDS_DECISION"
+   "disposition": "landed",
+   "probe_evidence": "substance probe: sleep-window strong handling present"
   },
   {
    "key": "fe09f4192870",
    "imperative": "(c3) ROUTINE HEARTBEAT = BRIEF HOURLY SMS, not the hourly email (chairman-directed 2026-07-17; cadence confirmed HOURLY by chairman verbal 2026-07-19: 'your hourly updates'; TEMPORARY CADENCE OVERRIDE (chairman verbal 2026-07-19 ~5:30PM ET: 'maybe you can send me an update via text every half hour i…",
    "match_score": 0.1,
    "carries_modal": false,
-   "disposition": "NEEDS_DECISION"
+   "disposition": "NEEDS_DECISION",
+   "probe_evidence": "ABSENT and UNRESOLVED. Chairman verbal 2026-07-19 set the SMS heartbeat to 30min UNTIL HE RESTORES HOURLY. The shortened contract keeps hourly, so landing it silently cancels a possibly-live directive. Requires chairman confirmation — do not assume either state."
   },
   {
    "key": "f0a2681f83eb",
@@ -1202,21 +1227,24 @@
    "imperative": "This duty follows the belt-countdown durable-encoding pattern — it previously lived only in session wakeup prompts and would have died with the session.",
    "match_score": 0.36,
    "carries_modal": false,
-   "disposition": "NEEDS_DECISION"
+   "disposition": "landed",
+   "probe_evidence": "substance probe: belt countdown duty present"
   },
   {
    "key": "3c776894977c",
    "imperative": "- ARTIFACT PRE-SHIP GATE (chairman-directed 2026-07-19, after the invented-Gantt-dates incident): every chairman-facing ARTIFACT (document, chart, image, digest) passes a pre-ship gate before delivery — the artifact-channel twin of the SMS pre-send rubric: (a) SOURCE-ATTRIBUTION — every number/date …",
    "match_score": 0.3,
    "carries_modal": true,
-   "disposition": "NEEDS_DECISION"
+   "disposition": "landed",
+   "probe_evidence": "substance probe: artifact pre-ship gate present"
   },
   {
    "key": "ecac16a06afd",
    "imperative": "ENCODE-BEFORE-NEXT-USE (the parent rule, same incident): a chairman-ratified constraint is scribed into this contract/spec BEFORE Adam next performs the action it governs — a ratified rule may never remain conversation-only across even one use of the governed action (the knowledge-existing-vs-knowle…",
    "match_score": 0.37,
    "carries_modal": true,
-   "disposition": "NEEDS_DECISION"
+   "disposition": "landed",
+   "probe_evidence": "substance probe: encode-before-next-use present"
   },
   {
    "key": "ce263411e4a8",
@@ -1230,7 +1258,8 @@
    "imperative": "The helper adds a Todoist task + an EXPLICIT verified v1 push reminder — the @doist SDK is BLIND to reminders (Sync-API-only), and dueDatetime / the ! quick-add syntax attach 0 reminders and never push, so only the explicit reminder_add buzzes the phone.",
    "match_score": 0.65,
    "carries_modal": false,
-   "disposition": "landed"
+   "disposition": "landed",
+   "probe_evidence": "substance probe: chairman phone-notify present"
   },
   {
    "key": "a505b61cbe22",
@@ -1251,7 +1280,8 @@
    "imperative": "The coordinator uses the SAME helper for urgent gate decisions; never re-implement the v1 reminder_add POST anywhere.",
    "match_score": 0.36,
    "carries_modal": false,
-   "disposition": "NEEDS_DECISION"
+   "disposition": "landed",
+   "probe_evidence": "substance probe: chairman phone-notify present"
   },
   {
    "key": "455405cf18a4",
@@ -1272,7 +1302,8 @@
    "imperative": "(b) WHENEVER THE CHAIRMAN PASTES A USAGE CHART, MATCH IT TO THE CURRENTLY-ACTIVE ACCOUNT FIRST — resolve the live account identity (node -e read ~/.claude.json -> oauthAccount.emailAddress) and bind the chart to THAT account before acting on any number.",
    "match_score": 0.32,
    "carries_modal": false,
-   "disposition": "NEEDS_DECISION"
+   "disposition": "landed",
+   "probe_evidence": "substance probe: account-switch/usage duty present"
   },
   {
    "key": "38c819f43323",
@@ -1307,7 +1338,8 @@
    "imperative": "- THE BELT-NEVER-DRY LAW — the unifying plan/sourcing/block principle (chairman-directed 2026-07-17, hard-coded into the contract at his request): As long as the project-management plan (the ratified LEO Roadmap / plan of record) is NOT 100% complete, the belt should NEVER be dry.",
    "match_score": 0.3,
    "carries_modal": true,
-   "disposition": "NEEDS_DECISION"
+   "disposition": "landed",
+   "probe_evidence": "substance probe: belt-never-dry law present"
   },
   {
    "key": "7fe957dc6f0b",
@@ -1328,7 +1360,8 @@
    "imperative": "Chairman-canonical 2026-07-17: 'that belt should never be empty, never be dry, until the project management plan is 100% complete.",
    "match_score": 0.4,
    "carries_modal": false,
-   "disposition": "NEEDS_DECISION"
+   "disposition": "landed",
+   "probe_evidence": "substance probe: belt-never-dry law present"
   },
   {
    "key": "21d92fbdaa22",
@@ -1349,7 +1382,8 @@
    "imperative": "(2) BLOCKED work — the work exists but is fenced/blocked -> RESOLVE the block per the BLOCK RESOLUTION duty (verify stale-vs-real first, then route the actual unblocking work; never force-unfence).",
    "match_score": 0.47,
    "carries_modal": false,
-   "disposition": "NEEDS_DECISION"
+   "disposition": "landed",
+   "probe_evidence": "substance probe: block-resolution method present"
   },
   {
    "key": "4f606a8420e0",
@@ -1412,7 +1446,8 @@
    "imperative": "THE RIGHT WAY (mandatory method): (1) VERIFY-FIRST — before treating any block as real, check it against LIVE ground truth: is the block STALE (its named dependency already shipped/completed, its prerequisite already built)?",
    "match_score": 0.48,
    "carries_modal": false,
-   "disposition": "NEEDS_DECISION"
+   "disposition": "landed",
+   "probe_evidence": "substance probe: block-resolution method present"
   },
   {
    "key": "e6d06d01a284",
@@ -1433,7 +1468,8 @@
    "imperative": "(3) NEVER force-unfence to fill the belt — clearing a fence is legitimate ONLY when the underlying block is actually resolved or verified stale; belt-fill pressure is never a reason to unblock.",
    "match_score": 0.24,
    "carries_modal": true,
-   "disposition": "NEEDS_DECISION"
+   "disposition": "landed",
+   "probe_evidence": "substance probe: block-resolution method present"
   },
   {
    "key": "d002fb8e50a2",
@@ -2329,7 +2365,8 @@
    "imperative": "Promote an item via node scripts/leo-create-sd.js --from-roadmap-item <id> — the REGISTER-FIRST path (it stamps the two-way roadmap↔SD provenance for you; never hand-recreate it).",
    "match_score": 0.54,
    "carries_modal": false,
-   "disposition": "NEEDS_DECISION"
+   "disposition": "merged_into",
+   "probe_evidence": "EXPECTED RELOCATION, not loss: SD-creation how-to belongs in CLAUDE_ADAM_MANUAL.md. Absence from the contract is intended — but the companion does not exist yet, so this is only correct once it does."
   },
   {
    "key": "829b4d377e44",
@@ -2448,7 +2485,8 @@
    "imperative": "V1/Foundation) derive their % from computeBuildGauge.build_pct (the VDR gauge); OUTCOME rungs (V2/V3 — Revenue, Distance-to-quit) derive from key_results progress via each wave's sd_key_result_alignment.",
    "match_score": 0.21,
    "carries_modal": false,
-   "disposition": "NEEDS_DECISION"
+   "disposition": "landed",
+   "probe_evidence": "substance probe: taper rule present"
   },
   {
    "key": "2cf5b5f81a12",
@@ -2581,14 +2619,16 @@
    "imperative": "NEVER hand-insert into strategic_directives_v2, and NEVER call scripts/leo-create-sd.js directly — the ENF-SD-CREATE-SKILL hook blocks direct calls.",
    "match_score": 0.17,
    "carries_modal": true,
-   "disposition": "NEEDS_DECISION"
+   "disposition": "merged_into",
+   "probe_evidence": "EXPECTED RELOCATION, not loss: SD-creation how-to belongs in CLAUDE_ADAM_MANUAL.md. Absence from the contract is intended — but the companion does not exist yet, so this is only correct once it does."
   },
   {
    "key": "e29e684db424",
    "imperative": "Create path: the /sd-create skill (it sets SD_CREATE_VIA_SKILL=1 and delegates to scripts/leo-create-sd.js).",
    "match_score": 0.22,
    "carries_modal": false,
-   "disposition": "NEEDS_DECISION"
+   "disposition": "merged_into",
+   "probe_evidence": "EXPECTED RELOCATION, not loss: SD-creation how-to belongs in CLAUDE_ADAM_MANUAL.md. Absence from the contract is intended — but the companion does not exist yet, so this is only correct once it does."
   },
   {
    "key": "b159c1486166",
@@ -2602,7 +2642,8 @@
    "imperative": "interactive — /sd-create runs the vision-readiness rubric (Step 0), then prompts.",
    "match_score": 0.14,
    "carries_modal": false,
-   "disposition": "NEEDS_DECISION"
+   "disposition": "merged_into",
+   "probe_evidence": "EXPECTED RELOCATION, not loss: SD-creation how-to belongs in CLAUDE_ADAM_MANUAL.md. Absence from the contract is intended — but the companion does not exist yet, so this is only correct once it does."
   },
   {
    "key": "9bae1ddf5af0",
@@ -2686,7 +2727,8 @@
    "imperative": "success_metrics: array of {metric, target} — supply 3+ (the buildDefaultSuccessMetrics convention in leo-create-sd.js; STRUCTURAL_RULES does NOT shape-check this field).",
    "match_score": 0.09,
    "carries_modal": true,
-   "disposition": "NEEDS_DECISION"
+   "disposition": "merged_into",
+   "probe_evidence": "EXPECTED RELOCATION, not loss: SD-creation how-to belongs in CLAUDE_ADAM_MANUAL.md. Absence from the contract is intended — but the companion does not exist yet, so this is only correct once it does."
   },
   {
    "key": "d1490827d033",
@@ -2714,7 +2756,8 @@
    "imperative": "The other field shapes/counts come from the leo-create-sd.js default builders + specific handoff gate validators (sd-objectives-validator, the SMOKE_TEST_SPECIFICATION gate). isPopulated in sd-quality-scoring.js only checks a non-empty array — it does not enforce the 3+/2+ counts.",
    "match_score": 0.1,
    "carries_modal": false,
-   "disposition": "NEEDS_DECISION"
+   "disposition": "merged_into",
+   "probe_evidence": "EXPECTED RELOCATION, not loss: SD-creation how-to belongs in CLAUDE_ADAM_MANUAL.md. Absence from the contract is intended — but the companion does not exist yet, so this is only correct once it does."
   },
   {
    "key": "b008184ea06b",
@@ -2735,7 +2778,8 @@
    "imperative": "The DB-type mapping is mapToDbType (leo-create-sd.js): infra->infrastructure, doc->documentation, docs->docs (already canonical — passes through, NOT documentation), qa/testing->infrastructure, feat->feature, fix->bugfix, orch->orchestrator; an unknown type FAILS LOUD via assertValidSdType (never a …",
    "match_score": 0.07,
    "carries_modal": false,
-   "disposition": "NEEDS_DECISION"
+   "disposition": "merged_into",
+   "probe_evidence": "EXPECTED RELOCATION, not loss: SD-creation how-to belongs in CLAUDE_ADAM_MANUAL.md. Absence from the contract is intended — but the companion does not exist yet, so this is only correct once it does."
   },
   {
    "key": "999391b99f05",
@@ -2945,14 +2989,16 @@
    "imperative": "META-TO-PRODUCT RATIO = harness/meta items (SD-LEO-INFRA- / SD-LEARN-FIX- / SD-MAN-INFRA- / QF-) filed+shipped vs product/venture items, over the window.",
    "match_score": 0.14,
    "carries_modal": false,
-   "disposition": "NEEDS_DECISION"
+   "disposition": "landed",
+   "probe_evidence": "substance probe: taper rule present"
   },
   {
    "key": "1c05a7ba5223",
    "imperative": "Per THE TAPER RULE (above) it must DECLINE as the solo-operator stability bar approaches — a ratio rising near launch-readiness is the cue to taper meta-sourcing.",
    "match_score": 0.58,
    "carries_modal": false,
-   "disposition": "NEEDS_DECISION"
+   "disposition": "landed",
+   "probe_evidence": "substance probe: taper rule present"
   },
   {
    "key": "ae4441beff63",
@@ -2973,7 +3019,8 @@
    "imperative": "DISTANCE-TO-QUIT = current monthly venture net vs the chairman quit-threshold (read from SD-LEO-ORCH-ADAM-PLAN-KEEPER-001 metadata.chairman_amendment_2026_06_11_income_replacement).",
    "match_score": 0.2,
    "carries_modal": false,
-   "disposition": "NEEDS_DECISION"
+   "disposition": "landed",
+   "probe_evidence": "substance probe: chairman north star present"
   },
   {
    "key": "be6f5fd476f1",
@@ -3029,7 +3076,8 @@
    "imperative": "Reserve the chairman phone-notify (notifyChairman, lib/integrations/todoist/chairman-notify.js) for genuinely urgent, decision-required items — use it sparingly.",
    "match_score": 0.33,
    "carries_modal": false,
-   "disposition": "NEEDS_DECISION"
+   "disposition": "landed",
+   "probe_evidence": "substance probe: chairman phone-notify present"
   },
   {
    "key": "b949609333d8",
@@ -3050,7 +3098,8 @@
    "imperative": "Materialize, do not advise: a bar-clearing candidate is created as a DRAFT SD via the canonical conversion path node scripts/leo-create-sd.js --from-proposal (or the DB-direct --proposal-b64 / --proposal-stdin forms), NOT left as an advisory session_coordination INFO row the coordinator must hand-co…",
    "match_score": 0.48,
    "carries_modal": false,
-   "disposition": "NEEDS_DECISION"
+   "disposition": "merged_into",
+   "probe_evidence": "EXPECTED RELOCATION, not loss: SD-creation how-to belongs in CLAUDE_ADAM_MANUAL.md. Absence from the contract is intended — but the companion does not exist yet, so this is only correct once it does."
   },
   {
    "key": "204d23c2069e",
@@ -3274,14 +3323,16 @@
    "imperative": "MECHANICS (what makes it survive sessions): the underlying facts for done/next/committing are DERIVED FROM THE LEO ROADMAP (roadmap_waves + roadmap_wave_items, the ratified plan of record), not eyeballed from adam_task_ledger — via lib/roadmap/plan-check-status.js computePlanCheckStatus() (CLI: node…",
    "match_score": 0.5,
    "carries_modal": false,
-   "disposition": "NEEDS_DECISION"
+   "disposition": "landed",
+   "probe_evidence": "substance probe: board reconcile duty present"
   },
   {
    "key": "5d706703e4f7",
    "imperative": "The section-4 forward-list persistence anchor (adam_task_ledger, source_ref plan-check-forward-list-) is UNCHANGED and still the COMPUTED-against node for \"what slipped\" / cross-session delta detection.",
    "match_score": 0.13,
    "carries_modal": false,
-   "disposition": "NEEDS_DECISION"
+   "disposition": "landed",
+   "probe_evidence": "substance probe: board reconcile duty present"
   },
   {
    "key": "157a5b67a347",
@@ -3738,5 +3789,15 @@
    "carries_modal": false,
    "disposition": "landed"
   }
- ]
+ ],
+ "probe_campaign": {
+  "method": "hand-written substance probes; the automated score was falsified against ground truth and is NOT used",
+  "named_rules": {
+   "original": 178,
+   "proposed": 104,
+   "dropped": 85,
+   "probed": 36
+  },
+  "scope_limit": "NAMED RULES ONLY. Says nothing about unnamed obligations, which are the majority."
+ }
 }
