@@ -503,7 +503,9 @@ async function main() {
         entity_type: 'strategic_roadmaps',
         entity_id: overrideTargets[0],
         severity: AUDIT_SEVERITY,
-        created_by: `roadmap-generate:${process.env.CLAUDE_SESSION_ID || process.env.USERNAME || 'unknown'}`,
+        // USER before USERNAME: USERNAME is Windows-only, so a POSIX run without a session id
+        // recorded 'unknown' and the audit row lost its actor (SEC-5b).
+        created_by: `roadmap-generate:${process.env.CLAUDE_SESSION_ID || process.env.USER || process.env.USERNAME || 'unknown'}`,
         metadata: {
           sd: 'SD-LEO-INFRA-ROADMAP-REGENERATION-DUPLICATES-001',
           replaced_roadmap_ids: overrideTargets,
