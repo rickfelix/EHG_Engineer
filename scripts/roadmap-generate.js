@@ -454,10 +454,12 @@ async function main() {
     console.log(`  OVERRIDE: --replace-active on ${existingActive.id} — reason: ${replaceReason}`);
     try {
       await supabase.from('audit_log').insert({
-        event: 'ROADMAP_FULL_REPLACE_ACTIVE',
-        details: {
+        event_type: 'ROADMAP_FULL_REPLACE_ACTIVE',
+        entity_type: 'strategic_roadmaps',
+        entity_id: existingActive.id,
+        severity: 'high',
+        metadata: {
           sd: 'SD-LEO-INFRA-ROADMAP-REGENERATION-DUPLICATES-001',
-          replaced_roadmap_id: existingActive.id,
           replaced_roadmap_title: existingActive.title,
           reason: replaceReason,
           dry_run: dryRun,
