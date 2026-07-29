@@ -41,6 +41,7 @@ import { isFixtureSd, isBareShell, bareShellLastCompare, isStartedSd, stripDispa
 // handling both the [{sd_id}]/[{sd_key}] object and raw-string shapes the old hand-rolled
 // resolver coerced, while correctly dropping the sentinel the hand-rolled one mis-counted.
 import { parseSdDependencies } from '../lib/utils/parse-sd-dependencies.cjs';
+import { resolveCanonicalWaveIds } from '../lib/roadmap/canonical-roadmap.js';
 // SD-LEO-INFRA-ADAM-WORK-SELECTION-001 FR-2/FR-3: ONE roadmap-marker predicate, imported rather
 // than re-declared. A hardcoded copy here had already drifted from the reader's list by 326 SDs.
 import { isPlanLinked } from '../lib/adam/work-selection-gate.js';
@@ -449,10 +450,17 @@ async function main() {
       activeRungKey = roll.activeRungKey || null;
       progByKey = rungProgressByKey(roll.rows);
     }
-    const [{ data: waveItems }, { data: waves }] = await Promise.all([
-      sb.from('roadmap_wave_items').select('promoted_to_sd_key, wave_id').not('promoted_to_sd_key', 'is', null),
-      sb.from('roadmap_waves').select('id, time_horizon, metadata'),
-    ]);
+    // SD-LEO-INFRA-ROADMAP-REGENERATION-DUPLICATES-001 FR-4 follow-up — same correction as
+    // gauge-runner.mjs. runRollup() above is scoped; these two queries were a separate unscoped
+    // read feeding buildSdRungMap, which drives needleScore and therefore backlog ORDER. I had
+    // wrongly recorded this call site as fixed transitively.
+    const canonicalWaveIds = await resolveCanonicalWaveIds(sb);
+    const [{ data: waveItems }, { data: waves }] = canonicalWaveIds === null
+      ? [{ data: [] }, { data: [] }]
+      : await Promise.all([
+        sb.from('roadmap_wave_items').select('promoted_to_sd_key, wave_id').in('wave_id', canonicalWaveIds).not('promoted_to_sd_key', 'is', null),
+        sb.from('roadmap_waves').select('id, time_horizon, metadata').in('id', canonicalWaveIds),
+      ]);
     const wavesById = Object.fromEntries((waves || []).map((w) => [w.id, w]));
     sdRungMap = buildSdRungMap(waveItems, wavesById);
     console.log(`[BACKLOG-RANK] needle context: activeRung=${activeRungKey} rungs=${Object.keys(progByKey).join(',') || 'none'} sd↦rung=${Object.keys(sdRungMap).length}`);

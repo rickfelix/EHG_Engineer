@@ -22,6 +22,7 @@ import { createClient } from '@supabase/supabase-js';
 import { pathToFileURL } from 'node:url';
 import { createRequire } from 'node:module';
 import { GAUGE_REGISTRY } from '../lib/governance/gauge-registry.js';
+import { resolveCanonicalWaveIds } from '../lib/roadmap/canonical-roadmap.js';
 import { computeClaimableLeaves } from './coordinator-backlog-rank.mjs';
 import { countUnrankedClaimableLeaves } from './gauge-unranked-claimable-leaves.mjs';
 import { checkoutFreshness } from '../lib/governance/checkout-freshness.js';
@@ -313,10 +314,26 @@ function buildDetectorResolvers(supabase) {
         const computeGaugeFn = () => computeBuildGauge({ io: { supabase, grep }, visionSource: true });
         const roll = await runRollup({ supabase, computeGaugeFn, apply: false, log: () => {} });
         if (roll && roll.ok) activeRungKey = roll.activeRungKey || null;
-        const [{ data: waveItems }, { data: waves }] = await Promise.all([
-          supabase.from('roadmap_wave_items').select('promoted_to_sd_key, wave_id').not('promoted_to_sd_key', 'is', null),
-          supabase.from('roadmap_waves').select('id, time_horizon, metadata'),
-        ]);
+        // SD-LEO-INFRA-ROADMAP-REGENERATION-DUPLICATES-001 FR-4 follow-up. I previously claimed
+        // this call site was fixed "transitively" because it calls runRollup(). That was WRONG,
+        // and the EXEC adversarial review caught it: runRollup is scoped, but these two queries
+        // are a SEPARATE, unscoped read feeding buildSdRungMap. Seeing the scoped call above made
+        // me stop looking.
+        //
+        // It also left this one function internally inconsistent: computeStampCoverage() at the
+        // top is canonical-scoped, while sdRungMap here was corpus-wide — two populations, one
+        // gauge, which is how a 'plan-drift-mix' value stops meaning one thing.
+        //
+        // Impact today is nil (all non-canonical waves have time_horizon=null and no
+        // metadata.rung_key, so mapWaveToRung returns null and buildSdRungMap skips them), so this
+        // is a latent correctness fix, not a live-number one. Stated rather than implied.
+        const canonicalWaveIds = await resolveCanonicalWaveIds(supabase);
+        const [{ data: waveItems }, { data: waves }] = canonicalWaveIds === null
+          ? [{ data: [] }, { data: [] }]
+          : await Promise.all([
+            supabase.from('roadmap_wave_items').select('promoted_to_sd_key, wave_id').in('wave_id', canonicalWaveIds).not('promoted_to_sd_key', 'is', null),
+            supabase.from('roadmap_waves').select('id, time_horizon, metadata').in('id', canonicalWaveIds),
+          ]);
         const wavesById = Object.fromEntries((waves || []).map((w) => [w.id, w]));
         sdRungMap = buildSdRungMap(waveItems, wavesById);
       } catch (e) {
