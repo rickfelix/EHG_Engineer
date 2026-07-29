@@ -4,6 +4,8 @@
 const os = require('os');
 const fs = require('fs');
 const path = require('path');
+// SD-LEO-INFRA-REPO-WIDE-TIMEZONE-001: naive PostgREST timestamps must not be parsed as local.
+const { pgTimestampAgeMs } = require('../lib/time/pg-timestamp.cjs');
 const crypto = require('crypto');
 const util = require('util');
 const { spawnSync } = require('child_process');
@@ -757,7 +759,18 @@ function printQuickFixes(d) {
   const now = Date.now();
   console.log('  ' + pad('ID', 18) + pad('Status', 12) + pad('Age', 6) + pad('Holder', 10) + 'Title');
   for (const qf of qfs) {
-    const ageH = qf.created_at ? Math.max(0, Math.round((now - Date.parse(qf.created_at)) / 3600000)) + 'h' : '?';
+    // SD-LEO-INFRA-REPO-WIDE-TIMEZONE-001 FR-5. This line previously read:
+    //     Math.max(0, Math.round((now - Date.parse(qf.created_at)) / 3600000)) + 'h'
+    // Two defects in one expression. The bare Date.parse read the naive created_at as LOCAL,
+    // so on a UTC-4 host every QF younger than 4h computed a NEGATIVE age — and the
+    // Math.max(0, ...) then printed that impossible value as a perfectly plausible "0h".
+    // THE CLAMP IS WHY THIS SURVIVED: a negative age was the only self-evident symptom this
+    // bug class ever produces, and the clamp deleted it. The coordinator read this column all
+    // night without seeing anything wrong.
+    // The parse is now correct, so ages are truthful; the clamp is gone rather than merely
+    // unnecessary, and a negative would print loudly if this ever regresses.
+    const ageMs = qf.created_at ? pgTimestampAgeMs(qf.created_at, now) : NaN;
+    const ageH = Number.isFinite(ageMs) ? Math.round(ageMs / 3600000) + 'h' : '?';
     const holder = qf.claiming_session_id ? String(qf.claiming_session_id).substring(0, 8) : '—';
     // SD-LEO-INFRA-EXCLUDE-CHAIRMAN-GATED-001: gated rows are NOT claimable open work —
     // badge them here so the primary list agrees with the worker-lane exclusion.

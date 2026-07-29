@@ -45,6 +45,11 @@ const ws = require('../lib/fleet/worker-status.cjs');
 // a guard built on it would silently never run. Pinned by tests/unit/fleet/assignment-target.test.js.
 const { resolveAssignmentTargetKey } = require('../lib/fleet/assignment-target.cjs');
 const { stampClaim } = require('../lib/fleet/claim-stamp.cjs');
+// SD-LEO-INFRA-REPO-WIDE-TIMEZONE-001: quick_fixes.created_at is `timestamp without time zone`,
+// so PostgREST returns it with no designator and Date.parse reads it as LOCAL — shifting every
+// age below by the host's UTC offset. Canonical normalizer, deliberately CJS so this file can
+// require it directly.
+const { pgTimestampMs } = require('../lib/time/pg-timestamp.cjs');
 // SD-FDBK-FIX-SELF-ONLY-AUTHORIZATION-001: acquisition-time guard so a propose-only
 // (non_fleet/role=adam) session never self-claims a build SD — the shared predicate
 // the ESM claim-validity gate also uses (one source; no asymmetry).
@@ -194,7 +199,12 @@ const CRITICAL_QF_JUMP_GRACE_MS = 10 * 60 * 1000;
 function isCriticalQfJumpEligible(qf, nowMs) {
   if (!isAutoStartableQF(qf, nowMs)) return false;
   if (qf.severity !== 'critical') return false;
-  const created = Date.parse(qf.created_at);
+  // SD-LEO-INFRA-REPO-WIDE-TIMEZONE-001 (absorbs QF-20260729-352). A bare Date.parse here read
+  // the naive created_at as LOCAL, putting it 4h in the FUTURE on a UTC-4 host — so the age went
+  // NEGATIVE for any QF younger than 4h and this 10-minute grace could not be satisfied until the
+  // row was 4h10m old in wall clock. Measured: 250 minutes to clear a 10-minute gate. The
+  // pre-emption was dead for exactly the window it exists to serve.
+  const created = pgTimestampMs(qf.created_at);
   if (!Number.isFinite(created)) return false;
   return (nowMs - created) >= CRITICAL_QF_JUMP_GRACE_MS;
 }
@@ -585,6 +595,23 @@ async function rehydrateCallsign(sb, sessionId, currentMeta) {
  * scripts/modules/sd-next/display/quick-fixes.js. Re-implemented INLINE because
  * worker-checkin.cjs is CommonJS and that module is ESM (package.json
  * type:module), so it cannot be require()d here. SD-LEO-INFRA-MAKE-OPEN-QFS-001.
+ *
+ * *** CORRECTION (SD-LEO-INFRA-REPO-WIDE-TIMEZONE-001). THE REASON ABOVE IS FALSE, AND
+ * BELIEVING IT COST FOUR INCOMPLETE FIXES. *** CJS can require ESM: it has been stable
+ * since Node 22.12 and this fleet runs 24. It was tested, not assumed — requiring the ESM
+ * parseAsUTC from a .cjs returns a working function. The retained text above is left
+ * visible rather than deleted because it is the primary evidence for WHY the timezone bug
+ * class survived four separate fixes without ever reaching this file: each pass read this
+ * docblock, believed reuse was impossible here, and stopped.
+ *
+ * The one real limit is narrower: require() fails with ERR_REQUIRE_ASYNC_MODULE against a
+ * module carrying a TOP-LEVEL AWAIT. That is why the canonical normalizer now lives at
+ * lib/time/pg-timestamp.cjs — a CJS home carries no such constraint, and ESM can import
+ * CJS unconditionally.
+ *
+ * THE DUPLICATION ITSELF IS STILL REAL and is NOT resolved by this SD: this predicate and
+ * scripts/modules/sd-next/display/quick-fixes.js:275 remain independent implementations
+ * that both carried the identical timezone defect. Consolidating them is follow-on work.
  */
 function isAutoStartableQF(qf, nowMs) {
   if (!qf || qf.status !== 'open') return false;
@@ -618,7 +645,8 @@ function isAutoStartableQF(qf, nowMs) {
   // Stays status='open' but is false open work for a worker: exclude until released via
   // scripts/release-chairman-gated-qf.js. Visible on the coordinator surface, never lost.
   if (isChairmanGatedQF(qf)) return false;
-  const created = qf.created_at ? Date.parse(qf.created_at) : NaN;
+  // SD-LEO-INFRA-REPO-WIDE-TIMEZONE-001: naive created_at, see the require at the top of this file.
+  const created = qf.created_at ? pgTimestampMs(qf.created_at) : NaN;
   if (!Number.isFinite(created)) return false;
   const ageDays = (nowMs - created) / (24 * 60 * 60 * 1000);
   return ageDays < STALE_QF_DAYS;                       // exclude stale/verify-first QFs
