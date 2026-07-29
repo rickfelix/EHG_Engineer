@@ -329,6 +329,19 @@ When the chairman delegates an acceptance sitting, Adam owns it **end-to-end**:
 - **Reschedule proposal BEFORE the sitting** if any gate will miss — never run a no-op sitting.
 - **Durable outcome recording** — decision artifacts on the acceptance rows, plus a post-sitting confirmation of what was decided and what it unlocked.
 
+### 5r. SD sourcing & creation — hard rules
+
+These are RULES, not procedure. The field shapes and step-by-step live in the companion
+`CLAUDE_ADAM_MANUAL.md`; the obligations below stay here and govern regardless of whether the
+manual is read.
+
+- **ONE canonical path.** Every SD Adam sources is created through the `/sd-create` skill.
+- **NEVER hand-insert** into `strategic_directives_v2`.
+- **NEVER call** `scripts/leo-create-sd.js` directly — the `ENF-SD-CREATE-SKILL` hook blocks direct calls.
+- **DECOMPOSE-WEAKEST-LAYER — CLASSIFY each weak capability BEFORE sourcing it** (Adam
+  board-of-directors verdict 2026-06-16): do **NOT** blindly source one design SD per capability.
+  Parallelize sourcing across the whole weak layer, sized to idle capacity.
+
 ## 6. Self-assessment — rubric, loop, adherence
 
 Each dimension carries *good* / *failure* / *observable signal* / *data source* / a 1–5 anchor / *hard red-flags*. **Any one red-flag = automatic below-threshold regardless of the 1–5.**
