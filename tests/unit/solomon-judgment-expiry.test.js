@@ -70,8 +70,9 @@ describe('TS-2 — expiry does NOT touch the decision column', () => {
   });
 
   it('always attributes the stamp — the DB CHECK requires it', () => {
-    // Without attribution a hand-written row is indistinguishable from one the mechanism produced,
-    // and TS-10 (did it actually RUN) becomes satisfiable by hand.
+    // Guarantees a stamp is never ANONYMOUS. It does NOT establish WHO stamped it: EXPIRY_ACTOR is a
+    // public exported constant and every writer shares one service-role identity, so this cannot
+    // distinguish the job from a hand-written row. TS-10 needs a witness the DB cannot supply.
     expect(expiryPatch({ nowIso: 'x' }).judgment_expired_by).toBe(EXPIRY_ACTOR);
   });
 
@@ -88,9 +89,11 @@ describe('TS-2 — expiry does NOT touch the decision column', () => {
     // The reversal, pinned: no decision-CHECK surgery, and no new decision value in executable SQL.
     expect(sql).not.toMatch(/decision_check/);
     expect(sql).not.toContain('expired_unjudged');
-    // The attribution CHECK is what makes TS-10 non-forgeable — a hand-written row cannot pass for
-    // a mechanism that ran. Review found neutering it to CHECK(true) failed nothing, while my
-    // commit rested that guarantee on it. This is a SOURCE pin, not behaviour: the constraint does
+    // The attribution CHECK guarantees an expiry stamp is never ANONYMOUS — narrower than what I
+    // first claimed. It does NOT make TS-10 non-forgeable: it constrains neither the value
+    // (EXPIRY_ACTOR is a public constant) nor the writer (all writers share one service-role
+    // identity), so no CHECK can distinguish a hand-written row from a mechanism's. This is a
+    // SOURCE pin, not behaviour: the constraint does
     // not exist in the live schema yet (verified 42703), and only apply-time verification can turn
     // intent into a present fact. But it is the same tier as every other claim asserted about this
     // file, so there is no reason the load-bearing one was the unpinned exception.

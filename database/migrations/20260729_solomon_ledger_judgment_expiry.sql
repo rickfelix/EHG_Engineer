@@ -39,11 +39,20 @@ CREATE INDEX IF NOT EXISTS idx_solomon_ledger_judgment_expired
   ON solomon_advice_outcome_ledger (judgment_expired_at)
   WHERE judgment_expired_at IS NOT NULL;
 
--- Attribution is REQUIRED when expiry is stamped. Without it a hand-written row is
--- indistinguishable from one the aging job produced, and TS-10 -- which asserts the mechanism
--- actually RAN rather than merely shipping green -- would be satisfiable by hand. Five mechanisms
--- have already shipped into this table and all five run at zero; that is the failure mode this
--- constraint is aimed at.
+-- Attribution is REQUIRED when expiry is stamped: a stamped row must say WHAT stamped it.
+--
+-- CLAIM NARROWED AFTER SECURITY REVIEW, because the first version of this comment overstated it. I
+-- wrote that this makes a hand-written row unable to "pass for a mechanism that actually ran". It
+-- does not, and no CHECK could: it constrains neither the VALUE (EXPIRY_ACTOR is a public exported
+-- constant anyone can copy) nor the WRITER (every writer authenticates as the same service role, so
+-- Postgres cannot tell them apart). What it actually guarantees is narrower and still worth having:
+-- an expiry stamp can never be ANONYMOUS, so a row missing attribution is a schema violation rather
+-- than a silent gap.
+--
+-- TS-10 -- "the mechanism actually RAN rather than merely shipping green" -- therefore CANNOT rest
+-- on this constraint. Five mechanisms have already shipped into this table and all five run at zero;
+-- distinguishing "ran" from "shipped" needs a witness the DB cannot provide, and that is recorded as
+-- an open gap rather than papered over with a constraint that reads like it closes it.
 ALTER TABLE solomon_advice_outcome_ledger
   DROP CONSTRAINT IF EXISTS solomon_ledger_judgment_expiry_attributed;
 ALTER TABLE solomon_advice_outcome_ledger
