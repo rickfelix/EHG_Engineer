@@ -79,3 +79,60 @@ describe('FR-5 — the token/sentence discriminant', () => {
     expect(resolveOutcomeRef('rejected', {}).ref).toBeNull();
   });
 });
+
+/**
+ * FR-6 — outcome_sd_key drives the FORWARD reconciliation path and had no production writer.
+ *
+ * solomon-ledger-reconcile.cjs:64 skips every row lacking it ("no outcome_sd_key") and :70 resolves
+ * the SD by it to derive an outcome. Measured: NULL on 1062 of 1109 rows, and the 47 populated ones
+ * came from one-off scripts, not from any production path. That is why the reconciler is inert on
+ * ~95% of the ledger — the same starvation as FR-5, on the other leg. Both mechanisms were built and
+ * neither was fed.
+ *
+ * NOTE THE CORRECTION IN THE SD'S OWN RECORD: this SD originally asserted "zero writers, NULL on
+ * 1094/1094". The table said 47, and so did the SD's own description body — it contradicted itself.
+ */
+describe('FR-6 — outcome_sd_key is derived when the artifact is an SD/QF key', () => {
+  function capturingClient() {
+    const rows = [];
+    return {
+      rows,
+      from() {
+        return {
+          upsert(row) { rows.push(row); return Promise.resolve({ error: null }); },
+          update() { return { in: () => Promise.resolve({ error: null }), eq: () => Promise.resolve({ error: null }) }; },
+          select() { return { eq: () => ({ is: () => Promise.resolve({ data: [], error: null }) }) }; },
+        };
+      },
+    };
+  }
+
+  it('populates outcome_sd_key from an SD-key artifact', async () => {
+    const m = require_('../../scripts/coordinator-ack-adam.cjs');
+    const c = capturingClient();
+    await m.recordLedgerDecision(c, { correlationId: 'c1', disposition: 'accepted', outcomeRef: 'SD-LEO-INFRA-ADVICE-OUTCOME-LEDGER-001' });
+    expect(c.rows[0].outcome_sd_key).toBe('SD-LEO-INFRA-ADVICE-OUTCOME-LEDGER-001');
+    // DERIVED, never separately supplied: two hand-entered fields would drift and then disagree
+    // about which artifact a decision tracked.
+    expect(c.rows[0].outcome_ref).toBe(c.rows[0].outcome_sd_key);
+  });
+
+  it('leaves outcome_sd_key unset for a NON-SD artifact', async () => {
+    // The negative control. Without it, "always copy outcome_ref into outcome_sd_key" would satisfy
+    // the test above — and the reconciler would then look up SDs by a commit sha and find nothing,
+    // turning an inert path into a noisy one.
+    const m = require_('../../scripts/coordinator-ack-adam.cjs');
+    const c = capturingClient();
+    await m.recordLedgerDecision(c, { correlationId: 'c2', disposition: 'accepted', outcomeRef: 'https://github.com/rickfelix/ehg/pull/783' });
+    expect(c.rows[0].outcome_ref).toBeTruthy();
+    expect(c.rows[0].outcome_sd_key).toBeUndefined();
+  });
+
+  it('never derives a key from the NO_ARTIFACT sentinel', async () => {
+    const m = require_('../../scripts/coordinator-ack-adam.cjs');
+    const c = capturingClient();
+    await m.recordLedgerDecision(c, { correlationId: 'c3', disposition: 'accepted', noArtifact: 'verbal ack' });
+    expect(c.rows[0].outcome_ref).toMatch(/^NO_ARTIFACT/);
+    expect(c.rows[0].outcome_sd_key).toBeUndefined();
+  });
+});

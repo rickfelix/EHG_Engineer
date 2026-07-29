@@ -192,6 +192,23 @@ async function recordLedgerDecision(supabase, { correlationId, disposition, deci
       decision_at: decisionAt,
     };
     if (resolvedOutcomeRef) row.outcome_ref = resolvedOutcomeRef;
+    // SD-LEO-INFRA-ADVICE-OUTCOME-LEDGER-001 FR-6 — ALSO populate outcome_sd_key when the artifact
+    // IS an SD/QF key.
+    //
+    // This column is not decoration: it drives the FORWARD reconciliation path.
+    // solomon-ledger-reconcile.cjs:64 skips every row without it ("no outcome_sd_key") and :70 looks
+    // the SD up by it to derive the outcome via mapSdStatusToOutcome. It had NO production writer —
+    // the 47 populated rows came from one-off scripts — so it is NULL on 1062 of 1109 rows, and that
+    // is the reason the reconciler is inert on ~95% of the ledger.
+    //
+    // Same starvation as FR-5, on the other leg: the negative path was starved of matchable refs,
+    // the forward path is starved of this key. Both were built and neither was fed.
+    //
+    // Derived rather than separately supplied, deliberately: a second hand-entered field would drift
+    // from outcome_ref, and then two columns would disagree about which artifact a decision tracked.
+    if (resolvedOutcomeRef && !isNoArtifactRef(resolvedOutcomeRef) && /^(SD|QF)-[A-Z0-9-]+$/i.test(resolvedOutcomeRef)) {
+      row.outcome_sd_key = resolvedOutcomeRef;
+    }
     if (disposition === 'deferred') row.defer_trigger = deferTrigger;
     const { error } = await supabase
       .from('solomon_advice_outcome_ledger') // schema-lint-disable-line — new table (this PR's migration), chairman-apply-gated, not yet in the live snapshot
