@@ -9,7 +9,7 @@ import { describe, it, expect } from 'vitest';
 import fs from 'fs';
 import os from 'os';
 import path from 'path';
-import { classifyAudit, isReparsePoint, collectWorktrees, resolveMainRepoRoot } from '../../../scripts/audit/worktree-reparse-audit.mjs';
+import { classifyAudit, isReparsePoint, collectWorktrees, resolveMainRepoRoot, isArchivedWorktree, auditWorktrees, partitionWorktrees } from '../../../scripts/audit/worktree-reparse-audit.mjs';
 
 describe('classifyAudit — 0/0 is a FAILURE TO MEASURE, never a pass', () => {
   it('refuses an empty denominator', () => {
@@ -105,5 +105,80 @@ describe('resolveMainRepoRoot — the guard must measure the FLEET, not the call
   it('does not truncate on a path that merely CONTAINS the word worktrees', () => {
     // Guards against matching a bare substring instead of the path segment.
     expect(resolveMainRepoRoot('C:/repo/my-worktrees-notes')).toBe('C:/repo/my-worktrees-notes');
+  });
+});
+
+describe('isArchivedWorktree — the denominator must be the LIVE fleet', () => {
+  // ADDED AFTER THE COORDINATOR TURNED THEIR OWN WARNING ON THIS FILE. They cautioned against
+  // reading an unreaped pool as evidence; the reaper is currently refusing to reap, so archived
+  // trees accumulate. This audit swept _archive into the denominator and reported 52-53 when the
+  // live population was 17 -- a ratio over a stale-inflated base, which is the same
+  // wrong-population error this SD LEAD phase made twice before.
+  it('classifies an _archive path as archived', () => {
+    expect(isArchivedWorktree('C:/repo/.worktrees/_archive/SD-OLD-001-2026-07-27T15-15-41')).toBe(true);
+  });
+
+  it('classifies a live worktree as NOT archived', () => {
+    expect(isArchivedWorktree('C:/repo/.worktrees/SD-LIVE-001')).toBe(false);
+  });
+
+  it('handles Windows separators', () => {
+    // This literal was CORRUPTED on first write and STILL PASSED. A shell heredoc ate the
+    // backslash in \repo, so the assertion ran against 'C:<CR>epo\...' and matched for a
+    // COINCIDENTAL reason -- the mangled string still contained /_archive/ after normalisation.
+    // A green test on a string that is not the string you wrote is the same class as the
+    // un-failable pins this SD keeps surfacing, so the input is now pinned FIRST.
+    const winPath = String.raw`C:\repo\.worktrees\_archive\SD-OLD-001`;
+    expect(winPath).toContain('\\repo\\');   // the input is what it appears to be
+    expect(winPath).not.toContain(String.fromCharCode(13));  // no CR smuggled in
+    expect(isArchivedWorktree(winPath)).toBe(true);
+  });
+
+  it('does NOT match a name that merely CONTAINS _archive', () => {
+    // Guards substring matching: the segment is /_archive/, not the bare token.
+    expect(isArchivedWorktree('C:/repo/.worktrees/SD-_archive-tooling-001')).toBe(false);
+  });
+});
+
+describe('auditWorktrees — archived trees are REPORTED but never move the verdict', () => {
+  // THE FIRST VERSION OF THIS BLOCK WAS UN-FAILABLE and I wrote it. It asserted
+  // `classifyAudit({total: 17})` directly, which stays green no matter what main() passes in — so
+  // it pinned nothing about the live-vs-archived rule it claimed to guard. The rule only became
+  // testable once the partition was extracted into a function a test can actually drive.
+  const isArchivedFake = (w) => w.includes('_archive');
+
+  it('a junction in an ARCHIVED tree does NOT fail the live fleet', () => {
+    const r = auditWorktrees(['/wt/a', '/wt/b', '/wt/_archive/old'], isArchivedFake);
+    expect(r.verdict).toBe('CLEAN');
+    expect(r.archivedReparse).toHaveLength(1);   // still surfaced, never hidden
+  });
+
+  it('the DENOMINATOR counts live trees only', () => {
+    // Fold the archive in and this reads "0 of 3" — the stale-pool dilution this guards against.
+    const r = auditWorktrees(['/wt/a', '/wt/b', '/wt/_archive/old'], isArchivedFake);
+    expect(r.reason).toMatch(/0 of 2/);
+    expect(r.live).toHaveLength(2);
+  });
+
+  it('a junction in a LIVE tree DOES fail — the guard still has teeth', () => {
+    const r = auditWorktrees(['/wt/a', '/wt/_archive/old'], (w) => w === '/wt/a');
+    expect(r.verdict).toBe('REGRESSION');
+    expect(r.exitCode).toBe(1);
+  });
+
+  it('an all-archived population is FAILED_TO_MEASURE, not a free pass', () => {
+    // The stalled-reaper worst case: every tree archived, live denominator 0. Reporting CLEAN here
+    // would be a vacuous green over an empty base — the exact 0/0 trap this file exists for.
+    expect(auditWorktrees(['/wt/_archive/a'], isArchivedFake).verdict).toBe('FAILED_TO_MEASURE');
+  });
+});
+
+describe('partitionWorktrees', () => {
+  it('splits without dropping or duplicating any tree', () => {
+    const all = ['/wt/a', '/wt/_archive/x', '/wt/b', '/wt/_archive/y'];
+    const { live, archived } = partitionWorktrees(all);
+    expect(live).toEqual(['/wt/a', '/wt/b']);
+    expect(archived).toEqual(['/wt/_archive/x', '/wt/_archive/y']);
+    expect(live.length + archived.length).toBe(all.length);
   });
 });

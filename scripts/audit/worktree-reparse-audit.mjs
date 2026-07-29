@@ -63,6 +63,53 @@ export function classifyAudit({ total, reparse }) {
   return { verdict: 'CLEAN', exitCode: 0, reason: `0 of ${total} worktree node_modules are reparse points` };
 }
 
+/**
+ * Pure: is this worktree path an ARCHIVED tree rather than a live one?
+ *
+ * ADDED AFTER THE COORDINATOR TURNED THEIR OWN WARNING ON THIS FILE. They cautioned against
+ * reading an unreaped pool as evidence — the reaper is currently REFUSING TO REAP (8 commits
+ * behind origin/main, dirty tree), so archived trees accumulate. This audit enumerated `.git`
+ * dirs recursively and swept `_archive` in with the rest, reporting a denominator of 52-53 when
+ * the LIVE population was 17 (measured 2026-07-29T00:40Z; `git worktree list` agrees: 1 main + 16
+ * linked). A ratio over a stale-inflated denominator is the same wrong-population error this SD's
+ * LEAD phase already made twice. The count is STAMPED because the population is volatile — an
+ * unstamped count of a moving population manufactures contradictions between two correct readers.
+ *
+ * Archived trees still matter — a junction in one is still a junction — so they are COUNTED and
+ * REPORTED, just never folded into the live denominator.
+ */
+export function isArchivedWorktree(p) {
+  return String(p).split(path.sep).join('/').includes('/_archive/');
+}
+
+/**
+ * Pure: split a worktree list into live and archived. Extracted so the live-only denominator is
+ * PINNABLE. Asserting `classifyAudit({total: 17})` in a test does NOT pin this — that assertion
+ * stays green no matter what main() passes in, which is the un-failable-pin shape this SD keeps
+ * finding. The rule only becomes testable once the partition is a function a test can drive.
+ */
+export function partitionWorktrees(all = []) {
+  const live = [];
+  const archived = [];
+  for (const w of all) (isArchivedWorktree(w) ? archived : live).push(w);
+  return { live, archived };
+}
+
+/**
+ * Pure: the whole audit, minus IO. `isReparse` is injectable so a test can drive the real
+ * live-vs-archived rule without creating junctions on disk.
+ *
+ * THE INVARIANT: a reparse point in an ARCHIVED tree is REPORTED but must never move the verdict
+ * or the denominator. With the reaper stalled the archive grows without bound; folding it in lets
+ * a stale pool dilute a ratio that is supposed to describe the CURRENT fleet.
+ */
+export function auditWorktrees(all, isReparse = (w) => isReparsePoint(path.join(w, 'node_modules'))) {
+  const { live, archived } = partitionWorktrees(all);
+  const liveReparse = live.filter(isReparse);
+  const archivedReparse = archived.filter(isReparse);
+  return { live, archived, liveReparse, archivedReparse, ...classifyAudit({ total: live.length, reparse: liveReparse }) };
+}
+
 /** Recursively collect directories that contain a `.git` entry — the instrument-independent population. */
 export function collectWorktrees(rootDir, fsImpl = fs, depth = 0) {
   const out = [];
@@ -138,19 +185,29 @@ function main() {
   if (selfCode !== 0) process.exit(selfCode);
   if (selfOnly) process.exit(0);
 
-  const worktrees = collectWorktrees(worktreesDir);
-  const reparse = worktrees.filter((w) => isReparsePoint(path.join(w, 'node_modules')));
+  const all = collectWorktrees(worktreesDir);
   const measuredAt = new Date().toISOString();
-  const result = classifyAudit({ total: worktrees.length, reparse });
+  // LIVE vs ARCHIVED are reported separately and NEVER summed into one denominator. The rule lives
+  // in auditWorktrees() so it is covered by a test that can actually fail; main() stays thin IO.
+  const { live, archived, liveReparse, archivedReparse, ...result } = auditWorktrees(all);
 
   if (json) {
-    console.log(JSON.stringify({ measured_at: measuredAt, total_worktrees: worktrees.length, reparse_points: reparse, ...result }, null, 2));
+    console.log(JSON.stringify({
+      measured_at: measuredAt,
+      live_worktrees: live.length, live_reparse_points: liveReparse,
+      archived_worktrees: archived.length, archived_reparse_points: archivedReparse,
+      verdict_basis: 'live only — archived trees are counted and reported but never folded into the denominator',
+      ...result
+    }, null, 2));
   } else {
     console.log(`\n  measured_at: ${measuredAt}   <- the population is VOLATILE; a count without this manufactures contradictions`);
-    console.log(`  total_worktrees: ${worktrees.length}  (recursive, dirs containing .git)`);
-    console.log(`  reparse_points:  ${reparse.length}`);
-    for (const r of reparse) console.log(`    ! ${r}`);
-    console.log(`\n  ${result.verdict}: ${result.reason}\n`);
+    console.log(`  live_worktrees:     ${live.length}  (recursive, dirs containing .git, EXCLUDING _archive)`);
+    console.log(`  reparse (live):     ${liveReparse.length}`);
+    for (const r of liveReparse) console.log(`    ! ${r}`);
+    console.log(`  archived_worktrees: ${archived.length}  (reported, NOT in the denominator — a stalled reaper inflates this)`);
+    console.log(`  reparse (archived): ${archivedReparse.length}`);
+    for (const r of archivedReparse) console.log(`    ~ ${r}`);
+    console.log(`\n  ${result.verdict}: ${result.reason}  [live fleet only]\n`);
   }
   process.exit(result.exitCode);
 }
