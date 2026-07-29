@@ -491,8 +491,14 @@ export async function validateProtocolFileRead(handoffType, ctx = {}) {
       console.log('   ✅ CROSS-MODE FALLBACK: FULL file present - allowing handoff');
       console.log('   💡 Regenerate DIGEST files: node scripts/generate-claude-md-from-db.js');
 
-      markProtocolFileRead(requiredFile);
-
+      // SD-LEO-INFRA-ROLE-CONTRACT-READ-GATE-001 / FR-1, SECOND SITE. The same write lived here and
+      // I MISSED IT ON THE FIRST PASS — I fixed the PASS_FALLBACK branch and shipped, leaving an
+      // identical self-falsifying stamp in the cross-mode branch one screen further down. It is
+      // arguably worse here: it marks the DIGEST file as read on the strength of the FULL file
+      // merely existing, so the record names a file nobody opened in either form.
+      // Found because the FR-1 regression guard failed on its first run for the wrong reason, and
+      // reading why surfaced this. Only reachable in digest mode, which the codebase currently
+      // pins off — but "unreachable today" is exactly how the other dead gate became a trap.
       const state = readSessionState();
       emitStructuredLog({
         event: 'PROTOCOL_FILE_READ_GATE',

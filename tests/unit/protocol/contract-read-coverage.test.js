@@ -10,7 +10,7 @@
 import { describe, it, expect } from 'vitest';
 import { createRequire } from 'node:module';
 const require_ = createRequire(import.meta.url);
-const { contractReadVerdict, FULL_COVERAGE_PCT } = require_('../../../lib/protocol/contract-read-coverage.cjs');
+const { contractReadVerdict, FULL_COVERAGE_PCT, SINGLE_READ_SAFE_BYTES } = require_('../../../lib/protocol/contract-read-coverage.cjs');
 
 describe('contractReadVerdict — the inversion, both halves', () => {
   it('THE DILIGENT READER: paginated full coverage reports FULLY READ', () => {
@@ -166,5 +166,62 @@ describe('coverage threshold', () => {
     expect(v.coverage_pct).toBe(50);
 
     // MUTATION: sum the limits instead of unioning -> 100%, fully_read true, fails.
+  });
+});
+
+describe('size tier DEFERS to contradicting delivered evidence', () => {
+  /**
+   * *** THIS TIER ORIGINALLY OVERRODE A DIRECT MEASUREMENT WITH A SIZE INFERENCE. ***
+   * A 40KB contract whose own lastDelivered recorded 100 of 500 lines returned fully_read=true on
+   * basis 'single_read_safe_size'. That is a cheap proxy outranking the real signal — the same
+   * defect class this whole module exists to close, reintroduced one tier up by the fix for it.
+   * Found in SECURITY review and reproduced on the merged code before the fix.
+   */
+  it('a small contract with lastDelivered showing partial coverage is NOT fully read', () => {
+    const v = contractReadVerdict(
+      { readCount: 1, lastReadWasPartial: false, lastDelivered: { numLines: 100, totalLines: 500, coveredWholeFile: false } },
+      500,
+      { sizeBytes: 30000 }
+    );
+    expect(v.fully_read).toBe(false);
+    expect(v.basis).toBe('delivered_lines');
+    expect(v.coverage_pct).toBe(20);
+
+    // MUTATION THAT MUST BREAK THIS: run the size tier before checking lastDelivered (the shipped
+    // state). Returns fully_read true on basis single_read_safe_size.
+  });
+
+  it('a small contract with lastDelivered showing FULL coverage is still fully read', () => {
+    // The other half — the guard must not turn into "any lastDelivered blocks the tier".
+    const v = contractReadVerdict(
+      { readCount: 1, lastReadWasPartial: false, lastDelivered: { numLines: 99, totalLines: 99, coveredWholeFile: true } },
+      99,
+      { sizeBytes: 30000 }
+    );
+    expect(v.fully_read).toBe(true);
+  });
+});
+
+describe('SINGLE_READ_SAFE_BYTES is derived from a MEASUREMENT, not an assertion', () => {
+  /**
+   * The original 50,000 was justified by "2 bytes/token is below any real tokenizer's ratio". That
+   * claim was FALSE — measured with tiktoken cl100k_base on 50,000-byte samples: random ASCII ~1.32
+   * B/token (52% over the 25k cap), base64 ~1.40 (43% over), hex/minified ~1.77 (over). Re-derived
+   * as 25,000 tokens x 1.32 = 33,000, set to 32,000 for margin. Pinned here so it cannot drift back
+   * to a number justified by assertion.
+   */
+  it('is bounded by the densest measured tokenization, not by a guessed ratio', () => {
+    const WORST_MEASURED_BYTES_PER_TOKEN = 1.32;
+    const READ_CAP_TOKENS = 25000;
+    expect(SINGLE_READ_SAFE_BYTES).toBeLessThanOrEqual(READ_CAP_TOKENS * WORST_MEASURED_BYTES_PER_TOKEN);
+
+    // MUTATION: raise it back to 50000 -> exceeds 33,000 and fails.
+  });
+
+  it('still admits the coordinator contract and still excludes the over-cap ones', () => {
+    // The bound is only useful if it lands correctly on the real files it governs.
+    expect(25587).toBeLessThanOrEqual(SINGLE_READ_SAFE_BYTES);  // CLAUDE_COORDINATOR.md
+    expect(67501).toBeGreaterThan(SINGLE_READ_SAFE_BYTES);      // CLAUDE_SOLOMON.md
+    expect(104280).toBeGreaterThan(SINGLE_READ_SAFE_BYTES);     // CLAUDE_ADAM.md
   });
 });
