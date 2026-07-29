@@ -22,13 +22,12 @@
  */
 import { describe, it, expect } from 'vitest';
 import path from 'node:path';
-import { spawn } from 'node:child_process';
 import { fileURLToPath } from 'node:url';
 import { createRequire } from 'node:module';
 
 const repoRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '../../..');
 const HOOK = path.join(repoRoot, 'scripts/hooks/loop-state-resume-clear.cjs');
-const { shouldClearLatch, applyClear, LATCHED_STATES } = createRequire(import.meta.url)(HOOK);
+const { shouldClearLatch, applyClear, resolveSessionId, parsePayload, LATCHED_STATES } = createRequire(import.meta.url)(HOOK);
 
 describe('shouldClearLatch — the pure decision', () => {
   it('clears awaiting_tick and DELIBERATELY leaves exited alone', () => {
@@ -99,18 +98,33 @@ describe('applyClear — the conditional write IS the safety invariant', () => {
   });
 });
 
-describe('the real hook process', () => {
-  it('exits 0 and writes NOTHING when handed no session id', async () => {
-    // End-to-end over the actual file: stdin parse, the no-id fail-open path, and a clean exit.
-    // Needs no credentials precisely because it returns before building a client — which is also
-    // the assertion: the no-id path must never reach the database.
-    const code = await new Promise((resolve) => {
-      const child = spawn(process.execPath, [HOOK], { stdio: ['pipe', 'pipe', 'pipe'] });
-      const timer = setTimeout(() => child.kill('SIGKILL'), 20000);
-      child.stdin.end(JSON.stringify({}));
-      child.on('close', (c) => { clearTimeout(timer); resolve(c); });
-    });
-    expect(code).toBe(0);   // a hook that can break a turn is worse than a guard that misses one
+describe('resolveSessionId / parsePayload — pure, and deliberately NOT a subprocess', () => {
+  // The subprocess test this replaces spawned the hook with no env option, so it inherited the
+  // parent CLAUDE_SESSION_ID and real service-role credentials, built a live client and wrote to
+  // production claude_sessions — while asserting only exit 0, which the safe path and the writing
+  // path BOTH satisfy. It could not distinguish them. That is this SD's own defect class, so the
+  // seam moved into a pure function that has no reach at all.
+  it('prefers the payload session id over the environment', () => {
+    expect(resolveSessionId({ session_id: 'from-stdin' }, { CLAUDE_SESSION_ID: 'from-env' })).toBe('from-stdin');
+  });
+
+  it('falls back to CLAUDE_SESSION_ID and NEVER to the generic SESSION_ID', () => {
+    expect(resolveSessionId({}, { CLAUDE_SESSION_ID: 'env-id' })).toBe('env-id');
+    // SESSION_ID is used elsewhere in the repo; a foreign value there would clear a DIFFERENT
+    // session's latch, disarming the guard for a seat that never resumed.
+    expect(resolveSessionId({}, { SESSION_ID: 'someone-elses-id' })).toBe('');
+  });
+
+  it('yields empty for every no-id shape, which is the fail-open path', () => {
+    for (const [p, e] of [[{}, {}], [null, {}], [{ session_id: '' }, {}], [{ session_id: 42 }, {}]]) {
+      expect(resolveSessionId(p, e), JSON.stringify(p)).toBe('');
+    }
+  });
+
+  it('tolerates absent and malformed stdin without throwing', () => {
+    expect(parsePayload('')).toEqual({});
+    expect(parsePayload('not json at all')).toEqual({});
+    expect(parsePayload('{\"session_id\":\"s\"}')).toEqual({ session_id: 's' });
   });
 });
 

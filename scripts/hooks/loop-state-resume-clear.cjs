@@ -27,17 +27,15 @@
  * 1 if UserPromptSubmit did not fire on a tick. Corroborated across 8 live seats (14..2496 turns)
  * whose checkpoint mtimes land on whole-minute boundaries: the wakeup cadence, not human typing.
  *
- * TWO VALUES ARE CLEARED, NOT ONE, and 'exited' is the more dangerous of the pair. Its sole
- * programmatic writer is stale-session-sweep.cjs:3611, meaning "sessions THIS sweep released",
- * while the guard branch it feeds asserts "loop legitimately ended" — a meaning with zero writers
- * anywhere. Nothing reset it either, so from sweep-release until the next arming it waved through a
- * LIVE, WORKING, CLAIM-HOLDING seat. That is a live bypass, not an inert branch.
+ * ONE VALUE IS CLEARED, NOT TWO. An earlier draft also cleared 'exited', on the claim that the
+ * meaning "the loop legitimately ended" had zero writers. Review falsified that — see LATCHED_STATES
+ * below for the three writers and the mutex-path consumer. 'exited' is left strictly alone.
  *
  * THE CONDITIONAL WRITE *IS* THE SAFETY INVARIANT — do not "simplify" it to an unconditional stamp.
  * The operator-never-blocked rule (stop-loop-wakeup-reminder.cjs:26-32) is enforced ENTIRELY by
- * writing only where loop_state already holds one of the two latched values. A session that never
- * entered the loop machine has loop_state null/'unknown', matches nothing here, and is never
- * touched — so it can never be blocked. Operators, Adam, Solomon and the coordinator all claim SDs.
+ * writing only where loop_state already holds the latched value. A session that never entered the
+ * loop machine has loop_state null/'unknown', matches nothing here, and is never touched — so it can
+ * never be blocked. Operators, Adam, Solomon and the coordinator all claim SDs.
  *
  * Fail-open throughout: a hook that can break a turn is worse than a guard that misses one.
  */
@@ -72,7 +70,9 @@ let _shuttingDown = false;
  * it is REQUIRED, not decorative: supabase-js issues its requests through undici, whose keep-alive
  * socket pool holds the event loop open after the write completes. Without this the hook does its
  * job and then hangs to the harness timeout, which is indistinguishable from a hook that broke the
- * turn. Found by the subprocess test: SIGTERM/ETIMEDOUT with the PATCH already delivered.
+ * turn. Found while driving the real process against a stub server: SIGTERM/ETIMEDOUT with the
+ * PATCH already delivered. That harness has since been replaced (it inherited real credentials), but
+ * the drain it exposed is still required — nothing in the current suite covers it, stated plainly.
  */
 async function shutdown() {
   if (_shuttingDown) return;
@@ -136,18 +136,39 @@ function loadClient() {
   }
 }
 
-async function main() {
-  let payload = {};
-  try {
-    const raw = require('fs').readFileSync(0, 'utf8');
-    if (raw && raw.trim()) payload = JSON.parse(raw);
-  } catch { /* no stdin or unparseable — fall through to env */ }
+/**
+ * PURE — resolve the session id from the hook payload, falling back to the environment.
+ *
+ * Extracted so it is testable WITHOUT spawning the hook. That is not a stylistic preference: the
+ * subprocess test that used to cover this inherited the parent environment, so on any machine inside
+ * a Claude Code session it resolved a real CLAUDE_SESSION_ID, built a live service-role client and
+ * wrote to production `claude_sessions` — while asserting only `exit 0`, which the safe path and the
+ * writing path both satisfy. The test could not tell them apart. A pure function has no such reach.
+ *
+ * CLAUDE_SESSION_ID only, never the generic SESSION_ID: that name is used elsewhere in the repo, and
+ * a foreign value there would clear a DIFFERENT session's latch — disarming the attrition guard for
+ * a seat that never resumed, which is precisely the failure this hook exists to prevent.
+ * @param {{session_id?: string}} payload parsed hook stdin
+ * @param {Record<string,string|undefined>} env
+ * @returns {string} the session id, or '' when there is none
+ */
+function resolveSessionId(payload = {}, env = {}) {
+  const fromPayload = payload && typeof payload.session_id === 'string' ? payload.session_id : '';
+  return fromPayload || env.CLAUDE_SESSION_ID || '';
+}
 
-  // CLAUDE_SESSION_ID only. The generic SESSION_ID is used elsewhere in the repo for other things,
-  // and review flagged that a foreign value there would clear a DIFFERENT session's latch —
-  // disarming the attrition guard for a seat that never resumed, which is the exact failure this
-  // hook exists to prevent.
-  const sessionId = payload.session_id || process.env.CLAUDE_SESSION_ID || '';
+/** PURE — parse hook stdin, tolerating absent or malformed input. */
+function parsePayload(raw) {
+  try {
+    return raw && String(raw).trim() ? JSON.parse(raw) : {};
+  } catch { return {}; }                                      // unparseable → fall through to env
+}
+
+async function main() {
+  let raw = '';
+  try { raw = require('fs').readFileSync(0, 'utf8'); } catch { /* no stdin */ }
+
+  const sessionId = resolveSessionId(parsePayload(raw), process.env);
   if (!sessionId) return shutdown();                          // fail-open
 
   let supabase;
@@ -159,7 +180,7 @@ async function main() {
   await shutdown();
 }
 
-module.exports = { shouldClearLatch, applyClear, LATCHED_STATES };
+module.exports = { shouldClearLatch, applyClear, resolveSessionId, parsePayload, LATCHED_STATES };
 
 if (require.main === module) {
   main().catch(() => {}).finally(() => { process.exitCode = 0; });
