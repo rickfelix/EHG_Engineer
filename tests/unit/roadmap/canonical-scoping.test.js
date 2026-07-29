@@ -18,6 +18,7 @@
  */
 import { describe, it, expect } from 'vitest';
 import { gatherWaves, formatRoadmapLine } from '../../../scripts/cron/chairman-morning-review-sweep.mjs';
+import { dispositionCoverage } from '../../../scripts/eva-distill-brainstorm.js';
 
 const ROADMAPS = [
   { id: 'arch-newest', status: 'archived', created_at: '2026-07-17T15:49:00Z' },
@@ -124,5 +125,99 @@ describe('TS-11: avgPct is asserted, not just waveCount', () => {
     const r = await gatherWaves(makeDb());
     expect(r.avgPct).toBe(69);
     expect(r.doneWaves).toBe(3);
+  });
+});
+
+/**
+ * FR-3 / TS-4, TS-5 — the disposition-coverage gauge.
+ *
+ * Needs a second double because this path uses head-count queries
+ * (`.select('id', {count:'exact', head:true})`) plus `.in()` and `.neq()`, which the roadmap
+ * double above does not model. It applies every operator it receives, same rule as TS-10.
+ */
+function makeCountDb({ roadmaps = ROADMAPS, waves = WAVES_WITH_IDS, items = ITEMS } = {}) {
+  const src = { strategic_roadmaps: roadmaps, roadmap_waves: waves, roadmap_wave_items: items };
+  return {
+    from(table) {
+      let rows = [...(src[table] || [])];
+      let counting = false;
+      const api = {
+        select(_c, opts) { counting = Boolean(opts?.count); return api; },
+        eq(col, val) { rows = rows.filter((r) => r[col] === val); return api; },
+        neq(col, val) { rows = rows.filter((r) => r[col] !== val); return api; },
+        in(col, vals) { rows = rows.filter((r) => vals.includes(r[col])); return api; },
+        then(res) {
+          return Promise.resolve(counting ? { count: rows.length, error: null } : { data: rows, error: null }).then(res);
+        }
+      };
+      return api;
+    }
+  };
+}
+
+const WAVES_WITH_IDS = [
+  ...Array.from({ length: 4 }, (_, i) => ({ id: `an-${i}`, roadmap_id: 'arch-newest', status: 'proposed', progress_pct: 0 })),
+  ...Array.from({ length: 8 }, (_, i) => ({ id: `po-${i}`, roadmap_id: 'active-poR', status: 'approved', progress_pct: 50 })),
+  ...Array.from({ length: 6 }, (_, i) => ({ id: `ao-${i}`, roadmap_id: 'arch-oldest', status: 'proposed', progress_pct: 0 }))
+];
+const ITEMS = [
+  // Canonical roadmap: 10 items, 4 dispositioned -> 4/10 = 40%
+  ...Array.from({ length: 10 }, (_, i) => ({ id: `p${i}`, wave_id: 'po-0', item_disposition: i < 4 ? 'promoted' : 'pending' })),
+  // Orphans under the NEWEST archived roadmap: all pending (the July-incident shape)
+  ...Array.from({ length: 40 }, (_, i) => ({ id: `n${i}`, wave_id: 'an-0', item_disposition: 'pending' })),
+  // Orphans under the OLDEST archived roadmap: SOME NON-PENDING (the real ed12bf74 shape).
+  // This is what makes TS-5 discriminating — a denominator-only fix survives all-pending
+  // orphans and dies here.
+  ...Array.from({ length: 50 }, (_, i) => ({ id: `o${i}`, wave_id: 'ao-0', item_disposition: i < 20 ? 'promoted' : 'pending' }))
+];
+
+describe('FR-3 / TS-4: the coverage gauge is scoped to the canonical roadmap', () => {
+  it('counts only canonical items in BOTH numerator and denominator', async () => {
+    const r = await dispositionCoverage(makeCountDb());
+    expect(r.status).toBe('ok');
+    expect(r.numerator).toBe(4);
+    expect(r.denominator).toBe(10);
+  });
+
+  it('is unmoved by adding or removing archived-roadmap items', async () => {
+    const withOrphans = await dispositionCoverage(makeCountDb());
+    const withoutOrphans = await dispositionCoverage(
+      makeCountDb({ items: ITEMS.filter((i) => i.wave_id === 'po-0') })
+    );
+    expect(withOrphans.value).toBe(withoutOrphans.value);
+  });
+
+  it('NEGATIVE CONTROL: the unscoped counts differ, so this fixture can tell fixed from broken', async () => {
+    // Pre-fix: 100 items total, 24 non-pending -> 24%. Post-fix: 4/10 -> 40%.
+    const allItems = ITEMS.length;
+    const allNonPending = ITEMS.filter((i) => i.item_disposition !== 'pending').length;
+    expect(allNonPending / allItems).not.toBe(4 / 10);
+  });
+});
+
+describe('FR-3 / TS-5: the fix is not accidentally correct', () => {
+  it('excludes NON-pending orphan items from the numerator too', async () => {
+    // 20 of the archived-roadmap items are 'promoted'. A fix that scoped only the denominator
+    // would report 24/10 here — a ratio above 1. Asserting the numerator catches that.
+    const r = await dispositionCoverage(makeCountDb());
+    expect(r.numerator).toBe(4);
+    expect(r.value).toBeLessThanOrEqual(1);
+  });
+});
+
+describe('FR-3: non-resolved states are distinct, never an empty corpus', () => {
+  it('reports no active roadmap distinctly', async () => {
+    const r = await dispositionCoverage(makeCountDb({ roadmaps: [] }));
+    expect(r.status).toBe('unknown');
+    expect(r.detail).toMatch(/no active roadmap/);
+    expect(r.detail).not.toMatch(/empty corpus/);
+  });
+
+  it('reports ambiguity distinctly rather than as an empty corpus', async () => {
+    const allActive = ROADMAPS.map((r) => ({ ...r, status: 'active' }));
+    const r = await dispositionCoverage(makeCountDb({ roadmaps: allActive }));
+    expect(r.status).toBe('unknown');
+    expect(r.detail).toMatch(/ambiguous/i);
+    expect(r.detail).not.toMatch(/empty corpus/);
   });
 });
