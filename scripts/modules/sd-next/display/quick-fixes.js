@@ -7,6 +7,11 @@
 import { colors } from '../colors.js';
 import { analyzeClaimRelationship } from '../claim-analysis.js';
 import { getStaleThresholdSeconds } from '../../../../lib/claim/stale-threshold.js';
+// SD-LEO-INFRA-REPO-WIDE-TIMEZONE-001: the canonical normalizer is CJS, and ESM imports CJS
+// unconditionally — this import is the ESM half of the proof that one home serves both module
+// systems. The CJS half is the require() in scripts/worker-checkin.cjs.
+import pgTimestamp from '../../../../lib/time/pg-timestamp.cjs';
+const { pgTimestampAgeMs } = pgTimestamp;
 
 const MAX_DISPLAY = 10;
 
@@ -274,7 +279,14 @@ function inferTier(estimatedLoc) {
  */
 function ageDays(createdAt) {
   if (!createdAt) return 0;
-  return Math.floor((Date.now() - new Date(createdAt).getTime()) / (1000 * 60 * 60 * 24));
+  // SD-LEO-INFRA-REPO-WIDE-TIMEZONE-001. quick_fixes.created_at is `timestamp without time
+  // zone`, so PostgREST returns it with no designator and new Date() reads it as LOCAL —
+  // shifting this age by the host's UTC offset. This site was INVISIBLE to the repo scan that
+  // sized this SD, because the column is renamed to camelCase `createdAt` and so the literal
+  // string `created_at` never shares a line with Date.now(). It carries the identical defect to
+  // scripts/worker-checkin.cjs:isAutoStartableQF, independently — the two are separate
+  // implementations of the same predicate.
+  return Math.floor(pgTimestampAgeMs(createdAt) / (1000 * 60 * 60 * 24));
 }
 
 /**
