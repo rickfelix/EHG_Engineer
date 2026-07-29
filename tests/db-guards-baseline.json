@@ -1,5 +1,4 @@
 [
-  "tests/create-quick-fix-unknown-flag.test.js",
   "tests/execute-team-supervisor.test.js",
   "tests/lib/supabase-connection-connstr-skip-password.test.js",
   "tests/lib/supabase-connection-ssl-ca.test.js",
@@ -9,7 +8,6 @@
   "tests/unit/auto-extract-patterns-service-client.test.js",
   "tests/unit/auto-trigger-stories-fk-fix.test.js",
   "tests/unit/cleanup/master-reset-validation.test.js",
-  "tests/unit/enforcement-worktree-hygiene.test.js",
   "tests/unit/eva/mission-command.test.js",
   "tests/unit/lib/sd-id-resolver.test.js",
   "tests/unit/mock/firewall.test.js",
@@ -17,6 +15,5 @@
   "tests/unit/regression-pins/qf-orchestrator-service-role-pins.test.js",
   "tests/unit/sd-burnrate-import-guard.test.js",
   "tests/unit/split-postgresql-statements.test.js",
-  "tests/unit/supabase-anon-governance-guard.test.js",
-  "tests/wiring-validators/e2e-demo-recorder.test.js"
+  "tests/unit/supabase-anon-governance-guard.test.js"
 ]
