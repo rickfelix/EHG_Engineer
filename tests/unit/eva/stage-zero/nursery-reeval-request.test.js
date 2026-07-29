@@ -29,6 +29,39 @@ describe('buildNurseryReevalRequest — AC-9 attribution guard', () => {
     ).toThrow(UnregisteredPrincipalError);
   });
 
+  // SEC-3 (security review of PR #6528). The guard being tested is the Array.isArray check,
+  // and it is worth stating why a type check earns a test: `registeredPrincipals` reaches an
+  // allowlist test via String.prototype.includes, which does SUBSTRING matching. A string
+  // registry therefore does not fail — it silently DEGRADES the allowlist into a fuzzy match,
+  // admitting any caller whose uid happens to appear as a substring. Verified against the
+  // pre-fix code: this exact call SUCCEEDED and returned a fully-shaped insert row.
+  it('refuses a STRING registry that contains the uid, rather than substring-matching it', () => {
+    const stringRegistry = `allowed: ${FAKE_PRINCIPAL}, and some other text`;
+    expect(stringRegistry.includes(FAKE_PRINCIPAL)).toBe(true); // the trap, made explicit
+
+    expect(() =>
+      buildNurseryReevalRequest(
+        { requestedBy: FAKE_PRINCIPAL, nurseryId: HEADLINE_TRANSFORMER },
+        { registeredPrincipals: stringRegistry }
+      )
+    ).toThrow(UnregisteredPrincipalError);
+  });
+
+  it('reports a non-array registry as empty rather than crashing the error itself', () => {
+    // The throw passes `registeredPrincipals || []`. Without it the error constructor would
+    // receive the offending non-array and a diagnostic path could fail while reporting a
+    // security refusal — turning a clean refusal into an unrelated crash.
+    try {
+      buildNurseryReevalRequest(
+        { requestedBy: FAKE_PRINCIPAL, nurseryId: HEADLINE_TRANSFORMER },
+        { registeredPrincipals: null }
+      );
+      throw new Error('expected UnregisteredPrincipalError');
+    } catch (err) {
+      expect(err).toBeInstanceOf(UnregisteredPrincipalError);
+    }
+  });
+
   it('refuses the chairman human account even when other principals are registered', () => {
     expect(() =>
       buildNurseryReevalRequest(
