@@ -104,35 +104,36 @@ function isNoArtifactRef(ref) {
  * @param {string} ref
  * @returns {boolean}
  */
-/**
- * Single-token PLACEHOLDERS. Whitespace-free, so the token rule waves them through — and they are
- * STRICTLY WORSE than the NO_ARTIFACT sentinel, which is why they need naming explicitly.
- * selectNegativeBackprop SKIPS a NO_ARTIFACT ref (it knows there is nothing to track), but it
- * carries 'n/a' as a genuine link that can never match. Review found the error message itself steers
- * people here: it says "supply the identifier, or --no-artifact", so an operator with neither types
- * 'n/a'. Fixing only the sentence case would have narrowed the starvation to single tokens rather
- * than closing it.
- */
-const PLACEHOLDER_REFS = Object.freeze(new Set([
-  'n/a', 'na', 'n.a.', 'none', 'nil', 'null', 'nothing', 'tbd', 'tba', 'todo', 'unknown', 'unclear',
-  'moot', 'done', 'merged', 'various', 'multiple', 'verbal', 'pending', 'n/a.', '-', '--', '...',
-]));
-
 function isMatchableRef(ref) {
   if (typeof ref !== 'string') return false;
   const s = ref.trim();
   if (!s || /\s/.test(s)) return false;              // an identifier has no spaces; a sentence does
-  // A bare number IS a legitimate artifact id — pr_number is one of the matcher's harvest keys, and
-  // rejecting '#7' was a false rejection review caught. Length floors must not swallow it.
-  if (/^#?\d{1,7}$/.test(s)) return true;
-  if (s.length < 3 || s.length > 500) return false;  // 200 rejected a real signed CI-run URL (220 chars)
-  if (PLACEHOLDER_REFS.has(s.toLowerCase())) return false;
+  if (s.length > 500) return false;                  // 200 rejected a real signed CI-run URL (220 chars)
+
   // A NEAR-MISS SPELLING OF THE SENTINEL IS THE WORST CASE OF ALL: 'no_artifact' lowercase or
   // 'NO-ARTIFACT' hyphenated fails isNoArtifactRef, so the operator believes they recorded "nothing
-  // to track" while the row is billed as a real, permanently unmatchable link that the back-prop
-  // will NOT skip. Reject so they are told to use the exact sentinel.
-  if (/^no[-_. ]?artifact/i.test(s) && !isNoArtifactRef(s)) return false;
-  return /[A-Za-z0-9]/.test(s);
+  // to track" while the row is billed as a real, permanently unmatchable link the back-prop will NOT
+  // skip. END-ANCHORED — my first version was a bare prefix rule and wrongly rejected
+  // 'no-artifact-handling-001', which is a false rejection, the mode I keep calling worse than the
+  // defect. Only the near-misses themselves are caught now.
+  if (/^no[-_. ]?artifact$/i.test(s) && !isNoArtifactRef(s)) return false;
+
+  // THE STRUCTURAL DISCRIMINANT — a digit, or a URL.
+  //
+  // My previous attempt was a PLACEHOLDER_REFS enumeration, and review correctly identified it as
+  // the same failure mode as my v1 scheme allow-list, pointed the other way: 'already-merged',
+  // 'see-adam-note' and ~24 unlisted words sailed through, and one trailing character defeated it
+  // ('n/a' blocked, 'na.' not). An enumeration of what to reject rots exactly like an enumeration of
+  // what to accept.
+  //
+  // The structural fact is that an artifact identifier CARRIES A NUMBER — a sha, an SD/QF key, a PR
+  // or issue number, a uuid, a versioned URL — while a placeholder is words. Verified against the
+  // live corpus: all 5 currently-accepted refs satisfy it, and every placeholder review supplied
+  // fails it. It cannot be defeated by a word nobody thought to enumerate.
+  //
+  // All-zeros is the one numeric placeholder ('0', '#00'), so it is excluded explicitly.
+  if (/^#?0+$/.test(s)) return false;
+  return /\d/.test(s) || /^https?:\/\/\S+$/i.test(s);
 }
 
 function resolveOutcomeRef(disposition, { outcomeRef = null, noArtifact = null } = {}) {
@@ -238,7 +239,8 @@ async function recordLedgerDecision(supabase, { correlationId, disposition, deci
     //     NOT LIVE THERE (2 of 5453 rows carry a QF- key, and those are anomalies). A QF artifact
     //     would write a key that never resolves, so the row is re-selected by every scheduled batch
     //     forever, burning a slot and logging a skip line each time. Measured: 13 of the 31 existing
-    //     outcome_sd_key values already fail to resolve, 4 of them QF keys.
+    //     outcome_sd_key values already fail to resolve. Settled by direct count: 6 DISTINCT QF
+    //     keys across 8 ROWS (an earlier "4" came from a truncated sample read as a population).
     //   - /i: sd_key is stored uppercase, so a lowercased ref derives a key that never matches.
     // A key that cannot resolve is worse than no key: the forward path stays dead AND the batch is
     // permanently polluted.

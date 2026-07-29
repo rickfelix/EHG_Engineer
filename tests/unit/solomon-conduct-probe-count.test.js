@@ -22,14 +22,14 @@ import { resolveSolomonConductFacts } from '../../lib/solomon/conduct-probes.js'
  * the two strategies are distinguishable.
  */
 function fakeClient({ trueCount, rowCap = 1000 }) {
-  const seen = { headUsed: null, countMode: null };
+  const seen = { headUsed: null, countMode: null, eqArgs: [] };
   const builder = {
     select(_cols, opts) {
       seen.headUsed = Boolean(opts && opts.head);
       seen.countMode = opts && opts.count ? opts.count : null;
       return builder;
     },
-    eq() { return builder; },
+    eq(col, val) { seen.eqArgs.push([col, val]); return builder; },
     lt() {
       const head = seen.headUsed;
       return Promise.resolve(
@@ -73,14 +73,24 @@ describe('FR-3 — stale-advice count cannot silently saturate', () => {
     });
   });
 
-  it('still counts rows whose JUDGMENT EXPIRED — aging must not retire the backlog', () => {
-    // The safety property FR-1 buys by putting expiry in its own column. The probe filters on
-    // decision='pending', and an expired row keeps that decision, so it remains visible here.
-    // If expiry had been a decision value, every aged row would vanish from this count and the
-    // drain would have silently retired the very signal that justified this SD.
+  it('filters on decision=pending and applies NO expiry filter — the query shape, not just the number', () => {
+    // REWRITTEN AFTER REVIEW. The previous version asserted only that a count of 566 came back,
+    // which is test 1 with a different number: the fake ignores filter arguments, so deleting the
+    // decision filter entirely, or flipping it to 'accepted', both survived it. It claimed to pin
+    // "expired rows still count" and pinned nothing.
+    //
+    // What IS assertable in the unit tier is the query SHAPE, and that half was never blocked on the
+    // migration — it simply was not asserted. An expired row keeps decision='pending' (FR-1 put
+    // expiry in its own column), so a probe filtering on 'pending' and nothing else still sees it.
+    // The DB-behaviour half genuinely is not unit-testable: it needs the applied schema AND the job,
+    // and routing it through the db project would skip silently green — the invisible pass this SD
+    // exists to remove. It is stated as an apply-time claim rather than faked here.
     const c = fakeClient({ trueCount: 566 });
     return resolveSolomonConductFacts(c).then((facts) => {
       expect(facts.staleOpenAdviceCount).toBe(566);
+      expect(c.seen.eqArgs).toContainEqual(['decision', 'pending']);
+      const cols = c.seen.eqArgs.map(([col]) => col);
+      expect(cols, 'the probe must not filter on an expiry column').not.toContain('judgment_expired_at');
     });
   });
 });

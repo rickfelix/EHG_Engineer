@@ -88,6 +88,13 @@ describe('TS-2 — expiry does NOT touch the decision column', () => {
     // The reversal, pinned: no decision-CHECK surgery, and no new decision value in executable SQL.
     expect(sql).not.toMatch(/decision_check/);
     expect(sql).not.toContain('expired_unjudged');
+    // The attribution CHECK is what makes TS-10 non-forgeable — a hand-written row cannot pass for
+    // a mechanism that ran. Review found neutering it to CHECK(true) failed nothing, while my
+    // commit rested that guarantee on it. This is a SOURCE pin, not behaviour: the constraint does
+    // not exist in the live schema yet (verified 42703), and only apply-time verification can turn
+    // intent into a present fact. But it is the same tier as every other claim asserted about this
+    // file, so there is no reason the load-bearing one was the unpinned exception.
+    expect(sql).toMatch(/judgment_expired_at IS NULL OR judgment_expired_by IS NOT NULL/);
     // ...and the rationale MUST survive in the prose, so a later reader cannot re-litigate the
     // reversal without meeting the reason for it.
     expect(raw).toContain('expired_unjudged');
