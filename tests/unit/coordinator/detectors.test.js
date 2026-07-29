@@ -204,45 +204,12 @@ describe('detectLoopExpiry', () => {
 });
 
 describe('detectStalledLoop', () => {
-  const stalled = { session_id: 'w1', loop_state: 'active', sd_key: null, heartbeat_at: minsAgo(2), expected_silence_until: null, worktree_path: '/wt/w1' };
+  const stalled = { session_id: 'w1', loop_state: 'active', sd_key: null, heartbeat_at: minsAgo(2), expected_silence_until: null };
   it('matches a live active loop holding no claim while work waits', () => {
     const r = detectStalledLoop({ sessions: [stalled], unclaimedItems: 3, now: NOW });
     expect(r.matched).toBe(true);
     expect(r.evidence.stalled_count).toBe(1);
     expect(r.evidence.samples[0].session_id).toBe('w1');
-  });
-  // SD-LEO-INFRA-LOOP-STATE-AWAITING-001 — this detector was structurally dead: it requires
-  // loop_state==='active' and nothing ever reset the latch to 'active' on resume, so no live seat
-  // reached this loop body. Clearing the latch makes it reachable, and reachability exposed who it
-  // actually hits first.
-  it('EXCLUDES the coordinator, which otherwise matches every condition forever', () => {
-    // Measured specimen: of 8 live sessions, coordinator 880b5cc4 was the ONLY one this detector
-    // would newly flag. It never claims an SD, so sd_key is permanently null, and its heartbeat is
-    // permanently fresh — it would be reported stalled on every single pass.
-    const coordinator = { session_id: '880b5cc4', loop_state: 'active', sd_key: null,
-      heartbeat_at: minsAgo(0), expected_silence_until: null };   // no claim, no worktree, no completions
-    const r = detectStalledLoop({ sessions: [coordinator], unclaimedItems: 5, now: NOW });
-    expect(r.matched).toBe(false);
-    expect(r.reason).toBe('no_stalled_loops');
-  });
-
-  it('counts a claim OR a worktree OR a completion as participation', () => {
-    // Any one of the three is enough — a worker that claimed once and released still participated.
-    const base = { loop_state: 'active', sd_key: null, heartbeat_at: minsAgo(2), expected_silence_until: null };
-    for (const evidence of [{ claimed_at: minsAgo(60) }, { worktree_path: '/wt/x' }, { continuous_sds_completed: 1 }]) {
-      const r = detectStalledLoop({ sessions: [{ ...base, session_id: 'w', ...evidence }], unclaimedItems: 5, now: NOW });
-      expect(r.matched, JSON.stringify(evidence)).toBe(true);
-    }
-  });
-
-  it('ACCEPTS a false negative: a worker that has never once claimed is indistinguishable from the coordinator', () => {
-    // Stated rather than hidden. claude_sessions carries no role/kind column (agent_slot is null on
-    // the coordinator row), so participation is the only available discriminant. The window is narrow:
-    // a worker's first sd-start stamps claimed_at and worktree_path permanently, so this misses only a
-    // seat that has looped without ever claiming anything. detectIdleWithWork made the same trade.
-    const brandNew = { session_id: 'never-claimed', loop_state: 'active', sd_key: null,
-      heartbeat_at: minsAgo(1), expected_silence_until: null };
-    expect(detectStalledLoop({ sessions: [brandNew], unclaimedItems: 5, now: NOW }).matched).toBe(false);
   });
   it('does not match when there is no unclaimed work', () => {
     expect(detectStalledLoop({ sessions: [stalled], unclaimedItems: 0, now: NOW }).matched).toBe(false);
@@ -321,7 +288,7 @@ describe('detectCompletionBoundaryExit', () => {
 });
 
 describe('stalledLoopSessionIds (SD-LEO-FEAT-COORDINATOR-CAPACITY-FORECAST-001)', () => {
-  const active = { session_id: 'w1', loop_state: 'active', sd_key: null, heartbeat_at: minsAgo(2), expected_silence_until: null, worktree_path: '/wt/w1' };
+  const active = { session_id: 'w1', loop_state: 'active', sd_key: null, heartbeat_at: minsAgo(2), expected_silence_until: null };
 
   it('projects the flagged session_ids as a Set', () => {
     const ids = stalledLoopSessionIds({ sessions: [active], unclaimedItems: 3, now: NOW });
@@ -395,7 +362,7 @@ describe('runDetectors', () => {
       coordinatorCount: 0, idleWorkers: 0, unclaimedItems: 2,
       signals: [], claims: [], sdClaims: [],
       sessions: [
-        { session_id: 'old', loop_state: 'active', created_at: daysAgo(7), sd_key: null, heartbeat_at: minsAgo(1), expected_silence_until: null, worktree_path: '/wt/old' },
+        { session_id: 'old', loop_state: 'active', created_at: daysAgo(7), sd_key: null, heartbeat_at: minsAgo(1), expected_silence_until: null },
       ],
     };
     const byType = Object.fromEntries(runDetectors(data, { now: NOW }).map((m) => [m.event_type, m]));

@@ -122,24 +122,7 @@ export function analyzeSource(src) {
 // Identifier-level DB signal: client factory identifiers or direct env-var
 // reads. Matched against codeNoStrings so comments and assertion strings
 // (e.g. expect(out).not.toContain('SUPABASE_SERVICE_ROLE_KEY=')) never count.
-//
-// The env-var arm counts a READ of ambient credentials, never a WRITE of a
-// value the test itself supplies — `SUPABASE_URL: stubUrl` in a child-process
-// env, or `SUPABASE_URL = ''`, is the test OVERRIDING the credentials, which is
-// the opposite of depending on them. The negative lookahead `(?!\s*[:=][^=])`
-// excludes exactly that assignment position; `process.env.SUPABASE_URL` and any
-// other read still match, and `SUPABASE_URL ==` (a comparison, not a write) is
-// preserved by requiring a non-`=` after the operator.
-//
-// This is not a rule bent to fit one file: three pre-existing unit tests were
-// flagged for it, and one of them (tests/create-quick-fix-unknown-flag.test.js)
-// was flagged for setting the `test.invalid.local` sentinel — i.e. flagged for
-// deliberately pointing at nothing, which is the very safety this guard exists
-// to enforce. A test cannot hang against the sentinel it just overrode.
-//
-// The factory arm is untouched, so a test that writes an env var AND builds a
-// real client is still caught by `createSupabaseServiceClient` et al.
-export const DB_IMPORT_SIGNAL = /createSupabaseServiceClient|createSupabaseClient|getSupabaseClient|createDatabaseClient|createServiceClient\b|(?:SUPABASE_SERVICE_ROLE_KEY|SUPABASE_URL\b|SUPABASE_POOLER_URL)(?!\s*[:=][^=])/;
+export const DB_IMPORT_SIGNAL = /createSupabaseServiceClient|createSupabaseClient|getSupabaseClient|createDatabaseClient|createServiceClient\b|SUPABASE_SERVICE_ROLE_KEY|SUPABASE_URL\b|SUPABASE_POOLER_URL/;
 
 // A test is guarded if it self-skips when no real DB is configured. Matched
 // against codeNoStrings — a guard mentioned only in a comment does not count.

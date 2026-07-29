@@ -46,11 +46,25 @@
 const {
   LOOP_STATE_ACTIVE,
   LOOP_STATE_AWAITING_TICK,
-  LOOP_STATE_EXITED,
 } = require('../lib/sessions/loop-state-tracker.cjs');
 
-/** The two values that mean "a previous loop iteration parked or ended this session". */
-const LATCHED_STATES = [LOOP_STATE_AWAITING_TICK, LOOP_STATE_EXITED];
+/**
+ * The ONE value that means "a wakeup was armed for this session". Deliberately NOT 'exited'.
+ *
+ * This started as both. An adversarial review falsified the premise: I claimed 'exited' had "zero
+ * writers" for the meaning "the loop legitimately ended", so promoting it back to 'active' could
+ * only help. That was wrong on inspection — coordination-events.cjs:388 (charter item 7) and
+ * stop-loop-wakeup-reminder.cjs:224 both instruct an agent to write it with exactly that meaning,
+ * so the guard's OWN reminder advertises it as the deliberate way to stop. A fourth consumer,
+ * singleton-refresh-sequencer.cjs:67, reads 'exited' as UNHEALTHY -> hold_old; flipping it to
+ * 'active' would silently turn that into retire_old inside a mutex path.
+ *
+ * Clearing 'exited' would therefore make a deliberate exit non-durable: a still-armed tick would
+ * flip a session that legitimately stopped back to 'active', and a legitimately-exited seat reading
+ * 'active' means "do not dispatch" to the coordinator. The attrition defect this SD exists to fix
+ * is entirely in the 'awaiting_tick' latch; 'exited' was scope I could not justify.
+ */
+const LATCHED_STATES = [LOOP_STATE_AWAITING_TICK];
 
 let _shuttingDown = false;
 /**
@@ -83,6 +97,45 @@ function shouldClearLatch({ sessionId, loopState } = {}) {
   return { clear: true, reason: `cleared_from_${loopState}` };
 }
 
+/**
+ * The conditional UPDATE, isolated so it is testable against a fake client with no DB and no
+ * credentials anywhere near the test file.
+ *
+ * The predicate IS the guard: `.in('loop_state', LATCHED_STATES)` means a session that never entered
+ * the loop machine is not matched and not written. A read-then-write would only widen the race
+ * without adding safety, since the predicate rides on the write itself. Verified from the writer
+ * side during review: 'awaiting_tick' is written only by the ScheduleWakeup-matched hook, so an
+ * operator session is unreachable from here.
+ * @param {object} supabase a supabase-js client (or any object with the same builder shape)
+ * @param {string} sessionId
+ */
+async function applyClear(supabase, sessionId) {
+  return supabase
+    .from('claude_sessions')
+    .update({ loop_state: LOOP_STATE_ACTIVE })
+    .eq('session_id', sessionId)
+    .in('loop_state', LATCHED_STATES);
+}
+
+/**
+ * Build the service client WITHOUT letting its dotenv banner reach stdout.
+ *
+ * Found by review, and it is not cosmetic: UserPromptSubmit stdout is injected into the model's
+ * context, and this hook runs on EVERY turn for EVERY seat. Requiring lib/supabase-client.cjs emits
+ * a 76-byte dotenv banner, which would have made this the first hook to push text into every turn
+ * fleet-wide. Both existing UserPromptSubmit siblings emit zero bytes; so must this one.
+ */
+function loadClient() {
+  const realWrite = process.stdout.write.bind(process.stdout);
+  process.stdout.write = () => true;
+  try {
+    const { createSupabaseServiceClient } = require('../../lib/supabase-client.cjs');
+    return createSupabaseServiceClient();
+  } finally {
+    process.stdout.write = realWrite;
+  }
+}
+
 async function main() {
   let payload = {};
   try {
@@ -90,30 +143,23 @@ async function main() {
     if (raw && raw.trim()) payload = JSON.parse(raw);
   } catch { /* no stdin or unparseable — fall through to env */ }
 
-  const sessionId =
-    payload.session_id || process.env.CLAUDE_SESSION_ID || process.env.SESSION_ID || '';
+  // CLAUDE_SESSION_ID only. The generic SESSION_ID is used elsewhere in the repo for other things,
+  // and review flagged that a foreign value there would clear a DIFFERENT session's latch —
+  // disarming the attrition guard for a seat that never resumed, which is the exact failure this
+  // hook exists to prevent.
+  const sessionId = payload.session_id || process.env.CLAUDE_SESSION_ID || '';
   if (!sessionId) return shutdown();                          // fail-open
 
   let supabase;
-  try {
-    const { createSupabaseServiceClient } = require('../../lib/supabase-client.cjs');
-    supabase = createSupabaseServiceClient();
-  } catch { return shutdown(); }                              // fail-open
+  try { supabase = loadClient(); } catch { return shutdown(); }  // fail-open
 
   try {
-    // The conditional UPDATE *is* the guard: .in(loop_state, LATCHED_STATES) means a never-latched
-    // session is not matched and not written. A read-then-write would only widen the race without
-    // adding safety, since the predicate rides on the write itself.
-    await supabase
-      .from('claude_sessions')
-      .update({ loop_state: LOOP_STATE_ACTIVE })
-      .eq('session_id', sessionId)
-      .in('loop_state', LATCHED_STATES);
+    await applyClear(supabase, sessionId);
   } catch { /* best-effort observability; never block a turn */ }
   await shutdown();
 }
 
-module.exports = { shouldClearLatch, LATCHED_STATES };
+module.exports = { shouldClearLatch, applyClear, LATCHED_STATES };
 
 if (require.main === module) {
   main().catch(() => {}).finally(() => { process.exitCode = 0; });

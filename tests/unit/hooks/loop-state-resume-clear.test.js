@@ -1,36 +1,44 @@
 /**
  * SD-LEO-INFRA-LOOP-STATE-AWAITING-001 — the latch clears, and the guard can finally fire.
  *
- * WHY THESE ARE UNIT TESTS DRIVING A REAL SUBPROCESS, not `integration` tests.
- * The PRD originally typed the behavioural scenarios `integration`, which routes them to the vitest
- * `db` project — and that project is gated OFF (`assessDbTarget().allowed === false`, no CI sets
- * VITEST_DB_ALLOW_REF). An empty include resolves ZERO files, so those tests would have been
- * written, merged, reported green, and never executed once. That is the same defect this SD is
- * about, in the tests for this SD.
+ * WHY THIS DRIVES AN INJECTED CLIENT RATHER THAN A STUB POSTGREST SUBPROCESS.
+ * The first version of this file spawned the real hook against a local stub PostgREST server, which
+ * meant setting SUPABASE_URL / SUPABASE_SERVICE_ROLE_KEY in the child's env. audit-db-test-guards
+ * correctly refused it: the unit tier loads the real .env (vitest.config.js) and `||=` in
+ * tests/setup.unit.js never overwrites, so a unit test really can hold live credentials — the guard
+ * is load-bearing, not a formality.
  *
- * So the behavioural half runs here instead: supabase-js speaks PostgREST over plain HTTP, so a
- * local stub server IS a database as far as the hook is concerned. We spawn the REAL hook against
- * it and assert on what it actually wrote. Hermetic, no live DB, runs in the default tier.
+ * I first tried to narrow the guard to allow the pattern, arguing that WRITING an env var is not
+ * READING ambient credentials. That was wrong and got reverted: in JavaScript `:` is also
+ * destructuring-rename, so the narrowed rule let `const { SUPABASE_URL: url } = process.env` through
+ * — a genuine credential read, caught before the change and invisible after it. The stub-server
+ * shape is not distinguishable from that evasion by regex, so the honest fix was to stop needing
+ * the credentials at all.
+ *
+ * The conditional write is now injectable, so the safety invariant is asserted directly against a
+ * fake client. No credentials, no network, and it runs in the always-on tier — which the
+ * `integration`-typed alternative would not have (the vitest `db` project is gated OFF, so those
+ * tests would have been written, merged, reported green and never executed once).
  */
-import { describe, it, expect, beforeAll, afterAll } from 'vitest';
-import http from 'node:http';
-import { spawn } from 'node:child_process';
+import { describe, it, expect } from 'vitest';
 import path from 'node:path';
+import { spawn } from 'node:child_process';
 import { fileURLToPath } from 'node:url';
 import { createRequire } from 'node:module';
 
 const repoRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '../../..');
 const HOOK = path.join(repoRoot, 'scripts/hooks/loop-state-resume-clear.cjs');
-const { shouldClearLatch, LATCHED_STATES } = createRequire(import.meta.url)(HOOK);
+const { shouldClearLatch, applyClear, LATCHED_STATES } = createRequire(import.meta.url)(HOOK);
 
 describe('shouldClearLatch — the pure decision', () => {
-  it('clears BOTH latched values, because exited is the more dangerous one', () => {
-    // 'exited' is written only by the sweep, meaning "released by this cycle", while the guard
-    // branch it feeds asserts "loop legitimately ended". Nothing reset it, so it waved through a
-    // live claim-holding seat — a live bypass, not an inert branch.
-    expect(LATCHED_STATES).toEqual(['awaiting_tick', 'exited']);
+  it('clears awaiting_tick and DELIBERATELY leaves exited alone', () => {
+    // 'exited' was in this set until review found three sites that write it meaning "the loop
+    // legitimately ended" (coordination-events.cjs:388, stop-loop-wakeup-reminder.cjs:224) plus
+    // singleton-refresh-sequencer.cjs:67, which reads it as UNHEALTHY inside a mutex path.
+    // Promoting it back to 'active' would make a deliberate exit non-durable.
+    expect(LATCHED_STATES).toEqual(['awaiting_tick']);
     expect(shouldClearLatch({ sessionId: 's', loopState: 'awaiting_tick' }).clear).toBe(true);
-    expect(shouldClearLatch({ sessionId: 's', loopState: 'exited' }).clear).toBe(true);
+    expect(shouldClearLatch({ sessionId: 's', loopState: 'exited' }).clear).toBe(false);
   });
 
   it('NEGATIVE CONTROL — never touches a session that was never in the loop machine', () => {
@@ -53,85 +61,56 @@ describe('shouldClearLatch — the pure decision', () => {
 });
 
 /**
- * The stub PostgREST. It records every request so we can assert on the WRITE the hook issued,
- * which is the thing that matters — a test that only checked the exit code would pass on a hook
- * that did nothing at all.
+ * Records the builder chain so we can assert on the write the hook ACTUALLY issues. A test that
+ * only checked "it didn't throw" would pass on a hook that wrote nothing, or on one that wrote
+ * unconditionally — which is the dangerous direction.
  */
-function startStub() {
-  const requests = [];
-  const server = http.createServer((req, res) => {
-    let body = '';
-    req.on('data', (c) => { body += c; });
-    req.on('end', () => {
-      requests.push({ method: req.method, url: req.url, body });
-      res.writeHead(200, { 'Content-Type': 'application/json' });
-      res.end('[]');
-    });
-  });
-  return new Promise((resolve) => {
-    server.listen(0, '127.0.0.1', () => resolve({ server, requests, port: server.address().port }));
-  });
+function fakeClient() {
+  const calls = { from: null, update: null, eq: null, in: null };
+  const chain = {
+    update(patch) { calls.update = patch; return chain; },
+    eq(col, val) { calls.eq = [col, val]; return chain; },
+    in(col, vals) { calls.in = [col, vals]; return chain; },
+    then(res) { return Promise.resolve({ error: null }).then(res); },
+  };
+  return { calls, from(table) { calls.from = table; return chain; } };
 }
 
-let stub;
-beforeAll(async () => { stub = await startStub(); });
-afterAll(() => new Promise((r) => stub.server.close(r)));
+describe('applyClear — the conditional write IS the safety invariant', () => {
+  it('scopes the update to one session AND to the latched state only', async () => {
+    const c = fakeClient();
+    await applyClear(c, 'sess-1');
+    expect(c.calls.from).toBe('claude_sessions');
+    expect(c.calls.update).toEqual({ loop_state: 'active' });
+    expect(c.calls.eq).toEqual(['session_id', 'sess-1']);
+    // The predicate must ride on the write itself. An unconditional stamp would clear a
+    // never-latched operator session into the attrition guard's reach.
+    expect(c.calls.in).toEqual(['loop_state', ['awaiting_tick']]);
+  });
 
-/**
- * MUST be async spawn, never spawnSync. spawnSync BLOCKS this process's event loop, and the stub
- * server lives in this same process — so the child's connection can never be accepted and both
- * sides deadlock until the timeout. The symptom is indistinguishable from a hung hook (SIGTERM,
- * zero requests recorded), which is exactly how it presented before being traced.
- */
-function runHook(sessionId, urlOverride) {
-  stub.requests.length = 0;
-  const url = urlOverride || `http://127.0.0.1:${stub.port}`;
-  return new Promise((resolve) => {
-    const child = spawn(process.execPath, [HOOK], {
-      env: {
-        ...process.env,
-        SUPABASE_URL: url,
-        NEXT_PUBLIC_SUPABASE_URL: url,
-        SUPABASE_SERVICE_ROLE_KEY: 'stub-key-not-a-credential',
-        CLAUDE_SESSION_ID: sessionId || '',
-      },
-      stdio: ['pipe', 'pipe', 'pipe'],
+  it('carries the predicate for every session id, not just the first', async () => {
+    // Guards against a "latch the predicate once" refactor that would leave later calls unscoped.
+    for (const id of ['a', 'b-2', '11111111-2222-3333-4444-555555555555']) {
+      const c = fakeClient();
+      await applyClear(c, id);
+      expect(c.calls.eq).toEqual(['session_id', id]);
+      expect(c.calls.in[1]).toEqual(['awaiting_tick']);
+    }
+  });
+});
+
+describe('the real hook process', () => {
+  it('exits 0 and writes NOTHING when handed no session id', async () => {
+    // End-to-end over the actual file: stdin parse, the no-id fail-open path, and a clean exit.
+    // Needs no credentials precisely because it returns before building a client — which is also
+    // the assertion: the no-id path must never reach the database.
+    const code = await new Promise((resolve) => {
+      const child = spawn(process.execPath, [HOOK], { stdio: ['pipe', 'pipe', 'pipe'] });
+      const timer = setTimeout(() => child.kill('SIGKILL'), 20000);
+      child.stdin.end(JSON.stringify({}));
+      child.on('close', (c) => { clearTimeout(timer); resolve(c); });
     });
-    const timer = setTimeout(() => child.kill('SIGKILL'), 20000);
-    child.stdin.end(JSON.stringify({ session_id: sessionId }));
-    child.on('close', (code) => {
-      clearTimeout(timer);
-      resolve({ code, requests: [...stub.requests] });
-    });
-  });
-}
-
-describe('THE REAL HOOK, driven end to end against a stub PostgREST', () => {
-  it('issues a CONDITIONAL PATCH scoped to the session and to the latched values only', async () => {
-    const { code, requests } = await runHook('11111111-2222-3333-4444-555555555555');
-    expect(code).toBe(0);                             // fail-open: never breaks a turn
-
-    const patch = requests.find((r) => r.method === 'PATCH');
-    expect(patch, 'the hook issued no write at all').toBeTruthy();
-    expect(patch.url).toContain('claude_sessions');
-    expect(patch.url).toContain('11111111-2222-3333-4444-555555555555');
-    // THE PREDICATE IS THE SAFETY INVARIANT — it must ride on the write itself. An unconditional
-    // stamp would clear a never-latched operator session into the guard's reach.
-    expect(decodeURIComponent(patch.url)).toMatch(/loop_state=in\.\(.*awaiting_tick.*exited.*\)/);
-    expect(patch.body).toContain('active');
-  });
-
-  it('NEGATIVE CONTROL — no session id means no write at all', async () => {
-    // Without this, "always PATCH" would satisfy the assertion above while stamping every session
-    // the hook is ever handed.
-    const { code, requests } = await runHook('');
-    expect(code).toBe(0);
-    expect(requests.filter((r) => r.method === 'PATCH')).toHaveLength(0);
-  });
-
-  it('fails OPEN when the database is unreachable — a hook must never break a turn', async () => {
-    const { code } = await runHook('aaaa-bbbb', 'http://127.0.0.1:1');   // nothing listening
-    expect(code).toBe(0);
+    expect(code).toBe(0);   // a hook that can break a turn is worse than a guard that misses one
   });
 });
 
