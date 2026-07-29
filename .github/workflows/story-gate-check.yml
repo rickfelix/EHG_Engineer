@@ -45,10 +45,16 @@ jobs:
       - name: Extract SD Key from PR
         id: extract
         if: github.event_name == 'pull_request'
+        # QF-20260728-054: pass untrusted PR text through env, never into the script body.
+        env:
+          PR_TITLE: ${{ github.event.pull_request.title }}
+          # A BRANCH NAME IS ALSO UNTRUSTED: git ref names permit $, backticks, ; and |,
+          # so head_ref spliced into a script is the same injection vector as the title.
+          HEAD_REF: ${{ github.head_ref }}
         run: |
           # Try to extract SD key from branch name or PR title
-          BRANCH="${{ github.head_ref }}"
-          PR_TITLE="${{ github.event.pull_request.title }}"
+          BRANCH="$HEAD_REF"
+          # PR_TITLE arrives via env: above — see the header note.
 
           # Pattern: feat/SD-2025-09-EMB or SD-2025-09-EMB
           SD_KEY=$(echo "$BRANCH" | grep -oE 'SD-[0-9]{4}-[0-9]{2}-[A-Z]+' || true)
