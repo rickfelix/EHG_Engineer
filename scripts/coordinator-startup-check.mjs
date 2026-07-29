@@ -313,8 +313,34 @@ export const STANDARD_LOOPS = [
     prompt: 'Run `node scripts/read-adam-advisories.cjs`. For EACH unactioned advisory listed: ACTION it per its kind (route/decide/reply — never lean-filter advisories) and ack it PER-ITEM (actioned_at) — never bulk-ack. If none are listed this is a NO-OP. Incident basis: 14 advisories incl a chairman decision sat unactioned ~2.5h while every tick read clean.' },
   { key: 'silent-holder-audit', label: 'Silent-claim-holder audit — status-or-release on >3h no-signal with no work product', script: null, cron: '23 * * * *',
     prompt: 'Silent-holder audit: list fleet workers currently holding an sd_key claim. For each holder with >3h since their last /signal AND no work product in that window (no PR, no commits on the claim branch — WORK PRODUCT is the discriminator, never loop_state/started_at), send a status-or-release coordinator_request via the dispatch choke — unless that holder already has an unanswered status request pending (skip, no re-nudge). Release decisions stay with the sweep; this loop only asks.' },
-  { key: 'shared-root-freshness', label: 'Shared-root freshness — pull when clean main is behind origin (remediation half of the stale-tree gauge)', script: null, cron: '51 */2 * * *',
-    prompt: 'Shared-root freshness: in the SHARED ROOT (never a worktree), if `git status --porcelain` is clean AND the branch is main AND `git fetch origin && git rev-list --count HEAD..origin/main` > 0, run `git pull --ff-only`. If the tree is dirty or not on main, REPORT the state instead of pulling (another session may be mid-work). The stale-tree gauge detects; this loop remediates.' },
+  // QF-20260727-502. TWO CHANGES, BOTH FROM MEASUREMENT, NEITHER WEAKENING THE REAPER'S GUARD.
+  //
+  // (1) CADENCE 2h -> 20min. The loop remediates a tree that goes stale within MINUTES under six
+  // parallel workers. One measured 2.5h coordinator session saw drift of 6, then 22, then 3
+  // commits — every window far shorter than the 2h tick, so the remediation essentially never
+  // arrived in time and the reaper refused for 5 then 6 consecutive ticks with the pool at 20/28.
+  //
+  // (2) THE DIRTY-REFUSAL IS DROPPED FOR THE FF-ONLY VERB ONLY. It bought no safety here and was
+  // the thing converting a self-healing case into a 3am manual one. Measured across a four-cell
+  // control matrix (tracked/untracked x overlapping/disjoint): `git merge --ff-only` CANNOT
+  // clobber. On overlap it aborts with exit 1 and names the files, leaving local edits verbatim;
+  // on disjoint dirt it fast-forwards cleanly. The shared root's dirt is dominantly UNTRACKED
+  // (~138 porcelain entries: generated CLAUDE_*.md, scripts/one-off artifacts, worker leftovers),
+  // which is exactly the untracked-disjoint cell that already fast-forwards today.
+  //
+  // *** THE OFF-BRANCH REFUSAL STAYS UNCONDITIONAL, AND THE GUARD ITSELF IS UNTOUCHED. *** This
+  // relaxation applies to ff-only, the one verb git already protects. checkout/reset/rebase can
+  // genuinely clobber a peer worktree and must keep refusing on a dirty or off-branch tree.
+  //
+  // NOT DOING THE LOCK-CLEARING HALF, DELIBERATELY. An earlier version of this fix had the loop
+  // call clear-stale-index-lock.mjs first. The coordinator withdrew it after measuring that the
+  // helper's zero-byte branch has NO age floor and NO live-process check — and git creates
+  // .git/index.lock as zero bytes via O_CREAT|O_EXCL, writing content microseconds later. A cron
+  // clearing zero-byte locks unconditionally can unlink the lock of a LIVE operation, which in a
+  // six-worker shared root is a corruption risk strictly worse than the stale tree. Manual calls
+  // were safe by TIMING, not by predicate. Hardening the helper is SD-LEO-INFRA-JAMMED-GIT-INDEX-001.
+  { key: 'shared-root-freshness', label: 'Shared-root freshness — ff-only pull when main is behind origin (remediation half of the stale-tree gauge)', script: null, cron: '*/20 * * * *',
+    prompt: 'Shared-root freshness: in the SHARED ROOT (never a worktree), if the branch is main AND `git fetch origin && git rev-list --count HEAD..origin/main` > 0, run `git merge --ff-only origin/main`. DO NOT gate this on a clean tree: ff-only cannot clobber — on overlapping changes it aborts with exit 1 and names the files, leaving your edits untouched, and the shared root dirt is dominantly untracked and disjoint, which fast-forwards cleanly. If it exits non-zero, REPORT the message verbatim (that is the loud failure, not a problem to work around). If the branch is NOT main, REPORT and do nothing — that refusal stays unconditional because another session may be mid-work. Do NOT clear .git/index.lock here: a zero-byte lock can be a live git operation microseconds old (see SD-LEO-INFRA-JAMMED-GIT-INDEX-001). The stale-tree gauge detects; this loop remediates.' },
   // QF-20260704-493: feedback-consumption SLA gauge daily reminder (Solomon referent-audit
   // cell [4]) — actionable feedback categories (adam_adherence_drift, completion_flag,
   // coordinator_review, harness_backlog escalations) had no consumption deadline. Internally
