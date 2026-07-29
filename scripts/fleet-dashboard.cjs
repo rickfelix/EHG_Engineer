@@ -1956,7 +1956,23 @@ function computeSolomonLedgerRollup(rows, nowMs = Date.now()) {
   // batch_stamped marker are the 2026-07-12 non-contemporaneous retro backfill. They are EXCLUDED
   // from the accuracy math — numerator AND denominator — so accuracy reflects only trustworthy
   // contemporaneous evidence. Deterministic: keys on the durable column, never a timestamp heuristic.
-  const decidedAll = all.filter((r) => r.decision && r.decision !== 'pending');
+  // SD-LEO-INFRA-ADVICE-OUTCOME-LEDGER-001 FR-4 — EXPLICIT ALLOW-LIST, not a negation.
+  //
+  // This was `r.decision !== 'pending'`, which silently admits EVERY future decision value into the
+  // accuracy DENOMINATOR while the numerator below uses a positive allow-list. Any new terminal
+  // state therefore lands in the denominator and can never reach the numerator, so adding one
+  // mechanically drives accuracy DOWN with no change in the world. Simulated on live data at the
+  // time of writing: routing judgment-expiry through `decision` (this SD's original design) would
+  // have moved 566 rows and dropped accuracy from 16% to 6%.
+  //
+  // That design was reversed — expiry now lives in its own column and never touches `decision` —
+  // so this is no longer load-bearing for THIS change. It is fixed anyway because the trap is
+  // aimed at whoever adds the next value, and the reversal removed the current victim, not the trap.
+  //
+  // BEHAVIOUR-PRESERVING: this list is exactly the complement of 'pending' under today's CHECK
+  // constraint (pending|accepted|rejected|partial|deferred), so the computed number is unchanged.
+  const JUDGED_DECISIONS = ['accepted', 'rejected', 'partial', 'deferred'];
+  const decidedAll = all.filter((r) => JUDGED_DECISIONS.includes(r.decision));
   const batchExcludedCount = decidedAll.filter((r) => r.batch_stamped === true).length;
   const decided = decidedAll.filter((r) => r.batch_stamped !== true);
   const pending = all.filter((r) => !r.decision || r.decision === 'pending');
