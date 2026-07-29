@@ -33,6 +33,7 @@ import {
 // roadmap never satisfied -- the confirmed root cause of every distill run forking a
 // brand-new parallel 'EVA Intake Roadmap' instead of writing into the existing one).
 import { resolveCanonicalRoadmap } from '../lib/roadmap/canonical-roadmap.js';
+import { evaluateFullCreate, roadmapsToArchive, REFUSE_REASON_REQUIRED, AUDIT_SEVERITY } from '../lib/roadmap/full-create-guard.js';
 
 dotenv.config();
 
@@ -395,6 +396,11 @@ async function main() {
   const forceReassign = args.includes('--force-reassign');
   // --respect-locks is ON by default; --force-reassign disables it
   const respectLocks = !forceReassign;
+  // SD-LEO-INFRA-ROADMAP-REGENERATION-DUPLICATES-001 FR-5: explicit override for --full when an
+  // active roadmap already exists. Requires --reason, and the override is audit-logged.
+  const replaceActive = args.includes('--replace-active');
+  const reasonFlag = args.indexOf('--reason');
+  const replaceReason = reasonFlag >= 0 ? args[reasonFlag + 1] : undefined;
 
   const title = titleFlag >= 0 ? args[titleFlag + 1] : 'EVA Intake Roadmap';
   const application = appFlag >= 0 ? args[appFlag + 1] : undefined;
@@ -419,7 +425,112 @@ async function main() {
     process.exit(1);
   }
 
+  // SD-LEO-INFRA-ROADMAP-REGENERATION-DUPLICATES-001 FR-5: --full was an UNGUARDED escape hatch.
+  // The guard above covers only the !forceFull branch, so --full could still fork a second
+  // ACTIVE roadmap — and the moment two exist, resolveCanonicalRoadmap throws 'ambiguous' for
+  // every reader in the codebase, which is a strictly worse failure than refusing here. A guard
+  // inside one code path is not a guard on the invariant.
+  //
+  // --full keeps its stated purpose (bootstrap the FIRST roadmap, or recluster after the active
+  // one has been archived). What it no longer does is create a second one silently.
+  // *** CORRECTED AFTER ADVERSARIAL REVIEW: guarding on status='active' MISSED THE ACTUAL
+  // INCIDENT. *** createRoadmap() at :88 inserts status:'draft'; the flip to 'active' happens
+  // only in roadmap-manager.js:190 approveSequence, at chairman approval. So --full has never
+  // been able to fork a second ACTIVE roadmap, and a guard that only asks about active roadmaps
+  // cannot fire on the thing that actually happened here — two duplicate DRAFT rows (see
+  // scripts/one-off/archive-duplicate-roadmaps.mjs header: "2 pre-guard duplicate draft rows").
+  // Running --full twice from a bootstrap state would have reproduced a89b078b + 8ffa7fdf
+  // unimpeded through my first version of this guard.
+  //
+  // So the predicate is "does any NON-ARCHIVED roadmap already exist", which covers both the
+  // draft window and an approved plan of record.
+  const { data: liveRoadmaps, error: liveErr } = await supabase
+    .from('strategic_roadmaps')
+    .select('id, title, status')
+    .neq('status', 'archived');
+  if (liveErr) {
+    console.error(`  Could not check for existing roadmaps: ${liveErr.message}`);
+    process.exit(1);
+  }
+  // Decision lives in lib/roadmap/full-create-guard.js so it can be unit-tested; this file
+  // self-invokes main() at module load, so an inline predicate is unreachable from a test.
+  const verdict = evaluateFullCreate(liveRoadmaps, { replaceActive, replaceReason });
+  const existing = verdict.existing || [];
+  if (!verdict.allow) {
+    if (verdict.refusal === REFUSE_REASON_REQUIRED) {
+      console.error('  --replace-active requires --reason "<why>" — the override is audit-logged.');
+      process.exit(1);
+    }
+    const first = existing[0];
+    console.error(`  REFUSING: ${existing.length} non-archived roadmap(s) already exist, e.g. ${first.id} ("${first.title}", status=${first.status}).`);
+    console.error('  --full bootstraps the FIRST roadmap. A second one forks the plan of record:');
+    console.error('  a duplicate DRAFT is exactly what happened on 2026-07-17 (a89b078b, 8ffa7fdf),');
+    console.error('  and if one is later approved you get two active rows, at which point every');
+    console.error('  reader resolving through resolveCanonicalRoadmap() throws rather than guess.');
+    console.error('');
+    console.error('  To recluster: archive the current roadmap first, then re-run --full.');
+    console.error('  To replace deliberately: --full --replace-active --reason "<why>"');
+    process.exit(1);
+  }
+
+  const overrideTargets = verdict.override ? roadmapsToArchive(existing) : [];
+  if (verdict.override) {
+    console.log(`  OVERRIDE: --replace-active will archive ${overrideTargets.length} roadmap(s) AFTER the new one is created — reason: ${replaceReason}`);
+  }
+
+  // *** CREATE FIRST, ARCHIVE AFTER. *** The EXEC security review found that archiving first was
+  // a data-loss path, not merely an ordering preference: runFull() calls process.exit(0) at :339
+  // when there are no classified intake items — a NORMAL state, since classification is a
+  // separate prior step. So `--full --replace-active` against an empty queue archived EVERY
+  // roadmap including the plan of record, created nothing, and exited 0. There is no transaction
+  // here, so ordering is the only atomicity available: if creation does not happen, the archive
+  // must not either.
   await runFull({ title, application, dryRun });
+
+  if (verdict.override) {
+    if (dryRun) {
+      console.log(`  [DRY-RUN] would archive after creation: ${overrideTargets.join(', ')}`);
+    } else {
+      // *** THE AUDIT ROW GATES THE ARCHIVE. *** Previously this was best-effort in a try/catch,
+      // which was dead code twice over: supabase-js RETURNS {error} rather than throwing, and the
+      // severity value I used ('high') violates audit_log_severity_check. Net effect: the
+      // override wrote NO audit row, silently, while printing "Archived N roadmap(s)". Live probe
+      // confirms 0 rows in audit_log with entity_type='strategic_roadmaps' out of 241,139.
+      // An unauditable destructive action is worse than a failed one, so a failed audit now
+      // REFUSES rather than continuing.
+      const { error: auditErr } = await supabase.from('audit_log').insert({
+        event_type: 'ROADMAP_FULL_REPLACE_ACTIVE',
+        entity_type: 'strategic_roadmaps',
+        entity_id: overrideTargets[0],
+        severity: AUDIT_SEVERITY,
+        // USER before USERNAME: USERNAME is Windows-only, so a POSIX run without a session id
+        // recorded 'unknown' and the audit row lost its actor (SEC-5b).
+        created_by: `roadmap-generate:${process.env.CLAUDE_SESSION_ID || process.env.USER || process.env.USERNAME || 'unknown'}`,
+        metadata: {
+          sd: 'SD-LEO-INFRA-ROADMAP-REGENERATION-DUPLICATES-001',
+          replaced_roadmap_ids: overrideTargets,
+          reason: replaceReason,
+        },
+      });
+      if (auditErr) {
+        console.error(`  REFUSING to archive: the audit row could not be written (${auditErr.message}).`);
+        console.error('  The new roadmap HAS been created; the previous one(s) are untouched.');
+        console.error(`  Resolve the audit failure, then archive manually: ${overrideTargets.join(', ')}`);
+        process.exit(1);
+      }
+
+      const { error: archErr } = await supabase
+        .from('strategic_roadmaps')
+        .update({ status: 'archived' })
+        .in('id', overrideTargets);
+      if (archErr) {
+        console.error(`  Could not archive the previous roadmap(s): ${archErr.message}`);
+        console.error(`  The new roadmap exists; archive these manually: ${overrideTargets.join(', ')}`);
+        process.exit(1);
+      }
+      console.log(`  Archived ${overrideTargets.length} roadmap(s): ${overrideTargets.join(', ')}`);
+    }
+  }
 }
 
 main().catch(err => {

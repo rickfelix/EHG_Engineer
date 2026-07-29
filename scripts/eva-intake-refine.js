@@ -30,6 +30,7 @@ import { readFileSync, writeFileSync } from 'fs';
 import { resolve, dirname } from 'path';
 import { fileURLToPath, pathToFileURL } from 'url';
 import { dedup, extractDedupContext } from '../lib/integrations/refine-dedup.js';
+import { resolveCanonicalRoadmap } from '../lib/roadmap/canonical-roadmap.js';
 import { reconcile, extractReconcileContext, enforceInstitutionDiscipline } from '../lib/integrations/refine-reconcile.js';
 import { score, extractScoringContext } from '../lib/integrations/refine-score.js';
 import { promote, groupForPromotion } from '../lib/integrations/refine-promote.js';
@@ -81,28 +82,44 @@ async function getRoadmap() {
     return data;
   }
 
-  // Find active baselined roadmap
-  const { data, error } = await supabase
+  // SD-LEO-INFRA-ROADMAP-REGENERATION-DUPLICATES-001 FR-6. Found by the corpus-wide invariant,
+  // not by inspection — neither sub-agent examined this file.
+  //
+  // This was THE ORIGINAL ROOT CAUSE, still live in a second file. The primary query required
+  // current_baseline_version > 0, but the canonical roadmap has 0 (baselining is an
+  // approval-workflow step it never went through), so the primary returned EMPTY and control
+  // fell to a "any draft roadmap" fallback that ordered by created_at with NO status predicate.
+  //
+  // Verified live 2026-07-29: that fallback resolved to 8ffa7fdf — status=archived — because it
+  // is merely the newest row, while the actual plan of record 3aa2f3e2 was never considered.
+  // This function is used by the refine pass that backfills wave-item titles, so it was pointed
+  // at an archived roadmap's items.
+  //
+  // resolveCanonicalRoadmap deliberately does NOT filter on current_baseline_version, precisely
+  // because that predicate is what created this class of bug (see its header). Routing through
+  // it removes both the bad predicate and the unscoped fallback in one move.
+  const roadmap = await resolveCanonicalRoadmap(supabase);
+  if (roadmap) return roadmap;
+
+  // BOOTSTRAP WINDOW — restored after the EXEC adversarial review caught that removing it was a
+  // regression, not a simplification. roadmap-generate.js:88 inserts status:'draft', and the flip
+  // to 'active' happens only in roadmap-manager.js:190 approveSequence, i.e. at chairman approval.
+  // Refine runs BEFORE approval (its own closing output tells the operator to run
+  // "/distill approve --roadmap-id <id>"), so between generate and approve there is legitimately
+  // NO active roadmap. My first fix returned null there, and main() exits 0 with "No roadmap
+  // found. Run /distill first" — telling the operator to redo the step they had just done.
+  //
+  // The original fallback was not wrong to exist; it was wrong to be UNSCOPED. It ordered by
+  // created_at across every status, which is how it reached archived 8ffa7fdf. Filtering to
+  // status='draft' keeps the bootstrap path and still cannot select an archived roadmap.
+  const { data: drafts, error } = await supabase
     .from('strategic_roadmaps')
     .select('id, title, status, current_baseline_version')
-    .eq('status', 'active')
-    .gt('current_baseline_version', 0)
+    .eq('status', 'draft')
     .order('created_at', { ascending: false })
     .limit(1);
-
-  if (error || !data || data.length === 0) {
-    // Fall back to any draft roadmap
-    const { data: drafts } = await supabase
-      .from('strategic_roadmaps')
-      .select('id, title, status, current_baseline_version')
-      .order('created_at', { ascending: false })
-      .limit(1);
-
-    if (!drafts || drafts.length === 0) return null;
-    return drafts[0];
-  }
-
-  return data[0];
+  if (error || !drafts || drafts.length === 0) return null;
+  return drafts[0];
 }
 
 /**
