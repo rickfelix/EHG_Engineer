@@ -414,16 +414,41 @@ export function buildReport(argv = [], env = {}, repoRoot = REPO_ROOT) {
 // throws / blocks startup — same doctrine as the rest of this file).
 // ─────────────────────────────────────────────────────────────────────────────
 
-// The sourcing-engine activation flags, in escalation order (umbrella first, then per-engine,
-// then the autosource switch). Each is an env feature flag, OFF unless explicitly on|1|true.
+// The sourcing-engine activation flags. Each is an env feature flag, OFF unless explicitly
+// on|1|true.
+//
+// SD-LEO-INFRA-SOURCING-ENGINE-BELT-GATED-001 (FR-5) — FOUR FLAGS RETIRED FROM THIS LIST.
+// SOURCING_ENGINE_V1, SOURCING_ROADMAP_ENGINE_V1, SOURCING_PROACTIVE_POPULATOR_V1 and
+// LEO_ROADMAP_AUTOSOURCE had ZERO executable readers anywhere in the repo — re-verified at
+// implementation time, not inherited from the SD: each appeared in exactly ONE file, this display
+// list. They were displayed, never consulted.
+//
+// The consequence that had to be caught rather than shipped: this SD's own interim step "turn all
+// four ON now" was A NO-OP, and any acceptance criterion of the form "all six read ON in the probe"
+// would have been satisfiable by exporting four env vars while changing zero behaviour. A green
+// badge full of decorative flags is precisely the defect this SD exists to fix, one level up.
+//
+// The two that remain are REAL: gauge-gap-miner.js:296 and deferred-watcher.js:30 read them.
+// Both are hardcoded ON in the workflow job env, so they are already permanently on in the only
+// context that executes them — displayed here for completeness, not because they are tunable.
+//
+// THE OPERATIVE GATE IS NOT AN ENV FLAG AT ALL. The highest-blast-radius producer (refill-cron,
+// hourly --apply) is gated by the DB row sourcing_engine_activation_state.arm='auto-refill', read
+// at sourcing-engine-awareness.mjs:56-68 and consumed at refill-cron.mjs:124. The SD never named
+// it. It is now rendered from the DB below, so the badge shows what actually governs rather than
+// what merely looks like it does.
 export const SOURCING_FLAGS = [
-  'SOURCING_ENGINE_V1',
-  'SOURCING_ROADMAP_ENGINE_V1',
   'SOURCING_GAUGE_GAP_MINER_V1',
   'SOURCING_DEFERRED_WATCHER_V1',
+];
+
+/** The four env flags retired by FR-5, kept named so their removal is a record, not a silent drop. */
+export const RETIRED_SOURCING_FLAGS = Object.freeze([
+  'SOURCING_ENGINE_V1',
+  'SOURCING_ROADMAP_ENGINE_V1',
   'SOURCING_PROACTIVE_POPULATOR_V1',
   'LEO_ROADMAP_AUTOSOURCE',
-];
+]);
 
 /** Pure flag parse mirroring the sourcing-engine helpers: on|1|true => true; everything else => false. */
 export function isSourcingFlagOn(env, name) {
@@ -468,12 +493,22 @@ export function summarizeBacklogDisposition(total = 0, dispositioned = 0) {
 }
 
 /** Pure: render the state-probe section from already-resolved data (no I/O). */
-export function renderSourcingStateLines({ flags = [], wave = null, backlog = null, demand = null } = {}) {
+export function renderSourcingStateLines({ flags = [], wave = null, backlog = null, demand = null, arms = null } = {}) {
   const lines = ['═══ SOURCING SSOT STATE (read-only — route the SSOT before hand-mining) ═══'];
   // Flags
   const anyOn = flags.some((f) => f.on);
   lines.push('  Sourcing-engine flags: ' + (anyOn ? '' : '⚠️ ALL OFF — engine dormant; PROPOSE activation, do not substitute yourself tick-after-tick'));
   for (const f of flags) lines.push(`    ${f.on ? '🟢 on ' : '⚪ off'}  ${f.flag}`);
+  // FR-5: the DB arm states — what ACTUALLY gates the producers. Rendered under the env flags
+  // because reading only the env line has been misleading: the env flags above cannot turn the
+  // highest-blast-radius producer on or off, and this row can.
+  if (arms && arms.length) {
+    for (const a of arms) {
+      lines.push(`    ${a.enabled ? '🟢 on ' : '⚪ off'}  ${a.label} (DB arm — OPERATIVE${a.label === 'auto-refill' ? ', gates the hourly refill cron' : ''})`);
+    }
+  } else {
+    lines.push('    (DB arm states unavailable — the OPERATIVE gate could not be read)');
+  }
   // SD-LEO-INFRA-SOURCING-ENGINE-BELT-GATED-001 (FR-3): the DEMAND VERDICT, printed immediately
   // under the flag list so the two are read together. A flag line alone cannot distinguish "on and
   // correctly quiet" from "on and broken" — that ambiguity is what the whole SD is about. Rendered
@@ -576,15 +611,23 @@ export async function fetchSourcingState({ supabase = null, env = process.env } 
   for (const engine of BELT_DEPTH_GATED_PRODUCERS) {
     demand.push({ engine, decision: await readLastDemandDecision(client, engine) });
   }
-  return { wave, backlog, demand };
+  // FR-5: the DB arm states — the gate that actually governs the producers, as opposed to the env
+  // flags above. Fail-open (null) so an unreadable row degrades to an explicit "could not read"
+  // line rather than an absent section.
+  let arms = null;
+  try {
+    const { readSourcingEngineFlagsFromDb } = await import('./lib/sourcing-engine-awareness.mjs');
+    arms = await readSourcingEngineFlagsFromDb(client, {});
+  } catch { arms = null; }
+  return { wave, backlog, demand, arms };
 }
 
 /** Compose the full state-probe section (async, fail-open — never throws). */
 export async function renderSourcingState({ supabase = null, env = process.env } = {}) {
   try {
     const flags = readSourcingFlags(env);
-    const { wave, backlog, demand } = await fetchSourcingState({ supabase, env });
-    return renderSourcingStateLines({ flags, wave, backlog, demand });
+    const { wave, backlog, demand, arms } = await fetchSourcingState({ supabase, env });
+    return renderSourcingStateLines({ flags, wave, backlog, demand, arms });
   } catch (err) {
     return '═══ SOURCING SSOT STATE ═══\n  ✅ state probe skipped (fail-open): ' + (err?.message || String(err));
   }

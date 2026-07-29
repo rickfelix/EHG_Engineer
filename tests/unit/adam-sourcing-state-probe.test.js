@@ -1,9 +1,17 @@
 // Tests for the SOURCING SSOT STATE probe in scripts/adam-startup-check.mjs
+//
+// SD-LEO-INFRA-SOURCING-ENGINE-BELT-GATED-001 (FR-5): RENAMED FROM .test.mjs, WHERE IT NEVER RAN.
+// The vitest unit include does not match .test.mjs, so every assertion below was dead: this file
+// asserted a six-flag contract that nothing enforced, for the exact function this SD modifies.
+// A test that cannot run is the same defect class as a flag nothing reads — which is what the SD
+// is about, so leaving it in place while fixing decorative flags would have been incoherent.
+// Converted from node:test to vitest (assert stays; the runner is what changed).
 // SD-LEO-INFRA-ADAM-SOURCE-FROM-SSOT-CONTRACT-001 (FR-2)
-import { test } from 'node:test';
+import { test } from 'vitest';
 import assert from 'node:assert/strict';
 import {
   SOURCING_FLAGS,
+  RETIRED_SOURCING_FLAGS,
   isSourcingFlagOn,
   readSourcingFlags,
   summarizeUnpromotedByWave,
@@ -13,15 +21,30 @@ import {
   renderSourcingState,
 } from '../../scripts/adam-startup-check.mjs';
 
-test('SOURCING_FLAGS lists the six engine activation flags in escalation order', () => {
+test('SOURCING_FLAGS lists ONLY the flags something actually reads (FR-5)', () => {
+  // Was a six-flag contract. Four of them had zero executable readers anywhere in the repo and
+  // were retired; the two left are read at gauge-gap-miner.js:296 and deferred-watcher.js:30.
   assert.deepEqual(SOURCING_FLAGS, [
-    'SOURCING_ENGINE_V1',
-    'SOURCING_ROADMAP_ENGINE_V1',
     'SOURCING_GAUGE_GAP_MINER_V1',
     'SOURCING_DEFERRED_WATCHER_V1',
-    'SOURCING_PROACTIVE_POPULATOR_V1',
-    'LEO_ROADMAP_AUTOSOURCE',
   ]);
+});
+
+test('FR-5 TS-9 ENV-VAR-ALONE CONTROL — setting the retired flags changes NOTHING', () => {
+  // The criterion this SD refused to ship: "all six read ON in the probe", satisfiable by
+  // exporting four env vars while changing zero behaviour. This test makes that unsatisfiable —
+  // if anyone re-adds a decorative flag to the display list, the badge diff below goes non-empty
+  // and this fails.
+  const env = Object.fromEntries(RETIRED_SOURCING_FLAGS.map((f) => [f, 'on']));
+  const withRetiredFlagsOn = renderSourcingStateLines({ flags: readSourcingFlags(env) });
+  const withNothingSet = renderSourcingStateLines({ flags: readSourcingFlags({}) });
+  assert.equal(withRetiredFlagsOn, withNothingSet);
+  for (const f of RETIRED_SOURCING_FLAGS) assert.doesNotMatch(withRetiredFlagsOn, new RegExp(f));
+});
+
+test('FR-5: the retired flags are recorded, not silently dropped', () => {
+  assert.equal(RETIRED_SOURCING_FLAGS.length, 4);
+  for (const f of RETIRED_SOURCING_FLAGS) assert.equal(SOURCING_FLAGS.includes(f), false);
 });
 
 test('isSourcingFlagOn: on|1|true => true; everything else (incl. undefined) => false', () => {
@@ -31,11 +54,12 @@ test('isSourcingFlagOn: on|1|true => true; everything else (incl. undefined) => 
 });
 
 test('readSourcingFlags reports per-flag state from env', () => {
+  // A RETIRED flag set to 'on' is not reported at all — it has no entry to report.
   const flags = readSourcingFlags({ SOURCING_ENGINE_V1: 'on', SOURCING_GAUGE_GAP_MINER_V1: '1' });
-  assert.equal(flags.length, 6);
-  assert.equal(flags.find((f) => f.flag === 'SOURCING_ENGINE_V1').on, true);
+  assert.equal(flags.length, 2);
   assert.equal(flags.find((f) => f.flag === 'SOURCING_GAUGE_GAP_MINER_V1').on, true);
-  assert.equal(flags.find((f) => f.flag === 'LEO_ROADMAP_AUTOSOURCE').on, false);
+  assert.equal(flags.find((f) => f.flag === 'SOURCING_DEFERRED_WATCHER_V1').on, false);
+  assert.equal(flags.find((f) => f.flag === 'SOURCING_ENGINE_V1'), undefined);
 });
 
 test('summarizeUnpromotedByWave counts only null promoted_to_sd_key, grouped + ordered by wave rank', () => {
@@ -78,9 +102,9 @@ test('renderSourcingStateLines warns ALL OFF when no flag is on, and lists the S
 });
 
 test('renderSourcingStateLines does NOT warn ALL OFF when a flag is on', () => {
-  const out = renderSourcingStateLines({ flags: readSourcingFlags({ SOURCING_ENGINE_V1: 'on' }), wave: null, backlog: null });
+  const out = renderSourcingStateLines({ flags: readSourcingFlags({ SOURCING_GAUGE_GAP_MINER_V1: 'on' }), wave: null, backlog: null });
   assert.doesNotMatch(out, /ALL OFF/);
-  assert.match(out, /🟢 on\s+SOURCING_ENGINE_V1/);
+  assert.match(out, /🟢 on\s+SOURCING_GAUGE_GAP_MINER_V1/);
   assert.match(out, /unavailable — DB read skipped/); // wave + backlog null → fail-open lines
 });
 
@@ -96,8 +120,14 @@ function stubSupabase({ remainderRows = [], total = 0, dispositioned = 0 } = {})
         select(_cols, opts) { this._head = !!(opts && opts.head); return this; },
         is() { return this; },
         not() { this._dispositioned = true; return this; },
+        // The stub PREDATES the fetchAllPaginated repoint and lacked .range(), so the paginated
+        // read threw and wave came back null — undetected, because this file never ran.
+        range(from) { this._offset = from; return this; },
+        eq() { return this; },
+        order() { return this; },
+        limit() { return this; },
         then(res, rej) {
-          if (this._table === 'v_plan_of_record_remainder') return Promise.resolve({ data: remainderRows, error: null }).then(res, rej);
+          if (this._table === 'v_plan_of_record_remainder') return Promise.resolve({ data: this._offset ? [] : remainderRows, error: null }).then(res, rej);
           if (this._table === 'sd_backlog_map') return Promise.resolve({ count: this._dispositioned ? dispositioned : total, error: null }).then(res, rej);
           return Promise.resolve({ data: [], error: null }).then(res, rej);
         },
