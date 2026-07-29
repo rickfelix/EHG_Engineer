@@ -106,6 +106,53 @@ describe('contractReadVerdict — absence is reported as absence', () => {
   });
 });
 
+describe('single-read-safe size — the tier a CI failure forced me to add', () => {
+  /**
+   * My first cut required positive coverage evidence unconditionally. Correct for an over-cap
+   * contract, WRONG for a small one: with no lastDelivered and no ranges, a perfectly good single
+   * read of a 25KB file reported "partial" forever — a permanent false alarm on every startup, and
+   * a warning that always fires gets demoted to noise. That is the failure this SD exists to remove,
+   * so trading a false positive for a false negative is not a fix. CI caught it; two tests in
+   * tests/unit/adam/ that I had not run locally were asserting the correct behaviour all along.
+   */
+  const SAFE = 25_000;   // ~CLAUDE_COORDINATOR.md
+  const OVER = 104_000;  // ~CLAUDE_ADAM.md
+
+  it('a small contract read without a partial flag IS fully read, with no further evidence', () => {
+    const v = contractReadVerdict({ readCount: 1, lastReadWasPartial: false }, 99, { sizeBytes: SAFE });
+    expect(v.fully_read).toBe(true);
+    expect(v.basis).toBe('single_read_safe_size');
+
+    // MUTATION: drop the size tier -> falls to unknown_coverage, fully_read false, fails. That was
+    // literally my shipped state, and it is why CI went red.
+  });
+
+  it('the SAME evidence on an OVER-CAP contract is NOT fully read', () => {
+    // The discriminating pair. One assertion alone cannot distinguish "size tier works" from
+    // "everything passes" — this is the half that proves the tier is bounded.
+    const v = contractReadVerdict({ readCount: 1, lastReadWasPartial: false }, 421, { sizeBytes: OVER });
+    expect(v.fully_read).toBe(false);
+    expect(v.basis).toBe('unknown_coverage');
+
+    // MUTATION: raise the threshold above 104KB, or drop the bound entirely -> the truncated read on
+    // CLAUDE_ADAM.md counts as complete again and the original defect returns. Fails.
+  });
+
+  it('a small contract whose last read WAS partial still is not waved through', () => {
+    const v = contractReadVerdict({ readCount: 1, lastReadWasPartial: true }, 99, { sizeBytes: SAFE });
+    expect(v.basis).not.toBe('single_read_safe_size');
+
+    // MUTATION: drop the lastReadWasPartial check from the size tier -> a deliberately partial read
+    // of a small file reports complete. Fails.
+  });
+
+  it('an unknown size does not enter the tier', () => {
+    // A missing stat must not be read as "small". Absence is not evidence, at every tier.
+    const v = contractReadVerdict({ readCount: 1, lastReadWasPartial: false }, 421, { sizeBytes: null });
+    expect(v.fully_read).toBe(false);
+  });
+});
+
 describe('coverage threshold', () => {
   it('partial union coverage below the bar is not a full read', () => {
     const v = contractReadVerdict({ readCount: 1, ranges: [{ offset: 1, limit: 200 }] }, 421);

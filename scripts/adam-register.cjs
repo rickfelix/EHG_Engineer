@@ -36,7 +36,7 @@ const { createSupabaseServiceClient } = require('../lib/supabase-client.cjs');
 const { resolveStateReadPath } = require('./hooks/lib/session-state-resolver.cjs');
 // SD-LEO-INFRA-ROLE-CONTRACT-READ-GATE-001 / FR-3: shared with solomon-register.cjs so both roles
 // get the same verdict from one implementation — solomon had zero coverage for this path.
-const { contractReadVerdict, contractLineCount } = require('../lib/protocol/contract-read-coverage.cjs');
+const { contractReadVerdict, contractLineCount, contractSizeBytes, SINGLE_READ_SAFE_BYTES } = require('../lib/protocol/contract-read-coverage.cjs');
 // SD-LEO-INFRA-ROLE-SESSION-HANDOFF-PROTOCOL-001-C (FR-3): single-Adam guard + atomic write.
 // fetchAllAdamsStrict (not fetchFreshAdams) so the guard sees stale priors too and classifies
 // fresh-vs-stale itself (fresh => refuse; stale-only => retire). STRICT (FR-6, count-truncation
@@ -277,16 +277,21 @@ function checkContractRead(projectDir) {
       // paginated read recorded "partial". Coverage is now derived from evidence. Fixed HERE at the
       // consumer rather than in the tracker, because that stamp also feeds
       // protocol-file-read-gate.js:159 and therefore every handoff.
-      const verdict = contractReadVerdict(status, contractLineCount(root, CONTRACT_FILE));
+      const verdict = contractReadVerdict(status, contractLineCount(root, CONTRACT_FILE), { sizeBytes: contractSizeBytes(root, CONTRACT_FILE) });
       result.contract_read = verdict.read;
       result.contract_read_partial = !verdict.fully_read;
       result.contract_coverage_pct = verdict.coverage_pct;
       result.contract_read_basis = verdict.basis;
       result.contract_last_read_at = status.lastReadAt || null;
     } else if (Array.isArray(state.protocolFilesRead) && state.protocolFilesRead.includes(CONTRACT_FILE)) {
-      result.contract_read = true; // legacy-array fallback (pre-FR-2 state shape)
-      result.contract_read_partial = true; // legacy shape carries no coverage evidence — not a full read
-      result.contract_read_basis = 'legacy_array';
+      // Legacy pre-FR-2 state shape: a bare filename list carrying no coverage information at all.
+      // Sufficient ONLY when the contract fits in a single Read. For an over-cap contract it cannot
+      // distinguish a full read from a silently truncated one, which is the defect this SD closes.
+      const legacyBytes = contractSizeBytes(root, CONTRACT_FILE);
+      const legacyFits = Number.isFinite(legacyBytes) && legacyBytes > 0 && legacyBytes <= SINGLE_READ_SAFE_BYTES;
+      result.contract_read = true;
+      result.contract_read_partial = !legacyFits;
+      result.contract_read_basis = legacyFits ? 'legacy_array_single_read_safe' : 'legacy_array_no_evidence';
     }
   } catch { /* fail-open: tracking unavailable must never break role activation */ }
   return result;
