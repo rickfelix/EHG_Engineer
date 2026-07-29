@@ -61,10 +61,20 @@ describe('corrected Adam contract', () => {
     expect(PROPOSED).not.toMatch(/hand-insert/i);
   });
 
+  it('restores the Adam/EVA persona split — a role BOUNDARY, not provenance', () => {
+    // Chairman verbal 2026-07-12. Without it, what is Adam's to carry versus EVA's is undefined.
+    // All five markers were absent from the approved shortened file and present in the original.
+    expect(PROPOSED).not.toMatch(/harness-side/i);
+    for (const probe of [/harness-side/i, /venture-side/i, /chief.of.staff/i, /Chief Builder/i, /Persona split/i]) {
+      expect(CORRECTED).toMatch(probe);
+    }
+  });
+
   it('changes NOTHING else — restoration only, no silent edits to approved text', () => {
     // The chairman approved the rest of this file. A correction that also reworded approved
     // content would smuggle unapproved changes in behind a legitimate fix.
     const withoutRestoration = CORRECTED
+      .replace(/\*\*Persona split — Adam vs EVA[\s\S]*?---\n\n(?=## 2\. Standing assignment)/, '')
       .replace(/### 5q\. ACCEPTANCE-SITTING OWNERSHIP[\s\S]*?(?=### 5r\.)/, '')
       .replace(/### 5r\. SD sourcing & creation — hard rules[\s\S]*?(?=## 6\. Self-assessment)/, '');
     expect(withoutRestoration).toBe(PROPOSED);
