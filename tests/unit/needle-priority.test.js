@@ -107,10 +107,42 @@ describe('buildSdRungMap (reuses mapWaveToRung)', () => {
     expect(buildSdRungMap(items, wavesByIdMixedStatus)).toEqual({ 'SD-A': 'V1', 'SD-B': 'V2' });
   });
 
-  it('SD-LEO-INFRA-PLAN-OF-RECORD-REMAINDER-VIEW-001 regression: coordinator-backlog-rank.mjs still sources its rung-map input from unscoped roadmap_wave_items/roadmap_waves, not the approved-only v_plan_of_record_remainder view (FR-4 -- repointing this file would silently empty the map for non-approved-wave SDs)', () => {
+  it('SD-LEO-INFRA-PLAN-OF-RECORD-REMAINDER-VIEW-001 regression: coordinator-backlog-rank.mjs sources its rung-map from the base tables, never the approved-only v_plan_of_record_remainder view (repointing it would silently empty the map for non-approved-wave SDs)', () => {
+    // *** ASSERTED AS FRAGMENTS, NOT AS ONE PINNED LITERAL — SD-LEO-INFRA-ROADMAP-REGENERATION-
+    // DUPLICATES-001. *** This previously pinned the whole chained call as a single string, so
+    // adding a roadmap scope broke it even though the invariant it guards was untouched. A pin
+    // that fails on every legitimate insertion trains people to edit the assertion without
+    // reading it, which is how the real invariant eventually gets deleted by someone in a hurry.
+    // The invariant is: base tables, not the approved-only view, and no wave-STATUS filter.
     const source = readFileSync(path.join(REPO_ROOT, 'scripts/coordinator-backlog-rank.mjs'), 'utf8');
-    expect(source).toContain("sb.from('roadmap_wave_items').select('promoted_to_sd_key, wave_id').not('promoted_to_sd_key', 'is', null)");
-    expect(source).toContain("sb.from('roadmap_waves').select('id, time_horizon, metadata')");
+    expect(source).toContain("from('roadmap_wave_items')");
+    expect(source).toContain("'promoted_to_sd_key, wave_id'");
+    expect(source).toContain(".not('promoted_to_sd_key', 'is', null)");
+    expect(source).toContain("from('roadmap_waves')");
+    expect(source).toContain("'id, time_horizon, metadata'");
     expect(source).not.toContain('v_plan_of_record_remainder');
+  });
+
+  it('SD-LEO-INFRA-ROADMAP-REGENERATION-DUPLICATES-001: the rung map is scoped by ROADMAP, never by wave status', () => {
+    // The two scopings are easy to confuse and only one is safe. Scoping by roadmap_id keeps every
+    // wave of the canonical plan regardless of status (live 2026-07-29: 7 approved + 1 proposed —
+    // the proposed one MUST stay in the map). Scoping by wave status is what the original guard
+    // was written to prevent. Asserting the absence of a status filter is what stops a future
+    // "tidy-up" from converting one into the other.
+    const source = readFileSync(path.join(REPO_ROOT, 'scripts/coordinator-backlog-rank.mjs'), 'utf8');
+    expect(source).toContain('resolveCanonicalWaveIds');
+    expect(source).not.toContain("roadmap_waves').select('id, time_horizon, metadata').eq('status'");
+    expect(source).not.toContain("'approved'");
+  });
+
+  it('SD-LEO-INFRA-ROADMAP-REGENERATION-DUPLICATES-001: buildSdRungMap still maps waves of ANY status — the behaviour the source pins stand in for', () => {
+    // The pins above are proxies; this is the property itself. If someone rewrites the queries in
+    // a way the pins miss, this still fails when non-approved waves stop mapping.
+    const waves = {
+      w1: { id: 'w1', status: 'proposed', time_horizon: 'now' },
+      w2: { id: 'w2', status: 'approved', metadata: { rung_key: 'V2' } },
+    };
+    const items = [{ promoted_to_sd_key: 'SD-P', wave_id: 'w1' }, { promoted_to_sd_key: 'SD-A', wave_id: 'w2' }];
+    expect(buildSdRungMap(items, waves)).toEqual({ 'SD-P': 'V1', 'SD-A': 'V2' });
   });
 });
