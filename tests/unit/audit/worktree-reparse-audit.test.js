@@ -173,6 +173,45 @@ describe('auditWorktrees — archived trees are REPORTED but never move the verd
   });
 });
 
+describe('OS-separator invariance — the CI-only defect', () => {
+  // BOTH path helpers here used `String(p).split(path.sep).join('/')`, which is a NO-OP on Linux:
+  // path.sep is '/' there, so a Windows-style path keeps its backslashes and neither '/_archive/'
+  // nor '/.worktrees/' ever matches. Green on my Windows box, two failures on Linux CI.
+  //
+  // A SOURCE assertion, deliberately, and this is the one case where that is the right instrument
+  // rather than the weak one. The behavioural pins below CANNOT fail on Windows — under the old
+  // code both separator forms returned true locally — so on the platform where the tests are
+  // usually run first, the bug is invisible to any behavioural check. The property actually being
+  // guarded is a property OF THE IMPLEMENTATION: it must not branch on path.sep. So assert that.
+  // COMMENTS STRIPPED FIRST. The first version of this pin failed instantly against correct code:
+  // its regex matched the DOCSTRING, which quotes the old `split(path.sep)` implementation
+  // verbatim to explain the bug. A source assertion that cannot tell code from prose reports the
+  // explanation as the defect — the same unanchored-match trap that produced a false refutation
+  // earlier in this SD.
+  const src = fs.readFileSync(
+    new URL('../../../scripts/audit/worktree-reparse-audit.mjs', import.meta.url), 'utf8'
+  );
+  const code = src.replace(/\/\*[\s\S]*?\*\//g, '').replace(/^\s*\/\/.*$/gm, '');
+
+  it('the pin reads CODE, not prose — the docstring still quotes the old form', () => {
+    // Guards the stripper itself: if it ever stops working, the pin below silently goes vacuous.
+    expect(src).toContain('split(path.sep)');   // present, in the explanatory comment
+    expect(code).not.toContain('split(path.sep)'); // absent, in the code
+  });
+
+  it('normalisation goes through an explicit backslash regex', () => {
+    expect(code).toContain("replace(/\\\\/g, '/')");
+  });
+
+  it('behaviourally: both separator forms agree, on every platform', () => {
+    const B = String.fromCharCode(92);
+    expect(isArchivedWorktree(`C:${B}r${B}.worktrees${B}_archive${B}X`))
+      .toBe(isArchivedWorktree('C:/r/.worktrees/_archive/X'));
+    expect(resolveMainRepoRoot(`C:${B}r${B}.worktrees${B}SD-1`))
+      .toBe(resolveMainRepoRoot('C:/r/.worktrees/SD-1'));
+  });
+});
+
 describe('partitionWorktrees', () => {
   it('splits without dropping or duplicating any tree', () => {
     const all = ['/wt/a', '/wt/_archive/x', '/wt/b', '/wt/_archive/y'];

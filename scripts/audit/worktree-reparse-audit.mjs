@@ -79,7 +79,25 @@ export function classifyAudit({ total, reparse }) {
  * REPORTED, just never folded into the live denominator.
  */
 export function isArchivedWorktree(p) {
-  return String(p).split(path.sep).join('/').includes('/_archive/');
+  return toPosix(p).includes('/_archive/');
+}
+
+/**
+ * Normalise separators to POSIX. Uses an explicit backslash regex, NOT path.sep.
+ *
+ * CAUGHT BY CI, NOT BY ME. Both this and resolveMainRepoRoot used
+ * `String(p).split(path.sep).join('/')`, which is a no-op on Linux — path.sep is '/' there, so a
+ * Windows-style path keeps its backslashes and neither '/_archive/' nor '/.worktrees/' ever
+ * matches. The tests passed on my Windows box and failed on Linux CI.
+ *
+ * Worse than the bug: the test guarding it is NAMED "normalises Windows separators so the match is
+ * not platform-dependent" while the implementation was platform-DEPENDENT. The name asserted the
+ * exact property the code lacked, which is why reading it never raised a flag. A path helper must
+ * handle both separators on every platform, because the string can come from a Windows-recorded
+ * DB row while the process runs on Linux.
+ */
+function toPosix(p) {
+  return String(p).replace(/\\/g, '/');
 }
 
 /**
@@ -136,7 +154,9 @@ export function collectWorktrees(rootDir, fsImpl = fs, depth = 0) {
  * checkout, so truncating at that segment is sufficient and needs no git invocation.
  */
 export function resolveMainRepoRoot(cwd) {
-  const norm = String(cwd).split(path.sep).join('/');
+  // toPosix, NOT path.sep — see its docstring. On Linux this function silently returned the
+  // worktree path unchanged for any Windows-style input.
+  const norm = toPosix(cwd);
   const idx = norm.indexOf('/.worktrees/');
   return idx === -1 ? cwd : norm.slice(0, idx);
 }
