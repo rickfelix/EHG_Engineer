@@ -870,4 +870,9 @@ if (isMainScript) {
 
 // isValidWorktree is exported for QF-20260726-956's binding test: the lost-pointer case is
 // only observable against a real on-disk repo, so the test builds one rather than mocking git.
-export { resolve, resolveFromDB, resolveFromScan, validateWorktreePath, resolveVentureRepoRoot, resolveExistingBranch, rejectDescendantBranch, isValidWorktree };
+// ensureWorktreeEssentials is exported for FR-1's CONSUMER pin. isNodeModulesUnprovisioned was
+// already pinned directly, but a predicate can be perfectly correct and simply not be wired to
+// anything — pinning it proves the rule, not that the rule RUNS. This is the same
+// verify-at-the-consumer-not-at-the-merge gap this SD keeps finding in other people's work, so it
+// is closed in its own.
+export { resolve, resolveFromDB, resolveFromScan, validateWorktreePath, resolveVentureRepoRoot, resolveExistingBranch, rejectDescendantBranch, isValidWorktree, ensureWorktreeEssentials };
