@@ -24,6 +24,8 @@ import { selectRefillBatch, promoteStagedCandidate, isDistilledOnly } from '../.
 import { pathToFileURL } from 'node:url';
 import { normalizeTitleForCompare, crossRefShippedTitleAdvisory } from '../../lib/sourcing-engine/refill-candidate-validity.js';
 import { readSourcingEngineFlagsFromDb } from '../lib/sourcing-engine-awareness.mjs';
+import { measureDemand, recordDemandDecision, resolveDemandFloor } from '../../lib/governance/demand-gate-emit.js';
+import { formatDemandDecision } from '../../lib/governance/demand-gate.js';
 // SD-LEO-INFRA-COUNT-TRUNCATION-DISCIPLINE-001 FR-6 batch 9 — the staged-candidate read feeds
 // the promotion loop (a capped read silently drops promotable candidates with no error); the
 // shipped-title and accepted-fingerprint sets feed quality gates whose exactly-cap .limit(1000)
@@ -185,7 +187,20 @@ async function main() {
   // SD-LEO-INFRA-CORPUS-PROMOTE-ONLY-VIA-DISTILL-001 (FR-2): forward the distilled-only flag so the
   // batch selector applies CHECK #11 — only /distill build-dispositioned items promote. Now fail-closed
   // by default (isDistilledOnly), so an un-distilled raw corpus item is never minted onto the belt.
-  const sel = selectRefillBatch(rows, { limit, shippedTitleSet, acceptedFingerprintSet, distilledOnly: isDistilledOnly() });
+  // SD-LEO-INFRA-SOURCING-ENGINE-BELT-GATED-001 (FR-2/FR-3): measure DEMAND before minting, and
+  // RECORD the verdict whichever way it goes. This cron is the only unattended belt minter (hourly,
+  // 10/run, 240/day), so it is the one place where "the belt is already full" has to be able to
+  // stop production. Recorded BEFORE the batch is selected and unconditionally — a withheld run
+  // that leaves no trace is indistinguishable from a cron that never fired, which is the exact
+  // ambiguity this SD exists to remove.
+  const demand = await measureDemand(supabase, {
+    engine: 'refill-auto-promote',
+    floor: resolveDemandFloor(process.env),
+  });
+  await recordDemandDecision(supabase, demand);
+  console.log(formatDemandDecision(demand));
+
+  const sel = selectRefillBatch(rows, { limit, shippedTitleSet, acceptedFingerprintSet, distilledOnly: isDistilledOnly(), demand });
   const results = [];
   // SD-LEO-INFRA-WIRE-ALREADY-SHIPPED-001 (Phase 1 — ADVISORY): wire the exported-but-unused
   // crossRefShippedTitleAdvisory into the live promotion caller (its only production call site). It
@@ -212,6 +227,7 @@ async function main() {
       mode: apply ? 'apply' : 'dry_run',
       total: sel.total, validCount: sel.validCount, selected: sel.batch.length, limit: sel.limit,
       promoted, results,
+      demand, withheldByDemand: sel.withheldByDemand === true, // FR-3: the verdict travels with the run's own report
       advisoryByReason, advisoryMatches, // Phase 1 advisory (no verdict change) — for FP-rate measurement
     }, null, 2));
   } else {

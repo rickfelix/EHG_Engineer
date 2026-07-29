@@ -24,6 +24,8 @@ import { resolve, dirname } from 'path';
 import { fileURLToPath } from 'url';
 // SD-LEO-INFRA-FLEET-FRESHNESS-GUARD-001: advisory, fail-open checkout-freshness badge.
 import { checkoutFreshness, freshnessBadge, CRITICAL_PROTOCOL_FILES } from '../lib/governance/checkout-freshness.js';
+import { formatDemandDecision, BELT_DEPTH_GATED_PRODUCERS } from '../lib/governance/demand-gate.js';
+import { readLastDemandDecision } from '../lib/governance/demand-gate-emit.js';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const REPO_ROOT = resolve(__dirname, '..');
@@ -466,12 +468,28 @@ export function summarizeBacklogDisposition(total = 0, dispositioned = 0) {
 }
 
 /** Pure: render the state-probe section from already-resolved data (no I/O). */
-export function renderSourcingStateLines({ flags = [], wave = null, backlog = null } = {}) {
+export function renderSourcingStateLines({ flags = [], wave = null, backlog = null, demand = null } = {}) {
   const lines = ['═══ SOURCING SSOT STATE (read-only — route the SSOT before hand-mining) ═══'];
   // Flags
   const anyOn = flags.some((f) => f.on);
   lines.push('  Sourcing-engine flags: ' + (anyOn ? '' : '⚠️ ALL OFF — engine dormant; PROPOSE activation, do not substitute yourself tick-after-tick'));
   for (const f of flags) lines.push(`    ${f.on ? '🟢 on ' : '⚪ off'}  ${f.flag}`);
+  // SD-LEO-INFRA-SOURCING-ENGINE-BELT-GATED-001 (FR-3): the DEMAND VERDICT, printed immediately
+  // under the flag list so the two are read together. A flag line alone cannot distinguish "on and
+  // correctly quiet" from "on and broken" — that ambiguity is what the whole SD is about. Rendered
+  // UNCONDITIONALLY, one line per gated producer: an engine with no recorded decision prints
+  // NEVER RAN <engine> rather than nothing, because a section that disappears when there is no data
+  // reports a full belt and an unwired gate identically.
+  //
+  // SHAPE NOTE: an entry may be a DECISION object (its `decision` field is a STRING) or a
+  // {engine, decision} wrapper carrying null for an engine that has never run (its `decision` field
+  // is an object or null). Disambiguated on TYPE, never on presence — both shapes have a `decision`
+  // key, so a presence check would read the string 'withheld' as a decision object and throw.
+  const entries = Array.isArray(demand) ? demand : [demand];
+  for (const e of entries) {
+    const isBareDecision = e && typeof e.decision === 'string';
+    lines.push('  ' + formatDemandDecision(isBareDecision ? e : (e && e.decision) || null, e && e.engine));
+  }
   // Roadmap-SSOT unpromoted items
   if (wave) {
     lines.push(`  Roadmap-SSOT (plan-of-record remainder) unpromoted: ${wave.totalUnpromoted} — promote via leo-create-sd --from-roadmap-item (REGISTER-FIRST)`);
@@ -499,7 +517,14 @@ export async function fetchSourcingState({ supabase = null, env = process.env } 
   if (!client) {
     const url = env.SUPABASE_URL || env.NEXT_PUBLIC_SUPABASE_URL;
     const key = env.SUPABASE_SERVICE_ROLE_KEY;
-    if (!url || !key) return { wave: null, backlog: null };
+    // No creds is NOT "never ran" — we did not look. Rendering NEVER RAN here would report an
+    // unwired gate on every credential-less run, which is a false alarm that trains people to
+    // ignore the line. Unmeasurable is the honest verdict for a measurement not attempted.
+    if (!url || !key) return { wave: null, backlog: null, demand: BELT_DEPTH_GATED_PRODUCERS.map((engine) => ({
+      engine,
+      decision: { engine, gauge_value: null, floor: null, decision: 'unmeasurable',
+        measured_at: null, reason: 'no DB credentials in this environment — decision log not read' },
+    })) };
     const { createClient } = await import('@supabase/supabase-js');
     client = createClient(url, key);
   }
@@ -544,15 +569,22 @@ export async function fetchSourcingState({ supabase = null, env = process.env } 
       backlog = summarizeBacklogDisposition(tot.count, disp.count);
     }
   } catch { backlog = null; }
-  return { wave, backlog };
+  // SD-LEO-INFRA-SOURCING-ENGINE-BELT-GATED-001 (FR-3): last recorded demand verdict per gated
+  // producer. Reuses the client already built above. readLastDemandDecision never throws and
+  // returns null only for "nothing ever recorded", which renders as NEVER RAN <engine>.
+  const demand = [];
+  for (const engine of BELT_DEPTH_GATED_PRODUCERS) {
+    demand.push({ engine, decision: await readLastDemandDecision(client, engine) });
+  }
+  return { wave, backlog, demand };
 }
 
 /** Compose the full state-probe section (async, fail-open — never throws). */
 export async function renderSourcingState({ supabase = null, env = process.env } = {}) {
   try {
     const flags = readSourcingFlags(env);
-    const { wave, backlog } = await fetchSourcingState({ supabase, env });
-    return renderSourcingStateLines({ flags, wave, backlog });
+    const { wave, backlog, demand } = await fetchSourcingState({ supabase, env });
+    return renderSourcingStateLines({ flags, wave, backlog, demand });
   } catch (err) {
     return '═══ SOURCING SSOT STATE ═══\n  ✅ state probe skipped (fail-open): ' + (err?.message || String(err));
   }
