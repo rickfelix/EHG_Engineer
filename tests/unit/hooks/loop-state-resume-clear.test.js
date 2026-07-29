@@ -27,7 +27,7 @@ import { createRequire } from 'node:module';
 
 const repoRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '../../..');
 const HOOK = path.join(repoRoot, 'scripts/hooks/loop-state-resume-clear.cjs');
-const { shouldClearLatch, applyClear, resolveSessionId, parsePayload, LATCHED_STATES } = createRequire(import.meta.url)(HOOK);
+const { shouldClearLatch, applyClear, resolveSessionId, parsePayload, loadClient, LATCHED_STATES } = createRequire(import.meta.url)(HOOK);
 
 describe('shouldClearLatch — the pure decision', () => {
   it('clears awaiting_tick and DELIBERATELY leaves exited alone', () => {
@@ -66,13 +66,20 @@ describe('shouldClearLatch — the pure decision', () => {
  */
 function fakeClient() {
   const calls = { from: null, update: null, eq: null, in: null };
-  const chain = {
-    update(patch) { calls.update = patch; return chain; },
-    eq(col, val) { calls.eq = [col, val]; return chain; },
-    in(col, vals) { calls.in = [col, vals]; return chain; },
+  // MIRRORS THE REAL SPLIT, and that is the point. supabase-js separates PostgrestQueryBuilder
+  // (which has update() but NOT eq/in) from the PostgrestFilterBuilder that update() returns. A flat
+  // fake exposing all four on one object is strictly MORE PERMISSIVE than production: reordering
+  // applyClear to .from().eq().in().update() is a runtime TypeError against the real client, and a
+  // flat fake keeps every test green through it. Review caught exactly that.
+  const filterBuilder = {
+    eq(col, val) { calls.eq = [col, val]; return filterBuilder; },
+    in(col, vals) { calls.in = [col, vals]; return filterBuilder; },
     then(res) { return Promise.resolve({ error: null }).then(res); },
   };
-  return { calls, from(table) { calls.from = table; return chain; } };
+  const queryBuilder = {
+    update(patch) { calls.update = patch; return filterBuilder; },   // no eq/in here, exactly as in production
+  };
+  return { calls, from(table) { calls.from = table; return queryBuilder; } };
 }
 
 describe('applyClear — the conditional write IS the safety invariant', () => {
@@ -125,6 +132,32 @@ describe('resolveSessionId / parsePayload — pure, and deliberately NOT a subpr
     expect(parsePayload('')).toEqual({});
     expect(parsePayload('not json at all')).toEqual({});
     expect(parsePayload('{\"session_id\":\"s\"}')).toEqual({ session_id: 's' });
+  });
+});
+
+describe('loadClient — the banner suppression is PINNED, not merely measured once', () => {
+  it('swallows everything the require writes to stdout, and restores it afterwards', () => {
+    // UserPromptSubmit stdout is injected into the model's context and this hook runs on EVERY turn
+    // for EVERY seat, so a regression here is silent and fleet-wide. Injecting the require-er keeps
+    // this credential-free: the FACTORY is injected, so nothing here names a client factory or any
+    // SUPABASE_* identifier — which is exactly what the DB-test guard reads as 'reaches a live database'.
+    const noisy = () => { process.stdout.write('BANNER-76-BYTES'); return { fake: true }; };
+    const client = loadClient(noisy);
+    expect(client).toEqual({ fake: true });
+    expect(loadClient.lastSuppressedBytes).toBe('BANNER-76-BYTES'.length);   // it was written...
+    expect(process.stdout.write).not.toBe(undefined);                        // ...and stdout still works
+  });
+
+  it('restores stdout even when the require THROWS', () => {
+    const boom = () => { process.stdout.write('partial'); throw new Error('client construction failed'); };
+    expect(() => loadClient(boom)).toThrow('client construction failed');
+    // The finally must run, or every later write from this process would vanish.
+    let seen = '';
+    const real = process.stdout.write;
+    process.stdout.write = (c) => { seen += c; return true; };
+    process.stdout.write('after');
+    process.stdout.write = real;
+    expect(seen).toBe('after');
   });
 });
 

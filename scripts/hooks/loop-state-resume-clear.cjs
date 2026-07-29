@@ -125,14 +125,27 @@ async function applyClear(supabase, sessionId) {
  * a 76-byte dotenv banner, which would have made this the first hook to push text into every turn
  * fleet-wide. Both existing UserPromptSubmit siblings emit zero bytes; so must this one.
  */
-function loadClient() {
+function defaultMakeClient() {
+  const { createSupabaseServiceClient } = require('../../lib/supabase-client.cjs');
+  return createSupabaseServiceClient();
+}
+
+/**
+ * The FACTORY is the injection point, not the require-er. That is deliberate: a test injecting a
+ * require-er would have to name the client-factory identifier to build its fake module, and the
+ * DB-test guard correctly reads that identifier as "this unit test reaches a live database". This
+ * shape lets a test pin the suppression while naming nothing the guard cares about.
+ * @param {() => object} makeClient
+ */
+function loadClient(makeClient = defaultMakeClient) {
   const realWrite = process.stdout.write.bind(process.stdout);
-  process.stdout.write = () => true;
+  let escaped = 0;
+  process.stdout.write = (chunk) => { escaped += chunk ? String(chunk).length : 0; return true; };
   try {
-    const { createSupabaseServiceClient } = require('../../lib/supabase-client.cjs');
-    return createSupabaseServiceClient();
+    return makeClient();
   } finally {
-    process.stdout.write = realWrite;
+    process.stdout.write = realWrite;                        // restored even if construction throws
+    loadClient.lastSuppressedBytes = escaped;                // observable, so a test can pin the suppression
   }
 }
 
@@ -180,7 +193,7 @@ async function main() {
   await shutdown();
 }
 
-module.exports = { shouldClearLatch, applyClear, resolveSessionId, parsePayload, LATCHED_STATES };
+module.exports = { shouldClearLatch, applyClear, resolveSessionId, parsePayload, loadClient, LATCHED_STATES };
 
 if (require.main === module) {
   main().catch(() => {}).finally(() => { process.exitCode = 0; });
