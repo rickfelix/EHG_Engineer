@@ -435,11 +435,20 @@ export async function validateProtocolFileRead(handoffType, ctx = {}) {
 
   if (fileExists) {
     console.log(`   ⚠️  Session state does not track ${requiredFile}, but file exists on disk`);
-    console.log('   ✅ FALLBACK PASS: File exists and has content - allowing handoff');
+    console.log('   ⚠️  FALLBACK PASS: no read was observed — passing on file existence only');
 
-    // Mark it as read now to fix session state for future handoffs
-    markProtocolFileRead(requiredFile);
-
+    // SD-LEO-INFRA-ROLE-CONTRACT-READ-GATE-001 / FR-1: markProtocolFileRead(requiredFile) USED TO BE
+    // CALLED HERE, with the comment "Mark it as read now to fix session state for future handoffs".
+    //
+    // *** THAT MADE THE CHECK FALSIFY THE RECORD IT WAS EVALUATING. *** A file that was never read
+    // got stamped as READ, so every subsequent handoff took the top branch above and passed
+    // legitimately — on evidence this gate had manufactured. The failure could not even be
+    // reproduced by re-running, because the first run destroyed its own precondition.
+    //
+    // The fallback still PASSES: blocking here would wedge sessions whose state is genuinely
+    // missing, and that is a separate decision. But passing without a read and RECORDING a read are
+    // different acts, and only the second one corrupts the audit trail. A reader who later asks "was
+    // this file read?" now gets the truth.
     const state = readSessionState();
     emitStructuredLog({
       event: 'PROTOCOL_FILE_READ_GATE',
@@ -447,6 +456,9 @@ export async function validateProtocolFileRead(handoffType, ctx = {}) {
       handoff_type: handoffType,
       required_file: requiredFile,
       fallback_reason: 'file_exists_on_disk',
+      // Explicit so a log consumer can separate "passed on a read" from "passed without one".
+      read_observed: false,
+      session_state_written: false,
       session_id: state.sessionId || 'unknown',
       timestamp: new Date().toISOString()
     });
@@ -457,7 +469,8 @@ export async function validateProtocolFileRead(handoffType, ctx = {}) {
       max_score: 100,
       issues: [],
       warnings: [
-        `Session state did not track ${requiredFile} - fallback validation used`,
+        `NO READ OBSERVED for ${requiredFile} — passed on file existence alone, not on evidence it was read`,
+        'Session state was deliberately NOT updated: recording an unobserved read would falsify the audit trail',
         'Consider investigating session state corruption if this happens frequently'
       ]
     };
