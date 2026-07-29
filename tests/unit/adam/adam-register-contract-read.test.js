@@ -83,12 +83,31 @@ describe('adam-register contract-read verification', () => {
     expect(contractReadBanner(c)).toMatch(/PARTIAL/);
   });
 
-  it('accepts the legacy protocolFilesRead array as evidence', () => {
+  it('accepts the legacy protocolFilesRead array as evidence, but of UNKNOWN completeness', () => {
+    // BEHAVIOUR CHANGED DELIBERATELY — SD-LEO-INFRA-ADAM-CONTRACT-READABLE-001 FR-0.
+    // The legacy array records only THAT the file was read, never how much of it. Previously that
+    // earned full non-partial credit and silenced the banner, which let a truncated read of an
+    // over-cap contract launder itself into "read in full". Absence of a partial flag is not
+    // evidence of a complete read. Credit stands; completeness is now reported as unknown.
     fs.writeFileSync(path.join(tmp, CONTRACT_FILE), '# contract');
     writeState({ protocolFilesRead: [CONTRACT_FILE] });
     const c = checkContractRead(tmp);
     expect(c.contract_read).toBe(true);
-    expect(contractReadBanner(c)).toBeNull();
+    expect(c.contract_read_partial).toBe(true);
+    expect(contractReadBanner(c)).toContain('PARTIAL');
+  });
+
+  it('names the token cap — not a phantom offset — when the harness truncated the read', () => {
+    // The old banner told every partial reader to "Read IN FULL (no offset/limit)". On a file
+    // past the cap that instruction is impossible to follow: it describes the exact read that
+    // just silently failed. Advice that cannot succeed is worse than none.
+    fs.writeFileSync(path.join(tmp, CONTRACT_FILE), '# contract');
+    writeState({ protocolFileReadStatus: { [CONTRACT_FILE]: { readCount: 1, lastReadAt: new Date().toISOString(), lastReadWasPartial: true, lastReadTruncatedByHarness: true } } });
+    const c = checkContractRead(tmp);
+    expect(c.contract_read_truncated).toBe(true);
+    const banner = contractReadBanner(c);
+    expect(banner).toContain('TRUNCATED BY THE TOKEN CAP');
+    expect(banner).not.toContain('IN FULL (Read tool, no offset/limit)');
   });
 
   it('fails open (not read, no throw) on corrupt session state', () => {

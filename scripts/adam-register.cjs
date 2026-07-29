@@ -270,9 +270,16 @@ function checkContractRead(projectDir) {
     if (status && status.readCount > 0) {
       result.contract_read = true;
       result.contract_read_partial = status.lastReadWasPartial === true;
+      result.contract_read_truncated = status.lastReadTruncatedByHarness === true;
       result.contract_last_read_at = status.lastReadAt || null;
     } else if (Array.isArray(state.protocolFilesRead) && state.protocolFilesRead.includes(CONTRACT_FILE)) {
-      result.contract_read = true; // legacy-array fallback (pre-FR-2 state shape)
+      // SD-LEO-INFRA-ADAM-CONTRACT-READABLE-001 FR-0: the legacy array records only THAT the file
+      // was read, never HOW MUCH. It previously granted full credit here — bypassing every
+      // partial/truncation check downstream, because a missing partial flag was read as "not
+      // partial" rather than "unknown". Credit the read, but mark completeness unknown: on a file
+      // that exceeds the token cap the overwhelmingly likely history is a truncated read.
+      result.contract_read = true;
+      result.contract_read_partial = true;
     }
   } catch { /* fail-open: tracking unavailable must never break role activation */ }
   return result;
@@ -291,9 +298,20 @@ function contractReadBanner(check) {
   } else if (!check.contract_read) {
     lines.push(`  ✗ No record of ${CONTRACT_FILE} being read this session.`);
   } else {
-    lines.push(`  ⚠ Last read of ${CONTRACT_FILE} was PARTIAL (offset/limit used).`);
+    // FR-0: name the ACTUAL cause. "(offset/limit used)" is false for a harness truncation —
+    // there no offset was used at all, which is exactly why it went unnoticed — and false again
+    // for legacy state, where completeness is simply unrecorded.
+    lines.push(
+      check.contract_read_truncated
+        ? `  ⚠ Last read of ${CONTRACT_FILE} was TRUNCATED BY THE TOKEN CAP — no offset/limit was used; the file is larger than one Read call can return.`
+        : `  ⚠ Last read of ${CONTRACT_FILE} was PARTIAL (offset/limit used).`
+    );
   }
-  lines.push(`  → Read ${CONTRACT_FILE} IN FULL (Read tool, no offset/limit) BEFORE any Adam work.`);
+  lines.push(
+    check.contract_read_truncated
+      ? `  → ${CONTRACT_FILE} EXCEEDS the per-call token cap: an un-paginated Read CANNOT complete it. Page through with offset/limit until coverage is complete.`
+      : `  → Read ${CONTRACT_FILE} IN FULL (Read tool, no offset/limit) BEFORE any Adam work.`
+  );
   lines.push('  (Registration is not blocked — the tag must always land — but the contract read is mandatory.)');
   return lines.join('\n');
 }
