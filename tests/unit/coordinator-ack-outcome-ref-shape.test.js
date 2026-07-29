@@ -164,14 +164,50 @@ describe('FR-5 — placeholders, sentinel near-misses, and the bounds review bro
     expect(isNoArtifactRef('NO_ARTIFACT')).toBe(true);
   });
 
-  it('ACCEPTS a bare PR number — pr_number is one of the matcher own harvest keys', () => {
-    // False rejection found by review: my 3-char floor swallowed '#7' and '42'. Rejecting a real
-    // identifier is worse than the defect, because it blocks a legitimate accept at the CLI.
-    for (const ref of ['42', '#7', '7', '6284', '#6284']) {
+  it('REJECTS low-entropy bare numbers — reversing an earlier finding, deliberately', () => {
+    // THE TWO REVIEWS CONFLICTED AND I AM RECORDING WHICH WON. Testing review called rejecting '#7'
+    // a false rejection (pr_number IS a harvest key). Security review then demonstrated end to end
+    // that accepting it is a COLLISION PRIMITIVE: audit metadata carrying pr_number=42 harvests as
+    // '42', matches a ledger row whose outcome_ref is '42', and flips it shipped_clean -> reverted.
+    // No repo or type qualifier on either side; 'reverted' is terminal; the idempotency skip means
+    // it never self-heals.
+    //
+    // Safety wins. The cost of rejecting is one CLI error pointing at the qualified form; the cost
+    // of accepting is silent, permanent, unattributable corruption of the ledger this SD exists to
+    // make trustworthy.
+    for (const ref of ['42', '#7', '7', '1']) {
+      expect(isMatchableRef(ref), ref).toBe(false);
+    }
+    // Longer numbers still pass — only tokens that can collide by accident are refused, and the
+    // qualified form is always available.
+    for (const ref of ['6284', '#6284', 'https://github.com/rickfelix/ehg/pull/7']) {
       expect(isMatchableRef(ref), ref).toBe(true);
     }
   });
 
+  it('REJECTS control characters, zero-widths and bidi overrides', () => {
+    // The same hole as prose, arriving through the character set. A zero-width or homoglyph ref is
+    // BILLED AS LINKED and can never match — FR-5's own failure mode by a different door. Security
+    // review verified every one of these was previously accepted and persisted.
+    //
+    // Built with fromCharCode rather than escapes: my first version of this test failed while the
+    // production code was correct, because the escapes did not survive the way I wrote the file.
+    const ch = (n) => String.fromCharCode(n);
+    const cases = [
+      'SD-EVIL-001' + ch(8) + ch(8) + ch(8) + 'SD-GOOD-001',   // backspace overwrite
+      'SD-A-001' + ch(0x200b) + 'X',                            // zero-width space
+      'SD-' + ch(0x202e) + 'A-001',                             // bidi override
+      'SD-A-001' + ch(0),                                       // NUL
+      'SD-A-001' + ch(27) + '[2J',                              // ANSI clear-screen
+      'SD-' + ch(0x0410) + '-001',                              // Cyrillic homoglyph
+    ];
+    for (const ref of cases) {
+      expect(isMatchableRef(ref), JSON.stringify(ref)).toBe(false);
+    }
+    // Negative control: the ASCII form of the same shape is still accepted, so 'reject everything'
+    // would not satisfy this.
+    expect(isMatchableRef('SD-A-001')).toBe(true);
+  });
   it('ACCEPTS a long signed CI-run URL — the 200-char ceiling was too tight', () => {
     const url = 'https://github.com/rickfelix/EHG_Engineer/actions/runs/1234567890/jobs/9876543210?check_suite_focus=true&sig=' + 'a'.repeat(120);
     expect(url.length).toBeGreaterThan(200);

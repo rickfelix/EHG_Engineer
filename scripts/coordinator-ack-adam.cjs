@@ -110,6 +110,37 @@ function isMatchableRef(ref) {
   if (!s || /\s/.test(s)) return false;              // an identifier has no spaces; a sentence does
   if (s.length > 500) return false;                  // 200 rejected a real signed CI-run URL (220 chars)
 
+  // PRINTABLE ASCII ONLY — the same hole as prose, re-entering through the character set.
+  //
+  // The whitespace check closes newline log-forging but not NUL, BS, ESC, C1, U+200B zero-widths, or
+  // U+202E bidi overrides. Security review verified all of those were ACCEPTED and persisted. Two
+  // harms, and the first is the one that matters: a zero-width or homoglyph ref is BILLED AS LINKED
+  // and can never match — FR-5's own stated failure mode arriving by a different door. The control
+  // had a hole shaped exactly like the defect it closes. (The second is terminal injection: an
+  // OSC/backspace-overwrite ref renders as a different string than it stores.)
+  //
+  // One line rather than an enumeration of bad characters, consistent with why PLACEHOLDER_REFS was
+  // deleted. URLs are ASCII by spec; measured, all 5 live accepted refs pass and zero are newly
+  // rejected.
+  if (!/^[\x21-\x7e]+$/.test(s)) return false;
+
+  // MINIMUM LENGTH 3, AND THIS IS A DELIBERATE REVERSAL OF AN EARLIER REVIEW FINDING.
+  //
+  // My testing reviewer called rejecting '#7'/'42' a FALSE REJECTION, since pr_number is one of the
+  // matcher's harvest keys — correct in its own frame, and I widened the rule to admit them.
+  // Security review then demonstrated end-to-end that this is a COLLISION PRIMITIVE: audit metadata
+  // carrying pr_number=42 harvests as the string '42', matches a ledger row whose outcome_ref is
+  // '42', and flips it shipped_clean -> reverted. There is no repo or type qualifier on either side,
+  // 'reverted' is TERMINAL, and the idempotency skip means it never self-heals — governance-metric
+  // poisoning wearing the mechanism's own provenance.
+  //
+  // The two findings genuinely conflict. Safety wins: the cost of rejecting is one CLI error telling
+  // the operator to pass the qualified form (a PR URL, which is accepted), while the cost of
+  // accepting is a silent, permanent, unattributable corruption of the accuracy ledger this SD
+  // exists to make trustworthy. Longer numbers ('6284') still pass — only the low-entropy tokens
+  // that can collide by accident are refused.
+  if (s.length < 3) return false;
+
   // A NEAR-MISS SPELLING OF THE SENTINEL IS THE WORST CASE OF ALL: 'no_artifact' lowercase or
   // 'NO-ARTIFACT' hyphenated fails isNoArtifactRef, so the operator believes they recorded "nothing
   // to track" while the row is billed as a real, permanently unmatchable link the back-prop will NOT
