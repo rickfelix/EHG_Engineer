@@ -94,3 +94,38 @@ describe('hasRecordedAudience — FR-1s convention', () => {
     expect(hasRecordedAudience(null)).toBe(false);
   });
 });
+
+describe('SECURITY f3cdce33 attack suite — false negatives are the DANGEROUS direction', () => {
+  // Every one of these was verified LIVE against the shipped function and MISCLASSIFIED AS
+  // NARROWED. A false negative marks a broad policy "safe" and removes it from the audit
+  // silently -- the same failure mode as the defect the audit exists to find.
+  const attacks = [
+    ['1=1', 'numeric tautology'],
+    ["'a'='a'", 'string tautology'],
+    ['NOT false', 'negated-false tautology'],
+    ['true OR fn_is_chairman()', 'true-disjunct wearing a narrowing token'],
+    ["auth.role() = 'authenticated'::name", 'a cast other than ::text'],
+    ["auth.role() = 'authenticated' -- fn_is_chairman()", 'SQL comment hiding the tautology'],
+    ['/* fn_is_chairman() */ true', 'block comment hiding the tautology'],
+  ];
+  for (const [qual, label] of attacks) {
+    it(`does NOT accept ${label} as narrowing`, () => {
+      expect(hasNarrowingPredicate(qual)).toBe(false);
+    });
+  }
+
+  // The other half. A classifier that rejects everything would pass every test above and be
+  // useless -- these are what prove it still discriminates after the hardening.
+  const genuine = [
+    ['fn_is_chairman()', 'a real caller predicate'],
+    ['auth.uid() = user_id', 'identity binding'],
+    ['is_current = true', 'a row predicate'],
+    ["auth.role() = 'authenticated' AND auth.uid() = user_id", 'compound with a real conjunct'],
+    ['tenant_id = auth.uid() OR fn_is_chairman()', 'disjunction of two real predicates'],
+  ];
+  for (const [qual, label] of genuine) {
+    it(`still accepts ${label}`, () => {
+      expect(hasNarrowingPredicate(qual)).toBe(true);
+    });
+  }
+});

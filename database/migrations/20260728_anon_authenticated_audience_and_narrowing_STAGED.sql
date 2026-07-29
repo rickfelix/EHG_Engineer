@@ -45,6 +45,18 @@
 -- audience beyond service_role. If a consumer is later found to need superseded rows, the audience
 -- statement below is where that decision gets recorded and this predicate revisited — that is the
 -- point of recording it rather than leaving it implicit.
+--
+-- *** HONEST SCOPE OF WHAT THIS NARROWING BUYS (corrected after SECURITY review f3cdce33). ***
+-- This is DEFENCE IN DEPTH, not the closing of an active leak, and it should not be claimed as one:
+--   • Both real consumers ALREADY self-filter is_current=true at the application layer regardless
+--     of RLS — lib/eva/stage-zero/data-feed.js:79 and lib/eva/stage-zero/modeling.js:104.
+--   • The "Child D reads superseded rows" consumer described in the earlier draft of this comment
+--     DOES NOT EXIST IN CODE. lib/eva/cross-venture-learning.js:698-760 grades forecasts against
+--     actuals and never queries this table. I inferred that consumer rather than verifying it,
+--     which is the same move — reasoning about intent instead of measuring it — that this SD was
+--     written to stop. Removed rather than left standing.
+-- So the value here is that the boundary now holds in the DATABASE rather than only by the good
+-- behaviour of two callers. That is worth having; it is not an incident being closed.
 
 BEGIN;
 
