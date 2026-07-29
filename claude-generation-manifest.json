@@ -1,6 +1,6 @@
 {
-  "generated_at": "2026-07-28T13:47:38.366Z",
-  "git_commit": "c6572c19",
+  "generated_at": "2026-07-29T19:25:10.111Z",
+  "git_commit": "19e96a69",
   "db_snapshot_hash": "7eabaf04b99ecbde",
   "files": {
     "CLAUDE.md": {
@@ -8,116 +8,116 @@
       "chars": 19564,
       "estimated_tokens": 4891,
       "content_hash": "91b0c479ced58edc",
-      "path": "C:\\Users\\rickf\\Projects\\_EHG\\EHG_Engineer\\.worktrees\\SD-LEO-INFRA-ROLE-SESSION-SELF-001\\CLAUDE.md"
+      "path": "C:\\Users\\rickf\\Projects\\_EHG\\EHG_Engineer\\.worktrees\\SD-LEO-INFRA-SOURCING-ENGINE-BELT-GATED-001\\CLAUDE.md"
     },
     "CLAUDE_CORE.md": {
       "type": "full",
-      "chars": 92927,
-      "estimated_tokens": 23232,
-      "content_hash": "c0b0d69b2e4b3da6",
-      "path": "C:\\Users\\rickf\\Projects\\_EHG\\EHG_Engineer\\.worktrees\\SD-LEO-INFRA-ROLE-SESSION-SELF-001\\CLAUDE_CORE.md"
+      "chars": 92865,
+      "estimated_tokens": 23217,
+      "content_hash": "176c84266149556d",
+      "path": "C:\\Users\\rickf\\Projects\\_EHG\\EHG_Engineer\\.worktrees\\SD-LEO-INFRA-SOURCING-ENGINE-BELT-GATED-001\\CLAUDE_CORE.md"
     },
     "CLAUDE_LEAD.md": {
       "type": "full",
       "chars": 65998,
       "estimated_tokens": 16500,
-      "content_hash": "ac610fe83deb14db",
-      "path": "C:\\Users\\rickf\\Projects\\_EHG\\EHG_Engineer\\.worktrees\\SD-LEO-INFRA-ROLE-SESSION-SELF-001\\CLAUDE_LEAD.md"
+      "content_hash": "e1be7baeccd1d32c",
+      "path": "C:\\Users\\rickf\\Projects\\_EHG\\EHG_Engineer\\.worktrees\\SD-LEO-INFRA-SOURCING-ENGINE-BELT-GATED-001\\CLAUDE_LEAD.md"
     },
     "CLAUDE_PLAN.md": {
       "type": "full",
       "chars": 91830,
       "estimated_tokens": 22958,
-      "content_hash": "72c3a74b638f73dd",
-      "path": "C:\\Users\\rickf\\Projects\\_EHG\\EHG_Engineer\\.worktrees\\SD-LEO-INFRA-ROLE-SESSION-SELF-001\\CLAUDE_PLAN.md"
+      "content_hash": "e2a1ac902747651a",
+      "path": "C:\\Users\\rickf\\Projects\\_EHG\\EHG_Engineer\\.worktrees\\SD-LEO-INFRA-SOURCING-ENGINE-BELT-GATED-001\\CLAUDE_PLAN.md"
     },
     "CLAUDE_EXEC.md": {
       "type": "full",
       "chars": 89641,
       "estimated_tokens": 22411,
-      "content_hash": "988edb9414b749c0",
-      "path": "C:\\Users\\rickf\\Projects\\_EHG\\EHG_Engineer\\.worktrees\\SD-LEO-INFRA-ROLE-SESSION-SELF-001\\CLAUDE_EXEC.md"
+      "content_hash": "167b0fc2e03edab3",
+      "path": "C:\\Users\\rickf\\Projects\\_EHG\\EHG_Engineer\\.worktrees\\SD-LEO-INFRA-SOURCING-ENGINE-BELT-GATED-001\\CLAUDE_EXEC.md"
     },
     "CLAUDE_ADAM.md": {
       "type": "full",
-      "chars": 102992,
-      "estimated_tokens": 25748,
-      "content_hash": "1ebf69e817c53925",
-      "path": "C:\\Users\\rickf\\Projects\\_EHG\\EHG_Engineer\\.worktrees\\SD-LEO-INFRA-ROLE-SESSION-SELF-001\\CLAUDE_ADAM.md"
+      "chars": 104958,
+      "estimated_tokens": 26240,
+      "content_hash": "0eb05b2b3267e310",
+      "path": "C:\\Users\\rickf\\Projects\\_EHG\\EHG_Engineer\\.worktrees\\SD-LEO-INFRA-SOURCING-ENGINE-BELT-GATED-001\\CLAUDE_ADAM.md"
     },
     "CLAUDE_COORDINATOR.md": {
       "type": "full",
       "chars": 25316,
       "estimated_tokens": 6329,
-      "content_hash": "55f8346a520f9ae8",
-      "path": "C:\\Users\\rickf\\Projects\\_EHG\\EHG_Engineer\\.worktrees\\SD-LEO-INFRA-ROLE-SESSION-SELF-001\\CLAUDE_COORDINATOR.md"
+      "content_hash": "73d7358f2ee431dd",
+      "path": "C:\\Users\\rickf\\Projects\\_EHG\\EHG_Engineer\\.worktrees\\SD-LEO-INFRA-SOURCING-ENGINE-BELT-GATED-001\\CLAUDE_COORDINATOR.md"
     },
     "CLAUDE_SOLOMON.md": {
       "type": "full",
       "chars": 66522,
       "estimated_tokens": 16631,
-      "content_hash": "20e6ab8f7d0b3032",
-      "path": "C:\\Users\\rickf\\Projects\\_EHG\\EHG_Engineer\\.worktrees\\SD-LEO-INFRA-ROLE-SESSION-SELF-001\\CLAUDE_SOLOMON.md"
+      "content_hash": "d7d8475dc68c7ac1",
+      "path": "C:\\Users\\rickf\\Projects\\_EHG\\EHG_Engineer\\.worktrees\\SD-LEO-INFRA-SOURCING-ENGINE-BELT-GATED-001\\CLAUDE_SOLOMON.md"
     },
     "CLAUDE_DIGEST.md": {
       "type": "digest",
       "chars": 9611,
       "estimated_tokens": 2403,
       "content_hash": "56be33b0069b2965",
-      "path": "C:\\Users\\rickf\\Projects\\_EHG\\EHG_Engineer\\.worktrees\\SD-LEO-INFRA-ROLE-SESSION-SELF-001\\CLAUDE_DIGEST.md"
+      "path": "C:\\Users\\rickf\\Projects\\_EHG\\EHG_Engineer\\.worktrees\\SD-LEO-INFRA-SOURCING-ENGINE-BELT-GATED-001\\CLAUDE_DIGEST.md"
     },
     "CLAUDE_CORE_DIGEST.md": {
       "type": "digest",
       "chars": 11664,
       "estimated_tokens": 2916,
       "content_hash": "dde4eb32e7f32eaf",
-      "path": "C:\\Users\\rickf\\Projects\\_EHG\\EHG_Engineer\\.worktrees\\SD-LEO-INFRA-ROLE-SESSION-SELF-001\\CLAUDE_CORE_DIGEST.md"
+      "path": "C:\\Users\\rickf\\Projects\\_EHG\\EHG_Engineer\\.worktrees\\SD-LEO-INFRA-SOURCING-ENGINE-BELT-GATED-001\\CLAUDE_CORE_DIGEST.md"
     },
     "CLAUDE_LEAD_DIGEST.md": {
       "type": "digest",
       "chars": 5551,
       "estimated_tokens": 1388,
       "content_hash": "42b407cb2b032a1c",
-      "path": "C:\\Users\\rickf\\Projects\\_EHG\\EHG_Engineer\\.worktrees\\SD-LEO-INFRA-ROLE-SESSION-SELF-001\\CLAUDE_LEAD_DIGEST.md"
+      "path": "C:\\Users\\rickf\\Projects\\_EHG\\EHG_Engineer\\.worktrees\\SD-LEO-INFRA-SOURCING-ENGINE-BELT-GATED-001\\CLAUDE_LEAD_DIGEST.md"
     },
     "CLAUDE_PLAN_DIGEST.md": {
       "type": "digest",
       "chars": 8541,
       "estimated_tokens": 2136,
       "content_hash": "bfe9c6450c713021",
-      "path": "C:\\Users\\rickf\\Projects\\_EHG\\EHG_Engineer\\.worktrees\\SD-LEO-INFRA-ROLE-SESSION-SELF-001\\CLAUDE_PLAN_DIGEST.md"
+      "path": "C:\\Users\\rickf\\Projects\\_EHG\\EHG_Engineer\\.worktrees\\SD-LEO-INFRA-SOURCING-ENGINE-BELT-GATED-001\\CLAUDE_PLAN_DIGEST.md"
     },
     "CLAUDE_EXEC_DIGEST.md": {
       "type": "digest",
       "chars": 10964,
       "estimated_tokens": 2741,
       "content_hash": "99c578d3ca799133",
-      "path": "C:\\Users\\rickf\\Projects\\_EHG\\EHG_Engineer\\.worktrees\\SD-LEO-INFRA-ROLE-SESSION-SELF-001\\CLAUDE_EXEC_DIGEST.md"
+      "path": "C:\\Users\\rickf\\Projects\\_EHG\\EHG_Engineer\\.worktrees\\SD-LEO-INFRA-SOURCING-ENGINE-BELT-GATED-001\\CLAUDE_EXEC_DIGEST.md"
     },
     "CLAUDE_ADAM_DIGEST.md": {
       "type": "digest",
       "chars": 18755,
       "estimated_tokens": 4689,
-      "content_hash": "871462a7690a79c8",
-      "path": "C:\\Users\\rickf\\Projects\\_EHG\\EHG_Engineer\\.worktrees\\SD-LEO-INFRA-ROLE-SESSION-SELF-001\\CLAUDE_ADAM_DIGEST.md"
+      "content_hash": "94364e7491d7e2ef",
+      "path": "C:\\Users\\rickf\\Projects\\_EHG\\EHG_Engineer\\.worktrees\\SD-LEO-INFRA-SOURCING-ENGINE-BELT-GATED-001\\CLAUDE_ADAM_DIGEST.md"
     },
     "CLAUDE_COORDINATOR_DIGEST.md": {
       "type": "digest",
       "chars": 6076,
       "estimated_tokens": 1519,
       "content_hash": "280bee02a0e1c007",
-      "path": "C:\\Users\\rickf\\Projects\\_EHG\\EHG_Engineer\\.worktrees\\SD-LEO-INFRA-ROLE-SESSION-SELF-001\\CLAUDE_COORDINATOR_DIGEST.md"
+      "path": "C:\\Users\\rickf\\Projects\\_EHG\\EHG_Engineer\\.worktrees\\SD-LEO-INFRA-SOURCING-ENGINE-BELT-GATED-001\\CLAUDE_COORDINATOR_DIGEST.md"
     },
     "CLAUDE_SOLOMON_DIGEST.md": {
       "type": "digest",
       "chars": 4705,
       "estimated_tokens": 1177,
       "content_hash": "e3e04fbe3eb8561b",
-      "path": "C:\\Users\\rickf\\Projects\\_EHG\\EHG_Engineer\\.worktrees\\SD-LEO-INFRA-ROLE-SESSION-SELF-001\\CLAUDE_SOLOMON_DIGEST.md"
+      "path": "C:\\Users\\rickf\\Projects\\_EHG\\EHG_Engineer\\.worktrees\\SD-LEO-INFRA-SOURCING-ENGINE-BELT-GATED-001\\CLAUDE_SOLOMON_DIGEST.md"
     }
   },
   "section_digests": {
-    "global": "b4ca295a80207a0c",
+    "global": "b7e3724d25afb461",
     "byId": {
       "94": "ef2f1e7ed617b5e0",
       "189": "6398659126897bbb",
@@ -377,7 +377,7 @@
       "604": "a35e66b64599f81d",
       "605": "4a13b33776eb8b21",
       "606": "7303c149fceda758",
-      "607": "60054e673fe55d86",
+      "607": "c91766da9230ba92",
       "608": "7f99a4321502367e",
       "609": "9790a74a362ff0ca",
       "610": "34fedae699d8c9f3",
