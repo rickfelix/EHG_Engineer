@@ -1,0 +1,62 @@
+# SD-LEO-INFRA-ADVICE-OUTCOME-LEDGER-001 FR-2
+#
+# Ages out advice whose ADOPTION judgment was never answered. Before this, the ledger could say
+# accepted, rejected and still-waiting, but had no way to say NOBODY EVER ANSWERED — so 566 of ~1100
+# rows sat at 'pending' forever and an unanswered question was indistinguishable from work in
+# progress.
+#
+# SHIPS WITH THE WRITE PATH OFF, in two independent ways, because aging is not reversible in the
+# sense that matters: once a row records that nobody answered, judging it later cannot un-record it.
+#   1. `schedule:` is commented out — this workflow only runs on manual dispatch until someone
+#      deliberately enables the cadence.
+#   2. Even when dispatched, the runner refuses to write unless LEO_JUDGMENT_EXPIRY_ENABLED=1 AND
+#      --apply is passed. The default dispatch is a DRY RUN that prints the candidate set.
+#
+# The dry run is the point: seeing exactly which rows would be stamped is how an operator decides
+# whether the first real run is safe. Measured at authoring time, 0 pending rows exceeded 5 days and
+# the oldest was 4.8, so a 7d threshold expires nothing on day one and what it eventually expires is
+# genuinely abandoned rather than merely recent.
+#
+# WHY THIS FILE EXISTS AT ALL: the first version of FR-2 shipped a pure selector with no runner and
+# no entry, and I described it as "ships disabled". Retro review pointed out that is not a disabled
+# mechanism, it is an ABSENT one — the exact failure mode this SD documents, where five prior
+# mechanisms shipped into this table and all five run at zero.
+
+name: Solomon Judgment Expiry
+
+on:
+  workflow_dispatch:
+    inputs:
+      apply:
+        description: 'Actually stamp rows (default: dry run, prints candidates only)'
+        type: boolean
+        default: false
+  # Deliberately commented out. Uncomment ONLY after a dry run has been reviewed.
+  # schedule:
+  #   - cron: '17 4 * * *'   # daily, offset off the hour to avoid the cron thundering herd
+
+permissions:
+  contents: read
+
+jobs:
+  expire:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+      - run: npm ci --ignore-scripts
+      - name: Age out unanswered judgments
+        env:
+          SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+          SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
+          # The second gate. Absent this, the runner prints "disabled" and exits 0 regardless of
+          # --apply, so an accidental dispatch cannot write.
+          LEO_JUDGMENT_EXPIRY_ENABLED: '1'
+        run: |
+          if [ "${{ inputs.apply }}" = "true" ]; then
+            node scripts/solomon-judgment-expiry-run.mjs --apply
+          else
+            node scripts/solomon-judgment-expiry-run.mjs
+          fi

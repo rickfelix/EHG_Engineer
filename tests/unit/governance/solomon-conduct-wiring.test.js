@@ -54,7 +54,9 @@ describe('THE JOIN — the call site that connects the two halves', () => {
   it('runAndPersistCycle carries the conduct verdicts into the persisted row', async () => {
     // Testing the two functions separately proved each half worked while leaving the hand-off
     // unguarded: deleting it left every test green. This asserts the connection, not the parts.
-    const q = { select: () => q, eq: () => q, lt: async () => ({ data: [{ id: 1 }, { id: 2 }], error: null }) };
+    // FR-3: probe now uses select(id, {count:'exact', head:true}) — the server returns a count and
+    // NO rows, so an unpaginated 1000-row clamp cannot under-report. Intent unchanged: 2 stale rows.
+    const q = { select: () => q, eq: () => q, lt: async () => ({ data: null, count: 2, error: null }) };
     const inserted = [];
     const db = {
       from: (t) => (t === 'solomon_advice_outcome_ledger' ? { select: () => q } : {
@@ -83,7 +85,8 @@ describe('runConductVerdicts is fail-soft but not fail-silent', () => {
 
   it('NEGATIVE CONTROL — a working client produces a real verdict', async () => {
     // Without this, "always unknown" would satisfy the test above while the probe saw nothing.
-    const q = { select: () => q, eq: () => q, lt: async () => ({ data: [], error: null }) };
+    // FR-3: same shape change. Intent unchanged: zero stale rows.
+    const q = { select: () => q, eq: () => q, lt: async () => ({ data: null, count: 0, error: null }) };
     const out = await runConductVerdicts({ from: () => q });
     expect(out[0].verdict).toBe('pass');
   });

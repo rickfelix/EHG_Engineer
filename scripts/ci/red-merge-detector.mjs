@@ -270,7 +270,9 @@ async function main() {
     if (rot.rotted && !dryRun) {
       try {
         await db.from('audit_log').insert({
-          event: 'BASELINE_ROT_DETECTED',
+          // FR-0: same defect, same silent no-op.
+          event_type: 'BASELINE_ROT_DETECTED',
+          severity: 'medium',
           metadata: { rule: rot.rule, latest: rot.latest, prev: rot.prev, ceiling: rot.ceiling, recentMedian: rot.recentMedian, olderMedian: rot.olderMedian, reason: rot.reason },
         });
       } catch { /* best effort — never blocks */ }
@@ -344,7 +346,14 @@ async function main() {
   // Audit row — best-effort, never blocks.
   try {
     await db.from('audit_log').insert({
-      event: 'RED_MERGE_DETECTED',
+      // SD-LEO-INFRA-ADVICE-OUTCOME-LEDGER-001 FR-0: the column is `event_type`. Written as
+      // `event` this insert threw 42703 inside the best-effort catch below, so it silently
+      // no-opped on every red merge ever detected. entity_type/entity_id are populated too so
+      // the row is attributable rather than metadata-only.
+      event_type: 'RED_MERGE_DETECTED',
+      entity_type: 'commit',
+      entity_id: verdict.sha ?? null,
+      severity: 'high',
       metadata: { signature: verdict.signature, sha: verdict.sha, prev_failed: verdict.prevFailed, new_failed: verdict.newFailed, qf_output: out.slice(0, 500) },
     });
   } catch { /* best effort */ }
