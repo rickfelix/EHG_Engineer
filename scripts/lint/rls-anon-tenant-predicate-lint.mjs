@@ -45,6 +45,10 @@ import fs from 'fs';
 import path from 'path';
 import { execSync } from 'child_process';
 import { fileURLToPath, pathToFileURL } from 'url';
+// SD-LEO-INFRA-DEFAULT-ANON-AUTHENTICATED-001 FR-3: ONE classifier, shared with the FR-4 live
+// audit (scripts/audit/broad-policy-audience-audit.mjs). Two separately-authored predicate
+// classifiers would drift, and the drift would be invisible because each would look correct alone.
+import { hasNarrowingPredicate } from '../../lib/db/broad-policy-classifier.mjs';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const REPO_ROOT = path.resolve(__dirname, '..', '..');
@@ -170,6 +174,18 @@ export function classifyViolation(policy) {
   if (!policy.using) return null;
   if (BLANKET_TRUE_RE.test(policy.using)) return 'unconditional_anon_select';
   if (TENANT_COLUMN_RE.test(policy.using) && !IDENTITY_BOUND_RE.test(policy.using)) return 'unbound_tenant_predicate';
+  // SD-LEO-INFRA-DEFAULT-ANON-AUTHENTICATED-001 FR-3 — THE THIRD SHAPE.
+  //
+  // A qual that merely RE-STATES the role it already grants to:
+  //     USING (auth.role() = 'authenticated' OR auth.role() = 'service_role')
+  // narrows nothing — it is a tautology wearing the shape of a check. Neither branch above sees
+  // it: it is not literally `true`, and there is no tenant column whose binding could be tested.
+  // Live instance: research_intelligence_reference.
+  //
+  // Delegated to lib/db/broad-policy-classifier.mjs, which the FR-4 live-database audit also
+  // uses. Two separately-authored classifiers would drift, and the drift would be INVISIBLE
+  // because each would look correct on its own — so there is deliberately only one.
+  if (!hasNarrowingPredicate(policy.using)) return 'role_restatement_no_predicate';
   return null;
 }
 
@@ -182,6 +198,9 @@ const scopedRoleLabel = (p) => {
 };
 
 const VIOLATION_MESSAGES = {
+  role_restatement_no_predicate: (p) =>
+    `${scopedRoleLabel(p)}-role SELECT policy '${p.name}' ON ${p.table} has a USING clause that only RE-STATES the role it already grants to (e.g. auth.role() = 'authenticated') -- a tautology, not a narrowing predicate, so any matching-role caller can read ALL rows. Narrow the rows, or record the intended audience per SD-LEO-INFRA-DEFAULT-ANON-AUTHENTICATED-001 FR-1. Live instance: research_intelligence_reference.`,
+
   unconditional_anon_select: (p) =>
     `${scopedRoleLabel(p)}-role SELECT policy '${p.name}' ON ${p.table} has an unconditional USING (true) -- any ${scopedRoleLabel(p) === 'anon' ? 'anon-key holder' : 'matching-role caller'} can read ALL rows. See SD-LEO-GEN-SCOPE-ANON-KEY-001 (companies table) and SD-FDBK-FIX-FEEDBACK-SELECT-FEEDBACK-001 (feedback table, authenticated) for prior real instances of this class.`,
   unbound_tenant_predicate: (p) =>
