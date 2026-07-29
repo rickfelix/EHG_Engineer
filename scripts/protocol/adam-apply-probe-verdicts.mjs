@@ -35,6 +35,20 @@ const VERDICTS = [
   [/counterfactual/i, 'landed', 'substance probe: per-idea rationale bar present'],
   [/board-scan|eva.drain|vision-drift/i, 'landed', 'substance probe: per-scope task block present'],
 
+  // Modal-bearing obligations, batch 2. Probe set falsified against negative controls first:
+  // README 0/12, CLAUDE_PLAN 2/12, CLAUDE_EXEC 4/12, versus 12/12 for BOTH the preserved
+  // original and the corrected contract. Identical positives is the sound comparison here --
+  // the question is whether the REWRITE lost them, not whether a document mentions them.
+  [/solomon-advisory\.cjs/i, 'landed', 'probe: Adam/Solomon outbound tool separation present'],
+  [/eva_consultant_recommendations/i, 'landed', 'probe: AEGIS hard boundary (never set status=accepted) present'],
+  [/auto-sd-generator/i, 'landed', 'probe: AEGIS hard boundary (never run auto-sd-generator) present'],
+  [/never hold sourcing/i, 'landed', 'probe: NEVER HOLD SOURCING chairman override present'],
+  [/force-unfence/i, 'landed', 'probe: block-resolution classify/never-force-unfence present'],
+  [/resolution basis|unblock condition/i, 'landed', 'probe: document-the-resolution-basis duty present'],
+  [/solomon_consult/i, 'landed', 'probe: solomon_consult correlation_id dedup constraint present'],
+  [/self-exempt|cannot waive/i, 'landed', 'probe: no-self-exemption on the consult gate present'],
+  [/min_tier_rank/i, 'landed', 'probe: dispatch-MECHANISM SDs route to coordinator review'],
+
   // Confirmed ABSENT and NOT companion-bound: a duty deleted outright.
   [/^\*{0,2}ACCEPTANCE-SITTING OWNERSHIP/i, 'NEEDS_DECISION',
     'CONFIRMED DELETION. Zero trace in the shortened contract (sitting/acceptance/reschedule/t-24 all 0 occurrences). Chairman-DELEGATED duty carrying 5 obligations. It is a DUTY, not how-to, so it belongs in the contract itself — must be RESTORED, not relocated.'],

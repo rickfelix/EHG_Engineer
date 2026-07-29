@@ -3,9 +3,9 @@
  "counts": {
   "original": 533,
   "proposed": 298,
-  "landed": 185,
-  "needs_decision": 321,
-  "not_an_obligation": 19
+  "landed": 192,
+  "needs_decision": 314,
+  "not_an_obligation": 0
  },
  "entries": [
   {
@@ -204,7 +204,8 @@
    "imperative": "Sourcing/filing DRAFT SDs is EXEMPT — a DRAFT row is a CONST-002-safe proposal, not a dispatch — and runs CONTINUOUSLY per NEVER HOLD SOURCING (below); only claiming/worktreeing/driving/dispatching an SD requires the coordinator's go.",
    "match_score": 0.5,
    "carries_modal": true,
-   "disposition": "NEEDS_DECISION"
+   "disposition": "landed",
+   "probe_evidence": "probe: NEVER HOLD SOURCING chairman override present"
   },
   {
    "key": "2020fee5f276",
@@ -302,14 +303,16 @@
    "imperative": "NEVER run scripts/solomon-advisory.cjs from an Adam session: that is SOLOMON'S outbound tool (its default send targets the COORDINATOR — running it as Adam misroutes to the coordinator lane, live witness 2026-07-19, advisory d442d8ec; chairman-directed correction: the Solomon/coordinator distinction…",
    "match_score": 0.27,
    "carries_modal": true,
-   "disposition": "NEEDS_DECISION"
+   "disposition": "landed",
+   "probe_evidence": "probe: Adam/Solomon outbound tool separation present"
   },
   {
    "key": "70180bb8e68e",
    "imperative": "Per-role tool ownership: adam-advisory.cjs = Adam sends; solomon-advisory.cjs = Solomon sends.",
    "match_score": 1,
    "carries_modal": false,
-   "disposition": "landed"
+   "disposition": "landed",
+   "probe_evidence": "probe: Adam/Solomon outbound tool separation present"
   },
   {
    "key": "a3776419fe28",
@@ -607,7 +610,8 @@
    "imperative": "HARD BOUNDARIES (live AEGIS): NEVER set eva_consultant_recommendations.status=accepted; NEVER run the auto-sd-generator; NEVER write the constitution or chairman_approved vision; NEVER claim/worktree/dispatch.",
    "match_score": 0.2,
    "carries_modal": true,
-   "disposition": "NEEDS_DECISION"
+   "disposition": "landed",
+   "probe_evidence": "probe: AEGIS hard boundary (never set status=accepted) present"
   },
   {
    "key": "d4b272210d79",
@@ -705,7 +709,8 @@
    "imperative": "NEVER HOLD SOURCING (chairman override): Adam sources CONTINUOUSLY — raw backlog is groomed into verified, deduped, claimable DRAFT SDs/QFs as it arrives, regardless of queue depth.",
    "match_score": 0.29,
    "carries_modal": true,
-   "disposition": "NEEDS_DECISION"
+   "disposition": "landed",
+   "probe_evidence": "probe: NEVER HOLD SOURCING chairman override present"
   },
   {
    "key": "ac07c97948cd",
@@ -1480,7 +1485,8 @@
    "imperative": "(4) DOCUMENT the resolution basis on the SD (why cleared / what unblocked it / who approved), and every fence Adam or the fleet sets MUST carry a documented reason + explicit unblock condition (ties the blocked-status-visibility + decision-rollup resilience work — a blocked SD must READ as blocked, …",
    "match_score": 0.56,
    "carries_modal": true,
-   "disposition": "NEEDS_DECISION"
+   "disposition": "landed",
+   "probe_evidence": "probe: document-the-resolution-basis duty present"
   },
   {
    "key": "4e636c79b8b5",
@@ -1544,7 +1550,8 @@
    "imperative": "tiering / claim-eligibility matters — and ALWAYS confirm metadata.min_tier_rank is set DELIBERATELY with a recorded reason, NEVER the no-signal default (the subject-lifecycle stranding, by name).",
    "match_score": 0.79,
    "carries_modal": true,
-   "disposition": "landed"
+   "disposition": "landed",
+   "probe_evidence": "probe: dispatch-MECHANISM SDs route to coordinator review"
   },
   {
    "key": "a6a4f798cf7a",
@@ -1912,7 +1919,8 @@
    "imperative": "Sender-side dedup-hazard constraint: send the consult itself with payload.kind='solomon_consult' plus a correlation_id, and NEVER courtesy-ACK that correlation_id afterward — a premature ack hides the real oracle reply behind a read-stamped-without-action blindspot (the exact class that cost 9h of i…",
    "match_score": 0.12,
    "carries_modal": true,
-   "disposition": "NEEDS_DECISION"
+   "disposition": "landed",
+   "probe_evidence": "probe: solomon_consult correlation_id dedup constraint present"
   },
   {
    "key": "a9ef1b159339",
@@ -3708,7 +3716,8 @@
    "imperative": "Consult-then-send — a HIGH send is held until a solomon_consult is on record OR a bounded wait elapses.",
    "match_score": 0.8,
    "carries_modal": false,
-   "disposition": "landed"
+   "disposition": "landed",
+   "probe_evidence": "probe: solomon_consult correlation_id dedup constraint present"
   },
   {
    "key": "823cd8d08bbe",
@@ -3729,7 +3738,8 @@
    "imperative": "No self-exemption: Adam cannot waive its own consult requirement — the gate lives at the send choke, and every degraded-proceed is audited in adam_adherence_ledger.",
    "match_score": 0.38,
    "carries_modal": true,
-   "disposition": "NEEDS_DECISION"
+   "disposition": "landed",
+   "probe_evidence": "probe: no-self-exemption on the consult gate present"
   },
   {
    "key": "8138e9f39004",
