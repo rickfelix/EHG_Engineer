@@ -136,16 +136,29 @@ describe('resolveSessionId / parsePayload — pure, and deliberately NOT a subpr
 });
 
 describe('loadClient — the banner suppression is PINNED, not merely measured once', () => {
-  it('swallows everything the require writes to stdout, and restores it afterwards', () => {
+  it('lets NOTHING through to the real stdout, asserted at the payload not at our own counter', () => {
     // UserPromptSubmit stdout is injected into the model's context and this hook runs on EVERY turn
-    // for EVERY seat, so a regression here is silent and fleet-wide. Injecting the require-er keeps
-    // this credential-free: the FACTORY is injected, so nothing here names a client factory or any
-    // SUPABASE_* identifier — which is exactly what the DB-test guard reads as 'reaches a live database'.
-    const noisy = () => { process.stdout.write('BANNER-76-BYTES'); return { fake: true }; };
-    const client = loadClient(noisy);
+    // for EVERY seat, so a regression here is silent and fleet-wide. Injecting the FACTORY (rather
+    // than a require-er) keeps this credential-free: nothing here names a client factory or any
+    // SUPABASE_* identifier, which is exactly what the DB-test guard reads as "reaches a live database".
+    //
+    // THE ASSERTION THAT MATTERS IS `escapedToReal`. An earlier version of this test checked only
+    // loadClient.lastSuppressedBytes — our OWN counter — which a passing-through interceptor
+    // (`escaped += ...; return realWrite(chunk)`) satisfies perfectly while the banner still prints.
+    // Review found that surviving mutant: 12/12 green with the bytes on the terminal. Counting the
+    // bytes is not withholding them, so we capture the real sink and assert it stayed empty.
+    const realWrite = process.stdout.write;
+    let escapedToReal = '';
+    process.stdout.write = (chunk) => { escapedToReal += String(chunk); return true; };
+    let client;
+    try {
+      client = loadClient(() => { process.stdout.write('BANNER-76-BYTES'); return { fake: true }; });
+    } finally {
+      process.stdout.write = realWrite;
+    }
     expect(client).toEqual({ fake: true });
-    expect(loadClient.lastSuppressedBytes).toBe('BANNER-76-BYTES'.length);   // it was written...
-    expect(process.stdout.write).not.toBe(undefined);                        // ...and stdout still works
+    expect(escapedToReal).toBe('');                                          // nothing got through...
+    expect(loadClient.lastSuppressedBytes).toBe('BANNER-76-BYTES'.length);   // ...and it really was written
   });
 
   it('restores stdout even when the require THROWS', () => {
