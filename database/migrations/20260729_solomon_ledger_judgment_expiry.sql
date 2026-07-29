@@ -63,4 +63,4 @@ COMMENT ON COLUMN solomon_advice_outcome_ledger.judgment_expired_at IS
   'When the adoption judgment aged out unanswered. INDEPENDENT of decision, which stays ''pending'' -- a row can be both never-judged and still-pending, and that is the truth. Deliberately NOT a decision value: routing expiry through decision would move drain-inventory.mjs:88 and :91 together and inflate the accuracy denominator at fleet-dashboard.cjs:1959. SD-LEO-INFRA-ADVICE-OUTCOME-LEDGER-001 FR-1.';
 
 COMMENT ON COLUMN solomon_advice_outcome_ledger.judgment_expired_by IS
-  'Identifier of the aging process that stamped judgment_expired_at. Constraint-required so a hand-written row cannot pass for a mechanism that ran. SD-LEO-INFRA-ADVICE-OUTCOME-LEDGER-001 FR-2/TS-10.';
+  'Identifier of the aging process that stamped judgment_expired_at. Constraint-required so a stamp can never be ANONYMOUS -- it does NOT establish WHO stamped it, because the actor value is a public constant and every writer shares one service-role identity. TS-10 (did the mechanism actually RUN) needs a witness the database cannot supply. SD-LEO-INFRA-ADVICE-OUTCOME-LEDGER-001 FR-2.';

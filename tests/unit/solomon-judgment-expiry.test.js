@@ -112,3 +112,62 @@ describe('TS-3 — the job ships DISABLED', () => {
     expect(ENABLED_BY_DEFAULT).toBe(false);
   });
 });
+
+/**
+ * FR-2 — the RUNNER and its two independent safety gates.
+ *
+ * These exist because retro review found FR-2 had shipped as a pure selector with an
+ * ENABLED_BY_DEFAULT flag NO CODE READ, described as "ships disabled". That is not a disabled
+ * mechanism, it is an absent one — and an absent mechanism is precisely how five prior mechanisms
+ * came to sit at zero usage in this same table.
+ *
+ * The error worth naming: I had a sound argument that TS-3 should assert the enable FLAG rather than
+ * the scheduler ENTRY. That argument is about what to ASSERT. I reused it, without noticing, as a
+ * reason not to BUILD the entry — a narrower test silently became a narrower deliverable.
+ */
+describe('FR-2 — the runner refuses to write by default', () => {
+  it('does not run at all without the explicit env gate', async () => {
+    const { resolveRunMode } = await import('../../scripts/solomon-judgment-expiry-run.mjs');
+    const m = resolveRunMode({ env: {}, argv: ['--apply'] });
+    // --apply alone is NOT enough. Merging the workflow cannot start it.
+    expect(m.run).toBe(false);
+    expect(m.apply).toBe(false);
+  });
+
+  it('enabled WITHOUT --apply is a dry run, not a write', async () => {
+    const { resolveRunMode } = await import('../../scripts/solomon-judgment-expiry-run.mjs');
+    const m = resolveRunMode({ env: { LEO_JUDGMENT_EXPIRY_ENABLED: '1' }, argv: [] });
+    expect(m.run).toBe(true);
+    expect(m.apply).toBe(false);
+    // A dry run is deliberately permitted: seeing the candidate set is how an operator decides
+    // whether the first real run is safe, and aging cannot be undone by judging a row later.
+    expect(m.reason).toBe('dry-run');
+  });
+
+  it('writes only when BOTH gates are open', async () => {
+    const { resolveRunMode } = await import('../../scripts/solomon-judgment-expiry-run.mjs');
+    const m = resolveRunMode({ env: { LEO_JUDGMENT_EXPIRY_ENABLED: '1' }, argv: ['--apply'] });
+    expect(m.run).toBe(true);
+    expect(m.apply).toBe(true);
+  });
+
+  it('the scheduler entry EXISTS and its cadence is commented out', () => {
+    // Asserts the entry as well as the flag. The earlier reasoning — "a disabled entry still
+    // satisfies 'an entry references it'" — is a good argument against relying on the entry ALONE,
+    // and I wrongly let it stand as a reason to omit the entry entirely.
+    const wf = readFileSync(resolve(process.cwd(), '.github/workflows/solomon-judgment-expiry.yml'), 'utf8');
+    expect(wf).toMatch(/workflow_dispatch:/);
+    expect(wf).toMatch(/solomon-judgment-expiry-run\.mjs/);
+    // The cadence must be present-but-commented, so enabling it is a one-line deliberate act rather
+    // than a rewrite — and so its absence is visible rather than merely unwritten.
+    expect(wf).toMatch(/^\s*#\s*schedule:/m);
+    expect(wf).not.toMatch(/^\s{2}schedule:/m);
+  });
+
+  it('the runner PAGINATES — the ledger is past the 1000-row cap', () => {
+    const src = readFileSync(resolve(process.cwd(), 'scripts/solomon-judgment-expiry-run.mjs'), 'utf8')
+      .replace(/\/\*[\s\S]*?\*\//g, '').replace(/(^|[^:])\/\/.*$/gm, '$1');
+    expect(src).toMatch(/\.range\(/);
+    expect(src, 'an unpaginated read silently clamps at 1000').toMatch(/for \(let from = 0/);
+  });
+});
