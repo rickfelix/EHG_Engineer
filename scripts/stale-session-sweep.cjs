@@ -3315,7 +3315,10 @@ async function main() {
     try {
       stuckSignals = await fapPaginate(() => supabase
         .from('session_coordination')
-        .select('id, sender_session, created_at')
+        // QF-20260727-190: `payload` is now selected because SEVERITY decides whether the age
+        // branch may retire a signal. Without it the drain could not tell a routine flood-control
+        // candidate from a live worker's blocked high-severity call for help.
+        .select('id, sender_session, created_at, payload')
         .eq('payload->>signal_type', 'stuck')
         .is('acknowledged_at', null)
         .order('id', { ascending: true })); // unique tiebreaker (FR-6)
@@ -3342,15 +3345,59 @@ async function main() {
         warnings.push('GUARD_UNAVAILABLE: stuck-signal drain skipped this tick — sender liveness read failed (' + (guardErr && guardErr.message ? guardErr.message : 'unknown') + ')');
       }
     }
-    const drainStuckIds = senderGuardFailed ? [] : stuck
-      .filter(s => s.created_at < stuckAgeCutoff || !s.sender_session || !liveSenders.has(s.sender_session))
-      .map(s => s.id);
+    // QF-20260727-190. TWO CHANGES, AND THE LIVENESS BRANCH IS DELIBERATELY UNTOUCHED.
+    //
+    // (1) THE AGE BRANCH NO LONGER RETIRES high/critical SIGNALS FROM LIVE SENDERS. Draining
+    // stamps acknowledged_at, which under the two-stage ack contract means ACTIONED — but nothing
+    // actions it. Two measured instances in four hours, both severity=high, both from senders
+    // heartbeating at 0m, both carrying a question that needed an answer:
+    //   f191a23a Alpha-3, "BLOCKED — HARD RESOURCE LIMIT", drained UNREAD at 63 min
+    //   b6f9bbab Alpha-4, "needs a one-line additive DDL", drained READ at 63 min
+    // The second rules out "nobody saw it" and isolates the age branch as the sole cause.
+    //
+    // RAISING THE 1h THRESHOLD WOULD NOT HAVE FIXED EITHER. The QF is explicit: that converts a
+    // signal lost at 60 minutes into one lost at 180. The Alpha-3 worker was blocked across a
+    // multi-day quota reset, so NO finite age cutoff makes age a valid proxy for irrelevance.
+    // Severity is the right discriminant: flood control should never retire a severity the fleet
+    // defines as needing a human.
+    //
+    // (2) THE DEAD-SENDER BRANCH IS UNCHANGED AND STILL APPLIES AT EVERY SEVERITY. A signal whose
+    // sender is gone has nobody left to answer it, so retiring it is correct regardless of how
+    // urgent it was. The fail-CLOSED guard above (senderGuardFailed -> skip the tick) is likewise
+    // untouched: a failed liveness read must never read as "all senders dead".
+    const HELD_SEVERITIES = new Set(['high', 'critical']);
+    const senderIsDead = (s) => !s.sender_session || !liveSenders.has(s.sender_session);
+    const drainRows = senderGuardFailed ? [] : stuck.filter((s) => {
+      if (senderIsDead(s)) return true;                       // dead sender — drain at any severity
+      if (HELD_SEVERITIES.has(String(s.payload?.severity || '').toLowerCase())) return false; // live + urgent — HOLD
+      return s.created_at < stuckAgeCutoff;                   // live + routine — age-drain as before
+    });
+    const drainStuckIds = drainRows.map(s => s.id);
     for (let i = 0; i < drainStuckIds.length; i += 50) {
       const batch = drainStuckIds.slice(i, i + 50);
       await supabase.from('session_coordination').update({ acknowledged_at: now.toISOString() }).in('id', batch);
     }
     if (drainStuckIds.length > 0) {
-      actions.push('CLEANUP: drained ' + drainStuckIds.length + ' stale/dead-sender STUCK signal(s) (acknowledged_at stamped)');
+      // QF-20260727-190: the old line read "drained N stale/dead-sender STUCK signal(s)" — ONE
+      // label for TWO disjoint reasons. A coordinator read "dead-sender", verified the sender was
+      // alive at 0m heartbeat, and concluded the sweep had misclassified a live session. It had
+      // not; the age branch had fired. That single ambiguous word cost an hour of misdiagnosis and
+      // pointed at the wrong subsystem, so the counts are now reported separately.
+      const deadCount = drainRows.filter(senderIsDead).length;
+      const ageCount = drainStuckIds.length - deadCount;
+      const parts = [];
+      if (deadCount > 0) parts.push(deadCount + ' dead-sender');
+      if (ageCount > 0) parts.push(ageCount + ' aged-out (live sender, severity below high)');
+      actions.push('CLEANUP: drained ' + drainStuckIds.length + ' STUCK signal(s) — ' + parts.join(' + ') + ' (acknowledged_at stamped)');
+    }
+    // Report what was deliberately NOT drained, so a held signal is visible rather than merely
+    // un-retired. Without this the fix would be silent in exactly the way the bug was.
+    const heldLive = senderGuardFailed ? [] : stuck.filter(s =>
+      !senderIsDead(s) &&
+      HELD_SEVERITIES.has(String(s.payload?.severity || '').toLowerCase()) &&
+      s.created_at < stuckAgeCutoff);
+    if (heldLive.length > 0) {
+      actions.push('WORKER SIGNALS: ' + heldLive.length + ' high/critical STUCK signal(s) from LIVE senders held past 1h AWAITING COORDINATOR DISPOSITION (not drained): ' + heldLive.map(s => String(s.id).slice(0, 8)).join(', '));
     }
   } catch (e) {
     warnings.push('STUCK_SIGNAL_DRAIN: skipped due to error: ' + (e && e.message ? e.message : e));
