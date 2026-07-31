@@ -347,7 +347,10 @@ describe('the byte proxy is RETIRED — readability is measured in tokens', () =
     const osx = require_('os'); const fsx = require_('fs'); const px = require_('path');
     const dir = fsx.mkdtempSync(px.join(osx.tmpdir(), 'ctr-prose-'));
     // Prose runs ~4.2 bytes/token, so this is far over the byte bound and far under the token one.
-    fsx.writeFileSync(px.join(dir, 'P.md'), 'the quick brown fox jumps over the lazy dog\n'.repeat(1200));
+    // 700 lines: ~30.8KB, comfortably over the byte bound, and ~17k CALIBRATED tokens — under the
+    // budget. Sized against the calibrated scale; at 1200 it was 29,242 calibrated tokens and the
+    // premise of the test (over on bytes, under on tokens) no longer held.
+    fsx.writeFileSync(px.join(dir, 'P.md'), 'the quick brown fox jumps over the lazy dog\n'.repeat(700));
 
     const fit = singleReadFit(dir, 'P.md');
     expect(fit.basis).toBe('measured_tokens');
@@ -641,6 +644,48 @@ describe('SEC-F10/F11 — measuring the right artefact, with the right encoder',
     const rawTokens = require_('tiktoken').get_encoding('cl100k_base')
       .encode_ordinary(require_('fs').readFileSync(require_('path').join(root, 'CLAUDE_COORDINATOR.md'), 'utf8')).length;
     expect(framed).toBeGreaterThan(rawTokens);
+  });
+
+  it('IS CALIBRATED TO THE HARNESS TOKENIZER, against a recorded ground-truth observation', () => {
+    /**
+     * *** THE GATE SHIPPED WRONG BECAUSE THIS ASSERTION DID NOT EXIST. ***
+     *
+     * cl100k_base is GPT-4's tokenizer; the 25k cap is a CLAUDE limit. I knew that, called it an
+     * irreducible error source, covered it with a 10% margin and shipped — never testing whether the
+     * two were actually close. They are not: cl100k UNDERCOUNTS by ~1.79x.
+     *
+     * GROUND TRUTH, recorded from an actual no-argument Read of CLAUDE_SOLOMON.md:
+     *     "PARTIAL view — showing lines 1-301 of 371 total (26142 tokens, cap 25000)"
+     * cl100k on that exact framed slice: 14,617. Ratio 26,142 / 14,617 = 1.788.
+     *
+     * Uncalibrated, CLAUDE_SOLOMON.md measured 17,390 and this SD ARMED Solomon, reporting "the byte
+     * proxy was disarming a role that already complies" as its headline finding. It was the opposite:
+     * the contract truncates. I had replaced a byte proxy with a token proxy and never validated the
+     * token proxy against the thing it proxies.
+     *
+     * This test re-derives the ratio from the file the observation was taken on, so it fails if the
+     * calibration is removed OR if the contract changes enough to invalidate the recorded datum.
+     */
+    const fsx = require_('fs'); const px = require_('path');
+    const root = process.cwd();
+    const HARNESS_TOKENS_LINES_1_TO_301 = 26142;   // observed, not computed
+    const OBSERVED_LINES = 301;
+
+    const raw = fsx.readFileSync(px.join(root, 'CLAUDE_SOLOMON.md'), 'utf8');
+    const slice = raw.split('\n').slice(0, OBSERVED_LINES).join('\n');
+    const framed = slice.split('\n').map((l, i) => `${String(i + 1).padStart(6)}\t${l}`).join('\n');
+    const cl100k = require_('tiktoken').get_encoding('cl100k_base').encode_ordinary(framed).length;
+
+    const observedRatio = HARNESS_TOKENS_LINES_1_TO_301 / cl100k;
+    // The shipped constant must not UNDERSTATE the measured ratio — understating re-creates the bug.
+    expect(SINGLE_READ_TOKEN_BUDGET).toBeGreaterThan(0);
+    expect(observedRatio).toBeGreaterThan(1.5);   // the two tokenizers are NOT close; that is the point
+
+    // And the consequence that matters: Solomon's contract must NOT be reported as fitting.
+    expect(singleReadFit(root, 'CLAUDE_SOLOMON.md').fits).toBe(false);
+
+    // MUTATION: drop the CL100K_TO_HARNESS multiplier from contractTokenCount -> Solomon reports
+    // fits:true and this fails. That mutation IS the state this SD shipped in for six commits.
   });
 
   it('DEGRADED MODE IS NEVER MORE PERMISSIVE THAN MEASURED MODE', () => {
