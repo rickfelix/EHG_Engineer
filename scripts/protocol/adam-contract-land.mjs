@@ -41,6 +41,19 @@ const read = (f) => fs.readFileSync(DIR + f, 'utf8').replace(/\r\n/g, '\n');
  */
 const SNAPSHOT = 'adam-contract-9row-snapshot-2026-07-31.json';
 
+/** Same protocol_id the existing Adam rows carry — a companion on a different protocol renders nowhere. */
+const PROTOCOL_ID = 'leo-v4-3-3-ui-parity';
+
+/**
+ * COMPANIONS-ONLY mode. The chairman's A-GOVERN authorises GOVERNING THE COMPANIONS; it does not
+ * settle the two questions that still gate the CONTRACT rewrite (the composite — now three
+ * restorations — and the SMS cadence diff), nor the open five-row question: replacing row 601 alone
+ * leaves ~31,079 tokens against a 25,000 cap, so the consolidated artifact also requires emptying
+ * 604/607/624/606/625. Landing companions is safe TODAY precisely because the LIVE contract does not
+ * reference them yet, so there is no dangling pointer either way.
+ */
+const COMPANIONS_ONLY = process.argv.includes('--companions-only');
+
 const supabase = createClient(
   process.env.SUPABASE_URL || process.env.NEXT_PUBLIC_SUPABASE_URL,
   process.env.SUPABASE_SERVICE_ROLE_KEY,
@@ -137,6 +150,66 @@ const plan = [
   { order: 3, target: 'adam_role_contract row 601 (REPLACE 70,049 B)', bytes: CONTRACT.length, note: 'only AFTER both companions exist' },
 ];
 
+/**
+ * The two companion rows. Fresh order_index values, DELIBERATELY: order_index 2610 is already
+ * occupied TWICE (id=602 adam_self_adherence_loop and id=606 adam_role_contract), and rendering is
+ * deterministic there only because db-queries.js orders by order_index THEN id. A new row placed at
+ * an occupied index would land by ID rather than by intent. 2630 is the highest in use.
+ *
+ * Governed EXPLICITLY, per the chairman's "no auto-default" rider on A-GOVERN: each companion gets
+ * its own section_type and its own mapping entry. Nothing infers a companion from a missing entry,
+ * and no fallback can make one APPEAR governed.
+ */
+const COMPANIONS = [
+  { section_type: 'adam_manual', order_index: 2640, title: 'Adam Manual — how-to procedures (companion)', body: () => MANUAL },
+  { section_type: 'adam_provenance', order_index: 2650, title: 'Adam Provenance — dated rationale and live witnesses (companion)', body: () => PROVENANCE },
+];
+
+/**
+ * Land the companion rows. IDEMPOTENT by section_type: re-running updates content rather than
+ * inserting a second row, because two rows of one companion type would silently BOTH render.
+ */
+async function landCompanions() {
+  const results = [];
+  for (const c of COMPANIONS) {
+    const { data: existing, error: selErr } = await supabase
+      .from('leo_protocol_sections').select('id').eq('section_type', c.section_type);
+    if (selErr) throw new Error(`select ${c.section_type}: ${selErr.message}`);
+
+    if (existing && existing.length > 1) {
+      throw new Error(`${c.section_type} already has ${existing.length} rows — refusing to guess which one renders. Resolve by hand.`);
+    }
+
+    const payload = {
+      protocol_id: PROTOCOL_ID,
+      section_type: c.section_type,
+      title: c.title,
+      content: c.body(),
+      order_index: c.order_index,
+      context_tier: 'REFERENCE',
+      priority: 'STANDARD',
+      metadata: {
+        sd: 'SD-LEO-INFRA-ADAM-CONTRACT-READABLE-001',
+        companion_of: 'adam_role_contract',
+        governed: true,
+        chairman_decision: 'A-GOVERN (2026-07-31T12:08:50Z, packet adam-decision-govdemote-20260731, row 6cc469b1)',
+        rider: 'no auto-default — governed explicitly via section_type + mapping, never by a fallback path',
+      },
+    };
+
+    if (existing && existing.length === 1) {
+      const { error } = await supabase.from('leo_protocol_sections').update(payload).eq('id', existing[0].id);
+      if (error) throw new Error(`update ${c.section_type}: ${error.message}`);
+      results.push(`UPDATED ${c.section_type} (row ${existing[0].id}, ${payload.content.length} B)`);
+    } else {
+      const { data, error } = await supabase.from('leo_protocol_sections').insert(payload).select('id').single();
+      if (error) throw new Error(`insert ${c.section_type}: ${error.message}`);
+      results.push(`INSERTED ${c.section_type} (row ${data.id}, ${payload.content.length} B, order_index ${c.order_index})`);
+    }
+  }
+  return results;
+}
+
 (async () => {
   const fail = await preflight();
   console.log('=== FR-3 LANDING PLAN ===');
@@ -156,6 +229,23 @@ const plan = [
     console.error('REFUSING TO APPLY — preflight failed.');
     process.exit(1);
   }
-  console.error('APPLY path intentionally not implemented yet — see header. Close the three open items first.');
+
+  if (COMPANIONS_ONLY) {
+    console.log('APPLYING COMPANIONS ONLY (--companions-only). Row 601 is NOT touched.');
+    for (const line of await landCompanions()) console.log('  ' + line);
+    console.log('');
+    console.log('NEXT (required, same motion): regenerate and verify.');
+    console.log('  node scripts/generate-claude-md-from-db.js');
+    console.log('  node scripts/check-claude-md-drift.cjs        # must stay green');
+    console.log('A companion row with no mapping entry renders NOWHERE — landing rows without the');
+    console.log('four-surface wiring is the demotion this SD exists to prevent, in a new costume.');
+    process.exit(0);
+  }
+
+  console.error('FULL APPLY (contract rewrite) intentionally not implemented — see header.');
+  console.error('Blocked on: the chairman composite question, the SMS cadence diff, and the open');
+  console.error('five-row question (replacing row 601 ALONE leaves ~31,079 tokens vs a 25,000 cap,');
+  console.error('so the consolidated artifact also requires emptying 604/607/624/606/625).');
+  console.error('Use --companions-only to land the A-GOVERN-authorised half.');
   process.exit(1);
 })();

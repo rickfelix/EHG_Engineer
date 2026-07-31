@@ -46,6 +46,14 @@ const PROTOCOL_FILES = [
   // Role contracts (no DIGEST variant, NOT a handoff-gate requirement — verified at
   // role activation instead: adam-register.cjs checks this read via session state)
   'CLAUDE_ADAM.md',
+  // SD-LEO-INFRA-ADAM-CONTRACT-READABLE-001 / FR-2, the fourth of the four surfaces the chairman's
+  // A-GOVERN decision requires. Tracking a companion is NOT a read requirement — nothing gates on
+  // having read them, and the manual is explicitly read at the moment of doing rather than at
+  // startup. It is what makes a read OBSERVABLE: without an entry here the tracker ignores the file
+  // entirely, so "was the governed procedure ever opened?" has no answer at all. Governed content
+  // that no mechanism can even see being read is the demotion this SD exists to prevent.
+  'CLAUDE_ADAM_MANUAL.md',
+  'CLAUDE_ADAM_PROVENANCE.md',
   'CLAUDE_SOLOMON.md',  // role contract, not a handoff-gate requirement — verified at role activation
   // SD-LEO-INFRA-ROLE-CONTRACT-READ-GATE-001 / FR-2 prerequisite. The coordinator was the ONLY role
   // whose contract is small enough to read in one call (CLAUDE_COORDINATOR.md is ~25.5KB, under the

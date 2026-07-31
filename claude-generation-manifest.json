@@ -1,123 +1,137 @@
 {
-  "generated_at": "2026-07-29T19:25:10.111Z",
-  "git_commit": "19e96a69",
-  "db_snapshot_hash": "7eabaf04b99ecbde",
+  "generated_at": "2026-07-31T13:44:09.582Z",
+  "git_commit": "a007b027",
+  "db_snapshot_hash": "58bcc8f7a9a332ff",
   "files": {
     "CLAUDE.md": {
       "type": "full",
       "chars": 19564,
       "estimated_tokens": 4891,
       "content_hash": "91b0c479ced58edc",
-      "path": "C:\\Users\\rickf\\Projects\\_EHG\\EHG_Engineer\\.worktrees\\SD-LEO-INFRA-SOURCING-ENGINE-BELT-GATED-001\\CLAUDE.md"
+      "path": "C:\\Users\\rickf\\Projects\\_EHG\\EHG_Engineer\\.worktrees\\SD-LEO-INFRA-ADAM-CONTRACT-READABLE-001\\CLAUDE.md"
     },
     "CLAUDE_CORE.md": {
       "type": "full",
-      "chars": 92865,
-      "estimated_tokens": 23217,
-      "content_hash": "176c84266149556d",
-      "path": "C:\\Users\\rickf\\Projects\\_EHG\\EHG_Engineer\\.worktrees\\SD-LEO-INFRA-SOURCING-ENGINE-BELT-GATED-001\\CLAUDE_CORE.md"
+      "chars": 92390,
+      "estimated_tokens": 23098,
+      "content_hash": "ceb8c300dffbe069",
+      "path": "C:\\Users\\rickf\\Projects\\_EHG\\EHG_Engineer\\.worktrees\\SD-LEO-INFRA-ADAM-CONTRACT-READABLE-001\\CLAUDE_CORE.md"
     },
     "CLAUDE_LEAD.md": {
       "type": "full",
       "chars": 65998,
       "estimated_tokens": 16500,
-      "content_hash": "e1be7baeccd1d32c",
-      "path": "C:\\Users\\rickf\\Projects\\_EHG\\EHG_Engineer\\.worktrees\\SD-LEO-INFRA-SOURCING-ENGINE-BELT-GATED-001\\CLAUDE_LEAD.md"
+      "content_hash": "fd1b4d7b9b4af7ee",
+      "path": "C:\\Users\\rickf\\Projects\\_EHG\\EHG_Engineer\\.worktrees\\SD-LEO-INFRA-ADAM-CONTRACT-READABLE-001\\CLAUDE_LEAD.md"
     },
     "CLAUDE_PLAN.md": {
       "type": "full",
       "chars": 91830,
       "estimated_tokens": 22958,
-      "content_hash": "e2a1ac902747651a",
-      "path": "C:\\Users\\rickf\\Projects\\_EHG\\EHG_Engineer\\.worktrees\\SD-LEO-INFRA-SOURCING-ENGINE-BELT-GATED-001\\CLAUDE_PLAN.md"
+      "content_hash": "3e0153eba0827d89",
+      "path": "C:\\Users\\rickf\\Projects\\_EHG\\EHG_Engineer\\.worktrees\\SD-LEO-INFRA-ADAM-CONTRACT-READABLE-001\\CLAUDE_PLAN.md"
     },
     "CLAUDE_EXEC.md": {
       "type": "full",
       "chars": 89641,
       "estimated_tokens": 22411,
-      "content_hash": "167b0fc2e03edab3",
-      "path": "C:\\Users\\rickf\\Projects\\_EHG\\EHG_Engineer\\.worktrees\\SD-LEO-INFRA-SOURCING-ENGINE-BELT-GATED-001\\CLAUDE_EXEC.md"
+      "content_hash": "96a703e9685f5dc9",
+      "path": "C:\\Users\\rickf\\Projects\\_EHG\\EHG_Engineer\\.worktrees\\SD-LEO-INFRA-ADAM-CONTRACT-READABLE-001\\CLAUDE_EXEC.md"
     },
     "CLAUDE_ADAM.md": {
       "type": "full",
       "chars": 104958,
       "estimated_tokens": 26240,
-      "content_hash": "0eb05b2b3267e310",
-      "path": "C:\\Users\\rickf\\Projects\\_EHG\\EHG_Engineer\\.worktrees\\SD-LEO-INFRA-SOURCING-ENGINE-BELT-GATED-001\\CLAUDE_ADAM.md"
+      "content_hash": "f20505643f06ea74",
+      "path": "C:\\Users\\rickf\\Projects\\_EHG\\EHG_Engineer\\.worktrees\\SD-LEO-INFRA-ADAM-CONTRACT-READABLE-001\\CLAUDE_ADAM.md"
+    },
+    "CLAUDE_ADAM_MANUAL.md": {
+      "type": "full",
+      "chars": 15698,
+      "estimated_tokens": 3925,
+      "content_hash": "2344306061086a4c",
+      "path": "C:\\Users\\rickf\\Projects\\_EHG\\EHG_Engineer\\.worktrees\\SD-LEO-INFRA-ADAM-CONTRACT-READABLE-001\\CLAUDE_ADAM_MANUAL.md"
+    },
+    "CLAUDE_ADAM_PROVENANCE.md": {
+      "type": "full",
+      "chars": 6924,
+      "estimated_tokens": 1731,
+      "content_hash": "050adf31c606807e",
+      "path": "C:\\Users\\rickf\\Projects\\_EHG\\EHG_Engineer\\.worktrees\\SD-LEO-INFRA-ADAM-CONTRACT-READABLE-001\\CLAUDE_ADAM_PROVENANCE.md"
     },
     "CLAUDE_COORDINATOR.md": {
       "type": "full",
       "chars": 25316,
       "estimated_tokens": 6329,
-      "content_hash": "73d7358f2ee431dd",
-      "path": "C:\\Users\\rickf\\Projects\\_EHG\\EHG_Engineer\\.worktrees\\SD-LEO-INFRA-SOURCING-ENGINE-BELT-GATED-001\\CLAUDE_COORDINATOR.md"
+      "content_hash": "46a249bbe6cb9e04",
+      "path": "C:\\Users\\rickf\\Projects\\_EHG\\EHG_Engineer\\.worktrees\\SD-LEO-INFRA-ADAM-CONTRACT-READABLE-001\\CLAUDE_COORDINATOR.md"
     },
     "CLAUDE_SOLOMON.md": {
       "type": "full",
       "chars": 66522,
       "estimated_tokens": 16631,
-      "content_hash": "d7d8475dc68c7ac1",
-      "path": "C:\\Users\\rickf\\Projects\\_EHG\\EHG_Engineer\\.worktrees\\SD-LEO-INFRA-SOURCING-ENGINE-BELT-GATED-001\\CLAUDE_SOLOMON.md"
+      "content_hash": "267e6c6629a2410e",
+      "path": "C:\\Users\\rickf\\Projects\\_EHG\\EHG_Engineer\\.worktrees\\SD-LEO-INFRA-ADAM-CONTRACT-READABLE-001\\CLAUDE_SOLOMON.md"
     },
     "CLAUDE_DIGEST.md": {
       "type": "digest",
       "chars": 9611,
       "estimated_tokens": 2403,
-      "content_hash": "56be33b0069b2965",
-      "path": "C:\\Users\\rickf\\Projects\\_EHG\\EHG_Engineer\\.worktrees\\SD-LEO-INFRA-SOURCING-ENGINE-BELT-GATED-001\\CLAUDE_DIGEST.md"
+      "content_hash": "60e6818a0c6f0a5e",
+      "path": "C:\\Users\\rickf\\Projects\\_EHG\\EHG_Engineer\\.worktrees\\SD-LEO-INFRA-ADAM-CONTRACT-READABLE-001\\CLAUDE_DIGEST.md"
     },
     "CLAUDE_CORE_DIGEST.md": {
       "type": "digest",
       "chars": 11664,
       "estimated_tokens": 2916,
-      "content_hash": "dde4eb32e7f32eaf",
-      "path": "C:\\Users\\rickf\\Projects\\_EHG\\EHG_Engineer\\.worktrees\\SD-LEO-INFRA-SOURCING-ENGINE-BELT-GATED-001\\CLAUDE_CORE_DIGEST.md"
+      "content_hash": "7d85c728be4d57f9",
+      "path": "C:\\Users\\rickf\\Projects\\_EHG\\EHG_Engineer\\.worktrees\\SD-LEO-INFRA-ADAM-CONTRACT-READABLE-001\\CLAUDE_CORE_DIGEST.md"
     },
     "CLAUDE_LEAD_DIGEST.md": {
       "type": "digest",
       "chars": 5551,
       "estimated_tokens": 1388,
-      "content_hash": "42b407cb2b032a1c",
-      "path": "C:\\Users\\rickf\\Projects\\_EHG\\EHG_Engineer\\.worktrees\\SD-LEO-INFRA-SOURCING-ENGINE-BELT-GATED-001\\CLAUDE_LEAD_DIGEST.md"
+      "content_hash": "278e2f230c05ce35",
+      "path": "C:\\Users\\rickf\\Projects\\_EHG\\EHG_Engineer\\.worktrees\\SD-LEO-INFRA-ADAM-CONTRACT-READABLE-001\\CLAUDE_LEAD_DIGEST.md"
     },
     "CLAUDE_PLAN_DIGEST.md": {
       "type": "digest",
       "chars": 8541,
       "estimated_tokens": 2136,
-      "content_hash": "bfe9c6450c713021",
-      "path": "C:\\Users\\rickf\\Projects\\_EHG\\EHG_Engineer\\.worktrees\\SD-LEO-INFRA-SOURCING-ENGINE-BELT-GATED-001\\CLAUDE_PLAN_DIGEST.md"
+      "content_hash": "52a11a897e2c04d5",
+      "path": "C:\\Users\\rickf\\Projects\\_EHG\\EHG_Engineer\\.worktrees\\SD-LEO-INFRA-ADAM-CONTRACT-READABLE-001\\CLAUDE_PLAN_DIGEST.md"
     },
     "CLAUDE_EXEC_DIGEST.md": {
       "type": "digest",
       "chars": 10964,
       "estimated_tokens": 2741,
-      "content_hash": "99c578d3ca799133",
-      "path": "C:\\Users\\rickf\\Projects\\_EHG\\EHG_Engineer\\.worktrees\\SD-LEO-INFRA-SOURCING-ENGINE-BELT-GATED-001\\CLAUDE_EXEC_DIGEST.md"
+      "content_hash": "a26fd4b6fc9b5555",
+      "path": "C:\\Users\\rickf\\Projects\\_EHG\\EHG_Engineer\\.worktrees\\SD-LEO-INFRA-ADAM-CONTRACT-READABLE-001\\CLAUDE_EXEC_DIGEST.md"
     },
     "CLAUDE_ADAM_DIGEST.md": {
       "type": "digest",
       "chars": 18755,
       "estimated_tokens": 4689,
-      "content_hash": "94364e7491d7e2ef",
-      "path": "C:\\Users\\rickf\\Projects\\_EHG\\EHG_Engineer\\.worktrees\\SD-LEO-INFRA-SOURCING-ENGINE-BELT-GATED-001\\CLAUDE_ADAM_DIGEST.md"
+      "content_hash": "4f5c8e74c4df8352",
+      "path": "C:\\Users\\rickf\\Projects\\_EHG\\EHG_Engineer\\.worktrees\\SD-LEO-INFRA-ADAM-CONTRACT-READABLE-001\\CLAUDE_ADAM_DIGEST.md"
     },
     "CLAUDE_COORDINATOR_DIGEST.md": {
       "type": "digest",
       "chars": 6076,
       "estimated_tokens": 1519,
-      "content_hash": "280bee02a0e1c007",
-      "path": "C:\\Users\\rickf\\Projects\\_EHG\\EHG_Engineer\\.worktrees\\SD-LEO-INFRA-SOURCING-ENGINE-BELT-GATED-001\\CLAUDE_COORDINATOR_DIGEST.md"
+      "content_hash": "360adfdaae32407f",
+      "path": "C:\\Users\\rickf\\Projects\\_EHG\\EHG_Engineer\\.worktrees\\SD-LEO-INFRA-ADAM-CONTRACT-READABLE-001\\CLAUDE_COORDINATOR_DIGEST.md"
     },
     "CLAUDE_SOLOMON_DIGEST.md": {
       "type": "digest",
       "chars": 4705,
       "estimated_tokens": 1177,
-      "content_hash": "e3e04fbe3eb8561b",
-      "path": "C:\\Users\\rickf\\Projects\\_EHG\\EHG_Engineer\\.worktrees\\SD-LEO-INFRA-SOURCING-ENGINE-BELT-GATED-001\\CLAUDE_SOLOMON_DIGEST.md"
+      "content_hash": "72250b3378bb4cd8",
+      "path": "C:\\Users\\rickf\\Projects\\_EHG\\EHG_Engineer\\.worktrees\\SD-LEO-INFRA-ADAM-CONTRACT-READABLE-001\\CLAUDE_SOLOMON_DIGEST.md"
     }
   },
   "section_digests": {
-    "global": "b7e3724d25afb461",
+    "global": "a356203f782b1bd6",
     "byId": {
       "94": "ef2f1e7ed617b5e0",
       "189": "6398659126897bbb",
@@ -391,7 +405,9 @@
       "621": "5d93172c5c9c2138",
       "622": "94a8df85a96ad041",
       "624": "ecbc82be6b6c0dfe",
-      "625": "1fd11ec189bfb049"
+      "625": "1fd11ec189bfb049",
+      "626": "f9a040104b9c6234",
+      "627": "c1f5247af6cc9d08"
     },
     "meta": {
       "94": {
@@ -1758,6 +1774,16 @@
         "section_type": "adam_role_contract",
         "target_file": null,
         "title": "Pre-Send Solomon-Consult Rubric — the L1 gate (SD-LEO-INFRA-ADAM-PRE-SEND-001)"
+      },
+      "626": {
+        "section_type": "adam_manual",
+        "target_file": null,
+        "title": "Adam Manual — how-to procedures (companion)"
+      },
+      "627": {
+        "section_type": "adam_provenance",
+        "target_file": null,
+        "title": "Adam Provenance — dated rationale and live witnesses (companion)"
       }
     }
   }

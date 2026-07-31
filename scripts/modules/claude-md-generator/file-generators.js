@@ -522,6 +522,69 @@ ${scriptsSection}
  * @param {Object} fileMapping - Section to file mapping
  * @returns {string} Generated markdown content
  */
+/**
+ * SD-LEO-INFRA-ADAM-CONTRACT-READABLE-001 / FR-2 — the companions become GENERATED, and that is the
+ * whole point. Before this, CLAUDE_ADAM.md's own header referenced CLAUDE_ADAM_MANUAL.md and
+ * CLAUDE_ADAM_PROVENANCE.md by name while nothing generated, drift-checked, or read-tracked them:
+ * 77 of the 83 obligations retired in the FR-1 ledger are reachable ONLY inside those two files.
+ * Moving governed content behind a pointer nothing follows is a demotion, not a relocation — the
+ * chairman chose A-GOVERN over exactly that, so they are generated from governed rows like any
+ * other protocol file.
+ *
+ * @param {Object} data - All data from database
+ * @param {Object} fileMapping - Section to file mapping
+ * @param {string} fileKey - which companion to render
+ * @param {{heading: string, purpose: string, loadWhen: string, note: string}} spec
+ * @returns {string} Generated markdown content
+ */
+function generateAdamCompanion(data, fileMapping, fileKey, spec) {
+  const { protocol } = data;
+  const { today, time } = getMetadata(protocol);
+  const sections = getSectionsByMapping(protocol.sections, fileKey, fileMapping);
+  const body = sections.map(s => formatSection(s)).join('\n\n');
+  const types = (fileMapping[fileKey]?.sections || []).join(', ');
+
+  return `# ${fileKey} — ${spec.heading}
+
+**Generated**: ${today} ${time}
+**Protocol**: LEO ${protocol.version}
+**Purpose**: ${spec.purpose}
+**Load when**: ${spec.loadWhen}
+
+> ${spec.note}
+
+---
+
+${body}
+
+---
+
+*Generated from database: ${today}*
+*Protocol Version: ${protocol.version}*
+*Source of truth: leo_protocol_sections (section_type=${types}). Do not hand-edit — edit the DB section and regenerate.*
+`;
+}
+
+/** CLAUDE_ADAM_MANUAL.md — the how-to companion. */
+function generateAdamManual(data, fileMapping) {
+  return generateAdamCompanion(data, fileMapping, 'CLAUDE_ADAM_MANUAL.md', {
+    heading: 'Adam Manual (how-to companion)',
+    purpose: 'How-to procedures lifted out of the role contract — SD creation field shapes, migration ceremony steps, gauge inputs',
+    loadWhen: 'At the MOMENT OF DOING the procedure — not at session start',
+    note: 'This companion carries PROCEDURE. The RULES that govern these procedures stay in CLAUDE_ADAM.md and are in force whether or not this file is read.',
+  });
+}
+
+/** CLAUDE_ADAM_PROVENANCE.md — the dated-rationale companion. */
+function generateAdamProvenance(data, fileMapping) {
+  return generateAdamCompanion(data, fileMapping, 'CLAUDE_ADAM_PROVENANCE.md', {
+    heading: 'Adam Provenance (dated rationale)',
+    purpose: 'Why each clause exists — dated chairman verbals, live witnesses, superseded cadences',
+    loadWhen: 'When you need to know WHY a rule exists, or before proposing to change one',
+    note: 'Every rule in CLAUDE_ADAM.md is IN FORCE regardless of whether its history is read here. This file explains; it does not govern.',
+  });
+}
+
 function generateAdam(data, fileMapping) {
   const { protocol } = data;
   const sections = protocol.sections;
@@ -628,6 +691,8 @@ export {
   generatePlan,
   generateExec,
   generateAdam,
+  generateAdamManual,
+  generateAdamProvenance,
   generateCoordinator,
   generateSolomon,
   findCopiedSharedSections,
