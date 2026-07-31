@@ -16,6 +16,10 @@ describe('contractReadVerdict — the inversion, both halves', () => {
   it('THE DILIGENT READER: paginated full coverage reports FULLY READ', () => {
     // Exactly what the old code punished: the final page carries a limit, so lastReadWasPartial
     // was true and the reader who did the work was recorded incomplete.
+    // THE SHAPE THE REAL TRACKER WRITES. An earlier version of this fixture carried ranges ALONE,
+    // a combination production never emits — and that omission is exactly what let SEC-F8 hide for
+    // two rounds. deliveredRanges is what proves the pages were actually returned; ranges alone
+    // only proves they were asked for (SEC-F18).
     const status = {
       readCount: 3,
       lastReadWasPartial: true, // the old signal, now correctly ignored
@@ -24,11 +28,17 @@ describe('contractReadVerdict — the inversion, both halves', () => {
         { offset: 201, limit: 200 },
         { offset: 401, limit: 21 },
       ],
+      deliveredRanges: [
+        { offset: 1, limit: 200 },
+        { offset: 201, limit: 200 },
+        { offset: 401, limit: 21 },
+      ],
+      lastDelivered: { startLine: 401, numLines: 21, totalLines: 421, coveredWholeFile: false },
     };
     const v = contractReadVerdict(status, 421);
     expect(v.read).toBe(true);
     expect(v.fully_read).toBe(true);
-    expect(v.basis).toBe('union_ranges');
+    expect(v.basis).toBe('delivered_ranges');
 
     // MUTATION: read status.lastReadWasPartial instead of computing coverage -> fully_read false, fails.
   });
@@ -64,14 +74,17 @@ describe('contractReadVerdict — the inversion, both halves', () => {
      * also a true statement about one call being used to answer a question about the whole file.
      * Both the old test and the code agreed, so the suite was green and the behaviour was backwards.
      */
+    // Real tracker shape: an earlier read DELIVERED the whole file, a later one delivered 100 lines.
+    // The union of deliveries is still the whole file.
     const status = {
       readCount: 4,
-      ranges: [{ offset: 1, limit: 421 }],
+      ranges: [{ offset: 1, limit: 421 }, { offset: 1, limit: 100 }],
+      deliveredRanges: [{ offset: 1, limit: 421 }, { offset: 1, limit: 100 }],
       lastDelivered: { startLine: 1, numLines: 100, totalLines: 421, coveredWholeFile: false },
     };
     const v = contractReadVerdict(status, 421);
     expect(v.fully_read).toBe(true);
-    expect(v.basis).toBe('union_ranges');
+    expect(v.basis).toBe('delivered_ranges');
 
     // MUTATION: rank the single-call delivered tier above the union tier (the shipped order) ->
     // fully_read false on basis delivered_lines. Fails. That mutation IS the bug SEC-F8 found.
@@ -224,8 +237,41 @@ describe('the byte proxy is RETIRED — readability is measured in tokens', () =
    *   2nd: "1.32 B/token is the densest case"               — measured, but a sample MAX, not a max.
    * cl100k_base is byte-level BPE with 256 single-byte fallbacks, so the true floor is 1.0 B/token.
    */
-  it('the token cap is the REAL harness limit, not a derived proxy', () => {
-    expect(SINGLE_READ_TOKEN_CAP).toBe(25000);
+  it('THE MARGIN IS APPLIED, not merely declared', () => {
+    /**
+     * *** THIS IS THE ONE MUTANT THAT SURVIVED THE WHOLE SUITE. *** Changing singleReadFit to
+     * compare against SINGLE_READ_TOKEN_CAP (25,000) instead of SINGLE_READ_TOKEN_BUDGET (22,500)
+     * — i.e. DELETING the safety margin — passed every test. Every margin assertion checked the
+     * two constants' RELATIONSHIP; none checked that the smaller one is what the comparison uses.
+     * The docblock calls the margin load-bearing, and it was the only safety mechanism here with
+     * zero behavioural coverage.
+     *
+     * A contract sized into the band between budget and cap is the only thing that can tell them
+     * apart, so build one instead of hoping a real file lands there.
+     */
+    const osx = require_('os'); const fsx = require_('fs'); const px = require_('path');
+    const dir = fsx.mkdtempSync(px.join(osx.tmpdir(), 'ctr-margin-'));
+    const file = 'BAND.md';
+    const line = 'lorem ipsum dolor sit amet consectetur adipiscing elit sed do eiusmod\n';
+
+    // Grow until the FRAMED measurement lands strictly between budget and cap.
+    let body = '';
+    for (let i = 0; i < 20000; i++) {
+      body += line;
+      if (i % 200 !== 0) continue;
+      fsx.writeFileSync(px.join(dir, file), body);
+      const t = singleReadFit(dir, file).tokens;
+      if (t > SINGLE_READ_TOKEN_BUDGET && t < SINGLE_READ_TOKEN_CAP) break;
+      if (t >= SINGLE_READ_TOKEN_CAP) throw new Error(`overshot the band at ${t} tokens`);
+    }
+
+    const fit = singleReadFit(dir, file);
+    expect(fit.tokens).toBeGreaterThan(SINGLE_READ_TOKEN_BUDGET);
+    expect(fit.tokens).toBeLessThan(SINGLE_READ_TOKEN_CAP);
+    expect(fit.fits).toBe(false);   // the margin, doing its job
+
+    // MUTATION: compare against SINGLE_READ_TOKEN_CAP instead of the budget -> fits true. Fails.
+    // That mutation survived all 58 tests before this one existed.
   });
 
   it('the surviving byte constant is sound at the 1.0 B/token FLOOR, not at a sampled ratio', () => {
@@ -236,19 +282,43 @@ describe('the byte proxy is RETIRED — readability is measured in tokens', () =
     // MUTATION: restore 32,000 (the "1.32 B/token" derivation) -> unsound at the floor, fails.
   });
 
-  it('MEASURES the real contracts, and disagrees with the byte proxy on Solomon', () => {
-    // The load-bearing regression. Byte-wise Solomon looks 2.7x over; token-wise it fits.
+  it('MEASURES rather than infers — a file can be over the byte bound and still fit', () => {
+    /**
+     * *** DELIBERATELY NOT PINNED TO TODAY'S CONTRACT SIZES. *** The first version of this test
+     * asserted `sol.bytes > SINGLE_READ_SAFE_BYTES` and `coord.fits === true` against the live
+     * files — i.e. it required Solomon's contract to stay over 25 KB and the coordinator's to stay
+     * small. Trimming either (both desirable, and one is an active sibling SD) would have failed a
+     * test with nothing wrong. That is the same defect as the arming table this SD replaced, just
+     * pointed at a different fact.
+     *
+     * The BEHAVIOUR is what matters: bytes and tokens can disagree, and tokens decide. Built from
+     * a synthetic file so it stays true whatever happens to the real contracts.
+     */
+    const osx = require_('os'); const fsx = require_('fs'); const px = require_('path');
+    const dir = fsx.mkdtempSync(px.join(osx.tmpdir(), 'ctr-prose-'));
+    // Prose runs ~4.2 bytes/token, so this is far over the byte bound and far under the token one.
+    fsx.writeFileSync(px.join(dir, 'P.md'), 'the quick brown fox jumps over the lazy dog\n'.repeat(1200));
+
+    const fit = singleReadFit(dir, 'P.md');
+    expect(fit.basis).toBe('measured_tokens');
+    expect(fit.bytes).toBeGreaterThan(SINGLE_READ_SAFE_BYTES);  // the byte proxy would disarm it
+    expect(fit.tokens).toBeLessThan(SINGLE_READ_TOKEN_BUDGET);
+    expect(fit.fits).toBe(true);                                // ...measurement says otherwise
+
+    // MUTATION: compare bytes instead of tokens -> fits false. Fails.
+  });
+
+  it('the real contracts are measured by the same rule (reported, not required)', () => {
+    // Sanity only, and deliberately asserts nothing about SIZE — just that each real contract is
+    // genuinely measured and that fits/tokens agree with each other. Whatever the sibling SD does
+    // to CLAUDE_ADAM.md, this keeps passing and the arming table keeps telling the truth.
     const root = process.cwd();
-    const sol = singleReadFit(root, 'CLAUDE_SOLOMON.md');
-    const coord = singleReadFit(root, 'CLAUDE_COORDINATOR.md');
-
-    expect(sol.basis).toBe('measured_tokens');
-    expect(sol.bytes).toBeGreaterThan(SINGLE_READ_SAFE_BYTES); // the proxy would have disarmed it
-    expect(sol.tokens).toBeLessThan(SINGLE_READ_TOKEN_CAP);
-    expect(sol.fits).toBe(true);                               // ...but it genuinely fits
-
-    expect(coord.fits).toBe(true);
-    expect(coord.tokens).toBeLessThan(SINGLE_READ_TOKEN_CAP);
+    for (const f of ['CLAUDE_COORDINATOR.md', 'CLAUDE_SOLOMON.md', 'CLAUDE_ADAM.md']) {
+      const fit = singleReadFit(root, f);
+      expect(fit.basis).toBe('measured_tokens');
+      expect(fit.tokens).toBeGreaterThan(0);
+      expect(fit.fits).toBe(fit.tokens <= SINGLE_READ_TOKEN_BUDGET);
+    }
   });
 
   it('WITHOUT a tokenizer it degrades to disarmed — never to "fits"', () => {
@@ -446,15 +516,35 @@ describe('SEC-F16 — a REQUEST must never stand in for a MEASUREMENT', () => {
     expect(v.basis).toBe('delivered_ranges');
   });
 
-  it('requested ranges ARE used when there is no delivery record at all (legacy state)', () => {
-    // The fallback must still work, or every pre-deliveredRanges session reports unknown forever.
-    const v = contractReadVerdict(
+  it('SEC-F18: legacy requested-ranges coverage can DISPROVE completeness but never prove it', () => {
+    /**
+     * `ranges` is an UPPER bound — you cannot read more than you asked for, but you can read less.
+     * These three legacy shapes are byte-identical to this code and only the last is a full read:
+     *     Read(offset=1, limit=520) truncated at 166   -> union 100%
+     *     3 pages requesting 200 each, each truncated  -> union 100%
+     *     3 pages genuinely paginated and delivered    -> union 100%
+     * So a full-looking requested union reports UNCONFIRMED, not complete.
+     */
+    const full = contractReadVerdict(
       { readCount: 3, lastReadWasPartial: true, ranges: [{ offset: 1, limit: 200 }, { offset: 201, limit: 200 }, { offset: 401, limit: 120 }] },
       T,
       { singleReadFit: overCap }
     );
-    expect(v.fully_read).toBe(true);
-    expect(v.basis).toBe('union_ranges');
+    expect(full.coverage_pct).toBe(100);            // the request did span the file...
+    expect(full.fully_read).toBe(false);            // ...which is not evidence it was delivered
+    expect(full.basis).toBe('requested_ranges_unconfirmed');
+
+    // MUTATION: let the requested union set fully_read -> a truncated legacy read passes. Fails.
+
+    // And the direction it CAN speak to: falling short proves incompleteness.
+    const short = contractReadVerdict(
+      { readCount: 1, lastReadWasPartial: true, ranges: [{ offset: 1, limit: 100 }] },
+      T,
+      { singleReadFit: overCap }
+    );
+    expect(short.fully_read).toBe(false);
+    expect(short.basis).toBe('requested_ranges_incomplete');
+    expect(short.coverage_pct).toBe(19);
   });
 
   it('an EMPTY-after-filter delivery record does not fall back to requested ranges', () => {
@@ -503,17 +593,25 @@ describe('SEC-F10/F11 — measuring the right artefact, with the right encoder',
     expect(framed).toBeGreaterThan(rawTokens);
   });
 
-  it('the budget leaves margin under the cap, and no real verdict sits inside it', () => {
+  it('the budget leaves a real margin under the cap', () => {
     expect(SINGLE_READ_TOKEN_BUDGET).toBeLessThan(SINGLE_READ_TOKEN_CAP);
-    // The margin exists because cl100k_base is GPT-4's tokenizer and the cap is a Claude limit. It
-    // is only honest if no role's answer is DECIDED by it — assert each real contract clears the
-    // budget (or misses it) by more than the margin itself.
-    const root = process.cwd();
-    const margin = SINGLE_READ_TOKEN_CAP - SINGLE_READ_TOKEN_BUDGET;
-    for (const f of ['CLAUDE_COORDINATOR.md', 'CLAUDE_SOLOMON.md', 'CLAUDE_ADAM.md']) {
-      const { tokens } = singleReadFit(root, f);
-      expect(Math.abs(tokens - SINGLE_READ_TOKEN_BUDGET)).toBeGreaterThan(margin);
-    }
+    expect(SINGLE_READ_TOKEN_BUDGET).toBeGreaterThan(0);
+
+    /**
+     * *** THE ASSERTION THAT USED TO LIVE HERE WOULD HAVE BROKEN WHEN THE SIBLING SD SUCCEEDED. ***
+     * It required every real contract to sit further from the budget than the margin itself, to
+     * show no verdict was decided by the margin. True today — but CLAUDE_ADAM.md is 27,566 tokens
+     * and SD-LEO-INFRA-ADAM-CONTRACT-READABLE-001 exists to bring it under 22,500. Any landing in
+     * 20,000-25,000 arms the role CORRECTLY and would have failed this test, silently imposing a
+     * stricter bar than the arming condition itself.
+     *
+     * That is the mirror of the defect this SD was written to fix. The old arming table could not
+     * change when the world changed; this assertion would have broken when the world changed FOR
+     * THE BETTER. Both are a fact about today pinned as a requirement forever.
+     *
+     * The margin's real property — that it is APPLIED — is asserted above against a synthetic
+     * contract built into the band, which no contract trim can invalidate.
+     */
   });
 });
 
