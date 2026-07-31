@@ -3,11 +3,12 @@
   "counts": {
     "original": 533,
     "proposed": 298,
-    "landed": 290,
+    "landed": 303,
     "needs_decision": 299,
     "not_an_obligation": 19,
-    "NEEDS_DECISION": 216,
-    "merged_into": 8
+    "NEEDS_DECISION": 202,
+    "merged_into": 8,
+    "rationale_dropped_obligation_survives": 1
   },
   "entries": [
     {
@@ -119,9 +120,17 @@
       "imperative": "Chairman verbal 2026-07-16: \"I know at one point I told you you would be like the coordinator's assistant, but now I'm thinking you need to provide governance and oversight over the coordinator\" — reaffirmed 2026-07-17 with the explicit removal of the assistant framing: \"You can help, but you are in…",
       "match_score": 0.26,
       "carries_modal": true,
-      "disposition": "NEEDS_DECISION",
+      "disposition": "landed",
       "lexical_coverage": 0,
-      "lexical_note": "NOT evidence of deletion — the probe is rewrite-blind (3 of 3 known survivors score invisible). Needs a reader."
+      "survival_basis": {
+        "measure": "semantic adjudication by reading the corrected contract",
+        "reachable_in": [
+          "contract"
+        ],
+        "located_at": "CORRECTED §2 + §2a",
+        "note": "Governance/oversight over the coordinator, assistant framing removed. §2a carries audit + accountability + escalate and the standing coordinator-health audit (KPI-0..3).",
+        "adjudicated_by": "Alpha-2 session 8aa7b984"
+      }
     },
     {
       "key": "10b89a2d7f0d",
@@ -276,9 +285,17 @@
       "imperative": "- Boundaries unchanged: overseeing (or helping) the coordinator does NOT make Adam a coordinator or a worker — Adam still never claims/worktrees/drives an SD and never dispatches/roll-calls/tears-down the fleet; everything routes through the advisory lane.",
       "match_score": 0.25,
       "carries_modal": true,
-      "disposition": "NEEDS_DECISION",
+      "disposition": "landed",
       "lexical_coverage": 0,
-      "lexical_note": "NOT evidence of deletion — the probe is rewrite-blind (3 of 3 known survivors score invisible). Needs a reader."
+      "survival_basis": {
+        "measure": "semantic adjudication by reading the corrected contract",
+        "reachable_in": [
+          "contract"
+        ],
+        "located_at": "CORRECTED §1 + §6 D2",
+        "note": "Boundaries survive twice: §1 role/identity/boundaries, and D2 red-flag \"ANY claim/build/graduate by Adam = automatic below-threshold\".",
+        "adjudicated_by": "Alpha-2 session 8aa7b984"
+      }
     },
     {
       "key": "73a474a2d795",
@@ -303,9 +320,17 @@
       "imperative": "Chairman verbal 2026-07-17: \"In the same way that you have governance and oversight over the coordinator, you should add something in there about governance and oversight over Solomon... periodically check in with Solomon to make sure that he's doing what he's supposed to be doing.\" This ADDS an acc…",
       "match_score": 0.23,
       "carries_modal": true,
-      "disposition": "NEEDS_DECISION",
+      "disposition": "landed",
       "lexical_coverage": 0.02,
-      "lexical_note": "NOT evidence of deletion — the probe is rewrite-blind (3 of 3 known survivors score invisible). Needs a reader."
+      "survival_basis": {
+        "measure": "semantic adjudication by reading the corrected contract",
+        "reachable_in": [
+          "contract"
+        ],
+        "located_at": "CORRECTED §2b",
+        "note": "Governance/oversight over Solomon exists as its own subsection (2b), the Solomon-facing twin of 2a.",
+        "adjudicated_by": "Alpha-2 session 8aa7b984"
+      }
     },
     {
       "key": "062eae239c0a",
@@ -479,9 +504,17 @@
       "imperative": "D2 — propose_first: PROPOSE-not-execute / never accept-or-graduate (CONST-002). good: surfaces options+rationale, lets coordinator/chairman decide; DECLINES build-routes. failure: claims/worktrees/drives an SD / accepts a build / graduates (authoring/filing a DRAFT SD is NOT a failure — it is in-bou…",
       "match_score": 0.21,
       "carries_modal": true,
-      "disposition": "NEEDS_DECISION",
+      "disposition": "landed",
       "lexical_coverage": 0.262,
-      "lexical_note": "NOT evidence of deletion — the probe is rewrite-blind (3 of 3 known survivors score invisible). Needs a reader."
+      "survival_basis": {
+        "measure": "semantic adjudication by reading the corrected contract",
+        "reachable_in": [
+          "contract"
+        ],
+        "located_at": "CORRECTED §6 D2",
+        "note": "D2 propose_first survives with CONST-002 and the DRAFT-SD-is-not-a-failure carve-out intact.",
+        "adjudicated_by": "Alpha-2 session 8aa7b984"
+      }
     },
     {
       "key": "c5b6ab90d26b",
@@ -1263,18 +1296,34 @@
       "imperative": "- CHAIRMAN SMS CHANNEL DUTY (durable — chairman-directed 2026-07-17, elevated to contract same day): the Twilio SMS bridge carries ONLY the Adam→chairman leg of the escalation chain (worker → coordinator → Adam → chairman-by-text; the fleet NEVER auto-texts the chairman — chairman verbal: \"any quest…",
       "match_score": 0.32,
       "carries_modal": true,
-      "disposition": "NEEDS_DECISION",
+      "disposition": "landed",
       "lexical_coverage": 0.31,
-      "lexical_note": "NOT evidence of deletion — the probe is rewrite-blind (3 of 3 known survivors score invisible). Needs a reader."
+      "survival_basis": {
+        "measure": "semantic adjudication by reading the corrected contract",
+        "reachable_in": [
+          "contract"
+        ],
+        "located_at": "CORRECTED §5g",
+        "note": "\"ONLY the Adam->chairman leg\" and \"The fleet NEVER auto-texts the chairman\" both survive verbatim in 5g.",
+        "adjudicated_by": "Alpha-2 session 8aa7b984"
+      }
     },
     {
       "key": "61969760c0db",
       "imperative": "Adam's standing duties on this channel, re-armed EVERY session alongside the tick loops: (a) INBOUND WATCH — every recurring tick, check sms_relay_staging for undrained rows from the chairman's number (pre-drain, so GHA cron lag cannot hide them — witnessed 8-min lag 2026-07-17); a chairman free-tex…",
       "match_score": 0.37,
       "carries_modal": true,
-      "disposition": "NEEDS_DECISION",
+      "disposition": "landed",
       "lexical_coverage": 0.388,
-      "lexical_note": "NOT evidence of deletion — the probe is rewrite-blind (3 of 3 known survivors score invisible). Needs a reader."
+      "survival_basis": {
+        "measure": "semantic adjudication by reading the corrected contract",
+        "reachable_in": [
+          "contract"
+        ],
+        "located_at": "CORRECTED §5g(a)-(d)",
+        "note": "INBOUND WATCH survives with the pre-drain rationale (\"cron lag cannot hide them\"); re-arm-every-session survives in the 5g preamble.",
+        "adjudicated_by": "Alpha-2 session 8aa7b984"
+      }
     },
     {
       "key": "4c35cbccfd37",
@@ -1686,9 +1735,17 @@
       "imperative": "(3) PENDING CHAIRMAN DECISION — the work is gated on a call only the chairman can make (a policy ratification, a launch/irreversible go, reversing a prior chairman gate) -> SURFACE the decision to the chairman with a recommendation + default; NEVER let a decision-gate silently starve the belt.",
       "match_score": 0.27,
       "carries_modal": true,
-      "disposition": "NEEDS_DECISION",
+      "disposition": "landed",
       "lexical_coverage": 0.209,
-      "lexical_note": "NOT evidence of deletion — the probe is rewrite-blind (3 of 3 known survivors score invisible). Needs a reader."
+      "survival_basis": {
+        "measure": "semantic adjudication by reading the corrected contract",
+        "reachable_in": [
+          "contract"
+        ],
+        "located_at": "CORRECTED §5c.2 + §6 D1",
+        "note": "CHAIRMAN-DECISION -> surface with recommendation + default survives in 5c step 2. The starvation half survives as D1 red-flag \"belt starved while backlog rich\" rather than as one sentence.",
+        "adjudicated_by": "Alpha-2 session 8aa7b984"
+      }
     },
     {
       "key": "b466ef63f34e",
@@ -1769,9 +1826,17 @@
       "imperative": "(2) CLASSIFY each block and take the MATCHING step — STALE block -> verify + clear the fence (with provenance); REAL block (missing prerequisite / unbuilt dependency) -> SOURCE or route the actual unblocking work — NEVER flip the fence off while the prerequisite is still missing (that ships work whi…",
       "match_score": 0.29,
       "carries_modal": true,
-      "disposition": "NEEDS_DECISION",
+      "disposition": "landed",
       "lexical_coverage": 0.415,
-      "lexical_note": "NOT evidence of deletion — the probe is rewrite-blind (3 of 3 known survivors score invisible). Needs a reader."
+      "survival_basis": {
+        "measure": "semantic adjudication by reading the corrected contract",
+        "reachable_in": [
+          "contract"
+        ],
+        "located_at": "CORRECTED §5c.2",
+        "note": "STALE vs REAL classification and \"NEVER flip the fence off while the prerequisite is still missing\" survive in substance, with the claim-time-failure reason retained.",
+        "adjudicated_by": "Alpha-2 session 8aa7b984"
+      }
     },
     {
       "key": "a317526c0f63",
@@ -1906,9 +1971,17 @@
       "imperative": "dispatch-MECHANISM SDs — anything touching the claim / self-claim / assignment / tiering paths; mis-scoping these strands the WHOLE fleet (e.g. the worker-checkin self-claim WINDOW-EXCLUSION root: a .limit(N) fetch with no order means a reorder cannot lift an item that never entered the window).",
       "match_score": 0.38,
       "carries_modal": true,
-      "disposition": "NEEDS_DECISION",
+      "disposition": "landed",
       "lexical_coverage": 0.091,
-      "lexical_note": "NOT evidence of deletion — the probe is rewrite-blind (3 of 3 known survivors score invisible). Needs a reader."
+      "survival_basis": {
+        "measure": "semantic adjudication by reading the corrected contract",
+        "reachable_in": [
+          "contract"
+        ],
+        "located_at": "CORRECTED §4d",
+        "note": "dispatch-MECHANISM SDs survive as a COORDINATOR-review trigger with the whole-fleet-strand reason. The worker-checkin WINDOW-EXCLUSION example is dropped — illustration, not obligation.",
+        "adjudicated_by": "Alpha-2 session 8aa7b984"
+      }
     },
     {
       "key": "e0616a530923",
@@ -2090,9 +2163,17 @@
       "imperative": "The coordinator escalates to YOU only when it genuinely cannot resolve the block (insufficient authority/information); you provide guidance/direction.",
       "match_score": 0.54,
       "carries_modal": true,
-      "disposition": "NEEDS_DECISION",
+      "disposition": "landed",
       "lexical_coverage": 0.125,
-      "lexical_note": "NOT evidence of deletion — the probe is rewrite-blind (3 of 3 known survivors score invisible). Needs a reader."
+      "survival_basis": {
+        "measure": "semantic adjudication by reading the corrected contract",
+        "reachable_in": [
+          "contract"
+        ],
+        "located_at": "CORRECTED §4e",
+        "note": "Survives verbatim: \"The coordinator escalates to Adam only when it genuinely cannot resolve a block.\"",
+        "adjudicated_by": "Alpha-2 session 8aa7b984"
+      }
     },
     {
       "key": "480ebcc3351c",
@@ -2440,9 +2521,17 @@
       "imperative": "This rubric ROUTES to the EXISTING verification/research tools — it does NOT replace them:",
       "match_score": 0.14,
       "carries_modal": true,
-      "disposition": "NEEDS_DECISION",
+      "disposition": "landed",
       "lexical_coverage": 0,
-      "lexical_note": "NOT evidence of deletion — the probe is rewrite-blind (3 of 3 known survivors score invisible). Needs a reader."
+      "survival_basis": {
+        "measure": "semantic adjudication by reading the corrected contract",
+        "reachable_in": [
+          "contract"
+        ],
+        "located_at": "CORRECTED §6 grade->action->verify",
+        "note": "Routes-not-replaces survives as \"a tooling/process gap -> a DRAFT SD via the EXISTING retro -> /learn -> SD pipeline (do NOT reinvent it)\".",
+        "adjudicated_by": "Alpha-2 session 8aa7b984"
+      }
     },
     {
       "key": "d7a3acb80f63",
@@ -2705,9 +2794,17 @@
       "imperative": "A Adam self-score does NOT happen by itself.",
       "match_score": 0.33,
       "carries_modal": true,
-      "disposition": "NEEDS_DECISION",
+      "disposition": "landed",
       "lexical_coverage": 0,
-      "lexical_note": "NOT evidence of deletion — the probe is rewrite-blind (3 of 3 known survivors score invisible). Needs a reader."
+      "survival_basis": {
+        "measure": "semantic adjudication by reading the corrected contract",
+        "reachable_in": [
+          "contract"
+        ],
+        "located_at": "CORRECTED §6 self-score cadence",
+        "note": "Strengthened, not merely kept: --force is named the chairman-directed operating path and the \"ships inert means no score expected\" misreading is called out explicitly.",
+        "adjudicated_by": "Alpha-2 session 8aa7b984"
+      }
     },
     {
       "key": "0d0eaa73bed9",
@@ -2952,9 +3049,15 @@
       "imperative": "> Why: encoding the order-of-operations in the required-reading contract + surfacing the live state of every layer at /adam startup makes the route-the-SSOT-first duty structurally impossible to miss, so the degrade-to-hand-mining regression cannot recur each fresh session (SD-LEO-INFRA-ADAM-SOURCE-…",
       "match_score": 0.13,
       "carries_modal": true,
-      "disposition": "NEEDS_DECISION",
+      "disposition": "rationale_dropped_obligation_survives",
       "lexical_coverage": 0.022,
-      "lexical_note": "NOT evidence of deletion — the probe is rewrite-blind (3 of 3 known survivors score invisible). Needs a reader."
+      "lexical_note": "NOT evidence of deletion — the probe is rewrite-blind (3 of 3 known survivors score invisible). Needs a reader.",
+      "survival_basis": {
+        "measure": "semantic adjudication by reading the corrected contract",
+        "located_at": "obligation: CORRECTED §5f SOURCING SSOT — order of operations",
+        "note": "The OBLIGATION survives in full (roadmap-first, wave-0 distillation, check activation flags, hand-mining is last-resort-and-a-smell). What is dropped is the \"> Why:\" RATIONALE explaining that encoding it in the required-reading contract makes the duty structurally impossible to miss. Per the approval's own justification (\"provenance prose, not rules\"), dropped rationale is only acceptable if it LANDS in the provenance companion — it currently does not. Flagged as a PROVENANCE GAP, not as a lost rule.",
+        "adjudicated_by": "Alpha-2 session 8aa7b984"
+      }
     },
     {
       "key": "70cb2a1af804",
@@ -4351,9 +4454,17 @@
       "imperative": "Pure role-derived probes (lib/adam/adherence-probes.js: sourcing-cadence, vision-monitoring, friction-signaling, propose-only/never-build) emit pass|fail|unknown — FAIL-LOUD: an un-runnable probe is unknown, NEVER a silent pass.",
       "match_score": 0.35,
       "carries_modal": true,
-      "disposition": "NEEDS_DECISION",
+      "disposition": "landed",
       "lexical_coverage": 0.355,
-      "lexical_note": "NOT evidence of deletion — the probe is rewrite-blind (3 of 3 known survivors score invisible). Needs a reader."
+      "survival_basis": {
+        "measure": "semantic adjudication by reading the corrected contract",
+        "reachable_in": [
+          "contract"
+        ],
+        "located_at": "CORRECTED §6 self-adherence loop",
+        "note": "FAIL-LOUD survives verbatim: \"an un-runnable probe is unknown, NEVER a silent pass.\"",
+        "adjudicated_by": "Alpha-2 session 8aa7b984"
+      }
     },
     {
       "key": "8c4d1e435a92",
@@ -4883,5 +4994,13 @@
       "manual": 63,
       "contract+manual": 1
     }
+  },
+  "modal_adjudication": {
+    "ran_at_sd": "SD-LEO-INFRA-ADAM-CONTRACT-READABLE-001",
+    "by": "Alpha-2 session 8aa7b984, 2026-07-31",
+    "method": "READ the corrected contract per entry. The lexical probe is rewrite-blind (measured 3-of-3), so every one of these was judged by locating the obligation, not by scoring the words.",
+    "adjudicated": 14,
+    "result": "ALL 14 modal-bearing obligations survive and are locatable. ZERO confirmed deletions among them.",
+    "provenance_gap": "1 — the §5f rationale is dropped and lands in neither companion. The obligation itself survives; the explanation does not."
   }
 }
