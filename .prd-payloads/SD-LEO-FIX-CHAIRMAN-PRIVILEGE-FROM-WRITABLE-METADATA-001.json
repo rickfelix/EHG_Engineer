@@ -1,0 +1,284 @@
+{
+  "executive_summary": "The SD reports a chairman privilege escalation in lib/middleware/api-auth.js and asks for three JS lines to be fixed. Measurement over the pooler at PLAN INVERTED that framing, and this PRD is written to the measurement rather than the report. The middleware is the SMALL half: api-auth.js (Express) has ZERO production mounts, and the seventeen pages/api routes the SD names actually gate on lib/middleware/rbac.ts:76, which already reads the trusted app_metadata half. THE LIVE SURFACE IS THE DATABASE. public.fn_is_chairman() is SECURITY DEFINER and its body reads auth.users.raw_user_meta_data->>'role' -- the CLIENT-WRITABLE half -- and it is consumed by 29 RLS POLICIES and 22 FUNCTIONS, including the destructive kill_venture, delete_venture and master_reset_portfolio, and the governance-bearing approve_chairman_decision, reject_chairman_decision, set_global_auto_proceed and is_leo_admin. Any authenticated principal can call auth.updateUser({data:{role:'chairman'}}) on their own account and gain chairman across all 51 consumers. A second DB site, policy archetype_benchmarks_admin (roles={public}, cmd=ALL), reads the same column. This PRD closes all four derivation points -- one DB function, one RLS policy, and two JS modules -- by moving every chairman derivation onto the service-role-only app_metadata / raw_app_meta_data half. It does not argue from vendor documentation: it copies two safe siblings that are already live in this system, public.is_chairman_role() (raw_app_meta_data, SECURITY DEFINER, 6 policy consumers) and lib/middleware/rbac.ts:76. The flip was proven non-breaking BEFORE being planned: of 4 total users, the one live privileged account already carries app_metadata.role='admin' and survives, and the only account that loses privilege is the ehg.dev account already slated for deletion. Verification is a negative test that must FAIL against current main.",
+  "functional_requirements": [
+    {
+      "id": "FR-1",
+      "title": "Flip public.fn_is_chairman() onto the service-role-only metadata half",
+      "description": "public.fn_is_chairman() is the single highest-blast-radius derivation point in the system. Its live body is SECURITY DEFINER, SET search_path TO 'public', zero-arg, and reads auth.users.raw_user_meta_data->>'role' IN ('chairman','admin','owner') OR raw_user_meta_data->'roles' @> '\"chairman\"'::jsonb. raw_user_meta_data is the half a client rewrites at will via auth.updateUser({data:{...}}), so the function grants chairman to anyone who asks for it. Replace the body via CREATE OR REPLACE so that BOTH clauses read raw_app_meta_data instead, which only the service role can write. The signature MUST remain zero-arg and the function MUST remain SECURITY DEFINER with its search_path pin: 29 RLS policies and 22 other functions call it by that exact signature, and changing it would drop them. The accepted role vocabulary ('chairman','admin','owner') and the roles-array clause are preserved verbatim so the ONLY semantic change is which metadata half is trusted. Template already live in this database: public.is_chairman_role().",
+      "priority": "critical",
+      "acceptance_criteria": [
+        "pg_get_functiondef(public.fn_is_chairman) contains 'raw_app_meta_data' and contains ZERO occurrences of 'raw_user_meta_data'",
+        "public.fn_is_chairman still has exactly one overload and it takes zero arguments (pg_proc: pg_get_function_identity_arguments returns empty string)",
+        "public.fn_is_chairman is still prosecdef=true and still pins search_path",
+        "Consumer count is unchanged after apply: 29 policies and 22 functions still reference fn_is_chairman (no dependency was dropped by the replace)",
+        "The accepted role set is still chairman/admin/owner and the roles-array clause is still present, now sourced from raw_app_meta_data"
+      ]
+    },
+    {
+      "id": "FR-2",
+      "title": "Rewrite RLS policy archetype_benchmarks_admin off the client-writable column",
+      "description": "Policy archetype_benchmarks_admin on public.archetype_benchmarks is roles={public} (which in Postgres means ALL roles, including anon) and cmd=ALL (SELECT/INSERT/UPDATE/DELETE). Its USING expression inlines the same defect rather than calling a helper: EXISTS(SELECT 1 FROM auth.users WHERE auth.uid()=users.id AND users.raw_user_meta_data->>'role' = ANY(ARRAY['admin','chairman'])). The table has RLS enabled but grants UPDATE to both anon and authenticated, so a self-promoted principal gets full write. Replace the USING expression so it derives from the trusted half -- preferably by calling public.fn_is_chairman() (post-FR-1) so this policy can never drift away from the canonical derivation again, which is exactly how this inline copy came to exist. This is the ONE policy of 1582 that reads the client-writable half; the fix takes that population to zero.",
+      "priority": "critical",
+      "acceptance_criteria": [
+        "Repo-wide catalog sweep returns ZERO policies whose qual or with_check references raw_user_meta_data or user_metadata (baseline is exactly 1 of 1582)",
+        "Policy archetype_benchmarks_admin still exists, still cmd=ALL, and its USING expression derives from fn_is_chairman() or raw_app_meta_data",
+        "The pre-existing permissive policy archetype_benchmarks_select (cmd=SELECT, USING true) is left untouched -- it is out of scope and changing it is a separate access decision"
+      ]
+    },
+    {
+      "id": "FR-3",
+      "title": "Close all three derivation points in lib/middleware/api-auth.js and repair the permanently-failing RPC call",
+      "description": "lib/middleware/api-auth.js derives chairman from the client-writable half at three points: :93 role: user.user_metadata?.role || 'user', :94 isChairman: user.user_metadata?.role === 'chairman', and :151 the same read inside the EXPORTED isChairman() helper. requireChairman() at :122 is the enforcement point that consumes it. A fix scoped to the reported lines 93-94 would leave :151 intact -- it sits 57 lines below, in a differently-named export, and is exactly what survives a patch aimed at the reported symptom. All three move to app_metadata. Additionally repair the latent defect that makes :151 load-bearing: :144 calls rpc('fn_is_chairman', { user_uuid: userId }), but the live function has exactly ONE signature and it is ZERO-ARG, so every invocation returns PGRST202 'Could not find the function public.fn_is_chairman(user_uuid)'. The if (error) branch at :148 is therefore ALWAYS true and :151 is not a rare fallback but the ONLY path. Because this helper is handed an explicit userId together with a service-role client -- a context in which auth.uid() is NULL and so the zero-arg RPC could not answer for that user anyway -- the RPC is the wrong instrument here. Replace it with the admin lookup that already exists on the next line (supabase.auth.admin.getUserById(userId)) reading app_metadata.role, and drop the dead RPC call rather than leaving a call that fails on every request.",
+      "priority": "high",
+      "acceptance_criteria": [
+        "grep for user_metadata across lib/ and server/ returns ZERO privilege derivations (lib/mock/simulation-supabase-client.js:241, an empty fixture literal, is the only permitted remaining match)",
+        "A unit test exercises the exported isChairman() helper at :151 SPECIFICALLY and fails if that line reads the client-writable half",
+        "api-auth.js no longer issues rpc('fn_is_chairman', { user_uuid }) -- the call that returned PGRST202 on 100% of invocations is gone, not merely bypassed",
+        "requireChairman() at :122 still refuses when isChairman is false and still admits isServiceRole"
+      ]
+    },
+    {
+      "id": "FR-4",
+      "title": "Fix server/routes/protocol-lint.js and rewrite the test that pins the vulnerability",
+      "description": "server/routes/protocol-lint.js:42 reads const role = req.user?.user_metadata?.role ?? req.user?.role. This is the ONLY LIVE-MOUNTED site in the whole finding: it is mounted at server/index.js:296 as /api/admin/protocol-lint, and server/middleware/auth.js:79 assigns the RAW Supabase user object to req.user, so req.user.user_metadata.role is literally the client-writable claim with nothing in between. Its trust model genuinely differs from api-auth (req.isAdmin, set by an internal API key, short-circuits at :41), so the api-auth fix does NOT transfer verbatim -- the internal-API-key short-circuit is legitimate and must be preserved. Remove only the user_metadata read. CRITICALLY, server/routes/protocol-lint.test.js:47 contains a test named 'allows user with user_metadata.role=chairman' which ASSERTS THE VULNERABILITY IS THE INTENDED BEHAVIOR; it will fail the moment the route is fixed, and a careless EXEC would 'repair' the fix to satisfy the test. That test must be rewritten to assert the opposite. The sibling case at :65 ('rejects user with role=viewer') also feeds role via user_metadata and must be re-expressed on the supported shape so it keeps testing rejection rather than silently passing for the new reason.",
+      "priority": "high",
+      "acceptance_criteria": [
+        "server/routes/protocol-lint.js:42 no longer reads req.user.user_metadata",
+        "The req.isAdmin internal-API-key short-circuit at :41 is preserved and still covered by its existing passing test",
+        "The test formerly named 'allows user with user_metadata.role=chairman' now asserts a 403 NOT_ADMIN for a principal whose role appears ONLY in user_metadata",
+        "The ':65 viewer' rejection test still asserts 403 NOT_ADMIN and does so via the supported role shape, not via user_metadata"
+      ]
+    },
+    {
+      "id": "FR-5",
+      "title": "Negative self-promotion test that must FAIL against current main",
+      "description": "A fix in this area is easy to make LOOK correct: a test that only checks that a real chairman still gets through would pass against the vulnerable code and prove nothing. The required test is adversarial and directional. Authenticate as a NON-chairman principal, have that principal call auth.updateUser({ data: { role: 'chairman' } }) on its OWN account -- the exact move the vulnerability permits -- then exercise a gated surface and assert REFUSAL. Coverage must include the DB layer, because that is where the real exposure lives: after self-promotion, assert that fn_is_chairman() returns FALSE for that principal and that a read/write against an fn_is_chairman-gated table is denied by RLS. The test must be demonstrated RED against current main before the fix and GREEN after; a test that has never been observed failing has not been shown to test anything.",
+      "priority": "critical",
+      "acceptance_criteria": [
+        "The negative test is executed against UNFIXED code and observed to FAIL, and that failing output is captured as evidence",
+        "The same test passes after the fix",
+        "The test asserts at the DB layer that fn_is_chairman() is FALSE for a principal who set role=chairman in their own user_metadata",
+        "The test asserts a gated surface refuses that self-promoted principal, not merely that a boolean flipped"
+      ]
+    },
+    {
+      "id": "FR-6",
+      "title": "Record the RLS third-surface resolution as measurement, not assumption",
+      "description": "The SD flags an unresolved third surface: RLS policies on agent_configs / prompt_templates using a jwt user_metadata expression, and predicts by operator precedence that the expression is invalid SQL ((auth.jwt()->>'user_metadata'->'role') is text -> unknown) and therefore that the policies were never created. It instructs that ABSENT be read as CONFIRMING the parse and PRESENT as a real and worse surface. This was resolved live at PLAN and the result must be recorded in the PRD either way rather than quietly dropped. MEASURED: public.agent_configs DOES NOT EXIST in the live schema (the SD's claim that both tables exist is refuted). public.prompt_templates exists with RLS enabled and exactly 2 policies, neither of which references any metadata half ('Allow service_role to manage prompt_templates' cmd=ALL USING true, and 'Anon read prompt_templates' cmd=SELECT USING true). The predicted-invalid jwt user_metadata expression is therefore ABSENT from live policy, confirming the operator-precedence parse. The only place that expression survives is scripts/archive/one-time/, which is archived and never executed. No code change is required for this FR; it is a recorded finding with a durable assertion so the question is not re-opened from scratch.",
+      "priority": "medium",
+      "acceptance_criteria": [
+        "PRD and EXEC evidence record that agent_configs is ABSENT from the live schema, refuting the SD's 'both tables exist' claim",
+        "PRD and EXEC evidence record prompt_templates' 2 live policies verbatim and that neither reads a metadata half",
+        "The catalog sweep from FR-2 is the durable assertion that keeps this closed, so a future reintroduction of the idiom is caught by a test rather than by another investigation"
+      ]
+    }
+  ],
+  "technical_requirements": [
+    {
+      "id": "TR-1",
+      "title": "Signature-preserving DDL only",
+      "description": "fn_is_chairman must be changed with CREATE OR REPLACE FUNCTION, never DROP + CREATE. A DROP would cascade-drop or break the 29 policies and 22 functions that depend on it. The zero-arg signature, SECURITY DEFINER flag and search_path pin are all part of the contract with those consumers."
+    },
+    {
+      "id": "TR-2",
+      "title": "DDL is chairman-gated and applied through the documented path",
+      "description": "FR-1 and FR-2 are DDL against a SECURITY DEFINER function and an RLS policy, affecting 51 consumers. The migration lands in supabase/migrations/ following the live YYYYMMDD_name.sql convention and is applied via the gated path (npm run migration:apply / scripts/apply-migration.js), never by ad-hoc SQL over the pooler. Chairman gating for DDL applies; the scope inversion and the DDL nature were signalled to the coordinator at PLAN (signal e4bb8d83) rather than discovered at apply time."
+    },
+    {
+      "id": "TR-3",
+      "title": "Reuse the safe siblings already live in this system",
+      "description": "Do not invent an idiom. public.is_chairman_role() (LANGUAGE sql, STABLE, SECURITY DEFINER, SET search_path TO '', reads raw_app_meta_data, already consumed by 6 policies) is the DB template. lib/middleware/rbac.ts:76 (user.app_metadata?.role, under the comment 'Check JWT app_metadata first') is the JS template. Citing live siblings rather than vendor docs is what makes this defect legible as a same-name/different-meaning collision between two metadata halves."
+    },
+    {
+      "id": "TR-4",
+      "title": "No behavior change beyond the trusted half",
+      "description": "The accepted role vocabulary, the roles-array clause, the internal-API-key short-circuit in protocol-lint, and requireChairman's isServiceRole exemption are all preserved exactly. The single semantic change delivered by this SD is WHICH metadata half is trusted. Any other behavior delta is out of scope and must be raised rather than folded in silently."
+    }
+  ],
+  "test_scenarios": [
+    {
+      "id": "TS-1",
+      "scenario": "Self-promoted principal is refused at the DB layer (the negative test, FR-5)",
+      "type": "integration",
+      "expected": "A non-chairman calls auth.updateUser({data:{role:'chairman'}}) on its own account; fn_is_chairman() returns FALSE for it and an fn_is_chairman-gated table denies it. Observed RED against current main before the fix."
+    },
+    {
+      "id": "TS-2",
+      "scenario": "fn_is_chairman still admits the legitimate chairman after the flip",
+      "type": "integration",
+      "expected": "The account carrying app_metadata.role='admin' (69c8aa7a..., the live privileged account) still resolves TRUE, proving the flip closed the hole without a lockout."
+    },
+    {
+      "id": "TS-3",
+      "scenario": "Catalog sweep: no privilege derivation reads the client-writable half",
+      "type": "integration",
+      "expected": "Zero policies of ~1582 reference raw_user_meta_data or user_metadata (baseline 1), and zero functions do (baseline 1: fn_is_chairman). This is the durable assertion that keeps FR-2 and FR-6 closed."
+    },
+    {
+      "id": "TS-4",
+      "scenario": "fn_is_chairman dependency integrity survives CREATE OR REPLACE",
+      "type": "integration",
+      "expected": "After apply, 29 policy consumers and 22 function consumers still reference fn_is_chairman and the function still has exactly one zero-arg overload."
+    },
+    {
+      "id": "TS-5",
+      "scenario": "api-auth exported isChairman() helper reads the trusted half (the :151 path)",
+      "type": "unit",
+      "expected": "Given a user whose role appears only in user_metadata, isChairman() returns false; given app_metadata.role='chairman', it returns true. Targets the derivation a line-scoped fix would miss."
+    },
+    {
+      "id": "TS-6",
+      "scenario": "protocol-lint refuses a principal whose role is only in user_metadata",
+      "type": "unit",
+      "expected": "403 NOT_ADMIN. This is the inversion of the existing test at protocol-lint.test.js:47, which currently asserts the opposite and pins the vulnerability."
+    },
+    {
+      "id": "TS-7",
+      "scenario": "protocol-lint internal-API-key short-circuit is preserved",
+      "type": "unit",
+      "expected": "req.isAdmin=true still calls next() with no status set -- the legitimate trust path is not collateral damage of the fix."
+    }
+  ],
+  "acceptance_criteria": [
+    "Zero chairman/admin privilege derivations anywhere in the system read the client-writable metadata half: verified across pg_policies (0 of ~1582), pg_proc (0 functions), lib/ and server/ (0 derivations)",
+    "public.fn_is_chairman() reads raw_app_meta_data, keeps its zero-arg SECURITY DEFINER signature, and all 29 policy + 22 function consumers still resolve after apply",
+    "The negative self-promotion test was observed FAILING against unfixed code and passes after the fix, with both outputs captured as evidence",
+    "server/routes/protocol-lint.test.js no longer contains a test asserting that user_metadata.role=chairman is admitted",
+    "The legitimate privileged account still authenticates as chairman after the flip (no lockout), demonstrated rather than asserted",
+    "The agent_configs / prompt_templates third surface is recorded as resolved by live measurement, including the refutation that agent_configs exists"
+  ],
+  "risks": [
+    {
+      "risk": "Flipping fn_is_chairman locks out the real chairman, taking governance offline",
+      "mitigation": "MEASURED AT PLAN, NOT ASSUMED: auth.users holds 4 accounts total. The live privileged account (69c8aa7a..., gmail.com, last sign-in 2026-07-27) already carries app_metadata.role='admin' and SURVIVES the flip. The only account that loses privilege is 48d7ec58...@ehg.dev, which holds role only in user_metadata and is already slated for deletion per feedback d11b99a0 -- losing its privilege is the INTENT of this SD, not a regression. The audit script is re-run immediately before and after apply to confirm the survivor set did not drift in between.",
+      "severity": "low"
+    },
+    {
+      "risk": "CREATE OR REPLACE drops or breaks the 51 dependent policies and functions",
+      "mitigation": "Signature-preserving replace only (TR-1); never DROP + CREATE. TS-4 asserts the consumer counts (29 policies, 22 functions) are unchanged after apply, so a silent dependency loss fails the test rather than shipping.",
+      "severity": "medium"
+    },
+    {
+      "risk": "EXEC 'fixes' the failing pinned test back toward the vulnerable behavior",
+      "mitigation": "FR-4 names protocol-lint.test.js:47 explicitly as a test that encodes the defect as intended behavior and requires it to be INVERTED. Called out in the PRD precisely because the natural EXEC reflex on a red test is to satisfy it.",
+      "severity": "medium"
+    },
+    {
+      "risk": "The 'owner' role has no holder in the trusted half, so an owner-gated path silently admits nobody after the flip",
+      "mitigation": "Measured: zero accounts carry raw_app_meta_data->>'role'='owner' (the only 'owner' is the ehg.dev account being removed). The role vocabulary is preserved in the function so the path remains available; provisioning an owner requires a service-role write to app_metadata, which is the correct and intended cost.",
+      "severity": "low"
+    },
+    {
+      "risk": "DDL applied outside the gated path or without chairman awareness",
+      "mitigation": "TR-2 pins the migration to supabase/migrations/ and the npm run migration:apply path. The DDL nature and the 51-consumer blast radius were signalled to the coordinator at PLAN (signal e4bb8d83) before any change was authored.",
+      "severity": "medium"
+    }
+  ],
+  "integration_operationalization": {
+    "consumers": [
+      "29 RLS policies calling fn_is_chairman() across chairman_decisions, chairman_directives, chairman_constraints, chairman_constraints_proposals, governed_change_proposals, sd_proposals, venture_gvos_profile, venture_revenue_entries, venture_artifacts, venture_stage_work, ventures_kill_log, legal_templates, public_portfolio, agents, agent_registry, tool_usage_ledger, gvos_adherence_logs, ai_gen_provenance, ai_gen_dwell_tracking, sms_approved_spend_ledger, sms_decision_class_whitelist, chairman_switchon_policy, fable_suitability_map",
+      "22 SQL functions calling fn_is_chairman(), including the destructive kill_venture, delete_venture, master_reset_portfolio and the governance-bearing approve_chairman_decision, reject_chairman_decision, set_global_auto_proceed, is_leo_admin, advance_venture_stage, log_stage_advance_override, park_venture_decision",
+      "public.archetype_benchmarks via policy archetype_benchmarks_admin (roles={public}, cmd=ALL)",
+      "HTTP route /api/admin/protocol-lint, mounted at server/index.js:296, gated by requireAdminRole in server/routes/protocol-lint.js",
+      "lib/middleware/api-auth.js consumers: requireChairman() at :122 and the exported isChairman() helper. NOTE the seventeen pages/api routes named in the SD are NOT consumers of this module -- they import lib/middleware/api-auth.TS and gate on lib/middleware/rbac.ts:76, which already reads the safe half"
+    ],
+    "dependencies": [
+      "{ name: 'auth.users.raw_app_meta_data', direction: 'upstream', failure_mode: 'If a legitimate principal has no role in the trusted half they lose privilege at apply time. Measured: the one live privileged account already carries app_metadata.role=admin, so the survivor set is non-empty.' }",
+      "{ name: 'public.fn_is_chairman()', direction: 'downstream', failure_mode: 'Signature change or DROP would break 51 consumers. Contained by signature-preserving CREATE OR REPLACE and the TS-4 consumer-count assertion.' }",
+      "{ name: 'Supabase auth.updateUser({data}) writes raw_user_meta_data', direction: 'upstream', failure_mode: 'This is the attack primitive itself. It cannot be disabled, which is exactly why derivation must move to the half the client cannot write.' }",
+      "{ name: 'server/middleware/auth.js:79 assigns the raw Supabase user to req.user', direction: 'upstream', failure_mode: 'Passes the client-writable claim through untouched to protocol-lint. Fixed at the consumer (FR-4); the assignment itself is left intact so other consumers are unaffected.' }",
+      "{ name: 'public.is_chairman_role()', direction: 'reference', failure_mode: 'None -- read-only template. Its 6 existing policy consumers are untouched by this SD.' }"
+    ],
+    "data_contracts": [
+      "auth.users.raw_app_meta_data->>'role' becomes the sole trusted source of chairman/admin/owner across the system; raw_user_meta_data->>'role' becomes non-authoritative everywhere",
+      "public.fn_is_chairman() -> boolean, zero-arg, SECURITY DEFINER: signature is a hard contract with 51 consumers and does not change",
+      "No table schema change, no column added or dropped, no data migration to user rows",
+      "Policy archetype_benchmarks_admin: name, table, roles and cmd all unchanged; only the USING expression changes"
+    ],
+    "runtime_config": [
+      "No new env vars and no feature flags -- a privilege-escalation fix must not be flag-gated, since a flag would leave the vulnerable path reachable in one configuration",
+      "Deployment sequence: apply the migration (FR-1, FR-2) FIRST, then ship the JS changes (FR-3, FR-4). This order is safe in both directions because the JS sites have no production mounts, so no window exists in which the app depends on a not-yet-applied function",
+      "DDL applied via npm run migration:apply (scripts/apply-migration.js); chairman-gated"
+    ],
+    "observability_rollout": [
+      "Pre-apply and post-apply runs of the catalog audit (scripts/one-off/audit-chairman-db-surface*.cjs) are the primary evidence: policy count reading the client-writable half must go 1 -> 0, function count 1 -> 0",
+      "Consumer-count check (29 policies / 22 functions) run immediately after apply to prove no dependency was lost",
+      "The negative test captured RED before and GREEN after is the acceptance artifact",
+      "Rollback: re-apply the prior function body via CREATE OR REPLACE (signature-preserving, so rollback carries the same zero-dependency-risk profile as the forward change) and revert the JS commit. Rollback restores the vulnerability and is therefore an emergency-only path, justified solely by an unexpected chairman lockout -- the exact scenario measurement says will not occur.",
+      "Post-apply, confirm the legitimate chairman can still reach a gated surface before closing the SD"
+    ]
+  },
+  "system_architecture": {
+    "summary": "Move every chairman/admin privilege derivation from the client-writable metadata half (raw_user_meta_data / user_metadata) to the service-role-only half (raw_app_meta_data / app_metadata) at all four live derivation points, reusing two safe siblings already running in this system.",
+    "components": [
+      {
+        "name": "supabase/migrations/20260731_fix_chairman_privilege_app_metadata.sql",
+        "change": "NEW - CREATE OR REPLACE FUNCTION public.fn_is_chairman() onto raw_app_meta_data (signature-preserving), plus ALTER/CREATE OR REPLACE of policy archetype_benchmarks_admin off the client-writable column"
+      },
+      {
+        "name": "lib/middleware/api-auth.js",
+        "change": "Lines 93, 94 and 151 move to app_metadata; the permanently-failing rpc('fn_is_chairman', { user_uuid }) call at :144 is removed in favour of the admin lookup that already follows it"
+      },
+      {
+        "name": "server/routes/protocol-lint.js",
+        "change": "Line 42 stops reading req.user.user_metadata; the req.isAdmin internal-API-key short-circuit at :41 is preserved"
+      },
+      {
+        "name": "server/routes/protocol-lint.test.js",
+        "change": "The test at :47 that asserts user_metadata.role=chairman is ADMITTED is inverted to assert refusal; the :65 viewer case is re-expressed on the supported role shape"
+      },
+      {
+        "name": "tests/ - negative self-promotion test (FR-5)",
+        "change": "NEW - adversarial test: self-promote via user_metadata, then assert refusal at the DB layer and at a gated surface. Must be demonstrated RED against current main."
+      },
+      {
+        "name": "scripts/one-off/audit-chairman-db-surface*.cjs",
+        "change": "NEW (authored at PLAN) - read-only catalog audit that produced the evidence in this PRD and serves as the pre/post-apply verification instrument"
+      }
+    ]
+  },
+  "implementation_approach": {
+    "summary": "Fix the database first because that is where the live exposure is, then the two JS modules, then prove it with a test that fails against today's code.",
+    "steps": [
+      "Capture the RED baseline: run the negative self-promotion test against current main and record the failure output. A test never observed failing proves nothing (FR-5).",
+      "Re-run scripts/one-off/audit-chairman-db-surface.cjs and -3.cjs to confirm the survivor set has not drifted since PLAN (4 users; one app_metadata-carrying survivor) immediately before authoring the migration.",
+      "Author supabase/migrations/20260731_fix_chairman_privilege_app_metadata.sql: CREATE OR REPLACE fn_is_chairman() onto raw_app_meta_data preserving the zero-arg SECURITY DEFINER signature, role vocabulary and roles-array clause; rewrite policy archetype_benchmarks_admin's USING to call fn_is_chairman().",
+      "Apply via npm run migration:apply (gated path), then immediately assert consumer integrity: 29 policy + 22 function consumers still resolve, one zero-arg overload remains.",
+      "Fix lib/middleware/api-auth.js :93, :94, :151 to app_metadata and delete the dead rpc('fn_is_chairman', { user_uuid }) call at :144.",
+      "Fix server/routes/protocol-lint.js:42, preserving the req.isAdmin short-circuit.",
+      "INVERT server/routes/protocol-lint.test.js:47 so it asserts refusal, and re-express the :65 viewer case on the supported shape. Do not satisfy the old assertion.",
+      "Add the FR-5 negative test and the TS-3 catalog sweep assertion; run the full negative test GREEN and capture both outputs as paired evidence.",
+      "Confirm the legitimate chairman still reaches a gated surface post-apply before handing off."
+    ]
+  },
+  "smoke_test_steps": [
+    {
+      "step_number": 1,
+      "instruction": "node scripts/one-off/audit-chairman-db-surface.cjs",
+      "expected_outcome": "Section 2 reports raw_user_meta_data = 0 (baseline was 1 of 1582) and section 1 shows fn_is_chairman's body containing raw_app_meta_data with no raw_user_meta_data"
+    },
+    {
+      "step_number": 2,
+      "instruction": "node scripts/one-off/audit-chairman-db-surface-2.cjs",
+      "expected_outcome": "Section 5 reports 0 functions reading raw_user_meta_data (baseline 1); section 6 still reports 29 policy consumers and 22 function consumers of fn_is_chairman, proving no dependency was dropped"
+    },
+    {
+      "step_number": 3,
+      "instruction": "npm run test:unit -- server/routes/protocol-lint.test.js",
+      "expected_outcome": "A principal whose role appears only in user_metadata receives 403 NOT_ADMIN; the req.isAdmin internal-API-key test still passes"
+    },
+    {
+      "step_number": 4,
+      "instruction": "Run the FR-5 negative test: authenticate a non-chairman, call auth.updateUser({data:{role:'chairman'}}) on that account, then call fn_is_chairman() and hit a gated table",
+      "expected_outcome": "fn_is_chairman() returns FALSE and the gated table denies the request. The identical run against pre-fix code returned TRUE and allowed it."
+    },
+    {
+      "step_number": 5,
+      "instruction": "Verify the legitimate privileged account (app_metadata.role='admin') still resolves chairman and reaches a gated surface",
+      "expected_outcome": "Access granted -- the fix closed the escalation without a lockout"
+    }
+  ],
+  "metadata": {
+    "sd_key": "SD-LEO-FIX-CHAIRMAN-PRIVILEGE-FROM-WRITABLE-METADATA-001"
+  }
+}
