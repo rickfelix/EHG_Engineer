@@ -83,31 +83,72 @@ describe('adam-register contract-read verification', () => {
     expect(contractReadBanner(c)).toMatch(/PARTIAL/);
   });
 
-  it('accepts the legacy protocolFilesRead array as evidence, but of UNKNOWN completeness', () => {
-    // BEHAVIOUR CHANGED DELIBERATELY — SD-LEO-INFRA-ADAM-CONTRACT-READABLE-001 FR-0.
-    // The legacy array records only THAT the file was read, never how much of it. Previously that
-    // earned full non-partial credit and silenced the banner, which let a truncated read of an
-    // over-cap contract launder itself into "read in full". Absence of a partial flag is not
-    // evidence of a complete read. Credit stands; completeness is now reported as unknown.
+  // ── Legacy protocolFilesRead array: credit is CONDITIONED ON SIZE ──────────────────
+  // These two cases were one test asserting "legacy array always means UNKNOWN completeness"
+  // (SD-LEO-INFRA-ADAM-CONTRACT-READABLE-001 FR-0). That assertion did not survive review by the
+  // sibling SD-LEO-INFRA-ROLE-CONTRACT-READ-GATE-001, and it was right to lose: marking a legacy
+  // read of a SMALL contract partial fires a warning that can never be cleared, and a warning that
+  // always fires gets demoted to noise — trading a false positive for a false negative is not a fix.
+  // The invariant that actually matters is preserved below, and it is the over-cap case.
+
+  it('credits a legacy-array read of a contract that fits in ONE Read as complete', () => {
     fs.writeFileSync(path.join(tmp, CONTRACT_FILE), '# contract');
     writeState({ protocolFilesRead: [CONTRACT_FILE] });
     const c = checkContractRead(tmp);
     expect(c.contract_read).toBe(true);
+    expect(c.contract_read_partial).toBe(false);
+    expect(c.contract_read_basis).toBe('legacy_array_single_read_safe');
+    expect(contractReadBanner(c)).toBeNull();
+  });
+
+  it('refuses to call a legacy-array read of an OVER-CAP contract complete — it cannot know', () => {
+    // THE CASE THIS SD EXISTS FOR. The bare filename list records only THAT the file was read,
+    // never how much, so on a contract past the 25k-token cap it cannot distinguish a full read
+    // from a silently truncated one. Absence of a partial flag is not evidence of a complete read.
+    fs.writeFileSync(path.join(tmp, CONTRACT_FILE), 'x'.repeat(60000)); // > SINGLE_READ_SAFE_BYTES
+    writeState({ protocolFilesRead: [CONTRACT_FILE] });
+    const c = checkContractRead(tmp);
+    expect(c.contract_read).toBe(true);
     expect(c.contract_read_partial).toBe(true);
+    expect(c.contract_read_basis).toBe('legacy_array_no_evidence');
     expect(contractReadBanner(c)).toContain('PARTIAL');
   });
 
-  it('names the token cap — not a phantom offset — when the harness truncated the read', () => {
-    // The old banner told every partial reader to "Read IN FULL (no offset/limit)". On a file
-    // past the cap that instruction is impossible to follow: it describes the exact read that
-    // just silently failed. Advice that cannot succeed is worse than none.
-    fs.writeFileSync(path.join(tmp, CONTRACT_FILE), '# contract');
-    writeState({ protocolFileReadStatus: { [CONTRACT_FILE]: { readCount: 1, lastReadAt: new Date().toISOString(), lastReadWasPartial: true, lastReadTruncatedByHarness: true } } });
+  it('does not promote a harness-truncated read of an over-cap contract to "fully read"', () => {
+    // A no-offset Read of an over-cap file is truncated by the harness: it carries no limit/offset,
+    // so it never enters ranges[], and lastReadWasPartial is false — the read that did the LEAST
+    // used to be recorded complete. With no delivered-line evidence the verdict must fall through
+    // to "cannot say", never to "complete".
+    fs.writeFileSync(path.join(tmp, CONTRACT_FILE), 'x'.repeat(60000));
+    writeState({
+      protocolFileReadStatus: {
+        [CONTRACT_FILE]: { readCount: 1, lastReadAt: new Date().toISOString(), lastReadWasPartial: false },
+      },
+    });
     const c = checkContractRead(tmp);
-    expect(c.contract_read_truncated).toBe(true);
-    const banner = contractReadBanner(c);
-    expect(banner).toContain('TRUNCATED BY THE TOKEN CAP');
-    expect(banner).not.toContain('IN FULL (Read tool, no offset/limit)');
+    expect(c.contract_read).toBe(true);
+    expect(c.contract_read_partial).toBe(true);
+    expect(c.contract_read_basis).toBe('unknown_coverage');
+  });
+
+  it('sees a truncated read through DELIVERED LINES, and reports how much was covered', () => {
+    // The signal that survives: tool_response numLines/totalLines. 176 of 492 lines is the real
+    // measurement taken on CLAUDE_ADAM.md, and it must read as 36% covered, not as a full read.
+    fs.writeFileSync(path.join(tmp, CONTRACT_FILE), 'x'.repeat(60000));
+    writeState({
+      protocolFileReadStatus: {
+        [CONTRACT_FILE]: {
+          readCount: 1,
+          lastReadAt: new Date().toISOString(),
+          lastReadWasPartial: false,
+          lastDelivered: { startLine: 1, numLines: 176, totalLines: 492, coveredWholeFile: false },
+        },
+      },
+    });
+    const c = checkContractRead(tmp);
+    expect(c.contract_read_partial).toBe(true);
+    expect(c.contract_read_basis).toBe('delivered_lines');
+    expect(c.contract_coverage_pct).toBe(36);
   });
 
   it('fails open (not read, no throw) on corrupt session state', () => {
