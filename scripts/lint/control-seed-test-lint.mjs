@@ -38,12 +38,15 @@
  *     diff check below is what closes that: a new control file with no spec entry FAILS.
  *   - It cannot detect a fixture that is not really a defect. A reviewer still has to read
  *     the seed. This gate makes blindness expensive, not impossible.
+ *   - The `seedTest` form (a committed test rather than a fixture) is WEAKER: the gate can
+ *     confirm the test passes but cannot prove it would FAIL if the control were neutered.
+ *     Prefer `fixtures`; `seedTest` exists for controls that cannot be aimed at one.
  *
  * Usage:
  *   node scripts/lint/control-seed-test-lint.mjs [--diff|--all] [--json] [--enforce]
  */
 
-import { execFileSync } from 'node:child_process';
+import { execFileSync, spawnSync } from 'node:child_process';
 import { existsSync, readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { runTrial, VERDICT } from '../audit/control-seed-test.mjs';
@@ -99,6 +102,26 @@ export function evaluate(repoRoot, files, specs, isControlFn = isControl) {
     const src = existsSync(join(repoRoot, rel)) ? readFileSync(join(repoRoot, rel), 'utf8') : '';
     if (!KNOWN_LIMITATION_RE.test(src)) {
       failures.push({ file: rel, reason: 'NO_KNOWN_LIMITATION', detail: 'no KNOWN LIMITATION declaration naming a concrete undetected condition. All fifteen census instances were controls that did not say what they could not see.' });
+    }
+
+    // *** SECOND SEED FORM: A COMMITTED TEST — AND IT IS THE WEAKER ONE ***
+    // Found by running this gate on its own PR: it failed BOTH of my new controls with
+    // NO_SEED_TEST, and it was right to. But their seed-test genuinely exists — it is the
+    // committed TS-5 vitest that plants a blind gauge and asserts refusal. The registry simply
+    // could not express "the seed lives in a test". Some controls (an audit harness whose
+    // certified behaviour is a VERDICT, not a code pattern) cannot be seeded with a fixture file
+    // at all, so refusing that form would force a real seed-test to be reported as absent.
+    // HONEST LIMIT, stated because this path is weaker than the fixture path: the gate runs the
+    // test and requires it to PASS, but it CANNOT prove the test would FAIL if the control were
+    // neutered. A fixture trial proves firing; a passing test only proves the test passes. Prefer
+    // `fixtures`. Use `seedTest` only when the control cannot be aimed at a fixture, and expect a
+    // reviewer to read the test.
+    if (spec.seedTest) {
+      const r = spawnSync('npx', ['vitest', 'run', spec.seedTest], { cwd: repoRoot, encoding: 'utf8', timeout: 300000, shell: process.platform === 'win32' });
+      if (r.status !== 0) {
+        failures.push({ file: rel, reason: 'SEED_TEST_FAILED', detail: `its committed seed-test ${spec.seedTest} does not pass.`, evidence: `${r.stdout || ''}${r.stderr || ''}`.trim().split('\n').filter(Boolean).slice(-3) });
+      }
+      continue;
     }
 
     // FR-3: the seed-test must be OBSERVED FIRING. This is the whole gate.
