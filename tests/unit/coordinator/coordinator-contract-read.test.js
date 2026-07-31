@@ -16,7 +16,7 @@ import {
   COORDINATOR_CONTRACT_FILE,
 } from '../../../scripts/coordinator-startup-check.mjs';
 import { createRequire } from 'node:module';
-const { SINGLE_READ_TOKEN_CAP, SINGLE_READ_TOKEN_BUDGET } = createRequire(import.meta.url)('../../../lib/protocol/contract-read-coverage.cjs');
+const { SINGLE_READ_TOKEN_BUDGET } = createRequire(import.meta.url)('../../../lib/protocol/contract-read-coverage.cjs');
 
 const REPO = process.cwd();
 
