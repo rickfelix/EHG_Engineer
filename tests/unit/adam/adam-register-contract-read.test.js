@@ -22,16 +22,31 @@ describe('adam-register contract-read verification', () => {
   let tmp;
   let prevOverride;
 
+  let prevProjectDir;
+
   beforeEach(() => {
     tmp = fs.mkdtempSync(path.join(os.tmpdir(), 'adam-contract-test-'));
     // Force the session-state resolver onto the legacy path (no session registry)
     prevOverride = process.env.CLAUDE_SESSIONS_DIR_OVERRIDE;
     process.env.CLAUDE_SESSIONS_DIR_OVERRIDE = path.join(tmp, 'no-sessions');
+
+    // PIN THE PROJECT DIR TO THE FIXTURE, OR THESE TESTS READ THE REAL CONTRACT.
+    // checkContractRead falls back to CLAUDE_PROJECT_DIR || process.cwd() for any path it does not
+    // take from its argument. That fallback was harmless while the real CLAUDE_ADAM.md was 106KB —
+    // comfortably over SINGLE_READ_SAFE_BYTES, so an over-cap fixture and the real file agreed.
+    // SD-LEO-INFRA-ADAM-CONTRACT-READABLE-001 shrank it to ~45KB, which is UNDER that threshold, so
+    // the two now disagree and the over-cap cases flip to "fits in one read" wherever the fallback
+    // wins. It passed locally (CLAUDE_PROJECT_DIR set by the harness) and failed in CI (unset) —
+    // an ambient-environment dependency that only became visible once the contract got small.
+    prevProjectDir = process.env.CLAUDE_PROJECT_DIR;
+    process.env.CLAUDE_PROJECT_DIR = tmp;
   });
 
   afterEach(() => {
     if (prevOverride === undefined) delete process.env.CLAUDE_SESSIONS_DIR_OVERRIDE;
     else process.env.CLAUDE_SESSIONS_DIR_OVERRIDE = prevOverride;
+    if (prevProjectDir === undefined) delete process.env.CLAUDE_PROJECT_DIR;
+    else process.env.CLAUDE_PROJECT_DIR = prevProjectDir;
     fs.rmSync(tmp, { recursive: true, force: true });
   });
 
