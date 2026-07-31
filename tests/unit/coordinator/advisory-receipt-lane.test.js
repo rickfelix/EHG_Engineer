@@ -2,7 +2,7 @@
  * SD-LEO-INFRA-WORKER-ESCALATION-WRITE-001 (FR-1) — the ADVISORY lane of the one receipt contract.
  *
  * *** THE CONTRACT THAT EXISTS TO PREVENT SINGLE-LANE REMEDIES WAS ITSELF SINGLE-LANE. ***
- * receipt-ledger.cjs enumerates four lanes (signal, work_assignment, advisory, resolves_files)
+ * receipt-ledger.cjs enumerates the coordination lanes (signal, work_assignment, advisory)
  * precisely so "a remedy scoped to one lane cannot silently leave the others open" — its own words.
  * It shipped with exactly ONE writer (coordinator-ack-signal.cjs). Measured on the live ledger
  * before this change: 4 rows, every one lane='signal'. An advisory answered-rate of zero was
