@@ -251,7 +251,7 @@ function computeConsultSignature(row) {
   if (p.correlation_id) return `corr:${p.correlation_id}`;
   const sd = p.sd_key || p.sd_id || (row && row.target_sd) || '';
   const q = String(p.body || p.question || (row && row.subject) || '');
-  return `hash:${crypto.createHash('sha256').update(`${sd} ${q}`).digest('hex').slice(0, 32)}`;
+  return `hash:${crypto.createHash('sha256').update(`${sd}\u0000${q}`).digest('hex').slice(0, 32)}`;
 }
 
 /**
@@ -302,18 +302,31 @@ async function checkConsultQuota(supabase, { sdKey = null, perSdMax = SOLOMON_PE
       .eq('payload->>oracle', 'true')
       .gte('created_at', since.toISOString())
       .limit(500);
-    if (error) return { allowed: true };
+    // SD-FDBK-INFRA-SOLOMON-SCORECARD-MEASURES-001 FR-1: `available` distinguishes
+    // "the count is real" from "we could not see". Both fail-open branches returned a
+    // BARE { allowed: true } — byte-identical to a genuine quiet day — so a consumer
+    // could not tell a working query from a broken one. D3 scores cost-discipline off
+    // this; without the flag a DB outage would read as perfect compliance, which is the
+    // exact blindness this SD exists to end, reintroduced one layer up. Fail-open
+    // BEHAVIOUR is unchanged (still allowed:true, still never blocks a send).
+    if (error) return { allowed: true, available: false, reason: `quota signal unavailable: ${error.message || 'query error'}` };
     // QF-20260705-488 (adversarial-review W2): an answer's originator CC copy also carries
     // payload.oracle=true — exclude via='cc_originator' rows so a CC'd answer consumes ONE
     // quota slot, not two (the per-day ceiling would otherwise halve in practice).
     const rows = (data || []).filter((r) => !(r.payload && r.payload.via === 'cc_originator'));
-    if (rows.length >= perDayMax) return { allowed: false, reason: `per-day quota reached (${rows.length}/${perDayMax})` };
+    // FR-1: every REAL-SIGNAL return now carries available:true plus the observed count
+    // and the ceiling it was compared against, so a caller can record what the gate WOULD
+    // have refused without the gate refusing anything. `count` is the same post-dedup
+    // number the ceiling test uses — a consumer must never re-derive it independently, or
+    // it silently drops the cc_originator exclusion above and the two volumes diverge.
+    const measured = { available: true, count: rows.length, perDayMax };
+    if (rows.length >= perDayMax) return { allowed: false, ...measured, reason: `per-day quota reached (${rows.length}/${perDayMax})` };
     if (sdKey) {
       const perSd = rows.filter((r) => r.payload && (r.payload.sd_key === sdKey || r.payload.sd_id === sdKey)).length;
-      if (perSd >= perSdMax) return { allowed: false, reason: `per-SD quota reached for ${sdKey} (${perSd}/${perSdMax})` };
+      if (perSd >= perSdMax) return { allowed: false, ...measured, perSd, perSdMax, reason: `per-SD quota reached for ${sdKey} (${perSd}/${perSdMax})` };
     }
-    return { allowed: true };
-  } catch { return { allowed: true }; }
+    return { allowed: true, ...measured };
+  } catch (e) { return { allowed: true, available: false, reason: `quota signal unavailable: ${(e && e.message) || e}` }; }
 }
 
 /**
@@ -1014,6 +1027,29 @@ async function main() {
     console.log(`(dedup) consult ${String(replyTo).slice(0, 8)} already answered — not re-sending.${healed.inserted ? ` (healed missing originator CC -> ${healed.originator})` : ''}`);
     if (healed.error) console.error('WARN: originator CC heal failed (re-run the same --reply-to to retry):', healed.error);
     return;
+  }
+
+  // SD-FDBK-INFRA-SOLOMON-SCORECARD-MEASURES-001 FR-1 — MEASUREMENT ONLY, NOT ENFORCEMENT.
+  //
+  // checkConsultQuota had ZERO production call sites: it was written, exported and unit-tested,
+  // and nothing ever invoked it. That is why the 2026-07-29 cap breach (193 sends) went
+  // unnoticed — not because the gate returned the wrong answer, but because nobody asked it.
+  //
+  // This call asks it and RECORDS THE ANSWER. It deliberately does NOT act on it: no clamp, no
+  // refusal, no new exit path, and every send that succeeded before this line existed still
+  // succeeds. Choosing Solomon's throughput ceiling is a capacity decision for Adam and the
+  // chairman (the code default is 20 while real traffic is 193 and the breach narrative says
+  // 150 — a ~10x spread nobody has ratified), and a scorecard SD must not settle it silently.
+  // What this produces is the one input that decision currently lacks: a real refusal count.
+  //
+  // Relay-class sends (--to eva/ceo) return before this point and stay exempt from the clamp
+  // by design, but they ARE counted upstream in the same session_coordination sweep — so the
+  // volume here is not short by their traffic.
+  const quotaMeasurement = await checkConsultQuota(supabase, { sdKey: process.env.SD_KEY || null });
+  if (!quotaMeasurement.available) {
+    console.error(`WARN: quota signal unavailable — ${quotaMeasurement.reason}. D3 will score UNKNOWN for this send, NOT compliant.`);
+  } else if (!quotaMeasurement.allowed) {
+    console.error(`WARN: quota WOULD HAVE REFUSED this send — ${quotaMeasurement.reason}. Measurement only; the send proceeds.`);
   }
 
   let inserted;

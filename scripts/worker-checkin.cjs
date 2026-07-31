@@ -451,6 +451,25 @@ async function stampDirectedAssignment(sdKey) {
   return mergeMetadataKeys(sdKey, { directed_assignment: true });
 }
 
+/**
+ * SD-LEO-INFRA-WORKER-ESCALATION-WRITE-001 (FR-1): RETURNS A VERDICT, and that is load-bearing now.
+ *
+ * This used to return undefined on every path and swallow every error, which is fine for a
+ * best-effort stamp and NOT fine once a receipt is written beside it: the caller had no success
+ * signal, so it recorded a disposal for an ack that never landed. Proven by SECURITY driving the
+ * real function with a failing UPDATE — acked=0, receipts=1 — and the row, still unacked, is
+ * re-selected next tick and receipts AGAIN, once per check-in, unbounded.
+ *
+ * The adam branch is the sharper half. It deliberately stamps read_at ONLY, leaving acknowledged_at
+ * for genuine Adam processing — so a receipt written off it records DELIVERED as DISPOSED. That is
+ * verbatim the defect this SD exists to remove ("read_at meant rendered on a screen and was read as
+ * answered"), reintroduced inside the new lane. It must report acknowledged:false.
+ *
+ * ADDITIVE: every existing caller ignores the return value, so behaviour is unchanged for them.
+ *
+ * @returns {Promise<{acknowledged: boolean, reason?: string}>} acknowledged=true ONLY when
+ *          acknowledged_at was actually written.
+ */
 async function ackMessage(sb, id, opts = {}) {
   try {
     const now = new Date().toISOString();
@@ -463,10 +482,12 @@ async function ackMessage(sb, id, opts = {}) {
     const isDirective = (kind && ws.DIRECTIVE_KINDS.includes(kind)) || messageType === 'WORK_ASSIGNMENT';
     if (role === 'adam' && isDirective) {
       await sb.from('session_coordination').update({ read_at: now }).eq('id', id);
-      return;
+      // DELIVERED, not disposed — deliberately not an acknowledgement.
+      return { acknowledged: false, reason: 'adam_directive_read_only' };
     }
-    await sb.from('session_coordination').update({ read_at: now, acknowledged_at: now }).eq('id', id);
-  } catch { /* best-effort */ }
+    const { error } = await sb.from('session_coordination').update({ read_at: now, acknowledged_at: now }).eq('id', id) || {};
+    return error ? { acknowledged: false, reason: 'update_error' } : { acknowledged: true };
+  } catch { /* best-effort */ return { acknowledged: false, reason: 'exception' }; }
 }
 
 // SD-LEO-INFRA-WORKER-INBOX-PUSH-DELIVERY-001 (FR-1): is this a coordinator->worker PUSH the

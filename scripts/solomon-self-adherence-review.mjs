@@ -22,7 +22,17 @@ const REPO_ROOT = resolve(__dirname, '..');
 // NOTHING to the DB — its self-scoring was dormant/invisible. We persist each review cycle to the
 // EXISTING feedback table (no new chairman-gated table), mirroring the sibling solomon_self_assessment
 // writer convention (category-scoped, review_key-idempotent, service-role client).
-const SELF_ADHERENCE_CATEGORY = 'solomon_self_adherence';
+// SD-FDBK-INFRA-SOLOMON-SCORECARD-MEASURES-001 FR-4: aligned to the CONTRACT.
+// The authoritative Solomon role contract (leo_protocol_sections id=611) mandates
+// category='solomon_adherence_drift' in three places and never once mentions the
+// spelling this loop used. The contract is the governing representation and the loop
+// is the implementation that drifted, so the loop moves — not the contract.
+// CLAUDE_SOLOMON.md and CLAUDE_ADAM.md already documented the contract spelling as if
+// it were live, so this closes a pre-existing doc/code mismatch rather than inventing
+// a convention. 16 historical rows under the old spelling were backfilled WITH a
+// rename marker (scripts/one-off/backfill-solomon-adherence-category.mjs) so a trend
+// spanning the rename stays continuous and the rewrite stays auditable.
+const SELF_ADHERENCE_CATEGORY = 'solomon_adherence_drift';
 
 /**
  * Pure: build the self-adherence verdict. Reads CLAUDE_SOLOMON.md (if present) and reports which

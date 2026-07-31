@@ -165,7 +165,14 @@ describe('golden snapshot — locks in current Adam behavior before shared-core 
       overall: '29/40 (3.6/5)',
       // Full coverage: the headline is unchanged, and coverage is stated explicitly (FR-1).
       // This assertion stays an exact toEqual so a future field cannot slip in unnoticed.
-      coverage: { scored: 8, total: 8, unmeasured: [] },
+      //
+      // SD-FDBK-INFRA-SOLOMON-SCORECARD-MEASURES-001 FR-3 added `floor` and `below_floor`.
+      // THIS TEST CAUGHT THEM, which is precisely what it was written to do — the golden is
+      // updated deliberately rather than the toEqual being loosened, because loosening it
+      // would discard the guarantee the comment above promises. Adam scores 8 of 8 here, so
+      // it sits well clear of the 0.5 floor; the floor is fleet-wide (role-self-score.cjs is
+      // shared by every role), not Solomon-local.
+      coverage: { scored: 8, total: 8, unmeasured: [], floor: 0.5, below_floor: false },
       dimensions,
       below_threshold: below,
       committed_actions: committedActions,

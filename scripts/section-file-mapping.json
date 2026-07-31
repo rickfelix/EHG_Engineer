@@ -176,6 +176,18 @@
       "role_partnership_contract"
     ]
   },
+  "CLAUDE_ADAM_MANUAL.md": {
+    "description": "Adam MANUAL companion — how-to procedures (SD creation field shapes, migration ceremony steps, gauge inputs). Read at the moment of doing, not at session start. Governed: chairman decision A-GOVERN 2026-07-31.",
+    "sections": [
+      "adam_manual"
+    ]
+  },
+  "CLAUDE_ADAM_PROVENANCE.md": {
+    "description": "Adam PROVENANCE companion — dated rationale, live witnesses, superseded cadences. Every rule in CLAUDE_ADAM.md is in force regardless of whether its history is read. Governed: chairman decision A-GOVERN 2026-07-31.",
+    "sections": [
+      "adam_provenance"
+    ]
+  },
   "CLAUDE_COORDINATOR.md": {
     "description": "Coordinator role contract + SRE charter — fleet supervisor/orchestration role. Loaded by the /coordinator skill or when orienting a fleet-coordinator session, as workers load CLAUDE_CORE.",
     "sections": [

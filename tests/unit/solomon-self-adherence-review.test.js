@@ -70,7 +70,11 @@ describe('persistSelfAdherenceReview (FR-2 — cycle persistence) — fail-soft'
     expect(id).toBe('fb-solomon-1');
     expect(sb._calls.inserted).toHaveLength(1);
     const row = sb._calls.inserted[0];
-    expect(row.category).toBe('solomon_self_adherence');
+    // SD-FDBK-INFRA-SOLOMON-SCORECARD-MEASURES-001 FR-4: the loop now writes the
+    // category the contract (leo_protocol_sections id=611) actually mandates. This
+    // pin previously held the drifted spelling in place, so it had to move WITH the
+    // code rather than be relaxed.
+    expect(row.category).toBe('solomon_adherence_drift');
     expect(row.type).toBe('enhancement');
     expect(row.status).toBe('resolved');
     expect(row.metadata.ok).toBe(true);
