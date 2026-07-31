@@ -25,6 +25,10 @@ const path = require('path');
 const fs = require('fs');
 const core = require('../lib/governance/role-self-score.cjs');
 const { SOLOMON_CONFIG } = require('../lib/solomon/self-score-config.cjs');
+// SD-FDBK-INFRA-SOLOMON-SCORECARD-MEASURES-001 FR-2: D3's volume signal. Imported from the
+// advisory rather than re-implemented so D3 counts the SAME post-dedup rows the send path
+// measures — an independent query would drop the cc_originator exclusion and diverge.
+const { checkConsultQuota } = require('./solomon-advisory.cjs');
 
 // SD-LEO-INFRA-COUNT-TRUNCATION-DISCIPLINE-001 FR-6 batch 9 — claude_sessions grows unbounded
 // (every session ever run); the D1 solomon-claim-violation count would silently undercount past
@@ -84,8 +88,39 @@ async function gatherSignals(sb) {
 
   // D2 (unbiased-perspective), D4 (judgment quality), D5 (systemic hand-off accuracy) require
   // reading verdict/consult reasoning content, not a count -- left undefined (inconclusive).
-  // D3 (silence/cost-discipline quota breaches) has no durable quota-ledger table yet -- left
-  // undefined rather than querying a table that doesn't exist.
+
+  // D3 (silence/cost-discipline): SD-FDBK-INFRA-SOLOMON-SCORECARD-MEASURES-001 FR-2.
+  //
+  // D3 was the ONLY unmeasured dimension and the ONLY one that actually breached
+  // (2026-07-29, 193 sends against the cap). It is still true that no durable
+  // quota-ledger TABLE exists -- but a live count over the same rows checkConsultQuota
+  // already sweeps needs no new table, so "no table" was never a reason to score blind.
+  //
+  // THE THREE-STATE CONTRACT IS THE POINT, not the number. checkConsultQuota is
+  // fail-open in two places; before FR-1 it returned a bare { allowed: true } for BOTH
+  // "quiet day" and "the query blew up". Consuming that naively would make a DB outage
+  // score as perfect cost-discipline -- this SD's own defect one layer up. So:
+  //   signal unavailable -> null  -> D3 scores INCONCLUSIVE and lowers coverage
+  //   real count, 0 over -> 0     -> D3 scores passing, honestly
+  //   real count, N over -> N     -> D3 scores down, honestly
+  //
+  // Breaches are counted as sends BEYOND the ceiling -- i.e. exactly what the gate would
+  // have refused had anything been calling it. Reusing checkConsultQuota's own count is
+  // deliberate: re-querying independently would drop its cc_originator dedup exclusion and
+  // D3's volume would silently diverge from the volume FR-1 records at send time.
+  signals.quota_breach_count = await (async () => {
+    try {
+      const q = await checkConsultQuota(sb);
+      if (!q || q.available !== true) return null; // UNKNOWN -- never a passing 0
+      const cap = Number(q.perDayMax);
+      const count = Number(q.count);
+      if (!Number.isFinite(cap) || !Number.isFinite(count)) return null;
+      return Math.max(0, count - cap);
+    } catch {
+      return null;
+    }
+  })();
+
   return signals;
 }
 
