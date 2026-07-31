@@ -31,7 +31,7 @@ const { resolveStateReadPath } = _createRequireQF342(import.meta.url)('./hooks/l
 // really read" and ONE definition of the single-read bound, shared with adam-register.cjs and
 // solomon-register.cjs. Importing the bound rather than restating it is the difference between an
 // arming condition and an arming CLAIM — see roleArmingStates below.
-const { contractReadVerdict, contractLineCount, contractSizeBytes, SINGLE_READ_SAFE_BYTES } =
+const { contractReadVerdict, contractLineCount, singleReadFit, SINGLE_READ_TOKEN_CAP } =
   _createRequireQF342(import.meta.url)('../lib/protocol/contract-read-coverage.cjs');
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
@@ -543,7 +543,7 @@ export function renderFreshness(repoRoot = REPO_ROOT) {
  */
 export const COORDINATOR_CONTRACT_FILE = 'CLAUDE_COORDINATOR.md';
 
-export function checkCoordinatorContractRead(repoRoot = REPO_ROOT, stateReader = null) {
+export function checkCoordinatorContractRead(repoRoot = REPO_ROOT, stateReader = null, opts = {}) {
   const result = {
     contract_file: COORDINATOR_CONTRACT_FILE,
     contract_exists: false,
@@ -565,7 +565,7 @@ export function checkCoordinatorContractRead(repoRoot = REPO_ROOT, stateReader =
       const verdict = contractReadVerdict(
         status,
         contractLineCount(repoRoot, COORDINATOR_CONTRACT_FILE),
-        { sizeBytes: contractSizeBytes(repoRoot, COORDINATOR_CONTRACT_FILE) }
+        { singleReadFit: singleReadFit(repoRoot, COORDINATOR_CONTRACT_FILE) }
       );
       result.contract_read = verdict.read;
       result.contract_read_partial = !verdict.fully_read;
@@ -573,8 +573,19 @@ export function checkCoordinatorContractRead(repoRoot = REPO_ROOT, stateReader =
       result.contract_read_basis = verdict.basis;
       result.contract_last_read_at = status.lastReadAt || null;
     } else if (Array.isArray(state.protocolFilesRead) && state.protocolFilesRead.includes(COORDINATOR_CONTRACT_FILE)) {
-      result.contract_read = true; // legacy-array fallback, same as adam-register
-      result.contract_read_basis = 'legacy_array_single_read_safe';
+      // SEC-F1. This branch USED to hardcode basis 'legacy_array_single_read_safe' and leave
+      // contract_read_partial at false — a basis string NAMING a size check that was never run, with
+      // a comment claiming parity with adam-register that did not hold (adam and solomon both measure
+      // here and emit 'legacy_array_no_evidence' when the contract does not fit).
+      //
+      // It was true only because CLAUDE_COORDINATOR.md happens to fit — i.e. the exact "three true
+      // sentences" defect this same commit removed one function below, reintroduced by the fix for
+      // it. A legacy bare-filename list carries NO coverage information; it is sufficient only when
+      // the contract provably fits in one call, and that has to be measured, not asserted.
+      const fit = opts.fit || singleReadFit(repoRoot, COORDINATOR_CONTRACT_FILE);
+      result.contract_read = true;
+      result.contract_read_partial = fit.fits !== true;
+      result.contract_read_basis = fit.fits === true ? 'legacy_array_single_read_safe' : 'legacy_array_no_evidence';
     }
   } catch { /* fail-open: tracking unavailable must never break coordinator startup */ }
   return result;
@@ -617,28 +628,47 @@ export const ROLE_CONTRACTS = Object.freeze([
  * the filesystem asks whether the thing was actually achieved; asking the DB asks whether someone
  * marked it done. When those disagree, the filesystem is right.
  *
+ * *** ARMING IS DECIDED ON MEASURED TOKENS, NOT ON BYTES, AND THAT CHANGED A REAL VERDICT. *** The
+ * first version of this function compared file SIZE against a byte bound. The bound was tuned for
+ * adversarially dense input (~1.32 B/token), but these contracts are prose (~4.2 B/token), so it
+ * disarmed roles that can already comply. Measured: CLAUDE_SOLOMON.md is 67,501 B but only 15,965
+ * tokens — it FITS in one read, and the byte proxy was telling Solomon its contract was unreadable.
+ * CLAUDE_ADAM.md is over by 569 tokens, not by the 4x its byte count implies. A proxy for the limit
+ * is not the limit; the SD's own success criteria required token figures re-measured rather than
+ * inherited from a bytes derivation.
+ *
  * @param {string} [repoRoot]
- * @param {(file: string) => number|null} [sizer] test seam: byte size per contract file.
- * @returns {Array<{role:string,file:string,bytes:number|null,armed:boolean,reason:string}>}
+ * @param {(file: string) => {fits:boolean|null,tokens:number|null,bytes:number|null,basis:string}} [fitter]
+ *        test seam: single-read fit per contract file.
+ * @returns {Array<{role:string,file:string,tokens:number|null,bytes:number|null,armed:boolean,reason:string}>}
  */
-export function roleArmingStates(repoRoot = REPO_ROOT, sizer = null) {
-  const sizeOf = sizer || ((file) => contractSizeBytes(repoRoot, file));
+export function roleArmingStates(repoRoot = REPO_ROOT, fitter = null) {
+  const fitOf = fitter || ((file) => singleReadFit(repoRoot, file));
   return ROLE_CONTRACTS.map(({ role, file, dependency }) => {
-    let bytes = null;
-    try { bytes = sizeOf(file); } catch { bytes = null; }
-    const n = Number(bytes);
-    if (!Number.isFinite(n) || n <= 0) {
-      // Unmeasurable => DISARMED. Absence of evidence is never promoted to compliance; that promotion
-      // is the defect this whole SD exists to remove.
-      return { role, file, bytes: null, armed: false, reason: `${file} not found — cannot establish readability` };
+    let fit = null;
+    try { fit = fitOf(file); } catch { fit = null; }
+    const tokens = fit && Number.isFinite(Number(fit.tokens)) ? Number(fit.tokens) : null;
+    const bytes = fit && Number.isFinite(Number(fit.bytes)) ? Number(fit.bytes) : null;
+
+    // Unmeasurable (including `fits: null`) => DISARMED. Absence of evidence is never promoted to
+    // compliance; that promotion is the defect this whole SD exists to remove.
+    if (!fit || fit.fits !== true) {
+      if (!fit || fit.fits === null || fit.fits === undefined) {
+        return { role, file, tokens, bytes, armed: false, reason: `${file} not measurable — cannot establish readability` };
+      }
+      const over = tokens !== null
+        ? `${tokens} tokens > ${SINGLE_READ_TOKEN_CAP} cap`
+        : `${bytes}B exceeds the no-tokenizer fallback bound`;
+      return {
+        role, file, tokens, bytes, armed: false,
+        reason: `${file} exceeds a single read (${over})` + (dependency ? ` — blocked on ${dependency}` : ''),
+      };
     }
-    const armed = n <= SINGLE_READ_SAFE_BYTES;
     return {
-      role, file, bytes: n, armed,
-      reason: armed
-        ? `contract fits in one read (${n}B ≤ ${SINGLE_READ_SAFE_BYTES}B)`
-        : `${file} exceeds the single-read bound (${n}B > ${SINGLE_READ_SAFE_BYTES}B)`
-            + (dependency ? ` — blocked on ${dependency}` : ''),
+      role, file, tokens, bytes, armed: true,
+      reason: tokens !== null
+        ? `contract fits in one read (${tokens} tokens ≤ ${SINGLE_READ_TOKEN_CAP} cap)`
+        : `contract fits in one read (${bytes}B, no tokenizer — conservative bound)`,
     };
   });
 }
@@ -669,8 +699,8 @@ export function renderContractRead(repoRoot = REPO_ROOT, check = null, opts = {}
     } else {
       lines.push(`  ✅ ${COORDINATOR_CONTRACT_FILE} read${c.contract_last_read_at ? ` at ${c.contract_last_read_at}` : ''}`);
     }
-    lines.push('  ── per-role arming (measured now, from each contract on disk) ──');
-    for (const s of roleArmingStates(repoRoot, opts.sizer)) {
+    lines.push('  ── per-role arming (measured now: real tokens per contract, vs the read cap) ──');
+    for (const s of roleArmingStates(repoRoot, opts.fitter)) {
       lines.push(`  ${s.role.padEnd(11)} : ${s.armed ? 'ARMED' : 'disarmed'} — ${s.reason}`);
     }
   } catch (err) {

@@ -16,7 +16,7 @@ import {
   COORDINATOR_CONTRACT_FILE,
 } from '../../../scripts/coordinator-startup-check.mjs';
 import { createRequire } from 'node:module';
-const { SINGLE_READ_SAFE_BYTES } = createRequire(import.meta.url)('../../../lib/protocol/contract-read-coverage.cjs');
+const { SINGLE_READ_TOKEN_CAP } = createRequire(import.meta.url)('../../../lib/protocol/contract-read-coverage.cjs');
 
 const REPO = process.cwd();
 
@@ -94,17 +94,25 @@ describe('renderContractRead', () => {
     // Per-role arming's one real risk is someone assuming uniform coverage. The mitigation is that
     // the disarmed roles are printed, not implied.
     const out = renderContractRead(REPO, { contract_file: COORDINATOR_CONTRACT_FILE, contract_exists: true, contract_read: true, contract_read_partial: false, contract_last_read_at: null });
+    // ALL THREE roles appear, each with an explicit verdict. The point is that a disarmed role is
+    // PRINTED rather than left to inference from a green coordinator line.
+    for (const role of ['coordinator', 'adam', 'solomon']) expect(out).toContain(role);
     expect(out).toContain('coordinator : ARMED');
-    expect(out).toContain('adam        : disarmed');
-    expect(out).toContain('solomon     : disarmed');
+    expect(out).toContain('adam        : disarmed');  // genuinely over cap, by ~569 tokens
+    expect(out).toContain('solomon     : ARMED');     // 67KB but 15,965 tokens — it fits
 
+    // *** THIS ASSERTION USED TO READ 'solomon : disarmed', AND THAT IS THE BUG IT WAS HIDING. ***
+    // The byte proxy called a 67,501-byte contract unreadable; measured, it is 15,965 tokens and
+    // reads in one call. The test had encoded the proxy's error as a REQUIREMENT, so the only way to
+    // make the measurement correct was to change a test that was passing. A green test asserting a
+    // false fact is worse than no test.
+    //
     // MUTATION: drop the per-role table -> a reader sees a green coordinator check and reasonably
     // infers all three roles are covered. Fails.
     //
-    // *** THIS TEST IS NOT SUFFICIENT ON ITS OWN AND MUST NOT BE READ AS IF IT WERE. *** It pins
-    // today's real sizes, so it passes equally against a hardcoded string table — which is precisely
-    // what it used to assert. The arming CONDITION is proved by the roleArmingStates block below,
-    // where the sizes are injected and the verdict is required to move.
+    // STILL NOT SUFFICIENT ON ITS OWN: it pins today's real files, so it would pass against a
+    // hardcoded string table too. The arming CONDITION is proved by the roleArmingStates block
+    // below, where the measurements are injected and the verdict is required to move.
   });
 });
 
@@ -116,66 +124,115 @@ describe('renderContractRead', () => {
  * ever confirm today, and today is the one state a hardcoded table already gets right.
  */
 describe('roleArmingStates — arming is measured, not asserted', () => {
-  const sizes = (m) => (file) => (file in m ? m[file] : 999999);
+  /** Inject a single-read fit per file; anything unnamed is over cap. */
+  const fits = (m) => (file) => {
+    const tokens = file in m ? m[file] : SINGLE_READ_TOKEN_CAP * 2;
+    return { fits: tokens <= SINGLE_READ_TOKEN_CAP, tokens, bytes: tokens * 4, basis: 'measured_tokens' };
+  };
 
   it('NEGATIVE: a role whose contract is over cap is NOT armed', () => {
     // The load-bearing negative from the SD's success criteria.
-    const states = roleArmingStates(REPO, sizes({ 'CLAUDE_ADAM.md': SINGLE_READ_SAFE_BYTES + 1 }));
+    const states = roleArmingStates(REPO, fits({ 'CLAUDE_ADAM.md': SINGLE_READ_TOKEN_CAP + 1 }));
     const adam = states.find((s) => s.role === 'adam');
     expect(adam.armed).toBe(false);
-    expect(adam.reason).toContain('exceeds the single-read bound');
+    expect(adam.reason).toContain('exceeds a single read');
     // The dependency is NAMED, so a reader knows what would change it.
     expect(adam.reason).toContain('SD-LEO-INFRA-ADAM-CONTRACT-READABLE-001');
 
-    // MUTATION: flip the comparison to >= / drop the bound -> arms an unreadable contract, fails.
+    // MUTATION: treat fits!==true as armed / drop the cap -> arms an unreadable contract, fails.
   });
 
   it('POSITIVE: the same role ARMS ONCE ITS CONTRACT FITS — no code change, no redeploy', () => {
     // *** THE TEST THE OLD PROSE TABLE COULD NEVER HAVE PASSED. *** When
-    // SD-LEO-INFRA-ADAM-CONTRACT-READABLE-001 lands and CLAUDE_ADAM.md drops under the bound, adam
+    // SD-LEO-INFRA-ADAM-CONTRACT-READABLE-001 lands and CLAUDE_ADAM.md drops under the cap, adam
     // must arm on its own. The previous implementation would have kept printing "disarmed" forever
     // and its test would have kept passing.
-    const states = roleArmingStates(REPO, sizes({ 'CLAUDE_ADAM.md': 1000 }));
+    const states = roleArmingStates(REPO, fits({ 'CLAUDE_ADAM.md': 1000 }));
     expect(states.find((s) => s.role === 'adam').armed).toBe(true);
 
     // MUTATION: restore the hardcoded 'adam : disarmed' string -> fails. This assertion is the
     // difference between a condition and a comment.
   });
 
-  it('the bound is the SHARED one, not a second copy', () => {
-    // Exactly at the bound arms; one byte over does not. Pins the boundary in both directions so it
-    // cannot drift by restatement — the SD already had one near-miss from a restated constant.
-    const at = roleArmingStates(REPO, sizes({ 'CLAUDE_SOLOMON.md': SINGLE_READ_SAFE_BYTES }));
-    const over = roleArmingStates(REPO, sizes({ 'CLAUDE_SOLOMON.md': SINGLE_READ_SAFE_BYTES + 1 }));
+  it('the boundary is exact and shared, not a second copy', () => {
+    // Exactly at the cap arms; one token over does not.
+    const at = roleArmingStates(REPO, fits({ 'CLAUDE_SOLOMON.md': SINGLE_READ_TOKEN_CAP }));
+    const over = roleArmingStates(REPO, fits({ 'CLAUDE_SOLOMON.md': SINGLE_READ_TOKEN_CAP + 1 }));
     expect(at.find((s) => s.role === 'solomon').armed).toBe(true);
     expect(over.find((s) => s.role === 'solomon').armed).toBe(false);
   });
 
   it('an UNMEASURABLE contract is disarmed, never armed by default', () => {
     // Absence of evidence must not be promoted to compliance — the defect this SD exists to remove.
-    for (const bad of [null, 0, NaN, undefined]) {
+    // `fits: null` is the specific case: measurable file, unmeasurable readability.
+    for (const bad of [null, undefined, { fits: null, tokens: null, bytes: null, basis: 'unmeasurable' }]) {
       const s = roleArmingStates(REPO, () => bad).find((x) => x.role === 'coordinator');
       expect(s.armed).toBe(false);
       expect(s.reason).toContain('cannot establish readability');
     }
-    // A throwing sizer must also disarm rather than propagate: this runs in a fail-open startup path.
+    // A throwing fitter must also disarm rather than propagate: this is a fail-open startup path.
     const thrown = roleArmingStates(REPO, () => { throw new Error('stat failed'); });
     expect(thrown.every((s) => s.armed === false)).toBe(true);
 
-    // MUTATION: default `armed` to true when size is unknown -> fails all five.
+    // MUTATION: default `armed` to true when the fit is unknown -> fails all four.
   });
 
-  it('the RENDERED table reflects injected sizes rather than a fixed string', () => {
+  it('REAL FILES: arming follows measured TOKENS, not bytes — solomon fits despite being 67KB', () => {
+    // *** THE REGRESSION THAT CAUGHT THE BYTE PROXY. *** CLAUDE_SOLOMON.md is 67,501 bytes — 2.7x
+    // the old 25,000-ish byte bound — but only 15,965 tokens, so it reads in ONE call. The byte
+    // proxy disarmed a role that could already comply. Asserted on the real files, because the
+    // whole point is that the byte and token answers DISAGREE here.
+    const byRole = Object.fromEntries(roleArmingStates(REPO).map((s) => [s.role, s]));
+    expect(byRole.solomon.armed).toBe(true);
+    expect(byRole.solomon.bytes).toBeGreaterThan(60000);   // big in bytes...
+    expect(byRole.solomon.tokens).toBeLessThan(SINGLE_READ_TOKEN_CAP); // ...small in tokens
+    expect(byRole.coordinator.armed).toBe(true);
+    expect(byRole.adam.armed).toBe(false); // genuinely over, by ~569 tokens
+
+    // MUTATION: revert to comparing bytes against any bound that admits the 25,587-byte coordinator
+    // contract -> solomon (67,501 B) disarms and this fails. That was the shipped behaviour.
+  });
+
+  it('the RENDERED table reflects injected measurements rather than a fixed string', () => {
     // Closes the loop: the render path itself must be driven by the measurement, not merely
     // accompanied by it.
     const out = renderContractRead(
       REPO,
       { contract_file: COORDINATOR_CONTRACT_FILE, contract_exists: true, contract_read: true, contract_read_partial: false, contract_last_read_at: null },
-      { sizer: sizes({ 'CLAUDE_ADAM.md': 1000, 'CLAUDE_SOLOMON.md': 1000, 'CLAUDE_COORDINATOR.md': 999999 }) }
+      { fitter: fits({ 'CLAUDE_ADAM.md': 1000, 'CLAUDE_SOLOMON.md': 1000, 'CLAUDE_COORDINATOR.md': 999999 }) }
     );
     expect(out).toContain('adam        : ARMED');
     expect(out).toContain('solomon     : ARMED');
     expect(out).toContain('coordinator : disarmed'); // inverted vs reality, proving it is measured
+  });
+});
+
+describe('SEC-F1 — the legacy-array branch must MEASURE, not assert', () => {
+  /**
+   * The branch used to hardcode basis 'legacy_array_single_read_safe' and leave
+   * contract_read_partial at false, with a comment claiming parity with adam-register that did not
+   * hold. A basis string NAMING a size check nobody ran. True only because the coordinator contract
+   * happens to fit — the same defect removed one function below, reintroduced by the fix for it.
+   */
+  const legacy = () => () => ({ protocolFilesRead: [COORDINATOR_CONTRACT_FILE] });
+
+  it('a legacy record for a contract that FITS is accepted as a full read', () => {
+    const c = checkCoordinatorContractRead(REPO, legacy());
+    expect(c.contract_read).toBe(true);
+    expect(c.contract_read_partial).toBe(false);
+    expect(c.contract_read_basis).toBe('legacy_array_single_read_safe');
+  });
+
+  it('the SAME legacy record is NOT a full read once the contract no longer fits', () => {
+    // The discriminating half. Proved by differential execution in SECURITY review: on a synthetic
+    // 100,000-byte contract the coordinator returned a green "read" while adam correctly returned
+    // legacy_array_no_evidence for identical input.
+    const c = checkCoordinatorContractRead(REPO, legacy(), { fit: { fits: false, tokens: 99999, bytes: 400000, basis: 'measured_tokens' } });
+    expect(c.contract_read).toBe(true);           // a read did happen
+    expect(c.contract_read_partial).toBe(true);   // ...but it cannot be called complete
+    expect(c.contract_read_basis).toBe('legacy_array_no_evidence');
+
+    // MUTATION: restore the hardcoded basis -> an over-cap contract reports green, fails.
   });
 });
 

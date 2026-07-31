@@ -10,7 +10,7 @@
 import { describe, it, expect } from 'vitest';
 import { createRequire } from 'node:module';
 const require_ = createRequire(import.meta.url);
-const { contractReadVerdict, FULL_COVERAGE_PCT, SINGLE_READ_SAFE_BYTES } = require_('../../../lib/protocol/contract-read-coverage.cjs');
+const { contractReadVerdict, singleReadFit, FULL_COVERAGE_PCT, SINGLE_READ_SAFE_BYTES, SINGLE_READ_TOKEN_CAP } = require_('../../../lib/protocol/contract-read-coverage.cjs');
 
 describe('contractReadVerdict — the inversion, both halves', () => {
   it('THE DILIGENT READER: paginated full coverage reports FULLY READ', () => {
@@ -202,26 +202,137 @@ describe('size tier DEFERS to contradicting delivered evidence', () => {
   });
 });
 
-describe('SINGLE_READ_SAFE_BYTES is derived from a MEASUREMENT, not an assertion', () => {
+describe('the byte proxy is RETIRED — readability is measured in tokens', () => {
   /**
-   * The original 50,000 was justified by "2 bytes/token is below any real tokenizer's ratio". That
-   * claim was FALSE — measured with tiktoken cl100k_base on 50,000-byte samples: random ASCII ~1.32
-   * B/token (52% over the 25k cap), base64 ~1.40 (43% over), hex/minified ~1.77 (over). Re-derived
-   * as 25,000 tokens x 1.32 = 33,000, set to 32,000 for margin. Pinned here so it cannot drift back
-   * to a number justified by assertion.
+   * *** THIS BLOCK REPLACED ONE THAT ASSERTED A FALSE FACT. *** It previously pinned
+   * `expect(67501).toBeGreaterThan(SINGLE_READ_SAFE_BYTES)` — i.e. it required CLAUDE_SOLOMON.md to
+   * be over the bound. Solomon's contract is 67,501 BYTES but 15,965 TOKENS: it reads in one call.
+   * The test was encoding the proxy's error as a requirement, which is how a wrong bound survives.
+   *
+   * Two separate mistakes, both the same shape (a sample presented as a bound):
+   *   1st: "2 B/token is below any real tokenizer's ratio"  — never measured, false.
+   *   2nd: "1.32 B/token is the densest case"               — measured, but a sample MAX, not a max.
+   * cl100k_base is byte-level BPE with 256 single-byte fallbacks, so the true floor is 1.0 B/token.
    */
-  it('is bounded by the densest measured tokenization, not by a guessed ratio', () => {
-    const WORST_MEASURED_BYTES_PER_TOKEN = 1.32;
-    const READ_CAP_TOKENS = 25000;
-    expect(SINGLE_READ_SAFE_BYTES).toBeLessThanOrEqual(READ_CAP_TOKENS * WORST_MEASURED_BYTES_PER_TOKEN);
-
-    // MUTATION: raise it back to 50000 -> exceeds 33,000 and fails.
+  it('the token cap is the REAL harness limit, not a derived proxy', () => {
+    expect(SINGLE_READ_TOKEN_CAP).toBe(25000);
   });
 
-  it('still admits the coordinator contract and still excludes the over-cap ones', () => {
-    // The bound is only useful if it lands correctly on the real files it governs.
-    expect(25587).toBeLessThanOrEqual(SINGLE_READ_SAFE_BYTES);  // CLAUDE_COORDINATOR.md
-    expect(67501).toBeGreaterThan(SINGLE_READ_SAFE_BYTES);      // CLAUDE_SOLOMON.md
-    expect(104280).toBeGreaterThan(SINGLE_READ_SAFE_BYTES);     // CLAUDE_ADAM.md
+  it('the surviving byte constant is sound at the 1.0 B/token FLOOR, not at a sampled ratio', () => {
+    // It is now only the no-tokenizer fallback, so it must hold even for input that encodes at one
+    // token per byte. Anything above 25,000 is unsound at that floor.
+    expect(SINGLE_READ_SAFE_BYTES).toBeLessThanOrEqual(SINGLE_READ_TOKEN_CAP * 1.0);
+
+    // MUTATION: restore 32,000 (the "1.32 B/token" derivation) -> unsound at the floor, fails.
+  });
+
+  it('MEASURES the real contracts, and disagrees with the byte proxy on Solomon', () => {
+    // The load-bearing regression. Byte-wise Solomon looks 2.7x over; token-wise it fits.
+    const root = process.cwd();
+    const sol = singleReadFit(root, 'CLAUDE_SOLOMON.md');
+    const coord = singleReadFit(root, 'CLAUDE_COORDINATOR.md');
+
+    expect(sol.basis).toBe('measured_tokens');
+    expect(sol.bytes).toBeGreaterThan(SINGLE_READ_SAFE_BYTES); // the proxy would have disarmed it
+    expect(sol.tokens).toBeLessThan(SINGLE_READ_TOKEN_CAP);
+    expect(sol.fits).toBe(true);                               // ...but it genuinely fits
+
+    expect(coord.fits).toBe(true);
+    expect(coord.tokens).toBeLessThan(SINGLE_READ_TOKEN_CAP);
+  });
+
+  it('WITHOUT a tokenizer it degrades to disarmed — never to "fits"', () => {
+    // The safe direction. A missing tokenizer must not become a licence to wave contracts through.
+    const fit = { fits: null, tokens: null, bytes: null, basis: 'unmeasurable' };
+    const v = contractReadVerdict({ readCount: 1, lastReadWasPartial: false }, 99, { singleReadFit: fit });
+    expect(v.fully_read).toBe(false);
+    expect(v.basis).toBe('unknown_coverage');
+
+    // MUTATION: treat fits!==false as fitting -> an unmeasurable contract reports complete, fails.
+  });
+});
+
+describe('IMPORT PURITY — the fail-open promise depends on this module having no deps', () => {
+  /**
+   * *** NOTHING PINNED THIS, AND EVERYTHING RESTED ON IT. *** All three consumers
+   * (adam-register.cjs, solomon-register.cjs, coordinator-startup-check.mjs) `require` this module
+   * at TOP LEVEL, outside any try/catch, and all three promise never to block role activation —
+   * coordinator-startup-check.mjs states "Exit code is ALWAYS 0". A throw at import time cannot be
+   * caught by the try/catch inside the check functions, so those promises hold ONLY while this
+   * module imports nothing that can throw.
+   *
+   * That invariant has already been broken once: an earlier revision top-level-required
+   * sd-key-generator.js for one pure helper and transitively ran dotenv.config() plus a Supabase
+   * service-role client factory as import side effects (SECURITY measured process.env going 4 -> 78
+   * keys under `env -i`). It was fixed by deferring the require. This test is what stops it
+   * regressing silently the next time someone needs "just one helper".
+   */
+  it('imports nothing beyond node builtins — no supabase, no dotenv, no tokenizer', () => {
+    const path = require_('path');
+    const modPath = require_.resolve('../../../lib/protocol/contract-read-coverage.cjs');
+    // Load in a pristine child so this test's own imports cannot mask a violation.
+    const { execFileSync } = require_('child_process');
+    const probe = `
+      const before = Object.keys(process.env).length;
+      require(${JSON.stringify(modPath)});
+      const after = Object.keys(process.env).length;
+      const bad = Object.keys(require.cache).filter(k => /supabase|dotenv|tiktoken/i.test(k));
+      console.log(JSON.stringify({ envDelta: after - before, bad: bad.map(f => require('path').basename(f)) }));
+    `;
+    const out = JSON.parse(execFileSync(process.execPath, ['-e', probe], { encoding: 'utf8' }).trim());
+
+    expect(out.envDelta).toBe(0);   // no dotenv side effect
+    expect(out.bad).toEqual([]);    // no credential client, and the tokenizer stays LAZY
+
+    // MUTATION: move the tiktoken or unionRangeCoverage require to top level -> `bad` is non-empty
+    // and this fails. That is exactly the regression that broke fail-open once already.
+    expect(path.basename(modPath)).toBe('contract-read-coverage.cjs');
+  });
+});
+
+describe('SEC-F2 — a degenerate 0-of-0 delivered record must not certify a full read', () => {
+  /**
+   * `covered = numLines >= totalLines` is satisfied by `0 >= 0`, so a 0-of-0 record returned
+   * fully_read=true through the tier documented as STRONGEST evidence — and
+   * protocol-file-tracker.cjs writes exactly that shape. One degenerate harness response would have
+   * permanently green-lit the 25,569-token CLAUDE_ADAM.md for the whole session.
+   */
+  it('0 of 0 delivered lines is NOT a full read of a real file', () => {
+    const v = contractReadVerdict(
+      { readCount: 1, lastReadWasPartial: false, lastDelivered: { numLines: 0, totalLines: 0, coveredWholeFile: true } },
+      520,
+      { singleReadFit: { fits: false, tokens: 25569, bytes: 106286, basis: 'measured_tokens' } }
+    );
+    expect(v.fully_read).toBe(false);
+    expect(v.basis).not.toBe('delivered_lines');
+
+    // MUTATION: drop the `totalLines > 0` guard -> 0>=0 certifies it, fails.
+  });
+
+  it('a genuine 1-of-1 delivered record still IS a full read', () => {
+    // The other half — the guard must reject degenerate records, not all small ones.
+    const v = contractReadVerdict(
+      { readCount: 1, lastDelivered: { numLines: 1, totalLines: 1, coveredWholeFile: true } },
+      1,
+      { singleReadFit: { fits: false, tokens: 99999, bytes: 400000, basis: 'measured_tokens' } }
+    );
+    expect(v.fully_read).toBe(true);
+    expect(v.basis).toBe('delivered_lines');
+  });
+});
+
+describe('SEC-F6 — a bare coveredWholeFile:false contradicts the size tier on its own', () => {
+  it('an explicit not-covered flag is not overridden by the fits-in-one-read inference', () => {
+    // Previously `deliveredContradicts` required BOTH line fields to be finite, so a delivered
+    // record carrying only this flag was overridden by the very inference it denies.
+    const v = contractReadVerdict(
+      { readCount: 1, lastReadWasPartial: false, lastDelivered: { coveredWholeFile: false } },
+      99,
+      { singleReadFit: { fits: true, tokens: 6197, bytes: 25587, basis: 'measured_tokens' } }
+    );
+    expect(v.fully_read).toBe(false);
+    expect(v.basis).not.toBe('single_read_safe_size');
+
+    // MUTATION: require both line fields finite again -> the size tier wins, fully_read true, fails.
   });
 });
