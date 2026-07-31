@@ -27,6 +27,12 @@ const { OPERATING_THRESHOLD_HOURS } = _createRequireQF342(import.meta.url)('../l
 // SD-LEO-INFRA-ROLE-CONTRACT-READ-GATE-001 / FR-2: same resolver adam-register.cjs and the tracker
 // both use, so the coordinator check reads exactly the state the hook wrote — no second path.
 const { resolveStateReadPath } = _createRequireQF342(import.meta.url)('./hooks/lib/session-state-resolver.cjs');
+// SD-LEO-INFRA-ROLE-CONTRACT-READ-GATE-001 / FR-3 + FR-6: ONE implementation of "was this contract
+// really read" and ONE definition of the single-read bound, shared with adam-register.cjs and
+// solomon-register.cjs. Importing the bound rather than restating it is the difference between an
+// arming condition and an arming CLAIM — see roleArmingStates below.
+const { contractReadVerdict, contractLineCount, contractSizeBytes, SINGLE_READ_SAFE_BYTES } =
+  _createRequireQF342(import.meta.url)('../lib/protocol/contract-read-coverage.cjs');
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const REPO_ROOT = resolve(__dirname, '..');
@@ -551,11 +557,24 @@ export function checkCoordinatorContractRead(repoRoot = REPO_ROOT, stateReader =
     if (!state) return result;
     const status = state.protocolFileReadStatus && state.protocolFileReadStatus[COORDINATOR_CONTRACT_FILE];
     if (status && status.readCount > 0) {
-      result.contract_read = true;
-      result.contract_read_partial = status.lastReadWasPartial === true;
+      // Routed through the SHARED verdict rather than reading lastReadWasPartial directly. This
+      // contract fits in one call, so the old boolean was accurate for the common case — but a
+      // coordinator that paginated (e.g. via /read-full) would have been recorded PARTIAL for doing
+      // MORE work, which is the same inversion FR-3 removes for adam and solomon. One implementation,
+      // three roles; the size tier inside the verdict is what keeps this file's happy path green.
+      const verdict = contractReadVerdict(
+        status,
+        contractLineCount(repoRoot, COORDINATOR_CONTRACT_FILE),
+        { sizeBytes: contractSizeBytes(repoRoot, COORDINATOR_CONTRACT_FILE) }
+      );
+      result.contract_read = verdict.read;
+      result.contract_read_partial = !verdict.fully_read;
+      result.contract_coverage_pct = verdict.coverage_pct;
+      result.contract_read_basis = verdict.basis;
       result.contract_last_read_at = status.lastReadAt || null;
     } else if (Array.isArray(state.protocolFilesRead) && state.protocolFilesRead.includes(COORDINATOR_CONTRACT_FILE)) {
       result.contract_read = true; // legacy-array fallback, same as adam-register
+      result.contract_read_basis = 'legacy_array_single_read_safe';
     }
   } catch { /* fail-open: tracking unavailable must never break coordinator startup */ }
   return result;
@@ -571,6 +590,60 @@ function readCoordinatorSessionState(repoRoot) {
 }
 
 /**
+ * The three role contracts this gate reasons about, and the sibling SD that makes each one readable.
+ * Order is the render order.
+ */
+export const ROLE_CONTRACTS = Object.freeze([
+  Object.freeze({ role: 'coordinator', file: COORDINATOR_CONTRACT_FILE, dependency: null }),
+  Object.freeze({ role: 'adam', file: 'CLAUDE_ADAM.md', dependency: 'SD-LEO-INFRA-ADAM-CONTRACT-READABLE-001' }),
+  Object.freeze({ role: 'solomon', file: 'CLAUDE_SOLOMON.md', dependency: null }),
+]);
+
+/**
+ * SD-LEO-INFRA-ROLE-CONTRACT-READ-GATE-001 / FR-6 — ARMING IS A MEASUREMENT, NOT A SENTENCE.
+ *
+ * *** THIS REPLACED THREE HARDCODED STRINGS, AND THE STRINGS WERE CORRECT. *** That is exactly why
+ * they were dangerous. `adam : disarmed — CLAUDE_ADAM.md exceeds the read cap` was a true statement
+ * about 2026-07-31 pinned into source, and its test asserted the string. So the day
+ * SD-LEO-INFRA-ADAM-CONTRACT-READABLE-001 lands and CLAUDE_ADAM.md drops under the bound, the banner
+ * would still have printed "disarmed", the test would still have passed, and the newly-compliant role
+ * would have stayed dark with nothing anywhere reporting a discrepancy. A check whose verdict cannot
+ * change when the world changes is not a check — it is a comment with a test around it. The SD's own
+ * criterion is "encoded as a condition, not as prose", and the prose version met it only by coincidence.
+ *
+ * The dependency is read LIVE and at the only place it is actually observable: the contract's size on
+ * disk. Deliberately NOT a DB lookup of the sibling SD's status — this runs inside a fail-open startup
+ * path with no network, and more importantly the sibling's *deliverable* IS the smaller file. Asking
+ * the filesystem asks whether the thing was actually achieved; asking the DB asks whether someone
+ * marked it done. When those disagree, the filesystem is right.
+ *
+ * @param {string} [repoRoot]
+ * @param {(file: string) => number|null} [sizer] test seam: byte size per contract file.
+ * @returns {Array<{role:string,file:string,bytes:number|null,armed:boolean,reason:string}>}
+ */
+export function roleArmingStates(repoRoot = REPO_ROOT, sizer = null) {
+  const sizeOf = sizer || ((file) => contractSizeBytes(repoRoot, file));
+  return ROLE_CONTRACTS.map(({ role, file, dependency }) => {
+    let bytes = null;
+    try { bytes = sizeOf(file); } catch { bytes = null; }
+    const n = Number(bytes);
+    if (!Number.isFinite(n) || n <= 0) {
+      // Unmeasurable => DISARMED. Absence of evidence is never promoted to compliance; that promotion
+      // is the defect this whole SD exists to remove.
+      return { role, file, bytes: null, armed: false, reason: `${file} not found — cannot establish readability` };
+    }
+    const armed = n <= SINGLE_READ_SAFE_BYTES;
+    return {
+      role, file, bytes: n, armed,
+      reason: armed
+        ? `contract fits in one read (${n}B ≤ ${SINGLE_READ_SAFE_BYTES}B)`
+        : `${file} exceeds the single-read bound (${n}B > ${SINGLE_READ_SAFE_BYTES}B)`
+            + (dependency ? ` — blocked on ${dependency}` : ''),
+    };
+  });
+}
+
+/**
  * Render the contract-read state.
  *
  * PER-ROLE ARMING IS RENDERED, NOT IMPLIED. Global arming was rejected: it would make the one role
@@ -578,7 +651,7 @@ function readCoordinatorSessionState(repoRoot) {
  * sequenced after it. The risk of per-role is someone assuming uniform coverage, so the disarmed
  * roles are printed explicitly rather than left to inference.
  */
-export function renderContractRead(repoRoot = REPO_ROOT, check = null) {
+export function renderContractRead(repoRoot = REPO_ROOT, check = null, opts = {}) {
   const lines = ['═══ ROLE CONTRACT READ ═══'];
   try {
     const c = check || checkCoordinatorContractRead(repoRoot);
@@ -596,10 +669,10 @@ export function renderContractRead(repoRoot = REPO_ROOT, check = null) {
     } else {
       lines.push(`  ✅ ${COORDINATOR_CONTRACT_FILE} read${c.contract_last_read_at ? ` at ${c.contract_last_read_at}` : ''}`);
     }
-    lines.push('  ── per-role arming ──');
-    lines.push('  coordinator : ARMED (contract fits in one read)');
-    lines.push('  adam        : disarmed — CLAUDE_ADAM.md exceeds the read cap (SD-LEO-INFRA-ADAM-CONTRACT-READABLE-001)');
-    lines.push('  solomon     : disarmed — CLAUDE_SOLOMON.md exceeds the read cap');
+    lines.push('  ── per-role arming (measured now, from each contract on disk) ──');
+    for (const s of roleArmingStates(repoRoot, opts.sizer)) {
+      lines.push(`  ${s.role.padEnd(11)} : ${s.armed ? 'ARMED' : 'disarmed'} — ${s.reason}`);
+    }
   } catch (err) {
     lines.push('  ✅ contract-read check skipped (fail-open): ' + (err?.message || String(err)));
   }

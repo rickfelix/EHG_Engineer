@@ -12,8 +12,11 @@ import { describe, it, expect } from 'vitest';
 import {
   checkCoordinatorContractRead,
   renderContractRead,
+  roleArmingStates,
   COORDINATOR_CONTRACT_FILE,
 } from '../../../scripts/coordinator-startup-check.mjs';
+import { createRequire } from 'node:module';
+const { SINGLE_READ_SAFE_BYTES } = createRequire(import.meta.url)('../../../lib/protocol/contract-read-coverage.cjs');
 
 const REPO = process.cwd();
 
@@ -97,6 +100,82 @@ describe('renderContractRead', () => {
 
     // MUTATION: drop the per-role table -> a reader sees a green coordinator check and reasonably
     // infers all three roles are covered. Fails.
+    //
+    // *** THIS TEST IS NOT SUFFICIENT ON ITS OWN AND MUST NOT BE READ AS IF IT WERE. *** It pins
+    // today's real sizes, so it passes equally against a hardcoded string table — which is precisely
+    // what it used to assert. The arming CONDITION is proved by the roleArmingStates block below,
+    // where the sizes are injected and the verdict is required to move.
+  });
+});
+
+/**
+ * SD success criterion: "Arming policy is decided and encoded as a condition, not as prose", with an
+ * explicit NEGATIVE TEST that an over-cap contract leaves its role un-gated.
+ *
+ * Every test here INJECTS sizes. That is the whole point: a test that reads the real files can only
+ * ever confirm today, and today is the one state a hardcoded table already gets right.
+ */
+describe('roleArmingStates — arming is measured, not asserted', () => {
+  const sizes = (m) => (file) => (file in m ? m[file] : 999999);
+
+  it('NEGATIVE: a role whose contract is over cap is NOT armed', () => {
+    // The load-bearing negative from the SD's success criteria.
+    const states = roleArmingStates(REPO, sizes({ 'CLAUDE_ADAM.md': SINGLE_READ_SAFE_BYTES + 1 }));
+    const adam = states.find((s) => s.role === 'adam');
+    expect(adam.armed).toBe(false);
+    expect(adam.reason).toContain('exceeds the single-read bound');
+    // The dependency is NAMED, so a reader knows what would change it.
+    expect(adam.reason).toContain('SD-LEO-INFRA-ADAM-CONTRACT-READABLE-001');
+
+    // MUTATION: flip the comparison to >= / drop the bound -> arms an unreadable contract, fails.
+  });
+
+  it('POSITIVE: the same role ARMS ONCE ITS CONTRACT FITS — no code change, no redeploy', () => {
+    // *** THE TEST THE OLD PROSE TABLE COULD NEVER HAVE PASSED. *** When
+    // SD-LEO-INFRA-ADAM-CONTRACT-READABLE-001 lands and CLAUDE_ADAM.md drops under the bound, adam
+    // must arm on its own. The previous implementation would have kept printing "disarmed" forever
+    // and its test would have kept passing.
+    const states = roleArmingStates(REPO, sizes({ 'CLAUDE_ADAM.md': 1000 }));
+    expect(states.find((s) => s.role === 'adam').armed).toBe(true);
+
+    // MUTATION: restore the hardcoded 'adam : disarmed' string -> fails. This assertion is the
+    // difference between a condition and a comment.
+  });
+
+  it('the bound is the SHARED one, not a second copy', () => {
+    // Exactly at the bound arms; one byte over does not. Pins the boundary in both directions so it
+    // cannot drift by restatement — the SD already had one near-miss from a restated constant.
+    const at = roleArmingStates(REPO, sizes({ 'CLAUDE_SOLOMON.md': SINGLE_READ_SAFE_BYTES }));
+    const over = roleArmingStates(REPO, sizes({ 'CLAUDE_SOLOMON.md': SINGLE_READ_SAFE_BYTES + 1 }));
+    expect(at.find((s) => s.role === 'solomon').armed).toBe(true);
+    expect(over.find((s) => s.role === 'solomon').armed).toBe(false);
+  });
+
+  it('an UNMEASURABLE contract is disarmed, never armed by default', () => {
+    // Absence of evidence must not be promoted to compliance — the defect this SD exists to remove.
+    for (const bad of [null, 0, NaN, undefined]) {
+      const s = roleArmingStates(REPO, () => bad).find((x) => x.role === 'coordinator');
+      expect(s.armed).toBe(false);
+      expect(s.reason).toContain('cannot establish readability');
+    }
+    // A throwing sizer must also disarm rather than propagate: this runs in a fail-open startup path.
+    const thrown = roleArmingStates(REPO, () => { throw new Error('stat failed'); });
+    expect(thrown.every((s) => s.armed === false)).toBe(true);
+
+    // MUTATION: default `armed` to true when size is unknown -> fails all five.
+  });
+
+  it('the RENDERED table reflects injected sizes rather than a fixed string', () => {
+    // Closes the loop: the render path itself must be driven by the measurement, not merely
+    // accompanied by it.
+    const out = renderContractRead(
+      REPO,
+      { contract_file: COORDINATOR_CONTRACT_FILE, contract_exists: true, contract_read: true, contract_read_partial: false, contract_last_read_at: null },
+      { sizer: sizes({ 'CLAUDE_ADAM.md': 1000, 'CLAUDE_SOLOMON.md': 1000, 'CLAUDE_COORDINATOR.md': 999999 }) }
+    );
+    expect(out).toContain('adam        : ARMED');
+    expect(out).toContain('solomon     : ARMED');
+    expect(out).toContain('coordinator : disarmed'); // inverted vs reality, proving it is measured
   });
 });
 
