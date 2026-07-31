@@ -127,6 +127,42 @@ internal-only, not customer-facing product UI.
 
 ## Fleet panel graphical render (SD-LEO-INFRA-LEO-APP-RENDERED-001-A)
 
+> **RETIRED 2026-07-28 — SD-LEO-FIX-UNOWNED-PARENT-SLICE-001.**
+> `server/public/fleet-ui/fleet-panel.*` now returns **410 Gone**. The section
+> below is kept as the historical design record; the page is no longer served.
+>
+> **Where the capability lives now:** the Builder Sessions page in EHG
+> (`/builder/sessions`), which is authenticated and already renders the
+> manifest table, the account column and `AccountUsageStrip` (a strict
+> superset of this page's 2-field `accountChips` — 7 fields vs 2).
+>
+> **Why it was retired rather than fixed:** the page was served by plain
+> `express.static` with **no auth**, while every verb it called is
+> `requireAuth` — so all four buttons returned 401 for the page's entire life.
+> The obvious repair is forbidden: `requireAuth`'s only non-bearer option is
+> `x-internal-api-key`, a secret shared across ~15 route groups, so soliciting
+> it into an unauthenticated page converts any origin XSS into an app-wide
+> bypass. Removing the surface needs no credential at all.
+>
+> **What was NOT ported, and the condition to revisit it:** respawn-fleet,
+> relaunch-under-profile and snapshot-manifest. They are not dead capability —
+> every live consumer imports `lib/fleet/spawn-control.js` **directly**
+> (`canary-guard.js:25`, `session-watchdog.js:30`, `u4-drill-runner.js:26`).
+> The orphan was the HTTP route, not the verb. Note the usage count alone
+> proves nothing: no credentialed caller *could* exist while the only surface
+> 401'd. **Re-open condition:** an operator needing these from a browser
+> without CLI access. `add-session` already works authenticated from EHG
+> (`ehg/src/hooks/useFleetSessions.ts:420`).
+>
+> **Still open, deliberately:** `GET /api/fleet-panel` remains `optionalAuth`
+> and still serves this whole payload anonymously — the page was the proxy,
+> the endpoint is the payload. And NTFS 8.3 short names (`FLEET-~1.HTM`)
+> still serve the retired files, because a filesystem alias is not a spelling
+> and no path normaliser can see it; closing that needs `fs.realpathSync.native`
+> or an allow-list at the mount, **not** a sixth spelling. Both tracked
+> separately. `fleet-panel-format.js` is intentionally still served as the
+> canary for a dot-dropped matcher.
+
 The mockup-1 counterpart to the Session View pane above: renders
 `server/routes/fleet-panel.js`'s `GET /api/fleet-panel` (manifest table, 3
 named-account capacity chips, attention strip) and drives the 4
