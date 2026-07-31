@@ -15,7 +15,6 @@
       "tests/sd-start-dependency-gate.test.mjs",
       "tests/unit/adam-doc-drift-review.test.mjs",
       "tests/unit/adam-github-assessment.test.mjs",
-      "tests/unit/adam-sourcing-state-probe.test.mjs",
       "tests/unit/adam-startup-check.test.mjs",
       "tests/unit/calculate-sd-progress.test.mjs",
       "tests/unit/coordinator-startup-check.test.mjs",

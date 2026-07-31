@@ -20,6 +20,20 @@ import { computePlanAdherence } from '../../../scripts/adam-coordinator-health.m
 
 const NOW = '2026-07-25T22:00:00.000Z';
 
+/**
+ * SD-LEO-INFRA-ROADMAP-REGENERATION-DUPLICATES-001 FR-4: computeWaveLinkageCoverage now resolves
+ * the canonical roadmap before reading items, so any double feeding it must answer these two
+ * tables. Exactly ONE active roadmap, because resolveCanonicalRoadmap deliberately throws on
+ * more than one and these suites are not testing that path.
+ *
+ * These fixtures are incidental to what this file asserts (exception records must be inert to
+ * the linkage gauge) — they exist only to keep the function reachable.
+ */
+const CANONICAL_ROADMAP_TABLES = {
+  strategic_roadmaps: { select: () => ({ eq: async () => ({ data: [{ id: 'rm-canon', title: 'canonical', status: 'active', current_baseline_version: 0 }], error: null }) }) },
+  roadmap_waves: { select: () => ({ eq: async () => ({ data: [{ id: 'w-canon' }], error: null }) }) },
+};
+
 describe('buildRoadmapLinkException — FR-3 (record unconditionally, operator reason kept distinct)', () => {
   it('records a supplied operator reason verbatim and flags it as supplied', () => {
     const ex = buildRoadmapLinkException('SD-X-001', '  urgent revenue false-gate, sourced in minutes  ', NOW);
@@ -106,7 +120,10 @@ describe('TS-4 — a recorded exception must NOT raise plan-linkage coverage', (
     return {
       from: (table) => ({
         strategic_directives_v2: { select: () => ({ not: () => terminal(sdRows) }) },
-        roadmap_wave_items: { select: () => ({ not: () => terminal([]) }) },
+        // SD-LEO-INFRA-ROADMAP-REGENERATION-DUPLICATES-001 FR-4: the items query is now
+        // roadmap-scoped, so the chain gains .in() ahead of .not().
+        roadmap_wave_items: { select: () => ({ in: () => ({ not: () => terminal([]) }) }) },
+        ...CANONICAL_ROADMAP_TABLES,
       })[table],
     };
   }
@@ -158,7 +175,8 @@ describe('FR-5 — computePlanAdherence surfaces the count on BOTH return branch
     }
     return {
       from: (table) => {
-        if (table === 'roadmap_wave_items') return { select: () => ({ not: () => terminal([]) }) };
+        if (CANONICAL_ROADMAP_TABLES[table]) return CANONICAL_ROADMAP_TABLES[table];
+        if (table === 'roadmap_wave_items') return { select: () => ({ in: () => ({ not: () => terminal([]) }) }) };
         if (table === 'strategic_directives_v2') {
           return {
             select: () => ({

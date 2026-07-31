@@ -24,6 +24,8 @@ import { resolve, dirname } from 'path';
 import { fileURLToPath } from 'url';
 // SD-LEO-INFRA-FLEET-FRESHNESS-GUARD-001: advisory, fail-open checkout-freshness badge.
 import { checkoutFreshness, freshnessBadge, CRITICAL_PROTOCOL_FILES } from '../lib/governance/checkout-freshness.js';
+import { formatDemandDecision, BELT_DEPTH_GATED_PRODUCERS } from '../lib/governance/demand-gate.js';
+import { readLastDemandDecision } from '../lib/governance/demand-gate-emit.js';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const REPO_ROOT = resolve(__dirname, '..');
@@ -412,16 +414,41 @@ export function buildReport(argv = [], env = {}, repoRoot = REPO_ROOT) {
 // throws / blocks startup — same doctrine as the rest of this file).
 // ─────────────────────────────────────────────────────────────────────────────
 
-// The sourcing-engine activation flags, in escalation order (umbrella first, then per-engine,
-// then the autosource switch). Each is an env feature flag, OFF unless explicitly on|1|true.
+// The sourcing-engine activation flags. Each is an env feature flag, OFF unless explicitly
+// on|1|true.
+//
+// SD-LEO-INFRA-SOURCING-ENGINE-BELT-GATED-001 (FR-5) — FOUR FLAGS RETIRED FROM THIS LIST.
+// SOURCING_ENGINE_V1, SOURCING_ROADMAP_ENGINE_V1, SOURCING_PROACTIVE_POPULATOR_V1 and
+// LEO_ROADMAP_AUTOSOURCE had ZERO executable readers anywhere in the repo — re-verified at
+// implementation time, not inherited from the SD: each appeared in exactly ONE file, this display
+// list. They were displayed, never consulted.
+//
+// The consequence that had to be caught rather than shipped: this SD's own interim step "turn all
+// four ON now" was A NO-OP, and any acceptance criterion of the form "all six read ON in the probe"
+// would have been satisfiable by exporting four env vars while changing zero behaviour. A green
+// badge full of decorative flags is precisely the defect this SD exists to fix, one level up.
+//
+// The two that remain are REAL: gauge-gap-miner.js:296 and deferred-watcher.js:30 read them.
+// Both are hardcoded ON in the workflow job env, so they are already permanently on in the only
+// context that executes them — displayed here for completeness, not because they are tunable.
+//
+// THE OPERATIVE GATE IS NOT AN ENV FLAG AT ALL. The highest-blast-radius producer (refill-cron,
+// hourly --apply) is gated by the DB row sourcing_engine_activation_state.arm='auto-refill', read
+// at sourcing-engine-awareness.mjs:56-68 and consumed at refill-cron.mjs:124. The SD never named
+// it. It is now rendered from the DB below, so the badge shows what actually governs rather than
+// what merely looks like it does.
 export const SOURCING_FLAGS = [
-  'SOURCING_ENGINE_V1',
-  'SOURCING_ROADMAP_ENGINE_V1',
   'SOURCING_GAUGE_GAP_MINER_V1',
   'SOURCING_DEFERRED_WATCHER_V1',
+];
+
+/** The four env flags retired by FR-5, kept named so their removal is a record, not a silent drop. */
+export const RETIRED_SOURCING_FLAGS = Object.freeze([
+  'SOURCING_ENGINE_V1',
+  'SOURCING_ROADMAP_ENGINE_V1',
   'SOURCING_PROACTIVE_POPULATOR_V1',
   'LEO_ROADMAP_AUTOSOURCE',
-];
+]);
 
 /** Pure flag parse mirroring the sourcing-engine helpers: on|1|true => true; everything else => false. */
 export function isSourcingFlagOn(env, name) {
@@ -466,12 +493,42 @@ export function summarizeBacklogDisposition(total = 0, dispositioned = 0) {
 }
 
 /** Pure: render the state-probe section from already-resolved data (no I/O). */
-export function renderSourcingStateLines({ flags = [], wave = null, backlog = null } = {}) {
+export function renderSourcingStateLines({ flags = [], wave = null, backlog = null, demand = null, arms = null } = {}) {
   const lines = ['═══ SOURCING SSOT STATE (read-only — route the SSOT before hand-mining) ═══'];
   // Flags
   const anyOn = flags.some((f) => f.on);
   lines.push('  Sourcing-engine flags: ' + (anyOn ? '' : '⚠️ ALL OFF — engine dormant; PROPOSE activation, do not substitute yourself tick-after-tick'));
   for (const f of flags) lines.push(`    ${f.on ? '🟢 on ' : '⚪ off'}  ${f.flag}`);
+  // FR-5: the DB arm states — what ACTUALLY gates the producers. Rendered under the env flags
+  // because reading only the env line has been misleading: the env flags above cannot turn the
+  // highest-blast-radius producer on or off, and this row can.
+  if (arms && arms.length) {
+    for (const a of arms) {
+      // Three states, not two: on / off / UNKNOWN (no row). Collapsing unknown into off is the
+      // same merge this SD exists to undo.
+      const mark = a.enabled === true ? '🟢 on ' : a.enabled === false ? '⚪ off' : '❔ ???';
+      const unknown = a.enabled === null ? ' — NO ROW: state unknown, not "off"' : '';
+      lines.push(`    ${mark}  ${a.label} (DB arm — OPERATIVE${a.label === 'auto-refill' ? ', gates the hourly refill cron' : ''})${unknown}`);
+    }
+  } else {
+    lines.push('    ⚠️  DB arm states UNREADABLE — the OPERATIVE gate could not be read; do NOT read this as "off"');
+  }
+  // SD-LEO-INFRA-SOURCING-ENGINE-BELT-GATED-001 (FR-3): the DEMAND VERDICT, printed immediately
+  // under the flag list so the two are read together. A flag line alone cannot distinguish "on and
+  // correctly quiet" from "on and broken" — that ambiguity is what the whole SD is about. Rendered
+  // UNCONDITIONALLY, one line per gated producer: an engine with no recorded decision prints
+  // NEVER RAN <engine> rather than nothing, because a section that disappears when there is no data
+  // reports a full belt and an unwired gate identically.
+  //
+  // SHAPE NOTE: an entry may be a DECISION object (its `decision` field is a STRING) or a
+  // {engine, decision} wrapper carrying null for an engine that has never run (its `decision` field
+  // is an object or null). Disambiguated on TYPE, never on presence — both shapes have a `decision`
+  // key, so a presence check would read the string 'withheld' as a decision object and throw.
+  const entries = Array.isArray(demand) ? demand : [demand];
+  for (const e of entries) {
+    const isBareDecision = e && typeof e.decision === 'string';
+    lines.push('  ' + formatDemandDecision(isBareDecision ? e : (e && e.decision) || null, e && e.engine));
+  }
   // Roadmap-SSOT unpromoted items
   if (wave) {
     lines.push(`  Roadmap-SSOT (plan-of-record remainder) unpromoted: ${wave.totalUnpromoted} — promote via leo-create-sd --from-roadmap-item (REGISTER-FIRST)`);
@@ -499,7 +556,14 @@ export async function fetchSourcingState({ supabase = null, env = process.env } 
   if (!client) {
     const url = env.SUPABASE_URL || env.NEXT_PUBLIC_SUPABASE_URL;
     const key = env.SUPABASE_SERVICE_ROLE_KEY;
-    if (!url || !key) return { wave: null, backlog: null };
+    // No creds is NOT "never ran" — we did not look. Rendering NEVER RAN here would report an
+    // unwired gate on every credential-less run, which is a false alarm that trains people to
+    // ignore the line. Unmeasurable is the honest verdict for a measurement not attempted.
+    if (!url || !key) return { wave: null, backlog: null, demand: BELT_DEPTH_GATED_PRODUCERS.map((engine) => ({
+      engine,
+      decision: { engine, gauge_value: null, floor: null, decision: 'unmeasurable',
+        measured_at: null, reason: 'no DB credentials in this environment — decision log not read' },
+    })) };
     const { createClient } = await import('@supabase/supabase-js');
     client = createClient(url, key);
   }
@@ -544,15 +608,48 @@ export async function fetchSourcingState({ supabase = null, env = process.env } 
       backlog = summarizeBacklogDisposition(tot.count, disp.count);
     }
   } catch { backlog = null; }
-  return { wave, backlog };
+  // SD-LEO-INFRA-SOURCING-ENGINE-BELT-GATED-001 (FR-3): last recorded demand verdict per gated
+  // producer. Reuses the client already built above. readLastDemandDecision never throws and
+  // returns null only for "nothing ever recorded", which renders as NEVER RAN <engine>.
+  const demand = [];
+  for (const engine of BELT_DEPTH_GATED_PRODUCERS) {
+    demand.push({ engine, decision: await readLastDemandDecision(client, engine) });
+  }
+  // FR-5: the DB arm states — the gate that actually governs the producers, as opposed to the env
+  // flags above. Fail-open (null) so an unreadable row degrades to an explicit "could not read"
+  // line rather than an absent section.
+  //
+  // TESTING review 57879900 (C2): this originally called readSourcingEngineFlagsFromDb, which
+  // NEVER THROWS — sourcing-engine-awareness.mjs:61-67 swallows the query error and falls back to
+  // the ENV reader, and this call site passed {}, so every arm came back enabled=false. The catch
+  // below was therefore UNREACHABLE for a DB fault, and a failed read rendered as a confident
+  // "⚪ off auto-refill (OPERATIVE)". A lie on the line labelled OPERATIVE is worse than a blank
+  // one, and it is this SD's own thesis — unreadable state must never render as a definite state.
+  // So we query the arm table DIRECTLY here and keep the error: fail-soft in the FALLBACK sense
+  // (env-derived) is right for a forecaster deciding what to do, and wrong for a badge reporting
+  // what IS.
+  let arms = null;
+  try {
+    const { SOURCING_ACTIVATION_TABLE, SOURCING_ENGINE_FLAGS } = await import('./lib/sourcing-engine-awareness.mjs');
+    const { data, error } = await client.from(SOURCING_ACTIVATION_TABLE).select('arm, enabled');
+    if (error) throw new Error(error.message);
+    const byArm = new Map((data || []).map((r) => [r.arm, r.enabled === true]));
+    // An arm with no row is genuinely unknown, not off — a missing row and a row saying false are
+    // different facts and the badge must not merge them.
+    arms = SOURCING_ENGINE_FLAGS.map((f) => ({
+      label: f.label,
+      enabled: byArm.has(f.label) ? byArm.get(f.label) : null,
+    }));
+  } catch { arms = null; }
+  return { wave, backlog, demand, arms };
 }
 
 /** Compose the full state-probe section (async, fail-open — never throws). */
 export async function renderSourcingState({ supabase = null, env = process.env } = {}) {
   try {
     const flags = readSourcingFlags(env);
-    const { wave, backlog } = await fetchSourcingState({ supabase, env });
-    return renderSourcingStateLines({ flags, wave, backlog });
+    const { wave, backlog, demand, arms } = await fetchSourcingState({ supabase, env });
+    return renderSourcingStateLines({ flags, wave, backlog, demand, arms });
   } catch (err) {
     return '═══ SOURCING SSOT STATE ═══\n  ✅ state probe skipped (fail-open): ' + (err?.message || String(err));
   }

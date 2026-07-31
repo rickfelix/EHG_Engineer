@@ -1,8 +1,8 @@
-<!-- file_content_hash: 55f8346a520f9ae8 -->
+<!-- file_content_hash: 73d7358f2ee431dd -->
 <!-- GENERATED FILE - DO NOT EDIT DIRECTLY. Source of truth: leo_protocol_sections (DB). Regenerate: node scripts/generate-claude-md-from-db.js. Drift check: node scripts/check-claude-md-drift.cjs -->
 # CLAUDE_COORDINATOR.md - Coordinator Role Contract
 
-**Generated**: 2026-07-28 7:42:15 AM
+**Generated**: 2026-07-29 3:25:10 PM
 **Protocol**: LEO 4.4.1
 **Purpose**: Canonical coordinator role + SRE charter — fleet supervisor session
 **Load when**: Running /coordinator, or orienting a fleet-coordinator session
@@ -94,6 +94,6 @@ _Hierarchy note (chairman-ratified D-0719-ORGCHART "A", 2026-07-19): this partne
 
 ---
 
-*Generated from database: 2026-07-28*
+*Generated from database: 2026-07-29*
 *Protocol Version: 4.4.1*
 *Source of truth: leo_protocol_sections (section_type=coordinator_role_contract). Do not hand-edit — edit the DB section and regenerate.*

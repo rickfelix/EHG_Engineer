@@ -131,6 +131,21 @@ describe('POST /api/fleet-actions/add-session', () => {
     expect(res.status).toHaveBeenCalledWith(400);
   });
 
+  // Quick-fix QF-20260731-222: a refusal thrown inside spawn() (tree-currency, launch contract)
+  // must answer {ok:false, reason} — not fall through to the EVA error handler, which flattens it
+  // to a bare 422 the sessions page can only render as "Spawn failed: 422".
+  it('answers a spawn() throw as {ok:false, reason} so the UI can render the refusal', async () => {
+    spawn.mockRejectedValueOnce(new Error('[tree-currency] REFUSED: 36 commit(s) behind origin/main'));
+    const req = mockReq({ role: 'worker', callsign: 'Hotel-1' });
+    const res = mockRes();
+    await addSession(req, res);
+
+    expect(res.status).toHaveBeenCalledWith(422);
+    const payload = res.json.mock.calls.at(-1)[0];
+    expect(payload.ok).toBe(false);
+    expect(payload.reason).toContain('[tree-currency] REFUSED');
+  });
+
   // SD-LEO-FEAT-FLEET-COLD-START-UX-001. The suite above asserts opts as expect.anything(), which
   // is exactly why the key-presence defect was invisible — these assert opts itself.
   describe('role -> startup prompt (FR-1/FR-2)', () => {

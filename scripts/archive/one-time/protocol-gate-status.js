@@ -158,8 +158,14 @@ async function checkPostCompaction(phase) {
     process.exit(1);
   }
 
-  console.log(`\nChecking Post-Compaction Gate (phase: ${phase || 'unknown'})`);
-  const result = await gateModule.validatePostCompactionGate(phase);
+  // SD-LEO-INFRA-ROLE-CONTRACT-READ-GATE-001 / FR-4: validatePostCompactionGate was REMOVED. It was
+  // the only caller of a gate that had no live caller, hard-blocked on paper, and accepted a 1-line
+  // read as a satisfied "post-compaction re-read" — a trap for anyone later solving exactly this
+  // problem, since its name is what they would search for. Coverage now lives in
+  // lib/protocol/contract-read-coverage.cjs (union-of-ranges + delivered lines).
+  console.log(`\nPost-Compaction Gate check REMOVED (phase: ${phase || 'unknown'})`);
+  console.log('  See lib/protocol/contract-read-coverage.cjs — this archived script is no longer a gate status tool.');
+  const result = { pass: true, score: 0, max_score: 0, issues: [], warnings: ['validatePostCompactionGate removed by SD-LEO-INFRA-ROLE-CONTRACT-READ-GATE-001'] };
 
   console.log('');
   console.log('Result:', result.pass ? '✅ PASS' : '❌ BLOCKED');

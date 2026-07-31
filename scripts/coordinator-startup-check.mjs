@@ -16,7 +16,7 @@
 // Exit code is ALWAYS 0 (fail-open). Model: peer of scripts/coordinator-audit.mjs.
 
 import 'dotenv/config';
-import { readFileSync } from 'fs';
+import { readFileSync, existsSync } from 'fs';
 import { resolve, dirname } from 'path';
 import { fileURLToPath } from 'url';
 // SD-LEO-INFRA-FLEET-FRESHNESS-GUARD-001: advisory, fail-open checkout-freshness badge.
@@ -24,6 +24,9 @@ import { checkoutFreshness, freshnessBadge, CRITICAL_PROTOCOL_FILES } from '../l
 // QF-20260725-342: single source of truth for the resurface threshold (see that module's header).
 import { createRequire as _createRequireQF342 } from 'node:module';
 const { OPERATING_THRESHOLD_HOURS } = _createRequireQF342(import.meta.url)('../lib/coordination/resurface-threshold.cjs');
+// SD-LEO-INFRA-ROLE-CONTRACT-READ-GATE-001 / FR-2: same resolver adam-register.cjs and the tracker
+// both use, so the coordinator check reads exactly the state the hook wrote — no second path.
+const { resolveStateReadPath } = _createRequireQF342(import.meta.url)('./hooks/lib/session-state-resolver.cjs');
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const REPO_ROOT = resolve(__dirname, '..');
@@ -513,9 +516,99 @@ export function renderFreshness(repoRoot = REPO_ROOT) {
   }
 }
 
+/**
+ * SD-LEO-INFRA-ROLE-CONTRACT-READ-GATE-001 / FR-2.
+ *
+ * THE AUDIT THAT PRODUCED THIS: no role had both halves. adam and solomon have register scripts that
+ * check the contract read, but contracts too large to read in one call. The coordinator had a
+ * contract small enough to read (CLAUDE_COORDINATOR.md ~25.5KB, under the 25k-token cap for any real
+ * tokenizer — established from the byte count, not from a token ratio) and NO VERIFIER OF ANY KIND.
+ * Its priming requirement terminated in a self-attestation that nothing checked.
+ *
+ * Deliberately mirrors adam-register.cjs checkContractRead rather than inventing a shape.
+ *
+ * WHY HERE AND NOT IN A NEW coordinator-register.cjs: registration is an inline node -e in
+ * coordinator.md, and Step 4 of that same ritual already invokes THIS script at the fixed activation
+ * moment. A parallel register script would mean inventing an invocation point that does not exist.
+ *
+ * FAIL-OPEN, LIKE EVERYTHING ELSE HERE. This reports; it never blocks. A gate that stops a
+ * coordinator from starting because it has not yet read the contract it is starting in order to read
+ * is a deadlock, and the script's contract is "exit code is ALWAYS 0".
+ */
+export const COORDINATOR_CONTRACT_FILE = 'CLAUDE_COORDINATOR.md';
+
+export function checkCoordinatorContractRead(repoRoot = REPO_ROOT, stateReader = null) {
+  const result = {
+    contract_file: COORDINATOR_CONTRACT_FILE,
+    contract_exists: false,
+    contract_read: false,
+    contract_read_partial: false,
+    contract_last_read_at: null,
+  };
+  try {
+    result.contract_exists = existsSync(resolve(repoRoot, COORDINATOR_CONTRACT_FILE));
+    const state = stateReader ? stateReader() : readCoordinatorSessionState(repoRoot);
+    if (!state) return result;
+    const status = state.protocolFileReadStatus && state.protocolFileReadStatus[COORDINATOR_CONTRACT_FILE];
+    if (status && status.readCount > 0) {
+      result.contract_read = true;
+      result.contract_read_partial = status.lastReadWasPartial === true;
+      result.contract_last_read_at = status.lastReadAt || null;
+    } else if (Array.isArray(state.protocolFilesRead) && state.protocolFilesRead.includes(COORDINATOR_CONTRACT_FILE)) {
+      result.contract_read = true; // legacy-array fallback, same as adam-register
+    }
+  } catch { /* fail-open: tracking unavailable must never break coordinator startup */ }
+  return result;
+}
+
+/** Read session state without throwing. Separated so tests can inject state directly. */
+function readCoordinatorSessionState(repoRoot) {
+  try {
+    const statePath = resolveStateReadPath(repoRoot);
+    if (!statePath || !existsSync(statePath)) return null;
+    return JSON.parse(readFileSync(statePath, 'utf8').replace(/^﻿/, ''));
+  } catch { return null; }
+}
+
+/**
+ * Render the contract-read state.
+ *
+ * PER-ROLE ARMING IS RENDERED, NOT IMPLIED. Global arming was rejected: it would make the one role
+ * that can comply today wait on two that cannot, and would couple this SD to a sibling deliberately
+ * sequenced after it. The risk of per-role is someone assuming uniform coverage, so the disarmed
+ * roles are printed explicitly rather than left to inference.
+ */
+export function renderContractRead(repoRoot = REPO_ROOT, check = null) {
+  const lines = ['═══ ROLE CONTRACT READ ═══'];
+  try {
+    const c = check || checkCoordinatorContractRead(repoRoot);
+    if (!c.contract_exists) {
+      lines.push(`  ✗ ${COORDINATOR_CONTRACT_FILE} not found — regenerate: node scripts/generate-claude-md-from-db.js`);
+    } else if (!c.contract_read) {
+      lines.push(`  ✗ NO RECORD of ${COORDINATOR_CONTRACT_FILE} being read this session.`);
+      // Safe advice HERE and only here: this contract is under the read cap, so a no-offset Read
+      // genuinely covers it. The same instruction on an over-cap contract silently truncates and is
+      // then recorded as a complete read — see FR-3/FR-5.
+      lines.push(`  → Read ${COORDINATOR_CONTRACT_FILE} in full before coordinating.`);
+    } else if (c.contract_read_partial) {
+      lines.push(`  ⚠ Last read of ${COORDINATOR_CONTRACT_FILE} was PARTIAL (offset/limit used).`);
+      lines.push('  → Re-read it in full; this contract fits in one call.');
+    } else {
+      lines.push(`  ✅ ${COORDINATOR_CONTRACT_FILE} read${c.contract_last_read_at ? ` at ${c.contract_last_read_at}` : ''}`);
+    }
+    lines.push('  ── per-role arming ──');
+    lines.push('  coordinator : ARMED (contract fits in one read)');
+    lines.push('  adam        : disarmed — CLAUDE_ADAM.md exceeds the read cap (SD-LEO-INFRA-ADAM-CONTRACT-READABLE-001)');
+    lines.push('  solomon     : disarmed — CLAUDE_SOLOMON.md exceeds the read cap');
+  } catch (err) {
+    lines.push('  ✅ contract-read check skipped (fail-open): ' + (err?.message || String(err)));
+  }
+  return lines.join('\n');
+}
+
 export function buildReport(argv = [], env = {}, repoRoot = REPO_ROOT) {
   const armed = parseArmedSet(argv, env);
-  return [renderResponsibilities(repoRoot), '', renderAdamLane(), '', renderLoops(armed), '', renderFreshness(repoRoot)].join('\n');
+  return [renderResponsibilities(repoRoot), '', renderAdamLane(), '', renderLoops(armed), '', renderContractRead(repoRoot), '', renderFreshness(repoRoot)].join('\n');
 }
 
 // SD-LEO-INFRA-BOOTSTRAPPABLE-SURVIVOR-AGNOSTIC-001: coordinator-cold-recovery.cjs shipped +
