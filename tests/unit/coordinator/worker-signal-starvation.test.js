@@ -62,16 +62,27 @@ describe('reportWorkerSignalStarvation', () => {
     expect(lines.filter((l) => l.includes('WORKER_SIGNAL_UNANSWERED')).length).toBe(2);
   });
 
-  it('does NOT count signals that are answered, read, routed, or under threshold, or non-worker senders', async () => {
+  it('does NOT count signals that are answered, routed, under threshold, or from non-worker senders', async () => {
+    // SD-LEO-INFRA-WORKER-ESCALATION-WRITE-001 FR-3: row 'b' (read but never answered) was removed
+    // from this fixture and promoted to its own test below. Asserting starved===0 over a set that
+    // included a read-but-unanswered row locked in the defect that blinded this gauge to 99.85% of
+    // its population.
     const { log } = capture();
     const r = await reportWorkerSignalStarvation(fakeSupabase([
       { id: 'a', sender_session: 'w', sender_type: 'worker', created_at: minsAgo(90), acknowledged_at: minsAgo(5), payload: { signal_type: 'stuck' } },
-      { id: 'b', sender_session: 'w', sender_type: 'worker', created_at: minsAgo(90), read_at: minsAgo(5), payload: { signal_type: 'stuck' } },
       { id: 'c', sender_session: 'w', sender_type: 'worker', created_at: minsAgo(90), payload: { signal_type: 'stuck', routed_to_feedback_id: 'f-1' } },
       { id: 'd', sender_session: 'w', sender_type: 'worker', created_at: minsAgo(10), payload: { signal_type: 'stuck' } },   // too young
       { id: 'e', sender_session: 'adam', sender_type: 'adam', created_at: minsAgo(90), payload: { signal_type: 'stuck' } },  // not a worker
     ]), { now: NOW, log, env: {} });
     expect(r.starved).toBe(0);
+  });
+
+  it('DOES count a read-but-unanswered signal (FR-3 — read_at is delivery, not disposition)', async () => {
+    const { log } = capture();
+    const r = await reportWorkerSignalStarvation(fakeSupabase([
+      { id: 'b', sender_session: 'w', sender_type: 'worker', created_at: minsAgo(90), read_at: minsAgo(5), payload: { signal_type: 'stuck' } },
+    ]), { now: NOW, log, env: {} });
+    expect(r.starved).toBe(1);
   });
 
   // QF-20260727-683: every /checkin emits a fresh payload.kind='roll_call' availability
