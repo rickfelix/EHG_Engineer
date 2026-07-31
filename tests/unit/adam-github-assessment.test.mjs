@@ -5,7 +5,7 @@
  */
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { summarizePrs, rankGithubHealth } from '../../scripts/adam-github-assessment.mjs';
+import { summarizePrs, rankGithubHealth, countFailedRuns } from '../../scripts/adam-github-assessment.mjs';
 
 const NOW = new Date('2026-06-21T00:00:00Z').getTime();
 const daysAgo = (d) => new Date(NOW - d * 24 * 60 * 60 * 1000).toISOString();
@@ -38,6 +38,35 @@ test('rankGithubHealth: null facts are omitted (no fabricated alarm)', () => {
   const r = rankGithubHealth({});
   assert.equal(r.clean, true);
   assert.equal(r.findings.length, 0);
+});
+
+// ── QF-20260728-823 D2: the failed-run gauge must measure runs, and must never read UNKNOWN as 0 ──
+
+test('countFailedRuns: reported/actual == 1 across concatenated pages (exhaustion, not first page)', () => {
+  // 2 pages of `-q .workflow_runs[].conclusion` output, 120 failures total — more than one
+  // per_page=100 page, so a first-page-only count would report 100 and the ratio would be 0.83.
+  const actual = 120;
+  const stdout = Array.from({ length: actual }, () => 'failure').join('\n') + '\n';
+  assert.equal(countFailedRuns(stdout) / actual, 1);
+});
+
+test('countFailedRuns: counts only failure conclusions, tolerates quotes/blank lines', () => {
+  assert.equal(countFailedRuns('failure\n"failure"\nsuccess\ncancelled\n\n  failure  \n'), 3);
+  assert.equal(countFailedRuns(''), 0);   // measured, genuinely zero failures
+});
+
+test('countFailedRuns: an unreadable runs API is UNKNOWN (null), never 0', () => {
+  assert.equal(countFailedRuns(null), null);
+  assert.equal(countFailedRuns(undefined), null);
+  assert.notEqual(countFailedRuns(null), 0);
+});
+
+test('rankGithubHealth: UNKNOWN failed-run count alarms — silence must not read as all clear', () => {
+  const r = rankGithubHealth({ ciRedOnMain: 0, prStale: 0, failedRuns: null });
+  assert.equal(r.clean, false, 'an unreadable CI must NOT render as clean');
+  assert.match(r.summary, /UNKNOWN/);
+  // a measured zero stays silent — the alarm is about unmeasurability, not about zero
+  assert.equal(rankGithubHealth({ ciRedOnMain: 0, prStale: 0, failedRuns: 0 }).clean, true);
 });
 
 test('rankGithubHealth: severity-orders findings (high before low) and summarizes', () => {
