@@ -1,0 +1,57 @@
+[
+  {
+    "name": "realtime-subscribe-teardown-recursion-lint",
+    "script": "scripts/lint/realtime-subscribe-teardown-recursion-lint.mjs",
+    "rootFlag": "--root",
+    "fixtures": [
+      {
+        "path": "lib/seeded-realtime-defect.js",
+        "content": "// SEEDED DEFECT: teardown called synchronously inside the subscribe callback.\nexport function wire(supabase) {\n  const ch = supabase.channel('x');\n  ch.on('postgres_changes', {}, () => {}).subscribe((status) => {\n    if (status === 'SUBSCRIBED') {\n      supabase.removeChannel(ch);\n    }\n  });\n  return ch;\n}\n"
+      }
+    ]
+  },
+  {
+    "name": "session-coordination-insert-classguard-lint",
+    "script": "scripts/lint/session-coordination-insert-classguard-lint.mjs",
+    "rootFlag": "--root",
+    "fixtures": [
+      {
+        "path": "lib/seeded-coord-defect.js",
+        "content": "// SEEDED DEFECT: raw session_coordination insert bypassing insertCoordinationRow().\nexport async function send(supabase, payload) {\n  const { error } = await supabase.from('session_coordination').insert({\n    message_type: 'INFO',\n    payload\n  });\n  return error;\n}\n"
+      }
+    ]
+  },
+  {
+    "name": "alter-default-override-lint",
+    "script": "scripts/lint/alter-default-override-lint.mjs",
+    "rootFlag": "--root",
+    "fixtures": [
+      {
+        "path": "database/migrations/20260731000000_seeded_default.sql",
+        "content": "-- SEEDED DEFECT: migration sets a default that code below contradicts.\nALTER TABLE seeded_widgets ALTER COLUMN status SET DEFAULT 'active';\n"
+      },
+      {
+        "path": "lib/seeded-default-writer.js",
+        "content": "// SEEDED DEFECT: hardcodes a DIFFERENT literal than the migration default above,\n// silently negating it at insert time (the F12 drift class).\nexport async function create(supabase) {\n  return supabase.from('seeded_widgets').insert({ status: 'draft' });\n}\n"
+      }
+    ]
+  },
+  {
+    "name": "fleet-liveness-select-lint",
+    "script": "scripts/lint/fleet-liveness-select-lint.mjs",
+    "rootFlag": null,
+    "untestableReason": "no --root/--dir scoping flag (only --enforce); scans a hardcoded tree, so seeding would require planting the defect in the real working tree"
+  },
+  {
+    "name": "no-mocked-sut-import-lint",
+    "script": "scripts/lint/no-mocked-sut-import-lint.mjs",
+    "rootFlag": null,
+    "untestableReason": "no --root/--dir scoping flag; SCAN_DIRS is a hardcoded tests/ constant. Also warn-only by default (NO_MOCKED_SUT_IMPORT_MODE=block to promote), so even on detection it would exit 0"
+  },
+  {
+    "name": "venture-artifacts-write-lint",
+    "script": "scripts/lint/venture-artifacts-write-lint.mjs",
+    "rootFlag": null,
+    "untestableReason": "no argv scoping at all; SCAN_DIRS is a hardcoded constant"
+  }
+]
