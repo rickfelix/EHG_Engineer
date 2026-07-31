@@ -203,11 +203,23 @@ async function preflight() {
   return fail;
 }
 
-const plan = [
-  { order: 1, target: 'adam_manual (NEW section_type)', bytes: MANUAL.length, note: 'companion FIRST — the contract references it by name' },
-  { order: 2, target: 'adam_provenance (NEW section_type)', bytes: PROVENANCE.length, note: 'companion FIRST — partial by design, coverage disclosed in-file' },
-  { order: 3, target: 'adam_role_contract row 601 (REPLACE 70,049 B)', bytes: CONTRACT.length, note: 'only AFTER both companions exist' },
-];
+/**
+ * Built from the SPLIT, not from the raw artifact. The artifact is 44,857 B but the row bodies are
+ * 37,063 + 4,483 — the landing map, S7 and the duplicate title never land. A plan that displayed the
+ * artifact size would misreport what is about to be written, which is how the isolated-artifact
+ * preflight mis-passed an impossible scope in the first place.
+ */
+function buildPlan() {
+  const s = splitCorrected(CONTRACT);
+  return [
+    { order: 1, target: 'adam_manual (companion row)', bytes: MANUAL.length, note: 'companion FIRST — the contract names it in its opening blockquote' },
+    { order: 2, target: 'adam_provenance (companion row)', bytes: PROVENANCE.length, note: 'companion FIRST — partial by design, coverage disclosed in-file' },
+    ...EMPTY_ROWS.map((e, i) => ({ order: 3 + i, target: `DELETE row ${e.id}`, bytes: 0, note: e.why.slice(0, 96) })),
+    { order: 8, target: 'adam_role_contract row 601 (REWRITE)', bytes: s.contract.length, note: '70,049 B -> consolidated body; landing map + S7 + duplicate title excluded' },
+    { order: 9, target: 'adam_self_adherence_loop row 602 (REWRITE)', bytes: s.selfAdherence.length, note: 'S6 goes to its OWN section_type — in adam_role_contract it renders identically and is wrong forever' },
+    { order: 10, target: `UNTOUCHED rows ${KEEP_ROWS.join(', ')}`, bytes: 0, note: '614 genuinely independent (0% absorbed); 610 SHARED — included, never copied' },
+  ];
+}
 
 /**
  * FR-3 row plan, per the coordinator's scope ruling (COORDINATOR_REPLY c903eba1, 2026-07-31):
@@ -298,6 +310,59 @@ const COMPANIONS = [
 ];
 
 /**
+ * Land the CONTRACT half. Companions must already exist — the contract references them by name.
+ *
+ * *** "EMPTY THE ROWS" MEANS DELETE THEM, AND THAT IS NOT A LIBERTY WITH THE RULING. ***
+ * Blanking `content` does NOT remove a section from the render. formatSection() emits
+ * `## ${section.title}` UNCONDITIONALLY and only then appends content, so a blanked row renders as
+ * an ORPHAN HEADING. Verified directly:
+ *     formatSection({title:'SD Creation How-To + Duty Procedures', content:''})
+ *       -> "## SD Creation How-To + Duty Procedures\n\n"
+ * Blanking all five would ship five empty headings into the governed contract — visibly broken, and
+ * on an SD whose acceptance is that the file gets READ. So the rows are deleted.
+ *
+ * DELETE is destructive, which is exactly why stalenessGuard refuses unless every one of these ids
+ * is present AND unchanged in the snapshot: the restore path is re-inserting them from
+ * adam-contract-9row-snapshot-2026-07-31.json, which carries full content plus per-row sha256.
+ */
+async function landContract(split) {
+  const results = [];
+
+  // Companions first — the ordering is a safety property, not a preference. The contract body names
+  // both companions in its opening blockquotes; landing it while they are absent leaves a governed
+  // contract pointing at nothing.
+  for (const c of COMPANIONS) {
+    const { data } = await supabase.from('leo_protocol_sections').select('id').eq('section_type', c.section_type);
+    if (!data || data.length !== 1) {
+      throw new Error(`ORDER VIOLATION: ${c.section_type} has ${data ? data.length : 0} rows. Land the companions first (--companions-only).`);
+    }
+  }
+
+  // 1. Delete the absorbed rows.
+  for (const e of EMPTY_ROWS) {
+    const { error } = await supabase.from('leo_protocol_sections').delete().eq('id', e.id);
+    if (error) throw new Error(`delete row ${e.id}: ${error.message}`);
+    results.push(`DELETED row ${e.id} — ${e.why}`);
+  }
+
+  // 2. Row 601 gets the consolidated contract body.
+  const { error: e601 } = await supabase.from('leo_protocol_sections')
+    .update({ content: split.contract }).eq('id', 601);
+  if (e601) throw new Error(`update row 601: ${e601.message}`);
+  results.push(`REWROTE row 601 — 70,049 -> ${split.contract.length} B`);
+
+  // 3. Row 602 gets the S6 self-adherence body. It is its OWN section_type; writing S6 into
+  //    adam_role_contract instead renders identically today and is wrong forever after.
+  const { error: e602 } = await supabase.from('leo_protocol_sections')
+    .update({ content: split.selfAdherence }).eq('id', 602);
+  if (e602) throw new Error(`update row 602: ${e602.message}`);
+  results.push(`REWROTE row 602 (adam_self_adherence_loop) — ${split.selfAdherence.length} B`);
+
+  results.push(`UNTOUCHED: ${KEEP_ROWS.join(', ')} — 614 is 0% absorbed and genuinely independent; 610 is the SHARED row, included never copied.`);
+  return results;
+}
+
+/**
  * Land the companion rows. IDEMPOTENT by section_type: re-running updates content rather than
  * inserting a second row, because two rows of one companion type would silently BOTH render.
  */
@@ -345,7 +410,7 @@ async function landCompanions() {
 (async () => {
   const fail = await preflight();
   console.log('=== FR-3 LANDING PLAN ===');
-  for (const p of plan) console.log(`  ${p.order}. ${p.target}  [${p.bytes} B]  — ${p.note}`);
+  for (const p of buildPlan()) console.log(`  ${p.order}. ${p.target}  [${p.bytes} B]  — ${p.note}`);
   console.log('');
   console.log('preflight refusals:', fail.length ? '\n  * ' + fail.join('\n  * ') : 'none');
   console.log('');
@@ -374,10 +439,41 @@ async function landCompanions() {
     process.exit(0);
   }
 
-  console.error('FULL APPLY (contract rewrite) intentionally not implemented — see header.');
-  console.error('Blocked on: the chairman composite question, the SMS cadence diff, and the open');
-  console.error('five-row question (replacing row 601 ALONE leaves ~31,079 tokens vs a 25,000 cap,');
-  console.error('so the consolidated artifact also requires emptying 604/607/624/606/625).');
-  console.error('Use --companions-only to land the A-GOVERN-authorised half.');
-  process.exit(1);
+  // The contract rewrite is IMPLEMENTED but gated on a THIRD, human factor. The scope question is
+  // settled (coordinator ruling c903eba1) and the mechanics are ready; what is NOT settled is the
+  // CONTENT, and that is the chairman's alone. Landing it changes what every live Adam session
+  // loads, so the gate is a named flag rather than a comment nobody has to read.
+  if (process.env.LEO_ADAM_CONTRACT_CHAIRMAN_CLEARED !== '1') {
+    console.error('REFUSING THE CONTRACT REWRITE — chairman content clearance not recorded.');
+    console.error('');
+    console.error('SETTLED: the SCOPE question (coordinator ruling c903eba1) — empty 604/607/624/606/625,');
+    console.error('keep 614, move S6 to 602. Mechanics are implemented and preflight passes.');
+    console.error('');
+    console.error('NOT SETTLED, and NOT the coordinator\'s to settle — both are chairman content calls:');
+    console.error('  1. THE COMPOSITE. What would land is his approved shortened file PLUS THREE');
+    console.error('     restorations (5q acceptance-sitting, 5r lifted how-to rules, and the row-607');
+    console.error('     sourcing-engine restoration). Each restores content he had already approved being');
+    console.error('     IN the contract — but the composite is not literally the artifact he signed.');
+    console.error('  2. THE SMS CADENCE, now a textual diff rather than a suspicion:');
+    console.error('       original  "ROUTINE HEARTBEAT = BRIEF HOURLY SMS"  (chairman-confirmed hourly)');
+    console.error('       corrected "ROUTINE HEARTBEAT = brief SMS"          (HOURLY is GONE)');
+    console.error('     A later verbal set 30min "until he restores hourly", so landing this removes the');
+    console.error('     cadence rather than restoring it. A chairman-facing cadence change must not ride');
+    console.error('     inside a contract correction unnoticed.');
+    console.error('');
+    console.error('When he clears BOTH: LEO_ADAM_CONTRACT_CHAIRMAN_CLEARED=1 LEO_ADAM_CONTRACT_LAND=1 \\');
+    console.error('  node scripts/protocol/adam-contract-land.mjs --apply');
+    process.exit(1);
+  }
+
+  console.log('APPLYING FULL LANDING (chairman clearance recorded).');
+  for (const line of await landContract(splitCorrected(CONTRACT))) console.log('  ' + line);
+  console.log('');
+  console.log('NOW VERIFY — and the acceptance is a READ, never a byte or tokenizer proxy:');
+  console.log('  node scripts/generate-claude-md-from-db.js');
+  console.log('  node scripts/check-claude-md-drift.cjs');
+  console.log('  then Read CLAUDE_ADAM.md with NO offset/limit and confirm NO truncation notice.');
+  console.log('Rollback is ROW-LEVEL (CONST-005): restoring the .md fixes rendering and leaves the');
+  console.log('governed rows wrong. Re-insert from the snapshot instead.');
+  process.exit(0);
 })();
