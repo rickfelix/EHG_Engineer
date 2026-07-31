@@ -92,6 +92,28 @@ describe('wip-guard.checkWorktreeWIP', () => {
       fs.rmSync(nonGit, { recursive: true, force: true });
     }
   });
+
+  // SD-LEO-INFRA-FULL-UTILISATION-RECOVERY-001 (FR-3). The case above — a directory in NO repo —
+  // is genuinely "nothing to lose". This is the OTHER case, and it is a real observed condition: a
+  // leftover directory NESTED inside a repo (an unregistered .worktrees/<sd> is exactly this).
+  // There `git status` walks UP and reports the PARENT tree's dirt as if it were this worktree's,
+  // so a caller reading it would attribute someone else's changes to this seat. Same root cause as
+  // isReapable's dirty_tree false positive (harness backlog 16c88c91).
+  test('directory NESTED in another repo → dirty=true, not_a_worktree_root, and NO borrowed files', () => {
+    const nested = path.join(TMP_REPO, 'leftover-not-a-worktree');
+    fs.mkdirSync(nested, { recursive: true });
+    // Make the PARENT repo dirty — this is the dirt that must NOT be attributed to `nested`.
+    fs.writeFileSync(path.join(TMP_REPO, 'parent-dirty.txt'), 'parent tree change');
+    try {
+      const r = wip.checkWorktreeWIP(nested);
+      expect(r.dirty).toBe(true);
+      expect(r.note).toBe('not_a_worktree_root');
+      expect(r.files).toEqual([]); // never borrow the parent's file list
+    } finally {
+      fs.rmSync(nested, { recursive: true, force: true });
+      fs.rmSync(path.join(TMP_REPO, 'parent-dirty.txt'), { force: true });
+    }
+  });
 });
 
 describe('wip-guard.checkAllWorkersWIP', () => {
