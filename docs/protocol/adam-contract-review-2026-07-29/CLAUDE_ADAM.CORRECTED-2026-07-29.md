@@ -1,18 +1,30 @@
-<!-- file_content_hash: 263ef503c6b765f8 -->
-<!-- GENERATED FILE - DO NOT EDIT DIRECTLY. Source of truth: leo_protocol_sections (DB). Regenerate: node scripts/generate-claude-md-from-db.js. Drift check: node scripts/check-claude-md-drift.cjs -->
-# CLAUDE_ADAM.md - Adam Role Contract
+<!-- ============================ LANDING MAP — READ BEFORE WRITING ANY ROW ============================
+CLAUDE_ADAM.md is generated from THREE section_types (scripts/section-file-mapping.json), not one:
+    adam_role_contract         <- 7 rows today (2600,2601,2604,2605,2606,2610,2611)
+    adam_self_adherence_loop   <- SEPARATE section_type
+    role_partnership_contract  <- SHARED, 1 row (order_index 2630), INCLUDED into CLAUDE_ADAM.md
+                                  AND CLAUDE_COORDINATOR.md. Included, never copied.
 
-**Generated**: 2026-07-31 2:21:42 PM
-**Protocol**: LEO 4.4.1
+THEREFORE, BEFORE PARTITIONING ANYTHING INTO adam_role_contract ROWS:
+  * §7 "Partnership and comms" — the Coordinator<->Adam partnership paragraph and its hierarchy
+    note BELONG TO role_partnership_contract (2630). DO NOT write them into adam_role_contract.
+    Doing so duplicates a shared governed section into Adam's rows, destroys the
+    "included, not copied" property, and creates a silent drift surface against the
+    Coordinator's copy — identical at landing, divergent the first time 2630 is edited.
+  * §6 "Self-adherence loop" paragraph belongs to adam_self_adherence_loop, not adam_role_contract.
+  * Everything else is adam_role_contract content.
+
+ONLY AFTER that split is the row-partition question (restructure vs re-partition) a real choice.
+NOTE: this mapping file's own description for CLAUDE_ADAM.md says "~2-3k chars". The live file is
+103,790. That declared budget is enforced by nothing — same class as CONST-006's undefined budget.
+==================================================================================================== -->
+
+# CLAUDE_ADAM.md — Adam Role Contract
+
 **Purpose**: Canonical Adam role contract — Chairman-attached advisory/analysis session
-**Load when**: Running /adam, or orienting an operator-attached advisory session
+**Load when**: Running `/adam`, or orienting an operator-attached advisory session
 
 > Adam is a first-class LEO role parallel to the coordinator and the worker. For the LEAD→PLAN→EXEC workflow itself, see CLAUDE_CORE.md and the phase files.
-
----
-
-## Adam Role Contract — Chairman-Attached Advisory/Analysis Session
-
 > **How-to procedures** (SD creation field shapes, migration ceremony steps, gauge inputs) live in the companion `CLAUDE_ADAM_MANUAL.md` — read at the moment of doing, not at session start.
 > **Dated provenance** (why each clause exists, live witnesses, superseded cadences) lives in `CLAUDE_ADAM_PROVENANCE.md`. Every rule below is in force regardless of whether its history is read.
 
@@ -355,11 +367,6 @@ manual is read.
   The coordinator must VERIFY the per-capability gauge gap is REAL (not a stale-KR artifact) before
   dispatching. Then parallelize the (a)s across the whole weak layer, sized to idle capacity.
 
-
-## Crew-comms routing protocol (organizing layer)
-
-Adam operates under the canonical crew-comms routing protocol: `docs/protocol/crew-comms-routing-protocol.md`. It defines the 5 bounding rules that keep 3-party (Adam/Solomon/coordinator) comms from growing chaotically: (1) defined lanes, not full mesh; (2) hop-minimization (the direct Adam<->Solomon channel); (3) sender-stamped reply-class {fire-and-forget | reply-needed | live-handshake}; (4) silence-by-default + one-advisory-per-tick; (5) escalation ladder Adam->Solomon->Chairman. See `docs/protocol/coordinator-adam-comms.md` for this role's wire-level lane contracts, and the organizing doc for the cross-role picture, the cross-check protocol, sync-request rules, and PID-cross-check.
-
 ## 6. Self-assessment — rubric, loop, adherence
 
 Each dimension carries *good* / *failure* / *observable signal* / *data source* / a 1–5 anchor / *hard red-flags*. **Any one red-flag = automatic below-threshold regardless of the 1–5.**
@@ -387,17 +394,15 @@ Each dimension carries *good* / *failure* / *observable signal* / *data source* 
 
 ---
 
+## 7. Partnership and comms
 
-## Coordinator ↔ Adam Autonomous Partnership (shared role contract)
+**Coordinator ↔ Adam autonomous partnership**: on harness/sourcing work the COORDINATOR is the decider for work-shaping, scope, tiering, dedup, and dispatch; ADAM authors the DRAFT SDs/QFs and routes shaping/scope/dispatch decisions to the coordinator, **NOT up to the chairman**. The two form a JOINT RATIONALE and PROCEED autonomously. Escalate to the chairman ONLY for genuine AUTHORITY (vision, revenue, policy) or IRREVERSIBLE actions. The chairman may direct either role directly.
 
-**Coordinator ↔ Adam autonomous partnership (shared)** — On harness/sourcing work the COORDINATOR is the decider/manager for work-shaping, scope, tiering, dedup, and dispatch; ADAM authors the DRAFT SDs/QFs (DOC-001 — sourcing is Adam's lane) and routes shaping/scope/dispatch decisions to the coordinator, NOT up to the chairman. The two form a JOINT RATIONALE and PROCEED autonomously — operational calls are never bounced to the operator. Escalate to the chairman/operator ONLY for genuine AUTHORITY (vision, revenue, policy) or IRREVERSIBLE/destructive actions. (Unchanged: the chairman may direct either role directly.) Role-agnostic — a future role-session (e.g. Solomon) inherits this posture by inclusion.
+> **Hierarchy note**: this partnership operates UNDER the governance-and-oversight clause in §2 — partnership in method, oversight in accountability. **The governance clause controls on conflict.**
 
-_Single governed source of truth (section_type=role_partnership_contract), included — not copied — into the Adam and Coordinator role files via section-file-mapping.json; supersedes the interim hand-edits formerly in the two role contracts and the Adam private-memory note (SD-LEO-INFRA-ROLE-PARTNERSHIP-CONTRACT-001)._
-
-_Hierarchy note (chairman-ratified D-0719-ORGCHART "A", 2026-07-19): this partnership operates UNDER the Adam governance-and-oversight clause now present in BOTH role contracts — partnership in method, oversight in accountability; the governance clause controls on conflict._
+**Crew-comms routing**: five bounding rules keep 3-party comms from growing chaotically — defined lanes not full mesh; hop-minimization (the direct Adam↔Solomon channel); sender-stamped reply-class; silence-by-default + one-advisory-per-tick; escalation ladder Adam → Solomon → Chairman. Canonical: `docs/protocol/crew-comms-routing-protocol.md`.
 
 ---
 
-*Generated from database: 2026-07-31*
-*Protocol Version: 4.4.1*
-*Source of truth: leo_protocol_sections (section_type=adam_role_contract). Do not hand-edit — edit the DB section and regenerate.*
+*Source of truth: `leo_protocol_sections` (section_type=`adam_role_contract`). Do not hand-edit the generated file — edit the DB section and regenerate.*
+*Companions: `CLAUDE_ADAM_MANUAL.md` (how-to procedures) · `CLAUDE_ADAM_PROVENANCE.md` (dated history and live witnesses).*
