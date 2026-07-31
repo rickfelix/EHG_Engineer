@@ -118,10 +118,22 @@ describe('renderContractRead', () => {
  * ever confirm today, and today is the one state a hardcoded table already gets right.
  */
 describe('roleArmingStates — arming is measured, not asserted', () => {
-  /** Inject a single-read fit per file; anything unnamed is over cap. */
+  /**
+   * Inject a single-read fit per file; anything unnamed is over budget.
+   *
+   * *** USES THE BUDGET, NOT THE CAP, AND THAT WAS THE SIXTH FACT-PINNED DEFECT IN THIS SD. ***
+   * This injector previously computed `fits: tokens <= SINGLE_READ_TOKEN_CAP` (25,000) while
+   * production `singleReadFit` uses SINGLE_READ_TOKEN_BUDGET (22,500) — a 2,500-token divergence.
+   * So the block below modelled a boundary the code does not have, and the file carried TWO arming
+   * boundaries for one concept, the correct one appearing twenty lines later.
+   *
+   * It survived five review rounds because the previous five pins were on FILE SIZES; this one is a
+   * pin on a CONSTANT — the same class one level of indirection up, which is not what anyone was
+   * scanning for.
+   */
   const fits = (m) => (file) => {
-    const tokens = file in m ? m[file] : SINGLE_READ_TOKEN_CAP * 2;
-    return { fits: tokens <= SINGLE_READ_TOKEN_CAP, tokens, bytes: tokens * 4, basis: 'measured_tokens' };
+    const tokens = file in m ? m[file] : SINGLE_READ_TOKEN_BUDGET * 2;
+    return { fits: tokens <= SINGLE_READ_TOKEN_BUDGET, tokens, bytes: tokens * 4, basis: 'measured_tokens' };
   };
 
   it('NEGATIVE: a role whose contract is over cap is NOT armed', () => {
@@ -148,12 +160,26 @@ describe('roleArmingStates — arming is measured, not asserted', () => {
     // difference between a condition and a comment.
   });
 
-  it('the boundary is exact and shared, not a second copy', () => {
-    // Exactly at the cap arms; one token over does not.
-    const at = roleArmingStates(REPO, fits({ 'CLAUDE_SOLOMON.md': SINGLE_READ_TOKEN_CAP }));
-    const over = roleArmingStates(REPO, fits({ 'CLAUDE_SOLOMON.md': SINGLE_READ_TOKEN_CAP + 1 }));
+  it('roleArmingStates passes a fit verdict through faithfully, in both directions', () => {
+    /**
+     * *** RENAMED, BECAUSE THE OLD TITLE — "the boundary is exact and shared, not a second copy" —
+     * WAS FALSE OF THIS TEST. *** It injected the boundary it then asserted, so it was tautological
+     * with respect to the real bound and could never have detected a production change. That is
+     * exactly why the BUDGET->CAP mutant survived every test until the synthetic band test was added
+     * in the sibling file.
+     *
+     * What this CAN honestly prove is narrower and still worth having: roleArmingStates neither
+     * inverts nor overrides a fit verdict handed to it. The bound itself is tested where it can be
+     * tested for real — "THE MARGIN IS APPLIED" in tests/unit/protocol/contract-read-coverage.test.js,
+     * which builds a contract into the band between budget and cap and measures it.
+     */
+    const at = roleArmingStates(REPO, fits({ 'CLAUDE_SOLOMON.md': SINGLE_READ_TOKEN_BUDGET }));
+    const over = roleArmingStates(REPO, fits({ 'CLAUDE_SOLOMON.md': SINGLE_READ_TOKEN_BUDGET + 1 }));
     expect(at.find((s) => s.role === 'solomon').armed).toBe(true);
     expect(over.find((s) => s.role === 'solomon').armed).toBe(false);
+
+    // MUTATION: ignore fit.fits and re-derive arming here -> a second bound appears and one of these
+    // two fails. The point of the pair is that BOTH directions are carried through untouched.
   });
 
   it('an UNMEASURABLE contract is disarmed, never armed by default', () => {
