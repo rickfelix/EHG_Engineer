@@ -24,12 +24,24 @@
  *   2 = INDETERMINATE  -> the check itself could not run (e.g. git fetch failed). Treated as
  *                         still-blocking for safety, but reported distinctly so a broken check is
  *                         never silently read as "still blocked" forever. Fail-safe, not fail-quiet.
+ *   4 = DRAIN_REQUIRED -> you have undrained inbound messages. You may NOT assert blocker-unchanged
+ *                         until you have read them (SD-LEO-INFRA-WORKER-ESCALATION-WRITE-001 FR-6).
+ *
+ * WHY EXIT 4 EXISTS (FR-6). Alpha-3 re-checked its own blocker correctly on every pass, exactly as
+ * the directive says to — and still sat for ten hours, because it never re-read INBOUND while the
+ * coordinator was actively sending it the diagnosis that would have unstuck it. "Still blocked" is
+ * only a truthful claim if you have looked at everything that could have unblocked you. So an
+ * undrained inbox makes the assertion UNSOUND, not merely impolite, and this check refuses to let
+ * the worker make it. Note the asymmetry: a CLEARED result is never withheld — good news is allowed
+ * through an undrained inbox, because withholding it would keep a worker blocked to enforce a
+ * process rule, which is the very harm FR-6 exists to prevent.
  */
 import { execFileSync } from 'node:child_process';
 import { existsSync } from 'node:fs';
 import { createClient } from '@supabase/supabase-js';
 import fingerprintLib from '../lib/shared/content-fingerprint.cjs';
 import { emitFeedback } from '../lib/governance/emit-feedback.js';
+import { countUndrainedInbound, applyDrainGate, EXIT_CODES } from '../lib/fleet/blocker-drain-gate.mjs';
 import 'dotenv/config';
 
 const { fingerprint } = fingerprintLib;
@@ -88,6 +100,46 @@ const gateFile = arg('gate-file');
 const check = has('dirty') ? checkDirty() : checkGateFile(gateFile || 'scripts/sd-start.js');
 const label = has('dirty') ? 'peer-dirty-tree' : `gate-file:${gateFile || 'scripts/sd-start.js'}`;
 
+// FR-6 gate. Runs BEFORE the verdict is printed so the worker is never told "unchanged, stay quiet"
+// while an unread answer is sitting in its inbox.
+const sessionId = arg('session') || process.env.CLAUDE_SESSION_ID;
+// ONE client for the whole run, shared with the emit-feedback tail below. Building a second client
+// here and querying from it makes process.exit() race libuv teardown on Windows (exit 127, libuv
+// UV_HANDLE_CLOSING assertion), which would silently destroy the 0/2/3/4 exit-code contract that is
+// this CLI's entire interface. A client MUST be passed — omitting it makes the count return null
+// forever and the gate never fires, i.e. an inert mechanism, the exact failure this SD exists to fix.
+const sbUrl = process.env.SUPABASE_URL || process.env.NEXT_PUBLIC_SUPABASE_URL;
+const sbKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
+const supabase = sbUrl && sbKey ? createClient(sbUrl, sbKey) : null;
+
+/**
+ * Exit WITHOUT racing libuv teardown.
+ *
+ * Calling process.exit() in the same tick as a just-settled supabase fetch aborts the run on
+ * Windows with "Assertion failed: !(handle->flags & UV_HANDLE_CLOSING)" and exit code 127 —
+ * silently destroying the 0/2/3/4 contract that is this CLI's entire interface. MEASURED: the
+ * drain-count query followed by an immediate exit reproduced 127 every time.
+ *
+ * So: set exitCode and let the loop drain (clean, natural exit), with an UNREF'd timer as a
+ * backstop in case a keep-alive socket would otherwise hold the process open. Unref'd means the
+ * timer never itself keeps us alive — it only fires if something else already has.
+ */
+function finish(code) {
+  process.exitCode = code;
+  setTimeout(() => process.exit(code), 250).unref();
+}
+
+const undrained = await countUndrainedInbound(sessionId, null, { client: supabase });
+const gated = applyDrainGate(check.outcome, undrained);
+// if/ELSE, not two ifs: finish() only SETS the exit code (it must not process.exit in-tick — see
+// above), so a bare `if` would fall through and the tail's finish() would overwrite 4 with 3. That
+// exact bug shipped for one run here: the CLI printed DRAIN_REQUIRED and exited 3.
+if (gated === 'drain_required') {
+  console.log(`[recheck] ${label} -> DRAIN_REQUIRED (${undrained} unread inbound message(s); blocker looks unchanged but you have not read what arrived)`);
+  console.log('[recheck] Run /checkin and read your inbox, THEN re-assert. "Still blocked" is not a sound claim until you have.');
+  finish(4);
+} else {
+
 console.log(`[recheck] ${label} -> ${check.outcome.toUpperCase()} (${check.detail})`);
 if (check.outcome === 'cleared') console.log('[recheck] RESUME IMMEDIATELY — do not wait to be told.');
 if (check.outcome === 'still_blocking') console.log('[recheck] Unchanged: re-check silently next tick. Do NOT re-report (FR-2).');
@@ -97,12 +149,10 @@ if (check.outcome === 'still_blocking') console.log('[recheck] Unchanged: re-che
 // scripts/hooks/stop-loop-wakeup-reminder.cjs.
 if (!has('no-record')) {
   try {
-    const url = process.env.SUPABASE_URL || process.env.NEXT_PUBLIC_SUPABASE_URL;
-    const key = process.env.SUPABASE_SERVICE_ROLE_KEY;
-    if (url && key) {
+    if (supabase) {
       const fp = fingerprint('blocker_recheck', `${label}::${check.detail}`);
       await emitFeedback({
-        supabase: createClient(url, key),
+        supabase,
         title: `blocker re-check: ${label} -> ${check.outcome}`,
         description: `${check.detail}. Emitted by scripts/worker-recheck-blocker.mjs per SD-LEO-INFRA-BLOCKED-WORKER-SELF-RECHECK-001 FR-4.`,
         category: 'blocker_recheck',
@@ -117,4 +167,5 @@ if (!has('no-record')) {
   } catch { /* instrumentation is never load-bearing */ }
 }
 
-process.exit(check.outcome === 'cleared' ? 0 : check.outcome === 'still_blocking' ? 3 : 2);
+finish(EXIT_CODES[check.outcome] ?? 2);
+} // end else (non-drain path)
