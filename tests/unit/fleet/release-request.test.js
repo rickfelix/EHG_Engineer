@@ -4,6 +4,7 @@ import releaseRequestStep from '../../../lib/checkin/steps/release-request.cjs';
 
 const released = vi.hoisted(() => ({ value: true }));
 const lastCall = vi.hoisted(() => ({ args: null }));
+const wipResult = { value: { hasWip: false, reasons: [] } };
 vi.mock('../../../lib/fleet/best-effort-release.mjs', () => ({
   bestEffortReleaseSd: async (...args) => {
     lastCall.args = args;
@@ -58,7 +59,10 @@ describe('FR-1 release-request clears the stale ctx.mySd snapshot', () => {
     };
   }
 
-  const ctxFor = () => ({ sb: fakeSb(), sessionId: SESSION, mySd: SD_KEY, base: {} });
+  const ctxFor = () => ({
+    sb: fakeSb(), sessionId: SESSION, mySd: SD_KEY, base: {},
+    hasWipFn: () => wipResult.value,
+  });
 
   it('nulls ctx.mySd after a confirmed release, so resume falls through instead of re-attaching', async () => {
     released.value = true;
@@ -78,6 +82,22 @@ describe('FR-1 release-request clears the stale ctx.mySd snapshot', () => {
     await releaseRequestStep.run(ctx);
     expect(lastCall.args).not.toBeNull();
     expect(lastCall.args[4]).toMatchObject({ expectedSdKey: SD_KEY });
+  });
+
+  // FR-3: release_sd clears the DB claim without looking at the working tree, so a cooperative
+  // release could orphan real work. Refusal must happen BEFORE the flag clear, and must leave the
+  // request standing so it is honoured once the work is preserved.
+  it('FR-3: REFUSES the release when the seat has WIP, and does not release or clear the flag', async () => {
+    wipResult.value = { hasWip: true, reasons: ['uncommitted_changes'] };
+    released.value = true;
+    lastCall.args = null;
+    const ctx = ctxFor();
+    await releaseRequestStep.run(ctx);
+    expect(ctx.base.release_requests_refused?.[0]).toMatchObject({ sd: SD_KEY, reasons: ['uncommitted_changes'] });
+    expect(lastCall.args).toBeNull();            // bestEffortReleaseSd never called
+    expect(ctx.base.release_requests_honored).toBeUndefined();
+    expect(ctx.mySd).toBe(SD_KEY);               // claim retained — nothing was dropped
+    wipResult.value = { hasWip: false, reasons: [] };
   });
 
   it('PRESERVES ctx.mySd when the release did not actually happen', async () => {
