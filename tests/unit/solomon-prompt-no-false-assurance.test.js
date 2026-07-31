@@ -59,24 +59,23 @@ describe('Solomon tick prompt does not claim an unenforced quota', () => {
 });
 
 describe('the premise this test rests on is still true', () => {
-  it('checkConsultQuota still has no production call site', () => {
-    // GUARD AGAINST A STALE PIN: if a later change wires the clamp for real,
-    // the prompt SHOULD start saying "enforced" again — and this test would be
-    // wrong to keep forbidding it. So assert the premise directly rather than
-    // assuming it. NOTE: solomon-advisory.cjs contains a literal NUL byte, so a
-    // content-mode grep would skip it; reading the file directly avoids that.
+  it('the quota is measured but NOT enforced — which is what makes the prompt truthful', () => {
+    // GUARD AGAINST A STALE PIN, corrected during FR-1. The first draft asserted
+    // "checkConsultQuota has no production call site", conflating HAS-A-CALLER with
+    // IS-ENFORCED. FR-1 separated those: the gate is now invoked on every send, but
+    // purely to RECORD what it would have refused. So a call site existing no longer
+    // makes the prompt's "not enforced" wording stale.
+    //
+    // The premise the prompt actually depends on is that nothing ACTS on the verdict.
+    // If a future SD adds a clamp, this test must fail and the prompt must change in
+    // the same change-set — claim and code move together or not at all.
     const advisory = readFileSync(ADVISORY, 'utf8');
-    // Discriminate on SHAPE rather than on line position: an invocation is
-    // `checkConsultQuota(`, the definition is `function checkConsultQuota(`,
-    // and the export lists it bare with a comma and no paren. A position-based
-    // filter missed the export because the name sits mid-line in a multi-name
-    // module.exports block.
-    const callSites = advisory.split('\n').filter((line) => {
-      if (!/checkConsultQuota\s*\(/.test(line)) return false;   // not an invocation
-      if (/function\s+checkConsultQuota\s*\(/.test(line)) return false; // the definition
-      if (/^\s*(\*|\/\/)/.test(line)) return false;             // comment
-      return true;
-    });
-    expect(callSites).toEqual([]);
+
+    // The measurement call must exist (otherwise D3 has no signal at all).
+    expect(advisory).toMatch(/const quotaMeasurement = await checkConsultQuota\(/);
+
+    // ...and nothing may refuse, exit, or return based on its verdict.
+    const enforces = /if\s*\(\s*!quotaMeasurement\.allowed\s*\)[^\n]*(process\.exit|return\s*;|throw)/.test(advisory);
+    expect(enforces).toBe(false);
   });
 });
