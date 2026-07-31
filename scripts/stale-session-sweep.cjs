@@ -30,6 +30,7 @@ const { PLAN_CONTENT_MARKER } = require('../lib/sd-enrichment-markers.cjs');
 // dispatch choke point this file's WORK_ASSIGNMENT insert deliberately bypasses.
 const { describeUnreadableAssignment } = require('../lib/fleet/assignment-target.cjs');
 const { parseSdDependencies } = require('../lib/utils/parse-sd-dependencies.cjs'); // QF-20260525-542
+const { buildRetentionAckPayload } = require('../lib/retention/retention-ack-marker.cjs'); // FR-7
 // SD-LEO-FIX-COORDINATOR-SWEEP-CLAIMED-001: shared dispatch-eligibility predicate (same one the
 // worker self_claim path uses) so CLAIM_FIX never re-affirms an orchestrator PARENT / dep-blocked SD.
 const { evaluateDispatchEligibility, classifyDispatchIneligibility, TEST_FIXTURE_KEY_RE } = require('../lib/fleet/claim-eligibility.cjs');
@@ -3373,9 +3374,26 @@ async function main() {
       return s.created_at < stuckAgeCutoff;                   // live + routine — age-drain as before
     });
     const drainStuckIds = drainRows.map(s => s.id);
-    for (let i = 0; i < drainStuckIds.length; i += 50) {
-      const batch = drainStuckIds.slice(i, i + 50);
-      await supabase.from('session_coordination').update({ acknowledged_at: now.toISOString() }).in('id', batch);
+    // SD-LEO-INFRA-WORKER-ESCALATION-WRITE-001 (FR-7): this drain used to stamp a BARE
+    // acknowledged_at via `.in('id', batch)`, which made a flood-control retirement permanently
+    // indistinguishable from a genuine coordinator answer — and acknowledged_at is the substrate of
+    // the answered-rate metric, so an unmarked stamp INFLATES exactly the number used to judge
+    // whether this lane is healthy. Every stamp now carries payload.auto_acked (the convention
+    // convergeAckTTL already established) plus WHY it drained, which the log line below has always
+    // reported but never persisted.
+    //
+    // Per-row rather than `.in()` because payload is JSONB and must be MERGED — the row's
+    // signal_type / severity / sender_callsign are load-bearing downstream and a blanket write
+    // would erase them. Concurrency stays bounded at the same 50 the batching already used.
+    for (let i = 0; i < drainRows.length; i += 50) {
+      const batch = drainRows.slice(i, i + 50);
+      await Promise.all(batch.map((s) => supabase
+        .from('session_coordination')
+        .update({
+          acknowledged_at: now.toISOString(),
+          payload: buildRetentionAckPayload(s.payload, senderIsDead(s) ? 'dead_sender' : 'aged_out'),
+        })
+        .eq('id', s.id)));
     }
     if (drainStuckIds.length > 0) {
       // QF-20260727-190: the old line read "drained N stale/dead-sender STUCK signal(s)" — ONE
@@ -3388,7 +3406,7 @@ async function main() {
       const parts = [];
       if (deadCount > 0) parts.push(deadCount + ' dead-sender');
       if (ageCount > 0) parts.push(ageCount + ' aged-out (live sender, severity below high)');
-      actions.push('CLEANUP: drained ' + drainStuckIds.length + ' STUCK signal(s) — ' + parts.join(' + ') + ' (acknowledged_at stamped)');
+      actions.push('CLEANUP: drained ' + drainStuckIds.length + ' STUCK signal(s) — ' + parts.join(' + ') + ' (acknowledged_at stamped, payload.auto_acked=true — NOT an answer)');
     }
     // Report what was deliberately NOT drained, so a held signal is visible rather than merely
     // un-retired. Without this the fix would be silent in exactly the way the bug was.
