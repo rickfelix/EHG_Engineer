@@ -24,10 +24,17 @@
  *
  * KNOWN LIMITATIONS (FR-4 — a control that does not state its blind spot cannot be
  * trusted past it):
- *   - Only SCOPABLE controls can be tested. A control that scans a hardcoded tree with no
- *     --root/--dir flag cannot be pointed at a fixture, and is reported UNTESTABLE rather
- *     than counted as a pass or a failure. Scopability, not callability, is the binding
- *     constraint — see the FR-1 findings.
+ *   - Only SCOPABLE controls can be tested, and a control that can be aimed at NOTHING is
+ *     genuinely unverifiable — its correctness is not merely unknown but unknowable without
+ *     mutating the repo. Such controls are reported UNTESTABLE: never a pass, never a failure.
+ *     THE CRITERION IS "CAN IT BE AIMED", NOT "DOES IT TAKE A FLAG". Two scoping mechanisms
+ *     exist: an explicit --root/--dir, and cwd — most of these lints declare RELATIVE scan
+ *     dirs (SCAN_DIRS = ['scripts','lib']) that resolve against process.cwd(), so running
+ *     them from a fixture tree aims them exactly. THE SIZE OF THE TRULY-UNAIMABLE SET IS
+ *     UNMEASURED and deliberately not estimated here: an earlier draft judged scopability by
+ *     flags alone, called it half the family, and was wrong — including about both
+ *     control-about-control gates, which turned out to be aimable via cwd. An unmeasured
+ *     class honestly labelled beats a rate nobody can defend.
  *   - DETECTED is inferred from the control's own output naming the seeded path. A control
  *     that detects but prints nothing identifying is scored NOT-DETECTED. This is
  *     deliberately conservative: silence is not evidence of detection.

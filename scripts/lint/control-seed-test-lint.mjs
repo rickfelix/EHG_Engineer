@@ -28,10 +28,14 @@
  *
  * KNOWN LIMITATIONS (FR-4 applies to this gate too — a control that will not state its
  * blind spot cannot be trusted past it):
- *   - Only controls that can be POINTED AT a fixture are enforceable. Scopability, not
- *     callability, is the binding constraint: 16 of 22 lints are callable but only 7 take
- *     a --root. A new control with no scoping flag is reported UNENFORCEABLE and asked to
- *     add one, rather than being silently exempted.
+ *   - Only controls that can be POINTED AT a fixture are enforceable, and one that can be
+ *     aimed at nothing is unverifiable without mutating the repo. Such a control is reported
+ *     UNENFORCEABLE and asked to add a scoping mechanism, never silently exempted.
+ *     THE TEST IS "CAN IT BE AIMED", NOT "DOES IT TAKE A FLAG" — cwd is equally a scoping
+ *     mechanism, since these lints declare RELATIVE scan dirs that resolve against
+ *     process.cwd(). HOW BIG THE UNAIMABLE SET IS, THIS DOES NOT CLAIM: an earlier draft
+ *     judged by flags alone and put it at half the family, which was wrong. The class is
+ *     real; its population is unmeasured.
  *   - It verifies a control catches ITS OWN SEED, not that it covers its class. That is
  *     deliberate: the census instances failed at "can it fire at all", not at completeness.
  *   - A registry entry is required, so a control can evade this by not registering. The
