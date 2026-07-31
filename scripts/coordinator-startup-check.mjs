@@ -712,6 +712,83 @@ export function renderContractRead(repoRoot = REPO_ROOT, check = null, opts = {}
   return lines.join('\n');
 }
 
+/**
+ * SD-LEO-INFRA-WORKER-ESCALATION-WRITE-001 (FR-2, acceptance half) — THE FIRST PRODUCTION READER
+ * OF THE RECEIPT LEDGER.
+ *
+ * *** THE SD SHIPPED THE WRITE HALF OF ITS OWN THESIS AND NEARLY CALLED IT DONE. *** Three lanes
+ * wrote receipts and NOTHING read them: answered-rate.cjs had zero production callers, so the state
+ * was recorded and unobservable. The SD's stated goal is "a signal must produce a return state THE
+ * SENDING WORKER CAN OBSERVE". Found by VALIDATION at PLAN_VERIFICATION; coordinator ruled WIRE,
+ * not defer, partly because deferring it would have made FR-4's unhold trigger — which depends on
+ * the answered-rate being computable — permanently unreachable.
+ *
+ * WHY HERE: the coordinator is the party whose conduct this rate measures AND the one who can act
+ * on it, and this script already has a proven invocation point (coordinator.md Step 4). Scope is
+ * deliberately ONE reader per the ruling — not a dashboard, not a gauge family.
+ *
+ * FAIL-OPEN like everything else in this file, and UNKNOWN is never rendered as a healthy zero:
+ * computeAnsweredRate returns rate=null with a verdict when coverage cannot be established, and
+ * that is printed as UNKNOWN. An absence displayed as 0% is the exact defect this module exists to
+ * prevent — a deployment gap would otherwise read as "nobody answered anything".
+ */
+export async function renderAnsweredRate(sb = null, nowMs = Date.now()) {
+  const lines = ['═══ SIGNAL ANSWERED-RATE (durable ledger) ═══'];
+  try {
+    const client = sb || (await import('../lib/supabase-client.js')).lazyServiceClient();
+    const req = _createRequireQF342(import.meta.url);
+    const { computeAnsweredRate, answeredBySeat } = req('../lib/coordination/answered-rate.cjs');
+
+    const sinceIso = new Date(nowMs - 7 * 24 * 60 * 60 * 1000).toISOString();
+
+    /**
+     * PAGES. PostgREST caps an unranged select at 1000 rows and returns them WITHOUT ERROR.
+     *
+     * The first cut of this reader printed "1.3% (13 answered / 1000 signals)" — and 1000 is not a
+     * measurement, it is the cap. The denominator was a truncated page, so the rate was computed
+     * over a sample while being rendered as the population. That is the same defect this SD exists
+     * to remove, and the third time this specific cap has bitten in one day; it is silent every
+     * time, because a full page looks exactly like a complete result.
+     */
+    const fetchAll = async (build) => {
+      const PAGE = 1000;
+      const out = [];
+      for (let from = 0; ; from += PAGE) {
+        const { data, error } = await build().range(from, from + PAGE - 1);
+        if (error) throw error;
+        const rows = data || [];
+        out.push(...rows);
+        if (rows.length < PAGE) return out;
+      }
+    };
+
+    // The CANONICAL friction-signal predicate, reused rather than re-derived: detectors.cjs:142
+    // establishes that only rows carrying payload.signal_type are friction signals (roll-call rows
+    // deliberately omit it so they are not miscounted).
+    const [signals, receipts] = await Promise.all([
+      fetchAll(() => client.from('session_coordination').select('id, created_at, payload')
+        .not('payload->>signal_type', 'is', null).gte('created_at', sinceIso).order('created_at')),
+      fetchAll(() => client.from('coordination_receipts').select('coordination_id, lane, state, is_retention, created_at')
+        .eq('lane', 'signal').gte('created_at', sinceIso).order('created_at')),
+    ]);
+
+    const input = { receipts: receipts || [], signals: signals || [] };
+    const r = computeAnsweredRate(input);
+    if (r.rate === null) {
+      lines.push(`  UNKNOWN — ${r.verdict} (${r.total} signal(s) in window). NOT reported as 0%.`);
+    } else {
+      lines.push(`  ${(r.rate * 100).toFixed(1)}%  (${r.answered} answered / ${r.total} signals, 7d)`);
+      const { seats } = answeredBySeat(input);
+      const zero = seats.filter((s) => s.sent >= 5 && s.answered === 0);
+      if (zero.length) lines.push(`  ⚠ seat(s) at ZERO with >=5 sent: ${zero.map((s) => `${s.seat}(${s.sent})`).join(', ')}`);
+    }
+    if (r.excluded) lines.push(`  ${r.excluded} signal(s) excluded as uncoverable (writer not deployed).`);
+  } catch (err) {
+    lines.push('  ✅ answered-rate skipped (fail-open): ' + (err?.message || String(err)));
+  }
+  return lines.join('\n');
+}
+
 export function buildReport(argv = [], env = {}, repoRoot = REPO_ROOT) {
   const armed = parseArmedSet(argv, env);
   return [renderResponsibilities(repoRoot), '', renderAdamLane(), '', renderLoops(armed), '', renderContractRead(repoRoot), '', renderFreshness(repoRoot)].join('\n');
@@ -748,6 +825,11 @@ function main() {
   renderColdRecovery(process.argv.slice(2), process.env)
     .then(async (out) => {
       console.log(out);
+      // FR-2 acceptance half: PRINT the answered-rate. Building renderAnsweredRate and not calling
+      // it here would ship a second unread mechanism inside the SD whose entire subject is unread
+      // mechanisms. It rides this already-async leg because it needs a DB round trip, and it is
+      // fail-open on its own (never throws) so it cannot affect the startup contract.
+      try { console.log('\n' + await renderAnsweredRate()); } catch { /* fail-open */ }
       // SD-FDBK-ENH-CENTRAL-LIVENESS-STAMPER-001 (FR-3): stamp on every successful
       // startup-check tick (the report + cold-recovery leg are fail-open by design).
       try {
