@@ -33,13 +33,21 @@ function getSupabase() {
 /**
  * Require admin role on req.user.
  *
- * req.user is populated by requireAuth. Accepts either top-level role
- * or Supabase-style user_metadata.role. req.isAdmin (set by internal API key
+ * req.user is populated by requireAuth. Accepts either top-level role or
+ * Supabase-style app_metadata.role. req.isAdmin (set by internal API key
  * path) short-circuits.
+ *
+ * SECURITY (SD-LEO-FIX-CHAIRMAN-PRIVILEGE-FROM-WRITABLE-METADATA-001):
+ * this used to read req.user.user_metadata.role. server/middleware/auth.js:79
+ * assigns the RAW Supabase user to req.user, so that was literally the
+ * client-writable claim with nothing in between -- and this route is mounted
+ * live at /api/admin/protocol-lint (server/index.js:296), which made it the
+ * only production-reachable instance of this defect. app_metadata is
+ * service-role-writable only; the account holder cannot reach it.
  */
 export function requireAdminRole(req, res, next) {
   if (req.isAdmin) return next();
-  const role = req.user?.user_metadata?.role ?? req.user?.role;
+  const role = req.user?.app_metadata?.role ?? req.user?.role;
   if (!role || !ADMIN_ROLES.includes(role)) {
     return res.status(403).json({
       error: 'Forbidden',

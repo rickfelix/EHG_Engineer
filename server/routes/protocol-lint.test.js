@@ -44,13 +44,41 @@ describe('requireAdminRole', () => {
     expect(res.status).not.toHaveBeenCalled();
   });
 
-  it('allows user with user_metadata.role=chairman', () => {
+  // SD-LEO-FIX-CHAIRMAN-PRIVILEGE-FROM-WRITABLE-METADATA-001
+  // This case previously asserted the OPPOSITE ("allows user with
+  // user_metadata.role=chairman") and so pinned the vulnerability as intended
+  // behaviour: it would have gone green against the exploitable code and red
+  // against the fix. user_metadata is written by the account holder itself via
+  // auth.updateUser({ data }), so a principal presenting chairman there has
+  // merely asserted it about itself and must be refused.
+  it('REFUSES a principal whose chairman role appears only in user_metadata (self-promotion)', () => {
     const req = mockReq({ user: { user_metadata: { role: 'chairman' } } });
+    const res = mockRes();
+    const next = vi.fn();
+    requireAdminRole(req, res, next);
+    expect(res.status).toHaveBeenCalledWith(403);
+    expect(res.json).toHaveBeenCalledWith(expect.objectContaining({ code: 'NOT_ADMIN' }));
+    expect(next).not.toHaveBeenCalled();
+  });
+
+  it('allows user with app_metadata.role=chairman (service-role-written, trusted)', () => {
+    const req = mockReq({ user: { app_metadata: { role: 'chairman' } } });
     const res = mockRes();
     const next = vi.fn();
     requireAdminRole(req, res, next);
     expect(next).toHaveBeenCalledOnce();
     expect(res.status).not.toHaveBeenCalled();
+  });
+
+  it('ignores user_metadata even when app_metadata carries a non-admin role', () => {
+    const req = mockReq({
+      user: { app_metadata: { role: 'viewer' }, user_metadata: { role: 'chairman' } }
+    });
+    const res = mockRes();
+    const next = vi.fn();
+    requireAdminRole(req, res, next);
+    expect(res.status).toHaveBeenCalledWith(403);
+    expect(next).not.toHaveBeenCalled();
   });
 
   it('allows user with top-level role=system_admin_ops', () => {
@@ -61,8 +89,12 @@ describe('requireAdminRole', () => {
     expect(next).toHaveBeenCalledOnce();
   });
 
+  // Re-expressed on app_metadata by SD-LEO-FIX-CHAIRMAN-PRIVILEGE-FROM-WRITABLE-METADATA-001.
+  // Left on user_metadata this would still have gone green, but for a changed
+  // reason -- role would read as undefined rather than 'viewer', so it would no
+  // longer test that a KNOWN non-admin role is rejected.
   it('rejects user with role=viewer with 403 NOT_ADMIN', () => {
-    const req = mockReq({ user: { user_metadata: { role: 'viewer' } } });
+    const req = mockReq({ user: { app_metadata: { role: 'viewer' } } });
     const res = mockRes();
     const next = vi.fn();
     requireAdminRole(req, res, next);
