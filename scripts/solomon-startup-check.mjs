@@ -305,6 +305,106 @@ export function missingDurableDuties(markdown, loops = SOLOMON_LOOPS) {
   return parseDurableDutyMarkers(markdown).filter((slug) => !wired.has(slug));
 }
 
+// ─────────────────────────────────────────────────────────────────────────────
+// SD-FDBK-INFRA-SOLOMON-SCORECARD-MEASURES-001 FR-5: CATEGORY parity.
+//
+// The duty checks above verify that a loop EXISTS for each contract-named duty. They
+// have no concept of what that loop WRITES — which is exactly why parity reported
+// all-duties-present in the very same run that surfaced a live category mismatch
+// (contract mandated 'solomon_adherence_drift', the loop wrote 'solomon_self_adherence').
+// A presence check cannot see a value disagreement.
+//
+// This is net-new capability, not a tweak. It pairs the contract's OWN claim with the
+// code's ACTUAL constant and compares them — observing both sides rather than trusting
+// a declaration, because a declared mapping would drift from the script the same way
+// the docs drifted from the code.
+// ─────────────────────────────────────────────────────────────────────────────
+
+/**
+ * Pure: remove line and block comments so a mention in prose is never read as code.
+ * Deliberately simple — it does not need to be a JS parser, only to stop documentation
+ * from voting on whether the code it documents is correct.
+ */
+export function stripComments(source) {
+  return String(source || '')
+    .replace(/\/\*[\s\S]*?\*\//g, ' ')   // block comments
+    .replace(/(^|[^:])\/\/[^\n]*/g, '$1'); // line comments (the [^:] avoids URLs)
+}
+
+/**
+ * Pure: extract the contract's per-script category claims.
+ *
+ * The contract states these inline, pairing a script filename with the category it is
+ * expected to write, e.g. "`solomon-self-adherence-review.mjs` ... (`category='solomon_adherence_drift'`)".
+ *
+ * DELIBERATELY CONSERVATIVE: a claim is emitted only when a line carries EXACTLY ONE
+ * script and EXACTLY ONE category. Lines mentioning several of either are reported as
+ * `ambiguous` rather than guessed at — a mis-paired claim would produce a confident
+ * false mismatch, which is worse than an honest abstention.
+ *
+ * @returns {{claims: Array<{script: string, category: string}>, ambiguous: string[]}}
+ */
+export function parseContractCategoryClaims(markdown) {
+  const claims = [];
+  const ambiguous = [];
+  for (const line of String(markdown || '').split('\n')) {
+    const cats = [...line.matchAll(/category\s*=\s*'([a-z0-9_]+)'/gi)].map((m) => m[1]);
+    const scripts = [...line.matchAll(/([a-z0-9-]+\.(?:mjs|cjs))/gi)].map((m) => m[1]);
+    if (cats.length === 0 || scripts.length === 0) continue;
+    if (cats.length === 1 && scripts.length === 1) claims.push({ script: scripts[0], category: cats[0] });
+    else ambiguous.push(line.trim().slice(0, 120));
+  }
+  return { claims, ambiguous };
+}
+
+/**
+ * Compare each contract category claim against what the script actually writes.
+ *
+ * `readScript` is injected so this stays pure and testable — the adjacent
+ * wiredDutySlugs() is parametrized for the same reason. It receives a script basename
+ * and returns its source, or null when the file cannot be read.
+ *
+ * A script that cannot be read is reported as `unreadable`, never silently treated as
+ * passing: an unverifiable claim is not a satisfied one.
+ *
+ * @returns {{mismatches: Array<{script,expected,found}>, unreadable: string[], checked: number}}
+ */
+export function categoryParityMismatches(markdown, readScript) {
+  const { claims } = parseContractCategoryClaims(markdown);
+  const mismatches = [];
+  const unreadable = [];
+  let checked = 0;
+  for (const { script, category } of claims) {
+    const src = readScript(script);
+    if (src == null) { unreadable.push(script); continue; }
+
+    // COMPARE THE DECLARATION, NEVER MERE CONTAINMENT — AND STRIP COMMENTS FIRST.
+    //
+    // Two live failures got this here, both the same trap at different depths. A plain
+    // substring test passed on any MENTION of the name, so a comment explaining the
+    // category satisfied it. Tightening to `CATEGORY = '...'` was not enough either:
+    // the match is case-insensitive, so a comment reading "mandates
+    // category='solomon_adherence_drift'" still parsed as an assignment. Both times the
+    // checker reported parity holding on a file that had genuinely drifted.
+    //
+    // Grepping source text for a config value counts the file's own documentation as
+    // evidence for itself. Only the executable declaration governs, so comments come out
+    // before anything is read.
+    const code = stripComments(src);
+    const assigned = [...code.matchAll(/\b(?:const|let|var)\s+\w*CATEGORY\w*\s*=\s*['"]([a-z0-9_]+)['"]/gi)].map((m) => m[1]);
+    if (assigned.length === 0) {
+      // Nothing to compare against — unverifiable, which is NOT the same as passing.
+      unreadable.push(`${script} (no CATEGORY assignment found)`);
+      continue;
+    }
+    checked += 1;
+    if (!assigned.includes(category)) {
+      mismatches.push({ script, expected: category, found: assigned });
+    }
+  }
+  return { mismatches, unreadable, checked };
+}
+
 // A loop is "armed" when an armed-set was provided AND it contains the loop's KEY, full prompt, or
 // (for script-backed loops) its script basename.
 export function loopStatus(loop, armed) {
@@ -361,10 +461,30 @@ export function renderContractParity(repoRoot = REPO_ROOT) {
   try {
     const md = readFileSync(resolve(repoRoot, ROLE_CONTEXT_DOC), 'utf8');
     const missing = missingDurableDuties(md, SOLOMON_LOOPS);
-    if (missing.length === 0) {
-      return head + '✅ all durable CLAUDE_SOLOMON.md duties present in SOLOMON_LOOPS';
+
+    // FR-5: presence is necessary but not sufficient. A loop can exist and still write
+    // the WRONG category — which is precisely what this check missed before, reporting
+    // all-duties-present in the same run that a live mismatch was found by hand.
+    const readScript = (basename) => {
+      try { return readFileSync(resolve(repoRoot, 'scripts', basename), 'utf8'); } catch { return null; }
+    };
+    const { mismatches, unreadable, checked } = categoryParityMismatches(md, readScript);
+
+    const lines = [];
+    if (missing.length === 0) lines.push('✅ all durable CLAUDE_SOLOMON.md duties present in SOLOMON_LOOPS');
+    else lines.push(`⚠️ CONTRACT DRIFT: durable duty(ies) declared in ${ROLE_CONTEXT_DOC} but absent from SOLOMON_LOOPS: ${missing.join(', ')} — they will DIE every session until armed. Add them to SOLOMON_LOOPS (scripts/solomon-startup-check.mjs).`);
+
+    if (mismatches.length > 0) {
+      for (const m of mismatches) {
+        lines.push(`⚠️ CATEGORY DRIFT: ${m.script} — contract mandates category='${m.expected}' but the script writes ${m.found.map((f) => `'${f}'`).join(', ')}. The contract governs; move the script.`);
+      }
+    } else if (checked > 0) {
+      lines.push(`✅ ${checked} contract category claim(s) match what the scripts write`);
     }
-    return head + `⚠️ CONTRACT DRIFT: durable duty(ies) declared in ${ROLE_CONTEXT_DOC} but absent from SOLOMON_LOOPS: ${missing.join(', ')} — they will DIE every session until armed. Add them to SOLOMON_LOOPS (scripts/solomon-startup-check.mjs).`;
+    // An unverifiable claim is never reported as satisfied.
+    if (unreadable.length > 0) lines.push(`ℹ️ category parity unverified for: ${unreadable.join(', ')} (script not readable from ${repoRoot})`);
+
+    return head + lines.join('\n  ');
   } catch (err) {
     return head + '✅ parity check skipped (fail-open): ' + (err?.message || String(err));
   }

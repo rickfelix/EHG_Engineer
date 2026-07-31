@@ -54,7 +54,12 @@ describe('the loop writes the category the contract mandates', () => {
 });
 
 describe('no production code still writes the old category', () => {
-  it('scripts/ and lib/ carry zero live references to the drifted spelling', () => {
+  it('scripts/ and lib/ carry zero live CODE references to the drifted spelling', () => {
+    // STRIP COMMENTS FIRST — the same rule FR-5's parity check had to learn twice.
+    // A comment explaining the rename (or the defect that motivated it) is not a live
+    // reference, and counting it would make this check impossible to satisfy without
+    // deleting the explanation. Documentation must not vote on whether the code it
+    // documents is correct — in either direction.
     const files = [
       ...sourceFiles(join(repoRoot, 'scripts')),
       ...sourceFiles(join(repoRoot, 'lib')),
@@ -66,7 +71,10 @@ describe('no production code still writes the old category', () => {
       if (f.includes('backfill-solomon-adherence-category')) continue;
       let src;
       try { src = readFileSync(f, 'utf8'); } catch { continue; }
-      if (src.includes(OLD)) offenders.push(f.replace(repoRoot, '').replace(/\\/g, '/'));
+      const code = src
+        .replace(/\/\*[\s\S]*?\*\//g, ' ')
+        .replace(/(^|[^:])\/\/[^\n]*/g, '$1');
+      if (code.includes(OLD)) offenders.push(f.replace(repoRoot, '').replace(/\\/g, '/'));
     }
     expect(offenders).toEqual([]);
   });
