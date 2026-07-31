@@ -3,12 +3,16 @@
   "counts": {
     "original": 533,
     "proposed": 298,
-    "landed": 303,
+    "landed": 375,
     "needs_decision": 299,
     "not_an_obligation": 19,
-    "NEEDS_DECISION": 202,
+    "NEEDS_DECISION": 116,
     "merged_into": 8,
-    "rationale_dropped_obligation_survives": 1
+    "rationale_dropped_obligation_survives": 1,
+    "provenance_bound": 8,
+    "CHAIRMAN_DECISION_REQUIRED": 1,
+    "CANDIDATE_LOSS": 4,
+    "companion_bound": 1
   },
   "entries": [
     {
@@ -95,9 +99,16 @@
       "imperative": "Does not coordinate the fleet (no dispatch, no roll-call, no teardown).",
       "match_score": 0.2,
       "carries_modal": false,
-      "disposition": "NEEDS_DECISION",
+      "disposition": "landed",
       "lexical_coverage": 0,
-      "lexical_note": "NOT evidence of deletion — the probe is rewrite-blind (3 of 3 known survivors score invisible). Needs a reader."
+      "survival_basis": {
+        "measure": "semantic adjudication - full read of the corrected contract",
+        "adjudicated_by": "Alpha-2 session 8aa7b984",
+        "reachable_in": [
+          "contract"
+        ],
+        "located_at": "S1 hard boundaries - \"Never dispatches, roll-calls, or tears down the fleet.\""
+      }
     },
     {
       "key": "eb054e9c2b86",
@@ -146,9 +157,16 @@
       "imperative": "Adam proactively checks in — it does not wait to be pinged.",
       "match_score": 0.25,
       "carries_modal": false,
-      "disposition": "NEEDS_DECISION",
+      "disposition": "landed",
       "lexical_coverage": 0,
-      "lexical_note": "NOT evidence of deletion — the probe is rewrite-blind (3 of 3 known survivors score invisible). Needs a reader."
+      "survival_basis": {
+        "measure": "semantic adjudication - full read of the corrected contract",
+        "adjudicated_by": "Alpha-2 session 8aa7b984",
+        "reachable_in": [
+          "contract"
+        ],
+        "located_at": "S2a - \"run every tick, not only when prompted\""
+      }
     },
     {
       "key": "5c619fe7b943",
@@ -238,9 +256,16 @@
       "imperative": "Surfacing findings, canary observations, and proposing options is always in-bounds; beginning non-sourcing proactive work (investigations/building) requires the coordinator's go.",
       "match_score": 0.33,
       "carries_modal": false,
-      "disposition": "NEEDS_DECISION",
+      "disposition": "landed",
       "lexical_coverage": 0.053,
-      "lexical_note": "NOT evidence of deletion — the probe is rewrite-blind (3 of 3 known survivors score invisible). Needs a reader."
+      "survival_basis": {
+        "measure": "semantic adjudication - full read of the corrected contract",
+        "adjudicated_by": "Alpha-2 session 8aa7b984",
+        "reachable_in": [
+          "contract"
+        ],
+        "located_at": "S1 - \"Proactivity is PROPOSE, not auto-execute\"; sourcing/DRAFT-filing exempt"
+      }
     },
     {
       "key": "b030e17de1dd",
@@ -302,9 +327,16 @@
       "imperative": "Oversight = audit + accountability + escalation, not operational authority.",
       "match_score": 0.33,
       "carries_modal": false,
-      "disposition": "NEEDS_DECISION",
+      "disposition": "landed",
       "lexical_coverage": 0,
-      "lexical_note": "NOT evidence of deletion — the probe is rewrite-blind (3 of 3 known survivors score invisible). Needs a reader."
+      "survival_basis": {
+        "measure": "semantic adjudication - full read of the corrected contract",
+        "adjudicated_by": "Alpha-2 session 8aa7b984",
+        "reachable_in": [
+          "contract"
+        ],
+        "located_at": "S2 - \"oversight = audit + verify + press + escalate. Never operational authority.\""
+      }
     },
     {
       "key": "1deb57e33f34",
@@ -337,9 +369,16 @@
       "imperative": "Oversight here is the coordinator-oversight shape exactly: audit + verify + press + escalate, never operational authority, never take the wheel.",
       "match_score": 0.38,
       "carries_modal": false,
-      "disposition": "NEEDS_DECISION",
+      "disposition": "landed",
       "lexical_coverage": 0.467,
-      "lexical_note": "NOT evidence of deletion — the probe is rewrite-blind (3 of 3 known survivors score invisible). Needs a reader."
+      "survival_basis": {
+        "measure": "semantic adjudication - full read of the corrected contract",
+        "adjudicated_by": "Alpha-2 session 8aa7b984",
+        "reachable_in": [
+          "contract"
+        ],
+        "located_at": "S2 - same clause, plus \"Never take the wheel.\""
+      }
     },
     {
       "key": "bd086d67401c",
@@ -394,18 +433,32 @@
       "imperative": "Persistent unresolved Solomon drift escalates to the chairman; Adam never seizes Solomon's reasoning role.",
       "match_score": 0.22,
       "carries_modal": false,
-      "disposition": "NEEDS_DECISION",
+      "disposition": "landed",
       "lexical_coverage": 0,
-      "lexical_note": "NOT evidence of deletion — the probe is rewrite-blind (3 of 3 known survivors score invisible). Needs a reader."
+      "survival_basis": {
+        "measure": "semantic adjudication - full read of the corrected contract",
+        "adjudicated_by": "Alpha-2 session 8aa7b984",
+        "reachable_in": [
+          "contract"
+        ],
+        "located_at": "S2b.3 + \"Solomon stays autonomous in reasoning and method\" + \"never take over his work\""
+      }
     },
     {
       "key": "2d33efe40bec",
       "imperative": "Why this is not a contradiction with the sibling framing: the lateral/sibling framing governs WHO DECIDES (Solomon's reasoning is his own, lateral to Adam's sourcing — neither outranks the other in method); the oversight framing governs WHO VERIFIES THE ROLE STAYS HEALTHY (Adam, for the sibling role…",
       "match_score": 0.29,
       "carries_modal": false,
-      "disposition": "NEEDS_DECISION",
+      "disposition": "landed",
       "lexical_coverage": 0.311,
-      "lexical_note": "NOT evidence of deletion — the probe is rewrite-blind (3 of 3 known survivors score invisible). Needs a reader."
+      "survival_basis": {
+        "measure": "semantic adjudication - full read of the corrected contract",
+        "adjudicated_by": "Alpha-2 session 8aa7b984",
+        "reachable_in": [
+          "contract"
+        ],
+        "located_at": "S2b blockquote - \"Why this is not a contradiction\""
+      }
     },
     {
       "key": "686640f18c54",
@@ -436,9 +489,16 @@
       "imperative": "Adam's coordinator-facing scope is oversight-centric (audit-not-authority: the standing coordinator-health KPI audit, canary verification, backlog triage, pattern-spotting, drafting the SDs the coordinator delegates).",
       "match_score": 0.4,
       "carries_modal": false,
-      "disposition": "NEEDS_DECISION",
+      "disposition": "landed",
       "lexical_coverage": 0,
-      "lexical_note": "NOT evidence of deletion — the probe is rewrite-blind (3 of 3 known survivors score invisible). Needs a reader."
+      "survival_basis": {
+        "measure": "semantic adjudication - full read of the corrected contract",
+        "adjudicated_by": "Alpha-2 session 8aa7b984",
+        "reachable_in": [
+          "contract"
+        ],
+        "located_at": "S2a - audit-not-authority scope, KPI-0..3"
+      }
     },
     {
       "key": "ed7adeb6d204",
@@ -453,36 +513,67 @@
       "imperative": "This resolves the contradiction the original 2026-06-08 clause left standing — the contract's OWN later chairman-directed sections (hourly exec email, NEEDS-YOU tracking, phone-notify, acceptance-sitting ownership) already had Adam running chairman-facing briefing-adjacent duties, so the blanket 'do…",
       "match_score": 0.07,
       "carries_modal": false,
-      "disposition": "NEEDS_DECISION",
+      "disposition": "provenance_bound",
       "lexical_coverage": 0,
-      "lexical_note": "NOT evidence of deletion — the probe is rewrite-blind (3 of 3 known survivors score invisible). Needs a reader."
+      "survival_basis": {
+        "measure": "semantic adjudication - full read of the corrected contract",
+        "adjudicated_by": "Alpha-2 session 8aa7b984",
+        "reachable_in": [
+          "provenance (REQUIRED)"
+        ],
+        "located_at": "belongs in CLAUDE_ADAM_PROVENANCE.md",
+        "note": "resolves the contradiction the 2026-06-08 clause left standing - dated rationale, not a rule. Acceptable to move ONLY if the provenance companion actually lands and is loaded (FR-2)."
+      }
     },
     {
       "key": "cd85ba2dd4b5",
       "imperative": "Migrating those briefing duties fully to EVA's surface remains an open future consolidation, not foreclosed by this edit.",
       "match_score": 0.08,
       "carries_modal": false,
-      "disposition": "NEEDS_DECISION",
+      "disposition": "provenance_bound",
       "lexical_coverage": 0,
-      "lexical_note": "NOT evidence of deletion — the probe is rewrite-blind (3 of 3 known survivors score invisible). Needs a reader."
+      "survival_basis": {
+        "measure": "semantic adjudication - full read of the corrected contract",
+        "adjudicated_by": "Alpha-2 session 8aa7b984",
+        "reachable_in": [
+          "provenance (REQUIRED)"
+        ],
+        "located_at": "belongs in CLAUDE_ADAM_PROVENANCE.md",
+        "note": "EVA briefing-duty consolidation recorded as an open future note - dated rationale, not a rule. Acceptable to move ONLY if the provenance companion actually lands and is loaded (FR-2)."
+      }
     },
     {
       "key": "e9279b77002c",
       "imperative": "(Lands the memory-only role-model into the governed contract: SD-LEO-INFRA-CANONICALIZE-TRI-PARTY-001; A2 re-scope: SD-LEO-INFRA-ADAM-CONTRACT-RELAY-RESCOPE-001.)",
       "match_score": 0.22,
       "carries_modal": false,
-      "disposition": "NEEDS_DECISION",
+      "disposition": "provenance_bound",
       "lexical_coverage": 0.125,
-      "lexical_note": "NOT evidence of deletion — the probe is rewrite-blind (3 of 3 known survivors score invisible). Needs a reader."
+      "survival_basis": {
+        "measure": "semantic adjudication - full read of the corrected contract",
+        "adjudicated_by": "Alpha-2 session 8aa7b984",
+        "reachable_in": [
+          "provenance (REQUIRED)"
+        ],
+        "located_at": "belongs in CLAUDE_ADAM_PROVENANCE.md",
+        "note": "SD citations for where the role-model landed - dated rationale, not a rule. Acceptable to move ONLY if the provenance companion actually lands and is loaded (FR-2)."
+      }
     },
     {
       "key": "5ff824df5490",
       "imperative": "Self-assessment rubric (tri-party review): Adam scores its own performance on a per-dimension rubric using the shared tri-party shape — each dimension carries: good (what excellent looks like), failure (the anti-pattern), observable signal (how you'd see it), data source (where the evidence lives), …",
       "match_score": 0.36,
       "carries_modal": false,
-      "disposition": "NEEDS_DECISION",
+      "disposition": "landed",
       "lexical_coverage": 0,
-      "lexical_note": "NOT evidence of deletion — the probe is rewrite-blind (3 of 3 known survivors score invisible). Needs a reader."
+      "survival_basis": {
+        "measure": "semantic adjudication - full read of the corrected contract",
+        "adjudicated_by": "Alpha-2 session 8aa7b984",
+        "reachable_in": [
+          "contract"
+        ],
+        "located_at": "S6 opening - per-dimension rubric shape (good/failure/signal/source/anchor/red-flags)"
+      }
     },
     {
       "key": "27780e1848c7",
@@ -552,9 +643,17 @@
       "imperative": "WHY THIS CLAUSE EXISTS (QF-20260727-705): D4 already said \"verify the claim\" and still did not bind — six corrections in one day.",
       "match_score": 0.2,
       "carries_modal": false,
-      "disposition": "NEEDS_DECISION",
+      "disposition": "provenance_bound",
       "lexical_coverage": 0,
-      "lexical_note": "NOT evidence of deletion — the probe is rewrite-blind (3 of 3 known survivors score invisible). Needs a reader."
+      "survival_basis": {
+        "measure": "semantic adjudication - full read of the corrected contract",
+        "adjudicated_by": "Alpha-2 session 8aa7b984",
+        "reachable_in": [
+          "provenance (REQUIRED)"
+        ],
+        "located_at": "belongs in CLAUDE_ADAM_PROVENANCE.md",
+        "note": "WHY THIS CLAUSE EXISTS (QF-20260727-705) - six corrections in one day - dated rationale, not a rule. Acceptable to move ONLY if the provenance companion actually lands and is loaded (FR-2)."
+      }
     },
     {
       "key": "f9a7b61cd49d",
@@ -668,9 +767,16 @@
       "imperative": "The PROPOSE-not-execute envelope and \"never accept/graduate\" are UNCHANGED; the heartbeat makes Adam propose MORE, execute the same (zero).] On Adam's EXISTING tick (no new scheduler), when not serving the Chairman, Adam runs ONE governance-heartbeat pass over ONE scope per tick (weighted round-robi…",
       "match_score": 0.43,
       "carries_modal": false,
-      "disposition": "NEEDS_DECISION",
+      "disposition": "landed",
       "lexical_coverage": 0.045,
-      "lexical_note": "NOT evidence of deletion — the probe is rewrite-blind (3 of 3 known survivors score invisible). Needs a reader."
+      "survival_basis": {
+        "measure": "semantic adjudication - full read of the corrected contract",
+        "adjudicated_by": "Alpha-2 session 8aa7b984",
+        "reachable_in": [
+          "contract"
+        ],
+        "located_at": "S3a + S5p - the PROPOSE-not-execute envelope is unchanged"
+      }
     },
     {
       "key": "b06f5ae63779",
@@ -728,9 +834,16 @@
       "imperative": "GATE / SILENCE-BY-DEFAULT: nothing clears the bar → emit ADAM_OK to the ledger and surface NOTHING (OpenClaw silence contract). ≥1 clears → ONE ranked advisory via scripts/adam-advisory.cjs (two-stage actioned_at ACK: re-surface once if ignored, never spam).",
       "match_score": 0.33,
       "carries_modal": false,
-      "disposition": "NEEDS_DECISION",
+      "disposition": "landed",
       "lexical_coverage": 0.316,
-      "lexical_note": "NOT evidence of deletion — the probe is rewrite-blind (3 of 3 known survivors score invisible). Needs a reader."
+      "survival_basis": {
+        "measure": "semantic adjudication - full read of the corrected contract",
+        "adjudicated_by": "Alpha-2 session 8aa7b984",
+        "reachable_in": [
+          "contract"
+        ],
+        "located_at": "S5p - \"Silence-by-default ... emit ADAM_OK ... surface NOTHING\" + GLOBAL <=1-advisory-per-tick cap"
+      }
     },
     {
       "key": "f37086e5e35e",
@@ -786,9 +899,17 @@
       "imperative": "> Why a first-class role: Adam needs the same scaffolding the coordinator and worker already have (canonical contract, slash command, comms lane, self-improvement loop) so operator-attached advisory work is governed and discoverable, not ad hoc.",
       "match_score": 0.23,
       "carries_modal": false,
-      "disposition": "NEEDS_DECISION",
+      "disposition": "provenance_bound",
       "lexical_coverage": 0,
-      "lexical_note": "NOT evidence of deletion — the probe is rewrite-blind (3 of 3 known survivors score invisible). Needs a reader."
+      "survival_basis": {
+        "measure": "semantic adjudication - full read of the corrected contract",
+        "adjudicated_by": "Alpha-2 session 8aa7b984",
+        "reachable_in": [
+          "provenance (REQUIRED)"
+        ],
+        "located_at": "belongs in CLAUDE_ADAM_PROVENANCE.md",
+        "note": "the first-class-role scaffolding rationale - dated rationale, not a rule. Acceptable to move ONLY if the provenance companion actually lands and is loaded (FR-2)."
+      }
     },
     {
       "key": "714c25a9f34e",
@@ -1010,18 +1131,32 @@
       "imperative": "THE SOURCING BAR (two questions, in order): every Adam-sourced item must pass (1) Is it real? — live-evidence-verified premise (necessary but weak), AND once the LEO Roadmap is laid out (2) Does it move us toward launch-readiness or revenue?",
       "match_score": 0.42,
       "carries_modal": false,
-      "disposition": "NEEDS_DECISION",
+      "disposition": "landed",
       "lexical_coverage": 0.421,
-      "lexical_note": "NOT evidence of deletion — the probe is rewrite-blind (3 of 3 known survivors score invisible). Needs a reader."
+      "survival_basis": {
+        "measure": "semantic adjudication - full read of the corrected contract",
+        "adjudicated_by": "Alpha-2 session 8aa7b984",
+        "reachable_in": [
+          "contract"
+        ],
+        "located_at": "S5e - THE SOURCING BAR, two questions in order"
+      }
     },
     {
       "key": "d3d10d558689",
       "imperative": "If an item passes (1) but not (2), it goes to the durable backlog channel, NOT the belt.",
       "match_score": 0.57,
       "carries_modal": false,
-      "disposition": "NEEDS_DECISION",
+      "disposition": "landed",
       "lexical_coverage": 0.214,
-      "lexical_note": "NOT evidence of deletion — the probe is rewrite-blind (3 of 3 known survivors score invisible). Needs a reader."
+      "survival_basis": {
+        "measure": "semantic adjudication - full read of the corrected contract",
+        "adjudicated_by": "Alpha-2 session 8aa7b984",
+        "reachable_in": [
+          "contract"
+        ],
+        "located_at": "S5e - \"Passing (1) but not (2) -> the durable backlog channel, NOT the belt.\""
+      }
     },
     {
       "key": "7e269b29d150",
@@ -1088,9 +1223,16 @@
       "imperative": "Actually, it should be even more important... the project management role and responsibilities become a greater priority.\" This lands the 2026-07-16 directive (Adam is a plan-driven PM, not a reactive belt-scrambler) into the governed contract — previously it lived only in session memory, which is e…",
       "match_score": 0.13,
       "carries_modal": false,
-      "disposition": "NEEDS_DECISION",
+      "disposition": "landed",
       "lexical_coverage": 0,
-      "lexical_note": "NOT evidence of deletion — the probe is rewrite-blind (3 of 3 known survivors score invisible). Needs a reader."
+      "survival_basis": {
+        "measure": "semantic adjudication - full read of the corrected contract",
+        "adjudicated_by": "Alpha-2 session 8aa7b984",
+        "reachable_in": [
+          "contract"
+        ],
+        "located_at": "S5d - \"Adam is the chairman PROJECT MANAGER first\""
+      }
     },
     {
       "key": "a6f7c802d126",
@@ -1126,9 +1268,16 @@
       "imperative": "- Plan first, gauges second: recommendation shape = current plan position → what the plan says is next → any deviation proposed AS a plan delta (propose-only, per the retro contract), tagged with its reason-band (now-wave-remainder | feedback | incident | chairman-directed).",
       "match_score": 0.59,
       "carries_modal": false,
-      "disposition": "NEEDS_DECISION",
+      "disposition": "landed",
       "lexical_coverage": 0.5,
-      "lexical_note": "NOT evidence of deletion — the probe is rewrite-blind (3 of 3 known survivors score invisible). Needs a reader."
+      "survival_basis": {
+        "measure": "semantic adjudication - full read of the corrected contract",
+        "adjudicated_by": "Alpha-2 session 8aa7b984",
+        "reachable_in": [
+          "contract"
+        ],
+        "located_at": "S5d - \"Plan first, gauges second\""
+      }
     },
     {
       "key": "3ec07c5dc938",
@@ -1158,9 +1307,16 @@
       "imperative": "KPI-2 (plan-adherence) is the coordinator-facing edge of the SAME duty: Adam holds the plan lens on both surfaces — coordinator dispatch decisions (KPI-2 reason-band audit) and its own chairman-facing recommendations (this clause).",
       "match_score": 0.26,
       "carries_modal": false,
-      "disposition": "NEEDS_DECISION",
+      "disposition": "landed",
       "lexical_coverage": 0.152,
-      "lexical_note": "NOT evidence of deletion — the probe is rewrite-blind (3 of 3 known survivors score invisible). Needs a reader."
+      "survival_basis": {
+        "measure": "semantic adjudication - full read of the corrected contract",
+        "adjudicated_by": "Alpha-2 session 8aa7b984",
+        "reachable_in": [
+          "contract"
+        ],
+        "located_at": "S5d - \"KPI-2 is the coordinator-facing edge of the SAME duty\""
+      }
     },
     {
       "key": "45a4ad03ddfe",
@@ -1196,18 +1352,32 @@
       "imperative": "This duty previously lived only in session-scoped crons and DIED with every Adam session (confirmed by the 2026-06-11 handoff drill).",
       "match_score": 0.54,
       "carries_modal": false,
-      "disposition": "NEEDS_DECISION",
+      "disposition": "landed",
       "lexical_coverage": 0.526,
-      "lexical_note": "NOT evidence of deletion — the probe is rewrite-blind (3 of 3 known survivors score invisible). Needs a reader."
+      "survival_basis": {
+        "measure": "semantic adjudication - full read of the corrected contract",
+        "adjudicated_by": "Alpha-2 session 8aa7b984",
+        "reachable_in": [
+          "contract"
+        ],
+        "located_at": "S5i preamble - \"previously lived only in session-scoped crons and DIED with each session\""
+      }
     },
     {
       "key": "002af3b786bf",
       "imperative": "Every /adam startup must RE-ARM it alongside the three canonical tick loops; countdown timestamps derive from DB rows — never hand-converted ET↔UTC.",
       "match_score": 0.38,
       "carries_modal": false,
-      "disposition": "NEEDS_DECISION",
+      "disposition": "landed",
       "lexical_coverage": 0.3,
-      "lexical_note": "NOT evidence of deletion — the probe is rewrite-blind (3 of 3 known survivors score invisible). Needs a reader."
+      "survival_basis": {
+        "measure": "semantic adjudication - full read of the corrected contract",
+        "adjudicated_by": "Alpha-2 session 8aa7b984",
+        "reachable_in": [
+          "contract"
+        ],
+        "located_at": "S5i - re-arm at EVERY startup; \"Timestamps derive from DB rows - never hand-converted ET<->UTC\""
+      }
     },
     {
       "key": "68d0110f6cfc",
@@ -1247,18 +1417,32 @@
       "imperative": "Propose-only (CONST-002); silence-by-default on a truly-nothing sweep.",
       "match_score": 0.4,
       "carries_modal": false,
-      "disposition": "NEEDS_DECISION",
+      "disposition": "landed",
       "lexical_coverage": 0,
-      "lexical_note": "NOT evidence of deletion — the probe is rewrite-blind (3 of 3 known survivors score invisible). Needs a reader."
+      "survival_basis": {
+        "measure": "semantic adjudication - full read of the corrected contract",
+        "adjudicated_by": "Alpha-2 session 8aa7b984",
+        "reachable_in": [
+          "contract"
+        ],
+        "located_at": "S5p + S3a - propose-only, silence-by-default"
+      }
     },
     {
       "key": "5eb3cb8910cc",
       "imperative": "This duty previously lived only in a session-scoped cron (Adam-armed 2026-07-21) and DIED with every Adam session; every /adam startup must RE-ARM it via ADAM_LOOPS (scripts/adam-startup-check.mjs) alongside the other durable tick loops.",
       "match_score": 0.29,
       "carries_modal": false,
-      "disposition": "NEEDS_DECISION",
+      "disposition": "landed",
       "lexical_coverage": 0.026,
-      "lexical_note": "NOT evidence of deletion — the probe is rewrite-blind (3 of 3 known survivors score invisible). Needs a reader."
+      "survival_basis": {
+        "measure": "semantic adjudication - full read of the corrected contract",
+        "adjudicated_by": "Alpha-2 session 8aa7b984",
+        "reachable_in": [
+          "contract"
+        ],
+        "located_at": "S5i - re-arm via ADAM_LOOPS"
+      }
     },
     {
       "key": "7feb1fc73398",
@@ -1280,9 +1464,16 @@
       "imperative": "LIVE STATE LIVES IN THE DB, NOT MEMORY (handoff rule): experiment arm state (e.g. effort-tier metadata.arms_log), open-watch lists, and queue state must be re-read LIVE at session start; memory files are point-in-time and go stale within hours on an active fleet.",
       "match_score": 0.43,
       "carries_modal": false,
-      "disposition": "NEEDS_DECISION",
+      "disposition": "landed",
       "lexical_coverage": 0.489,
-      "lexical_note": "NOT evidence of deletion — the probe is rewrite-blind (3 of 3 known survivors score invisible). Needs a reader."
+      "survival_basis": {
+        "measure": "semantic adjudication - full read of the corrected contract",
+        "adjudicated_by": "Alpha-2 session 8aa7b984",
+        "reachable_in": [
+          "contract"
+        ],
+        "located_at": "S5i - \"LIVE STATE LIVES IN THE DB, NOT MEMORY\""
+      }
     },
     {
       "key": "839fa943dfd2",
@@ -1426,9 +1617,16 @@
       "imperative": "During the window: (a) NO outbound texts except a genuine can-wait-till-morning CRITICAL alert, and even that is written to be READ on waking, never expecting a reply — all non-critical texts (heartbeats, questions, status) QUEUE and FLUSH at 06:00 ET as a single tidy morning batch rather than buzzi…",
       "match_score": 0.49,
       "carries_modal": false,
-      "disposition": "NEEDS_DECISION",
+      "disposition": "landed",
       "lexical_coverage": 0.184,
-      "lexical_note": "NOT evidence of deletion — the probe is rewrite-blind (3 of 3 known survivors score invisible). Needs a reader."
+      "survival_basis": {
+        "measure": "semantic adjudication - full read of the corrected contract",
+        "adjudicated_by": "Alpha-2 session 8aa7b984",
+        "reachable_in": [
+          "contract"
+        ],
+        "located_at": "S5g - CHAIRMAN SLEEP WINDOW 22:00-06:00 ET, retry clock frozen"
+      }
     },
     {
       "key": "62850b18ad5c",
@@ -1470,10 +1668,18 @@
       "imperative": "(c3) ROUTINE HEARTBEAT = BRIEF HOURLY SMS, not the hourly email (chairman-directed 2026-07-17; cadence confirmed HOURLY by chairman verbal 2026-07-19: 'your hourly updates'; TEMPORARY CADENCE OVERRIDE (chairman verbal 2026-07-19 ~5:30PM ET: 'maybe you can send me an update via text every half hour i…",
       "match_score": 0.1,
       "carries_modal": false,
-      "disposition": "NEEDS_DECISION",
+      "disposition": "CHAIRMAN_DECISION_REQUIRED",
       "probe_evidence": "ABSENT and UNRESOLVED. Chairman verbal 2026-07-19 set the SMS heartbeat to 30min UNTIL HE RESTORES HOURLY. The shortened contract keeps hourly, so landing it silently cancels a possibly-live directive. Requires chairman confirmation — do not assume either state.",
       "lexical_coverage": 0.043,
-      "lexical_note": "NOT evidence of deletion — the probe is rewrite-blind (3 of 3 known survivors score invisible). Needs a reader."
+      "survival_basis": {
+        "measure": "semantic adjudication - full read of the corrected contract",
+        "adjudicated_by": "Alpha-2 session 8aa7b984",
+        "reachable_in": [
+          "contract (ALTERED)"
+        ],
+        "located_at": "S5g(c3)",
+        "note": "CADENCE CHANGE, NOT A DELETION - THIS IS CHAIRMAN DECISION 2. Original: \"(c3) ROUTINE HEARTBEAT = BRIEF HOURLY SMS\", with the cadence recorded as chairman-confirmed HOURLY (verbal 2026-07-19, \"your hourly updates\"). Corrected S5g(c3): \"ROUTINE HEARTBEAT = brief SMS\" - the word HOURLY is GONE. A later verbal set 30 minutes \"until he restores hourly\". Landing this silently changes the heartbeat cadence, so it must be resolved by the chairman, never by an implementer."
+      }
     },
     {
       "key": "f0a2681f83eb",
@@ -1523,9 +1729,16 @@
       "imperative": "(d) DEGRADED MODE — if no Adam session is alive, chairman texts queue durably in staging (nothing lost); act on arrival-order at next session start.",
       "match_score": 0.57,
       "carries_modal": false,
-      "disposition": "NEEDS_DECISION",
+      "disposition": "landed",
       "lexical_coverage": 0.381,
-      "lexical_note": "NOT evidence of deletion — the probe is rewrite-blind (3 of 3 known survivors score invisible). Needs a reader."
+      "survival_basis": {
+        "measure": "semantic adjudication - full read of the corrected contract",
+        "adjudicated_by": "Alpha-2 session 8aa7b984",
+        "reachable_in": [
+          "contract"
+        ],
+        "located_at": "S5g(d) - DEGRADED MODE, texts queue durably in staging"
+      }
     },
     {
       "key": "3862bf88b23f",
@@ -1591,18 +1804,31 @@
       "imperative": "This is a phone-push LAYER on top of the coordinator decision-queue / fn_chairman_decide, NOT a replacement.",
       "match_score": 0.17,
       "carries_modal": false,
-      "disposition": "NEEDS_DECISION",
+      "disposition": "CANDIDATE_LOSS",
       "lexical_coverage": 0,
-      "lexical_note": "NOT evidence of deletion — the probe is rewrite-blind (3 of 3 known survivors score invisible). Needs a reader."
+      "survival_basis": {
+        "measure": "semantic adjudication - full read of the corrected contract",
+        "adjudicated_by": "Alpha-2 session 8aa7b984",
+        "reachable_in": [],
+        "located_at": "NOT LOCATED in the contract or either companion",
+        "note": "phone-notify is \"a LAYER on top of the coordinator decision-queue / fn_chairman_decide, NOT a replacement\". S5k keeps sparingly/urgent-only but drops the not-a-replacement relationship. CANDIDATE LOSS (low severity)."
+      }
     },
     {
       "key": "b030f358047f",
       "imperative": "Use it SPARINGLY (urgent only — never spam the chairman).",
       "match_score": 0.4,
       "carries_modal": false,
-      "disposition": "NEEDS_DECISION",
+      "disposition": "landed",
       "lexical_coverage": 0,
-      "lexical_note": "NOT evidence of deletion — the probe is rewrite-blind (3 of 3 known survivors score invisible). Needs a reader."
+      "survival_basis": {
+        "measure": "semantic adjudication - full read of the corrected contract",
+        "adjudicated_by": "Alpha-2 session 8aa7b984",
+        "reachable_in": [
+          "contract"
+        ],
+        "located_at": "S5k - \"Use SPARINGLY - urgent only.\""
+      }
     },
     {
       "key": "7d37fe10a4a9",
@@ -1626,9 +1852,16 @@
       "imperative": "Two PAIRED standing rules on this channel: (a) ON EVERY ACCOUNT SWITCH (any detected/announced /login), PROMPT the chairman to paste the /usage dashboard (current-session % + weekly % + reset times) — Adam can read account IDENTITY programmatically but NOT the quota meters, so the chairman's paste i…",
       "match_score": 0.37,
       "carries_modal": false,
-      "disposition": "NEEDS_DECISION",
+      "disposition": "landed",
       "lexical_coverage": 0.286,
-      "lexical_note": "NOT evidence of deletion — the probe is rewrite-blind (3 of 3 known survivors score invisible). Needs a reader."
+      "survival_basis": {
+        "measure": "semantic adjudication - full read of the corrected contract",
+        "adjudicated_by": "Alpha-2 session 8aa7b984",
+        "reachable_in": [
+          "contract"
+        ],
+        "located_at": "S5j - the two paired account-switch / usage-chart rules"
+      }
     },
     {
       "key": "f7e78c64305e",
@@ -1692,9 +1925,16 @@
       "imperative": "An incomplete plan means there is more work BY DEFINITION; if that work is not reaching the belt, Adam diagnoses why and fixes it.",
       "match_score": 0.18,
       "carries_modal": false,
-      "disposition": "NEEDS_DECISION",
+      "disposition": "landed",
       "lexical_coverage": 0,
-      "lexical_note": "NOT evidence of deletion — the probe is rewrite-blind (3 of 3 known survivors score invisible). Needs a reader."
+      "survival_basis": {
+        "measure": "semantic adjudication - full read of the corrected contract",
+        "adjudicated_by": "Alpha-2 session 8aa7b984",
+        "reachable_in": [
+          "contract"
+        ],
+        "located_at": "S5b - BELT-NEVER-DRY; an incomplete plan means more work by definition"
+      }
     },
     {
       "key": "6755d8009b50",
@@ -1709,18 +1949,32 @@
       "imperative": "If something's not 100% complete, there's more work to do.",
       "match_score": 0.2,
       "carries_modal": false,
-      "disposition": "NEEDS_DECISION",
+      "disposition": "landed",
       "lexical_coverage": 0,
-      "lexical_note": "NOT evidence of deletion — the probe is rewrite-blind (3 of 3 known survivors score invisible). Needs a reader."
+      "survival_basis": {
+        "measure": "semantic adjudication - full read of the corrected contract",
+        "adjudicated_by": "Alpha-2 session 8aa7b984",
+        "reachable_in": [
+          "contract"
+        ],
+        "located_at": "S5b - same law"
+      }
     },
     {
       "key": "dfebf8f4827e",
       "imperative": "If something's not getting done, it's probably blocked — we need to unblock it, or there are pending decisions the chairman needs to make, and you surface those.' THE ROOT-CAUSE DIAGNOSIS (run EVERY time the belt runs thin — a dry belt reduces to a small enumerable set; find which, then take the MAT…",
       "match_score": 0.17,
       "carries_modal": false,
-      "disposition": "NEEDS_DECISION",
+      "disposition": "landed",
       "lexical_coverage": 0.059,
-      "lexical_note": "NOT evidence of deletion — the probe is rewrite-blind (3 of 3 known survivors score invisible). Needs a reader."
+      "survival_basis": {
+        "measure": "semantic adjudication - full read of the corrected contract",
+        "adjudicated_by": "Alpha-2 session 8aa7b984",
+        "reachable_in": [
+          "contract"
+        ],
+        "located_at": "S5b cases 2 and 3 (BLOCKED / PENDING CHAIRMAN DECISION)"
+      }
     },
     {
       "key": "242b438005a5",
@@ -1752,9 +2006,16 @@
       "imperative": "(4) RESIDUAL / legitimate-empty — the remaining plan work is genuinely ALL IN-FLIGHT (every dispatchable item is already claimed and being worked; belt dry only because live capacity >= dispatchable supply) OR genuinely sequence-blocked on in-progress upstream work (not on a decision or a stale fenc…",
       "match_score": 0.42,
       "carries_modal": false,
-      "disposition": "NEEDS_DECISION",
+      "disposition": "landed",
       "lexical_coverage": 0.07,
-      "lexical_note": "NOT evidence of deletion — the probe is rewrite-blind (3 of 3 known survivors score invisible). Needs a reader."
+      "survival_basis": {
+        "measure": "semantic adjudication - full read of the corrected contract",
+        "adjudicated_by": "Alpha-2 session 8aa7b984",
+        "reachable_in": [
+          "contract"
+        ],
+        "located_at": "S5b case 4 RESIDUAL / legitimate-empty"
+      }
     },
     {
       "key": "38821a77263e",
@@ -1775,9 +2036,16 @@
       "imperative": "Adam OWNS keeping this pipeline flowing; a starved belt is Adam's to diagnose and refill, not to observe.",
       "match_score": 0.22,
       "carries_modal": false,
-      "disposition": "NEEDS_DECISION",
+      "disposition": "landed",
       "lexical_coverage": 0.133,
-      "lexical_note": "NOT evidence of deletion — the probe is rewrite-blind (3 of 3 known survivors score invisible). Needs a reader."
+      "survival_basis": {
+        "measure": "semantic adjudication - full read of the corrected contract",
+        "adjudicated_by": "Alpha-2 session 8aa7b984",
+        "reachable_in": [
+          "contract"
+        ],
+        "located_at": "S5b - \"Adam owns keeping this pipeline flowing\" + never merely observed and reported"
+      }
     },
     {
       "key": "ed5332b1c3a6",
@@ -1793,9 +2061,16 @@
       "imperative": "- BLOCK RESOLUTION — a DIRECT Adam responsibility (chairman-directed 2026-07-17, hard-coded into the contract at his request): Resolving blockages on sourced/blocked SDs — and resolving them THE RIGHT WAY — is Adam's direct, owned duty, not an ad-hoc or coordinator-only concern.",
       "match_score": 0.15,
       "carries_modal": false,
-      "disposition": "NEEDS_DECISION",
+      "disposition": "landed",
       "lexical_coverage": 0.049,
-      "lexical_note": "NOT evidence of deletion — the probe is rewrite-blind (3 of 3 known survivors score invisible). Needs a reader."
+      "survival_basis": {
+        "measure": "semantic adjudication - full read of the corrected contract",
+        "adjudicated_by": "Alpha-2 session 8aa7b984",
+        "reachable_in": [
+          "contract"
+        ],
+        "located_at": "S5c - \"BLOCK RESOLUTION - a direct Adam duty\""
+      }
     },
     {
       "key": "0a1247a4c5ba",
@@ -1817,9 +2092,16 @@
       "imperative": "Fences routinely outlive their cause (live witness 2026-07-17: BIND-OBSERVE-ONLY-001's 'prerequisite does not exist' was STALE — checkExitGates was already wired onto the live advance path at stage-execution-engine.js; INTELLIGENT-SWITCH-AUTOMATION-001's HOLD-STATE-CONTRACT-001 dependency had alread…",
       "match_score": 0.14,
       "carries_modal": false,
-      "disposition": "NEEDS_DECISION",
+      "disposition": "landed",
       "lexical_coverage": 0.023,
-      "lexical_note": "NOT evidence of deletion — the probe is rewrite-blind (3 of 3 known survivors score invisible). Needs a reader."
+      "survival_basis": {
+        "measure": "semantic adjudication - full read of the corrected contract",
+        "adjudicated_by": "Alpha-2 session 8aa7b984",
+        "reachable_in": [
+          "contract"
+        ],
+        "located_at": "S5c.1 - \"Fences routinely outlive their cause.\""
+      }
     },
     {
       "key": "27dc25edce83",
@@ -1859,9 +2141,16 @@
       "imperative": "Escalate a genuinely stuck block (no owner, or resolution needs authority Adam lacks) through the normal ladder (coordinator -> Adam -> chairman).",
       "match_score": 0.21,
       "carries_modal": false,
-      "disposition": "NEEDS_DECISION",
+      "disposition": "landed",
       "lexical_coverage": 0,
-      "lexical_note": "NOT evidence of deletion — the probe is rewrite-blind (3 of 3 known survivors score invisible). Needs a reader."
+      "survival_basis": {
+        "measure": "semantic adjudication - full read of the corrected contract",
+        "adjudicated_by": "Alpha-2 session 8aa7b984",
+        "reachable_in": [
+          "contract"
+        ],
+        "located_at": "S4e - COORDINATOR -> ADAM -> CHAIRMAN ladder"
+      }
     },
     {
       "key": "8de20658fbb5",
@@ -1915,9 +2204,16 @@
       "imperative": "Be CONSISTENT (apply the rubric every source), not ad hoc.",
       "match_score": 0.4,
       "carries_modal": false,
-      "disposition": "NEEDS_DECISION",
+      "disposition": "landed",
       "lexical_coverage": 0,
-      "lexical_note": "NOT evidence of deletion — the probe is rewrite-blind (3 of 3 known survivors score invisible). Needs a reader."
+      "survival_basis": {
+        "measure": "semantic adjudication - full read of the corrected contract",
+        "adjudicated_by": "Alpha-2 session 8aa7b984",
+        "reachable_in": [
+          "contract"
+        ],
+        "located_at": "S4d - \"Apply every source; never ad hoc.\""
+      }
     },
     {
       "key": "92c365fa57a9",
@@ -2041,9 +2337,17 @@
       "imperative": "Solomon consult (live, 2026-07-12): consult Solomon directly via node scripts/worker-signal.cjs solomon-consult (see the chairman-escalation-rubric section above for the full command, triage gate, reply shape, and the never-courtesy-ACK-on-correlation_id constraint) before committing the SD's shape.",
       "match_score": 0.18,
       "carries_modal": false,
-      "disposition": "NEEDS_DECISION",
+      "disposition": "companion_bound",
       "lexical_coverage": 0,
-      "lexical_note": "NOT evidence of deletion — the probe is rewrite-blind (3 of 3 known survivors score invisible). Needs a reader."
+      "survival_basis": {
+        "measure": "semantic adjudication - full read of the corrected contract",
+        "adjudicated_by": "Alpha-2 session 8aa7b984",
+        "reachable_in": [
+          "manual (REQUIRED)"
+        ],
+        "located_at": "belongs in CLAUDE_ADAM_MANUAL.md",
+        "note": "consult-Solomon invocation. The corrected contract routes via S2b adam-advisory.cjs send --to solomon; this entry names worker-signal.cjs solomon-consult. Command-level how-to -> MANUAL companion, and the two spellings must be reconciled there rather than left as two live spellings."
+      }
     },
     {
       "key": "bdc5da943346",
@@ -2059,9 +2363,16 @@
       "imperative": "SOURCE-AND-GO (default — no pre-review) when NONE of the above: small / self-contained (Tier 1/2), no deps, no fleet impact, clear / routine scope, low priority.",
       "match_score": 0.13,
       "carries_modal": false,
-      "disposition": "NEEDS_DECISION",
+      "disposition": "landed",
       "lexical_coverage": 0,
-      "lexical_note": "NOT evidence of deletion — the probe is rewrite-blind (3 of 3 known survivors score invisible). Needs a reader."
+      "survival_basis": {
+        "measure": "semantic adjudication - full read of the corrected contract",
+        "adjudicated_by": "Alpha-2 session 8aa7b984",
+        "reachable_in": [
+          "contract"
+        ],
+        "located_at": "S4d - \"Neither -> source-and-go.\""
+      }
     },
     {
       "key": "889941e69a90",
@@ -2077,9 +2388,16 @@
       "imperative": "Silence-by-default: never manufacture a review for a routine SD.",
       "match_score": 0.25,
       "carries_modal": false,
-      "disposition": "NEEDS_DECISION",
+      "disposition": "landed",
       "lexical_coverage": 0,
-      "lexical_note": "NOT evidence of deletion — the probe is rewrite-blind (3 of 3 known survivors score invisible). Needs a reader."
+      "survival_basis": {
+        "measure": "semantic adjudication - full read of the corrected contract",
+        "adjudicated_by": "Alpha-2 session 8aa7b984",
+        "reachable_in": [
+          "contract"
+        ],
+        "located_at": "S4d + S5p silence-by-default"
+      }
     },
     {
       "key": "5a4ae52af12a",
@@ -2145,9 +2463,16 @@
       "imperative": "In the blocked-claim resolution chain (COORDINATOR -> ADAM -> CHAIRMAN) you are the second tier, not the first or last.",
       "match_score": 0.33,
       "carries_modal": false,
-      "disposition": "NEEDS_DECISION",
+      "disposition": "landed",
       "lexical_coverage": 0,
-      "lexical_note": "NOT evidence of deletion — the probe is rewrite-blind (3 of 3 known survivors score invisible). Needs a reader."
+      "survival_basis": {
+        "measure": "semantic adjudication - full read of the corrected contract",
+        "adjudicated_by": "Alpha-2 session 8aa7b984",
+        "reachable_in": [
+          "contract"
+        ],
+        "located_at": "S4e - second tier, not the first or the last"
+      }
     },
     {
       "key": "8188a817a9b5",
@@ -2210,9 +2535,16 @@
       "imperative": "Adam is the chairman's escalation filter: the chairman interfaces only with Adam, so Adam's core function is to triage what actually reaches him.",
       "match_score": 0.3,
       "carries_modal": false,
-      "disposition": "NEEDS_DECISION",
+      "disposition": "landed",
       "lexical_coverage": 0.143,
-      "lexical_note": "NOT evidence of deletion — the probe is rewrite-blind (3 of 3 known survivors score invisible). Needs a reader."
+      "survival_basis": {
+        "measure": "semantic adjudication - full read of the corrected contract",
+        "adjudicated_by": "Alpha-2 session 8aa7b984",
+        "reachable_in": [
+          "contract"
+        ],
+        "located_at": "S4b - \"Adam is the chairman escalation filter.\""
+      }
     },
     {
       "key": "aac8408a1b4b",
@@ -2395,9 +2727,16 @@
       "imperative": "Enforcement probe tracked as SD-LEO-INFRA-ADAM-DECISION-RUBRIC-ENFORCE-001 so the self-adherence loop auto-flags over-asking, not just documents the rule.)",
       "match_score": 0.18,
       "carries_modal": false,
-      "disposition": "NEEDS_DECISION",
+      "disposition": "landed",
       "lexical_coverage": 0,
-      "lexical_note": "NOT evidence of deletion — the probe is rewrite-blind (3 of 3 known survivors score invisible). Needs a reader."
+      "survival_basis": {
+        "measure": "semantic adjudication - full read of the corrected contract",
+        "adjudicated_by": "Alpha-2 session 8aa7b984",
+        "reachable_in": [
+          "contract"
+        ],
+        "located_at": "S4a - \"both probed by the self-adherence review\" (over-ask and under-escalate)"
+      }
     },
     {
       "key": "f246d74ca6af",
@@ -2421,18 +2760,32 @@
       "imperative": "A commission carries: near-verbatim quotes of what the chairman actually said (not a summary that drifts from intent), complete artifact pointers (file paths, SD keys, PR links -- everything a reader needs to verify the commission without re-asking), explicit exclusion lists (what is deliberately NO…",
       "match_score": 0.57,
       "carries_modal": false,
-      "disposition": "NEEDS_DECISION",
+      "disposition": "landed",
       "lexical_coverage": 0.048,
-      "lexical_note": "NOT evidence of deletion — the probe is rewrite-blind (3 of 3 known survivors score invisible). Needs a reader."
+      "survival_basis": {
+        "measure": "semantic adjudication - full read of the corrected contract",
+        "adjudicated_by": "Alpha-2 session 8aa7b984",
+        "reachable_in": [
+          "contract"
+        ],
+        "located_at": "S5m - commission carries near-verbatim quotes, pointers, exclusion lists, preemption notes, provenance"
+      }
     },
     {
       "key": "12387c122676",
       "imperative": "Fold oracle/coordinator outputs into groomed decision sets with defaults for the chairman to ratify or override -- never an open-ended question (mirrors the DECIDE-and-INFORM default above: bring a recommendation with a default Adam will execute unless the chairman objects).",
       "match_score": 0.54,
       "carries_modal": false,
-      "disposition": "NEEDS_DECISION",
+      "disposition": "landed",
       "lexical_coverage": 0.526,
-      "lexical_note": "NOT evidence of deletion — the probe is rewrite-blind (3 of 3 known survivors score invisible). Needs a reader."
+      "survival_basis": {
+        "measure": "semantic adjudication - full read of the corrected contract",
+        "adjudicated_by": "Alpha-2 session 8aa7b984",
+        "reachable_in": [
+          "contract"
+        ],
+        "located_at": "S5m - groomed decision sets with defaults, never an open-ended question"
+      }
     },
     {
       "key": "52089defae0b",
@@ -2461,9 +2814,16 @@
       "imperative": "This closes the untracked-file-loss class both role sessions (Adam and the coordinator) have suffered, where a genuinely valuable artifact existed only as an uncommitted file and was lost to a stash, a checkout, or a tree reset by a concurrent session before it was ever durably recorded.",
       "match_score": 0.11,
       "carries_modal": false,
-      "disposition": "NEEDS_DECISION",
+      "disposition": "landed",
       "lexical_coverage": 0,
-      "lexical_note": "NOT evidence of deletion — the probe is rewrite-blind (3 of 3 known survivors score invisible). Needs a reader."
+      "survival_basis": {
+        "measure": "semantic adjudication - full read of the corrected contract",
+        "adjudicated_by": "Alpha-2 session 8aa7b984",
+        "reachable_in": [
+          "contract"
+        ],
+        "located_at": "S5l - evidence-durability; never an untracked file in a shared working tree"
+      }
     },
     {
       "key": "8b146a45885c",
@@ -2512,9 +2872,16 @@
       "imperative": "Default bias: the fleet UNDER-researches — when a GO trigger fires, reach for the web; treat the offline list as the exception, not the gate.",
       "match_score": 0.58,
       "carries_modal": false,
-      "disposition": "NEEDS_DECISION",
+      "disposition": "landed",
       "lexical_coverage": 0.571,
-      "lexical_note": "NOT evidence of deletion — the probe is rewrite-blind (3 of 3 known survivors score invisible). Needs a reader."
+      "survival_basis": {
+        "measure": "semantic adjudication - full read of the corrected contract",
+        "adjudicated_by": "Alpha-2 session 8aa7b984",
+        "reachable_in": [
+          "contract"
+        ],
+        "located_at": "S5o - \"Default bias: the fleet UNDER-researches.\""
+      }
     },
     {
       "key": "bd4670806f87",
@@ -2626,18 +2993,32 @@
       "imperative": "CHAIRMAN COMMISSION — an explicit \"go research X\" from the chairman IS the trigger: no rubric gate, no hesitation (Solomon: admits as Mode-C with budget-at-entry — use existing machinery). 5.",
       "match_score": 0.29,
       "carries_modal": false,
-      "disposition": "NEEDS_DECISION",
+      "disposition": "landed",
       "lexical_coverage": 0,
-      "lexical_note": "NOT evidence of deletion — the probe is rewrite-blind (3 of 3 known survivors score invisible). Needs a reader."
+      "survival_basis": {
+        "measure": "semantic adjudication - full read of the corrected contract",
+        "adjudicated_by": "Alpha-2 session 8aa7b984",
+        "reachable_in": [
+          "contract"
+        ],
+        "located_at": "S5o GO ONLINE - \"CHAIRMAN COMMISSION (no rubric gate)\""
+      }
     },
     {
       "key": "e583d4d2ff07",
       "imperative": "LOW-CONFIDENCE + CONSEQUENTIAL — about to assert/act on an external fact, not confident, wrong matters. 6.",
       "match_score": 0.44,
       "carries_modal": false,
-      "disposition": "NEEDS_DECISION",
+      "disposition": "landed",
       "lexical_coverage": 0,
-      "lexical_note": "NOT evidence of deletion — the probe is rewrite-blind (3 of 3 known survivors score invisible). Needs a reader."
+      "survival_basis": {
+        "measure": "semantic adjudication - full read of the corrected contract",
+        "adjudicated_by": "Alpha-2 session 8aa7b984",
+        "reachable_in": [
+          "contract"
+        ],
+        "located_at": "S5o GO ONLINE - LOW-CONFIDENCE + CONSEQUENTIAL"
+      }
     },
     {
       "key": "2e18f6c79e2b",
@@ -2667,9 +3048,16 @@
       "imperative": "The third leg must be independent of the reasoning's ORIGIN.",
       "match_score": 0.25,
       "carries_modal": false,
-      "disposition": "NEEDS_DECISION",
+      "disposition": "landed",
       "lexical_coverage": 0,
-      "lexical_note": "NOT evidence of deletion — the probe is rewrite-blind (3 of 3 known survivors score invisible). Needs a reader."
+      "survival_basis": {
+        "measure": "semantic adjudication - full read of the corrected contract",
+        "adjudicated_by": "Alpha-2 session 8aa7b984",
+        "reachable_in": [
+          "contract"
+        ],
+        "located_at": "S5o - independence = different ORIGINS"
+      }
     },
     {
       "key": "e2484f277b8b",
@@ -2690,9 +3078,16 @@
       "imperative": "HOW (quality + cost): prefer PRIMARY sources; independence = different ORIGINS (author/publisher/underlying data), NOT different URLs (syndication + scraper-farms make 10 URLs one source); time-box (quick fact-check vs. deep pass — don't rabbit-hole); cite sources; state web-sourced vs internal.",
       "match_score": 0.52,
       "carries_modal": false,
-      "disposition": "NEEDS_DECISION",
+      "disposition": "landed",
       "lexical_coverage": 0.179,
-      "lexical_note": "NOT evidence of deletion — the probe is rewrite-blind (3 of 3 known survivors score invisible). Needs a reader."
+      "survival_basis": {
+        "measure": "semantic adjudication - full read of the corrected contract",
+        "adjudicated_by": "Alpha-2 session 8aa7b984",
+        "reachable_in": [
+          "contract"
+        ],
+        "located_at": "S5o HOW - PRIMARY sources; different ORIGINS, not different URLs"
+      }
     },
     {
       "key": "7568e0eb0fa9",
@@ -2708,9 +3103,16 @@
       "imperative": "SOURCE-ESCALATION LADDER (renamed from \"triangulation\" to avoid collision with Ground-Truth Triangulation) — for JUDGMENT under uncertainty (NOT lookups), when stakes are high AND uncertainty is real (irreversible/structural, conflicting reads, novel classes): 1.",
       "match_score": 0.3,
       "carries_modal": false,
-      "disposition": "NEEDS_DECISION",
+      "disposition": "landed",
       "lexical_coverage": 0.067,
-      "lexical_note": "NOT evidence of deletion — the probe is rewrite-blind (3 of 3 known survivors score invisible). Needs a reader."
+      "survival_basis": {
+        "measure": "semantic adjudication - full read of the corrected contract",
+        "adjudicated_by": "Alpha-2 session 8aa7b984",
+        "reachable_in": [
+          "contract"
+        ],
+        "located_at": "S5o - SOURCE-ESCALATION LADDER, classify-the-question-first on divergence"
+      }
     },
     {
       "key": "c6f205729795",
@@ -2742,9 +3144,15 @@
       "imperative": "SOLOMON: (a) a consult arriving WITH web citations — the sources are inputs to RE-DERIVE, never premises to inherit (check the source, not the asker's reading); (b) web research rides the existing per-sweep/per-consult task_budget (entry-enforced), no separate allowance; (c) verdict/D4: flag web-sou…",
       "match_score": 0.11,
       "carries_modal": false,
-      "disposition": "NEEDS_DECISION",
+      "disposition": "CANDIDATE_LOSS",
       "lexical_coverage": 0,
-      "lexical_note": "NOT evidence of deletion — the probe is rewrite-blind (3 of 3 known survivors score invisible). Needs a reader."
+      "survival_basis": {
+        "measure": "semantic adjudication - full read of the corrected contract",
+        "adjudicated_by": "Alpha-2 session 8aa7b984",
+        "reachable_in": [],
+        "located_at": "NOT LOCATED in the contract or either companion",
+        "note": "SOLOMON consult arriving WITH web citations: \"the sources are inputs to RE-DERIVE, never premises to inherit (check the source, not the asker reading)\". S5o CONTAMINATION is a DIFFERENT rule (our-design-vs-best-practice false independence). No clause in the corrected contract carries inherit-vs-re-derive for an inbound consult. CANDIDATE LOSS."
+      }
     },
     {
       "key": "ac0ec0f27a9b",
@@ -2767,27 +3175,49 @@
       "imperative": "Recorded because the contract previously asserted a cadence that the runtime did not provide, and a reader had no way to tell the difference.",
       "match_score": 0.18,
       "carries_modal": false,
-      "disposition": "NEEDS_DECISION",
+      "disposition": "provenance_bound",
       "lexical_coverage": 0,
-      "lexical_note": "NOT evidence of deletion — the probe is rewrite-blind (3 of 3 known survivors score invisible). Needs a reader."
+      "survival_basis": {
+        "measure": "semantic adjudication - full read of the corrected contract",
+        "adjudicated_by": "Alpha-2 session 8aa7b984",
+        "reachable_in": [
+          "provenance (REQUIRED)"
+        ],
+        "located_at": "belongs in CLAUDE_ADAM_PROVENANCE.md",
+        "note": "recorded because the contract asserted a cadence the runtime did not provide - dated rationale, not a rule. Acceptable to move ONLY if the provenance companion actually lands and is loaded (FR-2)."
+      }
     },
     {
       "key": "de8af6df8a01",
       "imperative": "THE SCORER SHIPS INERT. scripts/adam-self-assessment-writer.cjs gates on ADAM_SELF_SCORE_CADENCE and no-ops when it is not exactly on.",
       "match_score": 0.56,
       "carries_modal": false,
-      "disposition": "NEEDS_DECISION",
+      "disposition": "landed",
       "lexical_coverage": 0.238,
-      "lexical_note": "NOT evidence of deletion — the probe is rewrite-blind (3 of 3 known survivors score invisible). Needs a reader."
+      "survival_basis": {
+        "measure": "semantic adjudication - full read of the corrected contract",
+        "adjudicated_by": "Alpha-2 session 8aa7b984",
+        "reachable_in": [
+          "contract"
+        ],
+        "located_at": "S6 - \"THE SCORER SHIPS INERT\" / gates on ADAM_SELF_SCORE_CADENCE"
+      }
     },
     {
       "key": "3ae2fec30c55",
       "imperative": "The default is off, and the variable is set nowhere — not in .env, not in .env.example, not in .claude/settings.json, not in any cron.",
       "match_score": 0.25,
       "carries_modal": false,
-      "disposition": "NEEDS_DECISION",
+      "disposition": "landed",
       "lexical_coverage": 0.045,
-      "lexical_note": "NOT evidence of deletion — the probe is rewrite-blind (3 of 3 known survivors score invisible). Needs a reader."
+      "survival_basis": {
+        "measure": "semantic adjudication - full read of the corrected contract",
+        "adjudicated_by": "Alpha-2 session 8aa7b984",
+        "reachable_in": [
+          "contract"
+        ],
+        "located_at": "S6 - \"the default is off and it is set nowhere\""
+      }
     },
     {
       "key": "7e744e065fe3",
@@ -2841,18 +3271,32 @@
       "imperative": "3. leo_feature_flags IS A GAUGE FOR THIS FLAG, NOT A GATE. scripts/adam-self-assessment-writer.cjs reads process.env only, and nothing hydrates leo_feature_flags into the environment.",
       "match_score": 0.54,
       "carries_modal": false,
-      "disposition": "NEEDS_DECISION",
+      "disposition": "landed",
       "lexical_coverage": 0.286,
-      "lexical_note": "NOT evidence of deletion — the probe is rewrite-blind (3 of 3 known survivors score invisible). Needs a reader."
+      "survival_basis": {
+        "measure": "semantic adjudication - full read of the corrected contract",
+        "adjudicated_by": "Alpha-2 session 8aa7b984",
+        "reachable_in": [
+          "contract"
+        ],
+        "located_at": "S6 - \"leo_feature_flags is a GAUGE for this flag, not a GATE\""
+      }
     },
     {
       "key": "04a00a654845",
       "imperative": "Flipping is_enabled on that row therefore has no runtime effect whatsoever — it changes a dashboard, not a behaviour.",
       "match_score": 0.56,
       "carries_modal": false,
-      "disposition": "NEEDS_DECISION",
+      "disposition": "landed",
       "lexical_coverage": 0.133,
-      "lexical_note": "NOT evidence of deletion — the probe is rewrite-blind (3 of 3 known survivors score invisible). Needs a reader."
+      "survival_basis": {
+        "measure": "semantic adjudication - full read of the corrected contract",
+        "adjudicated_by": "Alpha-2 session 8aa7b984",
+        "reachable_in": [
+          "contract"
+        ],
+        "located_at": "S6 - \"changes a dashboard, not a behaviour\""
+      }
     },
     {
       "key": "c526ff1fef84",
@@ -2921,9 +3365,16 @@
       "imperative": "This is the required order; the live state of every layer below is printed every /adam startup by the SOURCING SSOT STATE probe (scripts/adam-startup-check.mjs) — read that badge first.",
       "match_score": 0.24,
       "carries_modal": false,
-      "disposition": "NEEDS_DECISION",
+      "disposition": "landed",
       "lexical_coverage": 0,
-      "lexical_note": "NOT evidence of deletion — the probe is rewrite-blind (3 of 3 known survivors score invisible). Needs a reader."
+      "survival_basis": {
+        "measure": "semantic adjudication - full read of the corrected contract",
+        "adjudicated_by": "Alpha-2 session 8aa7b984",
+        "reachable_in": [
+          "contract"
+        ],
+        "located_at": "S5f - \"Read this BEFORE sourcing anything. Work top-down\""
+      }
     },
     {
       "key": "110468af8daa",
@@ -3024,9 +3475,16 @@
       "imperative": "Mining computeBuildGauge for unbuilt capabilities by hand is the bottom of this list, not the top.",
       "match_score": 0.14,
       "carries_modal": false,
-      "disposition": "NEEDS_DECISION",
+      "disposition": "landed",
       "lexical_coverage": 0,
-      "lexical_note": "NOT evidence of deletion — the probe is rewrite-blind (3 of 3 known survivors score invisible). Needs a reader."
+      "survival_basis": {
+        "measure": "semantic adjudication - full read of the corrected contract",
+        "adjudicated_by": "Alpha-2 session 8aa7b984",
+        "reachable_in": [
+          "contract"
+        ],
+        "located_at": "S5f.4 - \"Hand-mining the VDR gauge is LAST-RESORT - and a SMELL.\""
+      }
     },
     {
       "key": "25c6f79e9ca0",
@@ -3096,9 +3554,15 @@
       "imperative": "It REUSES the existing gauge + KR alignment — it is not a new measurement system.",
       "match_score": 0.17,
       "carries_modal": false,
-      "disposition": "NEEDS_DECISION",
+      "disposition": "CANDIDATE_LOSS",
       "lexical_coverage": 0,
-      "lexical_note": "NOT evidence of deletion — the probe is rewrite-blind (3 of 3 known survivors score invisible). Needs a reader."
+      "survival_basis": {
+        "measure": "semantic adjudication - full read of the corrected contract",
+        "adjudicated_by": "Alpha-2 session 8aa7b984",
+        "reachable_in": [],
+        "located_at": "NOT LOCATED in the contract or either companion",
+        "note": "\"It REUSES the existing gauge + KR alignment - it is not a new measurement system.\" No corrected clause states the reuse constraint. CANDIDATE LOSS (low severity)."
+      }
     },
     {
       "key": "cd3863d589dd",
@@ -3158,9 +3622,17 @@
       "imperative": "Every exception recorded WITH a careful reason counted as WITHOUT one — 7 rows — and because the docblock names without_reason as the number to drive to zero, via that path it could never reach zero.",
       "match_score": 0.17,
       "carries_modal": false,
-      "disposition": "NEEDS_DECISION",
+      "disposition": "provenance_bound",
       "lexical_coverage": 0,
-      "lexical_note": "NOT evidence of deletion — the probe is rewrite-blind (3 of 3 known survivors score invisible). Needs a reader."
+      "survival_basis": {
+        "measure": "semantic adjudication - full read of the corrected contract",
+        "adjudicated_by": "Alpha-2 session 8aa7b984",
+        "reachable_in": [
+          "provenance (REQUIRED)"
+        ],
+        "located_at": "belongs in CLAUDE_ADAM_PROVENANCE.md",
+        "note": "the 7-rows-counted-without_reason incident - dated rationale, not a rule. Acceptable to move ONLY if the provenance companion actually lands and is loaded (FR-2)."
+      }
     },
     {
       "key": "6d0408732e2d",
@@ -3176,9 +3648,17 @@
       "imperative": "The contract learned it for sub-agents only; this rule generalises it.",
       "match_score": 0.33,
       "carries_modal": false,
-      "disposition": "NEEDS_DECISION",
+      "disposition": "provenance_bound",
       "lexical_coverage": 0,
-      "lexical_note": "NOT evidence of deletion — the probe is rewrite-blind (3 of 3 known survivors score invisible). Needs a reader."
+      "survival_basis": {
+        "measure": "semantic adjudication - full read of the corrected contract",
+        "adjudicated_by": "Alpha-2 session 8aa7b984",
+        "reachable_in": [
+          "provenance (REQUIRED)"
+        ],
+        "located_at": "belongs in CLAUDE_ADAM_PROVENANCE.md",
+        "note": "the contract learned it for sub-agents only; this rule generalises it - dated rationale, not a rule. Acceptable to move ONLY if the provenance companion actually lands and is loaded (FR-2)."
+      }
     },
     {
       "key": "4e38b2c8ffbb",
@@ -4302,9 +4782,16 @@
       "imperative": "Window: rolling 48 hours (he thinks in last-48h vs next-48h, never wave percentages or lifetime status).",
       "match_score": 0.2,
       "carries_modal": false,
-      "disposition": "NEEDS_DECISION",
+      "disposition": "landed",
       "lexical_coverage": 0,
-      "lexical_note": "NOT evidence of deletion — the probe is rewrite-blind (3 of 3 known survivors score invisible). Needs a reader."
+      "survival_basis": {
+        "measure": "semantic adjudication - full read of the corrected contract",
+        "adjudicated_by": "Alpha-2 session 8aa7b984",
+        "reachable_in": [
+          "contract"
+        ],
+        "located_at": "S5n - \"Window: rolling 48 hours.\""
+      }
     },
     {
       "key": "efef2f00149f",
@@ -4350,9 +4837,16 @@
       "imperative": "Estimates carry \"~\"; sequence/shape matters, not precision — never apologize for an hour's drift.",
       "match_score": 0.56,
       "carries_modal": false,
-      "disposition": "NEEDS_DECISION",
+      "disposition": "landed",
       "lexical_coverage": 0.3,
-      "lexical_note": "NOT evidence of deletion — the probe is rewrite-blind (3 of 3 known survivors score invisible). Needs a reader."
+      "survival_basis": {
+        "measure": "semantic adjudication - full read of the corrected contract",
+        "adjudicated_by": "Alpha-2 session 8aa7b984",
+        "reachable_in": [
+          "contract"
+        ],
+        "located_at": "S5n.3 - estimates carry \"~\"; never apologize for an hour of drift"
+      }
     },
     {
       "key": "fcd56656afca",
@@ -4387,18 +4881,32 @@
       "imperative": "No ID soup, no jargon compression; phone-readable in about a minute.",
       "match_score": 0.17,
       "carries_modal": false,
-      "disposition": "NEEDS_DECISION",
+      "disposition": "landed",
       "lexical_coverage": 0.25,
-      "lexical_note": "NOT evidence of deletion — the probe is rewrite-blind (3 of 3 known survivors score invisible). Needs a reader."
+      "survival_basis": {
+        "measure": "semantic adjudication - full read of the corrected contract",
+        "adjudicated_by": "Alpha-2 session 8aa7b984",
+        "reachable_in": [
+          "contract"
+        ],
+        "located_at": "S5n Tone - no ID soup; phone-readable in about a minute"
+      }
     },
     {
       "key": "3991dbf44d3b",
       "imperative": "IN-CHAT EXTRAS: (a) end every in-chat PLAN CHECK with 2-3 anticipated follow-up options tailored to THAT report's content (e.g. \"want the story behind the slip?\") — never generic boilerplate; (b) delta-first on repeat asks — a second ask within ~2h (judgment up to ~6h) LEADS with a \"since the last u…",
       "match_score": 0.4,
       "carries_modal": false,
-      "disposition": "NEEDS_DECISION",
+      "disposition": "landed",
       "lexical_coverage": 0.058,
-      "lexical_note": "NOT evidence of deletion — the probe is rewrite-blind (3 of 3 known survivors score invisible). Needs a reader."
+      "survival_basis": {
+        "measure": "semantic adjudication - full read of the corrected contract",
+        "adjudicated_by": "Alpha-2 session 8aa7b984",
+        "reachable_in": [
+          "contract"
+        ],
+        "located_at": "S5n In-chat extras - 2-3 anticipated follow-ups tailored to that report"
+      }
     },
     {
       "key": "4c84c8accc00",
@@ -4445,9 +4953,16 @@
       "imperative": "Adam runs a 4th recurring tick (self-adherence, every 6h: node scripts/adam-self-adherence-review.mjs) that audits Adam's OWN role-contract adherence.",
       "match_score": 0.45,
       "carries_modal": false,
-      "disposition": "NEEDS_DECISION",
+      "disposition": "landed",
       "lexical_coverage": 0.095,
-      "lexical_note": "NOT evidence of deletion — the probe is rewrite-blind (3 of 3 known survivors score invisible). Needs a reader."
+      "survival_basis": {
+        "measure": "semantic adjudication - full read of the corrected contract",
+        "adjudicated_by": "Alpha-2 session 8aa7b984",
+        "reachable_in": [
+          "contract"
+        ],
+        "located_at": "S6 - recurring 6h self-adherence tick"
+      }
     },
     {
       "key": "12c1fd724bfc",
@@ -4487,9 +5002,16 @@
       "imperative": "This is the self-improving governance loop: Adam's own adherence is measured and remediated, not assumed.",
       "match_score": 0.29,
       "carries_modal": false,
-      "disposition": "NEEDS_DECISION",
+      "disposition": "landed",
       "lexical_coverage": 0,
-      "lexical_note": "NOT evidence of deletion — the probe is rewrite-blind (3 of 3 known survivors score invisible). Needs a reader."
+      "survival_basis": {
+        "measure": "semantic adjudication - full read of the corrected contract",
+        "adjudicated_by": "Alpha-2 session 8aa7b984",
+        "reachable_in": [
+          "contract"
+        ],
+        "located_at": "S6 - the self-improving governance loop"
+      }
     },
     {
       "key": "8ac94798318a",
@@ -4510,9 +5032,16 @@
       "imperative": "The chairman delegated to Adam (2026-06-16; durable: chairman_decisions b917c3e1 + SD metadata.chairman_authorization) the authority to APPLY a SCOPED set of PRODUCTION database changes, so additive vision-loop work no longer dead-ends at the chairman.",
       "match_score": 0.37,
       "carries_modal": false,
-      "disposition": "NEEDS_DECISION",
+      "disposition": "landed",
       "lexical_coverage": 0.143,
-      "lexical_note": "NOT evidence of deletion — the probe is rewrite-blind (3 of 3 known survivors score invisible). Needs a reader."
+      "survival_basis": {
+        "measure": "semantic adjudication - full read of the corrected contract",
+        "adjudicated_by": "Alpha-2 session 8aa7b984",
+        "reachable_in": [
+          "contract"
+        ],
+        "located_at": "S3b - chairman-delegated APPLY authority (scoped, apply-only, revocable)"
+      }
     },
     {
       "key": "b8ef404e2d08",
@@ -4533,9 +5062,16 @@
       "imperative": "The delegated-apply path does not touch claim acquisition (lib/claim/build-forbidden-session.cjs / the claim-validity gate).",
       "match_score": 0.25,
       "carries_modal": false,
-      "disposition": "NEEDS_DECISION",
+      "disposition": "landed",
       "lexical_coverage": 0,
-      "lexical_note": "NOT evidence of deletion — the probe is rewrite-blind (3 of 3 known survivors score invisible). Needs a reader."
+      "survival_basis": {
+        "measure": "semantic adjudication - full read of the corrected contract",
+        "adjudicated_by": "Alpha-2 session 8aa7b984",
+        "reachable_in": [
+          "contract"
+        ],
+        "located_at": "S3b - \"APPLY-ONLY - NOT a build right. CONST-002 unchanged.\""
+      }
     },
     {
       "key": "744123740257",
@@ -4556,18 +5092,32 @@
       "imperative": "Enforcement (code, not prose): lib/migration/adam-delegated-apply.js isDelegatableForApply (a STRICT SUBSET of the additive tier-classifier that EXCLUDES create_policy/enable_rls tokens) + the bounded classifyGovernedInsert; gated by scripts/lib/migration-guards.js validateDelegatedApplyGuards.",
       "match_score": 0.5,
       "carries_modal": false,
-      "disposition": "NEEDS_DECISION",
+      "disposition": "landed",
       "lexical_coverage": 0.273,
-      "lexical_note": "NOT evidence of deletion — the probe is rewrite-blind (3 of 3 known survivors score invisible). Needs a reader."
+      "survival_basis": {
+        "measure": "semantic adjudication - full read of the corrected contract",
+        "adjudicated_by": "Alpha-2 session 8aa7b984",
+        "reachable_in": [
+          "contract"
+        ],
+        "located_at": "S3b Enforcement - isDelegatableForApply, STRICT SUBSET excluding create_policy/enable_rls"
+      }
     },
     {
       "key": "6326ee3697ed",
       "imperative": "A forgeable \"-- @delegated-by: adam\" line is ONLY a routing marker — the REAL authority is a valid delegation TOKEN (the same crypto-token factor the chairman path uses).",
       "match_score": 0.59,
       "carries_modal": false,
-      "disposition": "NEEDS_DECISION",
+      "disposition": "landed",
       "lexical_coverage": 0.458,
-      "lexical_note": "NOT evidence of deletion — the probe is rewrite-blind (3 of 3 known survivors score invisible). Needs a reader."
+      "survival_basis": {
+        "measure": "semantic adjudication - full read of the corrected contract",
+        "adjudicated_by": "Alpha-2 session 8aa7b984",
+        "reachable_in": [
+          "contract"
+        ],
+        "located_at": "S3b - \"@delegated-by is ONLY a routing marker - the real authority is a valid crypto delegation TOKEN\""
+      }
     },
     {
       "key": "a67f75cbe227",
@@ -4624,9 +5174,16 @@
       "imperative": "Distinct from the @delegated-by authority above: this ceremony is how Adam executes a CHAIRMAN-ONLY (non-delegatable) apply after the chairman approves VERBALLY in-session.",
       "match_score": 0.21,
       "carries_modal": false,
-      "disposition": "NEEDS_DECISION",
+      "disposition": "landed",
       "lexical_coverage": 0,
-      "lexical_note": "NOT evidence of deletion — the probe is rewrite-blind (3 of 3 known survivors score invisible). Needs a reader."
+      "survival_basis": {
+        "measure": "semantic adjudication - full read of the corrected contract",
+        "adjudicated_by": "Alpha-2 session 8aa7b984",
+        "reachable_in": [
+          "contract"
+        ],
+        "located_at": "S3c - chairman-verbal scribe ceremony for CHAIRMAN-ONLY applies"
+      }
     },
     {
       "key": "607e9b270ebc",
@@ -4649,9 +5206,16 @@
       "imperative": "Approval is per-migration and per-content — it never extends to other files or to content changed after the approval.",
       "match_score": 0.33,
       "carries_modal": false,
-      "disposition": "NEEDS_DECISION",
+      "disposition": "landed",
       "lexical_coverage": 0.188,
-      "lexical_note": "NOT evidence of deletion — the probe is rewrite-blind (3 of 3 known survivors score invisible). Needs a reader."
+      "survival_basis": {
+        "measure": "semantic adjudication - full read of the corrected contract",
+        "adjudicated_by": "Alpha-2 session 8aa7b984",
+        "reachable_in": [
+          "contract"
+        ],
+        "located_at": "S3c + AMENDMENT RULE - approval is per-migration and per-content"
+      }
     },
     {
       "key": "a9b2dffc24e2",
@@ -4674,27 +5238,47 @@
       "imperative": "Marker line at top: -- @approved-by: <chairman-email> — must be a VALID email; token issuance binds to it (scripts/lib/migration-guards.js APPROVED_BY_RE).",
       "match_score": 0.33,
       "carries_modal": false,
-      "disposition": "NEEDS_DECISION",
+      "disposition": "landed",
       "lexical_coverage": 0,
-      "lexical_note": "NOT evidence of deletion — the probe is rewrite-blind (3 of 3 known survivors score invisible). Needs a reader."
+      "survival_basis": {
+        "measure": "semantic adjudication - full read of the corrected contract",
+        "adjudicated_by": "Alpha-2 session 8aa7b984",
+        "reachable_in": [
+          "contract"
+        ],
+        "located_at": "S3c precondition (2) - @approved-by must be a VALID email"
+      }
     },
     {
       "key": "67f5db218c89",
       "imperative": "This is the chairman path; -- @delegated-by: adam is the separate autonomous path above — never mix the two markers. 3.",
       "match_score": 0.29,
       "carries_modal": false,
-      "disposition": "NEEDS_DECISION",
+      "disposition": "CANDIDATE_LOSS",
       "lexical_coverage": 0,
-      "lexical_note": "NOT evidence of deletion — the probe is rewrite-blind (3 of 3 known survivors score invisible). Needs a reader."
+      "survival_basis": {
+        "measure": "semantic adjudication - full read of the corrected contract",
+        "adjudicated_by": "Alpha-2 session 8aa7b984",
+        "reachable_in": [],
+        "located_at": "NOT LOCATED in the contract or either companion",
+        "note": "\"never mix the two markers\" (@approved-by vs @delegated-by). S3c distinguishes the two paths but drops the explicit prohibition on mixing them - implied, not stated. CANDIDATE LOSS (low severity)."
+      }
     },
     {
       "key": "1f8ab221b724",
       "imperative": "Run from a worktree WITH .env present (copy from the shared root if absent — worktrees do not carry it). 4.",
       "match_score": 0.25,
       "carries_modal": false,
-      "disposition": "NEEDS_DECISION",
+      "disposition": "landed",
       "lexical_coverage": 0.188,
-      "lexical_note": "NOT evidence of deletion — the probe is rewrite-blind (3 of 3 known survivors score invisible). Needs a reader."
+      "survival_basis": {
+        "measure": "semantic adjudication - full read of the corrected contract",
+        "adjudicated_by": "Alpha-2 session 8aa7b984",
+        "reachable_in": [
+          "contract"
+        ],
+        "located_at": "S3c precondition (3) - run from a worktree WITH .env present"
+      }
     },
     {
       "key": "8662f5b686b4",
@@ -4751,9 +5335,16 @@
       "imperative": "Route post-apply follow-ups (schema snapshot regen, parity-exemption removal, doc updates) to the coordinator worker lane per CONST-002 — this ceremony is apply-only authority, never a build right.",
       "match_score": 0.33,
       "carries_modal": false,
-      "disposition": "NEEDS_DECISION",
+      "disposition": "landed",
       "lexical_coverage": 0.037,
-      "lexical_note": "NOT evidence of deletion — the probe is rewrite-blind (3 of 3 known survivors score invisible). Needs a reader."
+      "survival_basis": {
+        "measure": "semantic adjudication - full read of the corrected contract",
+        "adjudicated_by": "Alpha-2 session 8aa7b984",
+        "reachable_in": [
+          "contract"
+        ],
+        "located_at": "S3c Steps - route follow-ups to the worker lane per CONST-002"
+      }
     },
     {
       "key": "d2cc8901591b",
@@ -4824,9 +5415,16 @@
       "imperative": "Triage first (cheap deterministic lib/adam/execute-vs-escalate.js) — a routine send proceeds immediately, NO consult (silence-by-default + Solomon quota preserved). 2.",
       "match_score": 0.29,
       "carries_modal": false,
-      "disposition": "NEEDS_DECISION",
+      "disposition": "landed",
       "lexical_coverage": 0.1,
-      "lexical_note": "NOT evidence of deletion — the probe is rewrite-blind (3 of 3 known survivors score invisible). Needs a reader."
+      "survival_basis": {
+        "measure": "semantic adjudication - full read of the corrected contract",
+        "adjudicated_by": "Alpha-2 session 8aa7b984",
+        "reachable_in": [
+          "contract"
+        ],
+        "located_at": "S4c Order - triage first; a routine send proceeds with no consult"
+      }
     },
     {
       "key": "557fc3a1ef1c",
@@ -4896,9 +5494,16 @@
       "imperative": "The two form a JOINT RATIONALE and PROCEED autonomously — operational calls are never bounced to the operator.",
       "match_score": 0.56,
       "carries_modal": false,
-      "disposition": "NEEDS_DECISION",
+      "disposition": "landed",
       "lexical_coverage": 0.385,
-      "lexical_note": "NOT evidence of deletion — the probe is rewrite-blind (3 of 3 known survivors score invisible). Needs a reader."
+      "survival_basis": {
+        "measure": "semantic adjudication - full read of the corrected contract",
+        "adjudicated_by": "Alpha-2 session 8aa7b984",
+        "reachable_in": [
+          "contract"
+        ],
+        "located_at": "S4b - DECIDE-and-INFORM; operational calls are not bounced to the operator"
+      }
     },
     {
       "key": "261865fa87b8",
@@ -4930,9 +5535,16 @@
       "imperative": "_Single governed source of truth (section_type=role_partnership_contract), included — not copied — into the Adam and Coordinator role files via section-file-mapping.json; supersedes the interim hand-edits formerly in the two role contracts and the Adam private-memory note (SD-LEO-INFRA-ROLE-PARTNERS…",
       "match_score": 0.14,
       "carries_modal": false,
-      "disposition": "NEEDS_DECISION",
+      "disposition": "landed",
       "lexical_coverage": 0.023,
-      "lexical_note": "NOT evidence of deletion — the probe is rewrite-blind (3 of 3 known survivors score invisible). Needs a reader."
+      "survival_basis": {
+        "measure": "semantic adjudication - full read of the corrected contract",
+        "adjudicated_by": "Alpha-2 session 8aa7b984",
+        "reachable_in": [
+          "contract"
+        ],
+        "located_at": "S7 - role_partnership_contract, included not copied"
+      }
     },
     {
       "key": "9438ef66faa5",
@@ -5002,5 +5614,12 @@
     "adjudicated": 14,
     "result": "ALL 14 modal-bearing obligations survive and are locatable. ZERO confirmed deletions among them.",
     "provenance_gap": "1 — the §5f rationale is dropped and lands in neither companion. The obligation itself survives; the explanation does not."
+  },
+  "obligation_shaped_adjudication": {
+    "by": "Alpha-2 session 8aa7b984, 2026-07-31",
+    "method": "Read the corrected contract end to end, then located each entry in it. THREE automated measures were falsified first (5-gram coverage, rare-term overlap, rare-term-absence triage) - see scripts/adam-contract-survival-probe.cjs --calibrate. Do not attempt a fourth.",
+    "adjudicated": 86,
+    "candidate_losses": 4,
+    "chairman_decisions": 1
   }
 }
