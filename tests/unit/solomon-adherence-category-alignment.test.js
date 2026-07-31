@@ -66,9 +66,17 @@ describe('no production code still writes the old category', () => {
     ];
     const offenders = [];
     for (const f of files) {
-      // The backfill script names the old category by necessity — it is the thing
-      // being migrated FROM. Exclude it explicitly rather than loosening the check.
-      if (f.includes('backfill-solomon-adherence-category')) continue;
+      // scripts/one-off/ holds HISTORICAL ARTIFACTS — migration and retrospective
+      // scripts that name the old category BY NECESSITY, because they are the record
+      // OF the rename rather than code that performs it. The backfill script must say
+      // what it migrated FROM; the retro must describe what changed. Neither is a live
+      // write path, which is what this check is about.
+      //
+      // This started as an ad-hoc exclusion for the backfill script alone, and the
+      // retro script then tripped it for the identical reason — so the rule is stated
+      // as the directory-level principle it always was, rather than accumulating one
+      // filename exception per artifact.
+      if (f.replace(/\\/g, '/').includes('/scripts/one-off/')) continue;
       let src;
       try { src = readFileSync(f, 'utf8'); } catch { continue; }
       const code = src
