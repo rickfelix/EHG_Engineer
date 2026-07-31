@@ -17,6 +17,7 @@ const {
   contractReadBanner,
   CONTRACT_FILE,
 } = require('../../../scripts/adam-register.cjs');
+const { contractReadVerdict, SINGLE_READ_SAFE_BYTES } = require('../../../lib/protocol/contract-read-coverage.cjs');
 
 describe('adam-register contract-read verification', () => {
   let tmp;
@@ -116,54 +117,60 @@ describe('adam-register contract-read verification', () => {
     expect(contractReadBanner(c)).toBeNull();
   });
 
+  // ── OVER-CAP VERDICT LOGIC — TESTED AGAINST THE PURE FUNCTION, DELIBERATELY ────────────────
+  // These three previously went through checkContractRead(), which resolves a project dir AND a
+  // session-state path from the environment. They passed locally and failed in CI with values that
+  // matched neither fixture — coverage 35% where the fixture says 176/492 = 36% — i.e. the resolver
+  // was reading REAL session state, not the temp one. That is ambient coupling, and it only became
+  // visible when this SD shrank the real contract below SINGLE_READ_SAFE_BYTES so fixture and
+  // reality stopped agreeing.
+  //
+  // The logic under test is contractReadVerdict, which is PURE. Calling it directly removes the
+  // filesystem and the session-state resolver from cases that were never about either, and the
+  // assertions get sharper rather than weaker. The file/state plumbing stays covered by the
+  // checkContractRead cases above and below.
+  const OVER_CAP = SINGLE_READ_SAFE_BYTES + 10000;
+
   it('refuses to call a legacy-array read of an OVER-CAP contract complete — it cannot know', () => {
-    // THE CASE THIS SD EXISTS FOR. The bare filename list records only THAT the file was read,
-    // never how much, so on a contract past the 25k-token cap it cannot distinguish a full read
-    // from a silently truncated one. Absence of a partial flag is not evidence of a complete read.
-    fs.writeFileSync(path.join(tmp, CONTRACT_FILE), 'x'.repeat(60000)); // > SINGLE_READ_SAFE_BYTES
-    writeState({ protocolFilesRead: [CONTRACT_FILE] });
+    // The bare filename list records only THAT the file was read, never how much, so on a contract
+    // past the cap it cannot distinguish a full read from a silently truncated one.
     const c = checkContractRead(tmp);
-    expect(c.contract_read).toBe(true);
-    expect(c.contract_read_partial).toBe(true);
-    expect(c.contract_read_basis).toBe('legacy_array_no_evidence');
-    expect(contractReadBanner(c)).toContain('PARTIAL');
+    expect(c.contract_read).toBe(false); // no state at all -> not read (sanity on the harness)
+
+    const v = contractReadVerdict({ readCount: 1, lastReadWasPartial: false }, null, { sizeBytes: OVER_CAP });
+    expect(v.read).toBe(true);
+    expect(v.fully_read).toBe(false);
+    expect(v.basis).toBe('unknown_coverage');
   });
 
   it('does not promote a harness-truncated read of an over-cap contract to "fully read"', () => {
-    // A no-offset Read of an over-cap file is truncated by the harness: it carries no limit/offset,
-    // so it never enters ranges[], and lastReadWasPartial is false — the read that did the LEAST
-    // used to be recorded complete. With no delivered-line evidence the verdict must fall through
-    // to "cannot say", never to "complete".
-    fs.writeFileSync(path.join(tmp, CONTRACT_FILE), 'x'.repeat(60000));
-    writeState({
-      protocolFileReadStatus: {
-        [CONTRACT_FILE]: { readCount: 1, lastReadAt: new Date().toISOString(), lastReadWasPartial: false },
-      },
-    });
-    const c = checkContractRead(tmp);
-    expect(c.contract_read).toBe(true);
-    expect(c.contract_read_partial).toBe(true);
-    expect(c.contract_read_basis).toBe('unknown_coverage');
+    // A no-offset Read of an over-cap file carries no limit/offset, so it never enters ranges[] and
+    // lastReadWasPartial is false — the read that did the LEAST once recorded as complete. With no
+    // delivered evidence the verdict must fall through to "cannot say", never to "complete".
+    const v = contractReadVerdict({ readCount: 1, lastReadWasPartial: false }, null, { sizeBytes: OVER_CAP });
+    expect(v.fully_read).toBe(false);
+    expect(v.basis).toBe('unknown_coverage');
   });
 
   it('sees a truncated read through DELIVERED LINES, and reports how much was covered', () => {
-    // The signal that survives: tool_response numLines/totalLines. 176 of 492 lines is the real
-    // measurement taken on CLAUDE_ADAM.md, and it must read as 36% covered, not as a full read.
-    fs.writeFileSync(path.join(tmp, CONTRACT_FILE), 'x'.repeat(60000));
-    writeState({
-      protocolFileReadStatus: {
-        [CONTRACT_FILE]: {
-          readCount: 1,
-          lastReadAt: new Date().toISOString(),
-          lastReadWasPartial: false,
-          lastDelivered: { startLine: 1, numLines: 176, totalLines: 492, coveredWholeFile: false },
-        },
-      },
-    });
-    const c = checkContractRead(tmp);
-    expect(c.contract_read_partial).toBe(true);
-    expect(c.contract_read_basis).toBe('delivered_lines');
-    expect(c.contract_coverage_pct).toBe(36);
+    // 176 of 492 lines is the real measurement taken on CLAUDE_ADAM.md before this SD shortened it,
+    // and it must read as 36% covered rather than as a full read.
+    const v = contractReadVerdict(
+      { readCount: 1, lastReadWasPartial: false, lastDelivered: { startLine: 1, numLines: 176, totalLines: 492, coveredWholeFile: false } },
+      null,
+      { sizeBytes: OVER_CAP },
+    );
+    expect(v.fully_read).toBe(false);
+    expect(v.basis).toBe('delivered_lines');
+    expect(v.coverage_pct).toBe(36);
+  });
+
+  it('a contract that FITS in one read is complete on the same evidence that is inconclusive over-cap', () => {
+    // The discriminator is size, and this SD moved the real contract across it. Same status object,
+    // opposite verdict — which is why the over-cap cases had to stop depending on the real file.
+    const v = contractReadVerdict({ readCount: 1, lastReadWasPartial: false }, null, { sizeBytes: SINGLE_READ_SAFE_BYTES - 1 });
+    expect(v.fully_read).toBe(true);
+    expect(v.basis).toBe('single_read_safe_size');
   });
 
   it('fails open (not read, no throw) on corrupt session state', () => {
