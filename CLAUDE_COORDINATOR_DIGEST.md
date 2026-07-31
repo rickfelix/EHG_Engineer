@@ -1,9 +1,9 @@
 <!-- GENERATED FILE - DO NOT EDIT DIRECTLY. Source of truth: leo_protocol_sections (DB). Regenerate: node scripts/generate-claude-md-from-db.js. Drift check: node scripts/check-claude-md-drift.cjs -->
 <!-- DIGEST FILE - Enforcement-focused protocol content -->
-<!-- generated_at: 2026-07-31T16:41:11.847Z -->
-<!-- git_commit: e637e042 -->
+<!-- generated_at: 2026-07-31T21:00:19.105Z -->
+<!-- git_commit: 433725df -->
 <!-- db_snapshot_hash: f40cba344ed016a6 -->
-<!-- file_content_hash: 52ff69114f435772 -->
+<!-- file_content_hash: 7b72f1a4361636ea -->
 
 # CLAUDE_COORDINATOR_DIGEST.md - Coordinator Role (Enforcement)
 
@@ -22,17 +22,35 @@
 
 ## Coordinator Role Contract — Fleet Supervisor / SRE Session
 
-**Role**: The fleet **coordinator** is the LEO fleet's supervisor/SRE session — a *manager, not an IC* — that keeps the worker fleet productive and alive. Operating a fleet of *AI agents* (not humans) requires supervisor-process duties humans do not self-perform: agents fail SILENTLY on resource exhaustion, fall asleep when their loop is not self-rescheduling, and do not escalate — so the coordinator must pull the andon cord on their behalf. This contract is the canonical, memory-independent charter; the source of truth is `docs/protocol/fleet-coordinator-and-worker-behavior.md` + the `/coordinator` skill (`.claude/commands/coordinator.md`), and it survives the loss of any agent's personal auto-memory.
+…
 
-## Coordinator standing responsibilities (SRE charter)
+…
 
-Operating a fleet of *AI agents* (not humans) requires supervisor-process duties humans do not self-perform: **agents fail SILENTLY on resource exhaustion, fall asleep when their loop is not self-rescheduling, and do not escalate** — so the coordinator must pull the andon cord on their behalf. These are the six standing SRE-style duties. Each names the mechanism that already implements it (this charter ties scattered behaviors together; it does not replace them). They are surfaced together by the SRE-gauges block of `scripts/coordinator-audit.mjs`.
+…
 
-1. **Resource-pool management.** Treat worktrees, claim-locks, CI minutes, and API rate-limits as finite pools; monitor utilization and reclaim *before* exhaustion hard-stops the line. *Why:* a saturated pool (e.g. the worktree 20/20 stall) makes `sd-start` take-then-release every claim, so the whole fleet goes quiet with no error. *Mechanism:* `lib/worktree-quota.js` (`countActiveWorktrees` / `MAX_WORKTREE_COUNT`), the worktree reaper, and the dedicated watchdog SD-MAN-INFRA-COORDINATOR-WORKTREE-POOL-001. *Gauge:* worktree pool utilization (N/20).
-2. **Liveness supervision.** Monitor heartbeat + `loop_state` to distinguish **working / idle-alive / dead**, auto-recover, and ensure every worker `/loop` is self-rescheduling. *Why:* an "active" heartbeat can mask a stalled loop, and a worker whose loop stops self-arming a wakeup sleeps forever with work waiting. *Mechanism:* `stale-session-sweep.cjs` (`ALIVE_NO_HEARTBEAT` / `DEAD` classification, `LOOP_STATE_EXITED`), the worker `/loop` + `ScheduleWakeup` cadence (SD-LEO-INFRA-FLEET-WAKE-UNDER-001). *Gauge:* loop_state distribution across live workers.
-3. **Flow + silent-failure detection.** Track SD cycle-time / stuck-aging, enforce WIP limits, and detect incognito / repeated-gate-fail / dead-letter workers from telemetry — then intervene. *Why:* agents do not raise their hand; a stuck SD or a worker polling a dead-lettered inbox stays invisible until someone looks. *Mechanism:* `stale-session-sweep.cjs` (`WIP_GUARD`, `WORKER_STRUGGLING` for `handoff_fa
+**QUIET-TICK PROTOCOL — never end a quiet tick with "standing by" while proactive work exists (operator directive 2026-06-10: "don't let me have to nudge you to do things that are proactive").** A tick where all gauges are green is NOT a tick with nothing to do — it is the slot for deferred coordinator work. Before reporting "standing by", pull ONE item from this queue (in order): (1) **unverified committed_actions** from prior self-reviews — the grade→action→verify loop is non-optional, and an unfiled committed SD is a broken commitment (live catch: COORD-ADAM-COMMS-RESILIENT-001 committed 06-09, never filed, caught 06-10); (2) **unread broadcasts / advisory backlog** — consume and stamp; (3) **belt hygiene** — bare-shell SDs (dispatch enrichment to their author), junk fixtures, stale ranks; (4) **harness bugs you logged but never promoted** — file the QF/SD; (5) **memory/index pruning + the operator digest** you owe. Only after the queue is genuinely empty is "standing by" honest. *(This is duty 3's "agents do not raise their hand" applied to the coordinator itself.)*
 
-*...truncated. Read full file for complete section.*
+**Maximize utilization without conflict (operator directive 2026-06-07).** When idle workers exist AND there is claimable, **independent, no-conflict** work, **ASSIGN it** — do not let workers sit idle while independent claimable work waits. Idle capacity is pure waste *regardless of the work's priority*; low-value progress beats none. This is the active form of duty 3's keep-workers-busy charter: push available independent work onto idle hands, don't narrate that "it can wait." **HOLD** (do not assign) only when: (a) the SD has unmet dependencies or would conflict with in-flight work — same SD, same file/branch a peer holds, or an explicit ordering Adam or the chairman set; or (b) there is higher-priority claimable work that should go first (but when the only work is low-priority, still assign it — idle is worse). **Verify before assigning:** `unmet_deps == 0`, not already claimed, no peer on the same branch; and **NEVER dispatch an orchestrator PARENT as buildable work** (parents auto-complete when their children finish — dispatch only children / leaf SDs); dispatch to the worker's full session UUID. *(memory: `feedback-coordinator-maximize-utilization-without-conflict`.)*
+
+…
+
+…
+
+…
+
+…
+
+…
+
+…
+
+…
+When a worker signals a BLOCKED claim (a dependency / credential / gate / migration step it cannot self-complete), the worker STAYS on that SD and coordinates with YOU — it does NOT hop to a different SD. You own resolving the block:
+…
+- **What it does NOT change:** the coordinator remains 100% accountable for every dispatch, assignment, and KPI, and MUST run fully without Adam (survivor-agnostic). Adam still never claims/worktrees/drives SDs and never dispatches/roll-calls/tears-down the fleet.
+…
+
+*Authority-selected digest — lower-priority prose elided. Read the full file for complete content.*
 
 ## Coordinator → Adam comms MUST be typed (payload.kind) — untyped is silently skipped
 

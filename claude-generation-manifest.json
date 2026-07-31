@@ -1,6 +1,6 @@
 {
-  "generated_at": "2026-07-31T18:21:42.081Z",
-  "git_commit": "76591fd2",
+  "generated_at": "2026-07-31T21:00:19.105Z",
+  "git_commit": "433725df",
   "db_snapshot_hash": "f40cba344ed016a6",
   "files": {
     "CLAUDE.md": {
@@ -35,7 +35,7 @@
       "type": "full",
       "chars": 89641,
       "estimated_tokens": 22411,
-      "content_hash": "96a703e9685f5dc9",
+      "content_hash": "5c3c775c0b71a49d",
       "path": "C:\\Users\\rickf\\Projects\\_EHG\\EHG_Engineer\\.worktrees\\SD-LEO-INFRA-ADAM-CONTRACT-READABLE-001\\CLAUDE_EXEC.md"
     },
     "CLAUDE_ADAM.md": {
@@ -82,9 +82,9 @@
     },
     "CLAUDE_CORE_DIGEST.md": {
       "type": "digest",
-      "chars": 11664,
-      "estimated_tokens": 2916,
-      "content_hash": "96d9e755d3145670",
+      "chars": 13747,
+      "estimated_tokens": 3437,
+      "content_hash": "3b00e340966330ba",
       "path": "C:\\Users\\rickf\\Projects\\_EHG\\EHG_Engineer\\.worktrees\\SD-LEO-INFRA-ADAM-CONTRACT-READABLE-001\\CLAUDE_CORE_DIGEST.md"
     },
     "CLAUDE_LEAD_DIGEST.md": {
@@ -110,23 +110,23 @@
     },
     "CLAUDE_ADAM_DIGEST.md": {
       "type": "digest",
-      "chars": 4700,
-      "estimated_tokens": 1175,
-      "content_hash": "fcbae365404745cb",
+      "chars": 17736,
+      "estimated_tokens": 4434,
+      "content_hash": "3f184ad15999f5a3",
       "path": "C:\\Users\\rickf\\Projects\\_EHG\\EHG_Engineer\\.worktrees\\SD-LEO-INFRA-ADAM-CONTRACT-READABLE-001\\CLAUDE_ADAM_DIGEST.md"
     },
     "CLAUDE_COORDINATOR_DIGEST.md": {
       "type": "digest",
-      "chars": 6076,
-      "estimated_tokens": 1519,
-      "content_hash": "52ff69114f435772",
+      "chars": 6091,
+      "estimated_tokens": 1523,
+      "content_hash": "7b72f1a4361636ea",
       "path": "C:\\Users\\rickf\\Projects\\_EHG\\EHG_Engineer\\.worktrees\\SD-LEO-INFRA-ADAM-CONTRACT-READABLE-001\\CLAUDE_COORDINATOR_DIGEST.md"
     },
     "CLAUDE_SOLOMON_DIGEST.md": {
       "type": "digest",
-      "chars": 4705,
-      "estimated_tokens": 1177,
-      "content_hash": "267d8dcb0d8b0063",
+      "chars": 4717,
+      "estimated_tokens": 1180,
+      "content_hash": "64bcaa2800214e54",
       "path": "C:\\Users\\rickf\\Projects\\_EHG\\EHG_Engineer\\.worktrees\\SD-LEO-INFRA-ADAM-CONTRACT-READABLE-001\\CLAUDE_SOLOMON_DIGEST.md"
     }
   },

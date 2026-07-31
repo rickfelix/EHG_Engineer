@@ -1,8 +1,8 @@
-<!-- file_content_hash: 96a703e9685f5dc9 -->
+<!-- file_content_hash: 5c3c775c0b71a49d -->
 <!-- GENERATED FILE - DO NOT EDIT DIRECTLY. Source of truth: leo_protocol_sections (DB). Regenerate: node scripts/generate-claude-md-from-db.js. Drift check: node scripts/check-claude-md-drift.cjs -->
 # CLAUDE_EXEC.md - EXEC Phase Operations
 
-**Generated**: 2026-07-31 9:44:09 AM
+**Generated**: 2026-07-31 5:00:19 PM
 **Protocol**: LEO 4.4.1
 **Purpose**: EXEC agent implementation requirements and testing
 **Effort**: xhigh (implementation + testing require maximum reasoning for agentic coding per Opus 4.8 guidance)
@@ -2014,8 +2014,8 @@ If the merges show recent activity on the path in question, the "missing" code m
 
 | Column | Valid Values | Hint |
 |--------|--------------|------|
-| `status` | pending, accepted, rejected, failed | Use one of: pending, accepted, rejected, failed |
 | `validation_score` | N/A | Validation score must be an integer between 0 and 100. Use Math.round() and clamp to 0-100. |
+| `status` | pending, accepted, rejected, failed | Use one of: pending, accepted, rejected, failed |
 
 ### leo_protocols
 
@@ -2040,9 +2040,9 @@ If the merges show recent activity on the path in question, the "missing" code m
 
 | Column | Valid Values | Hint |
 |--------|--------------|------|
+| `status` | pending_acceptance, accepted, rejected | Use one of: pending_acceptance, accepted, rejected |
 | `from_phase` | LEAD, PLAN, EXEC | Use one of: LEAD, PLAN, EXEC (uppercase) |
 | `to_phase` | LEAD, PLAN, EXEC | Use one of: LEAD, PLAN, EXEC (uppercase) |
-| `status` | pending_acceptance, accepted, rejected | Use one of: pending_acceptance, accepted, rejected |
 
 ### sd_scope_deliverables
 
@@ -2067,9 +2067,9 @@ If the merges show recent activity on the path in question, the "missing" code m
 
 | Column | Valid Values | Hint |
 |--------|--------------|------|
-| `status` | draft, completed, in_progress, ready | Use one of: draft, completed, in_progress, ready. NOT "approved" - that is not a valid value. |
-| `validation_status` | pending, in_progress, validated, failed, skipped | Use one of: pending, in_progress, validated, failed, skipped |
 | `e2e_test_status` | not_created, created, passing, failing, skipped | Use one of: not_created, created, passing, failing, skipped |
+| `validation_status` | pending, in_progress, validated, failed, skipped | Use one of: pending, in_progress, validated, failed, skipped |
+| `status` | draft, completed, in_progress, ready | Use one of: draft, completed, in_progress, ready. NOT "approved" - that is not a valid value. |
 
 
 
