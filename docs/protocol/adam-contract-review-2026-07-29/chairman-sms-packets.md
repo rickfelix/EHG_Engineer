@@ -1,3 +1,12 @@
+---
+Category: Protocol
+Status: Approved
+Version: 1.0.0
+Author: rickfelix
+Last Updated: 2026-07-31
+Tags: [protocol, adam, chairman, decision]
+---
+
 # Two chairman decisions, drafted in the ratified SMS-decide format
 
 **SD**: SD-LEO-INFRA-ADAM-CONTRACT-READABLE-001 / FR-3

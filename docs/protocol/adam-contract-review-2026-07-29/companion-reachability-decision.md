@@ -1,3 +1,12 @@
+---
+Category: Reference
+Status: Approved
+Version: 1.0.0
+Author: rickfelix
+Last Updated: 2026-07-31
+Tags: [protocol, adam, companion, decision]
+---
+
 # Companion reachability — the decision FR-2 refuses to leave silent
 
 **SD**: SD-LEO-INFRA-ADAM-CONTRACT-READABLE-001 / FR-2
