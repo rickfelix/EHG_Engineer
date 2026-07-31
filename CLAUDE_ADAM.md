@@ -1,8 +1,8 @@
-<!-- file_content_hash: 1ebf69e817c53925 -->
+<!-- file_content_hash: 0eb05b2b3267e310 -->
 <!-- GENERATED FILE - DO NOT EDIT DIRECTLY. Source of truth: leo_protocol_sections (DB). Regenerate: node scripts/generate-claude-md-from-db.js. Drift check: node scripts/check-claude-md-drift.cjs -->
 # CLAUDE_ADAM.md - Adam Role Contract
 
-**Generated**: 2026-07-28 7:42:15 AM
+**Generated**: 2026-07-29 3:25:10 PM
 **Protocol**: LEO 4.4.1
 **Purpose**: Canonical Adam role contract — Chairman-attached advisory/analysis session
 **Load when**: Running /adam, or orienting an operator-attached advisory session
@@ -281,7 +281,35 @@ When you need candidates, work the sources **top-down** and stop at the first th
 
 1. **Roadmap-as-SSOT first.** `roadmap_wave_items` + the rung roadmap are the FIRST candidate source. Promote an item via `node scripts/leo-create-sd.js --from-roadmap-item <id>` — the **REGISTER-FIRST** path (it stamps the two-way roadmap↔SD provenance for you; never hand-recreate it). The startup probe prints the unpromoted count per wave.
 2. **Wave-0 distillation if rung-waves are empty.** If the relevant rung-waves have no unpromoted items, **distillation precedes routing** — groom raw backlog (`sd_backlog_map`) into waved, dispositioned candidates first; do not skip straight to gauge-mining. The startup probe prints `sd_backlog_map` disposition %.
-3. **Check the sourcing-engine activation flags BEFORE hand-feeding.** The engine (cron sweeps `SOURCING_ENGINE_V1`, `SOURCING_ROADMAP_ENGINE_V1`, `SOURCING_GAUGE_GAP_MINER_V1`, `SOURCING_DEFERRED_WATCHER_V1`, `SOURCING_PROACTIVE_POPULATOR_V1`, `LEO_ROADMAP_AUTOSOURCE`) populates the belt for you when on. If they are **OFF** (the startup probe flags this), **PROPOSE activation** — flip the flags + apply any dormant migrations — as a chairman/coordinator go-live decision. Do **not** substitute yourself for the dormant engine tick-after-tick; that masks the fact the engine is off and is unsustainable.
+3. **Check the sourcing-engine activation state BEFORE hand-feeding — and read the RIGHT switch.**
+   The engine populates the belt for you when on. Two things changed here; both matter before you propose anything (SD-LEO-INFRA-SOURCING-ENGINE-BELT-GATED-001).
+
+   **(a) The OPERATIVE gate is a DB row, not an env flag.** The highest-blast-radius producer
+   (`scripts/sourcing-engine/refill-cron.mjs`, hourly `--apply`) is gated by
+   `sourcing_engine_activation_state.arm='auto-refill'`, read at `scripts/lib/sourcing-engine-awareness.mjs`
+   and consumed at `refill-cron.mjs`. The `/adam` startup probe now prints the DB arm states directly,
+   marked **OPERATIVE**, in three states — on / off / `NO ROW: state unknown, not "off"`.
+   Only two env flags have executable readers: `SOURCING_GAUGE_GAP_MINER_V1` (`lib/sourcing-engine/gauge-gap-miner.js`)
+   and `SOURCING_DEFERRED_WATCHER_V1` (`lib/sourcing-engine/deferred-watcher.js`), and both are hardcoded ON
+   in the workflow job env — already permanently on in the only context that executes them.
+
+   **RETIRED — do NOT propose flipping these, it is a NO-OP:** `SOURCING_ENGINE_V1`,
+   `SOURCING_ROADMAP_ENGINE_V1`, `SOURCING_PROACTIVE_POPULATOR_V1`, `LEO_ROADMAP_AUTOSOURCE` had
+   **zero executable readers** anywhere in the repo — they appeared only in the startup probe's own
+   display list. Setting them changed nothing while *looking* like activation. They are removed from
+   the probe; `RETIRED_SOURCING_FLAGS` in `scripts/adam-startup-check.mjs` keeps the removal on record.
+
+   **(b) "On" no longer means "floods".** The chairman's objection to activation was that an armed
+   engine is overwhelming and a disarmed one is forgotten. The two producers that actually mint belt
+   depth (`refill-auto-promote`, `fr-c-generator`) now consult a **belt-DEMAND gate**
+   (`lib/governance/demand-gate.js`): they produce only when dispatchable depth is at or below a floor,
+   and an unreadable gauge is `unmeasurable` → **withhold**, never a licence to produce. Every run emits
+   `{engine, gauge_value, floor, decision, reason, measured_at}` to `audit_log`, and the startup badge
+   prints the last verdict per producer — so a correctly-quiet engine is now distinguishable from a dead one.
+
+   So: if the arm is OFF, **PROPOSE activation as a chairman decision** (it is genuinely his call — the
+   arm was set off by chairman directive), and cite the gate as the reason it is now safe. Do **not**
+   substitute yourself for a dormant engine tick-after-tick; that masks the fact it is off and is unsustainable.
 4. **Hand-mining the VDR gauge is LAST-RESORT — and a SMELL.** Mining `computeBuildGauge` for unbuilt capabilities by hand is the bottom of this list, not the top. Reaching for it means a layer above failed: the engine is off, or the backlog is undistilled. When you find yourself hand-mining, fix the upstream cause (propose engine activation / run distillation) rather than normalizing the last-resort path.
 
 > Why: encoding the order-of-operations in the required-reading contract + surfacing the live state of every layer at `/adam` startup makes the *route-the-SSOT-first* duty structurally impossible to miss, so the degrade-to-hand-mining regression cannot recur each fresh session (SD-LEO-INFRA-ADAM-SOURCE-FROM-SSOT-CONTRACT-001).
@@ -486,6 +514,6 @@ _Hierarchy note (chairman-ratified D-0719-ORGCHART "A", 2026-07-19): this partne
 
 ---
 
-*Generated from database: 2026-07-28*
+*Generated from database: 2026-07-29*
 *Protocol Version: 4.4.1*
 *Source of truth: leo_protocol_sections (section_type=adam_role_contract). Do not hand-edit — edit the DB section and regenerate.*
