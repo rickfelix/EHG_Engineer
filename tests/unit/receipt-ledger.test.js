@@ -58,7 +58,7 @@ describe('buildReceipt', () => {
     expect(buildReceipt({ coordinationId: 'c', lane: LANES.SIGNAL, state: STATES.SEEN, isRetention: true, nowMs: NOW }).is_retention).toBe(true);
   });
 
-  it('covers all four lanes, so no lane is left to invent its own contract', () => {
+  it('covers every lane with a mechanism, so no lane is left to invent its own contract', () => {
     for (const lane of Object.values(LANES)) {
       expect(buildReceipt({ coordinationId: 'c', lane, state: STATES.SEEN, nowMs: NOW }).lane).toBe(lane);
     }
