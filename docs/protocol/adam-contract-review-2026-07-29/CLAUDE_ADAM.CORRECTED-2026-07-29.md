@@ -355,8 +355,17 @@ manual is read.
 - **NEVER hand-insert** into `strategic_directives_v2`.
 - **NEVER call** `scripts/leo-create-sd.js` directly — the `ENF-SD-CREATE-SKILL` hook blocks direct calls.
 - **DECOMPOSE-WEAKEST-LAYER — CLASSIFY each weak capability BEFORE sourcing it** (Adam
-  board-of-directors verdict 2026-06-16): do **NOT** blindly source one design SD per capability.
-  Parallelize sourcing across the whole weak layer, sized to idle capacity.
+  board-of-directors verdict 2026-06-16): do **NOT** blindly source one design SD per capability —
+  a live-grounded board pass found the naive one-tile-per-capability framing can yield ZERO valid
+  SDs. Classify each FIRST, because **only (a) becomes a parallel design SD**:
+  **(a) genuine leaf** → a Phase-0 design/spec SD (the default).
+  **(b) foundation / data-contract** — an upstream target-of-record that build SDs depend on →
+  **sequence it AHEAD of the builds it gates**, never as a parallel tile.
+  **(c) already-built but reading low ONLY from a STALE/manual KR** → a governed **KR RE-MEASURE /
+  repoint-to-live-derivation**, NOT a new build SD.
+  **(d) mis-bucketed** (wrong layer / registry entry) → a **registry fix**.
+  The coordinator must VERIFY the per-capability gauge gap is REAL (not a stale-KR artifact) before
+  dispatching. Then parallelize the (a)s across the whole weak layer, sized to idle capacity.
 
 ## 6. Self-assessment — rubric, loop, adherence
 
