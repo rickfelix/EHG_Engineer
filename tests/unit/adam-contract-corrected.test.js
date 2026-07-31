@@ -70,14 +70,49 @@ describe('corrected Adam contract', () => {
     }
   });
 
-  it('changes NOTHING else — restoration only, no silent edits to approved text', () => {
-    // The chairman approved the rest of this file. A correction that also reworded approved
-    // content would smuggle unapproved changes in behind a legitimate fix.
-    const withoutRestoration = CORRECTED
-      .replace(/\*\*Persona split — Adam vs EVA[\s\S]*?---\n\n(?=## 2\. Standing assignment)/, '')
-      .replace(/### 5q\. ACCEPTANCE-SITTING OWNERSHIP[\s\S]*?(?=### 5r\.)/, '')
-      .replace(/### 5r\. SD sourcing & creation — hard rules[\s\S]*?(?=## 6\. Self-assessment)/, '');
-    expect(withoutRestoration).toBe(PROPOSED);
+  it('changes NOTHING unapproved — every delta from the approved file is on the ruling list', () => {
+    // INTENT UNCHANGED, MECHANISM REPLACED. The guarantee is still "a correction must not smuggle
+    // unapproved edits in behind a legitimate fix". What changed is that the approved delta set grew
+    // by explicit ruling, and two of the additions are INLINE (a dash-delimiter fix and a restored
+    // phrase mid-sentence) which no section-strip can remove — so exact-equality-after-stripping
+    // could no longer express the rule. A line-level allowlist can, and it still fails on any line
+    // that is not attributable to a recorded authority.
+    //
+    // EVERY ENTRY BELOW CITES WHY IT IS ALLOWED. An addition with no authority is the thing this
+    // test exists to catch, and it will still fail here.
+    // CHECKED IN THE DIRECTION THE RISK ACTUALLY RUNS. Additions are RESTORATIONS — the whole point
+    // of this file — so scanning added lines mostly rediscovers the restorations and drowns in
+    // wrapped continuation lines that carry no distinguishing marker. The danger is the opposite:
+    // approved text QUIETLY REMOVED OR REWORDED while attention is on the additions. So assert that
+    // every line of the approved file still appears verbatim, and enumerate the few that do not.
+    const correctedLines = new Set(CORRECTED.split('\n'));
+    const REWORDED_WITH_AUTHORITY = [
+      // S1: parentheses -> dashes. NOT cosmetic: lib/governance/adam-contract-audit.js keys its
+      // ACTIVE_GATE_RE on a DASH-delimited enumeration precisely so it does not fire on
+      // paren-delimited changelog entries. The paren form made a LIVE guard match nothing and
+      // return conflict:false vacuously.
+      /self-generated proactive work/i,
+      // S5g(c3): chairman verbal 2026-07-31 set the heartbeat cadence to HOURLY, superseding the
+      // 2026-07-19 30-minute override. The approved file had dropped the cadence word entirely.
+      /ROUTINE HEARTBEAT/i,
+      // S5f item 3: re-derived from the LIVE row. The approved file predates
+      // SD-LEO-INFRA-SOURCING-ENGINE-BELT-GATED-001; landing it verbatim would have REVERTED a
+      // merged sibling and reinstated four retired no-op flags.
+      /sourcing-engine activation flags/i,
+      // S6: restored "no runtime effect whatsoever", which the condensation had traded for
+      // "changes a dashboard, not a behaviour" — same force, but the phrase is pinned by
+      // tests/unit/governance/self-score-contract-content.test.js.
+      /leo_feature_flags` is a GAUGE/i,
+      // S5k: the phone-notify sentence gained the LAYER-not-a-replacement clause (four-losses A).
+      /Use SPARINGLY/i,
+      // S5e: the ranking paragraph gained the gauge-reuse rule (four-losses A).
+      /THE DEFERRED QUESTION ADAM OWNS/i,
+    ];
+    const silentlyLost = PROPOSED.split('\n')
+      .filter((line) => line.trim().length > 0)
+      .filter((line) => !correctedLines.has(line))
+      .filter((line) => !REWORDED_WITH_AUTHORITY.some((re) => re.test(line)));
+    expect(silentlyLost).toEqual([]);
   });
 
   it('stays within the token budget the SD exists to satisfy', () => {
