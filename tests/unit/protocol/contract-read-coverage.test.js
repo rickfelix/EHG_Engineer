@@ -138,8 +138,12 @@ describe('single-read-safe size — the tier a CI failure forced me to add', () 
    * so trading a false positive for a false negative is not a fix. CI caught it; two tests in
    * tests/unit/adam/ that I had not run locally were asserting the correct behaviour all along.
    */
-  const SAFE = 25_000;   // ~CLAUDE_COORDINATOR.md
-  const OVER = 104_000;  // ~CLAUDE_ADAM.md
+  // SHARED, not restated. This was `const SAFE = 25_000` — a literal copy of a bound the file
+  // already imports, with a comment calling it '~CLAUDE_COORDINATOR.md'. The coordinator contract
+  // is 25,587 bytes and would FAIL that tier, so the label was wrong too. Same class as the
+  // sixth fact-pin: a bound restated instead of shared.
+  const SAFE = SINGLE_READ_SAFE_BYTES;
+  const OVER = 104_000;  // ~CLAUDE_ADAM.md, comfortably over any bound this module uses
 
   it('a small contract read without a partial flag IS fully read, with no further evidence', () => {
     const v = contractReadVerdict({ readCount: 1, lastReadWasPartial: false }, 99, { sizeBytes: SAFE });
@@ -637,6 +641,27 @@ describe('SEC-F10/F11 — measuring the right artefact, with the right encoder',
     const rawTokens = require_('tiktoken').get_encoding('cl100k_base')
       .encode_ordinary(require_('fs').readFileSync(require_('path').join(root, 'CLAUDE_COORDINATOR.md'), 'utf8')).length;
     expect(framed).toBeGreaterThan(rawTokens);
+  });
+
+  it('DEGRADED MODE IS NEVER MORE PERMISSIVE THAN MEASURED MODE', () => {
+    /**
+     * *** THE SEVENTH FINDING, AND IT WAS IN PRODUCTION CODE — WHICH IS WHY FIVE TEST-FOCUSED
+     * SWEEPS MISSED IT. *** The measured path admitted <= 22,500 tokens (a 10% margin under the
+     * cap) while the no-tokenizer byte fallback admitted <= 25,000 bytes — which at the module's own
+     * documented 1.0 B/token floor is 25,000 tokens, i.e. exactly the cap and 2,500 tokens BEYOND
+     * what the measured path allows.
+     *
+     * So the module was most generous exactly where it knew least: it relaxed its bound at the
+     * moment it lost the ability to measure. That is the inverse of the doctrine stated in every
+     * other tier here ("absence of evidence is never promoted to compliance") and the same shape as
+     * every defect this SD has closed.
+     *
+     * Pinned as a RELATIONSHIP rather than as two literals, so it holds if either constant moves.
+     */
+    expect(SINGLE_READ_SAFE_BYTES).toBeLessThanOrEqual(SINGLE_READ_TOKEN_BUDGET);
+
+    // MUTATION: restore SINGLE_READ_SAFE_BYTES = 25000 -> the fallback outruns the measured path
+    // by 2,500 tokens and this fails.
   });
 
   it('the budget leaves a real margin under the cap', () => {

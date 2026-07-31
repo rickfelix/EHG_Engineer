@@ -138,7 +138,7 @@ describe('roleArmingStates — arming is measured, not asserted', () => {
 
   it('NEGATIVE: a role whose contract is over cap is NOT armed', () => {
     // The load-bearing negative from the SD's success criteria.
-    const states = roleArmingStates(REPO, fits({ 'CLAUDE_ADAM.md': SINGLE_READ_TOKEN_CAP + 1 }));
+    const states = roleArmingStates(REPO, fits({ 'CLAUDE_ADAM.md': SINGLE_READ_TOKEN_BUDGET + 1 }));
     const adam = states.find((s) => s.role === 'adam');
     expect(adam.armed).toBe(false);
     expect(adam.reason).toContain('exceeds a single read');
@@ -178,8 +178,8 @@ describe('roleArmingStates — arming is measured, not asserted', () => {
     expect(at.find((s) => s.role === 'solomon').armed).toBe(true);
     expect(over.find((s) => s.role === 'solomon').armed).toBe(false);
 
-    // MUTATION: ignore fit.fits and re-derive arming here -> a second bound appears and one of these
-    // two fails. The point of the pair is that BOTH directions are carried through untouched.
+    // MUTATION: ignore fit.fits and re-derive arming with a DIFFERENT bound -> one of these two fails.
+    // (Re-deriving with the SAME bound is a provably equivalent mutant and survives, correctly.)
   });
 
   it('an UNMEASURABLE contract is disarmed, never armed by default', () => {
