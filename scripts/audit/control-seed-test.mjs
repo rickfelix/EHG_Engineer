@@ -68,7 +68,12 @@ function gitStatus(repoRoot) {
 
 /** Run one control against one seeded defect. Never touches the working tree. */
 export function runTrial(spec, repoRoot) {
-  if (!spec.rootFlag) {
+  // *** CWD IS A SCOPING MECHANISM TOO, AND MISSING IT UNDER-COUNTS TESTABILITY ***
+  // diagnostic-gauge-citation-lint has no --root, but it enumerates via `git diff` /
+  // `git ls-files` calls that inherit process.cwd(). Judging scopability by FLAGS ALONE
+  // marked it untestable when it can in fact be aimed — the same shape as scoring a control
+  // SILENT because the harness could not see what it did. A spec may declare cwdScope:true.
+  if (!spec.rootFlag && !spec.cwdScope) {
     return { name: spec.name, verdict: VERDICT.UNTESTABLE, reason: spec.untestableReason || 'no scoping flag — cannot be pointed at a fixture without planting the defect in the real tree' };
   }
 
@@ -97,14 +102,17 @@ export function runTrial(spec, repoRoot) {
       // Non-fatal: filesystem-walking controls still work without it.
     }
 
-    const args = [spec.script, spec.rootFlag, dir, ...(spec.extraArgs || [])];
+    const args = spec.cwdScope
+      ? [join(repoRoot, spec.script), ...(spec.extraArgs || [])]
+      : [spec.script, spec.rootFlag, dir, ...(spec.extraArgs || [])];
+    const runCwd = spec.cwdScope ? dir : repoRoot;
     // *** BOTH STREAMS, ALWAYS — THE ASYMMETRY WAS A FALSE NEGATIVE I SHIPPED ***
     // The first version used execFileSync, which RETURNS STDOUT ONLY on success and only
     // merged stderr in the catch branch. Controls print their findings to stderr and many
     // exit 0 while doing so (advisory mode), so on exactly the interesting path the harness
     // read an empty string, saw no match, and scored a control SILENT that had in fact
     // reported the violation by name. spawnSync gives both streams on both paths.
-    const r = spawnSync('node', args, { cwd: repoRoot, encoding: 'utf8', timeout: 120000 });
+    const r = spawnSync('node', args, { cwd: runCwd, encoding: 'utf8', timeout: 120000, env: { ...process.env, ...(spec.env || {}) } });
     code = typeof r.status === 'number' ? r.status : 1;
     out = `${r.stdout || ''}${r.stderr || ''}`;
   } finally {
@@ -186,7 +194,23 @@ function main() {
   if (suspectSeeds.length) console.log(`  ⚠ SEED SUSPECT (control reported scanning nothing — blame the seed, not the control): ${suspectSeeds.map((s2) => s2.name).join(', ')}`);
   console.log('\n  NOTE: BLOCKS and DETECTS are reported separately and never blended. An advisory');
   console.log('  control that reports but exits 0 stops no merge, so a combined rate would overstate');
-  console.log('  actual protection.\n');
+  console.log('  actual protection.');
+
+  // *** POPULATION LIMIT — TRAVELS WITH THE NUMBER, NEVER IN A FOOTNOTE ***
+  // Coordinator ruling 274335fa. scripts/lint/ is a defensible frame and is the population the
+  // lint/guard workflows execute — but EVERY blind control the fleet actually FOUND today lives
+  // OUTSIDE it, and the lint family is plausibly the CLEANEST subpopulation precisely because it
+  // is uniform, callable and workflow-executed. Printed with the rate so a later reader cannot
+  // generalise it to "controls" without seeing this in the same breath.
+  console.log('\n  *** SCOPE LIMIT — THIS IS THE LINT FAMILY FIRE-RATE, NOT THE CONTROL FIRE-RATE ***');
+  console.log('  NONE of the blind controls found today lives in scripts/lint/: subagent-evidence-gate');
+  console.log('  (fetched the verdict, discarded it); coordinator-fleet-retro (magic-string scrape, blind');
+  console.log('  5 days); retention-ack-marker (absorbing state, no writer clears it); the GHA liveness');
+  console.log('  registry (a run 40min old reported 370h overdue); venture-capture-completeness (184');
+  console.log('  where the true value is 0); the retrospective scorer (identical 90 before and after a');
+  console.log('  content rewrite); the CI documentation validator (6 violations in CI, 0 locally).');
+  console.log('  This frame is measurable, which is why it was chosen — and that same uniformity is');
+  console.log('  why it is probably the cleanest slice. DO NOT generalise this rate to controls.\n');
 
   process.exitCode = 0;
 }

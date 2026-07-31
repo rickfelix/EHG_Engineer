@@ -1,5 +1,45 @@
 [
   {
+    "name": "diagnostic-gauge-citation-lint",
+    "script": "scripts/lint/diagnostic-gauge-citation-lint.mjs",
+    "rootFlag": null,
+    "cwdScope": true,
+    "extraArgs": [
+      "--all"
+    ],
+    "note": "CONTROL-ABOUT-CONTROLS. No --root, but it enumerates via git/fs calls that inherit cwd, so it IS aimable — scopability by flag alone under-counted it.",
+    "fixtures": [
+      {
+        "path": "lib/seeded-gauge-citation-defect.js",
+        "content": "// SEEDED DEFECT: cites a DIAGNOSTIC-ONLY gauge as a numeric gating threshold.\nexport function gate(retro) {\n  if (retro.quality_score >= 90) { return 'ship'; }\n  return 'block';\n}\n"
+      }
+    ],
+    "detectTokens": [
+      "quality_score",
+      "seeded-gauge-citation-defect"
+    ]
+  },
+  {
+    "name": "fleet-liveness-select-lint",
+    "script": "scripts/lint/fleet-liveness-select-lint.mjs",
+    "rootFlag": null,
+    "cwdScope": true,
+    "extraArgs": [
+      "--enforce"
+    ],
+    "note": "CONTROL-ABOUT-CONTROLS. Advisory-first by design (exit 0 unless --enforce).",
+    "fixtures": [
+      {
+        "path": "lib/seeded-liveness-select-defect.js",
+        "content": "// SEEDED DEFECT: unbounded multi-row claude_sessions select — the PostgREST 1000-row\n// cap silently drops the NEWEST live workers, so liveness undercounts.\nexport async function all(supabase) {\n  return supabase.from('claude_sessions').select('session_id, heartbeat_at');\n}\n"
+      }
+    ],
+    "detectTokens": [
+      "seeded-liveness-select-defect",
+      "claude_sessions"
+    ]
+  },
+  {
     "name": "realtime-subscribe-teardown-recursion-lint",
     "script": "scripts/lint/realtime-subscribe-teardown-recursion-lint.mjs",
     "rootFlag": "--root",
@@ -83,12 +123,6 @@
         "content": "-- SEEDED DEFECT: SELECT policy references a tenant-shaped column without binding it\n-- to the caller's own identity, so any anon caller reads every tenant's rows.\nCREATE POLICY seeded_anon_select_widgets ON public.widgets\n  FOR SELECT TO anon\n  USING (venture_id IS NOT NULL);\n"
       }
     ]
-  },
-  {
-    "name": "fleet-liveness-select-lint",
-    "script": "scripts/lint/fleet-liveness-select-lint.mjs",
-    "rootFlag": null,
-    "untestableReason": "no --root/--dir scoping flag (only --enforce); scans a hardcoded tree, so seeding would require planting the defect in the real working tree"
   },
   {
     "name": "no-mocked-sut-import-lint",
