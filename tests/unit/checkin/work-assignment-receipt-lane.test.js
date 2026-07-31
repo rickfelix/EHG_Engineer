@@ -12,7 +12,7 @@
  * directed-assignment-marker-write.test.js) rather than calling the step in isolation, so a receipt
  * only appears if the production path actually emits one.
  */
-import { describe, it, expect, beforeEach } from 'vitest';
+import { describe, it, expect } from 'vitest';
 import { createRequire } from 'node:module';
 
 const require = createRequire(import.meta.url);
@@ -72,9 +72,6 @@ const SD_ROW = (key, status = 'in_progress') => ({
 });
 
 describe('FR-1: a disposed WORK_ASSIGNMENT writes a receipt', () => {
-  let receipts;
-  beforeEach(() => { receipts = null; });
-
   it('a FULFILLED assignment records disposition=actioned on the work_assignment lane', async () => {
     const r = await runDirected({ assignedKey: 'SD-WA-001', sdRow: SD_ROW('SD-WA-001') });
     expect(r.res.action).toBe('claimed_assignment');
