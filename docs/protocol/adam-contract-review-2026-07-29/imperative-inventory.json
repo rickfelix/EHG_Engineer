@@ -2,20 +2,14 @@
   "source_sha256": "9ee08b8ffb4201f61a60c1d27719c6d16b966694f771a8279643646261e2d1ec",
   "counts": {
     "original": 533,
-    "proposed": 298,
     "landed": 388,
-    "needs_decision": 299,
-    "not_an_obligation": 19,
-    "NEEDS_DECISION": 116,
-    "merged_into": 8,
-    "rationale_dropped_obligation_survives": 1,
-    "provenance_bound": 8,
-    "CHAIRMAN_DECISION_REQUIRED": 1,
-    "CANDIDATE_LOSS": 4,
     "companion_bound": 102,
-    "CLASSIFIED_PENDING_FR2": 101,
+    "not_an_obligation": 19,
+    "provenance_bound": 8,
     "detail_dropped_obligation_survives": 3,
-    "restored": 4
+    "restored": 4,
+    "merged_into": 8,
+    "rationale_dropped_obligation_survives": 1
   },
   "entries": [
     {
@@ -6565,5 +6559,6 @@
     "cadence_closed": 1,
     "fr2_pending_closed": 101,
     "note": "NEEDS_DECISION 0, CANDIDATE_LOSS 0, CHAIRMAN_DECISION_REQUIRED 0, CLASSIFIED_PENDING_FR2 0. Every one of the 533 entries now carries a disposition backed by either a located clause in the regenerated contract, a chairman ruling, or an explicit governed-companion destination."
-  }
+  },
+  "counts_note": "REBUILT from entries 2026-07-31. The prior object retained keys from earlier passes (needs_decision 299, NEEDS_DECISION 116, CLASSIFIED_PENDING_FR2 101, CANDIDATE_LOSS 4, CHAIRMAN_DECISION_REQUIRED 1) after every one of those entries had been re-dispositioned — a reader trusting inv.counts would have concluded 222 items were unresolved when none were. Counts are now derived, not accumulated."
 }

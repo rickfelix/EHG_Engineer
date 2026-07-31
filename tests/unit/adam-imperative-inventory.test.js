@@ -153,5 +153,21 @@ describe('imperative inventory artifact (TS-2)', () => {
     // auto-marks everything landed strips these rows and this floor fails, which is the whole point.
     const evidenced = inv.entries.filter((e) => e.survival_basis?.located_at || e.survival_basis?.note);
     expect(evidenced.length).toBeGreaterThan(150);
+
+    // DISPOSITION DIVERSITY — CLOSES A HOLE THE COMMENT ABOVE CLAIMED WAS ALREADY CLOSED.
+    // A TESTING sub-agent falsified this file with 12 planted mutants and found the rationale
+    // overclaiming: the widened form says it catches "a laundered artifact that renamed everything
+    // to a non-queue disposition", but bulk-relabelling all 533 entries to `merged_into` OR to
+    // `deliberately_dropped` passed 8/8. Both are non-queue, both walked straight through — the
+    // landed-ratio bound only watches `landed`, and the evidence check early-returns for any
+    // disposition outside ADJUDICATED. `deliberately_dropped` is the worst case available: it
+    // declares all 533 obligations abandoned and nothing objected.
+    //
+    // A ratio bound per-disposition is the general fix — it does not care WHICH label a bulk-close
+    // picks, including one invented later, which a hand-listed set never could.
+    const byDisposition = {};
+    for (const e of inv.entries) byDisposition[e.disposition] = (byDisposition[e.disposition] || 0) + 1;
+    const dominant = Math.max(...Object.values(byDisposition));
+    expect(dominant / inv.entries.length).toBeLessThan(0.9);
   });
 });
