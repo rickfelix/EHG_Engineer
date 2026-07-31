@@ -50,6 +50,92 @@ function getSectionsByMapping(sections, fileKey, fileMapping) {
   return sections.filter(s => mappedTypes.includes(s.section_type));
 }
 
+/**
+ * SD-LEO-INFRA-ADAM-CONTRACT-READABLE-001 / FR-4 — "included, never copied" is CONVENTION.
+ * Nothing enforced it until this function.
+ *
+ * *** WHY THE OBVIOUS CHECKS ALL PASS ON THE CORRUPTION THIS CATCHES. ***
+ * role_partnership_contract (row 610) is mapped into BOTH CLAUDE_ADAM.md and
+ * CLAUDE_COORDINATOR.md, so ONE governed row supplies that section to two files and an edit to it
+ * moves both at once. Copying its prose into an adam_role_contract row instead renders a
+ * byte-identical CLAUDE_ADAM.md on the day it lands — and then drifts silently the first time 610
+ * is edited, because only the Coordinator copy moves.
+ *   - getSectionsByMapping above is a three-line membership filter run independently per output
+ *     file: no exclusivity check, no dedup, no cross-section content comparison.
+ *   - the drift check compares DB-to-file fidelity, so a faithfully-rendered duplicate is GREEN.
+ *   - a textual diff of the two rendered files is GREEN too — at landing they genuinely match.
+ * The only thing that can catch it is asserting that ONE row supplies the shared section, which is
+ * what this does: it looks for the shared row's own distinctive lines showing up inside some OTHER
+ * section's content.
+ *
+ * Line-level rather than fuzzy on purpose — an exact match of a long line is nearly impossible to
+ * hit by coincidence, so this reports duplication without a similarity threshold to tune. Short
+ * lines are skipped because headings and boilerplate ("---", "> Why:") legitimately recur.
+ *
+ * @param {Array} sections - all leo_protocol_sections rows
+ * @param {Object} fileMapping - section-file-mapping.json
+ * @param {number} [minLineLength=60] - shortest line treated as distinctive
+ * @returns {Array<{shared_type: string, shared_id: *, copied_into_type: string, copied_into_id: *, evidence: string}>}
+ */
+function findCopiedSharedSections(sections, fileMapping, minLineLength = 60) {
+  // A section_type is SHARED when more than one generated file maps it.
+  const fileCount = {};
+  for (const spec of Object.values(fileMapping || {})) {
+    for (const type of spec?.sections || []) fileCount[type] = (fileCount[type] || 0) + 1;
+  }
+  const sharedTypes = Object.keys(fileCount).filter(t => fileCount[t] > 1);
+  if (sharedTypes.length === 0) return [];
+
+  const findings = [];
+  for (const sharedType of sharedTypes) {
+    for (const shared of (sections || []).filter(s => s.section_type === sharedType)) {
+      const distinctive = String(shared.content || '')
+        .split('\n')
+        .map(l => l.trim())
+        .filter(l => l.length >= minLineLength);
+      if (distinctive.length === 0) continue;
+
+      for (const other of sections || []) {
+        if (other === shared || other.section_type === sharedType) continue;
+        const otherContent = String(other.content || '');
+        const hit = distinctive.find(line => otherContent.includes(line));
+        if (hit) {
+          findings.push({
+            shared_type: sharedType,
+            shared_id: shared.id,
+            copied_into_type: other.section_type,
+            copied_into_id: other.id,
+            evidence: hit.slice(0, 120),
+          });
+        }
+      }
+    }
+  }
+  return findings;
+}
+
+/**
+ * Throwing wrapper for the generation path. Refuses to render rather than emitting a file that
+ * looks correct today and drifts later — the failure mode this SD exists to prevent is one that
+ * passes every check on landing day and is discovered months afterward.
+ * @param {Array} sections
+ * @param {Object} fileMapping
+ */
+function assertSharedSectionsNotCopied(sections, fileMapping) {
+  const findings = findCopiedSharedSections(sections, fileMapping);
+  if (findings.length === 0) return;
+  const detail = findings
+    .map(f => `  • ${f.shared_type} (row ${f.shared_id}) duplicated into ${f.copied_into_type} (row ${f.copied_into_id})\n      "${f.evidence}…"`)
+    .join('\n');
+  throw new Error(
+    'SHARED SECTION COPIED INSTEAD OF INCLUDED — refusing to generate.\n' +
+    detail + '\n' +
+    '  A shared section must be supplied by ONE row to every file that maps it. Copying it renders\n' +
+    '  identically today and diverges the first time the shared row is edited. Delete the copy and\n' +
+    '  let the mapping include the original.'
+  );
+}
+
 // getRCAMandate() removed (2026-02-16): RCA mandate lives in CLAUDE.md router only.
 // Phase files now use a reference pointer instead of duplicating ~51 lines each.
 
@@ -543,5 +629,7 @@ export {
   generateExec,
   generateAdam,
   generateCoordinator,
-  generateSolomon
+  generateSolomon,
+  findCopiedSharedSections,
+  assertSharedSectionsNotCopied
 };

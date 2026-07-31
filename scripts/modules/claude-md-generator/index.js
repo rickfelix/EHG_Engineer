@@ -36,7 +36,8 @@ import {
   generateExec,
   generateAdam,
   generateCoordinator,
-  generateSolomon
+  generateSolomon,
+  assertSharedSectionsNotCopied
 } from './file-generators.js';
 
 import {
@@ -234,6 +235,13 @@ class CLAUDEMDGeneratorV3 {
       autonomousDirectives,
       visionGapInsights
     };
+
+    // SD-LEO-INFRA-ADAM-CONTRACT-READABLE-001 (FR-4): refuse to render when a section shared by
+    // two output files has been COPIED into another section instead of included from its one
+    // governed row. Checked HERE rather than in generate() so the drift-check render path
+    // (renderAll) is held to the same rule — a duplicate that only the write path rejects would
+    // still show green on the check people actually run.
+    assertSharedSectionsNotCopied(protocol.sections, this.fileMapping);
 
     // Initialize manifest header
     this.manifest.generated_at = new Date().toISOString();
