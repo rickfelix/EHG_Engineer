@@ -1,21 +1,15 @@
 #!/usr/bin/env node
 /**
- * QF-20260728-894 — find SDs that declare a chairman gate in PROSE but carry no
- * machine-readable flag, so they sit CLAIMABLE on the open belt.
+ * QF-20260728-894 — find open SDs that declare a chairman gate in PROSE while no
+ * machine-readable flag holds them, so they sit CLAIMABLE on the belt. Exit 1 on an
+ * unconditional offender (CI-gateable). Full rationale: PR #6670.
  *
- * Origin: SD-LEO-INFRA-CLOSE-REMAINING-SECURITY-001 declared "permission changes are
- * non-delegable ... chairman 3-factor --prod-deploy path" in its description while every
- * gating key was unset. A worker self-claimed it off the belt; that claim was the proof.
+ * metadata.requires_human_action is the ONLY axis that fences a claim (see
+ * lib/fleet/claim-eligibility.cjs). requires_chairman_apply / chairman_gated /
+ * gated_ddl measured 0 live rows each — folklore.
  *
- * metadata.requires_human_action is the ONLY axis that actually fences a claim
- * (lib/fleet/claim-eligibility.cjs, INELIGIBILITY_AXES.humanActionRequired).
- * requires_chairman_apply / chairman_gated / gated_ddl are folklore — measured at 0 live rows.
- *
- * REPORT-ONLY by design: it flags rows for a human to adjudicate, it does not fence them.
- * A regex must never silently block a claim — "the coordinator STRUCTURALLY CANNOT GRANT IT"
- * is English, not SQL, and an auto-fence on that would strand a legitimate SD.
- *
- * Exit 1 when an UNCONDITIONAL declared gate is unflagged (CI-gateable); 0 otherwise.
+ * REPORT-ONLY: it never fences. "the coordinator ... STRUCTURALLY CANNOT GRANT IT"
+ * is English, not SQL — auto-fencing that match would strand a legitimate SD.
  */
 import { createClient } from '@supabase/supabase-js';
 
