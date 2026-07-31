@@ -227,7 +227,13 @@ async function main() {
     if (insErr) throw new Error(`feedback insert failed: ${insErr.message}`);
 
     writeState({ invocations, last_fired_turn: invocations, cycle: newCycle, streak: verdict.escalation ? verdict.escalation.streak : 0 });
-    process.stdout.write(`solomon-self-assessment: wrote cycle ${newCycle} (${score.overall}) review_key=${score.review_key}${verdict.escalation && verdict.escalation.triggered ? ' [ESCALATE]' : ''}\n`);
+    // FR-3: the coverage floor surfaces as a VISIBLE tag alongside [ESCALATE], and the write
+    // still happens — soft-flag, never a refusal. A thin cycle that renders its caveat and
+    // passes on by is what this replaces.
+    const lowCoverage = score.coverage && score.coverage.below_floor
+      ? ` [LOW-COVERAGE ${score.coverage.scored}/${score.coverage.total}]`
+      : '';
+    process.stdout.write(`solomon-self-assessment: wrote cycle ${newCycle} (${score.overall}) review_key=${score.review_key}${verdict.escalation && verdict.escalation.triggered ? ' [ESCALATE]' : ''}${lowCoverage}\n`);
     process.exit(0);
   } catch (e) {
     // FAIL OPEN — never break a Solomon tick.
