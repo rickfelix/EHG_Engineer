@@ -124,6 +124,7 @@
     "test:smoke": "vitest run tests/smoke.test.js",
     "test:session-tick": "node --test tests/unit/session-tick-heartbeat.test.mjs tests/unit/session-tick-marker-pid-refresh.test.mjs tests/unit/session-tick-patch-failure-telemetry.test.mjs tests/unit/session-tick-release-on-exit.test.mjs tests/unit/session-tick-spawn-observe.test.mjs",
     "test:sd-key-generator-gate": "node --test tests/unit/sd-key-generator-coverage.test.mjs",
+    "test:adam-github-assessment": "node --test tests/unit/adam-github-assessment.test.mjs",
     "test:unit": "vitest run --project unit",
     "test:db": "vitest run --project db",
     "test:db-guards": "node scripts/audit-db-test-guards.mjs",
