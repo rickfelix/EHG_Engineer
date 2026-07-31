@@ -85,6 +85,33 @@ describe('FR-3 CONSTRAINT capture (parent FR-4 AC-2)', () => {
   });
 });
 
+// FR-4 (parent FR-4 AC-3): "Function items compare pg_proc.prosrc/proconfig, so a search_path
+// change is visible." Verified live that pg_get_functiondef already emits SET search_path for
+// every public function carrying a proconfig, so no separate proconfig capture is needed. What
+// MUST hold from here on is that the definition survives VERBATIM — a future normalisation that
+// trimmed or rewrote the definition would strip the SET line and silently break AC-3 while every
+// other test still passed.
+describe('FR-4 function definition passes through verbatim (AC-3 depends on it)', () => {
+  const fakeClient = (def) => ({ query: async () => ({ rows: [{ def }] }) });
+
+  it('a SET search_path line in the definition is preserved exactly', async () => {
+    const { captureObjectDefinitions } = await import('../../../scripts/lib/migration-verification.js');
+    const def = 'CREATE OR REPLACE FUNCTION public.f()\n RETURNS void\n LANGUAGE plpgsql\n SECURITY DEFINER\n SET search_path TO \'public\'\nAS $function$ BEGIN END $function$\n';
+    const [row] = await captureObjectDefinitions(fakeClient(def), [{ kind: 'FUNCTION', schema: 'public', name: 'f' }]);
+    expect(row.definition).toBe(def);                      // byte-identical, not trimmed
+    expect(row.definition).toContain("SET search_path TO 'public'");
+  });
+
+  it('two definitions differing ONLY in search_path are not equal', async () => {
+    const { captureObjectDefinitions } = await import('../../../scripts/lib/migration-verification.js');
+    const mk = (sp) => `CREATE OR REPLACE FUNCTION public.f()\n SET search_path TO '${sp}'\nAS $function$ BEGIN END $function$\n`;
+    const obj = [{ kind: 'FUNCTION', schema: 'public', name: 'f' }];
+    const [a] = await captureObjectDefinitions(fakeClient(mk('public')), obj);
+    const [b] = await captureObjectDefinitions(fakeClient(mk('public, extensions')), obj);
+    expect(a.definition).not.toBe(b.definition);
+  });
+});
+
 describe('no regression to the pre-existing kinds', () => {
   it('an unknown kind still yields definition=null rather than throwing', async () => {
     const client = fakeClient(() => ({ rows: [] }));

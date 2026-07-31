@@ -9,6 +9,27 @@
  * SD: SD-LEO-INFRA-CANONICAL-SCRIPTS-APPLY-001
  */
 
+/**
+ * FR-4 (SD-FDBK-INFRA-LIVE-PROBE-DDL-001) — NO SEPARATE proconfig CAPTURE IS NEEDED, and the
+ * reason is measured rather than assumed.
+ *
+ * Parent FR-4 AC-3 reads "Function items compare pg_proc.prosrc/proconfig, so a search_path
+ * change is visible." The AC names columns; its stated PURPOSE is visibility of a search_path
+ * change. pg_get_functiondef already reconstructs the SET clauses from proconfig, so that
+ * purpose is met by the capture below. Verified live against this database, not inferred:
+ * all 3 public functions carrying a non-null proconfig (reset_eva_circuit,
+ * update_leo_settings_timestamp, update_feedback_updated_at) emit a matching
+ * "SET search_path" line in pg_get_functiondef output.
+ *
+ * SCOPE OF THAT CHECK, stated so nobody over-reads it: search_path specifically was verified.
+ * proconfig can carry other GUCs (e.g. statement_timeout); pg_get_functiondef emits SET clauses
+ * generally, but only the search_path case was measured.
+ *
+ * THE STANDING REQUIREMENT this creates: the returned definition must be passed through
+ * VERBATIM. Any future normalisation/trimming that strips SET lines would silently break AC-3
+ * while every existing test still passed. tests/unit/lib/migration-verification-access-control.js
+ * pins that.
+ */
 async function captureFunctionDef(client, schema, name) {
   const r = await client.query(
     `SELECT pg_get_functiondef(p.oid) AS def
