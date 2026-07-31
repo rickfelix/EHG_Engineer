@@ -10,7 +10,7 @@
 import { describe, it, expect } from 'vitest';
 import { createRequire } from 'node:module';
 const require_ = createRequire(import.meta.url);
-const { contractReadVerdict, singleReadFit, FULL_COVERAGE_PCT, SINGLE_READ_SAFE_BYTES, SINGLE_READ_TOKEN_CAP } = require_('../../../lib/protocol/contract-read-coverage.cjs');
+const { contractReadVerdict, singleReadFit, FULL_COVERAGE_PCT, SINGLE_READ_SAFE_BYTES, SINGLE_READ_TOKEN_CAP, SINGLE_READ_TOKEN_BUDGET } = require_('../../../lib/protocol/contract-read-coverage.cjs');
 
 describe('contractReadVerdict — the inversion, both halves', () => {
   it('THE DILIGENT READER: paginated full coverage reports FULLY READ', () => {
@@ -52,19 +52,29 @@ describe('contractReadVerdict — the inversion, both halves', () => {
     // could NOT have made pass.
   });
 
-  it('delivered evidence OUTRANKS ranges when both are present', () => {
-    // A file can have historical paginated ranges AND a recent truncated read. The truncated read is
-    // the more recent fact about what this session actually has in hand.
+  it('COVERAGE IS CUMULATIVE: a later partial read does not erase an earlier full one', () => {
+    /**
+     * *** THIS ASSERTION WAS INVERTED, AND IT IS WHAT KEPT SEC-F8 ALIVE. *** It used to require
+     * fully_read=false here, on the rationale that "the truncated read is the more recent fact about
+     * what this session has in hand". That rationale is wrong: reading MORE of a file cannot un-read
+     * the part already read. Coverage accumulates over a session; it does not track the last call.
+     *
+     * Ranking a single-call fact above whole-file coverage to honour that idea is precisely the
+     * defect this module was built to remove — the same mistake as `lastReadWasPartial`, which was
+     * also a true statement about one call being used to answer a question about the whole file.
+     * Both the old test and the code agreed, so the suite was green and the behaviour was backwards.
+     */
     const status = {
       readCount: 4,
       ranges: [{ offset: 1, limit: 421 }],
       lastDelivered: { startLine: 1, numLines: 100, totalLines: 421, coveredWholeFile: false },
     };
     const v = contractReadVerdict(status, 421);
-    expect(v.fully_read).toBe(false);
-    expect(v.basis).toBe('delivered_lines');
+    expect(v.fully_read).toBe(true);
+    expect(v.basis).toBe('union_ranges');
 
-    // MUTATION: check ranges before lastDelivered -> stale full coverage wins, fully_read true, fails.
+    // MUTATION: rank the single-call delivered tier above the union tier (the shipped order) ->
+    // fully_read false on basis delivered_lines. Fails. That mutation IS the bug SEC-F8 found.
   });
 
   it('a genuinely complete delivered read reports FULLY READ', () => {
@@ -249,6 +259,121 @@ describe('the byte proxy is RETIRED — readability is measured in tokens', () =
     expect(v.basis).toBe('unknown_coverage');
 
     // MUTATION: treat fits!==false as fitting -> an unmeasurable contract reports complete, fails.
+  });
+});
+
+describe('SEC-F8 — the diligent reader, on the state shape the REAL tracker writes', () => {
+  /**
+   * *** THE FOUNDING DEFECT, FOUND AGAIN ONE FIELD OVER, AFTER I HAD DECLARED IT FIXED. ***
+   *
+   * protocol-file-tracker.cjs writes `lastDelivered` UNCONDITIONALLY — after both the partial and
+   * the full branch — so a paginated read carries ranges[] AND a lastDelivered describing only its
+   * FINAL PAGE. The old tier order returned on that single-call fact before the union tier could
+   * run, so a 100%-covered 3-page read of CLAUDE_ADAM.md reported 23% "not fully read", while the
+   * lazy truncated single read reported 32% — BETTER. Exactly the inversion this module exists to
+   * remove, in a different field.
+   *
+   * *** AND THE TEST THAT "PROVED" THE DILIGENT CASE COULD NOT HAVE CAUGHT IT: *** it supplied
+   * ranges WITHOUT lastDelivered, a combination the real tracker never emits. A fixture that cannot
+   * occur in production is not evidence about production. Every fixture below carries all three
+   * fields together, because that is what is actually on disk.
+   */
+  const TOTAL = 520;
+  const overCap = { fits: false, tokens: 27566, bytes: 106286, basis: 'measured_tokens' };
+
+  /** 3 pages covering all 520 lines — ranges, deliveredRanges AND a last-page lastDelivered. */
+  const diligent = {
+    readCount: 3, lastReadWasPartial: true,
+    ranges: [{ offset: 1, limit: 200 }, { offset: 201, limit: 200 }, { offset: 401, limit: 120 }],
+    deliveredRanges: [{ offset: 1, limit: 200 }, { offset: 201, limit: 200 }, { offset: 401, limit: 120 }],
+    lastDelivered: { startLine: 401, numLines: 120, totalLines: TOTAL, coveredWholeFile: false },
+  };
+
+  /** One no-argument read the harness silently truncated at 166 of 520. No ranges — that is the point. */
+  const lazy = {
+    readCount: 1, lastReadWasPartial: false,
+    deliveredRanges: [{ offset: 1, limit: 166 }],
+    lastDelivered: { startLine: 1, numLines: 166, totalLines: TOTAL, coveredWholeFile: false },
+  };
+
+  it('a paginated FULL read reports fully read', () => {
+    const v = contractReadVerdict(diligent, TOTAL, { singleReadFit: overCap });
+    expect(v.fully_read).toBe(true);
+    expect(v.coverage_pct).toBe(100);
+    expect(v.basis).toBe('delivered_ranges');
+
+    // MUTATION: rank the single-call delivered tier above the union tier (the shipped order) ->
+    // returns 23% / not fully read. Fails.
+  });
+
+  it('a truncated no-arg read still does NOT report fully read', () => {
+    // The half that stops the fix from becoming "everything passes".
+    const v = contractReadVerdict(lazy, TOTAL, { singleReadFit: overCap });
+    expect(v.fully_read).toBe(false);
+    expect(v.coverage_pct).toBe(32);
+  });
+
+  it('AND THE ORDERING IS RIGHT: the diligent reader outscores the lazy one', () => {
+    // The invariant in one line. Stated as a comparison because the defect was never about an
+    // absolute number — it was about which of the two came out ahead.
+    const d = contractReadVerdict(diligent, TOTAL, { singleReadFit: overCap });
+    const l = contractReadVerdict(lazy, TOTAL, { singleReadFit: overCap });
+    expect(d.coverage_pct).toBeGreaterThan(l.coverage_pct);
+    expect(d.fully_read && !l.fully_read).toBe(true);
+  });
+
+  it('partial pagination is still partial — union, not "any ranges means done"', () => {
+    const partial = {
+      readCount: 1, lastReadWasPartial: true,
+      ranges: [{ offset: 1, limit: 100 }],
+      deliveredRanges: [{ offset: 1, limit: 100 }],
+      lastDelivered: { startLine: 1, numLines: 100, totalLines: TOTAL, coveredWholeFile: false },
+    };
+    const v = contractReadVerdict(partial, TOTAL, { singleReadFit: overCap });
+    expect(v.fully_read).toBe(false);
+    expect(v.coverage_pct).toBe(19);
+  });
+});
+
+describe('SEC-F10/F11 — measuring the right artefact, with the right encoder', () => {
+  it('a contract mentioning a special-token literal does not silently degrade', () => {
+    // cl100k_base `encode` THROWS on <|endoftext|> even inline in prose. That throw would fall
+    // through to the byte fallback and flip a 25,587-byte contract from ARMED to disarmed on the
+    // strength of a documentation string. encode_ordinary treats it as text.
+    const os = require_('os'); const fsx = require_('fs'); const p = require_('path');
+    const dir = fsx.mkdtempSync(p.join(os.tmpdir(), 'ctr-special-'));
+    fsx.writeFileSync(p.join(dir, 'X.md'), '# doc\nmentions <|endoftext|> inline\n'.repeat(50));
+
+    const fit = singleReadFit(dir, 'X.md');
+    expect(fit.basis).toBe('measured_tokens');   // NOT the byte fallback
+    expect(fit.tokens).toBeGreaterThan(0);
+
+    // MUTATION: swap encode_ordinary back to encode -> throws, basis becomes
+    // conservative_bytes_no_tokenizer, fails.
+  });
+
+  it('counts the FRAMED response, not the raw file', () => {
+    // Read returns cat -n output; the line numbers and tabs count against the cap. Measuring raw
+    // bytes understates the real cost — measuring the wrong artefact is the same error the byte
+    // proxy made, one level down.
+    const root = process.cwd();
+    const framed = singleReadFit(root, 'CLAUDE_COORDINATOR.md').tokens;
+    const rawTokens = require_('tiktoken').get_encoding('cl100k_base')
+      .encode_ordinary(require_('fs').readFileSync(require_('path').join(root, 'CLAUDE_COORDINATOR.md'), 'utf8')).length;
+    expect(framed).toBeGreaterThan(rawTokens);
+  });
+
+  it('the budget leaves margin under the cap, and no real verdict sits inside it', () => {
+    expect(SINGLE_READ_TOKEN_BUDGET).toBeLessThan(SINGLE_READ_TOKEN_CAP);
+    // The margin exists because cl100k_base is GPT-4's tokenizer and the cap is a Claude limit. It
+    // is only honest if no role's answer is DECIDED by it — assert each real contract clears the
+    // budget (or misses it) by more than the margin itself.
+    const root = process.cwd();
+    const margin = SINGLE_READ_TOKEN_CAP - SINGLE_READ_TOKEN_BUDGET;
+    for (const f of ['CLAUDE_COORDINATOR.md', 'CLAUDE_SOLOMON.md', 'CLAUDE_ADAM.md']) {
+      const { tokens } = singleReadFit(root, f);
+      expect(Math.abs(tokens - SINGLE_READ_TOKEN_BUDGET)).toBeGreaterThan(margin);
+    }
   });
 });
 

@@ -31,7 +31,7 @@ const { resolveStateReadPath } = _createRequireQF342(import.meta.url)('./hooks/l
 // really read" and ONE definition of the single-read bound, shared with adam-register.cjs and
 // solomon-register.cjs. Importing the bound rather than restating it is the difference between an
 // arming condition and an arming CLAIM — see roleArmingStates below.
-const { contractReadVerdict, contractLineCount, singleReadFit, SINGLE_READ_TOKEN_CAP } =
+const { contractReadVerdict, contractLineCount, singleReadFit, SINGLE_READ_TOKEN_BUDGET } =
   _createRequireQF342(import.meta.url)('../lib/protocol/contract-read-coverage.cjs');
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
@@ -647,8 +647,11 @@ export function roleArmingStates(repoRoot = REPO_ROOT, fitter = null) {
   return ROLE_CONTRACTS.map(({ role, file, dependency }) => {
     let fit = null;
     try { fit = fitOf(file); } catch { fit = null; }
-    const tokens = fit && Number.isFinite(Number(fit.tokens)) ? Number(fit.tokens) : null;
-    const bytes = fit && Number.isFinite(Number(fit.bytes)) ? Number(fit.bytes) : null;
+    // SEC-F9: `Number(null)` is 0 and `Number.isFinite(0)` is true, so a null token count became 0
+    // and the banner printed "contract fits in one read (0 tokens ≤ 25000 cap)" in degraded mode,
+    // making the honest no-tokenizer message unreachable. Null-check BEFORE coercing.
+    const tokens = fit && fit.tokens != null && Number.isFinite(Number(fit.tokens)) ? Number(fit.tokens) : null;
+    const bytes = fit && fit.bytes != null && Number.isFinite(Number(fit.bytes)) ? Number(fit.bytes) : null;
 
     // Unmeasurable (including `fits: null`) => DISARMED. Absence of evidence is never promoted to
     // compliance; that promotion is the defect this whole SD exists to remove.
@@ -657,7 +660,7 @@ export function roleArmingStates(repoRoot = REPO_ROOT, fitter = null) {
         return { role, file, tokens, bytes, armed: false, reason: `${file} not measurable — cannot establish readability` };
       }
       const over = tokens !== null
-        ? `${tokens} tokens > ${SINGLE_READ_TOKEN_CAP} cap`
+        ? `${tokens} tokens > ${SINGLE_READ_TOKEN_BUDGET} budget`
         : `${bytes}B exceeds the no-tokenizer fallback bound`;
       return {
         role, file, tokens, bytes, armed: false,
@@ -667,7 +670,7 @@ export function roleArmingStates(repoRoot = REPO_ROOT, fitter = null) {
     return {
       role, file, tokens, bytes, armed: true,
       reason: tokens !== null
-        ? `contract fits in one read (${tokens} tokens ≤ ${SINGLE_READ_TOKEN_CAP} cap)`
+        ? `contract fits in one read (${tokens} tokens ≤ ${SINGLE_READ_TOKEN_BUDGET} budget)`
         : `contract fits in one read (${bytes}B, no tokenizer — conservative bound)`,
     };
   });
