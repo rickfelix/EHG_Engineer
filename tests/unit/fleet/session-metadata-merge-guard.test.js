@@ -183,13 +183,38 @@ describe('classifier: does this write REPLACE the column?', () => {
 describe('live tree', () => {
   const read = (rel) => fs.readFileSync(path.join(ROOT, rel), 'utf8');
 
-  it('the three live compliant merge sites are not flagged', () => {
-    for (const rel of [
-      'lib/fleet/attention-flag-writer.js',
-      'lib/fleet/window-visibility-writer.js',
-    ]) {
+  it('the live compliant merge sites are not flagged', () => {
+    // WAS VACUOUS, AND SAID "THREE" WHILE ITERATING TWO. Both files write via raw SQL, which no
+    // REPLACING_FORM matches, so they return ZERO findings of any verdict — `filter(REPLACE)` was
+    // satisfied by the empty set and the assertion would have passed identically with MERGE_FORMS
+    // deleted. Part 1 of this file is careful about unfalsifiable assertions; Part 3 was not.
+    // A test that cannot fail is not evidence, which is the thesis of the SD it belongs to.
+    // The honest assertion is therefore about ABSENCE OF A FALSE ACCUSATION, stated as such, plus a
+    // positive check that the classifier can see a merge at all when one is in a shape it parses.
+    for (const rel of ['lib/fleet/attention-flag-writer.js', 'lib/fleet/window-visibility-writer.js']) {
       const f = classifyFile(read(rel), rel);
       expect(f.filter((x) => x.verdict === VERDICT.REPLACE)).toEqual([]);
+    }
+    // The non-vacuous half: a merge the classifier DOES parse is classified as one.
+    const parsed = classifyFile(
+      'await sb.from(\'claude_sessions\').update({ metadata: patch }); // sql: metadata || $2::jsonb',
+      'fixture.js',
+    );
+    expect(parsed.length).toBeGreaterThan(0);
+    expect(parsed.some((x) => x.verdict === VERDICT.MERGE)).toBe(true);
+  });
+
+  it('REGRESSION: stripComments must not delete lines, or every citation is wrong', () => {
+    // `^\s*` with /m ate newlines and ' '.repeat() replaced them with spaces: 172 lines vanished
+    // from session-manager.mjs, 195 from capture-session-id.cjs. Reported line numbers were off by
+    // up to 159, and capture-session-id.cjs fell out of the proximity window entirely — so the
+    // guard returned ZERO findings for the file its own header names as its reason for existing.
+    for (const rel of ['lib/session-manager.mjs', 'scripts/hooks/capture-session-id.cjs']) {
+      const src = read(rel);
+      const findings = classifyFile(src, rel);
+      const maxLine = findings.reduce((n, f) => Math.max(n, f.line), 0);
+      // A citation past the end of the file is impossible unless stripping changed the numbering.
+      expect(maxLine).toBeLessThanOrEqual(src.split('\n').length);
     }
   });
 
