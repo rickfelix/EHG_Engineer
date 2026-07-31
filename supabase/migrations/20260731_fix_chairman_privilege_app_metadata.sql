@@ -1,4 +1,5 @@
 -- SD-LEO-FIX-CHAIRMAN-PRIVILEGE-FROM-WRITABLE-METADATA-001
+-- @approved-by: codestreetlabs@gmail.com
 -- Move chairman/admin privilege derivation off the CLIENT-WRITABLE metadata half.
 --
 -- THE DEFECT
