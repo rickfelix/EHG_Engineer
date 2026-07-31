@@ -34,7 +34,13 @@
 --   are preserved verbatim. The ONLY semantic change is which metadata half is
 --   trusted. A privilege fix must not quietly widen access while it narrows it.
 
-BEGIN;
+-- NO EXPLICIT BEGIN/COMMIT HERE, DELIBERATELY.
+--   scripts/apply-migration.js already wraps the file in its own transaction
+--   (BEGIN before the statements, COMMIT after, ROLLBACK on error). An inner
+--   BEGIN would be a no-op WARNING, and an inner COMMIT would close the
+--   harness's transaction EARLY -- leaving the harness's own rollback path with
+--   nothing to roll back if a later statement failed. 18 of the 20 most recent
+--   migrations in this directory correctly omit it; this one follows that.
 
 -- ---------------------------------------------------------------------------
 -- 1. fn_is_chairman(): same signature, same role vocabulary, trusted half only.
@@ -77,5 +83,3 @@ AS $function$
 ALTER POLICY archetype_benchmarks_admin
   ON public.archetype_benchmarks
   USING (public.is_chairman_role());
-
-COMMIT;
