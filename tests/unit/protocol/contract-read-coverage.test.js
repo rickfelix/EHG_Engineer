@@ -371,49 +371,107 @@ describe('SEC-F12 — a falsy limit means "nothing delivered", never "to end of 
   });
 });
 
-describe('SEC-F13 — the two range lists are both lower bounds, so take the better one', () => {
+describe('SEC-F16 — a REQUEST must never stand in for a MEASUREMENT', () => {
   /**
-   * I ranked deliveredRanges above ranges "by how much of the FILE each signal describes", then
-   * implemented it as a fixed precedence that returned on the first non-empty list. The lists are
-   * written under DIFFERENT conditions (ranges.push guarded by isPartialRead; deliveredRanges.push
-   * by the presence of tool_response), so deliveredRanges can be a strict SUBSET — and then the
-   * ordering contradicted the very principle it was justified by.
+   * *** THIS BLOCK REPLACED ONE THAT ASSERTED THE FOUNDING DEFECT AS A REQUIREMENT. ***
+   *
+   * Briefly, this module took the MAX of the two range unions, on the premise that both were lower
+   * bounds on what was READ and neither could un-read the other. The premise is false:
+   * protocol-file-tracker.cjs pushes `limit: toolInputData.limit` into ranges[] — the caller's
+   * ARGUMENT, never reconciled against what came back. ranges[] bounds what was REQUESTED.
+   *
+   * So the max let a request outrank a measurement, and a no-limit-honoured truncated read reported
+   * 100% fully read — this SD's founding defect, restored in full by a fix for a milder complaint.
+   * The test that went with it asserted `fully_read: true` from a requested-range union, mutation
+   * note and all: the second green test in this SD to encode a false fact as a requirement.
+   *
+   * The under-report it was trying to fix (deliveredRanges a strict subset when only some calls
+   * carried a tool_response) is SAFE — it costs a spurious re-read. The over-report ships an unread
+   * contract. For a gate that exists to prove a file was read, those do not trade.
    */
   const T = 520;
   const overCap = { fits: false, tokens: 27566, bytes: 106286, basis: 'measured_tokens' };
 
-  it('three diligent pages where only the first carried a tool_response still reports 100%', () => {
+  it('a read that REQUESTED the whole file but was truncated is NOT fully read', () => {
+    // The load-bearing case. Requested 520, harness delivered 166.
+    const v = contractReadVerdict(
+      {
+        readCount: 1, lastReadWasPartial: true,
+        ranges: [{ offset: 1, limit: 520 }],
+        deliveredRanges: [{ offset: 1, limit: 166 }],
+        lastDelivered: { startLine: 1, numLines: 166, totalLines: T, coveredWholeFile: false },
+      },
+      T,
+      { singleReadFit: overCap }
+    );
+    expect(v.fully_read).toBe(false);
+    expect(v.coverage_pct).toBe(32);
+    expect(v.basis).toBe('delivered_ranges');
+
+    // MUTATION: take the max of the two unions -> 100% fully_read on basis union_ranges. Fails.
+    // A finite positive requested limit sails through the positive-limit filter, so ONLY the
+    // delivered-preferred rule catches this.
+  });
+
+  it('pages that requested 200 each but delivered 60 each are NOT fully read', () => {
+    const v = contractReadVerdict(
+      {
+        readCount: 3, lastReadWasPartial: true,
+        ranges: [{ offset: 1, limit: 200 }, { offset: 201, limit: 200 }, { offset: 401, limit: 200 }],
+        deliveredRanges: [{ offset: 1, limit: 60 }, { offset: 201, limit: 60 }, { offset: 401, limit: 60 }],
+        lastDelivered: { startLine: 401, numLines: 60, totalLines: T, coveredWholeFile: false },
+      },
+      T,
+      { singleReadFit: overCap }
+    );
+    expect(v.fully_read).toBe(false);
+    expect(v.coverage_pct).toBe(35);
+  });
+
+  it('UNDER-reporting is accepted as the safe direction when delivery is partly unrecorded', () => {
+    // The mixed-subset case, stated as a deliberate trade rather than left to look like an oversight.
+    // Only page 1 carried a tool_response, so delivery is recorded for 200 of 520 even though all
+    // three pages were read. 38% is WRONG but SAFE; the correct fix is in the tracker.
     const v = contractReadVerdict(
       {
         readCount: 3, lastReadWasPartial: true,
         ranges: [{ offset: 1, limit: 200 }, { offset: 201, limit: 200 }, { offset: 401, limit: 120 }],
-        deliveredRanges: [{ offset: 1, limit: 200 }],   // strict subset — only page 1 had a response
+        deliveredRanges: [{ offset: 1, limit: 200 }],
         lastDelivered: { startLine: 1, numLines: 200, totalLines: T, coveredWholeFile: false },
       },
       T,
       { singleReadFit: overCap }
     );
-    expect(v.fully_read).toBe(true);
-    expect(v.coverage_pct).toBe(100);
-
-    // MUTATION: return on deliveredRanges whenever it is non-empty (the shipped order) -> 38%,
-    // not fully read. Fails. Neither list can un-read the other.
+    expect(v.fully_read).toBe(false);
+    expect(v.basis).toBe('delivered_ranges');
   });
 
-  it('and the measured list still wins when it is the larger one', () => {
-    // The other direction — "take the max" must not collapse into "always prefer requested".
+  it('requested ranges ARE used when there is no delivery record at all (legacy state)', () => {
+    // The fallback must still work, or every pre-deliveredRanges session reports unknown forever.
+    const v = contractReadVerdict(
+      { readCount: 3, lastReadWasPartial: true, ranges: [{ offset: 1, limit: 200 }, { offset: 201, limit: 200 }, { offset: 401, limit: 120 }] },
+      T,
+      { singleReadFit: overCap }
+    );
+    expect(v.fully_read).toBe(true);
+    expect(v.basis).toBe('union_ranges');
+  });
+
+  it('an EMPTY-after-filter delivery record does not fall back to requested ranges', () => {
+    // The subtle half: "no usable delivery" must not be treated as "no delivery record", or a
+    // zero-delivery read would borrow the request's coverage and pass.
     const v = contractReadVerdict(
       {
-        readCount: 2,
-        ranges: [{ offset: 1, limit: 100 }],
-        deliveredRanges: [{ offset: 1, limit: 100 }, { offset: 101, limit: 420 }],
-        lastDelivered: { startLine: 101, numLines: 420, totalLines: T, coveredWholeFile: false },
+        readCount: 1,
+        ranges: [{ offset: 1, limit: 520 }],
+        deliveredRanges: [{ offset: 1, limit: 0 }],
+        lastDelivered: { startLine: 1, numLines: 0, totalLines: T, coveredWholeFile: false },
       },
       T,
       { singleReadFit: overCap }
     );
-    expect(v.coverage_pct).toBe(100);
-    expect(v.basis).toBe('delivered_ranges');
+    expect(v.fully_read).toBe(false);
+    expect(v.coverage_pct).not.toBe(100);
   });
 });
 
