@@ -335,6 +335,88 @@ describe('SEC-F8 — the diligent reader, on the state shape the REAL tracker wr
   });
 });
 
+describe('SEC-F12 — a falsy limit means "nothing delivered", never "to end of file"', () => {
+  /**
+   * *** A REGRESSION I INTRODUCED WHILE FIXING SEC-F8, CAUGHT BEFORE IT SHIPPED. ***
+   * unionRangeCoverage does `Number(r.limit) || (totalLines - from + 1)` — a falsy limit means
+   * to-EOF. Correct for a REQUESTED range (Read(offset=1) does ask for the rest); exactly backwards
+   * for a DELIVERED one, where limit is the measured line count and 0 means nothing came back.
+   * So a read that delivered NOTHING unioned to 100% and certified as complete, through the tier I
+   * had just promoted to strongest. The tracker guards only on Number.isFinite, and both Number(0)
+   * and Number(null) are finite, so this is reachable from the canonical writer.
+   */
+  const T = 520;
+  const overCap = { fits: false, tokens: 27566, bytes: 106286, basis: 'measured_tokens' };
+
+  for (const [label, limit] of [['zero', 0], ['null', null], ['undefined', undefined], ['negative', -5]]) {
+    it(`a delivered range with a ${label} limit is not coverage`, () => {
+      const v = contractReadVerdict(
+        { readCount: 1, deliveredRanges: [{ offset: 1, limit }], lastDelivered: { startLine: 1, numLines: 0, totalLines: T, coveredWholeFile: false } },
+        T,
+        { singleReadFit: overCap }
+      );
+      expect(v.fully_read).toBe(false);
+      expect(v.coverage_pct).not.toBe(100);
+
+      // MUTATION: drop the positive-limit filter -> unions to 100%, fully_read true. Fails.
+    });
+  }
+
+  it('SEC-F15: an OPEN-ENDED requested range is not full coverage either', () => {
+    // `Read(path, offset=1)` records {offset:1, limit:null}. That is precisely the call the harness
+    // can silently truncate, so reading it as coverage-to-EOF is the original defect again.
+    const v = contractReadVerdict({ readCount: 1, ranges: [{ offset: 1, limit: null }] }, T, { singleReadFit: overCap });
+    expect(v.fully_read).toBe(false);
+    expect(v.basis).toBe('unknown_coverage');
+  });
+});
+
+describe('SEC-F13 — the two range lists are both lower bounds, so take the better one', () => {
+  /**
+   * I ranked deliveredRanges above ranges "by how much of the FILE each signal describes", then
+   * implemented it as a fixed precedence that returned on the first non-empty list. The lists are
+   * written under DIFFERENT conditions (ranges.push guarded by isPartialRead; deliveredRanges.push
+   * by the presence of tool_response), so deliveredRanges can be a strict SUBSET — and then the
+   * ordering contradicted the very principle it was justified by.
+   */
+  const T = 520;
+  const overCap = { fits: false, tokens: 27566, bytes: 106286, basis: 'measured_tokens' };
+
+  it('three diligent pages where only the first carried a tool_response still reports 100%', () => {
+    const v = contractReadVerdict(
+      {
+        readCount: 3, lastReadWasPartial: true,
+        ranges: [{ offset: 1, limit: 200 }, { offset: 201, limit: 200 }, { offset: 401, limit: 120 }],
+        deliveredRanges: [{ offset: 1, limit: 200 }],   // strict subset — only page 1 had a response
+        lastDelivered: { startLine: 1, numLines: 200, totalLines: T, coveredWholeFile: false },
+      },
+      T,
+      { singleReadFit: overCap }
+    );
+    expect(v.fully_read).toBe(true);
+    expect(v.coverage_pct).toBe(100);
+
+    // MUTATION: return on deliveredRanges whenever it is non-empty (the shipped order) -> 38%,
+    // not fully read. Fails. Neither list can un-read the other.
+  });
+
+  it('and the measured list still wins when it is the larger one', () => {
+    // The other direction — "take the max" must not collapse into "always prefer requested".
+    const v = contractReadVerdict(
+      {
+        readCount: 2,
+        ranges: [{ offset: 1, limit: 100 }],
+        deliveredRanges: [{ offset: 1, limit: 100 }, { offset: 101, limit: 420 }],
+        lastDelivered: { startLine: 101, numLines: 420, totalLines: T, coveredWholeFile: false },
+      },
+      T,
+      { singleReadFit: overCap }
+    );
+    expect(v.coverage_pct).toBe(100);
+    expect(v.basis).toBe('delivered_ranges');
+  });
+});
+
 describe('SEC-F10/F11 — measuring the right artefact, with the right encoder', () => {
   it('a contract mentioning a special-token literal does not silently degrade', () => {
     // cl100k_base `encode` THROWS on <|endoftext|> even inline in prose. That throw would fall
