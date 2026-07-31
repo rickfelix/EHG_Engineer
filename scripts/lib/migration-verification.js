@@ -9,6 +9,27 @@
  * SD: SD-LEO-INFRA-CANONICAL-SCRIPTS-APPLY-001
  */
 
+/**
+ * FR-4 (SD-FDBK-INFRA-LIVE-PROBE-DDL-001) — NO SEPARATE proconfig CAPTURE IS NEEDED, and the
+ * reason is measured rather than assumed.
+ *
+ * Parent FR-4 AC-3 reads "Function items compare pg_proc.prosrc/proconfig, so a search_path
+ * change is visible." The AC names columns; its stated PURPOSE is visibility of a search_path
+ * change. pg_get_functiondef already reconstructs the SET clauses from proconfig, so that
+ * purpose is met by the capture below. Verified live against this database, not inferred:
+ * all 3 public functions carrying a non-null proconfig (reset_eva_circuit,
+ * update_leo_settings_timestamp, update_feedback_updated_at) emit a matching
+ * "SET search_path" line in pg_get_functiondef output.
+ *
+ * SCOPE OF THAT CHECK, stated so nobody over-reads it: search_path specifically was verified.
+ * proconfig can carry other GUCs (e.g. statement_timeout); pg_get_functiondef emits SET clauses
+ * generally, but only the search_path case was measured.
+ *
+ * THE STANDING REQUIREMENT this creates: the returned definition must be passed through
+ * VERBATIM. Any future normalisation/trimming that strips SET lines would silently break AC-3
+ * while every existing test still passed. tests/unit/lib/migration-verification-access-control.js
+ * pins that.
+ */
 async function captureFunctionDef(client, schema, name) {
   const r = await client.query(
     `SELECT pg_get_functiondef(p.oid) AS def
@@ -57,6 +78,64 @@ async function captureIndexDef(client, schema, name) {
   return r.rows.length ? r.rows[0].indexdef : null;
 }
 
+/**
+ * POLICY capture — SD-FDBK-INFRA-LIVE-PROBE-DDL-001 FR-2 (parent FR-4 AC-1:
+ * "RLS/policy items are verdicted from pg_policies and relrowsecurity directly").
+ *
+ * Returns a stable, comparable definition string built from the live catalog, plus the
+ * table's relrowsecurity — AC-4 requires citing relrowsecurity=FALSE with zero policies,
+ * so the RLS-enabled flag must survive into the captured value, not just the policy body.
+ *
+ * AMBIGUITY RETURNS NULL. A policy name is unique per (table, policy), not per schema, so a
+ * name-only lookup can match rows on several tables. Returning null makes the item
+ * UNVERIFIABLE rather than picking one arbitrarily — per the FR-1 decision
+ * (docs/reference/ddl-approval-record-definition.md), the fail direction is UNVERIFIABLE,
+ * never a false APPLIED. Pass obj.table to disambiguate.
+ */
+async function capturePolicyDef(client, schema, name, table) {
+  const params = table ? [schema, name, table] : [schema, name];
+  const r = await client.query(
+    `SELECT p.tablename, p.policyname, p.permissive, p.roles::text AS roles, p.cmd,
+            COALESCE(p.qual, '') AS qual, COALESCE(p.with_check, '') AS with_check,
+            c.relrowsecurity
+       FROM pg_policies p
+       JOIN pg_class c ON c.relname = p.tablename
+       JOIN pg_namespace n ON n.oid = c.relnamespace AND n.nspname = p.schemaname
+      WHERE p.schemaname = $1 AND p.policyname = $2
+        ${table ? 'AND p.tablename = $3' : ''}`,
+    params
+  );
+  if (r.rows.length !== 1) return null; // 0 = absent, >1 = ambiguous -> UNVERIFIABLE
+  const p = r.rows[0];
+  return `POLICY ${p.policyname} ON ${schema}.${p.tablename} `
+    + `PERMISSIVE=${p.permissive} ROLES=${p.roles} CMD=${p.cmd} `
+    + `USING=(${p.qual}) WITH_CHECK=(${p.with_check}) RLS_ENABLED=${p.relrowsecurity}`;
+}
+
+/**
+ * CONSTRAINT capture — FR-3 (parent FR-4 AC-2: "Constraint items compare
+ * pg_get_constraintdef() BODY, never conname alone").
+ *
+ * The BODY is the point. scripts/verify-migration-apply-state.mjs:358-366 matches on conname
+ * only, so a same-named CHECK with a different body reads APPLIED — that fail-open is exactly
+ * what this closes. Same ambiguity rule as policies: conname is unique per table, not per
+ * schema, so >1 match returns null rather than guessing.
+ */
+async function captureConstraintDef(client, schema, name, table) {
+  const params = table ? [schema, name, table] : [schema, name];
+  const r = await client.query(
+    `SELECT pg_get_constraintdef(con.oid) AS def, rel.relname AS tablename
+       FROM pg_constraint con
+       JOIN pg_namespace n ON n.oid = con.connamespace
+       LEFT JOIN pg_class rel ON rel.oid = con.conrelid
+      WHERE n.nspname = $1 AND con.conname = $2
+        ${table ? 'AND rel.relname = $3' : ''}`,
+    params
+  );
+  if (r.rows.length !== 1) return null; // 0 = absent, >1 = ambiguous -> UNVERIFIABLE
+  return `CONSTRAINT ${name} ON ${schema}.${r.rows[0].tablename} ${r.rows[0].def}`;
+}
+
 export async function captureObjectDefinitions(client, declaredObjects) {
   const out = [];
   for (const obj of declaredObjects) {
@@ -65,7 +144,13 @@ export async function captureObjectDefinitions(client, declaredObjects) {
     else if (obj.kind === 'TRIGGER') definition = await captureTriggerDef(client, obj.schema, obj.name);
     else if (obj.kind === 'VIEW') definition = await captureViewDef(client, obj.schema, obj.name);
     else if (obj.kind === 'INDEX') definition = await captureIndexDef(client, obj.schema, obj.name);
-    out.push({ kind: obj.kind, schema: obj.schema, name: obj.name, definition });
+    // FR-2/FR-3 (SD-FDBK-INFRA-LIVE-PROBE-DDL-001): POLICY and CONSTRAINT were the declared
+    // gap — migration-object-parser.js:5 scopes the MVP to FUNCTION/TRIGGER/VIEW/INDEX, which
+    // is precisely why access-control DDL has never been verifiable. obj.table is optional and
+    // disambiguates; without it an ambiguous match returns null (-> UNVERIFIABLE, never APPLIED).
+    else if (obj.kind === 'POLICY') definition = await capturePolicyDef(client, obj.schema, obj.name, obj.table);
+    else if (obj.kind === 'CONSTRAINT') definition = await captureConstraintDef(client, obj.schema, obj.name, obj.table);
+    out.push({ kind: obj.kind, schema: obj.schema, name: obj.name, ...(obj.table ? { table: obj.table } : {}), definition });
   }
   return out;
 }

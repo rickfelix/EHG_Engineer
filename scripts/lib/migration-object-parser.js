@@ -58,11 +58,27 @@ function parseQualifiedName(raw) {
   return { schema: DEFAULT_SCHEMA, name: trimmed };
 }
 
+/**
+ * SD-FDBK-INFRA-LIVE-PROBE-DDL-001 FR-5a — the key now includes `table` when the object has one.
+ *
+ * WHY THIS CHANGED, because it is a behaviour change and not a rename: POLICY, CONSTRAINT,
+ * TRIGGER and INDEX names are unique per TABLE, not per schema. Keying on kind::schema::name
+ * silently COLLAPSED two genuinely different objects into one and dropped the second — and for
+ * policies that is the common case, not an edge case (a schema where many tables each carry a
+ * policy named "select_own" declared exactly one). A dropped declared object is a silent miss,
+ * which is the failure class this SD exists to end; it would have meant probing one table and
+ * reporting the other as verified.
+ *
+ * The change only makes dedupe LESS aggressive — objects that differ solely by table are now
+ * both retained. FUNCTION and VIEW carry no table and are unaffected.
+ */
 function uniqByKindSchemaName(objs) {
   const seen = new Set();
   const out = [];
   for (const o of objs) {
-    const k = `${o.kind}::${o.schema}::${o.name}`;
+    const k = o.table
+      ? `${o.kind}::${o.schema}::${o.table}::${o.name}`
+      : `${o.kind}::${o.schema}::${o.name}`;
     if (seen.has(k)) continue;
     seen.add(k);
     out.push(o);
@@ -98,6 +114,23 @@ export function parseDeclaredObjects(sql) {
     const idx = parseQualifiedName(m[1]);
     const table = parseQualifiedName(m[2]);
     objs.push({ kind: 'INDEX', schema: table.schema, name: idx.name, table: table.name });
+  }
+
+  // SD-FDBK-INFRA-LIVE-PROBE-DDL-001 FR-5a: POLICY and CONSTRAINT. Without these the live
+  // probes added in FR-2/FR-3 have nothing to probe — a migration that changes access-control
+  // DDL declares ZERO objects today, so the sweep cannot even know an object was touched.
+  const policyRe = /\b(?:CREATE|ALTER)\s+POLICY\s+("?[\w]+"?)\s+ON\s+(?:TABLE\s+)?("?[\w]+"?(?:\.[\w"]+)?)/gi;
+  while ((m = policyRe.exec(cleaned)) !== null) {
+    const pol = parseQualifiedName(m[1]);
+    const table = parseQualifiedName(m[2]);
+    objs.push({ kind: 'POLICY', schema: table.schema, name: pol.name, table: table.name });
+  }
+
+  const conRe = /\bALTER\s+TABLE\s+(?:(?:IF\s+EXISTS|ONLY)\s+)*("?[\w]+"?(?:\.[\w"]+)?)[\s\S]*?\bADD\s+CONSTRAINT\s+("?[\w]+"?)/gi;
+  while ((m = conRe.exec(cleaned)) !== null) {
+    const table = parseQualifiedName(m[1]);
+    const con = parseQualifiedName(m[2]);
+    objs.push({ kind: 'CONSTRAINT', schema: table.schema, name: con.name, table: table.name });
   }
 
   return uniqByKindSchemaName(objs);

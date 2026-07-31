@@ -169,7 +169,15 @@ The protocol file enforcement system now supports three trigger points:
 |---------|------|----------------|----------------|
 | **SESSION_START** | LEO session initialization | CLAUDE.md, CLAUDE_CORE.md | `validateSessionStartGate()` |
 | **SD_START** | Before any SD work begins | CLAUDE.md, CLAUDE_CORE.md + destination phase file | `validateSdStartGate(sdId, ctx, handoffType)` |
-| **POST_COMPACTION** | After context compaction | CLAUDE.md, CLAUDE_CORE.md + phase file | `validatePostCompactionGate()` |
+| **POST_COMPACTION** | ~~After context compaction~~ **RETIRED** | — | ~~`validatePostCompactionGate()`~~ — removed by SD-LEO-INFRA-ROLE-CONTRACT-READ-GATE-001 / FR-4 |
+
+> **POST_COMPACTION was removed, not repaired (SD-LEO-INFRA-ROLE-CONTRACT-READ-GATE-001 / FR-4).**
+> It was named for exactly the job this table implies, but it had no live caller outside an archived
+> script, its `checkFileNeedsRead` was satisfied by a one-line read, and it had no test at all.
+> Repairing it would have meant giving it the same union-of-ranges coverage maths that already exists
+> — a fourth implementation of one idea in a tree that already had three. Post-compaction contract
+> verification now lives at the role level in `lib/protocol/contract-read-coverage.cjs`, consumed by
+> `adam-register.cjs`, `solomon-register.cjs` and `coordinator-startup-check.mjs`.
 
 **Enhancement (v1.2.0)**: The SD_START gate now accepts an optional `handoffType` parameter that enforces reading the **destination** phase's protocol file:
 

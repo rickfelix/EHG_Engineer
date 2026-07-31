@@ -36,7 +36,7 @@ const { createSupabaseServiceClient } = require('../lib/supabase-client.cjs');
 const { resolveStateReadPath } = require('./hooks/lib/session-state-resolver.cjs');
 // SD-LEO-INFRA-ROLE-CONTRACT-READ-GATE-001 / FR-3: shared with adam-register.cjs — one verdict
 // implementation for both roles.
-const { contractReadVerdict, contractLineCount, contractSizeBytes, SINGLE_READ_SAFE_BYTES } = require('../lib/protocol/contract-read-coverage.cjs');
+const { contractReadVerdict, contractLineCount, singleReadFit } = require('../lib/protocol/contract-read-coverage.cjs');
 // SD-LEO-INFRA-SOLOMON-CONSULT-001A (Solomon foundation) — faithful copy-rename of adam-register.cjs: single-Solomon guard + atomic write.
 // fetchAllSolomonsStrict (not fetchFreshSolomons) so the guard sees stale priors too and classifies
 // fresh-vs-stale itself (fresh => refuse; stale-only => retire). STRICT (FR-6, count-truncation
@@ -267,7 +267,7 @@ function checkContractRead(projectDir) {
       // SD-LEO-INFRA-ROLE-CONTRACT-READ-GATE-001 / FR-3 — identical fix to adam-register.cjs, from
       // one shared implementation. This path had NO test coverage at all before this SD, which is
       // part of why the inversion survived here as long as it did.
-      const verdict = contractReadVerdict(status, contractLineCount(root, CONTRACT_FILE), { sizeBytes: contractSizeBytes(root, CONTRACT_FILE) });
+      const verdict = contractReadVerdict(status, contractLineCount(root, CONTRACT_FILE), { singleReadFit: singleReadFit(root, CONTRACT_FILE) });
       result.contract_read = verdict.read;
       result.contract_read_partial = !verdict.fully_read;
       result.contract_coverage_pct = verdict.coverage_pct;
@@ -277,8 +277,9 @@ function checkContractRead(projectDir) {
       // Legacy pre-FR-2 state shape: a bare filename list carrying no coverage information at all.
       // Sufficient ONLY when the contract fits in a single Read. For an over-cap contract it cannot
       // distinguish a full read from a silently truncated one, which is the defect this SD closes.
-      const legacyBytes = contractSizeBytes(root, CONTRACT_FILE);
-      const legacyFits = Number.isFinite(legacyBytes) && legacyBytes > 0 && legacyBytes <= SINGLE_READ_SAFE_BYTES;
+      // Measured on TOKENS, not bytes: the byte proxy this replaced disarmed CLAUDE_SOLOMON.md
+      // (67,501 B but only 15,965 tokens) even though it reads in one call.
+      const legacyFits = singleReadFit(root, CONTRACT_FILE).fits === true;
       result.contract_read = true;
       result.contract_read_partial = !legacyFits;
       result.contract_read_basis = legacyFits ? 'legacy_array_single_read_safe' : 'legacy_array_no_evidence';

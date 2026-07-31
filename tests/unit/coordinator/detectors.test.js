@@ -62,16 +62,32 @@ describe('detectReplyStarvation', () => {
     expect(r.matched).toBe(true);
     expect(r.evidence.starved_count).toBe(1);
   });
-  it('does not match answered / read / non-worker / recent signals', () => {
+  it('does not match answered / non-worker / recent signals', () => {
+    // SD-LEO-INFRA-WORKER-ESCALATION-WRITE-001 FR-3: the read-but-unanswered row was REMOVED from
+    // this fixture and promoted to its own test below. It used to sit here asserting that a read
+    // signal is not starved, which locked in the defect: read_at is set on 99.85% of friction
+    // signals, so treating read as answered made this gauge structurally unable to see its own
+    // population.
     const base = { sender_type: 'worker', sender_session: 'w', created_at: minsAgo(45), acknowledged_at: null, read_at: null, payload: { signal_type: 'stuck' } };
     const signals = [
       { ...base, id: 'a', acknowledged_at: minsAgo(40) },                 // acknowledged
       { ...base, id: 'b', payload: { signal_type: 'stuck', routed_to_feedback_id: 'fb-1' } },   // routed (stampRouted)
-      { ...base, id: 'c', read_at: minsAgo(40) },                          // read
       { ...base, id: 'd', sender_type: 'coordinator' },                   // not a worker ask
       { ...base, id: 'e', created_at: minsAgo(5) },                        // too recent
     ];
     expect(detectReplyStarvation({ signals, now: NOW, thresholdMs: 30 * 60_000 }).matched).toBe(false);
+  });
+
+  it('DOES match a signal that was read but never answered (FR-3 — read is delivery, not disposition)', () => {
+    // read_at means DELIVERED and, per COORDINATOR-WAKE-ON-DIRECTIVE-001 and
+    // ADAM-INBOX-SURFACE-NOT-STAMP-001 (both 2026-07-10), a read-stamp means SURFACED — never
+    // RENDERED. fleet-dashboard.cjs stamps read_at on render, so counting read as answered let a
+    // signal be silenced by the act of drawing it on a screen.
+    const base = { sender_type: 'worker', sender_session: 'w', created_at: minsAgo(45), acknowledged_at: null, read_at: null, payload: { signal_type: 'stuck' } };
+    const readButUnanswered = [{ ...base, id: 'c', read_at: minsAgo(40) }];
+    const res = detectReplyStarvation({ signals: readButUnanswered, now: NOW, thresholdMs: 30 * 60_000 });
+    expect(res.matched).toBe(true);
+    expect(res.evidence.starved_count).toBe(1);
   });
 
   it('SD-LEO-INFRA-ACKSTAMP-FALSE-METRICS-C6-001: a correlated reply row excludes the original from starvation', () => {

@@ -26,6 +26,9 @@ const { createSupabaseServiceClient } = require('../lib/supabase-client.cjs');
 const { isTwoWayV2Enabled } = require('../lib/coordinator/resolve.cjs');
 const { isFullUuid } = require('../lib/coordinator/dispatch.cjs');
 const { sendCoordinatorReply } = require('./coordinator-reply.cjs');
+// FR-2: durable receipt ledger — the answered-rate cannot be recovered from session_coordination,
+// whose cleanup deletes ACKED rows at created+24h while unacked rows persist.
+const { recordReceipt, LANES, STATES, DISPOSITIONS } = require('../lib/coordination/receipt-ledger.cjs');
 
 function parseArgs(argv) {
   const args = argv.slice(2);
@@ -65,7 +68,7 @@ async function main() {
 
   const { data: sig, error: fErr } = await supabase
     .from('session_coordination')
-    .select('id, sender_session, payload, acknowledged_at')
+    .select('id, sender_session, payload, acknowledged_at, created_at')
     .eq('id', signalId)
     .maybeSingle();
   if (fErr) { console.error('ERROR: signal lookup failed:', fErr.message); process.exit(1); }
@@ -79,6 +82,29 @@ async function main() {
       .update({ acknowledged_at: nowIso })
       .eq('id', signalId);
     if (sErr) { console.error('ERROR: failed to stamp acknowledged_at:', sErr.message); process.exit(1); }
+
+    // SD-LEO-INFRA-WORKER-ESCALATION-WRITE-001 (FR-2): record the disposal in the DURABLE ledger.
+    // This row is deleted by cleanup_expired_coordination() at created+24h — and it is deleted
+    // BECAUSE it is now acked, while unacked rows persist. So the answered-rate cannot be recovered
+    // from session_coordination afterwards at any later time; it has to be captured HERE, at the
+    // moment of the transition, or it is gone. source_created_at is passed so time-to-answer
+    // survives the deletion too.
+    //
+    // Deliberately NON-FATAL and after the stamp: the ack has already happened and must stand even
+    // if the ledger write fails. A measurement outage must never become an operational one.
+    const receipt = await recordReceipt(supabase, {
+      coordinationId: signalId,
+      lane: LANES.SIGNAL,
+      state: STATES.DISPOSED,
+      disposition: DISPOSITIONS.ACTIONED,
+      actorSession: process.env.CLAUDE_SESSION_ID || null,
+      actorRole: 'coordinator',
+      isRetention: false,
+      sourceCreatedAt: sig.created_at,
+      nowMs: Date.parse(nowIso),
+      metadata: { signal_type: (sig.payload && sig.payload.signal_type) || null, via: 'coordinator-ack-signal.cjs' },
+    });
+    if (!receipt.ok) console.error('NOTE: receipt ledger write skipped (' + (receipt.error || receipt.skipped) + ') — ack still stands.');
   }
   console.log('✓ Signal acknowledged (retired from inbox)');
   console.log('  signal_id:', signalId);
