@@ -1,9 +1,9 @@
 <!-- GENERATED FILE - DO NOT EDIT DIRECTLY. Source of truth: leo_protocol_sections (DB). Regenerate: node scripts/generate-claude-md-from-db.js. Drift check: node scripts/check-claude-md-drift.cjs -->
 <!-- DIGEST FILE - Enforcement-focused protocol content -->
-<!-- generated_at: 2026-07-31T13:44:09.582Z -->
-<!-- git_commit: a007b027 -->
-<!-- db_snapshot_hash: 58bcc8f7a9a332ff -->
-<!-- file_content_hash: 7d85c728be4d57f9 -->
+<!-- generated_at: 2026-07-31T16:41:11.847Z -->
+<!-- git_commit: e637e042 -->
+<!-- db_snapshot_hash: f40cba344ed016a6 -->
+<!-- file_content_hash: 96d9e755d3145670 -->
 
 # CLAUDE_CORE_DIGEST.md - Core Protocol (Enforcement)
 
@@ -270,5 +270,5 @@ These anti-patterns apply across ALL phases. Violating them leads to failed hand
 
 ---
 
-*DIGEST generated: 2026-07-31 9:44:09 AM*
+*DIGEST generated: 2026-07-31 12:41:11 PM*
 *Protocol: 4.4.1*

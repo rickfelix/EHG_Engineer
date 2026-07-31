@@ -1,8 +1,8 @@
-<!-- file_content_hash: ceb8c300dffbe069 -->
+<!-- file_content_hash: d9e588b31093600b -->
 <!-- GENERATED FILE - DO NOT EDIT DIRECTLY. Source of truth: leo_protocol_sections (DB). Regenerate: node scripts/generate-claude-md-from-db.js. Drift check: node scripts/check-claude-md-drift.cjs -->
 # CLAUDE_CORE.md - LEO Protocol Core Context
 
-**Generated**: 2026-07-31 9:44:09 AM
+**Generated**: 2026-07-31 12:41:11 PM
 **Protocol**: LEO 4.4.1
 **Purpose**: Essential workflow context for all sessions
 **Effort**: medium (core context; phase-specific files tag their own effort for phase work)
@@ -1591,11 +1591,16 @@ Each SD should trace upward through this hierarchy. When evaluating or creating 
 |------------|----------|----------|-------|-------|--------------|
 | PAT-HF-PLANTOLEAD-27a62713 | handoff_failure | [HIGH] high | 7 | [STABLE] | N/A |
 | PAT-RETRO-PLANTOLEAD-27a62713 | session_retrospective | [HIGH] high | 7 | [STABLE] | N/A |
-| PAT-HF-PLANTOEXEC-3e540545 | handoff_failure | [HIGH] high | 6 | [STABLE] | N/A |
-| PAT-HF-PLANTOLEAD-e8842331 | handoff_failure | [HIGH] high | 6 | [STABLE] | N/A |
+| PAT-HF-LEADTOPLAN-90e39736 | handoff_failure | [HIGH] high | 6 | [STABLE] | N/A |
+| PAT-TEST-PINS-FACT-NOT-BEHAVIOUR-001 | testing | [HIGH] high | 6 | [STABLE] | Assert the RULE, not today's answer. The |
 | PAT-RETRO-PLANTOLEAD-e8842331 | session_retrospective | [HIGH] high | 6 | [STABLE] | N/A |
 
 ### Prevention Checklists
+
+**testing**:
+- [ ] For every assertion, ask: does this state a RULE the system must obey, or a MEASUREMENT of the system as it currently stands? Rules belong in tests; measurements belong in the code that measures.
+- [ ] Would this assertion fail if a known in-flight sibling SD SUCCEEDED? If yes it is a fact-pin, not a requirement — and it imposes a stricter bar than the production condition it claims to guard.
+- [ ] A green test asserting a false fact is worse than no test: it makes the correct fix look like a regression. When a measurement must change, expect to change a PASSING test and treat that as the signal, not the obstacle.
 
 
 *Patterns auto-updated from `issue_patterns` table. Use `npm run pattern:resolve PAT-XXX` to mark resolved.*
