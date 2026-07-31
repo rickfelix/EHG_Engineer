@@ -124,3 +124,44 @@ test('PARKED-LOOP TR-2: released-row stop semantics preserved (re-discovery must
   assert.match(tickSrc, /status=in\.\(active,idle,stale\)/);
   assert.match(tickSrc, /Content-Range/);
 });
+
+/**
+ * QF-20260729-704 — the adopted parent pid must reach the ROW, not only the marker file.
+ *
+ * MEASURED live on session e7c92ad8: row pid 35464 = ESRCH, watched parent 13028 = RUNNING
+ * (claude), tick daemon 6888 = RUNNING, heartbeat advancing every 60s. The daemon was healthy and
+ * the ROW was lying, because rotation was persisted to the marker (QF-20260727-703) and never to
+ * claude_sessions.pid. Every consumer that OS-checks row.pid saw a corpse holding an SD claim.
+ *
+ * These are SOURCE-TEXT assertions, stated plainly rather than dressed up as behavioural: this file
+ * exports nothing, so the established pattern here is to assert against the source. Each anchor is
+ * distinctive enough that a rename fails the test loudly instead of passing vacuously.
+ */
+test('QF-704: the adoption branch persists the pid to the row, not just the marker', () => {
+  assert.match(tickSrc, /writeMarker\(\);\s*(?:\/\/[^\n]*\n\s*)*persistAdoptedPid\(rediscovered\)/,
+    'persistAdoptedPid(rediscovered) must follow writeMarker() in the adoption path');
+});
+
+test('QF-704: persistAdoptedPid writes pid and cannot resurrect a released row', () => {
+  // Normalise CRLF — this repo checks in \r\n and a \n-anchored slice silently returns nothing,
+  // which would make every assertion below vacuous rather than failing.
+  const src = tickSrc.replace(/\r\n/g, '\n');
+  const start = src.indexOf('function persistAdoptedPid');
+  assert.ok(start > -1, 'persistAdoptedPid must exist');
+  const body = src.slice(start, src.indexOf('// ── Telemetry write', start));
+  assert.ok(body.length > 100, 'failed to isolate the function body — assertions would be vacuous');
+  assert.match(body, /JSON\.stringify\(\{\s*pid\s*\}\)/, 'must PATCH the pid column');
+  assert.match(body, /status=in\.\(active,idle,stale\)/, 'must exclude released rows');
+  assert.match(body, /\.catch\(/, 'must be fail-soft — telemetry may never kill a healthy tick');
+});
+
+test('QF-704: the steady-state PATCH body is EXACTLY the two timestamps (hot path unchanged)', () => {
+  // The fix belongs in the rare adoption path, not the every-tick write: a pid in the steady-state
+  // body would be rewritten every tick from a value nothing re-verifies. Asserting the body's exact
+  // shape is stronger than asserting the absence of "pid", which would also pass if the body were
+  // deleted. (The FIRST-tick POST does legitimately carry pid: process.pid — a naive search for
+  // "pid" in this file finds that one and proves nothing about the hot path.)
+  const src = tickSrc.replace(/\r\n/g, '\n');
+  assert.match(src, /JSON\.stringify\(\{\s*process_alive_at: now,\s*heartbeat_at: now,\s*\}\)/,
+    'steady-state PATCH must carry exactly process_alive_at + heartbeat_at');
+});
