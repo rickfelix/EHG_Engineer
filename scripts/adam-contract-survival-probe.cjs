@@ -119,6 +119,56 @@ function verdictFor(cov) {
   return cov >= SURVIVED_AT ? 'SURVIVED' : 'NEEDS_SEMANTIC_REVIEW';
 }
 
+// ── SECOND MEASURE: rare-term overlap, built because the first one is rewrite-blind ──────────
+//
+// The 5-gram measure answers "are these WORDS still here", which a rewrite defeats by construction.
+// This one asks "are the DISTINCTIVE TERMS still here" — the nouns a rule cannot be restated without
+// (`sms_relay_staging`, `roll-call`, `worktrees`, `correlation_id`). Rewording swaps the connective
+// tissue and keeps the terms; deletion takes the terms with it.
+//
+// IT IS SUBJECT TO THE SAME RULE AS THE FIRST: no verdicts until --calibrate shows it separates the
+// confirmed deletion from the three confirmed-but-reworded survivors that defeated the 5-gram score.
+
+const STOPWORDS = new Set(('the a an and or but if then than that this these those is are was were be been being of to in on at by for with from as it its into over under not no nor so such own same too very can will just don should now what which who whom when where why how all any both each few more most other some only own s t you your yours he she they them their there here about after again against because before below between during further once out off up down out again' ).split(/\s+/));
+
+/** Content terms: length>=5, not a stopword, not a bare number. Deduped. */
+function terms(text) {
+  return [...new Set(
+    normalize(text).split(' ').filter(w => w.length >= 5 && !STOPWORDS.has(w) && !/^\d+$/.test(w))
+  )];
+}
+
+/**
+ * Fraction of an imperative's distinctive terms that still appear in the corpus, weighted toward
+ * RARE terms. Rarity is measured against the ORIGINAL contract: a term used once carries far more
+ * identifying signal than one used fifty times, and weighting by it stops common vocabulary
+ * ("chairman", "coordinator") from floating every entry over the bar.
+ * @returns {{score:number, total:number, missing:string[]}}
+ */
+function termOverlap(imperative, corpus, rarity) {
+  const ts = terms(imperative);
+  if (ts.length === 0) return { score: 1, total: 0, missing: [] };
+  let have = 0, want = 0;
+  const missing = [];
+  for (const t of ts) {
+    // freq 1 -> weight 1.0; freq 50 -> weight ~0.2. Never zero, so a common term still counts a little.
+    const w = 1 / Math.log2((rarity.get(t) || 1) + 1.5);
+    want += w;
+    if (corpus.text.includes(t)) have += w; else missing.push(t);
+  }
+  return { score: want > 0 ? have / want : 1, total: ts.length, missing: missing.slice(0, 6) };
+}
+
+/** Term frequencies in the original, used as the rarity model. */
+function buildRarity(file) {
+  const m = new Map();
+  if (!fs.existsSync(file)) return m;
+  for (const w of normalize(fs.readFileSync(file, 'utf8')).split(' ')) {
+    if (w.length >= 5 && !STOPWORDS.has(w)) m.set(w, (m.get(w) || 0) + 1);
+  }
+  return m;
+}
+
 /** Where an imperative can still be reached, so a survivor is not just "somewhere". */
 function locate(imperative, corpora) {
   const hits = [];
@@ -202,7 +252,46 @@ function runCalibration() {
     console.log(`${gt.label}\n${line}\n`);
   }
 
+  // ── Second measure, calibrated on the SAME ground truth and reported side by side. ─────────
+  const rarity = buildRarity(ORIGINAL);
+  console.log('── TERM-OVERLAP MEASURE (rewrite-robust) on the same four rules ──');
+  let termFail = 0;
+  let sepMin = 1, sepMax = 0; // survivor floor vs deletion ceiling
+  for (const gt of GROUND_TRUTH) {
+    const parts = [];
+    if (gt.expect_in_corrected === 'PRESENT') {
+      const s = termOverlap(gt.probe, corrected, rarity).score;
+      sepMin = Math.min(sepMin, s);
+      parts.push(`CORRECTED ${(s * 100).toFixed(0)}% (known PRESENT)`);
+    }
+    if (gt.expect_in_proposed === 'ABSENT') {
+      const s = termOverlap(gt.probe, proposed, rarity).score;
+      sepMax = Math.max(sepMax, s);
+      parts.push(`PROPOSED ${(s * 100).toFixed(0)}% (known DELETED)`);
+    }
+    console.log(`  ${gt.label}\n    ${parts.join('  |  ')}`);
+  }
+  // The measure is only usable if every known survivor outscores every known deletion.
+  const separated = sepMin > sepMax;
+  if (!separated) termFail++;
+  console.log(`\n  survivor floor ${(sepMin * 100).toFixed(0)}%  vs  deletion ceiling ${(sepMax * 100).toFixed(0)}%  -> ${separated ? 'SEPARATED ✓' : 'OVERLAPPING ✗'}`);
+  if (separated) {
+    console.log(`  usable band: score a rule SURVIVED only above ${(sepMax * 100).toFixed(0)}%, the highest a CONFIRMED DELETION reaches.`);
+  } else {
+    console.log('  *** MEASURE REJECTED — KEPT DELIBERATELY AS A RECORD THAT IT WAS TRIED. ***');
+    console.log('  A known DELETION outscores a known SURVIVOR, so no threshold exists that separates them.');
+    console.log('  Cause: a 42KB contract is vocabulary-homogeneous. Deleting one clause does not remove its');
+    console.log('  nouns from the document — they recur in neighbouring rules — so "the terms are still here"');
+    console.log('  is not evidence THIS rule is still here. Nothing in runProbe() consults this measure.');
+    console.log('  Do not re-derive it: term overlap and n-gram coverage have now BOTH been falsified on the');
+    console.log('  same four rules. The remaining queue needs a reader, not a third score.');
+  }
+  console.log('');
+
   const rewriteTotal = GROUND_TRUTH.filter(g => g.expect_in_corrected === 'PRESENT').length;
+  // termFail is NOT counted as a calibration failure. The second measure being rejected is this
+  // script working correctly — it is reported and then never consulted. Only the measure that
+  // actually issues verdicts has to pass.
   if (failures > 0) {
     console.log(`CALIBRATION FAILED (${failures} mismatch(es)). The measure has NOT earned a verdict on the open queue.`);
     process.exitCode = 1;
