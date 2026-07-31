@@ -239,10 +239,21 @@ export async function addSession(req, res) {
   // FR-1: spread CONDITIONALLY. resolveRoleSpawnOpts returns {} for 'worker' so the key is ABSENT,
   // which is what makes spawn() fall through to callsign-namespace selection. Passing
   // `startupPrompt: undefined` would make the key present and suppress the pointer entirely.
-  const result = await spawn(
-    { role, callsign: resolvedCallsign, accountProfile },
-    { supabaseClient: supabase, ...resolveRoleSpawnOpts(role) },
-  );
+  let result;
+  try {
+    result = await spawn(
+      { role, callsign: resolvedCallsign, accountProfile },
+      { supabaseClient: supabase, ...resolveRoleSpawnOpts(role) },
+    );
+  } catch (err) {
+    // Quick-fix QF-20260731-222: spawn()'s guards throw refusals whose messages carry the remedy
+    // (tree-currency names `git pull --ff-only`; the launch contract names its violations). Letting
+    // them fall through to the EVA error handler flattens them to a bare 422 with no reason field,
+    // while the sessions page already renders {ok:false, reason} verbatim — so answer in that shape
+    // and the operator sees the refusal instead of a status code.
+    res.status(422).json({ ok: false, reason: (err && err.message) || String(err) });
+    return;
+  }
   // callsign LAST and authoritative: the UI must report the name that was actually spawned, not the
   // (now absent) one the operator typed.
   res.json({ live: isLiveEnabled(), ...result, callsign: resolvedCallsign, callsign_minted: !supplied });
