@@ -46,6 +46,15 @@ jobs:
         # first-tick fixes under a real spawned child process.
         run: npm run test:session-tick
 
+      - name: Run adam-github-assessment node:test suite (QF-20260728-823)
+        # Same gap as the session-tick step above, found again: this suite uses
+        # node:test/node:assert, and `--project unit` includes **/*.test.js plus ONLY the
+        # tests/unit/org and tests/unit/venture-email .mjs anchors — so this file has never
+        # gated a PR since it was written. Wiring it here means the D2 regression tests
+        # (failed-run count measured from the runs API; UNKNOWN never reported as 0)
+        # actually run in CI instead of only on the author's machine.
+        run: npm run test:adam-github-assessment
+
       - name: Quarantine burn-down summary
         if: always()
         # SD-LEO-FIX-UNIT-TIER-STARTUP-001: block scalar (run: |) so the embedded
