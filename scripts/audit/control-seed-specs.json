@@ -128,13 +128,41 @@
     "name": "no-mocked-sut-import-lint",
     "script": "scripts/lint/no-mocked-sut-import-lint.mjs",
     "rootFlag": null,
-    "untestableReason": "no --root/--dir scoping flag; SCAN_DIRS is a hardcoded tests/ constant. Also warn-only by default (NO_MOCKED_SUT_IMPORT_MODE=block to promote), so even on detection it would exit 0"
+    "cwdScope": true,
+    "extraArgs": [
+      "--all"
+    ],
+    "fixtures": [
+      {
+        "path": "tests/unit/seeded-mock-sut.test.js",
+        "content": "import { vi } from 'vitest';\n// SEEDED DEFECT: mocks the module under test itself.\nvi.mock('../../lib/seeded-sut.js');\nimport { thing } from '../../lib/seeded-sut.js';\nit('x', () => { expect(thing).toBeDefined(); });\n"
+      },
+      {
+        "path": "lib/seeded-sut.js",
+        "content": "export const thing = 1;\n"
+      }
+    ],
+    "detectTokens": [
+      "seeded-mock-sut"
+    ],
+    "note": "WAS marked UNTESTABLE on flags alone. SCAN_DIRS is RELATIVE, so it resolves against cwd — retesting via cwdScope."
   },
   {
     "name": "venture-artifacts-write-lint",
     "script": "scripts/lint/venture-artifacts-write-lint.mjs",
     "rootFlag": null,
-    "untestableReason": "no argv scoping at all; SCAN_DIRS is a hardcoded constant"
+    "cwdScope": true,
+    "fixtures": [
+      {
+        "path": "lib/seeded-venture-artifact-defect.js",
+        "content": "// SEEDED DEFECT: venture_artifacts insert omitting the NOT-NULL title column,\n// which inserts ZERO rows and swallows the error.\nexport async function write(supabase, ventureId) {\n  return supabase.from('venture_artifacts').insert({\n    venture_id: ventureId,\n    lifecycle_stage: 'stage_21',\n    artifact_type: 'design'\n  });\n}\n"
+      }
+    ],
+    "detectTokens": [
+      "seeded-venture-artifact-defect",
+      "title"
+    ],
+    "note": "WAS marked UNTESTABLE on flags alone. SCAN_DIRS is RELATIVE, so it resolves against cwd — retesting via cwdScope."
   },
   {
     "name": "control-seed-test-lint",
