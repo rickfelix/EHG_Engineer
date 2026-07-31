@@ -21,7 +21,23 @@ const ORIGINAL = path.join(DIR, 'CLAUDE_ADAM.ORIGINAL-2026-07-29.md');
 const INVENTORY = path.join(DIR, 'imperative-inventory.json');
 
 const inv = JSON.parse(fs.readFileSync(INVENTORY, 'utf8'));
-const VALID = new Set(['landed', 'merged_into', 'deliberately_dropped', 'NEEDS_DECISION', 'not_an_obligation']);
+
+// Adjudication vocabulary. The four added below are NOT softer synonyms for "landed" — each one
+// records something a bare landed/dropped split cannot express, and each keeps an item VISIBLE:
+//   CANDIDATE_LOSS               not located in the contract or either companion
+//   CHAIRMAN_DECISION_REQUIRED   altered rather than dropped, and only the chairman may resolve it
+//   CLASSIFIED_PENDING_FR2       companion-bound, so its fate rides on the unresolved govern-vs-demote call
+//   provenance_bound / companion_bound / *_obligation_survives
+//                                the obligation survives; some rationale or detail did not
+const VALID = new Set([
+  'landed', 'merged_into', 'deliberately_dropped', 'NEEDS_DECISION', 'not_an_obligation',
+  'CANDIDATE_LOSS', 'CHAIRMAN_DECISION_REQUIRED', 'CLASSIFIED_PENDING_FR2',
+  'provenance_bound', 'companion_bound',
+  'rationale_dropped_obligation_survives', 'detail_dropped_obligation_survives',
+]);
+
+/** Dispositions that mean "still open" — the ledger is not closed while any of these remain. */
+const OPEN = new Set(['NEEDS_DECISION', 'CLASSIFIED_PENDING_FR2', 'CANDIDATE_LOSS', 'CHAIRMAN_DECISION_REQUIRED']);
 
 describe('imperative inventory artifact (TS-2)', () => {
   it('pins the source it was derived from', () => {
@@ -89,7 +105,29 @@ describe('imperative inventory artifact (TS-2)', () => {
   it('CONTROL: the inventory is not vacuously satisfied', () => {
     // If everything were auto-marked landed, every assertion above still passes while the
     // artifact asserts nothing. Unreviewed obligations must remain visible as open work.
+    //
+    // WIDENED, NOT WEAKENED. This used to require NEEDS_DECISION > 0, which stopped being the
+    // right question once adjudication introduced a vocabulary: the queue can be empty while the
+    // LEDGER is still open, because companion-bound entries are parked behind the FR-2
+    // govern-vs-demote call. Asserting on the queue alone would now fail on correct work AND —
+    // worse — would pass on a laundered artifact that renamed everything to a non-queue
+    // disposition. So the control asks the question it always meant: is unresolved work still
+    // visible, and has the ledger avoided collapsing into all-clear?
     expect(inv.entries.length).toBeGreaterThan(100);
-    expect(inv.entries.filter((e) => e.disposition === 'NEEDS_DECISION').length).toBeGreaterThan(0);
+
+    const open = inv.entries.filter((e) => OPEN.has(e.disposition));
+    expect(open.length).toBeGreaterThan(0);
+
+    // A ledger that is >=95% "landed" is indistinguishable from one auto-marked landed. The real
+    // artifact sits far below this; the bound exists to catch a future bulk-close.
+    const landed = inv.entries.filter((e) => e.disposition === 'landed').length;
+    expect(landed / inv.entries.length).toBeLessThan(0.95);
+
+    // Every open entry must say WHY it is still open, so "open" cannot become a parking label that
+    // means nothing. NEEDS_DECISION predates this rule and is exempt — it is the un-triaged state.
+    const unexplained = open.filter((e) =>
+      e.disposition !== 'NEEDS_DECISION' &&
+      !(e.triage?.why_not_closed || e.survival_basis?.note));
+    expect(unexplained.map((e) => e.key)).toEqual([]);
   });
 });
