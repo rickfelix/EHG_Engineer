@@ -367,10 +367,25 @@ export function parseContractCategoryClaims(markdown) {
  * A script that cannot be read is reported as `unreadable`, never silently treated as
  * passing: an unverifiable claim is not a satisfied one.
  *
+ * KNOWN LIMITATION, STATED RATHER THAN DISCOVERED LATER. This is SYNTACTIC declaration
+ * matching with no dataflow tracing to the actual insert. Adversarial review found three
+ * shapes that still produce a false PASS: (1) a decoy/unused *_CATEGORY constant holding
+ * the contract value while the live write uses another; (2) two live *CATEGORY* constants
+ * with the wrong one wired to the insert; (3) a correct literal reassigned before use.
+ * Closing those needs real dataflow analysis, which is a materially larger build than the
+ * duty-parity gap this FR was scoped to. What it DOES close is the drift that actually
+ * occurred — a single constant disagreeing with the contract — and the two comment-vote
+ * false passes found during implementation. Recorded here so the next reader knows the
+ * boundary of the guarantee rather than inferring a stronger one from a green line.
+ *
  * @returns {{mismatches: Array<{script,expected,found}>, unreadable: string[], checked: number}}
  */
 export function categoryParityMismatches(markdown, readScript) {
-  const { claims } = parseContractCategoryClaims(markdown);
+  // `ambiguous` is CARRIED, not discarded. Dropping it made the renderer report
+  // "✅ 1 claim matches" while a second real contract mandate sat unverified and
+  // unmentioned — a green line standing in for a claim nobody checked, which is the
+  // same reports-green-while-unverified shape this whole check exists to remove.
+  const { claims, ambiguous } = parseContractCategoryClaims(markdown);
   const mismatches = [];
   const unreadable = [];
   let checked = 0;
@@ -402,7 +417,7 @@ export function categoryParityMismatches(markdown, readScript) {
       mismatches.push({ script, expected: category, found: assigned });
     }
   }
-  return { mismatches, unreadable, checked };
+  return { mismatches, unreadable, checked, ambiguous };
 }
 
 // A loop is "armed" when an armed-set was provided AND it contains the loop's KEY, full prompt, or
@@ -468,7 +483,7 @@ export function renderContractParity(repoRoot = REPO_ROOT) {
     const readScript = (basename) => {
       try { return readFileSync(resolve(repoRoot, 'scripts', basename), 'utf8'); } catch { return null; }
     };
-    const { mismatches, unreadable, checked } = categoryParityMismatches(md, readScript);
+    const { mismatches, unreadable, checked, ambiguous } = categoryParityMismatches(md, readScript);
 
     const lines = [];
     if (missing.length === 0) lines.push('✅ all durable CLAUDE_SOLOMON.md duties present in SOLOMON_LOOPS');
@@ -483,6 +498,10 @@ export function renderContractParity(repoRoot = REPO_ROOT) {
     }
     // An unverifiable claim is never reported as satisfied.
     if (unreadable.length > 0) lines.push(`ℹ️ category parity unverified for: ${unreadable.join(', ')} (script not readable from ${repoRoot})`);
+    // Nor is an UNPARSEABLE one. A line naming several scripts or categories cannot be
+    // paired confidently, so it is abstained on — but silence would let a ✅ above stand
+    // in for a mandate nobody checked. Say the abstention out loud.
+    if (ambiguous.length > 0) lines.push(`ℹ️ ${ambiguous.length} contract category claim(s) NOT verified — the line names multiple scripts or categories and was not guessed at: ${ambiguous.map((l) => `"${l.slice(0, 60)}…"`).join('; ')}`);
 
     return head + lines.join('\n  ');
   } catch (err) {
