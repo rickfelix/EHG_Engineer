@@ -50,8 +50,13 @@ const VERDICT = Object.freeze({
   BLOCKS: 'BLOCKS',        // detected AND non-zero exit — actually stops a merge
   DETECTS: 'DETECTS',      // reported it, but exit 0 — advisory; blocks nothing
   SILENT: 'SILENT',        // ran clean against a real seeded defect — the census shape
-  UNTESTABLE: 'UNTESTABLE' // cannot be scoped to a fixture; not a pass and not a failure
+  UNTESTABLE: 'UNTESTABLE', // cannot be scoped to a fixture; not a pass and not a failure
+  ERROR: 'ERROR'            // control did not run to completion; not a verdict at all
 });
+
+// A control that dies mid-run exits non-zero without having judged anything. Reading that
+// as a clean pass is how a harness invents a blind control that does not exist.
+const CRASH_RE = /Node\.js v\d|at ModuleJob|Unhandled|ERR_MODULE_NOT_FOUND|throw er;/;
 
 function gitStatus(repoRoot) {
   try {
@@ -111,11 +116,32 @@ export function runTrial(spec, repoRoot) {
   // never folded into the control's verdict.
   const treeClean = before === after;
 
-  // Conservative: the control must NAME the seeded artifact. Silence is not detection.
-  const detected = spec.fixtures.some((f) => out.includes(f.path.split('/').pop()));
+  // *** A NON-ZERO EXIT IS NOT A VERDICT — IT MIGHT BE A CRASH ***
+  // rls-anon-tenant-predicate-lint died on a git revision error against the scratch repo and
+  // exited 1. Reading that as "ran and found nothing" would have recorded a control as SILENT
+  // that never executed at all. A control that could not run is ERROR: not a pass, not a
+  // failure, and never counted in the rate.
+  if (CRASH_RE.test(out)) {
+    return { name: spec.name, verdict: VERDICT.ERROR, exitCode: code, treeClean, reason: 'control did not run to completion (crash/unhandled error)', evidence: out.trim().split('\n').filter(Boolean).slice(-2) };
+  }
+
+  // *** DETECTION IS NOT ALWAYS REPORTED BY FILENAME ***
+  // metadata-flag-lint fired correctly — "ORPHAN is_seeded_orphan w=1 r=0 FAIL" — but names the
+  // SYMBOL, not the file. Keying detection on the filename alone scored a firing control SILENT.
+  // Specs may therefore declare additional tokens the control is expected to emit.
+  const tokens = [
+    ...(spec.fixtures || []).map((f) => f.path.split('/').pop()),
+    ...(spec.detectTokens || [])
+  ];
+  const detected = tokens.some((t) => out.includes(t));
   const verdict = detected ? (code !== 0 ? VERDICT.BLOCKS : VERDICT.DETECTS) : VERDICT.SILENT;
 
-  return { name: spec.name, verdict, exitCode: code, detected, treeClean, evidence: out.trim().split('\n').filter(Boolean).slice(-3) };
+  // A SILENT verdict is an ACCUSATION and must carry the evidence to check it. If the control
+  // reports scanning zero files, the seed never reached it and the seed is the suspect, not the
+  // control. Never publish SILENT without reading this field.
+  const scannedZero = /0 file\(s\) scanned|no files/i.test(out);
+
+  return { name: spec.name, verdict, exitCode: code, detected, treeClean, scannedZero, evidence: out.trim().split('\n').filter(Boolean).slice(-3) };
 }
 
 function main() {
@@ -135,7 +161,8 @@ function main() {
     return;
   }
 
-  const tested = results.filter((r) => r.verdict !== VERDICT.UNTESTABLE);
+  const tested = results.filter((r) => r.verdict !== VERDICT.UNTESTABLE && r.verdict !== VERDICT.ERROR);
+  const errored = results.filter((r) => r.verdict === VERDICT.ERROR);
   const blocks = tested.filter((r) => r.verdict === VERDICT.BLOCKS);
   const detects = tested.filter((r) => r.verdict === VERDICT.DETECTS);
   const silent = tested.filter((r) => r.verdict === VERDICT.SILENT);
@@ -150,11 +177,13 @@ function main() {
   // very class this SD exists to eliminate.
   console.log('\n--- RATE (denominator mandatory) ---');
   console.log(`  sampled:    ${results.length}`);
-  console.log(`  testable:   ${tested.length}   (untestable: ${untestable.length} — not counted as pass OR fail)`);
+  console.log(`  testable:   ${tested.length}   (untestable: ${untestable.length}, errored: ${errored.length} — none counted as pass OR fail)`);
   console.log(`  BLOCKS:     ${blocks.length}/${tested.length}`);
   console.log(`  DETECTS:    ${detects.length}/${tested.length}   (advisory — blocks nothing at merge time)`);
   console.log(`  SILENT:     ${silent.length}/${tested.length}   (ran clean against a real seeded defect)`);
   if (dirty.length) console.log(`  ⚠ HARNESS FAILURE — working tree changed during: ${dirty.map((d) => d.name).join(', ')}`);
+  const suspectSeeds = silent.filter((r) => r.scannedZero);
+  if (suspectSeeds.length) console.log(`  ⚠ SEED SUSPECT (control reported scanning nothing — blame the seed, not the control): ${suspectSeeds.map((s2) => s2.name).join(', ')}`);
   console.log('\n  NOTE: BLOCKS and DETECTS are reported separately and never blended. An advisory');
   console.log('  control that reports but exits 0 stops no merge, so a combined rate would overstate');
   console.log('  actual protection.\n');

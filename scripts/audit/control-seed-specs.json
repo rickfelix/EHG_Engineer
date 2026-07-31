@@ -37,6 +37,54 @@
     ]
   },
   {
+    "name": "count-delta-gate-lint",
+    "script": "scripts/lint/count-delta-gate-lint.mjs",
+    "rootFlag": "--root",
+    "fixtures": [
+      {
+        "path": "scripts/ci/seeded-count-delta-defect.mjs",
+        "content": "// SEEDED DEFECT: gates on a raw failure-COUNT delta instead of an identity-set diff.\nexport function gate(prevFailCount, failCount) {\n  if (failCount > prevFailCount) {\n    throw new Error(`failures rose ${prevFailCount} -> ${failCount}`);\n  }\n  return true;\n}\n"
+      }
+    ],
+    "seedNote": "SEED SUSPECT: the control scanned the fixture and reported 0 violations. Its detection comes from eslint-rules/no-count-delta-gate-assertion.js, so the seed likely does not match that rule shape. Do NOT record this control as blind on this evidence."
+  },
+  {
+    "name": "ismainmodule-classguard-lint",
+    "script": "scripts/lint/ismainmodule-classguard-lint.mjs",
+    "rootFlag": "--root",
+    "fixtures": [
+      {
+        "path": "scripts/seeded-ismainmodule-defect.mjs",
+        "content": "// SEEDED DEFECT: the raw Windows-broken direct-execution guard. argv[1] is a\n// backslash path on Windows and import.meta.url is a file:// URL, so this never\n// matches and the guard silently no-ops.\nfunction main() { console.log('ran'); }\nif (import.meta.url === `file://${process.argv[1]}`) main();\n"
+      }
+    ]
+  },
+  {
+    "name": "metadata-flag-lint",
+    "script": "scripts/lint/metadata-flag-lint.mjs",
+    "rootFlag": "--root",
+    "fixtures": [
+      {
+        "path": "lib/seeded-metadata-orphan-defect.js",
+        "content": "// SEEDED DEFECT: writes metadata.is_seeded_orphan and nothing ever reads it (ORPHAN).\nexport async function mark(supabase, id) {\n  return supabase.from('widgets').update({ metadata: { is_seeded_orphan: true } }).eq('id', id);\n}\n"
+      }
+    ],
+    "detectTokens": [
+      "is_seeded_orphan"
+    ]
+  },
+  {
+    "name": "rls-anon-tenant-predicate-lint",
+    "script": "scripts/lint/rls-anon-tenant-predicate-lint.mjs",
+    "rootFlag": "--root",
+    "fixtures": [
+      {
+        "path": "database/migrations/20260731000001_seeded_rls_defect.sql",
+        "content": "-- SEEDED DEFECT: SELECT policy references a tenant-shaped column without binding it\n-- to the caller's own identity, so any anon caller reads every tenant's rows.\nCREATE POLICY seeded_anon_select_widgets ON public.widgets\n  FOR SELECT TO anon\n  USING (venture_id IS NOT NULL);\n"
+      }
+    ]
+  },
+  {
     "name": "fleet-liveness-select-lint",
     "script": "scripts/lint/fleet-liveness-select-lint.mjs",
     "rootFlag": null,
