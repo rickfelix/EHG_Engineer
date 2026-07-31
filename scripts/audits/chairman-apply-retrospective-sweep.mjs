@@ -32,7 +32,12 @@
  * and a run reporting many APPLIED has loosened a rule rather than found good news. The conclusion
  * is robust to the predicate choice: under all three candidate readings APPLIED lands at 11, 5 or 4.
  *
- * Usage: node scripts/audits/chairman-apply-retrospective-sweep.mjs [--json]
+ * Usage: node scripts/audits/chairman-apply-retrospective-sweep.mjs [--json] [--live-probe]
+ *
+ * --live-probe (SD-FDBK-INFRA-LIVE-PROBE-DDL-001 FR-5): compare live database objects against the
+ * approved artifact. OPT-IN. Without it the sweep behaves exactly as before and exit 1 remains
+ * unreachable. With it, a requested-but-failed probe is a CONTROL FAILURE (exit 2), never a silent
+ * fall back to the unprobed path — "could not check" must not be reportable as "nothing found".
  * Exit: 0 nothing actionable · 1 chairman-actionable findings · 2 a CONTROL failed (never trust the run)
  */
 
@@ -136,6 +141,12 @@ async function fetchAllReconciled(supabase, table, columns) {
 async function main() {
   const argv = process.argv.slice(2);
   const asJson = argv.includes('--json');
+  // SD-FDBK-INFRA-LIVE-PROBE-DDL-001 FR-5: OPT-IN live probing. Default OFF, so every existing
+  // invocation stays byte-identical. Turning this on activates three verdict branches (APPLIED,
+  // APPLIED-BUT-DIVERGENT, NOT-APPLIED-BUT-COMPLETED) that have never executed in production and
+  // makes exit 1 reachable for the first time, so it is opt-in until validated against a real
+  // database rather than flipped on for everyone in one step.
+  const liveProbe = argv.includes('--live-probe');
   const url = process.env.SUPABASE_URL;
   const key = process.env.SUPABASE_SERVICE_ROLE_KEY;
   if (!url || !key) {
@@ -203,8 +214,45 @@ async function main() {
     for (const r of baselines.regressions) controlFailures.push(`arm ${r.arm} shrank: floor ${r.floor}, observed ${r.got}`);
   }
 
-  const rows = population.map((item) => {
-    const evidence = buildEvidence(item);
+  // FR-5: build evidence first, then OPTIONALLY enrich it with a live probe. Enrichment is a
+  // separate pass because buildEvidence is synchronous and probing needs a database round trip.
+  // With --live-probe absent, enrichEvidences returns the same objects and nothing changes.
+  const evidences = population.map((item) => buildEvidence(item));
+  let probeClient = null;
+  let probeError = null;
+  if (liveProbe) {
+    try {
+      const [{ createDatabaseClient }, { enrichAllWithLiveProbe }, { captureObjectDefinitions }] = await Promise.all([
+        import('../lib/supabase-connection.js'),
+        import('../../lib/audits/live-probe-enrichment.js'),
+        import('../lib/migration-verification.js'),
+      ]);
+      probeClient = await createDatabaseClient('engineer');
+      const enriched = await enrichAllWithLiveProbe(evidences, {
+        client: probeClient,
+        repoRoot: process.cwd(),
+        captureObjectDefinitions,
+      });
+      for (let i = 0; i < enriched.length; i++) evidences[i] = enriched[i];
+    } catch (e) {
+      // FAIL LOUD, NOT OPEN. If probing was REQUESTED and could not run, the sweep must not
+      // silently fall back to the unprobed path and report a clean exit 0 — that is precisely the
+      // absence-dressed-as-assertion this SD exists to end. Recorded and surfaced as a control
+      // failure below.
+      probeError = String((e && e.message) || e).slice(0, 300);
+    } finally {
+      if (probeClient && typeof probeClient.end === 'function') {
+        try { await probeClient.end(); } catch { /* closing a client must never fail the sweep */ }
+      }
+    }
+  }
+  if (probeError) {
+    controlsOk = false;
+    controlFailures.push(`--live-probe requested but failed: ${probeError}`);
+  }
+
+  const rows = population.map((item, idx) => {
+    const evidence = evidences[idx];
     const result = classifyItem(evidence);
     return {
       identifier: item.identifier, source: item.source, status: item.status,
