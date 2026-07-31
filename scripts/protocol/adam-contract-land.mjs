@@ -119,8 +119,14 @@ async function stalenessGuard() {
   // row 607 drifted +1,966 chars under this SD and is now on the empty list, so the hazard is not
   // hypothetical, it is the same hazard five times over.
   for (const e of EMPTY_ROWS) {
-    if (!byId.has(e.id)) {
-      fail.push(`EMPTY-TARGET ROW ${e.id} is NOT in the snapshot. Refusing to empty a row with no captured baseline — there would be nothing to restore it from.`);
+    const liveRow = (live || []).some((r) => r.id === e.id);
+    // The guard protects against DESTROYING a row we cannot restore. A target that is already gone
+    // from BOTH live and the snapshot is ALREADY IN THE DESIRED STATE — the delete is an idempotent
+    // no-op and there is nothing left to protect. Refusing there would make the script un-re-runnable
+    // after its own successful landing, which is a worse failure than the one the guard prevents.
+    if (!byId.has(e.id) && !liveRow) continue;
+    if (!byId.has(e.id) && liveRow) {
+      fail.push(`EMPTY-TARGET ROW ${e.id} EXISTS LIVE but is NOT in the snapshot. Refusing to delete a row with no captured baseline — there would be nothing to restore it from.`);
     }
   }
   return fail;
@@ -353,8 +359,16 @@ async function landContract(split) {
 
   // 3. Row 602 gets the S6 self-adherence body. It is its OWN section_type; writing S6 into
   //    adam_role_contract instead renders identically today and is wrong forever after.
+  //
+  //    THE TITLE IS SET DELIBERATELY, and it is not cosmetic. formatSection() emits
+  //    `## ${title}` and then STRIPS a leading `## ${title}` from the content — so the title must
+  //    MATCH the body's own heading or the render stacks two headings. Landing this row with its
+  //    old title produced exactly that: "## Adam Self-Adherence Loop ..." immediately above
+  //    "## 6. Self-assessment ...". Same formatSection behaviour that forced DELETE over blanking,
+  //    surfacing a second way.
+  const S6_TITLE = '6. Self-assessment — rubric, loop, adherence';
   const { error: e602 } = await supabase.from('leo_protocol_sections')
-    .update({ content: split.selfAdherence }).eq('id', 602);
+    .update({ content: split.selfAdherence, title: S6_TITLE }).eq('id', 602);
   if (e602) throw new Error(`update row 602: ${e602.message}`);
   results.push(`REWROTE row 602 (adam_self_adherence_loop) — ${split.selfAdherence.length} B`);
 

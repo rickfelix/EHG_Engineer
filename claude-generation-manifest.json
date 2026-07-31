@@ -1,110 +1,110 @@
 {
-  "generated_at": "2026-07-31T16:41:11.847Z",
-  "git_commit": "e637e042",
+  "generated_at": "2026-07-31T17:00:34.924Z",
+  "git_commit": "ba1f8608",
   "db_snapshot_hash": "f40cba344ed016a6",
   "files": {
     "CLAUDE.md": {
       "type": "full",
-      "chars": 19565,
-      "estimated_tokens": 4892,
+      "chars": 19564,
+      "estimated_tokens": 4891,
       "content_hash": "91b0c479ced58edc",
       "path": "C:\\Users\\rickf\\Projects\\_EHG\\EHG_Engineer\\.worktrees\\SD-LEO-INFRA-ADAM-CONTRACT-READABLE-001\\CLAUDE.md"
     },
     "CLAUDE_CORE.md": {
       "type": "full",
-      "chars": 93072,
+      "chars": 93071,
       "estimated_tokens": 23268,
       "content_hash": "d9e588b31093600b",
       "path": "C:\\Users\\rickf\\Projects\\_EHG\\EHG_Engineer\\.worktrees\\SD-LEO-INFRA-ADAM-CONTRACT-READABLE-001\\CLAUDE_CORE.md"
     },
     "CLAUDE_LEAD.md": {
       "type": "full",
-      "chars": 65999,
+      "chars": 65998,
       "estimated_tokens": 16500,
       "content_hash": "fd1b4d7b9b4af7ee",
       "path": "C:\\Users\\rickf\\Projects\\_EHG\\EHG_Engineer\\.worktrees\\SD-LEO-INFRA-ADAM-CONTRACT-READABLE-001\\CLAUDE_LEAD.md"
     },
     "CLAUDE_PLAN.md": {
       "type": "full",
-      "chars": 91831,
+      "chars": 91830,
       "estimated_tokens": 22958,
       "content_hash": "3e0153eba0827d89",
       "path": "C:\\Users\\rickf\\Projects\\_EHG\\EHG_Engineer\\.worktrees\\SD-LEO-INFRA-ADAM-CONTRACT-READABLE-001\\CLAUDE_PLAN.md"
     },
     "CLAUDE_EXEC.md": {
       "type": "full",
-      "chars": 89642,
+      "chars": 89641,
       "estimated_tokens": 22411,
       "content_hash": "96a703e9685f5dc9",
       "path": "C:\\Users\\rickf\\Projects\\_EHG\\EHG_Engineer\\.worktrees\\SD-LEO-INFRA-ADAM-CONTRACT-READABLE-001\\CLAUDE_EXEC.md"
     },
     "CLAUDE_ADAM.md": {
       "type": "full",
-      "chars": 44948,
-      "estimated_tokens": 11237,
-      "content_hash": "e3945e4459edd5fd",
+      "chars": 45785,
+      "estimated_tokens": 11447,
+      "content_hash": "e07c499baa7b6aaf",
       "path": "C:\\Users\\rickf\\Projects\\_EHG\\EHG_Engineer\\.worktrees\\SD-LEO-INFRA-ADAM-CONTRACT-READABLE-001\\CLAUDE_ADAM.md"
     },
     "CLAUDE_ADAM_MANUAL.md": {
       "type": "full",
-      "chars": 15699,
+      "chars": 15698,
       "estimated_tokens": 3925,
       "content_hash": "2344306061086a4c",
       "path": "C:\\Users\\rickf\\Projects\\_EHG\\EHG_Engineer\\.worktrees\\SD-LEO-INFRA-ADAM-CONTRACT-READABLE-001\\CLAUDE_ADAM_MANUAL.md"
     },
     "CLAUDE_ADAM_PROVENANCE.md": {
       "type": "full",
-      "chars": 6925,
-      "estimated_tokens": 1732,
+      "chars": 6924,
+      "estimated_tokens": 1731,
       "content_hash": "050adf31c606807e",
       "path": "C:\\Users\\rickf\\Projects\\_EHG\\EHG_Engineer\\.worktrees\\SD-LEO-INFRA-ADAM-CONTRACT-READABLE-001\\CLAUDE_ADAM_PROVENANCE.md"
     },
     "CLAUDE_COORDINATOR.md": {
       "type": "full",
-      "chars": 25317,
-      "estimated_tokens": 6330,
+      "chars": 25316,
+      "estimated_tokens": 6329,
       "content_hash": "46a249bbe6cb9e04",
       "path": "C:\\Users\\rickf\\Projects\\_EHG\\EHG_Engineer\\.worktrees\\SD-LEO-INFRA-ADAM-CONTRACT-READABLE-001\\CLAUDE_COORDINATOR.md"
     },
     "CLAUDE_SOLOMON.md": {
       "type": "full",
-      "chars": 66523,
+      "chars": 66522,
       "estimated_tokens": 16631,
       "content_hash": "267e6c6629a2410e",
       "path": "C:\\Users\\rickf\\Projects\\_EHG\\EHG_Engineer\\.worktrees\\SD-LEO-INFRA-ADAM-CONTRACT-READABLE-001\\CLAUDE_SOLOMON.md"
     },
     "CLAUDE_DIGEST.md": {
       "type": "digest",
-      "chars": 9612,
+      "chars": 9611,
       "estimated_tokens": 2403,
       "content_hash": "145c2727660e8751",
       "path": "C:\\Users\\rickf\\Projects\\_EHG\\EHG_Engineer\\.worktrees\\SD-LEO-INFRA-ADAM-CONTRACT-READABLE-001\\CLAUDE_DIGEST.md"
     },
     "CLAUDE_CORE_DIGEST.md": {
       "type": "digest",
-      "chars": 11665,
-      "estimated_tokens": 2917,
+      "chars": 11664,
+      "estimated_tokens": 2916,
       "content_hash": "96d9e755d3145670",
       "path": "C:\\Users\\rickf\\Projects\\_EHG\\EHG_Engineer\\.worktrees\\SD-LEO-INFRA-ADAM-CONTRACT-READABLE-001\\CLAUDE_CORE_DIGEST.md"
     },
     "CLAUDE_LEAD_DIGEST.md": {
       "type": "digest",
-      "chars": 5552,
+      "chars": 5551,
       "estimated_tokens": 1388,
       "content_hash": "7eaae885385e9816",
       "path": "C:\\Users\\rickf\\Projects\\_EHG\\EHG_Engineer\\.worktrees\\SD-LEO-INFRA-ADAM-CONTRACT-READABLE-001\\CLAUDE_LEAD_DIGEST.md"
     },
     "CLAUDE_PLAN_DIGEST.md": {
       "type": "digest",
-      "chars": 8542,
+      "chars": 8541,
       "estimated_tokens": 2136,
       "content_hash": "6a2207cc18ddebdc",
       "path": "C:\\Users\\rickf\\Projects\\_EHG\\EHG_Engineer\\.worktrees\\SD-LEO-INFRA-ADAM-CONTRACT-READABLE-001\\CLAUDE_PLAN_DIGEST.md"
     },
     "CLAUDE_EXEC_DIGEST.md": {
       "type": "digest",
-      "chars": 10965,
-      "estimated_tokens": 2742,
+      "chars": 10964,
+      "estimated_tokens": 2741,
       "content_hash": "660d291913c69986",
       "path": "C:\\Users\\rickf\\Projects\\_EHG\\EHG_Engineer\\.worktrees\\SD-LEO-INFRA-ADAM-CONTRACT-READABLE-001\\CLAUDE_EXEC_DIGEST.md"
     },
@@ -131,7 +131,7 @@
     }
   },
   "section_digests": {
-    "global": "66c47fa81b0acafc",
+    "global": "22ba21574cea12b1",
     "byId": {
       "94": "ef2f1e7ed617b5e0",
       "189": "6398659126897bbb",
@@ -385,8 +385,8 @@
       "596": "0251044882a17550",
       "597": "ca5efc991922f3b8",
       "599": "7ddd3e2178799aa8",
-      "601": "6adb64bc9f235fcc",
-      "602": "f734c8b0608901b2",
+      "601": "76f3f0225a2d4322",
+      "602": "1d330031fd427ecf",
       "603": "98d7b093d064f76a",
       "605": "4a13b33776eb8b21",
       "608": "7f99a4321502367e",
@@ -1673,7 +1673,7 @@
       "602": {
         "section_type": "adam_self_adherence_loop",
         "target_file": "CLAUDE_ADAM.md",
-        "title": "Adam Self-Adherence Loop (recurring audit + propose-only remediation)"
+        "title": "6. Self-assessment — rubric, loop, adherence"
       },
       "603": {
         "section_type": "fleet_worker_loop_continuity",

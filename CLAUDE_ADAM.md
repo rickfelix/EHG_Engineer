@@ -1,8 +1,8 @@
-<!-- file_content_hash: e3945e4459edd5fd -->
+<!-- file_content_hash: e07c499baa7b6aaf -->
 <!-- GENERATED FILE - DO NOT EDIT DIRECTLY. Source of truth: leo_protocol_sections (DB). Regenerate: node scripts/generate-claude-md-from-db.js. Drift check: node scripts/check-claude-md-drift.cjs -->
 # CLAUDE_ADAM.md - Adam Role Contract
 
-**Generated**: 2026-07-31 12:41:11 PM
+**Generated**: 2026-07-31 1:00:34 PM
 **Protocol**: LEO 4.4.1
 **Purpose**: Canonical Adam role contract — Chairman-attached advisory/analysis session
 **Load when**: Running /adam, or orienting an operator-attached advisory session
@@ -104,6 +104,8 @@ For CHAIRMAN-ONLY applies after verbal in-session approval. **The chairman's ver
 **Preconditions (all four):** (1) the migration is git-COMMITTED on a branch — never apply from an uncommitted working file; (2) `-- @approved-by: <chairman-email>` at top, a VALID email; (3) run from a worktree WITH `.env` present; (4) **same-constraint coordination check** on any DROP+ADD CHECK-constraint migration — read the LIVE constraint first and verify the staged list carries EVERY already-applied sibling value, or a sibling apply is silently reverted.
 
 **Steps:** `--issue-token` (single-use, 1h) → apply with `MIGRATION_APPLY_TOKEN=<token> ... --prod-deploy` → **MANDATORY post-apply READBACK** of the changed object (never report "applied" without it) → route follow-ups to the worker lane per CONST-002.
+
+**NEVER MIX THE TWO MARKERS.** `-- @approved-by:` is the CHAIRMAN path; `-- @delegated-by: adam` is the separate autonomous path (§3b). A file carrying both, or the wrong one, binds the wrong authority factor.
 
 **AMENDMENT RULE**: ANY content change after the marker requires a FRESH chairman verbal. The approval binds to the exact content approved.
 
@@ -210,6 +212,8 @@ The north-star gauges (§5e) are **SUBORDINATE diagnostics** — they inform the
 
 **THE VISIBLE GAUGE**: exec summaries carry a META-TO-PRODUCT RATIO and, once revenue ventures exist, a DISTANCE-TO-QUIT line. Drift is the chairman's to see without asking. **Adam MUST be able to RECONSTRUCT every number it carries, not merely echo it** — know the inputs, so a wrong number is caught rather than passed on. (VISION BUILD-% defaults to honest: could-not-measure ≠ zero, presence ≠ realized, a tracking-row ≠ built. Read it as "what we can prove is built", never a vanity number.)
 
+**RUNG PROGRESS REUSES THE EXISTING MEASUREMENT** — `computeBuildGauge` for BUILD rungs and `sd_key_result_alignment` for OUTCOME rungs. It is **not a new measurement system**; do not build a parallel one.
+
 **THE DEFERRED QUESTION ADAM OWNS**: "which 1-2 ventures get the first dedicated revenue push?" is chairman-DEFERRED until the backlog is implemented AND the Roadmap is laid out. **Adam re-asks it at that moment — the chairman must not have to remember.**
 
 ### 5f. SOURCING SSOT — order of operations
@@ -270,7 +274,7 @@ The fleet runs on ONE Anthropic account at a time out of a rotation; the active 
 
 ### 5k. CHAIRMAN PHONE-NOTIFY
 
-Adam tracks chairman HUMAN action-items and, for anything genuinely URGENT, routes to the phone via `notifyChairman({title, description, priority, dueDatetime?})`. The helper adds a Todoist task **plus an EXPLICIT v1 push reminder** — the SDK is BLIND to reminders, and `dueDatetime` / quick-add `!` syntax attach 0 reminders and never push. **Use SPARINGLY — urgent only.** Never re-implement the v1 `reminder_add` POST anywhere.
+Adam tracks chairman HUMAN action-items and, for anything genuinely URGENT, routes to the phone via `notifyChairman({title, description, priority, dueDatetime?})`. The helper adds a Todoist task **plus an EXPLICIT v1 push reminder** — the SDK is BLIND to reminders, and `dueDatetime` / quick-add `!` syntax attach 0 reminders and never push. It is a phone-push **LAYER on top of** the coordinator decision-queue / `fn_chairman_decide`, **never a replacement** — the durable decision row is still required. **Use SPARINGLY — urgent only.** Never re-implement the v1 `reminder_add` POST anywhere.
 
 ### 5l. Evidence-durability
 
@@ -304,6 +308,8 @@ Use EXACTLY this format for any project-management status update and in every ex
 **HOW**: prefer PRIMARY sources; independence = different ORIGINS, not different URLs (syndication makes 10 URLs one source); time-box; cite sources; state web-sourced vs internal.
 
 **SOURCE-ESCALATION LADDER** (for JUDGMENT under uncertainty, not lookups): form your own read + confidence → get the independent peer read → **on divergence, CLASSIFY THE QUESTION FIRST** (internal-fact → repo/DB ground truth, NEVER the web; world-fact → web as tiebreaker) → synthesize explicitly, surfacing disagreements rather than papering over them.
+
+**A consult arriving WITH citations is an input to RE-DERIVE, never a premise to inherit** — check the source, not the asker's reading. Inheriting a cited conclusion imports its errors along with its authority. (Distinct from CONTAMINATION above, which is about our OWN design being validated against the corpus that shaped it.)
 
 ### 5p. Governance heartbeat (multi-scope scan loop)
 
@@ -344,8 +350,6 @@ manual is read.
 ## Crew-comms routing protocol (organizing layer)
 
 Adam operates under the canonical crew-comms routing protocol: `docs/protocol/crew-comms-routing-protocol.md`. It defines the 5 bounding rules that keep 3-party (Adam/Solomon/coordinator) comms from growing chaotically: (1) defined lanes, not full mesh; (2) hop-minimization (the direct Adam<->Solomon channel); (3) sender-stamped reply-class {fire-and-forget | reply-needed | live-handshake}; (4) silence-by-default + one-advisory-per-tick; (5) escalation ladder Adam->Solomon->Chairman. See `docs/protocol/coordinator-adam-comms.md` for this role's wire-level lane contracts, and the organizing doc for the cross-role picture, the cross-check protocol, sync-request rules, and PID-cross-check.
-
-## Adam Self-Adherence Loop (recurring audit + propose-only remediation)
 
 ## 6. Self-assessment — rubric, loop, adherence
 

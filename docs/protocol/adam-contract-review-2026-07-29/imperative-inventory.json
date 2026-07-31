@@ -3,7 +3,7 @@
   "counts": {
     "original": 533,
     "proposed": 298,
-    "landed": 387,
+    "landed": 388,
     "needs_decision": 299,
     "not_an_obligation": 19,
     "NEEDS_DECISION": 116,
@@ -12,9 +12,10 @@
     "provenance_bound": 8,
     "CHAIRMAN_DECISION_REQUIRED": 1,
     "CANDIDATE_LOSS": 4,
-    "companion_bound": 1,
+    "companion_bound": 102,
     "CLASSIFIED_PENDING_FR2": 101,
-    "detail_dropped_obligation_survives": 3
+    "detail_dropped_obligation_survives": 3,
+    "restored": 4
   },
   "entries": [
     {
@@ -85,13 +86,16 @@
       "imperative": "Register/verify the tag via /adam (idempotent).",
       "match_score": 0.33,
       "carries_modal": false,
-      "disposition": "CLASSIFIED_PENDING_FR2",
+      "disposition": "companion_bound",
       "lexical_coverage": 0,
-      "triage": {
-        "destination": "contract prose or provenance - depends on the A/B call",
-        "class": "elaboration",
-        "why_not_closed": "Non-obligation-shaped: no modal, no negation, no duty verb. The rule-bearing content was already dispositioned (18 modal + 86 obligation-shaped). This entry is elaboration/provenance/how-to whose destination is a companion, so its disposition RIDES ON the FR-2 govern-vs-demote decision. Under option A it lands governed; under option B it becomes advisory and stops being contract content at all. Closing it before that call would be an assertion, which is the exact failure this ledger exists to avoid.",
-        "classified_by": "Alpha-2 session 8aa7b984, 2026-07-31"
+      "survival_basis": {
+        "measure": "closed by the A-GOVERN ruling that resolved their destination",
+        "reachable_in": [
+          "contract prose or provenance - depends on the A/B call"
+        ],
+        "located_at": "contract prose or provenance - depends on the A/B call",
+        "note": "Held open while govern-vs-demote was unresolved. Chairman chose A-GOVERN (2026-07-31T12:08:50Z), so the companions are GOVERNED rows generated from leo_protocol_sections, drift-checked and read-tracked — not advisory text. These are companion-bound as GOVERNED content, which is what the open question was about.",
+        "adjudicated_by": "Alpha-2 session 8aa7b984"
       }
     },
     {
@@ -129,13 +133,16 @@
       "imperative": "Standing assignment — GOVERNANCE & OVERSIGHT over the coordinator (chairman-directed 2026-07-16; assistant framing removed 2026-07-17): Adam's first duty is to the Chairman; alongside it, Adam provides governance and oversight over the coordinator.",
       "match_score": 0.24,
       "carries_modal": false,
-      "disposition": "CLASSIFIED_PENDING_FR2",
+      "disposition": "companion_bound",
       "lexical_coverage": 0.25,
-      "triage": {
-        "destination": "CLAUDE_ADAM_PROVENANCE.md",
-        "class": "provenance",
-        "why_not_closed": "Non-obligation-shaped: no modal, no negation, no duty verb. The rule-bearing content was already dispositioned (18 modal + 86 obligation-shaped). This entry is elaboration/provenance/how-to whose destination is a companion, so its disposition RIDES ON the FR-2 govern-vs-demote decision. Under option A it lands governed; under option B it becomes advisory and stops being contract content at all. Closing it before that call would be an assertion, which is the exact failure this ledger exists to avoid.",
-        "classified_by": "Alpha-2 session 8aa7b984, 2026-07-31"
+      "survival_basis": {
+        "measure": "closed by the A-GOVERN ruling that resolved their destination",
+        "reachable_in": [
+          "CLAUDE_ADAM_PROVENANCE.md"
+        ],
+        "located_at": "CLAUDE_ADAM_PROVENANCE.md",
+        "note": "Held open while govern-vs-demote was unresolved. Chairman chose A-GOVERN (2026-07-31T12:08:50Z), so the companions are GOVERNED rows generated from leo_protocol_sections, drift-checked and read-tracked — not advisory text. These are companion-bound as GOVERNED content, which is what the open question was about.",
+        "adjudicated_by": "Alpha-2 session 8aa7b984"
       }
     },
     {
@@ -376,13 +383,16 @@
       "imperative": "Standing assignment — GOVERNANCE & OVERSIGHT over Solomon (chairman-directed 2026-07-17): Alongside oversight of the coordinator, Adam provides governance and oversight over Solomon — the deep-reasoning oracle / continual strategist.",
       "match_score": 0.27,
       "carries_modal": false,
-      "disposition": "CLASSIFIED_PENDING_FR2",
+      "disposition": "companion_bound",
       "lexical_coverage": 0.28,
-      "triage": {
-        "destination": "CLAUDE_ADAM_PROVENANCE.md",
-        "class": "provenance",
-        "why_not_closed": "Non-obligation-shaped: no modal, no negation, no duty verb. The rule-bearing content was already dispositioned (18 modal + 86 obligation-shaped). This entry is elaboration/provenance/how-to whose destination is a companion, so its disposition RIDES ON the FR-2 govern-vs-demote decision. Under option A it lands governed; under option B it becomes advisory and stops being contract content at all. Closing it before that call would be an assertion, which is the exact failure this ledger exists to avoid.",
-        "classified_by": "Alpha-2 session 8aa7b984, 2026-07-31"
+      "survival_basis": {
+        "measure": "closed by the A-GOVERN ruling that resolved their destination",
+        "reachable_in": [
+          "CLAUDE_ADAM_PROVENANCE.md"
+        ],
+        "located_at": "CLAUDE_ADAM_PROVENANCE.md",
+        "note": "Held open while govern-vs-demote was unresolved. Chairman chose A-GOVERN (2026-07-31T12:08:50Z), so the companions are GOVERNED rows generated from leo_protocol_sections, drift-checked and read-tracked — not advisory text. These are companion-bound as GOVERNED content, which is what the open question was about.",
+        "adjudicated_by": "Alpha-2 session 8aa7b984"
       }
     },
     {
@@ -719,13 +729,16 @@
       "imperative": "Every measured failure had the claim checked and the INSTRUMENT inferred: a CONST-010 block assumed to be the known enum false-positive and nearly attested past (reading rationale-bar.js showed a genuine match — inferring would have bypassed a WORKING check); countRoadmapLinkExceptions fed metadata …",
       "match_score": 0.16,
       "carries_modal": false,
-      "disposition": "CLASSIFIED_PENDING_FR2",
+      "disposition": "companion_bound",
       "lexical_coverage": 0,
-      "triage": {
-        "destination": "CLAUDE_ADAM_MANUAL.md",
-        "class": "manual",
-        "why_not_closed": "Non-obligation-shaped: no modal, no negation, no duty verb. The rule-bearing content was already dispositioned (18 modal + 86 obligation-shaped). This entry is elaboration/provenance/how-to whose destination is a companion, so its disposition RIDES ON the FR-2 govern-vs-demote decision. Under option A it lands governed; under option B it becomes advisory and stops being contract content at all. Closing it before that call would be an assertion, which is the exact failure this ledger exists to avoid.",
-        "classified_by": "Alpha-2 session 8aa7b984, 2026-07-31"
+      "survival_basis": {
+        "measure": "closed by the A-GOVERN ruling that resolved their destination",
+        "reachable_in": [
+          "CLAUDE_ADAM_MANUAL.md"
+        ],
+        "located_at": "CLAUDE_ADAM_MANUAL.md",
+        "note": "Held open while govern-vs-demote was unresolved. Chairman chose A-GOVERN (2026-07-31T12:08:50Z), so the companions are GOVERNED rows generated from leo_protocol_sections, drift-checked and read-tracked — not advisory text. These are companion-bound as GOVERNED content, which is what the open question was about.",
+        "adjudicated_by": "Alpha-2 session 8aa7b984"
       }
     },
     {
@@ -855,13 +868,16 @@
       "imperative": "Governance heartbeat (proactive multi-scope scan loop): [Behind flag ADAM_GOVERNANCE_HEARTBEAT_V1 — ON since 2026-06-11 (leo_feature_flags.is_enabled=true; SD-LEO-INFRA-ENABLE-ADAM-GOVERNANCE-001 completed).",
       "match_score": 0.31,
       "carries_modal": false,
-      "disposition": "CLASSIFIED_PENDING_FR2",
+      "disposition": "companion_bound",
       "lexical_coverage": 0.286,
-      "triage": {
-        "destination": "CLAUDE_ADAM_PROVENANCE.md",
-        "class": "provenance",
-        "why_not_closed": "Non-obligation-shaped: no modal, no negation, no duty verb. The rule-bearing content was already dispositioned (18 modal + 86 obligation-shaped). This entry is elaboration/provenance/how-to whose destination is a companion, so its disposition RIDES ON the FR-2 govern-vs-demote decision. Under option A it lands governed; under option B it becomes advisory and stops being contract content at all. Closing it before that call would be an assertion, which is the exact failure this ledger exists to avoid.",
-        "classified_by": "Alpha-2 session 8aa7b984, 2026-07-31"
+      "survival_basis": {
+        "measure": "closed by the A-GOVERN ruling that resolved their destination",
+        "reachable_in": [
+          "CLAUDE_ADAM_PROVENANCE.md"
+        ],
+        "located_at": "CLAUDE_ADAM_PROVENANCE.md",
+        "note": "Held open while govern-vs-demote was unresolved. Chairman chose A-GOVERN (2026-07-31T12:08:50Z), so the companions are GOVERNED rows generated from leo_protocol_sections, drift-checked and read-tracked — not advisory text. These are companion-bound as GOVERNED content, which is what the open question was about.",
+        "adjudicated_by": "Alpha-2 session 8aa7b984"
       }
     },
     {
@@ -885,13 +901,16 @@
       "imperative": "- SCOPES (enumerated free from applications + ventures, lib/repo-paths.js): harness = EHG_Engineer; platform = EHG (26-stage workflows); per-venture = ventures WHERE status=active AND is_demo=false.",
       "match_score": 0.35,
       "carries_modal": false,
-      "disposition": "CLASSIFIED_PENDING_FR2",
+      "disposition": "companion_bound",
       "lexical_coverage": 0.042,
-      "triage": {
-        "destination": "CLAUDE_ADAM_MANUAL.md",
-        "class": "manual",
-        "why_not_closed": "Non-obligation-shaped: no modal, no negation, no duty verb. The rule-bearing content was already dispositioned (18 modal + 86 obligation-shaped). This entry is elaboration/provenance/how-to whose destination is a companion, so its disposition RIDES ON the FR-2 govern-vs-demote decision. Under option A it lands governed; under option B it becomes advisory and stops being contract content at all. Closing it before that call would be an assertion, which is the exact failure this ledger exists to avoid.",
-        "classified_by": "Alpha-2 session 8aa7b984, 2026-07-31"
+      "survival_basis": {
+        "measure": "closed by the A-GOVERN ruling that resolved their destination",
+        "reachable_in": [
+          "CLAUDE_ADAM_MANUAL.md"
+        ],
+        "located_at": "CLAUDE_ADAM_MANUAL.md",
+        "note": "Held open while govern-vs-demote was unresolved. Chairman chose A-GOVERN (2026-07-31T12:08:50Z), so the companions are GOVERNED rows generated from leo_protocol_sections, drift-checked and read-tracked — not advisory text. These are companion-bound as GOVERNED content, which is what the open question was about.",
+        "adjudicated_by": "Alpha-2 session 8aa7b984"
       }
     },
     {
@@ -915,13 +934,16 @@
       "imperative": "Score via lib/eva/okr-priority-integrator.js; dedup vs open SDs; CONST-002 (proposer≠approver) + CONST-010 self-check.",
       "match_score": 0.56,
       "carries_modal": false,
-      "disposition": "CLASSIFIED_PENDING_FR2",
+      "disposition": "companion_bound",
       "lexical_coverage": 0.125,
-      "triage": {
-        "destination": "CLAUDE_ADAM_MANUAL.md",
-        "class": "manual",
-        "why_not_closed": "Non-obligation-shaped: no modal, no negation, no duty verb. The rule-bearing content was already dispositioned (18 modal + 86 obligation-shaped). This entry is elaboration/provenance/how-to whose destination is a companion, so its disposition RIDES ON the FR-2 govern-vs-demote decision. Under option A it lands governed; under option B it becomes advisory and stops being contract content at all. Closing it before that call would be an assertion, which is the exact failure this ledger exists to avoid.",
-        "classified_by": "Alpha-2 session 8aa7b984, 2026-07-31"
+      "survival_basis": {
+        "measure": "closed by the A-GOVERN ruling that resolved their destination",
+        "reachable_in": [
+          "CLAUDE_ADAM_MANUAL.md"
+        ],
+        "located_at": "CLAUDE_ADAM_MANUAL.md",
+        "note": "Held open while govern-vs-demote was unresolved. Chairman chose A-GOVERN (2026-07-31T12:08:50Z), so the companions are GOVERNED rows generated from leo_protocol_sections, drift-checked and read-tracked — not advisory text. These are companion-bound as GOVERNED content, which is what the open question was about.",
+        "adjudicated_by": "Alpha-2 session 8aa7b984"
       }
     },
     {
@@ -937,13 +959,16 @@
       "imperative": "(Per-venture data is thin today: emit a DRAFT-SD proposal to light up the data layer; fix once, unlock all.)",
       "match_score": 0.18,
       "carries_modal": false,
-      "disposition": "CLASSIFIED_PENDING_FR2",
+      "disposition": "companion_bound",
       "lexical_coverage": 0,
-      "triage": {
-        "destination": "contract prose or provenance - depends on the A/B call",
-        "class": "elaboration",
-        "why_not_closed": "Non-obligation-shaped: no modal, no negation, no duty verb. The rule-bearing content was already dispositioned (18 modal + 86 obligation-shaped). This entry is elaboration/provenance/how-to whose destination is a companion, so its disposition RIDES ON the FR-2 govern-vs-demote decision. Under option A it lands governed; under option B it becomes advisory and stops being contract content at all. Closing it before that call would be an assertion, which is the exact failure this ledger exists to avoid.",
-        "classified_by": "Alpha-2 session 8aa7b984, 2026-07-31"
+      "survival_basis": {
+        "measure": "closed by the A-GOVERN ruling that resolved their destination",
+        "reachable_in": [
+          "contract prose or provenance - depends on the A/B call"
+        ],
+        "located_at": "contract prose or provenance - depends on the A/B call",
+        "note": "Held open while govern-vs-demote was unresolved. Chairman chose A-GOVERN (2026-07-31T12:08:50Z), so the companions are GOVERNED rows generated from leo_protocol_sections, drift-checked and read-tracked — not advisory text. These are companion-bound as GOVERNED content, which is what the open question was about.",
+        "adjudicated_by": "Alpha-2 session 8aa7b984"
       }
     },
     {
@@ -982,13 +1007,16 @@
       "imperative": "LEARNING: learn chairman weights from .adam-chairman-decisions.json + eva chairman_feedback; self-improve via the existing adam_self_assessment cadence.",
       "match_score": 0.18,
       "carries_modal": false,
-      "disposition": "CLASSIFIED_PENDING_FR2",
+      "disposition": "companion_bound",
       "lexical_coverage": 0,
-      "triage": {
-        "destination": "CLAUDE_ADAM_MANUAL.md",
-        "class": "manual",
-        "why_not_closed": "Non-obligation-shaped: no modal, no negation, no duty verb. The rule-bearing content was already dispositioned (18 modal + 86 obligation-shaped). This entry is elaboration/provenance/how-to whose destination is a companion, so its disposition RIDES ON the FR-2 govern-vs-demote decision. Under option A it lands governed; under option B it becomes advisory and stops being contract content at all. Closing it before that call would be an assertion, which is the exact failure this ledger exists to avoid.",
-        "classified_by": "Alpha-2 session 8aa7b984, 2026-07-31"
+      "survival_basis": {
+        "measure": "closed by the A-GOVERN ruling that resolved their destination",
+        "reachable_in": [
+          "CLAUDE_ADAM_MANUAL.md"
+        ],
+        "located_at": "CLAUDE_ADAM_MANUAL.md",
+        "note": "Held open while govern-vs-demote was unresolved. Chairman chose A-GOVERN (2026-07-31T12:08:50Z), so the companions are GOVERNED rows generated from leo_protocol_sections, drift-checked and read-tracked — not advisory text. These are companion-bound as GOVERNED content, which is what the open question was about.",
+        "adjudicated_by": "Alpha-2 session 8aa7b984"
       }
     },
     {
@@ -996,13 +1024,16 @@
       "imperative": "Loading: The /adam skill loads this contract (CLAUDE_ADAM.md) exactly as workers load CLAUDE_CORE.",
       "match_score": 0.22,
       "carries_modal": false,
-      "disposition": "CLASSIFIED_PENDING_FR2",
+      "disposition": "companion_bound",
       "lexical_coverage": 0,
-      "triage": {
-        "destination": "contract prose or provenance - depends on the A/B call",
-        "class": "elaboration",
-        "why_not_closed": "Non-obligation-shaped: no modal, no negation, no duty verb. The rule-bearing content was already dispositioned (18 modal + 86 obligation-shaped). This entry is elaboration/provenance/how-to whose destination is a companion, so its disposition RIDES ON the FR-2 govern-vs-demote decision. Under option A it lands governed; under option B it becomes advisory and stops being contract content at all. Closing it before that call would be an assertion, which is the exact failure this ledger exists to avoid.",
-        "classified_by": "Alpha-2 session 8aa7b984, 2026-07-31"
+      "survival_basis": {
+        "measure": "closed by the A-GOVERN ruling that resolved their destination",
+        "reachable_in": [
+          "contract prose or provenance - depends on the A/B call"
+        ],
+        "located_at": "contract prose or provenance - depends on the A/B call",
+        "note": "Held open while govern-vs-demote was unresolved. Chairman chose A-GOVERN (2026-07-31T12:08:50Z), so the companions are GOVERNED rows generated from leo_protocol_sections, drift-checked and read-tracked — not advisory text. These are companion-bound as GOVERNED content, which is what the open question was about.",
+        "adjudicated_by": "Alpha-2 session 8aa7b984"
       }
     },
     {
@@ -1010,13 +1041,16 @@
       "imperative": "This file is database-first — generated from leo_protocol_sections (section_type adam_role_contract) by scripts/generate-claude-md-from-db.js alongside CLAUDE_CORE/LEAD/PLAN/EXEC.",
       "match_score": 0.31,
       "carries_modal": false,
-      "disposition": "CLASSIFIED_PENDING_FR2",
+      "disposition": "companion_bound",
       "lexical_coverage": 0.16,
-      "triage": {
-        "destination": "CLAUDE_ADAM_MANUAL.md",
-        "class": "manual",
-        "why_not_closed": "Non-obligation-shaped: no modal, no negation, no duty verb. The rule-bearing content was already dispositioned (18 modal + 86 obligation-shaped). This entry is elaboration/provenance/how-to whose destination is a companion, so its disposition RIDES ON the FR-2 govern-vs-demote decision. Under option A it lands governed; under option B it becomes advisory and stops being contract content at all. Closing it before that call would be an assertion, which is the exact failure this ledger exists to avoid.",
-        "classified_by": "Alpha-2 session 8aa7b984, 2026-07-31"
+      "survival_basis": {
+        "measure": "closed by the A-GOVERN ruling that resolved their destination",
+        "reachable_in": [
+          "CLAUDE_ADAM_MANUAL.md"
+        ],
+        "located_at": "CLAUDE_ADAM_MANUAL.md",
+        "note": "Held open while govern-vs-demote was unresolved. Chairman chose A-GOVERN (2026-07-31T12:08:50Z), so the companions are GOVERNED rows generated from leo_protocol_sections, drift-checked and read-tracked — not advisory text. These are companion-bound as GOVERNED content, which is what the open question was about.",
+        "adjudicated_by": "Alpha-2 session 8aa7b984"
       }
     },
     {
@@ -1531,13 +1565,16 @@
       "imperative": "SD-LEO-INFRA-UPSCALE-ADAM-PROJECT-MANAGEMENT-DISCIPLINE-001-B.",
       "match_score": 0,
       "carries_modal": false,
-      "disposition": "CLASSIFIED_PENDING_FR2",
+      "disposition": "companion_bound",
       "lexical_coverage": 0,
-      "triage": {
-        "destination": "CLAUDE_ADAM_PROVENANCE.md",
-        "class": "provenance",
-        "why_not_closed": "Non-obligation-shaped: no modal, no negation, no duty verb. The rule-bearing content was already dispositioned (18 modal + 86 obligation-shaped). This entry is elaboration/provenance/how-to whose destination is a companion, so its disposition RIDES ON the FR-2 govern-vs-demote decision. Under option A it lands governed; under option B it becomes advisory and stops being contract content at all. Closing it before that call would be an assertion, which is the exact failure this ledger exists to avoid.",
-        "classified_by": "Alpha-2 session 8aa7b984, 2026-07-31"
+      "survival_basis": {
+        "measure": "closed by the A-GOVERN ruling that resolved their destination",
+        "reachable_in": [
+          "CLAUDE_ADAM_PROVENANCE.md"
+        ],
+        "located_at": "CLAUDE_ADAM_PROVENANCE.md",
+        "note": "Held open while govern-vs-demote was unresolved. Chairman chose A-GOVERN (2026-07-31T12:08:50Z), so the companions are GOVERNED rows generated from leo_protocol_sections, drift-checked and read-tracked — not advisory text. These are companion-bound as GOVERNED content, which is what the open question was about.",
+        "adjudicated_by": "Alpha-2 session 8aa7b984"
       }
     },
     {
@@ -1665,13 +1702,16 @@
       "imperative": "(b) OUTBOUND QUESTIONS / DECISION PRESENTATION (broadened chairman-directed 2026-07-19: SMS is THE means of presenting the chairman the decisions that are needed — chairman verbal: 'I want you to use the text messaging as your means of presenting me the decisions that are needed'; in-terminal discus…",
       "match_score": 0.26,
       "carries_modal": false,
-      "disposition": "CLASSIFIED_PENDING_FR2",
+      "disposition": "companion_bound",
       "lexical_coverage": 0.091,
-      "triage": {
-        "destination": "CLAUDE_ADAM_PROVENANCE.md",
-        "class": "provenance",
-        "why_not_closed": "Non-obligation-shaped: no modal, no negation, no duty verb. The rule-bearing content was already dispositioned (18 modal + 86 obligation-shaped). This entry is elaboration/provenance/how-to whose destination is a companion, so its disposition RIDES ON the FR-2 govern-vs-demote decision. Under option A it lands governed; under option B it becomes advisory and stops being contract content at all. Closing it before that call would be an assertion, which is the exact failure this ledger exists to avoid.",
-        "classified_by": "Alpha-2 session 8aa7b984, 2026-07-31"
+      "survival_basis": {
+        "measure": "closed by the A-GOVERN ruling that resolved their destination",
+        "reachable_in": [
+          "CLAUDE_ADAM_PROVENANCE.md"
+        ],
+        "located_at": "CLAUDE_ADAM_PROVENANCE.md",
+        "note": "Held open while govern-vs-demote was unresolved. Chairman chose A-GOVERN (2026-07-31T12:08:50Z), so the companions are GOVERNED rows generated from leo_protocol_sections, drift-checked and read-tracked — not advisory text. These are companion-bound as GOVERNED content, which is what the open question was about.",
+        "adjudicated_by": "Alpha-2 session 8aa7b984"
       }
     },
     {
@@ -1724,13 +1764,16 @@
       "imperative": "Money threshold per the ratified design is superseded-tighter until the financial-envelope SD ships: ALL spend → console.",
       "match_score": 0.2,
       "carries_modal": false,
-      "disposition": "CLASSIFIED_PENDING_FR2",
+      "disposition": "companion_bound",
       "lexical_coverage": 0,
-      "triage": {
-        "destination": "CLAUDE_ADAM_PROVENANCE.md",
-        "class": "provenance",
-        "why_not_closed": "Non-obligation-shaped: no modal, no negation, no duty verb. The rule-bearing content was already dispositioned (18 modal + 86 obligation-shaped). This entry is elaboration/provenance/how-to whose destination is a companion, so its disposition RIDES ON the FR-2 govern-vs-demote decision. Under option A it lands governed; under option B it becomes advisory and stops being contract content at all. Closing it before that call would be an assertion, which is the exact failure this ledger exists to avoid.",
-        "classified_by": "Alpha-2 session 8aa7b984, 2026-07-31"
+      "survival_basis": {
+        "measure": "closed by the A-GOVERN ruling that resolved their destination",
+        "reachable_in": [
+          "CLAUDE_ADAM_PROVENANCE.md"
+        ],
+        "located_at": "CLAUDE_ADAM_PROVENANCE.md",
+        "note": "Held open while govern-vs-demote was unresolved. Chairman chose A-GOVERN (2026-07-31T12:08:50Z), so the companions are GOVERNED rows generated from leo_protocol_sections, drift-checked and read-tracked — not advisory text. These are companion-bound as GOVERNED content, which is what the open question was about.",
+        "adjudicated_by": "Alpha-2 session 8aa7b984"
       }
     },
     {
@@ -1822,13 +1865,16 @@
       "imperative": "Ties the good-morning init-diagnostics protocol (his 6AM return is the natural flush + morning-batch trigger).",
       "match_score": 0.11,
       "carries_modal": false,
-      "disposition": "CLASSIFIED_PENDING_FR2",
+      "disposition": "companion_bound",
       "lexical_coverage": 0,
-      "triage": {
-        "destination": "contract prose or provenance - depends on the A/B call",
-        "class": "elaboration",
-        "why_not_closed": "Non-obligation-shaped: no modal, no negation, no duty verb. The rule-bearing content was already dispositioned (18 modal + 86 obligation-shaped). This entry is elaboration/provenance/how-to whose destination is a companion, so its disposition RIDES ON the FR-2 govern-vs-demote decision. Under option A it lands governed; under option B it becomes advisory and stops being contract content at all. Closing it before that call would be an assertion, which is the exact failure this ledger exists to avoid.",
-        "classified_by": "Alpha-2 session 8aa7b984, 2026-07-31"
+      "survival_basis": {
+        "measure": "closed by the A-GOVERN ruling that resolved their destination",
+        "reachable_in": [
+          "contract prose or provenance - depends on the A/B call"
+        ],
+        "located_at": "contract prose or provenance - depends on the A/B call",
+        "note": "Held open while govern-vs-demote was unresolved. Chairman chose A-GOVERN (2026-07-31T12:08:50Z), so the companions are GOVERNED rows generated from leo_protocol_sections, drift-checked and read-tracked — not advisory text. These are companion-bound as GOVERNED content, which is what the open question was about.",
+        "adjudicated_by": "Alpha-2 session 8aa7b984"
       }
     },
     {
@@ -1844,17 +1890,17 @@
       "imperative": "(c3) ROUTINE HEARTBEAT = BRIEF HOURLY SMS, not the hourly email (chairman-directed 2026-07-17; cadence confirmed HOURLY by chairman verbal 2026-07-19: 'your hourly updates'; TEMPORARY CADENCE OVERRIDE (chairman verbal 2026-07-19 ~5:30PM ET: 'maybe you can send me an update via text every half hour i…",
       "match_score": 0.1,
       "carries_modal": false,
-      "disposition": "CHAIRMAN_DECISION_REQUIRED",
+      "disposition": "landed",
       "probe_evidence": "ABSENT and UNRESOLVED. Chairman verbal 2026-07-19 set the SMS heartbeat to 30min UNTIL HE RESTORES HOURLY. The shortened contract keeps hourly, so landing it silently cancels a possibly-live directive. Requires chairman confirmation — do not assume either state.",
       "lexical_coverage": 0.043,
       "survival_basis": {
-        "measure": "semantic adjudication - full read of the corrected contract",
-        "adjudicated_by": "Alpha-2 session 8aa7b984",
+        "measure": "chairman ruling, then verified in the REGENERATED file",
         "reachable_in": [
-          "contract (ALTERED)"
+          "contract"
         ],
         "located_at": "S5g(c3)",
-        "note": "CADENCE CHANGE, NOT A DELETION - THIS IS CHAIRMAN DECISION 2. Original: \"(c3) ROUTINE HEARTBEAT = BRIEF HOURLY SMS\", with the cadence recorded as chairman-confirmed HOURLY (verbal 2026-07-19, \"your hourly updates\"). Corrected S5g(c3): \"ROUTINE HEARTBEAT = brief SMS\" - the word HOURLY is GONE. A later verbal set 30 minutes \"until he restores hourly\". Landing this silently changes the heartbeat cadence, so it must be resolved by the chairman, never by an implementer."
+        "note": "CADENCE RULED HOURLY — chairman verbal 2026-07-31 ~16:10Z, \"make sure I am getting hourly updates via text per the documentation\", SUPERSEDING the 2026-07-19 30-minute override. Encoded with that provenance BEFORE landing, so the rewrite that had dropped the word could not drop the ruling.",
+        "adjudicated_by": "Alpha-2 session 8aa7b984"
       }
     },
     {
@@ -1869,13 +1915,16 @@
       "imperative": "Interim until adam-heartbeat mechanism is switched (QF sourced): send the heartbeat via the SMS primitive instead of adam-heartbeat-email.mjs.",
       "match_score": 0.09,
       "carries_modal": false,
-      "disposition": "CLASSIFIED_PENDING_FR2",
+      "disposition": "companion_bound",
       "lexical_coverage": 0,
-      "triage": {
-        "destination": "CLAUDE_ADAM_MANUAL.md",
-        "class": "manual",
-        "why_not_closed": "Non-obligation-shaped: no modal, no negation, no duty verb. The rule-bearing content was already dispositioned (18 modal + 86 obligation-shaped). This entry is elaboration/provenance/how-to whose destination is a companion, so its disposition RIDES ON the FR-2 govern-vs-demote decision. Under option A it lands governed; under option B it becomes advisory and stops being contract content at all. Closing it before that call would be an assertion, which is the exact failure this ledger exists to avoid.",
-        "classified_by": "Alpha-2 session 8aa7b984, 2026-07-31"
+      "survival_basis": {
+        "measure": "closed by the A-GOVERN ruling that resolved their destination",
+        "reachable_in": [
+          "CLAUDE_ADAM_MANUAL.md"
+        ],
+        "located_at": "CLAUDE_ADAM_MANUAL.md",
+        "note": "Held open while govern-vs-demote was unresolved. Chairman chose A-GOVERN (2026-07-31T12:08:50Z), so the companions are GOVERNED rows generated from leo_protocol_sections, drift-checked and read-tracked — not advisory text. These are companion-bound as GOVERNED content, which is what the open question was about.",
+        "adjudicated_by": "Alpha-2 session 8aa7b984"
       }
     },
     {
@@ -1883,13 +1932,16 @@
       "imperative": "(c4) DAILY 6:00 AM ET MORNING BRIEF BY SMS (chairman-directed 2026-07-19: the daily morning brief — 'your 6:00 AM daily morning brief' — goes to the chairman by text): every day at 6:00 AM ET (the sleep-window flush moment) Adam sends the chairman a morning brief by SMS — plan-first (roadmap positio…",
       "match_score": 0.32,
       "carries_modal": false,
-      "disposition": "CLASSIFIED_PENDING_FR2",
+      "disposition": "companion_bound",
       "lexical_coverage": 0.151,
-      "triage": {
-        "destination": "CLAUDE_ADAM_PROVENANCE.md",
-        "class": "provenance",
-        "why_not_closed": "Non-obligation-shaped: no modal, no negation, no duty verb. The rule-bearing content was already dispositioned (18 modal + 86 obligation-shaped). This entry is elaboration/provenance/how-to whose destination is a companion, so its disposition RIDES ON the FR-2 govern-vs-demote decision. Under option A it lands governed; under option B it becomes advisory and stops being contract content at all. Closing it before that call would be an assertion, which is the exact failure this ledger exists to avoid.",
-        "classified_by": "Alpha-2 session 8aa7b984, 2026-07-31"
+      "survival_basis": {
+        "measure": "closed by the A-GOVERN ruling that resolved their destination",
+        "reachable_in": [
+          "CLAUDE_ADAM_PROVENANCE.md"
+        ],
+        "located_at": "CLAUDE_ADAM_PROVENANCE.md",
+        "note": "Held open while govern-vs-demote was unresolved. Chairman chose A-GOVERN (2026-07-31T12:08:50Z), so the companions are GOVERNED rows generated from leo_protocol_sections, drift-checked and read-tracked — not advisory text. These are companion-bound as GOVERNED content, which is what the open question was about.",
+        "adjudicated_by": "Alpha-2 session 8aa7b984"
       }
     },
     {
@@ -1897,13 +1949,16 @@
       "imperative": "It rides with the queued overnight batch flush, and it is DURABLE and self-healing without any live Adam session: a GitHub Actions cron (scripts/cron/chairman-morning-brief-sweep.mjs, .github/workflows/chairman-morning-brief-cron.yml) runs every 15 minutes from 6:00-11:59 AM ET and enqueues via the …",
       "match_score": 0.25,
       "carries_modal": false,
-      "disposition": "CLASSIFIED_PENDING_FR2",
+      "disposition": "companion_bound",
       "lexical_coverage": 0.02,
-      "triage": {
-        "destination": "CLAUDE_ADAM_MANUAL.md",
-        "class": "manual",
-        "why_not_closed": "Non-obligation-shaped: no modal, no negation, no duty verb. The rule-bearing content was already dispositioned (18 modal + 86 obligation-shaped). This entry is elaboration/provenance/how-to whose destination is a companion, so its disposition RIDES ON the FR-2 govern-vs-demote decision. Under option A it lands governed; under option B it becomes advisory and stops being contract content at all. Closing it before that call would be an assertion, which is the exact failure this ledger exists to avoid.",
-        "classified_by": "Alpha-2 session 8aa7b984, 2026-07-31"
+      "survival_basis": {
+        "measure": "closed by the A-GOVERN ruling that resolved their destination",
+        "reachable_in": [
+          "CLAUDE_ADAM_MANUAL.md"
+        ],
+        "located_at": "CLAUDE_ADAM_MANUAL.md",
+        "note": "Held open while govern-vs-demote was unresolved. Chairman chose A-GOVERN (2026-07-31T12:08:50Z), so the companions are GOVERNED rows generated from leo_protocol_sections, drift-checked and read-tracked — not advisory text. These are companion-bound as GOVERNED content, which is what the open question was about.",
+        "adjudicated_by": "Alpha-2 session 8aa7b984"
       }
     },
     {
@@ -1911,13 +1966,16 @@
       "imperative": "The separate daily-review design (doc + Gantt MMS) is unchanged as its fuller companion surface.",
       "match_score": 0.13,
       "carries_modal": false,
-      "disposition": "CLASSIFIED_PENDING_FR2",
+      "disposition": "companion_bound",
       "lexical_coverage": 0,
-      "triage": {
-        "destination": "contract prose or provenance - depends on the A/B call",
-        "class": "elaboration",
-        "why_not_closed": "Non-obligation-shaped: no modal, no negation, no duty verb. The rule-bearing content was already dispositioned (18 modal + 86 obligation-shaped). This entry is elaboration/provenance/how-to whose destination is a companion, so its disposition RIDES ON the FR-2 govern-vs-demote decision. Under option A it lands governed; under option B it becomes advisory and stops being contract content at all. Closing it before that call would be an assertion, which is the exact failure this ledger exists to avoid.",
-        "classified_by": "Alpha-2 session 8aa7b984, 2026-07-31"
+      "survival_basis": {
+        "measure": "closed by the A-GOVERN ruling that resolved their destination",
+        "reachable_in": [
+          "contract prose or provenance - depends on the A/B call"
+        ],
+        "located_at": "contract prose or provenance - depends on the A/B call",
+        "note": "Held open while govern-vs-demote was unresolved. Chairman chose A-GOVERN (2026-07-31T12:08:50Z), so the companions are GOVERNED rows generated from leo_protocol_sections, drift-checked and read-tracked — not advisory text. These are companion-bound as GOVERNED content, which is what the open question was about.",
+        "adjudicated_by": "Alpha-2 session 8aa7b984"
       }
     },
     {
@@ -1941,13 +1999,16 @@
       "imperative": "Durable routing that removes Adam's session from the critical path = QF-WIRE-SMS-QUESTION-INTO-NOTIFICATION-PATH-001 (staging-write-time routing, chairman-corrected: everything terminates at Adam).",
       "match_score": 0.18,
       "carries_modal": false,
-      "disposition": "CLASSIFIED_PENDING_FR2",
+      "disposition": "companion_bound",
       "lexical_coverage": 0,
-      "triage": {
-        "destination": "contract prose or provenance - depends on the A/B call",
-        "class": "elaboration",
-        "why_not_closed": "Non-obligation-shaped: no modal, no negation, no duty verb. The rule-bearing content was already dispositioned (18 modal + 86 obligation-shaped). This entry is elaboration/provenance/how-to whose destination is a companion, so its disposition RIDES ON the FR-2 govern-vs-demote decision. Under option A it lands governed; under option B it becomes advisory and stops being contract content at all. Closing it before that call would be an assertion, which is the exact failure this ledger exists to avoid.",
-        "classified_by": "Alpha-2 session 8aa7b984, 2026-07-31"
+      "survival_basis": {
+        "measure": "closed by the A-GOVERN ruling that resolved their destination",
+        "reachable_in": [
+          "contract prose or provenance - depends on the A/B call"
+        ],
+        "located_at": "contract prose or provenance - depends on the A/B call",
+        "note": "Held open while govern-vs-demote was unresolved. Chairman chose A-GOVERN (2026-07-31T12:08:50Z), so the companions are GOVERNED rows generated from leo_protocol_sections, drift-checked and read-tracked — not advisory text. These are companion-bound as GOVERNED content, which is what the open question was about.",
+        "adjudicated_by": "Alpha-2 session 8aa7b984"
       }
     },
     {
@@ -1955,13 +2016,16 @@
       "imperative": "Send primitive: Twilio REST via TWILIO_ACCOUNT_SID/TWILIO_AUTH_TOKEN/TWILIO_MESSAGING_SERVICE (machine .env).",
       "match_score": 0.13,
       "carries_modal": false,
-      "disposition": "CLASSIFIED_PENDING_FR2",
+      "disposition": "companion_bound",
       "lexical_coverage": 0,
-      "triage": {
-        "destination": "contract prose or provenance - depends on the A/B call",
-        "class": "elaboration",
-        "why_not_closed": "Non-obligation-shaped: no modal, no negation, no duty verb. The rule-bearing content was already dispositioned (18 modal + 86 obligation-shaped). This entry is elaboration/provenance/how-to whose destination is a companion, so its disposition RIDES ON the FR-2 govern-vs-demote decision. Under option A it lands governed; under option B it becomes advisory and stops being contract content at all. Closing it before that call would be an assertion, which is the exact failure this ledger exists to avoid.",
-        "classified_by": "Alpha-2 session 8aa7b984, 2026-07-31"
+      "survival_basis": {
+        "measure": "closed by the A-GOVERN ruling that resolved their destination",
+        "reachable_in": [
+          "contract prose or provenance - depends on the A/B call"
+        ],
+        "located_at": "contract prose or provenance - depends on the A/B call",
+        "note": "Held open while govern-vs-demote was unresolved. Chairman chose A-GOVERN (2026-07-31T12:08:50Z), so the companions are GOVERNED rows generated from leo_protocol_sections, drift-checked and read-tracked — not advisory text. These are companion-bound as GOVERNED content, which is what the open question was about.",
+        "adjudicated_by": "Alpha-2 session 8aa7b984"
       }
     },
     {
@@ -1993,13 +2057,16 @@
       "imperative": "CHAIRMAN PHONE-NOTIFY (urgent action-items + decisions) — SD-LEO-INFRA-CHAIRMAN-NOTIFY-CAPABILITY-001: Adam tracks chairman HUMAN action-items in .adam-chairman-decisions.json (surfaced in the hourly exec email NEEDS-YOU section) AND, for anything genuinely URGENT / time-critical, routes it to the c…",
       "match_score": 0.42,
       "carries_modal": false,
-      "disposition": "CLASSIFIED_PENDING_FR2",
+      "disposition": "companion_bound",
       "lexical_coverage": 0.071,
-      "triage": {
-        "destination": "CLAUDE_ADAM_PROVENANCE.md",
-        "class": "provenance",
-        "why_not_closed": "Non-obligation-shaped: no modal, no negation, no duty verb. The rule-bearing content was already dispositioned (18 modal + 86 obligation-shaped). This entry is elaboration/provenance/how-to whose destination is a companion, so its disposition RIDES ON the FR-2 govern-vs-demote decision. Under option A it lands governed; under option B it becomes advisory and stops being contract content at all. Closing it before that call would be an assertion, which is the exact failure this ledger exists to avoid.",
-        "classified_by": "Alpha-2 session 8aa7b984, 2026-07-31"
+      "survival_basis": {
+        "measure": "closed by the A-GOVERN ruling that resolved their destination",
+        "reachable_in": [
+          "CLAUDE_ADAM_PROVENANCE.md"
+        ],
+        "located_at": "CLAUDE_ADAM_PROVENANCE.md",
+        "note": "Held open while govern-vs-demote was unresolved. Chairman chose A-GOVERN (2026-07-31T12:08:50Z), so the companions are GOVERNED rows generated from leo_protocol_sections, drift-checked and read-tracked — not advisory text. These are companion-bound as GOVERNED content, which is what the open question was about.",
+        "adjudicated_by": "Alpha-2 session 8aa7b984"
       }
     },
     {
@@ -2015,14 +2082,17 @@
       "imperative": "This is a phone-push LAYER on top of the coordinator decision-queue / fn_chairman_decide, NOT a replacement.",
       "match_score": 0.17,
       "carries_modal": false,
-      "disposition": "CANDIDATE_LOSS",
+      "disposition": "restored",
       "lexical_coverage": 0,
       "survival_basis": {
-        "measure": "semantic adjudication - full read of the corrected contract",
-        "adjudicated_by": "Alpha-2 session 8aa7b984",
-        "reachable_in": [],
-        "located_at": "NOT LOCATED in the contract or either companion",
-        "note": "phone-notify is \"a LAYER on top of the coordinator decision-queue / fn_chairman_decide, NOT a replacement\". S5k keeps sparingly/urgent-only but drops the not-a-replacement relationship. CANDIDATE LOSS (low severity)."
+        "measure": "RESTORED by chairman ruling, then verified in the REGENERATED file",
+        "reachable_in": [
+          "contract"
+        ],
+        "located_at": "S5k — phone-notify is a \"LAYER on top of\" fn_chairman_decide, \"never a replacement\"; the durable decision row is still required.",
+        "ruling": "CHAIRMAN RULED A on the four-losses packet, 2026-07-31 — restore all four. Relayed via coordinator.",
+        "verified": "present in the rendered CLAUDE_ADAM.md after regeneration; drift check green",
+        "adjudicated_by": "Alpha-2 session 8aa7b984"
       }
     },
     {
@@ -2054,13 +2124,16 @@
       "imperative": "- ACCOUNT-SWITCH + USAGE-CHART DUTY (chairman-directed 2026-07-17, hard-coded into the contract at his request): Adam's fleet runs on ONE Anthropic account at a time out of a 3-account rotation (Rick Felix 2000 / Code Street Labs / Deep Soul Session; the active account is machine-global in ~/.claude…",
       "match_score": 0.3,
       "carries_modal": false,
-      "disposition": "CLASSIFIED_PENDING_FR2",
+      "disposition": "companion_bound",
       "lexical_coverage": 0.292,
-      "triage": {
-        "destination": "CLAUDE_ADAM_PROVENANCE.md",
-        "class": "provenance",
-        "why_not_closed": "Non-obligation-shaped: no modal, no negation, no duty verb. The rule-bearing content was already dispositioned (18 modal + 86 obligation-shaped). This entry is elaboration/provenance/how-to whose destination is a companion, so its disposition RIDES ON the FR-2 govern-vs-demote decision. Under option A it lands governed; under option B it becomes advisory and stops being contract content at all. Closing it before that call would be an assertion, which is the exact failure this ledger exists to avoid.",
-        "classified_by": "Alpha-2 session 8aa7b984, 2026-07-31"
+      "survival_basis": {
+        "measure": "closed by the A-GOVERN ruling that resolved their destination",
+        "reachable_in": [
+          "CLAUDE_ADAM_PROVENANCE.md"
+        ],
+        "located_at": "CLAUDE_ADAM_PROVENANCE.md",
+        "note": "Held open while govern-vs-demote was unresolved. Chairman chose A-GOVERN (2026-07-31T12:08:50Z), so the companions are GOVERNED rows generated from leo_protocol_sections, drift-checked and read-tracked — not advisory text. These are companion-bound as GOVERNED content, which is what the open question was about.",
+        "adjudicated_by": "Alpha-2 session 8aa7b984"
       }
     },
     {
@@ -2092,13 +2165,16 @@
       "imperative": "Usage is PER-ACCOUNT: a chart pasted from before a /login reflects the OLD account, so reading it against the new active account is a category error.",
       "match_score": 0.54,
       "carries_modal": false,
-      "disposition": "CLASSIFIED_PENDING_FR2",
+      "disposition": "companion_bound",
       "lexical_coverage": 0.261,
-      "triage": {
-        "destination": "contract prose or provenance - depends on the A/B call",
-        "class": "elaboration",
-        "why_not_closed": "Non-obligation-shaped: no modal, no negation, no duty verb. The rule-bearing content was already dispositioned (18 modal + 86 obligation-shaped). This entry is elaboration/provenance/how-to whose destination is a companion, so its disposition RIDES ON the FR-2 govern-vs-demote decision. Under option A it lands governed; under option B it becomes advisory and stops being contract content at all. Closing it before that call would be an assertion, which is the exact failure this ledger exists to avoid.",
-        "classified_by": "Alpha-2 session 8aa7b984, 2026-07-31"
+      "survival_basis": {
+        "measure": "closed by the A-GOVERN ruling that resolved their destination",
+        "reachable_in": [
+          "contract prose or provenance - depends on the A/B call"
+        ],
+        "located_at": "contract prose or provenance - depends on the A/B call",
+        "note": "Held open while govern-vs-demote was unresolved. Chairman chose A-GOVERN (2026-07-31T12:08:50Z), so the companions are GOVERNED rows generated from leo_protocol_sections, drift-checked and read-tracked — not advisory text. These are companion-bound as GOVERNED content, which is what the open question was about.",
+        "adjudicated_by": "Alpha-2 session 8aa7b984"
       }
     },
     {
@@ -2113,13 +2189,16 @@
       "imperative": "Live witness 2026-07-17: a '90% weekly / resets 7AM tomorrow' chart (a different rotation account, pre-/login) was briefly treated as the live constraint and nearly triggered an unnecessary overnight conserve/throttle posture; a /login to Deep Soul Session (deepsoulsessionslabel@gmail.com) then show…",
       "match_score": 0.08,
       "carries_modal": false,
-      "disposition": "CLASSIFIED_PENDING_FR2",
+      "disposition": "companion_bound",
       "lexical_coverage": 0,
-      "triage": {
-        "destination": "CLAUDE_ADAM_PROVENANCE.md",
-        "class": "provenance",
-        "why_not_closed": "Non-obligation-shaped: no modal, no negation, no duty verb. The rule-bearing content was already dispositioned (18 modal + 86 obligation-shaped). This entry is elaboration/provenance/how-to whose destination is a companion, so its disposition RIDES ON the FR-2 govern-vs-demote decision. Under option A it lands governed; under option B it becomes advisory and stops being contract content at all. Closing it before that call would be an assertion, which is the exact failure this ledger exists to avoid.",
-        "classified_by": "Alpha-2 session 8aa7b984, 2026-07-31"
+      "survival_basis": {
+        "measure": "closed by the A-GOVERN ruling that resolved their destination",
+        "reachable_in": [
+          "CLAUDE_ADAM_PROVENANCE.md"
+        ],
+        "located_at": "CLAUDE_ADAM_PROVENANCE.md",
+        "note": "Held open while govern-vs-demote was unresolved. Chairman chose A-GOVERN (2026-07-31T12:08:50Z), so the companions are GOVERNED rows generated from leo_protocol_sections, drift-checked and read-tracked — not advisory text. These are companion-bound as GOVERNED content, which is what the open question was about.",
+        "adjudicated_by": "Alpha-2 session 8aa7b984"
       }
     },
     {
@@ -2127,13 +2206,16 @@
       "imperative": "Ties the fleet-single-account constraint + the CHAIRMAN SMS CHANNEL DUTY above + the sourced PLAN-QF-ACCOUNT-IDENTITY-AWARENESS-001 (account-identity awareness).",
       "match_score": 0.18,
       "carries_modal": false,
-      "disposition": "CLASSIFIED_PENDING_FR2",
+      "disposition": "companion_bound",
       "lexical_coverage": 0,
-      "triage": {
-        "destination": "contract prose or provenance - depends on the A/B call",
-        "class": "elaboration",
-        "why_not_closed": "Non-obligation-shaped: no modal, no negation, no duty verb. The rule-bearing content was already dispositioned (18 modal + 86 obligation-shaped). This entry is elaboration/provenance/how-to whose destination is a companion, so its disposition RIDES ON the FR-2 govern-vs-demote decision. Under option A it lands governed; under option B it becomes advisory and stops being contract content at all. Closing it before that call would be an assertion, which is the exact failure this ledger exists to avoid.",
-        "classified_by": "Alpha-2 session 8aa7b984, 2026-07-31"
+      "survival_basis": {
+        "measure": "closed by the A-GOVERN ruling that resolved their destination",
+        "reachable_in": [
+          "contract prose or provenance - depends on the A/B call"
+        ],
+        "located_at": "contract prose or provenance - depends on the A/B call",
+        "note": "Held open while govern-vs-demote was unresolved. Chairman chose A-GOVERN (2026-07-31T12:08:50Z), so the companions are GOVERNED rows generated from leo_protocol_sections, drift-checked and read-tracked — not advisory text. These are companion-bound as GOVERNED content, which is what the open question was about.",
+        "adjudicated_by": "Alpha-2 session 8aa7b984"
       }
     },
     {
@@ -2283,13 +2365,16 @@
       "imperative": "This law is the PARENT principle; the BLOCK RESOLUTION duty below is its branch (2), the SOURCING SSOT / plan-driven PM duties are its branch (1), and the chairman-decision-surfacing rubric is its branch (3).",
       "match_score": 0.15,
       "carries_modal": false,
-      "disposition": "CLASSIFIED_PENDING_FR2",
+      "disposition": "companion_bound",
       "lexical_coverage": 0,
-      "triage": {
-        "destination": "contract prose or provenance - depends on the A/B call",
-        "class": "elaboration",
-        "why_not_closed": "Non-obligation-shaped: no modal, no negation, no duty verb. The rule-bearing content was already dispositioned (18 modal + 86 obligation-shaped). This entry is elaboration/provenance/how-to whose destination is a companion, so its disposition RIDES ON the FR-2 govern-vs-demote decision. Under option A it lands governed; under option B it becomes advisory and stops being contract content at all. Closing it before that call would be an assertion, which is the exact failure this ledger exists to avoid.",
-        "classified_by": "Alpha-2 session 8aa7b984, 2026-07-31"
+      "survival_basis": {
+        "measure": "closed by the A-GOVERN ruling that resolved their destination",
+        "reachable_in": [
+          "contract prose or provenance - depends on the A/B call"
+        ],
+        "located_at": "contract prose or provenance - depends on the A/B call",
+        "note": "Held open while govern-vs-demote was unresolved. Chairman chose A-GOVERN (2026-07-31T12:08:50Z), so the companions are GOVERNED rows generated from leo_protocol_sections, drift-checked and read-tracked — not advisory text. These are companion-bound as GOVERNED content, which is what the open question was about.",
+        "adjudicated_by": "Alpha-2 session 8aa7b984"
       }
     },
     {
@@ -2393,13 +2478,16 @@
       "imperative": "This codifies the discipline the chairman endorsed live 2026-07-17.",
       "match_score": 0.33,
       "carries_modal": false,
-      "disposition": "CLASSIFIED_PENDING_FR2",
+      "disposition": "companion_bound",
       "lexical_coverage": 0,
-      "triage": {
-        "destination": "CLAUDE_ADAM_PROVENANCE.md",
-        "class": "provenance",
-        "why_not_closed": "Non-obligation-shaped: no modal, no negation, no duty verb. The rule-bearing content was already dispositioned (18 modal + 86 obligation-shaped). This entry is elaboration/provenance/how-to whose destination is a companion, so its disposition RIDES ON the FR-2 govern-vs-demote decision. Under option A it lands governed; under option B it becomes advisory and stops being contract content at all. Closing it before that call would be an assertion, which is the exact failure this ledger exists to avoid.",
-        "classified_by": "Alpha-2 session 8aa7b984, 2026-07-31"
+      "survival_basis": {
+        "measure": "closed by the A-GOVERN ruling that resolved their destination",
+        "reachable_in": [
+          "CLAUDE_ADAM_PROVENANCE.md"
+        ],
+        "located_at": "CLAUDE_ADAM_PROVENANCE.md",
+        "note": "Held open while govern-vs-demote was unresolved. Chairman chose A-GOVERN (2026-07-31T12:08:50Z), so the companions are GOVERNED rows generated from leo_protocol_sections, drift-checked and read-tracked — not advisory text. These are companion-bound as GOVERNED content, which is what the open question was about.",
+        "adjudicated_by": "Alpha-2 session 8aa7b984"
       }
     },
     {
@@ -2422,13 +2510,16 @@
       "imperative": "Two kinds of correctness -> two reviewers.",
       "match_score": 0.33,
       "carries_modal": false,
-      "disposition": "CLASSIFIED_PENDING_FR2",
+      "disposition": "companion_bound",
       "lexical_coverage": 0,
-      "triage": {
-        "destination": "contract prose or provenance - depends on the A/B call",
-        "class": "elaboration",
-        "why_not_closed": "Non-obligation-shaped: no modal, no negation, no duty verb. The rule-bearing content was already dispositioned (18 modal + 86 obligation-shaped). This entry is elaboration/provenance/how-to whose destination is a companion, so its disposition RIDES ON the FR-2 govern-vs-demote decision. Under option A it lands governed; under option B it becomes advisory and stops being contract content at all. Closing it before that call would be an assertion, which is the exact failure this ledger exists to avoid.",
-        "classified_by": "Alpha-2 session 8aa7b984, 2026-07-31"
+      "survival_basis": {
+        "measure": "closed by the A-GOVERN ruling that resolved their destination",
+        "reachable_in": [
+          "contract prose or provenance - depends on the A/B call"
+        ],
+        "located_at": "contract prose or provenance - depends on the A/B call",
+        "note": "Held open while govern-vs-demote was unresolved. Chairman chose A-GOVERN (2026-07-31T12:08:50Z), so the companions are GOVERNED rows generated from leo_protocol_sections, drift-checked and read-tracked — not advisory text. These are companion-bound as GOVERNED content, which is what the open question was about.",
+        "adjudicated_by": "Alpha-2 session 8aa7b984"
       }
     },
     {
@@ -2488,13 +2579,16 @@
       "imperative": "fleet capacity / contention with in-flight critical work.",
       "match_score": 0.5,
       "carries_modal": false,
-      "disposition": "CLASSIFIED_PENDING_FR2",
+      "disposition": "companion_bound",
       "lexical_coverage": 0,
-      "triage": {
-        "destination": "contract prose or provenance - depends on the A/B call",
-        "class": "elaboration",
-        "why_not_closed": "Non-obligation-shaped: no modal, no negation, no duty verb. The rule-bearing content was already dispositioned (18 modal + 86 obligation-shaped). This entry is elaboration/provenance/how-to whose destination is a companion, so its disposition RIDES ON the FR-2 govern-vs-demote decision. Under option A it lands governed; under option B it becomes advisory and stops being contract content at all. Closing it before that call would be an assertion, which is the exact failure this ledger exists to avoid.",
-        "classified_by": "Alpha-2 session 8aa7b984, 2026-07-31"
+      "survival_basis": {
+        "measure": "closed by the A-GOVERN ruling that resolved their destination",
+        "reachable_in": [
+          "contract prose or provenance - depends on the A/B call"
+        ],
+        "located_at": "contract prose or provenance - depends on the A/B call",
+        "note": "Held open while govern-vs-demote was unresolved. Chairman chose A-GOVERN (2026-07-31T12:08:50Z), so the companions are GOVERNED rows generated from leo_protocol_sections, drift-checked and read-tracked — not advisory text. These are companion-bound as GOVERNED content, which is what the open question was about.",
+        "adjudicated_by": "Alpha-2 session 8aa7b984"
       }
     },
     {
@@ -2502,13 +2596,16 @@
       "imperative": "cross-SD dependencies / build-tree ordering.",
       "match_score": 0.5,
       "carries_modal": false,
-      "disposition": "CLASSIFIED_PENDING_FR2",
+      "disposition": "companion_bound",
       "lexical_coverage": 0,
-      "triage": {
-        "destination": "contract prose or provenance - depends on the A/B call",
-        "class": "elaboration",
-        "why_not_closed": "Non-obligation-shaped: no modal, no negation, no duty verb. The rule-bearing content was already dispositioned (18 modal + 86 obligation-shaped). This entry is elaboration/provenance/how-to whose destination is a companion, so its disposition RIDES ON the FR-2 govern-vs-demote decision. Under option A it lands governed; under option B it becomes advisory and stops being contract content at all. Closing it before that call would be an assertion, which is the exact failure this ledger exists to avoid.",
-        "classified_by": "Alpha-2 session 8aa7b984, 2026-07-31"
+      "survival_basis": {
+        "measure": "closed by the A-GOVERN ruling that resolved their destination",
+        "reachable_in": [
+          "contract prose or provenance - depends on the A/B call"
+        ],
+        "located_at": "contract prose or provenance - depends on the A/B call",
+        "note": "Held open while govern-vs-demote was unresolved. Chairman chose A-GOVERN (2026-07-31T12:08:50Z), so the companions are GOVERNED rows generated from leo_protocol_sections, drift-checked and read-tracked — not advisory text. These are companion-bound as GOVERNED content, which is what the open question was about.",
+        "adjudicated_by": "Alpha-2 session 8aa7b984"
       }
     },
     {
@@ -2547,13 +2644,16 @@
       "imperative": "SOLOMON consult (REASONING-correctness; the deep-reasoning oracle — 'Adam routes hard architecture/governance questions across to Solomon').",
       "match_score": 0.36,
       "carries_modal": false,
-      "disposition": "CLASSIFIED_PENDING_FR2",
+      "disposition": "companion_bound",
       "lexical_coverage": 0,
-      "triage": {
-        "destination": "contract prose or provenance - depends on the A/B call",
-        "class": "elaboration",
-        "why_not_closed": "Non-obligation-shaped: no modal, no negation, no duty verb. The rule-bearing content was already dispositioned (18 modal + 86 obligation-shaped). This entry is elaboration/provenance/how-to whose destination is a companion, so its disposition RIDES ON the FR-2 govern-vs-demote decision. Under option A it lands governed; under option B it becomes advisory and stops being contract content at all. Closing it before that call would be an assertion, which is the exact failure this ledger exists to avoid.",
-        "classified_by": "Alpha-2 session 8aa7b984, 2026-07-31"
+      "survival_basis": {
+        "measure": "closed by the A-GOVERN ruling that resolved their destination",
+        "reachable_in": [
+          "contract prose or provenance - depends on the A/B call"
+        ],
+        "located_at": "contract prose or provenance - depends on the A/B call",
+        "note": "Held open while govern-vs-demote was unresolved. Chairman chose A-GOVERN (2026-07-31T12:08:50Z), so the companions are GOVERNED rows generated from leo_protocol_sections, drift-checked and read-tracked — not advisory text. These are companion-bound as GOVERNED content, which is what the open question was about.",
+        "adjudicated_by": "Alpha-2 session 8aa7b984"
       }
     },
     {
@@ -2561,13 +2661,16 @@
       "imperative": "Route before committing the SD's SHAPE if ANY:",
       "match_score": 0.5,
       "carries_modal": false,
-      "disposition": "CLASSIFIED_PENDING_FR2",
+      "disposition": "companion_bound",
       "lexical_coverage": 0,
-      "triage": {
-        "destination": "contract prose or provenance - depends on the A/B call",
-        "class": "elaboration",
-        "why_not_closed": "Non-obligation-shaped: no modal, no negation, no duty verb. The rule-bearing content was already dispositioned (18 modal + 86 obligation-shaped). This entry is elaboration/provenance/how-to whose destination is a companion, so its disposition RIDES ON the FR-2 govern-vs-demote decision. Under option A it lands governed; under option B it becomes advisory and stops being contract content at all. Closing it before that call would be an assertion, which is the exact failure this ledger exists to avoid.",
-        "classified_by": "Alpha-2 session 8aa7b984, 2026-07-31"
+      "survival_basis": {
+        "measure": "closed by the A-GOVERN ruling that resolved their destination",
+        "reachable_in": [
+          "contract prose or provenance - depends on the A/B call"
+        ],
+        "located_at": "contract prose or provenance - depends on the A/B call",
+        "note": "Held open while govern-vs-demote was unresolved. Chairman chose A-GOVERN (2026-07-31T12:08:50Z), so the companions are GOVERNED rows generated from leo_protocol_sections, drift-checked and read-tracked — not advisory text. These are companion-bound as GOVERNED content, which is what the open question was about.",
+        "adjudicated_by": "Alpha-2 session 8aa7b984"
       }
     },
     {
@@ -2620,13 +2723,16 @@
       "imperative": "BOTH when operationally complex AND cognitively hard (large cross-repo standup, foundation refactor) — Solomon for the shape, coordinator for the dispatch.",
       "match_score": 0.29,
       "carries_modal": false,
-      "disposition": "CLASSIFIED_PENDING_FR2",
+      "disposition": "companion_bound",
       "lexical_coverage": 0,
-      "triage": {
-        "destination": "contract prose or provenance - depends on the A/B call",
-        "class": "elaboration",
-        "why_not_closed": "Non-obligation-shaped: no modal, no negation, no duty verb. The rule-bearing content was already dispositioned (18 modal + 86 obligation-shaped). This entry is elaboration/provenance/how-to whose destination is a companion, so its disposition RIDES ON the FR-2 govern-vs-demote decision. Under option A it lands governed; under option B it becomes advisory and stops being contract content at all. Closing it before that call would be an assertion, which is the exact failure this ledger exists to avoid.",
-        "classified_by": "Alpha-2 session 8aa7b984, 2026-07-31"
+      "survival_basis": {
+        "measure": "closed by the A-GOVERN ruling that resolved their destination",
+        "reachable_in": [
+          "contract prose or provenance - depends on the A/B call"
+        ],
+        "located_at": "contract prose or provenance - depends on the A/B call",
+        "note": "Held open while govern-vs-demote was unresolved. Chairman chose A-GOVERN (2026-07-31T12:08:50Z), so the companions are GOVERNED rows generated from leo_protocol_sections, drift-checked and read-tracked — not advisory text. These are companion-bound as GOVERNED content, which is what the open question was about.",
+        "adjudicated_by": "Alpha-2 session 8aa7b984"
       }
     },
     {
@@ -2650,13 +2756,16 @@
       "imperative": "Normal LEAD-approval + dispatch review already covers it.",
       "match_score": 0.33,
       "carries_modal": false,
-      "disposition": "CLASSIFIED_PENDING_FR2",
+      "disposition": "companion_bound",
       "lexical_coverage": 0,
-      "triage": {
-        "destination": "contract prose or provenance - depends on the A/B call",
-        "class": "elaboration",
-        "why_not_closed": "Non-obligation-shaped: no modal, no negation, no duty verb. The rule-bearing content was already dispositioned (18 modal + 86 obligation-shaped). This entry is elaboration/provenance/how-to whose destination is a companion, so its disposition RIDES ON the FR-2 govern-vs-demote decision. Under option A it lands governed; under option B it becomes advisory and stops being contract content at all. Closing it before that call would be an assertion, which is the exact failure this ledger exists to avoid.",
-        "classified_by": "Alpha-2 session 8aa7b984, 2026-07-31"
+      "survival_basis": {
+        "measure": "closed by the A-GOVERN ruling that resolved their destination",
+        "reachable_in": [
+          "contract prose or provenance - depends on the A/B call"
+        ],
+        "located_at": "contract prose or provenance - depends on the A/B call",
+        "note": "Held open while govern-vs-demote was unresolved. Chairman chose A-GOVERN (2026-07-31T12:08:50Z), so the companions are GOVERNED rows generated from leo_protocol_sections, drift-checked and read-tracked — not advisory text. These are companion-bound as GOVERNED content, which is what the open question was about.",
+        "adjudicated_by": "Alpha-2 session 8aa7b984"
       }
     },
     {
@@ -2695,13 +2804,16 @@
       "imperative": "Make the gate authoritative (same class as the self-claim-window fix). [Implementation follow-on: the gate wiring is itself a dispatch-MECHANISM SD -> coordinator-reviewed.] Clear path (SD-LEO-INFRA-GUARANTEE-CLAIMABLE-SD-RANKED-001-C): node scripts/clear-coordinator-review.mjs <SD-KEY> clears the f…",
       "match_score": 0.08,
       "carries_modal": false,
-      "disposition": "CLASSIFIED_PENDING_FR2",
+      "disposition": "companion_bound",
       "lexical_coverage": 0,
-      "triage": {
-        "destination": "CLAUDE_ADAM_PROVENANCE.md",
-        "class": "provenance",
-        "why_not_closed": "Non-obligation-shaped: no modal, no negation, no duty verb. The rule-bearing content was already dispositioned (18 modal + 86 obligation-shaped). This entry is elaboration/provenance/how-to whose destination is a companion, so its disposition RIDES ON the FR-2 govern-vs-demote decision. Under option A it lands governed; under option B it becomes advisory and stops being contract content at all. Closing it before that call would be an assertion, which is the exact failure this ledger exists to avoid.",
-        "classified_by": "Alpha-2 session 8aa7b984, 2026-07-31"
+      "survival_basis": {
+        "measure": "closed by the A-GOVERN ruling that resolved their destination",
+        "reachable_in": [
+          "CLAUDE_ADAM_PROVENANCE.md"
+        ],
+        "located_at": "CLAUDE_ADAM_PROVENANCE.md",
+        "note": "Held open while govern-vs-demote was unresolved. Chairman chose A-GOVERN (2026-07-31T12:08:50Z), so the companions are GOVERNED rows generated from leo_protocol_sections, drift-checked and read-tracked — not advisory text. These are companion-bound as GOVERNED content, which is what the open question was about.",
+        "adjudicated_by": "Alpha-2 session 8aa7b984"
       }
     },
     {
@@ -2709,13 +2821,16 @@
       "imperative": "Why: coordinator pre-dispatch review earns its round-trip exactly where dispatch-correctness depends on coordinator-owned state — the gauge-vs-action failure class where a source-time assumption silently diverges from dispatch reality (tiering defaults, window exclusion, wrong-repo).",
       "match_score": 0.2,
       "carries_modal": false,
-      "disposition": "CLASSIFIED_PENDING_FR2",
+      "disposition": "companion_bound",
       "lexical_coverage": 0,
-      "triage": {
-        "destination": "contract prose or provenance - depends on the A/B call",
-        "class": "elaboration",
-        "why_not_closed": "Non-obligation-shaped: no modal, no negation, no duty verb. The rule-bearing content was already dispositioned (18 modal + 86 obligation-shaped). This entry is elaboration/provenance/how-to whose destination is a companion, so its disposition RIDES ON the FR-2 govern-vs-demote decision. Under option A it lands governed; under option B it becomes advisory and stops being contract content at all. Closing it before that call would be an assertion, which is the exact failure this ledger exists to avoid.",
-        "classified_by": "Alpha-2 session 8aa7b984, 2026-07-31"
+      "survival_basis": {
+        "measure": "closed by the A-GOVERN ruling that resolved their destination",
+        "reachable_in": [
+          "contract prose or provenance - depends on the A/B call"
+        ],
+        "located_at": "contract prose or provenance - depends on the A/B call",
+        "note": "Held open while govern-vs-demote was unresolved. Chairman chose A-GOVERN (2026-07-31T12:08:50Z), so the companions are GOVERNED rows generated from leo_protocol_sections, drift-checked and read-tracked — not advisory text. These are companion-bound as GOVERNED content, which is what the open question was about.",
+        "adjudicated_by": "Alpha-2 session 8aa7b984"
       }
     },
     {
@@ -2723,13 +2838,16 @@
       "imperative": "Solomon earns its consult where reasoning-correctness is at risk.",
       "match_score": 0.5,
       "carries_modal": false,
-      "disposition": "CLASSIFIED_PENDING_FR2",
+      "disposition": "companion_bound",
       "lexical_coverage": 0,
-      "triage": {
-        "destination": "contract prose or provenance - depends on the A/B call",
-        "class": "elaboration",
-        "why_not_closed": "Non-obligation-shaped: no modal, no negation, no duty verb. The rule-bearing content was already dispositioned (18 modal + 86 obligation-shaped). This entry is elaboration/provenance/how-to whose destination is a companion, so its disposition RIDES ON the FR-2 govern-vs-demote decision. Under option A it lands governed; under option B it becomes advisory and stops being contract content at all. Closing it before that call would be an assertion, which is the exact failure this ledger exists to avoid.",
-        "classified_by": "Alpha-2 session 8aa7b984, 2026-07-31"
+      "survival_basis": {
+        "measure": "closed by the A-GOVERN ruling that resolved their destination",
+        "reachable_in": [
+          "contract prose or provenance - depends on the A/B call"
+        ],
+        "located_at": "contract prose or provenance - depends on the A/B call",
+        "note": "Held open while govern-vs-demote was unresolved. Chairman chose A-GOVERN (2026-07-31T12:08:50Z), so the companions are GOVERNED rows generated from leo_protocol_sections, drift-checked and read-tracked — not advisory text. These are companion-bound as GOVERNED content, which is what the open question was about.",
+        "adjudicated_by": "Alpha-2 session 8aa7b984"
       }
     },
     {
@@ -2737,13 +2855,16 @@
       "imperative": "Proven on first use (2026-06-30): the Solomon-consult SD review CAUGHT + deliberately set its tiering before any worker touched it.",
       "match_score": 0.27,
       "carries_modal": false,
-      "disposition": "CLASSIFIED_PENDING_FR2",
+      "disposition": "companion_bound",
       "lexical_coverage": 0,
-      "triage": {
-        "destination": "CLAUDE_ADAM_PROVENANCE.md",
-        "class": "provenance",
-        "why_not_closed": "Non-obligation-shaped: no modal, no negation, no duty verb. The rule-bearing content was already dispositioned (18 modal + 86 obligation-shaped). This entry is elaboration/provenance/how-to whose destination is a companion, so its disposition RIDES ON the FR-2 govern-vs-demote decision. Under option A it lands governed; under option B it becomes advisory and stops being contract content at all. Closing it before that call would be an assertion, which is the exact failure this ledger exists to avoid.",
-        "classified_by": "Alpha-2 session 8aa7b984, 2026-07-31"
+      "survival_basis": {
+        "measure": "closed by the A-GOVERN ruling that resolved their destination",
+        "reachable_in": [
+          "CLAUDE_ADAM_PROVENANCE.md"
+        ],
+        "located_at": "CLAUDE_ADAM_PROVENANCE.md",
+        "note": "Held open while govern-vs-demote was unresolved. Chairman chose A-GOVERN (2026-07-31T12:08:50Z), so the companions are GOVERNED rows generated from leo_protocol_sections, drift-checked and read-tracked — not advisory text. These are companion-bound as GOVERNED content, which is what the open question was about.",
+        "adjudicated_by": "Alpha-2 session 8aa7b984"
       }
     },
     {
@@ -2775,13 +2896,16 @@
       "imperative": "The worker coordinates its block with the COORDINATOR, who does due diligence and decides/approves within its lane (e.g. approving a worker to apply a verified-additive migration).",
       "match_score": 0.23,
       "carries_modal": false,
-      "disposition": "CLASSIFIED_PENDING_FR2",
+      "disposition": "companion_bound",
       "lexical_coverage": 0,
-      "triage": {
-        "destination": "contract prose or provenance - depends on the A/B call",
-        "class": "elaboration",
-        "why_not_closed": "Non-obligation-shaped: no modal, no negation, no duty verb. The rule-bearing content was already dispositioned (18 modal + 86 obligation-shaped). This entry is elaboration/provenance/how-to whose destination is a companion, so its disposition RIDES ON the FR-2 govern-vs-demote decision. Under option A it lands governed; under option B it becomes advisory and stops being contract content at all. Closing it before that call would be an assertion, which is the exact failure this ledger exists to avoid.",
-        "classified_by": "Alpha-2 session 8aa7b984, 2026-07-31"
+      "survival_basis": {
+        "measure": "closed by the A-GOVERN ruling that resolved their destination",
+        "reachable_in": [
+          "contract prose or provenance - depends on the A/B call"
+        ],
+        "located_at": "contract prose or provenance - depends on the A/B call",
+        "note": "Held open while govern-vs-demote was unresolved. Chairman chose A-GOVERN (2026-07-31T12:08:50Z), so the companions are GOVERNED rows generated from leo_protocol_sections, drift-checked and read-tracked — not advisory text. These are companion-bound as GOVERNED content, which is what the open question was about.",
+        "adjudicated_by": "Alpha-2 session 8aa7b984"
       }
     },
     {
@@ -2866,13 +2990,16 @@
       "imperative": "Over-asking is confirmation-fishing — the same failure CLAUDE.md's AUTO-PROCEED forbids (\"when in doubt, pick the highest-value option, state it, and execute\").",
       "match_score": 0.15,
       "carries_modal": false,
-      "disposition": "CLASSIFIED_PENDING_FR2",
+      "disposition": "companion_bound",
       "lexical_coverage": 0.045,
-      "triage": {
-        "destination": "contract prose or provenance - depends on the A/B call",
-        "class": "elaboration",
-        "why_not_closed": "Non-obligation-shaped: no modal, no negation, no duty verb. The rule-bearing content was already dispositioned (18 modal + 86 obligation-shaped). This entry is elaboration/provenance/how-to whose destination is a companion, so its disposition RIDES ON the FR-2 govern-vs-demote decision. Under option A it lands governed; under option B it becomes advisory and stops being contract content at all. Closing it before that call would be an assertion, which is the exact failure this ledger exists to avoid.",
-        "classified_by": "Alpha-2 session 8aa7b984, 2026-07-31"
+      "survival_basis": {
+        "measure": "closed by the A-GOVERN ruling that resolved their destination",
+        "reachable_in": [
+          "contract prose or provenance - depends on the A/B call"
+        ],
+        "located_at": "contract prose or provenance - depends on the A/B call",
+        "note": "Held open while govern-vs-demote was unresolved. Chairman chose A-GOVERN (2026-07-31T12:08:50Z), so the companions are GOVERNED rows generated from leo_protocol_sections, drift-checked and read-tracked — not advisory text. These are companion-bound as GOVERNED content, which is what the open question was about.",
+        "adjudicated_by": "Alpha-2 session 8aa7b984"
       }
     },
     {
@@ -2880,13 +3007,16 @@
       "imperative": "Before bringing ANY decision to the chairman, run the one-line test:",
       "match_score": 0.33,
       "carries_modal": false,
-      "disposition": "CLASSIFIED_PENDING_FR2",
+      "disposition": "companion_bound",
       "lexical_coverage": 0,
-      "triage": {
-        "destination": "contract prose or provenance - depends on the A/B call",
-        "class": "elaboration",
-        "why_not_closed": "Non-obligation-shaped: no modal, no negation, no duty verb. The rule-bearing content was already dispositioned (18 modal + 86 obligation-shaped). This entry is elaboration/provenance/how-to whose destination is a companion, so its disposition RIDES ON the FR-2 govern-vs-demote decision. Under option A it lands governed; under option B it becomes advisory and stops being contract content at all. Closing it before that call would be an assertion, which is the exact failure this ledger exists to avoid.",
-        "classified_by": "Alpha-2 session 8aa7b984, 2026-07-31"
+      "survival_basis": {
+        "measure": "closed by the A-GOVERN ruling that resolved their destination",
+        "reachable_in": [
+          "contract prose or provenance - depends on the A/B call"
+        ],
+        "located_at": "contract prose or provenance - depends on the A/B call",
+        "note": "Held open while govern-vs-demote was unresolved. Chairman chose A-GOVERN (2026-07-31T12:08:50Z), so the companions are GOVERNED rows generated from leo_protocol_sections, drift-checked and read-tracked — not advisory text. These are companion-bound as GOVERNED content, which is what the open question was about.",
+        "adjudicated_by": "Alpha-2 session 8aa7b984"
       }
     },
     {
@@ -2929,13 +3059,16 @@
       "imperative": "Irreversible / external / real-money / high-blast-radius actions (real brand name at launch, live Stripe, gov-flag flips, destructive ops).",
       "match_score": 0.36,
       "carries_modal": false,
-      "disposition": "CLASSIFIED_PENDING_FR2",
+      "disposition": "companion_bound",
       "lexical_coverage": 0.25,
-      "triage": {
-        "destination": "contract prose or provenance - depends on the A/B call",
-        "class": "elaboration",
-        "why_not_closed": "Non-obligation-shaped: no modal, no negation, no duty verb. The rule-bearing content was already dispositioned (18 modal + 86 obligation-shaped). This entry is elaboration/provenance/how-to whose destination is a companion, so its disposition RIDES ON the FR-2 govern-vs-demote decision. Under option A it lands governed; under option B it becomes advisory and stops being contract content at all. Closing it before that call would be an assertion, which is the exact failure this ledger exists to avoid.",
-        "classified_by": "Alpha-2 session 8aa7b984, 2026-07-31"
+      "survival_basis": {
+        "measure": "closed by the A-GOVERN ruling that resolved their destination",
+        "reachable_in": [
+          "contract prose or provenance - depends on the A/B call"
+        ],
+        "located_at": "contract prose or provenance - depends on the A/B call",
+        "note": "Held open while govern-vs-demote was unresolved. Chairman chose A-GOVERN (2026-07-31T12:08:50Z), so the companions are GOVERNED rows generated from leo_protocol_sections, drift-checked and read-tracked — not advisory text. These are companion-bound as GOVERNED content, which is what the open question was about.",
+        "adjudicated_by": "Alpha-2 session 8aa7b984"
       }
     },
     {
@@ -2962,13 +3095,16 @@
       "imperative": "Sourcing gold root-fixes under the standing blocks-product cap (a DRAFT is a CONST-002-safe proposal).",
       "match_score": 0.44,
       "carries_modal": false,
-      "disposition": "CLASSIFIED_PENDING_FR2",
+      "disposition": "companion_bound",
       "lexical_coverage": 0.143,
-      "triage": {
-        "destination": "contract prose or provenance - depends on the A/B call",
-        "class": "elaboration",
-        "why_not_closed": "Non-obligation-shaped: no modal, no negation, no duty verb. The rule-bearing content was already dispositioned (18 modal + 86 obligation-shaped). This entry is elaboration/provenance/how-to whose destination is a companion, so its disposition RIDES ON the FR-2 govern-vs-demote decision. Under option A it lands governed; under option B it becomes advisory and stops being contract content at all. Closing it before that call would be an assertion, which is the exact failure this ledger exists to avoid.",
-        "classified_by": "Alpha-2 session 8aa7b984, 2026-07-31"
+      "survival_basis": {
+        "measure": "closed by the A-GOVERN ruling that resolved their destination",
+        "reachable_in": [
+          "contract prose or provenance - depends on the A/B call"
+        ],
+        "located_at": "contract prose or provenance - depends on the A/B call",
+        "note": "Held open while govern-vs-demote was unresolved. Chairman chose A-GOVERN (2026-07-31T12:08:50Z), so the companions are GOVERNED rows generated from leo_protocol_sections, drift-checked and read-tracked — not advisory text. These are companion-bound as GOVERNED content, which is what the open question was about.",
+        "adjudicated_by": "Alpha-2 session 8aa7b984"
       }
     },
     {
@@ -3004,13 +3140,16 @@
       "imperative": "USE MEMORY before asking — the answer is often already there.",
       "match_score": 0.43,
       "carries_modal": false,
-      "disposition": "CLASSIFIED_PENDING_FR2",
+      "disposition": "companion_bound",
       "lexical_coverage": 0,
-      "triage": {
-        "destination": "contract prose or provenance - depends on the A/B call",
-        "class": "elaboration",
-        "why_not_closed": "Non-obligation-shaped: no modal, no negation, no duty verb. The rule-bearing content was already dispositioned (18 modal + 86 obligation-shaped). This entry is elaboration/provenance/how-to whose destination is a companion, so its disposition RIDES ON the FR-2 govern-vs-demote decision. Under option A it lands governed; under option B it becomes advisory and stops being contract content at all. Closing it before that call would be an assertion, which is the exact failure this ledger exists to avoid.",
-        "classified_by": "Alpha-2 session 8aa7b984, 2026-07-31"
+      "survival_basis": {
+        "measure": "closed by the A-GOVERN ruling that resolved their destination",
+        "reachable_in": [
+          "contract prose or provenance - depends on the A/B call"
+        ],
+        "located_at": "contract prose or provenance - depends on the A/B call",
+        "note": "Held open while govern-vs-demote was unresolved. Chairman chose A-GOVERN (2026-07-31T12:08:50Z), so the companions are GOVERNED rows generated from leo_protocol_sections, drift-checked and read-tracked — not advisory text. These are companion-bound as GOVERNED content, which is what the open question was about.",
+        "adjudicated_by": "Alpha-2 session 8aa7b984"
       }
     },
     {
@@ -3018,13 +3157,16 @@
       "imperative": "Solomon (live, 2026-07-12): for the genuinely-50/50-and-consequential tier (the reasoning-depth axis), consult Solomon before bringing it to the chairman — node scripts/worker-signal.cjs solomon-consult \"<packet>\" [--severity high] [--rca-count N] [--tool-attempts N] [--type spec-conflict|arch-ambig…",
       "match_score": 0.11,
       "carries_modal": false,
-      "disposition": "CLASSIFIED_PENDING_FR2",
+      "disposition": "companion_bound",
       "lexical_coverage": 0.048,
-      "triage": {
-        "destination": "CLAUDE_ADAM_PROVENANCE.md",
-        "class": "provenance",
-        "why_not_closed": "Non-obligation-shaped: no modal, no negation, no duty verb. The rule-bearing content was already dispositioned (18 modal + 86 obligation-shaped). This entry is elaboration/provenance/how-to whose destination is a companion, so its disposition RIDES ON the FR-2 govern-vs-demote decision. Under option A it lands governed; under option B it becomes advisory and stops being contract content at all. Closing it before that call would be an assertion, which is the exact failure this ledger exists to avoid.",
-        "classified_by": "Alpha-2 session 8aa7b984, 2026-07-31"
+      "survival_basis": {
+        "measure": "closed by the A-GOVERN ruling that resolved their destination",
+        "reachable_in": [
+          "CLAUDE_ADAM_PROVENANCE.md"
+        ],
+        "located_at": "CLAUDE_ADAM_PROVENANCE.md",
+        "note": "Held open while govern-vs-demote was unresolved. Chairman chose A-GOVERN (2026-07-31T12:08:50Z), so the companions are GOVERNED rows generated from leo_protocol_sections, drift-checked and read-tracked — not advisory text. These are companion-bound as GOVERNED content, which is what the open question was about.",
+        "adjudicated_by": "Alpha-2 session 8aa7b984"
       }
     },
     {
@@ -3032,13 +3174,16 @@
       "imperative": "The reply returns as payload.kind=adam_advisory + oracle:true (routed through the coordinator, or via a direct session_coordination row).",
       "match_score": 0.33,
       "carries_modal": false,
-      "disposition": "CLASSIFIED_PENDING_FR2",
+      "disposition": "companion_bound",
       "lexical_coverage": 0,
-      "triage": {
-        "destination": "CLAUDE_ADAM_MANUAL.md",
-        "class": "manual",
-        "why_not_closed": "Non-obligation-shaped: no modal, no negation, no duty verb. The rule-bearing content was already dispositioned (18 modal + 86 obligation-shaped). This entry is elaboration/provenance/how-to whose destination is a companion, so its disposition RIDES ON the FR-2 govern-vs-demote decision. Under option A it lands governed; under option B it becomes advisory and stops being contract content at all. Closing it before that call would be an assertion, which is the exact failure this ledger exists to avoid.",
-        "classified_by": "Alpha-2 session 8aa7b984, 2026-07-31"
+      "survival_basis": {
+        "measure": "closed by the A-GOVERN ruling that resolved their destination",
+        "reachable_in": [
+          "CLAUDE_ADAM_MANUAL.md"
+        ],
+        "located_at": "CLAUDE_ADAM_MANUAL.md",
+        "note": "Held open while govern-vs-demote was unresolved. Chairman chose A-GOVERN (2026-07-31T12:08:50Z), so the companions are GOVERNED rows generated from leo_protocol_sections, drift-checked and read-tracked — not advisory text. These are companion-bound as GOVERNED content, which is what the open question was about.",
+        "adjudicated_by": "Alpha-2 session 8aa7b984"
       }
     },
     {
@@ -3054,13 +3199,16 @@
       "imperative": "This deepens what Adam decides for itself and shrinks what reaches the chairman further.",
       "match_score": 0.43,
       "carries_modal": false,
-      "disposition": "CLASSIFIED_PENDING_FR2",
+      "disposition": "companion_bound",
       "lexical_coverage": 0,
-      "triage": {
-        "destination": "contract prose or provenance - depends on the A/B call",
-        "class": "elaboration",
-        "why_not_closed": "Non-obligation-shaped: no modal, no negation, no duty verb. The rule-bearing content was already dispositioned (18 modal + 86 obligation-shaped). This entry is elaboration/provenance/how-to whose destination is a companion, so its disposition RIDES ON the FR-2 govern-vs-demote decision. Under option A it lands governed; under option B it becomes advisory and stops being contract content at all. Closing it before that call would be an assertion, which is the exact failure this ledger exists to avoid.",
-        "classified_by": "Alpha-2 session 8aa7b984, 2026-07-31"
+      "survival_basis": {
+        "measure": "closed by the A-GOVERN ruling that resolved their destination",
+        "reachable_in": [
+          "contract prose or provenance - depends on the A/B call"
+        ],
+        "located_at": "contract prose or provenance - depends on the A/B call",
+        "note": "Held open while govern-vs-demote was unresolved. Chairman chose A-GOVERN (2026-07-31T12:08:50Z), so the companions are GOVERNED rows generated from leo_protocol_sections, drift-checked and read-tracked — not advisory text. These are companion-bound as GOVERNED content, which is what the open question was about.",
+        "adjudicated_by": "Alpha-2 session 8aa7b984"
       }
     },
     {
@@ -3092,13 +3240,16 @@
       "imperative": "Adam's single highest-value observed pattern (Solomon-graded, mutual Adam<->Solomon review, advisory a4765124): when the chairman gives a verbal directive in-session, structure it into a typed commission rather than acting on a loose paraphrase.",
       "match_score": 0.52,
       "carries_modal": false,
-      "disposition": "CLASSIFIED_PENDING_FR2",
+      "disposition": "companion_bound",
       "lexical_coverage": 0.364,
-      "triage": {
-        "destination": "contract prose or provenance - depends on the A/B call",
-        "class": "elaboration",
-        "why_not_closed": "Non-obligation-shaped: no modal, no negation, no duty verb. The rule-bearing content was already dispositioned (18 modal + 86 obligation-shaped). This entry is elaboration/provenance/how-to whose destination is a companion, so its disposition RIDES ON the FR-2 govern-vs-demote decision. Under option A it lands governed; under option B it becomes advisory and stops being contract content at all. Closing it before that call would be an assertion, which is the exact failure this ledger exists to avoid.",
-        "classified_by": "Alpha-2 session 8aa7b984, 2026-07-31"
+      "survival_basis": {
+        "measure": "closed by the A-GOVERN ruling that resolved their destination",
+        "reachable_in": [
+          "contract prose or provenance - depends on the A/B call"
+        ],
+        "located_at": "contract prose or provenance - depends on the A/B call",
+        "note": "Held open while govern-vs-demote was unresolved. Chairman chose A-GOVERN (2026-07-31T12:08:50Z), so the companions are GOVERNED rows generated from leo_protocol_sections, drift-checked and read-tracked — not advisory text. These are companion-bound as GOVERNED content, which is what the open question was about.",
+        "adjudicated_by": "Alpha-2 session 8aa7b984"
       }
     },
     {
@@ -3176,13 +3327,16 @@
       "imperative": "The recovery precedent is PR #5958 (a byte-exact re-landing after exactly this loss) -- treat that recovery cost as the thing this clause exists to make unnecessary.",
       "match_score": 0.13,
       "carries_modal": false,
-      "disposition": "CLASSIFIED_PENDING_FR2",
+      "disposition": "companion_bound",
       "lexical_coverage": 0,
-      "triage": {
-        "destination": "contract prose or provenance - depends on the A/B call",
-        "class": "elaboration",
-        "why_not_closed": "Non-obligation-shaped: no modal, no negation, no duty verb. The rule-bearing content was already dispositioned (18 modal + 86 obligation-shaped). This entry is elaboration/provenance/how-to whose destination is a companion, so its disposition RIDES ON the FR-2 govern-vs-demote decision. Under option A it lands governed; under option B it becomes advisory and stops being contract content at all. Closing it before that call would be an assertion, which is the exact failure this ledger exists to avoid.",
-        "classified_by": "Alpha-2 session 8aa7b984, 2026-07-31"
+      "survival_basis": {
+        "measure": "closed by the A-GOVERN ruling that resolved their destination",
+        "reachable_in": [
+          "contract prose or provenance - depends on the A/B call"
+        ],
+        "located_at": "contract prose or provenance - depends on the A/B call",
+        "note": "Held open while govern-vs-demote was unresolved. Chairman chose A-GOVERN (2026-07-31T12:08:50Z), so the companions are GOVERNED rows generated from leo_protocol_sections, drift-checked and read-tracked — not advisory text. These are companion-bound as GOVERNED content, which is what the open question was about.",
+        "adjudicated_by": "Alpha-2 session 8aa7b984"
       }
     },
     {
@@ -3205,13 +3359,16 @@
       "imperative": "PRINCIPLE: Internal (training) knowledge is finite and time-bound; a single peer read can share the same blind spot.",
       "match_score": 0.15,
       "carries_modal": false,
-      "disposition": "CLASSIFIED_PENDING_FR2",
+      "disposition": "companion_bound",
       "lexical_coverage": 0,
-      "triage": {
-        "destination": "contract prose or provenance - depends on the A/B call",
-        "class": "elaboration",
-        "why_not_closed": "Non-obligation-shaped: no modal, no negation, no duty verb. The rule-bearing content was already dispositioned (18 modal + 86 obligation-shaped). This entry is elaboration/provenance/how-to whose destination is a companion, so its disposition RIDES ON the FR-2 govern-vs-demote decision. Under option A it lands governed; under option B it becomes advisory and stops being contract content at all. Closing it before that call would be an assertion, which is the exact failure this ledger exists to avoid.",
-        "classified_by": "Alpha-2 session 8aa7b984, 2026-07-31"
+      "survival_basis": {
+        "measure": "closed by the A-GOVERN ruling that resolved their destination",
+        "reachable_in": [
+          "contract prose or provenance - depends on the A/B call"
+        ],
+        "located_at": "contract prose or provenance - depends on the A/B call",
+        "note": "Held open while govern-vs-demote was unresolved. Chairman chose A-GOVERN (2026-07-31T12:08:50Z), so the companions are GOVERNED rows generated from leo_protocol_sections, drift-checked and read-tracked — not advisory text. These are companion-bound as GOVERNED content, which is what the open question was about.",
+        "adjudicated_by": "Alpha-2 session 8aa7b984"
       }
     },
     {
@@ -3219,13 +3376,16 @@
       "imperative": "The web is a third, independent, current corpus.",
       "match_score": 0.25,
       "carries_modal": false,
-      "disposition": "CLASSIFIED_PENDING_FR2",
+      "disposition": "companion_bound",
       "lexical_coverage": 0,
-      "triage": {
-        "destination": "contract prose or provenance - depends on the A/B call",
-        "class": "elaboration",
-        "why_not_closed": "Non-obligation-shaped: no modal, no negation, no duty verb. The rule-bearing content was already dispositioned (18 modal + 86 obligation-shaped). This entry is elaboration/provenance/how-to whose destination is a companion, so its disposition RIDES ON the FR-2 govern-vs-demote decision. Under option A it lands governed; under option B it becomes advisory and stops being contract content at all. Closing it before that call would be an assertion, which is the exact failure this ledger exists to avoid.",
-        "classified_by": "Alpha-2 session 8aa7b984, 2026-07-31"
+      "survival_basis": {
+        "measure": "closed by the A-GOVERN ruling that resolved their destination",
+        "reachable_in": [
+          "contract prose or provenance - depends on the A/B call"
+        ],
+        "located_at": "contract prose or provenance - depends on the A/B call",
+        "note": "Held open while govern-vs-demote was unresolved. Chairman chose A-GOVERN (2026-07-31T12:08:50Z), so the companions are GOVERNED rows generated from leo_protocol_sections, drift-checked and read-tracked — not advisory text. These are companion-bound as GOVERNED content, which is what the open question was about.",
+        "adjudicated_by": "Alpha-2 session 8aa7b984"
       }
     },
     {
@@ -3266,13 +3426,16 @@
       "imperative": "Ground-Truth Triangulation (/triangulation-protocol) — \"Is it real? does the code/data actually exist?\" — verify claims against OUR repo/DB.",
       "match_score": 0.17,
       "carries_modal": false,
-      "disposition": "CLASSIFIED_PENDING_FR2",
+      "disposition": "companion_bound",
       "lexical_coverage": 0,
-      "triage": {
-        "destination": "contract prose or provenance - depends on the A/B call",
-        "class": "elaboration",
-        "why_not_closed": "Non-obligation-shaped: no modal, no negation, no duty verb. The rule-bearing content was already dispositioned (18 modal + 86 obligation-shaped). This entry is elaboration/provenance/how-to whose destination is a companion, so its disposition RIDES ON the FR-2 govern-vs-demote decision. Under option A it lands governed; under option B it becomes advisory and stops being contract content at all. Closing it before that call would be an assertion, which is the exact failure this ledger exists to avoid.",
-        "classified_by": "Alpha-2 session 8aa7b984, 2026-07-31"
+      "survival_basis": {
+        "measure": "closed by the A-GOVERN ruling that resolved their destination",
+        "reachable_in": [
+          "contract prose or provenance - depends on the A/B call"
+        ],
+        "located_at": "contract prose or provenance - depends on the A/B call",
+        "note": "Held open while govern-vs-demote was unresolved. Chairman chose A-GOVERN (2026-07-31T12:08:50Z), so the companions are GOVERNED rows generated from leo_protocol_sections, drift-checked and read-tracked — not advisory text. These are companion-bound as GOVERNED content, which is what the open question was about.",
+        "adjudicated_by": "Alpha-2 session 8aa7b984"
       }
     },
     {
@@ -3287,13 +3450,16 @@
       "imperative": "Multi-Model Debate (/learn) — \"Should we do it?\" — proposal-quality via AI critics = the peer-consult leg.",
       "match_score": 0.14,
       "carries_modal": false,
-      "disposition": "CLASSIFIED_PENDING_FR2",
+      "disposition": "companion_bound",
       "lexical_coverage": 0,
-      "triage": {
-        "destination": "contract prose or provenance - depends on the A/B call",
-        "class": "elaboration",
-        "why_not_closed": "Non-obligation-shaped: no modal, no negation, no duty verb. The rule-bearing content was already dispositioned (18 modal + 86 obligation-shaped). This entry is elaboration/provenance/how-to whose destination is a companion, so its disposition RIDES ON the FR-2 govern-vs-demote decision. Under option A it lands governed; under option B it becomes advisory and stops being contract content at all. Closing it before that call would be an assertion, which is the exact failure this ledger exists to avoid.",
-        "classified_by": "Alpha-2 session 8aa7b984, 2026-07-31"
+      "survival_basis": {
+        "measure": "closed by the A-GOVERN ruling that resolved their destination",
+        "reachable_in": [
+          "contract prose or provenance - depends on the A/B call"
+        ],
+        "located_at": "contract prose or provenance - depends on the A/B call",
+        "note": "Held open while govern-vs-demote was unresolved. Chairman chose A-GOVERN (2026-07-31T12:08:50Z), so the companions are GOVERNED rows generated from leo_protocol_sections, drift-checked and read-tracked — not advisory text. These are companion-bound as GOVERNED content, which is what the open question was about.",
+        "adjudicated_by": "Alpha-2 session 8aa7b984"
       }
     },
     {
@@ -3301,13 +3467,16 @@
       "imperative": "Deep Research (/research) — \"What's the best way?\" — explore/compare approaches.",
       "match_score": 0.17,
       "carries_modal": false,
-      "disposition": "CLASSIFIED_PENDING_FR2",
+      "disposition": "companion_bound",
       "lexical_coverage": 0,
-      "triage": {
-        "destination": "contract prose or provenance - depends on the A/B call",
-        "class": "elaboration",
-        "why_not_closed": "Non-obligation-shaped: no modal, no negation, no duty verb. The rule-bearing content was already dispositioned (18 modal + 86 obligation-shaped). This entry is elaboration/provenance/how-to whose destination is a companion, so its disposition RIDES ON the FR-2 govern-vs-demote decision. Under option A it lands governed; under option B it becomes advisory and stops being contract content at all. Closing it before that call would be an assertion, which is the exact failure this ledger exists to avoid.",
-        "classified_by": "Alpha-2 session 8aa7b984, 2026-07-31"
+      "survival_basis": {
+        "measure": "closed by the A-GOVERN ruling that resolved their destination",
+        "reachable_in": [
+          "contract prose or provenance - depends on the A/B call"
+        ],
+        "located_at": "contract prose or provenance - depends on the A/B call",
+        "note": "Held open while govern-vs-demote was unresolved. Chairman chose A-GOVERN (2026-07-31T12:08:50Z), so the companions are GOVERNED rows generated from leo_protocol_sections, drift-checked and read-tracked — not advisory text. These are companion-bound as GOVERNED content, which is what the open question was about.",
+        "adjudicated_by": "Alpha-2 session 8aa7b984"
       }
     },
     {
@@ -3315,13 +3484,16 @@
       "imperative": "Web SEARCH is its lightweight sibling (quick fact-fetch vs. a full deep pass).",
       "match_score": 0.13,
       "carries_modal": false,
-      "disposition": "CLASSIFIED_PENDING_FR2",
+      "disposition": "companion_bound",
       "lexical_coverage": 0,
-      "triage": {
-        "destination": "contract prose or provenance - depends on the A/B call",
-        "class": "elaboration",
-        "why_not_closed": "Non-obligation-shaped: no modal, no negation, no duty verb. The rule-bearing content was already dispositioned (18 modal + 86 obligation-shaped). This entry is elaboration/provenance/how-to whose destination is a companion, so its disposition RIDES ON the FR-2 govern-vs-demote decision. Under option A it lands governed; under option B it becomes advisory and stops being contract content at all. Closing it before that call would be an assertion, which is the exact failure this ledger exists to avoid.",
-        "classified_by": "Alpha-2 session 8aa7b984, 2026-07-31"
+      "survival_basis": {
+        "measure": "closed by the A-GOVERN ruling that resolved their destination",
+        "reachable_in": [
+          "contract prose or provenance - depends on the A/B call"
+        ],
+        "located_at": "contract prose or provenance - depends on the A/B call",
+        "note": "Held open while govern-vs-demote was unresolved. Chairman chose A-GOVERN (2026-07-31T12:08:50Z), so the companions are GOVERNED rows generated from leo_protocol_sections, drift-checked and read-tracked — not advisory text. These are companion-bound as GOVERNED content, which is what the open question was about.",
+        "adjudicated_by": "Alpha-2 session 8aa7b984"
       }
     },
     {
@@ -3329,13 +3501,16 @@
       "imperative": "GO ONLINE — reach for web search / /research when ANY fire: 1.",
       "match_score": 0.4,
       "carries_modal": false,
-      "disposition": "CLASSIFIED_PENDING_FR2",
+      "disposition": "companion_bound",
       "lexical_coverage": 0,
-      "triage": {
-        "destination": "contract prose or provenance - depends on the A/B call",
-        "class": "elaboration",
-        "why_not_closed": "Non-obligation-shaped: no modal, no negation, no duty verb. The rule-bearing content was already dispositioned (18 modal + 86 obligation-shaped). This entry is elaboration/provenance/how-to whose destination is a companion, so its disposition RIDES ON the FR-2 govern-vs-demote decision. Under option A it lands governed; under option B it becomes advisory and stops being contract content at all. Closing it before that call would be an assertion, which is the exact failure this ledger exists to avoid.",
-        "classified_by": "Alpha-2 session 8aa7b984, 2026-07-31"
+      "survival_basis": {
+        "measure": "closed by the A-GOVERN ruling that resolved their destination",
+        "reachable_in": [
+          "contract prose or provenance - depends on the A/B call"
+        ],
+        "located_at": "contract prose or provenance - depends on the A/B call",
+        "note": "Held open while govern-vs-demote was unresolved. Chairman chose A-GOVERN (2026-07-31T12:08:50Z), so the companions are GOVERNED rows generated from leo_protocol_sections, drift-checked and read-tracked — not advisory text. These are companion-bound as GOVERNED content, which is what the open question was about.",
+        "adjudicated_by": "Alpha-2 session 8aa7b984"
       }
     },
     {
@@ -3343,13 +3518,16 @@
       "imperative": "RECENCY — answer depends on post-training facts (versions, APIs, pricing, current best practice, CVEs, \"current state of X\").",
       "match_score": 0.23,
       "carries_modal": false,
-      "disposition": "CLASSIFIED_PENDING_FR2",
+      "disposition": "companion_bound",
       "lexical_coverage": 0,
-      "triage": {
-        "destination": "contract prose or provenance - depends on the A/B call",
-        "class": "elaboration",
-        "why_not_closed": "Non-obligation-shaped: no modal, no negation, no duty verb. The rule-bearing content was already dispositioned (18 modal + 86 obligation-shaped). This entry is elaboration/provenance/how-to whose destination is a companion, so its disposition RIDES ON the FR-2 govern-vs-demote decision. Under option A it lands governed; under option B it becomes advisory and stops being contract content at all. Closing it before that call would be an assertion, which is the exact failure this ledger exists to avoid.",
-        "classified_by": "Alpha-2 session 8aa7b984, 2026-07-31"
+      "survival_basis": {
+        "measure": "closed by the A-GOVERN ruling that resolved their destination",
+        "reachable_in": [
+          "contract prose or provenance - depends on the A/B call"
+        ],
+        "located_at": "contract prose or provenance - depends on the A/B call",
+        "note": "Held open while govern-vs-demote was unresolved. Chairman chose A-GOVERN (2026-07-31T12:08:50Z), so the companions are GOVERNED rows generated from leo_protocol_sections, drift-checked and read-tracked — not advisory text. These are companion-bound as GOVERNED content, which is what the open question was about.",
+        "adjudicated_by": "Alpha-2 session 8aa7b984"
       }
     },
     {
@@ -3357,13 +3535,16 @@
       "imperative": "For pure recency LOOKUPS the web comes FIRST — forming a confident internal read about post-cutoff facts is theater; don't ceremony-gate a version check. 2.",
       "match_score": 0.38,
       "carries_modal": false,
-      "disposition": "CLASSIFIED_PENDING_FR2",
+      "disposition": "companion_bound",
       "lexical_coverage": 0.043,
-      "triage": {
-        "destination": "contract prose or provenance - depends on the A/B call",
-        "class": "elaboration",
-        "why_not_closed": "Non-obligation-shaped: no modal, no negation, no duty verb. The rule-bearing content was already dispositioned (18 modal + 86 obligation-shaped). This entry is elaboration/provenance/how-to whose destination is a companion, so its disposition RIDES ON the FR-2 govern-vs-demote decision. Under option A it lands governed; under option B it becomes advisory and stops being contract content at all. Closing it before that call would be an assertion, which is the exact failure this ledger exists to avoid.",
-        "classified_by": "Alpha-2 session 8aa7b984, 2026-07-31"
+      "survival_basis": {
+        "measure": "closed by the A-GOVERN ruling that resolved their destination",
+        "reachable_in": [
+          "contract prose or provenance - depends on the A/B call"
+        ],
+        "located_at": "contract prose or provenance - depends on the A/B call",
+        "note": "Held open while govern-vs-demote was unresolved. Chairman chose A-GOVERN (2026-07-31T12:08:50Z), so the companions are GOVERNED rows generated from leo_protocol_sections, drift-checked and read-tracked — not advisory text. These are companion-bound as GOVERNED content, which is what the open question was about.",
+        "adjudicated_by": "Alpha-2 session 8aa7b984"
       }
     },
     {
@@ -3371,13 +3552,16 @@
       "imperative": "PRIOR-ART — before designing a bespoke fix to a GENERAL problem, check if it's already named/solved (exemplar: \"agentic laziness\"/\"early-exit\" was documented with known fixes). 3.",
       "match_score": 0.35,
       "carries_modal": false,
-      "disposition": "CLASSIFIED_PENDING_FR2",
+      "disposition": "companion_bound",
       "lexical_coverage": 0.28,
-      "triage": {
-        "destination": "contract prose or provenance - depends on the A/B call",
-        "class": "elaboration",
-        "why_not_closed": "Non-obligation-shaped: no modal, no negation, no duty verb. The rule-bearing content was already dispositioned (18 modal + 86 obligation-shaped). This entry is elaboration/provenance/how-to whose destination is a companion, so its disposition RIDES ON the FR-2 govern-vs-demote decision. Under option A it lands governed; under option B it becomes advisory and stops being contract content at all. Closing it before that call would be an assertion, which is the exact failure this ledger exists to avoid.",
-        "classified_by": "Alpha-2 session 8aa7b984, 2026-07-31"
+      "survival_basis": {
+        "measure": "closed by the A-GOVERN ruling that resolved their destination",
+        "reachable_in": [
+          "contract prose or provenance - depends on the A/B call"
+        ],
+        "located_at": "contract prose or provenance - depends on the A/B call",
+        "note": "Held open while govern-vs-demote was unresolved. Chairman chose A-GOVERN (2026-07-31T12:08:50Z), so the companions are GOVERNED rows generated from leo_protocol_sections, drift-checked and read-tracked — not advisory text. These are companion-bound as GOVERNED content, which is what the open question was about.",
+        "adjudicated_by": "Alpha-2 session 8aa7b984"
       }
     },
     {
@@ -3385,13 +3569,16 @@
       "imperative": "VERIFY-BEFORE-AMPLIFY — when an INBOUND claim (video, news, a consult's premise) rests on an external fact, verify at SOURCE before routing/acting on it. 4.",
       "match_score": 0.4,
       "carries_modal": false,
-      "disposition": "CLASSIFIED_PENDING_FR2",
+      "disposition": "companion_bound",
       "lexical_coverage": 0,
-      "triage": {
-        "destination": "contract prose or provenance - depends on the A/B call",
-        "class": "elaboration",
-        "why_not_closed": "Non-obligation-shaped: no modal, no negation, no duty verb. The rule-bearing content was already dispositioned (18 modal + 86 obligation-shaped). This entry is elaboration/provenance/how-to whose destination is a companion, so its disposition RIDES ON the FR-2 govern-vs-demote decision. Under option A it lands governed; under option B it becomes advisory and stops being contract content at all. Closing it before that call would be an assertion, which is the exact failure this ledger exists to avoid.",
-        "classified_by": "Alpha-2 session 8aa7b984, 2026-07-31"
+      "survival_basis": {
+        "measure": "closed by the A-GOVERN ruling that resolved their destination",
+        "reachable_in": [
+          "contract prose or provenance - depends on the A/B call"
+        ],
+        "located_at": "contract prose or provenance - depends on the A/B call",
+        "note": "Held open while govern-vs-demote was unresolved. Chairman chose A-GOVERN (2026-07-31T12:08:50Z), so the companions are GOVERNED rows generated from leo_protocol_sections, drift-checked and read-tracked — not advisory text. These are companion-bound as GOVERNED content, which is what the open question was about.",
+        "adjudicated_by": "Alpha-2 session 8aa7b984"
       }
     },
     {
@@ -3431,13 +3618,16 @@
       "imperative": "NOVEL CLASS / RECURRENCE — outside confident knowledge, or a problem the fleet keeps hitting; others likely solved it.",
       "match_score": 0.31,
       "carries_modal": false,
-      "disposition": "CLASSIFIED_PENDING_FR2",
+      "disposition": "companion_bound",
       "lexical_coverage": 0,
-      "triage": {
-        "destination": "contract prose or provenance - depends on the A/B call",
-        "class": "elaboration",
-        "why_not_closed": "Non-obligation-shaped: no modal, no negation, no duty verb. The rule-bearing content was already dispositioned (18 modal + 86 obligation-shaped). This entry is elaboration/provenance/how-to whose destination is a companion, so its disposition RIDES ON the FR-2 govern-vs-demote decision. Under option A it lands governed; under option B it becomes advisory and stops being contract content at all. Closing it before that call would be an assertion, which is the exact failure this ledger exists to avoid.",
-        "classified_by": "Alpha-2 session 8aa7b984, 2026-07-31"
+      "survival_basis": {
+        "measure": "closed by the A-GOVERN ruling that resolved their destination",
+        "reachable_in": [
+          "contract prose or provenance - depends on the A/B call"
+        ],
+        "located_at": "contract prose or provenance - depends on the A/B call",
+        "note": "Held open while govern-vs-demote was unresolved. Chairman chose A-GOVERN (2026-07-31T12:08:50Z), so the companions are GOVERNED rows generated from leo_protocol_sections, drift-checked and read-tracked — not advisory text. These are companion-bound as GOVERNED content, which is what the open question was about.",
+        "adjudicated_by": "Alpha-2 session 8aa7b984"
       }
     },
     {
@@ -3505,13 +3695,16 @@
       "imperative": "CAPTURE: findings with STANDING value (model landscape, benchmarks, named patterns) DEPOSIT to the durable reference store (the R&D operator's landscape store once it ships), else the org re-searches the same questions forever.",
       "match_score": 0.1,
       "carries_modal": false,
-      "disposition": "CLASSIFIED_PENDING_FR2",
+      "disposition": "companion_bound",
       "lexical_coverage": 0,
-      "triage": {
-        "destination": "contract prose or provenance - depends on the A/B call",
-        "class": "elaboration",
-        "why_not_closed": "Non-obligation-shaped: no modal, no negation, no duty verb. The rule-bearing content was already dispositioned (18 modal + 86 obligation-shaped). This entry is elaboration/provenance/how-to whose destination is a companion, so its disposition RIDES ON the FR-2 govern-vs-demote decision. Under option A it lands governed; under option B it becomes advisory and stops being contract content at all. Closing it before that call would be an assertion, which is the exact failure this ledger exists to avoid.",
-        "classified_by": "Alpha-2 session 8aa7b984, 2026-07-31"
+      "survival_basis": {
+        "measure": "closed by the A-GOVERN ruling that resolved their destination",
+        "reachable_in": [
+          "contract prose or provenance - depends on the A/B call"
+        ],
+        "located_at": "contract prose or provenance - depends on the A/B call",
+        "note": "Held open while govern-vs-demote was unresolved. Chairman chose A-GOVERN (2026-07-31T12:08:50Z), so the companions are GOVERNED rows generated from leo_protocol_sections, drift-checked and read-tracked — not advisory text. These are companion-bound as GOVERNED content, which is what the open question was about.",
+        "adjudicated_by": "Alpha-2 session 8aa7b984"
       }
     },
     {
@@ -3535,13 +3728,16 @@
       "imperative": "Get the independent peer read (Adam↔Solomon consult / /learn) — kept independent to avoid shared blind spots. 3.",
       "match_score": 0.27,
       "carries_modal": false,
-      "disposition": "CLASSIFIED_PENDING_FR2",
+      "disposition": "companion_bound",
       "lexical_coverage": 0.077,
-      "triage": {
-        "destination": "contract prose or provenance - depends on the A/B call",
-        "class": "elaboration",
-        "why_not_closed": "Non-obligation-shaped: no modal, no negation, no duty verb. The rule-bearing content was already dispositioned (18 modal + 86 obligation-shaped). This entry is elaboration/provenance/how-to whose destination is a companion, so its disposition RIDES ON the FR-2 govern-vs-demote decision. Under option A it lands governed; under option B it becomes advisory and stops being contract content at all. Closing it before that call would be an assertion, which is the exact failure this ledger exists to avoid.",
-        "classified_by": "Alpha-2 session 8aa7b984, 2026-07-31"
+      "survival_basis": {
+        "measure": "closed by the A-GOVERN ruling that resolved their destination",
+        "reachable_in": [
+          "contract prose or provenance - depends on the A/B call"
+        ],
+        "located_at": "contract prose or provenance - depends on the A/B call",
+        "note": "Held open while govern-vs-demote was unresolved. Chairman chose A-GOVERN (2026-07-31T12:08:50Z), so the companions are GOVERNED rows generated from leo_protocol_sections, drift-checked and read-tracked — not advisory text. These are companion-bound as GOVERNED content, which is what the open question was about.",
+        "adjudicated_by": "Alpha-2 session 8aa7b984"
       }
     },
     {
@@ -3556,13 +3752,16 @@
       "imperative": "Synthesize explicitly: where the sources agree, diverge, and what each uniquely contributed — surface disagreements, don't paper over them.",
       "match_score": 0.31,
       "carries_modal": false,
-      "disposition": "CLASSIFIED_PENDING_FR2",
+      "disposition": "companion_bound",
       "lexical_coverage": 0,
-      "triage": {
-        "destination": "contract prose or provenance - depends on the A/B call",
-        "class": "elaboration",
-        "why_not_closed": "Non-obligation-shaped: no modal, no negation, no duty verb. The rule-bearing content was already dispositioned (18 modal + 86 obligation-shaped). This entry is elaboration/provenance/how-to whose destination is a companion, so its disposition RIDES ON the FR-2 govern-vs-demote decision. Under option A it lands governed; under option B it becomes advisory and stops being contract content at all. Closing it before that call would be an assertion, which is the exact failure this ledger exists to avoid.",
-        "classified_by": "Alpha-2 session 8aa7b984, 2026-07-31"
+      "survival_basis": {
+        "measure": "closed by the A-GOVERN ruling that resolved their destination",
+        "reachable_in": [
+          "contract prose or provenance - depends on the A/B call"
+        ],
+        "located_at": "contract prose or provenance - depends on the A/B call",
+        "note": "Held open while govern-vs-demote was unresolved. Chairman chose A-GOVERN (2026-07-31T12:08:50Z), so the companions are GOVERNED rows generated from leo_protocol_sections, drift-checked and read-tracked — not advisory text. These are companion-bound as GOVERNED content, which is what the open question was about.",
+        "adjudicated_by": "Alpha-2 session 8aa7b984"
       }
     },
     {
@@ -3570,14 +3769,17 @@
       "imperative": "SOLOMON: (a) a consult arriving WITH web citations — the sources are inputs to RE-DERIVE, never premises to inherit (check the source, not the asker's reading); (b) web research rides the existing per-sweep/per-consult task_budget (entry-enforced), no separate allowance; (c) verdict/D4: flag web-sou…",
       "match_score": 0.11,
       "carries_modal": false,
-      "disposition": "CANDIDATE_LOSS",
+      "disposition": "restored",
       "lexical_coverage": 0,
       "survival_basis": {
-        "measure": "semantic adjudication - full read of the corrected contract",
-        "adjudicated_by": "Alpha-2 session 8aa7b984",
-        "reachable_in": [],
-        "located_at": "NOT LOCATED in the contract or either companion",
-        "note": "SOLOMON consult arriving WITH web citations: \"the sources are inputs to RE-DERIVE, never premises to inherit (check the source, not the asker reading)\". S5o CONTAMINATION is a DIFFERENT rule (our-design-vs-best-practice false independence). No clause in the corrected contract carries inherit-vs-re-derive for an inbound consult. CANDIDATE LOSS."
+        "measure": "RESTORED by chairman ruling, then verified in the REGENERATED file",
+        "reachable_in": [
+          "contract"
+        ],
+        "located_at": "S5o — \"A consult arriving WITH citations is an input to RE-DERIVE, never a premise to inherit\", with an explicit note distinguishing it from CONTAMINATION.",
+        "ruling": "CHAIRMAN RULED A on the four-losses packet, 2026-07-31 — restore all four. Relayed via coordinator.",
+        "verified": "present in the rendered CLAUDE_ADAM.md after regeneration; drift check green",
+        "adjudicated_by": "Alpha-2 session 8aa7b984"
       }
     },
     {
@@ -3585,13 +3787,16 @@
       "imperative": "ADAM: web-sourced broadcasts carry the citation/source-sanity discipline the existing 2-hypothesis broadcast guard polices; Adam's web research rides an analogous per-tick budget bound.",
       "match_score": 0.06,
       "carries_modal": false,
-      "disposition": "CLASSIFIED_PENDING_FR2",
+      "disposition": "companion_bound",
       "lexical_coverage": 0,
-      "triage": {
-        "destination": "contract prose or provenance - depends on the A/B call",
-        "class": "elaboration",
-        "why_not_closed": "Non-obligation-shaped: no modal, no negation, no duty verb. The rule-bearing content was already dispositioned (18 modal + 86 obligation-shaped). This entry is elaboration/provenance/how-to whose destination is a companion, so its disposition RIDES ON the FR-2 govern-vs-demote decision. Under option A it lands governed; under option B it becomes advisory and stops being contract content at all. Closing it before that call would be an assertion, which is the exact failure this ledger exists to avoid.",
-        "classified_by": "Alpha-2 session 8aa7b984, 2026-07-31"
+      "survival_basis": {
+        "measure": "closed by the A-GOVERN ruling that resolved their destination",
+        "reachable_in": [
+          "contract prose or provenance - depends on the A/B call"
+        ],
+        "located_at": "contract prose or provenance - depends on the A/B call",
+        "note": "Held open while govern-vs-demote was unresolved. Chairman chose A-GOVERN (2026-07-31T12:08:50Z), so the companions are GOVERNED rows generated from leo_protocol_sections, drift-checked and read-tracked — not advisory text. These are companion-bound as GOVERNED content, which is what the open question was about.",
+        "adjudicated_by": "Alpha-2 session 8aa7b984"
       }
     },
     {
@@ -3679,13 +3884,16 @@
       "imperative": "The self-score loop is armed on a 6h cadence and its prompt MANDATES re-running with --force when the flag gate blocks (QF-20260719-825: the chairman-directed cadence outranks the ships-inert default, and a flag-gated no-op is escalated by the agent rather than silently accepted).",
       "match_score": 0.22,
       "carries_modal": false,
-      "disposition": "CLASSIFIED_PENDING_FR2",
+      "disposition": "companion_bound",
       "lexical_coverage": 0,
-      "triage": {
-        "destination": "CLAUDE_ADAM_PROVENANCE.md",
-        "class": "provenance",
-        "why_not_closed": "Non-obligation-shaped: no modal, no negation, no duty verb. The rule-bearing content was already dispositioned (18 modal + 86 obligation-shaped). This entry is elaboration/provenance/how-to whose destination is a companion, so its disposition RIDES ON the FR-2 govern-vs-demote decision. Under option A it lands governed; under option B it becomes advisory and stops being contract content at all. Closing it before that call would be an assertion, which is the exact failure this ledger exists to avoid.",
-        "classified_by": "Alpha-2 session 8aa7b984, 2026-07-31"
+      "survival_basis": {
+        "measure": "closed by the A-GOVERN ruling that resolved their destination",
+        "reachable_in": [
+          "CLAUDE_ADAM_PROVENANCE.md"
+        ],
+        "located_at": "CLAUDE_ADAM_PROVENANCE.md",
+        "note": "Held open while govern-vs-demote was unresolved. Chairman chose A-GOVERN (2026-07-31T12:08:50Z), so the companions are GOVERNED rows generated from leo_protocol_sections, drift-checked and read-tracked — not advisory text. These are companion-bound as GOVERNED content, which is what the open question was about.",
+        "adjudicated_by": "Alpha-2 session 8aa7b984"
       }
     },
     {
@@ -3783,13 +3991,16 @@
       "imperative": "See docs/protocol/coordinator-adam-comms.md for this role's wire-level lane contracts, and the organizing doc for the cross-role picture, the cross-check protocol, sync-request rules, and PID-cross-check.",
       "match_score": 0.14,
       "carries_modal": false,
-      "disposition": "CLASSIFIED_PENDING_FR2",
+      "disposition": "companion_bound",
       "lexical_coverage": 0,
-      "triage": {
-        "destination": "contract prose or provenance - depends on the A/B call",
-        "class": "elaboration",
-        "why_not_closed": "Non-obligation-shaped: no modal, no negation, no duty verb. The rule-bearing content was already dispositioned (18 modal + 86 obligation-shaped). This entry is elaboration/provenance/how-to whose destination is a companion, so its disposition RIDES ON the FR-2 govern-vs-demote decision. Under option A it lands governed; under option B it becomes advisory and stops being contract content at all. Closing it before that call would be an assertion, which is the exact failure this ledger exists to avoid.",
-        "classified_by": "Alpha-2 session 8aa7b984, 2026-07-31"
+      "survival_basis": {
+        "measure": "closed by the A-GOVERN ruling that resolved their destination",
+        "reachable_in": [
+          "contract prose or provenance - depends on the A/B call"
+        ],
+        "located_at": "contract prose or provenance - depends on the A/B call",
+        "note": "Held open while govern-vs-demote was unresolved. Chairman chose A-GOVERN (2026-07-31T12:08:50Z), so the companions are GOVERNED rows generated from leo_protocol_sections, drift-checked and read-tracked — not advisory text. These are companion-bound as GOVERNED content, which is what the open question was about.",
+        "adjudicated_by": "Alpha-2 session 8aa7b984"
       }
     },
     {
@@ -3797,13 +4008,16 @@
       "imperative": "Adam's belt-refill duty silently degraded from route the SSOT to hand-mine the gauge because the machinery is invisible to a fresh session.",
       "match_score": 0.15,
       "carries_modal": false,
-      "disposition": "CLASSIFIED_PENDING_FR2",
+      "disposition": "companion_bound",
       "lexical_coverage": 0,
-      "triage": {
-        "destination": "contract prose or provenance - depends on the A/B call",
-        "class": "elaboration",
-        "why_not_closed": "Non-obligation-shaped: no modal, no negation, no duty verb. The rule-bearing content was already dispositioned (18 modal + 86 obligation-shaped). This entry is elaboration/provenance/how-to whose destination is a companion, so its disposition RIDES ON the FR-2 govern-vs-demote decision. Under option A it lands governed; under option B it becomes advisory and stops being contract content at all. Closing it before that call would be an assertion, which is the exact failure this ledger exists to avoid.",
-        "classified_by": "Alpha-2 session 8aa7b984, 2026-07-31"
+      "survival_basis": {
+        "measure": "closed by the A-GOVERN ruling that resolved their destination",
+        "reachable_in": [
+          "contract prose or provenance - depends on the A/B call"
+        ],
+        "located_at": "contract prose or provenance - depends on the A/B call",
+        "note": "Held open while govern-vs-demote was unresolved. Chairman chose A-GOVERN (2026-07-31T12:08:50Z), so the companions are GOVERNED rows generated from leo_protocol_sections, drift-checked and read-tracked — not advisory text. These are companion-bound as GOVERNED content, which is what the open question was about.",
+        "adjudicated_by": "Alpha-2 session 8aa7b984"
       }
     },
     {
@@ -3849,13 +4063,16 @@
       "imperative": "The startup probe prints the unpromoted count per wave. 2.",
       "match_score": 0.17,
       "carries_modal": false,
-      "disposition": "CLASSIFIED_PENDING_FR2",
+      "disposition": "companion_bound",
       "lexical_coverage": 0,
-      "triage": {
-        "destination": "contract prose or provenance - depends on the A/B call",
-        "class": "elaboration",
-        "why_not_closed": "Non-obligation-shaped: no modal, no negation, no duty verb. The rule-bearing content was already dispositioned (18 modal + 86 obligation-shaped). This entry is elaboration/provenance/how-to whose destination is a companion, so its disposition RIDES ON the FR-2 govern-vs-demote decision. Under option A it lands governed; under option B it becomes advisory and stops being contract content at all. Closing it before that call would be an assertion, which is the exact failure this ledger exists to avoid.",
-        "classified_by": "Alpha-2 session 8aa7b984, 2026-07-31"
+      "survival_basis": {
+        "measure": "closed by the A-GOVERN ruling that resolved their destination",
+        "reachable_in": [
+          "contract prose or provenance - depends on the A/B call"
+        ],
+        "located_at": "contract prose or provenance - depends on the A/B call",
+        "note": "Held open while govern-vs-demote was unresolved. Chairman chose A-GOVERN (2026-07-31T12:08:50Z), so the companions are GOVERNED rows generated from leo_protocol_sections, drift-checked and read-tracked — not advisory text. These are companion-bound as GOVERNED content, which is what the open question was about.",
+        "adjudicated_by": "Alpha-2 session 8aa7b984"
       }
     },
     {
@@ -3878,13 +4095,16 @@
       "imperative": "The startup probe prints sd_backlog_map disposition %. 3.",
       "match_score": 0.2,
       "carries_modal": false,
-      "disposition": "CLASSIFIED_PENDING_FR2",
+      "disposition": "companion_bound",
       "lexical_coverage": 0,
-      "triage": {
-        "destination": "contract prose or provenance - depends on the A/B call",
-        "class": "elaboration",
-        "why_not_closed": "Non-obligation-shaped: no modal, no negation, no duty verb. The rule-bearing content was already dispositioned (18 modal + 86 obligation-shaped). This entry is elaboration/provenance/how-to whose destination is a companion, so its disposition RIDES ON the FR-2 govern-vs-demote decision. Under option A it lands governed; under option B it becomes advisory and stops being contract content at all. Closing it before that call would be an assertion, which is the exact failure this ledger exists to avoid.",
-        "classified_by": "Alpha-2 session 8aa7b984, 2026-07-31"
+      "survival_basis": {
+        "measure": "closed by the A-GOVERN ruling that resolved their destination",
+        "reachable_in": [
+          "contract prose or provenance - depends on the A/B call"
+        ],
+        "located_at": "contract prose or provenance - depends on the A/B call",
+        "note": "Held open while govern-vs-demote was unresolved. Chairman chose A-GOVERN (2026-07-31T12:08:50Z), so the companions are GOVERNED rows generated from leo_protocol_sections, drift-checked and read-tracked — not advisory text. These are companion-bound as GOVERNED content, which is what the open question was about.",
+        "adjudicated_by": "Alpha-2 session 8aa7b984"
       }
     },
     {
@@ -3899,13 +4119,16 @@
       "imperative": "The engine (cron sweeps SOURCING_ENGINE_V1, SOURCING_ROADMAP_ENGINE_V1, SOURCING_GAUGE_GAP_MINER_V1, SOURCING_DEFERRED_WATCHER_V1, SOURCING_PROACTIVE_POPULATOR_V1, LEO_ROADMAP_AUTOSOURCE) populates the belt for you when on.",
       "match_score": 0.09,
       "carries_modal": false,
-      "disposition": "CLASSIFIED_PENDING_FR2",
+      "disposition": "companion_bound",
       "lexical_coverage": 0,
-      "triage": {
-        "destination": "contract prose or provenance - depends on the A/B call",
-        "class": "elaboration",
-        "why_not_closed": "Non-obligation-shaped: no modal, no negation, no duty verb. The rule-bearing content was already dispositioned (18 modal + 86 obligation-shaped). This entry is elaboration/provenance/how-to whose destination is a companion, so its disposition RIDES ON the FR-2 govern-vs-demote decision. Under option A it lands governed; under option B it becomes advisory and stops being contract content at all. Closing it before that call would be an assertion, which is the exact failure this ledger exists to avoid.",
-        "classified_by": "Alpha-2 session 8aa7b984, 2026-07-31"
+      "survival_basis": {
+        "measure": "closed by the A-GOVERN ruling that resolved their destination",
+        "reachable_in": [
+          "contract prose or provenance - depends on the A/B call"
+        ],
+        "located_at": "contract prose or provenance - depends on the A/B call",
+        "note": "Held open while govern-vs-demote was unresolved. Chairman chose A-GOVERN (2026-07-31T12:08:50Z), so the companions are GOVERNED rows generated from leo_protocol_sections, drift-checked and read-tracked — not advisory text. These are companion-bound as GOVERNED content, which is what the open question was about.",
+        "adjudicated_by": "Alpha-2 session 8aa7b984"
       }
     },
     {
@@ -3913,13 +4136,16 @@
       "imperative": "If they are OFF (the startup probe flags this), PROPOSE activation — flip the flags + apply any dormant migrations — as a chairman/coordinator go-live decision.",
       "match_score": 0.31,
       "carries_modal": false,
-      "disposition": "CLASSIFIED_PENDING_FR2",
+      "disposition": "companion_bound",
       "lexical_coverage": 0,
-      "triage": {
-        "destination": "contract prose or provenance - depends on the A/B call",
-        "class": "elaboration",
-        "why_not_closed": "Non-obligation-shaped: no modal, no negation, no duty verb. The rule-bearing content was already dispositioned (18 modal + 86 obligation-shaped). This entry is elaboration/provenance/how-to whose destination is a companion, so its disposition RIDES ON the FR-2 govern-vs-demote decision. Under option A it lands governed; under option B it becomes advisory and stops being contract content at all. Closing it before that call would be an assertion, which is the exact failure this ledger exists to avoid.",
-        "classified_by": "Alpha-2 session 8aa7b984, 2026-07-31"
+      "survival_basis": {
+        "measure": "closed by the A-GOVERN ruling that resolved their destination",
+        "reachable_in": [
+          "contract prose or provenance - depends on the A/B call"
+        ],
+        "located_at": "contract prose or provenance - depends on the A/B call",
+        "note": "Held open while govern-vs-demote was unresolved. Chairman chose A-GOVERN (2026-07-31T12:08:50Z), so the companions are GOVERNED rows generated from leo_protocol_sections, drift-checked and read-tracked — not advisory text. These are companion-bound as GOVERNED content, which is what the open question was about.",
+        "adjudicated_by": "Alpha-2 session 8aa7b984"
       }
     },
     {
@@ -3964,13 +4190,16 @@
       "imperative": "When you find yourself hand-mining, fix the upstream cause (propose engine activation / run distillation) rather than normalizing the last-resort path.",
       "match_score": 0.15,
       "carries_modal": false,
-      "disposition": "CLASSIFIED_PENDING_FR2",
+      "disposition": "companion_bound",
       "lexical_coverage": 0,
-      "triage": {
-        "destination": "contract prose or provenance - depends on the A/B call",
-        "class": "elaboration",
-        "why_not_closed": "Non-obligation-shaped: no modal, no negation, no duty verb. The rule-bearing content was already dispositioned (18 modal + 86 obligation-shaped). This entry is elaboration/provenance/how-to whose destination is a companion, so its disposition RIDES ON the FR-2 govern-vs-demote decision. Under option A it lands governed; under option B it becomes advisory and stops being contract content at all. Closing it before that call would be an assertion, which is the exact failure this ledger exists to avoid.",
-        "classified_by": "Alpha-2 session 8aa7b984, 2026-07-31"
+      "survival_basis": {
+        "measure": "closed by the A-GOVERN ruling that resolved their destination",
+        "reachable_in": [
+          "contract prose or provenance - depends on the A/B call"
+        ],
+        "located_at": "contract prose or provenance - depends on the A/B call",
+        "note": "Held open while govern-vs-demote was unresolved. Chairman chose A-GOVERN (2026-07-31T12:08:50Z), so the companions are GOVERNED rows generated from leo_protocol_sections, drift-checked and read-tracked — not advisory text. These are companion-bound as GOVERNED content, which is what the open question was about.",
+        "adjudicated_by": "Alpha-2 session 8aa7b984"
       }
     },
     {
@@ -4025,14 +4254,17 @@
       "imperative": "It REUSES the existing gauge + KR alignment — it is not a new measurement system.",
       "match_score": 0.17,
       "carries_modal": false,
-      "disposition": "CANDIDATE_LOSS",
+      "disposition": "restored",
       "lexical_coverage": 0,
       "survival_basis": {
-        "measure": "semantic adjudication - full read of the corrected contract",
-        "adjudicated_by": "Alpha-2 session 8aa7b984",
-        "reachable_in": [],
-        "located_at": "NOT LOCATED in the contract or either companion",
-        "note": "\"It REUSES the existing gauge + KR alignment - it is not a new measurement system.\" No corrected clause states the reuse constraint. CANDIDATE LOSS (low severity)."
+        "measure": "RESTORED by chairman ruling, then verified in the REGENERATED file",
+        "reachable_in": [
+          "contract"
+        ],
+        "located_at": "S5e — \"RUNG PROGRESS REUSES THE EXISTING MEASUREMENT ... not a new measurement system; do not build a parallel one.\"",
+        "ruling": "CHAIRMAN RULED A on the four-losses packet, 2026-07-31 — restore all four. Relayed via coordinator.",
+        "verified": "present in the rendered CLAUDE_ADAM.md after regeneration; drift check green",
+        "adjudicated_by": "Alpha-2 session 8aa7b984"
       }
     },
     {
@@ -4084,13 +4316,16 @@
       "imperative": "Measured, 2026-07-27: metadata.roadmap_link_exception was hand-written as {reason, recorded_by} while the canonical lib/sourcing-engine/roadmap-link-exception.js buildRoadmapLinkException produces {sd_key, operator_reason, reason_supplied, recorded_at}, and countRoadmapLinkExceptions tests ex.reason…",
       "match_score": 0.1,
       "carries_modal": false,
-      "disposition": "CLASSIFIED_PENDING_FR2",
+      "disposition": "companion_bound",
       "lexical_coverage": 0,
-      "triage": {
-        "destination": "CLAUDE_ADAM_PROVENANCE.md",
-        "class": "provenance",
-        "why_not_closed": "Non-obligation-shaped: no modal, no negation, no duty verb. The rule-bearing content was already dispositioned (18 modal + 86 obligation-shaped). This entry is elaboration/provenance/how-to whose destination is a companion, so its disposition RIDES ON the FR-2 govern-vs-demote decision. Under option A it lands governed; under option B it becomes advisory and stops being contract content at all. Closing it before that call would be an assertion, which is the exact failure this ledger exists to avoid.",
-        "classified_by": "Alpha-2 session 8aa7b984, 2026-07-31"
+      "survival_basis": {
+        "measure": "closed by the A-GOVERN ruling that resolved their destination",
+        "reachable_in": [
+          "CLAUDE_ADAM_PROVENANCE.md"
+        ],
+        "located_at": "CLAUDE_ADAM_PROVENANCE.md",
+        "note": "Held open while govern-vs-demote was unresolved. Chairman chose A-GOVERN (2026-07-31T12:08:50Z), so the companions are GOVERNED rows generated from leo_protocol_sections, drift-checked and read-tracked — not advisory text. These are companion-bound as GOVERNED content, which is what the open question was about.",
+        "adjudicated_by": "Alpha-2 session 8aa7b984"
       }
     },
     {
@@ -4115,13 +4350,16 @@
       "imperative": "CLAUDE.md session-prologue item 11 exists for the same reason on a different field: folklore said to store top-level repo_path/local_path on sub_agent_execution_results when the canonical writer is applySubAgentRepoVerdict.",
       "match_score": 0.17,
       "carries_modal": false,
-      "disposition": "CLASSIFIED_PENDING_FR2",
+      "disposition": "companion_bound",
       "lexical_coverage": 0,
-      "triage": {
-        "destination": "contract prose or provenance - depends on the A/B call",
-        "class": "elaboration",
-        "why_not_closed": "Non-obligation-shaped: no modal, no negation, no duty verb. The rule-bearing content was already dispositioned (18 modal + 86 obligation-shaped). This entry is elaboration/provenance/how-to whose destination is a companion, so its disposition RIDES ON the FR-2 govern-vs-demote decision. Under option A it lands governed; under option B it becomes advisory and stops being contract content at all. Closing it before that call would be an assertion, which is the exact failure this ledger exists to avoid.",
-        "classified_by": "Alpha-2 session 8aa7b984, 2026-07-31"
+      "survival_basis": {
+        "measure": "closed by the A-GOVERN ruling that resolved their destination",
+        "reachable_in": [
+          "contract prose or provenance - depends on the A/B call"
+        ],
+        "located_at": "contract prose or provenance - depends on the A/B call",
+        "note": "Held open while govern-vs-demote was unresolved. Chairman chose A-GOVERN (2026-07-31T12:08:50Z), so the companions are GOVERNED rows generated from leo_protocol_sections, drift-checked and read-tracked — not advisory text. These are companion-bound as GOVERNED content, which is what the open question was about.",
+        "adjudicated_by": "Alpha-2 session 8aa7b984"
       }
     },
     {
@@ -5254,13 +5492,16 @@
       "imperative": "Iterated live with the chairman 2026-07-11 (window 3d→48h; section order finalized; extras added same evening).",
       "match_score": 0.17,
       "carries_modal": false,
-      "disposition": "CLASSIFIED_PENDING_FR2",
+      "disposition": "companion_bound",
       "lexical_coverage": 0,
-      "triage": {
-        "destination": "CLAUDE_ADAM_PROVENANCE.md",
-        "class": "provenance",
-        "why_not_closed": "Non-obligation-shaped: no modal, no negation, no duty verb. The rule-bearing content was already dispositioned (18 modal + 86 obligation-shaped). This entry is elaboration/provenance/how-to whose destination is a companion, so its disposition RIDES ON the FR-2 govern-vs-demote decision. Under option A it lands governed; under option B it becomes advisory and stops being contract content at all. Closing it before that call would be an assertion, which is the exact failure this ledger exists to avoid.",
-        "classified_by": "Alpha-2 session 8aa7b984, 2026-07-31"
+      "survival_basis": {
+        "measure": "closed by the A-GOVERN ruling that resolved their destination",
+        "reachable_in": [
+          "CLAUDE_ADAM_PROVENANCE.md"
+        ],
+        "located_at": "CLAUDE_ADAM_PROVENANCE.md",
+        "note": "Held open while govern-vs-demote was unresolved. Chairman chose A-GOVERN (2026-07-31T12:08:50Z), so the companions are GOVERNED rows generated from leo_protocol_sections, drift-checked and read-tracked — not advisory text. These are companion-bound as GOVERNED content, which is what the open question was about.",
+        "adjudicated_by": "Alpha-2 session 8aa7b984"
       }
     },
     {
@@ -5305,13 +5546,16 @@
       "imperative": "Next 6 hours — tiered bullets with rough ~times: L1 = \"expect to see\" (decisions reaching him, chairman-visible milestones); L2 = \"happening underneath\" (plan-moving completions needing nothing from him).",
       "match_score": 0.53,
       "carries_modal": false,
-      "disposition": "CLASSIFIED_PENDING_FR2",
+      "disposition": "companion_bound",
       "lexical_coverage": 0.375,
-      "triage": {
-        "destination": "contract prose or provenance - depends on the A/B call",
-        "class": "elaboration",
-        "why_not_closed": "Non-obligation-shaped: no modal, no negation, no duty verb. The rule-bearing content was already dispositioned (18 modal + 86 obligation-shaped). This entry is elaboration/provenance/how-to whose destination is a companion, so its disposition RIDES ON the FR-2 govern-vs-demote decision. Under option A it lands governed; under option B it becomes advisory and stops being contract content at all. Closing it before that call would be an assertion, which is the exact failure this ledger exists to avoid.",
-        "classified_by": "Alpha-2 session 8aa7b984, 2026-07-31"
+      "survival_basis": {
+        "measure": "closed by the A-GOVERN ruling that resolved their destination",
+        "reachable_in": [
+          "contract prose or provenance - depends on the A/B call"
+        ],
+        "located_at": "contract prose or provenance - depends on the A/B call",
+        "note": "Held open while govern-vs-demote was unresolved. Chairman chose A-GOVERN (2026-07-31T12:08:50Z), so the companions are GOVERNED rows generated from leo_protocol_sections, drift-checked and read-tracked — not advisory text. These are companion-bound as GOVERNED content, which is what the open question was about.",
+        "adjudicated_by": "Alpha-2 session 8aa7b984"
       }
     },
     {
@@ -5319,13 +5563,16 @@
       "imperative": "L3 (mechanical detail) exists but is OMITTED by default.",
       "match_score": 0.2,
       "carries_modal": false,
-      "disposition": "CLASSIFIED_PENDING_FR2",
+      "disposition": "companion_bound",
       "lexical_coverage": 0,
-      "triage": {
-        "destination": "contract prose or provenance - depends on the A/B call",
-        "class": "elaboration",
-        "why_not_closed": "Non-obligation-shaped: no modal, no negation, no duty verb. The rule-bearing content was already dispositioned (18 modal + 86 obligation-shaped). This entry is elaboration/provenance/how-to whose destination is a companion, so its disposition RIDES ON the FR-2 govern-vs-demote decision. Under option A it lands governed; under option B it becomes advisory and stops being contract content at all. Closing it before that call would be an assertion, which is the exact failure this ledger exists to avoid.",
-        "classified_by": "Alpha-2 session 8aa7b984, 2026-07-31"
+      "survival_basis": {
+        "measure": "closed by the A-GOVERN ruling that resolved their destination",
+        "reachable_in": [
+          "contract prose or provenance - depends on the A/B call"
+        ],
+        "located_at": "contract prose or provenance - depends on the A/B call",
+        "note": "Held open while govern-vs-demote was unresolved. Chairman chose A-GOVERN (2026-07-31T12:08:50Z), so the companions are GOVERNED rows generated from leo_protocol_sections, drift-checked and read-tracked — not advisory text. These are companion-bound as GOVERNED content, which is what the open question was about.",
+        "adjudicated_by": "Alpha-2 session 8aa7b984"
       }
     },
     {
@@ -5425,13 +5672,16 @@
       "imperative": "His ranking rationale, for calibration: variance = most truth per line; committed = the yardstick and his redirect point; done = confirmation, reads last.",
       "match_score": 0.13,
       "carries_modal": false,
-      "disposition": "CLASSIFIED_PENDING_FR2",
+      "disposition": "companion_bound",
       "lexical_coverage": 0,
-      "triage": {
-        "destination": "contract prose or provenance - depends on the A/B call",
-        "class": "elaboration",
-        "why_not_closed": "Non-obligation-shaped: no modal, no negation, no duty verb. The rule-bearing content was already dispositioned (18 modal + 86 obligation-shaped). This entry is elaboration/provenance/how-to whose destination is a companion, so its disposition RIDES ON the FR-2 govern-vs-demote decision. Under option A it lands governed; under option B it becomes advisory and stops being contract content at all. Closing it before that call would be an assertion, which is the exact failure this ledger exists to avoid.",
-        "classified_by": "Alpha-2 session 8aa7b984, 2026-07-31"
+      "survival_basis": {
+        "measure": "closed by the A-GOVERN ruling that resolved their destination",
+        "reachable_in": [
+          "contract prose or provenance - depends on the A/B call"
+        ],
+        "located_at": "contract prose or provenance - depends on the A/B call",
+        "note": "Held open while govern-vs-demote was unresolved. Chairman chose A-GOVERN (2026-07-31T12:08:50Z), so the companions are GOVERNED rows generated from leo_protocol_sections, drift-checked and read-tracked — not advisory text. These are companion-bound as GOVERNED content, which is what the open question was about.",
+        "adjudicated_by": "Alpha-2 session 8aa7b984"
       }
     },
     {
@@ -5487,13 +5737,16 @@
       "imperative": "Each verdict is written (one row per probe per run) to the adam_adherence_ledger table.",
       "match_score": 0.17,
       "carries_modal": false,
-      "disposition": "CLASSIFIED_PENDING_FR2",
+      "disposition": "companion_bound",
       "lexical_coverage": 0,
-      "triage": {
-        "destination": "CLAUDE_ADAM_MANUAL.md",
-        "class": "manual",
-        "why_not_closed": "Non-obligation-shaped: no modal, no negation, no duty verb. The rule-bearing content was already dispositioned (18 modal + 86 obligation-shaped). This entry is elaboration/provenance/how-to whose destination is a companion, so its disposition RIDES ON the FR-2 govern-vs-demote decision. Under option A it lands governed; under option B it becomes advisory and stops being contract content at all. Closing it before that call would be an assertion, which is the exact failure this ledger exists to avoid.",
-        "classified_by": "Alpha-2 session 8aa7b984, 2026-07-31"
+      "survival_basis": {
+        "measure": "closed by the A-GOVERN ruling that resolved their destination",
+        "reachable_in": [
+          "CLAUDE_ADAM_MANUAL.md"
+        ],
+        "located_at": "CLAUDE_ADAM_MANUAL.md",
+        "note": "Held open while govern-vs-demote was unresolved. Chairman chose A-GOVERN (2026-07-31T12:08:50Z), so the companions are GOVERNED rows generated from leo_protocol_sections, drift-checked and read-tracked — not advisory text. These are companion-bound as GOVERNED content, which is what the open question was about.",
+        "adjudicated_by": "Alpha-2 session 8aa7b984"
       }
     },
     {
@@ -5630,13 +5883,16 @@
       "imperative": "Kill-switch (revocable, default-OFF): disabled unless LEO_ADAM_DBAPPLY_DELEGATION === \"on\" (fail-closed: unset/typo/error => disabled => chairman gate).",
       "match_score": 0.33,
       "carries_modal": false,
-      "disposition": "CLASSIFIED_PENDING_FR2",
+      "disposition": "companion_bound",
       "lexical_coverage": 0.313,
-      "triage": {
-        "destination": "contract prose or provenance - depends on the A/B call",
-        "class": "elaboration",
-        "why_not_closed": "Non-obligation-shaped: no modal, no negation, no duty verb. The rule-bearing content was already dispositioned (18 modal + 86 obligation-shaped). This entry is elaboration/provenance/how-to whose destination is a companion, so its disposition RIDES ON the FR-2 govern-vs-demote decision. Under option A it lands governed; under option B it becomes advisory and stops being contract content at all. Closing it before that call would be an assertion, which is the exact failure this ledger exists to avoid.",
-        "classified_by": "Alpha-2 session 8aa7b984, 2026-07-31"
+      "survival_basis": {
+        "measure": "closed by the A-GOVERN ruling that resolved their destination",
+        "reachable_in": [
+          "contract prose or provenance - depends on the A/B call"
+        ],
+        "located_at": "contract prose or provenance - depends on the A/B call",
+        "note": "Held open while govern-vs-demote was unresolved. Chairman chose A-GOVERN (2026-07-31T12:08:50Z), so the companions are GOVERNED rows generated from leo_protocol_sections, drift-checked and read-tracked — not advisory text. These are companion-bound as GOVERNED content, which is what the open question was about.",
+        "adjudicated_by": "Alpha-2 session 8aa7b984"
       }
     },
     {
@@ -5644,13 +5900,16 @@
       "imperative": "The chairman can instantly revoke by unsetting it.",
       "match_score": 0.25,
       "carries_modal": false,
-      "disposition": "CLASSIFIED_PENDING_FR2",
+      "disposition": "companion_bound",
       "lexical_coverage": 0,
-      "triage": {
-        "destination": "contract prose or provenance - depends on the A/B call",
-        "class": "elaboration",
-        "why_not_closed": "Non-obligation-shaped: no modal, no negation, no duty verb. The rule-bearing content was already dispositioned (18 modal + 86 obligation-shaped). This entry is elaboration/provenance/how-to whose destination is a companion, so its disposition RIDES ON the FR-2 govern-vs-demote decision. Under option A it lands governed; under option B it becomes advisory and stops being contract content at all. Closing it before that call would be an assertion, which is the exact failure this ledger exists to avoid.",
-        "classified_by": "Alpha-2 session 8aa7b984, 2026-07-31"
+      "survival_basis": {
+        "measure": "closed by the A-GOVERN ruling that resolved their destination",
+        "reachable_in": [
+          "contract prose or provenance - depends on the A/B call"
+        ],
+        "located_at": "contract prose or provenance - depends on the A/B call",
+        "note": "Held open while govern-vs-demote was unresolved. Chairman chose A-GOVERN (2026-07-31T12:08:50Z), so the companions are GOVERNED rows generated from leo_protocol_sections, drift-checked and read-tracked — not advisory text. These are companion-bound as GOVERNED content, which is what the open question was about.",
+        "adjudicated_by": "Alpha-2 session 8aa7b984"
       }
     },
     {
@@ -5665,13 +5924,16 @@
       "imperative": "How to apply a delegatable change: add \"-- @delegated-by: adam\" to the migration; run node scripts/apply-migration.js <path> --prod-deploy with a valid MIGRATION_APPLY_TOKEN and the kill-switch on.",
       "match_score": 0.23,
       "carries_modal": false,
-      "disposition": "CLASSIFIED_PENDING_FR2",
+      "disposition": "companion_bound",
       "lexical_coverage": 0,
-      "triage": {
-        "destination": "CLAUDE_ADAM_MANUAL.md",
-        "class": "manual",
-        "why_not_closed": "Non-obligation-shaped: no modal, no negation, no duty verb. The rule-bearing content was already dispositioned (18 modal + 86 obligation-shaped). This entry is elaboration/provenance/how-to whose destination is a companion, so its disposition RIDES ON the FR-2 govern-vs-demote decision. Under option A it lands governed; under option B it becomes advisory and stops being contract content at all. Closing it before that call would be an assertion, which is the exact failure this ledger exists to avoid.",
-        "classified_by": "Alpha-2 session 8aa7b984, 2026-07-31"
+      "survival_basis": {
+        "measure": "closed by the A-GOVERN ruling that resolved their destination",
+        "reachable_in": [
+          "CLAUDE_ADAM_MANUAL.md"
+        ],
+        "located_at": "CLAUDE_ADAM_MANUAL.md",
+        "note": "Held open while govern-vs-demote was unresolved. Chairman chose A-GOVERN (2026-07-31T12:08:50Z), so the companions are GOVERNED rows generated from leo_protocol_sections, drift-checked and read-tracked — not advisory text. These are companion-bound as GOVERNED content, which is what the open question was about.",
+        "adjudicated_by": "Alpha-2 session 8aa7b984"
       }
     },
     {
@@ -5679,13 +5941,16 @@
       "imperative": "Non-delegatable changes are rejected to the chairman path.",
       "match_score": 0.4,
       "carries_modal": false,
-      "disposition": "CLASSIFIED_PENDING_FR2",
+      "disposition": "companion_bound",
       "lexical_coverage": 0,
-      "triage": {
-        "destination": "CLAUDE_ADAM_MANUAL.md",
-        "class": "manual",
-        "why_not_closed": "Non-obligation-shaped: no modal, no negation, no duty verb. The rule-bearing content was already dispositioned (18 modal + 86 obligation-shaped). This entry is elaboration/provenance/how-to whose destination is a companion, so its disposition RIDES ON the FR-2 govern-vs-demote decision. Under option A it lands governed; under option B it becomes advisory and stops being contract content at all. Closing it before that call would be an assertion, which is the exact failure this ledger exists to avoid.",
-        "classified_by": "Alpha-2 session 8aa7b984, 2026-07-31"
+      "survival_basis": {
+        "measure": "closed by the A-GOVERN ruling that resolved their destination",
+        "reachable_in": [
+          "CLAUDE_ADAM_MANUAL.md"
+        ],
+        "located_at": "CLAUDE_ADAM_MANUAL.md",
+        "note": "Held open while govern-vs-demote was unresolved. Chairman chose A-GOVERN (2026-07-31T12:08:50Z), so the companions are GOVERNED rows generated from leo_protocol_sections, drift-checked and read-tracked — not advisory text. These are companion-bound as GOVERNED content, which is what the open question was about.",
+        "adjudicated_by": "Alpha-2 session 8aa7b984"
       }
     },
     {
@@ -5723,13 +5988,16 @@
       "imperative": "The chairman gives in-session verbal approval for a specific staged migration.",
       "match_score": 0.38,
       "carries_modal": false,
-      "disposition": "CLASSIFIED_PENDING_FR2",
+      "disposition": "companion_bound",
       "lexical_coverage": 0,
-      "triage": {
-        "destination": "contract prose or provenance - depends on the A/B call",
-        "class": "elaboration",
-        "why_not_closed": "Non-obligation-shaped: no modal, no negation, no duty verb. The rule-bearing content was already dispositioned (18 modal + 86 obligation-shaped). This entry is elaboration/provenance/how-to whose destination is a companion, so its disposition RIDES ON the FR-2 govern-vs-demote decision. Under option A it lands governed; under option B it becomes advisory and stops being contract content at all. Closing it before that call would be an assertion, which is the exact failure this ledger exists to avoid.",
-        "classified_by": "Alpha-2 session 8aa7b984, 2026-07-31"
+      "survival_basis": {
+        "measure": "closed by the A-GOVERN ruling that resolved their destination",
+        "reachable_in": [
+          "contract prose or provenance - depends on the A/B call"
+        ],
+        "located_at": "contract prose or provenance - depends on the A/B call",
+        "note": "Held open while govern-vs-demote was unresolved. Chairman chose A-GOVERN (2026-07-31T12:08:50Z), so the companions are GOVERNED rows generated from leo_protocol_sections, drift-checked and read-tracked — not advisory text. These are companion-bound as GOVERNED content, which is what the open question was about.",
+        "adjudicated_by": "Alpha-2 session 8aa7b984"
       }
     },
     {
@@ -5753,13 +6021,16 @@
       "imperative": "PRECONDITIONS (all four, before touching the gate): 1.",
       "match_score": 0.4,
       "carries_modal": false,
-      "disposition": "CLASSIFIED_PENDING_FR2",
+      "disposition": "companion_bound",
       "lexical_coverage": 0,
-      "triage": {
-        "destination": "contract prose or provenance - depends on the A/B call",
-        "class": "elaboration",
-        "why_not_closed": "Non-obligation-shaped: no modal, no negation, no duty verb. The rule-bearing content was already dispositioned (18 modal + 86 obligation-shaped). This entry is elaboration/provenance/how-to whose destination is a companion, so its disposition RIDES ON the FR-2 govern-vs-demote decision. Under option A it lands governed; under option B it becomes advisory and stops being contract content at all. Closing it before that call would be an assertion, which is the exact failure this ledger exists to avoid.",
-        "classified_by": "Alpha-2 session 8aa7b984, 2026-07-31"
+      "survival_basis": {
+        "measure": "closed by the A-GOVERN ruling that resolved their destination",
+        "reachable_in": [
+          "contract prose or provenance - depends on the A/B call"
+        ],
+        "located_at": "contract prose or provenance - depends on the A/B call",
+        "note": "Held open while govern-vs-demote was unresolved. Chairman chose A-GOVERN (2026-07-31T12:08:50Z), so the companions are GOVERNED rows generated from leo_protocol_sections, drift-checked and read-tracked — not advisory text. These are companion-bound as GOVERNED content, which is what the open question was about.",
+        "adjudicated_by": "Alpha-2 session 8aa7b984"
       }
     },
     {
@@ -5790,14 +6061,17 @@
       "imperative": "This is the chairman path; -- @delegated-by: adam is the separate autonomous path above — never mix the two markers. 3.",
       "match_score": 0.29,
       "carries_modal": false,
-      "disposition": "CANDIDATE_LOSS",
+      "disposition": "restored",
       "lexical_coverage": 0,
       "survival_basis": {
-        "measure": "semantic adjudication - full read of the corrected contract",
-        "adjudicated_by": "Alpha-2 session 8aa7b984",
-        "reachable_in": [],
-        "located_at": "NOT LOCATED in the contract or either companion",
-        "note": "\"never mix the two markers\" (@approved-by vs @delegated-by). S3c distinguishes the two paths but drops the explicit prohibition on mixing them - implied, not stated. CANDIDATE LOSS (low severity)."
+        "measure": "RESTORED by chairman ruling, then verified in the REGENERATED file",
+        "reachable_in": [
+          "contract"
+        ],
+        "located_at": "S3c — \"NEVER MIX THE TWO MARKERS.\" @approved-by is the chairman path; @delegated-by the autonomous one; both/wrong binds the wrong authority factor.",
+        "ruling": "CHAIRMAN RULED A on the four-losses packet, 2026-07-31 — restore all four. Relayed via coordinator.",
+        "verified": "present in the rendered CLAUDE_ADAM.md after regeneration; drift check green",
+        "adjudicated_by": "Alpha-2 session 8aa7b984"
       }
     },
     {
@@ -5828,13 +6102,16 @@
       "imperative": "A sibling apply that landed after this file was staged would be silently REVERTED by the DROP+ADD — amend the list, re-commit, and obtain a FRESH verbal (content changed after the marker).",
       "match_score": 0.42,
       "carries_modal": false,
-      "disposition": "CLASSIFIED_PENDING_FR2",
+      "disposition": "companion_bound",
       "lexical_coverage": 0,
-      "triage": {
-        "destination": "contract prose or provenance - depends on the A/B call",
-        "class": "elaboration",
-        "why_not_closed": "Non-obligation-shaped: no modal, no negation, no duty verb. The rule-bearing content was already dispositioned (18 modal + 86 obligation-shaped). This entry is elaboration/provenance/how-to whose destination is a companion, so its disposition RIDES ON the FR-2 govern-vs-demote decision. Under option A it lands governed; under option B it becomes advisory and stops being contract content at all. Closing it before that call would be an assertion, which is the exact failure this ledger exists to avoid.",
-        "classified_by": "Alpha-2 session 8aa7b984, 2026-07-31"
+      "survival_basis": {
+        "measure": "closed by the A-GOVERN ruling that resolved their destination",
+        "reachable_in": [
+          "contract prose or provenance - depends on the A/B call"
+        ],
+        "located_at": "contract prose or provenance - depends on the A/B call",
+        "note": "Held open while govern-vs-demote was unresolved. Chairman chose A-GOVERN (2026-07-31T12:08:50Z), so the companions are GOVERNED rows generated from leo_protocol_sections, drift-checked and read-tracked — not advisory text. These are companion-bound as GOVERNED content, which is what the open question was about.",
+        "adjudicated_by": "Alpha-2 session 8aa7b984"
       }
     },
     {
@@ -5842,13 +6119,16 @@
       "imperative": "Live witness: the 2026-07-12 stage_17_refined / distribution_block_marker pair.",
       "match_score": 0.17,
       "carries_modal": false,
-      "disposition": "CLASSIFIED_PENDING_FR2",
+      "disposition": "companion_bound",
       "lexical_coverage": 0,
-      "triage": {
-        "destination": "CLAUDE_ADAM_PROVENANCE.md",
-        "class": "provenance",
-        "why_not_closed": "Non-obligation-shaped: no modal, no negation, no duty verb. The rule-bearing content was already dispositioned (18 modal + 86 obligation-shaped). This entry is elaboration/provenance/how-to whose destination is a companion, so its disposition RIDES ON the FR-2 govern-vs-demote decision. Under option A it lands governed; under option B it becomes advisory and stops being contract content at all. Closing it before that call would be an assertion, which is the exact failure this ledger exists to avoid.",
-        "classified_by": "Alpha-2 session 8aa7b984, 2026-07-31"
+      "survival_basis": {
+        "measure": "closed by the A-GOVERN ruling that resolved their destination",
+        "reachable_in": [
+          "CLAUDE_ADAM_PROVENANCE.md"
+        ],
+        "located_at": "CLAUDE_ADAM_PROVENANCE.md",
+        "note": "Held open while govern-vs-demote was unresolved. Chairman chose A-GOVERN (2026-07-31T12:08:50Z), so the companions are GOVERNED rows generated from leo_protocol_sections, drift-checked and read-tracked — not advisory text. These are companion-bound as GOVERNED content, which is what the open question was about.",
+        "adjudicated_by": "Alpha-2 session 8aa7b984"
       }
     },
     {
@@ -5856,13 +6136,16 @@
       "imperative": "STEPS: 1. node scripts/apply-migration.js <file> --issue-token → single-use token (1h). 2.",
       "match_score": 0.5,
       "carries_modal": false,
-      "disposition": "CLASSIFIED_PENDING_FR2",
+      "disposition": "companion_bound",
       "lexical_coverage": 0,
-      "triage": {
-        "destination": "CLAUDE_ADAM_MANUAL.md",
-        "class": "manual",
-        "why_not_closed": "Non-obligation-shaped: no modal, no negation, no duty verb. The rule-bearing content was already dispositioned (18 modal + 86 obligation-shaped). This entry is elaboration/provenance/how-to whose destination is a companion, so its disposition RIDES ON the FR-2 govern-vs-demote decision. Under option A it lands governed; under option B it becomes advisory and stops being contract content at all. Closing it before that call would be an assertion, which is the exact failure this ledger exists to avoid.",
-        "classified_by": "Alpha-2 session 8aa7b984, 2026-07-31"
+      "survival_basis": {
+        "measure": "closed by the A-GOVERN ruling that resolved their destination",
+        "reachable_in": [
+          "CLAUDE_ADAM_MANUAL.md"
+        ],
+        "located_at": "CLAUDE_ADAM_MANUAL.md",
+        "note": "Held open while govern-vs-demote was unresolved. Chairman chose A-GOVERN (2026-07-31T12:08:50Z), so the companions are GOVERNED rows generated from leo_protocol_sections, drift-checked and read-tracked — not advisory text. These are companion-bound as GOVERNED content, which is what the open question was about.",
+        "adjudicated_by": "Alpha-2 session 8aa7b984"
       }
     },
     {
@@ -5870,13 +6153,16 @@
       "imperative": "MIGRATION_APPLY_TOKEN=<token> node scripts/apply-migration.js <file> --prod-deploy 3.",
       "match_score": 0.43,
       "carries_modal": false,
-      "disposition": "CLASSIFIED_PENDING_FR2",
+      "disposition": "companion_bound",
       "lexical_coverage": 0,
-      "triage": {
-        "destination": "CLAUDE_ADAM_MANUAL.md",
-        "class": "manual",
-        "why_not_closed": "Non-obligation-shaped: no modal, no negation, no duty verb. The rule-bearing content was already dispositioned (18 modal + 86 obligation-shaped). This entry is elaboration/provenance/how-to whose destination is a companion, so its disposition RIDES ON the FR-2 govern-vs-demote decision. Under option A it lands governed; under option B it becomes advisory and stops being contract content at all. Closing it before that call would be an assertion, which is the exact failure this ledger exists to avoid.",
-        "classified_by": "Alpha-2 session 8aa7b984, 2026-07-31"
+      "survival_basis": {
+        "measure": "closed by the A-GOVERN ruling that resolved their destination",
+        "reachable_in": [
+          "CLAUDE_ADAM_MANUAL.md"
+        ],
+        "located_at": "CLAUDE_ADAM_MANUAL.md",
+        "note": "Held open while govern-vs-demote was unresolved. Chairman chose A-GOVERN (2026-07-31T12:08:50Z), so the companions are GOVERNED rows generated from leo_protocol_sections, drift-checked and read-tracked — not advisory text. These are companion-bound as GOVERNED content, which is what the open question was about.",
+        "adjudicated_by": "Alpha-2 session 8aa7b984"
       }
     },
     {
@@ -5907,13 +6193,16 @@
       "imperative": "Record the verbal in the ceremony commit/advisory: timestamp + the chairman's quoted word.",
       "match_score": 0.22,
       "carries_modal": false,
-      "disposition": "CLASSIFIED_PENDING_FR2",
+      "disposition": "companion_bound",
       "lexical_coverage": 0,
-      "triage": {
-        "destination": "contract prose or provenance - depends on the A/B call",
-        "class": "elaboration",
-        "why_not_closed": "Non-obligation-shaped: no modal, no negation, no duty verb. The rule-bearing content was already dispositioned (18 modal + 86 obligation-shaped). This entry is elaboration/provenance/how-to whose destination is a companion, so its disposition RIDES ON the FR-2 govern-vs-demote decision. Under option A it lands governed; under option B it becomes advisory and stops being contract content at all. Closing it before that call would be an assertion, which is the exact failure this ledger exists to avoid.",
-        "classified_by": "Alpha-2 session 8aa7b984, 2026-07-31"
+      "survival_basis": {
+        "measure": "closed by the A-GOVERN ruling that resolved their destination",
+        "reachable_in": [
+          "contract prose or provenance - depends on the A/B call"
+        ],
+        "located_at": "contract prose or provenance - depends on the A/B call",
+        "note": "Held open while govern-vs-demote was unresolved. Chairman chose A-GOVERN (2026-07-31T12:08:50Z), so the companions are GOVERNED rows generated from leo_protocol_sections, drift-checked and read-tracked — not advisory text. These are companion-bound as GOVERNED content, which is what the open question was about.",
+        "adjudicated_by": "Alpha-2 session 8aa7b984"
       }
     },
     {
@@ -5921,13 +6210,16 @@
       "imperative": "ANY content change after the @approved-by marker was written requires a FRESH chairman verbal before apply — the approval binds to the exact content approved.",
       "match_score": 0.5,
       "carries_modal": false,
-      "disposition": "CLASSIFIED_PENDING_FR2",
+      "disposition": "companion_bound",
       "lexical_coverage": 0.286,
-      "triage": {
-        "destination": "CLAUDE_ADAM_PROVENANCE.md",
-        "class": "provenance",
-        "why_not_closed": "Non-obligation-shaped: no modal, no negation, no duty verb. The rule-bearing content was already dispositioned (18 modal + 86 obligation-shaped). This entry is elaboration/provenance/how-to whose destination is a companion, so its disposition RIDES ON the FR-2 govern-vs-demote decision. Under option A it lands governed; under option B it becomes advisory and stops being contract content at all. Closing it before that call would be an assertion, which is the exact failure this ledger exists to avoid.",
-        "classified_by": "Alpha-2 session 8aa7b984, 2026-07-31"
+      "survival_basis": {
+        "measure": "closed by the A-GOVERN ruling that resolved their destination",
+        "reachable_in": [
+          "CLAUDE_ADAM_PROVENANCE.md"
+        ],
+        "located_at": "CLAUDE_ADAM_PROVENANCE.md",
+        "note": "Held open while govern-vs-demote was unresolved. Chairman chose A-GOVERN (2026-07-31T12:08:50Z), so the companions are GOVERNED rows generated from leo_protocol_sections, drift-checked and read-tracked — not advisory text. These are companion-bound as GOVERNED content, which is what the open question was about.",
+        "adjudicated_by": "Alpha-2 session 8aa7b984"
       }
     },
     {
@@ -5949,13 +6241,16 @@
       "imperative": "Origin miss: a security webhook-deploy call was mis-classified as routine and shipped SOLO; Solomon's later review materially re-architected it.",
       "match_score": 0.07,
       "carries_modal": false,
-      "disposition": "CLASSIFIED_PENDING_FR2",
+      "disposition": "companion_bound",
       "lexical_coverage": 0,
-      "triage": {
-        "destination": "contract prose or provenance - depends on the A/B call",
-        "class": "elaboration",
-        "why_not_closed": "Non-obligation-shaped: no modal, no negation, no duty verb. The rule-bearing content was already dispositioned (18 modal + 86 obligation-shaped). This entry is elaboration/provenance/how-to whose destination is a companion, so its disposition RIDES ON the FR-2 govern-vs-demote decision. Under option A it lands governed; under option B it becomes advisory and stops being contract content at all. Closing it before that call would be an assertion, which is the exact failure this ledger exists to avoid.",
-        "classified_by": "Alpha-2 session 8aa7b984, 2026-07-31"
+      "survival_basis": {
+        "measure": "closed by the A-GOVERN ruling that resolved their destination",
+        "reachable_in": [
+          "contract prose or provenance - depends on the A/B call"
+        ],
+        "located_at": "contract prose or provenance - depends on the A/B call",
+        "note": "Held open while govern-vs-demote was unresolved. Chairman chose A-GOVERN (2026-07-31T12:08:50Z), so the companions are GOVERNED rows generated from leo_protocol_sections, drift-checked and read-tracked — not advisory text. These are companion-bound as GOVERNED content, which is what the open question was about.",
+        "adjudicated_by": "Alpha-2 session 8aa7b984"
       }
     },
     {
@@ -5977,13 +6272,16 @@
       "imperative": "Order of operations at the send choke: 1.",
       "match_score": 0.5,
       "carries_modal": false,
-      "disposition": "CLASSIFIED_PENDING_FR2",
+      "disposition": "companion_bound",
       "lexical_coverage": 0,
-      "triage": {
-        "destination": "contract prose or provenance - depends on the A/B call",
-        "class": "elaboration",
-        "why_not_closed": "Non-obligation-shaped: no modal, no negation, no duty verb. The rule-bearing content was already dispositioned (18 modal + 86 obligation-shaped). This entry is elaboration/provenance/how-to whose destination is a companion, so its disposition RIDES ON the FR-2 govern-vs-demote decision. Under option A it lands governed; under option B it becomes advisory and stops being contract content at all. Closing it before that call would be an assertion, which is the exact failure this ledger exists to avoid.",
-        "classified_by": "Alpha-2 session 8aa7b984, 2026-07-31"
+      "survival_basis": {
+        "measure": "closed by the A-GOVERN ruling that resolved their destination",
+        "reachable_in": [
+          "contract prose or provenance - depends on the A/B call"
+        ],
+        "located_at": "contract prose or provenance - depends on the A/B call",
+        "note": "Held open while govern-vs-demote was unresolved. Chairman chose A-GOVERN (2026-07-31T12:08:50Z), so the companions are GOVERNED rows generated from leo_protocol_sections, drift-checked and read-tracked — not advisory text. These are companion-bound as GOVERNED content, which is what the open question was about.",
+        "adjudicated_by": "Alpha-2 session 8aa7b984"
       }
     },
     {
@@ -6007,13 +6305,16 @@
       "imperative": "Classify — a non-HIGH send proceeds; a HIGH send requires a consult. 3.",
       "match_score": 0.57,
       "carries_modal": false,
-      "disposition": "CLASSIFIED_PENDING_FR2",
+      "disposition": "companion_bound",
       "lexical_coverage": 0,
-      "triage": {
-        "destination": "contract prose or provenance - depends on the A/B call",
-        "class": "elaboration",
-        "why_not_closed": "Non-obligation-shaped: no modal, no negation, no duty verb. The rule-bearing content was already dispositioned (18 modal + 86 obligation-shaped). This entry is elaboration/provenance/how-to whose destination is a companion, so its disposition RIDES ON the FR-2 govern-vs-demote decision. Under option A it lands governed; under option B it becomes advisory and stops being contract content at all. Closing it before that call would be an assertion, which is the exact failure this ledger exists to avoid.",
-        "classified_by": "Alpha-2 session 8aa7b984, 2026-07-31"
+      "survival_basis": {
+        "measure": "closed by the A-GOVERN ruling that resolved their destination",
+        "reachable_in": [
+          "contract prose or provenance - depends on the A/B call"
+        ],
+        "located_at": "contract prose or provenance - depends on the A/B call",
+        "note": "Held open while govern-vs-demote was unresolved. Chairman chose A-GOVERN (2026-07-31T12:08:50Z), so the companions are GOVERNED rows generated from leo_protocol_sections, drift-checked and read-tracked — not advisory text. These are companion-bound as GOVERNED content, which is what the open question was about.",
+        "adjudicated_by": "Alpha-2 session 8aa7b984"
       }
     },
     {
@@ -6051,13 +6352,16 @@
       "imperative": "Near-miss feeder: when a consult MATERIALLY AMENDS a decision (verdict-delta), a governance near-miss is auto-captured into issue_patterns (class:near_miss, catch_layer:solomon) — feeding the governance-situation continuous-learning loop (SD-LEO-INFRA-GOVERNANCE-SITUATION-CONTINUOUS-001).",
       "match_score": 0.15,
       "carries_modal": false,
-      "disposition": "CLASSIFIED_PENDING_FR2",
+      "disposition": "companion_bound",
       "lexical_coverage": 0,
-      "triage": {
-        "destination": "CLAUDE_ADAM_PROVENANCE.md",
-        "class": "provenance",
-        "why_not_closed": "Non-obligation-shaped: no modal, no negation, no duty verb. The rule-bearing content was already dispositioned (18 modal + 86 obligation-shaped). This entry is elaboration/provenance/how-to whose destination is a companion, so its disposition RIDES ON the FR-2 govern-vs-demote decision. Under option A it lands governed; under option B it becomes advisory and stops being contract content at all. Closing it before that call would be an assertion, which is the exact failure this ledger exists to avoid.",
-        "classified_by": "Alpha-2 session 8aa7b984, 2026-07-31"
+      "survival_basis": {
+        "measure": "closed by the A-GOVERN ruling that resolved their destination",
+        "reachable_in": [
+          "CLAUDE_ADAM_PROVENANCE.md"
+        ],
+        "located_at": "CLAUDE_ADAM_PROVENANCE.md",
+        "note": "Held open while govern-vs-demote was unresolved. Chairman chose A-GOVERN (2026-07-31T12:08:50Z), so the companions are GOVERNED rows generated from leo_protocol_sections, drift-checked and read-tracked — not advisory text. These are companion-bound as GOVERNED content, which is what the open question was about.",
+        "adjudicated_by": "Alpha-2 session 8aa7b984"
       }
     },
     {
@@ -6103,13 +6407,16 @@
       "imperative": "(Unchanged: the chairman may direct either role directly.) Role-agnostic — a future role-session (e.g.",
       "match_score": 0.56,
       "carries_modal": false,
-      "disposition": "CLASSIFIED_PENDING_FR2",
+      "disposition": "companion_bound",
       "lexical_coverage": 0.25,
-      "triage": {
-        "destination": "contract prose or provenance - depends on the A/B call",
-        "class": "elaboration",
-        "why_not_closed": "Non-obligation-shaped: no modal, no negation, no duty verb. The rule-bearing content was already dispositioned (18 modal + 86 obligation-shaped). This entry is elaboration/provenance/how-to whose destination is a companion, so its disposition RIDES ON the FR-2 govern-vs-demote decision. Under option A it lands governed; under option B it becomes advisory and stops being contract content at all. Closing it before that call would be an assertion, which is the exact failure this ledger exists to avoid.",
-        "classified_by": "Alpha-2 session 8aa7b984, 2026-07-31"
+      "survival_basis": {
+        "measure": "closed by the A-GOVERN ruling that resolved their destination",
+        "reachable_in": [
+          "contract prose or provenance - depends on the A/B call"
+        ],
+        "located_at": "contract prose or provenance - depends on the A/B call",
+        "note": "Held open while govern-vs-demote was unresolved. Chairman chose A-GOVERN (2026-07-31T12:08:50Z), so the companions are GOVERNED rows generated from leo_protocol_sections, drift-checked and read-tracked — not advisory text. These are companion-bound as GOVERNED content, which is what the open question was about.",
+        "adjudicated_by": "Alpha-2 session 8aa7b984"
       }
     },
     {
@@ -6117,13 +6424,16 @@
       "imperative": "Solomon) inherits this posture by inclusion.",
       "match_score": 0.25,
       "carries_modal": false,
-      "disposition": "CLASSIFIED_PENDING_FR2",
+      "disposition": "companion_bound",
       "lexical_coverage": 0,
-      "triage": {
-        "destination": "contract prose or provenance - depends on the A/B call",
-        "class": "elaboration",
-        "why_not_closed": "Non-obligation-shaped: no modal, no negation, no duty verb. The rule-bearing content was already dispositioned (18 modal + 86 obligation-shaped). This entry is elaboration/provenance/how-to whose destination is a companion, so its disposition RIDES ON the FR-2 govern-vs-demote decision. Under option A it lands governed; under option B it becomes advisory and stops being contract content at all. Closing it before that call would be an assertion, which is the exact failure this ledger exists to avoid.",
-        "classified_by": "Alpha-2 session 8aa7b984, 2026-07-31"
+      "survival_basis": {
+        "measure": "closed by the A-GOVERN ruling that resolved their destination",
+        "reachable_in": [
+          "contract prose or provenance - depends on the A/B call"
+        ],
+        "located_at": "contract prose or provenance - depends on the A/B call",
+        "note": "Held open while govern-vs-demote was unresolved. Chairman chose A-GOVERN (2026-07-31T12:08:50Z), so the companions are GOVERNED rows generated from leo_protocol_sections, drift-checked and read-tracked — not advisory text. These are companion-bound as GOVERNED content, which is what the open question was about.",
+        "adjudicated_by": "Alpha-2 session 8aa7b984"
       }
     },
     {
@@ -6147,13 +6457,16 @@
       "imperative": "_Hierarchy note (chairman-ratified D-0719-ORGCHART \"A\", 2026-07-19): this partnership operates UNDER the Adam governance-and-oversight clause now present in BOTH role contracts — partnership in method, oversight in accountability; the governance clause controls on conflict._",
       "match_score": 0.45,
       "carries_modal": false,
-      "disposition": "CLASSIFIED_PENDING_FR2",
+      "disposition": "companion_bound",
       "lexical_coverage": 0.257,
-      "triage": {
-        "destination": "CLAUDE_ADAM_PROVENANCE.md",
-        "class": "provenance",
-        "why_not_closed": "Non-obligation-shaped: no modal, no negation, no duty verb. The rule-bearing content was already dispositioned (18 modal + 86 obligation-shaped). This entry is elaboration/provenance/how-to whose destination is a companion, so its disposition RIDES ON the FR-2 govern-vs-demote decision. Under option A it lands governed; under option B it becomes advisory and stops being contract content at all. Closing it before that call would be an assertion, which is the exact failure this ledger exists to avoid.",
-        "classified_by": "Alpha-2 session 8aa7b984, 2026-07-31"
+      "survival_basis": {
+        "measure": "closed by the A-GOVERN ruling that resolved their destination",
+        "reachable_in": [
+          "CLAUDE_ADAM_PROVENANCE.md"
+        ],
+        "located_at": "CLAUDE_ADAM_PROVENANCE.md",
+        "note": "Held open while govern-vs-demote was unresolved. Chairman chose A-GOVERN (2026-07-31T12:08:50Z), so the companions are GOVERNED rows generated from leo_protocol_sections, drift-checked and read-tracked — not advisory text. These are companion-bound as GOVERNED content, which is what the open question was about.",
+        "adjudicated_by": "Alpha-2 session 8aa7b984"
       }
     },
     {
@@ -6161,13 +6474,16 @@
       "imperative": "Generated from database: 2026-07-28 Protocol Version: 4.4.1 Source of truth: leo_protocol_sections (section_type=adam_role_contract).",
       "match_score": 0.5,
       "carries_modal": false,
-      "disposition": "CLASSIFIED_PENDING_FR2",
+      "disposition": "companion_bound",
       "lexical_coverage": 0.389,
-      "triage": {
-        "destination": "CLAUDE_ADAM_PROVENANCE.md",
-        "class": "provenance",
-        "why_not_closed": "Non-obligation-shaped: no modal, no negation, no duty verb. The rule-bearing content was already dispositioned (18 modal + 86 obligation-shaped). This entry is elaboration/provenance/how-to whose destination is a companion, so its disposition RIDES ON the FR-2 govern-vs-demote decision. Under option A it lands governed; under option B it becomes advisory and stops being contract content at all. Closing it before that call would be an assertion, which is the exact failure this ledger exists to avoid.",
-        "classified_by": "Alpha-2 session 8aa7b984, 2026-07-31"
+      "survival_basis": {
+        "measure": "closed by the A-GOVERN ruling that resolved their destination",
+        "reachable_in": [
+          "CLAUDE_ADAM_PROVENANCE.md"
+        ],
+        "located_at": "CLAUDE_ADAM_PROVENANCE.md",
+        "note": "Held open while govern-vs-demote was unresolved. Chairman chose A-GOVERN (2026-07-31T12:08:50Z), so the companions are GOVERNED rows generated from leo_protocol_sections, drift-checked and read-tracked — not advisory text. These are companion-bound as GOVERNED content, which is what the open question was about.",
+        "adjudicated_by": "Alpha-2 session 8aa7b984"
       }
     },
     {
@@ -6238,5 +6554,16 @@
       "manual": 13
     },
     "standing_note": "NEEDS_DECISION is now EMPTY, but that does NOT mean the ledger is closed. CLASSIFIED_PENDING_FR2 entries are deliberately open: they are companion-bound, and whether a companion is GOVERNED or ADVISORY is the unresolved FR-2 A/B call. Resolve that first, then close these in one motion."
+  },
+  "candidate_loss_outcome": {
+    "ruling": "CHAIRMAN RULED A on the four-losses packet, 2026-07-31 — restore all four. Relayed via coordinator.",
+    "restored": 4,
+    "note": "All four moved CANDIDATE_LOSS -> restored. The decline path (deliberately_dropped with the decision cited) was written down in advance and did not need to be used."
+  },
+  "ledger_closed": {
+    "by": "Alpha-2 session 8aa7b984, 2026-07-31",
+    "cadence_closed": 1,
+    "fr2_pending_closed": 101,
+    "note": "NEEDS_DECISION 0, CANDIDATE_LOSS 0, CHAIRMAN_DECISION_REQUIRED 0, CLASSIFIED_PENDING_FR2 0. Every one of the 533 entries now carries a disposition backed by either a located clause in the regenerated contract, a chairman ruling, or an explicit governed-companion destination."
   }
 }

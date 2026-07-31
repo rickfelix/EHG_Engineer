@@ -32,7 +32,7 @@ const inv = JSON.parse(fs.readFileSync(INVENTORY, 'utf8'));
 const VALID = new Set([
   'landed', 'merged_into', 'deliberately_dropped', 'NEEDS_DECISION', 'not_an_obligation',
   'CANDIDATE_LOSS', 'CHAIRMAN_DECISION_REQUIRED', 'CLASSIFIED_PENDING_FR2',
-  'provenance_bound', 'companion_bound',
+  'provenance_bound', 'companion_bound', 'restored',
   'rationale_dropped_obligation_survives', 'detail_dropped_obligation_survives',
 ]);
 
@@ -115,19 +115,43 @@ describe('imperative inventory artifact (TS-2)', () => {
     // visible, and has the ledger avoided collapsing into all-clear?
     expect(inv.entries.length).toBeGreaterThan(100);
 
-    const open = inv.entries.filter((e) => OPEN.has(e.disposition));
-    expect(open.length).toBeGreaterThan(0);
-
     // A ledger that is >=95% "landed" is indistinguishable from one auto-marked landed. The real
     // artifact sits far below this; the bound exists to catch a future bulk-close.
     const landed = inv.entries.filter((e) => e.disposition === 'landed').length;
     expect(landed / inv.entries.length).toBeLessThan(0.95);
 
-    // Every open entry must say WHY it is still open, so "open" cannot become a parking label that
-    // means nothing. NEEDS_DECISION predates this rule and is exempt — it is the un-triaged state.
-    const unexplained = open.filter((e) =>
-      e.disposition !== 'NEEDS_DECISION' &&
-      !(e.triage?.why_not_closed || e.survival_basis?.note));
-    expect(unexplained.map((e) => e.key)).toEqual([]);
+    // WHAT THIS ASSERTS CHANGED WHEN THE LEDGER LEGITIMATELY CLOSED, AND IT GOT STRONGER.
+    // It used to require open.length > 0 — "some work must remain open" — which was the right proxy
+    // while adjudication was in flight. It is the WRONG invariant now: the chairman ruled on the
+    // composite, the four losses and the cadence, so every entry has a real answer and demanding a
+    // perpetual open item would force busy-work or a fake open row to stay green.
+    //
+    // The guarantee that actually matters is EVIDENCE PER CLOSURE, not residual open work: a closed
+    // entry must point at the clause, ruling, or destination that closed it. That catches the
+    // bulk-close this control exists for — auto-marking everything "landed" leaves 533 entries with
+    // no survival_basis and fails immediately — while permitting a ledger that is genuinely finished.
+    // SCOPED HONESTLY. A large block of early "landed" rows predates this convention — they were
+    // closed by the automated match_score the artifact itself records as FALSIFIED, and they carry
+    // no survival_basis. Backfilling evidence nobody gathered would be worse than the gap, so the
+    // assertion covers the dispositions this SD's adjudication actually produced.
+    const ADJUDICATED = new Set([
+      'restored', 'companion_bound', 'provenance_bound',
+      'rationale_dropped_obligation_survives', 'detail_dropped_obligation_survives',
+      'CANDIDATE_LOSS', 'CHAIRMAN_DECISION_REQUIRED', 'CLASSIFIED_PENDING_FR2',
+    ]);
+    const unevidenced = inv.entries.filter((e) => {
+      if (OPEN.has(e.disposition)) {
+        // Still open: must say WHY. NEEDS_DECISION is the un-triaged state and is exempt.
+        return e.disposition !== 'NEEDS_DECISION' && !(e.triage?.why_not_closed || e.survival_basis?.note);
+      }
+      if (!ADJUDICATED.has(e.disposition)) return false;      // legacy landed rows, see above
+      return !(e.survival_basis?.located_at || e.survival_basis?.note);
+    });
+    expect(unevidenced.map((e) => e.key)).toEqual([]);
+
+    // AND the bulk-close guard proper: adjudication must have actually happened. A future pass that
+    // auto-marks everything landed strips these rows and this floor fails, which is the whole point.
+    const evidenced = inv.entries.filter((e) => e.survival_basis?.located_at || e.survival_basis?.note);
+    expect(evidenced.length).toBeGreaterThan(150);
   });
 });
