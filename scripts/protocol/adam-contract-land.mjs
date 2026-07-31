@@ -9,12 +9,17 @@
  * Neither alone writes anything.
  *
  * WHY IT IS NOT ARMED YET (do not remove these gates to "make it work"):
- *   1. CORRECTED is the chairman-approved shortened file PLUS two restorations (5q, 5r). Those
- *      restore content he had already approved being IN the contract, but the composite is not
- *      literally the artifact he signed off.
- *   2. 340 of 533 inventory obligations still carry no disposition.
- *   3. TEMPORARY CADENCE OVERRIDE is unresolved and is his call: a verbal set the SMS heartbeat
- *      to 30min "until he restores hourly", and the shortened contract reverts it silently.
+ *   1. CORRECTED is the chairman-approved shortened file PLUS restorations (5q, 5r, and now the
+ *      row-607 sourcing-engine restoration). Each restores content he had already approved being IN
+ *      the contract, but the composite is not literally the artifact he signed off.
+ *   2. TEMPORARY CADENCE OVERRIDE is unresolved and is his call — and it is now a measured textual
+ *      diff, not a suspicion: the original reads "ROUTINE HEARTBEAT = BRIEF HOURLY SMS", the
+ *      corrected S5g(c3) reads "ROUTINE HEARTBEAT = brief SMS". HOURLY is GONE, not reverted, while
+ *      a later verbal set 30min "until he restores hourly".
+ *
+ * CLOSED SINCE THIS HEADER WAS WRITTEN: the "340 of 533 obligations carry no disposition" item.
+ * All 533 are now dispositioned; 101 remain deliberately OPEN as CLASSIFIED_PENDING_FR2 (they are
+ * companion-bound and close with this landing, since the chairman chose A-GOVERN).
  *
  * ORDERING IS A SAFETY PROPERTY, NOT A PREFERENCE. The shortened contract references
  * CLAUDE_ADAM_MANUAL.md and CLAUDE_ADAM_PROVENANCE.md by name. Landing it before those rows exist
@@ -23,11 +28,18 @@
  */
 import 'dotenv/config';
 import fs from 'fs';
+import crypto from 'crypto';
 import { createClient } from '@supabase/supabase-js';
 
 const APPLY = process.argv.includes('--apply') && process.env.LEO_ADAM_CONTRACT_LAND === '1';
 const DIR = 'docs/protocol/adam-contract-review-2026-07-29/';
 const read = (f) => fs.readFileSync(DIR + f, 'utf8').replace(/\r\n/g, '\n');
+
+/**
+ * The snapshot the CORRECTED artifact is derived from. Drift against it means the artifact is
+ * describing rows that have since moved on — see stalenessGuard().
+ */
+const SNAPSHOT = 'adam-contract-9row-snapshot-2026-07-31.json';
 
 const supabase = createClient(
   process.env.SUPABASE_URL || process.env.NEXT_PUBLIC_SUPABASE_URL,
@@ -38,9 +50,61 @@ const CONTRACT = read('CLAUDE_ADAM.CORRECTED-2026-07-29.md');
 const MANUAL = read('CLAUDE_ADAM_MANUAL.DRAFT-2026-07-29.md');
 const PROVENANCE = read('CLAUDE_ADAM_PROVENANCE.DRAFT-2026-07-29.md');
 
+/**
+ * *** STALENESS GUARD — THIS ONE ALREADY FIRED FOR REAL, AND IT IS THE MOST IMPORTANT CHECK HERE. ***
+ *
+ * The artifact is a REWRITE of rows captured at a moment in time. Those rows keep moving: while this
+ * SD was in flight, SD-LEO-INFRA-SOURCING-ENGINE-BELT-GATED-001 added ~2KB of governed content to
+ * row 607 (SOURCING SSOT). The corrected artifact predated it and said "check the activation FLAGS"
+ * — naming a mechanism that sibling had just retired as four dead no-op flags, and omitting both the
+ * DB-row arm that actually gates the producer and the belt-DEMAND gate's withhold-on-unmeasurable
+ * rule. Landing it unchanged would have SILENTLY REVERTED a merged sibling SD.
+ *
+ * Nothing would have caught it. The drift check compares DB-to-file and would have gone green on the
+ * reverted text, because after landing, the file faithfully renders the row it just clobbered. The
+ * only way to see it is to compare the LIVE rows against the snapshot the artifact was derived from,
+ * BEFORE writing — which is what this does.
+ *
+ * Refuses per-row and names the row, so the remedy ("re-derive that section from live") is obvious.
+ */
+async function stalenessGuard() {
+  const fail = [];
+  let snap;
+  try {
+    snap = JSON.parse(fs.readFileSync(DIR + SNAPSHOT, 'utf8'));
+  } catch {
+    // Absence is a refusal, never a pass. With no snapshot there is no way to know the artifact
+    // still describes the live rows, and "no evidence" must not read as "no drift".
+    return ['NO SNAPSHOT: ' + DIR + SNAPSHOT + ' is missing or unreadable. Re-snapshot all nine rows before landing — a landing with no derivation baseline cannot detect a silent revert.'];
+  }
+
+  const types = snap.section_types || ['adam_role_contract', 'adam_self_adherence_loop', 'role_partnership_contract'];
+  const { data: live, error } = await supabase
+    .from('leo_protocol_sections').select('id, section_type, content').in('section_type', types);
+  if (error) return ['SNAPSHOT COMPARE FAILED: ' + error.message + ' — refusing rather than assuming no drift.'];
+
+  const sha = (s) => crypto.createHash('sha256').update(String(s || ''), 'utf8').digest('hex');
+  const byId = new Map((snap.rows || []).map((r) => [r.id, r]));
+
+  for (const row of live || []) {
+    const base = byId.get(row.id);
+    if (!base) {
+      fail.push(`NEW ROW ${row.id} (${row.section_type}) exists live but is absent from the snapshot — the artifact cannot account for it.`);
+      continue;
+    }
+    if (sha(row.content) !== base.content_sha256) {
+      fail.push(`ROW ${row.id} (${row.section_type}) DRIFTED since the snapshot: ${base.content_chars} -> ${String(row.content || '').length} chars. Landing would revert whatever changed it. Re-derive that section from the LIVE row, then re-snapshot.`);
+    }
+  }
+  for (const id of byId.keys()) {
+    if (!(live || []).some((r) => r.id === id)) fail.push(`ROW ${id} was DELETED live since the snapshot — re-derive before landing.`);
+  }
+  return fail;
+}
+
 /** Preflight refusals — every one of these has already bitten this SD once. */
 async function preflight() {
-  const fail = [];
+  const fail = [...(await stalenessGuard())];
 
   // Row 610 is INCLUDED by both CLAUDE_ADAM.md and CLAUDE_COORDINATOR.md. Copying its body into
   // an adam_role_contract row reads identically on landing day and drifts the first time 610 is
@@ -83,9 +147,9 @@ const plan = [
 
   if (!APPLY) {
     console.log('DRY RUN — nothing written. Both gates are required: LEO_ADAM_CONTRACT_LAND=1 and --apply.');
-    console.log('This step is deliberately unarmed; see the header for the three open items that must');
-    console.log('close first (chairman review of the composite, 340 undispositioned obligations, and');
-    console.log('the TEMPORARY CADENCE OVERRIDE question).');
+    console.log('This step is deliberately unarmed; see the header for the open items that must close');
+    console.log('first (chairman review of the composite, and the TEMPORARY CADENCE OVERRIDE question,');
+    console.log('which is now a measured textual diff rather than a suspicion).');
     process.exit(0);
   }
   if (fail.length) {
