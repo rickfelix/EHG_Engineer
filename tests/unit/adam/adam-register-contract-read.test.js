@@ -162,7 +162,12 @@ describe('adam-register contract-read verification', () => {
     );
     expect(v.fully_read).toBe(false);
     expect(v.basis).toBe('delivered_lines');
-    expect(v.coverage_pct).toBe(36);
+    // ROUNDING IS NOT THE SUBJECT. 176/492 is 35.77%, and this asserted toBe(36) — which pinned
+    // Math.round. SD-LEO-INFRA-ROLE-CONTRACT-READ-GATE-001 has since rewritten this library to
+    // floor, so the same correct behaviour now yields 35 and the test failed on the one detail it
+    // never meant to constrain. What matters is that a third of a file does not read as complete.
+    expect(v.coverage_pct).toBeGreaterThanOrEqual(35);
+    expect(v.coverage_pct).toBeLessThanOrEqual(36);
   });
 
   it('a contract that FITS in one read is complete on the same evidence that is inconclusive over-cap', () => {
