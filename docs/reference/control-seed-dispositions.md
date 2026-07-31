@@ -25,8 +25,8 @@ non-BLOCKS result rather than an edge case. Recording it as either TRUST or DISA
   is **promote or retire**.
 
 This is not a quibble about naming. A binary that has to classify a NARRATES control will push it
-into TRUSTED, because "it works" is the obvious reading — and that is how an advisory control comes
-to be counted as protection it does not provide.
+into TRUSTED, because "it works" is the obvious reading — and that is how an advisory control ends
+up counting as protection it never provided.
 
 ## Dispositions
 
