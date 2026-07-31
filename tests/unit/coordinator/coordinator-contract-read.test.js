@@ -16,7 +16,7 @@ import {
   COORDINATOR_CONTRACT_FILE,
 } from '../../../scripts/coordinator-startup-check.mjs';
 import { createRequire } from 'node:module';
-const { SINGLE_READ_TOKEN_CAP } = createRequire(import.meta.url)('../../../lib/protocol/contract-read-coverage.cjs');
+const { SINGLE_READ_TOKEN_CAP, SINGLE_READ_TOKEN_BUDGET } = createRequire(import.meta.url)('../../../lib/protocol/contract-read-coverage.cjs');
 
 const REPO = process.cwd();
 
@@ -94,25 +94,19 @@ describe('renderContractRead', () => {
     // Per-role arming's one real risk is someone assuming uniform coverage. The mitigation is that
     // the disarmed roles are printed, not implied.
     const out = renderContractRead(REPO, { contract_file: COORDINATOR_CONTRACT_FILE, contract_exists: true, contract_read: true, contract_read_partial: false, contract_last_read_at: null });
-    // ALL THREE roles appear, each with an explicit verdict. The point is that a disarmed role is
-    // PRINTED rather than left to inference from a green coordinator line.
-    for (const role of ['coordinator', 'adam', 'solomon']) expect(out).toContain(role);
-    expect(out).toContain('coordinator : ARMED');
-    expect(out).toContain('adam        : disarmed');  // genuinely over cap, by ~569 tokens
-    expect(out).toContain('solomon     : ARMED');     // 67KB but 15,965 tokens — it fits
-
-    // *** THIS ASSERTION USED TO READ 'solomon : disarmed', AND THAT IS THE BUG IT WAS HIDING. ***
-    // The byte proxy called a 67,501-byte contract unreadable; measured, it is 15,965 tokens and
-    // reads in one call. The test had encoded the proxy's error as a REQUIREMENT, so the only way to
-    // make the measurement correct was to change a test that was passing. A green test asserting a
-    // false fact is worse than no test.
+    // ALL THREE roles appear, each with an EXPLICIT verdict. That is the whole point of the table:
+    // a disarmed role is PRINTED rather than left to inference from a green coordinator line.
     //
-    // MUTATION: drop the per-role table -> a reader sees a green coordinator check and reasonably
-    // infers all three roles are covered. Fails.
-    //
-    // STILL NOT SUFFICIENT ON ITS OWN: it pins today's real files, so it would pass against a
-    // hardcoded string table too. The arming CONDITION is proved by the roleArmingStates block
-    // below, where the measurements are injected and the verdict is required to move.
+    // *** DELIBERATELY ASSERTS THE SHAPE, NOT WHICH ROLES ARE ARMED TODAY. *** An earlier version
+    // required `adam : disarmed` and `solomon : ARMED` against the live contracts. Both are true
+    // right now and neither is a requirement: SD-LEO-INFRA-ADAM-CONTRACT-READABLE-001 exists to
+    // bring CLAUDE_ADAM.md under the budget, and on the day it succeeds adam arms CORRECTLY and the
+    // old assertion fails with nothing wrong. This is the fourth time that shape has appeared in
+    // this SD — including in the very sibling file cleaned up this round, which is how it survived:
+    // the cleanup was applied to one file and not the other.
+    for (const role of ['coordinator', 'adam', 'solomon']) {
+      expect(out).toMatch(new RegExp(`${role}\\s+: (ARMED|disarmed) — .+`));
+    }
   });
 });
 
@@ -177,20 +171,25 @@ describe('roleArmingStates — arming is measured, not asserted', () => {
     // MUTATION: default `armed` to true when the fit is unknown -> fails all four.
   });
 
-  it('REAL FILES: arming follows measured TOKENS, not bytes — solomon fits despite being 67KB', () => {
-    // *** THE REGRESSION THAT CAUGHT THE BYTE PROXY. *** CLAUDE_SOLOMON.md is 67,501 bytes — 2.7x
-    // the old 25,000-ish byte bound — but only 15,965 tokens, so it reads in ONE call. The byte
-    // proxy disarmed a role that could already comply. Asserted on the real files, because the
-    // whole point is that the byte and token answers DISAGREE here.
-    const byRole = Object.fromEntries(roleArmingStates(REPO).map((s) => [s.role, s]));
-    expect(byRole.solomon.armed).toBe(true);
-    expect(byRole.solomon.bytes).toBeGreaterThan(60000);   // big in bytes...
-    expect(byRole.solomon.tokens).toBeLessThan(SINGLE_READ_TOKEN_CAP); // ...small in tokens
-    expect(byRole.coordinator.armed).toBe(true);
-    expect(byRole.adam.armed).toBe(false); // genuinely over, by ~569 tokens
+  it('REAL FILES: every role is measured, and armed follows the measurement', () => {
+    /**
+     * *** ASSERTS THE RULE, NOT TODAY'S ANSWERS. *** This test previously required
+     * `solomon.armed === true`, `solomon.bytes > 60000` and `adam.armed === false` against the live
+     * contracts. All three are true today and none is a requirement — trimming either contract is
+     * desirable, and one is an active sibling SD, so the test would have failed on success.
+     *
+     * What must hold forever is that `armed` is DERIVED from the measurement rather than stated:
+     * every role reports a real token count, and its armed flag agrees with that count against the
+     * budget. If a contract shrinks, the role arms and this still passes.
+     */
+    for (const s of roleArmingStates(REPO)) {
+      expect(s.tokens).toBeGreaterThan(0);
+      expect(s.armed).toBe(s.tokens <= SINGLE_READ_TOKEN_BUDGET);
+      expect(s.reason).toContain('token');
+    }
 
-    // MUTATION: revert to comparing bytes against any bound that admits the 25,587-byte coordinator
-    // contract -> solomon (67,501 B) disarms and this fails. That was the shipped behaviour.
+    // MUTATION: hardcode any role's verdict, or compare bytes instead of tokens -> armed stops
+    // agreeing with tokens and this fails.
   });
 
   it('the RENDERED table reflects injected measurements rather than a fixed string', () => {

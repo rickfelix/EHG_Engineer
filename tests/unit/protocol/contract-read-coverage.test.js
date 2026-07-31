@@ -176,6 +176,52 @@ describe('single-read-safe size — the tier a CI failure forced me to add', () 
   });
 });
 
+describe('the 95% bar is exact — rounding must not move it, and a gauge must not round UP', () => {
+  /**
+   * *** THE FIX FOR THIS SHIPPED WITH A COMMENT INSTEAD OF AN ASSERTION, AND BOTH REVIEWERS CAUGHT
+   * IT INDEPENDENTLY. *** The previous commit corrected `Math.round` running BEFORE the threshold
+   * comparison — which had quietly moved the bar from 95% to 94.5% — and wrote a paragraph about it.
+   * Nothing tested it: restoring the rounding passed all 59 tests. That is the identical gap the
+   * margin had one round earlier. A safety mechanism defended only by a comment is undefended, and
+   * this SD has now produced that shape twice, so it is worth naming as a pattern rather than an
+   * incident: when a fix is subtle enough to need a paragraph, it is subtle enough to need a test.
+   */
+  const T = 520;
+  const overCap = { fits: false, tokens: 27566, bytes: 106286, basis: 'measured_tokens' };
+  const withDelivered = (limit) => ({
+    readCount: 1, lastReadWasPartial: true,
+    deliveredRanges: [{ offset: 1, limit }],
+    lastDelivered: { startLine: 1, numLines: limit, totalLines: T, coveredWholeFile: false },
+  });
+
+  it('493 of 520 lines (94.81%) is NOT a full read', () => {
+    // The exact payload the round-first mutant certifies: 94.8077% rounds to 95, and 95 >= 95.
+    // 5.2% of the contract never delivered, reported complete.
+    const v = contractReadVerdict(withDelivered(493), T, { singleReadFit: overCap });
+    expect(v.fully_read).toBe(false);
+
+    // MUTATION: round before comparing to FULL_COVERAGE_PCT -> fully_read true. Fails.
+  });
+
+  it('494 of 520 lines (95.0%) IS a full read', () => {
+    // The discriminating half: the bar must still be reachable, or the fix would just be "nothing
+    // ever passes" — which no single-sided test could distinguish.
+    const v = contractReadVerdict(withDelivered(494), T, { singleReadFit: overCap });
+    expect(v.fully_read).toBe(true);
+  });
+
+  it('the REPORTED percentage never contradicts the verdict, and never rounds up', () => {
+    // At 493/520 a rounding report would print "95%" beside "not fully read" against a 95% bar,
+    // inviting the reader to assume the verdict is the broken half. Flooring also means the gauge
+    // can never overstate coverage — the failure mode this whole module exists to prevent.
+    const near = contractReadVerdict(withDelivered(493), T, { singleReadFit: overCap });
+    expect(near.coverage_pct).toBeLessThan(FULL_COVERAGE_PCT);
+    expect(near.coverage_pct).toBe(94);
+
+    // MUTATION: report Math.round -> 95, contradicting fully_read:false. Fails.
+  });
+});
+
 describe('coverage threshold', () => {
   it('partial union coverage below the bar is not a full read', () => {
     const v = contractReadVerdict({ readCount: 1, ranges: [{ offset: 1, limit: 200 }] }, 421);
@@ -258,7 +304,7 @@ describe('the byte proxy is RETIRED — readability is measured in tokens', () =
     let body = '';
     for (let i = 0; i < 20000; i++) {
       body += line;
-      if (i % 200 !== 0) continue;
+      if (i % 20 !== 0) continue;   // stride 20, not 200: the band is 2,500 wide and a 3,600-token step can leap clean over it
       fsx.writeFileSync(px.join(dir, file), body);
       const t = singleReadFit(dir, file).tokens;
       if (t > SINGLE_READ_TOKEN_BUDGET && t < SINGLE_READ_TOKEN_CAP) break;
@@ -380,7 +426,7 @@ describe('SEC-F8 — the diligent reader, on the state shape the REAL tracker wr
     // The half that stops the fix from becoming "everything passes".
     const v = contractReadVerdict(lazy, TOTAL, { singleReadFit: overCap });
     expect(v.fully_read).toBe(false);
-    expect(v.coverage_pct).toBe(32);
+    expect(v.coverage_pct).toBe(31);   // 166/520 = 31.92%, FLOORED — a coverage gauge never rounds up
   });
 
   it('AND THE ORDERING IS RIGHT: the diligent reader outscores the lazy one', () => {
@@ -475,7 +521,7 @@ describe('SEC-F16 — a REQUEST must never stand in for a MEASUREMENT', () => {
       { singleReadFit: overCap }
     );
     expect(v.fully_read).toBe(false);
-    expect(v.coverage_pct).toBe(32);
+    expect(v.coverage_pct).toBe(31);   // 166/520 = 31.92%, FLOORED — a coverage gauge never rounds up
     expect(v.basis).toBe('delivered_ranges');
 
     // MUTATION: take the max of the two unions -> 100% fully_read on basis union_ranges. Fails.
@@ -495,7 +541,7 @@ describe('SEC-F16 — a REQUEST must never stand in for a MEASUREMENT', () => {
       { singleReadFit: overCap }
     );
     expect(v.fully_read).toBe(false);
-    expect(v.coverage_pct).toBe(35);
+    expect(v.coverage_pct).toBe(34);   // 180/520 = 34.6%, floored
   });
 
   it('UNDER-reporting is accepted as the safe direction when delivery is partly unrecorded', () => {
