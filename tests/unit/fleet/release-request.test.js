@@ -3,8 +3,12 @@ import { releaseRequestState } from '../../../lib/checkin/steps/release-request.
 import releaseRequestStep from '../../../lib/checkin/steps/release-request.cjs';
 
 const released = vi.hoisted(() => ({ value: true }));
+const lastCall = vi.hoisted(() => ({ args: null }));
 vi.mock('../../../lib/fleet/best-effort-release.mjs', () => ({
-  bestEffortReleaseSd: async () => ({ released: released.value, error: null }),
+  bestEffortReleaseSd: async (...args) => {
+    lastCall.args = args;
+    return { released: released.value, error: null };
+  },
 }));
 
 describe('TS-5 releaseRequestState (pure part of the release-request step)', () => {
@@ -62,6 +66,18 @@ describe('FR-1 release-request clears the stale ctx.mySd snapshot', () => {
     await releaseRequestStep.run(ctx);
     expect(ctx.base.release_requests_honored?.[0]?.sd).toBe(SD_KEY);
     expect(ctx.mySd).toBeNull();
+  });
+
+  // QF-20260726-593: release_sd takes no SD argument and releases whatever the session currently
+  // holds. This loop walks up to 5 held SDs, so an unscoped call can clear THIS row's flag while
+  // releasing a DIFFERENT live SD. expectedSdKey makes it fail-closed.
+  it('passes expectedSdKey so the release is SD-scoped, not "whatever the session holds"', async () => {
+    released.value = true;
+    lastCall.args = null;
+    const ctx = ctxFor();
+    await releaseRequestStep.run(ctx);
+    expect(lastCall.args).not.toBeNull();
+    expect(lastCall.args[4]).toMatchObject({ expectedSdKey: SD_KEY });
   });
 
   it('PRESERVES ctx.mySd when the release did not actually happen', async () => {
