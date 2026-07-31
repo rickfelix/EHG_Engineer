@@ -3,7 +3,7 @@
   "counts": {
     "original": 533,
     "proposed": 298,
-    "landed": 375,
+    "landed": 387,
     "needs_decision": 299,
     "not_an_obligation": 19,
     "NEEDS_DECISION": 116,
@@ -12,7 +12,9 @@
     "provenance_bound": 8,
     "CHAIRMAN_DECISION_REQUIRED": 1,
     "CANDIDATE_LOSS": 4,
-    "companion_bound": 1
+    "companion_bound": 1,
+    "CLASSIFIED_PENDING_FR2": 101,
+    "detail_dropped_obligation_survives": 3
   },
   "entries": [
     {
@@ -83,9 +85,14 @@
       "imperative": "Register/verify the tag via /adam (idempotent).",
       "match_score": 0.33,
       "carries_modal": false,
-      "disposition": "NEEDS_DECISION",
+      "disposition": "CLASSIFIED_PENDING_FR2",
       "lexical_coverage": 0,
-      "lexical_note": "NOT evidence of deletion — the probe is rewrite-blind (3 of 3 known survivors score invisible). Needs a reader."
+      "triage": {
+        "destination": "contract prose or provenance - depends on the A/B call",
+        "class": "elaboration",
+        "why_not_closed": "Non-obligation-shaped: no modal, no negation, no duty verb. The rule-bearing content was already dispositioned (18 modal + 86 obligation-shaped). This entry is elaboration/provenance/how-to whose destination is a companion, so its disposition RIDES ON the FR-2 govern-vs-demote decision. Under option A it lands governed; under option B it becomes advisory and stops being contract content at all. Closing it before that call would be an assertion, which is the exact failure this ledger exists to avoid.",
+        "classified_by": "Alpha-2 session 8aa7b984, 2026-07-31"
+      }
     },
     {
       "key": "e090a7d1ed0c",
@@ -122,9 +129,14 @@
       "imperative": "Standing assignment — GOVERNANCE & OVERSIGHT over the coordinator (chairman-directed 2026-07-16; assistant framing removed 2026-07-17): Adam's first duty is to the Chairman; alongside it, Adam provides governance and oversight over the coordinator.",
       "match_score": 0.24,
       "carries_modal": false,
-      "disposition": "NEEDS_DECISION",
+      "disposition": "CLASSIFIED_PENDING_FR2",
       "lexical_coverage": 0.25,
-      "lexical_note": "NOT evidence of deletion — the probe is rewrite-blind (3 of 3 known survivors score invisible). Needs a reader."
+      "triage": {
+        "destination": "CLAUDE_ADAM_PROVENANCE.md",
+        "class": "provenance",
+        "why_not_closed": "Non-obligation-shaped: no modal, no negation, no duty verb. The rule-bearing content was already dispositioned (18 modal + 86 obligation-shaped). This entry is elaboration/provenance/how-to whose destination is a companion, so its disposition RIDES ON the FR-2 govern-vs-demote decision. Under option A it lands governed; under option B it becomes advisory and stops being contract content at all. Closing it before that call would be an assertion, which is the exact failure this ledger exists to avoid.",
+        "classified_by": "Alpha-2 session 8aa7b984, 2026-07-31"
+      }
     },
     {
       "key": "9d73c2602141",
@@ -148,9 +160,16 @@
       "imperative": "Helping is permitted; oversight is the ROLE.",
       "match_score": 0.5,
       "carries_modal": false,
-      "disposition": "NEEDS_DECISION",
+      "disposition": "landed",
       "lexical_coverage": 0,
-      "lexical_note": "NOT evidence of deletion — the probe is rewrite-blind (3 of 3 known survivors score invisible). Needs a reader."
+      "survival_basis": {
+        "measure": "semantic adjudication - spot-verified against the corrected contract",
+        "reachable_in": [
+          "contract"
+        ],
+        "located_at": "S2a - \"Adam remains free to HELP\" + S2 oversight definition",
+        "adjudicated_by": "Alpha-2 session 8aa7b984"
+      }
     },
     {
       "key": "3126d6695f8a",
@@ -181,9 +200,16 @@
       "imperative": "Alarm on the six Solomon failure classes (wrong-tier routing; false-completion — sample-verify completions vs origin/main; stuck-without-stamp; dispatch-latency tail; directed-work invisibility; review-loop silent-drop) with the anti-gaming guards (progress evidence per claim-hour; adversarial spot-…",
       "match_score": 0.55,
       "carries_modal": false,
-      "disposition": "NEEDS_DECISION",
+      "disposition": "landed",
       "lexical_coverage": 0.59,
-      "lexical_note": "NOT evidence of deletion — the probe is rewrite-blind (3 of 3 known survivors score invisible). Needs a reader."
+      "survival_basis": {
+        "measure": "semantic adjudication - spot-verified against the corrected contract",
+        "reachable_in": [
+          "contract"
+        ],
+        "located_at": "S2a - \"Alarm on the six failure classes: wrong-tier routing; false-completion ...\"",
+        "adjudicated_by": "Alpha-2 session 8aa7b984"
+      }
     },
     {
       "key": "3ef053f9f0b4",
@@ -287,9 +313,16 @@
       "imperative": "Operator-canonical: \"get confirmation from the coordinator before you begin any of them — give options + your rationale, let the coordinator decide what you work on.\"",
       "match_score": 0.4,
       "carries_modal": false,
-      "disposition": "NEEDS_DECISION",
+      "disposition": "landed",
       "lexical_coverage": 0,
-      "lexical_note": "NOT evidence of deletion — the probe is rewrite-blind (3 of 3 known survivors score invisible). Needs a reader."
+      "survival_basis": {
+        "measure": "semantic adjudication - spot-verified against the corrected contract",
+        "reachable_in": [
+          "contract"
+        ],
+        "located_at": "S1 - \"Adam does NOT autonomously begin self-generated proactive work ... without the coordinator go\"",
+        "adjudicated_by": "Alpha-2 session 8aa7b984"
+      }
     },
     {
       "key": "7b643450e301",
@@ -343,9 +376,14 @@
       "imperative": "Standing assignment — GOVERNANCE & OVERSIGHT over Solomon (chairman-directed 2026-07-17): Alongside oversight of the coordinator, Adam provides governance and oversight over Solomon — the deep-reasoning oracle / continual strategist.",
       "match_score": 0.27,
       "carries_modal": false,
-      "disposition": "NEEDS_DECISION",
+      "disposition": "CLASSIFIED_PENDING_FR2",
       "lexical_coverage": 0.28,
-      "lexical_note": "NOT evidence of deletion — the probe is rewrite-blind (3 of 3 known survivors score invisible). Needs a reader."
+      "triage": {
+        "destination": "CLAUDE_ADAM_PROVENANCE.md",
+        "class": "provenance",
+        "why_not_closed": "Non-obligation-shaped: no modal, no negation, no duty verb. The rule-bearing content was already dispositioned (18 modal + 86 obligation-shaped). This entry is elaboration/provenance/how-to whose destination is a companion, so its disposition RIDES ON the FR-2 govern-vs-demote decision. Under option A it lands governed; under option B it becomes advisory and stops being contract content at all. Closing it before that call would be an assertion, which is the exact failure this ledger exists to avoid.",
+        "classified_by": "Alpha-2 session 8aa7b984, 2026-07-31"
+      }
     },
     {
       "key": "c9cbca1ac35f",
@@ -424,9 +462,16 @@
       "imperative": "Solomon's drift fixes and systemic findings route through Adam-sourced DRAFT SDs — the existing \"Solomon diagnoses, Adam sources\" seam already carries exactly this, so reuse it rather than inventing a new mechanism.",
       "match_score": 0.2,
       "carries_modal": false,
-      "disposition": "NEEDS_DECISION",
+      "disposition": "landed",
       "lexical_coverage": 0,
-      "lexical_note": "NOT evidence of deletion — the probe is rewrite-blind (3 of 3 known survivors score invisible). Needs a reader."
+      "survival_basis": {
+        "measure": "semantic adjudication - spot-verified against the corrected contract",
+        "reachable_in": [
+          "contract"
+        ],
+        "located_at": "S2b.3 - drift/systemic_flag findings wait on Adam to source; Solomon NEVER files his own fix",
+        "adjudicated_by": "Alpha-2 session 8aa7b984"
+      }
     },
     {
       "key": "40771b818e8a",
@@ -472,9 +517,16 @@
       "imperative": "This mirrors, and is the Solomon-facing twin of, the coordinator standing-assignment above.",
       "match_score": 0.17,
       "carries_modal": false,
-      "disposition": "NEEDS_DECISION",
+      "disposition": "landed",
       "lexical_coverage": 0,
-      "lexical_note": "NOT evidence of deletion — the probe is rewrite-blind (3 of 3 known survivors score invisible). Needs a reader."
+      "survival_basis": {
+        "measure": "semantic adjudication - spot-verified against the corrected contract",
+        "reachable_in": [
+          "contract"
+        ],
+        "located_at": "S2b - the standing Solomon-health check mirrors S2a",
+        "adjudicated_by": "Alpha-2 session 8aa7b984"
+      }
     },
     {
       "key": "3153f74b526b",
@@ -620,9 +672,16 @@
       "imperative": "D4 — verify_before_certainty: verify premise vs LIVE before asserting/filing (verify-before-file, liveness checks, dedup vs shipped).",
       "match_score": 0.25,
       "carries_modal": false,
-      "disposition": "NEEDS_DECISION",
+      "disposition": "landed",
       "lexical_coverage": 0,
-      "lexical_note": "NOT evidence of deletion — the probe is rewrite-blind (3 of 3 known survivors score invisible). Needs a reader."
+      "survival_basis": {
+        "measure": "semantic adjudication - spot-verified against the corrected contract",
+        "reachable_in": [
+          "contract"
+        ],
+        "located_at": "S6 D4 - \"READ THE INSTRUMENT, DO NOT INFER IT\", with both red-flags",
+        "adjudicated_by": "Alpha-2 session 8aa7b984"
+      }
     },
     {
       "key": "7c2a2307420e",
@@ -660,9 +719,14 @@
       "imperative": "Every measured failure had the claim checked and the INSTRUMENT inferred: a CONST-010 block assumed to be the known enum false-positive and nearly attested past (reading rationale-bar.js showed a genuine match — inferring would have bypassed a WORKING check); countRoadmapLinkExceptions fed metadata …",
       "match_score": 0.16,
       "carries_modal": false,
-      "disposition": "NEEDS_DECISION",
+      "disposition": "CLASSIFIED_PENDING_FR2",
       "lexical_coverage": 0,
-      "lexical_note": "NOT evidence of deletion — the probe is rewrite-blind (3 of 3 known survivors score invisible). Needs a reader."
+      "triage": {
+        "destination": "CLAUDE_ADAM_MANUAL.md",
+        "class": "manual",
+        "why_not_closed": "Non-obligation-shaped: no modal, no negation, no duty verb. The rule-bearing content was already dispositioned (18 modal + 86 obligation-shaped). This entry is elaboration/provenance/how-to whose destination is a companion, so its disposition RIDES ON the FR-2 govern-vs-demote decision. Under option A it lands governed; under option B it becomes advisory and stops being contract content at all. Closing it before that call would be an assertion, which is the exact failure this ledger exists to avoid.",
+        "classified_by": "Alpha-2 session 8aa7b984, 2026-07-31"
+      }
     },
     {
       "key": "537dc1a43716",
@@ -677,27 +741,48 @@
       "imperative": "D6 — close_loops_ack: close the loop outbound (completion check-ins) + ACK inbound (two-stage actioned_at). good: terminal-action check-ins; directives acked/processed. failure: leaves coordinator scraping state; missed directives. signal: ack latency; missing completion check-ins. source: session_c…",
       "match_score": 0.31,
       "carries_modal": false,
-      "disposition": "NEEDS_DECISION",
+      "disposition": "landed",
       "lexical_coverage": 0.105,
-      "lexical_note": "NOT evidence of deletion — the probe is rewrite-blind (3 of 3 known survivors score invisible). Needs a reader."
+      "survival_basis": {
+        "measure": "semantic adjudication - spot-verified against the corrected contract",
+        "reachable_in": [
+          "contract"
+        ],
+        "located_at": "S6 D6 - close the loop outbound, ACK inbound; red-flag directive past SLA",
+        "adjudicated_by": "Alpha-2 session 8aa7b984"
+      }
     },
     {
       "key": "c5d49e9f1989",
       "imperative": "D7 — sd_quality: authored DRAFT SDs/QFs are scoped, deduped, implementation-ready, correctly tiered. good: net-new, file:line-grounded, right tier, dedup-cited. failure: vague/dup/mis-tiered. signal: gate pass-rate of Adam-authored drafts; dup-filed rate. source: strategic_directives_v2, gates. red-…",
       "match_score": 0.35,
       "carries_modal": false,
-      "disposition": "NEEDS_DECISION",
+      "disposition": "landed",
       "lexical_coverage": 0.119,
-      "lexical_note": "NOT evidence of deletion — the probe is rewrite-blind (3 of 3 known survivors score invisible). Needs a reader."
+      "survival_basis": {
+        "measure": "semantic adjudication - spot-verified against the corrected contract",
+        "reachable_in": [
+          "contract"
+        ],
+        "located_at": "S6 D7 - net-new, file:line-grounded, right tier, dedup-cited",
+        "adjudicated_by": "Alpha-2 session 8aa7b984"
+      }
     },
     {
       "key": "3f9431a5d111",
       "imperative": "D8 — interface_clarity: comms clear, correctly-addressed, non-noisy (right lane, full uuid+correlation, silence-by-default). good: clear advisories, correct lane/target, ≤1/tick. failure: malformed targets, noise, lane pollution. signal: delivery success; advisory volume vs material. source: advisor…",
       "match_score": 0.39,
       "carries_modal": false,
-      "disposition": "NEEDS_DECISION",
+      "disposition": "landed",
       "lexical_coverage": 0.111,
-      "lexical_note": "NOT evidence of deletion — the probe is rewrite-blind (3 of 3 known survivors score invisible). Needs a reader."
+      "survival_basis": {
+        "measure": "semantic adjudication - spot-verified against the corrected contract",
+        "reachable_in": [
+          "contract"
+        ],
+        "located_at": "S6 D8 - right lane, full uuid + correlation, silence-by-default, <=1/tick",
+        "adjudicated_by": "Alpha-2 session 8aa7b984"
+      }
     },
     {
       "key": "520eeda21877",
@@ -711,18 +796,30 @@
       "imperative": "The coordinator's parallel rubric (same shape) lives in .claude/commands/coordinator.md.",
       "match_score": 0.25,
       "carries_modal": false,
-      "disposition": "NEEDS_DECISION",
+      "disposition": "detail_dropped_obligation_survives",
       "lexical_coverage": 0.111,
-      "lexical_note": "NOT evidence of deletion — the probe is rewrite-blind (3 of 3 known survivors score invisible). Needs a reader."
+      "survival_basis": {
+        "measure": "semantic adjudication - read against the corrected contract",
+        "located_at": "parent obligation survives; this elaboration does not",
+        "note": "A cross-reference to .claude/commands/coordinator.md, not a rule. Not carried.",
+        "adjudicated_by": "Alpha-2 session 8aa7b984"
+      }
     },
     {
       "key": "cbe6dfb2ab40",
       "imperative": "Each score row uses the common score schema: per-dimension scores PLUS committed_actions (array) and prior_action_outcomes (array).",
       "match_score": 0.36,
       "carries_modal": false,
-      "disposition": "NEEDS_DECISION",
+      "disposition": "landed",
       "lexical_coverage": 0,
-      "lexical_note": "NOT evidence of deletion — the probe is rewrite-blind (3 of 3 known survivors score invisible). Needs a reader."
+      "survival_basis": {
+        "measure": "semantic adjudication - spot-verified against the corrected contract",
+        "reachable_in": [
+          "contract"
+        ],
+        "located_at": "S6 - \"(c) RECORD committed_actions\" + \"(d) recording prior_action_outcomes\"",
+        "adjudicated_by": "Alpha-2 session 8aa7b984"
+      }
     },
     {
       "key": "d75297d11036",
@@ -758,9 +855,14 @@
       "imperative": "Governance heartbeat (proactive multi-scope scan loop): [Behind flag ADAM_GOVERNANCE_HEARTBEAT_V1 — ON since 2026-06-11 (leo_feature_flags.is_enabled=true; SD-LEO-INFRA-ENABLE-ADAM-GOVERNANCE-001 completed).",
       "match_score": 0.31,
       "carries_modal": false,
-      "disposition": "NEEDS_DECISION",
+      "disposition": "CLASSIFIED_PENDING_FR2",
       "lexical_coverage": 0.286,
-      "lexical_note": "NOT evidence of deletion — the probe is rewrite-blind (3 of 3 known survivors score invisible). Needs a reader."
+      "triage": {
+        "destination": "CLAUDE_ADAM_PROVENANCE.md",
+        "class": "provenance",
+        "why_not_closed": "Non-obligation-shaped: no modal, no negation, no duty verb. The rule-bearing content was already dispositioned (18 modal + 86 obligation-shaped). This entry is elaboration/provenance/how-to whose destination is a companion, so its disposition RIDES ON the FR-2 govern-vs-demote decision. Under option A it lands governed; under option B it becomes advisory and stops being contract content at all. Closing it before that call would be an assertion, which is the exact failure this ledger exists to avoid.",
+        "classified_by": "Alpha-2 session 8aa7b984, 2026-07-31"
+      }
     },
     {
       "key": "95f09396bad1",
@@ -783,9 +885,14 @@
       "imperative": "- SCOPES (enumerated free from applications + ventures, lib/repo-paths.js): harness = EHG_Engineer; platform = EHG (26-stage workflows); per-venture = ventures WHERE status=active AND is_demo=false.",
       "match_score": 0.35,
       "carries_modal": false,
-      "disposition": "NEEDS_DECISION",
+      "disposition": "CLASSIFIED_PENDING_FR2",
       "lexical_coverage": 0.042,
-      "lexical_note": "NOT evidence of deletion — the probe is rewrite-blind (3 of 3 known survivors score invisible). Needs a reader."
+      "triage": {
+        "destination": "CLAUDE_ADAM_MANUAL.md",
+        "class": "manual",
+        "why_not_closed": "Non-obligation-shaped: no modal, no negation, no duty verb. The rule-bearing content was already dispositioned (18 modal + 86 obligation-shaped). This entry is elaboration/provenance/how-to whose destination is a companion, so its disposition RIDES ON the FR-2 govern-vs-demote decision. Under option A it lands governed; under option B it becomes advisory and stops being contract content at all. Closing it before that call would be an assertion, which is the exact failure this ledger exists to avoid.",
+        "classified_by": "Alpha-2 session 8aa7b984, 2026-07-31"
+      }
     },
     {
       "key": "05b6681ddf3e",
@@ -808,9 +915,14 @@
       "imperative": "Score via lib/eva/okr-priority-integrator.js; dedup vs open SDs; CONST-002 (proposer≠approver) + CONST-010 self-check.",
       "match_score": 0.56,
       "carries_modal": false,
-      "disposition": "NEEDS_DECISION",
+      "disposition": "CLASSIFIED_PENDING_FR2",
       "lexical_coverage": 0.125,
-      "lexical_note": "NOT evidence of deletion — the probe is rewrite-blind (3 of 3 known survivors score invisible). Needs a reader."
+      "triage": {
+        "destination": "CLAUDE_ADAM_MANUAL.md",
+        "class": "manual",
+        "why_not_closed": "Non-obligation-shaped: no modal, no negation, no duty verb. The rule-bearing content was already dispositioned (18 modal + 86 obligation-shaped). This entry is elaboration/provenance/how-to whose destination is a companion, so its disposition RIDES ON the FR-2 govern-vs-demote decision. Under option A it lands governed; under option B it becomes advisory and stops being contract content at all. Closing it before that call would be an assertion, which is the exact failure this ledger exists to avoid.",
+        "classified_by": "Alpha-2 session 8aa7b984, 2026-07-31"
+      }
     },
     {
       "key": "04800bbbe7f4",
@@ -825,9 +937,14 @@
       "imperative": "(Per-venture data is thin today: emit a DRAFT-SD proposal to light up the data layer; fix once, unlock all.)",
       "match_score": 0.18,
       "carries_modal": false,
-      "disposition": "NEEDS_DECISION",
+      "disposition": "CLASSIFIED_PENDING_FR2",
       "lexical_coverage": 0,
-      "lexical_note": "NOT evidence of deletion — the probe is rewrite-blind (3 of 3 known survivors score invisible). Needs a reader."
+      "triage": {
+        "destination": "contract prose or provenance - depends on the A/B call",
+        "class": "elaboration",
+        "why_not_closed": "Non-obligation-shaped: no modal, no negation, no duty verb. The rule-bearing content was already dispositioned (18 modal + 86 obligation-shaped). This entry is elaboration/provenance/how-to whose destination is a companion, so its disposition RIDES ON the FR-2 govern-vs-demote decision. Under option A it lands governed; under option B it becomes advisory and stops being contract content at all. Closing it before that call would be an assertion, which is the exact failure this ledger exists to avoid.",
+        "classified_by": "Alpha-2 session 8aa7b984, 2026-07-31"
+      }
     },
     {
       "key": "f059dde94ce4",
@@ -865,27 +982,42 @@
       "imperative": "LEARNING: learn chairman weights from .adam-chairman-decisions.json + eva chairman_feedback; self-improve via the existing adam_self_assessment cadence.",
       "match_score": 0.18,
       "carries_modal": false,
-      "disposition": "NEEDS_DECISION",
+      "disposition": "CLASSIFIED_PENDING_FR2",
       "lexical_coverage": 0,
-      "lexical_note": "NOT evidence of deletion — the probe is rewrite-blind (3 of 3 known survivors score invisible). Needs a reader."
+      "triage": {
+        "destination": "CLAUDE_ADAM_MANUAL.md",
+        "class": "manual",
+        "why_not_closed": "Non-obligation-shaped: no modal, no negation, no duty verb. The rule-bearing content was already dispositioned (18 modal + 86 obligation-shaped). This entry is elaboration/provenance/how-to whose destination is a companion, so its disposition RIDES ON the FR-2 govern-vs-demote decision. Under option A it lands governed; under option B it becomes advisory and stops being contract content at all. Closing it before that call would be an assertion, which is the exact failure this ledger exists to avoid.",
+        "classified_by": "Alpha-2 session 8aa7b984, 2026-07-31"
+      }
     },
     {
       "key": "fcca4839e3a6",
       "imperative": "Loading: The /adam skill loads this contract (CLAUDE_ADAM.md) exactly as workers load CLAUDE_CORE.",
       "match_score": 0.22,
       "carries_modal": false,
-      "disposition": "NEEDS_DECISION",
+      "disposition": "CLASSIFIED_PENDING_FR2",
       "lexical_coverage": 0,
-      "lexical_note": "NOT evidence of deletion — the probe is rewrite-blind (3 of 3 known survivors score invisible). Needs a reader."
+      "triage": {
+        "destination": "contract prose or provenance - depends on the A/B call",
+        "class": "elaboration",
+        "why_not_closed": "Non-obligation-shaped: no modal, no negation, no duty verb. The rule-bearing content was already dispositioned (18 modal + 86 obligation-shaped). This entry is elaboration/provenance/how-to whose destination is a companion, so its disposition RIDES ON the FR-2 govern-vs-demote decision. Under option A it lands governed; under option B it becomes advisory and stops being contract content at all. Closing it before that call would be an assertion, which is the exact failure this ledger exists to avoid.",
+        "classified_by": "Alpha-2 session 8aa7b984, 2026-07-31"
+      }
     },
     {
       "key": "7ee69b07b342",
       "imperative": "This file is database-first — generated from leo_protocol_sections (section_type adam_role_contract) by scripts/generate-claude-md-from-db.js alongside CLAUDE_CORE/LEAD/PLAN/EXEC.",
       "match_score": 0.31,
       "carries_modal": false,
-      "disposition": "NEEDS_DECISION",
+      "disposition": "CLASSIFIED_PENDING_FR2",
       "lexical_coverage": 0.16,
-      "lexical_note": "NOT evidence of deletion — the probe is rewrite-blind (3 of 3 known survivors score invisible). Needs a reader."
+      "triage": {
+        "destination": "CLAUDE_ADAM_MANUAL.md",
+        "class": "manual",
+        "why_not_closed": "Non-obligation-shaped: no modal, no negation, no duty verb. The rule-bearing content was already dispositioned (18 modal + 86 obligation-shaped). This entry is elaboration/provenance/how-to whose destination is a companion, so its disposition RIDES ON the FR-2 govern-vs-demote decision. Under option A it lands governed; under option B it becomes advisory and stops being contract content at all. Closing it before that call would be an assertion, which is the exact failure this ledger exists to avoid.",
+        "classified_by": "Alpha-2 session 8aa7b984, 2026-07-31"
+      }
     },
     {
       "key": "985dca158a3e",
@@ -1284,9 +1416,16 @@
       "imperative": "Standing plan review: hold a live read of wave progress + forward-list-vs-actual at every exec summary and every chairman \"what next\".",
       "match_score": 0.57,
       "carries_modal": false,
-      "disposition": "NEEDS_DECISION",
+      "disposition": "landed",
       "lexical_coverage": 0.263,
-      "lexical_note": "NOT evidence of deletion — the probe is rewrite-blind (3 of 3 known survivors score invisible). Needs a reader."
+      "survival_basis": {
+        "measure": "semantic adjudication - spot-verified against the corrected contract",
+        "reachable_in": [
+          "contract"
+        ],
+        "located_at": "S5d - \"Standing plan review at every exec summary and every chairman what-next\"",
+        "adjudicated_by": "Alpha-2 session 8aa7b984"
+      }
     },
     {
       "key": "8ab53361cd29",
@@ -1392,9 +1531,14 @@
       "imperative": "SD-LEO-INFRA-UPSCALE-ADAM-PROJECT-MANAGEMENT-DISCIPLINE-001-B.",
       "match_score": 0,
       "carries_modal": false,
-      "disposition": "NEEDS_DECISION",
+      "disposition": "CLASSIFIED_PENDING_FR2",
       "lexical_coverage": 0,
-      "lexical_note": "NOT evidence of deletion — the probe is rewrite-blind (3 of 3 known survivors score invisible). Needs a reader."
+      "triage": {
+        "destination": "CLAUDE_ADAM_PROVENANCE.md",
+        "class": "provenance",
+        "why_not_closed": "Non-obligation-shaped: no modal, no negation, no duty verb. The rule-bearing content was already dispositioned (18 modal + 86 obligation-shaped). This entry is elaboration/provenance/how-to whose destination is a companion, so its disposition RIDES ON the FR-2 govern-vs-demote decision. Under option A it lands governed; under option B it becomes advisory and stops being contract content at all. Closing it before that call would be an assertion, which is the exact failure this ledger exists to avoid.",
+        "classified_by": "Alpha-2 session 8aa7b984, 2026-07-31"
+      }
     },
     {
       "key": "7e44323d4953",
@@ -1521,9 +1665,14 @@
       "imperative": "(b) OUTBOUND QUESTIONS / DECISION PRESENTATION (broadened chairman-directed 2026-07-19: SMS is THE means of presenting the chairman the decisions that are needed — chairman verbal: 'I want you to use the text messaging as your means of presenting me the decisions that are needed'; in-terminal discus…",
       "match_score": 0.26,
       "carries_modal": false,
-      "disposition": "NEEDS_DECISION",
+      "disposition": "CLASSIFIED_PENDING_FR2",
       "lexical_coverage": 0.091,
-      "lexical_note": "NOT evidence of deletion — the probe is rewrite-blind (3 of 3 known survivors score invisible). Needs a reader."
+      "triage": {
+        "destination": "CLAUDE_ADAM_PROVENANCE.md",
+        "class": "provenance",
+        "why_not_closed": "Non-obligation-shaped: no modal, no negation, no duty verb. The rule-bearing content was already dispositioned (18 modal + 86 obligation-shaped). This entry is elaboration/provenance/how-to whose destination is a companion, so its disposition RIDES ON the FR-2 govern-vs-demote decision. Under option A it lands governed; under option B it becomes advisory and stops being contract content at all. Closing it before that call would be an assertion, which is the exact failure this ledger exists to avoid.",
+        "classified_by": "Alpha-2 session 8aa7b984, 2026-07-31"
+      }
     },
     {
       "key": "8352b05ead84",
@@ -1545,9 +1694,16 @@
       "imperative": "ONE question per message; ONE decision outstanding at a time (serialized — new questions queue until the current one resolves; urgent jumps the queue; truly-can't-wait = console anyway).",
       "match_score": 0.53,
       "carries_modal": false,
-      "disposition": "NEEDS_DECISION",
+      "disposition": "landed",
       "lexical_coverage": 0.28,
-      "lexical_note": "NOT evidence of deletion — the probe is rewrite-blind (3 of 3 known survivors score invisible). Needs a reader."
+      "survival_basis": {
+        "measure": "semantic adjudication - spot-verified against the corrected contract",
+        "reachable_in": [
+          "contract"
+        ],
+        "located_at": "S5g(c2) - \"ONE question per message; ONE decision outstanding at a time\"",
+        "adjudicated_by": "Alpha-2 session 8aa7b984"
+      }
     },
     {
       "key": "8bbe28b08fd9",
@@ -1568,9 +1724,14 @@
       "imperative": "Money threshold per the ratified design is superseded-tighter until the financial-envelope SD ships: ALL spend → console.",
       "match_score": 0.2,
       "carries_modal": false,
-      "disposition": "NEEDS_DECISION",
+      "disposition": "CLASSIFIED_PENDING_FR2",
       "lexical_coverage": 0,
-      "lexical_note": "NOT evidence of deletion — the probe is rewrite-blind (3 of 3 known survivors score invisible). Needs a reader."
+      "triage": {
+        "destination": "CLAUDE_ADAM_PROVENANCE.md",
+        "class": "provenance",
+        "why_not_closed": "Non-obligation-shaped: no modal, no negation, no duty verb. The rule-bearing content was already dispositioned (18 modal + 86 obligation-shaped). This entry is elaboration/provenance/how-to whose destination is a companion, so its disposition RIDES ON the FR-2 govern-vs-demote decision. Under option A it lands governed; under option B it becomes advisory and stops being contract content at all. Closing it before that call would be an assertion, which is the exact failure this ledger exists to avoid.",
+        "classified_by": "Alpha-2 session 8aa7b984, 2026-07-31"
+      }
     },
     {
       "key": "dc183ce707c9",
@@ -1633,27 +1794,42 @@
       "imperative": "Boundary-safe: a question arriving at 05:55 starts almost immediately; at 21:55 gets at most the pre-window nudge then freezes.",
       "match_score": 0.09,
       "carries_modal": false,
-      "disposition": "NEEDS_DECISION",
+      "disposition": "detail_dropped_obligation_survives",
       "lexical_coverage": 0,
-      "lexical_note": "NOT evidence of deletion — the probe is rewrite-blind (3 of 3 known survivors score invisible). Needs a reader."
+      "survival_basis": {
+        "measure": "semantic adjudication - read against the corrected contract",
+        "located_at": "parent obligation survives; this elaboration does not",
+        "note": "S5g keeps the sleep window and the frozen retry clock; the 05:55/21:55 boundary worked example is not carried.",
+        "adjudicated_by": "Alpha-2 session 8aa7b984"
+      }
     },
     {
       "key": "0045c3297382",
       "imperative": "The window is his TYPICAL default and is config-tunable for travel/timezone shifts.",
       "match_score": 0.29,
       "carries_modal": false,
-      "disposition": "NEEDS_DECISION",
+      "disposition": "detail_dropped_obligation_survives",
       "lexical_coverage": 0,
-      "lexical_note": "NOT evidence of deletion — the probe is rewrite-blind (3 of 3 known survivors score invisible). Needs a reader."
+      "survival_basis": {
+        "measure": "semantic adjudication - read against the corrected contract",
+        "located_at": "parent obligation survives; this elaboration does not",
+        "note": "S5g fixes 22:00-06:00 ET DST-aware; the config-tunable-for-travel note is not carried.",
+        "adjudicated_by": "Alpha-2 session 8aa7b984"
+      }
     },
     {
       "key": "75ccd72e9816",
       "imperative": "Ties the good-morning init-diagnostics protocol (his 6AM return is the natural flush + morning-batch trigger).",
       "match_score": 0.11,
       "carries_modal": false,
-      "disposition": "NEEDS_DECISION",
+      "disposition": "CLASSIFIED_PENDING_FR2",
       "lexical_coverage": 0,
-      "lexical_note": "NOT evidence of deletion — the probe is rewrite-blind (3 of 3 known survivors score invisible). Needs a reader."
+      "triage": {
+        "destination": "contract prose or provenance - depends on the A/B call",
+        "class": "elaboration",
+        "why_not_closed": "Non-obligation-shaped: no modal, no negation, no duty verb. The rule-bearing content was already dispositioned (18 modal + 86 obligation-shaped). This entry is elaboration/provenance/how-to whose destination is a companion, so its disposition RIDES ON the FR-2 govern-vs-demote decision. Under option A it lands governed; under option B it becomes advisory and stops being contract content at all. Closing it before that call would be an assertion, which is the exact failure this ledger exists to avoid.",
+        "classified_by": "Alpha-2 session 8aa7b984, 2026-07-31"
+      }
     },
     {
       "key": "12a9b444af93",
@@ -1693,36 +1869,56 @@
       "imperative": "Interim until adam-heartbeat mechanism is switched (QF sourced): send the heartbeat via the SMS primitive instead of adam-heartbeat-email.mjs.",
       "match_score": 0.09,
       "carries_modal": false,
-      "disposition": "NEEDS_DECISION",
+      "disposition": "CLASSIFIED_PENDING_FR2",
       "lexical_coverage": 0,
-      "lexical_note": "NOT evidence of deletion — the probe is rewrite-blind (3 of 3 known survivors score invisible). Needs a reader."
+      "triage": {
+        "destination": "CLAUDE_ADAM_MANUAL.md",
+        "class": "manual",
+        "why_not_closed": "Non-obligation-shaped: no modal, no negation, no duty verb. The rule-bearing content was already dispositioned (18 modal + 86 obligation-shaped). This entry is elaboration/provenance/how-to whose destination is a companion, so its disposition RIDES ON the FR-2 govern-vs-demote decision. Under option A it lands governed; under option B it becomes advisory and stops being contract content at all. Closing it before that call would be an assertion, which is the exact failure this ledger exists to avoid.",
+        "classified_by": "Alpha-2 session 8aa7b984, 2026-07-31"
+      }
     },
     {
       "key": "c63835d57456",
       "imperative": "(c4) DAILY 6:00 AM ET MORNING BRIEF BY SMS (chairman-directed 2026-07-19: the daily morning brief — 'your 6:00 AM daily morning brief' — goes to the chairman by text): every day at 6:00 AM ET (the sleep-window flush moment) Adam sends the chairman a morning brief by SMS — plan-first (roadmap positio…",
       "match_score": 0.32,
       "carries_modal": false,
-      "disposition": "NEEDS_DECISION",
+      "disposition": "CLASSIFIED_PENDING_FR2",
       "lexical_coverage": 0.151,
-      "lexical_note": "NOT evidence of deletion — the probe is rewrite-blind (3 of 3 known survivors score invisible). Needs a reader."
+      "triage": {
+        "destination": "CLAUDE_ADAM_PROVENANCE.md",
+        "class": "provenance",
+        "why_not_closed": "Non-obligation-shaped: no modal, no negation, no duty verb. The rule-bearing content was already dispositioned (18 modal + 86 obligation-shaped). This entry is elaboration/provenance/how-to whose destination is a companion, so its disposition RIDES ON the FR-2 govern-vs-demote decision. Under option A it lands governed; under option B it becomes advisory and stops being contract content at all. Closing it before that call would be an assertion, which is the exact failure this ledger exists to avoid.",
+        "classified_by": "Alpha-2 session 8aa7b984, 2026-07-31"
+      }
     },
     {
       "key": "831bdeed4c72",
       "imperative": "It rides with the queued overnight batch flush, and it is DURABLE and self-healing without any live Adam session: a GitHub Actions cron (scripts/cron/chairman-morning-brief-sweep.mjs, .github/workflows/chairman-morning-brief-cron.yml) runs every 15 minutes from 6:00-11:59 AM ET and enqueues via the …",
       "match_score": 0.25,
       "carries_modal": false,
-      "disposition": "NEEDS_DECISION",
+      "disposition": "CLASSIFIED_PENDING_FR2",
       "lexical_coverage": 0.02,
-      "lexical_note": "NOT evidence of deletion — the probe is rewrite-blind (3 of 3 known survivors score invisible). Needs a reader."
+      "triage": {
+        "destination": "CLAUDE_ADAM_MANUAL.md",
+        "class": "manual",
+        "why_not_closed": "Non-obligation-shaped: no modal, no negation, no duty verb. The rule-bearing content was already dispositioned (18 modal + 86 obligation-shaped). This entry is elaboration/provenance/how-to whose destination is a companion, so its disposition RIDES ON the FR-2 govern-vs-demote decision. Under option A it lands governed; under option B it becomes advisory and stops being contract content at all. Closing it before that call would be an assertion, which is the exact failure this ledger exists to avoid.",
+        "classified_by": "Alpha-2 session 8aa7b984, 2026-07-31"
+      }
     },
     {
       "key": "955c86441d87",
       "imperative": "The separate daily-review design (doc + Gantt MMS) is unchanged as its fuller companion surface.",
       "match_score": 0.13,
       "carries_modal": false,
-      "disposition": "NEEDS_DECISION",
+      "disposition": "CLASSIFIED_PENDING_FR2",
       "lexical_coverage": 0,
-      "lexical_note": "NOT evidence of deletion — the probe is rewrite-blind (3 of 3 known survivors score invisible). Needs a reader."
+      "triage": {
+        "destination": "contract prose or provenance - depends on the A/B call",
+        "class": "elaboration",
+        "why_not_closed": "Non-obligation-shaped: no modal, no negation, no duty verb. The rule-bearing content was already dispositioned (18 modal + 86 obligation-shaped). This entry is elaboration/provenance/how-to whose destination is a companion, so its disposition RIDES ON the FR-2 govern-vs-demote decision. Under option A it lands governed; under option B it becomes advisory and stops being contract content at all. Closing it before that call would be an assertion, which is the exact failure this ledger exists to avoid.",
+        "classified_by": "Alpha-2 session 8aa7b984, 2026-07-31"
+      }
     },
     {
       "key": "242b1413ecb7",
@@ -1745,18 +1941,28 @@
       "imperative": "Durable routing that removes Adam's session from the critical path = QF-WIRE-SMS-QUESTION-INTO-NOTIFICATION-PATH-001 (staging-write-time routing, chairman-corrected: everything terminates at Adam).",
       "match_score": 0.18,
       "carries_modal": false,
-      "disposition": "NEEDS_DECISION",
+      "disposition": "CLASSIFIED_PENDING_FR2",
       "lexical_coverage": 0,
-      "lexical_note": "NOT evidence of deletion — the probe is rewrite-blind (3 of 3 known survivors score invisible). Needs a reader."
+      "triage": {
+        "destination": "contract prose or provenance - depends on the A/B call",
+        "class": "elaboration",
+        "why_not_closed": "Non-obligation-shaped: no modal, no negation, no duty verb. The rule-bearing content was already dispositioned (18 modal + 86 obligation-shaped). This entry is elaboration/provenance/how-to whose destination is a companion, so its disposition RIDES ON the FR-2 govern-vs-demote decision. Under option A it lands governed; under option B it becomes advisory and stops being contract content at all. Closing it before that call would be an assertion, which is the exact failure this ledger exists to avoid.",
+        "classified_by": "Alpha-2 session 8aa7b984, 2026-07-31"
+      }
     },
     {
       "key": "c620dae21485",
       "imperative": "Send primitive: Twilio REST via TWILIO_ACCOUNT_SID/TWILIO_AUTH_TOKEN/TWILIO_MESSAGING_SERVICE (machine .env).",
       "match_score": 0.13,
       "carries_modal": false,
-      "disposition": "NEEDS_DECISION",
+      "disposition": "CLASSIFIED_PENDING_FR2",
       "lexical_coverage": 0,
-      "lexical_note": "NOT evidence of deletion — the probe is rewrite-blind (3 of 3 known survivors score invisible). Needs a reader."
+      "triage": {
+        "destination": "contract prose or provenance - depends on the A/B call",
+        "class": "elaboration",
+        "why_not_closed": "Non-obligation-shaped: no modal, no negation, no duty verb. The rule-bearing content was already dispositioned (18 modal + 86 obligation-shaped). This entry is elaboration/provenance/how-to whose destination is a companion, so its disposition RIDES ON the FR-2 govern-vs-demote decision. Under option A it lands governed; under option B it becomes advisory and stops being contract content at all. Closing it before that call would be an assertion, which is the exact failure this ledger exists to avoid.",
+        "classified_by": "Alpha-2 session 8aa7b984, 2026-07-31"
+      }
     },
     {
       "key": "9ab6768c7d6c",
@@ -1787,9 +1993,14 @@
       "imperative": "CHAIRMAN PHONE-NOTIFY (urgent action-items + decisions) — SD-LEO-INFRA-CHAIRMAN-NOTIFY-CAPABILITY-001: Adam tracks chairman HUMAN action-items in .adam-chairman-decisions.json (surfaced in the hourly exec email NEEDS-YOU section) AND, for anything genuinely URGENT / time-critical, routes it to the c…",
       "match_score": 0.42,
       "carries_modal": false,
-      "disposition": "NEEDS_DECISION",
+      "disposition": "CLASSIFIED_PENDING_FR2",
       "lexical_coverage": 0.071,
-      "lexical_note": "NOT evidence of deletion — the probe is rewrite-blind (3 of 3 known survivors score invisible). Needs a reader."
+      "triage": {
+        "destination": "CLAUDE_ADAM_PROVENANCE.md",
+        "class": "provenance",
+        "why_not_closed": "Non-obligation-shaped: no modal, no negation, no duty verb. The rule-bearing content was already dispositioned (18 modal + 86 obligation-shaped). This entry is elaboration/provenance/how-to whose destination is a companion, so its disposition RIDES ON the FR-2 govern-vs-demote decision. Under option A it lands governed; under option B it becomes advisory and stops being contract content at all. Closing it before that call would be an assertion, which is the exact failure this ledger exists to avoid.",
+        "classified_by": "Alpha-2 session 8aa7b984, 2026-07-31"
+      }
     },
     {
       "key": "0a7f78a1ae22",
@@ -1843,9 +2054,14 @@
       "imperative": "- ACCOUNT-SWITCH + USAGE-CHART DUTY (chairman-directed 2026-07-17, hard-coded into the contract at his request): Adam's fleet runs on ONE Anthropic account at a time out of a 3-account rotation (Rick Felix 2000 / Code Street Labs / Deep Soul Session; the active account is machine-global in ~/.claude…",
       "match_score": 0.3,
       "carries_modal": false,
-      "disposition": "NEEDS_DECISION",
+      "disposition": "CLASSIFIED_PENDING_FR2",
       "lexical_coverage": 0.292,
-      "lexical_note": "NOT evidence of deletion — the probe is rewrite-blind (3 of 3 known survivors score invisible). Needs a reader."
+      "triage": {
+        "destination": "CLAUDE_ADAM_PROVENANCE.md",
+        "class": "provenance",
+        "why_not_closed": "Non-obligation-shaped: no modal, no negation, no duty verb. The rule-bearing content was already dispositioned (18 modal + 86 obligation-shaped). This entry is elaboration/provenance/how-to whose destination is a companion, so its disposition RIDES ON the FR-2 govern-vs-demote decision. Under option A it lands governed; under option B it becomes advisory and stops being contract content at all. Closing it before that call would be an assertion, which is the exact failure this ledger exists to avoid.",
+        "classified_by": "Alpha-2 session 8aa7b984, 2026-07-31"
+      }
     },
     {
       "key": "fc2ed6fea2f5",
@@ -1876,9 +2092,14 @@
       "imperative": "Usage is PER-ACCOUNT: a chart pasted from before a /login reflects the OLD account, so reading it against the new active account is a category error.",
       "match_score": 0.54,
       "carries_modal": false,
-      "disposition": "NEEDS_DECISION",
+      "disposition": "CLASSIFIED_PENDING_FR2",
       "lexical_coverage": 0.261,
-      "lexical_note": "NOT evidence of deletion — the probe is rewrite-blind (3 of 3 known survivors score invisible). Needs a reader."
+      "triage": {
+        "destination": "contract prose or provenance - depends on the A/B call",
+        "class": "elaboration",
+        "why_not_closed": "Non-obligation-shaped: no modal, no negation, no duty verb. The rule-bearing content was already dispositioned (18 modal + 86 obligation-shaped). This entry is elaboration/provenance/how-to whose destination is a companion, so its disposition RIDES ON the FR-2 govern-vs-demote decision. Under option A it lands governed; under option B it becomes advisory and stops being contract content at all. Closing it before that call would be an assertion, which is the exact failure this ledger exists to avoid.",
+        "classified_by": "Alpha-2 session 8aa7b984, 2026-07-31"
+      }
     },
     {
       "key": "a789f34ee77d",
@@ -1892,18 +2113,28 @@
       "imperative": "Live witness 2026-07-17: a '90% weekly / resets 7AM tomorrow' chart (a different rotation account, pre-/login) was briefly treated as the live constraint and nearly triggered an unnecessary overnight conserve/throttle posture; a /login to Deep Soul Session (deepsoulsessionslabel@gmail.com) then show…",
       "match_score": 0.08,
       "carries_modal": false,
-      "disposition": "NEEDS_DECISION",
+      "disposition": "CLASSIFIED_PENDING_FR2",
       "lexical_coverage": 0,
-      "lexical_note": "NOT evidence of deletion — the probe is rewrite-blind (3 of 3 known survivors score invisible). Needs a reader."
+      "triage": {
+        "destination": "CLAUDE_ADAM_PROVENANCE.md",
+        "class": "provenance",
+        "why_not_closed": "Non-obligation-shaped: no modal, no negation, no duty verb. The rule-bearing content was already dispositioned (18 modal + 86 obligation-shaped). This entry is elaboration/provenance/how-to whose destination is a companion, so its disposition RIDES ON the FR-2 govern-vs-demote decision. Under option A it lands governed; under option B it becomes advisory and stops being contract content at all. Closing it before that call would be an assertion, which is the exact failure this ledger exists to avoid.",
+        "classified_by": "Alpha-2 session 8aa7b984, 2026-07-31"
+      }
     },
     {
       "key": "a23443328b1b",
       "imperative": "Ties the fleet-single-account constraint + the CHAIRMAN SMS CHANNEL DUTY above + the sourced PLAN-QF-ACCOUNT-IDENTITY-AWARENESS-001 (account-identity awareness).",
       "match_score": 0.18,
       "carries_modal": false,
-      "disposition": "NEEDS_DECISION",
+      "disposition": "CLASSIFIED_PENDING_FR2",
       "lexical_coverage": 0,
-      "lexical_note": "NOT evidence of deletion — the probe is rewrite-blind (3 of 3 known survivors score invisible). Needs a reader."
+      "triage": {
+        "destination": "contract prose or provenance - depends on the A/B call",
+        "class": "elaboration",
+        "why_not_closed": "Non-obligation-shaped: no modal, no negation, no duty verb. The rule-bearing content was already dispositioned (18 modal + 86 obligation-shaped). This entry is elaboration/provenance/how-to whose destination is a companion, so its disposition RIDES ON the FR-2 govern-vs-demote decision. Under option A it lands governed; under option B it becomes advisory and stops being contract content at all. Closing it before that call would be an assertion, which is the exact failure this ledger exists to avoid.",
+        "classified_by": "Alpha-2 session 8aa7b984, 2026-07-31"
+      }
     },
     {
       "key": "ee8871c537a3",
@@ -2052,9 +2283,14 @@
       "imperative": "This law is the PARENT principle; the BLOCK RESOLUTION duty below is its branch (2), the SOURCING SSOT / plan-driven PM duties are its branch (1), and the chairman-decision-surfacing rubric is its branch (3).",
       "match_score": 0.15,
       "carries_modal": false,
-      "disposition": "NEEDS_DECISION",
+      "disposition": "CLASSIFIED_PENDING_FR2",
       "lexical_coverage": 0,
-      "lexical_note": "NOT evidence of deletion — the probe is rewrite-blind (3 of 3 known survivors score invisible). Needs a reader."
+      "triage": {
+        "destination": "contract prose or provenance - depends on the A/B call",
+        "class": "elaboration",
+        "why_not_closed": "Non-obligation-shaped: no modal, no negation, no duty verb. The rule-bearing content was already dispositioned (18 modal + 86 obligation-shaped). This entry is elaboration/provenance/how-to whose destination is a companion, so its disposition RIDES ON the FR-2 govern-vs-demote decision. Under option A it lands governed; under option B it becomes advisory and stops being contract content at all. Closing it before that call would be an assertion, which is the exact failure this ledger exists to avoid.",
+        "classified_by": "Alpha-2 session 8aa7b984, 2026-07-31"
+      }
     },
     {
       "key": "3d60913f89a4",
@@ -2157,9 +2393,14 @@
       "imperative": "This codifies the discipline the chairman endorsed live 2026-07-17.",
       "match_score": 0.33,
       "carries_modal": false,
-      "disposition": "NEEDS_DECISION",
+      "disposition": "CLASSIFIED_PENDING_FR2",
       "lexical_coverage": 0,
-      "lexical_note": "NOT evidence of deletion — the probe is rewrite-blind (3 of 3 known survivors score invisible). Needs a reader."
+      "triage": {
+        "destination": "CLAUDE_ADAM_PROVENANCE.md",
+        "class": "provenance",
+        "why_not_closed": "Non-obligation-shaped: no modal, no negation, no duty verb. The rule-bearing content was already dispositioned (18 modal + 86 obligation-shaped). This entry is elaboration/provenance/how-to whose destination is a companion, so its disposition RIDES ON the FR-2 govern-vs-demote decision. Under option A it lands governed; under option B it becomes advisory and stops being contract content at all. Closing it before that call would be an assertion, which is the exact failure this ledger exists to avoid.",
+        "classified_by": "Alpha-2 session 8aa7b984, 2026-07-31"
+      }
     },
     {
       "key": "92f9bbaa4025",
@@ -2181,9 +2422,14 @@
       "imperative": "Two kinds of correctness -> two reviewers.",
       "match_score": 0.33,
       "carries_modal": false,
-      "disposition": "NEEDS_DECISION",
+      "disposition": "CLASSIFIED_PENDING_FR2",
       "lexical_coverage": 0,
-      "lexical_note": "NOT evidence of deletion — the probe is rewrite-blind (3 of 3 known survivors score invisible). Needs a reader."
+      "triage": {
+        "destination": "contract prose or provenance - depends on the A/B call",
+        "class": "elaboration",
+        "why_not_closed": "Non-obligation-shaped: no modal, no negation, no duty verb. The rule-bearing content was already dispositioned (18 modal + 86 obligation-shaped). This entry is elaboration/provenance/how-to whose destination is a companion, so its disposition RIDES ON the FR-2 govern-vs-demote decision. Under option A it lands governed; under option B it becomes advisory and stops being contract content at all. Closing it before that call would be an assertion, which is the exact failure this ledger exists to avoid.",
+        "classified_by": "Alpha-2 session 8aa7b984, 2026-07-31"
+      }
     },
     {
       "key": "66e4fba9be29",
@@ -2242,18 +2488,28 @@
       "imperative": "fleet capacity / contention with in-flight critical work.",
       "match_score": 0.5,
       "carries_modal": false,
-      "disposition": "NEEDS_DECISION",
+      "disposition": "CLASSIFIED_PENDING_FR2",
       "lexical_coverage": 0,
-      "lexical_note": "NOT evidence of deletion — the probe is rewrite-blind (3 of 3 known survivors score invisible). Needs a reader."
+      "triage": {
+        "destination": "contract prose or provenance - depends on the A/B call",
+        "class": "elaboration",
+        "why_not_closed": "Non-obligation-shaped: no modal, no negation, no duty verb. The rule-bearing content was already dispositioned (18 modal + 86 obligation-shaped). This entry is elaboration/provenance/how-to whose destination is a companion, so its disposition RIDES ON the FR-2 govern-vs-demote decision. Under option A it lands governed; under option B it becomes advisory and stops being contract content at all. Closing it before that call would be an assertion, which is the exact failure this ledger exists to avoid.",
+        "classified_by": "Alpha-2 session 8aa7b984, 2026-07-31"
+      }
     },
     {
       "key": "f720526812df",
       "imperative": "cross-SD dependencies / build-tree ordering.",
       "match_score": 0.5,
       "carries_modal": false,
-      "disposition": "NEEDS_DECISION",
+      "disposition": "CLASSIFIED_PENDING_FR2",
       "lexical_coverage": 0,
-      "lexical_note": "NOT evidence of deletion — the probe is rewrite-blind (3 of 3 known survivors score invisible). Needs a reader."
+      "triage": {
+        "destination": "contract prose or provenance - depends on the A/B call",
+        "class": "elaboration",
+        "why_not_closed": "Non-obligation-shaped: no modal, no negation, no duty verb. The rule-bearing content was already dispositioned (18 modal + 86 obligation-shaped). This entry is elaboration/provenance/how-to whose destination is a companion, so its disposition RIDES ON the FR-2 govern-vs-demote decision. Under option A it lands governed; under option B it becomes advisory and stops being contract content at all. Closing it before that call would be an assertion, which is the exact failure this ledger exists to avoid.",
+        "classified_by": "Alpha-2 session 8aa7b984, 2026-07-31"
+      }
     },
     {
       "key": "4bfcb8cf5d6c",
@@ -2291,18 +2547,28 @@
       "imperative": "SOLOMON consult (REASONING-correctness; the deep-reasoning oracle — 'Adam routes hard architecture/governance questions across to Solomon').",
       "match_score": 0.36,
       "carries_modal": false,
-      "disposition": "NEEDS_DECISION",
+      "disposition": "CLASSIFIED_PENDING_FR2",
       "lexical_coverage": 0,
-      "lexical_note": "NOT evidence of deletion — the probe is rewrite-blind (3 of 3 known survivors score invisible). Needs a reader."
+      "triage": {
+        "destination": "contract prose or provenance - depends on the A/B call",
+        "class": "elaboration",
+        "why_not_closed": "Non-obligation-shaped: no modal, no negation, no duty verb. The rule-bearing content was already dispositioned (18 modal + 86 obligation-shaped). This entry is elaboration/provenance/how-to whose destination is a companion, so its disposition RIDES ON the FR-2 govern-vs-demote decision. Under option A it lands governed; under option B it becomes advisory and stops being contract content at all. Closing it before that call would be an assertion, which is the exact failure this ledger exists to avoid.",
+        "classified_by": "Alpha-2 session 8aa7b984, 2026-07-31"
+      }
     },
     {
       "key": "fd1d5e2bad43",
       "imperative": "Route before committing the SD's SHAPE if ANY:",
       "match_score": 0.5,
       "carries_modal": false,
-      "disposition": "NEEDS_DECISION",
+      "disposition": "CLASSIFIED_PENDING_FR2",
       "lexical_coverage": 0,
-      "lexical_note": "NOT evidence of deletion — the probe is rewrite-blind (3 of 3 known survivors score invisible). Needs a reader."
+      "triage": {
+        "destination": "contract prose or provenance - depends on the A/B call",
+        "class": "elaboration",
+        "why_not_closed": "Non-obligation-shaped: no modal, no negation, no duty verb. The rule-bearing content was already dispositioned (18 modal + 86 obligation-shaped). This entry is elaboration/provenance/how-to whose destination is a companion, so its disposition RIDES ON the FR-2 govern-vs-demote decision. Under option A it lands governed; under option B it becomes advisory and stops being contract content at all. Closing it before that call would be an assertion, which is the exact failure this ledger exists to avoid.",
+        "classified_by": "Alpha-2 session 8aa7b984, 2026-07-31"
+      }
     },
     {
       "key": "ef755d4449dd",
@@ -2354,9 +2620,14 @@
       "imperative": "BOTH when operationally complex AND cognitively hard (large cross-repo standup, foundation refactor) — Solomon for the shape, coordinator for the dispatch.",
       "match_score": 0.29,
       "carries_modal": false,
-      "disposition": "NEEDS_DECISION",
+      "disposition": "CLASSIFIED_PENDING_FR2",
       "lexical_coverage": 0,
-      "lexical_note": "NOT evidence of deletion — the probe is rewrite-blind (3 of 3 known survivors score invisible). Needs a reader."
+      "triage": {
+        "destination": "contract prose or provenance - depends on the A/B call",
+        "class": "elaboration",
+        "why_not_closed": "Non-obligation-shaped: no modal, no negation, no duty verb. The rule-bearing content was already dispositioned (18 modal + 86 obligation-shaped). This entry is elaboration/provenance/how-to whose destination is a companion, so its disposition RIDES ON the FR-2 govern-vs-demote decision. Under option A it lands governed; under option B it becomes advisory and stops being contract content at all. Closing it before that call would be an assertion, which is the exact failure this ledger exists to avoid.",
+        "classified_by": "Alpha-2 session 8aa7b984, 2026-07-31"
+      }
     },
     {
       "key": "d4f1f129104b",
@@ -2379,9 +2650,14 @@
       "imperative": "Normal LEAD-approval + dispatch review already covers it.",
       "match_score": 0.33,
       "carries_modal": false,
-      "disposition": "NEEDS_DECISION",
+      "disposition": "CLASSIFIED_PENDING_FR2",
       "lexical_coverage": 0,
-      "lexical_note": "NOT evidence of deletion — the probe is rewrite-blind (3 of 3 known survivors score invisible). Needs a reader."
+      "triage": {
+        "destination": "contract prose or provenance - depends on the A/B call",
+        "class": "elaboration",
+        "why_not_closed": "Non-obligation-shaped: no modal, no negation, no duty verb. The rule-bearing content was already dispositioned (18 modal + 86 obligation-shaped). This entry is elaboration/provenance/how-to whose destination is a companion, so its disposition RIDES ON the FR-2 govern-vs-demote decision. Under option A it lands governed; under option B it becomes advisory and stops being contract content at all. Closing it before that call would be an assertion, which is the exact failure this ledger exists to avoid.",
+        "classified_by": "Alpha-2 session 8aa7b984, 2026-07-31"
+      }
     },
     {
       "key": "b202c6277ae9",
@@ -2419,36 +2695,56 @@
       "imperative": "Make the gate authoritative (same class as the self-claim-window fix). [Implementation follow-on: the gate wiring is itself a dispatch-MECHANISM SD -> coordinator-reviewed.] Clear path (SD-LEO-INFRA-GUARANTEE-CLAIMABLE-SD-RANKED-001-C): node scripts/clear-coordinator-review.mjs <SD-KEY> clears the f…",
       "match_score": 0.08,
       "carries_modal": false,
-      "disposition": "NEEDS_DECISION",
+      "disposition": "CLASSIFIED_PENDING_FR2",
       "lexical_coverage": 0,
-      "lexical_note": "NOT evidence of deletion — the probe is rewrite-blind (3 of 3 known survivors score invisible). Needs a reader."
+      "triage": {
+        "destination": "CLAUDE_ADAM_PROVENANCE.md",
+        "class": "provenance",
+        "why_not_closed": "Non-obligation-shaped: no modal, no negation, no duty verb. The rule-bearing content was already dispositioned (18 modal + 86 obligation-shaped). This entry is elaboration/provenance/how-to whose destination is a companion, so its disposition RIDES ON the FR-2 govern-vs-demote decision. Under option A it lands governed; under option B it becomes advisory and stops being contract content at all. Closing it before that call would be an assertion, which is the exact failure this ledger exists to avoid.",
+        "classified_by": "Alpha-2 session 8aa7b984, 2026-07-31"
+      }
     },
     {
       "key": "5fb487255aa9",
       "imperative": "Why: coordinator pre-dispatch review earns its round-trip exactly where dispatch-correctness depends on coordinator-owned state — the gauge-vs-action failure class where a source-time assumption silently diverges from dispatch reality (tiering defaults, window exclusion, wrong-repo).",
       "match_score": 0.2,
       "carries_modal": false,
-      "disposition": "NEEDS_DECISION",
+      "disposition": "CLASSIFIED_PENDING_FR2",
       "lexical_coverage": 0,
-      "lexical_note": "NOT evidence of deletion — the probe is rewrite-blind (3 of 3 known survivors score invisible). Needs a reader."
+      "triage": {
+        "destination": "contract prose or provenance - depends on the A/B call",
+        "class": "elaboration",
+        "why_not_closed": "Non-obligation-shaped: no modal, no negation, no duty verb. The rule-bearing content was already dispositioned (18 modal + 86 obligation-shaped). This entry is elaboration/provenance/how-to whose destination is a companion, so its disposition RIDES ON the FR-2 govern-vs-demote decision. Under option A it lands governed; under option B it becomes advisory and stops being contract content at all. Closing it before that call would be an assertion, which is the exact failure this ledger exists to avoid.",
+        "classified_by": "Alpha-2 session 8aa7b984, 2026-07-31"
+      }
     },
     {
       "key": "833cb5896713",
       "imperative": "Solomon earns its consult where reasoning-correctness is at risk.",
       "match_score": 0.5,
       "carries_modal": false,
-      "disposition": "NEEDS_DECISION",
+      "disposition": "CLASSIFIED_PENDING_FR2",
       "lexical_coverage": 0,
-      "lexical_note": "NOT evidence of deletion — the probe is rewrite-blind (3 of 3 known survivors score invisible). Needs a reader."
+      "triage": {
+        "destination": "contract prose or provenance - depends on the A/B call",
+        "class": "elaboration",
+        "why_not_closed": "Non-obligation-shaped: no modal, no negation, no duty verb. The rule-bearing content was already dispositioned (18 modal + 86 obligation-shaped). This entry is elaboration/provenance/how-to whose destination is a companion, so its disposition RIDES ON the FR-2 govern-vs-demote decision. Under option A it lands governed; under option B it becomes advisory and stops being contract content at all. Closing it before that call would be an assertion, which is the exact failure this ledger exists to avoid.",
+        "classified_by": "Alpha-2 session 8aa7b984, 2026-07-31"
+      }
     },
     {
       "key": "4217f7cb64fb",
       "imperative": "Proven on first use (2026-06-30): the Solomon-consult SD review CAUGHT + deliberately set its tiering before any worker touched it.",
       "match_score": 0.27,
       "carries_modal": false,
-      "disposition": "NEEDS_DECISION",
+      "disposition": "CLASSIFIED_PENDING_FR2",
       "lexical_coverage": 0,
-      "lexical_note": "NOT evidence of deletion — the probe is rewrite-blind (3 of 3 known survivors score invisible). Needs a reader."
+      "triage": {
+        "destination": "CLAUDE_ADAM_PROVENANCE.md",
+        "class": "provenance",
+        "why_not_closed": "Non-obligation-shaped: no modal, no negation, no duty verb. The rule-bearing content was already dispositioned (18 modal + 86 obligation-shaped). This entry is elaboration/provenance/how-to whose destination is a companion, so its disposition RIDES ON the FR-2 govern-vs-demote decision. Under option A it lands governed; under option B it becomes advisory and stops being contract content at all. Closing it before that call would be an assertion, which is the exact failure this ledger exists to avoid.",
+        "classified_by": "Alpha-2 session 8aa7b984, 2026-07-31"
+      }
     },
     {
       "key": "57c489b1c8eb",
@@ -2479,9 +2775,14 @@
       "imperative": "The worker coordinates its block with the COORDINATOR, who does due diligence and decides/approves within its lane (e.g. approving a worker to apply a verified-additive migration).",
       "match_score": 0.23,
       "carries_modal": false,
-      "disposition": "NEEDS_DECISION",
+      "disposition": "CLASSIFIED_PENDING_FR2",
       "lexical_coverage": 0,
-      "lexical_note": "NOT evidence of deletion — the probe is rewrite-blind (3 of 3 known survivors score invisible). Needs a reader."
+      "triage": {
+        "destination": "contract prose or provenance - depends on the A/B call",
+        "class": "elaboration",
+        "why_not_closed": "Non-obligation-shaped: no modal, no negation, no duty verb. The rule-bearing content was already dispositioned (18 modal + 86 obligation-shaped). This entry is elaboration/provenance/how-to whose destination is a companion, so its disposition RIDES ON the FR-2 govern-vs-demote decision. Under option A it lands governed; under option B it becomes advisory and stops being contract content at all. Closing it before that call would be an assertion, which is the exact failure this ledger exists to avoid.",
+        "classified_by": "Alpha-2 session 8aa7b984, 2026-07-31"
+      }
     },
     {
       "key": "e25a7d330b76",
@@ -2565,18 +2866,28 @@
       "imperative": "Over-asking is confirmation-fishing — the same failure CLAUDE.md's AUTO-PROCEED forbids (\"when in doubt, pick the highest-value option, state it, and execute\").",
       "match_score": 0.15,
       "carries_modal": false,
-      "disposition": "NEEDS_DECISION",
+      "disposition": "CLASSIFIED_PENDING_FR2",
       "lexical_coverage": 0.045,
-      "lexical_note": "NOT evidence of deletion — the probe is rewrite-blind (3 of 3 known survivors score invisible). Needs a reader."
+      "triage": {
+        "destination": "contract prose or provenance - depends on the A/B call",
+        "class": "elaboration",
+        "why_not_closed": "Non-obligation-shaped: no modal, no negation, no duty verb. The rule-bearing content was already dispositioned (18 modal + 86 obligation-shaped). This entry is elaboration/provenance/how-to whose destination is a companion, so its disposition RIDES ON the FR-2 govern-vs-demote decision. Under option A it lands governed; under option B it becomes advisory and stops being contract content at all. Closing it before that call would be an assertion, which is the exact failure this ledger exists to avoid.",
+        "classified_by": "Alpha-2 session 8aa7b984, 2026-07-31"
+      }
     },
     {
       "key": "04c1f00768f3",
       "imperative": "Before bringing ANY decision to the chairman, run the one-line test:",
       "match_score": 0.33,
       "carries_modal": false,
-      "disposition": "NEEDS_DECISION",
+      "disposition": "CLASSIFIED_PENDING_FR2",
       "lexical_coverage": 0,
-      "lexical_note": "NOT evidence of deletion — the probe is rewrite-blind (3 of 3 known survivors score invisible). Needs a reader."
+      "triage": {
+        "destination": "contract prose or provenance - depends on the A/B call",
+        "class": "elaboration",
+        "why_not_closed": "Non-obligation-shaped: no modal, no negation, no duty verb. The rule-bearing content was already dispositioned (18 modal + 86 obligation-shaped). This entry is elaboration/provenance/how-to whose destination is a companion, so its disposition RIDES ON the FR-2 govern-vs-demote decision. Under option A it lands governed; under option B it becomes advisory and stops being contract content at all. Closing it before that call would be an assertion, which is the exact failure this ledger exists to avoid.",
+        "classified_by": "Alpha-2 session 8aa7b984, 2026-07-31"
+      }
     },
     {
       "key": "b4d7c9304b61",
@@ -2618,9 +2929,14 @@
       "imperative": "Irreversible / external / real-money / high-blast-radius actions (real brand name at launch, live Stripe, gov-flag flips, destructive ops).",
       "match_score": 0.36,
       "carries_modal": false,
-      "disposition": "NEEDS_DECISION",
+      "disposition": "CLASSIFIED_PENDING_FR2",
       "lexical_coverage": 0.25,
-      "lexical_note": "NOT evidence of deletion — the probe is rewrite-blind (3 of 3 known survivors score invisible). Needs a reader."
+      "triage": {
+        "destination": "contract prose or provenance - depends on the A/B call",
+        "class": "elaboration",
+        "why_not_closed": "Non-obligation-shaped: no modal, no negation, no duty verb. The rule-bearing content was already dispositioned (18 modal + 86 obligation-shaped). This entry is elaboration/provenance/how-to whose destination is a companion, so its disposition RIDES ON the FR-2 govern-vs-demote decision. Under option A it lands governed; under option B it becomes advisory and stops being contract content at all. Closing it before that call would be an assertion, which is the exact failure this ledger exists to avoid.",
+        "classified_by": "Alpha-2 session 8aa7b984, 2026-07-31"
+      }
     },
     {
       "key": "bde2fd606ebd",
@@ -2646,9 +2962,14 @@
       "imperative": "Sourcing gold root-fixes under the standing blocks-product cap (a DRAFT is a CONST-002-safe proposal).",
       "match_score": 0.44,
       "carries_modal": false,
-      "disposition": "NEEDS_DECISION",
+      "disposition": "CLASSIFIED_PENDING_FR2",
       "lexical_coverage": 0.143,
-      "lexical_note": "NOT evidence of deletion — the probe is rewrite-blind (3 of 3 known survivors score invisible). Needs a reader."
+      "triage": {
+        "destination": "contract prose or provenance - depends on the A/B call",
+        "class": "elaboration",
+        "why_not_closed": "Non-obligation-shaped: no modal, no negation, no duty verb. The rule-bearing content was already dispositioned (18 modal + 86 obligation-shaped). This entry is elaboration/provenance/how-to whose destination is a companion, so its disposition RIDES ON the FR-2 govern-vs-demote decision. Under option A it lands governed; under option B it becomes advisory and stops being contract content at all. Closing it before that call would be an assertion, which is the exact failure this ledger exists to avoid.",
+        "classified_by": "Alpha-2 session 8aa7b984, 2026-07-31"
+      }
     },
     {
       "key": "5607b164afef",
@@ -2683,27 +3004,42 @@
       "imperative": "USE MEMORY before asking — the answer is often already there.",
       "match_score": 0.43,
       "carries_modal": false,
-      "disposition": "NEEDS_DECISION",
+      "disposition": "CLASSIFIED_PENDING_FR2",
       "lexical_coverage": 0,
-      "lexical_note": "NOT evidence of deletion — the probe is rewrite-blind (3 of 3 known survivors score invisible). Needs a reader."
+      "triage": {
+        "destination": "contract prose or provenance - depends on the A/B call",
+        "class": "elaboration",
+        "why_not_closed": "Non-obligation-shaped: no modal, no negation, no duty verb. The rule-bearing content was already dispositioned (18 modal + 86 obligation-shaped). This entry is elaboration/provenance/how-to whose destination is a companion, so its disposition RIDES ON the FR-2 govern-vs-demote decision. Under option A it lands governed; under option B it becomes advisory and stops being contract content at all. Closing it before that call would be an assertion, which is the exact failure this ledger exists to avoid.",
+        "classified_by": "Alpha-2 session 8aa7b984, 2026-07-31"
+      }
     },
     {
       "key": "5f497d005cbe",
       "imperative": "Solomon (live, 2026-07-12): for the genuinely-50/50-and-consequential tier (the reasoning-depth axis), consult Solomon before bringing it to the chairman — node scripts/worker-signal.cjs solomon-consult \"<packet>\" [--severity high] [--rca-count N] [--tool-attempts N] [--type spec-conflict|arch-ambig…",
       "match_score": 0.11,
       "carries_modal": false,
-      "disposition": "NEEDS_DECISION",
+      "disposition": "CLASSIFIED_PENDING_FR2",
       "lexical_coverage": 0.048,
-      "lexical_note": "NOT evidence of deletion — the probe is rewrite-blind (3 of 3 known survivors score invisible). Needs a reader."
+      "triage": {
+        "destination": "CLAUDE_ADAM_PROVENANCE.md",
+        "class": "provenance",
+        "why_not_closed": "Non-obligation-shaped: no modal, no negation, no duty verb. The rule-bearing content was already dispositioned (18 modal + 86 obligation-shaped). This entry is elaboration/provenance/how-to whose destination is a companion, so its disposition RIDES ON the FR-2 govern-vs-demote decision. Under option A it lands governed; under option B it becomes advisory and stops being contract content at all. Closing it before that call would be an assertion, which is the exact failure this ledger exists to avoid.",
+        "classified_by": "Alpha-2 session 8aa7b984, 2026-07-31"
+      }
     },
     {
       "key": "c37187990445",
       "imperative": "The reply returns as payload.kind=adam_advisory + oracle:true (routed through the coordinator, or via a direct session_coordination row).",
       "match_score": 0.33,
       "carries_modal": false,
-      "disposition": "NEEDS_DECISION",
+      "disposition": "CLASSIFIED_PENDING_FR2",
       "lexical_coverage": 0,
-      "lexical_note": "NOT evidence of deletion — the probe is rewrite-blind (3 of 3 known survivors score invisible). Needs a reader."
+      "triage": {
+        "destination": "CLAUDE_ADAM_MANUAL.md",
+        "class": "manual",
+        "why_not_closed": "Non-obligation-shaped: no modal, no negation, no duty verb. The rule-bearing content was already dispositioned (18 modal + 86 obligation-shaped). This entry is elaboration/provenance/how-to whose destination is a companion, so its disposition RIDES ON the FR-2 govern-vs-demote decision. Under option A it lands governed; under option B it becomes advisory and stops being contract content at all. Closing it before that call would be an assertion, which is the exact failure this ledger exists to avoid.",
+        "classified_by": "Alpha-2 session 8aa7b984, 2026-07-31"
+      }
     },
     {
       "key": "141d1dffa21e",
@@ -2718,9 +3054,14 @@
       "imperative": "This deepens what Adam decides for itself and shrinks what reaches the chairman further.",
       "match_score": 0.43,
       "carries_modal": false,
-      "disposition": "NEEDS_DECISION",
+      "disposition": "CLASSIFIED_PENDING_FR2",
       "lexical_coverage": 0,
-      "lexical_note": "NOT evidence of deletion — the probe is rewrite-blind (3 of 3 known survivors score invisible). Needs a reader."
+      "triage": {
+        "destination": "contract prose or provenance - depends on the A/B call",
+        "class": "elaboration",
+        "why_not_closed": "Non-obligation-shaped: no modal, no negation, no duty verb. The rule-bearing content was already dispositioned (18 modal + 86 obligation-shaped). This entry is elaboration/provenance/how-to whose destination is a companion, so its disposition RIDES ON the FR-2 govern-vs-demote decision. Under option A it lands governed; under option B it becomes advisory and stops being contract content at all. Closing it before that call would be an assertion, which is the exact failure this ledger exists to avoid.",
+        "classified_by": "Alpha-2 session 8aa7b984, 2026-07-31"
+      }
     },
     {
       "key": "7ff63f34e97d",
@@ -2751,9 +3092,14 @@
       "imperative": "Adam's single highest-value observed pattern (Solomon-graded, mutual Adam<->Solomon review, advisory a4765124): when the chairman gives a verbal directive in-session, structure it into a typed commission rather than acting on a loose paraphrase.",
       "match_score": 0.52,
       "carries_modal": false,
-      "disposition": "NEEDS_DECISION",
+      "disposition": "CLASSIFIED_PENDING_FR2",
       "lexical_coverage": 0.364,
-      "lexical_note": "NOT evidence of deletion — the probe is rewrite-blind (3 of 3 known survivors score invisible). Needs a reader."
+      "triage": {
+        "destination": "contract prose or provenance - depends on the A/B call",
+        "class": "elaboration",
+        "why_not_closed": "Non-obligation-shaped: no modal, no negation, no duty verb. The rule-bearing content was already dispositioned (18 modal + 86 obligation-shaped). This entry is elaboration/provenance/how-to whose destination is a companion, so its disposition RIDES ON the FR-2 govern-vs-demote decision. Under option A it lands governed; under option B it becomes advisory and stops being contract content at all. Closing it before that call would be an assertion, which is the exact failure this ledger exists to avoid.",
+        "classified_by": "Alpha-2 session 8aa7b984, 2026-07-31"
+      }
     },
     {
       "key": "fd585d19adc3",
@@ -2830,9 +3176,14 @@
       "imperative": "The recovery precedent is PR #5958 (a byte-exact re-landing after exactly this loss) -- treat that recovery cost as the thing this clause exists to make unnecessary.",
       "match_score": 0.13,
       "carries_modal": false,
-      "disposition": "NEEDS_DECISION",
+      "disposition": "CLASSIFIED_PENDING_FR2",
       "lexical_coverage": 0,
-      "lexical_note": "NOT evidence of deletion — the probe is rewrite-blind (3 of 3 known survivors score invisible). Needs a reader."
+      "triage": {
+        "destination": "contract prose or provenance - depends on the A/B call",
+        "class": "elaboration",
+        "why_not_closed": "Non-obligation-shaped: no modal, no negation, no duty verb. The rule-bearing content was already dispositioned (18 modal + 86 obligation-shaped). This entry is elaboration/provenance/how-to whose destination is a companion, so its disposition RIDES ON the FR-2 govern-vs-demote decision. Under option A it lands governed; under option B it becomes advisory and stops being contract content at all. Closing it before that call would be an assertion, which is the exact failure this ledger exists to avoid.",
+        "classified_by": "Alpha-2 session 8aa7b984, 2026-07-31"
+      }
     },
     {
       "key": "bcec2dff4f39",
@@ -2854,18 +3205,28 @@
       "imperative": "PRINCIPLE: Internal (training) knowledge is finite and time-bound; a single peer read can share the same blind spot.",
       "match_score": 0.15,
       "carries_modal": false,
-      "disposition": "NEEDS_DECISION",
+      "disposition": "CLASSIFIED_PENDING_FR2",
       "lexical_coverage": 0,
-      "lexical_note": "NOT evidence of deletion — the probe is rewrite-blind (3 of 3 known survivors score invisible). Needs a reader."
+      "triage": {
+        "destination": "contract prose or provenance - depends on the A/B call",
+        "class": "elaboration",
+        "why_not_closed": "Non-obligation-shaped: no modal, no negation, no duty verb. The rule-bearing content was already dispositioned (18 modal + 86 obligation-shaped). This entry is elaboration/provenance/how-to whose destination is a companion, so its disposition RIDES ON the FR-2 govern-vs-demote decision. Under option A it lands governed; under option B it becomes advisory and stops being contract content at all. Closing it before that call would be an assertion, which is the exact failure this ledger exists to avoid.",
+        "classified_by": "Alpha-2 session 8aa7b984, 2026-07-31"
+      }
     },
     {
       "key": "a8c5bee0ba5e",
       "imperative": "The web is a third, independent, current corpus.",
       "match_score": 0.25,
       "carries_modal": false,
-      "disposition": "NEEDS_DECISION",
+      "disposition": "CLASSIFIED_PENDING_FR2",
       "lexical_coverage": 0,
-      "lexical_note": "NOT evidence of deletion — the probe is rewrite-blind (3 of 3 known survivors score invisible). Needs a reader."
+      "triage": {
+        "destination": "contract prose or provenance - depends on the A/B call",
+        "class": "elaboration",
+        "why_not_closed": "Non-obligation-shaped: no modal, no negation, no duty verb. The rule-bearing content was already dispositioned (18 modal + 86 obligation-shaped). This entry is elaboration/provenance/how-to whose destination is a companion, so its disposition RIDES ON the FR-2 govern-vs-demote decision. Under option A it lands governed; under option B it becomes advisory and stops being contract content at all. Closing it before that call would be an assertion, which is the exact failure this ledger exists to avoid.",
+        "classified_by": "Alpha-2 session 8aa7b984, 2026-07-31"
+      }
     },
     {
       "key": "53d7efd3cd5e",
@@ -2905,9 +3266,14 @@
       "imperative": "Ground-Truth Triangulation (/triangulation-protocol) — \"Is it real? does the code/data actually exist?\" — verify claims against OUR repo/DB.",
       "match_score": 0.17,
       "carries_modal": false,
-      "disposition": "NEEDS_DECISION",
+      "disposition": "CLASSIFIED_PENDING_FR2",
       "lexical_coverage": 0,
-      "lexical_note": "NOT evidence of deletion — the probe is rewrite-blind (3 of 3 known survivors score invisible). Needs a reader."
+      "triage": {
+        "destination": "contract prose or provenance - depends on the A/B call",
+        "class": "elaboration",
+        "why_not_closed": "Non-obligation-shaped: no modal, no negation, no duty verb. The rule-bearing content was already dispositioned (18 modal + 86 obligation-shaped). This entry is elaboration/provenance/how-to whose destination is a companion, so its disposition RIDES ON the FR-2 govern-vs-demote decision. Under option A it lands governed; under option B it becomes advisory and stops being contract content at all. Closing it before that call would be an assertion, which is the exact failure this ledger exists to avoid.",
+        "classified_by": "Alpha-2 session 8aa7b984, 2026-07-31"
+      }
     },
     {
       "key": "8b9f93080ffd",
@@ -2921,72 +3287,112 @@
       "imperative": "Multi-Model Debate (/learn) — \"Should we do it?\" — proposal-quality via AI critics = the peer-consult leg.",
       "match_score": 0.14,
       "carries_modal": false,
-      "disposition": "NEEDS_DECISION",
+      "disposition": "CLASSIFIED_PENDING_FR2",
       "lexical_coverage": 0,
-      "lexical_note": "NOT evidence of deletion — the probe is rewrite-blind (3 of 3 known survivors score invisible). Needs a reader."
+      "triage": {
+        "destination": "contract prose or provenance - depends on the A/B call",
+        "class": "elaboration",
+        "why_not_closed": "Non-obligation-shaped: no modal, no negation, no duty verb. The rule-bearing content was already dispositioned (18 modal + 86 obligation-shaped). This entry is elaboration/provenance/how-to whose destination is a companion, so its disposition RIDES ON the FR-2 govern-vs-demote decision. Under option A it lands governed; under option B it becomes advisory and stops being contract content at all. Closing it before that call would be an assertion, which is the exact failure this ledger exists to avoid.",
+        "classified_by": "Alpha-2 session 8aa7b984, 2026-07-31"
+      }
     },
     {
       "key": "0eeb4c7b4153",
       "imperative": "Deep Research (/research) — \"What's the best way?\" — explore/compare approaches.",
       "match_score": 0.17,
       "carries_modal": false,
-      "disposition": "NEEDS_DECISION",
+      "disposition": "CLASSIFIED_PENDING_FR2",
       "lexical_coverage": 0,
-      "lexical_note": "NOT evidence of deletion — the probe is rewrite-blind (3 of 3 known survivors score invisible). Needs a reader."
+      "triage": {
+        "destination": "contract prose or provenance - depends on the A/B call",
+        "class": "elaboration",
+        "why_not_closed": "Non-obligation-shaped: no modal, no negation, no duty verb. The rule-bearing content was already dispositioned (18 modal + 86 obligation-shaped). This entry is elaboration/provenance/how-to whose destination is a companion, so its disposition RIDES ON the FR-2 govern-vs-demote decision. Under option A it lands governed; under option B it becomes advisory and stops being contract content at all. Closing it before that call would be an assertion, which is the exact failure this ledger exists to avoid.",
+        "classified_by": "Alpha-2 session 8aa7b984, 2026-07-31"
+      }
     },
     {
       "key": "e0f660437fbe",
       "imperative": "Web SEARCH is its lightweight sibling (quick fact-fetch vs. a full deep pass).",
       "match_score": 0.13,
       "carries_modal": false,
-      "disposition": "NEEDS_DECISION",
+      "disposition": "CLASSIFIED_PENDING_FR2",
       "lexical_coverage": 0,
-      "lexical_note": "NOT evidence of deletion — the probe is rewrite-blind (3 of 3 known survivors score invisible). Needs a reader."
+      "triage": {
+        "destination": "contract prose or provenance - depends on the A/B call",
+        "class": "elaboration",
+        "why_not_closed": "Non-obligation-shaped: no modal, no negation, no duty verb. The rule-bearing content was already dispositioned (18 modal + 86 obligation-shaped). This entry is elaboration/provenance/how-to whose destination is a companion, so its disposition RIDES ON the FR-2 govern-vs-demote decision. Under option A it lands governed; under option B it becomes advisory and stops being contract content at all. Closing it before that call would be an assertion, which is the exact failure this ledger exists to avoid.",
+        "classified_by": "Alpha-2 session 8aa7b984, 2026-07-31"
+      }
     },
     {
       "key": "17eb23ef5634",
       "imperative": "GO ONLINE — reach for web search / /research when ANY fire: 1.",
       "match_score": 0.4,
       "carries_modal": false,
-      "disposition": "NEEDS_DECISION",
+      "disposition": "CLASSIFIED_PENDING_FR2",
       "lexical_coverage": 0,
-      "lexical_note": "NOT evidence of deletion — the probe is rewrite-blind (3 of 3 known survivors score invisible). Needs a reader."
+      "triage": {
+        "destination": "contract prose or provenance - depends on the A/B call",
+        "class": "elaboration",
+        "why_not_closed": "Non-obligation-shaped: no modal, no negation, no duty verb. The rule-bearing content was already dispositioned (18 modal + 86 obligation-shaped). This entry is elaboration/provenance/how-to whose destination is a companion, so its disposition RIDES ON the FR-2 govern-vs-demote decision. Under option A it lands governed; under option B it becomes advisory and stops being contract content at all. Closing it before that call would be an assertion, which is the exact failure this ledger exists to avoid.",
+        "classified_by": "Alpha-2 session 8aa7b984, 2026-07-31"
+      }
     },
     {
       "key": "3ec254e8292c",
       "imperative": "RECENCY — answer depends on post-training facts (versions, APIs, pricing, current best practice, CVEs, \"current state of X\").",
       "match_score": 0.23,
       "carries_modal": false,
-      "disposition": "NEEDS_DECISION",
+      "disposition": "CLASSIFIED_PENDING_FR2",
       "lexical_coverage": 0,
-      "lexical_note": "NOT evidence of deletion — the probe is rewrite-blind (3 of 3 known survivors score invisible). Needs a reader."
+      "triage": {
+        "destination": "contract prose or provenance - depends on the A/B call",
+        "class": "elaboration",
+        "why_not_closed": "Non-obligation-shaped: no modal, no negation, no duty verb. The rule-bearing content was already dispositioned (18 modal + 86 obligation-shaped). This entry is elaboration/provenance/how-to whose destination is a companion, so its disposition RIDES ON the FR-2 govern-vs-demote decision. Under option A it lands governed; under option B it becomes advisory and stops being contract content at all. Closing it before that call would be an assertion, which is the exact failure this ledger exists to avoid.",
+        "classified_by": "Alpha-2 session 8aa7b984, 2026-07-31"
+      }
     },
     {
       "key": "411ee66a6435",
       "imperative": "For pure recency LOOKUPS the web comes FIRST — forming a confident internal read about post-cutoff facts is theater; don't ceremony-gate a version check. 2.",
       "match_score": 0.38,
       "carries_modal": false,
-      "disposition": "NEEDS_DECISION",
+      "disposition": "CLASSIFIED_PENDING_FR2",
       "lexical_coverage": 0.043,
-      "lexical_note": "NOT evidence of deletion — the probe is rewrite-blind (3 of 3 known survivors score invisible). Needs a reader."
+      "triage": {
+        "destination": "contract prose or provenance - depends on the A/B call",
+        "class": "elaboration",
+        "why_not_closed": "Non-obligation-shaped: no modal, no negation, no duty verb. The rule-bearing content was already dispositioned (18 modal + 86 obligation-shaped). This entry is elaboration/provenance/how-to whose destination is a companion, so its disposition RIDES ON the FR-2 govern-vs-demote decision. Under option A it lands governed; under option B it becomes advisory and stops being contract content at all. Closing it before that call would be an assertion, which is the exact failure this ledger exists to avoid.",
+        "classified_by": "Alpha-2 session 8aa7b984, 2026-07-31"
+      }
     },
     {
       "key": "d1d303bdf899",
       "imperative": "PRIOR-ART — before designing a bespoke fix to a GENERAL problem, check if it's already named/solved (exemplar: \"agentic laziness\"/\"early-exit\" was documented with known fixes). 3.",
       "match_score": 0.35,
       "carries_modal": false,
-      "disposition": "NEEDS_DECISION",
+      "disposition": "CLASSIFIED_PENDING_FR2",
       "lexical_coverage": 0.28,
-      "lexical_note": "NOT evidence of deletion — the probe is rewrite-blind (3 of 3 known survivors score invisible). Needs a reader."
+      "triage": {
+        "destination": "contract prose or provenance - depends on the A/B call",
+        "class": "elaboration",
+        "why_not_closed": "Non-obligation-shaped: no modal, no negation, no duty verb. The rule-bearing content was already dispositioned (18 modal + 86 obligation-shaped). This entry is elaboration/provenance/how-to whose destination is a companion, so its disposition RIDES ON the FR-2 govern-vs-demote decision. Under option A it lands governed; under option B it becomes advisory and stops being contract content at all. Closing it before that call would be an assertion, which is the exact failure this ledger exists to avoid.",
+        "classified_by": "Alpha-2 session 8aa7b984, 2026-07-31"
+      }
     },
     {
       "key": "17fbd60d135f",
       "imperative": "VERIFY-BEFORE-AMPLIFY — when an INBOUND claim (video, news, a consult's premise) rests on an external fact, verify at SOURCE before routing/acting on it. 4.",
       "match_score": 0.4,
       "carries_modal": false,
-      "disposition": "NEEDS_DECISION",
+      "disposition": "CLASSIFIED_PENDING_FR2",
       "lexical_coverage": 0,
-      "lexical_note": "NOT evidence of deletion — the probe is rewrite-blind (3 of 3 known survivors score invisible). Needs a reader."
+      "triage": {
+        "destination": "contract prose or provenance - depends on the A/B call",
+        "class": "elaboration",
+        "why_not_closed": "Non-obligation-shaped: no modal, no negation, no duty verb. The rule-bearing content was already dispositioned (18 modal + 86 obligation-shaped). This entry is elaboration/provenance/how-to whose destination is a companion, so its disposition RIDES ON the FR-2 govern-vs-demote decision. Under option A it lands governed; under option B it becomes advisory and stops being contract content at all. Closing it before that call would be an assertion, which is the exact failure this ledger exists to avoid.",
+        "classified_by": "Alpha-2 session 8aa7b984, 2026-07-31"
+      }
     },
     {
       "key": "8ec5ca4328c4",
@@ -3025,9 +3431,14 @@
       "imperative": "NOVEL CLASS / RECURRENCE — outside confident knowledge, or a problem the fleet keeps hitting; others likely solved it.",
       "match_score": 0.31,
       "carries_modal": false,
-      "disposition": "NEEDS_DECISION",
+      "disposition": "CLASSIFIED_PENDING_FR2",
       "lexical_coverage": 0,
-      "lexical_note": "NOT evidence of deletion — the probe is rewrite-blind (3 of 3 known survivors score invisible). Needs a reader."
+      "triage": {
+        "destination": "contract prose or provenance - depends on the A/B call",
+        "class": "elaboration",
+        "why_not_closed": "Non-obligation-shaped: no modal, no negation, no duty verb. The rule-bearing content was already dispositioned (18 modal + 86 obligation-shaped). This entry is elaboration/provenance/how-to whose destination is a companion, so its disposition RIDES ON the FR-2 govern-vs-demote decision. Under option A it lands governed; under option B it becomes advisory and stops being contract content at all. Closing it before that call would be an assertion, which is the exact failure this ledger exists to avoid.",
+        "classified_by": "Alpha-2 session 8aa7b984, 2026-07-31"
+      }
     },
     {
       "key": "b0786b6054f6",
@@ -3094,9 +3505,14 @@
       "imperative": "CAPTURE: findings with STANDING value (model landscape, benchmarks, named patterns) DEPOSIT to the durable reference store (the R&D operator's landscape store once it ships), else the org re-searches the same questions forever.",
       "match_score": 0.1,
       "carries_modal": false,
-      "disposition": "NEEDS_DECISION",
+      "disposition": "CLASSIFIED_PENDING_FR2",
       "lexical_coverage": 0,
-      "lexical_note": "NOT evidence of deletion — the probe is rewrite-blind (3 of 3 known survivors score invisible). Needs a reader."
+      "triage": {
+        "destination": "contract prose or provenance - depends on the A/B call",
+        "class": "elaboration",
+        "why_not_closed": "Non-obligation-shaped: no modal, no negation, no duty verb. The rule-bearing content was already dispositioned (18 modal + 86 obligation-shaped). This entry is elaboration/provenance/how-to whose destination is a companion, so its disposition RIDES ON the FR-2 govern-vs-demote decision. Under option A it lands governed; under option B it becomes advisory and stops being contract content at all. Closing it before that call would be an assertion, which is the exact failure this ledger exists to avoid.",
+        "classified_by": "Alpha-2 session 8aa7b984, 2026-07-31"
+      }
     },
     {
       "key": "8d1635569bf5",
@@ -3119,9 +3535,14 @@
       "imperative": "Get the independent peer read (Adam↔Solomon consult / /learn) — kept independent to avoid shared blind spots. 3.",
       "match_score": 0.27,
       "carries_modal": false,
-      "disposition": "NEEDS_DECISION",
+      "disposition": "CLASSIFIED_PENDING_FR2",
       "lexical_coverage": 0.077,
-      "lexical_note": "NOT evidence of deletion — the probe is rewrite-blind (3 of 3 known survivors score invisible). Needs a reader."
+      "triage": {
+        "destination": "contract prose or provenance - depends on the A/B call",
+        "class": "elaboration",
+        "why_not_closed": "Non-obligation-shaped: no modal, no negation, no duty verb. The rule-bearing content was already dispositioned (18 modal + 86 obligation-shaped). This entry is elaboration/provenance/how-to whose destination is a companion, so its disposition RIDES ON the FR-2 govern-vs-demote decision. Under option A it lands governed; under option B it becomes advisory and stops being contract content at all. Closing it before that call would be an assertion, which is the exact failure this ledger exists to avoid.",
+        "classified_by": "Alpha-2 session 8aa7b984, 2026-07-31"
+      }
     },
     {
       "key": "dadae4f481b7",
@@ -3135,9 +3556,14 @@
       "imperative": "Synthesize explicitly: where the sources agree, diverge, and what each uniquely contributed — surface disagreements, don't paper over them.",
       "match_score": 0.31,
       "carries_modal": false,
-      "disposition": "NEEDS_DECISION",
+      "disposition": "CLASSIFIED_PENDING_FR2",
       "lexical_coverage": 0,
-      "lexical_note": "NOT evidence of deletion — the probe is rewrite-blind (3 of 3 known survivors score invisible). Needs a reader."
+      "triage": {
+        "destination": "contract prose or provenance - depends on the A/B call",
+        "class": "elaboration",
+        "why_not_closed": "Non-obligation-shaped: no modal, no negation, no duty verb. The rule-bearing content was already dispositioned (18 modal + 86 obligation-shaped). This entry is elaboration/provenance/how-to whose destination is a companion, so its disposition RIDES ON the FR-2 govern-vs-demote decision. Under option A it lands governed; under option B it becomes advisory and stops being contract content at all. Closing it before that call would be an assertion, which is the exact failure this ledger exists to avoid.",
+        "classified_by": "Alpha-2 session 8aa7b984, 2026-07-31"
+      }
     },
     {
       "key": "86ffa7a4bfc7",
@@ -3159,9 +3585,14 @@
       "imperative": "ADAM: web-sourced broadcasts carry the citation/source-sanity discipline the existing 2-hypothesis broadcast guard polices; Adam's web research rides an analogous per-tick budget bound.",
       "match_score": 0.06,
       "carries_modal": false,
-      "disposition": "NEEDS_DECISION",
+      "disposition": "CLASSIFIED_PENDING_FR2",
       "lexical_coverage": 0,
-      "lexical_note": "NOT evidence of deletion — the probe is rewrite-blind (3 of 3 known survivors score invisible). Needs a reader."
+      "triage": {
+        "destination": "contract prose or provenance - depends on the A/B call",
+        "class": "elaboration",
+        "why_not_closed": "Non-obligation-shaped: no modal, no negation, no duty verb. The rule-bearing content was already dispositioned (18 modal + 86 obligation-shaped). This entry is elaboration/provenance/how-to whose destination is a companion, so its disposition RIDES ON the FR-2 govern-vs-demote decision. Under option A it lands governed; under option B it becomes advisory and stops being contract content at all. Closing it before that call would be an assertion, which is the exact failure this ledger exists to avoid.",
+        "classified_by": "Alpha-2 session 8aa7b984, 2026-07-31"
+      }
     },
     {
       "key": "4eb6059afac6",
@@ -3248,9 +3679,14 @@
       "imperative": "The self-score loop is armed on a 6h cadence and its prompt MANDATES re-running with --force when the flag gate blocks (QF-20260719-825: the chairman-directed cadence outranks the ships-inert default, and a flag-gated no-op is escalated by the agent rather than silently accepted).",
       "match_score": 0.22,
       "carries_modal": false,
-      "disposition": "NEEDS_DECISION",
+      "disposition": "CLASSIFIED_PENDING_FR2",
       "lexical_coverage": 0,
-      "lexical_note": "NOT evidence of deletion — the probe is rewrite-blind (3 of 3 known survivors score invisible). Needs a reader."
+      "triage": {
+        "destination": "CLAUDE_ADAM_PROVENANCE.md",
+        "class": "provenance",
+        "why_not_closed": "Non-obligation-shaped: no modal, no negation, no duty verb. The rule-bearing content was already dispositioned (18 modal + 86 obligation-shaped). This entry is elaboration/provenance/how-to whose destination is a companion, so its disposition RIDES ON the FR-2 govern-vs-demote decision. Under option A it lands governed; under option B it becomes advisory and stops being contract content at all. Closing it before that call would be an assertion, which is the exact failure this ledger exists to avoid.",
+        "classified_by": "Alpha-2 session 8aa7b984, 2026-07-31"
+      }
     },
     {
       "key": "696d9da537c9",
@@ -3347,18 +3783,28 @@
       "imperative": "See docs/protocol/coordinator-adam-comms.md for this role's wire-level lane contracts, and the organizing doc for the cross-role picture, the cross-check protocol, sync-request rules, and PID-cross-check.",
       "match_score": 0.14,
       "carries_modal": false,
-      "disposition": "NEEDS_DECISION",
+      "disposition": "CLASSIFIED_PENDING_FR2",
       "lexical_coverage": 0,
-      "lexical_note": "NOT evidence of deletion — the probe is rewrite-blind (3 of 3 known survivors score invisible). Needs a reader."
+      "triage": {
+        "destination": "contract prose or provenance - depends on the A/B call",
+        "class": "elaboration",
+        "why_not_closed": "Non-obligation-shaped: no modal, no negation, no duty verb. The rule-bearing content was already dispositioned (18 modal + 86 obligation-shaped). This entry is elaboration/provenance/how-to whose destination is a companion, so its disposition RIDES ON the FR-2 govern-vs-demote decision. Under option A it lands governed; under option B it becomes advisory and stops being contract content at all. Closing it before that call would be an assertion, which is the exact failure this ledger exists to avoid.",
+        "classified_by": "Alpha-2 session 8aa7b984, 2026-07-31"
+      }
     },
     {
       "key": "d2ff927d9f93",
       "imperative": "Adam's belt-refill duty silently degraded from route the SSOT to hand-mine the gauge because the machinery is invisible to a fresh session.",
       "match_score": 0.15,
       "carries_modal": false,
-      "disposition": "NEEDS_DECISION",
+      "disposition": "CLASSIFIED_PENDING_FR2",
       "lexical_coverage": 0,
-      "lexical_note": "NOT evidence of deletion — the probe is rewrite-blind (3 of 3 known survivors score invisible). Needs a reader."
+      "triage": {
+        "destination": "contract prose or provenance - depends on the A/B call",
+        "class": "elaboration",
+        "why_not_closed": "Non-obligation-shaped: no modal, no negation, no duty verb. The rule-bearing content was already dispositioned (18 modal + 86 obligation-shaped). This entry is elaboration/provenance/how-to whose destination is a companion, so its disposition RIDES ON the FR-2 govern-vs-demote decision. Under option A it lands governed; under option B it becomes advisory and stops being contract content at all. Closing it before that call would be an assertion, which is the exact failure this ledger exists to avoid.",
+        "classified_by": "Alpha-2 session 8aa7b984, 2026-07-31"
+      }
     },
     {
       "key": "4108d8d9350d",
@@ -3403,9 +3849,14 @@
       "imperative": "The startup probe prints the unpromoted count per wave. 2.",
       "match_score": 0.17,
       "carries_modal": false,
-      "disposition": "NEEDS_DECISION",
+      "disposition": "CLASSIFIED_PENDING_FR2",
       "lexical_coverage": 0,
-      "lexical_note": "NOT evidence of deletion — the probe is rewrite-blind (3 of 3 known survivors score invisible). Needs a reader."
+      "triage": {
+        "destination": "contract prose or provenance - depends on the A/B call",
+        "class": "elaboration",
+        "why_not_closed": "Non-obligation-shaped: no modal, no negation, no duty verb. The rule-bearing content was already dispositioned (18 modal + 86 obligation-shaped). This entry is elaboration/provenance/how-to whose destination is a companion, so its disposition RIDES ON the FR-2 govern-vs-demote decision. Under option A it lands governed; under option B it becomes advisory and stops being contract content at all. Closing it before that call would be an assertion, which is the exact failure this ledger exists to avoid.",
+        "classified_by": "Alpha-2 session 8aa7b984, 2026-07-31"
+      }
     },
     {
       "key": "62b330615c9f",
@@ -3427,9 +3878,14 @@
       "imperative": "The startup probe prints sd_backlog_map disposition %. 3.",
       "match_score": 0.2,
       "carries_modal": false,
-      "disposition": "NEEDS_DECISION",
+      "disposition": "CLASSIFIED_PENDING_FR2",
       "lexical_coverage": 0,
-      "lexical_note": "NOT evidence of deletion — the probe is rewrite-blind (3 of 3 known survivors score invisible). Needs a reader."
+      "triage": {
+        "destination": "contract prose or provenance - depends on the A/B call",
+        "class": "elaboration",
+        "why_not_closed": "Non-obligation-shaped: no modal, no negation, no duty verb. The rule-bearing content was already dispositioned (18 modal + 86 obligation-shaped). This entry is elaboration/provenance/how-to whose destination is a companion, so its disposition RIDES ON the FR-2 govern-vs-demote decision. Under option A it lands governed; under option B it becomes advisory and stops being contract content at all. Closing it before that call would be an assertion, which is the exact failure this ledger exists to avoid.",
+        "classified_by": "Alpha-2 session 8aa7b984, 2026-07-31"
+      }
     },
     {
       "key": "c9578a005244",
@@ -3443,18 +3899,28 @@
       "imperative": "The engine (cron sweeps SOURCING_ENGINE_V1, SOURCING_ROADMAP_ENGINE_V1, SOURCING_GAUGE_GAP_MINER_V1, SOURCING_DEFERRED_WATCHER_V1, SOURCING_PROACTIVE_POPULATOR_V1, LEO_ROADMAP_AUTOSOURCE) populates the belt for you when on.",
       "match_score": 0.09,
       "carries_modal": false,
-      "disposition": "NEEDS_DECISION",
+      "disposition": "CLASSIFIED_PENDING_FR2",
       "lexical_coverage": 0,
-      "lexical_note": "NOT evidence of deletion — the probe is rewrite-blind (3 of 3 known survivors score invisible). Needs a reader."
+      "triage": {
+        "destination": "contract prose or provenance - depends on the A/B call",
+        "class": "elaboration",
+        "why_not_closed": "Non-obligation-shaped: no modal, no negation, no duty verb. The rule-bearing content was already dispositioned (18 modal + 86 obligation-shaped). This entry is elaboration/provenance/how-to whose destination is a companion, so its disposition RIDES ON the FR-2 govern-vs-demote decision. Under option A it lands governed; under option B it becomes advisory and stops being contract content at all. Closing it before that call would be an assertion, which is the exact failure this ledger exists to avoid.",
+        "classified_by": "Alpha-2 session 8aa7b984, 2026-07-31"
+      }
     },
     {
       "key": "fa34935774d1",
       "imperative": "If they are OFF (the startup probe flags this), PROPOSE activation — flip the flags + apply any dormant migrations — as a chairman/coordinator go-live decision.",
       "match_score": 0.31,
       "carries_modal": false,
-      "disposition": "NEEDS_DECISION",
+      "disposition": "CLASSIFIED_PENDING_FR2",
       "lexical_coverage": 0,
-      "lexical_note": "NOT evidence of deletion — the probe is rewrite-blind (3 of 3 known survivors score invisible). Needs a reader."
+      "triage": {
+        "destination": "contract prose or provenance - depends on the A/B call",
+        "class": "elaboration",
+        "why_not_closed": "Non-obligation-shaped: no modal, no negation, no duty verb. The rule-bearing content was already dispositioned (18 modal + 86 obligation-shaped). This entry is elaboration/provenance/how-to whose destination is a companion, so its disposition RIDES ON the FR-2 govern-vs-demote decision. Under option A it lands governed; under option B it becomes advisory and stops being contract content at all. Closing it before that call would be an assertion, which is the exact failure this ledger exists to avoid.",
+        "classified_by": "Alpha-2 session 8aa7b984, 2026-07-31"
+      }
     },
     {
       "key": "01f086e577bf",
@@ -3498,9 +3964,14 @@
       "imperative": "When you find yourself hand-mining, fix the upstream cause (propose engine activation / run distillation) rather than normalizing the last-resort path.",
       "match_score": 0.15,
       "carries_modal": false,
-      "disposition": "NEEDS_DECISION",
+      "disposition": "CLASSIFIED_PENDING_FR2",
       "lexical_coverage": 0,
-      "lexical_note": "NOT evidence of deletion — the probe is rewrite-blind (3 of 3 known survivors score invisible). Needs a reader."
+      "triage": {
+        "destination": "contract prose or provenance - depends on the A/B call",
+        "class": "elaboration",
+        "why_not_closed": "Non-obligation-shaped: no modal, no negation, no duty verb. The rule-bearing content was already dispositioned (18 modal + 86 obligation-shaped). This entry is elaboration/provenance/how-to whose destination is a companion, so its disposition RIDES ON the FR-2 govern-vs-demote decision. Under option A it lands governed; under option B it becomes advisory and stops being contract content at all. Closing it before that call would be an assertion, which is the exact failure this ledger exists to avoid.",
+        "classified_by": "Alpha-2 session 8aa7b984, 2026-07-31"
+      }
     },
     {
       "key": "d56126a7b6d2",
@@ -3613,9 +4084,14 @@
       "imperative": "Measured, 2026-07-27: metadata.roadmap_link_exception was hand-written as {reason, recorded_by} while the canonical lib/sourcing-engine/roadmap-link-exception.js buildRoadmapLinkException produces {sd_key, operator_reason, reason_supplied, recorded_at}, and countRoadmapLinkExceptions tests ex.reason…",
       "match_score": 0.1,
       "carries_modal": false,
-      "disposition": "NEEDS_DECISION",
+      "disposition": "CLASSIFIED_PENDING_FR2",
       "lexical_coverage": 0,
-      "lexical_note": "NOT evidence of deletion — the probe is rewrite-blind (3 of 3 known survivors score invisible). Needs a reader."
+      "triage": {
+        "destination": "CLAUDE_ADAM_PROVENANCE.md",
+        "class": "provenance",
+        "why_not_closed": "Non-obligation-shaped: no modal, no negation, no duty verb. The rule-bearing content was already dispositioned (18 modal + 86 obligation-shaped). This entry is elaboration/provenance/how-to whose destination is a companion, so its disposition RIDES ON the FR-2 govern-vs-demote decision. Under option A it lands governed; under option B it becomes advisory and stops being contract content at all. Closing it before that call would be an assertion, which is the exact failure this ledger exists to avoid.",
+        "classified_by": "Alpha-2 session 8aa7b984, 2026-07-31"
+      }
     },
     {
       "key": "4a586e2d3b31",
@@ -3639,9 +4115,14 @@
       "imperative": "CLAUDE.md session-prologue item 11 exists for the same reason on a different field: folklore said to store top-level repo_path/local_path on sub_agent_execution_results when the canonical writer is applySubAgentRepoVerdict.",
       "match_score": 0.17,
       "carries_modal": false,
-      "disposition": "NEEDS_DECISION",
+      "disposition": "CLASSIFIED_PENDING_FR2",
       "lexical_coverage": 0,
-      "lexical_note": "NOT evidence of deletion — the probe is rewrite-blind (3 of 3 known survivors score invisible). Needs a reader."
+      "triage": {
+        "destination": "contract prose or provenance - depends on the A/B call",
+        "class": "elaboration",
+        "why_not_closed": "Non-obligation-shaped: no modal, no negation, no duty verb. The rule-bearing content was already dispositioned (18 modal + 86 obligation-shaped). This entry is elaboration/provenance/how-to whose destination is a companion, so its disposition RIDES ON the FR-2 govern-vs-demote decision. Under option A it lands governed; under option B it becomes advisory and stops being contract content at all. Closing it before that call would be an assertion, which is the exact failure this ledger exists to avoid.",
+        "classified_by": "Alpha-2 session 8aa7b984, 2026-07-31"
+      }
     },
     {
       "key": "d11d8440c56b",
@@ -4773,9 +5254,14 @@
       "imperative": "Iterated live with the chairman 2026-07-11 (window 3d→48h; section order finalized; extras added same evening).",
       "match_score": 0.17,
       "carries_modal": false,
-      "disposition": "NEEDS_DECISION",
+      "disposition": "CLASSIFIED_PENDING_FR2",
       "lexical_coverage": 0,
-      "lexical_note": "NOT evidence of deletion — the probe is rewrite-blind (3 of 3 known survivors score invisible). Needs a reader."
+      "triage": {
+        "destination": "CLAUDE_ADAM_PROVENANCE.md",
+        "class": "provenance",
+        "why_not_closed": "Non-obligation-shaped: no modal, no negation, no duty verb. The rule-bearing content was already dispositioned (18 modal + 86 obligation-shaped). This entry is elaboration/provenance/how-to whose destination is a companion, so its disposition RIDES ON the FR-2 govern-vs-demote decision. Under option A it lands governed; under option B it becomes advisory and stops being contract content at all. Closing it before that call would be an assertion, which is the exact failure this ledger exists to avoid.",
+        "classified_by": "Alpha-2 session 8aa7b984, 2026-07-31"
+      }
     },
     {
       "key": "e3a7fa8f3072",
@@ -4819,18 +5305,28 @@
       "imperative": "Next 6 hours — tiered bullets with rough ~times: L1 = \"expect to see\" (decisions reaching him, chairman-visible milestones); L2 = \"happening underneath\" (plan-moving completions needing nothing from him).",
       "match_score": 0.53,
       "carries_modal": false,
-      "disposition": "NEEDS_DECISION",
+      "disposition": "CLASSIFIED_PENDING_FR2",
       "lexical_coverage": 0.375,
-      "lexical_note": "NOT evidence of deletion — the probe is rewrite-blind (3 of 3 known survivors score invisible). Needs a reader."
+      "triage": {
+        "destination": "contract prose or provenance - depends on the A/B call",
+        "class": "elaboration",
+        "why_not_closed": "Non-obligation-shaped: no modal, no negation, no duty verb. The rule-bearing content was already dispositioned (18 modal + 86 obligation-shaped). This entry is elaboration/provenance/how-to whose destination is a companion, so its disposition RIDES ON the FR-2 govern-vs-demote decision. Under option A it lands governed; under option B it becomes advisory and stops being contract content at all. Closing it before that call would be an assertion, which is the exact failure this ledger exists to avoid.",
+        "classified_by": "Alpha-2 session 8aa7b984, 2026-07-31"
+      }
     },
     {
       "key": "f239d549eff3",
       "imperative": "L3 (mechanical detail) exists but is OMITTED by default.",
       "match_score": 0.2,
       "carries_modal": false,
-      "disposition": "NEEDS_DECISION",
+      "disposition": "CLASSIFIED_PENDING_FR2",
       "lexical_coverage": 0,
-      "lexical_note": "NOT evidence of deletion — the probe is rewrite-blind (3 of 3 known survivors score invisible). Needs a reader."
+      "triage": {
+        "destination": "contract prose or provenance - depends on the A/B call",
+        "class": "elaboration",
+        "why_not_closed": "Non-obligation-shaped: no modal, no negation, no duty verb. The rule-bearing content was already dispositioned (18 modal + 86 obligation-shaped). This entry is elaboration/provenance/how-to whose destination is a companion, so its disposition RIDES ON the FR-2 govern-vs-demote decision. Under option A it lands governed; under option B it becomes advisory and stops being contract content at all. Closing it before that call would be an assertion, which is the exact failure this ledger exists to avoid.",
+        "classified_by": "Alpha-2 session 8aa7b984, 2026-07-31"
+      }
     },
     {
       "key": "d287626a003f",
@@ -4929,9 +5425,14 @@
       "imperative": "His ranking rationale, for calibration: variance = most truth per line; committed = the yardstick and his redirect point; done = confirmation, reads last.",
       "match_score": 0.13,
       "carries_modal": false,
-      "disposition": "NEEDS_DECISION",
+      "disposition": "CLASSIFIED_PENDING_FR2",
       "lexical_coverage": 0,
-      "lexical_note": "NOT evidence of deletion — the probe is rewrite-blind (3 of 3 known survivors score invisible). Needs a reader."
+      "triage": {
+        "destination": "contract prose or provenance - depends on the A/B call",
+        "class": "elaboration",
+        "why_not_closed": "Non-obligation-shaped: no modal, no negation, no duty verb. The rule-bearing content was already dispositioned (18 modal + 86 obligation-shaped). This entry is elaboration/provenance/how-to whose destination is a companion, so its disposition RIDES ON the FR-2 govern-vs-demote decision. Under option A it lands governed; under option B it becomes advisory and stops being contract content at all. Closing it before that call would be an assertion, which is the exact failure this ledger exists to avoid.",
+        "classified_by": "Alpha-2 session 8aa7b984, 2026-07-31"
+      }
     },
     {
       "key": "9a905e6d7500",
@@ -4986,9 +5487,14 @@
       "imperative": "Each verdict is written (one row per probe per run) to the adam_adherence_ledger table.",
       "match_score": 0.17,
       "carries_modal": false,
-      "disposition": "NEEDS_DECISION",
+      "disposition": "CLASSIFIED_PENDING_FR2",
       "lexical_coverage": 0,
-      "lexical_note": "NOT evidence of deletion — the probe is rewrite-blind (3 of 3 known survivors score invisible). Needs a reader."
+      "triage": {
+        "destination": "CLAUDE_ADAM_MANUAL.md",
+        "class": "manual",
+        "why_not_closed": "Non-obligation-shaped: no modal, no negation, no duty verb. The rule-bearing content was already dispositioned (18 modal + 86 obligation-shaped). This entry is elaboration/provenance/how-to whose destination is a companion, so its disposition RIDES ON the FR-2 govern-vs-demote decision. Under option A it lands governed; under option B it becomes advisory and stops being contract content at all. Closing it before that call would be an assertion, which is the exact failure this ledger exists to avoid.",
+        "classified_by": "Alpha-2 session 8aa7b984, 2026-07-31"
+      }
     },
     {
       "key": "f53237ff8e93",
@@ -5124,18 +5630,28 @@
       "imperative": "Kill-switch (revocable, default-OFF): disabled unless LEO_ADAM_DBAPPLY_DELEGATION === \"on\" (fail-closed: unset/typo/error => disabled => chairman gate).",
       "match_score": 0.33,
       "carries_modal": false,
-      "disposition": "NEEDS_DECISION",
+      "disposition": "CLASSIFIED_PENDING_FR2",
       "lexical_coverage": 0.313,
-      "lexical_note": "NOT evidence of deletion — the probe is rewrite-blind (3 of 3 known survivors score invisible). Needs a reader."
+      "triage": {
+        "destination": "contract prose or provenance - depends on the A/B call",
+        "class": "elaboration",
+        "why_not_closed": "Non-obligation-shaped: no modal, no negation, no duty verb. The rule-bearing content was already dispositioned (18 modal + 86 obligation-shaped). This entry is elaboration/provenance/how-to whose destination is a companion, so its disposition RIDES ON the FR-2 govern-vs-demote decision. Under option A it lands governed; under option B it becomes advisory and stops being contract content at all. Closing it before that call would be an assertion, which is the exact failure this ledger exists to avoid.",
+        "classified_by": "Alpha-2 session 8aa7b984, 2026-07-31"
+      }
     },
     {
       "key": "da7ca6ccf4e2",
       "imperative": "The chairman can instantly revoke by unsetting it.",
       "match_score": 0.25,
       "carries_modal": false,
-      "disposition": "NEEDS_DECISION",
+      "disposition": "CLASSIFIED_PENDING_FR2",
       "lexical_coverage": 0,
-      "lexical_note": "NOT evidence of deletion — the probe is rewrite-blind (3 of 3 known survivors score invisible). Needs a reader."
+      "triage": {
+        "destination": "contract prose or provenance - depends on the A/B call",
+        "class": "elaboration",
+        "why_not_closed": "Non-obligation-shaped: no modal, no negation, no duty verb. The rule-bearing content was already dispositioned (18 modal + 86 obligation-shaped). This entry is elaboration/provenance/how-to whose destination is a companion, so its disposition RIDES ON the FR-2 govern-vs-demote decision. Under option A it lands governed; under option B it becomes advisory and stops being contract content at all. Closing it before that call would be an assertion, which is the exact failure this ledger exists to avoid.",
+        "classified_by": "Alpha-2 session 8aa7b984, 2026-07-31"
+      }
     },
     {
       "key": "f3355e1a2ecc",
@@ -5149,18 +5665,28 @@
       "imperative": "How to apply a delegatable change: add \"-- @delegated-by: adam\" to the migration; run node scripts/apply-migration.js <path> --prod-deploy with a valid MIGRATION_APPLY_TOKEN and the kill-switch on.",
       "match_score": 0.23,
       "carries_modal": false,
-      "disposition": "NEEDS_DECISION",
+      "disposition": "CLASSIFIED_PENDING_FR2",
       "lexical_coverage": 0,
-      "lexical_note": "NOT evidence of deletion — the probe is rewrite-blind (3 of 3 known survivors score invisible). Needs a reader."
+      "triage": {
+        "destination": "CLAUDE_ADAM_MANUAL.md",
+        "class": "manual",
+        "why_not_closed": "Non-obligation-shaped: no modal, no negation, no duty verb. The rule-bearing content was already dispositioned (18 modal + 86 obligation-shaped). This entry is elaboration/provenance/how-to whose destination is a companion, so its disposition RIDES ON the FR-2 govern-vs-demote decision. Under option A it lands governed; under option B it becomes advisory and stops being contract content at all. Closing it before that call would be an assertion, which is the exact failure this ledger exists to avoid.",
+        "classified_by": "Alpha-2 session 8aa7b984, 2026-07-31"
+      }
     },
     {
       "key": "36c59dab1138",
       "imperative": "Non-delegatable changes are rejected to the chairman path.",
       "match_score": 0.4,
       "carries_modal": false,
-      "disposition": "NEEDS_DECISION",
+      "disposition": "CLASSIFIED_PENDING_FR2",
       "lexical_coverage": 0,
-      "lexical_note": "NOT evidence of deletion — the probe is rewrite-blind (3 of 3 known survivors score invisible). Needs a reader."
+      "triage": {
+        "destination": "CLAUDE_ADAM_MANUAL.md",
+        "class": "manual",
+        "why_not_closed": "Non-obligation-shaped: no modal, no negation, no duty verb. The rule-bearing content was already dispositioned (18 modal + 86 obligation-shaped). This entry is elaboration/provenance/how-to whose destination is a companion, so its disposition RIDES ON the FR-2 govern-vs-demote decision. Under option A it lands governed; under option B it becomes advisory and stops being contract content at all. Closing it before that call would be an assertion, which is the exact failure this ledger exists to avoid.",
+        "classified_by": "Alpha-2 session 8aa7b984, 2026-07-31"
+      }
     },
     {
       "key": "96878a13b713",
@@ -5197,9 +5723,14 @@
       "imperative": "The chairman gives in-session verbal approval for a specific staged migration.",
       "match_score": 0.38,
       "carries_modal": false,
-      "disposition": "NEEDS_DECISION",
+      "disposition": "CLASSIFIED_PENDING_FR2",
       "lexical_coverage": 0,
-      "lexical_note": "NOT evidence of deletion — the probe is rewrite-blind (3 of 3 known survivors score invisible). Needs a reader."
+      "triage": {
+        "destination": "contract prose or provenance - depends on the A/B call",
+        "class": "elaboration",
+        "why_not_closed": "Non-obligation-shaped: no modal, no negation, no duty verb. The rule-bearing content was already dispositioned (18 modal + 86 obligation-shaped). This entry is elaboration/provenance/how-to whose destination is a companion, so its disposition RIDES ON the FR-2 govern-vs-demote decision. Under option A it lands governed; under option B it becomes advisory and stops being contract content at all. Closing it before that call would be an assertion, which is the exact failure this ledger exists to avoid.",
+        "classified_by": "Alpha-2 session 8aa7b984, 2026-07-31"
+      }
     },
     {
       "key": "8c76e2111517",
@@ -5222,9 +5753,14 @@
       "imperative": "PRECONDITIONS (all four, before touching the gate): 1.",
       "match_score": 0.4,
       "carries_modal": false,
-      "disposition": "NEEDS_DECISION",
+      "disposition": "CLASSIFIED_PENDING_FR2",
       "lexical_coverage": 0,
-      "lexical_note": "NOT evidence of deletion — the probe is rewrite-blind (3 of 3 known survivors score invisible). Needs a reader."
+      "triage": {
+        "destination": "contract prose or provenance - depends on the A/B call",
+        "class": "elaboration",
+        "why_not_closed": "Non-obligation-shaped: no modal, no negation, no duty verb. The rule-bearing content was already dispositioned (18 modal + 86 obligation-shaped). This entry is elaboration/provenance/how-to whose destination is a companion, so its disposition RIDES ON the FR-2 govern-vs-demote decision. Under option A it lands governed; under option B it becomes advisory and stops being contract content at all. Closing it before that call would be an assertion, which is the exact failure this ledger exists to avoid.",
+        "classified_by": "Alpha-2 session 8aa7b984, 2026-07-31"
+      }
     },
     {
       "key": "cca0e559bb06",
@@ -5292,36 +5828,56 @@
       "imperative": "A sibling apply that landed after this file was staged would be silently REVERTED by the DROP+ADD — amend the list, re-commit, and obtain a FRESH verbal (content changed after the marker).",
       "match_score": 0.42,
       "carries_modal": false,
-      "disposition": "NEEDS_DECISION",
+      "disposition": "CLASSIFIED_PENDING_FR2",
       "lexical_coverage": 0,
-      "lexical_note": "NOT evidence of deletion — the probe is rewrite-blind (3 of 3 known survivors score invisible). Needs a reader."
+      "triage": {
+        "destination": "contract prose or provenance - depends on the A/B call",
+        "class": "elaboration",
+        "why_not_closed": "Non-obligation-shaped: no modal, no negation, no duty verb. The rule-bearing content was already dispositioned (18 modal + 86 obligation-shaped). This entry is elaboration/provenance/how-to whose destination is a companion, so its disposition RIDES ON the FR-2 govern-vs-demote decision. Under option A it lands governed; under option B it becomes advisory and stops being contract content at all. Closing it before that call would be an assertion, which is the exact failure this ledger exists to avoid.",
+        "classified_by": "Alpha-2 session 8aa7b984, 2026-07-31"
+      }
     },
     {
       "key": "9e2ee385ed19",
       "imperative": "Live witness: the 2026-07-12 stage_17_refined / distribution_block_marker pair.",
       "match_score": 0.17,
       "carries_modal": false,
-      "disposition": "NEEDS_DECISION",
+      "disposition": "CLASSIFIED_PENDING_FR2",
       "lexical_coverage": 0,
-      "lexical_note": "NOT evidence of deletion — the probe is rewrite-blind (3 of 3 known survivors score invisible). Needs a reader."
+      "triage": {
+        "destination": "CLAUDE_ADAM_PROVENANCE.md",
+        "class": "provenance",
+        "why_not_closed": "Non-obligation-shaped: no modal, no negation, no duty verb. The rule-bearing content was already dispositioned (18 modal + 86 obligation-shaped). This entry is elaboration/provenance/how-to whose destination is a companion, so its disposition RIDES ON the FR-2 govern-vs-demote decision. Under option A it lands governed; under option B it becomes advisory and stops being contract content at all. Closing it before that call would be an assertion, which is the exact failure this ledger exists to avoid.",
+        "classified_by": "Alpha-2 session 8aa7b984, 2026-07-31"
+      }
     },
     {
       "key": "cf009a4cc85e",
       "imperative": "STEPS: 1. node scripts/apply-migration.js <file> --issue-token → single-use token (1h). 2.",
       "match_score": 0.5,
       "carries_modal": false,
-      "disposition": "NEEDS_DECISION",
+      "disposition": "CLASSIFIED_PENDING_FR2",
       "lexical_coverage": 0,
-      "lexical_note": "NOT evidence of deletion — the probe is rewrite-blind (3 of 3 known survivors score invisible). Needs a reader."
+      "triage": {
+        "destination": "CLAUDE_ADAM_MANUAL.md",
+        "class": "manual",
+        "why_not_closed": "Non-obligation-shaped: no modal, no negation, no duty verb. The rule-bearing content was already dispositioned (18 modal + 86 obligation-shaped). This entry is elaboration/provenance/how-to whose destination is a companion, so its disposition RIDES ON the FR-2 govern-vs-demote decision. Under option A it lands governed; under option B it becomes advisory and stops being contract content at all. Closing it before that call would be an assertion, which is the exact failure this ledger exists to avoid.",
+        "classified_by": "Alpha-2 session 8aa7b984, 2026-07-31"
+      }
     },
     {
       "key": "c38902207997",
       "imperative": "MIGRATION_APPLY_TOKEN=<token> node scripts/apply-migration.js <file> --prod-deploy 3.",
       "match_score": 0.43,
       "carries_modal": false,
-      "disposition": "NEEDS_DECISION",
+      "disposition": "CLASSIFIED_PENDING_FR2",
       "lexical_coverage": 0,
-      "lexical_note": "NOT evidence of deletion — the probe is rewrite-blind (3 of 3 known survivors score invisible). Needs a reader."
+      "triage": {
+        "destination": "CLAUDE_ADAM_MANUAL.md",
+        "class": "manual",
+        "why_not_closed": "Non-obligation-shaped: no modal, no negation, no duty verb. The rule-bearing content was already dispositioned (18 modal + 86 obligation-shaped). This entry is elaboration/provenance/how-to whose destination is a companion, so its disposition RIDES ON the FR-2 govern-vs-demote decision. Under option A it lands governed; under option B it becomes advisory and stops being contract content at all. Closing it before that call would be an assertion, which is the exact failure this ledger exists to avoid.",
+        "classified_by": "Alpha-2 session 8aa7b984, 2026-07-31"
+      }
     },
     {
       "key": "8c9f45ec3681",
@@ -5351,18 +5907,28 @@
       "imperative": "Record the verbal in the ceremony commit/advisory: timestamp + the chairman's quoted word.",
       "match_score": 0.22,
       "carries_modal": false,
-      "disposition": "NEEDS_DECISION",
+      "disposition": "CLASSIFIED_PENDING_FR2",
       "lexical_coverage": 0,
-      "lexical_note": "NOT evidence of deletion — the probe is rewrite-blind (3 of 3 known survivors score invisible). Needs a reader."
+      "triage": {
+        "destination": "contract prose or provenance - depends on the A/B call",
+        "class": "elaboration",
+        "why_not_closed": "Non-obligation-shaped: no modal, no negation, no duty verb. The rule-bearing content was already dispositioned (18 modal + 86 obligation-shaped). This entry is elaboration/provenance/how-to whose destination is a companion, so its disposition RIDES ON the FR-2 govern-vs-demote decision. Under option A it lands governed; under option B it becomes advisory and stops being contract content at all. Closing it before that call would be an assertion, which is the exact failure this ledger exists to avoid.",
+        "classified_by": "Alpha-2 session 8aa7b984, 2026-07-31"
+      }
     },
     {
       "key": "efea5ff9fdef",
       "imperative": "ANY content change after the @approved-by marker was written requires a FRESH chairman verbal before apply — the approval binds to the exact content approved.",
       "match_score": 0.5,
       "carries_modal": false,
-      "disposition": "NEEDS_DECISION",
+      "disposition": "CLASSIFIED_PENDING_FR2",
       "lexical_coverage": 0.286,
-      "lexical_note": "NOT evidence of deletion — the probe is rewrite-blind (3 of 3 known survivors score invisible). Needs a reader."
+      "triage": {
+        "destination": "CLAUDE_ADAM_PROVENANCE.md",
+        "class": "provenance",
+        "why_not_closed": "Non-obligation-shaped: no modal, no negation, no duty verb. The rule-bearing content was already dispositioned (18 modal + 86 obligation-shaped). This entry is elaboration/provenance/how-to whose destination is a companion, so its disposition RIDES ON the FR-2 govern-vs-demote decision. Under option A it lands governed; under option B it becomes advisory and stops being contract content at all. Closing it before that call would be an assertion, which is the exact failure this ledger exists to avoid.",
+        "classified_by": "Alpha-2 session 8aa7b984, 2026-07-31"
+      }
     },
     {
       "key": "ee081a1698c9",
@@ -5383,9 +5949,14 @@
       "imperative": "Origin miss: a security webhook-deploy call was mis-classified as routine and shipped SOLO; Solomon's later review materially re-architected it.",
       "match_score": 0.07,
       "carries_modal": false,
-      "disposition": "NEEDS_DECISION",
+      "disposition": "CLASSIFIED_PENDING_FR2",
       "lexical_coverage": 0,
-      "lexical_note": "NOT evidence of deletion — the probe is rewrite-blind (3 of 3 known survivors score invisible). Needs a reader."
+      "triage": {
+        "destination": "contract prose or provenance - depends on the A/B call",
+        "class": "elaboration",
+        "why_not_closed": "Non-obligation-shaped: no modal, no negation, no duty verb. The rule-bearing content was already dispositioned (18 modal + 86 obligation-shaped). This entry is elaboration/provenance/how-to whose destination is a companion, so its disposition RIDES ON the FR-2 govern-vs-demote decision. Under option A it lands governed; under option B it becomes advisory and stops being contract content at all. Closing it before that call would be an assertion, which is the exact failure this ledger exists to avoid.",
+        "classified_by": "Alpha-2 session 8aa7b984, 2026-07-31"
+      }
     },
     {
       "key": "3ea73ca96458",
@@ -5406,9 +5977,14 @@
       "imperative": "Order of operations at the send choke: 1.",
       "match_score": 0.5,
       "carries_modal": false,
-      "disposition": "NEEDS_DECISION",
+      "disposition": "CLASSIFIED_PENDING_FR2",
       "lexical_coverage": 0,
-      "lexical_note": "NOT evidence of deletion — the probe is rewrite-blind (3 of 3 known survivors score invisible). Needs a reader."
+      "triage": {
+        "destination": "contract prose or provenance - depends on the A/B call",
+        "class": "elaboration",
+        "why_not_closed": "Non-obligation-shaped: no modal, no negation, no duty verb. The rule-bearing content was already dispositioned (18 modal + 86 obligation-shaped). This entry is elaboration/provenance/how-to whose destination is a companion, so its disposition RIDES ON the FR-2 govern-vs-demote decision. Under option A it lands governed; under option B it becomes advisory and stops being contract content at all. Closing it before that call would be an assertion, which is the exact failure this ledger exists to avoid.",
+        "classified_by": "Alpha-2 session 8aa7b984, 2026-07-31"
+      }
     },
     {
       "key": "8e97db52a40f",
@@ -5431,9 +6007,14 @@
       "imperative": "Classify — a non-HIGH send proceeds; a HIGH send requires a consult. 3.",
       "match_score": 0.57,
       "carries_modal": false,
-      "disposition": "NEEDS_DECISION",
+      "disposition": "CLASSIFIED_PENDING_FR2",
       "lexical_coverage": 0,
-      "lexical_note": "NOT evidence of deletion — the probe is rewrite-blind (3 of 3 known survivors score invisible). Needs a reader."
+      "triage": {
+        "destination": "contract prose or provenance - depends on the A/B call",
+        "class": "elaboration",
+        "why_not_closed": "Non-obligation-shaped: no modal, no negation, no duty verb. The rule-bearing content was already dispositioned (18 modal + 86 obligation-shaped). This entry is elaboration/provenance/how-to whose destination is a companion, so its disposition RIDES ON the FR-2 govern-vs-demote decision. Under option A it lands governed; under option B it becomes advisory and stops being contract content at all. Closing it before that call would be an assertion, which is the exact failure this ledger exists to avoid.",
+        "classified_by": "Alpha-2 session 8aa7b984, 2026-07-31"
+      }
     },
     {
       "key": "0f2ac685ef51",
@@ -5470,9 +6051,14 @@
       "imperative": "Near-miss feeder: when a consult MATERIALLY AMENDS a decision (verdict-delta), a governance near-miss is auto-captured into issue_patterns (class:near_miss, catch_layer:solomon) — feeding the governance-situation continuous-learning loop (SD-LEO-INFRA-GOVERNANCE-SITUATION-CONTINUOUS-001).",
       "match_score": 0.15,
       "carries_modal": false,
-      "disposition": "NEEDS_DECISION",
+      "disposition": "CLASSIFIED_PENDING_FR2",
       "lexical_coverage": 0,
-      "lexical_note": "NOT evidence of deletion — the probe is rewrite-blind (3 of 3 known survivors score invisible). Needs a reader."
+      "triage": {
+        "destination": "CLAUDE_ADAM_PROVENANCE.md",
+        "class": "provenance",
+        "why_not_closed": "Non-obligation-shaped: no modal, no negation, no duty verb. The rule-bearing content was already dispositioned (18 modal + 86 obligation-shaped). This entry is elaboration/provenance/how-to whose destination is a companion, so its disposition RIDES ON the FR-2 govern-vs-demote decision. Under option A it lands governed; under option B it becomes advisory and stops being contract content at all. Closing it before that call would be an assertion, which is the exact failure this ledger exists to avoid.",
+        "classified_by": "Alpha-2 session 8aa7b984, 2026-07-31"
+      }
     },
     {
       "key": "5af69374e3b9",
@@ -5517,18 +6103,28 @@
       "imperative": "(Unchanged: the chairman may direct either role directly.) Role-agnostic — a future role-session (e.g.",
       "match_score": 0.56,
       "carries_modal": false,
-      "disposition": "NEEDS_DECISION",
+      "disposition": "CLASSIFIED_PENDING_FR2",
       "lexical_coverage": 0.25,
-      "lexical_note": "NOT evidence of deletion — the probe is rewrite-blind (3 of 3 known survivors score invisible). Needs a reader."
+      "triage": {
+        "destination": "contract prose or provenance - depends on the A/B call",
+        "class": "elaboration",
+        "why_not_closed": "Non-obligation-shaped: no modal, no negation, no duty verb. The rule-bearing content was already dispositioned (18 modal + 86 obligation-shaped). This entry is elaboration/provenance/how-to whose destination is a companion, so its disposition RIDES ON the FR-2 govern-vs-demote decision. Under option A it lands governed; under option B it becomes advisory and stops being contract content at all. Closing it before that call would be an assertion, which is the exact failure this ledger exists to avoid.",
+        "classified_by": "Alpha-2 session 8aa7b984, 2026-07-31"
+      }
     },
     {
       "key": "ce9dc90aef01",
       "imperative": "Solomon) inherits this posture by inclusion.",
       "match_score": 0.25,
       "carries_modal": false,
-      "disposition": "NEEDS_DECISION",
+      "disposition": "CLASSIFIED_PENDING_FR2",
       "lexical_coverage": 0,
-      "lexical_note": "NOT evidence of deletion — the probe is rewrite-blind (3 of 3 known survivors score invisible). Needs a reader."
+      "triage": {
+        "destination": "contract prose or provenance - depends on the A/B call",
+        "class": "elaboration",
+        "why_not_closed": "Non-obligation-shaped: no modal, no negation, no duty verb. The rule-bearing content was already dispositioned (18 modal + 86 obligation-shaped). This entry is elaboration/provenance/how-to whose destination is a companion, so its disposition RIDES ON the FR-2 govern-vs-demote decision. Under option A it lands governed; under option B it becomes advisory and stops being contract content at all. Closing it before that call would be an assertion, which is the exact failure this ledger exists to avoid.",
+        "classified_by": "Alpha-2 session 8aa7b984, 2026-07-31"
+      }
     },
     {
       "key": "0502d74d684a",
@@ -5551,18 +6147,28 @@
       "imperative": "_Hierarchy note (chairman-ratified D-0719-ORGCHART \"A\", 2026-07-19): this partnership operates UNDER the Adam governance-and-oversight clause now present in BOTH role contracts — partnership in method, oversight in accountability; the governance clause controls on conflict._",
       "match_score": 0.45,
       "carries_modal": false,
-      "disposition": "NEEDS_DECISION",
+      "disposition": "CLASSIFIED_PENDING_FR2",
       "lexical_coverage": 0.257,
-      "lexical_note": "NOT evidence of deletion — the probe is rewrite-blind (3 of 3 known survivors score invisible). Needs a reader."
+      "triage": {
+        "destination": "CLAUDE_ADAM_PROVENANCE.md",
+        "class": "provenance",
+        "why_not_closed": "Non-obligation-shaped: no modal, no negation, no duty verb. The rule-bearing content was already dispositioned (18 modal + 86 obligation-shaped). This entry is elaboration/provenance/how-to whose destination is a companion, so its disposition RIDES ON the FR-2 govern-vs-demote decision. Under option A it lands governed; under option B it becomes advisory and stops being contract content at all. Closing it before that call would be an assertion, which is the exact failure this ledger exists to avoid.",
+        "classified_by": "Alpha-2 session 8aa7b984, 2026-07-31"
+      }
     },
     {
       "key": "762625defbc3",
       "imperative": "Generated from database: 2026-07-28 Protocol Version: 4.4.1 Source of truth: leo_protocol_sections (section_type=adam_role_contract).",
       "match_score": 0.5,
       "carries_modal": false,
-      "disposition": "NEEDS_DECISION",
+      "disposition": "CLASSIFIED_PENDING_FR2",
       "lexical_coverage": 0.389,
-      "lexical_note": "NOT evidence of deletion — the probe is rewrite-blind (3 of 3 known survivors score invisible). Needs a reader."
+      "triage": {
+        "destination": "CLAUDE_ADAM_PROVENANCE.md",
+        "class": "provenance",
+        "why_not_closed": "Non-obligation-shaped: no modal, no negation, no duty verb. The rule-bearing content was already dispositioned (18 modal + 86 obligation-shaped). This entry is elaboration/provenance/how-to whose destination is a companion, so its disposition RIDES ON the FR-2 govern-vs-demote decision. Under option A it lands governed; under option B it becomes advisory and stops being contract content at all. Closing it before that call would be an assertion, which is the exact failure this ledger exists to avoid.",
+        "classified_by": "Alpha-2 session 8aa7b984, 2026-07-31"
+      }
     },
     {
       "key": "89f8593e0c3a",
@@ -5621,5 +6227,16 @@
     "adjudicated": 86,
     "candidate_losses": 4,
     "chairman_decisions": 1
+  },
+  "remainder_triage": {
+    "by": "Alpha-2 session 8aa7b984, 2026-07-31",
+    "closed_by_spot_check": 15,
+    "classified_pending_fr2": 101,
+    "by_destination": {
+      "elaboration": 66,
+      "provenance": 22,
+      "manual": 13
+    },
+    "standing_note": "NEEDS_DECISION is now EMPTY, but that does NOT mean the ledger is closed. CLASSIFIED_PENDING_FR2 entries are deliberately open: they are companion-bound, and whether a companion is GOVERNED or ADVISORY is the unresolved FR-2 A/B call. Resolve that first, then close these in one motion."
   }
 }
