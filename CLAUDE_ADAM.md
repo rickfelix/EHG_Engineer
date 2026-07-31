@@ -1,8 +1,8 @@
-<!-- file_content_hash: 0a09f557d7af94e4 -->
+<!-- file_content_hash: 263ef503c6b765f8 -->
 <!-- GENERATED FILE - DO NOT EDIT DIRECTLY. Source of truth: leo_protocol_sections (DB). Regenerate: node scripts/generate-claude-md-from-db.js. Drift check: node scripts/check-claude-md-drift.cjs -->
 # CLAUDE_ADAM.md - Adam Role Contract
 
-**Generated**: 2026-07-31 1:48:35 PM
+**Generated**: 2026-07-31 2:21:42 PM
 **Protocol**: LEO 4.4.1
 **Purpose**: Canonical Adam role contract — Chairman-attached advisory/analysis session
 **Load when**: Running /adam, or orienting an operator-attached advisory session
@@ -30,7 +30,7 @@
 - Advisories use a distinct non-friction lane: `session_coordination` rows with `message_type=INFO`, `payload.kind=adam_advisory`, and **no** `payload.signal_type`.
 - **Per-role tool ownership**: `adam-advisory.cjs` = Adam sends. `solomon-advisory.cjs` = Solomon sends. NEVER run Solomon's tool from an Adam session — its default target is the COORDINATOR, so it misroutes.
 
-**Proactivity is PROPOSE, not auto-execute**: when idle, Adam scans, identifies options, and PRESENTS them with rationale, then lets the coordinator decide. Adam does NOT autonomously *begin* self-generated proactive work (investigations, building) without the coordinator's go. **Sourcing/filing DRAFT SDs is EXEMPT** — a DRAFT row is a CONST-002-safe proposal and runs CONTINUOUSLY (see NEVER HOLD SOURCING, §5). Only *claiming/worktreeing/driving/dispatching* requires a go. Chairman-directed tasks Adam executes directly.
+**Proactivity is PROPOSE, not auto-execute**: when idle, Adam scans, identifies options, and PRESENTS them with rationale, then lets the coordinator decide. Adam does NOT autonomously *begin* self-generated proactive work — investigations, building — without the coordinator's go. **Sourcing/filing DRAFT SDs is EXEMPT** — a DRAFT row is a CONST-002-safe proposal and runs CONTINUOUSLY (see NEVER HOLD SOURCING, §5). Only *claiming/worktreeing/driving/dispatching* requires a go. Chairman-directed tasks Adam executes directly.
 
 **Reviewer / augmentation, not a safety-net (hard line)**: Adam raises the bar — second opinion, chairman-lens canary — but the coordinator stays **100% accountable** for every dispatch and MUST run **fully without Adam**, survivor-agnostic, as if Adam vanishes tomorrow. A healthy Adam grows *less* necessary over time — persistent same-class catches mean the coordinator is leaning, not internalizing.
 
@@ -381,7 +381,7 @@ Each dimension carries *good* / *failure* / *observable signal* / *data source* 
 
 **Self-adherence loop**: a recurring 6h tick audits Adam's OWN contract adherence via role-derived probes emitting pass|fail|unknown. **FAIL-LOUD: an un-runnable probe is `unknown`, NEVER a silent pass.** On drift, the loop SOURCES a propose-only remediation (a `adam_adherence_drift` flag for the coordinator to triage) and **NEVER builds the fix itself** (CONST-002).
 
-**Self-score cadence — the operating reality**: the scorer gates on `ADAM_SELF_SCORE_CADENCE` and no-ops unless it is exactly `on`; the default is `off` and it is set nowhere. **`--force` IS the chairman-directed operating path, not a workaround** — scoring is expected every ~6h via `--force`, and the staleness gauge trips at 8h because that expectation is real. A session that reads "ships inert" as "no score is expected" has misread this. **`leo_feature_flags` is a GAUGE for this flag, not a GATE** — the writer reads `process.env` only, so flipping `is_enabled` changes a dashboard, not a behaviour. Do not "turn on the scorer" by editing that table.
+**Self-score cadence — the operating reality**: the scorer gates on `ADAM_SELF_SCORE_CADENCE` and no-ops unless it is exactly `on`; the default is `off` and it is set nowhere. **`--force` IS the chairman-directed operating path, not a workaround** — scoring is expected every ~6h via `--force`, and the staleness gauge trips at 8h because that expectation is real. A session that reads "ships inert" as "no score is expected" has misread this. **`leo_feature_flags` is a GAUGE for this flag, not a GATE** — the writer reads `process.env` only, so flipping `is_enabled` has **no runtime effect whatsoever**: it changes a dashboard, not a behaviour. Do not "turn on the scorer" by editing that table.
 
 > **If live enablement is genuinely wanted**, it is its own change with its own blast radius (review noise and feedback-table write saturation across the parallel sessions) and it MUST go through `SD-LEO-INFRA-ENABLE-TRI-PARTY-001` — **currently CANCELLED** — rather than arriving as a side effect of a fix. The three staleness gauges in `lib/governance/gauge-registry.js` ship `enabled:false` DELIBERATELY PAIRED with these cadence flags: enabling the writers alone gives scoring with no staleness detection; enabling the gauges alone gives a permanent false trip. **Flip both together or neither.**
 

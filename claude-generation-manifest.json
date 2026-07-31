@@ -1,6 +1,6 @@
 {
-  "generated_at": "2026-07-31T17:48:35.649Z",
-  "git_commit": "a4f91ad5",
+  "generated_at": "2026-07-31T18:21:42.081Z",
+  "git_commit": "76591fd2",
   "db_snapshot_hash": "f40cba344ed016a6",
   "files": {
     "CLAUDE.md": {
@@ -40,9 +40,9 @@
     },
     "CLAUDE_ADAM.md": {
       "type": "full",
-      "chars": 46542,
-      "estimated_tokens": 11636,
-      "content_hash": "0a09f557d7af94e4",
+      "chars": 46585,
+      "estimated_tokens": 11647,
+      "content_hash": "263ef503c6b765f8",
       "path": "C:\\Users\\rickf\\Projects\\_EHG\\EHG_Engineer\\.worktrees\\SD-LEO-INFRA-ADAM-CONTRACT-READABLE-001\\CLAUDE_ADAM.md"
     },
     "CLAUDE_ADAM_MANUAL.md": {
@@ -112,7 +112,7 @@
       "type": "digest",
       "chars": 4700,
       "estimated_tokens": 1175,
-      "content_hash": "6b824560c335f94d",
+      "content_hash": "fcbae365404745cb",
       "path": "C:\\Users\\rickf\\Projects\\_EHG\\EHG_Engineer\\.worktrees\\SD-LEO-INFRA-ADAM-CONTRACT-READABLE-001\\CLAUDE_ADAM_DIGEST.md"
     },
     "CLAUDE_COORDINATOR_DIGEST.md": {
@@ -131,7 +131,7 @@
     }
   },
   "section_digests": {
-    "global": "77bf8c9369a471ff",
+    "global": "6ada722023f4f3ac",
     "byId": {
       "94": "ef2f1e7ed617b5e0",
       "189": "6398659126897bbb",
@@ -385,8 +385,8 @@
       "596": "0251044882a17550",
       "597": "ca5efc991922f3b8",
       "599": "7ddd3e2178799aa8",
-      "601": "d2f2f8f2a5ee4df6",
-      "602": "1d330031fd427ecf",
+      "601": "5a6892ffdeae751b",
+      "602": "52425599b58d0a12",
       "603": "98d7b093d064f76a",
       "605": "4a13b33776eb8b21",
       "608": "7f99a4321502367e",
