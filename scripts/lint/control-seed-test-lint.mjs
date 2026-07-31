@@ -38,8 +38,11 @@
  *     diff check below is what closes that: a new control file with no spec entry FAILS.
  *   - It cannot detect a fixture that is not really a defect. A reviewer still has to read
  *     the seed. This gate makes blindness expensive, not impossible.
- *   - The `seedTest` form (a committed test rather than a fixture) is WEAKER: the gate can
- *     confirm the test passes but cannot prove it would FAIL if the control were neutered.
+ *   - The `seedTest` form (a committed test rather than a fixture) is WEAKER in TWO ways.
+ *     (1) The gate can confirm the test passes but cannot prove it would FAIL if the control
+ *     were neutered. (2) It shells out to the test runner, so it takes a dependency on
+ *     node_modules being installed and can fail for reasons unrelated to detection — this
+ *     gate's own first CI run failed exactly that way, on a workflow with no npm ci step.
  *     Prefer `fixtures`; `seedTest` exists for controls that cannot be aimed at one.
  *
  * Usage:

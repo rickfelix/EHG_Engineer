@@ -52,6 +52,16 @@ jobs:
       - uses: actions/setup-node@v4
         with:
           node-version: '20'
+          cache: 'npm'
+
+      # REQUIRED, and its absence was caught by this gate on its own first CI run.
+      # The `seedTest` spec form shells out to `npx vitest`, so it needs node_modules —
+      # the `fixtures` form does not. That is a SECOND way seedTest is weaker than a
+      # fixture trial, beyond the one already in KNOWN LIMITATIONS: it takes a dependency
+      # on the test runner being installed, so it can fail for reasons that have nothing
+      # to do with whether the control detects anything.
+      - name: Install dependencies
+        run: npm ci --prefer-offline --no-audit
 
       - name: Seed-test every new control in this diff
         run: |
