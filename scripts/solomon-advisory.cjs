@@ -251,7 +251,7 @@ function computeConsultSignature(row) {
   if (p.correlation_id) return `corr:${p.correlation_id}`;
   const sd = p.sd_key || p.sd_id || (row && row.target_sd) || '';
   const q = String(p.body || p.question || (row && row.subject) || '');
-  return `hash:${crypto.createHash('sha256').update(`${sd} ${q}`).digest('hex').slice(0, 32)}`;
+  return `hash:${crypto.createHash('sha256').update(`${sd}\u0000${q}`).digest('hex').slice(0, 32)}`;
 }
 
 /**
