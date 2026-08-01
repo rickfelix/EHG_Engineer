@@ -39,7 +39,10 @@ describe('TS-6: no staged thesis -> REFUSE, never author one', () => {
 
   it('emits NO artifact — the killing mutation is any branch that fabricates one', () => {
     const out = attachDemandThesisArtifact({ analysis: 'x' }, { ventureMetadata: null, typePending: false });
-    expect(out.artifacts).toEqual([]);
+    // No typed artifacts[] is emitted at all on a non-promote path, so the engine keeps its normal
+    // single-artifact route for truth_ai_critique. Emitting an empty array would be harmless today
+    // (consumers check length > 0) but would signal an intent to co-emit that does not exist.
+    expect(out.artifacts).toBeUndefined();
     expect(out.demand_thesis.action).toBe('refuse');
     // Stage 2 still completes — a venture without a thesis is not a broken venture.
     expect(out.analysis).toBe('x');
@@ -50,6 +53,62 @@ describe('TS-6: no staged thesis -> REFUSE, never author one', () => {
       expect(() => decideDemandThesisAction({ ventureMetadata: md, typePending: false })).not.toThrow();
       expect(decideDemandThesisAction({ ventureMetadata: md, typePending: false }).action).toBe('refuse');
     }
+  });
+});
+
+describe('the four defects the EXEC sub-agents found in this producer', () => {
+  it('CHECK_FAILED is distinguished from GENUINELY ABSENT', async () => {
+    // A systemic DB blip must not read as "no venture in the fleet has a thesis". Same
+    // absence-mistaken-for-a-verdict error this SD is about, which I reproduced in my own fail-soft.
+    const { CHECK_FAILED } = await import('../../../lib/eva/stage-templates/analysis-steps/stage-02-demand-thesis.js');
+    const d = decideDemandThesisAction({ ventureMetadata: CHECK_FAILED, typePending: false });
+    expect(d.action).toBe('refuse');
+    expect(d.reason).toContain('THESIS_CHECK_FAILED');
+    expect(d.reason).toMatch(/UNKNOWN/);
+    // And it must NOT claim absence.
+    expect(d.reason).not.toContain('NO_ADJUDICATED_THESIS');
+  });
+
+  it('co-emission does NOT drop stage 2 own artifact', () => {
+    /**
+     * *** THIS WAS SILENT DATA LOSS. *** Both consumers treat a non-empty typed artifacts[] as
+     * EXCLUSIVE, so appending only the thesis meant truth_ai_critique — stage 2's actual job — was
+     * never written. The stage would have reported success while losing its primary output. Dormant
+     * only because the DDL gate makes promote unreachable; it fires on the first post-migration run.
+     */
+    const out = attachDemandThesisArtifact(
+      { critiques: ['a'], compositeScore: 7 },
+      { ventureMetadata: staged(), typePending: false }
+    );
+    expect(out.artifacts.map((a) => a.artifactType))
+      .toEqual(['truth_ai_critique', 'truth_demand_thesis']);
+    expect(out.artifacts[0].payload.compositeScore).toBe(7);
+  });
+
+  it('faithfulness is DERIVED from a comparison, not asserted', () => {
+    // The first cut compared the source to ITSELF, so `faithful` could only ever be true — a
+    // structural constant wearing the costume of a check.
+    const d = decideDemandThesisAction({ ventureMetadata: staged(), typePending: false });
+    expect(d.artifact.payload.provenance.faithful).toBe(true);
+    // The comparison now runs against the built payload, so a divergence is reachable.
+    expect(d.artifact.payload.claims).toEqual(validThesis().claims);
+  });
+
+  it('an unrecognised gate-file shape is treated as PENDING, not permitted', async () => {
+    const { isArtifactTypePendingChairmanGate } = await import('../../../lib/eva/stage-templates/analysis-steps/stage-02-demand-thesis.js');
+    // Valid JSON, no `allow` key — previously fell through to "not pending" and would have attempted
+    // a write that raises 23514 fleet-wide.
+    const { writeFileSync, mkdtempSync } = await import('node:fs');
+    const { tmpdir } = await import('node:os');
+    const { join } = await import('node:path');
+    const dir = mkdtempSync(join(tmpdir(), 'gate-'));
+    const p = join(dir, 'g.json');
+    writeFileSync(p, JSON.stringify({ _doc: 'no allow key here' }));
+    expect(isArtifactTypePendingChairmanGate('truth_demand_thesis', { gatePath: p })).toBe(true);
+    writeFileSync(p, JSON.stringify({ allow: { truth_demand_thesis: 'x' } }));
+    expect(isArtifactTypePendingChairmanGate('truth_demand_thesis', { gatePath: p })).toBe(true);
+    writeFileSync(p, JSON.stringify({ allow: {} }));
+    expect(isArtifactTypePendingChairmanGate('truth_demand_thesis', { gatePath: p })).toBe(false);
   });
 });
 
@@ -80,7 +139,10 @@ describe('FR-5: the write cannot succeed yet, so DEFER rather than break stage 2
 
   it('a deferral would otherwise raise 23514 on EVERY stage-2 run — 117 ventures, not one', () => {
     const out = attachDemandThesisArtifact({ analysis: 'x' }, { ventureMetadata: staged(), typePending: true });
-    expect(out.artifacts).toEqual([]);
+    // No typed artifacts[] is emitted at all on a non-promote path, so the engine keeps its normal
+    // single-artifact route for truth_ai_critique. Emitting an empty array would be harmless today
+    // (consumers check length > 0) but would signal an intent to co-emit that does not exist.
+    expect(out.artifacts).toBeUndefined();
     expect(out.demand_thesis.action).toBe('defer');
   });
 });
