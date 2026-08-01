@@ -330,3 +330,61 @@ describe('the incumbent is RUN, not quoted — precedence must not rot into a fr
     expect(incumbent.reason).toBe('progressed_past_boundary');
   });
 });
+
+describe('the dashboard strip RENDER path — uncovered until printStuckSeatStrip was exported', () => {
+  /**
+   * ADDED AFTER REVIEW. The strip was the only renderer in fleet-dashboard.cjs missing from
+   * module.exports, whose own comment reads "Export read-only renderers for unit testing" — so its
+   * render path had no coverage at all. These assert the behaviour that actually matters: the strip
+   * must NEVER produce a silent zero, because a detector that scanned nothing and a fleet that is
+   * genuinely fine must not render identically.
+   */
+  const { printStuckSeatStrip } = require('../../../scripts/fleet-dashboard.cjs');
+
+  function fakeClient(rows) {
+    return { from: () => { let w = rows.slice(); const q = {
+      select: () => q, in: (c, v) => { w = w.filter((r) => v.includes(r[c])); return q; },
+      order: () => q, limit: async (n) => ({ data: w.slice(0, n), error: null }) }; return q; } };
+  }
+  function capture(fn) {
+    const lines = []; const orig = console.log;
+    console.log = (...a) => lines.push(a.join(' '));
+    return fn().finally(() => { console.log = orig; }).then(() => lines.join('\n'));
+  }
+
+  const HEALTHY = { session_id: 'aaaaaaaa-1111-2222-3333-444444444444', status: 'active', last_tool_at: new Date().toISOString(), metadata: {} };
+  const STUCK = { session_id: 'bbbbbbbb-1111-2222-3333-444444444444', status: 'idle', last_tool_at: new Date(Date.now() - 600 * 60000).toISOString(), metadata: {} };
+  const BLIND = { session_id: 'cccccccc-1111-2222-3333-444444444444', status: 'active', last_tool_at: null, metadata: {} };
+
+  it('an ALL-CLEAR still states its denominator — this is the anti-silent-zero guarantee', async () => {
+    const out = await capture(() => printStuckSeatStrip(fakeClient([HEALTHY])));
+    expect(out).toContain('STUCK SEATS');
+    expect(out).toContain('seats scanned=1');
+    expect(out).toContain('stuck=0');
+  });
+
+  it('scanning NOTHING renders as a blind detector, not as a healthy fleet', async () => {
+    const out = await capture(() => printStuckSeatStrip(fakeClient([])));
+    expect(out).toContain('seats scanned=0');
+    expect(out).toMatch(/SCANNED NOTHING/);
+  });
+
+  it('a stuck seat is named with its silence and wake state', async () => {
+    const out = await capture(() => printStuckSeatStrip(fakeClient([HEALTHY, STUCK])));
+    expect(out).toContain(STUCK.session_id);
+    expect(out).toContain('stuck=1');
+  });
+
+  it('an UNKNOWN seat is counted and explained, never folded into healthy', async () => {
+    const out = await capture(() => printStuckSeatStrip(fakeClient([HEALTHY, BLIND])));
+    expect(out).toContain('unknown=1');
+    expect(out).toMatch(/could not see those seats, not that they are healthy/);
+  });
+
+  it('a DB failure says so rather than rendering a clean zero', async () => {
+    const failing = { from: () => ({ select: () => ({ in: () => ({ order: () => ({ limit: async () => ({ data: null, error: { message: 'boom' } }) }) }) }) }) };
+    const out = await capture(() => printStuckSeatStrip(failing));
+    expect(out).toContain('check unavailable');
+    expect(out).not.toContain('stuck=0');
+  });
+});

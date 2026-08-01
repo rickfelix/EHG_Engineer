@@ -1674,11 +1674,15 @@ async function printAttentionStrip() {
  */
 const STUCK_SEAT_CUT_POINT_MINUTES = 120;   // operator-facing display threshold, NOT a calibration
 
-async function printStuckSeatStrip() {
+// `client` is injectable ONLY so the render path can be unit-tested; production passes nothing and
+// uses the module-scope client. Every sibling renderer here is exported "for unit testing" and this
+// one was omitted from module.exports, which is the actual reason its render was uncovered — a
+// reviewer attributed that to "no test imports fleet-dashboard", but eight test files do.
+async function printStuckSeatStrip(client) {
   try {
     const { fetchPopulation } = require('../lib/fleet/stuck-seat-population.cjs');
     const { classifySeat, VERDICT } = require('../lib/fleet/stuck-seat-predicate.cjs');
-    const { seats: population, truncated } = await fetchPopulation(supabase);
+    const { seats: population, truncated } = await fetchPopulation(client || supabase);
     const results = population.map((row) => classifySeat(row, { cutPointMinutes: STUCK_SEAT_CUT_POINT_MINUTES }));
     const stuck = results.filter((r) => r.verdict === VERDICT.STUCK);
     const unknown = results.filter((r) => r.verdict === VERDICT.UNKNOWN);
@@ -2706,7 +2710,7 @@ async function main() {
 }
 
 // Export read-only renderers for unit testing (SD-LEO-INFRA-COORDINATOR-DASHBOARD-SURFACES-001).
-module.exports = { printFeedback, reconcilePAliveWithLiveness, computeSolomonLedgerRollup, printWorkers, printChairmanEmailChannelHealth, printAvailable, printWorkerInbox, resolveInboxAudience, printAttentionStrip, printQA };
+module.exports = { printFeedback, reconcilePAliveWithLiveness, computeSolomonLedgerRollup, printWorkers, printChairmanEmailChannelHealth, printAvailable, printWorkerInbox, resolveInboxAudience, printAttentionStrip, printQA, printStuckSeatStrip };
 
 // Only run the CLI when invoked directly, so requiring this module in a test does
 // not execute main() against the live database.
