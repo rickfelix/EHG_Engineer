@@ -11,6 +11,53 @@
 import BaseExecutor from '../BaseExecutor.js';
 import ResultBuilder from '../../ResultBuilder.js';
 
+/**
+ * Project the orchestrator's per-gate results into a compact, queryable shape for persistence
+ * on the LEAD-FINAL handoff row. SD-FDBK-FIX-COMPLETION-FLAG-HARNESS-001 FR-5.
+ *
+ * WHY THIS EXISTS: measured before the fix, 0 of 62 LEAD-FINAL handoff rows carried any
+ * gate_results, so FR_DELIVERY_VERIFICATION — the gate whose blindness this SD was filed
+ * about — had NO persisted execution record for any of the 60 most recent completed SDs. Its
+ * verdict was unobservable to any auditor after the run, which meant a repair to it could only
+ * ever be demonstrated in a unit test and never in production.
+ *
+ * Deliberately compact: name/score/passed/required plus the FR classification counts. The full
+ * `details` blob is NOT persisted — it can carry every FR description and would bloat the row.
+ *
+ * Pure and exported for direct unit testing (no DB, no orchestrator instance needed).
+ *
+ * @param {Object} gateResults - the ValidationOrchestrator result (uses .gateResults map)
+ * @returns {Array<Object>} one compact entry per gate, or [] when nothing is available
+ */
+export function projectGateResultsForPersistence(gateResults) {
+  const byName = gateResults && gateResults.gateResults;
+  if (!byName || typeof byName !== 'object') return [];
+  return Object.entries(byName).map(([name, r]) => {
+    const entry = {
+      name,
+      score: r && typeof r.score === 'number' ? r.score : null,
+      max_score: r && typeof r.max_score === 'number' ? r.max_score : (r && typeof r.maxScore === 'number' ? r.maxScore : null),
+      passed: !!(r && r.passed),
+      required: !!(r && r.required),
+    };
+    // FR-delivery gates carry the classification the auditor actually needs — specifically
+    // whether a shortfall was UNVERIFIABLE (blind) or UNDELIVERED (genuinely missing).
+    const d = r && r.details;
+    if (d && typeof d.total === 'number') {
+      entry.fr_classification = {
+        total: d.total,
+        delivered: d.delivered ?? null,
+        descoped: d.descoped ?? null,
+        undelivered: d.undelivered ?? null,
+        unverifiable: d.unverifiable ?? null,
+        convention_in_use: d.convention_in_use ?? null,
+        over_ceiling: d.over_ceiling ?? null,
+      };
+    }
+    return entry;
+  });
+}
+
 // Domain imports
 import { getRequiredGates } from './gates.js';
 import {
@@ -493,7 +540,13 @@ export class LeadFinalApprovalExecutor extends BaseExecutor {
             validation_details: { written_by: 'LeadFinalApprovalExecutor pre-completion canonical write' },
             accepted_at: new Date().toISOString(),
             created_by: HANDOFF_SYSTEM_TAG,
-            metadata: { canonical_pre_completion_write: true, sd_ref: 'SD-FDBK-FIX-LFA-ACCEPT-ORDERING-001' }
+            metadata: {
+              canonical_pre_completion_write: true,
+              sd_ref: 'SD-FDBK-FIX-LFA-ACCEPT-ORDERING-001',
+              // SD-FDBK-FIX-COMPLETION-FLAG-HARNESS-001 FR-5: make the per-gate verdicts
+              // auditable after the run. Previously absent on all 62 LEAD-FINAL rows.
+              gate_results: projectGateResultsForPersistence(gateResults)
+            }
           });
         if (canonErr) {
           console.log(`   ❌ Canonical LFA write failed (SD NOT completed): ${canonErr.message}`);

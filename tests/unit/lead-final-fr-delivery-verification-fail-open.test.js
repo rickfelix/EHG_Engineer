@@ -18,6 +18,10 @@ vi.mock('../../scripts/modules/handoff/gates/fr-delivery-classifier.js', () => (
   classifyFrDelivery: vi.fn(),
   projectGateResult: vi.fn(),
   isFrTraceabilityEnforced: vi.fn(() => process.env.LEO_FR_TRACEABILITY_ENFORCE === 'true'),
+  // SD-FDBK-FIX-COMPLETION-FLAG-HARNESS-001: the gate now distinguishes a non-measurement
+  // and a broken instrument from a verified delivery, so the mock must carry both constants.
+  NOT_MEASURED_SCORE: 75,
+  ERRORED_SCORE: 50,
 }));
 
 const { classifyFrDelivery, projectGateResult } = await import('../../scripts/modules/handoff/gates/fr-delivery-classifier.js');
