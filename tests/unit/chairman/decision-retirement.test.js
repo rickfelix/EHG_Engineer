@@ -7,7 +7,7 @@
  * codebase happens to write. A value outside that set dies at runtime with 23514.
  */
 import { describe, it, expect } from 'vitest';
-import { planRetirement, applyRetirement, armOf, FEEDBACK_STATUS, DECISION_STATUS } from '../../../lib/chairman/decision-retirement.mjs';
+import { planRetirement, applyRetirement, armOf, FEEDBACK_STATUS, DECISION_STATUS, CITATION_COLUMN, RETIRABLE_STATUSES } from '../../../lib/chairman/decision-retirement.mjs';
 import { indexDispositions, DEFERRAL_CATEGORY } from '../../../lib/chairman/decision-disposition.mjs';
 
 const NOW = new Date('2026-08-01T21:00:00Z');
@@ -95,9 +95,25 @@ describe('FR-1/TR-3 status vocabulary — never assert a decision the chairman d
 
   it('the citation travels WITH the write — a basis in a commit message is not a basis', () => {
     const plan = planRetirement({ id: 'dec-1', decision_type: 'chairman_approval' }, withAuth('dec-1'));
-    expect(plan.patch.retirement_basis.cited_record).toBe('fb-dec-1');
-    expect(plan.patch.retirement_basis.decided_by).toBe('chairman-cli');
-    expect(plan.patch.retirement_basis.decided_at).toBeTruthy();
+    expect(plan.retirementBasis.cited_record).toBe('fb-dec-1');
+    expect(plan.retirementBasis.decided_by).toBe('chairman-cli');
+    expect(plan.retirementBasis.decided_at).toBeTruthy();
+  });
+
+  it('the citation targets a column that ACTUALLY EXISTS on the arm it writes', () => {
+    // `retirement_basis` is not a column on either table — an explicit select returns 42703 on
+    // feedback AND chairman_decisions, and no migration adds it. The citation therefore nests into
+    // an existing jsonb column per arm. Pinned here because the original defect was invisible to a
+    // fake that accepted any patch.
+    expect(CITATION_COLUMN.chairman_decisions).toBe('brief_data');
+    expect(CITATION_COLUMN.feedback).toBe('metadata');
+    const a4 = planRetirement({ id: 'dec-1', decision_type: 'chairman_approval' }, withAuth('dec-1'));
+    const a5 = planRetirement({ id: 'dec-1', decision_type: 'flag_review' }, withAuth('dec-1'));
+    expect(a4.citationColumn).toBe('brief_data');
+    expect(a5.citationColumn).toBe('metadata');
+    // and the plan must NOT carry a phantom top-level column
+    expect(a4.patch).not.toHaveProperty('retirement_basis');
+    expect(a5.patch).not.toHaveProperty('retirement_basis');
   });
 });
 
@@ -123,45 +139,163 @@ describe('FR-2 arm 6 is GATED and says so — never a silent skip', () => {
   });
 });
 
-describe('TR-9 idempotency — the fence is "not already retired", not "status = pending"', () => {
-  function fake(rows) {
+describe('TR-9 idempotency and the terminal-status refusal', () => {
+  // THE FAKE IS SCHEMA-AWARE ON PURPOSE. The previous fake accepted any patch object, which is why
+  // it could not witness that `retirement_basis` is not a column on either table — every call would
+  // have died with 42703 in production while the suite stayed green. A double that cannot REJECT is
+  // not a double, it is an echo. These column sets are the real ones (feedback 65 cols /
+  // chairman_decisions 36; only the fields under test are listed, plus the jsonb citation column).
+  const COLUMNS = {
+    feedback: ['id', 'status', 'metadata', 'resolved_at', 'title', 'description', 'category'],
+    chairman_decisions: ['id', 'status', 'brief_data', 'decision', 'created_at']
+  };
+
+  // The builder is CHAINABLE AND THENABLE, exactly like PostgREST's: `.select(...).eq(...)` is
+  // valid and the builder itself resolves when awaited. A fake whose select() returns a bare
+  // promise cannot express `.select().eq()` at all — and one that is chainable but NOT thenable
+  // silently yields undefined when awaited. Both shapes have already produced false greens here.
+  function fake(table, rows, opts = {}) {
     const calls = [];
+    const store = rows.map(r => ({ ...r }));
     return {
       calls,
-      from: (table) => {
-        let sel = rows.slice();
+      rows: store,
+      from: (t) => {
+        let sel = store.slice();
+        let pending = null;
+        let err = null;
+        const exec = async () => {
+          if (opts.readError && !pending) return { data: null, error: { message: opts.readError } };
+          if (opts.writeError && pending) return { data: null, error: { message: opts.writeError } };
+          if (err) return { data: null, error: err };
+          if (pending) for (const r of sel) Object.assign(r, pending);
+          return { data: sel, error: null };
+        };
         const api = {
-          update: (patch) => { calls.push({ table, patch }); return api; },
+          update: (patch) => {
+            for (const k of Object.keys(patch)) {
+              if (!COLUMNS[t] || !COLUMNS[t].includes(k)) {
+                // exactly what PostgREST returns for an unknown column
+                err = { code: '42703', message: `column "${k}" of relation "${t}" does not exist` };
+              }
+            }
+            pending = patch; calls.push({ table: t, patch });
+            return api;
+          },
           eq: (c, v) => { sel = sel.filter((r) => r[c] === v); return api; },
           neq: (c, v) => { sel = sel.filter((r) => r[c] !== v); return api; },
-          select: async () => ({ data: sel, error: null })
+          in: (c, vs) => { sel = sel.filter((r) => vs.includes(r[c])); return api; },
+          select: () => api,
+          then: (resolve, reject) => exec().then(resolve, reject)
         };
         return api;
       }
     };
   }
+  const a5 = () => planRetirement({ id: 'dec-1', decision_type: 'flag_review' }, withAuth('dec-1'));
+  const a4 = () => planRetirement({ id: 'dec-1', decision_type: 'chairman_approval' }, withAuth('dec-1'));
 
   it('arm 5 retirement WRITES even though feedback has no "pending" status', async () => {
-    // The live feedback statuses are new/resolved/backlog/... — "pending" is synthesised by the
-    // view, not stored. A fence on status='pending' would match zero rows and no-op silently while
-    // still reporting success. This is the regression guard for that.
-    const db = fake([{ id: 'dec-1', status: 'new' }]);
-    const plan = planRetirement({ id: 'dec-1', decision_type: 'flag_review' }, withAuth('dec-1'));
-    const res = await applyRetirement(db, plan);
+    // "pending" is synthesised by the view, not stored. A fence on status='pending' would match
+    // zero feedback rows and no-op silently while still reporting success.
+    const db = fake('feedback', [{ id: 'dec-1', status: 'new', metadata: null }]);
+    const res = await applyRetirement(db, a5());
     expect(res.wrote).toBe(true);
   });
 
-  it('a SECOND retire is a no-op — the row already carries the target status', async () => {
-    const db = fake([{ id: 'dec-1', status: FEEDBACK_STATUS.HELD }]);
-    const plan = planRetirement({ id: 'dec-1', decision_type: 'flag_review' }, withAuth('dec-1'));
-    const res = await applyRetirement(db, plan);
+  it('writes ONLY columns that exist — a phantom column would surface as 42703', async () => {
+    const db = fake('feedback', [{ id: 'dec-1', status: 'new', metadata: null }]);
+    const res = await applyRetirement(db, a5());
+    expect(res.wrote).toBe(true);
+    expect(res.error).toBeUndefined();
+    for (const c of db.calls) for (const k of Object.keys(c.patch)) expect(COLUMNS.feedback).toContain(k);
+  });
+
+  it('the citation is MERGED into the jsonb column, not written over it', async () => {
+    const db = fake('feedback', [{ id: 'dec-1', status: 'new', metadata: { keep_me: 'existing', target_id: 'x' } }]);
+    await applyRetirement(db, a5());
+    expect(db.rows[0].metadata.keep_me).toBe('existing');   // pre-existing keys survive
+    expect(db.rows[0].metadata.target_id).toBe('x');
+    expect(db.rows[0].metadata.retirement_basis.decided_by).toBe('chairman-cli');
+  });
+
+  it('a null jsonb column is handled without throwing', async () => {
+    const db = fake('chairman_decisions', [{ id: 'dec-1', status: 'pending', brief_data: null }]);
+    const res = await applyRetirement(db, a4());
+    expect(res.wrote).toBe(true);
+    expect(db.rows[0].brief_data.retirement_basis).toBeTruthy();
+  });
+
+  it('a SECOND retire is a no-op, and SAYS SO — "already_retired", not a bare false', async () => {
+    const db = fake('feedback', [{ id: 'dec-1', status: FEEDBACK_STATUS.HELD, metadata: null }]);
+    const res = await applyRetirement(db, a5());
     expect(res.wrote).toBe(false);
+    expect(res.reason).toBe('already_retired');
+  });
+
+  it('REFUSES to overwrite a human-terminal feedback status', async () => {
+    // MEASURED: 3 of the 6 live feedback deferral targets sit at status='resolved'. The old
+    // .neq(status,target) fence matched them and would have overwritten a resolution.
+    for (const status of ['resolved', 'wont_fix', 'duplicate', 'invalid']) {
+      const db = fake('feedback', [{ id: 'dec-1', status, metadata: null }]);
+      const res = await applyRetirement(db, a5());
+      expect(res.wrote, status).toBe(false);
+      expect(res.reason, status).toBe('refused_terminal_status');
+      expect(db.rows[0].status, status).toBe(status);   // genuinely untouched
+    }
+  });
+
+  it('REFUSES to erase a chairman approval — the worst case this fence exists for', async () => {
+    // MEASURED: 3 of the 7 live chairman_decisions deferral targets sit at status='approved', and
+    // chairman_decisions.status has NO CHECK constraint to stop an overwrite. Retiring one would
+    // assert a disposition the chairman never made — the exact failure this SD removes.
+    for (const status of ['approved', 'rejected', 'cancelled']) {
+      const db = fake('chairman_decisions', [{ id: 'dec-1', status, brief_data: null }]);
+      const res = await applyRetirement(db, a4());
+      expect(res.wrote, status).toBe(false);
+      expect(res.reason, status).toBe('refused_terminal_status');
+      expect(db.rows[0].status, status).toBe(status);
+    }
+  });
+
+  it('arm 4 retires only a PENDING decision', async () => {
+    const db = fake('chairman_decisions', [{ id: 'dec-1', status: 'pending', brief_data: null }]);
+    const res = await applyRetirement(db, a4());
+    expect(res.wrote).toBe(true);
+  });
+
+  it('a missing row is reported as not_found, not as idempotency', async () => {
+    const db = fake('feedback', []);
+    const res = await applyRetirement(db, a5());
+    expect(res.wrote).toBe(false);
+    expect(res.reason).toBe('not_found');
+  });
+
+  it('R13: a DB ERROR is never indistinguishable from an idempotent no-op', async () => {
+    // The surviving mutant: delete the error branch and a failed write reports {wrote:false} with
+    // no error — identical to a correct no-op. Both the read and the write path are asserted.
+    const readFail = fake('feedback', [{ id: 'dec-1', status: 'new', metadata: null }], { readError: 'boom-read' });
+    const r1 = await applyRetirement(readFail, a5());
+    expect(r1.wrote).toBe(false);
+    expect(r1.reason).toBe('db_error');
+    expect(r1.error).toMatch(/boom-read/);
+
+    const writeFail = fake('feedback', [{ id: 'dec-1', status: 'new', metadata: null }], { writeError: 'boom-write' });
+    const r2 = await applyRetirement(writeFail, a5());
+    expect(r2.wrote).toBe(false);
+    expect(r2.reason).toBe('db_error');
+    expect(r2.error).toMatch(/boom-write/);
   });
 
   it('retirement does NOT write resolved_at — retirement is not resolution', async () => {
-    const db = fake([{ id: 'dec-1', status: 'new' }]);
-    const plan = planRetirement({ id: 'dec-1', decision_type: 'flag_review' }, withAuth('dec-1'));
-    await applyRetirement(db, plan);
-    expect(Object.keys(db.calls[0].patch)).not.toContain('resolved_at');
+    const db = fake('feedback', [{ id: 'dec-1', status: 'new', metadata: null }]);
+    await applyRetirement(db, a5());
+    for (const c of db.calls) expect(Object.keys(c.patch)).not.toContain('resolved_at');
+  });
+
+  it('the retirable sets match the real per-arm vocabularies', () => {
+    expect(RETIRABLE_STATUSES.chairman_decisions).toEqual(['pending']);
+    expect(RETIRABLE_STATUSES.feedback).not.toContain('resolved');
+    expect(RETIRABLE_STATUSES.feedback).toContain('backlog');
   });
 });
