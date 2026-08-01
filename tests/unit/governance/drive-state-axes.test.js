@@ -41,7 +41,14 @@ function applyingFake(tables, capture = {}) {
           rows.sort((a, b) => (String(a[col] ?? '') < String(b[col] ?? '') ? -1 : 1) * dir); // APPLIED, not recorded
           return q;
         },
-        limit: async (n) => { capture.limit = n; return { data: rows.slice(0, n), error: null }; }
+        gte: (col, val) => { capture.gte = { col, val }; rows = rows.filter((r) => String(r[col] ?? '') >= String(val)); return q; },
+        not: (col, op, val) => { capture.not = { col, op, val }; if (op === 'is' && val === null) rows = rows.filter((r) => r[col] != null); return q; },
+        limit: async (n) => { capture.limit = n; return { data: rows.slice(0, n), error: null }; },
+        // THENABLE, because the real client is. A terminal await with no .limit() — which several
+        // adapters use — resolved to the query OBJECT against the old fake, so `data` came back
+        // undefined and the adapter silently saw an empty population. A fake that cannot model the
+        // real client's await is itself the blind spot.
+        then: (res, rej) => Promise.resolve({ data: rows.slice(), error: null }).then(res, rej)
       };
       return q;
     }
@@ -477,5 +484,60 @@ describe('AXIS 2 coordinator_performance — the breach is measurable, the ACTIO
     const state = await coordAxis.fetch(applyingFake({ session_coordination: [{ score: 100, created_at: ago(1) }] }), { now: NOW });
     expect(state.snapshots.length).toBe(0);
     expect(coordAxis.classify(state, NOW).state).toBe(STATE.UNMEASURABLE);
+  });
+});
+
+describe('AXIS 4 venture_stage_motion — WIRING (the gap a discriminator test cannot see)', () => {
+  const ventureAxis = require('../../../lib/governance/drive-state/axes/venture-stage-motion.cjs');
+
+  // REGRESSION GUARD. fetch() originally returned {ventures} while classify() consumed {evaluated},
+  // so the two never met and the axis reported UNMEASURABLE/'no_venture_evaluations' forever. Every
+  // discriminator test passed throughout, because they construct {evaluated} directly. Only running
+  // the composer against the live DB exposed it. This test closes that loop in CI.
+  it('fetch() produces the key classify() consumes — not merely a well-shaped object', async () => {
+    const cap = {};
+    const fake = applyingFake({
+      ventures: [{ id: 'v1', name: 'V1', status: 'active', updated_at: minsAgo(60), metadata: {} }],
+      stage_executions: []
+    }, cap);
+    const state = await ventureAxis.fetch(fake, { now: NOW });
+    expect(Array.isArray(state.evaluated), 'fetch must emit `evaluated`').toBe(true);
+    expect(state.evaluated.length).toBe(1);
+    // And the verdict must NOT be the no-evaluations refusal, which is what the gap produced.
+    const r = ventureAxis.classify(state, NOW);
+    expect(r.reason).not.toBe('no_venture_evaluations');
+  });
+
+  it('each evaluated row carries the fields the classifier reads', async () => {
+    const state = await ventureAxis.fetch(applyingFake({
+      ventures: [{ id: 'v1', name: 'V1', status: 'active', updated_at: minsAgo(60), metadata: {} }],
+      stage_executions: []
+    }), { now: NOW });
+    const row = state.evaluated[0];
+    for (const k of ['id', 'name', 'alarm', 'reason']) expect(row, `missing ${k}`).toHaveProperty(k);
+    expect(typeof row.alarm).toBe('boolean');
+  });
+
+  it('zero active ventures short-circuits to an empty evaluation set, not a crash', async () => {
+    const state = await ventureAxis.fetch(applyingFake({ ventures: [], stage_executions: [] }), { now: NOW });
+    expect(state.evaluated).toEqual([]);
+    expect(ventureAxis.classify(state, NOW).state).toBe(STATE.CLEAR);
+  });
+});
+
+describe('the ADAPTER REGISTRY binds every frozen axis', () => {
+  const { ADAPTERS } = require('../../../lib/governance/drive-state/adapters.cjs');
+  const { AXES } = require('../../../lib/governance/drive-state/contract.cjs');
+
+  it('registers exactly the frozen axis list — no gaps, no strangers', () => {
+    expect(Object.keys(ADAPTERS).sort()).toEqual([...AXES].sort());
+  });
+
+  it('every registered adapter exposes the fetch/classify contract', () => {
+    for (const axis of AXES) {
+      expect(typeof ADAPTERS[axis].classify, `${axis}.classify`).toBe('function');
+      expect(typeof ADAPTERS[axis].fetch, `${axis}.fetch`).toBe('function');
+      expect(ADAPTERS[axis].AXIS, `${axis} self-name`).toBe(axis);
+    }
   });
 });
