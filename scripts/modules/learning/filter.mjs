@@ -25,6 +25,11 @@ const DEFAULT_BLOCK_SD_STATUSES = new Set([
 ]);
 
 const DEFAULT_CLOSED_SOURCE_STATUSES = new Set(['completed', 'cancelled']);
+// SD-FDBK-ENH-LEARNING-LOOP-DESTROYS-001 / FR-6. Not a new threshold — this mirrors
+// v_patterns_with_decay's own min_occurrence_threshold CASE, which already grants critical/high a
+// single-occurrence bypass. Keeping the two in step is the point; if the view's CASE ever changes,
+// change this with it.
+const SINGLE_SD_SEVERITY_BYPASS = new Set(['critical', 'high']);
 const DEFAULT_STALE_OPEN_AGE_DAYS = 7;
 const MS_PER_DAY = 24 * 60 * 60 * 1000;
 
@@ -121,6 +126,25 @@ function checkSingleSDClosedSource(pattern, sourceSdStatusMap, closedStatuses) {
   if (firstId !== lastId) return null;
   const status = sourceSdStatusMap.get(firstId);
   if (status === undefined) return null;
+  // SD-FDBK-ENH-LEARNING-LOOP-DESTROYS-001 / FR-6 — honour the severity bypass the VIEW already
+  // encodes, instead of two components answering the same policy question opposite ways.
+  //
+  // v_patterns_with_decay sets min_occurrence_threshold = 1 and meets_threshold = true for
+  // critical/high, i.e. "these surface on a single occurrence". This filter runs AFTER the view
+  // and never read pattern.severity at all, so that bypass was dead on arrival — the view granted
+  // an exemption the filter then ignored.
+  //
+  // MEASURED on the live corpus: of 1086 active patterns, 937 are single-SD with a closed source
+  // and every one was rejected here. 132 of those are critical/high — 90% of ALL critical/high
+  // patterns, permanently unsurfaceable. A retrospective lesson is single-SD-and-closed BY
+  // CONSTRUCTION (that is when retros run), so the write path was capturing exactly what the read
+  // path discarded.
+  //
+  // NOT disabling the check. It is doing real work on the ~805 medium/low single-SD rows, which is
+  // its documented purpose: a one-off on one SD is not a recurrence. This narrows it to the
+  // severities the view has already exempted, and no further — the threshold is borrowed, not
+  // invented.
+  if (SINGLE_SD_SEVERITY_BYPASS.has(String(pattern?.severity || '').toLowerCase())) return null;
   if (closedStatuses.has(status)) return REJECT_REASONS.SINGLE_SD_CLOSED_SOURCE;
   return null;
 }
