@@ -15,7 +15,11 @@
  */
 import { describe, it, expect, vi } from 'vitest';
 import { criterionFromFR } from '../../../lib/sub-agents/modules/stories/execute.js';
-import { generateStoriesBatch } from '../../../lib/sub-agents/modules/stories/quality-generation.js';
+// NOTE: generateStoriesBatch is deliberately NOT imported statically. The FR-2 tests need the
+// generator mocked BEFORE quality-generation.js is evaluated, so they import it dynamically after
+// vi.doMock. A static import here would bind the unmocked module and silently defeat the mock —
+// which is how the first version of those tests ended up exercising the LLM success path instead of
+// the fallback they claimed to guard.
 
 /** Minimal stand-in for what getLLMClient() actually returns: `.complete()`, and NO `.messages`. */
 function makeAdapter(overrides = {}) {
