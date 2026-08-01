@@ -17,6 +17,7 @@
  */
 
 import { describe, it, expect } from 'vitest';
+import { readFileSync } from 'node:fs';
 import { STATE, ACTION } from '../../../lib/governance/drive-state/contract.cjs';
 import * as fleetAxis from '../../../lib/governance/drive-state/axes/fleet-health.cjs';
 import * as learnAxis from '../../../lib/governance/drive-state/axes/learning-conversion.cjs';
@@ -215,5 +216,79 @@ describe('AXIS 4 venture_stage_motion — a fail-safe for an ALARM is a fail-OPE
     );
     expect(out.alarm).toBe(false);
     expect(out.reason).toBe(ventureAxis.NO_SIGNAL_REASON);
+  });
+});
+
+describe('AXIS 1 chairman_decisions — blind to CRITICAL is the defect this axis exists to avoid', () => {
+  const chairAxis = require('../../../lib/governance/drive-state/axes/chairman-decisions.cjs');
+  const hoursAgo = (h) => new Date(NOW - h * 3600000).toISOString();
+  const PRIORITIES = ['critical', 'high', 'normal', 'low'];
+
+  it('FR-4.1: a CRITICAL decision aged past the threshold is STALLED', () => {
+    // The acceptance criterion the axis exists for, and the one the obvious implementation fails.
+    const r = chairAxis.classify({ pending: [
+      { id: 'd1', title: 'ship the thing', priority: 'critical', created_at: hoursAgo(100) }
+    ] }, NOW);
+    expect(r.state).toBe(STATE.STALLED);
+    expect(r.citation).toMatch(/critical@100h/);
+  });
+
+  it('THE FULL PRIORITY-BY-AGE MATRIX — no priority class may be structurally incapable of STALLED', () => {
+    // A both-directions test written against a single `normal` seed passes while every CRITICAL
+    // decision reports CLEAR forever. Driving the whole matrix is what makes the claim real.
+    for (const priority of PRIORITIES) {
+      const stale = chairAxis.classify({ pending: [{ id: 'x', title: 't', priority, created_at: hoursAgo(100) }] }, NOW);
+      expect(stale.state, priority + ' @100h must be STALLED').toBe(STATE.STALLED);
+      const fresh = chairAxis.classify({ pending: [{ id: 'x', title: 't', priority, created_at: hoursAgo(1) }] }, NOW);
+      expect(fresh.state, priority + ' @1h must be CLEAR').toBe(STATE.CLEAR);
+    }
+  });
+
+  it('PROVES THE UPSTREAM HOLE IS REAL — effectivePriority cannot escalate a critical row at ANY age', async () => {
+    // The justification for not reusing age_escalated, executed rather than cited. rank =
+    // Math.max(1, baseRank - bump) and escalated = rank < baseRank; for critical baseRank is 1, so
+    // the floor absorbs the bump and the comparison is 1 < 1.
+    const { effectivePriority } = await import('../../../lib/chairman/decision-queue.mjs');
+    for (const h of [1, 71, 73, 100, 1000]) {
+      const out = effectivePriority({ priority: 'critical', created_at: hoursAgo(h) }, new Date(NOW));
+      expect(out.escalated, `critical @${h}h`).toBe(false);
+    }
+    // ...while a lower class DOES escalate, which is why the hole is easy to miss.
+    expect(effectivePriority({ priority: 'normal', created_at: hoursAgo(100) }, new Date(NOW)).escalated).toBe(true);
+  });
+
+  it('the axis source does NOT read age_escalated or effectivePriority', () => {
+    const src = readFileSync('lib/governance/drive-state/axes/chairman-decisions.cjs', 'utf8')
+      .replace(/\/\*[\s\S]*?\*\//g, ' ')
+      .replace(/^[^\S\r\n]*\/\/[^\n]*$/gm, ' ');
+    expect(src).not.toContain('age_escalated');
+    expect(src).not.toContain('effectivePriority');
+  });
+
+  it('the four named sub-states report UNMEASURABLE rather than being invented', () => {
+    expect(chairAxis.UNMEASURABLE_SUBSTATES).toEqual(['surfaced', 'packaged', 'retried', 'resolved']);
+    const r = chairAxis.classify({ pending: [{ id: 'd', title: 't', priority: 'low', created_at: hoursAgo(1) }] }, NOW);
+    expect(r.citation).toMatch(/UNMEASURABLE \(no columns exist\)/);
+  });
+
+  it('unparseable timestamps on EVERY row are UNMEASURABLE, not CLEAR', () => {
+    const r = chairAxis.classify({ pending: [{ id: 'd', created_at: 'nonsense' }] }, NOW);
+    expect(r.state).toBe(STATE.UNMEASURABLE);
+    expect(r.reason).toBe('no_parseable_created_at');
+  });
+
+  it('UNTRUSTED population: attacker-controlled titles are control-stripped and bounded', () => {
+    const ESC = String.fromCharCode(27), BEL = String.fromCharCode(7);
+    const r = chairAxis.classify({ pending: [
+      { id: 'd', title: 'evil' + ESC + '[31m' + BEL + 'x'.repeat(500), priority: 'critical', created_at: hoursAgo(100) }
+    ] }, NOW);
+    expect(r.state).toBe(STATE.STALLED);
+    expect(r.citation.includes(ESC), 'ESC must be stripped').toBe(false);
+    expect(r.citation.includes(BEL), 'BEL must be stripped').toBe(false);
+    expect(r.citation.length).toBeLessThanOrEqual(400);
+  });
+
+  it('zero pending is legitimately CLEAR', () => {
+    expect(chairAxis.classify({ pending: [] }, NOW).state).toBe(STATE.CLEAR);
   });
 });
