@@ -1682,13 +1682,20 @@ async function printStuckSeatStrip() {
     const results = population.map((row) => classifySeat(row, { cutPointMinutes: STUCK_SEAT_CUT_POINT_MINUTES }));
     const stuck = results.filter((r) => r.verdict === VERDICT.STUCK);
     const unknown = results.filter((r) => r.verdict === VERDICT.UNKNOWN);
-    if (stuck.length === 0 && unknown.length === 0) return;
+    // THE STRIP ALWAYS RENDERS AND ALWAYS STATES ITS DENOMINATOR. An earlier version returned early
+    // when both counts were zero; a reviewer mutated the population query and the strip then printed
+    // NOTHING AT ALL — no header, no zero, no error. Silent-empty was indistinguishable from a
+    // healthy fleet AND from the strip not being wired, which is precisely the confusion this SD
+    // exists to remove. The unknown counter alone does not cover it: population-level blindness
+    // produces zero unknowns too, so the SEATS SCANNED number is the load-bearing one.
     console.log('STUCK SEATS  (tool-silent >= ' + STUCK_SEAT_CUT_POINT_MINUTES + 'm; advisory, no action taken)');
     console.log('─'.repeat(72));
     for (const r of stuck.sort((a, b) => b.toolSilentMinutes - a.toolSilentMinutes)) {
       console.log('  ' + pad(r.session_id, 38) + pad(r.toolSilentMinutes + 'm silent', 16) + 'wake:' + r.wake.state);
     }
-    console.log('  stuck=' + stuck.length + '  unknown=' + unknown.length +
+    console.log('  seats scanned=' + population.length + '  stuck=' + stuck.length + '  unknown=' + unknown.length +
+      (population.truncated ? '  [TRUNCATED at the row cap — the count is over a partial page]' : '') +
+      (population.length === 0 ? '  <- SCANNED NOTHING. This is a blind detector, not a healthy fleet.' : '') +
       (unknown.length ? '  <- UNKNOWN means the detector could not see those seats, not that they are healthy' : ''));
     console.log('');
   } catch (e) {

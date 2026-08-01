@@ -9,7 +9,7 @@
 
 import { describe, it, expect } from 'vitest';
 import { classifySeat, classifyWakeState, VERDICT, REASON, PRECEDENCE } from '../../../lib/fleet/stuck-seat-predicate.cjs';
-import { POPULATION_STATUSES, POPULATION_COLUMNS } from '../../../lib/fleet/stuck-seat-population.cjs';
+import { POPULATION_STATUSES, POPULATION_COLUMNS, POPULATION_ROW_LIMIT, fetchPopulation } from '../../../lib/fleet/stuck-seat-population.cjs';
 import { readFileSync } from 'node:fs';
 
 const MEASURED_AT = Date.parse('2026-08-01T09:25:44.546Z');
@@ -47,17 +47,36 @@ describe('the six measured specimens', () => {
     }
   });
 
-  it('heartbeat_at is identical on all six and therefore carries NO information', () => {
-    // This is why the SD exists: four independent liveness indicators read healthy on Delta.
-    // If a future change makes the predicate consult heartbeat_at, it consults a constant.
-    const beats = new Set(SPECIMENS.map((s) => rowFor(s).heartbeat_at));
-    expect(beats.size).toBe(1);
+  it('heartbeat_at cannot change any verdict — it carries no information and must not be consulted', () => {
+    // REWRITTEN AFTER REVIEW. The first version compared `rowFor()` output to itself: it asserted a
+    // constant the fixture builder had just written, stayed green under BOTH predicate mutations,
+    // and its own comment claimed it would catch "a future change that consults heartbeat_at" — which
+    // is not what it checked. This is that check: drive heartbeat_at across its whole plausible range
+    // and require every verdict to be byte-identical.
+    for (const spec of SPECIMENS) {
+      const base = classifySeat(rowFor(spec), { cutPointMinutes: TEST_CUT, now: MEASURED_AT });
+      for (const beat of [MEASURED_AT, MEASURED_AT - 3600_000, MEASURED_AT - 86_400_000, null]) {
+        const r = classifySeat(rowFor(spec, { heartbeat_at: beat === null ? null : new Date(beat).toISOString() }),
+          { cutPointMinutes: TEST_CUT, now: MEASURED_AT });
+        expect(r, spec.label + ' heartbeat=' + beat).toEqual(base);
+      }
+    }
   });
 
-  it('last_tool_at separates the classes with NO overlap — the ordering, not a cut point', () => {
-    const healthy = SPECIMENS.filter((s) => s.truth === 'healthy').map((s) => s.lta_min);
-    const stuck = SPECIMENS.filter((s) => s.truth === 'stuck').map((s) => s.lta_min);
-    expect(Math.max(...healthy)).toBeLessThan(Math.min(...stuck));
+  it('the ORDERING is a property of the code, not of the fixture literal', () => {
+    // REWRITTEN AFTER REVIEW. The first version compared numbers inside the SPECIMENS array to each
+    // other and never called the module — it could not fail for any reason involving the code.
+    // Now: run the shipped predicate over the specimens and require that no cut point anywhere in the
+    // gap produces a misclassification. That is what "separates with no overlap" actually means.
+    const healthyMax = Math.max(...SPECIMENS.filter((s) => s.truth === 'healthy').map((s) => s.lta_min));
+    const stuckMin = Math.min(...SPECIMENS.filter((s) => s.truth === 'stuck').map((s) => s.lta_min));
+    expect(healthyMax).toBeLessThan(stuckMin);
+    for (const cut of [healthyMax + 1, Math.floor((healthyMax + stuckMin) / 2), stuckMin]) {
+      for (const spec of SPECIMENS) {
+        const r = classifySeat(rowFor(spec), { cutPointMinutes: cut, now: MEASURED_AT });
+        expect(r.verdict, spec.label + ' at cut=' + cut).toBe(spec.truth === 'stuck' ? VERDICT.STUCK : VERDICT.HEALTHY);
+      }
+    }
   });
 });
 
@@ -185,5 +204,89 @@ describe('precedence against the incumbent detector', () => {
     const r = classifySeat(rowFor(delta), { cutPointMinutes: TEST_CUT, now: MEASURED_AT });
     expect(r.verdict).toBe(VERDICT.STUCK);
     expect(r.toolSilentMinutes).toBe(888);
+  });
+});
+
+describe('fetchPopulation BEHAVIOURALLY — the gap that let the defect through twice', () => {
+  /**
+   * A reviewer proved the hole: rewriting everClaimed as a computed property evaded the source scan
+   * AND passed 21/21, because NOTHING CALLED fetchPopulation. Measured blast radius under that
+   * evasion: population=0, stuck=0 — a permanently blind detector with a fully green suite. In the
+   * predicate the same evasion was caught (the invariance test still failed); the population had no
+   * equivalent. This is that equivalent.
+   *
+   * The fake APPLIES its filters instead of recording them. A double that records a predicate and
+   * then returns the fixture regardless answers "found it" to a query no row can satisfy — the exact
+   * shape that let a provably-dead predicate pass 162 tests earlier in this SD family.
+   */
+  function fakeSupabase(rows, { capture = {} } = {}) {
+    return {
+      from(table) {
+        capture.table = table;
+        let working = rows.slice();
+        const q = {
+          select(cols) { capture.columns = cols; return q; },
+          in(col, vals) { capture.statusFilter = { col, vals }; working = working.filter((r) => vals.includes(r[col])); return q; },
+          order(col, opts) { capture.order = { col, ...opts }; return q; },
+          async limit(n) { capture.limit = n; return { data: working.slice(0, n), error: null }; }
+        };
+        return q;
+      }
+    };
+  }
+
+  const LIVE_SHAPED = [
+    // The four stuck specimens: every one has NO claim state. Three are status='idle'.
+    { session_id: 'ab29dc41-0382-4bdb-8d79-5306874e8dbb', status: 'active', last_tool_at: '2026-07-31T18:38:14Z', sd_key: null, claimed_at: null, worktree_path: null, continuous_sds_completed: 0, metadata: {} },
+    { session_id: 'e3610a71-688e-4184-a323-261ad135f0d3', status: 'idle',   last_tool_at: '2026-08-01T01:02:00Z', sd_key: null, claimed_at: null, worktree_path: null, continuous_sds_completed: 0, metadata: {} },
+    { session_id: 'e7c92ad8-6be0-42a6-870e-cfb5d9f73098', status: 'idle',   last_tool_at: '2026-07-31T21:47:00Z', sd_key: null, claimed_at: null, worktree_path: null, continuous_sds_completed: 0, metadata: {} },
+    { session_id: '06521203-f370-4666-a40c-7801bcc192ef', status: 'idle',   last_tool_at: '2026-08-01T05:11:00Z', sd_key: null, claimed_at: null, worktree_path: null, continuous_sds_completed: 0, metadata: {} },
+    // A healthy claim-HOLDING seat, and a fixture that must be excluded by ID SHAPE not claim state.
+    { session_id: '2bd03a3c-aaaa-bbbb-cccc-dddddddddddd', status: 'active', last_tool_at: '2026-08-01T09:25:00Z', sd_key: 'SD-X-001', claimed_at: '2026-08-01T08:00:00Z', worktree_path: '/wt', continuous_sds_completed: 2, metadata: {} },
+    { session_id: 'test-session-fixture-1',                status: 'active', last_tool_at: '2026-08-01T09:25:00Z', sd_key: null, claimed_at: null, worktree_path: null, continuous_sds_completed: 0, metadata: {} },
+    // status='released' — outside the population entirely.
+    { session_id: 'ffffffff-dead-dead-dead-ffffffffffff', status: 'released', last_tool_at: '2026-07-01T00:00:00Z', sd_key: null, claimed_at: null, worktree_path: null, continuous_sds_completed: 0, metadata: {} }
+  ];
+
+  it('returns all four CLAIM-FREE stuck seats — the regression test for returning 1 of 4', async () => {
+    const seats = await fetchPopulation(fakeSupabase(LIVE_SHAPED));
+    const ids = seats.map((s) => s.session_id);
+    for (const stuck of ['ab29dc41-0382-4bdb-8d79-5306874e8dbb', 'e3610a71-688e-4184-a323-261ad135f0d3',
+                         'e7c92ad8-6be0-42a6-870e-cfb5d9f73098', '06521203-f370-4666-a40c-7801bcc192ef']) {
+      expect(ids, 'stuck seat must survive the population').toContain(stuck);
+    }
+    // Under the everClaimed evasion this returned ZERO. Asserting the count pins the whole class,
+    // not just the four ids: any claim-derived filter drops all four at once.
+    expect(seats.length).toBe(5);
+  });
+
+  it('excludes fixtures by ID SHAPE and excludes released seats — but never by claim state', async () => {
+    const ids = (await fetchPopulation(fakeSupabase(LIVE_SHAPED))).map((s) => s.session_id);
+    expect(ids).not.toContain('test-session-fixture-1');          // isFixtureSession, id shape
+    expect(ids).not.toContain('ffffffff-dead-dead-dead-ffffffffffff'); // status filter
+    expect(ids).toContain('2bd03a3c-aaaa-bbbb-cccc-dddddddddddd');     // claim-HOLDING seat still in
+  });
+
+  it('bounds the read and orders it stalest-first, so a row-cap truncation cannot silently hide stuck seats', async () => {
+    const capture = {};
+    await fetchPopulation(fakeSupabase(LIVE_SHAPED, { capture }));
+    expect(capture.limit).toBe(POPULATION_ROW_LIMIT);
+    expect(capture.order).toMatchObject({ col: 'last_tool_at', ascending: true });
+    expect(capture.statusFilter).toEqual({ col: 'status', vals: POPULATION_STATUSES });
+  });
+
+  it('reports truncation rather than swallowing it', async () => {
+    const many = Array.from({ length: POPULATION_ROW_LIMIT }, (_, i) => ({
+      session_id: 'aaaaaaaa-0000-0000-0000-' + String(i).padStart(12, '0'),
+      status: 'active', last_tool_at: '2026-08-01T00:00:00Z', metadata: {}
+    }));
+    expect((await fetchPopulation(fakeSupabase(many))).truncated).toBe(true);
+    expect((await fetchPopulation(fakeSupabase(LIVE_SHAPED))).truncated).toBe(false);
+  });
+
+  it('throws on a query error instead of returning an empty population', async () => {
+    // An empty population and a failed query render identically as "0 stuck" — the failure must be loud.
+    const failing = { from: () => ({ select: () => ({ in: () => ({ order: () => ({ limit: async () => ({ data: null, error: { message: 'boom' } }) }) }) }) }) };
+    await expect(fetchPopulation(failing)).rejects.toThrow(/boom/);
   });
 });
