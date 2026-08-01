@@ -22,6 +22,17 @@ import { fetchAllPaginated } from '../lib/db/fetch-all-paginated.mjs';
 const require = createRequire(import.meta.url);
 const { createClient } = require('@supabase/supabase-js');
 
+// FULL-SPECTRUM DRIVE STATE — SD-FDBK-INFRA-ENCODE-FULL-SPECTRUM-001, FR-6.
+// This board is the renderer's FIRST CONSUMER, and it is mounted here rather than behind a flag
+// because the defect being removed is a board that reports confidently on a NARROW slice. The board
+// answers "what is on the ledger"; it did not answer "is anything actually moving", and a chairman
+// reading a complete-looking board could not tell the difference. There is deliberately NO env gate:
+// a full-spectrum probe that only runs when someone opts in reproduces the partial picture it exists
+// to replace.
+const { computeDriveState } = require('../lib/governance/drive-state/index.cjs');
+const { ADAPTERS } = require('../lib/governance/drive-state/adapters.cjs');
+const { renderDriveState, renderRefusal } = require('../lib/governance/drive-state/render.cjs');
+
 function makeClient() {
   const url = process.env.SUPABASE_URL || process.env.NEXT_PUBLIC_SUPABASE_URL;
   const key = process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.SUPABASE_SERVICE_KEY;
@@ -75,6 +86,29 @@ async function fetchLedgerRows(sb) {
   return fetchAllPaginated(() => sb.from(TABLE).select('*').order('id', { ascending: true })); // unique tiebreaker (FR-6)
 }
 
+/**
+ * Compute and render the six-axis drive state. NEVER returns hand-formatted output and NEVER
+ * returns empty on failure — the two ways a board reverts to a confident partial picture.
+ *
+ * renderDriveState THROWS on an incomplete verdict by design. Catching that and printing the axes
+ * we DID get would be precisely the defect this SD removes, so the catch renders the REFUSAL banner
+ * instead: loud, explicitly not-an-all-clear, and carrying the reason.
+ *
+ * @returns {Promise<{lines: string[], verdict: object|null, refused: string|null}>}
+ */
+export async function buildDriveStateSection(sb, { now } = {}) {
+  let verdict = null;
+  try {
+    verdict = await computeDriveState({ adapters: ADAPTERS, supabase: sb, now });
+    // renderDriveState returns an ARRAY OF LINES, not a string. Joining is the caller's job and
+    // forgetting it prints a comma-spliced blob, so it is done once, here.
+    return { lines: renderDriveState(verdict), verdict, refused: null };
+  } catch (e) {
+    const reason = e && e.message ? e.message : String(e);
+    return { lines: renderRefusal(reason), verdict, refused: reason };
+  }
+}
+
 async function main() {
   const asJson = process.argv.includes('--json');
   const sb = makeClient();
@@ -88,9 +122,16 @@ async function main() {
   }
 
   const view = buildBoardView(rows);
+  // Computed BEFORE the early --json return so the machine-readable path cannot silently omit it.
+  const drive = await buildDriveStateSection(sb);
 
   if (asJson) {
-    console.log(JSON.stringify({ ...view, error: fetchError }));
+    console.log(JSON.stringify({
+      ...view,
+      error: fetchError,
+      drive_state: drive.verdict,
+      drive_state_refused: drive.refused
+    }));
     return;
   }
 
@@ -103,6 +144,11 @@ async function main() {
     for (const p of view.panels) console.log(renderPanel(p));
     console.log(`  ─── total token cost: ${view.totalTokenCost} ───`);
   }
+
+  // Unconditional. A ledger failure above must not suppress the drive state, and vice versa —
+  // they answer different questions and a board missing either one is the partial picture again.
+  console.log('');
+  for (const line of drive.lines) console.log(line);
 }
 
 if (isMainModule(import.meta.url)) {

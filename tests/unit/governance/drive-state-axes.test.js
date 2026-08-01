@@ -400,13 +400,13 @@ describe('AXIS 2 coordinator_performance — the breach is measurable, the ACTIO
   const ago = (h) => new Date(NOW - h * HOURS).toISOString();
 
   it('a fresh breach reading (score 50) is STALLED', () => {
-    const r = coordAxis.classify({ snapshots: [{ score: 50, created_at: ago(1) }] }, NOW);
+    const r = coordAxis.classify({ snapshots: [{ score: 50, at: ago(1) }] }, NOW);
     expect(r.state).toBe(STATE.STALLED);
     expect(r.stalled).toBe(1);
   });
 
   it('a fresh clean reading (score 100) is CLEAR — both directions', () => {
-    const r = coordAxis.classify({ snapshots: [{ score: 100, created_at: ago(1) }] }, NOW);
+    const r = coordAxis.classify({ snapshots: [{ score: 100, at: ago(1) }] }, NOW);
     expect(r.state).toBe(STATE.CLEAR);
     expect(r.stalled).toBe(0);
   });
@@ -417,18 +417,18 @@ describe('AXIS 2 coordinator_performance — the breach is measurable, the ACTIO
     // Measured: 82 of 82 advisories retired, 78 recording no actor, 4 naming the measured party.
     // If any path ever returns RECORDED, the axis is grading the coordinator on its own receipt.
     const paths = [
-      coordAxis.classify({ snapshots: [{ score: 50, created_at: ago(1) }] }, NOW),
-      coordAxis.classify({ snapshots: [{ score: 100, created_at: ago(1) }] }, NOW),
+      coordAxis.classify({ snapshots: [{ score: 50, at: ago(1) }] }, NOW),
+      coordAxis.classify({ snapshots: [{ score: 100, at: ago(1) }] }, NOW),
       coordAxis.classify({ snapshots: [] }, NOW),
       coordAxis.classify(null, NOW),
-      coordAxis.classify({ snapshots: [{ score: 100, created_at: ago(1) }], probe: { status: 'no_cohort' } }, NOW)
+      coordAxis.classify({ snapshots: [{ score: 100, at: ago(1) }], probe: { status: 'no_cohort' } }, NOW)
     ];
     for (const r of paths) expect(r.action_taken).toBe(ACTION.UNVERIFIABLE);
     expect(paths.some((r) => r.action_taken === ACTION.RECORDED)).toBe(false);
   });
 
   it('the citation states WHY action is unverifiable, with the counts', () => {
-    const r = coordAxis.classify({ snapshots: [{ score: 50, created_at: ago(1) }] }, NOW);
+    const r = coordAxis.classify({ snapshots: [{ score: 50, at: ago(1) }] }, NOW);
     expect(r.citation).toMatch(/82 of 82/);
     expect(r.citation).toMatch(/78 recording NO actor/);
   });
@@ -436,14 +436,14 @@ describe('AXIS 2 coordinator_performance — the breach is measurable, the ACTIO
   // ===== FRESHNESS: SILENCE IS NOT HEALTH =====
 
   it('no reading inside the stale window is UNMEASURABLE, never CLEAR', () => {
-    const r = coordAxis.classify({ snapshots: [{ score: 100, created_at: ago(48) }] }, NOW);
+    const r = coordAxis.classify({ snapshots: [{ score: 100, at: ago(48) }] }, NOW);
     expect(r.state).toBe(STATE.UNMEASURABLE);
     expect(r.reason).toBe('unavailable');
     expect(r.citation).toMatch(/not evidence it is well/);
   });
 
   it('a stale BREACH does not linger as STALLED either — staleness dominates both verdicts', () => {
-    const r = coordAxis.classify({ snapshots: [{ score: 50, created_at: ago(48) }] }, NOW);
+    const r = coordAxis.classify({ snapshots: [{ score: 50, at: ago(48) }] }, NOW);
     expect(r.state).toBe(STATE.UNMEASURABLE);
   });
 
@@ -453,35 +453,64 @@ describe('AXIS 2 coordinator_performance — the breach is measurable, the ACTIO
     expect(coordAxis.HONEST_NULL).toEqual(['no_cohort', 'unmeasurable_until_linkage', 'unavailable', 'unverifiable']);
     for (const status of coordAxis.HONEST_NULL) {
       // Note the snapshot says CLEAN and is FRESH — only the probe's honest-null must win.
-      const r = coordAxis.classify({ snapshots: [{ score: 100, created_at: ago(1) }], probe: { status } }, NOW);
+      const r = coordAxis.classify({ snapshots: [{ score: 100, at: ago(1) }], probe: { status } }, NOW);
       expect(r.state, `${status} must not collapse to CLEAR`).toBe(STATE.UNMEASURABLE);
       expect(r.reason).toBe(status);
     }
   });
 
   it('a normal probe status does NOT trigger the honest-null path', () => {
-    const r = coordAxis.classify({ snapshots: [{ score: 100, created_at: ago(1) }], probe: { status: 'measured' } }, NOW);
+    const r = coordAxis.classify({ snapshots: [{ score: 100, at: ago(1) }], probe: { status: 'measured' } }, NOW);
     expect(r.state).toBe(STATE.CLEAR);
   });
 
   it('unparseable timestamps count as not-fresh rather than as fresh', () => {
-    const r = coordAxis.classify({ snapshots: [{ score: 100, created_at: 'nonsense' }] }, NOW);
+    const r = coordAxis.classify({ snapshots: [{ score: 100, at: 'nonsense' }] }, NOW);
     expect(r.state).toBe(STATE.UNMEASURABLE);
   });
 
   // ===== WIRING =====
 
+  const DIM = 'adam_coordinator_health';
+
   it('reads codebase_health_snapshots — the durable sink, not the advisory lane', async () => {
     const cap = {};
     const state = await coordAxis.fetch(applyingFake({
-      codebase_health_snapshots: [{ score: 50, created_at: ago(1) }]
+      codebase_health_snapshots: [{ score: 50, dimension: DIM, scanned_at: ago(1) }]
     }, cap), { now: NOW });
     expect(cap.table).toBe('codebase_health_snapshots');
     expect(state.snapshots.length).toBe(1);
   });
 
+  // REGRESSION GUARD. codebase_health_snapshots is a SHARED table. The first version of fetch()
+  // omitted the dimension filter and ordered by created_at, so it read whatever writer touched the
+  // table last and classified a foreign score — reporting CLEAR off someone else's row. The probe
+  // emits ONLY 50 or 100, so a live 99.98 was the tell; no unit test caught it because the fake held
+  // only this table. This asserts the filter, not merely the table name.
+  it('EXCLUDES other writers rows — the shared table is filtered by dimension', async () => {
+    const state = await coordAxis.fetch(applyingFake({
+      codebase_health_snapshots: [
+        { score: 99.98, dimension: 'some_other_probe', scanned_at: ago(0) },   // newer, foreign
+        { score: 50, dimension: DIM, scanned_at: ago(2) }                      // older, ours
+      ]
+    }), { now: NOW });
+    expect(state.snapshots.length, 'foreign rows must not enter the population').toBe(1);
+    expect(state.snapshots[0].score).toBe(50);
+    // And the verdict must follow OUR row, not the fresher foreign one.
+    expect(coordAxis.classify(state, NOW).state).toBe(STATE.STALLED);
+  });
+
+  it('orders by scanned_at — the column the probe itself reads back on', async () => {
+    const cap = {};
+    await coordAxis.fetch(applyingFake({
+      codebase_health_snapshots: [{ score: 100, dimension: DIM, scanned_at: ago(1) }]
+    }, cap), { now: NOW });
+    expect(cap.order.col).toBe('scanned_at');
+    expect(cap.order.ascending).toBe(false);
+  });
+
   it('a WRONG-TABLE fetch yields no snapshots — which classify must call UNMEASURABLE, not CLEAR', async () => {
-    const state = await coordAxis.fetch(applyingFake({ session_coordination: [{ score: 100, created_at: ago(1) }] }), { now: NOW });
+    const state = await coordAxis.fetch(applyingFake({ session_coordination: [{ score: 100, at: ago(1) }] }), { now: NOW });
     expect(state.snapshots.length).toBe(0);
     expect(coordAxis.classify(state, NOW).state).toBe(STATE.UNMEASURABLE);
   });
@@ -539,5 +568,55 @@ describe('the ADAPTER REGISTRY binds every frozen axis', () => {
       expect(typeof ADAPTERS[axis].fetch, `${axis}.fetch`).toBe('function');
       expect(ADAPTERS[axis].AXIS, `${axis} self-name`).toBe(axis);
     }
+  });
+});
+
+describe('the BOARD is the renderer first consumer — and never degrades quietly', () => {
+  // FR-6: the drive state must be reached in the DEFAULT config with no env gate, and the consumer
+  // must never fall back to hand-formatting or to silence. renderDriveState THROWS on an incomplete
+  // verdict by design; printing the axes we DID get would be the exact defect this SD removes.
+  it('the board imports the composer, the registry and BOTH render entry points', () => {
+    const src = readFileSync(new URL('../../../scripts/adam-pm-board.mjs', import.meta.url), 'utf8');
+    expect(src).toContain('computeDriveState');
+    expect(src).toContain('ADAPTERS');
+    expect(src).toContain('renderDriveState');
+    expect(src).toContain('renderRefusal');
+  });
+
+  it('is NOT behind an env gate — a probe that runs only on opt-in is the partial picture again', () => {
+    const src = readFileSync(new URL('../../../scripts/adam-pm-board.mjs', import.meta.url), 'utf8');
+    const gated = /process\.env\.[A-Z_]*(DRIVE|SPECTRUM|AXIS)[A-Z_]*/.test(src);
+    expect(gated, 'drive state must not be conditioned on an env var').toBe(false);
+  });
+
+  it('renders the drive state UNCONDITIONALLY — not inside the ledger success branch', () => {
+    const src = readFileSync(new URL('../../../scripts/adam-pm-board.mjs', import.meta.url), 'utf8');
+    // The ledger and the drive state answer different questions; a failure in one must not
+    // suppress the other, which is what nesting the render inside the else-branch would do.
+    const renderIdx = src.indexOf('for (const line of drive.lines)');
+    const elseIdx = src.indexOf('(no parent nodes on the board)');
+    expect(renderIdx).toBeGreaterThan(-1);
+    expect(renderIdx, 'drive render must come AFTER the ledger branch, not inside it').toBeGreaterThan(elseIdx);
+  });
+
+  it('the JSON path carries the verdict too — a machine reader cannot silently miss it', () => {
+    const src = readFileSync(new URL('../../../scripts/adam-pm-board.mjs', import.meta.url), 'utf8');
+    expect(src).toContain('drive_state: drive.verdict');
+    expect(src).toContain('drive_state_refused: drive.refused');
+    // And it must be computed BEFORE the early --json return.
+    expect(src.indexOf('await buildDriveStateSection')).toBeLessThan(src.indexOf('if (asJson)'));
+  });
+
+  it('buildDriveStateSection ALWAYS yields lines — never empty, on any outcome', async () => {
+    const { buildDriveStateSection } = await import('../../../scripts/adam-pm-board.mjs');
+    // A client that rejects every query: adapters fail-safe to UNMEASURABLE, so this yields a
+    // complete verdict rather than a refusal — but either way it must never yield silence.
+    const broken = { from() { throw new Error('db down'); } };
+    const out = await buildDriveStateSection(broken, { now: NOW });
+    expect(Array.isArray(out.lines)).toBe(true);
+    expect(out.lines.length, 'silence is the one unacceptable output').toBeGreaterThan(0);
+    expect(out.lines.join('\n')).toMatch(/DRIVE STATE/);
+    // And a total failure must be visibly marked, never rendered as an all-clear.
+    if (out.refused) expect(out.lines.join('\n')).toMatch(/NOT an all-clear/);
   });
 });
