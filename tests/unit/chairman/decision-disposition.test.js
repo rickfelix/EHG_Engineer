@@ -383,6 +383,21 @@ describe('SECURITY — retirement authority must not be forgeable by an unauthen
     expect(indexDispositions([{ ...base, venture_id: 'any-non-null' }]).size).toBe(0);
     expect(indexDispositions([{ ...base, feedback_type: 'user_other' }]).size).toBe(0);
   });
+
+  it('clause 3 matches SQL LIKE semantics — `_` is a WILDCARD, not a literal underscore', () => {
+    // venture_user_insert_feedback admits anything matching LIKE 'user_%', and in SQL `_` matches
+    // ANY single character. A literal startsWith('user_') would admit these while the policy admits
+    // them too — making the header's "independent second block" claim false. Blocked today by
+    // clause 2 regardless; this pins the clause-3 guarantee itself.
+    const base = deferral('dec-1', 1);
+    for (const ft of ['user_bug', 'userX', 'usera', 'user-bug', 'user.bug']) {
+      expect(indexDispositions([{ ...base, feedback_type: ft }]).size, ft).toBe(0);
+    }
+    // ...and it must NOT over-block: the genuine value and other non-user_% values still govern.
+    for (const ft of ['sentry_error', 'venture_error', 'user']) {
+      expect(indexDispositions([{ ...base, feedback_type: ft }]).size, ft).toBe(1);
+    }
+  });
 });
 
 describe('SECURITY — an under-selecting caller must FAIL LOUDLY, not silently yield nothing', () => {
