@@ -1,5 +1,6 @@
 -- requires-chairman-apply
--- @approved-by: codestreetlabs@gmail.com (chairman verbal at terminal, 2026-08-01 ~09:35Z: "approved" — Adam d5080cf3 scribing)
+-- @approved-by: codestreetlabs@gmail.com
+-- @approval-provenance: chairman verbal "approved" at terminal 2026-08-01 ~09:35Z, Adam d5080cf3 scribing
 -- =============================================================================
 -- Migration: venture_artifacts_artifact_type_check — ADD 'truth_demand_thesis'
 -- Why: lib/eva/stage-templates/analysis-steps/stage-22-distribution-setup.js
