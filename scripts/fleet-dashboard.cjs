@@ -1653,6 +1653,52 @@ async function printAttentionStrip() {
   console.log('');
 }
 
+/**
+ * STUCK-SEAT STRIP — SD-FDBK-INFRA-STUCK-SEAT-DETECTION-001, FR-6.
+ *
+ * A summary line, deliberately NOT a per-row cell: fleet-dashboard's worker table renders inside a
+ * per-seat loop, so a fleet-wide count placed there would print once per seat.
+ *
+ * THE UNKNOWN COUNT IS RENDERED BESIDE THE STUCK COUNT AND THAT IS THE POINT. last_tool_at has
+ * silent-loss paths (its sole writer swallows failures with an empty catch, and hooks run from each
+ * session's own checkout), so a detector that can see nothing and a fleet that is genuinely fine
+ * both produce zero findings. Printing only "0 stuck" would make those two states identical — the
+ * exact defect class this SD exists to remove, reproduced in its own instrumentation.
+ *
+ * THE CUT POINT IS NAMED IN THE OUTPUT. The predicate ships no default and throws without one
+ * (TR-4: the ordering is established 6/6, the cut point is not — n=1 per class on the false-negative
+ * side, and healthy-latency data is right-censored). That pushes the number to the caller, so the
+ * caller states it where it is consumed rather than burying it in a render call.
+ *
+ * ADVISORY ONLY. This drives no release, quarantine or handback — see PRECEDENCE in the predicate.
+ */
+const STUCK_SEAT_CUT_POINT_MINUTES = 120;   // operator-facing display threshold, NOT a calibration
+
+async function printStuckSeatStrip() {
+  try {
+    const { fetchPopulation } = require('../lib/fleet/stuck-seat-population.cjs');
+    const { classifySeat, VERDICT } = require('../lib/fleet/stuck-seat-predicate.cjs');
+    const population = await fetchPopulation(supabase);
+    const results = population.map((row) => classifySeat(row, { cutPointMinutes: STUCK_SEAT_CUT_POINT_MINUTES }));
+    const stuck = results.filter((r) => r.verdict === VERDICT.STUCK);
+    const unknown = results.filter((r) => r.verdict === VERDICT.UNKNOWN);
+    if (stuck.length === 0 && unknown.length === 0) return;
+    console.log('STUCK SEATS  (tool-silent >= ' + STUCK_SEAT_CUT_POINT_MINUTES + 'm; advisory, no action taken)');
+    console.log('─'.repeat(72));
+    for (const r of stuck.sort((a, b) => b.toolSilentMinutes - a.toolSilentMinutes)) {
+      console.log('  ' + pad(r.session_id, 38) + pad(r.toolSilentMinutes + 'm silent', 16) + 'wake:' + r.wake.state);
+    }
+    console.log('  stuck=' + stuck.length + '  unknown=' + unknown.length +
+      (unknown.length ? '  <- UNKNOWN means the detector could not see those seats, not that they are healthy' : ''));
+    console.log('');
+  } catch (e) {
+    // Never let an advisory strip take the dashboard down — but say so, rather than rendering a
+    // silent zero that would read as "no stuck seats".
+    console.log('STUCK SEATS: check unavailable (' + e.message + ')');
+    console.log('');
+  }
+}
+
 // ── Section: Operator cockpit session actions (SD-LEO-INFRA-LEO-COMPLETION-001-E, FR-1) ──
 // Wires lib/fleet/session-detail-view.js's buildSessionDetailView() and lib/fleet/browser-control.js's
 // requestBrowserSession()/signalTakeover() into REAL production callers (G3 no-unit-mock proof: these
@@ -2525,7 +2571,7 @@ async function main() {
   const d = await loadData();
 
   const sections = {
-    workers:       async () => { printWorkers(d); await printAttentionStrip(); },
+    workers:       async () => { printWorkers(d); await printAttentionStrip(); await printStuckSeatStrip(); },
     orchestrator:  () => printOrchestrator(d),
     available:     () => printAvailable(d),
     quickfixes:    async () => { printQuickFixes(d); await printChairmanGatedQfs(); }, // QF-20260525-836 + SD-LEO-INFRA-EXCLUDE-CHAIRMAN-GATED-001
@@ -2582,6 +2628,7 @@ async function main() {
       if (d.executeTeams && d.executeTeams.length > 0) printTeam(d);
       printWorkers(d);
       await printAttentionStrip();
+      await printStuckSeatStrip();
       printDrainAgents(d);
       printOrchestrator(d);
       printAvailable(d);
