@@ -325,6 +325,21 @@ describe('TR-9 idempotency and the terminal-status refusal', () => {
     expect(db.rows[0].status).toBe('backlog');                // no status re-assertion
   });
 
+  it('the citation branch does NOT outrank the terminal refusal', async () => {
+    // Regression for a defect the W2 fix itself introduced. SUPERSEDED is 'duplicate', which is
+    // TERMINAL (not in RETIRABLE_STATUSES.feedback). A row already at 'duplicate' was marked so by
+    // someone else, so the status-collision branch would have stamped a chairman retirement_basis
+    // onto it — an attribution for a retirement that never happened. HELD ('backlog') is different:
+    // it IS retirable, which is the case the branch exists for.
+    const db = fake('feedback', [{ id: 'dec-1', status: 'duplicate', metadata: { marked_by: 'a-human' }, duplicate_of_id: 'other' }]);
+    const plan = planRetirement({ id: 'dec-1', decision_type: 'flag_review' }, withAuth('dec-1'),
+      { disposition: 'superseded', supersededBy: 'newer-1' });
+    const res = await applyRetirement(db, plan);
+    expect(res.reason).toBe('refused_terminal_status');
+    expect(res.wrote).toBe(false);
+    expect(db.rows[0].metadata).toEqual({ marked_by: 'a-human' });   // NOT stamped
+  });
+
   it('REFUSES to merge into a jsonb column that is not a plain object', async () => {
     // typeof [] === 'object', so an array would have spread into {"0":…} and silently changed the
     // column's shape; a scalar would have fallen to {} and been discarded. Both destroy data the
