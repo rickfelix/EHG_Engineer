@@ -294,8 +294,15 @@ describe('AXIS 1 chairman_decisions — blind to CRITICAL is the defect this axi
     expect(r.citation.length).toBeLessThanOrEqual(400);
   });
 
-  it('zero pending is legitimately CLEAR', () => {
-    expect(chairAxis.classify({ pending: [] }, NOW).state).toBe(STATE.CLEAR);
+  it('zero pending is UNMEASURABLE, not CLEAR — this test previously pinned the defect', () => {
+    // ORIGINALLY ASSERTED CLEAR, and that assertion was wrong in the specific way this SD is about:
+    // it certified a confident all-clear produced by an empty read. A review probed the adapter and
+    // showed a wrong-source fetch yields exactly this state, so the test was protecting the
+    // fail-open rather than the behaviour. A green test over a blind branch is the failure mode.
+    const r = chairAxis.classify({ pending: [] }, NOW);
+    expect(r.state).toBe(STATE.UNMEASURABLE);
+    expect(r.state).not.toBe(STATE.CLEAR);
+    expect(r.reason).toBe('empty_decision_population');
   });
 });
 
@@ -652,5 +659,73 @@ describe('SECOND consumer: coordinator-hourly-review renders FROM the probe', ()
     expect(driveIdx).toBeGreaterThan(-1);
     expect(gateIdx).toBeGreaterThan(-1);
     expect(driveIdx, 'drive state must precede the CYCLE-DOWN return').toBeLessThan(gateIdx);
+  });
+});
+
+describe('sub-agent review findings — each pinned by a test that fails without the fix', () => {
+  const chairAxis2 = require('../../../lib/governance/drive-state/axes/chairman-decisions.cjs');
+  const ventAxis2 = require('../../../lib/governance/drive-state/axes/venture-stage-motion.cjs');
+  const { safeCitation } = require('../../../lib/governance/drive-state/render.cjs');
+
+  // TESTING, HIGH: axis 1 had NO wiring test and FAILED OPEN. A wrong-source fetch returns [],
+  // and classify() rendered that as CLEAR — a confident all-clear from a blind probe.
+  it('AXIS 1 wrong-source fetch yields UNMEASURABLE, never CLEAR', async () => {
+    const rows = [{ id: 'd1', title: 't', priority: 'critical', created_at: minsAgo(60 * 200) }];
+    const right = await chairAxis2.fetch(applyingFake({ chairman_pending_decisions: rows }), { now: NOW });
+    expect(chairAxis2.classify(right, NOW).state, 'correct source must still classify').toBe(STATE.STALLED);
+
+    const wrong = await chairAxis2.fetch(applyingFake({ some_other_table: rows }), { now: NOW });
+    const v = chairAxis2.classify(wrong, NOW);
+    expect(v.state, 'a mis-fetch must NOT read as clear').toBe(STATE.UNMEASURABLE);
+    expect(v.state).not.toBe(STATE.CLEAR);
+    expect(v.reason).toBe('empty_decision_population');
+    expect(v.action_taken).toBe(ACTION.UNVERIFIABLE);
+  });
+
+  it('AXIS 1 reads the VIEW — the underlying table is documented to return 0 rows', async () => {
+    const cap = {};
+    await chairAxis2.fetch(applyingFake({ chairman_pending_decisions: [] }, cap), { now: NOW });
+    expect(cap.table).toBe('chairman_pending_decisions');
+  });
+
+  // SECURITY, MEDIUM: safeCitation stripped Cc but not Cf, so bidi/RTL overrides survived into
+  // both the terminal line and the --json payload. Proven reachable end-to-end as the anon role.
+  it('safeCitation strips Cf format chars — bidi overrides, zero-width, BOM', () => {
+    const cases = {
+      'U+202E RLO': 0x202e, 'U+202D LRO': 0x202d, 'U+2066 LRI': 0x2066, 'U+2069 PDI': 0x2069,
+      'U+200B ZWSP': 0x200b, 'U+200E LRM': 0x200e, 'U+FEFF BOM': 0xfeff, 'U+FFF9 IAA': 0xfff9
+    };
+    for (const [name, cp] of Object.entries(cases)) {
+      const ch = String.fromCharCode(cp);
+      expect(safeCitation('before' + ch + 'after').includes(ch), `${name} must be stripped`).toBe(false);
+    }
+    // Cc still stripped, and ordinary text still survives.
+    expect(safeCitation('a' + String.fromCharCode(27) + '[31mb').includes(String.fromCharCode(27))).toBe(false);
+    expect(safeCitation('ordinary text')).toContain('ordinary text');
+  });
+
+  it('render.cjs is TEXT, not binary — the refusal path must be diff-reviewable', () => {
+    const buf = readFileSync(new URL('../../../lib/governance/drive-state/render.cjs', import.meta.url));
+    const raw = [];
+    for (let i = 0; i < buf.length; i++) {
+      const c = buf[i];
+      if (c < 9 || (c > 13 && c < 32) || c === 127) raw.push(i);
+    }
+    // Raw control BYTES in source make git treat the file as binary, hiding 90 lines from review.
+    // The same class expressed as \uXXXX escapes behaves identically and stays reviewable.
+    expect(raw, `raw control bytes at offsets ${raw.join(',')}`).toEqual([]);
+  });
+
+  // SECURITY, LOW: ventures.name is DB free text reaching the --json path unwrapped.
+  it('AXIS 4 wraps ventures.name — the --json path has no render-time strip', () => {
+    const RLO = String.fromCharCode(0x202e), ESC = String.fromCharCode(27);
+    const r = ventAxis2.classify({
+      evaluated: [{ id: 'v1', name: 'evil' + RLO + ESC + '[31m' + 'x'.repeat(600), alarm: true, reason: 'stalled', elapsed_days: 20, clock_days: 14 }],
+      scanned: 1
+    }, NOW);
+    expect(r.state).toBe(STATE.STALLED);
+    expect(r.citation.includes(RLO), 'bidi override must not reach the JSON consumer').toBe(false);
+    expect(r.citation.includes(ESC)).toBe(false);
+    expect(r.citation.length).toBeLessThanOrEqual(400);
   });
 });
