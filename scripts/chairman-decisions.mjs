@@ -51,7 +51,16 @@ if (parsed.command === 'list') {
       const { data: disp, error: dErr } = await db.from('feedback')
         .select(DISPOSITION_SELECT)
         .eq('category', DEFERRAL_CATEGORY);
-      if (!dErr) dispositions = indexDispositions(disp || []);
+      // supabase-js RETURNS PostgREST failures in `error`; it does not throw. So the catch below
+      // never sees them, and an `if (!dErr)` with no else left the most likely failure — a drifted
+      // DISPOSITION_SELECT yielding a 400 — completely silent, rendering an uncorrected queue that
+      // looks healthy. That is the same blindness that let a dead FR-6 ship green, arriving through
+      // the error channel instead of the empty-result one.
+      if (dErr) {
+        console.error('[chairman-decisions] disposition query FAILED, rendering uncorrected: ' + dErr.message);
+      } else {
+        dispositions = indexDispositions(disp || []);
+      }
     } catch (e) {
       // Fail-soft: render without the correction rather than not at all. NOT silent — a swallowed
       // error here is indistinguishable from "no deferrals exist", which is the failure mode that
