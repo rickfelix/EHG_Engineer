@@ -47,14 +47,6 @@
       "reclassified_note": "module exists at a different extension (e.g. .js->.cjs rename); test import path is stale. follow-up SD-REFILL-00CO4E8Q: update the import extension and de-quarantine."
     },
     {
-      "file": "lib/sub-agents/modules/stories/llm-story-generator.test.js",
-      "reason_class": "assertion-drift",
-      "error_signature": "AssertionError: expected true to be false // Object.is equality",
-      "linked_ref": "feedback:65fce396-3dfb-4fda-b9d4-81417d7205f7",
-      "quarantined_at": "2026-06-11T10:09:40.363Z",
-      "quarantined_by": "aa0de85c-9877-4cc1-b561-4f38b30e4a6b"
-    },
-    {
       "file": "lib/utils/work-item-router.test.js",
       "reason_class": "node-test-runner",
       "error_signature": "Error: No test suite found in file C:/Users/rickf/Projects/_EHG/EHG_Engineer/.worktrees/SD-LEO-FIX-GREEN-MAIN-TRIAGE-001/lib/utils/work-item-router.test.js",

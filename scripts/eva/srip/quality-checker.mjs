@@ -109,8 +109,11 @@ ${builtOutput.substring(0, 4000)}
 Score the built output against the reference on a 0-100 scale for ${domain.label}.`;
 
   try {
+    // SD-LEO-INFRA-USER-STORY-QUALITY-001 (FR-3): same copy-pasted pair as proposal-agent.js —
+    // `.messages` did not exist on the adapter (now provided by the FR-4 compat layer), and
+    // `client._model` is undefined on every adapter, so the override never applied.
     const response = await client.messages.create({
-      model: client._model || getClaudeModel('fast'),
+      model: client.defaultModel || client.model || getClaudeModel('fast'),
       max_tokens: 1024,
       system: systemPrompt,
       messages: [{ role: 'user', content: userPrompt }],
