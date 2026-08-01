@@ -4,8 +4,8 @@
 **Database**: dedlbzhpgkmetvhbkyzq
 **Repository**: EHG_Engineer (this repository)
 **Purpose**: Strategic Directive management, PRD tracking, retrospectives, LEO Protocol configuration
-**Generated**: 2026-07-02T14:19:23.450Z
-**Rows**: 0
+**Generated**: 2026-08-01T20:27:50.592Z
+**Rows**: 1
 **RLS**: Disabled
 
 ⚠️ **This is a REFERENCE document** - Query database directly for validation
@@ -14,7 +14,7 @@
 
 ---
 
-## Columns (13 total)
+## Columns (15 total)
 
 | Column | Type | Nullable | Default | Description |
 |--------|------|----------|---------|-------------|
@@ -31,6 +31,8 @@
 | runtime_observed_at | `timestamp with time zone` | YES | - | - |
 | created_at | `timestamp with time zone` | **NO** | `now()` | - |
 | updated_at | `timestamp with time zone` | YES | `now()` | - |
+| real_event_ref | `text` | YES | - | G3 (SD-LEO-INFRA-DEFINITION-DONE-ACTIVATION-001): id/correlation id of the real production event this row evidences. |
+| evidence_kind | `text` | YES | - | G3 (SD-LEO-INFRA-DEFINITION-DONE-ACTIVATION-001): advisory vocab (real_event | replayed_fixture | armed_declaration) — a replayed_fixture row does NOT satisfy the ACTIVATED requirement. |
 
 ## Constraints
 
@@ -55,6 +57,10 @@
   ```sql
   CREATE INDEX idx_scope_completion_chain_entity ON public.scope_completion_chain USING btree (entity_type, entity_id)
   ```
+- `idx_scope_completion_chain_evidence_kind`
+  ```sql
+  CREATE INDEX idx_scope_completion_chain_evidence_kind ON public.scope_completion_chain USING btree (evidence_kind)
+  ```
 - `idx_scope_completion_chain_status`
   ```sql
   CREATE INDEX idx_scope_completion_chain_status ON public.scope_completion_chain USING btree (chain_status)
@@ -63,6 +69,18 @@
   ```sql
   CREATE UNIQUE INDEX scope_completion_chain_pkey ON public.scope_completion_chain USING btree (id)
   ```
+
+## Triggers
+
+### scope_completion_chain_evidence_kind_advisory
+
+- **Timing**: BEFORE INSERT
+- **Action**: `EXECUTE FUNCTION scope_completion_chain_evidence_kind_advisory_trigger()`
+
+### scope_completion_chain_evidence_kind_advisory
+
+- **Timing**: BEFORE UPDATE
+- **Action**: `EXECUTE FUNCTION scope_completion_chain_evidence_kind_advisory_trigger()`
 
 ---
 

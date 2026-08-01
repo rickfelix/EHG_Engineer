@@ -4,9 +4,9 @@
 **Database**: dedlbzhpgkmetvhbkyzq
 **Repository**: EHG_Engineer (this repository)
 **Purpose**: Strategic Directive management, PRD tracking, retrospectives, LEO Protocol configuration
-**Generated**: 2026-07-02T14:19:23.450Z
-**Rows**: 3,146
-**RLS**: Enabled (1 policy)
+**Generated**: 2026-08-01T20:27:50.592Z
+**Rows**: 4,451
+**RLS**: Enabled (2 policies)
 
 ⚠️ **This is a REFERENCE document** - Query database directly for validation
 
@@ -63,7 +63,12 @@
 
 ## RLS Policies
 
-### 1. Service role full access on stage_executions (ALL)
+### 1. Authenticated read on stage_executions (SELECT)
+
+- **Roles**: {authenticated}
+- **Using**: `true`
+
+### 2. Service role full access on stage_executions (ALL)
 
 - **Roles**: {public}
 - **Using**: `(auth.role() = 'service_role'::text)`
