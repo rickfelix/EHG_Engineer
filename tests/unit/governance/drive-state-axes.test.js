@@ -149,3 +149,71 @@ describe('AXIS 6 learning_conversion — ships UNMEASURABLE, and that is the poi
     expect(learnAxis.classifyConversion({ recorded: 0, prevented: 0, reWitnessedAfterPrevention: 0 }).state).toBe(STATE.UNMEASURABLE);
   });
 });
+
+describe('AXIS 4 venture_stage_motion — a fail-safe for an ALARM is a fail-OPEN for a drive axis', () => {
+  const ventureAxis = require('../../../lib/governance/drive-state/axes/venture-stage-motion.cjs');
+
+  it('STALLED when a venture is divergent-and-stalled past its tier clock, naming it', () => {
+    const r = ventureAxis.classify({ evaluated: [
+      { id: 'v1', name: 'alpha', alarm: true, reason: 'divergent-and-stalled', elapsed_days: 9, clock_days: 5 },
+      { id: 'v2', name: 'beta', alarm: false, reason: 'real-build-or-not-divergent' }
+    ] }, NOW);
+    expect(r.state).toBe(STATE.STALLED);
+    expect(r.stalled).toBe(1);
+    expect(r.citation).toMatch(/alpha@9d\/5d/);
+  });
+
+  it('CLEAR when ventures are moving — the matched control', () => {
+    const r = ventureAxis.classify({ evaluated: [
+      { id: 'v1', alarm: false, reason: 'real-build-or-not-divergent' },
+      { id: 'v2', alarm: false, reason: 'real-build-or-not-divergent' }
+    ] }, NOW);
+    expect(r.state).toBe(STATE.CLEAR);
+    expect(r.in_motion).toBe(2);
+  });
+
+  it('THE TRANSLATION: no-stall-signal on EVERY venture is UNMEASURABLE, never CLEAR', () => {
+    // evaluateRealBuildStall returns {alarm:false, reason:'no-stall-signal'} when the venture has no
+    // forward-motion timestamp — a deliberate fail-safe so missing data cannot raise a false alarm.
+    // Correct for an alarm; catastrophic for a drive axis, where it would report health FROM AN
+    // ABSENCE. Reusing the discriminator without re-reading its null contract would have shipped an
+    // axis that reads healthiest exactly when it is blindest.
+    const r = ventureAxis.classify({ evaluated: [
+      { id: 'v1', alarm: false, reason: ventureAxis.NO_SIGNAL_REASON },
+      { id: 'v2', alarm: false, reason: ventureAxis.NO_SIGNAL_REASON }
+    ] }, NOW);
+    expect(r.state).toBe(STATE.UNMEASURABLE);
+    expect(r.state).not.toBe(STATE.CLEAR);
+    expect(r.reason).toBe('no_motion_signal_on_any_venture');
+    expect(r.citation).toMatch(/not evidence of motion/);
+  });
+
+  it('a PARTIAL blind set still reports CLEAR but SAYS how many it could not see', () => {
+    const r = ventureAxis.classify({ evaluated: [
+      { id: 'v1', alarm: false, reason: 'real-build-or-not-divergent' },
+      { id: 'v2', alarm: false, reason: ventureAxis.NO_SIGNAL_REASON }
+    ] }, NOW);
+    expect(r.state).toBe(STATE.CLEAR);
+    expect(r.citation).toMatch(/1 with no motion signal/);
+  });
+
+  it('zero ACTIVE ventures is legitimately CLEAR — distinct from fleet-health zero seats', () => {
+    // Nothing that could stall actually exists. That is different from a population query returning
+    // zero against a fleet that certainly does exist, which is a blind probe.
+    const r = ventureAxis.classify({ evaluated: [] }, NOW);
+    expect(r.state).toBe(STATE.CLEAR);
+    expect(r.citation).toMatch(/nothing to stall/);
+  });
+
+  it('the real evaluateRealBuildStall DOES fail-safe to no-stall-signal — the premise, executed', async () => {
+    // The translation above is only justified if the upstream contract really behaves this way.
+    // Run it rather than cite it.
+    const { evaluateRealBuildStall } = await import('../../../lib/governance/real-build-stall-alarm.mjs');
+    const out = evaluateRealBuildStall(
+      { id: 'v', current_lifecycle_stage: 25, metadata: {} },
+      { now: NOW, lastStageAdvanceAt: null }
+    );
+    expect(out.alarm).toBe(false);
+    expect(out.reason).toBe(ventureAxis.NO_SIGNAL_REASON);
+  });
+});
