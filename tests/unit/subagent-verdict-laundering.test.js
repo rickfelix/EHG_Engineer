@@ -69,11 +69,75 @@ describe('the unmodelled fallback no longer means "accepted" (FR-1)', () => {
     }
   });
 
-  it('is case- and whitespace-SENSITIVE, and that is safe because the fallback rejects', () => {
-    // 'pass' and 'PASS ' do not match the map. Under the old fallback they became WARNING
-    // (accepted); now they reject, so a casing bug fails loudly instead of silently passing.
-    expect(classifyVerdict(mapVerdict('pass'))).toBe('reject');
-    expect(classifyVerdict(mapVerdict('PASS '))).toBe('reject');
+  it('normalizes case and whitespace instead of rejecting on them', () => {
+    // FIRST CUT OF THIS FIX GOT THIS WRONG. It left the map case-SENSITIVE and argued the
+    // rejecting fallback made that safe. It is safe against LAUNDERING and unsafe against
+    // FALSE REJECTION — and live data carries lowercase 'pass' and 'approve-with-conditions'.
+    expect(mapVerdict('pass')).toBe('PASS');
+    expect(mapVerdict('PASS ')).toBe('PASS');
+    expect(mapVerdict('  manual_required  ')).toBe('MANUAL_REQUIRED');
+  });
+});
+
+describe('REGRESSION GUARD — the 60 live outliers must not become hard failures', () => {
+  // MEASURED, NOT IMAGINED. 60 rows carry an original_verdict outside the 9-key map and
+  // ALL 60 are stored ACCEPTING today. Sending that family to a rejecting fallback would
+  // turn ~30 semantically-passing rows/month into hard handoff failures the moment
+  // SUBAGENT_VERDICT_MODE=block is enabled — this SD would have broken the very promotion
+  // it exists to enable. Every string below is a real value from that population.
+  it.each([
+    ['PASS_WITH_CONCERNS', 14], ['CONCERNS', 14], ['PASS_WITH_CONDITIONS', 3],
+    ['CONCERNS_DISPOSITIONED', 3], ['CONCERN', 2], ['PASS_WITH_MITIGATIONS', 2],
+    ['APPROVED_WITH_CONDITIONS', 2], ['PASS_WITH_CONTRADICTIONS', 1],
+    ['PASS_WITH_FINDINGS', 1], ['APPROVE-WITH-CONDITIONS', 1], ['PROCEED_WITH_CONCERNS', 1],
+    ['PASS_WITH_RECOMMENDATIONS', 1], ['PROCEED_WITH_MITIGATION', 1],
+    ['APPROVE_WITH_HARDENING', 1], ['approve-with-conditions', 1], ['pass', 1],
+  ])('%s (x%i live) stays ACCEPTING', (verdict) => {
+    expect(classifyVerdict(mapVerdict(verdict))).toBe('accept');
+  });
+
+  it('a PROSE verdict beginning "PASS_WITH_CONCERNS —" is accepted by PREFIX, never by substring', () => {
+    const prose = 'PASS_WITH_CONCERNS — all three REQUIRED items are functionally closed and runtime-verified';
+    expect(classifyVerdict(mapVerdict(prose))).toBe('accept');
+  });
+
+  it('OPPOSITE POLARITY: a PROSE verdict beginning "FAIL —" REJECTS, even though it contains the word "pass"', () => {
+    // Two such rows exist live and are stored as accepting WARNING today — laundering this
+    // change corrects. `includes` matching would read the embedded "pass" and accept them.
+    const prose = 'FAIL — 4 of 6 prior REQUIRED items are closed and were re-verified, but the primary sd:next path is still inert';
+    expect(mapVerdict(prose)).toBe('FAIL');
+    expect(classifyVerdict(mapVerdict(prose))).toBe('reject');
+  });
+
+  it('ERROR keeps its tripwire: only genuinely unclassifiable values land there', () => {
+    // The whole rationale for ERROR — here and at subagent-evidence-gate.js:57-66 — is that
+    // it has zero rows, so its appearance means "a new value needs classifying". Bulk-filling
+    // it with PASS_WITH_CONCERNS would have destroyed that property.
+    // Both are real live values and NEITHER IS A VERDICT: 'HIGH' is a severity leaked into
+    // the column, the other is a findings string. These are precisely the rows a human
+    // should look at, so ERROR is the right destination.
+    for (const junk of ['HIGH', 'NO_DUPLICATES_FOUND_EXTEND_EXISTING_FILES']) {
+      expect(mapVerdict(junk), junk).toBe('ERROR');
+      expect(classifyVerdict(mapVerdict(junk))).toBe('reject');
+    }
+    // And the pass-family does NOT land there — that is the regression guard.
+    expect(mapVerdict('PASS_WITH_CONCERNS')).not.toBe('ERROR');
+  });
+
+  it('a namespaced verdict resolves on its MEANINGFUL token, in both directions', () => {
+    // Prefix-only matching sent both of these to ERROR because their first word is a
+    // namespace. Token order still decides, so the BLOCK one rejects and the APPROVED one
+    // does not — the same rule, not two special cases.
+    expect(mapVerdict('STRATEGY_APPROVED_WITH_REQUIRED_ADDITIONS')).toBe('CONDITIONAL_PASS');
+    expect(classifyVerdict(mapVerdict('STRATEGY_APPROVED_WITH_REQUIRED_ADDITIONS'))).toBe('accept');
+    expect(mapVerdict('STRATEGY_BLOCK_ALL_ADDITIONS_COMMITTED_TO_EXEC')).toBe('BLOCKED');
+    expect(classifyVerdict(mapVerdict('STRATEGY_BLOCK_ALL_ADDITIONS_COMMITTED_TO_EXEC'))).toBe('reject');
+  });
+
+  it('only the FIRST THREE tokens are scanned — a verdict announces itself at the front', () => {
+    // Scanning further turns classification into keyword-mining over prose, which is how a
+    // FAIL that happens to mention "passed" gets read as a pass.
+    expect(mapVerdict('SOMETHING UNRELATED ENTIRELY PASS')).toBe('ERROR');
   });
 });
 
