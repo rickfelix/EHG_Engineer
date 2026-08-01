@@ -343,6 +343,17 @@ class CLAUDEMDGeneratorV3 {
       const fullTotalTokens = fullFiles.reduce((sum, [_, f]) => sum + f.estimated_tokens, 0);
       const digestTotalTokens = digestFiles.reduce((sum, [_, f]) => sum + f.estimated_tokens, 0);
 
+      // SD-FDBK-INFRA-CLAUDE-LEAD-EXCEEDS-001 / FR-4 — the regression guard.
+      // Until this, fullTotalTokens was computed on the line above and compared to NOTHING; the only
+      // budget check covered the eight DIGEST files COMBINED. So a FULL file could grow past the
+      // Read tool's single-call cap and the only symptom was a truncation notice that the protocol
+      // read gate cannot see (it derives read-to-EOF from whether the CALLER passed a limit, never
+      // from delivered content — feedback 39c3d27d). Silent by construction.
+      assertSingleReadFit(
+        fullFiles.map(([name, f]) => ({ name, bytes: f.chars })),
+        { onWarn: (m) => console.warn(m) },
+      );
+
       if (this.options.generateDigest && digestFiles.length > 0) {
         if (digestTotalTokens > this.options.tokenBudget) {
           console.error(`\n   TOKEN BUDGET EXCEEDED: ${digestTotalTokens} > ${this.options.tokenBudget}`);
@@ -509,6 +520,77 @@ class CLAUDEMDGeneratorV3 {
 }
 
 export { CLAUDEMDGeneratorV3 };
+
+// ── SD-FDBK-INFRA-CLAUDE-LEAD-EXCEEDS-001 / FR-4 ────────────────────────────────────────────
+// The Read tool's per-call cap. Exceed it and a no-offset Read returns a truncated page while
+// reporting success, so the failure is invisible to every consumer that matters.
+export const SINGLE_READ_TOKEN_CAP = 25000;
+
+// Bytes per HARNESS token, measured — not estimated, and deliberately not borrowed.
+//
+// Two tempting shortcuts are both wrong for this content, and each fails in the opposite direction:
+//   estimateTokens() above is content.length/4 and runs ~40% LOW. chars/4 and tiktoken(gpt-4) BOTH
+//     reported CLAUDE_PLAN.md under the cap when the harness measured 38,166 — i.e. they say the
+//     defect this guard exists to catch does not exist.
+//   contractTokenCount() in lib/protocol/contract-read-coverage.cjs runs 43-61% HIGH here, because
+//     it frames content cat -n style AND THEN multiplies by CL100K_TO_HARNESS=1.85. The framing
+//     already closes most of the gap, so the multiply double-corrects. That 1.85 was calibrated on
+//     a 371-line file; these are 1,400-2,500 lines. A CONSTANT CARRIES ITS CALIBRATION DOMAIN, AND
+//     THE DOMAIN IS INVISIBLE AT THE CALL SITE.
+// This value comes from the harness's own truncation notice on this file family: a padded
+// CLAUDE_LEAD.md at 64,613 bytes reported 26,722 tokens. It independently agrees with a second
+// derivation (92,184 bytes / 38,166 tokens on CLAUDE_PLAN.md) to 0.1%.
+export const HARNESS_BYTES_PER_TOKEN = 2.4177;
+
+// THROW only for files a shipped SD has actually made fit; WARN for the rest.
+//
+// This is not timidity, it is the difference between a guard and a blockade. CLAUDE_CORE.md
+// (39,750 tokens), CLAUDE_EXEC.md (37,056) and CLAUDE_SOLOMON.md are over cap TODAY and their fixes
+// are separate SDs. A guard that throws on every FULL file would fail the very first regeneration
+// after this ships and block the whole family — punishing everyone for a defect nobody has been
+// given the chance to fix yet. Add a file here when its SD lands, not before.
+export const MUST_FIT_SINGLE_READ = ['CLAUDE_LEAD.md', 'CLAUDE_PLAN.md'];
+
+/**
+ * Fail generation when a file that is REQUIRED to fit no longer does.
+ *
+ * Pure and side-effect-free apart from the injected onWarn, so it is testable without a Supabase
+ * client — generate() makes 13+ live DB calls, which is why the budget check could not previously
+ * be exercised by a unit test at all.
+ *
+ * @param {Array<{name: string, bytes: number}>} files
+ * @param {{cap?: number, mustFit?: string[], bytesPerToken?: number, onWarn?: (msg: string) => void}} [opts]
+ * @returns {Array<{name: string, tokens: number, overBy: number, enforced: boolean}>} files over cap
+ */
+export function assertSingleReadFit(files, opts = {}) {
+  const {
+    cap = SINGLE_READ_TOKEN_CAP,
+    mustFit = MUST_FIT_SINGLE_READ,
+    bytesPerToken = HARNESS_BYTES_PER_TOKEN,
+    onWarn = () => {},
+  } = opts;
+
+  const over = (files || [])
+    .map(({ name, bytes }) => ({ name, tokens: Math.round((bytes || 0) / bytesPerToken) }))
+    .filter((f) => f.tokens > cap)
+    .map((f) => ({ ...f, overBy: f.tokens - cap, enforced: mustFit.includes(f.name) }));
+
+  for (const f of over.filter((x) => !x.enforced)) {
+    onWarn(`   ⚠ OVER SINGLE-READ CAP (not enforced — no SD owns this file yet): ${f.name} ~${f.tokens} tokens, ${f.overBy} over ${cap}. A no-offset Read of it truncates SILENTLY.`);
+  }
+
+  const breached = over.filter((x) => x.enforced);
+  if (breached.length) {
+    const detail = breached.map((f) => `${f.name} ~${f.tokens} tokens (${f.overBy} over ${cap})`).join('; ');
+    throw new Error(
+      `SINGLE_READ_CAP_EXCEEDED: ${detail}. These files are required to be readable in ONE Read call; ` +
+      'a no-offset Read now truncates and reports success, so nothing downstream will tell you. ' +
+      'Move sections to a companion via scripts/section-file-mapping.json (see CLAUDE_LEAD_MANUAL.md ' +
+      'for the pattern) rather than raising the cap.',
+    );
+  }
+  return over;
+}
 
 // SD-LEO-INFRA-PROTOCOL-PUBLICATION-PIPELINE-001 (FR-4): the complete generated-file
 // set, used to validate --only targets (unknown names fail loud listing these).
