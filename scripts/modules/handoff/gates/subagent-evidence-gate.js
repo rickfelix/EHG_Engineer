@@ -55,7 +55,17 @@ const ACCEPT_VERDICTS = new Set(['PASS', 'CONDITIONAL_PASS', 'WARNING']);
  *                     rather than left to fall through to `unknown`, because
  *                     "manual action outstanding" is the opposite of validated.
  */
-const REJECT_VERDICTS = new Set(['FAIL', 'BLOCKED', 'PENDING', 'MANUAL_REQUIRED']);
+//   ERROR           — added after checking the CHECK constraint rather than the data. The
+//                     valid_verdict domain (database/migrations/20260130_fix_sub_agent_verdict_
+//                     constraint.sql:13-22) is PASS/FAIL/BLOCKED/CONDITIONAL_PASS/WARNING/
+//                     MANUAL_REQUIRED/PENDING/ERROR. ERROR has zero rows today, so measuring the
+//                     TABLE could not surface it — only reading the constraint could. Left
+//                     unclassified it fell through to `unknown`, which this gate ACCEPTS: a verdict
+//                     whose migration comment reads "When execution errors occur" would have been
+//                     accepted with a warning. That is the exact defect this SD exists to fix,
+//                     surviving inside its own fix. THE POPULATION IS NOT THE DOMAIN — a value with
+//                     no rows yet is still a value the writer is allowed to emit.
+const REJECT_VERDICTS = new Set(['FAIL', 'BLOCKED', 'PENDING', 'MANUAL_REQUIRED', 'ERROR']);
 
 /**
  * Classify one verdict value into accept / reject / unknown.

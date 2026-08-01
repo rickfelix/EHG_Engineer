@@ -534,4 +534,42 @@ describe('validateSubagentEvidence — advisory mode is the DEFAULT and does not
     expect(result.passed).toBe(true);
     expect(result.warnings).toEqual([]);
   });
+// ── SD-FDBK-FIX-GATE-SUBAGENT-EVIDENCE-001: gaps found reviewing the fix itself ──────────────
+
+  it('REGRESSION: ERROR is a REJECTING verdict, not an unknown one', async () => {
+    // ERROR is legal per the valid_verdict CHECK constraint — its migration comment reads
+    // "When execution errors occur" — but it has ZERO rows, so measuring the TABLE could never
+    // surface it. Only reading the constraint could. Left unclassified it fell through to
+    // `unknown`, which this gate ACCEPTS with a warning: a verdict named for execution errors
+    // would have satisfied the gate. That is this SD's own defect surviving inside its own fix.
+    // THE POPULATION IS NOT THE DOMAIN.
+    process.env.SUBAGENT_VERDICT_MODE = 'block';
+    const supabase = makeSupabase({
+      phaseStart: PHASE_START_ISO,
+      evidenceRows: [{ sub_agent_code: 'TESTING', created_at: '2026-04-24T21:00:00Z', verdict: 'ERROR' }]
+    });
+    const result = await validateSubagentEvidence({ sd: makeSD(), handoffType: 'PLAN-TO-EXEC' }, supabase);
+    expect(result.passed).toBe(false);
+    expect(result.details.failing).toEqual([
+      expect.objectContaining({ agent: 'TESTING', verdict: 'ERROR' })
+    ]);
+    // And it must NOT be reported as an unknown verdict — that would mean it was accepted.
+    expect(result.details.unknown_verdicts).toEqual([]);
+  });
+
+  it('every value in the valid_verdict CHECK domain is classified, none falls through', () => {
+    // The gate accepts unknown verdicts by design (fail-open + warn). That is defensible ONLY if
+    // every value the writer is ALLOWED to emit is classified — otherwise "unknown" quietly
+    // becomes the accept path for a legal value, which is how ERROR slipped through above.
+    const DOMAIN = ['PASS', 'FAIL', 'BLOCKED', 'CONDITIONAL_PASS', 'WARNING', 'MANUAL_REQUIRED', 'PENDING', 'ERROR'];
+    const unclassified = DOMAIN.filter((v) => classifyVerdict(v) === 'unknown');
+    expect(unclassified).toEqual([]);
+  });
+
+  it('CONTROL: a genuinely unmodelled verdict still classifies as unknown', () => {
+    // The test above must not pass by making classifyVerdict return 'reject' for everything —
+    // the fail-open branch is deliberate and must still exist for values outside the constraint.
+    expect(classifyVerdict('SOMETHING_INVENTED_LATER')).toBe('unknown');
+    expect(classifyVerdict(null)).toBe('unknown');
+  });
 });
