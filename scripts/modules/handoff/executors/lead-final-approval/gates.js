@@ -14,7 +14,13 @@ import { getFilteredRetrospective } from '../../retro-filters.js';
 
 // Core Protocol Gate - SD Start Gate (SD-LEO-INFRA-ENHANCED-PROTOCOL-FILE-001)
 import { createSdStartGate } from '../../gates/core-protocol-gate.js';
-import { classifyFrDelivery, projectGateResult, isFrTraceabilityEnforced } from '../../gates/fr-delivery-classifier.js';
+import {
+  classifyFrDelivery,
+  projectGateResult,
+  isFrTraceabilityEnforced,
+  NOT_MEASURED_SCORE,
+  ERRORED_SCORE,
+} from '../../gates/fr-delivery-classifier.js';
 
 // Pipeline Flow Verifier (SD-LEO-INFRA-INTEGRATION-AWARE-PRD-001 FR-5)
 import { verifyPipelineFlow, requiresPipelineFlowVerification } from '../../../../../lib/pipeline-flow-verifier.js';
@@ -942,19 +948,24 @@ async function runFRDeliveryVerification(ctx, supabase, prdRepo) {
       .select('id')
       .eq('parent_sd_id', ctx.sd.id);
 
+    // SD-FDBK-FIX-COMPLETION-FLAG-HARNESS-001: each of the three non-measurement paths below
+    // used to emit its own unearned score (100 / 80 / 100), so "delegated to children",
+    // "there was no PRD" and "every FR verified delivered" were indistinguishable to the
+    // composite mean. They now share ONE representation — NOT_MEASURED_SCORE — and each
+    // names its own condition in the warning text.
     if (children && children.length > 0) {
-      console.log('   ℹ️  Orchestrator SD — FR verification delegated to children');
-      return { passed: true, score: 100, max_score: 100, issues: [], warnings: ['Orchestrator SD — FR verification delegated to children'] };
+      console.log('   ℹ️  Orchestrator SD — FR verification delegated to children (not measured here)');
+      return { passed: true, score: NOT_MEASURED_SCORE, max_score: 100, issues: [], warnings: ['Orchestrator SD — FR verification delegated to children; NOT verified at this boundary'] };
     }
 
-    console.log('   ⚠️  No PRD found — skipping FR verification');
-    return { passed: true, score: 80, max_score: 100, issues: [], warnings: ['No PRD found — FR delivery verification skipped'] };
+    console.log('   ⚠️  No PRD found — FR delivery NOT verified');
+    return { passed: true, score: NOT_MEASURED_SCORE, max_score: 100, issues: [], warnings: ['No PRD found — FR delivery NOT verified (this is a non-measurement, not a pass)'] };
   }
 
   const frs = prd.functional_requirements || [];
   if (frs.length === 0) {
-    console.log('   ℹ️  No functional requirements in PRD');
-    return { passed: true, score: 100, max_score: 100, issues: [], warnings: ['No FRs defined in PRD'] };
+    console.log('   ℹ️  No functional requirements in PRD — nothing to verify');
+    return { passed: true, score: NOT_MEASURED_SCORE, max_score: 100, issues: [], warnings: ['No FRs defined in PRD — FR delivery NOT verified'] };
   }
 
   console.log(`   📋 Checking ${frs.length} functional requirements (per-FR mapping)...`);
@@ -970,17 +981,19 @@ async function runFRDeliveryVerification(ctx, supabase, prdRepo) {
     functionalRequirements: frs,
     requesterSessionId: ctx.sessionId || ctx.session_id || null,
   });
+  const MARKS = { delivered: '✅', descoped: '🔵', unverifiable: '❓', undelivered: '❌' };
   for (const f of classification.frs) {
-    const mark = f.status === 'delivered' ? '✅' : f.status === 'descoped' ? '🔵' : '❌';
-    console.log(`   ${mark} ${f.id} [${f.status}]: ${safeTruncate(f.description || '', 56)}`);
+    console.log(`   ${MARKS[f.status] || '❌'} ${f.id} [${f.status}]: ${safeTruncate(f.description || '', 56)}`);
   }
   const enforced = isFrTraceabilityEnforced();
-  console.log(`\n   📊 FR delivery: ${classification.delivered} delivered, ${classification.descoped} descoped, ${classification.undelivered} undelivered (enforce=${enforced ? 'ON' : 'OFF/warn-only'})`);
+  console.log(`\n   📊 FR delivery: ${classification.delivered} delivered, ${classification.descoped} descoped, ${classification.undelivered} undelivered, ${classification.unverifiable} unverifiable (enforce=${enforced ? 'ON' : 'OFF/warn-only'})`);
   const result = projectGateResult(classification, { enforced, gateName: 'FR_DELIVERY_VERIFICATION' });
   if (!result.passed) {
     console.log(`   ❌ FR delivery FAILED — ${classification.undelivered}/${classification.total} undelivered`);
+  } else if (classification.unverifiable === classification.total) {
+    console.log(`   ❓ FR delivery UNVERIFIABLE — this SD does not use the FR-reference convention, so delivery was NOT observed (score ${result.score} = verified delivery only)`);
   } else if (result.warnings.length) {
-    console.log('   ⚠️  FR delivery passed (warn-only) with undelivered FRs');
+    console.log('   ⚠️  FR delivery passed (warn-only) with undelivered or unverifiable FRs');
   } else {
     console.log('   ✅ All FRs delivered or approver-descoped');
   }
@@ -1010,9 +1023,11 @@ export function createFRDeliveryVerificationGate(supabase, prdRepo) {
       } catch (err) {
         if (isFrTraceabilityEnforced()) throw err;
         console.log(`   ⚠️  FR delivery verification errored in warn-only mode (fail-open): ${err.message}`);
+        // SD-FDBK-FIX-COMPLETION-FLAG-HARNESS-001: still non-blocking, but NOT a 100. A broken
+        // instrument must not be arithmetically indistinguishable from a verified delivery.
         return {
-          passed: true, score: 100, max_score: 100, issues: [],
-          warnings: [`FR delivery verification errored (warn-only, fail-open): ${err.message}`],
+          passed: true, score: ERRORED_SCORE, max_score: 100, issues: [],
+          warnings: [`FR delivery verification ERRORED (warn-only, fail-open) — delivery NOT verified: ${err.message}`],
         };
       }
     },

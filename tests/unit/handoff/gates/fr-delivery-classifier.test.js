@@ -10,6 +10,9 @@ import {
   descopeFor,
   classifyFrDelivery,
   projectGateResult,
+  frUnverifiableCeiling,
+  NOT_MEASURED_SCORE,
+  ERRORED_SCORE,
 } from '../../../../scripts/modules/handoff/gates/fr-delivery-classifier.js';
 
 describe('FR-2: isFrTraceabilityEnforced — default OFF', () => {
@@ -118,27 +121,179 @@ describe('FR-2: projectGateResult — flag gating', () => {
     expect(r.required).toBe(true);
     expect(r.issues.join(' ')).toMatch(/undelivered/i);
   });
-  it('OFF + undelivered -> warn-only (passed:true, required:false, FULL score, warning lists FR)', () => {
+  // SD-FDBK-FIX-COMPLETION-FLAG-HARNESS-001 REPLACES the two assertions that used to live here.
+  // They asserted score===100 in warn-only mode and an invariant pass-path "regardless of
+  // undelivered count" — i.e. they PINNED the defect: the gate was required by its own tests to
+  // report a perfect score while measuring a shortfall. Measured on the real specimen, that made
+  // 0-of-6 delivered indistinguishable from 6-of-6. The contract is now inverted: the flag
+  // governs BLOCKING only and never the reported score.
+  it('OFF + undelivered -> warn-only pass but the score is TRUE, not pinned at 100', () => {
     const r = projectGateResult(undeliveredClass, { enforced: false });
     expect(r.passed).toBe(true);
     expect(r.required).toBe(false);
-    expect(r.score).toBe(100);                 // NOT diluted -> zero blast radius
+    expect(r.score).toBe(50);                  // 1 of 2 satisfied — honest, not 100
     expect(r.warnings.join(' ')).toMatch(/FR-002/);
-    expect(r.details.raw_score).toBe(50);      // real coverage preserved in details
   });
-  it('OFF pass-path is invariant regardless of undelivered count', () => {
-    const many = { frs: [], total: 5, delivered: 0, descoped: 0, undelivered: 5 };
-    const r = projectGateResult(many, { enforced: false });
-    expect(r.passed).toBe(true);
-    expect(r.score).toBe(100);
+  it('OFF score TRACKS the undelivered count instead of being invariant', () => {
+    const allBad = { frs: [], total: 5, delivered: 0, descoped: 0, undelivered: 5, unverifiable: 0 };
+    const halfBad = { frs: [], total: 4, delivered: 2, descoped: 0, undelivered: 2, unverifiable: 0 };
+    expect(projectGateResult(allBad, { enforced: false }).score).toBe(0);
+    expect(projectGateResult(halfBad, { enforced: false }).score).toBe(50);
+    // still non-blocking in warn-only mode — the rollout promise that DOES survive
+    expect(projectGateResult(allBad, { enforced: false }).passed).toBe(true);
   });
-  it('all delivered -> pass either way; required mirrors the flag', () => {
-    expect(projectGateResult(allGoodClass, { enforced: false })).toMatchObject({ passed: true, required: false });
-    expect(projectGateResult(allGoodClass, { enforced: true })).toMatchObject({ passed: true, required: true });
+  it('all delivered -> pass either way, score 100; required mirrors the flag', () => {
+    expect(projectGateResult(allGoodClass, { enforced: false })).toMatchObject({ passed: true, required: false, score: 100 });
+    expect(projectGateResult(allGoodClass, { enforced: true })).toMatchObject({ passed: true, required: true, score: 100 });
   });
-  it('no FRs -> pass, required:false', () => {
+  it('no FRs -> pass but scored as NOT-MEASURED, never 100', () => {
     const r = projectGateResult({ frs: [], total: 0, delivered: 0, descoped: 0, undelivered: 0 }, { enforced: true });
     expect(r).toMatchObject({ passed: true, required: false });
+    expect(r.score).toBe(NOT_MEASURED_SCORE);
+    expect(r.score).not.toBe(100);
+    expect(r.warnings.join(' ')).toMatch(/NOT verified|not-measured/i);
+  });
+});
+
+// ─────────────────────────────────────────────────────────────────────────────
+// SD-FDBK-FIX-COMPLETION-FLAG-HARNESS-001 — the repair
+// ─────────────────────────────────────────────────────────────────────────────
+
+describe('UNVERIFIABLE: per-SD convention check distinguishes blindness from absence', () => {
+  it('REGRESSION (the 93-scored specimen): no FR referenced anywhere -> all unverifiable, never 100', async () => {
+    // Mirrors SD-FDBK-INFRA-WORKER-LOOP-DIRECTIVE-001: 6 FRs, 6 validated stories, and not one
+    // story references an FR id. Shipped behaviour was 6 undelivered reported as score 100.
+    const stories = [
+      { id: 's1', title: 'Name the classifier denial verbatim', status: 'completed' },
+      { id: 's2', title: 'State the correct shape as four actions', status: 'completed' },
+      { id: 's3', title: 'Keep the second surface in sync', status: 'completed' },
+    ];
+    const c = await classifyFrDelivery(stub({ stories }), { sdId: 'sd-spec', functionalRequirements: FRS });
+    expect(c.unverifiable).toBe(3);
+    expect(c.undelivered).toBe(0);          // NOT blamed for non-delivery
+    expect(c.convention_in_use).toBe(false);
+
+    const r = projectGateResult(c, { enforced: false });
+    expect(r.score).not.toBe(100);          // the defect, gone
+    expect(r.score).toBe(0);                // zero VERIFIED delivery — accurate
+    expect(r.warnings.join(' ')).toMatch(/UNVERIFIABLE/);
+    expect(r.warnings.join(' ')).toMatch(/BLINDNESS, not evidence of absence/);
+  });
+
+  it('SEEDED DEFECT: convention IS in use and one named FR is missing -> UNDELIVERED and REFUSED', async () => {
+    // The acceptance case. FR-001 is genuinely referenced, which proves the instrument works
+    // for this SD, so FR-002's missing reference is real evidence rather than an artifact.
+    const stories = [{ id: 's1', title: 'implement FR-001 fully', status: 'completed' }];
+    const c = await classifyFrDelivery(stub({ stories }), {
+      sdId: 'sd-seeded',
+      functionalRequirements: [{ id: 'FR-001', requirement: 'a' }, { id: 'FR-002', requirement: 'b' }],
+    });
+    expect(c.convention_in_use).toBe(true);
+    expect(c.delivered).toBe(1);
+    expect(c.undelivered).toBe(1);
+    expect(c.unverifiable).toBe(0);
+
+    const enforcedResult = projectGateResult(c, { enforced: true });
+    expect(enforcedResult.passed).toBe(false);   // REFUSED
+    expect(enforcedResult.required).toBe(true);
+    expect(enforcedResult.issues.join(' ')).toMatch(/FR-002/);
+  });
+
+  it('ZERO validated stories is UNDELIVERED, not unverifiable — blindness needs something to be blind to', async () => {
+    // The distinction that matters: "stories exist but do not use the convention" is genuine
+    // blindness; "no work product exists at all" is not an excuse, it is a finding. Without
+    // this, an SD could declare FRs, build and validate nothing, and be excused as unmeasurable.
+    const c = await classifyFrDelivery(stub({ stories: [] }), { sdId: 'sd-empty', functionalRequirements: FRS });
+    expect(c.has_work_product).toBe(false);
+    expect(c.validated_story_count).toBe(0);
+    expect(c.undelivered).toBe(3);
+    expect(c.unverifiable).toBe(0);
+    expect(c.frs[0].evidence).toMatch(/nothing was built or validated/i);
+    // and it must still hard-fail under enforcement
+    expect(projectGateResult(c, { enforced: true }).passed).toBe(false);
+  });
+
+  it('unvalidated stories do not count as work product', async () => {
+    // Stories that exist but were never validated cannot carry a delivery signal either way,
+    // so they must not flip an SD out of the honest UNDELIVERED verdict.
+    const stories = [{ id: 's1', title: 'draft work', status: 'ready' }];
+    const c = await classifyFrDelivery(stub({ stories }), { sdId: 'sd-draft', functionalRequirements: FRS });
+    expect(c.has_work_product).toBe(false);
+    expect(c.undelivered).toBe(3);
+    expect(c.unverifiable).toBe(0);
+  });
+
+  it('a descope alone does not prove the convention is in use', async () => {
+    // Work product exists (a validated story) but references no FR id, so the convention is
+    // not in use; the descope is honoured and the remaining FR is unmeasurable rather than
+    // blamed. A descope is an approval record, not evidence that the reference convention works.
+    const stories = [{ id: 's1', title: 'some unrelated work', status: 'completed' }];
+    const c = await classifyFrDelivery(stub({ stories }), {
+      sdId: 'sd-descope-only',
+      functionalRequirements: [{ id: 'FR-001', requirement: 'a' }, { id: 'FR-002', requirement: 'b' }],
+      sdMetadata: { descoped_frs: [{ fr_id: 'FR-001', approved_by: 'lead' }] },
+    });
+    expect(c.descoped).toBe(1);
+    expect(c.convention_in_use).toBe(false);
+    expect(c.unverifiable).toBe(1);   // FR-002 unmeasurable, not "undelivered"
+    expect(c.undelivered).toBe(0);
+  });
+});
+
+describe('UNVERIFIABLE ceiling (shipped day one, per the WAIT-verdict precedent)', () => {
+  const allUnver = { frs: [], total: 4, delivered: 0, descoped: 0, undelivered: 0, unverifiable: 4 };
+
+  it('default ceiling tolerates a fully-unverifiable SD but still reports it', () => {
+    const r = projectGateResult(allUnver, { enforced: true, ceiling: 1 });
+    expect(r.passed).toBe(true);
+    expect(r.details.over_ceiling).toBe(false);
+  });
+  it('exceeding the ceiling produces an OBSERVABLY DIFFERENT result, not the same pass', () => {
+    const within = projectGateResult(allUnver, { enforced: true, ceiling: 1 });
+    const over = projectGateResult(allUnver, { enforced: true, ceiling: 0.5 });
+    expect(over.passed).toBe(false);
+    expect(over.passed).not.toBe(within.passed);
+    expect(over.details.over_ceiling).toBe(true);
+    expect(over.issues.join(' ')).toMatch(/ceiling/i);
+  });
+  it('the ceiling never blocks in warn-only mode', () => {
+    expect(projectGateResult(allUnver, { enforced: false, ceiling: 0 }).passed).toBe(true);
+  });
+  it('frUnverifiableCeiling parses env and fails safe on nonsense', () => {
+    expect(frUnverifiableCeiling({})).toBe(1);
+    expect(frUnverifiableCeiling({ LEO_FR_UNVERIFIABLE_CEILING: '0.4' })).toBe(0.4);
+    for (const bad of ['nonsense', '-1', '2', '']) {
+      expect(frUnverifiableCeiling({ LEO_FR_UNVERIFIABLE_CEILING: bad })).toBe(1);
+    }
+  });
+});
+
+describe('no path reports 100 without a verified full delivery', () => {
+  it('score 100 implies undelivered===0 AND unverifiable===0', () => {
+    const cases = [
+      { frs: [], total: 3, delivered: 3, descoped: 0, undelivered: 0, unverifiable: 0 },
+      { frs: [], total: 3, delivered: 1, descoped: 2, undelivered: 0, unverifiable: 0 },
+      { frs: [], total: 3, delivered: 0, descoped: 0, undelivered: 3, unverifiable: 0 },
+      { frs: [], total: 3, delivered: 0, descoped: 0, undelivered: 0, unverifiable: 3 },
+      { frs: [], total: 3, delivered: 1, descoped: 0, undelivered: 1, unverifiable: 1 },
+      { frs: [], total: 0, delivered: 0, descoped: 0, undelivered: 0, unverifiable: 0 },
+    ];
+    for (const c of cases) {
+      for (const enforced of [true, false]) {
+        const r = projectGateResult(c, { enforced });
+        if (r.score === 100) {
+          expect(c.undelivered).toBe(0);
+          expect(c.unverifiable).toBe(0);
+          expect(c.total).toBeGreaterThan(0);
+        }
+      }
+    }
+  });
+  it('a non-measurement and a broken instrument do not share a score with each other or with 100', () => {
+    expect(NOT_MEASURED_SCORE).not.toBe(100);
+    expect(ERRORED_SCORE).not.toBe(100);
+    expect(ERRORED_SCORE).not.toBe(NOT_MEASURED_SCORE);
+    expect(ERRORED_SCORE).toBeLessThan(NOT_MEASURED_SCORE);
   });
 });
 
