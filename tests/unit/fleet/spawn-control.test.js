@@ -146,9 +146,23 @@ describe('module surface (TS-10: exactly seven named verbs, no more)', () => {
     // it, restart() calls it internally once succession is proven. It is exported solely so its
     // fail-closed refusals can be asserted directly — a pid whose identity cannot be confirmed must
     // never be signalled, and that is not reachable through restart() without real processes.
+    // isWorktreeExemptPath / assertSpawnSourceNotExempt (SD-FDBK-INFRA-SPAWN-SOURCE-CURRENCY-001
+    // FR-1) are HELPERS by the same test this file already applies: an operator never invokes
+    // them, and they are not reachable from any route. They are pure predicates, exported for two
+    // reasons. First, isWorktreeExemptPath was an INLINE expression inside spawn(); extracting it
+    // gives the exemption and the guard that depends on it ONE representation, so they cannot
+    // drift. Second, assertSpawnSourceNotExempt guards a failure that is invisible by
+    // construction — a spawn-source tree sited under .worktrees/ would be silently exempted from
+    // the currency check and would appear to work while asserting nothing — so it must be
+    // assertable directly rather than only through spawn().
+    //
+    // This guard did its job again: adding these failed the test rather than slipping in
+    // unannounced, which is why they are declared here with a reason instead of the test being
+    // loosened to accommodate them.
     const helperNames = ['roleOf', 'isSingletonRole', 'resolveProfileDir', 'isLiveEnabled', 'buildLiveSpawnInvocation',
       'SESSION_BIND_MAX_ATTEMPTS', 'SESSION_BIND_DELAY_MS',
-      'CANARY_PROFILE', 'CANARY_CALLSIGN_PREFIX', 'retirePredecessorProcess'];
+      'CANARY_PROFILE', 'CANARY_CALLSIGN_PREFIX', 'retirePredecessorProcess',
+      'isWorktreeExemptPath', 'assertSpawnSourceNotExempt'];
     const unexpected = Object.keys(mod).filter((k) => !verbNames.includes(k) && !helperNames.includes(k));
     expect(unexpected).toEqual([]);
   });
