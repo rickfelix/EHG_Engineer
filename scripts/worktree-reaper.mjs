@@ -604,10 +604,19 @@ function runGit(args, opts = {}) {
  * carries `shell: false, // SR-1 — do not remove` plus measured live timings.
  *
  * RESIDUAL, left as an assertion rather than an assumption: the refutation holds because
- * gh is a .exe. A .cmd/.bat shim (scoop/winget) would ENOENT under shell:false — but that
- * surfaces as res.error, which throws below, which detectors.js turns into the DOCUMENTED
- * patch_equivalent_gh_unavailable advisory. Worst case degrades to a recorded advisory,
- * never to silence.
+ * gh is a .exe. A .cmd/.bat shim (scoop/winget) would ENOENT under shell:false — that
+ * surfaces as res.error, throws below, and detectors.js turns it into the documented
+ * patch_equivalent_gh_unavailable path.
+ *
+ * CORRECTED BY SECURITY, because the first version of this comment said "worst case
+ * degrades to a recorded advisory, never to silence" and that is WRONG. Measured: an
+ * unknown key does degrade to advisory-only, but a TERMINAL-status key reaches STAGE-1
+ * REMOVE AUTHORITY, because the fail-open returns evidence with no merged_pr_count and the
+ * `?? 0` at the terminal override treats that as zero. It is NOT a widening — a gh that
+ * returns [] decides identically, so the security delta is nil — but what is lost on a
+ * .cmd-only host is the GitHub cross-check itself, fleet-wide, while terminal-key removals
+ * proceed on cherry evidence alone. Stating that accurately matters more than the comfort
+ * of the shorter sentence.
  *
  * DO NOT "simplify" the throw below into a returned error: detectors.js depends on the
  * throw and tests/unit/worktree-reaper/detectors.test.js pins it. Exported so a test can

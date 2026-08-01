@@ -117,7 +117,17 @@ describe('THE LOAD-BEARING ASSERTION — the real runners spawn without a shell'
     const [bin, args, opts] = spiedSpawnSync.mock.calls.at(-1);
     expect(bin).toBe('gh');
     expect(Array.isArray(args)).toBe(true);
-    expect(opts.shell).toBeFalsy(); // absent or false — never platform-conditional
+    // ABSENCE, not falsiness. `toBeFalsy()` looked equivalent and was not: CI runs on
+    // ubuntu, where `shell: process.platform === 'win32'` evaluates to FALSE — so a
+    // reinstated platform-conditional flag is falsy there and the assertion passes. TESTING
+    // proved it by injecting `shell: process.platform === 'darwin'` at both sites and
+    // watching all 8 tests stay green. The only platform CI runs this on was the one
+    // platform on which it could not fail.
+    //
+    // Do NOT "improve" this by stubbing process.platform instead: a hoisted
+    // `const IS_WIN` is evaluated at module load, before any stub, which is the exact
+    // shape this file's docblock records as having defeated three prior refactors.
+    expect(opts).not.toHaveProperty('shell');
   });
 
   test('runGh forwards a hostile branch as a discrete argv element, not a command string', () => {
@@ -126,7 +136,7 @@ describe('THE LOAD-BEARING ASSERTION — the real runners spawn without a shell'
     try { runGh(args); } catch { /* ignore */ }
     const [, delivered, opts] = spiedSpawnSync.mock.calls.at(-1);
     expect(delivered).toEqual(args);
-    expect(opts.shell).toBeFalsy();
+    expect(opts).not.toHaveProperty('shell');
   });
 
   test('wip-detector defaultRunGh also spawns without a shell (the second site)', async () => {
