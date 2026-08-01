@@ -179,3 +179,30 @@ describe('absence is recorded as a value, not an omitted key (FR-4)', () => {
     expect(classifyVerdict(mapVerdict(ABSENT_VERDICT))).toBe('reject');
   });
 });
+
+describe('NEGATION — a negated pass is not a pass (found by review, not by me)', () => {
+  // I asked the reviewer directly whether the token scan could be defeated. It could:
+  // the negator is not itself a verdict token, so the scan walked past it and resolved on
+  // the accepting word behind it. Every string below returned CONDITIONAL_PASS -> accept.
+  // Not a regression — the old `|| 'WARNING'` accepted them too — and no live row matches
+  // today. But an LLM sub-agent emitting "CANNOT PROCEED" is entirely plausible, and the
+  // exposure lands exactly when SUBAGENT_VERDICT_MODE=block flips on.
+  it.each([
+    'NOT A PASS', 'DID NOT PASS', 'CANNOT PROCEED', 'DO NOT PROCEED',
+    'NOT APPROVED', 'NO PASS', 'UNABLE TO PROCEED', 'SHOULD NOT PROCEED',
+  ])('%s REJECTS', (verdict) => {
+    expect(classifyVerdict(mapVerdict(verdict))).toBe('reject');
+  });
+
+  it('OPPOSITE POLARITY: the un-negated forms still ACCEPT — the guard is narrow', () => {
+    for (const v of ['A PASS', 'PASSED', 'PROCEED', 'APPROVED', 'PASS_WITH_CONCERNS']) {
+      expect(classifyVerdict(mapVerdict(v)), v).toBe('accept');
+    }
+  });
+
+  it('negation does not flip a REJECTING verdict into acceptance', () => {
+    // "NOT FAIL" is odd phrasing and rare; rejecting is the safe direction either way.
+    expect(classifyVerdict(mapVerdict('NOT FAIL'))).toBe('reject');
+    expect(classifyVerdict(mapVerdict('CANNOT BLOCK'))).toBe('reject');
+  });
+});
