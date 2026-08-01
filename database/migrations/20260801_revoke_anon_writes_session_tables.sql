@@ -1,5 +1,6 @@
 -- requires-chairman-apply
--- @approved-by: <pending chairman sign-off>
+-- @approved-by: codestreetlabs@gmail.com
+-- @approval-provenance: chairman verbal "approved." at terminal 2026-08-01 ~10:02Z, Adam d5080cf3 scribing
 -- =============================================================================
 -- Migration: revoke anon WRITE grants on claude_sessions + session_coordination
 -- Why: SECURITY (Alpha-2 PLAN-TO-EXEC review, 2026-08-01) verified WITH THE ANON
