@@ -85,13 +85,28 @@ describe('the four defects the EXEC sub-agents found in this producer', () => {
     expect(out.artifacts[0].payload.compositeScore).toBe(7);
   });
 
-  it('faithfulness is DERIVED from a comparison, not asserted', () => {
-    // The first cut compared the source to ITSELF, so `faithful` could only ever be true — a
-    // structural constant wearing the costume of a check.
-    const d = decideDemandThesisAction({ ventureMetadata: staged(), typePending: false });
-    expect(d.artifact.payload.provenance.faithful).toBe(true);
-    // The comparison now runs against the built payload, so a divergence is reachable.
-    expect(d.artifact.payload.claims).toEqual(validThesis().claims);
+  it('claims no faithfulness guarantee it cannot compute — the field is GONE', () => {
+    /**
+     * *** I SHIPPED A FALSE 'faithful: true' THREE TIMES BEFORE DELETING IT. ***
+     * v1 compared the source to itself. v2 compared a shallow-spread payload to the source — the
+     * SAME REFERENCE. v3 added a basis string my own mutation defeated by hardcoding it. Each
+     * rewrite made the claim look more computed while remaining exactly as vacuous.
+     *
+     * Through this function the payload is ALWAYS a verbatim spread, so a key-set comparison can
+     * never fail: the branch is unreachable by construction and no test can force it. So the
+     * computed-looking boolean is gone, replaced by a statement about HOW the artifact was built —
+     * verifiable by reading the code rather than by trusting a flag.
+     */
+    const md = staged();
+    const d = decideDemandThesisAction({ ventureMetadata: md, typePending: false });
+    expect(d.action).toBe('promote');
+    // No fabricated guarantee.
+    expect(d.artifact.payload.provenance.faithful).toBeUndefined();
+    expect(d.artifact.payload.provenance.faithful_basis).toBeUndefined();
+    // An honest, checkable statement instead.
+    expect(d.artifact.payload.provenance.promotion_method).toBe('verbatim_spread');
+    // And the thing that claim asserts is TRUE: the promoted claims are the adjudicated object.
+    expect(d.artifact.payload.claims).toBe(md.demand_thesis_staged.thesis.claims);
   });
 
   it('an unrecognised gate-file shape is treated as PENDING, not permitted', async () => {
@@ -156,7 +171,7 @@ describe('FR-4: promotion is verbatim, with provenance', () => {
     expect(d.artifact.payload.provenance).toMatchObject({
       source: 'ventures.metadata.demand_thesis_staged',
       promoted_verbatim: true,
-      faithful: true
+      promotion_method: 'verbatim_spread'
     });
   });
 
