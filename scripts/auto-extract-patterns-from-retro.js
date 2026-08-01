@@ -116,6 +116,20 @@ async function extractPatternsFromImprovements(retro, sdId, _sdKey, linkedFeedba
   }
 
   const patterns = [];
+  // SD-FDBK-ENH-LEARNING-LOOP-DESTROYS-001 / FR-2 — per-item isolation.
+  //
+  // THIS IS THE LIVE PRODUCTION WRITER, and it had no try/catch anywhere in its own module. A
+  // single createPattern throw propagated UNCAUGHT out of this loop, abandoned every REMAINING
+  // improvement in the retrospective, and left learning_extracted_at permanently NULL — then
+  // scripts/generate-comprehensive-retrospective.js:771-773 swallowed it to a console.warn, AFTER
+  // the retro had already printed its own success line at :748. So one malformed lesson silently
+  // cost the whole batch and the run still looked clean.
+  //
+  // Worth stating because the SD points elsewhere: the SD cites lib/team/findings-extractor.js as
+  // the failure site. That function is DEAD CODE — its only reference in the tree is its own barrel
+  // re-export. THIS file is the one that actually runs, and its failure mode is worse, because
+  // findings-extractor at least isolates per finding.
+  const failures = [];
 
   for (const improvement of retro.what_needs_improvement) {
     // Skip generic items
@@ -123,6 +137,7 @@ async function extractPatternsFromImprovements(retro, sdId, _sdKey, linkedFeedba
         improvement === 'No significant challenges documented') {
       continue;
     }
+    try {
 
     const category = categorizeIssue(improvement);
     const severity = determineSeverity(improvement, retro.business_value_delivered);
@@ -186,6 +201,25 @@ async function extractPatternsFromImprovements(retro, sdId, _sdKey, linkedFeedba
 
       console.log(`     ✅ Created pattern: ${newPattern.pattern_id}`);
     }
+    } catch (err) {
+      // FR-3 — a DESTROYED lesson must be distinguishable from nothing-to-create.
+      //
+      // Note what is NOT being fixed here: the printed count. The SD claims the summary count is
+      // "contradicted by the database". It is not — createPattern throws, and every counter
+      // increment sits after its await, so a failure never inflates a count. The count was always
+      // honest. What was missing is that destruction surfaced ONLY as a warning that nothing read
+      // and nothing acted on, so "0 created" from a healthy run and "0 created" because three
+      // lessons were destroyed were indistinguishable.
+      failures.push({ improvement: improvement.substring(0, 120), code: err.code || null, message: err.message });
+      console.error(`     ❌ LESSON LOST (${err.code || 'error'}): ${err.message}`);
+    }
+  }
+
+  if (failures.length) {
+    // Loud, structured, and returned to the caller — not a warn that dies in the log.
+    console.error(`\n  ⚠️  ${failures.length} lesson(s) DESTROYED and not persisted:`);
+    failures.forEach((f) => console.error(`     - [${f.code || 'error'}] ${f.improvement}`));
+    patterns.destroyed = failures;
   }
 
   return patterns;
