@@ -20,6 +20,7 @@
 import 'dotenv/config';
 import { createRequire } from 'node:module';
 import { join } from 'node:path';
+import { existsSync } from 'node:fs'; // QF-20260801-998: DUTY-8b stranded-worktree probe
 import { createClient } from '@supabase/supabase-js';
 import { getDbNowMs } from '../lib/fleet/db-clock.mjs';
 import { isProcessRunning } from '../lib/heartbeat-manager.mjs';
@@ -36,6 +37,11 @@ import {
   detectAutoRefillBacklog,
   // SD-REFILL-00R7REXL: DUTY-3b — in_progress + unclaimed orphans (invisible to DUTY-2/3/4/5/7/8/9).
   detectInProgressOrphans,
+  // QF-20260801-998: DUTY-8b — stranded workers. Shipped unwired by
+  // SD-FDBK-INFRA-ORPHAN-WORKTREE-STRANDING-001-C: the detector was unit-tested but
+  // never imported here, so it never ran. Unit-testing a detector proves it BEHAVES;
+  // only the call site proves it is ASKED.
+  detectStrandedWorker,
 } from '../lib/coordinator/charter-audit-detectors.mjs';
 // SD-LEO-INFRA-AUTO-REFILL-SELECTION-GATE-001-E: the -B dry-run verifier supplies the promotable count.
 import { verifyStagedCandidates } from '../lib/sourcing-engine/refill-dry-run-verifier.js';
@@ -305,6 +311,20 @@ async function main() {
     // the full `live` set (heartbeat|armed-silence|PID) NOT liveWorkers, so a long-Task worker whose claim
     // was transiently hard-cap-released (still heartbeating its sd_key) is never mis-flagged (c1df435f).
     orphan: detectInProgressOrphans({ sds, liveSessions: live, classifyIneligibility: classifyDispatchIneligibility, nowMs, minAgeMs: ORPHAN_MIN_AGE_MS }),
+    // QF-20260801-998: DUTY-8b — a worker whose worktree is missing or is not a worktree
+    // root. Invisible to DUTY-8 above, which reads liveness: a stranded worker is ALIVE
+    // with a green heartbeat, which is exactly why its SD flatlines unnoticed. The fs
+    // probe is injected (never called inside the detector) so the detector stays pure
+    // and its fixtures keep running against injected state rather than this machine.
+    stranded: detectStrandedWorker({
+      liveSessions: liveWorkers, nowMs, isWithinArmedSilence: isWithinArmedSilenceWindow,
+      probeWorktree: (p) => ({
+        exists: existsSync(p),
+        // A real worktree carries a `.git` FILE (a `gitdir:` pointer); a stranded
+        // leftover carries none. Absence of .git is the stranding, not an error.
+        isWorktreeRoot: existsSync(join(p, '.git')),
+      }),
+    }),
   };
 
   const flag = (r) => (r.remediation ? '  ⚠ ' + r.remediation : '');
@@ -321,6 +341,7 @@ async function main() {
   console.log('  DUTY-8 PROGRESS-STALL: ' + D.progress.detail + flag(D.progress)); // PROGRESS-STALL-DETECTION-001
   console.log('  DUTY-9 LEAD-AGING    : ' + D.leadAging.detail + flag(D.leadAging)); // ADAM-VISION-SD-FLOW-001
   console.log('  DUTY-3b IN-PROG ORPHAN: ' + D.orphan.detail + flag(D.orphan)); // SD-REFILL-00R7REXL
+  console.log('  DUTY-8b STRANDED WKR : ' + D.stranded.detail + flag(D.stranded)); // QF-20260801-998
   // SD-LEO-INFRA-GOVERNANCE-ROLE-ADHERENCE-DBVALIDATION-001 (FR-3) — coordinator mirror adherence.
   if (D.srcCap) console.log('  SOURCE-TO-CAPACITY   : ' + D.srcCap.detail + flag(D.srcCap));
   if (D.d3lean) console.log('  D3-LEAN (coord/Adam) : ' + D.d3lean.detail + flag(D.d3lean));
