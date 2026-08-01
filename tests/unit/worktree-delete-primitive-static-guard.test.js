@@ -33,6 +33,59 @@ const SCAN_DIRS = ['lib', 'scripts'];
 const EXT_RE = /\.(m?c?js)$/;
 const PRIMITIVE_RE = /git\s+worktree\s+remove/;
 
+// ── FR-5 predicate, at MODULE scope so the self-test below can drive THE REAL ONE ──
+//
+// RETRO-F1: the previous self-test re-declared this regex inside its own `it()` and ran it
+// against a string literal, because every helper lived inside the scan `it()` and was out of
+// scope. It therefore passed no matter what the guard did — WINDOW could go back to 1,
+// blankComments could be deleted, the allowlist could swallow every file. That is the
+// correct-but-not-wired failure this SD spent a commit fixing elsewhere, re-committed inside
+// the fix for the line-number bug, in a commit whose message claimed verification by planted
+// violation. The manual planted runs were real; what got committed was not them.
+
+/** Blank comment BODIES in place, preserving newlines so line numbers stay accurate. */
+function blankComments(src) {
+  const NL = String.fromCharCode(10);
+  let out = ''; let state = null;
+  for (let i = 0; i < src.length;) {
+    const two = src.slice(i, i + 2);
+    if (state === null) {
+      if (two === '/*') { state = 'block'; out += '  '; i += 2; continue; }
+      if (two === '//') { state = 'line'; out += '  '; i += 2; continue; }
+      out += src[i]; i += 1;
+    } else if (state === 'block') {
+      if (two === '*/') { state = null; out += '  '; i += 2; continue; }
+      out += src[i] === NL ? NL : ' '; i += 1;
+    } else {
+      if (src[i] === NL) { state = null; out += NL; i += 1; continue; }
+      out += ' '; i += 1;
+    }
+  }
+  return out;
+}
+
+// Word-boundary, so the BARE destructured `rmSync(` is caught alongside `fs.rmSync(`.
+const RAW_RM_RE = /\brmSync\s*\(/;
+// SECURITY: the first version required `rmSync(` and `recursive` on the SAME line, and
+// Prettier splits a long call — the reformatted call sailed through a guard whose entire
+// purpose is ending a five-time recurrence. The options object is searched in a window.
+const RM_WINDOW = 4;
+
+/**
+ * Line numbers (1-based) of raw recursive rmSync calls in `src`.
+ * THE single implementation — the scan and its non-vacuity test both call this.
+ */
+function findRawRecursiveRmSync(src) {
+  const NL = String.fromCharCode(10);
+  const lines = blankComments(src).split(NL);
+  const hits = [];
+  for (const [i, line] of lines.entries()) {
+    if (!RAW_RM_RE.test(line)) continue;
+    if (lines.slice(i, i + RM_WINDOW).join(NL).includes('recursive')) hits.push(i + 1);
+  }
+  return hits;
+}
+
 function* walk(dir) {
   for (const entry of fs.readdirSync(dir, { withFileTypes: true })) {
     const fp = path.join(dir, entry.name);
@@ -105,68 +158,51 @@ describe('worktree delete primitive is chokepoint-only (FR-5)', () => {
         'CORRECTED BY SECURITY: verifiably safe, not merely unverified — :57 lists .worktrees/ in its never-walk EXCLUDE set. My earlier reason was weaker than the truth and would have sent a future reader chasing a non-hazard.'],
     ]);
 
-    // Comments are BLANKED IN PLACE rather than removed: stripping them shifts every
-    // subsequent line number, so reported violations point at the wrong code. (Learned
-    // the hard way while sizing this guard.) An unstripped scan is also wrong — the
-    // reaper mentions rmSync only in a comment and would self-report a false violation.
-    const blankComments = (src) => {
-      let out = ''; let state = null;
-      for (let i = 0; i < src.length;) {
-        const two = src.slice(i, i + 2);
-        if (state === null) {
-          if (two === '/*') { state = 'block'; out += '  '; i += 2; continue; }
-          if (two === '//') { state = 'line'; out += '  '; i += 2; continue; }
-          out += src[i]; i += 1;
-        } else if (state === 'block') {
-          if (two === '*/') { state = null; out += '  '; i += 2; continue; }
-          out += src[i] === '\n' ? '\n' : ' '; i += 1;
-        } else {
-          if (src[i] === '\n') { state = null; out += '\n'; i += 1; continue; }
-          out += ' '; i += 1;
-        }
-      }
-      return out;
-    };
-
-    // Word-boundary, so it catches the BARE destructured `rmSync(` as well as `fs.rmSync(`.
-    // SECURITY found the first version evadable: it required `rmSync(` and `recursive` on
-    // the SAME line, and Prettier splits a long call across lines — the reformatted call
-    // sailed through a guard whose entire purpose is ending a five-time recurrence. The
-    // options object is now searched in a small forward WINDOW instead.
-    const RAW_RM_RE = /\brmSync\s*\(/;
-    const WINDOW = 4;
     const violations = [];
     for (const dir of SCAN_DIRS) {
       for (const fp of walk(path.join(repoRoot, dir))) {
         const rel = path.relative(repoRoot, fp).replace(/\\/g, '/');
         if (FS_ALLOWLIST.has(rel)) continue;
-        const blanked = blankComments(fs.readFileSync(fp, 'utf8'));
-        if (!blanked.includes('.worktrees')) continue; // not a worktree-handling file
-        const lines = blanked.split('\n');
-        for (const [i, line] of lines.entries()) {
-          if (!RAW_RM_RE.test(line)) continue;
-          const window = lines.slice(i, i + WINDOW).join('\n');
-          if (window.includes('recursive')) violations.push(`${rel}:${i + 1}`);
-        }
+        const src = fs.readFileSync(fp, 'utf8');
+        if (!blankComments(src).includes('.worktrees')) continue; // not a worktree-handling file
+        for (const line of findRawRecursiveRmSync(src)) violations.push(`${rel}:${line}`);
       }
     }
     expect(violations, `raw recursive rmSync in worktree-handling files (use safeRecursiveRm):\n  ${violations.join('\n  ')}`).toEqual([]);
   });
 
-  it('FR-5 guard is not vacuous — it detects a synthetic violation', () => {
-    // Without this, the guard passes identically whether its predicate works or not.
-    const synthetic = [
+  it('FR-5 predicate is not vacuous — it detects BOTH call shapes and ignores comments', () => {
+    // Drives findRawRecursiveRmSync itself. Acceptance for RETRO-F1: setting RM_WINDOW
+    // back to 1 must turn this RED, which is impossible if the test re-implements it.
+    const NL = String.fromCharCode(10);
+    const singleLine = [
       'const dir = resolve(cwd, ".worktrees", name);',
       'fs.rmSync(dir, { recursive: true, force: true });',
-    ].join('\n');
-    const RAW_RM_RE = /\brmSync\s*\(/;
-    const hit = synthetic.split('\n').some((l) => RAW_RM_RE.test(l) && l.includes('recursive'));
-    expect(hit).toBe(true);
-    // …and a comment-only mention must NOT trip it, which is why blanking exists.
-    const commented = '// fs.rmSync(dir, { recursive: true });';
-    expect(commented.trim().startsWith('//')).toBe(true);
-  });
+    ].join(NL);
+    expect(findRawRecursiveRmSync(singleLine)).toEqual([2]);
 
+    // The multi-line form Prettier emits — the shape that evaded the first version.
+    const multiLine = [
+      'const dir = resolve(cwd, ".worktrees", name);',
+      'fs.rmSync(dir, {',
+      '  recursive: true,',
+      '  force: true,',
+      '});',
+    ].join(NL);
+    expect(findRawRecursiveRmSync(multiLine)).toEqual([2]);
+
+    // The bare destructured call, not just the dotted form.
+    expect(findRawRecursiveRmSync('rmSync(p, { recursive: true });')).toEqual([1]);
+
+    // A comment-only mention must NOT trip it — this is what blankComments buys, and it
+    // is asserted THROUGH the predicate rather than by re-checking the string.
+    expect(findRawRecursiveRmSync('// fs.rmSync(dir, { recursive: true });')).toEqual([]);
+    const blockComment = ['/*', ' fs.rmSync(dir, {', ' recursive: true,', ' });', '*/'].join(NL);
+    expect(findRawRecursiveRmSync(blockComment)).toEqual([]);
+
+    // A non-recursive rmSync is out of scope and must not be flagged.
+    expect(findRawRecursiveRmSync('fs.rmSync(file);')).toEqual([]);
+  });
   it('the warn-and-proceed CWD branch is gone from post-merge cleanup (FR-2)', () => {
     const src = fs.readFileSync(path.join(repoRoot, 'scripts/modules/shipping/post-merge-worktree-cleanup.js'), 'utf8');
     // The old branch returned a warning AND still deleted; the refusal path
