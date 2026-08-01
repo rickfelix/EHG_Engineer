@@ -86,7 +86,6 @@ describe('AXIS 5 fleet_health — discriminator', () => {
 });
 
 describe('AXIS 5 fleet_health — WIRING (what a discriminator test cannot catch)', () => {
-  const capture = {};
   const seats = [
     { session_id: 'aaaaaaaa-0000-0000-0000-000000000001', status: 'active', last_tool_at: minsAgo(600), metadata: {} },
     { session_id: 'bbbbbbbb-0000-0000-0000-000000000002', status: 'idle', last_tool_at: minsAgo(0), metadata: {} }
