@@ -64,8 +64,9 @@ import { runOrphanSweep } from '../lib/worktree-reaper/orphan-sweep.js';
 // QF-20260710-432: last-line live-claim guard — a live-claimed worktree is never
 // reaped regardless of commit count (Alpha-2 incident: zero-commit mid-PLAN reap).
 import { liveClaimBlocksRemoval } from '../lib/worktree-reaper/live-claim-guard.js';
-import { heartbeatResidencyBlocksRemoval } from '../lib/worktree-reaper/residency-guard.js';
-import { hasReapEligibleMarker, readReapEligibleMarker } from '../lib/worktree-reaper/reap-eligible-marker.js';
+import { heartbeatResidencyBlocksRemoval, treeResidencyBlocksRemoval } from '../lib/worktree-reaper/residency-guard.js';
+import { hasReapEligibleMarker, readReapEligibleMarker, isReapEligibleMarkerValid } from '../lib/worktree-reaper/reap-eligible-marker.js';
+import { decideRemoval, UNRESOLVABLE_KEY_RESIDENCY_CLEARED } from '../lib/worktree-reaper/removal-decision.js';
 // QF-20260725-821: the opt-OUT marker. .reap-eligible.json is opt-IN TO REAPING; before this
 // there was no way to say "do not reap me", so any operator/drill/ops worktree without an
 // sd_key basename and a DB claim was auto-removed at stage 2 (live incident: the chairman's
@@ -620,9 +621,26 @@ async function classifyWorktree(wt, ctx) {
   // marker is the out-of-band handoff from a post-merge flow that refused to
   // self-delete — collect it promptly, ahead of age-based classification. The
   // removal gate (live-claim + residency guards) still decides WHEN it is safe.
+  // SD-FDBK-INFRA-ORPHAN-WORKTREE-STRANDING-001-B (FR-3): the marker must still HOLD
+  // authority, not merely exist. Presence alone let a 5.5-hour-old marker naming a
+  // different SD license deleting the RLS ceremony tree at 21:34:48Z. The gate lands
+  // here — by not pushing the category — rather than in stageForCategories, which is a
+  // pure function of `categories` pinned by 14 assertions and is the wrong layer.
   if (hasReapEligibleMarker(wt.path)) {
-    categories.push('reap-eligible');
-    reasons['reap-eligible'] = { matched: true, reason: 'marker', evidence: readReapEligibleMarker(wt.path) || {} };
+    const validity = isReapEligibleMarkerValid(wt.path, { treeKey: keyFromWorktree(wt) });
+    if (validity.valid) {
+      categories.push('reap-eligible');
+      reasons['reap-eligible'] = { matched: true, reason: 'marker', evidence: readReapEligibleMarker(wt.path) || {} };
+    } else {
+      // Recorded, not silent: an expired marker is a decision someone made and it should
+      // be visible that it was declined rather than never seen.
+      reasons['reap-eligible-expired'] = {
+        matched: false,
+        reason: validity.reason,
+        detail: validity.detail || null,
+        evidence: readReapEligibleMarker(wt.path) || {},
+      };
+    }
   }
 
   const nested = isNested(wt);
@@ -1394,19 +1412,14 @@ export async function main(argv = process.argv) {
         logger: (m) => process.stderr.write(`  ${m}
 `),
       });
-      if (claimGuard.blocked) {
-        console.log(`  ⛔ ${path.basename(wtPath)} live-claim guard: ${claimGuard.reason} — skipping`);
-        emitJsonLine({
-          schema_version: SCHEMA_VERSION,
-          timestamp: new Date().toISOString(),
-          event: 'removal_blocked_live_claim',
-          worktree_path: wtPath,
-          reason: claimGuard.reason,
-          detail: claimGuard.detail || null,
-        });
-        aborted++;
-        continue;
-      }
+      // SD-FDBK-INFRA-ORPHAN-WORKTREE-STRANDING-001-B (FR-2): tree residency —
+      // occupancy asked of the FILESYSTEM, needing no DB row to agree with reality.
+      // This is the only predicate that can answer for a worktree whose basename
+      // resolves to no work key, since keyFromWorktree reads the branch but only for
+      // feat|qf|fix|chore|hotfix. Claim-independent and session-independent.
+      const treeResidency = treeResidencyBlocksRemoval(wtPath, {
+        logger: (m) => process.stderr.write(`  ${m}\n`),
+      });
 
       // SD-LEO-INFRA-WORKTREE-REAPER-RESIDENT-001 (FR-4): residency guard —
       // a FRESH-heartbeat session whose worktree_path references this target
@@ -1415,20 +1428,38 @@ export async function main(argv = process.argv) {
       const residency = await heartbeatResidencyBlocksRemoval(supabase, wtPath, {
         logger: (m) => process.stderr.write(`  ${m}\n`),
       });
-      if (residency.blocked) {
-        console.log(`  ⛔ ${path.basename(wtPath)} residency guard: ${residency.reason} — skipping`);
+
+      // FR-1b: compose. Every guard is still a veto EXCEPT the claim guard's
+      // work_key_unresolvable, which is an admission that it cannot verify — that one
+      // becomes a DEMAND that residency affirmatively clear. Without this, FR-1's
+      // honest refusal would mean an unresolvable basename is never reaped again.
+      const decision = decideRemoval({ claimGuard, treeResidency, heartbeatResidency: residency });
+      if (!decision.remove) {
+        console.log(`  ⛔ ${path.basename(wtPath)} removal gate (${decision.source}): ${decision.reason} — skipping`);
         emitJsonLine({
           schema_version: SCHEMA_VERSION,
           timestamp: new Date().toISOString(),
-          event: 'removal_blocked_resident',
+          // Historical event names kept verbatim — the emitted JSON is a consumed schema
+          // and this FR is about the decision, not the reporting vocabulary.
+          event: decision.source === 'claim' ? 'removal_blocked_live_claim' : 'removal_blocked_resident',
           worktree_path: wtPath,
-          reason: residency.reason,
-          detail: residency.detail || null,
+          reason: decision.reason,
+          source: decision.source,
+          detail: (decision.source === 'claim' ? claimGuard.detail : treeResidency.detail) || null,
         });
         aborted++;
         continue;
       }
-
+      if (decision.reason === UNRESOLVABLE_KEY_RESIDENCY_CLEARED) {
+        emitJsonLine({
+          schema_version: SCHEMA_VERSION,
+          timestamp: new Date().toISOString(),
+          event: 'removal_permitted_unresolvable_key',
+          worktree_path: wtPath,
+          reason: decision.reason,
+          detail: treeResidency.detail || null,
+        });
+      }
       // SD-LEO-FEAT-DATA-LOSS-HIGH-001 (FR-2): preserve BOTH untracked AND modified-tracked files
       // before the force-remove. Uncommitted edits to tracked files (the ~56-LOC data-loss class)
       // were previously destroyed because only `untracked` was copied. Dedupe defensively. The

@@ -87,8 +87,35 @@ describe('liveClaimBlocksRemoval — the Alpha-2 regression fixture', () => {
     expect(r.reason).toBe('unverifiable_guard_exception');
   });
 
-  test('non-work directories are not the guard\'s business', async () => {
+  // SD-FDBK-INFRA-ORPHAN-WORKTREE-STRANDING-001 (FR-1) REVERSES this case. The old test
+  // was named "non-work directories are not the guard's business" and pinned
+  // {blocked:false, reason:'no_work_key_in_path'}. That doctrine deleted two in-use
+  // ceremony trees on 2026-07-31. A directory the guard cannot resolve is now precisely
+  // the guard's business, because it is the case it cannot verify.
+  test('an unresolvable directory name fails CLOSED — cannot verify is not "no claim"', async () => {
     const r = await liveClaimBlocksRemoval(null, 'C:/repo/.worktrees/_archive');
-    expect(r).toEqual({ blocked: false, reason: 'no_work_key_in_path' });
+    expect(r.blocked).toBe(true);
+    expect(r.reason).toBe('work_key_unresolvable');
+    expect(r.detail).toEqual({ worktree_path: 'C:/repo/.worktrees/_archive' });
+  });
+
+  // The two REAL basenames from the 2026-07-31 incident, verbatim. Regression pins.
+  test.each([
+    '.worktrees/scribe-privesc-20260731',
+    '.worktrees/changelog-privesc',
+  ])('incident basename %s is refused, not reaped', async (rel) => {
+    const r = await liveClaimBlocksRemoval(null, `C:/repo/${rel}`);
+    expect(r.blocked).toBe(true);
+    expect(r.reason).toBe('work_key_unresolvable');
+  });
+
+  // OPPOSITE POLARITY — the control. Without this, a change that simply blocked
+  // everything would pass every assertion above while breaking the reaper entirely.
+  // A resolvable key with no claimant must still clear, via the VERIFIED path.
+  test('a resolvable key with no claimant still clears (fail-closed is not block-everything)', async () => {
+    const supabase = mockSupabase({ claimant: null, pointingSession: null });
+    const r = await liveClaimBlocksRemoval(supabase, 'C:/repo/.worktrees/SD-SOME-THING-001', { isSessionAliveFn: deadFn });
+    expect(r.blocked).toBe(false);
+    expect(r.reason).toBe('no_live_claim');
   });
 });
