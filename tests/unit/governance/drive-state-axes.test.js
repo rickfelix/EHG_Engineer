@@ -292,3 +292,98 @@ describe('AXIS 1 chairman_decisions — blind to CRITICAL is the defect this axi
     expect(chairAxis.classify({ pending: [] }, NOW).state).toBe(STATE.CLEAR);
   });
 });
+
+describe('AXIS 3 roadmap_motion — motion is a RATE, and state however complete is not a rate', () => {
+  const roadAxis = require('../../../lib/governance/drive-state/axes/roadmap-motion.cjs');
+  const DAY = 86400000;
+  const at = (d) => new Date(NOW - d * DAY).toISOString();
+
+  it('ships UNMEASURABLE, with a citation carrying the measured population figures', () => {
+    const r = roadAxis.classify({}, NOW);
+    expect(r.state).toBe(STATE.UNMEASURABLE);
+    expect(r.reason).toBe('no_per_item_commitment_clock');
+    expect(r.action_taken).toBe(ACTION.UNVERIFIABLE);
+    // Provenance, not adjectives: the numbers a reader can go re-measure.
+    expect(r.citation).toMatch(/1864/);
+    expect(r.citation).toMatch(/0\.9%/);
+    expect(r.citation).toMatch(/SD-FDBK-INFRA-ROADMAP-COMMITMENT-CLOCK-001/);
+  });
+
+  it('does NOT claim storage is missing — the store exists and is named', () => {
+    // The wrong artifact would have been "no table fits". Guard against regressing to it.
+    expect(roadAxis.BLOCKED_CITATION).toMatch(/roadmap_baseline_snapshots exists/);
+    expect(roadAxis.BLOCKED_CITATION).toMatch(/Storage is NOT the blocker/);
+  });
+
+  it('fetch() deliberately retrieves nothing rather than returning a state census', () => {
+    return roadAxis.fetch(null, {}).then((s) => expect(s).toEqual({ blocked: true }));
+  });
+
+  // ===== THE DISCRIMINATOR, both directions =====
+
+  it('STALLED when a dated commitment sits past the stall window unadvanced', () => {
+    const r = roadAxis.classifyMotion({
+      committed: [{ id: 'a', committedAt: at(90) }, { id: 'b', committedAt: at(2) }],
+      advanced: new Set(['b']), voidedByDecision: new Set(), asOf: NOW, stallDays: 30
+    });
+    expect(r.state).toBe(STATE.STALLED);
+    expect(r.stalled).toBe(1);
+  });
+
+  it('CLEAR when every dated commitment advanced or is inside the window', () => {
+    const r = roadAxis.classifyMotion({
+      committed: [{ id: 'a', committedAt: at(90) }, { id: 'b', committedAt: at(2) }],
+      advanced: new Set(['a']), voidedByDecision: new Set(), asOf: NOW, stallDays: 30
+    });
+    expect(r.state).toBe(STATE.CLEAR);
+    expect(r.stalled).toBe(0);
+  });
+
+  // ===== THE FINDING THAT KILLED THE OBVIOUS IMPLEMENTATION =====
+
+  it('REFUSES a single-backfill date set instead of computing ages against a batch stamp', () => {
+    // The live condition: 1843 of 1864 rows share one stamp written by one writer in one pass.
+    // Ages computed against it are ages of the backfill, so "stalled past 14d" returns 0 BY
+    // CONSTRUCTION. Reporting CLEAR here is the axis-1 escalated:false defect in a new column.
+    const sameDay = at(10);
+    const r = roadAxis.classifyMotion({
+      committed: Array.from({ length: 50 }, (_, i) => ({ id: 'i' + i, committedAt: sameDay })),
+      advanced: new Set(), voidedByDecision: new Set(), asOf: NOW, stallDays: 5
+    });
+    expect(r.state).toBe(STATE.UNMEASURABLE);
+    expect(r.reason).toBe('commitment_dates_are_a_single_backfill');
+  });
+
+  it('...and that refusal is NOT a blanket refusal — genuine spread still classifies', () => {
+    const r = roadAxis.classifyMotion({
+      committed: [{ id: 'a', committedAt: at(10) }, { id: 'b', committedAt: at(40) }],
+      advanced: new Set(), voidedByDecision: new Set(), asOf: NOW, stallDays: 5
+    });
+    expect(r.state).toBe(STATE.STALLED);
+  });
+
+  it('an item VOIDED BY DECISION is not a stall — scope discipline must not read as neglect', () => {
+    // Live: 226 cancelled SDs map to remainder_state 'void', reasons naming "Chairman final cut"
+    // and "All items already built in codebase". Counting those as stalls is a false alarm.
+    const r = roadAxis.classifyMotion({
+      committed: [{ id: 'a', committedAt: at(90) }, { id: 'b', committedAt: at(80) }],
+      advanced: new Set(), voidedByDecision: new Set(['a', 'b']), asOf: NOW, stallDays: 30
+    });
+    expect(r.state).toBe(STATE.CLEAR);
+    expect(r.stalled).toBe(0);
+  });
+
+  it('state-only input cannot yield CLEAR — undated commitments are UNMEASURABLE', () => {
+    const r = roadAxis.classifyMotion({
+      committed: [{ id: 'a', state: 'promotable_now' }, { id: 'b', state: 'promotable_now' }],
+      advanced: new Set(), voidedByDecision: new Set(), asOf: NOW, stallDays: 30
+    });
+    expect(r.state).toBe(STATE.UNMEASURABLE);
+    expect(r.reason).toBe('no_parseable_commitment_dates');
+  });
+
+  it('malformed input returns null rather than a verdict', () => {
+    expect(roadAxis.classifyMotion(null)).toBe(null);
+    expect(roadAxis.classifyMotion({ committed: [], advanced: [] })).toBe(null);
+  });
+});
