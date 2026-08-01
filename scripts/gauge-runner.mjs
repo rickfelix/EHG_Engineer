@@ -69,6 +69,7 @@ import {
   fetchLastNDispatchedKeys,
   hasOpenFinding,
   findOpenFinding,
+  OPEN_FINDING_STATUSES,
 } from '../lib/governance/plan-drift-detectors.js';
 import { stampLastFired } from '../lib/periodic-liveness/stamp-last-fired.js';
 import { checkGhostCeos } from '../lib/agents/ghost-ceo-gauge.js';
@@ -538,7 +539,14 @@ export async function routeFinding(supabase, entry, result) {
         occurrence_count: (open.occurrence_count || 1) + 1,
         updated_at: new Date().toISOString(),
       })
-      .eq('id', open.id);
+      .eq('id', open.id)
+      // RE-ASSERTED, NOT ASSUMED. The lookup already proved these, but the invariant "this runner
+      // only ever bumps its OWN open gauge rows" then lives split across two statements in two
+      // files, and the anti-precedent above is exactly what that split produces: a correct-looking
+      // UPDATE fed by a lookup that lost a predicate. Keeping them here makes the UPDATE refuse a
+      // stale or mis-scoped id on its own terms — it is a no-op when the lookup is right.
+      .eq('category', 'invariant_gauge_finding')
+      .in('status', OPEN_FINDING_STATUSES);
     if (error) {
       console.error(`[gauge-runner] ${entry.id}: re-emission stamp failed (non-fatal): ${error.message}`);
       return 'error';

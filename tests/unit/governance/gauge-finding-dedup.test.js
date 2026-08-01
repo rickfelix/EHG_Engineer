@@ -48,9 +48,20 @@ function makeSupabase({ openRow = null, selectError = null, updateError = null, 
         update(payload) { calls.updates.push({ payload }); return q; },
         async insert(row) { calls.inserts.push(row); return { error: insertError ? { message: insertError } : null }; },
       };
-      // .update(...).eq(...) resolves as a thenable
+      // The UPDATE is its OWN builder, not the select's. It was a one-shot `{ eq: async () => … }`,
+      // which broke the moment the UPDATE re-asserted category and open-status alongside the id.
+      // It now takes any number of filters, RECORDS each one, and resolves as a thenable the way
+      // postgrest-js does — so `await …update().eq().eq().in()` works and the filters are assertable.
       const origUpdate = q.update;
-      q.update = (payload) => { origUpdate(payload); return { eq: async () => ({ error: updateError ? { message: updateError } : null }) }; };
+      q.update = (payload) => {
+        origUpdate(payload);
+        const u = {
+          eq(col, val) { if (col === 'id') calls.updates.at(-1).id = val; else calls.updates.at(-1)[col] = val; return u; },
+          in(col, vals) { calls.updates.at(-1)[col] = vals; return u; },
+          then(resolve, reject) { return Promise.resolve({ error: updateError ? { message: updateError } : null }).then(resolve, reject); },
+        };
+        return u;
+      };
       return q;
     },
   };
@@ -65,6 +76,12 @@ describe('routeFinding: re-emission is stamped, not re-inserted', () => {
     expect(sb.calls.updates).toHaveLength(1);
     expect(sb.calls.updates[0].payload.occurrence_count).toBe(8);
     expect(sb.calls.updates[0].payload.last_seen).toEqual(expect.any(String));
+    // THE UPDATE RE-ASSERTS ITS OWN SCOPE. The lookup already proved category and open-status, but
+    // the named anti-precedent in this very PR (gh-failure-monitor, live-bumping a RESOLVED row to
+    // occurrence_count 586) is precisely a correct-looking UPDATE fed by a lookup that lost a
+    // predicate. Split across two files, that invariant is one careless edit from gone.
+    expect(sb.calls.updates[0].category).toBe('invariant_gauge_finding');
+    expect(sb.calls.updates[0].status).toEqual(OPEN_FINDING_STATUSES);
   });
 
   it('INSERTS a first emission and stamps BOTH first_seen and last_seen', async () => {
@@ -207,6 +224,12 @@ describe('the dedup query asks the right question', () => {
     await routeFinding(sb, ENTRY, { count: 1 });
     expect(sb.calls.selects.join('|')).toContain('source_type=auto_capture');
     expect(sb.calls.isFilters).toContainEqual({ col: 'feedback_type', val: null });
+    // The category filter is what keeps the dedup key inside this runner's own row family; without
+    // it any auto_capture row with a matching gauge_id would mute the gauge.
+    expect(sb.calls.selects.join('|')).toContain('category=invariant_gauge_finding');
+    // An archived row still holds an open STATUS — archiving is not a status transition — so only
+    // this predicate stops an archived finding from muting its gauge from behind a filtered view.
+    expect(sb.calls.isFilters).toContainEqual({ col: 'archived_at', val: null });
   });
 
   it('picks the open row DETERMINISTICALLY — .limit(1) without .order() stamps an arbitrary sibling', async () => {
