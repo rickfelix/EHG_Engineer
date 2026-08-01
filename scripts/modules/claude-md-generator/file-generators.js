@@ -585,6 +585,60 @@ function generateAdamProvenance(data, fileMapping) {
   });
 }
 
+/**
+ * CLAUDE_LEAD_MANUAL.md — SD-FDBK-INFRA-CLAUDE-LEAD-EXCEEDS-001.
+ *
+ * CLAUDE_LEAD.md measured 27,462 harness tokens against the Read tool's 25,000 cap, so a
+ * no-offset Read returned lines 1-1231 of 1592 and SAID SO ONLY IN A NOTICE THE GATE CANNOT SEE.
+ * Head truncation keeps the rationale at the top and drops the tail, which is disproportionately
+ * the rules — an absent prohibition reads as permission, at the phase that approves scope.
+ *
+ * This reuses generateAdamCompanion unchanged: despite the name it takes fileKey + spec and is
+ * already generic, and SD-LEO-INFRA-ADAM-CONTRACT-READABLE-001 proved the shape on a file with
+ * the same defect. Renaming it to generateCompanion would be tidier and would also touch a
+ * working, shipped path for no behavioural gain, so it keeps its name.
+ *
+ * WHAT MAY MOVE HERE IS AN ALLOW-LIST, NOT A REGEX VERDICT. The four sections below were each
+ * checked individually for rule content; the keyword scan is only a tripwire that prompts that
+ * check. That distinction is not pedantry — the original detector (/BLOCKING|MUST NOT|NEVER|
+ * MANDATORY|PROHIBITED/, case-sensitive) scored `negative_constraints_plan` at ZERO, a section
+ * titled "PLAN Phase Negative Constraints" consisting entirely of NC-PLAN-001..005. Prohibitions
+ * here are expressed structurally — headed lists, NC- identifiers, Anti-Pattern/Why Wrong triples
+ * — at least as often as lexically, so a lexical detector is aimed at the wrong layer and fails
+ * SILENTLY. An allow-list fails LOUDLY instead: a section nobody justified simply does not move.
+ */
+function generateLeadManual(data, fileMapping) {
+  return generateAdamCompanion(data, fileMapping, 'CLAUDE_LEAD_MANUAL.md', {
+    heading: 'LEAD Manual (reference companion)',
+    purpose: 'Long-form LEAD reference — the Q9 strategic-validation rubric, parent/child SD governance, multi-track parallel execution, directive submission review',
+    loadWhen: 'At the MOMENT OF DOING one of these procedures — not at every LEAD phase entry',
+    note: 'This companion carries REFERENCE AND PROCEDURE. Every RULE and PROHIBITION that governs LEAD stays in CLAUDE_LEAD.md and is in force whether or not this file is read. If you are ever unsure whether something belongs here, it belongs in CLAUDE_LEAD.md — this file exists to make that file readable, not to relieve it of anything that binds.',
+  });
+}
+
+/**
+ * CLAUDE_PLAN_MANUAL.md — the second half of SD-FDBK-INFRA-CLAUDE-LEAD-EXCEEDS-001.
+ *
+ * CLAUDE_PLAN.md measured 38,166 harness tokens against the 25,000 cap — the worst of the four
+ * phase/context files — truncating at line 1368 of 2457, so 44% of PLAN guidance was silently
+ * absent from any single read.
+ *
+ * ONE ENTRY HERE IS WEAKER THAN THE REST AND SAYS SO. `workflow` is included because excluding it
+ * leaves the budget 274 tokens short, not because it is self-evidently reference. It survives
+ * review on the facts — three unrelated rows share that generic type, 72% of it is a manual
+ * /runtime-audit protocol with no bearing on PLAN gating, and the type still renders into
+ * CLAUDE_EXEC.md so nothing leaves the protocol — but arithmetic-driven inclusions should be
+ * visible as such rather than blended into the list.
+ */
+function generatePlanManual(data, fileMapping) {
+  return generateAdamCompanion(data, fileMapping, 'CLAUDE_PLAN_MANUAL.md', {
+    heading: 'PLAN Manual (reference companion)',
+    purpose: 'Long-form PLAN reference — gate scoring tables, PRD and presentation templates, parent/child decomposition, refactor-brief guide, Explore-before-validation, runtime-audit protocol',
+    loadWhen: 'At the MOMENT OF DOING one of these procedures — not at every PLAN phase entry',
+    note: 'This companion carries REFERENCE AND PROCEDURE. Every RULE and PROHIBITION that governs PLAN stays in CLAUDE_PLAN.md and is in force whether or not this file is read. The negative constraints, the anti-patterns, the smoke-test and stubbed-code requirements all stayed behind deliberately — this file exists to make that one readable, not to relieve it of anything that binds.',
+  });
+}
+
 function generateAdam(data, fileMapping) {
   const { protocol } = data;
   const sections = protocol.sections;
@@ -693,6 +747,8 @@ export {
   generateAdam,
   generateAdamManual,
   generateAdamProvenance,
+  generateLeadManual,
+  generatePlanManual,
   generateCoordinator,
   generateSolomon,
   findCopiedSharedSections,

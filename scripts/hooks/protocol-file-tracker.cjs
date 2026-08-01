@@ -53,6 +53,11 @@ const PROTOCOL_FILES = [
   // entirely, so "was the governed procedure ever opened?" has no answer at all. Governed content
   // that no mechanism can even see being read is the demotion this SD exists to prevent.
   'CLAUDE_ADAM_MANUAL.md',
+  // SD-FDBK-INFRA-CLAUDE-LEAD-EXCEEDS-001. A read of a file absent from this list is invisible to
+  // session state entirely — CLAUDE_ADAM_DIGEST.md is generated today and tracked nowhere. A new
+  // companion that nothing records is a companion nobody can prove was read.
+  'CLAUDE_LEAD_MANUAL.md',
+  'CLAUDE_PLAN_MANUAL.md',
   'CLAUDE_ADAM_PROVENANCE.md',
   'CLAUDE_SOLOMON.md',  // role contract, not a handoff-gate requirement — verified at role activation
   // SD-LEO-INFRA-ROLE-CONTRACT-READ-GATE-001 / FR-2 prerequisite. The coordinator was the ONLY role

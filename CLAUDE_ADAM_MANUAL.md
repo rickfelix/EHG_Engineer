@@ -1,8 +1,8 @@
-<!-- file_content_hash: 2344306061086a4c -->
+<!-- file_content_hash: fb786c2c04998c77 -->
 <!-- GENERATED FILE - DO NOT EDIT DIRECTLY. Source of truth: leo_protocol_sections (DB). Regenerate: node scripts/generate-claude-md-from-db.js. Drift check: node scripts/check-claude-md-drift.cjs -->
 # CLAUDE_ADAM_MANUAL.md — Adam Manual (how-to companion)
 
-**Generated**: 2026-07-31 9:44:09 AM
+**Generated**: 2026-08-01 8:11:44 AM
 **Protocol**: LEO 4.4.1
 **Purpose**: How-to procedures lifted out of the role contract — SD creation field shapes, migration ceremony steps, gauge inputs
 **Load when**: At the MOMENT OF DOING the procedure — not at session start
@@ -113,6 +113,6 @@ It guards two opposed failure modes, both probed by the self-adherence review (`
 
 ---
 
-*Generated from database: 2026-07-31*
+*Generated from database: 2026-08-01*
 *Protocol Version: 4.4.1*
 *Source of truth: leo_protocol_sections (section_type=adam_manual). Do not hand-edit — edit the DB section and regenerate.*

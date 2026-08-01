@@ -1,7 +1,7 @@
 <!-- GENERATED FILE - DO NOT EDIT DIRECTLY. Source of truth: leo_protocol_sections (DB). Regenerate: node scripts/generate-claude-md-from-db.js. Drift check: node scripts/check-claude-md-drift.cjs -->
 <!-- DIGEST FILE - Enforcement-focused protocol content -->
-<!-- generated_at: 2026-07-31T16:41:11.847Z -->
-<!-- git_commit: e637e042 -->
+<!-- generated_at: 2026-08-01T12:11:44.491Z -->
+<!-- git_commit: f70be27d -->
 <!-- db_snapshot_hash: f40cba344ed016a6 -->
 <!-- file_content_hash: 6a2207cc18ddebdc -->
 
@@ -163,5 +163,5 @@ On 2026-04-06 during SD-LEO-REFAC-STAGE-ADVANCEMENT-ENGINE-001 child decompositi
 
 ---
 
-*DIGEST generated: 2026-07-31 12:41:11 PM*
+*DIGEST generated: 2026-08-01 8:11:44 AM*
 *Protocol: 4.4.1*
