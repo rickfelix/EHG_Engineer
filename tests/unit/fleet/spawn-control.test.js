@@ -169,7 +169,13 @@ describe('module surface (TS-10: exactly seven named verbs, no more)', () => {
       // matters because BOTH failure modes are invisible at runtime (a tree under .worktrees/ is
       // silently unguarded; an unignored tree silently dirties the root). SPAWN_SOURCE_DIRNAME is
       // a VALUE, belonging here for the same reason as the SESSION_BIND_* constants above.
-      'resolveSpawnSourceDir', 'SPAWN_SOURCE_DIRNAME'];
+      'resolveSpawnSourceDir', 'SPAWN_SOURCE_DIRNAME',
+      // ensureSpawnSourceWorktree / buildSpawnSourceWorktreeArgs — helpers, not verbs. No operator
+      // invokes them and no route reaches them; spawn() consumes them internally. Exported because
+      // both take injected deps (exists probe, git runner) so the create-vs-reuse decision and the
+      // argv shape are assertable without a real repo — the reuse path in particular would only
+      // fail under repeated spawns, which is exactly when it is hardest to observe.
+      'ensureSpawnSourceWorktree', 'buildSpawnSourceWorktreeArgs'];
     const unexpected = Object.keys(mod).filter((k) => !verbNames.includes(k) && !helperNames.includes(k));
     expect(unexpected).toEqual([]);
   });
