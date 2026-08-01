@@ -1,5 +1,6 @@
 -- requires-chairman-apply
--- @approved-by: <pending chairman sign-off>
+-- @approved-by: codestreetlabs@gmail.com
+-- @approval-provenance: chairman SMS "Approved" 2026-08-01 11:16:35Z (packet sent 11:13:36Z), Adam d5080cf3 scribing
 -- =============================================================================
 -- Migration: revoke anon WRITE grants on the remaining 6 exposed tables
 -- Why: PR 6717 closed claude_sessions + session_coordination, but SECURITY
