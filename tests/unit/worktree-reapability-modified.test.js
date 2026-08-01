@@ -13,7 +13,17 @@ import os from 'node:os';
 import path from 'node:path';
 import { collectDirtyStatus } from '../../lib/worktree-reapability.js';
 
-const git = (stdout, code = 0) => () => ({ code, stdout, stderr: '' });
+// Was args-BLIND (returned the same stdout for every call). Since -C, collectDirtyStatus
+// asserts ownership before letting a dirty answer through, so an args-blind runner hands
+// its porcelain output back as the answer to `rev-parse --show-toplevel` and the tree
+// reads as not-its-own. It now answers rev-parse with the cwd it was handed — these
+// fixtures all describe a REAL worktree reporting its OWN dirt. Only what the fixture
+// ANSWERS changed; every assertion below still claims exactly what it claimed before.
+const git = (stdout, code = 0) => (args, cwd) => (
+  args[0] === 'rev-parse' && args[1] === '--show-toplevel'
+    ? { code: 0, stdout: String(cwd), stderr: '' }
+    : { code, stdout, stderr: '' }
+);
 
 describe('collectDirtyStatus.modified (FR-1)', () => {
   let wt;
