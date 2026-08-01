@@ -173,11 +173,30 @@ export async function runPrerequisitePreflight(supabase, handoffType, sdId) {
         supabase
       );
       if (evidenceResult.passed === false && !evidenceResult.wait) {
-        issues.push({
-          code: 'SUBAGENT_EVIDENCE_MISSING',
-          message: `Missing sub-agent evidence for: ${(evidenceResult.details?.missing || []).join(', ') || 'required agent(s)'}`,
-          remediation: evidenceResult.remediation || 'Invoke the missing sub-agent(s) via the Task tool before re-running the handoff.'
-        });
+        // ABSENT AND FAILED ARE DIFFERENT PROBLEMS WITH DIFFERENT REMEDIES, and collapsing them
+        // here would have defeated the gate's whole point. Since
+        // SD-FDBK-FIX-GATE-SUBAGENT-EVIDENCE-001 the gate can block because a required agent's
+        // LATEST evidence carries a rejecting verdict — in which case `missing` is EMPTY. Rendering
+        // only `missing` produced "Missing sub-agent evidence for: required agent(s)" under the
+        // code SUBAGENT_EVIDENCE_MISSING: no agent named, and the wrong diagnosis. A worker reading
+        // that re-invokes an agent that already ran, instead of investigating why it failed.
+        const missing = evidenceResult.details?.missing || [];
+        const failing = evidenceResult.details?.failing || [];
+        if (failing.length > 0) {
+          issues.push({
+            code: 'SUBAGENT_EVIDENCE_BAD_VERDICT',
+            message: `Sub-agent evidence present but not passing: ${failing.map(f => `${f.agent}=${f.verdict}`).join(', ')}`,
+            remediation: evidenceResult.remediation
+              || 'Investigate why the sub-agent(s) returned a non-passing verdict, then re-run them — the gate reads the LATEST row per agent, so a successful re-run supersedes the failed one.'
+          });
+        }
+        if (missing.length > 0 || failing.length === 0) {
+          issues.push({
+            code: 'SUBAGENT_EVIDENCE_MISSING',
+            message: `Missing sub-agent evidence for: ${missing.join(', ') || 'required agent(s)'}`,
+            remediation: evidenceResult.remediation || 'Invoke the missing sub-agent(s) via the Task tool before re-running the handoff.'
+          });
+        }
       }
     } catch (evidenceErr) {
       // Fail-open: the real gate still enforces this later — preflight is UX only.
