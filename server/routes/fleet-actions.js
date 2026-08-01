@@ -60,11 +60,24 @@ export async function respawnFleet(req, res) {
   const results = [];
   for (const missingSlot of drift.missing) {
     const desired = desiredSlots.find((d) => d.name === missingSlot.name) || {};
-    const result = await spawn(
-      { role: desired.role, callsign: missingSlot.name, accountProfile: desired.account_profile },
-      { supabaseClient: supabase },
-    );
-    results.push({ name: missingSlot.name, ...result });
+    try {
+      const result = await spawn(
+        { role: desired.role, callsign: missingSlot.name, accountProfile: desired.account_profile },
+        { supabaseClient: supabase },
+      );
+      results.push({ name: missingSlot.name, ...result });
+    } catch (err) {
+      // SD-FDBK-INFRA-SPAWN-SOURCE-CURRENCY-001 FR-4: spawn()'s guards THROW refusals whose
+      // messages carry the remedy (tree-currency names `git pull --ff-only`). Unhandled, the
+      // throw escaped to the EVA error handler, which flattens it to a bare 422 with no reason.
+      //
+      // Caught PER ITERATION rather than around the whole loop, deliberately: a single stale or
+      // dirty slot used to abort the entire respawn and discard every other slot's result, so one
+      // refusable slot silently cost the operator the whole batch. Now each slot reports its own
+      // outcome and the sweep completes. Same {ok:false, reason} shape the sessions page already
+      // renders verbatim (QF-20260731-222, PR #6669) — no new client contract.
+      results.push({ name: missingSlot.name, ok: false, reason: (err && err.message) || String(err) });
+    }
   }
 
   res.json({ live: isLiveEnabled(), respawned: results, unchanged: drift.present.length });
@@ -81,7 +94,17 @@ export async function relaunchSessionUnderProfile(req, res) {
     res.status(400).json({ ok: false, reason: 'target and accountProfile are required' });
     return;
   }
-  const result = await relaunchUnderProfile(target, accountProfile, { supabaseClient: supabase, newSessionId });
+  let result;
+  try {
+    result = await relaunchUnderProfile(target, accountProfile, { supabaseClient: supabase, newSessionId });
+  } catch (err) {
+    // SD-FDBK-INFRA-SPAWN-SOURCE-CURRENCY-001 FR-4: mirrors the addSession handler shipped in
+    // QF-20260731-222 (PR #6669). relaunch crosses the same tree-currency guard as spawn, so an
+    // unhandled refusal reached the EVA error handler and surfaced as a bare 422 — the operator
+    // saw a status code instead of the remedy the guard had already written for them.
+    res.status(422).json({ ok: false, reason: (err && err.message) || String(err) });
+    return;
+  }
   res.json({ live: isLiveEnabled(), ...result });
 }
 
