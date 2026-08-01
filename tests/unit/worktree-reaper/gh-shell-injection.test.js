@@ -139,6 +139,41 @@ describe('THE LOAD-BEARING ASSERTION — the real runners spawn without a shell'
     expect(opts).not.toHaveProperty('shell');
   });
 
+  test('SITE 2 shape assertion — defaultRunGh passes NO shell option (platform-independent)', async () => {
+    // RETRO C1. The PATH-injection test below is win32-shaped and asserts nothing about
+    // the option on the platform CI actually runs. Reinstating
+    // `shell: process.platform === 'win32'` at wip-detector was therefore UNDETECTABLE on
+    // ubuntu — the same defect I had just fixed for site 1 and applied as a find-and-replace
+    // over the two lines that happened to contain toBeFalsy(), rather than as a property of
+    // the suite.
+    //
+    // The tell was in my own commit message: the win32 mutation turned THREE tests red
+    // (2 reaper + 1 wip-detector) and I wrote "turns 2 RED" after the change. 3 -> 2 IS this
+    // gap, printed in my own numbers and uncommented. "N went red" is not the check;
+    // "every site I claim to have closed contributed at least one red, under the ENFORCING
+    // platform's evaluation semantics" is.
+    //
+    // CJS require() returns the cached module object, and defaultRunGh re-requires inside
+    // the function, so spying on that object is observed by the real runner.
+    const { createRequire } = await import('node:module');
+    const req = createRequire(import.meta.url);
+    const cp = req('child_process');
+    const spy = vi.spyOn(cp, 'spawnSync').mockReturnValue({ stdout: '[]', stderr: '', status: 0 });
+    try {
+      const { defaultRunGh, defaultRunGit } = req('../../../lib/claim/wip-detector.cjs');
+      defaultRunGh(['pr', 'list', '--head', HOSTILE_BRANCH, '--json', 'number']);
+      defaultRunGit(['cherry', 'origin/main', '--', HOSTILE_BRANCH]);
+      expect(spy).toHaveBeenCalledTimes(2);
+      for (const [bin, args, opts] of spy.mock.calls) {
+        expect(['gh', 'git']).toContain(bin);
+        expect(opts).not.toHaveProperty('shell'); // ABSENT — falsy would pass on ubuntu
+        expect(args).toContain(HOSTILE_BRANCH);   // discrete element, never concatenated
+      }
+    } finally {
+      spy.mockRestore();
+    }
+  });
+
   test('wip-detector defaultRunGh also spawns without a shell (the second site)', async () => {
     // ASSERTED BY PATH INJECTION, NOT BY MOCKING. hasOpenPr takes runGh as a required
     // parameter, so driving it through hasOpenPr observes only the runner the test
