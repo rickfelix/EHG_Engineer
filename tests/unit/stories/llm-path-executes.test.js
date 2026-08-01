@@ -148,6 +148,7 @@ describe('FR-2 follow-up: the loud channel must not carry credentials', () => {
     vi.resetModules();
     vi.doMock('../../../lib/sub-agents/modules/stories/llm-story-generator.js', async (orig) => ({
       ...(await orig()),
+      isLLMAvailable: () => true,
       createLLMStoryGenerator: () => ({
         isEnabled: () => true,
         generateStoriesFromCriteria: async () => {
@@ -187,6 +188,7 @@ describe('FR-2: taking the fallback is LOUD', () => {
     vi.resetModules();
     vi.doMock('../../../lib/sub-agents/modules/stories/llm-story-generator.js', async (orig) => ({
       ...(await orig()),
+      isLLMAvailable: () => true,
       createLLMStoryGenerator: () => ({
         isEnabled: () => true,
         generateStoriesFromCriteria: async () => { throw new Error('forced provider outage'); },
@@ -222,6 +224,7 @@ describe('FR-2: taking the fallback is LOUD', () => {
     vi.resetModules();
     vi.doMock('../../../lib/sub-agents/modules/stories/llm-story-generator.js', async (orig) => ({
       ...(await orig()),
+      isLLMAvailable: () => true,
       createLLMStoryGenerator: () => ({
         isEnabled: () => true,
         generateStoriesFromCriteria: async (criteria) => ({
