@@ -192,3 +192,98 @@ describe('FR-6/TR-8 renderPendingLine — the rendered surface, now assertable',
     expect(line).toContain('chairman_approval:dec-1');
   });
 });
+
+describe('FR-4 supersession — a recurring review must not accrue one stale critical per cycle', () => {
+  // A fake that records writes and is TABLE- and FILTER-aware, so a supersession aimed at the
+  // wrong table or the wrong window cannot pass. Seeded with a PRIOR-window pending packet and a
+  // FOREIGN decision_type that must be left alone.
+  function reviewFake({ existingInWindow = [], priors = [] } = {}) {
+    const writes = [];
+    const rows = {
+      chairman_decisions: [
+        ...existingInWindow.map((r) => ({ ...r, _window: 'current' })),
+        ...priors.map((r) => ({ ...r, _window: 'prior' }))
+      ]
+    };
+    const q = (table) => {
+      let sel = rows[table] ? rows[table].slice() : [];
+      const api = {
+        select: () => api,
+        eq: (c, v) => { sel = sel.filter((r) => r[c] === v); return api; },
+        neq: (c, v) => { sel = sel.filter((r) => r[c] !== v); return api; },
+        gte: () => { sel = sel.filter((r) => r._window === 'current'); return api; },
+        lt: () => { sel = sel.filter((r) => r._window === 'prior'); return api; },
+        order: () => api,
+        // fetchAllPaginated drives the ventures read through .range()
+        range: async (a, b) => ({ data: sel.slice(a, b + 1), error: null }),
+        limit: async (n) => ({ data: sel.slice(0, n), error: null }),
+        // The management_reviews leg runs AFTER the supersession; stubbed so it cannot mask a
+        // supersession failure by throwing first.
+        maybeSingle: async () => ({ data: sel[0] || null, error: null }),
+        insert: async () => ({ error: null }),
+        upsert: async () => ({ error: null }),
+        update: (patch) => ({ eq: async (c, v) => { writes.push({ table, id: v, patch }); return { error: null }; } }),
+        delete: () => ({ eq: async () => ({ error: null }) }),
+        then: (res, rej) => Promise.resolve({ data: sel.slice(), error: null }).then(res, rej)
+      };
+      return api;
+    };
+    return { from: (t) => q(t), _writes: writes };
+  }
+
+  const handler = async (db, extra = {}) => {
+    const { portfolioReviewHandler } = await import('../../../scripts/eva/portfolio-review-round.mjs');
+    return portfolioReviewHandler({
+      supabase: db,
+      deps: {
+        loadStrategy: async () => ({ vision_key: 'VISION-PORTFOLIO-STRATEGY-001' }),
+        record: async () => ({ recorded: true, id: 'new-packet' }),
+        ...extra
+      }
+    });
+  };
+
+  it('a NEW window supersedes the prior pending packet WITH a pointer', async () => {
+    const db = reviewFake({ priors: [{ id: 'old-packet', decision_type: 'portfolio_review', status: 'pending', brief_data: { keep: 1 } }] });
+    const res = await handler(db);
+    expect(res.insertedPacket).toBe(true);
+    expect(res.superseded).toContain('old-packet');
+    const w = db._writes.find((x) => x.id === 'old-packet');
+    expect(w.table).toBe('chairman_decisions');
+    expect(w.patch.status).toBe('superseded');
+    expect(w.patch.brief_data.superseded_by).toBe('new-packet');
+    expect(w.patch.brief_data.keep, 'existing brief_data must survive').toBe(1);
+  });
+
+  it('NEVER records approved/rejected — the chairman did not decide this packet (TR-3)', async () => {
+    const db = reviewFake({ priors: [{ id: 'old-packet', decision_type: 'portfolio_review', status: 'pending' }] });
+    await handler(db);
+    const w = db._writes.find((x) => x.id === 'old-packet');
+    expect(['approved', 'rejected']).not.toContain(w.patch.status);
+  });
+
+  it('SAME-window re-run supersedes NOTHING — the idempotency contract is preserved', async () => {
+    // A packet already occupies the window, so no insert happens and no supersession may fire.
+    const db = reviewFake({
+      existingInWindow: [{ id: 'this-window', decision_type: 'portfolio_review', status: 'pending' }],
+      priors: [{ id: 'old-packet', decision_type: 'portfolio_review', status: 'pending' }]
+    });
+    const res = await handler(db);
+    expect(res.insertedPacket).toBe(false);
+    expect(res.superseded).toEqual([]);
+    expect(db._writes.length, 'a same-window re-run must write nothing').toBe(0);
+  });
+
+  it('a prior packet ALREADY decided is not re-touched — only pending rows supersede', async () => {
+    const db = reviewFake({ priors: [{ id: 'old-decided', decision_type: 'portfolio_review', status: 'approved' }] });
+    const res = await handler(db);
+    expect(res.superseded).toEqual([]);
+  });
+
+  it('a FOREIGN decision_type in the prior window is left alone', async () => {
+    const db = reviewFake({ priors: [{ id: 'other-arm', decision_type: 'framing_escalation', status: 'pending' }] });
+    const res = await handler(db);
+    expect(res.superseded).toEqual([]);
+    expect(db._writes.length).toBe(0);
+  });
+});
