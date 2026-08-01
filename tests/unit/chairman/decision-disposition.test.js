@@ -21,6 +21,7 @@ const deferral = (targetId, daysAgo, extra = {}) => ({
   category: DEFERRAL_CATEGORY,
   created_at: iso(daysAgo),
   snoozed_until: null,
+  source_type: 'auto_capture',   // the provenance fence: 21 of 21 genuine records carry this
   description: 'Chairman verbal, verbatim: "defer both". REAFFIRMING A DELIBERATE HOLD.',
   metadata: { target_id: targetId, decided_by: 'chairman-cli', deferred_at: iso(daysAgo), decision_type: 'chairman_approval' },
   ...extra
@@ -38,7 +39,7 @@ describe('FR-3 disposition reader — indexing', () => {
     // The census says 21 of 21 use target_id and ZERO use flag_id. A flag_id-only record cannot be
     // attributed to a decision, so it must govern nothing rather than silently half-match.
     const m = indexDispositions([{
-      id: 'fb-x', category: DEFERRAL_CATEGORY, created_at: iso(1),
+      id: 'fb-x', category: DEFERRAL_CATEGORY, created_at: iso(1), source_type: 'auto_capture',
       metadata: { flag_id: 'dec-1', decided_by: 'chairman-cli', deferred_at: iso(1) }
     }]);
     expect(m.size).toBe(0);
@@ -117,7 +118,7 @@ describe('FR-3 retirement authority — absence BLOCKS retirement, never default
 
   it('an UNATTRIBUTABLE record authorises nothing even though it is indexed', () => {
     const m = indexDispositions([{
-      id: 'fb-y', category: DEFERRAL_CATEGORY, created_at: iso(1),
+      id: 'fb-y', category: DEFERRAL_CATEGORY, created_at: iso(1), source_type: 'auto_capture',
       metadata: { target_id: 'dec-1', deferred_at: iso(1) }   // no decided_by
     }]);
     expect(m.size).toBe(1);                                    // it IS a record
@@ -285,5 +286,57 @@ describe('FR-4 supersession — a recurring review must not accrue one stale cri
     const res = await handler(db);
     expect(res.superseded).toEqual([]);
     expect(db._writes.length).toBe(0);
+  });
+});
+
+describe('SECURITY — retirement authority must not be forgeable by an unauthenticated party', () => {
+  // PROVEN LIVE as the anon role before this fence existed: an anon client inserted a
+  // category='chairman_decision_deferred' row targeting a REAL pending decision with
+  // decided_by='chairman-cli', and retirementAuthority() ACCEPTED it. Both directions of the
+  // discriminator were then verified against the live database:
+  //   anon INSERT source_type='auto_capture' -> BLOCKED (42501 RLS)
+  //   anon INSERT source_type='telegram'     -> allowed
+  //   anon UPDATE of a genuine deferral      -> 0 rows (RLS filtered)
+  const forged = (targetId) => ({
+    id: 'fb-forged', category: DEFERRAL_CATEGORY, created_at: iso(1),
+    source_type: 'telegram',                    // the ONLY value anon can write
+    description: 'attacker-supplied basis',
+    metadata: { target_id: targetId, decided_by: 'chairman-cli', deferred_at: iso(1) }
+  });
+
+  it('an anon-writable source_type is NOT indexed at all', () => {
+    expect(indexDispositions([forged('dec-1')]).size).toBe(0);
+  });
+
+  it('a forged record cannot authorise retiring a real decision', () => {
+    expect(retirementAuthority({ id: 'dec-1' }, indexDispositions([forged('dec-1')]))).toBe(null);
+  });
+
+  it('a forged record cannot move a real decision age clock — FR-6 reads the same records', () => {
+    // This is the LIVE half: FR-6 already ships, so a forged deferral would reset the clock and
+    // silence a genuine decision's escalation on the chairman's CLI today.
+    const clock = ageClockFor({ id: 'dec-1', created_at: iso(56) }, indexDispositions([forged('dec-1')]));
+    expect(clock.source).toBe('creation');
+    expect(clock.since).toBe(iso(56));
+  });
+
+  it('a forged record cannot hold a row', () => {
+    const m = indexDispositions([{ ...forged('dec-1'), snoozed_until: new Date(NOW.getTime() + 86400000).toISOString() }]);
+    expect(isHeld({ id: 'dec-1' }, m, NOW)).toBe(false);
+  });
+
+  it('BOTH DIRECTIONS: a genuine auto_capture record still governs — the fence is not a blanket block', () => {
+    const m = indexDispositions([deferral('dec-1', 1)]);
+    expect(m.size).toBe(1);
+    expect(retirementAuthority({ id: 'dec-1' }, m)).not.toBe(null);
+  });
+
+  it('a forged record does not shadow a genuine one for the same target', () => {
+    // The forged row is NEWER, so an index that admitted it would let the attacker overwrite the
+    // real basis with their own.
+    const m = indexDispositions([deferral('dec-1', 5), forged('dec-1')]);
+    expect(m.size).toBe(1);
+    expect(m.get('dec-1').basis).toMatch(/DELIBERATE HOLD/);
+    expect(m.get('dec-1').basis).not.toMatch(/attacker-supplied/);
   });
 });

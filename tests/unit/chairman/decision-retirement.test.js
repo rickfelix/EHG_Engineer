@@ -14,6 +14,7 @@ const NOW = new Date('2026-08-01T21:00:00Z');
 const iso = (d) => new Date(NOW.getTime() - d * 86400000).toISOString();
 const deferral = (targetId) => ({
   id: `fb-${targetId}`, category: DEFERRAL_CATEGORY, created_at: iso(1),
+  source_type: 'auto_capture',   // provenance fence — anon can only write source_type='telegram'
   description: 'Chairman verbal: "defer both".',
   metadata: { target_id: targetId, decided_by: 'chairman-cli', deferred_at: iso(1) }
 });
