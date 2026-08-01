@@ -107,12 +107,17 @@ async function main() {
   const supabase = createSupabaseServiceClient();
   const deps = buildKillDeps(supabase, sessionId, { reason, dryRun });
 
-  // spawn-control's stop() records the fleet_verb_stop event (and idempotently re-runs the
-  // claim release + hand-back, both CAS-guarded). Imported lazily so a dry run that never
-  // reaches step 7 does not pull the module in.
-  deps.recordStop = dryRun ? null : async (sid) => {
+  // spawn-control's stop() records the fleet_verb_stop event and re-runs the claim release +
+  // hand-back. THAT RE-RUN IS NOT CAS-GUARDED, WHICH THIS COMMENT USED TO CLAIM. It is merely
+  // usually inert, because release_sd() nulls claude_sessions.sd_key and releaseHeldWorkItem
+  // no-ops on the null — an incidental side effect, not a predicate. So graceful-kill forwards
+  // what it actually learned: opts.gone. Without it, a kill that could NOT be verified would
+  // still hand the work item back here, silently undoing the fail-closed decision made two steps
+  // earlier (GK-1, SD-LEO-INFRA-RELEASE-WORK-ITEM-001).
+  // Imported lazily so a dry run that never reaches step 7 does not pull the module in.
+  deps.recordStop = dryRun ? null : async (sid, o = {}) => {
     const { stop } = await import('../lib/fleet/spawn-control.js');
-    await stop(sid, { by: 'session_id', supabaseClient: supabase });
+    await stop(sid, { by: 'session_id', supabaseClient: supabase, holderVerifiedGone: o.gone });
   };
 
   const verdict = await gracefulKillSession(supabase, sessionId, deps);
