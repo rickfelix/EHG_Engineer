@@ -11,8 +11,9 @@
 import 'dotenv/config';
 import { createClient } from '@supabase/supabase-js';
 import {
-  parseArgs, routeDecision, sortPending, effectivePriority, formatAge, USAGE,
+  parseArgs, routeDecision, sortPending, effectivePriority, formatAge, renderPendingLine, USAGE,
 } from '../lib/chairman/decision-queue.mjs';
+import { indexDispositions, ageClockFor, DEFERRAL_CATEGORY } from '../lib/chairman/decision-disposition.mjs';
 import { armCliTeardown } from '../lib/cli-graceful-exit.js';
 import { CHAIRMAN_FEEDBACK_TYPE } from '../lib/chairman/feedback-decision-type.mjs';
 
@@ -37,21 +38,39 @@ if (parsed.command === 'list') {
     // Sort client-side with the same semantics as the view (also covers a
     // pre-migration view that lacks blocking/effective_priority columns).
     const rows = sortPending(data || []);
+    // FR-6: read the dispositions the queue has never read. Five of seven rows were deferred —
+    // several twice — and measured live it is SEVEN of seven, every one within ~1.3 days. Ageing
+    // them from created_at is what makes a settled queue present as stale and escalating.
+    // Fail-soft: a disposition read that errors leaves the prior behaviour intact rather than
+    // taking down the chairman's list.
+    let dispositions = null;
+    try {
+      const { data: disp, error: dErr } = await db.from('feedback')
+        .select('id, category, created_at, snoozed_until, metadata, description, title')
+        .eq('category', DEFERRAL_CATEGORY);
+      if (!dErr) dispositions = indexDispositions(disp || []);
+    } catch { /* fail-soft: render without the correction rather than not at all */ }
+
     if (parsed.json) {
-      console.log(JSON.stringify(rows.map((r) => ({
-        ...r,
-        effective_priority: r.effective_priority ?? effectivePriority(r).label,
-        age_escalated: r.age_escalated ?? effectivePriority(r).escalated,
-      })), null, 2));
+      console.log(JSON.stringify(rows.map((r) => {
+        const clock = ageClockFor(r, dispositions);
+        const deferred = clock.source === 'deferral';
+        const ep = effectivePriority(deferred ? { ...r, created_at: clock.since } : r);
+        return {
+          ...r,
+          effective_priority: deferred ? ep.label : (r.effective_priority ?? ep.label),
+          age_escalated: deferred ? ep.escalated : (r.age_escalated ?? ep.escalated),
+          // Surfaced so a machine reader can see WHY the clock moved, not just that it did.
+          disposition: clock.disposition
+            ? { deferred_at: clock.disposition.deferredAt, decided_by: clock.disposition.decidedBy, cited_record: clock.disposition.sourceId }
+            : null,
+          age_since: clock.since,
+          age_clock_source: clock.source
+        };
+      }), null, 2));
     } else {
       if (!rows.length) console.log('No pending chairman decisions.');
-      for (const r of rows) {
-        const ep = effectivePriority(r);
-        const pri = (r.effective_priority ?? ep.label) + ((r.age_escalated ?? ep.escalated) ? '^ (age-escalated)' : '');
-        const block = r.blocking ? ' BLOCKING' : '';
-        console.log(`[${formatAge(r.created_at)}] [${r.decision_type}:${r.id}] [${pri}${block}] ${r.title}` +
-          (r.recommendation ? ' — ' + r.recommendation : ''));
-      }
+      for (const r of rows) console.log(renderPendingLine(r, { dispositions }));
       console.log('\n' + rows.length + ' pending. Decide: node scripts/chairman-decisions.mjs decide <decision_type:id> <approve|reject|defer> --rationale "..."');
     }
     await armCliTeardown(0);

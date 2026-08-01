@@ -135,3 +135,60 @@ describe('FR-3 retirement authority — absence BLOCKS retirement, never default
     expect(withoutActor).toBe(null);
   });
 });
+
+describe('FR-6/TR-8 renderPendingLine — the rendered surface, now assertable', () => {
+  const row = (over = {}) => ({
+    id: 'dec-1', decision_type: 'chairman_approval', title: 'Stage 0 Chairman Approval',
+    priority: 'critical', created_at: iso(56), blocking: false, ...over
+  });
+
+  it('an UNDEFERRED row renders from creation and keeps the view verdict', async () => {
+    const { renderPendingLine } = await import('../../../lib/chairman/decision-queue.mjs');
+    const line = renderPendingLine(row({ age_escalated: true, effective_priority: 'critical' }), { dispositions: null, now: NOW });
+    expect(line).toMatch(/^\[56d\]/);
+    expect(line).toContain('age-escalated');
+    expect(line).not.toContain('(deferred');
+  });
+
+  it('a DEFERRED row renders from the deferral and says so', async () => {
+    const { renderPendingLine } = await import('../../../lib/chairman/decision-queue.mjs');
+    const d = indexDispositions([deferral('dec-1', 1)]);
+    const line = renderPendingLine(row({ age_escalated: true, effective_priority: 'critical' }), { dispositions: d, now: NOW });
+    // formatAge only switches to days at >=48h, so one day renders '24h' — the point is that it is
+    // hours-since-deferral rather than the 56d the row would show clocked from creation.
+    expect(line).toMatch(/^\[24h\]/);
+    expect(line).not.toMatch(/^\[56d\]/);
+    expect(line).toContain('(deferred');
+  });
+
+  it('THE LOAD-BEARING LINE: a deferral OVERRIDES the view stale escalation marker', async () => {
+    // The live path reads `row.age_escalated ?? ep.escalated`, and false is not nullish, so the
+    // VIEW governs the marker — and the view cannot see deferrals. If the view's `true` won here,
+    // the corrected clock would be read and change nothing, which is this SD's own defect.
+    const { renderPendingLine } = await import('../../../lib/chairman/decision-queue.mjs');
+    const d = indexDispositions([deferral('dec-1', 1)]);
+    const line = renderPendingLine(row({ age_escalated: true }), { dispositions: d, now: NOW });
+    expect(line).not.toContain('age-escalated');
+  });
+
+  it('...and a row deferred LONG ago still escalates — the override is not a blanket silence', async () => {
+    const { renderPendingLine } = await import('../../../lib/chairman/decision-queue.mjs');
+    const d = indexDispositions([deferral('dec-1', 30)]);
+    const line = renderPendingLine(row({ age_escalated: false }), { dispositions: d, now: NOW });
+    expect(line).toContain('age-escalated');
+  });
+
+  it('a live snooze is surfaced as HELD', async () => {
+    const { renderPendingLine } = await import('../../../lib/chairman/decision-queue.mjs');
+    const d = indexDispositions([deferral('dec-1', 1, { snoozed_until: new Date(NOW.getTime() + 86400000).toISOString() })]);
+    expect(renderPendingLine(row(), { dispositions: d, now: NOW })).toContain('HELD');
+  });
+
+  it('BLOCKING and recommendation survive the rewrite — no regression to the existing line', async () => {
+    const { renderPendingLine } = await import('../../../lib/chairman/decision-queue.mjs');
+    const line = renderPendingLine(row({ blocking: true, recommendation: 'fix' }), { dispositions: null, now: NOW });
+    expect(line).toContain('BLOCKING');
+    expect(line).toContain('— fix');
+    expect(line).toContain('chairman_approval:dec-1');
+  });
+});
