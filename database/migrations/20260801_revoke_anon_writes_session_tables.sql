@@ -1,0 +1,27 @@
+-- requires-chairman-apply
+-- @approved-by: <pending chairman sign-off>
+-- =============================================================================
+-- Migration: revoke anon WRITE grants on claude_sessions + session_coordination
+-- Why: SECURITY (Alpha-2 PLAN-TO-EXEC review, 2026-08-01) verified WITH THE ANON
+--      KEY that the public anon role holds UPDATE and DELETE grants on BOTH
+--      tables (13,064 claude_sessions rows; 7,060 session_coordination rows),
+--      with coordination_receipts returning 42501 as the working negative
+--      control. Root causes: an "Allow all for anon" FOR ALL policy on
+--      claude_sessions never dropped by the RLS remediation, and a
+--      session_coordination policy with no TO clause (defaults PUBLIC).
+--      Consequence: the public key can alter the liveness telemetry every
+--      dispatch/stale-release/stuck-seat decision reads (heartbeat_at,
+--      last_tool_at, loop_state, status) and delete coordination rows.
+-- Scope: DELIBERATELY MINIMAL — table-level WRITE grant revocation only.
+--      Because PostgREST requires BOTH a grant AND a policy, revoking the
+--      write grants neutralizes the write exposure regardless of policy
+--      shape, while touching NO read path (LEO session-view dashboards may
+--      legitimately read on anon). Policy-level cleanup (dropping the FOR ALL
+--      policy, adding TO clauses, read posture) rides
+--      SD-LEO-INFRA-DEFAULT-ANON-AUTHENTICATED-001 as considered work.
+--      Grants were PROVEN; a matching write was NOT demonstrated (classifier
+--      blocked the probe and SECURITY correctly did not work around it) — this
+--      revoke closes the capability either way.
+-- =============================================================================
+REVOKE INSERT, UPDATE, DELETE, TRUNCATE ON public.claude_sessions FROM anon;
+REVOKE INSERT, UPDATE, DELETE, TRUNCATE ON public.session_coordination FROM anon;
