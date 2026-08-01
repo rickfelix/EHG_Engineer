@@ -390,8 +390,10 @@ describe('SECURITY — retirement authority must not be forgeable by an unauthen
     // them too — making the header's "independent second block" claim false. Blocked today by
     // clause 2 regardless; this pins the clause-3 guarantee itself.
     const base = deferral('dec-1', 1);
-    for (const ft of ['user_bug', 'userX', 'usera', 'user-bug', 'user.bug']) {
-      expect(indexDispositions([{ ...base, feedback_type: ft }]).size, ft).toBe(0);
+    // The newline cases matter separately: JS `.` excludes line terminators but SQL `_` matches
+    // them, so /^user./ still admitted rows the policy admits. [\s\S] is the exact mirror.
+    for (const ft of ['user_bug', 'userX', 'usera', 'user-bug', 'user.bug', 'user\nx', 'user\rx', 'user x']) {
+      expect(indexDispositions([{ ...base, feedback_type: ft }]).size, JSON.stringify(ft)).toBe(0);
     }
     // ...and it must NOT over-block: the genuine value and other non-user_% values still govern.
     for (const ft of ['sentry_error', 'venture_error', 'user']) {

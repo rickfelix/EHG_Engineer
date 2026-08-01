@@ -293,6 +293,18 @@ describe('TR-9 idempotency and the terminal-status refusal', () => {
     for (const c of db.calls) expect(Object.keys(c.patch)).not.toContain('resolved_at');
   });
 
+  it('the citation column is DERIVED from the table, not taken from the plan', async () => {
+    // DQR-SEC-09: `col` is string-interpolated into .select(), so reading it from a caller-supplied
+    // plan would make that interpolation caller-controlled. A tampered plan must be ignored, not
+    // trusted. Not reachable today — which is exactly why it needs a test rather than a comment.
+    const db = fake('feedback', [{ id: 'dec-1', status: 'new', metadata: null }]);
+    const tampered = { ...a5(), citationColumn: 'id, status, pg_sleep(10)' };
+    const res = await applyRetirement(db, tampered);
+    expect(res.wrote).toBe(true);
+    expect(res.citationColumn).toBe('metadata');           // derived, not echoed
+    expect(db.rows[0].metadata.retirement_basis).toBeTruthy();
+  });
+
   it('the retirable sets match the real per-arm vocabularies', () => {
     expect(RETIRABLE_STATUSES.chairman_decisions).toEqual(['pending']);
     expect(RETIRABLE_STATUSES.feedback).not.toContain('resolved');
