@@ -162,7 +162,14 @@ describe('module surface (TS-10: exactly seven named verbs, no more)', () => {
     const helperNames = ['roleOf', 'isSingletonRole', 'resolveProfileDir', 'isLiveEnabled', 'buildLiveSpawnInvocation',
       'SESSION_BIND_MAX_ATTEMPTS', 'SESSION_BIND_DELAY_MS',
       'CANARY_PROFILE', 'CANARY_CALLSIGN_PREFIX', 'retirePredecessorProcess',
-      'isWorktreeExemptPath', 'assertSpawnSourceNotExempt'];
+      'isWorktreeExemptPath', 'assertSpawnSourceNotExempt',
+      // resolveSpawnSourceDir is a HELPER by the same test: an operator never invokes it, and it
+      // is not reachable from a route — spawn() will consume it internally once FR-1's machinery
+      // lands. It is exported so the two siting constraints can be asserted directly, which
+      // matters because BOTH failure modes are invisible at runtime (a tree under .worktrees/ is
+      // silently unguarded; an unignored tree silently dirties the root). SPAWN_SOURCE_DIRNAME is
+      // a VALUE, belonging here for the same reason as the SESSION_BIND_* constants above.
+      'resolveSpawnSourceDir', 'SPAWN_SOURCE_DIRNAME'];
     const unexpected = Object.keys(mod).filter((k) => !verbNames.includes(k) && !helperNames.includes(k));
     expect(unexpected).toEqual([]);
   });
