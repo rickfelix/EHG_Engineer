@@ -65,7 +65,7 @@ import { runOrphanSweep } from '../lib/worktree-reaper/orphan-sweep.js';
 // reaped regardless of commit count (Alpha-2 incident: zero-commit mid-PLAN reap).
 import { liveClaimBlocksRemoval } from '../lib/worktree-reaper/live-claim-guard.js';
 import { heartbeatResidencyBlocksRemoval, treeResidencyBlocksRemoval } from '../lib/worktree-reaper/residency-guard.js';
-import { hasReapEligibleMarker, readReapEligibleMarker } from '../lib/worktree-reaper/reap-eligible-marker.js';
+import { hasReapEligibleMarker, readReapEligibleMarker, isReapEligibleMarkerValid } from '../lib/worktree-reaper/reap-eligible-marker.js';
 import { decideRemoval, UNRESOLVABLE_KEY_RESIDENCY_CLEARED } from '../lib/worktree-reaper/removal-decision.js';
 // QF-20260725-821: the opt-OUT marker. .reap-eligible.json is opt-IN TO REAPING; before this
 // there was no way to say "do not reap me", so any operator/drill/ops worktree without an
@@ -621,9 +621,26 @@ async function classifyWorktree(wt, ctx) {
   // marker is the out-of-band handoff from a post-merge flow that refused to
   // self-delete — collect it promptly, ahead of age-based classification. The
   // removal gate (live-claim + residency guards) still decides WHEN it is safe.
+  // SD-FDBK-INFRA-ORPHAN-WORKTREE-STRANDING-001-B (FR-3): the marker must still HOLD
+  // authority, not merely exist. Presence alone let a 5.5-hour-old marker naming a
+  // different SD license deleting the RLS ceremony tree at 21:34:48Z. The gate lands
+  // here — by not pushing the category — rather than in stageForCategories, which is a
+  // pure function of `categories` pinned by 14 assertions and is the wrong layer.
   if (hasReapEligibleMarker(wt.path)) {
-    categories.push('reap-eligible');
-    reasons['reap-eligible'] = { matched: true, reason: 'marker', evidence: readReapEligibleMarker(wt.path) || {} };
+    const validity = isReapEligibleMarkerValid(wt.path, { treeKey: keyFromWorktree(wt) });
+    if (validity.valid) {
+      categories.push('reap-eligible');
+      reasons['reap-eligible'] = { matched: true, reason: 'marker', evidence: readReapEligibleMarker(wt.path) || {} };
+    } else {
+      // Recorded, not silent: an expired marker is a decision someone made and it should
+      // be visible that it was declined rather than never seen.
+      reasons['reap-eligible-expired'] = {
+        matched: false,
+        reason: validity.reason,
+        detail: validity.detail || null,
+        evidence: readReapEligibleMarker(wt.path) || {},
+      };
+    }
   }
 
   const nested = isNested(wt);
