@@ -26,6 +26,16 @@ function mockGit(args, cwd) {
   if (args[0] === 'cherry') {
     return { code: 0, stdout: c.includes('unpushed-orphan') ? '+ abc123 wip\n' : '', stderr: '' };
   }
+  // Since SD-FDBK-INFRA-ORPHAN-WORKTREE-STRANDING-001-C, a BLOCKING dirty/cherry answer
+  // is only honoured once the directory proves it owns its git state. This mock already
+  // modelled that distinction through the .git marker the fixtures below create — it now
+  // expresses the SAME distinction through the channel the code actually reads. A dir
+  // with no .git answers with an ANCESTOR path, which is precisely what real git does
+  // when discovery walks up out of a .git-less directory.
+  if (args[0] === 'rev-parse' && args[1] === '--show-toplevel') {
+    const ownsGit = fs.existsSync(path.join(cwd, '.git'));
+    return { code: 0, stdout: ownsGit ? String(cwd) : path.join(os.tmpdir(), 'some-ancestor-repo'), stderr: '' };
+  }
   return { code: 0, stdout: '', stderr: '' };
 }
 
