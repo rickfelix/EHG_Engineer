@@ -125,7 +125,12 @@ describe('FR-3 — contract details that break callers if wrong', () => {
   });
 
   test('canonicalWorkKey normalizes case and path shape, and rejects non-keys', () => {
-    expect(canonicalWorkKey('sd-foo-001')).toBe('SD-foo-001');
+    // SEC-07: the WHOLE key is uppercased, not just the prefix. Casing only the prefix
+    // made `sd-victim-001` and `SD-VICTIM-001` compare unequal and report
+    // marker_sd_key_mismatch — the loudest reason, reserved for the real incident shape —
+    // for what is the same key. live-claim-guard.js normalizes case; these now agree.
+    expect(canonicalWorkKey('sd-foo-001')).toBe('SD-FOO-001');
+    expect(canonicalWorkKey('SD-FOO-001')).toBe(canonicalWorkKey('sd-foo-001'));
     expect(canonicalWorkKey('.worktrees/qf/QF-20260710-432')).toBe('QF-20260710-432');
     expect(canonicalWorkKey('wt-abc')).toBeNull();
     expect(canonicalWorkKey(null)).toBeNull();

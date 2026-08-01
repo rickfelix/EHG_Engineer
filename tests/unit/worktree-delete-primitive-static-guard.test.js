@@ -75,9 +75,16 @@ describe('worktree delete primitive is chokepoint-only (FR-5)', () => {
    * `git worktree remove`, so EVERY rmSync / safeRecursiveRm deleter was structurally
    * invisible to it. The header of this file records that per-site patching is why the
    * class recurred five times; the mechanism built to end that recurrence covered one of
-   * the two delete primitives. A worktree removed with a RAW recursive rmSync can also
-   * follow a node_modules junction out of the tree and into the shared store, which the
-   * junction-safe helpers exist to prevent.
+   * the two delete primitives.
+   *
+   * WHY, CORRECTED (SEC-08): the original justification here claimed a raw recursive
+   * rmSync follows a nested node_modules junction out of the tree. SECURITY could NOT
+   * reproduce that on Node v24.12.0 — the nested junction was unlinked and its target
+   * survived. The real reason to route through the junction-safe helpers is that they
+   * unlink links deliberately and are the single place that behaviour is maintained; a
+   * raw rmSync is an unreviewed second implementation of a delete policy. Keeping a false
+   * threat premise in a control's rationale is its own hazard: it points readers at a safe
+   * route and away from the real one (intermediate-segment junctions, see SEC-01).
    *
    * Scope is deliberately narrow so the guard does not land permanently red: a bare
    * `recursive: true` pattern matches 226 files. This flags a raw recursive rmSync only in
@@ -89,13 +96,13 @@ describe('worktree delete primitive is chokepoint-only (FR-5)', () => {
       ['lib/worktree-manager.js',
         'IS the junction-safe primitive — safeRecursiveRm/WithRetry are defined here and this is their implementation.'],
       ['lib/cleanup/filesystem-provider.js',
-        'FR-4 removed .worktrees from its allowlist; it now refuses worktree paths outright and deletes only under tmp. It mentions .worktrees solely to name that refusal.'],
+        'FR-4 removed .worktrees from its allowlist and it refuses worktree paths outright. SECURITY disproved the first version of this reason by escaping the LEXICAL containment check via an intermediate-segment junction; containment is now realpath-based and the resolved path is what gets deleted, so the claim holds as restated.'],
       ['scripts/audit/worktree-reparse-audit.mjs',
         'Removes its own mkdtemp scratch dir, not a worktree.'],
       ['scripts/hooks/concurrent-session-worktree.cjs',
-        'RESIDUAL RISK, RECORDED NOT RESOLVED: this DOES rmSync a worktree path. Already allowlisted above for the git primitive because a sync CJS hook cannot import the ESM chokepoint. It is guarded by fs-marker + active-claim + dirty + unpushed + merged-to-main checks, but the raw rmSync means it is not junction-safe. Converting it needs its own change.'],
+        'CORRECTED BY SECURITY: it DOES rmSync a worktree path, but it is NOT unsafe — :610 calls _unlinkNestedLinks(wtPath) inside the retry loop immediately before every rmSync at :612, mirroring the canonical _unlinkLinksRecursive (worktree-manager.js:1334). My earlier reason here said it was not junction-safe; that was wrong. The real (minor) issue is DUPLICATION of the primitive rather than reuse, which is a drift risk, not a wipe risk.'],
       ['scripts/maintenance/sweep-worker-scratch.mjs',
-        'Sweeps worker scratch paths. Not re-verified as worktree-free in this SD — allowlisted to keep the guard green, flagged for follow-up.'],
+        'CORRECTED BY SECURITY: verifiably safe, not merely unverified — :57 lists .worktrees/ in its never-walk EXCLUDE set. My earlier reason was weaker than the truth and would have sent a future reader chasing a non-hazard.'],
     ]);
 
     // Comments are BLANKED IN PLACE rather than removed: stripping them shifts every
@@ -122,7 +129,12 @@ describe('worktree delete primitive is chokepoint-only (FR-5)', () => {
     };
 
     // Word-boundary, so it catches the BARE destructured `rmSync(` as well as `fs.rmSync(`.
+    // SECURITY found the first version evadable: it required `rmSync(` and `recursive` on
+    // the SAME line, and Prettier splits a long call across lines — the reformatted call
+    // sailed through a guard whose entire purpose is ending a five-time recurrence. The
+    // options object is now searched in a small forward WINDOW instead.
     const RAW_RM_RE = /\brmSync\s*\(/;
+    const WINDOW = 4;
     const violations = [];
     for (const dir of SCAN_DIRS) {
       for (const fp of walk(path.join(repoRoot, dir))) {
@@ -130,10 +142,11 @@ describe('worktree delete primitive is chokepoint-only (FR-5)', () => {
         if (FS_ALLOWLIST.has(rel)) continue;
         const blanked = blankComments(fs.readFileSync(fp, 'utf8'));
         if (!blanked.includes('.worktrees')) continue; // not a worktree-handling file
-        for (const [i, line] of blanked.split('\n').entries()) {
-          if (RAW_RM_RE.test(line) && line.includes('recursive')) {
-            violations.push(`${rel}:${i + 1}`);
-          }
+        const lines = blanked.split('\n');
+        for (const [i, line] of lines.entries()) {
+          if (!RAW_RM_RE.test(line)) continue;
+          const window = lines.slice(i, i + WINDOW).join('\n');
+          if (window.includes('recursive')) violations.push(`${rel}:${i + 1}`);
         }
       }
     }

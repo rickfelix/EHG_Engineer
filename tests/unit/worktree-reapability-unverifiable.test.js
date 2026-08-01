@@ -26,9 +26,11 @@ import {
 // A real path, so the fs.existsSync pre-checks pass and the git runner is genuinely reached.
 const REAL = process.cwd();
 
-const failing = () => ({ code: 128, stdout: '', stderr: 'fatal: index file corrupt' });
+// rev-parse SUCCEEDS (this dir owns its git state) so a status/cherry failure is a genuine
+// UNKNOWN rather than the definitive "no git here" answer.
+const failing = (args) => (args[0] === 'rev-parse' ? { code: 0, stdout: REAL } : { code: 128, stdout: '', stderr: 'fatal: index file corrupt' });
 const throwing = () => { throw new Error('EPERM: operation not permitted'); };
-const clean = (args) => (args[0] === 'status' ? { code: 0, stdout: '' } : { code: 0, stdout: '' });
+const clean = (args) => (args[0] === 'rev-parse' ? { code: 0, stdout: REAL } : { code: 0, stdout: '' });
 
 describe('FR-7 — could-not-look is not proof-of-clean', () => {
   test('THE DEFECT, at the level where it caused harm: a git failure no longer yields reapable:true', () => {
@@ -52,21 +54,34 @@ describe('FR-7 — could-not-look is not proof-of-clean', () => {
   });
 
   test('a POSITIVE dirty answer keeps its specific reason rather than being masked as unverifiable', () => {
-    const dirty = (args) => (args[0] === 'status'
-      ? { code: 0, stdout: ' M src/a.js\n?? b.txt\n' }
-      : { code: 0, stdout: '' });
+    const dirty = (args) => (args[0] === 'rev-parse'
+      ? { code: 0, stdout: REAL }
+      : args[0] === 'status' ? { code: 0, stdout: ' M src/a.js\n?? b.txt\n' } : { code: 0, stdout: '' });
     expect(isReapable(REAL, { gitRunner: dirty }).reason).toBe(REAP_REASONS.DIRTY_TREE);
   });
 
   test('a positive unpushed answer likewise keeps UNPUSHED', () => {
-    const ahead = (args) => (args[0] === 'status'
-      ? { code: 0, stdout: '' }
-      : { code: 0, stdout: '+ abc123 subject\n' });
+    const ahead = (args) => (args[0] === 'rev-parse'
+      ? { code: 0, stdout: REAL }
+      : args[0] === 'status' ? { code: 0, stdout: '' } : { code: 0, stdout: '+ abc123 subject\n' });
     expect(isReapable(REAL, { gitRunner: ahead }).reason).toBe(REAP_REASONS.UNPUSHED);
   });
 
+  // F4 (TESTING): the MIRROR of the case below. Without it, the `dirty.unknown` guard can
+  // be deleted entirely and stay green, because the `ahead.unknown` guard masks it — the
+  // exact "testing them only in combination lets a half-implementation pass" failure this
+  // SD warns about for FR-3, committed in FR-7.
+  test('dirty-probe failure alone is unverifiable, even when the unpushed probe succeeded', () => {
+    const dirtyFailsOnly = (args) => (args[0] === 'rev-parse'
+      ? { code: 0, stdout: REAL }
+      : args[0] === 'status' ? { code: 128, stdout: '' } : { code: 0, stdout: '' });
+    expect(isReapable(REAL, { gitRunner: dirtyFailsOnly }).reason).toBe(REAP_REASONS.UNVERIFIABLE);
+  });
+
   test('unpushed-probe failure alone is unverifiable, even when the dirty probe succeeded', () => {
-    const mixed = (args) => (args[0] === 'status' ? { code: 0, stdout: '' } : { code: 128, stdout: '' });
+    const mixed = (args) => (args[0] === 'rev-parse'
+      ? { code: 0, stdout: REAL }
+      : args[0] === 'status' ? { code: 0, stdout: '' } : { code: 128, stdout: '' });
     expect(isReapable(REAL, { gitRunner: mixed }).reason).toBe(REAP_REASONS.UNVERIFIABLE);
   });
 });
