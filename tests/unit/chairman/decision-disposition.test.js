@@ -10,18 +10,24 @@
 import { describe, it, expect } from 'vitest';
 import {
   indexDispositions, ageClockFor, isHeld, retirementAuthority,
-  DEFERRAL_CATEGORY, DISPOSITION_KEY
+  DEFERRAL_CATEGORY, DISPOSITION_KEY, DISPOSITION_SELECT, REQUIRED_PROVENANCE_FIELDS
 } from '../../../lib/chairman/decision-disposition.mjs';
 
 const NOW = new Date('2026-08-01T21:00:00Z');
 const iso = (d) => new Date(NOW.getTime() - d * 86400000).toISOString();
 
+// The provenance triple below is the LIVE shape, unanimous across all 21 genuine rows:
+// source_type='auto_capture', venture_id=NULL, feedback_type='sentry_error'. All three are load
+// bearing — see isTrustedProvenance. A fixture carrying only source_type is what let a fence that
+// rejects every real row look green.
 const deferral = (targetId, daysAgo, extra = {}) => ({
   id: `fb-${targetId}-${daysAgo}`,
   category: DEFERRAL_CATEGORY,
   created_at: iso(daysAgo),
   snoozed_until: null,
-  source_type: 'auto_capture',   // the provenance fence: 21 of 21 genuine records carry this
+  source_type: 'auto_capture',
+  venture_id: null,
+  feedback_type: 'sentry_error',
   description: 'Chairman verbal, verbatim: "defer both". REAFFIRMING A DELIBERATE HOLD.',
   metadata: { target_id: targetId, decided_by: 'chairman-cli', deferred_at: iso(daysAgo), decision_type: 'chairman_approval' },
   ...extra
@@ -39,7 +45,8 @@ describe('FR-3 disposition reader — indexing', () => {
     // The census says 21 of 21 use target_id and ZERO use flag_id. A flag_id-only record cannot be
     // attributed to a decision, so it must govern nothing rather than silently half-match.
     const m = indexDispositions([{
-      id: 'fb-x', category: DEFERRAL_CATEGORY, created_at: iso(1), source_type: 'auto_capture',
+      id: 'fb-x', category: DEFERRAL_CATEGORY, created_at: iso(1),
+      source_type: 'auto_capture', venture_id: null, feedback_type: 'sentry_error',
       metadata: { flag_id: 'dec-1', decided_by: 'chairman-cli', deferred_at: iso(1) }
     }]);
     expect(m.size).toBe(0);
@@ -118,7 +125,8 @@ describe('FR-3 retirement authority — absence BLOCKS retirement, never default
 
   it('an UNATTRIBUTABLE record authorises nothing even though it is indexed', () => {
     const m = indexDispositions([{
-      id: 'fb-y', category: DEFERRAL_CATEGORY, created_at: iso(1), source_type: 'auto_capture',
+      id: 'fb-y', category: DEFERRAL_CATEGORY, created_at: iso(1),
+      source_type: 'auto_capture', venture_id: null, feedback_type: 'sentry_error',
       metadata: { target_id: 'dec-1', deferred_at: iso(1) }   // no decided_by
     }]);
     expect(m.size).toBe(1);                                    // it IS a record
@@ -290,53 +298,137 @@ describe('FR-4 supersession — a recurring review must not accrue one stale cri
 });
 
 describe('SECURITY — retirement authority must not be forgeable by an unauthenticated party', () => {
-  // PROVEN LIVE as the anon role before this fence existed: an anon client inserted a
-  // category='chairman_decision_deferred' row targeting a REAL pending decision with
-  // decided_by='chairman-cli', and retirementAuthority() ACCEPTED it. Both directions of the
-  // discriminator were then verified against the live database:
-  //   anon INSERT source_type='auto_capture' -> BLOCKED (42501 RLS)
-  //   anon INSERT source_type='telegram'     -> allowed
-  //   anon UPDATE of a genuine deferral      -> 0 rows (RLS filtered)
-  const forged = (targetId) => ({
-    id: 'fb-forged', category: DEFERRAL_CATEGORY, created_at: iso(1),
-    source_type: 'telegram',                    // the ONLY value anon can write
+  // PROVEN LIVE, TWICE, as the anon role against the real database.
+  //
+  // `feedback` has TWO permissive anon INSERT policies and RLS OR-s them, so there are two shapes
+  // an attacker can write. The FIRST version of this fence checked only source_type and its test
+  // suite modelled only the telegram shape — so it was green while the OTHER shape walked straight
+  // through. Both shapes are modelled here now; deleting either half of isTrustedProvenance must
+  // turn one of them red.
+  //
+  //   telegram_bot_insert_feedback  WITH CHECK (source_type = 'telegram')
+  //   venture_user_insert_feedback  WITH CHECK (feedback_type LIKE 'user_%' AND venture_id IS NOT NULL
+  //                                             AND venture_exists_and_active(venture_id) AND ...)
+  //
+  // Re-demonstrated live 2026-08-02 with the venture_user shape: anon .insert() returned 201 with no
+  // error, the row PERSISTED (confirmed by service-role read-back), and retirementAuthority()
+  // GRANTED forged authority over a real pending decision while ageClockFor() reported
+  // source='deferral'. The earlier "BLOCKED 42501" reading was a false negative: 42501 is also
+  // raised by a SUCCEEDING insert whose RETURNING clause fails the telegram-only anon SELECT policy.
+
+  // Shape 1 — reachable via telegram_bot_insert_feedback.
+  const forgedTelegram = (targetId) => ({
+    id: 'fb-forged-tg', category: DEFERRAL_CATEGORY, created_at: iso(1),
+    source_type: 'telegram', venture_id: null, feedback_type: 'sentry_error',
     description: 'attacker-supplied basis',
     metadata: { target_id: targetId, decided_by: 'chairman-cli', deferred_at: iso(1) }
   });
 
-  it('an anon-writable source_type is NOT indexed at all', () => {
-    expect(indexDispositions([forged('dec-1')]).size).toBe(0);
+  // Shape 2 — reachable via venture_user_insert_feedback. THIS IS THE ONE THAT WAS LIVE.
+  // Note source_type='auto_capture': that policy places no constraint on it whatsoever.
+  const forgedVentureUser = (targetId) => ({
+    id: 'fb-forged-vu', category: DEFERRAL_CATEGORY, created_at: iso(1),
+    source_type: 'auto_capture',
+    venture_id: '3d9e6484-56fd-45bf-b3e6-8399ef1647ad',  // policy REQUIRES NOT NULL
+    feedback_type: 'user_bug',                            // policy REQUIRES LIKE 'user_%'
+    description: 'attacker-supplied basis',
+    metadata: { target_id: targetId, decided_by: 'chairman-cli', deferred_at: iso(1) }
   });
 
-  it('a forged record cannot authorise retiring a real decision', () => {
-    expect(retirementAuthority({ id: 'dec-1' }, indexDispositions([forged('dec-1')]))).toBe(null);
-  });
+  for (const [label, forged] of [['telegram', forgedTelegram], ['venture_user', forgedVentureUser]]) {
+    describe(`anon shape: ${label}`, () => {
+      it('is NOT indexed at all', () => {
+        expect(indexDispositions([forged('dec-1')]).size).toBe(0);
+      });
 
-  it('a forged record cannot move a real decision age clock — FR-6 reads the same records', () => {
-    // This is the LIVE half: FR-6 already ships, so a forged deferral would reset the clock and
-    // silence a genuine decision's escalation on the chairman's CLI today.
-    const clock = ageClockFor({ id: 'dec-1', created_at: iso(56) }, indexDispositions([forged('dec-1')]));
-    expect(clock.source).toBe('creation');
-    expect(clock.since).toBe(iso(56));
-  });
+      it('cannot authorise retiring a real decision', () => {
+        expect(retirementAuthority({ id: 'dec-1' }, indexDispositions([forged('dec-1')]))).toBe(null);
+      });
 
-  it('a forged record cannot hold a row', () => {
-    const m = indexDispositions([{ ...forged('dec-1'), snoozed_until: new Date(NOW.getTime() + 86400000).toISOString() }]);
-    expect(isHeld({ id: 'dec-1' }, m, NOW)).toBe(false);
-  });
+      it('cannot move a real decision age clock — FR-6 reads the same records', () => {
+        // The LIVE half: FR-6 ships, so a forged deferral would reset the clock and silence a
+        // genuine decision's escalation on the chairman's CLI today.
+        const clock = ageClockFor({ id: 'dec-1', created_at: iso(56) }, indexDispositions([forged('dec-1')]));
+        expect(clock.source).toBe('creation');
+        expect(clock.since).toBe(iso(56));
+      });
 
-  it('BOTH DIRECTIONS: a genuine auto_capture record still governs — the fence is not a blanket block', () => {
+      it('cannot hold a row', () => {
+        const m = indexDispositions([{ ...forged('dec-1'), snoozed_until: new Date(NOW.getTime() + 86400000).toISOString() }]);
+        expect(isHeld({ id: 'dec-1' }, m, NOW)).toBe(false);
+      });
+
+      it('does not shadow a genuine record for the same target', () => {
+        // The forged row is NEWER, so an index that admitted it would let the attacker overwrite
+        // the real basis with their own.
+        const m = indexDispositions([deferral('dec-1', 5), forged('dec-1')]);
+        expect(m.size).toBe(1);
+        expect(m.get('dec-1').basis).toMatch(/DELIBERATE HOLD/);
+        expect(m.get('dec-1').basis).not.toMatch(/attacker-supplied/);
+      });
+    });
+  }
+
+  it('BOTH DIRECTIONS: a genuine record still governs — the fence is not a blanket block', () => {
     const m = indexDispositions([deferral('dec-1', 1)]);
     expect(m.size).toBe(1);
     expect(retirementAuthority({ id: 'dec-1' }, m)).not.toBe(null);
   });
 
-  it('a forged record does not shadow a genuine one for the same target', () => {
-    // The forged row is NEWER, so an index that admitted it would let the attacker overwrite the
-    // real basis with their own.
-    const m = indexDispositions([deferral('dec-1', 5), forged('dec-1')]);
-    expect(m.size).toBe(1);
-    expect(m.get('dec-1').basis).toMatch(/DELIBERATE HOLD/);
-    expect(m.get('dec-1').basis).not.toMatch(/attacker-supplied/);
+  it('each clause of the fence is independently load-bearing', () => {
+    // If any single clause were removed, the corresponding row below would be admitted. Asserting
+    // them one at a time means a future edit that drops one clause fails HERE, specifically.
+    const base = deferral('dec-1', 1);
+    expect(indexDispositions([{ ...base, source_type: 'telegram' }]).size).toBe(0);
+    expect(indexDispositions([{ ...base, venture_id: 'any-non-null' }]).size).toBe(0);
+    expect(indexDispositions([{ ...base, feedback_type: 'user_other' }]).size).toBe(0);
+  });
+});
+
+describe('SECURITY — an under-selecting caller must FAIL LOUDLY, not silently yield nothing', () => {
+  // THE REGRESSION THIS EXISTS FOR: the first fence shipped while scripts/chairman-decisions.mjs
+  // selected no source_type, so every production row failed the fence and FR-6 was DEAD IN
+  // PRODUCTION — with all 32 unit tests green, because every fixture supplied the column by hand.
+  // Measured live: 0 dispositions via the real select, 15 via the same rows with source_type added.
+  // "0 dispositions" and "0 TRUSTED dispositions" must never again be the same observation.
+
+  it('throws when a matching row lacks the provenance columns', () => {
+    const underSelected = {
+      id: 'fb-1', category: DEFERRAL_CATEGORY, created_at: iso(1),
+      metadata: { target_id: 'dec-1', decided_by: 'chairman-cli', deferred_at: iso(1) }
+    };
+    expect(() => indexDispositions([underSelected])).toThrow(/missing provenance column/i);
+  });
+
+  it('names every missing column, so the fix is mechanical', () => {
+    const partial = {
+      id: 'fb-2', category: DEFERRAL_CATEGORY, created_at: iso(1), source_type: 'auto_capture',
+      metadata: { target_id: 'dec-1', decided_by: 'chairman-cli', deferred_at: iso(1) }
+    };
+    expect(() => indexDispositions([partial])).toThrow(/venture_id[\s\S]*feedback_type|feedback_type[\s\S]*venture_id/);
+  });
+
+  it('a NON-matching row is skipped before the provenance check — no false alarm', () => {
+    // Rows of other categories legitimately arrive without these columns.
+    expect(indexDispositions([{ id: 'z', category: 'harness_backlog', metadata: { target_id: 'dec-1' } }]).size).toBe(0);
+  });
+
+  it('DISPOSITION_SELECT covers every column the fence requires', () => {
+    // The anti-drift pin: the consumer builds its query from DISPOSITION_SELECT, so if a future
+    // clause reads a new column it must be added here or this fails.
+    const selected = DISPOSITION_SELECT.split(',').map(s => s.trim());
+    for (const f of REQUIRED_PROVENANCE_FIELDS) expect(selected).toContain(f);
+    for (const f of ['id', 'category', 'created_at', 'snoozed_until', 'metadata', 'description', 'title']) {
+      expect(selected).toContain(f);
+    }
+  });
+
+  it('the real consumer selects DISPOSITION_SELECT rather than a hand-written list', async () => {
+    // Reads the CONSUMER'S OWN SOURCE. A fixture cannot catch consumer/reader drift — only the
+    // consumer can — and that drift is precisely what shipped a dead FR-6 past a green suite.
+    const { readFileSync } = await import('node:fs');
+    const src = readFileSync(new URL('../../../scripts/chairman-decisions.mjs', import.meta.url), 'utf8');
+    expect(src).toMatch(/\.select\(DISPOSITION_SELECT\)/);
+    expect(src).toContain('DISPOSITION_SELECT');
   });
 });

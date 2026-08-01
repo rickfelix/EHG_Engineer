@@ -12,9 +12,12 @@ import { indexDispositions, DEFERRAL_CATEGORY } from '../../../lib/chairman/deci
 
 const NOW = new Date('2026-08-01T21:00:00Z');
 const iso = (d) => new Date(NOW.getTime() - d * 86400000).toISOString();
+// The provenance triple is the live shape (21/21): auto_capture + venture_id NULL + sentry_error.
+// All three are required — anon can reach source_type='auto_capture' via venture_user_insert_feedback,
+// so source_type alone is NOT a fence. See decision-disposition.mjs.
 const deferral = (targetId) => ({
   id: `fb-${targetId}`, category: DEFERRAL_CATEGORY, created_at: iso(1),
-  source_type: 'auto_capture',   // provenance fence — anon can only write source_type='telegram'
+  source_type: 'auto_capture', venture_id: null, feedback_type: 'sentry_error',
   description: 'Chairman verbal: "defer both".',
   metadata: { target_id: targetId, decided_by: 'chairman-cli', deferred_at: iso(1) }
 });
@@ -38,8 +41,11 @@ describe('FR-3 authority gate — absence BLOCKS retirement', () => {
   });
 
   it('an UNATTRIBUTABLE record authorises nothing', () => {
+    // Full provenance deliberately: this must fail on the MISSING ACTOR, not get filtered by the
+    // fence first. Without the triple it would be rejected for the wrong reason (and now throws).
     const m = indexDispositions([{
       id: 'fb-z', category: DEFERRAL_CATEGORY, created_at: iso(1),
+      source_type: 'auto_capture', venture_id: null, feedback_type: 'sentry_error',
       metadata: { target_id: 'dec-1', deferred_at: iso(1) }  // no decided_by
     }]);
     expect(planRetirement({ id: 'dec-1', decision_type: 'chairman_approval' }, m)).toBe(null);

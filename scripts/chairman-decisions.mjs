@@ -13,7 +13,7 @@ import { createClient } from '@supabase/supabase-js';
 import {
   parseArgs, routeDecision, sortPending, effectivePriority, formatAge, renderPendingLine, USAGE,
 } from '../lib/chairman/decision-queue.mjs';
-import { indexDispositions, ageClockFor, DEFERRAL_CATEGORY } from '../lib/chairman/decision-disposition.mjs';
+import { indexDispositions, ageClockFor, DEFERRAL_CATEGORY, DISPOSITION_SELECT } from '../lib/chairman/decision-disposition.mjs';
 import { armCliTeardown } from '../lib/cli-graceful-exit.js';
 import { CHAIRMAN_FEEDBACK_TYPE } from '../lib/chairman/feedback-decision-type.mjs';
 
@@ -45,11 +45,19 @@ if (parsed.command === 'list') {
     // taking down the chairman's list.
     let dispositions = null;
     try {
+      // DISPOSITION_SELECT, not a hand-written column list: the provenance fence needs
+      // source_type/venture_id/feedback_type, and a list that drifts from it silently disables
+      // FR-6 entirely (it already did once — see DISPOSITION_SELECT's docstring).
       const { data: disp, error: dErr } = await db.from('feedback')
-        .select('id, category, created_at, snoozed_until, metadata, description, title')
+        .select(DISPOSITION_SELECT)
         .eq('category', DEFERRAL_CATEGORY);
       if (!dErr) dispositions = indexDispositions(disp || []);
-    } catch { /* fail-soft: render without the correction rather than not at all */ }
+    } catch (e) {
+      // Fail-soft: render without the correction rather than not at all. NOT silent — a swallowed
+      // error here is indistinguishable from "no deferrals exist", which is the failure mode that
+      // let a dead FR-6 look healthy.
+      console.error('[chairman-decisions] disposition read failed, rendering uncorrected: ' + (e?.message || e));
+    }
 
     if (parsed.json) {
       console.log(JSON.stringify(rows.map((r) => {
