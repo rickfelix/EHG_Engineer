@@ -386,3 +386,96 @@ describe('AXIS 3 roadmap_motion — motion is a RATE, and state however complete
     expect(roadAxis.classifyMotion({ committed: [], advanced: [] })).toBe(null);
   });
 });
+
+describe('AXIS 2 coordinator_performance — the breach is measurable, the ACTION is not', () => {
+  const coordAxis = require('../../../lib/governance/drive-state/axes/coordinator-performance.cjs');
+  const HOURS = 3600000;
+  const ago = (h) => new Date(NOW - h * HOURS).toISOString();
+
+  it('a fresh breach reading (score 50) is STALLED', () => {
+    const r = coordAxis.classify({ snapshots: [{ score: 50, created_at: ago(1) }] }, NOW);
+    expect(r.state).toBe(STATE.STALLED);
+    expect(r.stalled).toBe(1);
+  });
+
+  it('a fresh clean reading (score 100) is CLEAR — both directions', () => {
+    const r = coordAxis.classify({ snapshots: [{ score: 100, created_at: ago(1) }] }, NOW);
+    expect(r.state).toBe(STATE.CLEAR);
+    expect(r.stalled).toBe(0);
+  });
+
+  // ===== THE LOAD-BEARING CONSTRAINT =====
+
+  it('action_taken is UNVERIFIABLE on EVERY outcome — a bare self-stamp is not evidence of action', () => {
+    // Measured: 82 of 82 advisories retired, 78 recording no actor, 4 naming the measured party.
+    // If any path ever returns RECORDED, the axis is grading the coordinator on its own receipt.
+    const paths = [
+      coordAxis.classify({ snapshots: [{ score: 50, created_at: ago(1) }] }, NOW),
+      coordAxis.classify({ snapshots: [{ score: 100, created_at: ago(1) }] }, NOW),
+      coordAxis.classify({ snapshots: [] }, NOW),
+      coordAxis.classify(null, NOW),
+      coordAxis.classify({ snapshots: [{ score: 100, created_at: ago(1) }], probe: { status: 'no_cohort' } }, NOW)
+    ];
+    for (const r of paths) expect(r.action_taken).toBe(ACTION.UNVERIFIABLE);
+    expect(paths.some((r) => r.action_taken === ACTION.RECORDED)).toBe(false);
+  });
+
+  it('the citation states WHY action is unverifiable, with the counts', () => {
+    const r = coordAxis.classify({ snapshots: [{ score: 50, created_at: ago(1) }] }, NOW);
+    expect(r.citation).toMatch(/82 of 82/);
+    expect(r.citation).toMatch(/78 recording NO actor/);
+  });
+
+  // ===== FRESHNESS: SILENCE IS NOT HEALTH =====
+
+  it('no reading inside the stale window is UNMEASURABLE, never CLEAR', () => {
+    const r = coordAxis.classify({ snapshots: [{ score: 100, created_at: ago(48) }] }, NOW);
+    expect(r.state).toBe(STATE.UNMEASURABLE);
+    expect(r.reason).toBe('unavailable');
+    expect(r.citation).toMatch(/not evidence it is well/);
+  });
+
+  it('a stale BREACH does not linger as STALLED either — staleness dominates both verdicts', () => {
+    const r = coordAxis.classify({ snapshots: [{ score: 50, created_at: ago(48) }] }, NOW);
+    expect(r.state).toBe(STATE.UNMEASURABLE);
+  });
+
+  // ===== HONEST-NULL VOCABULARY IS PROPAGATED, NOT COLLAPSED =====
+
+  it('every honest-null probe status propagates as itself rather than becoming CLEAR', () => {
+    expect(coordAxis.HONEST_NULL).toEqual(['no_cohort', 'unmeasurable_until_linkage', 'unavailable', 'unverifiable']);
+    for (const status of coordAxis.HONEST_NULL) {
+      // Note the snapshot says CLEAN and is FRESH — only the probe's honest-null must win.
+      const r = coordAxis.classify({ snapshots: [{ score: 100, created_at: ago(1) }], probe: { status } }, NOW);
+      expect(r.state, `${status} must not collapse to CLEAR`).toBe(STATE.UNMEASURABLE);
+      expect(r.reason).toBe(status);
+    }
+  });
+
+  it('a normal probe status does NOT trigger the honest-null path', () => {
+    const r = coordAxis.classify({ snapshots: [{ score: 100, created_at: ago(1) }], probe: { status: 'measured' } }, NOW);
+    expect(r.state).toBe(STATE.CLEAR);
+  });
+
+  it('unparseable timestamps count as not-fresh rather than as fresh', () => {
+    const r = coordAxis.classify({ snapshots: [{ score: 100, created_at: 'nonsense' }] }, NOW);
+    expect(r.state).toBe(STATE.UNMEASURABLE);
+  });
+
+  // ===== WIRING =====
+
+  it('reads codebase_health_snapshots — the durable sink, not the advisory lane', async () => {
+    const cap = {};
+    const state = await coordAxis.fetch(applyingFake({
+      codebase_health_snapshots: [{ score: 50, created_at: ago(1) }]
+    }, cap), { now: NOW });
+    expect(cap.table).toBe('codebase_health_snapshots');
+    expect(state.snapshots.length).toBe(1);
+  });
+
+  it('a WRONG-TABLE fetch yields no snapshots — which classify must call UNMEASURABLE, not CLEAR', async () => {
+    const state = await coordAxis.fetch(applyingFake({ session_coordination: [{ score: 100, created_at: ago(1) }] }), { now: NOW });
+    expect(state.snapshots.length).toBe(0);
+    expect(coordAxis.classify(state, NOW).state).toBe(STATE.UNMEASURABLE);
+  });
+});
