@@ -83,7 +83,8 @@
       "vision_v2_lead",
       "governance_okr_alignment_lead",
       "sub_agent_phase_guidance_lead",
-      "lead_testing_agent_harness_fix_cadence"
+      "lead_testing_agent_harness_fix_cadence",
+      "directive_submission_review"
     ],
     "_removed_sections_note": "migration_execution_protocol_lead (duplicate of CORE migration_execution_protocol), mandatory_phase_transitions_lead (duplicate of CORE mandatory_phase_transitions). RCA mandate removed from generator — already in router."
   },
@@ -92,16 +93,17 @@
     "sections": [
       "lead_strategic_validation_q9",
       "parent_child_sd_governance",
-      "multi_track_parallel_execution",
-      "directive_submission_review"
+      "multi_track_parallel_execution"
     ],
     "_move_justification": {
       "lead_strategic_validation_q9": "The Q9 strategic-validation rubric — a scoring procedure consulted while validating, not a rule that binds unread.",
       "parent_child_sd_governance": "Parent/child governance reference; the binding orchestrator rules live in the SD Continuation truth table in CLAUDE.md.",
-      "multi_track_parallel_execution": "Track-execution reference material, descriptive rather than prescriptive.",
-      "directive_submission_review": "Submission-review walkthrough — procedure performed at a moment, not a standing constraint."
+      "multi_track_parallel_execution": "Track-execution reference material, descriptive rather than prescriptive."
     },
-    "_allow_list_note": "This list is an ALLOW-LIST reviewed section by section, not the output of a keyword scan. The original scan (/BLOCKING|MUST NOT|NEVER|MANDATORY|PROHIBITED/, case-sensitive) scored negative_constraints_plan at zero despite that section being nothing but NC-PLAN-001..005, so a lexical detector cannot be the authority. Adding a section here requires a written justification above."
+    "_allow_list_note": "This list is an ALLOW-LIST reviewed section by section, not the output of a keyword scan. The original scan (/BLOCKING|MUST NOT|NEVER|MANDATORY|PROHIBITED/, case-sensitive) scored negative_constraints_plan at zero despite that section being nothing but NC-PLAN-001..005, so a lexical detector cannot be the authority. Adding a section here requires a written justification above.",
+    "_excluded_deliberately": {
+      "directive_submission_review": "PULLED BACK AT EXEC after SECURITY review. It sat at OLD line 878 — INSIDE the old readable head — so moving it made something VISIBLE become INVISIBLE. That is a reachability regression this SD introduced, not a pre-existing one it failed to fix, and it falsifies any \"nothing visible became invisible\" claim. Procedural rather than a labeled rule, so the harm was bounded, but the direction was wrong and the budget can afford it."
+    }
   },
   "CLAUDE_PLAN.md": {
     "description": "PLAN phase operations (~20-25k chars). Lean PLAN (2026-02-16).",

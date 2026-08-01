@@ -1,8 +1,8 @@
-<!-- file_content_hash: 9909c48c4b00a97b -->
+<!-- file_content_hash: 26cdc8c1fcdde5e9 -->
 <!-- GENERATED FILE - DO NOT EDIT DIRECTLY. Source of truth: leo_protocol_sections (DB). Regenerate: node scripts/generate-claude-md-from-db.js. Drift check: node scripts/check-claude-md-drift.cjs -->
 # CLAUDE_LEAD_MANUAL.md — LEAD Manual (reference companion)
 
-**Generated**: 2026-08-01 8:11:44 AM
+**Generated**: 2026-08-01 9:22:00 AM
 **Protocol**: LEO 4.4.1
 **Purpose**: Long-form LEAD reference — the Q9 strategic-validation rubric, parent/child SD governance, multi-track parallel execution, directive submission review
 **Load when**: At the MOMENT OF DOING one of these procedures — not at every LEAD phase entry
@@ -10,29 +10,6 @@
 > This companion carries REFERENCE AND PROCEDURE. Every RULE and PROHIBITION that governs LEAD stays in CLAUDE_LEAD.md and is in force whether or not this file is read. If you are ever unsure whether something belongs here, it belongs in CLAUDE_LEAD.md — this file exists to make that file readable, not to relieve it of anything that binds.
 
 ---
-
-## 📋 Directive Submission Review Process
-
-**Directive Submission Review**: Review submissions before creating SDs.
-
-**Quick Review**:
-```bash
-node scripts/lead-review-submissions.js
-```
-
-**Review Checklist**:
-- Chairman input (original intent)
-- Intent clarity & strategic alignment
-- Priority assessment & scope validation
-- Duplicate check & gate progression
-
-**Decision Matrix**:
-- Completed + No SD → Create SD
-- Completed + SD exists → Verify & handoff
-- Pending → Monitor
-- Failed → Archive/remediate
-
-**Complete Process**: See `docs/reference/directive-submission-review.md`
 
 ## 🎯 Strategic Validation Question 9: Human-Verifiable Outcome
 
@@ -234,4 +211,4 @@ npm run sd:status    # Overall progress by track
 
 *Generated from database: 2026-08-01*
 *Protocol Version: 4.4.1*
-*Source of truth: leo_protocol_sections (section_type=lead_strategic_validation_q9, parent_child_sd_governance, multi_track_parallel_execution, directive_submission_review). Do not hand-edit — edit the DB section and regenerate.*
+*Source of truth: leo_protocol_sections (section_type=lead_strategic_validation_q9, parent_child_sd_governance, multi_track_parallel_execution). Do not hand-edit — edit the DB section and regenerate.*

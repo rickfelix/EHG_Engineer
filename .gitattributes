@@ -5,3 +5,16 @@
 # checkouts, making `npm run venture-stages:check` fail spuriously (this was
 # the pre-existing ~699-line "drift" Child D fixed).
 lib/proving-companion/stage-config.js eol=lf
+
+# SD-FDBK-INFRA-CLAUDE-LEAD-EXCEEDS-001 — these files sit within ~4% of the Read tool 25k
+# single-call cap. core.autocrlf=true rewrites LF to CRLF on Windows checkouts, which adds
+# exactly one byte per line: +1372 on CLAUDE_LEAD.md alone, ~568 tokens, 58% of its margin —
+# from a git operation that changes no content. Observed for real during this SD after a
+# stash round-trip. Pin LF so a checkout cannot silently push a fixed file back over cap.
+CLAUDE_LEAD.md text eol=lf
+CLAUDE_LEAD_MANUAL.md text eol=lf
+CLAUDE_PLAN.md text eol=lf
+CLAUDE_PLAN_MANUAL.md text eol=lf
+CLAUDE_CORE.md text eol=lf
+CLAUDE_EXEC.md text eol=lf
+CLAUDE.md text eol=lf
