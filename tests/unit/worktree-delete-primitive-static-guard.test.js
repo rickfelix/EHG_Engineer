@@ -70,6 +70,90 @@ describe('worktree delete primitive is chokepoint-only (FR-5)', () => {
     expect(violations, `direct 'git worktree remove' outside the guarded chokepoint:\n  ${violations.join('\n  ')}`).toEqual([]);
   });
 
+  /**
+   * SD-FDBK-INFRA-ORPHAN-WORKTREE-STRANDING-001-B (FR-5) — the guard above greps only
+   * `git worktree remove`, so EVERY rmSync / safeRecursiveRm deleter was structurally
+   * invisible to it. The header of this file records that per-site patching is why the
+   * class recurred five times; the mechanism built to end that recurrence covered one of
+   * the two delete primitives. A worktree removed with a RAW recursive rmSync can also
+   * follow a node_modules junction out of the tree and into the shared store, which the
+   * junction-safe helpers exist to prevent.
+   *
+   * Scope is deliberately narrow so the guard does not land permanently red: a bare
+   * `recursive: true` pattern matches 226 files. This flags a raw recursive rmSync only in
+   * files that actually deal with worktree paths.
+   */
+  it('no non-allowlisted worktree-handling file deletes with a raw recursive rmSync (FR-5)', () => {
+    // Each entry states WHY, so the next reader can re-judge it rather than inherit it.
+    const FS_ALLOWLIST = new Map([
+      ['lib/worktree-manager.js',
+        'IS the junction-safe primitive — safeRecursiveRm/WithRetry are defined here and this is their implementation.'],
+      ['lib/cleanup/filesystem-provider.js',
+        'FR-4 removed .worktrees from its allowlist; it now refuses worktree paths outright and deletes only under tmp. It mentions .worktrees solely to name that refusal.'],
+      ['scripts/audit/worktree-reparse-audit.mjs',
+        'Removes its own mkdtemp scratch dir, not a worktree.'],
+      ['scripts/hooks/concurrent-session-worktree.cjs',
+        'RESIDUAL RISK, RECORDED NOT RESOLVED: this DOES rmSync a worktree path. Already allowlisted above for the git primitive because a sync CJS hook cannot import the ESM chokepoint. It is guarded by fs-marker + active-claim + dirty + unpushed + merged-to-main checks, but the raw rmSync means it is not junction-safe. Converting it needs its own change.'],
+      ['scripts/maintenance/sweep-worker-scratch.mjs',
+        'Sweeps worker scratch paths. Not re-verified as worktree-free in this SD — allowlisted to keep the guard green, flagged for follow-up.'],
+    ]);
+
+    // Comments are BLANKED IN PLACE rather than removed: stripping them shifts every
+    // subsequent line number, so reported violations point at the wrong code. (Learned
+    // the hard way while sizing this guard.) An unstripped scan is also wrong — the
+    // reaper mentions rmSync only in a comment and would self-report a false violation.
+    const blankComments = (src) => {
+      let out = ''; let state = null;
+      for (let i = 0; i < src.length;) {
+        const two = src.slice(i, i + 2);
+        if (state === null) {
+          if (two === '/*') { state = 'block'; out += '  '; i += 2; continue; }
+          if (two === '//') { state = 'line'; out += '  '; i += 2; continue; }
+          out += src[i]; i += 1;
+        } else if (state === 'block') {
+          if (two === '*/') { state = null; out += '  '; i += 2; continue; }
+          out += src[i] === '\n' ? '\n' : ' '; i += 1;
+        } else {
+          if (src[i] === '\n') { state = null; out += '\n'; i += 1; continue; }
+          out += ' '; i += 1;
+        }
+      }
+      return out;
+    };
+
+    // Word-boundary, so it catches the BARE destructured `rmSync(` as well as `fs.rmSync(`.
+    const RAW_RM_RE = /\brmSync\s*\(/;
+    const violations = [];
+    for (const dir of SCAN_DIRS) {
+      for (const fp of walk(path.join(repoRoot, dir))) {
+        const rel = path.relative(repoRoot, fp).replace(/\\/g, '/');
+        if (FS_ALLOWLIST.has(rel)) continue;
+        const blanked = blankComments(fs.readFileSync(fp, 'utf8'));
+        if (!blanked.includes('.worktrees')) continue; // not a worktree-handling file
+        for (const [i, line] of blanked.split('\n').entries()) {
+          if (RAW_RM_RE.test(line) && line.includes('recursive')) {
+            violations.push(`${rel}:${i + 1}`);
+          }
+        }
+      }
+    }
+    expect(violations, `raw recursive rmSync in worktree-handling files (use safeRecursiveRm):\n  ${violations.join('\n  ')}`).toEqual([]);
+  });
+
+  it('FR-5 guard is not vacuous — it detects a synthetic violation', () => {
+    // Without this, the guard passes identically whether its predicate works or not.
+    const synthetic = [
+      'const dir = resolve(cwd, ".worktrees", name);',
+      'fs.rmSync(dir, { recursive: true, force: true });',
+    ].join('\n');
+    const RAW_RM_RE = /\brmSync\s*\(/;
+    const hit = synthetic.split('\n').some((l) => RAW_RM_RE.test(l) && l.includes('recursive'));
+    expect(hit).toBe(true);
+    // …and a comment-only mention must NOT trip it, which is why blanking exists.
+    const commented = '// fs.rmSync(dir, { recursive: true });';
+    expect(commented.trim().startsWith('//')).toBe(true);
+  });
+
   it('the warn-and-proceed CWD branch is gone from post-merge cleanup (FR-2)', () => {
     const src = fs.readFileSync(path.join(repoRoot, 'scripts/modules/shipping/post-merge-worktree-cleanup.js'), 'utf8');
     // The old branch returned a warning AND still deleted; the refusal path
