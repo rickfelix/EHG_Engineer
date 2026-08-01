@@ -40,6 +40,7 @@ import {
   generateAdamManual,
   generateAdamProvenance,
   generateLeadManual,
+  generatePlanManual,
   assertSharedSectionsNotCopied
 } from './file-generators.js';
 
@@ -177,6 +178,7 @@ class CLAUDEMDGeneratorV3 {
       // back under the Read tool's 25k single-call cap. Rules stay in the gated file.
       ['CLAUDE_LEAD_MANUAL.md', (d) => generateLeadManual(d, this.fileMapping), 'full'],
       ['CLAUDE_PLAN.md', (d) => generatePlan(d, this.fileMapping), 'full'],
+      ['CLAUDE_PLAN_MANUAL.md', (d) => generatePlanManual(d, this.fileMapping), 'full'],
       ['CLAUDE_EXEC.md', (d) => generateExec(d, this.fileMapping), 'full'],
       ['CLAUDE_ADAM.md', (d) => generateAdam(d, this.fileMapping), 'full'],
       // SD-LEO-INFRA-ADAM-CONTRACT-READABLE-001 / FR-2 (chairman decision A-GOVERN). The
@@ -511,7 +513,7 @@ export { CLAUDEMDGeneratorV3 };
 // SD-LEO-INFRA-PROTOCOL-PUBLICATION-PIPELINE-001 (FR-4): the complete generated-file
 // set, used to validate --only targets (unknown names fail loud listing these).
 export const KNOWN_GENERATED_FILES = [
-  'CLAUDE.md', 'CLAUDE_CORE.md', 'CLAUDE_LEAD.md', 'CLAUDE_LEAD_MANUAL.md', 'CLAUDE_PLAN.md', 'CLAUDE_EXEC.md', 'CLAUDE_ADAM.md', 'CLAUDE_ADAM_MANUAL.md', 'CLAUDE_ADAM_PROVENANCE.md', 'CLAUDE_COORDINATOR.md', 'CLAUDE_SOLOMON.md',
+  'CLAUDE.md', 'CLAUDE_CORE.md', 'CLAUDE_LEAD.md', 'CLAUDE_LEAD_MANUAL.md', 'CLAUDE_PLAN.md', 'CLAUDE_PLAN_MANUAL.md', 'CLAUDE_EXEC.md', 'CLAUDE_ADAM.md', 'CLAUDE_ADAM_MANUAL.md', 'CLAUDE_ADAM_PROVENANCE.md', 'CLAUDE_COORDINATOR.md', 'CLAUDE_SOLOMON.md',
   'CLAUDE_DIGEST.md', 'CLAUDE_CORE_DIGEST.md', 'CLAUDE_LEAD_DIGEST.md', 'CLAUDE_PLAN_DIGEST.md', 'CLAUDE_EXEC_DIGEST.md', 'CLAUDE_ADAM_DIGEST.md', 'CLAUDE_COORDINATOR_DIGEST.md', 'CLAUDE_SOLOMON_DIGEST.md',
 ];
 

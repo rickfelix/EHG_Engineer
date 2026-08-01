@@ -57,6 +57,7 @@ const PROTOCOL_FILES = [
   // session state entirely — CLAUDE_ADAM_DIGEST.md is generated today and tracked nowhere. A new
   // companion that nothing records is a companion nobody can prove was read.
   'CLAUDE_LEAD_MANUAL.md',
+  'CLAUDE_PLAN_MANUAL.md',
   'CLAUDE_ADAM_PROVENANCE.md',
   'CLAUDE_SOLOMON.md',  // role contract, not a handoff-gate requirement — verified at role activation
   // SD-LEO-INFRA-ROLE-CONTRACT-READ-GATE-001 / FR-2 prerequisite. The coordinator was the ONLY role

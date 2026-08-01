@@ -616,6 +616,29 @@ function generateLeadManual(data, fileMapping) {
   });
 }
 
+/**
+ * CLAUDE_PLAN_MANUAL.md — the second half of SD-FDBK-INFRA-CLAUDE-LEAD-EXCEEDS-001.
+ *
+ * CLAUDE_PLAN.md measured 38,166 harness tokens against the 25,000 cap — the worst of the four
+ * phase/context files — truncating at line 1368 of 2457, so 44% of PLAN guidance was silently
+ * absent from any single read.
+ *
+ * ONE ENTRY HERE IS WEAKER THAN THE REST AND SAYS SO. `workflow` is included because excluding it
+ * leaves the budget 274 tokens short, not because it is self-evidently reference. It survives
+ * review on the facts — three unrelated rows share that generic type, 72% of it is a manual
+ * /runtime-audit protocol with no bearing on PLAN gating, and the type still renders into
+ * CLAUDE_EXEC.md so nothing leaves the protocol — but arithmetic-driven inclusions should be
+ * visible as such rather than blended into the list.
+ */
+function generatePlanManual(data, fileMapping) {
+  return generateAdamCompanion(data, fileMapping, 'CLAUDE_PLAN_MANUAL.md', {
+    heading: 'PLAN Manual (reference companion)',
+    purpose: 'Long-form PLAN reference — gate scoring tables, PRD and presentation templates, parent/child decomposition, refactor-brief guide, Explore-before-validation, runtime-audit protocol',
+    loadWhen: 'At the MOMENT OF DOING one of these procedures — not at every PLAN phase entry',
+    note: 'This companion carries REFERENCE AND PROCEDURE. Every RULE and PROHIBITION that governs PLAN stays in CLAUDE_PLAN.md and is in force whether or not this file is read. The negative constraints, the anti-patterns, the smoke-test and stubbed-code requirements all stayed behind deliberately — this file exists to make that one readable, not to relieve it of anything that binds.',
+  });
+}
+
 function generateAdam(data, fileMapping) {
   const { protocol } = data;
   const sections = protocol.sections;
@@ -725,6 +748,7 @@ export {
   generateAdamManual,
   generateAdamProvenance,
   generateLeadManual,
+  generatePlanManual,
   generateCoordinator,
   generateSolomon,
   findCopiedSharedSections,

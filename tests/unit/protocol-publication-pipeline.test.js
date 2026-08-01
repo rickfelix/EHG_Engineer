@@ -134,7 +134,7 @@ describe('FR-4: --only scoped regeneration', () => {
     } finally { fs.rmSync(dir, { recursive: true, force: true }); }
   });
 
-  it('KNOWN_GENERATED_FILES covers the 19 generated files', () => {
+  it('KNOWN_GENERATED_FILES covers the 20 generated files', () => {
     // Grew 12 -> 14 (Coordinator) -> 16 (Solomon: CLAUDE_SOLOMON.md + CLAUDE_SOLOMON_DIGEST.md)
     // -> 18 (SD-LEO-INFRA-ADAM-CONTRACT-READABLE-001: the two Adam companions, which the chairman
     // ruled A-GOVERN on so they are GENERATED from governed rows rather than hand-maintained files).
@@ -142,7 +142,7 @@ describe('FR-4: --only scoped regeneration', () => {
     // material out of CLAUDE_LEAD.md so the gated file fits the Read tool's 25k single-call cap.
     // Before it, a no-offset Read of CLAUDE_LEAD.md returned lines 1-1231 of 1592 and the gate could
     // not tell that from a complete read.)
-    expect(KNOWN_GENERATED_FILES).toHaveLength(19);
+    expect(KNOWN_GENERATED_FILES).toHaveLength(20);
     expect(KNOWN_GENERATED_FILES).toContain('CLAUDE.md');
     expect(KNOWN_GENERATED_FILES).toContain('CLAUDE_ADAM_DIGEST.md');
     expect(KNOWN_GENERATED_FILES).toContain('CLAUDE_COORDINATOR.md');
@@ -158,6 +158,7 @@ describe('FR-4: --only scoped regeneration', () => {
     // set, CLAUDE_LEAD.md silently reabsorbs its sections and goes back over the Read cap — which
     // presents as nothing at all, because a truncated read reports success. Named so that fails here.
     expect(KNOWN_GENERATED_FILES).toContain('CLAUDE_LEAD_MANUAL.md');
+    expect(KNOWN_GENERATED_FILES).toContain('CLAUDE_PLAN_MANUAL.md');
   });
 });
 

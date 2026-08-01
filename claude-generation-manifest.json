@@ -1,6 +1,6 @@
 {
-  "generated_at": "2026-08-01T12:03:39.143Z",
-  "git_commit": "f70be27d",
+  "generated_at": "2026-08-01T12:28:23.090Z",
+  "git_commit": "0575d188",
   "db_snapshot_hash": "f40cba344ed016a6",
   "files": {
     "CLAUDE.md": {
@@ -12,9 +12,9 @@
     },
     "CLAUDE_CORE.md": {
       "type": "full",
-      "chars": 93608,
-      "estimated_tokens": 23402,
-      "content_hash": "628fc50a72a4ac34",
+      "chars": 93546,
+      "estimated_tokens": 23387,
+      "content_hash": "f2d5c2e61a9ef97f",
       "path": "C:\\Users\\rickf\\Projects\\_EHG\\EHG_Engineer\\.worktrees\\SD-FDBK-INFRA-CLAUDE-LEAD-EXCEEDS-001\\CLAUDE_CORE.md"
     },
     "CLAUDE_LEAD.md": {
@@ -33,10 +33,17 @@
     },
     "CLAUDE_PLAN.md": {
       "type": "full",
-      "chars": 91830,
-      "estimated_tokens": 22958,
-      "content_hash": "950a561a2b25f501",
+      "chars": 54928,
+      "estimated_tokens": 13732,
+      "content_hash": "db83158e6a9ff10c",
       "path": "C:\\Users\\rickf\\Projects\\_EHG\\EHG_Engineer\\.worktrees\\SD-FDBK-INFRA-CLAUDE-LEAD-EXCEEDS-001\\CLAUDE_PLAN.md"
+    },
+    "CLAUDE_PLAN_MANUAL.md": {
+      "type": "full",
+      "chars": 38353,
+      "estimated_tokens": 9589,
+      "content_hash": "5e92e8814131c76d",
+      "path": "C:\\Users\\rickf\\Projects\\_EHG\\EHG_Engineer\\.worktrees\\SD-FDBK-INFRA-CLAUDE-LEAD-EXCEEDS-001\\CLAUDE_PLAN_MANUAL.md"
     },
     "CLAUDE_EXEC.md": {
       "type": "full",
