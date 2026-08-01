@@ -362,12 +362,36 @@ async function extractPatternsFromRetrospective(retroId) {
     })
     .eq('id', retroId);
 
+  // SD-FDBK-ENH-LEARNING-LOOP-DESTROYS-001 / FR-3 — CORRECTED AT EXEC AFTER TESTING PROVED MY
+  // FIRST ATTEMPT DID NOT WORK.
+  //
+  // I had attached the failures as `patterns.destroyed` on the returned ARRAY. Spreading an array
+  // copies its ELEMENTS, not its custom properties, so `[...improvementPatterns]` silently dropped
+  // it and the return object never carried a destroyed key at all. TESTING ran it live three
+  // times: a retrospective in which 100% of lessons were destroyed exited 0 and printed
+  // {"patterns_created":0,"all_patterns":[]} — byte-identical to a healthy run with nothing to do.
+  //
+  // So my fix for "a destroyed lesson is indistinguishable from nothing-to-create" was itself
+  // indistinguishable from nothing-to-create. That is this SD's own defect, reproduced by the
+  // person fixing it, and it survived because I verified the claim by reading my code instead of
+  // running it.
+  //
+  // Now carried as a first-class field, and success is FALSE when anything was destroyed, so the
+  // exit code changes too — AC-4 asks for the exit code AND the structured output, and stderr
+  // alone satisfied neither.
+  const destroyed = [
+    ...(improvementPatterns.destroyed || []),
+    ...(successPatterns.destroyed || []),
+  ];
+
   return {
-    success: true,
+    success: destroyed.length === 0,
     retrospective_id: retroId,
     patterns_created: created,
     patterns_updated: updated,
     prevention_items: preventions,
+    lessons_destroyed: destroyed.length,
+    destroyed,
     all_patterns: [...improvementPatterns, ...successPatterns]
   };
 }
@@ -397,7 +421,11 @@ async function main() {
   try {
     const result = await extractPatternsFromRetrospective(retroId);
     console.log('\n' + JSON.stringify(result, null, 2));
-    process.exit(0);
+    // FR-3 — exit NON-ZERO when lessons were destroyed. AC-4 asks for the exit code AND the
+    // structured output; a run that loses every lesson previously exited 0, so any caller checking
+    // only the status code saw success. This is the second half of the same fix, and I missed it
+    // the first time because I checked the output channel and stopped there.
+    process.exit(result?.lessons_destroyed > 0 ? 2 : 0);
   } catch (error) {
     console.error('\n❌ Error:', error.message);
     console.error(error.stack);

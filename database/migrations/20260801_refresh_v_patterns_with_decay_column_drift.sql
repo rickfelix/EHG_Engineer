@@ -88,9 +88,15 @@ SELECT
 FROM issue_patterns p
 WHERE p.status = 'active';
 
--- Preserved from 20260211/20260602: CREATE OR REPLACE does not carry security_invoker forward,
--- and losing it is the exact recurrence those two migrations were written to prevent. Re-assert it
--- here rather than relying on the event trigger, so this migration is correct standing alone.
+-- Preserved from 20260211/20260602: a bare CREATE OR REPLACE VIEW does drop security_invoker --
+-- verified empirically against a disposable scratch view, not taken from documentation.
+--
+-- CORRECTED AFTER SECURITY REVIEW: an earlier draft of this comment said omitting the line would
+-- "silently revert" the protection. That overstates it. The leo_enforce_view_security_invoker
+-- event trigger from 20260602 is live and fires synchronously within the same DDL command, so in
+-- THIS database the omission would be caught loudly with no exposure window. The line stays as
+-- defence-in-depth for a replay into an environment without that trigger -- which is a real
+-- reason, and a smaller one than the comment originally claimed.
 ALTER VIEW v_patterns_with_decay SET (security_invoker = on);
 
 COMMENT ON VIEW v_patterns_with_decay IS
