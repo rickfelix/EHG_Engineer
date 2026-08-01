@@ -301,7 +301,7 @@ async function main() {
   try {
     const { checkGaugeRunnerLiveness } = await import('../lib/governance/gauge-runner-liveness.js');
     const { data: hb } = await sb.from('codebase_health_snapshots')
-      .select('scanned_at')
+      .select('scanned_at, findings')
       .eq('dimension', 'gauge_runner_heartbeat')
       .order('scanned_at', { ascending: false })
       .limit(1)
@@ -310,6 +310,28 @@ async function main() {
     if (liveness.alarm) {
       const ageNote = liveness.ageMs == null ? 'no heartbeat ever recorded' : Math.floor(liveness.ageMs / 60000) + 'm stale';
       console.log('\n[HOURLY-REVIEW] GAUGE-RUNNER LIVENESS ALARM — invariant gauges may be silently NOT running (' + ageNote + '). Investigate scripts/gauge-runner.mjs.');
+    }
+
+    // SD-FDBK-INFRA-LESSONS-CONVERSION-WIRING-001: SIGNAL liveness, not just PROCESS liveness.
+    // The check above proves the runner RAN. It cannot prove the gauges still SEE anything —
+    // writeHeartbeat fires unconditionally with a hardcoded score of 100 regardless of detector
+    // outcomes, so a runner that executes flawlessly while every detector returns nothing produces
+    // a perfect heartbeat. That gap became load-bearing when gauge findings started deduping:
+    // nothing in this repo ever CLEARS a gauge finding, so `inserted` is 0 from the very first run
+    // and stays there. `suppressed > 0` is the ONLY evidence the gauges are still watching.
+    // ALL-QUIET IS THE ALARM CONDITION: every counter zero means either the detectors stopped
+    // tripping or they stopped working, and those must not look identical.
+    const routing = Array.isArray(hb?.findings) ? hb.findings[0] : null;
+    if (routing && ['inserted', 'suppressed', 'skipped', 'error'].some((k) => typeof routing[k] === 'number')) {
+      const { inserted = 0, suppressed = 0, skipped = 0, error = 0 } = routing;
+      if (inserted + suppressed + skipped + error === 0) {
+        console.log('\n[HOURLY-REVIEW] GAUGE SIGNAL ALARM — the runner is alive but routed NOTHING last pass '
+          + '(inserted=0 suppressed=0 skipped=0 error=0). Either every detector stopped tripping or every '
+          + 'detector stopped working; a healthy deduped pass reports suppressed>0. Investigate before trusting the gauges.');
+      } else {
+        console.log('[HOURLY-REVIEW] gauge routing last pass: inserted=' + inserted + ' suppressed=' + suppressed
+          + ' skipped=' + skipped + ' error=' + error);
+      }
     }
   } catch (e) {
     console.log('[HOURLY-REVIEW] gauge-runner liveness check skipped (non-fatal): ' + e.message);

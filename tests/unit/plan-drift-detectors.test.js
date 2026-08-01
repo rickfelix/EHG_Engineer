@@ -112,18 +112,21 @@ describe('plan-drift-detectors', () => {
   });
 
   describe('hasOpenFinding (FR-5 re-surface-once dedup, TS-6)', () => {
+    // Flat chainable double rather than the previous hand-nested select→eq→eq→in→limit shape.
+    // That shape encoded the exact filter LIST, so adding a predicate to the query — here the
+    // .is('feedback_type', null) and .order() that stop an anon-planted row from muting a gauge —
+    // failed with "…is not a function" in a file that has no opinion about the filter list.
+    // These three tests assert hasOpenFinding's VERDICT (true / false / throws). The query SHAPE is
+    // asserted where it belongs, in gauge-finding-dedup.test.js, whose double RECORDS every filter
+    // — so making this one permissive drops no coverage.
     const fakeSupabase = (rows, err = null) => ({
-      from: (table) => ({
-        select: () => ({
-          eq: (col1, val1) => ({
-            eq: (col2, val2) => ({
-              in: () => ({
-                limit: () => Promise.resolve({ data: rows, error: err }),
-              }),
-            }),
-          }),
-        }),
-      }),
+      from: () => {
+        const q = {
+          select: () => q, eq: () => q, in: () => q, is: () => q, order: () => q,
+          limit: () => Promise.resolve({ data: rows, error: err }),
+        };
+        return q;
+      },
     });
 
     it('returns true when an OPEN finding already exists for the gauge_id', async () => {

@@ -26,7 +26,7 @@ const ENTRY = { id: 'test-gauge', name: 'Test Gauge', ownerRole: 'coordinator', 
  * defect this SD is about.
  */
 function makeSupabase({ openRow = null, selectError = null, updateError = null, insertError = null, selectDelayMs = 0 } = {}) {
-  const calls = { selects: [], updates: [], inserts: [], statusFilter: null };
+  const calls = { selects: [], updates: [], inserts: [], statusFilter: null, isFilters: [], order: null };
   return {
     calls,
     from() {
@@ -35,6 +35,11 @@ function makeSupabase({ openRow = null, selectError = null, updateError = null, 
         select(cols) { q._isSelect = true; calls.selects.push(cols); return q; },
         eq(col, val) { if (col === 'id') calls.updates.at(-1).id = val; else calls.selects.push(`${col}=${val}`); return q; },
         in(col, vals) { calls.statusFilter = { col, vals }; return q; },
+        // .is() and .order() are recorded, not ignored. A double that silently swallows a filter
+        // lets the query drift out from under its own assertions — which is how a dedup that asks
+        // the WRONG question still returns the right verdict and ships green.
+        is(col, val) { calls.isFilters.push({ col, val }); return q; },
+        order(col, opts) { calls.order = { col, ...opts }; return q; },
         async limit() {
           if (selectDelayMs) await new Promise((r) => setTimeout(r, selectDelayMs));
           if (selectError) return { data: null, error: { message: selectError } };
@@ -94,6 +99,18 @@ describe('the dedup must not destroy recurrence information', () => {
     expect(OPEN_FINDING_STATUSES).toContain('in_progress');
     expect(OPEN_FINDING_STATUSES).not.toContain('resolved');
     expect(OPEN_FINDING_STATUSES).not.toContain('wont_fix');
+  });
+
+  it('is checked against the FULL live status domain, so an omission cannot hide', () => {
+    // The assertions above are not.toContain checks, which BY CONSTRUCTION cannot catch a MISSING
+    // open status. That is exactly how 'triaged' was dropped from the first version while the suite
+    // stayed green: the live feedback_status_check domain contains it, and omitting it would have
+    // re-armed hourly amplification the moment anyone started triaging the 5,382-row backlog --
+    // i.e. on first contact with the intended use. Partition the WHOLE domain instead.
+    const LIVE_STATUS_DOMAIN = ['new', 'triaged', 'in_progress', 'resolved', 'wont_fix', 'duplicate', 'invalid', 'backlog', 'shipped'];
+    const CLOSED = ['resolved', 'wont_fix', 'duplicate', 'invalid', 'shipped'];
+    const open = LIVE_STATUS_DOMAIN.filter((s) => !CLOSED.includes(s));
+    expect([...OPEN_FINDING_STATUSES].sort()).toEqual([...open].sort());
   });
 
   it('PREDICATE ONLY — trip, CLEAR, trip yields a second row', async () => {
@@ -178,6 +195,27 @@ describe('the dedup query asks the right question', () => {
     expect(sb.calls.statusFilter).not.toBeNull();
     expect(sb.calls.statusFilter.col).toBe('status');
     expect(sb.calls.statusFilter.vals).toEqual(OPEN_FINDING_STATUSES);
+  });
+
+  it('SECURITY: restricts to rows this runner could have written, so an anon row cannot mute a gauge', async () => {
+    // RLS grants anon an INSERT path constrained on source_type='telegram' ONLY — category, status
+    // and metadata are caller-supplied, and the anon key is public. Without these predicates a
+    // planted lookalike row would PERMANENTLY mute that invariant, because nothing clears a gauge
+    // finding. This diff is what makes planting effective: while the insert was unconditional a
+    // planted row suppressed nothing.
+    const sb = makeSupabase({ openRow: { id: 'row-1', occurrence_count: 1 } });
+    await routeFinding(sb, ENTRY, { count: 1 });
+    expect(sb.calls.selects.join('|')).toContain('source_type=auto_capture');
+    expect(sb.calls.isFilters).toContainEqual({ col: 'feedback_type', val: null });
+  });
+
+  it('picks the open row DETERMINISTICALLY — .limit(1) without .order() stamps an arbitrary sibling', async () => {
+    // Up to 692 open rows share one gauge_id today. An unordered limit(1) picks arbitrarily and
+    // then UPDATEs, perturbing the ordering it depended on, scattering occurrence_count across
+    // hundreds of identical siblings with no authoritative row.
+    const sb = makeSupabase({ openRow: { id: 'row-1', occurrence_count: 1 } });
+    await routeFinding(sb, ENTRY, { count: 1 });
+    expect(sb.calls.order).toEqual({ col: 'created_at', ascending: false });
   });
 
   it('keys on the gauge id, which buildFindingRow also writes', async () => {

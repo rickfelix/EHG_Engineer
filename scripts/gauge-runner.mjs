@@ -508,14 +508,21 @@ export async function routeFinding(supabase, entry, result) {
   // The timeout matters because a HANGING (not erroring) lookup across 22 gauges could exhaust the
   // workflow budget and kill a pass mid-flight, which would read as a fleet-down alarm.
   let open = null;
+  let timer = null;
   try {
     open = await Promise.race([
       findOpenFinding(supabase, entry.id),
-      new Promise((_, reject) => setTimeout(() => reject(new Error('dedup lookup timeout')), DEDUP_LOOKUP_TIMEOUT_MS)),
+      new Promise((_, reject) => { timer = setTimeout(() => reject(new Error('dedup lookup timeout')), DEDUP_LOOKUP_TIMEOUT_MS); }),
     ]);
   } catch (e) {
     console.error(`[gauge-runner] ${entry.id}: dedup lookup failed (${e.message}) -- INSERTING rather than suppressing`);
     open = null;
+  } finally {
+    // The timer holds the event loop for its FULL duration even when the lookup wins — measured at
+    // 4007ms for a call that resolved in 1ms. Invisible today only because main() calls
+    // process.exit(), which is a load-bearing accident rather than a design. routeFinding is
+    // EXPORTED now, so any long-lived importer would accumulate these.
+    if (timer) clearTimeout(timer);
   }
 
   if (open) {
@@ -623,7 +630,7 @@ async function main() {
     console.error(`[gauge-runner] stampLastFired failed (non-fatal): ${err.message}`);
   }
 
-  if (JSON_MODE) console.log(JSON.stringify({ ran: results.length, results }));
+  if (JSON_MODE) console.log(JSON.stringify({ ran: results.length, routing, results }));
   process.exit(0); // advisory: the runner itself never fails the tick
 }
 
