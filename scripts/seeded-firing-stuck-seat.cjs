@@ -30,11 +30,15 @@
  *     what capacity actually runs on. So the seed IS visible to getFleetRoster, the capacity
  *     forecaster's idleNow, coordination-events' unfiltered scan, and detectStalledLoop (it matches
  *     every guard). ACCEPTED IN-WINDOW RISK, not an exclusion.
- *   ALSO UNMENTIONED AND REAL — worktree_path NULL is read by auto-exec-checkout-sync as "this
- *     worker is in the MAIN checkout", which can hold a worker-exclusion lock for up to 15 minutes,
- *     OUTLIVING this script; and resolve-own-session's last-resort strategy picks the freshest
+ *   DIRECTION INVERTED, CORRECTED AFTER REVIEW — I wrote that worktree_path NULL "can hold a
+ *     worker-exclusion lock for 15 minutes, outliving this script". auto-exec-checkout-sync does
+ *     read NULL as "this worker is in the MAIN checkout", and MAIN_WORKER_TTL_MS is 15 minutes, but
+ *     the seed BLOCKS lock acquisition (the code aborts with reason 'live_worker_in_main') rather
+ *     than holding one — and that whole path is default-OFF behind a disabled flag. Less severe than
+ *     I claimed, and in the opposite direction; recorded rather than quietly deleted.
+ *   REAL AND UNMENTIONED — resolve-own-session's last-resort strategy picks the freshest
  *     status='active' row by heartbeat, which this seed becomes BY CONSTRUCTION, so a process
- *     falling through to it could adopt the synthetic row as its own session.
+ *     falling through to it during the window could adopt the synthetic row as its own session.
  *   TRUE — no session_coordination row is written at all. The shipped predicate does not read
  *     outbound escalation-ness (that conjunct was dropped as unproven), so there is nothing to seed
  *     and nothing for lib/coordinator/signal-router.cjs to promote into a durable feedback row.
@@ -131,7 +135,7 @@ async function main() {
     // THE DETECTOR RUNS ITS OWN PRODUCTION QUERY. The rows are NOT handed in — that is the whole
     // point of the binding criterion: a detector can score SILENT because the harness never fed it
     // anything, and that false negative is indistinguishable from a real finding.
-    let population = await fetchPopulation(sb);
+    let { seats: population, truncated } = await fetchPopulation(sb);
     if (FALSIFY) {
       population = population.filter(() => false);   // mutate the feed to select nothing
       console.log('\n[--falsify] population feed forced empty');

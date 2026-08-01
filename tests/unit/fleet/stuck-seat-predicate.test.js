@@ -249,7 +249,7 @@ describe('fetchPopulation BEHAVIOURALLY — the gap that let the defect through 
   ];
 
   it('returns all four CLAIM-FREE stuck seats — the regression test for returning 1 of 4', async () => {
-    const seats = await fetchPopulation(fakeSupabase(LIVE_SHAPED));
+    const { seats } = await fetchPopulation(fakeSupabase(LIVE_SHAPED));
     const ids = seats.map((s) => s.session_id);
     for (const stuck of ['ab29dc41-0382-4bdb-8d79-5306874e8dbb', 'e3610a71-688e-4184-a323-261ad135f0d3',
                          'e7c92ad8-6be0-42a6-870e-cfb5d9f73098', '06521203-f370-4666-a40c-7801bcc192ef']) {
@@ -261,7 +261,7 @@ describe('fetchPopulation BEHAVIOURALLY — the gap that let the defect through 
   });
 
   it('excludes fixtures by ID SHAPE and excludes released seats — but never by claim state', async () => {
-    const ids = (await fetchPopulation(fakeSupabase(LIVE_SHAPED))).map((s) => s.session_id);
+    const ids = (await fetchPopulation(fakeSupabase(LIVE_SHAPED))).seats.map((s) => s.session_id);
     expect(ids).not.toContain('test-session-fixture-1');          // isFixtureSession, id shape
     expect(ids).not.toContain('ffffffff-dead-dead-dead-ffffffffffff'); // status filter
     expect(ids).toContain('2bd03a3c-aaaa-bbbb-cccc-dddddddddddd');     // claim-HOLDING seat still in
@@ -288,5 +288,45 @@ describe('fetchPopulation BEHAVIOURALLY — the gap that let the defect through 
     // An empty population and a failed query render identically as "0 stuck" — the failure must be loud.
     const failing = { from: () => ({ select: () => ({ in: () => ({ order: () => ({ limit: async () => ({ data: null, error: { message: 'boom' } }) }) }) }) }) };
     await expect(fetchPopulation(failing)).rejects.toThrow(/boom/);
+  });
+});
+
+describe('the incumbent is RUN, not quoted — precedence must not rot into a frozen constant', () => {
+  /**
+   * ADDED AFTER REVIEW. The precedence test above asserts the documented rule; a reviewer pointed out
+   * it never executes lib/fleet/claim-boundary-probe.cjs, so if the incumbent's behaviour changed the
+   * assertion would keep passing while the documented rationale quietly became false. That is
+   * PAT-TEST-PINS-FACT-NOT-BEHAVIOUR-001, which has six prior occurrences in this repo, and I hit it
+   * in the one place the PRD explicitly asked for behaviour. This runs both detectors on the same row.
+   */
+  const { evaluateClaimBoundary } = require('../../../lib/fleet/claim-boundary-probe.cjs');
+
+  it('DELTA-shaped row: the incumbent PASSes and this module says STUCK', () => {
+    // Delta's real shape: it worked for a while AFTER its claim anchor, then froze. The incumbent's
+    // progressed_past_boundary guard sees the post-anchor activity and passes; it never looks at how
+    // long ago that activity was. That guard is the dangerous one — it clears ANY seat that did work
+    // and then stopped, which is the entire failure class this SD addresses.
+    const anchorMs = MEASURED_AT - 935 * 60000;          // claim anchor, ~15.5h ago
+    const lastToolAtMs = MEASURED_AT - 888 * 60000;      // last tool 47 min AFTER the anchor
+    const incumbent = evaluateClaimBoundary({ nowMs: MEASURED_AT, anchorMs, lastToolAtMs, outboundSinceAnchor: 0 });
+    const mine = classifySeat(
+      { session_id: 'delta', last_tool_at: new Date(lastToolAtMs).toISOString(), metadata: {} },
+      { cutPointMinutes: TEST_CUT, now: MEASURED_AT }
+    );
+    expect(incumbent.verdict).toBe('PASS');
+    expect(mine.verdict).toBe(VERDICT.STUCK);
+    // The disagreement is REAL and REPRODUCED, so the documented precedence has something to govern.
+    expect(PRECEDENCE.onDisagreement).toBe('stuck_wins_for_reporting_incumbent_wins_for_actuation');
+    expect(PRECEDENCE.thisModuleIsAdvisoryOnly).toBe(true);
+  });
+
+  it('names WHICH incumbent guard fired, so a change of reason is visible rather than silent', () => {
+    const anchorMs = MEASURED_AT - 935 * 60000;
+    const incumbent = evaluateClaimBoundary({
+      nowMs: MEASURED_AT, anchorMs, lastToolAtMs: MEASURED_AT - 888 * 60000, outboundSinceAnchor: 0
+    });
+    // Recorded because I documented the WRONG guard first: the PRD originally said Delta passes via
+    // outbound_comms_since_anchor, which is unreachable on Delta (zero outbound since its anchor).
+    expect(incumbent.reason).toBe('progressed_past_boundary');
   });
 });

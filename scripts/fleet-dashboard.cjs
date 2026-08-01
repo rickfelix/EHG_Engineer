@@ -1678,7 +1678,7 @@ async function printStuckSeatStrip() {
   try {
     const { fetchPopulation } = require('../lib/fleet/stuck-seat-population.cjs');
     const { classifySeat, VERDICT } = require('../lib/fleet/stuck-seat-predicate.cjs');
-    const population = await fetchPopulation(supabase);
+    const { seats: population, truncated } = await fetchPopulation(supabase);
     const results = population.map((row) => classifySeat(row, { cutPointMinutes: STUCK_SEAT_CUT_POINT_MINUTES }));
     const stuck = results.filter((r) => r.verdict === VERDICT.STUCK);
     const unknown = results.filter((r) => r.verdict === VERDICT.UNKNOWN);
@@ -1694,7 +1694,7 @@ async function printStuckSeatStrip() {
       console.log('  ' + pad(r.session_id, 38) + pad(r.toolSilentMinutes + 'm silent', 16) + 'wake:' + r.wake.state);
     }
     console.log('  seats scanned=' + population.length + '  stuck=' + stuck.length + '  unknown=' + unknown.length +
-      (population.truncated ? '  [TRUNCATED at the row cap — the count is over a partial page]' : '') +
+      (truncated ? '  [TRUNCATED at the row cap — the count is over a partial page]' : '') +
       (population.length === 0 ? '  <- SCANNED NOTHING. This is a blind detector, not a healthy fleet.' : '') +
       (unknown.length ? '  <- UNKNOWN means the detector could not see those seats, not that they are healthy' : ''));
     console.log('');
