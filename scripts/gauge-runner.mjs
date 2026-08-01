@@ -532,7 +532,7 @@ export async function routeFinding(supabase, entry, result) {
     // Its LOOKUP at :91-95 is a NAMED ANTI-PRECEDENT (PRD TR-4): it filters on error_hash with NO
     // status filter, so it bumps counts on CLOSED rows -- live, a ci_failure row sits at
     // occurrence_count 586 with a fresh last_seen while that table holds 2,101 resolved.
-    const { error } = await supabase
+    const { data: stamped, error } = await supabase
       .from('feedback')
       .update({
         last_seen: new Date().toISOString(),
@@ -540,15 +540,28 @@ export async function routeFinding(supabase, entry, result) {
         updated_at: new Date().toISOString(),
       })
       .eq('id', open.id)
-      // RE-ASSERTED, NOT ASSUMED. The lookup already proved these, but the invariant "this runner
-      // only ever bumps its OWN open gauge rows" then lives split across two statements in two
-      // files, and the anti-precedent above is exactly what that split produces: a correct-looking
-      // UPDATE fed by a lookup that lost a predicate. Keeping them here makes the UPDATE refuse a
-      // stale or mis-scoped id on its own terms — it is a no-op when the lookup is right.
+      // RE-ASSERTED, NOT ASSUMED — and re-asserting the FULL lookup predicate, not a subset. The
+      // lookup already proved these, but the invariant "this runner only ever bumps its OWN open
+      // gauge rows" then lives split across two statements in two files, and the anti-precedent
+      // above is exactly what that split produces: a correct-looking UPDATE fed by a lookup that
+      // lost a predicate. It is a no-op whenever the lookup is right.
       .eq('category', 'invariant_gauge_finding')
-      .in('status', OPEN_FINDING_STATUSES);
+      .eq('source_type', 'auto_capture')
+      .eq('feedback_type', 'sentry_error')
+      .is('archived_at', null)
+      .in('status', OPEN_FINDING_STATUSES)
+      // ZERO ROWS MATCHED IS NOT SUCCESS. Without .select() supabase-js returns {error:null} for an
+      // UPDATE that touched NOTHING, so a row triaged or archived out of scope between the lookup
+      // and the stamp would be reported 'suppressed' with nothing written — the trip silently
+      // dropped, and counted as healthy dedup on the very tally that exists to detect silence.
+      // Reporting success for work that did not happen is the defect class this whole SD is about.
+      .select('id');
     if (error) {
       console.error(`[gauge-runner] ${entry.id}: re-emission stamp failed (non-fatal): ${error.message}`);
+      return 'error';
+    }
+    if (!Array.isArray(stamped) || stamped.length === 0) {
+      console.error(`[gauge-runner] ${entry.id}: re-emission stamp matched NO row (row ${open.id} moved out of scope between lookup and update) — reporting error, not suppressed`);
       return 'error';
     }
     return 'suppressed';
