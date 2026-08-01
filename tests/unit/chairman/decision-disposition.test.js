@@ -56,6 +56,30 @@ describe('FR-3 disposition reader — indexing', () => {
     expect(indexDispositions([{ id: 'z', category: 'harness_backlog', metadata: { target_id: 'dec-1' } }]).size).toBe(0);
   });
 
+  it('D6: metadata.deferred_at TAKES PRECEDENCE over the row created_at', () => {
+    // The helper sets created_at and metadata.deferred_at to the SAME instant, which makes the
+    // `md.deferred_at || r.created_at` ordering unobservable — swapping the operands kept the suite
+    // green. Here they differ, so the precedence is pinned. This matters on live data: a deferral
+    // row's created_at is when the AUDIT ROW was written, which is not necessarily the moment the
+    // chairman deferred.
+    const m = indexDispositions([{
+      ...deferral('dec-1', 56),
+      created_at: iso(56),
+      metadata: { target_id: 'dec-1', decided_by: 'chairman-cli', deferred_at: iso(2) }
+    }]);
+    expect(m.get('dec-1').deferredAt).toBe(iso(2));
+    expect(m.get('dec-1').deferredAt).not.toBe(iso(56));
+  });
+
+  it('D6b: falls back to created_at only when deferred_at is absent', () => {
+    const m = indexDispositions([{
+      ...deferral('dec-1', 56),
+      created_at: iso(9),
+      metadata: { target_id: 'dec-1', decided_by: 'chairman-cli' }   // no deferred_at
+    }]);
+    expect(m.get('dec-1').deferredAt).toBe(iso(9));
+  });
+
   it('a row deferred TWICE is governed by the LATER deferral — three live rows have this shape', () => {
     const m = indexDispositions([deferral('dec-1', 10), deferral('dec-1', 2)]);
     expect(m.size).toBe(1);
@@ -191,6 +215,30 @@ describe('FR-6/TR-8 renderPendingLine — the rendered surface, now assertable',
     const { renderPendingLine } = await import('../../../lib/chairman/decision-queue.mjs');
     const d = indexDispositions([deferral('dec-1', 1, { snoozed_until: new Date(NOW.getTime() + 86400000).toISOString() })]);
     expect(renderPendingLine(row(), { dispositions: d, now: NOW })).toContain('HELD');
+  });
+
+  it('Q6: on an UNDEFERRED row the view false is HONOURED — `??` not `||`', async () => {
+    // The distinguishing case the suite lacked. With `??`, an explicit age_escalated:false from the
+    // view is kept even on an old row (the view governs when there is no deferral to correct it).
+    // With `||`, false is falsy and the recomputed verdict leaks through, flipping the marker on.
+    // Every prior fixture used age_escalated:true, where both operators agree.
+    const { renderPendingLine } = await import('../../../lib/chairman/decision-queue.mjs');
+    const line = renderPendingLine(row({ age_escalated: false }), { dispositions: null, now: NOW });
+    expect(line).not.toContain('age-escalated');
+  });
+
+  it('Q4: on a DEFERRED row the recomputed label WINS over a stale view label', async () => {
+    // Every prior fixture passed effective_priority:'critical' on a critical row, so the view label
+    // and the recomputed label agreed by construction and the override was unobservable. Here they
+    // DISAGREE: the view still says 'critical', the deferral-corrected clock says 'normal'.
+    const { renderPendingLine } = await import('../../../lib/chairman/decision-queue.mjs');
+    const d = indexDispositions([deferral('dec-1', 1)]);
+    const line = renderPendingLine(
+      row({ priority: 'normal', effective_priority: 'critical', age_escalated: true }),
+      { dispositions: d, now: NOW }
+    );
+    expect(line).toContain('[normal');
+    expect(line).not.toContain('[critical');
   });
 
   it('BLOCKING and recommendation survive the rewrite — no regression to the existing line', async () => {
