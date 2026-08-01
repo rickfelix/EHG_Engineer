@@ -452,7 +452,12 @@ async function main() {
 }
 
 // Export for programmatic use
-export { extractPatternsFromRetrospective, assembleExtractionResult };
+// extractPatternsFromImprovements is exported for tests/unit/learning/batch-resilience.test.js.
+// FR-2 is this SD's headline mechanism and the live production writer, and it was resting entirely
+// on one-off manual probes with no CI-visible guard. Exporting the real function is deliberate: a
+// test that reconstructs the loop can only confirm its author's belief, which is how the FR-3 fix
+// shipped broken the first time.
+export { extractPatternsFromRetrospective, assembleExtractionResult, extractPatternsFromImprovements };
 
 // Run if called directly
 if (process.argv[1].endsWith('auto-extract-patterns-from-retro.js')) {
