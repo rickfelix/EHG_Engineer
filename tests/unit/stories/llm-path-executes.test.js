@@ -74,6 +74,100 @@ describe('FR-4: the adapter compat layer covers BOTH conventions', () => {
   });
 });
 
+describe('FR-4 follow-up: the shim must not silently drop conversation history', () => {
+  it('preserves assistant turns instead of filtering to role==="user"', async () => {
+    /**
+     * *** THE FIRST CUT OF THE SHIM REINTRODUCED THIS SD'S OWN DEFECT CLASS. ***
+     * It did `messages.filter(m => m.role === 'user')`, so every assistant turn vanished. A live
+     * SECURITY control caught it: a [user, assistant, user] exchange reached .complete() with the
+     * assistant text gone. eva-chat-service's generateEVAResponse — repaired in this very SD from a
+     * hard TypeError to actually running — feeds real DB-backed history, so every reply past the
+     * first would have lost EVA's own prior words.
+     *
+     * Replacing a HARD FAILURE with a QUIET WRONG ANSWER is worse than the bug being fixed, which
+     * is why this is a test and not just a patch.
+     */
+    const { AnthropicAdapter } = await import('../../../lib/sub-agents/vetting/provider-adapters.js');
+    const adapter = new AnthropicAdapter({ apiKey: 'test-key-not-used' });
+    let captured = null;
+    adapter.complete = async (_system, user) => { captured = user; return { content: 'ok', usage: {} }; };
+
+    await adapter.messages.create({
+      max_tokens: 16,
+      messages: [
+        { role: 'user', content: 'first question' },
+        { role: 'assistant', content: 'PRIOR ASSISTANT REPLY' },
+        { role: 'user', content: 'follow-up question' }
+      ]
+    });
+
+    expect(captured, 'assistant turn must survive').toContain('PRIOR ASSISTANT REPLY');
+    expect(captured).toContain('first question');
+    expect(captured).toContain('follow-up question');
+
+    // MUTATION: restore the user-only filter -> the assistant assertion fails.
+  });
+
+  it('leaves a single-turn call byte-identical — no framing text the caller did not ask for', async () => {
+    // The overwhelmingly common case is one user message. Role labels there would silently alter
+    // every existing prompt in the repo, so single-turn passes through verbatim.
+    const { AnthropicAdapter } = await import('../../../lib/sub-agents/vetting/provider-adapters.js');
+    const adapter = new AnthropicAdapter({ apiKey: 'test-key-not-used' });
+    let captured = null;
+    adapter.complete = async (_system, user) => { captured = user; return { content: 'ok', usage: {} }; };
+
+    await adapter.messages.create({ max_tokens: 16, messages: [{ role: 'user', content: 'just this' }] });
+    expect(captured).toBe('just this');
+  });
+
+  it('bounds recursion so a deeply-nested content array cannot blow the stack', async () => {
+    // A SECURITY control blew the stack at ~200k depth. No call site passes nested arrays, so this
+    // is defense-in-depth for a primitive now shared by EVERY adapter.
+    const { AnthropicAdapter } = await import('../../../lib/sub-agents/vetting/provider-adapters.js');
+    const adapter = new AnthropicAdapter({ apiKey: 'test-key-not-used' });
+    adapter.complete = async (_s, u) => ({ content: String(u), usage: {} });
+
+    let nested = [{ type: 'text', text: 'deep' }];
+    for (let i = 0; i < 5000; i++) nested = [nested];
+
+    await expect(
+      adapter.messages.create({ max_tokens: 16, messages: [{ role: 'user', content: nested }] })
+    ).resolves.toBeDefined();
+  });
+});
+
+describe('FR-2 follow-up: the loud channel must not carry credentials', () => {
+  it('redacts key-shaped tokens from degradation_reason and warnings', async () => {
+    /**
+     * A SECURITY control planted `Incorrect API key provided: sk-test-fake-planted...` in a thrown
+     * error and found it VERBATIM in degradation_reason, warnings[0] and the console.warn. Nothing
+     * persists those fields today, so this is defense-in-depth — but FR-2 deliberately made this
+     * channel LOUD, and making a channel loud while leaving it unredacted is how a latent leak
+     * becomes a real one.
+     */
+    vi.resetModules();
+    vi.doMock('../../../lib/sub-agents/modules/stories/llm-story-generator.js', async (orig) => ({
+      ...(await orig()),
+      createLLMStoryGenerator: () => ({
+        isEnabled: () => true,
+        generateStoriesFromCriteria: async () => {
+          throw new Error('401 Incorrect API key provided: sk-test-fake-planted-key-00000');
+        }
+      })
+    }));
+    const { generateStoriesBatch: batch } = await import('../../../lib/sub-agents/modules/stories/quality-generation.js');
+    const result = await batch(['a'], { id: 'PRD-T', functional_requirements: [] }, {}, { sdType: 'infrastructure' });
+    vi.doUnmock('../../../lib/sub-agents/modules/stories/llm-story-generator.js');
+
+    expect(result.generated_by, 'non-vacuity: the throwing path must be the one under test').toBe('RULE_BASED');
+    expect(result.degradation_reason, 'the planted secret must not survive').not.toContain('sk-test-fake-planted');
+    expect(JSON.stringify(result.warnings)).not.toContain('sk-test-fake-planted');
+    // The reason must still be USEFUL — redaction that destroys the diagnosis defeats FR-2.
+    expect(result.degradation_reason).toContain('[REDACTED]');
+    expect(result.degradation_reason).toMatch(/401|Incorrect API key/);
+  });
+});
+
 describe('FR-2: taking the fallback is LOUD', () => {
   it('reports degraded=true with a reason, and still returns stories', async () => {
     /**
