@@ -194,7 +194,7 @@ describe('the laziness invariant — the property that bounds the blast radius',
     // resolveWorktreeRoot claims ownership when the probe throws, which routes an
     // unanswerable case back into "keep the blocking answer". For a GUARD that is the
     // right direction: if we cannot tell whose dirt it is, do not license deletion.
-    const throwing = (args, cwd) => {
+    const throwing = (args) => {
       if (args[0] === 'status') return { code: 0, stdout: ' M a.js\n', stderr: '' };
       if (args[0] === 'rev-parse') throw new Error('probe exploded');
       return { code: 0, stdout: '', stderr: '' };
