@@ -379,6 +379,27 @@ async function extractPatternsFromRetrospective(retroId) {
   // Now carried as a first-class field, and success is FALSE when anything was destroyed, so the
   // exit code changes too — AC-4 asks for the exit code AND the structured output, and stderr
   // alone satisfied neither.
+  return {
+    retrospective_id: retroId,
+    patterns_updated: updated,
+    prevention_items: preventions,
+    ...assembleExtractionResult(improvementPatterns, successPatterns, created)
+  };
+}
+
+/**
+ * Assemble the destruction-aware result. EXPORTED SO THE TEST BINDS TO THIS CODE rather than to a
+ * copy of it — a test that re-implements the logic it checks agrees with whatever its author
+ * believed, which is precisely how the original defect survived review.
+ *
+ * @param {Array} improvementPatterns results from the improvements loop, possibly carrying .destroyed
+ * @param {Array} successPatterns     results from the successes loop, possibly carrying .destroyed
+ * @param {number} created            count of newly created patterns
+ */
+function assembleExtractionResult(improvementPatterns, successPatterns, created) {
+  // Read .destroyed off each source BEFORE spreading. Spreading an array copies ELEMENTS, not
+  // custom properties, so doing this after the spread silently loses every failure — which is the
+  // bug this function exists to make impossible to reintroduce quietly.
   const destroyed = [
     ...(improvementPatterns.destroyed || []),
     ...(successPatterns.destroyed || []),
@@ -386,10 +407,7 @@ async function extractPatternsFromRetrospective(retroId) {
 
   return {
     success: destroyed.length === 0,
-    retrospective_id: retroId,
     patterns_created: created,
-    patterns_updated: updated,
-    prevention_items: preventions,
     lessons_destroyed: destroyed.length,
     destroyed,
     all_patterns: [...improvementPatterns, ...successPatterns]
@@ -434,7 +452,7 @@ async function main() {
 }
 
 // Export for programmatic use
-export { extractPatternsFromRetrospective };
+export { extractPatternsFromRetrospective, assembleExtractionResult };
 
 // Run if called directly
 if (process.argv[1].endsWith('auto-extract-patterns-from-retro.js')) {
