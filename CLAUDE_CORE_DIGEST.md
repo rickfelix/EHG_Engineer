@@ -1,7 +1,7 @@
 <!-- GENERATED FILE - DO NOT EDIT DIRECTLY. Source of truth: leo_protocol_sections (DB). Regenerate: node scripts/generate-claude-md-from-db.js. Drift check: node scripts/check-claude-md-drift.cjs -->
 <!-- DIGEST FILE - Enforcement-focused protocol content -->
-<!-- generated_at: 2026-07-31T20:47:28.552Z -->
-<!-- git_commit: 433725df -->
+<!-- generated_at: 2026-08-01T12:11:44.491Z -->
+<!-- git_commit: f70be27d -->
 <!-- db_snapshot_hash: f40cba344ed016a6 -->
 <!-- file_content_hash: 3b00e340966330ba -->
 
@@ -294,5 +294,5 @@ These anti-patterns apply across ALL phases. Violating them leads to failed hand
 
 ---
 
-*DIGEST generated: 2026-07-31 4:47:28 PM*
+*DIGEST generated: 2026-08-01 8:11:44 AM*
 *Protocol: 4.4.1*

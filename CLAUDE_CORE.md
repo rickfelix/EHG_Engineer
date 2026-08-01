@@ -1,8 +1,8 @@
-<!-- file_content_hash: d9e588b31093600b -->
+<!-- file_content_hash: 628fc50a72a4ac34 -->
 <!-- GENERATED FILE - DO NOT EDIT DIRECTLY. Source of truth: leo_protocol_sections (DB). Regenerate: node scripts/generate-claude-md-from-db.js. Drift check: node scripts/check-claude-md-drift.cjs -->
 # CLAUDE_CORE.md - LEO Protocol Core Context
 
-**Generated**: 2026-07-31 12:41:11 PM
+**Generated**: 2026-08-01 8:11:44 AM
 **Protocol**: LEO 4.4.1
 **Purpose**: Essential workflow context for all sessions
 **Effort**: medium (core context; phase-specific files tag their own effort for phase work)
@@ -1608,7 +1608,15 @@ Each SD should trace upward through this hierarchy. When evaluating or creating 
 
 ## Known Friction Points
 
-*(No widespread friction signals tracked currently — workers can /signal to surface recurring issues.)*
+**From Worker Signals** — recurring friction observed by 3+ workers via `/signal`. Aggregated into harness-backlog by `lib/coordinator/signal-router.cjs` on every sweep cycle. Triage via `node scripts/sd-from-feedback.js`.
+
+| Signal Type | Workers | Severity | Title |
+|-------------|---------|----------|-------|
+| feedback | 6 | medium | online — entering autonomous loop |
+| feedback | 3 | medium | wakeup-armed +600s — idle, 0 claimable at my tier (unchanged |
+| feedback | 3 | medium | comms-check ack — read you |
+
+*Auto-updated from `feedback` table where `category='harness_backlog'` AND `metadata.contributing_workers` length ≥ 3.*
 
 
 
@@ -1737,7 +1745,7 @@ Results MUST be persisted to `sub_agent_execution_results` table.
 
 ---
 
-*Generated from database: 2026-07-31*
+*Generated from database: 2026-08-01*
 *Protocol Version: 4.4.1*
 *Includes: Proposals (0) + Hot Patterns (5) + Lessons (5)*
 *Load this file first in all sessions*
