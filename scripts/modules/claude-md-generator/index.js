@@ -350,7 +350,9 @@ class CLAUDEMDGeneratorV3 {
       // read gate cannot see (it derives read-to-EOF from whether the CALLER passed a limit, never
       // from delivered content — feedback 39c3d27d). Silent by construction.
       assertSingleReadFit(
-        fullFiles.map(([name, f]) => ({ name, bytes: f.chars })),
+        // f.bytes, NOT f.chars — see the byteCount comment in generateFile(). chars is UTF-16
+        // code units and under-counts these emoji-bearing files, which inflates headroom.
+        fullFiles.map(([name, f]) => ({ name, bytes: f.bytes })),
         { onWarn: (m) => console.warn(m) },
       );
 
@@ -444,12 +446,20 @@ class CLAUDEMDGeneratorV3 {
 
     const size = (content.length / 1024).toFixed(1);
     const charCount = content.length;
+    // SD-FDBK-INFRA-CLAUDE-LEAD-EXCEEDS-001 — `chars` is content.length, i.e. UTF-16 CODE UNITS,
+    // and these files are full of emoji section headers. CLAUDE_LEAD.md measures 58,426 chars
+    // against 58,622 real UTF-8 bytes; CLAUDE_PLAN.md is off by 257. Feeding chars to the
+    // single-read guard UNDER-counts and therefore INFLATES apparent headroom — the same
+    // direction of error the guard exists to catch, arriving on a different axis. `chars` keeps
+    // its meaning because other consumers read it; the guard gets a field that means what it says.
+    const byteCount = Buffer.byteLength(content, 'utf8');
     const tokens = this.estimateTokens(content);
 
     // Add to manifest
     this.manifest.files[filename] = {
       type,
       chars: charCount,
+      bytes: byteCount,
       estimated_tokens: tokens,
       content_hash: contentHash,
       path: filePath

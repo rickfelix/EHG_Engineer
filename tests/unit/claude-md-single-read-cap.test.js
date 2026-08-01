@@ -92,3 +92,31 @@ describe('FR-4: single-read cap enforcement', () => {
     expect(() => assertSingleReadFit(undefined)).not.toThrow();
   });
 });
+
+// The gap VALIDATION found existed because every fixture above builds `bytes` synthetically and
+// so never exercises the manifest wiring. A guard fed the wrong FIELD is indistinguishable, at the
+// unit level, from a guard fed the right one. These pin the field itself.
+describe('FR-4: the guard is fed BYTES, not UTF-16 code units', () => {
+  it('emoji make content.length UNDER-count real bytes — the dangerous direction', () => {
+    // These files carry emoji section headers (🚫 🎯 🔍 …). Each is 1 UTF-16 unit but 4 UTF-8 bytes.
+    const content = '## 🚫 Negative Constraints\n## 🎯 Planning\n## 🔍 Explore\n';
+    const chars = content.length;
+    const bytes = Buffer.byteLength(content, 'utf8');
+    expect(bytes).toBeGreaterThan(chars);
+    // Under-counting inflates apparent headroom, so the guard would stay silent past the real cap.
+    expect(Math.round(chars / HARNESS_BYTES_PER_TOKEN)).toBeLessThan(Math.round(bytes / HARNESS_BYTES_PER_TOKEN));
+  });
+
+  it('a file that fits by chars but NOT by bytes must still throw', () => {
+    // The exact shape of the defect: chars says safe, bytes says over. Measured on the real files,
+    // CLAUDE_LEAD.md was 58,426 chars vs 58,622 bytes — a 196-byte gap that showed 834 tokens of
+    // headroom where 753 was true.
+    const overByBytes = Math.ceil(25001 * HARNESS_BYTES_PER_TOKEN);
+    const underByChars = Math.floor(24900 * HARNESS_BYTES_PER_TOKEN);
+    expect(underByChars).toBeLessThan(overByBytes); // the fixture really does straddle the cap
+    expect(() => assertSingleReadFit([{ name: 'CLAUDE_LEAD.md', bytes: overByBytes }]))
+      .toThrow(/SINGLE_READ_CAP_EXCEEDED/);
+    // CONTROL: the same file measured the WRONG way slips through — which is what shipped before.
+    expect(() => assertSingleReadFit([{ name: 'CLAUDE_LEAD.md', bytes: underByChars }])).not.toThrow();
+  });
+});
