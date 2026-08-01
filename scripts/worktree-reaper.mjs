@@ -577,13 +577,58 @@ function runGit(args, opts = {}) {
   };
 }
 
-function runGh(args, opts = {}) {
+/**
+ * SD-LEO-INFRA-REAPER-GH-SHELL-INJECTION-001 (FR-1).
+ *
+ * `shell: process.platform === 'win32'` USED TO BE HERE, and it made this an arbitrary
+ * command execution primitive inside an unattended scheduled process. With a shell, Node
+ * does not pass argv as discrete arguments — it CONCATENATES them into a command string,
+ * which Node itself warns about (DEP0190). detectors.js interpolates a BRANCH NAME into
+ * these args, so a branch name was a command.
+ *
+ * Reproduced independently by three parties: branch `feat/x& echo MARKER` produced stdout
+ * `MARKER --state merged --json ...` — the injected command ran, ate the remaining
+ * arguments, and exited 0.
+ *
+ * WHY THE SEVERITY IS NOT MERELY "SOMETHING EXECUTES": the attacker also controls stdout.
+ * A payload emitting VALID merged-PR JSON yields merged_pr_count >= 1, which
+ * decideShippedStaleAction routes to 'merged-pr-backed' and stageForCategories turns into
+ * stage1_remove — the path labelled "auto-safe" in this file. Forged merge evidence drives
+ * deletion. (The MALFORMED case is fail-safe: JSON.parse fails, prs=[], advisory-only.)
+ *
+ * THE FLAG WAS NOT LOAD-BEARING, and that was MEASURED rather than assumed, because the
+ * plausible objection is that Windows needs a shell to resolve `gh`. It does not: gh is a
+ * native .exe, libuv appends the extension, and both `gh --version` and the real
+ * classification argv return status 0 under shell:false on this fleet. Seven callers in
+ * this repo already invoke gh with no shell — see lib/fleet/inflight-git-state.cjs, which
+ * carries `shell: false, // SR-1 — do not remove` plus measured live timings.
+ *
+ * RESIDUAL, left as an assertion rather than an assumption: the refutation holds because
+ * gh is a .exe. A .cmd/.bat shim (scoop/winget) would ENOENT under shell:false — that
+ * surfaces as res.error, throws below, and detectors.js turns it into the documented
+ * patch_equivalent_gh_unavailable path.
+ *
+ * CORRECTED BY SECURITY, because the first version of this comment said "worst case
+ * degrades to a recorded advisory, never to silence" and that is WRONG. Measured: an
+ * unknown key does degrade to advisory-only, but a TERMINAL-status key reaches STAGE-1
+ * REMOVE AUTHORITY, because the fail-open returns evidence with no merged_pr_count and the
+ * `?? 0` at the terminal override treats that as zero. It is NOT a widening — a gh that
+ * returns [] decides identically, so the security delta is nil — but what is lost on a
+ * .cmd-only host is the GitHub cross-check itself, fleet-wide, while terminal-key removals
+ * proceed on cherry evidence alone. Stating that accurately matters more than the comfort
+ * of the shorter sentence.
+ *
+ * DO NOT "simplify" the throw below into a returned error: detectors.js depends on the
+ * throw and tests/unit/worktree-reaper/detectors.test.js pins it. Exported so a test can
+ * observe the REAL spawn options — a seam-injected fake cannot, because the seam replaces
+ * the very code that decides them.
+ */
+export function runGh(args, opts = {}) {
   const res = spawnSync('gh', args, {
     cwd: opts.cwd || process.cwd(),
     encoding: 'utf8',
     stdio: ['ignore', 'pipe', 'pipe'],
     windowsHide: true,
-    shell: process.platform === 'win32',
   });
   if (res.error) throw res.error;
   return {
