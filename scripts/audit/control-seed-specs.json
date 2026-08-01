@@ -1,0 +1,178 @@
+[
+  {
+    "name": "diagnostic-gauge-citation-lint",
+    "script": "scripts/lint/diagnostic-gauge-citation-lint.mjs",
+    "rootFlag": null,
+    "cwdScope": true,
+    "extraArgs": [
+      "--all"
+    ],
+    "note": "CONTROL-ABOUT-CONTROLS. No --root, but it enumerates via git/fs calls that inherit cwd, so it IS aimable — scopability by flag alone under-counted it.",
+    "fixtures": [
+      {
+        "path": "lib/seeded-gauge-citation-defect.js",
+        "content": "// SEEDED DEFECT: cites a DIAGNOSTIC-ONLY gauge as a numeric gating threshold.\nexport function gate(retro) {\n  if (retro.quality_score >= 90) { return 'ship'; }\n  return 'block';\n}\n"
+      }
+    ],
+    "detectTokens": [
+      "quality_score",
+      "seeded-gauge-citation-defect"
+    ]
+  },
+  {
+    "name": "fleet-liveness-select-lint",
+    "script": "scripts/lint/fleet-liveness-select-lint.mjs",
+    "rootFlag": null,
+    "cwdScope": true,
+    "extraArgs": [],
+    "note": "CONTROL-ABOUT-CONTROLS. TESTED IN DEFAULT MODE, DELIBERATELY. An earlier run passed --enforce and scored BLOCKS, but --enforce is NOT what CI runs — the ruled question is whether a control BLOCKS AT MERGE TIME, so measuring a non-default enforcing mode overstates protection. In its default advisory mode it DETECTS and exits 0.",
+    "fixtures": [
+      {
+        "path": "lib/seeded-liveness-select-defect.js",
+        "content": "// SEEDED DEFECT: unbounded multi-row claude_sessions select — the PostgREST 1000-row\n// cap silently drops the NEWEST live workers, so liveness undercounts.\nexport async function all(supabase) {\n  return supabase.from('claude_sessions').select('session_id, heartbeat_at');\n}\n"
+      }
+    ],
+    "detectTokens": [
+      "seeded-liveness-select-defect",
+      "claude_sessions"
+    ]
+  },
+  {
+    "name": "realtime-subscribe-teardown-recursion-lint",
+    "script": "scripts/lint/realtime-subscribe-teardown-recursion-lint.mjs",
+    "rootFlag": "--root",
+    "fixtures": [
+      {
+        "path": "lib/seeded-realtime-defect.js",
+        "content": "// SEEDED DEFECT: teardown called synchronously inside the subscribe callback.\nexport function wire(supabase) {\n  const ch = supabase.channel('x');\n  ch.on('postgres_changes', {}, () => {}).subscribe((status) => {\n    if (status === 'SUBSCRIBED') {\n      supabase.removeChannel(ch);\n    }\n  });\n  return ch;\n}\n"
+      }
+    ]
+  },
+  {
+    "name": "session-coordination-insert-classguard-lint",
+    "script": "scripts/lint/session-coordination-insert-classguard-lint.mjs",
+    "rootFlag": "--root",
+    "fixtures": [
+      {
+        "path": "lib/seeded-coord-defect.js",
+        "content": "// SEEDED DEFECT: raw session_coordination insert bypassing insertCoordinationRow().\nexport async function send(supabase, payload) {\n  const { error } = await supabase.from('session_coordination').insert({\n    message_type: 'INFO',\n    payload\n  });\n  return error;\n}\n"
+      }
+    ]
+  },
+  {
+    "name": "alter-default-override-lint",
+    "script": "scripts/lint/alter-default-override-lint.mjs",
+    "rootFlag": "--root",
+    "fixtures": [
+      {
+        "path": "database/migrations/20260731000000_seeded_default.sql",
+        "content": "-- SEEDED DEFECT: migration sets a default that code below contradicts.\nALTER TABLE seeded_widgets ALTER COLUMN status SET DEFAULT 'active';\n"
+      },
+      {
+        "path": "lib/seeded-default-writer.js",
+        "content": "// SEEDED DEFECT: hardcodes a DIFFERENT literal than the migration default above,\n// silently negating it at insert time (the F12 drift class).\nexport async function create(supabase) {\n  return supabase.from('seeded_widgets').insert({ status: 'draft' });\n}\n"
+      }
+    ]
+  },
+  {
+    "name": "count-delta-gate-lint",
+    "script": "scripts/lint/count-delta-gate-lint.mjs",
+    "rootFlag": "--root",
+    "fixtures": [
+      {
+        "path": "scripts/ci/seeded-count-delta-defect.mjs",
+        "content": "// SEEDED DEFECT: gates on a raw failure-COUNT delta rather than an identity-set diff.\n// Uses the rule's actual lexicon (failedCount / baselineFailed) — my first seed said\n// failCount, which the lexicon does not match, so the control correctly reported 0.\nexport function gate(baselineFailed, failedCount) {\n  if (failedCount > baselineFailed) {\n    throw new Error('failure count rose');\n  }\n  return true;\n}\n"
+      }
+    ],
+    "seedNote": "SEED WAS WRONG AND HAS BEEN FIXED. The rule's EXACT_LEXICON/LEXICON_PATTERN match failed|failing|failure names (failedCount, baselineFailed). My first seed used failCount, which is outside the lexicon, so the control scanned the fixture and correctly found nothing. That was a SEED MISMATCH, never evidence of blindness."
+  },
+  {
+    "name": "ismainmodule-classguard-lint",
+    "script": "scripts/lint/ismainmodule-classguard-lint.mjs",
+    "rootFlag": "--root",
+    "fixtures": [
+      {
+        "path": "scripts/seeded-ismainmodule-defect.mjs",
+        "content": "// SEEDED DEFECT: the raw Windows-broken direct-execution guard. argv[1] is a\n// backslash path on Windows and import.meta.url is a file:// URL, so this never\n// matches and the guard silently no-ops.\nfunction main() { console.log('ran'); }\nif (import.meta.url === `file://${process.argv[1]}`) main();\n"
+      }
+    ]
+  },
+  {
+    "name": "metadata-flag-lint",
+    "script": "scripts/lint/metadata-flag-lint.mjs",
+    "rootFlag": "--root",
+    "fixtures": [
+      {
+        "path": "lib/seeded-metadata-orphan-defect.js",
+        "content": "// SEEDED DEFECT: writes metadata.is_seeded_orphan and nothing ever reads it (ORPHAN).\nexport async function mark(supabase, id) {\n  return supabase.from('widgets').update({ metadata: { is_seeded_orphan: true } }).eq('id', id);\n}\n"
+      }
+    ],
+    "detectTokens": [
+      "is_seeded_orphan"
+    ]
+  },
+  {
+    "name": "rls-anon-tenant-predicate-lint",
+    "script": "scripts/lint/rls-anon-tenant-predicate-lint.mjs",
+    "rootFlag": "--root",
+    "fixtures": [
+      {
+        "path": "database/migrations/20260731000001_seeded_rls_defect.sql",
+        "content": "-- SEEDED DEFECT: SELECT policy references a tenant-shaped column without binding it\n-- to the caller's own identity, so any anon caller reads every tenant's rows.\nCREATE POLICY seeded_anon_select_widgets ON public.widgets\n  FOR SELECT TO anon\n  USING (venture_id IS NOT NULL);\n"
+      }
+    ]
+  },
+  {
+    "name": "no-mocked-sut-import-lint",
+    "script": "scripts/lint/no-mocked-sut-import-lint.mjs",
+    "rootFlag": null,
+    "cwdScope": true,
+    "extraArgs": [
+      "--all"
+    ],
+    "fixtures": [
+      {
+        "path": "tests/unit/seeded-mock-sut.test.js",
+        "content": "import { vi } from 'vitest';\n// SEEDED DEFECT: mocks the module under test itself.\nvi.mock('../../lib/seeded-sut.js');\nimport { thing } from '../../lib/seeded-sut.js';\nit('x', () => { expect(thing).toBeDefined(); });\n"
+      },
+      {
+        "path": "lib/seeded-sut.js",
+        "content": "export const thing = 1;\n"
+      }
+    ],
+    "detectTokens": [
+      "seeded-mock-sut"
+    ],
+    "note": "WAS marked UNTESTABLE on flags alone. SCAN_DIRS is RELATIVE, so it resolves against cwd — retesting via cwdScope.",
+    "seedNote": "UNRESOLVED SILENT, and NOT a mode artifact: re-probed with NO_MOCKED_SUT_IMPORT_MODE=block and it is STILL silent, so promoting it would not change the verdict. Either the seed does not match its detector shape or it genuinely does not fire. NOT recorded as blind on this evidence."
+  },
+  {
+    "name": "venture-artifacts-write-lint",
+    "script": "scripts/lint/venture-artifacts-write-lint.mjs",
+    "rootFlag": null,
+    "cwdScope": true,
+    "fixtures": [
+      {
+        "path": "lib/seeded-venture-artifact-defect.js",
+        "content": "// SEEDED DEFECT: venture_artifacts insert omitting the NOT-NULL title column,\n// which inserts ZERO rows and swallows the error.\nexport async function write(supabase, ventureId) {\n  return supabase.from('venture_artifacts').insert({\n    venture_id: ventureId,\n    lifecycle_stage: 'stage_21',\n    artifact_type: 'design'\n  });\n}\n"
+      }
+    ],
+    "detectTokens": [
+      "seeded-venture-artifact-defect",
+      "title"
+    ],
+    "note": "WAS marked UNTESTABLE on flags alone. SCAN_DIRS is RELATIVE, so it resolves against cwd — retesting via cwdScope."
+  },
+  {
+    "name": "control-seed-test-lint",
+    "script": "scripts/lint/control-seed-test-lint.mjs",
+    "seedTest": "tests/unit/lint/control-seed-test-lint.test.js",
+    "note": "Seeded by the committed TS-5 test: plants a deliberately blind gauge and asserts the gate REFUSES it. Cannot use a fixture trial — this control's certified output is a VERDICT about other controls, not a code pattern in a file."
+  },
+  {
+    "name": "control-seed-test",
+    "script": "scripts/audit/control-seed-test.mjs",
+    "seedTest": "tests/unit/lint/control-seed-test-lint.test.js",
+    "note": "Same TS-5 test exercises runTrial through evaluate — a blind gauge must come back SILENT. Its certified behaviour is a verdict, so there is no code pattern to seed into a fixture."
+  }
+]

@@ -627,7 +627,8 @@
     "schema:snapshot:lint": "node scripts/lint/schema-reference-snapshot.mjs",
     "canary:probe": "node scripts/canary/run-canary-probe.mjs",
     "test:quarantine": "node scripts/unit-tier-quarantine.mjs report .claude-unit-run.log",
-    "test:quarantine:burndown": "node scripts/unit-tier-quarantine.mjs burndown"
+    "test:quarantine:burndown": "node scripts/unit-tier-quarantine.mjs burndown",
+    "worker:recheck-blocker": "node scripts/worker-recheck-blocker.mjs"
   },
   "dependencies": {
     "@anthropic-ai/sdk": "^0.85.0",

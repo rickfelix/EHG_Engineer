@@ -32,9 +32,20 @@ const KEY = process.env.SUPABASE_SERVICE_ROLE_KEY;
 const PLACEHOLDER = /not-real|placeholder|^test-/i;
 const CAN_RUN = Boolean(URL_ && KEY && !PLACEHOLDER.test(KEY) && !PLACEHOLDER.test(URL_));
 
+// A ROLE CONTRACT IS NOT ONE ROW, AND PINNING ONE ROW IS THE BUG THIS FILE EXISTS TO PREVENT.
+// CLAUDE_ADAM.md renders from THREE section_types (scripts/section-file-mapping.json):
+// adam_role_contract (601), adam_self_adherence_loop (602) and the SHARED role_partnership_contract.
+// This test previously read 601 alone and called that "the Adam contract". When
+// SD-LEO-INFRA-ADAM-CONTRACT-READABLE-001 moved the §6 self-assessment body to its own section_type
+// (602) — where it belongs, and where the rendered contract still carries it verbatim — the
+// assertions went red even though not one word had been lost from what Adam actually loads.
+//
+// That is this SD's own subject in miniature: a check that reads a PROXY for the contract rather
+// than the contract. Read the composed set, so a legitimate re-partition across the role's own
+// section_types cannot fake a content regression — and a genuine deletion still fails.
 const SECTIONS = [
-  { id: 601, role: 'Adam', flag: 'ADAM_SELF_SCORE_CADENCE' },
-  { id: 611, role: 'Solomon', flag: 'SOLOMON_SELF_SCORE_CADENCE' },
+  { ids: [601, 602], role: 'Adam', flag: 'ADAM_SELF_SCORE_CADENCE' },
+  { ids: [611], role: 'Solomon', flag: 'SOLOMON_SELF_SCORE_CADENCE' },
 ];
 
 const content = new Map();
@@ -42,15 +53,20 @@ const content = new Map();
 beforeAll(async () => {
   if (!CAN_RUN) return;
   const db = createClient(URL_, KEY);
-  const { data } = await db.from('leo_protocol_sections').select('id, content').in('id', SECTIONS.map((s) => s.id));
-  for (const row of data || []) content.set(row.id, row.content || '');
+  const allIds = SECTIONS.flatMap((s) => s.ids);
+  const { data } = await db.from('leo_protocol_sections').select('id, content').in('id', allIds);
+  const byId = new Map((data || []).map((r) => [r.id, r.content || '']));
+  // Compose per role: a rule satisfied in ANY of the role's own section_types is satisfied, because
+  // that is exactly what the generated contract presents to the reader.
+  for (const s of SECTIONS) content.set(s.role, s.ids.map((i) => byId.get(i) || '').join('\n\n'));
 });
 
 describe.skipIf(!CAN_RUN)('FR-5 — the contract states the self-score operating reality', () => {
-  for (const { id, role, flag } of SECTIONS) {
-    describe(`section ${id} (${role})`, () => {
+  for (const { ids, role, flag } of SECTIONS) {
+    const id = role; // content is keyed by role now that a contract may span several sections
+    describe(`${role} contract (sections ${ids.join('+')})`, () => {
       it('names the flag that gates the scorer', () => {
-        expect(content.get(id), `section ${id} not readable`).toBeTruthy();
+        expect(content.get(id), `${role} contract sections not readable`).toBeTruthy();
         expect(content.get(id)).toContain(flag);
       });
 
@@ -95,9 +111,9 @@ describe.skipIf(!CAN_RUN)('FR-5 — the contract states the self-score operating
   it('NEGATIVE CONTROL — the sections are not trivially matching everything', () => {
     // Guards against a content assertion that would pass on any large document: if these sections
     // "contained" an arbitrary phrase, every assertion above would be meaningless.
-    for (const { id } of SECTIONS) {
-      expect(content.get(id)).not.toMatch(/the scorers ship live/i);
-      expect(content.get(id)).not.toMatch(/zzz-not-in-any-contract-zzz/);
+    for (const { role } of SECTIONS) {
+      expect(content.get(role)).not.toMatch(/the scorers ship live/i);
+      expect(content.get(role)).not.toMatch(/zzz-not-in-any-contract-zzz/);
     }
   });
 });
