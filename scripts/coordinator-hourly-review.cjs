@@ -209,10 +209,86 @@ async function resolveLiveAdam(sb, freshS) {
   return adams[0] || null;
 }
 
+/**
+ * GAUGE HEALTH — HOISTED OUT OF THE REMINDER LEGS ON PURPOSE.
+ * This lived at the tail of main(), behind three early returns: fleet-quiescent CYCLE-DOWN, no live
+ * Adam, and dry-run. So the one surface that distinguishes "gauges deduped and still watching" from
+ * "gauges silently dead" could not evaluate precisely when the fleet was idle and nobody was
+ * watching — the longest a dead gauge system would go unnoticed. It is a who-watches-the-watchmen
+ * check with no dependency on Adam, on dry-run, or on fleet activity, so it runs unconditionally
+ * and reads/logs only.
+ */
+async function reportGaugeHealth(sb) {
+// SD-LEO-INFRA-INVARIANT-GAUGES-FRAMEWORK-001 FR-4 (invariant #0, who-watches-the-watchmen):
+// an EXTERNAL check (this process is independently cron'd, separate from gauge-runner.mjs
+// itself) that the gauge-runner is observably alive. A dead runner is a worse failure than any
+// single invariant drifting (false all-clear) -- so a stale/missing heartbeat alarms here.
+try {
+  const { checkGaugeRunnerLiveness } = await import('../lib/governance/gauge-runner-liveness.js');
+  const { data: hb } = await sb.from('codebase_health_snapshots')
+    .select('scanned_at, findings')
+    .eq('dimension', 'gauge_runner_heartbeat')
+    .order('scanned_at', { ascending: false })
+    .limit(1)
+    .maybeSingle();
+  const liveness = checkGaugeRunnerLiveness(hb?.scanned_at, Date.now());
+  if (liveness.alarm) {
+    const ageNote = liveness.ageMs == null ? 'no heartbeat ever recorded' : Math.floor(liveness.ageMs / 60000) + 'm stale';
+    console.log('\n[HOURLY-REVIEW] GAUGE-RUNNER LIVENESS ALARM — invariant gauges may be silently NOT running (' + ageNote + '). Investigate scripts/gauge-runner.mjs.');
+  }
+
+  // SD-FDBK-INFRA-LESSONS-CONVERSION-WIRING-001: SIGNAL liveness, not just PROCESS liveness.
+  // The check above proves the runner RAN. It cannot prove the gauges still SEE anything —
+  // writeHeartbeat fires unconditionally with a hardcoded score of 100 regardless of detector
+  // outcomes, so a runner that executes flawlessly while every detector returns nothing produces
+  // a perfect heartbeat. That gap became load-bearing when gauge findings started deduping:
+  // nothing in this repo ever CLEARS a gauge finding, so `inserted` is 0 from the very first run
+  // and stays there. `suppressed > 0` is the ONLY evidence the gauges are still watching.
+  // ALL-QUIET IS THE ALARM CONDITION: every counter zero means either the detectors stopped
+  // tripping or they stopped working, and those must not look identical.
+  const routing = Array.isArray(hb?.findings) ? hb.findings[0] : null;
+  if (routing && ['inserted', 'suppressed', 'skipped', 'error'].some((k) => typeof routing[k] === 'number')) {
+    const { inserted = 0, suppressed = 0, skipped = 0, error = 0 } = routing;
+    if (inserted + suppressed + skipped + error === 0) {
+      console.log('\n[HOURLY-REVIEW] GAUGE SIGNAL ALARM — the runner is alive but routed NOTHING last pass '
+        + '(inserted=0 suppressed=0 skipped=0 error=0). Either every detector stopped tripping or every '
+        + 'detector stopped working; a healthy deduped pass reports suppressed>0. Investigate before trusting the gauges.');
+    } else if (inserted > 0 && suppressed === 0) {
+      // THE ALARM THAT WOULD HAVE CAUGHT THE DEFECT THIS PR ALMOST SHIPPED. The first version of
+      // findOpenFinding filtered on a NOT NULL column being NULL, so the lookup could never match
+      // and every pass took the INSERT branch — dedup permanently inert, amplification unchanged,
+      // and the all-quiet alarm above silent because the counters were NOT all zero. Standing
+      // trips are what this system is made of: after the first pass a working dedup ALWAYS reports
+      // suppressed>0. inserted>0 with suppressed==0, pass after pass, is the signature of a dedup
+      // that is not deduping — the exact shape 162 green unit tests failed to see.
+      console.log('\n[HOURLY-REVIEW] GAUGE DEDUP ALARM — ' + inserted + ' inserted, 0 suppressed. Every gauge '
+        + 'finding was NEW, which after the first pass means the dedup lookup is matching nothing (a filter that '
+        + 'cannot match the rows the runner itself writes). Amplification is uncontrolled. Check findOpenFinding '
+        + 'in lib/governance/plan-drift-detectors.js against the live feedback column definitions.');
+    } else if (error > 0) {
+      // Routing errors fail toward a duplicate row, so they never surface as silence — but they do
+      // mean freshness stamps are being lost, and nothing else reports them.
+      console.log('\n[HOURLY-REVIEW] GAUGE ROUTING ERRORS — ' + error + ' of '
+        + (inserted + suppressed + skipped + error) + ' gauges failed to route last pass '
+        + '(inserted=' + inserted + ' suppressed=' + suppressed + '). Stamps are being dropped.');
+    } else {
+      console.log('[HOURLY-REVIEW] gauge routing last pass: inserted=' + inserted + ' suppressed=' + suppressed
+        + ' skipped=' + skipped + ' error=' + error);
+    }
+  }
+} catch (e) {
+  console.log('[HOURLY-REVIEW] gauge-runner liveness check skipped (non-fatal): ' + e.message);
+}
+
+}
+
 async function main() {
   let sb;
   try { sb = createSupabaseServiceClient(); }
   catch (e) { console.log('[HOURLY-REVIEW] supabase unavailable (non-fatal): ' + e.message); return; }
+
+  // BEFORE the quiescence gate: a dead gauge system is most dangerous when the fleet is idle.
+  await reportGaugeHealth(sb);
 
   const activity = await assessFleetActivity(sb);
   if (activity.quiescent) {
@@ -294,26 +370,6 @@ async function main() {
     console.log('[HOURLY-REVIEW] undelivered-receipt check skipped (non-fatal): ' + e.message);
   }
 
-  // SD-LEO-INFRA-INVARIANT-GAUGES-FRAMEWORK-001 FR-4 (invariant #0, who-watches-the-watchmen):
-  // an EXTERNAL check (this process is independently cron'd, separate from gauge-runner.mjs
-  // itself) that the gauge-runner is observably alive. A dead runner is a worse failure than any
-  // single invariant drifting (false all-clear) -- so a stale/missing heartbeat alarms here.
-  try {
-    const { checkGaugeRunnerLiveness } = await import('../lib/governance/gauge-runner-liveness.js');
-    const { data: hb } = await sb.from('codebase_health_snapshots')
-      .select('scanned_at')
-      .eq('dimension', 'gauge_runner_heartbeat')
-      .order('scanned_at', { ascending: false })
-      .limit(1)
-      .maybeSingle();
-    const liveness = checkGaugeRunnerLiveness(hb?.scanned_at, Date.now());
-    if (liveness.alarm) {
-      const ageNote = liveness.ageMs == null ? 'no heartbeat ever recorded' : Math.floor(liveness.ageMs / 60000) + 'm stale';
-      console.log('\n[HOURLY-REVIEW] GAUGE-RUNNER LIVENESS ALARM — invariant gauges may be silently NOT running (' + ageNote + '). Investigate scripts/gauge-runner.mjs.');
-    }
-  } catch (e) {
-    console.log('[HOURLY-REVIEW] gauge-runner liveness check skipped (non-fatal): ' + e.message);
-  }
 
   // SD-LEO-INFRA-RELAY-QUEUE-CONFIRM-ON-RELAY-DELIVERY-GUARANTEE-001 / FR-3: surface the
   // relay/decision/review drop gauge. Read-only + fail-open (planRelayDrops never throws).

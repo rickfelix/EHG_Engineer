@@ -68,6 +68,8 @@ import {
   isDriftBreach,
   fetchLastNDispatchedKeys,
   hasOpenFinding,
+  findOpenFinding,
+  OPEN_FINDING_STATUSES,
 } from '../lib/governance/plan-drift-detectors.js';
 import { stampLastFired } from '../lib/periodic-liveness/stamp-last-fired.js';
 import { checkGhostCeos } from '../lib/agents/ghost-ceo-gauge.js';
@@ -460,25 +462,132 @@ export function buildFindingRow(entry, result) {
   };
 }
 
-async function routeFinding(supabase, entry, result) {
-  // SD-LEO-INFRA-PLAN-DRIFT-GAUGE-001 FR-5 (re-surface-once dedup): a detector may set
-  // result.skipRoute=true when an OPEN finding for its gauge_id already exists (or the trip is a
-  // self-gated starved short-circuit that isn't a genuine drift finding) -- skip the duplicate
-  // insert. Generic extension point: any future detector can opt in the same way.
+/** How long the dedup lookup may take before we give up and INSERT. See routeFinding. */
+export const DEDUP_LOOKUP_TIMEOUT_MS = 4000;
+
+/**
+ * Route one tripped gauge to the feedback table, deduping re-emissions.
+ *
+ * WHY THIS CHANGED (SD-FDBK-INFRA-LESSONS-CONVERSION-WIRING-001).
+ * The insert below was UNCONDITIONAL, and 12 of 13 emitting detectors never opted into skipRoute.
+ * Measured consequence: 5,374 invariant_gauge_finding rows representing ~13 distinct conditions —
+ * roughly 77x amplification — at 0% disposition, growing 200-330/day. The contrast is ci_failure,
+ * which absorbs far MORE raw events, stays at ~2,104 rows and is 99.9% dispositioned, because it
+ * collapses re-emissions onto last_seen instead of inserting.
+ *
+ * THE DEDUP IS DEFAULT-ON AND LIVES HERE, NOT IN EACH DETECTOR. Per-detector opt-in is exactly what
+ * left 12 of 13 undeduped for the life of this code; a chokepoint is the only place the default can
+ * actually hold.
+ *
+ * *** THIS CHANGE MAKES THE GAUGE SYSTEM QUIET, AND THAT IS THE DANGEROUS PART. ***
+ * Nothing in this repo ever CLEARS a gauge finding — all 5,374 rows are status='new'; every
+ * automated closer is scoped to other categories, both DB auto-close triggers key on SD/QF
+ * references gauge rows never carry, and the purpose-built drain writes to a table with zero rows
+ * ever written and no join back. So after one more pass every tripping gauge holds an open row and
+ * this function stops inserting, permanently. That is not a prediction: plan-drift-mix, the single
+ * detector that already opted in, has EXACTLY ONE ROW EVER — tripped once, silently muted since.
+ * Going from 5,374 rows at 0% disposition to ~14 at 0% disposition is a real NOISE win and ZERO
+ * OBSERVABILITY win, and it turns a loud useless signal into a quiet one. A system that is wrong
+ * and noisy gets fixed; a system that is wrong and quiet does not.
+ * THAT is why this returns a verdict and why main() must surface the counts: the suppressed count
+ * is the only thing distinguishing "deduped" from "the gauges stopped working".
+ *
+ * @returns {Promise<'inserted'|'suppressed'|'skipped'|'error'>}
+ */
+export async function routeFinding(supabase, entry, result) {
+  // SD-LEO-INFRA-PLAN-DRIFT-GAUGE-001 FR-5: a detector may still self-suppress. Kept AHEAD of the
+  // dedup deliberately — it also covers the starved short-circuit case, which is not a re-emission
+  // at all, so folding it into the dedup branch would conflate two different reasons for silence.
   if (result?.skipRoute) {
     console.log(`[gauge-runner] ${entry.id}: routing skipped (skipRoute -- already-open finding or starved short-circuit)`);
-    return;
+    return 'skipped';
   }
-  const { error } = await supabase.from('feedback').insert(buildFindingRow(entry, result));
-  if (error) console.error(`[gauge-runner] finding-route failed for ${entry.id} (non-fatal): ${error.message}`);
+
+  // FAIL TOWARD INSERTING. A duplicate row is recoverable and visible; a suppressed genuine first
+  // emission is silent and is the failure this whole SD exists to eliminate. Both the throw path
+  // and the timeout path therefore fall through to the insert below.
+  // The timeout matters because a HANGING (not erroring) lookup across 22 gauges could exhaust the
+  // workflow budget and kill a pass mid-flight, which would read as a fleet-down alarm.
+  let open = null;
+  let timer = null;
+  try {
+    open = await Promise.race([
+      findOpenFinding(supabase, entry.id),
+      new Promise((_, reject) => { timer = setTimeout(() => reject(new Error('dedup lookup timeout')), DEDUP_LOOKUP_TIMEOUT_MS); }),
+    ]);
+  } catch (e) {
+    console.error(`[gauge-runner] ${entry.id}: dedup lookup failed (${e.message}) -- INSERTING rather than suppressing`);
+    open = null;
+  } finally {
+    // The timer holds the event loop for its FULL duration even when the lookup wins — measured at
+    // 4007ms for a call that resolved in 1ms. Invisible today only because main() calls
+    // process.exit(), which is a load-bearing accident rather than a design. routeFinding is
+    // EXPORTED now, so any long-lived importer would accumulate these.
+    if (timer) clearTimeout(timer);
+  }
+
+  if (open) {
+    // RE-EMISSION. Stamp freshness on the existing row rather than inserting a new one.
+    // Modelled on scripts/clockwork/gh-failure-monitor.cjs:96-110 -- THE UPDATE HALF ONLY.
+    // Its LOOKUP at :91-95 is a NAMED ANTI-PRECEDENT (PRD TR-4): it filters on error_hash with NO
+    // status filter, so it bumps counts on CLOSED rows -- live, a ci_failure row sits at
+    // occurrence_count 586 with a fresh last_seen while that table holds 2,101 resolved.
+    const { data: stamped, error } = await supabase
+      .from('feedback')
+      .update({
+        last_seen: new Date().toISOString(),
+        occurrence_count: (open.occurrence_count || 1) + 1,
+        updated_at: new Date().toISOString(),
+      })
+      .eq('id', open.id)
+      // RE-ASSERTED, NOT ASSUMED — and re-asserting the FULL lookup predicate, not a subset. The
+      // lookup already proved these, but the invariant "this runner only ever bumps its OWN open
+      // gauge rows" then lives split across two statements in two files, and the anti-precedent
+      // above is exactly what that split produces: a correct-looking UPDATE fed by a lookup that
+      // lost a predicate. It is a no-op whenever the lookup is right.
+      .eq('category', 'invariant_gauge_finding')
+      .eq('source_type', 'auto_capture')
+      .eq('feedback_type', 'sentry_error')
+      .is('archived_at', null)
+      .in('status', OPEN_FINDING_STATUSES)
+      // ZERO ROWS MATCHED IS NOT SUCCESS. Without .select() supabase-js returns {error:null} for an
+      // UPDATE that touched NOTHING, so a row triaged or archived out of scope between the lookup
+      // and the stamp would be reported 'suppressed' with nothing written — the trip silently
+      // dropped, and counted as healthy dedup on the very tally that exists to detect silence.
+      // Reporting success for work that did not happen is the defect class this whole SD is about.
+      .select('id');
+    if (error) {
+      console.error(`[gauge-runner] ${entry.id}: re-emission stamp failed (non-fatal): ${error.message}`);
+      return 'error';
+    }
+    if (!Array.isArray(stamped) || stamped.length === 0) {
+      console.error(`[gauge-runner] ${entry.id}: re-emission stamp matched NO row (row ${open.id} moved out of scope between lookup and update) — reporting error, not suppressed`);
+      return 'error';
+    }
+    return 'suppressed';
+  }
+
+  // FIRST EMISSION. Stamp BOTH first_seen and last_seen: all 5,374 existing gauge rows have both
+  // NULL, so without this the freshness data the dedup branch depends on is never seeded. (My
+  // original spec claimed these columns were already populated -- that was the ci_failure
+  // population measured on the wrong set.)
+  const now = new Date().toISOString();
+  const { error } = await supabase
+    .from('feedback')
+    .insert({ ...buildFindingRow(entry, result), first_seen: now, last_seen: now });
+  if (error) {
+    console.error(`[gauge-runner] finding-route failed for ${entry.id} (non-fatal): ${error.message}`);
+    return 'error';
+  }
+  return 'inserted';
 }
 
-async function writeHeartbeat(supabase, ranCount) {
+async function writeHeartbeat(supabase, ranCount, routing) {
   const { error } = await supabase.from('codebase_health_snapshots').insert({
     dimension: HEARTBEAT_DIMENSION,
     target_application: 'EHG_Engineer',
     score: 100,
-    findings: [{ ran_count: ranCount, ran_at: new Date().toISOString() }],
+    findings: [{ ran_count: ranCount, ran_at: new Date().toISOString(), ...(routing || {}) }],
     trend_direction: 'stable',
     metadata: { source: 'gauge-runner.mjs' },
   });
@@ -492,6 +601,10 @@ async function main() {
   const supabase = createClient(url, key);
   const resolvers = buildDetectorResolvers(supabase);
 
+  // Routing tally. WITHOUT THIS THE DEDUP IS INDISTINGUISHABLE FROM THE GAUGES BREAKING:
+  // once every tripping gauge holds an open row this runner stops inserting forever, and a silent
+  // run and a healthy run look identical. suppressed>0 is the proof the system is still watching.
+  const routing = { inserted: 0, suppressed: 0, skipped: 0, error: 0 };
   const enabled = selectEnabledEntries(GAUGE_REGISTRY).slice(0, MAX_DETECTORS_PER_RUN);
   const results = [];
 
@@ -508,7 +621,8 @@ async function main() {
       console.log(`GAUGE ${entry.id}=${value}`);
       results.push({ id: entry.id, value, tripped, result });
       if (tripped) {
-        await routeFinding(supabase, entry, result);
+        const verdict = await routeFinding(supabase, entry, result);
+        routing[verdict] = (routing[verdict] || 0) + 1;
         // SD-LEO-INFRA-PLAN-DRIFT-GAUGE-001 FR-6: dual-recipient push, gauge-specific (narrow by
         // design -- no other gauge pushes to session_coordination yet) and dedup-gated (skipRoute
         // means either a starved short-circuit or an already-open finding -- never re-push).
@@ -528,7 +642,8 @@ async function main() {
     }
   }
 
-  await writeHeartbeat(supabase, results.length);
+  console.log(`GAUGE_ROUTING inserted=${routing.inserted} suppressed=${routing.suppressed} skipped=${routing.skipped} error=${routing.error}`);
+  await writeHeartbeat(supabase, results.length, routing);
 
   try {
     await stampLastFired(supabase, 'standard_loop:gauge-runner');
@@ -536,7 +651,7 @@ async function main() {
     console.error(`[gauge-runner] stampLastFired failed (non-fatal): ${err.message}`);
   }
 
-  if (JSON_MODE) console.log(JSON.stringify({ ran: results.length, results }));
+  if (JSON_MODE) console.log(JSON.stringify({ ran: results.length, routing, results }));
   process.exit(0); // advisory: the runner itself never fails the tick
 }
 

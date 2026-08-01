@@ -420,4 +420,15 @@ describe('buildFindingRow (FR-3 alerting row shape)', () => {
     expect(row.description).toContain('gid');
     expect(row.description).toContain('do the thing');
   });
+  it('gauge ids are UNIQUE — a duplicate id is now silent cross-gauge suppression, not a cosmetic clash', () => {
+    // BEHAVIOUR CHANGED BY THE DEDUP SD. Before it, routeFinding inserted unconditionally and two
+    // registry entries sharing an id produced two rows — ugly, harmless, visible. Now the dedup key
+    // IS metadata.gauge_id, so the second entry finds the FIRST one's open row and suppresses
+    // itself forever. One gauge silently stops reporting and the routing tally counts it as a
+    // healthy 'suppressed'. Nothing else in the registry pins this.
+    const ids = GAUGE_REGISTRY.map((g) => g.id);
+    const dupes = ids.filter((id, i) => ids.indexOf(id) !== i);
+    expect(dupes).toEqual([]);
+    expect(new Set(ids).size).toBe(ids.length);
+  });
 });
