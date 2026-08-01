@@ -57,11 +57,6 @@ export const NAME_ONLY_OR_NON_STAGE_PRODUCED = Object.freeze({
   truth_problem_statement: 'NAME-ONLY: declared, unmapped, zero rows as of 2026-08-01',
   truth_target_market_analysis: 'NAME-ONLY: declared, unmapped, zero rows as of 2026-08-01',
   truth_value_proposition: 'NAME-ONLY: declared, unmapped, zero rows as of 2026-08-01',
-  truth_demand_thesis:
-    'NAME-ONLY, AND THE ONLY ONE OF THE FOURTEEN THAT IS GATE-ENFORCED — which is why it blocked ' +
-    'ApexNiche at S21 while the other thirteen sat latent. REMOVE THIS ENTRY when FR-1 lands the ' +
-    'S2 producer and ARTIFACT_TYPE_BY_STAGE[2] includes it; leaving it here after that would ' +
-    'silence the check for the one type this SD exists to fix.',
   blueprint_risk_register: 'NAME-ONLY: declared, unmapped, zero rows as of 2026-08-01',
   blueprint_project_plan: 'NAME-ONLY: declared, unmapped, zero rows as of 2026-08-01',
   build_system_prompt: 'NAME-ONLY: declared, unmapped, zero rows as of 2026-08-01',
