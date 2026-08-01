@@ -620,3 +620,37 @@ describe('the BOARD is the renderer first consumer — and never degrades quietl
     if (out.refused) expect(out.lines.join('\n')).toMatch(/NOT an all-clear/);
   });
 });
+
+describe('SECOND consumer: coordinator-hourly-review renders FROM the probe', () => {
+  const SRC = readFileSync(new URL('../../../scripts/coordinator-hourly-review.cjs', import.meta.url), 'utf8');
+
+  it('imports the composer, the registry and BOTH render entry points', () => {
+    expect(SRC).toContain('computeDriveState');
+    expect(SRC).toContain('ADAPTERS');
+    expect(SRC).toContain('renderDriveState');
+    expect(SRC).toContain('renderRefusal');
+  });
+
+  it('AC-4: no env gate — an adoption criterion satisfiable by code that never runs is not adoption', () => {
+    const fn = SRC.slice(SRC.indexOf('async function reportDriveState'), SRC.indexOf('async function main'));
+    expect(/process\.env/.test(fn), 'reportDriveState must not consult any env var').toBe(false);
+  });
+
+  it('AC-3: the refusal is NOT swallowed — the catch renders the banner, never a hand-formatter', () => {
+    const fn = SRC.slice(SRC.indexOf('async function reportDriveState'), SRC.indexOf('async function main'));
+    // The catch must produce the refusal lines. A catch that logged and returned would leave the
+    // review with no drive-state section at all — the degradation AC-3 names.
+    expect(fn).toMatch(/catch[\s\S]*renderRefusal/);
+    expect(fn).not.toMatch(/catch[\s\S]*return;/);
+  });
+
+  it('runs BEFORE the quiescence early-return — a stall matters most when the fleet looks quiet', () => {
+    // CYCLE-DOWN returns early. Mounting after it would hide the drive state on exactly the hours
+    // a reader is most likely to conclude there is nothing to drive.
+    const driveIdx = SRC.indexOf('await reportDriveState(sb)');
+    const gateIdx = SRC.indexOf('if (activity.quiescent)');
+    expect(driveIdx).toBeGreaterThan(-1);
+    expect(gateIdx).toBeGreaterThan(-1);
+    expect(driveIdx, 'drive state must precede the CYCLE-DOWN return').toBeLessThan(gateIdx);
+  });
+});

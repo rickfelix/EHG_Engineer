@@ -282,6 +282,35 @@ try {
 
 }
 
+/**
+ * Render the six-axis drive state. SD-FDBK-INFRA-ENCODE-FULL-SPECTRUM-001 FR-6.
+ *
+ * This review is one of the three Layer-3 consumers FR-6 names as hand-concatenating their own
+ * output. It now renders FROM the probe.
+ *
+ * THE REFUSAL IS NOT SWALLOWED (FR-6 AC-3). renderDriveState THROWS on an incomplete verdict;
+ * catching that and printing the axes that happened to succeed is the defect this SD removes, and
+ * silently reverting to hand-formatting is explicitly prohibited. So the catch prints the REFUSAL
+ * banner — visible, labelled not-an-all-clear — and the try wraps only the compute, never a
+ * fallback formatter. There is deliberately NO env gate (AC-4): an adoption criterion satisfiable
+ * by code that never runs is the 'registration is not drainage' anti-precedent.
+ */
+async function reportDriveState(sb) {
+  const { computeDriveState } = require('../lib/governance/drive-state/index.cjs');
+  const { ADAPTERS } = require('../lib/governance/drive-state/adapters.cjs');
+  const { renderDriveState, renderRefusal } = require('../lib/governance/drive-state/render.cjs');
+
+  let lines;
+  try {
+    const verdict = await computeDriveState({ adapters: ADAPTERS, supabase: sb });
+    lines = renderDriveState(verdict); // returns an ARRAY of lines
+  } catch (e) {
+    lines = renderRefusal(e && e.message ? e.message : String(e));
+  }
+  console.log('');
+  for (const line of lines) console.log(line);
+}
+
 async function main() {
   let sb;
   try { sb = createSupabaseServiceClient(); }
@@ -289,6 +318,14 @@ async function main() {
 
   // BEFORE the quiescence gate: a dead gauge system is most dangerous when the fleet is idle.
   await reportGaugeHealth(sb);
+
+  // FULL-SPECTRUM DRIVE STATE — SD-FDBK-INFRA-ENCODE-FULL-SPECTRUM-001, FR-6.
+  // ALSO before the quiescence gate, and for a stronger version of the same reason: a stalled axis
+  // is most dangerous precisely when the fleet looks quiet. The CYCLE-DOWN branch below returns
+  // early with "skipping reminders", and a reader seeing that on a quiet hour concludes there is
+  // nothing to drive — which is the exact inference this SD exists to make uninferable. As
+  // measured live while writing this, a quiescent-looking fleet had THREE stalled axes.
+  await reportDriveState(sb);
 
   const activity = await assessFleetActivity(sb);
   if (activity.quiescent) {
