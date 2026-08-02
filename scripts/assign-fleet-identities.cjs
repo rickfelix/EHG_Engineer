@@ -132,8 +132,26 @@ function nextAvailable(pool, usedSet) {
 // QF-20260508-648: writer/consumer asymmetry — lib/coordinator/resolve.cjs
 // setActiveCoordinator() writes metadata.is_coordinator=true; this consumer
 // must filter it out so coordinator sessions aren't assigned worker callsigns.
+//
+// 2026-08-02 (feedback 3372f8fb): the SAME asymmetry was open for the other two
+// ROLE sessions. adam-register.cjs / solomon-register.cjs write metadata.role +
+// metadata.non_fleet, and this consumer read neither — so Adam was rostered as a
+// fleet worker and his statusline rendered "Alpha-4 | idle" while his own
+// metadata.callsign said "Adam". Two representations of one name on one row, and
+// the statusline reads the wrong one. Operator-reported.
+//
+// The predicate here is deliberately the same shape as lib/claim/build-forbidden-session.cjs
+// isBuildForbiddenSession (non_fleet || role==='adam' || is_coordinator), which is
+// what the claim path already uses to keep these sessions propose-only per CONST-002.
+// The canonical cohort predicate is lib/fleet/session-predicates.mjs isFleetWorker;
+// it is ESM and additionally requires an sd_key, which would drop claim-free parked
+// workers out of the roster, so consolidating onto it is a separate change.
 function filterOutCoordinators(rows) {
-  return (rows || []).filter(w => w && w.metadata?.is_coordinator !== true);
+  return (rows || []).filter(w => w
+    && w.metadata?.is_coordinator !== true
+    && w.metadata?.non_fleet !== true
+    && w.metadata?.role !== 'adam'
+    && w.metadata?.role !== 'solomon');
 }
 
 // QF-20260528-581 (Bug B): filter out test/ghost sessions that consume the clean
