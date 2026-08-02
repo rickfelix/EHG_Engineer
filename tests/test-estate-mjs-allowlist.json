@@ -25,7 +25,6 @@
       "tests/unit/sd-key-generator-coverage.test.mjs",
       "tests/unit/session-tick-patch-failure-telemetry.test.mjs",
       "tests/unit/v-sd-next-candidates-fixture-exclusion.test.mjs",
-      "tests/unit/vision/rung-progress-rollup.test.mjs",
       "tests/unit/worktree-stale-base-guard.test.mjs"
     ]
   }
