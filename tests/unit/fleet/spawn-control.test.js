@@ -175,7 +175,13 @@ describe('module surface (TS-10: exactly seven named verbs, no more)', () => {
       // both take injected deps (exists probe, git runner) so the create-vs-reuse decision and the
       // argv shape are assertable without a real repo — the reuse path in particular would only
       // fail under repeated spawns, which is exactly when it is hardest to observe.
-      'ensureSpawnSourceWorktree', 'buildSpawnSourceWorktreeArgs'];
+      'ensureSpawnSourceWorktree', 'buildSpawnSourceWorktreeArgs',
+      // resolveMainRepoRoot — helper, not a verb. Resolves the MAIN repo root from any worktree by
+      // asking git (rev-parse --git-common-dir) rather than parsing the '/.worktrees/' literal.
+      // Exported because it takes an injected runner and must be assertable without a real repo:
+      // both wrong answers it replaces (path.dirname of cwd, and getRepoRoot's process.cwd-bound
+      // lookup) fail SILENTLY on the spawn path, so the correct one needs pinned tests.
+      'resolveMainRepoRoot'];
     const unexpected = Object.keys(mod).filter((k) => !verbNames.includes(k) && !helperNames.includes(k));
     expect(unexpected).toEqual([]);
   });
