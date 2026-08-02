@@ -6,11 +6,23 @@
  *
  * SD: SD-LEO-INFRA-ADAM-DECISION-SCHEDULER-001 (FR-2)
  *
- * FAIL-SOFT: sms_outbound_obligations is a STAGED migration, not yet applied live. While
- * absent, runDecisionSchedulerTick() returns {ran:true, results:[]} (owedStore.getOwedDecisions
- * returns [] fail-soft) and this sweep exits 0. Once the migration is applied, the SAME code
- * path processes real owed decision rows -- see the decision-scheduler module header for the
- * documented column-mapping caveat (no answered/resurfaceCount/resurfacedThisWindow columns).
+ * THE MIGRATION IS APPLIED. THIS RUNNER DOES REAL WORK ON EVERY TICK.
+ * This header previously said "sms_outbound_obligations is a STAGED migration, not yet applied
+ * live … this sweep exits 0", which invited every reader of the ENTRY POINT to conclude the whole
+ * path was inert. MEASURED 2026-08-02T00:47Z: the table resolves, 395 rows, 17 columns, and NINE
+ * rows match getOwedDecisions' predicate. This workflow runs ~15x/day.
+ *
+ * FAIL-SOFT (mechanism, still correct): were the table absent, runDecisionSchedulerTick() would
+ * return {ran:true, results:[]} and this sweep would exit 0. That branch is defensive, not the
+ * normal case.
+ *
+ * WHAT ACTUALLY RESTRAINS THIS PATH is the durability refusal in away-bridge, NOT absence of the
+ * table: sms_outbound_obligations has no answered/resurface_count/resurfaced_this_window columns
+ * (42703 each, against a clean control on id/kind/decision_id), so the window-skip and K-cap
+ * cannot fire, and buildOwedStore stamps durabilityUnavailable so the bridge refuses to send.
+ * Without that refusal the loop is SELF-AMPLIFYING, not merely repetitive: each re-surface
+ * enqueues a row that itself matches the unfiltered predicate (9 -> 18 -> 36 per tick).
+ * SD-LEO-INFRA-DECISION-RESURFACE-GUARDS-001 FR-3.
  *
  * Liveness: registers ARMED machinery once (periodic_process_registry, named activation
  * trigger = this cron workflow) and stamps last_fired_at on every real run, mirroring
