@@ -45,15 +45,23 @@
 // emit-feedback). So the muzzle is installed at module load, before any require below runs, and
 // stdout is restored ONLY to emit the decision. Everything else on this hook's stdout is dropped.
 // stderr is untouched. AC: process.stdout.write appears exactly ONCE outside these two helpers.
+// GATED ON BEING THE PROCESS ENTRY POINT. Node sets require.main before executing the entry
+// module, so this still arms BEFORE the requires below when running as the hook — which is the
+// whole point. But an IMPORTER (a test, a script) must not have its stdout silently muzzled as a
+// side effect of requiring this file: I hit exactly that while verifying a merge, where a
+// verification script that required the hook printed nothing at all and looked like a crash.
+// A global side effect on every consumer is too high a price for a guarantee only the hook
+// process needs.
+const RUNNING_AS_HOOK = require.main === module;
 const REAL_STDOUT_WRITE = process.stdout.write.bind(process.stdout);
-process.stdout.write = () => true;
+if (RUNNING_AS_HOOK) process.stdout.write = () => true;
 
 /** The ONLY path back onto stdout. Writes the decision document and re-muzzles. */
 function emitDecision(payload) {
   try {
     REAL_STDOUT_WRITE(JSON.stringify(payload));
   } finally {
-    process.stdout.write = () => true;
+    if (RUNNING_AS_HOOK) process.stdout.write = () => true;
   }
 }
 
