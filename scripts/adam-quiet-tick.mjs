@@ -41,6 +41,10 @@ import { fetchAllPaginated } from '../lib/db/fetch-all-paginated.mjs';
 // alarm class layered onto the existing orchestrator-blocked venture stall scan below. Consumes
 // the Child-A discriminator (lib/governance/real-build-discriminator.mjs) transitively.
 import { evaluateRealBuildStall } from '../lib/governance/real-build-stall-alarm.mjs';
+// SD-LEO-INFRA-ADAM-DURABLE-STANDING-001: the durable standing priority. Surfaced ABOVE the inbox
+// below, because the measured failure was the queue setting the agenda — a priority printed beneath
+// a dozen inbound rows has been filed, not surfaced.
+import { evaluateStandingPriority } from '../lib/adam/standing-priority.js';
 
 const require = createRequire(import.meta.url);
 const crypto = require('crypto');
@@ -587,6 +591,14 @@ async function main() {
   // QF-20260719-848: contract INBOUND WATCH — surface undrained chairman SMS every tick.
   const smsInbound = await surfaceSmsInbound(sb);
 
+  // SD-LEO-INFRA-ADAM-DURABLE-STANDING-001: evaluate the durable standing priority. Fail-soft like
+  // its siblings above — and fail QUIET: a detector that cannot read its store reports 'unknown'
+  // and renders nothing, because an unreadable store must never be shown as a held priority.
+  let standing = { status: 'unknown', priority: null, servedBy: [], anchored: false };
+  try {
+    standing = await evaluateStandingPriority(sb);
+  } catch { /* fail-quiet — 'unknown' renders nothing; absent measurement is not a pass */ }
+
   // FR-4: belt-countdown + offer-help collapse to a salient-delta check — Adam only
   // reaches the coordinator on a real belt/venture delta, never a "still idle" status.
   const salient = await readSalientState(sb);
@@ -665,6 +677,11 @@ async function main() {
     stallAlerted: stall.alerted,
     ventureStallAlerted: ventureStall.alerted,
     ventureRealBuildStallAlerted: ventureStall.realBuildStalled || [],
+    // SD-LEO-INFRA-ADAM-DURABLE-STANDING-001: 'none' | 'served' | 'unserved' | 'unknown'.
+    // 'unserved' is the state that used to be indistinguishable from an idle tick.
+    standingPriority: standing.status,
+    standingPriorityAnchored: standing.priority ? standing.anchored : null,
+    standingPrioritySource: standing.priority ? standing.priority.source : null,
     inboxSurfaced: inboxSurface.items.length,
     inboxDirectives: inboxSurface.directives,
     // FR-3: the SUPPRESSION-FREE backlog count from the shared SSOT selector. Distinct from
@@ -743,6 +760,20 @@ async function main() {
     }
     if (oversightStale.selfScoreOverdueH) {
       console.log(`QUIET_TICK_SELFSCORE_OVERDUE=adam lastScoreAgeH=${oversightStale.selfScoreOverdueH} — run node scripts/adam-self-assessment-writer.cjs NOW (durable cron lost or failing; cadence 6h, threshold 2x)`);
+    }
+    // SD-LEO-INFRA-ADAM-DURABLE-STANDING-001: THE STANDING PRIORITY IS PRINTED HERE, ABOVE THE
+    // INBOX LOOP BELOW, AND THE POSITION IS THE POINT. The measured failure was the queue setting
+    // the agenda; a priority rendered under a dozen inbound rows has been filed, not surfaced.
+    //
+    // 'unserved' carries its OWN token because an idle tick that cannot distinguish "nothing to do"
+    // from "priority unserved" is exactly the defect — those two states produced identical silence.
+    // status 'none' deliberately emits nothing (a tick with no priority set is a genuine NO-OP, and
+    // waking the operator to be told nothing is wrong is the alert fatigue QF-20260725-638 removed);
+    // 'unknown' likewise emits nothing, because an unreadable store must never render as held.
+    if (standing.status === 'served') {
+      console.log(`QUIET_TICK_STANDING_PRIORITY=adam status=served source=${standing.priority.source} anchored=${standing.anchored} title="${standing.priority.title}" servedBy=${standing.servedBy.join(',')}`);
+    } else if (standing.status === 'unserved') {
+      console.log(`QUIET_TICK_STANDING_PRIORITY_UNSERVED=adam source=${standing.priority.source} anchored=${standing.anchored} title="${standing.priority.title}" linked=${(standing.priority.linked_sd_keys || []).join(',') || '(none)'} — a standing priority is set and NOTHING is routed into it. This tick is NOT a no-op: route work to it, or clear it deliberately.`);
     }
     // SD-LEO-INFRA-ADAM-INBOX-SURFACE-NOT-STAMP-001 (FR-3): first-class inbox surfacing —
     // directive/reply-needed rows carry the distinct hard-interrupt token.
