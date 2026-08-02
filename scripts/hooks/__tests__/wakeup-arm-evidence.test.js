@@ -457,6 +457,32 @@ describe('step B — awaiting_tick is stamped only on real arm evidence (AC3, co
   });
 });
 
+// The step-C gate reads feedback(category='wind_down_survey'). That channel had written ZERO rows
+// since it shipped, because source_type='wind_down_survey' violates feedback_source_type_check and
+// recordWindDown swallows the throw to stderr. A dead writer reads identically to an empty
+// population — the gate would have returned 0 forever and killed step C for the wrong reason.
+describe('wind-down mirror writes through a source_type the DB actually accepts', () => {
+  const hookSrc = fs.readFileSync(HOOK_PATH, 'utf8');
+  // Mirrors CHECK feedback_source_type_check (database/schema-reference-snapshot.json:1505).
+  const ALLOWED_SOURCE_TYPES = [
+    'manual_feedback', 'auto_capture', 'uat_failure', 'error_capture', 'uncaught_exception',
+    'unhandled_rejection', 'manual_capture', 'todoist_intake', 'youtube_intake',
+    'claude_code_intake', 'telegram', 'user_feedback',
+  ];
+
+  it('every source_type this hook emits is admitted by the CHECK constraint', () => {
+    const emitted = [...hookSrc.matchAll(/source_type:\s*'([^']+)'/g)].map((m) => m[1]);
+    expect(emitted.length).toBeGreaterThan(0);
+    for (const st of emitted) expect(ALLOWED_SOURCE_TYPES).toContain(st);
+  });
+
+  // The category is the discriminator the gauge registry reads; it was never the blocker and
+  // must not drift while fixing the source_type.
+  it('still files under category wind_down_survey (what the gate and gauge query)', () => {
+    expect(hookSrc).toMatch(/category:\s*'wind_down_survey'/);
+  });
+});
+
 describe('no new hook or registry (constraint)', () => {
   it('the Stop array is unchanged — exactly 6 commands, same set', () => {
     const settings = JSON.parse(fs.readFileSync(SETTINGS, 'utf8'));

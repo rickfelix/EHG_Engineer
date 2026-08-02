@@ -302,7 +302,19 @@ async function recordWindDown(supabase, sessionId, { reason, hadClaim } = {}) {
       description: `Worker session ${sessionId} wound down: reason=${reason}, had_claim=${!!hadClaim}.`,
       category: 'wind_down_survey',
       severity: 'low',
-      source_type: 'wind_down_survey',
+      // 'wind_down_survey' is a valid CATEGORY but NOT a valid source_type: CHECK
+      // feedback_source_type_check admits only a fixed list, and machine telemetry uses
+      // 'auto_capture' (1000/1000 sampled rows). The old value threw on EVERY call, and the
+      // catch below swallowed it to stderr — so this mirror has written ZERO rows since it
+      // shipped, while reading as healthy. Measured 2026-08-02: 0 rows for the category, and a
+      // direct emitFeedback call reproduced the constraint violation; swapping this one value
+      // made the row land and the count go 0 -> 1.
+      //
+      // THIS IS LOAD-BEARING FOR THIS SD. Step A's 'second_stop_still_unarmed' — the substitute
+      // shipped INSTEAD of the debt marker, and the pre-registered gate for step C — writes
+      // through here. Left unfixed, that gate would have read 0 forever and killed step C for
+      // the wrong reason: not "the population is empty" but "the instrument was never plugged in".
+      source_type: 'auto_capture',
       metadata: { session_id: sessionId, reason, had_claim: !!hadClaim, at },
       // One row per session per minute-bucket per reason — idempotent if the hook fires twice.
       dedup_key: `wind_down::${sessionId}::${reason}::${at.slice(0, 16)}`,
