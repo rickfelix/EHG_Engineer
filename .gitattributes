@@ -18,3 +18,11 @@ CLAUDE_PLAN_MANUAL.md text eol=lf
 CLAUDE_CORE.md text eol=lf
 CLAUDE_EXEC.md text eol=lf
 CLAUDE.md text eol=lf
+
+# SD-FDBK-ENH-LEARNING-LOOP-DESTROYS-001 — ESLint auto-fix rewrites staged JS, and with
+# core.autocrlf=true that rewrite converts LF to CRLF. It turned a 60-line change into a
+# 1070-line diff (546 CRLF pairs), which is unreviewable and hides the real edit. Same class
+# as the CLAUDE_*.md pins above, on the source tree this time.
+*.js text eol=lf
+*.mjs text eol=lf
+*.cjs text eol=lf
