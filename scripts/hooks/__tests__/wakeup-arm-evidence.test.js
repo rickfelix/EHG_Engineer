@@ -413,21 +413,47 @@ describe('print-before-park — discriminators (first tests for this file)', () 
 });
 
 // ── Ship-order tripwires: these encode the BUILD ORDER itself as assertions ──
-describe('ship-order tripwires (green during step 0/A, red at step B by design)', () => {
+// STEP B LANDED. The tripwire is UPDATED, not weakened: AC3 stays countable (exactly one call
+// site) and gains the stronger claim — that call site is now UNREACHABLE unless the turn actually
+// armed. Guarding beat deleting: deleting would have stripped the true state from compliant
+// workers too, and all four consumers depend on it being present when it is EARNED.
+describe('step B — awaiting_tick is stamped only on real arm evidence (AC3, countable)', () => {
   const hookSrc = fs.readFileSync(HOOK_PATH, 'utf8');
+  const hook = require(HOOK_PATH);
 
-  // AC3 is countable, so count it. Step B deletes this call site; this test going red IS the
-  // signal that step B landed, at which point it is updated deliberately rather than by accident.
-  it('setLoopState(_, AWAITING_TICK) has EXACTLY ONE call site', () => {
+  it('setLoopState(_, AWAITING_TICK) still has EXACTLY ONE call site', () => {
     const sites = hookSrc.match(/setLoopState\(\s*sessionId\s*,\s*LOOP_STATE_AWAITING_TICK\s*\)/g) || [];
     expect(sites).toHaveLength(1);
   });
 
-  // FR-B1: parkSessionRecoverable writes TWO things. Step B kills the false arm claim and KEEPS
-  // the recoverability write — deleting both would remove the unarmed parked seat from
-  // detectDormantWorkers, losing the only current sighting of this SD's target population.
-  it('parkSessionRecoverable still writes expected_silence_until (kept at step B)', () => {
-    expect(hookSrc).toMatch(/expected_silence_until/);
+  it('that call site sits behind an armVerdict === \'armed\' guard', () => {
+    expect(hookSrc).toMatch(/if \(armVerdict === 'armed'\)[\s\S]{0,300}setLoopState\(\s*sessionId\s*,\s*LOOP_STATE_AWAITING_TICK\s*\)/);
+  });
+
+  // FR-B1: the recoverability write must SURVIVE. Deleting both would drop the seat out of
+  // charter-audit's parked check and dormancy-watchdog's :27 parse, losing the only sighting of
+  // this SD's target population.
+  it('expected_silence_until is still written UNCONDITIONALLY, outside the arm guard', () => {
+    const body = hookSrc.slice(hookSrc.indexOf('async function parkSessionRecoverable'));
+    const guardEnd = body.indexOf('}', body.indexOf('setLoopState('));
+    expect(body.slice(guardEnd).includes('expected_silence_until')).toBe(true);
+  });
+
+  // Behavioural, not just source-shaped: the write must not fire for an unarmed or unknown turn.
+  it('does not touch loop_state for unarmed / unknown / missing verdicts', async () => {
+    const tracker = require(path.resolve(__dirname, '../../lib/sessions/loop-state-tracker.cjs'));
+    const orig = tracker.setLoopState;
+    const calls = [];
+    tracker.setLoopState = async (...a) => { calls.push(a); };
+    try {
+      for (const armVerdict of ['unarmed', 'unknown', undefined]) {
+        await hook.parkSessionRecoverable('11111111-2222-4333-8444-555555555555', { armVerdict });
+      }
+      expect(calls).toHaveLength(0);
+      await hook.parkSessionRecoverable('11111111-2222-4333-8444-555555555555', { armVerdict: 'armed' });
+      expect(calls).toHaveLength(1);
+      expect(calls[0][1]).toBe('awaiting_tick');
+    } finally { tracker.setLoopState = orig; }
   });
 });
 
