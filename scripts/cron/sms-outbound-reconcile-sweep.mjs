@@ -9,8 +9,13 @@
  * mid-send (the F1 failure mode). reconcileOutboundSms itself is claim-serialized + idempotent,
  * so overlapping invocations are safe.
  *
- * FAIL-SOFT: while the STAGED sms_outbound_obligations migration is unapplied, reconcileOutboundSms
- * returns {ran:false, reason:'table_absent'} and this sweep exits 0 (nothing to do).
+ * FAIL-SOFT (mechanism, still correct): if the table were absent, reconcileOutboundSms returns
+ * {ran:false, reason:'table_absent'} and this sweep exits 0.
+ *
+ * THE TABLE IS PRESENT. This header previously said the STAGED migration "is unapplied".
+ * MEASURED 2026-08-02: 17 columns, 395 rows, to_regclass resolves (control query on a known
+ * table confirms the probe works). This sweep therefore does REAL work; treating it as inert
+ * is wrong. SD-LEO-INFRA-DECISION-RESURFACE-GUARDS-001 FR-3.
  *
  * Usage:
  *   node scripts/cron/sms-outbound-reconcile-sweep.mjs --once       # one reconcile pass

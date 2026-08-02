@@ -17,9 +17,14 @@
  * is 5), so exactly one of the two fires maps to 05:45 ET per season and does work — the other
  * exits inert. The per-ET-date dedupeKey is the idempotency backstop against a double-fire.
  *
- * FAIL-SOFT: while the STAGED sms_outbound_obligations table is unapplied, enqueueChairmanSms
- * returns {enqueued:false, reason:'table_absent...'} without throwing and this sweep logs inert
- * + exits 0 (no crash, no direct provider.send fallback).
+ * FAIL-SOFT (mechanism, still correct): if the table were absent, enqueueChairmanSms returns
+ * {enqueued:false, reason:'table_absent...'} without throwing and this sweep logs inert + exits 0
+ * (no crash, no direct provider.send fallback).
+ *
+ * THE TABLE IS PRESENT. This header previously said it "is unapplied". MEASURED 2026-08-02:
+ * 17 columns, 395 rows, to_regclass resolves (control query on a known table confirms the probe
+ * works). This sweep enqueues for real — do not reason about it as inert.
+ * SD-LEO-INFRA-DECISION-RESURFACE-GUARDS-001 FR-3.
  *
  * Usage:
  *   node scripts/cron/chairman-morning-review-sweep.mjs --once
