@@ -57,6 +57,23 @@
 
 BEGIN;
 
+-- Capture the CURRENT owner before the DROP discards it. A DROP takes ownership with it and the
+-- CREATE assigns it to whoever is running, so if this is applied under a different role the view
+-- silently changes owner and the owner ACL entry is not what it was. That is invisible to BOTH
+-- assertions below: the columns are all present and security_invoker is set regardless of who
+-- owns the view.
+--
+-- Asserts PRESERVATION, not owner='postgres'. Hardcoding would false-fail in any environment
+-- legitimately owned by another role — the same defect avoided in the security_invoker match.
+-- ON COMMIT DROP so it cannot leak out of the transaction, and a rollback leaves nothing behind.
+CREATE TEMP TABLE _vpwd_pre_owner
+ON COMMIT DROP
+AS
+SELECT pg_get_userbyid(c.relowner) AS owner_name
+  FROM pg_class c
+ WHERE c.relname = 'v_patterns_with_decay'
+   AND c.relnamespace = 'public'::regnamespace;
+
 -- NO CASCADE, DELIBERATELY. The measurement says nothing depends on this view, but the whole
 -- point of a measurement someone else took is that this statement should not silently act as if
 -- it were certainly true. Without CASCADE, an unmeasured dependent makes the DROP ERROR and the
@@ -148,7 +165,10 @@ CHANGE THIS VIEW WITH DROP + CREATE IN A TRANSACTION, NEVER CREATE OR REPLACE: R
 append columns, so any column added to the middle of issue_patterns makes REPLACE fail with
 "cannot change name of view column".';
 
--- *** POST-CONDITIONS RUN INSIDE THE TRANSACTION, ON PURPOSE. ***
+-- *** THREE POST-CONDITIONS, ALL INSIDE THE TRANSACTION, ON PURPOSE. ***
+-- Columns exposed, security_invoker preserved, and ownership preserved. Each of the three is
+-- invisible to the other two: the column check passes with the wrong posture, the posture check
+-- passes under the wrong owner, and both pass while a column is missing from the view.
 -- These were considered as an external test and deliberately put here instead. The vitest `db`
 -- project in this repo is gated to zero files when no non-production target is designated, so a
 -- live-DB test asserting this would report green having executed nothing — which is precisely the
@@ -158,6 +178,8 @@ DO $$
 DECLARE
     missing_cols text;
     invoker_ok   boolean;
+    prev_owner   name;
+    curr_owner   name;
 BEGIN
     -- 1. Every column of issue_patterns must be exposed by the view. This is the drift check.
     --    It fails LOUDLY rather than leaving a future reader to rediscover 42703 at runtime.
@@ -201,6 +223,30 @@ BEGIN
         RAISE EXCEPTION
           'v_patterns_with_decay was recreated WITHOUT security_invoker=on — RLS posture would have changed silently.';
     END IF;
+
+    -- 3. Ownership must survive the recreate.
+    --    Invisible to checks (1) and (2) — they pass regardless of who owns the view — so an
+    --    apply under the wrong role produces a green migration with a changed owner ACL entry.
+    --    An apply-time precondition would also catch it, but only if whoever applies remembers;
+    --    an assertion inside the transaction cannot be skipped by anyone.
+    --    IS DISTINCT FROM rather than <> so a NULL on either side cannot silently pass.
+    SELECT owner_name INTO prev_owner FROM _vpwd_pre_owner LIMIT 1;
+
+    IF prev_owner IS NOT NULL THEN
+        SELECT pg_get_userbyid(c.relowner)
+          INTO curr_owner
+          FROM pg_class c
+         WHERE c.relname = 'v_patterns_with_decay'
+           AND c.relnamespace = 'public'::regnamespace;
+
+        IF curr_owner IS DISTINCT FROM prev_owner THEN
+            RAISE EXCEPTION
+              'v_patterns_with_decay ownership changed across the recreate: was %, now %. The applying role differs from the original owner, so the owner ACL entry is not what it was.',
+              prev_owner, curr_owner;
+        END IF;
+    END IF;
+    -- prev_owner NULL means the view did not pre-exist: there is no ownership to preserve, so this
+    -- SKIPS rather than fires. An assertion that aborts a correct migration is its own defect.
 END $$;
 
 COMMIT;
