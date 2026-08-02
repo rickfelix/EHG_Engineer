@@ -45,15 +45,23 @@
 // emit-feedback). So the muzzle is installed at module load, before any require below runs, and
 // stdout is restored ONLY to emit the decision. Everything else on this hook's stdout is dropped.
 // stderr is untouched. AC: process.stdout.write appears exactly ONCE outside these two helpers.
+// GATED ON BEING THE PROCESS ENTRY POINT. Node sets require.main before executing the entry
+// module, so this still arms BEFORE the requires below when running as the hook — which is the
+// whole point. But an IMPORTER (a test, a script) must not have its stdout silently muzzled as a
+// side effect of requiring this file: I hit exactly that while verifying a merge, where a
+// verification script that required the hook printed nothing at all and looked like a crash.
+// A global side effect on every consumer is too high a price for a guarantee only the hook
+// process needs.
+const RUNNING_AS_HOOK = require.main === module;
 const REAL_STDOUT_WRITE = process.stdout.write.bind(process.stdout);
-process.stdout.write = () => true;
+if (RUNNING_AS_HOOK) process.stdout.write = () => true;
 
 /** The ONLY path back onto stdout. Writes the decision document and re-muzzles. */
 function emitDecision(payload) {
   try {
     REAL_STDOUT_WRITE(JSON.stringify(payload));
   } finally {
-    process.stdout.write = () => true;
+    if (RUNNING_AS_HOOK) process.stdout.write = () => true;
   }
 }
 
@@ -332,7 +340,19 @@ function readStdinPayload(timeoutMs = 2000) {
   });
 }
 
+// TOTAL WORK BUDGET. The hook is registered with a 10s timeout, and a TIMED-OUT Stop hook returns
+// NO DECISION — the enforcement silently vanishes exactly when the machine is loaded, which is the
+// failure shape this whole SD exists to remove. MEASURED on CI 2026-08-02: the cheapest path (fail
+// open, no transcript) took 7198ms against 412ms locally — a 17x spread on a runner whose
+// node_modules probe was failing. If the CHEAPEST path costs 7.2s there, the block path (this
+// budget + 3-5 DB round trips) would blow the timeout outright.
+// So the hook bounds its own discretionary work instead of assuming the environment is fast: the
+// stabilisation re-read gets whatever is LEFT of the budget after the DB calls, never a fixed 2.5s.
+const HOOK_WORK_BUDGET_MS = 6000;
+
 async function main() {
+  const hookStartedAt = Date.now();
+  const remainingBudgetMs = () => Math.max(0, HOOK_WORK_BUDGET_MS - (Date.now() - hookStartedAt));
   try {
     const flagEnabled = isFlagEnabled();
     if (!flagEnabled) { return shutdown(); }     // default-OFF fast path
@@ -420,7 +440,11 @@ async function main() {
           if (!fs.existsSync(payload.transcript_path)) return { verdict: 'unknown', reason: 'transcript absent', armCount: 0 };
           return armEvidence.findArmInCurrentTurn(readTailEntries(payload.transcript_path));
         };
-        armObservation = await armEvidence.awaitStableVerdict({ read, sleep: (ms) => new Promise((r) => setTimeout(r, ms)) });
+        armObservation = await armEvidence.awaitStableVerdict({
+          read,
+          sleep: (ms) => new Promise((r) => setTimeout(r, ms)),
+          deadlineMs: Math.min(2500, remainingBudgetMs()),   // whatever the DB calls LEFT
+        });
         armVerdict = armObservation.stable && armObservation.stable.verdict;
         process.stderr.write(armEvidence.formatPendingWake(armObservation, { sessionId }));
       } catch (e) {
