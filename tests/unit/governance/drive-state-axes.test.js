@@ -250,16 +250,31 @@ describe('AXIS 1 chairman_decisions — blind to CRITICAL is the defect this axi
     }
   });
 
-  it('PROVES THE UPSTREAM HOLE IS REAL — effectivePriority cannot escalate a critical row at ANY age', async () => {
-    // The justification for not reusing age_escalated, executed rather than cited. rank =
-    // Math.max(1, baseRank - bump) and escalated = rank < baseRank; for critical baseRank is 1, so
-    // the floor absorbs the bump and the comparison is 1 < 1.
+  it('THE UPSTREAM HOLE WAS REAL AND IS NOW CLOSED — effectivePriority escalates critical by AGE', async () => {
+    // HISTORY, because this test's meaning inverted and a silent flip would erase why it exists.
+    // It originally asserted the OPPOSITE: that effectivePriority could never escalate a critical
+    // row at any age. That was true and was this axis's justification for not reusing
+    // age_escalated — rank = Math.max(1, baseRank - bump), escalated = rank < baseRank, and for
+    // critical baseRank is 1, so the floor absorbed the bump and the comparison was 1 < 1.
+    //
+    // SD-FDBK-INFRA-DECISION-QUEUE-RETIREMENT-001 FR-5 fixed it: the marker is now a property of
+    // AGE, not of rank movement (`escalated: bump > 0`). So this test now pins the FIX. Left here
+    // rather than deleted because a test that merely documented a defect becomes a regression guard
+    // the moment the defect is closed — and because the axis's independence rationale below
+    // (:the-axis-source-does-NOT-read) now rests on separation of concerns, NOT on this hole.
     const { effectivePriority } = await import('../../../lib/chairman/decision-queue.mjs');
-    for (const h of [1, 71, 73, 100, 1000]) {
-      const out = effectivePriority({ priority: 'critical', created_at: hoursAgo(h) }, new Date(NOW));
-      expect(out.escalated, `critical @${h}h`).toBe(false);
+    for (const h of [1, 71]) {
+      expect(effectivePriority({ priority: 'critical', created_at: hoursAgo(h) }, new Date(NOW)).escalated,
+        `critical @${h}h is inside the 72h window`).toBe(false);
     }
-    // ...while a lower class DOES escalate, which is why the hole is easy to miss.
+    for (const h of [73, 100, 1000]) {
+      expect(effectivePriority({ priority: 'critical', created_at: hoursAgo(h) }, new Date(NOW)).escalated,
+        `critical @${h}h is past the 72h threshold`).toBe(true);
+    }
+    // The RANK FLOOR is deliberately untouched by that fix — critical cannot outrank critical, and
+    // sort order depends on it. Escalation and ordering are now separate facts.
+    expect(effectivePriority({ priority: 'critical', created_at: hoursAgo(1000) }, new Date(NOW)).rank).toBe(1);
+    // A lower class still escalates, unchanged.
     expect(effectivePriority({ priority: 'normal', created_at: hoursAgo(100) }, new Date(NOW)).escalated).toBe(true);
   });
 
