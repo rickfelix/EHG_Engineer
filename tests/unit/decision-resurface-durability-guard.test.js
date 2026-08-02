@@ -228,6 +228,35 @@ describe('THE REAL STORE marks the gap — not just the test fixture', () => {
     expect(owedDecisions.length).toBeGreaterThan(0);
     for (const o of owedDecisions) {
       expect(o.durabilityUnavailable, `owed ${o.owedId}`).toBe(true);
+
+      // ===== answered:false IS LOAD-BEARING, AND ITS ABSENCE HERE WAS A LIVE SURVIVOR =====
+      // Mutating the adapter's `answered: false` to `true` left ALL 12 tests green. It is not a
+      // cosmetic field: away-bridge's answered-drop (:63) runs BEFORE the durability refusal
+      // (:91), so an always-answered store makes THIS SD'S GUARD UNREACHABLE — every owed
+      // decision exits as 'dropped_answered', which reads in the log like a legitimate drop
+      // rather than a disabled brake. A one-line adapter change silently removes the feature.
+      //
+      // The comment above ("if the store stops marking … nothing would notice") was written for
+      // exactly this hazard and then closed it for ONE field. Pinning every mapped field is the
+      // general form: a stubbed writer is only witnessed for the values you actually assert.
+      expect(o.answered, `owed ${o.owedId} answered`).toBe(false);
+      expect(o.resurfaceCount, `owed ${o.owedId} resurfaceCount`).toBe(0);
+      expect(o.resurfacedThisWindow, `owed ${o.owedId} resurfacedThisWindow`).toBe(false);
+      expect(o.owedId, 'owedId must be mapped').toBeTruthy();
+      expect(o.message, 'message must be mapped').toBeTruthy();
     }
+  });
+
+  it('an always-answered store would make the refusal UNREACHABLE — the drop precedes it', async () => {
+    // Proves the consequence the assertion above guards against, at the bridge level: with
+    // answered:true the refusal never runs, so the outcome is 'dropped_answered' and NOT
+    // 'skipped_no_durable_sink'. Ordering is the whole point — the drop is upstream of the guard.
+    const answeredStore = {
+      getOwedDecisions: async () => [{ ...owed(), answered: true, durabilityUnavailable: true }],
+      markResurfaced: async () => {},
+    };
+    const results = await run(AWAY, answeredStore);
+    expect(results.map((r) => r.action)).toEqual(['dropped_answered']);
+    expect(results.map((r) => r.action)).not.toContain('skipped_no_durable_sink');
   });
 });
