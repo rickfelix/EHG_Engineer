@@ -379,6 +379,24 @@ function isHeadlessZombie(session, telemetry, nowMs) {
 }
 // SD-LEO-INFRA-STALE-SWEEP-PID-LIVENESS-GUARD-001: PID-liveness guard for the conflict-eviction path.
 const { shouldHoldClaim } = require('../lib/fleet/claim-release-guard.cjs');
+
+// SD-LEO-INFRA-STALE-SESSION-SWEEP-001 FR-1 — the columns every release seam in this file reads.
+//
+// Hoisted out of the inline .select() so tests/unit/fleet/liveness-input-parity.test.js can assert
+// it against LIVENESS_INPUT_FIELDS instead of scraping a string literal out of this source.
+//
+// THE LAST THREE ENTRIES ARE THE FIX. is_alive, process_alive_at and expected_silence_until were
+// never selected, so three of the five rungs in isSessionAlive() could not fire at ANY of the three
+// seams that consult shouldHoldClaim() (completed-SD release, orphaned-claim release, conflict
+// eviction) — all three filter the same `classified` array built from this query. On
+// 2026-07-27T18:18:27.855Z that released session b25ec3e5 at 344.4s heartbeat age (threshold 300s)
+// with pid and terminal_id both NULL: every rung the guard could still read was blind, while this
+// same query's computed_status had already classified it ALIVE_SOURCE_SIDE.
+//
+// DO NOT NARROW THIS LIST to "the columns we happen to use today" — the guard reads it, not this
+// file, and the parity test fails if a rung's column goes missing again.
+const SESSION_SELECT_COLUMNS = 'session_id, sd_key, sd_title, heartbeat_age_seconds, heartbeat_age_human, computed_status, hostname, tty, pid, track, is_virtual, parent_session_id, terminal_id, current_branch, is_alive, process_alive_at, expected_silence_until';
+module.exports.SESSION_SELECT_COLUMNS = SESSION_SELECT_COLUMNS;
 // SD-LEO-INFRA-TWO-WAY-COORDINATOR-001 / FR-3b — top-level require so wire-check
 // call-graph builder can statically resolve the dependency on lib/coordinator/signal-router.cjs.
 const _signalRouterModule = require('../lib/coordinator/signal-router.cjs');
@@ -2018,7 +2036,7 @@ async function main() {
   try {
     sessions = await fapPaginate(() => supabase
       .from('v_active_sessions')
-      .select('session_id, sd_key, sd_title, heartbeat_age_seconds, heartbeat_age_human, computed_status, hostname, tty, pid, track, is_virtual, parent_session_id, terminal_id, current_branch')
+      .select(SESSION_SELECT_COLUMNS)
       .not('sd_key', 'is', null)
       .order('heartbeat_age_seconds', { ascending: true })
       .order('session_id', { ascending: true })); // unique tiebreaker APPENDED after the non-unique order (FR-6)
