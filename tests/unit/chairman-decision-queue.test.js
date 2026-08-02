@@ -78,9 +78,38 @@ describe('TS-4 age escalation (visibility only)', () => {
       .toEqual({ rank: 3, label: 'normal', escalated: false });
   });
 
-  it('critical cannot escalate past critical', () => {
-    expect(effectivePriority({ priority: 'critical', created_at: hoursAgo(500) }, now))
-      .toEqual({ rank: 1, label: 'critical', escalated: false });
+  // FR-0 (SD-FDBK-INFRA-DECISION-QUEUE-RETIREMENT-001). THIS TEST PREVIOUSLY PINNED THE DEFECT.
+  // It asserted `escalated: false` for a critical row at 500h and PASSED — while that false was the
+  // bug. The name is about RANK and is still true (critical cannot outrank critical, and the floor
+  // that guarantees it is correct); the assertion was about the MARKER, which must fire whenever the
+  // age threshold is crossed regardless of whether the rank could move. Because `escalated` was
+  // computed as `rank < baseRank`, and critical's baseRank is 1, the comparison was 1 < 1 — false at
+  // ANY age. Four of the seven live queue rows are critical, one at 15 days, none ever marked.
+  // Do not restore the old assertion: a green test over a live defect is worse than no test.
+  it('critical keeps rank 1 but IS marked escalated past the threshold', () => {
+    const aged = effectivePriority({ priority: 'critical', created_at: hoursAgo(500) }, now);
+    expect(aged.rank, 'critical cannot outrank critical — the floor is correct').toBe(1);
+    expect(aged.label).toBe('critical');
+    expect(aged.escalated, 'the MARKER must fire on age, not on rank movement').toBe(true);
+  });
+
+  it('critical below the threshold is NOT marked — the fix must not mark everything', () => {
+    const fresh = effectivePriority({ priority: 'critical', created_at: hoursAgo(1) }, now);
+    expect(fresh.rank).toBe(1);
+    expect(fresh.escalated).toBe(false);
+  });
+
+  it('every priority class can reach escalated=true — no class is structurally blind', () => {
+    // The matrix is the test. A normal-priority seed passes even with the defect live, which is
+    // why a single seeded row proved nothing here.
+    for (const priority of ['critical', 'high', 'normal', 'low']) {
+      const r = effectivePriority({ priority, created_at: hoursAgo(500) }, now);
+      expect(r.escalated, `${priority} must be capable of escalating`).toBe(true);
+    }
+    for (const priority of ['critical', 'high', 'normal', 'low']) {
+      const r = effectivePriority({ priority, created_at: hoursAgo(1) }, now);
+      expect(r.escalated, `${priority} must not escalate when fresh`).toBe(false);
+    }
   });
 
   it('sortPending orders blocking DESC, effective class, then created_at ASC', () => {

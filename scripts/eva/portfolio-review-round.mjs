@@ -174,6 +174,39 @@ export async function portfolioReviewHandler({ dryRun = false, supabase = null, 
     }
   }
 
+  // FR-4 (SD-FDBK-INFRA-DECISION-QUEUE-RETIREMENT-001): SUPERSEDE THE PRIOR WINDOW'S PACKET.
+  // The cadence above is correctly idempotent WITHIN a window, but nothing retired the PREVIOUS
+  // one — so a new Stage-0 row appeared every 7 days and the old one never left. Measured live:
+  // exactly two portfolio_review rows existed and BOTH were pending, listing the same ventures.
+  // Left alone this accrues one stale critical per cycle forever, and arm 4 hardcodes
+  // priority='critical', so every accrued row lands at the top of the chairman's queue.
+  //
+  // Only fires when a NEW packet was actually inserted, so re-running inside the same window
+  // supersedes nothing — the idempotency contract above is preserved rather than reinterpreted.
+  //
+  // status='superseded', never approved/rejected: the chairman did not decide this packet, and
+  // crediting him with a decision he never made is the failure mode TR-3 forbids. The pointer
+  // lands in brief_data so the audit trail survives — a bare disappearance loses why it left.
+  let superseded = [];
+  if (insertedPacket) {
+    const { data: priors, error: priorErr } = await db
+      .from('chairman_decisions')
+      .select('id, brief_data')
+      .eq('decision_type', PORTFOLIO_REVIEW_DECISION_TYPE)
+      .eq('status', 'pending')
+      .lt('created_at', windowStart);
+    if (priorErr) throw new Error(`supersede lookup failed: ${priorErr.message}`);
+    for (const prior of priors || []) {
+      if (prior.id === packetId) continue;
+      const { error: supErr } = await db.from('chairman_decisions').update({
+        status: 'superseded',
+        brief_data: { ...(prior.brief_data || {}), superseded_by: packetId, superseded_at: new Date().toISOString() }
+      }).eq('id', prior.id);
+      // Fail-soft: a supersession that errors must not lose the packet we just recorded.
+      if (!supErr) superseded.push(prior.id);
+    }
+  }
+
   // The (review_date, 'ad_hoc') slot is shared with genuine ad-hoc management
   // reviews (UNIQUE constraint). Never clobber a foreign row — skip the durable
   // record instead (the packet row above is the load-bearing artifact).
@@ -185,7 +218,7 @@ export async function portfolioReviewHandler({ dryRun = false, supabase = null, 
     .maybeSingle();
   if (slot && slot.decisions?.kind !== PORTFOLIO_REVIEW_DECISION_TYPE) {
     console.warn(`management_reviews (${reviewDate}, ad_hoc) slot held by a non-portfolio review — skipping durable record to avoid clobbering it`);
-    return { reviewDate, packetId, insertedPacket, ventures: ventures.length, strategyActive: !!strategy, reviewRecordSkipped: true };
+    return { reviewDate, packetId, insertedPacket, superseded, ventures: ventures.length, strategyActive: !!strategy, reviewRecordSkipped: true };
   }
 
   const { error: reviewErr } = await db
@@ -207,6 +240,7 @@ export async function portfolioReviewHandler({ dryRun = false, supabase = null, 
     reviewDate,
     packetId,
     insertedPacket,
+    superseded,
     ventures: ventures.length,
     strategyActive: !!strategy,
   };
