@@ -38,9 +38,10 @@ if (parsed.command === 'list') {
     // Sort client-side with the same semantics as the view (also covers a
     // pre-migration view that lacks blocking/effective_priority columns).
     const rows = sortPending(data || []);
-    // FR-6: read the dispositions the queue has never read. Five of seven rows were deferred —
-    // several twice — and measured live it is SEVEN of seven, every one within ~1.3 days. Ageing
-    // them from created_at is what makes a settled queue present as stale and escalating.
+    // FR-6: read the dispositions the queue has never read. Measured live, SEVEN of seven rows
+    // carry a deferral — several twice — every one within ~1.3 days. (An early estimate said five
+    // of seven; the measurement superseded it.) Ageing them from created_at is what makes a
+    // settled queue present as stale and escalating.
     // Fail-soft: a disposition read that errors leaves the prior behaviour intact rather than
     // taking down the chairman's list.
     let dispositions = null;

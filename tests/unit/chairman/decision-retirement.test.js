@@ -2,12 +2,14 @@
  * lib/chairman/decision-retirement.mjs — FR-1, arm-aware retirement.
  * SD-FDBK-INFRA-DECISION-QUEUE-RETIREMENT-001.
  *
- * The status vocabulary is asserted against the CHECK constraint's permitted set, read from
- * database/migrations/20260131_feedback_resolution_enforcement.sql:150-165 — not from what the
- * codebase happens to write. A value outside that set dies at runtime with 23514.
+ * BOTH arms' status vocabularies are asserted against their REAL permitted sets, read from
+ * pg_constraint — not from what the codebase happens to write. A value outside the set dies at
+ * runtime with 23514, and this suite previously pinned arm 5 that way while pinning arm 4 only as
+ * "not approved/rejected", which an entirely illegal value passes trivially. That asymmetry is how
+ * an arm-4 status the CHECK forbids shipped green. Pin every arm against its own permitted set.
  */
 import { describe, it, expect } from 'vitest';
-import { planRetirement, applyRetirement, armOf, FEEDBACK_STATUS, DECISION_STATUS, CITATION_COLUMN, RETIRABLE_STATUSES } from '../../../lib/chairman/decision-retirement.mjs';
+import { planRetirement, applyRetirement, armOf, FEEDBACK_STATUS, DECISION_STATUS, CITATION_COLUMN, RETIRABLE_STATUSES, PERMITTED_DECISION_STATUS, RETIREMENT_READ_SELECT } from '../../../lib/chairman/decision-retirement.mjs';
 import { indexDispositions, DEFERRAL_CATEGORY } from '../../../lib/chairman/decision-disposition.mjs';
 
 const NOW = new Date('2026-08-01T21:00:00Z');
@@ -99,26 +101,41 @@ describe('FR-1/TR-3 status vocabulary — never assert a decision the chairman d
     }
   });
 
-  it('arm 4 NEVER uses approved or rejected', () => {
-    for (const d of ['held', 'superseded']) {
-      const plan = planRetirement({ id: 'dec-1', decision_type: 'chairman_approval' }, withAuth('dec-1'), { disposition: d });
-      expect(['approved', 'rejected']).not.toContain(plan.patch.status);
-    }
+  it('arm 4 uses ONLY values chairman_decisions_status_check permits', () => {
+    // THE HOLE THAT LET THE ARM-4 CRITICAL SHIP: arm 5's vocabulary was pinned against the real
+    // permitted set, and arm 4's was pinned only as "not approved/rejected" — which an entirely
+    // ILLEGAL value passes trivially. 'superseded' and 'held' both passed that assertion while
+    // being rejected by the live CHECK with 23514. This is the missing mirror.
+    expect(PERMITTED_DECISION_STATUS).toEqual(['pending', 'approved', 'rejected', 'cancelled']);
+    const plan = planRetirement({ id: 'dec-1', decision_type: 'chairman_approval' }, withAuth('dec-1'), { disposition: 'superseded' });
+    expect(PERMITTED_DECISION_STATUS).toContain(plan.patch.status);
+    expect(['approved', 'rejected']).not.toContain(plan.patch.status);
   });
 
-  it('the two dispositions are distinguishable per arm', () => {
-    const a4h = planRetirement({ id: 'dec-1', decision_type: 'chairman_approval' }, withAuth('dec-1'), { disposition: 'held' });
+  it('arm 4 HELD is refused — no permitted status means "parked but still to be decided"', () => {
+    // approved/rejected assert an outcome (TR-3); 'cancelled' would withdraw a decision the
+    // chairman still intends to make. A held row belongs in 'pending', where it already is.
+    const plan = planRetirement({ id: 'dec-1', decision_type: 'chairman_approval' }, withAuth('dec-1'), { disposition: 'held' });
+    expect(plan.verdict).toBe('blocked');
+    expect(plan.patch).toBe(null);
+    expect(plan.reason).toMatch(/pending|still intends/);
+  });
+
+  it('the dispositions are distinguishable on the arm that supports both', () => {
     const a4s = planRetirement({ id: 'dec-1', decision_type: 'chairman_approval' }, withAuth('dec-1'), { disposition: 'superseded' });
     const a5h = planRetirement({ id: 'dec-1', decision_type: 'flag_review' }, withAuth('dec-1'), { disposition: 'held' });
     const a5s = planRetirement({ id: 'dec-1', decision_type: 'flag_review' }, withAuth('dec-1'), { disposition: 'superseded', supersededBy: 'newer-1' });
-    expect(a4h.patch.status).toBe(DECISION_STATUS.HELD);
     expect(a4s.patch.status).toBe(DECISION_STATUS.SUPERSEDED);
     expect(a5h.patch.status).toBe(FEEDBACK_STATUS.HELD);
     expect(a5s.patch.status).toBe(FEEDBACK_STATUS.SUPERSEDED);
+    expect(a5h.patch.status).not.toBe(a5s.patch.status);
+    // the disposition itself is always recorded in the citation, whichever status carries it
+    expect(a4s.retirementBasis.disposition).toBe('superseded');
+    expect(a5h.retirementBasis.disposition).toBe('held');
   });
 
   it('the citation travels WITH the write — a basis in a commit message is not a basis', () => {
-    const plan = planRetirement({ id: 'dec-1', decision_type: 'chairman_approval' }, withAuth('dec-1'));
+    const plan = planRetirement({ id: 'dec-1', decision_type: 'chairman_approval' }, withAuth('dec-1'), { disposition: 'superseded' });
     expect(plan.retirementBasis.cited_record).toBe('fb-dec-1');
     expect(plan.retirementBasis.decided_by).toBe('chairman-cli');
     expect(plan.retirementBasis.decided_at).toBeTruthy();
@@ -131,7 +148,7 @@ describe('FR-1/TR-3 status vocabulary — never assert a decision the chairman d
     // fake that accepted any patch.
     expect(CITATION_COLUMN.chairman_decisions).toBe('brief_data');
     expect(CITATION_COLUMN.feedback).toBe('metadata');
-    const a4 = planRetirement({ id: 'dec-1', decision_type: 'chairman_approval' }, withAuth('dec-1'));
+    const a4 = planRetirement({ id: 'dec-1', decision_type: 'chairman_approval' }, withAuth('dec-1'), { disposition: 'superseded' });
     const a5 = planRetirement({ id: 'dec-1', decision_type: 'flag_review' }, withAuth('dec-1'));
     expect(a4.citationColumn).toBe('brief_data');
     expect(a5.citationColumn).toBe('metadata');
@@ -190,7 +207,7 @@ describe('feedback status=duplicate is CHECK-constrained to carry a referent', (
 
 describe('FR-1 each arm targets its OWN table — a single-table retirement covers a third of the queue', () => {
   it('arm 4 writes chairman_decisions, arm 5 writes feedback', () => {
-    expect(planRetirement({ id: 'd', decision_type: 'chairman_approval' }, withAuth('d')).table).toBe('chairman_decisions');
+    expect(planRetirement({ id: 'd', decision_type: 'chairman_approval' }, withAuth('d'), { disposition: 'superseded' }).table).toBe('chairman_decisions');
     expect(planRetirement({ id: 'd', decision_type: 'flag_review' }, withAuth('d')).table).toBe('feedback');
   });
 });
@@ -238,12 +255,15 @@ describe('TR-9 idempotency and the terminal-status refusal', () => {
         let sel = store.slice();
         let pending = null;
         let err = null;
+        let projection = null;
         const exec = async () => {
           if (opts.readError && !pending) return { data: null, error: { message: opts.readError } };
           if (opts.writeError && pending) return { data: null, error: { message: opts.writeError } };
           if (err) return { data: null, error: err };
           if (pending) for (const r of sel) Object.assign(r, pending);
-          return { data: sel, error: null };
+          // Hand back ONLY the projected columns, as PostgREST does.
+          const project = (r) => projection ? Object.fromEntries(projection.map(k => [k, r[k]])) : { ...r };
+          return { data: sel.map(project), error: null };
         };
         const api = {
           update: (patch) => {
@@ -259,7 +279,23 @@ describe('TR-9 idempotency and the terminal-status refusal', () => {
           eq: (c, v) => { sel = sel.filter((r) => r[c] === v); return api; },
           neq: (c, v) => { sel = sel.filter((r) => r[c] !== v); return api; },
           in: (c, vs) => { sel = sel.filter((r) => vs.includes(r[c])); return api; },
-          select: () => api,
+          // select() PROJECTS, it does not pass the whole row through. A fake that ignores its
+          // projection cannot see under-selection — and under-selection is precisely the class that
+          // shipped FR-6 dead in production past 32 green tests. With the projection ignored, the
+          // read-first jsonb merge would keep passing even if RETIREMENT_READ_SELECT stopped
+          // fetching the citation column, at which point the write silently REPLACES that column.
+          select: (cols) => {
+            if (typeof cols === 'string' && cols !== 'id') {
+              const want = cols.split(',').map(s => s.trim());
+              for (const k of want) {
+                if (!COLUMNS[t] || !COLUMNS[t].includes(k)) {
+                  err = { code: '42703', message: `column ${t}.${k} does not exist` };
+                }
+              }
+              projection = want;
+            }
+            return api;
+          },
           then: (resolve, reject) => exec().then(resolve, reject)
         };
         return api;
@@ -267,7 +303,7 @@ describe('TR-9 idempotency and the terminal-status refusal', () => {
     };
   }
   const a5 = () => planRetirement({ id: 'dec-1', decision_type: 'flag_review' }, withAuth('dec-1'));
-  const a4 = () => planRetirement({ id: 'dec-1', decision_type: 'chairman_approval' }, withAuth('dec-1'));
+  const a4 = () => planRetirement({ id: 'dec-1', decision_type: 'chairman_approval' }, withAuth('dec-1'), { disposition: 'superseded' });
 
   it('arm 5 retirement WRITES even though feedback has no "pending" status', async () => {
     // "pending" is synthesised by the view, not stored. A fence on status='pending' would match
@@ -437,6 +473,25 @@ describe('TR-9 idempotency and the terminal-status refusal', () => {
     expect(db.rows[0].status).toBe(FEEDBACK_STATUS.SUPERSEDED);
     expect(db.rows[0].duplicate_of_id).toBe('newer-1');
     expect(db.rows[0].metadata.retirement_basis.disposition).toBe('superseded');
+  });
+
+  it('the fake PROJECTS — so a mis-projected read is visible instead of silently destructive', () => {
+    // The fake used to hand back whole rows regardless of the projection, which made
+    // RETIREMENT_READ_SELECT untestable: drop the citation column from it and row[col] is
+    // undefined, the merge becomes {retirement_basis} alone, and the write REPLACES the column,
+    // destroying everything in it — with every test still green. That is the same under-selection
+    // class that shipped FR-6 dead in production past 32 green tests.
+    expect(RETIREMENT_READ_SELECT.feedback.split(',').map(s => s.trim())).toContain(CITATION_COLUMN.feedback);
+    expect(RETIREMENT_READ_SELECT.chairman_decisions.split(',').map(s => s.trim())).toContain(CITATION_COLUMN.chairman_decisions);
+  });
+
+  it('a read that omits the citation column is caught, not silently destructive', async () => {
+    // Simulates the drift directly against the fake's projection, proving the double can now
+    // witness it: with metadata absent from the projection the pre-existing keys are NOT preserved.
+    const db = fake('feedback', [{ id: 'dec-1', status: 'new', metadata: { keep_me: 'existing' } }]);
+    const { data } = await db.from('feedback').select('id, status').eq('id', 'dec-1');
+    expect(data[0]).not.toHaveProperty('metadata');   // the projection is real
+    expect(data[0].status).toBe('new');
   });
 
   it('the retirable sets match the real per-arm vocabularies', () => {
