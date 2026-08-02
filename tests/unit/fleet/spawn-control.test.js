@@ -47,6 +47,28 @@ const {
  * refuses -- 21 red tests whose behaviour depended on the physical location of the checkout.
  * A unit test must never depend on real git state or on network egress.
  */
+/**
+ * HERMETICITY PIN — SD-FDBK-INFRA-SPAWN-SOURCE-CURRENCY-001, added after this suite performed a
+ * REAL `git worktree add` against the SHARED repo root.
+ *
+ * spawn()'s FR-2 block reads `opts.currencyEnv || process.env`, and the 24 spawn() calls in this
+ * file pass no currencyEnv — so they read the AMBIENT environment. They also pass no
+ * spawnSourceRunner / spawnSourceExists / repoRoot, and those default to REAL execFileSync, REAL
+ * fs.existsSync and the REAL main repo root (correct for production, catastrophic for a unit test).
+ * The moment anything makes the flag read true, every one of these unit tests becomes a live
+ * integration test against the shared root.
+ *
+ * That is not hypothetical: mutant M5 (flag gate defaults ON) did exactly this during a mutation
+ * run and created a real `.spawn-source` worktree in the shared root, which vitest then globbed
+ * into — running the entire repo's suite a second time and rewriting 16 tracked files' line
+ * endings. A unit test that reads an ambient feature flag is non-hermetic by construction.
+ *
+ * Pinned to an explicit falsy value rather than deleted, so the ambient environment cannot decide.
+ * This does NOT weaken M5: the default-OFF contract is asserted directly in
+ * spawn-source-flag-gate.test.js, which passes an explicit `{}` and is where that mutant is caught.
+ */
+beforeEach(() => { vi.stubEnv('FLEET_SPAWN_SOURCE_TREE', '0'); });
+
 const CURRENT_RUNNER = (args) => {
   if (args[0] === 'fetch') return '';
   if (args.includes('--abbrev-ref')) return 'main\n';
@@ -187,7 +209,16 @@ describe('module surface (TS-10: exactly seven named verbs, no more)', () => {
       // internally. Exported so the DEFAULT-OFF contract is assertable directly, which is the
       // whole safety claim of the FR-2 rollout: with FLEET_SPAWN_SOURCE_TREE unset, spawn
       // behaviour must be byte-identical to before this SD.
-      'isSpawnSourceTreeEnabled'];
+      'isSpawnSourceTreeEnabled',
+      // buildSpawnSourceUpdateArgs / SPAWN_SOURCE_BRANCH — helper and value, by the same test as
+      // everything above: no operator invokes them and no route reaches them. Both exist because
+      // the tree shipped DETACHED, which assessTreeCurrency rejects as detached_head no matter how
+      // pristine the tree is — so under FLEET_SPAWN_SOURCE_TREE every spawn in the fleet would have
+      // been refused. The branch name is exported so the seam test can assert the guard's verdict
+      // on the branch we actually create, and the update argv is exported because a fast-forward on
+      // reuse is REQUIRED (self-heal only ever advances a clean tree on 'main', which this
+      // deliberately is not) and its shape must be assertable without a real repo.
+      'buildSpawnSourceUpdateArgs', 'SPAWN_SOURCE_BRANCH'];
     const unexpected = Object.keys(mod).filter((k) => !verbNames.includes(k) && !helperNames.includes(k));
     expect(unexpected).toEqual([]);
   });
