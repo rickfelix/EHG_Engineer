@@ -181,7 +181,13 @@ describe('module surface (TS-10: exactly seven named verbs, no more)', () => {
       // Exported because it takes an injected runner and must be assertable without a real repo:
       // both wrong answers it replaces (path.dirname of cwd, and getRepoRoot's process.cwd-bound
       // lookup) fail SILENTLY on the spawn path, so the correct one needs pinned tests.
-      'resolveMainRepoRoot'];
+      'resolveMainRepoRoot',
+      // isSpawnSourceTreeEnabled — a flag PREDICATE, exactly like isLiveEnabled above and
+      // isFrTraceabilityEnforced on the FR gates. No operator invokes it; spawn() reads it
+      // internally. Exported so the DEFAULT-OFF contract is assertable directly, which is the
+      // whole safety claim of the FR-2 rollout: with FLEET_SPAWN_SOURCE_TREE unset, spawn
+      // behaviour must be byte-identical to before this SD.
+      'isSpawnSourceTreeEnabled'];
     const unexpected = Object.keys(mod).filter((k) => !verbNames.includes(k) && !helperNames.includes(k));
     expect(unexpected).toEqual([]);
   });

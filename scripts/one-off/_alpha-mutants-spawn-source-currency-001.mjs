@@ -18,6 +18,7 @@ const SUITES = [
   'tests/unit/fleet/spawn-source-resolve.test.js',
   'tests/unit/fleet/spawn-source-ensure.test.js',
   'tests/unit/fleet/spawn-source-repo-root.test.js',
+  'tests/unit/fleet/spawn-source-flag-gate.test.js',
   'tests/unit/fleet/spawn-control.test.js',
 ];
 
@@ -39,6 +40,12 @@ const MUTANTS = [
     detail: 'The wrong answer I shipped-and-reverted: --show-toplevel returns the WORKTREE root, not the main root, so the spawn source would be sited inside whichever worktree spawned.',
     find: "['rev-parse', '--path-format=absolute', '--git-common-dir']",
     replace: "['rev-parse', '--show-toplevel']",
+  },
+  {
+    name: 'M5 flag gate defaults ON instead of OFF',
+    detail: 'Breaks the entire safety claim of the FR-2 rollout: an unset FLEET_SPAWN_SOURCE_TREE would silently relocate the currency target for every spawn in the fleet.',
+    find: "  const v = env.FLEET_SPAWN_SOURCE_TREE;\r\n  if (v == null) return false;",
+    replace: "  const v = env.FLEET_SPAWN_SOURCE_TREE;\r\n  if (v == null) return true;",
   },
   {
     // Single-line anchor deliberately: the first attempt used a multi-line `} catch {...}` anchor
