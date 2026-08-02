@@ -92,11 +92,22 @@ describe('FR-5: liveness input parity — every shouldHoldClaim producer supplie
     expect(missing).toHaveLength(3);
   });
 
-  it('the sweep query supplies every rung the guard reads', () => {
-    // THE ASSERTION THAT WAS RED BEFORE THIS SD. All three sweep release seams
-    // (completed-SD, orphaned-claim, conflict eviction) filter the same `classified` array built
-    // from this one query, so this single check covers all three.
-    expect(unsatisfiedGroups(columnsOf(SESSION_SELECT_COLUMNS))).toEqual([]);
+  it('the sweep query supplies every rung the guard reads, EXCEPT the one deliberately withheld', () => {
+    // THE ASSERTION THAT WAS RED BEFORE THIS SD. All three sweep release seams (completed-SD,
+    // orphaned-claim, conflict eviction) filter the same `classified` array built from this one
+    // query, so this single check covers all three.
+    //
+    // is_alive IS WITHHELD ON PURPOSE — not an oversight, and it must not be "fixed" by adding it.
+    // MEASURED: 6 of 6 claim-holding rows carry is_alive=true, and raw_is_alive is rung 1, which
+    // short-circuits before every other rung. Selecting it here would hold every row at every seam
+    // and turn the sweep into a silent no-op, killing genuine conflict eviction. The flag is also
+    // sticky (2075 rows true with heartbeats 3-170 days old; nothing clears it on release), so it is
+    // the one liveness input that cannot expire. Withholding it keeps rung 1 exactly as inert at the
+    // sweep as it is today — a narrower, more reversible lever than overriding the guard's verdict
+    // downstream, which broke two ratified guard-rail tests when that was attempted.
+    //
+    // The exemption is a SINGLE NAMED GROUP, so any OTHER missing rung still fails this assertion.
+    expect(unsatisfiedGroups(columnsOf(SESSION_SELECT_COLUMNS))).toEqual(['is_alive']);
   });
 
   it.each(REFERENCE_SITES)('$file already honoured the contract and still does', ({ file }) => {
