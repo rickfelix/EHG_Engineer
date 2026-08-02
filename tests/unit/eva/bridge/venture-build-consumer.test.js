@@ -162,6 +162,56 @@ describe('venture-build-consumer — introspection', () => {
     // Degenerate case: no descendants is vacuously complete (unchanged by the inversion).
     expect(isTreeComplete([])).toBe(true);
   });
+
+  // SD-LEO-INFRA-STATUS-VOCABULARY-SCHISM-001 (FR-3). Pins the QF-20260727-846 direction for the
+  // OTHER status the pipeline produces. PLAN-TO-LEAD writes 'pending_approval', which — like
+  // 'in_progress' before it — is in neither list, so it must block completion for the same reason.
+  // Landed BEFORE the NON_TERMINAL edit below, because that edit touches the same constant family
+  // and this is the behaviour it must not regress.
+  it('isTreeComplete blocks on pending_approval (PLAN-TO-LEAD output), not just in_progress', () => {
+    const sds = nestedTree({ children: 1, grandkidsEach: 2 }).filter((s) => s.id !== 'orch-top');
+    sds.forEach((s) => { s.status = 'completed'; });
+    sds[0].status = 'pending_approval';
+    expect(isTreeComplete(sds)).toBe(false);
+  });
+
+  // SD-LEO-INFRA-STATUS-VOCABULARY-SCHISM-001 (FR-2). THE STARVATION HALF.
+  //
+  // legacyWorkableLeaves reads NON_TERMINAL with two OPPOSITE senses in one function: it SELECTS
+  // leaves whose own status is non-terminal, and it EXCLUDES a node that still has a non-terminal
+  // DESCENDANT. Leaving 'in_progress' out of the list therefore broke it twice — the in-flight SD
+  // was not selected, AND its parent stopped seeing it as working, so the parent surfaced as a
+  // leaf in its place. Both directions are asserted here.
+  it('computeWorkableLeaves selects in_progress and pending_approval SDs, and their parents do not shadow them', () => {
+    const sds = nestedTree({ children: 1, grandkidsEach: 2 }).filter((s) => s.id !== 'orch-top');
+    const leaves = sds.filter((s) => s.sd_type === 'feature');
+
+    // The exact reported defect: an SD past any handoff is still workable.
+    leaves.forEach((l) => { l.status = 'in_progress'; });
+    let picked = computeWorkableLeaves(sds);
+    expect(picked.map((p) => p.id).sort()).toEqual(leaves.map((l) => l.id).sort());
+
+    // PLAN-TO-LEAD's status is workable too.
+    leaves.forEach((l) => { l.status = 'pending_approval'; });
+    picked = computeWorkableLeaves(sds);
+    expect(picked.length).toBe(leaves.length);
+
+    // THE SHADOWING DIRECTION: with a working child, the child-orchestrator parent must NOT be
+    // offered as a leaf itself. Before the fix an in_progress child was invisible, so the parent
+    // looked childless-and-workable and the wrong node got driven.
+    expect(picked.some((p) => p.sd_type === 'orchestrator')).toBe(false);
+  });
+
+  // The enumeration must stay an enumeration: an unknown status is NOT workable. This is the
+  // opposite safe direction from isTreeComplete on purpose — inverting here would drive an SD
+  // nobody classified. Asserted alongside the completion direction so the two cannot drift apart.
+  it('an unknown status is NOT workable and NOT complete — opposite safe directions, one scenario', () => {
+    const sds = nestedTree({ children: 1, grandkidsEach: 2 }).filter((s) => s.id !== 'orch-top');
+    sds.forEach((s) => { s.status = 'some_future_status_nobody_enumerated'; });
+
+    expect(computeWorkableLeaves(sds)).toHaveLength(0);
+    expect(isTreeComplete(sds)).toBe(false);
+  });
 });
 
 describe('TS-1 — nested-tree drive (keystone)', () => {
