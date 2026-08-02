@@ -8,6 +8,7 @@
     "ADAM_GOVERNANCE_HEARTBEAT_V1": "on",
     "COORD_QUESTION_AUTO_PROCEED_V1": "on",
     "LEO_LOOP_WAKEUP_REMINDER": "on",
+    "LEO_PRINT_BEFORE_PARK": "on",
     "COORD_COMPACTION_THRESHOLD_V2": "on"
   },
   "statusLine": {
@@ -235,6 +236,11 @@
           {
             "type": "command",
             "command": "node ${CLAUDE_PROJECT_DIR}/scripts/hooks/stop-loop-wakeup-reminder.cjs",
+            "timeout": 10
+          },
+          {
+            "type": "command",
+            "command": "node ${CLAUDE_PROJECT_DIR}/scripts/hooks/print-before-park.cjs",
             "timeout": 10
           }
         ]
