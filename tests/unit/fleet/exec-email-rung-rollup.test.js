@@ -13,9 +13,27 @@ describe('aggregateRungProgress', () => {
       { rung_key: 'V2', progress_pct: null },
       { rung_key: null, progress_pct: 50 }, // unmappable -> excluded
     ]);
-    expect(agg.V1).toEqual({ pct: 88, waves: 2, measured: 2 }); // (80+96)/2
-    expect(agg.V2).toEqual({ pct: null, waves: 1, measured: 0 }); // honest-null, never 0
+    expect(agg.V1).toEqual({ pct: 88, waves: 2, measured: 2, distinct: 2 }); // (80+96)/2
+    expect(agg.V2).toEqual({ pct: null, waves: 1, measured: 0, distinct: 0 }); // honest-null, never 0
     expect(agg.null).toBeUndefined();
+  });
+
+  // SD-LEO-INFRA-ROADMAP-WAVES-PROGRESS-001 (FR-3): distinct === 1 with measured > 1 is the LIVE
+  // shape, not a curiosity — runRollup gives every wave of a build rung the same computeBuildGauge,
+  // which is why the real table held one value across four waves. Without `distinct`, `measured: 4`
+  // reads as four independent measurements agreeing: the most persuasive evidence shape there is,
+  // and entirely spurious. The mean of identical copies also returns the copy, so `pct` cannot
+  // reveal the duplication either.
+  it('distinguishes agreement from duplication when a rung shares one measurement', () => {
+    const agg = aggregateRungProgress([
+      { rung_key: 'V1', progress_pct: 71 },
+      { rung_key: 'V1', progress_pct: 71 },
+      { rung_key: 'V1', progress_pct: 71 },
+      { rung_key: 'V1', progress_pct: 71 },
+    ]);
+    expect(agg.V1.pct).toBe(71);
+    expect(agg.V1.measured).toBe(4);
+    expect(agg.V1.distinct).toBe(1); // ONE measurement counted four times
   });
 
   it('handles empty / non-array input', () => {

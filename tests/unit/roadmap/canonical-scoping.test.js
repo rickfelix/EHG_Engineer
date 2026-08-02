@@ -118,13 +118,30 @@ describe('FR-2 / TS-2, TS-3, TS-11: the four states are PAIRWISE DISTINCT', () =
   });
 });
 
-describe('TS-11: avgPct is asserted, not just waveCount', () => {
-  it('averages progress across the ACTIVE roadmap only', async () => {
-    // 3 waves at 100 + 5 at 50 = 550/8 = 68.75 -> 69. Under the pre-fix reader this would be
-    // the archived roadmap's 0, so the number itself discriminates.
+describe('TS-11: the counts discriminate the ACTIVE roadmap, not just waveCount', () => {
+  // This test asserted avgPct === 69 (3 waves at 100 + 5 at 50 = 550/8) BECAUSE the number
+  // discriminated: the pre-fix unscoped reader would have returned the archived roadmap's 0.
+  //
+  // SD-LEO-INFRA-ROADMAP-WAVES-PROGRESS-001 (FR-2) removed avgPct — it averaged a RUNG-level
+  // progress_pct across waves and coerced NULL to 0, so an unmeasured wave counted as measured-
+  // at-zero in the chairman's headline. The SCOPING PROPERTY this test exists to prove is
+  // untouched by that, and must not be lost with the vehicle that carried it.
+  //
+  // The fixture still discriminates, now on two independent signals rather than one: the active
+  // roadmap has 8 waves of which 3 are completed; the archived-newest roadmap that a broken
+  // `order(created_at).limit(1)` reader would select has 4 waves and none completed. Reading the
+  // wrong roadmap therefore fails BOTH assertions, not merely one.
+  it('counts waves from the ACTIVE roadmap only', async () => {
     const r = await gatherWaves(makeDb());
-    expect(r.avgPct).toBe(69);
-    expect(r.doneWaves).toBe(3);
+    expect(r.waveCount).toBe(8); // archived-newest would give 4
+    expect(r.doneWaves).toBe(3); // archived-newest would give 0
+  });
+
+  // The removed field must stay removed: null here is the fix holding, not a missing value.
+  it('reports no roadmap-level average, because none can be honestly derived', async () => {
+    const r = await gatherWaves(makeDb());
+    expect(r.avgPct).toBeNull();
+    expect(formatRoadmapLine(r)).not.toMatch(/%/);
   });
 });
 
