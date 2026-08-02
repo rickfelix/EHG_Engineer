@@ -37,6 +37,7 @@ const {
   LOOP_STATE_AWAITING_TICK,
   LOOP_STATE_EXITED,
 } = require('../lib/sessions/loop-state-tracker.cjs');
+const armEvidence = require('./lib/wakeup-arm-evidence.cjs');
 
 // ── Clean shutdown — Windows libuv UV_HANDLE_CLOSING avoidance ────────────────
 // The claude_sessions query opens an undici/fetch keep-alive socket. Calling
@@ -154,9 +155,23 @@ async function parkSessionRecoverable(sessionId) {
  *                                              contradicting its own recorded had_claim:true flag).
  *   - 'turn_end_wakeup_scheduled'           — loop_state='awaiting_tick' but no live claim (idle worker
  *                                              that armed its own wakeup correctly).
- *   - 'no_claim_idle'                       — none of the above; no wakeup evidence and no live claim.
+ *   - 'turn_end_with_claim_no_wakeup'       — SD-LEO-INFRA-TERMINAL-RITUAL-ENFORCEMENT-001 (TR-3):
+ *                                              a live SD claim with NO wakeup evidence. This is THIS
+ *                                              SD's entire target population — the seat that ends a turn
+ *                                              holding work and never re-fires. It was previously folded
+ *                                              into 'no_claim_idle', a value that CONTRADICTS the
+ *                                              had_claim:true stamped beside it by recordWindDown, so the
+ *                                              dormancy population was uncountable by its own telemetry.
+ *   - 'no_claim_idle'                       — none of the above; no wakeup evidence AND no live claim.
+ *
+ * BROAD, not narrow: the claim-aware split is applied to the WHOLE fall-through, not just the one
+ * path reachable today (loop_state='exited' + a live claim). The other inputs are unreachable only
+ * because shouldRemind currently blocks them first — and step A REPLACES that predicate, which makes
+ * them reachable. A fix narrowed to today's reachability would silently start lying the moment the
+ * predicate changes. This turns tests/unit/hooks/stop-loop-park-recoverable.test.js:100-113 RED; that
+ * test pinned the contradiction as if it were the desired behaviour, and is updated with this change.
  * @param {{ windDownSignaled?:boolean, stopHookActive?:boolean, hasActiveClaim?:boolean, loopState?:string|null }} args
- * @returns {'signaled'|'second_stop'|'turn_end_with_claim_wakeup_scheduled'|'turn_end_wakeup_scheduled'|'no_claim_idle'}
+ * @returns {'signaled'|'second_stop'|'turn_end_with_claim_wakeup_scheduled'|'turn_end_wakeup_scheduled'|'turn_end_with_claim_no_wakeup'|'no_claim_idle'}
  */
 function classifyWindDownReason({ windDownSignaled, stopHookActive, hasActiveClaim, loopState } = {}) {
   if (windDownSignaled) return 'signaled';
@@ -164,7 +179,7 @@ function classifyWindDownReason({ windDownSignaled, stopHookActive, hasActiveCla
   if (loopState === LOOP_STATE_AWAITING_TICK) {
     return hasActiveClaim ? 'turn_end_with_claim_wakeup_scheduled' : 'turn_end_wakeup_scheduled';
   }
-  return 'no_claim_idle';
+  return hasActiveClaim ? 'turn_end_with_claim_no_wakeup' : 'no_claim_idle';
 }
 
 /**
@@ -225,6 +240,21 @@ const REMINDER = [
   '(This reminder fires once — if you stop again it will let you through.)',
 ].join('\n');
 
+/**
+ * Run `fn` with process.stdout.write discarded, then restore it. Any diagnostic a transitively
+ * required module prints is dropped rather than prepended to the Stop decision document. Restores
+ * in a finally, so a throw inside `fn` cannot leave stdout muzzled for the decision write.
+ */
+function muzzleStdout(fn) {
+  const original = process.stdout.write;
+  process.stdout.write = () => true;
+  try {
+    return fn();
+  } finally {
+    process.stdout.write = original;
+  }
+}
+
 /** Read+parse the Stop-hook stdin payload once; resolve {} on any error/timeout. */
 function readStdinPayload(timeoutMs = 2000) {
   return new Promise((resolve) => {
@@ -261,7 +291,15 @@ async function main() {
     const sessionId = payload.session_id || process.env.CLAUDE_SESSION_ID || process.env.SESSION_ID || '';
     if (!sessionId) { return shutdown(); }       // can't resolve — fail-open
 
-    const { createSupabaseServiceClient } = require('../../lib/supabase-client.cjs');
+    // STDOUT IS THE DECISION CHANNEL. Requiring the supabase client loads dotenv, which writes an
+    // 80-byte "◇ injected env …" banner to STDOUT — MEASURED 2026-08-02, and PRE-EXISTING (git HEAD
+    // already required this module at the same point). That put a non-JSON preamble in front of
+    // every block decision this hook has ever emitted; it is the only blocking Stop hook that
+    // requires supabase-client, and therefore the only one with a polluted channel. Whether Claude
+    // Code tolerates the preamble is unverified — but a decision document that MIGHT not parse, on
+    // the hook every seat traverses every turn, is exactly the silent-failure shape this SD exists
+    // to remove. Muzzled synchronously around the require; stderr is untouched.
+    const { createSupabaseServiceClient } = muzzleStdout(() => require('../../lib/supabase-client.cjs'));
     const supabase = createSupabaseServiceClient();
     const { data, error } = await supabase
       .from('claude_sessions')
@@ -288,20 +326,55 @@ async function main() {
     // wind-down via /signal recently? session_coordination.sender_session = this session, and the
     // body/payload mentions wind-down/offline. If so, the stop is legitimate — do not block.
     let windDownSignaled = false;
+    // KILL SWITCH (SD-LEO-INFRA-TERMINAL-RITUAL-ENFORCEMENT-001 FR-2): enforcement must be
+    // disableable on a LIVE seat with no merge and no restart. Hooks run from each seat's own
+    // worktree checkout, so an env/code flag cannot reach a running seat — only a DB read can.
+    // It rides the SAME round-trip as the wind-down probe (widened or-filter), adding no call to
+    // the Stop path, and FAILS OPEN TO OFF: unreadable switch ⇒ treat as disabled.
+    let enforcementDisabled = true;
     try {
-      const sinceIso = new Date(Date.now() - 10 * 60 * 1000).toISOString();
-      const { data: sigRows } = await supabase
+      const nowMs = Date.now();
+      const sinceIso = new Date(nowMs - armEvidence.WIND_DOWN_WINDOW_MS).toISOString();
+      const { data: coordRows, error: coordErr } = await supabase
         .from('session_coordination')
-        .select('body, payload, created_at')
-        .eq('sender_session', sessionId)
-        .gte('created_at', sinceIso)
+        .select('body, payload, created_at, target_sd, expires_at')
+        .or(armEvidence.buildCoordinationFilter({ sessionId, sinceIso, nowIso: new Date(nowMs).toISOString() }))
         .order('created_at', { ascending: false })
-        .limit(10);
-      windDownSignaled = Array.isArray(sigRows) && sigRows.some((r) => {
-        const blob = `${r.body || ''} ${JSON.stringify(r.payload || '')}`.toLowerCase();
-        return /winding down|wind-down|going offline|offline —|going idle|signing off/.test(blob);
-      });
-    } catch { /* fail-open: treat as not-signaled (conservative — still reminds) */ }
+        .limit(25);
+      if (!coordErr) {
+        const { killRows, senderRows } = armEvidence.partitionCoordinationRows(coordRows);
+        enforcementDisabled = armEvidence.isEnforcementDisabled(killRows, { nowMs });
+        // Scan ONLY this session's own rows: widening the query above changed this consumer's
+        // input, and a broadcast row whose text mentions "winding down" must never flip this.
+        windDownSignaled = armEvidence.recentSenderRows(senderRows, { nowMs }).some((r) => {
+          const blob = `${r.body || ''} ${JSON.stringify(r.payload || '')}`.toLowerCase();
+          return /winding down|wind-down|going offline|offline —|going idle|signing off/.test(blob);
+        });
+      }
+    } catch { /* fail-open: not-signaled, and enforcement stays DISABLED (safe direction) */ }
+
+    // TWO-VERDICT OBSERVATION — measure the flush-race frequency BEFORE step A's decision
+    // depends on it. Observe-only: nothing below reads these verdicts. Emitted to STDERR;
+    // stdout stays byte-empty so the Stop decision channel is untouched.
+    // Worker-gated, for the same reason the park is: an UNARMED verdict costs a ~2.5s stabilisation,
+    // and a claim-less interactive operator ends most turns unarmed by design. Ungated, this would
+    // add 2.5s to every operator turn-end to measure a population it is not in. Same predicate as
+    // the park below, so the observation covers exactly the seats the enforcement will act on.
+    const workerShaped = shouldParkRecoverable({ loopState, hasActiveClaim, windDownSignaled });
+    if (!enforcementDisabled && workerShaped && payload.transcript_path) {
+      try {
+        const fs = require('fs');
+        const { readTailEntries } = require('./print-before-park.cjs');
+        const read = () => {
+          if (!fs.existsSync(payload.transcript_path)) return { verdict: 'unknown', reason: 'transcript absent', armCount: 0 };
+          return armEvidence.findArmInCurrentTurn(readTailEntries(payload.transcript_path));
+        };
+        const obs = await armEvidence.awaitStableVerdict({ read, sleep: (ms) => new Promise((r) => setTimeout(r, ms)) });
+        process.stderr.write(armEvidence.formatPendingWake(obs, { sessionId }));
+      } catch (e) {
+        process.stderr.write(`[stop-loop-wakeup-reminder] pending-wake observe (non-fatal): ${e.message}\n`);
+      }
+    }
 
     if (shouldRemind({ loopState, stopHookActive, flagEnabled, hasActiveClaim, windDownSignaled })) {
       // BLOCK — the worker must arm its OWN ScheduleWakeup; do not park on its behalf (parking here
@@ -338,4 +411,4 @@ if (require.main === module) {
   main().catch(() => shutdown());
 }
 
-module.exports = { shouldRemind, shouldParkRecoverable, parkSessionRecoverable, classifyWindDownReason, recordWindDown, isFlagEnabled, REMINDER };
+module.exports = { shouldRemind, shouldParkRecoverable, parkSessionRecoverable, classifyWindDownReason, recordWindDown, isFlagEnabled, muzzleStdout, REMINDER };

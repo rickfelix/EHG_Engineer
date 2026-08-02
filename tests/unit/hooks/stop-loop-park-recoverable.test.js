@@ -97,18 +97,32 @@ describe('classifyWindDownReason (SD-LEO-INFRA-WORKER-WINDDOWN-SURVEY-001)', () 
     })).toBe('second_stop');
   });
 
-  it("still 'no_claim_idle' when hasActiveClaim is true but no wakeup evidence (loopState not awaiting_tick)", () => {
-    expect(classifyWindDownReason({
-      windDownSignaled: false,
-      stopHookActive: false,
-      hasActiveClaim: true,
-      loopState: 'active',
-    })).toBe('no_claim_idle');
-    expect(classifyWindDownReason({
-      windDownSignaled: false,
-      stopHookActive: false,
-      hasActiveClaim: true,
-      loopState: null,
-    })).toBe('no_claim_idle');
+  // SD-LEO-INFRA-TERMINAL-RITUAL-ENFORCEMENT-001 (TR-3) — REPLACES the previous assertion, which
+  // pinned 'no_claim_idle' for a claim-HOLDING session. That value contradicts the had_claim:true
+  // recordWindDown stamps beside it, and it made this SD's target population (a seat that ends a
+  // turn holding work with no wakeup armed) uncountable by its own telemetry.
+  it("'turn_end_with_claim_no_wakeup' when a live claim ends a turn with no wakeup evidence", () => {
+    for (const loopState of ['active', null, 'exited', 'unknown']) {
+      expect(classifyWindDownReason({
+        windDownSignaled: false,
+        stopHookActive: false,
+        hasActiveClaim: true,
+        loopState,
+      })).toBe('turn_end_with_claim_no_wakeup');
+    }
+  });
+
+  // The REACHABLE contradiction specifically (TR-3): shouldRemind lets loop_state='exited' through
+  // (:86), shouldParkRecoverable parks it on the claim (:111), and classify then ran the
+  // fall-through. This is the one input that was reaching production; the others above are
+  // unreachable ONLY until step A replaces the block predicate.
+  it("the reachable path (loop_state='exited' + live claim) no longer reports 'no claim'", () => {
+    expect(classifyWindDownReason({ hasActiveClaim: true, loopState: 'exited' })).not.toMatch(/no_claim/);
+  });
+
+  it("'no_claim_idle' is retained for a genuinely claim-less idle session", () => {
+    for (const loopState of ['active', null, 'exited', 'unknown']) {
+      expect(classifyWindDownReason({ hasActiveClaim: false, loopState })).toBe('no_claim_idle');
+    }
   });
 });

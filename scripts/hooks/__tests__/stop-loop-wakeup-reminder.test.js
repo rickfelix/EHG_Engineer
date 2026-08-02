@@ -154,4 +154,30 @@ describe('stop-loop-wakeup-reminder — wrapper fail-open (TS-6, spawn)', () => 
     expect(r.status).toBe(0);
     expect(r.stdout || '').not.toMatch(/"decision"\s*:\s*"block"/);
   });
+
+  // SD-LEO-INFRA-TERMINAL-RITUAL-ENFORCEMENT-001 (step 0) — the pending-wake print shares the
+  // stdout channel Claude Code parses as the Stop DECISION. "It goes to stderr" is an intention;
+  // what is enforceable is the emitted BYTES. On every allow path stdout must be EXACTLY empty —
+  // not merely free of a block decision, since any stray byte risks the decision parse on the one
+  // hook every seat traverses every turn.
+  it('allow paths emit ZERO bytes on stdout (decision channel untouched)', () => {
+    const cases = [
+      [{ stop_hook_active: false, session_id: 'nonexistent' }, { LEO_LOOP_WAKEUP_REMINDER: 'off' }],
+      [{ stop_hook_active: true, session_id: 'nonexistent' }, { LEO_LOOP_WAKEUP_REMINDER: 'on' }],
+      ['not-json-at-all', { LEO_LOOP_WAKEUP_REMINDER: 'on', CLAUDE_SESSION_ID: '', SESSION_ID: '' }],
+    ];
+    for (const [payload, env] of cases) {
+      const r = runHook(payload, env);
+      expect(r.stdout).toBe('');
+    }
+  });
+
+  // A Stop hook that TIMES OUT returns NO decision — the enforcement silently disappears exactly
+  // when the machine is loaded. Registered timeout is 10s against 3-5 DB round-trips plus a 2.5s
+  // stabilisation re-read, so the hermetic path must stay well clear of it.
+  it('stays under the 6s wall-clock ceiling (10s registered timeout)', () => {
+    const t0 = Date.now();
+    runHook({ stop_hook_active: false, session_id: 'nonexistent' }, { LEO_LOOP_WAKEUP_REMINDER: 'on' });
+    expect(Date.now() - t0).toBeLessThan(6000);
+  });
 });
