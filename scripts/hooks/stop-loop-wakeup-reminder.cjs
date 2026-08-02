@@ -381,7 +381,19 @@ function readStdinPayload(timeoutMs = 2000) {
   });
 }
 
+// TOTAL WORK BUDGET. The hook is registered with a 10s timeout, and a TIMED-OUT Stop hook returns
+// NO DECISION — the enforcement silently vanishes exactly when the machine is loaded, which is the
+// failure shape this whole SD exists to remove. MEASURED on CI 2026-08-02: the cheapest path (fail
+// open, no transcript) took 7198ms against 412ms locally — a 17x spread on a runner whose
+// node_modules probe was failing. If the CHEAPEST path costs 7.2s there, the block path (this
+// budget + 3-5 DB round trips) would blow the timeout outright.
+// So the hook bounds its own discretionary work instead of assuming the environment is fast: the
+// stabilisation re-read gets whatever is LEFT of the budget after the DB calls, never a fixed 2.5s.
+const HOOK_WORK_BUDGET_MS = 6000;
+
 async function main() {
+  const hookStartedAt = Date.now();
+  const remainingBudgetMs = () => Math.max(0, HOOK_WORK_BUDGET_MS - (Date.now() - hookStartedAt));
   try {
     const flagEnabled = isFlagEnabled();
     if (!flagEnabled) { return shutdown(); }     // default-OFF fast path
@@ -469,7 +481,12 @@ async function main() {
           if (!fs.existsSync(payload.transcript_path)) return { verdict: 'unknown', reason: 'transcript absent', armCount: 0 };
           return armEvidence.findArmInCurrentTurn(readTailEntries(payload.transcript_path));
         };
-        armObservation = await armEvidence.awaitStableVerdict({ read, sleep: (ms) => new Promise((r) => setTimeout(r, ms)) });
+        // Whatever is LEFT of the budget — the DB round-trips above already spent some of it.
+        armObservation = await armEvidence.awaitStableVerdict({
+          read,
+          sleep: (ms) => new Promise((r) => setTimeout(r, ms)),
+          deadlineMs: Math.min(2500, remainingBudgetMs()),
+        });
         armVerdict = armObservation.stable && armObservation.stable.verdict;
         process.stderr.write(armEvidence.formatPendingWake(armObservation, { sessionId }));
       } catch (e) {
