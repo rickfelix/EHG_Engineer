@@ -64,6 +64,23 @@ canonical engines. This is the anti-divergence design.
   labeled honestly. The wider-window + live queries fire **lazily** (only when sparse). A query error
   returns `null` so a failure never masquerades as a real "0 active". The `(hr avg)` subject tag only
   appears for a *confident* (non-sparse) hourly average.
+- **"Active" means TOOL-ADVANCING, not heartbeating** (SD-LEO-INFRA-FLEET-DOWN-PAGER-001). It
+  previously meant "heartbeat fresh within 15 min" — but `heartbeat_at` is stamped by a *separate*
+  daemon (`scripts/session-tick.cjs`), so it stays fresh on a **frozen** seat. The email therefore
+  reported capacity that did not exist: measured at filing, the header read *"5 active"* while four
+  of those seats were frozen and the true count able to make progress was **zero**. Both feeds are
+  now freeze-aware — the pulse (`scripts/fleet-worker-pulse.mjs`) and `computeLive`
+  (`scripts/adam-exec-summary.mjs`) each select `last_tool_at` + `loop_state` by spreading
+  `FREEZE_TERM_COLUMNS`, and `liveFleetWorkers` excludes a seat that is *positively known wedged*.
+- **Wedged = one of two shapes**, both requiring tool-silence past `FREEZE_CUT_MINUTES` (default
+  **120**, override `FLEET_FREEZE_CUT_MINUTES`, floored at 15): `loop_state='active'` (stuck
+  mid-iteration), or `loop_state='awaiting_tick'` **with its recorded wake deadline already passed**
+  (the latch failed). A seat parked on a *pending* deadline is alive and still counts.
+- **The term FAILS OPEN**, which is why this cannot silently zero the gauge: an absent/unparseable
+  `last_tool_at`, an absent `loop_state`, a missing wake deadline, or a thrown verdict all leave the
+  seat counted. Only a positive STUCK verdict removes one. Consequence for readers of this doc: a
+  caller that does *not* select those two columns silently gets the **old** heartbeat-only count —
+  spread `FREEZE_TERM_COLUMNS` from `lib/fleet/genuine-worker.mjs` into its select to opt in.
 
 ### Number 2 — EHG VISION BUILD-% (reuses computeBuildGauge — link 10)
 
