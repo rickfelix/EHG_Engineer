@@ -18,7 +18,7 @@ import 'dotenv/config';
 import { createClient } from '@supabase/supabase-js';
 import { pathToFileURL } from 'url';
 import { resolve } from 'path';
-import { liveFleetWorkers, isFleetWorker } from '../lib/fleet/genuine-worker.mjs';
+import { liveFleetWorkers, isFleetWorker, FREEZE_TERM_COLUMNS } from '../lib/fleet/genuine-worker.mjs';
 import { renderDecisionLines, prepareDecisions, DEAD_VENTURE_STATUSES } from '../lib/chairman/decision-layman.mjs';
 import { resolveActionsStatusLabel } from '../lib/chairman/actions-status-label.mjs';
 // SD-LEO-INFRA-AUTOMATED-ONE-ROADMAP-001 (FR-4): the LIVE VDR build-% gauge, replacing the
@@ -129,10 +129,18 @@ const fetchPulses = async (hours) => {
 };
 // Live instantaneous count — same genuine-worker predicate the fleet dashboard/coordinator use.
 // Returns null on a query error so a failure NEVER masquerades as a real "0 active".
+//
+// SD-LEO-INFRA-FLEET-DOWN-PAGER-001: FREEZE_TERM_COLUMNS is spread in because the freeze term in
+// liveFleetWorkers() FAILS OPEN — a caller that omits these columns silently gets the old
+// heartbeat-derived count, which counts frozen seats as active. THIS consumer is the reason that
+// matters most: it is emailed to the chairman as "N active" and is the basis on which he judges
+// whether the machine is running. An internal gauge that lies gets caught by the next reader; a
+// chairman-facing gauge that lies gets believed. (Measured at filing: header read "5 active" while
+// four of those seats were frozen and the true count able to make progress was ZERO.)
 const computeLive = async () => {
   try {
     const { data: sessRaw, error: sErr } = await db.from('claude_sessions')
-      .select('session_id,heartbeat_at,sd_key,status,claimed_at,worktree_path,continuous_sds_completed,metadata')
+      .select(['session_id', 'heartbeat_at', 'sd_key', 'status', 'claimed_at', 'worktree_path', 'continuous_sds_completed', 'metadata', ...FREEZE_TERM_COLUMNS].join(','))
       .order('heartbeat_at', { ascending: false }).limit(60);
     if (sErr) throw sErr;
     const live = liveFleetWorkers(sessRaw, me, t);
