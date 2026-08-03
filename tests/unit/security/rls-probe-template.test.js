@@ -156,6 +156,67 @@ describe('FR-5 / TS-7 — fixture drift HARD-ERRORS, never skips', () => {
   });
 });
 
+describe('FR-5 — a NON-POLICY error is INCONCLUSIVE, never REFUSED', () => {
+  // MEASURED, and the reason this arm exists: probing `feedback` with a row carrying a `subject`
+  // column (that table has none — the marker column is `title`) died PGRST204 in the schema cache
+  // BEFORE any policy ran. All three legs came back absent and the classifier said
+  // "REFUSED — three legs confirmed" about a surface that is in fact OPEN for source_type='telegram'.
+  // A malformed probe fails CONSISTENTLY, which is indistinguishable from a working guard.
+  it('PGRST204 (column not in schema cache) is INCONCLUSIVE even with all three legs absent', () => {
+    const v = classifyProbeEvidence({
+      withReturning: { data: null, error: { code: 'PGRST204' } },
+      readbackAfterReturning: { rows: [] },
+      bareInsert: { error: { code: 'PGRST204' } },
+      readbackAfterBare: { rows: [] },
+    });
+    expect(v.verdict).toBe(VERDICT.INCONCLUSIVE);
+    expect(v.detail.non_policy_error).toBe(true);
+  });
+
+  // ALLOWLIST, NOT BLOCKLIST — an enumerated list of non-policy codes is always one entry short, so
+  // an unanticipated code must fail CLOSED to INCONCLUSIVE rather than through to REFUSED.
+  it.each(['PGRST205', '42703', '23502', '23514', '22P02', 'SOME-UNANTICIPATED-CODE'])(
+    'code %s never yields REFUSED', (code) => {
+      const v = classifyProbeEvidence({
+        withReturning: { data: null, error: { code } },
+        readbackAfterReturning: { rows: [] },
+        bareInsert: { error: { code } },
+        readbackAfterBare: { rows: [] },
+      });
+      expect(v.verdict).toBe(VERDICT.INCONCLUSIVE);
+    });
+
+  it('still reaches REFUSED for the real RLS code, so the guard above did not just disable the verdict', () => {
+    const v = classifyProbeEvidence({
+      withReturning: { data: null, error: { code: '42501' } },
+      readbackAfterReturning: { rows: [] },
+      bareInsert: { error: { code: '42501' } },
+      readbackAfterBare: { rows: [] },
+    });
+    expect(v.verdict).toBe(VERDICT.REFUSED);
+  });
+});
+
+describe('FR-5 — 1-REP is ENFORCED against the canary, not asserted in prose', () => {
+  // The docstring used to claim "one representation of the rule, two consumers". It was false — the
+  // canary required 42501 and this classifier did not. This test is what makes the claim true.
+  const { classifyRlsProbe } = require('../../../lib/breakage/active-canary-probes.cjs');
+  const EVIDENCE = [
+    ['landed via bare', { withReturning: { data: null, error: { code: '42501' } }, readbackAfterReturning: { rows: [] }, bareInsert: { error: null }, readbackAfterBare: { rows: [{ id: 'x' }] } }],
+    ['three-leg refusal', { withReturning: { data: null, error: { code: '42501' } }, readbackAfterReturning: { rows: [] }, bareInsert: { error: { code: '42501' } }, readbackAfterBare: { rows: [] } }],
+    ['two legs only', { withReturning: { data: null, error: { code: '42501' } }, readbackAfterReturning: { rows: [] } }],
+    ['non-policy error', { withReturning: { data: null, error: { code: 'PGRST204' } }, readbackAfterReturning: { rows: [] }, bareInsert: { error: { code: 'PGRST204' } }, readbackAfterBare: { rows: [] } }],
+    ['landed via returning', { withReturning: { data: [{ id: 'x' }], error: null }, readbackAfterReturning: { rows: [{ id: 'x' }] } }],
+  ];
+  it.each(EVIDENCE)('template and canary agree on: %s', (_label, evidence) => {
+    const mine = classifyProbeEvidence(evidence);
+    const theirs = classifyRlsProbe(evidence);
+    // Canary vocabulary -> template vocabulary. breakage=true means the write got through.
+    const theirsVerdict = theirs.breakage ? VERDICT.OPEN : theirs.inconclusive ? VERDICT.INCONCLUSIVE : VERDICT.REFUSED;
+    expect(mine.verdict).toBe(theirsVerdict);
+  });
+});
+
 describe('FR-5 — never branch on message TEXT', () => {
   // Measured: a genuinely-denied control returns the SAME code AND the same message string as the
   // ambiguous case, so the template must decide on state and never on wording.
