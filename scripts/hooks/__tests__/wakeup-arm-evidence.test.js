@@ -192,11 +192,70 @@ describe('turn boundary — promptId primary, origin fallback', () => {
   });
 });
 
+// FR-3 — THE POPULATION THAT ACTUALLY FAILS. Arm compliance is ~100% on failure-shaped turns
+// (an error is salient, the worker is still "in" the task) and decays toward zero on
+// success-terminal ones, where a dense closing summary displaces the mechanical step. A suite
+// that only exercises failure paths passes while leaving the entire real failure population
+// untouched — so the specimens below are all SUCCESS-shaped.
+describe('FR-3 — success-terminal unarmed turns are the target, and they block', () => {
+  const { shouldRemind } = require(HOOK_PATH);
+  const u = (promptId) => ({ type: 'user', promptId, message: { content: [{ type: 'tool_result' }] } });
+  const worker = { loopState: 'active', flagEnabled: true, hasActiveClaim: true, stopHookActive: false };
+
+  // The exact shape of all three recorded dormancies: work done, tests green, a long closing
+  // summary written — and the wakeup never armed because the summary displaced it.
+  it('a turn that ends on a successful summary with no arm is UNARMED and blocks', () => {
+    const specimen = [u('t1'), otherTool('Bash'), otherTool('Edit'), textEntry('All 362 tests pass. Shipped as PR #6741.')];
+    const v = ev.findArmInCurrentTurn(specimen);
+    expect(v.verdict).toBe('unarmed');
+    expect(shouldRemind({ ...worker, armVerdict: v.verdict })).toBe(true);
+  });
+
+  // Charlie's false positive, reproduced deliberately: the worker SAYS it armed, in the same
+  // turn, in text. Text is not a tool call.
+  it('a turn that ANNOUNCES "wakeup armed" in text but never calls the tool still blocks', () => {
+    const specimen = [u('t1'), otherTool('Bash'), textEntry('Done. wakeup-armed +900s at 17:53.')];
+    const v = ev.findArmInCurrentTurn(specimen);
+    expect(v.verdict).toBe('unarmed');
+    expect(shouldRemind({ ...worker, armVerdict: v.verdict })).toBe(true);
+  });
+
+  // The same announcement mirrored into the DB as the worker's self-report. The OLD predicate
+  // read exactly this and allowed the stop.
+  it('the same turn still blocks even with loop_state=awaiting_tick claiming otherwise', () => {
+    const v = ev.findArmInCurrentTurn([u('t1'), textEntry('wakeup-armed +900s')]);
+    expect(shouldRemind({ ...worker, loopState: 'awaiting_tick', armVerdict: v.verdict })).toBe(true);
+  });
+
+  // STALE ARM, end to end: a real ScheduleWakeup exists in the transcript — one turn too early.
+  it('a success-shaped turn whose only arm is in the PREVIOUS turn blocks (stale arm)', () => {
+    const specimen = [u('t1'), armEntry({ delaySeconds: 900 }), textEntry('tick done'),
+      u('t2'), otherTool('Bash'), textEntry('next tick done')];
+    const v = ev.findArmInCurrentTurn(specimen);
+    expect(v.verdict).toBe('unarmed');
+    expect(v.armCount).toBe(0);
+    expect(shouldRemind({ ...worker, armVerdict: v.verdict })).toBe(true);
+  });
+
+  // The compliant shape this SD is trying to produce: arm, THEN summarise.
+  it('arming before the closing summary is compliant and does NOT block', () => {
+    const specimen = [u('t1'), otherTool('Bash'), armEntry({ delaySeconds: 900 }), textEntry('Shipped. Next tick in 15m.')];
+    const v = ev.findArmInCurrentTurn(specimen);
+    expect(v.verdict).toBe('armed');
+    expect(shouldRemind({ ...worker, armVerdict: v.verdict })).toBe(false);
+  });
+
+  it('a deliberate ScheduleWakeup({stop:true}) loop-end is not treated as a failure to arm', () => {
+    const v = ev.findArmInCurrentTurn([u('t1'), armEntry({ stop: true }), textEntry('loop complete')]);
+    expect(v.stopRequested).toBe(true);
+    expect(shouldRemind({ ...worker, armVerdict: v.verdict })).toBe(false);
+  });
+});
+
 describe('stdout decision-channel muzzle', () => {
   const hook = require(HOOK_PATH);
+  const hookSrc = fs.readFileSync(HOOK_PATH, 'utf8');
 
-  // Requiring the supabase client loads dotenv, which writes ~80 bytes of banner to STDOUT — the
-  // channel Claude Code parses as the Stop decision. Measured pre-existing at git HEAD.
   it('discards stdout writes made inside the muzzle', () => {
     const chunks = [];
     const real = process.stdout.write;
@@ -213,11 +272,28 @@ describe('stdout decision-channel muzzle', () => {
     expect(process.stdout.write).toBe(before);
   });
 
-  // A throw inside the muzzle must not leave stdout muted for the decision write that follows.
   it('restores stdout even when the callee throws', () => {
     const before = process.stdout.write;
     expect(() => hook.muzzleStdout(() => { throw new Error('boom'); })).toThrow('boom');
     expect(process.stdout.write).toBe(before);
+  });
+
+  // THE CLASS FIX, MADE COUNTABLE. A scoped muzzle around the one require I had MEASURED was an
+  // instance fix: the allow path still emitted 87 bytes from a different transitive require
+  // (park-worker / emit-feedback), caught only by an end-to-end run. The muzzle now installs at
+  // module load, so the invariant is structural — exactly one write reaches the real stdout, and
+  // it is the decision. A new `process.stdout.write(...)` anywhere else turns this red.
+  it('the real stdout has exactly ONE writer, and it is emitDecision', () => {
+    const realWrites = hookSrc.match(/REAL_STDOUT_WRITE\(/g) || [];
+    expect(realWrites).toHaveLength(1);
+    expect(hookSrc).toMatch(/function emitDecision[\s\S]{0,200}REAL_STDOUT_WRITE\(/);
+    // the muzzle is armed before any require below it can print
+    expect(hookSrc.indexOf('process.stdout.write = () => true;')).toBeLessThan(hookSrc.indexOf("require('../lib/sessions/loop-state-tracker.cjs')"));
+  });
+
+  it('the block decision is emitted through emitDecision, not a raw write', () => {
+    expect(hookSrc).toMatch(/emitDecision\(\{\s*decision:\s*'block'/);
+    expect(hookSrc).not.toMatch(/process\.stdout\.write\(JSON\.stringify/);
   });
 });
 
@@ -337,21 +413,73 @@ describe('print-before-park — discriminators (first tests for this file)', () 
 });
 
 // ── Ship-order tripwires: these encode the BUILD ORDER itself as assertions ──
-describe('ship-order tripwires (green during step 0/A, red at step B by design)', () => {
+// STEP B LANDED. The tripwire is UPDATED, not weakened: AC3 stays countable (exactly one call
+// site) and gains the stronger claim — that call site is now UNREACHABLE unless the turn actually
+// armed. Guarding beat deleting: deleting would have stripped the true state from compliant
+// workers too, and all four consumers depend on it being present when it is EARNED.
+describe('step B — awaiting_tick is stamped only on real arm evidence (AC3, countable)', () => {
   const hookSrc = fs.readFileSync(HOOK_PATH, 'utf8');
+  const hook = require(HOOK_PATH);
 
-  // AC3 is countable, so count it. Step B deletes this call site; this test going red IS the
-  // signal that step B landed, at which point it is updated deliberately rather than by accident.
-  it('setLoopState(_, AWAITING_TICK) has EXACTLY ONE call site', () => {
+  it('setLoopState(_, AWAITING_TICK) still has EXACTLY ONE call site', () => {
     const sites = hookSrc.match(/setLoopState\(\s*sessionId\s*,\s*LOOP_STATE_AWAITING_TICK\s*\)/g) || [];
     expect(sites).toHaveLength(1);
   });
 
-  // FR-B1: parkSessionRecoverable writes TWO things. Step B kills the false arm claim and KEEPS
-  // the recoverability write — deleting both would remove the unarmed parked seat from
-  // detectDormantWorkers, losing the only current sighting of this SD's target population.
-  it('parkSessionRecoverable still writes expected_silence_until (kept at step B)', () => {
-    expect(hookSrc).toMatch(/expected_silence_until/);
+  it('that call site sits behind an armVerdict === \'armed\' guard', () => {
+    expect(hookSrc).toMatch(/if \(armVerdict === 'armed'\)[\s\S]{0,300}setLoopState\(\s*sessionId\s*,\s*LOOP_STATE_AWAITING_TICK\s*\)/);
+  });
+
+  // FR-B1: the recoverability write must SURVIVE. Deleting both would drop the seat out of
+  // charter-audit's parked check and dormancy-watchdog's :27 parse, losing the only sighting of
+  // this SD's target population.
+  it('expected_silence_until is still written UNCONDITIONALLY, outside the arm guard', () => {
+    const body = hookSrc.slice(hookSrc.indexOf('async function parkSessionRecoverable'));
+    const guardEnd = body.indexOf('}', body.indexOf('setLoopState('));
+    expect(body.slice(guardEnd).includes('expected_silence_until')).toBe(true);
+  });
+
+  // Behavioural, not just source-shaped: the write must not fire for an unarmed or unknown turn.
+  it('does not touch loop_state for unarmed / unknown / missing verdicts', async () => {
+    const tracker = require(path.resolve(__dirname, '../../lib/sessions/loop-state-tracker.cjs'));
+    const orig = tracker.setLoopState;
+    const calls = [];
+    tracker.setLoopState = async (...a) => { calls.push(a); };
+    try {
+      for (const armVerdict of ['unarmed', 'unknown', undefined]) {
+        await hook.parkSessionRecoverable('11111111-2222-4333-8444-555555555555', { armVerdict });
+      }
+      expect(calls).toHaveLength(0);
+      await hook.parkSessionRecoverable('11111111-2222-4333-8444-555555555555', { armVerdict: 'armed' });
+      expect(calls).toHaveLength(1);
+      expect(calls[0][1]).toBe('awaiting_tick');
+    } finally { tracker.setLoopState = orig; }
+  });
+});
+
+// The step-C gate reads feedback(category='wind_down_survey'). That channel had written ZERO rows
+// since it shipped, because source_type='wind_down_survey' violates feedback_source_type_check and
+// recordWindDown swallows the throw to stderr. A dead writer reads identically to an empty
+// population — the gate would have returned 0 forever and killed step C for the wrong reason.
+describe('wind-down mirror writes through a source_type the DB actually accepts', () => {
+  const hookSrc = fs.readFileSync(HOOK_PATH, 'utf8');
+  // Mirrors CHECK feedback_source_type_check (database/schema-reference-snapshot.json:1505).
+  const ALLOWED_SOURCE_TYPES = [
+    'manual_feedback', 'auto_capture', 'uat_failure', 'error_capture', 'uncaught_exception',
+    'unhandled_rejection', 'manual_capture', 'todoist_intake', 'youtube_intake',
+    'claude_code_intake', 'telegram', 'user_feedback',
+  ];
+
+  it('every source_type this hook emits is admitted by the CHECK constraint', () => {
+    const emitted = [...hookSrc.matchAll(/source_type:\s*'([^']+)'/g)].map((m) => m[1]);
+    expect(emitted.length).toBeGreaterThan(0);
+    for (const st of emitted) expect(ALLOWED_SOURCE_TYPES).toContain(st);
+  });
+
+  // The category is the discriminator the gauge registry reads; it was never the blocker and
+  // must not drift while fixing the source_type.
+  it('still files under category wind_down_survey (what the gate and gauge query)', () => {
+    expect(hookSrc).toMatch(/category:\s*'wind_down_survey'/);
   });
 });
 
