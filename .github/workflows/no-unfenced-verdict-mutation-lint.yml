@@ -1,0 +1,85 @@
+name: Unfenced Verdict Mutation Lint
+
+# SD-LEO-INFRA-WRITER-SUB-AGENT-001 (FR-4 / FR-7)
+#
+# Fences the sub-agent EVIDENCE PATH: no writer may silently rewrite a caller's verdict between what
+# the sub-agent returned and what lands in sub_agent_execution_results.verdict. Mutations must route
+# through recordVerdictMutation() (lib/sub-agents/verdict-chain.js), which preserves the caller
+# verdict in metadata.verdict_chain and names the mutator and its reason.
+#
+# THIS WORKFLOW IS THE REQUIREMENT, NOT THE PLUMBING — and it exists because the class-guard this SD
+# was originally told to copy has NEVER INSPECTED A REAL FILE. eslint-rules/no-process-cwd-in-sub-agents.js
+# (SD-LEO-INFRA-FLEET-WIDE-SUB-001 FR-4) shipped with 82 passing unit tests and is unreachable four
+# ways: it is not registered in eslint.config.js; lib/sub-agents/.eslintrc.json is eslintrc format
+# which ESLint 9 ignores under flat config; `npx eslint --print-config` on a fenced file resolves
+# ZERO custom rules; and the escape-hatch pragmas already sitting in source report "Definition for
+# rule ... was not found". No driver, no workflow — and bare `npm run lint` is invoked by no CI
+# workflow at all, while .husky/pre-commit runs eslint with `|| true`.
+#
+# A correct rule that nothing runs is indistinguishable from no rule, and it ships GREEN. For an SD
+# about guards whose failure is silent, mirroring that would have been self-refuting. So the fence
+# is asserted here, in CI, on real files.
+#
+# BLOCKING FROM DAY ONE, and that is a MEASURED decision rather than nerve: the converted tree is
+# clean (443 files scanned, 0 findings), so unlike the mocked-SUT guard there is no pre-existing
+# backlog that day-one blocking would dump on unrelated PRs. Downgrade with
+# VERDICT_MUTATION_MODE=warn if that ever stops being true — but prefer fixing the finding.
+
+on:
+  pull_request:
+    paths:
+      - 'lib/sub-agents/**'
+      - 'lib/sub-agent-executor/**'
+      - 'scripts/modules/orchestrator/**'
+      - 'scripts/modules/phase-subagent-orchestrator/**'
+      - 'scripts/modules/handoff/**'
+      - 'eslint-rules/no-unfenced-verdict-mutation.js'
+      - 'scripts/lint/no-unfenced-verdict-mutation-lint.mjs'
+      - '.github/workflows/no-unfenced-verdict-mutation-lint.yml'
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  no-unfenced-verdict-mutation-lint:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          # Full history so `git merge-base HEAD origin/main` resolves. A shallow clone makes the
+          # driver degrade to an --all sweep, which is louder but still correct.
+          fetch-depth: 0
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+      - run: npm ci
+
+      # REACHABILITY FIRST (FR-7). This step is the whole lesson of the inert precedent: prove the
+      # fence can FAIL before trusting a pass. It injects a mutator that appears in no enumeration,
+      # asserts the driver exits non-zero, then removes it. If this step ever succeeds when it
+      # should not, the guard has gone decorative and the next step's green means nothing.
+      - name: Prove the fence FIRES (inject an unenumerated mutator, expect exit 1)
+        run: |
+          cat > lib/sub-agents/_ci-fence-canary.js <<'CANARY'
+          export function unenumeratedMutator(results) {
+            if (results.verdict === 'FAIL') { results.verdict = 'PASS'; }
+            return results;
+          }
+          export function unenumeratedDefault(result) {
+            return { verdict: result.verdict || 'WARNING' };
+          }
+          CANARY
+          set +e
+          node scripts/lint/no-unfenced-verdict-mutation-lint.mjs --all
+          code=$?
+          set -e
+          rm -f lib/sub-agents/_ci-fence-canary.js
+          if [ "$code" -eq 0 ]; then
+            echo "::error::FENCE IS INERT — the driver passed a file containing two unfenced verdict mutators."
+            exit 1
+          fi
+          echo "Fence fired as expected (exit $code)."
+
+      - name: Enforce — no unfenced verdict mutation on the evidence path
+        run: node scripts/lint/no-unfenced-verdict-mutation-lint.mjs --all
