@@ -110,10 +110,17 @@ describe('TS-8 — the gate is wired at BOTH call sites, and encloses the spawn'
     ['../../../scripts/promote-retro-action-items.mjs', 'RETRO_ACTION_PROMOTER_ENGINE'],
   ])('%s calls gatedQfMint with its own engine constant', (path, konst) => {
     const src = read(path);
-    expect(src).toMatch(/gatedQfMint\(/);
-    expect(src).toContain(konst);
-    // The gate must ENCLOSE the minting: gatedQfMint takes the loop as its callback.
-    expect(src).toMatch(/gatedQfMint\(supabase,\s*\{[^}]*\},\s*promoteAll\)/);
+    // BIND THE CONSTANT INTO THE CALL, not merely into the file. The first version asserted
+    // toContain(konst), which the surviving IMPORT line satisfies — so replacing the constant at
+    // the CALL SITE with a hard-coded literal (cross-wiring one minter to the other's engine name)
+    // survived all 2961 tests. Found by TESTING at EXEC-TO-PLAN. That is precisely the failure
+    // qf-mint-gate.mjs:36-43 says these constants exist to prevent: a wrong engine name does not
+    // error, it renders NEVER RAN on the badge forever, indistinguishable from a producer that has
+    // simply not fired yet.
+    expect(src).toMatch(new RegExp(`gatedQfMint\\(supabase,\\s*\\{\\s*engine:\\s*${konst}\\s*\\},\\s*promoteAll\\)`));
+    // And no gauge override may be slipped in alongside it — the brace body must contain ONLY the
+    // engine, or a call site could silently re-point itself at the SD gauge and pass TS-6 too.
+    expect(src).not.toMatch(/gatedQfMint\(supabase,\s*\{[^}]*gauge:/);
   });
 
   it('create-quick-fix.js is NOT gated — the shared boundary stays open to humans', () => {
