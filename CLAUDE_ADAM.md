@@ -1,8 +1,8 @@
-<!-- file_content_hash: 771430de96821d9f -->
+<!-- file_content_hash: 97b5f14ee44bcee0 -->
 <!-- GENERATED FILE - DO NOT EDIT DIRECTLY. Source of truth: leo_protocol_sections (DB). Regenerate: node scripts/generate-claude-md-from-db.js. Drift check: node scripts/check-claude-md-drift.cjs -->
 # CLAUDE_ADAM.md - Adam Role Contract
 
-**Generated**: 2026-08-01 8:11:44 AM
+**Generated**: 2026-08-03 8:17:35 AM
 **Protocol**: LEO 4.4.1
 **Purpose**: Canonical Adam role contract — Chairman-attached advisory/analysis session
 **Load when**: Running /adam, or orienting an operator-attached advisory session
@@ -224,7 +224,7 @@ The north-star gauges (§5e) are **SUBORDINATE diagnostics** — they inform the
 2. **Wave-0 distillation if rung-waves are empty** — groom raw backlog (`sd_backlog_map`) into waved, dispositioned candidates. Distillation precedes routing.
 3. **Check the sourcing-engine activation state BEFORE hand-feeding — and read the RIGHT switch.**
    **(a) The OPERATIVE gate is a DB ROW, not an env flag.** `sourcing_engine_activation_state.arm='auto-refill'` gates the highest-blast-radius producer (hourly `refill-cron.mjs --apply`), in three states — on / off / **`NO ROW: state unknown, not "off"`**. Only `SOURCING_GAUGE_GAP_MINER_V1` and `SOURCING_DEFERRED_WATCHER_V1` have executable readers, and both are already hardcoded ON in the only context that runs them. **RETIRED — proposing a flip of these is a NO-OP, not an activation:** `SOURCING_ENGINE_V1`, `SOURCING_ROADMAP_ENGINE_V1`, `SOURCING_PROACTIVE_POPULATOR_V1`, `LEO_ROADMAP_AUTOSOURCE` have **zero executable readers**; setting them changed nothing while *looking* like activation.
-   **(b) "On" no longer means "floods".** The two producers that mint belt depth consult a **belt-DEMAND gate** (`lib/governance/demand-gate.js`): they produce only when dispatchable depth is at or below a floor, and **an unreadable gauge is `unmeasurable` → WITHHOLD, never a licence to produce.** Every run emits its verdict to `audit_log`, so a correctly-quiet engine is distinguishable from a dead one.
+   **(b) "On" no longer means "floods".** The **four** producers that mint belt depth consult a **belt-DEMAND gate** (`lib/governance/demand-gate.js`): they produce only when their OWN lane’s depth is at or below a floor — the two SD minters read SD depth, the two QF minters read QF depth (SD-LEO-INFRA-GATE-SIDE-BELT-001), because the default gauge cannot see a quick_fix, and **an unreadable gauge is `unmeasurable` → WITHHOLD, never a licence to produce.** Every run emits its verdict to `audit_log`, so a correctly-quiet engine is distinguishable from a dead one.
    So if the arm is OFF, **PROPOSE activation as a CHAIRMAN decision** — it is genuinely his call, the arm having been set off by chairman directive — and cite the demand gate as why it is now safe. Do NOT substitute yourself for a dormant engine tick-after-tick; that masks the fact it is off and is unsustainable.
 4. **Hand-mining the VDR gauge is LAST-RESORT — and a SMELL.** Reaching for it means a layer above failed. Fix the upstream cause.
 
@@ -398,6 +398,6 @@ _Hierarchy note (chairman-ratified D-0719-ORGCHART "A", 2026-07-19): this partne
 
 ---
 
-*Generated from database: 2026-08-01*
+*Generated from database: 2026-08-03*
 *Protocol Version: 4.4.1*
 *Source of truth: leo_protocol_sections (section_type=adam_role_contract). Do not hand-edit — edit the DB section and regenerate.*
