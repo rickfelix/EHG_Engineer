@@ -225,27 +225,46 @@ describe('stop-loop-wakeup-reminder — wrapper fail-open (TS-6, spawn)', () => 
   });
 
   // A Stop hook that TIMES OUT returns NO decision — the enforcement silently disappears exactly
-  // when the machine is loaded. Registered timeout is 10s against 3-5 DB round-trips plus a 2.5s
-  // stabilisation re-read, so the hermetic path must stay well clear of it.
-  // RECALIBRATED, NOT RELAXED TO GET GREEN. At 6000ms this failed on CI at 7198ms for the same
-  // hermetic path that measures 412ms locally — a 17x spread on a runner whose node_modules probe
-  // was failing. Most of that is node process start + module resolution: the hook does not control
-  // it and no in-hook change shrinks it, so a hard 6s threshold measures the RUNNER, not this code.
-  // Kept at 9000ms only as a coarse guard against the 10s cliff; the real invariant is the
-  // environment-independent budget assertion below. The 7198ms reading was reported, not absorbed.
+  // when the machine is loaded.
+  //
+  // THIS THRESHOLD WAS RECALIBRATED, NOT RELAXED TO GET GREEN. At 6000ms it failed on CI at
+  // 7198ms for this same hermetic path, which measures 412ms locally — a 17x spread on a runner
+  // whose node_modules probe was failing. Most of that is node process start + module resolution,
+  // which the hook does not control and which no in-hook fix can shrink; the number therefore says
+  // more about the runner than about this code. What the hook DOES control is now bounded
+  // explicitly (HOOK_WORK_BUDGET_MS, asserted below), so this assertion is kept only as a coarse
+  // guard against the 10s cliff rather than as the real invariant.
+  //
+  // The 7198ms reading is itself a finding and was reported, not absorbed: if the CHEAPEST path
+  // costs that much on CI-class hardware, the block path would exceed the registered timeout there.
   it('stays clear of the 10s registered timeout on the hermetic path', () => {
     const t0 = Date.now();
     runHook({ stop_hook_active: false, session_id: 'nonexistent' }, { LEO_LOOP_WAKEUP_REMINDER: 'on' });
     expect(Date.now() - t0).toBeLessThan(9000);
   });
 
-  // The half that actually protects the decision: the hook's own discretionary work is capped, and
-  // the stabilisation re-read gets only what the DB round-trips left rather than 2.5s on top.
+  // The environment-independent half of the same invariant, and the one that actually protects the
+  // decision: the hook's own discretionary work is capped, and the stabilisation re-read is given
+  // only what the DB round-trips left rather than a fixed 2.5s on top of them.
   it('bounds its own work budget below the registered timeout', () => {
     const src = require('node:fs').readFileSync(HOOK_PATH, 'utf8');
     const budget = Number((src.match(/HOOK_WORK_BUDGET_MS\s*=\s*(\d+)/) || [])[1]);
     expect(budget).toBeGreaterThan(0);
-    expect(budget).toBeLessThan(10000);
-    expect(src).toMatch(/deadlineMs:\s*Math\.min\(2500,\s*remainingBudgetMs\(\)\)/);
+    expect(budget).toBeLessThan(10000);            // the registered timeout
+    expect(src).toMatch(/deadlineMs:[\s\S]{0,120}remainingBudgetMs\(\)/);
+  });
+
+  // The observational re-read must not be able to spend the budget the DECISION-CRITICAL block
+  // record needs. Racing them for one pool starved the write — measured, it got timed out, which
+  // put the step-C gate back to unreadable. Asserted on the arithmetic, not on a fixed string,
+  // so the reserve cannot be silently dropped while the expression is reshaped.
+  it('reserves telemetry budget OUT of what the stabilisation re-read may spend', () => {
+    const src = require('node:fs').readFileSync(HOOK_PATH, 'utf8');
+    const reserve = Number((src.match(/TELEMETRY_RESERVE_MS\s*=\s*(\d+)/) || [])[1]);
+    const budget = Number((src.match(/HOOK_WORK_BUDGET_MS\s*=\s*(\d+)/) || [])[1]);
+    expect(reserve).toBeGreaterThan(0);
+    expect(reserve).toBeLessThan(budget);          // a reserve that eats the whole budget is a stall
+    expect(src).toMatch(/remainingBudgetMs\(\)\s*-\s*TELEMETRY_RESERVE_MS/);
+    expect(src).toMatch(/reason: 'blocked_unarmed'/);   // the record the reserve exists for
   });
 });

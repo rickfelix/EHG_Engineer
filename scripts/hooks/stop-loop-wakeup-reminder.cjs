@@ -169,17 +169,54 @@ function shouldParkRecoverable({ loopState, hasActiveClaim, windDownSignaled } =
 }
 
 /**
- * Write a RECOVERABLE park-state for the session: loop_state='awaiting_tick' + a capped
- * expected_silence_until, reusing the post-tool-loop-state.cjs writeTelemetryAwait pattern so
- * coordinator-revival / orphan-adoption deterministically re-engages the worker (no cold-exit).
+ * STEP B — write a RECOVERABLE park-state: a capped expected_silence_until ALWAYS, and
+ * loop_state='awaiting_tick' ONLY WHEN THE TURN ACTUALLY ARMED.
+ *
+ * FR-B1's requirement is "no code path stamps armed-state without an actual ScheduleWakeup tool
+ * call". This function was that path: it stamped awaiting_tick — a claim that a wakeup is pending —
+ * on every parked worker, armed or not. Now that step A produces real arm evidence, the write is
+ * GUARDED by it rather than deleted. Guarding beats deleting: a genuinely armed worker keeps the
+ * true state and all four consumers below behave exactly as before, so the change costs nothing on
+ * the compliant path and only removes the FALSE claim.
+ *
+ * THE FOUR ACTUATING CONSUMERS, and what each does once an unarmed seat stops being stamped
+ * (an unarmed /loop worker's loop_state remains 'active', which is accurate — it was looping and
+ * did not arm):
+ *   1. dormancy-watchdog.cjs isDormant:25 — gates on loop_state ∈ {awaiting_tick, active} FIRST,
+ *      then expected_silence_until. Unarmed seats stay 'active' ⇒ STILL DETECTED.
+ *      NOTE FR-B1 IS WRONG ON THE MECHANISM: it says keeping expected_silence_until preserves
+ *      visibility, but :25 short-circuits on loop_state BEFORE :26 ever reads that field. What
+ *      actually preserves visibility is 'active' already being in the set. Keeping
+ *      expected_silence_until is still required — :27 rejects an unparseable one — but it is not
+ *      sufficient on its own, and a seat whose loop_state is null/'unknown' would be invisible.
+ *      MEASURED 2026-08-02: of 4 claim-holding sessions, loop_state was {awaiting_tick:2,
+ *      active:2} and ZERO fell outside the set. That is a point-in-time sample, not a proof the
+ *      null/'unknown' population is empty in general.
+ *   2. session-watchdog.js classifyWatchdogState:48 — 'parked' ⇒ STOPPED ⇒ never restarted.
+ *      It also treats a live expected_silence_until window as parked, so behaviour is UNCHANGED
+ *      while the window is open. Once it elapses, an unarmed seat now classifies CRASHED/AUTH-LOST
+ *      and becomes ACTIONABLE. That is the point: a dead seat should be revived, not left parked
+ *      forever by a sticky flag it never earned.
+ *   3. singleton-relaunch-trigger.js SAFE_LOOP_STATES:47 — ['awaiting_tick','exited']; anything
+ *      else FAILS CLOSED (no relaunch). An unarmed singleton now reads 'active' ⇒ relaunch is NOT
+ *      scheduled. Conservative, and it removes a real contradiction: the same false stamp was
+ *      simultaneously telling consumer 2 "parked, do not restart" and consumer 3 "safe to
+ *      relaunch". Armed singletons are unaffected — they still stamp awaiting_tick, both here and
+ *      via post-tool-loop-state.cjs, which is the LEGITIMATE writer (it fires on the actual tool call).
+ *   4. charter-audit-detectors.mjs isParked:83 — awaiting_tick OR inside the armed-silence window.
+ *      expected_silence_until is still written unconditionally ⇒ UNCHANGED; parked workers are
+ *      still excluded from the neglect flag, so no false starvation alarms.
+ *
  * Best-effort / fail-open — any failure is logged and never blocks the stop.
  */
-async function parkSessionRecoverable(sessionId) {
-  try {
-    const { setLoopState } = require('../lib/sessions/loop-state-tracker.cjs');
-    await setLoopState(sessionId, LOOP_STATE_AWAITING_TICK);
-  } catch (e) {
-    process.stderr.write(`[stop-loop-wakeup-reminder] park loop-state (non-fatal): ${e.message}\n`);
+async function parkSessionRecoverable(sessionId, { armVerdict } = {}) {
+  if (armVerdict === 'armed') {
+    try {
+      const { setLoopState } = require('../lib/sessions/loop-state-tracker.cjs');
+      await setLoopState(sessionId, LOOP_STATE_AWAITING_TICK);
+    } catch (e) {
+      process.stderr.write(`[stop-loop-wakeup-reminder] park loop-state (non-fatal): ${e.message}\n`);
+    }
   }
   try {
     const { computeSilenceMinutes } = require('../park-worker.cjs');
@@ -273,7 +310,19 @@ async function recordWindDown(supabase, sessionId, { reason, hadClaim } = {}) {
       description: `Worker session ${sessionId} wound down: reason=${reason}, had_claim=${!!hadClaim}.`,
       category: 'wind_down_survey',
       severity: 'low',
-      source_type: 'wind_down_survey',
+      // 'wind_down_survey' is a valid CATEGORY but NOT a valid source_type: CHECK
+      // feedback_source_type_check admits only a fixed list, and machine telemetry uses
+      // 'auto_capture' (1000/1000 sampled rows). The old value threw on EVERY call, and the
+      // catch below swallowed it to stderr — so this mirror has written ZERO rows since it
+      // shipped, while reading as healthy. Measured 2026-08-02: 0 rows for the category, and a
+      // direct emitFeedback call reproduced the constraint violation; swapping this one value
+      // made the row land and the count go 0 -> 1.
+      //
+      // THIS IS LOAD-BEARING FOR THIS SD. Step A's 'second_stop_still_unarmed' — the substitute
+      // shipped INSTEAD of the debt marker, and the pre-registered gate for step C — writes
+      // through here. Left unfixed, that gate would have read 0 forever and killed step C for
+      // the wrong reason: not "the population is empty" but "the instrument was never plugged in".
+      source_type: 'auto_capture',
       metadata: { session_id: sessionId, reason, had_claim: !!hadClaim, at },
       // One row per session per minute-bucket per reason — idempotent if the hook fires twice.
       dedup_key: `wind_down::${sessionId}::${reason}::${at.slice(0, 16)}`,
@@ -349,6 +398,13 @@ function readStdinPayload(timeoutMs = 2000) {
 // So the hook bounds its own discretionary work instead of assuming the environment is fast: the
 // stabilisation re-read gets whatever is LEFT of the budget after the DB calls, never a fixed 2.5s.
 const HOOK_WORK_BUDGET_MS = 6000;
+// Reserved OUT of the budget for the block-telemetry write, which the stabilisation re-read may
+// not consume. Both are optional work, but they are not equally valuable: the re-read is
+// OBSERVATIONAL (it refines a verdict that is already usable), while the block record is
+// DECISION-CRITICAL — without it, second_stop_still_unarmed=0 cannot be told apart from "no block
+// ever fired", and the step-C gate reverts to meaningless. Racing them for the same budget
+// silently starved the more important one: MEASURED, the write got timed out at the cap.
+const TELEMETRY_RESERVE_MS = 2500;
 
 async function main() {
   const hookStartedAt = Date.now();
@@ -440,10 +496,13 @@ async function main() {
           if (!fs.existsSync(payload.transcript_path)) return { verdict: 'unknown', reason: 'transcript absent', armCount: 0 };
           return armEvidence.findArmInCurrentTurn(readTailEntries(payload.transcript_path));
         };
+        // Whatever is LEFT of the budget — the DB round-trips above already spent some of it.
         armObservation = await armEvidence.awaitStableVerdict({
           read,
           sleep: (ms) => new Promise((r) => setTimeout(r, ms)),
-          deadlineMs: Math.min(2500, remainingBudgetMs()),   // whatever the DB calls LEFT
+          // Whatever the DB calls left, MINUS the telemetry reserve — this observational re-read
+          // must not eat the budget the decision-critical block record needs.
+          deadlineMs: Math.max(0, Math.min(2500, remainingBudgetMs() - TELEMETRY_RESERVE_MS)),
         });
         armVerdict = armObservation.stable && armObservation.stable.verdict;
         process.stderr.write(armEvidence.formatPendingWake(armObservation, { sessionId }));
@@ -460,6 +519,25 @@ async function main() {
       // rides here rather than on stderr (which the model never sees on a blocking Stop).
       const detail = armObservation ? `\n${armEvidence.formatPendingWake(armObservation, { sessionId }).trim()}` : '';
       emitDecision({ decision: 'block', reason: REMINDER + detail });
+      // RECORD THE BLOCK. Without this the step-C gate is UNINTERPRETABLE, and I only noticed
+      // because I asked what state would silence it and whether anyone can reach that state.
+      // 'second_stop_still_unarmed' requires TWO events: (1) a block fires, then (2) the worker
+      // stops again still unarmed. Step (2) was recorded; step (1) was not. A zero therefore meant
+      // EITHER "no block has ever fired, so (2) is unreachable" OR "blocks fire and every worker
+      // complies" — opposite conclusions, indistinguishable, and I had been treating the zero as
+      // evidence for the second. Recording the block makes the ratio readable: blocks>0 with
+      // second_stop_still_unarmed=0 is genuine compliance; blocks=0 means the enforcement never
+      // engages and the gate says nothing about step C at all.
+      // Emitted AFTER the decision is already on stdout — but that ordering alone is NOT enough.
+      // A hook killed at the 10s timeout returns no decision at all, so work done after the write
+      // can still cost the decision it was meant to annotate. MEASURED: this write added ~1.9s
+      // (3260ms -> 5146ms), which fits the 6s budget locally and would NOT fit on the CI-class
+      // hardware that spent 7.2s on the cheapest path. So it is raced against whatever budget is
+      // left: telemetry may be dropped, the decision may not.
+      await Promise.race([
+        recordWindDown(supabase, sessionId, { reason: 'blocked_unarmed', hadClaim: hasActiveClaim }),
+        new Promise((r) => setTimeout(r, remainingBudgetMs())),
+      ]);
       return shutdown();
     }
     // ALLOW-PATH (SD-LEO-INFRA-WORKER-ENGAGEMENT-ARM-PARK-001): the stop is allowed — windDownSignaled
@@ -467,7 +545,7 @@ async function main() {
     // work, PARK it recoverable (loop_state='awaiting_tick' + capped expected_silence_until) so
     // coordinator-revival / orphan-adoption re-engages it, instead of a cold-exit to zero workers.
     if (shouldParkRecoverable({ loopState, hasActiveClaim, windDownSignaled })) {
-      await parkSessionRecoverable(sessionId);
+      await parkSessionRecoverable(sessionId, { armVerdict });
       // SD-LEO-INFRA-WORKER-WINDDOWN-SURVEY-001 (a)+(c): capture WHY this worker wound down
       // (same worker-gate as the park, so no false telemetry on a non-worker operator session).
       await recordWindDown(supabase, sessionId, {
