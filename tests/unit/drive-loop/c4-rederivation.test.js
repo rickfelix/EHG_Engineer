@@ -42,6 +42,20 @@ import { fileURLToPath } from 'node:url';
 import { buildPlanPosition, SECTION_ID as PLAN_POSITION } from '../../../lib/drive-loop/sections/plan-position.js';
 import { buildBeltDiagnosis, SECTION_ID as BELT_DIAGNOSIS } from '../../../lib/drive-loop/sections/belt-diagnosis.js';
 import { buildStallDeltas, SECTION_ID as STALL_DELTAS } from '../../../lib/drive-loop/sections/stall-deltas.js';
+import { buildChainToGate, SECTION_ID as CHAIN_TO_GATE } from '../../../lib/drive-loop/sections/chain-to-gate.js';
+
+// Section 2 fixture. Gate is w1 (lowest sequence_rank WITH open items); the chain is its two open
+// items ordered by priority_rank; i1 is the blocker via a blocked-on-* lane. Counts are deliberately
+// distinct from the other fixtures so a value copied from the wrong sibling is a mismatch rather
+// than a coincidence.
+const CHAIN_WAVES = [
+  { id: 'w1', title: 'Wave 1', sequence_rank: 1 },
+  { id: 'w2', title: 'Wave 2', sequence_rank: 2 },
+];
+const CHAIN_ITEMS = [
+  { id: 'i1', wave_id: 'w1', priority_rank: 1, title: 'blocked head', lane: 'blocked-on-SD-X', sd: { status: 'blocked' } },
+  { id: 'i2', wave_id: 'w1', priority_rank: 2, title: 'waiting', sd: { owner_lane: 'lane-a' } },
+];
 
 // ───────────────────────────────────────────────────────────────────────────────────────────
 // Fixtures. Every row set is DELIBERATELY NON-EMPTY and the counts are DELIBERATELY DISTINCT
@@ -112,6 +126,10 @@ async function buildAll() {
       }),
       ctx: { priorReport: PRIOR_REPORT },
     },
+    [CHAIN_TO_GATE]: {
+      section: buildChainToGate({ waves: CHAIN_WAVES, items: CHAIN_ITEMS }),
+      ctx: { waves: CHAIN_WAVES, items: CHAIN_ITEMS },
+    },
   };
 }
 
@@ -121,6 +139,21 @@ const SECTION_MODULE_FILES = {
   [PLAN_POSITION]: 'plan-position.js',
   [BELT_DIAGNOSIS]: 'belt-diagnosis.js',
   [STALL_DELTAS]: 'stall-deltas.js',
+  // Registered when section 2 landed from the handover branch. The directory-vs-registry check
+  // BELOW is what forced this line: chain-to-gate.js arrived unregistered and the guard went red
+  // on first contact, exactly as intended. Do not soften that check to a warning — an unregistered
+  // section silently escapes the re-derivation property, which is the one thing this file exists
+  // to prevent.
+  //
+  // ⚠️ REGISTERED IS NOT COVERED, AND THIS MAP ALONE PROVES ONLY THE FORMER. ⚠️
+  // MEASURED: after adding this line and nothing else, the directory check went green while a
+  // mutation making chain_length contradict its own row_ids still passed 22/22 — because the
+  // property only ever inspects what buildAll() actually BUILDS, and that map is separate. So the
+  // obvious remedy for a red directory check (add a line here) defeats the guard: it silences the
+  // alarm without extending a single assertion. The keys-match assertion below is what closes it —
+  // it makes "named here" and "built and checked" the same set by construction, so the only way to
+  // satisfy the directory check is to hand the property a real section.
+  [CHAIN_TO_GATE]: 'chain-to-gate.js',
 };
 
 // ───────────────────────────────────────────────────────────────────────────────────────────
@@ -142,6 +175,41 @@ const REDERIVERS = {
     opened: section.items.opened.length,
     position_moved: section.position.moved,
   }),
+
+  // Section 2 publishes OBJECTS, not counts, so row_ids cannot re-derive them — citing one row id
+  // beside a descriptor proves where it came from without reproducing it. The property refused
+  // both on arrival (no_way_to_re_derive), which is the default-deny doing its job: a new section
+  // cannot opt out by omission. Re-derived here from the WAVES/ITEMS the section was handed, never
+  // from its own output, so this is independent recomputation rather than the section vouching for
+  // itself. Both re-implement the module's stated definitions — GATE is the lowest-sequence_rank
+  // approved wave that still has open items; BLOCKER is the first item in that chain that cannot
+  // proceed, which is deliberately NOT the first item.
+  [`${CHAIN_TO_GATE}.gate`]: ({ waves, items }) => {
+    const openIn = (id) => items.filter((i) => i.wave_id === id).length;
+    const g = [...waves].sort((a, b) => a.sequence_rank - b.sequence_rank).find((w) => openIn(w.id) > 0);
+    return g ? { wave_id: g.id, title: g.title, sequence_rank: g.sequence_rank } : null;
+  },
+
+  [`${CHAIN_TO_GATE}.blocker`]: ({ waves, items }) => {
+    const openIn = (id) => items.filter((i) => i.wave_id === id);
+    const g = [...waves].sort((a, b) => a.sequence_rank - b.sequence_rank).find((w) => openIn(w.id).length > 0);
+    if (!g) return null;
+    const chain = openIn(g.id).slice().sort((a, b) => a.priority_rank - b.priority_rank);
+    const b = chain.find((i) => String(i.lane || '').startsWith('blocked-on-')
+      || i.sd?.status === 'blocked'
+      || (Array.isArray(i.sd?.unmet_dependencies) && i.sd.unmet_dependencies.length > 0));
+    if (!b) return null;
+    const owner = b.sd?.claiming_session_id ?? b.sd?.owner_lane ?? null;
+    return {
+      item_id: b.id,
+      title: b.title,
+      blocked_on: String(b.lane || '').startsWith('blocked-on-') ? String(b.lane).slice('blocked-on-'.length) : null,
+      owner,
+      owner_basis: b.sd?.claiming_session_id ? 'active claim on the SD'
+        : b.sd?.owner_lane ? 'SD owner_lane'
+          : b.sd ? 'SD exists but is unclaimed and has no owner lane' : 'no SD — the item is unsourced',
+    };
+  },
 };
 
 // ───────────────────────────────────────────────────────────────────────────────────────────
@@ -461,6 +529,22 @@ describe('TS-14 — no section module escapes this file', () => {
 
     expect(onDisk, 'a new section module must get a fixture and a REDERIVERS entry in this file '
       + 'before it can ship — otherwise its numbers are checked by nothing').toEqual(registered);
+  });
+
+  it('every REGISTERED section is also BUILT and CHECKED — registration alone buys nothing', async () => {
+    // THE GAP THE CHECK ABOVE DOES NOT CLOSE, measured rather than imagined. When chain-to-gate.js
+    // arrived, adding one line to SECTION_MODULE_FILES turned the directory check green — and a
+    // mutation making chain_length contradict its own row_ids STILL passed 22/22, because the
+    // property only inspects what buildAll() returns and that is a different list.
+    //
+    // So the natural fix for a red directory check silences it without adding one assertion. This
+    // ties the two sets together: a module can only satisfy the directory check by also being
+    // handed to the property with a real fixture.
+    const built = Object.keys(await buildAll()).sort();
+    const registered = Object.keys(SECTION_MODULE_FILES).sort();
+    expect(built, 'a section named in SECTION_MODULE_FILES but missing from buildAll() is REGISTERED '
+      + 'AND UNCHECKED — the worst of both, because the directory guard reads green while its '
+      + 'numbers are verified by nothing').toEqual(registered);
   });
 });
 
