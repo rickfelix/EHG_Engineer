@@ -509,7 +509,8 @@ export function createPRPrecheckGate(supabase, deps = {}) {
       console.log('-'.repeat(50));
 
       const sdId = ctx.sd.sd_key || ctx.sd.id;
-      const branchPatterns = [`feat/${sdId}`, `fix/${sdId}`, `docs/${sdId}`, `test/${sdId}`];
+      // (The branchPatterns array that used to sit here fed only the anchored regex and became
+      // dead when that was removed — deleted rather than prefixed with _, since nothing reads it.)
 
       // FR-3: third call site of the matcher that was replaced. All three migrate together —
       // leaving one on the anchored regex would leave a live blind site.
