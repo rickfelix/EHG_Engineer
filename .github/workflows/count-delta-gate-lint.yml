@@ -17,9 +17,25 @@ name: Count-Delta Gate Assertion Lint
 on:
   pull_request:
     paths:
-      - 'scripts/ci/**/*.{js,mjs,cjs,ts,tsx}'
-      - 'scripts/hooks/**/*.{js,mjs,cjs,ts,tsx}'
-      - 'scripts/modules/**/*.{js,mjs,cjs,ts,tsx}'
+      # SD-LEO-INFRA-FIVE-GUARDS-WIRED-001: these 15 entries were PREVIOUSLY three brace-globs.
+      # GitHub Actions does not expand brace alternation, so they matched nothing and this
+      # workflow had run EXACTLY ONCE EVER — on its own introducing PR, matched by the literal
+      # machinery entries below. It has never evaluated a single one of the ~710 files it scans.
+      - 'scripts/ci/**/*.js'
+      - 'scripts/ci/**/*.mjs'
+      - 'scripts/ci/**/*.cjs'
+      - 'scripts/ci/**/*.ts'
+      - 'scripts/ci/**/*.tsx'
+      - 'scripts/hooks/**/*.js'
+      - 'scripts/hooks/**/*.mjs'
+      - 'scripts/hooks/**/*.cjs'
+      - 'scripts/hooks/**/*.ts'
+      - 'scripts/hooks/**/*.tsx'
+      - 'scripts/modules/**/*.js'
+      - 'scripts/modules/**/*.mjs'
+      - 'scripts/modules/**/*.cjs'
+      - 'scripts/modules/**/*.ts'
+      - 'scripts/modules/**/*.tsx'
       - 'eslint-rules/no-count-delta-gate-assertion.js'
       - 'scripts/lint/count-delta-gate-lint.mjs'
       - '.github/workflows/count-delta-gate-lint.yml'

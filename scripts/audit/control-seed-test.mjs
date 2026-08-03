@@ -52,6 +52,7 @@ import { mkdtempSync, writeFileSync, mkdirSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join, dirname } from 'node:path';
 import { readFileSync } from 'node:fs';
+import { isMainModule } from '../../lib/utils/is-main-module.js';
 
 const VERDICT = Object.freeze({
   BLOCKS: 'BLOCKS',        // detected AND non-zero exit — actually stops a merge
@@ -222,6 +223,6 @@ function main() {
   process.exitCode = 0;
 }
 
-if (import.meta.url === `file://${process.argv[1]}` || process.argv[1]?.endsWith('control-seed-test.mjs')) main();
+if (isMainModule(import.meta.url)) main();
 
 export { VERDICT };

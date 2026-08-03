@@ -20,8 +20,21 @@ name: Realtime Subscribe Teardown Recursion Lint
 on:
   pull_request:
     paths:
-      - 'lib/**/*.{js,mjs,cjs,ts,tsx}'
-      - 'server/**/*.{js,mjs,cjs,ts,tsx}'
+      # SD-LEO-INFRA-FIVE-GUARDS-WIRED-001: these 10 entries were PREVIOUSLY two brace-globs.
+      # GitHub Actions does not expand brace alternation, so they matched nothing and this
+      # workflow had run EXACTLY ONCE EVER — on its own introducing PR. The crash class it
+      # guards was fixed independently 3x before the guard existed; the guard then spent 32
+      # days unable to see the ~2116 files under lib/ and server/ it was written to police.
+      - 'lib/**/*.js'
+      - 'lib/**/*.mjs'
+      - 'lib/**/*.cjs'
+      - 'lib/**/*.ts'
+      - 'lib/**/*.tsx'
+      - 'server/**/*.js'
+      - 'server/**/*.mjs'
+      - 'server/**/*.cjs'
+      - 'server/**/*.ts'
+      - 'server/**/*.tsx'
       - 'eslint-rules/no-realtime-teardown-in-subscribe-callback.js'
       - 'scripts/lint/realtime-subscribe-teardown-recursion-lint.mjs'
       - '.github/workflows/realtime-subscribe-teardown-recursion-lint.yml'
