@@ -8,6 +8,9 @@
 import path from 'path';
 import { fileURLToPath } from 'url';
 import { safeTruncate } from '../../../../../lib/utils/safe-truncate.js';
+// SD-LEO-INFRA-RESUME-FINAL-READ-001 (FR-3/FR-4): branch→owner resolution replaces the anchored
+// regex. See lib/git/branch-owner.js for why a widened regex is provably impossible.
+import { branchBelongsToSd, loadKeySet, OWNER_REASON } from '../../../../../lib/git/branch-owner.js';
 import { resolveRepoPath, resolveGitHubRepo, ENGINEER_ROOT } from '../../../../../lib/repo-paths.js';
 import { getTierForSD } from '../../../sd-type-checker.js';
 import { getFilteredRetrospective } from '../../retro-filters.js';
@@ -496,7 +499,9 @@ export function createRetrospectiveExistsGate(supabase) {
  *
  * @returns {Object} Gate definition
  */
-export function createPRPrecheckGate() {
+export function createPRPrecheckGate(supabase, deps = {}) {
+  const getKeySet = deps.loadKeySet || (() => loadKeySet(supabase));
+
   return {
     name: 'PR_PRECHECK',
     validator: async (ctx) => {
@@ -505,12 +510,28 @@ export function createPRPrecheckGate() {
 
       const sdId = ctx.sd.sd_key || ctx.sd.id;
       const branchPatterns = [`feat/${sdId}`, `fix/${sdId}`, `docs/${sdId}`, `test/${sdId}`];
-      // QF-20260509-PRMERGE-EXACT (closes 9d55499d): exact-match regex anchored
-      // at start AND end. Pre-fix `.includes(pattern)` matched extended-suffix
-      // sibling branches (e.g. `feat/SD-X-001-stage-25-foo` matched query for
-      // SD-X-001 because headRefName.includes("feat/SD-X-001") returned true).
-      const sdIdEscaped = sdId.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
-      const exactBranchRegex = new RegExp(`^(feat|fix|docs|test)/${sdIdEscaped}$`, 'i');
+
+      // FR-3: third call site of the matcher that was replaced. All three migrate together —
+      // leaving one on the anchored regex would leave a live blind site.
+      //
+      // FR-4, AND THIS IS A DELIBERATE ASYMMETRY, NOT AN OVERSIGHT. Unlike PR_MERGE_VERIFICATION,
+      // this gate does NOT block when the key set is unavailable. It is a fast-fail optimisation
+      // whose whole contract is "the full PR_MERGE gate will validate" — its existing catch
+      // already returns passed:true on any error by design. Blocking here would turn an
+      // optimisation into a second hard dependency on the key-set lookup. The decision is recorded
+      // and LOGGED rather than inherited silently, because the risk of a permissive precheck is
+      // entirely carried by PR_MERGE_VERIFICATION actually blocking — if that ever stops being
+      // true, this asymmetry becomes a hole.
+      const keySetResult = await getKeySet();
+      if (!keySetResult.ok) {
+        console.log(`   ⚠️  Key set unavailable (${keySetResult.error || keySetResult.reason}) — precheck skipped by design; PR_MERGE_VERIFICATION blocks on this condition`);
+        return {
+          passed: true, score: 100, max_score: 100, issues: [],
+          warnings: [`PR_PRECHECK skipped: key set unavailable (${keySetResult.reason}). This is non-blocking BY DESIGN — PR_MERGE_VERIFICATION fails closed on the same condition.`],
+          details: { skipped: true, reason: OWNER_REASON.KEY_SET_UNAVAILABLE, deferred_to: 'PR_MERGE_VERIFICATION' }
+        };
+      }
+      const keySet = keySetResult.keys;
 
       try {
         const { execSync } = await import('child_process');
@@ -523,7 +544,7 @@ export function createPRPrecheckGate() {
               { encoding: 'utf8', timeout: 15000 }
             );
             const prs = JSON.parse(result || '[]');
-            const matching = prs.filter(pr => exactBranchRegex.test(pr.headRefName));
+            const matching = prs.filter(pr => branchBelongsToSd(pr.headRefName, sdId, keySet).belongs);
 
             if (matching.length > 0) {
               console.log(`   ❌ Open PR(s) found in ${repo} — run /ship first`);
@@ -565,7 +586,13 @@ export function createPRPrecheckGate() {
  *
  * @returns {Object} Gate definition
  */
-export function createPRMergeVerificationGate() {
+export function createPRMergeVerificationGate(supabase, deps = {}) {
+  // Injectable so the fail-closed path is unit-testable WITHOUT a database. A DB-backed test would
+  // file under the vitest `db` project, which is disabled when no non-production target is
+  // designated and runs zero files — a fail-closed test that cannot fire, inside the SD about
+  // guards that cannot fire (SD-LEO-INFRA-RESUME-FINAL-READ-001, TS-3).
+  const getKeySet = deps.loadKeySet || (() => loadKeySet(supabase));
+
   return {
     name: 'PR_MERGE_VERIFICATION',
     validator: async (ctx) => {
@@ -583,14 +610,35 @@ export function createPRMergeVerificationGate() {
         `test/${sdId}`
       ];
 
-      // QF-20260509-PRMERGE-EXACT (closes 9d55499d): exact-match regex anchored
-      // at start AND end of branch name. Pre-fix `.includes(pattern)` matched
-      // sibling branches with extended-suffix names. Witnessed 2026-05-07
-      // SD-LEO-FEAT-STAGE-POST-LAUNCH-002 LEAD-FINAL-APPROVAL: orphan branch
-      // in non-target repo with different SD's commits caused false-positive
-      // block requiring explicit DELETE to unwedge.
-      const sdIdEscaped = sdId.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
-      const exactBranchRegex = new RegExp(`^(feat|fix|docs|test)/${sdIdEscaped}$`, 'i');
+      // SD-LEO-INFRA-RESUME-FINAL-READ-001 (FR-3) — replaces the anchored regex that used to be
+      // built here. That regex could not see a branch carrying a suffix after the SD key, so an
+      // OPEN PR was invisible and an SD completed with its deliverable unmerged. The obvious
+      // repair (also match <type>/<KEY>-<suffix>) is PROVABLY IMPOSSIBLE: for key K and child key
+      // K-x the string <type>/K-x is simultaneously a suffixed branch of K and the canonical
+      // branch of K-x. The disambiguating information is in the KEY SET, not the string.
+      //
+      // LOADED BEFORE THE try BELOW, DELIBERATELY. The catch at the end of this validator already
+      // returns fail-closed on any throw, so loading inside it would make the resolver inherit
+      // fail-closed behaviour it does not implement — and a test asserting "the gate blocks" would
+      // pass with no resolver logic at all. Loading here keeps the resolver's own refusal
+      // observable and separately assertable (TS-3's negative control).
+      const keySetResult = await getKeySet();
+      if (!keySetResult.ok) {
+        console.log(`   ❌ Key set unavailable (${keySetResult.error || keySetResult.reason}) — cannot resolve branch ownership`);
+        return {
+          passed: false,
+          score: 0,
+          max_score: 100,
+          issues: [
+            `Cannot verify PR merge state for ${sdId}: the SD key set could not be loaded (${keySetResult.error || keySetResult.reason}).`,
+            'This BLOCKS rather than passes. Without the key set, "no matching branches" is indistinguishable from "the lookup failed", and treating the second as the first is the fail-open this gate exists to close.',
+            'Bypass available for documented emergencies: --bypass-validation --bypass-reason "<reason>"'
+          ],
+          warnings: [],
+          details: { fail_closed: true, reason: OWNER_REASON.KEY_SET_UNAVAILABLE, resolver: true }
+        };
+      }
+      const keySet = keySetResult.keys;
 
       try {
         const { execSync } = await import('child_process');
@@ -609,9 +657,10 @@ export function createPRMergeVerificationGate() {
 
             const prs = JSON.parse(result || '[]');
 
-            // QF-20260509-PRMERGE-EXACT: anchored regex (not includes) rejects
-            // extended-suffix sibling branches.
-            const matchingPRs = prs.filter(pr => exactBranchRegex.test(pr.headRefName));
+            // FR-3: ownership resolution, not pattern matching. A suffixed branch belongs to this
+            // SD when no LONGER key claims it — which is why the key set is required and why the
+            // anchored regex this replaces could not answer the question at all.
+            const matchingPRs = prs.filter(pr => branchBelongsToSd(pr.headRefName, sdId, keySet).belongs);
 
             if (matchingPRs.length > 0) {
               openPRs.push(...matchingPRs.map(pr => ({
@@ -680,8 +729,10 @@ export function createPRMergeVerificationGate() {
                 .map(b => b.trim())
                 .filter(b => {
                   if (!b || b.includes('HEAD')) return false;
-                  const branchName = b.replace(/^origin\//, '');
-                  return exactBranchRegex.test(branchName);
+                  // FR-3: SAME resolver as the PR scan above. This is the second of the two guards
+                  // that shared the anchored regex — so both were blind to a suffixed branch, and
+                  // fixing only the PR scan would have left this one silently passing.
+                  return branchBelongsToSd(b, sdId, keySet).belongs;
                 });
 
               for (const branch of matchingBranches) {
@@ -1372,12 +1423,15 @@ export function getRequiredGates(supabase, prdRepo, sd = null) {
   }
 
   // PR Precheck — fast-fail before heavyweight gates (SD-LEARN-FIX-ADDRESS-PATTERN-LEARN-081)
-  gates.push(createPRPrecheckGate());
+  // FR-3/FR-4: both PR gates now resolve branch ownership against the SD key set, so both need
+  // the client. Passing it here rather than constructing one inside the gate keeps the key-set
+  // failure path injectable — and therefore testable in the unit tier.
+  gates.push(createPRPrecheckGate(supabase));
 
   gates.push(createPlanToLeadHandoffGate(supabase));
   gates.push(createUserStoriesCompleteGate(supabase, prdRepo));
   gates.push(createRetrospectiveExistsGate(supabase));
-  gates.push(createPRMergeVerificationGate());
+  gates.push(createPRMergeVerificationGate(supabase));
 
   // Chairman-Apply Verification (SD-LEO-INFRA-CHAIRMAN-APPLY-FLAG-001) — refuses completion of
   // a chairman-gated SD whose staged migration was never applied. Registration is a manual push
