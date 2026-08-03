@@ -1,141 +1,141 @@
 {
-  "generated_at": "2026-08-03T13:53:35.722Z",
-  "git_commit": "8dd03533",
+  "generated_at": "2026-08-03T14:24:48.046Z",
+  "git_commit": "2f5ee003",
   "db_snapshot_hash": "31945d3b870a9f44",
   "files": {
     "CLAUDE.md": {
       "type": "full",
-      "chars": 19564,
-      "bytes": 19703,
-      "estimated_tokens": 4891,
+      "chars": 19565,
+      "bytes": 19704,
+      "estimated_tokens": 4892,
       "content_hash": "91b0c479ced58edc",
       "path": "C:\\Users\\rickf\\Projects\\_EHG\\EHG_Engineer\\.worktrees\\SD-LEO-INFRA-TIER-GATE-FLAG-001\\CLAUDE.md"
     },
     "CLAUDE_CORE.md": {
       "type": "full",
-      "chars": 94348,
-      "bytes": 94941,
-      "estimated_tokens": 23587,
-      "content_hash": "cade29aad3c0d176",
+      "chars": 94779,
+      "bytes": 95376,
+      "estimated_tokens": 23695,
+      "content_hash": "640fd3bff8d7fa00",
       "path": "C:\\Users\\rickf\\Projects\\_EHG\\EHG_Engineer\\.worktrees\\SD-LEO-INFRA-TIER-GATE-FLAG-001\\CLAUDE_CORE.md"
     },
     "CLAUDE_LEAD.md": {
       "type": "full",
-      "chars": 58425,
-      "bytes": 58621,
+      "chars": 58426,
+      "bytes": 58622,
       "estimated_tokens": 14607,
       "content_hash": "cf775e0a447447a8",
       "path": "C:\\Users\\rickf\\Projects\\_EHG\\EHG_Engineer\\.worktrees\\SD-LEO-INFRA-TIER-GATE-FLAG-001\\CLAUDE_LEAD.md"
     },
     "CLAUDE_LEAD_MANUAL.md": {
       "type": "full",
-      "chars": 8818,
-      "bytes": 8862,
+      "chars": 8819,
+      "bytes": 8863,
       "estimated_tokens": 2205,
       "content_hash": "959da55357a233ac",
       "path": "C:\\Users\\rickf\\Projects\\_EHG\\EHG_Engineer\\.worktrees\\SD-LEO-INFRA-TIER-GATE-FLAG-001\\CLAUDE_LEAD_MANUAL.md"
     },
     "CLAUDE_PLAN.md": {
       "type": "full",
-      "chars": 54928,
-      "bytes": 55185,
-      "estimated_tokens": 13732,
+      "chars": 54929,
+      "bytes": 55186,
+      "estimated_tokens": 13733,
       "content_hash": "051fc5edb1dc5786",
       "path": "C:\\Users\\rickf\\Projects\\_EHG\\EHG_Engineer\\.worktrees\\SD-LEO-INFRA-TIER-GATE-FLAG-001\\CLAUDE_PLAN.md"
     },
     "CLAUDE_PLAN_MANUAL.md": {
       "type": "full",
-      "chars": 38353,
-      "bytes": 38460,
+      "chars": 38354,
+      "bytes": 38461,
       "estimated_tokens": 9589,
       "content_hash": "e81d796d6cc256b2",
       "path": "C:\\Users\\rickf\\Projects\\_EHG\\EHG_Engineer\\.worktrees\\SD-LEO-INFRA-TIER-GATE-FLAG-001\\CLAUDE_PLAN_MANUAL.md"
     },
     "CLAUDE_EXEC.md": {
       "type": "full",
-      "chars": 89641,
-      "bytes": 90071,
+      "chars": 89642,
+      "bytes": 90072,
       "estimated_tokens": 22411,
       "content_hash": "1f348de3aa7d8060",
       "path": "C:\\Users\\rickf\\Projects\\_EHG\\EHG_Engineer\\.worktrees\\SD-LEO-INFRA-TIER-GATE-FLAG-001\\CLAUDE_EXEC.md"
     },
     "CLAUDE_ADAM.md": {
       "type": "full",
-      "chars": 46747,
-      "bytes": 47257,
+      "chars": 46748,
+      "bytes": 47258,
       "estimated_tokens": 11687,
       "content_hash": "97b5f14ee44bcee0",
       "path": "C:\\Users\\rickf\\Projects\\_EHG\\EHG_Engineer\\.worktrees\\SD-LEO-INFRA-TIER-GATE-FLAG-001\\CLAUDE_ADAM.md"
     },
     "CLAUDE_ADAM_MANUAL.md": {
       "type": "full",
-      "chars": 15698,
-      "bytes": 15842,
+      "chars": 15699,
+      "bytes": 15843,
       "estimated_tokens": 3925,
       "content_hash": "c0ef00343b7d36a4",
       "path": "C:\\Users\\rickf\\Projects\\_EHG\\EHG_Engineer\\.worktrees\\SD-LEO-INFRA-TIER-GATE-FLAG-001\\CLAUDE_ADAM_MANUAL.md"
     },
     "CLAUDE_ADAM_PROVENANCE.md": {
       "type": "full",
-      "chars": 6924,
-      "bytes": 6988,
-      "estimated_tokens": 1731,
+      "chars": 6925,
+      "bytes": 6989,
+      "estimated_tokens": 1732,
       "content_hash": "3e7a7e1190a18618",
       "path": "C:\\Users\\rickf\\Projects\\_EHG\\EHG_Engineer\\.worktrees\\SD-LEO-INFRA-TIER-GATE-FLAG-001\\CLAUDE_ADAM_PROVENANCE.md"
     },
     "CLAUDE_COORDINATOR.md": {
       "type": "full",
-      "chars": 25316,
-      "bytes": 25514,
-      "estimated_tokens": 6329,
+      "chars": 25317,
+      "bytes": 25515,
+      "estimated_tokens": 6330,
       "content_hash": "94f2d627c5099db2",
       "path": "C:\\Users\\rickf\\Projects\\_EHG\\EHG_Engineer\\.worktrees\\SD-LEO-INFRA-TIER-GATE-FLAG-001\\CLAUDE_COORDINATOR.md"
     },
     "CLAUDE_SOLOMON.md": {
       "type": "full",
-      "chars": 58545,
-      "bytes": 59080,
+      "chars": 58546,
+      "bytes": 59081,
       "estimated_tokens": 14637,
       "content_hash": "24df7120b93f102c",
       "path": "C:\\Users\\rickf\\Projects\\_EHG\\EHG_Engineer\\.worktrees\\SD-LEO-INFRA-TIER-GATE-FLAG-001\\CLAUDE_SOLOMON.md"
     },
     "CLAUDE_DIGEST.md": {
       "type": "digest",
-      "chars": 9611,
-      "bytes": 9653,
+      "chars": 9612,
+      "bytes": 9654,
       "estimated_tokens": 2403,
       "content_hash": "364c61ae61d46577",
       "path": "C:\\Users\\rickf\\Projects\\_EHG\\EHG_Engineer\\.worktrees\\SD-LEO-INFRA-TIER-GATE-FLAG-001\\CLAUDE_DIGEST.md"
     },
     "CLAUDE_CORE_DIGEST.md": {
       "type": "digest",
-      "chars": 13747,
-      "bytes": 13861,
+      "chars": 13748,
+      "bytes": 13862,
       "estimated_tokens": 3437,
       "content_hash": "8e793099b375a84d",
       "path": "C:\\Users\\rickf\\Projects\\_EHG\\EHG_Engineer\\.worktrees\\SD-LEO-INFRA-TIER-GATE-FLAG-001\\CLAUDE_CORE_DIGEST.md"
     },
     "CLAUDE_LEAD_DIGEST.md": {
       "type": "digest",
-      "chars": 5551,
-      "bytes": 5571,
+      "chars": 5552,
+      "bytes": 5572,
       "estimated_tokens": 1388,
       "content_hash": "e0b34896c77ea1ba",
       "path": "C:\\Users\\rickf\\Projects\\_EHG\\EHG_Engineer\\.worktrees\\SD-LEO-INFRA-TIER-GATE-FLAG-001\\CLAUDE_LEAD_DIGEST.md"
     },
     "CLAUDE_PLAN_DIGEST.md": {
       "type": "digest",
-      "chars": 8541,
-      "bytes": 8581,
+      "chars": 8542,
+      "bytes": 8582,
       "estimated_tokens": 2136,
       "content_hash": "8872217b95a1d76b",
       "path": "C:\\Users\\rickf\\Projects\\_EHG\\EHG_Engineer\\.worktrees\\SD-LEO-INFRA-TIER-GATE-FLAG-001\\CLAUDE_PLAN_DIGEST.md"
     },
     "CLAUDE_EXEC_DIGEST.md": {
       "type": "digest",
-      "chars": 10964,
-      "bytes": 11046,
-      "estimated_tokens": 2741,
+      "chars": 10965,
+      "bytes": 11047,
+      "estimated_tokens": 2742,
       "content_hash": "f0b8d48af6ed1026",
       "path": "C:\\Users\\rickf\\Projects\\_EHG\\EHG_Engineer\\.worktrees\\SD-LEO-INFRA-TIER-GATE-FLAG-001\\CLAUDE_EXEC_DIGEST.md"
     },
@@ -165,7 +165,7 @@
     }
   },
   "section_digests": {
-    "global": "8738f6ff2e208c71",
+    "global": "b9842664e8b4b9ea",
     "byId": {
       "94": "ef2f1e7ed617b5e0",
       "189": "6398659126897bbb",
@@ -342,7 +342,7 @@
       "435": "dc205008f2747ac6",
       "436": "8115bd7ee9303db3",
       "439": "08a9d4b4ea40618b",
-      "444": "975f8c48f9e92ba4",
+      "444": "f53c571cc6b49f44",
       "449": "86f83ca9a7afe8cc",
       "450": "94087ec605b29ee4",
       "452": "5bb15e4ce5af0b4e",

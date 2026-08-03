@@ -80,6 +80,11 @@ async function freshGate() {
   const mod = await import('../../scripts/modules/handoff/pre-checks/pending-migrations-check.js');
   return async (...args) => {
     delete process.env.LEO_MIGRATION_TIER_GATE;
+    // The break-glass is stripped too, for symmetry with FILE B. It is set nowhere today,
+    // but an operator exporting the documented LEO_MIGRATION_TIER_GATE_FORCE_ON would
+    // otherwise short-circuit every case here — reintroducing the exact blind spot that
+    // made the original suite unfalsifiable.
+    delete process.env.LEO_MIGRATION_TIER_GATE_FORCE_ON;
     return mod.tierGateEnabled(...args);
   };
 }

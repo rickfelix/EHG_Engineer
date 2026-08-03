@@ -9,11 +9,28 @@
 // fail-open defect this SD exists to kill, one layer up. Under BYPASS polarity the evaluator's
 // false means "no bypass" means GATE ON, so every indeterminate outcome is already the safe
 // one and no wrapper is needed. Renaming this flag to gate-polarity silently inverts a
-// chairman security boundary; tests/unit/migration-tier-gate-bypass-flag.test.js pins it.
+// chairman security boundary. Pinned by tests/unit/migration-tier-gate-reader.test.js
+// (allowlist + polarity) and tests/unit/migration-tier-gate-failclosed.test.js (real
+// evaluator). An earlier version of this comment cited a test file that was never written.
 //
-// risk_tier 'high' is also deliberate: registry.js requires 2 approvals to ENABLE a high-tier
-// flag and 0 to disable it, so the dangerous direction (opening the gate) is hard and the safe
-// direction (closing it) is free.
+// WHAT risk_tier 'high' ACTUALLY BUYS — corrected after measuring, because the first
+// version of this comment asserted a control that does not exist:
+//   transitionLifecycleState(key,'enabled')      -> BLOCKED, "requires 2 approval(s)"
+//   registry.updateFlag(key,{isEnabled:true})    -> SUCCEEDS, zero approvals
+//   raw service-role .update({is_enabled:true})  -> SUCCEEDS
+// RLS grants service_role ALL, and the table's triggers (set_updated_at,
+// fn_audit_feature_flag_changes, fn_increment_feature_flag_version) plus its CHECKs
+// (chk_flag_lifecycle_enabled_consistency, chk_owner_type) enforce NO approval gate. The
+// approvals are advisory on ONE code path, so any holder of SUPABASE_SERVICE_ROLE_KEY —
+// i.e. every LEO script — can open this bypass in a single statement.
+//
+// The real control strength is: default-OFF + inverted polarity (every indeterminate read
+// is safe) + service-role key custody + a DB-level audit trail, since
+// fn_audit_feature_flag_changes records before/after on EVERY update including raw ones.
+// risk_tier 'high' is retained as an accurate risk LABEL and because it does gate the
+// lifecycle-transition path — not because it makes opening the gate hard.
+// Worth filing: a trigger refusing is_enabled false->true for risk_tier='high' without an
+// approved row would make the stronger claim true rather than merely stated.
 import 'dotenv/config';
 import { createClient } from '@supabase/supabase-js';
 import { createFlag, getFlag } from '../lib/feature-flags/registry.js';
@@ -49,8 +66,16 @@ const FLAG = {
     'Enable ONLY to deliberately suspend the tier gate fleet-wide, with chairman sign-off — it ' +
     'permits destructive DDL to auto-apply without the 3-factor gate. Normal rollback of the ' +
     'gate is this flag; the env var cannot turn the gate off (strengthen-only, FR-3). ' +
+    'NOTE, MEASURED: the risk_tier=high approval requirement is enforced ONLY on ' +
+    'transitionLifecycleState — updateFlag({isEnabled:true}) and a raw service-role UPDATE ' +
+    'both succeed with zero approvals, and no RLS policy, trigger or CHECK blocks them. Treat ' +
+    'this flag as protected by key custody and the fn_audit_feature_flag_changes audit trail, ' +
+    'NOT by an enforced approval gate. ' +
     'ATTACH NO ROLLOUT POLICY: a percentage rollout would make the security boundary hold for ' +
-    'some subjectIds and not others, and the reader refuses rollout-derived affirmatives.',
+    'some subjectIds and not others, and the reader refuses rollout-derived affirmatives. ' +
+    'Note a production policy of ANY kind also changes the reason away from ' +
+    'no_policy_default_enabled, which the reader does not accept — so a policy silently makes ' +
+    'this flag unable to grant the bypass at all.',
   ownerType: 'team',
   ownerId: 'coordinator',
   riskTier: 'high'

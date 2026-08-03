@@ -45,8 +45,22 @@ export function resolveMainRepoRoot(startDir = __dirname) {
 
 const REPO_ROOT = resolveMainRepoRoot();
 
-/** Controls whose value must not diverge between the shared root and any worktree copy. */
-export const TRACKED_KEYS = Object.freeze(['LEO_MIGRATION_TIER_GATE']);
+/**
+ * Controls whose value must not diverge between the shared root and any worktree copy.
+ *
+ * NEVER add a secret-bearing key: divergent VALUES are printed, so tracking a credential
+ * would leak it to stdout and into --json.
+ *
+ * LEO_MIGRATION_TIER_GATE_FORCE_ON is tracked and LEO_MIGRATION_TIER_GATE is kept for the
+ * deprecation window. The FORCE_ON one matters more: it is the only remaining env var that
+ * can still alter gate behaviour from a per-worktree .env. It is strengthen-only so a
+ * divergence cannot open the gate — but a worktree silently forcing the gate ON while the
+ * fleet reads the DB flag is still two representations, which is what this check is for.
+ */
+export const TRACKED_KEYS = Object.freeze([
+  'LEO_MIGRATION_TIER_GATE',
+  'LEO_MIGRATION_TIER_GATE_FORCE_ON'
+]);
 
 /** Parse `KEY=value` for the tracked keys only. Returns a Map; absent keys are simply not set. */
 export function readEnvKeys(file, keys = TRACKED_KEYS) {
