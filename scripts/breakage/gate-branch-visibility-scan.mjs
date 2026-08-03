@@ -63,6 +63,14 @@ function openPrs(repo) {
   }
 }
 
+// "Does this branch name an SD/QF key at all?" — the question that decides whether a failure to
+// resolve is a GAP (invisible) or simply none of the gate's business.
+// NOTE: written here rather than built in a shell one-liner because an earlier insertion lost the
+// backslash and shipped `[A-Za-z0-9-]*d` — a literal letter 'd'. It still matched the two live
+// witnesses by coincidence ("approveD", "aDam") while silently failing to match `feat/SD-FOO-001`,
+// which has no 'd' after the prefix. A pattern that is wrong and passes on the samples in front of
+// you is the worst kind.
+const KEYISH = /(?:SD|QF)-[A-Za-z0-9-]*\d/;
 const keys = await loadKeys();
 const buckets = { visible: [], invisible: [], unsupportedType: [], noKey: [] };
 const repoErrors = [];
@@ -73,18 +81,24 @@ for (const repo of REPOS) {
   for (const pr of prs) {
     const r = resolveBranchOwner(pr.headRefName, keys);
     const entry = { number: pr.number, repo, branch: pr.headRefName, owner: r.owner, reason: r.reason };
+    // CLASSIFY BY "DOES IT NAME A KEY" FIRST, THEN BY REASON. The first version bucketed
+    // UNSUPPORTED_BRANCH_TYPE before applying the key filter, which HID every key-carrying branch
+    // under an unsupported type — including PR #6664 (OPEN, on an SD completed 2026-07-28: the exact
+    // defect this scan exists to count) — and made the headline read 0.
+    //
+    // Worse, it made the metric move the WRONG WAY under the worst mutation: SHRINKING
+    // BRANCH_TYPE_TOKENS would have moved branches out of `invisible` and improved the number. A
+    // measurement that rewards narrowing the thing it measures is not a measurement.
+    //
+    // Now: if the branch names an SD/QF key and did not resolve, it is INVISIBLE — whatever the
+    // reason. The reason is retained per-entry so an unsupported type is still distinguishable from
+    // an unknown key; it just no longer buys an exemption from the count.
     if (r.reason === OWNER_REASON.RESOLVED) buckets.visible.push(entry);
+    else if (KEYISH.test(pr.headRefName)) buckets.invisible.push(entry);
     else if (r.reason === OWNER_REASON.UNSUPPORTED_BRANCH_TYPE) buckets.unsupportedType.push(entry);
     else buckets.noKey.push(entry);
   }
 }
-
-// "Invisible" means: the branch names an SD/QF key the gate should associate, but resolution fails.
-// A branch outside the supported token set is a KNOWN, ENUMERATED exclusion — kept in its own bucket
-// so it can never be averaged into a headline number that looks like success.
-const KEYISH = /(?:SD|QF)-[A-Za-z0-9-]*\d/;
-buckets.invisible = buckets.noKey.filter((e) => KEYISH.test(e.branch));
-buckets.noKey = buckets.noKey.filter((e) => !KEYISH.test(e.branch));
 
 const keyCarrying = buckets.visible.length + buckets.invisible.length;
 const summary = {
@@ -116,7 +130,7 @@ if (asJson) {
   console.log(`  no SD/QF key in branch    : ${summary.totals.no_sd_key_in_branch}  (gate would not associate these anyway)`);
   console.log(`  VISIBLE to the gate       : ${summary.totals.visible_to_gate}`);
   console.log(`  INVISIBLE to the gate     : ${summary.totals.invisible_to_gate}   <- target 0`);
-  console.log(`  unsupported branch type   : ${summary.totals.unsupported_branch_type}  (KNOWN exclusion, enumerated below — not counted as invisible)`);
+  console.log(`  unsupported branch type   : ${summary.totals.unsupported_branch_type}  (no SD/QF key — the gate would not associate these)`);
   if (buckets.invisible.length) {
     console.log('\n  INVISIBLE — each is an SD that could complete with this PR open:');
     for (const e of buckets.invisible) console.log(`    #${e.number} [${e.repo}] ${e.branch}  (${e.reason})`);
