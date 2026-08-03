@@ -55,7 +55,12 @@ const AXIS_FIXTURES = {
   chairmanRatificationPending: { row: orphan({ metadata: { chairman_ratified: false } }), blocks: true },
   needsCoordinatorReview: { row: orphan({ metadata: { needs_coordinator_review: true } }), blocks: true },
   leadBlockerActive: { row: orphan({ metadata: { lead_blocker: { reason: 'awaiting chairman' } } }), blocks: true },
-  testCloneBuildTree: { row: orphan({ sd_key: 'SD-DEMO-CLONE-001' }), blocks: true },
+  // CORRECTED AFTER EXEC REVIEW — this fixture asserted NOTHING. 'SD-DEMO-CLONE-001' matches
+  // TEST_FIXTURE_KEY_RE, so heldReason returned truthy via test_fixture_key, not this axis; because
+  // heldReason JOINS all matching axes, the case was green on a different axis's truthiness and the
+  // real production shape (a bridge-created clone with an ordinary sd_key and the metadata flag)
+  // was never exercised. Second instance of the same bug — the iteration caught one and missed one.
+  testCloneBuildTree: { row: orphan({ metadata: { test_clone_build_tree: true } }), blocks: true },
   // NOT a metadata flag — I guessed one and the iteration caught it. The real predicate is an
   // SD-key PREFIX plus a target_application pointing outside this repo, which is exactly the kind
   // of detail a hard-coded roster would have let me get wrong silently.

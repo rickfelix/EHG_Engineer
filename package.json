@@ -628,7 +628,8 @@
     "canary:probe": "node scripts/canary/run-canary-probe.mjs",
     "test:quarantine": "node scripts/unit-tier-quarantine.mjs report .claude-unit-run.log",
     "test:quarantine:burndown": "node scripts/unit-tier-quarantine.mjs burndown",
-    "worker:recheck-blocker": "node scripts/worker-recheck-blocker.mjs"
+    "worker:recheck-blocker": "node scripts/worker-recheck-blocker.mjs",
+    "audit:unreachable-midphase": "node scripts/audit-unreachable-midphase-sds.mjs"
   },
   "dependencies": {
     "@anthropic-ai/sdk": "^0.85.0",

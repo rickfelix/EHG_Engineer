@@ -60,9 +60,19 @@ export const NON_TERMINAL_STARTED_STATUSES = Object.freeze(['active', 'in_progre
  * The phase veto that makes a started row invisible to the draft-tier claim sources.
  * Mirrors isSdInFlight's leg: anything past LEAD is treated as in-flight and skipped.
  */
+export const UNSTARTED_PHASES = Object.freeze(['LEAD', 'LEAD_APPROVAL']);
+
 export function isPhaseVetoed(row) {
   const phase = row?.current_phase;
-  return Boolean(phase) && phase !== 'LEAD';
+  // CORRECTED AFTER EXEC REVIEW — and this file's own constraint 1 is what I violated.
+  // The first version tested `phase !== 'LEAD'` only. isSdInFlight (worker-checkin.cjs:1345)
+  // treats LEAD **and LEAD_APPROVAL** as equivalent un-started states, and LEAD_APPROVAL is the
+  // column DEFAULT — so a brand-new never-touched row sits there. Testing LEAD alone declared
+  // every default-phase row phase-vetoed, which is the opposite of the truth and would have made
+  // this check disagree with the code it claims to mirror. Restating a predicate instead of
+  // importing it is the exact sin the docblock above lectures against; I committed it two
+  // functions below the lecture.
+  return Boolean(phase) && !UNSTARTED_PHASES.includes(phase);
 }
 
 /**
@@ -82,11 +92,19 @@ export function reachableBy(row) {
   // FR-2 widens this predicate to include 'active'; until it lands, only in_progress qualifies.
   if (ADOPTION_STATUSES.includes(status)) return 'resume_orphan';
 
-  // Draft-tier sources fetch draft|active but veto anything past LEAD.
-  if (!isPhaseVetoed(row)) return 'draft_tier';
+  // Draft-tier sources fetch .in('status',['draft','active']) and then veto anything past the
+  // un-started phases. BOTH legs matter: the first version omitted the status check, so a
+  // pending_approval row at an un-started phase was reported reachable by 'draft_tier' when no
+  // draft source would ever fetch it. Caught by an EXEC reviewer driving the exported predicate
+  // directly — and it was internally inconsistent too, since the same unreachable row one phase
+  // over WAS flagged an offender.
+  if (DRAFT_TIER_STATUSES.includes(status) && !isPhaseVetoed(row)) return 'draft_tier';
 
   return null;
 }
+
+/** What the draft-tier claim sources actually fetch (worker-checkin.cjs:888/:922/:964/:1000). */
+export const DRAFT_TIER_STATUSES = Object.freeze(['draft', 'active']);
 
 /**
  * The statuses adoptOrphanInProgress accepts — IMPORTED FROM THE ADOPTION PATH ITSELF, not
@@ -162,10 +180,21 @@ async function main() {
     if (offenders.length === 0) console.log('  none — every started unclaimed row is reachable or explicitly held');
   }
 
-  // Non-zero exit so this can gate. FR-2 has not landed until this reaches 0.
-  process.exit(offenders.length > 0 ? 1 : 0);
+  // EXIT CODE VIA process.exitCode, NOT process.exit() — and this is not style.
+  //
+  // process.exit() while the supabase-js handle is still closing aborts the process on Windows
+  // with `Assertion failed: !(handle->flags & UV_HANDLE_CLOSING), src/win/async.c:76`, and the
+  // shell then sees 127 REGARDLESS of the argument. Measured 5/5: process.exit(0) -> 127 and
+  // process.exit(1) -> 127, indistinguishable. A gate reading $? could not tell clean from
+  // dirty, which would have made this check — the SD's whole acceptance — unable to gate at all.
+  //
+  // Caught by an EXEC reviewer who checked the exit code rather than the output. My own "4 before,
+  // 0 after" was read off stdout TEXT and never off the gating surface, so the number was right
+  // and the mechanism was broken. Setting exitCode lets the event loop drain naturally and the
+  // real code survives.
+  process.exitCode = offenders.length > 0 ? 1 : 0;
 }
 
 if (process.argv[1] && import.meta.url === new URL(`file://${process.argv[1].replace(/\\/g, '/')}`).href) {
-  main().catch((e) => { console.error('[unreachable-midphase] fatal:', e.message); process.exit(2); });
+  main().catch((e) => { console.error('[unreachable-midphase] fatal:', e.message); process.exitCode = 2; });
 }
