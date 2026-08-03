@@ -98,7 +98,7 @@ describe('selectReapableOrphans (FR-1/FR-3)', () => {
   it('selects orphans = fs dirs minus registered + recent + helpers', () => {
     const oldOrphan = mkLeftover('old-orphan');
     const registered = mkLeftover('registered-wt', { withGit: true });
-    const recent = mkLeftover('fresh-dir');
+    mkLeftover('fresh-dir'); // created for its side effect; asserted by name below
     fs.mkdirSync(path.join(worktreesDir, '_archive'), { recursive: true }); // helper, never an orphan
 
     // Age the old orphan well past the threshold — CONTENTS INCLUDED (see ageTree); leave
