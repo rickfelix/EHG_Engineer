@@ -231,8 +231,13 @@ COMMIT;
 --
 -- Do not reintroduce the older framing, which held that a 42501 could not be trusted BECAUSE the
 -- RETURNING clause had failed the read policy. That framing was carried through several rounds of
--- this SD's own evidence and is REFUTED — see
--- strategic_directives_v2.metadata.method_correction_20260803. It misnames the hazard, and the
+-- this SD's own evidence and is REFUTED — see strategic_directives_v2.metadata
+--   -> acceptance_evidence_20260802 -> method_correction_20260803   (NESTED, not a top-level key;
+-- the first version of this very comment cited the top-level path, which does not resolve — the
+-- commit written to make the correction travel shipped a dead pointer, which is the lesson eating
+-- itself. A correction travels on CO-LOCATION PLUS A RESOLVABLE POINTER; co-location alone is what
+-- was landed. Caught by the RETRO sub-agent, which checked the path instead of reading past it.)
+-- It misnames the hazard, and the
 -- misnaming matters: it points at the READ policy and so invites a fix there, while the actual
 -- divergence is between the two WRITE forms. The correction previously lived only in SD metadata
 -- and did not travel with this file — which is exactly how it got repeated. It travels now.
