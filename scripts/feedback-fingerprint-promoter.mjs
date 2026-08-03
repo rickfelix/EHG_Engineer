@@ -93,7 +93,7 @@ let skippedBelowThreshold = 0;
 // Extracted so the demand gate can ENCLOSE the minting rather than merely precede it. A gate that
 // only returns a verdict is one forgotten `if` away from being decorative — and that omission is
 // invisible to a source-text guard test, which is all this script had.
-async function promoteAll() {
+async function promoteAll(reportOnly = false) {
 for (const group of groups.values()) {
   if (!shouldPromote(group, THRESHOLD)) {
     skippedBelowThreshold++;
@@ -111,8 +111,8 @@ for (const group of groups.values()) {
   console.log(`  source rows: ${sourceIds.join(', ')}`);
   console.log(`  sample: ${group.sample_body.slice(0, 120)}`);
 
-  if (!apply) {
-    console.log('  [DRY RUN] would create QF-candidate here.');
+  if (!apply || reportOnly) {
+    console.log(reportOnly ? '  [WITHHELD] would have created a QF-candidate here - suppressed by belt demand.' : '  [DRY RUN] would create QF-candidate here.');
     continue;
   }
 
@@ -170,7 +170,7 @@ let withheldByDemand = false;
 if (!apply) {
   await promoteAll();
 } else {
-  const result = await gatedQfMint(supabase, { engine: FINGERPRINT_PROMOTER_ENGINE }, promoteAll);
+  const result = await gatedQfMint(supabase, { engine: FINGERPRINT_PROMOTER_ENGINE, onWithheld: () => promoteAll(true) }, promoteAll);
   withheldByDemand = result.withheldByDemand;
 }
 
