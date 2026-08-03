@@ -47,7 +47,7 @@ async function main() {
     // Fetch waves
     const { data: waves, error: wErr } = await supabase
       .from('roadmap_waves')
-      .select('id, sequence_rank, title, status, progress_pct, confidence_score')
+      .select('id, sequence_rank, title, status, confidence_score')
       .eq('roadmap_id', rm.id)
       .order('sequence_rank', { ascending: true });
 
@@ -86,12 +86,15 @@ async function main() {
       }
       const dispStr = Object.entries(dispositions).map(([k, v]) => `${k}:${v}`).join(' ');
 
+      // SD-LEO-INFRA-ROADMAP-WAVES-PROGRESS-001 (FR-4): the per-wave "Progress: N%" is removed.
+      // It printed roadmap_waves.progress_pct — a RUNG-level value shared across every wave of a
+      // rung — as this wave's progress, with null coerced to 0. The Items/Promoted line printed
+      // immediately below is the honest per-wave signal and is unchanged.
       const statusLabel = WAVE_STATUS_LABELS[wave.status] || wave.status;
-      const progress = Number(wave.progress_pct || 0).toFixed(0);
       const conf = Number(wave.confidence_score || 0).toFixed(2);
 
       console.log(`    [${wave.sequence_rank}] ${wave.title}`);
-      console.log(`        Status: ${statusLabel} | Progress: ${progress}% | Confidence: ${conf}`);
+      console.log(`        Status: ${statusLabel} | Confidence: ${conf}`);
       console.log(`        Items: ${count || 0} | Promoted: ${promoted.count || 0}${dispStr ? ' | ' + dispStr : ''}`);
     }
   }

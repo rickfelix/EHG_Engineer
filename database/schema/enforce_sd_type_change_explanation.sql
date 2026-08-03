@@ -1,3 +1,44 @@
+-- ============================================================================
+-- SUPERSEDED — DO NOT APPLY. This file is kept for history only.
+-- SD-LEO-INFRA-AUDIT-LOG-MUTATION-BLIND-001 (FR-2)
+--
+-- THE LIVE DEFINITION IS:
+--   database/migrations/20260202_sd_type_change_governance_fixed.sql
+--
+-- Both files define enforce_sd_type_change_explanation() and
+-- trg_enforce_sd_type_change_explanation, but they DIFFER in one way that
+-- matters: the migration writes sd_type mutations to audit_log with old_value
+-- and new_value populated (:115-129, :158, :188); THIS FILE WRITES NOTHING.
+-- Those writes are 172 of the 388 rows in the whole table that carry an
+-- old_value — 0.167% of audit_log is the entire mutation record, and this
+-- function's live twin produces a large share of it.
+--
+-- So applying this file would CREATE OR REPLACE the live function with a
+-- non-auditing one, silently ending sd_type mutation auditing. Nothing would
+-- detect it: no test asserts the trigger writes, and the rows simply stop
+-- appearing. database/schema/ is not scanned by the pending-migration checker
+-- (it reads database/migrations, database/manual-updates, supabase/migrations),
+-- so this file is applied only by a human copying it — which is exactly the
+-- path a guard has to cover.
+--
+-- The guard below makes that mistake loud instead of silent. Remove it only
+-- together with the duplicate definition itself.
+-- ============================================================================
+DO $supersede$
+BEGIN
+  RAISE EXCEPTION USING
+    MESSAGE = 'SUPERSEDED FILE — applying this would disable sd_type audit logging.',
+    DETAIL  = 'enforce_sd_type_change_explanation() is defined here WITHOUT the audit_log writes '
+              || 'that the live version has. Replacing the live function would silently stop '
+              || 'recording sd_type mutations (old_value/new_value), and nothing detects the loss.',
+    HINT    = 'Apply database/migrations/20260202_sd_type_change_governance_fixed.sql instead.';
+END
+$supersede$;
+
+-- ---------------------------------------------------------------------------
+-- Historical content below this line. Unreachable: the guard above aborts.
+-- ---------------------------------------------------------------------------
+
 -- Enforce SD Type Change Explanation Requirement
 -- Created: 2025-12-30
 -- Purpose: Requires governance_metadata.type_reclassification when sd_type is changed

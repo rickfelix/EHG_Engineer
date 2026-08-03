@@ -17,9 +17,14 @@
  * is 5), so exactly one of the two fires maps to 05:45 ET per season and does work — the other
  * exits inert. The per-ET-date dedupeKey is the idempotency backstop against a double-fire.
  *
- * FAIL-SOFT: while the STAGED sms_outbound_obligations table is unapplied, enqueueChairmanSms
- * returns {enqueued:false, reason:'table_absent...'} without throwing and this sweep logs inert
- * + exits 0 (no crash, no direct provider.send fallback).
+ * FAIL-SOFT (mechanism, still correct): if the table were absent, enqueueChairmanSms returns
+ * {enqueued:false, reason:'table_absent...'} without throwing and this sweep logs inert + exits 0
+ * (no crash, no direct provider.send fallback).
+ *
+ * THE TABLE IS PRESENT. This header previously said it "is unapplied". MEASURED 2026-08-02:
+ * 17 columns, 395 rows, to_regclass resolves (control query on a known table confirms the probe
+ * works). This sweep enqueues for real — do not reason about it as inert.
+ * SD-LEO-INFRA-DECISION-RESURFACE-GUARDS-001 FR-3.
  *
  * Usage:
  *   node scripts/cron/chairman-morning-review-sweep.mjs --once
@@ -125,13 +130,22 @@ export async function gatherWaves(supabase) {
   }
   if (!rm) return { state: 'none', waveCount: 0, doneWaves: 0, avgPct: null };
   try {
-    const { data: waves, error } = await supabase.from('roadmap_waves').select('status, progress_pct').eq('roadmap_id', rm.id);
+    // SD-LEO-INFRA-ROADMAP-WAVES-PROGRESS-001 (FR-2): progress_pct is no longer read here.
+    //
+    // This was the THIRD chairman-facing consumer and the least honest of them. progress_pct is a
+    // RUNG-level value stored on a per-wave row, so `avgPct` averaged copies of one measurement —
+    // and `Number(w.progress_pct || 0)` coerced NULL to 0, which is precisely the fabrication the
+    // rollup's own contract forbids ("never fabricated as 0%"). An unmeasured wave therefore
+    // dragged the chairman's headline build % downward as though it had been measured at zero.
+    //
+    // doneWaves now keys on the wave's own status, which is a genuine per-wave fact. No average is
+    // computed: there is no honest roadmap-level percentage to derive from a rung-level column.
+    const { data: waves, error } = await supabase.from('roadmap_waves').select('status').eq('roadmap_id', rm.id);
     if (error) throw new Error(error.message);
     const ws = waves || [];
     const waveCount = ws.length;
-    const doneWaves = ws.filter((w) => Number(w.progress_pct || 0) >= 100 || w.status === 'completed').length;
-    const avgPct = waveCount ? Math.round(ws.reduce((s, w) => s + Number(w.progress_pct || 0), 0) / waveCount) : null;
-    return { state: 'resolved', roadmapId: rm.id, waveCount, doneWaves, avgPct };
+    const doneWaves = ws.filter((w) => w.status === 'completed').length;
+    return { state: 'resolved', roadmapId: rm.id, waveCount, doneWaves, avgPct: null };
   } catch {
     return { state: 'unavailable', waveCount: 0, doneWaves: 0, avgPct: null };
   }
@@ -146,8 +160,12 @@ export async function gatherWaves(supabase) {
 export function formatRoadmapLine(waves) {
   switch (waves?.state) {
     case 'resolved':
+      // FR-2 (SD-LEO-INFRA-ROADMAP-WAVES-PROGRESS-001): the "N% build" clause is gone with the
+      // column it came from. Rendering '?%' instead would keep asserting that a roadmap-level
+      // percentage exists and is merely unavailable; it does not exist. The wave counts beside it
+      // are real, and the four states stay pairwise distinct without it.
       return waves.waveCount
-        ? `Roadmap: ${waves.avgPct == null ? '?' : waves.avgPct}% build, waves ${waves.doneWaves}/${waves.waveCount} done`
+        ? `Roadmap: waves ${waves.doneWaves}/${waves.waveCount} done`
         : 'Roadmap: active roadmap has no waves yet';
     case 'ambiguous':
       return `Roadmap: AMBIGUOUS — ${waves.activeCount ?? 'multiple'} active roadmaps, numbers withheld until resolved`;

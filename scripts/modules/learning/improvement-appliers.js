@@ -10,6 +10,7 @@ import dotenv from 'dotenv';
 import path from 'path';
 import { fileURLToPath } from 'url';
 import { closeIssuePatterns } from '../../../lib/governance/pattern-closure.js';
+import { sanitizeProtocolSectionPayload } from './protocol-section-payload-guard.js';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 dotenv.config({ path: path.resolve(__dirname, '../../../.env') });
@@ -81,15 +82,26 @@ async function applyProtocolSectionChange(improvement) {
     throw new Error(`Unexpected target table: ${target_table}`);
   }
 
-  const { error } = await supabase
-    .from('leo_protocol_sections')
-    .upsert(payload);
-
-  if (error) {
-    throw new Error(`Failed to update protocol section: ${error.message}`);
+  // SD-LEO-INFRA-IMPROVEMENT-APPLIER-UPSERTS-001 (FR-1, FR-2, FR-3): this was
+  // .upsert(payload) — unfiltered, and the ONLY applier that could REPLACE a row. A payload
+  // carrying an 'id' overwrote a governing protocol section, auto-approved at threshold 50 with no
+  // human review. INSERT-ONLY now, and the payload is filtered to an explicit column allowlist.
+  // sanitize THROWS on a non-object payload (the string shape measured in the live queue) rather
+  // than degrading to {} — a silent empty write is how this fix would ship looking correct.
+  const { clean, dropped } = sanitizeProtocolSectionPayload(payload, { queueRowId: improvement?.id });
+  if (dropped.length) {
+    console.warn(`[improvement-appliers] dropped non-allowlisted keys for queue row ${improvement?.id ?? 'unknown'}: ${dropped.join(', ')}`);
   }
 
-  return `Updated leo_protocol_sections: ${payload.section_key || payload.id}`;
+  const { error } = await supabase
+    .from('leo_protocol_sections')
+    .insert(clean);
+
+  if (error) {
+    throw new Error(`Failed to append protocol section: ${error.message}`);
+  }
+
+  return `Appended leo_protocol_sections: ${clean.section_type ?? '(untyped)'} — ${clean.title ?? '(untitled)'}`;
 }
 
 /**

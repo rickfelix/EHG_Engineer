@@ -184,6 +184,10 @@ async function main() {
       }
     }
     console.log(`\nrevive-all: ${inserted} inserted, ${skipped} skipped (already pending), ${failed} failed`);
+    // FR-1/FR-2: revive-all is the path most likely to be run unattended, which is where
+    // the silence cost the most — 21 requests expired here without anyone noticing.
+    const allWarn = formatQueueWarning(await assessQueueHealth(supabase));
+    if (allWarn) console.log(allWarn);
     if (failed > 0) process.exit(2);
     return;
   }
@@ -196,17 +200,32 @@ async function main() {
   }
 
   const r = await reviveOne(supabase, callsign, requestedBySessionId);
+  // FR-1/FR-2: read the queue's history BEFORE reporting an outcome, so "requested"
+  // is never printed as if it meant "will be acted on".
+  const health = await assessQueueHealth(supabase);
   if (r.inserted) {
-    console.log(`✓ Revival requested for ${callsign}`);
+    console.log(`✓ Revival REQUESTED for ${callsign} (row written — not yet consumed)`);
     console.log(`  row_id: ${r.row.id}`);
     console.log(`  expires_at: ${r.row.expires_at}`);
     console.log(`  broadcast: SPAWN_REQUEST emitted on session_coordination`);
     console.log(`\nA spawn-execution layer (watchdog/notification/cron) should consume the row and start a fresh CC instance.`);
     console.log(`See docs/protocol/coordinator-worker-revival.md for the contract.`);
+    const warn = formatQueueWarning(health);
+    if (warn) console.log(warn);
   } else if (r.alreadyPending) {
-    console.log(`↺ ${callsign}: already has a pending revival request.`);
-    console.log(`  No new row inserted (idempotency rule: one pending per callsign).`);
+    // FR-3: idempotency behaviour is unchanged — only how it READS. On a queue that has
+    // never delivered, the blocking pending row is evidence of the dead consumer, not of
+    // a duplicate politely suppressed.
+    if (health && health.neverConsumed) {
+      console.log(`⚠ ${callsign}: BLOCKED by an unconsumed revival request — not a benign duplicate.`);
+      console.log(`  A previous request is still pending and nothing has consumed it.`);
+    } else {
+      console.log(`↺ ${callsign}: already has a pending revival request.`);
+      console.log(`  No new row inserted (idempotency rule: one pending per callsign).`);
+    }
     console.log(`  Run: SELECT id, requested_at, expires_at FROM worker_spawn_requests WHERE requested_callsign='${callsign}' AND status='pending';`);
+    const warn = formatQueueWarning(health);
+    if (warn) console.log(warn);
   } else {
     console.error(`✗ Failed to insert revival request: ${r.error?.message || 'unknown error'}`);
     process.exit(2);
@@ -214,7 +233,81 @@ async function main() {
 }
 
 // Export internal helpers for unit testing.
-module.exports = { NATO, findIdleCallsigns, reviveOne, insertSpawnRequest, isExpiredPendingRow, reapExpiredPendingRequests };
+/**
+ * SD-LEO-INFRA-COORDINATOR-REVIVE-NEVER-001 (FR-1, FR-2).
+ *
+ * Read the queue's own history so the CALLER can tell a live queue from a dead one.
+ * Everything here is DERIVED at call time (TR-3) — never hardcoded — so the warning
+ * switches OFF by itself the moment a request is actually fulfilled. A permanent
+ * warning would get ignored as noise and re-create the unobservable failure it exists
+ * to expose.
+ *
+ * Exact head counts, never an unbounded select (TR-1): PostgREST caps a plain .select()
+ * at 1000 rows, which would silently UNDER-REPORT the stuck population — the same
+ * blind-measurement class this SD is about.
+ *
+ * @returns {Promise<{total:number, pending:number, everFulfilled:number,
+ *                    oldestPendingAt:string|null, neverConsumed:boolean}|null>}
+ */
+async function assessQueueHealth(supabase) {
+  try {
+    const head = { count: 'exact', head: true };
+    const [{ count: total }, { count: pending }, { count: everFulfilled }] = await Promise.all([
+      supabase.from('worker_spawn_requests').select('*', head),
+      supabase.from('worker_spawn_requests').select('*', head).eq('status', 'pending'),
+      supabase.from('worker_spawn_requests').select('*', head).not('fulfilled_at', 'is', null),
+    ]);
+    const { data: oldest } = await supabase
+      .from('worker_spawn_requests')
+      .select('requested_at')
+      .eq('status', 'pending')
+      .order('requested_at', { ascending: true })
+      .limit(1);
+
+    return {
+      total: total ?? 0,
+      pending: pending ?? 0,
+      everFulfilled: everFulfilled ?? 0,
+      oldestPendingAt: oldest && oldest[0] ? oldest[0].requested_at : null,
+      // The whole signal: has this queue EVER delivered? Derived, not asserted.
+      neverConsumed: (total ?? 0) > 0 && (everFulfilled ?? 0) === 0,
+    };
+  } catch {
+    // Fail-soft: an unreadable queue must not break revive. Absent health is reported
+    // as absent, never as healthy — silence is not evidence of a live consumer.
+    return null;
+  }
+}
+
+/**
+ * Render the caller-facing warning. Returns '' when the queue has ever delivered, so a
+ * working consumer produces no noise (TS-2 pins this off-switch).
+ *
+ * Counts always ship WITH their denominator (FR-2): a bare "8 pending" is the
+ * count-truncation shape this codebase keeps rediscovering.
+ */
+function formatQueueWarning(health) {
+  if (!health) return '\n  [warn] queue health unreadable — cannot confirm a consumer exists.';
+  if (!health.neverConsumed) return '';
+  const ageDays = health.oldestPendingAt
+    ? ((Date.now() - new Date(health.oldestPendingAt).getTime()) / 86400000).toFixed(1)
+    : null;
+  const lines = [
+    '',
+    '  *** THIS REQUEST MAY NEVER BE CONSUMED ***',
+    `  worker_spawn_requests has NEVER fulfilled a request: 0 of ${health.total} rows have fulfilled_at set.`,
+    `  pending: ${health.pending} of ${health.total}` + (ageDays ? `, oldest waiting ${ageDays} days.` : '.'),
+    '  The row inserted above is real; whether anything reads it is NOT established by this command.',
+    '  WHY: scripts/fleet/worker-spawn-executor.cjs is OPERATOR-GATED (its header: "Stage 2, do NOT',
+    '  enable autonomously") and .github/workflows/fleet-rollcall-cron.yml deliberately does not wire',
+    '  it — the live spawn path needs a chairman to host-validate the claude CLI invocation and register',
+    '  a LOCAL Windows Task Scheduler entry; GHA cannot host it. Until that is done, this queue is a',
+    '  write-only surface and revive cannot recover anything.',
+  ];
+  return lines.join('\n');
+}
+
+module.exports = { NATO, findIdleCallsigns, reviveOne, insertSpawnRequest, isExpiredPendingRow, reapExpiredPendingRequests, assessQueueHealth, formatQueueWarning };
 
 // Only run main() when invoked as CLI (not when require'd by tests).
 if (require.main === module) {

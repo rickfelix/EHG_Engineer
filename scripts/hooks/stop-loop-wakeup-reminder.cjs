@@ -32,11 +32,45 @@
  * 'active' (no wakeup armed) — exactly the attrition case it guards.
  */
 
+// ── STDOUT IS THE DECISION CHANNEL — MUZZLED BEFORE ANYTHING ELSE LOADS ──────
+// Claude Code parses this hook's stdout as the Stop decision document. Requiring the supabase
+// client loads dotenv, which writes an ~80-byte "◇ injected env …" banner to STDOUT (measured
+// 2026-08-02; PRE-EXISTING — git HEAD already required it). Worse, that banner's tip text
+// contains a literal "{", so it is not merely a preamble: it defeats find-first-brace extraction
+// and yields a SyntaxError instead of a decision. (Observed live — it broke an unrelated parse of
+// worker-checkin.cjs stdout the same day.)
+//
+// A scoped muzzle around the ONE require I had measured was the instance fix, not the class fix:
+// the allow path still emitted 87 bytes from a DIFFERENT transitive require (park-worker /
+// emit-feedback). So the muzzle is installed at module load, before any require below runs, and
+// stdout is restored ONLY to emit the decision. Everything else on this hook's stdout is dropped.
+// stderr is untouched. AC: process.stdout.write appears exactly ONCE outside these two helpers.
+// GATED ON BEING THE PROCESS ENTRY POINT. Node sets require.main before executing the entry
+// module, so this still arms BEFORE the requires below when running as the hook — which is the
+// whole point. But an IMPORTER (a test, a script) must not have its stdout silently muzzled as a
+// side effect of requiring this file: I hit exactly that while verifying a merge, where a
+// verification script that required the hook printed nothing at all and looked like a crash.
+// A global side effect on every consumer is too high a price for a guarantee only the hook
+// process needs.
+const RUNNING_AS_HOOK = require.main === module;
+const REAL_STDOUT_WRITE = process.stdout.write.bind(process.stdout);
+if (RUNNING_AS_HOOK) process.stdout.write = () => true;
+
+/** The ONLY path back onto stdout. Writes the decision document and re-muzzles. */
+function emitDecision(payload) {
+  try {
+    REAL_STDOUT_WRITE(JSON.stringify(payload));
+  } finally {
+    if (RUNNING_AS_HOOK) process.stdout.write = () => true;
+  }
+}
+
 const {
   LOOP_STATE_ACTIVE,
   LOOP_STATE_AWAITING_TICK,
   LOOP_STATE_EXITED,
 } = require('../lib/sessions/loop-state-tracker.cjs');
+const armEvidence = require('./lib/wakeup-arm-evidence.cjs');
 
 // ── Clean shutdown — Windows libuv UV_HANDLE_CLOSING avoidance ────────────────
 // The claude_sessions query opens an undici/fetch keep-alive socket. Calling
@@ -63,30 +97,50 @@ async function shutdown() {
 
 /**
  * Pure decision: should the Stop hook block-and-remind this turn?
- * Block when the reminder is enabled, we have not already reminded this turn, AND the session
- * is a worker about to go silent without a wakeup armed. Two worker signals:
- *   - loop_state='active' (in a /loop, no wakeup armed), OR
- *   - the session holds an active SD claim while loop_state never entered the machine
- *     ('unknown'/null) — the coverage gap where a working worker would otherwise stop silently.
- * Operator/coordinator/Adam sessions hold no sd-start claim and never reach 'active', so they
- * are never trapped; and the block fires at most once per turn (stop_hook_active guard).
- * @param {{ loopState: string|null|undefined, stopHookActive: boolean, flagEnabled: boolean, hasActiveClaim?: boolean }} args
+ *
+ * STEP A (SD-LEO-INFRA-TERMINAL-RITUAL-ENFORCEMENT-001): the block now derives from TRANSCRIPT
+ * EVIDENCE of a ScheduleWakeup tool_use in the current turn, not from loop_state. The old
+ * predicate read a flag the worker sets about itself, so a worker that believed it had armed —
+ * or said so — satisfied it without the tool ever being called.
+ *
+ * WHAT THIS CAN AND CANNOT DO. It blocks ONCE per turn; a worker that stops again passes through
+ * (stop_hook_active, the anti-infinite-loop guard). For the dormancy this SD targets there is no
+ * later turn to re-block — the seat is gone — so step A is a one-shot NUDGE, not a compulsion.
+ * The escape is therefore COUNTED (classifyWindDownReason → 'second_stop_still_unarmed'): that
+ * number is how often a reminder was seen and ignored, and it is the evidence base for step C,
+ * which arms on the worker's behalf and is the actual enforcement.
+ *
+ * @param {{ armVerdict?: 'armed'|'unarmed'|'unknown', loopState?: string|null, stopHookActive?: boolean,
+ *           flagEnabled?: boolean, enforcementDisabled?: boolean, hasActiveClaim?: boolean }} args
  * @returns {boolean}
  */
-function shouldRemind({ loopState, stopHookActive, flagEnabled, hasActiveClaim, windDownSignaled }) {
+function shouldRemind({ armVerdict, loopState, stopHookActive, flagEnabled, enforcementDisabled, hasActiveClaim }) {
   if (!flagEnabled) return false;                       // default-OFF: no-op
+  if (enforcementDisabled) return false;                // runtime kill switch (FR-2)
   if (stopHookActive) return false;                     // never block twice — already reminded
-  // ALLOW-PATH (SD-LEO-INFRA-LOOP-CONTINUITY-ENFORCE-001, exit-mode 4c): a worker that
-  // announced its wind-down via /signal (session_coordination) is making a LEGITIMATE,
-  // coordinator-visible stop — never block it. Closes the false-positive where a worker
-  // does the handshake and then gets trapped by the reminder.
-  if (windDownSignaled) return false;
-  if (loopState === LOOP_STATE_ACTIVE) return true;     // in-loop, no wakeup armed
-  if (loopState === LOOP_STATE_AWAITING_TICK) return false; // wakeup already armed — fine
   if (loopState === LOOP_STATE_EXITED) return false;    // loop legitimately ended
-  // loop_state 'unknown'/null: remind ONLY if this session holds a live SD claim (= a worker
-  // about to abandon in-progress work). A claim-less interactive session is never reminded.
-  return Boolean(hasActiveClaim);
+
+  // WORKER GATE (FR-4). Worker-shape is a CLAIM or a live loop state — NOT an announcement.
+  // This is what keeps operators safe, and it replaces the old windDownSignaled allow-path,
+  // which returned false for ANY session that merely said "winding down". That allow-path was
+  // simultaneously too wide and too narrow: it let a worker talk its way out of the arm
+  // requirement, and (shouldParkRecoverable:112, same defect) it parked operators into
+  // awaiting_tick, where an aged-out window then blocked THEIR turn-end.
+  const isWorker = Boolean(hasActiveClaim)
+    || loopState === LOOP_STATE_ACTIVE
+    || loopState === LOOP_STATE_AWAITING_TICK;
+  if (!isWorker) return false;
+
+  // ARM EVIDENCE (FR-3). ONLY an actual ScheduleWakeup tool_use in the CURRENT turn excuses the
+  // stop. An announcement does not — not a /signal saying "wakeup armed", not loop_state, not
+  // metadata. That is Charlie's false positive, and it is the whole point of this predicate:
+  // the old one read loop_state='awaiting_tick', which post-tool-loop-state.cjs sets from the
+  // worker's own claim about itself, so the enforcement was asking the suspect for an alibi.
+  if (armVerdict === 'armed') return false;
+  if (armVerdict === 'unarmed') return true;
+  // 'unknown' — no boundary in the tail window, or no transcript. Absence of evidence is not
+  // evidence of absence: fail open rather than trap a worker on an unreadable transcript.
+  return false;
 }
 
 function isFlagEnabled() {
@@ -115,17 +169,54 @@ function shouldParkRecoverable({ loopState, hasActiveClaim, windDownSignaled } =
 }
 
 /**
- * Write a RECOVERABLE park-state for the session: loop_state='awaiting_tick' + a capped
- * expected_silence_until, reusing the post-tool-loop-state.cjs writeTelemetryAwait pattern so
- * coordinator-revival / orphan-adoption deterministically re-engages the worker (no cold-exit).
+ * STEP B — write a RECOVERABLE park-state: a capped expected_silence_until ALWAYS, and
+ * loop_state='awaiting_tick' ONLY WHEN THE TURN ACTUALLY ARMED.
+ *
+ * FR-B1's requirement is "no code path stamps armed-state without an actual ScheduleWakeup tool
+ * call". This function was that path: it stamped awaiting_tick — a claim that a wakeup is pending —
+ * on every parked worker, armed or not. Now that step A produces real arm evidence, the write is
+ * GUARDED by it rather than deleted. Guarding beats deleting: a genuinely armed worker keeps the
+ * true state and all four consumers below behave exactly as before, so the change costs nothing on
+ * the compliant path and only removes the FALSE claim.
+ *
+ * THE FOUR ACTUATING CONSUMERS, and what each does once an unarmed seat stops being stamped
+ * (an unarmed /loop worker's loop_state remains 'active', which is accurate — it was looping and
+ * did not arm):
+ *   1. dormancy-watchdog.cjs isDormant:25 — gates on loop_state ∈ {awaiting_tick, active} FIRST,
+ *      then expected_silence_until. Unarmed seats stay 'active' ⇒ STILL DETECTED.
+ *      NOTE FR-B1 IS WRONG ON THE MECHANISM: it says keeping expected_silence_until preserves
+ *      visibility, but :25 short-circuits on loop_state BEFORE :26 ever reads that field. What
+ *      actually preserves visibility is 'active' already being in the set. Keeping
+ *      expected_silence_until is still required — :27 rejects an unparseable one — but it is not
+ *      sufficient on its own, and a seat whose loop_state is null/'unknown' would be invisible.
+ *      MEASURED 2026-08-02: of 4 claim-holding sessions, loop_state was {awaiting_tick:2,
+ *      active:2} and ZERO fell outside the set. That is a point-in-time sample, not a proof the
+ *      null/'unknown' population is empty in general.
+ *   2. session-watchdog.js classifyWatchdogState:48 — 'parked' ⇒ STOPPED ⇒ never restarted.
+ *      It also treats a live expected_silence_until window as parked, so behaviour is UNCHANGED
+ *      while the window is open. Once it elapses, an unarmed seat now classifies CRASHED/AUTH-LOST
+ *      and becomes ACTIONABLE. That is the point: a dead seat should be revived, not left parked
+ *      forever by a sticky flag it never earned.
+ *   3. singleton-relaunch-trigger.js SAFE_LOOP_STATES:47 — ['awaiting_tick','exited']; anything
+ *      else FAILS CLOSED (no relaunch). An unarmed singleton now reads 'active' ⇒ relaunch is NOT
+ *      scheduled. Conservative, and it removes a real contradiction: the same false stamp was
+ *      simultaneously telling consumer 2 "parked, do not restart" and consumer 3 "safe to
+ *      relaunch". Armed singletons are unaffected — they still stamp awaiting_tick, both here and
+ *      via post-tool-loop-state.cjs, which is the LEGITIMATE writer (it fires on the actual tool call).
+ *   4. charter-audit-detectors.mjs isParked:83 — awaiting_tick OR inside the armed-silence window.
+ *      expected_silence_until is still written unconditionally ⇒ UNCHANGED; parked workers are
+ *      still excluded from the neglect flag, so no false starvation alarms.
+ *
  * Best-effort / fail-open — any failure is logged and never blocks the stop.
  */
-async function parkSessionRecoverable(sessionId) {
-  try {
-    const { setLoopState } = require('../lib/sessions/loop-state-tracker.cjs');
-    await setLoopState(sessionId, LOOP_STATE_AWAITING_TICK);
-  } catch (e) {
-    process.stderr.write(`[stop-loop-wakeup-reminder] park loop-state (non-fatal): ${e.message}\n`);
+async function parkSessionRecoverable(sessionId, { armVerdict } = {}) {
+  if (armVerdict === 'armed') {
+    try {
+      const { setLoopState } = require('../lib/sessions/loop-state-tracker.cjs');
+      await setLoopState(sessionId, LOOP_STATE_AWAITING_TICK);
+    } catch (e) {
+      process.stderr.write(`[stop-loop-wakeup-reminder] park loop-state (non-fatal): ${e.message}\n`);
+    }
   }
   try {
     const { computeSilenceMinutes } = require('../park-worker.cjs');
@@ -154,17 +245,37 @@ async function parkSessionRecoverable(sessionId) {
  *                                              contradicting its own recorded had_claim:true flag).
  *   - 'turn_end_wakeup_scheduled'           — loop_state='awaiting_tick' but no live claim (idle worker
  *                                              that armed its own wakeup correctly).
- *   - 'no_claim_idle'                       — none of the above; no wakeup evidence and no live claim.
+ *   - 'turn_end_with_claim_no_wakeup'       — SD-LEO-INFRA-TERMINAL-RITUAL-ENFORCEMENT-001 (TR-3):
+ *                                              a live SD claim with NO wakeup evidence. This is THIS
+ *                                              SD's entire target population — the seat that ends a turn
+ *                                              holding work and never re-fires. It was previously folded
+ *                                              into 'no_claim_idle', a value that CONTRADICTS the
+ *                                              had_claim:true stamped beside it by recordWindDown, so the
+ *                                              dormancy population was uncountable by its own telemetry.
+ *   - 'no_claim_idle'                       — none of the above; no wakeup evidence AND no live claim.
+ *
+ * BROAD, not narrow: the claim-aware split is applied to the WHOLE fall-through, not just the one
+ * path reachable today (loop_state='exited' + a live claim). The other inputs are unreachable only
+ * because shouldRemind currently blocks them first — and step A REPLACES that predicate, which makes
+ * them reachable. A fix narrowed to today's reachability would silently start lying the moment the
+ * predicate changes. This turns tests/unit/hooks/stop-loop-park-recoverable.test.js:100-113 RED; that
+ * test pinned the contradiction as if it were the desired behaviour, and is updated with this change.
  * @param {{ windDownSignaled?:boolean, stopHookActive?:boolean, hasActiveClaim?:boolean, loopState?:string|null }} args
- * @returns {'signaled'|'second_stop'|'turn_end_with_claim_wakeup_scheduled'|'turn_end_wakeup_scheduled'|'no_claim_idle'}
+ * @returns {'signaled'|'second_stop'|'turn_end_with_claim_wakeup_scheduled'|'turn_end_wakeup_scheduled'|'turn_end_with_claim_no_wakeup'|'no_claim_idle'}
  */
-function classifyWindDownReason({ windDownSignaled, stopHookActive, hasActiveClaim, loopState } = {}) {
+function classifyWindDownReason({ windDownSignaled, stopHookActive, hasActiveClaim, loopState, armVerdict } = {}) {
+  // STEP A — THE COUNTABLE IGNORE. A worker that reached a SECOND stop while still carrying no
+  // arm evidence saw the reminder and stopped anyway. This is the population step A cannot save
+  // (the anti-infinite-loop guard lets it through) and the exact population step C exists for.
+  // Counted before 'signaled' so an announcement cannot mask it — announcing is what these
+  // workers do INSTEAD of arming, and folding them into 'signaled' would hide the whole class.
+  if (stopHookActive && armVerdict === 'unarmed' && hasActiveClaim) return 'second_stop_still_unarmed';
   if (windDownSignaled) return 'signaled';
   if (stopHookActive) return 'second_stop';
   if (loopState === LOOP_STATE_AWAITING_TICK) {
     return hasActiveClaim ? 'turn_end_with_claim_wakeup_scheduled' : 'turn_end_wakeup_scheduled';
   }
-  return 'no_claim_idle';
+  return hasActiveClaim ? 'turn_end_with_claim_no_wakeup' : 'no_claim_idle';
 }
 
 /**
@@ -199,7 +310,19 @@ async function recordWindDown(supabase, sessionId, { reason, hadClaim } = {}) {
       description: `Worker session ${sessionId} wound down: reason=${reason}, had_claim=${!!hadClaim}.`,
       category: 'wind_down_survey',
       severity: 'low',
-      source_type: 'wind_down_survey',
+      // 'wind_down_survey' is a valid CATEGORY but NOT a valid source_type: CHECK
+      // feedback_source_type_check admits only a fixed list, and machine telemetry uses
+      // 'auto_capture' (1000/1000 sampled rows). The old value threw on EVERY call, and the
+      // catch below swallowed it to stderr — so this mirror has written ZERO rows since it
+      // shipped, while reading as healthy. Measured 2026-08-02: 0 rows for the category, and a
+      // direct emitFeedback call reproduced the constraint violation; swapping this one value
+      // made the row land and the count go 0 -> 1.
+      //
+      // THIS IS LOAD-BEARING FOR THIS SD. Step A's 'second_stop_still_unarmed' — the substitute
+      // shipped INSTEAD of the debt marker, and the pre-registered gate for step C — writes
+      // through here. Left unfixed, that gate would have read 0 forever and killed step C for
+      // the wrong reason: not "the population is empty" but "the instrument was never plugged in".
+      source_type: 'auto_capture',
       metadata: { session_id: sessionId, reason, had_claim: !!hadClaim, at },
       // One row per session per minute-bucket per reason — idempotent if the hook fires twice.
       dedup_key: `wind_down::${sessionId}::${reason}::${at.slice(0, 16)}`,
@@ -210,6 +333,10 @@ async function recordWindDown(supabase, sessionId, { reason, hadClaim } = {}) {
 }
 
 const REMINDER = [
+  'NO ScheduleWakeup tool_use found in THIS turn. This is read from the transcript, not from any',
+  'state you set: saying "wakeup armed" in a /signal, or having loop_state=awaiting_tick, does NOT',
+  'satisfy it. Only calling the tool does. If you believe you armed one, you armed it in a PREVIOUS',
+  'turn — that is the stale-arm case this check exists to catch.',
   'Worker stopping with NO ScheduleWakeup armed — you will go INCOGNITO and strand your claimed SD',
   '(the worktree then gets reaped by the claim-sweep). Run the WIND-DOWN HANDSHAKE before you stop:',
   "  1. If you hold an IN-PROGRESS SD: FINISH it or hand it off — never leave it half-done + unclaimed (orphan).",
@@ -224,6 +351,21 @@ const REMINDER = [
   "  • To legitimately END the loop instead, set claude_sessions.loop_state='exited' for your session.",
   '(This reminder fires once — if you stop again it will let you through.)',
 ].join('\n');
+
+/**
+ * Run `fn` with process.stdout.write discarded, then restore it. Any diagnostic a transitively
+ * required module prints is dropped rather than prepended to the Stop decision document. Restores
+ * in a finally, so a throw inside `fn` cannot leave stdout muzzled for the decision write.
+ */
+function muzzleStdout(fn) {
+  const original = process.stdout.write;
+  process.stdout.write = () => true;
+  try {
+    return fn();
+  } finally {
+    process.stdout.write = original;
+  }
+}
 
 /** Read+parse the Stop-hook stdin payload once; resolve {} on any error/timeout. */
 function readStdinPayload(timeoutMs = 2000) {
@@ -247,7 +389,26 @@ function readStdinPayload(timeoutMs = 2000) {
   });
 }
 
+// TOTAL WORK BUDGET. The hook is registered with a 10s timeout, and a TIMED-OUT Stop hook returns
+// NO DECISION — the enforcement silently vanishes exactly when the machine is loaded, which is the
+// failure shape this whole SD exists to remove. MEASURED on CI 2026-08-02: the cheapest path (fail
+// open, no transcript) took 7198ms against 412ms locally — a 17x spread on a runner whose
+// node_modules probe was failing. If the CHEAPEST path costs 7.2s there, the block path (this
+// budget + 3-5 DB round trips) would blow the timeout outright.
+// So the hook bounds its own discretionary work instead of assuming the environment is fast: the
+// stabilisation re-read gets whatever is LEFT of the budget after the DB calls, never a fixed 2.5s.
+const HOOK_WORK_BUDGET_MS = 6000;
+// Reserved OUT of the budget for the block-telemetry write, which the stabilisation re-read may
+// not consume. Both are optional work, but they are not equally valuable: the re-read is
+// OBSERVATIONAL (it refines a verdict that is already usable), while the block record is
+// DECISION-CRITICAL — without it, second_stop_still_unarmed=0 cannot be told apart from "no block
+// ever fired", and the step-C gate reverts to meaningless. Racing them for the same budget
+// silently starved the more important one: MEASURED, the write got timed out at the cap.
+const TELEMETRY_RESERVE_MS = 2500;
+
 async function main() {
+  const hookStartedAt = Date.now();
+  const remainingBudgetMs = () => Math.max(0, HOOK_WORK_BUDGET_MS - (Date.now() - hookStartedAt));
   try {
     const flagEnabled = isFlagEnabled();
     if (!flagEnabled) { return shutdown(); }     // default-OFF fast path
@@ -261,6 +422,8 @@ async function main() {
     const sessionId = payload.session_id || process.env.CLAUDE_SESSION_ID || process.env.SESSION_ID || '';
     if (!sessionId) { return shutdown(); }       // can't resolve — fail-open
 
+    // (stdout is muzzled at module load — see the header. This require is one of at least two
+    // that print a dotenv banner; the park path carries another.)
     const { createSupabaseServiceClient } = require('../../lib/supabase-client.cjs');
     const supabase = createSupabaseServiceClient();
     const { data, error } = await supabase
@@ -288,25 +451,93 @@ async function main() {
     // wind-down via /signal recently? session_coordination.sender_session = this session, and the
     // body/payload mentions wind-down/offline. If so, the stop is legitimate — do not block.
     let windDownSignaled = false;
+    // KILL SWITCH (SD-LEO-INFRA-TERMINAL-RITUAL-ENFORCEMENT-001 FR-2): enforcement must be
+    // disableable on a LIVE seat with no merge and no restart. Hooks run from each seat's own
+    // worktree checkout, so an env/code flag cannot reach a running seat — only a DB read can.
+    // It rides the SAME round-trip as the wind-down probe (widened or-filter), adding no call to
+    // the Stop path, and FAILS OPEN TO OFF: unreadable switch ⇒ treat as disabled.
+    let enforcementDisabled = true;
     try {
-      const sinceIso = new Date(Date.now() - 10 * 60 * 1000).toISOString();
-      const { data: sigRows } = await supabase
+      const nowMs = Date.now();
+      const sinceIso = new Date(nowMs - armEvidence.WIND_DOWN_WINDOW_MS).toISOString();
+      const { data: coordRows, error: coordErr } = await supabase
         .from('session_coordination')
-        .select('body, payload, created_at')
-        .eq('sender_session', sessionId)
-        .gte('created_at', sinceIso)
+        .select('body, payload, created_at, target_sd, expires_at')
+        .or(armEvidence.buildCoordinationFilter({ sessionId, sinceIso, nowIso: new Date(nowMs).toISOString() }))
         .order('created_at', { ascending: false })
-        .limit(10);
-      windDownSignaled = Array.isArray(sigRows) && sigRows.some((r) => {
-        const blob = `${r.body || ''} ${JSON.stringify(r.payload || '')}`.toLowerCase();
-        return /winding down|wind-down|going offline|offline —|going idle|signing off/.test(blob);
-      });
-    } catch { /* fail-open: treat as not-signaled (conservative — still reminds) */ }
+        .limit(25);
+      if (!coordErr) {
+        const { killRows, senderRows } = armEvidence.partitionCoordinationRows(coordRows);
+        enforcementDisabled = armEvidence.isEnforcementDisabled(killRows, { nowMs });
+        // Scan ONLY this session's own rows: widening the query above changed this consumer's
+        // input, and a broadcast row whose text mentions "winding down" must never flip this.
+        windDownSignaled = armEvidence.recentSenderRows(senderRows, { nowMs }).some((r) => {
+          const blob = `${r.body || ''} ${JSON.stringify(r.payload || '')}`.toLowerCase();
+          return /winding down|wind-down|going offline|offline —|going idle|signing off/.test(blob);
+        });
+      }
+    } catch { /* fail-open: not-signaled, and enforcement stays DISABLED (safe direction) */ }
 
-    if (shouldRemind({ loopState, stopHookActive, flagEnabled, hasActiveClaim, windDownSignaled })) {
+    // TWO-VERDICT OBSERVATION — measure the flush-race frequency BEFORE step A's decision
+    // depends on it. Observe-only: nothing below reads these verdicts. Emitted to STDERR;
+    // stdout stays byte-empty so the Stop decision channel is untouched.
+    // Worker-gated, for the same reason the park is: an UNARMED verdict costs a ~2.5s stabilisation,
+    // and a claim-less interactive operator ends most turns unarmed by design. Ungated, this would
+    // add 2.5s to every operator turn-end to measure a population it is not in. Same predicate as
+    // the park below, so the observation covers exactly the seats the enforcement will act on.
+    const workerShaped = shouldParkRecoverable({ loopState, hasActiveClaim, windDownSignaled });
+    let armVerdict;                       // undefined ⇒ not evaluated ⇒ treated as 'unknown'
+    let armObservation = null;
+    if (!enforcementDisabled && workerShaped && payload.transcript_path) {
+      try {
+        const fs = require('fs');
+        const { readTailEntries } = require('./print-before-park.cjs');
+        const read = () => {
+          if (!fs.existsSync(payload.transcript_path)) return { verdict: 'unknown', reason: 'transcript absent', armCount: 0 };
+          return armEvidence.findArmInCurrentTurn(readTailEntries(payload.transcript_path));
+        };
+        // Whatever is LEFT of the budget — the DB round-trips above already spent some of it.
+        armObservation = await armEvidence.awaitStableVerdict({
+          read,
+          sleep: (ms) => new Promise((r) => setTimeout(r, ms)),
+          // Whatever the DB calls left, MINUS the telemetry reserve — this observational re-read
+          // must not eat the budget the decision-critical block record needs.
+          deadlineMs: Math.max(0, Math.min(2500, remainingBudgetMs() - TELEMETRY_RESERVE_MS)),
+        });
+        armVerdict = armObservation.stable && armObservation.stable.verdict;
+        process.stderr.write(armEvidence.formatPendingWake(armObservation, { sessionId }));
+      } catch (e) {
+        // Fail-open: an unreadable transcript leaves armVerdict undefined ⇒ never blocks.
+        process.stderr.write(`[stop-loop-wakeup-reminder] pending-wake observe (non-fatal): ${e.message}\n`);
+      }
+    }
+
+    if (shouldRemind({ armVerdict, loopState, stopHookActive, flagEnabled, enforcementDisabled, hasActiveClaim })) {
       // BLOCK — the worker must arm its OWN ScheduleWakeup; do not park on its behalf (parking here
       // would let it cold-exit anyway by satisfying the recoverable-state check it should set itself).
-      process.stdout.write(JSON.stringify({ decision: 'block', reason: REMINDER }));
+      // The block reason is the ONLY channel that reaches the model, so the pending-wake state
+      // rides here rather than on stderr (which the model never sees on a blocking Stop).
+      const detail = armObservation ? `\n${armEvidence.formatPendingWake(armObservation, { sessionId }).trim()}` : '';
+      emitDecision({ decision: 'block', reason: REMINDER + detail });
+      // RECORD THE BLOCK. Without this the step-C gate is UNINTERPRETABLE, and I only noticed
+      // because I asked what state would silence it and whether anyone can reach that state.
+      // 'second_stop_still_unarmed' requires TWO events: (1) a block fires, then (2) the worker
+      // stops again still unarmed. Step (2) was recorded; step (1) was not. A zero therefore meant
+      // EITHER "no block has ever fired, so (2) is unreachable" OR "blocks fire and every worker
+      // complies" — opposite conclusions, indistinguishable, and I had been treating the zero as
+      // evidence for the second. Recording the block makes the ratio readable: blocks>0 with
+      // second_stop_still_unarmed=0 is genuine compliance; blocks=0 means the enforcement never
+      // engages and the gate says nothing about step C at all.
+      // Emitted AFTER the decision is already on stdout — but that ordering alone is NOT enough.
+      // A hook killed at the 10s timeout returns no decision at all, so work done after the write
+      // can still cost the decision it was meant to annotate. MEASURED: this write added ~1.9s
+      // (3260ms -> 5146ms), which fits the 6s budget locally and would NOT fit on the CI-class
+      // hardware that spent 7.2s on the cheapest path. So it is raced against whatever budget is
+      // left: telemetry may be dropped, the decision may not.
+      await Promise.race([
+        recordWindDown(supabase, sessionId, { reason: 'blocked_unarmed', hadClaim: hasActiveClaim }),
+        new Promise((r) => setTimeout(r, remainingBudgetMs())),
+      ]);
       return shutdown();
     }
     // ALLOW-PATH (SD-LEO-INFRA-WORKER-ENGAGEMENT-ARM-PARK-001): the stop is allowed — windDownSignaled
@@ -314,11 +545,11 @@ async function main() {
     // work, PARK it recoverable (loop_state='awaiting_tick' + capped expected_silence_until) so
     // coordinator-revival / orphan-adoption re-engages it, instead of a cold-exit to zero workers.
     if (shouldParkRecoverable({ loopState, hasActiveClaim, windDownSignaled })) {
-      await parkSessionRecoverable(sessionId);
+      await parkSessionRecoverable(sessionId, { armVerdict });
       // SD-LEO-INFRA-WORKER-WINDDOWN-SURVEY-001 (a)+(c): capture WHY this worker wound down
       // (same worker-gate as the park, so no false telemetry on a non-worker operator session).
       await recordWindDown(supabase, sessionId, {
-        reason: classifyWindDownReason({ windDownSignaled, stopHookActive, hasActiveClaim, loopState }),
+        reason: classifyWindDownReason({ windDownSignaled, stopHookActive, hasActiveClaim, loopState, armVerdict }),
         hadClaim: hasActiveClaim,
       });
     }
@@ -338,4 +569,4 @@ if (require.main === module) {
   main().catch(() => shutdown());
 }
 
-module.exports = { shouldRemind, shouldParkRecoverable, parkSessionRecoverable, classifyWindDownReason, recordWindDown, isFlagEnabled, REMINDER };
+module.exports = { shouldRemind, shouldParkRecoverable, parkSessionRecoverable, classifyWindDownReason, recordWindDown, isFlagEnabled, muzzleStdout, REMINDER };

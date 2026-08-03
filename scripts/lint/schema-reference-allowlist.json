@@ -2,8 +2,10 @@
  "_comment": "schema-reference-lint escapes (SD-LEO-INFRA-SCHEMA-REFERENCE-LINT-001). files: repo-relative paths whose DB client targets ANOTHER database (e.g. the EHG app project) or whose table names are dynamic/templated. tables: relation names to skip everywhere (e.g. tables that exist only in the EHG app DB but are referenced from cross-DB scripts). Prefer the inline pragma (schema-lint-disable-line) for single intentional lines.",
  "files": [
   "lib/gates/operator-contract/__tests__/operator-contract.test.js",
-  "lib/gates/operator-contract/__tests__/venture-and-self-cadence.test.js"
+  "lib/gates/operator-contract/__tests__/venture-and-self-cadence.test.js",
+  "src/middleware/venture-scope.js"
  ],
+ "_venture_scope_note": "SD-LEO-INFRA-ADAM-DURABLE-STANDING-001: this file has no static table references at all. validateVentureOwnership() calls .from(resourceTable) where resourceTable is a RUNTIME PARAMETER — the dynamic case this list exists for — and the only literal, supabase.from('table') at :162, is a placeholder inside a JSDoc usage example. The violation is pre-existing on origin/main (the file is byte-identical there); it surfaces only in a PR whose merge widens the diff-vs-base range to include this untouched file, so it blocks unrelated PRs at random. The inline pragma was rejected as the fix because this file's stored blob is CRLF while .gitattributes demands LF, so touching a single line renormalizes all 231 lines.",
  "_operator_contract_test_note": "SD-LEO-INFRA-OPERATOR-CONTRACT-GATE-001: these unit tests use deliberately-fictional fixture table names (foo_events, venture_signals) to exercise detectCreator/consumer/reaper against synthetic CREATOR diffs — they are not real relations.",
  "tables": [
   "north_star",

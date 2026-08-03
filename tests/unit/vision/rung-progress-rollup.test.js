@@ -1,6 +1,15 @@
 // Tests for lib/vision/rung-progress-rollup.mjs
 // SD-LEO-INFRA-PROGRESS-ROLLUP-NEEDLE-PRIORITIZATION-001-B (FR-1)
-import { test } from 'node:test';
+//
+// SD-LEO-INFRA-ROADMAP-WAVES-PROGRESS-001: THESE 17 TESTS HAD NEVER RUN. The file was named
+// `.test.mjs` and used node:test, but the vitest unit project includes `**/*.test.js` plus
+// `.test.mjs` ONLY under tests/unit/org/ and tests/unit/venture-email/ — so this path matched
+// nothing and the runner silently skipped it. Two of its assertions had ALREADY been broken by
+// SD-LEO-INFRA-ROADMAP-REGENERATION-DUPLICATES-001 FR-8, which added canonical-roadmap scoping to
+// runRollup without teaching this stub about strategic_roadmaps; res.rows came back empty and
+// nobody heard. Switched to the vitest runner (assert still works) and renamed to .test.js so the
+// module at the centre of this SD is actually covered.
+import { test } from 'vitest';
 import assert from 'node:assert/strict';
 import {
   RUNG_BY_HORIZON,
@@ -108,19 +117,33 @@ test('rollupWaves maps all waves', () => {
 });
 
 // ── runRollup IO with an injected supabase stub ──
-function stubSupabase({ activeRung = { rung_key: 'V1' }, krs = [], waves = [], captureUpdates } = {}) {
+// The `roadmaps` default models ONE active canonical roadmap. Without it resolveCanonicalRoadmap
+// (added by REGENERATION-DUPLICATES FR-8) resolves nothing, runRollup fails closed to zero waves,
+// and every row assertion below fails on an empty array — which is exactly what was happening,
+// unobserved, for as long as this file has been unrunnable.
+function stubSupabase({ activeRung = { rung_key: 'V1' }, krs = [], waves = [], captureUpdates,
+  roadmaps = [{ id: 'rm-1', status: 'active', created_at: '2026-01-01T00:00:00Z' }] } = {}) {
   return {
     from(table) {
       const chain = {
         _table: table, _filters: {},
         select() { return chain; },
         eq(col, val) { chain._filters[col] = val; return chain; },
+        in() { return chain; },
+        order() { return chain; },
+        limit() { return chain; },
         maybeSingle() {
           if (table === 'vision_ladder_rungs') return Promise.resolve({ data: activeRung, error: null });
+          if (table === 'strategic_roadmaps') return Promise.resolve({ data: roadmaps[0] || null, error: null });
+          return Promise.resolve({ data: null, error: null });
+        },
+        single() {
+          if (table === 'strategic_roadmaps') return Promise.resolve({ data: roadmaps[0] || null, error: null });
           return Promise.resolve({ data: null, error: null });
         },
         update(payload) { chain._payload = payload; return chain; },
         then(res, rej) {
+          if (table === 'strategic_roadmaps') return Promise.resolve({ data: roadmaps, error: null }).then(res, rej);
           if (table === 'key_results') return Promise.resolve({ data: krs, error: null }).then(res, rej);
           if (table === 'roadmap_waves') {
             if (chain._payload) { // an update().eq() resolution
@@ -160,23 +183,30 @@ test('runRollup dry-run: computes rows, writes nothing', async () => {
   assert.equal(byId.wx.progress_pct, null); // skip
 });
 
-test('runRollup apply: persists only non-null rows', async () => {
+// SD-LEO-INFRA-ROADMAP-WAVES-PROGRESS-001 (FR-1): INVERTED. This asserted that apply:true wrote
+// progress_pct back to two wave rows — w1 taking the build gauge (60) and w3 a KR aggregate (50).
+// Both are RUNG-level figures, and roadmap_waves is keyed by wave, so those writes are precisely
+// how one measurement came to sit on four rows at once. apply:true is now inert: the values are
+// still computed and returned in `rows` for the in-memory consumers, and nothing is persisted.
+test('runRollup apply: computes rows but persists NOTHING', async () => {
   const updates = [];
   const supabase = stubSupabase({
     krs: [{ objective_id: 'obj-a', baseline_value: 0, current_value: 5, target_value: 10, direction: 'increase' }],
     waves: [
       { id: 'w1', time_horizon: 'now' },
       { id: 'w3', time_horizon: 'next', okr_objective_ids: ['obj-a'] },
-      { id: 'wx', time_horizon: null }, // skip → must NOT be written
+      { id: 'wx', time_horizon: null },
     ],
     captureUpdates: (u) => updates.push(u),
   });
   const res = await runRollup({ supabase, computeGaugeFn: async () => ({ available: true, build_pct: 60 }), apply: true, log: () => {} });
-  assert.equal(res.written, 2);
-  assert.equal(updates.length, 2);
-  assert.deepEqual(updates.map((u) => u.id).sort(), ['w1', 'w3']);
-  assert.equal(updates.find((u) => u.id === 'w1').payload.progress_pct, 60);
-  assert.equal(updates.find((u) => u.id === 'w3').payload.progress_pct, 50);
+  assert.equal(res.written, 0);
+  assert.equal(updates.length, 0, 'apply:true must not write roadmap_waves.progress_pct');
+  // The computation itself is unchanged — the values still reach the in-memory consumers.
+  const byId = Object.fromEntries(res.rows.map((r) => [r.wave_id, r]));
+  assert.equal(byId.w1.progress_pct, 60);
+  assert.equal(byId.w3.progress_pct, 50);
+  assert.equal(byId.wx.progress_pct, null);
 });
 
 test('runRollup fail-soft: gauge throw → build rungs null, no throw', async () => {

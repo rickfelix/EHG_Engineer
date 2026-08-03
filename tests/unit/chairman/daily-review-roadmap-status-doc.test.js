@@ -156,9 +156,12 @@ describe('buildRoadmapStatusDoc — plan_of_record section', () => {
     expect(por.data.waves[0]).toMatchObject({
       wave_id: 'w1',
       calibrated_probability: 0.8,
-      progress_pct: 50,
       item_counts: { total: 2, promoted: 1 },
     });
+    // SD-LEO-INFRA-ROADMAP-WAVES-PROGRESS-001 (FR-2): progress_pct is no longer carried into the
+    // wave summary at all. toMatchObject ignores extra keys, so asserting its ABSENCE explicitly
+    // is what keeps this test able to fail if the field is reintroduced.
+    expect(por.data.waves[0]).not.toHaveProperty('progress_pct');
     expect(por.data.overall_pct).toBeCloseTo(33.3, 1); // 1 promoted of 3 total
   });
 
