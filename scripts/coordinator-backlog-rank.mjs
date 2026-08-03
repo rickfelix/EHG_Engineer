@@ -233,6 +233,7 @@ import { makeDefaultGrepSeam } from '../lib/vision/vdr-grep-seam.js';
 import { needleScore, rungProgressByKey, buildSdRungMap } from '../lib/vision/needle-priority.mjs';
 import { stampLastFired } from '../lib/periodic-liveness/stamp-last-fired.js';
 import { planLinkageCompare } from '../lib/roadmap/plan-linkage-comparator.js';
+import { committingItemBandCompare } from '../lib/roadmap/committing-item-band.js';
 
 const DRY = process.argv.includes('--dry-run');
 const PRIORITY_W = { critical: 3, high: 2, medium: 1, med: 1, low: 0 };
@@ -489,6 +490,15 @@ async function main() {
     if (fa !== fb) return fb - fa;                          // critical-walk-blocker first
     const ua = unlockScore(a.sd_key), ub = unlockScore(b.sd_key);
     if (ub !== ua) return ub - ua;
+    // SD-LEO-INFRA-PLAN-POSITION-READABLE-001 (FR-3): the committing-item BAND. The roadmap join
+    // already existed below (needleOf), but it sits after productPivotCompare and so can only break
+    // ties — it can never lift a committing-item child across the harness band, which is what the
+    // chairman actually asked for. This band does that. Placed ABOVE productPivotCompare (the ask)
+    // and BELOW unlockScore (so a committing item can never outrank its own unlocker and starve the
+    // critical path — the same placement rule every other band here follows). needleOf remains below
+    // as the finer-grained rung ordering WITHIN this band.
+    const ci = committingItemBandCompare(a, b, sdRungMap);
+    if (ci !== 0) return ci;
     // SD-LEO-INFRA-BELT-RANKER-PIVOT-AWARENESS-001 (FR-1): the pivot-aware product-priority band
     // (SD-APEXNICHE-AI-LEO-FIX-FLAG-GOVERNANCE-CLEANUP-001: graduated to always-active). Product-class SDs outrank harness-class SDs.
     // Placed AFTER unlock (never strands a critical-path unlocker) and the bare-shell/quarantine/
