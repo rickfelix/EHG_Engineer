@@ -251,6 +251,20 @@ describe('stop-loop-wakeup-reminder — wrapper fail-open (TS-6, spawn)', () => 
     const budget = Number((src.match(/HOOK_WORK_BUDGET_MS\s*=\s*(\d+)/) || [])[1]);
     expect(budget).toBeGreaterThan(0);
     expect(budget).toBeLessThan(10000);            // the registered timeout
-    expect(src).toMatch(/deadlineMs:\s*Math\.min\(2500,\s*remainingBudgetMs\(\)\)/);
+    expect(src).toMatch(/deadlineMs:[\s\S]{0,120}remainingBudgetMs\(\)/);
+  });
+
+  // The observational re-read must not be able to spend the budget the DECISION-CRITICAL block
+  // record needs. Racing them for one pool starved the write — measured, it got timed out, which
+  // put the step-C gate back to unreadable. Asserted on the arithmetic, not on a fixed string,
+  // so the reserve cannot be silently dropped while the expression is reshaped.
+  it('reserves telemetry budget OUT of what the stabilisation re-read may spend', () => {
+    const src = require('node:fs').readFileSync(HOOK_PATH, 'utf8');
+    const reserve = Number((src.match(/TELEMETRY_RESERVE_MS\s*=\s*(\d+)/) || [])[1]);
+    const budget = Number((src.match(/HOOK_WORK_BUDGET_MS\s*=\s*(\d+)/) || [])[1]);
+    expect(reserve).toBeGreaterThan(0);
+    expect(reserve).toBeLessThan(budget);          // a reserve that eats the whole budget is a stall
+    expect(src).toMatch(/remainingBudgetMs\(\)\s*-\s*TELEMETRY_RESERVE_MS/);
+    expect(src).toMatch(/reason: 'blocked_unarmed'/);   // the record the reserve exists for
   });
 });
