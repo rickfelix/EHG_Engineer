@@ -68,7 +68,13 @@
 -- ROLLBACK: database/chairman-gated/20260803_source4_rework_ROLLBACK.sql
 -- ============================================================================
 
-CREATE OR REPLACE VIEW public.chairman_all_decision_signals AS
+-- WITH (security_invoker = on) IS STATED EXPLICITLY AND MUST NOT BE DROPPED. Verified live:
+-- pg_class.reloptions for this view is {security_invoker=on}. Relying on CREATE OR REPLACE to
+-- retain reloptions implicitly would be gambling on a semantic that is not worth gambling on --
+-- if it were ever lost the view would run with DEFINER privileges and silently bypass RLS for
+-- every querying user. Stating it is unambiguous under any retention behaviour.
+CREATE OR REPLACE VIEW public.chairman_all_decision_signals
+WITH (security_invoker = on) AS
  SELECT am.id,
     'escalation'::text AS decision_type,
     am.subject AS title,

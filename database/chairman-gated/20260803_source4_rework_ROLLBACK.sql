@@ -1,6 +1,8 @@
 -- Rollback for 20260803_chairman_source4_rework.sql — the LIVE definition captured from pg_views
 -- immediately before the change, on 2026-08-03. STAGED, NOT APPLIED; TIER-2 like its forward pair.
-CREATE OR REPLACE VIEW public.chairman_all_decision_signals AS
+-- security_invoker restated for the same reason as the forward migration: never let a replace drop it.
+CREATE OR REPLACE VIEW public.chairman_all_decision_signals
+WITH (security_invoker = on) AS
  SELECT am.id,
     'escalation'::text AS decision_type,
     am.subject AS title,
