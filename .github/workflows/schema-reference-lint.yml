@@ -59,7 +59,13 @@ jobs:
         env:
           SCHEMA_LINT_BASE: origin/${{ github.base_ref }}
         run: |
-          git fetch origin ${{ github.base_ref }} --depth=1 || true
+          # QF-20260802-742: do NOT re-shallow the base ref. checkout@v4 above already fetched
+          # FULL history (fetch-depth: 0); `--depth=1` here truncated that ref back to a single
+          # commit and wrote a .git/shallow boundary, which cripples `git merge-base` — the base
+          # of the PR becomes uncomputable and the diff widens to include main's own commits.
+          # That is the "merge-commit widening" half of this QF, and it was self-inflicted one
+          # line after the full fetch that would have prevented it.
+          git fetch origin ${{ github.base_ref }} || true
           node scripts/lint/schema-reference-lint.mjs --diff | tee lint-output.txt
           exit_code=${PIPESTATUS[0]}
           {
