@@ -61,6 +61,52 @@ describe('FR-2: one trigger definition, and it audits', () => {
   });
 });
 
+describe('FR-1/FR-5: the mutation trigger covers the named transitions and nothing else', () => {
+  const MIGRATION = 'database/chairman-gated/20260802_sd_mutation_audit_trigger.sql';
+
+  it('CONTROL: the migration exists outside every auto-applied directory', () => {
+    expect(existsSync(join(REPO, MIGRATION)), `${MIGRATION} missing — the assertions below would pass vacuously`).toBe(true);
+    // pending-migrations-check.js:778 scans exactly these three, with autoExecute defaulting TRUE.
+    // Chairman-gated DDL sitting in any of them would be self-applied, so its ABSENCE from them is
+    // part of the deliverable, not an accident of where the file landed.
+    for (const scanned of ['database/migrations', 'database/manual-updates', 'supabase/migrations']) {
+      expect(existsSync(join(REPO, scanned, '20260802_sd_mutation_audit_trigger.sql'))).toBe(false);
+    }
+  });
+
+  it('audits exactly the three governed fields, each with old_value and new_value', () => {
+    const sql = read(MIGRATION);
+    for (const field of ['status', 'current_phase', 'claiming_session_id']) {
+      expect(sql).toContain(`NEW.${field} IS DISTINCT FROM OLD.${field}`);
+    }
+    expect(sql).toMatch(/INSERT INTO audit_log/);
+    expect(sql).toMatch(/old_value/);
+    expect(sql).toMatch(/new_value/);
+    // Claim release is the direction that matters operationally and is easy to omit.
+    expect(sql).toContain('sd_claim_released');
+    expect(sql).toContain('sd_claim_acquired');
+  });
+
+  // THE GUARD THAT KEEPS THE FIX FROM BECOMING THE NEXT FLOOD. updated_at is touched on every
+  // write, so a trigger without a WHEN clause fires on every UPDATE — on a table with NO retention,
+  // where every row is permanent, that would out-volume the 214k advisory traffic it must be
+  // readable against. The WHEN clause is a second guard independent of the function body.
+  it('is field-scoped at the TRIGGER level, not only inside the function', () => {
+    const sql = read(MIGRATION);
+    const when = sql.slice(sql.indexOf('CREATE TRIGGER trg_sd_mutation_audit'));
+    expect(when).toMatch(/WHEN\s*\(/);
+    expect(when).toContain('OLD.status IS DISTINCT FROM NEW.status');
+    expect(when).toContain('OLD.current_phase IS DISTINCT FROM NEW.current_phase');
+    expect(when).toContain('OLD.claiming_session_id IS DISTINCT FROM NEW.claiming_session_id');
+  });
+
+  it('ships a rollback, because a trigger applied by hand must be removable by hand', () => {
+    const sql = read(MIGRATION);
+    expect(sql).toContain('DROP TRIGGER IF EXISTS trg_sd_mutation_audit');
+    expect(sql).toContain('DROP FUNCTION IF EXISTS log_sd_mutation_audit');
+  });
+});
+
 describe('FR-3: a failed cancellation audit write is recorded, not swallowed', () => {
   const failure = { event_type: 'sd_cancelled', at: '2026-08-02T23:59:00.000Z', error: 'permission denied', source: 'cancel-sd.js' };
 
