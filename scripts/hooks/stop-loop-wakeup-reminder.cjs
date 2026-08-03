@@ -22,6 +22,16 @@
  *   - Escape: loop_state='exited' (or any non-'active' state) → never blocks.
  *   - Fail-open: any error / no session / DB-unavailable → allow stop (exit 0), never throws.
  *
+ * ⚠ THE SAFETY ARGUMENT BELOW IS STALE AS OF STEP A — read this first.
+ * The paragraph that follows claims this hook "can NEVER block an operator's turn-end" because an
+ * interactive session never reaches loop_state='active'. FR-4 replaced that reasoning: the worker
+ * gate is now (hasActiveClaim || live loop state), so an OPERATOR WHO HOLDS A CLAIM is worker-shaped
+ * and IS blockable — once per turn, every turn. Measured 2026-08-03: exposure is zero because all
+ * six claim-holders are loop workers, which makes today's safety a COINCIDENCE rather than the
+ * structural guarantee the text asserts. Left in place, marked, rather than quietly deleted: the
+ * original reasoning is why the flag was enabled fleet-wide, and whoever revisits that decision
+ * needs to see both the claim and its expiry.
+ *
  * STATUS (QF-20260609-308): ENABLED fleet-wide via .claude/settings.json env
  * (LEO_LOOP_WAKEUP_REMINDER=on). Verified safe for interactive operator sessions: loop_state
  * only ever becomes 'active' via session-register.cjs's CONDITIONAL update
@@ -52,16 +62,21 @@
 // verification script that required the hook printed nothing at all and looked like a crash.
 // A global side effect on every consumer is too high a price for a guarantee only the hook
 // process needs.
+// A muzzle must still HONOUR THE WRITE CALLBACK. An arrow that just returns true DROPS it, so a
+// transitive writer that waits for its callback would hang until the 10s hook timeout — and a
+// timed-out Stop hook returns NO DECISION, the exact failure the budget work exists to prevent.
+// Swallow the bytes, invoke the callback, report success. (Found by the SECURITY sub-agent.)
+const SWALLOW = (_chunk, enc, cb) => { if (typeof enc === 'function') enc(); else if (typeof cb === 'function') cb(); return true; };
 const RUNNING_AS_HOOK = require.main === module;
 const REAL_STDOUT_WRITE = process.stdout.write.bind(process.stdout);
-if (RUNNING_AS_HOOK) process.stdout.write = () => true;
+if (RUNNING_AS_HOOK) process.stdout.write = SWALLOW;
 
 /** The ONLY path back onto stdout. Writes the decision document and re-muzzles. */
 function emitDecision(payload) {
   try {
     REAL_STDOUT_WRITE(JSON.stringify(payload));
   } finally {
-    if (RUNNING_AS_HOOK) process.stdout.write = () => true;
+    if (RUNNING_AS_HOOK) process.stdout.write = SWALLOW;
   }
 }
 
@@ -359,7 +374,7 @@ const REMINDER = [
  */
 function muzzleStdout(fn) {
   const original = process.stdout.write;
-  process.stdout.write = () => true;
+  process.stdout.write = SWALLOW;
   try {
     return fn();
   } finally {
@@ -471,7 +486,7 @@ async function main() {
         enforcementDisabled = armEvidence.isEnforcementDisabled(killRows, { nowMs });
         // Scan ONLY this session's own rows: widening the query above changed this consumer's
         // input, and a broadcast row whose text mentions "winding down" must never flip this.
-        windDownSignaled = armEvidence.recentSenderRows(senderRows, { nowMs }).some((r) => {
+        windDownSignaled = armEvidence.recentSenderRows(senderRows, { nowMs, sessionId }).some((r) => {
           const blob = `${r.body || ''} ${JSON.stringify(r.payload || '')}`.toLowerCase();
           return /winding down|wind-down|going offline|offline —|going idle|signing off/.test(blob);
         });
@@ -569,4 +584,4 @@ if (require.main === module) {
   main().catch(() => shutdown());
 }
 
-module.exports = { shouldRemind, shouldParkRecoverable, parkSessionRecoverable, classifyWindDownReason, recordWindDown, isFlagEnabled, muzzleStdout, REMINDER };
+module.exports = { shouldRemind, shouldParkRecoverable, parkSessionRecoverable, classifyWindDownReason, recordWindDown, isFlagEnabled, muzzleStdout, SWALLOW, REMINDER };

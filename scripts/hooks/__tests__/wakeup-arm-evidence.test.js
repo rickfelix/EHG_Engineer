@@ -42,6 +42,63 @@ describe('kill switch — filter shape (FR-2)', () => {
     expect(ev.FLEET_BROADCAST_SD).toBe('__FLEET_ENFORCEMENT__');
     expect(ev.buildCoordinationFilter({ sessionId: SID, sinceIso: 'a', nowIso: 'b' })).toContain('target_sd.eq.');
   });
+
+  // POSTGREST FILTER INJECTION — confirmed LIVE by the SECURITY sub-agent, not theorised. A
+  // sessionId of `x),or(...)` escaped the and(...) group and widened the query: benign input
+  // returned 0 rows, the crafted one returned 3. It could not forge a kill row (partition
+  // re-checks target_sd/kind/expires_at in JS) but that was the ONLY thing containing it.
+  it('refuses to interpolate a non-UUID session id (injection)', () => {
+    const hostile = 'x),or(target_sd.eq.__FLEET_ENFORCEMENT__';
+    const f = ev.buildCoordinationFilter({ sessionId: hostile, sinceIso: 'S', nowIso: 'N' });
+    expect(f).not.toContain(hostile);
+    expect(f).not.toContain('sender_session');      // the sender leg is dropped entirely
+    expect(f).toContain('target_sd.eq.__FLEET_ENFORCEMENT__'); // kill switch still readable
+  });
+
+  it('still builds both legs for a well-formed session id', () => {
+    const f = ev.buildCoordinationFilter({ sessionId: SID, sinceIso: 'S', nowIso: 'N' });
+    expect(f).toContain(`sender_session.eq.${SID}`);
+    expect(f).toContain('target_sd.eq.__FLEET_ENFORCEMENT__');
+  });
+
+  // The invariant "scan ONLY this session's own rows" was previously enforced SOLELY by the
+  // interpolated SQL — recentSenderRows filtered on created_at alone. An invariant worth writing
+  // in a comment is worth enforcing where it is consumed.
+  it('recentSenderRows enforces the sender itself, not just the time window', () => {
+    const now = Date.now();
+    const rows = [
+      { sender_session: SID, created_at: new Date(now - 1000).toISOString(), body: 'mine' },
+      { sender_session: 'someone-else', created_at: new Date(now - 1000).toISOString(), body: 'theirs' },
+    ];
+    const kept = ev.recentSenderRows(rows, { nowMs: now, sessionId: SID });
+    expect(kept).toHaveLength(1);
+    expect(kept[0].body).toBe('mine');
+  });
+});
+
+describe('stdout muzzle honours the write callback', () => {
+  const hookSrc = fs.readFileSync(HOOK_PATH, 'utf8');
+
+  // `() => true` DROPS the callback. A transitive writer that waits for it would hang to the 10s
+  // hook timeout — and a timed-out Stop hook returns NO DECISION, the exact failure the budget
+  // work exists to prevent. Found by the SECURITY sub-agent.
+  it('no muzzle site discards the write callback', () => {
+    expect(hookSrc).not.toMatch(/process\.stdout\.write = \(\) => true/);
+    expect(hookSrc).toMatch(/const SWALLOW = \(_chunk, enc, cb\)/);
+  });
+
+  // Tests the REAL exported function rather than re-parsing its source — a source-derived copy
+  // can pass while the shipped one differs, which is the whole failure family this SD kept hitting.
+  it('SWALLOW invokes the callback in both node signatures and swallows the bytes', () => {
+    const { SWALLOW } = require(HOOK_PATH);
+    let cb2 = false;
+    expect(SWALLOW('x', () => { cb2 = true; })).toBe(true);
+    expect(cb2).toBe(true);                      // write(chunk, cb)
+    let cb3 = false;
+    expect(SWALLOW('x', 'utf8', () => { cb3 = true; })).toBe(true);
+    expect(cb3).toBe(true);                      // write(chunk, encoding, cb)
+    expect(SWALLOW('x')).toBe(true);             // no callback supplied — must not throw
+  });
 });
 
 describe('kill switch — partition (widening a shared query changes every consumer)', () => {

@@ -35,7 +35,23 @@ const WIND_DOWN_WINDOW_MS = 10 * 60 * 1000;
  * Each leg carries its OWN time bound inside the and(...) group, so the result set stays small
  * and a kill-switch row cannot be starved out of the row limit by chatty sender rows.
  */
+const UUID_RE = /^[0-9a-fA-F-]{36}$/;
+
 function buildCoordinationFilter({ sessionId, sinceIso, nowIso }) {
+  // POSTGREST FILTER INJECTION — confirmed live by the SECURITY sub-agent, not theorised: a
+  // sessionId of `x),or(target_sd.eq.__FLEET_ENFORCEMENT__` ESCAPES this and(...) group and
+  // widens the query (benign input returned 0 rows; the crafted one returned 3).
+  // It could not forge a kill row, because partitionCoordinationRows re-checks target_sd, kind
+  // AND expires_at in JS — but that defence-in-depth was the ONLY thing containing it, and
+  // recentSenderRows did not re-check sender_session at all, so "scan only this session's own
+  // rows" was an invariant asserted in a comment and enforced solely by interpolated SQL.
+  // sessionId is harness-sourced today, so exploitability was low; an unvalidated interpolation
+  // into a filter language is not worth carrying on the hook every seat runs every turn.
+  if (!UUID_RE.test(String(sessionId || ''))) {
+    // Unparseable id: drop the sender leg entirely rather than interpolate it. The kill-switch
+    // leg still works, so the runtime switch never depends on a well-formed session id.
+    return `and(target_sd.eq.${FLEET_BROADCAST_SD},payload->>kind.eq.${KILL_SWITCH_KIND},expires_at.gt.${nowIso})`;
+  }
   return [
     `and(sender_session.eq.${sessionId},created_at.gte.${sinceIso})`,
     `and(target_sd.eq.${FLEET_BROADCAST_SD},payload->>kind.eq.${KILL_SWITCH_KIND},expires_at.gt.${nowIso})`,
@@ -77,10 +93,17 @@ function isEnforcementDisabled(killRows, { enforcement = ENFORCEMENT_ID, nowMs =
   return false;
 }
 
-/** Rows for the wind-down text scan, re-applying the 10-minute window in JS. */
-function recentSenderRows(senderRows, { nowMs = Date.now(), windowMs = WIND_DOWN_WINDOW_MS } = {}) {
+/**
+ * Rows for the wind-down text scan, re-applying BOTH conditions in JS.
+ * The sender check is the point: previously this filtered on created_at only, so the
+ * "scan ONLY this session's own rows" invariant lived entirely in the interpolated SQL above.
+ * An invariant worth stating in a comment is worth enforcing where it is consumed.
+ * sessionId is optional so existing callers keep working; when supplied it is enforced.
+ */
+function recentSenderRows(senderRows, { nowMs = Date.now(), windowMs = WIND_DOWN_WINDOW_MS, sessionId } = {}) {
   return (Array.isArray(senderRows) ? senderRows : []).filter((r) => {
     if (!r || !r.created_at) return false;
+    if (sessionId && r.sender_session !== sessionId) return false;
     return nowMs - new Date(r.created_at).getTime() <= windowMs;
   });
 }
