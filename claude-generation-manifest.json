@@ -1,7 +1,7 @@
 {
-  "generated_at": "2026-08-03T12:35:51.655Z",
-  "git_commit": "1ea0403b",
-  "db_snapshot_hash": "8c2c5d2e658539c5",
+  "generated_at": "2026-08-03T13:47:44.638Z",
+  "git_commit": "221fd8e1",
+  "db_snapshot_hash": "31945d3b870a9f44",
   "files": {
     "CLAUDE.md": {
       "type": "full",
@@ -9,15 +9,15 @@
       "bytes": 19703,
       "estimated_tokens": 4891,
       "content_hash": "91b0c479ced58edc",
-      "path": "C:\\Users\\rickf\\Projects\\_EHG\\EHG_Engineer\\.worktrees\\GSB-B2\\CLAUDE.md"
+      "path": "C:\\Users\\rickf\\Projects\\_EHG\\EHG_Engineer\\.worktrees\\SD-FDBK-INFRA-CLAUDE-SOLOMON-EXCEEDS-001\\CLAUDE.md"
     },
     "CLAUDE_CORE.md": {
       "type": "full",
-      "chars": 93546,
-      "bytes": 94135,
-      "estimated_tokens": 23387,
-      "content_hash": "692727b11a1ed341",
-      "path": "C:\\Users\\rickf\\Projects\\_EHG\\EHG_Engineer\\.worktrees\\GSB-B2\\CLAUDE_CORE.md"
+      "chars": 93457,
+      "bytes": 94044,
+      "estimated_tokens": 23365,
+      "content_hash": "1b3a2dd5a80f4519",
+      "path": "C:\\Users\\rickf\\Projects\\_EHG\\EHG_Engineer\\.worktrees\\SD-FDBK-INFRA-CLAUDE-SOLOMON-EXCEEDS-001\\CLAUDE_CORE.md"
     },
     "CLAUDE_LEAD.md": {
       "type": "full",
@@ -25,7 +25,7 @@
       "bytes": 58621,
       "estimated_tokens": 14607,
       "content_hash": "cf775e0a447447a8",
-      "path": "C:\\Users\\rickf\\Projects\\_EHG\\EHG_Engineer\\.worktrees\\GSB-B2\\CLAUDE_LEAD.md"
+      "path": "C:\\Users\\rickf\\Projects\\_EHG\\EHG_Engineer\\.worktrees\\SD-FDBK-INFRA-CLAUDE-SOLOMON-EXCEEDS-001\\CLAUDE_LEAD.md"
     },
     "CLAUDE_LEAD_MANUAL.md": {
       "type": "full",
@@ -33,7 +33,7 @@
       "bytes": 8862,
       "estimated_tokens": 2205,
       "content_hash": "959da55357a233ac",
-      "path": "C:\\Users\\rickf\\Projects\\_EHG\\EHG_Engineer\\.worktrees\\GSB-B2\\CLAUDE_LEAD_MANUAL.md"
+      "path": "C:\\Users\\rickf\\Projects\\_EHG\\EHG_Engineer\\.worktrees\\SD-FDBK-INFRA-CLAUDE-SOLOMON-EXCEEDS-001\\CLAUDE_LEAD_MANUAL.md"
     },
     "CLAUDE_PLAN.md": {
       "type": "full",
@@ -41,7 +41,7 @@
       "bytes": 55185,
       "estimated_tokens": 13732,
       "content_hash": "051fc5edb1dc5786",
-      "path": "C:\\Users\\rickf\\Projects\\_EHG\\EHG_Engineer\\.worktrees\\GSB-B2\\CLAUDE_PLAN.md"
+      "path": "C:\\Users\\rickf\\Projects\\_EHG\\EHG_Engineer\\.worktrees\\SD-FDBK-INFRA-CLAUDE-SOLOMON-EXCEEDS-001\\CLAUDE_PLAN.md"
     },
     "CLAUDE_PLAN_MANUAL.md": {
       "type": "full",
@@ -49,7 +49,7 @@
       "bytes": 38460,
       "estimated_tokens": 9589,
       "content_hash": "e81d796d6cc256b2",
-      "path": "C:\\Users\\rickf\\Projects\\_EHG\\EHG_Engineer\\.worktrees\\GSB-B2\\CLAUDE_PLAN_MANUAL.md"
+      "path": "C:\\Users\\rickf\\Projects\\_EHG\\EHG_Engineer\\.worktrees\\SD-FDBK-INFRA-CLAUDE-SOLOMON-EXCEEDS-001\\CLAUDE_PLAN_MANUAL.md"
     },
     "CLAUDE_EXEC.md": {
       "type": "full",
@@ -57,7 +57,7 @@
       "bytes": 90071,
       "estimated_tokens": 22411,
       "content_hash": "1f348de3aa7d8060",
-      "path": "C:\\Users\\rickf\\Projects\\_EHG\\EHG_Engineer\\.worktrees\\GSB-B2\\CLAUDE_EXEC.md"
+      "path": "C:\\Users\\rickf\\Projects\\_EHG\\EHG_Engineer\\.worktrees\\SD-FDBK-INFRA-CLAUDE-SOLOMON-EXCEEDS-001\\CLAUDE_EXEC.md"
     },
     "CLAUDE_ADAM.md": {
       "type": "full",
@@ -65,7 +65,7 @@
       "bytes": 47257,
       "estimated_tokens": 11687,
       "content_hash": "97b5f14ee44bcee0",
-      "path": "C:\\Users\\rickf\\Projects\\_EHG\\EHG_Engineer\\.worktrees\\GSB-B2\\CLAUDE_ADAM.md"
+      "path": "C:\\Users\\rickf\\Projects\\_EHG\\EHG_Engineer\\.worktrees\\SD-FDBK-INFRA-CLAUDE-SOLOMON-EXCEEDS-001\\CLAUDE_ADAM.md"
     },
     "CLAUDE_ADAM_MANUAL.md": {
       "type": "full",
@@ -73,7 +73,7 @@
       "bytes": 15842,
       "estimated_tokens": 3925,
       "content_hash": "c0ef00343b7d36a4",
-      "path": "C:\\Users\\rickf\\Projects\\_EHG\\EHG_Engineer\\.worktrees\\GSB-B2\\CLAUDE_ADAM_MANUAL.md"
+      "path": "C:\\Users\\rickf\\Projects\\_EHG\\EHG_Engineer\\.worktrees\\SD-FDBK-INFRA-CLAUDE-SOLOMON-EXCEEDS-001\\CLAUDE_ADAM_MANUAL.md"
     },
     "CLAUDE_ADAM_PROVENANCE.md": {
       "type": "full",
@@ -81,7 +81,7 @@
       "bytes": 6988,
       "estimated_tokens": 1731,
       "content_hash": "3e7a7e1190a18618",
-      "path": "C:\\Users\\rickf\\Projects\\_EHG\\EHG_Engineer\\.worktrees\\GSB-B2\\CLAUDE_ADAM_PROVENANCE.md"
+      "path": "C:\\Users\\rickf\\Projects\\_EHG\\EHG_Engineer\\.worktrees\\SD-FDBK-INFRA-CLAUDE-SOLOMON-EXCEEDS-001\\CLAUDE_ADAM_PROVENANCE.md"
     },
     "CLAUDE_COORDINATOR.md": {
       "type": "full",
@@ -89,83 +89,91 @@
       "bytes": 25514,
       "estimated_tokens": 6329,
       "content_hash": "94f2d627c5099db2",
-      "path": "C:\\Users\\rickf\\Projects\\_EHG\\EHG_Engineer\\.worktrees\\GSB-B2\\CLAUDE_COORDINATOR.md"
+      "path": "C:\\Users\\rickf\\Projects\\_EHG\\EHG_Engineer\\.worktrees\\SD-FDBK-INFRA-CLAUDE-SOLOMON-EXCEEDS-001\\CLAUDE_COORDINATOR.md"
     },
     "CLAUDE_SOLOMON.md": {
       "type": "full",
-      "chars": 66522,
-      "bytes": 67131,
-      "estimated_tokens": 16631,
-      "content_hash": "612c9738749ee143",
-      "path": "C:\\Users\\rickf\\Projects\\_EHG\\EHG_Engineer\\.worktrees\\GSB-B2\\CLAUDE_SOLOMON.md"
+      "chars": 58545,
+      "bytes": 59080,
+      "estimated_tokens": 14637,
+      "content_hash": "24df7120b93f102c",
+      "path": "C:\\Users\\rickf\\Projects\\_EHG\\EHG_Engineer\\.worktrees\\SD-FDBK-INFRA-CLAUDE-SOLOMON-EXCEEDS-001\\CLAUDE_SOLOMON.md"
+    },
+    "CLAUDE_SOLOMON_MANUAL.md": {
+      "type": "full",
+      "chars": 11227,
+      "bytes": 11324,
+      "estimated_tokens": 2807,
+      "content_hash": "42750ae5e763c049",
+      "path": "C:\\Users\\rickf\\Projects\\_EHG\\EHG_Engineer\\.worktrees\\SD-FDBK-INFRA-CLAUDE-SOLOMON-EXCEEDS-001\\CLAUDE_SOLOMON_MANUAL.md"
     },
     "CLAUDE_DIGEST.md": {
       "type": "digest",
       "chars": 9611,
       "bytes": 9653,
       "estimated_tokens": 2403,
-      "content_hash": "cdb939bdcdab6214",
-      "path": "C:\\Users\\rickf\\Projects\\_EHG\\EHG_Engineer\\.worktrees\\GSB-B2\\CLAUDE_DIGEST.md"
+      "content_hash": "364c61ae61d46577",
+      "path": "C:\\Users\\rickf\\Projects\\_EHG\\EHG_Engineer\\.worktrees\\SD-FDBK-INFRA-CLAUDE-SOLOMON-EXCEEDS-001\\CLAUDE_DIGEST.md"
     },
     "CLAUDE_CORE_DIGEST.md": {
       "type": "digest",
       "chars": 13747,
       "bytes": 13861,
       "estimated_tokens": 3437,
-      "content_hash": "39b4343c8cc47ce4",
-      "path": "C:\\Users\\rickf\\Projects\\_EHG\\EHG_Engineer\\.worktrees\\GSB-B2\\CLAUDE_CORE_DIGEST.md"
+      "content_hash": "8e793099b375a84d",
+      "path": "C:\\Users\\rickf\\Projects\\_EHG\\EHG_Engineer\\.worktrees\\SD-FDBK-INFRA-CLAUDE-SOLOMON-EXCEEDS-001\\CLAUDE_CORE_DIGEST.md"
     },
     "CLAUDE_LEAD_DIGEST.md": {
       "type": "digest",
       "chars": 5551,
       "bytes": 5571,
       "estimated_tokens": 1388,
-      "content_hash": "661bdfde5e6c67b7",
-      "path": "C:\\Users\\rickf\\Projects\\_EHG\\EHG_Engineer\\.worktrees\\GSB-B2\\CLAUDE_LEAD_DIGEST.md"
+      "content_hash": "e0b34896c77ea1ba",
+      "path": "C:\\Users\\rickf\\Projects\\_EHG\\EHG_Engineer\\.worktrees\\SD-FDBK-INFRA-CLAUDE-SOLOMON-EXCEEDS-001\\CLAUDE_LEAD_DIGEST.md"
     },
     "CLAUDE_PLAN_DIGEST.md": {
       "type": "digest",
       "chars": 8541,
       "bytes": 8581,
       "estimated_tokens": 2136,
-      "content_hash": "9e2f8a591ca8de70",
-      "path": "C:\\Users\\rickf\\Projects\\_EHG\\EHG_Engineer\\.worktrees\\GSB-B2\\CLAUDE_PLAN_DIGEST.md"
+      "content_hash": "8872217b95a1d76b",
+      "path": "C:\\Users\\rickf\\Projects\\_EHG\\EHG_Engineer\\.worktrees\\SD-FDBK-INFRA-CLAUDE-SOLOMON-EXCEEDS-001\\CLAUDE_PLAN_DIGEST.md"
     },
     "CLAUDE_EXEC_DIGEST.md": {
       "type": "digest",
       "chars": 10964,
       "bytes": 11046,
       "estimated_tokens": 2741,
-      "content_hash": "ee2e4989585377ed",
-      "path": "C:\\Users\\rickf\\Projects\\_EHG\\EHG_Engineer\\.worktrees\\GSB-B2\\CLAUDE_EXEC_DIGEST.md"
+      "content_hash": "f0b8d48af6ed1026",
+      "path": "C:\\Users\\rickf\\Projects\\_EHG\\EHG_Engineer\\.worktrees\\SD-FDBK-INFRA-CLAUDE-SOLOMON-EXCEEDS-001\\CLAUDE_EXEC_DIGEST.md"
     },
     "CLAUDE_ADAM_DIGEST.md": {
       "type": "digest",
       "chars": 17736,
       "bytes": 18068,
       "estimated_tokens": 4434,
-      "content_hash": "09eebc7e252cbc7c",
-      "path": "C:\\Users\\rickf\\Projects\\_EHG\\EHG_Engineer\\.worktrees\\GSB-B2\\CLAUDE_ADAM_DIGEST.md"
+      "content_hash": "80ea775ceed59e00",
+      "path": "C:\\Users\\rickf\\Projects\\_EHG\\EHG_Engineer\\.worktrees\\SD-FDBK-INFRA-CLAUDE-SOLOMON-EXCEEDS-001\\CLAUDE_ADAM_DIGEST.md"
     },
     "CLAUDE_COORDINATOR_DIGEST.md": {
       "type": "digest",
       "chars": 6091,
       "bytes": 6161,
       "estimated_tokens": 1523,
-      "content_hash": "fc6aa2cbec21075a",
-      "path": "C:\\Users\\rickf\\Projects\\_EHG\\EHG_Engineer\\.worktrees\\GSB-B2\\CLAUDE_COORDINATOR_DIGEST.md"
+      "content_hash": "d34b0d16e63399fa",
+      "path": "C:\\Users\\rickf\\Projects\\_EHG\\EHG_Engineer\\.worktrees\\SD-FDBK-INFRA-CLAUDE-SOLOMON-EXCEEDS-001\\CLAUDE_COORDINATOR_DIGEST.md"
     },
     "CLAUDE_SOLOMON_DIGEST.md": {
       "type": "digest",
-      "chars": 4717,
-      "bytes": 4757,
-      "estimated_tokens": 1180,
-      "content_hash": "b0c9025de34d7fa3",
-      "path": "C:\\Users\\rickf\\Projects\\_EHG\\EHG_Engineer\\.worktrees\\GSB-B2\\CLAUDE_SOLOMON_DIGEST.md"
+      "chars": 3969,
+      "bytes": 4011,
+      "estimated_tokens": 993,
+      "content_hash": "6fb9bbdcaa21f2fd",
+      "path": "C:\\Users\\rickf\\Projects\\_EHG\\EHG_Engineer\\.worktrees\\SD-FDBK-INFRA-CLAUDE-SOLOMON-EXCEEDS-001\\CLAUDE_SOLOMON_DIGEST.md"
     }
   },
   "section_digests": {
-    "global": "9faa816432329f6e",
+    "global": "9cbd3edf770dc6d9",
     "byId": {
       "94": "ef2f1e7ed617b5e0",
       "189": "6398659126897bbb",
@@ -426,17 +434,18 @@
       "608": "7f99a4321502367e",
       "609": "9790a74a362ff0ca",
       "610": "34fedae699d8c9f3",
-      "611": "633eeaf64343dd1c",
+      "611": "c34869b09bd696bc",
       "612": "13e03eddf5300bcc",
       "613": "1e1de64689c1ad82",
       "614": "a4d5064f0ffbe97c",
       "615": "1ac30c8d7046c470",
-      "616": "cf03793e285951bf",
+      "616": "cc3b2a117dc15f14",
       "620": "3fd2f83a068a8381",
       "621": "5d93172c5c9c2138",
       "622": "94a8df85a96ad041",
       "626": "f9a040104b9c6234",
-      "627": "c1f5247af6cc9d08"
+      "627": "c1f5247af6cc9d08",
+      "629": "fbba3f3dba64e4a4"
     },
     "meta": {
       "94": {
@@ -1760,7 +1769,7 @@
         "title": "Crew-comms routing protocol (organizing layer)"
       },
       "616": {
-        "section_type": "solomon_role_contract",
+        "section_type": "solomon_manual",
         "target_file": "CLAUDE_SOLOMON.md",
         "title": "Crew-comms routing protocol (organizing layer)"
       },
@@ -1788,6 +1797,11 @@
         "section_type": "adam_provenance",
         "target_file": null,
         "title": "Adam Provenance — dated rationale and live witnesses (companion)"
+      },
+      "629": {
+        "section_type": "solomon_manual",
+        "target_file": null,
+        "title": "Solomon Manual — reference and procedure (companion)"
       }
     }
   }
