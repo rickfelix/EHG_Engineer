@@ -152,14 +152,35 @@ BEGIN
       AND policyname = 'drive_reports_service_role'
   ), 'drive_reports: the service_role policy is missing or renamed';
 
-  -- The reclassification trigger, enforced rather than merely documented: if anon or
-  -- authenticated hold ANY privilege on this table, the non-permission-class classification
-  -- recorded on the SD is false and the deploy must fail loudly rather than ship a lie.
+  -- The reclassification trigger, enforced rather than merely documented: if ANY role other than
+  -- the owner and service_role holds ANY privilege on this table, the non-permission-class
+  -- classification recorded on the SD is false and the deploy must fail loudly rather than ship a lie.
+  --
+  -- WIDENED from `grantee IN ('anon','authenticated')`. The coordinator ruling reclassifies on ANY
+  -- NON-SERVICE GRANT, but the old assertion ENUMERATED TWO ROLES BY NAME — so `GRANT ... TO PUBLIC`,
+  -- or a grant to any role invented later, walked straight past the one check enforcing the ruling's
+  -- own condition. A tripwire narrower than the rule it guards reads as enforcement and isn't.
+  -- Found by the SECURITY sub-agent, which correctly marked it INFERRED rather than measured.
+  --
+  -- MEASURED WHILE WIDENING, and it corrected my own first explanation: I assumed
+  -- information_schema.role_table_grants could not see PUBLIC at all. It can — this database has 2
+  -- such rows. So the defect was never the view's blindness; it was the literal two-role list. Worth
+  -- stating because the wrong diagnosis would have suggested the wrong fix (swap the view) instead
+  -- of the right one (stop naming roles).
+  --
+  -- Reads pg_class.relacl via aclexplode: the authoritative ACL, which represents PUBLIC explicitly
+  -- as grantee OID 0 and enumerates EVERY grantee rather than the ones we thought to name.
+  -- Deny-by-default — a role invented next year is caught by construction, not by amendment.
+  -- Verified read-only before shipping: this predicate executes and correctly enumerates
+  -- anon/authenticated/service_role on existing tables, and aclexplode does surface grantee=0.
   ASSERT NOT EXISTS (
-    SELECT 1 FROM information_schema.role_table_grants
-    WHERE table_schema = 'public' AND table_name = 'drive_reports'
-      AND grantee IN ('anon', 'authenticated')
-  ), 'drive_reports: a non-service grant exists — this table is now PERMISSION-CLASS and requires chairman approval';
+    SELECT 1
+    FROM pg_class c
+    CROSS JOIN LATERAL aclexplode(COALESCE(c.relacl, acldefault('r', c.relowner))) a
+    WHERE c.oid = 'public.drive_reports'::regclass
+      AND a.grantee <> c.relowner                                            -- the owner is not a grant
+      AND COALESCE(pg_get_userbyid(NULLIF(a.grantee, 0)), 'PUBLIC') <> 'service_role'
+  ), 'drive_reports: a non-service grant exists (including PUBLIC) — this table is now PERMISSION-CLASS and requires chairman approval';
 
   -- The append-only boundary on the C4 ruling. Without this trigger a stored observation is
   -- rewritable, which turns it back into copied state and silently moves the baseline every
