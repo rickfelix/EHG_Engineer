@@ -134,12 +134,25 @@ describe('reportWorkerSignalStarvation', () => {
     expect(resolveThresholdMs({ COORD_REPLY_STARVATION_SEC: '600' })).toBe(600 * 1000);
   });
 
-  it('is READ-ONLY: only session_coordination is read, and no write verb is ever invoked', async () => {
+  // SD-LEO-INFRA-RETENTION-DESTROYS-REPLY-001 (FR-1): this asserted `from` was called EXACTLY ONCE
+  // with session_coordination. That pinned the TABLE COUNT as a proxy for read-only-ness, and the
+  // proxy broke when a second READ was legitimately added: retention_archive holds the acknowledged
+  // replies that retention moves out of the live table roughly an hour after ack, and without them
+  // an answered signal reported as starved for the remaining ~23 hours of the lookback.
+  //
+  // The property this test exists to protect is NO WRITES, not one table — so it now asserts that
+  // directly. Asserting the read set as well keeps it from silently widening further.
+  it('is READ-ONLY: reads only the two evidence tables, and no write verb is ever invoked', async () => {
     const { log } = capture();
     const sb = fakeSupabase([]);
     await reportWorkerSignalStarvation(sb, { now: NOW, log, env: {} });
-    expect(sb.from).toHaveBeenCalledWith('session_coordination');
-    expect(sb.from).toHaveBeenCalledTimes(1);
+    const tables = sb.from.mock.calls.map((c) => c[0]);
+    expect(tables).toContain('session_coordination');
+    expect(new Set(tables)).toEqual(new Set(['session_coordination', 'retention_archive']));
+    // The actual contract: no mutation verb reached the client on any path.
+    for (const verb of ['insert', 'update', 'upsert', 'delete', 'rpc']) {
+      expect(sb[verb], `${verb} must never be called`).toBeUndefined();
+    }
   });
 });
 
