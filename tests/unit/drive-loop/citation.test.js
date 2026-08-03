@@ -1,9 +1,9 @@
-// SD-LEO-INFRA-DRIVE-LOOP-INSTRUMENT-001-B (TR-2, TS-14, TS-6) — the C4 primitive.
+// SD-LEO-INFRA-DRIVE-LOOP-INSTRUMENT-001-B (TR-2, TS-6) — the C4 primitive.
 //
-// TS-14 is the test this child was missing until PLAN TESTING found the gap: TS-3 and TS-4
-// check that a citation has the right SHAPE, but nothing checked that FOLLOWING a citation
-// reproduces the number displayed. Without that, a section storing a correct-looking citation
-// alongside a copied value passes every other scenario.
+// SCOPE OF THIS FILE, stated because the filename invites the wrong assumption: this file tests
+// cite() and unmeasurable() as FUNCTIONS. The C4 property itself — that a cited number re-derives
+// to the number a section displayed — is NOT tested here and cannot be, because nothing in this
+// file imports a section. It lives in c4-rederivation.test.js.
 
 import { describe, it, expect } from 'vitest';
 import { cite, unmeasurable, isUnmeasurable, scoreLegs } from '../../../lib/drive-loop/citation.js';
@@ -54,41 +54,137 @@ describe('cite() — provenance is mandatory, not decorative', () => {
   });
 });
 
-describe('TS-14 — a cited number re-derives to the number displayed', () => {
-  // The whole point of C4. A section can store a perfectly-shaped citation next to a value
-  // that the citation does not actually produce, and every shape test still passes.
-  const ROWS = [
-    { id: 'i1', remainder_state: 'promotable_now' },
-    { id: 'i2', remainder_state: 'promotable_now' },
-    { id: 'i3', remainder_state: 'void' },
-  ];
-  // The executable form of the stored predicate. In production this is the query; here it is
-  // the same logic against a fixture, which is what makes the assertion meaningful at all.
-  const runPredicate = (rows) => rows.filter((r) => r.remainder_state === 'promotable_now');
+// ---------------------------------------------------------------------------------------------
+// REMOVED: a `describe('TS-14 — a cited number re-derives to the number displayed')` block used to
+// sit here. It defined a fixture-local `runPredicate`, called it to BUILD a value, then called it
+// again and asserted the two agreed — `runPredicate(ROWS).length === runPredicate(ROWS).length`.
+// Its companion asserted `2 !== 99`. Both passed unconditionally.
+//
+// Deleted rather than annotated. An inert test is a FALSE GREEN: it contributes to the passing
+// count and to the summary line a reviewer actually reads, and the whole premise of this SD's
+// testing work is that "tests exist" and "tests can fail" are different claims. A comment saying
+// "this does not really test anything" leaves the misleading number in place for everyone who
+// does not read the comment.
+//
+// MEASURED, which is why it went: three mutations that made a section's cited value contradict its
+// own row_ids (plan-position next +7, done_recent +99, slipped +42) left the entire suite green
+// while this block sat here claiming to be TS-14.
+//
+// TS-14 now lives in tests/unit/drive-loop/c4-rederivation.test.js, imports the real section
+// modules, and is mutation-proven against those same three defects.
+// ---------------------------------------------------------------------------------------------
 
-  it('re-running the predicate reproduces the stored value', () => {
-    const derived = runPredicate(ROWS);
-    const c = cite({
-      value: derived.length,
-      table: 'v_plan_of_record_remainder',
-      row_ids: derived.map((r) => r.id),
-      predicate: 'count of rows where remainder_state = promotable_now',
-    });
+describe('cite() — null is an OBSERVATION when it says what it means (738432e4e04)', () => {
+  // The discriminator is REASONED-vs-UNREASONED, not null-vs-not-null. In this domain null is
+  // frequently the answer — the-next-gate-is-null means every wave is clear — and rejecting it
+  // forces a section to invent a sentinel, which is copied state with extra steps.
+  const base = { table: 'roadmap_wave_items', predicate: 'the gate the active wave is currently held at' };
 
-    const rederived = runPredicate(ROWS);
-    expect(rederived.length).toBe(c.value);
-    expect(rederived.map((r) => r.id)).toEqual(c.citation.row_ids);
+  it('CASE 1 — an unexplained null THROWS, and the error names the way out', () => {
+    // The fail-loud property the original all-nulls-are-missing rule was defending. It has to be
+    // impossible to satisfy by accident, so the message has to name the field to add.
+    expect(() => cite({ ...base, value: null })).toThrow(/null_means/);
   });
 
-  it('CATCHES a copied value that its own citation does not produce', () => {
-    // The failure mode this test exists for: a plausible citation beside a stale number.
+  it('CASE 2 — an explained null PASSES, and null_means travels IN the emission', () => {
     const c = cite({
-      value: 99,
-      table: 'v_plan_of_record_remainder',
-      row_ids: ['i1', 'i2'],
-      predicate: 'count of rows where remainder_state = promotable_now',
+      ...base,
+      value: null,
+      null_means: 'no wave is currently held at a gate; every approved wave is clear',
     });
-    expect(runPredicate(ROWS).length).not.toBe(c.value);
+
+    expect(c.value).toBeNull();
+    // The load-bearing half. An explanation that stays at the call site leaves the consumer
+    // looking at a bare null, guessing between "nothing blocks" and "nobody looked" — which is
+    // the entire distinction being drawn. Same rule as `limitation`, same reason.
+    expect(c.null_means).toBe('no wave is currently held at a gate; every approved wave is clear');
+  });
+
+  it('CASE 3 — value 0 passes and is NOT swept into the null path', () => {
+    // The regression someone will cause when they "simplify" this with a falsy check. A counted
+    // nothing and an observed nothing are different findings: 0 means the query ran and returned
+    // none; null means there was nothing to count. Collapsing them loses the distinction that
+    // made the fix necessary in the first place.
+    const c = cite({ ...base, value: 0, row_ids: [] });
+
+    expect(c.value).toBe(0);
+    expect(c.value).not.toBeNull();
+    expect(c).not.toHaveProperty('null_means');
+  });
+
+  it('CASE 3b — the whole falsy family passes without an explanation', () => {
+    // 0 is the one named in the requirement, but a falsy check would take all of these with it,
+    // and each is a legitimate observation that needs no excuse.
+    expect(() => cite({ ...base, value: 0 })).not.toThrow();
+    expect(() => cite({ ...base, value: '' })).not.toThrow();
+    expect(() => cite({ ...base, value: false })).not.toThrow();
+    expect(() => cite({ ...base, value: [] })).not.toThrow();
+    expect(cite({ ...base, value: [] }).value).toEqual([]);
+  });
+
+  it('CASE 4 — an undefined value THROWS: the field was never supplied at all', () => {
+    // Absent, null and empty stay three different things. undefined is the one that means nobody
+    // wrote the field, which no explanation can rescue.
+    expect(() => cite({ ...base })).toThrow(/value/);
+    expect(() => cite({ ...base, value: undefined })).toThrow(/value/);
+    // And it stays a defect even WITH a null_means — an explanation cannot conjure a field.
+    expect(() => cite({ ...base, value: undefined, null_means: 'nothing is held' })).toThrow(/value/);
+  });
+
+  it('CASE 5 — a null table THROWS: provenance can never be nothing', () => {
+    expect(() => cite({ table: null, predicate: 'p', value: 1 })).toThrow(/table/);
+    // null_means is about the OBSERVATION and must not launder missing provenance.
+    expect(() => cite({ table: null, predicate: 'p', value: null, null_means: 'nothing held' })).toThrow(/table/);
+  });
+
+  it('CASE 6 — a null predicate THROWS: "what counts" can never be nothing', () => {
+    expect(() => cite({ table: 't', predicate: null, value: 1 })).toThrow(/predicate/);
+    expect(() => cite({ table: 't', predicate: null, value: null, null_means: 'nothing held' })).toThrow(/predicate/);
+  });
+
+  it('an EMPTY or whitespace null_means is not an explanation', () => {
+    // The same failure the predicate and limitation rules already guard: a field that satisfies a
+    // presence check while carrying no information. An empty null_means is read as no explanation,
+    // so it must fail exactly like a missing one.
+    expect(() => cite({ ...base, value: null, null_means: '' })).toThrow(/null_means/);
+    expect(() => cite({ ...base, value: null, null_means: '   ' })).toThrow(/null_means/);
+    expect(() => cite({ ...base, value: null, null_means: '\n\t ' })).toThrow(/null_means/);
+  });
+
+  it('a non-string null_means is not an explanation either', () => {
+    expect(() => cite({ ...base, value: null, null_means: true })).toThrow(/null_means/);
+    expect(() => cite({ ...base, value: null, null_means: 1 })).toThrow(/null_means/);
+  });
+
+  it('null_means is trimmed, so padding cannot smuggle an empty explanation through', () => {
+    const c = cite({ ...base, value: null, null_means: '  nothing is blocking  ' });
+    expect(c.null_means).toBe('nothing is blocking');
+  });
+
+  it('null_means is NOT emitted on a non-null value — it would read as a null that is not there', () => {
+    // A stray null_means beside a real number tells the reader the observation was absent when it
+    // was not. The field belongs to the null, not to the call.
+    const c = cite({ ...base, value: 3, row_ids: ['a', 'b', 'c'], null_means: 'left over from a copy-paste' });
+    expect(c.value).toBe(3);
+    expect(c).not.toHaveProperty('null_means');
+  });
+
+  it('an explained null still carries its full provenance', () => {
+    // The point of admitting null at all is that it is an OBSERVATION, so it is held to the same
+    // provenance standard as any other — an unauditable null is no better than a sentinel.
+    const c = cite({
+      ...base,
+      value: null,
+      row_ids: [],
+      predicate: 'the gate the active wave is currently held at',
+      source: 'lib/drive-loop/sections/plan-position.js',
+      null_means: 'no wave is held at a gate',
+    });
+
+    expect(c.citation.table).toBe('roadmap_wave_items');
+    expect(c.citation.source).toMatch(/plan-position/);
+    expect(c.predicate).toBeTruthy();
+    expect(c.citation.row_ids).toEqual([]);
   });
 });
 
@@ -103,6 +199,20 @@ describe('unmeasurable() — never a false zero (TS-6)', () => {
 
   it('THROWS without a reason — "unmeasurable" with no cause is a shrug, not a measurement', () => {
     expect(() => unmeasurable({ table: 't' })).toThrow(/reason/);
+  });
+
+  it('is a DIFFERENT claim from an explained null, and stays distinguishable', () => {
+    // Both carry value:null and both are legitimate, but they say opposite things about whether
+    // the instrument worked: unmeasurable means the gauge could not be READ; an explained null
+    // means it WAS read and the answer was nothing. Collapsing them is how an outage starts
+    // reading as a clean bill of health.
+    const u = unmeasurable({ table: 't', predicate: 'p', reason: 'query timed out' });
+    const n = cite({ table: 't', predicate: 'p', value: null, null_means: 'nothing is blocking' });
+
+    expect(isUnmeasurable(u)).toBe(true);
+    expect(isUnmeasurable(n)).toBe(false);
+    expect(u).not.toHaveProperty('null_means');
+    expect(n).not.toHaveProperty('reason');
   });
 });
 
@@ -134,5 +244,19 @@ describe('scoreLegs() — the denominator SHRINKS, the score does not sink (TS-6
     // outage indistinguishable from a genuinely bad day.
     expect(oneBlind.score).toBe(allGood.score);
     expect(oneBlind.denominator).toBeLessThan(6);
+  });
+
+  it('an explained null leg is SCORED, not treated as unreadable', () => {
+    // An observation of nothing is a measurement. Only unmeasurable() shrinks the denominator —
+    // if an explained null did too, "the plan is clear" would look like "the gauge is broken".
+    const nullLeg = {
+      id: 'leg-null',
+      points: 2,
+      cited: cite({ value: null, table: 't', predicate: 'p', null_means: 'no wave is held at a gate' }),
+    };
+    const r = scoreLegs([ok('leg1', 2), nullLeg]);
+
+    expect(r.denominator).toBe(4);
+    expect(r.unmeasurable_legs).toEqual([]);
   });
 });

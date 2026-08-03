@@ -201,6 +201,59 @@ function resolveRederivation({ sectionId, path, cited, ctx }) {
 }
 
 /**
+ * A NULL OBSERVATION IS A LEGITIMATE THIRD CATEGORY — decided here rather than left implicit.
+ *
+ * cite() admits `value: null` when the caller states what the null MEANS (738432e4e04), because in
+ * this domain null is frequently the answer: the-next-gate-is-null means every wave is clear. Under
+ * the row-count rule alone such a value has no row grain, so it would fall to `undeclared` and be
+ * reported as no_way_to_re_derive — which would push a section into faking a row grain, or into
+ * inventing a sentinel, to satisfy a property meant to prevent exactly that.
+ *
+ * So null gets its own category, on the SAME TERMS cite() sets, and it is not a free pass:
+ *
+ *   1. It must be EXPLAINED. An unexplained null reaching a section's output is a violation even
+ *      though cite() throws on one today — the property must hold for a section that hand-builds
+ *      the cited shape, not only for one that goes through cite().
+ *   2. It must not CONTRADICT ITS OWN CITATION. Null alongside NON-EMPTY row_ids says "here are the
+ *      rows I found" and "I found nothing" in the same breath. An absent or empty row grain is
+ *      consistent with an observation of nothing; a populated one is not.
+ *   3. A DECLARED RE-DERIVER STILL GOVERNS (see findViolations). A section reporting null where its
+ *      rollup says 300 is not rescued by explaining the null.
+ *
+ * Where it differs from unmeasurable(): both carry value:null, and they make opposite claims about
+ * whether the instrument worked. unmeasurable means the gauge could not be READ. An explained null
+ * means it WAS read and the answer was nothing. unmeasurable is handled first, on its own terms.
+ *
+ * @returns {object|null} a violation, or null when the observation is admissible
+ */
+function checkNullObservation(path, cited) {
+  const explained = typeof cited.null_means === 'string' && cited.null_means.trim().length > 0;
+  if (!explained) {
+    return {
+      path,
+      kind: 'unexplained_null',
+      detail: `${path} observes null with no null_means. Null is admissible here as an OBSERVATION `
+        + '(no next gate, nothing blocking) but only when it states what the absence signifies. '
+        + 'A bare null leaves the consumer guessing between "nothing blocks" and "nobody looked".',
+    };
+  }
+
+  const rowIds = cited.citation?.row_ids;
+  if (Array.isArray(rowIds) && rowIds.length > 0) {
+    return {
+      path,
+      kind: 'null_contradicts_its_rows',
+      row_ids: rowIds,
+      detail: `${path} observes null while citing ${rowIds.length} row(s). Following the citation `
+        + 'produces rows; the value says there were none. One of them is wrong, and a reader has '
+        + 'no way to tell which.',
+    };
+  }
+
+  return null;
+}
+
+/**
  * The contract, applied to one built section. Returns violations rather than asserting, so the
  * harness itself can be positively controlled below.
  */
@@ -217,9 +270,25 @@ function findViolations(sectionId, section, ctx) {
       continue;
     }
 
+    // An explained, self-consistent null is admissible — but the checks are real, and a declared
+    // re-deriver still governs below, so explaining a null does not exempt it from agreeing with
+    // the source that produced it.
+    if (cited.value === null) {
+      const nullViolation = checkNullObservation(path, cited);
+      if (nullViolation) {
+        violations.push(nullViolation);
+        continue;
+      }
+    }
+
     const r = resolveRederivation({ sectionId, path, cited, ctx: { ...ctx, section } });
 
     if (r.kind === 'undeclared') {
+      // An explained, self-consistent null observation is legitimately un-rederivable by counting:
+      // the observation IS the absence, and re-running its predicate yields no rows, which is
+      // exactly what it already says. It reached here only by passing checkNullObservation.
+      if (cited.value === null) continue;
+
       violations.push({
         path,
         kind: 'no_way_to_re_derive',
@@ -392,5 +461,107 @@ describe('TS-14 — no section module escapes this file', () => {
 
     expect(onDisk, 'a new section module must get a fixture and a REDERIVERS entry in this file '
       + 'before it can ship — otherwise its numbers are checked by nothing').toEqual(registered);
+  });
+});
+
+describe('TS-14 — a null observation is a third category, not an exemption', () => {
+  // cite() admits value:null with a null_means (738432e4e04). The property has to say what that
+  // means for re-derivation, or the two rules disagree and a section satisfies one by breaking the
+  // other. Decided: admissible, on the same terms cite() sets, and still bound by any declared
+  // re-deriver. These controls are what make that decision real rather than a comment.
+  const nullCited = (over = {}) => ({
+    value: null,
+    citation: { table: 'roadmap_wave_items' },
+    predicate: 'the gate the active wave is currently held at',
+    null_means: 'no wave is held at a gate; every approved wave is clear',
+    ...over,
+  });
+  const sectionWith = (cited) => ({ section: BELT_DIAGNOSIS, cases: {}, next_gate: cited });
+
+  it('ADMITS an explained null with no row grain', () => {
+    expect(findViolations(BELT_DIAGNOSIS, sectionWith(nullCited()), {})).toEqual([]);
+  });
+
+  it('ADMITS an explained null citing an EMPTY row set — that is consistent, not contradictory', () => {
+    const cited = nullCited({ citation: { table: 'roadmap_wave_items', row_ids: [] } });
+    expect(findViolations(BELT_DIAGNOSIS, sectionWith(cited), {})).toEqual([]);
+  });
+
+  it('REJECTS an unexplained null — the property does not depend on cite() having been used', () => {
+    // cite() throws on this today, so the only way it reaches a section's output is a hand-built
+    // cited shape. That is precisely the case a property has to cover and a unit test of cite()
+    // cannot.
+    const cited = nullCited({ null_means: undefined });
+    const v = findViolations(BELT_DIAGNOSIS, sectionWith(cited), {});
+    expect(v).toHaveLength(1);
+    expect(v[0]).toMatchObject({ path: 'next_gate', kind: 'unexplained_null' });
+  });
+
+  it('REJECTS an empty-string null_means, matching cite()', () => {
+    // If the two rules disagreed here, a section could satisfy the property with an explanation
+    // cite() would have refused — and the weaker of two rules is the one that governs.
+    for (const empty of ['', '   ', '\n\t ']) {
+      const v = findViolations(BELT_DIAGNOSIS, sectionWith(nullCited({ null_means: empty })), {});
+      expect(v).toHaveLength(1);
+      expect(v[0].kind).toBe('unexplained_null');
+    }
+  });
+
+  it('REJECTS a null that CONTRADICTS its own cited rows', () => {
+    // The failure the null category could otherwise smuggle in: "here are the three rows I found"
+    // beside "I found nothing". Following the citation and reading the value give opposite answers.
+    const cited = nullCited({ citation: { table: 'roadmap_wave_items', row_ids: ['r1', 'r2', 'r3'] } });
+    const v = findViolations(BELT_DIAGNOSIS, sectionWith(cited), {});
+    expect(v).toHaveLength(1);
+    expect(v[0]).toMatchObject({ path: 'next_gate', kind: 'null_contradicts_its_rows', row_ids: ['r1', 'r2', 'r3'] });
+  });
+
+  it('a DECLARED re-deriver still governs — explaining a null does not excuse it from agreeing', () => {
+    // plan_position.remainder has a declared re-deriver reading the rollup's open_total. A section
+    // reporting "nothing remains" while the rollup says 300 is the most dangerous possible false
+    // reading of that section, and a well-worded null_means makes it MORE plausible, not less.
+    const section = {
+      section: PLAN_POSITION,
+      remainder: nullCited({ null_means: 'the wave remainder is empty; nothing is outstanding' }),
+    };
+    const v = findViolations(PLAN_POSITION, section, { status: { open_total: 300 } });
+
+    expect(v).toHaveLength(1);
+    expect(v[0]).toMatchObject({
+      path: 'remainder',
+      kind: 'value_does_not_match_its_citation',
+      via: 'declared',
+      displayed: null,
+      re_derived: 300,
+    });
+  });
+
+  it('an UNMEASURABLE value is not treated as a null observation — they are opposite claims', () => {
+    // Both carry value:null. unmeasurable means the gauge could not be read; an explained null
+    // means it was read and the answer was nothing. If the null branch swallowed unmeasurable, an
+    // instrument outage would start reading as a clean bill of health.
+    const cited = {
+      value: null,
+      unmeasurable: true,
+      reason: 'query timed out',
+      citation: { table: 'roadmap_wave_items' },
+      predicate: 'the gate the active wave is currently held at',
+    };
+    expect(findViolations(BELT_DIAGNOSIS, sectionWith(cited), {})).toEqual([]);
+
+    // ...and an unmeasurable WITHOUT a reason is still caught by its own rule, not by the null one.
+    const noReason = { ...cited, reason: '' };
+    const v = findViolations(BELT_DIAGNOSIS, sectionWith(noReason), {});
+    expect(v).toHaveLength(1);
+    expect(v[0].kind).toBe('unmeasurable_without_reason');
+  });
+
+  it('a NON-null value is untouched by any of this — the control is two-sided', () => {
+    // A null rule that also fired on real values would pass every test above while being useless.
+    const cited = { value: 2, citation: { table: 't', row_ids: ['a', 'b'] }, predicate: 'p' };
+    expect(findViolations(BELT_DIAGNOSIS, sectionWith(cited), {})).toEqual([]);
+
+    const wrong = { value: 5, citation: { table: 't', row_ids: ['a', 'b'] }, predicate: 'p' };
+    expect(findViolations(BELT_DIAGNOSIS, sectionWith(wrong), {})).toHaveLength(1);
   });
 });
