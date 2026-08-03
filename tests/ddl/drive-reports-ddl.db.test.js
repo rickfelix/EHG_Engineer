@@ -255,13 +255,33 @@ describe('the append-only freeze trigger — both halves', () => {
 
 describe('idempotence — the file advertises it and nothing proved it', () => {
   it('re-running the entire migration succeeds and preserves existing rows', async () => {
+    // SELF-CONTAINED, because comparing count-before to count-after passes VACUOUSLY on an empty
+    // table (0 === 0). As written it depended on an earlier describe having inserted rows first —
+    // an ordering dependency, not an assertion. Run alone, or reordered, it proved nothing.
+    const { rows: seed } = await client.query(
+      `INSERT INTO public.drive_reports (sections)
+       VALUES ('{"idempotence":"sentinel"}'::jsonb) RETURNING id`,
+    );
+    const sentinelId = seed[0].id;
+
     const { rows: before } = await client.query('SELECT count(*)::int AS n FROM public.drive_reports');
-    await applyMigration();
-    const { rows: after } = await client.query('SELECT count(*)::int AS n FROM public.drive_reports');
+    // The comparison below is meaningless at zero, so this is the guard that makes it mean something.
+    expect(before[0].n).toBeGreaterThan(0);
 
     // IF NOT EXISTS / DROP ... IF EXISTS advertise re-runnability; a CREATE POLICY without its
     // DROP would raise here, and a CREATE TABLE without IF NOT EXISTS would take the data.
+    await applyMigration();
+
+    const { rows: after } = await client.query('SELECT count(*)::int AS n FROM public.drive_reports');
     expect(after[0].n).toBe(before[0].n);
+
+    // A count can match while the CONTENTS were replaced. Name the row and read it back.
+    const { rows: survived } = await client.query(
+      'SELECT sections FROM public.drive_reports WHERE id = $1',
+      [sentinelId],
+    );
+    expect(survived).toHaveLength(1);
+    expect(survived[0].sections).toEqual({ idempotence: 'sentinel' });
   });
 });
 
@@ -289,7 +309,7 @@ describe('the grant tripwire — deny-by-default, not an enumeration', () => {
 
   it('GRANT TO PUBLIC: the CURRENT predicate FAILS', async () => {
     await client.query('GRANT SELECT ON public.drive_reports TO PUBLIC;');
-    await expect(client.query(VERIFY_BLOCK)).rejects.toThrow(/non-service grant exists/);
+    await expect(client.query(VERIFY_BLOCK)).rejects.toThrow(/non-service grant exists \(including PUBLIC\)/);
   });
 
   it('GRANT TO PUBLIC: the OLD two-role predicate PASSES — this is the widening, demonstrated', async () => {
@@ -310,19 +330,19 @@ describe('the grant tripwire — deny-by-default, not an enumeration', () => {
 
     // A role nobody thought to name when the migration was written. The current predicate catches
     // it by construction; an enumeration can only catch it by amendment.
-    await expect(client.query(VERIFY_BLOCK)).rejects.toThrow(/non-service grant exists/);
+    await expect(client.query(VERIFY_BLOCK)).rejects.toThrow(/non-service grant exists \(including PUBLIC\)/);
     await expect(client.query(OLD_PREDICATE_BLOCK)).resolves.toBeTruthy();
   });
 
   it('GRANT TO anon: BOTH predicates fail — the case the old one did cover', async () => {
     await client.query('GRANT SELECT ON public.drive_reports TO anon;');
-    await expect(client.query(VERIFY_BLOCK)).rejects.toThrow(/non-service grant exists/);
+    await expect(client.query(VERIFY_BLOCK)).rejects.toThrow(/non-service grant exists \(including PUBLIC\)/);
     await expect(client.query(OLD_PREDICATE_BLOCK)).rejects.toThrow(/OLD PREDICATE/);
   });
 
   it('GRANT TO authenticated: current FAILS', async () => {
     await client.query('GRANT SELECT ON public.drive_reports TO authenticated;');
-    await expect(client.query(VERIFY_BLOCK)).rejects.toThrow(/non-service grant exists/);
+    await expect(client.query(VERIFY_BLOCK)).rejects.toThrow(/non-service grant exists \(including PUBLIC\)/);
   });
 
   it('TWO-SIDED: owner privileges alone do NOT trip it', async () => {
@@ -331,7 +351,13 @@ describe('the grant tripwire — deny-by-default, not an enumeration', () => {
     const { rows } = await client.query(
       "SELECT pg_get_userbyid(c.relowner) AS owner FROM pg_class c WHERE c.oid = 'public.drive_reports'::regclass",
     );
-    expect(rows[0].owner).toBeTruthy();
+    // toBeTruthy() passed on any non-empty string, including one that would make this test
+    // meaningless. What actually has to hold is that the owner is a REAL principal and is NOT one
+    // of the grantees the tripwire checks — otherwise `grantee <> c.relowner` would be excluding
+    // the very role the assertion exists to catch.
+    expect(typeof rows[0].owner).toBe('string');
+    expect(rows[0].owner.length).toBeGreaterThan(0);
+    expect(['service_role', 'anon', 'authenticated']).not.toContain(rows[0].owner);
     await expect(client.query(VERIFY_BLOCK)).resolves.toBeTruthy();
   });
 
@@ -350,7 +376,7 @@ describe('the grant tripwire — deny-by-default, not an enumeration', () => {
 
   it('a revoked grant CLEARS the tripwire — it latches on state, not on history', async () => {
     await client.query('GRANT SELECT ON public.drive_reports TO PUBLIC;');
-    await expect(client.query(VERIFY_BLOCK)).rejects.toThrow(/non-service grant exists/);
+    await expect(client.query(VERIFY_BLOCK)).rejects.toThrow(/non-service grant exists \(including PUBLIC\)/);
 
     await client.query('REVOKE ALL ON public.drive_reports FROM PUBLIC;');
     // A check that cannot go back to passing would be indistinguishable from a permanently broken
