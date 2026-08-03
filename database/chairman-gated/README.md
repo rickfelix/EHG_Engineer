@@ -61,10 +61,20 @@ node scripts/apply-migration.js "database/chairman-gated/20260803_bound_anon_ing
 Chairman-approved 2026-08-03 (Option A, SMS 10:13:53Z, on record via Adam). **Approval to author is
 not approval to apply** — the apply runs through the ceremony with the approval row referenced.
 
-Rollback is in the file header, and the pre-amendment predicate is captured there **verbatim from
-`pg_get_expr` on the live policy**, not reconstructed from the migration source. That distinction is
-load-bearing: Postgres normalises `NOT IN` to `<> ALL (ARRAY[...])` and adds `::text` casts, so a
-rollback rebuilt from the migration file would not restore byte-identical state.
+**The rollback source is a FRESH PRE-APPLY CAPTURE of live `pg_policies` state, taken by the applier
+at apply time — never a repo file, including the amendment file itself.** The predicate in that
+file's header is captured from `pg_get_expr` on the live policy at *authoring* time and is there as
+**context to diff against**, not as an authority to restore from.
+
+That requirement is not ceremony. This repo already carries a policy file for
+`public.session_coordination` (20260309, `FOR ALL` with no `TO` clause) that **disagrees with live
+state** — the same defect as the SD above in the opposite direction: there a live policy had no
+file, here a file misdescribes the live policy. Both are one representation being trusted for a fact
+it does not hold.
+
+**Any file-vs-live disagreement found during the pre-apply capture is a BLOCKING finding** — stop
+the ceremony and report it, because it means live policy was changed outside migration history
+again, which matters more than the amendment does.
 
 **Run the acceptance twice — the baseline is not optional:**
 

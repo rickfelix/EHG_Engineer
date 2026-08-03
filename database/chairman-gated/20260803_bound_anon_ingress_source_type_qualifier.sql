@@ -30,13 +30,31 @@
 -- treated as an incident.
 --
 -- ============================================================================================
--- THE CURRENT PREDICATE, VERBATIM FROM THE CATALOG — so rollback is EXACT, not RECONSTRUCTED
+-- THE CURRENT PREDICATE — CAPTURED FOR CONTEXT. *** THIS IS NOT THE ROLLBACK SOURCE. ***
 -- ============================================================================================
--- Captured 2026-08-03 via pg_get_expr(p.polwithcheck, p.polrelid, true) on the LIVE policy, not
--- copied from the migration file. This matters: the file's text and the installed text differ in
--- normalisation (Postgres rewrites NOT IN as <> ALL(ARRAY[...]) and casts to ::text), so a rollback
--- reconstructed from the migration would not restore byte-identical state. Requirement (1) from
--- Adam, and the reason it was made a condition.
+-- HARD REQUIREMENT (Adam, 2026-08-03; supersedes the original wording of condition 1):
+--   The rollback source for this amendment is a FRESH PRE-APPLY CAPTURE of live pg_policies state,
+--   taken by the applier in his own lane at apply time. It is NEVER a repo file — including THIS
+--   one. The block below is context for the reviewer, not an authority to restore from.
+--
+-- WHY THE REQUIREMENT WAS UPGRADED, and it is not hypothetical: SECURITY found that this repo
+-- already carries a policy file for public.session_coordination (20260309, declaring FOR ALL with
+-- no TO clause) that DISAGREES with live state. That is the same defect as this SD's parent, in
+-- the opposite direction — there, a live policy had no file; here, a file misdescribes the live
+-- policy. Both are one representation being trusted for a fact it does not hold. So file-resident
+-- policy text cannot be trusted as rollback, and THIS FILE IS A FILE. The block below is
+-- EXPECTED-AT-AUTHORING; diff the fresh capture against it rather than restoring from it.
+--
+-- *** ANY FILE-VS-LIVE DISAGREEMENT FOUND DURING THE PRE-APPLY CAPTURE IS A BLOCKING FINDING. ***
+-- Not a footnote, not note-and-proceed. If the fresh capture does not match the block below, STOP
+-- the ceremony and report it: it means the live policy was changed outside migration history a
+-- second time, which matters more than this amendment does.
+--
+-- Captured 2026-08-03 at AUTHORING time (not apply time) via
+-- pg_get_expr(p.polwithcheck, p.polrelid, true) on the live policy, not copied from the migration
+-- file. Even as context that distinction matters: the file's text and the installed text differ in
+-- normalisation (Postgres rewrites NOT IN as <> ALL(ARRAY[...]) and casts to ::text), so anything
+-- reconstructed from migration source would not reproduce installed state byte-identically.
 --
 -- polname     : anon_feedback_ingress_bounds
 -- polpermissive: false   (RESTRICTIVE)
@@ -49,7 +67,9 @@
 --      FROM feedback f
 --     WHERE f.source_type::text = 'telegram'::text AND f.created_at > (now() - '01:00:00'::interval))
 --
--- ROLLBACK — restores exactly the above. Run inside a transaction:
+-- ROLLBACK SHAPE — REFERENCE ONLY. Build the actual rollback from the fresh pre-apply capture, not
+-- from this. It is reproduced here so the reviewer can see what a correct rollback looks like and
+-- so the fresh capture has something to be diffed AGAINST. Run inside a transaction:
 --
 --   ALTER POLICY anon_feedback_ingress_bounds ON public.feedback
 --       WITH CHECK (
