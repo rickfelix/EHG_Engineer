@@ -60,10 +60,11 @@ function fakeSupabase() {
  * Records which directory the currency guard was pointed at. This is the whole point: the bug was
  * never in whether the flag branch executed — it was in what the guard SAID about the destination.
  */
-function recordingCurrencyRunner({ branch, behind }) {
+function recordingCurrencyRunner({ branch, behind }, sequence = []) {
   const seen = [];
   const runner = (args, o) => {
     seen.push({ args, cwd: o && o.cwd });
+    sequence.push('guard:' + args[0]);
     if (args[0] === 'fetch') return '';
     if (args.includes('--abbrev-ref')) return `${branch}\n`;
     if (args[0] === 'status') return '';
@@ -74,11 +75,15 @@ function recordingCurrencyRunner({ branch, behind }) {
 }
 
 function spawnOpts({ branch, behind, exists = true }) {
-  const rec = recordingCurrencyRunner({ branch, behind });
+  // ONE shared ordered log across BOTH runners. Two separate per-runner logs can only tell you
+  // that each thing happened, never which came first — see the ordering test below.
+  const sequence = [];
+  const rec = recordingCurrencyRunner({ branch, behind }, sequence);
   const gitCalls = [];
   return {
     rec,
     gitCalls,
+    sequence,
     opts: {
       live: true,
       spawnFn: vi.fn(() => ({ pid: 1, unref: vi.fn() })),
@@ -89,7 +94,11 @@ function spawnOpts({ branch, behind, exists = true }) {
       currencyRunner: rec.runner,
       repoRoot: REPO_ROOT,
       spawnSourceExists: () => exists,
-      spawnSourceRunner: (args) => { gitCalls.push(args.join(' ')); return ''; },
+      spawnSourceRunner: (args) => {
+        gitCalls.push(args.join(' '));
+        sequence.push(args.includes('--ff-only') ? 'refresh' : 'spawnsource:' + args.join(' ').slice(0, 24));
+        return '';
+      },
     },
   };
 }
@@ -120,15 +129,27 @@ describe('FR-2 seam: FLEET_SPAWN_SOURCE_TREE forced ON', () => {
     await expect(spawn({ role: 'worker', callsign: 'Alpha-5' }, opts)).rejects.toThrow(/TREE_NOT_CURRENT|detached|not current/i);
   });
 
-  it('REFRESHES the existing tree before the guard reads it, in that order', async () => {
-    const { gitCalls, rec, opts } = spawnOpts({ branch: SPAWN_SOURCE_BRANCH, behind: 0 });
+  it('REFRESHES the existing tree BEFORE the guard reads it — asserted as an ORDER, not a pair of facts', async () => {
+    // REWRITTEN after independent review (coordinator testing-agent, evidence row 6ecbbd8c). The
+    // previous version was named "...in that order" and did not assert order at all: it checked
+    // that a ff-only merge was issued AND that the guard had run at least once. Swapping the
+    // refresh and the guard would have kept it green — a test asserting something weaker than its
+    // own name, which is precisely this SD's defect class showing up in my own suite.
+    //
+    // Order is load-bearing: a guard that reads the tree BEFORE the refresh judges a pre-refresh
+    // tree, so a stale spawn source would be reported current-or-not on the wrong snapshot.
+    const { sequence, gitCalls, opts } = spawnOpts({ branch: SPAWN_SOURCE_BRANCH, behind: 0 });
     await spawn({ role: 'worker', callsign: 'Alpha-5' }, opts);
 
-    // The refresh must happen through the spawn-source runner...
-    expect(gitCalls.some((c) => c.includes('merge --ff-only'))).toBe(true);
+    const refreshAt = sequence.indexOf('refresh');
+    const firstGuardAt = sequence.findIndex((s) => s.startsWith('guard:'));
+
+    expect(refreshAt, 'no ff-only refresh was issued at all').toBeGreaterThanOrEqual(0);
+    expect(firstGuardAt, 'the currency guard never ran').toBeGreaterThanOrEqual(0);
+    expect(refreshAt, `refresh must precede the guard; sequence was ${JSON.stringify(sequence)}`)
+      .toBeLessThan(firstGuardAt);
+
     expect(gitCalls.some((c) => c.includes('worktree add'))).toBe(false); // it already exists
-    // ...and the guard must have run after it, or the guard would judge a pre-refresh tree.
-    expect(rec.seen.length).toBeGreaterThan(0);
   });
 
   it('CREATES the tree on a branch when absent, and the created tree passes the guard', async () => {
@@ -140,6 +161,33 @@ describe('FR-2 seam: FLEET_SPAWN_SOURCE_TREE forced ON', () => {
     expect(add).toContain('-B');
     expect(add).not.toContain('--detach'); // the whole bug, in one assertion
     expect(result.live).toBe(true);
+  });
+
+  it('a THROWING worktree-add falls back to the spawning tree instead of taking the fleet down', async () => {
+    // C3 from independent review (evidence row 6ecbbd8c). ensureSpawnSourceWorktree already
+    // fail-softs a failed REFRESH, but a throwing creation propagated out of spawn() — so under
+    // flag-ON one bad `git worktree add` was a hard fleet-wide spawn outage while the equivalent
+    // refresh failure was tolerated. Asymmetric, unintended, and previously untested.
+    const { rec, opts } = spawnOpts({ branch: 'main', behind: 0, exists: false });
+    const boom = { ...opts, spawnSourceRunner: () => { throw new Error('fatal: could not create work tree'); } };
+
+    const result = await spawn({ role: 'worker', callsign: 'Alpha-5' }, boom);
+
+    expect(result.live).toBe(true); // spawned anyway
+    // and the guard fell back to judging the SPAWNING tree, not a spawn source that does not exist
+    for (const call of rec.seen) expect(call.cwd).not.toBe(SPAWN_SOURCE_DIR);
+  });
+
+  it('...but a MIS-SITED tree stays FATAL — failing soft there would leave the spawn silently unguarded', async () => {
+    // The one exception to the fallback. A tree under .worktrees/ is EXEMPT from the currency
+    // check, so tolerating it would hand back exactly the false assurance the guard exists to
+    // prevent. This is the two-sided half of the test above: a fallback that swallowed EVERYTHING
+    // would pass the previous test while destroying the invariant.
+    const { opts } = spawnOpts({ branch: 'main', behind: 0, exists: false });
+    const misSited = { ...opts, currencyEnv: { FLEET_SPAWN_SOURCE_TREE: 'true', FLEET_SPAWN_SOURCE_DIR: '/repo/.worktrees/src' } };
+
+    await expect(spawn({ role: 'worker', callsign: 'Alpha-5' }, misSited))
+      .rejects.toThrow(/may not sit under \.worktrees\//);
   });
 
   it('with the flag OFF the spawn-source runner is never touched — the default stays byte-identical', async () => {

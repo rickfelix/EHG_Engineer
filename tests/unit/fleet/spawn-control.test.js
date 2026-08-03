@@ -218,7 +218,14 @@ describe('module surface (TS-10: exactly seven named verbs, no more)', () => {
       // on the branch we actually create, and the update argv is exported because a fast-forward on
       // reuse is REQUIRED (self-heal only ever advances a clean tree on 'main', which this
       // deliberately is not) and its shape must be assertable without a real repo.
-      'buildSpawnSourceUpdateArgs', 'SPAWN_SOURCE_BRANCH'];
+      'buildSpawnSourceUpdateArgs', 'SPAWN_SOURCE_BRANCH',
+      // SPAWN_SOURCE_SITING_ERROR — a VALUE, like the SESSION_BIND_* constants. It exists so the
+      // spawn() call-site can tell a CORRECTNESS violation from a git hiccup: creation failures now
+      // fail soft to the spawning tree (C3, independent review 6ecbbd8c), but a tree sited under
+      // .worktrees/ must stay FATAL, because that path is exempt from the currency check and
+      // tolerating it would leave the spawn silently unguarded. Exported rather than matched on
+      // message text so the distinction cannot drift when the wording changes.
+      'SPAWN_SOURCE_SITING_ERROR'];
     const unexpected = Object.keys(mod).filter((k) => !verbNames.includes(k) && !helperNames.includes(k));
     expect(unexpected).toEqual([]);
   });
