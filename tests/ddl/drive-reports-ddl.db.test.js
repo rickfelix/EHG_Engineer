@@ -1,0 +1,393 @@
+// SD-LEO-INFRA-DRIVE-LOOP-INSTRUMENT-001-B — the DDL tier for 20260803_drive_reports.sql.
+//
+// ═══════════════════════════════════════════════════════════════════════════════════════════
+// WHAT A GREEN RUN OF THIS FILE DOES **NOT** MEAN
+//
+// This runs against an EPHEMERAL vanilla PostgreSQL 16 with three stub roles created by hand.
+// It proves the SQL's LOGIC. It does NOT and cannot prove the PRODUCTION POSTURE, because a
+// vanilla Postgres does not reproduce Supabase's role inheritance or its ALTER DEFAULT
+// PRIVILEGES setup. A green run here is FULLY COMPATIBLE with an inherited anon grant existing
+// on the live instance.
+//
+// The only thing that settles the production posture is applying the migration to the real
+// instance, which is chairman-gated behind `scripts/apply-migration.js --prod-deploy`. Until
+// that happens, AC-9 is unverified against production no matter how green this file is.
+//
+// Do not read a passing job as "the table is safe". Read it as "the SQL says what we think it
+// says". Those are different claims, and conflating them is the exact failure this SD exists
+// to stop.
+// ═══════════════════════════════════════════════════════════════════════════════════════════
+//
+// WHY THIS IS NOT IN THE vitest `db` PROJECT. That project gates on assessDbTarget, which parses
+// SUPABASE_URL for a supabase.co project ref. An ephemeral Postgres is not Supabase, so it would
+// resolve `unrecognised_target`, collect ZERO files, and pass. That is precisely how
+// migration-deploy-drift-guard.yml's own end-to-end proof ended up green while running nothing
+// (measured: "0 of db tests will run" / "No test files found"). This file therefore runs under
+// its own config (vitest.ddl.config.mjs) with passWithNoTests OFF, and it FAILS rather than skips
+// when it cannot reach a database. "Did not run" and "passed" must never look the same.
+
+import { describe, it, expect, beforeAll, afterAll, beforeEach } from 'vitest';
+import fs from 'node:fs';
+import { fileURLToPath } from 'node:url';
+import pg from 'pg';
+
+const MIGRATION_PATH = fileURLToPath(
+  new URL('../../database/migrations/20260803_drive_reports.sql', import.meta.url),
+);
+const MIGRATION_SQL = fs.readFileSync(MIGRATION_PATH, 'utf8');
+
+// THE REAL VERIFY BLOCK, extracted from the migration rather than re-typed. Re-typing it would
+// make this test agree with a COPY of the posture check instead of with the one that ships —
+// the parallel-re-derivation mistake that let the original db-target defect survive its own test.
+//
+// LINE-ANCHORED, and the anchoring is load-bearing. An UNANCHORED version of this regex also
+// matches the COMMENT occurrence of the same literal earlier in the migration ("...and the
+// DO $verify$ block is") and then runs lazily to the REAL block's terminator — capturing the
+// whole table DDL, the freeze function and the grants along the way. That is not hypothetical:
+// it is what the first version of this file did. It was caught by the negative controls in the
+// guard below, NOT by "did I find exactly one match", which the over-wide capture satisfies just
+// as well. The real block opens with DO $verify$ alone on its own line.
+const VERIFY_MATCHES = MIGRATION_SQL.match(/^DO \$verify\$[ \t]*$[\s\S]*?^\$verify\$;/gm) || [];
+const VERIFY_BLOCK = VERIFY_MATCHES[0];
+
+// The pre-widening predicate, quoted verbatim from the parent of 738432e4e04 so that "the
+// widening actually widened" is a demonstration rather than an assertion. RECONSTRUCTED: it no
+// longer exists in the file, so unlike VERIFY_BLOCK it cannot be extracted. If someone edits this
+// quote the CONTRAST weakens, but the load-bearing forward assertion (the CURRENT block must
+// reject PUBLIC) uses the real extracted block and is unaffected.
+const OLD_PREDICATE_BLOCK = `
+DO $old$
+BEGIN
+  ASSERT NOT EXISTS (
+    SELECT 1 FROM information_schema.role_table_grants
+    WHERE table_schema = 'public' AND table_name = 'drive_reports'
+      AND grantee IN ('anon', 'authenticated')
+  ), 'OLD PREDICATE: a non-service grant exists';
+END
+$old$;`;
+
+const STUB_ROLES = `
+DO $roles$
+BEGIN
+  IF NOT EXISTS (SELECT 1 FROM pg_roles WHERE rolname = 'service_role')   THEN CREATE ROLE service_role NOLOGIN;   END IF;
+  IF NOT EXISTS (SELECT 1 FROM pg_roles WHERE rolname = 'anon')           THEN CREATE ROLE anon NOLOGIN;           END IF;
+  IF NOT EXISTS (SELECT 1 FROM pg_roles WHERE rolname = 'authenticated')  THEN CREATE ROLE authenticated NOLOGIN;  END IF;
+END
+$roles$;`;
+
+const INVENTED_ROLE = 'qa_role_invented_by_this_test';
+
+let client;
+
+async function applyMigration() {
+  await client.query(MIGRATION_SQL);
+}
+
+/** Restore the posture the migration ships with, and prove it is restored. */
+async function resetGrants() {
+  await client.query('REVOKE ALL ON public.drive_reports FROM PUBLIC, anon, authenticated;');
+  await client.query(`DO $r$ BEGIN
+    IF EXISTS (SELECT 1 FROM pg_roles WHERE rolname = '${INVENTED_ROLE}') THEN
+      EXECUTE 'REVOKE ALL ON public.drive_reports FROM ${INVENTED_ROLE}';
+    END IF;
+  END $r$;`);
+  await client.query('GRANT ALL ON public.drive_reports TO service_role;');
+  // A grant leaked from a previous case would make the NEXT case pass for the wrong reason.
+  await expect(client.query(VERIFY_BLOCK)).resolves.toBeTruthy();
+}
+
+beforeAll(async () => {
+  // FAIL-CLOSED. No skip branch: if this file is invoked and cannot reach a database, that is a
+  // broken runner, and a broken runner must be loud. A self-skip here would reproduce the exact
+  // "green forever, asserting nothing" pattern this tier was created to escape.
+  //
+  // VERIFIED LOCALLY with no Postgres running: the suite collects 23 tests and the run FAILS with
+  // ECONNREFUSED, exit 1. Fail-closed is measured here, not intended.
+  client = new pg.Client({
+    host: process.env.PGHOST || '127.0.0.1',
+    port: Number(process.env.PGPORT || 5432),
+    database: process.env.PGDATABASE || 'ddl_check',
+    user: process.env.PGUSER || 'postgres',
+    password: process.env.PGPASSWORD || 'postgres',
+  });
+  await client.connect();
+
+  await client.query(STUB_ROLES);
+  await applyMigration();
+}, 60_000);
+
+afterAll(async () => {
+  if (client) await client.end();
+});
+
+describe('the instrument itself — before trusting a single ASSERT', () => {
+  it('the verify block was extracted, exactly once, and is not too WIDE', () => {
+    // Two failure directions, and only one of them is obvious. TOO NARROW / MISSING: the block
+    // was renamed, extraction yields undefined, and every posture test below runs zero
+    // assertions. TOO WIDE: the regex also swallowed surrounding DDL — which is what the first
+    // version of this file actually did, and it satisfied both "exactly one match" and "contains
+    // the strings I expected".
+    expect(VERIFY_MATCHES).toHaveLength(1);
+    expect(VERIFY_BLOCK).toMatch(/relrowsecurity/);
+    expect(VERIFY_BLOCK).toMatch(/aclexplode/);
+
+    // NEGATIVE CONTROLS — the capture must contain ONLY the verify block. If any of these appear,
+    // then re-running "the verify block" would re-execute the migration body and silently restore
+    // the very grants a tripwire case had just added, turning every must-FAIL case green.
+    expect(VERIFY_BLOCK).not.toMatch(/CREATE OR REPLACE FUNCTION/);
+    expect(VERIFY_BLOCK).not.toMatch(/CREATE TABLE/);
+    expect(VERIFY_BLOCK).not.toMatch(/GRANT ALL/);
+    expect(VERIFY_BLOCK).not.toMatch(/REVOKE ALL/);
+    expect(VERIFY_BLOCK).not.toMatch(/CREATE POLICY/);
+
+    // Shaped like the block, not merely containing it.
+    expect(VERIFY_BLOCK.startsWith('DO ' + '$verify$')).toBe(true);
+    expect(VERIFY_BLOCK.trimEnd().endsWith('$verify$;')).toBe(true);
+    expect(VERIFY_BLOCK).toMatch(/^BEGIN$/m);
+  });
+
+  it('plpgsql assertions are ENABLED — otherwise the whole verify block is a no-op', async () => {
+    // THE CONTROL THAT MAKES EVERY OTHER POSTURE TEST MEAN ANYTHING. With
+    // plpgsql.check_asserts = off, every ASSERT in the migration silently succeeds and the
+    // deploy-time posture check certifies nothing while looking identical to a passing one.
+    const { rows } = await client.query('SHOW plpgsql.check_asserts');
+    expect(rows[0].plpgsql_check_asserts).toBe('on');
+
+    // And prove it behaviourally rather than trusting the setting: a deliberately false ASSERT
+    // must raise. Reading the GUC is a claim about configuration; this is the configuration
+    // doing its job.
+    await expect(
+      client.query('DO $probe$ BEGIN ASSERT false, \'assertions are live\'; END $probe$;'),
+    ).rejects.toThrow(/assertions are live/);
+  });
+
+  it('the migration applied and the table exists', async () => {
+    const { rows } = await client.query("SELECT to_regclass('public.drive_reports') AS t");
+    expect(rows[0].t).toBe('drive_reports');
+  });
+});
+
+describe('the append-only freeze trigger — both halves', () => {
+  let reportId;
+
+  beforeEach(async () => {
+    const { rows } = await client.query(
+      `INSERT INTO public.drive_reports (sections, drive_score, metadata)
+       VALUES ('{"plan_position":{"value":1}}'::jsonb, '{"score":4}'::jsonb, '{"seed":true}'::jsonb)
+       RETURNING id`,
+    );
+    reportId = rows[0].id;
+  });
+
+  it('UPDATE of sections RAISES, naming the column and the reason', async () => {
+    await expect(
+      client.query('UPDATE public.drive_reports SET sections = \'{"tampered":true}\'::jsonb WHERE id = $1', [reportId]),
+    ).rejects.toThrow(/sections is append-only/);
+  });
+
+  it('UPDATE of drive_score RAISES', async () => {
+    await expect(
+      client.query('UPDATE public.drive_reports SET drive_score = \'{"score":8}\'::jsonb WHERE id = $1', [reportId]),
+    ).rejects.toThrow(/drive_score is append-only/);
+  });
+
+  it('UPDATE of generated_at RAISES', async () => {
+    await expect(
+      client.query("UPDATE public.drive_reports SET generated_at = now() - interval '1 day' WHERE id = $1", [reportId]),
+    ).rejects.toThrow(/generated_at is append-only/);
+  });
+
+  // ── THE HALF A LAZIER TEST WOULD CERTIFY AS WORKING ──────────────────────────────────────
+  // A blanket immutability trigger passes all three cases above and breaks C1 silently. C1
+  // requires each CONSUMER to stamp its own receipt after the producer is done, so if receipts
+  // froze too, the table could never record that anyone read a report — and the three tests
+  // above would still be green.
+
+  it('UPDATE of consumption_receipts SUCCEEDS, and the value really changes (C1)', async () => {
+    await client.query(
+      'UPDATE public.drive_reports SET consumption_receipts = \'{"coordinator":"2026-08-03T00:00:00Z"}\'::jsonb WHERE id = $1',
+      [reportId],
+    );
+    const { rows } = await client.query('SELECT consumption_receipts FROM public.drive_reports WHERE id = $1', [reportId]);
+    // Asserting the VALUE, not merely that no error was thrown — a trigger that swallowed the
+    // change and returned OLD would pass a no-throw check.
+    expect(rows[0].consumption_receipts).toEqual({ coordinator: '2026-08-03T00:00:00Z' });
+  });
+
+  it('UPDATE of metadata SUCCEEDS and really changes', async () => {
+    await client.query('UPDATE public.drive_reports SET metadata = \'{"annotated":true}\'::jsonb WHERE id = $1', [reportId]);
+    const { rows } = await client.query('SELECT metadata FROM public.drive_reports WHERE id = $1', [reportId]);
+    expect(rows[0].metadata).toEqual({ annotated: true });
+  });
+
+  it('a frozen-column UPDATE does not partially apply alongside a writable one', async () => {
+    // The mixed statement. If the trigger let the row through while only rejecting some columns,
+    // an observation could be rewritten under cover of a receipt stamp.
+    await expect(
+      client.query(
+        `UPDATE public.drive_reports
+            SET consumption_receipts = '{"adam":"now"}'::jsonb,
+                sections = '{"tampered":true}'::jsonb
+          WHERE id = $1`,
+        [reportId],
+      ),
+    ).rejects.toThrow(/sections is append-only/);
+
+    const { rows } = await client.query(
+      'SELECT sections, consumption_receipts FROM public.drive_reports WHERE id = $1',
+      [reportId],
+    );
+    expect(rows[0].sections).toEqual({ plan_position: { value: 1 } });
+    expect(rows[0].consumption_receipts).toEqual({});
+  });
+});
+
+describe('idempotence — the file advertises it and nothing proved it', () => {
+  it('re-running the entire migration succeeds and preserves existing rows', async () => {
+    const { rows: before } = await client.query('SELECT count(*)::int AS n FROM public.drive_reports');
+    await applyMigration();
+    const { rows: after } = await client.query('SELECT count(*)::int AS n FROM public.drive_reports');
+
+    // IF NOT EXISTS / DROP ... IF EXISTS advertise re-runnability; a CREATE POLICY without its
+    // DROP would raise here, and a CREATE TABLE without IF NOT EXISTS would take the data.
+    expect(after[0].n).toBe(before[0].n);
+  });
+});
+
+describe('the grant tripwire — deny-by-default, not an enumeration', () => {
+  beforeEach(resetGrants);
+
+  afterAll(async () => {
+    if (!client) return;
+    await client.query(`DO $d$ BEGIN
+      IF EXISTS (SELECT 1 FROM pg_roles WHERE rolname = '${INVENTED_ROLE}') THEN
+        EXECUTE 'REVOKE ALL ON public.drive_reports FROM ${INVENTED_ROLE}';
+        EXECUTE 'DROP ROLE ${INVENTED_ROLE}';
+      END IF;
+    END $d$;`);
+  });
+
+  it('the shipped posture PASSES its own verify block', async () => {
+    await expect(client.query(VERIFY_BLOCK)).resolves.toBeTruthy();
+  });
+
+  // ── THE DISCRIMINATING CASE ──────────────────────────────────────────────────────────────
+  // Worth more than the rest combined, because it does not merely assert that the current
+  // predicate is correct — it shows the predicate it REPLACED is not, on the same input. A
+  // rewrite that quietly changed nothing would fail this pair and pass everything else.
+
+  it('GRANT TO PUBLIC: the CURRENT predicate FAILS', async () => {
+    await client.query('GRANT SELECT ON public.drive_reports TO PUBLIC;');
+    await expect(client.query(VERIFY_BLOCK)).rejects.toThrow(/non-service grant exists/);
+  });
+
+  it('GRANT TO PUBLIC: the OLD two-role predicate PASSES — this is the widening, demonstrated', async () => {
+    await client.query('GRANT SELECT ON public.drive_reports TO PUBLIC;');
+    // The old check enumerated 'anon' and 'authenticated' by name, so a PUBLIC grant walked
+    // straight past the one assertion enforcing the reclassification ruling. Not because
+    // information_schema is blind to PUBLIC — it is not — but because a list is not a rule.
+    await expect(client.query(OLD_PREDICATE_BLOCK)).resolves.toBeTruthy();
+  });
+
+  it('GRANT TO an INVENTED role: current FAILS, old PASSES — deny-by-default as a property', async () => {
+    await client.query(`DO $c$ BEGIN
+      IF NOT EXISTS (SELECT 1 FROM pg_roles WHERE rolname = '${INVENTED_ROLE}') THEN
+        EXECUTE 'CREATE ROLE ${INVENTED_ROLE} NOLOGIN';
+      END IF;
+    END $c$;`);
+    await client.query(`GRANT SELECT ON public.drive_reports TO ${INVENTED_ROLE};`);
+
+    // A role nobody thought to name when the migration was written. The current predicate catches
+    // it by construction; an enumeration can only catch it by amendment.
+    await expect(client.query(VERIFY_BLOCK)).rejects.toThrow(/non-service grant exists/);
+    await expect(client.query(OLD_PREDICATE_BLOCK)).resolves.toBeTruthy();
+  });
+
+  it('GRANT TO anon: BOTH predicates fail — the case the old one did cover', async () => {
+    await client.query('GRANT SELECT ON public.drive_reports TO anon;');
+    await expect(client.query(VERIFY_BLOCK)).rejects.toThrow(/non-service grant exists/);
+    await expect(client.query(OLD_PREDICATE_BLOCK)).rejects.toThrow(/OLD PREDICATE/);
+  });
+
+  it('GRANT TO authenticated: current FAILS', async () => {
+    await client.query('GRANT SELECT ON public.drive_reports TO authenticated;');
+    await expect(client.query(VERIFY_BLOCK)).rejects.toThrow(/non-service grant exists/);
+  });
+
+  it('TWO-SIDED: owner privileges alone do NOT trip it', async () => {
+    // `a.grantee <> c.relowner`. A tripwire that fired on the owner's own privileges would fail
+    // every deploy, and would pass all five rejection cases above while being unusable.
+    const { rows } = await client.query(
+      "SELECT pg_get_userbyid(c.relowner) AS owner FROM pg_class c WHERE c.oid = 'public.drive_reports'::regclass",
+    );
+    expect(rows[0].owner).toBeTruthy();
+    await expect(client.query(VERIFY_BLOCK)).resolves.toBeTruthy();
+  });
+
+  it('TWO-SIDED: service_role holding ALL does NOT trip it', async () => {
+    // The posture the migration ships. If the predicate flagged service_role, the migration could
+    // never apply — and every "it correctly rejects X" test above would still be green.
+    const { rows } = await client.query(`
+      SELECT count(*)::int AS n
+      FROM pg_class c
+      CROSS JOIN LATERAL aclexplode(COALESCE(c.relacl, acldefault('r', c.relowner))) a
+      WHERE c.oid = 'public.drive_reports'::regclass
+        AND pg_get_userbyid(NULLIF(a.grantee, 0)) = 'service_role'`);
+    expect(rows[0].n).toBeGreaterThan(0);
+    await expect(client.query(VERIFY_BLOCK)).resolves.toBeTruthy();
+  });
+
+  it('a revoked grant CLEARS the tripwire — it latches on state, not on history', async () => {
+    await client.query('GRANT SELECT ON public.drive_reports TO PUBLIC;');
+    await expect(client.query(VERIFY_BLOCK)).rejects.toThrow(/non-service grant exists/);
+
+    await client.query('REVOKE ALL ON public.drive_reports FROM PUBLIC;');
+    // A check that cannot go back to passing would be indistinguishable from a permanently broken
+    // one, and the next person would learn to ignore it.
+    await expect(client.query(VERIFY_BLOCK)).resolves.toBeTruthy();
+  });
+});
+
+describe('the RLS posture the classification is conditional on', () => {
+  beforeEach(resetGrants);
+
+  it('RLS is enabled and there is EXACTLY one policy, named as the migration expects', async () => {
+    const { rows: rls } = await client.query(
+      "SELECT relrowsecurity FROM pg_class WHERE oid = 'public.drive_reports'::regclass",
+    );
+    expect(rls[0].relrowsecurity).toBe(true);
+
+    const { rows: pol } = await client.query(
+      "SELECT policyname FROM pg_policies WHERE schemaname = 'public' AND tablename = 'drive_reports'",
+    );
+    expect(pol.map((p) => p.policyname)).toEqual(['drive_reports_service_role']);
+  });
+
+  it('the freeze trigger exists and is not internal', async () => {
+    const { rows } = await client.query(`
+      SELECT tgname FROM pg_trigger
+      WHERE tgrelid = 'public.drive_reports'::regclass
+        AND tgname = 'drive_reports_freeze_observations_trg'
+        AND NOT tgisinternal`);
+    expect(rows).toHaveLength(1);
+  });
+
+  it('a SECOND policy makes the verify block fail — "exactly one" is enforced, not described', async () => {
+    await client.query('CREATE POLICY qa_extra_policy ON public.drive_reports FOR SELECT TO service_role USING (true);');
+    try {
+      await expect(client.query(VERIFY_BLOCK)).rejects.toThrow(/expected exactly ONE policy/);
+    } finally {
+      await client.query('DROP POLICY IF EXISTS qa_extra_policy ON public.drive_reports;');
+    }
+    await expect(client.query(VERIFY_BLOCK)).resolves.toBeTruthy();
+  });
+
+  it('dropping the freeze trigger makes the verify block fail', async () => {
+    await client.query('DROP TRIGGER drive_reports_freeze_observations_trg ON public.drive_reports;');
+    try {
+      await expect(client.query(VERIFY_BLOCK)).rejects.toThrow(/append-only trigger is missing/);
+    } finally {
+      await applyMigration(); // re-creates the trigger and re-runs the block
+    }
+  });
+});

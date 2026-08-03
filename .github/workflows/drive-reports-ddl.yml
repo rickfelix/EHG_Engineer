@@ -1,0 +1,114 @@
+name: Drive Reports DDL
+
+# SD-LEO-INFRA-DRIVE-LOOP-INSTRUMENT-001-B.
+#
+# WHY THIS WORKFLOW EXISTS AT ALL. Nothing in this repository executes the SQL in
+# database/migrations/. Measured, not assumed:
+#   - db-verify.yml triggers on `database/migrations/**` and then runs ops/scripts/staging_apply.sh,
+#     which applies a FIXED heredoc of eng.*/vh.*/audit.* sample tables and never reads that
+#     directory. The step is named "Apply migrations". It does not apply these migrations.
+#   - Its PG*_STAGING secrets do not exist, so today those steps SKIP (run 30826494785) and nothing
+#     is falsely verified. The trap springs on CONFIGURATION: whoever adds PG*_STAGING believing
+#     they are switching on migration verification will switch on something else.
+#   - The vitest `db` project resolves ZERO files both locally and in CI (run 30827477299:
+#     "0 of db tests will run" / "No test files found"), because DESIGNATED_NON_PROD_REFS is empty
+#     and no workflow sets VITEST_DB_ALLOW_REF.
+#   - The only path that applies these files for real is `scripts/apply-migration.js --prod-deploy`,
+#     behind a 3-factor token guard. Production only.
+#
+# So this job creates its own database. No secrets, no provisioning, nothing to configure —
+# the pattern is copied from housekeeping-staging-selfcontained.yml, which already does this.
+#
+# ─────────────────────────────────────────────────────────────────────────────────────────────
+# SCOPE: DELIBERATELY NARROW. Path-filtered to this migration and its own harness. This is not a
+# general DDL tier and must not become one by accident — it does not run on unrelated PRs.
+# ─────────────────────────────────────────────────────────────────────────────────────────────
+
+on:
+  pull_request:
+    paths:
+      - 'database/migrations/20260803_drive_reports.sql'
+      - 'tests/ddl/drive-reports-ddl.db.test.js'
+      - 'vitest.ddl.config.mjs'
+      # Self-validating: edits to this file re-run it.
+      - '.github/workflows/drive-reports-ddl.yml'
+  workflow_dispatch:
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+jobs:
+  ddl:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_DB: ddl_check
+          POSTGRES_USER: ddl_runner
+          POSTGRES_PASSWORD: ddl_pw   # ephemeral container, never reachable off the runner
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd="pg_isready -U ddl_runner -d ddl_check"
+          --health-interval=10s
+          --health-timeout=5s
+          --health-retries=15
+
+    env:
+      PGHOST: 127.0.0.1
+      PGPORT: '5432'
+      PGDATABASE: ddl_check
+      PGUSER: ddl_runner
+      PGPASSWORD: ddl_pw
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+
+      - run: npm ci --no-audit --no-fund
+
+      - name: Wait for Postgres
+        run: |
+          for i in $(seq 1 30); do
+            if node -e "const{Client}=require('pg');const c=new Client();c.connect().then(()=>c.end()).then(()=>process.exit(0)).catch(()=>process.exit(1))"; then
+              echo "Postgres reachable"; exit 0
+            fi
+            echo "waiting ($i/30)"; sleep 2
+          done
+          echo "::error::Postgres never became reachable"; exit 1
+
+      # The suite itself fails closed if it cannot connect, and the config has passWithNoTests
+      # OFF, so a zero-file collection exits non-zero. Between them there is no arrangement in
+      # which this step is green without having executed the assertions.
+      - name: Apply the migration and assert its behaviour
+        run: npx vitest run --config vitest.ddl.config.mjs
+
+      - name: State what a green run does NOT mean
+        if: always()
+        run: |
+          {
+            echo "### Drive Reports DDL — scope of this result"
+            echo ""
+            echo "Ran against an **ephemeral vanilla PostgreSQL 16** with three stub roles"
+            echo "(\`service_role\`, \`anon\`, \`authenticated\`) created by the test."
+            echo ""
+            echo "**This proves the SQL's LOGIC. It does NOT prove the production posture.**"
+            echo "A vanilla Postgres does not reproduce Supabase role inheritance or"
+            echo "\`ALTER DEFAULT PRIVILEGES\`, so a green run here is fully compatible with an"
+            echo "inherited \`anon\` grant existing on the live instance."
+            echo ""
+            echo "The production posture is settled only by applying the migration to the real"
+            echo "instance via \`scripts/apply-migration.js --prod-deploy\` (chairman-gated)."
+            echo "Until then AC-9 is unverified against production, however green this job is."
+          } >> "$GITHUB_STEP_SUMMARY"
