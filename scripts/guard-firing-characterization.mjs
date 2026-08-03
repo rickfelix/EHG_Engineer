@@ -27,6 +27,7 @@
  */
 import 'dotenv/config';
 import { createClient } from '@supabase/supabase-js';
+import { isMainModule } from '../lib/utils/is-main-module.js';
 
 /**
  * Guards in scope. `action` is the event a guard writes WHEN IT FIRES; `denominator` is the event
@@ -116,6 +117,6 @@ async function main() {
   console.log('  that surface is NOT covered here and is named in the completion flags.\n');
 }
 
-if (import.meta.url === `file://${process.argv[1]}` || process.argv[1]?.endsWith('guard-firing-characterization.mjs')) {
+if (isMainModule(import.meta.url)) {
   main().catch((e) => { console.error('FATAL:', e.message); process.exitCode = 1; });
 }

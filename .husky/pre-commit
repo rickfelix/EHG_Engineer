@@ -885,6 +885,12 @@ echo "🔧 Checking staged workflow YAML..."
 STAGED_WORKFLOWS=$(git diff --cached --name-only --diff-filter=ACM | grep -E '^\.github/workflows/.*\.(yml|yaml)$' || true)
 if [ -n "$STAGED_WORKFLOWS" ]; then
   node scripts/check-workflow-yaml.mjs $STAGED_WORKFLOWS || exit 1
+  # SD-LEO-INFRA-FIVE-GUARDS-WIRED-001 (FR-4): same staged set, second rule — a brace-glob
+  # path filter parses perfectly and matches NOTHING, so the parse check above cannot see it.
+  # Catching it here means the author learns at commit time rather than discovering months
+  # later that a guard has run once ever. CI enforces it too (workflow-path-filter-lint.yml);
+  # this hook is the earlier, bypassable half, not the authority.
+  node scripts/lint/workflow-path-filter-lint.mjs $STAGED_WORKFLOWS || exit 1
 else
   echo "✅ No workflow files staged — skipping workflow-YAML gate"
 fi

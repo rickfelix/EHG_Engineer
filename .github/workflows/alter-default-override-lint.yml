@@ -18,10 +18,30 @@ on:
       # AC-5: migrations that could change a default ...
       - 'database/migrations/**/*.sql'
       # ... and the known writer paths (where inserts/upserts live) ...
-      - 'scripts/**/*.{js,mjs,cjs,ts}'
-      - 'lib/**/*.{js,mjs,cjs,ts}'
-      - 'server/**/*.{js,mjs,cjs,ts}'
-      - 'api/**/*.{js,mjs,cjs,ts}'
+      #
+      # SD-LEO-INFRA-FIVE-GUARDS-WIRED-001: these 16 entries were PREVIOUSLY four brace-globs
+      # ('scripts/**/*.{js,mjs,cjs,ts}' and siblings). GitHub Actions does not expand brace
+      # alternation, so each matched only a literal filename ending in ".{js,mjs,cjs,ts}" —
+      # nothing. This workflow was NOT dormant (539 runs) because line 19's migrations glob is
+      # brace-free and fires normally; it was PARTIALLY wired, covering the migration half of
+      # its own drift class while never once evaluating the writer paths it exists to
+      # cross-check. A green check reading as full coverage is the more dangerous failure.
+      - 'scripts/**/*.js'
+      - 'scripts/**/*.mjs'
+      - 'scripts/**/*.cjs'
+      - 'scripts/**/*.ts'
+      - 'lib/**/*.js'
+      - 'lib/**/*.mjs'
+      - 'lib/**/*.cjs'
+      - 'lib/**/*.ts'
+      - 'server/**/*.js'
+      - 'server/**/*.mjs'
+      - 'server/**/*.cjs'
+      - 'server/**/*.ts'
+      - 'api/**/*.js'
+      - 'api/**/*.mjs'
+      - 'api/**/*.cjs'
+      - 'api/**/*.ts'
       # ... and the lint itself.
       - 'scripts/lint/alter-default-override-lint.mjs'
       - 'scripts/lint/alter-default-override-allowlist.json'

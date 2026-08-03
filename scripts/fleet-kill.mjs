@@ -22,6 +22,7 @@ import { gracefulKillSession, isGracefulKillEnabled } from '../lib/fleet/gracefu
 import { sampleToolActivityTwice } from '../lib/fleet/release-work-item.mjs';
 import { bestEffortReleaseSd } from '../lib/fleet/best-effort-release.mjs';
 import { createSupabaseServiceClient } from '../lib/supabase-client.js';
+import { isMainModule } from '../lib/utils/is-main-module.js';
 
 const require = createRequire(import.meta.url);
 const REPO_ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
@@ -127,7 +128,7 @@ async function main() {
   process.exit(verdict.outcome === 'killed' ? 0 : 1);
 }
 
-if (import.meta.url === `file://${process.argv[1]}` || process.argv[1]?.endsWith('fleet-kill.mjs')) {
+if (isMainModule(import.meta.url)) {
   main().catch((err) => {
     console.error(`fleet-kill failed: ${(err && err.message) || err}`);
     process.exit(1);
