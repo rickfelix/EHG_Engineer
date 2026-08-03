@@ -1,6 +1,6 @@
 {
-  "generated_at": "2026-08-03T14:24:48.046Z",
-  "git_commit": "2f5ee003",
+  "generated_at": "2026-08-03T14:54:55.208Z",
+  "git_commit": "bffed436",
   "db_snapshot_hash": "31945d3b870a9f44",
   "files": {
     "CLAUDE.md": {
@@ -13,10 +13,10 @@
     },
     "CLAUDE_CORE.md": {
       "type": "full",
-      "chars": 94779,
-      "bytes": 95376,
-      "estimated_tokens": 23695,
-      "content_hash": "640fd3bff8d7fa00",
+      "chars": 94868,
+      "bytes": 95467,
+      "estimated_tokens": 23717,
+      "content_hash": "9a8aef43ad97163e",
       "path": "C:\\Users\\rickf\\Projects\\_EHG\\EHG_Engineer\\.worktrees\\SD-LEO-INFRA-TIER-GATE-FLAG-001\\CLAUDE_CORE.md"
     },
     "CLAUDE_LEAD.md": {
@@ -98,6 +98,14 @@
       "estimated_tokens": 14637,
       "content_hash": "24df7120b93f102c",
       "path": "C:\\Users\\rickf\\Projects\\_EHG\\EHG_Engineer\\.worktrees\\SD-LEO-INFRA-TIER-GATE-FLAG-001\\CLAUDE_SOLOMON.md"
+    },
+    "CLAUDE_SOLOMON_MANUAL.md": {
+      "type": "full",
+      "chars": 11228,
+      "bytes": 11325,
+      "estimated_tokens": 2807,
+      "content_hash": "42750ae5e763c049",
+      "path": "C:\\Users\\rickf\\Projects\\_EHG\\EHG_Engineer\\.worktrees\\SD-LEO-INFRA-TIER-GATE-FLAG-001\\CLAUDE_SOLOMON_MANUAL.md"
     },
     "CLAUDE_DIGEST.md": {
       "type": "digest",

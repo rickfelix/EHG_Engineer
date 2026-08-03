@@ -105,3 +105,21 @@ describe('the QF gauge is FAIL-LOUD, so an unreadable belt cannot masquerade as 
     await expect(countClaimableQuickFixes(erroring)).rejects.toBeTruthy();
   });
 });
+
+describe('SEC-GSB-1 — a NON-NUMERIC count is a failed measurement, not an empty belt', () => {
+  // The dangerous branch was never the `error` one. PostgREST returns {count:null, error:null} for
+  // a missing relation, and the original `typeof count === 'number' ? count : 0` turned that into a
+  // genuine finite 0 — which normalizeGaugeReading accepts as valid, so decideDemand's operand
+  // guards never fire and 0 <= floor resolves to SOURCED. The gate would OPEN because it could not
+  // see the belt. The prior mutation set pinned the error branch and left this one unpinned.
+  const nullCount = { from: () => ({ select: () => ({ is: () => ({ in: () => Promise.resolve({ count: null, error: null }) }) }) }) };
+  it('THROWS on {count:null, error:null} rather than reporting 0', async () => {
+    await expect(countClaimableQuickFixes(nullCount)).rejects.toThrow(/measurement FAILED/);
+  });
+  it('still returns a real zero when the belt is genuinely empty', async () => {
+    const emptyBelt = { from: () => ({ select: () => ({ is: () => ({ in: () => Promise.resolve({ count: 0, error: null }) }) }) }) };
+    // Both arms in one describe: a version that throws unconditionally fails here, and a version
+    // that coerces unconditionally fails above. Neither constant survives.
+    await expect(countClaimableQuickFixes(emptyBelt)).resolves.toBe(0);
+  });
+});

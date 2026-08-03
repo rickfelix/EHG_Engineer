@@ -1,8 +1,8 @@
-<!-- file_content_hash: 640fd3bff8d7fa00 -->
+<!-- file_content_hash: 9a8aef43ad97163e -->
 <!-- GENERATED FILE - DO NOT EDIT DIRECTLY. Source of truth: leo_protocol_sections (DB). Regenerate: node scripts/generate-claude-md-from-db.js. Drift check: node scripts/check-claude-md-drift.cjs -->
 # CLAUDE_CORE.md - LEO Protocol Core Context
 
-**Generated**: 2026-08-03 10:24:48 AM
+**Generated**: 2026-08-03 10:54:55 AM
 **Protocol**: LEO 4.4.1
 **Purpose**: Essential workflow context for all sessions
 **Effort**: medium (core context; phase-specific files tag their own effort for phase work)
@@ -1612,6 +1612,7 @@ Each SD should trace upward through this hierarchy. When evaluating or creating 
 
 | Signal Type | Workers | Severity | Title |
 |-------------|---------|----------|-------|
+| feedback | 3 | medium | wakeup-armed +600s — idle, 0 claimable at my tier (unchanged |
 | feedback | 3 | medium | comms-check ack — read you |
 
 *Auto-updated from `feedback` table where `category='harness_backlog'` AND `metadata.contributing_workers` length ≥ 3.*

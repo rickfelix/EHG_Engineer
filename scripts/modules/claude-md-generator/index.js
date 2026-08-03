@@ -40,6 +40,7 @@ import {
   generateAdamManual,
   generateAdamProvenance,
   generateLeadManual,
+  generateSolomonManual,
   generatePlanManual,
   assertSharedSectionsNotCopied
 } from './file-generators.js';
@@ -188,6 +189,11 @@ class CLAUDEMDGeneratorV3 {
       ['CLAUDE_ADAM_PROVENANCE.md', (d) => generateAdamProvenance(d, this.fileMapping), 'full'],
       ['CLAUDE_COORDINATOR.md', (d) => generateCoordinator(d, this.fileMapping), 'full'],
       ['CLAUDE_SOLOMON.md', (d) => generateSolomon(d, this.fileMapping), 'full'],
+      // SD-FDBK-INFRA-CLAUDE-SOLOMON-EXCEEDS-001: the reference companion that gets
+      // CLAUDE_SOLOMON.md back under the Read tool's 25k single-call cap. Rules, prohibitions and
+      // durable duties stay in the gated file — including the two the tripwire caught on the way
+      // out (the web-research HARD security stop, and ACCURACY REVIEW DUTY).
+      ['CLAUDE_SOLOMON_MANUAL.md', (d) => generateSolomonManual(d, this.fileMapping), 'full'],
     ];
     if (this.options.generateDigest) {
       specs.push(
@@ -605,7 +611,7 @@ export function assertSingleReadFit(files, opts = {}) {
 // SD-LEO-INFRA-PROTOCOL-PUBLICATION-PIPELINE-001 (FR-4): the complete generated-file
 // set, used to validate --only targets (unknown names fail loud listing these).
 export const KNOWN_GENERATED_FILES = [
-  'CLAUDE.md', 'CLAUDE_CORE.md', 'CLAUDE_LEAD.md', 'CLAUDE_LEAD_MANUAL.md', 'CLAUDE_PLAN.md', 'CLAUDE_PLAN_MANUAL.md', 'CLAUDE_EXEC.md', 'CLAUDE_ADAM.md', 'CLAUDE_ADAM_MANUAL.md', 'CLAUDE_ADAM_PROVENANCE.md', 'CLAUDE_COORDINATOR.md', 'CLAUDE_SOLOMON.md',
+  'CLAUDE.md', 'CLAUDE_CORE.md', 'CLAUDE_LEAD.md', 'CLAUDE_LEAD_MANUAL.md', 'CLAUDE_PLAN.md', 'CLAUDE_PLAN_MANUAL.md', 'CLAUDE_EXEC.md', 'CLAUDE_ADAM.md', 'CLAUDE_ADAM_MANUAL.md', 'CLAUDE_ADAM_PROVENANCE.md', 'CLAUDE_COORDINATOR.md', 'CLAUDE_SOLOMON.md', 'CLAUDE_SOLOMON_MANUAL.md',
   'CLAUDE_DIGEST.md', 'CLAUDE_CORE_DIGEST.md', 'CLAUDE_LEAD_DIGEST.md', 'CLAUDE_PLAN_DIGEST.md', 'CLAUDE_EXEC_DIGEST.md', 'CLAUDE_ADAM_DIGEST.md', 'CLAUDE_COORDINATOR_DIGEST.md', 'CLAUDE_SOLOMON_DIGEST.md',
 ];
 
