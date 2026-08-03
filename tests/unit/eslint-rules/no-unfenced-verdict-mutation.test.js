@@ -105,6 +105,14 @@ describe('TS-13 adversarial shape matrix — CAUGHT vs KNOWN-MISSED, stated open
     { name: 'read-modify-write on a param', caught: true, code: 'function f(results){ if(results.verdict===\'FAIL\'){ results.verdict=\'PASS\'; } }' },
     { name: 'object-literal string default', caught: true, code: 'const o = { verdict: r.verdict || \'WARNING\' };' },
     { name: 'object-literal ?? string default', caught: true, code: 'const o = { verdict: r.verdict ?? \'PASS\' };' },
+    // ADDED AFTER EXEC REVIEW — a reviewer found four evasions, two of them LIVE shapes in this
+    // tree. The sharpest is the statement-form default: it is the predecessor SD's literal defect
+    // one refactor away, and it is exactly the refactor an author reaches for when Predicate B
+    // blocks the object-literal form. A fence that teaches its own evasion is worse than none.
+    { name: 'statement-form default (the natural refactor when B blocks you)', caught: true, code: 'function f(results){ results.verdict = results.verdict || \'WARNING\'; }' },
+    { name: 'logical-assignment default ||=', caught: true, code: 'function f(results){ results.verdict ||= \'WARNING\'; }' },
+    { name: 'switch discriminant read-modify-write', caught: true, code: 'function f(results){ switch(results.verdict){ case \'FAIL\': results.verdict=\'PASS\'; } }' },
+    { name: 'computed member results[\'verdict\']', caught: true, code: 'function f(results){ if(results.verdict===\'FAIL\'){ results[\'verdict\']=\'PASS\'; } }' },
     { name: 'ternary remap in a literal', caught: false, code: 'const o = { verdict: r.blocked ? \'FAIL\' : \'PASS\' };' },
     { name: 'spread-rebuild (new object, nothing overwritten)', caught: false, code: 'function f(results){ return { ...results, verdict: \'PASS\' }; }' },
     { name: 'helper-indirected (overwrite lives in another file)', caught: false, code: 'function f(results){ applyElsewhere(results); return results; }' },

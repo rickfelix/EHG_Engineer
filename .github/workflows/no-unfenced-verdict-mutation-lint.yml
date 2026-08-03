@@ -59,7 +59,7 @@ jobs:
       # fence can FAIL before trusting a pass. It injects a mutator that appears in no enumeration,
       # asserts the driver exits non-zero, then removes it. If this step ever succeeds when it
       # should not, the guard has gone decorative and the next step's green means nothing.
-      - name: Prove the fence FIRES (inject an unenumerated mutator, expect exit 1)
+      - name: Prove the fence FIRES — BOTH predicates, attributed to the canary file
         run: |
           cat > lib/sub-agents/_ci-fence-canary.js <<'CANARY'
           export function unenumeratedMutator(results) {
@@ -71,15 +71,29 @@ jobs:
           }
           CANARY
           set +e
-          node scripts/lint/no-unfenced-verdict-mutation-lint.mjs --all
-          code=$?
+          node scripts/lint/no-unfenced-verdict-mutation-lint.mjs --all --json > /tmp/fence-canary.json
           set -e
           rm -f lib/sub-agents/_ci-fence-canary.js
-          if [ "$code" -eq 0 ]; then
-            echo "::error::FENCE IS INERT — the driver passed a file containing two unfenced verdict mutators."
-            exit 1
-          fi
-          echo "Fence fired as expected (exit $code)."
+          # ASSERT PER PREDICATE, NOT ON THE EXIT CODE.
+          #
+          # The first version of this step asserted only `exit != 0`. A reviewer sabotaged Predicate A
+          # alone and the job went GREEN: the canary carries BOTH shapes, so a bare exit check is an
+          # OR — either predicate firing satisfies it, and half a dead fence passes. Worse, the
+          # driver also reports bare-disable findings from a plain regex that never invokes the
+          # ESLint rule at all, so a non-zero exit does not even prove the rule ran.
+          #
+          # Attribute both findings to the canary FILE and to their distinct messages. This is the
+          # whole reachability guarantee; a weaker assertion here makes the enforcing step's green
+          # meaningless, which is precisely the failure this SD exists to abolish.
+          node -e "
+            const r = require('/tmp/fence-canary.json');
+            const mine = r.findings.filter(f => f.filePath.endsWith('_ci-fence-canary.js'));
+            const rmw = mine.filter(f => /recordVerdictMutation/.test(f.message)).length;
+            const def = mine.filter(f => /silently promotes a missing verdict/.test(f.message)).length;
+            if (rmw < 1) { console.error('::error::PREDICATE A (read-modify-write) DID NOT FIRE — fence is half dead.'); process.exit(1); }
+            if (def < 1) { console.error('::error::PREDICATE B (object-literal default) DID NOT FIRE — fence is half dead.'); process.exit(1); }
+            console.log('Fence fired on BOTH predicates (' + rmw + ' + ' + def + ' findings in the canary).');
+          "
 
       - name: Enforce — no unfenced verdict mutation on the evidence path
         run: node scripts/lint/no-unfenced-verdict-mutation-lint.mjs --all

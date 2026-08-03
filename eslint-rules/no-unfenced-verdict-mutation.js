@@ -53,13 +53,18 @@ const MESSAGE_DEFAULT =
   'literal defect SD-LEO-INFRA-SUBAGENT-VERDICT-LAUNDERED-001 fixed in one file and left in two others. ' +
   'Pass the verdict through unmodified and let the canonical writer map it.';
 
-/** Is this node a `<obj>.verdict` member expression? */
+/**
+ * Is this node a `<obj>.verdict` member expression?
+ *
+ * Computed access is included: `results['verdict'] = x` is the same write with different syntax,
+ * and excluding it left a one-character evasion.
+ */
 function isVerdictMember(node) {
-  return node
-    && node.type === 'MemberExpression'
-    && !node.computed
-    && node.property?.type === 'Identifier'
-    && node.property.name === 'verdict';
+  if (!node || node.type !== 'MemberExpression') return false;
+  if (!node.computed) {
+    return node.property?.type === 'Identifier' && node.property.name === 'verdict';
+  }
+  return node.property?.type === 'Literal' && node.property.value === 'verdict';
 }
 
 /** Does this subtree read `.verdict` anywhere? (P2's test) */
@@ -92,11 +97,19 @@ function enclosingParamNames(ancestors) {
   return names;
 }
 
-/** Nearest enclosing conditional, so P2 can inspect its test. */
+/**
+ * Nearest enclosing conditional, so P2 can inspect what it branches on.
+ *
+ * SwitchStatement is included and its DISCRIMINANT is the test — `switch (results.verdict) { case
+ * 'FAIL': results.verdict = 'PASS' }` is a read-modify-write in every sense that matters, and the
+ * first version of this rule walked only IfStatement/ConditionalExpression. A reviewer found the
+ * shape live at scripts/execute-subagent.js:186 and lib/.../result-aggregator.js:282 among others.
+ */
 function enclosingConditionalTest(ancestors) {
   for (let i = ancestors.length - 1; i >= 0; i--) {
     const a = ancestors[i];
     if (a.type === 'IfStatement' || a.type === 'ConditionalExpression') return a.test;
+    if (a.type === 'SwitchStatement') return a.discriminant;
   }
   return null;
 }
@@ -129,6 +142,29 @@ export default {
 
         // P1: the mutated object arrived as a parameter — an AUTHOR builds its own local object.
         if (!enclosingParamNames(ancestors).has(objectNode.name)) return;
+
+        // PREDICATE A-PRIME — THE STATEMENT-FORM DEFAULT, AND IT IS THE MOST IMPORTANT ONE HERE.
+        //   results.verdict = results.verdict || 'WARNING';
+        //   results.verdict ||= 'WARNING';
+        // This needs NO enclosing conditional, so P2 would never see it, and it is not an
+        // ObjectExpression Property, so Predicate B would never see it either. It is also the
+        // predecessor SD's literal defect one refactor away — and precisely the refactor an author
+        // performs when Predicate B blocks the object-literal form. A fence that teaches its own
+        // evasion is worse than no fence, because it converts a visible pattern into a hidden one.
+        // Flagged regardless of P2: a string-literal fallback on a verdict IS the laundering
+        // signature, exactly as in Predicate B (`?? null` stays absent; `|| 'WARNING'` manufactures).
+        const rhs = node.right;
+        const isLogicalDefault =
+          (node.operator === '||=' || node.operator === '??=')
+            ? (rhs?.type === 'Literal' && typeof rhs.value === 'string')
+            : (rhs?.type === 'LogicalExpression'
+                && (rhs.operator === '||' || rhs.operator === '??')
+                && rhs.right?.type === 'Literal'
+                && typeof rhs.right.value === 'string');
+        if (isLogicalDefault) {
+          context.report({ node, messageId: 'unfencedDefault' });
+          return;
+        }
 
         // P2: the enclosing conditional reads .verdict — the read-modify-write signature. Without
         // this conjunct the rule is 86% false positives and gets switched off.

@@ -51,7 +51,10 @@ const RULE_ID = 'verdict-chain/no-unfenced-verdict-mutation';
 const KNOWN_MISSED = [
   'spread-rebuild: `return { ...results, verdict: X }` creates a new object, so nothing is overwritten (live at lib/fleet/spawn-control.js:1419)',
   'helper-indirected: `applyX(results)` where the overwrite happens in another file — single-file AST cannot follow it',
-  'read-modify-write whose condition tests something OTHER than .verdict (e.g. lib/sub-agents/performance.js:239)'
+  'read-modify-write whose condition tests something OTHER than .verdict (LIVE at lib/sub-agents/performance.js:239, which also has no test file)',
+  'ternary remap in an object literal: `verdict: x ? FAIL : PASS` — authored rather than rewritten, so indistinguishable from a legitimate author',
+  'Object.assign(results, { verdict: X }) — no live instance found in this tree',
+  'short-circuit mutation `x.verdict === F && (x.verdict = P)` — no live instance found in this tree'
 ];
 
 const FLAT_CONFIG = {
