@@ -398,6 +398,13 @@ function readStdinPayload(timeoutMs = 2000) {
 // So the hook bounds its own discretionary work instead of assuming the environment is fast: the
 // stabilisation re-read gets whatever is LEFT of the budget after the DB calls, never a fixed 2.5s.
 const HOOK_WORK_BUDGET_MS = 6000;
+// Reserved OUT of the budget for the block-telemetry write, which the stabilisation re-read may
+// not consume. Both are optional work, but they are not equally valuable: the re-read is
+// OBSERVATIONAL (it refines a verdict that is already usable), while the block record is
+// DECISION-CRITICAL — without it, second_stop_still_unarmed=0 cannot be told apart from "no block
+// ever fired", and the step-C gate reverts to meaningless. Racing them for the same budget
+// silently starved the more important one: MEASURED, the write got timed out at the cap.
+const TELEMETRY_RESERVE_MS = 2500;
 
 async function main() {
   const hookStartedAt = Date.now();
@@ -493,7 +500,9 @@ async function main() {
         armObservation = await armEvidence.awaitStableVerdict({
           read,
           sleep: (ms) => new Promise((r) => setTimeout(r, ms)),
-          deadlineMs: Math.min(2500, remainingBudgetMs()),
+          // Whatever the DB calls left, MINUS the telemetry reserve — this observational re-read
+          // must not eat the budget the decision-critical block record needs.
+          deadlineMs: Math.max(0, Math.min(2500, remainingBudgetMs() - TELEMETRY_RESERVE_MS)),
         });
         armVerdict = armObservation.stable && armObservation.stable.verdict;
         process.stderr.write(armEvidence.formatPendingWake(armObservation, { sessionId }));
@@ -510,6 +519,25 @@ async function main() {
       // rides here rather than on stderr (which the model never sees on a blocking Stop).
       const detail = armObservation ? `\n${armEvidence.formatPendingWake(armObservation, { sessionId }).trim()}` : '';
       emitDecision({ decision: 'block', reason: REMINDER + detail });
+      // RECORD THE BLOCK. Without this the step-C gate is UNINTERPRETABLE, and I only noticed
+      // because I asked what state would silence it and whether anyone can reach that state.
+      // 'second_stop_still_unarmed' requires TWO events: (1) a block fires, then (2) the worker
+      // stops again still unarmed. Step (2) was recorded; step (1) was not. A zero therefore meant
+      // EITHER "no block has ever fired, so (2) is unreachable" OR "blocks fire and every worker
+      // complies" — opposite conclusions, indistinguishable, and I had been treating the zero as
+      // evidence for the second. Recording the block makes the ratio readable: blocks>0 with
+      // second_stop_still_unarmed=0 is genuine compliance; blocks=0 means the enforcement never
+      // engages and the gate says nothing about step C at all.
+      // Emitted AFTER the decision is already on stdout — but that ordering alone is NOT enough.
+      // A hook killed at the 10s timeout returns no decision at all, so work done after the write
+      // can still cost the decision it was meant to annotate. MEASURED: this write added ~1.9s
+      // (3260ms -> 5146ms), which fits the 6s budget locally and would NOT fit on the CI-class
+      // hardware that spent 7.2s on the cheapest path. So it is raced against whatever budget is
+      // left: telemetry may be dropped, the decision may not.
+      await Promise.race([
+        recordWindDown(supabase, sessionId, { reason: 'blocked_unarmed', hadClaim: hasActiveClaim }),
+        new Promise((r) => setTimeout(r, remainingBudgetMs())),
+      ]);
       return shutdown();
     }
     // ALLOW-PATH (SD-LEO-INFRA-WORKER-ENGAGEMENT-ARM-PARK-001): the stop is allowed — windDownSignaled
