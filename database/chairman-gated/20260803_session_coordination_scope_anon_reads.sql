@@ -13,11 +13,24 @@
 -- carries a fleet-control primitive (the enforcement kill-switch sentinel), so anyone holding the
 -- anon key — a by-convention PUBLIC credential — can read every control message.
 --
--- The single policy is named `service_role_full_access` and is actually
--- cmd=SELECT, roles={public}, qual=true. It is NEITHER service-role-scoped NOR full access. That
--- name is very likely why this survived audits: an operator scanning pg_policies on a sensitive
--- table reads "service_role_full_access" and moves on. The rename is therefore PART OF THE FIX,
--- not cosmetic — leaving a truthful policy beside a lying name rebuilds the blind spot.
+-- ROOT CAUSE — CORRECTED. My first draft of this file blamed a misleading policy NAME. That was
+-- wrong, and the truth is more useful. The policy was created here:
+--
+--   supabase/ehg_engineer/migrations/20260309_session_coordination.sql:67
+--     -- Allow all operations for service role (hooks use service key)
+--     CREATE POLICY "service_role_full_access" ON session_coordination
+--       FOR ALL USING (true) WITH CHECK (true);
+--
+-- The name states the author's INTENT accurately. The defect is the OMITTED `TO service_role`
+-- CLAUSE: a CREATE POLICY with no TO clause defaults to PUBLIC, so a policy written to scope access
+-- to the service role in fact granted it to everyone, anon included. That generalises beyond this
+-- table — any CREATE POLICY in this repo lacking an explicit TO is silently public — and it is a
+-- far better thing to go looking for than a naming convention.
+--
+-- UNRECONCILED DRIFT, MUST BE SETTLED AT THE PRE-APPLY CAPTURE: git says this policy is FOR ALL
+-- (i.e. all commands, with WITH CHECK). The 2026-08-02 live capture says cmd=SELECT. Those disagree,
+-- so something altered the policy after creation or the capture describes a different object. DO NOT
+-- DROP UNTIL THAT IS RESOLVED — a rollback written from the wrong one restores the wrong grant.
 --
 -- ════════════════════════════════════════════════════════════════════════════════════════════
 -- WHY THIS MIGRATION IS A DROP AND NOT A REPLACEMENT — read before "improving" it
@@ -50,9 +63,23 @@
 --   SELECT relrowsecurity, relforcerowsecurity
 --     FROM pg_class WHERE oid = 'public.session_coordination'::regclass;
 --
--- NO `CREATE POLICY` for this table exists anywhere in git, so that capture is the ONLY rollback
--- source. The definition below was captured 2026-08-02 and is POINT-IN-TIME — it is a reference,
--- not a substitute for a fresh read.
+-- ⚠️ CORRECTION — an earlier version of this file asserted "NO CREATE POLICY for this table exists
+-- anywhere in git, so that capture is the ONLY rollback source". THAT WAS FALSE, and it was the
+-- worst possible place for a false load-bearing claim: it would have justified dropping a policy
+-- with no git-side reference to restore from. One DOES exist, at
+-- supabase/ehg_engineer/migrations/20260309_session_coordination.sql:67 (see ROOT CAUSE above).
+--
+-- So there are TWO candidate rollback sources and they DISAGREE (git: FOR ALL; captured live:
+-- cmd=SELECT). The fresh capture is authoritative for what is actually there, and the git original
+-- is authoritative for what was intended. DIFF THEM BEFORE DROPPING ANYTHING — restoring from the
+-- wrong one silently re-grants a different scope than existed.
+--
+-- The definition below was captured 2026-08-02 and is POINT-IN-TIME — a reference, not a substitute
+-- for a fresh read.
+--
+-- NOTE ON PROVENANCE: the live cmd/roles/qual values below are RELAYED from that capture and were
+-- NOT independently re-verified from this seat — no SQL RPC is exposed and no client-side probe
+-- discriminates policy shape. Treat them as evidence of what was reported, not as a measurement.
 --
 -- Captured state as of 2026-08-02:
 --   policy   : service_role_full_access | cmd=SELECT | roles={public} | qual=true

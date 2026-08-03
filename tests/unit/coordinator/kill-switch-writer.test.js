@@ -17,6 +17,7 @@ const {
   FLEET_BROADCAST_SD,
   KILL_SWITCH_KIND,
   ACTIVE_HEARTBEAT_MS,
+  MAX_EXPIRES_MS,
 } = require_('../../../lib/coordinator/kill-switch-writer.cjs');
 
 const NOW = Date.parse('2026-08-03T09:00:00.000Z');
@@ -143,7 +144,33 @@ describe('FR-2: fireFleetEnforcementKill — refusals and the written row', () =
     // The load-bearing assertion: an attribution whose strength is unstated gets read as stronger
     // than it is. All seats share one service-role key, so this is corroboration, not authentication.
     expect(row.payload.attribution.authenticated).toBe(false);
-    expect(row.payload.attribution.method).toBe('corroborated_against_claude_sessions');
+    expect(row.payload.attribution.method).toBe('corroborated_against_active_coordinator');
+    // The audit record must not misdescribe itself: 'role_authorized' was a leftover label from the
+    // refuted metadata.role design, and a listed check that is never run is worse than no list.
+    expect(row.payload.attribution.checks).toContain('is_active_coordinator');
+    expect(row.payload.attribution.checks).not.toContain('role_authorized');
+    // The disclosure must name the CHEAPEST forge, not the most impressive one. The pointer file is
+    // locally writable and resolves first, so it is a far lower bar than impersonating a live seat.
+    expect(row.payload.attribution.residual_gap).toMatch(/active-coordinator\.json/);
     expect(row.payload.attribution.residual_gap).toMatch(/share one service-role key/);
+  });
+
+  it('REFUSES an unbounded or absurd expiry — a switch with no expiry is one nobody turns off', async () => {
+    const h = harness();
+    for (const bad of [0, -1, Number.NaN, Number.POSITIVE_INFINITY, 999 * 3600 * 1000]) {
+      await expect(fireFleetEnforcementKill(h.deps, { actor: COORD_ID, reason: 'r', expiresInMs: bad }))
+        .rejects.toMatchObject({ code: 'KILL_SWITCH_BAD_EXPIRY' });
+    }
+    expect(h.insert).not.toHaveBeenCalled();
+  });
+
+  it('REJECTS rather than silently clamping an over-long expiry', async () => {
+    // Quietly shortening a duration the caller asked for makes expires_at disagree with the
+    // operator's intent without telling anyone — a lie of convenience in an audit row.
+    const h = harness();
+    await expect(fireFleetEnforcementKill(h.deps, { actor: COORD_ID, reason: 'r', expiresInMs: MAX_EXPIRES_MS + 1 }))
+      .rejects.toMatchObject({ code: 'KILL_SWITCH_BAD_EXPIRY' });
+    await expect(fireFleetEnforcementKill(h.deps, { actor: COORD_ID, reason: 'r', expiresInMs: MAX_EXPIRES_MS }))
+      .resolves.toBeDefined();
   });
 });
