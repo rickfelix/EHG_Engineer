@@ -141,6 +141,21 @@ describe('identity comes from stdin, not the environment', () => {
     expect(runHook({ sessionId: EARNER })).not.toContain('SD-LEGACY-SHARED');
   });
 
+  // Raised by the EXEC SECURITY review: state still falls back to a shared
+  // bucket while the flag fails closed. That asymmetry is deliberate (see the
+  // docblock on stateFileFor), but nothing asserted WHERE the unidentified
+  // write landed — so it read as an oversight and could have drifted silently.
+  it('unidentified sessions share the default bucket, by design', () => {
+    runHook({ stdin: 'not json' });
+    const shared = path.join(STATE_DIR, 'session-default.json');
+    expect(fs.existsSync(shared)).toBe(true);
+    // ...and crucially, they still consume no handoff flag. The fallback is
+    // scoped to state only; identity failure must never share a FLAG.
+    const someoneElses = writeFlagFor(EARNER);
+    runHook({ stdin: 'not json' });
+    expect(fs.existsSync(someoneElses)).toBe(true);
+  });
+
   it('sweeps the stale legacy shared file so it is not left behind forever', () => {
     fs.mkdirSync(TEST_FLAG_DIR, { recursive: true });
     const legacy = path.join(TEST_FLAG_DIR, 'compact-after-handoff.json');

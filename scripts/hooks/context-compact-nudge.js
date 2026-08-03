@@ -77,6 +77,24 @@ const CHECK_INTERVAL = intervalIdx !== -1 ? parseInt(process.argv[intervalIdx + 
 const STATE_DIR = process.env.LEO_COMPACT_STATE_DIR || path.join(os.tmpdir(), 'leo-context-nudge');
 const UNATTRIBUTED_SESSION = 'default';
 
+/**
+ * DELIBERATE ASYMMETRY, flagged by the EXEC SECURITY review — the handoff flag
+ * fails CLOSED on unknown identity (no file, no consumption) but state falls
+ * back to a shared `session-default.json`, which is the very pattern this SD
+ * removes elsewhere. It is kept because the alternatives are worse, not because
+ * it was overlooked:
+ *   - PID cannot key it. The hook is a FRESH PROCESS on every invocation, so a
+ *     PID-keyed file would be new each time and counters would never accumulate.
+ *   - Skipping the state write entirely means startTime resets every run, so
+ *     sessionAgeMinutes is always ~0 and the time/turn nudge never fires at all.
+ * There is no stable per-session key available without identity, so the shared
+ * bucket is the only option that preserves any behaviour. The blast radius is
+ * bounded to nudge-COOLDOWN cross-talk between sessions that are ALREADY
+ * unidentified; the handoff flag itself is never shared. In production stdin
+ * always carries session_id (the hook is wired as a first-party command hook at
+ * PostToolUse and UserPromptSubmit), so this path should not be reached at all.
+ * Pinned by test: 'unidentified sessions share the default bucket, by design'.
+ */
 function stateFileFor(sessionId) {
   return path.join(STATE_DIR, `session-${sessionId || UNATTRIBUTED_SESSION}.json`);
 }

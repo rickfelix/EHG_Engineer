@@ -178,6 +178,15 @@ describe('sanitizeSessionId — this value reaches path.join()', () => {
   it('caps length so a hostile id cannot blow the filename limit', () => {
     expect(sanitizeSessionId('a'.repeat(500))).toHaveLength(64);
   });
+
+  // NTFS and APFS are case-insensitive by default, so without folding, two ids
+  // differing only in case resolve to ONE file on disk — one session reading
+  // and deleting another's flag, which is the defect this SD exists to remove.
+  it('folds case so two ids differing only in case cannot alias to one file', () => {
+    expect(sanitizeSessionId('ABC123')).toBe('abc123');
+    expect(getHandoffFlagPath({ CLAUDE_SESSION_ID: 'ABC123' }))
+      .toBe(getHandoffFlagPath({ CLAUDE_SESSION_ID: 'abc123' }));
+  });
 });
 
 describe('writeCompactAfterHandoffFlag — session identity is explicit, not swallowed', () => {

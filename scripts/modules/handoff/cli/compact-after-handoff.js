@@ -58,7 +58,13 @@ export function sanitizeSessionId(raw) {
   if (typeof raw !== 'string') return null;
   const trimmed = raw.trim();
   if (!trimmed || !/^[A-Za-z0-9_-]+$/.test(trimmed)) return null;
-  return trimmed.slice(0, SESSION_ID_MAX_LENGTH);
+  // Case-folded because NTFS and APFS are case-insensitive by default: two ids
+  // differing only in case would otherwise alias to ONE file, which is a
+  // cross-session leak of exactly the kind this SD removes. Real ids are
+  // lowercase UUIDs so this is unreachable today — but the guard should not
+  // depend on the caller's formatting for that. Folding here keeps writer and
+  // reader in agreement because both resolve their path through this function.
+  return trimmed.slice(0, SESSION_ID_MAX_LENGTH).toLowerCase();
 }
 
 export function getHandoffFlagDir(env = process.env) {
