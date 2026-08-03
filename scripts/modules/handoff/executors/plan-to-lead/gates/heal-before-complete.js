@@ -31,7 +31,11 @@ import { GATE_REASON_CODES, MAX_HEAL_ITERATIONS } from './gate-reason-codes.js';
 // Shared threshold policy (SD-PAT-FIX-WRITER-CONSUMER-ASYMMETRY-001): consume the same
 // single source as the LEAD-TO-PLAN vision-score gate instead of dynamic-importing
 // across sibling executor directories (the QF-20260506-295 band-aid this replaces).
-import { countAddressableDimensions, calculateDynamicThreshold } from '../../../../../../lib/handoff/threshold-resolver.js';
+// SD-FDBK-FIX-HEAL-BEFORE-COMPLETE-001 FR-2: the TABLE is now imported alongside the functions.
+// This module previously imported only the functions while keeping its OWN SD_TYPE_THRESHOLDS —
+// so the comment above ("single source as the LEAD-TO-PLAN vision-score gate") described an
+// intention the import did not implement, and the two tables drifted apart unobserved.
+import { countAddressableDimensions, calculateDynamicThreshold, SD_TYPE_THRESHOLDS } from '../../../../../../lib/handoff/threshold-resolver.js';
 
 const DEFAULT_HEAL_THRESHOLD = 85;
 const DEFAULT_TOLERANCE_BUFFER = 3;
@@ -284,23 +288,28 @@ Respond with ONLY a JSON object: {"score": <0-100>, "reasoning": "<one sentence>
  * and documentation SDs use a lower bar since auto-heal scoring
  * produces scores in the 80-90 range for non-code-heavy SDs.
  */
-const SD_TYPE_THRESHOLDS = {
-  feature: 90,
-  security: 90,
-  enhancement: 85,
-  refactor: 85,
-  infrastructure: 80,
-  documentation: 80,
-  // `bugfix` is the canonical db-stored value (sd-key-generator maps user input
-  // `fix` → `bugfix` at the synonym layer; the phantom `fix: 85` key was removed
-  // by SD-FDBK-INFRA-TYPE-SOURCE-TRUTH-001 since post-mapping nothing reaches
-  // this lookup with `'fix'`).
-  // Threshold lower than feature/security because bugfix SDs address a narrow slice
-  // of dimensions and are mathematically unable to hit higher thresholds against the
-  // full vision rubric. A follow-up SD should port type-aware dimension filtering
-  // from GATE_VISION_SCORE's SD_TYPE_ADDRESSABLE_DIMENSIONS into this gate.
-  bugfix: 60,
-};
+// SD-FDBK-FIX-HEAL-BEFORE-COMPLETE-001 FR-2: THE LOCAL TABLE IS DELETED. It lived here while this
+// module imported only the FUNCTIONS from lib/handoff/threshold-resolver.js, so two tables governed
+// one decision and nothing compared them. MEASURED disagreement at deletion — four types, not the
+// five the SD description claimed:
+//     enhancement    85 -> 80
+//     refactor       85 -> 70
+//     documentation  80 -> 70
+//     bugfix         60 -> 70
+// feature, security and infrastructure AGREED, so the drift was partial, which is exactly why it
+// survived: any spot-check that happened to land on one of those three confirmed the tables matched.
+// SIX KEYS WERE MISSING HERE ENTIRELY and now resolve instead of falling through:
+//     governance, database, maintenance, protocol, orchestrator, _default
+// The missing keys are the larger live effect: 4 in-flight ORCHESTRATOR SDs move 85 -> 70 via an
+// ABSENT key rather than a disagreeing value, while the four types listed above have almost no
+// in-flight population (0/0/0/5, and the 5 bugfix SDs are unreachable — validation_gate_registry
+// 3197ce73 has sd_type=bugfix applicability=DISABLED, honoured at BaseExecutor.js:403 and
+// gate-policy-resolver.js:66). A blast-radius claim scoped to the disagreeing VALUES reports roughly
+// zero impact and is wrong; the impact is in the absences.
+//
+// The bugfix rationale that used to live here — "narrow dimension slice, mathematically unable to
+// hit the full-rubric bar" — is not lost: it is the narrowing problem, addressed by FR-1's
+// rubric-aware resolution rather than by a second table holding a compensating constant.
 
 /**
  * Read a single config value from the canonical `app_config` table (key/value).
