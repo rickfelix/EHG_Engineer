@@ -37,6 +37,23 @@ import { GATE_REASON_CODES, MAX_HEAL_ITERATIONS } from './gate-reason-codes.js';
 // intention the import did not implement, and the two tables drifted apart unobserved.
 import { countAddressableDimensions, calculateDynamicThreshold, SD_TYPE_THRESHOLDS } from '../../../../../../lib/handoff/threshold-resolver.js';
 
+/**
+ * Is this rubric_snapshot an sd-heal snapshot? — SD-FDBK-FIX-HEAL-BEFORE-COMPLETE-001 FR-3.
+ *
+ * EXPORTED SO IT CAN BE TESTED. The predicate used to be an inline `s.rubric_snapshot?.mode ===
+ * 'sd-heal'`, which is correct for object snapshots and quietly wrong-shaped for the 161 rows that
+ * store rubric_snapshot as a STRING (a raw LLM prompt): `?.mode` on a string is undefined, so the
+ * optional-chain hides that a non-object ever arrived. Naming the shapes makes the string case a
+ * decision instead of an accident.
+ *
+ * @param {object|string|null|undefined} snapshot
+ * @returns {boolean}
+ */
+export function isSdHealSnapshot(snapshot) {
+  if (!snapshot || typeof snapshot !== 'object' || Array.isArray(snapshot)) return false;
+  return snapshot.mode === 'sd-heal';
+}
+
 const DEFAULT_HEAL_THRESHOLD = 85;
 const DEFAULT_TOLERANCE_BUFFER = 3;
 const AUTO_HEAL_TIMEOUT_MS = 120_000; // 120 seconds (increased from 60s — LLM calls need headroom)
@@ -513,34 +530,40 @@ export function createHealBeforeCompleteGate(supabase) {
       let healError = null;
       let healScores = null;
 
-      // First try: get the most recent sd-heal mode score
-      const { data: sdHealScores } = await supabase
+      // SD-FDBK-FIX-HEAL-BEFORE-COMPLETE-001 FR-3: ONE SELECTION STRATEGY.
+      //
+      // This previously tried `.containedBy('rubric_snapshot', {mode:'sd-heal'})` first and fell back
+      // to a client-side filter, under a comment that already suspected the truth ("containedBy may
+      // not work for jsonb"). containedBy asks whether the STORED object is a SUBSET of {mode}, so
+      // any snapshot carrying arch_key/criteria/latency_ms/summary/vision_key is excluded by
+      // construction. It is not dead, which would have been safer — MEASURED, it matches 8 of 6055
+      // rows (one real snapshot plus seven empty objects). So the primary path fires roughly 0.1% of
+      // the time, and on exactly those rows the gate selects by a DIFFERENT rule than it uses the
+      // other 99.9% of the time. A branch that rare is a branch nobody has ever seen run; keeping
+      // both strategies meant the untested one decided the rare cases.
+      //
+      // Removed rather than repaired: the client-side filter below is the path that has actually
+      // been selecting scores all along, so this is deleting an unused alternative, not changing the
+      // rule. It also drops a round-trip that almost always returned nothing.
+      const { data: allScores, error: allErr } = await supabase
         .from('eva_vision_scores')
         .select('id, sd_id, total_score, threshold_action, rubric_snapshot, scored_at')
         .eq('sd_id', sdKey)
-        .containedBy('rubric_snapshot', { mode: 'sd-heal' })
         .order('scored_at', { ascending: false })
-        .limit(1);
+        .limit(20);
 
-      // containedBy may not work for jsonb — fall back to fetching all and filtering
-      if (sdHealScores && sdHealScores.length > 0) {
-        healScores = sdHealScores;
+      healError = allErr;
+      if (allScores && allScores.length > 0) {
+        // A FIFTH snapshot shape exists that no prior reading modelled: 161 rows store
+        // rubric_snapshot as a STRING (a raw LLM prompt), where `?.mode` yields undefined. Those
+        // rows are correctly excluded from the sd-heal set here — but note they remain eligible as
+        // the `allScores[0]` fallback, which is how a non-sd-heal rubric reaches the comparison.
+        // That selection breadth is FR-1's subject, not FR-3's; naming it so the next reader does
+        // not mistake this filter for the guarantee.
+        const sdHealMode = allScores.filter((s) => isSdHealSnapshot(s.rubric_snapshot));
+        healScores = sdHealMode.length > 0 ? [sdHealMode[0]] : [allScores[0]];
       } else {
-        // Fetch recent scores and filter client-side
-        const { data: allScores, error: allErr } = await supabase
-          .from('eva_vision_scores')
-          .select('id, sd_id, total_score, threshold_action, rubric_snapshot, scored_at')
-          .eq('sd_id', sdKey)
-          .order('scored_at', { ascending: false })
-          .limit(20);
-
-        healError = allErr;
-        if (allScores && allScores.length > 0) {
-          const sdHealMode = allScores.filter(s => s.rubric_snapshot?.mode === 'sd-heal');
-          healScores = sdHealMode.length > 0 ? [sdHealMode[0]] : [allScores[0]];
-        } else {
-          healScores = allScores;
-        }
+        healScores = allScores;
       }
 
       if (healError) {

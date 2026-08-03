@@ -68,3 +68,63 @@ describe('FR-2 — the canonical table is internally coherent', () => {
     expect(new Set(Object.values(SD_TYPE_THRESHOLDS)).size).toBeGreaterThan(1);
   });
 });
+
+// ── FR-3 ──────────────────────────────────────────────────────────────────────
+import { isSdHealSnapshot } from '../../scripts/modules/handoff/executors/plan-to-lead/gates/heal-before-complete.js';
+
+describe('FR-3 — one selection strategy, and the string shape is a decision not an accident', () => {
+  it('the dead containedBy predicate is gone from the live code', () => {
+    // Asserted on NON-COMMENT lines only: the explanatory comment names the removed call, and a
+    // naive whole-file match would fail on its own documentation.
+    const live = src().split('\n').filter((l) => !/^\s*(\/\/|\*|\/\*)/.test(l)).join('\n');
+    expect(live).not.toMatch(/\.containedBy\(/);
+  });
+
+  it('selects an object snapshot whose mode is sd-heal', () => {
+    expect(isSdHealSnapshot({ mode: 'sd-heal', arch_key: 'x', criteria_count: 7 })).toBe(true);
+  });
+
+  it('rejects a STRING snapshot rather than letting ?.mode quietly yield undefined', () => {
+    // 161 rows store rubric_snapshot as a raw LLM prompt. `'...'?.mode` is undefined, so the old
+    // optional-chain excluded them for the right reason by accident — it could not tell a string
+    // from an object missing the key.
+    expect(isSdHealSnapshot('You are scoring an SD against the vision rubric...')).toBe(false);
+    expect(isSdHealSnapshot('')).toBe(false);
+  });
+
+  it('rejects null, undefined and arrays', () => {
+    for (const v of [null, undefined, [], [{ mode: 'sd-heal' }]]) {
+      expect(isSdHealSnapshot(v)).toBe(false);
+    }
+  });
+
+  it('rejects an object of a DIFFERENT mode — the predicate still discriminates', () => {
+    // Both arms in one file: a predicate returning true for everything passes the accept case, and
+    // one returning false for everything passes every reject case. Neither survives both.
+    expect(isSdHealSnapshot({ mode: 'vision-18dim' })).toBe(false);
+    expect(isSdHealSnapshot({ arch_key: 'x' })).toBe(false);
+  });
+});
+
+describe('FR-3 — where the shape guard is actually LOAD-BEARING', () => {
+  // HONEST SCOPE. For a plain string, the old `snapshot?.mode === 'sd-heal'` ALREADY returned false,
+  // because `'...'.mode` is undefined in JS. A mutation reverting the explicit typeof check passed
+  // every string/array case — so for those inputs the guard is CLARIFYING, not corrective, and
+  // claiming otherwise would be claiming a fix that changes no behaviour.
+  //
+  // It IS load-bearing for a non-plain object carrying the key: an array or boxed String with a
+  // `mode` property reads as sd-heal under the old predicate and is rejected under this one. That is
+  // the case that makes the guard a guard rather than a comment.
+  it('rejects an ARRAY carrying a mode property — the old predicate accepted this', () => {
+    const arrayWithMode = Object.assign([], { mode: 'sd-heal' });
+    expect(arrayWithMode.mode).toBe('sd-heal');          // the old predicate would have said true
+    expect(isSdHealSnapshot(arrayWithMode)).toBe(false); // this one does not
+  });
+
+  // A boxed String carrying `mode` WOULD slip through — typeof new String() is 'object' and
+  // Array.isArray says no — but that assertion was written, run, and REMOVED rather than fixed
+  // around: rubric_snapshot arrives via JSON, and JSON.parse never yields a boxed primitive, so the
+  // shape is unreachable from the database. Hardening against it would be coverage of a case this
+  // environment cannot deliver, and the passing test would have implied a guarantee the guard does
+  // not actually provide against anything real.
+});
