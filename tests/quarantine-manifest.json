@@ -3,6 +3,15 @@
   "generated_at": "2026-06-11T10:09:40.368Z",
   "quarantined": [
     {
+      "file": "scripts/lib/branch-resolver.test.js",
+      "reason_class": "network-dependent-timeout",
+      "error_signature": "Error: Test timed out in 60000ms. // 'should not find branches for non-existent SD ID' — discoverBranchFromGit runs 'git fetch --all' (scripts/lib/branch-resolver/domains/discovery.js:40), a live network fetch inside a unit test; hung ~111s on the runner in two consecutive main runs (30796370865 @ 881f1498, 30798078480 @ 8bd86b591) after three greens the same morning",
+      "linked_ref": "feedback:8b36c8e3-bf51-4325-8f79-9ab31dc0c7fd",
+      "quarantined_at": "2026-08-03T09:20:00.000Z",
+      "quarantined_by": "0ab6a99c-3f30-4061-badc-304785aa8185",
+      "triage_note": "EMERGENCY coordinator quarantine — red main was blocking every PR carrying the required Unit Tier check. Passes 52/52 locally; failure is runner-network-dependent, not code. De-quarantine when the fetch is injectable/skippable under test (fixture repo) per the linked feedback's fix shape."
+    },
+    {
       "file": "lib/__tests__/repo-paths-git-capable.test.js",
       "reason_class": "assertion-drift",
       "error_signature": "AssertionError: expected true to be false // Object.is equality",
