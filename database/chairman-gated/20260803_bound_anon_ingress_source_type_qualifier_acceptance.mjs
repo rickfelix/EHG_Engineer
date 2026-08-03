@@ -162,10 +162,32 @@ try {
       console.log('\nB. DISCRIMINATOR — a DIFFERENT source_type, under its own threshold, must still be accepted');
       const ventureUnder = await windowCount('user_feedback');
       console.log(`  user_feedback rows in window = ${ventureUnder} (must be under ${THRESHOLD})`);
+      // LESSON STAMPED AT FIRST LIVE VERIFY (2026-08-03): this probe originally carried NO
+      // venture_id. For a non-telegram anon row the ONLY permissive path is
+      // venture_user_insert_feedback, which requires venture_id IS NOT NULL AND
+      // venture_exists_and_active(venture_id) — so the row was refused by the PERMISSIVE layer
+      // regardless of G2, in baseline AND verify. The baseline B-failure was OVERDETERMINED
+      // (G2 + missing venture), and the suite credited it entirely to G2 — the exact
+      // "permissive layer refused for an unrelated reason" hazard this test's own remark text
+      // warns about on the opposite arm. The probe must ride the venture path fully.
+      // Venture resolved AT RUN TIME (a hardcoded id goes stale silently). Selection calls the
+      // REAL venture_exists_and_active function (param p_venture_id, verified from pg_proc) —
+      // never a reimplementation of its semantics.
+      const { data: activeVentures } = await svc.from('ventures').select('id, name').order('updated_at', { ascending: false }).limit(25);
+      let ventureId = null;
+      for (const v of activeVentures || []) {
+        const { data: ok } = await svc.rpc('venture_exists_and_active', { p_venture_id: v.id }).then(r => r, () => ({ data: null }));
+        if (ok === true) { ventureId = v.id; console.log(`  venture-user path rides venture: ${v.name} (${v.id.slice(0, 8)})`); break; }
+      }
+      if (!ventureId) {
+        console.log('  *** NO ACTIVE VENTURE FOUND — the venture-user permissive path cannot be exercised.');
+        console.log('  *** Test B is NOT RUNNABLE, which is a FAIL, not a skip: an absence result would mean nothing.');
+      }
       const other = await probe('other-source-under-limit', {
         source_type: 'user_feedback',
         feedback_type: 'user_general',
         severity: 'low',
+        venture_id: ventureId,
       });
       const expectLanded = MODE === 'verify';
       record('B', `non-telegram anon insert ${expectLanded ? 'ACCEPTED (G2 fixed)' : 'DENIED (G2 present — this FAIL is the point of --baseline)'}`,
