@@ -150,7 +150,10 @@ describe('the bound is real — a cap hit is truncated, not a trusted partial co
     const root = mk('capped', files);
     const r = probeContent(root, { fsImpl: fs, pathImpl: path, maxFiles: 5 });
     expect(r.truncated).toBe(true);
-    expect(r.files).toBeLessThanOrEqual(6);
+    // Assert the CONTRACT ("never walk more than maxFiles"), not the observed behaviour.
+    // This previously read `toBeLessThanOrEqual(6)` with maxFiles=5 — an assertion shaped around
+    // an off-by-one rather than around the requirement, so it passed while the bound was wrong.
+    expect(r.files).toBe(5);
   });
 
   it('a truncated probe REFUSES rather than judging on a partial count', () => {

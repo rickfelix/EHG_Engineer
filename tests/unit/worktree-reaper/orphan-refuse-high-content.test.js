@@ -32,9 +32,14 @@
  */
 import { describe, it, expect, beforeAll, afterAll } from 'vitest';
 import fs from 'node:fs';
+import { readFileSync } from 'node:fs';
 import path from 'node:path';
 import os from 'node:os';
+import { fileURLToPath } from 'node:url';
+import { dirname, resolve } from 'node:path';
 import { classifyOrphanDirs } from '../../../lib/worktree-quota.js';
+
+const REPO_ROOT = resolve(dirname(fileURLToPath(import.meta.url)), '../../..');
 import {
   probeContent, PROBE_MAX_FILES, REASON,
   CONTENT_REFUSE_MIN_FILES,
@@ -254,15 +259,42 @@ describe('a BROKEN .git must not exempt a directory from the content check', () 
 });
 
 describe('the probe never runs on the worktree-creation hot path', () => {
-  it('classifyOrphanDirs performs ZERO probe calls when no probe is supplied', () => {
-    // enforceWorktreeQuota reaches this with no minAgeMs and no probe on every `git worktree add`.
-    // A probe there would walk the live .worktrees — which currently holds a 45,877-file tree whose
-    // naive walk exceeded ten minutes.
-    let calls = 0;
-    const counting = (d) => { calls += 1; return realProbe(d); };
-    classifyOrphanDirs(worktreesDir, [], {});                       // the hot-path shape
-    expect(calls).toBe(0);
-    classifyOrphanDirs(worktreesDir, [], { probe: counting });      // the sweep shape
-    expect(calls).toBeGreaterThan(0);
+  // WHY THIS IS A SOURCE ASSERTION AND NOT A CALL COUNT.
+  //
+  // This was originally written as a counting test: increment on each probe call, invoke
+  // classifyOrphanDirs with no probe, assert the counter is 0. That assertion was TAUTOLOGICAL —
+  // the counting function was never passed to that invocation, so the counter was 0 by
+  // construction and no implementation could have made it fail. A mutant that walked on every
+  // call survived it.
+  //
+  // A better counter does not exist either: classifyOrphanDirs never imports probeContent, it
+  // only receives one, so "did it call probeContent" is trivially no regardless of behaviour.
+  // The claim that actually matters lives one level up — whether the QUOTA CALL SITE passes a
+  // probe — and that is a property of the call site, so the call site is what gets asserted.
+  const QUOTA_SRC = readFileSync(resolve(REPO_ROOT, 'lib/worktree-quota.js'), 'utf8')
+    .replace(/\/\*[\s\S]*?\*\//g, '').replace(/^\s*\/\/.*$/gm, '');
+
+  it('the quota warning path calls classifyOrphanDirs WITHOUT a probe', () => {
+    // enforceWorktreeQuota reaches this on every `git worktree add`, against the live .worktrees
+    // — which currently holds a 45,877-file tree whose naive walk exceeded a ten-minute budget.
+    const call = QUOTA_SRC.match(/classifyOrphanDirs\(worktreesDir, registered, \{[^}]*\}\)/);
+    expect(call, 'quota call site not found — the anchor moved').not.toBeNull();
+    expect(call[0]).not.toMatch(/probe/);
+  });
+
+  it('and the probe branch is gated on the probe being a function', () => {
+    // So an absent probe cannot fall through to a default that walks.
+    expect(QUOTA_SRC).toMatch(/typeof probe === 'function'/);
+    expect(QUOTA_SRC).not.toMatch(/probe = \(dir\) =>/);   // no module-scope default in the classifier
+  });
+
+  it('BEHAVIOURAL: with no probe supplied, nothing can land in refused', () => {
+    // The half of the original test that was never tautological, kept and named honestly.
+    const dir = path.join(worktreesDir, 'heavy-but-unprobed');
+    fs.mkdirSync(dir, { recursive: true });
+    for (let i = 0; i < 10; i++) fs.writeFileSync(path.join(dir, `f${i}.txt`), 'x'.repeat(600));
+    const r = classifyOrphanDirs(worktreesDir, [], { minAgeMs: 0 });
+    expect(r.refused).toEqual([]);
+    expect(r.reapableDirs.find((x) => x.dir === 'heavy-but-unprobed')).toBeDefined();
   });
 });

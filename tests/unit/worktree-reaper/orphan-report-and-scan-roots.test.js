@@ -22,7 +22,12 @@ import {
   selectReapableOrphans, buildOrphanSummary, ARCHIVE_DIR_NAME,
 } from '../../../lib/worktree-reaper/orphan-sweep.js';
 import { WORKTREE_QUOTA_HELPERS } from '../../../lib/worktree-quota.js';
-import { REASON } from '../../../lib/worktree-reaper/orphan-content-probe.mjs';
+import { REASON, probeContent } from '../../../lib/worktree-reaper/orphan-content-probe.mjs';
+import { readFileSync } from 'node:fs';
+import { fileURLToPath } from 'node:url';
+import { dirname, resolve } from 'node:path';
+
+const REPO_ROOT = resolve(dirname(fileURLToPath(import.meta.url)), '../../..');
 
 let root, worktreesDir;
 
@@ -88,6 +93,34 @@ describe('FR-4 — refusals survive the merge and reach the report', () => {
     const summary = buildOrphanSummary(sel, { reclaimed_count: 0, reclaimed_bytes: 0, failed: [], dry_run: true });
     expect(summary.refused_count).toBe(0);
     expect(summary.refused).toEqual([]);
+  });
+});
+
+describe('FR-2 — the DRY-RUN path is bounded too', () => {
+  it('sizing goes through the bounded probe, not the unbounded walker', () => {
+    // reclaimOrphans calls sizeOf ABOVE the `if (!execute)` short-circuit, so it runs on every dry
+    // run — the default posture, hourly. dirSizeBytes has no cap and no deadline, so that walk is
+    // exactly the one that exceeded ten minutes on the 45,877-file directory. Bounding the
+    // classifier's walk while leaving this one meant the hazard survived in the path that runs
+    // most often.
+    const SRC = readFileSync(resolve(REPO_ROOT, 'lib/worktree-reaper/orphan-sweep.js'), 'utf8')
+      .replace(/\/\*[\s\S]*?\*\//g, '').replace(/^\s*\/\/.*$/gm, '');
+    expect(SRC).toMatch(/sizeOf = \(full\) => \{[\s\S]{0,200}probeContent\(/);
+    expect(SRC).not.toMatch(/sizeOf = \(full\) => dirSizeBytes\(full\)/);
+  });
+
+  it('a tree far over the cap still returns promptly with a lower-bound size', () => {
+    // Behavioural: the probe truncates rather than walking forever. The number is a lower bound,
+    // which is the right trade for a summary field — an approximate figure that always returns
+    // beats an exact one that hangs the reaper.
+    const big = path.join(worktreesDir, 'oversized');
+    fs.mkdirSync(big, { recursive: true });
+    for (let i = 0; i < 40; i++) fs.writeFileSync(path.join(big, `f${i}.txt`), 'x'.repeat(100));
+    const started = Date.now();
+    const p = probeContent(big, { fsImpl: fs, pathImpl: path, maxFiles: 10 });
+    expect(p.truncated).toBe(true);
+    expect(p.files).toBe(10);
+    expect(Date.now() - started).toBeLessThan(2000);
   });
 });
 
