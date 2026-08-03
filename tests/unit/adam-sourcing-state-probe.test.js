@@ -9,6 +9,7 @@
 // SD-LEO-INFRA-ADAM-SOURCE-FROM-SSOT-CONTRACT-001 (FR-2)
 import { test } from 'vitest';
 import assert from 'node:assert/strict';
+import { BELT_DEPTH_GATED_PRODUCERS } from '../../lib/governance/demand-gate.js';
 import {
   SOURCING_FLAGS,
   RETIRED_SOURCING_FLAGS,
@@ -201,5 +202,10 @@ test('C4: the demand section is rendered by the composed path, not only by the p
   // Kills "drop demand from the renderSourcingStateLines call" and "replace the read with null".
   const out = await renderSourcingState({ supabase: null, env: {} });
   assert.match(out, /\[demand-gate\]/);
-  for (const engine of ['refill-auto-promote', 'fr-c-generator']) assert.match(out, new RegExp(engine));
+  // SD-LEO-INFRA-GATE-SIDE-BELT-001: iterate the REGISTRY, not a hardcoded pair. The literal list
+  // here was ['refill-auto-promote','fr-c-generator']; when the two QF minters joined
+  // BELT_DEPTH_GATED_PRODUCERS this test kept passing while silently ceasing to cover them — a
+  // check that cannot notice a new member is not a check on membership.
+  for (const engine of BELT_DEPTH_GATED_PRODUCERS) assert.match(out, new RegExp(engine));
+  assert.ok(BELT_DEPTH_GATED_PRODUCERS.length >= 4, 'expected the QF-side minters to be registered too');
 });

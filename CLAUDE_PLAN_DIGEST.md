@@ -1,9 +1,9 @@
 <!-- GENERATED FILE - DO NOT EDIT DIRECTLY. Source of truth: leo_protocol_sections (DB). Regenerate: node scripts/generate-claude-md-from-db.js. Drift check: node scripts/check-claude-md-drift.cjs -->
 <!-- DIGEST FILE - Enforcement-focused protocol content -->
-<!-- generated_at: 2026-08-01T12:11:44.491Z -->
-<!-- git_commit: f70be27d -->
-<!-- db_snapshot_hash: f40cba344ed016a6 -->
-<!-- file_content_hash: 6a2207cc18ddebdc -->
+<!-- generated_at: 2026-08-03T12:17:35.304Z -->
+<!-- git_commit: 972d12c9 -->
+<!-- db_snapshot_hash: 8c2c5d2e658539c5 -->
+<!-- file_content_hash: 9e2f8a591ca8de70 -->
 
 # CLAUDE_PLAN_DIGEST.md - PLAN Phase (Enforcement)
 
@@ -163,5 +163,5 @@ On 2026-04-06 during SD-LEO-REFAC-STAGE-ADVANCEMENT-ENGINE-001 child decompositi
 
 ---
 
-*DIGEST generated: 2026-08-01 8:11:44 AM*
+*DIGEST generated: 2026-08-03 8:17:35 AM*
 *Protocol: 4.4.1*
