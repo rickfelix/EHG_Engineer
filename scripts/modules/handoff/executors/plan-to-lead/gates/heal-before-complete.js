@@ -784,8 +784,21 @@ export function createHealBeforeCompleteGate(supabase) {
       // Without this, narrow-domain SDs (e.g. chairman-UI Reject dialog scoring 75/90 on
       // the 8 dims it actually addresses) are permanently blocked at heal even when those
       // addressable dims score well. Skip for corrective SDs (already use GRADE.A).
+      // SD-FDBK-FIX-HEAL-BEFORE-COMPLETE-001 FR-4: NAME WHY NARROWING DID NOT HAPPEN.
+      //
+      // Every no-op below used to look identical from outside — dynamicAdjustment stayed null and,
+      // in the failure case, the reason went to console.debug and vanished. "The threshold was not
+      // narrowed" and "narrowing FAILED and nobody noticed" rendered the same, which is the shape
+      // this SD is about: a silent absence reading as a deliberate decision.
+      //
+      // The SD text says three causes. There are FIVE distinguishable outcomes, and the extra two
+      // are not pedantry — skipped_corrective is a policy decision while no_dimension_scores is a
+      // data defect, and treating them as one no-op is what made this invisible.
       let dynamicAdjustment = null;
-      if (!isCorrective) {
+      let narrowingOutcome = null;
+      if (isCorrective) {
+        narrowingOutcome = { outcome: 'skipped_corrective', reason: 'corrective SDs use GRADE.A and are deliberately exempt from narrowing' };
+      } else {
         try {
           const { data: scoreDims } = await supabase
             .from('eva_vision_scores')
@@ -797,7 +810,11 @@ export function createHealBeforeCompleteGate(supabase) {
             .select('metadata')
             .eq('id', sdUuid)
             .single();
-          if (scoreDims?.dimension_scores && sdForOverride?.metadata) {
+          if (!scoreDims?.dimension_scores) {
+            narrowingOutcome = { outcome: 'no_dimension_scores', reason: `score ${latestScore.id} carries no dimension_scores — narrowing had no input` };
+          } else if (!sdForOverride?.metadata) {
+            narrowingOutcome = { outcome: 'no_sd_metadata', reason: 'SD metadata is absent/null — vision_addressable_dimensions could not be read' };
+          } else {
             const { addressable, total } = countAddressableDimensions(
               sdType,
               scoreDims.dimension_scores,
@@ -806,17 +823,44 @@ export function createHealBeforeCompleteGate(supabase) {
             const adjusted = calculateDynamicThreshold(threshold, addressable, total);
             if (adjusted !== threshold) {
               dynamicAdjustment = { base: threshold, adjusted, addressable, total };
+              narrowingOutcome = { outcome: 'narrowed', reason: `${addressable}/${total} addressable`, addressable, total };
               console.log(`   📐 Dynamic threshold (per-SD addressable dims): ${threshold} → ${adjusted} (${addressable}/${total} addressable, MIN_ADJUSTED_THRESHOLD_RATIO floor)`);
               threshold = adjusted;
+            } else {
+              // A GENUINE no-change, and the only no-op that is actually good news.
+              narrowingOutcome = { outcome: 'no_change', reason: `${addressable}/${total} addressable yields the same threshold`, addressable, total };
             }
           }
         } catch (e) {
-          console.debug('[HealBeforeComplete] dynamic threshold adjustment suppressed:', e?.message || e);
+          // FAILED, not "decided not to". This is the case that used to be indistinguishable from
+          // every line above it, and it is the only one where the threshold in force is not the
+          // threshold anyone intended.
+          narrowingOutcome = { outcome: 'failed', reason: e?.message || String(e) };
+          console.warn(`   ⚠️  Dynamic threshold narrowing FAILED (threshold stays ${threshold}, which may be stricter than intended): ${e?.message || e}`);
         }
+      }
+      if (narrowingOutcome && narrowingOutcome.outcome !== 'narrowed') {
+        console.log(`   📐 Dynamic threshold: NOT narrowed [${narrowingOutcome.outcome}] — ${narrowingOutcome.reason}`);
       }
 
       console.log(`   SD Heal Score: ${sdHealScore}/100 (threshold: ${threshold})`);
-      console.log(`   Score Age: ${scoreAge} min`);
+      // SD-FDBK-FIX-HEAL-BEFORE-COMPLETE-001 FR-5: scoreAge DOES NOT GATE, AND NOW SAYS SO.
+      //
+      // It was computed here and reported in four places while participating in zero comparisons.
+      // A number printed beside a verdict reads as an input to that verdict; every maintainer who
+      // saw "Score Age: 361 min" reasonably assumed staleness was being enforced somewhere. It was
+      // not — a 6-hour-old score was consumed as original_score for the SD that motivated this SD.
+      //
+      // THE DECISION IS THAT IT MUST NOT GATE, and the reason is this SD's own thesis: an age
+      // threshold would silently become a FOURTH instrument disagreeing with the other three. Age
+      // only tells you whether the score is stale if you already know the WORK changed in between,
+      // and the gate cannot know that — heal re-scores produce new rows seconds apart on unchanged
+      // work (measured: 88 then 66 ten seconds later, different rubrics). Gating on age would reject
+      // a correct score for being old and accept a wrong one for being fresh.
+      // So it is labelled ADVISORY rather than made load-bearing, and stays visible for the human
+      // reading the log. If a future SD wants staleness enforced, the missing input is a
+      // work-changed-since signal, not a bigger number here.
+      console.log(`   Score Age: ${scoreAge} min (ADVISORY — does not gate; see FR-5)`);
       console.log(`   Score ID: ${latestScore.id}`);
       if (!isSDHeal) {
         console.log(`   ⚠️  Score mode: ${latestScore.rubric_snapshot?.mode || 'unknown'} (expected: sd-heal)`);

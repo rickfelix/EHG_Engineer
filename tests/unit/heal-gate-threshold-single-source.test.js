@@ -128,3 +128,52 @@ describe('FR-3 — where the shape guard is actually LOAD-BEARING', () => {
   // environment cannot deliver, and the passing test would have implied a guarantee the guard does
   // not actually provide against anything real.
 });
+
+describe('FR-4 — a narrowing no-op names WHICH no-op it was', () => {
+  // Every no-op used to render identically: dynamicAdjustment stayed null and, in the failure case,
+  // the reason went to console.debug and vanished. "Not narrowed" and "narrowing FAILED" looked the
+  // same — a silent absence reading as a deliberate decision, which is this SD's whole subject.
+  const s = () => src();
+
+  it('distinguishes FIVE outcomes, not the three the SD text named', () => {
+    for (const outcome of ['skipped_corrective', 'no_dimension_scores', 'no_sd_metadata', 'narrowed', 'no_change']) {
+      expect(s()).toContain(`'${outcome}'`);
+    }
+    expect(s()).toMatch(/outcome:\s*'failed'/);
+  });
+
+  it('a FAILURE is warned, not debug-swallowed', () => {
+    // The specific regression: console.debug for a failed narrowing. A test asserting only that
+    // some warn exists would pass while the failure path stayed on debug, so this pins the pairing.
+    expect(s()).toMatch(/console\.warn\([^)]*narrowing FAILED/);
+  });
+
+  it('the failure message says the threshold may now be STRICTER than intended', () => {
+    // Direction matters: a failed narrowing leaves the UNNARROWED threshold in force, so the gate
+    // is harsher than the author meant — the opposite of the fail-open most readers assume.
+    expect(s()).toMatch(/stricter than intended/);
+  });
+
+  it('skipped_corrective and no_dimension_scores are separate outcomes — a policy decision is not a data defect', () => {
+    const src_ = s();
+    const policy = src_.indexOf("'skipped_corrective'");
+    const defect = src_.indexOf("'no_dimension_scores'");
+    expect(policy).toBeGreaterThan(-1);
+    expect(defect).toBeGreaterThan(-1);
+    expect(policy).not.toBe(defect);
+  });
+});
+
+describe('FR-5 — scoreAge is labelled advisory instead of reading as a control', () => {
+  it('the reported line says it does not gate', () => {
+    expect(src()).toMatch(/Score Age:.*ADVISORY.*does not gate/);
+  });
+
+  it('scoreAge still participates in ZERO comparisons — the decision was to leave it non-gating', () => {
+    // Guards against a later reader "finishing the job" by wiring it in. If age is ever meant to
+    // gate, the missing input is a work-changed-since signal, not a comparison here.
+    const live = src().split('\n').filter((l) => !/^\s*(\/\/|\*|\/\*)/.test(l)).join('\n');
+    expect(live).not.toMatch(/scoreAge\s*[<>]=?/);
+    expect(live).not.toMatch(/[<>]=?\s*scoreAge/);
+  });
+});
