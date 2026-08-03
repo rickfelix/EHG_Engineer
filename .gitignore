@@ -9,6 +9,12 @@ handoff-result.txt
 *.log
 verification-packages/
 .worktrees/
+# SD-FDBK-INFRA-SPAWN-SOURCE-CURRENCY-001 FR-1: the dedicated spawn-source worktree. MUST stay
+# ignored — an unignored in-repo worktree becomes untracked dirt in the root, which is exactly
+# the condition this SD exists to stop stranding spawns. Deliberately NOT under .worktrees/,
+# because that path is exempt from the tree-currency check (spawn-control.js isWorktreeExemptPath)
+# and a spawn source sited there would be silently unguarded.
+.spawn-source/
 .cache/
 
 # Per-session worktree state (written by sd-start.js / create-quick-fix.js).

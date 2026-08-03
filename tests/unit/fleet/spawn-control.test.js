@@ -47,6 +47,28 @@ const {
  * refuses -- 21 red tests whose behaviour depended on the physical location of the checkout.
  * A unit test must never depend on real git state or on network egress.
  */
+/**
+ * HERMETICITY PIN — SD-FDBK-INFRA-SPAWN-SOURCE-CURRENCY-001, added after this suite performed a
+ * REAL `git worktree add` against the SHARED repo root.
+ *
+ * spawn()'s FR-2 block reads `opts.currencyEnv || process.env`, and the 24 spawn() calls in this
+ * file pass no currencyEnv — so they read the AMBIENT environment. They also pass no
+ * spawnSourceRunner / spawnSourceExists / repoRoot, and those default to REAL execFileSync, REAL
+ * fs.existsSync and the REAL main repo root (correct for production, catastrophic for a unit test).
+ * The moment anything makes the flag read true, every one of these unit tests becomes a live
+ * integration test against the shared root.
+ *
+ * That is not hypothetical: mutant M5 (flag gate defaults ON) did exactly this during a mutation
+ * run and created a real `.spawn-source` worktree in the shared root, which vitest then globbed
+ * into — running the entire repo's suite a second time and rewriting 16 tracked files' line
+ * endings. A unit test that reads an ambient feature flag is non-hermetic by construction.
+ *
+ * Pinned to an explicit falsy value rather than deleted, so the ambient environment cannot decide.
+ * This does NOT weaken M5: the default-OFF contract is asserted directly in
+ * spawn-source-flag-gate.test.js, which passes an explicit `{}` and is where that mutant is caught.
+ */
+beforeEach(() => { vi.stubEnv('FLEET_SPAWN_SOURCE_TREE', '0'); });
+
 const CURRENT_RUNNER = (args) => {
   if (args[0] === 'fetch') return '';
   if (args.includes('--abbrev-ref')) return 'main\n';
@@ -146,9 +168,64 @@ describe('module surface (TS-10: exactly seven named verbs, no more)', () => {
     // it, restart() calls it internally once succession is proven. It is exported solely so its
     // fail-closed refusals can be asserted directly — a pid whose identity cannot be confirmed must
     // never be signalled, and that is not reachable through restart() without real processes.
+    // isWorktreeExemptPath / assertSpawnSourceNotExempt (SD-FDBK-INFRA-SPAWN-SOURCE-CURRENCY-001
+    // FR-1) are HELPERS by the same test this file already applies: an operator never invokes
+    // them, and they are not reachable from any route. They are pure predicates, exported for two
+    // reasons. First, isWorktreeExemptPath was an INLINE expression inside spawn(); extracting it
+    // gives the exemption and the guard that depends on it ONE representation, so they cannot
+    // drift. Second, assertSpawnSourceNotExempt guards a failure that is invisible by
+    // construction — a spawn-source tree sited under .worktrees/ would be silently exempted from
+    // the currency check and would appear to work while asserting nothing — so it must be
+    // assertable directly rather than only through spawn().
+    //
+    // This guard did its job again: adding these failed the test rather than slipping in
+    // unannounced, which is why they are declared here with a reason instead of the test being
+    // loosened to accommodate them.
     const helperNames = ['roleOf', 'isSingletonRole', 'resolveProfileDir', 'isLiveEnabled', 'buildLiveSpawnInvocation',
       'SESSION_BIND_MAX_ATTEMPTS', 'SESSION_BIND_DELAY_MS',
-      'CANARY_PROFILE', 'CANARY_CALLSIGN_PREFIX', 'retirePredecessorProcess'];
+      'CANARY_PROFILE', 'CANARY_CALLSIGN_PREFIX', 'retirePredecessorProcess',
+      'isWorktreeExemptPath', 'assertSpawnSourceNotExempt',
+      // resolveSpawnSourceDir is a HELPER by the same test: an operator never invokes it, and it
+      // is not reachable from a route — spawn() will consume it internally once FR-1's machinery
+      // lands. It is exported so the two siting constraints can be asserted directly, which
+      // matters because BOTH failure modes are invisible at runtime (a tree under .worktrees/ is
+      // silently unguarded; an unignored tree silently dirties the root). SPAWN_SOURCE_DIRNAME is
+      // a VALUE, belonging here for the same reason as the SESSION_BIND_* constants above.
+      'resolveSpawnSourceDir', 'SPAWN_SOURCE_DIRNAME',
+      // ensureSpawnSourceWorktree / buildSpawnSourceWorktreeArgs — helpers, not verbs. No operator
+      // invokes them and no route reaches them; spawn() consumes them internally. Exported because
+      // both take injected deps (exists probe, git runner) so the create-vs-reuse decision and the
+      // argv shape are assertable without a real repo — the reuse path in particular would only
+      // fail under repeated spawns, which is exactly when it is hardest to observe.
+      'ensureSpawnSourceWorktree', 'buildSpawnSourceWorktreeArgs',
+      // resolveMainRepoRoot — helper, not a verb. Resolves the MAIN repo root from any worktree by
+      // asking git (rev-parse --git-common-dir) rather than parsing the '/.worktrees/' literal.
+      // Exported because it takes an injected runner and must be assertable without a real repo:
+      // both wrong answers it replaces (path.dirname of cwd, and getRepoRoot's process.cwd-bound
+      // lookup) fail SILENTLY on the spawn path, so the correct one needs pinned tests.
+      'resolveMainRepoRoot',
+      // isSpawnSourceTreeEnabled — a flag PREDICATE, exactly like isLiveEnabled above and
+      // isFrTraceabilityEnforced on the FR gates. No operator invokes it; spawn() reads it
+      // internally. Exported so the DEFAULT-OFF contract is assertable directly, which is the
+      // whole safety claim of the FR-2 rollout: with FLEET_SPAWN_SOURCE_TREE unset, spawn
+      // behaviour must be byte-identical to before this SD.
+      'isSpawnSourceTreeEnabled',
+      // buildSpawnSourceUpdateArgs / SPAWN_SOURCE_BRANCH — helper and value, by the same test as
+      // everything above: no operator invokes them and no route reaches them. Both exist because
+      // the tree shipped DETACHED, which assessTreeCurrency rejects as detached_head no matter how
+      // pristine the tree is — so under FLEET_SPAWN_SOURCE_TREE every spawn in the fleet would have
+      // been refused. The branch name is exported so the seam test can assert the guard's verdict
+      // on the branch we actually create, and the update argv is exported because a fast-forward on
+      // reuse is REQUIRED (self-heal only ever advances a clean tree on 'main', which this
+      // deliberately is not) and its shape must be assertable without a real repo.
+      'buildSpawnSourceUpdateArgs', 'SPAWN_SOURCE_BRANCH',
+      // SPAWN_SOURCE_SITING_ERROR — a VALUE, like the SESSION_BIND_* constants. It exists so the
+      // spawn() call-site can tell a CORRECTNESS violation from a git hiccup: creation failures now
+      // fail soft to the spawning tree (C3, independent review 6ecbbd8c), but a tree sited under
+      // .worktrees/ must stay FATAL, because that path is exempt from the currency check and
+      // tolerating it would leave the spawn silently unguarded. Exported rather than matched on
+      // message text so the distinction cannot drift when the wording changes.
+      'SPAWN_SOURCE_SITING_ERROR'];
     const unexpected = Object.keys(mod).filter((k) => !verbNames.includes(k) && !helperNames.includes(k));
     expect(unexpected).toEqual([]);
   });

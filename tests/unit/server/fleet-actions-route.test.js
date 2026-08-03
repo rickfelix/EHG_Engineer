@@ -301,3 +301,59 @@ describe('SD-LEO-FIX-UNOWNED-PARENT-SLICE-001: /api/fleet-actions stays behind r
     expect(mount).not.toContain('optionalAuth');
   });
 });
+
+// ─────────────────────────────────────────────────────────────────────────────
+// SD-FDBK-INFRA-SPAWN-SOURCE-CURRENCY-001 FR-4 — refusals must RENDER their reason.
+//
+// spawn()'s guards THROW refusals whose messages carry the remedy (tree-currency names
+// `git pull --ff-only`). Unhandled, those throws reached the EVA error handler, which maps
+// unknown errors to a bare 422 with no reason field — so the operator saw a status code
+// instead of the fix the guard had already written for them.
+//
+// QF-20260731-222 (PR #6669) fixed this for addSession ONLY. These pin the two siblings,
+// which is the partial-application shape CLAUDE_EXEC.md's uniformity audit exists to catch.
+// ─────────────────────────────────────────────────────────────────────────────
+describe('FR-4: spawn refusals render their reason on every operator route', () => {
+  const REFUSAL = 'tree is 12 behind origin/main — run: git pull --ff-only';
+
+  it('respawnFleet: a refused slot reports its reason AND the sweep still completes', async () => {
+    // Per-iteration catch, not a whole-route one: previously a single refusable slot threw out
+    // of the loop and discarded every other slot's result, so one stale slot silently cost the
+    // operator the entire batch.
+    spawn.mockRejectedValueOnce(new Error(REFUSAL));
+    const req = mockReq();
+    const res = mockRes();
+    await respawnFleet(req, res);
+
+    expect(res.status).not.toHaveBeenCalled();          // route itself did not error out
+    const payload = res.json.mock.calls[0][0];
+    expect(payload.respawned).toHaveLength(1);           // the sweep completed
+    expect(payload.respawned[0]).toMatchObject({ name: 'Golf-4', ok: false });
+    expect(payload.respawned[0].reason).toContain('git pull --ff-only');
+    expect(payload.unchanged).toBe(1);                   // untouched slots still reported
+  });
+
+  it('relaunchSessionUnderProfile: a thrown refusal becomes {ok:false, reason}, not a bare 422', async () => {
+    relaunchUnderProfile.mockRejectedValueOnce(new Error(REFUSAL));
+    const req = mockReq({ target: 'Golf-4', accountProfile: 'RickFelix' });
+    const res = mockRes();
+    await relaunchSessionUnderProfile(req, res);
+
+    expect(res.status).toHaveBeenCalledWith(422);
+    const payload = res.json.mock.calls[0][0];
+    expect(payload.ok).toBe(false);
+    expect(payload.reason).toContain('git pull --ff-only');
+  });
+
+  it('the happy path is unchanged on both routes', async () => {
+    const r1 = mockRes();
+    await respawnFleet(mockReq(), r1);
+    expect(r1.status).not.toHaveBeenCalled();
+    expect(r1.json.mock.calls[0][0].respawned[0].ok).not.toBe(false);
+
+    const r2 = mockRes();
+    await relaunchSessionUnderProfile(mockReq({ target: 'Golf-4', accountProfile: 'RickFelix' }), r2);
+    expect(r2.status).not.toHaveBeenCalled();
+    expect(r2.json.mock.calls[0][0]).toMatchObject({ ok: true });
+  });
+});
