@@ -97,10 +97,23 @@ function makeStub(cfg) {
           }
           return Promise.resolve({ data: rows, error: null });
         }
-        // adoptOrphanInProgress listing (SD-FDBK-INFRA-ORPHAN-ADOPTION-WORKER-001): a third
-        // STRING discriminant (.eq('status','in_progress')) — placed ABOVE the draft fallthrough.
-        // Honors the .lt('updated_at') age guard and the server-side .neq('sd_type') exclusion.
-        if (state.filters.status === 'in_progress') {
+        // adoptOrphanInProgress listing (SD-FDBK-INFRA-ORPHAN-ADOPTION-WORKER-001).
+        //
+        // SD-LEO-INFRA-RELEASED-MID-PHASE-001 / FR-2: this discriminant USED TO BE a string
+        // compare (state.filters.status === 'in_progress'), which was correct only while the
+        // adoption query used .eq(). It now uses .in(['in_progress','active']) — and because
+        // eq() and in() write the SAME key in this stub, a string compare stops matching and
+        // the orphan query FALLS THROUGH to the draft branch below. That failure mode is
+        // uniquely nasty: the four "expect idle" cases would have gone GREEN because the stub
+        // returned drafts-shaped nothing, not because any guard fired. A test that passes for
+        // the wrong reason is worse than one that fails.
+        //
+        // Discriminate on ARRAY CONTENTS, and note both allowlists contain 'active' — the
+        // draft tier queries ['draft','active'] — so membership of 'active' alone cannot
+        // distinguish them. 'in_progress' is the token unique to the adoption tier.
+        if (Array.isArray(state.filters.status)
+              ? state.filters.status.includes('in_progress')
+              : state.filters.status === 'in_progress') {
           if (cfg.orphansThrow) return Promise.reject(new Error('orphan query failed'));
           let rows = cfg.orphans || [];
           if (state.filters.lt_updated_at !== undefined) {
