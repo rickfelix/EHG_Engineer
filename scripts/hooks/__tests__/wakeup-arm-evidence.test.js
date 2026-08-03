@@ -42,6 +42,63 @@ describe('kill switch — filter shape (FR-2)', () => {
     expect(ev.FLEET_BROADCAST_SD).toBe('__FLEET_ENFORCEMENT__');
     expect(ev.buildCoordinationFilter({ sessionId: SID, sinceIso: 'a', nowIso: 'b' })).toContain('target_sd.eq.');
   });
+
+  // POSTGREST FILTER INJECTION — confirmed LIVE by the SECURITY sub-agent, not theorised. A
+  // sessionId of `x),or(...)` escaped the and(...) group and widened the query: benign input
+  // returned 0 rows, the crafted one returned 3. It could not forge a kill row (partition
+  // re-checks target_sd/kind/expires_at in JS) but that was the ONLY thing containing it.
+  it('refuses to interpolate a non-UUID session id (injection)', () => {
+    const hostile = 'x),or(target_sd.eq.__FLEET_ENFORCEMENT__';
+    const f = ev.buildCoordinationFilter({ sessionId: hostile, sinceIso: 'S', nowIso: 'N' });
+    expect(f).not.toContain(hostile);
+    expect(f).not.toContain('sender_session');      // the sender leg is dropped entirely
+    expect(f).toContain('target_sd.eq.__FLEET_ENFORCEMENT__'); // kill switch still readable
+  });
+
+  it('still builds both legs for a well-formed session id', () => {
+    const f = ev.buildCoordinationFilter({ sessionId: SID, sinceIso: 'S', nowIso: 'N' });
+    expect(f).toContain(`sender_session.eq.${SID}`);
+    expect(f).toContain('target_sd.eq.__FLEET_ENFORCEMENT__');
+  });
+
+  // The invariant "scan ONLY this session's own rows" was previously enforced SOLELY by the
+  // interpolated SQL — recentSenderRows filtered on created_at alone. An invariant worth writing
+  // in a comment is worth enforcing where it is consumed.
+  it('recentSenderRows enforces the sender itself, not just the time window', () => {
+    const now = Date.now();
+    const rows = [
+      { sender_session: SID, created_at: new Date(now - 1000).toISOString(), body: 'mine' },
+      { sender_session: 'someone-else', created_at: new Date(now - 1000).toISOString(), body: 'theirs' },
+    ];
+    const kept = ev.recentSenderRows(rows, { nowMs: now, sessionId: SID });
+    expect(kept).toHaveLength(1);
+    expect(kept[0].body).toBe('mine');
+  });
+});
+
+describe('stdout muzzle honours the write callback', () => {
+  const hookSrc = fs.readFileSync(HOOK_PATH, 'utf8');
+
+  // `() => true` DROPS the callback. A transitive writer that waits for it would hang to the 10s
+  // hook timeout — and a timed-out Stop hook returns NO DECISION, the exact failure the budget
+  // work exists to prevent. Found by the SECURITY sub-agent.
+  it('no muzzle site discards the write callback', () => {
+    expect(hookSrc).not.toMatch(/process\.stdout\.write = \(\) => true/);
+    expect(hookSrc).toMatch(/const SWALLOW = \(_chunk, enc, cb\)/);
+  });
+
+  // Tests the REAL exported function rather than re-parsing its source — a source-derived copy
+  // can pass while the shipped one differs, which is the whole failure family this SD kept hitting.
+  it('SWALLOW invokes the callback in both node signatures and swallows the bytes', () => {
+    const { SWALLOW } = require(HOOK_PATH);
+    let cb2 = false;
+    expect(SWALLOW('x', () => { cb2 = true; })).toBe(true);
+    expect(cb2).toBe(true);                      // write(chunk, cb)
+    let cb3 = false;
+    expect(SWALLOW('x', 'utf8', () => { cb3 = true; })).toBe(true);
+    expect(cb3).toBe(true);                      // write(chunk, encoding, cb)
+    expect(SWALLOW('x')).toBe(true);             // no callback supplied — must not throw
+  });
 });
 
 describe('kill switch — partition (widening a shared query changes every consumer)', () => {
@@ -430,13 +487,39 @@ describe('step B — awaiting_tick is stamped only on real arm evidence (AC3, co
     expect(hookSrc).toMatch(/if \(armVerdict === 'armed'\)[\s\S]{0,300}setLoopState\(\s*sessionId\s*,\s*LOOP_STATE_AWAITING_TICK\s*\)/);
   });
 
-  // FR-B1: the recoverability write must SURVIVE. Deleting both would drop the seat out of
-  // charter-audit's parked check and dormancy-watchdog's :27 parse, losing the only sighting of
-  // this SD's target population.
-  it('expected_silence_until is still written UNCONDITIONALLY, outside the arm guard', () => {
-    const body = hookSrc.slice(hookSrc.indexOf('async function parkSessionRecoverable'));
-    const guardEnd = body.indexOf('}', body.indexOf('setLoopState('));
-    expect(body.slice(guardEnd).includes('expected_silence_until')).toBe(true);
+  // FR-B1: the recoverability write must SURVIVE. Moving it inside the arm guard drops unarmed
+  // seats out of charter-audit isParked:83 and dormancy-watchdog :27 — false starvation alarms,
+  // and the loss of this SD's only sighting of its own target population.
+  //
+  // THIS TEST WAS REWRITTEN BECAUSE THE PREVIOUS ONE COULD NOT FAIL. It asserted
+  // `body.slice(afterGuard).includes('expected_silence_until')` — a TEXT-ORDER check that stays
+  // true under the exact regression it names, since moving the call into the guard leaves the
+  // string later in the file either way. A mutation run (TESTING sub-agent, EXEC) moved the write
+  // inside the guard and all 107 tests stayed green. An assertion that survives its own mutant is
+  // decoration; the seam to do it properly already existed one test below.
+  it('writes expected_silence_until for EVERY verdict, armed or not (mutation-killing)', async () => {
+    const writerPath = path.resolve(__dirname, '../lib/session-telemetry-writer.cjs');
+    const writer = require(writerPath);
+    const origWrite = writer.writeTelemetryAwait;
+    const tracker = require(path.resolve(__dirname, '../../lib/sessions/loop-state-tracker.cjs'));
+    const origSet = tracker.setLoopState;
+    const silenceCalls = [];
+    writer.writeTelemetryAwait = async (sid, patch) => { silenceCalls.push(patch); };
+    tracker.setLoopState = async () => {};
+    try {
+      for (const armVerdict of ['armed', 'unarmed', 'unknown', undefined]) {
+        await hook.parkSessionRecoverable('11111111-2222-4333-8444-555555555555', { armVerdict });
+      }
+      // One recoverability write per call — the UNARMED ones are the whole point.
+      expect(silenceCalls).toHaveLength(4);
+      for (const patch of silenceCalls) {
+        expect(patch).toHaveProperty('expected_silence_until');
+        expect(Number.isNaN(Date.parse(patch.expected_silence_until))).toBe(false); // :27 must parse it
+      }
+    } finally {
+      writer.writeTelemetryAwait = origWrite;
+      tracker.setLoopState = origSet;
+    }
   });
 
   // Behavioural, not just source-shaped: the write must not fire for an unarmed or unknown turn.
