@@ -15,6 +15,11 @@
 -- chairman-gated ceremony with the approval row referenced. Approval to AUTHOR is not approval to
 -- APPLY, and this file does not apply itself.
 --
+-- @approved-by: codestreetlabs@gmail.com
+-- (Approver header added 2026-08-03 ~21:2xZ during the chairman's own apply session, at his
+-- terminal, under his direction. The email is the repo's git user.email — the chairman's Code
+-- Street Labs identity. Approval provenance: the SMS above + in-terminal walkthrough this hour.)
+--
 -- ============================================================================================
 -- WHAT IS WRONG TODAY (the defect this amends)
 -- ============================================================================================
