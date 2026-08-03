@@ -244,9 +244,31 @@ async function resolveSessionClaimedSdKey(sessionId) {
     const supabaseUrl = process.env.SUPABASE_URL;
     const serviceKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
     if (!supabaseUrl || !serviceKey || !sessionId) return null;
+    // SD-LEO-INFRA-CLAIM-LIFECYCLE-RELEASE-002 (FR-7): ORDER ONLY. With limit=1 and no ordering,
+    // a session holding several claims got an ARBITRARY heap row, so the guard could name a
+    // different SD run to run. Ordering makes the pick deterministic and prefers the row the
+    // session is actually working.
+    //
+    // THE FILTER IS DELIBERATELY NOT ADDED, and this is the load-bearing part. `is_working_on=eq.true`
+    // as a FILTER can EMPTY the set for a session holding exactly one claim with is_working_on=false.
+    // This function returns null on an empty set and its caller FAILS OPEN — so the filter would flip
+    // the guard from correctly BLOCKING to PERMITTING. An ORDER clause cannot empty a set; a FILTER
+    // can. That is the whole distinction.
+    //
+    // MEASURED 2026-08-03, AND THE MEASUREMENT IS A TRAP: 6 claiming sessions, ZERO currently in the
+    // at-risk state (the SD recorded 1 at authoring time, so it has since cleared). Anyone
+    // re-measuring today would find no counterexample and conclude the filter is safe. It is safe by
+    // COINCIDENCE — nothing prevents a session from holding one not-working claim tomorrow, and the
+    // failure is silent because a fail-open guard looks identical to a guard with nothing to block.
+    //
+    // Two further reasons the rest of the guard change stays in the last wave: a claude_sessions
+    // tiebreak is not implementable as a query change (PostgREST 400 PGRST200 — no FK to embed), and
+    // this same function is consumed elsewhere as `hasClaim` for AskUserQuestion, so narrowing the
+    // set changes behaviour for a genuine holder outside the stated blast radius.
     const url = supabaseUrl +
       '/rest/v1/strategic_directives_v2?claiming_session_id=eq.' +
-      encodeURIComponent(sessionId) + '&select=sd_key&limit=1';
+      encodeURIComponent(sessionId) +
+      '&select=sd_key&order=is_working_on.desc,updated_at.desc&limit=1';
     const resp = await Promise.race([
       fetch(url, { headers: { apikey: serviceKey, Authorization: 'Bearer ' + serviceKey } }),
       new Promise((_, reject) => setTimeout(() => reject(new Error('timeout')), 1500)),
