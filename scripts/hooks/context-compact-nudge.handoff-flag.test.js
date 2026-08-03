@@ -7,16 +7,23 @@ import fs from 'fs';
 import path from 'path';
 import os from 'os';
 import { fileURLToPath } from 'url';
+import { getHandoffFlagPath } from '../modules/handoff/cli/compact-after-handoff.js';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const HOOK_SCRIPT = path.join(__dirname, 'context-compact-nudge.js');
 
 const TEST_FLAG_DIR = path.join(os.tmpdir(), `leo-compact-test-${process.pid}`);
-const HANDOFF_FLAG = path.join(TEST_FLAG_DIR, 'compact-after-handoff.json');
-const COMPACTION_MARKER = path.join(TEST_FLAG_DIR, 'last-compaction.json');
 const STATE_DIR = path.join(os.tmpdir(), 'leo-context-nudge');
 const SESSION_ID = `test-handoff-flag-${process.pid}`;
 const STATE_FILE = path.join(STATE_DIR, `session-${SESSION_ID}.json`);
+// SD-LEO-INFRA-COMPACT-NUDGE-RACES-001: derived from the writer, not a fourth
+// hardcoded copy of the filename. When this was a literal, a change to the
+// writer's path would have left these tests writing where the hook never looks
+// — and every "expect no nudge" test below would have passed for that reason.
+const HANDOFF_FLAG = getHandoffFlagPath(
+  { LEO_COMPACT_FLAG_DIR: TEST_FLAG_DIR, CLAUDE_SESSION_ID: SESSION_ID }
+);
+const COMPACTION_MARKER = path.join(TEST_FLAG_DIR, 'last-compaction.json');
 
 function writeHandoffFlag(payload) {
   if (!fs.existsSync(TEST_FLAG_DIR)) fs.mkdirSync(TEST_FLAG_DIR, { recursive: true });
@@ -99,10 +106,18 @@ describe('context-compact-nudge — handoff flag consumption', () => {
     });
     const stdout = runHook();
     expect(stdout).not.toContain('LEAD-TO-PLAN complete');
+    // Load-bearing: the hook UNLINKS a stale flag. If the reader stopped
+    // looking at this path, the file would survive and this line would fail —
+    // which is what keeps the assertion above from passing vacuously.
     expect(fs.existsSync(HANDOFF_FLAG)).toBe(false);
   });
 
-  it('skips nudge when compaction marker is recent (cooldown)', () => {
+  // SD-LEO-INFRA-COMPACT-NUDGE-RACES-001 — the next two tests carry a positive
+  // control. Asserting only the ABSENCE of nudge text is satisfied just as well
+  // by a reader that never found the flag at all, so a filename change would
+  // have left them green while silently disconnecting writer from reader. Phase
+  // B removes the disqualifying condition and proves the same file DOES nudge.
+  it('skips nudge when compaction marker is recent (cooldown), but the flag itself is live', () => {
     if (!fs.existsSync(TEST_FLAG_DIR)) fs.mkdirSync(TEST_FLAG_DIR, { recursive: true });
     fs.writeFileSync(COMPACTION_MARKER, JSON.stringify({ timestamp: new Date().toISOString() }));
     writeHandoffFlag({
@@ -112,8 +127,13 @@ describe('context-compact-nudge — handoff flag consumption', () => {
       mode: 'nudge',
       timestamp: new Date().toISOString()
     });
-    const stdout = runHook();
-    expect(stdout).not.toContain('LEAD-TO-PLAN complete');
+    expect(runHook()).not.toContain('LEAD-TO-PLAN complete');
+    expect(fs.existsSync(HANDOFF_FLAG)).toBe(true);
+
+    // Phase B: same flag, marker gone, state reset.
+    fs.unlinkSync(COMPACTION_MARKER);
+    try { fs.unlinkSync(STATE_FILE); } catch { /* may not exist */ }
+    expect(runHook()).toContain('LEAD-TO-PLAN complete (SD SD-COOL)');
   });
 
   it('does nothing when flag is absent (regression: existing behavior preserved)', () => {
@@ -122,9 +142,20 @@ describe('context-compact-nudge — handoff flag consumption', () => {
     expect(stdout).not.toContain('LEAD-FINAL-APPROVAL');
   });
 
-  it('ignores flag with malformed payload (no tier)', () => {
+  it('ignores flag with malformed payload (no tier), and is not merely blind to the path', () => {
     writeHandoffFlag({ sd_id: 'SD-BAD', timestamp: new Date().toISOString() });
-    const stdout = runHook();
-    expect(stdout).not.toContain('complete');
+    expect(runHook()).not.toContain('complete');
+
+    // Phase B: same path, valid payload — proves the rejection above was a
+    // decision about the payload, not an inability to see the file.
+    try { fs.unlinkSync(STATE_FILE); } catch { /* may not exist */ }
+    writeHandoffFlag({
+      sd_id: 'SD-BAD',
+      handoff_type: 'LEAD-TO-PLAN',
+      tier: 'soft',
+      mode: 'nudge',
+      timestamp: new Date().toISOString()
+    });
+    expect(runHook()).toContain('LEAD-TO-PLAN complete (SD SD-BAD)');
   });
 });
