@@ -31,6 +31,7 @@ const { PLAN_CONTENT_MARKER } = require('../lib/sd-enrichment-markers.cjs');
 const { describeUnreadableAssignment } = require('../lib/fleet/assignment-target.cjs');
 const { parseSdDependencies } = require('../lib/utils/parse-sd-dependencies.cjs'); // QF-20260525-542
 const { buildRetentionAckPayload } = require('../lib/retention/retention-ack-marker.cjs'); // FR-7
+const { PROMOTION_ACK_KEY } = require('../lib/coordinator/promotion-ack.cjs'); // SIGNAL-ROUTER-AUTO-001 FR-8
 // SD-LEO-FIX-COORDINATOR-SWEEP-CLAIMED-001: shared dispatch-eligibility predicate (same one the
 // worker self_claim path uses) so CLAIM_FIX never re-affirms an orchestrator PARENT / dep-blocked SD.
 const { evaluateDispatchEligibility, classifyDispatchIneligibility, TEST_FIXTURE_KEY_RE } = require('../lib/fleet/claim-eligibility.cjs');
@@ -3322,6 +3323,19 @@ async function main() {
         .select('id, sender_session, created_at, payload')
         .eq('payload->>signal_type', 'stuck')
         .is('acknowledged_at', null)
+        // SD-LEO-INFRA-SIGNAL-ROUTER-AUTO-001 (FR-8) — WITHOUT THIS THE ROUTER FIX IS INERT.
+        // The router now leaves acknowledged_at null when it promotes a signal, so promoted
+        // type=stuck rows became eligible for this drain, which re-stamps acknowledged_at at the
+        // bottom of this block. Three of the nine measured swallowed signals are type=stuck: the
+        // drain would have re-acked them within the hour and put them straight back into the
+        // swallowed state, with every other acceptance criterion still passing.
+        //
+        // The severity gate below does not cover this: HELD_SEVERITIES protects rows whose sender
+        // is still LIVE, but senderIsDead() drains at any severity — and the condition that makes
+        // a signal most worth preserving (its sender has gone away) is exactly what makes it
+        // drainable. A promotion-marked row is already filed and awaiting disposition; it is not
+        // an unacked row rotting in the lane, which is what this drain exists to clear.
+        .is(`payload->>${PROMOTION_ACK_KEY}`, null)
         .order('id', { ascending: true })); // unique tiebreaker (FR-6)
     } catch { stuckSignals = []; } // prior behavior: read error ignored
     const stuck = stuckSignals || [];
