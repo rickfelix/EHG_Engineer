@@ -187,3 +187,31 @@ describe('SEC-GSB-2 — a WITHHELD run COUNTS and NAMES what it suppressed', () 
     }
   });
 });
+
+describe('SEC-GSB-2 follow-up — report-only returns what it SUPPRESSED, not what it minted', () => {
+  // MEASURED IN PRODUCTION, not hypothesised: the first live withheld run printed
+  // "suppressed 0 promotable group(s)" while its own log carried 34 [WITHHELD] lines. promoteAll
+  // returned `promoted`, which in report-only mode is 0 by construction. The number looked measured
+  // AND looked like good news — strictly worse than printing nothing, because it answers the
+  // question wrongly instead of leaving it open.
+  it('the count reaching the log is the callback return, so a wrong return is a wrong headline', async () => {
+    const logged = [];
+    const r = await gatedQfMint({}, {
+      engine: 'e', gauge: async () => 0,
+      measure: async () => decision(DEMAND_DECISION.WITHHELD),
+      record: async () => {}, log: (m) => logged.push(m),
+      onWithheld: async () => 34,
+    }, async () => 0);
+    expect(r.suppressed).toBe(34);
+    expect(logged.join('\n')).toMatch(/suppressed 34 promotable group/);
+  });
+
+  it('both minters return the suppressed counter in report-only mode', () => {
+    const read = (p) => require('node:fs').readFileSync(require.resolve(p), 'utf8');
+    for (const p of ['../../../scripts/feedback-fingerprint-promoter.mjs', '../../../scripts/promote-retro-action-items.mjs']) {
+      const s = read(p);
+      expect(s).toMatch(/return reportOnly \? suppressedCount : promoted;/);
+      expect(s).toMatch(/if \(reportOnly\) suppressedCount\+\+;/);
+    }
+  });
+});

@@ -93,7 +93,9 @@ let skippedBelowThreshold = 0;
 // Extracted so the demand gate can ENCLOSE the minting rather than merely precede it. A gate that
 // only returns a verdict is one forgotten `if` away from being decorative — and that omission is
 // invisible to a source-text guard test, which is all this script had.
+let suppressedCount = 0;
 async function promoteAll(reportOnly = false) {
+  suppressedCount = 0;
 for (const group of groups.values()) {
   if (!shouldPromote(group, THRESHOLD)) {
     skippedBelowThreshold++;
@@ -112,6 +114,7 @@ for (const group of groups.values()) {
   console.log(`  sample: ${group.sample_body.slice(0, 120)}`);
 
   if (!apply || reportOnly) {
+    if (reportOnly) suppressedCount++;
     console.log(reportOnly ? '  [WITHHELD] would have created a QF-candidate here - suppressed by belt demand.' : '  [DRY RUN] would create QF-candidate here.');
     continue;
   }
@@ -156,7 +159,10 @@ for (const group of groups.values()) {
     console.error(`  [PROMOTE_FAILED] create-quick-fix.js exited non-zero for fingerprint ${group.fingerprint.slice(0, 12)}: ${e.message}`);
   }
 }
-  return promoted;
+  // REPORT-ONLY RETURNS WHAT IT SUPPRESSED, NOT WHAT IT MINTED. Returning `promoted` here made the
+  // gate print "suppressed 0" on a run that suppressed 34 — a number that looked measured and looked
+  // like good news. In report-only mode nothing is ever promoted, so `promoted` is 0 by construction.
+  return reportOnly ? suppressedCount : promoted;
 }
 
 // DRY-RUN IS DELIBERATELY UNGATED. Without --apply nothing is minted, so there is no belt to
