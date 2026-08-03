@@ -378,7 +378,7 @@ function isHeadlessZombie(session, telemetry, nowMs) {
   return claimAgeMs > HEADLESS_ZOMBIE_MIN_MS;
 }
 // SD-LEO-INFRA-STALE-SWEEP-PID-LIVENESS-GUARD-001: PID-liveness guard for the conflict-eviction path.
-const { shouldHoldClaim } = require('../lib/fleet/claim-release-guard.cjs');
+const { shouldHoldClaim, refuseConflictEviction } = require('../lib/fleet/claim-release-guard.cjs');
 
 // SD-LEO-INFRA-STALE-SESSION-SWEEP-001 FR-1 — the columns every release seam in this file reads.
 //
@@ -2392,8 +2392,24 @@ async function main() {
   // the fixture. Fixtures never participate in keeper selection; they are bilaterally released later.
   const { isFixtureSession } = await import('../lib/fleet/session-predicates.mjs');
   const bySD = {};
+  // SD-LEO-INFRA-STALE-SESSION-SWEEP-001 / FR-3: DEDUPE BY session_id.
+  //
+  // This bucket decides who gets EVICTED, and its only filter was isFixtureSession. One session
+  // appearing twice therefore satisfied `arr.length > 1` and CONFLICTED WITH ITSELF: sorted[0]
+  // became the keeper and sorted[1] the evictee, the same row on both sides.
+  //
+  // DEFENCE-IN-DEPTH, NOT THE PRIMARY FIX, and the distinction matters. The known duplicate
+  // route — a LEFT JOIN fan-out on qf_active inside v_active_sessions — was already fixed live
+  // by QF-20260727-574 (LATERAL + LIMIT 1). A second dormant route remains: fapPaginate uses
+  // OFFSET pagination, which can repeat a row when the underlying set shifts between pages. So
+  // this guards a producer that is currently fixed and one that is not, and it must not be read
+  // as making FR-1/FR-2 redundant — FR-1 protects GENUINE multi-claimant conflicts, which no
+  // dedupe touches.
+  const seenSessionIds = new Set();
   classified.forEach(s => {
     if (isFixtureSession(s.session_id)) return; // fixture: never a conflict keeper/evictor
+    if (seenSessionIds.has(s.session_id)) return; // FR-3: a session cannot conflict with itself
+    seenSessionIds.add(s.session_id);
     if (!bySD[s.sd_key]) bySD[s.sd_key] = [];
     bySD[s.sd_key].push(s);
   });
@@ -2774,7 +2790,13 @@ async function main() {
   // 4a. Worktree conflict detection (SD-MAN-INFRA-WORKER-WORKTREE-SELF-001)
   // Detect multiple active sessions on the same feature branch (excludes main/QF)
   const branchSessions = new Map();
+  // FR-3, second grouping site. Non-destructive (this one only emits a WARNING), but a
+  // WORKTREE_CONFLICT naming the same session twice is a false alarm an operator acts on, and
+  // an alarm that cries wolf is how a real one gets ignored. Same invariant, same one-line shape.
+  const seenBranchSessionIds = new Set();
   for (const s of classified.filter(c => c.status === 'ACTIVE' && c.current_branch && c.current_branch !== 'main')) {
+    if (seenBranchSessionIds.has(s.session_id)) continue;
+    seenBranchSessionIds.add(s.session_id);
     if (!branchSessions.has(s.current_branch)) branchSessions.set(s.current_branch, []);
     branchSessions.get(s.current_branch).push(s);
   }
@@ -2812,6 +2834,18 @@ async function main() {
     for (const evict of evictees) {
       // Skip if already released in step 4
       if (dead.find(d => d.session_id === evict.session_id)) continue;
+
+      // SD-LEO-INFRA-STALE-SESSION-SWEEP-001 / FR-2 + FR-6 — refusals that must precede any
+      // mutation. Both live in lib/fleet/claim-release-guard.cjs as a pure function so the tested
+      // path IS the shipped path; see refuseConflictEviction() for why each one exists.
+      const refusal = refuseConflictEviction({ evict, keeper, bucketSize: claimants.length });
+      if (refusal.refuse) {
+        const line = 'EVICTION_REFUSED[' + refusal.code + '] on ' + sdId + ' — ' + refusal.detail;
+        // keeper_is_evictee is a corrupt bucket an operator should see; classified_alive is the
+        // guard doing its ordinary job, so it is an action rather than a warning.
+        if (refusal.code === 'keeper_is_evictee') warnings.push(line); else actions.push(line);
+        continue;
+      }
 
       // SD-LEO-INFRA-STALE-SWEEP-PID-LIVENESS-GUARD-001 (FR-2/FR-3): never evict a claimant whose
       // PID is ALIVE — a parked-but-live worker with an older heartbeat must not lose its claim to
@@ -2860,6 +2894,43 @@ async function main() {
           await clearAndReopenQf(supabase, sdId, { expectedHolder: evict.session_id });
         }
         actions.push('CONFLICT on ' + sdId + ': released ' + evict.session_id + tag + ' (kept ' + keeper.session_id + ')');
+
+        // SD-LEO-INFRA-STALE-SESSION-SWEEP-001 / FR-4 — PERSIST THE EVIDENCE.
+        //
+        // Keeper identity was stdout-only, which is precisely why the 2026-07-27 eviction can be
+        // corroborated but never PROVEN: whether it was a self-eviction is unfalsifiable from the
+        // database. Recording keeper, evictee, bucket size and the classifier's own verdict makes
+        // the next occurrence decidable instead of arguable.
+        //
+        // session_lifecycle_events, not claude_sessions.metadata (PLAN decision 2026-08-02): both
+        // are DDL-free, but an append-only event survives the release that clears the seat, and a
+        // metadata blob on a row the sweep is actively blanking is the worst place to keep the
+        // record of what the sweep did to it.
+        //
+        // FAIL-SOFT, and that direction is deliberate: evidence-writing must never be able to
+        // block or reverse a release that already committed. A lost audit row costs a future
+        // argument; a throw here would strand the claim this loop just freed.
+        try {
+          await supabase.from('session_lifecycle_events').insert({
+            event_type: 'SWEEP_CONFLICT_EVICTION',
+            session_id: evict.session_id,
+            reason: 'SWEEP_CONFLICT_RESOLUTION',
+            metadata: {
+              sd_key: sdId,
+              keeper_session_id: keeper.session_id,
+              evictee_session_id: evict.session_id,
+              bucket_size: claimants.length,
+              evictee_status: evict.status ?? null,
+              evictee_is_stale: evict.isStale ?? null,
+              evictee_source_side_reason: evict.sourceSideReason ?? null,
+              evictee_heartbeat_age_seconds: evict.heartbeat_age_seconds ?? null,
+              keeper_heartbeat_age_seconds: keeper.heartbeat_age_seconds ?? null,
+              guard_hold: evictGuard.hold ?? null,
+              guard_reason: evictGuard.reason ?? null,
+              sd: 'SD-LEO-INFRA-STALE-SESSION-SWEEP-001',
+            },
+          });
+        } catch { /* fail-open: never let an audit write undo a completed release */ }
 
         // Send coordination message to the evicted session so it picks up other work
         conflictEvicted.push(evict);
