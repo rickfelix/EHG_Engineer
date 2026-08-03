@@ -63,6 +63,50 @@ CREATE INDEX IF NOT EXISTS drive_reports_generated_at_idx
   ON public.drive_reports (generated_at DESC);
 
 -- ---------------------------------------------------------------------------
+-- APPEND-ONLY OBSERVATIONS — the boundary on the C4 ruling, enforced not documented.
+--
+-- The ruling that permits storing a value at all (coordinator 640f3ebc) covers OBSERVATIONS:
+-- a number stamped generated_at with its citation and predicate attached is a measurement with
+-- its instrument, not copied state. The ruling's stated boundary is that this holds ONLY while
+-- the observation is append-only — "if any path UPDATES a stored observation in place, it stops
+-- being an observation and becomes copied state again (the delta baseline silently rewrites)".
+--
+-- That boundary is load-bearing for section 5. Report-over-report deltas compare N against N+1;
+-- if N can be edited afterwards, the baseline moves and a delta silently becomes meaningless
+-- while continuing to render a number. Nothing above this line prevented that.
+--
+-- BUT THE ROW IS NOT WHOLLY IMMUTABLE, and that is the whole difficulty: consumption_receipts
+-- MUST be writable, because C1 requires each consumer to stamp its OWN receipt after the fact.
+-- So this is partial immutability — the observation fields freeze, the receipt field does not.
+-- A blanket immutability trigger would have been simpler and would have broken C1.
+-- ---------------------------------------------------------------------------
+CREATE OR REPLACE FUNCTION public.drive_reports_freeze_observations()
+RETURNS trigger
+LANGUAGE plpgsql
+AS $freeze$
+BEGIN
+  IF NEW.sections IS DISTINCT FROM OLD.sections THEN
+    RAISE EXCEPTION 'drive_reports.sections is append-only: a stored observation that can be rewritten is copied state, and section-5 deltas silently lose their baseline (report id %)', OLD.id;
+  END IF;
+  IF NEW.drive_score IS DISTINCT FROM OLD.drive_score THEN
+    RAISE EXCEPTION 'drive_reports.drive_score is append-only: rewriting a past score rewrites the trend it is measured against (report id %)', OLD.id;
+  END IF;
+  IF NEW.generated_at IS DISTINCT FROM OLD.generated_at THEN
+    RAISE EXCEPTION 'drive_reports.generated_at is append-only: it is the observation timestamp, not a bookkeeping field (report id %)', OLD.id;
+  END IF;
+  -- consumption_receipts and metadata are DELIBERATELY writable. Receipts are stamped by each
+  -- consumer after the producer is done (C1), so freezing them would break the requirement
+  -- this table exists to serve.
+  RETURN NEW;
+END
+$freeze$;
+
+DROP TRIGGER IF EXISTS drive_reports_freeze_observations_trg ON public.drive_reports;
+CREATE TRIGGER drive_reports_freeze_observations_trg
+  BEFORE UPDATE ON public.drive_reports
+  FOR EACH ROW EXECUTE FUNCTION public.drive_reports_freeze_observations();
+
+-- ---------------------------------------------------------------------------
 -- Posture: service-role only. Asserted, not inherited.
 -- ---------------------------------------------------------------------------
 ALTER TABLE public.drive_reports ENABLE ROW LEVEL SECURITY;
@@ -116,6 +160,17 @@ BEGIN
     WHERE table_schema = 'public' AND table_name = 'drive_reports'
       AND grantee IN ('anon', 'authenticated')
   ), 'drive_reports: a non-service grant exists — this table is now PERMISSION-CLASS and requires chairman approval';
+
+  -- The append-only boundary on the C4 ruling. Without this trigger a stored observation is
+  -- rewritable, which turns it back into copied state and silently moves the baseline every
+  -- section-5 delta is measured against. Asserted here because the ruling explicitly asked
+  -- for one assertion pinning it — a boundary that is only in a comment is not a boundary.
+  ASSERT EXISTS (
+    SELECT 1 FROM pg_trigger
+    WHERE tgrelid = 'public.drive_reports'::regclass
+      AND tgname = 'drive_reports_freeze_observations_trg'
+      AND NOT tgisinternal
+  ), 'drive_reports: the append-only trigger is missing — stored observations would be rewritable and section-5 deltas would lose their baseline';
 END
 $verify$;
 
