@@ -150,8 +150,19 @@ describe('the instrument itself — before trusting a single ASSERT', () => {
     // THE CONTROL THAT MAKES EVERY OTHER POSTURE TEST MEAN ANYTHING. With
     // plpgsql.check_asserts = off, every ASSERT in the migration silently succeeds and the
     // deploy-time posture check certifies nothing while looking identical to a passing one.
-    const { rows } = await client.query('SHOW plpgsql.check_asserts');
-    expect(rows[0].plpgsql_check_asserts).toBe('on');
+    // current_setting() with an explicit alias rather than SHOW: `SHOW plpgsql.check_asserts`
+    // returns its column named EXACTLY 'plpgsql.check_asserts' — dotted, not underscored — so
+    // rows[0].plpgsql_check_asserts is undefined and this assertion failed on the first real CI
+    // run (30853982928) for a key-name guess rather than for the condition it exists to check.
+    // MEASURED against a live instance: SHOW yields {"plpgsql.check_asserts":"on"} while
+    // current_setting yields {"v":"on"}. Aliasing removes the guess entirely.
+    //
+    // It failed CLOSED, which is the only reason this was cheap: an instrument control written as
+    // a truthy check would have passed on undefined and certified an unarmed instrument.
+    const { rows } = await client.query(
+      "SELECT current_setting('plpgsql.check_asserts', true) AS check_asserts",
+    );
+    expect(rows[0].check_asserts).toBe('on');
 
     // And prove it behaviourally rather than trusting the setting: a deliberately false ASSERT
     // must raise. Reading the GUC is a claim about configuration; this is the configuration
