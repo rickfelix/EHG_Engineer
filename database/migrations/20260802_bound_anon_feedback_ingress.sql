@@ -229,8 +229,9 @@ COMMIT;
 -- therefore proves only that RETURNING refused — never that the write did. Every refusal claimed
 -- below must hold under BOTH variants, and the control must LAND under both.
 --
--- Do not restate this as "42501 is ambiguous because RETURNING fails the read policy." That
--- framing was carried through several rounds of this SD's own evidence and is REFUTED — see
+-- Do not reintroduce the older framing, which held that a 42501 could not be trusted BECAUSE the
+-- RETURNING clause had failed the read policy. That framing was carried through several rounds of
+-- this SD's own evidence and is REFUTED — see
 -- strategic_directives_v2.metadata.method_correction_20260803. It misnames the hazard, and the
 -- misnaming matters: it points at the READ policy and so invites a fix there, while the actual
 -- divergence is between the two WRITE forms. The correction previously lived only in SD metadata
