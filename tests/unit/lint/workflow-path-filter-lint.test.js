@@ -125,6 +125,32 @@ describe('collectPathEntries', () => {
     expect(collectPathEntries({})).toEqual([]);
     expect(collectPathEntries({ on: 'push' })).toEqual([]);
   });
+
+  // REGRESSION — this shape was SILENTLY SKIPPED by the first implementation, which guarded
+  // on Array.isArray and moved on. A scalar `paths:` is off-spec for GitHub Actions, but
+  // declining to examine it is the very behaviour this lint exists to abolish: the failure is
+  // never "the guard said no", it is "the guard never looked". Found by adversarial review,
+  // not by the original suite, which is why it now has a test of its own.
+  it('examines a SCALAR paths: value instead of skipping it', () => {
+    const got = collectPathEntries({ on: { pull_request: { paths: 'scripts/**/*.{js,ts}' } } });
+    expect(got).toHaveLength(1);
+    expect(got[0].entry).toBe('scripts/**/*.{js,ts}');
+  });
+
+  it('flags a brace-glob written as a scalar paths-ignore value', () => {
+    const yamlSrc = "name: S\non:\n  push:\n    paths-ignore: 'docs/**/*.{md,mdx}'\njobs:\n  n:\n    runs-on: ubuntu-latest\n";
+    const res = findBraceGlobEntries(yamlSrc, { filename: 'scalar.yml' });
+    expect(res.ok).toBe(false);
+    expect(res.violations).toHaveLength(1);
+    expect(res.violations[0].key).toBe('paths-ignore');
+  });
+
+  it('still ignores a scalar that is perfectly legal', () => {
+    // The non-flagging twin, so the normalisation cannot be mistaken for flag-everything.
+    const got = collectPathEntries({ on: { pull_request: { paths: 'scripts/**/*.js' } } });
+    expect(got).toHaveLength(1);
+    expect(hasBraceAlternation(got[0].entry)).toBe(false);
+  });
 });
 
 describe('findBraceGlobEntries — the two-sided control over the fixture', () => {

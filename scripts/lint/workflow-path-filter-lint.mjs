@@ -108,9 +108,14 @@ export function collectPathEntries(doc) {
   for (const [trigger, cfg] of Object.entries(on)) {
     if (!cfg || typeof cfg !== 'object') continue;
     for (const key of ['paths', 'paths-ignore']) {
-      const arr = cfg[key];
-      if (!Array.isArray(arr)) continue;
-      for (const entry of arr) {
+      const raw = cfg[key];
+      if (raw === undefined || raw === null) continue;
+      // A scalar `paths: 'scripts/**/*.{js,ts}'` is not the shape GitHub Actions documents,
+      // but skipping it because it is not an Array is precisely the failure this whole lint
+      // exists to prevent: a guard that silently declines to look at something. Normalise
+      // instead, so an off-spec shape is still EXAMINED rather than passed over in silence.
+      const entries = Array.isArray(raw) ? raw : [raw];
+      for (const entry of entries) {
         if (typeof entry === 'string') out.push({ trigger, key, entry });
       }
     }

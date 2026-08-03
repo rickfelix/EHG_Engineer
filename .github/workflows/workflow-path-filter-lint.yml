@@ -21,7 +21,10 @@ name: Workflow Path-Filter Lint
 #
 # Reviewer's at-a-glance check, which is the property the guard enforces applied to itself:
 #     sed -n '/^on:/,/^concurrency:/p' .github/workflows/workflow-path-filter-lint.yml | grep -c '{'
-# must print 0.
+# must print 0. NOTE: that heuristic is for THIS FILE ONLY. Run against a workflow whose
+# comments discuss brace-globs (alter-default-override-lint.yml does) it prints a non-zero
+# count for comment text, which is a false positive — the authority is the lint itself, which
+# reads the PARSED paths: arrays and never the surrounding prose.
 #
 # Precedent: ssl-bypass-lint.yml is an always-on lint whose subject is also .github/workflows/**.
 # Unlike that one, this lint does NOT exclude its own file from the scan — a guard that skips
@@ -41,6 +44,12 @@ on:
 concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}
   cancel-in-progress: true
+
+# Least privilege: this job only reads the checkout. It runs on `pull_request` (never
+# `pull_request_target`), so a fork PR already gets a read-only token and no secrets; the
+# explicit grant makes that the stated contract rather than a default someone could change.
+permissions:
+  contents: read
 
 jobs:
   workflow-path-filter-lint:
