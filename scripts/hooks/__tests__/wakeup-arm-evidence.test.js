@@ -430,13 +430,39 @@ describe('step B — awaiting_tick is stamped only on real arm evidence (AC3, co
     expect(hookSrc).toMatch(/if \(armVerdict === 'armed'\)[\s\S]{0,300}setLoopState\(\s*sessionId\s*,\s*LOOP_STATE_AWAITING_TICK\s*\)/);
   });
 
-  // FR-B1: the recoverability write must SURVIVE. Deleting both would drop the seat out of
-  // charter-audit's parked check and dormancy-watchdog's :27 parse, losing the only sighting of
-  // this SD's target population.
-  it('expected_silence_until is still written UNCONDITIONALLY, outside the arm guard', () => {
-    const body = hookSrc.slice(hookSrc.indexOf('async function parkSessionRecoverable'));
-    const guardEnd = body.indexOf('}', body.indexOf('setLoopState('));
-    expect(body.slice(guardEnd).includes('expected_silence_until')).toBe(true);
+  // FR-B1: the recoverability write must SURVIVE. Moving it inside the arm guard drops unarmed
+  // seats out of charter-audit isParked:83 and dormancy-watchdog :27 — false starvation alarms,
+  // and the loss of this SD's only sighting of its own target population.
+  //
+  // THIS TEST WAS REWRITTEN BECAUSE THE PREVIOUS ONE COULD NOT FAIL. It asserted
+  // `body.slice(afterGuard).includes('expected_silence_until')` — a TEXT-ORDER check that stays
+  // true under the exact regression it names, since moving the call into the guard leaves the
+  // string later in the file either way. A mutation run (TESTING sub-agent, EXEC) moved the write
+  // inside the guard and all 107 tests stayed green. An assertion that survives its own mutant is
+  // decoration; the seam to do it properly already existed one test below.
+  it('writes expected_silence_until for EVERY verdict, armed or not (mutation-killing)', async () => {
+    const writerPath = path.resolve(__dirname, '../lib/session-telemetry-writer.cjs');
+    const writer = require(writerPath);
+    const origWrite = writer.writeTelemetryAwait;
+    const tracker = require(path.resolve(__dirname, '../../lib/sessions/loop-state-tracker.cjs'));
+    const origSet = tracker.setLoopState;
+    const silenceCalls = [];
+    writer.writeTelemetryAwait = async (sid, patch) => { silenceCalls.push(patch); };
+    tracker.setLoopState = async () => {};
+    try {
+      for (const armVerdict of ['armed', 'unarmed', 'unknown', undefined]) {
+        await hook.parkSessionRecoverable('11111111-2222-4333-8444-555555555555', { armVerdict });
+      }
+      // One recoverability write per call — the UNARMED ones are the whole point.
+      expect(silenceCalls).toHaveLength(4);
+      for (const patch of silenceCalls) {
+        expect(patch).toHaveProperty('expected_silence_until');
+        expect(Number.isNaN(Date.parse(patch.expected_silence_until))).toBe(false); // :27 must parse it
+      }
+    } finally {
+      writer.writeTelemetryAwait = origWrite;
+      tracker.setLoopState = origSet;
+    }
   });
 
   // Behavioural, not just source-shaped: the write must not fire for an unarmed or unknown turn.
