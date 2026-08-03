@@ -28,6 +28,8 @@ import { extractReferences, findViolations } from './schema-reference-extract.mj
 // SD-LEO-INFRA-SCHEMA-LINT-DEGRADED-FAILOPEN-001: a degraded --diff run (unresolvable base ->
 // whole-repo fallback) is ADVISORY and must not block; the pure helper encodes that exit rule.
 import { computeExitCode } from './schema-lint-exit.mjs';
+// QF-20260802-742: the new-vs-pre-existing split, kept pure so both polarities are fixture-testable.
+import { violationKey, partitionViolations } from './schema-lint-scope.mjs';
 
 const SNAPSHOT_PATH = 'database/schema-reference-snapshot.json';
 const ALLOWLIST_PATH = 'scripts/lint/schema-reference-allowlist.json';
@@ -47,6 +49,14 @@ const alertOnDrift = args.includes('--alert');
 // A full sweep re-surfaces the pre-existing phantom backlog (not NEW drift), so we must NOT fire a
 // critical schema-drift alert on it (adversarial-review finding) — only a genuine diff-scoped result is.
 let degradedFallback = false;
+// QF-20260802-742: the merge-base SHA a --diff run scoped itself to. Printed in every report so a
+// disputed scan scope is auditable, and used as the baseline for the new-vs-pre-existing split.
+let mergeBase = null;
+// QF-20260802-742: in CI the working tree is not a developer's — it is a fresh checkout whose only
+// "local modifications" are line-ending renormalisations. Scope to COMMITTED changes there.
+// --committed-only forces it anywhere; --include-worktree opts back in for debugging a CI run.
+const committedOnly = args.includes('--committed-only')
+  || (!!process.env.CI && !args.includes('--include-worktree'));
 
 function loadJson(p, fallback) {
   try { return JSON.parse(readFileSync(p, 'utf8')); } catch { return fallback; }
@@ -73,14 +83,37 @@ function candidateFiles() {
   if (mode === 'diff') {
     try {
       const base = process.env.SCHEMA_LINT_BASE || 'origin/main';
-      // Committed changes vs the merge base + staged + working-tree changes —
-      // the latter two are empty in CI but make local pre-push linting correct.
-      const out = [
-        execSync(`git diff --name-only --diff-filter=ACMR ${base}...HEAD`, { encoding: 'utf8', timeout: 30000 }),
-        execSync('git diff --name-only --diff-filter=ACMR --cached', { encoding: 'utf8', timeout: 30000 }),
-        execSync('git diff --name-only --diff-filter=ACMR', { encoding: 'utf8', timeout: 30000 }),
-        execSync('git ls-files --others --exclude-standard', { encoding: 'utf8', timeout: 30000 }),
-      ].join('\n');
+      // QF-20260802-742: resolve the merge base EXPLICITLY instead of leaning on the `...`
+      // shorthand. The SHA becomes printable, so two runs whose scope is disputed can be
+      // compared directly — on PR #6738 the checked set drifted 79 -> 140 files across 24
+      // minutes with the violation count pinned, and there was no way to tell which run was
+      // right. An explicit two-dot diff from that SHA also cannot widen if origin/main
+      // advances between the fetch and the diff.
+      mergeBase = execSync(`git merge-base ${base} HEAD`, { encoding: 'utf8', timeout: 30000 }).trim();
+      // QF-20260802-742: git merge-base exits 1 with no common ancestor (verified against a
+      // deliberately shallowed clone), so the throw above normally covers it. This guard closes
+      // the exit-0-but-empty case explicitly: a falsy mergeBase would make every baseline lookup
+      // return null, and EVERY pre-existing violation would then read as new — the original bug,
+      // silently restored. Routed into the same catch so it degrades to advisory, never blocks.
+      if (!mergeBase) throw new Error(`merge-base ${base}..HEAD resolved empty (shallow clone?)`);
+      const sources = [
+        execSync(`git diff --name-only --diff-filter=ACMR ${mergeBase}..HEAD`, { encoding: 'utf8', timeout: 30000 }),
+      ];
+      // QF-20260802-742: the previous code ALWAYS unioned staged + working-tree + untracked
+      // files, on the stated assumption that "the latter two are empty in CI". They are not.
+      // CI checkout renormalises line endings, so every CRLF-affected file surfaces as an
+      // unstaged modification and joins this PR's scope — the measured 5-file -> 33-file
+      // inflation that blocked #6738 on 33 violations with ZERO in its own 12-file diff.
+      // Locally they are genuinely wanted for pre-push linting, so they are dropped only
+      // where the working tree is not the developer's: CI.
+      if (!committedOnly) {
+        sources.push(
+          execSync('git diff --name-only --diff-filter=ACMR --cached', { encoding: 'utf8', timeout: 30000 }),
+          execSync('git diff --name-only --diff-filter=ACMR', { encoding: 'utf8', timeout: 30000 }),
+          execSync('git ls-files --others --exclude-standard', { encoding: 'utf8', timeout: 30000 }),
+        );
+      }
+      const out = sources.join('\n');
       return [...new Set(out.split('\n').map(s => s.trim()).filter(Boolean))]
         .filter(f => CODE_RE.test(f))
         .filter(f => RUNTIME_DIRS.includes(f.split('/')[0]))
@@ -112,8 +145,27 @@ function candidateFilesAll() {
   return out;
 }
 
+/** Violations already present in `file` at the merge base. null when there is no baseline. */
+function baselineViolationKeys(file) {
+  if (!mergeBase) return null; // --all sweep or degraded fallback: nothing to compare against
+  let prev;
+  try {
+    prev = execSync(`git show ${mergeBase}:${file}`, {
+      encoding: 'utf8', timeout: 30000, maxBuffer: 32 * 1024 * 1024, stdio: ['ignore', 'pipe', 'ignore'],
+    });
+  } catch {
+    return new Set(); // file did not exist at the merge base -> every violation in it is genuinely new
+  }
+  return new Set(
+    findViolations(extractReferences(prev, file), snapshot)
+      .filter(v => !allowedTables.has(v.table))
+      .map(violationKey)
+  );
+}
+
 const files = candidateFiles();
-const allViolations = [];
+const allViolations = [];   // NEW drift — blocks
+const preExisting = [];     // present at the merge base — reported, never blocks
 for (const file of files) {
   if (allowedFiles.has(file)) continue;
   let text;
@@ -121,7 +173,15 @@ for (const file of files) {
   const refs = extractReferences(text, file);
   const violations = findViolations(refs, snapshot)
     .filter(v => !allowedTables.has(v.table));
-  allViolations.push(...violations);
+  if (violations.length === 0) continue;
+  // QF-20260802-742: split per VIOLATION, not per file. A PR that legitimately touches a file
+  // carrying old violations must not inherit them — that is how main's ~378-violation backlog
+  // became individual PRs' problem. This also disarms the CRLF mechanism on its own: a merely
+  // renormalised file has byte-identical violations at both ends, so all of them classify as
+  // pre-existing and none block.
+  const split = partitionViolations(violations, baselineViolationKeys(file));
+  allViolations.push(...split.newViolations);
+  preExisting.push(...split.preExisting);
 }
 
 // FR-C1: opt-in breakage surfacing — emit ONE schema-drift system_alerts row ONLY for a genuine
@@ -139,10 +199,18 @@ if (alertOnDrift && allViolations.length > 0 && mode === 'diff' && !degradedFall
   });
 }
 
+// QF-20260802-742: the scan scope, stated on every run. Two runs of the same head+base must
+// report the same merge_base and the same files_checked; when they do not, this line is the
+// evidence. Without it the 79-vs-140 drift on #6738 was unfalsifiable from the logs alone.
+const scope = `scope: merge_base=${mergeBase ? mergeBase.slice(0, 8) : 'none'} files=${files.length} committed_only=${committedOnly}`;
+
 if (asJson) {
-  console.log(JSON.stringify({ mode, files_checked: files.length, violations: allViolations }, null, 1));
+  console.log(JSON.stringify({
+    mode, files_checked: files.length, merge_base: mergeBase, committed_only: committedOnly,
+    violations: allViolations, pre_existing: preExisting,
+  }, null, 1));
 } else if (allViolations.length === 0) {
-  console.log(`✅ schema-reference-lint (${mode}): ${files.length} file(s) checked, 0 violations`);
+  console.log(`✅ schema-reference-lint (${mode}): ${files.length} file(s) checked, 0 new violations  [${scope}]`);
 } else if (degradedFallback) {
   // Degraded full-repo sweep (the --diff base was unresolvable): these are the pre-existing
   // backlog, NOT new drift, and the check is NON-BLOCKING (advisory). Print as a warning.
@@ -169,6 +237,21 @@ if (asJson) {
   );
 }
 
+// QF-20260802-742: the pre-existing backlog gets its own NON-BLOCKING report. main is red at
+// ~378 violations in --all mode, so before this split the workflow header's promise that the
+// phantom backlog "never blocks a PR" was false in practice for any PR touching an affected file.
+// Reported (not silenced) so the backlog stays visible and someone can still choose to clear it.
+if (preExisting.length > 0 && !asJson) {
+  console.warn(
+    `\nℹ️  ${preExisting.length} PRE-EXISTING violation(s) in touched files — present at merge base ` +
+    `${mergeBase ? mergeBase.slice(0, 8) : '?'}, NOT introduced by this change, NOT blocking:`
+  );
+  for (const v of preExisting) console.warn(`   ${v.file}:${v.line}  missing ${v.missing}  (${v.kind})`);
+  console.warn(`   To clear the backlog: npm run schema:snapshot:lint (commit the result) or update ${ALLOWLIST_PATH}.`);
+}
+
 // FR-1: a degraded --diff run (unresolvable base) is advisory and exits 0; a resolvable-base run
 // keeps full diff-scoped blocking. An explicit --all run keeps degradedFallback=false -> unchanged.
+// QF-20260802-742: `allViolations` now counts NEW drift only — pre-existing violations are in
+// `preExisting` and are deliberately absent from this decision.
 process.exitCode = computeExitCode({ violations: allViolations.length, degradedFallback });

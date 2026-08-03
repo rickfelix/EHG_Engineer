@@ -13,13 +13,20 @@ const waves = [
 ];
 
 describe('buildGanttSvg (FR-1)', () => {
-  it('returns well-formed SVG containing each wave title (falls back to progress_pct when item_counts absent)', () => {
+  // SD-LEO-INFRA-ROADMAP-WAVES-PROGRESS-001 (FR-2): this test previously ASSERTED the fallback —
+  // it required '71%' and '20%' to appear for waves that carry no item_counts. QF-20260719-275
+  // removed the fallback from the primary path but left it as a fallback AND pinned it here, so
+  // the surviving half of the defect was defended by the suite: anyone deleting it was told they
+  // had broken something. The rung-level values it asserts (71, 20) are the very numbers the live
+  // table still holds across four and two waves respectively. Now inverted.
+  it('renders each wave title and emits NO percentage when item_counts is absent', () => {
     const svg = buildGanttSvg(waves);
     expect(svg.startsWith('<svg')).toBe(true);
     expect(svg).toContain('Wave 1: Foundation');
     expect(svg).toContain('Wave 2: Revenue rails');
-    expect(svg).toContain('71%');
-    expect(svg).toContain('20%');
+    expect(svg).not.toContain('71%');
+    expect(svg).not.toContain('20%');
+    expect(svg).toContain('not yet scoped');
   });
 
   it('handles an empty waves array without throwing', () => {
@@ -48,9 +55,15 @@ describe('buildGanttSvg (FR-1)', () => {
     expect(svg).not.toContain('>0%<');
   });
 
-  it('treats item_counts.total === 0 as no signal and falls back to progress_pct', () => {
+  // THE REGRESSION FIXTURE, in miniature. The artifact delivered to the chairman on 2026-07-22
+  // (chairman-daily-review/2026-07-22.png) drew a 75% filled bar over a wave with ZERO items,
+  // because total === 0 fell back to the rung value. A zero-item wave has no per-wave progress:
+  // the honest render is an empty track, not a plausible number.
+  it('emits NO percentage for a wave with zero items — not a fallback, no number at all', () => {
     const svg = buildGanttSvg([{ title: 'Empty wave', progress_pct: 45, item_counts: { total: 0, promoted: 0 } }]);
-    expect(svg).toContain('45%');
+    expect(svg).not.toContain('45%');
+    expect(svg).not.toMatch(/>\d+%</);
+    expect(svg).toContain('not yet scoped');
   });
 
   // QF-20260719-275: long titles overflowed under the bar area into the right-edge pct labels.

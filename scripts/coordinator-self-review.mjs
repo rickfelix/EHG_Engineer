@@ -16,6 +16,8 @@ const { insertCoordinationRow, isFullUuid } = createRequire(import.meta.url)('..
 import { guardMutation, resolveOwnSessionId } from '../lib/coordinator-mutation-guard.mjs';
 // SD-LEO-INFRA-ROLE-RUBRIC-SCORE-001 FR-2: graded coordinator self-score (shared role-agnostic core).
 import { COORDINATOR_CONFIG } from '../lib/coordinator/self-score-config.mjs';
+// SD-LEO-INFRA-GATE-SIDE-BELT-001: belt depth is read through the ONE eligibility-gated gauge.
+import { countDispatchableBacklog } from '../lib/fleet/belt-depth.cjs';
 import { stampLastFired } from '../lib/periodic-liveness/stamp-last-fired.js';
 const roleScoreCore = createRequire(import.meta.url)('../lib/governance/role-self-score.cjs');
 
@@ -196,7 +198,18 @@ export async function selfReviewMain() {
   // with the common tri-party score schema, idempotent on review_key. FAIL-OPEN.
   if (process.env.COORD_SELF_SCORE_V1 === 'on') {
     try {
-      const { count: beltDepth } = await db.from('strategic_directives_v2').select('id', { count: 'exact', head: true }).eq('status', 'draft').is('claiming_session_id', null);
+      // SD-LEO-INFRA-GATE-SIDE-BELT-001: this was the raw
+      //   .eq('status','draft').is('claiming_session_id', null)
+      // head-count — VERBATIM the query lib/fleet/belt-depth.cjs:4-6 records itself as replacing,
+      // still live here and feeding a governance SELF-SCORE via lib/coordinator/self-score-config.mjs.
+      // It read 41 where the eligibility-gated gauge reads 22: the 19-row gap is human_action_required
+      // holds, orchestrator parents, a needs-review row and a test fixture — none of them dispatchable.
+      // Scoring proactive_sourcing against the raw number rewards a belt that only LOOKS full, which is
+      // the precise defect QF-20260725-089 created the shared gauge to abolish; it converted two of the
+      // four consumers and this one was missed.
+      //
+      // `dispatchable`, NOT `raw`: raw is the pre-eligibility count and would reproduce the old value.
+      const { dispatchable: beltDepth } = await countDispatchableBacklog(db);
       // Reuse the SAME `workers` set the solicitation loop above already computed (partitionParticipants
       // + isFullUuid filter) rather than re-deriving from `sess` -- keeps this signal consistent with
       // that loop's own Adam-exclusion behavior (adversarial review catch, 2026-07-04): when

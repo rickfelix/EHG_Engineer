@@ -26,26 +26,74 @@ const {
 } = require('../../lib/breakage/active-canary-probes.cjs');
 const { recordSystemAlert } = require('../../lib/breakage/alert-writer.cjs');
 
-const RLS_PROBE_TABLE = 'session_coordination'; // governance table; anon INSERT is RLS-denied (verified 42501)
+// ATTRIBUTION, corrected. This previously read "anon INSERT is RLS-denied (verified 42501)" — which
+// is this SD's own anti-pattern committed in a comment: 42501 was observed and the enforcement was
+// attributed to RLS without checking WHICH mechanism produced it. Measured 2026-08-03:
+// session_coordination has relrowsecurity=true but exactly ONE policy (service_role_full_access,
+// PERMISSIVE, cmd=SELECT), so there is NO INSERT policy at all — and anon's table grants are
+// REFERENCES/SELECT/TRIGGER, with no INSERT. A MISSING GRANT raises the SAME SQLSTATE 42501 as an RLS
+// WITH CHECK violation. So what this probe actually holds is the GRANT; `DISABLE ROW LEVEL SECURITY`
+// would not move its verdict. Naming the class 'RLS-regression' overstates what the probe can see.
+// Fixing an instrument does not fix its attribution — the two are separate claims.
+const RLS_PROBE_TABLE = 'session_coordination'; // anon INSERT denied by a MISSING GRANT (42501), not by a policy
 const PAYMENT_WEBHOOK_TABLES = ['webhook_events', 'payment_webhook_events']; // candidates — absent today (Stripe test-mode)
 
-/** anon INSERT a uniquely-marked canary row; RLS must DENY it (42501). On regression the row is cleaned up. */
+/**
+ * anon INSERT a uniquely-marked canary row, gathering THREE LEGS of evidence
+ * (SD-LEO-INFRA-SURVEY-EVERY-PERMISSION-001). 42501 alone cannot distinguish a refusal from a write
+ * that landed and whose RETURNING merely failed the read policy — and the SAME row via a bare
+ * `.insert()` can land with `error:null`. So we observe the error, read back as service_role, and if
+ * that still looks like refusal we re-attempt WITHOUT `.select()` and read back again.
+ *
+ * CLEANUP IS BY MARKER, CONFIRMED BY COUNT. Deleting by returned id was satisfiable by an empty id
+ * loop while a bare-insert row persisted — and this is `session_coordination`, a live table an inbox
+ * consumer reads. Any row carrying the marker is removed regardless of which leg created it.
+ */
 async function probeRls(anon, service, nowMs) {
   const marker = `__RLS_CANARY_PROBE_${nowMs}__`;
-  let result;
+  const row = { target_session: marker, message_type: 'INFO', subject: marker, body: 'RLS-regression canary probe (auto-delete)', sender_type: 'system' };
+  // readback failed ⇒ absent evidence, NOT evidence of absence. The `catch` alone did NOT achieve
+  // that: postgrest-js resolves failures as {data:null,error} instead of throwing, so the catch never
+  // ran and every failed readback became rows:[] — "observed, and absent", which is one of the two
+  // conjuncts a three-leg REFUSED requires. Checking `error` is the fix.
+  const readByMarker = async () => {
+    try {
+      const { data, error } = await service.from(RLS_PROBE_TABLE).select('id').eq('subject', marker);
+      if (error) return null;
+      return { rows: Array.isArray(data) ? data : [] };
+    } catch { return null; }
+  };
+
+  const evidence = {};
   try {
-    result = await anon.from(RLS_PROBE_TABLE)
-      .insert({ target_session: marker, message_type: 'INFO', subject: marker, body: 'RLS-regression canary probe (auto-delete)', sender_type: 'system' })
-      .select('id');
+    evidence.withReturning = await anon.from(RLS_PROBE_TABLE).insert(row).select('id');
   } catch (e) {
-    result = { error: { code: e.code, message: e.message }, data: null };
+    evidence.withReturning = { error: { code: e.code, message: e.message }, data: null };
   }
-  const verdict = classifyRlsProbe(result);
-  if (verdict.breakage && verdict.detail && Array.isArray(verdict.detail.inserted_ids)) {
-    for (const id of verdict.detail.inserted_ids) {
-      try { await service.from(RLS_PROBE_TABLE).delete().eq('id', id); } catch { /* best-effort; row is clearly marked */ }
+  evidence.readbackAfterReturning = await readByMarker();
+
+  // Leg 3 — only when legs 1-2 look like refusal. This is the leg that catches an open door.
+  const looksRefused = ((evidence.withReturning && evidence.withReturning.error && evidence.withReturning.error.code) === '42501')
+    && evidence.readbackAfterReturning && evidence.readbackAfterReturning.rows.length === 0;
+  if (looksRefused) {
+    try {
+      evidence.bareInsert = await anon.from(RLS_PROBE_TABLE).insert(row);
+    } catch (e) {
+      evidence.bareInsert = { error: { code: e.code, message: e.message } };
     }
+    evidence.readbackAfterBare = await readByMarker();
   }
+
+  const verdict = classifyRlsProbe(evidence);
+
+  // Unconditional marker cleanup, then CONFIRM by count — never trust the delete's silence.
+  try {
+    await service.from(RLS_PROBE_TABLE).delete().eq('subject', marker);
+    const after = await readByMarker();
+    if (after && after.rows.length > 0) {
+      verdict.detail = { ...(verdict.detail || {}), cleanup_residue: after.rows.length, marker };
+    }
+  } catch { /* best-effort; the row is clearly marked for a human sweep */ }
   return verdict;
 }
 
