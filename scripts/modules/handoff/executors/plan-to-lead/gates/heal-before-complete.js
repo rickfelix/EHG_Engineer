@@ -20,7 +20,7 @@
  *   - Threshold resolved in priority order:
  *     1. app_config 'heal_gate_threshold' (global override)
  *     2. SD-type-aware tier (feature/security=90, infrastructure/docs=80)
- *     3. DEFAULT_HEAL_THRESHOLD (85) as final fallback
+ *     3. SD_TYPE_THRESHOLDS._default as final fallback (same table — no second constant)
  *   - Tolerance buffer: app_config 'heal_gate_tolerance_buffer' (default 3)
  *   - Corrective SDs: always use GRADE.A (93) via grade-scale.js
  * - Vision heal: ADVISORY — logged but does not block
@@ -31,9 +31,31 @@ import { GATE_REASON_CODES, MAX_HEAL_ITERATIONS } from './gate-reason-codes.js';
 // Shared threshold policy (SD-PAT-FIX-WRITER-CONSUMER-ASYMMETRY-001): consume the same
 // single source as the LEAD-TO-PLAN vision-score gate instead of dynamic-importing
 // across sibling executor directories (the QF-20260506-295 band-aid this replaces).
-import { countAddressableDimensions, calculateDynamicThreshold } from '../../../../../../lib/handoff/threshold-resolver.js';
+// SD-FDBK-FIX-HEAL-BEFORE-COMPLETE-001 FR-2: the TABLE is now imported alongside the functions.
+// This module previously imported only the functions while keeping its OWN SD_TYPE_THRESHOLDS —
+// so the comment above ("single source as the LEAD-TO-PLAN vision-score gate") described an
+// intention the import did not implement, and the two tables drifted apart unobserved.
+import { countAddressableDimensions, calculateDynamicThreshold, SD_TYPE_THRESHOLDS } from '../../../../../../lib/handoff/threshold-resolver.js';
 
-const DEFAULT_HEAL_THRESHOLD = 85;
+/**
+ * Is this rubric_snapshot an sd-heal snapshot? — SD-FDBK-FIX-HEAL-BEFORE-COMPLETE-001 FR-3.
+ *
+ * EXPORTED SO IT CAN BE TESTED. The predicate used to be an inline `s.rubric_snapshot?.mode ===
+ * 'sd-heal'`, which is correct for object snapshots and quietly wrong-shaped for the 161 rows that
+ * store rubric_snapshot as a STRING (a raw LLM prompt): `?.mode` on a string is undefined, so the
+ * optional-chain hides that a non-object ever arrived. Naming the shapes makes the string case a
+ * decision instead of an accident.
+ *
+ * @param {object|string|null|undefined} snapshot
+ * @returns {boolean}
+ */
+export function isSdHealSnapshot(snapshot) {
+  if (!snapshot || typeof snapshot !== 'object' || Array.isArray(snapshot)) return false;
+  return snapshot.mode === 'sd-heal';
+}
+
+// DEFAULT_HEAL_THRESHOLD (85) DELETED — it was the surviving half of the duplicate this SD exists
+// to remove. The fallback now reads SD_TYPE_THRESHOLDS._default from the canonical table.
 const DEFAULT_TOLERANCE_BUFFER = 3;
 const AUTO_HEAL_TIMEOUT_MS = 120_000; // 120 seconds (increased from 60s — LLM calls need headroom)
 const FAST_HEAL_TIMEOUT_MS = 30_000; // 30 seconds for fast Haiku path
@@ -284,23 +306,28 @@ Respond with ONLY a JSON object: {"score": <0-100>, "reasoning": "<one sentence>
  * and documentation SDs use a lower bar since auto-heal scoring
  * produces scores in the 80-90 range for non-code-heavy SDs.
  */
-const SD_TYPE_THRESHOLDS = {
-  feature: 90,
-  security: 90,
-  enhancement: 85,
-  refactor: 85,
-  infrastructure: 80,
-  documentation: 80,
-  // `bugfix` is the canonical db-stored value (sd-key-generator maps user input
-  // `fix` → `bugfix` at the synonym layer; the phantom `fix: 85` key was removed
-  // by SD-FDBK-INFRA-TYPE-SOURCE-TRUTH-001 since post-mapping nothing reaches
-  // this lookup with `'fix'`).
-  // Threshold lower than feature/security because bugfix SDs address a narrow slice
-  // of dimensions and are mathematically unable to hit higher thresholds against the
-  // full vision rubric. A follow-up SD should port type-aware dimension filtering
-  // from GATE_VISION_SCORE's SD_TYPE_ADDRESSABLE_DIMENSIONS into this gate.
-  bugfix: 60,
-};
+// SD-FDBK-FIX-HEAL-BEFORE-COMPLETE-001 FR-2: THE LOCAL TABLE IS DELETED. It lived here while this
+// module imported only the FUNCTIONS from lib/handoff/threshold-resolver.js, so two tables governed
+// one decision and nothing compared them. MEASURED disagreement at deletion — four types, not the
+// five the SD description claimed:
+//     enhancement    85 -> 80
+//     refactor       85 -> 70
+//     documentation  80 -> 70
+//     bugfix         60 -> 70
+// feature, security and infrastructure AGREED, so the drift was partial, which is exactly why it
+// survived: any spot-check that happened to land on one of those three confirmed the tables matched.
+// SIX KEYS WERE MISSING HERE ENTIRELY and now resolve instead of falling through:
+//     governance, database, maintenance, protocol, orchestrator, _default
+// The missing keys are the larger live effect: 4 in-flight ORCHESTRATOR SDs move 85 -> 70 via an
+// ABSENT key rather than a disagreeing value, while the four types listed above have almost no
+// in-flight population (0/0/0/5, and the 5 bugfix SDs are unreachable — validation_gate_registry
+// 3197ce73 has sd_type=bugfix applicability=DISABLED, honoured at BaseExecutor.js:403 and
+// gate-policy-resolver.js:66). A blast-radius claim scoped to the disagreeing VALUES reports roughly
+// zero impact and is wrong; the impact is in the absences.
+//
+// The bugfix rationale that used to live here — "narrow dimension slice, mathematically unable to
+// hit the full-rubric bar" — is not lost: it is the narrowing problem, addressed by FR-1's
+// rubric-aware resolution rather than by a second table holding a compensating constant.
 
 /**
  * Read a single config value from the canonical `app_config` table (key/value).
@@ -343,7 +370,24 @@ async function readAppConfigValue(supabase, key) {
  * Resolution order:
  *   1. app_config 'heal_gate_threshold' (explicit global override)
  *   2. SD-type-aware tier from SD_TYPE_THRESHOLDS
- *   3. DEFAULT_HEAL_THRESHOLD (85)
+ *   3. SD_TYPE_THRESHOLDS._default — the SAME table, not a second constant
+ *
+ * FR-2 COMPLETED HERE. Deleting the duplicate TABLE left a duplicate SCALAR, which is the same
+ * defect one branch down: step 2 tested SD_TYPE_THRESHOLDS[sdType], so the canonical _default (80)
+ * was reachable ONLY if sd_type were literally the string "_default", and every unrecognised type
+ * fell through to a gate-local `DEFAULT_HEAL_THRESHOLD = 85`. Two constants five points apart still
+ * governed one decision.
+ *
+ * The test that should have caught it is the sharpest instance of the class this SD is about: it is
+ * named "carries a _default so an unknown sd_type resolves rather than falling through" and it
+ * PASSED — because it asked the TABLE whether _default exists, not the GATE whether it uses it. The
+ * assertion and the deliverable were one word apart and shared no code path.
+ *
+ * MEASURED BLAST RADIUS of adopting 80: 41 SDs carry an sd_type absent from the table
+ * (uat 20, docs 11, implementation 5, ux_debt 4, discovery_spike 1) and ALL 41 ARE TERMINAL —
+ * zero in-flight. Those five names are also a real gap worth its own work: `docs` is not
+ * `documentation`, so it has silently been taking the fallback rather than the tier it looks like
+ * it should get. Out of scope here; recorded rather than quietly fixed.
  *
  * @param {Object} supabase
  * @param {string} [sdType] - The SD type (feature, infrastructure, etc.)
@@ -359,13 +403,17 @@ async function loadHealThreshold(supabase, sdType) {
     }
   }
 
-  // 2. SD-type-aware tier
-  if (sdType && SD_TYPE_THRESHOLDS[sdType] != null) {
+  // 2. SD-type-aware tier.
+  // Object.hasOwn, NOT a truthiness or != null test: `SD_TYPE_THRESHOLDS['constructor']` resolves
+  // to an INHERITED Function, which is not nullish, so a prototype-named sd_type would return a
+  // Function as the threshold. The typeof check is the second half — together they make an
+  // unrecognised OR prototype-named type fall to _default instead of resolving to something absurd.
+  if (sdType && Object.hasOwn(SD_TYPE_THRESHOLDS, sdType) && typeof SD_TYPE_THRESHOLDS[sdType] === 'number') {
     return { threshold: SD_TYPE_THRESHOLDS[sdType], source: `sd_type:${sdType}` };
   }
 
-  // 3. Default fallback
-  return { threshold: DEFAULT_HEAL_THRESHOLD, source: 'default' };
+  // 3. Default — from the canonical table, so ONE representation governs the decision.
+  return { threshold: SD_TYPE_THRESHOLDS._default, source: 'sd_type:_default' };
 }
 
 /**
@@ -504,34 +552,40 @@ export function createHealBeforeCompleteGate(supabase) {
       let healError = null;
       let healScores = null;
 
-      // First try: get the most recent sd-heal mode score
-      const { data: sdHealScores } = await supabase
+      // SD-FDBK-FIX-HEAL-BEFORE-COMPLETE-001 FR-3: ONE SELECTION STRATEGY.
+      //
+      // This previously tried `.containedBy('rubric_snapshot', {mode:'sd-heal'})` first and fell back
+      // to a client-side filter, under a comment that already suspected the truth ("containedBy may
+      // not work for jsonb"). containedBy asks whether the STORED object is a SUBSET of {mode}, so
+      // any snapshot carrying arch_key/criteria/latency_ms/summary/vision_key is excluded by
+      // construction. It is not dead, which would have been safer — MEASURED, it matches 8 of 6055
+      // rows (one real snapshot plus seven empty objects). So the primary path fires roughly 0.1% of
+      // the time, and on exactly those rows the gate selects by a DIFFERENT rule than it uses the
+      // other 99.9% of the time. A branch that rare is a branch nobody has ever seen run; keeping
+      // both strategies meant the untested one decided the rare cases.
+      //
+      // Removed rather than repaired: the client-side filter below is the path that has actually
+      // been selecting scores all along, so this is deleting an unused alternative, not changing the
+      // rule. It also drops a round-trip that almost always returned nothing.
+      const { data: allScores, error: allErr } = await supabase
         .from('eva_vision_scores')
         .select('id, sd_id, total_score, threshold_action, rubric_snapshot, scored_at')
         .eq('sd_id', sdKey)
-        .containedBy('rubric_snapshot', { mode: 'sd-heal' })
         .order('scored_at', { ascending: false })
-        .limit(1);
+        .limit(20);
 
-      // containedBy may not work for jsonb — fall back to fetching all and filtering
-      if (sdHealScores && sdHealScores.length > 0) {
-        healScores = sdHealScores;
+      healError = allErr;
+      if (allScores && allScores.length > 0) {
+        // A FIFTH snapshot shape exists that no prior reading modelled: 161 rows store
+        // rubric_snapshot as a STRING (a raw LLM prompt), where `?.mode` yields undefined. Those
+        // rows are correctly excluded from the sd-heal set here — but note they remain eligible as
+        // the `allScores[0]` fallback, which is how a non-sd-heal rubric reaches the comparison.
+        // That selection breadth is FR-1's subject, not FR-3's; naming it so the next reader does
+        // not mistake this filter for the guarantee.
+        const sdHealMode = allScores.filter((s) => isSdHealSnapshot(s.rubric_snapshot));
+        healScores = sdHealMode.length > 0 ? [sdHealMode[0]] : [allScores[0]];
       } else {
-        // Fetch recent scores and filter client-side
-        const { data: allScores, error: allErr } = await supabase
-          .from('eva_vision_scores')
-          .select('id, sd_id, total_score, threshold_action, rubric_snapshot, scored_at')
-          .eq('sd_id', sdKey)
-          .order('scored_at', { ascending: false })
-          .limit(20);
-
-        healError = allErr;
-        if (allScores && allScores.length > 0) {
-          const sdHealMode = allScores.filter(s => s.rubric_snapshot?.mode === 'sd-heal');
-          healScores = sdHealMode.length > 0 ? [sdHealMode[0]] : [allScores[0]];
-        } else {
-          healScores = allScores;
-        }
+        healScores = allScores;
       }
 
       if (healError) {
@@ -752,8 +806,21 @@ export function createHealBeforeCompleteGate(supabase) {
       // Without this, narrow-domain SDs (e.g. chairman-UI Reject dialog scoring 75/90 on
       // the 8 dims it actually addresses) are permanently blocked at heal even when those
       // addressable dims score well. Skip for corrective SDs (already use GRADE.A).
+      // SD-FDBK-FIX-HEAL-BEFORE-COMPLETE-001 FR-4: NAME WHY NARROWING DID NOT HAPPEN.
+      //
+      // Every no-op below used to look identical from outside — dynamicAdjustment stayed null and,
+      // in the failure case, the reason went to console.debug and vanished. "The threshold was not
+      // narrowed" and "narrowing FAILED and nobody noticed" rendered the same, which is the shape
+      // this SD is about: a silent absence reading as a deliberate decision.
+      //
+      // The SD text says three causes. There are FIVE distinguishable outcomes, and the extra two
+      // are not pedantry — skipped_corrective is a policy decision while no_dimension_scores is a
+      // data defect, and treating them as one no-op is what made this invisible.
       let dynamicAdjustment = null;
-      if (!isCorrective) {
+      let narrowingOutcome = null;
+      if (isCorrective) {
+        narrowingOutcome = { outcome: 'skipped_corrective', reason: 'corrective SDs use GRADE.A and are deliberately exempt from narrowing' };
+      } else {
         try {
           const { data: scoreDims } = await supabase
             .from('eva_vision_scores')
@@ -765,7 +832,11 @@ export function createHealBeforeCompleteGate(supabase) {
             .select('metadata')
             .eq('id', sdUuid)
             .single();
-          if (scoreDims?.dimension_scores && sdForOverride?.metadata) {
+          if (!scoreDims?.dimension_scores) {
+            narrowingOutcome = { outcome: 'no_dimension_scores', reason: `score ${latestScore.id} carries no dimension_scores — narrowing had no input` };
+          } else if (!sdForOverride?.metadata) {
+            narrowingOutcome = { outcome: 'no_sd_metadata', reason: 'SD metadata is absent/null — vision_addressable_dimensions could not be read' };
+          } else {
             const { addressable, total } = countAddressableDimensions(
               sdType,
               scoreDims.dimension_scores,
@@ -774,17 +845,44 @@ export function createHealBeforeCompleteGate(supabase) {
             const adjusted = calculateDynamicThreshold(threshold, addressable, total);
             if (adjusted !== threshold) {
               dynamicAdjustment = { base: threshold, adjusted, addressable, total };
+              narrowingOutcome = { outcome: 'narrowed', reason: `${addressable}/${total} addressable`, addressable, total };
               console.log(`   📐 Dynamic threshold (per-SD addressable dims): ${threshold} → ${adjusted} (${addressable}/${total} addressable, MIN_ADJUSTED_THRESHOLD_RATIO floor)`);
               threshold = adjusted;
+            } else {
+              // A GENUINE no-change, and the only no-op that is actually good news.
+              narrowingOutcome = { outcome: 'no_change', reason: `${addressable}/${total} addressable yields the same threshold`, addressable, total };
             }
           }
         } catch (e) {
-          console.debug('[HealBeforeComplete] dynamic threshold adjustment suppressed:', e?.message || e);
+          // FAILED, not "decided not to". This is the case that used to be indistinguishable from
+          // every line above it, and it is the only one where the threshold in force is not the
+          // threshold anyone intended.
+          narrowingOutcome = { outcome: 'failed', reason: e?.message || String(e) };
+          console.warn(`   ⚠️  Dynamic threshold narrowing FAILED (threshold stays ${threshold}, which may be stricter than intended): ${e?.message || e}`);
         }
+      }
+      if (narrowingOutcome && narrowingOutcome.outcome !== 'narrowed') {
+        console.log(`   📐 Dynamic threshold: NOT narrowed [${narrowingOutcome.outcome}] — ${narrowingOutcome.reason}`);
       }
 
       console.log(`   SD Heal Score: ${sdHealScore}/100 (threshold: ${threshold})`);
-      console.log(`   Score Age: ${scoreAge} min`);
+      // SD-FDBK-FIX-HEAL-BEFORE-COMPLETE-001 FR-5: scoreAge DOES NOT GATE, AND NOW SAYS SO.
+      //
+      // It was computed here and reported in four places while participating in zero comparisons.
+      // A number printed beside a verdict reads as an input to that verdict; every maintainer who
+      // saw "Score Age: 361 min" reasonably assumed staleness was being enforced somewhere. It was
+      // not — a 6-hour-old score was consumed as original_score for the SD that motivated this SD.
+      //
+      // THE DECISION IS THAT IT MUST NOT GATE, and the reason is this SD's own thesis: an age
+      // threshold would silently become a FOURTH instrument disagreeing with the other three. Age
+      // only tells you whether the score is stale if you already know the WORK changed in between,
+      // and the gate cannot know that — heal re-scores produce new rows seconds apart on unchanged
+      // work (measured: 88 then 66 ten seconds later, different rubrics). Gating on age would reject
+      // a correct score for being old and accept a wrong one for being fresh.
+      // So it is labelled ADVISORY rather than made load-bearing, and stays visible for the human
+      // reading the log. If a future SD wants staleness enforced, the missing input is a
+      // work-changed-since signal, not a bigger number here.
+      console.log(`   Score Age: ${scoreAge} min (ADVISORY — does not gate; see FR-5)`);
       console.log(`   Score ID: ${latestScore.id}`);
       if (!isSDHeal) {
         console.log(`   ⚠️  Score mode: ${latestScore.rubric_snapshot?.mode || 'unknown'} (expected: sd-heal)`);
