@@ -60,14 +60,16 @@ describe('FR-9 seam 2: reaffirmClaimColumns is importable', () => {
     expect(m.reaffirmClaimColumns.length).toBeGreaterThanOrEqual(3); // (supabase, sdKey, sessionId)
   });
 
-  // The defect FR-6 will fix, asserted as PRESENT so the fix has a falsifiable starting point.
-  it('documents the CAS asymmetry FR-6 exists to close', () => {
+  // This assertion originally pinned the CAS asymmetry as PRESENT, so FR-6 would have a falsifiable
+  // starting point. FR-6 has now closed it, so the assertion flips to the fixed state — BOTH branches
+  // guard. Keeping it here (rather than only in the FR-6 suite) means the seam file itself notices
+  // if the guard is ever dropped again.
+  it('BOTH branches now compare-and-set — the asymmetry FR-6 closed', () => {
     const src = fs.readFileSync(path.join(root, 'lib/claim-guard.mjs'), 'utf8');
     const fn = src.slice(src.indexOf('export async function reaffirmClaimColumns'));
     const body = fn.slice(0, fn.indexOf('\n}\n'));
-    expect(body).toMatch(/claimQuickFix\(supabase, sdKey, sessionId\)/);        // QF branch: CAS-hardened
-    expect(body).toMatch(/\.update\(\{ claiming_session_id: sessionId/);         // SD branch: bare update
-    expect(body).toMatch(/\.eq\('sd_key', sdKey\)/);                             // ...with no compare-and-set
+    expect(body).toMatch(/claimQuickFix\(supabase, sdKey, sessionId\)/);                    // QF: shared fail-closed CAS
+    expect(body).toMatch(/claiming_session_id\.is\.null,claiming_session_id\.eq\./);        // SD: null-OR-self CAS
   });
 });
 
