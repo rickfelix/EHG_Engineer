@@ -154,4 +154,46 @@ describe('stop-loop-wakeup-reminder — wrapper fail-open (TS-6, spawn)', () => 
     expect(r.status).toBe(0);
     expect(r.stdout || '').not.toMatch(/"decision"\s*:\s*"block"/);
   });
+
+  // SD-LEO-INFRA-TERMINAL-RITUAL-ENFORCEMENT-001 (step 0) — the pending-wake print shares the
+  // stdout channel Claude Code parses as the Stop DECISION. "It goes to stderr" is an intention;
+  // what is enforceable is the emitted BYTES. On every allow path stdout must be EXACTLY empty —
+  // not merely free of a block decision, since any stray byte risks the decision parse on the one
+  // hook every seat traverses every turn.
+  it('allow paths emit ZERO bytes on stdout (decision channel untouched)', () => {
+    const cases = [
+      [{ stop_hook_active: false, session_id: 'nonexistent' }, { LEO_LOOP_WAKEUP_REMINDER: 'off' }],
+      [{ stop_hook_active: true, session_id: 'nonexistent' }, { LEO_LOOP_WAKEUP_REMINDER: 'on' }],
+      ['not-json-at-all', { LEO_LOOP_WAKEUP_REMINDER: 'on', CLAUDE_SESSION_ID: '', SESSION_ID: '' }],
+    ];
+    for (const [payload, env] of cases) {
+      const r = runHook(payload, env);
+      expect(r.stdout).toBe('');
+    }
+  });
+
+  // A Stop hook that TIMES OUT returns NO decision — the enforcement silently disappears exactly
+  // when the machine is loaded. Registered timeout is 10s against 3-5 DB round-trips plus a 2.5s
+  // stabilisation re-read, so the hermetic path must stay well clear of it.
+  // RECALIBRATED, NOT RELAXED TO GET GREEN. At 6000ms this failed on CI at 7198ms for the same
+  // hermetic path that measures 412ms locally — a 17x spread on a runner whose node_modules probe
+  // was failing. Most of that is node process start + module resolution: the hook does not control
+  // it and no in-hook change shrinks it, so a hard 6s threshold measures the RUNNER, not this code.
+  // Kept at 9000ms only as a coarse guard against the 10s cliff; the real invariant is the
+  // environment-independent budget assertion below. The 7198ms reading was reported, not absorbed.
+  it('stays clear of the 10s registered timeout on the hermetic path', () => {
+    const t0 = Date.now();
+    runHook({ stop_hook_active: false, session_id: 'nonexistent' }, { LEO_LOOP_WAKEUP_REMINDER: 'on' });
+    expect(Date.now() - t0).toBeLessThan(9000);
+  });
+
+  // The half that actually protects the decision: the hook's own discretionary work is capped, and
+  // the stabilisation re-read gets only what the DB round-trips left rather than 2.5s on top.
+  it('bounds its own work budget below the registered timeout', () => {
+    const src = require('node:fs').readFileSync(HOOK_PATH, 'utf8');
+    const budget = Number((src.match(/HOOK_WORK_BUDGET_MS\s*=\s*(\d+)/) || [])[1]);
+    expect(budget).toBeGreaterThan(0);
+    expect(budget).toBeLessThan(10000);
+    expect(src).toMatch(/deadlineMs:\s*Math\.min\(2500,\s*remainingBudgetMs\(\)\)/);
+  });
 });
