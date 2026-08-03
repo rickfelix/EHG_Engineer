@@ -179,14 +179,23 @@ BEGIN
     END IF;
 
     -- 2. THE CORRELATION LANDED. Guards the exact silent failure described at clause (3): if the
-    --    outer reference had bound to the subquery alias, Postgres would render the predicate with
-    --    `f.source_type IS NOT DISTINCT FROM f.source_type`. Assert the rendered expression
-    --    references the OUTER table name inside the correlation, and does NOT contain the
-    --    self-comparison form.
-    IF wc !~ 'f\.source_type IS NOT DISTINCT FROM feedback\.source_type' THEN
-        RAISE EXCEPTION 'clause (3) is not correlated to the inserting row: expected f.source_type IS NOT DISTINCT FROM feedback.source_type, got: %', wc;
+    --    outer reference had bound to the subquery alias, the rendered predicate would contain a
+    --    self-comparison and NO reference to the outer table name.
+    --
+    --    LESSON STAMPED AT APPLY TIME (2026-08-03, first live run): the original assertion matched
+    --    the literal source spelling `f.source_type IS NOT DISTINCT FROM feedback.source_type` —
+    --    but pg_get_expr renders the NORMALIZED form `NOT f.source_type::text IS DISTINCT FROM
+    --    feedback.source_type::text`, so the check REJECTED A CORRECT APPLY and rolled it back.
+    --    The header of this very file warns that pg_get_expr output is a rendering, not source;
+    --    the instrument built to catch the mis-scoping committed the file's own documented trap.
+    --    Fixed to key on what normalization PRESERVES: outer columns render UNQUALIFIED at the
+    --    top level, so the table-qualified `feedback.source_type` token appears ONLY as a
+    --    correlated outer reference inside the subquery — and a collapsed binding renders both
+    --    sides as `f.source_type` with no `feedback.` token at all.
+    IF wc !~ 'feedback\.source_type' THEN
+        RAISE EXCEPTION 'clause (3) is not correlated to the inserting row: no outer reference feedback.source_type in the rendered predicate, got: %', wc;
     END IF;
-    IF wc ~ 'f\.source_type IS NOT DISTINCT FROM f\.source_type' THEN
+    IF wc ~ 'f\.source_type(::text)? IS DISTINCT FROM f\.source_type(::text)?' THEN
         RAISE EXCEPTION 'clause (3) correlation collapsed to a self-comparison (always TRUE) — the outer reference bound to the subquery alias.';
     END IF;
 
