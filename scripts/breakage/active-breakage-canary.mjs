@@ -29,23 +29,57 @@ const { recordSystemAlert } = require('../../lib/breakage/alert-writer.cjs');
 const RLS_PROBE_TABLE = 'session_coordination'; // governance table; anon INSERT is RLS-denied (verified 42501)
 const PAYMENT_WEBHOOK_TABLES = ['webhook_events', 'payment_webhook_events']; // candidates — absent today (Stripe test-mode)
 
-/** anon INSERT a uniquely-marked canary row; RLS must DENY it (42501). On regression the row is cleaned up. */
+/**
+ * anon INSERT a uniquely-marked canary row, gathering THREE LEGS of evidence
+ * (SD-LEO-INFRA-SURVEY-EVERY-PERMISSION-001). 42501 alone cannot distinguish a refusal from a write
+ * that landed and whose RETURNING merely failed the read policy — and the SAME row via a bare
+ * `.insert()` can land with `error:null`. So we observe the error, read back as service_role, and if
+ * that still looks like refusal we re-attempt WITHOUT `.select()` and read back again.
+ *
+ * CLEANUP IS BY MARKER, CONFIRMED BY COUNT. Deleting by returned id was satisfiable by an empty id
+ * loop while a bare-insert row persisted — and this is `session_coordination`, a live table an inbox
+ * consumer reads. Any row carrying the marker is removed regardless of which leg created it.
+ */
 async function probeRls(anon, service, nowMs) {
   const marker = `__RLS_CANARY_PROBE_${nowMs}__`;
-  let result;
+  const row = { target_session: marker, message_type: 'INFO', subject: marker, body: 'RLS-regression canary probe (auto-delete)', sender_type: 'system' };
+  const readByMarker = async () => {
+    try {
+      const { data } = await service.from(RLS_PROBE_TABLE).select('id').eq('subject', marker);
+      return { rows: Array.isArray(data) ? data : [] };
+    } catch { return null; }   // readback failed ⇒ absent evidence, NOT evidence of absence
+  };
+
+  const evidence = {};
   try {
-    result = await anon.from(RLS_PROBE_TABLE)
-      .insert({ target_session: marker, message_type: 'INFO', subject: marker, body: 'RLS-regression canary probe (auto-delete)', sender_type: 'system' })
-      .select('id');
+    evidence.withReturning = await anon.from(RLS_PROBE_TABLE).insert(row).select('id');
   } catch (e) {
-    result = { error: { code: e.code, message: e.message }, data: null };
+    evidence.withReturning = { error: { code: e.code, message: e.message }, data: null };
   }
-  const verdict = classifyRlsProbe(result);
-  if (verdict.breakage && verdict.detail && Array.isArray(verdict.detail.inserted_ids)) {
-    for (const id of verdict.detail.inserted_ids) {
-      try { await service.from(RLS_PROBE_TABLE).delete().eq('id', id); } catch { /* best-effort; row is clearly marked */ }
+  evidence.readbackAfterReturning = await readByMarker();
+
+  // Leg 3 — only when legs 1-2 look like refusal. This is the leg that catches an open door.
+  const looksRefused = ((evidence.withReturning && evidence.withReturning.error && evidence.withReturning.error.code) === '42501')
+    && evidence.readbackAfterReturning && evidence.readbackAfterReturning.rows.length === 0;
+  if (looksRefused) {
+    try {
+      evidence.bareInsert = await anon.from(RLS_PROBE_TABLE).insert(row);
+    } catch (e) {
+      evidence.bareInsert = { error: { code: e.code, message: e.message } };
     }
+    evidence.readbackAfterBare = await readByMarker();
   }
+
+  const verdict = classifyRlsProbe(evidence);
+
+  // Unconditional marker cleanup, then CONFIRM by count — never trust the delete's silence.
+  try {
+    await service.from(RLS_PROBE_TABLE).delete().eq('subject', marker);
+    const after = await readByMarker();
+    if (after && after.rows.length > 0) {
+      verdict.detail = { ...(verdict.detail || {}), cleanup_residue: after.rows.length, marker };
+    }
+  } catch { /* best-effort; the row is clearly marked for a human sweep */ }
   return verdict;
 }
 

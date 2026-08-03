@@ -18,21 +18,63 @@ const LEGAL_ALERT_TYPES = ['circuit_breaker', 'threshold_breach', 'system_health
 const NOW = 1_900_000_000_000;
 const isoAgo = (ms) => new Date(NOW - ms).toISOString();
 
-describe('classifyRlsProbe (FR-D1)', () => {
-  it('REGRESSED when an anon INSERT returns rows (RLS not enforced)', () => {
-    const v = classifyRlsProbe({ data: [{ id: 'r1' }], error: null });
+// SD-LEO-INFRA-SURVEY-EVERY-PERMISSION-001 — REWRITTEN onto the three-leg method.
+// The previous suite PINNED THE DEFECT AS THE CONTRACT: it asserted that a bare 42501 means
+// "RLS enforced, no breakage", which is exactly the reading that let a landed-but-unreadable
+// write report healthy. Fixing the classifier alone would have turned this file red and invited
+// a revert of the fix, so the pin is inverted here in the same change.
+describe('classifyRlsProbe (FR-D1) — three-leg method', () => {
+  const marker = [{ id: 'r1' }];
+
+  it('REGRESSED when the row is PRESENT on readback after the RETURNING attempt', () => {
+    const v = classifyRlsProbe({ withReturning: { data: marker, error: null }, readbackAfterReturning: { rows: marker } });
     expect(v.breakage).toBe(true);
     expect(v.breakClass).toBe('RLS-regression');
     expect(v.detail.inserted_ids).toEqual(['r1']);
   });
-  it('ENFORCED (no breakage) when anon write is denied 42501', () => {
-    const v = classifyRlsProbe({ data: null, error: { code: '42501', message: 'permission denied' } });
+
+  // THE CASE THE OLD CONTRACT COULD NOT SEE. 42501 with the row absent looks like refusal, but the
+  // identical row via a bare insert LANDS. The old branch keyed on data.length > 0, which is always
+  // false for a bare insert, so the landed row was invisible even in principle.
+  it('REGRESSED when 42501 + absent-after-RETURNING but the BARE re-attempt LANDS', () => {
+    const v = classifyRlsProbe({
+      withReturning: { data: null, error: { code: '42501', message: 'new row violates row-level security policy' } },
+      readbackAfterReturning: { rows: [] },
+      bareInsert: { error: null },
+      readbackAfterBare: { rows: marker },
+    });
+    expect(v.breakage).toBe(true);
+    expect(v.breakClass).toBe('RLS-regression');
+    expect(v.detail.landed_via).toBe('bare-insert');
+  });
+
+  it('ENFORCED (no breakage, not inconclusive) only when BOTH readbacks are empty — three legs', () => {
+    const v = classifyRlsProbe({
+      withReturning: { data: null, error: { code: '42501', message: 'permission denied' } },
+      readbackAfterReturning: { rows: [] },
+      bareInsert: { error: { code: '42501' } },
+      readbackAfterBare: { rows: [] },
+    });
     expect(v.breakage).toBe(false);
     expect(v.inconclusive).toBeFalsy();
+    expect(v.detail.legs).toBe(3);
   });
+
+  // NO FALSE POSITIVE. The alert path is fail-loud (recordSystemAlert + process.exit(1)), and a
+  // genuinely-enforced table also returns 42501 — so a bare code must never alert, in either direction.
+  it('INCONCLUSIVE (never an alert) when 42501 arrives without leg-3 evidence', () => {
+    const one = classifyRlsProbe({ withReturning: { data: null, error: { code: '42501' } } });
+    expect(one.breakage).toBe(false);
+    expect(one.inconclusive).toBe(true);
+    const two = classifyRlsProbe({ withReturning: { data: null, error: { code: '42501' } }, readbackAfterReturning: { rows: [] } });
+    expect(two.breakage).toBe(false);
+    expect(two.inconclusive).toBe(true);
+    expect(two.detail.legs).toBe(2);
+  });
+
   it('INCONCLUSIVE (no false alert) on a constraint/other error or empty', () => {
-    expect(classifyRlsProbe({ error: { code: '23505' } }).inconclusive).toBe(true);
-    expect(classifyRlsProbe({ data: [], error: null }).inconclusive).toBe(true);
+    expect(classifyRlsProbe({ withReturning: { error: { code: '23505' } } }).inconclusive).toBe(true);
+    expect(classifyRlsProbe({ withReturning: { data: [], error: null } }).inconclusive).toBe(true);
     expect(classifyRlsProbe({}).breakage).toBe(false);
   });
 });
@@ -113,8 +155,13 @@ describe('frozen taxonomy round-trip (TR-1) — the 4 child-D classes stay in th
 });
 
 // --- injected-fake integration: dry-run writes nothing; live path is fail-loud + passes the break_class ---
-function fakeService({ handoffs = [], webhookPresent = false } = {}) {
+// Both fakes gained capability for the three-leg method: fakeService needs a marker READBACK path
+// (.select().eq()) it never had, and fakeAnon needs a BARE .insert() — previously it only implemented
+// .insert().select(), which is precisely the shape that cannot observe a landed row.
+function fakeService({ handoffs = [], webhookPresent = false, markerRows = [] } = {}) {
+  const state = { rows: markerRows.slice() };
   return {
+    __state: state,
     from(table) {
       return {
         select(_cols, _opts) {
@@ -122,16 +169,74 @@ function fakeService({ handoffs = [], webhookPresent = false } = {}) {
           if (table === 'webhook_events' || table === 'payment_webhook_events') {
             return { limit: () => Promise.resolve({ data: webhookPresent ? [] : null, error: webhookPresent ? null : { code: 'PGRST205', message: 'Could not find the table' } }) };
           }
-          return { limit: () => Promise.resolve({ data: [], error: null }) };
+          // Marker readback used by probeRls legs 2 and 3, and by the cleanup confirmation.
+          return { eq: () => Promise.resolve({ data: state.rows, error: null }), limit: () => Promise.resolve({ data: [], error: null }) };
         },
-        delete() { return { eq: () => Promise.resolve({ error: null }) }; },
+        delete() { return { eq: () => { state.rows = []; return Promise.resolve({ error: null }); } }; },
       };
     },
   };
 }
-function fakeAnon({ rlsRegressed = false } = {}) {
-  return { from: () => ({ insert: () => ({ select: () => Promise.resolve(rlsRegressed ? { data: [{ id: 'leak-1' }], error: null } : { data: null, error: { code: '42501' } }) }) }) };
+// rlsRegressed        — the RETURNING attempt itself succeeds (classic leak)
+// landsOnBareInsert   — RETURNING 42501s, but the bare re-attempt lands: the case the old fake could not express
+// LAZY like the real supabase-js builder: the request fires when the builder is AWAITED, not when
+// insert() is called. An eager fake set its landed-row side effect during .insert(), so the
+// leg-2 readback saw the bare-insert row and the verdict reported landed_via 'with-returning' —
+// a fake-fidelity bug that produced a plausible wrong answer. The builder is a THENABLE.
+function fakeAnon({ rlsRegressed = false, landsOnBareInsert = false, service = null } = {}) {
+  return {
+    from: () => ({
+      insert: () => ({
+        // awaited directly (no .select()) => the BARE insert path
+        then(resolve) {
+          if (landsOnBareInsert && service) service.__state.rows = [{ id: 'leak-bare' }];
+          return Promise.resolve(landsOnBareInsert ? { error: null } : { error: { code: '42501' } }).then(resolve);
+        },
+        // .select() => the RETURNING path
+        select() {
+          if (rlsRegressed && service) service.__state.rows = [{ id: 'leak-1' }];
+          return Promise.resolve(rlsRegressed
+            ? { data: [{ id: 'leak-1' }], error: null }
+            : { data: null, error: { code: '42501' } });
+        },
+      }),
+    }),
+  };
 }
+
+// The CALLER's leg-3 gathering, which the classifier unit tests cannot cover: probeRls must, on an
+// apparent refusal, RE-ATTEMPT the identical write WITHOUT .select() and read back again. Without
+// this the open door stays invisible no matter how correct the classifier is.
+describe('probeRls gathers leg 3 — the bare re-attempt (SD-LEO-INFRA-SURVEY-EVERY-PERMISSION-001)', () => {
+  it('REGRESSES when RETURNING 42501s with the row absent but the BARE insert lands', async () => {
+    const svc = fakeService({ handoffs: [] });
+    const summary = await run({
+      service: svc,
+      anon: fakeAnon({ rlsRegressed: false, landsOnBareInsert: true, service: svc }),
+      detectFromDb: async () => ({ rung: 'NORMAL', reason: 'healthy' }),
+      record: async () => ({ id: 'x', deduped: false }),
+      dryRun: true,
+      nowMs: NOW,
+    });
+    const rls = (summary || []).find((v) => v && (v.breakClass === 'RLS-regression'));
+    expect(rls, 'leg 3 never ran — an open door read as enforced').toBeTruthy();
+    expect(rls.detail.landed_via).toBe('bare-insert');
+  });
+
+  it('stays SILENT (no breakage) when both legs are genuinely empty — no false positive on an enforced table', async () => {
+    const svc = fakeService({ handoffs: [] });
+    const summary = await run({
+      service: svc,
+      anon: fakeAnon({ rlsRegressed: false, landsOnBareInsert: false, service: svc }),
+      detectFromDb: async () => ({ rung: 'NORMAL', reason: 'healthy' }),
+      record: async () => ({ id: 'x', deduped: false }),
+      dryRun: true,
+      nowMs: NOW,
+    });
+    const rls = (summary || []).find((v) => v && v.breakClass === 'RLS-regression');
+    expect(rls, 'alerted on a genuinely enforced table — the fail-loud false positive').toBeFalsy();
+  });
+});
 
 describe('run() — dry-run performs NO writes; live path is fail-loud (TS-4 / FR-D5)', () => {
   it('dry-run classifies breakages but never calls recordSystemAlert', async () => {
