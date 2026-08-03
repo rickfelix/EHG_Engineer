@@ -24,22 +24,64 @@ describe('stop-loop-wakeup-reminder — REMINDER text (source-pin, shipped wordi
   });
 });
 
-// SD-LEO-INFRA-LOOP-CONTINUITY-ENFORCE-001 (FR-2 allow-path): a worker that announced its
-// wind-down via /signal must NOT be blocked (false-positive guard), while an un-announced
-// premature stop STILL blocks.
-describe('stop-loop-wakeup-reminder — wind-down allow-path', () => {
-  it('does NOT block when windDownSignaled, even for an active worker', () => {
-    expect(shouldRemind({ loopState: 'active', stopHookActive: false, flagEnabled: true, windDownSignaled: true })).toBe(false);
+// SD-LEO-INFRA-TERMINAL-RITUAL-ENFORCEMENT-001 step A — REPLACES the windDownSignaled allow-path
+// (SD-LEO-INFRA-LOOP-CONTINUITY-ENFORCE-001 FR-2). That path returned false for ANY session that
+// merely SAID "winding down", which is precisely Charlie's false positive: a worker talks its way
+// out of the arm requirement without the tool ever being called. Operator safety — the reason the
+// allow-path existed — is now carried by the WORKER GATE instead, which is a claim or a live loop
+// state rather than an announcement. Announcements are no longer load-bearing anywhere.
+describe('step A — an ANNOUNCEMENT is not an arm (FR-3, Charlie\'s false positive)', () => {
+  it('BLOCKS a claim-holding worker that announced a wind-down but never called the tool', () => {
+    expect(shouldRemind({ armVerdict: 'unarmed', loopState: 'active', flagEnabled: true, hasActiveClaim: true })).toBe(true);
   });
-  it('does NOT block a claim-holder that announced wind-down (unknown state + claim)', () => {
-    expect(shouldRemind({ loopState: 'unknown', stopHookActive: false, flagEnabled: true, hasActiveClaim: true, windDownSignaled: true })).toBe(false);
+
+  // The self-report the OLD predicate trusted. post-tool-loop-state.cjs sets awaiting_tick from
+  // the worker's own claim about itself, so reading it asked the suspect for an alibi.
+  it('BLOCKS a worker whose loop_state says awaiting_tick when the transcript says unarmed', () => {
+    expect(shouldRemind({ armVerdict: 'unarmed', loopState: 'awaiting_tick', flagEnabled: true, hasActiveClaim: true })).toBe(true);
   });
-  it('STILL blocks an active worker that did NOT announce wind-down', () => {
-    expect(shouldRemind({ loopState: 'active', stopHookActive: false, flagEnabled: true, windDownSignaled: false })).toBe(true);
+
+  it('allows a worker with a REAL ScheduleWakeup tool_use in the current turn', () => {
+    expect(shouldRemind({ armVerdict: 'armed', loopState: 'active', flagEnabled: true, hasActiveClaim: true })).toBe(false);
   });
-  it('flag-off and stop_hook_active guards still win over everything', () => {
-    expect(shouldRemind({ loopState: 'active', stopHookActive: false, flagEnabled: false, windDownSignaled: false })).toBe(false);
-    expect(shouldRemind({ loopState: 'active', stopHookActive: true, flagEnabled: true, windDownSignaled: false })).toBe(false);
+});
+
+describe('step A — worker gate keeps operators safe (FR-4)', () => {
+  it('never blocks a claim-less, loop-less session even when unarmed', () => {
+    expect(shouldRemind({ armVerdict: 'unarmed', loopState: null, flagEnabled: true, hasActiveClaim: false })).toBe(false);
+    expect(shouldRemind({ armVerdict: 'unarmed', loopState: 'unknown', flagEnabled: true, hasActiveClaim: false })).toBe(false);
+  });
+
+  // The live defect FR-4 names: an operator that says "winding down" must not become blockable.
+  // Under the old allow-path this same input was ALSO false, but for the wrong reason (the
+  // announcement); it is false here because the session is not a worker.
+  it('never blocks an operator that announced a wind-down', () => {
+    expect(shouldRemind({ armVerdict: 'unarmed', loopState: null, flagEnabled: true, hasActiveClaim: false, windDownSignaled: true })).toBe(false);
+  });
+
+  it('blocks the same unarmed turn once a claim is held', () => {
+    expect(shouldRemind({ armVerdict: 'unarmed', loopState: null, flagEnabled: true, hasActiveClaim: true })).toBe(true);
+  });
+});
+
+describe('step A — guards and escapes', () => {
+  const worker = { armVerdict: 'unarmed', loopState: 'active', flagEnabled: true, hasActiveClaim: true };
+
+  it('flag-off, second-stop and loop_state=exited all win over the arm requirement', () => {
+    expect(shouldRemind({ ...worker, flagEnabled: false })).toBe(false);
+    expect(shouldRemind({ ...worker, stopHookActive: true })).toBe(false);
+    expect(shouldRemind({ ...worker, loopState: 'exited' })).toBe(false);
+  });
+
+  // FR-2: the runtime switch must be able to stop a LIVE seat enforcing, with no merge/restart.
+  it('the kill switch disables the block outright', () => {
+    expect(shouldRemind({ ...worker, enforcementDisabled: true })).toBe(false);
+  });
+
+  // Absence of evidence is not evidence of absence — an unreadable transcript must not trap.
+  it("'unknown' and a missing verdict both fail OPEN", () => {
+    expect(shouldRemind({ ...worker, armVerdict: 'unknown' })).toBe(false);
+    expect(shouldRemind({ ...worker, armVerdict: undefined })).toBe(false);
   });
 });
 
@@ -55,45 +97,55 @@ describe('loop_state coherence (FR-3, no-new-state)', () => {
   });
 });
 
+// The original TS-1..TS-9, carried forward onto the arm-evidence basis. Each case keeps its
+// ORIGINAL INTENT; only the signal standing in for "no wakeup armed" changed — from
+// loop_state='active' (a self-report) to armVerdict='unarmed' (transcript evidence).
 describe('stop-loop-wakeup-reminder — shouldRemind (pure)', () => {
-  it('TS-1: returns false when the flag is disabled, even for an active /loop worker', () => {
-    expect(shouldRemind({ loopState: 'active', stopHookActive: false, flagEnabled: false })).toBe(false);
+  const unarmedWorker = { armVerdict: 'unarmed', loopState: 'active', stopHookActive: false, flagEnabled: true };
+
+  it('TS-1: returns false when the flag is disabled, even for an unarmed /loop worker', () => {
+    expect(shouldRemind({ ...unarmedWorker, flagEnabled: false })).toBe(false);
   });
 
-  it('TS-2: returns true when enabled, loop_state=active, and first stop (no wakeup armed)', () => {
-    expect(shouldRemind({ loopState: 'active', stopHookActive: false, flagEnabled: true })).toBe(true);
+  it('TS-2: returns true when enabled, unarmed, in-loop, and first stop', () => {
+    expect(shouldRemind(unarmedWorker)).toBe(true);
   });
 
-  it('TS-3: returns false when a wakeup is already armed (loop_state=awaiting_tick)', () => {
-    expect(shouldRemind({ loopState: 'awaiting_tick', stopHookActive: false, flagEnabled: true })).toBe(false);
+  it('TS-3: returns false when a wakeup was genuinely armed this turn', () => {
+    expect(shouldRemind({ ...unarmedWorker, armVerdict: 'armed' })).toBe(false);
   });
 
   it('TS-4: returns false on the second pass (stop_hook_active true) — never block twice', () => {
-    expect(shouldRemind({ loopState: 'active', stopHookActive: true, flagEnabled: true })).toBe(false);
+    expect(shouldRemind({ ...unarmedWorker, stopHookActive: true })).toBe(false);
   });
 
-  it('TS-5: returns false for exited / null / unknown loop_state WITHOUT a claim (operator-safe)', () => {
-    expect(shouldRemind({ loopState: 'exited', stopHookActive: false, flagEnabled: true })).toBe(false);
-    expect(shouldRemind({ loopState: null, stopHookActive: false, flagEnabled: true })).toBe(false);
-    expect(shouldRemind({ loopState: undefined, stopHookActive: false, flagEnabled: true })).toBe(false);
-    expect(shouldRemind({ loopState: 'unknown', stopHookActive: false, flagEnabled: true })).toBe(false);
+  it('TS-5: returns false for exited, and for null/unknown loop_state WITHOUT a claim (operator-safe)', () => {
+    expect(shouldRemind({ ...unarmedWorker, loopState: 'exited' })).toBe(false);
+    for (const loopState of [null, undefined, 'unknown']) {
+      expect(shouldRemind({ ...unarmedWorker, loopState, hasActiveClaim: false })).toBe(false);
+    }
   });
 
   // Coverage-gap (operator 2026-06-10): a worker holding a live SD claim whose loop_state
   // never entered the machine ('unknown'/null) is still about to go silent → remind.
   it('TS-7: returns true for unknown/null loop_state WHEN the session holds an active SD claim', () => {
-    expect(shouldRemind({ loopState: 'unknown', stopHookActive: false, flagEnabled: true, hasActiveClaim: true })).toBe(true);
-    expect(shouldRemind({ loopState: null, stopHookActive: false, flagEnabled: true, hasActiveClaim: true })).toBe(true);
+    for (const loopState of ['unknown', null]) {
+      expect(shouldRemind({ ...unarmedWorker, loopState, hasActiveClaim: true })).toBe(true);
+    }
   });
 
-  it('TS-8: a claim does NOT override the awaiting_tick (wakeup armed) or exited escapes', () => {
-    expect(shouldRemind({ loopState: 'awaiting_tick', stopHookActive: false, flagEnabled: true, hasActiveClaim: true })).toBe(false);
-    expect(shouldRemind({ loopState: 'exited', stopHookActive: false, flagEnabled: true, hasActiveClaim: true })).toBe(false);
+  // CHANGED DELIBERATELY. TS-8 used to assert awaiting_tick was an escape even for a claim-holder.
+  // It is not any more: awaiting_tick is the worker's OWN self-report, and honouring it is exactly
+  // the hole step A closes. 'exited' remains an escape — it is an explicit, deliberate loop
+  // termination, not a claim about having armed.
+  it('TS-8: awaiting_tick is NO LONGER an escape; exited still is', () => {
+    expect(shouldRemind({ ...unarmedWorker, loopState: 'awaiting_tick', hasActiveClaim: true })).toBe(true);
+    expect(shouldRemind({ ...unarmedWorker, loopState: 'exited', hasActiveClaim: true })).toBe(false);
   });
 
   it('TS-9: a claim is ignored when the flag is off or already reminded this turn', () => {
-    expect(shouldRemind({ loopState: 'unknown', stopHookActive: false, flagEnabled: false, hasActiveClaim: true })).toBe(false);
-    expect(shouldRemind({ loopState: 'unknown', stopHookActive: true, flagEnabled: true, hasActiveClaim: true })).toBe(false);
+    expect(shouldRemind({ ...unarmedWorker, loopState: 'unknown', hasActiveClaim: true, flagEnabled: false })).toBe(false);
+    expect(shouldRemind({ ...unarmedWorker, loopState: 'unknown', hasActiveClaim: true, stopHookActive: true })).toBe(false);
   });
 });
 

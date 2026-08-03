@@ -192,11 +192,70 @@ describe('turn boundary — promptId primary, origin fallback', () => {
   });
 });
 
+// FR-3 — THE POPULATION THAT ACTUALLY FAILS. Arm compliance is ~100% on failure-shaped turns
+// (an error is salient, the worker is still "in" the task) and decays toward zero on
+// success-terminal ones, where a dense closing summary displaces the mechanical step. A suite
+// that only exercises failure paths passes while leaving the entire real failure population
+// untouched — so the specimens below are all SUCCESS-shaped.
+describe('FR-3 — success-terminal unarmed turns are the target, and they block', () => {
+  const { shouldRemind } = require(HOOK_PATH);
+  const u = (promptId) => ({ type: 'user', promptId, message: { content: [{ type: 'tool_result' }] } });
+  const worker = { loopState: 'active', flagEnabled: true, hasActiveClaim: true, stopHookActive: false };
+
+  // The exact shape of all three recorded dormancies: work done, tests green, a long closing
+  // summary written — and the wakeup never armed because the summary displaced it.
+  it('a turn that ends on a successful summary with no arm is UNARMED and blocks', () => {
+    const specimen = [u('t1'), otherTool('Bash'), otherTool('Edit'), textEntry('All 362 tests pass. Shipped as PR #6741.')];
+    const v = ev.findArmInCurrentTurn(specimen);
+    expect(v.verdict).toBe('unarmed');
+    expect(shouldRemind({ ...worker, armVerdict: v.verdict })).toBe(true);
+  });
+
+  // Charlie's false positive, reproduced deliberately: the worker SAYS it armed, in the same
+  // turn, in text. Text is not a tool call.
+  it('a turn that ANNOUNCES "wakeup armed" in text but never calls the tool still blocks', () => {
+    const specimen = [u('t1'), otherTool('Bash'), textEntry('Done. wakeup-armed +900s at 17:53.')];
+    const v = ev.findArmInCurrentTurn(specimen);
+    expect(v.verdict).toBe('unarmed');
+    expect(shouldRemind({ ...worker, armVerdict: v.verdict })).toBe(true);
+  });
+
+  // The same announcement mirrored into the DB as the worker's self-report. The OLD predicate
+  // read exactly this and allowed the stop.
+  it('the same turn still blocks even with loop_state=awaiting_tick claiming otherwise', () => {
+    const v = ev.findArmInCurrentTurn([u('t1'), textEntry('wakeup-armed +900s')]);
+    expect(shouldRemind({ ...worker, loopState: 'awaiting_tick', armVerdict: v.verdict })).toBe(true);
+  });
+
+  // STALE ARM, end to end: a real ScheduleWakeup exists in the transcript — one turn too early.
+  it('a success-shaped turn whose only arm is in the PREVIOUS turn blocks (stale arm)', () => {
+    const specimen = [u('t1'), armEntry({ delaySeconds: 900 }), textEntry('tick done'),
+      u('t2'), otherTool('Bash'), textEntry('next tick done')];
+    const v = ev.findArmInCurrentTurn(specimen);
+    expect(v.verdict).toBe('unarmed');
+    expect(v.armCount).toBe(0);
+    expect(shouldRemind({ ...worker, armVerdict: v.verdict })).toBe(true);
+  });
+
+  // The compliant shape this SD is trying to produce: arm, THEN summarise.
+  it('arming before the closing summary is compliant and does NOT block', () => {
+    const specimen = [u('t1'), otherTool('Bash'), armEntry({ delaySeconds: 900 }), textEntry('Shipped. Next tick in 15m.')];
+    const v = ev.findArmInCurrentTurn(specimen);
+    expect(v.verdict).toBe('armed');
+    expect(shouldRemind({ ...worker, armVerdict: v.verdict })).toBe(false);
+  });
+
+  it('a deliberate ScheduleWakeup({stop:true}) loop-end is not treated as a failure to arm', () => {
+    const v = ev.findArmInCurrentTurn([u('t1'), armEntry({ stop: true }), textEntry('loop complete')]);
+    expect(v.stopRequested).toBe(true);
+    expect(shouldRemind({ ...worker, armVerdict: v.verdict })).toBe(false);
+  });
+});
+
 describe('stdout decision-channel muzzle', () => {
   const hook = require(HOOK_PATH);
+  const hookSrc = fs.readFileSync(HOOK_PATH, 'utf8');
 
-  // Requiring the supabase client loads dotenv, which writes ~80 bytes of banner to STDOUT — the
-  // channel Claude Code parses as the Stop decision. Measured pre-existing at git HEAD.
   it('discards stdout writes made inside the muzzle', () => {
     const chunks = [];
     const real = process.stdout.write;
@@ -213,11 +272,28 @@ describe('stdout decision-channel muzzle', () => {
     expect(process.stdout.write).toBe(before);
   });
 
-  // A throw inside the muzzle must not leave stdout muted for the decision write that follows.
   it('restores stdout even when the callee throws', () => {
     const before = process.stdout.write;
     expect(() => hook.muzzleStdout(() => { throw new Error('boom'); })).toThrow('boom');
     expect(process.stdout.write).toBe(before);
+  });
+
+  // THE CLASS FIX, MADE COUNTABLE. A scoped muzzle around the one require I had MEASURED was an
+  // instance fix: the allow path still emitted 87 bytes from a different transitive require
+  // (park-worker / emit-feedback), caught only by an end-to-end run. The muzzle now installs at
+  // module load, so the invariant is structural — exactly one write reaches the real stdout, and
+  // it is the decision. A new `process.stdout.write(...)` anywhere else turns this red.
+  it('the real stdout has exactly ONE writer, and it is emitDecision', () => {
+    const realWrites = hookSrc.match(/REAL_STDOUT_WRITE\(/g) || [];
+    expect(realWrites).toHaveLength(1);
+    expect(hookSrc).toMatch(/function emitDecision[\s\S]{0,200}REAL_STDOUT_WRITE\(/);
+    // the muzzle is armed before any require below it can print
+    expect(hookSrc.indexOf('process.stdout.write = () => true;')).toBeLessThan(hookSrc.indexOf("require('../lib/sessions/loop-state-tracker.cjs')"));
+  });
+
+  it('the block decision is emitted through emitDecision, not a raw write', () => {
+    expect(hookSrc).toMatch(/emitDecision\(\{\s*decision:\s*'block'/);
+    expect(hookSrc).not.toMatch(/process\.stdout\.write\(JSON\.stringify/);
   });
 });
 
