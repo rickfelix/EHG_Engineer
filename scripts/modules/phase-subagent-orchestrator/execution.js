@@ -116,7 +116,11 @@ async function executeSubAgent(subAgent, sdId, options = {}) {
     return {
       sub_agent_code: code,
       sub_agent_name: name,
-      verdict: result.verdict || 'WARNING',
+      // SD-LEO-INFRA-WRITER-SUB-AGENT-001 / FR-2: `|| 'WARNING'` REMOVED — second copy of the
+      // predecessor SD's literal defect. WARNING sits in the evidence gate's ACCEPT set, so a
+      // sub-agent returning nothing was silently promoted to passing and stored raw, with no
+      // mapVerdict and no original_verdict. Pass the verdict through untouched.
+      verdict: result.verdict,
       confidence: result.confidence !== undefined ? result.confidence : 50,
       critical_issues: result.critical_issues || [],
       warnings: result.warnings || [],
@@ -291,13 +295,22 @@ async function storeSubAgentResult(supabase, sdId, result, options = {}) {
  */
 async function updatePRDMetadataFromSubAgents(supabase, sdId, phase, results) {
   try {
-    const { data: prd, error: prdError } = await supabase
-      .from('product_requirements_v2')
-      .select('id, metadata')
-      .eq('directive_id', sdId)
-      .single();
+    // SD-LEO-INFRA-WRITER-SUB-AGENT-001 (absorbed from Charlie's measurement, 770bedae): second
+    // copy of the same lookup. directive_id holds the SD KEY on 2987 of 4171 rows while callers pass
+    // a uuid, so the miss printed as "normal for early phases" — a silent skip wearing a benign label.
+    const isUuid = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(String(sdId));
+    let query = supabase.from('product_requirements_v2').select('id, metadata');
+    // sd_id is a uuid column — comparing it to an 'SD-...' key errors rather than returning empty.
+    query = isUuid
+      ? query.or(`sd_id.eq.${sdId},directive_id.eq.${sdId}`)
+      : query.eq('directive_id', sdId);
+    const { data: prd, error: prdError } = await query.maybeSingle();
 
-    if (prdError || !prd) {
+    if (prdError) {
+      console.warn(`   PRD lookup FAILED for SD ${sdId}: ${prdError.message}`);
+      return null;
+    }
+    if (!prd) {
       console.log(`   No PRD found for SD ${sdId} (normal for early phases)`);
       return null;
     }
