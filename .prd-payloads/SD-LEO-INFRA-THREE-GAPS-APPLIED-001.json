@@ -1,0 +1,98 @@
+{
+  "executive_summary": "Three gaps in the APPLIED anon-feedback permission policy, all sharing one shape: the security reasoning is correct in the author's head and nowhere in the system, so the next person to touch an adjacent object silently invalidates it. Every premise below was MEASURED against live Postgres during LEAD before being written here, and one premise inherited from the SD was found to be OVERSTATED and is corrected in FR-1. All DDL is STAGED into database/chairman-gated/ and routed through the chairman ceremony — the builder never applies, not even inside a rolled-back transaction. G2 (the cold-DoS rate-limit clause) is explicitly NOT in this SD and its status is positively stated at completion rather than left to inference.",
+  "functional_requirements": [
+    {
+      "id": "FR-1",
+      "title": "The unconstrainable writer: constrain the anon path, or amend every closure claim to state the real boundary",
+      "description": "MEASURED LIVE (do not re-derive, but DO re-verify before changing): public.record_venture_error has prosecdef=true, is owned by postgres whose rolbypassrls=true, and anon holds EXECUTE (alongside authenticated, service_role, postgres). That combination is precisely what no RLS policy on feedback can constrain, so the claim 'anon cannot reach the chairman queue' is FALSE AS STATED. CORRECTION TO THE SD TEXT, which must not be inherited verbatim: the SD says the function 'inserts rows with severity=high, status=new'. There are TWO insert paths and they differ — the normal path writes ('issue','new','medium') and the storm-watermark path writes ('issue','new','high'). A plain anon call yields medium, which the ingress policy already permits. FURTHER CORRECTION: the SD carries forward an assessment that this is 'not currently critical, because severity is hard-coded rather than caller-controlled'. Hard-coded is accurate; not-caller-controlled is NOT. p_error_hash is a caller parameter and the ceiling is `v_ceiling constant integer := 20` distinct fingerprints per venture per hour, so an anon caller can deliberately submit 21 distinct hashes to TRIP the ceiling and cause the severity=high row. WHICH hard-coded value fires is caller-influenceable. DELIVERABLE: either constrain the path (drop the anon EXECUTE grant, or have the function validate and downgrade what anon can produce) or amend the closure claim to state the real boundary INCLUDING the storm-path reachability condition. ACCEPTANCE ASSERTS ON THE CLAIM AS WELL AS THE CODE: no artifact may continue to assert unreachability that the function contradicts. A closure claim that is false is worse than an open gap, because it stops anyone looking."
+    },
+    {
+      "id": "FR-2",
+      "title": "The copied severity pair: one representation, or a two-sided fence that FAILS on divergence",
+      "description": "MEASURED: policy anon_feedback_ingress_bounds carries the pair inline as `severity IS NULL OR severity <> ALL (ARRAY['critical','high'])`, copied from a separately-editable view that has ALREADY been restructured once since — the pair survived byte-identical BY LUCK. Nothing records the dependency in either direction. DELIVERABLE: one representation (the policy derives the pair from the view, or both derive from a named source), or — if derivation is genuinely impossible inside a policy expression — a check that FAILS when the view's pair and the policy's pair diverge and PASSES when they agree. A CODE COMMENT DOES NOT SATISFY THIS: comments are exactly what already failed here. The fence must be demonstrated two-sided by seeding a divergence and observing the failure, because a check that has never failed is indistinguishable from a check that cannot fail."
+    },
+    {
+      "id": "FR-3",
+      "title": "The rate limit that will fail open: make the count independent of the caller's visibility",
+      "description": "MEASURED, AND THE SD'S FRAMING IS CORRECT — the hazard is FUTURE, not live. An earlier reading suggested the count was ALREADY starved (the limit counts source_type='telegram' rows while select_feedback_policy exposes only feedback_type LIKE 'user_%', and 0 of 1 live telegram rows match). That reading was REFUTED by checking pg_policy.polroles: select_feedback_policy binds to AUTHENTICATED, not anon; anon's SELECT is telegram_bot_select_feedback USING (source_type='telegram'), which covers the limit's WHERE clause exactly. The count works TODAY. THE ACTUAL DEFECT: the limit's correctness depends on telegram_bot_select_feedback remaining exactly as broad as the limit's WHERE clause, and nothing records that coupling. Narrow anon SELECT — a routine, obviously-safe-looking hardening — and the subquery returns fewer rows or none, `count(*) < 50` becomes unconditionally true, and the limit silently stops limiting. The tightening that looks like security is what disarms it. DELIVERABLE: make the count independent of the calling role's visibility (a SECURITY DEFINER counting helper, or an equivalent that cannot be starved by RLS narrowing), PLUS a two-sided fence: a test that FAILS if the limit stops rejecting when anon SELECT is narrowed, and PASSES on the current configuration."
+    },
+    {
+      "id": "FR-4",
+      "title": "Every DDL change staged and routed, with pre-change definitions captured for independent revert",
+      "description": "All migrations land in database/chairman-gated/ with a _DOWN companion, and the apply is performed through the chairman ceremony. THE BUILDER STAGES; THE CHAIRMAN APPLIES — and that holds even inside a rolled-back transaction. Read-only validation is the permitted substitute (BEGIN; SET TRANSACTION READ ONLY; ...; ROLLBACK). This PRD captures the pre-change grant, policy, and function definitions verbatim (see metadata.pre_change_state) so each FR is INDEPENDENTLY revertible rather than only revertible as a set. LOAD-BEARING DETAIL FOR ANY MIGRATION THAT RECREATES THE INGRESS POLICY: anon_feedback_ingress_bounds is the ONLY RESTRICTIVE policy on feedback, while anon simultaneously holds TWO PERMISSIVE insert policies (telegram_bot_insert_feedback, venture_user_insert_feedback). Permissive policies OR together, so a recreate that omits `AS RESTRICTIVE` silently disarms the entire bound while the policy still appears present and healthy in pg_policy. Restate it explicitly, the same way security_invoker must be restated on a view."
+    },
+    {
+      "id": "FR-5",
+      "title": "G2 is NOT silently absorbed: its status is positively stated at completion",
+      "description": "G2 — the cold denial-of-service in the rate-limit clause — is handled separately as a chairman ratification ask, because amending an applied permission policy is chairman-gated. This SD completing does NOT imply G2 is fixed. THE HONEST FORM OF THIS REQUIREMENT IS A POSITIVE STATEMENT, NOT AN ABSENCE: completion evidence must explicitly state G2's status (open / ratification pending / closed, with a pointer), because a criterion satisfied by simply not doing G2 work is indistinguishable from one that was never considered. Designed in here rather than remembered at LEAD-FINAL."
+    }
+  ],
+  "technical_requirements": [
+    { "id": "TR-1", "title": "No DDL applied by the builder", "description": "Zero applied DDL in this SD. Staged files only, plus read-only validation. Any apply is performed by the chairman through the ceremony." },
+    { "id": "TR-2", "title": "Tests must SEED their own data", "description": "MEASURED: public.feedback holds exactly 1 row with source_type='telegram', and 0 of them match feedback_type LIKE 'user_%'. Any test asserting the count(*)<50 limit must seed its own rows; relying on live data asserts against a population of one and passes vacuously." },
+    { "id": "TR-3", "title": "Every fence demonstrated two-sided", "description": "Each check delivered here must be shown to FAIL on a seeded defect and PASS on the current configuration. A one-sided check that only ever passes cannot be distinguished from a check with nothing to detect — the failure mode this whole SD is about." }
+  ],
+  "test_scenarios": [
+    { "id": "TS-1", "scenario": "Anon reach probe: the live grant and every closure sentence agree", "type": "integration", "expected": "Probe reports the observed grant state and BOTH severity literals (medium normal path, high storm path); exits non-zero naming any artifact still asserting anon-cannot-reach while the function contradicts it." },
+    { "id": "TS-2", "scenario": "Storm-path reachability is stated, not hand-waved", "type": "manual-review", "expected": "The amended claim (or the constraint) explicitly addresses that an anon caller controls p_error_hash and can trip the 20-distinct-fingerprint ceiling to produce the severity=high row." },
+    { "id": "TS-3", "scenario": "Severity-pair divergence fence FAILS when seeded", "type": "unit", "expected": "With the view pair and policy pair made to differ (in a rolled-back transaction), the check exits non-zero printing both pairs. This is the load-bearing direction." },
+    { "id": "TS-4", "scenario": "Severity-pair fence PASSES on the current configuration", "type": "unit", "expected": "Unseeded, the check exits 0 and names the single source it derived from." },
+    { "id": "TS-5", "scenario": "Rate limit still rejects when anon SELECT is narrowed", "type": "integration", "expected": "With 50+ seeded telegram rows and anon SELECT narrowed in the fixture, the next anon insert is STILL REJECTED. A run where it is ACCEPTED is the exact failure this scenario exists to catch." },
+    { "id": "TS-6", "scenario": "Rate limit rejects on the current unnarrowed configuration", "type": "integration", "expected": "Same seeding without narrowing: insert past threshold rejected. Pairing TS-5 and TS-6 proves the fence is two-sided rather than always-red or always-green." },
+    { "id": "TS-7", "scenario": "RESTRICTIVE is preserved by the staged migration", "type": "unit", "expected": "A check on the staged SQL asserts the recreated ingress policy declares AS RESTRICTIVE; removing the keyword from the staged file fails the check." },
+    { "id": "TS-8", "scenario": "Staged migrations are read-only validated, never applied", "type": "manual-review", "expected": "Each staged file validated via BEGIN; SET TRANSACTION READ ONLY; ...; ROLLBACK. No applied DDL appears in any evidence row for this SD." }
+  ],
+  "acceptance_criteria": [
+    "No artifact still asserts anon-cannot-reach-the-chairman-queue while record_venture_error contradicts it — verified by grepping the closure language and confirming it matches the live grant AND both insert paths. The CLAIM is part of acceptance, not just the code.",
+    "The SD's overstated premise is corrected wherever it is carried forward: severity=high is the STORM path only, and the caller influences which path fires via p_error_hash against the 20-fingerprint ceiling.",
+    "The severity pair has ONE representation, or a check FAILS when the view pair and policy pair are made to differ and PASSES when they agree. A code comment does not satisfy this.",
+    "The rate limit still rejects past threshold when anon SELECT is narrowed in a test fixture, and also rejects on the current configuration — the counting path does not depend on the calling role's visibility.",
+    "Every DDL change is staged in database/chairman-gated/ with a _DOWN companion and routed for the chairman ceremony; zero DDL applied by the builder. Pre-change grant/policy/function definitions are captured so each FR is independently revertible.",
+    "Any migration recreating anon_feedback_ingress_bounds restates AS RESTRICTIVE, proven by a check that fails when the keyword is removed.",
+    "G2's status is POSITIVELY STATED in completion evidence; this SD completing does not imply G2 is fixed."
+  ],
+  "risks": [
+    { "risk": "A migration recreates anon_feedback_ingress_bounds without AS RESTRICTIVE, silently disarming the whole bound while pg_policy still shows the policy present.", "mitigation": "TS-7 asserts the keyword in the staged SQL and fails when it is removed. Called out in FR-4 as load-bearing rather than left to reviewer attention." },
+    { "risk": "The SD's overstated severity premise is inherited into implementation, producing acceptance that tests the wrong insert path.", "mitigation": "FR-1 states both paths explicitly and TS-1 asserts on both literals. This is the same failure class that produced two refused acceptance criteria on the immediately preceding SD in this session." },
+    { "risk": "FR-2 and FR-3 are treated as two unrelated fixes, producing two partial mechanisms where one fence would cover both.", "mitigation": "They are the SAME class — an undeclared dependency between two separately-editable objects (policy-pair to view-pair; INSERT-subquery to SELECT-policy breadth). Prefer one two-sided divergence fence parameterised over both couplings." },
+    { "risk": "A fence is delivered that can never fail, and its green run is read as evidence.", "mitigation": "TR-3 requires every fence demonstrated on a seeded defect. Green alone is not accepted for any deliverable here." },
+    { "risk": "Builder applies chairman-gated DDL to 'just verify it works'.", "mitigation": "TR-1 plus read-only validation. The rule holds even inside a rolled-back transaction — staging is the deliverable, not an intermediate step." }
+  ],
+  "integration_operationalization": {
+    "consumers": "public.feedback ingress for the anon role (telegram + venture-user insert paths), the chairman decision queue which arms on severity IN (critical,high), and public.record_venture_error as a SECURITY DEFINER writer that bypasses every policy above.",
+    "dependencies": "The separately-editable view supplying the (critical,high) severity pair; telegram_bot_select_feedback, whose breadth silently determines whether the rate-limit subquery can count at all; the chairman ceremony as the only path that applies DDL in this SD.",
+    "data_contracts": "record_venture_error writes public.feedback with type='issue', status='new', and severity='medium' on the normal path or 'high' on the storm-watermark path (fixed watermark hash, ON CONFLICT DO UPDATE, so it collapses to one row per venture). anon_feedback_ingress_bounds bounds anon inserts on severity, category, and a trailing-hour telegram count.",
+    "runtime_config": "No new env vars. v_ceiling is a compile-time constant (20 distinct fingerprints per venture per hour) inside the function, not configuration — changing it is DDL and therefore chairman-gated.",
+    "observability_rollout": "Staged migrations merge to git; the chairman applies through the ceremony. Fences and tests ship live and are runnable BEFORE the DDL is applied, so divergence is detectable during the staging window rather than only after. Each fence prints both sides of the comparison it makes (view pair vs policy pair; narrowed vs unnarrowed limit behaviour) so a failure names the divergence instead of returning a bare boolean."
+  },
+  "system_architecture": {
+    "objects_touched": "public.record_venture_error (SECURITY DEFINER function, anon EXECUTE), public.feedback RLS policies — anon_feedback_ingress_bounds (RESTRICTIVE, anon, INSERT), telegram_bot_select_feedback (PERMISSIVE, anon, SELECT), and the separately-editable view supplying the (critical,high) severity pair.",
+    "invariant": "The anon ingress bound is the only RESTRICTIVE policy among permissive peers on the same role and command; its restrictiveness is what makes it a bound at all.",
+    "coupling_map": "policy severity pair <- view severity pair (FR-2). rate-limit subquery breadth <- anon SELECT policy breadth (FR-3). Neither coupling is currently recorded in either direction."
+  },
+  "implementation_approach": {
+    "sequence": "FR-4 first (capture pre-change state and establish the staging convention), then FR-2 and FR-3 together as one divergence-fence mechanism covering both couplings, then FR-1 (which may be a claim amendment rather than a code change and depends on what FR-2/FR-3 make provable), then FR-5 as completion evidence.",
+    "verification_discipline": "Measure before encoding. Every premise carried from the SD text was re-verified live during LEAD; two were found overstated or mis-scoped. Seed each fence's failure before trusting its pass.",
+    "out_of_scope": "G2 (cold-DoS rate-limit clause amendment) — separate chairman ratification ask. Any change to the permissive anon insert policies beyond what FR-4 requires to preserve restrictiveness."
+  },
+  "smoke_test_steps": [
+    { "step_number": 1, "instruction": "Run: node scripts/probe-anon-chairman-reach.mjs (probes the live grant plus both insert paths of public.record_venture_error)", "expected_outcome": "Prints REACH=<constrained|documented> and the two severity literals observed (medium normal, high storm). Exits 0 only when the live grant and every closure sentence agree; exits 1 naming the artifact whose claim contradicts the function." },
+    { "step_number": 2, "instruction": "Run: node scripts/check-severity-pair-divergence.mjs --seed-divergence (makes view pair and policy pair differ inside a transaction, then rolls back)", "expected_outcome": "FAILS with DIVERGENCE: view=[...] policy=[...] and a non-zero exit. Re-running WITHOUT --seed-divergence exits 0 printing PAIR_AGREES and the single source it derived from — proving the fence is two-sided." },
+    { "step_number": 3, "instruction": "Run: npx vitest run tests/unit/anon-rate-limit-survives-select-narrowing.test.js (seeds 50+ telegram rows, narrows anon SELECT in the fixture, attempts one more anon insert)", "expected_outcome": "Passes: the insert is STILL REJECTED after anon SELECT is narrowed, and the companion case shows it also rejects on the current unnarrowed configuration. A run where the narrowed case ACCEPTS is the failure this step exists to catch." }
+  ],
+  "metadata": {
+    "chairman_gated": true,
+    "ddl_applied_by_builder": 0,
+    "premises_measured_in_lead": 5,
+    "premises_corrected": 2,
+    "own_hypotheses_refuted": 1,
+    "g2_in_scope": false,
+    "pre_change_state": {
+      "function": "public.record_venture_error(p_venture_id uuid, p_error_hash text, p_message text, p_context jsonb DEFAULT '{}'::jsonb) — prosecdef=true, owner=postgres (rolbypassrls=true), SET search_path TO 'pg_catalog','public'. Normal insert VALUES (... 'issue','new','medium', p_context). Storm-watermark insert VALUES (... 'issue','new','high') with ON CONFLICT (venture_id, error_hash) DO UPDATE. Ceiling: v_ceiling constant integer := 20 distinct fingerprints per venture per hour.",
+      "grants": "EXECUTE on record_venture_error: postgres, anon, authenticated, service_role",
+      "policy_anon_feedback_ingress_bounds": "RESTRICTIVE, role anon, cmd INSERT. WITH CHECK: ((severity IS NULL OR severity::text <> ALL (ARRAY['critical','high']::text[])) AND (category::text IS DISTINCT FROM 'chairman_decision_deferred') AND (SELECT count(*) < 50 FROM feedback f WHERE f.source_type::text = 'telegram' AND f.created_at > now() - '01:00:00'::interval))",
+      "policy_inventory_on_feedback": "INSERT: anon_feedback_ingress_bounds (RESTRICTIVE, anon), insert_feedback_policy (PERM, service_role), telegram_bot_insert_feedback (PERM, anon), venture_user_insert_feedback (PERM, anon). SELECT: select_feedback_policy (PERM, authenticated), telegram_bot_select_feedback (PERM, anon). UPDATE: update_feedback_policy (PERM, service_role). DELETE: delete_feedback_policy (PERM, service_role).",
+      "population": "public.feedback rows with source_type='telegram': 1 total, 0 matching feedback_type LIKE 'user_%'"
+    }
+  }
+}
