@@ -107,6 +107,25 @@ CREATE POLICY anon_feedback_ingress_bounds
         --     whose signature could not be verified from the authoring side (unreadable through
         --     PostgREST, PGRST202). The chairman ratified "rate-limited"; the key is implementation,
         --     and this comment exists so it is never mistaken for a copy of the sibling.
+        --
+        --     *** THIS CLAUSE FAILS OPEN, AND NOTHING HERE CAN DETECT IT. READ BEFORE EDITING. ***
+        --     The subquery is evaluated AS THE INSERTING ROLE, so it is itself subject to anon's
+        --     SELECT RLS. It counts correctly today only because a permissive SELECT policy
+        --     (telegram_bot_select_feedback, TO anon, USING source_type='telegram') happens to
+        --     admit exactly the rows being counted. Tighten or drop that SELECT policy — an
+        --     entirely plausible, apparently-unrelated hardening — and this subquery sees ZERO
+        --     rows, count(*) < 50 becomes unconditionally TRUE, and the rate limit silently
+        --     becomes a no-op. It fails OPEN: the limit stops limiting while every post-condition
+        --     below still passes, because they assert the policy's SHAPE and never its BEHAVIOUR.
+        --     The dependency is invisible from the SELECT policy's side, which is where the
+        --     breaking edit would be made.
+        --     NOT fixed in place, deliberately: this policy is already INSTALLED in the database
+        --     (chairman-applied 2026-08-02) and this file is the catch-up commit for it. Changing
+        --     the predicate here — e.g. routing the count through a SECURITY DEFINER function,
+        --     which is the real fix — would make this migration stop reproducing production and
+        --     would alter a ratified permission-class object without ratification. The fix belongs
+        --     in its own chairman-gated work item; this comment exists so the coupling is not
+        --     rediscovered by an outage. Found by the TESTING sub-agent at EXEC, not by the author.
         AND (
             SELECT count(*) < 50
             FROM public.feedback f
@@ -198,9 +217,24 @@ COMMIT;
 
 -- VERIFICATION AFTER APPLY — the acceptance is this probe, NOT the apply exit code.
 -- Run every one AS THE ANON ROLE, and decide landed-vs-refused ONLY by a service-role readback.
--- 42501 is AMBIGUOUS: Postgres raises it both for a rejected insert AND for a SUCCESSFUL insert
--- whose RETURNING clause fails the read policy, so the dangerous case is indistinguishable from the
--- safe one by status alone.
+--
+-- *** USE THE THREE-LEG METHOD. AN ERROR CODE NEVER DECIDES LANDED-VS-REFUSED. ***
+--   leg 1  observe what the client reports (an error code, or none)
+--   leg 2  SERVICE-ROLE READBACK — the only thing that establishes whether the row exists
+--   leg 3  re-attempt the IDENTICAL write WITHOUT RETURNING (a bare insert), then read back AGAIN
+--
+-- Leg 3 is not belt-and-braces, it is the leg that catches the dangerous case: the two variants
+-- DIVERGE. A bare .insert() can return 201 with the row PERSISTED while the .insert().select()
+-- form of the same write reports an error. A probe suite built only from the RETURNING variant
+-- therefore proves only that RETURNING refused — never that the write did. Every refusal claimed
+-- below must hold under BOTH variants, and the control must LAND under both.
+--
+-- Do not restate this as "42501 is ambiguous because RETURNING fails the read policy." That
+-- framing was carried through several rounds of this SD's own evidence and is REFUTED — see
+-- strategic_directives_v2.metadata.method_correction_20260803. It misnames the hazard, and the
+-- misnaming matters: it points at the READ policy and so invites a fix there, while the actual
+-- divergence is between the two WRITE forms. The correction previously lived only in SD metadata
+-- and did not travel with this file — which is exactly how it got repeated. It travels now.
 --
 -- Probe rows must be OTHERWISE VALID and differ ONLY in the field under test — NOT NULL and CHECK
 -- constraints are evaluated BEFORE the RLS WITH CHECK, so a malformed probe never reaches the policy
@@ -219,3 +253,50 @@ COMMIT;
 --   AC-5     exceed the window -> the over-limit row ABSENT on readback
 --   AC-6     a SERVICE-ROLE insert of category='chairman_decision_deferred' still SUCCEEDS
 --            (service_role carries rolbypassrls=true, so the legitimate writer is unaffected)
+--
+--
+-- ============================================================================================
+-- KNOWN GAPS — found at EXEC review by the SECURITY and TESTING sub-agents, NOT by the author.
+-- None is fixed here: the executable SQL above is deliberately frozen to reproduce the policy
+-- already installed in production, and editing a ratified permission-class object without
+-- ratification is the larger error. They are recorded IN THE FILE because this SD exists because
+-- security knowledge that lived in only one place did not travel.
+-- ============================================================================================
+--
+-- G1. "ANON CANNOT REACH THE CHAIRMAN QUEUE" IS NOT ESTABLISHED — a channel bypasses RLS entirely.
+--     public.record_venture_error() is SECURITY DEFINER, owned by postgres (rolbypassrls=true), on
+--     a table with relforcerowsecurity=false — RLS bypassed twice over — and EXECUTE is granted to
+--     anon. Its storm branch inserts severity='high' with status='new', which satisfies the queue
+--     arm exactly. NO RLS policy on public.feedback can constrain it, including this one.
+--     Assessed NOT critical: severity is hard-coded, category is never set, inserts are
+--     ON CONFLICT-deduped, the text is boilerplate, the venture UUIDs are not anon-enumerable, and
+--     it has never fired. So it cannot produce the demonstrated exploit — but the stronger claim
+--     "anon cannot reach the chairman decision queue" is false as stated, and is not this policy's
+--     to make.
+--
+-- G2. THIS POLICY INTRODUCES AN AVAILABILITY REGRESSION. Clause (3) carries NO source_type
+--     qualifier, so a limit keyed on TELEGRAM ingress now gates EVERY anon INSERT — including the
+--     venture-user path, which has its own per-venture limit and never needed this one. An
+--     attacker can post 50 individually-legal telegram rows and deny ALL anon feedback ingress for
+--     an hour, at a cost of ~50 requests. The sibling limit this one deliberately does not copy is
+--     per-venture and therefore cannot be weaponised this way; this one is global. A source_type
+--     qualifier on clause (3) is the fix, and it needs ratification because it changes a ratified
+--     predicate.
+--
+-- G3. CLAUSE (1) MIRRORS A CONSTANT THAT LIVES IN A SEPARATELY-EDITABLE VIEW, AND THAT VIEW HAS
+--     ALREADY MOVED. The ('critical','high') pair is a copy of the queue arm's WHERE. Widen that
+--     arm and anon reaches the queue again while every post-condition above stays green — they
+--     assert this policy's SHAPE and can never see the view. This is not hypothetical: the queue
+--     has ALREADY been restructured since the 20260611_chairman_decision_queue.sql:193 citation in
+--     the header above — chairman_unified_decisions is now a thin filter over the newer
+--     chairman_all_decision_signals — and this policy was not consulted when that happened. The
+--     arm survived byte-identical by luck, not by a guard. Nothing records the dependency in
+--     either direction; treat the header's line citation as stale provenance, not a live pointer.
+--
+-- G4. THE POST-CONDITIONS ASSERT SHAPE, NEVER BEHAVIOUR, and run only inside the creating
+--     transaction — so they catch authoring errors in THIS file and nothing afterwards. Check 2's
+--     `< 1` threshold in particular still passes if telegram_bot_insert_feedback alone is dropped,
+--     which would close the very ingress path it exists to protect. Drift detection for this
+--     policy does not exist; the in-repo instrument to extend is
+--     scripts/breakage/active-breakage-canary.mjs, which needs a two-arm shape here because benign
+--     anon inserts are SUPPOSED to land.
