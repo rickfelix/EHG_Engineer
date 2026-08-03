@@ -69,16 +69,27 @@ describe('every writer that stamps acknowledged_at excludes promotion-marked row
     // Asserting the import STATEMENT is not enough — `{ PROMOTION_ACK_SOURCE_KEY:
     // PROMOTION_ACK_KEY }` satisfies that while pointing the guard at the wrong column. Assert
     // the destructured NAME matches the exported name.
-    expect(sweep).toMatch(/\{\s*PROMOTION_ACK_KEY\s*\}\s*=\s*require\([^)]*promotion-ack\.cjs[^)]*\)/);
+    // Allows sibling names in the destructure (the sweep also imports isPromotionAcked for the
+    // fourth guard) but still requires PROMOTION_ACK_KEY to be bound to ITS OWN name — which is
+    // what defeats `{ PROMOTION_ACK_SOURCE_KEY: PROMOTION_ACK_KEY }`.
+    expect(sweep).toMatch(/\{[^}]*\bPROMOTION_ACK_KEY\b[^}:]*\}\s*=\s*require\([^)]*promotion-ack\.cjs[^)]*\)/);
     expect(sweep).not.toMatch(/\.is\(['"]payload->>promotion_ack['"]/);
   });
 
-  it('the dead-letter drain excludes them (manual, but it stamps read_at too)', () => {
-    // The worst of the three: one write blinds the inbox, the sender view, isRouterSwallowed
-    // (needs !read_at) AND the starvation gauge (no auto_acked marker, so it reads as a HUMAN
-    // answer). Manual-only is not a guard.
+  it('the dead-letter drain excludes them, IN ITS OWN QUERY BLOCK', () => {
+    // The worst of the manual three: one write blinds the inbox, the sender view,
+    // isRouterSwallowed (needs !read_at) AND the starvation gauge (no auto_acked marker, so it
+    // reads as a HUMAN answer). Manual-only is not a guard.
+    //
+    // SCOPED, after a reviewer's mutation harness caught that this assertion was still
+    // file-global while the sweep's had been slice-scoped in the same commit — so relocating
+    // this guard to an unrelated line survived. The header claimed both were scoped; that was
+    // true of one and false of the other, in the file whose whole subject is claims that do not
+    // hold on every surface.
+    const block = deadLetter.slice(deadLetter.indexOf("all('session_coordination'"));
+    const query = block.slice(0, block.indexOf('const dead'));
+    expect(query).toMatch(/\.is\(`payload->>\$\{PROMOTION_ACK_KEY\}`, null\)/);
     expect(deadLetter).toMatch(/\{\s*PROMOTION_ACK_KEY\s*\}\s*=\s*createRequire\([^)]*\)\([^)]*promotion-ack\.cjs[^)]*\)/);
-    expect(deadLetter).toMatch(/\.is\(`payload->>\$\{PROMOTION_ACK_KEY\}`, null\)/);
   });
 
   it('every guarded site binds the key from the single module', () => {

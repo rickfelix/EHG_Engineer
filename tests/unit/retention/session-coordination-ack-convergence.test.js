@@ -19,15 +19,24 @@ function mockSupabase({ candidates = [], updateError = null } = {}) {
   // Filters are RECORDED rather than shaped, so a test can assert WHICH filters were applied
   // (see the promotion-marker case below) without pinning the order they arrive in.
   const filters = [];
+  const tables = [];
   const builder = {
     select: vi.fn(() => builder),
     is: vi.fn((col, val) => { filters.push(['is', col, val]); return builder; }),
     lte: vi.fn((col, val) => { filters.push(['lte', col, val]); return builder; }),
-    order: vi.fn(() => builder),
+    // RECORDED, not ignored: the nested chain used to reach .range() only via .order(), so it
+    // incidentally pinned the pagination contract. Dropping to a self-returning builder lost
+    // that — deleting the FR-6 `.order('id')` unique tiebreaker (added by
+    // COUNT-TRUNCATION-DISCIPLINE-001 precisely for stable page boundaries) reddened nothing.
+    // Recording it restores the pin without re-encoding filter ORDER, which was the brittleness.
+    order: vi.fn((col, opts) => { filters.push(['order', col, opts]); return builder; }),
     range: vi.fn(async () => ({ data: candidates, error: null })),
   };
-  const from = vi.fn(() => ({
-    select: builder.select,
+  const from = vi.fn((table) => ({
+    // The table name is recorded because a builder that ignores its argument will happily report
+    // the right filters applied to the WRONG RELATION — changing the SUT to .from('other_table')
+    // left this suite green until this was added.
+    select: (...a) => { tables.push(table); return builder.select(...a); },
     update: vi.fn((patch) => {
       updates.push(patch);
       return {
@@ -38,7 +47,7 @@ function mockSupabase({ candidates = [], updateError = null } = {}) {
       };
     }),
   }));
-  return { supabase: { from }, updates, filters };
+  return { supabase: { from }, updates, filters, tables };
 }
 
 describe('convergeAckTTL', () => {
@@ -56,13 +65,24 @@ describe('convergeAckTTL', () => {
   // observed. That closes all four, and it exercises the ESM createRequire import at runtime
   // rather than asserting the import statement exists.
   it('EXCLUDES promotion-marked rows from TTL convergence (observed, not grepped)', async () => {
-    const { supabase, filters } = mockSupabase({ candidates: [] });
+    const { supabase, filters, tables } = mockSupabase({ candidates: [] });
     await convergeAckTTL(supabase);
+    // The right filters on the wrong relation is still wrong.
+    expect(tables).toContain('session_coordination');
     const isFilters = filters.filter((f) => f[0] === 'is');
     expect(isFilters).toContainEqual(['is', 'acknowledged_at', null]);
     // The exact column string matters: promotion_ack_source would pass a laxer assertion while
     // filtering the wrong key entirely.
     expect(isFilters).toContainEqual(['is', 'payload->>promotion_ack', null]);
+  });
+
+  it('still paginates with the FR-6 unique tiebreaker (pinned after the builder swap lost it)', async () => {
+    // Not about this SD, but the self-returning builder dropped a contract the old nested chain
+    // held incidentally: it reached .range() only via .order(), so deleting the FR-6 unique
+    // tiebreaker reddened nothing. Re-pinned rather than left to be rediscovered.
+    const { supabase, filters } = mockSupabase({ candidates: [] });
+    await convergeAckTTL(supabase);
+    expect(filters).toContainEqual(['order', 'id', { ascending: true }]);
   });
 
   it('no-ops when there are no candidates', async () => {

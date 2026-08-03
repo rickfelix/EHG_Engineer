@@ -31,7 +31,7 @@ const { PLAN_CONTENT_MARKER } = require('../lib/sd-enrichment-markers.cjs');
 const { describeUnreadableAssignment } = require('../lib/fleet/assignment-target.cjs');
 const { parseSdDependencies } = require('../lib/utils/parse-sd-dependencies.cjs'); // QF-20260525-542
 const { buildRetentionAckPayload } = require('../lib/retention/retention-ack-marker.cjs'); // FR-7
-const { PROMOTION_ACK_KEY } = require('../lib/coordinator/promotion-ack.cjs'); // SIGNAL-ROUTER-AUTO-001 FR-8
+const { PROMOTION_ACK_KEY, isPromotionAcked } = require('../lib/coordinator/promotion-ack.cjs'); // SIGNAL-ROUTER-AUTO-001 FR-8
 // SD-LEO-FIX-COORDINATOR-SWEEP-CLAIMED-001: shared dispatch-eligibility predicate (same one the
 // worker self_claim path uses) so CLAIM_FIX never re-affirms an orchestrator PARENT / dep-blocked SD.
 const { evaluateDispatchEligibility, classifyDispatchIneligibility, TEST_FIXTURE_KEY_RE } = require('../lib/fleet/claim-eligibility.cjs');
@@ -3804,6 +3804,29 @@ function planDeadLetters(unreadMsgs, { allSessionIds, deadIds }, nowMs) {
     .filter(m => !allSessionIds.has(m.target_session) || deadIds.has(m.target_session))
     .filter(m => !m.expires_at || new Date(m.expires_at).getTime() <= nowMs)
     .filter(m => !(m.payload && m.payload.dead_letter === true))
+    // SD-LEO-INFRA-SIGNAL-ROUTER-AUTO-001 (FR-8, FOURTH site) — and the only automatic one left.
+    //
+    // Guarded HERE, in the pure planner, rather than in each executor's select. Three reasons:
+    // one edit covers BOTH twins (dead-letter-planning.cjs and legacy-fallback.cjs, which
+    // sweep-legacy-twin-parity requires stay in lockstep); this function is pure, exported and
+    // already unit-tested, so the guard gets a real behavioural test instead of a fourth source
+    // scan; and it avoids a fourth call site to keep in sync.
+    //
+    // WHY THIS PATH IS THE DANGEROUS ONE. It never stamps acknowledged_at, so the inbox, the
+    // sender's view and the starvation gauge all keep showing the row — it looks harmless. What
+    // it stamps is read_at, and a non-null read_at ARMS THE SECOND DISJUNCT of
+    // cleanup_expired_coordination (`read_at IS NOT NULL AND read_at <= now() - 7 days`). Before
+    // the stamp a promoted row has both columns NULL and is permanently immune to cleanup — that
+    // immunity IS the preservation this SD buys. After it, the row is archived and deleted seven
+    // days later, still unread and undispositioned. payload is spread rather than clobbered, so
+    // promotion_ack survives on the row it can no longer protect.
+    //
+    // Newly reachable BECAUSE of this SD: pre-fix, promoted rows carried acknowledged_at and the
+    // executors' `.is('acknowledged_at', null)` excluded them outright. Measured against the 10
+    // live promoted rows: 10/10 uuid-like target, 10/10 not already dead-lettered, 9/10 read_at
+    // null. And unlike the STUCK-drain this runs on the */5 cron in BOTH flag modes and is NOT
+    // gated on _coordMutationAllowed.
+    .filter(m => !isPromotionAcked(m))
     .map(m => ({
       id: m.id,
       update: {
