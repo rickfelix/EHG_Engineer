@@ -17,6 +17,7 @@ import { createSupabaseServiceClient } from '../lib/supabase-client.js';
 import sessionManager from '../lib/session-manager.mjs';
 import conflictChecker from '../lib/session-conflict-checker.mjs';
 import fs from 'fs';
+import { pathToFileURL } from 'node:url';   // FR-9: CLI-entrypoint detection, so importing this file does not run a command
 import dotenv from 'dotenv';
 
 // Load environment
@@ -358,11 +359,28 @@ ${colors.cyan}Parallel Work:${colors.reset}
 `);
 }
 
+// SD-LEO-INFRA-CLAIM-LIFECYCLE-RELEASE-002 (FR-9): test seam. This file had ZERO exports and ran
+// its CLI dispatch at module scope, so merely IMPORTING it executed a command and called
+// process.exit — which is why releaseSD could not be asserted in CI at all, and therefore why FR-5
+// (release resolves its target from the authoritative column) was untestable.
+//
+// The dispatch is now guarded so it runs ONLY when this file is the process entrypoint. Behaviour
+// when invoked as a CLI is byte-identical; the sole change is that an import no longer triggers it.
+export { releaseSD };
+
+const isCliEntrypoint = (() => {
+  try {
+    const entry = process.argv[1];
+    if (!entry) return false;
+    return import.meta.url === pathToFileURL(entry).href;
+  } catch { return false; }   // never let entrypoint detection break the CLI
+})();
+
 // Main
 const command = process.argv[2];
 const arg = process.argv[3];
 
-switch (command) {
+if (isCliEntrypoint) switch (command) {
   case 'claim':
     if (!arg) {
       console.log(`${colors.red}Error: SD-ID required${colors.reset}`);

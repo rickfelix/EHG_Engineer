@@ -1565,4 +1565,21 @@ async function main() {
 // fire-and-forget fetch landed here and exited un-drained, which was the last
 // remaining path to the libuv UV_HANDLE_CLOSING assertion (crash = PreToolUse
 // aborted = enforcement silently skipped). drainUndiciPool never throws.
-main().catch(async () => { await drainUndiciPool(); process.exit(0); }); // Fail-open: async errors never block
+// SD-LEO-INFRA-CLAIM-LIFECYCLE-RELEASE-002 (FR-9): test seam. This file had ZERO exports and ran
+// main() unconditionally at load, so importing it executed the whole enforcement pass and called
+// process.exit — which is exactly why FR-7's claim (that adding an is_working_on FILTER regresses
+// the guard, because resolveSessionClaimedSdKey returns null on an empty set and the guard
+// FAIL-OPENS below) could not be asserted in CI and had to be argued instead.
+//
+// BEHAVIOUR WHEN RUN AS THE HOOK IS UNCHANGED. .claude/settings.json invokes this as
+// `node <path>/pre-tool-enforce.cjs`, so require.main === module holds and main() still runs
+// exactly as before, including the fail-open drain. The guard only suppresses execution when the
+// file is IMPORTED — the one case that never happened in production and always broke tests.
+if (require.main === module) {
+  main().catch(async () => { await drainUndiciPool(); process.exit(0); }); // Fail-open: async errors never block
+}
+
+// Exported for tests only. resolveSessionClaimedSdKey is the FR-7 target: it returns null on an
+// empty result set, and its caller treats null as "no claim" and proceeds — so a FILTER that can
+// empty the set converts a guard into a no-op, which is the regression FR-7 corrected itself about.
+module.exports = { resolveSessionClaimedSdKey, main };
