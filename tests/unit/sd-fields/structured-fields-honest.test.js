@@ -116,6 +116,67 @@ describe('FR-3 detector — row-level classification (drives the REAL classifySd
   });
 });
 
+describe('FR-4 — the gate named for this defect can now fire on it', () => {
+  const load = () => import('../../../scripts/modules/handoff/executors/lead-to-plan/gates/placeholder-content.js');
+
+  it('[REGRESSION] detects value-side filler that the label-side checks scored as CUSTOM', async () => {
+    const { validatePlaceholderContent } = await load();
+    // Before FR-4 this row passed clean: `change` and `criterion` are real, and nothing inspected
+    // `impact` or `measure` where the filler actually lives.
+    const r = await validatePlaceholderContent({
+      key_changes: [{ change: 'A real change', impact: 'See SD description for details' }],
+      success_criteria: [{ criterion: 'A real criterion', measure: 'Implementation verified and tests passing' }],
+    });
+    expect(r.value_side_filler).toBe(2);
+    expect(r.placeholder_free).toBe(false);
+    expect(r.warnings.some((w) => /generator FILLER/.test(w))).toBe(true);
+  });
+
+  it('[REGRESSION] negative control — a row DESCRIBING the filler phrase is not flagged', async () => {
+    const { validatePlaceholderContent } = await load();
+    const r = await validatePlaceholderContent({
+      success_criteria: [{ criterion: 'Honest', measure: QUOTING_MEASURE }],
+    });
+    expect(r.value_side_filler).toBe(0);
+    expect(r.placeholder_free).toBe(true);
+  });
+
+  it('[GUARD-RAIL] clean rows stay clean — the revived gate is not a blanket flagger', async () => {
+    const { validatePlaceholderContent } = await load();
+    const r = await validatePlaceholderContent({
+      key_changes: [{ change: 'Real', impact: 'Breaks nothing' }],
+      success_criteria: [{ criterion: 'Real', measure: 'run the suite' }],
+    });
+    expect(r.value_side_filler).toBe(0);
+    expect(r.placeholder_free).toBe(true);
+    expect(r.warnings).toEqual([]);
+  });
+
+  it('[GUARD-RAIL] the explicit marker is reported but NOT penalised as filler', async () => {
+    // Penalising honest emptiness would push authors back toward filler — the opposite of the point.
+    const { validatePlaceholderContent } = await load();
+    const r = await validatePlaceholderContent({
+      key_changes: [{ change: 'Real', impact: UNPOPULATED }],
+    });
+    expect(r.value_side_filler).toBe(0);
+    expect(r.placeholder_free).toBe(true);
+    expect(r.warnings.some((w) => /explicitly UNPOPULATED/.test(w))).toBe(true);
+  });
+
+  it('[GUARD-RAIL] pass stays TRUE — the non-blocking contract is deliberately unchanged', async () => {
+    // This pins the RESTRAINT, not an oversight. The real verdict moved to `placeholder_free`;
+    // flipping `pass` would be an unverified blast radius on 1,442 existing SDs, and this SD
+    // already caught one such change in its own FR-2a. If a future SD flips it, this test SHOULD
+    // fail — and that failure is the signal to go enumerate consumers first.
+    const { validatePlaceholderContent } = await load();
+    const r = await validatePlaceholderContent({
+      success_criteria: [{ criterion: 'x', measure: 'See description for details' }],
+    });
+    expect(r.pass).toBe(true);
+    expect(r.placeholder_free).toBe(false);
+  });
+});
+
 describe('FR-2 — the producers no longer stamp plausible filler', () => {
   it('[REGRESSION] the filler constants are gone from validate-sd-fields.js', async () => {
     const { readFileSync } = await import('node:fs');
