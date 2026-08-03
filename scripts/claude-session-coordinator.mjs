@@ -17,6 +17,7 @@ import { createSupabaseServiceClient } from '../lib/supabase-client.js';
 import sessionManager from '../lib/session-manager.mjs';
 import conflictChecker from '../lib/session-conflict-checker.mjs';
 import fs from 'fs';
+import { pathToFileURL } from 'node:url';   // FR-9: CLI-entrypoint detection, so importing this file does not run a command
 import dotenv from 'dotenv';
 
 // Load environment
@@ -188,9 +189,37 @@ async function releaseSD() {
     return;
   }
 
+  // SD-LEO-INFRA-CLAIM-LIFECYCLE-RELEASE-002 (FR-5): release must resolve its target from the
+  // AUTHORITATIVE column, not from the in-memory mirror. session.sd_id is a mirror of a past
+  // ownership decision; when it is empty but claiming_session_id still names this session, the old
+  // early-return reported "No SD currently claimed" and did NOTHING — which is exactly the reported
+  // symptom that `npm run sd:release` says "no SD claimed" for a QF the seat is still pinned by.
+  //
+  // MIRROR FIRST, AUTHORITATIVE AS FALLBACK: when the mirror agrees, behaviour is byte-identical to
+  // before. The fallback only fires in the case that was previously unreleasable.
   if (!session.sd_id) {
-    console.log(`${colors.yellow}No SD currently claimed by this session.${colors.reset}\n`);
-    return;
+    const { getMyClaims } = await import('../lib/claim/get-my-claims.cjs');
+    const supabase = createSupabaseServiceClient();
+    const { claims, error } = await getMyClaims(supabase, session.session_id || session.id);
+
+    if (error && !claims.length) {
+      // A failed read is NOT "you hold nothing". Saying so would send an operator away believing the
+      // seat is free while it is still pinned — the precise misreport this FR exists to end.
+      console.log(`${colors.red}Could not determine claims from the authoritative columns: ${error}${colors.reset}`);
+      console.log(`${colors.yellow}NOT reporting "no claim" — that would be a guess. Retry, or clear the claim directly.${colors.reset}\n`);
+      return;
+    }
+    if (!claims.length) {
+      console.log(`${colors.yellow}No SD currently claimed by this session.${colors.reset} (mirror empty AND no authoritative claim)\n`);
+      return;
+    }
+    console.log(`${colors.yellow}Mirror was empty, but the authoritative column still names this session:${colors.reset}`);
+    for (const c of claims) console.log(`  ${c.kind} ${c.key}${c.status ? ` (${c.status})` : ''}`);
+    if (claims.length > 1) {
+      console.log(`${colors.yellow}  ${claims.length} claims held — releasing via the session manager releases its current one;${colors.reset}`);
+      console.log(`${colors.yellow}  re-run until this list is empty.${colors.reset}`);
+    }
+    session.sd_id = claims[0].key;   // give the release path a target it can act on
   }
 
   console.log(`Releasing: ${session.sd_id}`);
@@ -358,11 +387,28 @@ ${colors.cyan}Parallel Work:${colors.reset}
 `);
 }
 
+// SD-LEO-INFRA-CLAIM-LIFECYCLE-RELEASE-002 (FR-9): test seam. This file had ZERO exports and ran
+// its CLI dispatch at module scope, so merely IMPORTING it executed a command and called
+// process.exit — which is why releaseSD could not be asserted in CI at all, and therefore why FR-5
+// (release resolves its target from the authoritative column) was untestable.
+//
+// The dispatch is now guarded so it runs ONLY when this file is the process entrypoint. Behaviour
+// when invoked as a CLI is byte-identical; the sole change is that an import no longer triggers it.
+export { releaseSD };
+
+const isCliEntrypoint = (() => {
+  try {
+    const entry = process.argv[1];
+    if (!entry) return false;
+    return import.meta.url === pathToFileURL(entry).href;
+  } catch { return false; }   // never let entrypoint detection break the CLI
+})();
+
 // Main
 const command = process.argv[2];
 const arg = process.argv[3];
 
-switch (command) {
+if (isCliEntrypoint) switch (command) {
   case 'claim':
     if (!arg) {
       console.log(`${colors.red}Error: SD-ID required${colors.reset}`);
