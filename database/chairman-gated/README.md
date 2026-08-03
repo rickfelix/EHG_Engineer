@@ -51,6 +51,54 @@ and has **no retention implemented**, so every row added is permanent. The `WHEN
 trigger is a second, independent guard on that same property, so the trigger does not fire at all
 for updates touching none of the three fields.
 
+## Applying `20260803_bound_anon_ingress_source_type_qualifier.sql`
+
+```
+node scripts/apply-migration.js "database/chairman-gated/20260803_bound_anon_ingress_source_type_qualifier.sql" \
+  --prod-deploy --issue-token <token>
+```
+
+Chairman-approved 2026-08-03 (Option A, SMS 10:13:53Z, on record via Adam). **Approval to author is
+not approval to apply** — the apply runs through the ceremony with the approval row referenced.
+
+Rollback is in the file header, and the pre-amendment predicate is captured there **verbatim from
+`pg_get_expr` on the live policy**, not reconstructed from the migration source. That distinction is
+load-bearing: Postgres normalises `NOT IN` to `<> ALL (ARRAY[...])` and adds `::text` casts, so a
+rollback rebuilt from the migration file would not restore byte-identical state.
+
+**Run the acceptance twice — the baseline is not optional:**
+
+```
+node database/chairman-gated/20260803_bound_anon_ingress_source_type_qualifier_acceptance.mjs --baseline   # BEFORE apply, test B must FAIL
+node database/chairman-gated/20260803_bound_anon_ingress_source_type_qualifier_acceptance.mjs --verify     # AFTER apply, all must PASS
+```
+
+A post-apply green proves nothing alone: a probe that cannot detect the defect reads green against
+the unamended policy too, making "the fix works" indistinguishable from "the test cannot see". The
+baseline run is what gives the verify run meaning.
+
+### What it does
+
+Amends clause (3) of `anon_feedback_ingress_bounds` so the 1-hour window is counted over rows
+sharing the **inserting row's** `source_type` instead of always over `telegram`. Each `source_type`
+gets its own budget, so flooding one can no longer deny ingress to another.
+
+That cross-source denial was the defect (gap G2 of SD-LEO-FIX-BOUND-ANON-TELEGRAM-001): a limit
+keyed on telegram was ANDed into a RESTRICTIVE policy applying to *every* anon INSERT, so ~50
+individually-legal telegram rows denied all anon feedback ingress for an hour. Found by the SECURITY
+sub-agent during EXEC review, not by the policy's author. Exposure is real but cold — organic
+telegram volume is 1 row/hour all-time — so it is an adversarial lever, not an operational fault.
+
+`feedback.source_type` in the subquery is the load-bearing token and the thing most likely to be
+silently wrong: the subquery aliases the same table as `f`, so an unqualified `source_type` would
+bind to `f` and collapse the predicate to a tautology, counting the full hourly population while
+reading as if it were scoped. Verified read-only before staging (the correlated form returns
+distinct per-source counts, not the table total) and re-asserted at apply time by post-condition 2.
+
+**Does not fix**, and must not be read as fixing: the counting subquery still runs as the inserting
+role and is subject to that role's SELECT RLS, so narrowing the anon SELECT policy still makes it
+undercount and fail **open**.
+
 ## The underlying finding, which outlives this SD
 
 `LEO_MIGRATION_TIER_GATE` being off means the TIER-2 default-deny protection is currently inert
