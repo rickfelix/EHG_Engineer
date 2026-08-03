@@ -174,3 +174,49 @@ describe('FR-2: fireFleetEnforcementKill — refusals and the written row', () =
       .resolves.toBeDefined();
   });
 });
+
+/**
+ * THE PATHS THAT SHIP BUT NOTHING RAN — added on a SECURITY coverage note.
+ *
+ * Every test above injects lookupSession and resolveActiveCoordinator, so the DEFAULT
+ * implementations — the only ones that execute in production — were never exercised by anything.
+ * That is exactly how this file's callsign bug shipped: defaultLookupSession selected
+ * claude_sessions.callsign, a column that does not exist, and 13 green tests never touched it.
+ * CI's schema lint caught it; the suite structurally could not.
+ */
+describe('FR-2: the DEFAULT paths, which production actually uses', () => {
+  const { defaultResolveActiveCoordinator } = require_('../../../lib/coordinator/kill-switch-writer.cjs');
+
+  it('defaultLookupSession selects ONLY columns that exist on claude_sessions', async () => {
+    // Pins the column list against the live schema's known shape. callsign is deliberately named in
+    // the negative: it is the column that did not exist, and re-adding it is the regression.
+    let selected = null;
+    const sb = { from: () => ({ select: (cols) => { selected = cols; return { eq: () => ({ maybeSingle: async () => ({ data: null }) }) }; } }) };
+    const mod = require_('../../../lib/coordinator/kill-switch-writer.cjs');
+    // Reach the default by NOT injecting it.
+    await fireFleetEnforcementKill(
+      { supabase: sb, insertCoordinationRow: vi.fn(), resolveActiveCoordinator: async () => COORD_ID, now: () => NOW },
+      { actor: 'sess-x', reason: 'r' },
+    ).catch(() => {});
+    expect(selected, 'defaultLookupSession should have issued a select').toBeTruthy();
+    expect(selected).not.toMatch(/callsign/);
+    for (const col of ['session_id', 'status', 'heartbeat_at', 'metadata']) expect(selected).toContain(col);
+    expect(mod.defaultResolveActiveCoordinator).toBeTypeOf('function');
+  });
+
+  it('defaultResolveActiveCoordinator returns null when the resolver throws — fails CLOSED', async () => {
+    // A supabase double that throws on any use. The writer must treat "could not resolve" as "no
+    // coordinator", which evaluateActor then refuses on, rather than letting an exception escape or
+    // a falsy value read as authorized.
+    const exploding = { from: () => { throw new Error('resolver exploded'); } };
+    await expect(defaultResolveActiveCoordinator(exploding)).resolves.toBeNull();
+  });
+
+  it('a throwing resolver makes the WRITER refuse, not crash', async () => {
+    const h = harness();
+    const deps = { ...h.deps, resolveActiveCoordinator: async () => { throw new Error('boom'); } };
+    // The throw propagates from the injected resolver; what must NOT happen is a written row.
+    await fireFleetEnforcementKill(deps, { actor: COORD_ID, reason: 'r' }).catch(() => {});
+    expect(h.insert).not.toHaveBeenCalled();
+  });
+});
