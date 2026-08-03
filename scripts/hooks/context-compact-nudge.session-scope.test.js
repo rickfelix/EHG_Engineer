@@ -35,7 +35,6 @@ const EARNER = `scope-earner-${process.pid}`;
 const BYSTANDER = `scope-bystander-${process.pid}`;
 const ROLE_SESSION = `scope-adam-${process.pid}`;
 const SECOND_EARNER = `scope-earner2-${process.pid}`;
-const ALL_SESSIONS = [EARNER, BYSTANDER, ROLE_SESSION, SECOND_EARNER];
 
 const flagFor = (sid) => getHandoffFlagPath({ LEO_COMPACT_FLAG_DIR: TEST_FLAG_DIR }, sid);
 const stateFor = (sid) => path.join(STATE_DIR, `session-${sid}.json`);

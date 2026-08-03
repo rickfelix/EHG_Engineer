@@ -234,13 +234,6 @@ function minutesSince(isoTime) {
   return (Date.now() - new Date(isoTime).getTime()) / 60000;
 }
 
-function formatDuration(minutes) {
-  if (minutes < 60) return `${Math.round(minutes)}m`;
-  const h = Math.floor(minutes / 60);
-  const m = Math.round(minutes % 60);
-  return `${h}h ${m}m`;
-}
-
 // ============================================================================
 // MAIN
 // ============================================================================
