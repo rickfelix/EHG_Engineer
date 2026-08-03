@@ -34,6 +34,30 @@ function mkLeftover(name, { withGit = false } = {}) {
   return dir;
 }
 
+/**
+ * Age a leftover tree — DIRECTORY AND CONTENTS.
+ *
+ * SD-LEO-INFRA-ORPHAN-SWEEP-HARD-001 (FR-2): these fixtures previously called
+ * `fs.utimesSync(dir, old, old)` and aged the CONTAINER ONLY, leaving the file inside freshly
+ * written. Under the old guard — which stat'd the top-level directory inode — that read as two
+ * hours old and the tests passed. Under FR-2, which reads the newest DESCENDANT mtime, the same
+ * fixture correctly reads as SECONDS old and is excluded as too_recent.
+ *
+ * The tests were not wrong about intent; their fixture encoded the very blindness FR-2 removes.
+ * A directory whose contents were written moments ago IS recent, and the incident is precisely
+ * what that confusion costs: a tree edited 3.5h earlier read as ancient because only the container
+ * was consulted. So the fixtures are corrected to age the whole tree — the guard is not weakened
+ * to accommodate them.
+ */
+function ageTree(dir, ms) {
+  const when = new Date(Date.now() - ms);
+  for (const e of fs.readdirSync(dir)) {
+    const p = path.join(dir, e);
+    try { if (!fs.lstatSync(p).isSymbolicLink()) fs.utimesSync(p, when, when); } catch { /* skip */ }
+  }
+  fs.utimesSync(dir, when, when);
+}
+
 // Junction (Windows) / dir-symlink (POSIX) from <dir>/node_modules to the shared store.
 function linkNodeModules(dir) {
   const nm = path.join(dir, 'node_modules');
@@ -53,12 +77,20 @@ beforeEach(() => {
 
 afterEach(() => {
   // Defensive teardown: unlink any junctions first so the test cleanup never follows them.
-  try {
-    for (const e of fs.readdirSync(worktreesDir)) {
-      const nm = path.join(worktreesDir, e, 'node_modules');
+  // SD-LEO-INFRA-ORPHAN-SWEEP-HARD-001 (FR-1): archived orphans now live one level deeper, at
+  // _archive/<name>-<ts>/node_modules. Without descending into _archive the teardown's recursive
+  // rmSync below is no longer junction-guarded and could follow a junction into the shared store —
+  // the exact harm the CANARY test exists to detect, caused by the cleanup rather than the code.
+  const unlinkJunctionsIn = (dir) => {
+    let entries = [];
+    try { entries = fs.readdirSync(dir); } catch { return; }
+    for (const e of entries) {
+      const nm = path.join(dir, e, 'node_modules');
       try { if (fs.lstatSync(nm).isSymbolicLink()) fs.unlinkSync(nm); } catch { /* none */ }
     }
-  } catch { /* worktreesDir gone */ }
+  };
+  unlinkJunctionsIn(worktreesDir);
+  unlinkJunctionsIn(path.join(worktreesDir, '_archive'));
   try { fs.rmSync(root, { recursive: true, force: true }); } catch { /* best-effort */ }
 });
 
@@ -69,10 +101,11 @@ describe('selectReapableOrphans (FR-1/FR-3)', () => {
     const recent = mkLeftover('fresh-dir');
     fs.mkdirSync(path.join(worktreesDir, '_archive'), { recursive: true }); // helper, never an orphan
 
-    // Age the old orphan well past the threshold; leave 'fresh-dir' new.
+    // Age the old orphan well past the threshold — CONTENTS INCLUDED (see ageTree); leave
+    // 'fresh-dir' new. FR-2 reads the newest DESCENDANT mtime, so ageing only the container
+    // would leave this tree correctly classified as seconds old.
     const now = Date.now();
-    const old = new Date(now - 2 * 60 * 60 * 1000);
-    fs.utimesSync(oldOrphan, old, old);
+    ageTree(oldOrphan, 2 * 60 * 60 * 1000);
 
     const sel = selectReapableOrphans({
       worktreesDir,
@@ -100,8 +133,7 @@ describe('selectReapableOrphans (FR-1/FR-3)', () => {
     fs.mkdirSync(path.join(worktreesDir, '_archive', 'preserved-from-x'), { recursive: true });
 
     const now = Date.now();
-    const old = new Date(now - 2 * 60 * 60 * 1000);
-    fs.utimesSync(qfOrphan, old, old);
+    ageTree(qfOrphan, 2 * 60 * 60 * 1000);
 
     const sel = selectReapableOrphans({
       worktreesDir,
@@ -128,19 +160,99 @@ describe('reclaimOrphans dry-run (FR-3)', () => {
 
 describe('reclaimOrphans junction safety — CANARY survives (FR-2)', () => {
   it('reclaims an orphan that junctions to shared node_modules without gutting the store', () => {
+    // SD-LEO-INFRA-ORPHAN-SWEEP-HARD-001 (FR-1) REPAIR — READ THIS BEFORE EDITING.
+    //
+    // This test was the repo's ONLY behavioural proof that orphan reclamation does not follow a
+    // node_modules junction and gut the shared store. It proved it by DELETING a junctioned tree
+    // and checking the canary survived.
+    //
+    // FR-1 made reclamation rename-only. The two original assertions then became TRUE FOR THE
+    // WRONG REASONS and the test went on passing while measuring nothing:
+    //   existsSync(orphan)===false  — still true, because a rename MOVES the source away.
+    //   existsSync(canary)===true   — now TRIVIALLY true, because nothing deletes any more.
+    // A test whose failure mode has been removed is indistinguishable from a healthy one.
+    // (PAT-TEST-PINS-FACT-NOT-BEHAVIOUR-001.)
+    //
+    // The destination assertions below are what restore its teeth: they check the junction moved
+    // AS A LINK, still resolves to the shared store, and that the store was never traversed.
     const orphan = mkLeftover('orphan-junctioned');
     linkNodeModules(orphan);
     expect(fs.existsSync(canary)).toBe(true);
+    const storeEntriesBefore = fs.readdirSync(sharedStore).length;
 
     const res = reclaimOrphans([{ dir: 'orphan-junctioned', full: orphan }], {
       execute: true,
-      repoRoot: root, // not a git repo → removeWorktreeViaGit fails → safeRecursiveRm fallback
+      repoRoot: root, // not a git repo → the best-effort `git worktree prune` is skipped
     });
 
     expect(res.reclaimed_count).toBe(1);
     expect(res.failed.length).toBe(0);
-    expect(fs.existsSync(orphan)).toBe(false);  // orphan removed
-    expect(fs.existsSync(canary)).toBe(true);   // shared store CANARY survived (junction not followed)
+    expect(fs.existsSync(orphan)).toBe(false);  // source path vacated (moved, not deleted)
+    expect(fs.existsSync(canary)).toBe(true);   // shared store CANARY survived
+
+    // --- FR-1 destination assertions: the archive actually holds the content ---
+    const archiveRoot = path.join(worktreesDir, '_archive');
+    const archived = fs.readdirSync(archiveRoot).filter((d) => d.startsWith('orphan-junctioned-'));
+    expect(archived).toHaveLength(1);
+    const dest = path.join(archiveRoot, archived[0]);
+
+    // The real file moved with it — proves this was a move, not a delete-and-forget.
+    expect(fs.readFileSync(path.join(dest, 'file.txt'), 'utf8')).toHaveLength(100);
+
+    // The junction moved AS A JUNCTION and still points at the shared store. If rename had
+    // dereferenced it, this would be a real directory containing a copy of the store.
+    const destNm = path.join(dest, 'node_modules');
+    expect(fs.lstatSync(destNm).isSymbolicLink()).toBe(true);
+    expect(fs.readFileSync(path.join(destNm, 'CANARY.txt'), 'utf8')).toBe('do-not-delete');
+
+    // The store itself was never walked into or added to.
+    expect(fs.readdirSync(sharedStore).length).toBe(storeEntriesBefore);
+  });
+
+  it('REFUSES rather than truncating when the move fails — source left intact', () => {
+    // The failure this SD exists to prevent, in its post-fix form: a locked child makes the
+    // parent rename throw EPERM. The old code would fall back to copy-then-delete, and
+    // safeRecursiveCp silently skips children it cannot stat — a truncated archive reporting
+    // success, then the source deleted. Rename-only means the only honest answer is REFUSAL.
+    const orphan = mkLeftover('orphan-locked');
+    linkNodeModules(orphan);
+    const boom = () => { const e = new Error('EPERM: operation not permitted'); e.code = 'EPERM'; throw e; };
+
+    const r = defaultRemoveOrphan(orphan, root, { renameImpl: boom });
+
+    expect(r.ok).toBe(false);
+    expect(r.method).toBe('refused');
+    expect(fs.existsSync(path.join(orphan, 'file.txt'))).toBe(true); // source intact, still inspectable
+    expect(fs.existsSync(canary)).toBe(true);
+    // And no partial destination left behind for someone to mistake for a complete archive.
+    const archiveRoot = path.join(worktreesDir, '_archive');
+    const leftovers = fs.existsSync(archiveRoot)
+      ? fs.readdirSync(archiveRoot).filter((d) => d.startsWith('orphan-locked-'))
+      : [];
+    expect(leftovers).toHaveLength(0);
+  });
+
+  it('REFUSES when the archive destination already exists — never overwrites a prior preserve', () => {
+    // Found by a surviving mutant: removing the collision guard changed nothing observable, which
+    // meant the guard was untested. It matters because FR-1 makes _archive the SOLE custodian of
+    // everything the sweep preserves — silently landing on an existing entry would destroy an
+    // earlier preserved tree, which is this SD's own failure mode relocated one directory over.
+    // The Stage-1/2 archiver has no such check; millisecond stamps make a clash rare, not absent.
+    const orphan = mkLeftover('orphan-clash');
+    const fixedNow = Date.parse('2026-08-03T00:00:00.000Z');
+    const stamp = new Date(fixedNow).toISOString().replace(/[:.]/g, '-');
+    const archiveRoot = path.join(worktreesDir, '_archive');
+    fs.mkdirSync(path.join(archiveRoot, `orphan-clash-${stamp}`), { recursive: true });
+    fs.writeFileSync(path.join(archiveRoot, `orphan-clash-${stamp}`, 'PRIOR.txt'), 'earlier-preserve');
+
+    const r = defaultRemoveOrphan(orphan, root, { now: fixedNow });
+
+    expect(r.ok).toBe(false);
+    expect(r.method).toBe('refused');
+    expect(String(r.error)).toMatch(/already exists/);
+    // The earlier preserve is untouched and the source is still there to retry.
+    expect(fs.readFileSync(path.join(archiveRoot, `orphan-clash-${stamp}`, 'PRIOR.txt'), 'utf8')).toBe('earlier-preserve');
+    expect(fs.existsSync(path.join(orphan, 'file.txt'))).toBe(true);
   });
 });
 

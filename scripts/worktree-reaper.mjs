@@ -112,6 +112,48 @@ const PRESERVE_EXEMPT_RE = /^(tmp-|scratch-|\.claude[\\/]|\.workflow-patterns|\.
 
 // ── CLI parsing ────────────────────────────────────────────────────────
 
+/**
+ * SD-LEO-INFRA-ORPHAN-SWEEP-HARD-001 (FR-1b) — environment gate for the orphan leg.
+ *
+ * WHY AN ENV VAR AND NOT A CLI FLAG. `--no-orphan-sweep` is a real opt-out that NEITHER automated
+ * invoker can pass:
+ *   1. scripts/fleet/worktree-reaper-tick.cjs buildReaperArgs (:189-195) emits only --execute,
+ *      --stage2 --yes and --all-pools; the string 'no-orphan-sweep' does not appear in that file.
+ *   2. .github/workflows/worktree-reaper-cadence.yml runs `npm run worktree:reap:execute` on a
+ *      daily schedule, invoking THIS script directly with no path through the tick at all — it
+ *      cannot pass a flag under any wiring.
+ * An opt-out nothing can invoke is not an opt-out. Reading it HERE is the only seam both honour;
+ * threading a flag through buildReaperArgs alone would leave the cron ungated.
+ *
+ * FAIL DIRECTION IS DELIBERATE, and it is the opposite of the mistake next door. resolveMinAgeMs
+ * (lib/worktree-reaper/orphan-sweep.js:38-43) falls back to its 30-minute DEFAULT on every
+ * corruption — a value typo, a key typo, an empty string, a negative number — and accepts an
+ * explicit 0 that disables the guard entirely. Its docstring calls that "fail-safe toward MORE
+ * conservatism", which is true against a 30-minute baseline and FALSE once the same knob is used
+ * as a 10-year kill switch: every corruption RE-ARMS the destructive path. Measured, 2026-08-03.
+ *
+ * So here: UNSET means enabled (existing behaviour, byte-identical). A recognised off-value means
+ * disabled. Anything else that is SET BUT UNRECOGNISED means disabled AND WARNS — a typo must
+ * never silently leave a directory-deleting job armed, and it must never fail silently either.
+ * Accumulating orphans is a disk-space problem; deleting 601MB of deferred content is not.
+ *
+ * @param {NodeJS.ProcessEnv} [env=process.env]
+ * @returns {{disabled: boolean, reason: string|null, raw: string|undefined}}
+ */
+export function resolveOrphanSweepDisabled(env = process.env) {
+  const raw = env?.WORKTREE_ORPHAN_SWEEP;
+  if (raw == null || raw === '') return { disabled: false, reason: null, raw };
+  const v = String(raw).trim().toLowerCase();
+  if (['on', 'true', '1', 'yes', 'enabled'].includes(v)) return { disabled: false, reason: 'explicit_on', raw };
+  if (['off', 'false', '0', 'no', 'disabled'].includes(v)) return { disabled: true, reason: 'explicit_off', raw };
+  console.warn(
+    `⚠️  WORKTREE_ORPHAN_SWEEP is set to an unrecognised value ${JSON.stringify(raw)} — ` +
+    'treating the orphan sweep as DISABLED. This is deliberate: an unreadable setting must not ' +
+    'leave a directory-deleting job armed. Set it to on/off explicitly.'
+  );
+  return { disabled: true, reason: 'unrecognised_value', raw };
+}
+
 function parseArgs(argv) {
   const args = argv.slice(2);
   const opts = {
@@ -125,7 +167,10 @@ function parseArgs(argv) {
     // (standalone, for manual inspection); --no-orphan-sweep = skip the sweep that is
     // otherwise folded into the normal flow (so the hourly tick includes it).
     orphanSweep: args.includes('--orphan-sweep'),
-    noOrphanSweep: args.includes('--no-orphan-sweep'),
+    // SD-LEO-INFRA-ORPHAN-SWEEP-HARD-001 (FR-1b): the CLI opt-out above is unreachable from BOTH
+    // automated invokers, so the gate must also be readable from the environment. See
+    // resolveOrphanSweepDisabled() for why it lives here and not in buildReaperArgs.
+    noOrphanSweep: args.includes('--no-orphan-sweep') || resolveOrphanSweepDisabled().disabled,
     // SD-LEO-INFRA-WORKTREE-REAPER-MULTIREPO-001: reap EVERY registered pool (spawns a per-pool
     // --repo child so each pool keeps the full single-repo safety), not just the current repo.
     allPools: args.includes('--all-pools'),
