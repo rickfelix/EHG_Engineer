@@ -7,6 +7,9 @@
  */
 
 import { quickPreflightCheck } from '../../../../../lib/handoff-preflight.js';
+// SD-LEO-INFRA-STRUCTURED-FIELDS-HONEST-001 / FR-2a: recognise the explicit unpopulated marker so
+// an acknowledged-empty field is not silently counted as a valid metric.
+import { isUnpopulated } from '../../../../../../lib/sd-fields/unpopulated.js';
 
 /**
  * Validate SD Transition Readiness for LEAD→PLAN
@@ -176,18 +179,62 @@ export async function validateTransitionReadiness(sd, supabase) {
     // Format 1 (success_metrics): { metric: "...", target: "..." }
     // Format 2 (success_criteria per field reference): { criterion: "...", measure: "..." }
     // Format 3 (string): "Schema allows all status values..." (legacy success_criteria)
+    // SD-LEO-INFRA-STRUCTURED-FIELDS-HONEST-001 / FR-2a — CONSUMER TOLERANCE, SEQUENCED BEFORE
+    // FR-2 CHANGES WHAT THE GENERATOR EMITS.
+    //
+    // The generator no longer stamps 'See description for details' into the value key; it stamps an
+    // explicit [UNPOPULATED] marker. Structurally such an entry is still valid here (both keys are
+    // truthy strings), so WITHOUT this block the gate would silently count a marker as a real
+    // metric — trading undetectable filler for undetectable filler and gaining nothing.
+    //
+    // So markers are counted SEPARATELY: they do not qualify as valid content, but their presence
+    // is reported rather than silently folded into the invalid count. NET PASS/FAIL IS DELIBERATELY
+    // UNCHANGED for SDs that would pass today — this SD is about making the state HONEST and
+    // DETECTABLE, not about newly blocking work. Tightening this to a block is a separate change
+    // with its own calibration, per the observe-only-first default.
+    const isMarkerEntry = (m) => {
+      if (!m) return false;
+      if (typeof m === 'string') return isUnpopulated(m.trim());
+      if (typeof m === 'object') return isUnpopulated(m.measure) || isUnpopulated(m.target);
+      return false;
+    };
+    const markerMetrics = successMetrics.filter(isMarkerEntry);
     const validMetrics = successMetrics.filter(m =>
-      (m && typeof m === 'object' && m.metric && m.target) ||      // Format 1: success_metrics
-      (m && typeof m === 'object' && m.criterion && m.measure) ||  // Format 2: success_criteria (field reference doc format)
-      (m && typeof m === 'string' && m.trim().length > 0)          // Format 3: String format (legacy)
+      !isMarkerEntry(m) && (
+        (m && typeof m === 'object' && m.metric && m.target) ||      // Format 1: success_metrics
+        (m && typeof m === 'object' && m.criterion && m.measure) ||  // Format 2: success_criteria (field reference doc format)
+        (m && typeof m === 'string' && m.trim().length > 0)          // Format 3: String format (legacy)
+      )
     );
-    if (validMetrics.length === 0) {
+    if (markerMetrics.length > 0) {
+      warnings.push(`${markerMetrics.length} metric entr${markerMetrics.length === 1 ? 'y is' : 'ies are'} explicitly UNPOPULATED — the SD states no measurable success criterion`);
+      console.log(`   ⚠️  ${markerMetrics.length} entr${markerMetrics.length === 1 ? 'y' : 'ies'} marked UNPOPULATED (acknowledged-empty, not counted as content)`);
+    }
+    if (validMetrics.length === 0 && markerMetrics.length === successMetrics.length) {
+      // ALL entries are explicit UNPOPULATED markers. Before FR-2 this same SD carried plausible
+      // filler that counted as VALID and passed silently, so blocking it here would be a NEW
+      // failure introduced by an honesty fix — an SD that shipped yesterday would fail today for a
+      // defect it always had. That is the outcome the observe-only-first default exists to prevent
+      // (CLAUDE_CORE.md), so it warns loudly and scores down instead of blocking.
+      //
+      // The penalty is the SAME -10 as the partially-invalid branch below: strictly worse than a
+      // populated SD, strictly better than malformed, and never on its own the difference between
+      // pass and fail at the 85% bar. Promotion to blocking is a separate, calibrated change.
+      warnings.push('ALL success metrics/criteria are explicitly UNPOPULATED — this SD declares no measurable success criterion. Populate one before EXEC.');
+      console.log('   ⚠️  All entries UNPOPULATED — acknowledged-empty, NOT blocking (observe-only per CLAUDE_CORE.md default)');
+      score -= 10;
+    } else if (validMetrics.length === 0) {
       issues.push('success_metrics/success_criteria has no valid entries (expected: {metric,target}, {criterion,measure}, or string)');
       console.log('   ❌ No valid metric entries found');
       score -= 25;
-    } else if (validMetrics.length < successMetrics.length) {
-      warnings.push(`${successMetrics.length - validMetrics.length} metric entries are invalid`);
-      console.log(`   ⚠️  ${validMetrics.length}/${successMetrics.length} metrics are valid`);
+    } else if (validMetrics.length + markerMetrics.length < successMetrics.length) {
+      // Markers are excluded from this count on purpose: they are acknowledged-empty, not
+      // malformed, and they are already reported by the marker warning above. Counting them here
+      // too would double-warn and label them "invalid", which is the wrong diagnosis for a field
+      // that is honestly declaring it has nothing to say.
+      const malformed = successMetrics.length - validMetrics.length - markerMetrics.length;
+      warnings.push(`${malformed} metric entries are invalid`);
+      console.log(`   ⚠️  ${validMetrics.length}/${successMetrics.length} metrics are valid (${markerMetrics.length} unpopulated, ${malformed} malformed)`);
       score -= 10;
     } else {
       console.log(`   ✅ ${metricsSource} validated (${validMetrics.length} entries)`);
