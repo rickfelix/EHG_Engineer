@@ -139,6 +139,33 @@ describe('FR-4 — the key set is a new dependency, and it fails CLOSED', () => 
     const r = await gate.validator(makeCtx(SD));
     expect(r.passed).toBe(false); // the fail-open would have been `true` here
   });
+
+  // THE ADJACENT DOOR. The key-set guard above closed "lookup failed reads as nothing found" — and
+  // forty lines away in the same function, a gh outage did exactly that: the per-repo catch logged
+  // and continued, openPRs came back empty, and the gate returned passed:true / score:100. Found by
+  // the EXEC TESTING sub-agent by probing the shipped gate, not by reading it.
+  it('BLOCKS when a repo PR list cannot be read — an outage is not an all-clear', async () => {
+    execSync.mockImplementation((cmd) => {
+      if (cmd.includes('gh pr list') && cmd.includes('--state open')) throw new Error('gh: auth token expired');
+      if (cmd.includes('git branch -r')) return '  origin/main\n';
+      return '';
+    });
+    const r = await createPRMergeVerificationGate(null, { loadKeySet: keys(SD) }).validator(makeCtx(SD));
+    expect(r.passed).toBe(false);
+    expect(r.details?.reason).toBe('repo_scan_unreadable');
+    expect(JSON.stringify(r.issues)).toMatch(/auth token expired/);
+  });
+
+  it('the refusal names the unreadable repo rather than reporting a generic failure', async () => {
+    execSync.mockImplementation((cmd) => {
+      if (cmd.includes('gh pr list') && cmd.includes('--state open')) throw new Error('API rate limit exceeded');
+      if (cmd.includes('git branch -r')) return '  origin/main\n';
+      return '';
+    });
+    const r = await createPRMergeVerificationGate(null, { loadKeySet: keys(SD) }).validator(makeCtx(SD));
+    expect(r.details?.unreadableRepos?.length).toBeGreaterThan(0);
+    expect(JSON.stringify(r.issues)).toMatch(/rickfelix/);
+  });
 });
 
 describe('PR_PRECHECK — same resolver, deliberately asymmetric on an unavailable key set', () => {

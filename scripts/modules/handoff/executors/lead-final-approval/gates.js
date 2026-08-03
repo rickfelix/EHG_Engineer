@@ -648,6 +648,9 @@ export function createPRMergeVerificationGate(supabase, deps = {}) {
         // and metadata.target_repos[] instead of hardcoding both repos.
         const reposWithPaths = computeReposForSD(ctx.sd);
         const openPRs = [];
+        // FR-4: repos whose PR list could not be read. An unreadable repo may hold the open PR that
+        // should block this completion, so it is tracked and refused below rather than logged past.
+        const unreadableRepos = [];
 
         for (const { githubRepo: repo } of reposWithPaths) {
           try {
@@ -670,8 +673,38 @@ export function createPRMergeVerificationGate(supabase, deps = {}) {
               })));
             }
           } catch (repoError) {
-            console.log(`   ⚠️  Could not check ${repo}: ${safeTruncate(repoError.message || '', 50) || 'unknown error'}`);
+            // SD-LEO-INFRA-RESUME-FINAL-READ-001 (FR-4): "we could not look" is NOT evidence of
+            // "nothing is there". This catch used to log and continue, so a gh outage — auth
+            // expiry, rate limit, network — produced an empty openPRs list and the gate PASSED.
+            // Probed by the EXEC TESTING sub-agent: gh throwing for every repo returned
+            // passed:true, score:100. That is the same fail-open the key-set guard closes, forty
+            // lines away in this same function, and leaving it would make FR-4 incoherent: the
+            // whole reason PR_PRECHECK may be permissive is that THIS gate blocks.
+            unreadableRepos.push({ repo, error: safeTruncate(repoError.message || '', 120) || 'unknown error' });
+            console.log(`   ❌ Could not check ${repo}: ${safeTruncate(repoError.message || '', 80) || 'unknown error'}`);
           }
+        }
+
+        // FR-4: refuse BEFORE reporting a result derived from an incomplete scan. Ordered ahead of
+        // the openPRs check deliberately — if one repo read cleanly and another failed, "found 0
+        // open PRs" is a statement about the repo we could see, presented as a statement about all
+        // of them. Both branches of that are wrong to pass on.
+        if (unreadableRepos.length > 0) {
+          return {
+            passed: false,
+            score: 0,
+            max_score: 100,
+            issues: [
+              `Cannot verify PR merge state for ${sdId}: ${unreadableRepos.length} repo(s) could not be scanned.`,
+              ...unreadableRepos.map((r) => `  → ${r.repo}: ${r.error}`),
+              '',
+              'This BLOCKS rather than passes. An unreadable repo may hold the open PR that should stop this completion, and "we could not look" is not evidence of "nothing is there".',
+              'Usually gh auth or rate limiting: check `gh auth status`, then re-run.',
+              'Bypass available for documented emergencies: --bypass-validation --bypass-reason "<reason>"',
+            ],
+            warnings: [],
+            details: { fail_closed: true, reason: 'repo_scan_unreadable', unreadableRepos, scanIncomplete: true },
+          };
         }
 
         if (openPRs.length > 0) {

@@ -79,6 +79,23 @@ describe('FR-1 — a structurally fenced row is REFUSED, and the refusal is loud
     expect(r.message).toMatch(/refusal, not an absence/);
   });
 
+  // THE DISCRIMINATOR THIS SUITE WAS MISSING. The header claims these tests assert the SHARED
+  // classifier is consulted — and the TESTING sub-agent showed they did not: every row used either
+  // null metadata or requires_human_action, so replacing classifyDispatchIneligibility with
+  // `sd?.metadata?.requires_human_action ? 'human_action_required' : null` passed all nine. The
+  // suite could not tell the 15-axis shared predicate from a hand-rolled one-liner, which is the
+  // exact bypass class this SD was filed against.
+  //
+  // A test-fixture key trips a DIFFERENT axis of the same classifier, so a one-liner fails here.
+  it('refuses a test-fixture SD — an axis a requires_human_action one-liner would miss', async () => {
+    const claimed = [];
+    const sb = fakeSb({ stranded: [row('SD-TEST-PHANTOM-001')], claimed });
+    const r = await recoverStrandedFinal(sb, 'sess-1', {});
+    expect(claimed).not.toContain('SD-TEST-PHANTOM-001');
+    expect(r?.action).not.toBe('resume_final');
+    expect(JSON.stringify(r?.skipped_fenced || [])).toMatch(/SD-TEST-PHANTOM-001/);
+  });
+
   it('reaches an eligible row PAST a fenced one, and reports what it skipped', async () => {
     const claimed = [];
     const sb = fakeSb({
