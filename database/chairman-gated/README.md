@@ -14,7 +14,7 @@ database/migrations   database/manual-updates   supabase/migrations
 
 There *is* a tier gate meant to stop this for risky DDL: files that are not provably additive
 classify as **TIER-2 (default-deny)** and defer to the 3-factor chairman gate. But it is controlled
-by `LEO_MIGRATION_TIER_GATE`, which is **unset in this repo**, and `tierGateEnabled()` returns true
+by the `LEO_MIGRATION_TIER_GATE_BYPASS` flag in `leo_feature_flags`, and `tierGateEnabled()` returns true
 only for the literal string `on`. With the gate off the classification is computed and logged but,
 in the code's own words, "changes NOTHING".
 
@@ -111,7 +111,7 @@ undercount and fail **open**.
 
 ## The underlying finding, which outlives this SD
 
-`LEO_MIGRATION_TIER_GATE` being off means the TIER-2 default-deny protection is currently inert
+SUPERSEDED (SD-LEO-INFRA-TIER-GATE-FLAG-001): the TIER-2 default-deny protection is now ACTIVE by default — the gate reads the `LEO_MIGRATION_TIER_GATE_BYPASS` flag and fails CLOSED, so it holds unless a bypass is deliberately enabled. The text below described the prior state, in which the protection was inert
 repo-wide. Any worker adding non-additive DDL to `database/migrations/` today gets it auto-applied,
 gate or no gate. That is worth deciding on its own merits — either turn the gate on, or stop
 describing TIER-2 as deferred — and it is out of scope for this SD.

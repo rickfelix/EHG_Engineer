@@ -1,7 +1,8 @@
 -- STAGED, NOT APPLIED. This file lives in database/chairman-gated/ deliberately.
 -- It is OUTSIDE the three directories BaseExecutor._checkAndExecutePendingMigrations scans
 -- (database/migrations, database/manual-updates, supabase/migrations). Placing it in any of those
--- would auto-apply it: LEO_MIGRATION_TIER_GATE is unset in this repo, so the TIER-2 default-deny
+-- would auto-apply it. SUPERSEDED by SD-LEO-INFRA-TIER-GATE-FLAG-001: the gate now reads the
+-- LEO_MIGRATION_TIER_GATE_BYPASS flag and fails CLOSED, so the TIER-2 default-deny
 -- classification is computed, logged, and changes nothing. A worker cannot put chairman-gated DDL
 -- on an auto-applied path and still call it gated. See database/chairman-gated/README.md.
 --

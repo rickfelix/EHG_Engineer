@@ -629,7 +629,9 @@
     "test:quarantine": "node scripts/unit-tier-quarantine.mjs report .claude-unit-run.log",
     "test:quarantine:burndown": "node scripts/unit-tier-quarantine.mjs burndown",
     "worker:recheck-blocker": "node scripts/worker-recheck-blocker.mjs",
-    "audit:unreachable-midphase": "node scripts/audit-unreachable-midphase-sds.mjs"
+    "audit:unreachable-midphase": "node scripts/audit-unreachable-midphase-sds.mjs",
+    "audit:worktree-env-divergence": "node scripts/audit-worktree-env-divergence.mjs",
+    "flags:enroll-tier-gate": "node scripts/enroll-migration-tier-gate-flag.mjs"
   },
   "dependencies": {
     "@anthropic-ai/sdk": "^0.85.0",
