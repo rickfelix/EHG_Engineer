@@ -26,7 +26,7 @@
  */
 import pg from 'pg';
 import dotenv from 'dotenv';
-dotenv.config();
+dotenv.config({ quiet: true });  // banner on stdout would corrupt --json
 
 const { Client } = pg;
 
