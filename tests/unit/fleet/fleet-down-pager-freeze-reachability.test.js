@@ -10,10 +10,15 @@
  * WHY THE EXISTING SUITE COULD NOT CATCH IT, which dictates the shape of this file:
  * tests/unit/fleet-down-alert.test.js:8 builds pulses from bare active_count values and never
  * touches a session row. It is green, correct, and structurally incapable of noticing that the
- * number feeding it had gone blind. So this file drives the WHOLE chain — session rows ->
- * PULSE SELECT PROJECTION -> liveFleetWorkers -> active_count -> evaluateFleetDownAlert — and
- * projects every fixture through the pulse's REAL exported column list. A fixture that carries a
- * column the shipped query does not select would otherwise prove nothing.
+ * number feeding it had gone blind. So the end-to-end cases here drive the WHOLE chain — session
+ * rows -> PULSE SELECT PROJECTION -> liveFleetWorkers -> active_count -> evaluateFleetDownAlert.
+ *
+ * PRECISELY WHICH CASES ARE PROJECTED, because overclaiming this is how the file would start
+ * lying about itself: every case that goes through activeCountVia() is projected through the
+ * pulse's REAL exported column list (the chain cases and the falsification arms). The unit-level
+ * cases below call liveFleetWorkers directly on unprojected rows on purpose — they are probing the
+ * predicate, not the wiring. TS-6 is what pins the wiring, and the projection is what stops a
+ * chain fixture from carrying a column the shipped query never selects.
  */
 import { describe, it, expect } from 'vitest';
 import {
@@ -161,9 +166,13 @@ describe('TS-2 falsification: the freeze term is load-bearing', () => {
   });
 
   it('ARM 3: the SAME fixture projected through the PRE-FR-2 column list does NOT page', async () => {
-    // This is the historical defect reproduced exactly: the classifier is correct, the fixture is
-    // genuinely frozen, and the query simply never fetched the column. It is the only arm that
-    // proves the SELECT WIDENING — not just the predicate — is load-bearing.
+    // The historical defect reproduced exactly: the classifier is correct, the fixture is genuinely
+    // frozen, and the query simply never fetched the columns.
+    // HONEST SCOPE NOTE (a reviewer caught the earlier comment overclaiming): dropping BOTH columns
+    // makes isKnownWedged short-circuit on the loop_state guard before classifySeat is ever called,
+    // so this arm exercises the guard, not fail-open. It is therefore paired with ARM 3b below,
+    // which drops ONLY last_tool_at and so genuinely reaches the fail-open branch. TS-1 plus TS-6
+    // are what pin the widening against a PARTIAL revert.
     const PRE_WIDENING_COLUMNS =
       'session_id,heartbeat_at,sd_key,status,claimed_at,worktree_path,continuous_sds_completed,metadata';
     expect(PRE_WIDENING_COLUMNS).not.toBe(PULSE_SESSION_COLUMNS);
@@ -174,6 +183,24 @@ describe('TS-2 falsification: the freeze term is load-bearing', () => {
 
     expect(active).toBe(3);            // every frozen seat counted as alive
     expect(pagesOn(active)).toBe(false); // ...so nobody is paged. This was production.
+  });
+
+  it('ARM 3b: dropping ONLY last_tool_at (keeping loop_state) still does not page — the fail-open branch', async () => {
+    // loop_state survives, so the guard passes and classifySeat IS reached — and returns UNKNOWN
+    // because the tool clock is absent. This is the arm that proves fail-open is what keeps a
+    // half-widened query silent, rather than the loop_state guard doing it.
+    const HALF_WIDENED = PULSE_SESSION_COLUMNS.split(',')
+      .map((c) => c.trim()).filter((c) => c !== 'last_tool_at').join(',');
+    expect(HALF_WIDENED).toContain('loop_state');
+    expect(HALF_WIDENED).not.toContain('last_tool_at');
+
+    const fleet = [frozenSeat('a'), frozenSeat('b'), frozenSeat('c')];
+    const halfBlind = project(fleet, HALF_WIDENED);
+    for (const r of halfBlind) expect(r.loop_state).toBe('active');   // guard genuinely passed
+    const active = liveFleetWorkers(halfBlind, ME, NOW).length;
+
+    expect(active).toBe(3);
+    expect(pagesOn(active)).toBe(false);
   });
 });
 
@@ -294,17 +321,54 @@ describe('TS-11: the two select(*) callers', () => {
   });
 });
 
-describe('TS-12: ACCEPTED RESIDUAL — a fleet latched in awaiting_tick still cannot page', () => {
-  it('documents, rather than fixes, the remaining blind spot', async () => {
-    // post-tool-loop-state.cjs:96-97 records awaiting_tick as a ONE-WAY LATCH that nothing clears on
-    // resume, and :87-92 records ten seats parked 4-17h while all looking healthy. Such a fleet is
-    // indistinguishable here from a healthy parked one, so it counts alive and does NOT page.
-    // classifySeat already computes wake.state='armed_overdue' (stuck-seat-predicate.cjs:73-75) and
-    // isKnownWedged discards it — that is the natural follow-on, deliberately out of scope for this
-    // SD. This test exists so the gap is pinned and visible, not so it passes.
-    const latched = [parkedSeat('l1'), parkedSeat('l2')].map((r) => ({ ...r, last_tool_at: minsAgo(17 * 60) }));
+describe('TS-12: a fleet latched in awaiting_tick — judged on its OWN DEADLINE', () => {
+  // THE CASE THAT NEARLY SHIPPED UNCOVERED. Keying on loop_state='active' alone was the sourced
+  // design, and measurement showed it would have left the pager nearly as unreachable as before:
+  // only 1 then 2 of 5 heartbeat-fresh seats carried 'active' across two samples, so a total freeze
+  // would have gone 5->4 and 5->3 and never reached the zero the pager needs. Workers arm the
+  // wakeup BEFORE their terminal report, so the dominant freeze lands in 'awaiting_tick'.
+  const overdue = (id, silentMin) => ({
+    ...parkedSeat(id),
+    last_tool_at: minsAgo(silentMin),
+    metadata: { expected_wake_at: minsAgo(silentMin - 20) }   // deadline passed, long ago
+  });
+
+  it('parked + tool-silent + WAKE OVERDUE -> wedged, and an all-latched fleet PAGES', async () => {
+    const latched = [overdue('l1', 17 * 60), overdue('l2', 9 * 60), overdue('l3', 4 * 60)];
+    for (const r of latched) expect(r.loop_state).toBe('awaiting_tick');
+    assertOnlyFreezeExcluded(latched);
+
     const active = await activeCountVia(latched);
-    expect(active).toBe(2);
-    expect(pagesOn(active)).toBe(false);
+    expect(active).toBe(0);
+    expect(pagesOn(active)).toBe(true);
+  });
+
+  it('parked + tool-silent but wake STILL PENDING -> live, no page', async () => {
+    // The healthy long-wakeup case. Its deadline has not passed, so it is parked, not dead.
+    const pending = {
+      ...parkedSeat('p1'),
+      last_tool_at: minsAgo(FREEZE_CUT_MINUTES + 60),
+      metadata: { expected_wake_at: new Date(NOW + 20 * 60000).toISOString() }
+    };
+    expect(isKnownWedged(pending, NOW)).toBe(false);
+    expect(await activeCountVia([pending])).toBe(1);
+  });
+
+  it('parked + tool-silent with NO recorded deadline -> live (absence is not proof)', async () => {
+    // post-tool-loop-state.cjs:113 writes the deadline conditionally on a prior metadata read, so a
+    // read failure costs the deadline. An absent expected_wake_at must never be read as death.
+    const noDeadline = parkedSeat('n1');
+    expect(noDeadline.metadata.expected_wake_at).toBeUndefined();
+    expect(isKnownWedged(noDeadline, NOW)).toBe(false);
+    expect(await activeCountVia([noDeadline])).toBe(1);
+  });
+
+  it('parked + WAKE OVERDUE but tool-RECENT -> live (it woke up and did work)', async () => {
+    const woke = {
+      ...parkedSeat('w1'),
+      last_tool_at: minsAgo(2),
+      metadata: { expected_wake_at: minsAgo(60) }
+    };
+    expect(isKnownWedged(woke, NOW)).toBe(false);
   });
 });
