@@ -117,7 +117,10 @@ describe('TS-8 — the gate is wired at BOTH call sites, and encloses the spawn'
     // qf-mint-gate.mjs:36-43 says these constants exist to prevent: a wrong engine name does not
     // error, it renders NEVER RAN on the badge forever, indistinguishable from a producer that has
     // simply not fired yet.
-    expect(src).toMatch(new RegExp(`gatedQfMint\\(supabase,\\s*\\{\\s*engine:\\s*${konst}\\s*\\},\\s*promoteAll\\)`));
+    // The brace body may carry other keys (onWithheld), so the match is on the engine BINDING
+    // rather than on an exact-shape body — an exact-shape assertion broke the moment a legitimate
+    // key was added, which is a test that pins formatting instead of meaning.
+    expect(src).toMatch(new RegExp(`gatedQfMint\\(supabase,\\s*\\{[^}]*engine:\\s*${konst}\\b[^}]*\\},\\s*promoteAll\\)`));
     // And no gauge override may be slipped in alongside it — the brace body must contain ONLY the
     // engine, or a call site could silently re-point itself at the SD gauge and pass TS-6 too.
     expect(src).not.toMatch(/gatedQfMint\(supabase,\s*\{[^}]*gauge:/);
@@ -126,5 +129,61 @@ describe('TS-8 — the gate is wired at BOTH call sites, and encloses the spawn'
   it('create-quick-fix.js is NOT gated — the shared boundary stays open to humans', () => {
     const src = read('../../../scripts/create-quick-fix.js');
     expect(src).not.toMatch(/qf-mint-gate|gatedQfMint|openQfMintGate/);
+  });
+});
+
+describe('SEC-GSB-2 — a WITHHELD run COUNTS and NAMES what it suppressed', () => {
+  // Withholding is not free: neither producer holds durable pending state, so a withheld group
+  // EXPIRES on its rolling source window rather than queuing. The loss was invisible from both
+  // directions — no suppressed count in the audit row, and the mint callback never ran so the
+  // [PROMOTABLE] lines that name the casualties were never printed. A gate whose cost cannot be
+  // counted cannot be argued about.
+  it('invokes onWithheld and reports the suppressed count', async () => {
+    let mintCalls = 0; let reportCalls = 0; const logged = [];
+    const r = await gatedQfMint({}, {
+      engine: 'e', gauge: async () => 0,
+      measure: async () => decision(DEMAND_DECISION.WITHHELD),
+      record: async () => {}, log: (m) => logged.push(m),
+      onWithheld: async () => { reportCalls += 1; return 35; },
+    }, async () => { mintCalls += 1; return 9; });
+    expect(r.withheldByDemand).toBe(true);
+    expect(r.suppressed).toBe(35);
+    expect(reportCalls).toBe(1);
+    expect(mintCalls).toBe(0);                       // report-only, never mints
+    expect(logged.join('\n')).toMatch(/suppressed 35 promotable group/);
+  });
+
+  it('a SOURCED run does not report suppression — both arms, one describe', async () => {
+    let reportCalls = 0;
+    const r = await gatedQfMint({}, {
+      engine: 'e', gauge: async () => 0,
+      measure: async () => decision(DEMAND_DECISION.SOURCED),
+      record: async () => {}, log: () => {},
+      onWithheld: async () => { reportCalls += 1; return 35; },
+    }, async () => 9);
+    expect(r.withheldByDemand).toBe(false);
+    expect(r.suppressed).toBe(0);
+    expect(reportCalls).toBe(0);
+  });
+
+  it('a FAILING count degrades to null rather than turning a quiet run into a crash', async () => {
+    const r = await gatedQfMint({}, {
+      engine: 'e', gauge: async () => 0,
+      measure: async () => decision(DEMAND_DECISION.WITHHELD),
+      record: async () => {}, log: () => {},
+      onWithheld: async () => { throw new Error('count blew up'); },
+    }, async () => 9);
+    expect(r.withheldByDemand).toBe(true);
+    expect(r.suppressed).toBeNull();
+  });
+
+  it('both minters pass an onWithheld that runs their loop in REPORT-ONLY mode', () => {
+    const read = (p) => require('node:fs').readFileSync(require.resolve(p), 'utf8');
+    for (const p of ['../../../scripts/feedback-fingerprint-promoter.mjs', '../../../scripts/promote-retro-action-items.mjs']) {
+      const src = read(p);
+      expect(src).toMatch(/onWithheld:\s*\(\)\s*=>\s*promoteAll\(true\)/);
+      expect(src).toMatch(/async function promoteAll\(reportOnly = false\)/);
+      expect(src).toMatch(/if \(!apply \|\| reportOnly\)/);
+    }
   });
 });

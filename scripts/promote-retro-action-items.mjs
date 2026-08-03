@@ -113,7 +113,7 @@ let skippedTestFixture = 0;
 
 // Extracted so the demand gate ENCLOSES the minting rather than merely preceding it — a gate that
 // only returns a verdict is one forgotten `if` away from being decorative.
-async function promoteAll() {
+async function promoteAll(reportOnly = false) {
 for (const retro of retros || []) {
   if (retro.metadata?.action_items_promoted) {
     skippedAlreadyPromoted++;
@@ -177,8 +177,8 @@ for (const retro of retros || []) {
   console.log(`\n[PROMOTABLE] retro=${retro.id} sd=${retro.sd_id} high-priority action_items=${actionable.length}/${highPriority.length}`);
   for (const item of actionable) console.log(`  - ${actionText(item)}`);
 
-  if (!apply) {
-    console.log('  [DRY RUN] would create QF-candidate here.');
+  if (!apply || reportOnly) {
+    console.log(reportOnly ? '  [WITHHELD] would have created a QF-candidate here - suppressed by belt demand.' : '  [DRY RUN] would create QF-candidate here.');
     continue;
   }
 
@@ -219,7 +219,7 @@ let withheldByDemand = false;
 if (!apply) {
   await promoteAll();
 } else {
-  const result = await gatedQfMint(supabase, { engine: RETRO_ACTION_PROMOTER_ENGINE }, promoteAll);
+  const result = await gatedQfMint(supabase, { engine: RETRO_ACTION_PROMOTER_ENGINE, onWithheld: () => promoteAll(true) }, promoteAll);
   withheldByDemand = result.withheldByDemand;
 }
 
