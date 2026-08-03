@@ -106,6 +106,26 @@ export function findDivergences(rootEnvPath, worktreeDirs) {
   return { offenders, scanned };
 }
 
+/**
+ * The exit verdict, extracted so it is testable.
+ *
+ * It previously lived inline in main() and was the ONLY logic here a reviewer had to
+ * verify by hand — neutering the vacuity guard left the whole suite green. That guard is
+ * exactly what this file's header says was learned the hard way (a wrong-root resolution
+ * printing a green "0 scanned"), so leaving it unpinned repeated the lesson.
+ *
+ * @param {{offenderCount:number, worktreeCount:number, scanned:number, hasContainer:boolean}} o
+ * @returns {{ exitCode: 0|1, vacuous: boolean, noContainer: boolean }}
+ */
+export function verdictFor({ offenderCount, worktreeCount, scanned, hasContainer }) {
+  const noContainer = !hasContainer;
+  // Both arms matter. Missing the CONTAINER is louder than finding it empty: if the root
+  // resolves to a worktree there is no .worktrees/ inside it, worktreeCount is 0, and a
+  // guard keyed only on `worktreeCount > 0 && scanned === 0` would stay silent.
+  const vacuous = noContainer || (worktreeCount > 0 && scanned === 0);
+  return { exitCode: offenderCount > 0 || vacuous ? 1 : 0, vacuous, noContainer };
+}
+
 function listWorktrees(repoRoot) {
   const base = path.join(repoRoot, '.worktrees');
   if (!existsSync(base)) return [];
@@ -123,13 +143,13 @@ function main() {
   const { offenders, scanned } = findDivergences(rootEnv, dirs);
 
   // A clean verdict over ZERO compared files is not evidence of health — it is evidence
-  // the scan found nothing to look at. Both arms matter, and the second was learned the
-  // hard way: the FIRST version only flagged `dirs.length > 0 && scanned === 0`, so when
-  // the root resolved to a worktree (no .worktrees/ inside it) `dirs.length` was 0, the
-  // guard stayed silent, and the run printed a green "0 scanned". Missing the CONTAINER
-  // is a louder failure than finding it empty, so it must fail too.
-  const noContainer = !existsSync(path.join(REPO_ROOT, '.worktrees'));
-  const vacuous = noContainer || (dirs.length > 0 && scanned === 0);
+  // the scan found nothing to look at. See verdictFor() above for both arms.
+  const { exitCode, vacuous, noContainer } = verdictFor({
+    offenderCount: offenders.length,
+    worktreeCount: dirs.length,
+    scanned,
+    hasContainer: existsSync(path.join(REPO_ROOT, '.worktrees'))
+  });
 
   if (json) {
     console.log(JSON.stringify({ scanned, worktrees: dirs.length, offenders, vacuous }, null, 2));
@@ -157,7 +177,7 @@ function main() {
   // still closing aborts the process ("Assertion failed: !(handle->flags & UV_HANDLE_CLOSING)")
   // and the shell then observes 127 REGARDLESS of the argument — in BOTH branches, so the
   // check silently cannot gate. Measured 5/5 on SD-LEO-INFRA-RELEASED-MID-PHASE-001.
-  process.exitCode = offenders.length > 0 || vacuous ? 1 : 0;
+  process.exitCode = exitCode;
 }
 
 const invokedDirectly = process.argv[1] && path.resolve(process.argv[1]) === fileURLToPath(import.meta.url);

@@ -85,10 +85,19 @@ describe('the gate is actually WIRED — checkPendingMigrations honours the verd
   });
 
   it('DISCRIMINATES — gate OFF: the same file is NOT deferred', async () => {
-    // Without this half, a partition that deferred everything unconditionally would
-    // satisfy the case above while proving nothing about the gate.
+    // Without this half, a gate that deferred unconditionally would satisfy the case
+    // above while proving nothing. (An earlier comment here claimed it discriminated the
+    // PARTITION; measured false — with the gate OFF, partitionByTierGate is never called,
+    // so sabotaging it reddens the harm file and nothing here. It discriminates the GATE.)
     gateOff();
     const result = await checkPendingMigrations(supabaseStub, SD, { autoExecute: false });
+
+    // FIXTURE LIVENESS, and it is not ceremony: `tierDeferredFiles ?? []` is length 0
+    // whenever NOTHING WAS DISCOVERED AT ALL, and checkPendingMigrations wraps its whole
+    // body in a catch that swallows a mock fault rather than throwing. Without this line
+    // the case passes against a dead git mock — verified by blanking the porcelain, which
+    // reddens the other four cases and left this one green.
+    expect(result.uncommittedManualUpdates).toContain(DESTRUCTIVE.replace(/\\/g, '/'));
     expect(result.tierDeferredFiles ?? []).toHaveLength(0);
   });
 });

@@ -10,7 +10,8 @@ import {
   TRACKED_KEYS,
   readEnvKeys,
   findDivergences,
-  resolveMainRepoRoot
+  resolveMainRepoRoot,
+  verdictFor
 } from '../../scripts/audit-worktree-env-divergence.mjs';
 
 const tmp = mkdtempSync(path.join(tmpdir(), 'wt-env-'));
@@ -104,6 +105,39 @@ describe('findDivergences — absence is SAFE, disagreement is not', () => {
   it('scanned counts only worktrees carrying a local .env, so "clean" can be distinguished from "looked at nothing"', () => {
     const dirs = [mkWorktree('a', null), mkWorktree('b', 'LEO_MIGRATION_TIER_GATE=on\n'), mkWorktree('c', null)];
     expect(findDivergences(ROOT_ENV, dirs).scanned).toBe(1);
+  });
+});
+
+describe('verdictFor — the exit code and the vacuity guard', () => {
+  // This logic was inline in main() and untested: neutering the guard to `false` left the
+  // whole suite green, so the one thing a reviewer had to check by hand was the very guard
+  // this file's header says was learned the hard way.
+  const V = (o) => verdictFor({ hasContainer: true, worktreeCount: 3, scanned: 3, offenderCount: 0, ...o });
+
+  it('clean scan over real files => exit 0', () => {
+    expect(V({})).toMatchObject({ exitCode: 0, vacuous: false, noContainer: false });
+  });
+
+  it('offenders => exit 1', () => {
+    expect(V({ offenderCount: 1 }).exitCode).toBe(1);
+  });
+
+  it('MISSING CONTAINER => exit 1 even with zero worktrees and zero offenders', () => {
+    // The arm that a `worktreeCount > 0 && scanned === 0` guard misses entirely: a root
+    // resolved to a worktree has no .worktrees/, so worktreeCount is 0 and the naive
+    // guard stays silent while printing a green "0 scanned".
+    const r = verdictFor({ hasContainer: false, worktreeCount: 0, scanned: 0, offenderCount: 0 });
+    expect(r).toMatchObject({ exitCode: 1, vacuous: true, noContainer: true });
+  });
+
+  it('worktrees exist but NONE carries a local .env => vacuous, exit 1', () => {
+    expect(V({ scanned: 0 })).toMatchObject({ exitCode: 1, vacuous: true });
+  });
+
+  it('zero worktrees WITH a container is legitimately clean => exit 0', () => {
+    // Not vacuous: the container was found and genuinely holds nothing.
+    expect(verdictFor({ hasContainer: true, worktreeCount: 0, scanned: 0, offenderCount: 0 }))
+      .toMatchObject({ exitCode: 0, vacuous: false });
   });
 });
 
