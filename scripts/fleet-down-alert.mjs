@@ -244,6 +244,59 @@ export async function checkDeadCoordinator(db, DRY, sendChairmanSMSFn = null, no
   console.log('[dead-coordinator-alert] sendChairmanSMS result:', JSON.stringify(r));
 }
 
+/**
+ * QF-20260803-882: run one notification arm in isolation, so no arm can suppress another.
+ *
+ * THE DEFECT THIS REPLACES: main() ran the arms as two bare awaits with nothing between them, and
+ * the EMAIL arm ran FIRST. A throw from Resend — an outage, a rate limit, a malformed address —
+ * aborted main() before the chairman pager ever fired. So the fleet-down pager, shipped as the
+ * freeze remedy, had a path where the alarm simply does not go off, and that path was SILENT: a
+ * failed run and a clean run were indistinguishable in the logs and in the exit code.
+ *
+ * A pager whose reliability depends on an unrelated third-party email call is not a pager.
+ *
+ * PURE-ish and exported for test: the two-sided acceptance (email throws → pager still fires; pager
+ * throws → email still sends AND the failure is visible) cannot be asserted against a main() that
+ * takes no seams.
+ *
+ * @param {string} name arm label used in the log line
+ * @param {() => Promise<any>} fn the arm
+ * @param {{log?:Function, error?:Function}} [io]
+ * @returns {Promise<{name:string, ok:boolean, error?:string}>} never throws
+ */
+export async function runAlertArm(name, fn, io = {}) {
+  const err = io.error || ((m) => console.error(m));
+  try {
+    await fn();
+    return { name, ok: true };
+  } catch (e) {
+    // LOUD, not swallowed. A caught-and-ignored arm failure would recreate the silence this fixes.
+    err(`[fleet-down-alert] ARM FAILED: ${name}: ${(e && e.message) || e}`);
+    return { name, ok: false, error: (e && e.message) || String(e) };
+  }
+}
+
+/**
+ * QF-20260803-882: run every arm independently and report partial delivery.
+ *
+ * ORDER IS DELIBERATE — the chairman pager goes FIRST. Both arms are now isolated, so ordering can
+ * no longer cause suppression; but if the process is killed mid-run (workflow timeout, runner
+ * eviction) the arm that already fired should be the one that reaches a human.
+ *
+ * @returns {Promise<{results:Array, failed:Array}>}
+ */
+export async function runAlertArms(arms, io = {}) {
+  const results = [];
+  for (const [name, fn] of arms) results.push(await runAlertArm(name, fn, io));
+  const failed = results.filter((r) => !r.ok);
+  if (failed.length) {
+    const err = io.error || ((m) => console.error(m));
+    err(`[fleet-down-alert] PARTIAL DELIVERY: ${failed.length} of ${results.length} arm(s) failed `
+      + `(${failed.map((f) => f.name).join(', ')}) — this alert did NOT fully fire.`);
+  }
+  return { results, failed };
+}
+
 async function main() {
   enforceCliSendGuard({ scriptName: 'scripts/fleet-down-alert.mjs', flags: [{ name: '--dry-run' }] });
   const DRY = !!process.env.FLEET_DOWN_ALERT_DRYRUN || process.argv.includes('--dry-run');
@@ -255,8 +308,15 @@ async function main() {
   }
   const db = createClient(url, key, { auth: { autoRefreshToken: false, persistSession: false } });
 
-  await checkWorkerFleetDown(db, DRY);
-  await checkDeadCoordinator(db, DRY);
+  // QF-20260803-882: isolated arms, pager first. Previously two bare awaits — an email throw
+  // suppressed the pager entirely and the run still looked clean.
+  const { failed } = await runAlertArms([
+    ['dead-coordinator-pager', () => checkDeadCoordinator(db, DRY)],
+    ['worker-fleet-email', () => checkWorkerFleetDown(db, DRY)],
+  ]);
+  // A half-delivered alert must not exit 0. The workflow treating a partial page as success is the
+  // same silence one layer up.
+  if (failed.length) process.exitCode = 1;
 }
 
 // Run main() only as a CLI (guarded so tests can import the pure helper).
