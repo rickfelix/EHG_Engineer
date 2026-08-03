@@ -17,7 +17,16 @@
  *   node scripts/one-off/_alpha-fr3-post-merge-validate.mjs --spawn-evidence <path-to-json>
  *
  * The spawn-evidence file must be produced by whoever ran the live spawn and must contain:
- *   { observed_at_utc, spawn_succeeded: true, session_or_handle, invoked_by, notes }
+ *   {
+ *     observed_at_utc, spawn_succeeded: true, session_or_handle, invoked_by, notes,
+ *     flag_state,              // FLEET_SPAWN_SOURCE_TREE in force at spawn time — must be affirmative
+ *     currency_bypass_reason,  // FLEET_TREE_CURRENCY_BYPASS_REASON — must be present and empty/null
+ *   }
+ *
+ * The last two are not bookkeeping. "A spawn succeeded" is compatible with the flag being OFF (the
+ * shipped default, under which this SD is entirely inert) and with the currency bypass being set
+ * (which makes the guard return ok without establishing currency). Both produce the same observation
+ * as a genuine fix, so the run conditions are part of the evidence, not context around it.
  */
 import { execFileSync } from 'child_process';
 import { readFileSync, writeFileSync, existsSync } from 'fs';
@@ -108,6 +117,42 @@ if (!evidencePath) {
   if (spawnEvidence.spawn_succeeded !== true) failures.push('spawn evidence does not assert spawn_succeeded === true');
   for (const k of ['observed_at_utc', 'invoked_by']) {
     if (!spawnEvidence[k]) failures.push(`spawn evidence missing required field: ${k}`);
+  }
+
+  // THE HOLE THIS CLOSES, found after the merge and before this validator was ever used in anger.
+  // "A spawn succeeded" is NOT evidence that THIS SD's fix worked — there are two other ways to get
+  // the same observation, and the original version of this file could not tell any of them apart:
+  //
+  //   1. FLEET_SPAWN_SOURCE_TREE was OFF. That is the DEFAULT this SD shipped, so it is the likely
+  //      state, and under it spawn() never touches the spawn-source tree at all — the currency check
+  //      still points at the spawning tree and the whole SD is inert. A spawn observed succeeding
+  //      that way proves only that the root happened to be current.
+  //   2. FLEET_TREE_CURRENCY_BYPASS_REASON was set. That is a documented escape hatch which makes
+  //      enforceTreeCurrency return ok WITHOUT establishing currency ("UNKNOWN-AND-DECLARED, never
+  //      CURRENT" — tree-currency.cjs). A bypassed spawn succeeds identically to a fixed one.
+  //
+  // Either would have produced a SATISFIED record for an SD whose fix was never exercised. That is
+  // precisely the class of defect this SD exists to eliminate, reproduced inside the instrument
+  // built to certify it — so the evidence must now carry the run conditions, not just the outcome.
+  const flag = String(spawnEvidence.flag_state ?? '').trim().toLowerCase();
+  if (!['1', 'true', 'on', 'yes'].includes(flag)) {
+    failures.push(
+      `spawn evidence must record flag_state = the FLEET_SPAWN_SOURCE_TREE value in force at spawn time, ` +
+      `and it must be affirmative (got: ${JSON.stringify(spawnEvidence.flag_state ?? null)}). With the flag OFF ` +
+      `the spawn-source path is never taken, so a successful spawn demonstrates nothing about this SD.`,
+    );
+  }
+  const bypass = String(spawnEvidence.currency_bypass_reason ?? '').trim();
+  if (bypass) {
+    failures.push(
+      `spawn evidence reports FLEET_TREE_CURRENCY_BYPASS_REASON=${JSON.stringify(bypass)}. A bypassed spawn ` +
+      `succeeds without currency ever being established, so it cannot demonstrate AC-1.`,
+    );
+  } else if (!('currency_bypass_reason' in spawnEvidence)) {
+    failures.push(
+      'spawn evidence must record currency_bypass_reason explicitly (empty string or null if unset). ' +
+      'An ABSENT field is not the same as an observed-unset one, and only the latter rules out a bypassed spawn.',
+    );
   }
 }
 
