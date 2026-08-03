@@ -20,7 +20,7 @@
  *   - Threshold resolved in priority order:
  *     1. app_config 'heal_gate_threshold' (global override)
  *     2. SD-type-aware tier (feature/security=90, infrastructure/docs=80)
- *     3. DEFAULT_HEAL_THRESHOLD (85) as final fallback
+ *     3. SD_TYPE_THRESHOLDS._default as final fallback (same table — no second constant)
  *   - Tolerance buffer: app_config 'heal_gate_tolerance_buffer' (default 3)
  *   - Corrective SDs: always use GRADE.A (93) via grade-scale.js
  * - Vision heal: ADVISORY — logged but does not block
@@ -54,7 +54,8 @@ export function isSdHealSnapshot(snapshot) {
   return snapshot.mode === 'sd-heal';
 }
 
-const DEFAULT_HEAL_THRESHOLD = 85;
+// DEFAULT_HEAL_THRESHOLD (85) DELETED — it was the surviving half of the duplicate this SD exists
+// to remove. The fallback now reads SD_TYPE_THRESHOLDS._default from the canonical table.
 const DEFAULT_TOLERANCE_BUFFER = 3;
 const AUTO_HEAL_TIMEOUT_MS = 120_000; // 120 seconds (increased from 60s — LLM calls need headroom)
 const FAST_HEAL_TIMEOUT_MS = 30_000; // 30 seconds for fast Haiku path
@@ -369,7 +370,24 @@ async function readAppConfigValue(supabase, key) {
  * Resolution order:
  *   1. app_config 'heal_gate_threshold' (explicit global override)
  *   2. SD-type-aware tier from SD_TYPE_THRESHOLDS
- *   3. DEFAULT_HEAL_THRESHOLD (85)
+ *   3. SD_TYPE_THRESHOLDS._default — the SAME table, not a second constant
+ *
+ * FR-2 COMPLETED HERE. Deleting the duplicate TABLE left a duplicate SCALAR, which is the same
+ * defect one branch down: step 2 tested SD_TYPE_THRESHOLDS[sdType], so the canonical _default (80)
+ * was reachable ONLY if sd_type were literally the string "_default", and every unrecognised type
+ * fell through to a gate-local `DEFAULT_HEAL_THRESHOLD = 85`. Two constants five points apart still
+ * governed one decision.
+ *
+ * The test that should have caught it is the sharpest instance of the class this SD is about: it is
+ * named "carries a _default so an unknown sd_type resolves rather than falling through" and it
+ * PASSED — because it asked the TABLE whether _default exists, not the GATE whether it uses it. The
+ * assertion and the deliverable were one word apart and shared no code path.
+ *
+ * MEASURED BLAST RADIUS of adopting 80: 41 SDs carry an sd_type absent from the table
+ * (uat 20, docs 11, implementation 5, ux_debt 4, discovery_spike 1) and ALL 41 ARE TERMINAL —
+ * zero in-flight. Those five names are also a real gap worth its own work: `docs` is not
+ * `documentation`, so it has silently been taking the fallback rather than the tier it looks like
+ * it should get. Out of scope here; recorded rather than quietly fixed.
  *
  * @param {Object} supabase
  * @param {string} [sdType] - The SD type (feature, infrastructure, etc.)
@@ -385,13 +403,17 @@ async function loadHealThreshold(supabase, sdType) {
     }
   }
 
-  // 2. SD-type-aware tier
-  if (sdType && SD_TYPE_THRESHOLDS[sdType] != null) {
+  // 2. SD-type-aware tier.
+  // Object.hasOwn, NOT a truthiness or != null test: `SD_TYPE_THRESHOLDS['constructor']` resolves
+  // to an INHERITED Function, which is not nullish, so a prototype-named sd_type would return a
+  // Function as the threshold. The typeof check is the second half — together they make an
+  // unrecognised OR prototype-named type fall to _default instead of resolving to something absurd.
+  if (sdType && Object.hasOwn(SD_TYPE_THRESHOLDS, sdType) && typeof SD_TYPE_THRESHOLDS[sdType] === 'number') {
     return { threshold: SD_TYPE_THRESHOLDS[sdType], source: `sd_type:${sdType}` };
   }
 
-  // 3. Default fallback
-  return { threshold: DEFAULT_HEAL_THRESHOLD, source: 'default' };
+  // 3. Default — from the canonical table, so ONE representation governs the decision.
+  return { threshold: SD_TYPE_THRESHOLDS._default, source: 'sd_type:_default' };
 }
 
 /**
