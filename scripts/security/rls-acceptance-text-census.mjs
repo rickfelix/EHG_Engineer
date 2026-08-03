@@ -45,6 +45,7 @@
  */
 import pg from 'pg';
 import dotenv from 'dotenv';
+import { isMainModule } from '../../lib/utils/is-main-module.js';
 dotenv.config({ quiet: true });  // banner on stdout would corrupt --json
 
 const POOLER_HOST = process.env.SUPABASE_POOLER_HOST || 'aws-1-us-east-1.pooler.supabase.com';
@@ -163,4 +164,12 @@ async function main() {
   } finally { await client.end(); }
 }
 
-main().catch((e) => { console.error('census failed:', e.message); process.exit(1); });
+// EXPORTED SO IT CAN BE TESTED. classify() encodes the exact ABSENT / PRESENT-BUT-UNQUOTED /
+// PRESENT-AND-HALF-RIGHT distinction this SD says people mis-apply — 4 of 7 SURVEY-1 items were
+// mis-bucketed on it — and it had no tests, so its discrimination was asserted in prose next to a
+// sibling template whose docstring says a claim nothing checks is not a claim.
+export { classify, PERMISSION_TOKEN, ACCEPTANCE_FRAME, NEGATIVE_PROBE_SHAPE, MENTIONS_READBACK, PRESCRIBES_READBACK, THIRD_LEG };
+
+if (isMainModule(import.meta.url)) {
+  main().catch((e) => { console.error('census failed:', e.message); process.exit(1); });
+}

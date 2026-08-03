@@ -26,7 +26,16 @@ const {
 } = require('../../lib/breakage/active-canary-probes.cjs');
 const { recordSystemAlert } = require('../../lib/breakage/alert-writer.cjs');
 
-const RLS_PROBE_TABLE = 'session_coordination'; // governance table; anon INSERT is RLS-denied (verified 42501)
+// ATTRIBUTION, corrected. This previously read "anon INSERT is RLS-denied (verified 42501)" — which
+// is this SD's own anti-pattern committed in a comment: 42501 was observed and the enforcement was
+// attributed to RLS without checking WHICH mechanism produced it. Measured 2026-08-03:
+// session_coordination has relrowsecurity=true but exactly ONE policy (service_role_full_access,
+// PERMISSIVE, cmd=SELECT), so there is NO INSERT policy at all — and anon's table grants are
+// REFERENCES/SELECT/TRIGGER, with no INSERT. A MISSING GRANT raises the SAME SQLSTATE 42501 as an RLS
+// WITH CHECK violation. So what this probe actually holds is the GRANT; `DISABLE ROW LEVEL SECURITY`
+// would not move its verdict. Naming the class 'RLS-regression' overstates what the probe can see.
+// Fixing an instrument does not fix its attribution — the two are separate claims.
+const RLS_PROBE_TABLE = 'session_coordination'; // anon INSERT denied by a MISSING GRANT (42501), not by a policy
 const PAYMENT_WEBHOOK_TABLES = ['webhook_events', 'payment_webhook_events']; // candidates — absent today (Stripe test-mode)
 
 /**
@@ -43,11 +52,16 @@ const PAYMENT_WEBHOOK_TABLES = ['webhook_events', 'payment_webhook_events']; // 
 async function probeRls(anon, service, nowMs) {
   const marker = `__RLS_CANARY_PROBE_${nowMs}__`;
   const row = { target_session: marker, message_type: 'INFO', subject: marker, body: 'RLS-regression canary probe (auto-delete)', sender_type: 'system' };
+  // readback failed ⇒ absent evidence, NOT evidence of absence. The `catch` alone did NOT achieve
+  // that: postgrest-js resolves failures as {data:null,error} instead of throwing, so the catch never
+  // ran and every failed readback became rows:[] — "observed, and absent", which is one of the two
+  // conjuncts a three-leg REFUSED requires. Checking `error` is the fix.
   const readByMarker = async () => {
     try {
-      const { data } = await service.from(RLS_PROBE_TABLE).select('id').eq('subject', marker);
+      const { data, error } = await service.from(RLS_PROBE_TABLE).select('id').eq('subject', marker);
+      if (error) return null;
       return { rows: Array.isArray(data) ? data : [] };
-    } catch { return null; }   // readback failed ⇒ absent evidence, NOT evidence of absence
+    } catch { return null; }
   };
 
   const evidence = {};

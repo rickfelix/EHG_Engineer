@@ -36,11 +36,19 @@ function fakeAnon({ landsWithReturning = false, landsOnBare = false, store = nul
     }),
   };
 }
+// delete().eq() must be awaitable AND chain .select() — deletion-count mode counts what it removed.
 function fakeService(store) {
   return {
     from: () => ({
       select: () => ({ eq: () => Promise.resolve({ data: store.rows, error: null }) }),
-      delete: () => ({ eq: () => { store.rows = []; return Promise.resolve({ error: null }); } }),
+      delete: () => ({
+        eq: () => {
+          const removed = store.rows;
+          store.rows = [];
+          const settled = Promise.resolve({ data: removed, error: null });
+          return { then: (r, j) => settled.then(r, j), select: () => settled };
+        },
+      }),
     }),
   };
 }
@@ -197,9 +205,114 @@ describe('FR-5 — a NON-POLICY error is INCONCLUSIVE, never REFUSED', () => {
   });
 });
 
+describe('FR-5 — the COLLECTOR must not manufacture absence (SECURITY H1)', () => {
+  // postgrest-js resolves failures as {data:null,error} instead of throwing, so a `catch`-only guard
+  // never runs and every failed readback became rows:[] — "observed, and absent". That is one of the
+  // two conjuncts REFUSED requires, so a landed row could be reported REFUSED {legs:3}. The
+  // classifiers were correct throughout; the collector lied to them. These fakes RESOLVE with an
+  // error exactly as the real client does.
+  const erroringService = () => ({
+    from: () => ({
+      select: () => ({ eq: () => Promise.resolve({ data: null, error: { code: 'PGRST205' } }) }),
+      delete: () => ({ eq: () => Promise.resolve({ data: null, error: { code: 'PGRST205' } }) }),
+    }),
+  });
+
+  it('a readback that RESOLVES with an error is absent evidence — never REFUSED', async () => {
+    const v = await runProbe({
+      anon: fakeAnon({ landsOnBare: true, store: { rows: [] } }),
+      service: erroringService(), plan: plan(), assertPrecondition: ok,
+    }).catch((e) => ({ verdict: 'THREW', reason: e.message }));
+    // Either it refuses to report (baseline guard) or it reports INCONCLUSIVE. What it must NEVER do
+    // is return REFUSED off a readback that failed.
+    expect(v.verdict).not.toBe(VERDICT.REFUSED);
+  });
+
+  it('refuses to report at all when the BASELINE confirmation fails', async () => {
+    await expect(runProbe({
+      anon: fakeAnon({ store: { rows: [] } }), service: erroringService(),
+      plan: plan(), assertPrecondition: ok,
+    })).rejects.toThrow(/baseline confirmation FAILED/);
+  });
+
+  it('refuses to run when the marker already matches a row — no OPEN from residue (M2)', async () => {
+    const store = { rows: [{ id: 'pre-existing' }] };
+    await expect(runProbe({
+      anon: fakeAnon({ store }), service: fakeService(store), plan: plan(), assertPrecondition: ok,
+    })).rejects.toThrow(/not unique/);
+  });
+});
+
+describe('FR-5 — the nonsense control is EXECUTED, not merely required (SECURITY M1)', () => {
+  // Instrumentation showed ZERO property reads on plan.nonsenseControl during a full probe: it was
+  // present as a field and absent as a check. A probe cannot show it is still capable of failing by
+  // holding a control it never attempts.
+  it('withdraws a REFUSED verdict when the control row is ACCEPTED', async () => {
+    const store = { rows: [] };
+    // Denies the probe row, accepts anything else — i.e. the guard has stopped discriminating.
+    const anon = {
+      from: () => ({
+        insert: (row) => {
+          const isControl = String(row[Object.keys(row).find((k) => k === 'subject')] || '').includes('__CONTROL__');
+          if (isControl) { store.rows = [{ id: 'control-landed' }]; return Promise.resolve({ error: null }); }
+          return { then: (r) => Promise.resolve({ error: { code: '42501' } }).then(r),
+            select: () => Promise.resolve({ data: null, error: { code: '42501' } }) };
+        },
+      }),
+    };
+    const service = {
+      from: () => ({
+        select: () => ({ eq: (_c, v) => Promise.resolve({
+          data: String(v).includes('__CONTROL__') ? store.rows : [], error: null }) }),
+        delete: () => ({ eq: () => { store.rows = []; return Promise.resolve({ error: null }); } }),
+      }),
+    };
+    const v = await runProbe({ anon, service, plan: plan(), assertPrecondition: ok });
+    expect(v.verdict).toBe(VERDICT.INCONCLUSIVE);
+    expect(v.detail.control).toBe('landed');
+    expect(v.detail.withdrawn_verdict).toBe(VERDICT.REFUSED);
+  });
+
+  it('a REFUSED verdict records that the control was denied', async () => {
+    const store = { rows: [] };
+    const v = await runProbe({
+      anon: fakeAnon({ landsOnBare: false, store }), service: fakeService(store),
+      plan: plan(), assertPrecondition: ok,
+    });
+    expect(v.verdict).toBe(VERDICT.REFUSED);
+    expect(v.detail.control).toBe('denied');
+  });
+});
+
+describe('FR-5 — deletion-count mode can actually CONCLUDE (SECURITY M3)', () => {
+  // confirm() only ever emitted `rows` while present()/observed() read only `.deleted`, so in
+  // deletion-count mode a LANDED write returned INCONCLUSIVE "no service-role confirmation" — about a
+  // confirmation that had run. A mode that can never reach a verdict is not a mode.
+  it('reports OPEN when the row lands, rather than INCONCLUSIVE', async () => {
+    const store = { rows: [] };
+    const dcPlan = buildProbePlan({
+      table: 'feedback', validRow, fieldUnderTest: 'feedback_type',
+      nonsenseControl: nonsense, confirmBy: CONFIRM.DELETION_COUNT,
+    });
+    const v = await runProbe({
+      anon: fakeAnon({ landsOnBare: true, store }), service: fakeService(store),
+      plan: dcPlan, assertPrecondition: ok,
+    });
+    expect(v.verdict).toBe(VERDICT.OPEN);
+  });
+});
+
 describe('FR-5 — 1-REP is ENFORCED against the canary, not asserted in prose', () => {
   // The docstring used to claim "one representation of the rule, two consumers". It was false — the
   // canary required 42501 and this classifier did not. This test is what makes the claim true.
+  //
+  // SCOPE, STATED RATHER THAN IMPLIED: every case below is ABSENCE-MODE evidence, because absence
+  // mode is the canary's ENTIRE domain — classifyRlsProbe has no confirmBy switch and reads only
+  // `rows`. So this asserts agreement across the whole surface the two actually share, and it does
+  // NOT cover deletion-count evidence, where they genuinely differ and the canary is not a consumer
+  // at all. Left uncovered deliberately: forcing agreement there would mean asserting something about
+  // a mode one side does not implement. A cross-check whose scope is unstated invites the reader to
+  // assume it covers everything — which is how the divergence it now catches got in.
   const { classifyRlsProbe } = require('../../../lib/breakage/active-canary-probes.cjs');
   const EVIDENCE = [
     ['landed via bare', { withReturning: { data: null, error: { code: '42501' } }, readbackAfterReturning: { rows: [] }, bareInsert: { error: null }, readbackAfterBare: { rows: [{ id: 'x' }] } }],
