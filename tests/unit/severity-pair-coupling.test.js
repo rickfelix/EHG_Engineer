@@ -177,6 +177,47 @@ describe('FR-3 rate-limit count visibility coupling', () => {
   });
 });
 
+// --- FR-3 correlated form (the live policy, as amended mid-SD 2026-08-03) ----------
+
+describe('FR-3 correlated counted-set', () => {
+  // The applied policy changed WHILE this SD was open: the rate limit went from a fixed
+  // source_type='telegram' to `f.source_type IS NOT DISTINCT FROM feedback.source_type`,
+  // i.e. it counts rows sharing the INCOMING row's source_type. The per-source_type
+  // qualifier is more correct in intent than a global telegram budget — and it collides
+  // with anon SELECT, which exposes exactly one source_type.
+  it('DIVERGED when the caller SELECT pins the correlated column to one literal', () => {
+    const r = compareCountVisibility({
+      correlatedColumn: 'source_type',
+      selectPredicate: "(source_type)::text = 'telegram'::text",
+    });
+    expect(r.verdict).toBe(DIVERGED);
+    expect(r.detail).toMatch(/binds ONLY for source_type = 'telegram'/);
+    expect(r.detail).toMatch(/starved to 0/);
+  });
+
+  it('is DIVERGED, not UNREADABLE — a decidable divergence must not hide as unreadable', () => {
+    // Before the correlated branch existed, this exact input reported UNREADABLE, which
+    // is non-passing but says "could not measure" when the truth is "measured, and it
+    // diverges". Wrong diagnosis on a live fail-open is its own defect.
+    const r = compareCountVisibility({
+      correlatedColumn: 'source_type',
+      selectPredicate: "(source_type)::text = 'telegram'::text",
+    });
+    expect(r.verdict).not.toBe(UNREADABLE);
+  });
+
+  it('UNREADABLE when the caller SELECT does not pin the correlated column', () => {
+    const r = compareCountVisibility({ correlatedColumn: 'source_type', selectPredicate: 'venture_id IS NOT NULL' });
+    expect(r.verdict).toBe(UNREADABLE);
+    expect(r.verdict).not.toBe(AGREES);
+    expect(r.detail).toMatch(/anon-role probe/);
+  });
+
+  it('UNREADABLE when the caller SELECT is missing entirely', () => {
+    expect(compareCountVisibility({ correlatedColumn: 'source_type' }).verdict).toBe(UNREADABLE);
+  });
+});
+
 // --- the aggregate must not pass on nothing ----------------------------------------
 
 describe('allCouplingsAgree', () => {
