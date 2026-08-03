@@ -80,7 +80,16 @@ if (Test-Path $UnifiedStateFile) {
 }
 
 # Build unified state JSON
-$timestamp = Get-Date -Format "yyyy-MM-ddTHH:mm:ss.fffZ"
+# SD-LEO-INFRA-COMPACT-NUDGE-RACES-001: this was `Get-Date -Format "...fffZ"`,
+# which returns LOCAL time and treats Z as a literal character — so the value
+# claimed UTC while carrying local time. context-compact-nudge.js feeds this
+# through minutesSince() as if it were UTC. Observed on disk at UTC-4:
+# last-compaction.json said 02:19:45Z for a compaction that happened at 06:19:45Z,
+# making minutesSinceCompaction permanently ~240 so the compaction cooldown at
+# :220 never fired. East of UTC it is worse — the marker reads as the FUTURE,
+# minutesSince() goes negative, and the check at :220 short-circuits every
+# invocation, silently disabling the whole nudge hook after the first compaction.
+$timestamp = [DateTime]::UtcNow.ToString("yyyy-MM-ddTHH:mm:ss.fff'Z'")
 $state = @{
     version = "1.0.0"
     timestamp = $timestamp
