@@ -85,12 +85,43 @@ describe('the gate is wired at the seam both invokers reach', () => {
   const SRC = readFileSync(resolve(REPO_ROOT, 'scripts/worktree-reaper.mjs'), 'utf8');
   const CODE = SRC.replace(/\/\*[\s\S]*?\*\//g, '').replace(/^\s*\/\/.*$/gm, '');
 
-  it('noOrphanSweep consults the env gate, not only the CLI flag', () => {
-    expect(CODE).toMatch(/noOrphanSweep:[^\n]*resolveOrphanSweepDisabled\(\)/);
+  it('the orphan leg honours BOTH the CLI flag and the env gate', () => {
+    expect(CODE).toMatch(/if \(!opts\.noOrphanSweep && !orphanGate\.disabled\)/);
   });
 
-  it('the orphan leg call site still honours opts.noOrphanSweep', () => {
-    expect(CODE).toMatch(/if \(!opts\.noOrphanSweep\)/);
+  it('THE ORDERING — the env gate is resolved AFTER loadDotenv(), not inside parseArgs', () => {
+    // THE DEFECT THIS PINS, found in review: the gate was originally evaluated inside parseArgs
+    // (:1242) while loadDotenv() does not run until :1266. It therefore read process.env BEFORE
+    // .env was loaded, so WORKTREE_ORPHAN_SWEEP in a .env file had ZERO effect. The gate looked
+    // wired, tested green against injected env objects, and did nothing in the deployment that
+    // matters. Position is the requirement here — a substring match alone cannot see it.
+    const parseArgsPos = CODE.indexOf('function parseArgs');
+    const dotenvPos = CODE.lastIndexOf('loadDotenv()');
+    const gateCallPos = CODE.indexOf('const orphanGate = resolveOrphanSweepDisabled()');
+    expect(gateCallPos).toBeGreaterThan(-1);
+    expect(dotenvPos).toBeGreaterThan(-1);
+    expect(gateCallPos).toBeGreaterThan(dotenvPos);      // resolved after .env is loaded
+    // And it is NOT evaluated inside parseArgs' returned object literal any more.
+    expect(CODE).not.toMatch(/noOrphanSweep:[^\n]*resolveOrphanSweepDisabled/);
+    expect(parseArgsPos).toBeGreaterThan(-1);            // control: the anchor still exists
+  });
+
+  it('the audit_log gate includes refused_count — a refusal must leave a record', () => {
+    // FOUND IN SECURITY REVIEW: the insert was gated on reclaimed_count/failed_count only, so a
+    // refuse-5/archive-0 run wrote NO row. That is the outcome most needing a durable trace — the
+    // sweep declined to act and a human now has to decide — and it was the one case that vanished.
+    expect(CODE).toMatch(/const actedOrRefused = [^\n]*refused_count/);
+    expect(CODE).toMatch(/effectiveExecute && actedOrRefused/);
+  });
+
+  it('a refusal raises severity above info — it is an unresolved decision, not routine', () => {
+    expect(CODE).toMatch(/severity:[\s\S]{0,120}refused_count[^\n]*'warning'/);
+  });
+
+  it('a skipped sweep is ANNOUNCED, not silent', () => {
+    // A silent skip is indistinguishable from a sweep that ran and found nothing, which is how a
+    // disabled census goes unnoticed for weeks.
+    expect(CODE).toMatch(/orphan_sweep_skipped/);
   });
 
   it('CONTROL: the stripper did not empty the source', () => {

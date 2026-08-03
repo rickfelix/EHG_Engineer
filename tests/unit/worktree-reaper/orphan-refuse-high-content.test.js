@@ -110,6 +110,56 @@ describe('FR-3 — a .git-less directory holding real content is REFUSED, not re
   });
 });
 
+describe('FR-2 — the recency guard reads CONTENT age, proven by a discriminating fixture', () => {
+  // ADDED AFTER REVIEW. Every other recency fixture here ages the container AND its contents
+  // together, so none of them can tell which mtime the consumer actually reads: replacing
+  // `Math.max(container, newestDescendant)` with the legacy container-only stat left all 257
+  // tests green. probeContent was proven to REPORT the newest descendant mtime; nothing proved
+  // classifyOrphanDirs USED it. This is the shape that discriminates — and it is the incident's
+  // own shape: a container that looks ancient wrapped around contents edited minutes ago.
+  it('a dir whose CONTAINER is aged but whose CONTENTS are fresh is NOT reaped', () => {
+    const dir = path.join(worktreesDir, 'stale-shell-fresh-guts');
+    fs.mkdirSync(dir, { recursive: true });
+    fs.writeFileSync(path.join(dir, 'edited-just-now.txt'), 'x');   // descendant: seconds old
+    const ancient = new Date(Date.now() - AGED);
+    fs.utimesSync(dir, ancient, ancient);                            // container: 38.2h old
+
+    const r = classifyOrphanDirs(worktreesDir, [], { minAgeMs: THIRTY_MIN, probe: realProbe });
+
+    // Under the pre-fix top-level stat this read as 38.2h old and was REAPABLE — that is exactly
+    // how a tree edited 3.5h before the incident was classified as ancient and deleted.
+    expect(r.reapableDirs.find((x) => x.dir === 'stale-shell-fresh-guts')).toBeUndefined();
+    const ex = r.excluded.find((x) => x.dir === 'stale-shell-fresh-guts');
+    expect(ex).toBeDefined();
+    expect(ex.reason).toBe('too_recent');
+  });
+
+  it('an EMPTY dir created seconds ago is still too_recent — the guard\'s original purpose', () => {
+    // REGRESSION FOUND IN REVIEW: probeContent returns newestMtimeMs=0 for a tree with no files,
+    // so descendant-alone made `now - 0` ~57 years and a brand-new empty directory became
+    // REAPABLE. That population — a dir created by a half-finished `git worktree add` — is the
+    // case this guard was originally written for. Measured before the fix:
+    // WITH probe -> reapable, LEGACY -> too_recent.
+    fs.mkdirSync(path.join(worktreesDir, 'brand-new-empty'), { recursive: true });
+    const r = classifyOrphanDirs(worktreesDir, [], { minAgeMs: THIRTY_MIN, probe: realProbe });
+    const ex = r.excluded.find((x) => x.dir === 'brand-new-empty');
+    expect(ex).toBeDefined();
+    expect(ex.reason).toBe('too_recent');
+    expect(r.reapableDirs.find((x) => x.dir === 'brand-new-empty')).toBeUndefined();
+  });
+
+  it('and an AGED empty dir is still reapable — max() did not just disable the guard', () => {
+    // Opposite polarity for the same fix: if Math.max had been written so the container always
+    // wins, or the probe branch dropped entirely, empty orphans would stop being collected.
+    const dir = path.join(worktreesDir, 'aged-empty-shell');
+    fs.mkdirSync(dir, { recursive: true });
+    const ancient = new Date(Date.now() - AGED);
+    fs.utimesSync(dir, ancient, ancient);
+    const r = classifyOrphanDirs(worktreesDir, [], { minAgeMs: THIRTY_MIN, probe: realProbe });
+    expect(r.reapableDirs.find((x) => x.dir === 'aged-empty-shell')).toBeDefined();
+  });
+});
+
 describe('opposite polarity — the sweep must still do its job', () => {
   it('an EMPTY .git-less dir of the same age is still REAPABLE', () => {
     // If everything became refused, the orphan sweep would stop working and the fix would be
@@ -159,6 +209,47 @@ describe('FR-3b — an unmeasurable directory refuses with a DISTINCT reason', (
     expect(hit).toBeDefined();
     expect(hit.reason).toBe(REASON.WALK_TIMEOUT);
     expect(r.reapableDirs.find((x) => x.dir === 'aged-empty')).toBeUndefined();
+  });
+});
+
+describe('a BROKEN .git must not exempt a directory from the content check', () => {
+  // FOUND IN SECURITY REVIEW, reproduced before fixing. Two trees with identical content: the
+  // no-.git copy was caught, and a copy carrying a `.git` file pointing at a NONEXISTENT gitdir
+  // was classified REAPABLE. Three guards abstained on the same directory at once — isReapable
+  // cannot read git state it cannot reach and returns a clean-orphan verdict, the probe was gated
+  // off by hasGit, and recency fell back to the blind container stat. The original scoping
+  // rationale ("skip dirs isReapable already interrogates") is false exactly where that
+  // interrogation fails, which is the population most likely to be an abandoned real worktree.
+  const mkBroken = (name) => {
+    const dir = path.join(worktreesDir, name);
+    fs.mkdirSync(path.join(dir, 'nested'), { recursive: true });
+    for (let i = 0; i < 8; i++) fs.writeFileSync(path.join(dir, 'nested', `f${i}.txt`), 'x'.repeat(600));
+    fs.writeFileSync(path.join(dir, '.git'), 'gitdir: /nonexistent/path/that/does/not/exist');
+    const old = new Date(Date.now() - 6 * 60 * 60 * 1000);
+    fs.utimesSync(dir, old, old);           // container aged; contents deliberately left fresh
+    return dir;
+  };
+
+  it('a .git pointing at a nonexistent gitdir is REFUSED on content, not reaped', () => {
+    mkBroken('broken-git-heavy');
+    const r = classifyOrphanDirs(worktreesDir, [], { minAgeMs: THIRTY_MIN, probe: realProbe });
+    expect(r.reapableDirs.find((x) => x.dir === 'broken-git-heavy')).toBeUndefined();
+    const hit = r.refused.find((x) => x.dir === 'broken-git-heavy');
+    expect(hit).toBeDefined();
+    expect(hit.reason).toBe(REASON.HIGH_CONTENT);
+  });
+
+  it('but an EMPTY dir with a broken .git is still reapable — the check is content, not .git shape', () => {
+    // Opposite polarity: the fix must not make every .git-bearing dir unreapable, or the sweep
+    // stops collecting the leftovers it exists to collect.
+    const dir = path.join(worktreesDir, 'broken-git-empty');
+    fs.mkdirSync(dir, { recursive: true });
+    fs.writeFileSync(path.join(dir, '.git'), 'gitdir: /nonexistent');
+    const old = new Date(Date.now() - AGED);
+    fs.utimesSync(path.join(dir, '.git'), old, old);
+    fs.utimesSync(dir, old, old);
+    const r = classifyOrphanDirs(worktreesDir, [], { minAgeMs: THIRTY_MIN, probe: realProbe });
+    expect(r.reapableDirs.find((x) => x.dir === 'broken-git-empty')).toBeDefined();
   });
 });
 

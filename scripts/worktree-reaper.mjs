@@ -167,10 +167,12 @@ function parseArgs(argv) {
     // (standalone, for manual inspection); --no-orphan-sweep = skip the sweep that is
     // otherwise folded into the normal flow (so the hourly tick includes it).
     orphanSweep: args.includes('--orphan-sweep'),
-    // SD-LEO-INFRA-ORPHAN-SWEEP-HARD-001 (FR-1b): the CLI opt-out above is unreachable from BOTH
-    // automated invokers, so the gate must also be readable from the environment. See
-    // resolveOrphanSweepDisabled() for why it lives here and not in buildReaperArgs.
-    noOrphanSweep: args.includes('--no-orphan-sweep') || resolveOrphanSweepDisabled().disabled,
+    // SD-LEO-INFRA-ORPHAN-SWEEP-HARD-001 (FR-1b): CLI flag only HERE. The env half is evaluated at
+    // the call site instead — parseArgs runs at :1242 but loadDotenv() does not run until :1266,
+    // so reading process.env here would consult the environment BEFORE .env is loaded and
+    // WORKTREE_ORPHAN_SWEEP in a .env file would have had ZERO effect. The gate would have looked
+    // wired and done nothing, which is the same class of defect this SD exists to remove.
+    noOrphanSweep: args.includes('--no-orphan-sweep'),
     // SD-LEO-INFRA-WORKTREE-REAPER-MULTIREPO-001: reap EVERY registered pool (spawns a per-pool
     // --repo child so each pool keeps the full single-repo safety), not just the current repo.
     allPools: args.includes('--all-pools'),
@@ -1146,17 +1148,26 @@ async function runAndReportOrphanSweep({ repoRoot, worktreesDir, supabase, execu
   const s = sweep.summary || {};
   console.log(
     `🧹 Orphan sweep: scanned=${s.scanned ?? '?'} reapable=${s.reapable ?? '?'} ` +
-    `reclaimed=${s.reclaimed_count ?? 0} bytes=${s.reclaimed_bytes ?? 0} ` +
+    `archived=${s.reclaimed_count ?? 0} archived_bytes=${s.archived_bytes ?? 0} disk_freed=0 refused=${s.refused_count ?? 0} ` +
     `excluded=${s.excluded_count ?? 0} failed=${s.failed_count ?? 0}${s.dry_run ? ' (dry-run)' : ''}`
   );
-  // FR-4 durable summary: best-effort audit_log row when an EXECUTE run actually acted. Fail-soft.
-  if (sweep.ok && supabase && effectiveExecute && ((s.reclaimed_count || 0) > 0 || (s.failed_count || 0) > 0)) {
+  // FR-4 durable summary: best-effort audit_log row when an EXECUTE run acted OR REFUSED. Fail-soft.
+  //
+  // refused_count is in this gate deliberately. Without it, the one outcome that most needs a
+  // durable record — the sweep declining to touch a directory because it holds real content, which
+  // means a HUMAN has to decide — is the exact case that writes no row at all. A refuse-5/archive-0
+  // run would leave nothing behind but a console line on a cron nobody reads, which is how the
+  // 707MB directory sat unattributed for two days. FR-4 exists because the incident's record was
+  // correct and useless; a missing record is strictly worse than a useless one.
+  const actedOrRefused = (s.reclaimed_count || 0) > 0 || (s.failed_count || 0) > 0 || (s.refused_count || 0) > 0;
+  if (sweep.ok && supabase && effectiveExecute && actedOrRefused) {
     try {
       await supabase.from('audit_log').insert({
         event_type: 'worktree_orphan_sweep',
         entity_type: 'worktree',
         entity_id: 'orphan_sweep',
-        severity: (s.failed_count || 0) > 0 ? 'warning' : 'info',
+        // A refusal is not routine: it is an unresolved decision sitting on disk.
+        severity: ((s.failed_count || 0) > 0 || (s.refused_count || 0) > 0) ? 'warning' : 'info',
         created_by: 'worktree-reaper',
         metadata: s,
       });
@@ -1297,8 +1308,21 @@ export async function main(argv = process.argv) {
   // worktree-reaper-tick.cjs spawn includes it with NO separate cron. Runs BEFORE the
   // registered-worktree stage scan (and its early returns), is dry-run unless --execute,
   // and is fully fail-soft so it can never abort the reaper. Opt out with --no-orphan-sweep.
-  if (!opts.noOrphanSweep) {
+  // SD-LEO-INFRA-ORPHAN-SWEEP-HARD-001 (FR-1b): the env half of the gate is resolved HERE, after
+  // loadDotenv() has run at :1266. Reading it inside parseArgs (:1242) consulted process.env
+  // before .env was loaded, so a WORKTREE_ORPHAN_SWEEP entry in .env had no effect whatsoever —
+  // a gate that reads as wired and does nothing. Verified by the ordering of those two lines.
+  const orphanGate = resolveOrphanSweepDisabled();
+  if (!opts.noOrphanSweep && !orphanGate.disabled) {
     await runAndReportOrphanSweep({ repoRoot, worktreesDir, supabase, execute: opts.execute });
+  } else {
+    // Announce a deliberate zero rather than emitting nothing. A silent skip is indistinguishable
+    // from a sweep that ran and found nothing, which is how a disabled census goes unnoticed.
+    console.warn(JSON.stringify({
+      event: 'orphan_sweep_skipped',
+      reason: opts.noOrphanSweep ? 'cli_flag' : orphanGate.reason,
+      env_raw: orphanGate.raw ?? null,
+    }));
   }
 
   // Load reference data (best-effort — reaper is useful even with empty maps).
