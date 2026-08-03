@@ -1,0 +1,18 @@
+[
+  {
+    "id": 611,
+    "section_type": "solomon_role_contract",
+    "title": "Solomon Role Contract",
+    "order_index": 2640,
+    "bytes": 64841,
+    "sha256": "7ef63b2f8b7ecb15297124ed25458b298a96bdb2db7868610dd64a84b92e4ac2"
+  },
+  {
+    "id": 616,
+    "section_type": "solomon_role_contract",
+    "title": "Crew-comms routing protocol (organizing layer)",
+    "order_index": 2641,
+    "bytes": 752,
+    "sha256": "43fe9aa6bc0de50d88b1d051368763853bc0fae4f02b0f227727add14a9a396b"
+  }
+]

@@ -737,6 +737,41 @@ ${solomonContent}
 `;
 }
 
+/**
+ * CLAUDE_SOLOMON_MANUAL.md — SD-FDBK-INFRA-CLAUDE-SOLOMON-EXCEEDS-001.
+ *
+ * CLAUDE_SOLOMON.md did not fit one Read: the harness itself returned
+ * "PARTIAL view — showing lines 1-301 of 371 total (26138 tokens, cap 25000)".
+ *
+ * THE HARM HERE IS SHARPER THAN "AN ABSENT PROHIBITION READS AS PERMISSION". The surviving head
+ * states silence-by-default as an IDLENESS rule; the dropped tail carried the chairman-ratified
+ * "P1 — WORK POSTURE (silence-by-default as an IDLENESS rule is REPEALED)". Head truncation
+ * PRESERVED THE SUPERSEDED RULE AND DROPPED ITS REPEAL, so a Solomon session reading its contract
+ * the obvious way obeyed a rule the chairman had revoked, with nothing anywhere looking wrong.
+ * Solomon is a SINGLETON with no peer seat, so no second reader can notice the omission.
+ *
+ * THE INHERITED SIZE FIGURE WAS WRONG AND WAS NOT USED. The SD inherited 32,144 tokens and
+ * lib/protocol/contract-read-coverage.cjs independently reported 32,139 — both ~23% high. That
+ * module's CL100K_TO_HARNESS=1.85 is derived in its own comment as 26142/14617, dividing a
+ * WHOLE-FILE token count by the cl100k count of a DELIVERED SLICE; against the same ground truth
+ * the honest figure is 26142/17372 = 1.505. Encoding the inherited number would have cut ~30% of
+ * this contract to fix a 14% problem. Routed as its own defect; acceptance here is the harness
+ * Read, never a tokenizer.
+ *
+ * TWO CLAUSES WERE DELIBERATELY LEFT BEHIND IN THE GATED FILE, both found by the prohibition
+ * tripwire rather than by reading: the Web Research HARD security stop, and ACCURACY REVIEW DUTY
+ * — a DURABLE DUTY that happened to sit inside an otherwise procedural section. Same doctrine as
+ * the LEAD and ADAM precedents: an allow-list decides, the keyword scan only prompts the check.
+ */
+function generateSolomonManual(data, fileMapping) {
+  return generateAdamCompanion(data, fileMapping, 'CLAUDE_SOLOMON_MANUAL.md', {
+    heading: 'Solomon Manual (reference companion)',
+    purpose: 'Long-form Solomon reference — origin history, the advice-outcome ledger and success metrics, the web-research routing rubric, crew-comms routing',
+    loadWhen: 'At the MOMENT OF DOING one of these procedures — not at every Solomon session start',
+    note: 'This companion carries REFERENCE AND PROCEDURE. Every RULE, PROHIBITION and DURABLE DUTY that governs Solomon stays in CLAUDE_SOLOMON.md and is in force whether or not this file is read. If you are ever unsure whether something belongs here, it belongs in CLAUDE_SOLOMON.md — this file exists to make that file readable, not to relieve it of anything that binds.',
+  });
+}
+
 export {
   getSectionsByMapping,
   generateRouter,
@@ -751,6 +786,7 @@ export {
   generatePlanManual,
   generateCoordinator,
   generateSolomon,
+  generateSolomonManual,
   findCopiedSharedSections,
   assertSharedSectionsNotCopied
 };
