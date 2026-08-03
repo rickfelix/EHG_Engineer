@@ -20,8 +20,9 @@ const {
 } = require_('../../../lib/coordinator/kill-switch-writer.cjs');
 
 const NOW = Date.parse('2026-08-03T09:00:00.000Z');
+const COORD_ID = 'sess-987';
 const liveCoordinator = (over = {}) => ({
-  session_id: 'sess-987',
+  session_id: COORD_ID,
   callsign: 'Coordinator',
   status: 'active',
   heartbeat_at: new Date(NOW - 60_000).toISOString(),
@@ -29,13 +30,14 @@ const liveCoordinator = (over = {}) => ({
   ...over,
 });
 
-function harness({ session = liveCoordinator(), insert = vi.fn(async (_sb, row) => ({ data: row })) } = {}) {
+function harness({ session = liveCoordinator(), activeId = COORD_ID, insert = vi.fn(async (_sb, row) => ({ data: row })) } = {}) {
   return {
     insert,
     deps: {
       supabase: {},
       insertCoordinationRow: insert,
       lookupSession: async () => session,
+      resolveActiveCoordinator: async () => activeId,
       now: () => NOW,
     },
   };
@@ -43,31 +45,40 @@ function harness({ session = liveCoordinator(), insert = vi.fn(async (_sb, row) 
 
 describe('FR-2: evaluateActor — corroboration decisions', () => {
   it('accepts a live coordinator', () => {
-    expect(evaluateActor(liveCoordinator(), NOW)).toMatchObject({ ok: true, role: 'coordinator' });
+    expect(evaluateActor(liveCoordinator(), NOW, COORD_ID)).toMatchObject({ ok: true, role: 'coordinator' });
   });
 
   it('refuses an actor that does not exist — the arbitrary-string case Delta observed being accepted', () => {
-    expect(evaluateActor(null, NOW)).toMatchObject({ ok: false, code: 'ACTOR_NOT_FOUND' });
+    expect(evaluateActor(null, NOW, COORD_ID)).toMatchObject({ ok: false, code: 'ACTOR_NOT_FOUND' });
   });
 
-  it('refuses a WORKER seat — the population the enforcement constrains cannot disable it', () => {
-    const r = evaluateActor(liveCoordinator({ metadata: { role: 'worker' } }), NOW);
-    expect(r).toMatchObject({ ok: false, code: 'ACTOR_ROLE_FORBIDDEN' });
+  it('refuses a seat that is NOT the active coordinator — the population the enforcement constrains cannot disable it', () => {
+    // REWRITTEN. This previously asserted ACTOR_ROLE_FORBIDDEN against metadata.role='worker'. That
+    // model was fiction: metadata.role is set on 20 of 13,068 sessions and never to 'coordinator',
+    // so the old guard would have refused everyone — including the real coordinator — while these
+    // tests passed, because the fixture hand-built the very shape production does not have.
+    const other = liveCoordinator({ session_id: 'sess-worker-1' });
+    expect(evaluateActor(other, NOW, COORD_ID)).toMatchObject({ ok: false, code: 'ACTOR_NOT_COORDINATOR' });
+  });
+
+  it('refuses when NO active coordinator resolves — fails closed rather than guessing', () => {
+    // Refusing to fire a kill switch is recoverable; firing it wrongly is not.
+    expect(evaluateActor(liveCoordinator(), NOW, null)).toMatchObject({ ok: false, code: 'NO_ACTIVE_COORDINATOR' });
   });
 
   it('refuses a STALE session — "existed once" is not authorization', () => {
     const stale = liveCoordinator({ heartbeat_at: new Date(NOW - ACTIVE_HEARTBEAT_MS - 1000).toISOString() });
-    expect(evaluateActor(stale, NOW)).toMatchObject({ ok: false, code: 'ACTOR_NOT_LIVE' });
+    expect(evaluateActor(stale, NOW, COORD_ID)).toMatchObject({ ok: false, code: 'ACTOR_NOT_LIVE' });
   });
 
   it('refuses a session with no parseable heartbeat rather than treating absence as fresh', () => {
-    expect(evaluateActor(liveCoordinator({ heartbeat_at: null }), NOW)).toMatchObject({ ok: false, code: 'ACTOR_NO_HEARTBEAT' });
-    expect(evaluateActor(liveCoordinator({ heartbeat_at: 'not-a-date' }), NOW)).toMatchObject({ ok: false, code: 'ACTOR_NO_HEARTBEAT' });
+    expect(evaluateActor(liveCoordinator({ heartbeat_at: null }), NOW, COORD_ID)).toMatchObject({ ok: false, code: 'ACTOR_NO_HEARTBEAT' });
+    expect(evaluateActor(liveCoordinator({ heartbeat_at: 'not-a-date' }), NOW, COORD_ID)).toMatchObject({ ok: false, code: 'ACTOR_NO_HEARTBEAT' });
   });
 
   it('is INCLUSIVE at the liveness boundary, so a seat is not refused for being exactly at the edge', () => {
     const edge = liveCoordinator({ heartbeat_at: new Date(NOW - ACTIVE_HEARTBEAT_MS).toISOString() });
-    expect(evaluateActor(edge, NOW).ok).toBe(true);
+    expect(evaluateActor(edge, NOW, COORD_ID).ok).toBe(true);
   });
 });
 
@@ -91,10 +102,17 @@ describe('FR-2: fireFleetEnforcementKill — refusals and the written row', () =
     expect(h.insert).not.toHaveBeenCalled();
   });
 
-  it('REFUSES a worker seat and writes NOTHING — the headline hole', async () => {
-    const h = harness({ session: liveCoordinator({ metadata: { role: 'worker' } }) });
-    await expect(fireFleetEnforcementKill(h.deps, { actor: 'sess-w', reason: 'oops' }))
-      .rejects.toMatchObject({ code: 'ACTOR_ROLE_FORBIDDEN' });
+  it('REFUSES a non-coordinator seat and writes NOTHING — the headline hole', async () => {
+    const h = harness({ session: liveCoordinator({ session_id: 'sess-worker-1' }) });
+    await expect(fireFleetEnforcementKill(h.deps, { actor: 'sess-worker-1', reason: 'oops' }))
+      .rejects.toMatchObject({ code: 'ACTOR_NOT_COORDINATOR' });
+    expect(h.insert).not.toHaveBeenCalled();
+  });
+
+  it('REFUSES when no active coordinator resolves, and writes NOTHING', async () => {
+    const h = harness({ activeId: null });
+    await expect(fireFleetEnforcementKill(h.deps, { actor: COORD_ID, reason: 'r' }))
+      .rejects.toMatchObject({ code: 'NO_ACTIVE_COORDINATOR' });
     expect(h.insert).not.toHaveBeenCalled();
   });
 
