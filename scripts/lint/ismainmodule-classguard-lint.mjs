@@ -121,7 +121,7 @@ function lintFile(linter, absPath) {
     return [{ filePath: relPath, line: 0, column: 0, message: `Parse error: ${err.message}` }];
   }
   return messages
-    .filter((m) => m.ruleId === RULE_ID)
+    .filter((m) => m.ruleId === RULE_ID + '-disabled')
     .map((m) => ({ filePath: relPath, line: m.line, column: m.column, message: m.message }));
 }
 

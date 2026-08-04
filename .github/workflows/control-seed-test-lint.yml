@@ -41,7 +41,7 @@ jobs:
     name: control-seed-test-lint
     runs-on: ubuntu-latest
     # ADVISORY SOAK — see the flip criterion in the header. Not a permanent state.
-    continue-on-error: true
+    continue-on-error: false
     steps:
       - uses: actions/checkout@v4
         with:
