@@ -258,6 +258,24 @@ describe('FR-5 — exit only by a named, recorded event', () => {
     expect(isPending({ ...m, promoted_qf_id: 'QF-1' })).toBe(false);
   });
 
+  // The promoter's inline path cannot capture the minted id (create-quick-fix.js runs with
+  // stdio:'inherit'), so promoted_at is the authoritative stamp. Keying pending-ness on the id
+  // alone would leave every inline-promoted marker permanently "pending" — a record insisting
+  // something is outstanding after it has been dealt with.
+  it('promoted_at ALONE ends pending state, with no id present', () => {
+    const m = buildMarker(group(), demand(), { nowIso: NOW, severityRank, threshold: 3 });
+    expect(isPending({ ...m, promoted_at: NOW })).toBe(false);
+    expect(m.promoted_qf_id).toBeNull();
+  });
+
+  it('the marker carries promoted_at and promoted_fingerprint as first-class null-while-pending fields', () => {
+    const m = buildMarker(group(), demand(), { nowIso: NOW, severityRank, threshold: 3 });
+    // Present-and-null, so a reader never has to distinguish "absent key" from "not yet promoted".
+    expect(m).toHaveProperty('promoted_at', null);
+    expect(m).toHaveProperty('promoted_fingerprint', null);
+    expect(isPending(m)).toBe(true);
+  });
+
   it('a dispositioned marker is no longer pending', () => {
     const m = buildMarker(group(), demand(), { nowIso: NOW, severityRank, threshold: 3 });
     expect(isPending({ ...m, disposed_at: NOW, disposed_by: 'x', disposed_reason: 'y' })).toBe(false);
@@ -395,6 +413,16 @@ describe('writeMarkers — the real function, not an injected stub', () => {
     const res = await writeMarkers(db, [group()], demand(), ctx);
     expect(res.written).toBe(0);
     expect(db._store.get('fb-1').metadata[MARKER_KEY].promoted_qf_id).toBe('QF-9');
+  });
+
+  it('does NOT resurrect one consumed by the inline path, which stamps promoted_at and no id', async () => {
+    // The shape the promoter actually writes. If resurrection keyed only on promoted_qf_id, every
+    // inline-promoted marker would be re-marked pending on the next withheld run.
+    const inlineConsumed = { ...buildMarker(group(), demand(), ctx), promoted_at: NOW, promoted_fingerprint: 'abc123' };
+    const db = fakeDb([{ id: 'fb-1', metadata: { [MARKER_KEY]: inlineConsumed } }]);
+    const res = await writeMarkers(db, [group()], demand(), ctx);
+    expect(res.written).toBe(0);
+    expect(db._store.get('fb-1').metadata[MARKER_KEY].promoted_at).toBe(NOW);
   });
 
   // THE FALSE-ZERO. The first version returned {written: 0} when every write was rejected, and the

@@ -74,7 +74,13 @@ try {
     //     bare .gte, so the change is a provable no-op until a marker exists;
     //   - and the second branch genuinely admits out-of-window rows (measured 3291 with a
     //     predicate guaranteed to match them), so it is not a decorative disjunct.
-    .or(`created_at.gte.${cutoff},metadata->>${MARKER_KEY}.not.is.null`)
+    //
+    // TESTS PENDING-NESS, NOT MERE PRESENCE. The first version admitted any row carrying a marker
+    // at all — and neither exit (promotion or disposition) deletes the key, so a CONSUMED marker
+    // went on admitting its row forever and the candidate set grew monotonically toward the whole
+    // table. Found at review. The nested `and(...)` requires the marker to be present AND not yet
+    // promoted; the syntax was verified live before being encoded rather than assumed to parse.
+    .or(`created_at.gte.${cutoff},and(metadata->>${MARKER_KEY}.not.is.null,metadata->${MARKER_KEY}->>promoted_qf_id.is.null,metadata->${MARKER_KEY}->>disposed_at.is.null)`)
     // SD-LEO-INFRA-SIGNAL-PROMOTION-RESOLUTION-CHECK-001 (FR-4): this predicate had NO status
     // filter at all, so a row already marked resolved stayed promotion-eligible for its whole
     // 14-day window. Measured live at authoring time: 38 resolved + 1 invalid in-window rows were
@@ -176,8 +182,19 @@ for (const group of groups.values()) {
       // it: promotion is one of only two recorded ways out of pending, and a marker that simply
       // vanished on promotion would be the silent exit this SD exists to abolish, relocated.
       const priorMarker = row?.metadata?.[MARKER_KEY];
+      // THE QF ID IS NOT AVAILABLE HERE, AND THE FIELD NO LONGER PRETENDS OTHERWISE. create-quick-fix.js
+      // runs with stdio:'inherit' (deliberately — its output is streamed), so the minted id is never
+      // captured by this process. The first version stored group.fingerprint under promoted_qf_id,
+      // which made two writers of one field disagree: consumeMarker REFUSES a falsy id precisely
+      // because "consumed with no id" is a silent exit, while this path quietly satisfied the same
+      // field with something that is not an id at all. A field whose name is a claim the value does
+      // not support is the defect class this SD is about, in miniature.
+      //
+      // So: record what is actually known — that it was promoted, when, and by which fingerprint —
+      // and leave promoted_qf_id null. isPending treats promoted_at as a terminal stamp, so the
+      // marker still exits pending state correctly; it simply does not assert an id nobody captured.
       const consumed = priorMarker
-        ? { [MARKER_KEY]: { ...priorMarker, promoted_qf_id: group.fingerprint, promoted_at: stampedAt } }
+        ? { [MARKER_KEY]: { ...priorMarker, promoted_at: stampedAt, promoted_fingerprint: group.fingerprint } }
         : {};
       await supabase
         .from('feedback')
