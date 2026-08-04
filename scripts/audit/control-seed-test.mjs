@@ -48,11 +48,27 @@
  */
 
 import { execFileSync, spawnSync } from 'node:child_process';
-import { mkdtempSync, writeFileSync, mkdirSync, rmSync } from 'node:fs';
+import { mkdtempSync, writeFileSync, mkdirSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join, dirname } from 'node:path';
 import { readFileSync } from 'node:fs';
 import { isMainModule } from '../../lib/utils/is-main-module.js';
+// FR-5 chokepoint (SD-LEO-INFRA-WORKTREE-REAPER-RESIDENT-001). This module became a
+// worktree-handling file the moment runSeedTestTrial started creating one, and the static guard
+// in tests/unit/worktree-delete-primitive-static-guard.test.js flagged both raw deletes here
+// immediately -- correctly.
+//
+// THE REASON IS REUSE, NOT A WIPE THREAT FROM node's rmSync, and that distinction is load-bearing
+// enough that the guard's own rationale carries a SECURITY correction saying so: a raw recursive
+// delete was NOT reproducible as following a nested junction on Node v24. What it IS, is a second
+// unreviewed implementation of a delete policy that is maintained in exactly one place here.
+//
+// Worth recording because this SD nearly learned it the expensive way: the first US-007 draft
+// junctioned node_modules into a scratch worktree, and `git worktree remove --force` -- git's own
+// removal, not node's -- deleted 557 packages through that junction. The shipped design needs no
+// link at all, so that hazard is gone; routing through safeRecursiveRm is about not maintaining a
+// private copy of the policy.
+import { safeRecursiveRm } from '../../lib/worktree-manager.js';
 
 const VERDICT = Object.freeze({
   BLOCKS: 'BLOCKS',        // detected AND non-zero exit — actually stops a merge
@@ -132,7 +148,7 @@ export function runTrial(spec, repoRoot) {
     // exited 1. r.error is the only field that says WHY.
     spawnError = r.error || null;
   } finally {
-    rmSync(dir, { recursive: true, force: true });
+    safeRecursiveRm(dir);
   }
 
   const after = gitStatus(repoRoot);
@@ -326,7 +342,7 @@ export function runSeedTestTrial(spec, repoRoot, deps = {}) {
     return { name: spec.name, verdict: SEED_TRIAL.HARNESS_ERROR, code: 'HARNESS_THREW', reason: `the observed-RED harness itself failed: ${e.message}`, evidence: [] };
   } finally {
     try { exec('git', ['worktree', 'remove', '--force', wt], { cwd: repoRoot, stdio: 'ignore' }); } catch {}
-    try { rmSync(wt, { recursive: true, force: true }); } catch {}
+    try { safeRecursiveRm(wt); } catch {}
     try { exec('git', ['worktree', 'prune'], { cwd: repoRoot, stdio: 'ignore' }); } catch {}
   }
 }
