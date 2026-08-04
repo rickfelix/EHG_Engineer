@@ -9,7 +9,7 @@
 // No DB, no network: pure evaluate() against a committed fixture.
 import { describe, it, expect } from 'vitest';
 import { evaluate } from '../../../scripts/lint/control-seed-test-lint.mjs';
-import { classifySeedTrial, SEED_TRIAL } from '../../../scripts/audit/control-seed-test.mjs';
+import { classifySeedTrial, SEED_TRIAL, runSeedTestTrial } from '../../../scripts/audit/control-seed-test.mjs';
 
 const BLIND = 'tests/fixtures/control-seed-gate/blind-gauge-lint.mjs';
 const onlyBlind = (p) => p === BLIND;
@@ -206,5 +206,40 @@ describe('FR-7 — an observed RED, and only for the right reason', () => {
     const r = classifySeedTrial({ cleanExit: 0, mutationLanded: true, mutantExit: 1, mutantOut: 'exited with code 1' });
     expect(r.verdict).toBe(SEED_TRIAL.HARNESS_ERROR);
     expect(r.code).toBe('UNEXPLAINED_RED');
+  });
+});
+
+// SD-PAT-FIX-FIX-ABSENCE-SIGNAL-001 — SECURITY regressions, all live-proved before being fixed.
+//
+// scripts/audit/control-seed-specs.json IS EDITABLE IN A PULL REQUEST, so every field it carries
+// is attacker-authored input to code that writes files and spawns processes. These pin the two
+// primitives SECURITY demonstrated against the first US-007 implementation.
+//
+// All cases return BEFORE any worktree is created, so these are fast and touch nothing.
+describe('SECURITY — the spec file is untrusted input', () => {
+  const base = { name: 'attack', script: 'scripts/lint/control-seed-test-lint.mjs', seedTest: 'tests/unit/lint/control-seed-test-lint.test.js' };
+
+  it('[DECIDING] SEC-1: a neuter.file outside the control under test is refused', () => {
+    // `join(wt, '../../../..')` walked straight out of the trial worktree into the real repo.
+    const r = runSeedTestTrial({ ...base, neuter: { file: '../../../../etc/passwd', find: 'x', replace: 'y' } }, process.cwd());
+    expect(r.verdict).toBe(SEED_TRIAL.HARNESS_ERROR);
+    expect(r.code).toBe('NEUTER_FILE_NOT_SCRIPT');
+  });
+
+  it('[DECIDING] SEC-2: an EMPTY find is refused — it prepends rather than replaces', () => {
+    // The sharpest edge, and it does not look like one: ''.replace matches at index 0 ALWAYS, so
+    // `replace` is written unconditionally AND the mutation-landed check confirms a real change.
+    // The harness then re-runs vitest in that same worktree, so the prepended text EXECUTES.
+    const r = runSeedTestTrial({ ...base, neuter: { find: '', replace: 'import("child_process")' } }, process.cwd());
+    expect(r.verdict).toBe(SEED_TRIAL.HARNESS_ERROR);
+    expect(r.code).toBe('NEUTER_FIND_EMPTY');
+  });
+
+  it('[CONTROL] a well-formed neuter is NOT refused by these guards', () => {
+    // Without this, guards that reject EVERY spec would score a perfect pass on both tests above
+    // while disabling the feature entirely. It must fail for some LATER reason, never these two.
+    const r = runSeedTestTrial({ ...base, neuter: { find: 'genuinely-absent-token-xyz', replace: 'z' } }, process.cwd());
+    expect(r.code).not.toBe('NEUTER_FILE_NOT_SCRIPT');
+    expect(r.code).not.toBe('NEUTER_FIND_EMPTY');
   });
 });

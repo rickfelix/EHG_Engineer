@@ -50,7 +50,7 @@
 import { execFileSync, spawnSync } from 'node:child_process';
 import { mkdtempSync, writeFileSync, mkdirSync } from 'node:fs';
 import { tmpdir } from 'node:os';
-import { join, dirname } from 'node:path';
+import { join, dirname, resolve, sep } from 'node:path';
 import { readFileSync } from 'node:fs';
 import { isMainModule } from '../../lib/utils/is-main-module.js';
 // FR-5 chokepoint (SD-LEO-INFRA-WORKTREE-REAPER-RESIDENT-001). This module became a
@@ -140,7 +140,7 @@ export function runTrial(spec, repoRoot) {
     // exit 0 while doing so (advisory mode), so on exactly the interesting path the harness
     // read an empty string, saw no match, and scored a control SILENT that had in fact
     // reported the violation by name. spawnSync gives both streams on both paths.
-    const r = spawnSync('node', args, { cwd: runCwd, encoding: 'utf8', timeout: 120000, env: { ...process.env, ...(spec.env || {}) } });
+    const r = spawnSync('node', args, { cwd: runCwd, encoding: 'utf8', timeout: 120000, env: { ...process.env, ...safeSpecEnv(spec.env) } });
     code = typeof r.status === 'number' ? r.status : 1;
     out = `${r.stdout || ''}${r.stderr || ''}`;
     // FR-3: capture the STRUCTURAL failure. Note `r.status` is null on a timeout/ENOENT, which
@@ -305,9 +305,49 @@ export function classifySeedTrial({ cleanExit, mutationLanded, mutantExit, mutan
  * running it locally on a dirty tree measures the last commit. In CI — the venue where it
  * enforces — HEAD is the PR's merge commit, which is exactly the content under review.
  */
+// *** EVERY VALUE IN THE SPEC FILE IS ATTACKER-AUTHORED, BECAUSE THE SPEC FILE IS EDITABLE IN A
+// PULL REQUEST. *** SECURITY live-proved three reachable primitives here; the guards below close
+// them. The workflow uses `pull_request`, NOT `pull_request_target`, so a fork PR runs with a
+// read-only token and no secrets -- that BOUNDS the blast radius to an ephemeral job, it does not
+// remove it, and the bound is a property of the WORKFLOW TRIGGER rather than of this code. If the
+// trigger is ever changed, these guards are what stands between a spec edit and a writable token.
+
+// SEC-6, PRE-EXISTING (commit d89f4dfea3c0, predates this SD): `spec.env` was spread into the
+// child unfiltered, so `NODE_OPTIONS: "--require <file>"` preloads arbitrary code on any control
+// trial -- proved live, platform-independent. Nothing in-repo uses spec.env today, but an unused
+// hole is still a hole, and it sits a few lines from code this SD rewrote.
+const UNSAFE_ENV_RE = /^(NODE_OPTIONS|NODE_V8_COVERAGE|NODE_REPL_EXTERNAL_MODULE|LD_PRELOAD|LD_AUDIT|DYLD_)/i;
+function safeSpecEnv(env) {
+  return Object.fromEntries(Object.entries(env || {}).filter(([k]) => !UNSAFE_ENV_RE.test(k)));
+}
+
+// A refusal, never a verdict: these are harness/config faults, and scoring them as findings about
+// the control would be an accusation the evidence does not support.
+function harnessError(spec, code, reason) {
+  return { name: spec.name, verdict: SEED_TRIAL.HARNESS_ERROR, code, reason, evidence: [] };
+}
+
 export function runSeedTestTrial(spec, repoRoot, deps = {}) {
   const { spawn = spawnSync, exec = execFileSync } = deps;
-  const target = (spec.neuter?.file || spec.script).replace(/\\/g, '/');
+  // SEC-2: an EMPTY `find` is the sharpest edge here and it does not look like one. String
+  // .replace('') matches at index 0 ALWAYS, so `replace` is prepended unconditionally whatever
+  // the file contains -- and the mutation-landed check then confirms the file changed. Since the
+  // harness's very next step re-runs vitest inside that same worktree, prepended text is
+  // EXECUTED. Refuse it: a neuter must name real text it expects to find.
+  if (typeof spec.neuter?.find !== 'string' || spec.neuter.find.length === 0) {
+    return harnessError(spec, 'NEUTER_FIND_EMPTY', 'the neuter declares no non-empty `find` string; an empty find matches at position 0 unconditionally, which prepends arbitrary content rather than replacing anything');
+  }
+
+  // SEC-1: `neuter.file` was joined to the worktree root with NO containment, so `../../..`
+  // escaped into the real repo -- and, with the above, wrote code the follow-up vitest run would
+  // then import. Constraining it to the control's OWN script closes the traversal and the
+  // write-then-execute gadget together, and costs nothing: a neuter that edits some other file
+  // is not neutering the control under test anyway.
+  const declared = (spec.neuter?.file || spec.script).replace(/\\/g, '/');
+  const target = spec.script.replace(/\\/g, '/');
+  if (declared !== target) {
+    return harnessError(spec, 'NEUTER_FILE_NOT_SCRIPT', `the neuter targets ${declared}, which is not the control under test (${target}). A neuter may only edit the control it certifies.`);
+  }
   const wtParent = join(repoRoot, '.worktrees');
   const wt = join(wtParent, `.seedtrial-${spec.name.replace(/[^a-z0-9-]/gi, '_')}-${process.pid}`);
   const runVitest = (cwd) => {
@@ -328,6 +368,12 @@ export function runSeedTestTrial(spec, repoRoot, deps = {}) {
     }
 
     const p = join(wt, target);
+    // Second, INDEPENDENT containment check. The equality test above already bounds `target`,
+    // so reaching this means `spec.script` itself carried traversal -- a different door to the
+    // same room. A guard resting on another guard's correctness is one refactor from useless.
+    if (!resolve(p).startsWith(resolve(wt) + sep)) {
+      return harnessError(spec, 'NEUTER_PATH_ESCAPE', `the resolved neuter target escapes the trial worktree: ${resolve(p)}`);
+    }
     const before = readFileSync(p, 'utf8');
     const after = before.replace(spec.neuter.find, spec.neuter.replace);
     writeFileSync(p, after, 'utf8');
