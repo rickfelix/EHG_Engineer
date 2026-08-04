@@ -339,8 +339,21 @@ describe('consumption receipts — one row per (report, lane), no merge and no c
     try {
       await expect(client.query(VERIFY_BLOCK)).rejects.toThrow(/UNIQUE\(report_id, lane\) is missing/);
     } finally {
-      await applyMigration();
+      // RESTORE EXPLICITLY — applyMigration() CANNOT undo this, and assuming it could poisoned
+      // the whole file. The constraint is declared INSIDE `CREATE TABLE IF NOT EXISTS`, so once
+      // the table exists that statement is a NO-OP and the constraint stays dropped. Every later
+      // applyMigration() then failed its own verify block, cascading into unrelated tests.
+      //
+      // Caught by CI, which is the only place this tier runs — locally it cannot execute at all,
+      // so no amount of local green would have revealed it. The general shape is worth keeping:
+      // a teardown that re-runs a CREATE-IF-NOT-EXISTS script is not a restore, it is a no-op
+      // wearing a restore's name, and it fails LOUDLY only in whatever runs next.
+      await client.query(
+        'ALTER TABLE public.drive_report_receipts ADD CONSTRAINT drive_report_receipts_report_lane_uniq UNIQUE (report_id, lane);',
+      );
     }
+    // Prove the restore actually restored, rather than trusting the statement did not throw.
+    await expect(client.query(VERIFY_BLOCK)).resolves.toBeTruthy();
   });
 
   it('the receipts table is service-role-only, same posture as the report', async () => {
