@@ -172,9 +172,21 @@ export function buildGather({ supabase, computePlanCheckStatus }) {
  * @param {Function} [o.stamp] writes LAST_RUN_FIELD = now on the registry row
  * @param {Function} [o.findExisting]
  */
-export async function runDriveReportSweep({ nowMs, produce, gather, register = null, stamp = null, findExisting = null, log = () => {} } = {}) {
+export async function runDriveReportSweep({ nowMs, produce, gather, persist, register = null, stamp = null, findExisting = null, log = () => {} } = {}) {
   if (typeof produce !== 'function' || typeof gather !== 'function') {
     throw new Error('runDriveReportSweep(): produce and gather must be injected — a sweep whose write is hidden cannot be tested for whether it ran');
+  }
+  // `persist` IS REQUIRED HERE, and that is a fix, not a preference. This function used to accept
+  // it implicitly by not mentioning it: the CLI never passed one, produceDriveReport refuses
+  // without it, and the cron therefore threw on EVERY in-window tick and never wrote a report.
+  // Every test missed it because they all injected a stub `produce`, so the real producer's
+  // requirement was never exercised — the wiring test asserted the EDGE (`produce:
+  // produceDriveReport`) while the behaviour tests asserted a substitute. Both green, nothing
+  // working. Refusing here means the misconfiguration cannot be silent, and it names the sweep
+  // rather than surfacing as the producer's error from a stack the operator has to unwind.
+  if (typeof persist !== 'function') {
+    throw new Error('runDriveReportSweep(): persist must be injected — the producer requires it, and a sweep '
+      + 'that omits it fails on every tick while every edge-level wiring assertion still passes');
   }
 
   const gate = withinWindow(nowMs);
@@ -201,6 +213,7 @@ export async function runDriveReportSweep({ nowMs, produce, gather, register = n
 
   const result = await produce({
     gather,
+    persist,
     findExisting,
     runId,
     generatedAt: new Date(nowMs).toISOString(),
@@ -225,18 +238,25 @@ if (import.meta.url === `file://${process.argv[1]}`.replace(/\\/g, '/')) {
   const { computePlanCheckStatus } = await import('../../lib/roadmap/plan-check-status.js');
   const { registerArmedMachinery } = await import('../../lib/machinery-class/armed-registration.js');
 
-  const supabase = createClient(process.env.SUPABASE_URL, process.env.SUPABASE_SERVICE_ROLE_KEY);
+  // BEFORE createClient, not after. This check sat below it and was unreachable dead code:
+  // createClient(undefined, undefined) throws "supabaseUrl is required" first. Both orders fail
+  // closed, so nothing was insecure — what was lost is exactly the diagnostic this check exists
+  // to give, which is the difference between "we were not authenticated" and "the data was
+  // unmeasurable". Those render the same and demand opposite responses.
   if (!process.env.SUPABASE_URL || !process.env.SUPABASE_SERVICE_ROLE_KEY) {
-    // Refuse rather than run against a half-configured client: every query would fail one at a
-    // time and the run would look like "the data was unmeasurable" instead of "we were not
-    // authenticated", which are the same output and opposite problems.
     throw new Error('drive-report-sweep: SUPABASE_URL and SUPABASE_SERVICE_ROLE_KEY are required');
   }
+  const supabase = createClient(process.env.SUPABASE_URL, process.env.SUPABASE_SERVICE_ROLE_KEY);
 
   const out = await runDriveReportSweep({
     nowMs: Date.now(),
     produce: produceDriveReport,
     gather: buildGather({ supabase, computePlanCheckStatus }),
+    persist: async (row) => {
+      const { data, error } = await supabase.from('drive_reports').insert(row).select('id').single();
+      if (error) throw new Error(`persist failed: ${error.message}`);
+      return data;
+    },
     findExisting: async (id) => {
       const { data } = await supabase.from('drive_reports').select('id').eq('run_id', id).maybeSingle();
       return data || null;

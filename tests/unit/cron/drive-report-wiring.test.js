@@ -61,6 +61,19 @@ describe('the Drive Report producer names its dispatcher (TR-1)', () => {
     expect(src, 'sweep no longer passes the producer to the run function').toMatch(/produce:\s*produceDriveReport/);
   });
 
+  it('[REGRESSION] the CLI supplies a persist — without one the cron throws on EVERY tick', () => {
+    // This file used to assert `produce: produceDriveReport` and stop there. That edge was
+    // present and correct while the CLI passed NO persist, so produceDriveReport refused on
+    // every in-window fire and no report was ever written — with this suite fully green,
+    // because an edge assertion cannot see whether the two ends agree about their arguments.
+    // The behavioural proof now lives in drive-report-sweep.test.js's END-TO-END block, which
+    // runs the real producer; this is the cheap static half that names the CLI specifically.
+    const src = code(SWEEP);
+    expect(src, 'the CLI block must inject a persist').toMatch(/persist:\s*async\s*\(row\)\s*=>/);
+    expect(src, 'and persist must be forwarded to the producer').toMatch(/produce\(\{[\s\S]{0,200}?\bpersist,/);
+    expect(src, 'and the sweep must refuse without it rather than fail deep in the producer').toMatch(/persist must be injected/);
+  });
+
   it('the sweep names the workflow that dispatches it, by path', () => {
     expect(code(SWEEP)).toMatch(
       /ACTIVATION_TRIGGER\s*=\s*['"]\.github\/workflows\/drive-report-cron\.yml['"]/

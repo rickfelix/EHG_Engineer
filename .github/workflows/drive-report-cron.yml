@@ -45,9 +45,16 @@ permissions:
 
 # Two DST lines overlap for an hour every day. The window key already makes a double-fire a
 # no-op at the database, so this is the cheap outer guard, not the correctness one.
+#
+# cancel-in-progress is FALSE, and that is the opposite of the usual default for a reason:
+# cancelling mid-run can kill a tick between the produce() and the stamp(), which writes the
+# report but never records that it ran — and the FR-7 staleness alarm then fires on a report
+# that exists. Queueing is safe precisely because the producer is idempotent on the window key:
+# the queued run finds the row and reports already_produced. Cheap correctness beats a saved
+# runner-minute here.
 concurrency:
   group: ${{ github.workflow }}
-  cancel-in-progress: true
+  cancel-in-progress: false
 
 jobs:
   produce:

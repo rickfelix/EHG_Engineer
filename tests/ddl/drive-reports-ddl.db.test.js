@@ -497,3 +497,54 @@ describe('one row per run_id — enforced by the database, not by the producer',
     }
   });
 });
+
+describe('the holes the SECURITY re-run found — closed, and proven closed', () => {
+  beforeAll(async () => { await applyMigration(); });
+
+  it('a COLUMN grant to anon trips the tripwire — relacl alone could not see it', async () => {
+    // The same defect as the old two-role list, one level down: `GRANT SELECT (sections)` lands
+    // in pg_attribute.attacl and leaves pg_class.relacl untouched, so the table-level check
+    // passes while a non-service grant exists.
+    await client.query('GRANT SELECT (sections) ON public.drive_reports TO anon;');
+    try {
+      await expect(client.query(VERIFY_BLOCK)).rejects.toThrow(/non-service COLUMN grant/);
+    } finally {
+      await client.query('REVOKE ALL (sections) ON public.drive_reports FROM anon;');
+    }
+    await expect(client.query(VERIFY_BLOCK)).resolves.toBeTruthy();
+  });
+
+  it('[TWO-SIDED] a COLUMN grant to service_role does NOT trip it', async () => {
+    // Without this, a check that rejected every column grant would pass the test above.
+    await client.query('GRANT SELECT (sections) ON public.drive_reports TO service_role;');
+    try {
+      await expect(client.query(VERIFY_BLOCK)).resolves.toBeTruthy();
+    } finally {
+      await client.query('REVOKE ALL (sections) ON public.drive_reports FROM service_role;');
+    }
+  });
+
+  it('run_id is FROZEN — clearing it would free the key for a duplicate', async () => {
+    // The bypass around the partial unique index: NULLing run_id moves the row out of the index
+    // predicate (WHERE run_id IS NOT NULL), so the key becomes insertable again and the
+    // section-5 self-diff corruption is back.
+    await client.query("INSERT INTO public.drive_reports (run_id, sections) VALUES ('frozen-1', '{}'::jsonb);");
+    await expect(
+      client.query("UPDATE public.drive_reports SET run_id = NULL WHERE run_id = 'frozen-1';")
+    ).rejects.toThrow(/run_id is append-only/);
+    await expect(
+      client.query("UPDATE public.drive_reports SET run_id = 'frozen-2' WHERE run_id = 'frozen-1';")
+    ).rejects.toThrow(/run_id is append-only/);
+
+    const { rows } = await client.query("SELECT count(*)::int AS n FROM public.drive_reports WHERE run_id = 'frozen-1';");
+    expect(rows[0].n, 'the row must still carry its original key').toBe(1);
+  });
+
+  it('[TWO-SIDED] consumption_receipts is still writable — freezing it would break C1', async () => {
+    // The freeze must not spread. Receipts are stamped by each CONSUMER after the producer is
+    // done; a trigger that froze them would break the requirement this table exists to serve.
+    await client.query('UPDATE public.drive_reports SET consumption_receipts = \'{"coordinator":"read"}\'::jsonb WHERE run_id = \'frozen-1\';');
+    const { rows } = await client.query("SELECT consumption_receipts->>'coordinator' AS c FROM public.drive_reports WHERE run_id = 'frozen-1';");
+    expect(rows[0].c).toBe('read');
+  });
+});

@@ -21,6 +21,7 @@ import {
   WINDOW_START_HOUR, WINDOW_END_HOUR, PROCESS_KEY, ACTIVATION_TRIGGER, SD_KEY,
 } from '../../../scripts/cron/drive-report-sweep.mjs';
 import { armedProcessKey } from '../../../lib/machinery-class/armed-registration.js';
+import { produceDriveReport } from '../../../scripts/drive-report-produce.mjs';
 import { LAST_RUN_FIELD } from '../../../lib/drive-loop/report-posture.js';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
@@ -89,6 +90,7 @@ describe('TR-1 dual cron + wall-clock gate — the halves are only correct toget
       nowMs: Date.UTC(...JULY, 22, 0, 0),          // 18:00 ET — nowhere near the window
       produce: async () => { calls.push('produce'); return { written: true }; },
       gather: async () => ({}),
+      persist: async () => ({ id: 'x' }),
       register: async () => { calls.push('register'); return { ok: true }; },
       stamp: async () => { calls.push('stamp'); },
     });
@@ -121,6 +123,7 @@ describe('the idempotence key is the WINDOW, not the fire', () => {
       nowMs: Date.UTC(...JULY, 9, 30, 0),
       produce: async (o) => { seen = o; return { written: true }; },
       gather: async () => ({}),
+      persist: async () => ({ id: 'x' }),
     });
     expect(seen.runId).toBe('drive-2026-07-15');
     expect(seen.cadence).toBe('scheduled');
@@ -132,6 +135,7 @@ describe('registry bookkeeping — the stamp is what lets the FR-7 alarm CLEAR',
   const base = {
     nowMs: Date.UTC(...JULY, 9, 0, 0),
     gather: async () => ({}),
+    persist: async () => ({ id: 'x' }),
   };
 
   it('[ORDER] registers BEFORE stamping — reversed, the stamp is erased every run', async () => {
@@ -269,5 +273,62 @@ describe('gather — what this job can HONESTLY measure today', () => {
     expect(row.metadata.unavailable_sections.map((u) => u.section).sort())
       .toEqual(['belt_diagnosis', 'chain_to_gate', 'next_acts', 'stall_deltas']);
     expect(row.metadata.section_ids).toContain('plan_position');
+  });
+});
+
+/**
+ * THE TEST THAT WOULD HAVE CAUGHT IT.
+ *
+ * Everything above injects a STUB `produce`, and the wiring test asserts only the EDGE
+ * (`produce: produceDriveReport` appears in the source). Both were green while the shipped cron
+ * threw on every single in-window tick, because the sweep never passed `persist` and the REAL
+ * produceDriveReport refuses without one. Two suites, twenty-nine assertions, and no path that
+ * ran the two real modules against each other.
+ *
+ * A stub proves the caller's shape matches what the TEST believes the callee wants. Only the real
+ * callee proves it matches what the callee ACTUALLY wants. Found by the SECURITY sub-agent, which
+ * executed the pipeline instead of reading it.
+ */
+describe('[END-TO-END] the sweep drives the REAL producer — no stub in between', () => {
+  const status = { open_total: 42, next: [{ item_id: 'i1' }], next_truncated: false, done: [], slipped: [] };
+  const realGather = () => buildGather({ supabase: {}, computePlanCheckStatus: async () => status });
+
+  it('writes exactly one real row through the real producer', async () => {
+    const rows = [];
+    const r = await runDriveReportSweep({
+      nowMs: Date.UTC(...JULY, 10, 0, 0),                     // 06:00 ET
+      produce: produceDriveReport,                             // THE REAL ONE
+      gather: realGather(),
+      persist: async (row) => { rows.push(row); return { id: `row-${rows.length}` }; },
+      findExisting: async () => null,
+    });
+
+    expect(rows, 'the pipeline must actually reach a write').toHaveLength(1);
+    expect(r).toMatchObject({ ran: true, written: true, run_id: 'drive-2026-07-15' });
+    expect(rows[0].run_id).toBe('drive-2026-07-15');
+    expect(rows[0].cadence).toBe('scheduled');
+    expect(rows[0].sections.plan_position.remainder.value).toBe(42);
+    expect(rows[0].metadata.unavailable_sections).toHaveLength(4);
+  });
+
+  it('the second tick of the same window writes NOTHING and reports the skip', async () => {
+    const rows = [];
+    const persist = async (row) => { rows.push(row); return { id: `row-${rows.length}` }; };
+    const findExisting = async (id) => (rows.find((x) => x.run_id === id) ? { id: 'row-1' } : null);
+    const opts = { produce: produceDriveReport, gather: realGather(), persist, findExisting };
+
+    await runDriveReportSweep({ ...opts, nowMs: Date.UTC(...JULY, 10, 0, 0) });   // 06:00 ET
+    const second = await runDriveReportSweep({ ...opts, nowMs: Date.UTC(...JULY, 10, 15, 0) }); // 06:15 ET
+
+    expect(rows, 'a self-healing window must not write once per tick').toHaveLength(1);
+    expect(second).toMatchObject({ ran: true, written: false, skipped: 'already_produced' });
+  });
+
+  it('REFUSES without persist, naming the sweep rather than failing deep in the producer', async () => {
+    await expect(runDriveReportSweep({
+      nowMs: Date.UTC(...JULY, 10, 0, 0),
+      produce: produceDriveReport,
+      gather: realGather(),
+    })).rejects.toThrow(/persist must be injected/);
   });
 });

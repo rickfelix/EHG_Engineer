@@ -115,6 +115,15 @@ BEGIN
   IF NEW.generated_at IS DISTINCT FROM OLD.generated_at THEN
     RAISE EXCEPTION 'drive_reports.generated_at is append-only: it is the observation timestamp, not a bookkeeping field (report id %)', OLD.id;
   END IF;
+  -- run_id, because the unique index that prevents duplicate runs is PARTIAL (WHERE run_id IS
+  -- NOT NULL). Setting run_id to NULL on an existing row moves it OUT of the index predicate and
+  -- frees the key for re-insertion — re-opening the duplicate path, and with it the section-5
+  -- corruption where a report is diffed against itself. Only service_role can do this, but
+  -- service_role is exactly this trigger's threat model: every other frozen column above is
+  -- protected from the same actor. A constraint that an UPDATE can step around is not one.
+  IF NEW.run_id IS DISTINCT FROM OLD.run_id THEN
+    RAISE EXCEPTION 'drive_reports.run_id is append-only: it is the idempotence key, and clearing it moves the row out of the partial unique index and frees the key for a duplicate (report id %)', OLD.id;
+  END IF;
   -- consumption_receipts and metadata are DELIBERATELY writable. Receipts are stamped by each
   -- consumer after the producer is done (C1), so freezing them would break the requirement
   -- this table exists to serve.
@@ -215,6 +224,25 @@ BEGIN
       AND a.grantee <> c.relowner                                            -- the owner is not a grant
       AND COALESCE(pg_get_userbyid(NULLIF(a.grantee, 0)), 'PUBLIC') <> 'service_role'
   ), 'drive_reports: a non-service grant exists (including PUBLIC) — this table is now PERMISSION-CLASS and requires chairman approval';
+
+  -- COLUMN-LEVEL grants, which the table-level check above cannot see at all. pg_class.relacl
+  -- holds only table grants; `GRANT SELECT (sections) ON drive_reports TO anon` lands in
+  -- pg_attribute.attacl and leaves relacl untouched, so it walks past the tripwire exactly the
+  -- way `GRANT ... TO PUBLIC` used to. Same defect, one level down: a check that reads one ACL
+  -- catalogue and speaks for both.
+  --
+  -- RLS is still the real barrier, so this is not an exposure — it is the SD's own
+  -- classification rule being enforced completely rather than partially. Raised by the SECURITY
+  -- sub-agent as INFERRED (no live PG available to it); the DDL suite executes it for real.
+  ASSERT NOT EXISTS (
+    SELECT 1
+    FROM pg_attribute at
+    CROSS JOIN LATERAL aclexplode(at.attacl) a
+    WHERE at.attrelid = 'public.drive_reports'::regclass
+      AND at.attacl IS NOT NULL
+      AND a.grantee <> (SELECT relowner FROM pg_class WHERE oid = 'public.drive_reports'::regclass)
+      AND COALESCE(pg_get_userbyid(NULLIF(a.grantee, 0)), 'PUBLIC') <> 'service_role'
+  ), 'drive_reports: a non-service COLUMN grant exists (including PUBLIC) — column grants live in pg_attribute.attacl and are invisible to the table-level ACL check; this table is now PERMISSION-CLASS and requires chairman approval';
 
   -- The append-only boundary on the C4 ruling. Without this trigger a stored observation is
   -- rewritable, which turns it back into copied state and silently moves the baseline every

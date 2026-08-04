@@ -36,6 +36,31 @@ describe('SMS leg — untrusted content cannot reach the wire', () => {
     for (const v of VERDICTS) expect(typeof formatBody({ ...FACTS, verdict: v })).toBe('string');
   });
 
+  it('[POLLUTION] an inherited value is NOT a computed one — own properties only', () => {
+    // MEASURED by the SECURITY sub-agent before the fix: with Object.prototype polluted,
+    // formatBody() with ZERO arguments returned "Drive 99/99 | capacity SURPLUS". Destructuring
+    // walks the prototype chain, so every guard passed on values this run never computed.
+    // Integrity, not injection — a polluted verdict must still be in the frozen enum, so no
+    // attacker-controlled text can reach the wire either way.
+    Object.prototype.score = 99;              // eslint-disable-line no-extend-native
+    Object.prototype.possible = 99;           // eslint-disable-line no-extend-native
+    Object.prototype.verdict = 'SURPLUS';     // eslint-disable-line no-extend-native
+    try {
+      expect(() => formatBody()).toThrow(/must be an OWN property/);
+      expect(() => formatBody({})).toThrow(/must be an OWN property/);
+      // Two-sided: real own values must still work while the prototype is polluted.
+      expect(formatBody({ ...FACTS })).toBe('Drive 4/6 | capacity TIGHT');
+    } finally {
+      delete Object.prototype.score;
+      delete Object.prototype.possible;
+      delete Object.prototype.verdict;
+    }
+  });
+
+  it('refuses a non-object facts rather than reading properties off it', () => {
+    for (const bad of [null, 'TIGHT', 42]) expect(() => formatBody(bad)).toThrow(/must be an object|must be an OWN property/);
+  });
+
   it('refuses negative or non-finite numbers rather than rendering them', () => {
     expect(() => formatBody({ ...FACTS, score: -1 })).toThrow(/non-negative/);
     expect(() => formatBody({ ...FACTS, possible: NaN })).toThrow(/non-negative/);

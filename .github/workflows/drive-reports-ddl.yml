@@ -76,7 +76,10 @@ jobs:
           node-version: '22'
           cache: npm
 
-      - run: npm ci --no-audit --no-fund
+      # --ignore-scripts: this workflow triggers on pull_request, so lifecycle scripts from a
+      # dependency would execute on the runner for any PR. The sibling cron workflow already
+      # sets it; this one was inconsistent.
+      - run: npm ci --no-audit --no-fund --ignore-scripts
 
       - name: Wait for Postgres
         run: |

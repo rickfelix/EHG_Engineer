@@ -134,7 +134,10 @@ describe('FR-7 propose-only — asserted as NEGATIVE SPACE across the shipped mo
     for (const e of fs.readdirSync(dir, { withFileTypes: true })) {
       const p = path.join(dir, e.name);
       if (e.isDirectory()) sources(p, acc);
-      else if (e.name.endsWith('.js')) acc.push(p);
+      // .mjs too: everything under lib/drive-loop is .js today, so a single new .mjs would have
+      // been invisible to this whole scan while the suite stayed green. A guard that silently
+      // stops covering a file is worse than one that never covered it.
+      else if (e.name.endsWith('.js') || e.name.endsWith('.mjs')) acc.push(p);
     }
     return acc;
   }
@@ -151,6 +154,16 @@ describe('FR-7 propose-only — asserted as NEGATIVE SPACE across the shipped mo
     /\.insert\s*\(/, /\.update\s*\(/, /\.upsert\s*\(/, /\.delete\s*\(/,
     /\bclaim_sd\s*\(|\brelease_sd\s*\(/,
     /\bdispatch[A-Za-z]*\s*\(/,   // dispatch(...), dispatchWork(...) — a call, not `dispatch_rank`
+    // .rpc(...) — ADDED after the SECURITY sub-agent found the hole. This list had every
+    // client-builder write method and omitted the one that can do ANY of them: a Postgres
+    // function invoked through rpc() can insert, claim or dispatch, and none of the patterns
+    // above see it. Worse, the read-vs-perform test below explicitly PINNED
+    // `supabase.rpc("claim_sd", {})` as expected-NOT-caught, reasoning "a string arg, not a call
+    // site". That reasoning is right about JS syntax and backwards about this guard's purpose:
+    // for rpc, the string argument IS the invocation. There are zero rpc call sites under
+    // lib/drive-loop today, so this closes a hole at no cost — and if a genuinely read-only rpc
+    // is ever needed here, the answer is a deliberate, argued carve-out, not silence.
+    /\.rpc\s*\(/,
   ];
 
   it('the scan actually reads files — positive control', () => {
@@ -172,8 +185,15 @@ describe('FR-7 propose-only — asserted as NEGATIVE SPACE across the shipped mo
     expect(hits('dispatch_rank ordering, dispatch order, dispatchRank')).toBe(false);
     expect(hits('await dispatch(item)'), 'performing a dispatch must be caught').toBe(true);
     expect(hits('await dispatchWork({ sd })')).toBe(true);
-    expect(hits('await supabase.rpc("claim_sd", {})')).toBe(false);   // a string arg, not a call site
+    // REVERSED, deliberately. This previously asserted `false` on the reasoning that the function
+    // name is only a string argument. Syntactically true, and exactly wrong for a guard whose
+    // subject is "does this module PERFORM an act": rpc() is how a Supabase client performs an
+    // arbitrary server-side write. The old pin did not merely miss the case, it certified it.
+    expect(hits('await supabase.rpc("claim_sd", {})'), 'rpc IS the act, the string arg is its name').toBe(true);
+    expect(hits('await supabase.rpc("anything_at_all")')).toBe(true);
     expect(hits('claim_sd({ p_session_id })')).toBe(true);
+    // Still a noun, still tolerated — the narrowing this guard already earned must survive.
+    expect(hits('const label = "rpc";'), 'the word rpc in a string is not a call').toBe(false);
   });
 
   it('no module under lib/drive-loop reaches a claim, a dispatch or a write', () => {

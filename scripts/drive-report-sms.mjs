@@ -42,7 +42,25 @@ export function isE164(n) {
  *
  * @param {{score:number, possible:number, verdict:string, unavailableLegs:number, unownedBlockers:number}} f
  */
-export function formatBody({ score, possible, verdict, unavailableLegs = 0, unownedBlockers = 0 } = {}) {
+export function formatBody(facts = {}) {
+  // OWN PROPERTIES ONLY. Destructuring reads the prototype chain, so with a polluted
+  // Object.prototype this function returned a perfectly well-formed body for `formatBody()` with
+  // NO ARGUMENTS AT ALL — measured by the SECURITY sub-agent, not theorised. The blast radius is
+  // integrity rather than injection (a polluted verdict must still be a member of the frozen
+  // enum, so no attacker text reaches the wire), but "the SMS reported a score nobody computed"
+  // is its own failure, and it is the kind that is never traced back.
+  if (facts === null || typeof facts !== 'object') {
+    throw new Error(`formatBody(): facts must be an object — got ${JSON.stringify(facts)}`);
+  }
+  for (const k of ['score', 'possible', 'verdict']) {
+    if (!Object.hasOwn(facts, k)) {
+      throw new Error(`formatBody(): ${k} must be an OWN property of facts — an inherited value means the number was not computed by this run`);
+    }
+  }
+  const { score, possible, verdict } = facts;
+  const unavailableLegs = Object.hasOwn(facts, 'unavailableLegs') ? facts.unavailableLegs : 0;
+  const unownedBlockers = Object.hasOwn(facts, 'unownedBlockers') ? facts.unownedBlockers : 0;
+
   for (const [k, v] of Object.entries({ score, possible, unavailableLegs, unownedBlockers })) {
     if (!Number.isFinite(v) || v < 0) throw new Error(`formatBody(): ${k} must be a non-negative number — got ${JSON.stringify(v)}`);
   }
