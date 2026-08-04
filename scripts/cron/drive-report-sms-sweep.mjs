@@ -46,17 +46,38 @@
  */
 
 import { sendDriveSms, VERDICTS } from '../drive-report-sms.mjs';
-import { etParts, windowKey, EXPECTED_INTERVAL_SECONDS } from './drive-report-sweep.mjs';
+import { etParts, windowKey } from './drive-report-sweep.mjs';
 
 export const SMS_KIND = 'drive_report';
 export const DELIVER_AT_ET_HOUR = 6;
 
+// NOTE: there is deliberately NO age-based staleness constant here any more. An earlier version
+// gated on "past 2x cadence" and that is exactly what let yesterday's report through as fresh.
+// Freshness is decided by IDENTITY (run_id === this window's key); age is only ever REPORTED, in
+// the missing/stale body. Leaving a 2x-cadence constant in place would read as a policy that is
+// no longer in force.
+
 /**
- * Past this multiple of the expected cadence, the report is STALE and the chairman is told so.
- * Same "past 2x cadence" rule FR-7's self-staleness alarm uses — deliberately the same number,
- * not a second freshness policy that could disagree with the first.
+ * The ET hour by which the producer's window (05:00-08:59 ET) has definitively closed.
+ *
+ * ── WHY THIS EXISTS: A NEAR-MISS THAT WOULD HAVE BEEN INVISIBLE ───────────────────────────
+ * The first version of this sweep sent whatever report was newest, gated only on the 2x-cadence
+ * staleness rule. In EST the cron's other DST line fires at 05:00 ET — BEFORE the producer has
+ * run — and YESTERDAY's report is only ~24h old, well inside the 48h breach. So it read as
+ * FRESH, and the sweep enqueued YESTERDAY'S NUMBERS under TODAY'S dedupe key. Because
+ * dedupe_key is UNIQUE and scoped to the day, every later tick carrying today's real report was
+ * then deduped away.
+ *
+ * The chairman would have received yesterday's drive score every single day, forever, with
+ * plausible numbers, no error and nothing in any log to notice. A wrong reading that renders as
+ * normal is the worst failure shape an instrument can have — worse than silence, which at least
+ * prompts someone to ask.
+ *
+ * The fix is to stop inferring freshness from AGE and require IDENTITY: the report must be the
+ * one for THIS window. And "not produced yet" must be distinguishable from "the window closed
+ * without one" — the first is not a signal, the second is.
  */
-export const STALE_MULTIPLIER = 2;
+export const PRODUCER_WINDOW_CLOSE_ET_HOUR = 9;
 
 /**
  * Idempotence key. Names the WINDOW and the RECIPIENT: one obligation per chairman per report
@@ -79,6 +100,16 @@ export function notBeforeFor(nowMs) {
     if (etParts(candidate.getTime()).hour === DELIVER_AT_ET_HOUR) return candidate.toISOString();
   }
   throw new Error('notBeforeFor(): could not resolve 06:00 ET to an instant — refusing rather than guessing an offset');
+}
+
+/**
+ * How old the newest report is, in hours, or null when there is none or its stamp is unusable.
+ * Null and 0 are different facts here — "never produced" versus "produced this instant" — so an
+ * unparseable stamp reports null rather than collapsing to a number.
+ */
+export function ageHoursOf(report, nowMs) {
+  const t = Date.parse(report?.generated_at);
+  return Number.isFinite(t) ? (nowMs - t) / 3_600_000 : null;
 }
 
 /**
@@ -120,27 +151,29 @@ export async function runDriveSmsSweep({ nowMs, findLatestReport, enqueue, recip
   const runId = windowKey(nowMs);
   const report = await findLatestReport();
 
-  // Freshness, measured against the SAME cadence the FR-7 alarm uses.
+  // FRESHNESS IS IDENTITY, NOT AGE. The report must be the one produced for THIS window — see
+  // PRODUCER_WINDOW_CLOSE_ET_HOUR for the near-miss that made this the rule.
+  const isTodays = !!report && report.run_id === runId;
+
   let missing = null;
   let facts = null;
-  if (!report) {
-    missing = { ageHours: null };
+
+  if (isTodays) {
+    facts = factsFromReport(report);
+    // A row that exists but cannot supply numbers is NOT a usable report. Falling through to a
+    // zero here would be the false-zero this SD keeps guarding against, one level up.
+    if (!facts) missing = { ageHours: ageHoursOf(report, nowMs) };
+  } else if (etParts(nowMs).hour < PRODUCER_WINDOW_CLOSE_ET_HOUR) {
+    // NOT-YET-PRODUCED IS NOT A SIGNAL. The producer's window is still open, so enqueueing now
+    // would burn the day's dedupe key on a message that is merely EARLY — and because that key
+    // is UNIQUE, the real score could never replace it. Reported explicitly so no caller can
+    // read it as a send.
+    log(`waiting: no report for ${runId} yet, and the producer window is still open`);
+    return { sent: false, waiting: 'producer_window_still_open', run_id: runId, recipients: 0, enqueued: [] };
   } else {
-    const t = Date.parse(report.generated_at);
-    if (!Number.isFinite(t)) {
-      // An unparseable stamp is not a fresh report. Treating it as fresh would be the false-zero
-      // this SD keeps guarding against, one level up.
-      missing = { ageHours: null };
-    } else {
-      const ageHours = (nowMs - t) / 3_600_000;
-      const breachHours = (EXPECTED_INTERVAL_SECONDS * STALE_MULTIPLIER) / 3600;
-      if (ageHours > breachHours) missing = { ageHours };
-      else {
-        facts = factsFromReport(report);
-        // A row that exists but cannot supply numbers is NOT a fresh report either.
-        if (!facts) missing = { ageHours };
-      }
-    }
+    // The window closed without a report for this run. NOW it is a signal, and TR-3 requires it
+    // be said out loud: a dead instrument must not look like a healthy quiet day.
+    missing = { ageHours: ageHoursOf(report, nowMs) };
   }
 
   const notBefore = notBeforeFor(nowMs);
@@ -190,7 +223,11 @@ if (import.meta.url === `file://${process.argv[1]}`.replace(/\\/g, '/')) {
     findLatestReport: async () => {
       const { data } = await supabase
         .from('drive_reports')
-        .select('id, generated_at, drive_score')
+        // run_id IS LOAD-BEARING, not decoration: freshness is decided by identity
+        // (report.run_id === today's window key), so omitting it here would make isTodays
+        // permanently false and every day would report MISSING. A column the code reads and the
+        // query does not fetch is undefined, never an error.
+        .select('id, run_id, generated_at, drive_score')
         .order('generated_at', { ascending: false })
         .limit(1)
         .maybeSingle();

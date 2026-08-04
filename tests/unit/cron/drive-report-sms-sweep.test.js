@@ -12,9 +12,9 @@ import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import {
   runDriveSmsSweep, dedupeKeyFor, notBeforeFor, factsFromReport,
-  SMS_KIND, STALE_MULTIPLIER, DELIVER_AT_ET_HOUR,
+  SMS_KIND, PRODUCER_WINDOW_CLOSE_ET_HOUR, DELIVER_AT_ET_HOUR,
 } from '../../../scripts/cron/drive-report-sms-sweep.mjs';
-import { etParts, EXPECTED_INTERVAL_SECONDS } from '../../../scripts/cron/drive-report-sweep.mjs';
+import { etParts } from '../../../scripts/cron/drive-report-sweep.mjs';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const repoRoot = path.resolve(__dirname, '../../..');
@@ -23,8 +23,9 @@ const JULY = Date.UTC(2026, 6, 15, 11, 0, 0);   // 07:00 ET, EDT
 const JAN = Date.UTC(2026, 0, 15, 12, 0, 0);    // 07:00 ET, EST
 const TO = ['+15551234567'];
 
-const report = (agoHours, score = {}) => ({
+const report = (agoHours, score = {}, runId = 'drive-2026-07-15') => ({
   id: 'r1',
+  run_id: runId,
   generated_at: new Date(JULY - agoHours * 3_600_000).toISOString(),
   drive_score: { score: { value: 4 }, possible: 6, capacity_verdict: 'TIGHT', unavailable_legs: [], ...score },
 });
@@ -83,8 +84,14 @@ describe('TR-3 — it ENQUEUES through the bridge, it never sends', () => {
     // Two-sided. A key blunt enough to be constant forever would pass the test above and silence
     // the chairman permanently after the first send.
     const b = bridge();
-    await runDriveSmsSweep({ nowMs: JULY, findLatestReport: async () => report(1), enqueue: b.enqueue, recipients: TO });
-    await runDriveSmsSweep({ nowMs: JULY + 86_400_000, findLatestReport: async () => report(1), enqueue: b.enqueue, recipients: TO });
+    const CLOSED = Date.UTC(2026, 6, 15, 14, 0, 0);   // 10:00 ET, producer window closed
+    await runDriveSmsSweep({ nowMs: CLOSED, findLatestReport: async () => report(1), enqueue: b.enqueue, recipients: TO });
+    await runDriveSmsSweep({
+      nowMs: CLOSED + 86_400_000,
+      findLatestReport: async () => report(1, {}, 'drive-2026-07-16'),   // tomorrow's own report
+      enqueue: b.enqueue,
+      recipients: TO,
+    });
     expect(new Set(b.calls.map((c) => c.dedupeKey)).size).toBe(2);
   });
 
@@ -109,24 +116,84 @@ describe('a MISSING report is itself the signal (TR-3), never silence', () => {
   it('no report at all → the "none ever produced" body', async () => {
     const { calls } = bridge();
     const b = bridge();
-    const r = await runDriveSmsSweep({ nowMs: JULY, findLatestReport: async () => null, enqueue: b.enqueue, recipients: TO });
+    // AFTER the producer window closes — before it, "no report" is a wait, not a signal.
+    const r = await runDriveSmsSweep({ nowMs: Date.UTC(2026, 6, 15, 14, 0, 0), findLatestReport: async () => null, enqueue: b.enqueue, recipients: TO });
     expect(b.calls[0].body).toBe('Drive report MISSING: none ever produced');
     expect(r.signal).toBe('missing_or_stale');
     expect(calls).toHaveLength(0);
   });
 
-  it('a report past 2x cadence → the STALE body carrying its age', async () => {
-    const breachHours = (EXPECTED_INTERVAL_SECONDS * STALE_MULTIPLIER) / 3600;
+  it("[REGRESSION] YESTERDAY's report is never sent as today's — identity, not age", async () => {
+    // THE BUG THIS REPLACES. Freshness used to be "within 2x cadence" (48h). In EST the other
+    // DST cron line fires at 05:00 ET, BEFORE the producer runs, and yesterday's report is only
+    // ~24h old — comfortably fresh by that rule. So the sweep enqueued YESTERDAY'S NUMBERS under
+    // TODAY'S dedupe key, and because dedupe_key is UNIQUE every later tick carrying the real
+    // report was deduped away. The chairman would have got yesterday's score every day, forever,
+    // with plausible numbers and no error anywhere.
     const b = bridge();
-    await runDriveSmsSweep({ nowMs: JULY, findLatestReport: async () => report(breachHours + 1), enqueue: b.enqueue, recipients: TO });
-    expect(b.calls[0].body).toMatch(/^Drive report STALE: last one \d+h ago$/);
+    const yesterday = report(20, {}, 'drive-2026-07-14');   // 20h old: FRESH under the old rule
+    const r = await runDriveSmsSweep({
+      nowMs: Date.UTC(2026, 6, 15, 14, 0, 0),               // 10:00 ET — producer window CLOSED
+      findLatestReport: async () => yesterday,
+      enqueue: b.enqueue,
+      recipients: TO,
+    });
+    expect(b.calls[0].body, 'a stale-day report must never render as a score').toMatch(/^Drive report STALE/);
+    expect(r.signal).toBe('missing_or_stale');
   });
 
-  it('[BOUNDARY] exactly at 2x cadence is still FRESH — the breach is strictly past it', async () => {
-    const breachHours = (EXPECTED_INTERVAL_SECONDS * STALE_MULTIPLIER) / 3600;
+  it('[WAITING] before the producer window closes, a missing report enqueues NOTHING', async () => {
+    // The other half, and it is what makes the fix safe. If "no report yet" enqueued a MISSING
+    // body at 05:00, that body would take the day's UNIQUE dedupe key and the real score could
+    // never replace it. Not-yet-produced is not a signal; it is a wait, and it is REPORTED.
     const b = bridge();
-    await runDriveSmsSweep({ nowMs: JULY, findLatestReport: async () => report(breachHours), enqueue: b.enqueue, recipients: TO });
+    const r = await runDriveSmsSweep({
+      nowMs: Date.UTC(2026, 6, 15, 10, 0, 0),               // 06:00 ET — window still open
+      findLatestReport: async () => null,
+      enqueue: b.enqueue,
+      recipients: TO,
+    });
+    expect(b.calls, 'nothing may be enqueued while the producer still might produce').toHaveLength(0);
+    expect(r).toMatchObject({ sent: false, waiting: 'producer_window_still_open' });
+  });
+
+  it('[WAITING] a stale-day report ALSO waits while the window is open', async () => {
+    const b = bridge();
+    const r = await runDriveSmsSweep({
+      nowMs: Date.UTC(2026, 6, 15, 10, 0, 0),               // 06:00 ET
+      findLatestReport: async () => report(20, {}, 'drive-2026-07-14'),
+      enqueue: b.enqueue,
+      recipients: TO,
+    });
+    expect(b.calls).toHaveLength(0);
+    expect(r.waiting).toBe('producer_window_still_open');
+  });
+
+  it('once the window CLOSES with no report, the MISSING signal does go out', async () => {
+    // Two-sided: waiting must not become permanent silence. A dead instrument has to be heard.
+    const b = bridge();
+    await runDriveSmsSweep({
+      nowMs: Date.UTC(2026, 6, 15, 14, 0, 0),               // 10:00 ET
+      findLatestReport: async () => null,
+      enqueue: b.enqueue,
+      recipients: TO,
+    });
+    expect(b.calls[0].body).toBe('Drive report MISSING: none ever produced');
+  });
+
+  it("TODAY's report sends the score even at the very first tick", async () => {
+    const b = bridge();
+    await runDriveSmsSweep({
+      nowMs: Date.UTC(2026, 6, 15, 10, 0, 0),               // 06:00 ET, window still open
+      findLatestReport: async () => report(1),              // but TODAY's run_id
+      enqueue: b.enqueue,
+      recipients: TO,
+    });
     expect(b.calls[0].body).toBe('Drive 4/6 | capacity TIGHT');
+  });
+
+  it('the window-close hour is after the producer window ends', () => {
+    expect(PRODUCER_WINDOW_CLOSE_ET_HOUR).toBe(9);
   });
 
   it('a row that exists but carries no numbers is NOT fresh — a false zero would reassure', async () => {
@@ -134,7 +201,7 @@ describe('a MISSING report is itself the signal (TR-3), never silence', () => {
     const b = bridge();
     await runDriveSmsSweep({
       nowMs: JULY,
-      findLatestReport: async () => ({ id: 'r', generated_at: new Date(JULY - 3600_000).toISOString(), drive_score: {} }),
+      findLatestReport: async () => ({ id: 'r', run_id: 'drive-2026-07-15', generated_at: new Date(JULY - 3600_000).toISOString(), drive_score: {} }),
       enqueue: b.enqueue,
       recipients: TO,
     });
@@ -144,8 +211,8 @@ describe('a MISSING report is itself the signal (TR-3), never silence', () => {
   it('an unparseable generated_at is treated as missing, not as fresh', async () => {
     const b = bridge();
     await runDriveSmsSweep({
-      nowMs: JULY,
-      findLatestReport: async () => ({ id: 'r', generated_at: 'not-a-date', drive_score: { score: { value: 4 }, possible: 6 } }),
+      nowMs: Date.UTC(2026, 6, 15, 14, 0, 0),
+      findLatestReport: async () => ({ id: 'r', run_id: 'drive-2026-07-14', generated_at: 'not-a-date', drive_score: { score: { value: 4 }, possible: 6 } }),
       enqueue: b.enqueue,
       recipients: TO,
     });
