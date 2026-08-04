@@ -46,13 +46,12 @@ function runChildVitest(testPath, extraEnv) {
     VITEST_DB_ALLOW_REF: '',
     CI: '1',
   };
-  // Strip the parent runner's own vitest bookkeeping. A nested vitest that inherits VITEST_POOL_ID /
-  // VITEST_WORKER_ID / VITEST_MODE from the runner spawning it can exit non-zero after reporting a
-  // fully passing run — observed in CI on this very test, where the child logged
-  // "Test Files 1 passed (1) / Tests 5 passed (5)" and still returned a non-zero status.
-  for (const k of Object.keys(env)) {
-    if (k.startsWith('VITEST_') && k !== 'VITEST_DB_ALLOW_REF') delete env[k];
-  }
+  // DELIBERATELY NOT STRIPPING VITEST_* FROM THE CHILD, and the reason is measured. I added such a
+  // strip on the theory that inherited VITEST_POOL_ID / VITEST_WORKER_ID explained the child's
+  // non-zero exit, and it made things strictly worse: in CI the child then produced no run output at
+  // all, where before the strip it had reported "Test Files 1 passed (1) / Tests 5 passed (5)".
+  // Two changes shipped in one commit — the assertion fix, which was needed, and this strip, which
+  // was a guess — and the guess broke the case the fix had repaired.
   const res = spawnSync(
     'npx',
     ['vitest', 'run', '--project', 'unit', testPath],
