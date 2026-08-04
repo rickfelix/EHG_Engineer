@@ -446,3 +446,6 @@ scripts/harness/.spine-verify-first-runs/
 # SD-LEO-FEAT-FLEET-SESSION-LIFECYCLE-001 FR-5c: runtime parentage log, never committed
 .claude/console-parentage.jsonl
 .claude-work/
+
+# Local analysis/forensic output (drive-report-consume failure breadcrumb, census scratch)
+.artifacts/

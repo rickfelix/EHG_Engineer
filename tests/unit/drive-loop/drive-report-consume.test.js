@@ -21,18 +21,44 @@ import {
 const silent = { log() {}, error() {} };
 const REPORT_ID = 'ffffffff-1111-2222-3333-444444444444';
 
-/** Records what was upserted so assertions are about the PAYLOAD, not the call shape. */
-function makeDb({ reports = [{ id: REPORT_ID }], readError = null, writeError = null } = {}) {
-  const db = { upserts: [], upsertOpts: [] };
+/**
+ * Records what was upserted AND every query argument.
+ *
+ * THE FIRST VERSION OF THIS FAKE DISCARDED EVERY ARGUMENT to select/order/limit, and mutation
+ * testing showed exactly what that costs: TEN mutants survived, including flipping
+ * `ascending: false` to TRUE. That mutant makes the consumer stamp the OLDEST report forever while
+ * every test stays green — SILENTLY REPRODUCING THE STARVING-BINDING DEFECT THIS SD EXISTS TO
+ * EXPOSE. A fake that throws its arguments away cannot fail on a wrong argument, exactly as a
+ * stateless fake cannot fail on a dropped predicate.
+ */
+function makeDb({ reports = [{ id: REPORT_ID }], readError = null, writeError = null, upsertCount = 1 } = {}) {
+  const db = { upserts: [], upsertOpts: [], selects: [], orders: [], limits: [], tables: [], signals: [] };
   db.from = (table) => {
+    db.tables.push(table);
     if (table === 'drive_reports') {
-      return { select: () => ({ order: () => ({ limit: async () => ({ data: readError ? null : reports, error: readError }) }) }) };
+      return {
+        select: (cols) => { db.selects.push(cols); return {
+          order: (col, opts) => { db.orders.push({ col, opts }); return {
+            limit: (n) => { db.limits.push(n); return {
+              // MODELS abortSignal, so the timeout wiring is assertable. Without it a mutant that
+              // drops the signal is invisible and the 2000ms bound stays advisory — the real
+              // ceiling then being the host 90s kill, whose SIGTERM is a FALSE FAILED CORE.
+              abortSignal: async (sig) => { db.signals.push(sig); return { data: readError ? null : reports, error: readError, count: null }; },
+            }; },
+          }; },
+        }; },
+      };
     }
     if (table === 'drive_report_receipts') {
       return {
-        upsert: async (payload, opts) => {
+        upsert: (payload, opts) => {
           db.upserts.push(payload); db.upsertOpts.push(opts);
-          return { data: null, error: writeError };
+          return {
+            // MODELS `count`, which the real client returns and the previous fake did not. Without
+            // it the code cannot distinguish INSERTED from IGNORED, so its success log was false on
+            // every tick after the first.
+            abortSignal: async (sig) => { db.signals.push(sig); return { data: null, error: writeError, count: writeError ? null : upsertCount }; },
+          };
         },
       };
     }
@@ -78,14 +104,77 @@ describe('the lane key', () => {
   });
 });
 
+describe('it reads the NEWEST report — the assertion whose absence let the worst mutant live', () => {
+  it('orders by generated_at DESCENDING and takes exactly one', async () => {
+    // `ascending: true` would consume the OLDEST report forever: the newest would never be
+    // stamped, the instrument would report a permanently starving binding, and every unit test
+    // would stay green. That mutant survived until this assertion existed.
+    const db = makeDb();
+    await runDriveReportConsumeCore(db, seat(randomUUID()));
+    expect(db.orders).toHaveLength(1);
+    expect(db.orders[0].col).toBe('generated_at');
+    expect(db.orders[0].opts).toEqual({ ascending: false });
+    expect(db.limits).toEqual([1]);
+  });
+
+  it('attaches a real AbortSignal to BOTH queries, so the timeout is not merely advisory', async () => {
+    // Racing a timer settles the FUNCTION but leaves the socket open, keeping the process alive
+    // until the host 90s execFile kill — whose SIGTERM produces a non-zero child and therefore a
+    // FALSE FAILED CORE. An availability guard that hands the host a false failure is worse than
+    // none, so the signal must reach the query itself.
+    const db = makeDb();
+    await runDriveReportConsumeCore(db, seat(randomUUID()));
+    expect(db.signals).toHaveLength(2);
+    for (const s of db.signals) expect(s).toBeInstanceOf(AbortSignal);
+  });
+
+  it('reads from drive_reports and writes to drive_report_receipts — not the deleted column', async () => {
+    // Pins the table names. The previous version of this SD read a jsonb column on drive_reports
+    // that no longer exists; nothing in its suite would have noticed the table being wrong.
+    const db = makeDb();
+    await runDriveReportConsumeCore(db, seat(randomUUID()));
+    expect(db.tables).toEqual(['drive_reports', 'drive_report_receipts']);
+    expect(db.selects[0]).toBe('id');
+  });
+});
+
 describe('the write is a single native upsert — first-writer-wins comes from the SCHEMA', () => {
+  it('distinguishes INSERTED from ALREADY-PRESENT rather than claiming a write either way', async () => {
+    // ON CONFLICT DO NOTHING writes nothing on the second tick, so an unconditional
+    // "receipt recorded" log is FALSE on every tick after the first. A log line asserting a write
+    // that did not happen is the same class of lie the receipt itself exists to prevent.
+    const fresh = makeDb({ upsertCount: 1 });
+    expect((await runDriveReportConsumeCore(fresh, seat(randomUUID()))).inserted).toBe(true);
+    const already = makeDb({ upsertCount: 0 });
+    const out = await runDriveReportConsumeCore(already, seat(randomUUID()));
+    expect(out.inserted).toBe(false);
+    expect(out.status).toBe('ok');   // already-present is a correct steady state, NOT a failure
+  });
+
+  it('requests an exact count, or inserted-vs-ignored is unknowable', async () => {
+    const db = makeDb();
+    await runDriveReportConsumeCore(db, seat(randomUUID()));
+    expect(db.upsertOpts[0].count).toBe('exact');
+  });
+
   it('targets the unique constraint and does NOT rewrite an existing receipt', async () => {
     // ignoreDuplicates preserves the ORIGINAL consumed_at. The whole value of the receipt is WHEN
     // the lane first saw the report, so a re-run that refreshed the timestamp would destroy the
     // only fact it records.
     const db = makeDb();
     await runDriveReportConsumeCore(db, seat(randomUUID()));
-    expect(db.upsertOpts[0]).toEqual({ onConflict: 'report_id,lane', ignoreDuplicates: true });
+    expect(db.upsertOpts[0]).toEqual({ onConflict: 'report_id,lane', ignoreDuplicates: true, count: 'exact' });
+  });
+
+  it('stamps consumed_at from the INJECTED clock — the nowMs seam was previously dead', async () => {
+    // No test passed nowMs, so the seam existed only for the reader's benefit and mutants that
+    // replaced consumed_at with the epoch or null both survived. A fixture instant that appears
+    // nowhere in the implementation is what makes this discriminating.
+    const db = makeDb();
+    await runDriveReportConsumeCore(db, { ...seat(randomUUID()), nowMs: 1767225600000 });
+    expect(db.upserts[0].consumed_at).toBe(new Date(1767225600000).toISOString());
+    expect(db.upserts[0].consumed_at).toMatch(/^2026-/);   // not the epoch
+    expect(db.upserts[0].consumed_at).not.toBeNull();
   });
 
   it('writes exactly one row, for the newest report, and touches no sibling lane', async () => {

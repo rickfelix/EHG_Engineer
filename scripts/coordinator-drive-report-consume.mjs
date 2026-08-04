@@ -95,9 +95,22 @@ export function isCoordinatorSeat(sessionId, coordinatorId) {
   return Boolean(sessionId) && Boolean(coordinatorId) && sessionId === coordinatorId;
 }
 
-function withTimeout(promise, ms, label) {
+/**
+ * Race a query against a timer AND abort the underlying socket.
+ *
+ * THE TIMER ALONE IS ADVISORY, WHICH IS NOT WHAT THE OLD COMMENT CLAIMED. A reviewer measured it:
+ * Promise.race settles this function, but with no AbortSignal the socket stays open and KEEPS THE
+ * PROCESS ALIVE, so the real ceiling was the host's 90s execFile kill — whose SIGTERM produces a
+ * NON-ZERO CHILD and therefore a FALSE FAILED CORE. An availability guard that hands the host a
+ * false failure is worse than no guard.
+ *
+ * Callers pass a builder so the signal can be attached to the query itself, not merely raced.
+ */
+function withTimeout(buildQuery, ms, label) {
+  const signal = AbortSignal.timeout(ms);
+  const query = buildQuery(signal);
   return Promise.race([
-    promise,
+    query,
     new Promise((_, reject) => setTimeout(() => reject(new Error(`${label}: timed out after ${ms}ms`)), ms).unref?.()),
   ]);
 }
@@ -124,7 +137,7 @@ export async function runDriveReportConsumeCore(supabase, {
     }
 
     const { data: rows, error: readErr } = await withTimeout(
-      supabase.from('drive_reports').select('id').order('generated_at', { ascending: false }).limit(1),
+      (signal) => supabase.from('drive_reports').select('id').order('generated_at', { ascending: false }).limit(1).abortSignal(signal),
       WRITE_TIMEOUT_MS, 'drive_reports read');
 
     if (readErr) {
@@ -144,22 +157,32 @@ export async function runDriveReportConsumeCore(supabase, {
     // why -B moved to rows. ignoreDuplicates keeps the ORIGINAL consumed_at: a re-run must not
     // rewrite history, because the whole value of the receipt is WHEN the lane first saw the report.
     // No read-merge-write, so no sibling lane is reachable from this statement at all.
-    const { error: writeErr } = await withTimeout(
-      supabase.from('drive_report_receipts')
+    // count:'exact' so INSERTED and ALREADY-PRESENT are distinguishable. Without it the previous
+    // version logged "receipt recorded" unconditionally — FALSE ON EVERY TICK AFTER THE FIRST,
+    // since ON CONFLICT DO NOTHING writes nothing the second time. A log line that claims a write
+    // that did not happen is the same class of lie the receipt itself exists to prevent.
+    const { error: writeErr, count } = await withTimeout(
+      (signal) => supabase.from('drive_report_receipts')
         .upsert({
           report_id: row.id,
           lane: COORDINATOR_LANE,
           consumed_at: new Date(nowMs ?? Date.now()).toISOString(),
           metadata: { actor_session: sessionId },
-        }, { onConflict: 'report_id,lane', ignoreDuplicates: true }),
+        }, { onConflict: 'report_id,lane', ignoreDuplicates: true, count: 'exact' }).abortSignal(signal),
       WRITE_TIMEOUT_MS, 'drive_report_receipts upsert');
 
     if (writeErr) {
       logger.error(`[drive-report-consume] WRITE FAILED for report ${row.id}: ${writeErr.message}`);
       return { status: 'failed', reason: `write: ${writeErr.message}`, reportId: row.id };
     }
-    logger.log(`[drive-report-consume] receipt recorded for report ${row.id} lane ${COORDINATOR_LANE} by ${sessionId}`);
-    return { status: 'ok', reportId: row.id };
+    // count===0 means the lane had already consumed this report and ON CONFLICT DO NOTHING fired.
+    // That is a correct, expected steady state — not a failure — but it must not be reported as a
+    // fresh receipt.
+    const inserted = count !== 0;
+    logger.log(inserted
+      ? `[drive-report-consume] receipt RECORDED for report ${row.id} lane ${COORDINATOR_LANE} by ${sessionId}`
+      : `[drive-report-consume] receipt ALREADY PRESENT for report ${row.id} lane ${COORDINATOR_LANE} — nothing written`);
+    return { status: 'ok', reportId: row.id, inserted };
   } catch (e) {
     logger.error(`[drive-report-consume] UNEXPECTED FAILURE: ${e && e.message}`);
     return { status: 'failed', reason: `unexpected: ${e && e.message}` };
