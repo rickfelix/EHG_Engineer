@@ -276,12 +276,28 @@ if (import.meta.url === `file://${process.argv[1]}`.replace(/\\/g, '/')) {
         // tab and masks a genuine failure for anyone triaging by "is anything red today".
         //
         // So a MISSING TABLE exits cleanly with a loud, distinct outcome, and every OTHER error
-        // still throws. Nothing is silenced: this path deliberately does NOT stamp the registry,
-        // so FR-7's staleness alarm still reports the report as overdue — which is the correct
-        // compensating control, and is now genuinely at 2x cadence rather than the inherited 3x.
-        // "Not yet deployed" and "broken" must not look the same, in either direction.
+        // still throws. This path deliberately does NOT stamp the registry, which is correct —
+        // stamping here would mark a report that was never written as freshly produced.
+        //
+        // ⚠️ WHAT THIS DOES **NOT** BUY, corrected after the VALIDATION re-run traced it end to end.
+        // An earlier version of this comment claimed the alarm "still reports the report as overdue
+        // … now genuinely at 2x cadence rather than the inherited 3x". THAT WAS FALSE ON THIS EXACT
+        // PATH — the comment asserted the compensating control while standing in the one branch
+        // where it does not fire. Traced:
+        //   · grace_multiplier: 2 is written ONLY by stamp(), and stamp() is skipped right here.
+        //   · registerArmedMachinery (lib/machinery-class/armed-registration.js) upserts
+        //     last_fired_at: null every in-window tick and NEVER sets grace_multiplier, so the row
+        //     carries NULL + the column default 3 — not 2.
+        //   · periodic-liveness-watcher.mjs:247-248 returns UNVERIFIED (not OVERDUE) for a null
+        //     last_fired_at, and UNVERIFIED escalates only past 7 CONTINUOUS DAYS.
+        // So between merge and the chairman-gated apply — every tick — nothing alarms at 2x cadence.
+        //
+        // AC-8 IS satisfied once a report has succeeded ONCE: stamp() then writes both fields, and a
+        // >48h gap yields OVERDUE via the watcher's cron. It is UNMET for a report that has NEVER
+        // been produced, which is the state at merge and the most missing a report can be.
+        // Carried into PLAN-TO-LEAD as a named unmet criterion, never as a limitation.
         if (error.code === 'PGRST205' || error.code === '42P01') {
-          console.warn(`[drive-report-sweep] drive_reports does not exist yet (${error.code}) — the migration is chairman-gated and unapplied. NOT stamping the registry, so the FR-7 staleness alarm still reports this run as missing.`);
+          console.warn(`[drive-report-sweep] drive_reports does not exist yet (${error.code}) — the migration is chairman-gated and unapplied. NOT stamping the registry. NOTE: with last_fired_at still NULL the watcher reports this as UNVERIFIED, not OVERDUE — the 2x-cadence alarm (AC-8/FR-7) does NOT fire until a report has succeeded at least once.`);
           return { id: null, blocked: 'table_absent' };
         }
         throw new Error(`persist failed: ${error.message}`);
