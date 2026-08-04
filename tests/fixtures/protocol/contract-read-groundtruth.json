@@ -1,0 +1,198 @@
+{
+  "_README": [
+    "MEASURED HARNESS GROUND TRUTH for the contract-read coverage model.",
+    "SD-LEO-INFRA-CONTRACT-READ-COVERAGE-001.",
+    "",
+    "*** EVERY ROW PAIRS bytes AND harness_tokens FOR THE SAME ARTIFACT. THE FIRST DRAFT DID NOT. ***",
+    "EXEC review found two mispairings in this file, and the first is the exact defect class this SD",
+    "exists to close, committed inside the fixture that certifies the fix:",
+    "  - CLAUDE_SOLOMON.md@fixture-59080 paired bytes 59,080 with harness_tokens 23,897. 23,897 is the",
+    "    cost of the CURRENT 61,013-byte file. A fresh token count against a stale byte count -- a",
+    "    quantity whose two halves describe different artifacts, which is precisely how 1.85 was",
+    "    derived. It was also the one row keeping the suite green.",
+    "  - CLAUDE_SOLOMON.md@pre-split recorded 67,501 B while the git blob at 1ea0403b14ab is 67,131.",
+    "    The difference is exactly 370, the newline count: a CRLF artifact. That row is the",
+    "    worst-error point, so the tolerance figure derived from it was wrong too (6.80% -> 6.23%).",
+    "Every row now carries a sha where one exists, and bytes are read from the blob, not remembered.",
+    "",
+    "harness_tokens is what the READ TOOL ITSELF reported, never a prediction. Two sources:",
+    "  notice       - the tool printed a truncation notice carrying the whole-file token count.",
+    "  differential - H(f) = 2*H(f+P) - H(f+2P), using the over-cap error as a second measurement",
+    "                 channel. H(P) was identical across five host files, and the method reproduces",
+    "                 the notice figures to +/-1, so it is exact. It yields harness counts for files",
+    "                 that read CLEAN, which is why the SD's premise -- that a clean read gives only",
+    "                 an upper bound -- was wrong.",
+    "",
+    "FROZEN, NOT READ FROM DISK: CLAUDE_SOLOMON.md grew 1,933 bytes overnight mid-SD. A suite that",
+    "reads today's file cannot tell a fixed instrument from a changed file."
+  ],
+  "calibration_set": [
+    {
+      "name": "CLAUDE_ADAM.md@truncating",
+      "bytes": 106286,
+      "harness_tokens": 42190,
+      "source": "notice",
+      "pairing": "same-measurement",
+      "note": "bytes and notice recorded together in one measurement"
+    },
+    {
+      "name": "CLAUDE_SOLOMON.md@pre-split",
+      "bytes": 67131,
+      "harness_tokens": 26138,
+      "source": "notice",
+      "sha": "1ea0403b14ab",
+      "cl100k_framed": 17372,
+      "pairing": "git-verified",
+      "note": "CORRECTED. Was 67,501 B / 26,143 tokens; the blob is 67,131 B (the 370-byte delta is the newline count) and the measured whole-file count is 26,138. This is the worst-error point, so it sets measured_max_error_pct."
+    },
+    {
+      "name": "CLAUDE_LEAD.md@pre-fix",
+      "bytes": 66228,
+      "harness_tokens": 27462,
+      "source": "notice",
+      "pairing": "same-measurement"
+    },
+    {
+      "name": "CLAUDE_PLAN.md@pre-fix",
+      "bytes": 92184,
+      "harness_tokens": 38166,
+      "source": "notice",
+      "pairing": "same-measurement"
+    },
+    {
+      "name": "CLAUDE_EXEC.md@pre-fix",
+      "bytes": 90071,
+      "harness_tokens": 37056,
+      "source": "notice",
+      "pairing": "same-measurement"
+    },
+    {
+      "name": "CLAUDE_CORE.md@pre-fix",
+      "bytes": 94199,
+      "harness_tokens": 39750,
+      "source": "notice",
+      "pairing": "same-measurement"
+    }
+  ],
+  "verdict_set": [
+    {
+      "name": "CLAUDE_SOLOMON.md@371-pre-split",
+      "sha": "1ea0403b14ab",
+      "bytes": 67131,
+      "harness_tokens": 26138,
+      "line_count": 371,
+      "read_outcome": "truncated",
+      "expected_fits": false,
+      "source": "notice",
+      "pairing": "git-verified",
+      "notice_string": "PARTIAL view - showing lines 1-301 of 371 total (26138 tokens, cap 25000)",
+      "note": "THE NEAR-MISS NEGATIVE, and the only one. Every other expected-false row is 48-61% over cap, which any not-catastrophically-wrong model catches; this one is 4.6% over and is what actually discriminates. Numerator 26,138 not 26,142: measured by reconstructing the 371-line blob and counting it whole."
+    },
+    {
+      "name": "CLAUDE_SOLOMON.md@59080",
+      "sha": "75b6c5b23d90",
+      "bytes": 59080,
+      "harness_tokens": 23120,
+      "line_count": 310,
+      "read_outcome": "clean",
+      "expected_fits": true,
+      "source": "differential",
+      "pairing": "git-verified",
+      "cl100k_framed": 15281,
+      "note": "THE DECISIVE REFUTATION CASE, correctly paired at last. The shipped 1.85 model predicted 28,270 for this blob (15,281 framed x 1.85) and therefore PREDICTED TRUNCATION on a read that came back clean. Its measured cost is 23,120 -- above the OLD 22,500 budget, so no predictor could have cleared it until the margin went. The SD's stated cl100k figure of 15,281 was correct for THIS revision all along."
+    },
+    {
+      "name": "CLAUDE_LEAD.md@24336",
+      "bytes": 58622,
+      "harness_tokens": 24336,
+      "read_outcome": "clean",
+      "expected_fits": true,
+      "source": "differential",
+      "pairing": "same-measurement",
+      "note": "Over the old 22,500 budget while reading clean. 664 tokens of headroom (2.7%), inside the model's error band -- its verdict is corroboration, not proof."
+    },
+    {
+      "name": "CLAUDE_PLAN.md@23153",
+      "bytes": 55186,
+      "harness_tokens": 23153,
+      "read_outcome": "clean",
+      "expected_fits": true,
+      "source": "differential",
+      "pairing": "same-measurement",
+      "note": "Over the old budget while reading clean. 1,847 tokens of headroom (7.4%), OUTSIDE the 6.23% error band -- decided with real margin. An earlier draft of this note said 'also inside the band', repeating a review figure that was never checked."
+    },
+    {
+      "name": "CLAUDE_ADAM.md@18857",
+      "bytes": 47258,
+      "harness_tokens": 18857,
+      "read_outcome": "clean",
+      "expected_fits": true,
+      "source": "differential",
+      "pairing": "same-measurement",
+      "note": "24.6% headroom, comfortably outside the error band."
+    },
+    {
+      "name": "CLAUDE_EXEC.md@37059",
+      "bytes": 90072,
+      "harness_tokens": 37059,
+      "read_outcome": "truncated",
+      "expected_fits": false,
+      "source": "differential",
+      "pairing": "same-measurement"
+    },
+    {
+      "name": "CLAUDE_CORE.md@40285",
+      "bytes": 95531,
+      "harness_tokens": 40285,
+      "read_outcome": "truncated",
+      "expected_fits": false,
+      "source": "differential",
+      "pairing": "same-measurement"
+    }
+  ],
+  "tolerance": {
+    "relative_pct": 8.0,
+    "absolute_tokens": 2000,
+    "both_required": true,
+    "measured_max_error_pct": 6.23,
+    "theatre_threshold_pct": 22.96,
+    "note": "CORRECTED. measured_max_error_pct was 6.80, computed from the mispaired 67,501-byte SOLOMON row; against the git blob (67,131) it is 6.23. theatre_threshold_pct was 56.7, taken from a recorded overshoot rather than computed -- it is now the HONESTLY COMPUTED overshoot of the retired model on the one row where cl100k_framed is git-verified (17,372 x 1.85 = 32,138 against a measured 26,138 = 22.96%). A tolerance at or above that passes the retired model on this row and the suite stops discriminating. BOTH bounds are asserted; 8.0 sits above the measured 6.23 and well below 22.96."
+  },
+  "known_residual_false_fail": {
+    "_note": [
+      "*** THE SD DELIVERED ONE SEAT, NOT TWO. RECORDED HERE RATHER THAN OMITTED. ***",
+      "CLAUDE_ADAM.md went disarmed -> ARMED, decided with 24.6% margin. CLAUDE_SOLOMON.md at HEAD is",
+      "STILL DISARMED, and it is a FALSE fail: a no-offset Read of the live 61,013-byte file returns",
+      "all 310 lines with no truncation notice, and its measured cost is 23,896 -- 1,104 under the cap",
+      "-- while the bytes model predicts 25,236. Overshoot 5.61%, inside the model's own error band.",
+      "This is the same failure mode the SD was filed against, surviving at a different point on the",
+      "curve. The margin fix cleared three of the four; the predictor's resolution is what blocks the",
+      "fourth.",
+      "The test below asserts the CONTRADICTION explicitly and is SELF-RETIRING: improve the model so",
+      "it clears this file and the test reddens, and whoever does that should delete it."
+    ],
+    "name": "CLAUDE_SOLOMON.md@HEAD",
+    "sha": "9e95ffbf57ae",
+    "bytes": 61013,
+    "harness_tokens": 23896,
+    "line_count": 310,
+    "read_outcome": "clean",
+    "cl100k_framed": 15763,
+    "pairing": "git-verified"
+  },
+  "retired_model": {
+    "_note": [
+      "*** THE TWO-SIDED CONTROL, COMPUTED. THE FIRST VERSION WAS FAKE. ***",
+      "It derived the retired model's prediction FROM the measured harness count by multiplying by a",
+      "recorded overshoot percentage, so the assertion reduced to 'every recorded overshoot exceeds",
+      "8.0' -- a statement about this file's own constants. cl100k was never invoked. That is exactly",
+      "the shape the new suite's docblock indicts the old one for: comparing two numbers that came",
+      "from the same belief.",
+      "The control now runs the retired model for real -- cl100k on FRAMED text times 1.85 -- on every",
+      "row carrying a git-verified cl100k_framed. Only rows with that field can participate, and the",
+      "suite asserts at least one does rather than silently controlling on nothing."
+    ],
+    "constant": 1.85,
+    "basis": "cl100k_framed"
+  }
+}
