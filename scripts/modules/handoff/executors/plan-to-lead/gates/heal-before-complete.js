@@ -49,6 +49,45 @@ import { countAddressableDimensions, calculateDynamicThreshold, SD_TYPE_THRESHOL
  * @param {object|string|null|undefined} snapshot
  * @returns {boolean}
  */
+/**
+ * dimension_scores payload for a fast-heal insert — EXPORTED so it can be EXECUTED by a test.
+ *
+ * THE GATE MUST NOT WRITE A SIGNATURE ITS OWN RESOLVER REFUSES. fastAutoHeal returns
+ * details:{structural, semantic, elapsed_ms}, and that whole object used to go in as
+ * dimension_scores, putting a DURATION IN MILLISECONDS in the same JSONB column as 0-100 quality
+ * scores. 1136 rows carry it. Two consequences:
+ *
+ *   1. dimScoreOf returns elapsed_ms verbatim, so 1200 clears NARROW_FEATURE_DIM_FLOOR (50) by
+ *      MAGNITUDE ALONE — the stopwatch reading counts as a fully-addressed dimension, suppresses
+ *      narrowing entirely, and the SD is held to the full base bar on the strength of it.
+ *   2. resolveEffectiveThreshold REFUSES the signature as non-comparable. Once any gate consumes
+ *      that resolver, this gate would write a row its own reader rejects: write latency row ->
+ *      refuse -> FAIL -> retry -> identical row. A livelock authored by one function in this file
+ *      and sprung by another.
+ *
+ * elapsed_ms is ALREADY preserved verbatim in rubric_snapshot.details on the same insert, so
+ * dropping it here discards nothing — it moves a timing fact out of a column meaning "quality
+ * dimension" into one meaning "how this ran".
+ *
+ * WHY THIS IS A FUNCTION AND NOT FOUR INLINE LINES: as inline code its only possible test was a
+ * regex over this file, and a mutant that reverted the payload to fastResult.details SURVIVED that
+ * regex — the destructuring line was still present, only its USE had changed. A source test cannot
+ * see which variable the payload actually uses. Exporting it makes the behaviour executable.
+ *
+ * @param {{details?: Object, structuralScore?: number, semanticScore?: number}} fastResult
+ * @returns {Object} dimension_scores, guaranteed free of latency keys
+ */
+export function buildFastHealDimensionScores(fastResult) {
+  if (!fastResult || !fastResult.details || typeof fastResult.details !== 'object') {
+    return {
+      structural: { score: fastResult?.structuralScore ?? 100 },
+      semantic: { score: fastResult?.semanticScore ?? 70 }
+    };
+  }
+  const { elapsed_ms: _elapsedMs, ...qualityDims } = fastResult.details;
+  return qualityDims;
+}
+
 export function isSdHealSnapshot(snapshot) {
   if (!snapshot || typeof snapshot !== 'object' || Array.isArray(snapshot)) return false;
   return snapshot.mode === 'sd-heal';
@@ -635,10 +674,7 @@ export function createHealBeforeCompleteGate(supabase) {
                 .select('id', { count: 'exact', head: true })
                 .eq('sd_id', sdKey);
 
-              const dimensionScores = fastResult.details || {
-                structural: { score: fastResult.structuralScore || 100 },
-                semantic: { score: fastResult.semanticScore || 70 }
-              };
+              const dimensionScores = buildFastHealDimensionScores(fastResult);
 
               const insertPayload = {
                 sd_id: sdKey,
