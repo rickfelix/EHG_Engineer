@@ -88,6 +88,10 @@ export function runTrial(spec, repoRoot) {
   const before = gitStatus(repoRoot);
   const dir = mkdtempSync(join(tmpdir(), 'seedtest-'));
   let out = '', code = 0;
+  // FR-3 (SD-PAT-FIX-FIX-ABSENCE-SIGNAL-001): spawnSync's STRUCTURAL failure channel, hoisted
+  // so the verdict logic below can consult it. Previously r.error was never read anywhere in
+  // this file, so a control that could not be launched at all was scored by its OUTPUT.
+  let spawnError = null;
 
   try {
     for (const f of spec.fixtures) {
@@ -123,6 +127,10 @@ export function runTrial(spec, repoRoot) {
     const r = spawnSync('node', args, { cwd: runCwd, encoding: 'utf8', timeout: 120000, env: { ...process.env, ...(spec.env || {}) } });
     code = typeof r.status === 'number' ? r.status : 1;
     out = `${r.stdout || ''}${r.stderr || ''}`;
+    // FR-3: capture the STRUCTURAL failure. Note `r.status` is null on a timeout/ENOENT, which
+    // the line above silently coerces to 1 — indistinguishable from a control that ran and
+    // exited 1. r.error is the only field that says WHY.
+    spawnError = r.error || null;
   } finally {
     rmSync(dir, { recursive: true, force: true });
   }
@@ -137,6 +145,34 @@ export function runTrial(spec, repoRoot) {
   // exited 1. Reading that as "ran and found nothing" would have recorded a control as SILENT
   // that never executed at all. A control that could not run is ERROR: not a pass, not a
   // failure, and never counted in the rate.
+  // *** STRUCTURE BEFORE TEXT — FR-3, SD-PAT-FIX-FIX-ABSENCE-SIGNAL-001 ***
+  // CRASH_RE below decides ERROR by MATCHING THE OUTPUT, which cannot see a control that
+  // produced no output because it never started. spawnSync reports that in `r.error`, and
+  // this file never read it: a 120s TIMEOUT or an ENOENT yields status:null -> code 1 -> no
+  // crash text -> the control fell through and was published as SILENT, i.e. AS ONE THAT RAN
+  // CLEAN AGAINST A REAL SEEDED DEFECT. Probed during PLAN: a control that DIED (exit 1,
+  // "could not connect to database") and one that genuinely RAN BLIND (exit 0, "scan
+  // complete") produced the SAME row.
+  //
+  // The tempting fix was to add timeout/ENOENT alternatives to CRASH_RE. That is the INSTANCE
+  // fix — it would need extending for every future failure shape, and each omission is silent.
+  // Reading the structural channel is the CLASS fix: it is true for every way a spawn can fail,
+  // including ones not yet invented.
+  if (spawnError) {
+    return {
+      name: spec.name,
+      verdict: VERDICT.ERROR,
+      exitCode: code,
+      treeClean,
+      reason: `control could not be executed (${spawnError.code || spawnError.name || 'spawn failure'}): ${spawnError.message}`,
+      evidence: [
+        `spawnSync error: ${spawnError.code || spawnError.name || 'unknown'} — ${spawnError.message}`,
+        `exit code ${code} here is COERCED, not reported: r.status was null because the process never returned one`,
+        out.trim() ? `output captured before failure: ${out.trim().split('\n').slice(-1)[0]}` : 'no output at all — the control produced nothing to match against',
+      ].filter(Boolean),
+    };
+  }
+
   if (CRASH_RE.test(out)) {
     return { name: spec.name, verdict: VERDICT.ERROR, exitCode: code, treeClean, reason: 'control did not run to completion (crash/unhandled error)', evidence: out.trim().split('\n').filter(Boolean).slice(-2) };
   }

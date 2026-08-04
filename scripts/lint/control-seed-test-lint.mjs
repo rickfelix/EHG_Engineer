@@ -85,7 +85,14 @@ const KNOWN_LIMITATION_RE = /KNOWN LIMITATION/i;
 function changedFiles(repoRoot) {
   for (const base of ['origin/main...HEAD', 'HEAD~1']) {
     try {
-      const out = execFileSync('git', ['diff', '--name-only', '--diff-filter=A', base], { cwd: repoRoot, encoding: 'utf8' });
+      // FR-4: AMR, not A. `--diff-filter=A` sees ADDED files only, so it evaluates the FIRST
+      // EVENT IN A CONTROL'S LIFE AND NO LATER EDIT — a control MODIFIED into blindness, or
+      // RENAMED, was invisible to this gate. Measured over 30 days on scripts/lint +
+      // scripts/audit: 15 files added vs 15 modified, so roughly half the population was
+      // unreachable. Not novel: five in-repo lints already use ACMR
+      // (diagnostic-gauge-citation, session-coordination-insert-classguard,
+      // rls-anon-tenant-predicate, schema-reference, stage-advancement-chokepoint).
+      const out = execFileSync('git', ['diff', '--name-only', '--diff-filter=AMR', base], { cwd: repoRoot, encoding: 'utf8' });
       return out.split('\n').map((s) => s.trim()).filter(Boolean);
     } catch { /* try next base */ }
   }
@@ -194,7 +201,11 @@ function main() {
   }
   console.error(`\n❌ control-seed-test-lint: ${failures.length} issue(s) across ${controls.length} new control(s)\n`);
   for (const f of failures) {
-    console.error(`  ${f.reason.padEnd(20)} ${f.file}`);
+    // FR-3: SURFACE THE EXIT CODE. The harness records it and prints it in its own report, but
+    // this lint dropped it — so in the output a developer actually reads, the one field that
+    // separates a control that DIED from one that ran and saw nothing was absent.
+    const exit = typeof f.exitCode === 'number' ? ` (exit ${f.exitCode})` : '';
+    console.error(`  ${f.reason.padEnd(20)} ${f.file}${exit}`);
     console.error(`    ${f.detail}`);
     if (f.evidence?.length) f.evidence.forEach((e) => console.error(`      | ${e}`));
   }
