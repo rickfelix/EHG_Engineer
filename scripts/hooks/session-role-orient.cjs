@@ -148,11 +148,43 @@ function adamLines(headline) {
  * drive_reports is not live until PR #6784 (sibling -B) merges and is applied — and that is the
  * designed degraded path, not a stub to replace later.
  */
-async function fetchDriveHeadline() {
+async function fetchDriveReport() {
   try {
-    const rows = await pgGet('drive_reports?select=headline&order=generated_at.desc&limit=1');
-    const h = rows?.[0]?.headline;
-    return typeof h === 'string' && h.trim() ? h.trim() : null;
+    // id as well as headline: FR-2 stamps a consumption receipt against this report, and a receipt
+    // without the report it acknowledges is not a receipt.
+    const rows = await pgGet('drive_reports?select=id,headline&order=generated_at.desc&limit=1');
+    const r = rows?.[0];
+    const h = r?.headline;
+    if (!r?.id || typeof h !== 'string' || !h.trim()) return null;
+    return { id: r.id, headline: h.trim() };
+  } catch { return null; }
+}
+
+/**
+ * FR-2 — stamp Adam's consumption receipt.
+ *
+ * Uses the SHARED writer (lib/consumption/drive-report-receipts.js) rather than a local insert.
+ * It lives OUTSIDE lib/drive-loop deliberately: that tree is asserted PROPOSE-ONLY by a sibling
+ * leg (report-posture FR-7 scans it for write patterns), and a receipt is an ACT, not a proposal —
+ * putting the writer there would make the instrument a participant in what it measures. The adam
+ * and the chairman_brief lane cannot drift on the one property that matters: a refused write is
+ * never reportable as written. Dynamic import because this hook is CJS and the writer is ESM.
+ *
+ * FAIL-OPEN ON CONTROL FLOW, TRUTHFUL ON OUTCOME — these are different things and collapsing them
+ * is the defect this SD exists to close. A receipt failure must never break session start, so
+ * everything here is caught; but the VERDICT is returned rather than absorbed, and main() prints it
+ * when the write did not happen. Returning null means "could not even attempt", which the caller
+ * also treats as not-written.
+ */
+async function stampAdamReceipt(reportId) {
+  try {
+    const [{ writeConsumptionReceipt }, { createClient }] = await Promise.all([
+      import('../../lib/consumption/drive-report-receipts.js'),
+      import('@supabase/supabase-js'),
+    ]);
+    const url = process.env.SUPABASE_URL, key = process.env.SUPABASE_SERVICE_ROLE_KEY;
+    if (!url || !key) return null;
+    return await writeConsumptionReceipt(createClient(url, key), { reportId, lane: 'adam' });
   } catch { return null; }
 }
 
@@ -200,6 +232,45 @@ function decide(sessionId, meta, coordFile, driveHeadline = null) {
   if (coordFile?.session_id) return workerLines(meta?.callsign, coordFile.session_id);
   return SOLO;
 }
+/**
+ * FR-2 — emit the orientation and stamp Adam's receipt.
+ *
+ * EXTRACTED SO THE WIRING IS TESTABLE, which is the entire reason this function exists rather than
+ * living inline in main(). A test that calls stampAdamReceipt() directly proves the WRITER works
+ * and proves NOTHING about whether the hook ever calls it — that gap (a helper that tests green
+ * while nothing invokes it) has already been found twice on this SD family, once by mutation on
+ * QF-20260803-422 and once as TS-9. main() is now a thin adapter over this; the dependencies are
+ * injectable so a test can drive the real control flow with fakes instead of a live database.
+ *
+ * @param {{sessionId, meta, coordFile, fetchReport?, stamp?, log?, describe?}} deps
+ */
+async function orient({
+  sessionId, meta, coordFile,
+  fetchReport = fetchDriveReport,
+  stamp = stampAdamReceipt,
+  log = console.log,
+  describe = null,
+} = {}) {
+  const driveReport = isAdamSeat(meta) ? await fetchReport() : null;
+  decide(sessionId, meta, coordFile, driveReport?.headline || null).forEach((l) => log(l));
+  // The receipt is stamped AFTER the lines are emitted: the injection IS the delivery, and a
+  // receipt may only claim what was actually delivered. Stamping first would record a consumption
+  // that a later failure could prevent.
+  if (!driveReport?.id) return null;
+  const verdict = await stamp(driveReport.id);
+  // Printed ONLY when the receipt did not land. Success needs no line — the ROW is the evidence and
+  // that row is the deliverable. A failure has NO row, so silence here would make it silent
+  // everywhere: precisely the "loud at the database, silent at the observer" hazard this FR closes.
+  if (!verdict || !verdict.written) {
+    let render = describe;
+    if (!render) {
+      ({ describeReceiptOutcome: render } = await import('../../lib/consumption/drive-report-receipts.js').catch(() => ({})));
+    }
+    log(`[ROLE] ⚠️  ${render ? render(verdict) : 'receipt: NOT WRITTEN for lane adam'}`);
+  }
+  return verdict;
+}
+
 function main() {
   return new Promise(resolve => {
     let input = '';
@@ -217,8 +288,7 @@ function main() {
       // budget and every other seat would be charged for a read it never uses. Gated on isAdamSeat,
       // the SAME predicate decide() branches on, so the fetch and the branch cannot disagree about
       // who Adam is; a second inline comparison here is exactly how that drift would start.
-      const driveHeadline = isAdamSeat(meta) ? await fetchDriveHeadline() : null;
-      decide(sessionId, meta, coordFile, driveHeadline).forEach(l => console.log(l));
+      await orient({ sessionId, meta, coordFile });
       resolve();
     });
     process.stdin.on('error', () => resolve());
@@ -226,4 +296,4 @@ function main() {
   });
 }
 if (require.main === module) main().then(() => drainAndExit(0)).catch(() => drainAndExit(0));
-module.exports = { readCoordFile, fetchMeta, findActiveCoord, decide, SOLO, COORDINATOR, workerLines, roleLines, isAdamSeat, adamLines, fetchDriveHeadline };
+module.exports = { readCoordFile, fetchMeta, findActiveCoord, decide, SOLO, COORDINATOR, workerLines, roleLines, isAdamSeat, adamLines, fetchDriveReport, stampAdamReceipt, orient };

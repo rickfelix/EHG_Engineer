@@ -16,7 +16,7 @@
 // about RLS — an anon probe against an absent table returns absence, not denial.
 
 import { describe, it, expect } from 'vitest';
-import { writeConsumptionReceipt, describeReceiptOutcome, RECEIPT_OUTCOME } from '../../../lib/drive-loop/receipts.js';
+import { writeConsumptionReceipt, describeReceiptOutcome, RECEIPT_OUTCOME } from '../../../lib/consumption/drive-report-receipts.js';
 import { DRIVE_REPORT_LANES } from '../../../lib/drive-loop/lanes.js';
 
 const REPORT = '11111111-2222-3333-4444-555555555555';

@@ -112,3 +112,98 @@ describe('isAdamSeat — exact equality, and the near-misses that must not match
     expect(isAdamSeat({})).toBe(false);
   });
 });
+
+// ─────────────────────────────────────────────────────────────────────────────────────────────
+// FR-2 WIRING — does the hook actually CALL the receipt writer?
+//
+// THIS IS THE ASSERTION THE SD FAMILY HAS MISSED TWICE. A test that calls stampAdamReceipt() or
+// writeConsumptionReceipt() directly proves the WRITER works and proves nothing about whether
+// anything invokes it. Both prior instances tested green with the wiring absent: once caught only
+// by a drop-the-call mutation on QF-20260803-422, once specified as TS-9 and never implemented.
+//
+// So these drive orient() — the real control flow main() runs — with injected fakes, and assert on
+// the CALL. The dependencies are parameters precisely so this can be checked without a live table,
+// which matters because drive_report_receipts does not exist: the migration is chairman-gated and
+// unapplied. Nothing below is integration evidence.
+describe('FR-2 wiring — orient() invokes the receipt writer for the Adam seat', () => {
+  const ADAM = { role: 'adam', non_fleet: true };
+  const REPORT = { id: 'rep-1', headline: 'Wave 3 gate blocked' };
+  const mk = () => { const lines = [], stamped = []; return { lines, stamped, log: (l) => lines.push(l) }; };
+
+  it('stamps a receipt against the report it just injected', async () => {
+    const t = mk();
+    await hook.orient({
+      sessionId: 's', meta: ADAM, coordFile: null,
+      fetchReport: async () => REPORT,
+      stamp: async (id) => { t.stamped.push(id); return { written: true, lane: 'adam' }; },
+      log: t.log,
+    });
+    // The call happened, and it named the SAME report whose headline was emitted.
+    expect(t.stamped).toEqual(['rep-1']);
+    expect(t.lines.join('\n')).toContain('Wave 3 gate blocked');
+  });
+
+  it('does NOT stamp for a non-adam seat — no receipt without a delivery', async () => {
+    for (const meta of [{ role: 'adam_retired' }, { role: 'solomon' }, { callsign: 'x' }, null]) {
+      const t = mk();
+      await hook.orient({
+        sessionId: 's', meta, coordFile: { session_id: 'c' },
+        fetchReport: async () => REPORT,
+        stamp: async (id) => { t.stamped.push(id); return { written: true }; },
+        log: t.log,
+      });
+      expect(t.stamped).toEqual([]);
+    }
+  });
+
+  it('SURFACES a refused receipt instead of swallowing it', async () => {
+    const t = mk();
+    await hook.orient({
+      sessionId: 's', meta: ADAM, coordFile: null,
+      fetchReport: async () => REPORT,
+      stamp: async () => ({ written: false, reason: 'write_refused', lane: 'adam', error: 'relation does not exist' }),
+      log: t.log,
+      describe: (v) => `receipt: NOT WRITTEN for lane ${v.lane} — ${v.reason}`,
+    });
+    expect(t.lines.join('\n')).toMatch(/NOT WRITTEN/);
+    expect(t.lines.join('\n')).toMatch(/lane adam/);
+  });
+
+  it('treats a NULL verdict as not-written rather than as nothing to say', async () => {
+    const t = mk();
+    await hook.orient({
+      sessionId: 's', meta: ADAM, coordFile: null,
+      fetchReport: async () => REPORT,
+      stamp: async () => null,
+      log: t.log,
+      describe: () => 'receipt: NOT WRITTEN for lane adam',
+    });
+    expect(t.lines.join('\n')).toMatch(/NOT WRITTEN/);
+  });
+
+  it('stays SILENT on success — the row is the evidence, not a log line', async () => {
+    const t = mk();
+    await hook.orient({
+      sessionId: 's', meta: ADAM, coordFile: null,
+      fetchReport: async () => REPORT,
+      stamp: async () => ({ written: true, lane: 'adam' }),
+      log: t.log,
+      describe: () => 'SHOULD NOT APPEAR',
+    });
+    expect(t.lines.join('\n')).not.toMatch(/NOT WRITTEN|SHOULD NOT APPEAR/);
+  });
+
+  it('no report means no receipt — a receipt may only claim an actual delivery', async () => {
+    const t = mk();
+    const v = await hook.orient({
+      sessionId: 's', meta: ADAM, coordFile: null,
+      fetchReport: async () => null,
+      stamp: async (id) => { t.stamped.push(id); return { written: true }; },
+      log: t.log,
+    });
+    expect(t.stamped).toEqual([]);
+    expect(v).toBeNull();
+    // The seat is still oriented and still told the report is unavailable.
+    expect(t.lines.join('\n')).toMatch(/unavailable this session/);
+  });
+});
