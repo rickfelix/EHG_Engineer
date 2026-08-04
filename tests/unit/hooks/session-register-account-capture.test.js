@@ -69,6 +69,17 @@ describe('QF-514: account capture writes only what it could read', () => {
     await captureAccountIdentity(api, SID);
     if (calls.updates.length === 0) return; // unresolved account on this host — correct behaviour
     const written = calls.updates[0].metadata;
+    // QF-20260727-013: the escape hatch above keyed on "no write happened", which stopped being
+    // the right signal once an UNRESOLVED account also writes (metadata.account_unresolved_at, so
+    // darkness is recorded instead of silent). On a host without a resolvable account there is now
+    // a write, but still no identity — so gate on the identity itself. This preserves the control's
+    // intent exactly (assert the merge shape only when an account was genuinely written) rather
+    // than weakening it; CI caught this, where `claude auth status` does not exist.
+    if (!written.account_email) {
+      expect(written.account_unresolved_at).toEqual(expect.any(String));
+      expect(written.model).toBe('opus'); // the darkness write must still MERGE, never clobber
+      return;
+    }
     expect(written.model).toBe('opus');           // siblings survived the merge
     expect(written.effort).toBe('xhigh');
     expect(written.tier_rank).toBe(4);
