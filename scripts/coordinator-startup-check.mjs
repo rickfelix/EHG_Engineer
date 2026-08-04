@@ -157,6 +157,17 @@ export const STANDARD_LOOPS = [
   // the 3600s no-cron fallback.
   { key: 'unrouted-branches', folded: true, label: 'Unrouted finished-work detector (branches with commits and no open PR)', script: 'audit-unrouted-branches.mjs', cron: '0,15,30,45 * * * *',
     prompt: 'node scripts/audit-unrouted-branches.mjs' },
+  // SD-LEO-INFRA-DRIVE-LOOP-INSTRUMENT-001-C. folded:true — composed by the quiet tick
+  // (COMPOSED_CORES key 'drive-report-consume'), registered here for the loop-parity census so a
+  // cutover cannot silently drop the duty. NEVER arm standalone. Deliberately NOT gha_backed: the
+  // receipt must be stamped by the seat ACTUALLY EXECUTING as coordinator, and a CI runner is not
+  // that seat — a runner-written receipt would assert a consumption that never happened, which is
+  // precisely the producer-stamped defect this SD exists to prevent. The cron value mirrors the
+  // quiet tick's own cadence because that is the real fire rate; it is never armed, but
+  // parseStandardLoops derives expected_interval_seconds from it, so an honest value beats the
+  // 3600s no-cron fallback.
+  { key: 'drive-report-consume', folded: true, label: 'Coordinator drive-report consumption receipt (consumer-stamped from the live session)', script: 'coordinator-drive-report-consume.mjs', cron: '0,15,30,45 * * * *',
+    prompt: 'node scripts/coordinator-drive-report-consume.mjs' },
   // SD-LEO-INFRA-COORDINATOR-CHARTER-SELF-AUDIT-001: durable charter-compliance self-audit (replaces the
   // lost session-only CronCreate). READ-ONLY detection; authoritative PID/armed-silence liveness; fail-loud
   // on a foundational query error; names a remediation per violation. The prompt compels REMEDIATE-THEN-VERIFY.
