@@ -111,11 +111,16 @@ UNION ALL
  SELECT cd.id,
     cd.decision_type,
     concat(initcap(replace(cd.decision_type, '_', ' ')),
-      CASE WHEN cd.lifecycle_stage IS NULL THEN '' ELSE concat(' (Stage ', cd.lifecycle_stage, ')') END) AS title,
-    CASE WHEN cd.status <> 'pending'::text THEN 'resolved'::text
+      CASE WHEN cd.lifecycle_stage IS NULL THEN '' ELSE concat(' (Stage ', cd.lifecycle_stage, ')') END,
+      CASE WHEN cd.brief_data->'hold'->>'ratified' = 'true'
+           THEN concat(' — HELD until: ', COALESCE(NULLIF(cd.brief_data->'hold'->>'unpark_trigger', ''), 'trigger NOT RECORDED'))
+           ELSE '' END) AS title,
+    CASE WHEN cd.brief_data->'hold'->>'ratified' = 'true' THEN 'normal'::text
+         WHEN cd.status <> 'pending'::text THEN 'resolved'::text
          WHEN cd.blocking THEN 'critical'::text
          ELSE 'normal'::text END AS priority,
         CASE
+            WHEN cd.brief_data->'hold'->>'ratified' = 'true' THEN 'held'::text
             WHEN cd.status = 'pending'::text THEN 'pending'::text
             WHEN cd.decision::text = 'proceed'::text THEN 'approved'::text
             WHEN cd.decision::text = 'pause'::text THEN 'held'::text
