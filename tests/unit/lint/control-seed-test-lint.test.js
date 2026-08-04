@@ -108,6 +108,41 @@ describe('FR-6 — a spec-only diff still evaluates the controls that spec names
     expect(r.failures.some((f) => f.reason === 'SEED_DID_NOT_FIRE')).toBe(true);
   });
 
+  // MEASURED IN CI (run 30950096609), which is why these exist: the first version re-trialled
+  // EVERY control the spec names and surfaced 14 issues across 13 controls, of which ONE
+  // belonged to the diff. The cost was never CI time — it was that any PR touching this file
+  // inherits the whole corpus's health.
+  const OTHER = 'scripts/lint/some-other-control.mjs';
+  const twoSpecs = [blindSpec[0], { name: 'other', script: OTHER, fixtures: [{ path: 'x.js', content: 'x\n' }] }];
+  const isEither = (p) => p === BLIND || p === OTHER;
+
+  it('[DECIDING] only the control whose spec ENTRY changed is re-trialled', () => {
+    // Previous spec differs for the blind gauge only; `other` is byte-identical.
+    const prev = [{ ...blindSpec[0], fixtures: [{ path: 'lib/real-defect.js', content: '// WEAKENED\n' }] }, twoSpecs[1]];
+    const r = evaluate(process.cwd(), [SPEC_PATH], twoSpecs, isEither, prev);
+    expect(r.selected).toContain(BLIND);
+    expect(r.selected).not.toContain(OTHER);
+    expect(r.specBaseUnavailable).toBe(false);
+  });
+
+  it('[CONTROL] an UNCHANGED spec entry drags in nothing, even when the file changed', () => {
+    // Without this, `fromSpec` could ignore prevSpecs entirely and the deciding test above
+    // would still pass on the strength of the blind gauge alone.
+    const r = evaluate(process.cwd(), [SPEC_PATH], twoSpecs, isEither, twoSpecs);
+    expect(r.selected).not.toContain(BLIND);
+    expect(r.selected).not.toContain(OTHER);
+    expect(r.trials).toHaveLength(0);
+  });
+
+  it('[CONTROL] an unreadable base falls back to ALL and says so — never to none', () => {
+    // The dangerous direction is selecting nothing: an empty evaluation reported as a pass is
+    // this SD's entire subject. Fail wide and loud, not narrow and quiet.
+    const r = evaluate(process.cwd(), [SPEC_PATH], twoSpecs, isEither, null);
+    expect(r.specBaseUnavailable).toBe(true);
+    expect(r.selected).toContain(BLIND);
+    expect(r.selected).toContain(OTHER);
+  });
+
   it('[CONTROL] an unrelated diff does NOT trigger the expansion', () => {
     // Without this, `specChanged` could be hardcoded true and the deciding test above would
     // still pass while the gate re-trialled the whole corpus on every PR.
