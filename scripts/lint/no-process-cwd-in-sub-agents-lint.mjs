@@ -4,8 +4,15 @@
 // HAS NEVER INSPECTED A REAL FILE. Measured at LEAD: its only references anywhere in the repo were
 // PROSE — a docstring in the sibling verdict-mutation driver and a comment in that driver's
 // workflow, both citing it as the cautionary example. No import, no registration, no driver, no
-// workflow, no npm alias. eslint.config.js registers none of the eslint-rules/* modules, and the
-// eslintrc-format lib/sub-agents/.eslintrc.json that named this rule is ignored under flat config.
+// workflow, no npm alias. eslint.config.js registers none of the eslint-rules/* modules — see the
+// note at the top of that file explaining why, which this SD added.
+//
+// There was also a lib/sub-agents/.eslintrc.json declaring "this override makes the rule active in
+// the project's flat config setup". That was false (eslintrc is ignored under flat config) and it
+// READ as live enforcement, so it became the pattern other SDs were told to copy. DELETED by this
+// SD — leaving it would have been worse after this change than before, because the rule it falsely
+// claimed to enable now genuinely fires, which would give the next imitator apparent corroboration
+// for a mechanism that still does not run.
 //
 // A RAW GREP HIT COUNT GAVE THIS DEAD RULE THE SAME NUMBER OF REFERENCES AS THE LIVE ONES. That is
 // the trap worth remembering: counting references is not measuring enforcement. A live rule is

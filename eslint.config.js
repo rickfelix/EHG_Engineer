@@ -4,6 +4,24 @@ import typescriptParser from '@typescript-eslint/parser';
 import playwright from 'eslint-plugin-playwright';
 import playwrightSelectors from './tools/eslint-rules/playwright-selectors/index.js';
 
+// WHY THE RULES IN eslint-rules/ ARE NOT REGISTERED HERE — SD-LEO-INFRA-ONE-GENUINELY-DEAD-001.
+//
+// They are enforced by standalone drivers under scripts/lint/, each of which imports its rule
+// module and runs it through its own flat-config Linter, wired to a dedicated blocking workflow.
+// That is deliberate, not an oversight, and this note exists because the next reader's question is
+// "why is this rule not registered?" — one honest sentence answers it permanently.
+//
+// The cost of NOT writing it down: lib/sub-agents/.eslintrc.json sat here for months declaring
+// "this override makes the rule active in the project's flat config setup". That was false —
+// eslintrc files are ignored under flat config — and the rule it claimed to enable had never
+// inspected a single file. Worse, the file READ as live enforcement, so it became the pattern
+// other SDs were told to copy. Deleted by this SD.
+//
+// CONSEQUENCE FOR ANYONE ADDING A RULE: registering it here is not how enforcement happens, and an
+// in-source `eslint-disable-next-line <rule>` for one of these rules will report "Definition for
+// rule not found" under a plain `npx eslint` run. That is expected and currently harmless only
+// because .husky/pre-commit runs eslint with stderr discarded and a trailing `|| true`.
+
 export default [
   // Ignore bundled/generated files
   {
