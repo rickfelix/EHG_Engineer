@@ -726,12 +726,25 @@ describe('append-only means DELETE too — the hole the UPDATE freeze could not 
       .rejects.toThrow(/append-only/);
   });
 
-  it('an unset GUC is the NORMAL case and must not itself error', async () => {
-    // current_setting(..., true) returns NULL instead of raising for a never-set GUC. If that
-    // second argument were dropped, every delete would fail with an unrelated message and the
-    // real one would never be seen.
-    const { rows } = await client.query("SELECT COALESCE(current_setting('drive_reports.allow_delete', true), 'off') AS v;");
-    expect(rows[0].v).toBe('off');
+  it('an unset GUC does not error, and does not read as permission', async () => {
+    // current_setting(..., true) does not RAISE for an unset GUC — that second argument is
+    // load-bearing, and without it every delete would fail with an unrelated message while the
+    // real one was never seen.
+    //
+    // CORRECTED: this asserted the value was exactly 'off' via COALESCE. MEASURED in CI, it is
+    // the EMPTY STRING once the GUC has been SET LOCAL anywhere earlier in the session —
+    // COALESCE only catches NULL, so the assertion failed on a representation detail while the
+    // trigger it describes was behaving perfectly ('' <> 'on', so the delete is refused).
+    //
+    // Asserting a raw GUC value was the wrong subject anyway. What must hold is that an unset
+    // or empty setting is NOT permission — so that is what is asserted now, in the same shape
+    // the trigger actually uses.
+    const { rows } = await client.query(
+      "SELECT current_setting('drive_reports.allow_delete', true) AS raw, "
+      + "COALESCE(current_setting('drive_reports.allow_delete', true), 'off') <> 'on' AS blocks;",
+    );
+    expect(rows[0].raw === null || rows[0].raw === '' || rows[0].raw === 'off', `unexpected residual GUC value ${JSON.stringify(rows[0].raw)}`).toBe(true);
+    expect(rows[0].blocks, 'an unset or empty setting must never read as permission').toBe(true);
   });
 
   it('dropping the DELETE guard fails the verify block', async () => {
@@ -792,7 +805,15 @@ describe('the policy SHAPE, not just its name — a wrong policy used to pass ev
     // above while making the migration undeployable.
     await expect(client.query(VERIFY_BLOCK)).resolves.toBeTruthy();
     const { rows } = await client.query(`
-      SELECT p.polname, p.polcmd, p.polroles = ARRAY['service_role'::regrole] AS service_only
+      -- ::oid, matching the migration. pg_policy.polroles is oid[], and comparing it to a
+      -- regrole[] raises 42883. I fixed that cast in the migration and left this RE-TYPED copy
+      -- behind — the same predicate in two places, one of them updated. This file's own header
+      -- already documents the cure for exactly that (VERIFY_BLOCK is EXTRACTED from the
+      -- migration rather than re-typed, so it cannot drift); this assertion is the one place
+      -- that ignored it. Kept as a literal because it checks a DIFFERENT thing than the
+      -- migration's ASSERT — that one fails the deploy, this one reports WHICH policy is wrong
+      -- — but the cast is now identical by inspection and named as the drift risk it is.
+      SELECT p.polname, p.polcmd, p.polroles = ARRAY['service_role'::regrole::oid] AS service_only
       FROM pg_policy p
       WHERE p.polrelid IN ('public.drive_reports'::regclass, 'public.drive_report_receipts'::regclass)
       ORDER BY p.polname;
