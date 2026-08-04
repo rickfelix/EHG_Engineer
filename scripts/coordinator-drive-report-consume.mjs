@@ -62,6 +62,26 @@ export const COORDINATOR_LANE = 'coordinator';
 /** Bound so a black-holed write cannot stall the coordinator tick (precedent: receipt-ledger). */
 export const WRITE_TIMEOUT_MS = 2000;
 
+/**
+ * Describe why the supabase env is unusable, or null when it is fine.
+ *
+ * A PURE FUNCTION ON PURPOSE, so the check is testable WITHOUT a client. Inlined in main() it could
+ * only be tested by calling main(), which can reach createClient — and the repo's DB-test guard
+ * correctly refuses a unit test that can touch a database. A guard blocking a test is usually the
+ * guard being right about the shape of the test.
+ *
+ * WHY IT EXISTS AT ALL: with a missing or EMPTY url/key, createClient THROWS before any of this
+ * module's error handling runs — exit 0, ZERO-BYTE STDOUT, and the host's `tail(stdout) || 'ok'`
+ * reports the instrument healthy. A SERVICE-KEY ROTATION WOULD SILENCE IT PERMANENTLY while the
+ * tick said fine. Adding dotenv fixed the missing-FILE case and left the empty-VALUE case open.
+ */
+export function describeSupabaseEnvProblem(env = process.env) {
+  const url = env.SUPABASE_URL;
+  const key = env.SUPABASE_SERVICE_ROLE_KEY || env.SUPABASE_SERVICE_KEY;
+  if (url && key) return null;
+  return `env: SUPABASE_URL=${url ? 'set' : 'MISSING'} key=${key ? 'set' : 'MISSING'}`;
+}
+
 // resolveActorSessionId WAS DELETED HERE, AND THE DELETION IS A FINDING RATHER THAN A TIDY-UP.
 //
 // It resolved the actor from CLAUDE_SESSION_ID with getActiveCoordinatorId as a FALLBACK. When the
@@ -214,10 +234,14 @@ export async function runDriveReportConsumeCore(supabase, {
  * Path of the failure breadcrumb.
  *
  * WHY A FILE. runCoresFailSoft records `key:status` and DROPS the detail, and the core must exit 0
- * or the host reports a failed tick for a reason it cannot show. So an always-0 exit plus a
- * status-only summary means A GENUINE WRITE FAILURE WOULD BE COMPLETELY UNOBSERVABLE. This
- * breadcrumb is the channel: written on failure, REMOVED on success, so its mere existence is the
- * signal and a stale one cannot accumulate.
+ * or the host reports a failed tick for a reason it cannot show. Written on failure, REMOVED on
+ * success, so a stale one cannot accumulate.
+ *
+ * IT IS FORENSICS, NOT A CHANNEL, AND AN EARLIER VERSION OF THIS COMMENT OVERCLAIMED BY CALLING IT
+ * ONE. NOTHING READS IT — a repo-wide grep finds only this module and its own test. It is useful to
+ * a human who already suspects a problem and goes looking; it will never TELL anyone. The only
+ * surface the host consults is stdout, and the tick currently drops that detail too (the
+ * coordinator has taken that fix). Do not mistake this file for observability.
  */
 export const FAILURE_BREADCRUMB = path.join('.artifacts', 'drive-report-consume-last-failure.json');
 
@@ -249,10 +273,35 @@ export function recordOutcome(outcome, { root = process.cwd(), fsImpl = fs } = {
 export async function main({ supabase: injectedDb, env = process.env, resolveCoordinatorId, logger = console } = {}) {
   const { createClient } = await import('@supabase/supabase-js');
   const { getActiveCoordinatorId } = require_('../lib/coordinator/resolve.cjs');
-  const supabase = injectedDb ?? createClient(
-    env.SUPABASE_URL,
-    env.SUPABASE_SERVICE_ROLE_KEY || env.SUPABASE_SERVICE_KEY
-  );
+
+  let supabase = injectedDb;
+  if (!supabase) {
+    // VALIDATE BEFORE createClient. Adding dotenv removed a TRIGGER, not the defect: with a missing
+    // or EMPTY url/key, createClient THROWS before recordOutcome and before anything reaches stdout
+    // — exit 0, ZERO-BYTE STDOUT, and the host's `tail(stdout) || 'ok'` reports
+    // drive-report-consume:ok. A SERVICE-KEY ROTATION WOULD SILENCE THIS INSTRUMENT PERMANENTLY
+    // WHILE THE TICK SAID FINE. That is this SD's own target defect, and it survived two fixes:
+    // dotenv covered the missing-file case and left the empty-value case wide open.
+    const envProblem = describeSupabaseEnvProblem(env);
+    if (envProblem) {
+      const outcome = { status: 'failed', reason: envProblem };
+      recordOutcome(outcome);
+      logger.error(`[drive-report-consume] ${envProblem}`);
+      console.log(`FAILED ${envProblem}`);   // stdout, because that is the only thing the host reads
+      return 0;
+    }
+    const url = env.SUPABASE_URL;
+    const key = env.SUPABASE_SERVICE_ROLE_KEY || env.SUPABASE_SERVICE_KEY;
+    supabase = createClient(url, key, {
+      // THE CLIENT-LEVEL ABORT, which is what actually bounds the process. A Promise.race settles
+      // the FUNCTION and leaves the socket open — the exact pattern withTimeout's own docstring
+      // condemns, which I then used verbatim for the coordinator lookup. Measured: the seat decision
+      // was correct at t+2112ms while the PROCESS RAN TO t+95021ms, past the host's 90s kill, whose
+      // SIGTERM is the FALSE FAILED CORE the timeout exists to prevent. Signalling at the client
+      // covers every query including the coordinator lookup that precedes the guarded ones.
+      global: { fetch: (u, o) => fetch(u, { ...o, signal: AbortSignal.timeout(WRITE_TIMEOUT_MS) }) },
+    });
+  }
   const resolveCoord = resolveCoordinatorId ?? (() => getActiveCoordinatorId(supabase));
   // BOUNDED. This call sits BEFORE both guarded queries and was previously awaited UNBOUNDED — a
   // reviewer measured it still running at 95007ms against a blackholed DB, past the host's 90s

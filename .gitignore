@@ -447,5 +447,10 @@ scripts/harness/.spine-verify-first-runs/
 .claude/console-parentage.jsonl
 .claude-work/
 
-# Local analysis/forensic output (drive-report-consume failure breadcrumb, census scratch)
-.artifacts/
+# The drive-report-consume failure breadcrumb ONLY (SD-LEO-INFRA-DRIVE-LOOP-INSTRUMENT-001-C).
+# NARROWED FROM A BLANKET `.artifacts/`, which was a regression I introduced: `git ls-files
+# .artifacts` shows EIGHTEEN TRACKED FILES there — evidence scripts committed deliberately by
+# earlier SDs. Ignoring the whole directory would not have touched those, but the NEXT author's
+# `git add` of a new evidence script would have failed SILENTLY. Ignore the one runtime artifact,
+# not the convention.
+.artifacts/drive-report-consume-last-failure.json

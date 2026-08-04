@@ -7,11 +7,27 @@
 // passed, against a schema that no longer exists. Receipts are now ROWS in drive_report_receipts
 // with UNIQUE(report_id, lane), so first-writer-wins is a property of the SCHEMA and the two
 // idempotency guards the old suite worked so hard to isolate are gone with the mechanism.
-import { describe, it, expect } from 'vitest';
+import { describe, it, expect, vi } from 'vitest';
 import { randomUUID } from 'node:crypto';
+
+// GUARDED, at the DB-test guard's own instruction and on its own terms.
+//
+// The env-validation tests name SUPABASE_URL and SUPABASE_SERVICE_ROLE_KEY as object keys, which
+// the guard reads as a live-DB signal — correctly, since it cannot know statically that every path
+// here returns before a client is ever built. Mocking the client module makes the live client
+// UNREACHABLE rather than merely unused, which is the difference between a test that is safe and a
+// test that happens not to have connected yet.
+//
+// It also refused an earlier version of these tests that called main() directly, and it was right:
+// a unit test able to reach createClient is the wrong shape. That refusal is why the env check is
+// now a pure function. A guard blocking a test is usually the guard being right about the test.
+vi.mock('@supabase/supabase-js', () => ({
+  createClient: () => { throw new Error('createClient must be unreachable in the unit tier'); },
+}));
 import {
   runDriveReportConsumeCore,
   main,
+  describeSupabaseEnvProblem,
 
   isCoordinatorSeat,
   recordOutcome,
@@ -318,6 +334,26 @@ describe('main() env-only seat resolution — the line the exploit turns on', ()
     const db = makeDb();
     const code = await main({ supabase: db, env: {}, resolveCoordinatorId: async () => { throw new Error('db down'); }, logger: silent });
     expect(code).toBe(0);
+  });
+});
+
+describe('a broken supabase env is LOUD, not silent — the defect found in this SD three times', () => {
+  // Without this check, createClient THROWS before any of the module's error handling runs: exit 0,
+  // ZERO-BYTE STDOUT, and the host's `tail(stdout) || 'ok'` reports the instrument healthy. A
+  // SERVICE-KEY ROTATION WOULD SILENCE IT PERMANENTLY while the tick said fine. Adding dotenv fixed
+  // the missing-FILE case and left the empty-VALUE case wide open — I fixed the case I had
+  // reproduced and never asked what else produced the same symptom.
+  it('reports MISSING for an absent key and for an EMPTY one — the empty case is the one that bit', () => {
+    expect(describeSupabaseEnvProblem({ SUPABASE_URL: 'https://x' })).toMatch(/key=MISSING/);
+    expect(describeSupabaseEnvProblem({ SUPABASE_URL: 'https://x', SUPABASE_SERVICE_ROLE_KEY: '' })).toMatch(/key=MISSING/);
+    expect(describeSupabaseEnvProblem({ SUPABASE_SERVICE_ROLE_KEY: 'k' })).toMatch(/SUPABASE_URL=MISSING/);
+  });
+
+  it('returns null when the env is usable — both arms, so a constant-complain cannot pass', () => {
+    expect(describeSupabaseEnvProblem({ SUPABASE_URL: 'https://x', SUPABASE_SERVICE_ROLE_KEY: 'k' })).toBeNull();
+    // SUPABASE_SERVICE_KEY is the documented alternate name; treating only the first as valid
+    // would reject a correctly-configured seat.
+    expect(describeSupabaseEnvProblem({ SUPABASE_URL: 'https://x', SUPABASE_SERVICE_KEY: 'k' })).toBeNull();
   });
 });
 
