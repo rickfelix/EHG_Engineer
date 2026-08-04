@@ -100,7 +100,63 @@ function roleLines(role) {
   ];
 }
 
-function decide(sessionId, meta, coordFile) {
+/**
+ * SD-LEO-INFRA-DRIVE-LOOP-INSTRUMENT-001-D (FR-1) — is THIS seat the live Adam seat?
+ *
+ * EXACT EQUALITY, NOT A PREFIX OR A REGEX, and that is the whole point of having a named function
+ * rather than an inline test. MEASURED over 108 sessions with a 14d heartbeat (well under the
+ * 1000-row PostgREST cap, so not a truncated sample): metadata.role is adam_retired:6, adam:1,
+ * solomon:1, coordinator:1. RETIRED ADAM SEATS OUTNUMBER THE LIVE ONE 6:1, so
+ * role.startsWith('adam') or /adam/.test(role) is wrong on the MAJORITY of adam-ish rows — and
+ * wrong in the LEAKING direction, handing Adam-only content to six dead seats. A predicate that
+ * failed closed would be an annoyance; this one fails open.
+ *
+ * ONE REPRESENTATION: this is the only place the string 'adam' appears. main() calls it to decide
+ * whether to spend a round trip, decide() calls it to branch. Inlining the comparison at either
+ * call site would put the literal in two places and let them drift.
+ */
+function isAdamSeat(meta) {
+  return meta?.role === 'adam';
+}
+
+/**
+ * FR-1 — Adam's orientation: the generic role lines PLUS the Drive Report headline.
+ *
+ * Built on roleLines rather than replacing it: everything roleLines says about a non-fleet seat is
+ * still true of Adam, and duplicating those three lines here would mean a future edit to the role
+ * contract silently missing this seat.
+ *
+ * `headline` is null whenever the report could not be read — including right now, because
+ * drive_reports does not exist until PR #6784 lands. An absent report is stated plainly rather than
+ * omitted: a seat that sees nothing cannot tell "no report today" from "the injection is broken".
+ */
+function adamLines(headline) {
+  return [
+    ...roleLines('adam'),
+    headline
+      ? `[ROLE] DRIVE REPORT — ${headline}`
+      : '[ROLE] DRIVE REPORT — unavailable this session (no current report readable). This line is the mechanism working, not failing: it arrives every session so you never depend on remembering to ask.',
+  ];
+}
+
+/**
+ * FR-1 — read the current Drive Report headline. Returns null on ANY failure.
+ *
+ * Fail-open by construction, matching every other read in this hook: a SessionStart hook that
+ * throws takes the whole session start with it. pgGet already carries the BUDGET_MS timeout, so an
+ * unreachable or slow table costs the budget, not the session. TODAY this always returns null —
+ * drive_reports is not live until PR #6784 (sibling -B) merges and is applied — and that is the
+ * designed degraded path, not a stub to replace later.
+ */
+async function fetchDriveHeadline() {
+  try {
+    const rows = await pgGet('drive_reports?select=headline&order=generated_at.desc&limit=1');
+    const h = rows?.[0]?.headline;
+    return typeof h === 'string' && h.trim() ? h.trim() : null;
+  } catch { return null; }
+}
+
+function decide(sessionId, meta, coordFile, driveHeadline = null) {
   if (meta?.is_coordinator) return COORDINATOR;
   if (coordFile?.session_id === sessionId) return COORDINATOR;
 
@@ -116,6 +172,19 @@ function decide(sessionId, meta, coordFile) {
   // this hook runs on a strict startup budget — no second round trip. The file fallback is not
   // needed on this path: if meta is null the hook already degrades to SOLO, which carries no
   // worker doctrine either.
+  // SD-LEO-INFRA-DRIVE-LOOP-INSTRUMENT-001-D (FR-1) — ADAM BRANCH. POSITION IS LOAD-BEARING.
+  //
+  // This MUST stay ABOVE the general ROLE rung below. verdictFromMetadata(meta) === ROLE_VERDICT.ROLE
+  // is a BROAD match that a live Adam seat satisfies, so an adam branch placed after it is
+  // UNREACHABLE — and unreachable in the worst way: it would be DEAD CODE THAT TESTS GREEN for any
+  // test that calls the branch directly instead of driving decide(). That is why the covering test
+  // drives decide() end-to-end; a test that exercises the unit cannot see that the path never
+  // arrives. (Confirmed independently by the owner of the ROLE rung, 2026-08-04.)
+  //
+  // Adam is not a special case bolted beside the role axis — he IS a role seat, which is why this
+  // returns roleLines plus one line rather than a parallel block. The rung above him is the general
+  // one; this rung only adds what is specific to him.
+  if (isAdamSeat(meta)) return adamLines(driveHeadline);
   if (ROLE_VERDICT && verdictFromMetadata(meta) === ROLE_VERDICT.ROLE) return roleLines(meta.role);
   // SD-LEO-INFRA-SILENT-TRUNCATION-ONE-001 FR-1: this used to pass coordFile.session_id.slice(0, 8).
   // The [ROLE] line below is the ONLY place a worker is told who its coordinator is, and a worker
@@ -144,7 +213,12 @@ function main() {
         if (dbCoord) coordFile = { session_id: dbCoord };
       }
       const meta = sessionId ? await fetchMeta(sessionId) : null;
-      decide(sessionId, meta, coordFile).forEach(l => console.log(l));
+      // FR-1: ONLY the Adam seat pays for this round trip — this hook runs on a strict startup
+      // budget and every other seat would be charged for a read it never uses. Gated on isAdamSeat,
+      // the SAME predicate decide() branches on, so the fetch and the branch cannot disagree about
+      // who Adam is; a second inline comparison here is exactly how that drift would start.
+      const driveHeadline = isAdamSeat(meta) ? await fetchDriveHeadline() : null;
+      decide(sessionId, meta, coordFile, driveHeadline).forEach(l => console.log(l));
       resolve();
     });
     process.stdin.on('error', () => resolve());
@@ -152,4 +226,4 @@ function main() {
   });
 }
 if (require.main === module) main().then(() => drainAndExit(0)).catch(() => drainAndExit(0));
-module.exports = { readCoordFile, fetchMeta, findActiveCoord, decide, SOLO, COORDINATOR, workerLines, roleLines };
+module.exports = { readCoordFile, fetchMeta, findActiveCoord, decide, SOLO, COORDINATOR, workerLines, roleLines, isAdamSeat, adamLines, fetchDriveHeadline };
