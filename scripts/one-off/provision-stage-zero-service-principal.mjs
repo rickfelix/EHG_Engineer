@@ -20,6 +20,16 @@
  * the traversal. Part (2) of the ask — the credentialed run that promotes a nursery row into a
  * live venture — remains with the chairman and is explicitly NOT authorised.
  *
+ * ⚠ STATUS OF THAT FENCE, 2026-08-04 — READ BEFORE RELYING ON IT EITHER WAY. The fence above was
+ * written 2026-07-26 under coordinator ruling a59441f4 and is left VERBATIM because it may still
+ * bind. What changed since: the chairman ruled "C" on the Stage-0 WIP limit (capture d46b090e,
+ * SMS 989d2a6e), raising stage0.wip_limit 2 -> 3 for the stated purpose of admitting FR-3's
+ * traversal venture as the third live venture. The argument that this SUPERSEDES the fence is that
+ * you do not raise a WIP ceiling to make room for a venture you do not intend to create. That
+ * reading has been put to the coordinator and IS NOT YET ANSWERED, so it is recorded here as an
+ * open question rather than resolved in either direction. DO NOT treat this note as authorisation:
+ * until the coordinator answers, part (2) stays fenced and this script still provisions ONLY.
+ *
  * IDEMPOTENT: re-running finds the existing principal by email and re-prints its id rather than
  * creating a second one. A duplicate service identity would make attribution ambiguous, which
  * defeats the point of naming one.
@@ -29,7 +39,12 @@
 import 'dotenv/config';
 import { createClient } from '@supabase/supabase-js';
 
-const SERVICE_EMAIL = 'svc-stage-zero-invoker@ehg.dev';
+// DOMAIN CORRECTED 2026-08-04. This read @ehg.dev — a domain the chairman does not own, which is
+// precisely what his 07-29 HOLD (9d63afe5) was raised against. He confirmed ownership of
+// execholdings.ai by SMS ("Yes", inbound 846f1cff, capture 0854e73a), so the identity is re-homed
+// to a domain that is actually ours. An attribution guard whose own principal lives on a domain we
+// do not control cannot vouch for the name it attributes to.
+const SERVICE_EMAIL = 'svc-stage-zero-invoker@execholdings.ai';
 
 const supabase = createClient(
   process.env.SUPABASE_URL || process.env.NEXT_PUBLIC_SUPABASE_URL,
