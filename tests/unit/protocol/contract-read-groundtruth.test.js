@@ -186,6 +186,41 @@ describe('the fixture cannot silently rot', () => {
     expect(row.notice_string).not.toContain('26142');
   });
 
+  /**
+   * *** THE README CLAIMED THIS AND NOTHING ENFORCED IT. ***
+   * The fixture header says "Every row now carries a sha ... bytes are read from the blob, not
+   * remembered." That described the one-off re-capture, not the suite: at the previous commit no
+   * test resolved a sha, and the rot guard checked only that the numbers were positive. PLAN
+   * specified this ~15-LOC guard and it was not built. So the file certifying the span-mismatch fix
+   * carried an unbacked claim about its own provenance — occurrence 6 one level down, found by the
+   * retro measuring the file instead of reading its header.
+   *
+   * Now every sha-bearing row is re-resolved from git and its byte count recomputed. A row whose
+   * bytes drift from its blob fails here rather than quietly re-introducing the exact mispairing
+   * (fresh token count, stale byte count) this fixture exists to have corrected.
+   *
+   * WHAT IT CANNOT CATCH, stated because a guard whose limits are unstated gets over-trusted: a
+   * harness_tokens value that was wrong when recorded, a change to the harness tokenizer itself, or
+   * a history rewrite that drops the sha. Only a fresh truncating read catches those.
+   */
+  it('every sha-bearing row still matches its git blob, byte for byte', () => {
+    const { execSync } = require_('child_process');
+    const rows = [...GT.calibration_set, ...GT.verdict_set, GT.known_residual_false_fail]
+      .filter((r) => r && r.sha);
+
+    // A zero-row sweep would pass silently and read as provenance. Assert there is something to check.
+    expect(rows.length).toBeGreaterThanOrEqual(4);
+
+    for (const row of rows) {
+      const path = row.path || row.name.split('@')[0];
+      const blob = execSync(`git show ${row.sha}:${path}`, {
+        cwd: join(import.meta.dirname, '..', '..', '..'), encoding: 'utf8', maxBuffer: 64 * 1024 * 1024,
+      });
+      expect(Buffer.byteLength(blob, 'utf8'), `${row.name}: recorded bytes do not match blob ${row.sha}`).toBe(row.bytes);
+      if (row.line_count) expect(blob.split('\n').length).toBe(row.line_count);
+    }
+  });
+
   it('predictions are made from FROZEN bytes, never from a file on disk', () => {
     // The whole point of the fixture. If this suite ever reads a live contract, a green run stops
     // meaning the instrument is right and starts meaning the file happened not to have drifted.
