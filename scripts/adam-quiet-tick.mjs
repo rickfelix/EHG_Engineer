@@ -147,7 +147,12 @@ export async function readCriticalPathParents(sb) {
     // already finished, instead of escalating a stale board row.
     const data = await fetchAllPaginated(() => sb
       .from(TASK_LEDGER_TABLE)
-      .select('id, title, updated_at, status, source_kind, source_ref')
+      // QF-20260728-544: `tier` MUST be selected. stall-alert.js decides suppression on
+      // node.tier, and omitting it here left that value undefined on every row — the predicate
+      // could not see its own input, so QF-20260725-639's anchor suppression never fired once
+      // and 49 alerts/tick recurred. Selecting a column the WHERE clause already pins looks
+      // redundant; it is not, because the consumer reads the VALUE, not the filter.
+      .select('id, title, updated_at, status, tier, source_kind, source_ref')
       .eq('tier', 'parent')
       .in('status', ['open', 'in_progress', 'blocked'])
       .order('id', { ascending: true })); // unique tiebreaker (FR-6)
