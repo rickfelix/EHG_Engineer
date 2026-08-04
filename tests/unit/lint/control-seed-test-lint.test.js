@@ -88,3 +88,31 @@ describe('FR-8 — trialsRun is a real count, not an alias of matched', () => {
     expect(r.skipped).toHaveLength(0);
   });
 });
+
+// SD-PAT-FIX-FIX-ABSENCE-SIGNAL-001 — FR-6. A CHANGED SEED SPEC MUST RE-TRIAL ITS CONTROL.
+//
+// The spec file holds the seeded defect itself, so swapping a real fixture for a trivial one is
+// as dangerous as neutering the control. It is a .json and the control globs match .mjs/.js/.cjs,
+// so it can never be reached by widening a glob — and a PR touching only the spec used to report
+// "no new controls in this diff" and exit green, with the workflow having triggered correctly.
+const SPEC_PATH = 'scripts/audit/control-seed-specs.json';
+
+describe('FR-6 — a spec-only diff still evaluates the controls that spec names', () => {
+  it('[DECIDING] a diff containing ONLY the spec file selects the controls it names', () => {
+    const r = evaluate(process.cwd(), [SPEC_PATH], blindSpec, onlyBlind);
+    expect(r.specChanged).toBe(true);
+    expect(r.selected).toContain(BLIND);
+    // It must actually be EVALUATED, not merely listed — a trial ran on it.
+    expect(r.trials).toHaveLength(1);
+    expect(r.failures.some((f) => f.reason === 'SEED_DID_NOT_FIRE')).toBe(true);
+  });
+
+  it('[CONTROL] an unrelated diff does NOT trigger the expansion', () => {
+    // Without this, `specChanged` could be hardcoded true and the deciding test above would
+    // still pass while the gate re-trialled the whole corpus on every PR.
+    const r = evaluate(process.cwd(), ['README.md'], blindSpec, onlyBlind);
+    expect(r.specChanged).toBe(false);
+    expect(r.selected).not.toContain(BLIND);
+    expect(r.trials).toHaveLength(0);
+  });
+});

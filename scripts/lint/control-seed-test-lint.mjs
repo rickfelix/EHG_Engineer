@@ -124,7 +124,30 @@ export function evaluate(repoRoot, files, specs, isControlFn = isControl) {
   const skipped = [];
   const byName = new Map(specs.map((s) => [s.script?.replace(/\\/g, '/'), s]));
 
-  for (const f of files.filter(isControlFn)) {
+  // FR-6: A CHANGED SEED SPEC MUST RE-TRIAL ITS CONTROL.
+  // The spec file is where the seeded defect ITSELF lives, so weakening a fixture is exactly as
+  // dangerous as neutering the control — and it was completely invisible. SPEC_PATH is a .json
+  // while CONTROL_GLOBS match /\.(mjs|js|cjs)$/, so it can NEVER be selected by widening a glob;
+  // it needs this explicit branch. The workflow's `paths:` filter already lists scripts/audit/**
+  // AND the spec file by name (verified), so such a PR always TRIGGERED the job — it then
+  // reported "no new controls in this diff" and exited green. The trigger fired and the
+  // evaluation was empty: this SD's own absence-as-pass shape, inside the gate built to stop it.
+  //
+  // Done HERE rather than in main() so it has a test seam. Putting selection logic in main()
+  // would make it unreachable from a unit test — which is how a rule ends up asserted only by
+  // the comment above it.
+  //
+  // KNOWN LIMITATION (FR-4 binds this gate too): this re-trials EVERY control the spec file
+  // names, not only the entries whose text changed. Diffing the JSON to find which entry moved
+  // would be more precise and is deliberately not done — a conservative over-trial costs CI
+  // time, a missed entry costs a silently weakened fixture, and those are not symmetric.
+  const specChanged = files.some((f) => f.replace(/\\/g, '/') === SPEC_PATH);
+  const fromSpec = specChanged
+    ? specs.map((s) => s.script?.replace(/\\/g, '/')).filter((s) => s && isControlFn(s))
+    : [];
+  const selected = [...new Set([...files, ...fromSpec])];
+
+  for (const f of selected.filter(isControlFn)) {
     const rel = f.replace(/\\/g, '/');
     const spec = byName.get(rel);
 
@@ -192,7 +215,7 @@ export function evaluate(repoRoot, files, specs, isControlFn = isControl) {
   // ever have had to acknowledge the new information. The 4 tests this breaks are updated in
   // the same commit; both seedTest specs point at that test file, so leaving it broken would
   // make the gate fail itself.
-  return { failures, trials, skipped };
+  return { failures, trials, skipped, selected, specChanged };
 }
 
 function main() {
@@ -213,9 +236,13 @@ function main() {
   }
 
   const specs = existsSync(join(repoRoot, SPEC_PATH)) ? JSON.parse(readFileSync(join(repoRoot, SPEC_PATH), 'utf8')) : [];
-  const { failures, trials, skipped } = evaluate(repoRoot, files, specs);
 
-  const controls = files.filter(isControl);
+  const { failures, trials, skipped, selected, specChanged } = evaluate(repoRoot, files, specs);
+
+  const controls = selected.filter(isControl);
+  if (specChanged) {
+    console.log(`ℹ️  ${SPEC_PATH} changed — re-trialling ${controls.length} control(s) it names, because a weakened fixture is as dangerous as a neutered control.`);
+  }
   // FR-8: THE ACCEPTANCE METRIC, ON EVERY PATH. `matched` counts controls the diff selected;
   // `trialsRun` counts controls a seeded-defect trial ACTUALLY RAN on. They are DIFFERENT
   // numbers — a seedTest spec is matched and never trialled — and printing only `matched`
