@@ -114,6 +114,14 @@ function isControl(p) {
 // seed-tested — exactly the UNENFORCEABLE verdict it hands out to others.
 export function evaluate(repoRoot, files, specs, isControlFn = isControl) {
   const failures = [];
+  // FR-8 (SD-PAT-FIX-FIX-ABSENCE-SIGNAL-001): THE ACCEPTANCE METRIC.
+  // `trials` records controls a seeded-defect trial ACTUALLY RAN on; `skipped` records
+  // controls that were MATCHED but never trialled. Keeping both is what makes
+  // matched != trialsRun expressible — with only a match count, "how many controls were
+  // actually exercised" is unanswerable, and any trial count would be satisfiable as an
+  // alias of `matched` while measuring nothing.
+  const trials = [];
+  const skipped = [];
   const byName = new Map(specs.map((s) => [s.script?.replace(/\\/g, '/'), s]));
 
   for (const f of files.filter(isControlFn)) {
@@ -149,11 +157,20 @@ export function evaluate(repoRoot, files, specs, isControlFn = isControl) {
       if (r.status !== 0) {
         failures.push({ file: rel, reason: 'SEED_TEST_FAILED', detail: `its committed seed-test ${spec.seedTest} does not pass.`, evidence: `${r.stdout || ''}${r.stderr || ''}`.trim().split('\n').filter(Boolean).slice(-3) });
       }
+      // FR-8: this control was MATCHED but NO TRIAL WAS RUN — `continue` skips runTrial
+      // entirely. Recording it is what makes matched != trialsRun observable; without it the
+      // two numbers are always equal and the trial count is satisfiable as an alias of the
+      // match count, measuring nothing.
+      skipped.push({ file: rel, why: 'seedTest form — the committed test was run, but no seeded-defect TRIAL was performed' });
       continue;
     }
 
     // FR-3: the seed-test must be OBSERVED FIRING. This is the whole gate.
     const trial = runTrial(spec, repoRoot);
+    // FR-8: a TRIAL ACTUALLY RAN. This is the acceptance metric of
+    // SD-PAT-FIX-FIX-ABSENCE-SIGNAL-001 — recorded here, at the only place a trial happens,
+    // so the count cannot drift from the thing it counts.
+    trials.push({ file: rel, verdict: trial.verdict, exitCode: trial.exitCode, treeClean: trial.treeClean });
     if (trial.verdict === VERDICT.SILENT) {
       // An accusation ships with the evidence to refute it (FR-1 finding: four false
       // negatives, all accusing working controls of blindness).
@@ -168,7 +185,14 @@ export function evaluate(repoRoot, files, specs, isControlFn = isControl) {
       failures.push({ file: rel, reason: 'HARNESS_DIRTIED_TREE', detail: 'the working tree changed during the seed trial (TR-3 violation).' });
     }
   }
-  return failures;
+  // FR-8: BREAKING CHANGE, made deliberately rather than smuggled in. This returned a bare
+  // array; it now returns {failures, trials, skipped}. Returning an array with the counts
+  // bolted on as properties would have kept every existing caller working — and that is
+  // precisely the identity-preserving shape this SD exists to refuse, because nothing would
+  // ever have had to acknowledge the new information. The 4 tests this breaks are updated in
+  // the same commit; both seedTest specs point at that test file, so leaving it broken would
+  // make the gate fail itself.
+  return { failures, trials, skipped };
 }
 
 function main() {
@@ -189,14 +213,31 @@ function main() {
   }
 
   const specs = existsSync(join(repoRoot, SPEC_PATH)) ? JSON.parse(readFileSync(join(repoRoot, SPEC_PATH), 'utf8')) : [];
-  const failures = evaluate(repoRoot, files, specs);
-
-  if (argv.includes('--json')) { console.log(JSON.stringify({ failures }, null, 2)); return; }
+  const { failures, trials, skipped } = evaluate(repoRoot, files, specs);
 
   const controls = files.filter(isControl);
+  // FR-8: THE ACCEPTANCE METRIC, ON EVERY PATH. `matched` counts controls the diff selected;
+  // `trialsRun` counts controls a seeded-defect trial ACTUALLY RAN on. They are DIFFERENT
+  // numbers — a seedTest spec is matched and never trialled — and printing only `matched`
+  // is what let this gate report "each proved it FIRES" about controls it never exercised.
+  // This line prints on EVERY return path INCLUDING the no-controls path, so a run where
+  // trialsRun is 0 says so out loud instead of being inferred from silence.
+  const byVerdict = trials.reduce((acc, t) => ({ ...acc, [t.verdict]: (acc[t.verdict] || 0) + 1 }), {});
+  const summary = { matched: controls.length, trialsRun: trials.length, skipped: skipped.length, byVerdict };
+  const summaryLine = `control-seed-test-lint: matched ${summary.matched}, TRIALS RUN ${summary.trialsRun}`
+    + (summary.skipped ? `, skipped ${summary.skipped} (matched but never trialled)` : '')
+    + (trials.length ? ` — ${Object.entries(byVerdict).map(([k, v]) => `${k}:${v}`).join(' ')}` : '');
+
+  if (argv.includes('--json')) { console.log(JSON.stringify({ failures, trials, skipped, summary }, null, 2)); return; }
+
+  console.log(summaryLine);
+  for (const s of skipped) console.log(`   ⚠️  NO TRIAL: ${s.file} — ${s.why}`);
+
   if (!controls.length) { console.log('✅ control-seed-test-lint: no new controls in this diff.'); return; }
   if (!failures.length) {
-    console.log(`✅ control-seed-test-lint: ${controls.length} new control(s), each proved it FIRES on its own seeded defect.`);
+    // The old wording claimed every matched control "proved it FIRES", which was untrue for
+    // any seedTest spec — those are matched, skipped, and were counted as proven anyway.
+    console.log(`✅ control-seed-test-lint: ${summary.trialsRun} of ${summary.matched} new control(s) proved they FIRE on their own seeded defect.`);
     return;
   }
   console.error(`\n❌ control-seed-test-lint: ${failures.length} issue(s) across ${controls.length} new control(s)\n`);
