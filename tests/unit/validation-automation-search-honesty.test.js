@@ -173,6 +173,25 @@ describe('index status must tell ABSENT from EMPTY', () => {
     expect(s.message).not.toMatch(/run scripts\/semantic-indexer/i);
   });
 
+  it('TS-7b: an error that proves NEITHER — presence is UNKNOWN, never asserted true', async () => {
+    // THE ARM I ORIGINALLY SHIPPED WITHOUT A TEST, and it carried the defect this SD exists to
+    // remove. `table_present: !absent` made every non-absence error (RLS 42501, network, expired
+    // JWT) a POSITIVE claim that the table exists — manufactured from evidence that says nothing
+    // either way. I enforced two-sidedness on every other discriminator and skipped it on the arm
+    // I added last. A RETRO sub-agent caught it before merge, not me.
+    for (const err of [
+      { code: '42501', message: 'permission denied for table codebase_semantic_index' },
+      { code: 'PGRST301', message: 'JWT expired' },
+      { message: 'network unreachable' },
+    ]) {
+      selectMock.mockReturnValue({ limit: () => Promise.resolve({ data: null, error: err }) });
+      const s = await checkSemanticIndexStatus();
+      expect(s.available, `${err.code}: must not be available`).toBe(false);
+      expect(s.table_present, `${err.code}: presence must be UNKNOWN (null), never asserted`).toBeNull();
+      expect(s.message).toMatch(/UNREADABLE|cannot tell/i);
+    }
+  });
+
   it('TS-8: a PRESENT but EMPTY table still advises running the indexer', async () => {
     // Two-sided partner to TS-7. Either arm alone is satisfiable by a constant message.
     selectMock.mockReturnValue({ limit: () => Promise.resolve({ data: [], error: null }) });
