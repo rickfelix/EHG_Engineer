@@ -59,8 +59,8 @@ const MUTANTS = [
    '  return true;'],
 
   [CORE, 'M4  ignoreDuplicates:false — a re-run REWRITES the original consumed_at',
-   '        }, { onConflict: \'report_id,lane\', ignoreDuplicates: true }),',
-   '        }, { onConflict: \'report_id,lane\', ignoreDuplicates: false }),'],
+   'ignoreDuplicates: true, count: \'exact\' }).abortSignal(signal),',
+   'ignoreDuplicates: false, count: \'exact\' }).abortSignal(signal),'],
 
   [CORE, 'M5  READ FAILURE reported as success — the exact defect that sank version 1',
    '      return { status: \'failed\', reason: `read: ${readErr.message}` };',
