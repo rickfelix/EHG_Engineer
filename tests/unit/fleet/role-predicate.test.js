@@ -128,3 +128,25 @@ describe('TS-12 CONTROL — the role-side assertions can actually fail', () => {
     expect(real).not.toBe(await stub());                  // the real predicate must DIFFER
   });
 });
+
+describe('lifecycle role variants — found by a REAL invocation, not by a fixture', () => {
+  it('adam_retired is a ROLE seat, not a worker', async () => {
+    // Running the actual hook against live sessions showed a heartbeating role=adam_retired seat
+    // being told "[ROLE] WORKER (callsign: Adam)" — this SD's own defect, surviving for a variant
+    // my ROLE_IDENTITY map does not contain. I would never have picked this string as a fixture.
+    expect(verdictFromMetadata({ role: 'adam_retired' })).toBe(ROLE_VERDICT.ROLE);
+  });
+
+  it('non_fleet=true is authoritative on its own, whatever the role string says', () => {
+    // The SD's Solomon amendment: the class fires on ANY role=*/non_fleet=true seat.
+    expect(verdictFromMetadata({ non_fleet: true, role: 'something-unheard-of' })).toBe(ROLE_VERDICT.ROLE);
+    expect(verdictFromMetadata({ non_fleet: true })).toBe(ROLE_VERDICT.ROLE);
+  });
+
+  it('an unrecognised role is STILL a worker — family match, not any-non-empty-string', () => {
+    // The widening is for lifecycle variants of a KNOWN role, not a blanket "anything with a role
+    // key is a role seat". An unrecognised role is a real answer.
+    expect(verdictFromMetadata({ role: 'gardener' })).toBe(ROLE_VERDICT.WORKER);
+    expect(verdictFromMetadata({ role: 'adamant' })).toBe(ROLE_VERDICT.WORKER);   // prefix, not family
+  });
+});
