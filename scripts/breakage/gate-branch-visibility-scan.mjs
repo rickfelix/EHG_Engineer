@@ -27,12 +27,17 @@
 import 'dotenv/config';
 import { execSync } from 'node:child_process';
 import { createClient } from '@supabase/supabase-js';
+import { resolveGitHubRepo } from '../../lib/repo-paths.js';
 import { resolveBranchOwner, loadKeySet, OWNER_REASON, BRANCH_TYPE_TOKENS } from '../../lib/git/branch-owner.js';
 
 const args = process.argv.slice(2);
 const asJson = args.includes('--json');
 const repoArg = args.includes('--repo') ? args[args.indexOf('--repo') + 1] : null;
-const REPOS = repoArg ? [repoArg] : ['rickfelix/EHG_Engineer', 'rickfelix/ehg'];
+// RESOLVED, NOT HARDCODED. The first version wrote the two repo strings inline and was caught by
+// scripts/lint-repo-resolution-drift.mjs (SD-LEO-INFRA-CANONICAL-REPO-APP-001) — in a scan whose
+// entire purpose is measuring the gate against the REAL resolver rather than a copy of its rules.
+// Same defect as embedding a second copy of the matcher, one field over.
+const REPOS = repoArg ? [repoArg] : [resolveGitHubRepo('EHG_Engineer'), resolveGitHubRepo('EHG')];
 
 /**
  * The gate's OWN loader, not a copy. The first draft of this scan had its own .select('sd_key'),
