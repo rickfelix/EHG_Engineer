@@ -69,10 +69,20 @@ describe('every writer that stamps acknowledged_at excludes promotion-marked row
     // Asserting the import STATEMENT is not enough — `{ PROMOTION_ACK_SOURCE_KEY:
     // PROMOTION_ACK_KEY }` satisfies that while pointing the guard at the wrong column. Assert
     // the destructured NAME matches the exported name.
-    // Allows sibling names in the destructure (the sweep also imports isPromotionAcked for the
-    // fourth guard) but still requires PROMOTION_ACK_KEY to be bound to ITS OWN name — which is
-    // what defeats `{ PROMOTION_ACK_SOURCE_KEY: PROMOTION_ACK_KEY }`.
-    expect(sweep).toMatch(/\{[^}]*\bPROMOTION_ACK_KEY\b[^}:]*\}\s*=\s*require\([^)]*promotion-ack\.cjs[^)]*\)/);
+    // TWO ASSERTIONS, because one positive regex cannot carry both jobs — and trying to make it
+    // carry both is how this REGRESSED.
+    //
+    // History worth keeping: the original strict `{ PROMOTION_ACK_KEY }` form did reject the
+    // alias attack. Adding `isPromotionAcked` to the sweep import broke that form, so the regex
+    // was loosened to allow siblings — and the loosened version silently ADMITS the alias again.
+    // Trace it against `{ PROMOTION_ACK_SOURCE_KEY: PROMOTION_ACK_KEY, isPromotionAcked }`:
+    // `[^}]*` eats `PROMOTION_ACK_SOURCE_KEY: `, the word-boundary match then lands on the
+    // renamed-TO identifier, and `[^}:]*` happily takes `, isPromotionAcked `. The old comment
+    // claimed this form "defeats" the alias; it did not. The `[^}:]*` forbids a colon AFTER the
+    // name, but in an alias the colon comes BEFORE it.
+    expect(sweep).toMatch(/\{[^}]*\bPROMOTION_ACK_KEY\b[^}]*\}\s*=\s*require\([^)]*promotion-ack\.cjs[^)]*\)/);
+    // The actual attack, asserted directly: aliasing ANOTHER export INTO this name.
+    expect(sweep).not.toMatch(/:\s*PROMOTION_ACK_KEY\b/);
     expect(sweep).not.toMatch(/\.is\(['"]payload->>promotion_ack['"]/);
   });
 
@@ -89,7 +99,11 @@ describe('every writer that stamps acknowledged_at excludes promotion-marked row
     const block = deadLetter.slice(deadLetter.indexOf("all('session_coordination'"));
     const query = block.slice(0, block.indexOf('const dead'));
     expect(query).toMatch(/\.is\(`payload->>\$\{PROMOTION_ACK_KEY\}`, null\)/);
-    expect(deadLetter).toMatch(/\{\s*PROMOTION_ACK_KEY\s*\}\s*=\s*createRequire\([^)]*\)\([^)]*promotion-ack\.cjs[^)]*\)/);
+    // Same PAIR as the sweep. This file currently imports a single symbol, so the strict form
+    // still holds — but it would break the identical way the moment a second symbol is added,
+    // which is exactly what happened next door. Pairing it now rather than after.
+    expect(deadLetter).toMatch(/\{[^}]*\bPROMOTION_ACK_KEY\b[^}]*\}\s*=\s*createRequire\([^)]*\)\([^)]*promotion-ack\.cjs[^)]*\)/);
+    expect(deadLetter).not.toMatch(/:\s*PROMOTION_ACK_KEY\b/);
   });
 
   it('every guarded site binds the key from the single module', () => {
