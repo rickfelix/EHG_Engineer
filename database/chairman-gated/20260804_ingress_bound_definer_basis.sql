@@ -11,6 +11,12 @@
 -- projected rejection volume they imply. Both are measured and recorded — see
 -- strategic_directives_v2.metadata.ingress_bound_projection.
 --
+-- @approved-by: codestreetlabs@gmail.com
+-- (Chairman verbal approval at his terminal 2026-08-04 ~07:3x ET, recorded by Adam in-session:
+-- "approved" — after the full recommendation: auto_capture 250 / manual_feedback 200 / default 50,
+-- with the projected rejection volumes and the numbers-tunable-later caveat stated. The approval
+-- covers both the per-source thresholds AND the SECURITY DEFINER counting basis.)
+--
 -- ═══════════════════════════════════════════════════════════════════════════════════════════════
 -- THE DEFECT, VERIFIED LIVE (not inherited from the SD text)
 -- ═══════════════════════════════════════════════════════════════════════════════════════════════
