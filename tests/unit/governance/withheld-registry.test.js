@@ -16,6 +16,7 @@ import {
   isPending,
   disposeMarker,
   consumeMarker,
+  writeMarkers,
   MARKER_KEY,
   ADMISSION_SEVERITY_BYPASS,
   ADMISSION_COUNT_THRESHOLD,
@@ -273,6 +274,93 @@ describe('FR-5 — exit only by a named, recorded event', () => {
 
   it('buildMarker refuses to invent a clock', () => {
     expect(() => buildMarker(group(), demand(), { severityRank, threshold: 3 })).toThrow(/nowIso is required/);
+  });
+});
+
+describe('writeMarkers — the real function, not an injected stub', () => {
+  // Found at review: every writeMarkers reference in the first version of this suite was a STUB.
+  // The read-modify-write loop, the non-resurrection guard and the metadata carry-through had
+  // never executed under test, so the mechanism that actually implements idempotency was unpinned.
+  const fakeDb = (rows, { failWrites = false, failReads = false } = {}) => {
+    const store = new Map(rows.map((r) => [r.id, r]));
+    return {
+      updates: [],
+      from() { return this; },
+      select() { return this; },
+      eq(_c, v) { this._id = v; return this; },
+      maybeSingle() {
+        if (failReads) return Promise.resolve({ data: null, error: { message: 'read denied' } });
+        return Promise.resolve({ data: store.get(this._id) ?? null, error: null });
+      },
+      update(patch) {
+        if (failWrites) return { eq: () => Promise.resolve({ error: { message: 'write denied' } }) };
+        return {
+          eq: (_c, id) => {
+            store.set(id, { ...store.get(id), ...patch });
+            this.updates.push({ id, patch });
+            return Promise.resolve({ error: null });
+          },
+        };
+      },
+      _store: store,
+    };
+  };
+  const ctx = { nowIso: NOW, runId: 'run-1', severityRank, threshold: 3 };
+
+  it('writes one marker per member row and carries existing metadata through', async () => {
+    const db = fakeDb([{ id: 'fb-1', metadata: { keep: 'me' } }]);
+    const res = await writeMarkers(db, [group()], demand(), ctx);
+    expect(res.written).toBe(1);
+    expect(db._store.get('fb-1').metadata.keep).toBe('me');
+    expect(db._store.get('fb-1').metadata[MARKER_KEY].withheld_run_count).toBe(1);
+  });
+
+  it('is idempotent across runs — the SAME row, counters advancing', async () => {
+    const db = fakeDb([{ id: 'fb-1', metadata: {} }]);
+    await writeMarkers(db, [group()], demand(), ctx);
+    await writeMarkers(db, [group()], demand(), { ...ctx, runId: 'run-2' });
+    const m = db._store.get('fb-1').metadata[MARKER_KEY];
+    expect(m.withheld_run_count).toBe(2);
+    expect(m.first_withheld_run).toBe('run-1');
+    expect(m.last_withheld_run).toBe('run-2');
+  });
+
+  it('does NOT resurrect a marker that already left pending state', async () => {
+    const consumedMarker = { ...buildMarker(group(), demand(), ctx), promoted_qf_id: 'QF-9' };
+    const db = fakeDb([{ id: 'fb-1', metadata: { [MARKER_KEY]: consumedMarker } }]);
+    const res = await writeMarkers(db, [group()], demand(), ctx);
+    expect(res.written).toBe(0);
+    expect(db._store.get('fb-1').metadata[MARKER_KEY].promoted_qf_id).toBe('QF-9');
+  });
+
+  // THE FALSE-ZERO. The first version returned {written: 0} when every write was rejected, and the
+  // caller then announced "these now survive their 14-day window" — a claim of protection that had
+  // not happened, with nothing raised to contradict it. That is this module's own defect class,
+  // reproduced inside the fix for it.
+  it('THROWS when every write fails, rather than reporting a silent zero', async () => {
+    const db = fakeDb([{ id: 'fb-1', metadata: {} }], { failWrites: true });
+    await expect(writeMarkers(db, [group()], demand(), ctx)).rejects.toThrow(/all 1 durable write\(s\) failed/);
+  });
+
+  it('reports a PARTIAL failure instead of throwing, so a partial record is kept', async () => {
+    const db = fakeDb([{ id: 'fb-1', metadata: {} }, { id: 'fb-2', metadata: {} }]);
+    let n = 0;
+    const origUpdate = db.update.bind(db);
+    db.update = (patch) => (++n === 2
+      ? { eq: () => Promise.resolve({ error: { message: 'write denied' } }) }
+      : origUpdate(patch));
+    const res = await writeMarkers(db, [group({ rows: [{ id: 'fb-1' }, { id: 'fb-2' }] })], demand(), ctx);
+    expect(res.written).toBe(1);
+    expect(res.failed).toHaveLength(1);
+  });
+
+  it('an empty group list writes nothing and does not throw', async () => {
+    const db = fakeDb([]);
+    await expect(writeMarkers(db, [], demand(), ctx)).resolves.toEqual({ written: 0, rows: [] });
+  });
+
+  it('refuses a client that is not a client, rather than failing later and vaguely', async () => {
+    await expect(writeMarkers(null, [group()], demand(), ctx)).rejects.toThrow(/supabase client is required/);
   });
 });
 

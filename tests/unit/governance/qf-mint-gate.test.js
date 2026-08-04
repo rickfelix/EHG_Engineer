@@ -237,6 +237,25 @@ describe('SEC-GSB-2 follow-up — report-only returns what it SUPPRESSED, not wh
     expect(logged.join('\n')).toMatch(/suppressed 2 promotable group/);
   });
 
+  // H1, found at EXEC-TO-PLAN review: deleting `writeMarkers: recordWithheld` from the promoter's
+  // opts literal killed ZERO tests across the entire 35k-test unit project. The only production
+  // call site of the durable write could be removed silently, leaving all of the exposure and none
+  // of the benefit — the same unpinned-call-site class this file already records above.
+  //
+  // Deliberately asserted for the FINGERPRINT promoter ONLY. The retro promoter must NOT gain this
+  // key: its scalar return is what makes the injected default no-op, and a test elsewhere depends
+  // on that asymmetry to prove the out-of-scope engine writes nothing.
+  it('the fingerprint promoter WIRES the durable recorder at its call site', () => {
+    const read = (p) => require('node:fs').readFileSync(require.resolve(p), 'utf8');
+    expect(read('../../../scripts/feedback-fingerprint-promoter.mjs'))
+      .toMatch(/writeMarkers:\s*recordWithheld/);
+  });
+
+  it('the retro promoter does NOT wire it — the out-of-scope engine records nothing', () => {
+    const read = (p) => require('node:fs').readFileSync(require.resolve(p), 'utf8');
+    expect(read('../../../scripts/promote-retro-action-items.mjs')).not.toMatch(/writeMarkers:/);
+  });
+
   it('the fingerprint promoter still increments the counter alongside collecting the groups', () => {
     // Kept so the two can never silently disagree — a length and a counter that drift apart would
     // reproduce the original "the number is wrong" defect in a new place.

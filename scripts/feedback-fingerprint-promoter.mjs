@@ -215,13 +215,21 @@ for (const group of groups.values()) {
  * ambient environment and remains testable without one.
  */
 async function recordWithheld(sb, groups, demand) {
-  const { written } = await writeMarkers(sb, groups, demand, {
+  const { written, failed } = await writeMarkers(sb, groups, demand, {
     runId: process.env.GITHUB_RUN_ID || null,
     nowIso: new Date().toISOString(),
     severityRank,
     threshold: THRESHOLD,
   });
-  console.log(`  [WITHHELD_RECORDED] ${written} source row(s) marked pending across ${groups.length} group(s) — these now survive their 14-day window.`);
+  // THE HEADLINE MUST NOT OVERSTATE WHAT LANDED. The first version printed "these now survive
+  // their 14-day window" unconditionally, including on a run where every write was rejected —
+  // a claim of protection that had not happened, with nothing to contradict it. A total failure
+  // now throws inside writeMarkers; a partial one is reported as partial, here, in the headline.
+  if (failed && failed.length > 0) {
+    console.log(`  [WITHHELD_RECORDED] PARTIAL: ${written} of ${written + failed.length} source row(s) marked across ${groups.length} group(s) — ${failed.length} FAILED and are NOT protected (first: ${failed[0].error})`);
+  } else {
+    console.log(`  [WITHHELD_RECORDED] ${written} source row(s) marked pending across ${groups.length} group(s) — these now survive their 14-day window.`);
+  }
   return written;
 }
 
