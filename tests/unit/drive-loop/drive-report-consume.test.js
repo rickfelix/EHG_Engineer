@@ -33,6 +33,7 @@ import {
   recordOutcome,
   COORDINATOR_LANE,
   FAILURE_BREADCRUMB,
+  isRelationAbsent,
 } from '../../../scripts/coordinator-drive-report-consume.mjs';
 
 const silent = { log() {}, error() {} };
@@ -259,6 +260,67 @@ describe('failures are SURFACED, not swallowed — the defect that sank the firs
     const out = await runDriveReportConsumeCore(db, seat(randomUUID()));
     expect(out.status).toBe('failed');
     expect(out.reportId).toBe(REPORT_ID);
+  });
+
+  // AN ABSENT TABLE IS NOT A FAILURE — AND THIS SD SHIPPED THE OPPOSITE.
+  //
+  // Both drive_reports and drive_report_receipts live in sibling -B's unlanded migration. Between
+  // this merge and -B's, every 15-minute tick hit a table that does not exist and reported
+  // status='failed' — an alarm guaranteed to be firing on the day it was installed, for the normal
+  // state of the world. That is the exact inverse of the defect this SD exists to remove, and the
+  // schema-reference lint is what caught it: it refused the PR naming both relations, and the
+  // allowlist that would have silenced it admits only code that is fail-soft on absence. So the
+  // escape hatch's own precondition forced the real fix. The lint was right and I was wrong.
+  it('an ABSENT drive_reports is pending_migration, not failed (PGRST205)', async () => {
+    const db = makeDb({ readError: { code: 'PGRST205', message: "Could not find the table 'public.drive_reports'" } });
+    const out = await runDriveReportConsumeCore(db, seat(randomUUID()));
+    expect(out.status).toBe('pending_migration');
+    expect(out.status).not.toBe('failed');
+  });
+
+  it('an ABSENT drive_report_receipts is pending_migration on the WRITE path too', async () => {
+    // Reachable independently: -B may land the two tables in separate migrations, so the read can
+    // succeed while the write target is still missing. A test that only covered the read path
+    // would leave that branch unexecuted.
+    const db = makeDb({ writeError: { code: '42P01', message: 'relation "drive_report_receipts" does not exist' } });
+    const out = await runDriveReportConsumeCore(db, seat(randomUUID()));
+    expect(out.status).toBe('pending_migration');
+    expect(out.reportId).toBe(REPORT_ID);
+  });
+
+  it('pending_migration is NOT ok — the one field the tick cannot drop still says something is wrong', async () => {
+    // runCoresFailSoft records `key:status` and discards `detail`, so `status` is the only thing a
+    // human ever sees. If absence had been folded into 'ok' or 'nothing_to_consume', a consumer
+    // that never runs would read as a consumer with nothing to do — the starving-reads-as-fed
+    // defect, rebuilt one layer down.
+    const db = makeDb({ readError: { code: 'PGRST205', message: 'absent' } });
+    const out = await runDriveReportConsumeCore(db, seat(randomUUID()));
+    expect(out.status).not.toBe('ok');
+    expect(out.status).not.toBe('nothing_to_consume');
+  });
+
+  it('the absence predicate is NARROW — a permission error is still a failure', async () => {
+    // The load-bearing arm. A predicate widened to "any error while the migration is pending"
+    // would pass all three tests above while swallowing permission-denied, constraint violations
+    // and timeouts — turning the instrument back off, silently and permanently.
+    for (const err of [
+      { code: '42501', message: 'permission denied for table drive_reports' },
+      { code: 'PGRST301', message: 'JWT expired' },
+      { message: 'network unreachable' },              // no code at all
+      { code: 'PGRST20', message: 'prefix of the real code, must NOT match' },
+    ]) {
+      const out = await runDriveReportConsumeCore(makeDb({ readError: err }), seat(randomUUID()));
+      expect(out.status, `error ${JSON.stringify(err)} must remain a failure`).toBe('failed');
+    }
+  });
+
+  it('isRelationAbsent accepts exactly the two absence codes and nothing else', () => {
+    expect(isRelationAbsent({ code: 'PGRST205' })).toBe(true);
+    expect(isRelationAbsent({ code: '42P01' })).toBe(true);
+    expect(isRelationAbsent({ code: '42P02' })).toBe(false);
+    expect(isRelationAbsent({ message: 'does not exist' })).toBe(false);  // message text is NOT the signal
+    expect(isRelationAbsent(null)).toBe(false);
+    expect(isRelationAbsent(undefined)).toBe(false);
   });
 
   it('an absent report is NOT a failure — it is nothing to consume', async () => {

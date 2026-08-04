@@ -101,6 +101,18 @@ const MUTANTS = [
    '    const inserted = count !== 0;',
    '    const inserted = true;'],
 
+  // M14/M15 — THE ABSENCE PREDICATE, BOTH DIRECTIONS.
+  // Added because the branch it guards was the SD's own shipped inverse-defect, and a new branch
+  // with no mutant is the decoy pattern that already cost this SD one full review cycle: code the
+  // score cannot see reads as covered.
+  [CORE, 'M14 isRelationAbsent always TRUE — every error becomes pending_migration (instrument off)',
+   '  return err?.code === \'PGRST205\' || err?.code === \'42P01\';',
+   '  return true;'],
+
+  [CORE, 'M15 isRelationAbsent always FALSE — an absent table reports failed (the SHIPPED defect)',
+   '  return err?.code === \'PGRST205\' || err?.code === \'42P01\';',
+   '  return false;'],
+
   [TICK, 'M8  quiescentSkip flipped to true (silent exactly when it matters most)',
    '{ key: \'drive-report-consume\', script: \'coordinator-drive-report-consume.mjs\', args: [\'scripts/coordinator-drive-report-consume.mjs\'], quiescentSkip: false }',
    '{ key: \'drive-report-consume\', script: \'coordinator-drive-report-consume.mjs\', args: [\'scripts/coordinator-drive-report-consume.mjs\'], quiescentSkip: true }'],

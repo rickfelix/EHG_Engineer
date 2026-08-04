@@ -157,6 +157,31 @@ function withTimeout(buildQuery, ms, label) {
 }
 
 /**
+ * Is this error the relation simply not existing yet?
+ *
+ * WHY THIS EXISTS AT ALL. This SD was written to stop a starving binding from reading as fed. It
+ * shipped the exact inverse: BOTH tables live in sibling -B's unlanded migration, so on every tick
+ * between this merge and -B's, the core returned status='failed' for a condition that is the
+ * NORMAL, EXPECTED, CORRECT state of the world. An alarm that is guaranteed to be firing on the day
+ * you install it teaches everyone to ignore it, and then it cannot report the real failure later.
+ *
+ * NOT A CATCH-ALL, AND DELIBERATELY NARROW. Only PGRST205 (PostgREST: relation absent from the
+ * schema cache) and 42P01 (postgres: undefined_table) route here. Every other error — permission
+ * denied, constraint violation, timeout, malformed query — still returns 'failed'. Widening this
+ * predicate would rebuild the defect the SD exists to remove, one layer down.
+ *
+ * RESIDUAL RISK, STATED RATHER THAN SOLVED: after -B lands, a table DROPPED by accident produces
+ * this same code, and this core would report pending_migration indefinitely. What keeps that from
+ * being silent is that the status is NOT 'ok' — `runCoresFailSoft` records `key:status`, so the
+ * one field that survives the tick's detail-dropping is the one that says something is wrong. A
+ * permanent pending_migration is visible as not-healthy; it is simply mislabelled. Correctly
+ * distinguishing "never existed" from "existed and vanished" needs state this core does not have.
+ */
+export function isRelationAbsent(err) {
+  return err?.code === 'PGRST205' || err?.code === '42P01';
+}
+
+/**
  * Consume the newest drive report for the coordinator lane.
  *
  * RETURNS a small outcome object for tests and for the failure channel. The host
@@ -182,6 +207,10 @@ export async function runDriveReportConsumeCore(supabase, {
       WRITE_TIMEOUT_MS, 'drive_reports read');
 
     if (readErr) {
+      if (isRelationAbsent(readErr)) {
+        logger.log('[drive-report-consume] drive_reports not provisioned yet — producer -B has not landed');
+        return { status: 'pending_migration', reason: 'drive_reports absent' };
+      }
       // A READ FAILURE IS NOT A NO-OP — it is the instrument being unable to see. Surfaced through
       // the failure channel rather than logged and forgotten.
       logger.error(`[drive-report-consume] READ FAILED: ${readErr.message}`);
@@ -213,6 +242,12 @@ export async function runDriveReportConsumeCore(supabase, {
       WRITE_TIMEOUT_MS, 'drive_report_receipts upsert');
 
     if (writeErr) {
+      if (isRelationAbsent(writeErr)) {
+        // Reachable on its own: -B could land drive_reports and the receipts table separately, and
+        // the read above would then succeed against a schema whose write target is still missing.
+        logger.log(`[drive-report-consume] drive_report_receipts not provisioned yet — report ${row.id} left unconsumed`);
+        return { status: 'pending_migration', reason: 'drive_report_receipts absent', reportId: row.id };
+      }
       logger.error(`[drive-report-consume] WRITE FAILED for report ${row.id}: ${writeErr.message}`);
       return { status: 'failed', reason: `write: ${writeErr.message}`, reportId: row.id };
     }
