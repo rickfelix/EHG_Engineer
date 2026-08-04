@@ -19,7 +19,7 @@ const priorWith = (position, unmovedSince, items = {}) => ({
   sections: {
     [SECTION_ID]: {
       position: { position, unmoved_since_ms: unmovedSince },
-      items: { open: items.open || [], unmoved_reports: items.unmoved_reports || {} },
+      items: { open: items.open || [], consecutive_presence_reports: items.consecutive_presence_reports || {} },
     },
   },
 });
@@ -76,40 +76,40 @@ describe('TS-13 / FR_B — the position clock is independent of item churn', () 
 
 describe('FR_D — item deltas count REPORTS, position counts WALL TIME', () => {
   it('an item still open increments its report count', () => {
-    const prior = priorWith('p', T0, { open: ['i1', 'i2'], unmoved_reports: { i1: 2 } });
+    const prior = priorWith('p', T0, { open: ['i1', 'i2'], consecutive_presence_reports: { i1: 2 } });
     const d = computeItemDeltas({ currentItemIds: ['i1', 'i2'], priorReport: prior });
 
-    expect(d.unmoved_reports.i1).toBe(3);
-    expect(d.unmoved_reports.i2).toBe(1);
+    expect(d.consecutive_presence_reports.i1).toBe(3);
+    expect(d.consecutive_presence_reports.i2).toBe(1);
   });
 
   it('a closed item leaves the unmoved set entirely', () => {
-    const prior = priorWith('p', T0, { open: ['i1', 'i2'], unmoved_reports: { i1: 4, i2: 1 } });
+    const prior = priorWith('p', T0, { open: ['i1', 'i2'], consecutive_presence_reports: { i1: 4, i2: 1 } });
     const d = computeItemDeltas({ currentItemIds: ['i2'], priorReport: prior });
 
     expect(d.closed).toEqual(['i1']);
-    expect(d.unmoved_reports).not.toHaveProperty('i1');
+    expect(d.consecutive_presence_reports).not.toHaveProperty('i1');
   });
 
   it('a newly opened item starts at no count, not at the prior report count', () => {
-    const prior = priorWith('p', T0, { open: ['i1'], unmoved_reports: { i1: 5 } });
+    const prior = priorWith('p', T0, { open: ['i1'], consecutive_presence_reports: { i1: 5 } });
     const d = computeItemDeltas({ currentItemIds: ['i1', 'i2'], priorReport: prior });
 
     expect(d.opened).toEqual(['i2']);
-    expect(d.unmoved_reports.i2).toBeUndefined();
-    expect(d.unmoved_reports.i1).toBe(6);
+    expect(d.consecutive_presence_reports.i2).toBeUndefined();
+    expect(d.consecutive_presence_reports.i1).toBe(6);
   });
 
   it('the two clocks use different units, so they cannot be compared directly', () => {
-    const prior = priorWith('same', T0, { open: ['i1'], unmoved_reports: { i1: 1 } });
+    const prior = priorWith('same', T0, { open: ['i1'], consecutive_presence_reports: { i1: 1 } });
     const s = buildStallDeltas({ currentPosition: 'same', currentItemIds: ['i1'], priorReport: prior, nowMs: T0 + 72 * HOUR });
 
     // Position carries a TIMESTAMP; items carry a COUNT. Conflating them is how a ladder ends
     // up firing on the wrong subject's threshold.
     expect(typeof s.position.unmoved_since_ms).toBe('number');
-    expect(typeof s.items.unmoved_reports.i1).toBe('number');
+    expect(typeof s.items.consecutive_presence_reports.i1).toBe('number');
     expect(s.position.unmoved_since_ms).toBe(T0);
-    expect(s.items.unmoved_reports.i1).toBe(2);
+    expect(s.items.consecutive_presence_reports.i1).toBe(2);
   });
 });
 
@@ -141,5 +141,31 @@ describe('Section 5 — the built section', () => {
     // children end up with two subtly different park semantics.
     const s = buildStallDeltas({ currentPosition: 'p', currentItemIds: [], priorReport: priorWith('p', T0), nowMs: T0 + HOUR, suppressed: true });
     expect(s.position.suppressed).toBe(true);
+  });
+});
+
+describe('the item counter says what it MEASURES, not what a reader hopes it measures', () => {
+  it('counts consecutive PRESENCE — an item that progressed still increments', () => {
+    // The defect this rename closed. The prior report carries only item IDs, so nothing here can
+    // distinguish "sat untouched" from "was claimed, unblocked and had a PR opened". Both
+    // increment. Naming it unmoved_reports made an x5 read as "nothing happened in five
+    // reports", which would escalate precisely the work that is going well.
+    const prior = priorWith('p', T0, { open: ['i1'], consecutive_presence_reports: { i1: 4 } });
+    const d = computeItemDeltas({ currentItemIds: ['i1'], priorReport: prior });
+    expect(d.consecutive_presence_reports.i1).toBe(5);
+    expect(d, 'the overclaiming name must not come back').not.toHaveProperty('unmoved_reports');
+  });
+
+  it('EMITS the presence-vs-movement limitation, so the caveat travels with the number', () => {
+    // A limitation that lives only in a source comment is invisible to every consumer of the
+    // report. This one rides the emission, per the C4 rule that a citation states what was
+    // actually measured.
+    const s = buildStallDeltas({
+      currentPosition: 'p',
+      currentItemIds: ['i1'],
+      priorReport: priorWith('p', T0, { open: ['i1'] }),
+      nowMs: T0 + HOUR,
+    });
+    expect(s.summary.limitation).toMatch(/PRESENT in, NOT that it has failed to progress/);
   });
 });

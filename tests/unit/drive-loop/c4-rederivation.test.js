@@ -109,7 +109,7 @@ const PRIOR_REPORT = {
   sections: {
     [STALL_DELTAS]: {
       position: { position: 'wave-2:gate-A', unmoved_since_ms: T0 },
-      items: { open: ['i1', 'i2', 'i3'], unmoved_reports: { i1: 2 } },
+      items: { open: ['i1', 'i2', 'i3'], consecutive_presence_reports: { i1: 2 } },
     },
   },
 };
