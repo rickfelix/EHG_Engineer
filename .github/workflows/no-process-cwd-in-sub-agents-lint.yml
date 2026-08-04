@@ -1,0 +1,116 @@
+name: No process.cwd in Sub-Agents Lint
+
+# SD-LEO-INFRA-ONE-GENUINELY-DEAD-001
+#
+# THIS WORKFLOW IS THE POINT OF THE SD. eslint-rules/no-process-cwd-in-sub-agents.js has existed
+# since SD-LEO-INFRA-FLEET-WIDE-SUB-001 FR-4 and had NEVER INSPECTED A REAL FILE. Its only
+# references anywhere in the repo were prose — a docstring and a comment in the sibling
+# verdict-mutation guard, both citing it as the cautionary example. No import, no registration, no
+# driver, no workflow, no npm alias. A correct rule that nothing runs is indistinguishable from no
+# rule, and it ships GREEN.
+#
+# SCOPE, DELIBERATE: seven sibling rules already fire through their own drivers. This wires ONLY the
+# one that was genuinely dead. Wiring "all of them" would create redundant enforcement for guards
+# that already work — a single-representation violation produced by acting on an unmeasured
+# population claim, which is the exact failure this SD was filed to prevent.
+#
+# BLOCKING FROM DAY ONE, and that is MEASURED rather than brave: the tree is clean (79 files
+# scanned, 0 findings) because this SD fixed the three genuine violations and repaired the pragma
+# lookup so the two legitimate exemptions actually suppress. There is no pre-existing backlog to
+# dump on unrelated PRs, unlike the mocked-SUT guard which needs an env var to block against 334
+# outstanding violations and therefore cannot fail a merge.
+#
+# PATH FILTER NOTE: expanded literal globs, one entry per extension. Brace alternation is rejected
+# by scripts/lint/workflow-path-filter-lint.mjs, which BLOCKS in .husky/pre-commit — a workflow
+# written the wrong way cannot even be committed.
+
+on:
+  pull_request:
+    paths:
+      - 'lib/sub-agents/**'
+      - 'eslint-rules/no-process-cwd-in-sub-agents.js'
+      - 'scripts/lint/no-process-cwd-in-sub-agents-lint.mjs'
+      - '.github/workflows/no-process-cwd-in-sub-agents-lint.yml'
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  no-process-cwd-in-sub-agents-lint:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          # Full history so `git merge-base HEAD origin/main` resolves. A shallow clone makes the
+          # driver degrade to an --all sweep, which is louder but still correct.
+          fetch-depth: 0
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+      - run: npm ci
+
+      # REACHABILITY FIRST. Prove the fence can FAIL before trusting a pass. The sibling workflow
+      # records why this must assert on the FINDING and not the exit code: a reviewer sabotaged one
+      # predicate there and the job stayed green, because a bare exit check is satisfied by any
+      # finding from any source.
+      - name: Prove the fence FIRES — attributed to the canary FILE, not to the exit code
+        run: |
+          cat > lib/sub-agents/_ci-cwd-canary.js <<'CANARY'
+          export function canaryDirect() {
+            return process.cwd();
+          }
+          export function canaryNested() {
+            const here = process.cwd();
+            return here;
+          }
+          CANARY
+          set +e
+          node scripts/lint/no-process-cwd-in-sub-agents-lint.mjs --all --json > /tmp/cwd-canary.json
+          set -e
+          rm -f lib/sub-agents/_ci-cwd-canary.js
+          node -e "
+            const r = require('/tmp/cwd-canary.json');
+            const mine = r.findings.filter(f => f.filePath.endsWith('_ci-cwd-canary.js'));
+            if (r.scanned < 1) { console.error('::error::THE DRIVER SCANNED NOTHING — a zero-file run cannot detect anything.'); process.exit(1); }
+            if (mine.length < 2) {
+              console.error('::error::FENCE DID NOT FIRE ON BOTH CANARY SHAPES (direct return + nested const). Found ' + mine.length + ' of 2.');
+              process.exit(1);
+            }
+            console.log('Fence fired on both canary shapes (' + mine.length + ' findings), across ' + r.scanned + ' scanned files.');
+          "
+
+      # A CONTROL THE SIBLING WORKFLOWS DO NOT HAVE, added because I shipped this exact defect while
+      # building the driver: a MIS-REGISTERED rule makes linter.verify() THROW once per file rather
+      # than emit a message. The original driver caught that, skipped every file, and printed
+      # "findings=0" with exit 0 — a completely broken guard reporting a clean codebase. The driver
+      # now fails when every selected file was skipped. This step proves that failure path still
+      # works, on a COPY so the real driver is never mutated.
+      - name: Prove a BROKEN guard cannot report a clean tree
+        run: |
+          # The copy MUST live inside the repo, at the same depth as the original. Written to /tmp
+          # first time round, where `import { Linter } from 'eslint'` cannot resolve node_modules
+          # and the relative rule import breaks — the step failed with ERR_MODULE_NOT_FOUND, which
+          # is a non-zero exit for entirely the wrong reason. A control that fails for the wrong
+          # reason is worth less than no control: it goes red, someone "fixes" it, and the real
+          # assertion was never exercised. That is why the grep below is not optional.
+          sed "s#const RULE_ID = \`\${PLUGIN_NS}/\${RULE_NAME}\`;#const RULE_ID = 'wrong-ns/not-registered';#" \
+            scripts/lint/no-process-cwd-in-sub-agents-lint.mjs > scripts/lint/.ci-misconfig-driver.mjs
+          set +e
+          node scripts/lint/.ci-misconfig-driver.mjs --all > /tmp/misconfig.out 2>&1
+          code=$?
+          set -e
+          rm -f scripts/lint/.ci-misconfig-driver.mjs
+          if [ "$code" -eq 0 ]; then
+            echo "::error::A MIS-REGISTERED RULE EXITED 0 — the guard would report a clean tree while running nothing."
+            cat /tmp/misconfig.out
+            exit 1
+          fi
+          grep -q "THE GUARD DID NOT RUN" /tmp/misconfig.out || {
+            echo "::error::Mis-registration failed for the wrong reason — the skipped-equals-scanned invariant did not fire.";
+            cat /tmp/misconfig.out; exit 1;
+          }
+          echo "A broken guard fails loudly (exit $code) instead of reporting clean."
+
+      - name: Enforce — no process.cwd() in lib/sub-agents
+        run: node scripts/lint/no-process-cwd-in-sub-agents-lint.mjs --all

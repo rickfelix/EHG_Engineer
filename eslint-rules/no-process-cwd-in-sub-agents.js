@@ -180,11 +180,41 @@ export default {
  * @returns {import('estree').Comment | null}
  */
 function getDisablePragmaCommentAbove(sourceCode, node) {
-  const comments = sourceCode.getCommentsBefore(node);
-  if (!comments || comments.length === 0) return null;
-  const last = comments[comments.length - 1];
-  if (!last || (last.type !== 'Line' && last.type !== 'Block')) return null;
-  if (last.loc && node.loc && last.loc.end.line < node.loc.start.line - 1) return null;
-  const verdict = classifyPragma(last.value);
-  return verdict.targets ? last : null;
+  // ASK FOR COMMENTS ABOVE THE STATEMENT, NOT ABOVE THE CALL.
+  //
+  // getCommentsBefore() on a CallExpression returns NOTHING whenever the call is NESTED —
+  // `const c = process.cwd()`, an object property value, a logical or ternary operand — because
+  // the comment precedes the enclosing statement, not the call node. BOTH live pragma sites in
+  // this repo are nested shapes (lib/sub-agents/quickfix.js is a const initialiser,
+  // lib/sub-agents/resolve-repo.js is an object property), so before this walk EVERY real pragma
+  // in the codebase was silently ignored and the rule reported violations at sites their authors
+  // had deliberately exempted with written reasons.
+  //
+  // The rule's 82 unit tests could not catch it: RuleTester's NATIVE suppression fires before
+  // this fallback is ever consulted, so the tests exercised a path production never reaches.
+  // MATCH BY LINE, NOT BY TOKEN ADJACENCY — because `disable-next-line` means exactly that.
+  //
+  // Two earlier attempts got this wrong, each hidden by a fixture that did not match production:
+  //   1. getCommentsBefore(CallExpression) — returns nothing when the call is NESTED, because the
+  //      comment precedes the enclosing statement rather than the call.
+  //   2. Walking to the nearest STATEMENT — fixed a const initialiser but missed a property inside
+  //      a MULTI-LINE object literal, where the statement began many lines earlier. A single-line
+  //      object fixture hid that, since there property and statement share a line.
+  // And a third shape defeats BOTH: a comment above `|| process.cwd()` sits before the `||`
+  // OPERATOR token, so it is between no node and the call at all.
+  //
+  // Every one of those is the same mistake — inferring which AST node the author meant to annotate.
+  // The author annotated a LINE. So: is there a rule-targeting comment ending on the line directly
+  // above this call? That is the whole question, and it is shape-independent.
+  if (!node.loc) return null;
+  const targetLine = node.loc.start.line - 1;
+  for (const comment of sourceCode.getAllComments()) {
+    if (comment.type !== 'Line' && comment.type !== 'Block') continue;
+    if (!comment.loc || comment.loc.end.line !== targetLine) continue;
+    const verdict = classifyPragma(comment.value);
+    if (verdict.targets) return comment;
+  }
+  return null;
 }
+
+
