@@ -107,7 +107,7 @@ function candidateFilesDiff(root) {
     .filter((p) => fs.existsSync(p));
 }
 
-function lintFile(linter, filePath) {
+function lintFile(linter, filePath, stats) {
   let code;
   try { code = fs.readFileSync(filePath, 'utf8'); } catch { return []; }
   const rel = path.relative(REPO_ROOT, filePath).replace(/\\/g, '/');
@@ -117,7 +117,14 @@ function lintFile(linter, filePath) {
   } catch (e) {
     // A file the parser cannot read is NOT a clean file. Silence here and a genuine pass look
     // identical downstream, which is the defect class this whole SD exists to remove.
-    console.warn(`⚠️  skipped (parse): ${rel} — ${String(e.message).split('\n')[0]}`);
+    //
+    // AND THIS CATCH ONCE SWALLOWED A TOTAL GUARD FAILURE. A mis-registered rule does not produce
+    // an ESLint MESSAGE — `linter.verify` THROWS ("Could not find plugin ..."), once per file. The
+    // original version caught that, warned to stderr, returned [], and the run reported
+    // `findings=0` with exit 0. A completely broken configuration looked exactly like a clean
+    // codebase. Counting the skips is what makes that impossible; see the invariant in main().
+    stats.skipped += 1;
+    console.warn(`⚠️  skipped (parse/config): ${rel} — ${String(e.message).split('\n')[0]}`);
     return [];
   }
 
@@ -135,16 +142,34 @@ function lintFile(linter, filePath) {
   // every case INCLUDING its negative controls, and the only evidence was one discarded
   // ruleId:null message. A guard reporting nothing is indistinguishable from a guard finding
   // nothing — so these are surfaced as findings rather than dropped.
-  const configOrRegistrationProblems = messages
-    .filter((m) => m.ruleId === null)
-    .map((m) => ({
-      filePath: rel,
-      line: m.line || 1,
-      column: m.column || 1,
-      message: `ESLINT DIAGNOSTIC (not a rule violation — the guard itself may be misconfigured): ${m.message}`,
-    }));
+  // NOT EVERY ruleId:null MESSAGE MEANS THE GUARD IS BROKEN, and treating them alike makes the
+  // signal worthless. Two distinct things arrive on this channel:
+  //
+  //   MISCONFIGURATION — "Definition for rule ... was not found" (the rule is not registered under
+  //   the id the config names) or "No matching configuration found for <file>" (the file matched
+  //   no config block). Either means THE GUARD IS NOT RUNNING. These BLOCK.
+  //
+  //   UNUSED DIRECTIVE — "Unused eslint-disable directive". For THIS rule that is the NORMAL state
+  //   of a VALID pragma: the rule handles suppression itself in its Program visitor and returns
+  //   early at the call site, so ESLint's own directive legitimately suppresses nothing. Blocking
+  //   on it would fail every correctly-exempted site — which is how a useful guard becomes one
+  //   people switch off. Warned, not blocked, so a genuinely stale pragma is still visible.
+  const nullId = messages.filter((m) => m.ruleId === null);
+  const misconfigured = nullId.filter((m) => /Definition for rule|No matching configuration/i.test(m.message));
+  const unusedDirectives = nullId.filter((m) => /Unused eslint-disable directive/i.test(m.message));
 
-  return findings.concat(configOrRegistrationProblems);
+  for (const m of unusedDirectives) {
+    console.warn(`ℹ️  ${rel}:${m.line || 1} — ${m.message} (expected for a valid pragma on this rule: suppression happens at the call site, not via the directive)`);
+  }
+
+  const blockingDiagnostics = misconfigured.map((m) => ({
+    filePath: rel,
+    line: m.line || 1,
+    column: m.column || 1,
+    message: `THE GUARD ITSELF IS NOT RUNNING (not a code violation): ${m.message}`,
+  }));
+
+  return findings.concat(blockingDiagnostics);
 }
 
 function main() {
@@ -174,7 +199,26 @@ function main() {
   }
 
   const linter = new Linter({ configType: 'flat' });
-  const findings = scanned.flatMap((f) => lintFile(linter, f));
+  const stats = { skipped: 0 };
+  const findings = scanned.flatMap((f) => lintFile(linter, f, stats));
+
+  // ─── THE INVARIANT THAT MAKES A BROKEN GUARD IMPOSSIBLE TO MISREAD ───────────────────────────
+  // Derived from the OUTCOME rather than from matching an error message, because message patterns
+  // are exactly the brittle thing that lets the next failure mode through unrecognised.
+  //
+  // If files were selected but NONE of them could actually be linted, the run has measured
+  // nothing. Reporting "0 findings" there is the same lie as `search_performed: true` on a search
+  // that never ran. Observed for real during this SD: mis-registering the rule made verify() throw
+  // once per file, every file was skipped, and the driver printed findings=0 and exited 0.
+  if (scanned.length > 0 && stats.skipped === scanned.length) {
+    console.error(`❌ THE GUARD DID NOT RUN: all ${scanned.length} selected file(s) failed to lint. `
+      + 'This is a configuration or registration failure, NOT a clean codebase. Findings below are meaningless.');
+    process.exitCode = 1;
+    return;
+  }
+  if (stats.skipped > 0) {
+    console.warn(`⚠️  ${stats.skipped} of ${scanned.length} file(s) could not be linted — findings below cover only the remainder.`);
+  }
 
   if (jsonMode) {
     console.log(JSON.stringify({ mode, scanned: scanned.length, findings, known_missed: KNOWN_MISSED }, null, 2));
