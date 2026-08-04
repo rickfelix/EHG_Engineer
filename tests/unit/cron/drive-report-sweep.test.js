@@ -199,7 +199,15 @@ describe('registry bookkeeping — the stamp is what lets the FR-7 alarm CLEAR',
     expect(order).toEqual(['register', 'stamp']);
   });
 
-  it('stamps the row the registration actually creates, and the field that actually exists', async () => {
+  it('derives the stamp key from armedProcessKey and names the measured column constant', async () => {
+    // RENAMED from "stamps the row the registration actually creates, and the field that actually
+    // exists". Both "actually" clauses were checked against CONSTANTS, not against a registration
+    // or a schema — no row and no catalogue is consulted here. The process-key half is sound by
+    // DERIVATION (it must equal armedProcessKey(SD_KEY)); the field half asserts the constant
+    // equals 'last_fired_at', whose correspondence to the real column is pinned by
+    // REGISTRY_COLUMNS in report-posture.test.js — itself a hand-copied snapshot with its own
+    // stated limit. Naming it honestly matters here more than most: the defect this test was
+    // written for is a silent no-op nobody can see. (seam-census.)
     // Two names for one row was a real bug here for about ten minutes: a hand-written
     // 'drive_report_producer' would have updated ZERO rows, and a Supabase update matching
     // nothing returns no error — a silent no-op that leaves the alarm stuck on forever.

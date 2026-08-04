@@ -279,11 +279,37 @@ describe('[WIRING] the dispatcher exists and is named by a workflow', () => {
     expect(new Set(crons).size, 'two identical lines are one schedule').toBe(2);
   });
 
-  it('the sweep enqueues through the bridge and NEVER imports a provider', () => {
+  it('[STATIC] the sweep SOURCE names the bridge and imports NO provider', () => {
+    // RENAMED. This was "the sweep enqueues through the bridge", which claimed a behaviour no
+    // assertion here delivers — all three checks are source-string matches and nothing enqueues.
+    // That is the same sentence-shape as the TR-1 wiring assertion that stayed green while the
+    // pipeline threw on every tick. The "imports no provider" half IS genuinely delivered (the
+    // stripper control below proves the scan is not inert); the enqueueing behaviour is covered
+    // by the injected-bridge tests above, not here. Named for what it checks. (seam-census.)
     const src = code(SWEEP);
     expect(src).toMatch(/enqueueChairmanSms/);
     expect(src, 'a direct provider send would be a second representation of chairman delivery').not.toMatch(/twilio|Twilio/);
     expect(src).toMatch(/import\s*\{[^}]*sendDriveSms[^}]*\}\s*from\s*['"]\.\.\/drive-report-sms\.mjs['"]/);
+  });
+
+  it('[REGRESSION] the CLI supplies EVERY dependency — register/stamp are OPTIONAL, so omitting them fails silently', () => {
+    // THE ASYMMETRY seam-census found, and it is the TR-1 bug reintroduced one leg over.
+    //
+    // The producer got a CLI guard after TR-1 (drive-report-wiring.test.js). The SMS leg never
+    // got one — and `register`/`stamp` default to null in runDriveSmsSweep, so dropping them
+    // from the CLI is not an error: the sweep enqueues, returns success and exits 0 while this
+    // leg's FR-7 liveness row is NEVER stamped. That is precisely the "SMS leg dead, alarm
+    // green" defect F4 was filed to close, recreated through the wiring rather than the logic.
+    //
+    // MEASURED before writing this: I deleted the CLI's `register:` line and ALL 218 tests in
+    // tests/unit/cron/ still passed. Every behaviour test supplies those deps explicitly, so
+    // none of them can see a CLI that stops supplying them.
+    const src = code(SWEEP);
+    for (const dep of ['findLatestReport', 'enqueue', 'findObligation', 'register', 'stamp']) {
+      expect(src, `the CLI must inject ${dep} — the sweep tolerates its absence, so nothing else would notice`)
+        .toMatch(new RegExp(`\\n\\s{4}${dep}:`));
+    }
+    expect(src, 'the stamp must target this leg OWN registry key, not the producer key').toMatch(/armedProcessKey\(SMS_SD_KEY\)/);
   });
 
   it('[CONTROL] the comment-stripper works, or the assertions above are vacuous', () => {
@@ -360,7 +386,11 @@ describe('SECURITY re-run findings — the alarm must not break when it has some
     expect(r.enqueued[0]).toMatchObject({ deduped: true, dedupe_verified: true });
   });
 
-  it('[F4] the SMS leg registers and stamps its OWN liveness row, in that order', async () => {
+  it('[F4] the SMS leg CALLS register then stamp, in that order, with its OWN key', async () => {
+    // RENAMED from "registers and stamps its OWN liveness row": no ROW is touched here. This
+    // asserts the call ORDER of two injected stubs and that the key differs from the producer's.
+    // Both claims hold, but "liveness row" appears nowhere in the evidence — and the row-level
+    // fact is exactly the kind this SD keeps finding unverified. (seam-census.)
     // Producer healthy + SMS leg dead left FR-7 GREEN while the chairman got nothing: the
     // producer's registry key is not this leg's. Order matters for the same reason as the
     // producer's — registerArmedMachinery upserts last_fired_at NULL.
