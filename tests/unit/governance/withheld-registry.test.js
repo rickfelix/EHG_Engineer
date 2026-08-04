@@ -277,6 +277,70 @@ describe('FR-5 — exit only by a named, recorded event', () => {
   });
 });
 
+describe('FR-6 — what the withhold COST is recorded on the DB side', () => {
+  // The pre-existing decision row cannot carry this: it is written inside openQfMintGate, BEFORE
+  // `allowed` is known and long before anything has enumerated the suppressed set. So a DB reader
+  // could see THAT a withhold happened and never WHAT it cost, and had to open a per-run GHA log
+  // — unqueryable, and it expires. Hence a second event.
+  it('a withheld run emits the cost event with the suppressed count and marker reference', async () => {
+    const costs = [];
+    await gatedQfMint({}, {
+      engine: 'e', gauge: async () => 151, record: async () => {}, log: () => {},
+      onWithheld: async () => [group(), group({ fingerprint: 'b', rows: [{ id: 'fb-2' }] })],
+      writeMarkers: async () => 2,
+      recordCost: async (_sb, d, c) => { costs.push({ d, c }); return true; },
+    }, async () => 0);
+
+    expect(costs).toHaveLength(1);
+    expect(costs[0].c.suppressed_groups).toBe(2);
+    expect(costs[0].c.markers_written).toBe(2);
+    expect(costs[0].c.markers_failed).toBe(0);
+    expect(costs[0].c.marker_key).toBe(MARKER_KEY);
+    expect(costs[0].d.decision).toBe('withheld');
+  });
+
+  // The negative twin. Without it, "emits the cost event" is equally satisfied by emitting always.
+  it('an ALLOWED run emits NO cost event', async () => {
+    const costs = [];
+    const r = await gatedQfMint({}, {
+      engine: 'e', gauge: async () => 0, record: async () => {}, log: () => {},
+      onWithheld: async () => { throw new Error('must not run'); },
+      writeMarkers: async () => 5,
+      recordCost: async (...a) => { costs.push(a); return true; },
+    }, async () => 3);
+    expect(r.demand.decision).toBe('sourced');   // positive control: the arm really ran
+    expect(r.minted).toBe(3);
+    expect(costs).toEqual([]);
+  });
+
+  it('a withheld run with NO suppressed groups emits no cost event', async () => {
+    const costs = [];
+    await gatedQfMint({}, {
+      engine: 'e', gauge: async () => 151, record: async () => {}, log: () => {},
+      onWithheld: async () => [],
+      writeMarkers: async () => 0,
+      recordCost: async (...a) => { costs.push(a); return true; },
+    }, async () => 0);
+    expect(costs).toEqual([]);
+  });
+
+  it('a FAILED durable write is recorded as failed, not as a quiet success', async () => {
+    // The cost event must distinguish "recorded 34" from "recorded nothing". Logging both at the
+    // same severity would make the failure of this SD's own mechanism invisible in the audit trail.
+    const costs = [];
+    await gatedQfMint({}, {
+      engine: 'e', gauge: async () => 151, record: async () => {}, log: () => {},
+      onWithheld: async () => [group()],
+      writeMarkers: async () => { throw new Error('db down'); },
+      recordCost: async (_sb, _d, c) => { costs.push(c); return true; },
+    }, async () => 0);
+    expect(costs).toHaveLength(1);
+    expect(costs[0].markers_written).toBe(0);
+    expect(costs[0].markers_failed).toBe(1);
+    expect(costs[0].error).toContain('db down');
+  });
+});
+
 describe('writeMarkers — the real function, not an injected stub', () => {
   // Found at review: every writeMarkers reference in the first version of this suite was a STUB.
   // The read-modify-write loop, the non-resurrection guard and the metadata carry-through had
