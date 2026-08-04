@@ -192,43 +192,29 @@ function getDisablePragmaCommentAbove(sourceCode, node) {
   //
   // The rule's 82 unit tests could not catch it: RuleTester's NATIVE suppression fires before
   // this fallback is ever consulted, so the tests exercised a path production never reaches.
-  // Try the call node, then each enclosing ancestor, stopping at the statement. A pragma may be
-  // attached to any of them depending on how the code is written, and BOTH live shapes occur:
-  //   const cwd = process.cwd();          <- comment precedes the VariableDeclaration
-  //   { executed_from_cwd: process.cwd() } <- comment precedes the Property, inside a multi-line
-  //                                          object literal whose statement began many lines up
-  // Anchoring only at the statement fixes the first and misses the second; anchoring only at the
-  // call node misses both. My first fix did the former, and a single-line object-literal fixture
-  // hid it, because there the property and the statement share a line. The production shape is
-  // multi-line, so the fixture was not the code.
-  for (const anchor of anchorChainFor(node)) {
-    const comments = sourceCode.getCommentsBefore(anchor);
-    if (!comments || comments.length === 0) continue;
-    const last = comments[comments.length - 1];
-    if (!last || (last.type !== 'Line' && last.type !== 'Block')) continue;
-    // The pragma must sit on the line immediately above the thing it annotates.
-    if (last.loc && anchor.loc && last.loc.end.line < anchor.loc.start.line - 1) continue;
-    const verdict = classifyPragma(last.value);
-    if (verdict.targets) return last;
+  // MATCH BY LINE, NOT BY TOKEN ADJACENCY — because `disable-next-line` means exactly that.
+  //
+  // Two earlier attempts got this wrong, each hidden by a fixture that did not match production:
+  //   1. getCommentsBefore(CallExpression) — returns nothing when the call is NESTED, because the
+  //      comment precedes the enclosing statement rather than the call.
+  //   2. Walking to the nearest STATEMENT — fixed a const initialiser but missed a property inside
+  //      a MULTI-LINE object literal, where the statement began many lines earlier. A single-line
+  //      object fixture hid that, since there property and statement share a line.
+  // And a third shape defeats BOTH: a comment above `|| process.cwd()` sits before the `||`
+  // OPERATOR token, so it is between no node and the call at all.
+  //
+  // Every one of those is the same mistake — inferring which AST node the author meant to annotate.
+  // The author annotated a LINE. So: is there a rule-targeting comment ending on the line directly
+  // above this call? That is the whole question, and it is shape-independent.
+  if (!node.loc) return null;
+  const targetLine = node.loc.start.line - 1;
+  for (const comment of sourceCode.getAllComments()) {
+    if (comment.type !== 'Line' && comment.type !== 'Block') continue;
+    if (!comment.loc || comment.loc.end.line !== targetLine) continue;
+    const verdict = classifyPragma(comment.value);
+    if (verdict.targets) return comment;
   }
   return null;
-}
-
-/**
- * The call node plus every ancestor up to and including the nearest statement.
- *
- * @param {import('estree').Node} node
- * @returns {import('estree').Node[]}
- */
-function anchorChainFor(node) {
-  const chain = [node];
-  let current = node;
-  while (current && current.parent) {
-    current = current.parent;
-    chain.push(current);
-    if (typeof current.type === 'string' && /Statement$|^VariableDeclaration$|Declaration$/.test(current.type)) break;
-  }
-  return chain;
 }
 
 
