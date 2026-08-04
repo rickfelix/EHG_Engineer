@@ -214,15 +214,14 @@ describe('the append-only freeze trigger — both halves', () => {
   // froze too, the table could never record that anyone read a report — and the three tests
   // above would still be green.
 
-  it('UPDATE of consumption_receipts SUCCEEDS, and the value really changes (C1)', async () => {
-    await client.query(
-      'UPDATE public.drive_reports SET consumption_receipts = \'{"coordinator":"2026-08-03T00:00:00Z"}\'::jsonb WHERE id = $1',
-      [reportId],
-    );
-    const { rows } = await client.query('SELECT consumption_receipts FROM public.drive_reports WHERE id = $1', [reportId]);
-    // Asserting the VALUE, not merely that no error was thrown — a trigger that swallowed the
-    // change and returned OLD would pass a no-throw check.
-    expect(rows[0].consumption_receipts).toEqual({ coordinator: '2026-08-03T00:00:00Z' });
+  it('a CONSUMER can still record consumption — now as a ROW, which the freeze must not block (C1)', async () => {
+    // The C1 half. Receipts moved OFF this row under the per-lane ruling, so the check moved
+    // too: what must remain possible is that a consumer records having read the report. If the
+    // freeze trigger or the receipts posture blocked that, the three tests above would still be
+    // green while the table could never record that anyone read anything.
+    await client.query("INSERT INTO public.drive_report_receipts (report_id, lane) VALUES ($1, 'coordinator');", [reportId]);
+    const { rows } = await client.query('SELECT lane FROM public.drive_report_receipts WHERE report_id = $1', [reportId]);
+    expect(rows.map((r) => r.lane)).toEqual(['coordinator']);
   });
 
   it('UPDATE of metadata SUCCEEDS and really changes', async () => {
@@ -233,23 +232,120 @@ describe('the append-only freeze trigger — both halves', () => {
 
   it('a frozen-column UPDATE does not partially apply alongside a writable one', async () => {
     // The mixed statement. If the trigger let the row through while only rejecting some columns,
-    // an observation could be rewritten under cover of a receipt stamp.
+    // an observation could be rewritten under cover of an innocuous metadata edit.
     await expect(
       client.query(
         `UPDATE public.drive_reports
-            SET consumption_receipts = '{"adam":"now"}'::jsonb,
+            SET metadata = '{"annotated":"cover"}'::jsonb,
                 sections = '{"tampered":true}'::jsonb
           WHERE id = $1`,
         [reportId],
       ),
     ).rejects.toThrow(/sections is append-only/);
 
+    const { rows } = await client.query('SELECT sections, metadata FROM public.drive_reports WHERE id = $1', [reportId]);
+    expect(rows[0].sections).toEqual({ plan_position: { value: 1 } });
+    expect(rows[0].metadata, 'the writable column must not have applied either').not.toEqual({ annotated: 'cover' });
+  });
+});
+
+describe('consumption receipts — one row per (report, lane), no merge and no clobber window', () => {
+  let reportId;
+  beforeAll(async () => {
+    await applyMigration();
     const { rows } = await client.query(
-      'SELECT sections, consumption_receipts FROM public.drive_reports WHERE id = $1',
+      "INSERT INTO public.drive_reports (run_id, sections) VALUES ('receipts-run', '{\"a\":1}'::jsonb) RETURNING id;",
+    );
+    reportId = rows[0].id;
+  });
+
+  it('accepts one receipt per lane and REFUSES a second for the same lane', async () => {
+    // The constraint IS the design. Without it the table is a log, and every writer is back to
+    // read-merge-write — the hazard the per-lane shape was chosen to remove.
+    await client.query("INSERT INTO public.drive_report_receipts (report_id, lane) VALUES ($1, 'adam');", [reportId]);
+    await expect(
+      client.query("INSERT INTO public.drive_report_receipts (report_id, lane) VALUES ($1, 'adam');", [reportId]),
+    ).rejects.toThrow(/drive_report_receipts_report_lane_uniq|duplicate key/i);
+  });
+
+  it('[THE WHOLE POINT] a lane upserting its own receipt CANNOT touch a sibling lane', async () => {
+    // Under the jsonb map this was the hazard: a naive write clobbered sibling lanes and the
+    // damage surfaced in THEIR lane, not the writer's. Here there is no statement that reaches
+    // another lane's row, so the guarantee is structural rather than a predicate to remember.
+    await client.query("INSERT INTO public.drive_report_receipts (report_id, lane) VALUES ($1, 'chairman_brief');", [reportId]);
+    await client.query(
+      `INSERT INTO public.drive_report_receipts (report_id, lane, metadata) VALUES ($1, 'adam', '{"re":"read"}'::jsonb)
+       ON CONFLICT (report_id, lane) DO UPDATE SET metadata = EXCLUDED.metadata, consumed_at = now();`,
       [reportId],
     );
-    expect(rows[0].sections).toEqual({ plan_position: { value: 1 } });
-    expect(rows[0].consumption_receipts).toEqual({});
+    const { rows } = await client.query(
+      'SELECT lane, metadata FROM public.drive_report_receipts WHERE report_id = $1 ORDER BY lane;',
+      [reportId],
+    );
+    expect(rows.map((r) => r.lane)).toEqual(['adam', 'chairman_brief']);
+    expect(rows.find((r) => r.lane === 'adam').metadata).toEqual({ re: 'read' });
+    expect(rows.find((r) => r.lane === 'chairman_brief').metadata, 'the sibling lane must be untouched').toEqual({});
+  });
+
+  it('REFUSES a lane outside the vocabulary — a typo would read as "never consumed"', async () => {
+    // 'chairman-brief' with a hyphen would insert cleanly without the CHECK, take its own
+    // UNIQUE slot, and leave the real lane looking like it never read the report.
+    for (const bad of ['chairman-brief', 'Coordinator', 'eva']) {
+      await expect(
+        client.query('INSERT INTO public.drive_report_receipts (report_id, lane) VALUES ($1, $2);', [reportId, bad]),
+      ).rejects.toThrow(/violates check constraint/i);
+    }
+  });
+
+  it('REFUSES a receipt for a report that does not exist', async () => {
+    await expect(
+      client.query("INSERT INTO public.drive_report_receipts (report_id, lane) VALUES (gen_random_uuid(), 'adam');"),
+    ).rejects.toThrow(/violates foreign key constraint/i);
+  });
+
+  it('deleting the report takes its receipts with it', async () => {
+    const { rows: r } = await client.query(
+      "INSERT INTO public.drive_reports (run_id, sections) VALUES ('cascade-run', '{}'::jsonb) RETURNING id;",
+    );
+    await client.query("INSERT INTO public.drive_report_receipts (report_id, lane) VALUES ($1, 'adam');", [r[0].id]);
+    await client.query('DELETE FROM public.drive_reports WHERE id = $1;', [r[0].id]);
+    const { rows } = await client.query('SELECT count(*)::int AS n FROM public.drive_report_receipts WHERE report_id = $1;', [r[0].id]);
+    expect(rows[0].n, 'a receipt for a deleted report is a dangling claim').toBe(0);
+  });
+
+  it('the superseded jsonb column is GONE, and the verify block enforces that', async () => {
+    const { rows } = await client.query(
+      "SELECT count(*)::int AS n FROM information_schema.columns WHERE table_schema='public' AND table_name='drive_reports' AND column_name='consumption_receipts';",
+    );
+    expect(rows[0].n).toBe(0);
+
+    // Two representations of one fact is the failure; re-adding the column must fail the deploy.
+    await client.query("ALTER TABLE public.drive_reports ADD COLUMN consumption_receipts jsonb NOT NULL DEFAULT '{}'::jsonb;");
+    try {
+      await expect(client.query(VERIFY_BLOCK)).rejects.toThrow(/consumption_receipts still exists/);
+    } finally {
+      await client.query('ALTER TABLE public.drive_reports DROP COLUMN consumption_receipts;');
+    }
+    await expect(client.query(VERIFY_BLOCK)).resolves.toBeTruthy();
+  });
+
+  it('dropping the UNIQUE constraint fails the verify block', async () => {
+    await client.query('ALTER TABLE public.drive_report_receipts DROP CONSTRAINT drive_report_receipts_report_lane_uniq;');
+    try {
+      await expect(client.query(VERIFY_BLOCK)).rejects.toThrow(/UNIQUE\(report_id, lane\) is missing/);
+    } finally {
+      await applyMigration();
+    }
+  });
+
+  it('the receipts table is service-role-only, same posture as the report', async () => {
+    await client.query('GRANT SELECT ON public.drive_report_receipts TO anon;');
+    try {
+      await expect(client.query(VERIFY_BLOCK)).rejects.toThrow(/drive_report_receipts: a non-service grant/);
+    } finally {
+      await client.query('REVOKE ALL ON public.drive_report_receipts FROM anon;');
+    }
+    await expect(client.query(VERIFY_BLOCK)).resolves.toBeTruthy();
   });
 });
 
@@ -540,11 +636,12 @@ describe('the holes the SECURITY re-run found — closed, and proven closed', ()
     expect(rows[0].n, 'the row must still carry its original key').toBe(1);
   });
 
-  it('[TWO-SIDED] consumption_receipts is still writable — freezing it would break C1', async () => {
-    // The freeze must not spread. Receipts are stamped by each CONSUMER after the producer is
-    // done; a trigger that froze them would break the requirement this table exists to serve.
-    await client.query('UPDATE public.drive_reports SET consumption_receipts = \'{"coordinator":"read"}\'::jsonb WHERE run_id = \'frozen-1\';');
-    const { rows } = await client.query("SELECT consumption_receipts->>'coordinator' AS c FROM public.drive_reports WHERE run_id = 'frozen-1';");
-    expect(rows[0].c).toBe('read');
+  it('[TWO-SIDED] metadata is still writable — the freeze must not spread to every column', async () => {
+    // Without this, a blanket immutability trigger would pass every freeze assertion above. Under
+    // the per-lane ruling metadata is now the ONLY writable field on this row, which makes it the
+    // only thing standing between "append-only observations" and "wholly immutable row".
+    await client.query('UPDATE public.drive_reports SET metadata = \'{"annotated":true}\'::jsonb WHERE run_id = \'frozen-1\';');
+    const { rows } = await client.query("SELECT metadata->>'annotated' AS a FROM public.drive_reports WHERE run_id = 'frozen-1';");
+    expect(rows[0].a).toBe('true');
   });
 });

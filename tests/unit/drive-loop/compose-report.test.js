@@ -22,11 +22,15 @@ describe('composeReport — shapes the row, never writes it', () => {
     expect(row.metadata.section_ids).toEqual(['plan_position', 'belt_diagnosis']);
   });
 
-  it('[C1] consumption_receipts ships EMPTY — the producer never stamps one', () => {
-    // A producer-stamped receipt proves only that the producer believed delivery happened, which is
-    // the one thing a receipt must not do. Children -C and -D write these.
+  it('[C1] the row carries NO receipts field at all — the producer offers no such surface', () => {
+    // A producer-stamped receipt proves only that the producer believed delivery happened, which
+    // is the one thing a receipt must not do. This used to ship `consumption_receipts: {}`; under
+    // the per-lane ruling (coordinator, 2026-08-04) receipts are rows in drive_report_receipts,
+    // so there is nothing to ship — and an ABSENT field is strictly stronger than an empty one,
+    // because an empty map is still a surface a consumer can write to.
     const row = composeReport({ sections: SECTIONS, driveScore: SCORE, generatedAt: AT });
-    expect(row.consumption_receipts).toEqual({});
+    expect(Object.hasOwn(row, 'consumption_receipts'), 'the superseded field must be gone, not empty').toBe(false);
+    expect(row.metadata.receipts_note).toMatch(/rows in drive_report_receipts/i);
     expect(row.metadata.receipts_note).toMatch(/stamped BY EACH CONSUMER/);
   });
 

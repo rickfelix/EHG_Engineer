@@ -38,11 +38,14 @@ CREATE TABLE IF NOT EXISTS public.drive_reports (
   -- ratified by SMS, row 5d90338c) — never folded into the total.
   drive_score           jsonb NOT NULL DEFAULT '{}'::jsonb,
 
-  -- Consumption receipts, keyed by lane. STAMPED BY THE CONSUMER, never by the producer
-  -- (C1) — this table only holds the shape; children -C and -D do the writing. Producer-
-  -- stamped receipts would prove the producer believed delivery happened, which is the one
-  -- thing a receipt must not be.
-  consumption_receipts  jsonb NOT NULL DEFAULT '{}'::jsonb,
+  -- NO consumption_receipts COLUMN. Receipts are PER-LANE ROWS in drive_report_receipts below
+  -- (coordinator ruling, 2026-08-04). A jsonb per-lane map forces read-merge-write on every
+  -- writer forever, and through PostgREST it additionally needs a conditional-update guard that
+  -- every future sibling has to remember — one forgetful commit silently clobbers another lane's
+  -- receipt, and the damage surfaces in THEIR lane, not the writer's. The per-lane row has no
+  -- merge, no clobber window and no guard to forget. Safe by construction beats safe by
+  -- discipline. The column is REMOVED rather than deprecated in place: leaving it would be two
+  -- representations of one fact, and a column that exists WILL eventually be written to.
 
   -- Bumped when the sections/score shape changes, so an old row is readable as old rather
   -- than as malformed.
@@ -54,8 +57,61 @@ CREATE TABLE IF NOT EXISTS public.drive_reports (
 COMMENT ON TABLE public.drive_reports IS
   'Externally-scheduled Drive Report (SD-LEO-INFRA-DRIVE-LOOP-INSTRUMENT-001-B). One row per run of the GHA cron, computed on wall-clock cadence independent of any session turn state. Sections store citations and predicates only, never copied values, so every number is re-derivable from its cited query. Consumption receipts are written BY EACH CONSUMER, never by the producer. Service-role only; any non-service grant reclassifies this table as permission-class and requires chairman approval.';
 
-COMMENT ON COLUMN public.drive_reports.consumption_receipts IS
-  'Per-lane receipts, written by the consuming pipeline step itself (coordinator, adam, chairman-brief). Producer-stamped values here would be worthless — a receipt exists to prove the consumer read it, not that the producer sent it.';
+-- ---------------------------------------------------------------------------
+-- CONSUMPTION RECEIPTS — ONE ROW PER (report, lane).
+--
+-- A receipt proves the CONSUMER read the report. It is never written by the producer (C1):
+-- a producer-stamped receipt would prove only that the producer believed delivery happened,
+-- which is the one thing a receipt must not do.
+--
+-- The lane vocabulary also lives in lib/drive-loop/lanes.js as DRIVE_REPORT_LANES. Two
+-- representations of one vocabulary can drift, and the drift is invisible until an INSERT
+-- fails in production — so tests/unit/drive-loop/vocabulary-drift.test.js parses this CHECK
+-- and asserts the two sets are EQUAL.
+-- ---------------------------------------------------------------------------
+CREATE TABLE IF NOT EXISTS public.drive_report_receipts (
+  id           uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+
+  -- CASCADE: a receipt for a deleted report is not history, it is a dangling claim about a
+  -- row nobody can read.
+  report_id    uuid NOT NULL REFERENCES public.drive_reports(id) ON DELETE CASCADE,
+
+  lane         text NOT NULL CHECK (lane IN ('coordinator', 'adam', 'chairman_brief')),
+
+  -- When the consumer actually read it. Defaulted rather than required so a consumer cannot
+  -- accidentally stamp a receipt with no time on it.
+  consumed_at  timestamptz NOT NULL DEFAULT now(),
+
+  metadata     jsonb NOT NULL DEFAULT '{}'::jsonb,
+
+  -- THE POINT OF THE SHAPE. One receipt per lane per report, enforced here rather than by
+  -- every writer remembering to merge. Makes the write a single native upsert
+  -- (ON CONFLICT (report_id, lane)) that PostgREST expresses directly, and makes a second
+  -- receipt from the same lane an update of that lane ALONE — no sibling is reachable.
+  CONSTRAINT drive_report_receipts_report_lane_uniq UNIQUE (report_id, lane)
+);
+
+COMMENT ON TABLE public.drive_report_receipts IS
+  'Consumption receipts for drive_reports, ONE ROW PER (report_id, lane) — coordinator ruling 2026-08-04, replacing a jsonb per-lane map on drive_reports. Written BY EACH CONSUMER (coordinator, adam, chairman_brief), never by the producer: a producer-stamped receipt proves only that the producer believed delivery happened. The unique constraint removes the read-merge-write clobber window entirely rather than guarding it.';
+
+-- The receipts a given report has collected, and "has lane X consumed anything recently".
+CREATE INDEX IF NOT EXISTS drive_report_receipts_report_idx
+  ON public.drive_report_receipts (report_id);
+CREATE INDEX IF NOT EXISTS drive_report_receipts_lane_consumed_idx
+  ON public.drive_report_receipts (lane, consumed_at DESC);
+
+ALTER TABLE public.drive_report_receipts ENABLE ROW LEVEL SECURITY;
+
+DROP POLICY IF EXISTS drive_report_receipts_service_role ON public.drive_report_receipts;
+CREATE POLICY drive_report_receipts_service_role
+  ON public.drive_report_receipts
+  FOR ALL TO service_role
+  USING (true) WITH CHECK (true);
+
+-- Same posture as the parent table: service-role only. A receipts table is a record of who
+-- read what, so a non-service grant here reclassifies it exactly as it would the report.
+REVOKE ALL ON public.drive_report_receipts FROM anon, authenticated, PUBLIC;
+GRANT ALL ON public.drive_report_receipts TO service_role;
 
 -- Section 5 counts unmoved items across reports, and the self-staleness alarm asks "when was
 -- the last one" — both are ordered reads over generated_at.
@@ -96,10 +152,14 @@ CREATE UNIQUE INDEX IF NOT EXISTS drive_reports_run_id_uniq
 -- if N can be edited afterwards, the baseline moves and a delta silently becomes meaningless
 -- while continuing to render a number. Nothing above this line prevented that.
 --
--- BUT THE ROW IS NOT WHOLLY IMMUTABLE, and that is the whole difficulty: consumption_receipts
--- MUST be writable, because C1 requires each consumer to stamp its OWN receipt after the fact.
--- So this is partial immutability — the observation fields freeze, the receipt field does not.
--- A blanket immutability trigger would have been simpler and would have broken C1.
+-- AND UNDER THE PER-LANE RULING THE DIFFICULTY LARGELY DISSOLVES, which is worth recording
+-- because it is the second thing that shape bought. While receipts were a jsonb column ON this
+-- row, the row could never be wholly frozen: C1 requires each consumer to stamp its own receipt
+-- after the fact, so the trigger had to be a PARTIAL immutability that permitted writes to
+-- exactly one column — and every future field had to be classified by hand as observation or
+-- receipt. With receipts in their own table, the observation fields freeze and nothing about
+-- consumption needs an exemption. `metadata` stays writable deliberately; that is now the only
+-- carve-out rather than one of two.
 -- ---------------------------------------------------------------------------
 CREATE OR REPLACE FUNCTION public.drive_reports_freeze_observations()
 RETURNS trigger
@@ -124,9 +184,8 @@ BEGIN
   IF NEW.run_id IS DISTINCT FROM OLD.run_id THEN
     RAISE EXCEPTION 'drive_reports.run_id is append-only: it is the idempotence key, and clearing it moves the row out of the partial unique index and frees the key for a duplicate (report id %)', OLD.id;
   END IF;
-  -- consumption_receipts and metadata are DELIBERATELY writable. Receipts are stamped by each
-  -- consumer after the producer is done (C1), so freezing them would break the requirement
-  -- this table exists to serve.
+  -- metadata is DELIBERATELY writable, and it is now the ONLY exemption: receipts moved to
+  -- their own table, so consumption no longer needs a hole in this trigger at all.
   RETURN NEW;
 END
 $freeze$;
@@ -234,6 +293,49 @@ BEGIN
   -- RLS is still the real barrier, so this is not an exposure — it is the SD's own
   -- classification rule being enforced completely rather than partially. Raised by the SECURITY
   -- sub-agent as INFERRED (no live PG available to it); the DDL suite executes it for real.
+  -- ── The receipts table, asserted with the SAME posture as its parent ──────────────────
+  ASSERT to_regclass('public.drive_report_receipts') IS NOT NULL,
+    'drive_report_receipts did not land — receipts are per-lane ROWS (coordinator ruling 2026-08-04), not a jsonb map';
+
+  -- The column must be GONE, not merely unused. A jsonb receipts column left in place is a
+  -- second representation of the same fact, and a column that exists will eventually be
+  -- written to — by a consumer built against the superseded design, silently, with no error.
+  ASSERT NOT EXISTS (
+    SELECT 1 FROM information_schema.columns
+    WHERE table_schema = 'public' AND table_name = 'drive_reports' AND column_name = 'consumption_receipts'
+  ), 'drive_reports.consumption_receipts still exists — the per-lane ruling replaced it, and leaving it is two representations of one fact';
+
+  ASSERT EXISTS (
+    SELECT 1 FROM pg_class WHERE oid = 'public.drive_report_receipts'::regclass AND relrowsecurity
+  ), 'drive_report_receipts: RLS is NOT enabled — a record of who read what is service-role-only, same as the report';
+
+  ASSERT (
+    SELECT count(*) FROM pg_policies WHERE schemaname = 'public' AND tablename = 'drive_report_receipts'
+  ) = 1, 'drive_report_receipts: expected exactly ONE policy';
+
+  -- The unique constraint IS the design. Without it the table is just a log and every writer is
+  -- back to read-merge-write, which is the hazard the shape was chosen to remove.
+  ASSERT EXISTS (
+    SELECT 1 FROM pg_constraint
+    WHERE conrelid = 'public.drive_report_receipts'::regclass
+      AND conname = 'drive_report_receipts_report_lane_uniq'
+      AND contype = 'u'
+  ), 'drive_report_receipts: UNIQUE(report_id, lane) is missing — without it a lane can hold two receipts and the clobber window the per-lane shape removes is back';
+
+  ASSERT EXISTS (
+    SELECT 1 FROM pg_constraint
+    WHERE conrelid = 'public.drive_report_receipts'::regclass AND contype = 'f'
+  ), 'drive_report_receipts: the report_id foreign key is missing — a receipt for a report that does not exist is a dangling claim';
+
+  ASSERT NOT EXISTS (
+    SELECT 1
+    FROM pg_class c
+    CROSS JOIN LATERAL aclexplode(COALESCE(c.relacl, acldefault('r', c.relowner))) a
+    WHERE c.oid = 'public.drive_report_receipts'::regclass
+      AND a.grantee <> c.relowner
+      AND COALESCE(pg_get_userbyid(NULLIF(a.grantee, 0)), 'PUBLIC') <> 'service_role'
+  ), 'drive_report_receipts: a non-service grant exists (including PUBLIC) — this table is now PERMISSION-CLASS and requires chairman approval';
+
   ASSERT NOT EXISTS (
     SELECT 1
     FROM pg_attribute at
