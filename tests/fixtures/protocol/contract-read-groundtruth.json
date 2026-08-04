@@ -1,0 +1,120 @@
+{
+  "_README": [
+    "MEASURED HARNESS GROUND TRUTH for the contract-read coverage model.",
+    "SD-LEO-INFRA-CONTRACT-READ-COVERAGE-001.",
+    "",
+    "harness_tokens is what the READ TOOL ITSELF reported, never a prediction. Two sources:",
+    "  notice       - the tool printed a truncation notice carrying the whole-file token count.",
+    "  differential - H(f) = 2*H(f+P) - H(f+2P), using the over-cap error as a second measurement",
+    "                 channel. H(P) came out identical across five host files, so the method is exact.",
+    "                 It yields harness counts for files that read CLEAN, which is why the SD's",
+    "                 original premise -- that a clean read gives only an upper bound -- was wrong.",
+    "",
+    "WHY THIS IS FROZEN AND NOT READ FROM DISK: CLAUDE_SOLOMON.md grew 1,933 bytes between being",
+    "measured and the next morning. A suite that reads today's file cannot distinguish a fixed",
+    "instrument from a changed file, and at HEAD that file admits no coherent budget at all.",
+    "",
+    "ONLY THE ROWS WITH BOTH bytes AND harness_tokens can validate a BYTES model. The clean-read rows",
+    "carry tokens measured at a revision whose byte count was not recorded, so they are kept for the",
+    "budget argument and explicitly excluded from the calibration set. Recording that split is the",
+    "point: 'validate against all 11' was not executable, and pretending otherwise would have produced",
+    "a suite that looked twice as strong as it is."
+  ],
+
+  "calibration_set": [
+    { "name": "CLAUDE_ADAM.md@truncating",   "bytes": 106286, "harness_tokens": 42190, "source": "notice" },
+    { "name": "CLAUDE_SOLOMON.md@pre-split", "bytes": 67501,  "harness_tokens": 26143, "source": "notice" },
+    { "name": "CLAUDE_LEAD.md@pre-fix",      "bytes": 66228,  "harness_tokens": 27462, "source": "notice" },
+    { "name": "CLAUDE_PLAN.md@pre-fix",      "bytes": 92184,  "harness_tokens": 38166, "source": "notice" },
+    { "name": "CLAUDE_EXEC.md@pre-fix",      "bytes": 90071,  "harness_tokens": 37056, "source": "notice" },
+    { "name": "CLAUDE_CORE.md@pre-fix",      "bytes": 94199,  "harness_tokens": 39750, "source": "notice" }
+  ],
+
+  "verdict_set": [
+    {
+      "name": "CLAUDE_SOLOMON.md@371-pre-split",
+      "sha": "1ea0403b14ab",
+      "bytes": 67501,
+      "harness_tokens": 26138,
+      "line_count": 371,
+      "read_outcome": "truncated",
+      "expected_fits": false,
+      "source": "notice",
+      "notice_string": "PARTIAL view — showing lines 1-301 of 371 total (26138 tokens, cap 25000)",
+      "note": "THE NEAR-MISS NEGATIVE, and the only one. Every other expected-false row is 48-61% over cap, which any not-catastrophically-wrong model catches; this one is 4.6% over and is what actually discriminates. Numerator corrected from 26142 to 26138: measured by reconstructing the 371-line file and counting it whole. Four places in the repo already said 26138; only the coverage module and its test said 26142, hardcoded as observed-not-computed."
+    },
+    {
+      "name": "CLAUDE_SOLOMON.md@fixture-59080",
+      "bytes": 59080,
+      "harness_tokens": 23897,
+      "line_count": 310,
+      "read_outcome": "clean",
+      "expected_fits": true,
+      "source": "differential",
+      "note": "THE DECISIVE REFUTATION CASE, bound to its recorded byte count. The shipped 1.85 model predicted 28,270 for this file and therefore PREDICTED TRUNCATION on a read that came back clean. Note it exceeds the OLD 22,500 budget, so no predictor could have cleared it until the margin went."
+    },
+    {
+      "name": "CLAUDE_LEAD.md@24336",
+      "bytes": 58622,
+      "harness_tokens": 24336,
+      "read_outcome": "clean",
+      "expected_fits": true,
+      "source": "differential",
+      "note": "Over the old 22,500 budget while reading clean. Headroom under the cap is 664 tokens (2.7%), INSIDE the model's own 6.80% error band -- its verdict is corroboration, not proof."
+    },
+    {
+      "name": "CLAUDE_PLAN.md@23153",
+      "bytes": 55186,
+      "harness_tokens": 23153,
+      "read_outcome": "clean",
+      "expected_fits": true,
+      "source": "differential",
+      "note": "Over the old budget while reading clean. 1,847 tokens of headroom (7.4%), also inside the error band."
+    },
+    {
+      "name": "CLAUDE_ADAM.md@18857",
+      "bytes": 47258,
+      "harness_tokens": 18857,
+      "read_outcome": "clean",
+      "expected_fits": true,
+      "source": "differential",
+      "note": "The ONLY contract decided with real margin -- 24.6% headroom, comfortably outside the error band."
+    },
+    {
+      "name": "CLAUDE_EXEC.md@37059",
+      "bytes": 90072,
+      "harness_tokens": 37059,
+      "read_outcome": "truncated",
+      "expected_fits": false,
+      "source": "differential"
+    },
+    {
+      "name": "CLAUDE_CORE.md@40285",
+      "bytes": 95531,
+      "harness_tokens": 40285,
+      "read_outcome": "truncated",
+      "expected_fits": false,
+      "source": "differential"
+    }
+  ],
+
+  "tolerance": {
+    "relative_pct": 8.0,
+    "absolute_tokens": 2000,
+    "both_required": true,
+    "measured_max_error_pct": 6.8,
+    "theatre_threshold_pct": 56.7,
+    "leakage_begins_pct": 22.0,
+    "note": "BOTH bounds are asserted, and the theatre threshold is recorded so nobody can widen the tolerance into meaninglessness by accident. At 56.7% the RETIRED 1.85 model passes this same suite and it stops discriminating between the defect and the fix entirely; individual defective points start slipping through at 22.0%. The chosen 8.0% sits just above the measured 6.80% max and far below both."
+  },
+
+  "retired_model_overshoot_pct": {
+    "_note": "The 1.85 cl100k-on-framed model's overshoot against the calibration set. Used as the TWO-SIDED CONTROL: the retired model must FAIL the same tolerance the new one passes, or the tolerance proves nothing.",
+    "CLAUDE_ADAM.md@truncating": 27.7,
+    "CLAUDE_SOLOMON.md@pre-split": 22.0,
+    "CLAUDE_LEAD.md@pre-fix": 52.7,
+    "CLAUDE_PLAN.md@pre-fix": 54.1,
+    "CLAUDE_EXEC.md@pre-fix": 56.7,
+    "CLAUDE_CORE.md@pre-fix": 42.9
+  }
+}

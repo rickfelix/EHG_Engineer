@@ -10,7 +10,7 @@
 import { describe, it, expect } from 'vitest';
 import { createRequire } from 'node:module';
 const require_ = createRequire(import.meta.url);
-const { contractReadVerdict, singleReadFit, FULL_COVERAGE_PCT, SINGLE_READ_SAFE_BYTES, SINGLE_READ_TOKEN_CAP, SINGLE_READ_TOKEN_BUDGET } = require_('../../../lib/protocol/contract-read-coverage.cjs');
+const { contractReadVerdict, singleReadFit, FULL_COVERAGE_PCT, SINGLE_READ_SAFE_BYTES, SINGLE_READ_TOKEN_CAP, SINGLE_READ_TOKEN_BUDGET, EVIDENCE_KINDS, exceedsCapByRawLowerBound, HARNESS_BYTES_PER_TOKEN } = require_('../../../lib/protocol/contract-read-coverage.cjs');
 
 describe('contractReadVerdict — the inversion, both halves', () => {
   it('THE DILIGENT READER: paginated full coverage reports FULLY READ', () => {
@@ -287,90 +287,129 @@ describe('the byte proxy is RETIRED — readability is measured in tokens', () =
    *   2nd: "1.32 B/token is the densest case"               — measured, but a sample MAX, not a max.
    * cl100k_base is byte-level BPE with 256 single-byte fallbacks, so the true floor is 1.0 B/token.
    */
-  it('THE MARGIN IS APPLIED, not merely declared', () => {
-    /**
-     * *** THIS IS THE ONE MUTANT THAT SURVIVED THE WHOLE SUITE. *** Changing singleReadFit to
-     * compare against SINGLE_READ_TOKEN_CAP (25,000) instead of SINGLE_READ_TOKEN_BUDGET (22,500)
-     * — i.e. DELETING the safety margin — passed every test. Every margin assertion checked the
-     * two constants' RELATIONSHIP; none checked that the smaller one is what the comparison uses.
-     * The docblock calls the margin load-bearing, and it was the only safety mechanism here with
-     * zero behavioural coverage.
-     *
-     * A contract sized into the band between budget and cap is the only thing that can tell them
-     * apart, so build one instead of hoping a real file lands there.
-     */
-    const osx = require_('os'); const fsx = require_('fs'); const px = require_('path');
-    const dir = fsx.mkdtempSync(px.join(osx.tmpdir(), 'ctr-margin-'));
-    const file = 'BAND.md';
-    const line = 'lorem ipsum dolor sit amet consectetur adipiscing elit sed do eiusmod\n';
+  /**
+   * *** THE MARGIN TEST IS GONE BECAUSE THE MARGIN IS GONE, AND THAT WAS THE BIGGER FIX. ***
+   * SD-LEO-INFRA-CONTRACT-READ-COVERAGE-001. It grew a synthetic file until the prediction landed
+   * strictly between a 22,500 budget and the 25,000 cap, then asserted `fits === false` — pinning
+   * the margin as a requirement.
+   *
+   * The margin was measurably wrong. Actual harness tokens: CLAUDE_SOLOMON.md 23,897,
+   * CLAUDE_LEAD.md 24,336, CLAUDE_PLAN.md 23,153 — all three READ CLEAN and all three sat in that
+   * band, so the margin disarmed three of the four clean-reading contracts on its own. A perfect
+   * predictor could not have cleared them. Budget is now the cap, the band is empty, and this test
+   * would throw `overshot the band` on its first iteration rather than merely fail.
+   *
+   * What replaces it is NOT another band test — it is the ground-truth suite in
+   * contract-read-groundtruth.test.js, which checks the prediction against measured harness output
+   * instead of against a second constant.
+   */
+  it('the budget is the CAP — no margin, because the margin manufactured false-fails', () => {
+    expect(SINGLE_READ_TOKEN_BUDGET).toBe(SINGLE_READ_TOKEN_CAP);
 
-    // Grow until the FRAMED measurement lands strictly between budget and cap.
-    let body = '';
-    for (let i = 0; i < 20000; i++) {
-      body += line;
-      if (i % 20 !== 0) continue;   // stride 20, not 200: the band is 2,500 wide and a 3,600-token step can leap clean over it
-      fsx.writeFileSync(px.join(dir, file), body);
-      const t = singleReadFit(dir, file).tokens;
-      if (t > SINGLE_READ_TOKEN_BUDGET && t < SINGLE_READ_TOKEN_CAP) break;
-      if (t >= SINGLE_READ_TOKEN_CAP) throw new Error(`overshot the band at ${t} tokens`);
+    // The three measured clean readers that the old 22,500 budget disarmed. Each is asserted as a
+    // NUMBER here rather than read off disk, so the test states the fact it depends on.
+    for (const measured of [23897, 24336, 23153]) {
+      expect(measured).toBeGreaterThan(22500);              // the old budget would have disarmed it
+      expect(measured).toBeLessThanOrEqual(SINGLE_READ_TOKEN_BUDGET);  // it genuinely fits
     }
-
-    const fit = singleReadFit(dir, file);
-    expect(fit.tokens).toBeGreaterThan(SINGLE_READ_TOKEN_BUDGET);
-    expect(fit.tokens).toBeLessThan(SINGLE_READ_TOKEN_CAP);
-    expect(fit.fits).toBe(false);   // the margin, doing its job
-
-    // MUTATION: compare against SINGLE_READ_TOKEN_CAP instead of the budget -> fits true. Fails.
-    // That mutation survived all 58 tests before this one existed.
   });
 
-  it('the surviving byte constant is sound at the 1.0 B/token FLOOR, not at a sampled ratio', () => {
-    // It is now only the no-tokenizer fallback, so it must hold even for input that encodes at one
-    // token per byte. Anything above 25,000 is unsound at that floor.
-    expect(SINGLE_READ_SAFE_BYTES).toBeLessThanOrEqual(SINGLE_READ_TOKEN_CAP * 1.0);
+  it('SAFE_BYTES is the degraded-mode bound and is re-derived from the live scale', () => {
+    // It was derived from the RETIRED constant, so leaving it alone would have been the same defect
+    // one level down. Pinned against the arithmetic that produces it, not against the old floor.
+    expect(SINGLE_READ_SAFE_BYTES).toBe(Math.floor(SINGLE_READ_TOKEN_BUDGET * HARNESS_BYTES_PER_TOKEN));
 
-    // MUTATION: restore 32,000 (the "1.32 B/token" derivation) -> unsound at the floor, fails.
+    // NOT asserted: `SAFE_BYTES <= BUDGET`. That inequality held for every ratio at or above 1.0,
+    // so it would not have noticed the bound loosening — it is the shape of assertion that let the
+    // original defect through, and repeating it here would buy nothing.
   });
 
-  it('MEASURES rather than infers — a file can be over the byte bound and still fit', () => {
+  it('a dense file is vetoed even though the prose-calibrated bytes model would clear it', () => {
     /**
-     * *** DELIBERATELY NOT PINNED TO TODAY'S CONTRACT SIZES. *** The first version of this test
-     * asserted `sol.bytes > SINGLE_READ_SAFE_BYTES` and `coord.fits === true` against the live
-     * files — i.e. it required Solomon's contract to stay over 25 KB and the coordinator's to stay
-     * small. Trimming either (both desirable, and one is an active sibling SD) would have failed a
-     * test with nothing wrong. That is the same defect as the arming table this SD replaced, just
-     * pointed at a different fact.
-     *
-     * The BEHAVIOUR is what matters: bytes and tokens can disagree, and tokens decide. Built from
-     * a synthetic file so it stays true whatever happens to the real contracts.
+     * *** THE REGRESSION THE FIX ITSELF BUYS, AND THE GUARD THAT CLOSES IT. ***
+     * The bytes model is calibrated on prose-and-table documents at 2.4177 B/token. Random ASCII,
+     * base64 and minified text run 1.32-1.77, so a contract that gains a blob costs far more per
+     * byte than the model predicts and would be waved through AS FITTING WHILE IT TRUNCATES — the
+     * original defect, restored by its own fix. Nothing else in this suite covers that.
      */
     const osx = require_('os'); const fsx = require_('fs'); const px = require_('path');
-    const dir = fsx.mkdtempSync(px.join(osx.tmpdir(), 'ctr-prose-'));
-    // Prose runs ~4.2 bytes/token, so this is far over the byte bound and far under the token one.
-    // 700 lines: ~30.8KB, comfortably over the byte bound, and ~17k CALIBRATED tokens — under the
-    // budget. Sized against the calibrated scale; at 1200 it was 29,242 calibrated tokens and the
-    // premise of the test (over on bytes, under on tokens) no longer held.
-    fsx.writeFileSync(px.join(dir, 'P.md'), 'the quick brown fox jumps over the lazy dog\n'.repeat(700));
+    const dir = fsx.mkdtempSync(px.join(osx.tmpdir(), 'ctr-dense-'));
 
-    const fit = singleReadFit(dir, 'P.md');
-    expect(fit.basis).toBe('measured_tokens');
-    expect(fit.bytes).toBeGreaterThan(SINGLE_READ_SAFE_BYTES);  // the byte proxy would disarm it
-    expect(fit.tokens).toBeLessThan(SINGLE_READ_TOKEN_BUDGET);
-    expect(fit.fits).toBe(true);                                // ...measurement says otherwise
+    /**
+     * SIZED INTO THE GAP DELIBERATELY, and every number here was MEASURED rather than assumed. The
+     * bytes model clears anything up to 25,000 * 2.4177 = 60,442 B. This fixture is 49,336 B, which
+     * the model predicts at 20,406 tokens — comfortably fitting — while cl100k_raw measures 35,381,
+     * well over the cap. That gap is the only window in which this test proves anything.
+     *
+     * BASE64 OF PSEUDO-RANDOM BYTES, and the two rejected alternatives are worth recording because
+     * both looked right:
+     *   - `'someBase64ish'.repeat(n)` tokenizes at 4.87 B/token. Repetition is precisely what BPE
+     *     compresses best, so a repeated "dense" string is not dense at all.
+     *   - Sampling a base64 ALPHABET with an LCG gives the same problem: the low bits of an LCG are
+     *     highly structured, and the result still merges.
+     * Encoding random BYTES yields 1.394 B/token, which independently reproduces the 1.40 that this
+     * module's own docblock records SECURITY as having measured for base64.
+     *
+     * Deterministic LCG, never Math.random: a fixture that changes between runs cannot be a fixture.
+     */
+    let seed = 12345;
+    const raw = Buffer.alloc(37000);
+    for (let i = 0; i < raw.length; i++) {
+      seed = (seed * 1103515245 + 12345) % 2147483648;
+      raw[i] = (seed >> 16) & 0xff;   // high bits: the low bits of an LCG are too structured
+    }
+    fsx.writeFileSync(px.join(dir, 'D.md'), raw.toString('base64'));
 
-    // MUTATION: compare bytes instead of tokens -> fits false. Fails.
+    const fit = singleReadFit(dir, 'D.md');
+    const bytesModelSays = Math.round(fit.bytes / HARNESS_BYTES_PER_TOKEN);
+    expect(bytesModelSays).toBeLessThanOrEqual(SINGLE_READ_TOKEN_BUDGET);  // the model would clear it
+    expect(fit.fits).toBe(false);                                          // the veto does not
+    expect(fit.basis).toBe('raw_lower_bound_exceeds_cap');
+  });
+
+  it('the veto is ONE-SIDED — it never turns a does-not-fit into a fit', () => {
+    // A sound lower bound can only ever add refusals. If this ever flips a verdict the other way,
+    // the veto has stopped being a bound and become a second predictor.
+    const osx = require_('os'); const fsx = require_('fs'); const px = require_('path');
+    const dir = fsx.mkdtempSync(px.join(osx.tmpdir(), 'ctr-small-'));
+    fsx.writeFileSync(px.join(dir, 'S.md'), 'the quick brown fox jumps over the lazy dog\n'.repeat(50));
+
+    expect(exceedsCapByRawLowerBound(dir, 'S.md')).toBe(false);
+    expect(singleReadFit(dir, 'S.md').fits).toBe(true);
+  });
+
+  it('every verdict carries its evidence kind, and there is NO direct kind to carry', () => {
+    /**
+     * The original defect survived review because a PREDICTION wore the same label as an
+     * OBSERVATION. Each verdict now says which it is — and 'direct' is deliberately absent, because
+     * nothing can produce it: the structured consumer exists at protocol-file-tracker.cjs:232 and
+     * the harness has never fed it (0 truncation flags across 1,464 recorded reads). This assertion
+     * is a FALSIFIABLE NEGATIVE: re-adding an unreachable label reddens here.
+     */
+    expect(EVIDENCE_KINDS).not.toContain('direct');
+    expect(EVIDENCE_KINDS).not.toContain('notice_derived');
+
+    const osx = require_('os'); const fsx = require_('fs'); const px = require_('path');
+    const dir = fsx.mkdtempSync(px.join(osx.tmpdir(), 'ctr-ev-'));
+    fsx.writeFileSync(px.join(dir, 'E.md'), 'hello world\n'.repeat(10));
+    expect(EVIDENCE_KINDS).toContain(singleReadFit(dir, 'E.md').evidence);
+    expect(singleReadFit(dir, 'ABSENT.md').evidence).toBe('none');
   });
 
   it('the real contracts are measured by the same rule (reported, not required)', () => {
     // Sanity only, and deliberately asserts nothing about SIZE — just that each real contract is
-    // genuinely measured and that fits/tokens agree with each other. Whatever the sibling SD does
-    // to CLAUDE_ADAM.md, this keeps passing and the arming table keeps telling the truth.
+    // genuinely evaluated and that fits/tokens agree with each other. Whatever a sibling SD does to
+    // any contract's length, this keeps passing and the arming table keeps telling the truth.
     const root = process.cwd();
     for (const f of ['CLAUDE_COORDINATOR.md', 'CLAUDE_SOLOMON.md', 'CLAUDE_ADAM.md']) {
       const fit = singleReadFit(root, f);
-      expect(fit.basis).toBe('measured_tokens');
       expect(fit.tokens).toBeGreaterThan(0);
-      expect(fit.fits).toBe(fit.tokens <= SINGLE_READ_TOKEN_BUDGET);
+      expect(EVIDENCE_KINDS).toContain(fit.evidence);
+      // The veto can refuse a file the size rule would clear, so agreement is asserted only on the
+      // path where the size rule actually decided.
+      if (fit.basis === 'predicted_bytes') {
+        expect(fit.fits).toBe(fit.tokens <= SINGLE_READ_TOKEN_BUDGET);
+      }
     }
   });
 
@@ -618,116 +657,80 @@ describe('SEC-F16 — a REQUEST must never stand in for a MEASUREMENT', () => {
   });
 });
 
-describe('SEC-F10/F11 — measuring the right artefact, with the right encoder', () => {
+describe('SEC-F10/F11 — measuring the right artefact', () => {
   it('a contract mentioning a special-token literal does not silently degrade', () => {
-    // cl100k_base `encode` THROWS on <|endoftext|> even inline in prose. That throw would fall
-    // through to the byte fallback and flip a 25,587-byte contract from ARMED to disarmed on the
-    // strength of a documentation string. encode_ordinary treats it as text.
+    // cl100k_base `encode` THROWS on <|endoftext|> even inline in prose. That throw used to fall
+    // through to the byte fallback and flip a contract from ARMED to disarmed on the strength of a
+    // documentation string. The veto now owns the only tokenizer call and uses encode_ordinary, so
+    // the same file must still be evaluated rather than degraded.
     const os = require_('os'); const fsx = require_('fs'); const p = require_('path');
     const dir = fsx.mkdtempSync(p.join(os.tmpdir(), 'ctr-special-'));
     fsx.writeFileSync(p.join(dir, 'X.md'), '# doc\nmentions <|endoftext|> inline\n'.repeat(50));
 
     const fit = singleReadFit(dir, 'X.md');
-    expect(fit.basis).toBe('measured_tokens');   // NOT the byte fallback
+    expect(fit.basis).toBe('predicted_bytes');   // NOT the degraded fallback, NOT vetoed
     expect(fit.tokens).toBeGreaterThan(0);
+    // The veto must have reached a real answer rather than throwing to null.
+    expect(exceedsCapByRawLowerBound(dir, 'X.md')).toBe(false);
 
-    // MUTATION: swap encode_ordinary back to encode -> throws, basis becomes
-    // conservative_bytes_no_tokenizer, fails.
+    // MUTATION: swap encode_ordinary back to encode in harness-token-scale.cjs -> the veto throws,
+    // returns null, and this assertion fails.
   });
 
-  it('counts the FRAMED response, not the raw file', () => {
-    // Read returns cat -n output; the line numbers and tabs count against the cap. Measuring raw
-    // bytes understates the real cost — measuring the wrong artefact is the same error the byte
-    // proxy made, one level down.
-    const root = process.cwd();
-    const framed = singleReadFit(root, 'CLAUDE_COORDINATOR.md').tokens;
-    const rawTokens = require_('tiktoken').get_encoding('cl100k_base')
-      .encode_ordinary(require_('fs').readFileSync(require_('path').join(root, 'CLAUDE_COORDINATOR.md'), 'utf8')).length;
-    expect(framed).toBeGreaterThan(rawTokens);
-  });
-
-  it('IS CALIBRATED TO THE HARNESS TOKENIZER, against a recorded ground-truth observation', () => {
-    /**
-     * *** THE GATE SHIPPED WRONG BECAUSE THIS ASSERTION DID NOT EXIST. ***
-     *
-     * cl100k_base is GPT-4's tokenizer; the 25k cap is a CLAUDE limit. I knew that, called it an
-     * irreducible error source, covered it with a 10% margin and shipped — never testing whether the
-     * two were actually close. They are not: cl100k UNDERCOUNTS by ~1.79x.
-     *
-     * GROUND TRUTH, recorded from an actual no-argument Read of CLAUDE_SOLOMON.md:
-     *     "PARTIAL view — showing lines 1-301 of 371 total (26142 tokens, cap 25000)"
-     * cl100k on that exact framed slice: 14,617. Ratio 26,142 / 14,617 = 1.788.
-     *
-     * Uncalibrated, CLAUDE_SOLOMON.md measured 17,390 and this SD ARMED Solomon, reporting "the byte
-     * proxy was disarming a role that already complies" as its headline finding. It was the opposite:
-     * the contract truncates. I had replaced a byte proxy with a token proxy and never validated the
-     * token proxy against the thing it proxies.
-     *
-     * This test re-derives the ratio from the file the observation was taken on, so it fails if the
-     * calibration is removed OR if the contract changes enough to invalidate the recorded datum.
-     */
-    const fsx = require_('fs'); const px = require_('path');
-    const root = process.cwd();
-    const HARNESS_TOKENS_LINES_1_TO_301 = 26142;   // observed, not computed
-    const OBSERVED_LINES = 301;
-
-    const raw = fsx.readFileSync(px.join(root, 'CLAUDE_SOLOMON.md'), 'utf8');
-    const slice = raw.split('\n').slice(0, OBSERVED_LINES).join('\n');
-    const framed = slice.split('\n').map((l, i) => `${String(i + 1).padStart(6)}\t${l}`).join('\n');
-    const cl100k = require_('tiktoken').get_encoding('cl100k_base').encode_ordinary(framed).length;
-
-    const observedRatio = HARNESS_TOKENS_LINES_1_TO_301 / cl100k;
-    // The shipped constant must not UNDERSTATE the measured ratio — understating re-creates the bug.
-    expect(SINGLE_READ_TOKEN_BUDGET).toBeGreaterThan(0);
-    expect(observedRatio).toBeGreaterThan(1.5);   // the two tokenizers are NOT close; that is the point
-
-    // And the consequence that matters: Solomon's contract must NOT be reported as fitting.
-    expect(singleReadFit(root, 'CLAUDE_SOLOMON.md').fits).toBe(false);
-
-    // MUTATION: drop the CL100K_TO_HARNESS multiplier from contractTokenCount -> Solomon reports
-    // fits:true and this fails. That mutation IS the state this SD shipped in for six commits.
-  });
+  /**
+   * *** TWO TESTS WERE DELETED HERE, AND BOTH WERE GREEN WHEN THEY WERE DELETED. ***
+   * SD-LEO-INFRA-CONTRACT-READ-COVERAGE-001. Neither would have announced itself; they are recorded
+   * because a silently-passing test that pins abolished behaviour is worse than a failing one.
+   *
+   * 1. `counts the FRAMED response, not the raw file` asserted that the module measures cat -n
+   *    framed output. THE HARNESS COUNTS RAW CONTENT — framing is not in it. Measured on a
+   *    controlled pair with IDENTICAL WORDS at a 22x line-count difference: k_raw held at 1.6554 vs
+   *    1.6153 while k_framed swung 1.6348 vs 1.2484. Framing before predicting introduced a
+   *    line-count dependence the harness does not have, which is exactly why one constant fitted a
+   *    371-line file and overshot the 1,400-line phase files by 43-61%.
+   *    IT STAYED GREEN BY ARITHMETIC COINCIDENCE after the fix: bytes-model tokens for
+   *    CLAUDE_COORDINATOR.md are 10,553 against cl100k_raw 6,190, so `framed > raw` still held with
+   *    no framing anywhere in the code. A test can survive the deletion of the very thing it names.
+   *
+   * 2. `IS CALIBRATED TO THE HARNESS TOKENIZER` re-derived the ratio as 26142 / cl100k(lines 1-301).
+   *    That is the SPAN-MISMATCHED derivation itself — a whole-file harness count (371 lines) over a
+   *    delivered-slice cl100k count (301 lines) — reproduced as an assertion. It also read the
+   *    CURRENT 310-line CLAUDE_SOLOMON.md and sliced 0..301 out of it, so it measured 97% of a
+   *    DIFFERENT FILE than the datum came from. Its own staleness guard ("fails if the contract
+   *    changes enough to invalidate the recorded datum") DID NOT FIRE: the observed ratio had
+   *    already drifted to 26142/15640 = 1.6715 against a `> 1.5` assertion loose enough to pass a
+   *    file it no longer described. And its closing assertion required
+   *    `singleReadFit('CLAUDE_SOLOMON.md').fits === false` — pinning the false-fail as a REQUIREMENT.
+   *    Deleted rather than corrected in place, because correcting it would preserve the reasoning
+   *    that produced it. The salvageable half — that Solomon's PRE-SPLIT 371-line contract genuinely
+   *    did not fit — is true for the right reason and is asserted from the recorded fixture in
+   *    contract-read-groundtruth.test.js.
+   *
+   * The recorded numerator is 26,138, not 26,142. Measured by reconstructing the 371-line file and
+   * counting it whole; four places in the repo already said 26138 and only this module and this test
+   * said 26142, hardcoded as "observed, not computed".
+   */
 
   it('DEGRADED MODE IS NEVER MORE PERMISSIVE THAN MEASURED MODE', () => {
     /**
-     * *** THE SEVENTH FINDING, AND IT WAS IN PRODUCTION CODE — WHICH IS WHY FIVE TEST-FOCUSED
-     * SWEEPS MISSED IT. *** The measured path admitted <= 22,500 tokens (a 10% margin under the
-     * cap) while the no-tokenizer byte fallback admitted <= 25,000 bytes — which at the module's own
-     * documented 1.0 B/token floor is 25,000 tokens, i.e. exactly the cap and 2,500 tokens BEYOND
-     * what the measured path allows.
-     *
-     * So the module was most generous exactly where it knew least: it relaxed its bound at the
-     * moment it lost the ability to measure. That is the inverse of the doctrine stated in every
-     * other tier here ("absence of evidence is never promoted to compliance") and the same shape as
-     * every defect this SD has closed.
-     *
-     * Pinned as a RELATIONSHIP rather than as two literals, so it holds if either constant moves.
+     * The module must not relax its bound at the moment it loses the ability to measure. Kept from
+     * the original suite because the property survives the model change — but it is now asserted
+     * against TOKENS on both sides rather than comparing a byte count to a token count, which was
+     * only ever coherent while the two scales were confused.
      */
-    expect(SINGLE_READ_SAFE_BYTES).toBeLessThanOrEqual(SINGLE_READ_TOKEN_BUDGET);
-
-    // MUTATION: restore SINGLE_READ_SAFE_BYTES = 25000 -> the fallback outruns the measured path
-    // by 2,500 tokens and this fails.
+    const degradedTokenEquivalent = Math.round(SINGLE_READ_SAFE_BYTES / HARNESS_BYTES_PER_TOKEN);
+    expect(degradedTokenEquivalent).toBeLessThanOrEqual(SINGLE_READ_TOKEN_BUDGET);
   });
 
-  it('the budget leaves a real margin under the cap', () => {
-    expect(SINGLE_READ_TOKEN_BUDGET).toBeLessThan(SINGLE_READ_TOKEN_CAP);
-    expect(SINGLE_READ_TOKEN_BUDGET).toBeGreaterThan(0);
-
+  it('the budget is the cap, and nothing sits between them', () => {
     /**
-     * *** THE ASSERTION THAT USED TO LIVE HERE WOULD HAVE BROKEN WHEN THE SIBLING SD SUCCEEDED. ***
-     * It required every real contract to sit further from the budget than the margin itself, to
-     * show no verdict was decided by the margin. True today — but CLAUDE_ADAM.md is 27,566 tokens
-     * and SD-LEO-INFRA-ADAM-CONTRACT-READABLE-001 exists to bring it under 22,500. Any landing in
-     * 20,000-25,000 arms the role CORRECTLY and would have failed this test, silently imposing a
-     * stricter bar than the arming condition itself.
-     *
-     * That is the mirror of the defect this SD was written to fix. The old arming table could not
-     * change when the world changed; this assertion would have broken when the world changed FOR
-     * THE BETTER. Both are a fact about today pinned as a requirement forever.
-     *
-     * The margin's real property — that it is APPLIED — is asserted above against a synthetic
-     * contract built into the band, which no contract trim can invalidate.
+     * *** THIS ASSERTION IS THE INVERSE OF THE ONE IT REPLACES. *** The old test required
+     * `BUDGET < CAP` — a real margin under the cap. That margin was the defect: three contracts
+     * that read CLEAN (23,897 / 24,336 / 23,153) sat inside it and were disarmed by it, which no
+     * predictor could have fixed. The band is now empty by construction.
      */
+    expect(SINGLE_READ_TOKEN_BUDGET).toBe(SINGLE_READ_TOKEN_CAP);
+    expect(SINGLE_READ_TOKEN_BUDGET).toBeGreaterThan(0);
   });
 });
 
