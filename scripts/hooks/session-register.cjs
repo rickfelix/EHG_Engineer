@@ -175,6 +175,43 @@ async function emitSessionCreated(supabase, { sessionId, payload, prior }) {
  * real answer downstream, and this whole defect family is honest values answering the wrong
  * question. Absent is the honest representation of "not determined".
  */
+/**
+ * QF-20260727-013 — fallback resolver, deliberately reachable ONLY via CLAUDE_CONFIG_DIR.
+ *
+ * lib/fleet/account-identity.cjs getAccountIdentity() reads ~/.claude.json oauthAccount and
+ * works on this host where the CLI returned nulls — which is why coordinator-quiet-tick could
+ * print a real account in the same process tree where this path resolved null. Two resolvers,
+ * same host, same second, opposite answers.
+ *
+ * BUT CALLING IT BARE IS THE TRAP, and it is the exact defect QF-20260726-514 was created to
+ * fix. With no argument it uses resolveRealConfigPath() = USERPROFILE/.claude.json, which does
+ * NOT respect CLAUDE_CONFIG_DIR: host-global, last-writer-wins, every seat reporting the same
+ * account. That looks correct right up until the fleet splits across accounts, which is the
+ * only time this field matters. So we pass the PATH SEAM explicitly and return null rather
+ * than read the host-global default — an unresolved account must stay absent, never guessed.
+ *
+ * @returns {object|null} same shape as resolveAccountIdentity, or null
+ */
+function resolveAccountFromConfigDir() {
+  const dir = process.env.CLAUDE_CONFIG_DIR;
+  if (!dir) return null; // no per-profile scope => refuse; see above
+  try {
+    const { getAccountIdentity } = require('../../lib/fleet/account-identity.cjs');
+    const id = getAccountIdentity(path.join(dir, '.claude.json'));
+    if (!id || !id.email) return null;
+    return {
+      account_email: id.email,
+      account_org_name: id.orgName || null,
+      account_org_id: null,              // not carried by oauthAccount — absent, not invented
+      account_subscription_type: null,   // ditto
+      account_auth_method: 'config_dir',
+      account_captured_at: new Date().toISOString(),
+    };
+  } catch {
+    return null;
+  }
+}
+
 function resolveAccountIdentity() {
   try {
     // execSync with a single command string, matching lib/simplifier/plugin-bridge.js — the
@@ -193,7 +230,11 @@ function resolveAccountIdentity() {
       windowsHide: true,
     });
     const j = JSON.parse(raw);
-    if (!j || j.loggedIn !== true || !j.email) return null;
+    // QF-20260727-013: the CLI can answer loggedIn:true while every identity field is null
+    // (measured 2026-07-28: email/orgId/orgName/subscriptionType all null). The guard below is
+    // CORRECT to reject that — absent beats a placeholder — but it left the stamp 100% dark.
+    // Fall back through the per-profile seam before giving up.
+    if (!j || j.loggedIn !== true || !j.email) return resolveAccountFromConfigDir();
     return {
       account_email: j.email,
       account_org_name: j.orgName || null,
@@ -203,7 +244,12 @@ function resolveAccountIdentity() {
       account_captured_at: new Date().toISOString(),
     };
   } catch {
-    return null; // never abort SessionStart for telemetry
+    // QF-20260727-013: the fallback must be reachable from HERE too, not only from the
+    // null-identity branch above. A missing/failing `claude` binary throws rather than
+    // returning a null-identity payload, and the original code returned null from this catch
+    // without ever consulting the per-profile config — so the seat stayed dark for the one
+    // failure mode where an on-disk answer was still available. Caught by its own unit test.
+    return resolveAccountFromConfigDir(); // still null-safe; never aborts SessionStart
   }
 }
 
@@ -228,7 +274,18 @@ async function captureAccountIdentity(supabase, sessionId) {
       ? data.metadata : {};
     if (meta.account_email) return;                   // already captured — nothing to do
     const acct = resolveAccountIdentity();
-    if (!acct) return;                                // unresolved => leave ABSENT, not null
+    if (!acct) {
+      // QF-20260727-013: RECORD THE DARKNESS. Leaving the identity keys absent is still right —
+      // a null account stored as a value is indistinguishable from a real answer downstream.
+      // But absent-because-unresolved and absent-because-never-asked were ALSO indistinguishable,
+      // and that is why a 100%-dark instrument survived unnoticed from 2026-07-26: nothing said
+      // it was dark. This key answers only "did we ask and fail", so the identity fields keep
+      // their honest absence while the failure itself stops being silent.
+      await supabase.from('claude_sessions')
+        .update({ metadata: { ...meta, account_unresolved_at: new Date().toISOString() } })
+        .eq('session_id', sessionId);
+      return;
+    }
     await supabase.from('claude_sessions')
       .update({ metadata: { ...meta, ...acct } })
       .eq('session_id', sessionId);
