@@ -27,7 +27,7 @@ import { EventEmitter } from 'node:events';
 
 const REPO = join(import.meta.dirname, '..', '..', '..');
 const EVA = join(REPO, 'lib', 'integrations', 'eva-chat-service.js');
-const FIXTURE = join(REPO, 'tests', 'fixtures', 'llm-call-shapes', 'dead-factory-messages-stream.fixture.mjs');
+const FIXTURE = join(REPO, 'tests', 'fixtures', 'llm-call-shapes', 'dead-factory-messages-stream.fixture.js');
 const DOC = join(REPO, 'docs', 'architecture', 'llm-stream-watchdog.md');
 
 const parseModule = (src) => parse(src, { ecmaVersion: 'latest', sourceType: 'module' });
@@ -43,6 +43,11 @@ function exportedNames(src) {
       }
       for (const s of node.specifiers || []) names.add(s.exported.name);
     }
+    // M19/M20 killed here. The first walker handled only ExportNamedDeclaration, so adding
+    // `export default` or `export * from` to the module was invisible to an export-set EQUALITY --
+    // the guard would have reported the set unchanged while the module's surface had grown.
+    if (node.type === 'ExportDefaultDeclaration') names.add('default');
+    if (node.type === 'ExportAllDeclaration') names.add(node.exported ? node.exported.name : '*');
   }
   return names;
 }
@@ -168,6 +173,51 @@ describe('the preserved specimen', () => {
     expect(hasFactoryImport, 'receiver origin (dynamic import of client-factory) is missing from the CODE').toBe(true);
     expect(hasStreamCall, 'call form (.messages.stream) is missing from the CODE').toBe(true);
     expect(hasTextHandler, "the .on('text') incremental-delivery intent is missing from the CODE").toBe(true);
+
+    /**
+     * *** AND THEY MUST BE COUPLED. *** A mutation that kept the factory import but switched the
+     * .messages.stream receiver to a raw `new Anthropic()` client survived the previous version:
+     * both halves were present, and the specimen still demonstrated nothing, because a raw SDK
+     * client HAS a real .messages.stream. Presence of two halves is not the same as one linked
+     * pair, and the pair is the entire diagnostic.
+     */
+    /**
+     * *** AND THIS COUPLING CHECK ITSELF MATCHED THE DOCBLOCK ON ITS FIRST RUN. ***
+     * The raw-SDK half was written as `expect(src).not.toMatch(/new Anthropic\(/)` and failed
+     * immediately — against the fixture's own comment explaining that "a raw `new Anthropic()`
+     * client has a real .messages.stream". That is the FIFTH time in this SD a check read the prose
+     * instead of the code, and it happened inside the fix for the fourth. The lesson is not "be
+     * careful": it is that a substring check over a file containing prose about code is the wrong
+     * instrument, every time, and the AST is the right one.
+     */
+    let rawSdkConstruction = false;
+    let streamReceiver = null;
+    let factoryBinding = null;
+    const walk2 = (n) => {
+      if (!n || typeof n !== 'object') return;
+      if (n.type === 'NewExpression' && n.callee?.name === 'Anthropic') rawSdkConstruction = true;
+      // `const <name> = await createLLMClient(...)`
+      if (n.type === 'VariableDeclarator' && n.init?.type === 'AwaitExpression'
+          && n.init.argument?.type === 'CallExpression'
+          && n.init.argument.callee?.name === 'createLLMClient') factoryBinding = n.id?.name ?? null;
+      if (n.type === 'CallExpression' && n.callee?.type === 'MemberExpression'
+          && n.callee.property?.name === 'stream'
+          && n.callee.object?.type === 'MemberExpression'
+          && n.callee.object.property?.name === 'messages') {
+        streamReceiver = n.callee.object.object?.name ?? null;
+      }
+      for (const k of Object.keys(n)) {
+        const v = n[k];
+        if (Array.isArray(v)) v.forEach(walk2); else if (v && typeof v === 'object' && v.type) walk2(v);
+      }
+    };
+    walk2(ast);
+
+    expect(factoryBinding, 'no binding is assigned from the factory call').not.toBeNull();
+    expect(streamReceiver, 'the .messages.stream receiver is not the factory-derived binding')
+      .toBe(factoryBinding);
+    expect(rawSdkConstruction, 'a raw SDK client was constructed — the specimen no longer shows a FACTORY receiver')
+      .toBe(false);
   });
 
   it('is labelled so a future sweeper stops rather than files it', () => {
@@ -204,11 +254,23 @@ describe('every pointer in the watchdog doc resolves', () => {
     expect(citations.length).toBeGreaterThanOrEqual(3);
   });
 
-  it.each(citations)('$path:$line exists and the file is long enough', ({ path, line }) => {
+  it.each(citations)('$path:$line resolves AND the cited line is the streaming call', ({ path, line }) => {
+    /**
+     * M09c killed here. The first version checked existence and line count only, so repointing a
+     * citation from :110 to :1 stayed GREEN -- a citation can be badly wrong while still being
+     * in-range. That is precisely the staleness class this SD found three times in this document
+     * (two rows citing lines 862 and 1055 of a 184-line file), so a check that cannot detect
+     * in-range drift is not a check on the thing that went wrong.
+     */
     const full = join(REPO, path);
     expect(existsSync(full), `${path} does not exist`).toBe(true);
-    const count = readFileSync(full, 'utf8').split('\n').length;
-    expect(count, `${path} has ${count} lines, citation points at ${line}`).toBeGreaterThanOrEqual(line);
+    const lines = readFileSync(full, 'utf8').split('\n');
+    expect(lines.length, `${path} has ${lines.length} lines, citation points at ${line}`).toBeGreaterThanOrEqual(line);
+
+    // Every citation in this table names a live {stream: true} caller. Anchor on that, with a small
+    // window for ordinary edits above the call rather than a brittle exact-line match.
+    const window = lines.slice(Math.max(0, line - 4), line + 3).join('\n');
+    expect(window, `${path}:${line} does not point at a streaming call`).toMatch(/stream:\s*true/);
   });
 
   it('no table row still points at the deleted function', () => {
@@ -228,6 +290,14 @@ describe('THE HELD NEGATIVE — the streaming path this SD promises not to break
    * A held negative that cannot fail is worse than none, because it reads as protection. This is
    * the positive control that closes it — it drives the real _completeWithStreaming against the
    * same EventEmitter double shape the watchdog suite already uses.
+   *
+   * *** WHAT IT DOES NOT COVER, because the first draft of this docblock overstated it. *** Review
+   * mutated four things that this control leaves GREEN: removing the watchdog from the race,
+   * removing the wall-clock race, removing stream.abort() on timeout, and breaking complete()'s
+   * routing into _completeWithStreaming. So "closes a hole where no test could go red" is true for
+   * the TRANSPORT CALL and false for the three timeout behaviours the retirement block advertises
+   * as the surviving streaming story. Those remain untested; saying so is better than leaving a
+   * claim of coverage that does not exist.
    */
   const makeMockStream = () => {
     const ee = new EventEmitter();

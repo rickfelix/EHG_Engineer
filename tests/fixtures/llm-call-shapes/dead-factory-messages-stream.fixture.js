@@ -28,15 +28,22 @@
  *
  * INERT BY THREE INDEPENDENT MECHANISMS, each verified rather than assumed:
  *   - `tests/` is outside dead-code-scanner.mjs IMPORT_GRAPH_DIRS, so it is never graph-scanned.
- *   - the vitest unit project collects only `*.test.js`, so a `.fixture.mjs` name cannot be run.
+ *   - the vitest unit project collects only `*.test.js`, so a `.fixture.js` name cannot be run.
  *   - nothing imports this file; the export exists solely to give a parser something to bind.
- * It remains lintable (eslint.config.js ignores only bundles/dist/build/node_modules), which is
- * what makes it usable as a rule fixture.
+ *
+ * LINTABILITY, CORRECTED AFTER REVIEW MEASURED IT. This file was originally named `.fixture.mjs`,
+ * and that made it EFFECTIVELY UNLINTABLE: eslint.config.js's main block matches only .js, .jsx,
+ * .ts and .tsx, so `--print-config` returned ONE rule (disabled) for the .mjs name against EIGHT
+ * for a sibling .js. A rule registered the ordinary way would not have
+ * fired on the very specimen kept to prove it can fire -- the "control that cannot fire" defect
+ * this fixture exists to prevent, reproduced inside the fixture. Renamed to `.js`, now 8 rules.
+ * NOTE the remaining limit: `npm run lint` is `eslint scripts/ lib/ tools/`, so `tests/` is outside
+ * its directory scope. A future rule must target this path explicitly (as
+ * scripts/lint/session-coordination-insert-classguard-lint.mjs does for its own subject).
  */
 
 // --- BEGIN PRESERVED SPECIMEN ---------------------------------------------------------------
 // Receiver origin: a FACTORY client. This is the half a call-form-only sweep cannot see.
-// eslint-disable-next-line no-unused-vars
 export async function deadFactoryMessagesStreamSpecimen(messages, model, systemPrompt) {
   const { createLLMClient } = await import('../../../lib/llm/client-factory.js');
   const client = await createLLMClient('sonnet');
