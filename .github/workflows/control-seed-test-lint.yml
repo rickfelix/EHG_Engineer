@@ -66,7 +66,17 @@ jobs:
       - name: Seed-test every new control in this diff
         run: |
           git fetch origin ${{ github.base_ref }} --depth=0 || true
-          node scripts/lint/control-seed-test-lint.mjs --diff | tee seed-output.txt
+          # FR-2: `2>&1` IS LOAD-BEARING, NOT TIDINESS. A bare pipe carries STDOUT ONLY, and
+          # every failure line in the lint is console.error while both success lines are
+          # console.log. Measured: running the real lint against a repo with one added
+          # control produced ZERO BYTES on stdout. So this summary was POPULATED ON PASS and
+          # BLANK ON FAIL — it rendered "A control that cannot catch its own seeded defect
+          # does not merge." above an empty code block exactly when the gate found something.
+          #
+          # FR-1/FR-5: `--diff` removed — it was never read (changedFiles() ignores argv), and
+          # enforcing is now the lint's DEFAULT, so no flag is needed to make this gate able
+          # to fail. Pass --advisory only to deliberately opt out.
+          node scripts/lint/control-seed-test-lint.mjs 2>&1 | tee seed-output.txt
           exit_code=${PIPESTATUS[0]}
           {
             echo "## Control Seed-Test Gate"

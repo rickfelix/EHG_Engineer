@@ -50,7 +50,21 @@
  *     Prefer `fixtures`; `seedTest` exists for controls that cannot be aimed at one.
  *
  * Usage:
- *   node scripts/lint/control-seed-test-lint.mjs [--diff|--all] [--json] [--enforce]
+ *   node scripts/lint/control-seed-test-lint.mjs [--json] [--advisory]
+ *
+ * ENFORCING IS THE DEFAULT (SD-PAT-FIX-FIX-ABSENCE-SIGNAL-001, FR-1). It used to require
+ * --enforce, and the workflow never passed it — so for the whole life of this gate every
+ * failure path, INCLUDING the honest "refusing to report a pass on an unknown set" refusal,
+ * exited 0. Requiring a flag makes the safe behaviour something each workflow author has to
+ * REMEMBER; inverting it makes the omission UNEXPRESSIBLE. Pass --advisory to opt out
+ * deliberately, which is a thing a reader can see in the diff.
+ *
+ * --enforce is still accepted as a no-op so an existing caller cannot break; it is redundant.
+ *
+ * FR-5: [--diff|--all] USED TO BE DOCUMENTED HERE AND NEITHER FLAG WAS EVER READ. main()
+ * parsed only --enforce and --json, and changedFiles() ignores argv entirely — running --all
+ * and --diff produced byte-identical output. A documented flag that no code reads is a false
+ * statement in the help text, so the claim is removed rather than the behaviour invented.
  */
 
 import { execFileSync, spawnSync } from 'node:child_process';
@@ -153,7 +167,11 @@ export function evaluate(repoRoot, files, specs, isControlFn = isControl) {
 function main() {
   const argv = process.argv.slice(2);
   const repoRoot = process.cwd();
-  const enforce = argv.includes('--enforce');
+  // FR-1: ENFORCING IS THE DEFAULT. Opting OUT must be explicit and visible in a diff;
+  // opting IN was invisible by omission, which is how this gate spent its whole life
+  // unable to fail. `--enforce` stays accepted as a redundant no-op so existing callers
+  // keep working — it no longer grants anything.
+  const enforce = !argv.includes('--advisory');
 
   const files = changedFiles(repoRoot);
   if (files === null) {
