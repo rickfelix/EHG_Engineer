@@ -10,6 +10,7 @@
 import { describe, it, expect } from 'vitest';
 import { createRequire } from 'node:module';
 import { gatedQfMint } from '../../../lib/governance/qf-mint-gate.mjs';
+import { recordWithheldCost } from '../../../lib/governance/demand-gate-emit.js';
 import {
   buildMarker,
   deriveAdmissionPath,
@@ -290,6 +291,15 @@ describe('FR-5 — exit only by a named, recorded event', () => {
     await expect(disposeMarker({}, 'fb-1', { reason: 'stale' })).rejects.toThrow(/actor and reason/);
   });
 
+  // V-3: without nowIso this returned {disposed:true} while leaving disposed_at null — and
+  // isPending keys on disposed_at, so the marker stayed PENDING while the caller was told it had
+  // been disposed. A silent non-exit wearing a verb, inside the function whose own error message
+  // rails against exactly that. The guard was one argument short of its own rule.
+  it('disposeMarker REFUSES without nowIso — disposed_at is what actually ends pending state', async () => {
+    await expect(disposeMarker({}, 'fb-1', { actor: 'me', reason: 'stale' }))
+      .rejects.toThrow(/nowIso is required/);
+  });
+
   it('buildMarker refuses to invent a clock', () => {
     expect(() => buildMarker(group(), demand(), { severityRank, threshold: 3 })).toThrow(/nowIso is required/);
   });
@@ -312,9 +322,38 @@ describe('FR-6 — what the withhold COST is recorded on the DB side', () => {
     expect(costs).toHaveLength(1);
     expect(costs[0].c.suppressed_groups).toBe(2);
     expect(costs[0].c.markers_written).toBe(2);
-    expect(costs[0].c.markers_failed).toBe(0);
     expect(costs[0].c.marker_key).toBe(MARKER_KEY);
     expect(costs[0].d.decision).toBe('withheld');
+  });
+
+  // THIS TEST REPLACES ONE THAT PINNED THE DEFECT. The earlier version asserted markers_failed
+  // === 0 against a stub that could not fail — so it was asserting the hardcoded zero the gate
+  // used to emit, i.e. pinning the bug as though it were the requirement. A test whose subject
+  // cannot produce the other outcome is not measuring anything.
+  it('a PARTIAL failure reaches the cost record — it is not erased at the gate boundary', async () => {
+    const costs = [];
+    await gatedQfMint({}, {
+      engine: 'e', gauge: async () => 151, record: async () => {}, log: () => {},
+      onWithheld: async () => [group(), group({ fingerprint: 'b', rows: [{ id: 'fb-2' }] })],
+      // The detail shape the real recordWithheld now returns.
+      writeMarkers: async () => ({ written: 1, failed: [{ id: 'fb-2', stage: 'write', error: 'denied' }], attempted: 2 }),
+      recordCost: async (_sb, _d, c) => { costs.push(c); return true; },
+    }, async () => 0);
+    expect(costs[0].markers_written).toBe(1);
+    expect(costs[0].markers_failed).toBe(1);   // was hardcoded 0 before the fix
+    expect(costs[0].markers_attempted).toBe(2);
+  });
+
+  it('a bare-number writeMarkers return still works (backward compatible)', async () => {
+    const costs = [];
+    await gatedQfMint({}, {
+      engine: 'e', gauge: async () => 151, record: async () => {}, log: () => {},
+      onWithheld: async () => [group()],
+      writeMarkers: async () => 1,
+      recordCost: async (_sb, _d, c) => { costs.push(c); return true; },
+    }, async () => 0);
+    expect(costs[0].markers_written).toBe(1);
+    expect(costs[0].markers_failed).toBe(0);
   });
 
   // The negative twin. Without it, "emits the cost event" is equally satisfied by emitting always.
@@ -356,6 +395,94 @@ describe('FR-6 — what the withhold COST is recorded on the DB side', () => {
     expect(costs[0].markers_written).toBe(0);
     expect(costs[0].markers_failed).toBe(1);
     expect(costs[0].error).toContain('db down');
+  });
+});
+
+describe('the cost event severity discriminates fault from health', () => {
+  // Mutation M3 (hardcoding severity to 'info') previously killed ZERO tests. recordWithheldCost
+  // is now exercised directly against a stub client so the ternary actually evaluates.
+  const stub = () => {
+    const inserted = [];
+    return {
+      inserted,
+      from() { return this; },
+      insert(row) { inserted.push(row); return { select: () => Promise.resolve({ data: [{ id: 'x' }], error: null }) }; },
+    };
+  };
+  const d = { engine: 'e', decision: 'withheld', gauge_value: 151, floor: 3 };
+
+  it('a clean run logs info', async () => {
+    const sb = stub();
+    await recordWithheldCost(sb, d, { suppressed_groups: 4, markers_written: 4, markers_failed: 0, markers_attempted: 4 });
+    expect(sb.inserted[0].severity).toBe('info');
+  });
+
+  it('ANY failure logs warning', async () => {
+    const sb = stub();
+    await recordWithheldCost(sb, d, { suppressed_groups: 4, markers_written: 3, markers_failed: 1, markers_attempted: 4 });
+    expect(sb.inserted[0].severity).toBe('warning');
+  });
+
+  it('attempted-but-none-written logs warning — the mechanism failing is not routine', async () => {
+    const sb = stub();
+    await recordWithheldCost(sb, d, { suppressed_groups: 4, markers_written: 0, markers_failed: 4, markers_attempted: 4 });
+    expect(sb.inserted[0].severity).toBe('warning');
+  });
+
+  // The discriminator. An all-SKIPPED run legitimately writes nothing, and warning on it would
+  // fire every six hours on a healthy system until nobody reads the level at all.
+  it('an ALL-SKIPPED run (nothing attempted) logs info, not warning', async () => {
+    const sb = stub();
+    await recordWithheldCost(sb, d, { suppressed_groups: 4, markers_written: 0, markers_failed: 0, markers_attempted: 0 });
+    expect(sb.inserted[0].severity).toBe('info');
+  });
+
+  it('carries the decision alongside the cost, so a reader needs only this row', async () => {
+    const sb = stub();
+    await recordWithheldCost(sb, d, { suppressed_groups: 4, markers_written: 4, markers_failed: 0, markers_attempted: 4 });
+    expect(sb.inserted[0].metadata.engine).toBe('e');
+    expect(sb.inserted[0].metadata.gauge_value).toBe(151);
+    expect(sb.inserted[0].metadata.suppressed_groups).toBe(4);
+  });
+});
+
+describe('the promoter source stays in lockstep with isPending (V-1)', () => {
+  const read = () => require_('node:fs').readFileSync(
+    require_.resolve('../../../scripts/feedback-fingerprint-promoter.mjs'), 'utf8');
+
+  // V-1: two of my own fixes cancelled each other. The candidate query keyed pending-ness on
+  // promoted_qf_id while a later commit correctly stopped writing that field, so isPending() said
+  // false and the query said true — and a re-admitted consumed row then made the already-promoted
+  // check skip the WHOLE group, making any once-withheld fingerprint permanently unpromotable.
+  // Mutation M2 (flipping this predicate either way) killed zero tests.
+  it('the candidate query tests EVERY field isPending tests', () => {
+    // The source interpolates the constant rather than hard-coding the key, so the pin matches
+    // `${MARKER_KEY}->>field.is.null` — the shape actually on disk. (My first version of this
+    // assertion looked for the expanded literal and failed, correctly: the test was wrong, not
+    // the code. Worth keeping the note, because a pin that matches nothing is the same class of
+    // useless guard this SD is about.)
+    const src = read();
+    for (const field of ['promoted_at', 'promoted_qf_id', 'disposed_at']) {
+      expect(src, `candidate query must test ${field} — isPending does`)
+        .toMatch(new RegExp(`\\$\\{MARKER_KEY\\}->>${field}\\.is\\.null`));
+    }
+  });
+
+  it('that pin is not vacuous — MARKER_KEY really is the key isPending reads', () => {
+    // Guards the indirection: if MARKER_KEY ever stopped naming the field the marker lives under,
+    // the regex above would still pass while testing nothing.
+    const m = buildMarker(group(), demand(), { nowIso: NOW, severityRank, threshold: 3 });
+    expect(Object.keys({ [MARKER_KEY]: m })).toEqual(['withheld_pending']);
+    expect(m).toHaveProperty('promoted_at');
+    expect(m).toHaveProperty('promoted_qf_id');
+    expect(m).toHaveProperty('disposed_at');
+  });
+
+  // Mutation M1 (deleting the consumption spread) killed zero tests.
+  it('the promotion path CONSUMES the marker rather than clobbering it', () => {
+    const src = read();
+    expect(src).toMatch(/promoted_at: stampedAt, promoted_fingerprint: group\.fingerprint/);
+    expect(src).toMatch(/\.\.\.consumed/);
   });
 });
 

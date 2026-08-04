@@ -80,7 +80,19 @@ try {
     // went on admitting its row forever and the candidate set grew monotonically toward the whole
     // table. Found at review. The nested `and(...)` requires the marker to be present AND not yet
     // promoted; the syntax was verified live before being encoded rather than assumed to parse.
-    .or(`created_at.gte.${cutoff},and(metadata->>${MARKER_KEY}.not.is.null,metadata->${MARKER_KEY}->>promoted_qf_id.is.null,metadata->${MARKER_KEY}->>disposed_at.is.null)`)
+    // V-1, found at PLAN_VERIFICATION: this predicate MUST test promoted_at, not only
+    // promoted_qf_id. Two of my own fixes cancelled each other — the query was written while the
+    // inline promotion path still stamped a fingerprint into promoted_qf_id, and a later commit
+    // correctly stopped doing that (an id field must not hold a non-id) without updating the
+    // query. Net effect: isPending() said false while this predicate said true, so a consumed row
+    // was re-admitted forever.
+    //
+    // And the damage was NOT merely a growing candidate set. A re-admitted consumed row makes the
+    // already-promoted check skip the WHOLE group, so any fingerprint once withheld-then-promoted
+    // became permanently unpromotable and its later recurrences were never marked pending at all
+    // — silent expiry, re-created inside the fix for silent expiry. It must stay in lockstep with
+    // isPending(); the two are now pinned to each other by test.
+    .or(`created_at.gte.${cutoff},and(metadata->>${MARKER_KEY}.not.is.null,metadata->${MARKER_KEY}->>promoted_at.is.null,metadata->${MARKER_KEY}->>promoted_qf_id.is.null,metadata->${MARKER_KEY}->>disposed_at.is.null)`)
     // SD-LEO-INFRA-SIGNAL-PROMOTION-RESOLUTION-CHECK-001 (FR-4): this predicate had NO status
     // filter at all, so a row already marked resolved stayed promotion-eligible for its whole
     // 14-day window. Measured live at authoring time: 38 resolved + 1 invalid in-window rows were
@@ -232,7 +244,7 @@ for (const group of groups.values()) {
  * ambient environment and remains testable without one.
  */
 async function recordWithheld(sb, groups, demand) {
-  const { written, failed } = await writeMarkers(sb, groups, demand, {
+  const { written, failed, attempted } = await writeMarkers(sb, groups, demand, {
     runId: process.env.GITHUB_RUN_ID || null,
     nowIso: new Date().toISOString(),
     severityRank,
@@ -247,7 +259,13 @@ async function recordWithheld(sb, groups, demand) {
   } else {
     console.log(`  [WITHHELD_RECORDED] ${written} source row(s) marked pending across ${groups.length} group(s) — these now survive their 14-day window.`);
   }
-  return written;
+  // V-2: return the FAILURE DETAIL, not just the count. Returning only `written` erased partial
+  // failures at this boundary — the gate then had nothing to record but a zero, so a run where
+  // half the writes were rejected produced a durable cost row reading markers_failed:0 at
+  // severity 'info', and the partial survived only on stdout: the unqueryable expiring GHA log
+  // that FR-6 exists to replace. `attempted` travels too, so the gate can tell an all-SKIPPED run
+  // (healthy) from an all-FAILED one (not).
+  return { written, failed: failed || [], attempted };
 }
 
 let withheldByDemand = false;
