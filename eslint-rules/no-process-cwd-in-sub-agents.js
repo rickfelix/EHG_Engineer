@@ -192,36 +192,43 @@ function getDisablePragmaCommentAbove(sourceCode, node) {
   //
   // The rule's 82 unit tests could not catch it: RuleTester's NATIVE suppression fires before
   // this fallback is ever consulted, so the tests exercised a path production never reaches.
-  const anchor = statementAncestorOf(node) || node;
-  const comments = sourceCode.getCommentsBefore(anchor);
-  if (!comments || comments.length === 0) return null;
-  const last = comments[comments.length - 1];
-  if (!last || (last.type !== 'Line' && last.type !== 'Block')) return null;
-  if (last.loc && node.loc && last.loc.end.line < node.loc.start.line - 1) return null;
-  const verdict = classifyPragma(last.value);
-  return verdict.targets ? last : null;
-}
-
-/**
- * Nearest enclosing STATEMENT for a node, or null at the top of the tree.
- *
- * A pragma is written above a statement, so suppression must be anchored there. Walking to the
- * statement (rather than, say, one parent up) means the pragma covers the violation wherever it
- * sits inside that statement — initialiser, property value, ternary branch, argument — which is
- * what a reader writing `// eslint-disable-next-line ...` above a line already believes it does.
- *
- * @param {import('estree').Node} node
- * @returns {import('estree').Node | null}
- */
-function statementAncestorOf(node) {
-  let current = node;
-  while (current && current.parent) {
-    // Stop at the outermost statement in the chain, not the innermost, so a pragma above
-    // `const x = ...` still covers a call buried several expressions deep inside it.
-    if (typeof current.type === 'string' && /Statement$|^VariableDeclaration$|Declaration$/.test(current.type)) {
-      return current;
-    }
-    current = current.parent;
+  // Try the call node, then each enclosing ancestor, stopping at the statement. A pragma may be
+  // attached to any of them depending on how the code is written, and BOTH live shapes occur:
+  //   const cwd = process.cwd();          <- comment precedes the VariableDeclaration
+  //   { executed_from_cwd: process.cwd() } <- comment precedes the Property, inside a multi-line
+  //                                          object literal whose statement began many lines up
+  // Anchoring only at the statement fixes the first and misses the second; anchoring only at the
+  // call node misses both. My first fix did the former, and a single-line object-literal fixture
+  // hid it, because there the property and the statement share a line. The production shape is
+  // multi-line, so the fixture was not the code.
+  for (const anchor of anchorChainFor(node)) {
+    const comments = sourceCode.getCommentsBefore(anchor);
+    if (!comments || comments.length === 0) continue;
+    const last = comments[comments.length - 1];
+    if (!last || (last.type !== 'Line' && last.type !== 'Block')) continue;
+    // The pragma must sit on the line immediately above the thing it annotates.
+    if (last.loc && anchor.loc && last.loc.end.line < anchor.loc.start.line - 1) continue;
+    const verdict = classifyPragma(last.value);
+    if (verdict.targets) return last;
   }
   return null;
 }
+
+/**
+ * The call node plus every ancestor up to and including the nearest statement.
+ *
+ * @param {import('estree').Node} node
+ * @returns {import('estree').Node[]}
+ */
+function anchorChainFor(node) {
+  const chain = [node];
+  let current = node;
+  while (current && current.parent) {
+    current = current.parent;
+    chain.push(current);
+    if (typeof current.type === 'string' && /Statement$|^VariableDeclaration$|Declaration$/.test(current.type)) break;
+  }
+  return chain;
+}
+
+
