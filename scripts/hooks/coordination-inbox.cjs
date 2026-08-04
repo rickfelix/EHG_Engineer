@@ -70,6 +70,27 @@ const FRICTION_TRIGGERS = {
 const IDENTITY_DIR = path.resolve(__dirname, '../../.claude');
 // Per-session identity file keyed by session ID (birth certificate UUID or resolved).
 // Falls back to shared file for sessions without a resolvable ID.
+/**
+ * SD-LEO-INFRA-ROLE-BLIND-SESSION-001 FR-4 — should a SET_IDENTITY write be refused?
+ *
+ * Returns a reason string to refuse, or null to allow. Exported so the decision is testable
+ * without driving the whole inbox flow.
+ *
+ * @param {string} sessionId
+ * @param {string} [dir] identity dir override, for tests
+ * @returns {string|null}
+ */
+function setIdentityRefusalReason(sessionId, dir) {
+  try {
+    const rp = require('../../lib/fleet/role-status-identity.cjs');
+    const existing = rp.readIdentityFile(String(sessionId || ''), dir || rp.IDENTITY_DIR);
+    if (rp.verdictFromIdentityFile(existing) === rp.ROLE_VERDICT.ROLE) {
+      return `role session (${existing.callsign || 'role'}) — worker callsigns are not assigned to role seats`;
+    }
+  } catch { /* predicate unavailable -> allow, exactly as before this SD */ }
+  return null;
+}
+
 function getIdentityFile(resolvedSessionId) {
   const csid = resolvedSessionId || process.env.CLAUDE_SESSION_ID;
   if (csid) return path.join(IDENTITY_DIR, `fleet-identity-${csid}.json`);
@@ -685,14 +706,38 @@ async function main() {
 
       // Handle SET_IDENTITY: write per-session identity file for statusline integration
       if (msg.message_type === 'SET_IDENTITY' && msg.payload) {
-        try {
-          fs.writeFileSync(getIdentityFile(sessionId), JSON.stringify({
-            color: msg.payload.color,
-            callsign: msg.payload.callsign,
-            display_name: msg.payload.display_name,
-            assigned_at: new Date().toISOString()
-          }));
-        } catch { /* ignore write errors */ }
+        // SD-LEO-INFRA-ROLE-BLIND-SESSION-001 FR-4: the RECEIVER now guards too.
+        //
+        // The sending side already refuses to hand a NATO callsign to a role seat. A guard on only
+        // one side is satisfied by any caller that skips that side, which is how a role session
+        // ended up wearing a worker callsign.
+        //
+        // The damage is not only cosmetic. This write REPLACES the identity file wholesale, and the
+        // role file it clobbers is the one writeRoleStatusIdentity wrote with `role: true` — the
+        // same marker FR-2's stop hook reads to choose role guidance over worker doctrine. So an
+        // unguarded SET_IDENTITY silently un-does FR-2 for that seat, and it also burns one of the
+        // 8 claim-gated NATO names on a session that will never hold a claim.
+        //
+        // Reads the EXISTING file rather than the DB: the file is what is about to be overwritten,
+        // so it is the authority on what is being destroyed, and this path has no budget for a
+        // round trip. Fail-open — an unreadable/absent file means "not known to be a role seat",
+        // which preserves today's behaviour for every worker.
+        const refuseReason = setIdentityRefusalReason(sessionId);
+
+        if (refuseReason) {
+          // Exactly one line, per the SD. A refusal nobody can see is indistinguishable from a
+          // write that silently failed.
+          console.log(`[coordination-inbox] SET_IDENTITY REFUSED for ${sessionId}: ${refuseReason}`);
+        } else {
+          try {
+            fs.writeFileSync(getIdentityFile(sessionId), JSON.stringify({
+              color: msg.payload.color,
+              callsign: msg.payload.callsign,
+              display_name: msg.payload.display_name,
+              assigned_at: new Date().toISOString()
+            }));
+          } catch { /* ignore write errors */ }
+        }
       }
 
       console.log('');
@@ -888,6 +933,7 @@ if (require.main === module) {
 }
 
 module.exports = {
+  setIdentityRefusalReason,
   // SD-LEO-INFRA-PARKED-WORKER-CLAIM-LAPSE-001 FR-7: exported so the dispatch-availability
   // predicate can be asserted directly instead of through a mock of its own query.
   selectAvailableSds,
