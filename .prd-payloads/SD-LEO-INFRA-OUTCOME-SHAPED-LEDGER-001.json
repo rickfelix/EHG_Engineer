@@ -1,0 +1,94 @@
+{
+  "executive_summary": "The SD prescribes wiring. Measurement says a correct writer already exists (coordinator-ack-adam.cjs:249, d4f7cbed4db, ancestor of origin/main) and the INPUT is what fails: of 865 populated outcome_ref values, exactly ONE matches the eligible SD-key shape and 853 (98.6%) are narrative prose. outcome_ref is carrying two incompatible jobs — an artifact REFERENCE and an outcome NARRATIVE — and no wiring fixes an overloaded column. The deliverable is a shape classifier, a published DERIVABLE CEILING, and a three-bucket applicability report. Scope correction accepted as recommended-not-decided (coordinator 8b9720cb). PER EXPLICIT INSTRUCTION, FR-5 carries the RETRACTION of my own wrong finding, not just the corrected one.",
+  "functional_requirements": [
+    {
+      "id": "FR-1",
+      "title": "Classify every populated outcome_ref by shape and publish the DERIVABLE CEILING",
+      "description": "MEASURED whole-column, not sampled (865 populated values): 853 (98.6%) narrative prose; 4 commit sha; 4 `SD-` non-uppercase; 3 `QF-`; exactly 1 (0.1%) matching `^SD-[A-Z0-9-]+$`, the only shape the deriver can use. ~650 of the 853 carry an `era_closure:` prefix — a BULK STAMP, not organic writes. DELIVERABLE: a classifier that reports the split AND the resulting ceiling for outcome_sd_key. THE CEILING IS THE POINT: 3.4% judged against 100% reads as a broken writer; judged against a ceiling of ~0.1% derivable from current inputs, it reads as an absent input, which is the true defect. A population figure published without its ceiling is the exact metric this SD exists to stop chasing, so the report must refuse to emit one without the other."
+    },
+    {
+      "id": "FR-2",
+      "title": "Three buckets, never two: RESOLVABLE / NOT-YET / NOT-APPLICABLE",
+      "description": "A row whose outcome is a narrative can NEVER carry a resolvable SD key — it is not awaiting work, it is out of the mechanism's domain. Collapsing NOT-APPLICABLE into NOT-YET is what makes 3.4% look like a backlog rather than a ceiling, and a backlog invites the wrong remedy (more wiring). DELIVERABLE: every coverage report separates the three. A report schema that can only express populated-vs-empty fails this FR by construction, the same way a re-triage that cannot say 'undetermined' is re-labelling rather than measuring."
+    },
+    {
+      "id": "FR-3",
+      "title": "DO NOT loosen the derivation pattern — and record why, where the next person will look",
+      "description": "The narrowings at coordinator-ack-adam.cjs:264 are deliberate and each prevents a NOISIER failure than the current inert one. QF keys are excluded because the reconciler resolves against strategic_directives_v2 (scripts/solomon-ledger-reconcile.cjs:70) and quick fixes do not live there; uppercase-only because sd_key is stored uppercase. AN UNRESOLVABLE KEY IS WORSE THAN NO KEY: the row is re-selected by every scheduled batch forever, burning a slot and logging a skip each time. The prior author measured 13 of 31 existing outcome_sd_key values ALREADY failing to resolve. TRAP TO NAME EXPLICITLY: case-fixing the 4 non-uppercase `SD-` refs looks like an obvious cheap win and would gain FOUR ROWS out of 1,392. Turning an inert path noisy is a regression, not progress."
+    },
+    {
+      "id": "FR-4",
+      "title": "Name the overload: outcome_ref is one column with two meanings",
+      "description": "outcome_ref simultaneously holds an artifact REFERENCE (machine-resolvable — what the advice BECAME) and an outcome NARRATIVE (human prose — what happened). The deriver needs the first; 98.6% of the column is the second. This is a single-representation violation in the less familiar direction: not one fact in two places, but two facts in one place. DELIVERABLE: state it in the ledger's schema documentation so the next writer knows which job they are feeding. WHICHEVER WAY IT IS RESOLVED — split the column, or declare it narrative-only and source refs elsewhere — a fix that does not decide which job the column has will recreate the ambiguity under a new name."
+    },
+    {
+      "id": "FR-5",
+      "title": "Carry the RETRACTION, not just the corrected finding",
+      "description": "EXPLICIT COORDINATOR INSTRUCTION (8b9720cb). I first reported that outcome_sd_key had NO writer at all. That was FALSE. A correct writer exists at coordinator-ack-adam.cjs:249. HOW THE WRONG ANSWER LOOKED CONVINCING, which is the part worth keeping: my search excluded `row.outcome_sd_key` in order to drop READS like `if (!row.outcome_sd_key)` — and the WRITE is the same token up to the operator, so the filter deleted the thing I was searching for. I then ran a POSITIVE CONTROL against outcome_ref, it found four writers, and I treated that as proof the search was sound. IT COULD NOT HAVE CAUGHT THE ERROR: I applied the SAME exclusion to the control, so it found writers only via other syntactic forms and still came back green. THE RULE, now adopted as fleet guidance: A CONTROL THAT INHERITS THE FLAW CANNOT REVEAL IT — a control validates that the SEARCH RUNS, never that the EXCLUSION LIST is safe. To test an exclusion, the control must be a case the exclusion would wrongly remove. SECOND RETRACTION, on this SD's own thesis: I read outcome_ref rising 14%→62% as the field self-remedying and proposed copying that writer. It was a bulk stamp of PROSE into a REFERENCE field — the metric rose, the capability did not, outcome_sd_key moved by one row. A POPULATED COLUMN IS NOT A POPULATED MEASURE. A PRD showing only the tidy conclusion teaches the next reader that the conclusion was obvious; the useful content is how the wrong answer looked right."
+    }
+  ],
+  "technical_requirements": [
+    { "id": "TR-1", "title": "No migration", "description": "The SD says DO NOT WRITE A MIGRATION and that half stands: the column is already schemad and already has a live consumer. This SD adds reporting and documentation, not DDL." },
+    { "id": "TR-2", "title": "Measure whole-column, never sampled", "description": "All figures come from COUNT(head:true) or a full-column read. An earlier figure in this codebase ('4 distinct QF keys') came from a truncated sample read as a population and had to be corrected to 6 across 8 rows. Sampling is how a ceiling gets mistaken for a backlog." },
+    { "id": "TR-3", "title": "The report refuses to emit a population without a ceiling", "description": "Enforced in code, not by convention. A coverage percentage published alone is the artifact this SD exists to prevent." }
+  ],
+  "test_scenarios": [
+    { "id": "TS-1", "scenario": "Population is never emitted without its ceiling", "type": "unit", "expected": "Requesting the outcome_sd_key population without the derivable ceiling exits non-zero. SEEDED: a caller that asks for the bare number fails." },
+    { "id": "TS-2", "scenario": "Prose refs classify as NOT-APPLICABLE, not as a coverage failure", "type": "unit", "expected": "An `era_closure:...` ref lands in NOT-APPLICABLE. SEEDED: a classifier that puts it in NOT-YET fails, because that is the mistake that produced the SD's unbuildable remedy." },
+    { "id": "TS-3", "scenario": "Lowercase SD- ref is reported as case-drift, not silently derived", "type": "unit", "expected": "Reported in its own bucket with the reason (sd_key is stored uppercase). A run that derives from it fails — it would produce a key that never resolves." },
+    { "id": "TS-4", "scenario": "QF- ref classifies as EXCLUDED-BY-DESIGN with its reason", "type": "unit", "expected": "Bucketed with the rationale that quick fixes do not live in strategic_directives_v2, so the key would never resolve and the row would be re-selected by every batch forever." },
+    { "id": "TS-5", "scenario": "Three buckets always present in the schema", "type": "unit", "expected": "The report object exposes RESOLVABLE, NOT-YET and NOT-APPLICABLE even when a bucket is zero. SEEDED: a two-bucket schema fails by construction." },
+    { "id": "TS-6", "scenario": "Whole-column figures match a live count", "type": "integration", "expected": "Classifier totals reconcile against COUNT(head:true) on the live table; a mismatch exits non-zero rather than reporting a plausible-looking subtotal." }
+  ],
+  "acceptance_criteria": [
+    "The shape classifier reports the whole-column split and the DERIVABLE CEILING together; a population figure alone is not emittable.",
+    "Coverage reports separate RESOLVABLE / NOT-YET / NOT-APPLICABLE, with the third present even when zero.",
+    "The derivation pattern is UNCHANGED, and the reason an unresolvable key is worse than none is recorded where the next person will look.",
+    "The outcome_ref overload (reference vs narrative) is named in the ledger's schema documentation.",
+    "The PRD and retrospective carry the RETRACTION — the wrong finding and why it looked convincing — not only the corrected finding.",
+    "No migration; no change to the writer at coordinator-ack-adam.cjs; no loosening of the match."
+  ],
+  "risks": [
+    { "risk": "Someone loosens the pattern to raise the percentage.", "mitigation": "FR-3 plus TS-3/TS-4. An unresolvable key makes an inert path NOISY and permanently re-selected — measurably worse than the current state, and 13 of 31 existing values already fail to resolve." },
+    { "risk": "NOT-APPLICABLE is collapsed into NOT-YET, restoring the illusion of a backlog.", "mitigation": "FR-2 plus TS-5 — a two-bucket schema fails by construction rather than by reviewer vigilance." },
+    { "risk": "The retraction is smoothed out of the record as the SD is tidied for review.", "mitigation": "FR-5 makes it a numbered requirement with its own acceptance criterion, per explicit coordinator instruction." },
+    { "risk": "A figure is quoted from the SD body rather than re-measured.", "mitigation": "TR-2. The SD's own numbers were already stale by build time (1,216→1,392 rows; outcome_ref 14%→62%), which is what made the stated remedy look correct." }
+  ],
+  "integration_operationalization": {
+    "consumers": "scripts/solomon-ledger-reconcile.cjs — the forward reconciler that skips every row lacking outcome_sd_key (:64) and resolves the SD by that key (:70); anyone reading ledger coverage to judge whether the reward spine is working.",
+    "dependencies": "scripts/coordinator-ack-adam.cjs:249 as the sole writer (derives from outcome_ref); strategic_directives_v2 as the resolution target; the ledger's schema documentation as the place the overload must be named.",
+    "data_contracts": "No schema change. outcome_sd_key remains derived, never separately supplied — a second hand-entered field would drift from outcome_ref and the two columns would then disagree about which artifact a decision tracked.",
+    "runtime_config": "No new env vars. Reporting only.",
+    "observability_rollout": "The classifier IS the observable. Before: 3.4% population with no ceiling, which reads as a broken writer. After: population against a published ceiling plus a three-bucket applicability split, which reads as an absent input. The difference between those two readings is the entire value of this SD."
+  },
+  "system_architecture": {
+    "objects_touched": "Reporting scripts and schema documentation only. No DDL, no change to the writer or the reconciler.",
+    "invariant": "outcome_sd_key is DERIVED from outcome_ref and is only derivable when outcome_ref is a machine-resolvable uppercase SD key. Coverage can therefore never exceed the proportion of refs holding that shape.",
+    "coupling_map": "outcome_sd_key ← outcome_ref (derivation, coordinator-ack-adam.cjs:249). Reconciler ← outcome_sd_key (solomon-ledger-reconcile.cjs:64,:70). outcome_ref ← two unrelated writer intents (reference and narrative) — the overload named in FR-4."
+  },
+  "implementation_approach": {
+    "sequence": "Classifier and ceiling first (FR-1), because every later judgement depends on knowing what is achievable. Then the three-bucket report (FR-2). Then documentation of the overload (FR-4) and the do-not-loosen rationale (FR-3). FR-5 is written into the PRD and retro rather than built.",
+    "verification_discipline": "Whole-column, never sampled. Re-measure rather than quote the SD. And test an exclusion with a case the exclusion would wrongly remove — a control sharing the assumption proves nothing about it.",
+    "out_of_scope": "Changing the writer; loosening the match; any migration; deciding on the fleet's behalf whether advice outcomes SHOULD be artifacts — this SD supplies the measurement that makes that decision possible, and says so rather than pre-empting it."
+  },
+  "smoke_test_steps": [
+    { "step_number": 1, "instruction": "Run: node scripts/ledger-ref-shape-report.mjs", "expected_outcome": "Prints the whole-column shape split (eligible SD keys vs narrative prose vs other) with counts and percentages, AND the derivable ceiling for outcome_sd_key. Exits non-zero if a population figure is emitted without its ceiling." },
+    { "step_number": 2, "instruction": "Run: node scripts/ledger-ref-shape-report.mjs --applicability", "expected_outcome": "Reports three buckets, never two: RESOLVABLE, NOT-YET, and NOT-APPLICABLE. A run reporting only populated-vs-empty fails this step — collapsing not-applicable into not-yet is what makes 3.4% look like a backlog rather than a ceiling." },
+    { "step_number": 3, "instruction": "Run: npx vitest run tests/unit/ledger-ref-shape.test.js", "expected_outcome": "Green, including the seeded cases: a prose ref classifies NOT-APPLICABLE (not as a coverage failure), a lowercase SD- ref is reported as case-drift rather than silently derived, and a QF- ref is EXCLUDED-BY-DESIGN with the reason recorded." }
+  ],
+  "metadata": {
+    "no_migration": true,
+    "writer_unchanged": true,
+    "measured_2026_08_04": {
+      "rows": 1392,
+      "outcome_populated": "1392 (100%)",
+      "outcome_ref_populated": "865 (62.1%)",
+      "outcome_sd_key_populated": "48 (3.4%)",
+      "outcome_ref_shape": "853 prose (98.6%) / 4 sha / 4 SD- non-upper / 3 QF- / 1 eligible (0.1%)",
+      "era_closure_prefixed": "~650 of 853 (76%) — a bulk stamp"
+    },
+    "sd_figures_were_stale": "SD said 1,216 rows, outcome_ref 14.0%, outcome_sd_key 3.9%",
+    "retractions_carried": 2,
+    "scope_correction": "accepted recommended-not-decided, coordinator 8b9720cb"
+  }
+}
