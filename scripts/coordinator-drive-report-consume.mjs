@@ -29,7 +29,15 @@ import { fileURLToPath } from 'node:url';
 import process from 'node:process';
 
 const require_ = createRequire(import.meta.url);
-const { DRIVE_REPORT_LANES } = require_('../lib/drive-loop/lanes.cjs');
+
+// STATIC ESM IMPORT, NOT createRequire — and the reason is testability, not style. The lane key is
+// a shared cross-SD contract (FR-1), and the mutant worth killing is "someone inlines 'coordinator'
+// instead of importing it". That mutant CANNOT be killed by asserting the receipt key, because the
+// literal and the constant have the SAME VALUE — a fixture that coincides with the implementation's
+// own value can never detect a constant. It can only be killed by substituting the module and
+// asserting the substitution takes effect, and vi.mock intercepts ESM imports but NOT createRequire.
+import lanesModule from '../lib/drive-loop/lanes.cjs';
+const { DRIVE_REPORT_LANES } = lanesModule;
 
 /** Bound so a black-holed write cannot stall the coordinator tick (precedent: receipt-ledger). */
 export const WRITE_TIMEOUT_MS = 2000;
@@ -166,7 +174,18 @@ export async function main() {
 
 const isMainModule = process.argv[1] && fileURLToPath(import.meta.url) === process.argv[1];
 if (isMainModule) {
+  // SET exitCode, DO NOT CALL process.exit(). MEASURED, NOT STYLISTIC: the explicit
+  // process.exit(0) this replaced produced a DETERMINISTIC EXIT 127 on Windows —
+  // "Assertion failed: !(handle->flags & UV_HANDLE_CLOSING), src\\win\\async.c" — because forcing
+  // exit races a still-closing async handle and aborts the process. The core's own logic had
+  // already completed and logged correctly; only the exit code was wrong.
+  //
+  // That matters more than it looks: EXIT CODE 0 IS THE INVARIANT THIS HOST ACTUALLY READS
+  // (runCoresFailSoft treats a non-zero child as a failed core), so the observer would have
+  // reported a failed tick on every run while doing its job perfectly. No unit test could have
+  // caught it — they never exercise process teardown. It was found by running the real script
+  // against the live client during the window when drive_reports is genuinely absent.
   main()
-    .then((code) => process.exit(code ?? 0))
-    .catch((e) => { console.error(`[drive-report-consume] fatal (${e && e.message})`); process.exit(0); });
+    .then((code) => { process.exitCode = code ?? 0; })
+    .catch((e) => { console.error(`[drive-report-consume] fatal (${e && e.message})`); process.exitCode = 0; });
 }

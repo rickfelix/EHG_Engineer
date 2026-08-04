@@ -121,27 +121,51 @@ describe('FR-4 — read-merge-write PRESERVES sibling lanes', () => {
 });
 
 describe('FR-4 — idempotency', () => {
-  it('does not re-stamp an already-consumed lane', async () => {
+  // THE TWO GUARDS BELOW MASK EACH OTHER, AND MUTATION TESTING IS WHAT REVEALED IT.
+  // A read-time short-circuit (`if (receipts[lane]) return`) and a write-time predicate
+  // (`.is(lane, null)`) BOTH prevent a re-stamp. Remove either one alone and the other still
+  // prevents it — so a naive "call twice, timestamp unchanged" test passes against BOTH mutants and
+  // proves neither guard is load-bearing. Each test below is written so that only ONE guard can
+  // possibly be responsible for the outcome.
+
+  it('SHORT-CIRCUITS at read time — it does not even attempt the write', async () => {
+    // Isolates the read-time guard: asserting the timestamp is unchanged would be satisfied by the
+    // write predicate instead. Asserting that NO UPDATE WAS ATTEMPTED can only be satisfied by the
+    // short-circuit.
     const db = makeDb(baseRow());
     await runDriveReportConsumeCore(db, { sessionId: randomUUID(), nowMs: 1_000_000, logger: silent });
     const first = db.rows[0].consumption_receipts.coordinator.at;
+
+    let updateAttempts = 0;
+    const origFrom = db.from.bind(db);
+    db.from = (t) => { const q = origFrom(t); const u = q.update; q.update = (p) => { updateAttempts++; return u.call(q, p); }; return q; };
+
     await runDriveReportConsumeCore(db, { sessionId: randomUUID(), nowMs: 9_000_000, logger: silent });
+    expect(updateAttempts).toBe(0);
     expect(db.rows[0].consumption_receipts.coordinator.at).toBe(first);
   });
 
-  it('leaves a concurrent writer\'s receipt alone rather than clobbering it with a stale merge', async () => {
-    // The .is() predicate is what makes read-merge-write safe. Simulate the row being stamped
-    // between our read and our write.
+  it('the WRITE PREDICATE protects a lane stamped AFTER our read — the short-circuit cannot help here', async () => {
+    // Isolates the write-time predicate. The lane must appear BETWEEN the read and the write, so
+    // the read-time check saw an empty map and cannot be what saves us. Without the .is() guard the
+    // stale merge clobbers the concurrent writer.
     const db = makeDb(baseRow());
-    const original = db.from;
+    const origFrom = db.from.bind(db);
     let reads = 0;
-    db.from = function (t) {
-      const q = original.call(db, t);
+    db.from = (t) => {
+      const q = origFrom(t);
       const origLimit = q.limit;
-      q.limit = function () {
-        reads++;
-        if (reads === 1) db.rows[0].consumption_receipts = { coordinator: { actor: 'someone-else', at: 'T0' } };
-        return origLimit.call(q);
+      q.limit = async () => {
+        const res = await origLimit.call(q);
+        // SNAPSHOT FIRST, THEN mutate. Order is the whole test: an earlier version copied the row
+        // AFTER landing the concurrent receipt, so the core saw the lane already present and
+        // short-circuited at read time — the write predicate was never exercised and the mutant
+        // that deletes it SURVIVED while the test sat green.
+        const snapshot = JSON.parse(JSON.stringify(res.data));
+        if (++reads === 1) {
+          db.rows[0].consumption_receipts = { coordinator: { actor: 'someone-else', at: 'T0' } };
+        }
+        return { data: snapshot, error: null };
       };
       return q;
     };
