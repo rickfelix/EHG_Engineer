@@ -1,6 +1,11 @@
 -- SD-LEO-INFRA-CONTROL-SURFACE-POSTURE-001 (FR-1)
 -- Revoke the write-class grants held by `authenticated` on the fleet coordination bus.
 --
+-- @approved-by: codestreetlabs@gmail.com
+-- (Chairman verbal approval at his terminal 2026-08-04 ~07:2x ET, recorded by Adam in-session:
+-- "approved" — following the full B-ceremony brief: revoke TRUNCATE + latent writes from
+-- authenticated only; anon and service_role untouched; DOWN staged; two-sided acceptance.)
+--
 -- ⚠️ STAGED, NOT APPLIED. chairman_gated_ddl=true, pre-flagged at sourcing. This directory is
 -- outside all three auto-applied migration paths precisely so this file waits for a deliberate
 -- human apply. The builder does not apply it — not even inside a rolled-back transaction.
