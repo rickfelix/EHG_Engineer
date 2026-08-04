@@ -7,7 +7,7 @@
 // to a working one from outside while meaning nothing, which is the same class as the defect. So
 // the negative controls below were written BEFORE the write path and are the primary assertions;
 // the positive case is the easy half.
-import { describe, it, expect, vi } from 'vitest';
+import { describe, it, expect } from 'vitest';
 import { createRequire } from 'node:module';
 import { gatedQfMint } from '../../../lib/governance/qf-mint-gate.mjs';
 import {
