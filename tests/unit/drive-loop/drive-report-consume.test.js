@@ -5,7 +5,7 @@
 // kill a dropped-idempotency-guard mutant: it returns the same thing whether or not the predicate
 // is present. Only a fake that actually stores the row and evaluates the predicate can tell a
 // guarded write from an unguarded one.
-import { describe, it, expect, vi } from 'vitest';
+import { describe, it, expect } from 'vitest';
 import { randomUUID } from 'node:crypto';
 import {
   runDriveReportConsumeCore,
