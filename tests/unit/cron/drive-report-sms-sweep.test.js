@@ -111,6 +111,36 @@ describe('TR-3 — it ENQUEUES through the bridge, it never sends', () => {
   it('refuses hidden dependencies', async () => {
     await expect(runDriveSmsSweep({ nowMs: JULY, recipients: TO })).rejects.toThrow(/must be injected/);
   });
+
+  it('[NO SEAM] an injected sendDriveSms is IGNORED — the real one is not substitutable', async () => {
+    // Pins the ABSENCE of a seam, which was the one thing here nothing guarded.
+    //
+    // Every sweep test necessarily drives the REAL sendDriveSms, because it is a static import
+    // (:48) called directly (:228) with no injection point. That is a good property — but it was
+    // "safe by construction" with NOTHING enforcing the construction: adding
+    // `sendDriveSms = realSendDriveSms` to the destructure at :189 and stubbing it everywhere
+    // would keep every suite green, and the source-match assertion in the WIRING block would
+    // still pass on a file that imports the symbol without using it.
+    //
+    // So: pass a THROWING sendDriveSms. Today the fixed destructure discards it and the real one
+    // runs, which the body assertion proves. Introduce the seam and the throwing stub gets picked
+    // up and this fails, naming the cause. Suggested by the seam-census peer; mechanism verified
+    // here before adopting (fixed destructure at :189, static import at :48, call at :228).
+    //
+    // SCOPE, stated so this does not become another overclaiming name: it pins
+    // NON-SUBSTITUTABILITY only. It does not prove the real sendDriveSms is correct, and it does
+    // nothing for the two drift gaps against enqueueChairmanSms and computePlanCheckStatus.
+    const b = bridge();
+    const r = await runDriveSmsSweep({
+      nowMs: JULY,
+      findLatestReport: async () => report(1),
+      enqueue: b.enqueue,
+      recipients: TO,
+      sendDriveSms: () => { throw new Error('a seam was introduced — the real sendDriveSms is now substitutable'); },
+    });
+    expect(b.calls[0].body, 'the REAL formatter ran, so the real sendDriveSms ran').toBe('Drive 4/6 | capacity TIGHT');
+    expect(r.signal).toBe('score');
+  });
 });
 
 describe('a MISSING report is itself the signal (TR-3), never silence', () => {
