@@ -206,12 +206,43 @@ describe('SEC-GSB-2 follow-up — report-only returns what it SUPPRESSED, not wh
     expect(logged.join('\n')).toMatch(/suppressed 34 promotable group/);
   });
 
-  it('both minters return the suppressed counter in report-only mode', () => {
+  // SD-LEO-INFRA-WITHHELD-PROMOTIONS-GET-001 SPLIT THIS LOOP RATHER THAN RELAXING IT.
+  //
+  // It used to iterate BOTH promoters and pin the literal `return reportOnly ? suppressedCount :
+  // promoted;`. The fingerprint promoter now returns the GROUPS so they can be recorded durably,
+  // which breaks that literal — but widening the regex to accommodate both would have retired the
+  // pin for the RETRO promoter too. That pin exists because a real production run printed
+  // "suppressed 0" while suppressing 34. A weakened pin at the site of a known live defect is
+  // worse than no pin, because it still reads as coverage.
+  it('the retro promoter still returns the suppressed COUNTER in report-only mode', () => {
     const read = (p) => require('node:fs').readFileSync(require.resolve(p), 'utf8');
-    for (const p of ['../../../scripts/feedback-fingerprint-promoter.mjs', '../../../scripts/promote-retro-action-items.mjs']) {
-      const s = read(p);
-      expect(s).toMatch(/return reportOnly \? suppressedCount : promoted;/);
-      expect(s).toMatch(/if \(reportOnly\) suppressedCount\+\+;/);
-    }
+    const s = read('../../../scripts/promote-retro-action-items.mjs');
+    expect(s).toMatch(/return reportOnly \? suppressedCount : promoted;/);
+    expect(s).toMatch(/if \(reportOnly\) suppressedCount\+\+;/);
+  });
+
+  it('the fingerprint promoter returns the suppressed GROUPS, and the gate counts them by length', async () => {
+    // Strictly stronger than the source regex it replaces: this exercises the actual path from
+    // callback return -> gate -> reported count -> the logged headline, rather than asserting that
+    // a particular line of text exists. The count is what the previous defect got wrong.
+    const logged = [];
+    const groups = [{ fingerprint: 'a', rows: [{ id: '1' }] }, { fingerprint: 'b', rows: [{ id: '2' }] }];
+    const r = await gatedQfMint({}, {
+      engine: 'e', gauge: async () => 0,
+      measure: async () => decision(DEMAND_DECISION.WITHHELD),
+      record: async () => {}, log: (m) => logged.push(m),
+      onWithheld: async () => groups,
+    }, async () => 0);
+    expect(r.suppressed).toBe(2);
+    expect(logged.join('\n')).toMatch(/suppressed 2 promotable group/);
+  });
+
+  it('the fingerprint promoter still increments the counter alongside collecting the groups', () => {
+    // Kept so the two can never silently disagree — a length and a counter that drift apart would
+    // reproduce the original "the number is wrong" defect in a new place.
+    const read = (p) => require('node:fs').readFileSync(require.resolve(p), 'utf8');
+    const s = read('../../../scripts/feedback-fingerprint-promoter.mjs');
+    expect(s).toMatch(/if \(reportOnly\) \{ suppressedCount\+\+; suppressedGroups\.push\(group\); \}/);
+    expect(s).toMatch(/return reportOnly \? suppressedGroups : promoted;/);
   });
 });

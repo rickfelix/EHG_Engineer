@@ -27,7 +27,11 @@
 import 'dotenv/config';
 import { execFileSync } from 'node:child_process';
 import { createClient } from '@supabase/supabase-js';
-import { groupByFingerprint, shouldPromote } from '../lib/shared/content-fingerprint.cjs';
+import { groupByFingerprint, shouldPromote, severityRank } from '../lib/shared/content-fingerprint.cjs';
+// SD-LEO-INFRA-WITHHELD-PROMOTIONS-GET-001: the durable sink for withheld groups. In lib/, taking
+// supabase as a PARAMETER, for the same reason the gate is — this script builds its own client at
+// module scope and exports nothing, so anything left inline here is testable only by source regex.
+import { writeMarkers, MARKER_KEY } from '../lib/governance/withheld-registry.mjs';
 import { fetchAllPaginated } from '../lib/db/fetch-all-paginated.mjs';
 import { derivePromotedSeverity } from '../lib/feedback/promoted-severity.js';
 // SD-LEO-INFRA-GATE-SIDE-BELT-001: this producer mints quick_fixes unattended on a 6-hourly cron and
@@ -58,7 +62,19 @@ try {
     .select('id, title, description, severity, created_at, metadata')
     .eq('category', 'harness_backlog')
     .is('archived_at', null)
-    .gte('created_at', cutoff)
+    // SD-LEO-INFRA-WITHHELD-PROMOTIONS-GET-001: WAS a bare .gte('created_at', cutoff), which is
+    // the silent-expiry mechanism itself — a group withheld by the demand gate ages out of this
+    // window and becomes invisible to the very run that could finally promote it. A durable record
+    // that the promoter cannot SEE is readable-but-inert, a more expensive version of the defect.
+    //
+    // So: in-window OR carrying a pending marker. Both halves of this were verified live before
+    // being encoded, because a filter that silently matches nothing is precisely the class of bug
+    // this seat spent the day removing:
+    //   - with zero markers written, the widened query returns exactly the same 1264 rows as the
+    //     bare .gte, so the change is a provable no-op until a marker exists;
+    //   - and the second branch genuinely admits out-of-window rows (measured 3291 with a
+    //     predicate guaranteed to match them), so it is not a decorative disjunct.
+    .or(`created_at.gte.${cutoff},metadata->>${MARKER_KEY}.not.is.null`)
     // SD-LEO-INFRA-SIGNAL-PROMOTION-RESOLUTION-CHECK-001 (FR-4): this predicate had NO status
     // filter at all, so a row already marked resolved stayed promotion-eligible for its whole
     // 14-day window. Measured live at authoring time: 38 resolved + 1 invalid in-window rows were
@@ -94,8 +110,13 @@ let skippedBelowThreshold = 0;
 // only returns a verdict is one forgotten `if` away from being decorative — and that omission is
 // invisible to a source-text guard test, which is all this script had.
 let suppressedCount = 0;
+// SD-LEO-INFRA-WITHHELD-PROMOTIONS-GET-001: the suppressed GROUPS, not just how many. A count
+// cannot be recorded durably in any useful way — you cannot re-promote an integer — and the
+// groups were already in hand at the point the counter was incremented.
+let suppressedGroups = [];
 async function promoteAll(reportOnly = false) {
   suppressedCount = 0;
+  suppressedGroups = [];
 for (const group of groups.values()) {
   if (!shouldPromote(group, THRESHOLD)) {
     skippedBelowThreshold++;
@@ -114,7 +135,7 @@ for (const group of groups.values()) {
   console.log(`  sample: ${group.sample_body.slice(0, 120)}`);
 
   if (!apply || reportOnly) {
-    if (reportOnly) suppressedCount++;
+    if (reportOnly) { suppressedCount++; suppressedGroups.push(group); }
     console.log(reportOnly ? '  [WITHHELD] would have created a QF-candidate here - suppressed by belt demand.' : '  [DRY RUN] would create QF-candidate here.');
     continue;
   }
@@ -149,9 +170,18 @@ for (const group of groups.values()) {
     const stampedAt = new Date().toISOString();
     for (const id of sourceIds) {
       const row = group.rows.find(r => r.id === id);
+      // SD-LEO-INFRA-WITHHELD-PROMOTIONS-GET-001: this spread is taken from a snapshot read at the
+      // top of the run, so anything written to metadata SINCE that read is clobbered here unless
+      // carried explicitly. A pending marker is exactly such a thing. CONSUME it rather than drop
+      // it: promotion is one of only two recorded ways out of pending, and a marker that simply
+      // vanished on promotion would be the silent exit this SD exists to abolish, relocated.
+      const priorMarker = row?.metadata?.[MARKER_KEY];
+      const consumed = priorMarker
+        ? { [MARKER_KEY]: { ...priorMarker, promoted_qf_id: group.fingerprint, promoted_at: stampedAt } }
+        : {};
       await supabase
         .from('feedback')
-        .update({ metadata: { ...(row?.metadata || {}), promoted_to_qf: true, promoted_at: stampedAt, promoted_fingerprint: group.fingerprint } })
+        .update({ metadata: { ...(row?.metadata || {}), ...consumed, promoted_to_qf: true, promoted_at: stampedAt, promoted_fingerprint: group.fingerprint } })
         .eq('id', id);
     }
     promoted++;
@@ -162,7 +192,12 @@ for (const group of groups.values()) {
   // REPORT-ONLY RETURNS WHAT IT SUPPRESSED, NOT WHAT IT MINTED. Returning `promoted` here made the
   // gate print "suppressed 0" on a run that suppressed 34 — a number that looked measured and looked
   // like good news. In report-only mode nothing is ever promoted, so `promoted` is 0 by construction.
-  return reportOnly ? suppressedCount : promoted;
+  //
+  // SD-LEO-INFRA-WITHHELD-PROMOTIONS-GET-001: report-only now returns the GROUPS. The gate derives
+  // the count from .length — NOT from Number(), which returns NaN for an array and would print
+  // "suppressed 0" again, reintroducing the exact defect the paragraph above records. Both halves
+  // are pinned by tests; suppressedCount is kept in step so the two can never disagree.
+  return reportOnly ? suppressedGroups : promoted;
 }
 
 // DRY-RUN IS DELIBERATELY UNGATED. Without --apply nothing is minted, so there is no belt to
@@ -172,11 +207,34 @@ for (const group of groups.values()) {
 // The consequence of gating on apply is stated rather than discovered: on a dry-run-only day no
 // decision is recorded, so the startup badge reads NEVER RAN. That is the correct trade — a recorded
 // decision for a run that could never have minted would be a measurement of nothing.
+/**
+ * SD-LEO-INFRA-WITHHELD-PROMOTIONS-GET-001: record the suppressed groups durably.
+ *
+ * A thin binding, not logic — it supplies the run context the pure registry needs and nothing
+ * else. GITHUB_RUN_ID is read here rather than inside the registry so the module stays free of
+ * ambient environment and remains testable without one.
+ */
+async function recordWithheld(sb, groups, demand) {
+  const { written } = await writeMarkers(sb, groups, demand, {
+    runId: process.env.GITHUB_RUN_ID || null,
+    nowIso: new Date().toISOString(),
+    severityRank,
+    threshold: THRESHOLD,
+  });
+  console.log(`  [WITHHELD_RECORDED] ${written} source row(s) marked pending across ${groups.length} group(s) — these now survive their 14-day window.`);
+  return written;
+}
+
 let withheldByDemand = false;
 if (!apply) {
   await promoteAll();
 } else {
-  const result = await gatedQfMint(supabase, { engine: FINGERPRINT_PROMOTER_ENGINE, onWithheld: () => promoteAll(true) }, promoteAll);
+  // SD-LEO-INFRA-WITHHELD-PROMOTIONS-GET-001: writeMarkers is passed ONLY here, never on the
+  // dry-run path above. Dry-run is deliberately ungated, so a durable write there would let every
+  // operator preview permanently change what the next real run consumes — an observation that
+  // mutates the thing observed. The opts literal stays brace-flat on purpose: a source-regex guard
+  // matches this call site with a [^}] class that a nested object would break.
+  const result = await gatedQfMint(supabase, { engine: FINGERPRINT_PROMOTER_ENGINE, onWithheld: () => promoteAll(true), writeMarkers: recordWithheld }, promoteAll);
   withheldByDemand = result.withheldByDemand;
 }
 
