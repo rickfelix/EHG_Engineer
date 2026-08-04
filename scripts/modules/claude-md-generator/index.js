@@ -10,6 +10,9 @@ import path from 'path';
 import crypto from 'crypto';
 import { execSync } from 'child_process';
 import { writeFileAtomic } from '../../../lib/utils/atomic-write.js';
+// The single home for the harness token scale. CJS because lib/protocol/ is CJS and the coverage
+// module cannot import ESM; ESM reads it back through default interop.
+import harnessTokenScale from '../../../lib/protocol/harness-token-scale.cjs';
 
 import {
   getActiveProtocol,
@@ -556,7 +559,14 @@ export const SINGLE_READ_TOKEN_CAP = 25000;
 // This value comes from the harness's own truncation notice on this file family: a padded
 // CLAUDE_LEAD.md at 64,613 bytes reported 26,722 tokens. It independently agrees with a second
 // derivation (92,184 bytes / 38,166 tokens on CLAUDE_PLAN.md) to 0.1%.
-export const HARNESS_BYTES_PER_TOKEN = 2.4177;
+// RE-EXPORTED, NOT RE-DECLARED. SD-LEO-INFRA-CONTRACT-READ-COVERAGE-001 collapsed the two rival
+// answers to "how big is this file to the Read tool" into one home. This file used to hold the
+// value; lib/protocol/contract-read-coverage.cjs held a different one (CL100K_TO_HARNESS = 1.85, on
+// cl100k of FRAMED text) that overshot by 43-61% on exactly the family this constant was measured
+// on, and manufactured false partial-read verdicts that disarmed live seats. Two representations of
+// one physical quantity is the condition that produced it. The export shape is unchanged so every
+// consumer and the test pinning 2.4177 keep working.
+export const { HARNESS_BYTES_PER_TOKEN } = harnessTokenScale;
 
 // THROW only for files a shipped SD has actually made fit; WARN for the rest.
 //

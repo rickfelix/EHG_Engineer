@@ -112,6 +112,14 @@ export const COMPOSED_CORES = [
   { key: 'relay-drain', script: 'coordinator-relay-drain.cjs', args: ['scripts/coordinator-relay-drain.cjs'], quiescentSkip: false },
   // FR-3: cheap read + fail-open write; valuable exactly when quiet for the same reason.
   { key: 'relay-drop-gauge', script: 'coordinator-relay-drop-gauge.cjs', args: ['scripts/coordinator-relay-drop-gauge.cjs'], quiescentSkip: false },
+  // SD-LEO-INFRA-DRIVE-LOOP-INSTRUMENT-001-C: the coordinator's consumption receipt on the newest
+  // drive report. NOT quiescentSkip, and that is the whole point of the SD: an unconsumed report is
+  // indistinguishable from a producer that never produced, so skipping the stamp when the fleet is
+  // quiet would make the instrument report PRODUCER STALLED about its own silence. A quiet fleet is
+  // exactly when a binding is most likely to be starving unnoticed.
+  // Cheap: one indexed read of the newest row plus at most one narrow update; fail-soft, so it
+  // no-ops while sibling -B's migration is still unlanded.
+  { key: 'drive-report-consume', script: 'coordinator-drive-report-consume.mjs', args: ['scripts/coordinator-drive-report-consume.mjs'], quiescentSkip: false },
   // QF-20260705-797: solomon-ledger-pending-resurface.cjs shipped with no scheduled invoker
   // anywhere (npm script only) -- 0 session_coordination rows ever emitted. Cheap (single SELECT
   // + per-row dedup check), fail-open (no active Adam -> no-op), and self-rate-limits to once per

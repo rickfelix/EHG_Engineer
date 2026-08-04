@@ -348,6 +348,20 @@ export async function assertIngressBoundCannotBind(q, table, source) {
   await q('reset role');
   await q('rollback to savepoint sp_bound');
 
+  // SD-LEO-INFRA-INGRESS-BOUND-DEFINER-BASIS-001: read the BASIS ITSELF, not only its symptom.
+  //
+  // The visibility gap below (definer.n > 1 && anon.n <= 1) is a SYMPTOM of the inline-subquery
+  // basis — but the fix for that basis is a SECURITY DEFINER function, which deliberately does NOT
+  // close the gap: anon's SELECT surface stays exactly as narrow as it is today (that narrowing is
+  // owned by SD-LEO-INFRA-CONTROL-SURFACE-POSTURE-001 and widening it was explicitly ruled out).
+  //
+  // So a gap-only detector NEVER FLIPS. It would keep reporting this finding after the defect is
+  // gone, and inverting its EXPECTED would produce a check that is wrong in BOTH states. Measured
+  // here rather than assumed: with_check is already fetched above and was simply never examined.
+  const withCheck = String(pol.with_check || '');
+  const inlineBasis = /\bselect\b[\s\S]*\bcount\s*\(/i.test(withCheck);
+  const definerFnBasis = /fn_anon_ingress_prior_hour_count\s*\(/i.test(withCheck);
+
   return {
     applicable: true,
     restrictive: String(pol.permissive).toUpperCase() === 'RESTRICTIVE',
@@ -355,7 +369,13 @@ export async function assertIngressBoundCannotBind(q, table, source) {
     anonBasis: asAnon.n,
     // Non-vacuity: without this, a source with no recent rows agrees at 0 and "passes".
     vacuous: definer.n <= 1,
-    cannotBind: definer.n > 1 && asAnon.n <= 1
+    // The basis, read from the policy — this is what actually flips when the SD lands.
+    inlineBasis,
+    definerFnBasis,
+    // cannotBind now requires the DEFECT (an inline counting subquery) to still be present, not
+    // merely the visibility gap it exploits. Same verdict today; correctly GREEN once the basis
+    // becomes a definer call, which is what makes the reddening a real acceptance signal.
+    cannotBind: inlineBasis && definer.n > 1 && asAnon.n <= 1
   };
 }
 

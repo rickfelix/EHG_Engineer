@@ -82,11 +82,31 @@ const REJECT_VERDICTS = new Set(['FAIL', 'BLOCKED', 'PENDING', 'MANUAL_REQUIRED'
  * @param {string|null|undefined} verdict
  * @returns {'accept'|'reject'|'unknown'}
  */
+/**
+ * QF-20260804-569 — verdicts that mean THE CHECK NEVER RAN, as distinct from ran-and-rejected.
+ *
+ * ERROR is written when the executor CRASHES (e.g. `--code EXPLORE` dies with "Failed to load
+ * sub-agent EXPLORE from database" and still writes a row). PENDING is written when a run never
+ * finished. Neither is a verdict about the SD — they are the absence of one.
+ *
+ * They used to sit in REJECT_VERDICTS alongside FAIL, which made them subject to
+ * SUBAGENT_VERDICT_MODE — advisory by default. So a crashed run bought the same passage as a real
+ * one: "a row exists" was being read as "the check ran". Measured on two separate SDs.
+ *
+ * This is a PREDICATE change, not a policy change. It does not make the gate stricter about real
+ * verdicts — FAIL/BLOCKED/MANUAL_REQUIRED keep exactly their current advisory-or-block behaviour.
+ * It stops a crash from counting as evidence at all.
+ */
+const NON_EVIDENCE_VERDICTS = new Set(['ERROR', 'PENDING']);
+
 export function classifyVerdict(verdict) {
   if (verdict === null || verdict === undefined) return 'unknown';
   const v = String(verdict).trim().toUpperCase();
   if (v === '') return 'unknown';
   if (ACCEPT_VERDICTS.has(v)) return 'accept';
+  // Checked BEFORE reject: both sets list ERROR/PENDING today, and this ordering is what makes
+  // them non-evidence rather than a rejection. Do not reorder.
+  if (NON_EVIDENCE_VERDICTS.has(v)) return 'nonevidence';
   if (REJECT_VERDICTS.has(v)) return 'reject';
   return 'unknown';
 }
@@ -374,11 +394,18 @@ export async function validateSubagentEvidence(ctx, supabase) {
   // exists and says FAIL is not "the agent may still be mid-write".
   const failing = [];
   const unknownVerdicts = [];
+  // QF-20260804-569: agents whose latest row proves the check DID NOT RUN (crash / never
+  // finished). Tracked separately from `failing` because a rejection is a verdict and these are
+  // the absence of one — and separately from `missing` because these are NOT the FR-2 race window
+  // (a row exists; the agent is not mid-write). They block unconditionally, ignoring
+  // SUBAGENT_VERDICT_MODE, since there is no verdict for that mode to be lenient about.
+  const nonEvidence = [];
   for (const r of required) {
     const row = latestByCode.get(norm(r));
     if (!row) continue;
     const klass = classifyVerdict(row.verdict);
-    if (klass === 'reject') failing.push({ agent: r, verdict: row.verdict, created_at: row.created_at });
+    if (klass === 'nonevidence') nonEvidence.push({ agent: r, verdict: row.verdict, created_at: row.created_at });
+    else if (klass === 'reject') failing.push({ agent: r, verdict: row.verdict, created_at: row.created_at });
     else if (klass === 'unknown') unknownVerdicts.push({ agent: r, verdict: row.verdict });
   }
 
@@ -403,6 +430,57 @@ export async function validateSubagentEvidence(ctx, supabase) {
       u => `SUBAGENT_VERDICT_UNKNOWN: ${u.agent} latest evidence carries unrecognised verdict ${JSON.stringify(u.verdict)} — accepted (fail-open), but classify it in ACCEPT_VERDICTS/REJECT_VERDICTS.`
     );
     for (const u of unknownVerdicts) console.log(`   ❔ ${u.agent}: unrecognised verdict ${JSON.stringify(u.verdict)} — accepted with warning`);
+
+    // QF-20260804-569: a crashed or never-finished run is NOT evidence. Checked before the
+    // verdict-mode branch below, and deliberately not routed through it — SUBAGENT_VERDICT_MODE
+    // decides how lenient to be about a VERDICT, and there is no verdict here.
+    if (nonEvidence.length > 0) {
+      const ne = nonEvidence.map(f => `${f.agent}=${f.verdict}`).join(', ');
+      const head = `SUBAGENT_EVIDENCE_NOT_RUN: ${ne} — the run crashed or never finished, so no check was performed. A row existing is not the check having run.`;
+
+      // QF-20260804-926 — RESTORE THE DOCUMENTED SAFETY VALVE.
+      //
+      // QF-20260804-569 made non-evidence block UNCONDITIONALLY, ignoring verdict mode. That half
+      // is correct and hard-won — a crashed run must not buy the same passage as a real one — but
+      // it shipped WITHOUT its satisfiability half, and required-subagents.js:49-56 had already
+      // named the precondition verbatim:
+      //
+      //   "PRECONDITION FOR PROMOTING SUBAGENT_VERDICT_MODE=block: the residual ~10% ... is 100%
+      //    attributable to the unregistered-EXPLORE CLI path leaving a tombstone as the last row.
+      //    Resolve that first ... Until then the gate's advisory default keeps this cost at zero."
+      //
+      // LEAD-TO-PLAN still requires 'Explore', a Claude Code BUILT-IN absent from leo_sub_agents,
+      // so `--code EXPLORE` throws and writes a tombstone. Blocking on it makes LEAD-TO-PLAN
+      // unpassable for any seat restricted to the CLI path — no action available to that worker
+      // produces a passing row. Measured cohort: ~10% of SDs (187/209 = 89.5% unaffected).
+      //
+      // So non-evidence now honours the SAME mode flag as a rejecting verdict, until Explore is
+      // resolved (harness_backlog 6529e3a3). This is NOT re-softening ERROR/PENDING generally:
+      // they remain a DISTINCT class, they are still never accepted, and under
+      // SUBAGENT_VERDICT_MODE=block they still block. What returns is the operator's ability to
+      // turn the enforcement on deliberately rather than having it arrive as a side effect.
+      if (mode !== 'block') {
+        const warn = `${head} (mode: ${mode} — advisory until the required-agent list is satisfiable from every invocation path; see required-subagents.js:49-56)`;
+        console.log(`   ⚠️  ${warn}`);
+        return {
+          passed: true,
+          score: 100,
+          max_score: 100,
+          issues: [],
+          warnings: [...unknownWarnings, warn],
+          details: { reason: 'SUBAGENT_EVIDENCE_NOT_RUN_ADVISORY', non_evidence: nonEvidence, ...verdictDetails }
+        };
+      }
+
+      console.log(`   ❌ ${head}`);
+      return buildFailResult({
+        score: 0,
+        max_score: 100,
+        issues: [head],
+        details: { reason: 'SUBAGENT_EVIDENCE_NOT_RUN', non_evidence: nonEvidence, ...verdictDetails },
+        remediation: `Re-run ${nonEvidence.map(f => f.agent).join(', ')} for SD ${sdKey} until it writes a real verdict. If the agent code cannot be executed at all (e.g. it names a Claude Code agent TYPE with no row in the sub-agent catalog), that is a REQUIREMENT defect, not a worker error — the required-agent list is naming something no CLI path can satisfy.`
+      });
+    }
 
     if (failing.length === 0) {
       console.log(`   ✅ All required sub-agents have fresh PASSING evidence (${required.length}/${required.length})`);

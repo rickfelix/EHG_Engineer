@@ -1,0 +1,90 @@
+{
+  "executive_summary": "On 2026-06-11, 106 failing unit-test files were shelved the same day under reason_class=assertion-drift — a label that encodes a verdict (the TEST is stale) and therefore stops anyone looking. At least one was the opposite: a real regression whose test was correctly asserting something that a code change had broken. This SD replaces the bulk label with per-entry discrimination. THE DISCIPLINE IS THE DELIVERABLE: the other entries are UNMEASURED, not implied-guilty, and a re-triage that assumes the bulk was wrong repeats the original error inverted. Five SD premises were corrected by measurement during LEAD, one of them (FR-2's) in the SD's own favour — the entries are NOT evidence-free.",
+  "functional_requirements": [
+    {
+      "id": "FR-1",
+      "title": "Per-entry discrimination across the 106-entry same-day cohort, calibrated against a known answer first",
+      "description": "For each entry, answer ONE question with evidence: does a code change predating the quarantine invert the assertion? YES -> genuine drift, stays shelved with the inverting change CITED. NO -> the test was asserting something still true, so it is a candidate regression: un-shelve it AND file the defect it was covering. CALIBRATION CASE, RECOVERED FROM GIT (the SD premise was stale, not wrong): pr-merge-verification.test.js is NOT in the manifest because it was already un-shelved — added by a6a5477f149 (the 188-file green-main quarantine), removed by 071758279d1 on 2026-08-03. FR-1's calibration step therefore CAN execute; it reads git rather than the manifest. Its own header states the verdict at pr-merge-verification.test.js:11-12 — quarantined 2026-06-11 as assertion-drift, a label asserting the TEST was stale, when the CODE had changed. Process it FIRST and confirm the method reproduces that known answer before applying the method to 106 unknowns. PROCESSING ORDER, derived not arbitrary: the calibration case is a MEMBER of this cohort and carried error_signature 'AssertionError: expected true to be false'. Six other entries share that signature exactly; twelve more carry its inverse ('expected false to be true'). Those 18 boolean-inversion entries are the shape of the proven regression (a code change flipped a boolean the test correctly asserted), so they are processed first. UN-SHELVE MECHANISM: delete the entry from tests/quarantine-manifest.json. That is the ONLY edit — vitest.config.js:26 loadQuarantineExclude DERIVES the exclude list from that file (path at :28, applied at :35), so there is no second location and no half-un-shelved state."
+    },
+    {
+      "id": "FR-2",
+      "title": "The verdict travels with the entry — as a discrimination field beside evidence that already exists",
+      "description": "CORRECTED PREMISE, AND IT SHRINKS THIS FR. The SD says the current state is 'a label with no per-entry basis' and that this made the judgements 'indistinguishable from one'. MEASURED across the 106: ALL 106 carry an error_signature with 79 DISTINCT prefixes, and ALL 106 carry a linked_ref. Only triage_note is sparse (2 of 106). These were NOT one verdict stamped 106 times — the original quarantiners captured real per-entry data, and the manifest contract at scripts/unit-tier-quarantine.mjs:21 requires it (nothing may be skipped without a reason_class + linked_ref), enforced by tests/unit/quarantine-manifest.test.js:5. THE ACTUAL GAP IS DISCRIMINATION, NOT BASIS: nobody recorded whether a predating change inverted each assertion. DELIVERABLE: add a discrimination verdict (and its citation) to each processed entry ALONGSIDE the existing error_signature/linked_ref, so a future reader sees WHY an entry is shelved, not only THAT it is. This is recorded as a correction rather than absorbed, because an SD about premature closure that overstates how evidence-free its subject was is leaning the same direction as the thing it criticises."
+    },
+    {
+      "id": "FR-3",
+      "title": "Report the split honestly, with UNDETERMINED as a first-class outcome",
+      "description": "State how many of the processed cohort were genuine drift, how many were regressions, and how many could NOT be determined. Undetermined is permitted and EXPECTED: an entry whose original context is unrecoverable must be recorded as such rather than forced into either bucket to make the report tidy. The pressure at report time runs entirely toward a clean binary, and a re-triage that cannot say 'I could not determine this' is not measuring — it is re-labelling, which is the original failure with a new date on it. COHORT SEPARATION IS PART OF HONEST REPORTING: report the 106 same-day entries and the 11 individually-dated assertion-drift entries (06-22 x1, 06-28 x8, 07-08 x1, 07-17 x1) as DISTINCT cohorts. Only the 106 belong to the bulk-shelving event; the 11 were individual judgements and must not inherit the bulk argument. Reporting a single 117 figure would manufacture a bulk that did not happen."
+    },
+    {
+      "id": "FR-4",
+      "title": "Guard the method against becoming the error it corrects",
+      "description": "THE SIGNATURE ORDER IS LOOK-FIRST, NOT A VERDICT — this must be stated in the deliverable, not merely observed in passing. Sharing an error signature with the one proven regression is a reason to examine an entry EARLY; it is not evidence about that entry. All 18 boolean-inversion candidates still require the full FR-1 discrimination, and some will be genuine drift. The efficient-looking shortcut — un-shelve all 18 on the strength of one proven case — is the bulk error inverted: 18 verdicts inferred from 1 measurement, which is structurally what produced 106 same-day judgements. It would also be INDISTINGUISHABLE FROM DILIGENCE in the report, which is why the guard has to be explicit rather than assumed. Two-sided acceptance enforces this: genuine drift entries REMAIN shelved with the inverting change cited (this SD must not become a mass un-shelving), AND proven regressions ARE un-shelved with defects filed (finding one and leaving it shelved repeats the original failure). Both halves required."
+    }
+  ],
+  "technical_requirements": [
+    { "id": "TR-1", "title": "The manifest is the JSON, not the file named after the date", "description": "tests/quarantine-manifest.json is authoritative. docs/05_testing/skip-quarantine-manifest-2026-06-11.md is 83 lines with no reason_class field and is NOT the manifest despite its name — triaging it would produce a triage of nothing." },
+    { "id": "TR-2", "title": "Un-shelving is a single-file edit", "description": "Delete the entry from tests/quarantine-manifest.json only. vitest.config.js:26 derives the exclude list from it, so a second edit would be wrong, not merely redundant." },
+    { "id": "TR-3", "title": "Every verdict carries a citation", "description": "A discrimination verdict without the inverting change cited is an endorsement, which is the failure mode of the label being replaced. Genuine-drift verdicts cite the change that inverted the assertion; regression verdicts cite the filed defect." }
+  ],
+  "test_scenarios": [
+    { "id": "TS-1", "scenario": "The method reproduces the known answer on the calibration case", "type": "integration", "expected": "Applied to pr-merge-verification.test.js (recovered from git), the discrimination returns REGRESSION, matching the recorded verdict. A method that cannot reproduce the one known answer is not fit to judge 106 unknowns." },
+    { "id": "TS-2", "scenario": "Cohorts are reported separately", "type": "unit", "expected": "The report shows the 2026-06-11 cohort (106) and the individually-dated entries (11) as distinct groups. A single 117 figure fails this scenario." },
+    { "id": "TS-3", "scenario": "UNDETERMINED survives into the report", "type": "unit", "expected": "Entries whose context is unrecoverable appear in their own bucket with a non-zero-capable count. A report schema that can only express drift-or-regression fails this scenario by construction." },
+    { "id": "TS-4", "scenario": "Every processed entry carries a verdict AND a citation", "type": "unit", "expected": "The report exits non-zero if any processed entry has a verdict without a citation, or a citation without a verdict." },
+    { "id": "TS-5", "scenario": "Un-shelved entries are absent from the manifest", "type": "integration", "expected": "npx vitest run tests/unit/quarantine-manifest.test.js is green and every entry reported as un-shelved is gone from tests/quarantine-manifest.json. A file still present after being reported un-shelved is the failure this catches." },
+    { "id": "TS-6", "scenario": "Genuine drift REMAINS shelved", "type": "integration", "expected": "Entries discriminated as genuine drift are still in the manifest, now carrying the inverting change. This SD must not become a mass un-shelving, and this is the half that proves it did not." },
+    { "id": "TS-7", "scenario": "The signature order did not become a verdict", "type": "manual-review", "expected": "Each of the 18 boolean-inversion candidates has its OWN discrimination evidence, and at least the possibility of a drift verdict among them is preserved. A run where all 18 are un-shelved with a shared rationale fails review even if each is individually correct — the rationale must be per-entry." }
+  ],
+  "acceptance_criteria": [
+    "The calibration case is processed FIRST and the method reproduces its known REGRESSION verdict before any unknown is judged.",
+    "Genuine drift entries REMAIN shelved with the inverting change cited — this SD does not become a mass un-shelving.",
+    "Proven regressions ARE un-shelved AND have defects filed — finding one and leaving it shelved repeats the original failure.",
+    "Every processed entry carries a discrimination verdict WITH a citation, alongside its pre-existing error_signature and linked_ref.",
+    "The report states drift / regression / UNDETERMINED counts, with undetermined preserved rather than forced into a binary.",
+    "The 106 same-day cohort and the 11 individually-dated entries are reported as distinct cohorts, never as a single 117.",
+    "No entry is un-shelved on the strength of a shared error signature alone; the signature ordering is documented as look-first, not a verdict."
+  ],
+  "risks": [
+    { "risk": "The re-triage becomes a mass un-shelving — the original bulk error inverted.", "mitigation": "FR-4 plus two-sided acceptance: genuine drift must remain shelved with citations, and TS-6 asserts it. Both halves are required for acceptance." },
+    { "risk": "The 18 boolean-inversion candidates get a shared rationale instead of 18 discriminations.", "mitigation": "TS-7 fails review on a shared rationale even when each verdict is individually right, because 18 verdicts inferred from 1 measurement is structurally what produced the 106." },
+    { "risk": "UNDETERMINED entries get forced into drift-or-regression to tidy the report.", "mitigation": "FR-3 makes it first-class and TS-3 requires the schema to express it. A report that cannot say 'undetermined' is re-labelling, not measuring." },
+    { "risk": "The 11 individually-dated entries inherit the bulk-shelving argument they were never part of.", "mitigation": "Cohort separation in FR-3, asserted by TS-2. They may be exactly what the label says." },
+    { "risk": "Working the wrong file — the markdown named after the quarantine date looks like the manifest.", "mitigation": "TR-1. It has no reason_class field at all, so the mistake is detectable in one read." }
+  ],
+  "integration_operationalization": {
+    "consumers": "The unit-tier CI job, which excludes every manifest entry from the run (vitest.config.js:26 loadQuarantineExclude); anyone reading the manifest to understand why a test is not running; and the burn-down telemetry that treats the manifest as the debt register.",
+    "dependencies": "tests/quarantine-manifest.json as the single source of exclusion truth; scripts/unit-tier-quarantine.mjs:21 for the reason_class + linked_ref contract; tests/unit/quarantine-manifest.test.js:5 as its enforcing suite; git history for the calibration case, which is no longer in the manifest.",
+    "data_contracts": "Entry shape: file, reason_class, error_signature, linked_ref, quarantined_at, quarantined_by, triage_note. This SD ADDS a discrimination verdict with a citation; it does not remove or rewrite existing fields, because the existing evidence is exactly what makes discrimination possible.",
+    "runtime_config": "No new env vars. Un-shelving takes effect through the derived exclude list on the next unit-tier run; no separate deploy step.",
+    "observability_rollout": "The report is the observable: drift / regression / undetermined per cohort, each entry with its verdict and citation. Un-shelved entries become visible immediately as unit-tier runs that either pass (drift call was right) or fail (regression confirmed and now surfaced) — which is the point, and why regressions must have defects filed at the same time rather than being released into a red run with no owner."
+  },
+  "system_architecture": {
+    "objects_touched": "tests/quarantine-manifest.json (entries: verdict added; un-shelved entries removed). No production code changes. The vitest exclude list changes only as a derived consequence.",
+    "invariant": "An entry is shelved if and only if a named change inverted its assertion, and that change is cited on the entry. Absence of a citation is absence of a basis.",
+    "coupling_map": "vitest exclude list <- tests/quarantine-manifest.json (derived, vitest.config.js:26). Manifest contract <- scripts/unit-tier-quarantine.mjs:21, enforced by tests/unit/quarantine-manifest.test.js:5. Calibration case <- git history only, since 071758279d1 removed its entry."
+  },
+  "implementation_approach": {
+    "sequence": "Recover and re-derive the calibration verdict from git; confirm the method reproduces it. Then the 6 exact-signature entries, then the 12 inverse-signature entries, then the remaining 88 — each with its own discrimination. Report cohorts separately. File defects for confirmed regressions in the same change that un-shelves them.",
+    "verification_discipline": "Measure before encoding — five SD premises moved under measurement during LEAD, including one that corrected the SD in its own subject's favour. Reproduce the known answer before judging unknowns. Never infer a verdict from a shared signature.",
+    "out_of_scope": "The 45 non-assertion-drift entries (timeout, node-test-runner, empty-suite, etc.) — different reason classes with different discrimination questions. Rewriting or repairing the tests themselves; this SD determines whether a test was RIGHT, and filing the defect is where the repair is owned."
+  },
+  "smoke_test_steps": [
+    { "step_number": 1, "instruction": "Run: node scripts/quarantine-retriage-report.mjs", "expected_outcome": "Prints the 2026-06-11 bulk cohort (106) SEPARATELY from the 11 individually-dated assertion-drift entries, and reports drift / regression / UNDETERMINED with undetermined as its own count. Exits non-zero if any processed entry lacks a verdict or a citation." },
+    { "step_number": 2, "instruction": "Run: node scripts/quarantine-retriage-report.mjs --verify-calibration", "expected_outcome": "Re-derives the worked example from git (it is no longer in the manifest) and reports pr-merge-verification.test.js as a CONFIRMED REGRESSION: added a6a5477f149, removed 071758279d1, quarantined 2026-06-11 with error_signature 'AssertionError: expected true to be false'. Exits non-zero if the method fails to reproduce the known answer." },
+    { "step_number": 3, "instruction": "Run: npx vitest run tests/unit/quarantine-manifest.test.js", "expected_outcome": "Green, AND every entry reported un-shelved is absent from tests/quarantine-manifest.json — the only edit needed, since vitest.config.js:26 derives the exclude list. A file still present after being reported un-shelved is the failure this step catches." }
+  ],
+  "metadata": {
+    "cohort_same_day": 106,
+    "cohort_individually_dated": 11,
+    "boolean_inversion_candidates": 18,
+    "premise_corrections_at_lead": 5,
+    "calibration_case_source": "git history (071758279d1), not the manifest",
+    "measured_state": {
+      "manifest": "tests/quarantine-manifest.json — 162 entries total, 117 reason_class=assertion-drift",
+      "date_split": "2026-06-11=106, 06-22=1, 06-28=8, 07-08=1, 07-17=1",
+      "evidence_density_106": "error_signature 106/106 (79 distinct prefixes), linked_ref 106/106, triage_note 2/106",
+      "signature_frequency_top": "12x 'expected false to be true', 6x 'expected true to be false', 3x 'expected +0 to be 2', 3x path-mismatch"
+    }
+  }
+}

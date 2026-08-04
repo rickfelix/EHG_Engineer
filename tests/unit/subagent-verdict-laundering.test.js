@@ -17,6 +17,22 @@ import { describe, it, expect } from 'vitest';
 import { mapVerdict, ABSENT_VERDICT } from '../../lib/sub-agent-executor/results-storage.js';
 import { classifyVerdict } from '../../scripts/modules/handoff/gates/subagent-evidence-gate.js';
 
+/**
+ * QF-20260804-569: this suite's subject is LAUNDERING — a verdict being softened into one the gate
+ * ACCEPTS. It previously pinned the exact class name 'reject', which made it brittle to a
+ * taxonomy change rather than to a behaviour change: ERROR and PENDING are now classified
+ * 'nonevidence' (the run crashed or never finished, so no check was performed), which blocks
+ * UNCONDITIONALLY where 'reject' was subject to SUBAGENT_VERDICT_MODE — strictly stronger than
+ * what these tests were defending.
+ *
+ * So assert the PROPERTY these tests actually mean: not accepted, and not fail-open 'unknown'.
+ * That survives the taxonomy growing again and still fails if anything is genuinely laundered.
+ */
+function expectBlocking(verdict, label) {
+  const klass = classifyVerdict(verdict);
+  expect(['reject', 'nonevidence'], `${label ?? verdict} classified ${klass}`).toContain(klass);
+}
+
 /** The eight values valid_verdict permits (migration 20260130). */
 const ALLOWED = new Set(['PASS', 'FAIL', 'BLOCKED', 'CONDITIONAL_PASS', 'WARNING', 'MANUAL_REQUIRED', 'PENDING', 'ERROR']);
 
@@ -24,39 +40,39 @@ describe('the gate can finally SEE rejecting verdicts (FR-2)', () => {
   it('MANUAL_REQUIRED reaches the gate as REJECT — 141 production rows were laundered here', () => {
     // BEFORE: mapVerdict -> 'WARNING' -> classifyVerdict -> 'accept' -> no warning at all.
     expect(mapVerdict('MANUAL_REQUIRED')).toBe('MANUAL_REQUIRED');
-    expect(classifyVerdict(mapVerdict('MANUAL_REQUIRED'))).toBe('reject');
+    expectBlocking(mapVerdict('MANUAL_REQUIRED'));
   });
 
   it('PENDING reaches the gate as REJECT — tested separately because the map treated both identically', () => {
     // Testing only MANUAL_REQUIRED and assuming PENDING followed is exactly how the second
     // one stays broken; the old map sent both to WARNING via two distinct lines.
     expect(mapVerdict('PENDING')).toBe('PENDING');
-    expect(classifyVerdict(mapVerdict('PENDING'))).toBe('reject');
+    expectBlocking(mapVerdict('PENDING'));
   });
 
   it('ERROR is stored as itself rather than flattened to FAIL', () => {
     // Both reject, so this is not a policy change — it is truthfulness. The old mapping
     // discarded the distinction between "the agent rejected" and "the agent crashed".
     expect(mapVerdict('ERROR')).toBe('ERROR');
-    expect(classifyVerdict(mapVerdict('ERROR'))).toBe('reject');
+    expectBlocking(mapVerdict('ERROR'));
   });
 
   it('UNKNOWN becomes BLOCKED — not in the eight, so it must translate, and it must reject', () => {
     expect(mapVerdict('UNKNOWN')).toBe('BLOCKED');
-    expect(classifyVerdict(mapVerdict('UNKNOWN'))).toBe('reject');
+    expectBlocking(mapVerdict('UNKNOWN'));
   });
 });
 
 describe('the unmodelled fallback no longer means "accepted" (FR-1)', () => {
   it('free text lands on a REJECTING verdict', () => {
     // BEFORE: `|| 'WARNING'` — not-understood silently meant accepted.
-    expect(classifyVerdict(mapVerdict('NEEDS_HUMAN'))).toBe('reject');
-    expect(classifyVerdict(mapVerdict('totally-made-up'))).toBe('reject');
+    expectBlocking(mapVerdict('NEEDS_HUMAN'));
+    expectBlocking(mapVerdict('totally-made-up'));
   });
 
   it('an agent that returned NOTHING lands on a REJECTING verdict — 15 production rows', () => {
     for (const nothing of [undefined, null, '']) {
-      expect(classifyVerdict(mapVerdict(nothing)), `verdict=${JSON.stringify(nothing)}`).toBe('reject');
+      expectBlocking(mapVerdict(nothing), `verdict=${JSON.stringify(nothing)}`);
     }
   });
 
@@ -106,7 +122,7 @@ describe('REGRESSION GUARD — the 60 live outliers must not become hard failure
     // change corrects. `includes` matching would read the embedded "pass" and accept them.
     const prose = 'FAIL — 4 of 6 prior REQUIRED items are closed and were re-verified, but the primary sd:next path is still inert';
     expect(mapVerdict(prose)).toBe('FAIL');
-    expect(classifyVerdict(mapVerdict(prose))).toBe('reject');
+    expectBlocking(mapVerdict(prose));
   });
 
   it('ERROR keeps its tripwire: only genuinely unclassifiable values land there', () => {
@@ -118,7 +134,7 @@ describe('REGRESSION GUARD — the 60 live outliers must not become hard failure
     // should look at, so ERROR is the right destination.
     for (const junk of ['HIGH', 'NO_DUPLICATES_FOUND_EXTEND_EXISTING_FILES']) {
       expect(mapVerdict(junk), junk).toBe('ERROR');
-      expect(classifyVerdict(mapVerdict(junk))).toBe('reject');
+      expectBlocking(mapVerdict(junk));
     }
     // And the pass-family does NOT land there — that is the regression guard.
     expect(mapVerdict('PASS_WITH_CONCERNS')).not.toBe('ERROR');
@@ -131,7 +147,7 @@ describe('REGRESSION GUARD — the 60 live outliers must not become hard failure
     expect(mapVerdict('STRATEGY_APPROVED_WITH_REQUIRED_ADDITIONS')).toBe('CONDITIONAL_PASS');
     expect(classifyVerdict(mapVerdict('STRATEGY_APPROVED_WITH_REQUIRED_ADDITIONS'))).toBe('accept');
     expect(mapVerdict('STRATEGY_BLOCK_ALL_ADDITIONS_COMMITTED_TO_EXEC')).toBe('BLOCKED');
-    expect(classifyVerdict(mapVerdict('STRATEGY_BLOCK_ALL_ADDITIONS_COMMITTED_TO_EXEC'))).toBe('reject');
+    expectBlocking(mapVerdict('STRATEGY_BLOCK_ALL_ADDITIONS_COMMITTED_TO_EXEC'));
   });
 
   it('only the FIRST THREE tokens are scanned — a verdict announces itself at the front', () => {
@@ -176,7 +192,7 @@ describe('absence is recorded as a value, not an omitted key (FR-4)', () => {
   it('the sentinel is NOT a valid verdict, so it can never be mistaken for one', () => {
     expect(ALLOWED.has(ABSENT_VERDICT)).toBe(false);
     // And if it ever reached the verdict column by accident, it would reject rather than pass.
-    expect(classifyVerdict(mapVerdict(ABSENT_VERDICT))).toBe('reject');
+    expectBlocking(mapVerdict(ABSENT_VERDICT));
   });
 });
 
@@ -191,7 +207,7 @@ describe('NEGATION — a negated pass is not a pass (found by review, not by me)
     'NOT A PASS', 'DID NOT PASS', 'CANNOT PROCEED', 'DO NOT PROCEED',
     'NOT APPROVED', 'NO PASS', 'UNABLE TO PROCEED', 'SHOULD NOT PROCEED',
   ])('%s REJECTS', (verdict) => {
-    expect(classifyVerdict(mapVerdict(verdict))).toBe('reject');
+    expectBlocking(mapVerdict(verdict));
   });
 
   it('OPPOSITE POLARITY: the un-negated forms still ACCEPT — the guard is narrow', () => {
@@ -202,7 +218,7 @@ describe('NEGATION — a negated pass is not a pass (found by review, not by me)
 
   it('negation does not flip a REJECTING verdict into acceptance', () => {
     // "NOT FAIL" is odd phrasing and rare; rejecting is the safe direction either way.
-    expect(classifyVerdict(mapVerdict('NOT FAIL'))).toBe('reject');
-    expect(classifyVerdict(mapVerdict('CANNOT BLOCK'))).toBe('reject');
+    expectBlocking(mapVerdict('NOT FAIL'));
+    expectBlocking(mapVerdict('CANNOT BLOCK'));
   });
 });

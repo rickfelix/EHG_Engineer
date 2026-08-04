@@ -61,8 +61,47 @@ describe('FR-4: gauge and chokepoint agree on the axis where they used to disagr
       expect(isAutoStartableQF(f.row, Date.now())).toBe(f.claimable);
       // The property that actually matters: nothing is counted as supply that a worker cannot take.
       if (isClaimableQfSupply(f.row)) expect(isAutoStartableQF(f.row, Date.now())).toBe(true);
+
+      // SD-LEO-INFRA-BOTH-BELT-GAUGES-001 — THE OTHER DIRECTION, which was unasserted.
+      //
+      // The line above catches PHANTOM supply (counted but unclaimable) — the original defect. It
+      // is silent about INVISIBLE supply: work a worker CAN take that the gauge does not count.
+      // That direction is the dangerous one for the demand gate, because a lower reading makes
+      // `value <= floor` MORE likely and therefore SOURCES — under-reporting causes over-minting.
+      //
+      // The naive converse (claimable -> supply) is FALSE BY DESIGN, and the NOTE above says why:
+      // isAutoStartableQF answers "is this row FIT for auto-start" while the candidate query
+      // answers "is it FREE", so a row held by a live session is legitimately claimable-but-not-
+      // supply. Asserting the bare converse would pin a fiction. Controlling for the claimant axis
+      // gives the property that is actually true and actually load-bearing:
+      //
+      //   for a FREE row, FIT and COUNTED must agree exactly.
+      //
+      // HONEST SCOPE OF WHAT THIS ADDS, measured rather than asserted. I mutated the predicate to
+      // `&& target_application === 'EHG'` — the exact lane narrowing this SD proposes — and three
+      // tests failed, but the FIRST was line 60's `toBe(f.supply)`. The fixture table already pins
+      // both predicates on all five rows, so it catches that mutation WITHOUT this block. Claiming
+      // "without this the change ships green" would have been false, and it is the kind of claim a
+      // test comment is never audited for.
+      //
+      // What this DOES add is a constraint on fixtures not yet written: a future row given
+      // supply:false + claimable:true while FREE is a contradiction of the model, and the table
+      // alone would happily encode it as expected behaviour — pinning the defect as the
+      // requirement, which is the failure mode this suite has already hit once elsewhere.
+      if (f.row.claiming_session_id === null) {
+        expect(isClaimableQfSupply(f.row)).toBe(isAutoStartableQF(f.row, Date.now()));
+      }
     });
   }
+
+  it('the free-row biconditional is not vacuous — free rows exist on BOTH sides of it', () => {
+    // Control for the control. If every free fixture landed on one side, the assertion above would
+    // hold trivially and could never discriminate — the cannot-fail shape this suite already
+    // guards against one paragraph down.
+    const free = fixtures.filter((f) => f.row.claiming_session_id === null);
+    expect(free.some((f) => isClaimableQfSupply(f.row))).toBe(true);
+    expect(free.some((f) => !isClaimableQfSupply(f.row))).toBe(true);
+  });
 
   it('the intersection is NON-EMPTY — an always-false gauge would trivially "agree"', () => {
     // Load-bearing control. Without it, a gauge that counts nothing satisfies every assertion above
