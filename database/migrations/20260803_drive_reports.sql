@@ -340,7 +340,7 @@ BEGIN
     SELECT 1 FROM pg_policy p
     WHERE p.polrelid = 'public.drive_reports'::regclass
       AND p.polname = 'drive_reports_service_role'
-      AND p.polroles = ARRAY['service_role'::regrole]
+      AND p.polroles = ARRAY['service_role'::regrole::oid]
       AND p.polcmd = '*'
       AND p.polpermissive
   ), 'drive_reports: the policy exists but is NOT "FOR ALL TO service_role" — a policy TO PUBLIC (polroles {0}) or scoped to one command would pass a name-only check while granting this table far more widely, which is the permission-class reclassification this table requires chairman approval for';
@@ -425,7 +425,7 @@ BEGIN
     SELECT 1 FROM pg_policy p
     WHERE p.polrelid = 'public.drive_report_receipts'::regclass
       AND p.polname = 'drive_report_receipts_service_role'
-      AND p.polroles = ARRAY['service_role'::regrole]
+      AND p.polroles = ARRAY['service_role'::regrole::oid]
       AND p.polcmd = '*'
       AND p.polpermissive
   ), 'drive_report_receipts: the policy is missing, renamed, or NOT "FOR ALL TO service_role" — a policy TO PUBLIC would pass a bare count check while exposing who-read-what to every role';
