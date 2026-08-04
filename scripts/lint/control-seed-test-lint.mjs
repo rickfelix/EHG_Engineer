@@ -267,7 +267,7 @@ export function evaluate(repoRoot, files, specs, isControlFn = isControl, prevSp
   // ever have had to acknowledge the new information. The 4 tests this breaks are updated in
   // the same commit; both seedTest specs point at that test file, so leaving it broken would
   // make the gate fail itself.
-  return { failures, trials, skipped, selected, specChanged, specBaseUnavailable };
+  return { failures, trials, skipped, selected, specChanged, specBaseUnavailable, fromSpec };
 }
 
 function main() {
@@ -289,13 +289,13 @@ function main() {
 
   const specs = existsSync(join(repoRoot, SPEC_PATH)) ? JSON.parse(readFileSync(join(repoRoot, SPEC_PATH), 'utf8')) : [];
 
-  const { failures, trials, skipped, selected, specChanged, specBaseUnavailable } = evaluate(repoRoot, files, specs, isControl, previousSpecs(repoRoot));
+  const { failures, trials, skipped, selected, specChanged, specBaseUnavailable, fromSpec } = evaluate(repoRoot, files, specs, isControl, previousSpecs(repoRoot));
 
   const controls = selected.filter(isControl);
   if (specChanged) {
     console.log(specBaseUnavailable
-      ? `⚠️  ${SPEC_PATH} changed but its previous version could not be read, so this run re-trials ALL ${controls.length} control(s) it names rather than only the changed entries. Conservative on purpose: selecting none on an unreadable base would be an empty evaluation reported as a pass.`
-      : `ℹ️  ${SPEC_PATH} changed — re-trialling the ${controls.length} control(s) whose spec entry actually moved, because a weakened fixture is as dangerous as a neutered control.`);
+      ? `⚠️  ${SPEC_PATH} changed but its previous version could not be read, so this run re-trials ALL ${fromSpec.length} control(s) it names rather than only the changed entries. Conservative on purpose: selecting none on an unreadable base would be an empty evaluation reported as a pass.`
+      : `ℹ️  ${SPEC_PATH} changed — ${fromSpec.length} of its entr${fromSpec.length === 1 ? 'y' : 'ies'} moved and are re-trialled, because a weakened fixture is as dangerous as a neutered control. ${controls.length} control(s) selected in total for this run.`);
   }
   // FR-8: THE ACCEPTANCE METRIC, ON EVERY PATH. `matched` counts controls the diff selected;
   // `trialsRun` counts controls a seeded-defect trial ACTUALLY RAN on. They are DIFFERENT
