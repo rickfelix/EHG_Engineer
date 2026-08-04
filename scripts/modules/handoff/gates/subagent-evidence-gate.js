@@ -437,6 +437,41 @@ export async function validateSubagentEvidence(ctx, supabase) {
     if (nonEvidence.length > 0) {
       const ne = nonEvidence.map(f => `${f.agent}=${f.verdict}`).join(', ');
       const head = `SUBAGENT_EVIDENCE_NOT_RUN: ${ne} — the run crashed or never finished, so no check was performed. A row existing is not the check having run.`;
+
+      // QF-20260804-926 — RESTORE THE DOCUMENTED SAFETY VALVE.
+      //
+      // QF-20260804-569 made non-evidence block UNCONDITIONALLY, ignoring verdict mode. That half
+      // is correct and hard-won — a crashed run must not buy the same passage as a real one — but
+      // it shipped WITHOUT its satisfiability half, and required-subagents.js:49-56 had already
+      // named the precondition verbatim:
+      //
+      //   "PRECONDITION FOR PROMOTING SUBAGENT_VERDICT_MODE=block: the residual ~10% ... is 100%
+      //    attributable to the unregistered-EXPLORE CLI path leaving a tombstone as the last row.
+      //    Resolve that first ... Until then the gate's advisory default keeps this cost at zero."
+      //
+      // LEAD-TO-PLAN still requires 'Explore', a Claude Code BUILT-IN absent from leo_sub_agents,
+      // so `--code EXPLORE` throws and writes a tombstone. Blocking on it makes LEAD-TO-PLAN
+      // unpassable for any seat restricted to the CLI path — no action available to that worker
+      // produces a passing row. Measured cohort: ~10% of SDs (187/209 = 89.5% unaffected).
+      //
+      // So non-evidence now honours the SAME mode flag as a rejecting verdict, until Explore is
+      // resolved (harness_backlog 6529e3a3). This is NOT re-softening ERROR/PENDING generally:
+      // they remain a DISTINCT class, they are still never accepted, and under
+      // SUBAGENT_VERDICT_MODE=block they still block. What returns is the operator's ability to
+      // turn the enforcement on deliberately rather than having it arrive as a side effect.
+      if (mode !== 'block') {
+        const warn = `${head} (mode: ${mode} — advisory until the required-agent list is satisfiable from every invocation path; see required-subagents.js:49-56)`;
+        console.log(`   ⚠️  ${warn}`);
+        return {
+          passed: true,
+          score: 100,
+          max_score: 100,
+          issues: [],
+          warnings: [...unknownWarnings, warn],
+          details: { reason: 'SUBAGENT_EVIDENCE_NOT_RUN_ADVISORY', non_evidence: nonEvidence, ...verdictDetails }
+        };
+      }
+
       console.log(`   ❌ ${head}`);
       return buildFailResult({
         score: 0,

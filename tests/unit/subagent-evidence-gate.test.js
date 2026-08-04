@@ -639,3 +639,57 @@ describe('QF-20260804-569: ERROR/PENDING are non-evidence, not rejections', () =
     expect(ne).not.toBe(classifyVerdict('PASS'));
   });
 });
+
+// ─────────────────────────────────────────────────────────────────────────────────────────────
+// QF-20260804-926 — the safety valve QF-20260804-569 removed.
+//
+// required-subagents.js:49-56 names the precondition verbatim: promoting to block is gated on the
+// unregistered-EXPLORE CLI tombstone being resolved first, and "until then the gate's advisory
+// default keeps this cost at zero". The strict half shipped without the satisfiability half, so
+// LEAD-TO-PLAN became unpassable for seats restricted to the CLI path.
+//
+// Non-evidence therefore honours the SAME mode flag as a rejecting verdict. This is NOT a
+// re-softening: ERROR/PENDING remain a distinct class, are never ACCEPTED, and still block under
+// SUBAGENT_VERDICT_MODE=block.
+// ─────────────────────────────────────────────────────────────────────────────────────────────
+describe('QF-20260804-926: non-evidence respects verdict mode', () => {
+  const errorRow = [{ sub_agent_code: 'TESTING', created_at: '2026-04-24T21:00:00Z', verdict: 'ERROR' }];
+
+  it('BLOCKS under SUBAGENT_VERDICT_MODE=block — the strict half is intact', async () => {
+    process.env.SUBAGENT_VERDICT_MODE = 'block';
+    const supabase = makeSupabase({ phaseStart: PHASE_START_ISO, evidenceRows: errorRow });
+    const r = await validateSubagentEvidence({ sd: makeSD(), handoffType: 'PLAN-TO-EXEC' }, supabase);
+    expect(r.passed).toBe(false);
+    expect(r.details.reason).toBe('SUBAGENT_EVIDENCE_NOT_RUN');
+  });
+
+  it('WARNS (does not block) in the advisory default — the documented safety valve', async () => {
+    delete process.env.SUBAGENT_VERDICT_MODE;
+    const supabase = makeSupabase({ phaseStart: PHASE_START_ISO, evidenceRows: errorRow });
+    const r = await validateSubagentEvidence({ sd: makeSD(), handoffType: 'PLAN-TO-EXEC' }, supabase);
+    expect(r.passed).toBe(true);
+    expect(r.details.reason).toBe('SUBAGENT_EVIDENCE_NOT_RUN_ADVISORY');
+    // Never silent: an advisory pass must still say the check did not run.
+    expect(r.warnings.join('\n')).toMatch(/SUBAGENT_EVIDENCE_NOT_RUN/);
+  });
+
+  it('is still NOT accepted as a passing verdict in either mode', async () => {
+    // The half that must not regress. Advisory means "does not block", never "counts as a pass".
+    delete process.env.SUBAGENT_VERDICT_MODE;
+    const supabase = makeSupabase({ phaseStart: PHASE_START_ISO, evidenceRows: errorRow });
+    const r = await validateSubagentEvidence({ sd: makeSD(), handoffType: 'PLAN-TO-EXEC' }, supabase);
+    expect(r.details.non_evidence).toEqual([expect.objectContaining({ agent: 'TESTING', verdict: 'ERROR' })]);
+    expect(classifyVerdict('ERROR')).toBe('nonevidence');   // still a distinct class
+  });
+
+  it('CONTROL: the two modes genuinely differ — the flag is actually consulted', async () => {
+    // Without this, both branches could return the same verdict and the "restoration" would be
+    // cosmetic. Same input, two modes, opposite outcomes.
+    const supabase = () => makeSupabase({ phaseStart: PHASE_START_ISO, evidenceRows: errorRow });
+    process.env.SUBAGENT_VERDICT_MODE = 'block';
+    const blocked = await validateSubagentEvidence({ sd: makeSD(), handoffType: 'PLAN-TO-EXEC' }, supabase());
+    delete process.env.SUBAGENT_VERDICT_MODE;
+    const advisory = await validateSubagentEvidence({ sd: makeSD(), handoffType: 'PLAN-TO-EXEC' }, supabase());
+    expect(blocked.passed).not.toBe(advisory.passed);
+  });
+});
