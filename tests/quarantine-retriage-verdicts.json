@@ -1,0 +1,18 @@
+{
+  "$comment": "SD-LEO-INFRA-TRIAGE-2026-BULK-001 — per-entry discrimination verdicts. UNDETERMINED is a real outcome, not a failure to try; entries not yet examined are absent from this file entirely and are counted as UNPROCESSED by the report, because 'did not look' and 'could not determine' are different claims.",
+  "generated_by": "manual discrimination, worked entry by entry",
+  "verdicts": [
+    {
+      "file": "scripts/modules/handoff/executors/lead-final-approval/gates/pr-merge-verification.test.js",
+      "verdict": "regression",
+      "citation": "QF-20260509-PRMERGE-EXACT changed the anchored matcher so a SUFFIXED branch no longer blocked; the test written 2026-04-26 asserted it DOES block and correctly went red. Verdict recorded at pr-merge-verification.test.js:11-12; manifest entry added by a6a5477f149 and removed by 071758279d1.",
+      "note": "THE CALIBRATION CASE. Already un-shelved by prior work — included here because the method must reproduce this known answer before judging unknowns (TS-1), not because action remains."
+    },
+    {
+      "file": "lib/__tests__/repo-paths-git-capable.test.js",
+      "verdict": "undetermined",
+      "citation": null,
+      "note": "NEITHER BUCKET FITS, AND THE LABEL IS WHY. The failing assertion is isGitCapableRepo('EHG') === false (lib/__tests__/repo-paths-git-capable.test.js:31); the signature 'expected true to be false' means it returned true. But isGitCapableRepo (lib/repo-paths.js:300-302) is gitCapableAtPath(resolveRepoPath(targetApp)) — it STATS THE FILESYSTEM. Its result therefore depends on whether the sibling EHG repo is checked out at the resolved path, which is an ENVIRONMENT fact, not a code fact. No code change need have inverted this assertion for it to flip, so 'did a predating change invert it?' — the FR-1 question — has no clean answer here. UNDETERMINED is the honest verdict. SEPARATE FINDING WORTH ITS OWN ITEM: reason_class='assertion-drift' may be MISCLASSIFIED for this entry. The label presumes the test's expectation went stale; the actual dependency is environmental, closer to the 'test-isolation-order-dependent' or a machine-dependent class. This is precisely the kind of distinction a same-day bulk label erases, and it was found on the FIRST unknown examined."
+    }
+  ]
+}
