@@ -20,6 +20,15 @@ function makeCountQueryMock(count, error = null) {
   const builder = {
     in: vi.fn(() => builder),
     not: vi.fn(() => builder),
+    // SD-EHG-IDEATION-PIPELINE-SEAMS-001 FR-3: the WIP live-count now excludes fixtures with an
+    // `is_demo IS DISTINCT FROM true` filter (.or) instead of a chain of name-prefix .not(ilike).
+    or: vi.fn(() => builder),
+    // `eq`/`neq` are mocked NOT because the implementation uses them, but so that a regression to
+    // the FORBIDDEN naive forms (`.eq('is_demo', false)` / `.neq('is_demo', true)`) fails on the
+    // ASSERTION that names the defect, rather than crashing with "eq is not a function". A kill
+    // for the wrong reason is a weak kill: it goes red whether or not the guard actually works.
+    eq: vi.fn(() => builder),
+    neq: vi.fn(() => builder),
     then: (resolve) => Promise.resolve({ count, error }).then(resolve),
   };
   return builder;
@@ -684,9 +693,25 @@ describe('ChairmanReview', () => {
       ).rejects.toMatchObject({ name: 'WipLimitExceededError', limit: 1, current_count: 1 });
     });
 
-    // QF-20260712-860: e2e/test-harness residue (ventures.is_synthetic is a phantom column —
-    // name-prefix matched instead) must not count toward the WIP limit.
-    it('excludes every TEST_FIXTURE_NAME_PREFIXES entry from the live-count query via .not(ilike)', async () => {
+    // SD-EHG-IDEATION-PIPELINE-SEAMS-001 FR-3 / TS-4a. SUPERSEDES the QF-20260712-860 test that
+    // asserted the live-count excluded fixtures via a chain of .not('name','ilike',prefix) calls.
+    //
+    // WHY THE OLD ASSERTION HAD TO GO RATHER THAN BE EXTENDED: a name prefix is a PROXY for
+    // fixture-ness, and it failed in the direction that matters. Measured 2026-08-04 against the
+    // live table: the prefix predicate counted 85 of 89 live rows as real, so the gate was
+    // permanently jammed at 85 >= 2 and the chairman's limit had stopped protecting anything and
+    // started blocking everything. The canonical flag `is_demo` leaves exactly 2.
+    //
+    // THIS TEST IS THE FALSIFIER FOR AC-3a — the NULL-safety requirement — and it is the whole
+    // reason the filter is `.or('is_demo.is.null,is_demo.eq.false')` and not the obvious
+    // `.eq('is_demo', false)` or `.neq('is_demo', true)`. Those two return the same number today
+    // ONLY because no live row currently has a NULL flag; in SQL each evaluates to NULL for a NULL
+    // row and therefore DROPS it, so a venture created without the flag would silently escape the
+    // WIP count and the limit would quietly stop binding. That is this SD's own defect one layer
+    // up: checkNurseryTriggers filtered `nextReview && nextReview <= now`, which excluded all 16
+    // NULL-dated nursery rows. An unflagged venture must COUNT as real — fail toward enforcement.
+    it('TS-4a: excludes fixtures by is_demo with a NULL-SAFE filter, so an unflagged venture still counts', async () => {
+      const orCalls = [];
       const notCalls = [];
       const stub = {
         insert: vi.fn().mockReturnThis(),
@@ -708,6 +733,7 @@ describe('ChairmanReview', () => {
             const builder = {
               in: vi.fn(() => builder),
               not: vi.fn((...args) => { notCalls.push(args); return builder; }),
+              or: vi.fn((...args) => { orCalls.push(args); return builder; }),
               then: (resolve) => Promise.resolve({ count: 0, error: null }).then(resolve),
             };
             return builder;
@@ -731,9 +757,44 @@ describe('ChairmanReview', () => {
         { supabase, logger: silentLogger, company_id: 'co-1' },
       );
 
-      expect(notCalls).toEqual(
-        TEST_FIXTURE_NAME_PREFIXES.map((prefix) => ['name', 'ilike', `${prefix}%`]),
-      );
+      // The filter must ADMIT NULL. `is_demo.is.null` is the term that makes an unflagged venture
+      // count; without it this assertion fails, which is exactly what the naive forms would produce.
+      expect(orCalls).toHaveLength(1);
+      const [orExpr] = orCalls[0];
+      expect(orExpr).toContain('is_demo.is.null');
+      expect(orExpr).toContain('is_demo.eq.false');
+
+      // And the superseded proxy must be GONE — no name-shape filtering remains on the count.
+      expect(notCalls).toEqual([]);
+    });
+
+    // ⚠ THIS IS EXECUTABLE DOCUMENTATION, NOT A GUARD — labelled so after measuring it.
+    //
+    // I wrote it as "TS-4a second half" believing it added protection. It does not: under the
+    // mutation that swaps the implementation to the forbidden `.eq('is_demo', false)`, this test
+    // still PASSES, because it models PostgREST semantics rather than reading chairman-review.js.
+    // The only assertion that actually fails under that mutation is the call-shape test above.
+    //
+    // Kept, renamed, because it explains WHY the filter is shaped the way it is — the NULL row is
+    // the entire difference between the three forms, and that is invisible from the call-shape
+    // assertion alone. But a test that cannot fail when the code breaks must not be counted as
+    // coverage; that is the "green test over unreachable code" defect this SD exists to close,
+    // and mislabelling it TS-4a would have hidden it behind an acceptance-criterion id.
+    it('DOC (not a guard): NULL is the whole difference — the naive forms drop an unflagged venture', () => {
+      const admits = (expr, row) => {
+        // Model the two candidate PostgREST filters against a row with is_demo = null.
+        if (expr === 'or(is_demo.is.null,is_demo.eq.false)') return row.is_demo === null || row.is_demo === false;
+        if (expr === 'eq(is_demo,false)') return row.is_demo === false;          // NULL => dropped
+        if (expr === 'neq(is_demo,true)') return row.is_demo !== null && row.is_demo !== true; // NULL => dropped
+        throw new Error(`unmodelled filter: ${expr}`);
+      };
+      const unflagged = { name: 'A Real Venture', is_demo: null };
+      expect(admits('or(is_demo.is.null,is_demo.eq.false)', unflagged)).toBe(true);
+      expect(admits('eq(is_demo,false)', unflagged)).toBe(false);
+      expect(admits('neq(is_demo,true)', unflagged)).toBe(false);
+      // A genuine fixture is excluded by all three — the difference is only at NULL.
+      const fixture = { name: 'ZZZ_fixture', is_demo: true };
+      expect(admits('or(is_demo.is.null,is_demo.eq.false)', fixture)).toBe(false);
     });
 
     // SD-EHG-IDEATION-PIPELINE-SEAMS-001 FR-3. The WIP wall cannot be cleared honestly:

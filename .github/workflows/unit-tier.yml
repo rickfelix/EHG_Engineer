@@ -16,7 +16,21 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 25
     steps:
+      # FULL HISTORY IS REQUIRED, NOT OPTIONAL. tests/unit/protocol/contract-read-groundtruth.test.js
+      # verifies sha-bearing fixture rows against their git blobs with `git show <sha>:<path>`, and
+      # those rows are DATA-DRIVEN FROM THE DATABASE - the SHAs appear nowhere in the test file. The
+      # default depth of 1 leaves the job holding only the tip commit, so any row referencing an
+      # older commit fails with `fatal: invalid object name` even though the object is reachable from
+      # the remote. Observed on PR #6821: `git show 1ea0403b14ab:CLAUDE_SOLOMON.md` failed here while
+      # `git branch -r --contains 1ea0403b14ab` listed origin/main plus five branches.
+      #
+      # This is DETERMINISTIC, not flaky, and it hits every PR regardless of whose diff it is -
+      # re-running until green would teach the fleet the opposite. Same reasoning and same fix as
+      # .github/workflows/test-coverage.yml, which has carried fetch-depth: 0 for this class of
+      # failure already.
       - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
 
       - uses: actions/setup-node@v4
         with:
