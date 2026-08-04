@@ -88,12 +88,19 @@ jobs:
       # works, on a COPY so the real driver is never mutated.
       - name: Prove a BROKEN guard cannot report a clean tree
         run: |
+          # The copy MUST live inside the repo, at the same depth as the original. Written to /tmp
+          # first time round, where `import { Linter } from 'eslint'` cannot resolve node_modules
+          # and the relative rule import breaks — the step failed with ERR_MODULE_NOT_FOUND, which
+          # is a non-zero exit for entirely the wrong reason. A control that fails for the wrong
+          # reason is worth less than no control: it goes red, someone "fixes" it, and the real
+          # assertion was never exercised. That is why the grep below is not optional.
           sed "s#const RULE_ID = \`\${PLUGIN_NS}/\${RULE_NAME}\`;#const RULE_ID = 'wrong-ns/not-registered';#" \
-            scripts/lint/no-process-cwd-in-sub-agents-lint.mjs > /tmp/misconfigured-driver.mjs
+            scripts/lint/no-process-cwd-in-sub-agents-lint.mjs > scripts/lint/.ci-misconfig-driver.mjs
           set +e
-          node /tmp/misconfigured-driver.mjs --all > /tmp/misconfig.out 2>&1
+          node scripts/lint/.ci-misconfig-driver.mjs --all > /tmp/misconfig.out 2>&1
           code=$?
           set -e
+          rm -f scripts/lint/.ci-misconfig-driver.mjs
           if [ "$code" -eq 0 ]; then
             echo "::error::A MIS-REGISTERED RULE EXITED 0 — the guard would report a clean tree while running nothing."
             cat /tmp/misconfig.out
