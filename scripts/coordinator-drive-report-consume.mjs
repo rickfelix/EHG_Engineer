@@ -201,9 +201,34 @@ export async function main() {
   );
   let coordinatorId = null;
   try { coordinatorId = await getActiveCoordinatorId(supabase); } catch { /* fail closed below */ }
-  const sessionId = await resolveActorSessionId({ resolveCoordinatorId: async () => coordinatorId });
+
+  // THE EXECUTING SEAT COMES FROM THE ENVIRONMENT ONLY — NO FALLBACK. This is the fix for a
+  // SELF-SATISFYING GATE that a security review exploited on the previous version: main() resolved
+  // the actor with getActiveCoordinatorId as a FALLBACK and then compared that same value to
+  // coordinatorId, so with CLAUDE_SESSION_ID unset isCoordinatorSeat compared a value TO ITSELF and
+  // opened. Demonstrated with `env -u CLAUDE_SESSION_ID`, and reproduced by me.
+  //
+  // THE FALLBACK AND THE REFERENCE CANNOT BE THE SAME SOURCE. A seat check is only a check if the
+  // two sides are independently derived: the env var is what the process SELF-ASSERTS, the DB
+  // pointer is what the fleet BELIEVES. Comparing the belief to itself proves nothing.
+  //
+  // AND THE FAILURE WAS WORSE THAN NO GUARD: the bogus receipt would have carried the COORDINATOR's
+  // id rather than a junk value, so it read as a genuine consumption. A control that cannot stop a
+  // lie but makes it credible is worse than the absence it replaced. Absent env var => refuse.
+  const sessionId = typeof process.env.CLAUDE_SESSION_ID === 'string' && process.env.CLAUDE_SESSION_ID.trim()
+    ? process.env.CLAUDE_SESSION_ID.trim()
+    : null;
   const outcome = await runDriveReportConsumeCore(supabase, { sessionId, coordinatorId });
   recordOutcome(outcome);
+
+  // THE STATUS MUST GO TO STDOUT OR IT IS NOT A CHANNEL AT ALL.
+  // scriptCore reads ONLY STDOUT and defaults to the literal 'ok' when it is empty. Every failure
+  // above goes to console.ERROR, so the previous version printed `drive-report-consume:ok` on the
+  // tick EXACTLY WHEN THE INSTRUMENT WAS DEAD — this SD's own target defect, reproduced one level
+  // up, for the second time in this SD. Measured: stdout was empty on the failing path.
+  if (outcome && outcome.status === 'failed') {
+    console.log(`FAILED ${outcome.reason || 'unknown'}`);
+  }
   // EXIT 0 ON EVERY PATH — an observer that reports a failed TICK because it could not observe is
   // worse than useless. Genuine failures travel via the breadcrumb above, not via the exit code.
   return 0;
