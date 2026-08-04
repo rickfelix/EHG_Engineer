@@ -301,7 +301,10 @@ describe('classifyVerdict — verdict policy', () => {
     expect(classifyVerdict(v)).toBe('accept');
   });
 
-  it.each(['FAIL', 'BLOCKED', 'PENDING', 'MANUAL_REQUIRED'])('rejects %s', (v) => {
+  // QF-20260804-569: PENDING left this list — it is now `nonevidence` (the run never
+  // finished, so no check was performed). Its own classification is pinned in the
+  // QF-20260804-569 describe block below. FAIL/BLOCKED/MANUAL_REQUIRED are unchanged.
+  it.each(['FAIL', 'BLOCKED', 'MANUAL_REQUIRED'])('rejects %s', (v) => {
     expect(classifyVerdict(v)).toBe('reject');
   });
 
@@ -375,7 +378,9 @@ describe('validateSubagentEvidence — verdict enforcement (block mode)', () => 
     expect(result.details.failing).toEqual([]);
   });
 
-  it.each(['BLOCKED', 'PENDING', 'MANUAL_REQUIRED'])('%s does not satisfy', async (verdict) => {
+  // QF-20260804-569: PENDING still DOES NOT SATISFY — it now blocks unconditionally via the
+  // non-evidence path rather than via verdict mode, and is asserted there instead.
+  it.each(['BLOCKED', 'MANUAL_REQUIRED'])('%s does not satisfy', async (verdict) => {
     const supabase = rows({ sub_agent_code: 'TESTING', created_at: '2026-04-24T21:00:00Z', verdict });
     const result = await validateSubagentEvidence(ctx(), supabase);
     expect(result.passed).toBe(false);
@@ -550,9 +555,14 @@ describe('validateSubagentEvidence — advisory mode is the DEFAULT and does not
     });
     const result = await validateSubagentEvidence({ sd: makeSD(), handoffType: 'PLAN-TO-EXEC' }, supabase);
     expect(result.passed).toBe(false);
-    expect(result.details.failing).toEqual([
+    // QF-20260804-569: ERROR now lands in `non_evidence` rather than `failing`. The original
+    // intent of this regression — an execution-error verdict must NOT satisfy the gate, and must
+    // NOT be swallowed as `unknown` — is preserved and STRENGTHENED: non-evidence blocks
+    // unconditionally, where `failing` was subject to SUBAGENT_VERDICT_MODE (advisory by default).
+    expect(result.details.non_evidence).toEqual([
       expect.objectContaining({ agent: 'TESTING', verdict: 'ERROR' })
     ]);
+    expect(result.details.failing).toEqual([]);
     // And it must NOT be reported as an unknown verdict — that would mean it was accepted.
     expect(result.details.unknown_verdicts).toEqual([]);
   });
@@ -571,5 +581,61 @@ describe('validateSubagentEvidence — advisory mode is the DEFAULT and does not
     // the fail-open branch is deliberate and must still exist for values outside the constraint.
     expect(classifyVerdict('SOMETHING_INVENTED_LATER')).toBe('unknown');
     expect(classifyVerdict(null)).toBe('unknown');
+  });
+});
+
+// ─────────────────────────────────────────────────────────────────────────────────────────────
+// QF-20260804-569 — a crashed run is NOT evidence.
+//
+// ERROR (executor crashed) and PENDING (run never finished) used to sit in REJECT_VERDICTS, which
+// made them subject to SUBAGENT_VERDICT_MODE — advisory by default. So a crashed run bought the
+// same passage as a real one: "a row exists" was read as "the check ran". Measured on two separate
+// SDs before this fix.
+//
+// The fix is a PREDICATE change, so these tests pin BOTH halves: the new class, and the fact that
+// every other verdict is untouched. A change that quietly made FAIL stricter would be a different
+// (and unrequested) behaviour change.
+// ─────────────────────────────────────────────────────────────────────────────────────────────
+describe('QF-20260804-569: ERROR/PENDING are non-evidence, not rejections', () => {
+  it('classifies a crashed run as nonevidence', () => {
+    expect(classifyVerdict('ERROR')).toBe('nonevidence');
+  });
+
+  it('classifies a never-finished run as nonevidence', () => {
+    expect(classifyVerdict('PENDING')).toBe('nonevidence');
+  });
+
+  it('is case- and whitespace-insensitive, like every other verdict path', () => {
+    expect(classifyVerdict('  error ')).toBe('nonevidence');
+    expect(classifyVerdict('Pending')).toBe('nonevidence');
+  });
+
+  it('TWO-SIDED: a genuine rejection is STILL a rejection, not non-evidence', () => {
+    // The half that matters. If FAIL became nonevidence, this would silently convert an advisory
+    // warning into a hard block for every SD in the fleet — a policy change nobody asked for.
+    expect(classifyVerdict('FAIL')).toBe('reject');
+    expect(classifyVerdict('BLOCKED')).toBe('reject');
+    expect(classifyVerdict('MANUAL_REQUIRED')).toBe('reject');
+  });
+
+  it('TWO-SIDED: passing verdicts are untouched', () => {
+    expect(classifyVerdict('PASS')).toBe('accept');
+    expect(classifyVerdict('CONDITIONAL_PASS')).toBe('accept');
+    expect(classifyVerdict('WARNING')).toBe('accept');
+  });
+
+  it('TWO-SIDED: unrecognised and empty verdicts still fail open as unknown', () => {
+    expect(classifyVerdict('SOMETHING_NEW')).toBe('unknown');
+    expect(classifyVerdict('')).toBe('unknown');
+    expect(classifyVerdict(null)).toBe('unknown');
+  });
+
+  it('CONTROL: nonevidence is a DISTINCT class — not an alias for reject or unknown', () => {
+    // Without this, the whole change could be satisfied by returning 'reject' (the old behaviour)
+    // or 'unknown' (which fails OPEN and would be strictly worse than before).
+    const ne = classifyVerdict('ERROR');
+    expect(ne).not.toBe(classifyVerdict('FAIL'));
+    expect(ne).not.toBe(classifyVerdict('SOMETHING_NEW'));
+    expect(ne).not.toBe(classifyVerdict('PASS'));
   });
 });
