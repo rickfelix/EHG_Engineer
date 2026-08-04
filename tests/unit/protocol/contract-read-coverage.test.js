@@ -314,14 +314,66 @@ describe('the byte proxy is RETIRED — readability is measured in tokens', () =
     }
   });
 
-  it('SAFE_BYTES is the degraded-mode bound and is re-derived from the live scale', () => {
-    // It was derived from the RETIRED constant, so leaving it alone would have been the same defect
-    // one level down. Pinned against the arithmetic that produces it, not against the old floor.
-    expect(SINGLE_READ_SAFE_BYTES).toBe(Math.floor(SINGLE_READ_TOKEN_BUDGET * HARNESS_BYTES_PER_TOKEN));
+  it('SAFE_BYTES is the degraded-mode bound and is pinned to a MEASURED value', () => {
+    /**
+     * *** THE FIRST VERSION OF THIS ASSERTION WAS TAUTOLOGICAL AND MUTATION PROVED IT. ***
+     * It read `expect(SAFE_BYTES).toBe(Math.floor(BUDGET * HARNESS_BYTES_PER_TOKEN))` — restating
+     * the very line that computes it. Moving the constant to 2.60 moved SAFE_BYTES from 60,442 to
+     * 65,000 and this assertion stayed GREEN, because both sides moved together. It is the same
+     * shape as the old suite's calibration checks: two numbers from one belief.
+     *
+     * Pinned to the literal instead. If the scale changes, this fails and someone has to look at
+     * whether the degraded bound is still right rather than have it silently follow along.
+     */
+    expect(SINGLE_READ_SAFE_BYTES).toBe(60442);
 
     // NOT asserted: `SAFE_BYTES <= BUDGET`. That inequality held for every ratio at or above 1.0,
-    // so it would not have noticed the bound loosening — it is the shape of assertion that let the
-    // original defect through, and repeating it here would buy nothing.
+    // so it would not have noticed the bound loosening — the shape of assertion that let the
+    // original defect through.
+  });
+
+  it('an unavailable veto is REPORTED, not silently treated as a clearance', () => {
+    /**
+     * *** TWO INDEPENDENT MUTATIONS SURVIVED THE WHOLE SUITE HERE, IN TWO DIFFERENT MODULES. ***
+     * Making the tokenizer-failure catch return 0 (harness-token-scale.cjs) or false
+     * (contract-read-coverage.cjs) instead of null converts the veto's degradation from "no opinion"
+     * into "cleared" — and 97 tests stayed green. Both modules' docblocks state the invariant
+     * verbatim; neither had an assertion behind it. EXEC review reproduced the live consequence: with
+     * tiktoken blocked, the dense fixture this suite uses to PROVE the veto works flips to fits:true.
+     *
+     * The verdict deliberately does NOT refuse when the veto is unavailable — refusing would disarm
+     * every seat on a tokenizer hiccup, which is the disease being cured. What it must do is SAY SO.
+     */
+    const osx = require_('os'); const fsx = require_('fs'); const px = require_('path');
+    const dir = fsx.mkdtempSync(px.join(osx.tmpdir(), 'ctr-veto-'));
+    fsx.writeFileSync(px.join(dir, 'ok.md'), 'hello world\n'.repeat(20));
+
+    // Cleared and unavailable must be DISTINGUISHABLE. Before this, both emitted an identical verdict.
+    expect(singleReadFit(dir, 'ok.md').veto).toBe('cleared');
+    expect(singleReadFit(dir, 'MISSING.md').veto).toBe('unavailable');
+
+    // And the null itself must stay a null all the way out of the checker — the mutated forms
+    // returned 0 / false, which compare as "did not exceed" and read as a clearance.
+    expect(exceedsCapByRawLowerBound(dir, 'MISSING.md')).toBeNull();
+
+    // THE OTHER HALF, IN THE OTHER MODULE. A mutation making the tokenizer-failure branch return 0
+    // instead of null survived even after the assertion above existed, because that branch fires
+    // only when tiktoken itself will not load — unreachable from any fixture. The loader is injected
+    // so the branch is reachable, which is the only way a test can hold it.
+    const { cl100kRawLowerBound } = require_('../../../lib/protocol/harness-token-scale.cjs');
+    const brokenLoader = () => { throw new Error('tiktoken unavailable'); };
+    expect(cl100kRawLowerBound('some text', brokenLoader)).toBeNull();
+    expect(cl100kRawLowerBound('some text')).toBeGreaterThan(0);   // and the real loader still works
+  });
+
+  it('the veto fires and reports it, on the file it was built for', () => {
+    const osx = require_('os'); const fsx = require_('fs'); const px = require_('path');
+    const dir = fsx.mkdtempSync(px.join(osx.tmpdir(), 'ctr-vfire-'));
+    let seed = 12345;
+    const raw = Buffer.alloc(37000);
+    for (let i = 0; i < raw.length; i++) { seed = (seed * 1103515245 + 12345) % 2147483648; raw[i] = (seed >> 16) & 0xff; }
+    fsx.writeFileSync(px.join(dir, 'D.md'), raw.toString('base64'));
+    expect(singleReadFit(dir, 'D.md').veto).toBe('fired');
   });
 
   it('a dense file is vetoed even though the prose-calibrated bytes model would clear it', () => {

@@ -26,8 +26,21 @@ const TOL = GT.tolerance;
 
 /** The shipped model, isolated from file I/O so the fixture drives it directly. */
 const predict = (bytes) => Math.round(bytes / HARNESS_BYTES_PER_TOKEN);
-/** The RETIRED model, reconstructed from its recorded overshoot. Used only as the control. */
-const retiredPredict = (row) => Math.round(row.harness_tokens * (1 + GT.retired_model_overshoot_pct[row.name] / 100));
+/**
+ * The RETIRED model, COMPUTED: cl100k on FRAMED text, times 1.85.
+ *
+ * *** THE FIRST VERSION OF THIS WAS FAKE AND I SHIPPED IT. *** It read
+ * `round(harness_tokens * (1 + recorded_overshoot/100))` -- deriving the retired model's prediction
+ * FROM the measured answer, so the control below reduced to "every recorded overshoot exceeds 8.0",
+ * a statement about this fixture's own constants. cl100k was never invoked; `1.85` appeared only in
+ * the test title. That is precisely the shape this suite's own docblock indicts the old suite for:
+ * comparing two numbers that came from the same belief.
+ *
+ * Only rows carrying a git-verified `cl100k_framed` can participate, and the suite asserts that at
+ * least one does rather than quietly controlling on an empty set.
+ */
+const retiredPredict = (row) => Math.round(row.cl100k_framed * GT.retired_model.constant);
+const CONTROLLABLE = GT.calibration_set.filter((r) => Number.isFinite(r.cl100k_framed));
 
 describe('the bytes model against measured harness output', () => {
   it('has ground truth to check against — a zero-row sweep would pass vacuously', () => {
@@ -59,20 +72,29 @@ describe('the bytes model against measured harness output', () => {
    * model, it had no way to express what catching it would look like.
    */
   it('the RETIRED 1.85 model FAILS this same tolerance — the bar discriminates', () => {
-    const failures = GT.calibration_set.filter((row) => {
-      const p = retiredPredict(row);
-      return Math.abs(p - row.harness_tokens) / row.harness_tokens * 100 > TOL.relative_pct;
-    });
-    // Not "at least one" — every single calibration point must reject the retired model.
-    expect(failures.length).toBe(GT.calibration_set.length);
+    // Assert the control has something to run on. A control over an empty set passes silently and
+    // is worth less than no control, because it reads as one.
+    expect(CONTROLLABLE.length).toBeGreaterThanOrEqual(1);
+
+    for (const row of CONTROLLABLE) {
+      const p = retiredPredict(row);                       // cl100k_framed x 1.85, computed
+      const relPct = Math.abs(p - row.harness_tokens) / row.harness_tokens * 100;
+      expect(relPct).toBeGreaterThan(TOL.relative_pct);     // the retired model does NOT clear the bar
+      // ...and the shipped model does, on the very same row. Both directions, one assertion pair.
+      const shipped = Math.abs(predict(row.bytes) - row.harness_tokens) / row.harness_tokens * 100;
+      expect(shipped).toBeLessThanOrEqual(TOL.relative_pct);
+    }
   });
 
-  it('the tolerance is nowhere near the threshold at which it stops discriminating', () => {
-    // Recorded so a future widening cannot happen by accident: at the theatre threshold the retired
-    // model passes this suite, and at the leakage point individual defective files start slipping.
-    expect(TOL.relative_pct).toBeLessThan(TOL.leakage_begins_pct);
-    expect(TOL.relative_pct).toBeLessThan(TOL.theatre_threshold_pct);
+  it('the tolerance sits between the measured error and the point it stops discriminating', () => {
+    // Both bounds asserted against COMPUTED figures, so a future widening cannot happen quietly.
     expect(TOL.relative_pct).toBeGreaterThanOrEqual(TOL.measured_max_error_pct);
+    expect(TOL.relative_pct).toBeLessThan(TOL.theatre_threshold_pct);
+
+    // And the recorded theatre threshold is the real one: at it, the retired model clears the bar.
+    const worstRetired = Math.max(...CONTROLLABLE.map(
+      (r) => Math.abs(retiredPredict(r) - r.harness_tokens) / r.harness_tokens * 100));
+    expect(TOL.theatre_threshold_pct).toBeCloseTo(worstRetired, 1);
   });
 });
 
@@ -99,7 +121,7 @@ describe('verdicts against measured reads — positives and negatives inseparabl
   });
 
   it('the decisive refutation case fits — this is the false-fail the SD exists to remove', () => {
-    const row = GT.verdict_set.find((r) => r.name === 'CLAUDE_SOLOMON.md@fixture-59080');
+    const row = GT.verdict_set.find((r) => r.name === 'CLAUDE_SOLOMON.md@59080');
     expect(predict(row.bytes)).toBeLessThanOrEqual(SINGLE_READ_TOKEN_BUDGET);
 
     // AND it would NOT have fitted under the old 22,500 budget, whatever the predictor said. This is
@@ -122,12 +144,14 @@ describe('the resolution limit is real and is stated rather than hidden', () => 
    * accuracy — the same overstatement as the module comment claiming "every verdict decided by a
    * wide margin", which was false for the files it covered.
    *
-   * *** THE COUNT HERE WAS WRONG WHEN THIS TEST WAS WRITTEN, AND THE TEST IS WHAT CAUGHT IT. ***
+   * *** THIS COUNT HAS NOW BEEN WRONG TWICE, AND THE TEST CAUGHT IT BOTH TIMES. ***
    * Review reported "LEAD 664 (2.7%), SOLOMON 1,103 (4.4%), PLAN 1,847 (7.4%) — all inside the
-   * +-6.8% band", and that phrasing travelled unchecked into the PRD and into a module comment.
-   * 7.4% is not inside 6.8%. The real split is TWO inside (SOLOMON, LEAD) and TWO outside (PLAN,
-   * ADAM). Asserted by computation rather than by the quoted figure, so the arithmetic has to hold
-   * rather than merely being restated.
+   * +-6.8% band", and that phrasing travelled unchecked into the PRD and a module comment. 7.4% is
+   * not inside 6.8%, which made it two-inside/two-outside. THEN the band itself moved: correcting
+   * the mispaired SOLOMON row dropped measured max error from 6.80% to 6.23%, and the SOLOMON row's
+   * own headroom is 7.52% -- so it left the band too. ONE inside (LEAD), three outside.
+   * Asserted by computation rather than by any quoted figure, which is why both corrections
+   * surfaced here instead of shipping.
    */
   it('records which verdicts are decided within the error band', () => {
     const band = TOL.measured_max_error_pct / 100;
@@ -136,10 +160,8 @@ describe('the resolution limit is real and is stated rather than hidden', () => 
     const insideNoise = clean.filter((r) => headroom(r) < band);
 
     expect(clean.length).toBe(4);
-    expect(insideNoise.length).toBe(2);
-    expect(insideNoise.map((r) => r.name).sort()).toEqual(
-      ['CLAUDE_LEAD.md@24336', 'CLAUDE_SOLOMON.md@fixture-59080']
-    );
+    expect(insideNoise.length).toBe(1);
+    expect(insideNoise.map((r) => r.name).sort()).toEqual(['CLAUDE_LEAD.md@24336']);
 
     // And the two decided with real margin are genuinely outside it, not marginally so by rounding.
     for (const r of clean.filter((x) => !insideNoise.includes(x))) {
