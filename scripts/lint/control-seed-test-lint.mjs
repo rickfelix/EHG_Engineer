@@ -70,7 +70,7 @@
 import { execFileSync, spawnSync } from 'node:child_process';
 import { existsSync, readFileSync } from 'node:fs';
 import { join } from 'node:path';
-import { runTrial, VERDICT } from '../audit/control-seed-test.mjs';
+import { runTrial, VERDICT, runSeedTestTrial, SEED_TRIAL } from '../audit/control-seed-test.mjs';
 
 // THE SINGLE POINT THAT CHANGES WHEN THE FR-1 THRESHOLD IS RULED. Broad reading (blocks,
 // 67% < 80%) = all of these. Narrow reading (detects, 83% >= 80%) = trim to the
@@ -176,15 +176,35 @@ export function evaluate(repoRoot, files, specs, isControlFn = isControl) {
     // `fixtures`. Use `seedTest` only when the control cannot be aimed at a fixture, and expect a
     // reviewer to read the test.
     if (spec.seedTest) {
-      const r = spawnSync('npx', ['vitest', 'run', spec.seedTest], { cwd: repoRoot, encoding: 'utf8', timeout: 300000, shell: process.platform === 'win32' });
-      if (r.status !== 0) {
-        failures.push({ file: rel, reason: 'SEED_TEST_FAILED', detail: `its committed seed-test ${spec.seedTest} does not pass.`, evidence: `${r.stdout || ''}${r.stderr || ''}`.trim().split('\n').filter(Boolean).slice(-3) });
+      // FR-7 (SD-PAT-FIX-FIX-ABSENCE-SIGNAL-001): THIS FORM NOW REQUIRES AN OBSERVED RED.
+      // It used to run the test and require it to PASS — which proves only that it passes,
+      // never that it would notice if the control stopped working. A `neuter` declaration is
+      // mandatory so that omitting the proof is UNEXPRESSIBLE rather than merely discouraged;
+      // the alternative (treat a missing neuter as "nothing to check") would reproduce this
+      // SD's exact defect — an empty evaluation reported as a pass.
+      if (!spec.neuter) {
+        failures.push({ file: rel, reason: 'NO_NEUTER_DECLARED', detail: `uses the seedTest form but declares no \`neuter\` {find, replace, why}. Without one the gate can only observe that ${spec.seedTest} passes, which is not evidence it can fail.` });
+        skipped.push({ file: rel, why: 'seedTest form with no neuter declaration — no observed-RED trial was possible' });
+        continue;
       }
-      // FR-8: this control was MATCHED but NO TRIAL WAS RUN — `continue` skips runTrial
-      // entirely. Recording it is what makes matched != trialsRun observable; without it the
-      // two numbers are always equal and the trial count is satisfiable as an alias of the
-      // match count, measuring nothing.
-      skipped.push({ file: rel, why: 'seedTest form — the committed test was run, but no seeded-defect TRIAL was performed' });
+
+      const st = runSeedTestTrial(spec, repoRoot);
+      // FR-8: this IS a trial — the control was exercised against a deliberate defect, which
+      // is the same thing runTrial does, by a different route. Recording it here keeps the
+      // acceptance metric a count of controls actually exercised.
+      trials.push({ file: rel, form: 'seedTest', verdict: st.verdict, code: st.code });
+
+      if (st.code === 'RED_BEFORE_NEUTER') {
+        failures.push({ file: rel, reason: 'SEED_TEST_FAILED', detail: `its committed seed-test ${spec.seedTest} does not pass at HEAD.`, evidence: st.evidence });
+      } else if (st.verdict === SEED_TRIAL.CANNOT_FAIL) {
+        failures.push({ file: rel, reason: 'SEED_TEST_CANNOT_FAIL', detail: st.reason, evidence: st.evidence });
+      } else if (st.verdict === SEED_TRIAL.HARNESS_ERROR) {
+        // Loud, but NOT an accusation. The harness could not reach a verdict, and reporting
+        // that as blindness would be the false-positive shape FR-1 catalogued four times.
+        // Staying silent instead would be the absence-as-pass shape this SD exists to stop —
+        // so it blocks, and says plainly which of the two it is.
+        failures.push({ file: rel, reason: 'SEED_TRIAL_HARNESS_ERROR', detail: `${st.reason} — this is a HARNESS failure, not a finding that the control is blind.`, evidence: st.evidence });
+      }
       continue;
     }
 

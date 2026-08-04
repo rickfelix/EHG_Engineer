@@ -9,6 +9,7 @@
 // No DB, no network: pure evaluate() against a committed fixture.
 import { describe, it, expect } from 'vitest';
 import { evaluate } from '../../../scripts/lint/control-seed-test-lint.mjs';
+import { classifySeedTrial, SEED_TRIAL } from '../../../scripts/audit/control-seed-test.mjs';
 
 const BLIND = 'tests/fixtures/control-seed-gate/blind-gauge-lint.mjs';
 const onlyBlind = (p) => p === BLIND;
@@ -114,5 +115,61 @@ describe('FR-6 — a spec-only diff still evaluates the controls that spec names
     expect(r.specChanged).toBe(false);
     expect(r.selected).not.toContain(BLIND);
     expect(r.trials).toHaveLength(0);
+  });
+});
+
+// SD-PAT-FIX-FIX-ABSENCE-SIGNAL-001 — FR-7. THE seedTest FORM MUST REQUIRE AN OBSERVED RED.
+//
+// These drive the PURE classifier, never runSeedTestTrial. That is not only for speed: this
+// very file is the seed-test the trial runs, so a test here that invoked the trial would
+// spawn a worktree to run itself. Any spec used below must therefore stay `neuter`-free.
+//
+// Four of the six cases are CONTROLS, because every one of them is a way this check could
+// quietly become a rubber stamp while still reporting a verdict.
+describe('FR-7 — an observed RED, and only for the right reason', () => {
+  const REAL_RED = 'AssertionError: expected [] to have a length of 1';
+
+  it('[DECIDING] neutered and STILL GREEN is the finding — the test asserts nothing', () => {
+    const r = classifySeedTrial({ cleanExit: 0, mutationLanded: true, mutantExit: 0, neuterWhy: 'gate reports no failures' });
+    expect(r.verdict).toBe(SEED_TRIAL.CANNOT_FAIL);
+    expect(r.code).toBe('SURVIVED');
+  });
+
+  it('[DECIDING] green whole, red neutered, on an assertion → PROVEN_RED', () => {
+    const r = classifySeedTrial({ cleanExit: 0, mutationLanded: true, mutantExit: 1, mutantOut: REAL_RED });
+    expect(r.verdict).toBe(SEED_TRIAL.PROVEN_RED);
+  });
+
+  it('[CONTROL] already RED before neutering is never proof — the positive control dominates', () => {
+    // The dangerous direction: a mis-wired scratch tree makes the mutant red too, so without
+    // this rule the harness is most confident exactly when it is most broken. Note the inputs
+    // below would otherwise read as a textbook PROVEN_RED.
+    const r = classifySeedTrial({ cleanExit: 1, mutationLanded: true, mutantExit: 1, mutantOut: REAL_RED });
+    expect(r.verdict).toBe(SEED_TRIAL.HARNESS_ERROR);
+    expect(r.code).toBe('RED_BEFORE_NEUTER');
+  });
+
+  it('[CONTROL] a no-op mutation is an ERROR, never CANNOT_FAIL', () => {
+    // This fired for real during PLAN: a mutation attempt was a silent no-op and would have
+    // been published as a surviving mutant. "Neuter → still green" and "the edit never landed"
+    // produce identical observations, so the harness must refuse to score rather than guess.
+    const r = classifySeedTrial({ cleanExit: 0, mutationLanded: false, mutantExit: 0 });
+    expect(r.verdict).toBe(SEED_TRIAL.HARNESS_ERROR);
+    expect(r.code).toBe('MUTATION_NO_OP');
+    expect(r.verdict).not.toBe(SEED_TRIAL.CANNOT_FAIL);
+  });
+
+  it('[CONTROL] red because the module would not LOAD is not proof of detection', () => {
+    // Otherwise the weakest possible neutering — corrupting the file — passes as evidence,
+    // and every seedTest control could be certified by making its source unparseable.
+    const r = classifySeedTrial({ cleanExit: 0, mutationLanded: true, mutantExit: 1, mutantOut: 'Error: Failed to load url ../../../scripts/lint/x.mjs\nSyntaxError: Unexpected token' });
+    expect(r.verdict).toBe(SEED_TRIAL.HARNESS_ERROR);
+    expect(r.code).toBe('LOAD_CRASH');
+  });
+
+  it('[CONTROL] an unexplained red is refused rather than scored', () => {
+    const r = classifySeedTrial({ cleanExit: 0, mutationLanded: true, mutantExit: 1, mutantOut: 'exited with code 1' });
+    expect(r.verdict).toBe(SEED_TRIAL.HARNESS_ERROR);
+    expect(r.code).toBe('UNEXPLAINED_RED');
   });
 });

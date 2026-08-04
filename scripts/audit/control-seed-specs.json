@@ -167,12 +167,22 @@
     "name": "control-seed-test-lint",
     "script": "scripts/lint/control-seed-test-lint.mjs",
     "seedTest": "tests/unit/lint/control-seed-test-lint.test.js",
-    "note": "Seeded by the committed TS-5 test: plants a deliberately blind gauge and asserts the gate REFUSES it. Cannot use a fixture trial — this control's certified output is a VERDICT about other controls, not a code pattern in a file."
+    "note": "Seeded by the committed TS-5 test: plants a deliberately blind gauge and asserts the gate REFUSES it. Cannot use a fixture trial — this control's certified output is a VERDICT about other controls, not a code pattern in a file.",
+    "neuter": {
+      "find": "return { failures, trials, skipped, selected, specChanged };",
+      "replace": "return { failures: [], trials, skipped, selected, specChanged };",
+      "why": "evaluate() reports no failures at all — the blindest possible gate"
+    }
   },
   {
     "name": "control-seed-test",
     "script": "scripts/audit/control-seed-test.mjs",
     "seedTest": "tests/unit/lint/control-seed-test-lint.test.js",
-    "note": "Same TS-5 test exercises runTrial through evaluate — a blind gauge must come back SILENT. Its certified behaviour is a verdict, so there is no code pattern to seed into a fixture."
+    "note": "Same TS-5 test exercises runTrial through evaluate — a blind gauge must come back SILENT. Its certified behaviour is a verdict, so there is no code pattern to seed into a fixture.",
+    "neuter": {
+      "find": "const verdict = detected ? (code !== 0 ? VERDICT.BLOCKS : VERDICT.DETECTS) : VERDICT.SILENT;",
+      "replace": "const verdict = VERDICT.DETECTS;",
+      "why": "runTrial calls every control DETECTS, so a blind gauge never comes back SILENT"
+    }
   }
 ]

@@ -196,6 +196,141 @@ export function runTrial(spec, repoRoot) {
   return { name: spec.name, verdict, exitCode: code, detected, treeClean, scannedZero, evidence: out.trim().split('\n').filter(Boolean).slice(-3) };
 }
 
+// ===========================================================================================
+// SD-PAT-FIX-FIX-ABSENCE-SIGNAL-001 — FR-7. THE seedTest FORM MUST REQUIRE AN OBSERVED RED.
+//
+// Until now `seedTest` ran the committed test and required it to PASS. A passing test proves
+// only that it passes; it cannot distinguish a test that CHECKS something from one that
+// checks nothing. Both seedTest specs are this gate's OWN machinery, so the control that
+// certifies every other control was itself certified by the form it declares insufficient.
+//
+// The fix: neuter the control and require the test to go RED. Which means the harness now
+// performs deliberate breakage on the control's own source — and the three ways that goes
+// wrong are all silent, so each gets a structural defence rather than a promise.
+// ===========================================================================================
+
+export const SEED_TRIAL = Object.freeze({
+  PROVEN_RED: 'PROVEN_RED',       // green when whole, red when neutered — the test genuinely fires
+  CANNOT_FAIL: 'CANNOT_FAIL',     // neutered and STILL green — the test asserts nothing
+  HARNESS_ERROR: 'HARNESS_ERROR', // the harness failed. NEVER a verdict about the control.
+});
+
+// A vitest run can go red for reasons that prove nothing about the control. Telling those
+// apart requires reading WHY it was red, not merely THAT it was red.
+const ASSERTION_RE = /AssertionError|expected .+ to |Tests\s+\d+ failed/i;
+const LOAD_CRASH_RE = /ERR_MODULE_NOT_FOUND|Failed to load url|Cannot find (module|package)|SyntaxError|ReferenceError/i;
+
+/**
+ * The whole decision, as a pure function — no spawning, no filesystem.
+ *
+ * It lives apart from the I/O deliberately: every rule below is a way this check could
+ * silently degrade into a rubber stamp, and rules that can only be exercised by building a
+ * git worktree are rules nothing will ever test. A unit test drives this directly.
+ */
+export function classifySeedTrial({ cleanExit, mutationLanded, mutantExit, mutantOut = '', neuterWhy }) {
+  // (1) POSITIVE CONTROL, AND IT MUST COME FIRST. If the test is already red before we touch
+  // anything, the scratch tree is broken (or the test does not pass at HEAD) and EVERY later
+  // observation is uninterpretable — a red mutant would then "prove" firing when the truth is
+  // the harness never worked. This is the same trap as reading a crash as a verdict, one level
+  // up: without it the harness is most confident exactly when it is most broken.
+  if (cleanExit !== 0) {
+    return { verdict: SEED_TRIAL.HARNESS_ERROR, code: 'RED_BEFORE_NEUTER', reason: 'the seed-test is RED before any neutering, so nothing measured after this point means anything (scratch tree mis-wired, or the test does not pass at HEAD)' };
+  }
+
+  // (2) PROVE THE MUTATION LANDED. A no-op edit leaves the test green, which is
+  // INDISTINGUISHABLE from a test that cannot fail — this SD's own defect class, inside its
+  // own remedy. It fired for real during PLAN: a mutation attempt was a silent no-op sed and
+  // would have been published as a surviving mutant. So this is an ERROR, never a verdict:
+  // a verdict absorbs the failure, an error cannot be mistaken for a measurement.
+  if (!mutationLanded) {
+    return { verdict: SEED_TRIAL.HARNESS_ERROR, code: 'MUTATION_NO_OP', reason: 'the neutering edit did not change the file — its `find` string no longer matches the control (a no-op mutation is indistinguishable from a test that cannot fail, so it is refused rather than scored)' };
+  }
+
+  // (3) A NEUTERED CONTROL THAT LEAVES THE TEST GREEN IS THE FINDING.
+  if (mutantExit === 0) {
+    return {
+      verdict: SEED_TRIAL.CANNOT_FAIL,
+      code: 'SURVIVED',
+      reason: `the control was neutered (${neuterWhy || 'see spec.neuter'}) and its seed-test still passed — the test does not detect the thing it certifies`,
+    };
+  }
+
+  // (4) RED IS NOT ENOUGH: IT MUST BE RED FOR THE RIGHT REASON. Breaking a module's syntax
+  // also turns a test red, while proving only that an unparseable file cannot be imported.
+  // Accepting any non-zero exit would let the weakest possible neutering pass as proof.
+  if (LOAD_CRASH_RE.test(mutantOut) && !ASSERTION_RE.test(mutantOut)) {
+    return { verdict: SEED_TRIAL.HARNESS_ERROR, code: 'LOAD_CRASH', reason: 'the neutered control failed to LOAD rather than failing an assertion — that proves the file was broken, not that the test detects behaviour. Use a neutering that keeps the module valid.' };
+  }
+  if (!ASSERTION_RE.test(mutantOut)) {
+    return { verdict: SEED_TRIAL.HARNESS_ERROR, code: 'UNEXPLAINED_RED', reason: 'the seed-test exited non-zero but produced no recognisable assertion failure, so WHY it went red is unknown — refusing to score an unexplained red as proof' };
+  }
+
+  return { verdict: SEED_TRIAL.PROVEN_RED, code: 'PROVEN', reason: `neutering the control (${neuterWhy || 'see spec.neuter'}) turned its seed-test RED on an assertion` };
+}
+
+/**
+ * Run the observed-RED trial for one `seedTest` spec. Never touches the working tree.
+ *
+ * *** WHY A NESTED WORKTREE UNDER .worktrees/ AND NO node_modules LINK ***
+ * Requiring an observed RED means editing the control's source and re-running vitest, and
+ * doing that in place would violate the invariant at the top of this file. So the trial runs
+ * in a throwaway `git worktree` at HEAD, which git creates without touching the real tree.
+ *
+ * It goes under `.worktrees/` — already in .gitignore — for two independent reasons, and the
+ * second was learned the hard way. First, an ignored path keeps `git status --porcelain`
+ * byte-identical, so the trial cannot trip the lint's own HARNESS_DIRTIED_TREE check. Second,
+ * node resolves `node_modules` by walking UP, so a worktree nested inside the repo finds the
+ * real one with NO symlink. The first draft put the worktree in os.tmpdir() and junctioned
+ * node_modules into it — and `git worktree remove --force` DELETED THE 557-PACKAGE
+ * node_modules THROUGH THE JUNCTION. Nesting removes the need for the link, which removes the
+ * hazard entirely: there is no longer a destructive cleanup to get right.
+ *
+ * KNOWN LIMITATION (FR-4): the trial evaluates HEAD, not uncommitted working-tree edits, so
+ * running it locally on a dirty tree measures the last commit. In CI — the venue where it
+ * enforces — HEAD is the PR's merge commit, which is exactly the content under review.
+ */
+export function runSeedTestTrial(spec, repoRoot, deps = {}) {
+  const { spawn = spawnSync, exec = execFileSync } = deps;
+  const target = (spec.neuter?.file || spec.script).replace(/\\/g, '/');
+  const wtParent = join(repoRoot, '.worktrees');
+  const wt = join(wtParent, `.seedtrial-${spec.name.replace(/[^a-z0-9-]/gi, '_')}-${process.pid}`);
+  const runVitest = (cwd) => {
+    const r = spawn('npx', ['vitest', 'run', '--project', 'unit', spec.seedTest], { cwd, encoding: 'utf8', timeout: 600000, shell: process.platform === 'win32' });
+    return { code: typeof r.status === 'number' ? r.status : 1, out: `${r.stdout || ''}${r.stderr || ''}` };
+  };
+
+  try {
+    mkdirSync(wtParent, { recursive: true });
+    exec('git', ['worktree', 'add', '--detach', '-q', wt, 'HEAD'], { cwd: repoRoot, stdio: 'pipe' });
+
+    const clean = runVitest(wt);
+    // Short-circuit: with the positive control already failing there is nothing to learn from
+    // mutating, and running anyway would only produce a red we could not interpret.
+    if (clean.code !== 0) {
+      const c = classifySeedTrial({ cleanExit: clean.code, mutationLanded: false, mutantExit: 1 });
+      return { ...c, name: spec.name, evidence: clean.out.trim().split('\n').filter(Boolean).slice(-3) };
+    }
+
+    const p = join(wt, target);
+    const before = readFileSync(p, 'utf8');
+    const after = before.replace(spec.neuter.find, spec.neuter.replace);
+    writeFileSync(p, after, 'utf8');
+    // Read BACK from disk rather than comparing the strings we just built: this must prove the
+    // FILE changed, not that our replace() returned something different.
+    const mutationLanded = readFileSync(p, 'utf8') !== before;
+
+    const mutant = mutationLanded ? runVitest(wt) : { code: 1, out: '' };
+    const c = classifySeedTrial({ cleanExit: clean.code, mutationLanded, mutantExit: mutant.code, mutantOut: mutant.out, neuterWhy: spec.neuter.why });
+    return { ...c, name: spec.name, evidence: mutant.out.trim().split('\n').filter((l) => /FAIL|AssertionError|expected|Tests\s/.test(l)).slice(-3) };
+  } catch (e) {
+    return { name: spec.name, verdict: SEED_TRIAL.HARNESS_ERROR, code: 'HARNESS_THREW', reason: `the observed-RED harness itself failed: ${e.message}`, evidence: [] };
+  } finally {
+    try { exec('git', ['worktree', 'remove', '--force', wt], { cwd: repoRoot, stdio: 'ignore' }); } catch {}
+    try { rmSync(wt, { recursive: true, force: true }); } catch {}
+    try { exec('git', ['worktree', 'prune'], { cwd: repoRoot, stdio: 'ignore' }); } catch {}
+  }
+}
+
 function main() {
   const argv = process.argv.slice(2);
   const specIdx = argv.indexOf('--spec');
