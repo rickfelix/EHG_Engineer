@@ -116,6 +116,10 @@ scripts/apply-*.mjs
 scripts/apply-*.js
 # Production canonical apply script (SD-LEO-INFRA-CANONICAL-SCRIPTS-APPLY-001)
 !scripts/apply-migration.js
+# FR-4 deliverable of SD-LEO-INFRA-CHAIRMAN-DECISION-QUEUE-003 — NOT a one-off: it is the
+# documented apply path for chairman decision captures, is referenced by the PR's chairman
+# instructions, and is imported by a committed unit test.
+!scripts/apply-chairman-decision-captures.mjs
 scripts/check-*.mjs
 scripts/check-*.js
 scripts/check-*.cjs
