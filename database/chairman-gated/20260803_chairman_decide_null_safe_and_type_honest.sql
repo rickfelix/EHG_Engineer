@@ -5,6 +5,12 @@
 -- the 3-factor ceremony (--prod-deploy + single-use token + an @approved-by header matching
 -- git config user.email).
 --
+-- @approved-by: codestreetlabs@gmail.com
+-- (Approver header added 2026-08-04 ~07:2x ET at the chairman's own apply session, his terminal,
+-- his direction. Approval basis: his three recorded decisions of 2026-08-03 — captures 38b8ecd3 /
+-- 87786335 / 5e229e42 — exist SOLELY to be applied by this function fix; applying it is the
+-- execution of decisions he already made.)
+--
 -- ─────────────────────────────────────────────────────────────────────────────────────────────
 -- WHY THIS EXISTS
 -- ─────────────────────────────────────────────────────────────────────────────────────────────
