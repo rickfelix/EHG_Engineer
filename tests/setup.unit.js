@@ -5,17 +5,64 @@
 // touch a Supabase client hit the synthetic test.invalid.local sentinel and
 // fail/skip loudly instead of silently mutating production data.
 //
-// Host-shell env vars still take precedence via ||= (CI workflows that
-// deliberately pass secrets — e.g. protected-unit-suites.yml — keep working).
+// Host-shell env vars USED TO take precedence via ||=. They no longer do — see below.
 import { vi, beforeEach, afterEach } from 'vitest';
+import {
+  SENTINEL_URL,
+  SENTINEL_SERVICE_ROLE_KEY,
+  SENTINEL_ANON_KEY,
+  evaluateSentinelPostCondition,
+  formatCredentialFenceError,
+} from './helpers/credential-fence.js';
 
-// Synthetic env defaults so module-load createSupabaseServiceClient() factories
-// don't throw during vitest collection in environments without real credentials
-// (e.g. CI test-coverage runs without secrets, fork PRs).
-process.env.SUPABASE_URL ||= 'https://test.invalid.local';
-process.env.NEXT_PUBLIC_SUPABASE_URL ||= process.env.SUPABASE_URL;
-process.env.SUPABASE_SERVICE_ROLE_KEY ||= 'test-service-role-key-not-real';
-process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY ||= 'test-anon-key-not-real';
+// ─── SD-LEO-FIX-CREDENTIAL-GUARD-INVERSION-001 ────────────────────────────────────────────────
+//
+// THE INVERSION THIS REPLACES. These four lines used `||=`, so the synthetic sentinel applied
+// EXACTLY when nothing was set and was skipped EXACTLY when a real URL was exported. The comment
+// above justified that as letting protected-unit-suites.yml keep working. Measured: with the
+// sentinel forced and no real credentials, that workflow's suite runs 1736 tests green in 13.01s
+// with zero hangs. The `||=` protected a workflow that did not need protecting — while
+// fr-c-generator.test.js gated INSERT/UPDATE/DELETE against four production tables on
+// `skipIf(!HAS_REAL_DB)`, i.e. on this guard having FAILED. 11 production rows were written that
+// way between 2026-05-04 and 2026-07-07.
+//
+// It was never only an exported-vars problem: vitest.config.js loads `.env` in the PARENT process
+// for DB-target gating and `pool:'forks'` means every worker inherits that process.env before this
+// file runs. So on ANY machine with a .env the sentinel silently did not apply.
+//
+// FR-1: unconditional. A unit tier must never inherit ambient credentials, full stop.
+process.env.SUPABASE_URL = SENTINEL_URL;
+process.env.NEXT_PUBLIC_SUPABASE_URL = SENTINEL_URL;
+process.env.SUPABASE_SERVICE_ROLE_KEY = SENTINEL_SERVICE_ROLE_KEY;
+process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY = SENTINEL_ANON_KEY;
+
+// FR-2: the second fence, and it is a POST-CONDITION on the four lines above — not a check on
+// whether ambient credentials were present.
+//
+// That distinction was measured, not reasoned. The first implementation followed the SD literally
+// and aborted when it found a real SUPABASE_URL in the ambient environment; it failed an ordinary
+// local run immediately, because vitest.config.js loads `.env` in the PARENT process and every
+// fork inherits it. Ambient credentials are the NORMAL state here, so that fence would have fired
+// on every developer machine and every fleet seat, and would have been deleted by the first person
+// it stopped — leaving no fence at all.
+//
+// FR-1 already neutralises ambient credentials. What can still go wrong is FR-1 SILENTLY CEASING
+// TO WORK: a reintroduced `||=`, a reordering, a fifth credential variable added above and not
+// sentinelled. Asserting the post-condition catches exactly that, and is silent the rest of the
+// time — which is what makes it survivable, and therefore what makes it a fence.
+//
+// ORDER IS LOAD-BEARING: this must run AFTER the assignment. Moved above it, the check reads the
+// ambient environment, reports a breach on every machine with a `.env`, and reproduces the
+// always-firing alarm described above. tests/unit/setup/credential-fence-ordering.spawn.test.js
+// makes that regression go red from outside the process.
+//
+// Written to process.stderr rather than console.error because `console` is replaced with vi.fn()
+// further down this file — a guard that reports through a mock is a guard that can be silenced.
+const __fence = evaluateSentinelPostCondition(process.env);
+if (__fence.abort) {
+  process.stderr.write(`\n${formatCredentialFenceError(__fence)}\n\n`);
+  process.exit(1);
+}
 
 // Mock console methods to reduce noise during tests
 global.console = {

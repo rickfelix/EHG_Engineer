@@ -61,14 +61,17 @@ jobs:
       - name: Run ${{ matrix.suite.name }} unit tests (BLOCKING)
         # NO continue-on-error: a failing test fails the job (red check). That is the
         # whole point — stricter and directory-scoped, unlike the count-based suite-wide ratchet.
-        env:
-          # Defensive: tests/setup.js falls back to https://test.invalid.local when
-          # SUPABASE_URL is unset, and any test that issues a real .from() call then
-          # hangs until vitest's 60s timeout force-kills the worker (exit 1 = false red)
-          # — see test-coverage.yml + SD-LEO-INFRA-VITEST-EXITS-61S-001. Passing the
-          # secrets gives any DB-touching test a real endpoint; hermetic (mocked) tests ignore them.
-          SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
-          SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
-          NEXT_PUBLIC_SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
-          NEXT_PUBLIC_SUPABASE_ANON_KEY: ${{ secrets.NEXT_PUBLIC_SUPABASE_ANON_KEY }}
+        # SD-LEO-FIX-CREDENTIAL-GUARD-INVERSION-001 (FR-5): the real Supabase secrets that used to
+        # be set here are REMOVED. This invocation resolves into the `unit` project, whose setup
+        # now refuses to start when it finds ambient credentials — so passing them would abort the
+        # job outright.
+        #
+        # The old rationale was defensive rather than observed: setup.js falls back to an
+        # unresolvable host, a real .from() call hangs, the 60s timeout kills the worker. It cited
+        # tests/setup.js, but this tier loads tests/setup.unit.js.
+        #
+        # MEASURED before removing them: with the sentinel forced and NO credentials, this exact
+        # suite runs 1736 tests across 118 files, all passing, in 13.01s, with zero hangs. The
+        # secrets were protecting against something that does not happen here — while giving every
+        # credential-presence-gated suite in the project a live production handle.
         run: npx vitest run ${{ matrix.suite.test_path }}
