@@ -46,9 +46,14 @@ const MUTANTS = [
    '          metadata: { actor_session: sessionId },',
    '          metadata: { actor_session: \'6f1c0f6e-0000-4000-8000-000000000000\' },'],
 
-  [CORE, 'M1c identity precedence inverted — BELIEVED seat beats EXECUTING seat',
-   '  if (typeof fromEnv === \'string\' && fromEnv.trim()) return fromEnv.trim();',
-   '  if (false && typeof fromEnv === \'string\' && fromEnv.trim()) return fromEnv.trim();'],
+  // M1c REPLACED. It used to invert the precedence inside resolveActorSessionId — a function that
+  // became DEAD CODE when the seat check moved into main(). It killed reliably and protected
+  // nothing: a reviewer re-introduced the real vulnerability in main() with a one-token change and
+  // the whole suite stayed green while this mutant still reported KILLED. The replacement targets
+  // main()'s ACTUAL env-only resolution, which is the line the exploit turns on.
+  [CORE, 'M1c main() restores the fallback — the exact exploited hole (env-unset bypass)',
+   '    : null;',
+   '    : coordinatorId;'],
 
   [CORE, 'M2  lane reverts to the HYPHEN vocabulary the producer CHECK rejects',
    'export const COORDINATOR_LANE = \'coordinator\';',

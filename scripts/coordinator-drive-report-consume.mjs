@@ -28,6 +28,11 @@
  * /checkin at all. A consumer that never runs is indistinguishable from a producer that never
  * produced.
  */
+// dotenv FIRST. This was THE ONLY COMPOSED_CORES SCRIPT WITHOUT IT, and the omission was not
+// cosmetic: without the env loaded, createClient THROWS before any of this module's own error
+// handling runs, stdout is 0 BYTES, and the host's `|| 'ok'` default fires. The tick would have
+// reported drive-report-consume:ok for a process that died on line one.
+import 'dotenv/config';
 import { createRequire } from 'node:module';
 import { fileURLToPath } from 'node:url';
 import fs from 'node:fs';
@@ -57,24 +62,21 @@ export const COORDINATOR_LANE = 'coordinator';
 /** Bound so a black-holed write cannot stall the coordinator tick (precedent: receipt-ledger). */
 export const WRITE_TIMEOUT_MS = 2000;
 
-/**
- * Resolve the actor whose id goes on the receipt.
- *
- * PRECEDENCE IS LOAD-BEARING: the env var is the seat ACTUALLY EXECUTING; the DB pointer is the
- * seat BELIEVED to be coordinating. For an instrument measuring EXECUTION, the executing seat is
- * the truth — otherwise the receipt asserts something nobody verified.
- */
-export async function resolveActorSessionId({ env = process.env, resolveCoordinatorId } = {}) {
-  const fromEnv = env.CLAUDE_SESSION_ID;
-  if (typeof fromEnv === 'string' && fromEnv.trim()) return fromEnv.trim();
-  if (typeof resolveCoordinatorId === 'function') {
-    try {
-      const fallback = await resolveCoordinatorId();
-      if (typeof fallback === 'string' && fallback.trim()) return fallback.trim();
-    } catch { /* fail-soft: an unresolvable actor is a no-op, never a throw */ }
-  }
-  return null;
-}
+// resolveActorSessionId WAS DELETED HERE, AND THE DELETION IS A FINDING RATHER THAN A TIDY-UP.
+//
+// It resolved the actor from CLAUDE_SESSION_ID with getActiveCoordinatorId as a FALLBACK. When the
+// seat check moved into main(), that function became DEAD CODE — main() never called it — but its
+// THREE TESTS AND ITS MUTANT KEPT SCORING. One of those tests asserted the fallback behaviour was
+// CORRECT, which is to say it PINNED THE EXPLOITED VULNERABILITY AS THE SPECIFICATION.
+//
+// A reviewer proved the cost decisively: re-introducing the original hole in main() — a one-token
+// change — left the suite 32/32 GREEN and the harness would have reported 14/14 KILLED. My fix was
+// DEFENDED BY A DECOY: the tests and the mutant exercised a fossil while the real path sat
+// unprotected, and the mutation score ROSE as the protection FELL.
+//
+// A MUTATION SCORE MEASURES THE CODE THE TESTS REACH. After a refactor moves logic, the old
+// function plus its old tests plus its old mutants keep scoring, and the result is indistinguishable
+// from coverage. When you move logic, check who still calls what you left behind.
 
 /**
  * Is the executing seat actually the coordinator?
@@ -222,8 +224,18 @@ export async function main() {
     process.env.SUPABASE_URL,
     process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.SUPABASE_SERVICE_KEY
   );
+  // BOUNDED. This call sits BEFORE both guarded queries and was previously awaited UNBOUNDED — a
+  // reviewer measured it still running at 95007ms against a blackholed DB, past the host's 90s
+  // execFile kill, whose SIGTERM produces exactly the FALSE FAILED CORE that withTimeout exists to
+  // prevent. A timeout that guards the two queries and misses the call that precedes them bounds
+  // nothing: the slowest path was the unguarded one.
   let coordinatorId = null;
-  try { coordinatorId = await getActiveCoordinatorId(supabase); } catch { /* fail closed below */ }
+  try {
+    coordinatorId = await Promise.race([
+      getActiveCoordinatorId(supabase),
+      new Promise((_, reject) => setTimeout(() => reject(new Error('getActiveCoordinatorId: timed out')), WRITE_TIMEOUT_MS).unref?.()),
+    ]);
+  } catch { /* fail closed: an unresolvable coordinator means the seat check below refuses */ }
 
   // THE EXECUTING SEAT COMES FROM THE ENVIRONMENT ONLY — NO FALLBACK. This is the fix for a
   // SELF-SATISFYING GATE that a security review exploited on the previous version: main() resolved
@@ -244,11 +256,22 @@ export async function main() {
   const outcome = await runDriveReportConsumeCore(supabase, { sessionId, coordinatorId });
   recordOutcome(outcome);
 
-  // THE STATUS MUST GO TO STDOUT OR IT IS NOT A CHANNEL AT ALL.
-  // scriptCore reads ONLY STDOUT and defaults to the literal 'ok' when it is empty. Every failure
-  // above goes to console.ERROR, so the previous version printed `drive-report-consume:ok` on the
-  // tick EXACTLY WHEN THE INSTRUMENT WAS DEAD — this SD's own target defect, reproduced one level
-  // up, for the second time in this SD. Measured: stdout was empty on the failing path.
+  // A FAILURE IS STILL NOT OBSERVABLE FROM THE TICK, AND SAYING SO IS THE HONEST STATE.
+  //
+  // I moved this line from stderr to stdout believing that closed the gap. IT DID NOT. scriptCore
+  // does capture stdout into results[].detail — but coordinator-quiet-tick.mjs emits ONLY
+  // tick.summary, which is `key:status`, at :392 and in --json at :374/:388. DETAIL IS NEVER
+  // PRINTED OR PERSISTED. So the tick still reads `drive-report-consume:ok fail=0` while this
+  // instrument is dead.
+  //
+  // I FIXED THE WRITER AND NEVER CHECKED THE READER — the same class as writing a channel nobody
+  // reads, one layer further in. Surfacing `detail` belongs to the tick, not to this consumer, and
+  // the coordinator has taken that item; it is filed as a completion flag rather than patched here,
+  // because a consumer reaching into a shared host file to make its own failures visible is how a
+  // one-line fix becomes a fleet-wide behaviour change nobody reviewed.
+  //
+  // Until that lands, the ONLY durable evidence of a failure is the breadcrumb file below. Emitting
+  // on stdout is still correct — it is what the host would surface once it surfaces anything.
   if (outcome && outcome.status === 'failed') {
     console.log(`FAILED ${outcome.reason || 'unknown'}`);
   }

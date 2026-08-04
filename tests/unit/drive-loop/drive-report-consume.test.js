@@ -11,7 +11,7 @@ import { describe, it, expect } from 'vitest';
 import { randomUUID } from 'node:crypto';
 import {
   runDriveReportConsumeCore,
-  resolveActorSessionId,
+
   isCoordinatorSeat,
   recordOutcome,
   COORDINATOR_LANE,
@@ -212,19 +212,20 @@ describe('the coordinator-seat check — the premise that it was unnecessary was
   });
 });
 
-describe('identity precedence: the EXECUTING seat beats the BELIEVED seat', () => {
-  it('prefers CLAUDE_SESSION_ID when the two disagree', async () => {
-    const executing = randomUUID(); const believed = randomUUID();
-    expect(await resolveActorSessionId({ env: { CLAUDE_SESSION_ID: executing }, resolveCoordinatorId: async () => believed })).toBe(executing);
-  });
-  it('falls back to the resolver when the env var is absent — both arms', async () => {
-    const believed = randomUUID();
-    expect(await resolveActorSessionId({ env: {}, resolveCoordinatorId: async () => believed })).toBe(believed);
-  });
-  it('returns null rather than throwing when neither is available', async () => {
-    expect(await resolveActorSessionId({ env: {}, resolveCoordinatorId: async () => { throw new Error('down'); } })).toBe(null);
-  });
-});
+// THE THREE "identity precedence" TESTS WERE DELETED HERE, AND THE DELETION IS THE FINDING.
+//
+// They exercised resolveActorSessionId, which became DEAD CODE the moment the seat check moved into
+// main(). Worse, the middle one — "falls back to the resolver when the env var is absent" —
+// ASSERTED THE EXPLOITED VULNERABILITY AS CORRECT BEHAVIOUR. It would have outlived everyone who
+// knew why it was wrong, and any future engineer restoring the fallback could have cited it.
+//
+// A reviewer proved the cost: re-introducing the original hole in main() with a one-token change
+// left this suite 32/32 GREEN, and the mutation harness would have reported 14/14 KILLED. The tests
+// and the mutant were guarding a fossil while the live path sat open. EVIDENCE THAT ARGUES FOR THE
+// WRONG THING IS WORSE THAN NO EVIDENCE.
+//
+// The behaviour that replaced it — main() reading CLAUDE_SESSION_ID with NO fallback — is covered
+// by the seat-check tests above and, for the process-level path, by running the real script.
 
 describe('failures are SURFACED, not swallowed — the defect that sank the first version', () => {
   it('a read failure reports status failed rather than a quiet no-op', async () => {
