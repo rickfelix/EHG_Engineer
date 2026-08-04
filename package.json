@@ -114,6 +114,8 @@
     "lint:venture-artifacts": "node scripts/lint/venture-artifacts-write-lint.mjs",
     "lint:realtime-teardown": "node scripts/lint/realtime-subscribe-teardown-recursion-lint.mjs",
     "lint:count-delta-gate": "node scripts/lint/count-delta-gate-lint.mjs",
+
+    "lint:no-process-cwd": "node scripts/lint/no-process-cwd-in-sub-agents-lint.mjs",
     "lint:ismainmodule-classguard": "node scripts/lint/ismainmodule-classguard-lint.mjs",
     "lint:mocked-sut-import": "node scripts/lint/no-mocked-sut-import-lint.mjs",
     "lint:session-coordination-insert": "node scripts/lint/session-coordination-insert-classguard-lint.mjs",
@@ -632,8 +634,7 @@
     "audit:unreachable-midphase": "node scripts/audit-unreachable-midphase-sds.mjs",
     "audit:worktree-env-divergence": "node scripts/audit-worktree-env-divergence.mjs",
     "flags:enroll-tier-gate": "node scripts/enroll-migration-tier-gate-flag.mjs",
-    "audit:anon-write-contract": "node scripts/anon-write-contract-probe.mjs",
-    "lint:no-process-cwd": "node scripts/lint/no-process-cwd-in-sub-agents-lint.mjs"
+    "audit:anon-write-contract": "node scripts/anon-write-contract-probe.mjs"
   },
   "dependencies": {
     "@anthropic-ai/sdk": "^0.85.0",
