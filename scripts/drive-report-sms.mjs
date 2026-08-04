@@ -1,0 +1,109 @@
+#!/usr/bin/env node
+/**
+ * SD-LEO-INFRA-DRIVE-LOOP-INSTRUMENT-001-B (TR-3) — the durable SMS leg.
+ *
+ * Sends the drive score to the chairman. Outbound, to a real phone, on a cron that retries.
+ *
+ * ── UNTRUSTED CONTENT IS UNREPRESENTABLE, NOT SANITISED ───────────────────────────────────
+ * The report is FULL of free text: SD titles, predicates, `null_means`, limitation strings — all
+ * authored by agents or humans upstream. Interpolating any of it into an outbound message is the
+ * injection surface, and sanitising it is a losing game played forever.
+ *
+ * So the body is built ONLY from numbers and closed-set tokens. `formatBody` takes the score, the
+ * denominator, a verdict from a fixed enum, and counts. There is no parameter through which a
+ * report string could reach the wire, which is a stronger claim than "we escape it": it cannot be
+ * done, rather than being done carefully. Same move as section 4's closed act set.
+ *
+ * ── NO DOUBLE-SEND, AND A SKIP IS REPORTED AS A SKIP ──────────────────────────────────────
+ * Mirrors the producer. Keyed on run_id: probe first, and if this run already sent, return
+ * {sent:false, skipped:'already_sent'} rather than anything a caller could mistake for success. A
+ * duplicate here is not a wasted row — it is a second buzz on someone's phone at 3am, and the fix
+ * for "why did it text me twice" is never discovered by reading a log that says success.
+ *
+ * ── RECIPIENTS ARE VALIDATED AND CAPPED ───────────────────────────────────────────────────
+ * E.164 only, and a hard cap on how many go out per run. An unbounded recipient list on a retrying
+ * cron is a bill and a trust problem at the same time.
+ *
+ * LIVES IN scripts/ because it SENDS. The FR-7 propose-only scan forbids that under lib/drive-loop.
+ */
+
+export const MAX_RECIPIENTS = 3;
+export const MAX_BODY_CHARS = 320;   // 2 SMS segments; beyond this carriers split unpredictably
+export const VERDICTS = Object.freeze(['DEFICIT-URGENT', 'DEFICIT', 'TIGHT', 'SURPLUS', 'UNKNOWN']);
+
+/** E.164: a leading + and 8-15 digits. Anything else is not a phone number we will dial. */
+export function isE164(n) {
+  return typeof n === 'string' && /^\+[1-9]\d{7,14}$/.test(n);
+}
+
+/**
+ * The ONLY way a body is produced. Every parameter is a number or a closed-set token — there is no
+ * string passthrough, so no report text can reach the wire.
+ *
+ * @param {{score:number, possible:number, verdict:string, unavailableLegs:number, unownedBlockers:number}} f
+ */
+export function formatBody({ score, possible, verdict, unavailableLegs = 0, unownedBlockers = 0 } = {}) {
+  for (const [k, v] of Object.entries({ score, possible, unavailableLegs, unownedBlockers })) {
+    if (!Number.isFinite(v) || v < 0) throw new Error(`formatBody(): ${k} must be a non-negative number — got ${JSON.stringify(v)}`);
+  }
+  if (!VERDICTS.includes(verdict)) {
+    // A free-text verdict is exactly the hole this function exists to close.
+    throw new Error(`formatBody(): verdict must be one of ${VERDICTS.join(', ')} — got ${JSON.stringify(verdict)}`);
+  }
+  const parts = [
+    `Drive ${score}/${possible}`,
+    `capacity ${verdict}`,
+    unavailableLegs > 0 ? `${unavailableLegs} leg(s) unmeasured` : null,
+    unownedBlockers > 0 ? `${unownedBlockers} unowned blocker(s)` : null,
+  ].filter(Boolean);
+  const body = parts.join(' | ');
+  if (body.length > MAX_BODY_CHARS) throw new Error('formatBody(): body exceeds the segment cap');
+  return body;
+}
+
+/**
+ * @param {object} o
+ * @param {object} o.facts the numeric/enumerated facts — see formatBody
+ * @param {string[]} o.recipients E.164 numbers
+ * @param {(to:string, body:string) => Promise<object>} o.send injected, so sends are COUNTED
+ * @param {(runId:string) => Promise<boolean>} [o.findSent] idempotence probe
+ * @param {(o:object) => Promise<void>} [o.recordSent] durability: mark the run as sent
+ * @param {string} o.runId
+ */
+export async function sendDriveSms({ facts, recipients = [], send, findSent = null, recordSent = null, runId } = {}) {
+  if (typeof send !== 'function') {
+    throw new Error('sendDriveSms(): send must be injected — "did it send twice?" is unanswerable about a hidden client');
+  }
+  if (typeof runId !== 'string' || runId.trim().length === 0) {
+    throw new Error('sendDriveSms(): runId is required — it is the idempotence key, and without it a retry double-sends');
+  }
+
+  const invalid = recipients.filter((r) => !isE164(r));
+  if (invalid.length > 0) {
+    // Refuse the whole run rather than silently dropping the bad ones: a partial send that looks
+    // complete is how a recipient quietly stops receiving alerts nobody notices are missing.
+    throw new Error(`sendDriveSms(): ${invalid.length} recipient(s) are not E.164 — refusing the run rather than sending partially`);
+  }
+  if (recipients.length === 0) throw new Error('sendDriveSms(): no recipients — a send to nobody is a failed run, not a quiet success');
+  if (recipients.length > MAX_RECIPIENTS) {
+    throw new Error(`sendDriveSms(): ${recipients.length} recipients exceeds the cap of ${MAX_RECIPIENTS} — an unbounded list on a retrying cron is a bill and a trust problem`);
+  }
+
+  if (findSent && await findSent(runId)) {
+    return { sent: false, skipped: 'already_sent', run_id: runId, recipients: 0 };
+  }
+
+  // Built once, before the loop. NOTE, honestly: this ordering is for clarity, NOT a guard —
+  // I mutated it to build inside the loop and NOTHING went red, because formatBody is
+  // deterministic and its argument is evaluated before the first send() either way. So the
+  // "half the recipients messaged" hazard does not exist in this shape, and claiming the ordering
+  // prevents it would be asserting a guarantee nothing enforces. What IS enforced is that a bad
+  // `facts` sends to nobody, which the test does discriminate.
+  const body = formatBody(facts);
+
+  const results = [];
+  for (const to of recipients) results.push(await send(to, body));
+
+  if (recordSent) await recordSent({ run_id: runId, recipients: recipients.length, body });
+  return { sent: true, run_id: runId, recipients: recipients.length, body, results };
+}
