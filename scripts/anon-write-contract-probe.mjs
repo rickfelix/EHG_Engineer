@@ -11,7 +11,9 @@
  *   - ON CONFLICT DO UPDATE applies the UPDATE USING clause to the conflicting row as a
  *     WithCheckOption, and anon has NO update policy at all (only service_role does). anon DOES hold
  *     the UPDATE grant, so it is a policy denial, not an ACL denial.
- *   - ON CONFLICT DO NOTHING needs neither policy and LANDS.
+ *   - ON CONFLICT DO NOTHING is ALSO refused, by the SELECT policy on the arbiter check — measured
+ *     with a fresh id, so no collision ever occurs. The clause alone is sufficient. This file
+ *     originally asserted it LANDS, reasoning from the docs; the first live run said otherwise.
  * No live caller is broken today: all five (in apexniche-ai, marketlens and ehg) send the bare form.
  * This is regression prevention, not an outage repair — and the enforcement had to live HERE, at the
  * database, because zero of those five callers live in this repo, so a source lint would see none.
@@ -316,6 +318,47 @@ export async function runForms(q, table, { builder, ctx, subjectSource, controlS
   return { observed, attributions, guards, aborted: null };
 }
 
+/**
+ * FR-7. A RESTRICTIVE bound that cannot bind, asserted rather than argued.
+ *
+ * `anon_feedback_ingress_bounds` counts prior rows with an INLINE SUBQUERY, and an inline subquery
+ * in a policy runs as the INSERTING role — so the count is itself subject to the telegram-only
+ * SELECT policy. As anon the basis is n=1 for every non-telegram source and the limit is
+ * arithmetically incapable of binding. SECURITY DEFINER is what that basis lacks.
+ *
+ * Do NOT confuse this with `check_feedback_rate_limit(venture_id)`, which the insert policy also
+ * calls: that one IS SECURITY DEFINER and does bind. Conflating them files a bug against a control
+ * that works — which is why the two bases are measured separately here and both are reported.
+ *
+ * The non-vacuity guard is the point: an empty table would make the two bases agree at zero and
+ * pass this check for entirely the wrong reason.
+ */
+export async function assertIngressBoundCannotBind(q, table, source) {
+  const { rows: [pol] } = await q(
+    `select permissive, qual, with_check from pg_policies
+      where schemaname = split_part($1,'.',1) and tablename = split_part($1,'.',2)
+        and policyname = 'anon_feedback_ingress_bounds'`, [table]);
+  if (!pol) return { applicable: false, note: 'anon_feedback_ingress_bounds is absent — the finding may already be remediated, or the policy renamed' };
+
+  const countSql = `select count(*)::int as n from ${table} where source_type = $1 and created_at > now() - interval '1 hour'`;
+  const { rows: [definer] } = await q(countSql, [source]);   // still the owner here
+  await q('savepoint sp_bound');
+  await q('set local role anon');
+  const { rows: [asAnon] } = await q(countSql, [source]);
+  await q('reset role');
+  await q('rollback to savepoint sp_bound');
+
+  return {
+    applicable: true,
+    restrictive: String(pol.permissive).toUpperCase() === 'RESTRICTIVE',
+    definerBasis: definer.n,
+    anonBasis: asAnon.n,
+    // Non-vacuity: without this, a source with no recent rows agrees at 0 and "passes".
+    vacuous: definer.n <= 1,
+    cannotBind: definer.n > 1 && asAnon.n <= 1
+  };
+}
+
 function parseArgs(argv) {
   const a = { table: null, grantSelect: false, grantUpdate: false, subjectSource: 'manual_feedback', controlSource: 'telegram' };
   for (let i = 0; i < argv.length; i++) {
@@ -377,6 +420,13 @@ async function probeTable(client, q, table, args, uuid) {
     );
     if (c && c.n >= 50) return { code: EXIT.PROBE_INCONCLUSIVE, reason: `${args.controlSource} last hour = ${c.n} (>=50): the ingress bound may bind, so a REFUSED control would be ambiguous` };
 
+    // FR-7, measured before dropping to anon so the definer-side basis is readable.
+    let bound = null;
+    if (!control) {
+      try { bound = await assertIngressBoundCannotBind(q, table, args.subjectSource); }
+      catch (e) { bound = { applicable: false, note: `not measurable: ${e.message}` }; }
+    }
+
     await q('set local role anon');
     const { rows: [p] } = await q('select pg_backend_pid() as pid');
     const res = await runForms(q, table, { builder, ctx, subjectSource: args.subjectSource, controlSource: args.controlSource, uuid, basePid: p.pid });
@@ -390,6 +440,7 @@ async function probeTable(client, q, table, args, uuid) {
       return { code: EXIT.PROBE_MALFORMED, reason: `pre-RLS rejection, not a contract verdict: ${malformed.map(([k]) => `${k}=${res.attributions[k]}`).join('; ')}`, ...res };
     }
     const cmp = compare(res.observed);
+    res.bound = bound;
     if (control) {
       return { code: EXIT.CONTRACT_CHANGED, reason: `control mode: ${cmp.ok ? 'NO FLIP OBSERVED — the control proved nothing' : `flipped ${cmp.differingForms.join(', ')}`}`, control: true, flipped: cmp.differingForms, ...res };
     }
@@ -447,6 +498,15 @@ export async function main(argv = process.argv.slice(2)) {
       console.log(`\n=== ${table} ===`);
       for (const [form, verdict] of Object.entries(r.observed || {})) {
         console.log(`  ${form.padEnd(24)} ${String(verdict).padEnd(10)} ${r.attributions?.[form] ?? ''}`);
+      }
+      if (r.bound?.applicable) {
+        const b = r.bound;
+        console.log(`  ingress-bound  RESTRICTIVE=${b.restrictive} definer-basis=${b.definerBasis} anon-basis=${b.anonBasis}` +
+          (b.vacuous ? '  [VACUOUS — too few recent rows to tell, not a pass]'
+                     : b.cannotBind ? '  [CANNOT BIND — the inline subquery counts as anon]'
+                                    : '  [binds, or the basis changed]'));
+      } else if (r.bound) {
+        console.log(`  ingress-bound  ${r.bound.note}`);
       }
       console.log(`  -> [${Object.keys(EXIT).find((k) => EXIT[k] === r.code)}] ${r.reason}`);
       if (r.code !== EXIT.OK && worst === EXIT.OK) worst = r.code;
