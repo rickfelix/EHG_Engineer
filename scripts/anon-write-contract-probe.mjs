@@ -118,12 +118,34 @@ export function discoverAsymmetricTables(policyRows = []) {
   return [...tables.values()].filter((t) => t.rls && t.canInsert && !t.fullSelect).map((t) => t.key).sort();
 }
 
-/** A guard the caller cannot satisfy without changing the harm. RELEASE SAVEPOINT is included and
- *  deliberately never used below — savepoints are discarded by the outer ROLLBACK anyway. */
-const COMMIT_FAMILY = /^\s*(commit|end|prepare\s+transaction|release\s+savepoint)\b/i;
+/**
+ * A guard the caller cannot satisfy without changing the harm.
+ *
+ * IT MUST INSPECT EVERY STATEMENT, NOT THE FIRST. The original spelling anchored `^` with no `m`
+ * flag and so read only the head of the string — and node-postgres sends a param-less query over
+ * the SIMPLE protocol, which executes semicolon-separated statements. `select 1; commit` therefore
+ * committed while the guard returned clean. Measured, not theorised: EXEC review reproduced the
+ * commit live. A guard that inspects a prefix of what it is guarding is narration, not enforcement.
+ */
+const COMMIT_FAMILY = /(^|;)\s*(commit|end|prepare\s+transaction|release\s+savepoint)\b/i;
 export function assertNotCommitFamily(sql) {
-  if (COMMIT_FAMILY.test(sql)) throw new Error(`COMMIT_FAMILY_STATEMENT_BLOCKED: ${String(sql).slice(0, 60)}`);
+  const text = String(sql);
+  if (COMMIT_FAMILY.test(text)) throw new Error(`COMMIT_FAMILY_STATEMENT_BLOCKED: ${text.slice(0, 80)}`);
   return sql;
+}
+
+/**
+ * Every table name reaching this file is interpolated into SQL — `regclass` casts and CREATE POLICY
+ * cannot take a bind parameter. Validate the shape rather than trusting the caller: `--table
+ * 'feedback; commit; --'` would otherwise smuggle a COMMIT past even a corrected guard by splitting
+ * it across a comment. The operator already holds the DB password, so this is not privilege
+ * escalation — it is the difference between safe by construction, which is what this file claims,
+ * and safe because nobody typed that.
+ */
+const QUALIFIED_NAME = /^[a-z_][a-z0-9_$]*\.[a-z_][a-z0-9_$]*$/i;
+export function assertQualifiedName(name) {
+  if (!QUALIFIED_NAME.test(String(name ?? ''))) throw new Error(`UNSAFE_TABLE_NAME: ${name}`);
+  return name;
 }
 
 /** Five independent ways RLS can be silently inert. Any one of them makes every verdict a lie. */
@@ -139,11 +161,14 @@ export async function assertRlsInForce(q, table, basePid) {
     [table]
   );
   const problems = [];
+  // Every check below is spelled as "must be affirmatively OK", never "must not be the bad value".
+  // `=== true` on bypass would fail OPEN if the subquery ever returned NULL — a guard whose unknown
+  // case is indistinguishable from its safe case is not a guard.
   if (r.usr !== 'anon') problems.push(`current_user=${r.usr}`);
-  if (r.bypass === true) problems.push('rolbypassrls=true');
+  if (r.bypass !== false) problems.push(`rolbypassrls=${r.bypass}`);
   if (r.rowsec !== 'on') problems.push(`row_security=${r.rowsec}`);
-  if (r.active !== true) problems.push('row_security_active=false');
-  if (r.relrls !== true) problems.push('relrowsecurity=false');
+  if (r.active !== true) problems.push(`row_security_active=${r.active}`);
+  if (r.relrls !== true) problems.push(`relrowsecurity=${r.relrls}`);
   if (basePid != null && r.pid !== basePid) problems.push(`backend_pid ${basePid}->${r.pid}`);
   return { ok: problems.length === 0, problems, pid: r.pid, port: r.port };
 }
@@ -203,11 +228,37 @@ async function attempt(q, name, sql, params) {
   }
 }
 
-const COLS = '(id, venture_id, feedback_type, source_type, source_application, title, type)';
-const VALS = '($1, $2, $3, $4, $5, $6, $7)';
-const row = (id, v, src, ft = 'user_bug') => [id, v, ft, src, 'anon-write-contract-probe', `probe ${id}`, 'issue'];
+/**
+ * Row builders, per table.
+ *
+ * A probe row must satisfy every NOT NULL, every CHECK, and the insert policy's own WITH CHECK
+ * before it reaches the SELECT-policy question this file exists to ask — otherwise it is rejected
+ * pre-RLS and the verdict means nothing. That is not a hypothetical: it is the defect this SD also
+ * repairs in the G2 acceptance battery, and the first draft of this probe committed it too.
+ *
+ * A builder is therefore per-table and hand-written. THIS IS THE HONEST LIMIT OF THE PROBE: it can
+ * only assert the contract for tables it can construct a valid row for. Discovery (below) finds far
+ * more candidates than there are builders, and every candidate without one is reported UNPROBED —
+ * loudly — because an unprobed table silently omitted from the output reads exactly like a table
+ * that passed.
+ */
+export const ROW_BUILDERS = {
+  'public.feedback': {
+    cols: '(id, venture_id, feedback_type, source_type, source_application, title, type)',
+    vals: '($1, $2, $3, $4, $5, $6, $7)',
+    // venture_user_insert_feedback additionally requires venture_id to be present and active and
+    // the per-venture rate limit not to be tripped — both via SECURITY DEFINER functions, so both
+    // genuinely bind for anon. `type` and `feedback_type` carry separate CHECK constraints.
+    preflight: `select v.id from ventures v
+                 where venture_exists_and_active(v.id)
+                   and not check_feedback_rate_limit(v.id) limit 1`,
+    build: (id, ctx, src) => [id, ctx, 'user_bug', src, 'anon-write-contract-probe', `probe ${id}`, 'issue']
+  }
+};
 
-export async function runForms(q, table, { ventureId, subjectSource, controlSource, uuid, basePid }) {
+export async function runForms(q, table, { builder, ctx, subjectSource, controlSource, uuid, basePid }) {
+  const COLS = builder.cols, VALS = builder.vals;
+  const row = (id, c, src) => builder.build(id, c, src);
   const observed = {}, attributions = {}, guards = [];
   const check = async (label) => {
     const g = await assertRlsInForce(q, table, basePid);
@@ -215,11 +266,11 @@ export async function runForms(q, table, { ventureId, subjectSource, controlSour
     return g.ok;
   };
   const forms = [
-    ['bare_insert',           `insert into ${table} ${COLS} values ${VALS}`,                                    () => row(uuid(), ventureId, subjectSource)],
-    ['returning_columns',     `insert into ${table} ${COLS} values ${VALS} returning id, title`,                 () => row(uuid(), ventureId, subjectSource)],
-    ['returning_literal',     `insert into ${table} ${COLS} values ${VALS} returning 1`,                         () => row(uuid(), ventureId, subjectSource)],
-    ['on_conflict_do_nothing',`insert into ${table} ${COLS} values ${VALS} on conflict (id) do nothing`,         () => row(uuid(), ventureId, subjectSource)],
-    ['positive_control',      `insert into ${table} ${COLS} values ${VALS} returning id`,                        () => row(uuid(), ventureId, controlSource)]
+    ['bare_insert',           `insert into ${table} ${COLS} values ${VALS}`,                                    () => row(uuid(), ctx, subjectSource)],
+    ['returning_columns',     `insert into ${table} ${COLS} values ${VALS} returning id, title`,                 () => row(uuid(), ctx, subjectSource)],
+    ['returning_literal',     `insert into ${table} ${COLS} values ${VALS} returning 1`,                         () => row(uuid(), ctx, subjectSource)],
+    ['on_conflict_do_nothing',`insert into ${table} ${COLS} values ${VALS} on conflict (id) do nothing`,         () => row(uuid(), ctx, subjectSource)],
+    ['positive_control',      `insert into ${table} ${COLS} values ${VALS} returning id`,                        () => row(uuid(), ctx, controlSource)]
   ];
   for (const [name, sql, mk] of forms) {
     if (!(await check(name))) return { observed, attributions, guards, aborted: name };
@@ -239,10 +290,10 @@ export async function runForms(q, table, { ventureId, subjectSource, controlSour
   let pending = null;
   await q(`SAVEPOINT ${sp}`);
   try {
-    await q(`insert into ${table} ${COLS} values ${VALS}`, row(seed, ventureId, subjectSource));
+    await q(`insert into ${table} ${COLS} values ${VALS}`, row(seed, ctx, subjectSource));
     try {
       await q(`insert into ${table} ${COLS} values ${VALS} on conflict (id) do update set title = excluded.title`,
-        row(seed, ventureId, subjectSource));
+        row(seed, ctx, subjectSource));
       observed.on_conflict_do_update = 'LANDS';
     } catch (err) {
       // Attribution is deferred to AFTER the savepoint rollback below: once a statement errors, the
@@ -274,6 +325,7 @@ function parseArgs(argv) {
     else if (argv[i] === '--subject-source') a.subjectSource = argv[++i];
   }
   if (a.table && !a.table.includes('.')) a.table = `public.${a.table}`;
+  if (a.table) assertQualifiedName(a.table);
   return a;
 }
 
@@ -281,6 +333,9 @@ const POLICY_PREFIX = 'zz_probe_ctl_';
 
 async function probeTable(client, q, table, args, uuid) {
   const control = args.grantSelect || args.grantUpdate;
+  const builder = ROW_BUILDERS[table];
+  if (!builder) return { code: EXIT.PROBE_INCONCLUSIVE, unprobed: true, reason: 'NO ROW BUILDER — this table is in the class but its contract was NOT asserted' };
+  assertQualifiedName(table);
   await q('BEGIN');
   try {
     // Prove BEGIN actually opened a transaction. Autocommit is the un-greppable commit and the
@@ -292,6 +347,11 @@ async function probeTable(client, q, table, args, uuid) {
     if (tx?.in_tx !== true) throw new Error('NOT_IN_TRANSACTION: BEGIN did not open a transaction — refusing to issue any write');
     await q("set local statement_timeout = '30s'");
     await q("set local idle_in_transaction_session_timeout = '60s'");
+    // CREATE POLICY takes an AccessExclusiveLock held until this transaction ends, which in control
+    // mode blocks ALL reads and writes to a live ingress table — including real anon submissions,
+    // which a short anon statement_timeout turns from "slow" into "failed". Fail to acquire rather
+    // than queue behind ourselves. CI never runs a control mode, so scheduled runs never take it.
+    await q("set local lock_timeout = '1s'");
 
     // Owner-privileged setup happens BEFORE dropping to anon, so there is no mid-run role toggle to
     // leak back across. FR-2a's "re-assert after the toggle" is satisfied by there being no toggle.
@@ -302,10 +362,12 @@ async function probeTable(client, q, table, args, uuid) {
       await q(`create policy ${POLICY_PREFIX}upd on ${table} for update to anon using (true) with check (true)`);
     }
 
-    const { rows: [v] } = await q(
-      'select v.id from ventures v where venture_exists_and_active(v.id) and not check_feedback_rate_limit(v.id) limit 1'
-    );
-    if (!v) return { code: EXIT.PROBE_INCONCLUSIVE, reason: 'no active venture satisfies the insert policy predicate' };
+    let ctx = null;
+    if (builder.preflight) {
+      const { rows: [v] } = await q(builder.preflight);
+      if (!v) return { code: EXIT.PROBE_INCONCLUSIVE, reason: 'no row satisfies the insert policy predicate — a probe row cannot be constructed' };
+      ctx = v.id;
+    }
 
     // telegram is the ONE source the RESTRICTIVE 50/hr ingress bound can actually bind on, because
     // it is the only anon-SELECT-covered source. Measure before trusting the control.
@@ -317,7 +379,7 @@ async function probeTable(client, q, table, args, uuid) {
 
     await q('set local role anon');
     const { rows: [p] } = await q('select pg_backend_pid() as pid');
-    const res = await runForms(q, table, { ventureId: v.id, subjectSource: args.subjectSource, controlSource: args.controlSource, uuid, basePid: p.pid });
+    const res = await runForms(q, table, { builder, ctx, subjectSource: args.subjectSource, controlSource: args.controlSource, uuid, basePid: p.pid });
 
     if (res.aborted) {
       const g = res.guards[res.guards.length - 1];
@@ -338,35 +400,66 @@ async function probeTable(client, q, table, args, uuid) {
 }
 
 export async function main(argv = process.argv.slice(2)) {
-  const args = parseArgs(argv);
-  const { randomUUID } = await import('node:crypto');
-  const client = await createDatabaseClient('ehg');
-  const q = (sql, params) => client.query(assertNotCommitFamily(sql), params);
+  let client = null;
   let worst = EXIT.OK;
   try {
+    const args = parseArgs(argv);
+    const { randomUUID } = await import('node:crypto');
+    // Inside the try: this throws when the DB password is absent, and outside it that surfaced as an
+    // unhandled rejection with no diagnostic and an exit code that never came from the EXIT map.
+    // DATABASE_URL is what CI actually has. Locally it is usually unset and the password path
+    // resolves instead; passing undefined leaves that path untouched.
+    client = await createDatabaseClient('ehg',
+      process.env.DATABASE_URL ? { connectionString: process.env.DATABASE_URL } : {});
+    const q = (sql, params) => client.query(assertNotCommitFamily(sql), params);
+
     let targets = args.table ? [args.table] : null;
     if (!targets) {
       const { rows } = await q(`select p.schemaname, p.tablename, p.roles::text[] as roles, p.cmd, p.qual, p.with_check,
                                        p.permissive, c.relrowsecurity
                                   from pg_policies p
                                   join pg_class c on c.oid = format('%I.%I', p.schemaname, p.tablename)::regclass`);
-      targets = discoverAsymmetricTables(rows);
-      console.log(`class members (anon can INSERT, no unconditional anon SELECT coverage): ${targets.join(', ') || '(none)'}`);
+      const candidates = discoverAsymmetricTables(rows);
+      const probable = candidates.filter((t) => ROW_BUILDERS[t]);
+      const unprobed = candidates.filter((t) => !ROW_BUILDERS[t]);
+      // Report the shortfall EXPLICITLY. A discovery step that silently probes the 1 table it has a
+      // builder for, out of the N it found, prints a clean pass and reads as "the class is covered".
+      // The count being large is a finding about this probe's reach, not a detail to round off.
+      console.log(`discovery: ${candidates.length} candidate(s) in the class; ${probable.length} have a row builder and WILL be asserted.`);
+      if (unprobed.length) {
+        console.log(`UNPROBED (${unprobed.length}) — in the class, contract NOT asserted, no row builder: ${unprobed.slice(0, 12).join(', ')}${unprobed.length > 12 ? `, +${unprobed.length - 12} more` : ''}`);
+        console.log('  A candidate is a table where anon holds a permissive INSERT policy and has no UNCONDITIONAL anon SELECT policy.');
+        console.log('  Some are false positives: a qual that is always-false for anon via a function (e.g. fn_is_chairman()) is not');
+        console.log('  statically distinguishable from one that is always-true. Add a ROW_BUILDERS entry to assert any of them.');
+      }
+      targets = probable;
     }
+
     for (const table of targets) {
-      const r = await probeTable(client, q, table, args, randomUUID);
+      // Per-table isolation. Without it the first target that throws aborts the whole run, and the
+      // tables after it — including the one this SD is actually about — are never probed at all.
+      let r;
+      try {
+        r = await probeTable(client, q, table, args, randomUUID);
+      } catch (err) {
+        r = { code: EXIT.ERROR, reason: `probe threw: ${err.message}` };
+      }
       console.log(`\n=== ${table} ===`);
       for (const [form, verdict] of Object.entries(r.observed || {})) {
         console.log(`  ${form.padEnd(24)} ${String(verdict).padEnd(10)} ${r.attributions?.[form] ?? ''}`);
       }
       console.log(`  -> [${Object.keys(EXIT).find((k) => EXIT[k] === r.code)}] ${r.reason}`);
-      if (r.code !== EXIT.OK) worst = worst === EXIT.OK ? r.code : worst;
+      if (r.code !== EXIT.OK && worst === EXIT.OK) worst = r.code;
+    }
+    if (!targets.length) {
+      console.log('no target had a row builder — nothing was asserted');
+      worst = EXIT.PROBE_INCONCLUSIVE;
     }
   } catch (err) {
     console.error(`probe error: ${err.message}`);
     worst = EXIT.ERROR;
   } finally {
-    await client.end().catch(() => {});
+    if (client) await client.end().catch(() => {});
   }
   return worst;
 }

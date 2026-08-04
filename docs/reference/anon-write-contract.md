@@ -48,7 +48,9 @@ mechanisms; the probe therefore reports an **attributed cause** and never the ba
 
 ## What to do instead
 
-Use the bare insert with a **client-side id**. This is not a new invention — it is already proven in
+Use the bare insert with a **client-side id** — generate it with `crypto.randomUUID()`, not a
+counter or a hash of user input. A landed-vs-23505 response is a blind existence oracle, harmless
+while ids are unguessable and not harmless if they become predictable. This is not a new invention — it is already proven in
 production, and was written down a month before this document existed:
 
 > `ehg/src/integrations/feedback/feedbackDataAccess.ts:143-150` (landed 2026-07-12):
@@ -87,12 +89,36 @@ It is safe against production — the only database there is — because the gua
 query wrapper throws on any commit-family statement. That framing matters: a connection drop, a
 throw inside a catch, and an early return are all *already* safe.
 
+Two things that guarantee needed before it was true as written, both found by adversarial review
+rather than by reasoning about the code:
+
+- The guard originally anchored on the **start of the string**, and node-postgres sends a
+  param-less query over the simple protocol — which executes semicolon-separated statements. So
+  `select 1; commit` committed while the guard reported clean. It now inspects every statement.
+- `--table` is interpolated into `CREATE POLICY` and `::regclass`, which cannot take a bind
+  parameter, so the name is validated against a strict pattern. The operator already holds the DB
+  password, so this was never privilege escalation — it was the difference between safe by
+  construction and safe because nobody typed that.
+
+> **Control modes take an `AccessExclusiveLock`** on the target for the life of the transaction,
+> which blocks live ingress on a production table for as long as the run takes. A `lock_timeout` of
+> 1s bounds the acquisition, but do not run a control mode casually against a busy table. CI runs
+> the probe bare and never takes this lock.
+
 ## This is a class, not a table
 
-The probe discovers its own targets: any table where anon can INSERT but has no unconditional anon
-SELECT coverage. Two members today — `feedback` and **`marketing_attribution`**, whose only live
-writer (`ehg/src/integrations/marketing/landingDataAccess.ts:85`) uses the bare form and carries the
-identical latent trap.
+The probe discovers its own targets: any table where anon holds a permissive INSERT policy and has
+no *unconditional* anon SELECT policy. **Live, that is 59 candidates, not the 2 an earlier estimate
+claimed.** The estimate was wrong because a qual that is always-false *for anon* via a function call
+(`fn_is_chairman()`) is not statically distinguishable from one that is always-true, so the candidate
+set contains false positives.
+
+The probe asserts the contract only for tables it has a hand-written row builder for — today, just
+`public.feedback`. Every other candidate is reported **UNPROBED** on every run, loudly and by count.
+That is deliberate: a discovery step that quietly probes the one table it can and prints a clean
+pass reads exactly like a class that is covered. `marketing_attribution` is among the unprobed; its
+only live writer (`ehg/src/integrations/marketing/landingDataAccess.ts:85`) uses the bare form, so it
+carries the same latent trap and is a good candidate for the next builder.
 
 ## Related: a rate limit that cannot bind
 

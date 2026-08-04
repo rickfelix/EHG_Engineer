@@ -10,6 +10,11 @@
 # enforces this repo-wide, so the next one cannot repeat it either.
 name: anon-write-contract-probe
 
+# Least privilege: the default repo token is write-capable and checkout persists it into
+# .git/config before npm ci runs dependency lifecycle scripts.
+permissions:
+  contents: read
+
 on:
   push:
     paths:
@@ -32,6 +37,8 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
       - uses: actions/setup-node@v4
         with:
           node-version: '22'
@@ -40,9 +47,22 @@ jobs:
       # the build is indistinguishable from a step that was never added.
       - name: unit tier (pure — cannot skip)
         run: npx vitest run --project unit tests/unit/anon-write-contract-probe.test.js
+      # A missing secret must NAME ITSELF. SUPABASE_DB_PASSWORD was referenced here and is not a
+      # repo secret at all: it resolved to '' and the probe died on a connection error, so the
+      # live gate could never once have asserted the contract. Fail-closed is the right direction,
+      # but a permanently-red scheduled job is exactly how a genuine exit-2 gets ignored.
+      - name: assert credentials are present
+        env:
+          DATABASE_URL: ${{ secrets.DATABASE_URL }}
+        run: |
+          if [ -z "$DATABASE_URL" ]; then
+            echo "::error::DATABASE_URL secret is empty or unset — the live contract assertion cannot run."
+            exit 1
+          fi
+      # The probe reads only the DB connection. SUPABASE_SERVICE_ROLE_KEY is deliberately NOT
+      # injected: it is consumed by a different export this script never calls, and a service-role
+      # key in a step that does not need it is gratuitous blast radius.
       - name: live contract assertion
         env:
-          SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
-          SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
-          SUPABASE_DB_PASSWORD: ${{ secrets.SUPABASE_DB_PASSWORD }}
+          DATABASE_URL: ${{ secrets.DATABASE_URL }}
         run: node scripts/anon-write-contract-probe.mjs
