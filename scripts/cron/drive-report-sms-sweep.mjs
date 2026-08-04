@@ -47,9 +47,26 @@
 
 import { sendDriveSms, VERDICTS } from '../drive-report-sms.mjs';
 import { etParts, windowKey } from './drive-report-sweep.mjs';
+import { LAST_RUN_FIELD } from '../../lib/drive-loop/report-posture.js';
 
 export const SMS_KIND = 'drive_report';
 export const DELIVER_AT_ET_HOUR = 6;
+
+/**
+ * This leg's OWN liveness registration — separate from the producer's.
+ *
+ * ── WHY A SECOND KEY AND NOT THE PRODUCER'S ───────────────────────────────────────────────
+ * FR-7's staleness alarm watches a periodic_process_registry row. The producer registers and
+ * stamps one; until now this sweep registered nothing. So "producer healthy, SMS leg dead"
+ * left the alarm GREEN while the chairman received nothing and nobody was told — the exact
+ * armed-with-no-dispatcher class this SD exists to retire, one leg over, and it would have
+ * been invisible precisely because the OTHER leg was working. Found by the SECURITY sub-agent.
+ *
+ * The interval is DAILY like the producer's: one obligation per report day.
+ */
+export const SMS_SD_KEY = 'SD-LEO-INFRA-DRIVE-LOOP-INSTRUMENT-001-B-sms';
+export const SMS_ACTIVATION_TRIGGER = '.github/workflows/drive-report-sms-cron.yml';
+export const SMS_EXPECTED_INTERVAL_SECONDS = 24 * 60 * 60;
 
 // NOTE: there is deliberately NO age-based staleness constant here any more. An earlier version
 // gated on "past 2x cadence" and that is exactly what let yesterday's report through as fresh.
@@ -109,7 +126,13 @@ export function notBeforeFor(nowMs) {
  */
 export function ageHoursOf(report, nowMs) {
   const t = Date.parse(report?.generated_at);
-  return Number.isFinite(t) ? (nowMs - t) / 3_600_000 : null;
+  if (!Number.isFinite(t)) return null;
+  // CLAMPED AT ZERO. generated_at is stamped from the PRODUCER's wall clock and compared here
+  // against a DIFFERENT runner's — so a report can legitimately read as a few seconds in the
+  // future, and a badly-skewed writer by much more. A negative age is a clock disagreement, not
+  // a negative duration. Before the clamp this propagated into formatMissingBody and threw, on
+  // the missing branch only, so the alarm broke exactly when it had something to say.
+  return Math.max(0, (nowMs - t) / 3_600_000);
 }
 
 /**
@@ -120,7 +143,27 @@ export function factsFromReport(report) {
   const score = report?.drive_score;
   const value = score?.score?.value;
   const possible = score?.possible;
-  if (!Number.isFinite(value) || !Number.isFinite(possible)) return null;
+
+  // NON-NEGATIVE, not merely finite. This predicate must be AT LEAST as strict as formatBody's,
+  // because anything this function accepts is handed straight to it — and formatBody THROWS on a
+  // negative. The two disagreed: this checked finiteness, formatBody checked range, and a
+  // negative score aborted the entire run instead of degrading to the missing signal. So a
+  // corrupt number silenced the chairman completely rather than telling him something was wrong.
+  // A validator upstream of a stricter validator is not a validator; it is a gap. (SECURITY F2.)
+  const usable = (n) => Number.isFinite(n) && n >= 0;
+  if (!usable(value) || !usable(possible)) return null;
+
+  const legs = Array.isArray(score?.unavailable_legs) ? score.unavailable_legs.length : 0;
+
+  // ABSENT means zero; PRESENT-BUT-CORRUPT means unusable. My first fix collapsed both to 0,
+  // which stopped the crash and replaced it with the exact defect this SD exists to prevent:
+  // a corrupt counter silently rendering as "0 unowned blockers" — an unmeasured value wearing
+  // a measured one. A field that is simply not there is a legitimate zero; a field carrying a
+  // negative is a producer bug, and the honest report of a bug is UNUSABLE, not a reassuring
+  // number nobody will question.
+  const rawBlockers = score?.unowned_blockers;
+  if (rawBlockers !== undefined && rawBlockers !== null && !usable(rawBlockers)) return null;
+  const blockers = usable(rawBlockers) ? rawBlockers : 0;
 
   // The capacity verdict comes from leg 4 when it was measurable. UNKNOWN is a real member of
   // VERDICTS, so an unmeasured leg is SAID rather than defaulted to something reassuring.
@@ -131,8 +174,8 @@ export function factsFromReport(report) {
     score: value,
     possible,
     verdict,
-    unavailableLegs: Array.isArray(score?.unavailable_legs) ? score.unavailable_legs.length : 0,
-    unownedBlockers: Number.isFinite(score?.unowned_blockers) ? score.unowned_blockers : 0,
+    unavailableLegs: legs,
+    unownedBlockers: blockers,
   };
 }
 
@@ -143,7 +186,7 @@ export function factsFromReport(report) {
  * @param {(args:object) => Promise<object>} o.enqueue enqueueChairmanSms, bound to a client
  * @param {string[]} o.recipients E.164
  */
-export async function runDriveSmsSweep({ nowMs, findLatestReport, enqueue, recipients = [], log = () => {} } = {}) {
+export async function runDriveSmsSweep({ nowMs, findLatestReport, enqueue, findObligation = null, register = null, stamp = null, recipients = [], log = () => {} } = {}) {
   if (typeof findLatestReport !== 'function' || typeof enqueue !== 'function') {
     throw new Error('runDriveSmsSweep(): findLatestReport and enqueue must be injected — a sweep whose send is hidden cannot be tested for whether it sent twice');
   }
@@ -161,8 +204,10 @@ export async function runDriveSmsSweep({ nowMs, findLatestReport, enqueue, recip
   if (isTodays) {
     facts = factsFromReport(report);
     // A row that exists but cannot supply numbers is NOT a usable report. Falling through to a
-    // zero here would be the false-zero this SD keeps guarding against, one level up.
-    if (!facts) missing = { ageHours: ageHoursOf(report, nowMs) };
+    // zero here would be the false-zero this SD keeps guarding against, one level up. UNUSABLE
+    // rather than STALE, because the producer RAN — it is the score that is unreadable, which is
+    // a different cause pointing at a different remedy.
+    if (!facts) missing = { kind: 'UNUSABLE', ageHours: ageHoursOf(report, nowMs) };
   } else if (etParts(nowMs).hour < PRODUCER_WINDOW_CLOSE_ET_HOUR) {
     // NOT-YET-PRODUCED IS NOT A SIGNAL. The producer's window is still open, so enqueueing now
     // would burn the day's dedupe key on a message that is merely EARLY — and because that key
@@ -173,7 +218,8 @@ export async function runDriveSmsSweep({ nowMs, findLatestReport, enqueue, recip
   } else {
     // The window closed without a report for this run. NOW it is a signal, and TR-3 requires it
     // be said out loud: a dead instrument must not look like a healthy quiet day.
-    missing = { ageHours: ageHoursOf(report, nowMs) };
+    const age = ageHoursOf(report, nowMs);
+    missing = { kind: age === null ? 'NONE' : 'STALE', ageHours: age };
   }
 
   const notBefore = notBeforeFor(nowMs);
@@ -187,16 +233,49 @@ export async function runDriveSmsSweep({ nowMs, findLatestReport, enqueue, recip
     // The bridge is the sender. It also owns idempotence via dedupe_key UNIQUE, so a repeated
     // tick returns {enqueued:false, deduped:true} and nothing is written twice.
     send: async (to, body) => {
-      const r = await enqueue({ recipientPhone: to, kind: SMS_KIND, body, dedupeKey: dedupeKeyFor(runId, to), notBefore });
-      enqueued.push({ to, deduped: !!r?.deduped, obligationId: r?.obligationId ?? null });
+      const dedupeKey = dedupeKeyFor(runId, to);
+      const r = await enqueue({ recipientPhone: to, kind: SMS_KIND, body, dedupeKey, notBefore });
+
       if (r && r.enqueued === false && !r.deduped) {
         // A refusal that is not a dedupe is a real failure. Throwing beats returning a shape a
         // caller could mistake for success — the whole leg exists so someone HEARS about this.
         throw new Error(`runDriveSmsSweep(): enqueue refused for a recipient (${r.reason || 'unknown reason'})`);
       }
+
+      // A DEDUPE IS ONLY BENIGN IF THE ROW HOLDING THE KEY IS OURS.
+      //
+      // dedupe_key is a GLOBAL UNIQUE namespace and other callers pass keys straight through
+      // (scripts/adam-chairman-decision.mjs -> chairman-sms-gate -> enqueueChairmanSms). Our key
+      // is deterministic and therefore guessable, so a foreign row occupying it — crafted OR
+      // accidental — makes every tick report "deduped", which we treated as the self-healing
+      // window working. The chairman silently gets nothing and the job exits 0.
+      //
+      // Not privilege escalation: anyone who can write that table is already inside the trust
+      // boundary. It is a SILENT-SUPPRESSION primitive, and silence is the one failure this leg
+      // must never produce. So a dedupe is verified, not assumed. (SECURITY F3.)
+      let verified = null;
+      if (r?.deduped && typeof findObligation === 'function') {
+        const existing = await findObligation(dedupeKey);
+        verified = existing?.kind === SMS_KIND;
+        if (!verified) {
+          throw new Error(`runDriveSmsSweep(): dedupe key ${dedupeKey} is held by a foreign obligation `
+            + `(kind=${JSON.stringify(existing?.kind ?? null)}) — this run sent NOTHING and must not report success`);
+        }
+      }
+
+      enqueued.push({ to, deduped: !!r?.deduped, dedupe_verified: verified, obligationId: r?.obligationId ?? null });
       return r;
     },
   });
+
+  // Stamped only after the enqueue actually succeeded — a failed run must leave this leg's own
+  // alarm armed. Register BEFORE stamping: registerArmedMachinery upserts last_fired_at NULL, so
+  // the reverse order erases the stamp every run. Same trap as the producer's, same ordering.
+  if (register) {
+    const reg = await register({ activationTrigger: SMS_ACTIVATION_TRIGGER, expectedIntervalSeconds: SMS_EXPECTED_INTERVAL_SECONDS });
+    if (reg && reg.ok === false) log(`registry: registration failed (${reg.error}) — continuing; the SMS matters more than its bookkeeping`);
+  }
+  if (stamp) await stamp({ field: LAST_RUN_FIELD, at: new Date(nowMs).toISOString() });
 
   log(missing ? `enqueued MISSING/STALE signal for ${runId}` : `enqueued drive score for ${runId}`);
   return { ...result, run_id: runId, signal: missing ? 'missing_or_stale' : 'score', not_before: notBefore, enqueued };
@@ -215,7 +294,9 @@ if (import.meta.url === `file://${process.argv[1]}`.replace(/\\/g, '/')) {
 
   const { createClient } = await import('@supabase/supabase-js');
   const { enqueueChairmanSms } = await import('../../lib/chairman/sms-bridge.js');
+  const { registerArmedMachinery, armedProcessKey } = await import('../../lib/machinery-class/armed-registration.js');
   const supabase = createClient(process.env.SUPABASE_URL, process.env.SUPABASE_SERVICE_ROLE_KEY);
+  const smsProcessKey = armedProcessKey(SMS_SD_KEY);
 
   const out = await runDriveSmsSweep({
     nowMs: Date.now(),
@@ -234,8 +315,26 @@ if (import.meta.url === `file://${process.argv[1]}`.replace(/\\/g, '/')) {
       return data || null;
     },
     enqueue: (args) => enqueueChairmanSms(supabase, args),
+    // Reads back the row holding our dedupe key, so a benign dedupe is distinguishable from a
+    // foreign obligation squatting on it (F3).
+    findObligation: async (dedupeKey) => {
+      const { data } = await supabase.from('sms_outbound_obligations').select('id, kind').eq('dedupe_key', dedupeKey).maybeSingle();
+      return data || null;
+    },
+    register: (opts) => registerArmedMachinery(supabase, { sd_key: SMS_SD_KEY }, opts),
+    stamp: async ({ field, at }) => {
+      const { error } = await supabase.from('periodic_process_registry').update({ [field]: at }).eq('process_key', smsProcessKey);
+      if (error) console.warn(`[drive-report-sms-sweep] stamp failed: ${error.message}`);
+    },
     log: (m) => console.log(`[drive-report-sms-sweep] ${m}`),
   });
 
-  console.log(JSON.stringify({ ...out, body: undefined, results: undefined }));
+  // enqueued[] carries recipient phone numbers; stripped so delivery bookkeeping never prints a
+  // number into a log that outlives the run (F10). The counts are what an operator needs.
+  console.log(JSON.stringify({
+    ...out,
+    body: undefined,
+    results: undefined,
+    enqueued: (out.enqueued || []).map((e) => ({ deduped: e.deduped, dedupe_verified: e.dedupe_verified, obligationId: e.obligationId })),
+  }));
 }

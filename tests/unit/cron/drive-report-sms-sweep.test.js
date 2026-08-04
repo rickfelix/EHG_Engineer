@@ -12,7 +12,8 @@ import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import {
   runDriveSmsSweep, dedupeKeyFor, notBeforeFor, factsFromReport,
-  SMS_KIND, PRODUCER_WINDOW_CLOSE_ET_HOUR, DELIVER_AT_ET_HOUR,
+  SMS_KIND, PRODUCER_WINDOW_CLOSE_ET_HOUR, DELIVER_AT_ET_HOUR, ageHoursOf,
+  SMS_ACTIVATION_TRIGGER, SMS_SD_KEY,
 } from '../../../scripts/cron/drive-report-sms-sweep.mjs';
 import { etParts } from '../../../scripts/cron/drive-report-sweep.mjs';
 
@@ -205,7 +206,7 @@ describe('a MISSING report is itself the signal (TR-3), never silence', () => {
       enqueue: b.enqueue,
       recipients: TO,
     });
-    expect(b.calls[0].body).toMatch(/^Drive report (STALE|MISSING)/);
+    expect(b.calls[0].body).toMatch(/^Drive report (STALE|MISSING|UNUSABLE)/);
   });
 
   it('an unparseable generated_at is treated as missing, not as fresh', async () => {
@@ -288,5 +289,105 @@ describe('[WIRING] the dispatcher exists and is named by a workflow', () => {
   it('[CONTROL] the comment-stripper works, or the assertions above are vacuous', () => {
     expect(read(SWEEP), 'the header discusses Twilio in prose').toMatch(/Twilio/);
     expect(code(SWEEP), 'and it must not survive stripping').not.toMatch(/Twilio/);
+  });
+});
+
+
+describe('SECURITY re-run findings — the alarm must not break when it has something to say', () => {
+  const CLOSED = Date.UTC(2026, 6, 15, 14, 0, 0);   // 10:00 ET, producer window closed
+
+  it('[F1] a FUTURE-dated report does not crash the missing branch — clock skew is not negative age', async () => {
+    // MEASURED before the fix: a 3-SECOND skew threw. generated_at is stamped on the producer's
+    // machine and compared here against a DIFFERENT runner's clock, so this needed no attacker —
+    // and one future-dated row wins ORDER BY generated_at DESC, killing every tick from then on.
+    // The throw lived on the MISSING branch only, so the alarm failed exactly when it fired.
+    for (const skewMs of [3_000, 48 * 3_600_000]) {
+      const b = bridge();
+      const future = { id: 'r', run_id: 'drive-2026-07-14', generated_at: new Date(CLOSED + skewMs).toISOString(), drive_score: {} };
+      await expect(runDriveSmsSweep({ nowMs: CLOSED, findLatestReport: async () => future, enqueue: b.enqueue, recipients: TO }))
+        .resolves.toBeTruthy();
+      expect(b.calls[0].body).toMatch(/^Drive report (STALE|MISSING)/);
+    }
+    expect(ageHoursOf({ generated_at: new Date(CLOSED + 3_000).toISOString() }, CLOSED), 'clamped, not negative').toBe(0);
+  });
+
+  it('[F2] a NEGATIVE number degrades to the missing signal instead of aborting the run', async () => {
+    // factsFromReport validated finiteness while formatBody validated range, so a corrupt number
+    // threw and the chairman got NOTHING — silence instead of "something is wrong".
+    for (const bad of [{ score: { value: -5 }, possible: 6 }, { score: { value: 1 }, possible: 6, unowned_blockers: -1 }]) {
+      const b = bridge();
+      const row = { id: 'r', run_id: 'drive-2026-07-15', generated_at: new Date(CLOSED - 3_600_000).toISOString(), drive_score: bad };
+      await expect(runDriveSmsSweep({ nowMs: CLOSED, findLatestReport: async () => row, enqueue: b.enqueue, recipients: TO }))
+        .resolves.toBeTruthy();
+      expect(b.calls[0].body).toMatch(/^Drive report UNUSABLE/);
+    }
+  });
+
+  it('[F9] an unreadable score says UNUSABLE, not "STALE 0h ago"', async () => {
+    // "STALE: last one 0h ago" is self-contradicting, and it points at a dead producer when the
+    // producer ran fine and the SCORE is broken. Different cause, different remedy.
+    const b = bridge();
+    const row = { id: 'r', run_id: 'drive-2026-07-15', generated_at: new Date(CLOSED).toISOString(), drive_score: {} };
+    await runDriveSmsSweep({ nowMs: CLOSED, findLatestReport: async () => row, enqueue: b.enqueue, recipients: TO });
+    expect(b.calls[0].body).toBe('Drive report UNUSABLE: produced 0h ago, score unreadable');
+  });
+
+  it('[F3] a dedupe held by a FOREIGN obligation throws instead of reporting success', async () => {
+    // dedupe_key is a global UNIQUE namespace with caller-supplied writers, and our key is
+    // deterministic. A foreign row squatting on it made every tick report "deduped", which we
+    // treated as the self-healing window working — silent suppression, exit 0.
+    const b = bridge({ enqueued: false, deduped: true });
+    await expect(runDriveSmsSweep({
+      nowMs: CLOSED,
+      findLatestReport: async () => report(1),
+      enqueue: b.enqueue,
+      findObligation: async () => ({ id: 'x', kind: 'decision_question' }),
+      recipients: TO,
+    })).rejects.toThrow(/held by a foreign obligation/);
+  });
+
+  it('[F3 TWO-SIDED] a dedupe held by OUR OWN obligation is benign and reports verified', async () => {
+    // Without this, a check that rejected every dedupe would pass the test above and break the
+    // self-healing window entirely.
+    const b = bridge({ enqueued: false, deduped: true });
+    const r = await runDriveSmsSweep({
+      nowMs: CLOSED,
+      findLatestReport: async () => report(1),
+      enqueue: b.enqueue,
+      findObligation: async () => ({ id: 'x', kind: SMS_KIND }),
+      recipients: TO,
+    });
+    expect(r.enqueued[0]).toMatchObject({ deduped: true, dedupe_verified: true });
+  });
+
+  it('[F4] the SMS leg registers and stamps its OWN liveness row, in that order', async () => {
+    // Producer healthy + SMS leg dead left FR-7 GREEN while the chairman got nothing: the
+    // producer's registry key is not this leg's. Order matters for the same reason as the
+    // producer's — registerArmedMachinery upserts last_fired_at NULL.
+    const order = [];
+    let opts = null;
+    await runDriveSmsSweep({
+      nowMs: CLOSED,
+      findLatestReport: async () => report(1),
+      enqueue: bridge().enqueue,
+      register: async (o) => { order.push('register'); opts = o; return { ok: true }; },
+      stamp: async () => { order.push('stamp'); },
+      recipients: TO,
+    });
+    expect(order).toEqual(['register', 'stamp']);
+    expect(opts.activationTrigger).toBe(SMS_ACTIVATION_TRIGGER);
+    expect(SMS_SD_KEY, 'must be its OWN key, not the producer key').not.toBe('SD-LEO-INFRA-DRIVE-LOOP-INSTRUMENT-001-B');
+  });
+
+  it('[F4] a failed enqueue does NOT stamp — the leg own alarm stays armed', async () => {
+    let stamped = false;
+    await expect(runDriveSmsSweep({
+      nowMs: CLOSED,
+      findLatestReport: async () => report(1),
+      enqueue: async () => ({ enqueued: false, reason: 'table_absent' }),
+      stamp: async () => { stamped = true; },
+      recipients: TO,
+    })).rejects.toThrow(/enqueue refused/);
+    expect(stamped).toBe(false);
   });
 });

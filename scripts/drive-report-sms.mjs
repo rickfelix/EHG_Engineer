@@ -91,13 +91,34 @@ export function formatBody(facts = {}) {
  *
  * @param {{ageHours: number|null}} o ageHours null = no report has EVER been produced
  */
-export function formatMissingBody({ ageHours = null } = {}) {
-  if (ageHours !== null && (!Number.isFinite(ageHours) || ageHours < 0)) {
-    throw new Error(`formatMissingBody(): ageHours must be null or a non-negative number — got ${JSON.stringify(ageHours)}`);
+export const MISSING_KINDS = Object.freeze(['NONE', 'STALE', 'UNUSABLE']);
+
+export function formatMissingBody({ kind = 'NONE', ageHours = null } = {}) {
+  if (!MISSING_KINDS.includes(kind)) {
+    throw new Error(`formatMissingBody(): kind must be one of ${MISSING_KINDS.join(', ')} — got ${JSON.stringify(kind)}`);
   }
-  return ageHours === null
-    ? 'Drive report MISSING: none ever produced'
-    : `Drive report STALE: last one ${Math.round(ageHours)}h ago`;
+  // NEGATIVE AGES ARE ACCEPTED AND CLAMPED BY THE CALLER, NOT REFUSED HERE.
+  //
+  // The first version threw on ageHours < 0, and that was a defect of exactly the kind this SD
+  // exists to find: the throw lived on the MISSING branch ONLY, so the alarm crashed precisely
+  // when it had something to report and never when things were fine. Its failure was perfectly
+  // correlated with the condition it existed to announce.
+  //
+  // And it needed no attacker. generated_at is stamped from the PRODUCER's wall clock and
+  // compared against Date.now() on a DIFFERENT runner — MEASURED, a 3-SECOND skew was enough to
+  // throw. One future-dated row also wins ORDER BY generated_at DESC, so it would have killed
+  // every tick from then on. Found by the SECURITY sub-agent.
+  if (ageHours !== null && !Number.isFinite(ageHours)) {
+    throw new Error(`formatMissingBody(): ageHours must be null or a finite number — got ${JSON.stringify(ageHours)}`);
+  }
+  const hours = ageHours === null ? null : Math.max(0, Math.round(ageHours));
+
+  if (kind === 'NONE' || hours === null) return 'Drive report MISSING: none ever produced';
+  // UNUSABLE is its own literal because "STALE: last one 0h ago" is self-contradicting, and
+  // worse, it points the chairman at a dead producer when the producer ran fine and it is the
+  // SCORE that is unreadable. Different cause, different remedy, so a different sentence.
+  if (kind === 'UNUSABLE') return `Drive report UNUSABLE: produced ${hours}h ago, score unreadable`;
+  return `Drive report STALE: last one ${hours}h ago`;
 }
 
 /**

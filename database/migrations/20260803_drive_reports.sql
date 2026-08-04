@@ -212,7 +212,12 @@ CREATE POLICY drive_reports_service_role
 
 -- THE LOAD-BEARING LINES. Default grants are the documented failure mode; an inherited grant
 -- here would publish fleet plan-position and belt-diagnosis content to anon via PostgREST.
-REVOKE ALL ON public.drive_reports FROM anon, authenticated;
+-- PUBLIC included, matching the receipts table below. The tripwire reclassifies on ANY
+-- non-service grant INCLUDING PUBLIC, so revoking only two named roles here left the statement
+-- narrower than the rule it serves — the same enumerate-by-name mistake the tripwire itself was
+-- widened to fix. Fail-closed either way (the verify block aborts the deploy inside a
+-- transaction), so this is consistency, not an exposure. (SECURITY F6.)
+REVOKE ALL ON public.drive_reports FROM anon, authenticated, PUBLIC;
 GRANT ALL ON public.drive_reports TO service_role;
 
 -- ---------------------------------------------------------------------------
@@ -345,6 +350,23 @@ BEGIN
       AND a.grantee <> (SELECT relowner FROM pg_class WHERE oid = 'public.drive_reports'::regclass)
       AND COALESCE(pg_get_userbyid(NULLIF(a.grantee, 0)), 'PUBLIC') <> 'service_role'
   ), 'drive_reports: a non-service COLUMN grant exists (including PUBLIC) — column grants live in pg_attribute.attacl and are invisible to the table-level ACL check; this table is now PERMISSION-CLASS and requires chairman approval';
+
+  -- THE SAME COLUMN-GRANT CHECK FOR THE RECEIPTS TABLE.
+  --
+  -- Recorded plainly because it is the sharper lesson: the assertion above carries a comment
+  -- warning against "a check that reads one ACL catalogue and speaks for both" — and then this
+  -- migration shipped a check that read one TABLE and spoke for both, on a table added in the
+  -- same commit. Naming a defect class in a comment does not extend the code that comment sits
+  -- on. Coverage has to be enumerated, not implied. (SECURITY F5.)
+  ASSERT NOT EXISTS (
+    SELECT 1
+    FROM pg_attribute at
+    CROSS JOIN LATERAL aclexplode(at.attacl) a
+    WHERE at.attrelid = 'public.drive_report_receipts'::regclass
+      AND at.attacl IS NOT NULL
+      AND a.grantee <> (SELECT relowner FROM pg_class WHERE oid = 'public.drive_report_receipts'::regclass)
+      AND COALESCE(pg_get_userbyid(NULLIF(a.grantee, 0)), 'PUBLIC') <> 'service_role'
+  ), 'drive_report_receipts: a non-service COLUMN grant exists (including PUBLIC) — a record of who read what is service-role-only, same as the report';
 
   -- The append-only boundary on the C4 ruling. Without this trigger a stored observation is
   -- rewritable, which turns it back into copied state and silently moves the baseline every
