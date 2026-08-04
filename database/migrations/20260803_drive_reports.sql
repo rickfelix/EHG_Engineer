@@ -196,6 +196,44 @@ CREATE TRIGGER drive_reports_freeze_observations_trg
   FOR EACH ROW EXECUTE FUNCTION public.drive_reports_freeze_observations();
 
 -- ---------------------------------------------------------------------------
+-- THE DELETE HALF OF APPEND-ONLY.
+--
+-- The UPDATE trigger above froze four columns against service_role — and GRANT ALL includes
+-- DELETE, so DELETE + re-INSERT walked around all four. Every observation the freeze protects
+-- could be rewritten by the very actor the freeze names as its threat model. A constraint that
+-- one extra statement steps around is a speed bump, not a constraint. (SECURITY F7.)
+--
+-- WHY NOT SIMPLY FORBID DELETE: a retention policy will eventually need it, and the DDL suite
+-- legitimately deletes to prove the receipts CASCADE works. A blanket block would be honest but
+-- would make a normal operation impossible, and the usual response to that is someone dropping
+-- the trigger entirely — trading a narrow hole for a total one.
+--
+-- So deletion is POSSIBLE BUT NEVER ACCIDENTAL: it requires the caller to say so in the same
+-- transaction. `SET LOCAL` scopes the permission to that transaction and it cannot leak into the
+-- next one. The point is not to stop a determined operator — nothing here could — it is that
+-- rewriting history has to be a DELIBERATE, GREPPABLE act rather than a side effect of an
+-- ordinary DELETE somebody wrote for another reason.
+-- ---------------------------------------------------------------------------
+CREATE OR REPLACE FUNCTION public.drive_reports_guard_delete()
+RETURNS trigger
+LANGUAGE plpgsql
+AS $del$
+BEGIN
+  -- current_setting(..., true) returns NULL rather than raising when the GUC was never set,
+  -- which is the normal case and must not itself be an error.
+  IF COALESCE(current_setting('drive_reports.allow_delete', true), 'off') <> 'on' THEN
+    RAISE EXCEPTION 'drive_reports rows are append-only: DELETE would let an observation be rewritten by DELETE + re-INSERT, stepping around the freeze trigger. If this is deliberate (retention, or a test), say so in the same transaction: SET LOCAL drive_reports.allow_delete = ''on'' (report id %)', OLD.id;
+  END IF;
+  RETURN OLD;
+END
+$del$;
+
+DROP TRIGGER IF EXISTS drive_reports_guard_delete_trg ON public.drive_reports;
+CREATE TRIGGER drive_reports_guard_delete_trg
+  BEFORE DELETE ON public.drive_reports
+  FOR EACH ROW EXECUTE FUNCTION public.drive_reports_guard_delete();
+
+-- ---------------------------------------------------------------------------
 -- Posture: service-role only. Asserted, not inherited.
 -- ---------------------------------------------------------------------------
 ALTER TABLE public.drive_reports ENABLE ROW LEVEL SECURITY;
@@ -378,6 +416,16 @@ BEGIN
       AND tgname = 'drive_reports_freeze_observations_trg'
       AND NOT tgisinternal
   ), 'drive_reports: the append-only trigger is missing — stored observations would be rewritable and section-5 deltas would lose their baseline';
+
+  -- The DELETE half. Asserted separately because the UPDATE trigger existing tells you nothing
+  -- about whether DELETE + re-INSERT can step around it, and that gap is invisible from the
+  -- UPDATE assertion above — which passed for the entire time the hole was open.
+  ASSERT EXISTS (
+    SELECT 1 FROM pg_trigger
+    WHERE tgrelid = 'public.drive_reports'::regclass
+      AND tgname = 'drive_reports_guard_delete_trg'
+      AND NOT tgisinternal
+  ), 'drive_reports: the DELETE guard is missing — an observation could be rewritten by DELETE + re-INSERT, which the UPDATE freeze cannot see';
 END
 $verify$;
 

@@ -308,7 +308,12 @@ describe('consumption receipts — one row per (report, lane), no merge and no c
       "INSERT INTO public.drive_reports (run_id, sections) VALUES ('cascade-run', '{}'::jsonb) RETURNING id;",
     );
     await client.query("INSERT INTO public.drive_report_receipts (report_id, lane) VALUES ($1, 'adam');", [r[0].id]);
+    // The DELETE guard now requires deletion to be declared. Saying so here is the point: this
+    // test HAD to change, which is the evidence that ordinary deletes are genuinely blocked.
+    await client.query('BEGIN');
+    await client.query("SET LOCAL drive_reports.allow_delete = 'on';");
     await client.query('DELETE FROM public.drive_reports WHERE id = $1;', [r[0].id]);
+    await client.query('COMMIT');
     const { rows } = await client.query('SELECT count(*)::int AS n FROM public.drive_report_receipts WHERE report_id = $1;', [r[0].id]);
     expect(rows[0].n, 'a receipt for a deleted report is a dangling claim').toBe(0);
   });
@@ -643,5 +648,84 @@ describe('the holes the SECURITY re-run found — closed, and proven closed', ()
     await client.query('UPDATE public.drive_reports SET metadata = \'{"annotated":true}\'::jsonb WHERE run_id = \'frozen-1\';');
     const { rows } = await client.query("SELECT metadata->>'annotated' AS a FROM public.drive_reports WHERE run_id = 'frozen-1';");
     expect(rows[0].a).toBe('true');
+  });
+});
+
+describe('append-only means DELETE too — the hole the UPDATE freeze could not see (F7)', () => {
+  let reportId;
+  beforeAll(async () => {
+    await applyMigration();
+    const { rows } = await client.query(
+      'INSERT INTO public.drive_reports (run_id, sections) VALUES (\'del-guard\', \'{"plan_position":{"value":7}}\'::jsonb) RETURNING id;',
+    );
+    reportId = rows[0].id;
+  });
+
+  it('an ordinary DELETE is REFUSED', async () => {
+    await expect(client.query('DELETE FROM public.drive_reports WHERE id = $1;', [reportId]))
+      .rejects.toThrow(/append-only: DELETE would let an observation be rewritten/);
+    const { rows } = await client.query('SELECT count(*)::int AS n FROM public.drive_reports WHERE id = $1;', [reportId]);
+    expect(rows[0].n).toBe(1);
+  });
+
+  it('[THE ACTUAL ATTACK] DELETE + re-INSERT cannot rewrite a frozen observation', async () => {
+    // This is what the UPDATE freeze was protecting against and could not see. Rewriting
+    // `sections` directly raises; doing it in two statements used to succeed, under the very
+    // actor the freeze names as its threat model. The UPDATE assertion passed the whole time.
+    await expect(
+      client.query('UPDATE public.drive_reports SET sections = \'{"tampered":true}\'::jsonb WHERE id = $1;', [reportId]),
+    ).rejects.toThrow(/sections is append-only/);
+    await expect(client.query('DELETE FROM public.drive_reports WHERE id = $1;', [reportId]))
+      .rejects.toThrow(/append-only/);
+
+    const { rows } = await client.query('SELECT sections FROM public.drive_reports WHERE id = $1;', [reportId]);
+    expect(rows[0].sections, 'the observation must survive both routes').toEqual({ plan_position: { value: 7 } });
+  });
+
+  it('[TWO-SIDED] a DECLARED delete succeeds — the guard must not make retention impossible', async () => {
+    // Without this, a guard that blocked every delete forever would pass the tests above while
+    // making a legitimate retention policy unimplementable, and the usual answer to that is
+    // someone dropping the trigger entirely: a narrow hole traded for a total one.
+    const { rows: r } = await client.query(
+      "INSERT INTO public.drive_reports (run_id, sections) VALUES ('del-ok', '{}'::jsonb) RETURNING id;",
+    );
+    await client.query('BEGIN');
+    await client.query("SET LOCAL drive_reports.allow_delete = 'on';");
+    await client.query('DELETE FROM public.drive_reports WHERE id = $1;', [r[0].id]);
+    await client.query('COMMIT');
+    const { rows } = await client.query('SELECT count(*)::int AS n FROM public.drive_reports WHERE id = $1;', [r[0].id]);
+    expect(rows[0].n).toBe(0);
+  });
+
+  it('the permission is SET LOCAL — it does not leak into the next transaction', async () => {
+    // The whole reason this is a GUC rather than a flag column: the grant dies with the
+    // transaction that made it, so one deliberate delete cannot silently authorise the next.
+    const { rows: r } = await client.query(
+      "INSERT INTO public.drive_reports (run_id, sections) VALUES ('del-leak', '{}'::jsonb) RETURNING id;",
+    );
+    await client.query('BEGIN');
+    await client.query("SET LOCAL drive_reports.allow_delete = 'on';");
+    await client.query('COMMIT');   // the permission expires here
+
+    await expect(client.query('DELETE FROM public.drive_reports WHERE id = $1;', [r[0].id]))
+      .rejects.toThrow(/append-only/);
+  });
+
+  it('an unset GUC is the NORMAL case and must not itself error', async () => {
+    // current_setting(..., true) returns NULL instead of raising for a never-set GUC. If that
+    // second argument were dropped, every delete would fail with an unrelated message and the
+    // real one would never be seen.
+    const { rows } = await client.query("SELECT COALESCE(current_setting('drive_reports.allow_delete', true), 'off') AS v;");
+    expect(rows[0].v).toBe('off');
+  });
+
+  it('dropping the DELETE guard fails the verify block', async () => {
+    await client.query('DROP TRIGGER drive_reports_guard_delete_trg ON public.drive_reports;');
+    try {
+      await expect(client.query(VERIFY_BLOCK)).rejects.toThrow(/DELETE guard is missing/);
+    } finally {
+      await applyMigration();
+    }
+    await expect(client.query(VERIFY_BLOCK)).resolves.toBeTruthy();
   });
 });
