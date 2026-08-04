@@ -43,6 +43,15 @@ import { buildPlanPosition, SECTION_ID as PLAN_POSITION } from '../../../lib/dri
 import { buildBeltDiagnosis, SECTION_ID as BELT_DIAGNOSIS } from '../../../lib/drive-loop/sections/belt-diagnosis.js';
 import { buildStallDeltas, SECTION_ID as STALL_DELTAS } from '../../../lib/drive-loop/sections/stall-deltas.js';
 import { buildChainToGate, SECTION_ID as CHAIN_TO_GATE } from '../../../lib/drive-loop/sections/chain-to-gate.js';
+import { buildNextActs, SECTION_ID as NEXT_ACTS } from '../../../lib/drive-loop/sections/next-acts.js';
+
+// Section 4 fixture. Ranks deliberately non-contiguous and out of insertion order, so "sorted by
+// dispatch_rank" cannot be satisfied by accident of array order.
+const ACT_ITEMS = [
+  { id: 'n2', title: 'second', metadata: { dispatch_rank: 20 }, sd: { status: 'ready' } },
+  { id: 'n1', title: 'first', metadata: { dispatch_rank: 5 }, sd: { claiming_session_id: 'sess-1' } },
+  { id: 'n3', title: 'third', metadata: { dispatch_rank: 40 }, sd: null },
+];
 
 // Section 2 fixture. Gate is w1 (lowest sequence_rank WITH open items); the chain is its two open
 // items ordered by priority_rank; i1 is the blocker via a blocked-on-* lane. Counts are deliberately
@@ -130,6 +139,10 @@ async function buildAll() {
       section: buildChainToGate({ waves: CHAIN_WAVES, items: CHAIN_ITEMS }),
       ctx: { waves: CHAIN_WAVES, items: CHAIN_ITEMS },
     },
+    [NEXT_ACTS]: {
+      section: buildNextActs(ACT_ITEMS),
+      ctx: { items: ACT_ITEMS },
+    },
   };
 }
 
@@ -154,6 +167,7 @@ const SECTION_MODULE_FILES = {
   // it makes "named here" and "built and checked" the same set by construction, so the only way to
   // satisfy the directory check is to hand the property a real section.
   [CHAIN_TO_GATE]: 'chain-to-gate.js',
+  [NEXT_ACTS]: 'next-acts.js',
 };
 
 // ───────────────────────────────────────────────────────────────────────────────────────────
@@ -184,6 +198,32 @@ const REDERIVERS = {
   // itself. Both re-implement the module's stated definitions — GATE is the lowest-sequence_rank
   // approved wave that still has open items; BLOCKER is the first item in that chain that cannot
   // proceed, which is deliberately NOT the first item.
+  // Section 4's order is an ARRAY of act rows, so counting row_ids cannot reproduce it. Re-derived
+  // from the items the section was HANDED, re-implementing its stated rules (sort by the existing
+  // dispatch_rank; items without one are EXCLUDED, never defaulted to 0; owner from the SD only,
+  // never the intake-routing lane). Independent recomputation, not the section vouching for itself.
+  [`${NEXT_ACTS}.order`]: ({ items }) => items
+    .filter((i) => Number.isFinite(i?.metadata?.dispatch_rank))
+    .sort((a, b) => a.metadata.dispatch_rank - b.metadata.dispatch_rank)
+    .map((i) => {
+      const sd = i.sd || null;
+      const owner = sd?.claiming_session_id ?? sd?.owner_lane ?? null;
+      const act = !sd ? 'source'
+        : sd.status === 'blocked' ? (sd.blocked_on_decision ? 'await_decision' : 'unblock')
+          : (Array.isArray(sd.unmet_dependencies) && sd.unmet_dependencies.length > 0) ? 'unblock'
+            : sd.claiming_session_id ? 'resume' : 'claim';
+      return {
+        item_id: i.id,
+        title: i.title,
+        dispatch_rank: i.metadata.dispatch_rank,
+        act,
+        owner,
+        owner_basis: sd?.claiming_session_id ? 'active claim on the SD'
+          : sd?.owner_lane ? 'SD owner_lane'
+            : sd ? 'SD exists but is unclaimed and has no owner lane' : 'no SD — the item is unsourced',
+      };
+    }),
+
   [`${CHAIN_TO_GATE}.gate`]: ({ waves, items }) => {
     const openIn = (id) => items.filter((i) => i.wave_id === id).length;
     const g = [...waves].sort((a, b) => a.sequence_rank - b.sequence_rank).find((w) => openIn(w.id) > 0);

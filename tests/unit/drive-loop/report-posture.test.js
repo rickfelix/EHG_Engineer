@@ -87,11 +87,18 @@ describe('FR-7 propose-only — asserted as NEGATIVE SPACE across the shipped mo
     return acc;
   }
 
-  // The acts the report must never perform. Deliberately broad — a near-miss should trip this and
-  // be argued about, rather than a narrow pattern letting a real write through.
+  // The acts the report must never PERFORM. Each pattern matches a CALL or a WRITE, never a noun.
+  //
+  // NARROWED ONCE, WITH A REASON — and the distinction matters more than the patch. The first
+  // version used a bare /dispatch/i, which fired on section 4's `metadata.dispatch_rank`: a column
+  // being READ, not a dispatch being performed. The tempting response to a guard that cries wolf is
+  // to loosen it until it goes quiet, and then it catches nothing real either. So it was narrowed to
+  // the ACT — an invocation — rather than deleted, and the read-vs-perform distinction is pinned by
+  // the test below so a future edit cannot quietly re-broaden or re-blunt it.
   const FORBIDDEN = [
     /\.insert\s*\(/, /\.update\s*\(/, /\.upsert\s*\(/, /\.delete\s*\(/,
-    /claim_sd|release_sd/, /dispatch/i,
+    /\bclaim_sd\s*\(|\brelease_sd\s*\(/,
+    /\bdispatch[A-Za-z]*\s*\(/,   // dispatch(...), dispatchWork(...) — a call, not `dispatch_rank`
   ];
 
   it('the scan actually reads files — positive control', () => {
@@ -102,6 +109,19 @@ describe('FR-7 propose-only — asserted as NEGATIVE SPACE across the shipped mo
     const text = files.map((f) => fs.readFileSync(f, 'utf8')).join('');
     expect(text).toMatch(/export function cite/);       // known-present anchor
     expect(FORBIDDEN[0].test('supabase.from("x").insert({})')).toBe(true); // the pattern can match
+  });
+
+  it('the patterns catch PERFORMING an act and tolerate merely NAMING one', () => {
+    // The narrowing that a bare /dispatch/i got wrong. Reading metadata.dispatch_rank is how section
+    // 4 cites the existing order; calling dispatch() is the act this report must never take. If a
+    // future edit re-broadens this, the first line fails; if it blunts it, the second does.
+    const hits = (s) => FORBIDDEN.some((re) => re.test(s));
+    expect(hits('const r = i.metadata.dispatch_rank;'), 'reading a rank column is not dispatching').toBe(false);
+    expect(hits('dispatch_rank ordering, dispatch order, dispatchRank')).toBe(false);
+    expect(hits('await dispatch(item)'), 'performing a dispatch must be caught').toBe(true);
+    expect(hits('await dispatchWork({ sd })')).toBe(true);
+    expect(hits('await supabase.rpc("claim_sd", {})')).toBe(false);   // a string arg, not a call site
+    expect(hits('claim_sd({ p_session_id })')).toBe(true);
   });
 
   it('no module under lib/drive-loop reaches a claim, a dispatch or a write', () => {
