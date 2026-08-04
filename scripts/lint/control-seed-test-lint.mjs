@@ -102,6 +102,21 @@ function changedFiles(repoRoot) {
   return null;
 }
 
+// The spec file as of the diff base, so evaluate() can tell WHICH entry moved. Returns null
+// when the base cannot be read — the caller re-trials everything and says so out loud, since
+// the one thing this must never do is quietly select nothing.
+function previousSpecs(repoRoot) {
+  for (const rev of ['origin/main', 'HEAD~1']) {
+    try {
+      const base = rev === 'origin/main'
+        ? execFileSync('git', ['merge-base', 'origin/main', 'HEAD'], { cwd: repoRoot, encoding: 'utf8' }).trim()
+        : rev;
+      return JSON.parse(execFileSync('git', ['show', `${base}:${SPEC_PATH}`], { cwd: repoRoot, encoding: 'utf8' }));
+    } catch { /* try next base */ }
+  }
+  return null;
+}
+
 function isControl(p) {
   const rel = p.replace(/\\/g, '/');
   return CONTROL_GLOBS.some((re) => re.test(rel));
@@ -112,7 +127,7 @@ function isControl(p) {
 // unscopable: TS-5 could not point a blind-gauge fixture at it, so the gate silently reported
 // zero failures and "passed". A control whose own scope predicate cannot be aimed cannot be
 // seed-tested — exactly the UNENFORCEABLE verdict it hands out to others.
-export function evaluate(repoRoot, files, specs, isControlFn = isControl) {
+export function evaluate(repoRoot, files, specs, isControlFn = isControl, prevSpecs = null) {
   const failures = [];
   // FR-8 (SD-PAT-FIX-FIX-ABSENCE-SIGNAL-001): THE ACCEPTANCE METRIC.
   // `trials` records controls a seeded-defect trial ACTUALLY RAN on; `skipped` records
@@ -137,14 +152,31 @@ export function evaluate(repoRoot, files, specs, isControlFn = isControl) {
   // would make it unreachable from a unit test — which is how a rule ends up asserted only by
   // the comment above it.
   //
-  // KNOWN LIMITATION (FR-4 binds this gate too): this re-trials EVERY control the spec file
-  // names, not only the entries whose text changed. Diffing the JSON to find which entry moved
-  // would be more precise and is deliberately not done — a conservative over-trial costs CI
-  // time, a missed entry costs a silently weakened fixture, and those are not symmetric.
+  // ONLY THE ENTRIES THAT ACTUALLY CHANGED — AND THE FIRST VERSION OF THIS GOT IT WRONG.
+  // That version re-trialled EVERY control the spec names, justified as "a conservative
+  // over-trial only costs CI time". MEASURED IN CI (run 30950096609): it surfaced 14 issues
+  // across 13 controls, of which exactly ONE belonged to the diff. The real cost is not CI
+  // time — it is that ANY PR touching this file INHERITS THE WHOLE CORPUS'S HEALTH, so under
+  // enforcement an unrelated PR is blocked by failures it did not cause. That is how a gate
+  // teaches people to ignore it. Compare entries against the merge base and re-trial only
+  // what moved.
+  //
+  // FALLING BACK IS DELIBERATE AND MUST BE LOUD: if the previous spec cannot be read we
+  // re-trial ALL of them rather than NONE. Selecting nothing on an unreadable base would be
+  // an empty evaluation reported as a pass — this SD's own defect, in the code fixing it.
   const specChanged = files.some((f) => f.replace(/\\/g, '/') === SPEC_PATH);
-  const fromSpec = specChanged
-    ? specs.map((s) => s.script?.replace(/\\/g, '/')).filter((s) => s && isControlFn(s))
-    : [];
+  let specBaseUnavailable = false;
+  let fromSpec = [];
+  if (specChanged) {
+    if (Array.isArray(prevSpecs)) {
+      const prev = new Map(prevSpecs.map((s) => [s.name, JSON.stringify(s)]));
+      fromSpec = specs.filter((s) => prev.get(s.name) !== JSON.stringify(s));
+    } else {
+      specBaseUnavailable = true;
+      fromSpec = specs;
+    }
+    fromSpec = fromSpec.map((s) => s.script?.replace(/\\/g, '/')).filter((s) => s && isControlFn(s));
+  }
   const selected = [...new Set([...files, ...fromSpec])];
 
   for (const f of selected.filter(isControlFn)) {
@@ -235,7 +267,7 @@ export function evaluate(repoRoot, files, specs, isControlFn = isControl) {
   // ever have had to acknowledge the new information. The 4 tests this breaks are updated in
   // the same commit; both seedTest specs point at that test file, so leaving it broken would
   // make the gate fail itself.
-  return { failures, trials, skipped, selected, specChanged };
+  return { failures, trials, skipped, selected, specChanged, specBaseUnavailable };
 }
 
 function main() {
@@ -257,11 +289,13 @@ function main() {
 
   const specs = existsSync(join(repoRoot, SPEC_PATH)) ? JSON.parse(readFileSync(join(repoRoot, SPEC_PATH), 'utf8')) : [];
 
-  const { failures, trials, skipped, selected, specChanged } = evaluate(repoRoot, files, specs);
+  const { failures, trials, skipped, selected, specChanged, specBaseUnavailable } = evaluate(repoRoot, files, specs, isControl, previousSpecs(repoRoot));
 
   const controls = selected.filter(isControl);
   if (specChanged) {
-    console.log(`ℹ️  ${SPEC_PATH} changed — re-trialling ${controls.length} control(s) it names, because a weakened fixture is as dangerous as a neutered control.`);
+    console.log(specBaseUnavailable
+      ? `⚠️  ${SPEC_PATH} changed but its previous version could not be read, so this run re-trials ALL ${controls.length} control(s) it names rather than only the changed entries. Conservative on purpose: selecting none on an unreadable base would be an empty evaluation reported as a pass.`
+      : `ℹ️  ${SPEC_PATH} changed — re-trialling the ${controls.length} control(s) whose spec entry actually moved, because a weakened fixture is as dangerous as a neutered control.`);
   }
   // FR-8: THE ACCEPTANCE METRIC, ON EVERY PATH. `matched` counts controls the diff selected;
   // `trialsRun` counts controls a seeded-defect trial ACTUALLY RAN on. They are DIFFERENT
