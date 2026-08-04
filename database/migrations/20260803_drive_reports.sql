@@ -62,6 +62,27 @@ COMMENT ON COLUMN public.drive_reports.consumption_receipts IS
 CREATE INDEX IF NOT EXISTS drive_reports_generated_at_idx
   ON public.drive_reports (generated_at DESC);
 
+-- ONE ROW PER run_id, ENFORCED BY THE DATABASE.
+--
+-- The producer probes for an existing run_id before writing, but a probe-then-write is a
+-- decision made from a stale read: two ticks of the self-healing window that overlap, or a
+-- GitHub job re-run racing the original, can both observe "no row" and both insert. The
+-- application guard is the fast path; this index is what makes the duplicate IMPOSSIBLE
+-- rather than merely unlikely.
+--
+-- It matters more here than the word "duplicate" suggests. Section 5 computes report-over-
+-- report deltas against the immediately prior row. A second row for the same run makes it
+-- diff a report against itself: guaranteed zero movement, rendered as a stall that is not
+-- happening. The duplicate does not just waste a row, it silently corrupts the one section
+-- whose entire subject is history.
+--
+-- PARTIAL, because run_id is nullable: an ad-hoc row written without a run id is legitimate
+-- (cadence 'on_demand'), and NULLs are distinct under a plain UNIQUE anyway. Stating WHERE
+-- makes the intent legible instead of relying on that NULL-comparison subtlety.
+CREATE UNIQUE INDEX IF NOT EXISTS drive_reports_run_id_uniq
+  ON public.drive_reports (run_id)
+  WHERE run_id IS NOT NULL;
+
 -- ---------------------------------------------------------------------------
 -- APPEND-ONLY OBSERVATIONS — the boundary on the C4 ruling, enforced not documented.
 --
@@ -151,6 +172,19 @@ BEGIN
     WHERE schemaname = 'public' AND tablename = 'drive_reports'
       AND policyname = 'drive_reports_service_role'
   ), 'drive_reports: the service_role policy is missing or renamed';
+
+  -- The idempotence guard has to be UNIQUE and it has to be PARTIAL. Asserted on both
+  -- properties, because an index that exists under the right name while being neither would
+  -- pass a name-only check and enforce nothing — and the failure it admits (a duplicate run)
+  -- is invisible in the data: it looks exactly like a report showing no movement.
+  ASSERT EXISTS (
+    SELECT 1 FROM pg_index i
+    JOIN pg_class c ON c.oid = i.indexrelid
+    WHERE i.indrelid = 'public.drive_reports'::regclass
+      AND c.relname = 'drive_reports_run_id_uniq'
+      AND i.indisunique
+      AND i.indpred IS NOT NULL
+  ), 'drive_reports: drive_reports_run_id_uniq is missing, not UNIQUE, or not partial — two rows for one run would be insertable, and section 5 would then diff a report against itself and report a stall that is not happening';
 
   -- The reclassification trigger, enforced rather than merely documented: if ANY role other than
   -- the owner and service_role holds ANY privilege on this table, the non-permission-class

@@ -428,3 +428,72 @@ describe('the RLS posture the classification is conditional on', () => {
     }
   });
 });
+
+describe('one row per run_id — enforced by the database, not by the producer', () => {
+  beforeAll(async () => { await applyMigration(); });
+
+  // The producer already probes for an existing run_id before writing. That probe is a decision
+  // made from a stale read: two overlapping ticks of the self-healing window, or a job re-run
+  // racing the original, can both see "no row" and both insert. These tests are about what
+  // survives when the application guard loses that race.
+
+  it('REJECTS a second row with the same run_id', async () => {
+    await client.query("INSERT INTO public.drive_reports (run_id, sections) VALUES ('dup-run-1', '{\"a\":1}'::jsonb);");
+    await expect(
+      client.query("INSERT INTO public.drive_reports (run_id, sections) VALUES ('dup-run-1', '{\"b\":2}'::jsonb);")
+    ).rejects.toThrow(/drive_reports_run_id_uniq|duplicate key/i);
+
+    const { rows } = await client.query("SELECT count(*)::int AS n FROM public.drive_reports WHERE run_id = 'dup-run-1';");
+    expect(rows[0].n, 'exactly one row survived the second insert').toBe(1);
+  });
+
+  it('[TWO-SIDED] a DIFFERENT run_id still inserts — the guard must not suppress legitimate runs', async () => {
+    // Without this, an index so blunt it rejected everything would pass the test above.
+    await client.query("INSERT INTO public.drive_reports (run_id, sections) VALUES ('dup-run-2', '{}'::jsonb);");
+    const { rows } = await client.query("SELECT count(*)::int AS n FROM public.drive_reports WHERE run_id IN ('dup-run-1','dup-run-2');");
+    expect(rows[0].n).toBe(2);
+  });
+
+  it('MULTIPLE null run_ids are allowed — the index is partial by design', async () => {
+    // Ad-hoc rows (cadence on_demand) carry no run id. A non-partial unique index would still
+    // permit these, since NULLs compare distinct — so this pins the INTENT, and the assertion
+    // below pins the mechanism that makes the intent true rather than incidental.
+    await client.query("INSERT INTO public.drive_reports (run_id, sections) VALUES (NULL, '{}'::jsonb), (NULL, '{}'::jsonb);");
+    const { rows } = await client.query('SELECT count(*)::int AS n FROM public.drive_reports WHERE run_id IS NULL;');
+    expect(rows[0].n).toBeGreaterThanOrEqual(2);
+  });
+
+  it('the index is UNIQUE and PARTIAL, not merely present under the right name', async () => {
+    const { rows } = await client.query(`
+      SELECT i.indisunique, i.indpred IS NOT NULL AS is_partial
+      FROM pg_index i JOIN pg_class c ON c.oid = i.indexrelid
+      WHERE i.indrelid = 'public.drive_reports'::regclass AND c.relname = 'drive_reports_run_id_uniq';
+    `);
+    expect(rows, 'drive_reports_run_id_uniq does not exist').toHaveLength(1);
+    expect(rows[0].indisunique).toBe(true);
+    expect(rows[0].is_partial).toBe(true);
+  });
+
+  it('dropping the index makes the verify block fail — the assertion is not decoration', async () => {
+    await client.query('DROP INDEX public.drive_reports_run_id_uniq;');
+    try {
+      await expect(client.query(VERIFY_BLOCK)).rejects.toThrow(/drive_reports_run_id_uniq is missing/);
+    } finally {
+      await applyMigration();
+    }
+    await expect(client.query(VERIFY_BLOCK)).resolves.toBeTruthy();
+  });
+
+  it('a NON-UNIQUE index of the same name ALSO fails the verify block', async () => {
+    // The discriminating case. A name-only assertion passes here while the table happily accepts
+    // the duplicate that corrupts section 5 — enforcement that reads correct and enforces nothing.
+    await client.query('DROP INDEX public.drive_reports_run_id_uniq;');
+    await client.query('CREATE INDEX drive_reports_run_id_uniq ON public.drive_reports (run_id) WHERE run_id IS NOT NULL;');
+    try {
+      await expect(client.query(VERIFY_BLOCK)).rejects.toThrow(/not UNIQUE, or not partial/);
+    } finally {
+      await client.query('DROP INDEX IF EXISTS public.drive_reports_run_id_uniq;');
+      await applyMigration();
+    }
+  });
+});
