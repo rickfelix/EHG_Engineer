@@ -1137,14 +1137,26 @@ async function recoverStrandedFinal(sb, sessionId, base) {
     // FR-1: refusals are loud even when nothing is adopted. Returning a bare null here is what made
     // "every stranded row is fenced" indistinguishable from "there is nothing stranded" — and an
     // operator cannot act on a distinction the output does not draw.
+    //
+    // QF-20260803-422 — THE LOUDNESS IS KEPT; THE EARLY RETURN IS NOT. This block used to RETURN
+    // that refusal object, and runSteps (lib/checkin/pipeline.cjs:18) treats ANY truthy return as
+    // "resolved". So one fenced row ended the ladder at step 8 of 18 and silently skipped
+    // adopt-orphan, critical-qf-jump, the merged-pool SD self-claim and the QF self-claim — for
+    // EVERY worker in the fleet. Measured: ~17.5h continuous, 151 open quick_fixes and 38 draft SDs
+    // invisible behind a single row.
+    //
+    // The contract it broke is documented two lines below, on this function's own last statement:
+    // `return null` / "fail-open -> caller continues to normal self-claim". An instrument added to
+    // END one silence has to obey the rule that keeps the ladder moving, or it manufactures a
+    // bigger one.
+    //
+    // So the refusal is CARRIED, not returned: stash it on `base`, which every downstream
+    // resolution already spreads (`...base`), so the FIELD propagates for free; carryFencedRefusals
+    // at the runSteps seam puts it in the MESSAGE. That message half is not optional — FR-2's own
+    // lesson, 20 lines up, is "soft holds go in the MESSAGE, not only in a field ... a field a
+    // caller may or may not print reproduces that".
     if (skipped.length) {
-      return {
-        ...base,
-        action: 'idle',
-        sd: null,
-        skipped_fenced: skipped,
-        message: `No stranded SD adopted: ${skipped.length} candidate(s) are FENCED and were deliberately not claimed — ${skipped.join('; ')}. This is a refusal, not an absence. Clear the fence (or the hold it names) if recovery is intended.`,
-      };
+      base.skipped_fenced = skipped;
     }
   } catch { /* fail-open -> caller continues to normal self-claim */ }
   return null;
@@ -1898,7 +1910,36 @@ async function resolveCheckin(sb, sessionId, { getCoordinator = getActiveCoordin
     base: null,
     helpers: CHECKIN_HELPERS,
   };
-  return runSteps(CHECKIN_STEPS, ctx);
+  const resolution = await runSteps(CHECKIN_STEPS, ctx);
+  return carryFencedRefusals(resolution, ctx);
+}
+
+/**
+ * QF-20260803-422 — carry a step-8 fence refusal onto WHATEVER resolution finally wins.
+ *
+ * recoverStrandedFinal (step 8 of 18) refuses to adopt fenced stranded rows and must say so. It can
+ * no longer say so by RETURNING the refusal — that ends the ladder and suppresses steps 9-14 (see
+ * the long comment on its skipped-refusal block). It stashes on ctx.base instead; this puts the
+ * explanation into the winning resolution's message so the refusal stays as loud as FR-1 made it.
+ *
+ * APPLIED AT THE SINGLE runSteps SEAM, not inside steps 9-14, for one reason: any step added to the
+ * ladder later inherits this automatically. Per-step appending would be an unwritten obligation on
+ * every future step author — and an unwritten obligation on a step author is precisely what caused
+ * the defect this fixes.
+ *
+ * Note it does NOT fire on recoverStrandedFinal's own success return: that path returns from inside
+ * the loop before `base.skipped_fenced` is ever set, and already carries its own "skipped N fenced
+ * rows to reach this one" wording. So there is no double-append.
+ */
+function carryFencedRefusals(resolution, ctx) {
+  const skipped = ctx && ctx.base ? ctx.base.skipped_fenced : null;
+  if (!resolution || !Array.isArray(skipped) || skipped.length === 0) return resolution;
+  const note = `\n\nNOTE — ${skipped.length} stranded candidate(s) were FENCED and deliberately NOT claimed: ${skipped.join('; ')}. This is a refusal, not an absence. It did NOT stop this check-in from resolving. Clear the fence (or the hold it names) if recovery is intended.`;
+  return {
+    ...resolution,
+    skipped_fenced: skipped,
+    message: typeof resolution.message === 'string' ? resolution.message + note : resolution.message,
+  };
 }
 
 /**
@@ -1942,7 +1983,7 @@ async function main() {
 // top (imports are referenced directly — never re-derived).
 const CHECKIN_HELPERS = { ws, tryClaim, stampDirectedAssignment, ackMessage, extractSdFromAssignment, extractDirectedSd, isInformationalNudge, classifyDispatchIneligibility, coordinatorReservation, isSeatBusyOnDirectedWork, registerRollCall, rehydrateCallsign, selfClearQuarantine, mergeCheckinModelEffort, recoverStrandedFinal, describeSoftHolds, adoptOrphanInProgress, isSelfClaimDisabled, isGlobalStandDownActive, isBuildForbiddenSession, ensureActiveBaseline, isCriticalQfJumpEligible, tryClaimDraftCandidate, baselinedCandidateEligible, isSdInFlight, selfClaimQuickFix, selfHealStaleClaim, findOwnSdClaim, healOwnClaimPointer, confirmRowGone, surfaceCoordinatorMessages, fetchOutstandingSignals, formatOutstandingWarning, fetchDraftCandidates, fetchNewestDraftCandidates, fetchFleetCriticalCandidates, fetchRankedCandidates, sortByDispatchRank, resolveWorkerTierRank, isTieringActive, fetchLowerTierBacklogData, ladderTopRank, seatCapabilityIsVerified, fetchFableWindowActive, claimableForTier, claimableForRepo, getCommsActivitySignals, computeAdaptiveCadence, antiWinddownDirective, ASSIGNMENT_RECENCY_WINDOW_MS, TERMINAL_CLAIM_ERRORS, QF_CANDIDATE_LIMIT, SELF_CLAIM_CANDIDATE_LIMIT, DEFAULT_IDLE_WAKEUP_SECONDS };
 
-module.exports = { ADOPTABLE_ORPHAN_STATUSES, CHECKIN_HELPERS, stampDirectedAssignment, extractSdFromAssignment, extractDirectedSd, isInformationalNudge, tryClaim, registerRollCall, ackMessage, isCoordinatorPush, surfaceCoordinatorMessages, rehydrateCallsign, runCheckin, resolveCheckin, assignFleetIdentityAtCheckin, selfClaimQuickFix, isAutoStartableQF, sortQfCandidatesBySeverity, QF_SEVERITY_RANK, isCriticalQfJumpEligible, CRITICAL_QF_JUMP_GRACE_MS, selfClaimDraftSd, fetchDraftCandidates, fetchNewestDraftCandidates, fetchFleetCriticalCandidates, fetchRankedCandidates, tryClaimDraftCandidate, draftDepsSatisfied, baselinedCandidateEligible, recoverStrandedFinal, describeSoftHolds, adoptOrphanInProgress, pendingDirectedAssignmentBlocksAdoption, isSelfClaimDisabled, isQuarantined, isParked, selfClearQuarantine, isGlobalStandDownActive, isSdInFlight, isForeignSessionLive, foreignClaimantBlocksSteal, selfHealStaleClaim, findOwnSdClaim, healOwnClaimPointer, confirmRowGone, orderByRankMap, orderByFleetCriticalThenRank, sortByDispatchRank, DISPATCH_RANK_TTL_MS, PRIORITY_RANK, SD_KEY_RE, DEFAULT_IDLE_WAKEUP_SECONDS, STALE_QF_DAYS, antiWinddownDirective, mergeCheckinModelEffort, parseCheckinArgs };
+module.exports = { ADOPTABLE_ORPHAN_STATUSES, CHECKIN_HELPERS, stampDirectedAssignment, extractSdFromAssignment, extractDirectedSd, isInformationalNudge, tryClaim, registerRollCall, ackMessage, isCoordinatorPush, surfaceCoordinatorMessages, rehydrateCallsign, runCheckin, resolveCheckin, assignFleetIdentityAtCheckin, selfClaimQuickFix, isAutoStartableQF, sortQfCandidatesBySeverity, QF_SEVERITY_RANK, isCriticalQfJumpEligible, CRITICAL_QF_JUMP_GRACE_MS, selfClaimDraftSd, fetchDraftCandidates, fetchNewestDraftCandidates, fetchFleetCriticalCandidates, fetchRankedCandidates, tryClaimDraftCandidate, draftDepsSatisfied, baselinedCandidateEligible, recoverStrandedFinal, describeSoftHolds, adoptOrphanInProgress, pendingDirectedAssignmentBlocksAdoption, isSelfClaimDisabled, isQuarantined, isParked, selfClearQuarantine, isGlobalStandDownActive, isSdInFlight, isForeignSessionLive, foreignClaimantBlocksSteal, selfHealStaleClaim, findOwnSdClaim, healOwnClaimPointer, confirmRowGone, orderByRankMap, orderByFleetCriticalThenRank, sortByDispatchRank, DISPATCH_RANK_TTL_MS, PRIORITY_RANK, SD_KEY_RE, DEFAULT_IDLE_WAKEUP_SECONDS, STALE_QF_DAYS, antiWinddownDirective, mergeCheckinModelEffort, parseCheckinArgs, carryFencedRefusals };
 
 if (require.main === module) {
   main().catch(err => {

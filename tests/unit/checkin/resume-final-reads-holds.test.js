@@ -69,14 +69,19 @@ describe('FR-1 — a structurally fenced row is REFUSED, and the refusal is loud
     expect(r?.action).not.toBe('resume_final');
   });
 
-  it('SAYS WHY rather than returning a bare idle — silence is what let the original hold pass unread', async () => {
+  // REWRITTEN BY QF-20260803-422 — this test used to assert `expect(r).not.toBeNull()`, i.e. it
+  // PINNED the early return that suppressed steps 9-14 of the check-in ladder for the whole fleet.
+  // It was not merely silent about the defect; it held it in place. The contract it should have
+  // asserted is BOTH halves at once: the refusal is loud AND it does not stop the pipeline.
+  it('SAYS WHY without RETURNING — the refusal is carried on base, not used to end the ladder', async () => {
     const sb = fakeSb({ stranded: [row('SD-FENCED-001', { requires_human_action: true })] });
-    const r = await recoverStrandedFinal(sb, 'sess-1', {});
-    expect(r).not.toBeNull();
-    expect(r.skipped_fenced).toEqual(expect.arrayContaining([expect.stringContaining('SD-FENCED-001')]));
-    // Asserted on the MESSAGE, not only a field: an operator reads the message.
-    expect(r.message).toMatch(/FENCED/);
-    expect(r.message).toMatch(/refusal, not an absence/);
+    const base = {};
+    const r = await recoverStrandedFinal(sb, 'sess-1', base);
+    // Half one: falsy, so lib/checkin/pipeline.cjs runSteps() keeps descending the ladder.
+    expect(r).toBeFalsy();
+    // Half two: the refusal survives — loudness is preserved, only its delivery changed.
+    expect(base.skipped_fenced).toEqual(expect.arrayContaining([expect.stringContaining('SD-FENCED-001')]));
+    expect(base.skipped_fenced.join(' ')).toMatch(/human_action_required/);
   });
 
   // THE DISCRIMINATOR THIS SUITE WAS MISSING. The header claims these tests assert the SHARED
@@ -90,10 +95,14 @@ describe('FR-1 — a structurally fenced row is REFUSED, and the refusal is loud
   it('refuses a test-fixture SD — an axis a requires_human_action one-liner would miss', async () => {
     const claimed = [];
     const sb = fakeSb({ stranded: [row('SD-TEST-PHANTOM-001')], claimed });
-    const r = await recoverStrandedFinal(sb, 'sess-1', {});
+    const base = {};
+    const r = await recoverStrandedFinal(sb, 'sess-1', base);
     expect(claimed).not.toContain('SD-TEST-PHANTOM-001');
     expect(r?.action).not.toBe('resume_final');
-    expect(JSON.stringify(r?.skipped_fenced || [])).toMatch(/SD-TEST-PHANTOM-001/);
+    // QF-20260803-422: reads the carried refusal off `base` now, not off the (deliberately falsy)
+    // return. Asserted on the array itself rather than JSON.stringify(x || []) — the old form
+    // would have matched an EMPTY carry against "[]" and quietly reported nothing wrong.
+    expect(base.skipped_fenced).toEqual(expect.arrayContaining([expect.stringContaining('SD-TEST-PHANTOM-001')]));
   });
 
   it('reaches an eligible row PAST a fenced one, and reports what it skipped', async () => {
@@ -216,5 +225,143 @@ describe('describeSoftHolds', () => {
     expect(describeSoftHolds({ metadata: { hold_b: { reason: 'via reason' } } })[0]).toMatch(/via reason/);
     // No recognised field: still surfaced rather than dropped — an unreadable hold is still a hold.
     expect(describeSoftHolds({ metadata: { hold_c: { odd: 1 } } })[0]).toMatch(/odd/);
+  });
+});
+
+// ─────────────────────────────────────────────────────────────────────────────────────────────
+// QF-20260803-422 — THE FENCED REFUSAL MUST NOT STOP THE LADDER.
+//
+// THE DEFECT. lib/checkin/pipeline.cjs runSteps() ends the pipeline on ANY truthy step return.
+// recover-stranded-final is step 8 of 18. FR-1 (above) made its refusal loud by RETURNING an
+// object — so a single fenced row terminated every worker's check-in at step 8, silently skipping
+// adopt-orphan, critical-qf-jump, the merged-pool SD self-claim and the QF self-claim. Measured
+// live: ~17.5h continuous, hiding 151 open quick_fixes and 38 draft SDs behind ONE row.
+//
+// WHY THE OLD SUITE MISSED IT. The FR-1 test above asserted `expect(r).not.toBeNull()`. It did not
+// merely fail to catch the regression — it PINNED it. Every test in this file called
+// recoverStrandedFinal DIRECTLY, so nothing here ever observed what the pipeline does with its
+// return value. A unit boundary drawn one level below the defect cannot see the defect.
+//
+// So these tests drive the REAL runSteps, the REAL step module, and the REAL carry seam. Only the
+// DB and the downstream lanes are stubbed. Re-tighten the refusal into a return and this goes red.
+describe('QF-20260803-422 — a fenced-only stranded set still reaches the self-claim lanes', () => {
+  const { runSteps } = require_('../../../lib/checkin/pipeline.cjs');
+  const recoverStep = require_('../../../lib/checkin/steps/recover-stranded-final.cjs');
+  const { carryFencedRefusals } = checkin;
+
+  async function runLadder(strandedRows) {
+    const reached = [];
+    const ctx = {
+      sb: fakeSb({ stranded: strandedRows }),
+      sessionId: 'sess-1',
+      base: {},
+      helpers: { recoverStrandedFinal },
+    };
+    const lane = (name, resolution) => ({
+      name,
+      run: () => { reached.push(name); return resolution; },
+    });
+    const steps = [
+      recoverStep,                                    // the REAL step 8
+      lane('adopt-orphan'),                           // step 9
+      lane('critical-qf-jump'),                       // step 11
+      lane('merged-pool-self-claim'),                 // step 12 — the draft SD lane
+      lane('self-claim-qf', {                         // step 13 — the QF lane, resolves here
+        action: 'self_claimed_qf', qf: 'QF-STUB-001',
+        message: 'Self-claimed QF-STUB-001.',
+      }),
+    ];
+    return { reached, resolution: carryFencedRefusals(await runSteps(steps, ctx), ctx) };
+  }
+
+  const FENCED = [row('SD-FENCED-001', { requires_human_action: true })];
+
+  it('reaches BOTH the draft self-claim lane and the QF lane past a fenced-only stranded set', async () => {
+    const { reached, resolution } = await runLadder(FENCED);
+    // The four lanes the defect suppressed. Named individually so a partial regression is legible.
+    expect(reached).toContain('adopt-orphan');
+    expect(reached).toContain('critical-qf-jump');
+    expect(reached).toContain('merged-pool-self-claim');
+    expect(reached).toContain('self-claim-qf');
+    // And the ladder actually RESOLVED to real work rather than idling.
+    expect(resolution.action).toBe('self_claimed_qf');
+    expect(resolution.qf).toBe('QF-STUB-001');
+  });
+
+  it('CARRIES the fenced explanation into the winning resolution — loudness survives the fix', async () => {
+    const { resolution } = await runLadder(FENCED);
+    // In the MESSAGE, not only in a field: FR-2's own lesson is that a field a caller may or may
+    // not print reproduces the silence. Trading one silence for the other is not a fix.
+    expect(resolution.message).toMatch(/FENCED/);
+    expect(resolution.message).toMatch(/SD-FENCED-001/);
+    expect(resolution.message).toMatch(/refusal, not an absence/);
+    // And it says the refusal did not suppress the resolution — the distinction that was missing.
+    expect(resolution.message).toMatch(/did NOT stop this check-in/);
+    expect(resolution.skipped_fenced).toEqual(expect.arrayContaining([expect.stringContaining('SD-FENCED-001')]));
+    // The claim it rides on is still intact and un-mangled.
+    expect(resolution.message).toMatch(/Self-claimed QF-STUB-001/);
+  });
+
+  // TWO-SIDED CONTROL. Without this, an unconditional note would satisfy the assertions above —
+  // the carry would look correct while actually being a constant. A control that can only confirm
+  // is not a control.
+  it('appends NOTHING when no row was fenced', async () => {
+    const { reached, resolution } = await runLadder([]);
+    expect(reached).toContain('self-claim-qf');
+    expect(resolution.message).toBe('Self-claimed QF-STUB-001.');
+    expect(resolution.skipped_fenced).toBeUndefined();
+  });
+
+  // The other side of the ladder contract: a genuinely adoptable row MUST still short-circuit.
+  // Making the refusal non-terminal must not make the SUCCESS non-terminal too.
+  it('still stops the ladder when a stranded row IS adoptable', async () => {
+    const { reached, resolution } = await runLadder([row('SD-ADOPTABLE-001')]);
+    expect(resolution.action).toBe('resume_final');
+    expect(resolution.sd).toBe('SD-ADOPTABLE-001');
+    expect(reached).toEqual([]); // nothing below step 8 ran
+  });
+});
+
+// ─────────────────────────────────────────────────────────────────────────────────────────────
+// THE WIRING ASSERTION — added after mutation testing exposed that the suite above did NOT need it
+// to pass, which is the whole problem.
+//
+// HOW THIS WAS CAUGHT. Deleting the `carryFencedRefusals(...)` CALL from resolveCheckin left all 19
+// tests green. The ladder tests above call the helper THEMSELVES, so they prove the helper works
+// and prove nothing about whether the production entry point invokes it. A step-8 refusal could
+// have gone silent again with a full green suite.
+//
+// This is the same shape as TS-9 on SD-LEO-INFRA-RESUME-FINAL-READ-001 ("nothing asserts the gate
+// CONSUMES computeReposForSD") — a guard tested in isolation, upstream of the verdict that reports
+// it. Recognising the class one day earlier did not prevent repeating it; only the mutation did.
+//
+// So this drives the REAL resolveCheckin — real coordinator resolution, real 18-step ladder, real
+// carry seam — and asserts on what a worker actually receives.
+describe('QF-20260803-422 — resolveCheckin WIRES the carry (not just the helper in isolation)', () => {
+  const { resolveCheckin } = checkin;
+  const opts = { getCoordinator: async () => null };
+
+  it('the resolution a worker actually receives carries the fenced refusal', async () => {
+    const sb = fakeSb({ stranded: [row('SD-FENCED-001', { requires_human_action: true })] });
+    const r = await resolveCheckin(sb, 'sess-1', opts);
+    // Whatever the ladder resolved to, the refusal rode along.
+    expect(r.message).toMatch(/SD-FENCED-001/);
+    expect(r.message).toMatch(/FENCED/);
+    expect(r.skipped_fenced).toEqual(expect.arrayContaining([expect.stringContaining('SD-FENCED-001')]));
+  });
+
+  it('and it did NOT resolve at step 8 — the ladder ran past the refusal', async () => {
+    const sb = fakeSb({ stranded: [row('SD-FENCED-001', { requires_human_action: true })] });
+    const r = await resolveCheckin(sb, 'sess-1', opts);
+    // The defect's signature was action:'idle' WITHOUT the terminal idle step's own wording.
+    // Reaching step 14 proves steps 9-13 were offered their turn.
+    expect(r.message).toMatch(/never wait on a human|STANDING BY|Self-claimed|Claimed/);
+    expect(r.recommended_wakeup_seconds).toBeTypeOf('number');
+  });
+
+  it('two-sided: with nothing fenced, no refusal text is attached', async () => {
+    const r = await resolveCheckin(fakeSb({ stranded: [] }), 'sess-1', opts);
+    expect(r.message).not.toMatch(/FENCED/);
+    expect(r.skipped_fenced).toBeUndefined();
   });
 });
