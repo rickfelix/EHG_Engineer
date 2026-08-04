@@ -1,0 +1,64 @@
+name: "Drive Report chairman SMS (self-healing cron)"
+
+# SD-LEO-INFRA-DRIVE-LOOP-INSTRUMENT-001-B (TR-3) — the dispatcher for the chairman SMS leg.
+#
+# scripts/drive-report-sms.mjs had ZERO callers until this landed. TR-3 asks for a DURABLE cron
+# specifically because the defect it replaces was a session-armed CronCreate: those die with the
+# session and expire in 7 days, and heartbeat-sms's sibling morning-brief-sms missed its very
+# next fire that way.
+#
+# THIS JOB DOES NOT SEND. It enqueues an obligation through the hardened owed-state bridge; the
+# pre-existing sms-outbound-worker owns delivery truth. Sending here would be a second
+# representation of "the chairman was texted", with its own retries and blind to the delivery
+# reconciliation.
+#
+# WINDOW: runs AFTER the producer's window opens (05:00 ET) so there is something to report, and
+# every obligation is queued not_before 06:00 ET regardless — safe under both readings of the
+# chairman sleep window, which two sources describe differently (the obligations DDL says
+# 10PM-6AM ET, isWithinChairmanQuietWindow implements 23:00-05:00 ET).
+#
+# Repeated ticks are free: sms_outbound_obligations.dedupe_key is UNIQUE and the key names the
+# report window plus the recipient, so the second tick is a no-op at the database. That is what
+# makes the window self-healing — if the first tick failed, the next simply enqueues.
+
+on:
+  schedule:
+    - cron: '*/20 10-13 * * *'   # 06:00-09:40 ET in EDT (summer)
+    - cron: '*/20 11-14 * * *'   # 06:00-09:40 ET in EST (winter)
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+# Not cancel-in-progress: an enqueue killed midway would leave the window unserved, and the
+# dedupe key already makes a concurrent double-fire harmless.
+concurrency:
+  group: ${{ github.workflow }}
+  cancel-in-progress: false
+
+jobs:
+  sms:
+    name: Enqueue the chairman drive-score SMS
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+
+    env:
+      SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+      SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
+      CHAIRMAN_PHONE: ${{ secrets.CHAIRMAN_PHONE }}
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: 'npm'
+
+      - name: Install dependencies
+        run: npm ci --ignore-scripts
+
+      - name: Enqueue the drive-report SMS
+        run: node scripts/cron/drive-report-sms-sweep.mjs

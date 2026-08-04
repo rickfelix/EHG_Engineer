@@ -80,15 +80,38 @@ export function formatBody(facts = {}) {
 }
 
 /**
+ * The body for "there is no fresh report", which TR-3 requires be sent as its own fact rather
+ * than suppressed: no report IS the signal that the instrument or the Adam seat is down, and a
+ * silent cron is indistinguishable from a healthy quiet day.
+ *
+ * Closed vocabulary, exactly like formatBody — a number and fixed literals, no interpolated
+ * text. It is a SEPARATE function rather than a flag on formatBody because the two messages
+ * carry different facts, and giving formatBody a "reason" parameter is precisely the free-text
+ * hole this module exists to not have.
+ *
+ * @param {{ageHours: number|null}} o ageHours null = no report has EVER been produced
+ */
+export function formatMissingBody({ ageHours = null } = {}) {
+  if (ageHours !== null && (!Number.isFinite(ageHours) || ageHours < 0)) {
+    throw new Error(`formatMissingBody(): ageHours must be null or a non-negative number — got ${JSON.stringify(ageHours)}`);
+  }
+  return ageHours === null
+    ? 'Drive report MISSING: none ever produced'
+    : `Drive report STALE: last one ${Math.round(ageHours)}h ago`;
+}
+
+/**
  * @param {object} o
- * @param {object} o.facts the numeric/enumerated facts — see formatBody
+ * @param {object} [o.facts] the numeric/enumerated facts — see formatBody
+ * @param {{ageHours:number|null}} [o.missing] send the no-fresh-report signal instead. EXACTLY
+ *   one of facts/missing — never both, never neither.
  * @param {string[]} o.recipients E.164 numbers
  * @param {(to:string, body:string) => Promise<object>} o.send injected, so sends are COUNTED
  * @param {(runId:string) => Promise<boolean>} [o.findSent] idempotence probe
  * @param {(o:object) => Promise<void>} [o.recordSent] durability: mark the run as sent
  * @param {string} o.runId
  */
-export async function sendDriveSms({ facts, recipients = [], send, findSent = null, recordSent = null, runId } = {}) {
+export async function sendDriveSms({ facts, missing = null, recipients = [], send, findSent = null, recordSent = null, runId } = {}) {
   if (typeof send !== 'function') {
     throw new Error('sendDriveSms(): send must be injected — "did it send twice?" is unanswerable about a hidden client');
   }
@@ -111,13 +134,20 @@ export async function sendDriveSms({ facts, recipients = [], send, findSent = nu
     return { sent: false, skipped: 'already_sent', run_id: runId, recipients: 0 };
   }
 
+  // EXACTLY ONE of facts/missing. Both would mean the caller does not know which message it is
+  // sending; neither would mean an empty send. Refusing here keeps "which signal did the
+  // chairman get?" answerable from the arguments alone.
+  if ((facts && missing) || (!facts && !missing)) {
+    throw new Error('sendDriveSms(): supply EXACTLY ONE of facts or missing — both is ambiguous, neither is an empty send');
+  }
+
   // Built once, before the loop. NOTE, honestly: this ordering is for clarity, NOT a guard —
   // I mutated it to build inside the loop and NOTHING went red, because formatBody is
   // deterministic and its argument is evaluated before the first send() either way. So the
   // "half the recipients messaged" hazard does not exist in this shape, and claiming the ordering
   // prevents it would be asserting a guarantee nothing enforces. What IS enforced is that a bad
   // `facts` sends to nobody, which the test does discriminate.
-  const body = formatBody(facts);
+  const body = missing ? formatMissingBody(missing) : formatBody(facts);
 
   const results = [];
   for (const to of recipients) results.push(await send(to, body));
