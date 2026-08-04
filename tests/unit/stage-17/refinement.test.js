@@ -14,7 +14,17 @@ vi.mock('../../../lib/llm/client-factory.js', () => ({
   getLLMClient: vi.fn().mockReturnValue({
     complete: mockComplete,
   }),
-  // Legacy export kept for backward-compat imports elsewhere
+  // *** createLLMClient IS NOT A LEGACY EXPORT. IT HAS NEVER EXISTED. ***
+  // This entry previously said "Legacy export kept for backward-compat imports elsewhere", which is
+  // false and actively misleading: `git log -S createLLMClient -- lib/llm/client-factory.js` is
+  // EMPTY, so the symbol was never exported by that module at any point in its history. The real
+  // export is getLLMClient, above.
+  // Two dead call sites destructured this phantom and threw "createLLMClient is not a function" on
+  // every invocation; one was repaired by SD-LEO-INFRA-USER-STORY-QUALITY-001 and the other deleted
+  // by SD-LEO-INFRA-LLM-ADAPTER-STREAMING-ABSENT-001. A comment asserting the phantom was a
+  // supported legacy export is exactly what would send the next implementer looking for it.
+  // The mock stays only because vi.mock replaces the whole module surface; it is not evidence the
+  // symbol exists, and nothing in this repo should import it.
   createLLMClient: vi.fn().mockResolvedValue({
     messages: { create: vi.fn() },
   }),
