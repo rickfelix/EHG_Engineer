@@ -267,3 +267,63 @@ describe('static-pin: [ROLE] block content', () => {
     expect(lines).toMatch(/fleet-worker-loop-directive\.md/);
   });
 });
+
+// ─────────────────────────────────────────────────────────────────────────────────────────────
+// SD-LEO-INFRA-ROLE-BLIND-SESSION-001 FR-3 — decide() reads metadata.role before falling through
+// to the worker directive. Two-sided: the role seat must LOSE the worker doctrine and the worker
+// seat must KEEP it, because a fix that quiets a worker guard is worse than the noise it removes.
+// ─────────────────────────────────────────────────────────────────────────────────────────────
+describe('FR-3 role-aware SessionStart', () => {
+  // Same load pattern as the rest of this suite: the hook is .cjs and exports its pure
+  // helpers, so we require() with a cache bust rather than importing at module scope.
+  const { decide, workerLines, COORDINATOR } = loadHook();
+  const COORD = { session_id: 'coord-abc' };
+  // Match worker INSTRUCTIONS, not worker WORDS. The first version of this regex included
+  // /belt|no callsign/ and failed on correct code, because the role lines legitimately say
+  // "no claim, no belt, no callsign" — i.e. they name those things in order to DISCLAIM them.
+  // Asserting the absence of a word is not the same as asserting the absence of a directive.
+  const workerDoctrine = /SAME-TURN NEXT-CLAIM|WIND-DOWN HANDSHAKE|Coordinator check-in EVERY|\[ROLE\] WORKER \(/;
+
+  it('a SOLOMON seat gets role lines, not the worker directive', () => {
+    const out = decide('sess-solomon', { role: 'solomon' }, COORD).join('\n');
+    expect(out).toMatch(/SOLOMON session \(non_fleet\)/);
+    expect(out).not.toMatch(workerDoctrine);
+  });
+
+  it('an ADAM seat gets role lines — two distinct roles, so the axis is metadata.role not one name', () => {
+    // Success criterion 5: a solomon-only test would admit a solomon-keyed implementation.
+    const out = decide('sess-adam', { role: 'adam' }, COORD).join('\n');
+    expect(out).toMatch(/ADAM session \(non_fleet\)/);
+    expect(out).not.toMatch(workerDoctrine);
+  });
+
+  it('TWO-SIDED: a WORKER seat still gets the full worker directive, unchanged', () => {
+    // The half that matters most. If this ever passes because the worker branch went quiet, the
+    // fix has broken the guard it was supposed to preserve.
+    const out = decide('sess-worker', { callsign: 'Alpha' }, COORD).join('\n');
+    expect(out).toMatch(/WORKER \(callsign: Alpha\)/);
+    expect(out).toMatch(/SAME-TURN NEXT-CLAIM/);
+    expect(out).toMatch(/WIND-DOWN HANDSHAKE/);
+  });
+
+  it('an UNRECOGNISED role still gets the worker directive — the predicate gates on known roles', () => {
+    const out = decide('sess-x', { role: 'gardener', callsign: 'Bravo' }, COORD).join('\n');
+    expect(out).toMatch(/WORKER \(callsign: Bravo\)/);
+  });
+
+  it('the coordinator branch still wins, and still keys on its own signal', () => {
+    // Pre-existing behaviour: coordinator is detected via is_coordinator, a DIFFERENT signal from
+    // metadata.role. Pinning it so the new role branch cannot shadow it.
+    expect(decide('c', { is_coordinator: true }, COORD)).toEqual(COORDINATOR);
+  });
+
+  it('CONTROL: the role assertions fail against the pre-fix behaviour', () => {
+    // Without this, "role seat has no worker doctrine" would be satisfied by any output that
+    // simply lacks those words — including an empty array. This proves the worker directive
+    // really does contain what we assert its absence of.
+    const preFix = workerLines('Alpha', COORD.session_id).join('\n');
+    expect(preFix).toMatch(workerDoctrine);          // the doctrine is genuinely present...
+    const roleOut = decide('sess-solomon', { role: 'solomon' }, COORD).join('\n');
+    expect(roleOut).not.toBe(preFix);                // ...and the role path genuinely differs
+  });
+});
