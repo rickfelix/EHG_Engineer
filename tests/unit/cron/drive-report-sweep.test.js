@@ -8,8 +8,14 @@
  *      writes one row per day instead of one row per tick;
  *   3. registration must precede the stamp, because registration NULLS the stamped field.
  *
- * The DST assertions read the cron lines out of the workflow file rather than restating them,
- * so editing a schedule without editing the window (or the reverse) fails here.
+ * The DST assertions read the cron lines out of the workflow file rather than restating them.
+ *
+ * SCOPE, corrected after the TESTING sub-agent measured what this actually catches — the header
+ * previously claimed "editing a schedule without editing the window fails here", which was true
+ * only of hour-field edits at the union boundary. Now asserted explicitly: the HOUR union (both
+ * offsets), the EXACT spill hours, and the MINUTE field. The hour union is still a union, so an
+ * edit that shrinks one line INSIDE the 10-12 UTC overlap is masked by the other line and is
+ * NOT caught here — stated rather than papered over.
  */
 
 import { describe, it, expect } from 'vitest';
@@ -28,13 +34,18 @@ const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const repoRoot = path.resolve(__dirname, '../../..');
 const WORKFLOW = path.join(repoRoot, '.github', 'workflows', 'drive-report-cron.yml');
 
-/** The UTC hours the workflow's schedules actually fire on, parsed from the file that ships. */
-function scheduledUtcHours() {
+/** The cron expressions that ship in the workflow. */
+function scheduledCrons() {
   const yml = fs.readFileSync(WORKFLOW, 'utf8');
   const crons = [...yml.matchAll(/^\s*-\s*cron:\s*'([^']+)'/gm)].map((m) => m[1]);
   expect(crons.length, 'the workflow must register BOTH DST cron lines').toBe(2);
+  return crons;
+}
+
+/** The UTC hours the workflow's schedules actually fire on, parsed from the file that ships. */
+function scheduledUtcHours() {
   const hours = new Set();
-  for (const expr of crons) {
+  for (const expr of scheduledCrons()) {
     const hourField = expr.split(/\s+/)[1];
     for (const part of hourField.split(',')) {
       const [lo, hi] = part.split('-').map(Number);
@@ -42,6 +53,20 @@ function scheduledUtcHours() {
     }
   }
   return [...hours].sort((a, b) => a - b);
+}
+
+// The MINUTE field, which this file used to ignore entirely.
+//
+// Found by the TESTING sub-agent: parsing only the hour field meant the every-15-minutes cadence
+// could be edited away to a single tick per hour and every assertion here stayed GREEN — silently
+// cutting the self-healing window from 16 ticks a day to 4. That cadence IS the self-healing
+// property, per the workflow's own header, so a test claiming "editing a schedule without editing
+// the window fails here" overstated its reach on exactly the field carrying the behaviour.
+//
+// LINE comments, not JSDoc, deliberately: the cron literal contains the block-comment terminator,
+// so writing it inside a block comment silently truncates the comment and breaks the file.
+function scheduledMinuteFields() {
+  return scheduledCrons().map((expr) => expr.split(/\s+/)[0]);
 }
 
 /** ET hours admitted by the runner's gate, for every scheduled UTC hour on a given date. */
@@ -73,15 +98,36 @@ describe('TR-1 dual cron + wall-clock gate — the halves are only correct toget
     expect(admittedEtHours(...JAN), 'EST coverage').toEqual(expected);
   });
 
-  it('DISCARDS the spill hour each line produces in the offset it was not written for', () => {
+  it('DISCARDS exactly the spill hour each line produces in the offset it was not written for', () => {
     // The other half of "exactly": coverage alone would be satisfied by a gate that admitted
     // everything. Each offset has a scheduled UTC hour that maps OUTSIDE the ET window.
-    const spill = (y, m, d) => scheduledUtcHours()
+    //
+    // TIGHTENED from toBeGreaterThan(0) after the TESTING sub-agent pointed out that "at least
+    // one spill exists" also passes if the schedule were WIDENED to spill far more — the
+    // assertion named "discards the spill hour" while only proving some spill was discarded.
+    // The exact ET hours are asserted now: 09:00 in EDT, 04:00 in EST.
+    const spillEtHours = (y, m, d) => scheduledUtcHours()
       .map((h) => withinWindow(Date.UTC(y, m, d, h, 0, 0)))
-      .filter((g) => !g.inside);
-    expect(spill(...JULY).length, 'EDT must have a discarded hour (09:00 ET)').toBeGreaterThan(0);
-    expect(spill(...JAN).length, 'EST must have a discarded hour (04:00 ET)').toBeGreaterThan(0);
-    expect(spill(...JULY)[0].reason).toMatch(/expected, not a fault/);
+      .filter((g) => !g.inside)
+      .map((g) => g.etHour)
+      .sort((a, b) => a - b);
+    expect(spillEtHours(...JULY), 'EDT spills exactly 09:00 ET').toEqual([9]);
+    expect(spillEtHours(...JAN), 'EST spills exactly 04:00 ET').toEqual([4]);
+
+    const firstSpill = scheduledUtcHours()
+      .map((h) => withinWindow(Date.UTC(...JULY, h, 0, 0)))
+      .find((g) => !g.inside);
+    expect(firstSpill.reason).toMatch(/expected, not a fault/);
+  });
+
+  it('[MINUTE FIELD] both lines keep the */15 cadence that IS the self-healing window', () => {
+    // The gap the TESTING sub-agent found: every other assertion here reads only the HOUR field,
+    // so `*/15 9-12` -> `0 9-12` stayed green while silently cutting 16 ticks a day to 4. The
+    // repeated tick is not a detail — it is the entire retry mechanism, since a failed first tick
+    // is recovered only by a later one finding no row for the window key.
+    for (const minuteField of scheduledMinuteFields()) {
+      expect(minuteField, 'the self-healing cadence must survive a schedule edit').toBe('*/15');
+    }
   });
 
   it('a tick outside the window is REPORTED as skipped and touches nothing', async () => {

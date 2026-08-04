@@ -79,6 +79,15 @@ describe('FR-7 self-staleness — the existing primitive, not a second rule', ()
 
   it('[REGRESSION] reads a column that ACTUALLY EXISTS on periodic_process_registry', () => {
     // The whole defect in one assertion. Had this existed, the alarm would never have shipped stuck-on.
+    //
+    // KNOWN LIMIT, stated because the TESTING sub-agent named it and it is fair: REGISTRY_COLUMNS
+    // is a HAND-COPIED SNAPSHOT of production, and this assertion checks the constant against
+    // itself. So the original defect — code and fixture sharing one unmeasured belief — is pushed
+    // one level up rather than eliminated: if the table drops last_fired_at tomorrow, nothing here
+    // notices. The durable fix is a db-tier assertion against the live column set, which this repo
+    // cannot run today (the vitest `db` project resolves zero files without a designated
+    // non-production target). What this DOES buy is that the code and the fixture can no longer
+    // disagree with the snapshot independently, which is what actually broke.
     expect(REGISTRY_COLUMNS).toContain(LAST_RUN_FIELD);
     expect(LAST_RUN_FIELD).toBe('last_fired_at');
     expect(REGISTRY_COLUMNS, 'last_run_at is a real column on a DIFFERENT table — never this one').not.toContain('last_run_at');
