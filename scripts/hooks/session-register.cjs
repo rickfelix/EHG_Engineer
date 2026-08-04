@@ -237,6 +237,103 @@ async function captureAccountIdentity(supabase, sessionId) {
   }
 }
 
+/**
+ * SD-LEO-INFRA-SESSION-TICK-DAEMONS-001 FR-1 — close the session ids this rotation replaced.
+ *
+ * /clear and compaction-resume mint a NEW session_id while the Claude Code process survives.
+ * session-tick.cjs has exactly two exits — parent-PID death (:181, which DELIBERATELY survives
+ * /clear) and the 0-row PATCH self-exit (:350) — and nothing flipped either at rotation, so the
+ * outgoing session's daemon became immortal, stamping heartbeat_at AND process_alive_at every 30s
+ * for a conversation that can never act again.
+ *
+ * status='released' is necessary and SUFFICIENT: the daemon's PATCH filters
+ * `status=in.(active,idle,stale)` (session-tick.cjs:331), so releasing the row 0-rows its next
+ * write and it exits itself. Verified at the consumer, not at this write.
+ *
+ * WHY THIS HOOK. SessionStart fires on /clear and on compaction resume (both ROTATE the id) and
+ * does NOT fire when a ScheduleWakeup tick resumes an already-running session — documented in the
+ * header of loop-state-resume-clear.cjs as a defect for loop_state. Read the other way it is the
+ * guarantee this FR needs: we see every rotation and never see a parked worker waking up.
+ *
+ * A PARKED /loop WORKER IS EXCLUDED STRUCTURALLY, NOT CAREFULLY. One Claude Code process hosts one
+ * conversation, so a row sharing our cc_parent_pid with a DIFFERENT session_id has necessarily
+ * rotated out. There is no elapsed-time, last_tool_at or heartbeat condition anywhere below, and
+ * adding one would re-open the seam session-tick.cjs:181-184 names verbatim: it "trades false-life
+ * for false-death — the seam all five prior attempts at this defect fell down."
+ *
+ * Fire-and-forget and totally swallowed: this runs at every SessionStart on the host, so it must
+ * never be able to stop a session from starting.
+ */
+async function closeRotatedOutSessions(supabase, currentSessionId, overrides = {}) {
+  try {
+    const { sessionsToClose, readTickMarkers } = require('../../lib/sessions/rotation-closure.cjs');
+
+    // Derive the pid EXACTLY as capture-session-id.cjs:492-493 does — that process writes the
+    // markers we are about to join against, so agreeing by construction is the point. Using this
+    // hook's own process.ppid instead would silently match nothing (see rotation-closure.cjs
+    // header): findClaudeCodePid() is primary, ppid only its logged-degraded fallback.
+    //
+    // `overrides` exists so tests can pin the pid and marker dir. Production passes neither: a
+    // test that had to stub live PID discovery would be asserting against its own stub.
+    let parentPid = overrides.parentPid;
+    if (parentPid === undefined) {
+      const { findClaudeCodePid } = require('./capture-session-id.cjs');
+      parentPid = findClaudeCodePid() || process.ppid || process.pid;
+    }
+
+    const markers = readTickMarkers(
+      overrides.pidsDir || path.resolve(__dirname, '../../.claude/pids')
+    );
+    const candidateIds = [...markers.keys()];
+    if (!candidateIds.length) return;
+
+    // FAIL-CLOSED IDENTITY GUARD. This predicate is "everything on our pid EXCEPT us", so it is
+    // only as safe as `us`. Measured on live data: with a correct currentSessionId the pid-22196
+    // group closes exactly the one rotated-out id; with an id matching NO row it closes BOTH —
+    // including the live session. Nothing downstream notices, because releasing our own row is a
+    // perfectly ordinary-looking write.
+    //
+    // What made that unreachable in practice was only that our own marker usually does not exist
+    // yet when this runs (the new daemon spawns concurrently), so our row is never among the
+    // candidates. That is safety by coincidence, not by design, and it evaporates the moment the
+    // spawn order changes. So: if we DO have a marker, it must name the pid we are about to act
+    // on. Disagreement means identity resolution and the marker record contradict each other —
+    // exactly the smear this file's getCurrentSessionId() comment describes — and the only safe
+    // reading of a contradiction is to close nothing.
+    const ownMarkerPid = markers.get(String(currentSessionId));
+    if (ownMarkerPid !== undefined && String(ownMarkerPid) !== String(parentPid)) {
+      process.stderr.write(
+        `[session-register] rotation.skipped reason=identity_pid_mismatch ` +
+        `marker=${ownMarkerPid} discovered=${parentPid}\n`
+      );
+      return;
+    }
+
+    const { data, error } = await supabase
+      .from('claude_sessions').select('session_id,status').in('session_id', candidateIds);
+    if (error || !data) return;
+
+    // The predicate's row shape carries cc_parent_pid, which claude_sessions does NOT have as a
+    // column — the marker supplies it. Attaching it here keeps the shipped, unit-tested predicate
+    // untouched and confines the file-join to the wiring.
+    const rows = data.map((r) => ({ ...r, cc_parent_pid: markers.get(r.session_id) }));
+    const toClose = [...new Set(sessionsToClose({ currentSessionId, parentPid, rows }))];
+    if (!toClose.length) return;
+
+    const { error: relErr } = await supabase
+      .from('claude_sessions').update({ status: 'released' }).in('session_id', toClose);
+    process.stderr.write(
+      `[session-register] rotation.closed pid=${parentPid} n=${toClose.length} ` +
+      `ids=${toClose.map((s) => String(s).slice(0, 8)).join(',')}` +
+      (relErr ? ` error=${relErr.message}` : '') + `\n`
+    );
+  } catch (err) {
+    process.stderr.write(
+      `[session-register] rotation.failed reason=${(err?.message || String(err)).slice(0, 200)}\n`
+    );
+  }
+}
+
 async function main() {
   let supabase;
   try {
@@ -335,6 +432,10 @@ async function main() {
       .eq('session_id', sessionId)
       .eq('loop_state', LOOP_STATE_AWAITING_TICK);
   } catch { /* best-effort observability; never block SessionStart */ }
+
+  // SD-LEO-INFRA-SESSION-TICK-DAEMONS-001 (FR-1). Last, and awaited only so its stderr lands
+  // inside this hook's output — it cannot throw (fully wrapped) and cannot block startup.
+  await closeRotatedOutSessions(supabase, sessionId);
 }
 
 // SD-LEO-INFRA-FIX-SESSION-REGISTER-001: only auto-invoke main() when this
@@ -367,6 +468,8 @@ if (require.main === module) {
 
 module.exports = {
   getCurrentSessionId, main, emitSessionCreated,
+  // FR-1 — exported so the rotation closure is testable without running SessionStart.
+  closeRotatedOutSessions,
   // QF-20260726-514 — exported so the account capture is testable without running SessionStart.
   resolveAccountIdentity, captureAccountIdentity,
 };
