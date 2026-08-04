@@ -339,21 +339,23 @@ describe('consumption receipts — one row per (report, lane), no merge and no c
     try {
       await expect(client.query(VERIFY_BLOCK)).rejects.toThrow(/UNIQUE\(report_id, lane\) is missing/);
     } finally {
-      // RESTORE EXPLICITLY — applyMigration() CANNOT undo this, and assuming it could poisoned
-      // the whole file. The constraint is declared INSIDE `CREATE TABLE IF NOT EXISTS`, so once
-      // the table exists that statement is a NO-OP and the constraint stays dropped. Every later
-      // applyMigration() then failed its own verify block, cascading into unrelated tests.
+      // applyMigration() NOW restores this, and that is the point of the change. The constraint
+      // was moved OUT of the inline CREATE TABLE into an idempotent DO block, so re-running the
+      // migration REPAIRS a missing constraint instead of merely asserting it.
       //
-      // Caught by CI, which is the only place this tier runs — locally it cannot execute at all,
-      // so no amount of local green would have revealed it. The general shape is worth keeping:
-      // a teardown that re-runs a CREATE-IF-NOT-EXISTS script is not a restore, it is a no-op
-      // wearing a restore's name, and it fails LOUDLY only in whatever runs next.
-      await client.query(
-        'ALTER TABLE public.drive_report_receipts ADD CONSTRAINT drive_report_receipts_report_lane_uniq UNIQUE (report_id, lane);',
-      );
+      // My first fix was to ADD CONSTRAINT here in the test. That worked and was wrong: it made
+      // the suite green while leaving production unable to self-heal. The peer's framing is what
+      // moved it — the test bug was the symptom, the non-self-healing migration was the defect.
+      await applyMigration();
     }
-    // Prove the restore actually restored, rather than trusting the statement did not throw.
+    // Prove the restore actually restored — the assertion whose absence let the original
+    // cascade go unnoticed. Every other restore-test in this file has one; this was the only
+    // one that did not.
     await expect(client.query(VERIFY_BLOCK)).resolves.toBeTruthy();
+    const { rows } = await client.query(
+      "SELECT 1 FROM pg_constraint WHERE conrelid='public.drive_report_receipts'::regclass AND conname='drive_report_receipts_report_lane_uniq';",
+    );
+    expect(rows, 'the migration must REPAIR the constraint, not just pass its own assertion').toHaveLength(1);
   });
 
   it('the receipts table is service-role-only, same posture as the report', async () => {
@@ -740,5 +742,74 @@ describe('append-only means DELETE too — the hole the UPDATE freeze could not 
       await applyMigration();
     }
     await expect(client.query(VERIFY_BLOCK)).resolves.toBeTruthy();
+  });
+});
+
+describe('the policy SHAPE, not just its name — a wrong policy used to pass everything', () => {
+  beforeAll(async () => { await applyMigration(); });
+
+  // Before these, the migration checked that A policy existed, that there was exactly ONE, and
+  // that it was NAMED correctly — and never read who it was FOR. So `FOR ALL TO PUBLIC
+  // USING (true)` named drive_reports_service_role satisfied every assertion shipped, while
+  // granting the whole table to every role. That is the permission-class reclassification this
+  // table's own COMMENT escalates to the chairman. Raised by the ddl-review peer.
+
+  it('a policy TO PUBLIC is REJECTED even when correctly named', async () => {
+    await client.query('DROP POLICY drive_reports_service_role ON public.drive_reports;');
+    await client.query('CREATE POLICY drive_reports_service_role ON public.drive_reports FOR ALL TO PUBLIC USING (true) WITH CHECK (true);');
+    try {
+      await expect(client.query(VERIFY_BLOCK)).rejects.toThrow(/NOT "FOR ALL TO service_role"/);
+    } finally {
+      await applyMigration();   // DROP POLICY IF EXISTS + CREATE restores this one
+    }
+    await expect(client.query(VERIFY_BLOCK)).resolves.toBeTruthy();
+  });
+
+  it('a policy scoped to ONE COMMAND is rejected — FOR ALL is load-bearing', async () => {
+    // A SELECT-only policy named identically would leave writes ungoverned by RLS.
+    await client.query('DROP POLICY drive_reports_service_role ON public.drive_reports;');
+    await client.query('CREATE POLICY drive_reports_service_role ON public.drive_reports FOR SELECT TO service_role USING (true);');
+    try {
+      await expect(client.query(VERIFY_BLOCK)).rejects.toThrow(/NOT "FOR ALL TO service_role"/);
+    } finally {
+      await applyMigration();
+    }
+  });
+
+  it('the RECEIPTS policy is held to the same bar — it had no name check at all', async () => {
+    await client.query('DROP POLICY drive_report_receipts_service_role ON public.drive_report_receipts;');
+    await client.query('CREATE POLICY drive_report_receipts_service_role ON public.drive_report_receipts FOR ALL TO PUBLIC USING (true) WITH CHECK (true);');
+    try {
+      await expect(client.query(VERIFY_BLOCK)).rejects.toThrow(/drive_report_receipts: the policy is missing, renamed, or NOT/);
+    } finally {
+      await applyMigration();
+    }
+    await expect(client.query(VERIFY_BLOCK)).resolves.toBeTruthy();
+  });
+
+  it('[TWO-SIDED] the SHIPPED policies pass — the check must not reject what the migration creates', async () => {
+    // Without this, an assertion so strict it rejected the real policy would pass every test
+    // above while making the migration undeployable.
+    await expect(client.query(VERIFY_BLOCK)).resolves.toBeTruthy();
+    const { rows } = await client.query(`
+      SELECT p.polname, p.polcmd, p.polroles = ARRAY['service_role'::regrole] AS service_only
+      FROM pg_policy p
+      WHERE p.polrelid IN ('public.drive_reports'::regclass, 'public.drive_report_receipts'::regclass)
+      ORDER BY p.polname;
+    `);
+    expect(rows.map((r) => r.polname)).toEqual(['drive_report_receipts_service_role', 'drive_reports_service_role']);
+    expect(rows.every((r) => r.service_only && r.polcmd === '*')).toBe(true);
+  });
+
+  it('[SELF-HEAL] a dropped receipts constraint is REPAIRED by re-running the migration', async () => {
+    // The production corollary of the inline-constraint fix: the migration must be able to
+    // repair the object, not only assert it. Previously CREATE TABLE IF NOT EXISTS no-opped and
+    // the constraint stayed gone forever.
+    await client.query('ALTER TABLE public.drive_report_receipts DROP CONSTRAINT drive_report_receipts_report_lane_uniq;');
+    await applyMigration();
+    const { rows } = await client.query(
+      "SELECT 1 FROM pg_constraint WHERE conrelid='public.drive_report_receipts'::regclass AND conname='drive_report_receipts_report_lane_uniq';",
+    );
+    expect(rows, 'the migration must self-heal a missing constraint').toHaveLength(1);
   });
 });

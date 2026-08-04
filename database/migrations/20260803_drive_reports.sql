@@ -82,14 +82,47 @@ CREATE TABLE IF NOT EXISTS public.drive_report_receipts (
   -- accidentally stamp a receipt with no time on it.
   consumed_at  timestamptz NOT NULL DEFAULT now(),
 
-  metadata     jsonb NOT NULL DEFAULT '{}'::jsonb,
-
-  -- THE POINT OF THE SHAPE. One receipt per lane per report, enforced here rather than by
-  -- every writer remembering to merge. Makes the write a single native upsert
-  -- (ON CONFLICT (report_id, lane)) that PostgREST expresses directly, and makes a second
-  -- receipt from the same lane an update of that lane ALONE — no sibling is reachable.
-  CONSTRAINT drive_report_receipts_report_lane_uniq UNIQUE (report_id, lane)
+  metadata     jsonb NOT NULL DEFAULT '{}'::jsonb
+  -- The UNIQUE(report_id, lane) constraint is declared AFTER this statement, not inline. See
+  -- the block below for why — it is about self-healing, not style.
 );
+
+-- THE POINT OF THE SHAPE. One receipt per lane per report, enforced here rather than by every
+-- writer remembering to merge. Makes the write a single native upsert
+-- (ON CONFLICT (report_id, lane)) that PostgREST expresses directly, and makes a second receipt
+-- from the same lane an update of that lane ALONE — no sibling is reachable.
+--
+-- ── WHY THIS IS NOT INLINE IN THE CREATE TABLE ────────────────────────────────────────────
+-- Because an inline constraint CANNOT BE RESTORED BY RE-RUNNING THIS FILE. `CREATE TABLE IF
+-- NOT EXISTS` is a no-op once the table exists, so anything declared inside it — this UNIQUE,
+-- the CHECKs, the FK, the PKs — is created exactly once, at first apply, and never again.
+--
+-- MEASURED, not theorised: the DDL suite dropped this constraint to prove the verify block
+-- catches its absence, restored via a re-run of this migration, and the constraint stayed
+-- gone. The verify block then failed on every subsequent apply and cascaded into unrelated
+-- tests. CI caught it; the tier cannot run locally.
+--
+-- The production corollary is the part that actually matters, and it outlives the test bug: if
+-- drive_report_receipts ever exists WITHOUT this constraint — a partial apply, a manual drop, a
+-- restore from a dump that lost it — re-running this migration would not repair it, it would
+-- simply abort at the verify block. Fail-closed, so never an exposure, but asymmetric with
+-- drive_reports_run_id_uniq, which self-heals via CREATE UNIQUE INDEX IF NOT EXISTS.
+--
+-- Declared idempotently below, so this file can repair the object rather than only assert it.
+-- (Raised by the ddl-review peer, whose production-corollary framing is what made this worth
+-- changing rather than patching the test.)
+DO $receipts_uniq$
+BEGIN
+  IF NOT EXISTS (
+    SELECT 1 FROM pg_constraint
+    WHERE conrelid = 'public.drive_report_receipts'::regclass
+      AND conname = 'drive_report_receipts_report_lane_uniq'
+  ) THEN
+    ALTER TABLE public.drive_report_receipts
+      ADD CONSTRAINT drive_report_receipts_report_lane_uniq UNIQUE (report_id, lane);
+  END IF;
+END
+$receipts_uniq$;
 
 COMMENT ON TABLE public.drive_report_receipts IS
   'Consumption receipts for drive_reports, ONE ROW PER (report_id, lane) — coordinator ruling 2026-08-04, replacing a jsonb per-lane map on drive_reports. Written BY EACH CONSUMER (coordinator, adam, chairman_brief), never by the producer: a producer-stamped receipt proves only that the producer believed delivery happened. The unique constraint removes the read-merge-write clobber window entirely rather than guarding it.';
@@ -284,6 +317,34 @@ BEGIN
       AND policyname = 'drive_reports_service_role'
   ), 'drive_reports: the service_role policy is missing or renamed';
 
+  -- ── THE POLICY'S SHAPE, NOT JUST ITS NAME ────────────────────────────────────────────────
+  --
+  -- Everything above checks that A policy exists, that there is exactly one, and that it is
+  -- NAMED correctly. None of it reads who the policy is FOR. So a policy written
+  -- `FOR ALL TO PUBLIC USING (true)` and named drive_reports_service_role satisfies every
+  -- assertion this migration previously shipped — while granting the whole table to everyone.
+  -- That is precisely the reclassification condition this table's own COMMENT escalates to the
+  -- chairman, and nothing was checking it. (Raised by the ddl-review peer; MEASURED here — a
+  -- grep for polroles/pg_policies.roles across this file returned ZERO before this block.)
+  --
+  -- pg_policy.polroles is the load-bearing column: TO PUBLIC stores {0}, so an explicit
+  -- ARRAY['service_role'::regrole] comparison rejects it. polcmd '*' is FOR ALL.
+  --
+  -- WHY IN THE VERIFY BLOCK RATHER THAN THE DDL TEST TIER: this runs at
+  -- scripts/apply-migration.js --prod-deploy, so it is a DEPLOY-TIME guarantee against the REAL
+  -- instance. The DDL tier cannot give that — its postgres runs as a superuser who also owns
+  -- every object, with no FORCE ROW LEVEL SECURITY, so policies there are never evaluated at
+  -- all. Putting the check here means it fires the moment the chairman-gated apply happens,
+  -- which is the one place production posture is actually decidable.
+  ASSERT EXISTS (
+    SELECT 1 FROM pg_policy p
+    WHERE p.polrelid = 'public.drive_reports'::regclass
+      AND p.polname = 'drive_reports_service_role'
+      AND p.polroles = ARRAY['service_role'::regrole]
+      AND p.polcmd = '*'
+      AND p.polpermissive
+  ), 'drive_reports: the policy exists but is NOT "FOR ALL TO service_role" — a policy TO PUBLIC (polroles {0}) or scoped to one command would pass a name-only check while granting this table far more widely, which is the permission-class reclassification this table requires chairman approval for';
+
   -- The idempotence guard has to be UNIQUE and it has to be PARTIAL. Asserted on both
   -- properties, because an index that exists under the right name while being neither would
   -- pass a name-only check and enforce nothing — and the failure it admits (a duplicate run)
@@ -355,6 +416,19 @@ BEGIN
   ASSERT (
     SELECT count(*) FROM pg_policies WHERE schemaname = 'public' AND tablename = 'drive_report_receipts'
   ) = 1, 'drive_report_receipts: expected exactly ONE policy';
+
+  -- The receipts table was WEAKER than its parent: a bare count(*) = 1 with no name check and
+  -- no shape check, so any single policy at all satisfied it. A receipts table is a record of
+  -- who read what, so it carries the same reclassification rule — asserted identically now
+  -- rather than "the parent is checked, this one is similar". (ddl-review peer.)
+  ASSERT EXISTS (
+    SELECT 1 FROM pg_policy p
+    WHERE p.polrelid = 'public.drive_report_receipts'::regclass
+      AND p.polname = 'drive_report_receipts_service_role'
+      AND p.polroles = ARRAY['service_role'::regrole]
+      AND p.polcmd = '*'
+      AND p.polpermissive
+  ), 'drive_report_receipts: the policy is missing, renamed, or NOT "FOR ALL TO service_role" — a policy TO PUBLIC would pass a bare count check while exposing who-read-what to every role';
 
   -- The unique constraint IS the design. Without it the table is just a log and every writer is
   -- back to read-merge-write, which is the hazard the shape was chosen to remove.
