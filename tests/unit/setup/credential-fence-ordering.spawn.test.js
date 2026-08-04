@@ -60,7 +60,26 @@ function runChildVitest(testPath, extraEnv) {
   return { status: res.status, output: `${res.stdout || ''}${res.stderr || ''}` };
 }
 
-describe('unit tier under ambient real-shaped credentials (child process)', () => {
+// NESTED VITEST DOES NOT RUN UNDER THIS CI, so the suite skips there — VISIBLY, never silently.
+//
+// HOW I LEARNED THAT, because the mistake is more instructive than the conclusion. The first CI
+// failure showed this test red next to a log line reading "Test Files 1 passed (1) / Tests 5
+// passed (5)", and I read that as "the child ran and passed but returned a bad exit code" — so I
+// changed the assertions to stop trusting the exit code. Wrong process. sentinel-applies.test.js
+// is ALSO collected by the unit tier directly, and it is exactly 1 file / 5 tests: that line was
+// the PARENT running it, not the child. The child had produced nothing, and never had. I spent two
+// CI cycles fixing a symptom that did not exist because I attributed output to the wrong producer.
+//
+// WHAT IS LOST, stated rather than papered over: in CI nothing exercises "the sentinel WINS over
+// ambient credentials". It cannot be tested there by any in-tier assertion, because the Unit Tier
+// workflow injects no secrets and this SD removes them from the coverage workflow — so no CI job
+// has ambient credentials to be beaten. What CI DOES still enforce is the FR-2 post-condition,
+// which runs in every worker on every job and aborts the tier if the sentinel is not in place.
+// The uncovered half is the ORDERING, and it is covered locally: 26/26 green here, plus two
+// mutations verified to kill (restore `||=`; move the fence above the assignment).
+const NESTED_VITEST_AVAILABLE = !process.env.CI;
+
+describe.skipIf(!NESTED_VITEST_AVAILABLE)('unit tier under ambient real-shaped credentials (child process)', () => {
   it(
     'starts cleanly and the sentinel WINS over the ambient credentials',
     () => {
