@@ -87,7 +87,9 @@ jobs:
           # project against setup.db.js. The hang this guarded against cannot occur in this tier.
           #
           # MEASURED, not assumed: with the sentinel forced and no credentials, tests/unit/eva/
-          # stage-zero/ runs 1736 tests green in 13.01s with zero hangs.
+          # stage-zero/ runs 59 files / 868 tests green in ~11s with zero hangs. (An earlier note
+          # said 1736 — that was measured in a checkout carrying an untracked .spawn-source/ copy
+          # of the tree, which the unit project also collected. 59/868 is what CI sees.)
         # QF-20260426-465: vitest dropped CLI --json in 1.x->3.x; use --reporter=json instead.
         run: npm run test:coverage -- --reporter=json --outputFile=test-results.json
 
@@ -105,6 +107,21 @@ jobs:
           fi
           if ! node -e "JSON.parse(require('node:fs').readFileSync('test-results.json','utf8'))" > /dev/null 2>&1; then
             echo "::error::test-results.json exists but is not valid JSON — vitest reporter output is malformed."
+            exit 1
+          fi
+          # SD-LEO-FIX-CREDENTIAL-GUARD-INVERSION-001: fail the job DIRECTLY when the unit tier's
+          # credential fence aborts the run.
+          #
+          # Without this, a fence trip still failed the build — but only as a SIDE EFFECT: the step
+          # above has continue-on-error, this step's original two checks both PASS on an abort
+          # (vitest writes a parseable test-results.json with numTotalTests:0 and exits 1), and the
+          # job actually died several steps later in `Compare to main snapshot`, because
+          # scripts/compare-to-main-snapshot.mjs treats total===0 as an unexpected JSON shape.
+          # That is enforcement borrowed from a guard built for another purpose: refactor that
+          # script to read total===0 as "zero failures" and the credential fence goes silent in CI
+          # while still looking installed. Assert it here, where it is the point.
+          if [ "$(node -e "process.stdout.write(String(JSON.parse(require('node:fs').readFileSync('test-results.json','utf8')).numTotalTests ?? 0))")" = "0" ]; then
+            echo "::error::vitest reported ZERO tests. If the log shows UNIT_TIER_SENTINEL_BREACH the unit tier refused to start because it was holding real credentials instead of the synthetic sentinel — see tests/helpers/credential-fence.js. Otherwise collection matched no files."
             exit 1
           fi
           echo "✓ vitest produced parseable test-results.json"
