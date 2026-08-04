@@ -79,19 +79,38 @@ export const WRITE_TIMEOUT_MS = 2000;
 // from coverage. When you move logic, check who still calls what you left behind.
 
 /**
- * Is the executing seat actually the coordinator?
+ * Best-effort check that the executing seat is the coordinator.
  *
- * THIS EXISTS BECAUSE THE "STRUCTURALLY COORDINATOR-ONLY" PREMISE WAS FALSE. The first version had
- * no such check, justified by the host being coordinator-only. A security review disproved it in
- * one command: the script has an isMainModule entry, a .env carrying the service-role key sits in
- * every worktree, coordinator-quiet-tick.mjs carries no is_coordinator guard either, and the review
- * ran this script from a WORKER seat — and again with a FORGED CLAUDE_SESSION_ID — to exit 0 with
- * no complaint. Because the first receipt for a lane wins, ONE INCIDENTAL RUN PERMANENTLY MAKES A
- * STARVING BINDING READ AS FED. It was unexploitable only because the table did not exist yet:
- * safety by coincidence, which is not safety.
+ * ─── THIS IS AN ACCIDENT GUARD. IT IS NOT A SECURITY BOUNDARY. READ THIS BEFORE TRUSTING IT. ───
  *
- * Compares the EXECUTING session to the elected coordinator. Fails CLOSED — an unresolvable
- * coordinator means we do not write.
+ * A SESSION ID IS AN IDENTIFIER, NOT A CREDENTIAL. The coordinator's id is readable from
+ * .claude/active-coordinator.json, which sits in every worktree. A security review read it,
+ * exported it as CLAUDE_SESSION_ID from a WORKER seat, and this check passed. It also forged BOTH
+ * SIDES — overwriting the pointer file with any id holding a fresh heartbeat and matching the env
+ * var — and with COORDINATOR_TWOWAY_V2 at its documented default (OFF) getActiveCoordinatorId
+ * returned the attacker-chosen value. NO COMPARISON OF TWO READABLE VALUES CAN AUTHENTICATE A SEAT.
+ *
+ * Three attempts were made to close this properly and all three failed, each in a way worth
+ * recording: the first compared a value to ITSELF (the resolver was both the fallback and the
+ * reference); the second was defended by a DECOY — a dead function whose tests kept the mutation
+ * score green while the live path sat open; and the third still turned on a readable value.
+ *
+ * RULED (coordinator, option (a)): keep this as a MISTAKE GUARD and stop pretending otherwise. It
+ * genuinely stops the accident it was written for — a worker or a cron wrapper running this script
+ * without deliberately impersonating the coordinator — and that accident is the realistic one,
+ * because the first receipt for a lane WINS and a single stray run permanently makes a starving
+ * binding read as fed. It stops none of the deliberate cases above.
+ *
+ * WHY IT WAS NOT DELETED OUTRIGHT, which is a deviation from the literal ruling and is stated so it
+ * can be overruled: removing it makes the ACCIDENTAL write easier while removing no attacker
+ * capability, since an attacker was never blocked. The honest change is to the CLAIM, not the code.
+ *
+ * A REAL FIX NEEDS SOMETHING THE PROCESS CANNOT SELF-ASSERT — claude_sessions.pid checked against
+ * the live process tree, or an RPC that derives the actor server-side so the claim and the claimant
+ * are not the same party. Both are fleet-wide identity questions, not a -C question. Filed as a
+ * completion flag.
+ *
+ * Fails CLOSED: an unresolvable coordinator means no write.
  */
 export function isCoordinatorSeat(sessionId, coordinatorId) {
   return Boolean(sessionId) && Boolean(coordinatorId) && sessionId === coordinatorId;
@@ -217,13 +236,24 @@ export function recordOutcome(outcome, { root = process.cwd(), fsImpl = fs } = {
   }
 }
 
-export async function main() {
+/**
+ * @param {{supabase?: object, env?: object, resolveCoordinatorId?: Function, logger?: object}} deps
+ *
+ * DEPENDENCIES ARE INJECTABLE BECAUSE THE EXPLOIT LIVES HERE, NOT IN THE CORE. main() previously
+ * built its own client, so it was UNTESTABLE BY CONSTRUCTION — and the seat resolution it performs
+ * is exactly the line the security bypass turns on. The mutation harness proved the gap: a mutant
+ * restoring the fallback (`: null;` -> `: coordinatorId;`) SURVIVED the entire suite, because
+ * nothing could reach this function. An untestable entry point around a security-relevant decision
+ * is where a real vulnerability hides behind a green score.
+ */
+export async function main({ supabase: injectedDb, env = process.env, resolveCoordinatorId, logger = console } = {}) {
   const { createClient } = await import('@supabase/supabase-js');
   const { getActiveCoordinatorId } = require_('../lib/coordinator/resolve.cjs');
-  const supabase = createClient(
-    process.env.SUPABASE_URL,
-    process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.SUPABASE_SERVICE_KEY
+  const supabase = injectedDb ?? createClient(
+    env.SUPABASE_URL,
+    env.SUPABASE_SERVICE_ROLE_KEY || env.SUPABASE_SERVICE_KEY
   );
+  const resolveCoord = resolveCoordinatorId ?? (() => getActiveCoordinatorId(supabase));
   // BOUNDED. This call sits BEFORE both guarded queries and was previously awaited UNBOUNDED — a
   // reviewer measured it still running at 95007ms against a blackholed DB, past the host's 90s
   // execFile kill, whose SIGTERM produces exactly the FALSE FAILED CORE that withTimeout exists to
@@ -232,7 +262,7 @@ export async function main() {
   let coordinatorId = null;
   try {
     coordinatorId = await Promise.race([
-      getActiveCoordinatorId(supabase),
+      resolveCoord(),
       new Promise((_, reject) => setTimeout(() => reject(new Error('getActiveCoordinatorId: timed out')), WRITE_TIMEOUT_MS).unref?.()),
     ]);
   } catch { /* fail closed: an unresolvable coordinator means the seat check below refuses */ }
@@ -250,10 +280,10 @@ export async function main() {
   // AND THE FAILURE WAS WORSE THAN NO GUARD: the bogus receipt would have carried the COORDINATOR's
   // id rather than a junk value, so it read as a genuine consumption. A control that cannot stop a
   // lie but makes it credible is worse than the absence it replaced. Absent env var => refuse.
-  const sessionId = typeof process.env.CLAUDE_SESSION_ID === 'string' && process.env.CLAUDE_SESSION_ID.trim()
-    ? process.env.CLAUDE_SESSION_ID.trim()
+  const sessionId = typeof env.CLAUDE_SESSION_ID === 'string' && env.CLAUDE_SESSION_ID.trim()
+    ? env.CLAUDE_SESSION_ID.trim()
     : null;
-  const outcome = await runDriveReportConsumeCore(supabase, { sessionId, coordinatorId });
+  const outcome = await runDriveReportConsumeCore(supabase, { sessionId, coordinatorId, logger });
   recordOutcome(outcome);
 
   // A FAILURE IS STILL NOT OBSERVABLE FROM THE TICK, AND SAYING SO IS THE HONEST STATE.

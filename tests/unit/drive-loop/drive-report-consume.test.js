@@ -11,6 +11,7 @@ import { describe, it, expect } from 'vitest';
 import { randomUUID } from 'node:crypto';
 import {
   runDriveReportConsumeCore,
+  main,
 
   isCoordinatorSeat,
   recordOutcome,
@@ -280,6 +281,43 @@ describe('the failure breadcrumb is the channel the host does not give us', () =
   it('never throws, even when the filesystem refuses', () => {
     const hostileFs = { mkdirSync() { throw new Error('readonly'); }, writeFileSync() { throw new Error('readonly'); }, existsSync() { return false; }, rmSync() {} };
     expect(() => recordOutcome({ status: 'failed' }, { root: '/r', fsImpl: hostileFs })).not.toThrow();
+  });
+});
+
+describe('main() env-only seat resolution — the line the exploit turns on', () => {
+  // main() previously built its own client and was therefore UNTESTABLE BY CONSTRUCTION, which is
+  // how a mutant restoring the fallback (`: null;` -> `: coordinatorId;`) SURVIVED the whole suite.
+  // An untestable entry point around a security-relevant decision is where a real vulnerability
+  // hides behind a green score. Dependencies are now injectable so the decision is reachable.
+  it('REFUSES when CLAUDE_SESSION_ID is absent — no fallback to the resolved coordinator', async () => {
+    const db = makeDb();
+    const coordinator = randomUUID();
+    await main({ supabase: db, env: {}, resolveCoordinatorId: async () => coordinator, logger: silent });
+    // The fallback is exactly the exploited hole: with no env var it compared a value to ITSELF.
+    expect(db.upserts).toHaveLength(0);
+  });
+
+  it('writes when the env var MATCHES the resolved coordinator', async () => {
+    // The positive arm, so a constant-refuse implementation cannot pass the test above.
+    const db = makeDb();
+    const coordinator = randomUUID();
+    await main({ supabase: db, env: { CLAUDE_SESSION_ID: coordinator }, resolveCoordinatorId: async () => coordinator, logger: silent });
+    expect(db.upserts).toHaveLength(1);
+    expect(db.upserts[0].metadata.actor_session).toBe(coordinator);
+  });
+
+  it('REFUSES when the env var names a different seat', async () => {
+    const db = makeDb();
+    await main({ supabase: db, env: { CLAUDE_SESSION_ID: randomUUID() }, resolveCoordinatorId: async () => randomUUID(), logger: silent });
+    expect(db.upserts).toHaveLength(0);
+  });
+
+  it('always resolves to exit code 0, even when the coordinator resolver throws', async () => {
+    // Exit code is the only thing the host reads; an observer that reports a failed TICK because it
+    // could not observe is worse than useless.
+    const db = makeDb();
+    const code = await main({ supabase: db, env: {}, resolveCoordinatorId: async () => { throw new Error('db down'); }, logger: silent });
+    expect(code).toBe(0);
   });
 });
 
