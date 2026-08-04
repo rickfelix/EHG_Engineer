@@ -11,7 +11,7 @@ import { describe, it, expect } from 'vitest';
 import fs from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { unavailable, isAvailable, isSelfStale, DEFAULT_GRACE_MULTIPLIER } from '../../../lib/drive-loop/report-posture.js';
+import { unavailable, isAvailable, isSelfStale, DEFAULT_GRACE_MULTIPLIER, LAST_RUN_FIELD } from '../../../lib/drive-loop/report-posture.js';
 
 const NOW = Date.parse('2026-08-03T12:00:00Z');
 const ago = (sec) => new Date(NOW - sec * 1000).toISOString();
@@ -43,8 +43,60 @@ describe('FR-7 fail-loud — unavailable is not zero', () => {
   });
 });
 
+/**
+ * The REAL columns of periodic_process_registry, read from production on 2026-08-04 via
+ *   supabase.from('periodic_process_registry').select('*').limit(1) -> Object.keys(row).sort()
+ *
+ * This list exists because the first version of isSelfStale read `last_run_at`, a column that
+ * does not exist on this table — and the fixtures below invented the same field, so the test
+ * agreed with the code about a world neither had measured. Date.parse(undefined) is NaN, so the
+ * function returned stale:true unconditionally: FR-7's alarm was stuck ON and could never clear.
+ */
+const REGISTRY_COLUMNS = Object.freeze([
+  'consecutive_miss_count', 'created_at', 'currently_expected_active', 'display_name',
+  'expected_interval_seconds', 'grace_multiplier', 'last_fired_at', 'last_state',
+  'last_state_changed_at', 'liveness_source', 'liveness_source_ref', 'owner',
+  'process_key', 'process_type', 'session_bound', 'updated_at',
+]);
+
+/**
+ * Build a registry row that CANNOT contain a column the table does not have. A fixture free to
+ * invent fields can only ever confirm what the code already believes; this one refuses, so the
+ * specific mistake above is unrepresentable here rather than merely warned against.
+ */
+function registryRow(fields) {
+  for (const k of Object.keys(fields)) {
+    if (!REGISTRY_COLUMNS.includes(k)) {
+      throw new Error(`registryRow(): "${k}" is not a column of periodic_process_registry — `
+        + `real columns: ${REGISTRY_COLUMNS.join(', ')}. A fixture that invents a field proves nothing about production.`);
+    }
+  }
+  return fields;
+}
+
 describe('FR-7 self-staleness — the existing primitive, not a second rule', () => {
-  const row = (intervalSec, lastRunSec) => ({ expected_interval_seconds: intervalSec, last_run_at: ago(lastRunSec) });
+  const row = (intervalSec, lastRunSec) => registryRow({ expected_interval_seconds: intervalSec, [LAST_RUN_FIELD]: ago(lastRunSec) });
+
+  it('[REGRESSION] reads a column that ACTUALLY EXISTS on periodic_process_registry', () => {
+    // The whole defect in one assertion. Had this existed, the alarm would never have shipped stuck-on.
+    expect(REGISTRY_COLUMNS).toContain(LAST_RUN_FIELD);
+    expect(LAST_RUN_FIELD).toBe('last_fired_at');
+    expect(REGISTRY_COLUMNS, 'last_run_at is a real column on a DIFFERENT table — never this one').not.toContain('last_run_at');
+  });
+
+  it('[CONTROL] the fixture builder itself refuses an invented column', () => {
+    // Without this, "the builder validates" is an untested claim and the guard could be inert.
+    expect(() => registryRow({ expected_interval_seconds: 60, last_run_at: 'x' })).toThrow(/not a column of periodic_process_registry/);
+    expect(() => registryRow({ expected_interval_seconds: 60, [LAST_RUN_FIELD]: 'x' })).not.toThrow();
+  });
+
+  it('a HEALTHY producer reads fresh — the alarm must be able to CLEAR, not only to fire', () => {
+    // The two-sided half. The old code passed every "is it stale?" test while being incapable of
+    // ever reporting fresh, because a stuck-on alarm satisfies one-sided testing perfectly.
+    const r = isSelfStale({ registryRow: row(3600, 60), nowMs: NOW });
+    expect(r.stale).toBe(false);
+    expect(r.reason).toMatch(/within 2x cadence/);
+  });
 
   it('breaches at expected_interval_seconds * graceMultiplier, boundary pinned', () => {
     const I = 3600;
@@ -64,9 +116,9 @@ describe('FR-7 self-staleness — the existing primitive, not a second rule', ()
     }
   });
 
-  it('a missing or malformed last_run_at is stale, not fresh', () => {
-    expect(isSelfStale({ registryRow: { expected_interval_seconds: 60 }, nowMs: NOW }).stale).toBe(true);
-    expect(isSelfStale({ registryRow: { expected_interval_seconds: 60, last_run_at: 'nope' }, nowMs: NOW }).stale).toBe(true);
+  it(`a missing or malformed ${LAST_RUN_FIELD} is stale, not fresh`, () => {
+    expect(isSelfStale({ registryRow: registryRow({ expected_interval_seconds: 60 }), nowMs: NOW }).stale).toBe(true);
+    expect(isSelfStale({ registryRow: registryRow({ expected_interval_seconds: 60, [LAST_RUN_FIELD]: 'nope' }), nowMs: NOW }).stale).toBe(true);
   });
 
   it('refuses an implicit clock', () => {
