@@ -100,7 +100,40 @@ describe('the retirement provenance is real, not pasted', () => {
    */
   const SHA = 'f85cd2a7c92';
 
-  it('the cited deletion commit exists and is an ancestor of HEAD', () => {
+  /**
+   * *** THESE THREE NEED GIT HISTORY, AND CI DOES NOT HAVE IT. FOUND BY CI, NOT BY REASONING. ***
+   * They went red on the first PR run with `fatal: Not a valid object name f85cd2a7c92`, because
+   * actions/checkout@v4 defaults to fetch-depth 1 and the cited commit is from 2026-06-02. The
+   * assertions were right about the repository and wrong about their environment — I asked whether
+   * they REACH the layer they judge, and never whether that layer EXISTS where they run.
+   *
+   * Not "fixed" by loosening: they are gated on history being present, so they run in full clones
+   * (local, and any workflow using fetch-depth 0) and are reported as SKIPPED in CI rather than
+   * silently passing. A skip is visible in the run output; a loosened assertion is not.
+   *
+   * WHAT GUARDS THE MERGE IN CI, since these do not: the shallow-safe consequence test below — the
+   * route file is absent at HEAD — plus the deliberately-weak token check. Stated plainly so nobody
+   * reads a green CI run as meaning the provenance was verified there.
+   *
+   * The shared unit-tier workflow is deliberately NOT changed to fetch full history: it runs on
+   * every PR in this repo and unshallowing it would cost the whole fleet time to serve one SD.
+   */
+  const isShallow = (() => {
+    try {
+      return execSync('git rev-parse --is-shallow-repository', { cwd: REPO, encoding: 'utf8' }).trim() === 'true';
+    } catch { return true; }
+  })();
+
+  it('SHALLOW-SAFE: the route that was the only caller is absent at HEAD', () => {
+    // The CONSEQUENCE of the retirement, checkable without history. This is what actually guards
+    // the merge in CI. If the route ever comes back, the deleted function's provenance block is
+    // describing a world that no longer holds and this reddens.
+    const tracked = execSync('git ls-files server/routes/eva-chat.js', { cwd: REPO, encoding: 'utf8' }).trim();
+    expect(tracked).toBe('');
+    expect(existsSync(join(REPO, 'server', 'routes', 'eva-chat.js'))).toBe(false);
+  });
+
+  it.skipIf(isShallow)('the cited deletion commit exists and is an ancestor of HEAD', () => {
     // `git cat-file -e <sha>^{commit}` needs the braces quoted under sh; `-t` avoids the issue and
     // asserts the OBJECT TYPE, which is strictly more than existence — a tag or blob would fail.
     const type = execSync(`git cat-file -t ${SHA}`, { cwd: REPO, encoding: 'utf8' }).trim();
@@ -108,12 +141,12 @@ describe('the retirement provenance is real, not pasted', () => {
     expect(() => execSync(`git merge-base --is-ancestor ${SHA} HEAD`, { cwd: REPO, stdio: 'pipe' })).not.toThrow();
   });
 
-  it('its committer date is the date the record claims', () => {
+  it.skipIf(isShallow)('its committer date is the date the record claims', () => {
     const date = execSync(`git show -s --format=%cs ${SHA}`, { cwd: REPO, encoding: 'utf8' }).trim();
     expect(date).toBe('2026-06-02');
   });
 
-  it('it really did delete the route that was the only caller', () => {
+  it.skipIf(isShallow)('it really did delete the route that was the only caller', () => {
     const files = execSync(`git show --name-status --format= ${SHA}`, { cwd: REPO, encoding: 'utf8' });
     expect(files).toMatch(/^D\s+server\/routes\/eva-chat\.js$/m);
   });
