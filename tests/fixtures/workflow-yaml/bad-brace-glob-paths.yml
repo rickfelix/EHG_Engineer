@@ -1,0 +1,41 @@
+# FIXTURE — deliberately broken. SD-LEO-INFRA-FIVE-GUARDS-WIRED-001 (FR-3).
+#
+# The workflow-path-filter lint MUST flag the brace-alternation entries here and MUST NOT
+# flag the literal ones sitting beside them. Both halves are asserted: a guard that flags
+# everything is as useless as one that flags nothing, and only the two-sided check
+# distinguishes them.
+#
+# Mirrors tests/fixtures/workflow-yaml/bad-plain-scalar.yml, the existing
+# deliberately-broken-fixture precedent in this directory.
+#
+# DO NOT "FIX" THIS FILE. Its brokenness is the assertion.
+name: Fixture — brace-glob path filters
+
+on:
+  pull_request:
+    paths:
+      # DEAD — GitHub Actions does not expand braces, so this matches nothing.
+      - 'scripts/**/*.{js,mjs,cjs,ts}'
+      # LIVE — a literal glob, must NOT be flagged.
+      - 'lib/**/*.js'
+      # DEAD — second offender, different shape (two alternatives, leading dot).
+      - 'server/**/*.{ts,tsx}'
+      # LIVE — plain path, must NOT be flagged.
+      - '.github/workflows/fixture.yml'
+  push:
+    branches: [main]
+    paths-ignore:
+      # DEAD, and in a paths-ignore block — the lint must read this key too. A dead
+      # paths-ignore silently fails to EXCLUDE, so the workflow over-fires rather than
+      # under-fires; the defect is the same, the symptom is inverted.
+      - 'docs/**/*.{md,mdx}'
+
+concurrency:
+  group: fixture-brace-glob
+  cancel-in-progress: true
+
+jobs:
+  noop:
+    runs-on: ubuntu-latest
+    steps:
+      - run: echo "fixture only — never executed in CI"

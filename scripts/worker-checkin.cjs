@@ -1322,6 +1322,19 @@ async function foreignClaimantBlocksSteal(sb, sdKey, mySessionId, isSessionAlive
 }
 
 const ORPHAN_CANDIDATE_LIMIT = 5;
+
+/**
+ * SD-LEO-INFRA-RELEASED-MID-PHASE-001 / FR-2: the statuses this tier will adopt.
+ *
+ * EXPORTED AND SHARED WITH THE STANDING CHECK. scripts/audit-unreachable-midphase-sds.mjs
+ * imports this exact array to decide what "reachable by an automated path" means. If the two
+ * ever drift, the check silently stops measuring the thing it exists to measure — so they are
+ * one constant rather than two literals that happen to agree today.
+ *
+ * 'pending_approval' is deliberately ABSENT: recoverStrandedFinal owns the
+ * pending_approval/LEAD_FINAL class and adding it here would create a two-path race.
+ */
+const ADOPTABLE_ORPHAN_STATUSES = ['in_progress', 'active'];
 // One full claim-TTL window (claimGuard TTL = 15 min): a mid-transition worker whose claim
 // briefly clears is never raced; sweep claim-clears also refresh updated_at, deferring adoption
 // one window past the clear. A genuine orphan sits indefinitely — the delay is safe.
@@ -1369,7 +1382,25 @@ async function adoptOrphanInProgress(sb, sessionId, base) {
       // parent_sd_id added (SD-FDBK-INFRA-ORPHAN-ADOPT-RESUME-001): feeds the parentLeadPending
       // guard below so a CHILD orphan whose orchestrator parent is still pre-LEAD is not adopted.
       .select('sd_key, sd_type, status, current_phase, metadata, updated_at, target_application, parent_sd_id')
-      .eq('status', 'in_progress')
+      // SD-LEO-INFRA-RELEASED-MID-PHASE-001 / FR-2: WIDENED from .eq('status','in_progress').
+      //
+      // This tier is the purpose-built resume-a-mid-phase-orphan path and it was missing its
+      // target population by ONE ENUM VALUE. Measured live: all four unreachable mid-phase
+      // orphans carry status='active'; ZERO carry 'in_progress'. The rows fell BETWEEN TWO
+      // TIERS — the draft-tier sources fetch status IN (draft,active) but veto anything past
+      // LEAD via isSdInFlight, and this tier deliberately skips that veto but filtered a status
+      // none of them had.
+      //
+      // Widening rather than adding a parallel lane is deliberate: the four guards below
+      // (classifyDispatchIneligibility, parentLeadPending, foreignClaimantBlocksSteal,
+      // pendingDirectedAssignmentBlocksAdoption) are inherited for free, and a new lane would
+      // have to re-implement them or reopen QF-20260720-911 (silent no-land loop) and
+      // SD-FDBK-INFRA-ORPHAN-ADOPT-RESUME-001 (re-adopt loop).
+      //
+      // pending_approval is deliberately NOT included: recoverStrandedFinal already claims
+      // status='pending_approval' AND current_phase='LEAD_FINAL', and adding it here would put
+      // two paths in a race for one row.
+      .in('status', ADOPTABLE_ORPHAN_STATUSES)
       .is('claiming_session_id', null)
       .neq('sd_type', 'orchestrator')         // parents are in_progress/no-claim BY DESIGN while children run
       .lt('updated_at', cutoffIso)            // parked > one claim-TTL window — not a mid-transition race
@@ -1911,7 +1942,7 @@ async function main() {
 // top (imports are referenced directly — never re-derived).
 const CHECKIN_HELPERS = { ws, tryClaim, stampDirectedAssignment, ackMessage, extractSdFromAssignment, extractDirectedSd, isInformationalNudge, classifyDispatchIneligibility, coordinatorReservation, isSeatBusyOnDirectedWork, registerRollCall, rehydrateCallsign, selfClearQuarantine, mergeCheckinModelEffort, recoverStrandedFinal, describeSoftHolds, adoptOrphanInProgress, isSelfClaimDisabled, isGlobalStandDownActive, isBuildForbiddenSession, ensureActiveBaseline, isCriticalQfJumpEligible, tryClaimDraftCandidate, baselinedCandidateEligible, isSdInFlight, selfClaimQuickFix, selfHealStaleClaim, findOwnSdClaim, healOwnClaimPointer, confirmRowGone, surfaceCoordinatorMessages, fetchOutstandingSignals, formatOutstandingWarning, fetchDraftCandidates, fetchNewestDraftCandidates, fetchFleetCriticalCandidates, fetchRankedCandidates, sortByDispatchRank, resolveWorkerTierRank, isTieringActive, fetchLowerTierBacklogData, ladderTopRank, seatCapabilityIsVerified, fetchFableWindowActive, claimableForTier, claimableForRepo, getCommsActivitySignals, computeAdaptiveCadence, antiWinddownDirective, ASSIGNMENT_RECENCY_WINDOW_MS, TERMINAL_CLAIM_ERRORS, QF_CANDIDATE_LIMIT, SELF_CLAIM_CANDIDATE_LIMIT, DEFAULT_IDLE_WAKEUP_SECONDS };
 
-module.exports = { CHECKIN_HELPERS, stampDirectedAssignment, extractSdFromAssignment, extractDirectedSd, isInformationalNudge, tryClaim, registerRollCall, ackMessage, isCoordinatorPush, surfaceCoordinatorMessages, rehydrateCallsign, runCheckin, resolveCheckin, assignFleetIdentityAtCheckin, selfClaimQuickFix, isAutoStartableQF, sortQfCandidatesBySeverity, QF_SEVERITY_RANK, isCriticalQfJumpEligible, CRITICAL_QF_JUMP_GRACE_MS, selfClaimDraftSd, fetchDraftCandidates, fetchNewestDraftCandidates, fetchFleetCriticalCandidates, fetchRankedCandidates, tryClaimDraftCandidate, draftDepsSatisfied, baselinedCandidateEligible, recoverStrandedFinal, describeSoftHolds, adoptOrphanInProgress, pendingDirectedAssignmentBlocksAdoption, isSelfClaimDisabled, isQuarantined, isParked, selfClearQuarantine, isGlobalStandDownActive, isSdInFlight, isForeignSessionLive, foreignClaimantBlocksSteal, selfHealStaleClaim, findOwnSdClaim, healOwnClaimPointer, confirmRowGone, orderByRankMap, orderByFleetCriticalThenRank, sortByDispatchRank, DISPATCH_RANK_TTL_MS, PRIORITY_RANK, SD_KEY_RE, DEFAULT_IDLE_WAKEUP_SECONDS, STALE_QF_DAYS, antiWinddownDirective, mergeCheckinModelEffort, parseCheckinArgs };
+module.exports = { ADOPTABLE_ORPHAN_STATUSES, CHECKIN_HELPERS, stampDirectedAssignment, extractSdFromAssignment, extractDirectedSd, isInformationalNudge, tryClaim, registerRollCall, ackMessage, isCoordinatorPush, surfaceCoordinatorMessages, rehydrateCallsign, runCheckin, resolveCheckin, assignFleetIdentityAtCheckin, selfClaimQuickFix, isAutoStartableQF, sortQfCandidatesBySeverity, QF_SEVERITY_RANK, isCriticalQfJumpEligible, CRITICAL_QF_JUMP_GRACE_MS, selfClaimDraftSd, fetchDraftCandidates, fetchNewestDraftCandidates, fetchFleetCriticalCandidates, fetchRankedCandidates, tryClaimDraftCandidate, draftDepsSatisfied, baselinedCandidateEligible, recoverStrandedFinal, describeSoftHolds, adoptOrphanInProgress, pendingDirectedAssignmentBlocksAdoption, isSelfClaimDisabled, isQuarantined, isParked, selfClearQuarantine, isGlobalStandDownActive, isSdInFlight, isForeignSessionLive, foreignClaimantBlocksSteal, selfHealStaleClaim, findOwnSdClaim, healOwnClaimPointer, confirmRowGone, orderByRankMap, orderByFleetCriticalThenRank, sortByDispatchRank, DISPATCH_RANK_TTL_MS, PRIORITY_RANK, SD_KEY_RE, DEFAULT_IDLE_WAKEUP_SECONDS, STALE_QF_DAYS, antiWinddownDirective, mergeCheckinModelEffort, parseCheckinArgs };
 
 if (require.main === module) {
   main().catch(err => {

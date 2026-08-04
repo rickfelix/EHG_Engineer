@@ -32,7 +32,9 @@
 --
 -- APPLIED 2026-07-28T10:21:26Z by codestreetlabs@gmail.com, success=true, recorded in
 -- schema_migrations_applied. NOT applied by the authoring worker, deliberately: TIER-1 auto-apply
--- is not active (LEO_MIGRATION_TIER_GATE defaults OFF => classification is advisory only), so a
+-- is now active by default (SD-LEO-INFRA-TIER-GATE-FLAG-001: the gate reads the
+-- LEO_MIGRATION_TIER_GATE_BYPASS flag and fails CLOSED, so TIER-2 defers to the chairman
+-- gate unless a bypass is deliberately enabled), so a
 -- live apply needs either the 3-factor chairman gate (-- @approved-by: <chairman email> + a 1h
 -- single-use MIGRATION_APPLY_TOKEN) or Adam's delegated path (-- @delegated-by: adam, itself behind
 -- a default-OFF kill switch). A worker holds neither and must not fake an approver header, so this

@@ -1,0 +1,69 @@
+name: Workflow Path-Filter Lint
+
+# SD-LEO-INFRA-FIVE-GUARDS-WIRED-001 (FR-3 / FR-4)
+#
+# Blocks any PR that introduces a brace-alternation entry in a workflow `paths:` or
+# `paths-ignore:` block. GitHub Actions does NOT expand brace alternation, so an entry
+# written as 'scripts/**/*.{js,mjs,cjs,ts}' matches only a literal filename ending in
+# ".{js,mjs,cjs,ts}" — nothing. The workflow reads as wired, reports green, and never fires
+# on the source it exists to police.
+#
+# Five workflows in this repo were written that way. Three had run EXACTLY ONCE EVER, on
+# their own introducing PR. The class was fixed once, in one workflow, WITHOUT a guard — so
+# it stayed free to recur, and it did, four more times. This is the guard.
+#
+# ── WHY THIS WORKFLOW HAS NO `paths:` KEY ────────────────────────────────────────────────
+# THIS IS THE MOST IMPORTANT LINE IN THE FILE. If this workflow filtered itself by path, that
+# filter could carry the very defect this lint detects, and the guard would be silently
+# disabled by the bug it exists to catch — which is exactly how the original five failed.
+# It therefore runs on EVERY pull request, unconditionally. The scan is a parse of ~171 small
+# YAML files and costs seconds.
+#
+# Reviewer's at-a-glance check, which is the property the guard enforces applied to itself:
+#     sed -n '/^on:/,/^concurrency:/p' .github/workflows/workflow-path-filter-lint.yml | grep -c '{'
+# must print 0. NOTE: that heuristic is for THIS FILE ONLY. Run against a workflow whose
+# comments discuss brace-globs (alter-default-override-lint.yml does) it prints a non-zero
+# count for comment text, which is a false positive — the authority is the lint itself, which
+# reads the PARSED paths: arrays and never the surrounding prose.
+#
+# Precedent: ssl-bypass-lint.yml is an always-on lint whose subject is also .github/workflows/**.
+# Unlike that one, this lint does NOT exclude its own file from the scan — a guard that skips
+# itself cannot verify the one file whose correctness it most depends on.
+#
+# GENUINELY BLOCKING (no continue-on-error): matches the posture of count-delta-gate-lint.yml
+# and ismainmodule-classguard-lint.yml. There is deliberately no allow-list — a path filter
+# that matches nothing has no legitimate use. If a filter is meant to match nothing, the entry
+# should be deleted, not written in a form that silently cannot fire.
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+# Least privilege: this job only reads the checkout. It runs on `pull_request` (never
+# `pull_request_target`), so a fork PR already gets a read-only token and no secrets; the
+# explicit grant makes that the stated contract rather than a default someone could change.
+permissions:
+  contents: read
+
+jobs:
+  workflow-path-filter-lint:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+      - run: npm ci
+      - name: Detect brace-alternation path filters (which match nothing)
+        run: node scripts/lint/workflow-path-filter-lint.mjs
+      # Paired with the parse check, which until now was enforced ONLY by a local pre-commit
+      # hook and by no CI workflow at all — so an unparseable workflow could reach main from
+      # any contributor who committed with --no-verify.
+      - name: Verify every workflow file still parses
+        run: node scripts/check-workflow-yaml.mjs

@@ -30,6 +30,11 @@ import { createClient } from '@supabase/supabase-js';
 import { groupByFingerprint, shouldPromote } from '../lib/shared/content-fingerprint.cjs';
 import { fetchAllPaginated } from '../lib/db/fetch-all-paginated.mjs';
 import { derivePromotedSeverity } from '../lib/feedback/promoted-severity.js';
+// SD-LEO-INFRA-GATE-SIDE-BELT-001: this producer mints quick_fixes unattended on a 6-hourly cron and
+// was ungated, so it could mint into a full belt indefinitely. The gate lives in lib/ (not inline
+// here) because this script has no exports and its guard tests are source-text regexes, which cannot
+// see control flow — and control flow is all a gate is.
+import { gatedQfMint, FINGERPRINT_PROMOTER_ENGINE } from '../lib/governance/qf-mint-gate.mjs';
 
 const apply = process.argv.includes('--apply');
 const WINDOW_DAYS = 14;
@@ -85,6 +90,12 @@ let promoted = 0;
 let skippedAlreadyPromoted = 0;
 let skippedBelowThreshold = 0;
 
+// Extracted so the demand gate can ENCLOSE the minting rather than merely precede it. A gate that
+// only returns a verdict is one forgotten `if` away from being decorative — and that omission is
+// invisible to a source-text guard test, which is all this script had.
+let suppressedCount = 0;
+async function promoteAll(reportOnly = false) {
+  suppressedCount = 0;
 for (const group of groups.values()) {
   if (!shouldPromote(group, THRESHOLD)) {
     skippedBelowThreshold++;
@@ -102,8 +113,9 @@ for (const group of groups.values()) {
   console.log(`  source rows: ${sourceIds.join(', ')}`);
   console.log(`  sample: ${group.sample_body.slice(0, 120)}`);
 
-  if (!apply) {
-    console.log('  [DRY RUN] would create QF-candidate here.');
+  if (!apply || reportOnly) {
+    if (reportOnly) suppressedCount++;
+    console.log(reportOnly ? '  [WITHHELD] would have created a QF-candidate here - suppressed by belt demand.' : '  [DRY RUN] would create QF-candidate here.');
     continue;
   }
 
@@ -147,5 +159,26 @@ for (const group of groups.values()) {
     console.error(`  [PROMOTE_FAILED] create-quick-fix.js exited non-zero for fingerprint ${group.fingerprint.slice(0, 12)}: ${e.message}`);
   }
 }
+  // REPORT-ONLY RETURNS WHAT IT SUPPRESSED, NOT WHAT IT MINTED. Returning `promoted` here made the
+  // gate print "suppressed 0" on a run that suppressed 34 — a number that looked measured and looked
+  // like good news. In report-only mode nothing is ever promoted, so `promoted` is 0 by construction.
+  return reportOnly ? suppressedCount : promoted;
+}
 
-console.log(`\nSummary: ${promoted} promoted, ${skippedAlreadyPromoted} already-promoted, ${skippedBelowThreshold} below threshold.`);
+// DRY-RUN IS DELIBERATELY UNGATED. Without --apply nothing is minted, so there is no belt to
+// protect — and gating here would suppress the [PROMOTABLE] output that four integration assertions
+// read. The gate guards MINTING, not reporting.
+//
+// The consequence of gating on apply is stated rather than discovered: on a dry-run-only day no
+// decision is recorded, so the startup badge reads NEVER RAN. That is the correct trade — a recorded
+// decision for a run that could never have minted would be a measurement of nothing.
+let withheldByDemand = false;
+if (!apply) {
+  await promoteAll();
+} else {
+  const result = await gatedQfMint(supabase, { engine: FINGERPRINT_PROMOTER_ENGINE, onWithheld: () => promoteAll(true) }, promoteAll);
+  withheldByDemand = result.withheldByDemand;
+}
+
+console.log(`\nSummary: ${promoted} promoted, ${skippedAlreadyPromoted} already-promoted, ${skippedBelowThreshold} below threshold.`
+  + (withheldByDemand ? ' — WITHHELD by belt demand, nothing minted.' : ''));

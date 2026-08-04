@@ -239,6 +239,20 @@
       "solomon_role_contract"
     ]
   },
+  "CLAUDE_SOLOMON_MANUAL.md": {
+    "description": "Solomon reference companion (SD-FDBK-INFRA-CLAUDE-SOLOMON-EXCEEDS-001). Long-form reference and procedure lifted out of CLAUDE_SOLOMON.md so the gated contract fits the Read tool's 25k single-call cap. RULES, PROHIBITIONS AND DURABLE DUTIES DO NOT LIVE HERE — they stay in CLAUDE_SOLOMON.md and bind whether or not this file is read.",
+    "sections": [
+      "solomon_manual"
+    ],
+    "_move_justification": {
+      "1. Background & History": "Origin narrative — the Chairman's Canary idea, the Fable token-limit incident, the pantheon naming convention. Zero binding clauses; the unbiased-perspective idea it recounts binds via §4b, which stays in the gated file.",
+      "11. Advice-Outcome Ledger, Accuracy Review & Success Metrics": "Ledger field semantics and the keep/expand/kill evaluation procedure. MOVED WITH AN EXCEPTION: ACCURACY REVIEW DUTY is a DURABLE DUTY and was retained in §9 of the gated file.",
+      "Web Research & Source-Escalation Rubric": "The routing rubric and source-escalation ladder — a procedure performed at a moment. MOVED WITH AN EXCEPTION: the HARD security stop on secrets/credentials/chairman-private queries, the re-derive-never-inherit rule and the task_budget bound were retained in the gated file as 'Web Research — binding constraints'.",
+      "Crew-comms routing protocol (organizing layer)": "A pointer to the canonical docs/protocol/crew-comms-routing-protocol.md, which remains authoritative. Moved by RETYPING its existing row, with no content edit, so it could not be corrupted in transit."
+    },
+    "_allow_list_note": "This list is an ALLOW-LIST reviewed section by section, not the output of a keyword scan. The scan is only a TRIPWIRE that prompts the review: the LEAD precedent recorded that /BLOCKING|MUST NOT|NEVER|MANDATORY|PROHIBITED/ scored 'PLAN Phase Negative Constraints' at ZERO despite that section being nothing but NC-PLAN-001..005. Here the tripwire fired 24 times across the move-set and each hit was dispositioned individually; two hits were promoted to retained clauses in the gated file. Adding a section here requires a written justification above.",
+    "_acceptance": "Harness-measured, never computed: a no-offset Read of CLAUDE_SOLOMON.md must return ALL lines with NO 'PARTIAL view' notice. Baseline before this split: 'showing lines 1-301 of 371 total (26138 tokens, cap 25000)'. Byte counts and general-purpose tokenizers cannot verify this — the repo's own calibrated instrument read this file ~23% high."
+  },
   "SHARED": {
     "description": "Sections that appear in multiple files or are general reference",
     "sections": [

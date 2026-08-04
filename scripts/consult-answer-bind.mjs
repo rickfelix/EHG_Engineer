@@ -18,6 +18,7 @@
 import { createClient } from '@supabase/supabase-js';
 import 'dotenv/config';
 import { recordDisposition } from '../lib/decision-binding/disposition.js';
+import { isMainModule } from '../lib/utils/is-main-module.js';
 
 /**
  * Bind a delivered consult answer to the SD-metadata blocked-state it
@@ -102,7 +103,7 @@ async function main() {
   console.log(`Consult answer bound: question_key=${result.disposition.payload.question_key}, SD "${args.sdKey}".${args.blockedStateKey} unblocked.`);
 }
 
-if (import.meta.url === `file://${process.argv[1]}`) {
+if (isMainModule(import.meta.url)) {
   main().catch((err) => {
     console.error('consult-answer-bind: FAILED:', err.message);
     process.exit(1);

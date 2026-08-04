@@ -19,7 +19,21 @@ name: isMainModule Raw-Pattern Class Guard Lint
 on:
   pull_request:
     paths:
-      - 'scripts/**/*.{js,mjs,cjs,ts,tsx}'
+      # SD-LEO-INFRA-FIVE-GUARDS-WIRED-001: these 5 entries were PREVIOUSLY one brace-glob.
+      # GitHub Actions does not expand brace alternation, so it matched nothing and this
+      # workflow had run EXACTLY ONCE EVER — on its own introducing PR. SEVEN raw-pattern
+      # violations landed in scripts/** during the 32 days it was inert, every one of them
+      # AFTER the guard shipped. The header above claims this workflow "blocks ANY raw-pattern
+      # instance from day one, with zero exceptions"; that claim was true in intent and false
+      # in fact, and the allow-list is empty because nothing was grandfathered — the guard
+      # simply could not see them. All 7 are converted in the SAME commit as this expansion:
+      # the driver scans the whole tree rather than the PR diff, so enabling the filter first
+      # would red-line every scripts/** PR across the fleet.
+      - 'scripts/**/*.js'
+      - 'scripts/**/*.mjs'
+      - 'scripts/**/*.cjs'
+      - 'scripts/**/*.ts'
+      - 'scripts/**/*.tsx'
       - 'eslint-rules/no-raw-ismainmodule-comparison.js'
       - 'scripts/lint/ismainmodule-classguard-lint.mjs'
       - 'scripts/lint/ismainmodule-classguard-allowlist.json'

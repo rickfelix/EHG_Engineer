@@ -44,10 +44,126 @@ const RETRY_DELAY_MS = 1000;
 
 // ── SD-LEO-INFRA-MIGRATION-TIER-CLASSIFIER-001 (FR-2/FR-3) ────────────────────
 
-/** Tier gate is opt-in (reversible rollout). When OFF, behavior is unchanged and
- *  the tier is only computed/logged (advisory). Flip LEO_MIGRATION_TIER_GATE=on. */
-export function tierGateEnabled() {
-  return String(process.env.LEO_MIGRATION_TIER_GATE || '').toLowerCase() === 'on';
+// ── SD-LEO-INFRA-TIER-GATE-FLAG-001 ───────────────────────────────────────────
+// The gate's source of truth is a DB flag, not process.env, because .env is copied
+// into each worktree once at provisioning and never refreshed — so a flip at the
+// shared root never reached worktree sessions, and the gate read ABSENT => OFF.
+//
+// The stored flag is a BYPASS (enabled = gate OFF), inverted on purpose: the shared
+// evaluator returns enabled=false for evaluation_error / flag_not_found /
+// kill_switch_active / lifecycle_*, so under gate polarity every indeterminate read
+// would have meant "auto-apply destructive DDL". Inverted, they all mean GATE ON.
+
+/** The one place this flag key is spelled. scripts/enroll-migration-tier-gate-flag.mjs
+ *  imports it from here, so a rename cannot silently desynchronise reader and registrar. */
+export const TIER_GATE_BYPASS_FLAG = 'LEO_MIGRATION_TIER_GATE_BYPASS';
+
+/** Only these reasons are an AFFIRMATIVE bypass. Everything else — including every
+ *  rollout-derived affirmative — leaves the gate ON. A percentage rollout on a
+ *  security boundary would hold for some subjectIds and not others, so a bypass that
+ *  depends on WHO is asking is refused outright rather than pinned to a subjectId. */
+const AFFIRMATIVE_BYPASS_REASONS = new Set(['no_policy_default_enabled']);
+
+/** The break-glass. Deliberately a NEW, explicit name — see LEGACY_ENV_VAR below. */
+export const FORCE_ON_ENV_VAR = 'LEO_MIGRATION_TIER_GATE_FORCE_ON';
+/** The old source of truth. Now inert. */
+export const LEGACY_ENV_VAR = 'LEO_MIGRATION_TIER_GATE';
+
+/**
+ * FR-3 (AMENDED AT EXEC, from a measurement — see below).
+ *
+ * The break-glass may only ever STRENGTHEN the gate: it can force ON, never OFF. An
+ * override able to turn a chairman security boundary off from an unaudited per-worktree
+ * file would recreate this SD's own defect. Rollback lives in the DB row, which is
+ * audited and needs 2 approvals to open.
+ *
+ * WHY THE LEGACY VARIABLE IS IGNORED RATHER THAN HONOURED AS "force ON":
+ * `LEO_MIGRATION_TIER_GATE=on` is present in the shared-root .env and is loaded by this
+ * module's own import chain regardless of cwd — measured: stripping it from the process
+ * env AND running from a directory with no .env still produced OVERRIDE-ACTIVE. So if the
+ * legacy value were honoured as a strengthening override, it would short-circuit before
+ * every DB read on every surface, the flag row would be permanently inert, and this SD
+ * would ship as a no-op that merely looks like a migration. Two representations, with the
+ * old one silently winning, is the exact defect being fixed.
+ *
+ * Ignoring it is SAFE IN BOTH DIRECTIONS, which is why this is a demotion and not a
+ * weakening: a legacy 'off' stops being honoured (strictly safer — it was never allowed
+ * to weaken anyway), and a legacy 'on' defers to a DB flag whose default is no-bypass,
+ * i.e. gate ON. The verdict changes only when someone has deliberately enabled the
+ * high-risk bypass through the approvals path — which is precisely the rollback this SD
+ * is supposed to make reachable.
+ *
+ * @returns {'force_on'|null}
+ */
+function breakGlassOverride() {
+  const legacy = process.env[LEGACY_ENV_VAR];
+  if (legacy !== undefined && legacy !== null && legacy !== '') {
+    console.log(`   ⚠️  DEPRECATED: ${LEGACY_ENV_VAR}="${legacy}" is IGNORED — the tier gate now reads the ${TIER_GATE_BYPASS_FLAG} flag, one representation for every execution path. To force the gate ON locally use ${FORCE_ON_ENV_VAR}=1; to disable it, disable the flag in the DB. Remove this line from .env.`);
+  }
+  const raw = process.env[FORCE_ON_ENV_VAR];
+  if (raw === undefined || raw === null || raw === '') return null;
+  const v = String(raw).toLowerCase();
+  // Only affirmative values arm the break-glass; anything else is not a weakening
+  // instruction, it is simply not an instruction.
+  return v === '1' || v === 'on' || v === 'true' || v === 'yes' ? 'force_on' : null;
+}
+
+/**
+ * Is the migration tier gate ON? Async: reads the DB flag.
+ *
+ * FAIL-CLOSED by construction. The bypass is computed with a strict-identity
+ * conjunction, so an unawaited Promise (truthy) fails BOTH conjuncts and yields
+ * gate ON. Never introduce an async helper returning BYPASS semantics — an
+ * unawaited call there would be truthy and therefore fail OPEN.
+ *
+ * @returns {Promise<boolean>} true = gate ON (TIER-2 defers to the chairman gate)
+ */
+export async function tierGateEnabled() {
+  if (breakGlassOverride() === 'force_on') {
+    console.log(`   🔒 BREAK-GLASS ACTIVE: ${FORCE_ON_ENV_VAR} forces the tier gate ON (DB flag not consulted). This can only strengthen the gate — there is no env value that turns it off.`);
+    return true;
+  }
+
+  let res;
+  try {
+    const { evaluateFlag, clearCache } = await import('../../../../lib/feature-flags/index.js');
+    // FR-2a: the evaluator keeps a 30s cache and SILENTLY RETAINS a stale entry when a
+    // flags read fails while still stamping lastCacheRefresh — so an affirmative bypass
+    // could be served through a partial DB degradation. A handoff runs once and takes
+    // seconds, so force a fresh read; this must happen BEFORE evaluateFlag, not after.
+    clearCache();
+    res = await evaluateFlag(TIER_GATE_BYPASS_FLAG, { environment: 'production' });
+  } catch (e) {
+    console.log(`   🔒 Tier gate: bypass flag unreadable (${e?.message || e}) — gate ON (fail-closed).`);
+    return true;
+  }
+
+  const bypass = res?.enabled === true && AFFIRMATIVE_BYPASS_REASONS.has(res?.reason);
+  if (!bypass && res?.enabled === true) {
+    console.log(`   🔒 Tier gate: bypass flag is enabled but its reason "${res?.reason}" is not an accepted affirmative — gate ON (fail-closed).`);
+  }
+  return !bypass;
+}
+
+/**
+ * The gate's actual effect: which classified files stay eligible for handoff-time
+ * auto-apply, and which are held for the 3-factor @approved-by chairman gate.
+ *
+ * Extracted from the inline branch so the HARM is directly assertable. Every test that
+ * only checked the gate BOOLEAN passed with the `if (gateOn)` branch deleted — i.e. the
+ * suite certified a gate that no longer gated. This function is what must hold: TIER-2
+ * never appears in an eligible list.
+ *
+ * @param {Array<object>} classifiedSd  SD-declared migrations, tier-annotated
+ * @param {Array<object>} classifiedUnc uncommitted manual updates, tier-annotated
+ */
+export function partitionByTierGate(classifiedSd = [], classifiedUnc = []) {
+  return {
+    tier1Pending: classifiedSd.filter(m => m.tier === 1),
+    tier2Deferred: classifiedSd.filter(m => m.tier !== 1),
+    uncommittedEligible: classifiedUnc.filter(m => m.tier === 1).map(m => m.file),
+    uncommittedDeferred: classifiedUnc.filter(m => m.tier !== 1).map(m => m.file)
+  };
 }
 
 /** Classify each pending migration by reading its SQL. Fail-closed: an unreadable
@@ -84,7 +200,7 @@ export function inverseHint(matched) {
 
 /** FR-3: fail-soft audit of the tier decision per migration. Reuses audit_log if
  *  present; never throws (an audit failure must not block the handoff). */
-async function recordTierAudit(supabase, sd, classified) {
+async function recordTierAudit(supabase, sd, classified, gateOn) {
   try {
     const rows = classified.map((m) => ({
       event_type: 'MIGRATION_TIER_CLASSIFICATION',
@@ -97,7 +213,11 @@ async function recordTierAudit(supabase, sd, classified) {
         tier: m.tier,
         verdict: m.tierReason,
         matched: m.matched,
-        gate_enabled: String(process.env.LEO_MIGRATION_TIER_GATE || '').toLowerCase() === 'on',
+        // FR-4: threaded from the caller, NEVER re-derived. A second derivation here is what
+        // let the audit row report the env verdict while the decision used a different one —
+        // an audit trail that disagrees with the decision reads as corroboration and is worse
+        // than none. Boolean-coerced so a stray Promise can never serialise as {}.
+        gate_enabled: gateOn === true,
         inverse_rollback_hint: m.tier === 1 ? inverseHint(m.matched) : null,
       },
     }));
@@ -166,7 +286,7 @@ export async function checkPendingMigrations(supabase, sd, options = {}) {
     // chairman gate (scripts/lib/migration-guards.js, which this SD NEVER touches).
     // BOTH auto-apply vectors are gated: SD-declared migrations AND uncommitted manual
     // updates (both flow into executeWithRetry -> invokeDatabaseSubAgent/executeDirect).
-    const gateOn = tierGateEnabled();
+    const gateOn = await tierGateEnabled();
     let tier1Pending = sdPending;            // SD-declared files eligible for auto-apply
     let tier2Deferred = [];                  // SD-declared files held for @approved-by
     let uncommittedEligible = uncommitted;   // uncommitted manual-update files eligible
@@ -185,20 +305,18 @@ export async function checkPendingMigrations(supabase, sd, options = {}) {
       allClassified.forEach(m => console.log(`      • [TIER-${m.tier}] ${m.file} — ${m.tierReason}`));
 
       // FR-3: fail-soft audit of EVERY classification decision (never blocks the handoff).
-      await recordTierAudit(supabase, sd, allClassified);
+      await recordTierAudit(supabase, sd, allClassified, gateOn);
 
       if (gateOn) {
-        tier1Pending = classifiedSd.filter(m => m.tier === 1);
-        tier2Deferred = classifiedSd.filter(m => m.tier === 2);
-        uncommittedEligible = classifiedUnc.filter(m => m.tier === 1).map(m => m.file);
-        uncommittedDeferred = classifiedUnc.filter(m => m.tier === 2).map(m => m.file);
+        ({ tier1Pending, tier2Deferred, uncommittedEligible, uncommittedDeferred } =
+          partitionByTierGate(classifiedSd, classifiedUnc));
         const deferredFiles = [...tier2Deferred.map(m => m.file), ...uncommittedDeferred];
         if (deferredFiles.length > 0) {
           console.log('   ⛔ TIER-2 migrations are NOT auto-applied (default-deny). Apply each via the unchanged 3-factor chairman gate:');
           deferredFiles.forEach(f => console.log(`      node scripts/apply-migration.js ${f} --prod-deploy`));
         }
       } else {
-        console.log('   ℹ️  Tier gate OFF — classification is advisory only; auto-apply behavior unchanged. Enable with LEO_MIGRATION_TIER_GATE=on.');
+        console.log(`   ℹ️  Tier gate OFF — classification is advisory only; auto-apply behavior unchanged. The ${TIER_GATE_BYPASS_FLAG} flag is affirmatively enabled; disable it to restore the gate.`);
       }
     }
     const hasDeferred = tier2Deferred.length > 0 || uncommittedDeferred.length > 0;

@@ -94,11 +94,29 @@ describe('SD-FDBK-INFRA-SHARED-FLEET-WORKER-001: CLAIM_FIX fixture-session guard
 
   // Adversarial-review fix (Defect 2): a fixture must not win conflict-keeper selection and evict a
   // real worker before the CLAIM_FIX fixture guard runs ~166 lines later.
+  // SD-LEO-INFRA-STALE-SESSION-SWEEP-001: this assertion used to slice a FIXED 260-CHARACTER
+  // WINDOW from the `const bySD = {}` anchor. That pins a character offset, not a rule — adding a
+  // comment above the guard moved the guard out of the window and failed the test while the guard
+  // itself was untouched and still first. Per PAT-TEST-PINS-FACT-NOT-BEHAVIOUR-001, assert the RULE.
+  //
+  // The rule is: a fixture is excluded BEFORE anything is pushed into the bucket. Scoping to the
+  // real forEach body and checking ORDER is strictly STRONGER than the old window check — the old
+  // one would have passed with the guard placed after the push, which is the bug it exists to stop.
   it('excludes fixtures from the conflict bySD build (keeper selection)', () => {
     const idx = src.indexOf('const bySD = {}');
     expect(idx).toBeGreaterThan(0);
-    const block = src.slice(idx, idx + 260);
+    const forEachIdx = src.indexOf('classified.forEach', idx);
+    expect(forEachIdx).toBeGreaterThan(idx);
+    const endIdx = src.indexOf('});', forEachIdx);
+    expect(endIdx).toBeGreaterThan(forEachIdx);
+    const block = src.slice(forEachIdx, endIdx);
+
     expect(block).toMatch(/if\s*\(\s*isFixtureSession\(s\.session_id\)\s*\)\s*return;/);
+    // and it must come BEFORE the push that would admit it to keeper selection
+    const guardPos = block.search(/isFixtureSession\(s\.session_id\)/);
+    const pushPos = block.search(/bySD\[s\.sd_key\]\.push\(/);
+    expect(guardPos).toBeGreaterThanOrEqual(0);
+    expect(pushPos).toBeGreaterThan(guardPos);
   });
 
   it('imports isFixtureSession ABOVE the conflict build (not only in the broken-claim loop)', () => {
