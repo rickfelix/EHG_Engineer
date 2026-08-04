@@ -8,6 +8,8 @@
 // The gate itself is NOT scoped and must never be (FR-1). Everything here is the reporting path.
 import { describe, it, expect } from 'vitest';
 import { createRequire } from 'node:module';
+import { openQfMintGate } from '../../../lib/governance/qf-mint-gate.mjs';
+import { DEMAND_DECISION } from '../../../lib/governance/demand-gate.js';
 
 const require_ = createRequire(import.meta.url);
 const { countClaimableQuickFixes, countDispatchableBacklog } =
@@ -77,6 +79,66 @@ describe('TS-8b — an AMBIGUOUS lane refuses rather than counting one spelling'
   it('a DIFFERENT lane sharing no normal form does not trigger ambiguity', async () => {
     const s = stub({ count: 2, laneRows: [{ target_application: 'EHG' }, { target_application: 'EHG_Engineer' }] });
     await expect(countClaimableQuickFixes(s, 'EHG')).resolves.toBe(2);
+  });
+});
+
+describe('TS-6b — the REAL gauge, run across the floor (FR-5)', () => {
+  // FR-5 AS WRITTEN WOULD HAVE BEEN A NO-OP, and saying so is the point of this block.
+  //
+  // The ruling was: "TS-6's fixture MUST STRADDLE THE FLOOR or the identity-preserving mutation is
+  // invisible." Correct diagnosis, wrong lever. TS-6 asserts gauge IDENTITY
+  // (expect(seenGauge).toBe(countClaimableQuickFixes)) while STUBBING `measure`, so the gauge is
+  // captured and never called. Its `decision()` helper hardcodes BOTH gauge_value:1 AND the
+  // decision, so changing that 1 to a 7 changes nothing any assertion can observe — it is a
+  // fixture for a stub, not an input to a comparison. Editing it would have produced literal
+  // compliance and zero additional discrimination.
+  //
+  // The mutation actually feared is one INSIDE countClaimableQuickFixes that preserves its
+  // identity — a lane narrowing being the live candidate. Identity assertions cannot see it and
+  // neither can a stubbed measure. The only thing that can is running the REAL gauge through the
+  // REAL measureDemand with a count that MOVES ACROSS THE FLOOR, which is what these two do:
+  // omitting `measure` lets defaultMeasure run, and omitting `gauge` lets the real gauge run.
+  // FILTER-AWARE ON PURPOSE. A stub that returns a fixed count no matter what is applied to it
+  // cannot see a lane narrowing at all — the mutation would add .eq('target_application', ...),
+  // the count would come back unchanged, and this whole block would stay green while proving
+  // nothing. Modelling the filter's EFFECT is what makes the floor-straddle discriminating:
+  // an unscoped read returns `count`, a lane-scoped one returns the smaller `scopedCount`, and
+  // the verdict flips across the floor exactly as it would in production.
+  const gateStub = (count, scopedCount = count) => ({
+    from: () => {
+      let scoped = false;
+      const c = {
+        select: () => c,
+        eq: (col) => { if (col === 'target_application') scoped = true; return c; },
+        is: () => c, in: () => c,
+        then: (r) => Promise.resolve({ data: [], count: scoped ? scopedCount : count, error: null }).then(r),
+      };
+      return c;
+    },
+  });
+
+  it('a real reading ABOVE the floor withholds — and a LANE NARROWING would flip it', async () => {
+    // scopedCount 1 is the trap being set: if a future edit teaches countClaimableQuickFixes to
+    // filter by target_application, this stub returns 1 instead of 7, 1 <= 3 SOURCES, and this
+    // assertion fails. That is the identity-preserving mutation ruling (7) was aimed at, and it
+    // is caught here rather than in TS-6, which cannot see it.
+    const { allowed, demand } = await openQfMintGate(gateStub(7, 1), {
+      engine: 'fr5', env: { BELT_DEMAND_FLOOR: '3' }, record: async () => {}, log: () => {},
+    });
+    expect(demand.gauge_value).toBe(7);
+    expect(demand.decision).toBe(DEMAND_DECISION.WITHHELD);
+    expect(allowed).toBe(false);
+  });
+
+  it('a real reading AT OR BELOW the floor sources — the fixture straddles', async () => {
+    // The other side. Without it the pair above is satisfied by a gauge that always reads high,
+    // which is precisely the "cannot see a mutation that preserves what it asserts" trap.
+    const { allowed, demand } = await openQfMintGate(gateStub(2), {
+      engine: 'fr5', env: { BELT_DEMAND_FLOOR: '3' }, record: async () => {}, log: () => {},
+    });
+    expect(demand.gauge_value).toBe(2);
+    expect(demand.decision).toBe(DEMAND_DECISION.SOURCED);
+    expect(allowed).toBe(true);
   });
 });
 
