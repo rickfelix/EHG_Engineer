@@ -289,6 +289,36 @@ describe('FR-4: planDeadLetters (pure)', () => {
     expect(u.payload.body).toBe('go');
   });
 
+  // SD-LEO-INFRA-SIGNAL-ROUTER-AUTO-001 (FR-8, fourth site). BEHAVIOURAL, and guarded in the pure
+  // planner rather than in each executor's select so ONE edit covers both twins
+  // (dead-letter-planning.cjs and legacy-fallback.cjs, which sweep-legacy-twin-parity keeps in
+  // lockstep) and so the guard gets a real test instead of a fourth source scan.
+  it('SKIPS a promotion-marked row — it never stamps read_at, which would arm cleanup', () => {
+    // This path never touches acknowledged_at, so the inbox, the sender view and the starvation
+    // gauge all keep showing the row and it looks harmless. What it stamps is read_at, and a
+    // non-null read_at arms cleanup_expired_coordination's second disjunct — so the row is
+    // archived and deleted 7 days later, still unread. Before the stamp both columns are NULL
+    // and the row is permanently immune to cleanup; that immunity IS what promotion buys.
+    const promoted = row({ payload: { kind: 'coordinator_request', promotion_ack: true } });
+    expect(sweep.planDeadLetters([promoted], sets(), NOW)).toHaveLength(0);
+  });
+
+  it('DISCRIMINATES — an identical row WITHOUT the marker is still dead-lettered', () => {
+    // Without this half, a planner that returned [] unconditionally would satisfy the case above
+    // while silently disabling dead-lettering for everything.
+    expect(sweep.planDeadLetters([row()], sets(), NOW)).toHaveLength(1);
+  });
+
+  it('requires the marker to be strictly true, matching isPromotionAcked', () => {
+    // The SQL guards elsewhere exclude ANY present value (`payload->>key IS NULL`) while this
+    // predicate requires === true. Unreachable today because buildPromotionAckPayload only ever
+    // writes true, but the two are not interchangeable and a future writer could split them.
+    for (const v of [false, 'true', 1, null]) {
+      const r = row({ payload: { kind: 'coordinator_request', promotion_ack: v } });
+      expect(sweep.planDeadLetters([r], sets(), NOW), `promotion_ack=${JSON.stringify(v)}`).toHaveLength(1);
+    }
+  });
+
   it('row with a PAST expires_at keeps it (no backfill — only NULL is backfilled)', () => {
     const plan = sweep.planDeadLetters([row({ expires_at: iso(NOW - MIN) })], sets(), NOW);
     expect(plan).toHaveLength(1);
