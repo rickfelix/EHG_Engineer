@@ -220,6 +220,18 @@ export async function runDriveReportSweep({ nowMs, produce, gather, persist, reg
     cadence: 'scheduled',
   });
 
+  // A BLOCKED RUN IS NOT A HEALTHY ONE — checked BEFORE the stamp, because the stamp is what
+  // silences FR-7's alarm and this run produced nothing. Without this the table-absent path
+  // would exit cleanly AND stamp, so the alarm would read healthy while no report existed —
+  // which is precisely the false-green this instrument is built to refuse, committed by the
+  // very code that claims to refuse it. I wrote the comment saying "does NOT stamp" one edit
+  // before the code made it true; the comment was the lie, briefly.
+  const blocked = result?.row === undefined && result?.id === null && result?.written === true;
+  if (blocked || result?.blocked) {
+    log('BLOCKED: the report could not be persisted (table absent) — registry deliberately NOT stamped, so the staleness alarm still reports this window as missing');
+    return { ran: true, blocked: 'table_absent', run_id: runId, et_hour: gate.etHour };
+  }
+
   // Stamp on either healthy outcome. `already_produced` means a report for this window EXISTS,
   // which is precisely what the alarm asks about — treating it as "did not run" would make every
   // tick after the first re-arm the alarm. A genuine failure throws before reaching here and
@@ -254,7 +266,26 @@ if (import.meta.url === `file://${process.argv[1]}`.replace(/\\/g, '/')) {
     gather: buildGather({ supabase, computePlanCheckStatus }),
     persist: async (row) => {
       const { data, error } = await supabase.from('drive_reports').insert(row).select('id').single();
-      if (error) throw new Error(`persist failed: ${error.message}`);
+      if (error) {
+        // TABLE-ABSENT IS A KNOWN STATE, NOT A FAILURE — and telling them apart is this SD's
+        // whole thesis applied to its own deployment.
+        //
+        // The migration is chairman-gated behind --prod-deploy, so between merge and apply this
+        // table does not exist. Throwing on that produced ~32 red ticks a day (measured by the
+        // REGRESSION sub-agent across both DST cron lines), which normalises red on the Actions
+        // tab and masks a genuine failure for anyone triaging by "is anything red today".
+        //
+        // So a MISSING TABLE exits cleanly with a loud, distinct outcome, and every OTHER error
+        // still throws. Nothing is silenced: this path deliberately does NOT stamp the registry,
+        // so FR-7's staleness alarm still reports the report as overdue — which is the correct
+        // compensating control, and is now genuinely at 2x cadence rather than the inherited 3x.
+        // "Not yet deployed" and "broken" must not look the same, in either direction.
+        if (error.code === 'PGRST205' || error.code === '42P01') {
+          console.warn(`[drive-report-sweep] drive_reports does not exist yet (${error.code}) — the migration is chairman-gated and unapplied. NOT stamping the registry, so the FR-7 staleness alarm still reports this run as missing.`);
+          return { id: null, blocked: 'table_absent' };
+        }
+        throw new Error(`persist failed: ${error.message}`);
+      }
       return data;
     },
     findExisting: async (id) => {
@@ -263,7 +294,18 @@ if (import.meta.url === `file://${process.argv[1]}`.replace(/\\/g, '/')) {
     },
     register: (opts) => registerArmedMachinery(supabase, { sd_key: SD_KEY }, opts),
     stamp: async ({ processKey, field, at }) => {
-      const { error } = await supabase.from('periodic_process_registry').update({ [field]: at }).eq('process_key', processKey);
+      // grace_multiplier: 2 is NOT decoration — it is FR-7's "past 2x cadence" rule, and without
+      // it this row inherits the column default (sampled live: 3), so the alarm the PRD promises
+      // at 48h would not fire until 72h.
+      //
+      // Found by the VALIDATION sub-agent, and the finding was sharper than the number: FR-7's
+      // alarm is the COMPENSATING CONTROL for a producer that cannot write, and it degraded in
+      // exactly the state this SD ships in. isSelfStale() — which implements the 2x rule — has
+      // ZERO production callers; the live path is periodic-liveness-watcher.mjs reading this
+      // column. A rule implemented in a function nobody calls is a rule that is not in force.
+      const { error } = await supabase.from('periodic_process_registry')
+        .update({ [field]: at, grace_multiplier: 2 })
+        .eq('process_key', processKey);
       if (error) console.warn(`[drive-report-sweep] stamp failed: ${error.message}`);
     },
     log: (m) => console.log(`[drive-report-sweep] ${m}`),

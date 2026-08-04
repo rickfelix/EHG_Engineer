@@ -386,3 +386,51 @@ describe('[END-TO-END] the sweep drives the REAL producer — no stub in between
     })).rejects.toThrow(/persist must be injected/);
   });
 });
+
+describe('[BLOCKED] table-absent is a known state, not a healthy run and not a crash', () => {
+  // VALIDATION found that FR-7's staleness alarm is the compensating control for a producer
+  // that cannot write — and that it degraded in exactly the state this SD ships in. These pin
+  // both halves of the fix: the run does not spam CI red, and it does NOT silence the alarm.
+  const IN_WINDOW = Date.UTC(2026, 6, 15, 10, 0, 0);   // 06:00 ET
+
+  it('does NOT stamp the registry when persist reports the table is absent', async () => {
+    // The stamp is what silences the alarm. Stamping here would report healthy while no report
+    // exists — the false-green this instrument refuses. I shipped a comment claiming this before
+    // the code did it; the test is what makes the claim true.
+    let stamped = false;
+    const r = await runDriveReportSweep({
+      nowMs: IN_WINDOW,
+      produce: async () => ({ written: true, id: null, blocked: 'table_absent' }),
+      gather: async () => ({}),
+      persist: async () => ({ id: null, blocked: 'table_absent' }),
+      stamp: async () => { stamped = true; },
+    });
+    expect(r.blocked).toBe('table_absent');
+    expect(stamped, 'a blocked run must leave the staleness alarm armed').toBe(false);
+  });
+
+  it('[TWO-SIDED] a genuinely successful run DOES stamp', async () => {
+    // Without this, a guard that never stamped would pass the test above while permanently
+    // arming the alarm — an alarm that can never clear, which is a defect this SD already fixed
+    // once at the field-name level.
+    let stamped = false;
+    const r = await runDriveReportSweep({
+      nowMs: IN_WINDOW,
+      produce: async () => ({ written: true, id: 'row-1' }),
+      gather: async () => ({}),
+      persist: async () => ({ id: 'row-1' }),
+      stamp: async () => { stamped = true; },
+    });
+    expect(r.blocked).toBeUndefined();
+    expect(stamped).toBe(true);
+  });
+
+  it('the CLI passes grace_multiplier: 2 — FR-7 says 2x, the column default is 3', async () => {
+    // isSelfStale() implements the 2x rule and has ZERO production callers; the live path is
+    // periodic-liveness-watcher.mjs reading grace_multiplier off this row. Without setting it,
+    // the 48h alarm the PRD promises would not fire until 72h. A rule implemented in a function
+    // nobody calls is a rule that is not in force.
+    const src = fs.readFileSync(path.join(repoRoot, 'scripts', 'cron', 'drive-report-sweep.mjs'), 'utf8');
+    expect(src).toMatch(/grace_multiplier:\s*2/);
+  });
+});
