@@ -117,6 +117,25 @@ describe('invokeNurseryReeval — registered principal must EXIST, not merely be
     expect(supabase.inserts).toHaveLength(0);
   });
 
+  it('--dry-run does NOT report success while the principal is dangling', async () => {
+    // REGRESSION PIN for a false green I shipped and then caught at the consumer. An earlier
+    // draft placed the existence check AFTER the dryRun return, on the reasoning that a dry run
+    // writes nothing and so has nothing to protect. That defeated the point of dry run: it is
+    // the mode an operator uses to ask "is this scheduler healthy", so returning 'dry_run' with
+    // a deleted principal in the registry is exactly the false-green this guard exists to end.
+    const supabase = makeRecordingSupabase();
+    const result = await invokeNurseryReeval({ dryRun: true }, {
+      supabase,
+      registeredPrincipals: [PRINCIPAL],
+      principalExists: async () => ({ exists: false, detail: 'User not found' }),
+      logger: silentLogger,
+    });
+
+    expect(result.reason).toBe('registered_principal_missing');
+    expect(result.reason).not.toBe('dry_run');
+    expect(supabase.inserts).toHaveLength(0);
+  });
+
   it('resolves a REAL principal through the live admin shape and proceeds to enqueue', async () => {
     // THE TWO-SIDED CONTROL. Without this case the suite would pass just as happily against an
     // invoker that refuses unconditionally, which would be a different bug wearing this fix's
