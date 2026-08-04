@@ -238,8 +238,22 @@ describe('SECURITY — the spec file is untrusted input', () => {
   it('[CONTROL] a well-formed neuter is NOT refused by these guards', () => {
     // Without this, guards that reject EVERY spec would score a perfect pass on both tests above
     // while disabling the feature entirely. It must fail for some LATER reason, never these two.
-    const r = runSeedTestTrial({ ...base, neuter: { find: 'genuinely-absent-token-xyz', replace: 'z' } }, process.cwd());
+    //
+    // *** THE DEPENDENCY INJECTION IS LOAD-BEARING, NOT TIDINESS. *** This is the one case that
+    // gets PAST the guards, so it would otherwise reach the real body — building a git worktree
+    // and running a nested vitest INSIDE this very test file, which is itself the seed-test that
+    // trial runs. The first version did exactly that: standalone it passed in ~60s, but under
+    // full-suite CI load it blew the 60s timeout and turned the required check red. Caught by the
+    // RETRO agent reading the live PR, not by me. Stubbing `exec` makes it fail immediately at
+    // the first git call, which is all this test needs — it asserts WHICH refusal did not happen.
+    const explode = () => { throw new Error('stubbed: no real worktree in a unit test'); };
+    const r = runSeedTestTrial(
+      { ...base, neuter: { find: 'genuinely-absent-token-xyz', replace: 'z' } },
+      process.cwd(),
+      { exec: explode, spawn: explode },
+    );
     expect(r.code).not.toBe('NEUTER_FILE_NOT_SCRIPT');
     expect(r.code).not.toBe('NEUTER_FIND_EMPTY');
+    expect(r.code).toBe('HARNESS_THREW'); // reached the body, i.e. the guards let it through
   });
 });
