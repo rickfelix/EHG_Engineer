@@ -185,7 +185,14 @@ try {
       }
       const other = await probe('other-source-under-limit', {
         source_type: 'user_feedback',
-        feedback_type: 'user_general',
+        // 'user_general' is NOT in feedback_feedback_type_check, whose live admitted set is
+        // {sentry_error, user_bug, user_feature_request, user_usability, user_other, venture_error}.
+        // As anon it returned 23514 at the CHECK and never reached RLS, so test B could never turn
+        // green regardless of policy state — the exact class this file's own header (:29-32) warns
+        // about and records as having voided a full battery four times. 'user_bug' is admitted and
+        // also satisfies venture_user_insert_feedback's `feedback_type LIKE 'user_%'`.
+        // SD-LEO-INFRA-DEAD-VENTURE-USER-001 FR-4.
+        feedback_type: 'user_bug',
         severity: 'low',
         venture_id: ventureId,
       });
