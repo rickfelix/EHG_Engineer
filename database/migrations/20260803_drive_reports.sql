@@ -1,0 +1,507 @@
+-- SD-LEO-INFRA-DRIVE-LOOP-INSTRUMENT-001-B (FR-4) — the Drive Report table.
+--
+-- CLASSIFICATION, recorded rather than assumed: TIER-1-ADDITIVE and NOT permission-class, so
+-- no chairman pre-approval was needed to author this (coordinator ruling 2c526b33). That
+-- classification is CONDITIONAL on the posture below being service-role-only.
+--
+-- THE RECLASSIFICATION TRIGGER, written here because a flag without its invalidating condition
+-- is how a classification silently rots: THE MOMENT ANY NON-SERVICE GRANT APPEARS ON THIS TABLE
+-- IT BECOMES PERMISSION-CLASS AND GOES TO THE CHAIRMAN. Adding an anon or authenticated grant
+-- is not a tweak to this migration; it is a different class of change.
+--
+-- POSTURE IS ASSERTED, NOT INFERRED (coordinator ruling 4ba3f708, revised after measurement).
+-- The precedent originally cited relied on Postgres' implicit deny — RLS on with no policy. A
+-- population check of six recent table migrations found that shape was the OUTLIER: five use an
+-- explicit service_role policy and four carry a verify block. For a table whose non-permission
+-- status is CONDITIONAL on its posture, the posture must be self-verifying — the reclassification
+-- trigger above is only enforceable if something actually checks, and the DO $verify$ block is
+-- that something at the cheapest possible point.
+--
+-- WHY THE SECTIONS ARE JSONB AND NOT COLUMNS (C4): sections store CITATIONS AND PREDICATES ONLY —
+-- every number must be re-derivable from its cited query, with no copied state. Columns would
+-- invite storing the values themselves, which is exactly what the guardrail forbids.
+
+CREATE TABLE IF NOT EXISTS public.drive_reports (
+  id                    uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+  generated_at          timestamptz NOT NULL DEFAULT now(),
+
+  -- Which run produced this, so a report traces back to the job that wrote it.
+  run_id                text,
+  cadence               text NOT NULL DEFAULT 'scheduled'
+                          CHECK (cadence IN ('scheduled', 'on_demand')),
+
+  -- The five sections. Citations and predicates only — never copied values.
+  sections              jsonb NOT NULL DEFAULT '{}'::jsonb,
+
+  -- drive_score X/8 over four legs, 2 points each, every leg carrying artifact row-ids.
+  -- Chairman decision latency lives here too, BESIDE the score and ungraded (option A,
+  -- ratified by SMS, row 5d90338c) — never folded into the total.
+  drive_score           jsonb NOT NULL DEFAULT '{}'::jsonb,
+
+  -- NO consumption_receipts COLUMN. Receipts are PER-LANE ROWS in drive_report_receipts below
+  -- (coordinator ruling, 2026-08-04). A jsonb per-lane map forces read-merge-write on every
+  -- writer forever, and through PostgREST it additionally needs a conditional-update guard that
+  -- every future sibling has to remember — one forgetful commit silently clobbers another lane's
+  -- receipt, and the damage surfaces in THEIR lane, not the writer's. The per-lane row has no
+  -- merge, no clobber window and no guard to forget. Safe by construction beats safe by
+  -- discipline. The column is REMOVED rather than deprecated in place: leaving it would be two
+  -- representations of one fact, and a column that exists WILL eventually be written to.
+
+  -- Bumped when the sections/score shape changes, so an old row is readable as old rather
+  -- than as malformed.
+  schema_version        integer NOT NULL DEFAULT 1,
+
+  metadata              jsonb NOT NULL DEFAULT '{}'::jsonb
+);
+
+COMMENT ON TABLE public.drive_reports IS
+  'Externally-scheduled Drive Report (SD-LEO-INFRA-DRIVE-LOOP-INSTRUMENT-001-B). One row per run of the GHA cron, computed on wall-clock cadence independent of any session turn state. Sections store citations and predicates only, never copied values, so every number is re-derivable from its cited query. Consumption receipts are written BY EACH CONSUMER, never by the producer. Service-role only; any non-service grant reclassifies this table as permission-class and requires chairman approval.';
+
+-- ---------------------------------------------------------------------------
+-- CONSUMPTION RECEIPTS — ONE ROW PER (report, lane).
+--
+-- A receipt proves the CONSUMER read the report. It is never written by the producer (C1):
+-- a producer-stamped receipt would prove only that the producer believed delivery happened,
+-- which is the one thing a receipt must not do.
+--
+-- The lane vocabulary also lives in lib/drive-loop/lanes.js as DRIVE_REPORT_LANES. Two
+-- representations of one vocabulary can drift, and the drift is invisible until an INSERT
+-- fails in production — so tests/unit/drive-loop/vocabulary-drift.test.js parses this CHECK
+-- and asserts the two sets are EQUAL.
+-- ---------------------------------------------------------------------------
+CREATE TABLE IF NOT EXISTS public.drive_report_receipts (
+  id           uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+
+  -- CASCADE: a receipt for a deleted report is not history, it is a dangling claim about a
+  -- row nobody can read.
+  report_id    uuid NOT NULL REFERENCES public.drive_reports(id) ON DELETE CASCADE,
+
+  lane         text NOT NULL CHECK (lane IN ('coordinator', 'adam', 'chairman_brief')),
+
+  -- When the consumer actually read it. Defaulted rather than required so a consumer cannot
+  -- accidentally stamp a receipt with no time on it.
+  consumed_at  timestamptz NOT NULL DEFAULT now(),
+
+  metadata     jsonb NOT NULL DEFAULT '{}'::jsonb
+  -- The UNIQUE(report_id, lane) constraint is declared AFTER this statement, not inline. See
+  -- the block below for why — it is about self-healing, not style.
+);
+
+-- THE POINT OF THE SHAPE. One receipt per lane per report, enforced here rather than by every
+-- writer remembering to merge. Makes the write a single native upsert
+-- (ON CONFLICT (report_id, lane)) that PostgREST expresses directly, and makes a second receipt
+-- from the same lane an update of that lane ALONE — no sibling is reachable.
+--
+-- ── WHY THIS IS NOT INLINE IN THE CREATE TABLE ────────────────────────────────────────────
+-- Because an inline constraint CANNOT BE RESTORED BY RE-RUNNING THIS FILE. `CREATE TABLE IF
+-- NOT EXISTS` is a no-op once the table exists, so anything declared inside it — this UNIQUE,
+-- the CHECKs, the FK, the PKs — is created exactly once, at first apply, and never again.
+--
+-- MEASURED, not theorised: the DDL suite dropped this constraint to prove the verify block
+-- catches its absence, restored via a re-run of this migration, and the constraint stayed
+-- gone. The verify block then failed on every subsequent apply and cascaded into unrelated
+-- tests. CI caught it; the tier cannot run locally.
+--
+-- The production corollary is the part that actually matters, and it outlives the test bug: if
+-- drive_report_receipts ever exists WITHOUT this constraint — a partial apply, a manual drop, a
+-- restore from a dump that lost it — re-running this migration would not repair it, it would
+-- simply abort at the verify block. Fail-closed, so never an exposure, but asymmetric with
+-- drive_reports_run_id_uniq, which self-heals via CREATE UNIQUE INDEX IF NOT EXISTS.
+--
+-- Declared idempotently below, so this file can repair the object rather than only assert it.
+-- (Raised by the ddl-review peer, whose production-corollary framing is what made this worth
+-- changing rather than patching the test.)
+DO $receipts_uniq$
+BEGIN
+  IF NOT EXISTS (
+    SELECT 1 FROM pg_constraint
+    WHERE conrelid = 'public.drive_report_receipts'::regclass
+      AND conname = 'drive_report_receipts_report_lane_uniq'
+  ) THEN
+    ALTER TABLE public.drive_report_receipts
+      ADD CONSTRAINT drive_report_receipts_report_lane_uniq UNIQUE (report_id, lane);
+  END IF;
+END
+$receipts_uniq$;
+
+COMMENT ON TABLE public.drive_report_receipts IS
+  'Consumption receipts for drive_reports, ONE ROW PER (report_id, lane) — coordinator ruling 2026-08-04, replacing a jsonb per-lane map on drive_reports. Written BY EACH CONSUMER (coordinator, adam, chairman_brief), never by the producer: a producer-stamped receipt proves only that the producer believed delivery happened. The unique constraint removes the read-merge-write clobber window entirely rather than guarding it.';
+
+-- The receipts a given report has collected, and "has lane X consumed anything recently".
+CREATE INDEX IF NOT EXISTS drive_report_receipts_report_idx
+  ON public.drive_report_receipts (report_id);
+CREATE INDEX IF NOT EXISTS drive_report_receipts_lane_consumed_idx
+  ON public.drive_report_receipts (lane, consumed_at DESC);
+
+ALTER TABLE public.drive_report_receipts ENABLE ROW LEVEL SECURITY;
+
+DROP POLICY IF EXISTS drive_report_receipts_service_role ON public.drive_report_receipts;
+CREATE POLICY drive_report_receipts_service_role
+  ON public.drive_report_receipts
+  FOR ALL TO service_role
+  USING (true) WITH CHECK (true);
+
+-- Same posture as the parent table: service-role only. A receipts table is a record of who
+-- read what, so a non-service grant here reclassifies it exactly as it would the report.
+REVOKE ALL ON public.drive_report_receipts FROM anon, authenticated, PUBLIC;
+GRANT ALL ON public.drive_report_receipts TO service_role;
+
+-- Section 5 counts unmoved items across reports, and the self-staleness alarm asks "when was
+-- the last one" — both are ordered reads over generated_at.
+CREATE INDEX IF NOT EXISTS drive_reports_generated_at_idx
+  ON public.drive_reports (generated_at DESC);
+
+-- ONE ROW PER run_id, ENFORCED BY THE DATABASE.
+--
+-- The producer probes for an existing run_id before writing, but a probe-then-write is a
+-- decision made from a stale read: two ticks of the self-healing window that overlap, or a
+-- GitHub job re-run racing the original, can both observe "no row" and both insert. The
+-- application guard is the fast path; this index is what makes the duplicate IMPOSSIBLE
+-- rather than merely unlikely.
+--
+-- It matters more here than the word "duplicate" suggests. Section 5 computes report-over-
+-- report deltas against the immediately prior row. A second row for the same run makes it
+-- diff a report against itself: guaranteed zero movement, rendered as a stall that is not
+-- happening. The duplicate does not just waste a row, it silently corrupts the one section
+-- whose entire subject is history.
+--
+-- PARTIAL, because run_id is nullable: an ad-hoc row written without a run id is legitimate
+-- (cadence 'on_demand'), and NULLs are distinct under a plain UNIQUE anyway. Stating WHERE
+-- makes the intent legible instead of relying on that NULL-comparison subtlety.
+CREATE UNIQUE INDEX IF NOT EXISTS drive_reports_run_id_uniq
+  ON public.drive_reports (run_id)
+  WHERE run_id IS NOT NULL;
+
+-- ---------------------------------------------------------------------------
+-- APPEND-ONLY OBSERVATIONS — the boundary on the C4 ruling, enforced not documented.
+--
+-- The ruling that permits storing a value at all (coordinator 640f3ebc) covers OBSERVATIONS:
+-- a number stamped generated_at with its citation and predicate attached is a measurement with
+-- its instrument, not copied state. The ruling's stated boundary is that this holds ONLY while
+-- the observation is append-only — "if any path UPDATES a stored observation in place, it stops
+-- being an observation and becomes copied state again (the delta baseline silently rewrites)".
+--
+-- That boundary is load-bearing for section 5. Report-over-report deltas compare N against N+1;
+-- if N can be edited afterwards, the baseline moves and a delta silently becomes meaningless
+-- while continuing to render a number. Nothing above this line prevented that.
+--
+-- AND UNDER THE PER-LANE RULING THE DIFFICULTY LARGELY DISSOLVES, which is worth recording
+-- because it is the second thing that shape bought. While receipts were a jsonb column ON this
+-- row, the row could never be wholly frozen: C1 requires each consumer to stamp its own receipt
+-- after the fact, so the trigger had to be a PARTIAL immutability that permitted writes to
+-- exactly one column — and every future field had to be classified by hand as observation or
+-- receipt. With receipts in their own table, the observation fields freeze and nothing about
+-- consumption needs an exemption. `metadata` stays writable deliberately; that is now the only
+-- carve-out rather than one of two.
+-- ---------------------------------------------------------------------------
+CREATE OR REPLACE FUNCTION public.drive_reports_freeze_observations()
+RETURNS trigger
+LANGUAGE plpgsql
+AS $freeze$
+BEGIN
+  IF NEW.sections IS DISTINCT FROM OLD.sections THEN
+    RAISE EXCEPTION 'drive_reports.sections is append-only: a stored observation that can be rewritten is copied state, and section-5 deltas silently lose their baseline (report id %)', OLD.id;
+  END IF;
+  IF NEW.drive_score IS DISTINCT FROM OLD.drive_score THEN
+    RAISE EXCEPTION 'drive_reports.drive_score is append-only: rewriting a past score rewrites the trend it is measured against (report id %)', OLD.id;
+  END IF;
+  IF NEW.generated_at IS DISTINCT FROM OLD.generated_at THEN
+    RAISE EXCEPTION 'drive_reports.generated_at is append-only: it is the observation timestamp, not a bookkeeping field (report id %)', OLD.id;
+  END IF;
+  -- run_id, because the unique index that prevents duplicate runs is PARTIAL (WHERE run_id IS
+  -- NOT NULL). Setting run_id to NULL on an existing row moves it OUT of the index predicate and
+  -- frees the key for re-insertion — re-opening the duplicate path, and with it the section-5
+  -- corruption where a report is diffed against itself. Only service_role can do this, but
+  -- service_role is exactly this trigger's threat model: every other frozen column above is
+  -- protected from the same actor. A constraint that an UPDATE can step around is not one.
+  IF NEW.run_id IS DISTINCT FROM OLD.run_id THEN
+    RAISE EXCEPTION 'drive_reports.run_id is append-only: it is the idempotence key, and clearing it moves the row out of the partial unique index and frees the key for a duplicate (report id %)', OLD.id;
+  END IF;
+  -- metadata is DELIBERATELY writable, and it is now the ONLY exemption: receipts moved to
+  -- their own table, so consumption no longer needs a hole in this trigger at all.
+  RETURN NEW;
+END
+$freeze$;
+
+DROP TRIGGER IF EXISTS drive_reports_freeze_observations_trg ON public.drive_reports;
+CREATE TRIGGER drive_reports_freeze_observations_trg
+  BEFORE UPDATE ON public.drive_reports
+  FOR EACH ROW EXECUTE FUNCTION public.drive_reports_freeze_observations();
+
+-- ---------------------------------------------------------------------------
+-- THE DELETE HALF OF APPEND-ONLY.
+--
+-- The UPDATE trigger above froze four columns against service_role — and GRANT ALL includes
+-- DELETE, so DELETE + re-INSERT walked around all four. Every observation the freeze protects
+-- could be rewritten by the very actor the freeze names as its threat model. A constraint that
+-- one extra statement steps around is a speed bump, not a constraint. (SECURITY F7.)
+--
+-- WHY NOT SIMPLY FORBID DELETE: a retention policy will eventually need it, and the DDL suite
+-- legitimately deletes to prove the receipts CASCADE works. A blanket block would be honest but
+-- would make a normal operation impossible, and the usual response to that is someone dropping
+-- the trigger entirely — trading a narrow hole for a total one.
+--
+-- So deletion is POSSIBLE BUT NEVER ACCIDENTAL: it requires the caller to say so in the same
+-- transaction. `SET LOCAL` scopes the permission to that transaction and it cannot leak into the
+-- next one. The point is not to stop a determined operator — nothing here could — it is that
+-- rewriting history has to be a DELIBERATE, GREPPABLE act rather than a side effect of an
+-- ordinary DELETE somebody wrote for another reason.
+-- ---------------------------------------------------------------------------
+CREATE OR REPLACE FUNCTION public.drive_reports_guard_delete()
+RETURNS trigger
+LANGUAGE plpgsql
+AS $del$
+BEGIN
+  -- current_setting(..., true) returns NULL rather than raising when the GUC was never set,
+  -- which is the normal case and must not itself be an error.
+  IF COALESCE(current_setting('drive_reports.allow_delete', true), 'off') <> 'on' THEN
+    RAISE EXCEPTION 'drive_reports rows are append-only: DELETE would let an observation be rewritten by DELETE + re-INSERT, stepping around the freeze trigger. If this is deliberate (retention, or a test), say so in the same transaction: SET LOCAL drive_reports.allow_delete = ''on'' (report id %)', OLD.id;
+  END IF;
+  RETURN OLD;
+END
+$del$;
+
+DROP TRIGGER IF EXISTS drive_reports_guard_delete_trg ON public.drive_reports;
+CREATE TRIGGER drive_reports_guard_delete_trg
+  BEFORE DELETE ON public.drive_reports
+  FOR EACH ROW EXECUTE FUNCTION public.drive_reports_guard_delete();
+
+-- ---------------------------------------------------------------------------
+-- Posture: service-role only. Asserted, not inherited.
+-- ---------------------------------------------------------------------------
+ALTER TABLE public.drive_reports ENABLE ROW LEVEL SECURITY;
+
+-- Guarded so the file is genuinely re-runnable — the CREATE TABLE and CREATE INDEX above use
+-- IF NOT EXISTS, which advertises an idempotence a bare CREATE POLICY would not have.
+DROP POLICY IF EXISTS drive_reports_service_role ON public.drive_reports;
+CREATE POLICY drive_reports_service_role
+  ON public.drive_reports
+  FOR ALL
+  TO service_role
+  USING (true)
+  WITH CHECK (true);
+
+-- THE LOAD-BEARING LINES. Default grants are the documented failure mode; an inherited grant
+-- here would publish fleet plan-position and belt-diagnosis content to anon via PostgREST.
+-- PUBLIC included, matching the receipts table below. The tripwire reclassifies on ANY
+-- non-service grant INCLUDING PUBLIC, so revoking only two named roles here left the statement
+-- narrower than the rule it serves — the same enumerate-by-name mistake the tripwire itself was
+-- widened to fix. Fail-closed either way (the verify block aborts the deploy inside a
+-- transaction), so this is consistency, not an exposure. (SECURITY F6.)
+REVOKE ALL ON public.drive_reports FROM anon, authenticated, PUBLIC;
+GRANT ALL ON public.drive_reports TO service_role;
+
+-- ---------------------------------------------------------------------------
+-- Self-verification: fail the deploy if the table OR ITS POSTURE did not land.
+-- The posture assertions are the point — a table that lands without its RLS is the
+-- silent failure this whole classification depends on not happening.
+-- ---------------------------------------------------------------------------
+DO $verify$
+BEGIN
+  ASSERT to_regclass('public.drive_reports') IS NOT NULL,
+    'drive_reports table did not land';
+
+  ASSERT EXISTS (
+    SELECT 1 FROM pg_class
+    WHERE oid = 'public.drive_reports'::regclass AND relrowsecurity
+  ), 'drive_reports: RLS is NOT enabled — the service-role-only classification does not hold';
+
+  ASSERT (
+    SELECT count(*) FROM pg_policies
+    WHERE schemaname = 'public' AND tablename = 'drive_reports'
+  ) = 1, 'drive_reports: expected exactly ONE policy — a second policy is a posture change, not an addition';
+
+  ASSERT EXISTS (
+    SELECT 1 FROM pg_policies
+    WHERE schemaname = 'public' AND tablename = 'drive_reports'
+      AND policyname = 'drive_reports_service_role'
+  ), 'drive_reports: the service_role policy is missing or renamed';
+
+  -- ── THE POLICY'S SHAPE, NOT JUST ITS NAME ────────────────────────────────────────────────
+  --
+  -- Everything above checks that A policy exists, that there is exactly one, and that it is
+  -- NAMED correctly. None of it reads who the policy is FOR. So a policy written
+  -- `FOR ALL TO PUBLIC USING (true)` and named drive_reports_service_role satisfies every
+  -- assertion this migration previously shipped — while granting the whole table to everyone.
+  -- That is precisely the reclassification condition this table's own COMMENT escalates to the
+  -- chairman, and nothing was checking it. (Raised by the ddl-review peer; MEASURED here — a
+  -- grep for polroles/pg_policies.roles across this file returned ZERO before this block.)
+  --
+  -- pg_policy.polroles is the load-bearing column: TO PUBLIC stores {0}, so an explicit
+  -- ARRAY['service_role'::regrole] comparison rejects it. polcmd '*' is FOR ALL.
+  --
+  -- WHY IN THE VERIFY BLOCK RATHER THAN THE DDL TEST TIER: this runs at
+  -- scripts/apply-migration.js --prod-deploy, so it is a DEPLOY-TIME guarantee against the REAL
+  -- instance. The DDL tier cannot give that — its postgres runs as a superuser who also owns
+  -- every object, with no FORCE ROW LEVEL SECURITY, so policies there are never evaluated at
+  -- all. Putting the check here means it fires the moment the chairman-gated apply happens,
+  -- which is the one place production posture is actually decidable.
+  ASSERT EXISTS (
+    SELECT 1 FROM pg_policy p
+    WHERE p.polrelid = 'public.drive_reports'::regclass
+      AND p.polname = 'drive_reports_service_role'
+      AND p.polroles = ARRAY['service_role'::regrole::oid]
+      AND p.polcmd = '*'
+      AND p.polpermissive
+  ), 'drive_reports: the policy exists but is NOT "FOR ALL TO service_role" — a policy TO PUBLIC (polroles {0}) or scoped to one command would pass a name-only check while granting this table far more widely, which is the permission-class reclassification this table requires chairman approval for';
+
+  -- The idempotence guard has to be UNIQUE and it has to be PARTIAL. Asserted on both
+  -- properties, because an index that exists under the right name while being neither would
+  -- pass a name-only check and enforce nothing — and the failure it admits (a duplicate run)
+  -- is invisible in the data: it looks exactly like a report showing no movement.
+  ASSERT EXISTS (
+    SELECT 1 FROM pg_index i
+    JOIN pg_class c ON c.oid = i.indexrelid
+    WHERE i.indrelid = 'public.drive_reports'::regclass
+      AND c.relname = 'drive_reports_run_id_uniq'
+      AND i.indisunique
+      AND i.indpred IS NOT NULL
+  ), 'drive_reports: drive_reports_run_id_uniq is missing, not UNIQUE, or not partial — two rows for one run would be insertable, and section 5 would then diff a report against itself and report a stall that is not happening';
+
+  -- The reclassification trigger, enforced rather than merely documented: if ANY role other than
+  -- the owner and service_role holds ANY privilege on this table, the non-permission-class
+  -- classification recorded on the SD is false and the deploy must fail loudly rather than ship a lie.
+  --
+  -- WIDENED from `grantee IN ('anon','authenticated')`. The coordinator ruling reclassifies on ANY
+  -- NON-SERVICE GRANT, but the old assertion ENUMERATED TWO ROLES BY NAME — so `GRANT ... TO PUBLIC`,
+  -- or a grant to any role invented later, walked straight past the one check enforcing the ruling's
+  -- own condition. A tripwire narrower than the rule it guards reads as enforcement and isn't.
+  -- Found by the SECURITY sub-agent, which correctly marked it INFERRED rather than measured.
+  --
+  -- MEASURED WHILE WIDENING, and it corrected my own first explanation: I assumed
+  -- information_schema.role_table_grants could not see PUBLIC at all. It can — this database has 2
+  -- such rows. So the defect was never the view's blindness; it was the literal two-role list. Worth
+  -- stating because the wrong diagnosis would have suggested the wrong fix (swap the view) instead
+  -- of the right one (stop naming roles).
+  --
+  -- Reads pg_class.relacl via aclexplode: the authoritative ACL, which represents PUBLIC explicitly
+  -- as grantee OID 0 and enumerates EVERY grantee rather than the ones we thought to name.
+  -- Deny-by-default — a role invented next year is caught by construction, not by amendment.
+  -- Verified read-only before shipping: this predicate executes and correctly enumerates
+  -- anon/authenticated/service_role on existing tables, and aclexplode does surface grantee=0.
+  ASSERT NOT EXISTS (
+    SELECT 1
+    FROM pg_class c
+    CROSS JOIN LATERAL aclexplode(COALESCE(c.relacl, acldefault('r', c.relowner))) a
+    WHERE c.oid = 'public.drive_reports'::regclass
+      AND a.grantee <> c.relowner                                            -- the owner is not a grant
+      AND COALESCE(pg_get_userbyid(NULLIF(a.grantee, 0)), 'PUBLIC') <> 'service_role'
+  ), 'drive_reports: a non-service grant exists (including PUBLIC) — this table is now PERMISSION-CLASS and requires chairman approval';
+
+  -- COLUMN-LEVEL grants, which the table-level check above cannot see at all. pg_class.relacl
+  -- holds only table grants; `GRANT SELECT (sections) ON drive_reports TO anon` lands in
+  -- pg_attribute.attacl and leaves relacl untouched, so it walks past the tripwire exactly the
+  -- way `GRANT ... TO PUBLIC` used to. Same defect, one level down: a check that reads one ACL
+  -- catalogue and speaks for both.
+  --
+  -- RLS is still the real barrier, so this is not an exposure — it is the SD's own
+  -- classification rule being enforced completely rather than partially. Raised by the SECURITY
+  -- sub-agent as INFERRED (no live PG available to it); the DDL suite executes it for real.
+  -- ── The receipts table, asserted with the SAME posture as its parent ──────────────────
+  ASSERT to_regclass('public.drive_report_receipts') IS NOT NULL,
+    'drive_report_receipts did not land — receipts are per-lane ROWS (coordinator ruling 2026-08-04), not a jsonb map';
+
+  -- The column must be GONE, not merely unused. A jsonb receipts column left in place is a
+  -- second representation of the same fact, and a column that exists will eventually be
+  -- written to — by a consumer built against the superseded design, silently, with no error.
+  ASSERT NOT EXISTS (
+    SELECT 1 FROM information_schema.columns
+    WHERE table_schema = 'public' AND table_name = 'drive_reports' AND column_name = 'consumption_receipts'
+  ), 'drive_reports.consumption_receipts still exists — the per-lane ruling replaced it, and leaving it is two representations of one fact';
+
+  ASSERT EXISTS (
+    SELECT 1 FROM pg_class WHERE oid = 'public.drive_report_receipts'::regclass AND relrowsecurity
+  ), 'drive_report_receipts: RLS is NOT enabled — a record of who read what is service-role-only, same as the report';
+
+  ASSERT (
+    SELECT count(*) FROM pg_policies WHERE schemaname = 'public' AND tablename = 'drive_report_receipts'
+  ) = 1, 'drive_report_receipts: expected exactly ONE policy';
+
+  -- The receipts table was WEAKER than its parent: a bare count(*) = 1 with no name check and
+  -- no shape check, so any single policy at all satisfied it. A receipts table is a record of
+  -- who read what, so it carries the same reclassification rule — asserted identically now
+  -- rather than "the parent is checked, this one is similar". (ddl-review peer.)
+  ASSERT EXISTS (
+    SELECT 1 FROM pg_policy p
+    WHERE p.polrelid = 'public.drive_report_receipts'::regclass
+      AND p.polname = 'drive_report_receipts_service_role'
+      AND p.polroles = ARRAY['service_role'::regrole::oid]
+      AND p.polcmd = '*'
+      AND p.polpermissive
+  ), 'drive_report_receipts: the policy is missing, renamed, or NOT "FOR ALL TO service_role" — a policy TO PUBLIC would pass a bare count check while exposing who-read-what to every role';
+
+  -- The unique constraint IS the design. Without it the table is just a log and every writer is
+  -- back to read-merge-write, which is the hazard the shape was chosen to remove.
+  ASSERT EXISTS (
+    SELECT 1 FROM pg_constraint
+    WHERE conrelid = 'public.drive_report_receipts'::regclass
+      AND conname = 'drive_report_receipts_report_lane_uniq'
+      AND contype = 'u'
+  ), 'drive_report_receipts: UNIQUE(report_id, lane) is missing — without it a lane can hold two receipts and the clobber window the per-lane shape removes is back';
+
+  ASSERT EXISTS (
+    SELECT 1 FROM pg_constraint
+    WHERE conrelid = 'public.drive_report_receipts'::regclass AND contype = 'f'
+  ), 'drive_report_receipts: the report_id foreign key is missing — a receipt for a report that does not exist is a dangling claim';
+
+  ASSERT NOT EXISTS (
+    SELECT 1
+    FROM pg_class c
+    CROSS JOIN LATERAL aclexplode(COALESCE(c.relacl, acldefault('r', c.relowner))) a
+    WHERE c.oid = 'public.drive_report_receipts'::regclass
+      AND a.grantee <> c.relowner
+      AND COALESCE(pg_get_userbyid(NULLIF(a.grantee, 0)), 'PUBLIC') <> 'service_role'
+  ), 'drive_report_receipts: a non-service grant exists (including PUBLIC) — this table is now PERMISSION-CLASS and requires chairman approval';
+
+  ASSERT NOT EXISTS (
+    SELECT 1
+    FROM pg_attribute at
+    CROSS JOIN LATERAL aclexplode(at.attacl) a
+    WHERE at.attrelid = 'public.drive_reports'::regclass
+      AND at.attacl IS NOT NULL
+      AND a.grantee <> (SELECT relowner FROM pg_class WHERE oid = 'public.drive_reports'::regclass)
+      AND COALESCE(pg_get_userbyid(NULLIF(a.grantee, 0)), 'PUBLIC') <> 'service_role'
+  ), 'drive_reports: a non-service COLUMN grant exists (including PUBLIC) — column grants live in pg_attribute.attacl and are invisible to the table-level ACL check; this table is now PERMISSION-CLASS and requires chairman approval';
+
+  -- THE SAME COLUMN-GRANT CHECK FOR THE RECEIPTS TABLE.
+  --
+  -- Recorded plainly because it is the sharper lesson: the assertion above carries a comment
+  -- warning against "a check that reads one ACL catalogue and speaks for both" — and then this
+  -- migration shipped a check that read one TABLE and spoke for both, on a table added in the
+  -- same commit. Naming a defect class in a comment does not extend the code that comment sits
+  -- on. Coverage has to be enumerated, not implied. (SECURITY F5.)
+  ASSERT NOT EXISTS (
+    SELECT 1
+    FROM pg_attribute at
+    CROSS JOIN LATERAL aclexplode(at.attacl) a
+    WHERE at.attrelid = 'public.drive_report_receipts'::regclass
+      AND at.attacl IS NOT NULL
+      AND a.grantee <> (SELECT relowner FROM pg_class WHERE oid = 'public.drive_report_receipts'::regclass)
+      AND COALESCE(pg_get_userbyid(NULLIF(a.grantee, 0)), 'PUBLIC') <> 'service_role'
+  ), 'drive_report_receipts: a non-service COLUMN grant exists (including PUBLIC) — a record of who read what is service-role-only, same as the report';
+
+  -- The append-only boundary on the C4 ruling. Without this trigger a stored observation is
+  -- rewritable, which turns it back into copied state and silently moves the baseline every
+  -- section-5 delta is measured against. Asserted here because the ruling explicitly asked
+  -- for one assertion pinning it — a boundary that is only in a comment is not a boundary.
+  ASSERT EXISTS (
+    SELECT 1 FROM pg_trigger
+    WHERE tgrelid = 'public.drive_reports'::regclass
+      AND tgname = 'drive_reports_freeze_observations_trg'
+      AND NOT tgisinternal
+  ), 'drive_reports: the append-only trigger is missing — stored observations would be rewritable and section-5 deltas would lose their baseline';
+
+  -- The DELETE half. Asserted separately because the UPDATE trigger existing tells you nothing
+  -- about whether DELETE + re-INSERT can step around it, and that gap is invisible from the
+  -- UPDATE assertion above — which passed for the entire time the hole was open.
+  ASSERT EXISTS (
+    SELECT 1 FROM pg_trigger
+    WHERE tgrelid = 'public.drive_reports'::regclass
+      AND tgname = 'drive_reports_guard_delete_trg'
+      AND NOT tgisinternal
+  ), 'drive_reports: the DELETE guard is missing — an observation could be rewritten by DELETE + re-INSERT, which the UPDATE freeze cannot see';
+END
+$verify$;
+
+-- Reload PostgREST schema cache so the new table is immediately visible.
+NOTIFY pgrst, 'reload schema';
