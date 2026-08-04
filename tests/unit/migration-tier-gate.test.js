@@ -3,7 +3,6 @@
  *
  * The classifier itself (FR-1) is exhaustively covered by migration-tier-classifier.test.js.
  * This suite covers the HANDOFF-TIME GATE wiring in pending-migrations-check.js:
- *   - tierGateEnabled(): opt-in, ONLY the literal 'on' (case-insensitive) enables.
  *   - classifyPendingTiers(): reads each file's SQL and annotates the tier; an UNREADABLE
  *     file MUST default-deny to TIER-2 (the catastrophic-false-TIER-1 guard at the gate edge).
  *   - inverseHint(): coarse DROP rollback hints derived from the matched allow-tokens.
@@ -12,27 +11,26 @@ import { describe, it, expect, afterAll } from 'vitest';
 import { mkdtempSync, writeFileSync, rmSync } from 'fs';
 import { tmpdir } from 'os';
 import path from 'path';
-import { tierGateEnabled, classifyPendingTiers, inverseHint } from '../../scripts/modules/handoff/pre-checks/pending-migrations-check.js';
+import { classifyPendingTiers, inverseHint } from '../../scripts/modules/handoff/pre-checks/pending-migrations-check.js';
 
 const tmp = mkdtempSync(path.join(tmpdir(), 'tier-gate-'));
 const writeSql = (name, sql) => { const p = path.join(tmp, name); writeFileSync(p, sql, 'utf8'); return p; };
 afterAll(() => { try { rmSync(tmp, { recursive: true, force: true }); } catch { /* best-effort */ } });
 
-describe('tierGateEnabled — opt-in, default-OFF', () => {
-  const KEY = 'LEO_MIGRATION_TIER_GATE';
-  const orig = process.env[KEY];
-  afterAll(() => { if (orig === undefined) delete process.env[KEY]; else process.env[KEY] = orig; });
-
-  it('is OFF when unset', () => { delete process.env[KEY]; expect(tierGateEnabled()).toBe(false); });
-  it('is ON for "on" (any case)', () => {
-    process.env[KEY] = 'on'; expect(tierGateEnabled()).toBe(true);
-    process.env[KEY] = 'ON'; expect(tierGateEnabled()).toBe(true);
-    process.env[KEY] = ' On '.trim(); expect(tierGateEnabled()).toBe(true);
-  });
-  it('stays OFF for any other truthy-looking value (fail-safe to current behavior)', () => {
-    for (const v of ['off', 'true', '1', 'yes', 'enabled', '']) { process.env[KEY] = v; expect(tierGateEnabled()).toBe(false); }
-  });
-});
+// The tierGateEnabled() suite that lived here asserted the ENV contract: unset => OFF,
+// only 'on' enables. SD-LEO-INFRA-TIER-GATE-FLAG-001 inverted all three of those facts —
+// the gate now reads a DB flag and fails CLOSED, so unset => ON, and 'off' is refused
+// rather than honoured. It also became async, so the old sync `expect(tierGateEnabled())`
+// compared against a Promise.
+//
+// The cases moved rather than being ported in place, because the function now needs a
+// mocked collaborator and this file is deliberately dependency-free (pure classifier
+// helpers over temp files). Asserting the gate here would have meant either a live DB
+// client or a mock that this file's other suites do not want:
+//   • tests/unit/migration-tier-gate-reader.test.js   — mocks the evaluator, real SUT:
+//     reason allowlist, strengthen-only override both directions, missing-await safety.
+//   • tests/unit/migration-tier-gate-failclosed.test.js — real evaluator, mocked supabase:
+//     the 30s stale-affirmative cache, and unconstructable-client credentials.
 
 describe('classifyPendingTiers — per-file tiering with default-deny', () => {
   it('annotates a provably-additive file as TIER-1 and preserves original fields', () => {

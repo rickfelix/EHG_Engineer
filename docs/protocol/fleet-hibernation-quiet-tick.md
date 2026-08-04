@@ -35,6 +35,38 @@ coordinator-session-independent net for this gap now also runs at
 [`.github/workflows/backlog-rank-cron.yml`](../../.github/workflows/backlog-rank-cron.yml)
 (~15min GHA cron, mirrors `fleet-down-alert-cron.yml`).
 
+**drive-report-consume is not quiescent-skipped either**
+(SD-LEO-INFRA-DRIVE-LOOP-INSTRUMENT-001-C): the coordinator-lane consumer
+([`scripts/coordinator-drive-report-consume.mjs`](../../scripts/coordinator-drive-report-consume.mjs))
+writes a receipt row to `drive_report_receipts` recording that the coordinator lane saw the newest
+`drive_reports` row. Skipping it while quiescent would make the instrument silent in exactly the
+window it exists to measure — a lane that has stopped consuming and a fleet that is merely idle
+would then look identical. `quiescentSkip: false` is asserted by a unit test and by mutant M8 in
+`scripts/analysis/mutate-drive-report-consume.mjs`, because a flag flipped in the registry is
+invisible at every other layer.
+
+**Reading its status in the tick summary.** `runCoresFailSoft` records `key:status` and **drops
+`detail`**, so the status string is the whole message an operator gets:
+
+| Status | Means | Action |
+|--------|-------|--------|
+| `ok` | receipt written, or already present for this report | none |
+| `nothing_to_consume` | the table exists and holds no report | none |
+| `pending_migration` | `drive_reports` / `drive_report_receipts` **do not exist yet** — sibling SD -B's migration has not landed | none until -B ships; **not an incident** |
+| `skipped` | this seat is not the coordinator | none |
+| `failed` | a real error — permission, constraint, timeout, malformed query | investigate; a breadcrumb is written to `.artifacts/drive-report-consume-last-failure.json` |
+
+`pending_migration` exists because the first version of this core returned `failed` for the absent
+tables, which is the guaranteed state of the world between C's merge and -B's. An alarm that fires
+continuously from the day it is installed trains everyone to ignore it, and then it cannot report
+the real failure later. It is deliberately **not** folded into `ok` or `nothing_to_consume`: a
+consumer that never runs must not read as a consumer with nothing to do.
+
+Known limit: after -B lands, a table dropped by accident produces the same `PGRST205`/`42P01` and
+would report `pending_migration` indefinitely. It stays visible as not-`ok`, but the label would be
+wrong; distinguishing "never existed" from "existed and vanished" needs state this core does not
+carry.
+
 ## FR-6: the 15-minute responsiveness cap and the bounded-latency tradeoff
 
 A `ScheduleWakeup` park does **not** auto-wake on an inbound event. So the park interval

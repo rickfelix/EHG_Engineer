@@ -35,7 +35,7 @@ const { insertCoordinationRow, getThreadByTopicId } = require('../lib/coordinato
 const { buildRelayRequestPayload, buildRelayConfirmPayload } = require('../lib/coordinator/relay-queue.cjs');
 const { decideRelayDrops, resolveWindowMs } = require('../lib/coordinator/relay-drop-gauge.cjs');
 const { resolvePeerTarget } = require('../lib/coordinator/peer-target.cjs');
-const { PAYLOAD_KINDS, getServiceClient, getReadClient } = require('../lib/fleet/worker-status.cjs');
+const { PAYLOAD_KINDS, getServiceClient } = require('../lib/fleet/worker-status.cjs');
 
 const SD_ID = 'SD-LEO-INFRA-THREE-WAY-COMMS-RELIABILITY-001-E';
 // A fixed full-UUID self anchor for the deterministic self-loop (both sender + target). Full
@@ -274,8 +274,19 @@ function summaryLine(r) {
 
 /** --live-observe: real-DB READ snapshot (topic threads + live roles). Fail-soft. */
 async function tryLiveObserve(now) {
+  // SD-LEO-INFRA-COORDINATION-BUS-ACCESS-001 FR-3: acquiring the client is NOT part of this
+  // function's fail-soft OBSERVATION contract, and must not be folded into it. Failing to build a
+  // client means we could not look AT ALL; the catch below means we looked and the query failed.
+  // Collapsing those two into one shape is what let a credential failure render as "no activity" —
+  // and under FR-1's seat-scoped RLS that is exactly what an anon fallback would have produced.
+  // Three distinguishable outcomes now: observation_unavailable / error / a real reading.
+  let db;
   try {
-    const db = getReadClient();
+    db = getServiceClient();
+  } catch (e) {
+    return { observation_unavailable: true, reason: `service client unavailable: ${String((e && e.message) || e)}` };
+  }
+  try {
     const since = new Date(now - 24 * 3600 * 1000).toISOString();
     const { data } = await db.from('session_coordination').select('id, sender_type, payload, created_at').gte('created_at', since).limit(500);
     const byTopic = {};

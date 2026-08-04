@@ -25,6 +25,7 @@
  */
 import 'dotenv/config';
 import { createClient } from '@supabase/supabase-js';
+import { isMainModule } from '../lib/utils/is-main-module.js';
 import {
   selectExpiredJudgments,
   expiryPatch,
@@ -119,6 +120,6 @@ async function shutdown(code) {
   process.exit(code);
 }
 
-if (import.meta.url === `file://${process.argv[1]}` || process.argv[1]?.endsWith('solomon-judgment-expiry-run.mjs')) {
+if (isMainModule(import.meta.url)) {
   main().then(shutdown).catch((e) => { console.error('[judgment-expiry]', e.message); return shutdown(1); });
 }

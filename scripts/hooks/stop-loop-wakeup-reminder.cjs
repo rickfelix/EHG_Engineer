@@ -347,11 +347,27 @@ async function recordWindDown(supabase, sessionId, { reason, hadClaim } = {}) {
   }
 }
 
-const REMINDER = [
+/**
+ * SD-LEO-INFRA-ROLE-BLIND-SESSION-001 FR-2.
+ *
+ * The head of this reminder is TRUE FOR ANY SESSION — the transcript is the only evidence of an
+ * arm, regardless of seat. Only the tail below it is worker doctrine (claims, WIP pushes,
+ * worktrees, the wind-down handshake, loop_state). Splitting them here so a role seat keeps the
+ * check and loses only the vocabulary.
+ *
+ * The check itself is NOT role-gated, deliberately. The SD asks to keep the useful half, and
+ * exempting role seats from the arming reminder would trade a noise bug for a silence bug — a
+ * role seat that ends a turn unarmed goes just as quiet as a worker does.
+ */
+const REMINDER_HEAD = [
   'NO ScheduleWakeup tool_use found in THIS turn. This is read from the transcript, not from any',
   'state you set: saying "wakeup armed" in a /signal, or having loop_state=awaiting_tick, does NOT',
   'satisfy it. Only calling the tool does. If you believe you armed one, you armed it in a PREVIOUS',
   'turn — that is the stale-arm case this check exists to catch.',
+];
+
+/** Worker-only tail: every line here presumes a claim, a worktree, or the fleet belt. */
+const REMINDER_WORKER_TAIL = [
   'Worker stopping with NO ScheduleWakeup armed — you will go INCOGNITO and strand your claimed SD',
   '(the worktree then gets reaped by the claim-sweep). Run the WIND-DOWN HANDSHAKE before you stop:',
   "  1. If you hold an IN-PROGRESS SD: FINISH it or hand it off — never leave it half-done + unclaimed (orphan).",
@@ -364,8 +380,35 @@ const REMINDER = [
   '  4. Arm a SHORT grace ScheduleWakeup (~180s); on that tick RE-CHECK your inbox for a coordinator reply',
   '     BEFORE settling into the ~1200s idle cadence. (Short delay if work is in-flight, ~20min if truly idle.)',
   "  • To legitimately END the loop instead, set claude_sessions.loop_state='exited' for your session.",
-  '(This reminder fires once — if you stop again it will let you through.)',
-].join('\n');
+];
+
+/**
+ * Role-seat tail. A role session holds no claim, has no worktree to reap and is not on the belt,
+ * so none of the worker steps apply — but it still needs the arm, which is why this is a different
+ * tail rather than an exemption.
+ */
+const REMINDER_ROLE_TAIL = [
+  'This is a ROLE session (non_fleet): no claim, no worktree, no belt — the fleet wind-down',
+  'handshake does not apply to you. What DOES apply: if your seat runs a loop, arm the next tick',
+  'before you stop, or your loop simply ends here and nobody is watching for it.',
+  '  • If ending deliberately is correct for your seat, that is a legitimate stop — say so and end.',
+];
+
+const REMINDER_FOOT = '(This reminder fires once — if you stop again it will let you through.)';
+
+/** Compose the reminder for a seat. isRoleSession=true selects the role tail. */
+function reminderFor(isRoleSession) {
+  return [
+    ...REMINDER_HEAD,
+    ...(isRoleSession ? REMINDER_ROLE_TAIL : REMINDER_WORKER_TAIL),
+    REMINDER_FOOT,
+  ].join('\n');
+}
+
+// Preserved as the worker-seat reminder so existing importers and the static-pin regression tests
+// keep the exact string they assert on. Changing this constant's meaning would be a silent break
+// for anything that imports it.
+const REMINDER = reminderFor(false);
 
 /**
  * Run `fn` with process.stdout.write discarded, then restore it. Any diagnostic a transitively
@@ -533,7 +576,23 @@ async function main() {
       // The block reason is the ONLY channel that reaches the model, so the pending-wake state
       // rides here rather than on stderr (which the model never sees on a blocking Stop).
       const detail = armObservation ? `\n${armEvidence.formatPendingWake(armObservation, { sessionId }).trim()}` : '';
-      emitDecision({ decision: 'block', reason: REMINDER + detail });
+      // SD-LEO-INFRA-ROLE-BLIND-SESSION-001 FR-2: the CHECK is unchanged — shouldRemind above
+      // still gates on claim/loop-state and still blocks. Only the doctrine text is selected by
+      // seat. This is why a role seat previously had to set loop_state='exited' to escape: the
+      // worker gate treats a live loop_state as worker-shape, and a role seat that runs a loop
+      // has one. That escape is now unnecessary rather than merely unused.
+      //
+      // Read from the local identity file, not the DB: this runs inside the Stop budget after the
+      // DB round-trips above have already spent most of it, and writeRoleStatusIdentity has
+      // written role:true at role startup since ROLE-SESSION-NAMING-001. UNKNOWN falls back to the
+      // worker tail — the ambiguous seat keeps the fuller guidance, per the SD's rule that
+      // quieting a worker guard is worse than the noise it removes.
+      let isRoleSeat = false;
+      try {
+        const rp = require('../../lib/fleet/role-status-identity.cjs');
+        isRoleSeat = rp.verdictFromIdentityFile(rp.readIdentityFile(sessionId)) === rp.ROLE_VERDICT.ROLE;
+      } catch { /* predicate unavailable -> worker tail, exactly as before this SD */ }
+      emitDecision({ decision: 'block', reason: reminderFor(isRoleSeat) + detail });
       // RECORD THE BLOCK. Without this the step-C gate is UNINTERPRETABLE, and I only noticed
       // because I asked what state would silence it and whether anyone can reach that state.
       // 'second_stop_still_unarmed' requires TWO events: (1) a block fires, then (2) the worker
@@ -584,4 +643,4 @@ if (require.main === module) {
   main().catch(() => shutdown());
 }
 
-module.exports = { shouldRemind, shouldParkRecoverable, parkSessionRecoverable, classifyWindDownReason, recordWindDown, isFlagEnabled, muzzleStdout, SWALLOW, REMINDER };
+module.exports = { shouldRemind, shouldParkRecoverable, parkSessionRecoverable, classifyWindDownReason, recordWindDown, isFlagEnabled, muzzleStdout, SWALLOW, REMINDER, reminderFor, REMINDER_HEAD, REMINDER_ROLE_TAIL, REMINDER_WORKER_TAIL };

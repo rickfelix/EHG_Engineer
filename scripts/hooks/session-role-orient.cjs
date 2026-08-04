@@ -3,6 +3,13 @@
 const fs = require('fs');
 const path = require('path');
 const { drainAndExit } = require('../../lib/hooks/drain-undici.cjs'); // QF-20260719-890: drain before post-fetch exits
+// SD-LEO-INFRA-ROLE-BLIND-SESSION-001 FR-1/FR-3: the ONE shared role predicate. Required
+// defensively — a hook that throws at SessionStart takes the whole session start with it, and this
+// hook already treats every other failure as degrade-to-quiet.
+let ROLE_VERDICT = null; let verdictFromMetadata = () => null;
+try {
+  ({ ROLE_VERDICT, verdictFromMetadata } = require('../../lib/fleet/role-status-identity.cjs'));
+} catch { /* predicate unavailable -> behave exactly as before this SD */ }
 require('dotenv').config({ path: path.resolve(__dirname, '../../.env') });
 
 const COORD_FILE = path.resolve(__dirname, '../../.claude/active-coordinator.json');
@@ -77,9 +84,39 @@ async function findActiveCoord() {
   const cutoff = new Date(Date.now() - STALE_MIN * 60_000).toISOString();
   return (await pgGet(`claude_sessions?heartbeat_at=gte.${cutoff}&metadata->>is_coordinator=eq.true&order=heartbeat_at.desc&limit=1&select=session_id`))?.[0]?.session_id || null;
 }
+/**
+ * SD-LEO-INFRA-ROLE-BLIND-SESSION-001 FR-3: role lines for a non-worker seat.
+ *
+ * Deliberately short. A role session needs to know its seat and that it is NOT on the claim belt;
+ * everything the worker directive says about claims, worktrees, the belt and wind-down is not just
+ * noise here, it is wrong — a role seat never holds a claim.
+ */
+function roleLines(role) {
+  const name = String(role || 'role').trim().toLowerCase();
+  return [
+    `[ROLE] ${name.toUpperCase()} session (non_fleet). Not a fleet worker: you hold no SD claim.`,
+    '[ROLE] Fleet worker loop doctrine does not apply to this seat. Follow your own role contract.',
+    '[ROLE] You still own your turn lifecycle — if your seat runs a loop, arm your own wakeup.',
+  ];
+}
+
 function decide(sessionId, meta, coordFile) {
   if (meta?.is_coordinator) return COORDINATOR;
   if (coordFile?.session_id === sessionId) return COORDINATOR;
+
+  // FR-3: read metadata.role BEFORE falling through to workerLines.
+  //
+  // Note what was already here: the coordinator branch above keys on `meta.is_coordinator`, a
+  // DIFFERENT signal. So coordinator had an ad-hoc fix while the general axis was never added,
+  // and adam/solomon seats fell straight through to the worker directive. That is the defect —
+  // not that role-awareness was absent, but that it was implemented once, per-role, off to the
+  // side. Hence one shared predicate rather than a second special case.
+  //
+  // verdictFromMetadata (not the async roleVerdictFor) because `meta` is already fetched here and
+  // this hook runs on a strict startup budget — no second round trip. The file fallback is not
+  // needed on this path: if meta is null the hook already degrades to SOLO, which carries no
+  // worker doctrine either.
+  if (ROLE_VERDICT && verdictFromMetadata(meta) === ROLE_VERDICT.ROLE) return roleLines(meta.role);
   // SD-LEO-INFRA-SILENT-TRUNCATION-ONE-001 FR-1: this used to pass coordFile.session_id.slice(0, 8).
   // The [ROLE] line below is the ONLY place a worker is told who its coordinator is, and a worker
   // that addresses the coordinator builds target_session from it — so an 8-character prefix here is
@@ -115,4 +152,4 @@ function main() {
   });
 }
 if (require.main === module) main().then(() => drainAndExit(0)).catch(() => drainAndExit(0));
-module.exports = { readCoordFile, fetchMeta, findActiveCoord, decide, SOLO, COORDINATOR, workerLines };
+module.exports = { readCoordFile, fetchMeta, findActiveCoord, decide, SOLO, COORDINATOR, workerLines, roleLines };

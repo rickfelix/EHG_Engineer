@@ -12,6 +12,7 @@ import {
   loadHealThreshold,
   loadToleranceBuffer,
 } from '../../scripts/modules/handoff/executors/plan-to-lead/gates/heal-before-complete.js';
+import { SD_TYPE_THRESHOLDS } from '../../lib/handoff/threshold-resolver.js';
 
 /**
  * Build a mock supabase whose .from(table).select().eq(col,val).single() resolves
@@ -81,11 +82,29 @@ describe('loadHealThreshold — app_config override → sd_type tier → default
     expect(r.source).toBe('sd_type:feature');
   });
 
-  it('falls back to default when no sdType and no override', async () => {
+  // UPDATED DELIBERATELY by SD-FDBK-FIX-HEAL-BEFORE-COMPLETE-001 FR-2, not silenced.
+  //
+  // This assertion used to read `source: 'default'` / `threshold: 85`, where 85 was a gate-local
+  // `DEFAULT_HEAL_THRESHOLD` constant. That constant was the surviving half of the duplicate FR-2
+  // exists to delete: the gate imported SD_TYPE_THRESHOLDS but its fallback ignored the table's own
+  // _default (80), so two constants five points apart governed one decision.
+  //
+  // WHY OVERRIDING THIS PIN IS DEFENSIBLE, since overriding an inherited expectation usually is not.
+  // The 85 was incidental capture, not ratified policy: this file belongs to
+  // SD-LEO-FEAT-PHANTOM-TABLE-READ-001, whose subject was a gate reading a non-existent `leo_config`
+  // table. It locked in the table NAME and the override paths and happened to freeze whatever the
+  // fallback returned at the time. Nothing here argues 85 was intended.
+  //
+  // BLAST RADIUS MEASURED before the change: 41 SDs carry an sd_type absent from the table
+  // (uat 20, docs 11, implementation 5, ux_debt 4, discovery_spike 1) and all 41 are TERMINAL — zero
+  // in-flight. Asserted against the imported table rather than the literal 80, so a future deliberate
+  // re-tuning does not fail here for the wrong reason.
+  it('falls back to the CANONICAL _default when no sdType and no override', async () => {
     const { client } = makeSupabase(() => ({ data: null, error: { code: 'PGRST205' } }));
     const r = await loadHealThreshold(client, undefined);
-    expect(r.source).toBe('default');
-    expect(r.threshold).toBe(85);
+    expect(r.source).toBe('sd_type:_default');
+    expect(r.threshold).toBe(SD_TYPE_THRESHOLDS._default);
+    expect(r.threshold).not.toBe(85);   // the deleted gate-local constant must not come back
   });
 
   it('fails open to sd_type/default when the read throws', async () => {

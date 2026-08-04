@@ -129,11 +129,27 @@ export async function deferQuickFix(qfId, notBefore, { reopen = false, reason, o
   }
   const stamped = buildProvenancedStamp({ reason, owner, release_condition: releaseCondition }, writingSessionId);
 
-  const update = { not_before: validation.iso };
+  // SD-LEO-INFRA-CLAIM-LIFECYCLE-RELEASE-002 (FR-1): deferring MUST release the seat. Today this
+  // clears NEITHER surface, so a deferred QF pins its worker exactly like a returned one — and there
+  // is no other way out, because lib/quick-fix-claim.mjs exports claimQuickFix and no releaseQuickFix,
+  // and `npm run sd:release` reports "no SD claimed" for a QF since it only queries
+  // strategic_directives_v2. Clearing the authoritative column here is the whole release path.
+  const update = { not_before: validation.iso, claiming_session_id: null };
   if (reopen) update.status = 'open';
   if (stamped.reason) update.reason = stamped.reason;
   if (stamped.owner) update.owner = stamped.owner;
   if (stamped.release_condition) update.release_condition = stamped.release_condition;
+
+  // Who holds it RIGHT NOW. Must be read BEFORE the update, because the update nulls
+  // claiming_session_id and its RETURNING clause would hand back the already-cleared value — leaving
+  // no way to find the mirror that needs clearing. Fail-soft: if this read fails the defer still
+  // proceeds, and the mirror-clear below is simply skipped rather than blocking the release.
+  let existing = null;
+  try {
+    const { data: cur } = await supabase
+      .from('quick_fixes').select('claiming_session_id').eq('id', qfId).maybeSingle();
+    existing = cur;
+  } catch { /* fail-soft: release is the durable outcome; mirror-clear is best-effort */ }
 
   const { data, error } = await supabase
     .from('quick_fixes')
@@ -147,6 +163,33 @@ export async function deferQuickFix(qfId, notBefore, { reopen = false, reason, o
   }
   if (!data) {
     throw new Error(`Quick-fix not found: ${qfId}`);
+  }
+
+  // SD-LEO-INFRA-CLAIM-LIFECYCLE-RELEASE-002 (FR-1), second surface: clearing the authoritative
+  // column above frees the QF, but the seat stays pinned until the claude_sessions MIRROR is cleared
+  // too — resume.cjs derives ctx.mySd from that mirror. Both or neither; clearing one is what
+  // produced the half-released states this SD documents.
+  //
+  // COMPARE-AND-SET, NOT A BLANKET CLEAR. Only a mirror still pointing at THIS QF is cleared, so a
+  // session that has already moved to other work is never stomped — the same hazard FR-6 describes
+  // in the SD claim path, which issues a bare update with no CAS.
+  //
+  // FAIL-SOFT: the defer itself has already succeeded and is the durable outcome. A mirror-clear
+  // failure must not turn a successful release into a thrown error, so it is reported and swallowed.
+  const priorHolder = existing && existing.claiming_session_id;
+  if (priorHolder) {
+    try {
+      const { error: mirrorErr } = await supabase
+        .from('claude_sessions')
+        .update({ sd_key: null })
+        .eq('session_id', priorHolder)
+        .eq('sd_key', qfId);
+      if (mirrorErr) throw new Error(mirrorErr.message);
+    } catch (err) {
+      console.warn(`⚠️  ${qfId} was released, but clearing the claude_sessions mirror for `
+        + `${priorHolder} FAILED: ${(err && err.message) || err}. That seat may still resume this QF `
+        + 'until its mirror is cleared; re-run this command or clear sd_key directly.');
+    }
   }
 
   return data;

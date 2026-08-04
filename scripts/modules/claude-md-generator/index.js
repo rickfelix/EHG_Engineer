@@ -10,6 +10,9 @@ import path from 'path';
 import crypto from 'crypto';
 import { execSync } from 'child_process';
 import { writeFileAtomic } from '../../../lib/utils/atomic-write.js';
+// The single home for the harness token scale. CJS because lib/protocol/ is CJS and the coverage
+// module cannot import ESM; ESM reads it back through default interop.
+import harnessTokenScale from '../../../lib/protocol/harness-token-scale.cjs';
 
 import {
   getActiveProtocol,
@@ -40,6 +43,7 @@ import {
   generateAdamManual,
   generateAdamProvenance,
   generateLeadManual,
+  generateSolomonManual,
   generatePlanManual,
   assertSharedSectionsNotCopied
 } from './file-generators.js';
@@ -188,6 +192,11 @@ class CLAUDEMDGeneratorV3 {
       ['CLAUDE_ADAM_PROVENANCE.md', (d) => generateAdamProvenance(d, this.fileMapping), 'full'],
       ['CLAUDE_COORDINATOR.md', (d) => generateCoordinator(d, this.fileMapping), 'full'],
       ['CLAUDE_SOLOMON.md', (d) => generateSolomon(d, this.fileMapping), 'full'],
+      // SD-FDBK-INFRA-CLAUDE-SOLOMON-EXCEEDS-001: the reference companion that gets
+      // CLAUDE_SOLOMON.md back under the Read tool's 25k single-call cap. Rules, prohibitions and
+      // durable duties stay in the gated file — including the two the tripwire caught on the way
+      // out (the web-research HARD security stop, and ACCURACY REVIEW DUTY).
+      ['CLAUDE_SOLOMON_MANUAL.md', (d) => generateSolomonManual(d, this.fileMapping), 'full'],
     ];
     if (this.options.generateDigest) {
       specs.push(
@@ -550,7 +559,14 @@ export const SINGLE_READ_TOKEN_CAP = 25000;
 // This value comes from the harness's own truncation notice on this file family: a padded
 // CLAUDE_LEAD.md at 64,613 bytes reported 26,722 tokens. It independently agrees with a second
 // derivation (92,184 bytes / 38,166 tokens on CLAUDE_PLAN.md) to 0.1%.
-export const HARNESS_BYTES_PER_TOKEN = 2.4177;
+// RE-EXPORTED, NOT RE-DECLARED. SD-LEO-INFRA-CONTRACT-READ-COVERAGE-001 collapsed the two rival
+// answers to "how big is this file to the Read tool" into one home. This file used to hold the
+// value; lib/protocol/contract-read-coverage.cjs held a different one (CL100K_TO_HARNESS = 1.85, on
+// cl100k of FRAMED text) that overshot by 43-61% on exactly the family this constant was measured
+// on, and manufactured false partial-read verdicts that disarmed live seats. Two representations of
+// one physical quantity is the condition that produced it. The export shape is unchanged so every
+// consumer and the test pinning 2.4177 keep working.
+export const { HARNESS_BYTES_PER_TOKEN } = harnessTokenScale;
 
 // THROW only for files a shipped SD has actually made fit; WARN for the rest.
 //
@@ -605,7 +621,7 @@ export function assertSingleReadFit(files, opts = {}) {
 // SD-LEO-INFRA-PROTOCOL-PUBLICATION-PIPELINE-001 (FR-4): the complete generated-file
 // set, used to validate --only targets (unknown names fail loud listing these).
 export const KNOWN_GENERATED_FILES = [
-  'CLAUDE.md', 'CLAUDE_CORE.md', 'CLAUDE_LEAD.md', 'CLAUDE_LEAD_MANUAL.md', 'CLAUDE_PLAN.md', 'CLAUDE_PLAN_MANUAL.md', 'CLAUDE_EXEC.md', 'CLAUDE_ADAM.md', 'CLAUDE_ADAM_MANUAL.md', 'CLAUDE_ADAM_PROVENANCE.md', 'CLAUDE_COORDINATOR.md', 'CLAUDE_SOLOMON.md',
+  'CLAUDE.md', 'CLAUDE_CORE.md', 'CLAUDE_LEAD.md', 'CLAUDE_LEAD_MANUAL.md', 'CLAUDE_PLAN.md', 'CLAUDE_PLAN_MANUAL.md', 'CLAUDE_EXEC.md', 'CLAUDE_ADAM.md', 'CLAUDE_ADAM_MANUAL.md', 'CLAUDE_ADAM_PROVENANCE.md', 'CLAUDE_COORDINATOR.md', 'CLAUDE_SOLOMON.md', 'CLAUDE_SOLOMON_MANUAL.md',
   'CLAUDE_DIGEST.md', 'CLAUDE_CORE_DIGEST.md', 'CLAUDE_LEAD_DIGEST.md', 'CLAUDE_PLAN_DIGEST.md', 'CLAUDE_EXEC_DIGEST.md', 'CLAUDE_ADAM_DIGEST.md', 'CLAUDE_COORDINATOR_DIGEST.md', 'CLAUDE_SOLOMON_DIGEST.md',
 ];
 

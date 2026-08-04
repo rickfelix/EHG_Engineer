@@ -60,6 +60,10 @@ const PROTOCOL_FILES = [
   'CLAUDE_PLAN_MANUAL.md',
   'CLAUDE_ADAM_PROVENANCE.md',
   'CLAUDE_SOLOMON.md',  // role contract, not a handoff-gate requirement — verified at role activation
+  // SD-FDBK-INFRA-CLAUDE-SOLOMON-EXCEEDS-001. Same reason CLAUDE_LEAD_MANUAL.md is listed: a read
+  // of a file absent from this list is invisible to session state entirely, so a companion nothing
+  // records is a companion nobody can prove was read.
+  'CLAUDE_SOLOMON_MANUAL.md',
   // SD-LEO-INFRA-ROLE-CONTRACT-READ-GATE-001 / FR-2 prerequisite. The coordinator was the ONLY role
   // whose contract is small enough to read in one call (CLAUDE_COORDINATOR.md is ~25.5KB, under the
   // 25k-token cap for any real tokenizer) and the ONLY role with no verifier of any kind — its

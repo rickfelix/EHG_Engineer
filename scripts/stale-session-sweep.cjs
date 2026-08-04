@@ -31,6 +31,7 @@ const { PLAN_CONTENT_MARKER } = require('../lib/sd-enrichment-markers.cjs');
 const { describeUnreadableAssignment } = require('../lib/fleet/assignment-target.cjs');
 const { parseSdDependencies } = require('../lib/utils/parse-sd-dependencies.cjs'); // QF-20260525-542
 const { buildRetentionAckPayload } = require('../lib/retention/retention-ack-marker.cjs'); // FR-7
+const { PROMOTION_ACK_KEY, isPromotionAcked } = require('../lib/coordinator/promotion-ack.cjs'); // SIGNAL-ROUTER-AUTO-001 FR-8
 // SD-LEO-FIX-COORDINATOR-SWEEP-CLAIMED-001: shared dispatch-eligibility predicate (same one the
 // worker self_claim path uses) so CLAIM_FIX never re-affirms an orchestrator PARENT / dep-blocked SD.
 const { evaluateDispatchEligibility, classifyDispatchIneligibility, TEST_FIXTURE_KEY_RE } = require('../lib/fleet/claim-eligibility.cjs');
@@ -378,7 +379,25 @@ function isHeadlessZombie(session, telemetry, nowMs) {
   return claimAgeMs > HEADLESS_ZOMBIE_MIN_MS;
 }
 // SD-LEO-INFRA-STALE-SWEEP-PID-LIVENESS-GUARD-001: PID-liveness guard for the conflict-eviction path.
-const { shouldHoldClaim } = require('../lib/fleet/claim-release-guard.cjs');
+const { shouldHoldClaim, refuseConflictEviction } = require('../lib/fleet/claim-release-guard.cjs');
+
+// SD-LEO-INFRA-STALE-SESSION-SWEEP-001 FR-1 — the columns every release seam in this file reads.
+//
+// Hoisted out of the inline .select() so tests/unit/fleet/liveness-input-parity.test.js can assert
+// it against LIVENESS_INPUT_FIELDS instead of scraping a string literal out of this source.
+//
+// THE LAST TWO ENTRIES ARE THE FIX. process_alive_at and expected_silence_until were
+// never selected, so three of the five rungs in isSessionAlive() could not fire at ANY of the three
+// seams that consult shouldHoldClaim() (completed-SD release, orphaned-claim release, conflict
+// eviction) — all three filter the same `classified` array built from this query. On
+// 2026-07-27T18:18:27.855Z that released session b25ec3e5 at 344.4s heartbeat age (threshold 300s)
+// with pid and terminal_id both NULL: every rung the guard could still read was blind, while this
+// same query's computed_status had already classified it ALIVE_SOURCE_SIDE.
+//
+// DO NOT NARROW THIS LIST to "the columns we happen to use today" — the guard reads it, not this
+// file, and the parity test fails if a rung's column goes missing again.
+const SESSION_SELECT_COLUMNS = 'session_id, sd_key, sd_title, heartbeat_age_seconds, heartbeat_age_human, computed_status, hostname, tty, pid, track, is_virtual, parent_session_id, terminal_id, current_branch, process_alive_at, expected_silence_until';
+module.exports.SESSION_SELECT_COLUMNS = SESSION_SELECT_COLUMNS;
 // SD-LEO-INFRA-TWO-WAY-COORDINATOR-001 / FR-3b — top-level require so wire-check
 // call-graph builder can statically resolve the dependency on lib/coordinator/signal-router.cjs.
 const _signalRouterModule = require('../lib/coordinator/signal-router.cjs');
@@ -2018,7 +2037,7 @@ async function main() {
   try {
     sessions = await fapPaginate(() => supabase
       .from('v_active_sessions')
-      .select('session_id, sd_key, sd_title, heartbeat_age_seconds, heartbeat_age_human, computed_status, hostname, tty, pid, track, is_virtual, parent_session_id, terminal_id, current_branch')
+      .select(SESSION_SELECT_COLUMNS)
       .not('sd_key', 'is', null)
       .order('heartbeat_age_seconds', { ascending: true })
       .order('session_id', { ascending: true })); // unique tiebreaker APPENDED after the non-unique order (FR-6)
@@ -2374,8 +2393,24 @@ async function main() {
   // the fixture. Fixtures never participate in keeper selection; they are bilaterally released later.
   const { isFixtureSession } = await import('../lib/fleet/session-predicates.mjs');
   const bySD = {};
+  // SD-LEO-INFRA-STALE-SESSION-SWEEP-001 / FR-3: DEDUPE BY session_id.
+  //
+  // This bucket decides who gets EVICTED, and its only filter was isFixtureSession. One session
+  // appearing twice therefore satisfied `arr.length > 1` and CONFLICTED WITH ITSELF: sorted[0]
+  // became the keeper and sorted[1] the evictee, the same row on both sides.
+  //
+  // DEFENCE-IN-DEPTH, NOT THE PRIMARY FIX, and the distinction matters. The known duplicate
+  // route — a LEFT JOIN fan-out on qf_active inside v_active_sessions — was already fixed live
+  // by QF-20260727-574 (LATERAL + LIMIT 1). A second dormant route remains: fapPaginate uses
+  // OFFSET pagination, which can repeat a row when the underlying set shifts between pages. So
+  // this guards a producer that is currently fixed and one that is not, and it must not be read
+  // as making FR-1/FR-2 redundant — FR-1 protects GENUINE multi-claimant conflicts, which no
+  // dedupe touches.
+  const seenSessionIds = new Set();
   classified.forEach(s => {
     if (isFixtureSession(s.session_id)) return; // fixture: never a conflict keeper/evictor
+    if (seenSessionIds.has(s.session_id)) return; // FR-3: a session cannot conflict with itself
+    seenSessionIds.add(s.session_id);
     if (!bySD[s.sd_key]) bySD[s.sd_key] = [];
     bySD[s.sd_key].push(s);
   });
@@ -2756,7 +2791,13 @@ async function main() {
   // 4a. Worktree conflict detection (SD-MAN-INFRA-WORKER-WORKTREE-SELF-001)
   // Detect multiple active sessions on the same feature branch (excludes main/QF)
   const branchSessions = new Map();
+  // FR-3, second grouping site. Non-destructive (this one only emits a WARNING), but a
+  // WORKTREE_CONFLICT naming the same session twice is a false alarm an operator acts on, and
+  // an alarm that cries wolf is how a real one gets ignored. Same invariant, same one-line shape.
+  const seenBranchSessionIds = new Set();
   for (const s of classified.filter(c => c.status === 'ACTIVE' && c.current_branch && c.current_branch !== 'main')) {
+    if (seenBranchSessionIds.has(s.session_id)) continue;
+    seenBranchSessionIds.add(s.session_id);
     if (!branchSessions.has(s.current_branch)) branchSessions.set(s.current_branch, []);
     branchSessions.get(s.current_branch).push(s);
   }
@@ -2794,6 +2835,18 @@ async function main() {
     for (const evict of evictees) {
       // Skip if already released in step 4
       if (dead.find(d => d.session_id === evict.session_id)) continue;
+
+      // SD-LEO-INFRA-STALE-SESSION-SWEEP-001 / FR-2 + FR-6 — refusals that must precede any
+      // mutation. Both live in lib/fleet/claim-release-guard.cjs as a pure function so the tested
+      // path IS the shipped path; see refuseConflictEviction() for why each one exists.
+      const refusal = refuseConflictEviction({ evict, keeper, bucketSize: claimants.length });
+      if (refusal.refuse) {
+        const line = 'EVICTION_REFUSED[' + refusal.code + '] on ' + sdId + ' — ' + refusal.detail;
+        // keeper_is_evictee is a corrupt bucket an operator should see; classified_alive is the
+        // guard doing its ordinary job, so it is an action rather than a warning.
+        if (refusal.code === 'keeper_is_evictee') warnings.push(line); else actions.push(line);
+        continue;
+      }
 
       // SD-LEO-INFRA-STALE-SWEEP-PID-LIVENESS-GUARD-001 (FR-2/FR-3): never evict a claimant whose
       // PID is ALIVE — a parked-but-live worker with an older heartbeat must not lose its claim to
@@ -2842,6 +2895,43 @@ async function main() {
           await clearAndReopenQf(supabase, sdId, { expectedHolder: evict.session_id });
         }
         actions.push('CONFLICT on ' + sdId + ': released ' + evict.session_id + tag + ' (kept ' + keeper.session_id + ')');
+
+        // SD-LEO-INFRA-STALE-SESSION-SWEEP-001 / FR-4 — PERSIST THE EVIDENCE.
+        //
+        // Keeper identity was stdout-only, which is precisely why the 2026-07-27 eviction can be
+        // corroborated but never PROVEN: whether it was a self-eviction is unfalsifiable from the
+        // database. Recording keeper, evictee, bucket size and the classifier's own verdict makes
+        // the next occurrence decidable instead of arguable.
+        //
+        // session_lifecycle_events, not claude_sessions.metadata (PLAN decision 2026-08-02): both
+        // are DDL-free, but an append-only event survives the release that clears the seat, and a
+        // metadata blob on a row the sweep is actively blanking is the worst place to keep the
+        // record of what the sweep did to it.
+        //
+        // FAIL-SOFT, and that direction is deliberate: evidence-writing must never be able to
+        // block or reverse a release that already committed. A lost audit row costs a future
+        // argument; a throw here would strand the claim this loop just freed.
+        try {
+          await supabase.from('session_lifecycle_events').insert({
+            event_type: 'SWEEP_CONFLICT_EVICTION',
+            session_id: evict.session_id,
+            reason: 'SWEEP_CONFLICT_RESOLUTION',
+            metadata: {
+              sd_key: sdId,
+              keeper_session_id: keeper.session_id,
+              evictee_session_id: evict.session_id,
+              bucket_size: claimants.length,
+              evictee_status: evict.status ?? null,
+              evictee_is_stale: evict.isStale ?? null,
+              evictee_source_side_reason: evict.sourceSideReason ?? null,
+              evictee_heartbeat_age_seconds: evict.heartbeat_age_seconds ?? null,
+              keeper_heartbeat_age_seconds: keeper.heartbeat_age_seconds ?? null,
+              guard_hold: evictGuard.hold ?? null,
+              guard_reason: evictGuard.reason ?? null,
+              sd: 'SD-LEO-INFRA-STALE-SESSION-SWEEP-001',
+            },
+          });
+        } catch { /* fail-open: never let an audit write undo a completed release */ }
 
         // Send coordination message to the evicted session so it picks up other work
         conflictEvicted.push(evict);
@@ -3322,6 +3412,19 @@ async function main() {
         .select('id, sender_session, created_at, payload')
         .eq('payload->>signal_type', 'stuck')
         .is('acknowledged_at', null)
+        // SD-LEO-INFRA-SIGNAL-ROUTER-AUTO-001 (FR-8) — WITHOUT THIS THE ROUTER FIX IS INERT.
+        // The router now leaves acknowledged_at null when it promotes a signal, so promoted
+        // type=stuck rows became eligible for this drain, which re-stamps acknowledged_at at the
+        // bottom of this block. Three of the nine measured swallowed signals are type=stuck: the
+        // drain would have re-acked them within the hour and put them straight back into the
+        // swallowed state, with every other acceptance criterion still passing.
+        //
+        // The severity gate below does not cover this: HELD_SEVERITIES protects rows whose sender
+        // is still LIVE, but senderIsDead() drains at any severity — and the condition that makes
+        // a signal most worth preserving (its sender has gone away) is exactly what makes it
+        // drainable. A promotion-marked row is already filed and awaiting disposition; it is not
+        // an unacked row rotting in the lane, which is what this drain exists to clear.
+        .is(`payload->>${PROMOTION_ACK_KEY}`, null)
         .order('id', { ascending: true })); // unique tiebreaker (FR-6)
     } catch { stuckSignals = []; } // prior behavior: read error ignored
     const stuck = stuckSignals || [];
@@ -3790,6 +3893,29 @@ function planDeadLetters(unreadMsgs, { allSessionIds, deadIds }, nowMs) {
     .filter(m => !allSessionIds.has(m.target_session) || deadIds.has(m.target_session))
     .filter(m => !m.expires_at || new Date(m.expires_at).getTime() <= nowMs)
     .filter(m => !(m.payload && m.payload.dead_letter === true))
+    // SD-LEO-INFRA-SIGNAL-ROUTER-AUTO-001 (FR-8, FOURTH site) — and the only automatic one left.
+    //
+    // Guarded HERE, in the pure planner, rather than in each executor's select. Three reasons:
+    // one edit covers BOTH twins (dead-letter-planning.cjs and legacy-fallback.cjs, which
+    // sweep-legacy-twin-parity requires stay in lockstep); this function is pure, exported and
+    // already unit-tested, so the guard gets a real behavioural test instead of a fourth source
+    // scan; and it avoids a fourth call site to keep in sync.
+    //
+    // WHY THIS PATH IS THE DANGEROUS ONE. It never stamps acknowledged_at, so the inbox, the
+    // sender's view and the starvation gauge all keep showing the row — it looks harmless. What
+    // it stamps is read_at, and a non-null read_at ARMS THE SECOND DISJUNCT of
+    // cleanup_expired_coordination (`read_at IS NOT NULL AND read_at <= now() - 7 days`). Before
+    // the stamp a promoted row has both columns NULL and is permanently immune to cleanup — that
+    // immunity IS the preservation this SD buys. After it, the row is archived and deleted seven
+    // days later, still unread and undispositioned. payload is spread rather than clobbered, so
+    // promotion_ack survives on the row it can no longer protect.
+    //
+    // Newly reachable BECAUSE of this SD: pre-fix, promoted rows carried acknowledged_at and the
+    // executors' `.is('acknowledged_at', null)` excluded them outright. Measured against the 10
+    // live promoted rows: 10/10 uuid-like target, 10/10 not already dead-lettered, 9/10 read_at
+    // null. And unlike the STUCK-drain this runs on the */5 cron in BOTH flag modes and is NOT
+    // gated on _coordMutationAllowed.
+    .filter(m => !isPromotionAcked(m))
     .map(m => ({
       id: m.id,
       update: {
