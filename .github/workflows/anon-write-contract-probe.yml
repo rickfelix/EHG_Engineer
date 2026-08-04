@@ -1,0 +1,48 @@
+# Anon write-contract probe — SD-LEO-INFRA-DEAD-VENTURE-USER-001 FR-6.
+#
+# The probe binary is invoked DIRECTLY so its exit code is the gate. That is not a style choice:
+# the vitest `db` project on this repo has an empty DESIGNATED_NON_PROD_REFS, so assessDbTarget
+# returns {allowed:false} and any live-tier test placed there SKIPS — and a skip reports green.
+#
+# Path filters below use literal per-extension entries. GitHub Actions does NOT expand brace
+# alternation, so 'scripts/**/*.{js,mjs,cjs}' matches nothing — four workflows in this repo carry
+# that pattern and have effectively never fired. tests/unit/anon-write-contract-probe.test.js
+# enforces this repo-wide, so the next one cannot repeat it either.
+name: anon-write-contract-probe
+
+on:
+  push:
+    paths:
+      - 'scripts/anon-write-contract-probe.mjs'
+      - 'tests/unit/anon-write-contract-probe.test.js'
+      - '.github/workflows/anon-write-contract-probe.yml'
+  pull_request:
+    paths:
+      - 'scripts/anon-write-contract-probe.mjs'
+      - 'tests/unit/anon-write-contract-probe.test.js'
+      - '.github/workflows/anon-write-contract-probe.yml'
+  schedule:
+    # The contract can change without anyone touching this repo — a sibling SD altering an anon
+    # policy is exactly the event this probe exists to catch, and it produces no diff here.
+    - cron: '17 6 * * *'
+  workflow_dispatch:
+
+jobs:
+  probe:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - run: npm ci
+      # No continue-on-error anywhere in this file, and no job-level if:. A step that cannot fail
+      # the build is indistinguishable from a step that was never added.
+      - name: unit tier (pure — cannot skip)
+        run: npx vitest run --project unit tests/unit/anon-write-contract-probe.test.js
+      - name: live contract assertion
+        env:
+          SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+          SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
+          SUPABASE_DB_PASSWORD: ${{ secrets.SUPABASE_DB_PASSWORD }}
+        run: node scripts/anon-write-contract-probe.mjs
