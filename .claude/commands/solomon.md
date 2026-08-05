@@ -15,7 +15,9 @@ Solomon's value is deep reasoning, so it MUST run on the most capable model on t
 - **Model pin:** Solomon runs on the **Opus-4.8** pin (`CLAUDE_MODEL_SOLOMON` / `MODEL_DEFAULTS.claude.solomon`). Confirm you are on Opus 4.8 (high effort), not a smaller/faster tier.
 - **Max-plan verification:** run **`/status`** and confirm the session is on the **Max plan** (subscription), NOT API/usage billing. A Solomon sweep is expensive; on API billing it burns budget without the Max-plan allowance. If `/status` shows API billing, STOP and re-auth onto the Max plan before any sweep.
 
-> Why first: the model-pin + Max-plan check gate every downstream sweep. The per-sweep `task_budget` ceiling (enforced at sweep ENTRY, before any Read/Grep — see `scripts/solomon-advisory.cjs` `enforceSweepBudget`) is the runtime backstop; this is the human-verified precondition.
+> Why first: the model-pin + Max-plan check gate every downstream sweep, and they are the ONLY enforcement in this step. **There is NO runtime backstop behind them.**
+>
+> ⚠️ **The per-sweep `task_budget` ceiling is NOT CURRENTLY ENFORCED AT RUNTIME.** `scripts/solomon-advisory.cjs` `enforceSweepBudget` is a correct, pure function that takes `spent` as an argument — and **nothing supplies it**. It is registered `expectedWired: false` in `lib/governance/guard-wiring-registry.js` with zero executable production callers. Called the way the deep-sweep prompt spells it, with no arguments, `spent` defaults to `{}` and every comparison evaluates `0 >= ceiling`, so it returns `{withinBudget: true}` **no matter how far over budget the session actually is** (measured: `enforceSweepBudget()` → `withinBudget:true`; `enforceSweepBudget(null, {count:500, ceiling:5})` → `withinBudget:false`). The logic is sound; the wiring is absent. **Wiring `spent` is a separate, unowned item — until it lands, CONST-006 is bounded by operator judgment alone, and this check must not be described as a backstop.** (QF-20260729-221)
 
 ## Step 1 — REQUIRED: Read the canonical role contract (CLAUDE_SOLOMON.md)
 
