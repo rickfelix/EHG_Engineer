@@ -20,15 +20,27 @@
  * the traversal. Part (2) of the ask — the credentialed run that promotes a nursery row into a
  * live venture — remains with the chairman and is explicitly NOT authorised.
  *
- * ⚠ STATUS OF THAT FENCE, 2026-08-04 — READ BEFORE RELYING ON IT EITHER WAY. The fence above was
- * written 2026-07-26 under coordinator ruling a59441f4 and is left VERBATIM because it may still
- * bind. What changed since: the chairman ruled "C" on the Stage-0 WIP limit (capture d46b090e,
- * SMS 989d2a6e), raising stage0.wip_limit 2 -> 3 for the stated purpose of admitting FR-3's
- * traversal venture as the third live venture. The argument that this SUPERSEDES the fence is that
- * you do not raise a WIP ceiling to make room for a venture you do not intend to create. That
- * reading has been put to the coordinator and IS NOT YET ANSWERED, so it is recorded here as an
- * open question rather than resolved in either direction. DO NOT treat this note as authorisation:
- * until the coordinator answers, part (2) stays fenced and this script still provisions ONLY.
+ * ⚠ THE FENCE WAS TESTED AGAINST CHAIRMAN RULING C AND SURVIVED — RULED 2026-08-05, coordinator
+ * 0ab6a99c. Recorded here because a fence that has been CHALLENGED AND UPHELD is stronger evidence
+ * than one nobody ever questioned, and the next reader should not have to re-run the argument.
+ *
+ * THE CHALLENGE: the chairman ruled "C" (capture d46b090e, SMS 989d2a6e) raising stage0.wip_limit
+ * 2 -> 3, and the stated purpose was to admit FR-3's traversal venture as the third live venture.
+ * The argument for supersession was that you do not raise a WIP ceiling to make room for a venture
+ * you do not intend to create.
+ *
+ * THE RULING: THE FENCE STANDS. Ruling C amended EXACTLY ONE THING — the WIP ceiling. It says
+ * nothing about this scope fence. A RULING IS NOT A GENERAL LICENCE; IT IS THE NARROWEST THING THE
+ * QUESTION ASKED FOR, and the question that produced C was about the limit. Reading a WIP-ceiling
+ * amendment as dissolving a separate fence would be widening the chairman's ruling on his behalf —
+ * the identical act this SD refused twice when it declined to shave the WIP count. Refusing to
+ * shave the count and then inferring authorisation from an adjacent answer would have been the
+ * same shortcut wearing a different hat, one gate later.
+ *
+ * CONSEQUENCE: part (2) — the credentialed run that promotes a nursery row into a live venture —
+ * REMAINS WITH THE CHAIRMAN. This script still provisions the IDENTITY ONLY. FR-3 closes
+ * OPEN-BY-DESIGN, not blocked. If the fence should fall, that is a NEW question to put to him
+ * explicitly, never an inference from an adjacent ruling.
  *
  * IDEMPOTENT: re-running finds the existing principal by email and re-prints its id rather than
  * creating a second one. A duplicate service identity would make attribution ambiguous, which
