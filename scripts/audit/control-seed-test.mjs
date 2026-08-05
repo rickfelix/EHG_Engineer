@@ -51,7 +51,7 @@ import { execFileSync, spawnSync } from 'node:child_process';
 import { mkdtempSync, writeFileSync, mkdirSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join, dirname, resolve, sep } from 'node:path';
-import { readFileSync } from 'node:fs';
+import { readFileSync, realpathSync } from 'node:fs';
 import { isMainModule } from '../../lib/utils/is-main-module.js';
 // FR-5 chokepoint (SD-LEO-INFRA-WORKTREE-REAPER-RESIDENT-001). This module became a
 // worktree-handling file the moment runSeedTestTrial started creating one, and the static guard
@@ -371,8 +371,21 @@ export function runSeedTestTrial(spec, repoRoot, deps = {}) {
     // Second, INDEPENDENT containment check. The equality test above already bounds `target`,
     // so reaching this means `spec.script` itself carried traversal -- a different door to the
     // same room. A guard resting on another guard's correctness is one refactor from useless.
-    if (!resolve(p).startsWith(resolve(wt) + sep)) {
-      return harnessError(spec, 'NEUTER_PATH_ESCAPE', `the resolved neuter target escapes the trial worktree: ${resolve(p)}`);
+    //
+    // realpathSync, NOT resolve(). The first version compared LEXICAL paths, which never touch
+    // the filesystem, so a symlink/junction committed by the same PR at an entirely ordinary
+    // looking path escaped it with no `..` anywhere in the diff -- SECURITY defeated it with a
+    // real Windows junction and the write landed outside the worktree. realpath dereferences,
+    // so the check now measures where the write ACTUALLY goes rather than what the string says.
+    let realP, realWt;
+    try {
+      realP = realpathSync(p);
+      realWt = realpathSync(wt);
+    } catch (e) {
+      return harnessError(spec, 'NEUTER_PATH_UNRESOLVABLE', `could not resolve the neuter target on disk: ${e.message}`);
+    }
+    if (!realP.startsWith(realWt + sep)) {
+      return harnessError(spec, 'NEUTER_PATH_ESCAPE', `the neuter target resolves OUTSIDE the trial worktree: ${realP} is not under ${realWt}`);
     }
     const before = readFileSync(p, 'utf8');
     const after = before.replace(spec.neuter.find, spec.neuter.replace);
