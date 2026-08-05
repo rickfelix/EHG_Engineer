@@ -18,10 +18,17 @@ const CHAIRMAN_HUMAN_UID = '69c8aa7a-7661-48ed-9779-746fa6290873';
 const FAKE_PRINCIPAL = '00000000-0000-4000-8000-00000000dead';
 const withPrincipal = { registeredPrincipals: [FAKE_PRINCIPAL] };
 
-// svc-stage-zero-invoker@ehg.dev — the provisioned non-human enqueue identity (AC-10).
+// svc-stage-zero-invoker@execholdings.ai — the provisioned non-human enqueue identity (AC-10).
 // Pinned here so a change to the production registry has to be made deliberately in two
 // places, not slipped in by editing the module alone.
-const SERVICE_PRINCIPAL = '27e0e91e-35f7-4617-bbb9-932408db80f1';
+//
+// ⚠ AND NOTE WHAT THIS TWO-PLACE PIN DID NOT CATCH, because it is the whole lesson of this
+// file's history: from 2026-07-26 to 08-04 both places agreed on '27e0e91e-...' and BOTH WERE
+// WRONG — no such row existed in auth.users. Pinning the same id in two source files proves
+// the two files agree, never that the id names a real principal. Existence is checked at
+// RUNTIME in invokeNurseryReeval (defaultPrincipalExists), and that is the only check that
+// could have caught it. Read-back confirmed 2026-08-05T00:14:34Z: this id IS in auth.users.
+const SERVICE_PRINCIPAL = '13851be2-caf9-4aed-a1a4-c506daa94e0e';
 
 describe('buildNurseryReevalRequest — AC-9 attribution guard', () => {
   // The registry was empty until 2026-07-26 and this test asserted toHaveLength(0). The
