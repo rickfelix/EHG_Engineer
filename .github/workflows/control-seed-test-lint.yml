@@ -60,6 +60,23 @@ jobs:
       # fixture trial, beyond the one already in KNOWN LIMITATIONS: it takes a dependency
       # on the test runner being installed, so it can fail for reasons that have nothing
       # to do with whether the control detects anything.
+      # ⚠️ TRIPWIRE — DO NOT ADD --ignore-scripts HERE WITHOUT READING THIS.
+      # SD-PAT-FIX-FIX-ABSENCE-SIGNAL-001, SECURITY row 72f19e83.
+      #
+      # scripts/audit/control-seed-specs.json is EDITABLE IN A PULL REQUEST, and it drives file
+      # writes and process spawns in this job. SECURITY found three ways to abuse that. They were
+      # accepted as DEFENSE-IN-DEPTH rather than CRITICAL on ONE MEASURED FACT: this job ALREADY
+      # executes PR-controlled code, because `npm ci` runs lifecycle scripts and package.json has
+      # an unconditional `postinstall`. So those bypasses grant an attacker nothing they could not
+      # get more simply. Verified directly — .npmrc carries no ignore-scripts.
+      #
+      # THAT IS SAFETY BY COINCIDENCE, AND THIS COMMENT EXISTS SO IT CANNOT LAPSE SILENTLY.
+      # Adding --ignore-scripts (a sensible hardening for entirely unrelated reasons) CLOSES the
+      # postinstall route and thereby RE-OPENS all three findings as genuinely exploitable, with
+      # nothing anywhere reporting that the trade changed. If you are adding that flag: good, but
+      # first fix the neuter trust model in scripts/audit/control-seed-test.mjs — an allowlist for
+      # spec.env, and stop treating attacker-controlled find/replace against public file content
+      # as safe because the values look reasonable.
       - name: Install dependencies
         run: npm ci --prefer-offline --no-audit
 
