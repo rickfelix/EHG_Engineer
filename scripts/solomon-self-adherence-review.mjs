@@ -197,6 +197,25 @@ async function main() {
       console.log('  solomon-self-adherence persist fail-open:', err?.message || String(err));
     }
   }
+  // SD-LEO-INFRA-FORCE-ROLE-SESSIONS-001 (FR-3): Solomon's leg of the forced-capture obligation.
+  // Solomon has NO quiet tick and NO COMPOSED_CORES registry, so unlike Adam and the coordinator
+  // he cannot be wired by adding one core entry — this direct call IS his recurring choke, and
+  // asserting the three roles separately is why AC-4 exists: two roles sharing a registration
+  // pattern makes it easy to ship two legs and believe three shipped.
+  // check-only and fail-open, matching this script's own contract: it reports the obligation, it
+  // never records on Solomon's behalf (a gate that satisfies itself measures nothing) and it never
+  // blocks the tick.
+  try {
+    const { evaluateRoleCaptureGate } = await import('../lib/learning/role-capture-gate.js');
+    const supabase = createSupabaseServiceClient();
+    const gate = await evaluateRoleCaptureGate({ supabase, role: 'solomon' });
+    console.log(
+      `ROLE_CAPTURE_GATE=solomon state=${gate.state} kind=${gate.kind ?? 'none'} window=${gate.windowSeconds ?? 'na'}` +
+      (gate.error ? ` error=${gate.error}` : '')
+    );
+  } catch (err) {
+    console.log('ROLE_CAPTURE_GATE=solomon state=STORE_ERROR error=' + (err?.message || String(err)));
+  }
   process.exit(0);
 }
 

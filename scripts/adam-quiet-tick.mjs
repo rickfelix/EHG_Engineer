@@ -92,6 +92,14 @@ export const COMPOSED_CORES = [
   // stdout is truncated to one line (scriptCore below), so it must NEVER consume (read_at);
   // it stamps delivered_at only. Operator-visible surfacing is FR-3's surfaceInboxItems.
   { key: 'inbox-monitor', script: 'adam-advisory.cjs', args: ['scripts/adam-advisory.cjs', 'inbox', '--quiet', '--background'], quiescentSkip: false, safety: true },
+  // SD-LEO-INFRA-FORCE-ROLE-SESSIONS-001 (FR-3): the forced-capture obligation, evaluated at a
+  // RECURRING OPERATING CHOKE rather than at turn end. A turn-end / Stop-hook guard is blind to
+  // how role sessions actually die — four seats were measured wedged mid-iteration on 2026-08-02
+  // with loop_state=active and a stale last_tool_at, and a wedged session never reaches turn-end.
+  // Riding here means a frozen seat visibly stops passing, which is correct AND observable.
+  // check-only: the tick never records on Adam's behalf — a gate that satisfies itself measures
+  // nothing. The CLI always exits 0, so this contributes a state token and never a core failure.
+  { key: 'capture-gate', script: 'role-capture-gate.mjs', args: ['scripts/role-capture-gate.mjs', 'check', '--role', 'adam'], quiescentSkip: false },
 ];
 export const DELTA_GATED_LOOPS = ['belt-countdown', 'offer-help'];
 
