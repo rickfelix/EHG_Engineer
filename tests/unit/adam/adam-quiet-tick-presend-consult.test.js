@@ -28,10 +28,20 @@ describe('adam-quiet-tick.mjs account-switch send — pre-send consult gate (QF-
       fileURLToPath(new URL('../../../scripts/adam-quiet-tick.mjs', import.meta.url)),
       'utf8',
     );
-    const idx = source.indexOf("kind: 'account_switch_notice'");
-    expect(idx).toBeGreaterThan(-1);
-    const before = source.slice(Math.max(0, idx - 1500), idx);
-    expect(before).toContain('evaluatePreSendConsult');
-    expect(before).toContain('should-consult-solomon.js');
+    // SD-LEO-INFRA-COORDINATION-LANE-DRAIN-001: this asserted PROXIMITY (a 1500-char lookbehind)
+    // while its own name asserts ORDERING ("ahead of"). Those agree only until someone writes a
+    // comment: FR-5 added five explanatory lines and pushed the gap to 1594 chars, failing a guard
+    // whose subject — the call still sitting ahead of the choke — had not changed at all. A guard
+    // that fires on comment volume trains readers to treat it as noise, which is how a real
+    // regression eventually gets waved through. Now it compares positions, which is what it always
+    // meant and is immune to anything that does not actually reorder the two.
+    const chokeIdx = source.indexOf("kind: 'account_switch_notice'");
+    const consultIdx = source.indexOf('evaluatePreSendConsult');
+    const importIdx = source.indexOf('should-consult-solomon.js');
+    expect(chokeIdx).toBeGreaterThan(-1);
+    expect(consultIdx).toBeGreaterThan(-1);
+    expect(importIdx).toBeGreaterThan(-1);
+    expect(consultIdx).toBeLessThan(chokeIdx);
+    expect(importIdx).toBeLessThan(chokeIdx);
   });
 });

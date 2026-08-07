@@ -26,7 +26,7 @@ import { dirname, resolve, join } from 'node:path';
 import { readFileSync, writeFileSync } from 'node:fs';
 import 'dotenv/config';
 import { stampLastFired } from '../lib/periodic-liveness/stamp-last-fired.js';
-import { renderCount } from '../lib/db/fetch-all-paginated.mjs';
+import { renderCount, fetchAllPaginated } from '../lib/db/fetch-all-paginated.mjs';
 
 const require = createRequire(import.meta.url);
 const { createClient } = require('@supabase/supabase-js');
@@ -368,12 +368,16 @@ async function main() {
     // stamp actioned_at on ~1800 rows nobody acted on. Surfacing scope stays separate from
     // retirement scope. UNWINDOWED on purpose — age is the signal here, and the neighbouring
     // salience counter's 30-minute window is precisely what cannot see this defect.
-    const { data: laneRows } = await sb
+    // PAGINATED, not .limit(1000). A capped fetch measures the CAP rather than the population —
+    // the exact under-reporting shape FR-4 exists to fix, so shipping it inside FR-4's own remedy
+    // would have been the defect rebuilt in its cure. Caught by adversarial testing review.
+    const laneRows = await fetchAllPaginated((from, to) => sb
       .from('session_coordination')
       .select('id, created_at, acknowledged_at, payload')
       .in('target_session', [coordinatorIdForAdvisories, 'broadcast-coordinator'])
       .is('acknowledged_at', null)
-      .limit(1000);
+      .order('id', { ascending: true })
+      .range(from, to));
     lanePending = summarizePendingLane(laneRows || [], { nowMs: Date.now() });
   } catch { /* fail-soft: neither count ever blocks the tick */ }
 

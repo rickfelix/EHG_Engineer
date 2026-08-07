@@ -88,8 +88,25 @@ describe('the gauge output reaches someone (consumption)', () => {
     expect(invocation).toContain('--max-violation-ratio');
   });
 
-  it('CONTROL: an invocation without the flag is detectable', () => {
-    const synthetic = `      - run: node ${GAUGE_REL} --window-hours 24`;
-    expect(synthetic.includes('--max-violation-ratio')).toBe(false);
+  it('CONTROL: an invocation without the flag is detectable BY THE SAME EXTRACTION', () => {
+    // The first version of this control was TAUTOLOGICAL (flagged by adversarial review): it
+    // asserted that a locally-built string lacked a substring it had deliberately omitted, ran no
+    // production code, and did not even exercise the extraction the real assertion above uses. It
+    // could never have failed, so it certified nothing. Now it drives the SAME line-selection
+    // logic, so if that selection silently stops finding invocations this control goes red too.
+    const synthetic = [
+      '    steps:',
+      '      # - run: node ' + GAUGE_REL + ' --max-violation-ratio 0.10   <- commented out',
+      '      - run: node ' + GAUGE_REL + ' --window-hours 24'
+    ].join('\n');
+
+    const invocation = synthetic
+      .split('\n')
+      .map((l) => l.trim())
+      .filter((l) => !l.startsWith('#'))
+      .find((l) => l.includes(GAUGE_REL));
+
+    expect(invocation).toBeDefined();
+    expect(invocation).not.toContain('--max-violation-ratio');
   });
 });
