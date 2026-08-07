@@ -1,0 +1,73 @@
+name: "Coordination lane-lint gauge (cron)"
+
+# SD-LEO-INFRA-COORDINATION-LANE-DRAIN-001 (FR-6).
+#
+# WHY THIS EXISTS. lib/coordination/lane-lint-gauge.cjs measures real lane hygiene — untyped rows,
+# bodyless rows, empty-sender rows, full-lane over a paginated 24h sample — and NOTHING INVOKED IT.
+# Its only callers were its own CLI and its tests: absent from package.json, from every workflow,
+# and from gauge-runner.mjs. That is the same instrument-nobody-invokes defect the parent SD exists
+# to fix, and leaving it in place unscheduled is worse than deleting it, because its existence
+# reads as coverage.
+#
+# WHY IT FAILS THE JOB RATHER THAN JUST LOGGING. Simply cron-ing it would have reproduced the
+# defect in a new costume. The gauge writes nothing and emits nothing — a scheduled run prints into
+# an Actions log no human reads, so "it runs now" would be indistinguishable from "it ran and
+# nobody could tell you what it said". A non-zero exit gives the gauge a CONSUMER using a
+# notification channel that already exists, without adding a write path to a deliberately
+# read-only instrument.
+#
+# THE BUDGET IS A REGRESSION DETECTOR, NOT A ZERO-TOLERANCE ALARM. Measured baseline at authoring
+# time: 162 of ~3,772 rows (4.3%) carry no payload.kind, and that population is understood — it
+# includes the WORKER_SIGNAL friction channel, which keys on signal_type by design. A zero
+# threshold would be red on day one, and a check that is always red gets switched off; that is
+# exactly how the permanent-breach shape this SD warns about gets built. 10% leaves headroom over
+# a known-good 4.3% and fires when hygiene gets materially worse than the state someone reviewed.
+# If the baseline legitimately moves, move this number and say why in the commit.
+#
+# DAILY, not hourly: lane hygiene is a slow-moving property and a 24h sample window is the unit
+# this gauge already measures in. Sampling faster than the window would just re-read the same rows.
+
+on:
+  schedule:
+    - cron: '20 6 * * *'
+  workflow_dispatch:
+    inputs:
+      max_violation_ratio:
+        description: "Fail when untyped+bodyless+empty-sender exceed this fraction of the window (baseline ~0.043)."
+        type: string
+        default: '0.10'
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ${{ github.workflow }}
+  cancel-in-progress: true
+
+jobs:
+  lane-lint-gauge:
+    name: Coordination lane-lint gauge
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+
+    env:
+      SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+      SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: 'npm'
+
+      - name: Install dependencies
+        run: npm ci --ignore-scripts
+
+      # --max-violation-ratio is what makes this a CHECK rather than a log line. Without it the
+      # gauge always exits 0 and this workflow becomes decorative. Do not remove the flag.
+      - name: Lane-lint gauge
+        run: node scripts/coordinator-lane-lint-gauge.cjs --window-hours 24 --max-violation-ratio "${{ inputs.max_violation_ratio || '0.10' }}"
