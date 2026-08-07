@@ -35,9 +35,28 @@ import { execSync } from 'node:child_process';
 import { createClient } from '@supabase/supabase-js';
 import { isMainModule } from '../lib/utils/is-main-module.js';
 import { resolveGitHubRepo } from '../lib/repo-paths.js';
+// QF-20260807-745: the reaper reuses complete-quick-fix's reconcile contract rather than
+// restating it. QF-20260725-691 already settled what a merged PR proves at the front door;
+// a second, divergent copy here is how the two answers drift apart again.
+import { buildMergedReconcileUpdate } from './modules/complete-quick-fix/orchestrator.js';
 
 const SAFETY_WINDOW_MINUTES = Number(process.env.ORPHAN_QF_REAPER_SAFETY_WINDOW_MINUTES || 5);
 const DRY_RUN = process.env.ORPHAN_QF_REAPER_DRY_RUN === 'true';
+
+// QF-20260807-745. Landing NON-TERMINAL re-opened a loop the old terminal close hid: a
+// witnessed row keeps matching the candidate query, so without this the reaper would
+// re-witness the same QF every 15 minutes and append the note to verification_notes
+// forever. The old code could not hit this because `completed` removed the row from the
+// query — the bug was masked by the very behaviour being fixed.
+export const WITNESS_MARKER = 'merge witnessed, SCOPE ACCEPTANCE OUTSTANDING';
+
+export function alreadyWitnessed(qf, prUrl) {
+  const notes = qf?.verification_notes;
+  if (typeof notes !== 'string' || !notes.includes(WITNESS_MARKER)) return false;
+  // Same PR already witnessed → nothing new to record. A DIFFERENT PR on the same QF is
+  // new information (the guard-then-fix case) and is allowed through to be recorded.
+  return prUrl ? notes.includes(prUrl) : true;
+}
 
 function log(action, fields) {
   process.stdout.write(JSON.stringify({ action, ts: new Date().toISOString(), ...fields }) + '\n');
@@ -119,7 +138,10 @@ export async function main() {
 
   const { data: candidates, error: queryError } = await supabase
     .from('quick_fixes')
-    .select('id, status, pr_url, started_at, claiming_session_id, target_application')
+    // verification_notes is REQUIRED, not decorative (QF-20260807-745): alreadyWitnessed()
+    // reads it to stop re-witnessing every 15 min, and buildMergedReconcileUpdate PREPENDS
+    // it — unselected, the guard silently reads undefined and prior notes are overwritten.
+    .select('id, status, pr_url, started_at, claiming_session_id, target_application, verification_notes')
     .in('status', ['open', 'in_progress'])
     .not('pr_url', 'is', null)
     .lt('started_at', cutoffIso)
@@ -140,6 +162,7 @@ export async function main() {
     orphan_reconciled: 0,
     orphan_skipped_no_merged_pr: 0,
     orphan_skipped_already_completed: 0,
+    skipped_already_witnessed: 0,
     errored: 0,
   };
 
@@ -176,6 +199,12 @@ export async function main() {
     const mergeCommitSha = pr.data.mergeCommit?.oid || null;
     const mergedAt = pr.data.mergedAt || new Date().toISOString();
 
+    if (alreadyWitnessed(qf, qf.pr_url)) {
+      log('skipped_already_witnessed', { qf_id: qf.id, pr_number: prNumber });
+      summary.skipped_already_witnessed += 1;
+      continue;
+    }
+
     if (DRY_RUN) {
       log('dry_run_would_reconcile', { qf_id: qf.id, pr_number: prNumber, merge_commit_sha: mergeCommitSha });
       summary.reconciled += 1;
@@ -187,19 +216,19 @@ export async function main() {
     const { data: updated, error: updateError } = await supabase
       .from('quick_fixes')
       .update({
-        status: 'completed',
-        completed_at: mergedAt,
-        commit_sha: mergeCommitSha,
-        compliance_verdict: 'PASS',
-        compliance_details: 'Auto-reconciled by orphan-qf-reaper — PR merged on GitHub without complete-quick-fix.js flipping DB status.',
-        verified_by: 'ORPHAN_REAPER',
-        verification_notes: JSON.stringify({
-          reconciled_at: new Date().toISOString(),
-          closed_by: 'orphan_reaper',
-          pr_number: prNumber,
-          merge_commit_sha: mergeCommitSha,
+        // QF-20260807-745: was status:'completed' + force_completed + compliance_verdict:'PASS'.
+        // A merged PR witnesses that CODE LANDED; terminal `completed` asserts the QF's SCOPE
+        // WAS SATISFIED. The reaper can observe the first and can never establish the second,
+        // and the terminal status made complete-quick-fix.js answer already-completed, so the
+        // scope-proof gate never ran — the backstop fired first and hid the door it was backing.
+        ...buildMergedReconcileUpdate({
+          qf,
+          prUrl: qf.pr_url,
+          mergeSha: mergeCommitSha,
+          nowIso: mergedAt,
+          scopeAcceptedBy: null, // the reaper is a witness; it is never the attester
         }),
-        force_completed: true,
+        compliance_details: `Merge witnessed by orphan-qf-reaper (pr_url path, PR #${prNumber}) — NOT a scope acceptance. Attest via complete-quick-fix.js --scope-accepted.`,
       })
       .eq('id', qf.id)
       .eq('status', qf.status)
@@ -228,7 +257,7 @@ export async function main() {
   // per QF-20260508-230 retro). Resolve via `qf/<id>` branch convention.
   const { data: orphanCandidates, error: orphanQueryError } = await supabase
     .from('quick_fixes')
-    .select('id, status, started_at, claiming_session_id, target_application')
+    .select('id, status, started_at, claiming_session_id, target_application, verification_notes')
     .in('status', ['open', 'in_progress'])
     .is('pr_url', null)
     .not('claiming_session_id', 'is', null)
@@ -271,6 +300,12 @@ export async function main() {
       const mergeCommitSha = mergeCommit?.oid || null;
       const reconciledAt = mergedAt || new Date().toISOString();
 
+      if (alreadyWitnessed(qf, prUrl)) {
+        log('skipped_already_witnessed_orphan', { qf_id: qf.id, pr_number: prNumber, branch: branchName });
+        summary.skipped_already_witnessed += 1;
+        continue;
+      }
+
       if (DRY_RUN) {
         log('dry_run_would_reconcile_orphan', { qf_id: qf.id, pr_number: prNumber, branch: branchName, merge_commit_sha: mergeCommitSha });
         summary.orphan_reconciled += 1;
@@ -280,21 +315,20 @@ export async function main() {
       const { data: updated, error: updateError } = await supabase
         .from('quick_fixes')
         .update({
-          status: 'completed',
-          completed_at: reconciledAt,
-          commit_sha: mergeCommitSha,
-          pr_url: prUrl,
-          compliance_verdict: 'PASS',
-          compliance_details: 'Auto-reconciled by orphan-qf-reaper (branch-derived path) — PR merged on GitHub without pr_url ever populated.',
-          verified_by: 'ORPHAN_REAPER',
-          verification_notes: JSON.stringify({
-            reconciled_at: new Date().toISOString(),
-            closed_by: 'orphan_reaper_branch_derived',
-            pr_number: prNumber,
-            branch: branchName,
-            merge_commit_sha: mergeCommitSha,
+          // QF-20260807-745, the incident this fix is named for. This path closed on the FIRST
+          // PR merged from branch `qf/<id>` — and guard-then-fix is a normal, sometimes MANDATORY
+          // decomposition. On QF-20260804-647 it closed at 17:17Z citing the GUARD PR (which
+          // removed zero tax) while the actual fix was still 65 minutes from existing. A reaper
+          // that can only say "done" cannot express "PR merged, scope unvouched" — so it said the
+          // only thing it knew how to say, and it was wrong.
+          ...buildMergedReconcileUpdate({
+            qf,
+            prUrl,
+            mergeSha: mergeCommitSha,
+            nowIso: reconciledAt,
+            scopeAcceptedBy: null,
           }),
-          force_completed: true,
+          compliance_details: `Merge witnessed by orphan-qf-reaper (branch-derived path, branch ${branchName}, PR #${prNumber}) — the FIRST merged PR from this branch, which is NOT proof this QF's scope is satisfied. Attest via complete-quick-fix.js --scope-accepted.`,
         })
         .eq('id', qf.id)
         .eq('status', qf.status)
