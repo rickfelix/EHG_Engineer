@@ -651,7 +651,12 @@ async function main() {
             const { getActiveSolomonId } = require('../lib/coordinator/solomon-identity.cjs');
             const { buildSolomonConsultPayload } = require('./worker-signal.cjs');
             const solomonId = await getActiveSolomonId(sb).catch(() => null);
-            const cp = buildSolomonConsultPayload({ correlationId: crypto.randomUUID(), body: `[PRE-SEND CONSULT] ${body}`, senderCallsign: 'adam-quiet-tick', repo: process.cwd(), severity: 'high' });
+            // SD-LEO-INFRA-COORDINATION-LANE-DRAIN-001 / FR-5: set the STRUCTURAL discriminator.
+            // Without consult_purpose this row is indistinguishable from a genuine consult except
+            // by its body prefix, so Solomon's drain — which sorts on kind and arrival time — lets
+            // a CC needing no answer hold a real question behind it. The field has existed since
+            // SOLOMON-CONSULT-CANNOT-DELIVER-001 FR-2; this producer simply never passed it.
+            const cp = buildSolomonConsultPayload({ correlationId: crypto.randomUUID(), body: `[PRE-SEND CONSULT] ${body}`, senderCallsign: 'adam-quiet-tick', repo: process.cwd(), severity: 'high', consultPurpose: 'pre_send' });
             await insertCoordinationRow(sb, { sender_type: 'adam', target_session: solomonId || 'broadcast-solomon', message_type: 'INFO', subject: '[SOLOMON_CONSULT] pre-send', body: cp.body, payload: cp }, { targetRoleHint: 'solomon' });
           }
         } catch { /* fail-open — see comment above */ }

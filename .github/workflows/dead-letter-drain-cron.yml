@@ -1,0 +1,79 @@
+name: "Dead-letter coordination drain (cron)"
+
+# SD-LEO-INFRA-COORDINATION-LANE-DRAIN-001 (FR-2).
+#
+# WHAT THIS CLOSES. lib/coordination/dead-letter-drain.js could always re-route rows whose TARGET
+# SESSION is dead, but nothing ever invoked it — its entire caller list was its own CLI wrapper and
+# one unit test. Meanwhile the sweep that DOES run every 15 minutes (orphan-reroute-sweep-cron.yml)
+# is liveness-blind by design: its predicate is kind-recognition only and never inspects target
+# liveness. The two instruments partition the problem with ZERO overlap, so a well-recognized kind
+# addressed to a reaped session was covered by neither. This is the missing scheduled half.
+#
+# WHY HOURLY, AND NOT THE ORPHAN SWEEP'S 15 MINUTES — a deliberate deviation, not an oversight.
+# The orphan sweep is urgent per row: a message whose kind the target role cannot read is
+# undeliverable RIGHT NOW, so latency is the whole point. Dead-lettering is not urgent per row; its
+# horizon is set by the retention purge, which acts on a 7-day grace. Hourly is ~168x faster than
+# the deadline it defends, while a full-table scan every 15 minutes would burn a scan four times an
+# hour to buy latency nothing needs. If a case ever appears that genuinely needs sub-hour response,
+# raise the cadence THEN, with the case as the reason.
+#
+# APPLY IS OFF BY DEFAULT AND STAYS OFF UNTIL DELIBERATELY ENABLED (AC-11).
+# Scheduling is the irreversible act here. Every post-check inside the drain reads the lane only
+# AFTER it has written, so a wrong write is discovered by an instrument that already accepted it.
+# The scheduled run is therefore DRY-RUN unless repository variable DEAD_LETTER_DRAIN_APPLY is
+# exactly 'true'. That makes enabling writes a config change with an audit trail rather than a code
+# change, and it means this workflow can bake for a full cycle in report-only mode first — which is
+# the point of AC-11. Do not hardcode --apply here.
+
+on:
+  schedule:
+    - cron: '0 * * * *'
+  workflow_dispatch:
+    inputs:
+      apply:
+        description: "Write mode. Leave false to dry-run. Only set true after reviewing a dry-run plan."
+        type: boolean
+        default: false
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ${{ github.workflow }}
+  cancel-in-progress: true
+
+jobs:
+  dead-letter-drain:
+    name: Dead-letter coordination drain
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+
+    env:
+      SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+      SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: 'npm'
+
+      - name: Install dependencies
+        run: npm ci --ignore-scripts
+
+      # Two independent gates must BOTH allow a write: the repo variable (for the scheduled run)
+      # and the dispatch input (for a manual run). Absent either, this is a dry-run and the script
+      # performs no writes — its write calls sit behind an early return on the no-apply path.
+      - name: Drain dead-letter rows
+        run: |
+          if [ "${{ vars.DEAD_LETTER_DRAIN_APPLY }}" = "true" ] || [ "${{ inputs.apply }}" = "true" ]; then
+            echo "APPLY MODE — writes enabled"
+            node scripts/drain-dead-letter-coordination.mjs --apply
+          else
+            echo "DRY-RUN — no writes (set repo variable DEAD_LETTER_DRAIN_APPLY=true to enable)"
+            node scripts/drain-dead-letter-coordination.mjs
+          fi

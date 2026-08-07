@@ -383,7 +383,13 @@ async function drainInbox(supabase, sessionId, { quiet = false, background = fal
   const resolvedSolomonKinds = (await resolveRecognizedKinds({ supabase, role: 'solomon' }))
     .filter((k) => k !== 'comms_check');
 
-  const rows = (allRows || []).filter((r) => isReplyRow(r) || isSolomonInboxRow(r, resolvedSolomonKinds));
+  // SD-LEO-INFRA-COORDINATION-LANE-DRAIN-001 / FR-5: sort genuine consults ahead of pre-send CCs.
+  // The DB returns created_at ASC, which is the right tiebreak but the wrong PRIMARY key here —
+  // a CC that needs no answer would otherwise hold a real question behind it purely by arriving
+  // first. See orderSolomonInboxRows for why the discriminator is payload.consult_purpose.
+  const rows = orderSolomonInboxRows(
+    (allRows || []).filter((r) => isReplyRow(r) || isSolomonInboxRow(r, resolvedSolomonKinds))
+  );
   // SD-LEO-INFRA-SEND-TIME-TARGET-001 / FR-3: Solomon-directed canary coverage. comms_check
   // was listed handler-owned (EXCLUDED_KINDS) but NO Solomon-side handler existed — a
   // comms_check sent to Solomon orphaned silently (the exact class this SD closes send-side).
@@ -1110,7 +1116,47 @@ async function main() {
   }
 }
 
+/**
+ * Order the Solomon inbox so GENUINE CONSULTS come before PRE-SEND CCs.
+ * SD-LEO-INFRA-COORDINATION-LANE-DRAIN-001 / FR-5.
+ *
+ * ONE KIND CARRYING TWO INTENTS. Adam's quiet tick emits a pre-send CC as kind='solomon_consult',
+ * the same kind as a real question needing deep reasoning. Nothing in the row let this drain tell
+ * them apart — the lane label is computed from `kind` alone and ordering fell back to created_at
+ * ASC — so a CC needing no answer could hold a genuine consult behind it purely by arriving first.
+ * Fix the discrimination, not the per-consumer workaround.
+ *
+ * The discriminator already existed: payload.consult_purpose (scripts/worker-signal.cjs:464-469),
+ * added so a pre-send CC would be machine-readable rather than detectable only by a
+ * '[PRE-SEND CONSULT]' body prefix. It was optional, the producer never set it, and nothing ever
+ * read it — a field built for exactly this, inert on both ends. This reads it; adam-quiet-tick.mjs
+ * now sets it.
+ *
+ * ABSENT consult_purpose means GENUINE, deliberately. The field is optional and nearly every
+ * existing caller omits it, so defaulting the other way would silently demote every legacy consult
+ * on the lane. Stable within each class, preserving the created_at ASC the query already applies.
+ *
+ * @param {Array<{payload?:object}>} rows
+ * @returns {Array} a new array; the input is not mutated
+ */
+function orderSolomonInboxRows(rows = []) {
+  const isPreSendCc = (r) => (r && r.payload && r.payload.consult_purpose) === 'pre_send';
+  // Tiebreak on created_at EXPLICITLY rather than relying on the caller's order. The live query
+  // does sort created_at ASC, so index-stability would behave identically in production — and
+  // that is exactly what makes it the wrong thing to depend on: the function would silently stop
+  // honouring its own contract the day anyone reordered the query or reused it elsewhere.
+  const at = (r) => { const t = Date.parse((r && r.created_at) || ''); return Number.isFinite(t) ? t : 0; };
+  return rows
+    .map((r, i) => ({ r, i }))
+    .sort((a, b) =>
+      (Number(isPreSendCc(a.r)) - Number(isPreSendCc(b.r)))
+      || (at(a.r) - at(b.r))
+      || (a.i - b.i))
+    .map(({ r }) => r);
+}
+
 module.exports = {
+  orderSolomonInboxRows,
   buildAdvisoryPayload, advisoryExpiresAt, ADVISORY_TTL_MS,
   isReplyRow, isSolomonInboxRow, isOrphanedSolomonRow, SOLOMON_INBOX_KINDS, EXCLUDED_KINDS, SOLOMON_CONSULT_KIND,
   computeConsultSignature, enforceSweepBudget, SOLOMON_SWEEP_BUDGET, alreadyAnswered, checkConsultQuota,
