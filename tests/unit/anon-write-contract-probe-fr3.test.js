@@ -58,12 +58,19 @@ const mkQ = (over = {}) => {
     if (/reset role/i.test(s)) { asAnon = false; return { rows: [] }; }
     if (/^\s*(BEGIN|set local|savepoint|rollback|release)/i.test(s)) return { rows: [] };
     if (/in_tx/.test(s)) return { rows: [{ in_tx: true }] };
-    if (/from pg_policies/i.test(s)) return { rows: [{ permissive: 'RESTRICTIVE', qual: '', with_check: cfg.withCheck }] };
+    if (/from pg_policies/i.test(s)) {
+      if (cfg.policyReadThrows) throw new Error(cfg.policyReadThrows);
+      return { rows: [{ permissive: 'RESTRICTIVE', qual: '', with_check: cfg.withCheck }] };
+    }
     if (/from ventures v/i.test(s)) return { rows: [{ id: 'v1' }] };
     if (/to_regprocedure/i.test(s)) return { rows: [{ prosecdef: cfg.prosecdef, owner: cfg.definerOwner }] };
     if (/fn_anon_ingress_prior_hour_count\(\$1\)/i.test(s)) {
       if (cfg.definerThrows) { const e = new Error(cfg.definerThrows); e.code = '42501'; throw e; }
-      return { rows: [{ n: cfg.anonViaDefiner }] };
+      // ROLE-SENSITIVE ON PURPOSE. The whole meaning of this conjunct is "measured AS ANON", and a
+      // fixture that answers the same regardless of role cannot pin WHERE the measurement happens —
+      // only that it happens. Found by mutation: hoisting `reset role` above the definer call made
+      // it run as the OWNER, and with a role-blind fixture no test noticed.
+      return { rows: [{ n: asAnon ? cfg.anonViaDefiner : cfg.ownerCount }] };
     }
     if (/count\(\*\)::int as n/i.test(s)) {
       if (params?.[0] === 'telegram') return { rows: [{ n: 0 }] };   // control-source headroom check
@@ -141,6 +148,58 @@ describe('FR-3 — the invariant is a PAIR, and it reaches the exit code', () =>
     const { code } = await runMain({ ownerCount: 1, anonDirect: 0, anonViaDefiner: 1 });
     expect(code).toBe(EXIT.OK);
   });
+
+  /**
+   * THE VACUITY GATE MUST NOT SWALLOW THE BASIS CHECK — the SECURITY review's finding, and the one
+   * that mattered most. Reading the policy text needs ZERO rows, so a quiet hour says nothing about
+   * whether the count was re-inlined. Measured on live prod against this probe's own cron window
+   * (17 6 * * *, one-hour lookback) over 30 days: 17 of 30 runs are vacuous. With the basis check
+   * gated behind vacuity, a re-inlined policy would have exited 0 on 57% of runs — and retiring
+   * compareCountVisibility was made CONTINGENT on covering exactly that path.
+   *
+   * The pair below is the two-sided proof: same quiet hour, only the policy text differs.
+   */
+  it('FIRES on a re-inlined policy even during a vacuous hour (the basis needs no rows)', async () => {
+    const { code } = await runMain({
+      ownerCount: 1, anonDirect: 0, anonViaDefiner: 1,
+      withCheck: '((select count(*) from feedback f where f.source_type = source_type) < 50)'
+    });
+    expect(code).toBe(EXIT.CONTRACT_CHANGED);
+  });
+
+  it('and the same vacuous hour with a HEALTHY policy is still quiet — the gate is not just removed', async () => {
+    const { code } = await runMain({ ownerCount: 1, anonDirect: 0, anonViaDefiner: 1 });
+    expect(code).toBe(EXIT.OK);
+  });
+
+  /**
+   * X8. The definer count must be read AS ANON, not as the owner. This is the conjunct whose entire
+   * meaning is the role it is measured under, and mutation showed its measurement SITE was unpinned:
+   * hoisting `reset role` above the definer call still passed, because the fixture answered the same
+   * either way. The fixture is now role-sensitive, so this test fails if the read moves out of the
+   * anon window.
+   */
+  it('reads the definer count inside the anon window, not after the role is reset', async () => {
+    const { issued } = await runMain();
+    const anonAt = issued.findIndex((s) => /set local role anon/i.test(s));
+    const definerAt = issued.findIndex((s) => /fn_anon_ingress_prior_hour_count\(\$1\)/i.test(s));
+    const resetAt = issued.findIndex((s) => /reset role/i.test(s));
+    expect(anonAt).toBeGreaterThanOrEqual(0);
+    expect(definerAt).toBeGreaterThan(anonAt);
+    expect(definerAt).toBeLessThan(resetAt);
+  });
+
+  /**
+   * X3. The ladder's own comment claims UNREADABLE outranks the rest. A stated invariant with no
+   * assertion is just prose: without this, swapping two branches changes nothing observable, and an
+   * EXECUTE revoked during a quiet hour would read OK instead of INCONCLUSIVE.
+   */
+  it('UNREADABLE outranks VACUOUS: an unreadable basis on a quiet hour is not a pass', async () => {
+    const { code } = await runMain({
+      ownerCount: 1, anonDirect: 0, definerThrows: 'permission denied for function'
+    });
+    expect(code).toBe(EXIT.PROBE_INCONCLUSIVE);
+  });
 });
 
 /**
@@ -205,6 +264,17 @@ describe('boundExitCode — the fold, stated once and unit-pinned', () => {
     // indistinguishable from "already remediated" and exits 0 — the print-only defect one level up.
     expect(boundExitCode({ applicable: false, errored: true, note: 'not measurable: boom' }))
       .toBe(EXIT.PROBE_INCONCLUSIVE);
+  });
+
+  /**
+   * X1. The test above pins where `errored` is CONSUMED. This one pins where it is PRODUCED —
+   * probeTable's catch. A wire asserted at one end only is exactly the defect class this SD exists
+   * to remove: dropping `errored: true` from that catch passed every test until this one existed.
+   */
+  it('a measurement that throws reaches the exit code as INCONCLUSIVE, end to end', async () => {
+    const { code } = await runMain({ policyReadThrows: 'catalog read blew up' });
+    expect(code).toBe(EXIT.PROBE_INCONCLUSIVE);
+    expect(code).not.toBe(EXIT.OK);
   });
 });
 

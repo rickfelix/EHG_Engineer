@@ -429,15 +429,28 @@ export async function assertIngressBoundCannotBind(q, table, source) {
   const inlineBasis = /\bselect\b[\s\S]*\bcount\s*\(/i.test(withCheck);
   const definerFnBasis = /fn_anon_ingress_prior_hour_count\s*\(/i.test(withCheck);
 
-  // FR-3. The PAIR. Order matters: UNREADABLE outranks everything (an unread basis must never
-  // report AGREES), then vacuity (too few rows to tell is not a pass and not a regression either —
-  // failing the run on a quiet hour would be a fresh wolf-cry), then the invariant itself.
+  // FR-3. The PAIR, in a deliberate order.
+  //
+  // UNREADABLE outranks everything: an unread basis must never report AGREES.
+  //
+  // THE BASIS CHECK IS HOISTED ABOVE THE VACUITY GATE, and that ordering is the whole finding of
+  // the SECURITY review. definerFnBasis is a pure read of the POLICY TEXT and needs ZERO rows, so
+  // gating it behind a row-count precondition it does not need made a quiet hour swallow a
+  // re-inlined policy. Measured on live prod by replaying this probe's own cron window
+  // (17 6 * * *, a one-hour lookback) over 30 days: 17 of 30 runs would have been VACUOUS and
+  // asserted NOTHING. Since retiring compareCountVisibility was made contingent on covering the
+  // re-inline path, a coverage that lapses on 57% of runs does not satisfy the contingency.
+  //
+  // Vacuity still gates the two COUNT-BASED conjuncts, and correctly: with one row or none an
+  // equality at 0-vs-0 is uninformative, and failing the run on a quiet hour would be a fresh
+  // wolf-cry — the exact defect this SD removes.
   const rlsInForce = Number.isInteger(asAnon.n) && asAnon.n < definer.n;
   const definerIgnoresCallerVisibility = Number.isInteger(anonViaDefiner) && anonViaDefiner === definer.n;
   let verdict;
   if (unreadable || !Number.isInteger(anonViaDefiner)) verdict = 'UNREADABLE';
+  else if (!definerFnBasis) verdict = 'DIVERGED';        // row-independent: no row count makes a re-inline benign
   else if (definer.n <= 1) verdict = 'VACUOUS';
-  else if (definerFnBasis && definerIgnoresCallerVisibility && rlsInForce) verdict = 'AGREES';
+  else if (definerIgnoresCallerVisibility && rlsInForce) verdict = 'AGREES';
   else verdict = 'DIVERGED';
 
   return {
