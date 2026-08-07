@@ -78,7 +78,15 @@ async function main() {
       retargeted++;
     } else {
       p.dead_letter_drained = { orig_target: c.target_session, reason: c.reason, at: now, qf: 'QF-20260721-737' };
-      const { error } = await db.from('session_coordination').update({ acknowledged_at: now, read_at: now, payload: p }).eq('id', c.id);
+      // SD-LEO-INFRA-COORDINATION-LANE-DRAIN-001 / FR-1(a): stamp acknowledged_at ALONE, and mark
+      // the stamp as machine-authored. The prior write set read_at in the same patch and wrote no
+      // auto_acked marker, which blinded four surfaces at once (coordinator inbox, sender
+      // outstanding view, isRouterSwallowed which requires !read_at, and REPLY_STARVATION — that
+      // last because isGenuinelyAcknowledged read an unmarked stamp as a HUMAN answer). Harmless
+      // while this stayed manual and dry-run by default; this SD puts it on a cron, which is what
+      // makes it load-bearing. auto_acked mirrors the retention convergeAckTTL convention.
+      p.auto_acked = true;
+      const { error } = await db.from('session_coordination').update({ acknowledged_at: now, payload: p }).eq('id', c.id);
       if (error) { console.log(`  stamp ERR ${c.id}: ${error.message}`); continue; }
       stamped++;
     }
