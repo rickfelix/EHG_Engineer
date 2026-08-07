@@ -1,0 +1,16 @@
+import pg from 'pg';
+import dotenv from 'dotenv';
+dotenv.config();
+const c = new pg.Client({ connectionString: process.env.SUPABASE_POOLER_URL, ssl: { rejectUnauthorized: false } });
+await c.connect();
+const cols = await c.query(`SELECT column_name FROM information_schema.columns WHERE table_schema='public' AND table_name='v_sub_agent_repo_compliance' ORDER BY ordinal_position`);
+console.log('VIEW COLS:', cols.rows.map(x=>x.column_name).join(', '));
+const def = await c.query(`SELECT pg_get_viewdef('public.v_sub_agent_repo_compliance'::regclass, true) d`);
+console.log('\nVIEW DEF:\n' + def.rows[0].d);
+console.log('\n=== our row through the view ===');
+const v = await c.query(`SELECT * FROM public.v_sub_agent_repo_compliance WHERE sub_agent_code='VALIDATION' AND sd_id='21efcf8a-dcf6-4df0-8f90-bd4167d84eea'`);
+console.log(JSON.stringify(v.rows, null, 2));
+console.log('\n=== how do OTHER recent rows populate executed_from_cwd? ===');
+const o = await c.query(`SELECT sub_agent_code, executed_from_cwd, metadata->>'repo_path' rp, created_at FROM public.sub_agent_execution_results WHERE created_at > now() - interval '2 days' ORDER BY created_at DESC LIMIT 10`);
+console.table(o.rows);
+await c.end();

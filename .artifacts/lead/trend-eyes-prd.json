@@ -1,0 +1,264 @@
+{
+  "executive_summary": "Trend-Eyes gives the LEO harness a second set of eyes that keeps working when every seat is dead. The motivating case is the 2026-08-04 13-hour freeze: GHA crons kept firing while every seat-tick duty died, so nothing accumulated. The core split is OFF-SEAT EYES + ON-SEAT JUDGMENT — a GitHub Actions cron runs a mechanical trend SCAN and writes candidate rows; Solomon's seat GRADES those candidates on its existing crons and promotes at most one finding per day through the existing advisory lane. The cron never judges; the seat never has to be alive for detection. V1 delivers the detection spine: three trend classes (T1 REPEAT-QUESTION, T2 RECURRENCE-AFTER-FIX, T3 LESSON-DISJUNCTION drift), a candidate writer on the existing feedback table, a run-receipt so quiet-because-flat is distinguishable from dead-emitter, two-sided validation, and the GHA wiring that makes it actually run. Verification binds to the COUNTER, not the CALL: the nearest precedent (SD-LEO-INFRA-CONSULTANT-AGENT-PHASE-001/-002) reached COMPLETED having shipped two trend scripts that are verified UNWIRED, so a merged workflow file is explicitly not accepted as evidence here.",
+  "functional_requirements": [
+    {
+      "id": "FR-1",
+      "title": "Mechanical scan script with a pure-probe / injectable-resolver split",
+      "description": "New scripts/solomon/trend-eyes-scan.mjs runs the daily mechanical SCAN. It follows the shape already established by lib/solomon/conduct-probes.js: pure probe functions that take facts and return verdicts, plus a separate injectable resolver that does the Supabase IO. This split is what makes the two-sided validation in FR-7 possible without a database. The scan NEVER judges and NEVER promotes — it emits candidates only. It never messages the chairman (observe-never-join) and never gates anything (diagnostics only; tracesToLayer null). Auth is supabase-js + service-role ONLY: SUPABASE_POOLER_URL is injected into zero cron workflows in this repo and is silently undefined on a GHA runner (solomon-late-verdict-reconcile-cron.yml:38-40), so no pg/DATABASE_URL path may be introduced.",
+      "priority": "critical",
+      "acceptance_criteria": [
+        "scripts/solomon/trend-eyes-scan.mjs exists and exits 0 on a run that finds nothing",
+        "Probe logic is importable and callable with injected facts, with zero Supabase access in the pure path",
+        "grep confirms no pg / DATABASE_URL / SUPABASE_POOLER_URL usage anywhere in the new code",
+        "The scan writes no row to any table other than feedback (candidates) and codebase_health_snapshots (receipt)"
+      ]
+    },
+    {
+      "id": "FR-2",
+      "title": "T1 REPEAT-QUESTION — cluster inbound chairman SMS by question-class",
+      "description": "A chairman asking the same question-class twice across days IS a harness gap. Detection clusters inbound chairman SMS and fires on clusters with 2+ members at least 24h apart. Founding specimen: the SMS-coverage question asked 2026-08-03 and again 2026-08-05. The lane read reuses readChairmanSmsExchanges (lib/solomon/chairman-sms-exchanges.js:100), whose bounded window is MANDATORY — it throws on a non-positive windowHours (:102), so the scan must pass an explicit window. CRITICAL AND MEASURED AT LEAD: the clustering itself is NEW WORK, not reuse. The module's docblock at :43-46 states its correlation is chronological adjacency per counterpart phone, NOT similarity, and explains why it refuses similarity matching. The spine's listing of this module as 'reused, not re-derived' is true for the lane READ and false for the clustering; PLAN must not inherit the reuse assumption.",
+      "priority": "critical",
+      "acceptance_criteria": [
+        "Clustering fires on 2+ same-class inbound messages separated by 24h or more",
+        "Clustering does NOT fire on 2 same-class messages inside the same 24h window",
+        "The founding specimen (SMS-coverage question, 08-03 + 08-05) is a fixture in the test suite and fires",
+        "The scan passes an explicit windowHours to readChairmanSmsExchanges and never relies on the default"
+      ]
+    },
+    {
+      "id": "FR-3",
+      "title": "T2 RECURRENCE-AFTER-FIX — read retention_archive UNION session_coordination",
+      "description": "A lesson-channel class reappearing after its fix ships is the T2 signal (live specimen: the sess-987 pointer writer). BLOCKING CONSTRAINT MEASURED AT LEAD (condition C1): session_coordination is a SURVIVOR table — 3,725 live rows spanning only 2026-07-24 to 2026-08-07, with 84% from the last 7 days. A trend computed on it measures the DELETION POLICY, not conduct. The codebase already states this at lib/coordination/answered-rate.cjs:3-8: 'READ THE LEDGER, NEVER session_coordination... a survivor-table rate measures the deletion policy rather than anyone's conduct.' The durable source exists and the SD spine does not name it: retention_archive holds 44,003 archived session_coordination rows spanning 2026-03-11 to 2026-08-06, populated by archive-before-delete (20260713_fix_cleanup_expired_coordination_where_clause.sql:38-42). T2 therefore reads the UNION of both. Zero-new-tables holds only under this union. Prior art to cite rather than re-derive: lib/learning/outcome-tracker.js:364 detectRecurrence already implements recurrence-after-fix at point-event granularity; the SERIES framing is what is new.",
+      "priority": "critical",
+      "acceptance_criteria": [
+        "T2 reads retention_archive UNION session_coordination, verified by a test that seeds a class present ONLY in retention_archive and still detects it",
+        "A recurrence whose only pre-fix occurrences fall outside the session_coordination retention window is still detected",
+        "The PRD-cited window spans more than the ~14 days session_coordination alone can carry",
+        "The implementation cites outcome-tracker.js:364 in a comment rather than silently duplicating it"
+      ]
+    },
+    {
+      "id": "FR-4",
+      "title": "T3 LESSON-DISJUNCTION drift as a standing series, without becoming a fourth writer",
+      "description": "T3 tracks the ratio of lane-named-classes actually reaching issue_patterns as a standing series (Solomon measured 0-of-12 at 5c4da312). BLOCKING CONSTRAINT MEASURED AT LEAD (condition C2): issue_patterns.trend already has writers and T3 must not become another. calculate_pattern_trends() is live in pg_proc (20260110_pattern_intelligence.sql:55), performs 7d-vs-prior-30d trend detection over issue_patterns, has ZERO callers, and reads pattern_occurrences which has 0 rows — an instrument nobody invokes is indistinguishable from an absent one. Separately issue_patterns.trend IS populated (stable=1206 / decreasing=401 / increasing=38) by an unrelated age-based decay marker at scripts/detect-stale-patterns.js:104-120. T3 must either reconcile with those writers or scope away from that column entirely, and must say which in the implementation.",
+      "priority": "high",
+      "acceptance_criteria": [
+        "T3 writes no value to issue_patterns.trend, OR the PRD-implementing commit documents the reconciliation with both existing writers",
+        "The ratio is emitted as a series reading, not a point verdict",
+        "A ratio whose numerator and denominator are measured over the SAME extent is asserted by test (no span mismatch)"
+      ]
+    },
+    {
+      "id": "FR-5",
+      "title": "Candidate writer through the canonical feedback writer, honouring the insert contract",
+      "description": "Candidates persist as feedback rows with category=solomon_trend_candidate carrying self-describing queries in metadata, written through the canonical writer lib/governance/emit-feedback.js. Zero new tables, zero new transport. CONSTRAINT MEASURED AT LEAD (condition C4): feedback.category is genuinely free-text — varchar(50) nullable, not a pg_enum, and none of the 23 table constraints reference it — so the new category needs no migration. But feedback has four NOT NULL no-default columns (type, source_application, source_type, title), two of them CHECK-constrained (type in {issue, enhancement}; source_type in {auto_capture, ...}), so a naive writer takes a 23514 on its very first run. Additionally solomon_trend_candidate MUST be kept OUT of MACHINE_TELEMETRY_CATEGORIES (lib/governance/feedback-audience.js): membership routes a category through an aggregate UPSERT whose dedup hash is always today::telemetry::category, silently collapsing every row of that category into one per day and ignoring the caller's own dedup_key.",
+      "priority": "critical",
+      "acceptance_criteria": [
+        "Candidate rows are written via lib/governance/emit-feedback.js, not a raw insert",
+        "A test asserts all four NOT NULL columns are populated with CHECK-valid values",
+        "A test asserts solomon_trend_candidate is NOT a member of MACHINE_TELEMETRY_CATEGORIES",
+        "Two candidates from the same class in one day produce two distinct rows (not one collapsed row)",
+        "Each candidate row carries a self-describing query in metadata that reproduces its own finding"
+      ]
+    },
+    {
+      "id": "FR-6",
+      "title": "Run-receipt per execution, with an external liveness reader",
+      "description": "Every scan execution writes a run-receipt so quiet-because-flat is distinguishable from dead-emitter. This pattern already exists and is named, and is copied rather than re-derived: scripts/gauge-runner.mjs:585-595 writeHeartbeat() inserts dimension=gauge_runner_heartbeat into codebase_health_snapshots with findings carrying ran_count/ran_at plus a routing tally; its header calls this 'Invariant #0 (who-watches-the-watchmen)'. The receipt is only half the mechanism — the other half is an EXTERNAL reader, because a receipt nobody reads cannot raise an alarm: lib/governance/gauge-runner-liveness.js checkGaugeRunnerLiveness is a pure predicate where a null heartbeat is alarm:true. Trend-Eyes copies the full triple: writer, table+dimension, external pure liveness predicate. Per the anti-Goodhart exploration floor, the receipt ALSO lists the top-N raw clusters even when they fall below threshold, so a narrowing of the instrument's vision is itself visible in the receipt series.",
+      "priority": "critical",
+      "acceptance_criteria": [
+        "A scan run that finds nothing still writes a receipt row",
+        "A pure liveness predicate exists, is separately importable, and returns alarm:true for a null/stale receipt",
+        "The receipt records a routing tally so dedup-suppressed-everything is distinguishable from the-scan-broke",
+        "The receipt lists top-N raw clusters below threshold (exploration floor)"
+      ]
+    },
+    {
+      "id": "FR-7",
+      "title": "Two-sided ship validation in a single suite",
+      "description": "A one-sided test admits an instrument that can never fire. The suite must prove BOTH directions in the same run: a seeded known-trend MUST fire, AND a flat series MUST NOT. This applies per trend class, not once for the whole scan — a suite where T1's positive case carries the whole file lets T2 and T3 ship blind. Each class needs its own seeded-positive and its own flat-negative.",
+      "priority": "critical",
+      "acceptance_criteria": [
+        "For each of T1, T2, T3: a seeded known-trend fixture FIRES",
+        "For each of T1, T2, T3: a flat-series fixture does NOT fire",
+        "Both directions run in the same suite and both are required to pass",
+        "The negative fixtures are built on a different assumption than the positive ones, so a shared flaw cannot make both pass"
+      ]
+    },
+    {
+      "id": "FR-8",
+      "title": "GHA cron wiring — proven by a real scheduled run, not by a merged file",
+      "description": "A new .github/workflows/ entry runs the scan daily, copying the canonical template .github/workflows/solomon-ledger-reconcile.yml (daily 06:00, concurrency group, dry_run input). Explicitly DO NOT copy solomon-judgment-expiry.yml — its schedule is commented out and it ships deliberately disabled. The template shape is: permissions contents:read; concurrency group=github.workflow with cancel-in-progress; ubuntu-latest; timeout 5-10m; job-level env with exactly SUPABASE_URL and SUPABASE_SERVICE_ROLE_KEY; checkout@v4, setup-node@v4 (node 22, cache npm), npm ci --ignore-scripts, one node step. THE ACCEPTANCE BINDS TO THE COUNTER, NOT THE CALL: the nearest precedent, SD-LEO-INFRA-CONSULTANT-AGENT-PHASE-001/-002, reached COMPLETED having shipped scripts/eva/eva-trend-snapshot.mjs and scripts/eva/trend-detector.mjs, both verified UNWIRED with no npm script and no workflow entry. The in-repo lesson is already written at .github/workflows/solomon-judgment-expiry.yml:22-25: 'that is not a disabled mechanism, it is an ABSENT one.'",
+      "priority": "critical",
+      "acceptance_criteria": [
+        "The workflow has an ACTIVE (uncommented) schedule",
+        "Ship evidence is a real executed run: a run-receipt row in codebase_health_snapshots with a timestamp after merge",
+        "A merged workflow file alone is explicitly NOT accepted as completion evidence",
+        "The workflow references only SUPABASE_URL and SUPABASE_SERVICE_ROLE_KEY"
+      ]
+    }
+  ],
+  "technical_requirements": [
+    {
+      "id": "TR-1",
+      "title": "Zero new tables, zero new transport",
+      "description": "Reads: sms_relay_staging, sms_outbound_obligations, session_coordination, retention_archive, issue_patterns, retrospectives, feedback, merge_witness_telemetry. Writes: feedback (candidates) and codebase_health_snapshots (receipt) only. No migration ships with this SD."
+    },
+    {
+      "id": "TR-2",
+      "title": "Series mechanic reuses recursion-governor, not a new store",
+      "description": "lib/governance/recursion-governor.js already implements the append-a-reading / decide-from-the-sequence mechanic on the existing codebase_health_snapshots table: writeThroughputSnapshot appends per tick, fetchRecentSnapshots(supabase,{dimension,limit}) reads newest-first, detectSustainedBreach(recent,{requiredConsecutive}) returns {sustained, streak}. Reuse this rather than inventing a series store."
+    },
+    {
+      "id": "TR-3",
+      "title": "Per-day promotion cap idiom already exists",
+      "description": "scripts/lib/ci-recurrence-detector.mjs supplies the cap idiom (DEFAULT_THRESHOLD, DEFAULT_PER_RUN_CAP, DEFAULT_PER_DAY_CAP). The at-most-one-promoted-finding-per-day rule reuses this shape rather than a new mechanism."
+    },
+    {
+      "id": "TR-4",
+      "title": "Diagnostics only — never gates, never messages the chairman",
+      "description": "tracesToLayer null. The instrument gates nothing and acts on nothing (CONST-002). Findings reach the chairman only via the Adam packet; the scan holds no chairman-facing channel and must not acquire one."
+    },
+    {
+      "id": "TR-5",
+      "title": "Narrow the no-existing-series claim in code comments",
+      "description": "The spine's global claim that no instrument owns longitudinal series is refuted (8+ exist; lib/ship/witness-adoption.mjs:131 already builds a day-bucketed 60-day series over merge_witness_telemetry, a source this SD names). The defensible claim, conceded by the gauge registry in its own vocabulary, is cited instead: lib/governance/gauge-registry.js:320 defines accumulationSignal as 'the alarm on the SERIES, distinct from the per-event signal', records it MISSING at :356 and :386, and states at :394 that 'only the series exposes the outage'."
+    }
+  ],
+  "test_scenarios": [
+    { "id": "TS-1", "scenario": "T1 fires on the founding specimen: SMS-coverage question 08-03 and 08-05", "type": "unit", "expected": "One T1 candidate emitted, citing both messages" },
+    { "id": "TS-2", "scenario": "T1 flat case: two same-class messages 3 hours apart", "type": "unit", "expected": "No candidate — the 24h separation rule holds" },
+    { "id": "TS-3", "scenario": "T2 detects a recurrence whose pre-fix occurrences exist ONLY in retention_archive", "type": "unit", "expected": "Candidate emitted; proves the union read rather than the survivor table" },
+    { "id": "TS-4", "scenario": "T2 flat case: a class that appeared once and never returned after its fix", "type": "unit", "expected": "No candidate" },
+    { "id": "TS-5", "scenario": "T3 emits a ratio whose numerator and denominator span the same extent", "type": "unit", "expected": "Series reading emitted; a mismatched-span fixture fails the assertion" },
+    { "id": "TS-6", "scenario": "T3 flat case: a stable ratio across the window", "type": "unit", "expected": "No drift candidate" },
+    { "id": "TS-7", "scenario": "Scan finds nothing at all", "type": "integration", "expected": "Zero candidates AND one run-receipt row — quiet is distinguishable from dead" },
+    { "id": "TS-8", "scenario": "Liveness predicate reads a null / stale receipt", "type": "unit", "expected": "alarm:true in both cases" },
+    { "id": "TS-9", "scenario": "Two candidates of the same class on the same day", "type": "integration", "expected": "Two distinct feedback rows, not one collapsed row" },
+    { "id": "TS-10", "scenario": "Candidate insert against the real feedback contract", "type": "integration", "expected": "All four NOT NULL columns populated with CHECK-valid values; no 23514" },
+    { "id": "TS-11", "scenario": "solomon_trend_candidate membership in MACHINE_TELEMETRY_CATEGORIES", "type": "unit", "expected": "Asserted ABSENT — a regression here would silently collapse candidates to one per day" }
+  ],
+  "acceptance_criteria": [
+    "A real scheduled GHA run has executed and left a run-receipt row dated after merge — a merged workflow file is not accepted as evidence",
+    "All three trend classes have BOTH a seeded-positive that fires and a flat-negative that does not, in the same suite",
+    "T2 demonstrably reads retention_archive UNION session_coordination, proven by a fixture present only in the archive",
+    "T3 does not write issue_patterns.trend, or documents its reconciliation with the two existing writers",
+    "Candidate rows are written through lib/governance/emit-feedback.js and survive the real feedback insert contract",
+    "The scan writes to no table other than feedback and codebase_health_snapshots, and ships no migration",
+    "The instrument gates nothing and holds no chairman-facing channel"
+  ],
+  "risks": [
+    {
+      "risk": "The instrument ships and is never wired — the exact fate of the nearest precedent (SD-LEO-INFRA-CONSULTANT-AGENT-PHASE-001/-002, both COMPLETED with two verified-unwired trend scripts)",
+      "mitigation": "Acceptance binds to a real executed run leaving a receipt row, not to a merged file. FR-8 states this explicitly and the criterion is load-bearing.",
+      "severity": "high"
+    },
+    {
+      "risk": "T2 computes its trend on a survivor table and silently measures the deletion policy instead of conduct",
+      "mitigation": "FR-3 requires the retention_archive union and a test whose fixture exists ONLY in the archive, so a regression to the survivor table fails the suite rather than quietly returning a plausible number.",
+      "severity": "high"
+    },
+    {
+      "risk": "T3 becomes a fourth writer to issue_patterns.trend and corrupts a column three other things already touch",
+      "mitigation": "FR-4 forbids writing that column absent a documented reconciliation with calculate_pattern_trends and detect-stale-patterns.js:104-120.",
+      "severity": "high"
+    },
+    {
+      "risk": "The candidate category is later added to MACHINE_TELEMETRY_CATEGORIES, collapsing all candidates to one row per day while every test still passes",
+      "mitigation": "TS-11 asserts non-membership directly, so the collapse becomes a test failure rather than a silent loss of findings.",
+      "severity": "medium"
+    },
+    {
+      "risk": "A one-sided test suite admits a class that can never fire",
+      "mitigation": "FR-7 requires per-class two-sided coverage, with negative fixtures built on a different assumption than the positives so a shared flaw cannot make both pass.",
+      "severity": "medium"
+    },
+    {
+      "risk": "The scan swallows a query error into an empty result, making could-not-read indistinguishable from nothing-was-said",
+      "mitigation": "readChairmanSmsExchanges already throws rather than returning [] (lib/solomon/chairman-sms-exchanges.js:117-120); the scan must propagate rather than catch-and-continue, and the receipt records the failure.",
+      "severity": "medium"
+    }
+  ],
+  "integration_operationalization": {
+    "consumers": [
+      "Solomon's seat — GRADES candidates on its existing crons and promotes at most one finding per day through the existing advisory lane (no new seat machinery)",
+      "The Adam packet — the only route by which a finding reaches the chairman",
+      "An external liveness reader for the run-receipt, following the coordinator-hourly-review.cjs precedent"
+    ],
+    "dependencies": [
+      "lib/solomon/chairman-sms-exchanges.js readChairmanSmsExchanges (lane read only — clustering is new work)",
+      "lib/governance/emit-feedback.js (canonical feedback writer)",
+      "lib/governance/recursion-governor.js (series mechanic over codebase_health_snapshots)",
+      "scripts/gauge-runner.mjs writeHeartbeat + lib/governance/gauge-runner-liveness.js (run-receipt triple)",
+      "retention_archive (durable session_coordination history)"
+    ],
+    "data_contracts": [
+      "feedback: new free-text category solomon_trend_candidate; no migration required (varchar(50), no enum, no CHECK on category). Four NOT NULL no-default columns must be populated: type (CHECK in {issue, enhancement}), source_application, source_type (CHECK in {auto_capture, ...}), title",
+      "codebase_health_snapshots: new dimension value for the run-receipt; no schema change",
+      "No new tables, no new transport"
+    ],
+    "runtime_config": [
+      "SUPABASE_URL and SUPABASE_SERVICE_ROLE_KEY only — supabase-js + service-role path exclusively",
+      "SUPABASE_POOLER_URL / pg / DATABASE_URL are forbidden: injected into zero cron workflows and silently undefined on a GHA runner"
+    ],
+    "observability_rollout": [
+      "The run-receipt IS the rollout observability: a receipt row per execution, read by an external pure liveness predicate where a null heartbeat is alarm:true",
+      "The routing tally distinguishes dedup-suppressed-everything from the-scan-broke",
+      "The exploration floor (top-N raw clusters below threshold, always listed) makes narrowing of the instrument's vision visible in the receipt series"
+    ]
+  },
+  "system_architecture": {
+    "summary": "A daily GHA cron runs a pure-probe scan over existing sources, writing candidate rows and a run-receipt; Solomon's existing seat crons grade and promote at most one per day.",
+    "components": [
+      { "name": "scripts/solomon/trend-eyes-scan.mjs", "change": "NEW — scan entrypoint (IO + orchestration)" },
+      { "name": "lib/solomon/trend-eyes-probes.js", "change": "NEW — pure probe functions for T1/T2/T3, no IO" },
+      { "name": "lib/solomon/trend-eyes-liveness.js", "change": "NEW — pure run-receipt liveness predicate" },
+      { "name": ".github/workflows/solomon-trend-eyes-scan.yml", "change": "NEW — daily cron, copied from solomon-ledger-reconcile.yml" },
+      { "name": "tests/unit/solomon/trend-eyes-probes.test.js", "change": "NEW — per-class two-sided suite" },
+      { "name": "lib/governance/emit-feedback.js", "change": "REUSED unchanged — canonical candidate writer" },
+      { "name": "lib/solomon/chairman-sms-exchanges.js", "change": "REUSED unchanged — bounded lane read only" }
+    ]
+  },
+  "implementation_approach": {
+    "summary": "Build the pure probes first with two-sided fixtures, then the IO shell, then wire the cron and prove it ran.",
+    "steps": [
+      "Write lib/solomon/trend-eyes-probes.js with pure T1/T2/T3 probes taking injected facts",
+      "Write the per-class two-sided test suite BEFORE the IO layer, so each class has a firing positive and a silent negative",
+      "Write the resolver/IO half in scripts/solomon/trend-eyes-scan.mjs, including the retention_archive UNION session_coordination read for T2",
+      "Add the candidate writer through lib/governance/emit-feedback.js, honouring the four-NOT-NULL insert contract",
+      "Add the run-receipt writer plus the external pure liveness predicate (copy the gauge-runner triple)",
+      "Add the GHA workflow with an ACTIVE schedule, copied from solomon-ledger-reconcile.yml",
+      "Trigger the workflow and verify a real receipt row exists dated after merge — this, not the merged file, is the ship evidence"
+    ]
+  },
+  "smoke_test_steps": [
+    {
+      "step_number": 1,
+      "instruction": "node scripts/solomon/trend-eyes-scan.mjs --dry-run",
+      "expected_outcome": "Exits 0, prints the window it scanned and a per-class candidate count, and writes no rows in dry-run mode"
+    },
+    {
+      "step_number": 2,
+      "instruction": "npm test -- tests/unit/solomon/trend-eyes-probes.test.js",
+      "expected_outcome": "All tests pass, including for each of T1/T2/T3 both a seeded-positive that fires and a flat-negative that does not"
+    },
+    {
+      "step_number": 3,
+      "instruction": "Run the scan for real, then query codebase_health_snapshots for the trend-eyes receipt dimension ordered by created_at desc limit 1",
+      "expected_outcome": "Exactly one fresh receipt row exists with a ran_at timestamp from this run and a routing tally — present even when zero candidates were found"
+    }
+  ],
+  "metadata": {
+    "sd_key": "SD-LEO-INFRA-TREND-EYES-OFF-001",
+    "v1_scope_boundary": "V1 delivers the DETECTION SPINE (FR-1..FR-8). The self-improvement loop is deferred to a follow-on SD on a DEPENDENCY ground, not a convenience ground: the design specifies Tier-1 parameter learning as computed 'from recorded false-positive history' and bounded by 'precision drops two consecutive windows after a change', and neither the history nor the graded verdict series exists until this scan has run and Solomon has graded it. Tier 2 (class proposal) and Tier 3 (the weekly mirror) are marked in the approved design as follow-on rather than v1. The authority fence carries forward unchanged to that SD: the loop may learn DETECTION QUALITY only, never authority — it cannot add sources, change cadence or output surface, alter the admission tests, raise the one-finding-per-day cap, or touch anything chairman-facing, and all learned state lives in auditable, diffable, revertible parameter ROWS rather than code self-modification.",
+    "lead_conditions_addressed": {
+      "C1_retention_archive_union": "FR-3 + TS-3",
+      "C2_issue_patterns_trend_writers": "FR-4",
+      "C3_chairman_decision_captures_missing": "Source dropped from V1 — the named table does not exist; T1-T3 do not require it",
+      "C4_feedback_insert_contract": "FR-5 + TS-10 + TS-11",
+      "C5_narrow_series_claim": "TR-5",
+      "C6_wiring_is_the_deliverable": "FR-8 + top-level acceptance criterion 1"
+    },
+    "design_provenance": "Solomon-authored (design advisory 933675c0), chairman-commissioned (SMS 6e90454d + 21bf99d1), chairman GO recorded verbatim 'I approve Solomon's trend design' (SMS 8cafac9b, received 2026-08-05T12:46:24Z). LEAD recorded verified constraints as conditions rather than amending the approved design text."
+  }
+}
