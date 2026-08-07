@@ -116,7 +116,7 @@ function extractLimitPredicate(policyExpr) {
  * false positive that a hand-fed unit test cannot catch, because the query is the part under test.
  * relkind is left open so the SAME function reads a view ('v') and a table ('r').
  */
-async function readColumns(client, relname) {
+export async function readColumns(client, relname) {
   const { rows } = await client.query(
     `select a.attname
        from pg_attribute a
