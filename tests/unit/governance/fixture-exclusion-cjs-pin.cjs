@@ -14,7 +14,11 @@
  * in the same loader the real consumer uses, so this file is executed by node directly.
  *
  * RUN:      node tests/unit/governance/fixture-exclusion-cjs-pin.cjs
- * WIRED AT: npm run test:cjs-pins (and the EXEC gate for this SD)
+ * WIRED AT: npm run test:cjs-pins — AND NOWHERE ELSE. No CI workflow and no gate invokes it, so
+ *           today this pin only runs when a human or an agent remembers to type it. That is a
+ *           REAL GAP, recorded here rather than papered over: an instrument nobody invokes is
+ *           indistinguishable from an absent one, and this very docblock has now twice carried a
+ *           wiring claim that outran reality. Wiring it into CI is a follow-on (completion flag).
  *
  * PROVEN RED/GREEN, not merely asserted: temporarily add `await Promise.resolve();` at the top level
  * of fixture-exclusion.mjs and this script exits 1 with ERR_REQUIRE_ASYNC_MODULE. A pin never
