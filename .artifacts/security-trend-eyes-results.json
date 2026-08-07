@@ -1,0 +1,175 @@
+{
+  "sub_agent": "SECURITY",
+  "sd_id": "SD-LEO-INFRA-TREND-EYES-OFF-001",
+  "phase": "EXEC",
+  "handoff": "EXEC-TO-PLAN",
+  "commit_reviewed": "23c6793b3488495ea096c5434d09deb924727cbe",
+  "verdict": "FAIL",
+  "confidence": 95,
+  "summary": "No PII leak and no send-path breach — the two primary chartered risks are cleanly handled. But the sweep cannot execute: two phantom columns (retention_archive.payload, issue_patterns.pattern_name) make every run throw before any write, and after that fix two of three probes would still report FLAT (a false all-clear) over corpora that contain zero of the fields they require. A detection instrument that reports 'no trend' while blind is the exact failure class this SD was chartered against. Security-specific findings (RLS asymmetry, job-scoped service-role secret, uncapped T2 write fan-out) are latent until the sweep runs.",
+  "method": "Static transitive import-closure of the entrypoint (10 local modules, send/write-path scan over every file), plus live measurement against the production database via SUPABASE_POOLER_URL: information_schema column verification, pg_policies + role_table_grants RLS posture, live PostgREST probe of all four resolver SELECTs, and corpus measurement of every field the probes depend on.",
+  "findings": [
+    {
+      "id": "SEC-TE-01",
+      "severity": "CRITICAL",
+      "category": "availability_integrity",
+      "title": "Sweep throws on every run — two phantom columns",
+      "location": "scripts/solomon/trend-eyes-sweep.mjs:101-103 and :137-139",
+      "detail": "resolveT2Facts selects 'id, source_table, payload, archived_at' from retention_archive, but that table has NO payload column (columns are id, source_table, source_id, row_data, row_timestamp, archived_at, archived_by, run_id). The archived payload nests at row_data->'payload'. Live PostgREST probe returns 42703: 'column retention_archive.payload does not exist', so line 103 throws. Independently, resolveT3Facts selects 'id, pattern_name, created_at' from issue_patterns, which has no pattern_name column (it has pattern_id, issue_summary); live probe returns 42703, so line 139 throws. runSweep awaits resolveT2Facts at :228 before any write, so main() exits 1 with zero candidates AND zero run-receipt.",
+      "measured": "Live probe: session_coordination select OK; retention_archive select ERROR 42703; issue_patterns select ERROR 42703. codebase_health_snapshots WHERE dimension='trend_eyes_sweep_receipt' = 0 rows, latest NULL.",
+      "impact": "The instrument is dead on arrival. The SD's own declared ship evidence (workflow header :11-14: 'a real executed run leaving a run-receipt row in codebase_health_snapshots — NOT the presence of this file') cannot exist. Daily GHA job goes red.",
+      "remediation": "Read retention_archive.row_data->'payload' (the archive wraps the original row) and replace issue_patterns.pattern_name with pattern_id (or issue_summary). Then execute one real run and confirm a receipt row exists before claiming FR-6.",
+      "owner": "EXEC (fix) / DATABASE + TESTING (verify)"
+    },
+    {
+      "id": "SEC-TE-02",
+      "severity": "HIGH",
+      "category": "monitoring_integrity",
+      "title": "T2 and T3 emit FLAT (false all-clear) over corpora with zero of their required fields — violates the module's own UNKNOWN-not-FLAT invariant",
+      "location": "lib/solomon/trend-eyes-probes.js:119, :156, :168-171; sweep:112, :119, :153-156",
+      "detail": "probeRecurrenceAfterFix skips any class without fixedAt ('if (!c.fixedAt) continue'). Measured: payload->>'fix_shipped_at' is present in 0 of 3,786 session_coordination rows in the 120d window and 0 across the retention_archive union. Every class is therefore skipped and the probe returns FLAT 'no class recurred after its fix' — indistinguishable from a real negative. Likewise T3: the denominator namedKeys is built from payload.lesson_class, present in 0 rows (only signal_type exists, 66 rows), so every daily window hits 'if (namedKeys.size === 0) continue', readings is empty, and probeLessonDisjunctionDrift returns FLAT 'series has 0 reading(s)'. The module docblock at :14-17 states the opposite contract: 'Every probe returns UNKNOWN when its facts are absent or unusable, never FLAT. Collapsing the two would let a broken resolver render as no trend detected — a silent all-clear produced by blindness rather than by observation.'",
+      "measured": "session_coordination 120d: total 3,786; lesson_class present 0; signal_type present 0066; fix_shipped_at present 0. Union distinct classes 15, rows_with_fix_shipped_at 0.",
+      "impact": "Even after SEC-TE-01 is fixed, two of three trend classes are structurally incapable of firing and will report a clean bill of health forever. This is the precise failure mode the SD exists to detect elsewhere.",
+      "remediation": "Distinguish 'no facts in corpus' from 'facts present, no trend'. An empty denominator or a corpus with zero fix timestamps must return UNKNOWN, not FLAT. Also reconcile the field contract: the code reads lesson_class/fix_shipped_at, the lane writes signal_type and no fix timestamp.",
+      "owner": "EXEC / PLAN (contract reconciliation)"
+    },
+    {
+      "id": "SEC-TE-03",
+      "severity": "HIGH",
+      "category": "access_control",
+      "title": "PRE-EXISTING, NOT INTRODUCED BY THIS SD: anon holds TRUNCATE/DELETE/UPDATE on the chairman SMS tables; RLS does not govern TRUNCATE",
+      "location": "database grants (public.sms_relay_staging, sms_outbound_obligations, feedback, codebase_health_snapshots)",
+      "detail": "information_schema.role_table_grants shows role 'anon' granted DELETE, INSERT, REFERENCES, SELECT, TRIGGER, TRUNCATE, UPDATE on all four tables. RLS is enabled and (for sms_relay_staging) has zero policies, which correctly denies anon SELECT/INSERT/UPDATE/DELETE. However TRUNCATE is a table-level privilege that Row Level Security does NOT filter — an RLS policy cannot restrict it. The Supabase anon key is public by design.",
+      "measured": "pg_class.relrowsecurity=true for all 8 tables reviewed; pg_policies count for sms_relay_staging = 0; anon TRUNCATE grant confirmed on all four tables.",
+      "impact": "Destructive, not confidentiality: an anon-key holder can TRUNCATE the chairman's inbound SMS staging table and the outbound obligations table. This SD does not create the condition but newly depends on codebase_health_snapshots for its liveness alarm.",
+      "remediation": "REVOKE TRUNCATE, DELETE, UPDATE, TRIGGER, REFERENCES ON these tables FROM anon, authenticated. Track as a separate security SD — out of scope for this handoff, but escalate.",
+      "owner": "SECURITY / DATABASE (separate SD)"
+    },
+    {
+      "id": "SEC-TE-04",
+      "severity": "MEDIUM",
+      "category": "sensitive_data_exposure",
+      "title": "Chairman SMS topic metadata crosses an RLS boundary into an authenticated-readable table",
+      "location": "scripts/solomon/trend-eyes-sweep.mjs:203-219 (writeReceipt), :234-238 (exploration floor)",
+      "detail": "Source table sms_relay_staging: RLS enabled with ZERO policies = deny-all for anon and authenticated; service_role only. Sink table codebase_health_snapshots carries policy 'authenticated_read_snapshots' FOR SELECT TO authenticated USING (true) — every authenticated user can read every receipt. The receipt's findings[0].exploration_floor is [{questionClass, members}] and findings[0].verdicts[].detail includes T1 strings such as 'N question-class(es) asked 2+ times at least 24h apart'. So the chairman's SMS topic distribution and repeat cadence (e.g. 'cost-quota asked 3 times this week') becomes readable by any authenticated user, where the underlying messages were service-role-only.",
+      "measured": "pg_policies: sms_relay_staging 0 policies; codebase_health_snapshots authenticated SELECT USING (true).",
+      "impact": "Low-fidelity but real confidentiality downgrade. NO raw bodies, phone numbers, or message IDs cross — questionClass is one of 5 fixed literals and evidence (which carries the message ids) is deliberately dropped from the receipt at :206. Discloses the chairman's areas of concern, not his words.",
+      "remediation": "Either drop exploration_floor/questionClass labels from the receipt and keep only counts, or add a restrictive policy so trend_eyes_sweep_receipt rows are service-role-only. Decide explicitly rather than inheriting the table's blanket authenticated-read.",
+      "owner": "EXEC / LEAD (disclosure decision)"
+    },
+    {
+      "id": "SEC-TE-05",
+      "severity": "MEDIUM",
+      "category": "credential_handling",
+      "title": "Service-role key scoped job-level, exposed to three third-party actions that do not need it",
+      "location": ".github/workflows/solomon-trend-eyes-sweep.yml:42-44",
+      "detail": "SUPABASE_URL and SUPABASE_SERVICE_ROLE_KEY are set as job-level env, so they are present in the process environment of actions/checkout@v4, actions/setup-node@v4 and 'npm ci --ignore-scripts' — none of which need them. Only the final step (:55-56) uses them. A service-role key bypasses RLS across the entire database; the grants table in SEC-TE-03 shows how total that authority is. Mitigating: --ignore-scripts (:53) blocks dependency lifecycle-script exfiltration, which is a genuinely good control and better than most workflows in this repo.",
+      "measured": "Repo baseline is mixed and the safer pattern already exists in-repo: solomon-ledger-reconcile.yml:36-38 uses job-level (same as here), solomon-judgment-expiry.yml:51-53 uses step-level.",
+      "impact": "Defense-in-depth gap. No leak observed; no secret is echoed, and GitHub masks secret values in logs.",
+      "remediation": "Move the env: block from the job to the 'Run Trend-Eyes sweep' step, matching solomon-judgment-expiry.yml:51-53.",
+      "owner": "EXEC"
+    },
+    {
+      "id": "SEC-TE-06",
+      "severity": "MEDIUM",
+      "category": "write_blast_radius",
+      "title": "No cap on candidate rows written per run; T2 fan-out is unbounded and dedup is per-day only",
+      "location": "scripts/solomon/trend-eyes-sweep.mjs:168-194 (writeCandidates), :176 (dedup_key)",
+      "detail": "T1 is bounded at 5 candidates (questionClass returns one of 5 fixed literals). T3 is bounded at 1 (single evidence object). T2 is NOT bounded: fired is one entry per distinct classKey (payload.lesson_class || payload.signal_type) over a 120-day, two-table window, and each becomes its own feedback row. dedup_key embeds runAt.slice(0,10), and emitFeedback hashes today::description::dedup_key, so dedup is per-day — every day writes a fresh row set. Category 'solomon_trend_candidate' is NOT in MACHINE_TELEMETRY_CATEGORIES (lib/governance/feedback-audience.js:41-53), so it does not get the aggregate-UPSERT collapse.",
+      "measured": "Current T2 fan-out would be 15 distinct classes/day if fields were populated (bounded today only by SEC-TE-02's zero fix timestamps). feedback table is already at 19,237 rows total / 4,452 in the last 7 days; wind_down_survey alone contributed 2,613 in 7d — this table has a documented flood history that MACHINE_TELEMETRY_CATEGORIES was created to address.",
+      "impact": "Not exploitable, but the growth is unbounded by construction and lands in a table already under flood pressure. Confirmed the sweep writes to exactly two tables and performs no UPDATE or DELETE anywhere in its 10-module closure.",
+      "remediation": "Add an explicit MAX_CANDIDATES_PER_RUN cap and record the truncated count in the receipt so suppression is visible rather than silent.",
+      "owner": "EXEC"
+    },
+    {
+      "id": "SEC-TE-07",
+      "severity": "LOW",
+      "category": "untrusted_input",
+      "title": "SMS lane read applies no sender allowlist — any inbound number is treated as the chairman",
+      "location": "lib/solomon/chairman-sms-exchanges.js:107-110; consumed at sweep:63-73",
+      "detail": "readChairmanSmsExchanges selects all sms_relay_staging rows in the window with no from_phone filter. resolveT1Facts then classifies every inbound as a chairman question. Anyone who can land a row in that table can manufacture a T1 'the chairman asked twice' candidate.",
+      "measured": "Currently benign: sms_relay_staging holds 342 rows with exactly 1 distinct from_phone and 1 distinct to_phone. anon INSERT is blocked by RLS (0 policies = deny-all), so there is no unauthenticated write path today.",
+      "impact": "Latent integrity risk only. Candidates are explicitly UNGRADED and Solomon's seat grades before promotion, so a false candidate is noise, not an authorization bypass.",
+      "remediation": "Filter the T1 read to the known chairman phone rather than relying on the lane containing only his traffic.",
+      "owner": "EXEC (hardening)"
+    },
+    {
+      "id": "SEC-TE-08",
+      "severity": "LOW",
+      "category": "injection",
+      "title": "Workflow expression interpolated directly into a run: shell line",
+      "location": ".github/workflows/solomon-trend-eyes-sweep.yml:56",
+      "detail": "run: node scripts/solomon/trend-eyes-sweep.mjs ${{ inputs.dry_run && '--dry-run' || '' }} — direct ${{ }} interpolation into a shell command is the canonical GitHub Actions script-injection sink.",
+      "impact": "Low exploitability: the input is declared type: boolean (:28) so GitHub constrains the value, and workflow_dispatch requires repo write access. Not currently exploitable.",
+      "remediation": "Pass via an intermediate env var and branch in shell, per GitHub's hardening guidance.",
+      "owner": "EXEC"
+    },
+    {
+      "id": "SEC-TE-09",
+      "severity": "LOW",
+      "category": "redos",
+      "title": "questionClass regexes run on unbounded body text",
+      "location": "scripts/solomon/trend-eyes-sweep.mjs:48-59",
+      "detail": "All five anchors are of the shape /\\b(A|B)\\b.*\\b(C|D)\\b/ — a single greedy .* with no nested quantifier, so worst case is polynomial O(n*k), not exponential. No catastrophic backtracking is reachable. body is not length-capped before matching, so a pathological input of many 'sms' tokens would degrade quadratically.",
+      "measured": "sms_relay_staging max body length is 1,600 chars (carrier-bounded); 327 of 342 rows are under 476 chars. At n=1600 the cost is negligible. The workflow also sets timeout-minutes: 10 (:41), bounding any runaway.",
+      "impact": "Negligible in practice. Recorded for completeness since the concern was raised explicitly.",
+      "remediation": "Optional: String(body || '').slice(0, 2000).toLowerCase() at :49.",
+      "owner": "EXEC (optional)"
+    },
+    {
+      "id": "SEC-TE-10",
+      "severity": "INFO",
+      "category": "process",
+      "title": "The IO half of the sweep has zero test coverage, and a safeguard the code documents does not exist",
+      "location": "tests/unit/solomon/trend-eyes-probes.test.js; contract asserted at sweep:88-89",
+      "detail": "The 23-test suite contains zero references to resolveT1Facts/resolveT2Facts/resolveT3Facts, zero supabase mocks, and no table or column assertions — it exercises only the pure probes. The sole reference to the sweep is a filename assertion via classifyRequiresInvocation at test:300. The sweep docblock at :88-89 states 'queried is returned so the resolver test can assert BOTH tables were actually read' — that resolver test was never written. Three reasonable safeguards (pure/IO split, name-keyed invocation proof, two-sided probe suite) each pass while composing into total invisibility of the IO half, which is why SEC-TE-01 shipped green.",
+      "impact": "Explains the root cause of SEC-TE-01 and SEC-TE-02 and is the systemic fix.",
+      "remediation": "Add the promised resolver test asserting both tables are queried, and one live-schema smoke check that each resolver SELECT returns without a 42703.",
+      "owner": "TESTING"
+    }
+  ],
+  "concern_responses": {
+    "1_sensitive_data_exposure": {
+      "verdict": "PASS with one caveat (SEC-TE-04)",
+      "detail": "No raw SMS body, phone number, or PII reaches any persisted row, console.log, or GHA run log. questionClass() at sweep:48-59 collapses the body into one of exactly 5 fixed literals or null; the body is discarded at that point and never propagates. resolveT1Facts pushes only {at, id} (:72). Probe evidence is {questionClass, members, spreadMs, ids} (probes:80) — message UUIDs, no content. writeReceipt deliberately drops evidence, keeping only {trigger, verdict, detail} (:206). main()'s console output (:252-254) prints verdicts and counts only. Feedback candidate rows are correctly service-role-only: anon SELECT is restricted to source_type='telegram' while the sweep writes 'auto_capture' (:187), and the authenticated SELECT policy requires feedback_type LIKE 'user_%' AND venture_id IS NOT NULL, which these rows do not satisfy. The only boundary crossing is topic-level metadata into the authenticated-readable receipt table — SEC-TE-04."
+    },
+    "2_no_send_boundary": {
+      "verdict": "PASS — verified by import trace, not by comment",
+      "detail": "Full transitive local closure from scripts/solomon/trend-eyes-sweep.mjs is exactly 10 modules: the 3 new files, chairman-sms-exchanges.js, emit-feedback.js, feedback-audience.js, measurement-provenance.js, audit-events-emitter.js, vision-events.js, handler-registry.js. Bare specifiers are only @supabase/supabase-js, node:crypto, node:child_process. Zero send paths: the only sendChairmanSMS and escalate_to_chairman tokens in the entire closure are inside comments in chairman-sms-exchanges.js:9 and :21. No twilio, no messages.create, no fetch/axios, no INSERT/UPDATE against sms_outbound_obligations. The one transitive risk worth checking was the event bus: emit-feedback.js:304 calls publishVisionEvent(FEEDBACK_CREATED). This is a no-op in the cron process — handler-registry.js performs no auto-registration at import, the sole FEEDBACK_CREATED subscriber lives in lib/eva/event-bus/handlers/feedback-created.js which is NOT in the closure and requires an explicit registerFeedbackCreatedHandlers() call that nothing here makes, and that handler only calls detectRecurrence(). The observe-never-join non-goal holds."
+    },
+    "3_credential_handling": {
+      "verdict": "CONDITIONAL — see SEC-TE-05, SEC-TE-08",
+      "detail": "permissions: contents: read (:31-32) is correct and minimal for a checkout-only job; no id-token, no write scopes. concurrency group ${{ github.workflow }} with cancel-in-progress: true (:34-36) is repo-standard, though it means a manual dispatch cancels an in-flight scheduled run — with no transaction around writeCandidates/writeReceipt that could leave candidates written without a receipt. No secret is echoed at any step and GitHub masks secret values. Service-role writes are appropriately narrow in code (2 INSERT targets, no UPDATE/DELETE) but the credential itself is over-scoped to the whole job. Actions are tag-pinned @v4 rather than SHA-pinned; this matches the repo baseline (122 uses of checkout@v4) so it is not a regression introduced here."
+    },
+    "4_injection_untrusted_input": {
+      "verdict": "PASS — see SEC-TE-07, SEC-TE-08, SEC-TE-09 for hardening",
+      "detail": "No SQL injection surface: every query uses PostgREST builder methods with parameterized .eq()/.gte() — no .or(), .filter(), or raw string predicates anywhere, so no SMS-derived string reaches a query filter. dedup_key composition (:176) draws questionClass from the 5-literal fixed set; classKey is arbitrary lane data but is only SHA-256 hashed (emit-feedback.js:262-265) and stored as an opaque metadata value, so it cannot corrupt the hash or the query. ReDoS is polynomial-bounded and practically negligible against a 1,600-char carrier limit plus a 10-minute job timeout. The genuine gap is the missing sender allowlist (SEC-TE-07), not string handling."
+    },
+    "5_write_blast_radius": {
+      "verdict": "CONDITIONAL — see SEC-TE-06",
+      "detail": "Confirmed by scanning all 10 closure modules: the sweep writes to exactly two tables, feedback (via emitFeedback, the declared @canonical-writer-for) and codebase_health_snapshots (:212). There is no .update() and no .delete() against any Supabase table in the closure — the .update( hits are crypto hash .update() and the one .delete( is a JS Map.delete at chairman-sms-exchanges.js:69. A third table, security_audit_events, is reachable via _maybePa5DualWrite but is gated off twice: SECURITY_AUDIT_DUAL_WRITE_PA5 is not set in the workflow, and the row is not a capability_suppression event. The sweep correctly honors LEAD condition C2 by not writing issue_patterns.trend. Loops are bounded by result-set size with no retry or recursion, so a runaway is not reachable — but T2's per-run row count is unbounded by construction and only deduped per-day."
+    }
+  },
+  "positives": [
+    "No PII in any persisted row, console.log, or GHA log — the body is collapsed to a 5-value enum and discarded (sweep:48-59, :72)",
+    "Observe-never-join boundary holds under a full transitive import trace, including the event-bus path",
+    "feedback candidate rows land outside every anon and authenticated RLS read policy — verified against live pg_policies, not assumed",
+    "npm ci --ignore-scripts blocks dependency lifecycle-script exfiltration of the service-role key",
+    "permissions: contents: read is minimal and correct",
+    "No UPDATE or DELETE against any table anywhere in the closure; writes confined to 2 tables via the canonical writer",
+    "issue_patterns.trend correctly left unwritten per LEAD condition C2",
+    "The receipt-liveness predicate (lib/solomon/trend-eyes-liveness.js:35-37) correctly returns alarm:true on a NULL receipt — the one safeguard that will actually fire given SEC-TE-01"
+  ],
+  "blocking_for_handoff": [
+    "SEC-TE-01",
+    "SEC-TE-02"
+  ],
+  "recommended_before_merge": [
+    "SEC-TE-04",
+    "SEC-TE-05",
+    "SEC-TE-06"
+  ],
+  "escalate_separately": [
+    "SEC-TE-03"
+  ]
+}

@@ -1,0 +1,190 @@
+{
+  "sub_agent": "TESTING",
+  "sd_id": "SD-LEO-INFRA-TREND-EYES-OFF-001",
+  "phase": "EXEC",
+  "handoff": "EXEC-TO-PLAN",
+  "review_type": "RE-CHECK against fixed code",
+  "prior_evidence": "a9119a85 (CONDITIONAL_PASS, 14/23 mutants surviving)",
+  "commits_under_review": ["5f67e932c36", "8a75a311cec"],
+  "verdict": "CONDITIONAL_PASS",
+  "confidence": 90,
+  "headline": "The blocking defects are genuinely fixed and verified at ground truth, and every one of the four named prior survivors is now killed. But three of the four fixes are unprotected at their use sites — the central FALSE ALL-CLEAR fix is undone by a one-token edit with the suite 52/52 green, proven against live data — and the classifier fix did not reach the founding case in the SD's own charter.",
+
+  "task_1_suite_counts": {
+    "status": "CONFIRMED",
+    "tests/unit/solomon/trend-eyes-probes.test.js": "38 passed",
+    "tests/unit/solomon/chairman-sms-exchanges.test.js": "14 passed",
+    "tests/unit/solomon total": "2 files, 52 passed",
+    "claimed": "23 -> 38, 52 across tests/unit/solomon",
+    "matches_claim": true
+  },
+
+  "task_2_mutation_campaign": {
+    "mutants_attempted": 60,
+    "killed": 37,
+    "SURVIVED": 23,
+    "not_applied": 0,
+    "kill_rate": "61.7%",
+    "prior_campaign": "23 mutants, 14 surviving (39% kill rate)",
+    "note_on_not_applied": "Every mutant was asserted to match its search string EXACTLY once before being believed. A mutation that fails to apply leaves the suite green and is indistinguishable from a survivor; 0 fell into that trap.",
+    "prior_named_survivors_now_killed": {
+      "M3 (T1 24h threshold unpinned)": "KILLED - boundary tests at 23.5h/24.5h",
+      "M9 (T3 downward-only detector)": "KILLED - UPWARD-drift positive added",
+      "M21 (future-dated receipt read as fresh)": "KILLED - negative-age alarm added",
+      "M23 (TS-11 hardcoded the category literal)": "KILLED - CANDIDATE_CATEGORY now imported"
+    },
+    "surviving_mutants": [
+      {"id": "M49", "file": "scripts/solomon/trend-eyes-sweep.mjs", "mutation": "runSweep: t2.classes ?? undefined -> ?? []", "severity": "HIGH", "note": "THE CENTRAL FIX, UNDONE AT THE CONSUMER. Proven at ground truth."},
+      {"id": "M50", "file": "scripts/solomon/trend-eyes-sweep.mjs", "mutation": "runSweep: t3.readings ?? undefined -> ?? []", "severity": "HIGH", "note": "Same defect on the T3 arm."},
+      {"id": "M43", "file": "scripts/solomon/trend-eyes-sweep.mjs", "mutation": "resolveT3Facts: Math.min clamp RE-ADDED", "severity": "HIGH", "note": "Fix #4 undone with the suite green. Its 'proof' test never calls the resolver."},
+      {"id": "M33", "file": "scripts/solomon/trend-eyes-sweep.mjs", "mutation": "resolveT1Facts: watchdog exclusion neutered (continue removed)", "severity": "HIGH", "note": "Load-bearing and unprotected. Live dry-run goes 2 -> 3 firing classes. Suite green."},
+      {"id": "M34", "file": "scripts/solomon/trend-eyes-sweep.mjs", "mutation": "resolveT1Facts: direction !== 'in' -> !== 'out'", "severity": "HIGH", "note": "T1 would cluster OUR OWN outbound messages as chairman questions."},
+      {"id": "M35", "file": "scripts/solomon/trend-eyes-sweep.mjs", "mutation": "coverage.classified -> 0", "severity": "MEDIUM", "note": "The receipt's classifier-coverage series, added as the narrowing-detector, can report anything. Also DERIVED by subtraction, never counted from clusters actually built."},
+      {"id": "M28", "file": "scripts/solomon/trend-eyes-sweep.mjs", "mutation": "questionClass: predicate===null branch disabled", "severity": "MEDIUM", "note": "Kills cost-quota AND progress-status. progress-status is 18 of 24 real classifications (75%) and the class that actually fires T1 in production. Zero tests."},
+      {"id": "M46", "file": "scripts/solomon/trend-eyes-sweep.mjs", "mutation": "MAX_CANDIDATES_PER_CLASS 10 -> 100000", "severity": "MEDIUM", "note": "writeCandidates has no tests at all."},
+      {"id": "M47", "file": "scripts/solomon/trend-eyes-sweep.mjs", "mutation": "truncated -> always null", "severity": "MEDIUM", "note": "Commit 8a75a311cec exists SOLELY to stop the truncation record being silently lost, and shipped with nothing that would notice the loss."},
+      {"id": "M48", "file": "scripts/solomon/trend-eyes-sweep.mjs", "mutation": "dedup_key drops the per-finding index", "severity": "MEDIUM", "note": "Collapses same-day findings of one class into a single row - the documented failure the key exists to prevent."},
+      {"id": "M51", "file": "scripts/solomon/trend-eyes-sweep.mjs", "mutation": "SMS_WINDOW_HOURS 168 -> 1", "severity": "LOW"},
+      {"id": "M52", "file": "scripts/solomon/trend-eyes-sweep.mjs", "mutation": "EXPLORATION_TOP_N 5 -> 0", "severity": "LOW", "note": "Exploration floor is the anti-narrowing mechanism; unpinned."},
+      {"id": "M53", "file": "scripts/solomon/trend-eyes-sweep.mjs", "mutation": "LESSON_WINDOW_DAYS 120 -> 1", "severity": "LOW", "note": "120d exists to reach past the session_coordination retention horizon (LEAD C1)."},
+      {"id": "M41", "file": "scripts/solomon/trend-eyes-sweep.mjs", "mutation": "earliest-fix -> latest-fix", "severity": "MEDIUM", "note": "The comment says EARLIEST keeps a re-fix from masking a recurrence. Nothing tests it."},
+      {"id": "M8", "file": "lib/solomon/trend-eyes-probes.js", "mutation": "T2: drop the before-fix requirement", "severity": "MEDIUM"},
+      {"id": "M15", "file": "lib/solomon/trend-eyes-probes.js", "mutation": "T2: never-fixed classes admitted", "severity": "LOW", "note": "Partially equivalent - ms(null)=0 keeps FLAT for fixedAt:null."},
+      {"id": "M16", "file": "lib/solomon/trend-eyes-probes.js", "mutation": "T2 after-fix boundary > -> >=", "severity": "LOW"},
+      {"id": "M11", "file": "lib/solomon/trend-eyes-probes.js", "mutation": "T3_MIN_READINGS 3 -> 2", "severity": "MEDIUM", "note": "Production is sitting at EXACTLY this boundary right now (live series has 2 readings)."},
+      {"id": "M17", "file": "lib/solomon/trend-eyes-probes.js", "mutation": "T3 baseline includes the latest reading", "severity": "MEDIUM", "note": "Dilutes drift; fixture deltas too large to notice."},
+      {"id": "M1", "file": "lib/solomon/trend-eyes-probes.js", "mutation": "T1_MIN_CLUSTER 2 -> 1", "severity": "LOW", "note": "Likely equivalent - a 1-member cluster has spread 0."},
+      {"id": "M4", "file": "lib/solomon/trend-eyes-probes.js", "mutation": "T1 spread >= -> >", "severity": "LOW", "note": "Differs only at exactly 24h; the 23.5/24.5 tests straddle without pinning."},
+      {"id": "M14", "file": "lib/solomon/trend-eyes-probes.js", "mutation": "T3 window guard <= -> <", "severity": "LOW", "note": "Zero-length window admitted."},
+      {"id": "M22c", "file": "lib/solomon/trend-eyes-liveness.js", "mutation": "liveness threshold > -> >=", "severity": "LOW"}
+    ],
+    "structural_root_cause": "resolveT1Facts, writeCandidates, writeReceipt and runSweep have ZERO tests. TS-3 introduced a table-recording double and applied it to resolveT2Facts and resolveT3Facts only. 14 of the 23 survivors live in exactly the four functions that technique was not extended to."
+  },
+
+  "task_3_new_code_survivors": {
+    "finding": "14 of 23 survivors are in code added or changed by the two fix commits.",
+    "the_pattern": "Three of the four fixes were verified AT THE MERGE and not AT THE CONSUMER. The resolver-level halves are tested and killed (M38, M44, M36, M37, M42 all KILLED); the call-site halves that actually deliver the fix are untested and survive (M49, M50, M43, M33).",
+    "ground_truth_proof_M49": {
+      "mutation": "one token: `t2.classes ?? undefined` -> `t2.classes ?? []` in runSweep",
+      "suite_result": "52/52 PASSED",
+      "live_dry_run_mutated": "FLAT t2_recurrence_after_fix - no class recurred after its fix",
+      "live_dry_run_clean": "UNKNOWN t2_recurrence_after_fix - no lesson-channel classes supplied - NOT verified (this is not a flat reading)",
+      "meaning": "The exact false all-clear this SD was chartered against is reachable by a one-token edit that no test sees, against live production data."
+    },
+    "ground_truth_proof_M33": {
+      "mutation": "drop `continue` from the isAutomatedMessage branch in resolveT1Facts",
+      "suite_result": "52/52 PASSED",
+      "live_dry_run_mutated": "FIRE t1_repeat_question - 3 question-class(es); candidates: 3",
+      "live_dry_run_clean": "FIRE t1_repeat_question - 2 question-class(es); candidates: 2",
+      "why_it_matters": "questionClass('I haven\\'t received any text messages from you in over an hour. are you still there?') returns 'sms-coverage'. 76 of 342 rows are that exact watchdog. The ONLY thing preventing the guaranteed daily false positive the commit message describes is the ordering of two lines in an untested function."
+    },
+    "ground_truth_proof_M43": {
+      "mutation": "re-add the Math.min clamp that fix #4 removed",
+      "suite_result": "52/52 PASSED",
+      "why": "The test that claims to prove the clamp is gone ('emits an out-of-range numerator to the probe rather than clamping it away') calls probeLessonDisjunctionDrift with hand-built readings. It never invokes resolveT3Facts. It tests the probe's span guard, not the resolver's non-clamping - the fix's proof does not touch the fixed code."
+    }
+  },
+
+  "task_4_ground_truth_verification": {
+    "dry_run_exit_code": 0,
+    "dry_run_output": {
+      "t1_repeat_question": "FIRE - 2 question-class(es) asked 2+ times at least 24h apart",
+      "t2_recurrence_after_fix": "UNKNOWN - no lesson-channel classes supplied - NOT verified (this is not a flat reading)",
+      "t3_lesson_disjunction_drift": "FLAT - series has 2 reading(s); 3 needed before drift is meaningful",
+      "candidates": 2,
+      "sources_queried": ["session_coordination", "retention_archive"]
+    },
+    "t2_reports_UNKNOWN_not_FLAT": true,
+    "phantom_columns_verified_independently_against_live_schema": {
+      "method": "per-column probe; PostgREST 42703 = undefined_column. Then the four verbatim select lists from the code, run as written.",
+      "retention_archive.payload": "ABSENT (phantom confirmed gone)",
+      "retention_archive.row_data": "PRESENT",
+      "issue_patterns.pattern_name": "ABSENT (phantom confirmed gone)",
+      "issue_patterns.pattern_id": "PRESENT",
+      "verbatim_selects": "all 4 OK, rows returned",
+      "verdict": "Fix #1 is REAL at ground truth."
+    }
+  },
+
+  "task_5_classifier_coverage_remeasure": {
+    "status": "STILL BAD - reported plainly as requested",
+    "method": "exact count(head) then paginated fetch; fetched===population asserted (342/342). Not a sample.",
+    "population": 342,
+    "automated_excluded": 76,
+    "non_automated_corpus": 266,
+    "classified": 24,
+    "unclassified_null": 242,
+    "unclassified_rate_of_non_automated": "91.0%",
+    "unclassified_rate_of_all_rows": "70.8%",
+    "prior_measurement": "328 of 342 -> null (95.9%)",
+    "honest_delta": "Of the 86-row apparent improvement, 76 rows are the watchdog EXCLUSION, not classification. Actual classification went 14 -> 24 rows. Net gain: 10 rows.",
+    "by_class": {"progress-status": 18, "fleet-liveness": 4, "cost-quota": 1, "sms-coverage": 1},
+    "does_sms_coverage_match_anything_real": "NO",
+    "sms_coverage_detail": {
+      "rows_mentioning_sms_text_message": 97,
+      "of_which_non_automated": 24,
+      "assigned_sms_coverage": 1,
+      "the_single_hit": "2026-07-21 'Please confirm you received this text message' - a relay test, not a coverage question",
+      "not_assigned": 23
+    },
+    "THE_FOUNDING_CASE_STILL_DOES_NOT_CLASSIFY": {
+      "claim_under_test": "The SD's charter specimen: the SMS-coverage question asked 2026-08-03 and again 2026-08-05.",
+      "measured": [
+        {"at": "2026-08-03T10:17:12Z", "body": "I know Solomon has access to conversation exchanges and periodically reviews them looking for opportunities for improvement. Does Solomon al...", "class": null},
+        {"at": "2026-08-05T11:19:37Z", "body": "Does Solomon have a CRON job that reviews the SMS message history? If so what is it looking for as it reviews the SMS history?", "class": null},
+        {"at": "2026-08-05T11:54:20Z", "body": "Ask Solomon what it can do to design it so that it is self improving in its evaluation of the SMS message data", "class": null}
+      ],
+      "why": "These match the SUBJECT regex (sms) but carry no predicate term (cover/reach/miss/get through/deliver/receive), so the loop falls through every class to null.",
+      "conclusion": "T1 STILL could not fire on the founding case in its own charter. The commit message states this bug in the past tense; the fix did not reach it.",
+      "test_pattern": "The two new questionClass tests assert on synthetic strings the author wrote ('Are we missing any texts?', 'did the texts get through'), not on any string drawn from the corpus. The fixtures were built from the same mental model as the fix, so they confirm the fix and miss the population - a control built on the assumption it is meant to check."
+    },
+    "additional_hazard": "The watchdog body itself classifies AS sms-coverage. sms-coverage is therefore 100% watchdog noise plus one relay test, held apart only by an untested ordering (see M33)."
+  },
+
+  "task_6_wider_regression": {
+    "status": "PASS - no regression attributable to this SD",
+    "command": "npx vitest run --project unit",
+    "test_files": "1 failed | 2962 passed | 15 skipped (2978)",
+    "tests": "2 failed | 36194 passed | 199 skipped | 2 todo (36397)",
+    "duration_s": 242,
+    "failures": [
+      {
+        "file": "tests/unit/complete-quick-fix/external-timeout-and-coverage-gate.test.js",
+        "count": 2,
+        "cause": "ANSI/FORCE_COLOR artifact - the test spawns `node -e ... console.log(Number)` and compares stdout to a bare numeral; Node colorizes the number, yielding \\u001b[33m12345\\u001b[39m",
+        "reproduced_directly": true,
+        "passes_under_FORCE_COLOR_0": true,
+        "attributable_to_this_SD": false,
+        "why_not": "The SD is 2418 pure insertions (0 deletions) touching only lib/solomon, scripts/solomon, tests/unit/solomon, .github/workflows and .artifacts. It touches nothing under scripts/modules/complete-quick-fix, which that test imports."
+      }
+    ]
+  },
+
+  "conditions_to_clear_to_PASS": [
+    "C1 (HIGH) - Test the null->undefined conversion AT THE CONSUMER: assert runSweep with a blind resolver yields UNKNOWN verdicts. Kills M49 and M50. Without this the SD's central fix does not survive its first refactor.",
+    "C2 (HIGH) - Test that resolveT3Facts does NOT clamp: assert reachedPatterns can exceed laneNamed as emitted BY THE RESOLVER. Kills M43. The current 'proof' test never calls the resolver.",
+    "C3 (HIGH) - Test resolveT1Facts directly with a lane double: automated excluded BEFORE classification, inbound-only, and coverage counted from the clusters actually built rather than derived by subtraction. Kills M33, M34, M35.",
+    "C4 (HIGH) - Either fix questionClass so the founding-case bodies classify, or amend the code comment and the receipt to state plainly that sms-coverage is not yet operational. The comment currently asserts a fix the corpus refutes, and a stale comment that explains away the signal is worse than no comment.",
+    "C5 (MEDIUM) - Test writeCandidates: the per-class cap, the truncation record being non-null when it fires, and the per-finding dedup_key. Kills M46, M47, M48. Commit 8a75a311cec's entire purpose is unguarded.",
+    "C6 (LOW) - Pin the T3 baseline-excludes-latest property (M17) and T3_MIN_READINGS (M11); production is sitting at exactly the M11 boundary today."
+  ],
+
+  "what_is_genuinely_fixed": [
+    "Phantom columns - verified column-by-column against the live schema, independently of the author's account. retention_archive.payload and issue_patterns.pattern_name are ABSENT; the code's four verbatim selects all succeed. The sweep now runs and exits 0.",
+    "FALSE ALL-CLEAR at the resolver - resolveT2Facts and resolveT3Facts return null; both blindness branches are now covered (M36 and M37 both KILLED, including the classedRows branch the author found under-tested).",
+    "questionClass order-independence and plural-awareness - M24, M26, M27, M29 all KILLED.",
+    "isAutomatedMessage as a pure function - M30, M31, M32 all KILLED.",
+    "resolveT3Facts distinct pattern_id counting - M42 KILLED.",
+    "All four prior named survivors - M3, M9, M21, M23 - now KILLED.",
+    "TS-3 resolver test with a table-recording double genuinely asserts both tables are queried - M40 KILLED."
+  ],
+
+  "evidence_artifacts": {
+    "mutation_harness": ".artifacts/qa-recheck/mutate.mjs",
+    "mutation_results": ".artifacts/qa-recheck/mutation-results.json",
+    "schema_verification": ".artifacts/qa-recheck/schema-verify.mjs",
+    "classifier_coverage": ".artifacts/qa-recheck/classifier-coverage.mjs",
+    "founding_case": ".artifacts/qa-recheck/founding-case.mjs",
+    "restoration_verified": "git status --porcelain clean on all three mutated files after every run"
+  }
+}

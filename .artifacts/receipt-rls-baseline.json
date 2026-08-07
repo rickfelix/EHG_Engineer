@@ -1,0 +1,6 @@
+{
+  "captured_at": "2026-08-07T16:28:23.624Z",
+  "receipt_visible_pre_apply": 1,
+  "non_receipt_visible_pre_apply": 3965,
+  "note": "Captured BEFORE the RLS policy was applied. Only obtainable in this window."
+}
