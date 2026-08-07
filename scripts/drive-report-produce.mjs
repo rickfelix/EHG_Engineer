@@ -102,9 +102,35 @@ if (isMainModule(import.meta.url)) {
       return data || null;
     },
     gather: async () => {
-      // Wired by the consumers/sections in a follow-on; the producer's contract is fixed here.
-      throw new Error('gather() is not yet wired — the producer contract and its idempotence are '
-        + 'landed and tested; section wiring follows');
+      // QF-20260807-056 — THIS REFUSAL IS CORRECT; ONLY ITS REASON WAS WRONG, AND THE WRONG REASON
+      // COST TWO SEATS A MISDIAGNOSIS. The old message read "gather() is not yet wired — section
+      // wiring follows", which says the drive chain is blocked on an unbuilt function. It is not.
+      // The cron path's gather EXISTS and is wired: drive-report-sweep.mjs:384 passes
+      // buildGather({...}) to runDriveReportSweep alongside produce: produceDriveReport. That
+      // message sent a dispatched worker looking for a build gate that had already been closed.
+      //
+      // WHY THIS ENTRY POINT STILL REFUSES RATHER THAN REUSING buildGather. Not tidiness — three
+      // things the sweep does that this block structurally cannot, each of which makes a row
+      // written here WORSE than no row:
+      //   1. WINDOW KEY. The sweep reads the clock ONCE and passes capacityRunId: windowKey(now),
+      //      deliberately "the SAME window key the report row is written under, so an auditor can
+      //      join a verdict to the report that cites it". This block keys on GITHUB_RUN_ID, so a
+      //      row from here and leg4's capacity verdict would land under DIFFERENT keys and the
+      //      join silently returns nothing.
+      //   2. REGISTRY STAMP + WINDOW GATE. Both live in runDriveReportSweep. A row written here
+      //      is outside the window and leaves LAST_RUN_FIELD unstamped, so the liveness instrument
+      //      reads "never ran" over a table that just gained a row.
+      //   3. TABLE-ABSENT HANDLING. The sweep treats a missing drive_reports as a KNOWN state and
+      //      exits cleanly without stamping; the raw insert below throws instead.
+      // Importing buildGather here would also be circular: the sweep already imports this module.
+      //
+      // So the supported entry is the sweep. If you want a report now, run that.
+      throw new Error('drive-report-produce.mjs is not a standalone entry point — run the sweep '
+        + '(scripts/cron/drive-report-sweep.mjs), which owns the window gate, the registry stamp '
+        + 'and the windowKey() run id that lets a capacity verdict be joined to the report citing '
+        + 'it. gather() IS wired there (drive-report-sweep.mjs:384 buildGather). This module '
+        + 'exports produceDriveReport for that sweep to call; invoking it directly would write a '
+        + 'row under the wrong run id, outside the window, with the registry left unstamped.');
     },
     persist: async (row) => {
       const { data, error } = await supabase.from('drive_reports').insert(row).select('id').single();
