@@ -1,3 +1,5 @@
+-- @approved-by: rickfelix2000@gmail.com
+-- (Chairman ratification 2026-08-07 12:58:56Z, verbatim 'Yes', decision row 74f2a2c9 approved, capture 54769df1, relayed via Adam a31ae727 — scoped to the single RESTRICTIVE SELECT policy on codebase_health_snapshots, dry-run verified sha256 799110f2; header transcribed per the chairman transcription ruling of 2026-08-07 15:43:36Z, verbatim 'Yes', row a63434fb, capture 5d86e2e3, scribe-executed at the chairman's live direction in-session.)
 -- STAGED — NOT YET APPROVED FOR APPLY. requires-chairman-apply. Do NOT auto-apply on merge; there
 -- is no approved-by attestation on this file. Authoring is delegable; APPLYING IS NOT. This file
 -- was written by a worker (Alpha-2) as scribe work under coordinator ruling 246c81da so that the
