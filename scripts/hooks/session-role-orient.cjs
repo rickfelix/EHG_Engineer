@@ -14,6 +14,10 @@ require('dotenv').config({ path: path.resolve(__dirname, '../../.env') });
 
 const COORD_FILE = path.resolve(__dirname, '../../.claude/active-coordinator.json');
 const BUDGET_MS = 1500;
+// The receipt write's own deadline, matching the sibling coordinator lane's WRITE_TIMEOUT_MS. Its
+// own constant rather than BUDGET_MS: the reads race the orientation output and must land before
+// the seat is told anything, while this write happens after the lines are already emitted.
+const RECEIPT_WRITE_BUDGET_MS = 2000;
 const STALE_MIN = 10;
 const SOLO = [
   '[ROLE] SOLO — no active coordinator detected.',
@@ -126,16 +130,26 @@ function isAdamSeat(meta) {
  * still true of Adam, and duplicating those three lines here would mean a future edit to the role
  * contract silently missing this seat.
  *
- * `headline` is null whenever the report could not be read — including right now, because
- * drive_reports does not exist until PR #6784 lands. An absent report is stated plainly rather than
- * omitted: a seat that sees nothing cannot tell "no report today" from "the injection is broken".
+ * `headline` is null whenever the report could not be read — including right now, because the
+ * drive_reports migration is chairman-gated and unapplied. An absent report is stated plainly
+ * rather than omitted: a seat that sees nothing cannot tell "no report today" from "the injection
+ * is broken".
+ *
+ * SUPPRESSED IS ITS OWN SENTENCE, NOT A THIRD MEANING FOR THE SECOND ONE. When an operator sets
+ * LEO_DRIVE_REPORT_INJECT=off, "no current report readable… the mechanism working, not failing"
+ * becomes a false assurance: nobody looked. That collapse — an operator action wearing the costume
+ * of a healthy read — is the exact hazard the unavailable line exists to prevent, reintroduced one
+ * state over by the switch that was added to make the feature stoppable. So the switch gets its own
+ * line, naming the variable to unset. (Found by the SECURITY sub-agent on the fix itself.)
  */
-function adamLines(headline) {
+function adamLines(headline, suppressed = false) {
   return [
     ...roleLines('adam'),
-    headline
-      ? `[ROLE] DRIVE REPORT — ${headline}`
-      : '[ROLE] DRIVE REPORT — unavailable this session (no current report readable). This line is the mechanism working, not failing: it arrives every session so you never depend on remembering to ask.',
+    suppressed
+      ? '[ROLE] DRIVE REPORT — SUPPRESSED by LEO_DRIVE_REPORT_INJECT=off. Nobody looked: this says nothing about whether a report exists. Unset that variable to restore it.'
+      : headline
+        ? `[ROLE] DRIVE REPORT — ${headline}`
+        : '[ROLE] DRIVE REPORT — unavailable this session (no current report readable). This line is the mechanism working, not failing: it arrives every session so you never depend on remembering to ask.',
   ];
 }
 
@@ -229,15 +243,26 @@ async function stampAdamReceipt(reportId) {
     ]);
     const url = process.env.SUPABASE_URL, key = process.env.SUPABASE_SERVICE_ROLE_KEY;
     if (!url || !key) return null;
-    return await writeConsumptionReceipt(createClient(url, key), {
-      reportId,
-      lane: 'adam',
-      // What the row attests, stated ON it: the headline was emitted into this seat's SessionStart
-      // context. That IS delivery for this lane — unlike the chairman_brief lane, there is no
-      // transport downstream that could still drop it — but saying so costs one field and stops a
-      // future reader from having to infer it from the lane name.
-      metadata: { attests: 'injected_into_session_context' },
-    });
+    // A DEADLINE, matching the sibling coordinator lane's WRITE_TIMEOUT_MS. Without one this write
+    // is the only unbounded wait in a hook that budgets every other round trip, and the process can
+    // exit under it — the verdict then depends on a race rather than on the database. Bounded, the
+    // timeout lands in the UNCONFIRMED bucket, which is the honest answer: the POST may have
+    // arrived. (Found by the SECURITY sub-agent, which measured the 1.9s case rather than
+    // reasoning about it.)
+    const ctl = new AbortController();
+    const timer = setTimeout(() => ctl.abort(), RECEIPT_WRITE_BUDGET_MS);
+    try {
+      return await writeConsumptionReceipt(createClient(url, key), {
+        reportId,
+        lane: 'adam',
+        // What the row attests, stated ON it: the headline was emitted into this seat's SessionStart
+        // context. That IS delivery for this lane — unlike the chairman_brief lane, there is no
+        // transport downstream that could still drop it — but saying so costs one field and stops a
+        // future reader from having to infer it from the lane name.
+        metadata: { attests: 'injected_into_session_context' },
+        signal: ctl.signal,
+      });
+    } finally { clearTimeout(timer); }
   } catch { return null; }
 }
 
@@ -315,10 +340,10 @@ function resolveSeat(sessionId, meta, coordFile) {
  * The lines this seat is shown. Signature and output unchanged — this is now a thin renderer over
  * resolveSeat, which is where the precedence comments above belong and now live.
  */
-function decide(sessionId, meta, coordFile, driveHeadline = null) {
+function decide(sessionId, meta, coordFile, driveHeadline = null, driveSuppressed = false) {
   switch (resolveSeat(sessionId, meta, coordFile)) {
     case SEAT.COORDINATOR: return COORDINATOR;
-    case SEAT.ADAM: return adamLines(driveHeadline);
+    case SEAT.ADAM: return adamLines(driveHeadline, driveSuppressed);
     case SEAT.ROLE: return roleLines(meta.role);
     case SEAT.WORKER: return workerLines(meta?.callsign, coordFile.session_id);
     default: return SOLO;
@@ -348,8 +373,9 @@ async function orient({
   // was never shown — see resolveSeat. Gating on the seat also keeps the round trip off every
   // other seat's startup budget, which is what the isAdamSeat gate was originally for.
   const isAdam = resolveSeat(sessionId, meta, coordFile) === SEAT.ADAM;
-  const driveReport = isAdam && driveInjectionEnabled() ? await fetchReport() : null;
-  decide(sessionId, meta, coordFile, driveReport?.headline || null).forEach((l) => log(l));
+  const suppressed = isAdam && !driveInjectionEnabled();
+  const driveReport = isAdam && !suppressed ? await fetchReport() : null;
+  decide(sessionId, meta, coordFile, driveReport?.headline || null, suppressed).forEach((l) => log(l));
   // The receipt is stamped AFTER the lines are emitted: the injection IS the delivery, and a
   // receipt may only claim what was actually delivered. Stamping first would record a consumption
   // that a later failure could prevent.

@@ -269,6 +269,24 @@ describe('FR-2 wiring — orient() invokes the receipt writer for the Adam seat'
       expect(t.lines.slice(0, 3)).toEqual(roleLines('adam'));
     });
 
+    it('SAYS suppressed — never reuses the "unavailable, mechanism working" assurance', async () => {
+      // The first cut of this switch reused the unavailable line, which asserts the read happened
+      // and found nothing. With the switch off nobody looked, so that sentence is false and it is
+      // false in the reassuring direction — an operator action wearing the costume of a healthy
+      // read. Three states, three sentences.
+      const t = mk();
+      await withEnv('off', () => hook.orient({
+        sessionId: 's', meta: ADAM, coordFile: null,
+        fetchReport: async () => REPORT, stamp: async () => ({ written: true }), log: t.log,
+      }));
+      const out = t.lines.join('\n');
+      expect(out).toMatch(DRIVE_LINE);
+      expect(out).toMatch(/SUPPRESSED by LEO_DRIVE_REPORT_INJECT=off/);
+      expect(out).toMatch(/Nobody looked/);
+      expect(out).not.toMatch(/mechanism working, not failing/);
+      expect(out).not.toMatch(/unavailable this session/);
+    });
+
     it('DEFAULT ON — unset and any other value still inject', async () => {
       for (const value of [undefined, '', 'on', 'true', 'anything']) {
         const t = mk();

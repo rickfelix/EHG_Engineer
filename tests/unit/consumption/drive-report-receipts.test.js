@@ -78,6 +78,52 @@ describe('a write with nothing returned is UNCONFIRMED, never written', () => {
   });
 });
 
+describe('an ABORTED write is unconfirmed, not refused', () => {
+  // MEASURED by the SECURITY sub-agent on the live shape: with the deadline at 2s and the server
+  // 1.9s slow, the POST REACHES THE SERVER. The row may be there. "write_refused" would assert the
+  // database said no, which nobody observed — a different lie from the one this module was built to
+  // prevent, pointing the same way.
+  for (const thrown of [
+    Object.assign(new Error('The operation was aborted'), { name: 'AbortError' }),
+    new Error('AbortError: signal is aborted without reason'), // supabase-js sometimes plain-Errors it
+  ]) {
+    it(`reports unconfirmed for ${thrown.name}`, async () => {
+      const c = stubClient({ onCall: () => { throw thrown; } });
+      const v = await writeConsumptionReceipt(c, { reportId: REPORT, lane: 'adam' });
+      expect(v.written).toBe(false);
+      expect(v.reason).toBe(RECEIPT_OUTCOME.UNCONFIRMED);
+      expect(v.reason).not.toBe(RECEIPT_OUTCOME.WRITE_REFUSED);
+    });
+  }
+
+  it('a NON-abort throw is still a refusal — the distinction must not swallow real failures', async () => {
+    const c = stubClient({ onCall: () => { throw new Error('relation "drive_report_receipts" does not exist'); } });
+    const v = await writeConsumptionReceipt(c, { reportId: REPORT, lane: 'adam' });
+    expect(v.reason).toBe(RECEIPT_OUTCOME.WRITE_REFUSED);
+  });
+
+  it('passes an abort signal through when the client supports one, and works when it does not', async () => {
+    const seen = [];
+    const withAbort = {
+      from() {
+        const b = {
+          upsert() { return b; },
+          select() { return b; },
+          abortSignal(s) { seen.push(s); return b; },
+          async maybeSingle() { return { data: { id: 'receipt-1' }, error: null }; },
+        };
+        return b;
+      },
+    };
+    const ctl = new AbortController();
+    expect((await writeConsumptionReceipt(withAbort, { reportId: REPORT, lane: 'adam', signal: ctl.signal })).written).toBe(true);
+    expect(seen).toEqual([ctl.signal]);
+    // Feature-detected: the stub clients here have no abortSignal, and passing one must not break
+    // them — otherwise this module could only be tested against a live PostgREST.
+    expect((await writeConsumptionReceipt(stubClient(), { reportId: REPORT, lane: 'adam', signal: ctl.signal })).written).toBe(true);
+  });
+});
+
 describe('TS-6 — THE SWALLOW TEST: a refused write is never reportable as written', () => {
   it('a database refusal reports NOT WRITTEN and surfaces the cause', async () => {
     const c = stubClient({ error: { message: 'new row violates check constraint "drive_report_receipts_lane_check"' } });
