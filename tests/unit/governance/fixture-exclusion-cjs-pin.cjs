@@ -36,6 +36,7 @@ const REQUIRED_EXPORTS = [
   'isFixtureVenture',
   'isFixtureQf',
   'FIXTURE_CREATED_BY',
+  'isFixtureQfByCreatedBy',
   'FIXTURE_PROCESS_KEY_PREFIX',
   'isFixtureProcessKey',
   'hasFixtureMarker',

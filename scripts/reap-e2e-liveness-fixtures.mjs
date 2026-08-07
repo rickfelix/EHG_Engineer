@@ -45,8 +45,20 @@ import { createClient } from '@supabase/supabase-js';
 // class of defect this QF is about. Caught only because the dry run's output was empty.
 import { isMainModule } from '../lib/utils/is-main-module.js';
 
-/** The one prefix that is fixture residue. Exported so the safety argument is testable. */
-export const E2E_FIXTURE_PREFIX = '__e2e_';
+/**
+ * The one prefix that is fixture residue. Exported so the safety argument is testable.
+ *
+ * SD-LEO-INFRA-ONE-SYNTHETIC-ROW-001-A: this is now RE-EXPORTED from the canonical predicate
+ * module rather than declared here, so the DELETE side (this reaper) and the READ side
+ * (isFixtureProcessKey, used by the liveness gauges) are literally the same string. Two
+ * independently-declared literals that merely happen to match today is the drift this SD family
+ * exists to abolish — and the divergence that matters most is a reaper deleting MORE than the
+ * filter hides. The dependency points this way (script imports lib) because fixture-exclusion.mjs
+ * must stay zero-import and side-effect-free for its CJS consumers; this file imports
+ * dotenv/config and constructs a Supabase client at module scope, so it can never be the importee.
+ */
+export { FIXTURE_PROCESS_KEY_PREFIX as E2E_FIXTURE_PREFIX } from '../lib/governance/fixture-exclusion.mjs';
+import { FIXTURE_PROCESS_KEY_PREFIX as E2E_FIXTURE_PREFIX } from '../lib/governance/fixture-exclusion.mjs';
 
 /**
  * True iff this row is e2e fixture residue and safe to delete.

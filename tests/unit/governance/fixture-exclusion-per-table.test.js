@@ -20,6 +20,7 @@ import {
   isFixtureHealthSnapshot,
   isFixtureCoordinationRow,
   isFixtureQf,
+  isFixtureQfByCreatedBy,
   isFixtureVenture,
 } from '../../../lib/governance/fixture-exclusion.mjs';
 
@@ -113,7 +114,15 @@ describe('jsonb-carrier tables — codebase_health_snapshots and session_coordin
 
 describe('quick_fixes created_by carrier (TR-3)', () => {
   test('POSITIVE: the explicit marker classifies as fixture', () => {
-    expect(isFixtureQf({ id: 'QF-20260807-001', created_by: FIXTURE_CREATED_BY })).toBe(true);
+    expect(isFixtureQfByCreatedBy({ id: 'QF-20260807-001', created_by: FIXTURE_CREATED_BY })).toBe(true);
+  });
+
+  // THE OPT-IN BOUNDARY. isFixtureQf is consumed by five live surfaces including the dispatch
+  // queue, and quick_fixes RLS is permissive to anon (pre-existing). If created_by were folded
+  // into isFixtureQf, anyone could hide a REAL quick fix from all five by writing one free-text
+  // column, with no id or title change to give it away. This asserts the separation holds.
+  test('created_by does NOT leak into isFixtureQf — consumers must opt in explicitly', () => {
+    expect(isFixtureQf({ id: 'QF-20260807-001', created_by: FIXTURE_CREATED_BY })).toBe(false);
   });
 
   // THE VACUITY GUARD. created_by is defaulted and untruthful: 1,355 of 1,376 live rows carry
@@ -123,8 +132,8 @@ describe('quick_fixes created_by carrier (TR-3)', () => {
   // distinctness is what makes the mutation proof meaningful instead of vacuous.
   test('THE CONTROL: the marker is DISTINCT from the untruthful default', () => {
     expect(FIXTURE_CREATED_BY).not.toBe('UAT_AGENT');
-    expect(isFixtureQf({ id: 'QF-20260807-002', created_by: 'UAT_AGENT' })).toBe(false);
-    expect(isFixtureQf({
+    expect(isFixtureQfByCreatedBy({ id: 'QF-20260807-002', created_by: 'UAT_AGENT' })).toBe(false);
+    expect(isFixtureQfByCreatedBy({
       id: 'QF-20260728-967',
       created_by: 'UAT_AGENT',
       title: 'Fleet dashboard shows stale liveness',
