@@ -72,6 +72,33 @@ CREATE TABLE public.belt_capacity_verdicts (
 CREATE INDEX belt_capacity_verdicts_recorded_at_idx
   ON public.belt_capacity_verdicts (recorded_at DESC);
 
+-- ============================================================================================
+-- LOCK IT DOWN. THIS IS NOT BOILERPLATE — OMITTING IT SHIPS THE TABLE OPEN.
+-- ============================================================================================
+-- MEASURED ON THIS DATABASE by the SECURITY sub-agent, not assumed from convention:
+--   pg_default_acl, schema public, objtype 'r':
+--     {postgres=arwdDxtm, anon=arwdDxtm, authenticated=arwdDxtm, service_role=arwdDxtm}
+--   and anon + authenticated both hold USAGE on schema public.
+-- So EVERY new public table inherits full SELECT/INSERT/UPDATE/DELETE/TRUNCATE for anon and
+-- authenticated the instant CREATE TABLE returns. Saying nothing here is not "neutral defaults",
+-- it is OPT-IN-TO-OPEN. 815 of 849 public tables (96%) have RLS enabled; the RLS-off cohort is
+-- mostly quarantine snapshots and backups. This is a governance table and does not belong there.
+--
+-- WHY IT MATTERS MORE THAN THE DATA SUGGESTS. The contents are dull — counts and four enum
+-- strings. The exposure is INTEGRITY, not confidentiality: anon INSERT/UPDATE would forge the very
+-- trend drive_score leg4 cites, and that trend feeds the coordinator's Adam-sourcing reach-out. An
+-- anon TRUNCATE destroys history this file's own _DOWN states cannot be recomputed after the fact.
+--
+-- NOTE THE COMPARATOR IS WORSE HERE, NOT BETTER. session_coordination could argue its unused write
+-- grants were dormant because RLS was ON there and no policy admitted them. With RLS OFF, grants
+-- are the ONLY gate, and every one of them is live immediately.
+--
+-- ZERO RISK TO THIS SD'S OWN WRITERS: both producers build their client with
+-- SUPABASE_SERVICE_ROLE_KEY, and service_role bypasses RLS entirely. RLS with no policies does not
+-- touch the write path — it closes the anon/authenticated path and nothing else.
+ALTER TABLE public.belt_capacity_verdicts ENABLE ROW LEVEL SECURITY;
+REVOKE ALL ON public.belt_capacity_verdicts FROM anon, authenticated;
+
 COMMENT ON TABLE public.belt_capacity_verdicts IS
   'SD-LEO-INFRA-PERSIST-BELT-CAPACITY-001: one row per capacity-forecast / drive-report run, '
   'recording the belt capacity verdict that run reached. Closes FR-2 clause 1 of '
@@ -105,5 +132,26 @@ BEGIN
     WHERE schemaname = 'public' AND indexname = 'belt_capacity_verdicts_recorded_at_idx'
   ) THEN
     RAISE EXCEPTION 'POSTCONDITION FAILED: the recorded_at index is missing.';
+  END IF;
+
+  -- THE LOCKDOWN ASSERTS ITSELF. Without this the ALTER/REVOKE above are a hope: a future edit that
+  -- drops them leaves a governance table silently joining the 4% unprotected cohort, and NOTHING
+  -- fails at apply time to say so. The whole reason this table needs the guard is that the database
+  -- default is permissive, so "we did not say anything" and "we opened it" are the same outcome.
+  IF NOT (SELECT relrowsecurity FROM pg_class WHERE oid = 'public.belt_capacity_verdicts'::regclass) THEN
+    RAISE EXCEPTION 'POSTCONDITION FAILED: row level security is NOT enabled. With RLS off, the '
+      'inherited default ACL leaves anon and authenticated holding full write access.';
+  END IF;
+
+  IF EXISTS (
+    SELECT 1 FROM information_schema.role_table_grants
+    WHERE table_schema = 'public'
+      AND table_name = 'belt_capacity_verdicts'
+      AND grantee IN ('anon', 'authenticated')
+      AND privilege_type IN ('INSERT', 'UPDATE', 'DELETE', 'TRUNCATE')
+  ) THEN
+    RAISE EXCEPTION 'POSTCONDITION FAILED: anon or authenticated still holds a write-class grant. '
+      'The verdict history feeds drive_score leg4 and the coordinator sourcing loop; a forgeable '
+      'trend is worse than no trend.';
   END IF;
 END $$;

@@ -431,5 +431,15 @@ async function reachAdam(f) {
 // helpers) does not run the DB-touching main(). Only run when invoked directly as the CLI.
 if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) {
   main().then(() => { /* natural drain; no process.exit (Windows undici abort) */ })
-    .catch(e => { console.error('[CAPACITY-FORECAST] error:', e.message); });
+    .catch(e => {
+      console.error('[CAPACITY-FORECAST] error:', e.message);
+      // SD-LEO-INFRA-PERSIST-BELT-CAPACITY-001: SET THE EXIT CODE. This catch was harmless before
+      // the verdict persist existed — main() had no deliberate throw path, so logging and exiting 0
+      // lost nothing. It is now the TERMINUS of this SD's primary guarantee: the writer throws, the
+      // call site rethrows everything that is not table-absent, and then this swallowed it into a
+      // green tick. Three individually reasonable layers composing into silence is exactly the
+      // failure the throw was written to prevent, arriving one layer above it.
+      // exitCode (not process.exit) so the natural drain is preserved on Windows.
+      process.exitCode = 1;
+    });
 }

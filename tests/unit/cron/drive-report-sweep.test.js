@@ -29,6 +29,7 @@ import {
 import { armedProcessKey } from '../../../lib/machinery-class/armed-registration.js';
 import { produceDriveReport } from '../../../scripts/drive-report-produce.mjs';
 import { LAST_RUN_FIELD } from '../../../lib/drive-loop/report-posture.js';
+import { makeCapacityVerdictPersist } from '../../../scripts/lib/capacity-verdict-store.mjs';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const repoRoot = path.resolve(__dirname, '../../..');
@@ -548,5 +549,82 @@ describe('FR-3 — leg4 is injected, not declared unavailable', () => {
     // shape when a run cannot be measured, and forbidding it would outlaw the honest degradation.
     expect(src, 'the legs array must score leg4').toMatch(/await\s+scoreCapacityLeg\(/);
     expect(src, 'the old "writer is not built" declaration must be gone').not.toMatch(/is not built/);
+  });
+});
+
+/**
+ * SD-LEO-INFRA-PERSIST-BELT-CAPACITY-001 — the gap the TESTING sub-agent MEASURED, closed.
+ *
+ * It mutated makeCapacityVerdictPersist to swallow its insert error and return {id:'x'}. The store's
+ * own suite went red (4 failures) and THIS FILE STAYED 35/35 GREEN — because the FR-3 block above
+ * injects only hand-rolled stubs, so `makeCapacityVerdictPersist` appeared in it exactly once, inside
+ * a source-text regex. Gutting the real writer was invisible to the file that claims to test the
+ * wiring. A stub proves the caller matches what the TEST believes the callee wants; only the real
+ * callee proves it matches what the callee ACTUALLY wants — the same lesson the END-TO-END block
+ * above already records about the producer, recurring one level down because the new seam was built
+ * with stubs on both sides.
+ *
+ * These bind scoreCapacityLeg to the REAL writer over a fake supabase client, so the async→sync
+ * bridge is exercised end to end.
+ */
+describe('[BOUND] scoreCapacityLeg against the REAL writer, not a stub', () => {
+  const gatherCapacity = async () => ({ idleNow: 1, freeingSoon: 0, claimableCount: 2, openQfCount: 0 });
+
+  /** Fake supabase. `fail` makes the insert return a PostgREST-shaped error. */
+  const client = ({ fail = null, captured = {} } = {}) => ({
+    from(table) {
+      captured.table = table;
+      return {
+        insert(row) {
+          captured.row = row;
+          return { select: () => ({ single: async () => (fail
+            ? { data: null, error: fail }
+            : { data: { id: 'real-row-9', verdict: row.verdict, recorded_at: '2026-08-07T10:00:00Z' }, error: null }) }) };
+        },
+      };
+    },
+  });
+
+  it('the real writer + the real leg score together, and the row actually lands', async () => {
+    const captured = {};
+    const leg = await scoreCapacityLeg({
+      gatherCapacity,
+      persistVerdict: makeCapacityVerdictPersist(client({ captured })),
+      runId: 'drive-2026-08-07',
+    });
+
+    expect(captured.table).toBe('belt_capacity_verdicts');
+    expect(captured.row, 'the real writer must receive every measurement').toMatchObject({
+      run_id: 'drive-2026-08-07', verdict: 'TIGHT', belt_depth: 2, demand_soon: 1, deficit: 0,
+    });
+    expect(captured.row, 'recorded_at is the DATABASE default, never a client clock')
+      .not.toHaveProperty('recorded_at');
+    expect(leg.verdict_row_id).toBe('real-row-9');
+    expect(leg.points.value).toBe(2);
+  });
+
+  it('[MUTATION GUARD] a writer that swallowed its insert error FAILS here', async () => {
+    // The assertion the stub-only block could not make. If makeCapacityVerdictPersist is ever
+    // changed to catch-and-log, this leg would score against a row that does not exist — so a
+    // scored leg is the failure condition, and unavailable is the pass.
+    const leg = await scoreCapacityLeg({
+      gatherCapacity,
+      persistVerdict: makeCapacityVerdictPersist(client({ fail: { code: '42501', message: 'permission denied' } })),
+      runId: 'drive-2026-08-07',
+    });
+
+    expect(leg.points, 'a leg that scores here means the writer swallowed its failure').toBeUndefined();
+    expect(leg.unavailable.available).toBe(false);
+    expect(leg.unavailable.reason).toMatch(/durable write failed/);
+    expect(leg.unavailable.reason, 'the real code must reach the reason string').toMatch(/42501/);
+  });
+
+  it('table-absent through the REAL writer is still just unavailable (TS-7, unstubbed)', async () => {
+    const leg = await scoreCapacityLeg({
+      gatherCapacity,
+      persistVerdict: makeCapacityVerdictPersist(client({ fail: { code: 'PGRST205', message: 'no relation' } })),
+    });
+    expect(leg.unavailable.available).toBe(false);
+    expect(leg.points).toBeUndefined();
   });
 });

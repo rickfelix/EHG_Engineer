@@ -120,7 +120,11 @@ describe('TS-5 — POSITIVE CONTROL: a good write actually writes', () => {
     const row = await persist({ ...ROW, verdict });
     expect(row.verdict).toBe(verdict);
     expect(captured.row.run_id).toBe('run-7');
-    expect(captured.row.recorded_at).toBeTruthy();
+    // recorded_at is NOT sent — the column's DEFAULT now() supplies it. This table measures a
+    // DURATION, so the timestamp is the one column whose provenance matters, and two producers on
+    // two hosts with clock drift would interleave into a subtly out-of-order history that nothing
+    // in the rows would reveal. Asserted as an ABSENCE so a well-meaning re-add fails here.
+    expect(captured.row, 'the database clock owns recorded_at').not.toHaveProperty('recorded_at');
   });
 
   it('writes every measurement it was given — none are silently dropped', async () => {

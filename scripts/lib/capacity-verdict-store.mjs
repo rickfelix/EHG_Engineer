@@ -118,9 +118,14 @@ export function makeCapacityVerdictPersist(supabase, opts = {}) {
       }
     }
 
+    // recorded_at IS DELIBERATELY NOT SENT — the column's DEFAULT now() fires instead. This table
+    // exists to measure a DURATION ("how long have we been in DEFICIT"), so the timestamp is the
+    // one column whose provenance actually matters, and a client clock is the wrong authority for
+    // it: two producers on two hosts with any drift would interleave into a history that is subtly
+    // out of order, and nothing about the rows would show it. The database clock is single-sourced.
     const { data, error } = await supabase
       .from(table)
-      .insert({ run_id, verdict, belt_depth, demand_soon, deficit, detail, recorded_at: new Date().toISOString() })
+      .insert({ run_id, verdict, belt_depth, demand_soon, deficit, detail })
       .select('id, verdict, recorded_at')
       .single();
 
