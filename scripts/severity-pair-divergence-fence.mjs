@@ -47,7 +47,6 @@ import pg from 'pg';
 import { pathToFileURL } from 'node:url';
 import {
   compareSeverityPair,
-  compareCountVisibility,
   compareViewBaseParity,
   seedParityDivergence,
   allCouplingsAgree,
@@ -59,7 +58,31 @@ import { createSupabaseServiceClient } from '../lib/supabase-client.js';
 
 const VIEW_NAME = 'chairman_all_decision_signals';
 const INGRESS_POLICY = 'anon_feedback_ingress_bounds';
-const ANON_SELECT_POLICY = 'telegram_bot_select_feedback';
+
+/**
+ * FR-3 COUNT VISIBILITY WAS RETIRED FROM THIS FENCE on 2026-08-07
+ * (SD-LEO-FIX-POINT-STARVATION-COUPLING-001, coordinator ruling B on advisory 8c95764a).
+ *
+ * THE PREMISE DISSOLVED. The rate-limit count moved inside fn_anon_ingress_prior_hour_count
+ * (SECURITY DEFINER, postgres-owned), so it no longer runs as the inserting role and is no longer
+ * subject to that role's SELECT policy. Proven by execution, not argued: as postgres
+ * row_security_active(feedback) is false, direct count 8, via the definer fn 8; AS ANON
+ * row_security_active is TRUE, direct count 0, VIA THE DEFINER FN 8. Anon, whose own visibility of
+ * those rows is zero, receives the true count — the starvation this coupling watched for cannot
+ * occur, and a comparator that kept reporting it WOULD have reddened this fence on every run.
+ *
+ * IT WAS NOT LEFT IN PLACE UNUSED, deliberately. A comparator sitting exported with nine green
+ * tests — one of them titled "AGREES today" — reads to the next person as a live guard protecting
+ * the count. That is a lie waiting for a reader, and the more expensive failure of the two.
+ *
+ * WHAT REPLACED IT, so the capability is not merely deleted: an anon-role BEHAVIOURAL PROBE in
+ * scripts/anon-write-contract-probe.mjs (assertIngressBoundCannotBind), already armed on its own
+ * daily cron. It asserts a PAIR — as anon the definer count equals the owner's true count, AND
+ * anon's direct count is strictly less than it — which covers the re-inline path this comparator
+ * used to be the only thing positioned to notice, plus three paths it could never see (function
+ * OWNER change, BODY rewrite, and REVOKE EXECUTE from anon). The retired comparator's own closing
+ * note asked for exactly that: "this needs an anon-role probe".
+ */
 
 /** SD-LEO-INFRA-OWNERSHIP-PRESERVATION-ASSERTION-001 — armed-machinery identity. */
 export const SD_KEY = 'SD-LEO-INFRA-OWNERSHIP-PRESERVATION-ASSERTION-001';
@@ -80,33 +103,6 @@ export const PARITY_PAIRS = Object.freeze([
 const argv = process.argv.slice(2);
 const SEED = argv.includes('--seed-divergence');
 const JSON_OUT = argv.includes('--json');
-
-/**
- * Pull the rate-limit subquery's WHERE predicate out of the ingress policy body.
- * The clause looks like: ( SELECT (count(*) < 50) FROM feedback f WHERE (<pred>))
- * Returns null when absent — which the comparator reports as UNREADABLE, not as pass.
- */
-function extractLimitPredicate(policyExpr) {
-  if (typeof policyExpr !== 'string') return { literal: null, correlatedColumn: null };
-  const m = policyExpr.match(/count\(\*\)[\s\S]{0,200}?\bFROM\b[\s\S]{0,80}?\bWHERE\b\s*\(([\s\S]*)$/i);
-  if (!m) return { literal: null, correlatedColumn: null };
-  const body = m[1];
-
-  // CORRELATED form (live since 2026-08-03): the counted set tracks the incoming row.
-  //   NOT ((f.source_type)::text IS DISTINCT FROM (feedback.source_type)::text)
-  // Detect it FIRST — it also contains a `source_type` token, so a literal-first scan
-  // would fall through to "unreadable" and hide a decidable divergence.
-  // NOTE: the gap between the column and IS DISTINCT FROM contains `)::text`, so a
-  // `[^)]*` gap can never cross it. Use a bounded any-char gap instead.
-  const corr = body.match(/\b[a-z_]+\.([a-z_]+)\b[\s\S]{0,40}?IS\s+DISTINCT\s+FROM[\s\S]{0,40}?\bfeedback\.\1\b/i)
-    || body.match(/\bfeedback\.([a-z_]+)\b[\s\S]{0,40}?IS\s+DISTINCT\s+FROM/i);
-  if (corr) return { literal: null, correlatedColumn: corr[1].toLowerCase() };
-
-  // LITERAL form: take only the source_type conjunct — the created_at window is a time
-  // bound, not a visibility bound, and anon SELECT is not expected to replicate it.
-  const st = body.match(/\(?\s*[a-z_]*\.?source_type\s*\)?\s*(?:::\s*\w+(?:\s+\w+)?)?\s*=\s*'[^']+'(?:\s*::\s*\w+(?:\s+\w+)?)?/i);
-  return { literal: st ? st[0] : null, correlatedColumn: null };
-}
 
 /**
  * Live column list for one relation, from the catalog.
@@ -246,7 +242,6 @@ async function main() {
 
   let viewExpr = null;
   let ingressExpr = null;
-  let anonSelectExpr = null;
   const parityInputs = [];
   try {
     const v = await client.query('select definition from pg_views where schemaname = $1 and viewname = $2', ['public', VIEW_NAME]);
@@ -259,11 +254,10 @@ async function main() {
          from pg_policy
         where polrelid = 'public.feedback'::regclass
           and polname = any($1)`,
-      [[INGRESS_POLICY, ANON_SELECT_POLICY]],
+      [[INGRESS_POLICY]],
     );
     for (const row of p.rows) {
       if (row.polname === INGRESS_POLICY) ingressExpr = row.check_expr;
-      if (row.polname === ANON_SELECT_POLICY) anonSelectExpr = row.using_expr;
     }
 
     // Column parity, one catalog read per side per pair. Same connection, same try/finally.
@@ -278,41 +272,38 @@ async function main() {
     await client.end();
   }
 
-  const { literal: limitPredicate, correlatedColumn } = extractLimitPredicate(ingressExpr);
-
   if (SEED) {
     // Mutate ONE side of each coupling so EVERY fence must report DIVERGED.
     //
-    // THE PARITY SEED IS NOT OPTIONAL, and the reason is subtle enough to write down: the
-    // FENCE IS BROKEN check below asserts only that the AGGREGATE seeded run fails, and the two
-    // pre-existing seeds already guarantee that. A new coupling with no seed of its own would
-    // ride along permanently untested behind a control that passes for reasons unrelated to it.
+    // EVERY REMAINING COUPLING STILL HAS ITS OWN SEED, and the reason is subtle enough to write
+    // down: the FENCE IS BROKEN check below asserts only that the AGGREGATE seeded run fails, so a
+    // coupling with no seed of its own would ride along permanently untested behind a control that
+    // passes for reasons unrelated to it. Retiring FR-3 removed a coupling AND its seed together —
+    // dropping one without the other is exactly how that untested-passenger state gets created.
     if (ingressExpr) ingressExpr = ingressExpr.replace(/'high'/, "'medium'");
-    if (anonSelectExpr) anonSelectExpr = `${anonSelectExpr} AND venture_id IS NOT NULL`;
     for (const p of parityInputs) p.viewCols = seedParityDivergence(p.viewCols);
   }
 
   const pairResult = compareSeverityPair({ viewExpr, policyExpr: ingressExpr });
-  const countResult = compareCountVisibility({ limitPredicate, selectPredicate: anonSelectExpr, correlatedColumn });
   const parityResults = parityInputs.map((p) => compareViewBaseParity({
     viewCols: p.viewCols, baseCols: p.baseCols, viewName: p.view, baseName: p.base,
   }));
-  // The aggregator is UNCHANGED — it reads only .verdict, so this is purely additive.
-  const results = [pairResult, countResult, ...parityResults];
+  // The aggregator is UNCHANGED — it reads only .verdict.
+  const results = [pairResult, ...parityResults];
   const ok = allCouplingsAgree(results);
 
   if (JSON_OUT) {
-    console.log(JSON.stringify({ seeded: SEED, ok, pair: pairResult, count: countResult, parity: parityResults }, null, 2));
+    // `count` is gone from this payload with FR-3's retirement. Measured before removing it: no
+    // production consumer reads it — the only --json callers are this repo's own tests.
+    console.log(JSON.stringify({ seeded: SEED, ok, pair: pairResult, parity: parityResults }, null, 2));
   } else {
     console.log(SEED ? '=== SEEDED DIVERGENCE RUN (in-memory mutation; nothing written) ===' : '=== LIVE COUPLING CHECK ===');
     console.log(`FR-2 severity pair : ${pairResult.verdict}`);
     console.log(`   view   (${VIEW_NAME}) = ${fmt(pairResult.viewPair)}`);
     console.log(`   policy (${INGRESS_POLICY}) = ${fmt(pairResult.policyPair)}`);
     console.log(`   ${pairResult.detail}`);
-    console.log(`FR-3 count visibility : ${countResult.verdict}`);
-    console.log(`   limit counts   = ${countResult.limitPredicate ?? '(unreadable)'}`);
-    console.log(`   anon SELECT    = ${countResult.selectPredicate ?? '(unreadable)'}`);
-    console.log(`   ${countResult.detail}`);
+    console.log('FR-3 count visibility : RETIRED 2026-08-07 — premise dissolved (SECURITY DEFINER basis).');
+    console.log('   now asserted behaviourally by scripts/anon-write-contract-probe.mjs (its own daily cron).');
     for (const [i, r] of parityResults.entries()) {
       const p = parityInputs[i];
       console.log(`COLUMN PARITY (${p.view} <- ${p.base}) : ${r.verdict}`);
