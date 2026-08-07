@@ -134,7 +134,10 @@ describe('runArc (§H7 resume + §H3 coverage close-out)', () => {
 
     const executeStage = vi.fn(async ({ stageNumber }) => ({ template: `stage-${stageNumber}`, artifactId: 'a', validation: { valid: true }, output: {} }));
     const advanceStage = vi.fn(async () => ({}));
+    // QF-20260807-013: explicit env — the runner loads dotenv, which would otherwise inject the
+    // shared .env's LIVE Stripe key and trip the H5.1 spawn-env fence in every test process.
     const res = await runArc({
+      env: {},
       runId, entryStage: 20, toStage: 22, clockStart: '2026-07-12T09:00:00Z',
       supabase: fakeSupabase(), seams: { executeStage, advanceStage }, baseDir: BASE,
     });
@@ -161,7 +164,10 @@ describe('runArc (§H7 resume + §H3 coverage close-out)', () => {
     const runId = 't-arc-o10-pass';
     const executeStage = vi.fn(async ({ stageNumber }) => ({ template: `stage-${stageNumber}`, artifactId: 'a', validation: { valid: true }, output: {} }));
     const advanceStage = vi.fn(async () => ({}));
+    // QF-20260807-013: explicit env — the runner loads dotenv, which would otherwise inject the
+    // shared .env's LIVE Stripe key and trip the H5.1 spawn-env fence in every test process.
     const res = await runArc({
+      env: {},
       runId, entryStage: 20, toStage: 26, clockStart: '2026-07-12T09:00:00Z',
       supabase: fakeSupabase(), seams: { executeStage, advanceStage }, baseDir: BASE,
     });
@@ -174,7 +180,10 @@ describe('runArc (§H7 resume + §H3 coverage close-out)', () => {
 
   it('containment sweep journals scheduler residue as a RESIDUE finding when rows exist mid-run', async () => {
     const executeStage = vi.fn(async () => ({ artifactId: 'a', validation: { valid: true }, output: {} }));
+    // QF-20260807-013: explicit env — the runner loads dotenv, which would otherwise inject the
+    // shared .env's LIVE Stripe key and trip the H5.1 spawn-env fence in every test process.
     const res = await runArc({
+      env: {},
       runId: 't-arc-residue', entryStage: 21, toStage: 21, clockStart: '2026-07-12T09:00:00Z',
       supabase: fakeSupabase({ schedulerRows: 3 }), seams: { executeStage, advanceStage: vi.fn(async () => ({})) }, baseDir: BASE,
     });

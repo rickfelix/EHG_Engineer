@@ -111,6 +111,66 @@ export const LOOP_O_REQUIREMENTS = Object.freeze(ALL_O_REQUIREMENTS.filter((r) =
 export const ADVANCE_POLICIES = Object.freeze(['real-gates', 'fixture-artifact-seed']);
 export const FIXTURE_ARTIFACT_SEED_DIVERGENCE = 'fixture_artifact_seed';
 
+/**
+ * §H5.1 SPAWN-ENV FENCE. The shared .env carries a LIVE-mode STRIPE_SECRET_KEY, so the run
+ * process must spawn with that variable unset or holding a placeholder — an env-level override,
+ * NOT in-code filtering, because api/webhooks/stripe.js constructs a Stripe client straight from
+ * process.env without consulting lib/payments/stripe-client.js's fail-closed assertKeyAllowed.
+ * In-code filtering therefore cannot prove unreachability; emptying the variable can.
+ *
+ * THROWS on a live key rather than only journaling: a fence that records the breach it exists to
+ * prevent and then runs anyway is decoration. Returns the assertion for journaling.
+ *
+ * QF-20260807-013: first committed here. It was authored during the s2026-alpha4-0807 leg and
+ * lived ONLY as an uncommitted edit in the shared working tree — a binding green-light condition
+ * with no durable home, one `git checkout` away from being lost. BETA's leg depends on it.
+ */
+export function assertSpawnEnvStripeFence(env = process.env) {
+  const raw = env.STRIPE_SECRET_KEY;
+  const live = typeof raw === 'string' && /^(sk|rk)_live_/.test(raw);
+  const test = typeof raw === 'string' && /^(sk|rk)_test_/.test(raw);
+  if (live) {
+    throw new Error(
+      'H5.1 SPAWN-ENV FENCE: refusing to start — STRIPE_SECRET_KEY holds a LIVE-mode key. '
+      + 'Re-spawn with it unset (or a placeholder) so no code path can construct a live client.',
+    );
+  }
+  return {
+    kind: 'fence_assertion',
+    event: `H5.1 spawn-env: STRIPE_SECRET_KEY carries no live key (${test ? 'test-mode key present' : 'unset/placeholder'})`,
+    detail: { stripe_key_mode: test ? 'test' : 'absent_or_placeholder', live_key_reachable: false },
+  };
+}
+
+/**
+ * QF-20260807-013: PROBE the O6 payment-attribution precondition instead of asserting it.
+ *
+ * The previous reason was a hardcoded string claiming "no payment-attribution machinery found in
+ * EHG_Engineer lib/ — the attribution rail lives with the venture app". That was false at every
+ * checkable layer: the resolver module, the ops_payment_events store, the webhook ingest and the
+ * test-charge driver are all in this repo. Nothing had ever probed; the reason was written once
+ * and believed thereafter.
+ *
+ * So this returns a MEASURED verdict. `drivable` is only ever true because a probe said so, and
+ * every blocked verdict names the condition that was actually observed — never an assumption.
+ */
+export async function probeAttributionRail({ env = process.env, importer = (m) => import(m) } = {}) {
+  const key = env.STRIPE_SECRET_KEY;
+  if (!(typeof key === 'string' && /^(sk|rk)_test_/.test(key))) {
+    return { drivable: false, reason: 'no sk_test_ key in the run process env (chairman-gated input; E3 never runs on a live key)', probe: 'env' };
+  }
+  let resolver;
+  try {
+    resolver = await importer('../../lib/payments/attribution-resolver.js');
+  } catch (e) {
+    return { drivable: false, reason: `attribution-resolver module not importable: ${String(e.message).slice(0, 120)}`, probe: 'module' };
+  }
+  if (typeof resolver.resolveUnattributedEvents !== 'function') {
+    return { drivable: false, reason: 'attribution-resolver present but exports no resolveUnattributedEvents', probe: 'export' };
+  }
+  return { drivable: true, reason: 'attribution rail present and test key available', probe: 'export' };
+}
+
 /** The enumerated divergence set for a given advance policy. */
 export function allowedDivergencesFor(advancePolicy = 'real-gates') {
   return advancePolicy === 'fixture-artifact-seed'
@@ -255,15 +315,35 @@ export async function runPostLaunchDrivers({ supabase, journal, ventureId, clock
       }
     }
     // No implementation seam yet — the honest default per §H7: first-class finding.
-    const reason = {
-      stranger_visitor: 'no preview deploy exists for the fixture (preview() runs plan-mode without adapters — blocked_on_credentials by design, H5.2)',
-      conversion_event: 'depends on stranger_visitor reaching a live preview surface',
-      test_rail_payment: 'no payment-attribution machinery found in EHG_Engineer lib/ (attribution rail lives with the venture app; O6 undrivable from the platform repo alone)',
-      support_ticket: 'no support-ticket/triage machinery found in lib/ (O5 loop not built)',
-      incident_probe: 'no health-probe/remediation loop callable for a fixture venture (O5 loop not built)',
-      review_cadence: 'post-launch review cadence has no pre-scheduled machinery to fire under an injected clock (O8 scheduler absent)',
-    }[driver.key] || 'no driver seam wired';
-    journal.finding('CANNOT_DRIVE', `driver ${driver.key}: ${reason}`, { o_requirements: driver.o, at_clock: clock.now() });
+    //
+    // QF-20260807-013: test_rail_payment's entry used to be the hardcoded string "no
+    // payment-attribution machinery found in EHG_Engineer lib/ (attribution rail lives with the
+    // venture app)". Nothing ever probed — it was written once and believed thereafter — and it
+    // was false at every checkable layer: lib/payments/attribution-resolver.js, the
+    // ops_payment_events store, api/webhooks/stripe.js and the test-charge driver are all here.
+    // It now PROBES, so the reason is measured. The remaining entries are unprobed defaults and
+    // are labelled as such rather than presented as findings of absence.
+    let reason;
+    let probe = null;
+    if (driver.key === 'test_rail_payment') {
+      probe = await (seams.probeAttributionRail || probeAttributionRail)();
+      if (probe.drivable) {
+        // Precondition met — the leg is expected to drive it. Reaching here means the driver
+        // seam is still unwired, which is a DIFFERENT (and honest) blocker from "no machinery".
+        reason = `attribution rail IS present and a test key IS available (probe=${probe.probe}); blocked only on the harness driver seam, not on capability`;
+      } else {
+        reason = `${probe.reason} (measured, probe=${probe.probe})`;
+      }
+    } else {
+      reason = {
+        stranger_visitor: 'no preview deploy exists for the fixture (preview() runs plan-mode without adapters — blocked_on_credentials by design, H5.2)',
+        conversion_event: 'depends on stranger_visitor reaching a live preview surface',
+        support_ticket: 'no support-ticket/triage machinery found in lib/ (O5 loop not built)',
+        incident_probe: 'no health-probe/remediation loop callable for a fixture venture (O5 loop not built)',
+        review_cadence: 'post-launch review cadence has no pre-scheduled machinery to fire under an injected clock (O8 scheduler absent)',
+      }[driver.key] || 'no driver seam wired';
+    }
+    journal.finding('CANNOT_DRIVE', `driver ${driver.key}: ${reason}`, { o_requirements: driver.o, at_clock: clock.now(), ...(probe ? { probe } : {}) });
   }
 }
 
@@ -317,7 +397,7 @@ export async function containmentSweep({ supabase, journal, runId, ventureId, ad
   journal.append({ kind: 'fence_assertion', event: 'containment sweep complete', detail: { run_id: runId } });
 }
 
-export async function runArc({ runId, entryStage = 20, toStage = 26, clockStart, clockStepHours = 24, createFixtureFirst = false, sweepOnly = false, advancePolicy = 'real-gates', supabase: sb, seams = {}, baseDir } = {}) {
+export async function runArc({ runId, entryStage = 20, toStage = 26, clockStart, clockStepHours = 24, createFixtureFirst = false, sweepOnly = false, advancePolicy = 'real-gates', supabase: sb, seams = {}, baseDir, env = process.env } = {}) {
   const supabase = sb || makeClient();
   const clock = makeSteppingClock(clockStart || new Date().toISOString(), clockStepHours);
   const journal = new RunJournal(runId, { clock: clock.now, ...(baseDir ? { baseDir } : {}) });
@@ -330,6 +410,13 @@ export async function runArc({ runId, entryStage = 20, toStage = 26, clockStart,
   if (!ventureId) throw new Error(`no fixture venture for run ${runId} — create one first (s20-fixture.mjs create --run-id ${runId} or pass --create-fixture)`);
 
   journal.append({ kind: 'lifecycle', event: `run arc started (S${entryStage}..S${toStage})`, detail: { venture_id: ventureId, clock: clock.now() } });
+  // QF-20260807-013: journal-asserted AT RUN START, before any band can drive machinery that
+  // might reach a payment path. Throws (see the function) if a live key is reachable.
+  // `env` is a parameter, not a bypass seam: the default IS process.env, so a real run gets the
+  // real check. Unit tests pass an explicit env because the runner loads dotenv, which would
+  // otherwise inject the shared .env's live key into every test process — the fence firing there
+  // is the fence WORKING, but it makes the harness untestable without parameterization.
+  journal.append(assertSpawnEnvStripeFence(env));
 
   if (!sweepOnly) {
     const done = completedBands(journal);
