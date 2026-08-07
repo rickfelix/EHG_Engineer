@@ -23,10 +23,31 @@ const APPLY = process.argv.includes('--apply');
 const db = createClient(process.env.SUPABASE_URL, process.env.SUPABASE_SERVICE_ROLE_KEY);
 const PAGE = 1000;
 
-async function all(table, cols, filter) {
+/**
+ * Paginated fetch. `orderBy` is REQUIRED and must be a stable, unique column.
+ *
+ * SD-LEO-INFRA-COORDINATION-LANE-DRAIN-001 / FR-1e (adversarial security review finding).
+ * This previously paginated with .range() and NO .order(). Unordered LIMIT/OFFSET has no row-order
+ * guarantee, and claude_sessions carries ~13,000 rows fetched over ~14 pages while heartbeat
+ * UPDATEs continuously rewrite them — so a row can shift across a page boundary and be dropped
+ * from the result entirely. The sessions most likely to move are the LIVE, actively-heartbeating
+ * ones, which are exactly the ones whose mail must never be redirected.
+ *
+ * The consequence was worse than a miscount: a dropped session fails the `byId.has(t)` test below
+ * and is judged dead WITHOUT the heartbeat threshold ever being consulted — so the careful
+ * liveness oracle FR-1c added would be bypassed silently, by an absence rather than a verdict.
+ * Harmless while this was a hand-run dry-run tool; this SD puts it on an unattended hourly cron
+ * and lets it redirect mail, which is what makes an ordering guarantee load-bearing.
+ *
+ * The STEP 0 snapshot script already got this right and wrote down why
+ * (scripts/one-off/snapshot-dead-letter-population-lane-drain-001.mjs) — this brings the drain
+ * into line with it and with lib/coordinator/resolve.cjs:195.
+ */
+async function all(table, cols, filter, orderBy) {
+  if (!orderBy) throw new Error(`all(${table}): orderBy is required — unordered .range() pagination silently drops rows`);
   let out = [], from = 0;
   for (;;) {
-    let q = db.from(table).select(cols).range(from, from + PAGE - 1);
+    let q = db.from(table).select(cols).order(orderBy, { ascending: true }).range(from, from + PAGE - 1);
     if (filter) q = filter(q);
     const { data, error } = await q;
     if (error) throw new Error(`${table}: ${error.message}`);
@@ -43,7 +64,7 @@ async function main() {
   // so the drain skipped nine-tenths of its own problem as "live backlog". Selecting the heartbeat
   // columns is load-bearing: a column you never SELECT reads as undefined, which this oracle
   // fails closed on, so an omission here would silently mark the whole fleet dead.
-  const sessions = await all('claude_sessions', 'session_id,status,heartbeat_at,last_tool_at');
+  const sessions = await all('claude_sessions', 'session_id,status,heartbeat_at,last_tool_at', null, 'session_id');
   const byId = new Map(sessions.map((s) => [s.session_id, s]));
   const nowMs = Date.now();
   const isLive = (sid) => isSessionLive(byId.get(sid), { nowMs });
@@ -88,7 +109,7 @@ async function main() {
   // SD exists to put it on a cron, at which point every one of these properties becomes load-bearing.
   const unacked = await all('session_coordination', 'id,target_session,payload,message_type,subject', (q) => q
     .is('acknowledged_at', null)
-    .is(`payload->>${PROMOTION_ACK_KEY}`, null));
+    .is(`payload->>${PROMOTION_ACK_KEY}`, null), 'id');
   const dead = unacked.filter((r) => { const t = r.target_session; return !t || !byId.has(t) || !isLive(t); });
   console.log(`unacked=${unacked.length} live-backlog(excluded)=${unacked.length - dead.length} dead-letter=${dead.length}`);
 
@@ -133,7 +154,7 @@ async function main() {
   console.log(`\nAPPLIED: retargeted=${retargeted} stamped=${stamped}`);
 
   // count-integrity: re-verify zero unacked high-value dead-letter remains
-  const recheck = await all('session_coordination', 'id,target_session,payload,message_type', (q) => q.is('acknowledged_at', null));
+  const recheck = await all('session_coordination', 'id,target_session,payload,message_type', (q) => q.is('acknowledged_at', null), 'id');
   const stillDead = recheck.filter((r) => { const t = r.target_session; return (!t || !byId.has(t) || !isLive(t)); })
     .filter((r) => classifyDeadLetterRow(r, { successors }).action === 'retarget' || HIGH_VALUE_KINDS.includes((r.payload && r.payload.kind) || r.message_type));
   console.log(`post-check: unacked high-value-kind rows still targeting a non-live session = ${stillDead.length} (acceptance: 0)`);
