@@ -128,7 +128,7 @@ beforeEach(() => {
 });
 
 describe('orphan-qf-reaper main() integration (FR-4)', () => {
-  it('TS-1: pr_url path with MERGED PR → UPDATE issued with 8-col shape', async () => {
+  it('TS-1: pr_url path with MERGED PR → NON-TERMINAL witness UPDATE (no terminal-close columns)', async () => {
     supabaseInstance = makeSupabaseMock({
       firstQuery: [{ id: 'QF-20260508-001', status: 'open', pr_url: 'https://github.com/x/y/pull/123', started_at: '2026-05-08T00:00:00Z', claiming_session_id: 'sess' }],
       secondQuery: [],
@@ -153,19 +153,26 @@ describe('orphan-qf-reaper main() integration (FR-4)', () => {
     const calls = supabaseInstance._calls.updateCalls;
     expect(calls.length).toBe(1);
     const payload = calls[0].payload;
-    const requiredCols = ['status', 'completed_at', 'commit_sha', 'compliance_verdict', 'compliance_details', 'verified_by', 'verification_notes', 'force_completed'];
+    // QF-20260807-745: the reaper witnesses a merge; it cannot vouch that the QF's scope was
+    // satisfied, so this payload must record the true fact without asserting the false one.
+    const requiredCols = ['status', 'commit_sha', 'compliance_details', 'verification_notes'];
     for (const c of requiredCols) {
       expect(payload, `missing ${c}`).toHaveProperty(c);
     }
-    expect(payload.status).toBe('completed');
-    expect(payload.force_completed).toBe(true);
-    expect(payload.verified_by).toBe('ORPHAN_REAPER');
+    expect(payload.status).toBe('in_progress');
+    expect(payload.verification_notes).toContain('SCOPE ACCEPTANCE OUTSTANDING');
+    expect(payload.compliance_details).toContain('NOT a scope acceptance');
+    // The terminal-close columns must be ABSENT — their presence is the defect.
+    expect(payload).not.toHaveProperty('force_completed');
+    expect(payload).not.toHaveProperty('compliance_verdict');
+    expect(payload).not.toHaveProperty('completed_at');
+    expect(payload.verified_by).toBeUndefined(); // nothing was verified
     // Forbidden columns must NOT be present
     expect(payload).not.toHaveProperty('metadata');
     expect(payload).not.toHaveProperty('merged_via');
   });
 
-  it('TS-3: branch-derived path with merged PR → UPDATE with 9-col shape including pr_url', async () => {
+  it('TS-3: branch-derived path with merged PR → NON-TERMINAL witness UPDATE including pr_url', async () => {
     supabaseInstance = makeSupabaseMock({
       firstQuery: [],
       secondQuery: [{ id: 'QF-20260508-002', status: 'open', started_at: '2026-05-08T00:00:00Z', claiming_session_id: 'sess' }],
@@ -193,8 +200,13 @@ describe('orphan-qf-reaper main() integration (FR-4)', () => {
     const payload = calls[0].payload;
     expect(payload).toHaveProperty('pr_url');
     expect(payload.pr_url).toBe('https://github.com/x/y/pull/999');
-    expect(payload.status).toBe('completed');
-    expect(payload.force_completed).toBe(true);
+    // QF-20260807-745 — the incident path. This closed on the FIRST PR merged from qf/<id>,
+    // and guard-then-fix is a normal decomposition: on QF-647 it closed citing the guard PR
+    // while the real fix was still 65 minutes from existing. Non-terminal from here on.
+    expect(payload.status).toBe('in_progress');
+    expect(payload.verification_notes).toContain('SCOPE ACCEPTANCE OUTSTANDING');
+    expect(payload).not.toHaveProperty('force_completed');
+    expect(payload).not.toHaveProperty('compliance_verdict');
     expect(payload).not.toHaveProperty('metadata');
   });
 
