@@ -97,3 +97,64 @@ describe('the superseded receipts column is GONE from the migration, not merely 
     expect(SQL, 'a receipt for a deleted report is a dangling claim').toMatch(/REFERENCES public\.drive_reports\(id\) ON DELETE CASCADE/);
   });
 });
+
+// TS-9 (SD-LEO-INFRA-DRIVE-LOOP-INSTRUMENT-001-D) — THE SCAN. Specified in the PRD and, until now,
+// never implemented; the VALIDATION sub-agent caught that both consumers were writing
+// `lane: 'adam'` / `lane: 'chairman_brief'` at the call site while dutifully importing the constant
+// for validation. FR-2 says NEVER inline the string, and nothing was checking.
+//
+// It scans the SOURCE rather than asserting on behaviour, because the property is about how the
+// code is WRITTEN: a correct literal and a named constant behave identically today and diverge only
+// on the day someone types the hyphen. Every prose message in this SD's coordination thread wrote
+// 'chairman-brief'; the CHECK constraint rejects it at write time, which is loud at the database
+// and silent at a fail-soft observer.
+describe('TS-9 — no lane key is spelled outside lib/drive-loop/lanes.js', () => {
+  const REPO = path.resolve(__dirname, '../../..');
+  // The delivered consumers plus the shared writer. Not a repo-wide walk: this asserts a property
+  // of THIS SD's surface, and a glob would silently start covering (or stop covering) files as the
+  // tree moves, which makes a green run mean less over time.
+  const FILES = [
+    'scripts/hooks/session-role-orient.cjs',
+    'lib/chairman/daily-review/roadmap-status-doc.js',
+    'lib/consumption/drive-report-receipts.js',
+    'scripts/coordinator-drive-report-consume.mjs',
+  ];
+
+  // SCOPED TO THE LANE ARGUMENT, NOT TO THE WORDS. My first cut forbade the lane strings anywhere
+  // in these files and went red on both consumers — because 'coordinator' is an ordinary word here:
+  // session-role-orient.cjs carries a SEAT token spelled 'coordinator' and pages of worker prose
+  // about the coordinator role, none of it a lane. A scan that cannot be satisfied without
+  // mangling unrelated code does not get obeyed, it gets deleted. What FR-2 actually forbids is
+  // spelling the lane AT THE WRITE, so that is what this matches.
+  const LANE_ARG = /\blane\s*[:=]\s*(['"`])([^'"`]+)\1/g;
+
+  it('the matcher finds a lane argument when there is one — otherwise this proves nothing', () => {
+    // POSITIVE CONTROL, on a DIFFERENT sample than the files under test: without it, a regex that
+    // silently stopped matching anything would make every assertion below vacuously green.
+    const found = [...'lane: \'adam\'\nlane = "chairman_brief"'.matchAll(LANE_ARG)].map((m) => m[2]);
+    expect(found).toEqual(['adam', 'chairman_brief']);
+  });
+
+  for (const rel of FILES) {
+    it(`${rel} names lanes through the constant, never as a literal`, () => {
+      const abs = path.resolve(REPO, rel);
+      if (!fs.existsSync(abs)) return; // a sibling leg's file may not have landed yet
+      const src = fs.readFileSync(abs, 'utf8');
+      // Comments are prose ABOUT the vocabulary — these files' own docs quote the hyphen to warn
+      // about it — so they are stripped before the scan. Code is what ships.
+      const code = src.replace(/\/\*[\s\S]*?\*\//g, ' ').replace(/^\s*\/\/.*$/gm, ' ');
+
+      const inlined = [...code.matchAll(LANE_ARG)].map((m) => m[2]);
+      expect(inlined, `${rel} spells a lane at the write site — import DRIVE_REPORT_LANE instead`)
+        .toEqual([]);
+
+      // THE HYPHEN, checked separately and everywhere in the code: it is not a member of
+      // DRIVE_REPORT_LANES, so no scan driven by that list can ever catch it. It is the exact
+      // misspelling every prose message in this SD's coordination thread propagated, and the one
+      // the CHECK constraint rejects at write time — loud at the database, silent at a fail-soft
+      // observer.
+      expect(code, `${rel} contains the hyphenated lane the CHECK constraint rejects`)
+        .not.toMatch(/['"`]chairman-brief['"`]/);
+    });
+  }
+});
