@@ -284,8 +284,10 @@ async function writeCandidates(supabase, verdicts, { runAt, dryRun }) {
       written.push({ dedupKey, result: res });
     }
   }
-  written.truncated = truncated.length ? truncated : null;
-  return written;
+  // Returned as a pair rather than as a property bolted onto the array: an array property survives
+  // .length but is silently lost by any spread or .map(), so a later refactor could drop the
+  // truncation record while every test still passed — the cap would go quiet again.
+  return { written, truncated: truncated.length ? truncated : null };
 }
 
 /**
@@ -295,7 +297,7 @@ async function writeCandidates(supabase, verdicts, { runAt, dryRun }) {
  * exploration floor (top-N raw clusters even below threshold) so a narrowing of the instrument's
  * own vision is visible in the receipt series rather than silently converging.
  */
-async function writeReceipt(supabase, { verdicts, candidates, exploration, runAt, dryRun, coverage, blindness }) {
+async function writeReceipt(supabase, { verdicts, candidates, truncated, exploration, runAt, dryRun, coverage, blindness }) {
   const findings = [{
     ran_at: runAt,
     verdicts: verdicts.map((v) => ({ trigger: v.trigger, verdict: v.verdict, detail: v.detail })),
@@ -309,7 +311,7 @@ async function writeReceipt(supabase, { verdicts, candidates, exploration, runAt
     // Why a class could not answer, when it could not. Named blindness beats a silent FLAT.
     blindness: blindness && blindness.length ? blindness : null,
     // What the per-class cap dropped, if anything. A silent cap reads as "that's all there was".
-    truncated: candidates.truncated || null,
+    truncated: truncated || null,
   }];
   if (dryRun) return { dryRun: true, findings };
   const { error } = await supabase.from('codebase_health_snapshots').insert({
@@ -339,7 +341,7 @@ export async function runSweep(supabase, { now = new Date(), dryRun = false } = 
     classes: t2.classes ?? undefined,
     readings: t3.readings ?? undefined,
   });
-  const candidates = await writeCandidates(supabase, verdicts, { runAt, dryRun });
+  const { written: candidates, truncated } = await writeCandidates(supabase, verdicts, { runAt, dryRun });
 
   // The exploration floor runs over ALL raw clusters, including the ones no probe fired on.
   const exploration = t1.clusters
@@ -349,9 +351,9 @@ export async function runSweep(supabase, { now = new Date(), dryRun = false } = 
 
   const blindness = [t2.blind && `t2: ${t2.blind}`, t3.blind && `t3: ${t3.blind}`].filter(Boolean);
   const receipt = await writeReceipt(supabase, {
-    verdicts, candidates, exploration, runAt, dryRun, coverage: t1.coverage, blindness,
+    verdicts, candidates, truncated, exploration, runAt, dryRun, coverage: t1.coverage, blindness,
   });
-  return { runAt, verdicts, candidates, receipt, sourcesQueried: t2.queried, coverage: t1.coverage, blindness };
+  return { runAt, verdicts, candidates, truncated, receipt, sourcesQueried: t2.queried, coverage: t1.coverage, blindness };
 }
 
 async function main() {
