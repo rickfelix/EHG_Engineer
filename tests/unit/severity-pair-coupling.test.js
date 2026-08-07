@@ -11,7 +11,6 @@ import { describe, it, expect } from 'vitest';
 import {
   extractSeverityPair,
   compareSeverityPair,
-  compareCountVisibility,
   allCouplingsAgree,
   stripSqlComments,
   AGREES,
@@ -38,8 +37,6 @@ const REAL_VIEW_EXPR = `
 
 const REAL_POLICY_EXPR = '(((severity IS NULL) OR ((severity)::text <> ALL ((ARRAY[\'critical\'::character varying, \'high\'::character varying])::text[]))) AND ((category)::text IS DISTINCT FROM \'chairman_decision_deferred\'::text) AND ( SELECT (count(*) < 50) FROM feedback f WHERE (((f.source_type)::text = \'telegram\'::text) AND (f.created_at > (now() - \'01:00:00\'::interval)))))';
 
-const REAL_LIMIT_PREDICATE = '(f.source_type)::text = \'telegram\'::text';
-const REAL_ANON_SELECT_PREDICATE = '(source_type)::text = \'telegram\'::text';
 
 // --- extraction --------------------------------------------------------------------
 
@@ -130,95 +127,20 @@ describe('FR-2 severity pair coupling', () => {
   });
 });
 
-// --- FR-3: the count-visibility coupling -------------------------------------------
-
-describe('FR-3 rate-limit count visibility coupling', () => {
-  it('AGREES today: anon SELECT covers the rate-limit predicate exactly', () => {
-    // MEASURED: select_feedback_policy binds to AUTHENTICATED, not anon; anon SELECT is
-    // telegram_bot_select_feedback USING (source_type='telegram'), which is exactly what
-    // the limit counts. The limit is NOT starved today.
-    const r = compareCountVisibility({
-      limitPredicate: REAL_LIMIT_PREDICATE,
-      selectPredicate: REAL_ANON_SELECT_PREDICATE,
-    });
-    expect(r.verdict).toBe(AGREES);
-  });
-
-  it('SEEDED DEFECT: narrowing anon SELECT starves the count and is caught', () => {
-    // THE LOAD-BEARING DIRECTION. This is the "obviously safe hardening" that silently
-    // disarms the limit: count(*) < 50 becomes unconditionally true.
-    const narrowed = '(source_type)::text = \'telegram\'::text AND venture_id IS NOT NULL';
-    const r = compareCountVisibility({
-      limitPredicate: REAL_LIMIT_PREDICATE,
-      selectPredicate: narrowed,
-    });
-    expect(r.verdict).toBe(DIVERGED);
-    expect(r.detail).toMatch(/silently stops limiting/);
-  });
-
-  it('SEEDED DEFECT: scoping anon SELECT to a bot identity is caught', () => {
-    const r = compareCountVisibility({
-      limitPredicate: REAL_LIMIT_PREDICATE,
-      selectPredicate: '(source_type)::text = \'telegram\'::text AND (source_application)::text = \'bot\'::text',
-    });
-    expect(r.verdict).toBe(DIVERGED);
-  });
-
-  it('tolerates cast and whitespace spelling differences between the two sides', () => {
-    const r = compareCountVisibility({
-      limitPredicate: '((f.source_type)::text = \'telegram\'::text)',
-      selectPredicate: '(source_type)::character varying = \'telegram\'',
-    });
-    expect(r.verdict).toBe(AGREES);
-  });
-
-  it('an unreadable side is UNREADABLE, never AGREES', () => {
-    const r = compareCountVisibility({ limitPredicate: REAL_LIMIT_PREDICATE });
-    expect(r.verdict).toBe(UNREADABLE);
-    expect(r.verdict).not.toBe(AGREES);
-  });
-});
-
-// --- FR-3 correlated form (the live policy, as amended mid-SD 2026-08-03) ----------
-
-describe('FR-3 correlated counted-set', () => {
-  // The applied policy changed WHILE this SD was open: the rate limit went from a fixed
-  // source_type='telegram' to `f.source_type IS NOT DISTINCT FROM feedback.source_type`,
-  // i.e. it counts rows sharing the INCOMING row's source_type. The per-source_type
-  // qualifier is more correct in intent than a global telegram budget — and it collides
-  // with anon SELECT, which exposes exactly one source_type.
-  it('DIVERGED when the caller SELECT pins the correlated column to one literal', () => {
-    const r = compareCountVisibility({
-      correlatedColumn: 'source_type',
-      selectPredicate: "(source_type)::text = 'telegram'::text",
-    });
-    expect(r.verdict).toBe(DIVERGED);
-    expect(r.detail).toMatch(/binds ONLY for source_type = 'telegram'/);
-    expect(r.detail).toMatch(/starved to 0/);
-  });
-
-  it('is DIVERGED, not UNREADABLE — a decidable divergence must not hide as unreadable', () => {
-    // Before the correlated branch existed, this exact input reported UNREADABLE, which
-    // is non-passing but says "could not measure" when the truth is "measured, and it
-    // diverges". Wrong diagnosis on a live fail-open is its own defect.
-    const r = compareCountVisibility({
-      correlatedColumn: 'source_type',
-      selectPredicate: "(source_type)::text = 'telegram'::text",
-    });
-    expect(r.verdict).not.toBe(UNREADABLE);
-  });
-
-  it('UNREADABLE when the caller SELECT does not pin the correlated column', () => {
-    const r = compareCountVisibility({ correlatedColumn: 'source_type', selectPredicate: 'venture_id IS NOT NULL' });
-    expect(r.verdict).toBe(UNREADABLE);
-    expect(r.verdict).not.toBe(AGREES);
-    expect(r.detail).toMatch(/anon-role probe/);
-  });
-
-  it('UNREADABLE when the caller SELECT is missing entirely', () => {
-    expect(compareCountVisibility({ correlatedColumn: 'source_type' }).verdict).toBe(UNREADABLE);
-  });
-});
+// --- FR-3 count visibility: RETIRED 2026-08-07 -------------------------------------
+//
+// compareCountVisibility() and its nine tests were REMOVED, not skipped, by
+// SD-LEO-FIX-POINT-STARVATION-COUPLING-001. The premise dissolved: the rate-limit count moved
+// inside fn_anon_ingress_prior_hour_count (SECURITY DEFINER, postgres-owned), so it no longer
+// runs as the inserting role and cannot be starved by that role's SELECT policy.
+//
+// ONE OF THOSE TESTS WAS TITLED "AGREES today" AND PINNED REAL_LIMIT_PREDICATE, a literal that
+// had not been real since 2026-08-03 — a test pinning a fact rather than a behaviour, passing
+// green about a policy shape that no longer existed. Leaving the suite in place would have kept
+// nine green tests advertising a guard that was gone.
+//
+// The successor is a behavioural PAIR asserted as anon against the live database, with its own
+// acceptance suite: tests/unit/anon-write-contract-probe-fr3.test.js.
 
 // --- the aggregate must not pass on nothing ----------------------------------------
 

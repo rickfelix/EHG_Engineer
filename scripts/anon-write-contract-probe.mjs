@@ -319,6 +319,14 @@ export async function runForms(q, table, { builder, ctx, subjectSource, controlS
 }
 
 /**
+ * The definer basis, named once. FULLY QUALIFIED WITH ITS ARGUMENT TYPES because it is fed to
+ * to_regprocedure(): a bare proname carries neither namespace nor signature, so an overload would
+ * silently resolve to whichever row came back first.
+ */
+export const DEFINER_FN = 'public.fn_anon_ingress_prior_hour_count(text)';
+const DEFINER_FN_CALL = 'public.fn_anon_ingress_prior_hour_count($1)::int';
+
+/**
  * FR-7. A RESTRICTIVE bound that cannot bind, asserted rather than argued.
  *
  * `anon_feedback_ingress_bounds` counts prior rows with an INLINE SUBQUERY, and an inline subquery
@@ -332,6 +340,36 @@ export async function runForms(q, table, { builder, ctx, subjectSource, controlS
  *
  * The non-vacuity guard is the point: an empty table would make the two bases agree at zero and
  * pass this check for entirely the wrong reason.
+ *
+ * FR-3 STARVATION COUPLING, dissolved and re-pointed here 2026-08-07
+ * (SD-LEO-FIX-POINT-STARVATION-COUPLING-001; ruling B on advisory 8c95764a, amended after the
+ * refutation banked at strategic_directives_v2.metadata.validation_refutation_20260807).
+ *
+ * DISSOLUTION, proven by execution rather than argued: as postgres row_security_active(feedback)
+ * is false, direct count 8, via the definer fn 8; AS ANON row_security_active is TRUE, direct
+ * count 0, VIA THE DEFINER FN 8. Anon, whose own visibility of those rows is zero, receives the
+ * true count — so the count is RLS-independent and the original count-visibility starvation
+ * cannot occur.
+ *
+ * REFUTATION, why this is a BEHAVIOURAL PAIR and not the two posture flags first proposed:
+ * relforcerowsecurity is NOT a hazard flag. postgres holds rolbypassrls and BYPASSRLS is checked
+ * BEFORE the owner/FORCE test, so flipping FORCE RLS on feedback would not resurrect the hazard —
+ * proven by natural experiment on live prod with zero DDL: ai_gen_provenance and
+ * ai_gen_dwell_tracking both carry relforcerowsecurity=true and are postgres-owned, yet
+ * row_security_active() returns FALSE for postgres on both. A flag comparator would DIVERGE ON A
+ * HARMLESS FLIP — the wolf-cry back in a new costume, i.e. the exact defect this SD removed. Both
+ * flags together also miss four real paths: ALTER FUNCTION OWNER to a non-bypassing role
+ * (dominant), a BODY rewrite, the policy RE-INLINING the count, and REVOKE EXECUTE from anon
+ * (precedented — 20260603_03 revoked it from ~112 secdef functions before this one existed).
+ *
+ * A FLAG CAN BE GREEN FOR THE WRONG REASON; AN EQUALITY CAN TOO. The equality alone is satisfied
+ * by a globally-inert RLS — this file's own most-guarded failure, stated at the top. So the
+ * invariant is a PAIR, and the second half is what makes the first half mean anything:
+ *   (1) as anon, the DEFINER count EQUALS the owner's true count  -> the definer still ignores
+ *       caller visibility, which is what keeps the limit able to bind;
+ *   (2) as anon, the DIRECT count is STRICTLY LESS than that true count -> RLS is genuinely in
+ *       force, so (1) is a real result and not an artifact of RLS being off everywhere.
+ * prosecdef is reported as a DIAGNOSTIC only and is never a pass condition.
  */
 export async function assertIngressBoundCannotBind(q, table, source) {
   const { rows: [pol] } = await q(
@@ -342,9 +380,38 @@ export async function assertIngressBoundCannotBind(q, table, source) {
 
   const countSql = `select count(*)::int as n from ${table} where source_type = $1 and created_at > now() - interval '1 hour'`;
   const { rows: [definer] } = await q(countSql, [source]);   // still the owner here
+
+  // DIAGNOSTIC ONLY — never a pass condition. to_regprocedure() rather than a bare proname: the
+  // name alone has no namespace and no signature, so an overload silently returns two rows; and
+  // to_regprocedure yields NULL for an absent function instead of throwing mid-transaction.
+  const { rows: [fn] } = await q(
+    `select p.prosecdef, pg_get_userbyid(p.proowner) as owner
+       from pg_proc p where p.oid = to_regprocedure($1)`, [DEFINER_FN]);
+
   await q('savepoint sp_bound');
   await q('set local role anon');
   const { rows: [asAnon] } = await q(countSql, [source]);
+  // The definer count measured AS ANON, inside the same anon window as the direct count so the two
+  // are comparable. Its own savepoint is load-bearing: a REVOKE EXECUTE (hazard path 4) makes this
+  // THROW, and a throw aborts the transaction — without this nesting the `reset role` and the outer
+  // rollback below would both fail, turning a detectable hazard into a probe crash.
+  let anonViaDefiner = null;
+  let unreadable = null;
+  await q('savepoint sp_definer');
+  try {
+    const { rows: [d] } = await q(`select ${DEFINER_FN_CALL} as n`, [source]);
+    anonViaDefiner = d?.n ?? null;
+  } catch (e) {
+    unreadable = e.message;
+  } finally {
+    // ROLLBACK TO, never RELEASE, on BOTH paths. `release savepoint` is in this file's own
+    // COMMIT_FAMILY blocklist — it commits the subtransaction — so the guard throws on it, and the
+    // first draft here used it: the throw was caught two lines up and reported as UNREADABLE, which
+    // would have reddened the daily cron on EVERY run with a hazard that was not there. A fresh
+    // wolf-cry inside the SD written to remove one. ROLLBACK TO is also simply correct: the definer
+    // count is a pure read with nothing to preserve.
+    await q('rollback to savepoint sp_definer');
+  }
   await q('reset role');
   await q('rollback to savepoint sp_bound');
 
@@ -362,6 +429,17 @@ export async function assertIngressBoundCannotBind(q, table, source) {
   const inlineBasis = /\bselect\b[\s\S]*\bcount\s*\(/i.test(withCheck);
   const definerFnBasis = /fn_anon_ingress_prior_hour_count\s*\(/i.test(withCheck);
 
+  // FR-3. The PAIR. Order matters: UNREADABLE outranks everything (an unread basis must never
+  // report AGREES), then vacuity (too few rows to tell is not a pass and not a regression either —
+  // failing the run on a quiet hour would be a fresh wolf-cry), then the invariant itself.
+  const rlsInForce = Number.isInteger(asAnon.n) && asAnon.n < definer.n;
+  const definerIgnoresCallerVisibility = Number.isInteger(anonViaDefiner) && anonViaDefiner === definer.n;
+  let verdict;
+  if (unreadable || !Number.isInteger(anonViaDefiner)) verdict = 'UNREADABLE';
+  else if (definer.n <= 1) verdict = 'VACUOUS';
+  else if (definerFnBasis && definerIgnoresCallerVisibility && rlsInForce) verdict = 'AGREES';
+  else verdict = 'DIVERGED';
+
   return {
     applicable: true,
     restrictive: String(pol.permissive).toUpperCase() === 'RESTRICTIVE',
@@ -375,8 +453,49 @@ export async function assertIngressBoundCannotBind(q, table, source) {
     // cannotBind now requires the DEFECT (an inline counting subquery) to still be present, not
     // merely the visibility gap it exploits. Same verdict today; correctly GREEN once the basis
     // becomes a definer call, which is what makes the reddening a real acceptance signal.
-    cannotBind: inlineBasis && definer.n > 1 && asAnon.n <= 1
+    cannotBind: inlineBasis && definer.n > 1 && asAnon.n <= 1,
+    // FR-3 behavioural pair. `verdict` is what reaches the exit code via boundExitCode().
+    anonViaDefiner,
+    rlsInForce,
+    definerIgnoresCallerVisibility,
+    unreadableReason: unreadable,
+    prosecdef: fn ? fn.prosecdef : null,   // diagnostic
+    definerOwner: fn ? fn.owner : null,    // diagnostic
+    verdict
   };
+}
+
+/**
+ * FR-1b. THE VERDICT MUST REACH THE EXIT CODE.
+ *
+ * Before this SD the bound result was computed, assigned to res.bound and PRINTED — and main()
+ * folded only r.code, so a DIVERGED ingress bound changed NOTHING OBSERVABLE. A correct assertion
+ * that cannot fail the run is not a check. That defect appeared three times in one arc (a fence
+ * nobody invoked, an alert wire invisible in the exit code, and this), so the acceptance for this
+ * function is the FOLD, not the assertion.
+ *
+ * UNREADABLE maps to PROBE_INCONCLUSIVE rather than OK deliberately: the EXIT map exists so a
+ * caller can tell inconclusive from pass, and a basis that stopped being readable (REVOKE EXECUTE,
+ * a dropped function) is a change worth a red run — but it is not evidence the contract changed.
+ */
+export function boundExitCode(bound) {
+  if (bound?.errored) return EXIT.PROBE_INCONCLUSIVE;
+  if (!bound || bound.applicable !== true) return EXIT.OK;
+  if (bound.verdict === 'DIVERGED') return EXIT.CONTRACT_CHANGED;
+  if (bound.verdict === 'UNREADABLE') return EXIT.PROBE_INCONCLUSIVE;
+  return EXIT.OK;
+}
+
+/** Say WHICH half of the pair failed. "DIVERGED" alone sends the reader back to the source. */
+export function describeBound(b) {
+  if (!b || b.applicable !== true) return b?.note ?? 'not applicable';
+  if (b.verdict === 'UNREADABLE') return `the definer count is not readable as anon (${b.unreadableReason ?? 'no value returned'}) — EXECUTE may have been revoked, or the function dropped/renamed`;
+  if (b.verdict === 'VACUOUS') return `only ${b.definerBasis} recent row(s): too few to tell, which is not a pass`;
+  const why = [];
+  if (!b.definerFnBasis) why.push('the policy no longer calls the definer function (the count may have been re-inlined, which runs it as the INSERTING role)');
+  if (!b.definerIgnoresCallerVisibility) why.push(`as anon the definer counted ${b.anonViaDefiner} but the true count is ${b.definerBasis} — the definer no longer ignores caller visibility (owner change, or a body rewrite)`);
+  if (!b.rlsInForce) why.push(`as anon the DIRECT count is ${b.anonBasis} and the true count is ${b.definerBasis} — RLS is not visibly in force, so the equality above proves nothing`);
+  return why.join('; ') || 'invariant holds';
 }
 
 function parseArgs(argv) {
@@ -444,7 +563,10 @@ async function probeTable(client, q, table, args, uuid) {
     let bound = null;
     if (!control) {
       try { bound = await assertIngressBoundCannotBind(q, table, args.subjectSource); }
-      catch (e) { bound = { applicable: false, note: `not measurable: ${e.message}` }; }
+      // `errored` separates a MEASUREMENT FAILURE from the benign absent-policy case that also
+      // returns applicable:false. Without it a throw here reads exactly like "already remediated"
+      // and exits 0 — the same defect class as the print-only guard, one level up.
+      catch (e) { bound = { applicable: false, errored: true, note: `not measurable: ${e.message}` }; }
     }
 
     await q('set local role anon');
@@ -464,7 +586,14 @@ async function probeTable(client, q, table, args, uuid) {
     if (control) {
       return { code: EXIT.CONTRACT_CHANGED, reason: `control mode: ${cmp.ok ? 'NO FLIP OBSERVED — the control proved nothing' : `flipped ${cmp.differingForms.join(', ')}`}`, control: true, flipped: cmp.differingForms, ...res };
     }
-    return { code: cmp.ok ? EXIT.OK : EXIT.CONTRACT_CHANGED, reason: cmp.ok ? 'contract holds' : `CONTRACT CHANGED at ${cmp.differingForm}`, ...res };
+    if (!cmp.ok) return { code: EXIT.CONTRACT_CHANGED, reason: `CONTRACT CHANGED at ${cmp.differingForm}`, ...res };
+    // FR-1b. The ingress-bound verdict FOLDS INTO THE EXIT CODE here. Removing this line restores
+    // the print-only guard the SD exists to kill, so the acceptance mutates exactly this.
+    const boundCode = boundExitCode(bound);
+    if (boundCode !== EXIT.OK) {
+      return { code: boundCode, reason: `ingress-bound ${bound.verdict ?? 'NOT_MEASURABLE'}: ${describeBound(bound)}`, ...res };
+    }
+    return { code: EXIT.OK, reason: 'contract holds', ...res };
   } finally {
     await q('ROLLBACK');
   }
@@ -525,6 +654,10 @@ export async function main(argv = process.argv.slice(2)) {
           (b.vacuous ? '  [VACUOUS — too few recent rows to tell, not a pass]'
                      : b.cannotBind ? '  [CANNOT BIND — the inline subquery counts as anon]'
                                     : '  [binds, or the basis changed]'));
+        // FR-3. Printed AND folded — see boundExitCode(); the printing is not the check.
+        console.log(`  fr3-coupling   [${b.verdict}] anon-via-definer=${b.anonViaDefiner} true=${b.definerBasis} anon-direct=${b.anonBasis}` +
+          `  (diagnostic: prosecdef=${b.prosecdef} owner=${b.definerOwner})`);
+        if (b.verdict !== 'AGREES') console.log(`                 ${describeBound(b)}`);
       } else if (r.bound) {
         console.log(`  ingress-bound  ${r.bound.note}`);
       }
