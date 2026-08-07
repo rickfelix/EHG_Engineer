@@ -40,16 +40,21 @@ describe('QF-20260807-992 — producer entry guard fires cross-platform', () => 
   it('FIRES for a Windows argv path — the case that used to silently return false', () => {
     const winPath = String.raw`C:\Users\rickf\Projects\_EHG\EHG_Engineer\scripts\drive-report-produce.mjs`;
     process.argv[1] = winPath;
-    const metaUrl = pathToFileURL(winPath).href;
 
-    // THE LOAD-BEARING ASSERTION. Positive, on the exact input that broke.
-    expect(isMainModule(metaUrl)).toBe(true);
+    // THE LOAD-BEARING ASSERTION, and it is HOST-INDEPENDENT: the guard must agree with whatever
+    // Node's own encoder derives from argv[1]. That is the actual contract — isMainModule delegates
+    // to pathToFileURL, the same encoder import.meta.url is built with — and it holds on every
+    // platform. The old expression did NOT delegate, which is the entire defect.
+    expect(isMainModule(pathToFileURL(winPath).href)).toBe(true);
 
-    // And the counter-demonstration on the SAME input: the old expression disagrees, which is the
-    // defect stated as a comparison rather than as a claim.
+    // THE DEFECT, DEMONSTRATED AS PURE STRING MATH so it is valid on any host. Do NOT rebuild the
+    // expected URL with pathToFileURL here: on Linux a backslash string is a RELATIVE filename, so
+    // it yields file:///home/runner/…/C:\Users\… and the comparison would test the host instead of
+    // the guard. WINDOWS_CORRECT is what Node emits for this path ON Windows, written as a literal
+    // precisely because it is the other platform's answer.
+    const WINDOWS_CORRECT = 'file:///C:/Users/rickf/Projects/_EHG/EHG_Engineer/scripts/drive-report-produce.mjs';
     expect(handRolled(winPath)).toBe('file://C:/Users/rickf/Projects/_EHG/EHG_Engineer/scripts/drive-report-produce.mjs');
-    expect(metaUrl).toBe('file:///C:/Users/rickf/Projects/_EHG/EHG_Engineer/scripts/drive-report-produce.mjs');
-    expect(handRolled(winPath) === metaUrl, 'the old guard must be shown FAILING here').toBe(false);
+    expect(handRolled(winPath), 'two slashes vs three — the old guard can never match').not.toBe(WINDOWS_CORRECT);
   });
 
   it('FIRES for a POSIX-shaped argv path — the platform that always worked must not regress', () => {
