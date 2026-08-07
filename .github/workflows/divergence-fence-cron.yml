@@ -1,0 +1,90 @@
+name: "Divergence fence (cron)"
+
+# SD-LEO-INFRA-OWNERSHIP-PRESERVATION-ASSERTION-001 — the named dispatcher for
+# scripts/severity-pair-divergence-fence.mjs.
+#
+# THE FENCE EXISTED, WAS CORRECT, AND HAD NEVER RUN. Zero workflow references, zero npm
+# scripts, and zero rows in the live periodic_process_registry across 246 registered
+# processes — the registered-verifier-never-dispatched class. It even has a proven true
+# positive: its first genuine run caught a real FR-3 divergence against the production
+# catalog. An instrument nobody invokes is indistinguishable from an absent one, so this
+# file is the difference between a fence and a file that describes one.
+#
+# WHAT IT NOW CHECKS: the two original couplings PLUS view-vs-base-table column parity for
+# the p.*-refreeze drift class. Measured live 2026-08-07: v_patterns_with_decay was missing
+# SIX columns present on issue_patterns — including both its only consumer selects — so that
+# consumer raised 42703 every run and silently fell back to the base table, unnoticed for
+# months. That drift is what this schedule exists to notice next time.
+#
+# Static wiring pinned by tests/unit/cron/divergence-fence-wiring.test.js — renaming this
+# file or the script without updating ACTIVATION_TRIGGER fails CI.
+
+on:
+  schedule:
+    # Daily. Schema drift accrues on the timescale of migrations, not minutes, and the
+    # instrument's value is that it runs AT ALL rather than that it runs often.
+    - cron: '40 7 * * *'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ${{ github.workflow }}
+  cancel-in-progress: true
+
+jobs:
+  fence:
+    name: Live coupling + column-parity divergence check
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+
+    env:
+      # TWO CLIENTS, TWO CREDENTIAL SETS — and this is the one part of this workflow that
+      # could not be copied from a cron exemplar. The catalog reads use node-postgres
+      # (SUPABASE_POOLER_URL), while armed registration and the breakage alert use
+      # supabase-js (SUPABASE_URL + SUPABASE_SERVICE_ROLE_KEY). Omitting the pooler URL does
+      # not fail loudly by itself: an in-repo ruling at solomon-late-verdict-reconcile-cron.yml
+      # records that SUPABASE_POOLER_URL is injected into ZERO cron workflows here and is
+      # silently undefined on a runner. The fence now registers BEFORE that check can exit and
+      # emits an UNREADABLE alert, so a missing secret is reported rather than invisible — but
+      # the right fix is having the secret, not relying on the report.
+      SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+      SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
+      # SUPABASE_DB_URL IS FED FROM secrets.DATABASE_URL, AND THE MAPPING IS THE WHOLE POINT.
+      # The first version of this file injected SUPABASE_POOLER_URL — WHICH IS NOT A REPO SECRET
+      # (confirmed against the live secret list by two independent reviewers). It would have
+      # expanded EMPTY on every run, so `conn` was falsy, the script exited 2, and the seed step
+      # died before the fence ever ran: a daily red workflow whose parity check never executed.
+      # Meanwhile DATABASE_URL IS a real secret, WAS already injected here, and was read by
+      # nothing in the import graph. The script accepts SUPABASE_POOLER_URL || SUPABASE_DB_URL,
+      # so mapping the secret that exists onto the name the script reads is the entire fix.
+      #
+      # It passed locally because .env carries the pooler URL — a green hand-run says nothing
+      # about a runner's environment, and that is exactly the gap this cost.
+      SUPABASE_DB_URL: ${{ secrets.DATABASE_URL }}
+      # Kept so the workflow starts working the moment this secret is added, without another PR.
+      SUPABASE_POOLER_URL: ${{ secrets.SUPABASE_POOLER_URL }}
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: 'npm'
+
+      - name: Install dependencies
+        run: npm ci --ignore-scripts
+
+      - name: Prove the fence can FAIL before trusting that it passed
+        # A fence that has never failed is indistinguishable from a fence that CANNOT fail.
+        # The seeded run mutates one side of EVERY coupling in memory (nothing is written) and
+        # must exit non-zero; the script itself exits 3 with FENCE IS BROKEN if it passes.
+        # Running this FIRST means a green live run below is worth something.
+        run: node scripts/severity-pair-divergence-fence.mjs --seed-divergence || test $? -eq 1
+
+      - name: Run divergence fence
+        run: node scripts/severity-pair-divergence-fence.mjs
