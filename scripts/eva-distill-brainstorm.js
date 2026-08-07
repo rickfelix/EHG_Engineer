@@ -28,6 +28,7 @@ import { pathToFileURL } from 'url';
 import { distillItem, toQueueCandidate } from '../lib/integrations/distill-brainstorm.js';
 import { enqueueDistilledCandidate } from '../lib/eva/consultant/distillation-queue-writer.js';
 import { fetchAllPaginated } from '../lib/db/fetch-all-paginated.mjs';
+import { resolveCanonicalRoadmap } from '../lib/roadmap/canonical-roadmap.js';
 
 dotenv.config();
 
@@ -95,13 +96,45 @@ export async function loadTopWaveItems(supabase, topN = 20) {
  * Read-only. Returns { value, status, numerator, denominator, detail }.
  */
 export async function dispositionCoverage(supabase) {
+  // SD-LEO-INFRA-ROADMAP-REGENERATION-DUPLICATES-001 FR-3. Both counts were previously
+  // UNSCOPED over the whole roadmap_wave_items table, so every item belonging to an ARCHIVED
+  // roadmap fell into this gauge. Measured live 2026-07-29: as-written 95/1864 = 5.1%, versus
+  // 20/261 = 7.7% scoped to the canonical roadmap — the gauge understated coverage by 2.6pp.
+  //
+  // NOTE THE MECHANISM, because the obvious account of it is wrong: the 1603 non-canonical
+  // items span THREE archived roadmaps and 75 of them ARE non-pending, so they inflate the
+  // numerator as well as the denominator. The dilution happens because the orphans'
+  // non-pending rate (4.7%) is LOWER than the canonical roadmap's (7.7%), not because they
+  // are numerator-free. A denominator-only fix would be wrong.
+  let roadmap;
+  try {
+    roadmap = await resolveCanonicalRoadmap(supabase);
+  } catch (err) {
+    // Fail-loud resolver, fail-soft caller. Surface the ambiguity distinctly rather than
+    // letting it read as an empty corpus — see the same rule in chairman-morning-review-sweep.
+    return { value: null, status: 'unknown', numerator: 0, denominator: 0, detail: `ambiguous canonical roadmap: ${err.message}` };
+  }
+  if (!roadmap) return { value: null, status: 'unknown', numerator: 0, denominator: 0, detail: 'no active roadmap' };
+
+  const { data: waveRows, error: wErr } = await supabase
+    .from('roadmap_waves')
+    .select('id')
+    .eq('roadmap_id', roadmap.id);
+  if (wErr) return { value: null, status: 'unknown', numerator: 0, denominator: 0, detail: `wave error: ${wErr.message}` };
+  const waveIds = (waveRows || []).map((w) => w.id);
+  if (waveIds.length === 0) {
+    return { value: null, status: 'unknown', numerator: 0, denominator: 0, detail: 'active roadmap has no waves' };
+  }
+
   const { count: denom, error: dErr } = await supabase
     .from('roadmap_wave_items')
-    .select('id', { count: 'exact', head: true });
+    .select('id', { count: 'exact', head: true })
+    .in('wave_id', waveIds);
   if (dErr) return { value: null, status: 'unknown', numerator: 0, denominator: 0, detail: `denom error: ${dErr.message}` };
   const { count: numer, error: nErr } = await supabase
     .from('roadmap_wave_items')
     .select('id', { count: 'exact', head: true })
+    .in('wave_id', waveIds)
     .neq('item_disposition', 'pending');
   if (nErr) return { value: null, status: 'unknown', numerator: 0, denominator: denom || 0, detail: `numer error: ${nErr.message}` };
   if (!denom) return { value: null, status: 'unknown', numerator: 0, denominator: 0, detail: 'empty corpus (0 items)' };

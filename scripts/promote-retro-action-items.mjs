@@ -26,6 +26,10 @@ import { execFileSync } from 'node:child_process';
 import { createClient } from '@supabase/supabase-js';
 import { actionText, actionOwner, isActionable } from './lib/retro-action-item-filter.mjs';
 import { fetchAllPaginated } from '../lib/db/fetch-all-paginated.mjs';
+// SD-LEO-INFRA-GATE-SIDE-BELT-001: this producer mints quick_fixes unattended on a daily cron and
+// was ungated. The gate lives in lib/ rather than inline because this script has no exports and its
+// guard tests are source-text regexes, which cannot see control flow.
+import { gatedQfMint, RETRO_ACTION_PROMOTER_ENGINE } from '../lib/governance/qf-mint-gate.mjs';
 
 const apply = process.argv.includes('--apply');
 const LOOKBACK_DAYS = 7;
@@ -107,6 +111,11 @@ let skippedStatusUnavailable = 0;
 
 let skippedTestFixture = 0;
 
+// Extracted so the demand gate ENCLOSES the minting rather than merely preceding it — a gate that
+// only returns a verdict is one forgotten `if` away from being decorative.
+let suppressedCount = 0;
+async function promoteAll(reportOnly = false) {
+  suppressedCount = 0;
 for (const retro of retros || []) {
   if (retro.metadata?.action_items_promoted) {
     skippedAlreadyPromoted++;
@@ -170,8 +179,9 @@ for (const retro of retros || []) {
   console.log(`\n[PROMOTABLE] retro=${retro.id} sd=${retro.sd_id} high-priority action_items=${actionable.length}/${highPriority.length}`);
   for (const item of actionable) console.log(`  - ${actionText(item)}`);
 
-  if (!apply) {
-    console.log('  [DRY RUN] would create QF-candidate here.');
+  if (!apply || reportOnly) {
+    if (reportOnly) suppressedCount++;
+    console.log(reportOnly ? '  [WITHHELD] would have created a QF-candidate here - suppressed by belt demand.' : '  [DRY RUN] would create QF-candidate here.');
     continue;
   }
 
@@ -201,5 +211,22 @@ for (const retro of retros || []) {
     console.error(`  [PROMOTE_FAILED] create-quick-fix.js exited non-zero for retro ${retro.id}: ${e.message}`);
   }
 }
+  // REPORT-ONLY RETURNS WHAT IT SUPPRESSED, NOT WHAT IT MINTED — see the fingerprint promoter for
+  // the measured failure this corrects ("suppressed 0" printed on a run that suppressed 34).
+  return reportOnly ? suppressedCount : promoted;
+}
 
-console.log(`\nSummary: ${promoted} promoted, ${skippedAlreadyPromoted} already-promoted, ${skippedTerminalSd} terminal-SD, ${skippedStatusUnavailable} status-unavailable, ${skippedTestFixture} test-fixture, ${skippedNoHighPriority} with no high-priority items, ${skippedNonActionable} with only non-actionable items.`);
+// DRY-RUN IS DELIBERATELY UNGATED — without --apply nothing is minted, so there is no belt to
+// protect, and gating here would suppress the [PROMOTABLE] output the integration assertions read.
+// The gate guards MINTING, not reporting. Consequence, stated rather than discovered: on a
+// dry-run-only day no decision is recorded and the startup badge reads NEVER RAN.
+let withheldByDemand = false;
+if (!apply) {
+  await promoteAll();
+} else {
+  const result = await gatedQfMint(supabase, { engine: RETRO_ACTION_PROMOTER_ENGINE, onWithheld: () => promoteAll(true) }, promoteAll);
+  withheldByDemand = result.withheldByDemand;
+}
+
+console.log(`\nSummary: ${promoted} promoted, ${skippedAlreadyPromoted} already-promoted, ${skippedTerminalSd} terminal-SD, ${skippedStatusUnavailable} status-unavailable, ${skippedTestFixture} test-fixture, ${skippedNoHighPriority} with no high-priority items, ${skippedNonActionable} with only non-actionable items.`
+  + (withheldByDemand ? ' — WITHHELD by belt demand, nothing minted.' : ''));

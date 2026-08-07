@@ -33,18 +33,33 @@ describe('shouldParkRecoverable (SD-LEO-INFRA-WORKER-ENGAGEMENT-ARM-PARK-001)', 
   });
 });
 
+// SEPARATION OF CONCERNS (unchanged by step A): blocking and parking are independent decisions.
+// A stop that is ALLOWED through must still leave the worker parked-recoverable, or it cold-exits
+// to zero. Step A changes only what BLOCKS; every park assertion below is untouched.
 describe('shouldRemind allow-paths still allow (then the caller parks)', () => {
-  const base = { flagEnabled: true, stopHookActive: false, hasActiveClaim: true };
-  it('windDownSignaled → no block (allow-path), but the worker holds a claim → will be parked', () => {
-    expect(shouldRemind({ ...base, loopState: 'active', windDownSignaled: true })).toBe(false);
+  const base = { flagEnabled: true, stopHookActive: false, hasActiveClaim: true, armVerdict: 'unarmed' };
+
+  // REWRITTEN for step A. This case used to assert that ANNOUNCING a wind-down suppressed the
+  // block. It no longer does — that was Charlie's false positive. The worker is blocked, and is
+  // still parked recoverable, which is the invariant this file actually guards.
+  it('windDownSignaled no longer excuses an unarmed worker, but the park is unaffected', () => {
+    expect(shouldRemind({ ...base, loopState: 'active', windDownSignaled: true })).toBe(true);
     expect(shouldParkRecoverable({ loopState: 'active', hasActiveClaim: true, windDownSignaled: true })).toBe(true);
   });
+
   it('second-stop (stopHookActive) → no block (allow-path), claim-holder → parked', () => {
     expect(shouldRemind({ ...base, loopState: 'active', stopHookActive: true })).toBe(false);
     expect(shouldParkRecoverable({ loopState: 'active', hasActiveClaim: true })).toBe(true);
   });
-  it('a still-active loop worker (no wind-down, first stop) is BLOCKED (not yet an allow-path)', () => {
-    expect(shouldRemind({ flagEnabled: true, stopHookActive: false, hasActiveClaim: false, loopState: 'active', windDownSignaled: false })).toBe(true);
+
+  it('an unarmed loop worker at first stop is BLOCKED (not yet an allow-path)', () => {
+    expect(shouldRemind({ flagEnabled: true, stopHookActive: false, hasActiveClaim: false, loopState: 'active', armVerdict: 'unarmed' })).toBe(true);
+  });
+
+  // The allow-path that remains: real arm evidence. It is allowed AND parked.
+  it('a genuinely armed worker is allowed through and still parked recoverable', () => {
+    expect(shouldRemind({ ...base, loopState: 'active', armVerdict: 'armed' })).toBe(false);
+    expect(shouldParkRecoverable({ loopState: 'active', hasActiveClaim: true })).toBe(true);
   });
 });
 
@@ -97,18 +112,67 @@ describe('classifyWindDownReason (SD-LEO-INFRA-WORKER-WINDDOWN-SURVEY-001)', () 
     })).toBe('second_stop');
   });
 
-  it("still 'no_claim_idle' when hasActiveClaim is true but no wakeup evidence (loopState not awaiting_tick)", () => {
-    expect(classifyWindDownReason({
-      windDownSignaled: false,
-      stopHookActive: false,
-      hasActiveClaim: true,
-      loopState: 'active',
-    })).toBe('no_claim_idle');
-    expect(classifyWindDownReason({
-      windDownSignaled: false,
-      stopHookActive: false,
-      hasActiveClaim: true,
-      loopState: null,
-    })).toBe('no_claim_idle');
+  // SD-LEO-INFRA-TERMINAL-RITUAL-ENFORCEMENT-001 (TR-3) — REPLACES the previous assertion, which
+  // pinned 'no_claim_idle' for a claim-HOLDING session. That value contradicts the had_claim:true
+  // recordWindDown stamps beside it, and it made this SD's target population (a seat that ends a
+  // turn holding work with no wakeup armed) uncountable by its own telemetry.
+  it("'turn_end_with_claim_no_wakeup' when a live claim ends a turn with no wakeup evidence", () => {
+    for (const loopState of ['active', null, 'exited', 'unknown']) {
+      expect(classifyWindDownReason({
+        windDownSignaled: false,
+        stopHookActive: false,
+        hasActiveClaim: true,
+        loopState,
+      })).toBe('turn_end_with_claim_no_wakeup');
+    }
+  });
+
+  // The REACHABLE contradiction specifically (TR-3): shouldRemind lets loop_state='exited' through
+  // (:86), shouldParkRecoverable parks it on the claim (:111), and classify then ran the
+  // fall-through. This is the one input that was reaching production; the others above are
+  // unreachable ONLY until step A replaces the block predicate.
+  it("the reachable path (loop_state='exited' + live claim) no longer reports 'no claim'", () => {
+    expect(classifyWindDownReason({ hasActiveClaim: true, loopState: 'exited' })).not.toMatch(/no_claim/);
+  });
+
+  it("'no_claim_idle' is retained for a genuinely claim-less idle session", () => {
+    for (const loopState of ['active', null, 'exited', 'unknown']) {
+      expect(classifyWindDownReason({ hasActiveClaim: false, loopState })).toBe('no_claim_idle');
+    }
+  });
+
+  // STEP A — THE COUNTABLE IGNORE. The block fires once; a worker that stops again passes through
+  // the anti-infinite-loop guard, and for this dormancy there IS no later turn to re-block. So
+  // step A cannot compel — it can only count how often a reminder was seen and ignored, which is
+  // the evidence base for step C (auto-arm). If this value never appears, step C is unjustified;
+  // if it dominates, the nudge is insufficient and step C is the whole fix.
+  describe("'second_stop_still_unarmed' — the population step A cannot save", () => {
+    const ignored = { stopHookActive: true, armVerdict: 'unarmed', hasActiveClaim: true };
+
+    it('a claim-holder that reached a second stop still unarmed is counted distinctly', () => {
+      expect(classifyWindDownReason(ignored)).toBe('second_stop_still_unarmed');
+    });
+
+    // Announcing is what these workers do INSTEAD of arming, so 'signaled' must not absorb them.
+    it('outranks the wind-down announcement, which would otherwise mask the whole class', () => {
+      expect(classifyWindDownReason({ ...ignored, windDownSignaled: true })).toBe('second_stop_still_unarmed');
+    });
+
+    it('a second stop that DID arm is ordinary second_stop, not an ignore', () => {
+      expect(classifyWindDownReason({ ...ignored, armVerdict: 'armed' })).toBe('second_stop');
+    });
+
+    it('an unreadable transcript is not counted as an ignore', () => {
+      expect(classifyWindDownReason({ ...ignored, armVerdict: 'unknown' })).toBe('second_stop');
+      expect(classifyWindDownReason({ ...ignored, armVerdict: undefined })).toBe('second_stop');
+    });
+
+    it('a claim-less session is never counted as an ignore', () => {
+      expect(classifyWindDownReason({ ...ignored, hasActiveClaim: false })).toBe('second_stop');
+    });
+
+    it('only fires on the SECOND stop — a first stop is still a live block, not an ignore', () => {
+      expect(classifyWindDownReason({ ...ignored, stopHookActive: false, loopState: 'active' })).toBe('turn_end_with_claim_no_wakeup');
+    });
   });
 });

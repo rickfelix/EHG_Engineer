@@ -42,13 +42,60 @@ Curated dry-run: 814 corpus -> **kept 208** (188 harness_backlog + 20 estate_cor
 | `SOURCING_GAUGE_GAP_MINER_V1` | gauge-gap miner sweep (stages vdr_gauge roadmap items) | `.github/workflows/sourcing-gauge-gap-miner-cron.yml` (daily, `--apply`) | set env `off` / disable workflow |
 | `POPULATOR_CHAIRMAN_APPROVED` / `--chairman-approved` | proactive-populator STAGING | per-run flag (`npm run sourcing:populate -- --apply --chairman-approved`) | omit the flag (dry-run) |
 
-**Display-only flags** (read by `adam-startup-check.readSourcingFlags` for the state probe; they signal
-intended-on state but do **not** gate code today — documented honestly, not false-gating):
-`SOURCING_ENGINE_V1`, `SOURCING_ROADMAP_ENGINE_V1`, `SOURCING_PROACTIVE_POPULATOR_V1`, `LEO_ROADMAP_AUTOSOURCE`.
-If/when these are meant to gate, wire them at the relevant read-sites and add to the cron envs.
+**RETIRED flags** (SD-LEO-INFRA-SOURCING-ENGINE-BELT-GATED-001, FR-5) — `SOURCING_ENGINE_V1`,
+`SOURCING_ROADMAP_ENGINE_V1`, `SOURCING_PROACTIVE_POPULATOR_V1`, `LEO_ROADMAP_AUTOSOURCE`.
+This section previously described them as display-only, which was honest as far as it went; they are
+now **removed from the state probe entirely**, so they are no longer read anywhere. Setting them does
+nothing and never did — a decorative flag in a display list reads as activation while changing zero
+behaviour, which is the failure mode this runbook exists to prevent. `RETIRED_SOURCING_FLAGS` in
+`scripts/adam-startup-check.mjs` keeps the removal on record. If a switch is wanted for one of these
+lanes, wire it at a real read-site FIRST; do not re-add a name to a display list.
 
-All crons stage/advise only — none promotes to belt or creates an SD (promotion stays the separate,
-gated `leo-create-sd --from-roadmap-item` step).
+**The operative gate is a DB row, not an env flag.** `sourcing_engine_activation_state.arm` governs the
+live arms (`auto-refill`, `gauge-gap-miner`, `deferred-watcher`); it is read at
+`scripts/lib/sourcing-engine-awareness.mjs` and consumed at `scripts/sourcing-engine/refill-cron.mjs`.
+The `/adam` startup probe prints these marked **OPERATIVE**, in three states — on / off /
+`NO ROW: state unknown, not "off"` (a missing row is unknown, and rendering it as "off" would be a
+confident lie about a state nobody read).
+
+**Belt-demand gating (why "on" no longer means "floods").** The **four** producers that mint belt depth
+now consult `lib/governance/demand-gate.js` before producing. They mint only when depth is at or below a
+floor (`BELT_DEMAND_FLOOR`, default 3; a garbage value yields NaN → `unmeasurable` → withhold, never a
+silent revert to the default). An unreadable gauge is `unmeasurable` and **withholds** — it is never a
+licence to produce.
+
+**They do not all read the same gauge, and that is the point** (SD-LEO-INFRA-GATE-SIDE-BELT-001):
+
+| producer | mints into | gauge |
+|---|---|---|
+| `refill-auto-promote` | `strategic_directives_v2` | `countDispatchableBacklog` (SD depth) |
+| `fr-c-generator` | `strategic_directives_v2` | `countDispatchableBacklog` (SD depth) |
+| `feedback-fingerprint-promoter` | `quick_fixes` | `countClaimableQuickFixes` (QF depth) |
+| `promote-retro-action-items` | `quick_fixes` | `countClaimableQuickFixes` (QF depth) |
+
+The QF pair inject their gauge through `measureDemand`'s `gauge` parameter, because the DEFAULT gauge is
+`countDispatchableBacklog` — which reads `strategic_directives_v2` and cannot see a single quick fix.
+Gating QF minting on it would be an open loop failing in both directions: below the floor, minted QFs
+never raise the reading so the gate never closes; above it, minting is blocked no matter how starved the
+QF lane is.
+
+**One floor, two lanes.** `BELT_DEMAND_FLOOR` is a single global env var with no per-producer override,
+and the two lanes' depths differ by roughly 6× (SD ~21, QF ~145 at the time of writing). A floor tuned
+for one lane is not tuned for the other; a per-producer override is a known follow-up, not a shipped
+capability.
+
+**The gate guards MINTING, not reporting.** The QF producers gate only under `--apply`. A dry-run still
+prints its `[PROMOTABLE]` lines and records no decision — so on a dry-run-only day the startup badge
+reads `NEVER RAN`, which is correct: a recorded decision for a run that could never have minted would be
+a measurement of nothing.
+Every run emits `{engine, gauge_value, floor, decision, reason, measured_at}` to `audit_log` and the
+startup badge prints the last verdict per producer, so a correctly-quiet engine is distinguishable
+from a dead one.
+
+The crons in the table above stage/advise only — none promotes to belt or creates an SD (promotion
+stays the separate, gated `leo-create-sd --from-roadmap-item` step). `refill-cron` is the exception
+and is not in that table: it promotes on an hourly `--apply`, which is precisely why it is the
+primary subject of the demand gate.
 
 ## FR-4 — E2E verification
 

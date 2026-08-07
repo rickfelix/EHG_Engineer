@@ -13,6 +13,11 @@ import { describe, it, expect, beforeEach, vi } from 'vitest';
 
 const state = {
   claudeSessionsRow: null,
+  // SD-LEO-INFRA-PID-LIVENESS-DURABLE-VENUE-001 (FR-3c): resolveRoleSession no longer collapses
+  // the class to one row, so the claude_sessions query is now awaited directly and yields an
+  // ARRAY of seats. Tests that care about a single seat keep setting claudeSessionsRow; the
+  // multi-seat cases set claudeSessionsRows.
+  claudeSessionsRows: null,
   schedulerRow: null,
   updateError: null,
   updateCalls: [],
@@ -21,6 +26,9 @@ const state = {
 vi.mock('@supabase/supabase-js', () => ({
   createClient: () => ({
     from(table) {
+      // Per-query, because `from()` is called fresh for each: an UPDATE must still resolve to the
+      // update result, not to the seat list, even though both await the same chain object.
+      let isUpdate = false;
       const chain = {
         select: () => chain,
         eq: () => chain,
@@ -30,6 +38,7 @@ vi.mock('@supabase/supabase-js', () => ({
         neq: () => chain,
         update: (payload) => {
           state.updateCalls.push({ table, payload });
+          isUpdate = true;
           return chain;
         },
         maybeSingle: async () => {
@@ -37,7 +46,14 @@ vi.mock('@supabase/supabase-js', () => ({
           if (table === 'eva_scheduler_heartbeat') return { data: state.schedulerRow, error: null };
           return { data: null, error: null };
         },
-        then: (resolve) => resolve({ data: null, error: state.updateError }),
+        then: (resolve) => {
+          if (!isUpdate && table === 'claude_sessions') {
+            const rows = state.claudeSessionsRows
+              ?? (state.claudeSessionsRow ? [state.claudeSessionsRow] : []);
+            return resolve({ data: rows, error: null });
+          }
+          return resolve({ data: null, error: state.updateError });
+        },
       };
       return chain;
     },
@@ -97,9 +113,19 @@ function selfStampedRow(overrides = {}) {
 const OLD_TS = '2020-01-01T00:00:00Z'; // unambiguously stale for every signal type
 const FRESH_TS = () => new Date().toISOString();
 
+// SD-LEO-INFRA-PID-LIVENESS-DURABLE-VENUE-001 (FR-3a in the watcher).
+// pid-venue.cjs also loads via createRequire(), so vi.mock() is a silent no-op on it for the same
+// reason the header documents for session-liveness.cjs. evaluateRow therefore accepts an INJECTED
+// venue (ctx.pidVenue) so both verdicts are drivable hermetically instead of inheriting whatever
+// the machine running the suite happens to have on disk. Without this, every PID-rung assertion
+// below is environment-dependent: green on a dev box with markers, red in CI without them.
+const CAPABLE_VENUE = { capable: true, reason: 'marker_dir_present', markerDir: '/fake/markers', markerCount: 3 };
+const BLIND_VENUE = { capable: false, reason: 'marker_dir_absent', markerDir: '/fake/markers', markerCount: 0 };
+
 describe('evaluateRow', () => {
   beforeEach(() => {
     state.claudeSessionsRow = null;
+    state.claudeSessionsRows = null;
     state.schedulerRow = null;
   });
 
@@ -116,13 +142,58 @@ describe('evaluateRow', () => {
     const row = roleSessionRow();
     const result = await evaluateRow(row);
     expect(result.state).toBe(STATE.UNVERIFIED);
-    expect(result.reason).toBe('fewer_than_2_evaluable_signals');
+    // FR-3c appended the seat census to this reason; the verdict itself is unchanged.
+    expect(result.reason).toMatch(/^fewer_than_2_evaluable_signals/);
+    expect(result.reason).toMatch(/examined 1 seat\(s\)/);
   });
 
   it('role_session: heartbeat + terminal_id populated, both genuinely stale -> OVERDUE', async () => {
     state.claudeSessionsRow = { heartbeat_at: OLD_TS, terminal_id: 'win-cc-1234-999999', tty: null, process_alive_at: null, is_alive: false };
     const row = roleSessionRow();
-    const result = await evaluateRow(row);
+    // Venue pinned CAPABLE: in a venue where markers DO exist, "no marker for this seat" is a real
+    // negative and OVERDUE is the correct verdict. Left unpinned this assertion would silently
+    // become a test of the runner's own .claude/session-identity directory.
+    const result = await evaluateRow(row, { pidVenue: CAPABLE_VENUE });
+    expect(result.state).toBe(STATE.OVERDUE);
+  });
+
+  // ── FR-3a REGRESSION GUARD (adversarial review of PR #6537, CRITICAL) ────────────────────────
+  // The PID rung's guard was `(seat.terminal_id != null || seat.session_id != null)`. session_id is
+  // TEXT NOT NULL UNIQUE, so on a PRODUCTION row that condition is ALWAYS TRUE -- pidAlive could
+  // never be null, and hasPidAlive() returns a bare false for "no marker exists anywhere" exactly
+  // as it does for "the marker says the process is gone". The unanswerable case therefore counted
+  // as a corroborating STALE signal, pushing evaluableCount to 2 and converting an honest
+  // UNVERIFIED into OVERDUE -- could-not-determine coerced into death, in the very file
+  // implementing FR-3c.
+  //
+  // The pre-existing suite could not catch it: its fixtures omit session_id, a row shape that
+  // cannot occur in production. Both cases below carry session_id for that reason.
+  it('FR-3a: PID-BLIND venue + production row shape (session_id present) -> UNVERIFIED, never OVERDUE', async () => {
+    state.claudeSessionsRow = {
+      // Synthetic and unresolvable ON PURPOSE. A first draft of this test used the authoring
+      // session's REAL uuid -- which has a live marker on disk, so the capable-venue control
+      // resolved a running pid and returned OK instead of OVERDUE. The negative control caught it.
+      // hasPidAlive() reaches the real resolver here (createRequire bypasses vi.mock), so the id
+      // must be one no marker can ever match.
+      session_id: '00000000-0000-0000-0000-00000000dead', // NOT NULL in claude_sessions
+      heartbeat_at: OLD_TS, terminal_id: null, tty: null, process_alive_at: null, is_alive: false,
+    };
+    const result = await evaluateRow(roleSessionRow(), { pidVenue: BLIND_VENUE });
+    // Where no marker was ever written, the rung has NO ANSWER -- so heartbeat is the only
+    // evaluable signal and the 2-signal death gate must hold.
+    expect(result.state).toBe(STATE.UNVERIFIED);
+    expect(result.reason).toMatch(/^fewer_than_2_evaluable_signals/);
+  });
+
+  it('FR-3a NEGATIVE CONTROL: the SAME row in a CAPABLE venue does reach OVERDUE', async () => {
+    // Proves the assertion above is load-bearing rather than vacuous: the only thing that changed
+    // is venue capability, and the verdict flips. If this ever stops flipping, the abstention test
+    // has gone vacuous and must be fixed, not deleted.
+    state.claudeSessionsRow = {
+      session_id: '00000000-0000-0000-0000-00000000dead',
+      heartbeat_at: OLD_TS, terminal_id: null, tty: null, process_alive_at: null, is_alive: false,
+    };
+    const result = await evaluateRow(roleSessionRow(), { pidVenue: CAPABLE_VENUE });
     expect(result.state).toBe(STATE.OVERDUE);
   });
 
@@ -140,6 +211,57 @@ describe('evaluateRow', () => {
     const row = roleSessionRow();
     const result = await evaluateRow(row);
     expect(result.state).toBe(STATE.OK);
+  });
+
+  // ── SD-LEO-INFRA-PID-LIVENESS-DURABLE-VENUE-001 (FR-3c) ────────────────────────────────────
+  // The measured residual: the class probe used to end in
+  //   .order('heartbeat_at', {ascending:false}).limit(1).maybeSingle()
+  // so ONE seat spoke for the whole class — and the DESC ordering selected FOR the pathology,
+  // because a dead seat whose immortal tick kept stamping fresh heartbeats sorts FIRST. The SD
+  // measured 5 dead seats and found only 1 marked; this is the shape that produced that.
+  it('role_session: 4 dead seats hiding behind 1 forged-fresh seat are ALL examined and named', async () => {
+    const deadSeat = (n) => ({
+      session_id: `dead-${n}`,
+      heartbeat_at: OLD_TS,
+      terminal_id: 'win-cc-1234-999999', // unresolvable pid => a real, evaluable "not alive"
+      tty: null,
+      process_alive_at: OLD_TS,
+      is_alive: false,
+    });
+    state.claudeSessionsRows = [
+      // Sorts FIRST under the old heartbeat_at DESC ordering — the forged-fresh seat that used to
+      // be the only row examined, and which reported OK for the entire class.
+      { session_id: 'forged-fresh', heartbeat_at: FRESH_TS(), terminal_id: null, process_alive_at: null, is_alive: false },
+      deadSeat(1), deadSeat(2), deadSeat(3), deadSeat(4),
+    ];
+
+    const result = await evaluateRow(roleSessionRow());
+
+    // Class-level verdict is unchanged and still OK — something in the class IS alive, and this
+    // file's existing rule is that a single fresh signal is unambiguous positive evidence.
+    expect(result.state).toBe(STATE.OK);
+
+    // THE POINT: the other four are no longer invisible. Under the old probe these four rows were
+    // never read at all, on any run, however durable the invoker.
+    expect(result.seats_examined).toBe(5);
+    expect(result.dead_seat_ids).toEqual(['dead-1', 'dead-2', 'dead-3', 'dead-4']);
+    expect(result.reason).toMatch(/examined 5 seat\(s\), 1 alive/);
+    expect(result.reason).toMatch(/4 evaluable-but-not-alive/);
+  });
+
+  it('role_session: a class where every seat is alive names NO dead seats (negative control)', async () => {
+    // Without this, "always report 4 dead" would satisfy the test above. The census must track the
+    // population, not decorate every verdict with a fixed alarm.
+    state.claudeSessionsRows = [
+      { session_id: 'a', heartbeat_at: FRESH_TS(), terminal_id: null, process_alive_at: null, is_alive: false },
+      { session_id: 'b', heartbeat_at: FRESH_TS(), terminal_id: null, process_alive_at: null, is_alive: false },
+    ];
+    const result = await evaluateRow(roleSessionRow());
+    expect(result.state).toBe(STATE.OK);
+    expect(result.seats_examined).toBe(2);
+    expect(result.dead_seat_ids).toEqual([]);
+    expect(result.reason).toMatch(/examined 2 seat\(s\), 2 alive/);
+    expect(result.reason).not.toMatch(/evaluable-but-not-alive/);
   });
 
   it('scheduler_round: stale round-key timestamp beyond interval*grace -> OVERDUE (no 2-signal requirement)', async () => {

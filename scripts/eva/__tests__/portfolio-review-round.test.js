@@ -33,6 +33,13 @@ function makeDb({ ventures = [REAL_VENTURE], windows = [[]], slot = null } = {})
         select: vi.fn(() => chain),
         eq: vi.fn(() => chain),
         gte: vi.fn(() => chain),
+        // FR-4 supersession (SD-FDBK-INFRA-DECISION-QUEUE-RETIREMENT-001) queries prior-window
+        // pending packets and AWAITS the chain directly, so .lt must be THENABLE. Returning the
+        // chain here would resolve to the chain object, leave `data` undefined, and let the
+        // supersession silently no-op — the non-thenable-double trap. These fixtures seed no
+        // prior-window rows, so an empty set is the accurate answer; the supersession itself is
+        // covered in tests/unit/chairman/decision-disposition.test.js against a filter-aware fake.
+        lt: vi.fn(async () => ({ data: [], error: null })),
         order: vi.fn(() => chain),
         maybeSingle: vi.fn(async () => ({ data: slot })),
         limit: vi.fn(async () => {

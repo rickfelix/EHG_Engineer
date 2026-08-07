@@ -13,7 +13,10 @@ import { createClient } from '@supabase/supabase-js';
 import { computeSessionBadge } from '../../lib/fleet/fleet-view-badges.cjs';
 import { getAttentionFlaggedSessions } from '../../lib/fleet/attention-flag-writer.js';
 import { loadStore, buildNamedAccountChips } from '../../lib/fleet/account-capacity-gauge.cjs';
-import { getAccountUsage, allUnavailable } from '../../lib/fleet/account-usage-reader.cjs';
+import { getAccountUsage, allUnavailable, resolveDisplayIdentities } from '../../lib/fleet/account-usage-reader.cjs';
+// SD-LEO-INFRA-ACCOUNT-QUOTA-STRIP-001 (FR-4/FR-6): snapshot retention + last-known enrichment.
+import { persistReadings, fetchLastKnown, withLastKnown } from '../../lib/fleet/account-usage-snapshot-writer.cjs';
+import { isLiveEnabled } from '../../lib/fleet/spawn-control.js';
 
 const router = Router();
 
@@ -49,11 +52,50 @@ function resolveServiceClient(req) {
  * they heartbeat; the absence of ANY identity is what distinguishes them.
  */
 function sessionIdentityKind(meta = {}) {
-  if (meta.fleet_identity?.callsign) return 'worker';
+  // QF-20260727-205: A ROLE STAMP OUTRANKS A WORKER CALLSIGN — this is branch ORDER, nothing else.
+  // The callsign branch used to run FIRST and return unconditionally, so any row carrying BOTH a
+  // fleet callsign and is_coordinator resolved to 'worker' and the coordinator branch was
+  // unreachable. identity_kind is the machine key ehg groups on (useFleetSessions.ts:318 does an
+  // exact === 'coordinator' match), so the live coordinator landed in workers[] and the Sessions
+  // page rendered ROLES 0 / "No coordinator is live" while 1449a046 WAS the registered active
+  // coordinator (chairman-observed 2026-07-27, screenshot-confirmed).
+  //
+  // The contradictory pair is reachable by RACE, not merely operator error:
+  // assign-fleet-identities.cjs stamps a NATO callsign onto any live session in the worker cohort,
+  // and its filterOutCoordinators() (QF-20260508-648) can only exclude rows ALREADY flagged
+  // is_coordinator. A session that registers, gets stamped, and only LATER runs /coordinator start
+  // keeps the worker stamp permanently. Measured in the incident: registered 10:00:47Z, stamped
+  // 'Alpha' 10:01:31Z (44s later), became coordinator ~10:20Z. The identity cron ticks every 5
+  // minutes, so any /coordinator start whose priming reads outlast one tick opens the window.
+  //
+  // Note the symmetry, which is the actual lesson: QF-20260508-648 fixed this SAME writer/consumer
+  // asymmetry on the WRITER side, and its own comment names it. This READER carried the identical
+  // asymmetry and was never fixed. Fixing one side of a two-sided asymmetry is what left it live.
   if (meta.is_coordinator) return 'coordinator';
   if (meta.role) return String(meta.role);
+  if (meta.fleet_identity?.callsign) return 'worker';
   if (meta.model) return 'unstamped';   // real session, identity not yet assigned
   return null;                          // no identity at all -> ghost
+}
+
+/**
+ * QF-20260726-222 — capitalize a role name for DISPLAY only.
+ *
+ * Chairman-reported: workers render Foxtrot / Alpha-4 / Golf-2 while the three role rows rendered
+ * adam / solomon / coordinator — one column, two capitalization conventions. The docblock on the
+ * callsign fallback below already SAID "coordinator/Adam/Solomon"; the string was just passed
+ * through raw.
+ *
+ * *** DISPLAY LAYER ONLY. This must never touch identity_kind. *** identity_kind is the MACHINE KEY
+ * the frontend groups, filters and sorts roles on — verified at the consumer, not assumed:
+ * ehg useFleetSessions.ts:318 does String(r.identity_kind) === 'coordinator' (an exact lowercase
+ * match) and :284-285 filter and sort the role group by it. Capitalizing the key to fix a label is
+ * how a cosmetic change becomes a grouping bug. Nothing compares `callsign` to a lowercase role
+ * literal anywhere in EHG_Engineer or ehg, which is what makes the display fix safe.
+ */
+function capitalizeRoleLabel(value) {
+  if (typeof value !== 'string' || value.length === 0) return value;
+  return value.charAt(0).toUpperCase() + value.slice(1);
 }
 
 // QF-20260726-642: exported (additively, no behaviour change) so the per-session account fields
@@ -68,7 +110,8 @@ export function formatSessionRow(row) {
     session_id: row.session_id,
     // Fall back to the role name so the coordinator/Adam/Solomon rows read as themselves
     // instead of as blanks. Fleet callsign still wins when present.
-    callsign: identity.callsign || (kind && kind !== 'unstamped' ? kind : null),
+    callsign: identity.callsign || (kind && kind !== 'unstamped' ? capitalizeRoleLabel(kind) : null),
+    // NOT capitalized, deliberately — this is the machine key the frontend groups/sorts on.
     identity_kind: kind,
     color: identity.color || null,
     role: identity.role || null,
@@ -89,6 +132,20 @@ export function formatSessionRow(row) {
     account_org_name: meta.account_org_name || null,
     model_effort: `${model}/${effort}`,
     status: row.computed_status || 'unknown',
+    // SD-LEO-INFRA-SESSIONS-PAGE-TRUE-001-A FR-5 — THE OPERATOR-TRUTH DEFECT THIS SD EXISTS FOR.
+    // Until now this formatter emitted NO window field at all, while the UI seeded its hide/show
+    // toggle from row.window_visible — a field no backend produced — and then tracked it in React
+    // state alone. With a 15-second refetch the control reverted to "Open" on every remount
+    // regardless of the real OS window state, so the operator was shown a visibility claim the
+    // system had never checked. Measured across live seats: window_handle 9/9, window_visible 0/9.
+    //
+    // THREE-VALUED ON PURPOSE, same discipline as account_email above. null means NEVER RECORDED,
+    // which is NOT the same as recorded-visible. Rendering absent as "Open" would reproduce the
+    // exact defect in a new field: a confident claim with nothing behind it. The UI must show
+    // "not recorded" for null.
+    window_visible: meta.window_visible === undefined || meta.window_visible === null
+      ? null
+      : Boolean(meta.window_visible),
     sd_key: row.sd_key || null,
     heartbeat_age_human: row.heartbeat_age_human || null,
     // SD-LEO-FEAT-FLEET-COLD-START-UX-001 FR-3. The numeric age was already SELECTed and used for
@@ -179,6 +236,38 @@ export async function getFleetPanel(req, res) {
     accountUsage = allUnavailable('unreachable');
   }
 
+  // SD-LEO-INFRA-ACCOUNT-QUOTA-STRIP-001 (FR-4/FR-6): retain each reading, and attach the last
+  // known value to any account that currently has no number — so an EXHAUSTED account shows the
+  // figure that explains why the fleet stopped, with the time it was read, instead of collapsing
+  // to "Unavailable" and erasing it.
+  //
+  // WHOLLY FAIL-SOFT, IN BOTH DIRECTIONS. The snapshot migration is chairman-gated and may not be
+  // applied yet, so a missing table is an EXPECTED state rather than an error. Persistence is a
+  // side effect of rendering this strip and must never be able to break it: if history is
+  // unavailable the live readings still render exactly as they do today. A panel that went blank
+  // because its history store was missing would be a worse defect than the one being fixed.
+  try {
+    // Display-keyed, NOT resolveSlotIdentities: the readings carry relabelled names whenever
+    // FLEET_ACCOUNT_IDENTITY_MAP is set, so a raw-registry-keyed map misses every lookup and
+    // writes account_uuid8 NULL exactly when identity mapping is configured.
+    const identities = resolveDisplayIdentities({});
+    await persistReadings(accountUsage, { supabase, identities });
+    const lastKnown = await fetchLastKnown(supabase, accountUsage.map((r) => r?.name));
+    accountUsage = withLastKnown(accountUsage, lastKnown);
+  } catch {
+    /* history is a nicety; the live reading is the product */
+  }
+
+  // QF-20260726-575: the RESOLVED spawn live-state, so "is the live OS spawn armed on this host"
+  // is answerable by OBSERVATION instead of by reading a static docblock that cannot track an env
+  // var. spawn-control.js opened "STAGED / INERT BY DEFAULT" on a host where the flag was SET, so a
+  // reader got the wrong answer in the PERMISSIVE direction — and a bare process.env read is the
+  // same error by a second route, because FLEET_SPAWN_CONTROL_LIVE lives in .env and reads as
+  // undefined until it is loaded. This server always has env loaded, which is what makes it the
+  // authoritative answer. Calls the SAME exported predicate the verbs gate on — deliberately not a
+  // re-implemented env read, which would be free to drift from the thing it claims to describe.
+  const spawnControl = { live: isLiveEnabled() };
+
   let attentionStrip = [];
   try {
     attentionStrip = await getAttentionFlaggedSessions({ supabase });
@@ -190,6 +279,7 @@ export async function getFleetPanel(req, res) {
     sessions,
     accountChips,
     accountUsage,
+    spawnControl,
     attentionStrip,
     filter: { liveOnly: !showAll, windowSeconds, truncated, ghostsHidden },
   });

@@ -1,8 +1,8 @@
-<!-- file_content_hash: 448adb047745b514 -->
+<!-- file_content_hash: 636da0e0051ecc02 -->
 <!-- GENERATED FILE - DO NOT EDIT DIRECTLY. Source of truth: leo_protocol_sections (DB). Regenerate: node scripts/generate-claude-md-from-db.js. Drift check: node scripts/check-claude-md-drift.cjs -->
 # CLAUDE_EXEC.md - EXEC Phase Operations
 
-**Generated**: 2026-07-20 3:47:06 PM
+**Generated**: 2026-08-04 12:36:22 AM
 **Protocol**: LEO 4.4.1
 **Purpose**: EXEC agent implementation requirements and testing
 **Effort**: xhigh (implementation + testing require maximum reasoning for agentic coding per Opus 4.8 guidance)
@@ -1784,7 +1784,7 @@ The WORKER analog of CLAUDE.md "Canonical Pause Points — THE ONLY REASONS TO S
 
 **Every other condition is a CONTINUE — re-arm a ScheduleWakeup and re-run the loop. Four enforced exit-modes:**
 - **(4a) Post-ship**: you just shipped an SD → /signal a fleet-retro → /checkin → claim the next workable SD (READY > EXEC > PLANNING > DRAFT) in the SAME turn. Shipping is the START of the next iteration, not the end of the loop (the #1 wrong-stop).
-- **(4b) Blocked claim**: your SD hit a chairman gate/blocker while unblocked belt work exists → STAY on that SD, park WIP (push the branch + set metadata.blocker.status), /signal the specific blocker, and COORDINATE with the coordinator to RESOLVE the block (via /signal, re-poll session_coordination by correlation_id on each wakeup; the bare two-way request lane has no coordinator inbox surface yet, so use /signal until that ships) — do NOT hop to a different SD. The coordinator does due diligence, then decides + approves how you proceed; for a migration you MAY apply it yourself ONLY after explicit coordinator sign-off (never self-apply a prod migration without it). Never idle silently. Escalation runs Coordinator -> Adam -> chairman. (chairman directive 2026-06-24; canonical: docs/protocol/fleet-coordinator-and-worker-behavior.md "Blocked-claim resolution protocol".)
+- **(4b) Blocked claim**: your SD hit a chairman gate/blocker while unblocked belt work exists → STAY on that SD, park WIP (push the branch + set metadata.blocker.status), /signal the specific blocker, and COORDINATE with the coordinator to RESOLVE the block. *** ON EVERY WAKEUP, BEFORE YOU RE-POLL OR RE-REPORT: RE-RUN YOUR OWN BLOCKER CHECK. *** Blockers self-resolve silently and nobody tells you — two seats burned 5h23m and 9h41m on conditions that had already cleared, while awake and emitting 66 and 74 rows, because a stuck signal is a one-shot message into a queue nobody re-evaluates. The re-check is one command: RESYNC_REQUIRED is git fetch origin main && git log --oneline HEAD..origin/main -- scripts/sd-start.js; a peer-dirty tree is git status --porcelain. If it now passes, RESUME IMMEDIATELY. Re-report ONLY when the condition has materially changed (cleared, or changed in kind) — an UNCHANGED blocker is re-checked SILENTLY and never re-sent; do not invent a re-send timer. (via /signal, re-poll session_coordination by correlation_id on each wakeup; the bare two-way request lane has no coordinator inbox surface yet, so use /signal until that ships) — do NOT hop to a different SD. The coordinator does due diligence, then decides + approves how you proceed; for a migration you MAY apply it yourself ONLY after explicit coordinator sign-off (never self-apply a prod migration without it). Never idle silently. Escalation runs Coordinator -> Adam -> chairman. (chairman directive 2026-06-24; canonical: docs/protocol/fleet-coordinator-and-worker-behavior.md.)
 - **(4c) No wind-down handshake**: never exit silently → /signal feedback "winding down — finished <SD>, anything queued? idling ~180s", arm a SHORT (~180s) grace ScheduleWakeup, re-check the inbox on that tick, THEN settle into the ~300s idle cadence.
 - **(4d) Transient error**: a connectivity/API/tool blip is NOT a stop → re-arm a ScheduleWakeup and resume (retry ≤2, then invoke the RCA sub-agent). Never treat a transient error as terminal.
 
@@ -2148,6 +2148,6 @@ Verifies version consistency between CLAUDE*.md files and database. Use --fix to
 
 ---
 
-*Generated from database: 2026-07-20*
+*Generated from database: 2026-08-04*
 *Protocol Version: 4.4.1*
 *Load when: User mentions EXEC, implementation, coding, or testing*

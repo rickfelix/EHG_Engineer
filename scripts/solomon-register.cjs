@@ -34,6 +34,9 @@ const fs = require('fs');
 const path = require('path');
 const { createSupabaseServiceClient } = require('../lib/supabase-client.cjs');
 const { resolveStateReadPath } = require('./hooks/lib/session-state-resolver.cjs');
+// SD-LEO-INFRA-ROLE-CONTRACT-READ-GATE-001 / FR-3: shared with adam-register.cjs — one verdict
+// implementation for both roles.
+const { contractReadVerdict, contractLineCount, singleReadFit } = require('../lib/protocol/contract-read-coverage.cjs');
 // SD-LEO-INFRA-SOLOMON-CONSULT-001A (Solomon foundation) — faithful copy-rename of adam-register.cjs: single-Solomon guard + atomic write.
 // fetchAllSolomonsStrict (not fetchFreshSolomons) so the guard sees stale priors too and classifies
 // fresh-vs-stale itself (fresh => refuse; stale-only => retire). STRICT (FR-6, count-truncation
@@ -142,6 +145,37 @@ async function registerSolomon(supabase, sessionId, opts = {}) {
     action = 'tagged_fallback';
     fallbackReason = wrote.reason;
   }
+
+  // QF-20260727-909: stamp model/effort on this role session. CHAIRMAN-REPORTED — the sessions
+  // page rendered adam/solomon as '--/--' PERMANENTLY, because the only two writers of
+  // metadata.model are the SessionStart hook (stamps only when stdin carries a model) and
+  // worker-checkin's --model self-report, which ONLY workers run. A non_fleet role session runs
+  // neither, so no path would EVER populate it. Distinct from the neighbouring account column,
+  // where a blank self-heals on restart; this one does not.
+  //
+  // Reuses the worker path's EXISTING writer rather than adding a third. The QF asked to
+  // establish how the coordinator gets a stamp before inventing one — measured: its
+  // effort_source reads 'worker_self_report', i.e. it has no special role-stamping path, it
+  // simply runs the worker check-in. So there was nothing to copy, only this writer to share.
+  //
+  // Placed AFTER the role tag is persisted and OUTSIDE the RPC/fallback branch, deliberately:
+  // the set_solomon_flag RPC is the PRIMARY path and the JS merge only its fail-soft, so
+  // stamping inside the fallback would become dead code the moment the chairman-approved
+  // migration lands.
+  //
+  // Fail-soft throughout — a missing model stamp must never block role registration.
+  try {
+    const { parseCheckinArgs, mergeCheckinModelEffort } = require('./worker-checkin.cjs');
+    const { model, effort } = parseCheckinArgs(process.argv.slice(2));
+    if (model || effort) {
+      const { data: cur } = await supabase.from('claude_sessions')
+        .select('metadata').eq('session_id', sessionId).maybeSingle();
+      const { metadata: stamped, changed } = mergeCheckinModelEffort(cur?.metadata || {}, { model, effort });
+      if (changed) {
+        await supabase.from('claude_sessions').update({ metadata: stamped }).eq('session_id', sessionId);
+      }
+    }
+  } catch { /* never block registration on a stamp */ }
   // Retire stale priors — but RE-VALIDATE freshness right before clearing each, so a prior that
   // became fresh since the decision (a racing restart) is NEVER cleared (the deliberate divergence
   // holds even under a race). Residual: two simultaneous STALE restarts can both register briefly.
@@ -230,11 +264,25 @@ function checkContractRead(projectDir) {
     const state = JSON.parse(fs.readFileSync(statePath, 'utf8').replace(/^﻿/, ''));
     const status = state.protocolFileReadStatus && state.protocolFileReadStatus[CONTRACT_FILE];
     if (status && status.readCount > 0) {
-      result.contract_read = true;
-      result.contract_read_partial = status.lastReadWasPartial === true;
+      // SD-LEO-INFRA-ROLE-CONTRACT-READ-GATE-001 / FR-3 — identical fix to adam-register.cjs, from
+      // one shared implementation. This path had NO test coverage at all before this SD, which is
+      // part of why the inversion survived here as long as it did.
+      const verdict = contractReadVerdict(status, contractLineCount(root, CONTRACT_FILE), { singleReadFit: singleReadFit(root, CONTRACT_FILE) });
+      result.contract_read = verdict.read;
+      result.contract_read_partial = !verdict.fully_read;
+      result.contract_coverage_pct = verdict.coverage_pct;
+      result.contract_read_basis = verdict.basis;
       result.contract_last_read_at = status.lastReadAt || null;
     } else if (Array.isArray(state.protocolFilesRead) && state.protocolFilesRead.includes(CONTRACT_FILE)) {
-      result.contract_read = true; // legacy-array fallback (pre-FR-2 state shape)
+      // Legacy pre-FR-2 state shape: a bare filename list carrying no coverage information at all.
+      // Sufficient ONLY when the contract fits in a single Read. For an over-cap contract it cannot
+      // distinguish a full read from a silently truncated one, which is the defect this SD closes.
+      // Measured on TOKENS, not bytes: the byte proxy this replaced disarmed CLAUDE_SOLOMON.md
+      // (67,501 B but only 15,965 tokens) even though it reads in one call.
+      const legacyFits = singleReadFit(root, CONTRACT_FILE).fits === true;
+      result.contract_read = true;
+      result.contract_read_partial = !legacyFits;
+      result.contract_read_basis = legacyFits ? 'legacy_array_single_read_safe' : 'legacy_array_no_evidence';
     }
   } catch { /* fail-open: tracking unavailable must never break role activation */ }
   return result;

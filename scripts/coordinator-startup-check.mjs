@@ -16,7 +16,7 @@
 // Exit code is ALWAYS 0 (fail-open). Model: peer of scripts/coordinator-audit.mjs.
 
 import 'dotenv/config';
-import { readFileSync } from 'fs';
+import { readFileSync, existsSync } from 'fs';
 import { resolve, dirname } from 'path';
 import { fileURLToPath } from 'url';
 // SD-LEO-INFRA-FLEET-FRESHNESS-GUARD-001: advisory, fail-open checkout-freshness badge.
@@ -24,6 +24,15 @@ import { checkoutFreshness, freshnessBadge, CRITICAL_PROTOCOL_FILES } from '../l
 // QF-20260725-342: single source of truth for the resurface threshold (see that module's header).
 import { createRequire as _createRequireQF342 } from 'node:module';
 const { OPERATING_THRESHOLD_HOURS } = _createRequireQF342(import.meta.url)('../lib/coordination/resurface-threshold.cjs');
+// SD-LEO-INFRA-ROLE-CONTRACT-READ-GATE-001 / FR-2: same resolver adam-register.cjs and the tracker
+// both use, so the coordinator check reads exactly the state the hook wrote — no second path.
+const { resolveStateReadPath } = _createRequireQF342(import.meta.url)('./hooks/lib/session-state-resolver.cjs');
+// SD-LEO-INFRA-ROLE-CONTRACT-READ-GATE-001 / FR-3 + FR-6: ONE implementation of "was this contract
+// really read" and ONE definition of the single-read bound, shared with adam-register.cjs and
+// solomon-register.cjs. Importing the bound rather than restating it is the difference between an
+// arming condition and an arming CLAIM — see roleArmingStates below.
+const { contractReadVerdict, contractLineCount, singleReadFit, SINGLE_READ_TOKEN_BUDGET } =
+  _createRequireQF342(import.meta.url)('../lib/protocol/contract-read-coverage.cjs');
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const REPO_ROOT = resolve(__dirname, '..');
@@ -73,6 +82,7 @@ export const RESPONSIBILITIES = [
 //   unranked-gauge             | SCRIPT-SHAPED  | pending (FR-2 batch)      | deterministic invariant gauge
 //   singleton-relaunch          | SCRIPT-SHAPED  | pending (FR-2 batch)      | deterministic detection+scheduling only
 //   relay-drain                | SCRIPT-SHAPED  | pending (FR-2 batch)      | deterministic queue drain
+//   sms-relay-drain             | SCRIPT-SHAPED  | YES (sms-relay-drain-cron.yml) | QF-20260727-064: GHA-backed but session-armed ANYWAY — the workflow declares */5 and reports green while Actions deprioritisation makes the real cadence 1-3.7h (measured). The chairman's inbound lane cannot depend on a deprioritised runner.
 //   relay-drop-gauge           | SCRIPT-SHAPED  | pending (FR-2 batch)      | deterministic invariant gauge
 //   fleet-retro                | SCRIPT-SHAPED  | pending (FR-2 batch)      | capture is deterministic (label says capture/synthesis — FR-2 scopes strictly to the capture path; any judgment-shaped synthesis stays session-armed)
 //   row-growth                 | SCRIPT-SHAPED  | pending (FR-2 batch)      | deterministic daily snapshot
@@ -103,6 +113,7 @@ export const RESPONSIBILITIES = [
 //   unranked-gauge            | SAFE    | gauge-unranked-claimable-leaves.mjs is read + log only (no .insert/.upsert calls) — a pure gauge has nothing to duplicate
 //   singleton-relaunch        | SAFE    | singleton-relaunch-scheduler.mjs defaults to dry-run/report-only (SINGLETON_RELAUNCH_SCHEDULING_ENABLED gate) and guards real writes behind its own stampLastFired marker
 //   relay-drain                | SAFE    | coordinator-relay-drain.cjs only selects UNDRAINED relay_request rows (relay-queue.cjs's drainOne marks a row drained as part of processing it) — a second concurrent run finds nothing left to drain
+//   sms-relay-drain             | SAFE    | QF-20260727-064. Verified IN THIS SCRIPT, not by analogy to relay-drain above (this table's own rule): lib/chairman/sms-bridge.js drainSmsRelayStaging selects `.is('drained_at', null)` (:803) and stamps `.update({drained_at})` per row as part of processing it (:817-819), so a redundant fire finds nothing left to drain. Additionally gated: the runner is a NO-OP unless SMS_RELAY_DRAIN_ENABLED is truthy, and is fail-soft (a drain error logs and exits 0)
 //   relay-drop-gauge          | SAFE    | coordinator-relay-drop-gauge.cjs's own header: "Idempotent per (correlationId): a row already flagged for the same correlation is [skipped]"
 //   fleet-retro               | SAFE    | coordinator-fleet-retro.mjs's insert uses an explicit dedup key on the capture path (source_id/type-scoped)
 //   row-growth                | SAFE    | row-growth-snapshot.cjs is internally due-gated (~22h) per its own STANDARD_LOOPS comment above — an extra run inside the gate window is a documented no-op
@@ -146,6 +157,17 @@ export const STANDARD_LOOPS = [
   // the 3600s no-cron fallback.
   { key: 'unrouted-branches', folded: true, label: 'Unrouted finished-work detector (branches with commits and no open PR)', script: 'audit-unrouted-branches.mjs', cron: '0,15,30,45 * * * *',
     prompt: 'node scripts/audit-unrouted-branches.mjs' },
+  // SD-LEO-INFRA-DRIVE-LOOP-INSTRUMENT-001-C. folded:true — composed by the quiet tick
+  // (COMPOSED_CORES key 'drive-report-consume'), registered here for the loop-parity census so a
+  // cutover cannot silently drop the duty. NEVER arm standalone. Deliberately NOT gha_backed: the
+  // receipt must be stamped by the seat ACTUALLY EXECUTING as coordinator, and a CI runner is not
+  // that seat — a runner-written receipt would assert a consumption that never happened, which is
+  // precisely the producer-stamped defect this SD exists to prevent. The cron value mirrors the
+  // quiet tick's own cadence because that is the real fire rate; it is never armed, but
+  // parseStandardLoops derives expected_interval_seconds from it, so an honest value beats the
+  // 3600s no-cron fallback.
+  { key: 'drive-report-consume', folded: true, label: 'Coordinator drive-report consumption receipt (consumer-stamped from the live session)', script: 'coordinator-drive-report-consume.mjs', cron: '0,15,30,45 * * * *',
+    prompt: 'node scripts/coordinator-drive-report-consume.mjs' },
   // SD-LEO-INFRA-COORDINATOR-CHARTER-SELF-AUDIT-001: durable charter-compliance self-audit (replaces the
   // lost session-only CronCreate). READ-ONLY detection; authoritative PID/armed-silence liveness; fail-loud
   // on a foundational query error; names a remediation per violation. The prompt compels REMEDIATE-THEN-VERIFY.
@@ -188,6 +210,14 @@ export const STANDARD_LOOPS = [
   { key: 'unranked-gauge', label: 'Eligible-but-unranked-leaf-count invariant gauge', script: 'gauge-unranked-claimable-leaves.mjs', cron: '9,24,39,54 * * * *',
     gha_backed: true,
     prompt: 'node scripts/gauge-unranked-claimable-leaves.mjs' },
+  // SD-LEO-INFRA-FORCE-ROLE-SESSIONS-001 (FR-3/FR-4): the coordinator's forced-capture obligation,
+  // evaluated at a recurring operating choke rather than at turn end (a wedged session never
+  // reaches turn-end, so a Stop hook would have nothing to hook). folded — composed by
+  // coordinator-quiet-tick's capture-gate core, never armed standalone. gha_backed via
+  // role-capture-gate-cron.yml, because teardown-discipline deletes this session-armed leg on
+  // sustained idle and that is exactly the seat whose silence needs measuring.
+  { key: 'capture-gate', folded: true, gha_backed: true, label: 'Coordinator forced-capture obligation (check-only)', script: 'role-capture-gate.mjs', cron: '13,43 * * * *',
+    prompt: 'node scripts/role-capture-gate.mjs check --role coordinator' },
   // QF-20260702-976: the OPERATING layer for SD-LEO-INFRA-COORDINATOR-ORCHESTRATED-SINGLETON-REFRESH-001-A.
   // The trigger + scheduler logic (lib/coordinator/singleton-relaunch-trigger.js, scripts/
   // singleton-relaunch-scheduler.mjs, npm-wired as singleton-relaunch:run) shipped but nothing
@@ -209,6 +239,32 @@ export const STANDARD_LOOPS = [
   { key: 'relay-drain', label: 'Relay-request queue drain + confirm-on-relay', script: 'coordinator-relay-drain.cjs', cron: '1,16,31,46 * * * *',
     gha_backed: true,
     prompt: 'node scripts/coordinator-relay-drain.cjs' },
+  // QF-20260727-064: the CHAIRMAN's inbound SMS drain. sms-relay-drain-cron.yml declares
+  // '*/5 * * * *' and every run reports SUCCESS, but GitHub Actions DEPRIORITISES scheduled
+  // workflows on a busy repo, so the real cadence is nothing like 5 minutes. Measured run
+  // starts (UTC 2026-07-26/27) 19:50, 20:44, 21:43, 22:43, 23:43, 01:20, 05:01, 08:41,
+  // 11:59, 14:55 — gaps of 54, 59, 60, 60, 97, 221, 220, 197, 176 minutes. Hourly at best,
+  // 3.7h at worst, never 5 minutes. Live consequence 2026-07-27: the chairman texted ~09:45Z,
+  // the last drain had run 08:41Z, and at 11:47Z the row was STILL undrained.
+  //
+  // This is the fails-green class — flag on, workflow green, outcome absent — so it stays
+  // gha_backed:true (the workflow is real and does fire) while ALSO being session-armed here,
+  // exactly the "harmless redundant backup" posture the header table already sanctions for
+  // GHA-backed loops. A live coordinator ticks far more reliably than a deprioritised runner.
+  //
+  // This also REPAIRS THE FR-3 ALARM rather than retuning it away. sms-relay-drain.cjs's
+  // backlog-stall signal fires on rows undrained > SMS_RELAY_DRAIN_STALL_MINUTES (default 15).
+  // Under a 1-3.7h effective cadence that threshold is breached by NORMAL operation, so the
+  // alarm was either permanently firing or tuned to ignore the real failure. Restoring a true
+  // ~5-minute cadence makes 15 minutes meaningful again — the honest fix, versus relaxing the
+  // threshold to match a broken cadence and calling the silence health.
+  //
+  // NOT FIXED HERE, and deliberately so: draining a text into chairman_decisions is not the
+  // same as ANSWERING it. A live Adam session must still read and reply, so out-of-session
+  // inbound remains unanswered even at a correct cadence. The row says so explicitly.
+  { key: 'sms-relay-drain', label: 'Chairman inbound SMS relay-staging drain', script: 'sms-relay-drain.cjs', cron: '*/5 * * * *',
+    gha_backed: true,
+    prompt: 'node scripts/sms-relay-drain.cjs' },
   // FR-3: the drop-gauge — flags any inbound RELAY/DECISION/REVIEW row with no matching
   // outbound within the window (default ~15min). Offset from relay-drain so it observes a
   // just-drained queue rather than racing it.
@@ -285,8 +341,34 @@ export const STANDARD_LOOPS = [
     prompt: 'Run `node scripts/read-adam-advisories.cjs`. For EACH unactioned advisory listed: ACTION it per its kind (route/decide/reply — never lean-filter advisories) and ack it PER-ITEM (actioned_at) — never bulk-ack. If none are listed this is a NO-OP. Incident basis: 14 advisories incl a chairman decision sat unactioned ~2.5h while every tick read clean.' },
   { key: 'silent-holder-audit', label: 'Silent-claim-holder audit — status-or-release on >3h no-signal with no work product', script: null, cron: '23 * * * *',
     prompt: 'Silent-holder audit: list fleet workers currently holding an sd_key claim. For each holder with >3h since their last /signal AND no work product in that window (no PR, no commits on the claim branch — WORK PRODUCT is the discriminator, never loop_state/started_at), send a status-or-release coordinator_request via the dispatch choke — unless that holder already has an unanswered status request pending (skip, no re-nudge). Release decisions stay with the sweep; this loop only asks.' },
-  { key: 'shared-root-freshness', label: 'Shared-root freshness — pull when clean main is behind origin (remediation half of the stale-tree gauge)', script: null, cron: '51 */2 * * *',
-    prompt: 'Shared-root freshness: in the SHARED ROOT (never a worktree), if `git status --porcelain` is clean AND the branch is main AND `git fetch origin && git rev-list --count HEAD..origin/main` > 0, run `git pull --ff-only`. If the tree is dirty or not on main, REPORT the state instead of pulling (another session may be mid-work). The stale-tree gauge detects; this loop remediates.' },
+  // QF-20260727-502. TWO CHANGES, BOTH FROM MEASUREMENT, NEITHER WEAKENING THE REAPER'S GUARD.
+  //
+  // (1) CADENCE 2h -> 20min. The loop remediates a tree that goes stale within MINUTES under six
+  // parallel workers. One measured 2.5h coordinator session saw drift of 6, then 22, then 3
+  // commits — every window far shorter than the 2h tick, so the remediation essentially never
+  // arrived in time and the reaper refused for 5 then 6 consecutive ticks with the pool at 20/28.
+  //
+  // (2) THE DIRTY-REFUSAL IS DROPPED FOR THE FF-ONLY VERB ONLY. It bought no safety here and was
+  // the thing converting a self-healing case into a 3am manual one. Measured across a four-cell
+  // control matrix (tracked/untracked x overlapping/disjoint): `git merge --ff-only` CANNOT
+  // clobber. On overlap it aborts with exit 1 and names the files, leaving local edits verbatim;
+  // on disjoint dirt it fast-forwards cleanly. The shared root's dirt is dominantly UNTRACKED
+  // (~138 porcelain entries: generated CLAUDE_*.md, scripts/one-off artifacts, worker leftovers),
+  // which is exactly the untracked-disjoint cell that already fast-forwards today.
+  //
+  // *** THE OFF-BRANCH REFUSAL STAYS UNCONDITIONAL, AND THE GUARD ITSELF IS UNTOUCHED. *** This
+  // relaxation applies to ff-only, the one verb git already protects. checkout/reset/rebase can
+  // genuinely clobber a peer worktree and must keep refusing on a dirty or off-branch tree.
+  //
+  // NOT DOING THE LOCK-CLEARING HALF, DELIBERATELY. An earlier version of this fix had the loop
+  // call clear-stale-index-lock.mjs first. The coordinator withdrew it after measuring that the
+  // helper's zero-byte branch has NO age floor and NO live-process check — and git creates
+  // .git/index.lock as zero bytes via O_CREAT|O_EXCL, writing content microseconds later. A cron
+  // clearing zero-byte locks unconditionally can unlink the lock of a LIVE operation, which in a
+  // six-worker shared root is a corruption risk strictly worse than the stale tree. Manual calls
+  // were safe by TIMING, not by predicate. Hardening the helper is SD-LEO-INFRA-JAMMED-GIT-INDEX-001.
+  { key: 'shared-root-freshness', label: 'Shared-root freshness — ff-only pull when main is behind origin (remediation half of the stale-tree gauge)', script: null, cron: '*/20 * * * *',
+    prompt: 'Shared-root freshness: in the SHARED ROOT (never a worktree), if the branch is main AND `git fetch origin && git rev-list --count HEAD..origin/main` > 0, run `git merge --ff-only origin/main`. DO NOT gate this on a clean tree: ff-only cannot clobber — on overlapping changes it aborts with exit 1 and names the files, leaving your edits untouched, and the shared root dirt is dominantly untracked and disjoint, which fast-forwards cleanly. If it exits non-zero, REPORT the message verbatim (that is the loud failure, not a problem to work around). If the branch is NOT main, REPORT and do nothing — that refusal stays unconditional because another session may be mid-work. Do NOT clear .git/index.lock here: a zero-byte lock can be a live git operation microseconds old (see SD-LEO-INFRA-JAMMED-GIT-INDEX-001). The stale-tree gauge detects; this loop remediates.' },
   // QF-20260704-493: feedback-consumption SLA gauge daily reminder (Solomon referent-audit
   // cell [4]) — actionable feedback categories (adam_adherence_drift, completion_flag,
   // coordinator_review, harness_backlog escalations) had no consumption deadline. Internally
@@ -459,9 +541,276 @@ export function renderFreshness(repoRoot = REPO_ROOT) {
   }
 }
 
+/**
+ * SD-LEO-INFRA-ROLE-CONTRACT-READ-GATE-001 / FR-2.
+ *
+ * THE AUDIT THAT PRODUCED THIS: no role had both halves. adam and solomon have register scripts that
+ * check the contract read, but contracts too large to read in one call. The coordinator had a
+ * contract small enough to read (CLAUDE_COORDINATOR.md ~25.5KB, under the 25k-token cap for any real
+ * tokenizer — established from the byte count, not from a token ratio) and NO VERIFIER OF ANY KIND.
+ * Its priming requirement terminated in a self-attestation that nothing checked.
+ *
+ * Deliberately mirrors adam-register.cjs checkContractRead rather than inventing a shape.
+ *
+ * WHY HERE AND NOT IN A NEW coordinator-register.cjs: registration is an inline node -e in
+ * coordinator.md, and Step 4 of that same ritual already invokes THIS script at the fixed activation
+ * moment. A parallel register script would mean inventing an invocation point that does not exist.
+ *
+ * FAIL-OPEN, LIKE EVERYTHING ELSE HERE. This reports; it never blocks. A gate that stops a
+ * coordinator from starting because it has not yet read the contract it is starting in order to read
+ * is a deadlock, and the script's contract is "exit code is ALWAYS 0".
+ */
+export const COORDINATOR_CONTRACT_FILE = 'CLAUDE_COORDINATOR.md';
+
+export function checkCoordinatorContractRead(repoRoot = REPO_ROOT, stateReader = null, opts = {}) {
+  const result = {
+    contract_file: COORDINATOR_CONTRACT_FILE,
+    contract_exists: false,
+    contract_read: false,
+    contract_read_partial: false,
+    contract_last_read_at: null,
+  };
+  try {
+    result.contract_exists = existsSync(resolve(repoRoot, COORDINATOR_CONTRACT_FILE));
+    const state = stateReader ? stateReader() : readCoordinatorSessionState(repoRoot);
+    if (!state) return result;
+    const status = state.protocolFileReadStatus && state.protocolFileReadStatus[COORDINATOR_CONTRACT_FILE];
+    if (status && status.readCount > 0) {
+      // Routed through the SHARED verdict rather than reading lastReadWasPartial directly. This
+      // contract fits in one call, so the old boolean was accurate for the common case — but a
+      // coordinator that paginated (e.g. via /read-full) would have been recorded PARTIAL for doing
+      // MORE work, which is the same inversion FR-3 removes for adam and solomon. One implementation,
+      // three roles; the size tier inside the verdict is what keeps this file's happy path green.
+      const verdict = contractReadVerdict(
+        status,
+        contractLineCount(repoRoot, COORDINATOR_CONTRACT_FILE),
+        { singleReadFit: singleReadFit(repoRoot, COORDINATOR_CONTRACT_FILE) }
+      );
+      result.contract_read = verdict.read;
+      result.contract_read_partial = !verdict.fully_read;
+      result.contract_coverage_pct = verdict.coverage_pct;
+      result.contract_read_basis = verdict.basis;
+      result.contract_last_read_at = status.lastReadAt || null;
+    } else if (Array.isArray(state.protocolFilesRead) && state.protocolFilesRead.includes(COORDINATOR_CONTRACT_FILE)) {
+      // SEC-F1. This branch USED to hardcode basis 'legacy_array_single_read_safe' and leave
+      // contract_read_partial at false — a basis string NAMING a size check that was never run, with
+      // a comment claiming parity with adam-register that did not hold (adam and solomon both measure
+      // here and emit 'legacy_array_no_evidence' when the contract does not fit).
+      //
+      // It was true only because CLAUDE_COORDINATOR.md happens to fit — i.e. the exact "three true
+      // sentences" defect this same commit removed one function below, reintroduced by the fix for
+      // it. A legacy bare-filename list carries NO coverage information; it is sufficient only when
+      // the contract provably fits in one call, and that has to be measured, not asserted.
+      const fit = opts.fit || singleReadFit(repoRoot, COORDINATOR_CONTRACT_FILE);
+      result.contract_read = true;
+      result.contract_read_partial = fit.fits !== true;
+      result.contract_read_basis = fit.fits === true ? 'legacy_array_single_read_safe' : 'legacy_array_no_evidence';
+    }
+  } catch { /* fail-open: tracking unavailable must never break coordinator startup */ }
+  return result;
+}
+
+/** Read session state without throwing. Separated so tests can inject state directly. */
+function readCoordinatorSessionState(repoRoot) {
+  try {
+    const statePath = resolveStateReadPath(repoRoot);
+    if (!statePath || !existsSync(statePath)) return null;
+    return JSON.parse(readFileSync(statePath, 'utf8').replace(/^﻿/, ''));
+  } catch { return null; }
+}
+
+/**
+ * The three role contracts this gate reasons about, and the sibling SD that makes each one readable.
+ * Order is the render order.
+ */
+export const ROLE_CONTRACTS = Object.freeze([
+  Object.freeze({ role: 'coordinator', file: COORDINATOR_CONTRACT_FILE, dependency: null }),
+  Object.freeze({ role: 'adam', file: 'CLAUDE_ADAM.md', dependency: 'SD-LEO-INFRA-ADAM-CONTRACT-READABLE-001' }),
+  Object.freeze({ role: 'solomon', file: 'CLAUDE_SOLOMON.md', dependency: null }),
+]);
+
+/**
+ * SD-LEO-INFRA-ROLE-CONTRACT-READ-GATE-001 / FR-6 — ARMING IS A MEASUREMENT, NOT A SENTENCE.
+ *
+ * *** THIS REPLACED THREE HARDCODED STRINGS, AND THE STRINGS WERE CORRECT. *** That is exactly why
+ * they were dangerous. `adam : disarmed — CLAUDE_ADAM.md exceeds the read cap` was a true statement
+ * about 2026-07-31 pinned into source, and its test asserted the string. So the day
+ * SD-LEO-INFRA-ADAM-CONTRACT-READABLE-001 lands and CLAUDE_ADAM.md drops under the bound, the banner
+ * would still have printed "disarmed", the test would still have passed, and the newly-compliant role
+ * would have stayed dark with nothing anywhere reporting a discrepancy. A check whose verdict cannot
+ * change when the world changes is not a check — it is a comment with a test around it. The SD's own
+ * criterion is "encoded as a condition, not as prose", and the prose version met it only by coincidence.
+ *
+ * The dependency is read LIVE and at the only place it is actually observable: the contract's size on
+ * disk. Deliberately NOT a DB lookup of the sibling SD's status — this runs inside a fail-open startup
+ * path with no network, and more importantly the sibling's *deliverable* IS the smaller file. Asking
+ * the filesystem asks whether the thing was actually achieved; asking the DB asks whether someone
+ * marked it done. When those disagree, the filesystem is right.
+ *
+ * *** ARMING IS DECIDED ON MEASURED TOKENS, NOT ON BYTES, AND THAT CHANGED A REAL VERDICT. *** The
+ * first version of this function compared file SIZE against a byte bound. The bound was tuned for
+ * adversarially dense input (~1.32 B/token), but these contracts are prose (~4.2 B/token), so it
+ * disarmed roles that can already comply. Measured: CLAUDE_SOLOMON.md is 67,501 B but only 15,965
+ * tokens — it FITS in one read, and the byte proxy was telling Solomon its contract was unreadable.
+ * CLAUDE_ADAM.md is over by 569 tokens, not by the 4x its byte count implies. A proxy for the limit
+ * is not the limit; the SD's own success criteria required token figures re-measured rather than
+ * inherited from a bytes derivation.
+ *
+ * @param {string} [repoRoot]
+ * @param {(file: string) => {fits:boolean|null,tokens:number|null,bytes:number|null,basis:string}} [fitter]
+ *        test seam: single-read fit per contract file.
+ * @returns {Array<{role:string,file:string,tokens:number|null,bytes:number|null,armed:boolean,reason:string}>}
+ */
+export function roleArmingStates(repoRoot = REPO_ROOT, fitter = null) {
+  const fitOf = fitter || ((file) => singleReadFit(repoRoot, file));
+  return ROLE_CONTRACTS.map(({ role, file, dependency }) => {
+    let fit = null;
+    try { fit = fitOf(file); } catch { fit = null; }
+    // SEC-F9: `Number(null)` is 0 and `Number.isFinite(0)` is true, so a null token count became 0
+    // and the banner printed "contract fits in one read (0 tokens ≤ 25000 cap)" in degraded mode,
+    // making the honest no-tokenizer message unreachable. Null-check BEFORE coercing.
+    const tokens = fit && fit.tokens != null && Number.isFinite(Number(fit.tokens)) ? Number(fit.tokens) : null;
+    const bytes = fit && fit.bytes != null && Number.isFinite(Number(fit.bytes)) ? Number(fit.bytes) : null;
+
+    // Unmeasurable (including `fits: null`) => DISARMED. Absence of evidence is never promoted to
+    // compliance; that promotion is the defect this whole SD exists to remove.
+    if (!fit || fit.fits !== true) {
+      if (!fit || fit.fits === null || fit.fits === undefined) {
+        return { role, file, tokens, bytes, armed: false, reason: `${file} not measurable — cannot establish readability` };
+      }
+      const over = tokens !== null
+        ? `${tokens} tokens > ${SINGLE_READ_TOKEN_BUDGET} budget`
+        : `${bytes}B exceeds the no-tokenizer fallback bound`;
+      return {
+        role, file, tokens, bytes, armed: false,
+        reason: `${file} exceeds a single read (${over})` + (dependency ? ` — blocked on ${dependency}` : ''),
+      };
+    }
+    return {
+      role, file, tokens, bytes, armed: true,
+      reason: tokens !== null
+        ? `contract fits in one read (${tokens} tokens ≤ ${SINGLE_READ_TOKEN_BUDGET} budget)`
+        : `contract fits in one read (${bytes}B, no tokenizer — conservative bound)`,
+    };
+  });
+}
+
+/**
+ * Render the contract-read state.
+ *
+ * PER-ROLE ARMING IS RENDERED, NOT IMPLIED. Global arming was rejected: it would make the one role
+ * that can comply today wait on two that cannot, and would couple this SD to a sibling deliberately
+ * sequenced after it. The risk of per-role is someone assuming uniform coverage, so the disarmed
+ * roles are printed explicitly rather than left to inference.
+ */
+export function renderContractRead(repoRoot = REPO_ROOT, check = null, opts = {}) {
+  const lines = ['═══ ROLE CONTRACT READ ═══'];
+  try {
+    const c = check || checkCoordinatorContractRead(repoRoot);
+    if (!c.contract_exists) {
+      lines.push(`  ✗ ${COORDINATOR_CONTRACT_FILE} not found — regenerate: node scripts/generate-claude-md-from-db.js`);
+    } else if (!c.contract_read) {
+      lines.push(`  ✗ NO RECORD of ${COORDINATOR_CONTRACT_FILE} being read this session.`);
+      // Safe advice HERE and only here: this contract is under the read cap, so a no-offset Read
+      // genuinely covers it. The same instruction on an over-cap contract silently truncates and is
+      // then recorded as a complete read — see FR-3/FR-5.
+      lines.push(`  → Read ${COORDINATOR_CONTRACT_FILE} in full before coordinating.`);
+    } else if (c.contract_read_partial) {
+      lines.push(`  ⚠ Last read of ${COORDINATOR_CONTRACT_FILE} was PARTIAL (offset/limit used).`);
+      lines.push('  → Re-read it in full; this contract fits in one call.');
+    } else {
+      lines.push(`  ✅ ${COORDINATOR_CONTRACT_FILE} read${c.contract_last_read_at ? ` at ${c.contract_last_read_at}` : ''}`);
+    }
+    lines.push('  ── per-role arming (measured now: real tokens per contract, vs the read cap) ──');
+    for (const s of roleArmingStates(repoRoot, opts.fitter)) {
+      lines.push(`  ${s.role.padEnd(11)} : ${s.armed ? 'ARMED' : 'disarmed'} — ${s.reason}`);
+    }
+  } catch (err) {
+    lines.push('  ✅ contract-read check skipped (fail-open): ' + (err?.message || String(err)));
+  }
+  return lines.join('\n');
+}
+
+/**
+ * SD-LEO-INFRA-WORKER-ESCALATION-WRITE-001 (FR-2, acceptance half) — THE FIRST PRODUCTION READER
+ * OF THE RECEIPT LEDGER.
+ *
+ * *** THE SD SHIPPED THE WRITE HALF OF ITS OWN THESIS AND NEARLY CALLED IT DONE. *** Three lanes
+ * wrote receipts and NOTHING read them: answered-rate.cjs had zero production callers, so the state
+ * was recorded and unobservable. The SD's stated goal is "a signal must produce a return state THE
+ * SENDING WORKER CAN OBSERVE". Found by VALIDATION at PLAN_VERIFICATION; coordinator ruled WIRE,
+ * not defer, partly because deferring it would have made FR-4's unhold trigger — which depends on
+ * the answered-rate being computable — permanently unreachable.
+ *
+ * WHY HERE: the coordinator is the party whose conduct this rate measures AND the one who can act
+ * on it, and this script already has a proven invocation point (coordinator.md Step 4). Scope is
+ * deliberately ONE reader per the ruling — not a dashboard, not a gauge family.
+ *
+ * FAIL-OPEN like everything else in this file, and UNKNOWN is never rendered as a healthy zero:
+ * computeAnsweredRate returns rate=null with a verdict when coverage cannot be established, and
+ * that is printed as UNKNOWN. An absence displayed as 0% is the exact defect this module exists to
+ * prevent — a deployment gap would otherwise read as "nobody answered anything".
+ */
+export async function renderAnsweredRate(sb = null, nowMs = Date.now()) {
+  const lines = ['═══ SIGNAL ANSWERED-RATE (durable ledger) ═══'];
+  try {
+    const client = sb || (await import('../lib/supabase-client.js')).lazyServiceClient();
+    const req = _createRequireQF342(import.meta.url);
+    const { computeAnsweredRate, answeredBySeat } = req('../lib/coordination/answered-rate.cjs');
+
+    const sinceIso = new Date(nowMs - 7 * 24 * 60 * 60 * 1000).toISOString();
+
+    /**
+     * PAGES. PostgREST caps an unranged select at 1000 rows and returns them WITHOUT ERROR.
+     *
+     * The first cut of this reader printed "1.3% (13 answered / 1000 signals)" — and 1000 is not a
+     * measurement, it is the cap. The denominator was a truncated page, so the rate was computed
+     * over a sample while being rendered as the population. That is the same defect this SD exists
+     * to remove, and the third time this specific cap has bitten in one day; it is silent every
+     * time, because a full page looks exactly like a complete result.
+     */
+    const fetchAll = async (build) => {
+      const PAGE = 1000;
+      const out = [];
+      for (let from = 0; ; from += PAGE) {
+        const { data, error } = await build().range(from, from + PAGE - 1);
+        if (error) throw error;
+        const rows = data || [];
+        out.push(...rows);
+        if (rows.length < PAGE) return out;
+      }
+    };
+
+    // The CANONICAL friction-signal predicate, reused rather than re-derived: detectors.cjs:142
+    // establishes that only rows carrying payload.signal_type are friction signals (roll-call rows
+    // deliberately omit it so they are not miscounted).
+    const [signals, receipts] = await Promise.all([
+      fetchAll(() => client.from('session_coordination').select('id, created_at, payload')
+        .not('payload->>signal_type', 'is', null).gte('created_at', sinceIso).order('created_at')),
+      fetchAll(() => client.from('coordination_receipts').select('coordination_id, lane, state, is_retention, created_at')
+        .eq('lane', 'signal').gte('created_at', sinceIso).order('created_at')),
+    ]);
+
+    const input = { receipts: receipts || [], signals: signals || [] };
+    const r = computeAnsweredRate(input);
+    if (r.rate === null) {
+      lines.push(`  UNKNOWN — ${r.verdict} (${r.total} signal(s) in window). NOT reported as 0%.`);
+    } else {
+      lines.push(`  ${(r.rate * 100).toFixed(1)}%  (${r.answered} answered / ${r.total} signals, 7d)`);
+      const { seats } = answeredBySeat(input);
+      const zero = seats.filter((s) => s.sent >= 5 && s.answered === 0);
+      if (zero.length) lines.push(`  ⚠ seat(s) at ZERO with >=5 sent: ${zero.map((s) => `${s.seat}(${s.sent})`).join(', ')}`);
+    }
+    if (r.excluded) lines.push(`  ${r.excluded} signal(s) excluded as uncoverable (writer not deployed).`);
+  } catch (err) {
+    lines.push('  ✅ answered-rate skipped (fail-open): ' + (err?.message || String(err)));
+  }
+  return lines.join('\n');
+}
+
 export function buildReport(argv = [], env = {}, repoRoot = REPO_ROOT) {
   const armed = parseArmedSet(argv, env);
-  return [renderResponsibilities(repoRoot), '', renderAdamLane(), '', renderLoops(armed), '', renderFreshness(repoRoot)].join('\n');
+  return [renderResponsibilities(repoRoot), '', renderAdamLane(), '', renderLoops(armed), '', renderContractRead(repoRoot), '', renderFreshness(repoRoot)].join('\n');
 }
 
 // SD-LEO-INFRA-BOOTSTRAPPABLE-SURVIVOR-AGNOSTIC-001: coordinator-cold-recovery.cjs shipped +
@@ -495,6 +844,11 @@ function main() {
   renderColdRecovery(process.argv.slice(2), process.env)
     .then(async (out) => {
       console.log(out);
+      // FR-2 acceptance half: PRINT the answered-rate. Building renderAnsweredRate and not calling
+      // it here would ship a second unread mechanism inside the SD whose entire subject is unread
+      // mechanisms. It rides this already-async leg because it needs a DB round trip, and it is
+      // fail-open on its own (never throws) so it cannot affect the startup contract.
+      try { console.log('\n' + await renderAnsweredRate()); } catch { /* fail-open */ }
       // SD-FDBK-ENH-CENTRAL-LIVENESS-STAMPER-001 (FR-3): stamp on every successful
       // startup-check tick (the report + cold-recovery leg are fail-open by design).
       try {

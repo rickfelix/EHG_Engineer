@@ -67,11 +67,17 @@ export async function executeSubAgent(subAgent, sdId, options = {}) {
       ...options  // Forward any additional options (validation_mode, full_e2e, etc.)
     });
 
-    // Transform result to match orchestrator's expected format
-    return {
-      sub_agent_code: code,
-      sub_agent_name: name,
-      verdict: result.verdict || 'WARNING',
+    // Transform result to match orchestrator's expected format.
+    //
+    // SD-LEO-INFRA-WRITER-SUB-AGENT-001 / FR-2: `verdict: result.verdict || 'WARNING'` REMOVED.
+    // This was the LITERAL defect SD-LEO-INFRA-SUBAGENT-VERDICT-LAUNDERED-001 was created to fix,
+    // still alive here because that SD was scoped to ONE writer ("SCOPE IS ROWS FROM THIS WRITER,
+    // NOT THE WHOLE TABLE"). WARNING is in the evidence gate's ACCEPT set, so any sub-agent that
+    // returned nothing — including one that crashed — was silently promoted to a passing verdict,
+    // stored RAW via safeInsert with no mapVerdict and no original_verdict.
+    // The verdict is now passed through UNMODIFIED; mapping and provenance belong to the canonical
+    // writer, which this path already invokes via realExecuteSubAgent.
+    verdict: result.verdict,
       confidence: result.confidence !== undefined ? result.confidence : 50,
       critical_issues: result.critical_issues || [],
       warnings: result.warnings || [],
@@ -241,15 +247,30 @@ export async function storeSubAgentResult(sdId, result, supabase) {
  */
 export async function updatePRDMetadataFromSubAgents(sdId, phase, results, supabase) {
   try {
-    // Get PRD associated with this SD
-    const { data: prd, error: prdError } = await supabase
-      .from('product_requirements_v2')
-      .select('id, metadata')
-      .eq('directive_id', sdId)
-      .single();
+    // Get PRD associated with this SD.
+    //
+    // SD-LEO-INFRA-WRITER-SUB-AGENT-001 (absorbed from Charlie's population measurement, 770bedae):
+    // this was `.eq('directive_id', sdId)` alone. directive_id holds the SD KEY on 2987 of 4171 rows
+    // (re-measured independently), while every UUID-normalizing caller passes a uuid — so the lookup
+    // MISSED and the miss printed as "normal for early phases". A silent failure wearing a benign
+    // label, which is the same shape as the verdict laundering this SD exists to fix: the metadata
+    // update was skipped and nothing said so.
+    const isUuid = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(String(sdId));
+    let query = supabase.from('product_requirements_v2').select('id, metadata');
+    // Only widen to sd_id when the input IS a uuid: sd_id is a uuid column, and comparing it to an
+    // 'SD-...' key errors rather than returning empty.
+    query = isUuid
+      ? query.or(`sd_id.eq.${sdId},directive_id.eq.${sdId}`)
+      : query.eq('directive_id', sdId);
+    const { data: prd, error: prdError } = await query.maybeSingle();
 
-    if (prdError || !prd) {
-      // Not an error - SD may not have a PRD yet (early phases)
+    if (prdError) {
+      // A query ERROR is not "no PRD yet" — say so, rather than filing it under the benign label.
+      console.warn(`      PRD lookup FAILED for SD ${sdId}: ${prdError.message}`);
+      return null;
+    }
+    if (!prd) {
+      // Genuinely absent - SD may not have a PRD yet (early phases)
       console.log(`      No PRD found for SD ${sdId} (normal for early phases)`);
       return null;
     }

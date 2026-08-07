@@ -1,123 +1,179 @@
 {
-  "generated_at": "2026-07-20T19:47:06.145Z",
-  "git_commit": "9c631a0a",
-  "db_snapshot_hash": "15274e313a3b8c43",
+  "generated_at": "2026-08-04T04:36:22.358Z",
+  "git_commit": "7af34994",
+  "db_snapshot_hash": "31945d3b870a9f44",
   "files": {
     "CLAUDE.md": {
       "type": "full",
-      "chars": 19564,
-      "estimated_tokens": 4891,
-      "content_hash": "f52ce73a5849af56",
-      "path": "C:\\Users\\rickf\\Projects\\_EHG\\EHG_Engineer\\.worktrees\\qf\\QF-20260720-531\\CLAUDE.md"
+      "chars": 19565,
+      "bytes": 19704,
+      "estimated_tokens": 4892,
+      "content_hash": "91b0c479ced58edc",
+      "path": "C:\\Users\\rickf\\Projects\\_EHG\\EHG_Engineer\\.worktrees\\SD-LEO-INFRA-CHAIRMAN-SMS-LANE-001\\CLAUDE.md"
     },
     "CLAUDE_CORE.md": {
       "type": "full",
-      "chars": 92157,
-      "estimated_tokens": 23040,
-      "content_hash": "9b520aa8eb7a1f97",
-      "path": "C:\\Users\\rickf\\Projects\\_EHG\\EHG_Engineer\\.worktrees\\qf\\QF-20260720-531\\CLAUDE_CORE.md"
+      "chars": 94930,
+      "bytes": 95531,
+      "estimated_tokens": 23733,
+      "content_hash": "0f526e3d7ab3d6d9",
+      "path": "C:\\Users\\rickf\\Projects\\_EHG\\EHG_Engineer\\.worktrees\\SD-LEO-INFRA-CHAIRMAN-SMS-LANE-001\\CLAUDE_CORE.md"
     },
     "CLAUDE_LEAD.md": {
       "type": "full",
-      "chars": 65998,
-      "estimated_tokens": 16500,
-      "content_hash": "acb54c2d7e0181c2",
-      "path": "C:\\Users\\rickf\\Projects\\_EHG\\EHG_Engineer\\.worktrees\\qf\\QF-20260720-531\\CLAUDE_LEAD.md"
+      "chars": 58426,
+      "bytes": 58622,
+      "estimated_tokens": 14607,
+      "content_hash": "669a7bc3bfbc0666",
+      "path": "C:\\Users\\rickf\\Projects\\_EHG\\EHG_Engineer\\.worktrees\\SD-LEO-INFRA-CHAIRMAN-SMS-LANE-001\\CLAUDE_LEAD.md"
+    },
+    "CLAUDE_LEAD_MANUAL.md": {
+      "type": "full",
+      "chars": 8819,
+      "bytes": 8863,
+      "estimated_tokens": 2205,
+      "content_hash": "132692e6ee6b869e",
+      "path": "C:\\Users\\rickf\\Projects\\_EHG\\EHG_Engineer\\.worktrees\\SD-LEO-INFRA-CHAIRMAN-SMS-LANE-001\\CLAUDE_LEAD_MANUAL.md"
     },
     "CLAUDE_PLAN.md": {
       "type": "full",
-      "chars": 91830,
-      "estimated_tokens": 22958,
-      "content_hash": "f5b7c7b262300a7c",
-      "path": "C:\\Users\\rickf\\Projects\\_EHG\\EHG_Engineer\\.worktrees\\qf\\QF-20260720-531\\CLAUDE_PLAN.md"
+      "chars": 54929,
+      "bytes": 55186,
+      "estimated_tokens": 13733,
+      "content_hash": "607dcb3d314a390f",
+      "path": "C:\\Users\\rickf\\Projects\\_EHG\\EHG_Engineer\\.worktrees\\SD-LEO-INFRA-CHAIRMAN-SMS-LANE-001\\CLAUDE_PLAN.md"
+    },
+    "CLAUDE_PLAN_MANUAL.md": {
+      "type": "full",
+      "chars": 38354,
+      "bytes": 38461,
+      "estimated_tokens": 9589,
+      "content_hash": "03675ab2b5b12df3",
+      "path": "C:\\Users\\rickf\\Projects\\_EHG\\EHG_Engineer\\.worktrees\\SD-LEO-INFRA-CHAIRMAN-SMS-LANE-001\\CLAUDE_PLAN_MANUAL.md"
     },
     "CLAUDE_EXEC.md": {
       "type": "full",
-      "chars": 88941,
-      "estimated_tokens": 22236,
-      "content_hash": "8d09272f0012e071",
-      "path": "C:\\Users\\rickf\\Projects\\_EHG\\EHG_Engineer\\.worktrees\\qf\\QF-20260720-531\\CLAUDE_EXEC.md"
+      "chars": 89642,
+      "bytes": 90072,
+      "estimated_tokens": 22411,
+      "content_hash": "636da0e0051ecc02",
+      "path": "C:\\Users\\rickf\\Projects\\_EHG\\EHG_Engineer\\.worktrees\\SD-LEO-INFRA-CHAIRMAN-SMS-LANE-001\\CLAUDE_EXEC.md"
     },
     "CLAUDE_ADAM.md": {
       "type": "full",
-      "chars": 97225,
-      "estimated_tokens": 24307,
-      "content_hash": "15432e677382b095",
-      "path": "C:\\Users\\rickf\\Projects\\_EHG\\EHG_Engineer\\.worktrees\\qf\\QF-20260720-531\\CLAUDE_ADAM.md"
+      "chars": 46748,
+      "bytes": 47258,
+      "estimated_tokens": 11687,
+      "content_hash": "355b0e33be6c4716",
+      "path": "C:\\Users\\rickf\\Projects\\_EHG\\EHG_Engineer\\.worktrees\\SD-LEO-INFRA-CHAIRMAN-SMS-LANE-001\\CLAUDE_ADAM.md"
+    },
+    "CLAUDE_ADAM_MANUAL.md": {
+      "type": "full",
+      "chars": 15699,
+      "bytes": 15843,
+      "estimated_tokens": 3925,
+      "content_hash": "41ac71b8e45c6f71",
+      "path": "C:\\Users\\rickf\\Projects\\_EHG\\EHG_Engineer\\.worktrees\\SD-LEO-INFRA-CHAIRMAN-SMS-LANE-001\\CLAUDE_ADAM_MANUAL.md"
+    },
+    "CLAUDE_ADAM_PROVENANCE.md": {
+      "type": "full",
+      "chars": 6925,
+      "bytes": 6989,
+      "estimated_tokens": 1732,
+      "content_hash": "0d5f80568bbde47b",
+      "path": "C:\\Users\\rickf\\Projects\\_EHG\\EHG_Engineer\\.worktrees\\SD-LEO-INFRA-CHAIRMAN-SMS-LANE-001\\CLAUDE_ADAM_PROVENANCE.md"
     },
     "CLAUDE_COORDINATOR.md": {
       "type": "full",
-      "chars": 25316,
-      "estimated_tokens": 6329,
-      "content_hash": "0bc009e9cd2c00d1",
-      "path": "C:\\Users\\rickf\\Projects\\_EHG\\EHG_Engineer\\.worktrees\\qf\\QF-20260720-531\\CLAUDE_COORDINATOR.md"
+      "chars": 25317,
+      "bytes": 25515,
+      "estimated_tokens": 6330,
+      "content_hash": "e8e789d722f53bac",
+      "path": "C:\\Users\\rickf\\Projects\\_EHG\\EHG_Engineer\\.worktrees\\SD-LEO-INFRA-CHAIRMAN-SMS-LANE-001\\CLAUDE_COORDINATOR.md"
     },
     "CLAUDE_SOLOMON.md": {
       "type": "full",
-      "chars": 61340,
-      "estimated_tokens": 15335,
-      "content_hash": "6639bbb74a70eaaa",
-      "path": "C:\\Users\\rickf\\Projects\\_EHG\\EHG_Engineer\\.worktrees\\qf\\QF-20260720-531\\CLAUDE_SOLOMON.md"
+      "chars": 60474,
+      "bytes": 61013,
+      "estimated_tokens": 15119,
+      "content_hash": "8d48057bbd4154e5",
+      "path": "C:\\Users\\rickf\\Projects\\_EHG\\EHG_Engineer\\.worktrees\\SD-LEO-INFRA-CHAIRMAN-SMS-LANE-001\\CLAUDE_SOLOMON.md"
+    },
+    "CLAUDE_SOLOMON_MANUAL.md": {
+      "type": "full",
+      "chars": 11228,
+      "bytes": 11325,
+      "estimated_tokens": 2807,
+      "content_hash": "b789a6b547d08b4c",
+      "path": "C:\\Users\\rickf\\Projects\\_EHG\\EHG_Engineer\\.worktrees\\SD-LEO-INFRA-CHAIRMAN-SMS-LANE-001\\CLAUDE_SOLOMON_MANUAL.md"
     },
     "CLAUDE_DIGEST.md": {
       "type": "digest",
-      "chars": 9611,
+      "chars": 9612,
+      "bytes": 9654,
       "estimated_tokens": 2403,
-      "content_hash": "510d9aa246bbb014",
-      "path": "C:\\Users\\rickf\\Projects\\_EHG\\EHG_Engineer\\.worktrees\\qf\\QF-20260720-531\\CLAUDE_DIGEST.md"
+      "content_hash": "364c61ae61d46577",
+      "path": "C:\\Users\\rickf\\Projects\\_EHG\\EHG_Engineer\\.worktrees\\SD-LEO-INFRA-CHAIRMAN-SMS-LANE-001\\CLAUDE_DIGEST.md"
     },
     "CLAUDE_CORE_DIGEST.md": {
       "type": "digest",
-      "chars": 11664,
-      "estimated_tokens": 2916,
-      "content_hash": "a66795c1ec87c51d",
-      "path": "C:\\Users\\rickf\\Projects\\_EHG\\EHG_Engineer\\.worktrees\\qf\\QF-20260720-531\\CLAUDE_CORE_DIGEST.md"
+      "chars": 13748,
+      "bytes": 13862,
+      "estimated_tokens": 3437,
+      "content_hash": "8e793099b375a84d",
+      "path": "C:\\Users\\rickf\\Projects\\_EHG\\EHG_Engineer\\.worktrees\\SD-LEO-INFRA-CHAIRMAN-SMS-LANE-001\\CLAUDE_CORE_DIGEST.md"
     },
     "CLAUDE_LEAD_DIGEST.md": {
       "type": "digest",
-      "chars": 5551,
+      "chars": 5552,
+      "bytes": 5572,
       "estimated_tokens": 1388,
-      "content_hash": "aea95e0cd92214b0",
-      "path": "C:\\Users\\rickf\\Projects\\_EHG\\EHG_Engineer\\.worktrees\\qf\\QF-20260720-531\\CLAUDE_LEAD_DIGEST.md"
+      "content_hash": "e0b34896c77ea1ba",
+      "path": "C:\\Users\\rickf\\Projects\\_EHG\\EHG_Engineer\\.worktrees\\SD-LEO-INFRA-CHAIRMAN-SMS-LANE-001\\CLAUDE_LEAD_DIGEST.md"
     },
     "CLAUDE_PLAN_DIGEST.md": {
       "type": "digest",
-      "chars": 8541,
+      "chars": 8542,
+      "bytes": 8582,
       "estimated_tokens": 2136,
-      "content_hash": "69c51c5971e8a7e8",
-      "path": "C:\\Users\\rickf\\Projects\\_EHG\\EHG_Engineer\\.worktrees\\qf\\QF-20260720-531\\CLAUDE_PLAN_DIGEST.md"
+      "content_hash": "8872217b95a1d76b",
+      "path": "C:\\Users\\rickf\\Projects\\_EHG\\EHG_Engineer\\.worktrees\\SD-LEO-INFRA-CHAIRMAN-SMS-LANE-001\\CLAUDE_PLAN_DIGEST.md"
     },
     "CLAUDE_EXEC_DIGEST.md": {
       "type": "digest",
-      "chars": 10964,
-      "estimated_tokens": 2741,
-      "content_hash": "eb9d10bae2a2aa88",
-      "path": "C:\\Users\\rickf\\Projects\\_EHG\\EHG_Engineer\\.worktrees\\qf\\QF-20260720-531\\CLAUDE_EXEC_DIGEST.md"
+      "chars": 10965,
+      "bytes": 11047,
+      "estimated_tokens": 2742,
+      "content_hash": "f0b8d48af6ed1026",
+      "path": "C:\\Users\\rickf\\Projects\\_EHG\\EHG_Engineer\\.worktrees\\SD-LEO-INFRA-CHAIRMAN-SMS-LANE-001\\CLAUDE_EXEC_DIGEST.md"
     },
     "CLAUDE_ADAM_DIGEST.md": {
       "type": "digest",
-      "chars": 18755,
-      "estimated_tokens": 4689,
-      "content_hash": "fce8c69cd03013bd",
-      "path": "C:\\Users\\rickf\\Projects\\_EHG\\EHG_Engineer\\.worktrees\\qf\\QF-20260720-531\\CLAUDE_ADAM_DIGEST.md"
+      "chars": 17736,
+      "bytes": 18068,
+      "estimated_tokens": 4434,
+      "content_hash": "80ea775ceed59e00",
+      "path": "C:\\Users\\rickf\\Projects\\_EHG\\EHG_Engineer\\.worktrees\\SD-LEO-INFRA-CHAIRMAN-SMS-LANE-001\\CLAUDE_ADAM_DIGEST.md"
     },
     "CLAUDE_COORDINATOR_DIGEST.md": {
       "type": "digest",
-      "chars": 6076,
-      "estimated_tokens": 1519,
-      "content_hash": "fc87f0c0f8410e24",
-      "path": "C:\\Users\\rickf\\Projects\\_EHG\\EHG_Engineer\\.worktrees\\qf\\QF-20260720-531\\CLAUDE_COORDINATOR_DIGEST.md"
+      "chars": 6091,
+      "bytes": 6161,
+      "estimated_tokens": 1523,
+      "content_hash": "d34b0d16e63399fa",
+      "path": "C:\\Users\\rickf\\Projects\\_EHG\\EHG_Engineer\\.worktrees\\SD-LEO-INFRA-CHAIRMAN-SMS-LANE-001\\CLAUDE_COORDINATOR_DIGEST.md"
     },
     "CLAUDE_SOLOMON_DIGEST.md": {
       "type": "digest",
-      "chars": 4705,
-      "estimated_tokens": 1177,
-      "content_hash": "62e4fe784e029d55",
-      "path": "C:\\Users\\rickf\\Projects\\_EHG\\EHG_Engineer\\.worktrees\\qf\\QF-20260720-531\\CLAUDE_SOLOMON_DIGEST.md"
+      "chars": 3969,
+      "bytes": 4011,
+      "estimated_tokens": 993,
+      "content_hash": "6fb9bbdcaa21f2fd",
+      "path": "C:\\Users\\rickf\\Projects\\_EHG\\EHG_Engineer\\.worktrees\\SD-LEO-INFRA-CHAIRMAN-SMS-LANE-001\\CLAUDE_SOLOMON_DIGEST.md"
     }
   },
   "section_digests": {
-    "global": "cf0e58a7feb9e06c",
+    "global": "0824e5e03b4dd079",
     "byId": {
       "94": "ef2f1e7ed617b5e0",
       "189": "6398659126897bbb",
@@ -294,7 +350,7 @@
       "435": "dc205008f2747ac6",
       "436": "8115bd7ee9303db3",
       "439": "08a9d4b4ea40618b",
-      "444": "12b759c26cede8e8",
+      "444": "f53c571cc6b49f44",
       "449": "86f83ca9a7afe8cc",
       "450": "94087ec605b29ee4",
       "452": "5bb15e4ce5af0b4e",
@@ -371,27 +427,25 @@
       "596": "0251044882a17550",
       "597": "ca5efc991922f3b8",
       "599": "7ddd3e2178799aa8",
-      "601": "a924ab00af440778",
-      "602": "ad0aecae8cdc6cb3",
-      "603": "ea1eddc2cef94c83",
-      "604": "a35e66b64599f81d",
+      "601": "2688dac0629c7183",
+      "602": "52425599b58d0a12",
+      "603": "98d7b093d064f76a",
       "605": "4a13b33776eb8b21",
-      "606": "7303c149fceda758",
-      "607": "82e04c0cc0ffb28f",
       "608": "7f99a4321502367e",
       "609": "9790a74a362ff0ca",
       "610": "34fedae699d8c9f3",
-      "611": "11fb186f6a810003",
+      "611": "37f413e238b9804c",
       "612": "13e03eddf5300bcc",
       "613": "1e1de64689c1ad82",
       "614": "a4d5064f0ffbe97c",
       "615": "1ac30c8d7046c470",
-      "616": "cf03793e285951bf",
+      "616": "cc3b2a117dc15f14",
       "620": "3fd2f83a068a8381",
       "621": "5d93172c5c9c2138",
       "622": "94a8df85a96ad041",
-      "624": "ecbc82be6b6c0dfe",
-      "625": "1fd11ec189bfb049"
+      "626": "f9a040104b9c6234",
+      "627": "c1f5247af6cc9d08",
+      "629": "fbba3f3dba64e4a4"
     },
     "meta": {
       "94": {
@@ -1662,32 +1716,17 @@
       "602": {
         "section_type": "adam_self_adherence_loop",
         "target_file": "CLAUDE_ADAM.md",
-        "title": "Adam Self-Adherence Loop (recurring audit + propose-only remediation)"
+        "title": "6. Self-assessment — rubric, loop, adherence"
       },
       "603": {
         "section_type": "fleet_worker_loop_continuity",
         "target_file": "CLAUDE_EXEC.md",
         "title": "Loop Continuity / Never-Exit (Fleet Worker Contract)"
       },
-      "604": {
-        "section_type": "adam_role_contract",
-        "target_file": "CLAUDE_ADAM.md",
-        "title": "SD Creation How-To + Duty Procedures (Conversion · Build-% Gauge · Escalation)"
-      },
       "605": {
         "section_type": "coordinator_role_contract",
         "target_file": "CLAUDE_COORDINATOR.md",
         "title": "Coordinator Role Contract — Fleet Supervisor / SRE Session"
-      },
-      "606": {
-        "section_type": "adam_role_contract",
-        "target_file": "CLAUDE_ADAM.md",
-        "title": "Chairman-Delegated DB-Change APPLY Authority (scoped, apply-only, fail-closed, revocable)"
-      },
-      "607": {
-        "section_type": "adam_role_contract",
-        "target_file": "CLAUDE_ADAM.md",
-        "title": "SOURCING SSOT — order of operations"
       },
       "608": {
         "section_type": "system_coherence",
@@ -1730,7 +1769,7 @@
         "title": "Crew-comms routing protocol (organizing layer)"
       },
       "616": {
-        "section_type": "solomon_role_contract",
+        "section_type": "solomon_manual",
         "target_file": "CLAUDE_SOLOMON.md",
         "title": "Crew-comms routing protocol (organizing layer)"
       },
@@ -1749,15 +1788,20 @@
         "target_file": "CLAUDE_EXEC.md",
         "title": "Worktree Freshness Pre-Check (Before Declaring Code Missing)"
       },
-      "624": {
-        "section_type": "adam_role_contract",
+      "626": {
+        "section_type": "adam_manual",
         "target_file": null,
-        "title": "PLAN CHECK — chairman status-report format (chairman-directed 2026-07-11)"
+        "title": "Adam Manual — how-to procedures (companion)"
       },
-      "625": {
-        "section_type": "adam_role_contract",
+      "627": {
+        "section_type": "adam_provenance",
         "target_file": null,
-        "title": "Pre-Send Solomon-Consult Rubric — the L1 gate (SD-LEO-INFRA-ADAM-PRE-SEND-001)"
+        "title": "Adam Provenance — dated rationale and live witnesses (companion)"
+      },
+      "629": {
+        "section_type": "solomon_manual",
+        "target_file": null,
+        "title": "Solomon Manual — reference and procedure (companion)"
       }
     }
   }

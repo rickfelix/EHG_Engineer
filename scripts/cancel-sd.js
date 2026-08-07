@@ -210,6 +210,32 @@ export function verifyShippedOnOriginMain({ pr, evidenceFiles = [] } = {}, { run
  * @param {{runGit: Function, runGh: Function, repoRoot?: string}} runners
  * @returns {{refuse: boolean, reasons: string[]}}
  */
+/**
+ * SD-LEO-INFRA-AUDIT-LOG-MUTATION-BLIND-001 (FR-3): build the metadata patch recording that an
+ * audit_log write FAILED, so an unaudited cancellation is discoverable later instead of living in
+ * a console line nobody reads.
+ *
+ * PURE and exported for the same reason the helpers above are: the hazard here is not the happy
+ * path, it is the MERGE. `existing` must be the metadata read fresh from the row — passing a
+ * partial or undefined object would drop every key the SD already carries, turning an
+ * observability fix into silent data loss. That is the case the test pins.
+ *
+ * @param {object|null|undefined} existing - metadata as currently stored on the row
+ * @param {{event_type:string, error:string, source:string, at:string}} failure
+ * @returns {object} the full metadata object to write back
+ */
+export function buildAuditFailureMarker(existing, failure) {
+  return {
+    ...(existing && typeof existing === 'object' ? existing : {}),
+    audit_write_failed: {
+      event_type: failure.event_type,
+      at: failure.at,
+      error: failure.error,
+      source: failure.source,
+    },
+  };
+}
+
 export function decideCancelRefusal(reason, evidence, runners) {
   if (!classifyShipReason(reason)) return { refuse: false, reasons: [] };
   const { verified, reasons } = verifyShippedOnOriginMain(evidence, runners);
@@ -327,7 +353,47 @@ async function cancelSD(sd, reason) {
       created_by: 'cancel-sd.js',
     });
   if (auditErr) {
+    // SD-LEO-INFRA-AUDIT-LOG-MUTATION-BLIND-001 (FR-3): the non-fatal choice above is right — the
+    // SD is already cancelled and blocking on the audit write would mask a completed action. But
+    // "surfaced loudly" meant console.warn, and a console line in a script that ran hours ago is
+    // not an observation anyone can make later: a cancellation whose audit write FAILED was
+    // indistinguishable from one that was never audited, which is the exact blindness this SD
+    // exists to remove.
+    //
+    // So the failure is stamped on the ENTITY whose mutation went untraced. It is durable,
+    // queryable by a sweep, and cannot fail for the reason the audit_log write just did (different
+    // table, and the SD update on this path already succeeded). Best-effort in turn — if this also
+    // fails there is nothing further to write to, and the console line remains as the last resort.
     console.warn(`⚠️  audit_log write for ${sd.sd_key} failed (non-fatal):`, auditErr.message);
+    try {
+      // Re-READ metadata rather than spreading `sd.metadata`: the fetch at :247 selects seven
+      // columns and metadata is NOT one of them, so `sd.metadata` is undefined here and merging
+      // from it would write the marker over the WHOLE object, silently destroying every existing
+      // key. Fetching it fresh is also more correct — this runs after the cancellation update, so
+      // an in-memory copy could be stale regardless.
+      const { data: cur } = await supabase
+        .from('strategic_directives_v2')
+        .select('metadata')
+        .eq('id', sd.id)
+        .single();
+      const marker = buildAuditFailureMarker(cur && cur.metadata, {
+        event_type: 'sd_cancelled',
+        at: new Date().toISOString(),
+        error: auditErr.message,
+        source: 'cancel-sd.js',
+      });
+      const { error: markErr } = await supabase
+        .from('strategic_directives_v2')
+        .update({ metadata: marker })
+        .eq('id', sd.id);
+      if (markErr) {
+        console.warn(`⚠️  audit-failure marker for ${sd.sd_key} also failed:`, markErr.message);
+      } else {
+        console.warn(`   ↳ recorded metadata.audit_write_failed on ${sd.sd_key} — this cancellation is UNAUDITED`);
+      }
+    } catch (e) {
+      console.warn(`⚠️  audit-failure marker for ${sd.sd_key} threw:`, e?.message || e);
+    }
   } else {
     console.log(`✓ audit_log: sd_cancelled recorded for ${sd.sd_key}`);
   }

@@ -9,7 +9,7 @@ import { readFileSync } from 'fs';
 import { fileURLToPath } from 'url';
 import { dirname, resolve } from 'path';
 import { createRequire } from 'module';
-import { evaluateDependencyGate } from '../../../../lib/sd-start/dependency-gate.mjs';
+import { evaluateDependencyGate, formatDependencyRefusal, formatScopeConstraints } from '../../../../lib/sd-start/dependency-gate.mjs';
 
 const require = createRequire(import.meta.url);
 const {
@@ -169,6 +169,119 @@ describe('FR-1 superset (SD-LEO-INFRA-MAKE-WSJF-SELF-001) — metadata dep sourc
   });
 });
 
+// ── QF-20260727-168: QF-aware dependency resolution ────────────────────────────
+//
+// A dependency ref may name a QUICK-FIX. Resolving only against
+// strategic_directives_v2 meant such a ref could NEVER resolve, and the two callers then
+// diverged: sd-start warned and proceeded, worker-checkin failed CLOSED. The SD stayed
+// hand-claimable but never SELF-claimable, sitting in the belt as "BLOCKED (deps unmet)"
+// forever (live: SD-LEO-FEAT-FLEET-SESSION-LIFECYCLE-001, 3 of 4 refs are QF ids).
+//
+// This mock is table-AWARE on purpose: the shared makeSb above returns the same rows for
+// every .from(), which cannot express "absent from SDs but present in quick_fixes" — the
+// exact condition under test. A table-blind mock would pass either way.
+function makeSbByTable({ sds = [], qfs = [], depsRow, qfFailWith = null } = {}) {
+  return {
+    from(table) {
+      const rows = table === 'quick_fixes' ? qfs : sds;
+      const fail = table === 'quick_fixes' ? qfFailWith : null;
+      const builder = {
+        select() { return builder; },
+        or() { return builder; },
+        in() { return builder; },
+        maybeSingle() { return Promise.resolve({ data: depsRow !== undefined ? depsRow : null, error: null }); },
+        then(res, rej) {
+          if (fail) return Promise.resolve({ data: null, error: { message: fail } }).then(res, rej);
+          return Promise.resolve({ data: rows, error: null }).then(res, rej);
+        },
+      };
+      return builder;
+    },
+  };
+}
+
+describe('QF-20260727-168 — dependency refs that name a quick-fix', () => {
+  it('a COMPLETED quick-fix dependency is SATISFIED (was permanently unresolved)', async () => {
+    const sb = makeSbByTable({ sds: [], qfs: [{ id: 'QF-20260725-096', status: 'completed' }] });
+    const v = await evaluateClaimDependencyGate(sb, sdWith([{ sd_key: 'QF-20260725-096' }]));
+    expect(v.unresolved).toEqual([]);
+    expect(v.satisfied.map((d) => d.sd_id)).toEqual(['QF-20260725-096']);
+    // The whole point: worker-checkin can now SELF-claim this SD.
+    expect(depsSatisfiedFromVerdict(v)).toBe(true);
+  });
+
+  it('an OPEN quick-fix dependency BLOCKS — resolved, and legitimately unsatisfied', async () => {
+    const sb = makeSbByTable({ sds: [], qfs: [{ id: 'QF-20260726-677', status: 'open' }] });
+    const v = await evaluateClaimDependencyGate(sb, sdWith([{ sd_key: 'QF-20260726-677' }]));
+    // Resolved (so no false "deleted or typo") but blocking — a real, live dependency.
+    expect(v.unresolved).toEqual([]);
+    expect(v.blocking.map((d) => d.sd_id)).toEqual(['QF-20260726-677']);
+    expect(depsSatisfiedFromVerdict(v)).toBe(false);
+  });
+
+  it('mixed SD + QF refs each resolve against their own table', async () => {
+    const sb = makeSbByTable({
+      sds: [{ id: 'u-a', sd_key: 'SD-A-001', status: 'completed' }],
+      qfs: [{ id: 'QF-20260726-641', status: 'completed' }],
+    });
+    const v = await evaluateClaimDependencyGate(sb, sdWith([{ sd_key: 'SD-A-001' }, { sd_key: 'QF-20260726-641' }]));
+    expect(v.unresolved).toEqual([]);
+    expect(v.satisfied.map((d) => d.sd_id).sort()).toEqual(['QF-20260726-641', 'SD-A-001']);
+    expect(depsSatisfiedFromVerdict(v)).toBe(true);
+  });
+
+  it('SD resolution WINS — the QF lookup is additive and cannot override an SD hit', async () => {
+    // Same id present in both tables with different statuses. The SD meaning must survive.
+    const sb = makeSbByTable({
+      sds: [{ id: 'DUPE-001', sd_key: 'DUPE-001', status: 'in_progress' }],
+      qfs: [{ id: 'DUPE-001', status: 'completed' }],
+    });
+    const v = await evaluateClaimDependencyGate(sb, sdWith([{ sd_key: 'DUPE-001' }]));
+    expect(v.blocking.map((d) => d.sd_id)).toEqual(['DUPE-001']);
+    expect(v.satisfied).toEqual([]);
+  });
+
+  it('a ref in NEITHER table is still unresolved (fail-closed for checkin preserved)', async () => {
+    const sb = makeSbByTable({ sds: [], qfs: [] });
+    const v = await evaluateClaimDependencyGate(sb, sdWith([{ sd_key: 'QF-99999999-000' }]));
+    expect(v.unresolved.map((d) => d.sd_id)).toEqual(['QF-99999999-000']);
+    expect(depsSatisfiedFromVerdict(v)).toBe(false);
+  });
+
+  it('a quick_fixes query error surfaces as queryError, not as a silent "satisfied"', async () => {
+    const sb = makeSbByTable({ sds: [], qfs: [], qfFailWith: 'qf lookup exploded' });
+    const v = await evaluateClaimDependencyGate(sb, sdWith([{ sd_key: 'QF-20260725-096' }]));
+    expect(v.queryError).toBeTruthy();
+    expect(depsSatisfiedFromVerdict(v)).toBe(false);
+  });
+
+  it('does NOT hit quick_fixes when every ref already resolved as an SD (no wasted query)', async () => {
+    const tables = [];
+    const base = makeSbByTable({ sds: [{ id: 'u-a', sd_key: 'SD-A-001', status: 'completed' }] });
+    const sb = { from(t) { tables.push(t); return base.from(t); } };
+    const v = await evaluateClaimDependencyGate(sb, sdWith([{ sd_key: 'SD-A-001' }]));
+    expect(v.satisfied.map((d) => d.sd_id)).toEqual(['SD-A-001']);
+    expect(tables).not.toContain('quick_fixes');
+  });
+});
+
+describe('QF-20260727-168 — the unresolved message must not assert a diagnosis', () => {
+  it('names the scope actually searched instead of claiming deletion', () => {
+    const out = formatDependencyRefusal([], [{ sd_id: 'QF-20260725-096', status: null }]);
+    // The old text asserted "could not resolve (deleted or typo?)" for rows that existed —
+    // it sent readers hunting a data-integrity bug that was not there.
+    expect(out).not.toMatch(/deleted or typo\?/);
+    expect(out).toMatch(/strategic_directives_v2/);
+    expect(out).toMatch(/quick_fixes/);
+    expect(out).toMatch(/QF-20260725-096/);
+  });
+
+  it('still reports a blocking dep with its real status', () => {
+    const out = formatDependencyRefusal([{ sd_id: 'SD-A-001', status: 'in_progress' }], []);
+    expect(out).toMatch(/status='in_progress'/);
+  });
+});
+
 describe('module purity (FR-2 AC — D5 audit ownership + no CLI side effects)', () => {
   const raw = readFileSync(
     resolve(dirname(fileURLToPath(import.meta.url)), '../../../../lib/claim/gates/dependency-gate.cjs'),
@@ -181,5 +294,90 @@ describe('module purity (FR-2 AC — D5 audit ownership + no CLI side effects)',
     expect(src).not.toMatch(/console\./);
     expect(src).not.toMatch(/process\.argv/);
     expect(src).not.toMatch(/audit_log/); // DEPENDENCY_GATE_REFUSED stays in the sd-start caller
+  });
+});
+
+/**
+ * QF-20260727-251 — RELATION SCOPES THE REFUSAL.
+ *
+ * The gate read no relation at all, so a dependency blocking ONE strategic objective refused the
+ * WHOLE claim. Measured on SD-LEO-FEAT-FLEET-SESSION-LIFECYCLE-001: four refs, relations
+ * blocks_objective_0 / sequence_after_for_FR4 / land_before_FR5 / overlaps_FR4, not one of which
+ * blocks the SD, and claim_history recorded SEVEN sessions claiming and releasing that row in one
+ * day with zero completions.
+ *
+ * The direction is the design: only EXPLICITLY recognised scope relations may downgrade. Absent or
+ * unrecognised stays claim-blocking, because a gate that turns permissive on input it does not
+ * understand is the defect class, not the fix.
+ */
+describe('QF-20260727-251 — relation scopes the refusal', () => {
+  const { classifyDependencyRelation } = require('../../../../lib/claim/gates/dependency-gate.cjs');
+
+  it('classifies the four live relation forms as scope-constraining', () => {
+    for (const rel of ['blocks_objective_0', 'blocks_objective_12', 'sequence_after_for_FR4', 'land_before_FR5', 'overlaps_FR4']) {
+      expect(classifyDependencyRelation(rel), rel).toBe('scope');
+    }
+  });
+
+  it('NEGATIVE CONTROL — absent or unrecognised relations stay CLAIM-BLOCKING', () => {
+    // Load-bearing: without it, "everything downgrades" would satisfy the assertion above while
+    // silently disabling the gate for every legacy plain-string ref in the corpus.
+    for (const rel of [undefined, null, '', 'blocks', 'depends_on', 'blocked_by', 'blocks_objective_', 'BLOCKS_OBJECTIVE_0', 42, {}]) {
+      expect(classifyDependencyRelation(rel), String(rel)).toBe('claim');
+    }
+  });
+
+  it('THE LIVE FIXTURE — four scope relations permit the claim and are reported, not dropped', async () => {
+    const sb = makeSb({ rows: [
+      { id: 'u-a', sd_key: 'SD-COLD-START-001', status: 'in_progress' },
+      { id: 'u-b', sd_key: 'SD-OTHER-001', status: 'in_progress' },
+    ] });
+    const verdict = await evaluateClaimDependencyGate(sb, sdWith([
+      { sd_key: 'SD-COLD-START-001', relation: 'sequence_after_for_FR4' },
+      { sd_key: 'SD-OTHER-001', relation: 'blocks_objective_0' },
+    ]));
+    expect(verdict.blocking).toEqual([]);
+    expect(verdict.scopeConstrained.map(d => d.sd_id)).toEqual(['SD-COLD-START-001', 'SD-OTHER-001']);
+    // The relation rides along so the caller can NAME what is constrained.
+    expect(verdict.scopeConstrained[0].relation).toBe('sequence_after_for_FR4');
+
+    // sd-start's polarity: proceed, and WARN — a silent permit would be the same ambiguity as a
+    // silent refusal, one level down.
+    const result = evaluateDependencyGate(verdict.resolved, {});
+    expect(result.verdict).toBe('proceed');
+    expect(result.warn).toBe(true);
+    expect(formatScopeConstraints(result.scopeConstrained)).toMatch(/does NOT block the claim/);
+  });
+
+  it('a claim-blocking relation still REFUSES, alongside scope-constrained ones', async () => {
+    const sb = makeSb({ rows: [
+      { id: 'u-a', sd_key: 'SD-HARD-001', status: 'in_progress' },
+      { id: 'u-b', sd_key: 'SD-SOFT-001', status: 'in_progress' },
+    ] });
+    const verdict = await evaluateClaimDependencyGate(sb, sdWith([
+      { sd_key: 'SD-HARD-001', relation: 'blocked_by' },
+      { sd_key: 'SD-SOFT-001', relation: 'overlaps_FR4' },
+    ]));
+    expect(verdict.blocking.map(d => d.sd_id)).toEqual(['SD-HARD-001']);
+    expect(verdict.scopeConstrained.map(d => d.sd_id)).toEqual(['SD-SOFT-001']);
+    expect(evaluateDependencyGate(verdict.resolved, {}).verdict).toBe('refuse');
+  });
+
+  it('worker-checkin FAIL-CLOSED polarity is preserved on the narrowed axis', async () => {
+    // A scope-constrained dep no longer skips the candidate — that is the point — but an
+    // unresolved ref or a genuinely blocking relation still does.
+    const sb = makeSb({ rows: [{ id: 'u-b', sd_key: 'SD-SOFT-001', status: 'in_progress' }] });
+    const scoped = await evaluateClaimDependencyGate(sb, sdWith([{ sd_key: 'SD-SOFT-001', relation: 'land_before_FR5' }]));
+    expect(depsSatisfiedFromVerdict(scoped)).toBe(true);
+
+    const sb2 = makeSb({ rows: [{ id: 'u-c', sd_key: 'SD-HARD-001', status: 'in_progress' }] });
+    const hard = await evaluateClaimDependencyGate(sb2, sdWith([{ sd_key: 'SD-HARD-001', relation: 'blocks' }]));
+    expect(depsSatisfiedFromVerdict(hard)).toBe(false);
+  });
+
+  it('an entry with NO claimBlocking field keeps today behaviour (older callers, hand-built fixtures)', () => {
+    const result = evaluateDependencyGate([{ sd_id: 'SD-A-001', status: 'in_progress' }], {});
+    expect(result.verdict).toBe('refuse');
+    expect(result.scopeConstrained).toEqual([]);
   });
 });

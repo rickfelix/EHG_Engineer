@@ -3,7 +3,7 @@
  */
 import { describe, it, expect } from 'vitest';
 import { stampRoadmapItemsOnCompletion } from '../../../lib/roadmap/roadmap-completion-stamp.js';
-import { computePlanCheckStatus } from '../../../lib/roadmap/plan-check-status.js';
+import { computePlanCheckStatus, NEXT_LIMIT, COMMITTING_LIMIT } from '../../../lib/roadmap/plan-check-status.js';
 import { runBackfill } from '../../../scripts/one-off/backfill-roadmap-completion-linkage.mjs';
 
 const hoursAgo = (h) => new Date(Date.now() - h * 3_600_000).toISOString();
@@ -369,5 +369,90 @@ describe('runBackfill (FR-4)', () => {
 
     const second = await runBackfill({ supabase, apply: true, log: () => {} });
     expect(second.stamped).toBe(0); // already stamped -> excluded from the unstamped-candidates query
+  });
+});
+
+// ---------------------------------------------------------------------------
+// SD-LEO-INFRA-DRIVE-LOOP-INSTRUMENT-001-B (FR-1) — TS-1 and TS-2.
+//
+// `next` and `committing` have always been capped, and the return carried no
+// total and no truncation flag — so a caller could not distinguish "there are 10
+// open items" from "there are 300 and you were handed 10". The Drive Report's
+// section 1 asks for the wave REMAINDER, which makes that a wrong number rather
+// than a short list.
+//
+// The fix is ADDITIVE ON PURPOSE. Uncapping `next` would silently turn the
+// chairman-facing plan-check-status.mjs human report from ~10 lines into one line
+// per open item — a behaviour change to an existing surface delivered as a side
+// effect of a Drive Report enrichment. TS-1 is the guard for exactly that.
+//
+// These live in this file rather than a new one because makeFakeSupabase and the
+// canonical-roadmap fixture already exist here; a second fake Supabase would be a
+// second thing to keep true.
+// ---------------------------------------------------------------------------
+function seedOpenItems(count) {
+  return {
+    strategic_roadmaps: CANONICAL_ROADMAP_FIXTURE,
+    roadmap_waves: [{ id: 'wave-1', roadmap_id: CANONICAL_ROADMAP_ID, title: 'Wave 1', sequence_rank: 1, status: 'approved', progress_pct: 0 }],
+    roadmap_wave_items: Array.from({ length: count }, (_, i) => ({
+      id: `open-${i}`, wave_id: 'wave-1', title: `Open item ${i}`,
+      promoted_to_sd_key: null, item_disposition: 'pending', priority_rank: i,
+    })),
+    adam_task_ledger: [],
+    strategic_directives_v2: [],
+  };
+}
+
+describe('computePlanCheckStatus — open_total and truncation flags (DRIVE-LOOP-B FR-1)', () => {
+  it('TS-2: reports the TRUE open total when the list is capped', async () => {
+    const status = await computePlanCheckStatus(makeFakeSupabase(seedOpenItems(300)));
+
+    expect(status.open_total).toBe(300);
+    expect(status.next).toHaveLength(NEXT_LIMIT);
+    expect(status.committing).toHaveLength(COMMITTING_LIMIT);
+
+    // The whole point: a cap must no longer be mistakable for a count.
+    expect(status.open_total).not.toBe(status.next.length);
+    expect(status.next_truncated).toBe(true);
+    expect(status.committing_truncated).toBe(true);
+  });
+
+  it('does not claim truncation when nothing was truncated', async () => {
+    const status = await computePlanCheckStatus(makeFakeSupabase(seedOpenItems(3)));
+
+    expect(status.open_total).toBe(3);
+    expect(status.next).toHaveLength(3);
+    // A flag that is always true is as useless as no flag — this is the other side.
+    expect(status.next_truncated).toBe(false);
+    expect(status.committing_truncated).toBe(false);
+  });
+
+  it('the two flags are independent, not one shared flag', async () => {
+    // 7 items: over the committing cap of 5, under the next cap of 10.
+    const status = await computePlanCheckStatus(makeFakeSupabase(seedOpenItems(7)));
+
+    expect(status.open_total).toBe(7);
+    expect(status.next_truncated).toBe(false);
+    expect(status.committing_truncated).toBe(true);
+  });
+
+  it('TS-1: keeps the caps, so the existing human report cannot grow', async () => {
+    const status = await computePlanCheckStatus(makeFakeSupabase(seedOpenItems(300)));
+
+    // renderHuman prints one line per entry in `next`. Uncapping turns a ~10-line
+    // chairman-facing report into a 300-line one.
+    expect(status.next.length).toBeLessThanOrEqual(NEXT_LIMIT);
+    expect(status.committing.length).toBeLessThanOrEqual(COMMITTING_LIMIT);
+  });
+
+  it('TS-1: the pre-existing return fields keep their shape', async () => {
+    const status = await computePlanCheckStatus(makeFakeSupabase(seedOpenItems(12)));
+
+    // The one runtime consumer (scripts/roadmap/plan-check-status.mjs renderHuman)
+    // reads exactly these by name and calls .length on each.
+    for (const key of ['slipped', 'done', 'next', 'committing']) {
+      expect(Array.isArray(status[key])).toBe(true);
+    }
+    expect(status).toHaveProperty('admissions_by_linkage');
   });
 });

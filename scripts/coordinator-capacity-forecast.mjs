@@ -39,6 +39,8 @@ import { stampLastFired } from '../lib/periodic-liveness/stamp-last-fired.js';
 // predicate the worker resolver uses — else RHA-held / co_author_pending SDs inflate belt depth and the
 // forecaster emits false belt-low DEFICITs (the exact masked-starvation symptom this SD targets).
 import { classifyDispatchIneligibility } from '../lib/fleet/claim-eligibility.cjs';
+// SD-LEO-INFRA-GATE-SIDE-BELT-001: the QF term is no longer derived here. See the call site.
+import { countClaimableQuickFixes } from '../lib/fleet/belt-depth.cjs';
 // SD-LEO-INFRA-BELT-TIER-AWARE-CLAIMABILITY-001 (FR-3): per-tier claimable depth (not a single aggregate).
 import { tierClaimableBreakdown } from '../lib/fleet/tier-claimable.cjs';
 import { isTieringActive } from '../lib/fleet/tier-ladder.cjs';
@@ -210,7 +212,7 @@ export async function computePhaseMinsFromActuals(supabase) {
 
 async function main() {
   const liveCutoff = new Date(Date.now() - HEARTBEAT_LIVE_MS).toISOString();
-  const [sessions, sds, { count: openQfCountRaw }] = await Promise.all([
+  const [sessions, sds, openQfCountRaw] = await Promise.all([
     // SD-LEO-INFRA-COUNT-TRUNCATION-DISCIPLINE-001 FR-6 batch 9: claude_sessions is a growing
     // table and this read feeds worker-count/capacity math directly (filtered + iterated
     // below) — paginate to completion. Preserve the prior fail-open policy (undefined `data`
@@ -247,13 +249,23 @@ async function main() {
       .order('sd_key', { ascending: true })) // unique tiebreaker (FR-6)
       .catch(() => []),
     // Open QFs are claimable belt too (a worker can claim a QF) — counting only SDs
-    // under-reports belt depth and over-reports deficit (workers self-claim QFs). This is a
-    // gauge (only the count is used) — exact head-count avoids the 1000-row cap misreading
-    // belt depth (SD-LEO-INFRA-COUNT-TRUNCATION-DISCIPLINE-001 FR-6 batch 9).
-    sb.from('quick_fixes').select('id', { count: 'exact', head: true }).eq('status', 'open'),
+    // under-reports belt depth and over-reports deficit (workers self-claim QFs).
+    //
+    // SD-LEO-INFRA-GATE-SIDE-BELT-001: this was a local head-count on `status='open'` that IGNORED
+    // claiming_session_id, while the SD term ~20 lines below skips claimed rows — one surface, two
+    // claimability rules, over-reporting by 3 (148 counted, 145 actually claimable). It now shares
+    // the coordinator's QF supply predicate through lib/fleet/belt-depth.cjs, so this number and the
+    // coordinator's own supply reads cannot disagree again.
+    //
+    // FAIL-OPEN IS PRESERVED DELIBERATELY, AND SAID OUT LOUD. countClaimableQuickFixes is fail-LOUD
+    // by contract, because a gauge that reports 0 when it cannot read is indistinguishable from an
+    // empty belt. THIS surface has always fallen back to a 0 QF contribution rather than aborting the
+    // whole forecast, so the catch keeps that behaviour at the call site where a reader can see it,
+    // instead of weakening the shared gauge for every other consumer.
+    countClaimableQuickFixes(sb).catch(() => null),
   ]);
   const openQfCountRendered = renderCount(openQfCountRaw);
-  const openQfCount = typeof openQfCountRendered === 'number' ? openQfCountRendered : 0; // fail-open: unavailable → 0 belt contribution, same as prior [] fallback
+  const openQfCount = typeof openQfCountRendered === 'number' ? openQfCountRendered : 0; // fail-open: unreadable → 0 belt contribution, unchanged from the prior fallback
 
   // ── resolve dependency statuses → claimable belt ──
   // parseSdDependencies handles the live shape mix ([{sd_id}], [{sd_key}], raw strings) AND drops the

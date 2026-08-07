@@ -857,9 +857,25 @@ cd .sessions/hotfix
 **Symptom**: On Windows, junction creation fails
 
 **Resolution**:
-- Ensure main repo has `node_modules` present (run `npm ci` first)
+- Ensure the main repo has `node_modules` present. **Use `npm install`, NOT `npm ci`** — see the warning below.
 - On Windows, may require administrator privileges
-- Use `--no-symlink` flag to skip symlink creation (manual `npm ci` in worktree required)
+- Use `--no-symlink` to skip symlink creation, then `npm install --ignore-scripts --no-audit --no-fund` **inside the worktree**
+
+> ⚠️ **NEVER `npm ci` at the main repo root while worktrees exist.** Its internal `rm -rf` of
+> `node_modules` follows any worktree junction and guts the **shared** store, bricking every
+> parallel session. This is not hypothetical: it is the fleet-wide wipe class this runbook exists
+> to help you recover from.
+>
+> This repo's own guard agrees. `npmCiWouldWipeSharedStore({command:'npm ci', cwd:<repo root>})`
+> returns `{wipes: true, reason: 'main_root_with_active_worktrees'}` — the instruction that used to
+> be on this line is classified as a wipe by `lib/npm-ci-junction-guard.cjs`.
+>
+> `scripts/hooks/pre-tool-enforce.cjs` blocks this for an **agent** running Bash. It does **not**
+> protect a human typing into their own terminal — and a Troubleshooting section is read by humans.
+> The protection and the exposure sit on opposite sides of that boundary, which is exactly why the
+> instruction had to be removed rather than merely guarded.
+>
+> Use `npm install` (additive) or `npm run worktree:remove` (pre-unlinks the junction first).
 
 **Issue: Branch guard blocks commit unexpectedly**
 

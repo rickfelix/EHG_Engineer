@@ -64,8 +64,9 @@ import { runOrphanSweep } from '../lib/worktree-reaper/orphan-sweep.js';
 // QF-20260710-432: last-line live-claim guard — a live-claimed worktree is never
 // reaped regardless of commit count (Alpha-2 incident: zero-commit mid-PLAN reap).
 import { liveClaimBlocksRemoval } from '../lib/worktree-reaper/live-claim-guard.js';
-import { heartbeatResidencyBlocksRemoval } from '../lib/worktree-reaper/residency-guard.js';
-import { hasReapEligibleMarker, readReapEligibleMarker } from '../lib/worktree-reaper/reap-eligible-marker.js';
+import { heartbeatResidencyBlocksRemoval, treeResidencyBlocksRemoval } from '../lib/worktree-reaper/residency-guard.js';
+import { hasReapEligibleMarker, readReapEligibleMarker, isReapEligibleMarkerValid } from '../lib/worktree-reaper/reap-eligible-marker.js';
+import { decideRemoval, UNRESOLVABLE_KEY_RESIDENCY_CLEARED } from '../lib/worktree-reaper/removal-decision.js';
 // QF-20260725-821: the opt-OUT marker. .reap-eligible.json is opt-IN TO REAPING; before this
 // there was no way to say "do not reap me", so any operator/drill/ops worktree without an
 // sd_key basename and a DB claim was auto-removed at stage 2 (live incident: the chairman's
@@ -111,6 +112,48 @@ const PRESERVE_EXEMPT_RE = /^(tmp-|scratch-|\.claude[\\/]|\.workflow-patterns|\.
 
 // ── CLI parsing ────────────────────────────────────────────────────────
 
+/**
+ * SD-LEO-INFRA-ORPHAN-SWEEP-HARD-001 (FR-1b) — environment gate for the orphan leg.
+ *
+ * WHY AN ENV VAR AND NOT A CLI FLAG. `--no-orphan-sweep` is a real opt-out that NEITHER automated
+ * invoker can pass:
+ *   1. scripts/fleet/worktree-reaper-tick.cjs buildReaperArgs (:189-195) emits only --execute,
+ *      --stage2 --yes and --all-pools; the string 'no-orphan-sweep' does not appear in that file.
+ *   2. .github/workflows/worktree-reaper-cadence.yml runs `npm run worktree:reap:execute` on a
+ *      daily schedule, invoking THIS script directly with no path through the tick at all — it
+ *      cannot pass a flag under any wiring.
+ * An opt-out nothing can invoke is not an opt-out. Reading it HERE is the only seam both honour;
+ * threading a flag through buildReaperArgs alone would leave the cron ungated.
+ *
+ * FAIL DIRECTION IS DELIBERATE, and it is the opposite of the mistake next door. resolveMinAgeMs
+ * (lib/worktree-reaper/orphan-sweep.js:38-43) falls back to its 30-minute DEFAULT on every
+ * corruption — a value typo, a key typo, an empty string, a negative number — and accepts an
+ * explicit 0 that disables the guard entirely. Its docstring calls that "fail-safe toward MORE
+ * conservatism", which is true against a 30-minute baseline and FALSE once the same knob is used
+ * as a 10-year kill switch: every corruption RE-ARMS the destructive path. Measured, 2026-08-03.
+ *
+ * So here: UNSET means enabled (existing behaviour, byte-identical). A recognised off-value means
+ * disabled. Anything else that is SET BUT UNRECOGNISED means disabled AND WARNS — a typo must
+ * never silently leave a directory-deleting job armed, and it must never fail silently either.
+ * Accumulating orphans is a disk-space problem; deleting 601MB of deferred content is not.
+ *
+ * @param {NodeJS.ProcessEnv} [env=process.env]
+ * @returns {{disabled: boolean, reason: string|null, raw: string|undefined}}
+ */
+export function resolveOrphanSweepDisabled(env = process.env) {
+  const raw = env?.WORKTREE_ORPHAN_SWEEP;
+  if (raw == null || raw === '') return { disabled: false, reason: null, raw };
+  const v = String(raw).trim().toLowerCase();
+  if (['on', 'true', '1', 'yes', 'enabled'].includes(v)) return { disabled: false, reason: 'explicit_on', raw };
+  if (['off', 'false', '0', 'no', 'disabled'].includes(v)) return { disabled: true, reason: 'explicit_off', raw };
+  console.warn(
+    `⚠️  WORKTREE_ORPHAN_SWEEP is set to an unrecognised value ${JSON.stringify(raw)} — ` +
+    'treating the orphan sweep as DISABLED. This is deliberate: an unreadable setting must not ' +
+    'leave a directory-deleting job armed. Set it to on/off explicitly.'
+  );
+  return { disabled: true, reason: 'unrecognised_value', raw };
+}
+
 function parseArgs(argv) {
   const args = argv.slice(2);
   const opts = {
@@ -124,6 +167,11 @@ function parseArgs(argv) {
     // (standalone, for manual inspection); --no-orphan-sweep = skip the sweep that is
     // otherwise folded into the normal flow (so the hourly tick includes it).
     orphanSweep: args.includes('--orphan-sweep'),
+    // SD-LEO-INFRA-ORPHAN-SWEEP-HARD-001 (FR-1b): CLI flag only HERE. The env half is evaluated at
+    // the call site instead — parseArgs runs at :1242 but loadDotenv() does not run until :1266,
+    // so reading process.env here would consult the environment BEFORE .env is loaded and
+    // WORKTREE_ORPHAN_SWEEP in a .env file would have had ZERO effect. The gate would have looked
+    // wired and done nothing, which is the same class of defect this SD exists to remove.
     noOrphanSweep: args.includes('--no-orphan-sweep'),
     // SD-LEO-INFRA-WORKTREE-REAPER-MULTIREPO-001: reap EVERY registered pool (spawns a per-pool
     // --repo child so each pool keeps the full single-repo safety), not just the current repo.
@@ -576,13 +624,58 @@ function runGit(args, opts = {}) {
   };
 }
 
-function runGh(args, opts = {}) {
+/**
+ * SD-LEO-INFRA-REAPER-GH-SHELL-INJECTION-001 (FR-1).
+ *
+ * `shell: process.platform === 'win32'` USED TO BE HERE, and it made this an arbitrary
+ * command execution primitive inside an unattended scheduled process. With a shell, Node
+ * does not pass argv as discrete arguments — it CONCATENATES them into a command string,
+ * which Node itself warns about (DEP0190). detectors.js interpolates a BRANCH NAME into
+ * these args, so a branch name was a command.
+ *
+ * Reproduced independently by three parties: branch `feat/x& echo MARKER` produced stdout
+ * `MARKER --state merged --json ...` — the injected command ran, ate the remaining
+ * arguments, and exited 0.
+ *
+ * WHY THE SEVERITY IS NOT MERELY "SOMETHING EXECUTES": the attacker also controls stdout.
+ * A payload emitting VALID merged-PR JSON yields merged_pr_count >= 1, which
+ * decideShippedStaleAction routes to 'merged-pr-backed' and stageForCategories turns into
+ * stage1_remove — the path labelled "auto-safe" in this file. Forged merge evidence drives
+ * deletion. (The MALFORMED case is fail-safe: JSON.parse fails, prs=[], advisory-only.)
+ *
+ * THE FLAG WAS NOT LOAD-BEARING, and that was MEASURED rather than assumed, because the
+ * plausible objection is that Windows needs a shell to resolve `gh`. It does not: gh is a
+ * native .exe, libuv appends the extension, and both `gh --version` and the real
+ * classification argv return status 0 under shell:false on this fleet. Seven callers in
+ * this repo already invoke gh with no shell — see lib/fleet/inflight-git-state.cjs, which
+ * carries `shell: false, // SR-1 — do not remove` plus measured live timings.
+ *
+ * RESIDUAL, left as an assertion rather than an assumption: the refutation holds because
+ * gh is a .exe. A .cmd/.bat shim (scoop/winget) would ENOENT under shell:false — that
+ * surfaces as res.error, throws below, and detectors.js turns it into the documented
+ * patch_equivalent_gh_unavailable path.
+ *
+ * CORRECTED BY SECURITY, because the first version of this comment said "worst case
+ * degrades to a recorded advisory, never to silence" and that is WRONG. Measured: an
+ * unknown key does degrade to advisory-only, but a TERMINAL-status key reaches STAGE-1
+ * REMOVE AUTHORITY, because the fail-open returns evidence with no merged_pr_count and the
+ * `?? 0` at the terminal override treats that as zero. It is NOT a widening — a gh that
+ * returns [] decides identically, so the security delta is nil — but what is lost on a
+ * .cmd-only host is the GitHub cross-check itself, fleet-wide, while terminal-key removals
+ * proceed on cherry evidence alone. Stating that accurately matters more than the comfort
+ * of the shorter sentence.
+ *
+ * DO NOT "simplify" the throw below into a returned error: detectors.js depends on the
+ * throw and tests/unit/worktree-reaper/detectors.test.js pins it. Exported so a test can
+ * observe the REAL spawn options — a seam-injected fake cannot, because the seam replaces
+ * the very code that decides them.
+ */
+export function runGh(args, opts = {}) {
   const res = spawnSync('gh', args, {
     cwd: opts.cwd || process.cwd(),
     encoding: 'utf8',
     stdio: ['ignore', 'pipe', 'pipe'],
     windowsHide: true,
-    shell: process.platform === 'win32',
   });
   if (res.error) throw res.error;
   return {
@@ -620,9 +713,26 @@ async function classifyWorktree(wt, ctx) {
   // marker is the out-of-band handoff from a post-merge flow that refused to
   // self-delete — collect it promptly, ahead of age-based classification. The
   // removal gate (live-claim + residency guards) still decides WHEN it is safe.
+  // SD-FDBK-INFRA-ORPHAN-WORKTREE-STRANDING-001-B (FR-3): the marker must still HOLD
+  // authority, not merely exist. Presence alone let a 5.5-hour-old marker naming a
+  // different SD license deleting the RLS ceremony tree at 21:34:48Z. The gate lands
+  // here — by not pushing the category — rather than in stageForCategories, which is a
+  // pure function of `categories` pinned by 14 assertions and is the wrong layer.
   if (hasReapEligibleMarker(wt.path)) {
-    categories.push('reap-eligible');
-    reasons['reap-eligible'] = { matched: true, reason: 'marker', evidence: readReapEligibleMarker(wt.path) || {} };
+    const validity = isReapEligibleMarkerValid(wt.path, { treeKey: keyFromWorktree(wt) });
+    if (validity.valid) {
+      categories.push('reap-eligible');
+      reasons['reap-eligible'] = { matched: true, reason: 'marker', evidence: readReapEligibleMarker(wt.path) || {} };
+    } else {
+      // Recorded, not silent: an expired marker is a decision someone made and it should
+      // be visible that it was declined rather than never seen.
+      reasons['reap-eligible-expired'] = {
+        matched: false,
+        reason: validity.reason,
+        detail: validity.detail || null,
+        evidence: readReapEligibleMarker(wt.path) || {},
+      };
+    }
   }
 
   const nested = isNested(wt);
@@ -1038,17 +1148,26 @@ async function runAndReportOrphanSweep({ repoRoot, worktreesDir, supabase, execu
   const s = sweep.summary || {};
   console.log(
     `🧹 Orphan sweep: scanned=${s.scanned ?? '?'} reapable=${s.reapable ?? '?'} ` +
-    `reclaimed=${s.reclaimed_count ?? 0} bytes=${s.reclaimed_bytes ?? 0} ` +
+    `archived=${s.reclaimed_count ?? 0} archived_bytes=${s.archived_bytes ?? 0} disk_freed=0 refused=${s.refused_count ?? 0} ` +
     `excluded=${s.excluded_count ?? 0} failed=${s.failed_count ?? 0}${s.dry_run ? ' (dry-run)' : ''}`
   );
-  // FR-4 durable summary: best-effort audit_log row when an EXECUTE run actually acted. Fail-soft.
-  if (sweep.ok && supabase && effectiveExecute && ((s.reclaimed_count || 0) > 0 || (s.failed_count || 0) > 0)) {
+  // FR-4 durable summary: best-effort audit_log row when an EXECUTE run acted OR REFUSED. Fail-soft.
+  //
+  // refused_count is in this gate deliberately. Without it, the one outcome that most needs a
+  // durable record — the sweep declining to touch a directory because it holds real content, which
+  // means a HUMAN has to decide — is the exact case that writes no row at all. A refuse-5/archive-0
+  // run would leave nothing behind but a console line on a cron nobody reads, which is how the
+  // 707MB directory sat unattributed for two days. FR-4 exists because the incident's record was
+  // correct and useless; a missing record is strictly worse than a useless one.
+  const actedOrRefused = (s.reclaimed_count || 0) > 0 || (s.failed_count || 0) > 0 || (s.refused_count || 0) > 0;
+  if (sweep.ok && supabase && effectiveExecute && actedOrRefused) {
     try {
       await supabase.from('audit_log').insert({
         event_type: 'worktree_orphan_sweep',
         entity_type: 'worktree',
         entity_id: 'orphan_sweep',
-        severity: (s.failed_count || 0) > 0 ? 'warning' : 'info',
+        // A refusal is not routine: it is an unresolved decision sitting on disk.
+        severity: ((s.failed_count || 0) > 0 || (s.refused_count || 0) > 0) ? 'warning' : 'info',
         created_by: 'worktree-reaper',
         metadata: s,
       });
@@ -1189,8 +1308,21 @@ export async function main(argv = process.argv) {
   // worktree-reaper-tick.cjs spawn includes it with NO separate cron. Runs BEFORE the
   // registered-worktree stage scan (and its early returns), is dry-run unless --execute,
   // and is fully fail-soft so it can never abort the reaper. Opt out with --no-orphan-sweep.
-  if (!opts.noOrphanSweep) {
+  // SD-LEO-INFRA-ORPHAN-SWEEP-HARD-001 (FR-1b): the env half of the gate is resolved HERE, after
+  // loadDotenv() has run at :1266. Reading it inside parseArgs (:1242) consulted process.env
+  // before .env was loaded, so a WORKTREE_ORPHAN_SWEEP entry in .env had no effect whatsoever —
+  // a gate that reads as wired and does nothing. Verified by the ordering of those two lines.
+  const orphanGate = resolveOrphanSweepDisabled();
+  if (!opts.noOrphanSweep && !orphanGate.disabled) {
     await runAndReportOrphanSweep({ repoRoot, worktreesDir, supabase, execute: opts.execute });
+  } else {
+    // Announce a deliberate zero rather than emitting nothing. A silent skip is indistinguishable
+    // from a sweep that ran and found nothing, which is how a disabled census goes unnoticed.
+    console.warn(JSON.stringify({
+      event: 'orphan_sweep_skipped',
+      reason: opts.noOrphanSweep ? 'cli_flag' : orphanGate.reason,
+      env_raw: orphanGate.raw ?? null,
+    }));
   }
 
   // Load reference data (best-effort — reaper is useful even with empty maps).
@@ -1394,19 +1526,14 @@ export async function main(argv = process.argv) {
         logger: (m) => process.stderr.write(`  ${m}
 `),
       });
-      if (claimGuard.blocked) {
-        console.log(`  ⛔ ${path.basename(wtPath)} live-claim guard: ${claimGuard.reason} — skipping`);
-        emitJsonLine({
-          schema_version: SCHEMA_VERSION,
-          timestamp: new Date().toISOString(),
-          event: 'removal_blocked_live_claim',
-          worktree_path: wtPath,
-          reason: claimGuard.reason,
-          detail: claimGuard.detail || null,
-        });
-        aborted++;
-        continue;
-      }
+      // SD-FDBK-INFRA-ORPHAN-WORKTREE-STRANDING-001-B (FR-2): tree residency —
+      // occupancy asked of the FILESYSTEM, needing no DB row to agree with reality.
+      // This is the only predicate that can answer for a worktree whose basename
+      // resolves to no work key, since keyFromWorktree reads the branch but only for
+      // feat|qf|fix|chore|hotfix. Claim-independent and session-independent.
+      const treeResidency = treeResidencyBlocksRemoval(wtPath, {
+        logger: (m) => process.stderr.write(`  ${m}\n`),
+      });
 
       // SD-LEO-INFRA-WORKTREE-REAPER-RESIDENT-001 (FR-4): residency guard —
       // a FRESH-heartbeat session whose worktree_path references this target
@@ -1415,20 +1542,38 @@ export async function main(argv = process.argv) {
       const residency = await heartbeatResidencyBlocksRemoval(supabase, wtPath, {
         logger: (m) => process.stderr.write(`  ${m}\n`),
       });
-      if (residency.blocked) {
-        console.log(`  ⛔ ${path.basename(wtPath)} residency guard: ${residency.reason} — skipping`);
+
+      // FR-1b: compose. Every guard is still a veto EXCEPT the claim guard's
+      // work_key_unresolvable, which is an admission that it cannot verify — that one
+      // becomes a DEMAND that residency affirmatively clear. Without this, FR-1's
+      // honest refusal would mean an unresolvable basename is never reaped again.
+      const decision = decideRemoval({ claimGuard, treeResidency, heartbeatResidency: residency });
+      if (!decision.remove) {
+        console.log(`  ⛔ ${path.basename(wtPath)} removal gate (${decision.source}): ${decision.reason} — skipping`);
         emitJsonLine({
           schema_version: SCHEMA_VERSION,
           timestamp: new Date().toISOString(),
-          event: 'removal_blocked_resident',
+          // Historical event names kept verbatim — the emitted JSON is a consumed schema
+          // and this FR is about the decision, not the reporting vocabulary.
+          event: decision.source === 'claim' ? 'removal_blocked_live_claim' : 'removal_blocked_resident',
           worktree_path: wtPath,
-          reason: residency.reason,
-          detail: residency.detail || null,
+          reason: decision.reason,
+          source: decision.source,
+          detail: (decision.source === 'claim' ? claimGuard.detail : treeResidency.detail) || null,
         });
         aborted++;
         continue;
       }
-
+      if (decision.reason === UNRESOLVABLE_KEY_RESIDENCY_CLEARED) {
+        emitJsonLine({
+          schema_version: SCHEMA_VERSION,
+          timestamp: new Date().toISOString(),
+          event: 'removal_permitted_unresolvable_key',
+          worktree_path: wtPath,
+          reason: decision.reason,
+          detail: treeResidency.detail || null,
+        });
+      }
       // SD-LEO-FEAT-DATA-LOSS-HIGH-001 (FR-2): preserve BOTH untracked AND modified-tracked files
       // before the force-remove. Uncommitted edits to tracked files (the ~56-LOC data-loss class)
       // were previously destroyed because only `untracked` was copied. Dedupe defensively. The

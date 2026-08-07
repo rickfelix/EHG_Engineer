@@ -9,6 +9,12 @@ handoff-result.txt
 *.log
 verification-packages/
 .worktrees/
+# SD-FDBK-INFRA-SPAWN-SOURCE-CURRENCY-001 FR-1: the dedicated spawn-source worktree. MUST stay
+# ignored — an unignored in-repo worktree becomes untracked dirt in the root, which is exactly
+# the condition this SD exists to stop stranding spawns. Deliberately NOT under .worktrees/,
+# because that path is exempt from the tree-currency check (spawn-control.js isWorktreeExemptPath)
+# and a spawn source sited there would be silently unguarded.
+.spawn-source/
 .cache/
 
 # Per-session worktree state (written by sd-start.js / create-quick-fix.js).
@@ -110,6 +116,10 @@ scripts/apply-*.mjs
 scripts/apply-*.js
 # Production canonical apply script (SD-LEO-INFRA-CANONICAL-SCRIPTS-APPLY-001)
 !scripts/apply-migration.js
+# FR-4 deliverable of SD-LEO-INFRA-CHAIRMAN-DECISION-QUEUE-003 — NOT a one-off: it is the
+# documented apply path for chairman decision captures, is referenced by the PR's chairman
+# instructions, and is imported by a committed unit test.
+!scripts/apply-chairman-decision-captures.mjs
 scripts/check-*.mjs
 scripts/check-*.js
 scripts/check-*.cjs
@@ -429,3 +439,18 @@ scripts/cron/eva-watcher-task.cmd
 
 # SD-LEO-ORCH-OPERATING-COMPANY-SPINE-001-A: spine-verify-first-run.mjs run manifests (scratch, teardown-consumed)
 scripts/harness/.spine-verify-first-runs/
+
+# SD-LEO-INFRA-JAMMED-GIT-INDEX-001: per-tick carry-over state for the jammed-index detector.
+# Runtime state, not detector OUTPUT (the output is the verdict + exit code).
+.claude/index-jam-detector-state.json
+# SD-LEO-FEAT-FLEET-SESSION-LIFECYCLE-001 FR-5c: runtime parentage log, never committed
+.claude/console-parentage.jsonl
+.claude-work/
+
+# The drive-report-consume failure breadcrumb ONLY (SD-LEO-INFRA-DRIVE-LOOP-INSTRUMENT-001-C).
+# NARROWED FROM A BLANKET `.artifacts/`, which was a regression I introduced: `git ls-files
+# .artifacts` shows EIGHTEEN TRACKED FILES there — evidence scripts committed deliberately by
+# earlier SDs. Ignoring the whole directory would not have touched those, but the NEXT author's
+# `git add` of a new evidence script would have failed SILENTLY. Ignore the one runtime artifact,
+# not the convention.
+.artifacts/drive-report-consume-last-failure.json

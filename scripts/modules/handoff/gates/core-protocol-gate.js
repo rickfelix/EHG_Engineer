@@ -657,147 +657,6 @@ export async function validateSdStartGate(sdId, ctx = {}, handoffType = null) {
     full_files_loaded: fullFilesLoaded
   };
 }
-
-/**
- * Validate Post-Compaction Gate - enforces re-read after compaction
- *
- * SD-LEO-INFRA-DUAL-GENERATION-CLAUDE-001: Added DIGEST mode support
- *
- * @param {string} currentPhase - Current SD phase (LEAD, PLAN, EXEC)
- * @param {Object} ctx - Validation context
- * @param {boolean} ctx.needs_full_protocol - If true, load FULL files even in digest mode
- * @returns {Object} Validation result with protocolMode, full_loaded, full_files_loaded
- */
-export async function validatePostCompactionGate(currentPhase, ctx = {}) {
-  const protocolMode = getProtocolMode();
-  const coreRequirements = getCoreProtocolRequirements();
-  const phaseFiles = getPhaseProtocolFiles();
-
-  console.log('\n📚 GATE: Post-Compaction Protocol Enforcement');
-  console.log('-'.repeat(50));
-  console.log(`   Current Phase: ${currentPhase || 'unknown'}`);
-  console.log(`   Protocol Mode: ${protocolMode.toUpperCase()}`);
-
-  // Track if FULL files were loaded on-demand
-  let fullLoaded = false;
-  const fullFilesLoaded = [];
-
-  // PAT-ASYNC-RACE-001: Wait for sync marker before reading state
-  await waitForSyncMarker();
-
-  const state = readSessionState();
-  const lastCompaction = state.protocolGate?.lastCompactionAt;
-
-  if (!lastCompaction) {
-    console.log('   ℹ️  No compaction events recorded - gate not applicable');
-    return {
-      pass: true,
-      score: 100,
-      max_score: 100,
-      issues: [],
-      warnings: ['No compaction events in session - post-compaction gate not enforced'],
-      protocolMode,
-      full_loaded: false,
-      full_files_loaded: []
-    };
-  }
-
-  console.log(`   Last compaction: ${lastCompaction}`);
-  console.log(`   Compaction count: ${state.protocolGate?.compactionCount || 0}`);
-
-  // Determine required files based on protocol mode
-  const requiredFiles = [...coreRequirements.POST_COMPACTION];
-  if (currentPhase && phaseFiles[currentPhase]) {
-    requiredFiles.push(phaseFiles[currentPhase]);
-  }
-
-  // SD-LEO-INFRA-DUAL-GENERATION-CLAUDE-001: On-demand FULL loading
-  if (ctx.needs_full_protocol && protocolMode === 'digest') {
-    console.log('   ⚡ On-demand FULL loading triggered');
-
-    for (const digestFile of [...requiredFiles]) {
-      const fullFile = getFullFilename(digestFile);
-      if (!requiredFiles.includes(fullFile)) {
-        requiredFiles.push(fullFile);
-        fullFilesLoaded.push(fullFile);
-        fullLoaded = true;
-        console.log(`   + Adding FULL file: ${fullFile}`);
-      }
-    }
-  }
-
-  const issues = [];
-  const warnings = [];
-
-  for (const filename of requiredFiles) {
-    const check = checkFileNeedsRead(filename, 'POST_COMPACTION');
-
-    if (check.needsRead) {
-      console.log(`   ❌ ${filename} needs re-read after compaction (${check.reason})`);
-      issues.push(`Protocol file needs re-read after compaction: ${filename}`);
-    } else {
-      console.log(`   ✅ ${filename} read after compaction`);
-    }
-  }
-
-  if (issues.length > 0) {
-    console.log('');
-    console.log('   📚 REMEDIATION:');
-    console.log('   Context compaction occurred - protocol files need re-reading.');
-    console.log('');
-    console.log('   ACTION REQUIRED:');
-    requiredFiles.forEach((f, i) => console.log(`   ${i + 1}. Read the file: ${f}`));
-
-    emitStructuredLog({
-      event: 'POST_COMPACTION_GATE',
-      status: 'BLOCK',
-      currentPhase,
-      lastCompaction,
-      requiredFiles,
-      issues,
-      protocolMode,
-      timestamp: new Date().toISOString()
-    });
-
-    return {
-      pass: false,
-      score: 0,
-      max_score: 100,
-      issues,
-      warnings,
-      protocolMode,
-      full_loaded: fullLoaded,
-      full_files_loaded: fullFilesLoaded
-    };
-  }
-
-  // PAT-ASYNC-RACE-001: Clear sync marker after successful validation
-  clearSyncMarker();
-
-  emitStructuredLog({
-    event: 'POST_COMPACTION_GATE',
-    status: 'PASS',
-    currentPhase,
-    lastCompaction,
-    requiredFiles,
-    protocolMode,
-    fullLoaded,
-    fullFilesLoaded,
-    timestamp: new Date().toISOString()
-  });
-
-  return {
-    pass: true,
-    score: 100,
-    max_score: 100,
-    issues: [],
-    warnings,
-    protocolMode,
-    full_loaded: fullLoaded,
-    full_files_loaded: fullFilesLoaded
-  };
-}
-
 /**
  * Get current protocol gate state for auditing
  * @returns {Object} Current gate state
@@ -839,24 +698,6 @@ export function createSdStartGate(sdId, handoffType = null) {
     remediation: `Read ${fileList} before starting work on ${sdId}. Use: Read tool with file_path for each file.`
   };
 }
-
-/**
- * Create Post-Compaction Gate for handoff integration
- * @param {string} currentPhase - Current phase
- * @returns {Object} Gate configuration
- */
-export function createPostCompactionGate(currentPhase) {
-  return {
-    name: 'GATE_POST_COMPACTION_PROTOCOL',
-    validator: async (ctx) => {
-      return validatePostCompactionGate(currentPhase, ctx);
-    },
-    required: true,
-    blocking: true,
-    remediation: 'Re-read CLAUDE.md, CLAUDE_CORE.md, and phase protocol file after context compaction. Use: Read tool with file_path="CLAUDE.md" then file_path="CLAUDE_CORE.md"'
-  };
-}
-
 /**
  * Validate Session Start Gate - enforces CLAUDE_CORE.md at session initialization
  * This gate runs BEFORE any SD work, at the earliest point of LEO session initialization.
@@ -1036,13 +877,11 @@ export default {
 
   // Validation gates
   validateSdStartGate,
-  validatePostCompactionGate,
   validateSessionStartGate,
   getProtocolGateState,
 
   // Gate factories
   createSdStartGate,
-  createPostCompactionGate,
   createSessionStartGate,
 
   // Mode helpers (SD-LEO-INFRA-DUAL-GENERATION-CLAUDE-001)

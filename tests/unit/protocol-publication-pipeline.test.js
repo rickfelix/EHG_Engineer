@@ -134,15 +134,39 @@ describe('FR-4: --only scoped regeneration', () => {
     } finally { fs.rmSync(dir, { recursive: true, force: true }); }
   });
 
-  it('KNOWN_GENERATED_FILES covers the 16 generated files', () => {
-    // Grew 12 -> 14 (Coordinator) -> 16 (Solomon: CLAUDE_SOLOMON.md + CLAUDE_SOLOMON_DIGEST.md).
-    expect(KNOWN_GENERATED_FILES).toHaveLength(16);
+  it('KNOWN_GENERATED_FILES covers the 21 generated files', () => {
+    // Grew 12 -> 14 (Coordinator) -> 16 (Solomon: CLAUDE_SOLOMON.md + CLAUDE_SOLOMON_DIGEST.md)
+    // -> 18 (SD-LEO-INFRA-ADAM-CONTRACT-READABLE-001: the two Adam companions, which the chairman
+    // ruled A-GOVERN on so they are GENERATED from governed rows rather than hand-maintained files).
+    // -> 19 (SD-FDBK-INFRA-CLAUDE-LEAD-EXCEEDS-001: CLAUDE_LEAD_MANUAL.md, which carries reference
+    // material out of CLAUDE_LEAD.md so the gated file fits the Read tool's 25k single-call cap.
+    // Before it, a no-offset Read of CLAUDE_LEAD.md returned lines 1-1231 of 1592 and the gate could
+    // not tell that from a complete read.)
+    // -> 21 (SD-FDBK-INFRA-CLAUDE-SOLOMON-EXCEEDS-001: CLAUDE_SOLOMON_MANUAL.md. The harness
+    // returned "showing lines 1-301 of 371 total (26138 tokens, cap 25000)" for CLAUDE_SOLOMON.md,
+    // and the dropped tail held the chairman-ratified clause REPEALING a rule the surviving head
+    // still stated — truncation kept the superseded rule and discarded its repeal.)
+    expect(KNOWN_GENERATED_FILES).toHaveLength(21);
     expect(KNOWN_GENERATED_FILES).toContain('CLAUDE.md');
     expect(KNOWN_GENERATED_FILES).toContain('CLAUDE_ADAM_DIGEST.md');
     expect(KNOWN_GENERATED_FILES).toContain('CLAUDE_COORDINATOR.md');
     expect(KNOWN_GENERATED_FILES).toContain('CLAUDE_COORDINATOR_DIGEST.md');
     expect(KNOWN_GENERATED_FILES).toContain('CLAUDE_SOLOMON.md');
     expect(KNOWN_GENERATED_FILES).toContain('CLAUDE_SOLOMON_DIGEST.md');
+    // The companions are the point of the A-GOVERN ruling: named explicitly so a future edit that
+    // drops them from the generated set fails HERE rather than silently demoting governed content
+    // back to an unread file.
+    expect(KNOWN_GENERATED_FILES).toContain('CLAUDE_ADAM_MANUAL.md');
+    expect(KNOWN_GENERATED_FILES).toContain('CLAUDE_ADAM_PROVENANCE.md');
+    // Same reasoning one file later: if CLAUDE_LEAD_MANUAL.md is ever dropped from the generated
+    // set, CLAUDE_LEAD.md silently reabsorbs its sections and goes back over the Read cap — which
+    // presents as nothing at all, because a truncated read reports success. Named so that fails here.
+    expect(KNOWN_GENERATED_FILES).toContain('CLAUDE_LEAD_MANUAL.md');
+    // And again for Solomon, where the stakes are higher than for a phase file: Solomon is a
+    // SINGLETON with no peer seat, so a silently reabsorbed section has no second reader who could
+    // notice it went missing.
+    expect(KNOWN_GENERATED_FILES).toContain('CLAUDE_SOLOMON_MANUAL.md');
+    expect(KNOWN_GENERATED_FILES).toContain('CLAUDE_PLAN_MANUAL.md');
   });
 });
 

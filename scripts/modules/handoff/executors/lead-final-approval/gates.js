@@ -8,13 +8,22 @@
 import path from 'path';
 import { fileURLToPath } from 'url';
 import { safeTruncate } from '../../../../../lib/utils/safe-truncate.js';
+// SD-LEO-INFRA-RESUME-FINAL-READ-001 (FR-3/FR-4): branch→owner resolution replaces the anchored
+// regex. See lib/git/branch-owner.js for why a widened regex is provably impossible.
+import { branchBelongsToSd, loadKeySet, OWNER_REASON } from '../../../../../lib/git/branch-owner.js';
 import { resolveRepoPath, resolveGitHubRepo, ENGINEER_ROOT } from '../../../../../lib/repo-paths.js';
 import { getTierForSD } from '../../../sd-type-checker.js';
 import { getFilteredRetrospective } from '../../retro-filters.js';
 
 // Core Protocol Gate - SD Start Gate (SD-LEO-INFRA-ENHANCED-PROTOCOL-FILE-001)
 import { createSdStartGate } from '../../gates/core-protocol-gate.js';
-import { classifyFrDelivery, projectGateResult, isFrTraceabilityEnforced } from '../../gates/fr-delivery-classifier.js';
+import {
+  classifyFrDelivery,
+  projectGateResult,
+  isFrTraceabilityEnforced,
+  NOT_MEASURED_SCORE,
+  ERRORED_SCORE,
+} from '../../gates/fr-delivery-classifier.js';
 
 // Pipeline Flow Verifier (SD-LEO-INFRA-INTEGRATION-AWARE-PRD-001 FR-5)
 import { verifyPipelineFlow, requiresPipelineFlowVerification } from '../../../../../lib/pipeline-flow-verifier.js';
@@ -490,7 +499,9 @@ export function createRetrospectiveExistsGate(supabase) {
  *
  * @returns {Object} Gate definition
  */
-export function createPRPrecheckGate() {
+export function createPRPrecheckGate(supabase, deps = {}) {
+  const getKeySet = deps.loadKeySet || (() => loadKeySet(supabase));
+
   return {
     name: 'PR_PRECHECK',
     validator: async (ctx) => {
@@ -498,13 +509,30 @@ export function createPRPrecheckGate() {
       console.log('-'.repeat(50));
 
       const sdId = ctx.sd.sd_key || ctx.sd.id;
-      const branchPatterns = [`feat/${sdId}`, `fix/${sdId}`, `docs/${sdId}`, `test/${sdId}`];
-      // QF-20260509-PRMERGE-EXACT (closes 9d55499d): exact-match regex anchored
-      // at start AND end. Pre-fix `.includes(pattern)` matched extended-suffix
-      // sibling branches (e.g. `feat/SD-X-001-stage-25-foo` matched query for
-      // SD-X-001 because headRefName.includes("feat/SD-X-001") returned true).
-      const sdIdEscaped = sdId.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
-      const exactBranchRegex = new RegExp(`^(feat|fix|docs|test)/${sdIdEscaped}$`, 'i');
+      // (The branchPatterns array that used to sit here fed only the anchored regex and became
+      // dead when that was removed — deleted rather than prefixed with _, since nothing reads it.)
+
+      // FR-3: third call site of the matcher that was replaced. All three migrate together —
+      // leaving one on the anchored regex would leave a live blind site.
+      //
+      // FR-4, AND THIS IS A DELIBERATE ASYMMETRY, NOT AN OVERSIGHT. Unlike PR_MERGE_VERIFICATION,
+      // this gate does NOT block when the key set is unavailable. It is a fast-fail optimisation
+      // whose whole contract is "the full PR_MERGE gate will validate" — its existing catch
+      // already returns passed:true on any error by design. Blocking here would turn an
+      // optimisation into a second hard dependency on the key-set lookup. The decision is recorded
+      // and LOGGED rather than inherited silently, because the risk of a permissive precheck is
+      // entirely carried by PR_MERGE_VERIFICATION actually blocking — if that ever stops being
+      // true, this asymmetry becomes a hole.
+      const keySetResult = await getKeySet();
+      if (!keySetResult.ok) {
+        console.log(`   ⚠️  Key set unavailable (${keySetResult.error || keySetResult.reason}) — precheck skipped by design; PR_MERGE_VERIFICATION blocks on this condition`);
+        return {
+          passed: true, score: 100, max_score: 100, issues: [],
+          warnings: [`PR_PRECHECK skipped: key set unavailable (${keySetResult.reason}). This is non-blocking BY DESIGN — PR_MERGE_VERIFICATION fails closed on the same condition.`],
+          details: { skipped: true, reason: OWNER_REASON.KEY_SET_UNAVAILABLE, deferred_to: 'PR_MERGE_VERIFICATION' }
+        };
+      }
+      const keySet = keySetResult.keys;
 
       try {
         const { execSync } = await import('child_process');
@@ -517,7 +545,7 @@ export function createPRPrecheckGate() {
               { encoding: 'utf8', timeout: 15000 }
             );
             const prs = JSON.parse(result || '[]');
-            const matching = prs.filter(pr => exactBranchRegex.test(pr.headRefName));
+            const matching = prs.filter(pr => branchBelongsToSd(pr.headRefName, sdId, keySet).belongs);
 
             if (matching.length > 0) {
               console.log(`   ❌ Open PR(s) found in ${repo} — run /ship first`);
@@ -559,7 +587,13 @@ export function createPRPrecheckGate() {
  *
  * @returns {Object} Gate definition
  */
-export function createPRMergeVerificationGate() {
+export function createPRMergeVerificationGate(supabase, deps = {}) {
+  // Injectable so the fail-closed path is unit-testable WITHOUT a database. A DB-backed test would
+  // file under the vitest `db` project, which is disabled when no non-production target is
+  // designated and runs zero files — a fail-closed test that cannot fire, inside the SD about
+  // guards that cannot fire (SD-LEO-INFRA-RESUME-FINAL-READ-001, TS-3).
+  const getKeySet = deps.loadKeySet || (() => loadKeySet(supabase));
+
   return {
     name: 'PR_MERGE_VERIFICATION',
     validator: async (ctx) => {
@@ -577,14 +611,35 @@ export function createPRMergeVerificationGate() {
         `test/${sdId}`
       ];
 
-      // QF-20260509-PRMERGE-EXACT (closes 9d55499d): exact-match regex anchored
-      // at start AND end of branch name. Pre-fix `.includes(pattern)` matched
-      // sibling branches with extended-suffix names. Witnessed 2026-05-07
-      // SD-LEO-FEAT-STAGE-POST-LAUNCH-002 LEAD-FINAL-APPROVAL: orphan branch
-      // in non-target repo with different SD's commits caused false-positive
-      // block requiring explicit DELETE to unwedge.
-      const sdIdEscaped = sdId.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
-      const exactBranchRegex = new RegExp(`^(feat|fix|docs|test)/${sdIdEscaped}$`, 'i');
+      // SD-LEO-INFRA-RESUME-FINAL-READ-001 (FR-3) — replaces the anchored regex that used to be
+      // built here. That regex could not see a branch carrying a suffix after the SD key, so an
+      // OPEN PR was invisible and an SD completed with its deliverable unmerged. The obvious
+      // repair (also match <type>/<KEY>-<suffix>) is PROVABLY IMPOSSIBLE: for key K and child key
+      // K-x the string <type>/K-x is simultaneously a suffixed branch of K and the canonical
+      // branch of K-x. The disambiguating information is in the KEY SET, not the string.
+      //
+      // LOADED BEFORE THE try BELOW, DELIBERATELY. The catch at the end of this validator already
+      // returns fail-closed on any throw, so loading inside it would make the resolver inherit
+      // fail-closed behaviour it does not implement — and a test asserting "the gate blocks" would
+      // pass with no resolver logic at all. Loading here keeps the resolver's own refusal
+      // observable and separately assertable (TS-3's negative control).
+      const keySetResult = await getKeySet();
+      if (!keySetResult.ok) {
+        console.log(`   ❌ Key set unavailable (${keySetResult.error || keySetResult.reason}) — cannot resolve branch ownership`);
+        return {
+          passed: false,
+          score: 0,
+          max_score: 100,
+          issues: [
+            `Cannot verify PR merge state for ${sdId}: the SD key set could not be loaded (${keySetResult.error || keySetResult.reason}).`,
+            'This BLOCKS rather than passes. Without the key set, "no matching branches" is indistinguishable from "the lookup failed", and treating the second as the first is the fail-open this gate exists to close.',
+            'Bypass available for documented emergencies: --bypass-validation --bypass-reason "<reason>"'
+          ],
+          warnings: [],
+          details: { fail_closed: true, reason: OWNER_REASON.KEY_SET_UNAVAILABLE, resolver: true }
+        };
+      }
+      const keySet = keySetResult.keys;
 
       try {
         const { execSync } = await import('child_process');
@@ -593,6 +648,9 @@ export function createPRMergeVerificationGate() {
         // and metadata.target_repos[] instead of hardcoding both repos.
         const reposWithPaths = computeReposForSD(ctx.sd);
         const openPRs = [];
+        // FR-4: repos whose PR list could not be read. An unreadable repo may hold the open PR that
+        // should block this completion, so it is tracked and refused below rather than logged past.
+        const unreadableRepos = [];
 
         for (const { githubRepo: repo } of reposWithPaths) {
           try {
@@ -603,9 +661,10 @@ export function createPRMergeVerificationGate() {
 
             const prs = JSON.parse(result || '[]');
 
-            // QF-20260509-PRMERGE-EXACT: anchored regex (not includes) rejects
-            // extended-suffix sibling branches.
-            const matchingPRs = prs.filter(pr => exactBranchRegex.test(pr.headRefName));
+            // FR-3: ownership resolution, not pattern matching. A suffixed branch belongs to this
+            // SD when no LONGER key claims it — which is why the key set is required and why the
+            // anchored regex this replaces could not answer the question at all.
+            const matchingPRs = prs.filter(pr => branchBelongsToSd(pr.headRefName, sdId, keySet).belongs);
 
             if (matchingPRs.length > 0) {
               openPRs.push(...matchingPRs.map(pr => ({
@@ -614,8 +673,38 @@ export function createPRMergeVerificationGate() {
               })));
             }
           } catch (repoError) {
-            console.log(`   ⚠️  Could not check ${repo}: ${safeTruncate(repoError.message || '', 50) || 'unknown error'}`);
+            // SD-LEO-INFRA-RESUME-FINAL-READ-001 (FR-4): "we could not look" is NOT evidence of
+            // "nothing is there". This catch used to log and continue, so a gh outage — auth
+            // expiry, rate limit, network — produced an empty openPRs list and the gate PASSED.
+            // Probed by the EXEC TESTING sub-agent: gh throwing for every repo returned
+            // passed:true, score:100. That is the same fail-open the key-set guard closes, forty
+            // lines away in this same function, and leaving it would make FR-4 incoherent: the
+            // whole reason PR_PRECHECK may be permissive is that THIS gate blocks.
+            unreadableRepos.push({ repo, error: safeTruncate(repoError.message || '', 120) || 'unknown error' });
+            console.log(`   ❌ Could not check ${repo}: ${safeTruncate(repoError.message || '', 80) || 'unknown error'}`);
           }
+        }
+
+        // FR-4: refuse BEFORE reporting a result derived from an incomplete scan. Ordered ahead of
+        // the openPRs check deliberately — if one repo read cleanly and another failed, "found 0
+        // open PRs" is a statement about the repo we could see, presented as a statement about all
+        // of them. Both branches of that are wrong to pass on.
+        if (unreadableRepos.length > 0) {
+          return {
+            passed: false,
+            score: 0,
+            max_score: 100,
+            issues: [
+              `Cannot verify PR merge state for ${sdId}: ${unreadableRepos.length} repo(s) could not be scanned.`,
+              ...unreadableRepos.map((r) => `  → ${r.repo}: ${r.error}`),
+              '',
+              'This BLOCKS rather than passes. An unreadable repo may hold the open PR that should stop this completion, and "we could not look" is not evidence of "nothing is there".',
+              'Usually gh auth or rate limiting: check `gh auth status`, then re-run.',
+              'Bypass available for documented emergencies: --bypass-validation --bypass-reason "<reason>"',
+            ],
+            warnings: [],
+            details: { fail_closed: true, reason: 'repo_scan_unreadable', unreadableRepos, scanIncomplete: true },
+          };
         }
 
         if (openPRs.length > 0) {
@@ -674,8 +763,10 @@ export function createPRMergeVerificationGate() {
                 .map(b => b.trim())
                 .filter(b => {
                   if (!b || b.includes('HEAD')) return false;
-                  const branchName = b.replace(/^origin\//, '');
-                  return exactBranchRegex.test(branchName);
+                  // FR-3: SAME resolver as the PR scan above. This is the second of the two guards
+                  // that shared the anchored regex — so both were blind to a suffixed branch, and
+                  // fixing only the PR scan would have left this one silently passing.
+                  return branchBelongsToSd(b, sdId, keySet).belongs;
                 });
 
               for (const branch of matchingBranches) {
@@ -942,19 +1033,24 @@ async function runFRDeliveryVerification(ctx, supabase, prdRepo) {
       .select('id')
       .eq('parent_sd_id', ctx.sd.id);
 
+    // SD-FDBK-FIX-COMPLETION-FLAG-HARNESS-001: each of the three non-measurement paths below
+    // used to emit its own unearned score (100 / 80 / 100), so "delegated to children",
+    // "there was no PRD" and "every FR verified delivered" were indistinguishable to the
+    // composite mean. They now share ONE representation — NOT_MEASURED_SCORE — and each
+    // names its own condition in the warning text.
     if (children && children.length > 0) {
-      console.log('   ℹ️  Orchestrator SD — FR verification delegated to children');
-      return { passed: true, score: 100, max_score: 100, issues: [], warnings: ['Orchestrator SD — FR verification delegated to children'] };
+      console.log('   ℹ️  Orchestrator SD — FR verification delegated to children (not measured here)');
+      return { passed: true, score: NOT_MEASURED_SCORE, max_score: 100, issues: [], warnings: ['Orchestrator SD — FR verification delegated to children; NOT verified at this boundary'] };
     }
 
-    console.log('   ⚠️  No PRD found — skipping FR verification');
-    return { passed: true, score: 80, max_score: 100, issues: [], warnings: ['No PRD found — FR delivery verification skipped'] };
+    console.log('   ⚠️  No PRD found — FR delivery NOT verified');
+    return { passed: true, score: NOT_MEASURED_SCORE, max_score: 100, issues: [], warnings: ['No PRD found — FR delivery NOT verified (this is a non-measurement, not a pass)'] };
   }
 
   const frs = prd.functional_requirements || [];
   if (frs.length === 0) {
-    console.log('   ℹ️  No functional requirements in PRD');
-    return { passed: true, score: 100, max_score: 100, issues: [], warnings: ['No FRs defined in PRD'] };
+    console.log('   ℹ️  No functional requirements in PRD — nothing to verify');
+    return { passed: true, score: NOT_MEASURED_SCORE, max_score: 100, issues: [], warnings: ['No FRs defined in PRD — FR delivery NOT verified'] };
   }
 
   console.log(`   📋 Checking ${frs.length} functional requirements (per-FR mapping)...`);
@@ -970,17 +1066,19 @@ async function runFRDeliveryVerification(ctx, supabase, prdRepo) {
     functionalRequirements: frs,
     requesterSessionId: ctx.sessionId || ctx.session_id || null,
   });
+  const MARKS = { delivered: '✅', descoped: '🔵', unverifiable: '❓', undelivered: '❌' };
   for (const f of classification.frs) {
-    const mark = f.status === 'delivered' ? '✅' : f.status === 'descoped' ? '🔵' : '❌';
-    console.log(`   ${mark} ${f.id} [${f.status}]: ${safeTruncate(f.description || '', 56)}`);
+    console.log(`   ${MARKS[f.status] || '❌'} ${f.id} [${f.status}]: ${safeTruncate(f.description || '', 56)}`);
   }
   const enforced = isFrTraceabilityEnforced();
-  console.log(`\n   📊 FR delivery: ${classification.delivered} delivered, ${classification.descoped} descoped, ${classification.undelivered} undelivered (enforce=${enforced ? 'ON' : 'OFF/warn-only'})`);
+  console.log(`\n   📊 FR delivery: ${classification.delivered} delivered, ${classification.descoped} descoped, ${classification.undelivered} undelivered, ${classification.unverifiable} unverifiable (enforce=${enforced ? 'ON' : 'OFF/warn-only'})`);
   const result = projectGateResult(classification, { enforced, gateName: 'FR_DELIVERY_VERIFICATION' });
   if (!result.passed) {
     console.log(`   ❌ FR delivery FAILED — ${classification.undelivered}/${classification.total} undelivered`);
+  } else if (classification.unverifiable === classification.total) {
+    console.log(`   ❓ FR delivery UNVERIFIABLE — this SD does not use the FR-reference convention, so delivery was NOT observed (score ${result.score} = verified delivery only)`);
   } else if (result.warnings.length) {
-    console.log('   ⚠️  FR delivery passed (warn-only) with undelivered FRs');
+    console.log('   ⚠️  FR delivery passed (warn-only) with undelivered or unverifiable FRs');
   } else {
     console.log('   ✅ All FRs delivered or approver-descoped');
   }
@@ -1010,9 +1108,11 @@ export function createFRDeliveryVerificationGate(supabase, prdRepo) {
       } catch (err) {
         if (isFrTraceabilityEnforced()) throw err;
         console.log(`   ⚠️  FR delivery verification errored in warn-only mode (fail-open): ${err.message}`);
+        // SD-FDBK-FIX-COMPLETION-FLAG-HARNESS-001: still non-blocking, but NOT a 100. A broken
+        // instrument must not be arithmetically indistinguishable from a verified delivery.
         return {
-          passed: true, score: 100, max_score: 100, issues: [],
-          warnings: [`FR delivery verification errored (warn-only, fail-open): ${err.message}`],
+          passed: true, score: ERRORED_SCORE, max_score: 100, issues: [],
+          warnings: [`FR delivery verification ERRORED (warn-only, fail-open) — delivery NOT verified: ${err.message}`],
         };
       }
     },
@@ -1205,6 +1305,149 @@ export function createPhaseCoverageExitGate(supabase) {
  * @param {Object} sd - Strategic Directive (optional, for SD Start Gate)
  * @returns {Array} Array of gate definitions
  */
+/**
+ * SD-LEO-INFRA-CHAIRMAN-APPLY-FLAG-001 — make metadata.requires_chairman_apply mean something.
+ *
+ * The flag READ as protection and provided none. Its only functional consumer was
+ * check-migration-readiness.mjs, which uses it to make a PR-time drift detector QUIETER, and
+ * this executor could not see it at all (verified: zero matches for the flag across the whole
+ * lead-final-approval tree, against a populated 31-file/17-gate negative control, plus a live
+ * dry-run manifest of 30 gates with none migration-related). So a chairman-gated SD parked at
+ * pending_approval/LEAD_FINAL was one adopt-and-auto-chain away from being marked completed
+ * with its production migration never applied.
+ *
+ * THREE migration checks already existed and NOT ONE enforced: verify-migration-apply-state.mjs
+ * (mature classifier, CI-only, behind a wrapper that converts errors to exit 0),
+ * pending-migrations-check.js (wired into every handoff but defaulted to warn), and
+ * LeadFinalApprovalExecutor.verifyMigrationsApplied() (runs here, but CREATE-TABLE-only and
+ * fail-open). This gate is the reconciliation, not a fourth mechanism: it REUSES the mature
+ * classifier verbatim, by invoking it, and adds the one thing missing — refusal.
+ *
+ * @returns {Object} Gate definition
+ */
+export function createChairmanApplyVerificationGate() {
+  return {
+    name: 'CHAIRMAN_APPLY_VERIFICATION',
+    validator: async (ctx) => {
+      console.log('\n🔒 GATE: Chairman-Apply Verification');
+      console.log('-'.repeat(50));
+
+      const sd = ctx.sd || {};
+      const sdKey = sd.sd_key || sd.id || 'unknown';
+      // Accept the string 'true' as well as the boolean. Not defensive clutter: the flag's
+      // sibling consumer check-migration-readiness.mjs resolveSdGated() (:141) already guards
+      // `flag === 'true' || flag === true`, because it reads via raw SQL ->> which always
+      // returns text — in-repo evidence that this field demonstrably arrives as a string on
+      // some paths. This gate is the HIGHER-consequence consumer (it blocks completion, that
+      // one only quiets a warning), so it must not be the LESS tolerant of the two. Erring
+      // toward gating is the safe direction; erring toward skipping is the incident.
+      const rawFlag = sd.metadata?.requires_chairman_apply;
+      const gated = rawFlag === true || rawFlag === 'true';
+
+      // Not flagged → not applicable. Unflagged SDs must see no behaviour change at all.
+      if (!gated) {
+        console.log('   ℹ️  metadata.requires_chairman_apply not set — not applicable');
+        return {
+          passed: true, score: 100, max_score: 100, issues: [], warnings: [],
+          details: { applicable: false }
+        };
+      }
+
+      try {
+        // Which migration(s) does this SD own? Deliberately does NOT reuse or improve
+        // pending-migrations-check.js's filename-substring heuristic — sharpening that
+        // matching pushes more work into execute-manual-migrations.js, which has no
+        // chairman-gate awareness and could auto-apply the very migration being gated.
+        // Prefer an explicit declaration; fall back to an SD-key-bearing filename.
+        const declared = Array.isArray(sd.metadata?.migration_files) ? sd.metadata.migration_files : [];
+        const { classifyMigrationApplyState } = await import('./chairman-apply-state.js');
+        const { files, error } = await classifyMigrationApplyState();
+
+        if (error) {
+          // FR-3: could-not-determine BLOCKS. Verification failure is not verification success —
+          // the same lesson PR_MERGE_VERIFICATION records above, and the reason the CI wrapper's
+          // error-to-exit-0 conversion is deliberately NOT inherited here.
+          return failClosed(`apply-state could not be determined: ${error}`, sdKey);
+        }
+
+        // UNION, never an exclusive branch. An earlier cut used
+        //   declared.length ? filter(declared) : filter(sdKey)
+        // which the EXEC security and testing reviews independently broke: the moment
+        // metadata.migration_files was non-empty — honest partial declaration, stale
+        // copy-paste, or a deliberate decoy — the SD-key fallback was SKIPPED ENTIRELY, so a
+        // declared already-APPLIED file passed the gate while the real SD-key-named
+        // NOT_APPLIED migration sat untouched in the same files[] the gate already held.
+        // metadata is a DATABASE WRITE, not part of any git diff, so that bypass would have
+        // been invisible to review of the PR that introduced it. A declaration may only ever
+        // ADD to what is checked; it can never subtract.
+        const owned = files.filter(f => declared.includes(f.file) || f.file.includes(sdKey));
+
+        // A declaration that names a file the corpus does not contain is itself unverifiable.
+        // Without this, declaring ['real.sql','typo.sql'] checked only real.sql and silently
+        // dropped the other — a partial match reported as a full pass.
+        const missingDeclared = declared.filter(d => !files.some(f => f.file === d));
+        if (missingDeclared.length) {
+          return failClosed(
+            `declared migration(s) not found in the migration corpus: ${missingDeclared.join(', ')}`,
+            sdKey,
+            ['Correct metadata.migration_files, or remove entries that no longer exist.']
+          );
+        }
+
+        if (!owned.length) {
+          return failClosed(`no migration file could be associated with ${sdKey}`, sdKey,
+            ['Declare the SD\'s migration(s) in metadata.migration_files so this gate can verify them.']);
+        }
+
+        // PARTIAL is not APPLIED. A half-applied migration is precisely the state this gate exists
+        // to refuse, and treating it as good would rebuild the fail-open it replaces.
+        const unapplied = owned.filter(f => f.status !== 'APPLIED' && f.status !== 'NO_DDL');
+        if (unapplied.length) {
+          console.log(`   ❌ ${unapplied.length} migration(s) not applied`);
+          return {
+            passed: false, score: 0, max_score: 100,
+            issues: [
+              `${sdKey} is chairman-gated but its migration is NOT applied to the live database.`,
+              ...unapplied.map(f => `  ${f.file} → ${f.status}${f.missing?.length ? ` (missing: ${f.missing.slice(0, 3).join(', ')})` : ''}`),
+              '',
+              'REMEDIATION: obtain the chairman GO and apply the migration, then re-run this handoff.',
+              'Completing now would mark the SD done against a production migration that was never applied.'
+            ],
+            warnings: [],
+            details: { applicable: true, unapplied: unapplied.map(f => ({ file: f.file, status: f.status })) }
+          };
+        }
+
+        console.log(`   ✅ ${owned.length} chairman-gated migration(s) verified applied`);
+        return {
+          passed: true, score: 100, max_score: 100, issues: [], warnings: [],
+          details: { applicable: true, verified: owned.map(f => f.file) }
+        };
+      } catch (e) {
+        return failClosed(e.message, sdKey);
+      }
+    },
+    required: true
+  };
+}
+
+/** Shared fail-closed shape for CHAIRMAN_APPLY_VERIFICATION (FR-3). */
+function failClosed(reason, sdKey, extra = []) {
+  console.log(`   ❌ Chairman-apply verification could not run: ${reason}`);
+  return {
+    passed: false, score: 0, max_score: 100,
+    issues: [
+      `Chairman-apply verification could not be completed for ${sdKey}: ${reason}`,
+      'This BLOCKS rather than passes: an unverifiable migration is not a verified one.',
+      ...extra,
+      '',
+      'Bypass available for documented emergencies: --bypass-validation --bypass-reason "<reason>"'
+    ],
+    warnings: [],
+    details: { failed: true, reason, fail_closed: true }
+  };
+}
+
 export function getRequiredGates(supabase, prdRepo, sd = null) {
   const gates = [];
 
@@ -1214,12 +1457,22 @@ export function getRequiredGates(supabase, prdRepo, sd = null) {
   }
 
   // PR Precheck — fast-fail before heavyweight gates (SD-LEARN-FIX-ADDRESS-PATTERN-LEARN-081)
-  gates.push(createPRPrecheckGate());
+  // FR-3/FR-4: both PR gates now resolve branch ownership against the SD key set, so both need
+  // the client. Passing it here rather than constructing one inside the gate keeps the key-set
+  // failure path injectable — and therefore testable in the unit tier.
+  gates.push(createPRPrecheckGate(supabase));
 
   gates.push(createPlanToLeadHandoffGate(supabase));
   gates.push(createUserStoriesCompleteGate(supabase, prdRepo));
   gates.push(createRetrospectiveExistsGate(supabase));
-  gates.push(createPRMergeVerificationGate());
+  gates.push(createPRMergeVerificationGate(supabase));
+
+  // Chairman-Apply Verification (SD-LEO-INFRA-CHAIRMAN-APPLY-FLAG-001) — refuses completion of
+  // a chairman-gated SD whose staged migration was never applied. Registration is a manual push
+  // (there is no directory scan here), so a gate that is written but not pushed silently does
+  // nothing — which is how the flag it enforces became decorative in the first place.
+  gates.push(createChairmanApplyVerificationGate());
+
   gates.push(createPipelineFlowGate());
 
   // FR Delivery Verification (CONST-012 — SD-MAN-ORCH-SCOPE-INTEGRITY-CONSTITUTIONAL-001-C)

@@ -40,7 +40,16 @@ describe('QF-20260603-778 A1: --auto-pr defers PR creation until AFTER commit+pu
 
   it('the PR-URL prompt is SKIPPED under --auto-pr (gated by !options.autoPr)', () => {
     // Corrected shape: `if (!prUrl && !options.autoPr) { prompt(...) }`
-    expect(src).toMatch(/if \(!prUrl && !options\.autoPr\)[\s\S]*?GitHub PR URL/);
+    //
+    // QF-20260727-714: the tail of the condition is no longer pinned. This assertion protects ONE
+    // contract — that --auto-pr suppresses the PR-URL prompt — but it was written as a literal
+    // match on the whole condition, so it also froze the condition against ever gaining another
+    // skip clause. Adding --no-code-deliverable (a second, unrelated reason to skip the prompt)
+    // broke it while leaving the auto-pr contract fully intact. Pinning `!prUrl && !options.autoPr`
+    // as a PREFIX keeps the real guarantee and stops the test failing on additions it does not
+    // actually care about. Deliberately NOT relaxed to "mentions autoPr somewhere" — the ordering
+    // and the !prUrl conjunction are both part of what QF-779 fixed.
+    expect(src).toMatch(/if \(!prUrl && !options\.autoPr[^)]*\)[\s\S]*?GitHub PR URL/);
   });
 
   it('createAutoPR is DEFERRED until AFTER commitAndPushChanges (branch is pushed first)', () => {

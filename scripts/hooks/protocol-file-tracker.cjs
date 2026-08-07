@@ -46,7 +46,31 @@ const PROTOCOL_FILES = [
   // Role contracts (no DIGEST variant, NOT a handoff-gate requirement — verified at
   // role activation instead: adam-register.cjs checks this read via session state)
   'CLAUDE_ADAM.md',
-  'CLAUDE_SOLOMON.md'  // role contract, not a handoff-gate requirement — verified at role activation
+  // SD-LEO-INFRA-ADAM-CONTRACT-READABLE-001 / FR-2, the fourth of the four surfaces the chairman's
+  // A-GOVERN decision requires. Tracking a companion is NOT a read requirement — nothing gates on
+  // having read them, and the manual is explicitly read at the moment of doing rather than at
+  // startup. It is what makes a read OBSERVABLE: without an entry here the tracker ignores the file
+  // entirely, so "was the governed procedure ever opened?" has no answer at all. Governed content
+  // that no mechanism can even see being read is the demotion this SD exists to prevent.
+  'CLAUDE_ADAM_MANUAL.md',
+  // SD-FDBK-INFRA-CLAUDE-LEAD-EXCEEDS-001. A read of a file absent from this list is invisible to
+  // session state entirely — CLAUDE_ADAM_DIGEST.md is generated today and tracked nowhere. A new
+  // companion that nothing records is a companion nobody can prove was read.
+  'CLAUDE_LEAD_MANUAL.md',
+  'CLAUDE_PLAN_MANUAL.md',
+  'CLAUDE_ADAM_PROVENANCE.md',
+  'CLAUDE_SOLOMON.md',  // role contract, not a handoff-gate requirement — verified at role activation
+  // SD-FDBK-INFRA-CLAUDE-SOLOMON-EXCEEDS-001. Same reason CLAUDE_LEAD_MANUAL.md is listed: a read
+  // of a file absent from this list is invisible to session state entirely, so a companion nothing
+  // records is a companion nobody can prove was read.
+  'CLAUDE_SOLOMON_MANUAL.md',
+  // SD-LEO-INFRA-ROLE-CONTRACT-READ-GATE-001 / FR-2 prerequisite. The coordinator was the ONLY role
+  // whose contract is small enough to read in one call (CLAUDE_COORDINATOR.md is ~25.5KB, under the
+  // 25k-token cap for any real tokenizer) and the ONLY role with no verifier of any kind — its
+  // priming requirement terminated in a self-attestation nothing checked. Adding it here is the
+  // prerequisite for checking it at all: until now a coordinator READING its contract produced no
+  // session-state record, so there was nothing for a check to consult.
+  'CLAUDE_COORDINATOR.md'
 ];
 
 // SD-LEO-INFRA-OPTIMIZE-PROTOCOL-FILE-001: Equivalence mapping for gate compatibility
@@ -186,9 +210,59 @@ function normalizeProtocolPath(filePath) {
  *   }
  * }
  */
+/**
+ * Pure: decide whether a Read covered the whole file, and what range it actually covered.
+ * SD-LEO-INFRA-ADAM-CONTRACT-READABLE-001 FR-0.
+ *
+ * Exported so the decision is unit-testable without the hook's stdin/session-state plumbing —
+ * the pre-existing tracker tests drive the real hook against the REAL session state file, which
+ * is both order-dependent (all four are quarantined) and a live-state write.
+ *
+ * @param {{tool_input?: object, tool_response?: object}} hookInput
+ * @returns {{isPartialRead: boolean, truncatedByHarness: boolean, range: {offset: number, limit: number|null}}}
+ */
+function deriveReadCoverage(hookInput) {
+  const toolInputData = (hookInput && hookInput.tool_input) || {};
+  const respFile = (hookInput && hookInput.tool_response && hookInput.tool_response.file) || {};
+
+  const hasLimit = toolInputData.limit !== undefined && toolInputData.limit !== null;
+  const hasOffset = toolInputData.offset !== undefined && toolInputData.offset !== null;
+  // === true, never truthiness: the harness OMITS this key on a non-truncated read, and a missing
+  // value must not be read as a negative result.
+  const truncatedByHarness = respFile.truncatedByTokenCap === true;
+
+  return {
+    isPartialRead: hasLimit || hasOffset || truncatedByHarness,
+    truncatedByHarness,
+    range: {
+      offset: truncatedByHarness && typeof respFile.startLine === 'number'
+        ? respFile.startLine
+        : (hasOffset ? toolInputData.offset : 1),
+      limit: truncatedByHarness && typeof respFile.numLines === 'number'
+        ? respFile.numLines
+        : (hasLimit ? toolInputData.limit : null)
+    }
+  };
+}
+
 function processHookInput(hookInput) {
   const toolName = hookInput.tool_name || '';
   const toolInputData = hookInput.tool_input || {};
+  // SD-LEO-INFRA-ROLE-CONTRACT-READ-GATE-001 / FR-5. ADDITIVE ONLY — this does NOT touch
+  // lastReadWasPartial, whose semantics are load-bearing for protocol-file-read-gate.js:159 and
+  // therefore for all four handoff executors. A new field cannot change an existing verdict.
+  //
+  // WHY IT IS NEEDED: partial-ness is computed from the CALLER'S ARGUMENTS, so a no-argument Read of
+  // an over-cap file — which the harness silently TRUNCATES — records lastReadWasPartial=false, i.e.
+  // "confirmed full". It also never enters ranges[], because that push sits inside the isPartialRead
+  // branch. So neither the boolean nor union-coverage can see it. The only thing that can is what the
+  // read actually DELIVERED.
+  //
+  // WHETHER THE HARNESS SUPPLIES THIS IS AN OPEN QUESTION AT TIME OF WRITING: transcripts show the
+  // Read result carrying {startLine, numLines, totalLines}, but that is the transcript, not proof of
+  // the hook payload. Captured defensively — present when the harness sends it, absent otherwise, and
+  // consumers must treat absence as "unknown" rather than as "full".
+  const toolResponse = hookInput.tool_response || null;
 
   // Only track Read tool calls
   if (toolName !== 'Read') {
@@ -216,7 +290,23 @@ function processHookInput(hookInput) {
   // TR-3: Only flag when limit/offset explicitly used (including 0)
   const hasLimit = toolInputData.limit !== undefined && toolInputData.limit !== null;
   const hasOffset = toolInputData.offset !== undefined && toolInputData.offset !== null;
-  const isPartialRead = hasLimit || hasOffset;
+  // SD-LEO-INFRA-ADAM-CONTRACT-READABLE-001 FR-0: input params alone CANNOT see harness
+  // truncation. A no-offset Read of a file over the 25k-token cap returns ~36% of it and was
+  // recorded here as a FULL read (contract_read=true, partial=false), while correct pagination
+  // was the thing flagged partial — the gauge was inverted and already in its pass state.
+  //
+  // The signal is measured, not inferred: on PostToolUse the harness sets
+  // tool_response.file.truncatedByTokenCap === true ONLY on a cap-truncated read (verified
+  // empirically against a control read of the same file — the flag is ABSENT otherwise, so
+  // compare with === true and never treat "missing" as a negative result). Deriving truncation
+  // from startLine/numLines/totalLines instead would re-introduce the SAME inversion: those
+  // arithmetic ALSO reports "incomplete" for a legitimate limit=5 read.
+  // Single source of truth: the hook path and the unit tests must exercise the SAME derivation.
+  // An inline copy here would let the tested function and the live behaviour drift apart silently.
+  const respFile = (hookInput.tool_response && hookInput.tool_response.file) || {};
+  const coverage = deriveReadCoverage(hookInput);
+  const truncatedByHarness = coverage.truncatedByHarness;
+  const isPartialRead = coverage.isPartialRead;
 
   const now = new Date().toISOString();
 
@@ -259,17 +349,67 @@ function processHookInput(hookInput) {
     // unionRangeCoverage() contract at sd-key-generator.js:156-194 — raw
     // {offset, limit} pairs (offset 1-indexed, omitted = line 1).
     if (!Array.isArray(fileStatus.ranges)) fileStatus.ranges = [];
+    // FR-0: for a HARNESS-truncated read the input params describe a full-file request that did
+    // not happen, so recording {offset:1, limit:null} would claim total coverage. Record the
+    // lines actually returned instead, so unionRangeCoverage() credits real coverage and a
+    // follow-on paginated read can legitimately complete the file.
     fileStatus.ranges.push({
-      offset: hasOffset ? toolInputData.offset : 1,
-      limit: hasLimit ? toolInputData.limit : null,
-      readAt: now
+      offset: coverage.range.offset,
+      limit: coverage.range.limit,
+      readAt: now,
+      ...(truncatedByHarness ? { truncatedByTokenCap: true, totalLines: respFile.totalLines } : {})
     });
-    console.log(`[protocol-file-tracker] ⚠️ Partial read detected for ${normalizedPath} (limit: ${toolInputData.limit}, offset: ${toolInputData.offset}; ranges: ${fileStatus.ranges.length})`);
+    // FR-0: record WHY it was partial. A harness truncation is not an operator choice — it is a
+    // read that silently failed, and it previously produced no banner at all.
+    fileStatus.lastReadTruncatedByHarness = truncatedByHarness;
+    if (truncatedByHarness) {
+      fileStatus.lastPartialRead.truncatedByTokenCap = true;
+      console.log(`[protocol-file-tracker] 🚨 HARNESS-TRUNCATED read of ${normalizedPath}: returned lines ${respFile.startLine}-${(respFile.startLine || 1) + (respFile.numLines || 0) - 1} of ${respFile.totalLines}. The file exceeds the per-call token cap; this is NOT a full read. Paginate with offset/limit to cover the remainder.`);
+    } else {
+      console.log(`[protocol-file-tracker] ⚠️ Partial read detected for ${normalizedPath} (limit: ${toolInputData.limit}, offset: ${toolInputData.offset}; ranges: ${fileStatus.ranges.length})`);
+    }
   } else {
     // Full read clears partial read flag but preserves historical metadata
     fileStatus.lastReadWasPartial = false;
+    fileStatus.lastReadTruncatedByHarness = false;
     // Note: lastPartialRead preserved for audit (FR-2)
     console.log(`[protocol-file-tracker] ✅ Full read of ${normalizedPath}${fileStatus.lastPartialRead ? ' (clears partial read flag)' : ''}`);
+  }
+
+  // SD-LEO-INFRA-ROLE-CONTRACT-READ-GATE-001 / FR-5: record what the read actually DELIVERED,
+  // independent of what the caller asked for. This is the only signal that can distinguish a genuine
+  // full read from a no-argument read the harness silently truncated — the boolean above says
+  // "confirmed full" for both, and ranges[] never sees the truncated one at all.
+  //
+  // ADDITIVE: a new field, read by the role-contract consumers only. lastReadWasPartial is untouched,
+  // so the handoff gate at protocol-file-read-gate.js:159 behaves exactly as before.
+  //
+  // ABSENT MEANS UNKNOWN, NOT COMPLETE. If the harness does not supply tool_response, no field is
+  // written and a consumer must not infer coverage from its absence — that inference is the original
+  // defect in another costume.
+  if (toolResponse && typeof toolResponse === 'object') {
+    const total = Number(toolResponse.totalLines);
+    const delivered = Number(toolResponse.numLines);
+    const start = Number(toolResponse.startLine);
+    if (Number.isFinite(total) && Number.isFinite(delivered)) {
+      fileStatus.lastDelivered = {
+        startLine: Number.isFinite(start) ? start : 1,
+        numLines: delivered,
+        totalLines: total,
+        // The load-bearing derived fact, computed once here where both numbers are in hand.
+        coveredWholeFile: delivered >= total,
+        readAt: now
+      };
+      if (!Array.isArray(fileStatus.deliveredRanges)) fileStatus.deliveredRanges = [];
+      fileStatus.deliveredRanges.push({
+        offset: Number.isFinite(start) ? start : 1,
+        limit: delivered,
+        readAt: now
+      });
+      if (delivered < total) {
+        console.log(`[protocol-file-tracker] ⚠️ TRUNCATED read of ${normalizedPath}: ${delivered} of ${total} lines delivered (caller passed no limit/offset, so this would otherwise record as a full read)`);
+      }
+    }
   }
 
   // Save updated status for ACTUAL file read only
@@ -381,4 +521,10 @@ function main() {
   }, 2000);
 }
 
-main();
+// Only auto-run as a hook; requiring this file (tests) must not consume stdin.
+if (require.main === module) {
+  main();
+}
+
+module.exports = { deriveReadCoverage, processHookInput };
+

@@ -22,13 +22,31 @@ import { resolveAutoProceed } from '../auto-proceed-resolver.js';
  * helper re-queries the SD and force-updates status/phase when drift is
  * detected. Fail-soft: any error is logged but does not fail the handoff.
  *
- * Expected post-handoff SD state per handoff type (matches the DB writes
- * in each executor's state-transitions.js):
+ * Expected post-handoff SD state per handoff type. Each entry MUST equal what that
+ * handoff's authoritative setter actually writes — this table does not decide the
+ * vocabulary, it mirrors it.
+ *
+ * *** THIS COMMENT USED TO SAY THE TABLE MATCHED THE EXECUTORS. IT DID NOT. ***
+ * SD-LEO-INFRA-STATUS-VOCABULARY-SCHISM-001. From the 2026-04-24 reconciler commit
+ * (0af429eaf52) until this fix, PLAN-TO-EXEC and EXEC-TO-PLAN were listed here as
+ * 'in_progress' while their setters write 'active' — plan-to-exec/state-transitions.js:133
+ * and fn_atomic_exec_to_plan_transition. The drift branch below therefore fired on EVERY
+ * one of those handoffs and overwrote the setter milliseconds later in the same process,
+ * so 'active' stopped being written at all: the audit pre_active series ran 2026-04:125,
+ * 05:5, 06:12, 07:ZERO, with the collapse landing exactly on that commit.
+ *
+ * The false comment is why it survived three months of review — the file asserted its own
+ * correctness, so anyone checking read the claim instead of the executors. If you change a
+ * value here, change it because you read the setter, not because this comment says so.
+ *
+ * VERIFY AT THE CITED LINE: plan-to-exec/state-transitions.js has an EARLIER status write
+ * at :87 setting 'in_progress'. A grep that stops at the first hit reads the file as
+ * agreeing with this table and concludes there is no schism.
  */
 const POST_HANDOFF_SD_STATE = {
-  'LEAD-TO-PLAN': { status: 'in_progress', current_phase: 'PLAN_PRD' },
-  'PLAN-TO-EXEC': { status: 'in_progress', current_phase: 'EXEC' },
-  'EXEC-TO-PLAN': { status: 'in_progress', current_phase: 'PLAN_VERIFICATION' },
+  'LEAD-TO-PLAN': { status: 'in_progress', current_phase: 'PLAN_PRD' },       // lead-to-plan/state-transitions.js:104
+  'PLAN-TO-EXEC': { status: 'active', current_phase: 'EXEC' },                // plan-to-exec/state-transitions.js:133
+  'EXEC-TO-PLAN': { status: 'active', current_phase: 'PLAN_VERIFICATION' },   // fn_atomic_exec_to_plan_transition
   'PLAN-TO-LEAD': { status: 'pending_approval', current_phase: 'LEAD_FINAL' },
   'LEAD-FINAL-APPROVAL': { status: 'completed', current_phase: 'COMPLETED' },
 };

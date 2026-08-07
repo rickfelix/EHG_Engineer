@@ -19,6 +19,11 @@
  * @module scripts/modules/handoff/executors/exec-to-plan/gates/wiring-validation
  */
 
+// SD-LEO-INFRA-SWALLOWED-POSTGREST-ERROR-001 FR-1: query-error discipline, so a rejected
+// query cannot masquerade as an empty result and quietly relax this gate.
+import { safeQuery } from '../../../../../../lib/db/safe-query.mjs';
+
+
 const VISION_DOC_KEY = 'VISION-LEO-WIRING-VERIFICATION-L2-001';
 
 /**
@@ -41,17 +46,29 @@ export function createWiringValidationGate(supabase) {
       const selfOptIn = sd?.metadata?.wiring_required === true;
       let parentOptIn = false;
       if (!selfOptIn && sd?.parent_sd_id) {
-        try {
-          const { data: parent } = await supabase
+        // SD-LEO-INFRA-SWALLOWED-POSTGREST-ERROR-001 / FR-2: this fail-open is DELIBERATE — the
+        // original code says so ("Non-blocking: if we can't read parent, treat as non-opted-in")
+        // — so it is a genuine TOLERATED failure, not a defect to fix. Not every data-only
+        // destructure is a bug, and pretending otherwise would train people to convert blindly.
+        //
+        // What changes is that the tolerance is now DECLARED rather than implicit: safeQuery
+        // requires a REASON STRING to stay silent, the reason is written to stderr when it fires,
+        // and the count of such silences is itself a gauge. An implicit swallow is invisible; a
+        // declared one can be reviewed and, if the fleet accumulates too many, reconsidered.
+        const parent = await safeQuery(
+          supabase
             .from('strategic_directives_v2')
             .select('metadata')
             .eq('id', sd.parent_sd_id)
-            .maybeSingle();
-          parentOptIn = parent?.metadata?.wiring_enforcement === true;
-        } catch (e) {
-          // Non-blocking: if we can't read parent, treat as non-opted-in.
-          console.log(`   ⚠️  Parent lookup failed (${e?.message || e}) — treating as advisory`);
-        }
+            .maybeSingle(),
+          {
+            site: 'wiring-validation:parent-opt-in-lookup',
+            tolerate: 'Opt-in resolution is advisory by design: an unreadable parent means we cannot '
+              + 'confirm opt-in, and the gate then runs advisory-only rather than blocking. Failing '
+              + 'closed here would block SDs on an unrelated parent-row problem.',
+          }
+        );
+        parentOptIn = parent?.metadata?.wiring_enforcement === true;
       }
 
       const optedIn = selfOptIn || parentOptIn;
@@ -90,11 +107,21 @@ export function createWiringValidationGate(supabase) {
       const wiringValidated = sdRow?.wiring_validated;
 
       // ── Also fetch per-check breakdown for remediation text ─────────────
-      const { data: checks } = await supabase
-        .from('leo_wiring_validations')
-        .select('check_type, status, signals_detected, waived_by')
-        .eq('sd_key', sdKey)
-        .order('check_type');
+      // SD-LEO-INFRA-SWALLOWED-POSTGREST-ERROR-001 / FR-3: a failed read here previously yielded
+      // null, so checkCount became 0 and both the failed and warned filters came back empty —
+      // the gate reported NO ISSUES on a query it could not actually answer. Unlike the
+      // smoke-test and children-check sites, this one needs no catch restructuring: there is no
+      // local try/catch, and ValidationOrchestrator.validateGate() already converts an uncaught
+      // throw into an honest FAIL. Routing through safeQuery is sufficient here, and the test
+      // asserts on the REJECTION rather than on returned issues.
+      const checks = await safeQuery(
+        supabase
+          .from('leo_wiring_validations')
+          .select('check_type, status, signals_detected, waived_by')
+          .eq('sd_key', sdKey)
+          .order('check_type'),
+        { site: 'wiring-validation:checks-breakdown' }
+      );
 
       const issues = [];
       const warnings = [];

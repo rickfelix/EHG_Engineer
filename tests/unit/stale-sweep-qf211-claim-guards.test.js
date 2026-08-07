@@ -14,6 +14,24 @@ import path from 'node:path';
 const SCRIPT = path.resolve(__dirname, '../../scripts/stale-session-sweep.cjs');
 const src = readFileSync(SCRIPT, 'utf8');
 
+/**
+ * The FULL body of clearStaleQfClaims, from its declaration to the next top-level function.
+ *
+ * Replaces a fixed `slice(idx, idx + 3600)`. That window silently stopped covering the guards it
+ * asserts on the moment the function grew past it (SD-LEO-INFRA-DISPATCH-DELIVERY-INTEGRITY-001
+ * pushed the staleness guard to offset ~6237), and the failure reads as "the guard is missing" when
+ * what is actually missing is the guard's presence INSIDE AN ARBITRARY WINDOW. A character count is
+ * a proxy for "inside this function" that decays on every edit; this asks the real question.
+ */
+function clearStaleQfClaimsBody(source) {
+  const start = source.indexOf('async function clearStaleQfClaims');
+  if (start < 0) throw new Error('clearStaleQfClaims not found');
+  const rest = source.slice(start);
+  // Skip the declaration itself, then stop at the next top-level function.
+  const nextFn = rest.slice(1).search(/\nasync function |\nfunction /);
+  return nextFn > 0 ? rest.slice(0, nextFn + 1) : rest;
+}
+
 describe('QF-20260525-211 (B1): CLAIM_FIX terminal-status guard', () => {
   it('CLAIM_FIX SELECT includes status so terminal SDs can be detected', () => {
     // the broken-claim loop must read status, not just sd_key/claiming_session_id/is_working_on
@@ -76,11 +94,29 @@ describe('SD-FDBK-INFRA-SHARED-FLEET-WORKER-001: CLAIM_FIX fixture-session guard
 
   // Adversarial-review fix (Defect 2): a fixture must not win conflict-keeper selection and evict a
   // real worker before the CLAIM_FIX fixture guard runs ~166 lines later.
+  // SD-LEO-INFRA-STALE-SESSION-SWEEP-001: this assertion used to slice a FIXED 260-CHARACTER
+  // WINDOW from the `const bySD = {}` anchor. That pins a character offset, not a rule — adding a
+  // comment above the guard moved the guard out of the window and failed the test while the guard
+  // itself was untouched and still first. Per PAT-TEST-PINS-FACT-NOT-BEHAVIOUR-001, assert the RULE.
+  //
+  // The rule is: a fixture is excluded BEFORE anything is pushed into the bucket. Scoping to the
+  // real forEach body and checking ORDER is strictly STRONGER than the old window check — the old
+  // one would have passed with the guard placed after the push, which is the bug it exists to stop.
   it('excludes fixtures from the conflict bySD build (keeper selection)', () => {
     const idx = src.indexOf('const bySD = {}');
     expect(idx).toBeGreaterThan(0);
-    const block = src.slice(idx, idx + 260);
+    const forEachIdx = src.indexOf('classified.forEach', idx);
+    expect(forEachIdx).toBeGreaterThan(idx);
+    const endIdx = src.indexOf('});', forEachIdx);
+    expect(endIdx).toBeGreaterThan(forEachIdx);
+    const block = src.slice(forEachIdx, endIdx);
+
     expect(block).toMatch(/if\s*\(\s*isFixtureSession\(s\.session_id\)\s*\)\s*return;/);
+    // and it must come BEFORE the push that would admit it to keeper selection
+    const guardPos = block.search(/isFixtureSession\(s\.session_id\)/);
+    const pushPos = block.search(/bySD\[s\.sd_key\]\.push\(/);
+    expect(guardPos).toBeGreaterThanOrEqual(0);
+    expect(pushPos).toBeGreaterThan(guardPos);
   });
 
   it('imports isFixtureSession ABOVE the conflict build (not only in the broken-claim loop)', () => {
@@ -155,8 +191,13 @@ describe('QF-20260525-211 (early-exit gap): QF claim clear runs before the early
   });
 
   it('preserves QF-836 safety: race guard + conservative staleness bar', () => {
-    const idx = src.indexOf('async function clearStaleQfClaims');
-    const fn = src.slice(idx, idx + 3600); // widened: the QF-176 terminal pass precedes the open/in_progress pass
+    // SCOPED TO THE FUNCTION, NOT A CHARACTER COUNT. This previously sliced a fixed 3600-char
+    // window, which silently became too small the moment the function grew: the staleness guard
+    // moved to offset ~6237 and the assertion failed against source that plainly still contained it.
+    // A fixed-width window is a PROXY for "inside this function" and it decays every time the
+    // function is edited — the assertion reports a missing guard when what is really missing is
+    // the guard's presence INSIDE THE WINDOW.
+    const fn = clearStaleQfClaimsBody(src);
     // only clear if still held by the same (dead) session
     expect(fn).toMatch(/\.eq\(['"]claiming_session_id['"],\s*qf\.claiming_session_id\)/);
     // leave alive/recent holders alone
@@ -166,8 +207,8 @@ describe('QF-20260525-211 (early-exit gap): QF claim clear runs before the early
   });
 
   it('QF-20260711-176: terminal QFs are cleared unconditionally (no legitimate holder)', () => {
-    const idx = src.indexOf('async function clearStaleQfClaims');
-    const fn = src.slice(idx, idx + 3600);
+    // Same fix as above: scope to the function, not to a character count that decays on every edit.
+    const fn = clearStaleQfClaimsBody(src);
     expect(fn).toMatch(/\.in\(\s*['"]status['"]\s*,\s*\[\s*['"]completed['"]\s*,\s*['"]cancelled['"]\s*,\s*['"]escalated['"]\s*,\s*['"]closed['"]\s*\]/);
     expect(fn).toMatch(/TERMINAL/);
   });

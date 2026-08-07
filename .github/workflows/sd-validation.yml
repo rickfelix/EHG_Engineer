@@ -36,10 +36,14 @@ jobs:
 
       - name: Extract SD ID from PR
         id: extract-sd
+        # QF-20260728-054: pass untrusted PR text through env, never into the script body.
+        env:
+          PR_TITLE: ${{ github.event.pull_request.title }}
+          PR_BRANCH: ${{ github.event.pull_request.head.ref }}
         run: |
           # Extract SD ID from PR title or branch name
-          PR_TITLE="${{ github.event.pull_request.title }}"
-          PR_BRANCH="${{ github.event.pull_request.head.ref }}"
+          # PR_TITLE / PR_BRANCH arrive via env: above.
+
 
           # Try to extract the SD key. QF-20260701-088: the old two-alternative pattern required
           # EXACTLY 1-2 hyphenated segments before a mandatory trailing number, so a real

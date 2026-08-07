@@ -112,6 +112,24 @@ export const COMPOSED_CORES = [
   { key: 'relay-drain', script: 'coordinator-relay-drain.cjs', args: ['scripts/coordinator-relay-drain.cjs'], quiescentSkip: false },
   // FR-3: cheap read + fail-open write; valuable exactly when quiet for the same reason.
   { key: 'relay-drop-gauge', script: 'coordinator-relay-drop-gauge.cjs', args: ['scripts/coordinator-relay-drop-gauge.cjs'], quiescentSkip: false },
+  // SD-LEO-INFRA-FORCE-ROLE-SESSIONS-001 (FR-3): the forced-capture obligation, evaluated at a
+  // RECURRING OPERATING CHOKE rather than at turn end — a wedged session never reaches turn-end,
+  // so a Stop hook would have nothing to hook (four seats measured wedged mid-iteration
+  // 2026-08-02 with loop_state=active and a stale last_tool_at).
+  // EXPLICITLY NOT quiescentSkip, and that is load-bearing: a capture obligation that evaporates
+  // when the fleet is quiet exempts the seat MOST likely to be the wedged one. A quiet coordinator
+  // is not a coordinator with nothing to learn — it is the one whose silence nobody is checking.
+  // check-only: never records on the coordinator's behalf, because a gate that can satisfy itself
+  // measures nothing. The CLI always exits 0, so this yields a state token, never a core failure.
+  { key: 'capture-gate', script: 'role-capture-gate.mjs', args: ['scripts/role-capture-gate.mjs', 'check', '--role', 'coordinator'], quiescentSkip: false },
+  // SD-LEO-INFRA-DRIVE-LOOP-INSTRUMENT-001-C: the coordinator's consumption receipt on the newest
+  // drive report. NOT quiescentSkip, and that is the whole point of the SD: an unconsumed report is
+  // indistinguishable from a producer that never produced, so skipping the stamp when the fleet is
+  // quiet would make the instrument report PRODUCER STALLED about its own silence. A quiet fleet is
+  // exactly when a binding is most likely to be starving unnoticed.
+  // Cheap: one indexed read of the newest row plus at most one narrow update; fail-soft, so it
+  // no-ops while sibling -B's migration is still unlanded.
+  { key: 'drive-report-consume', script: 'coordinator-drive-report-consume.mjs', args: ['scripts/coordinator-drive-report-consume.mjs'], quiescentSkip: false },
   // QF-20260705-797: solomon-ledger-pending-resurface.cjs shipped with no scheduled invoker
   // anywhere (npm script only) -- 0 session_coordination rows ever emitted. Cheap (single SELECT
   // + per-row dedup check), fail-open (no active Adam -> no-op), and self-rate-limits to once per

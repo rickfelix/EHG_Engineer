@@ -246,7 +246,16 @@ describe('FR-7 captureNewWindowHandle — bounded budget, asserted by call count
     const sleepFn = vi.fn();
     const r = await captureNewWindowHandle([], { execFn, sleepFn });
     expect(r).toMatchObject({ handle: 4242, handleCaptureFailed: false, attempts: 3 });
-    expect(execFn).toHaveBeenCalledTimes(3);
+    // `attempts` is the budget assertion and stays 3 — that is what "stops as soon as the window
+    // appears" means. The exec COUNT is now polls + ONE owner-identity read
+    // (SD-LEO-INFRA-SESSIONS-PAGE-TRUE-001-A FR-2: process start time is not available from window
+    // enumeration, so it is a separate cheap read taken once on success, never per poll). Asserting
+    // 4 here rather than loosening to a range keeps this test able to catch a second stray call.
+    expect(execFn).toHaveBeenCalledTimes(4);
+    // The identity read gets this test's enumeration stdout, not a TICKS line, so owner degrades to
+    // null rather than persisting a partial identity — which is the refuse-by-default behaviour the
+    // hide guard depends on.
+    expect(r.owner).toBeNull();
   });
 
   it('does NOT poll on ambiguous — waiting cannot un-appear a window (the futile-poll lesson)', async () => {

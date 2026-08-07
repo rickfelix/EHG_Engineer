@@ -46,8 +46,29 @@ async function writeTelemetry(supabase, sdId, phase, outcome, mode, payloadShape
       sub_agent_code: GATE_NAME,
       source: 'gate',
       phase,
-      verdict: outcome.startsWith('BLOCK_') && mode === 'blocking' ? 'FAIL' : 'PASS',
-      metadata: { outcome, enforcement_mode: mode, payload_shape: payloadShape, rca_row_count: rcaRowCount }
+      // SD-LEO-INFRA-WRITER-SUB-AGENT-001 / FR-2: this was
+      //   outcome.startsWith('BLOCK_') && mode === 'blocking' ? 'FAIL' : 'PASS'
+      // which stored a BLOCK outcome as a PASS whenever mode !== 'blocking' — and readEnforcementMode
+      // below DEFAULTS to 'advisory' on any error, missing config, or non-string value. So the DEFAULT
+      // configuration laundered a block into the evidence table, in the gate's own telemetry.
+      //
+      // The ENFORCEMENT decision still belongs to the mode (advisory must not block a handoff); what
+      // must not vary is the RECORD of what was observed. A blocked outcome is now stored as BLOCKED
+      // in advisory mode — a rejecting verdict that reports the truth without acting on it — and FAIL
+      // only when the gate is actually enforcing.
+      verdict: outcome.startsWith('BLOCK_')
+        ? (mode === 'blocking' ? 'FAIL' : 'BLOCKED')
+        : 'PASS',
+      metadata: {
+        outcome,
+        enforcement_mode: mode,
+        payload_shape: payloadShape,
+        rca_row_count: rcaRowCount,
+        // The verdict here is authored from `outcome`, not rewritten from a caller's verdict, so
+        // there is no upstream value to preserve — recorded explicitly so a future reader does not
+        // mistake this for an unfenced mutation.
+        verdict_source: 'authored_from_outcome'
+      }
     });
   } catch { /* telemetry best-effort; do not throw from gate */ }
 }

@@ -119,6 +119,36 @@ describe('resolveCheckin — surface pending WORK_ASSIGNMENT on resume (seam 1)'
     }
   });
 
+  // FR-4 (SD-LEO-INFRA-FULL-UTILISATION-RECOVERY-001). ASSIGNMENT_RECENCY_WINDOW_MS bounds BOTH
+  // this peek and the directed-assignment pull, so an assignment to a seat holding its claim past
+  // the window ages out of both and goes permanently invisible — never claimed, never surfaced,
+  // never acked. It must be REPORTED (not resurrected: the bound deliberately stops an abandoned
+  // row being auto-claimed; what must not stand is unclaimed AND unreported).
+  it('FR-4: an assignment aged out of the recency window is still REPORTED, not silently lost', async () => {
+    const heldSd = 'SD-CURRENT-001';
+    const agedSd = 'SD-AGED-OUT-003';
+    const sb = fakeSb({ heldSd });
+    const ws = require('../../lib/fleet/worker-status.cjs');
+    const orig = ws.getMessagesForSession;
+    const agedRow = {
+      id: 'msg-aged', message_type: 'WORK_ASSIGNMENT',
+      payload: { assigned_sd: agedSd },
+      created_at: new Date(Date.now() - 48 * 60 * 60 * 1000).toISOString(), // 48h — outside the 24h window
+    };
+    // Honour sinceIso the way the real pull does: the BOUNDED query cannot see the aged row, the
+    // unbounded one can. A stub that ignored sinceIso would not simulate ageing at all.
+    ws.getMessagesForSession = async (_sb, _sid, opts) => (opts && opts.sinceIso ? [] : [agedRow]);
+    try {
+      const res = await resolveCheckin(sb, 'sess-busy', { getCoordinator: async () => null });
+      expect(res.action).toBe('resume');
+      expect(res.sd).toBe(heldSd);                       // claim still not dropped
+      expect(res.pending_work_assignment).toBeUndefined(); // correctly NOT resurrected
+      expect(res.aged_work_assignments?.[0]).toMatchObject({ sd: agedSd, aged_out_of_window: true });
+    } finally {
+      ws.getMessagesForSession = orig;
+    }
+  });
+
   it('held claim + NO assignment → plain resume (unchanged)', async () => {
     const sb = fakeSb({ heldSd: 'SD-CURRENT-001', assignmentSd: null });
     const ws = require('../../lib/fleet/worker-status.cjs');

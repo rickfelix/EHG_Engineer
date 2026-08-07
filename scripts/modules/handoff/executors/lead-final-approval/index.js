@@ -11,6 +11,53 @@
 import BaseExecutor from '../BaseExecutor.js';
 import ResultBuilder from '../../ResultBuilder.js';
 
+/**
+ * Project the orchestrator's per-gate results into a compact, queryable shape for persistence
+ * on the LEAD-FINAL handoff row. SD-FDBK-FIX-COMPLETION-FLAG-HARNESS-001 FR-5.
+ *
+ * WHY THIS EXISTS: measured before the fix, 0 of 62 LEAD-FINAL handoff rows carried any
+ * gate_results, so FR_DELIVERY_VERIFICATION — the gate whose blindness this SD was filed
+ * about — had NO persisted execution record for any of the 60 most recent completed SDs. Its
+ * verdict was unobservable to any auditor after the run, which meant a repair to it could only
+ * ever be demonstrated in a unit test and never in production.
+ *
+ * Deliberately compact: name/score/passed/required plus the FR classification counts. The full
+ * `details` blob is NOT persisted — it can carry every FR description and would bloat the row.
+ *
+ * Pure and exported for direct unit testing (no DB, no orchestrator instance needed).
+ *
+ * @param {Object} gateResults - the ValidationOrchestrator result (uses .gateResults map)
+ * @returns {Array<Object>} one compact entry per gate, or [] when nothing is available
+ */
+export function projectGateResultsForPersistence(gateResults) {
+  const byName = gateResults && gateResults.gateResults;
+  if (!byName || typeof byName !== 'object') return [];
+  return Object.entries(byName).map(([name, r]) => {
+    const entry = {
+      name,
+      score: r && typeof r.score === 'number' ? r.score : null,
+      max_score: r && typeof r.max_score === 'number' ? r.max_score : (r && typeof r.maxScore === 'number' ? r.maxScore : null),
+      passed: !!(r && r.passed),
+      required: !!(r && r.required),
+    };
+    // FR-delivery gates carry the classification the auditor actually needs — specifically
+    // whether a shortfall was UNVERIFIABLE (blind) or UNDELIVERED (genuinely missing).
+    const d = r && r.details;
+    if (d && typeof d.total === 'number') {
+      entry.fr_classification = {
+        total: d.total,
+        delivered: d.delivered ?? null,
+        descoped: d.descoped ?? null,
+        undelivered: d.undelivered ?? null,
+        unverifiable: d.unverifiable ?? null,
+        convention_in_use: d.convention_in_use ?? null,
+        over_ceiling: d.over_ceiling ?? null,
+      };
+    }
+    return entry;
+  });
+}
+
 // Domain imports
 import { getRequiredGates } from './gates.js';
 import {
@@ -493,7 +540,13 @@ export class LeadFinalApprovalExecutor extends BaseExecutor {
             validation_details: { written_by: 'LeadFinalApprovalExecutor pre-completion canonical write' },
             accepted_at: new Date().toISOString(),
             created_by: HANDOFF_SYSTEM_TAG,
-            metadata: { canonical_pre_completion_write: true, sd_ref: 'SD-FDBK-FIX-LFA-ACCEPT-ORDERING-001' }
+            metadata: {
+              canonical_pre_completion_write: true,
+              sd_ref: 'SD-FDBK-FIX-LFA-ACCEPT-ORDERING-001',
+              // SD-FDBK-FIX-COMPLETION-FLAG-HARNESS-001 FR-5: make the per-gate verdicts
+              // auditable after the run. Previously absent on all 62 LEAD-FINAL rows.
+              gate_results: projectGateResultsForPersistence(gateResults)
+            }
           });
         if (canonErr) {
           console.log(`   ❌ Canonical LFA write failed (SD NOT completed): ${canonErr.message}`);
@@ -855,12 +908,21 @@ export class LeadFinalApprovalExecutor extends BaseExecutor {
       console.log('\n🌲 Worktree Cleanup');
       console.log('-'.repeat(50));
       worktreeCleanupResult = cleanupWorktree(sdKey);
-      if (worktreeCleanupResult.cleaned) {
+      // SD-LEO-INFRA-WORKTREE-LIFECYCLE-FAILS-001 (FR-3): never tell the operator a worktree
+      // was "removed" when it was ARCHIVED. cleanupWorktree used to infer success from
+      // `git worktree list` containment, so an archived (MOVED) directory read as removed and
+      // this line printed a flat success. The library now reports the archive; surface it here
+      // with the path and the trigger, so "removed" means removed and nothing else does.
+      if (worktreeCleanupResult.archived && worktreeCleanupResult.archivePath) {
+        console.warn(`   ⚠️  Worktree NOT removed — archived to ${worktreeCleanupResult.archivePath} (${worktreeCleanupResult.reason}). The code is preserved there, not deleted.`);
+      } else if (worktreeCleanupResult.cleaned) {
         console.log(`   ✅ Worktree .worktrees/${sdKey} removed`);
       } else if (worktreeCleanupResult.reason === 'worktree_not_found') {
         console.log(`   ℹ️  No worktree found for ${sdKey} (may not have been created)`);
       } else if (worktreeCleanupResult.reason === 'dirty_worktree') {
         console.warn('   ⚠️  Worktree has uncommitted changes — run /ship first, then re-run LEAD-FINAL-APPROVAL');
+      } else if (worktreeCleanupResult.reason === 'husk_directory_remains') {
+        console.warn(`   ⚠️  Husk: ${sdKey} was deregistered from git but its directory remains at ${worktreeCleanupResult.worktreePath || `.worktrees/${sdKey}`} — invisible to git-based sweeps, safe to delete manually.`);
       } else {
         console.warn(`   ⚠️  Worktree cleanup incomplete: ${worktreeCleanupResult.reason}`);
       }
@@ -1070,6 +1132,31 @@ export class LeadFinalApprovalExecutor extends BaseExecutor {
    * Parses CREATE TABLE statements from migration files and checks information_schema.
    * @param {Object} sd - Strategic directive object
    * @returns {{hasMigrations: boolean, migrationFiles: string[], foundTables: string[], missingTables: string[]}}
+   */
+  /**
+   * ADVISORY ONLY. THIS IS NOT THE APPLY-STATE AUTHORITY.
+   * SD-LEO-INFRA-CHAIRMAN-APPLY-FLAG-001.
+   *
+   * The authority for "was this SD's migration actually applied" is the
+   * CHAIRMAN_APPLY_VERIFICATION gate (gates.js), which reuses
+   * scripts/verify-migration-apply-state.mjs and fails CLOSED when it cannot tell.
+   *
+   * Be precise about what this method does, because the imprecise version is the bug: it DOES
+   * reject (UNAPPLIED_MIGRATIONS, index.js:431) when it finds a missing table — it is not
+   * warn-and-proceed. Its fail-open is narrower and easier to miss: it blocks only on what it
+   * can SEE, and it sees very little. Unreadable files are swallowed, anything that is not a
+   * CREATE TABLE is invisible, and it never reads metadata.requires_chairman_apply. A migration
+   * that only adds a function, trigger, index, constraint or column passes it silently.
+   *
+   * IT IS KEPT, NOT SUBSUMED, AND THE REASON IS COVERAGE — the two are not interchangeable:
+   *   - this method scans EVERY implementation repo across database/migrations,
+   *     supabase/migrations and migrations/, but only understands CREATE TABLE;
+   *   - the authoritative classifier understands tables, views, matviews, functions, triggers,
+   *     indexes, constraints and columns, but is hard-scoped to EHG_Engineer/database/migrations
+   *     (MIGRATIONS_DIR, verify-migration-apply-state.mjs:30).
+   * Collapsing this into the gate would have silently dropped cross-repo and alternate-directory
+   * migrations from any check at all. Broad-but-shallow advisory here; narrow-but-deep enforcement
+   * there. If the classifier ever becomes multi-repo, retire this method rather than leaving two.
    */
   async verifyMigrationsApplied(sd) {
     const { existsSync } = await import('fs');

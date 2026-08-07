@@ -19,6 +19,7 @@ import 'dotenv/config';
 import { createSupabaseServiceClient } from './lib/supabase-connection.js';
 import { WOULD_DENY_EVENT_TYPE } from '../lib/claim/gates/dispatch-authorization.cjs';
 import { fetchAllPaginated } from '../lib/db/fetch-all-paginated.mjs';
+import { isMainModule } from '../lib/utils/is-main-module.js';
 
 /**
  * @param {object} supabase
@@ -78,7 +79,7 @@ async function main() {
   console.log('='.repeat(60));
 }
 
-if (import.meta.url === `file://${process.argv[1]}`) {
+if (isMainModule(import.meta.url)) {
   main().catch((err) => {
     console.error(err);
     process.exit(1);

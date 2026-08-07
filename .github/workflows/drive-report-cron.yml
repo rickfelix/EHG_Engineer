@@ -1,0 +1,83 @@
+name: "Drive Report producer (5:00 ET self-healing cron)"
+
+# SD-LEO-INFRA-DRIVE-LOOP-INSTRUMENT-001-B (TR-1) — the dispatcher for the Drive Report.
+#
+# THE DEFECT CLASS THIS RETIRES: armed machinery with no dispatcher. The producer, composer,
+# score legs and SMS leg were all built and tested, and nothing ran them. A registered verifier
+# that is never dispatched is indistinguishable from one that always passes.
+#
+# It also retires the SESSION-BOUND half, which is the reason TR-1 specifies a GHA cron rather
+# than a CronCreate: session-armed jobs die with the session and expire in 7 days. Its sibling
+# morning-brief-sms had exactly that defect and missed its very next fire.
+#
+# ── DUAL CRON LINES: THE DST HALF LIVES HERE, THE OTHER HALF LIVES IN THE RUNNER ────────────
+# GitHub cron is UTC and does not observe DST, so any single UTC schedule drifts an hour twice a
+# year. Both candidate schedules are registered PERMANENTLY, and scripts/cron/drive-report-sweep.mjs
+# gates on the America/New_York wall clock (withinWindow). Neither half is correct alone:
+#
+#   '*/15 9-12 * * *'   is 05:00-08:45 ET in EDT — and 04:00-07:45 ET in EST
+#   '*/15 10-13 * * *'  is 06:00-09:45 ET in EDT — and 05:00-08:45 ET in EST
+#
+# So in EITHER offset one line covers the window and the other spills an hour outside it; the
+# runner's ET-hour check discards the spill. The union, filtered, is exactly 05:00-08:59 ET all
+# year. tests/unit/cron/drive-report-sweep.test.js asserts the ADMITTED SET across both offsets
+# rather than either line, because that is the property — the lines are only correct together.
+#
+# ── WHY REPEATED TICKS ARE FREE, AND WHY THE WINDOW SELF-HEALS ──────────────────────────────
+# The producer's idempotence key is the ET CALENDAR DAY (`drive-YYYY-MM-DD`), NOT GITHUB_RUN_ID —
+# which is unique per fire and would key every tick differently and write a row every tick. The
+# first tick to succeed writes the row; every later tick finds it and reports already_produced.
+# If the first tick FAILED, the next simply finds nothing and produces. The reconciliation check
+# IS the retry, by construction, so there is no separate retry mechanism to drift out of sync.
+#
+# Per TR-1 this family has NO explicit failure alert, and that is deliberate: the repeated window
+# is the failure handling. The alarm for "no report at all" is FR-7's self-staleness check over
+# periodic_process_registry, which the sweep stamps — not a red X on this job.
+
+on:
+  schedule:
+    - cron: '*/15 9-12 * * *'    # covers 05:00-08:45 ET in EDT (summer)
+    - cron: '*/15 10-13 * * *'   # covers 05:00-08:45 ET in EST (winter)
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+# Two DST lines overlap for an hour every day. The window key already makes a double-fire a
+# no-op at the database, so this is the cheap outer guard, not the correctness one.
+#
+# cancel-in-progress is FALSE, and that is the opposite of the usual default for a reason:
+# cancelling mid-run can kill a tick between the produce() and the stamp(), which writes the
+# report but never records that it ran — and the FR-7 staleness alarm then fires on a report
+# that exists. Queueing is safe precisely because the producer is idempotent on the window key:
+# the queued run finds the row and reports already_produced. Cheap correctness beats a saved
+# runner-minute here.
+concurrency:
+  group: ${{ github.workflow }}
+  cancel-in-progress: false
+
+jobs:
+  produce:
+    name: Produce the daily Drive Report (05:00-08:59 ET window)
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+
+    env:
+      SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+      SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: 'npm'
+
+      - name: Install dependencies
+        run: npm ci --ignore-scripts
+
+      - name: Produce the Drive Report
+        run: node scripts/cron/drive-report-sweep.mjs

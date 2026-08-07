@@ -57,35 +57,102 @@ describe('detectThunderingHerd', () => {
 
 describe('detectReplyStarvation', () => {
   it('matches an old unanswered worker signal', () => {
-    const signals = [{ id: '1', sender_type: 'worker', sender_session: 'w1', created_at: minsAgo(45), acknowledged_at: null, read_at: null, payload: {} }];
+    const signals = [{ id: '1', sender_type: 'worker', sender_session: 'w1', created_at: minsAgo(45), acknowledged_at: null, read_at: null, payload: { signal_type: 'stuck' } }];
     const r = detectReplyStarvation({ signals, now: NOW, thresholdMs: 30 * 60_000 });
     expect(r.matched).toBe(true);
     expect(r.evidence.starved_count).toBe(1);
   });
-  it('does not match answered / read / non-worker / recent signals', () => {
-    const base = { sender_type: 'worker', sender_session: 'w', created_at: minsAgo(45), acknowledged_at: null, read_at: null, payload: {} };
+  it('does not match answered / non-worker / recent signals', () => {
+    // SD-LEO-INFRA-WORKER-ESCALATION-WRITE-001 FR-3: the read-but-unanswered row was REMOVED from
+    // this fixture and promoted to its own test below. It used to sit here asserting that a read
+    // signal is not starved, which locked in the defect: read_at is set on 99.85% of friction
+    // signals, so treating read as answered made this gauge structurally unable to see its own
+    // population.
+    const base = { sender_type: 'worker', sender_session: 'w', created_at: minsAgo(45), acknowledged_at: null, read_at: null, payload: { signal_type: 'stuck' } };
     const signals = [
       { ...base, id: 'a', acknowledged_at: minsAgo(40) },                 // acknowledged
-      { ...base, id: 'b', payload: { routed_to_feedback_id: 'fb-1' } },   // routed (stampRouted)
-      { ...base, id: 'c', read_at: minsAgo(40) },                          // read
+      { ...base, id: 'b', payload: { signal_type: 'stuck', routed_to_feedback_id: 'fb-1' } },   // routed (stampRouted)
       { ...base, id: 'd', sender_type: 'coordinator' },                   // not a worker ask
       { ...base, id: 'e', created_at: minsAgo(5) },                        // too recent
     ];
     expect(detectReplyStarvation({ signals, now: NOW, thresholdMs: 30 * 60_000 }).matched).toBe(false);
   });
 
+  it('DOES match a signal that was read but never answered (FR-3 — read is delivery, not disposition)', () => {
+    // read_at means DELIVERED and, per COORDINATOR-WAKE-ON-DIRECTIVE-001 and
+    // ADAM-INBOX-SURFACE-NOT-STAMP-001 (both 2026-07-10), a read-stamp means SURFACED — never
+    // RENDERED. fleet-dashboard.cjs stamps read_at on render, so counting read as answered let a
+    // signal be silenced by the act of drawing it on a screen.
+    const base = { sender_type: 'worker', sender_session: 'w', created_at: minsAgo(45), acknowledged_at: null, read_at: null, payload: { signal_type: 'stuck' } };
+    const readButUnanswered = [{ ...base, id: 'c', read_at: minsAgo(40) }];
+    const res = detectReplyStarvation({ signals: readButUnanswered, now: NOW, thresholdMs: 30 * 60_000 });
+    expect(res.matched).toBe(true);
+    expect(res.evidence.starved_count).toBe(1);
+  });
+
   it('SD-LEO-INFRA-ACKSTAMP-FALSE-METRICS-C6-001: a correlated reply row excludes the original from starvation', () => {
-    const original = { id: 'req-1', sender_type: 'worker', sender_session: 'w1', created_at: minsAgo(45), acknowledged_at: null, read_at: null, payload: {} };
+    const original = { id: 'req-1', sender_type: 'worker', sender_session: 'w1', created_at: minsAgo(45), acknowledged_at: null, read_at: null, payload: { signal_type: 'stuck' } };
     const reply = { id: 'reply-1', sender_type: 'coordinator', sender_session: 'c1', created_at: minsAgo(10), acknowledged_at: null, read_at: null, payload: { reply_to: 'req-1' } };
     expect(detectReplyStarvation({ signals: [original, reply], now: NOW, thresholdMs: 30 * 60_000 }).matched).toBe(false);
   });
 
   it('SD-LEO-INFRA-ACKSTAMP-FALSE-METRICS-C6-001: no correlated reply present still starves (genuine case preserved)', () => {
-    const original = { id: 'req-2', sender_type: 'worker', sender_session: 'w1', created_at: minsAgo(45), acknowledged_at: null, read_at: null, payload: {} };
+    const original = { id: 'req-2', sender_type: 'worker', sender_session: 'w1', created_at: minsAgo(45), acknowledged_at: null, read_at: null, payload: { signal_type: 'stuck' } };
     const unrelated = { id: 'other', sender_type: 'coordinator', sender_session: 'c1', created_at: minsAgo(10), acknowledged_at: null, read_at: null, payload: { reply_to: 'not-req-2' } };
     const r = detectReplyStarvation({ signals: [original, unrelated], now: NOW, thresholdMs: 30 * 60_000 });
     expect(r.matched).toBe(true);
     expect(r.evidence.samples.some((s) => s.id === 'req-2')).toBe(true);
+  });
+
+  // QF-20260727-683: every /checkin emits a fresh payload.kind='roll_call' availability
+  // ping (empty body, deliberately NO payload.signal_type per .claude/commands/checkin.md)
+  // — the sweep scooped these as WORKER_SIGNAL_UNANSWERED anyway, making the gauge
+  // structurally unable to reach zero (measured: 4 of 5 rows named on one tick were
+  // roll_calls). The fix mirrors signal-router.cjs's own friction-signal filter
+  // (payload.signal_type presence) via the shared hasSignalType() predicate.
+  describe('QF-20260727-683: roll_call / signal-type-less rows are not friction signals', () => {
+    it('(a) an empty-bodied roll_call row (payload.kind=roll_call, no signal_type) is NOT counted', () => {
+      const signals = [{
+        id: 'rc-1', sender_type: 'worker', sender_session: 'w1', created_at: minsAgo(45),
+        acknowledged_at: null, read_at: null, body: null,
+        payload: { kind: 'roll_call', sender_callsign: 'Bravo', available: true },
+      }];
+      const r = detectReplyStarvation({ signals, now: NOW, thresholdMs: 30 * 60_000 });
+      expect(r.matched).toBe(false);
+      expect(r.evidence.starved_count ?? 0).toBe(0);
+    });
+
+    it('(b) a row WITH a real payload.signal_type IS still counted — the gauge narrows, not disappears', () => {
+      const signals = [
+        // noise: excluded
+        { id: 'rc-2', sender_type: 'worker', sender_session: 'w1', created_at: minsAgo(45), acknowledged_at: null, read_at: null, body: null, payload: { kind: 'roll_call' } },
+        // signal: still counted
+        { id: 'sig-1', sender_type: 'worker', sender_session: 'w2', created_at: minsAgo(45), acknowledged_at: null, read_at: null, body: 'blocked on SD-X, need a utilization decision', payload: { signal_type: 'stuck', sender_callsign: 'Charlie' } },
+      ];
+      const r = detectReplyStarvation({ signals, now: NOW, thresholdMs: 30 * 60_000 });
+      expect(r.matched).toBe(true);
+      expect(r.evidence.starved_count).toBe(1);
+      expect(r.evidence.samples.some((s) => s.id === 'sig-1')).toBe(true);
+      expect(r.evidence.samples.some((s) => s.id === 'rc-2')).toBe(false);
+    });
+
+    it('(c) a row with neither payload.kind nor payload.signal_type is NOT counted', () => {
+      const signals = [{
+        id: 'bare-1', sender_type: 'worker', sender_session: 'w1', created_at: minsAgo(45),
+        acknowledged_at: null, read_at: null, body: null, payload: {},
+      }];
+      const r = detectReplyStarvation({ signals, now: NOW, thresholdMs: 30 * 60_000 });
+      expect(r.matched).toBe(false);
+    });
+
+    it('a coordinator_request (live-handshake, no signal_type) is also excluded — it is resolved by its own synchronous poll/timeout, not this gauge', () => {
+      const signals = [{
+        id: 'req-live', sender_type: 'worker', sender_session: 'w1', created_at: minsAgo(45),
+        acknowledged_at: null, read_at: null,
+        payload: { kind: 'coordinator_request', correlation_id: 'c-1', expects_reply: true },
+      }];
+      expect(detectReplyStarvation({ signals, now: NOW, thresholdMs: 30 * 60_000 }).matched).toBe(false);
+    });
   });
 });
 

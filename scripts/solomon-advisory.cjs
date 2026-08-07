@@ -54,6 +54,9 @@ const { getActiveAdamId } = require('../lib/coordinator/adam-identity.cjs');
 const { assertSenderRole, assertTargetRole } = require('../lib/coordinator/role-comms-guard.cjs');
 const { PEER_KINDS } = require('../lib/coordinator/peer-target.cjs');
 const { enqueueRelayRequest } = require('../lib/coordinator/relay-queue.cjs');
+const { bodyFromArgv } = require('../lib/coordinator/argv-body.cjs');
+const { MAX_PARTS } = require('../lib/coordinator/multi-part-reply.cjs');
+const { MESSAGE_KINDS, MESSAGE_KIND_SET } = require('../lib/coordinator/message-kinds.cjs');
 // SD-LEO-INFRA-ROLE-BASED-COMMS-ROUTING-PROTOCOL-001-C: sender-stamped reply_class SSOT.
 const {
   REPLY_CLASSES, isValidReplyClass, computeReplyExpectedBy, checkAndPingOverdueReplies,
@@ -69,6 +72,22 @@ const { readSessionCostTelemetry } = require('../lib/telemetry/session-cost.cjs'
 
 // The consult kind the Solomon lane drains (a deep-reasoning request routed to the oracle).
 const SOLOMON_CONSULT_KIND = 'solomon_consult';
+
+// SD-LEO-INFRA-CORRECTION-DELIVERY-PATH-001-C (FR-1): the CORRECTION family, carried as a
+// payload.message_kind SUB-DISCRIMINATOR on the existing adam_advisory leg — deliberately NOT a new
+// PAYLOAD_KINDS member. A correction has to reach the same people who saw the error, and at least
+// eight readers hard-filter payload.kind='adam_advisory' (lib/coordinator/adam-advisory-store.cjs
+// selectUnactionedAdvisories + resolveGroupForAdvisory, behind fleet-dashboard.cjs and
+// read-adam-advisories.cjs; scripts/worker-signal.cjs awaitCoordinatorReply; reply-class.cjs;
+// adam-coordinator-health.mjs; lib/coordination/dead-letter-drain.js HIGH_VALUE_KINDS;
+// scripts/hooks/coordination-inbox.cjs) plus the per-role DRAIN_SETS allowlist. A new top-level kind
+// would post a retraction that is INVISIBLE to exactly that audience. Same reuse-with-sub-discriminator
+// pattern as framing_class below (CLAUDE_SOLOMON.md:227 names it the standing decision).
+
+
+// MAX_PARTS moved to lib/coordinator/multi-part-reply.cjs (imported above) when Adam gained the same
+// --part capability: two senders enforcing the same ceiling from two local literals is a drift pair,
+// not a shared bound. The rationale for the ceiling itself now lives with the constant.
 
 const ADVISORY_TTL_MS = 24 * 60 * 60_000; // 24h durable delivery window (mirrors the Adam lane).
 function advisoryExpiresAt(nowMs) {
@@ -106,7 +125,7 @@ const KNOWN_SEND_KINDS = new Set([...Object.values(PAYLOAD_KINDS), ...DIRECTIVE_
  * sub-discriminator on the SAME leg (no new kind), per FW-3 design doc §6c. Omitted entirely when
  * not provided (byte-identical to pre-SD behavior for every existing sender).
  */
-function buildAdvisoryPayload({ body, senderCallsign, repo, correlationId, expectsReply, replyTo, via, replyClass, replyWindowMs, now, kind, framingClass }) {
+function buildAdvisoryPayload({ body, senderCallsign, repo, correlationId, expectsReply, replyTo, via, replyClass, replyWindowMs, now, kind, framingClass, messageKind, partIndex, partTotal }) {
   // An answer to a consult (replyTo set) is terminal -- always fire-and-forget. Otherwise: request
   // mode (expectsReply) is live-handshake; send mode defaults fire-and-forget unless the sender
   // opts into reply-needed via --reply-class (SD-LEO-INFRA-ROLE-BASED-COMMS-ROUTING-PROTOCOL-001-C).
@@ -119,6 +138,36 @@ function buildAdvisoryPayload({ body, senderCallsign, repo, correlationId, expec
     reply_class: resolvedReplyClass,
   };
   if (framingClass) payload.framing_class = framingClass;
+  // FR-1/FR-4 (SD-LEO-INFRA-CORRECTION-DELIVERY-PATH-001-C): the correction discriminator. NOTE what
+  // is deliberately NOT changed — the `kind` force above stays exactly as it was, so an arbitrary
+  // --kind on a reply (e.g. chairman_directive) is STILL coerced to adam_advisory. That force is
+  // load-bearing (SD-LEO-INFRA-COMMS-DELIVERY-CONTRACT-001 FR-2) and honoring any explicit kind here
+  // would both break the advisory-inbox contract and permit nonsense kind/replyTo combinations.
+  // Carrying the correction as a sub-discriminator is what lets a retraction ride the SAME leg — and
+  // therefore reach the SAME audience — while still being distinguishable to the dedup guard.
+  // Validated against an allowlist so a typo fails loudly instead of silently minting a lane that no
+  // reader drains. Omitted entirely when not supplied (byte-identical for every existing sender).
+  if (messageKind != null) {
+    if (!MESSAGE_KIND_SET.has(String(messageKind))) {
+      throw new Error(`INVALID_MESSAGE_KIND: "${messageKind}" (expected one of: ${MESSAGE_KINDS.join(', ')})`);
+    }
+    payload.message_kind = String(messageKind);
+  }
+  // FR-3: ordered parts of ONE reply may now share a correlation_id. Both fields are required
+  // together — a part_index without a part_total is unreassemblable, and stamping a half-pair would
+  // hand the reader a fragment it cannot order. Retires the subject-line N/M regex workaround
+  // documented in lib/coordinator/multi-part-reply.cjs.
+  if (partIndex != null && partTotal != null) {
+    const pi = Number(partIndex);
+    const pt = Number(partTotal);
+    // Enforced HERE as well as at the CLI, because buildAdvisoryPayload is exported and the CLI is
+    // not its only caller. A bound checked only at the outermost layer is not a bound.
+    if (!Number.isInteger(pi) || !Number.isInteger(pt) || pi < 1 || pt < 1 || pi > pt || pt > MAX_PARTS) {
+      throw new Error(`INVALID_PART: expected integers 1 <= part_index <= part_total <= ${MAX_PARTS} (got ${partIndex}/${partTotal}).`);
+    }
+    payload.part_index = pi;
+    payload.part_total = pt;
+  }
   if (body) payload.body = capBody(String(body));
   if (correlationId) payload.correlation_id = correlationId; // replyable (always)
   if (expectsReply) payload.expects_reply = true;            // sync await (request mode only)
@@ -202,7 +251,7 @@ function computeConsultSignature(row) {
   if (p.correlation_id) return `corr:${p.correlation_id}`;
   const sd = p.sd_key || p.sd_id || (row && row.target_sd) || '';
   const q = String(p.body || p.question || (row && row.subject) || '');
-  return `hash:${crypto.createHash('sha256').update(`${sd} ${q}`).digest('hex').slice(0, 32)}`;
+  return `hash:${crypto.createHash('sha256').update(`${sd}\u0000${q}`).digest('hex').slice(0, 32)}`;
 }
 
 /**
@@ -253,18 +302,31 @@ async function checkConsultQuota(supabase, { sdKey = null, perSdMax = SOLOMON_PE
       .eq('payload->>oracle', 'true')
       .gte('created_at', since.toISOString())
       .limit(500);
-    if (error) return { allowed: true };
+    // SD-FDBK-INFRA-SOLOMON-SCORECARD-MEASURES-001 FR-1: `available` distinguishes
+    // "the count is real" from "we could not see". Both fail-open branches returned a
+    // BARE { allowed: true } — byte-identical to a genuine quiet day — so a consumer
+    // could not tell a working query from a broken one. D3 scores cost-discipline off
+    // this; without the flag a DB outage would read as perfect compliance, which is the
+    // exact blindness this SD exists to end, reintroduced one layer up. Fail-open
+    // BEHAVIOUR is unchanged (still allowed:true, still never blocks a send).
+    if (error) return { allowed: true, available: false, reason: `quota signal unavailable: ${error.message || 'query error'}` };
     // QF-20260705-488 (adversarial-review W2): an answer's originator CC copy also carries
     // payload.oracle=true — exclude via='cc_originator' rows so a CC'd answer consumes ONE
     // quota slot, not two (the per-day ceiling would otherwise halve in practice).
     const rows = (data || []).filter((r) => !(r.payload && r.payload.via === 'cc_originator'));
-    if (rows.length >= perDayMax) return { allowed: false, reason: `per-day quota reached (${rows.length}/${perDayMax})` };
+    // FR-1: every REAL-SIGNAL return now carries available:true plus the observed count
+    // and the ceiling it was compared against, so a caller can record what the gate WOULD
+    // have refused without the gate refusing anything. `count` is the same post-dedup
+    // number the ceiling test uses — a consumer must never re-derive it independently, or
+    // it silently drops the cc_originator exclusion above and the two volumes diverge.
+    const measured = { available: true, count: rows.length, perDayMax };
+    if (rows.length >= perDayMax) return { allowed: false, ...measured, reason: `per-day quota reached (${rows.length}/${perDayMax})` };
     if (sdKey) {
       const perSd = rows.filter((r) => r.payload && (r.payload.sd_key === sdKey || r.payload.sd_id === sdKey)).length;
-      if (perSd >= perSdMax) return { allowed: false, reason: `per-SD quota reached for ${sdKey} (${perSd}/${perSdMax})` };
+      if (perSd >= perSdMax) return { allowed: false, ...measured, perSd, perSdMax, reason: `per-SD quota reached for ${sdKey} (${perSd}/${perSdMax})` };
     }
-    return { allowed: true };
-  } catch { return { allowed: true }; }
+    return { allowed: true, ...measured };
+  } catch (e) { return { allowed: true, available: false, reason: `quota signal unavailable: ${(e && e.message) || e}` }; }
 }
 
 /**
@@ -390,6 +452,12 @@ async function stampSurfaced(supabase, ids, { background = false } = {}) {
  * QF-20260710-593 (mirrors adam-advisory.ackRows) — the single sanctioned action-time stamp for
  * the Solomon lane. Stamps acknowledged_at (only where NULL) and backfills read_at where NULL (an
  * actioned row was necessarily seen). Ownership-scoped when expectedTarget is given. Idempotent.
+ *
+ * QF-20260727-454 (part b, WARN strictness — mirrors adam-advisory.ackRows): the
+ * UPDATE...RETURNING now also reads back payload/body, so the SAME atomic call that stamps the
+ * ack surfaces the content it acked. Batch/multi-id CLI (cron + interactive) — an empty body
+ * WARNS rather than refuses, since a hard refusal here would break legitimate callers acking a
+ * row that happens to carry no readable body.
  */
 async function ackRows(supabase, ids, { expectedTarget = null } = {}) {
   const now = new Date().toISOString();
@@ -404,14 +472,19 @@ async function ackRows(supabase, ids, { expectedTarget = null } = {}) {
     // sentinel lane (Solomon is that sentinel's intended consumer), so the ownership scope
     // must admit those rows too or a surfaced fallback row could never be acked.
     if (expectedTarget) q = q.in('target_session', [expectedTarget, 'broadcast-solomon']);
-    const { data, error } = await q.select('id, read_at');
+    const { data, error } = await q.select('id, read_at, payload, body');
     if (error) { console.error(`ERROR: ack failed for ${id}: ${error.message}`); continue; }
     if (data && data.length > 0) {
       acked += 1;
       if (data[0].read_at == null) {
         await supabase.from('session_coordination').update({ read_at: now }).eq('id', id).is('read_at', null);
       }
-      console.log(`  ✓ acked ${id}`);
+      const bodyText = (data[0].payload && data[0].payload.body) || data[0].body || '';
+      if (bodyText) {
+        console.log(`  ✓ acked ${id} — body read (${String(bodyText).length} chars): ${String(bodyText).slice(0, 120)}${String(bodyText).length > 120 ? '…' : ''}`);
+      } else {
+        console.warn(`  ⚠ acked ${id} but it carries no readable body/payload.body — could not surface content to confirm against`);
+      }
     } else {
       console.log(`  • ${id} already acked, not found, or not targeted at this Solomon session — no-op`);
     }
@@ -510,13 +583,25 @@ async function ensureOriginatorCc(supabase, { replyRef, replyTo, target, session
     if (originator === target || originator === sessionId) return { inserted: false, originator };
     // Idempotence: a row for this reply already targeting the originator (a prior CC, or the
     // primary answer itself under --to adam) means delivered — never duplicate.
+    //
+    // FR-5 (SD-LEO-INFRA-CORRECTION-DELIVERY-PATH-001-C): this check must be DISCRIMINATOR-AWARE for
+    // the same reason alreadyAnswered is. Keyed on target_session + reply_to alone, the ORIGINAL
+    // answer's CC row makes a later retraction look "already delivered", so the retraction silently
+    // never reaches the originator — it lands at the coordinator while the person who was actually
+    // misled is never told. That failure is worse than the bug this SD set out to fix, because the
+    // send reports success. Narrowed exactly like alreadyAnswered: each clause is STRICTLY
+    // CONDITIONAL, so a plain answer (no discriminator) reproduces the previous query byte-for-byte.
     try {
-      const { data: existing } = await supabase
+      let q = supabase
         .from('session_coordination')
         .select('id')
         .eq('target_session', originator)
-        .eq('payload->>reply_to', String(replyTo))
-        .limit(1);
+        .eq('payload->>reply_to', String(replyTo));
+      const ccMessageKind = payload && payload.message_kind;
+      if (ccMessageKind != null) q = q.eq('payload->>message_kind', String(ccMessageKind));
+      const ccPartIndex = payload && payload.part_index;
+      if (ccPartIndex != null) q = q.eq('payload->>part_index', String(ccPartIndex));
+      const { data: existing } = await q.limit(1);
       if (Array.isArray(existing) && existing.length > 0) return { inserted: false, originator };
     } catch { /* fail-open: attempt the CC */ }
     const { error: ccErr } = await insertRow(
@@ -625,6 +710,42 @@ async function drainSolomonOutbound(supabase, { newSessionId, oldSessionIds } = 
   }
 }
 
+/**
+ * SD-LEO-INFRA-CONSULT-CORRELATION-CONVENTIONS-001 / FR-1 — derive the message body by NAME, not by
+ * a hand-maintained index list.
+ *
+ * THE DEFECT CLASS THIS REMOVES. The previous code built a Set of flag indices by hand
+ * ([tIdx, tIdx+1, rIdx, ... ]) and every new flag had to be remembered in two places: where it is
+ * parsed, and where its value is excluded from the body. --part and --message-kind were added to the
+ * first and forgotten in the second, so `send --part 2/3 --message-kind amend "real body"` shipped
+ * body === "--part 2/3 --message-kind amend real body" on the LIVE Solomon path. Proven by execution
+ * before fixing. No test caught it because every part/message-kind assertion calls
+ * buildAdvisoryPayload with NAMED ARGS and never crosses argv.
+ *
+ * Patching the list would fix this instance and leave the next flag to rediscover it. Deriving the
+ * exclusions from the flag NAMES makes the omission unrepresentable: a flag that is parsed is a flag
+ * that is stripped, because both read the same list.
+ *
+ * Exported so the argv path is testable — the parse lives in an unexported main(), which is the
+ * other half of why this went unseen.
+ */
+// ENUMERATED FROM THE SOURCE, not from memory. My first draft of this list guessed '--ref' and
+// '--reply-window' (neither exists) and omitted --framing-class and --timeout entirely — which would
+// have re-created the very leak this removes, for different flags. These are every value-consuming
+// flag the SEND path parses; a drift test pins them against the source so a newly parsed flag cannot
+// be added without appearing here.
+const VALUE_FLAGS = ['--to', '--kind', '--part', '--message-kind', '--reply-class', '--reply-to', '--reply-window-ms', '--timeout', '--framing-class'];
+const BOOL_FLAGS = ['--direct'];
+// The status sub-command has its own narrower parse. Keeping it separate stops a legitimate '--eta'
+// token inside a message body from being stripped by the send path — the same asymmetry the leak
+// caused, pointing the other way.
+const STATUS_VALUE_FLAGS = ['--eta'];
+
+// Bound to the send path's OWN lists and used verbatim at the call site. The binding is the point:
+// a test that passed its own flag lists would prove the helper strips flags while saying nothing
+// about whether the send path hands it the right ones — which is precisely where the defect lived.
+const sendBodyFromArgv = (argv) => bodyFromArgv(argv, { valueFlags: VALUE_FLAGS, boolFlags: BOOL_FLAGS });
+
 // SD-LEO-INFRA-COMMS-PRESENCE-GROUNDING-SIGNALS-001 (FR-7) — mirrors adam-advisory.cjs's printStatus
 // exactly, using the SAME shared helper (no per-role reimplementation).
 function formatPresence(p) {
@@ -639,8 +760,10 @@ async function printStatus(supabase, sessionId, argv) {
   if (workingIdx >= 0) {
     const etaIdx = argv.indexOf('--eta');
     const etaMs = etaIdx >= 0 ? Number(argv[etaIdx + 1]) || null : null;
-    const flagValueIdxs = new Set([etaIdx, etaIdx + 1].filter(i => i >= 0));
-    const body = argv.slice(workingIdx + 1).filter((a, i) => !flagValueIdxs.has(i + 1 + workingIdx)).join(' ').trim();
+    // Same helper as the send path, with this path's own narrower flag list — the last hand-built
+    // index Set in this file. Its list happened to match its parse, but only by being small enough
+    // to hold in your head, which is exactly the property the send path lost as it grew.
+    const body = bodyFromArgv(argv, { valueFlags: STATUS_VALUE_FLAGS, from: workingIdx + 1 });
     const res = await writeWorkingSignal(supabase, sessionId, { body, etaMs });
     console.log(res.persisted
       ? `Working-signal set: "${body}"${etaMs ? ` (ETA ~${Math.round(etaMs / 60000)}min)` : ''}`
@@ -670,7 +793,7 @@ async function main() {
   const argv = process.argv.slice(2);
   const mode = argv[0];
   if (mode !== 'send' && mode !== 'request' && mode !== 'inbox' && mode !== 'status' && mode !== 'ack') {
-    console.error('Usage: node scripts/solomon-advisory.cjs send "<body>" [--reply-to <id>] [--to adam] [--kind <recognized_kind>] [--framing-class instrument|pick]  |  request "<q>" [--timeout <ms>] [--to adam] [--kind <recognized_kind>]  |  inbox [--quiet] [--background]  |  ack <row-id...>  |  status [--working "<body>" [--eta <ms>]]');
+    console.error('Usage: node scripts/solomon-advisory.cjs send "<body>" [--reply-to <id>] [--to adam] [--kind <recognized_kind>] [--framing-class instrument|pick] [--message-kind retraction|amend|supersede] [--part N/M]  |  request "<q>" [--timeout <ms>] [--to adam] [--kind <recognized_kind>]  |  inbox [--quiet] [--background]  |  ack <row-id...>  |  status [--working "<body>" [--eta <ms>]]');
     process.exit(2);
   }
   const sessionId = process.env.CLAUDE_SESSION_ID;
@@ -758,6 +881,42 @@ async function main() {
     console.error(`ERROR: --kind "${kindArg}" is not a recognized kind (see PAYLOAD_KINDS/DIRECTIVE_KINDS in lib/fleet/worker-status.cjs).`);
     process.exit(2);
   }
+  // SD-LEO-INFRA-CORRECTION-DELIVERY-PATH-001-C / FR-1: `--message-kind retraction` posts a
+  // correction ON the correlation that carried the error, instead of minting a fresh one and naming
+  // the old ids by hand. Rides the adam_advisory leg, so it reaches the same audience as the original.
+  const mkIdx = argv.indexOf('--message-kind');
+  const messageKindArg = mkIdx >= 0 ? argv[mkIdx + 1] || null : null;
+  if (messageKindArg && !MESSAGE_KIND_SET.has(messageKindArg)) {
+    console.error(`ERROR: --message-kind must be one of ${MESSAGE_KINDS.join(', ')} (got "${messageKindArg}").`);
+    process.exit(2);
+  }
+  // FR-3: `--part N/M` sends ordered parts of one long reply on ONE correlation_id. Parsed as a pair
+  // because a part index without a total cannot be reassembled by the reader.
+  const partIdx = argv.indexOf('--part');
+  let partIndexArg = null;
+  let partTotalArg = null;
+  if (partIdx >= 0) {
+    const m = /^(\d+)\/(\d+)$/.exec(String(argv[partIdx + 1] || ''));
+    if (!m) {
+      console.error(`ERROR: --part must look like N/M (got "${argv[partIdx + 1] || ''}").`);
+      process.exit(2);
+    }
+    partIndexArg = Number(m[1]);
+    partTotalArg = Number(m[2]);
+    if (partIndexArg < 1 || partTotalArg < 1 || partIndexArg > partTotalArg) {
+      console.error(`ERROR: --part N/M requires 1 <= N <= M (got "${partIndexArg}/${partTotalArg}").`);
+      process.exit(2);
+    }
+    // The part dimension necessarily relaxes "one answer per correlation" — without a ceiling a
+    // sender could post unboundedly many rows on one correlation just by incrementing N, defeating
+    // the invariant this guard exists to hold. MAX_PARTS keeps the relaxation finite: at most
+    // MAX_PARTS rows per (correlation, discriminator). A reply needing more than this many parts is
+    // a signal the body belongs in an artifact, not the message lane.
+    if (partTotalArg > MAX_PARTS) {
+      console.error(`ERROR: --part total exceeds MAX_PARTS (${MAX_PARTS}); got ${partTotalArg}. Link an artifact instead of splitting further.`);
+      process.exit(2);
+    }
+  }
   // SD-LEO-INFRA-ROLE-BASED-COMMS-ROUTING-PROTOCOL-001-B: `send/request --to adam` — direct 1-hop
   // channel, gated by ADAM_SOLOMON_TWOWAY_V1 (default ON since QF-20260705-488; 'off' kills it).
   // SD-LEO-INFRA-RELAY-QUEUE-CONFIRM-ON-RELAY-DELIVERY-GUARANTEE-001 / FR-4: --to also accepts
@@ -771,8 +930,15 @@ async function main() {
   const toArg = toIdx >= 0 ? (argv[toIdx + 1] || '').toLowerCase() || null : null;
   const directIdx = argv.indexOf('--direct');
   const peerArg = toArg || (directIdx >= 0 ? 'adam' : null);
-  const flagValueIdxs = new Set([tIdx, tIdx + 1, rIdx, rIdx + 1, rcIdx, rcIdx + 1, rwIdx, rwIdx + 1, toIdx, toIdx + 1, directIdx, kIdx, kIdx + 1].filter((i) => i >= 0));
-  const body = argv.slice(1).filter((a, i) => !flagValueIdxs.has(i + 1)).join(' ').trim();
+  // SD-LEO-INFRA-CONSULT-CORRELATION-CONVENTIONS-001 / FR-1: partIdx and mkIdx were MISSING here,
+  // so --part and --message-kind and their values fell through into the message BODY. Proven by
+  // execution before fixing: `send --part 2/3 --message-kind amend "real body here"` produced
+  //   body === "--part 2/3 --message-kind amend real body here"
+  // Every existing part/message-kind assertion calls buildAdvisoryPayload with NAMED ARGS and never
+  // crosses argv, which is exactly why a live defect on the shipped Solomon path stayed green.
+  // Found at PLAN by TESTING while reviewing whether to MIRROR this list onto Adam — mirroring it
+  // faithfully would have propagated the leak to a second sender. Fixed at source instead.
+  const body = sendBodyFromArgv(argv);
   if (!body) { console.error('ERROR: advisory body required.'); process.exit(2); }
 
   if (mode === 'request' && !isTwoWayV2Enabled()) {
@@ -840,7 +1006,7 @@ async function main() {
   // worker-signal.cjs already uses -- never a silent clip, never a crash-shaped stack trace.
   let payload;
   try {
-    payload = buildAdvisoryPayload({ body, senderCallsign, repo: process.cwd(), correlationId, expectsReply, replyTo, via, replyClass: replyClassArg, replyWindowMs, kind: kindArg, framingClass: framingClassArg });
+    payload = buildAdvisoryPayload({ body, senderCallsign, repo: process.cwd(), correlationId, expectsReply, replyTo, via, replyClass: replyClassArg, replyWindowMs, kind: kindArg, framingClass: framingClassArg, messageKind: messageKindArg, partIndex: partIndexArg, partTotal: partTotalArg });
   } catch (e) {
     if (e && e.code === 'BODY_TOO_LONG') { console.error('ERROR:', e.message); process.exit(2); }
     throw e;
@@ -853,11 +1019,37 @@ async function main() {
   // CC permanently unrecoverable — the primary answer existed, so a re-run short-circuited
   // here and the originator never got its copy (the exact hand-relay gap this QF closes).
   // The dedup branch now heals a missing CC (idempotent) before returning.
-  if (replyTo && (await alreadyAnswered(supabase, replyTo))) {
+  // FR-2/FR-3: pass the outgoing row's own discriminators, so the guard asks "has THIS kind of
+  // message already been posted here?" rather than "has anything been posted here?". Undefined for
+  // an ordinary answer, which reproduces the previous call exactly.
+  if (replyTo && (await alreadyAnswered(supabase, replyTo, { messageKind: payload.message_kind, partIndex: payload.part_index }))) {
     const healed = await ensureOriginatorCc(supabase, { replyRef: replyToArg || replyTo, replyTo, target, sessionId, subject, payload, expiresAt });
     console.log(`(dedup) consult ${String(replyTo).slice(0, 8)} already answered — not re-sending.${healed.inserted ? ` (healed missing originator CC -> ${healed.originator})` : ''}`);
     if (healed.error) console.error('WARN: originator CC heal failed (re-run the same --reply-to to retry):', healed.error);
     return;
+  }
+
+  // SD-FDBK-INFRA-SOLOMON-SCORECARD-MEASURES-001 FR-1 — MEASUREMENT ONLY, NOT ENFORCEMENT.
+  //
+  // checkConsultQuota had ZERO production call sites: it was written, exported and unit-tested,
+  // and nothing ever invoked it. That is why the 2026-07-29 cap breach (193 sends) went
+  // unnoticed — not because the gate returned the wrong answer, but because nobody asked it.
+  //
+  // This call asks it and RECORDS THE ANSWER. It deliberately does NOT act on it: no clamp, no
+  // refusal, no new exit path, and every send that succeeded before this line existed still
+  // succeeds. Choosing Solomon's throughput ceiling is a capacity decision for Adam and the
+  // chairman (the code default is 20 while real traffic is 193 and the breach narrative says
+  // 150 — a ~10x spread nobody has ratified), and a scorecard SD must not settle it silently.
+  // What this produces is the one input that decision currently lacks: a real refusal count.
+  //
+  // Relay-class sends (--to eva/ceo) return before this point and stay exempt from the clamp
+  // by design, but they ARE counted upstream in the same session_coordination sweep — so the
+  // volume here is not short by their traffic.
+  const quotaMeasurement = await checkConsultQuota(supabase, { sdKey: process.env.SD_KEY || null });
+  if (!quotaMeasurement.available) {
+    console.error(`WARN: quota signal unavailable — ${quotaMeasurement.reason}. D3 will score UNKNOWN for this send, NOT compliant.`);
+  } else if (!quotaMeasurement.allowed) {
+    console.error(`WARN: quota WOULD HAVE REFUSED this send — ${quotaMeasurement.reason}. Measurement only; the send proceeds.`);
   }
 
   let inserted;
@@ -924,7 +1116,11 @@ module.exports = {
   computeConsultSignature, enforceSweepBudget, SOLOMON_SWEEP_BUDGET, alreadyAnswered, checkConsultQuota,
   drainInbox, resolveReplyToCorrelation, drainSolomonOutbound, captureLedgerRow,
   checkLedgerCaptureHealth, resolveSolomonAdvisoryTarget, resolveConsultOriginator, ensureOriginatorCc,
-  stampSurfaced, ackRows, KNOWN_SEND_KINDS,
+  stampSurfaced, ackRows, KNOWN_SEND_KINDS, MESSAGE_KINDS,
+  // SD-LEO-INFRA-CONSULT-CORRELATION-CONVENTIONS-001 / FR-1: exported so the ARGV path is testable.
+  // The parse lives in an unexported main(), which is half of why the flag-leak went unseen — every
+  // existing assertion called buildAdvisoryPayload with named args and never crossed argv.
+  bodyFromArgv, sendBodyFromArgv, VALUE_FLAGS, BOOL_FLAGS, STATUS_VALUE_FLAGS,
 };
 
 if (require.main === module) {

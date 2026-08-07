@@ -33,6 +33,7 @@ import { enforceWorktreeQuota, MAX_WORKTREE_COUNT, WORKTREE_QUOTA_HELPERS } from
 import { resolveWorktreeBaseRef, fetchBaseRef, WorktreeBaseFetchFailedError, SUBSTRATE_ITEMS, VENTURE_SUBSTRATE_ITEMS, validateWorktreeSubstrate } from '../lib/worktree-manager.js';
 import { provisionWorktreeNodeModules, getIsolationMode, getFreeDiskBytes, countActiveFreshSessions } from '../lib/worktree-provision.js';
 import { execSync } from 'child_process';
+import { isNodeModulesUnprovisioned as isUnprovisionedShared } from '../lib/node-modules-population.js';
 import fs from 'fs';
 import path from 'path';
 import dotenv from 'dotenv';
@@ -570,6 +571,14 @@ async function createWorktree(sdKey, repoRoot, opts = {}) {
  * SUBSTRATE_ITEMS membership; .env.local is opportunistic (not in the
  * substrate contract but copied if present).
  */
+// SD-FDBK-ENH-SCOPE-REPLACE-WORKTREE-001 FR-1 / TR-6. The predicate moved to
+// lib/node-modules-population.js because FR-4's health check in lib/worktree-manager.js needs
+// the SAME rule, and two copies would drift. Re-exported here so the exported surface (and its
+// pins) stay stable.
+export function isNodeModulesUnprovisioned(nodeModulesPath, fsImpl = fs) {
+  return isUnprovisionedShared(nodeModulesPath, fsImpl);
+}
+
 function ensureWorktreeEssentials(worktreePath, repoRoot, opts = {}) {
   // SD-LEO-FIX-WORKTREE-CREATION-ATOMICITY-001 US-004: Structured error return
   // instead of swallowed catches. Best-effort semantics preserved (no throw) but
@@ -583,7 +592,9 @@ function ensureWorktreeEssentials(worktreePath, repoRoot, opts = {}) {
   if (SUBSTRATE_ITEMS.includes('node_modules')) {
     const sourceModules = path.join(repoRoot, 'node_modules');
     const targetModules = path.join(worktreePath, 'node_modules');
-    if (fs.existsSync(sourceModules) && !fs.existsSync(targetModules)) {
+    // FR-1: POPULATION, not existence. An empty node_modules (Vite's .vite cache, a stray lock)
+    // used to satisfy existsSync and suppress provisioning permanently.
+    if (fs.existsSync(sourceModules) && isNodeModulesUnprovisioned(targetModules)) {
       try {
         // SD-LEO-INFRA-SMART-PER-WORKTREE-001: isolate node_modules under concurrency
         // (immune to shared-store wipes), else junction. provision handles the
@@ -594,7 +605,12 @@ function ensureWorktreeEssentials(worktreePath, repoRoot, opts = {}) {
           mode: getIsolationMode(),
           activeSessionCount: opts.activeSessionCount,
           freeDiskBytes: getFreeDiskBytes(worktreePath),
-          deps: { log: () => {} },
+          // FR-2: the no-op logger is GONE. lib/worktree-provision.js falls back to a junction
+          // when npm install throws (180s wall-clock timeout, whose probability RISES with
+          // fleet concurrency), and logs that at :145 — but this, the highest-traffic
+          // provisioning path, swallowed it. The system could silently degrade to the shared
+          // store it was built to avoid, and no operator would see it. The failure this SD
+          // exists to prevent is one nobody observed happening.
         });
       } catch (err) {
         errors.push({ step: 'provision_node_modules', message: err.message });
@@ -854,4 +870,9 @@ if (isMainScript) {
 
 // isValidWorktree is exported for QF-20260726-956's binding test: the lost-pointer case is
 // only observable against a real on-disk repo, so the test builds one rather than mocking git.
-export { resolve, resolveFromDB, resolveFromScan, validateWorktreePath, resolveVentureRepoRoot, resolveExistingBranch, rejectDescendantBranch, isValidWorktree };
+// ensureWorktreeEssentials is exported for FR-1's CONSUMER pin. isNodeModulesUnprovisioned was
+// already pinned directly, but a predicate can be perfectly correct and simply not be wired to
+// anything — pinning it proves the rule, not that the rule RUNS. This is the same
+// verify-at-the-consumer-not-at-the-merge gap this SD keeps finding in other people's work, so it
+// is closed in its own.
+export { resolve, resolveFromDB, resolveFromScan, validateWorktreePath, resolveVentureRepoRoot, resolveExistingBranch, rejectDescendantBranch, isValidWorktree, ensureWorktreeEssentials };

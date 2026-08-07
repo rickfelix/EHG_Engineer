@@ -131,6 +131,21 @@ describe('POST /api/fleet-actions/add-session', () => {
     expect(res.status).toHaveBeenCalledWith(400);
   });
 
+  // Quick-fix QF-20260731-222: a refusal thrown inside spawn() (tree-currency, launch contract)
+  // must answer {ok:false, reason} — not fall through to the EVA error handler, which flattens it
+  // to a bare 422 the sessions page can only render as "Spawn failed: 422".
+  it('answers a spawn() throw as {ok:false, reason} so the UI can render the refusal', async () => {
+    spawn.mockRejectedValueOnce(new Error('[tree-currency] REFUSED: 36 commit(s) behind origin/main'));
+    const req = mockReq({ role: 'worker', callsign: 'Hotel-1' });
+    const res = mockRes();
+    await addSession(req, res);
+
+    expect(res.status).toHaveBeenCalledWith(422);
+    const payload = res.json.mock.calls.at(-1)[0];
+    expect(payload.ok).toBe(false);
+    expect(payload.reason).toContain('[tree-currency] REFUSED');
+  });
+
   // SD-LEO-FEAT-FLEET-COLD-START-UX-001. The suite above asserts opts as expect.anything(), which
   // is exactly why the key-presence defect was invisible — these assert opts itself.
   describe('role -> startup prompt (FR-1/FR-2)', () => {
@@ -248,5 +263,97 @@ describe('GET /api/fleet-actions/snapshot-manifest', () => {
     expect(payload.desiredSlots).toHaveLength(2);
     expect(payload.drift.missing).toEqual([{ name: 'Golf-4' }]);
     expect(typeof payload.snapshot_at).toBe('string');
+  });
+});
+
+/**
+ * SD-LEO-FIX-UNOWNED-PARENT-SLICE-001 — pin that these routes are actually AUTH-GATED.
+ *
+ * Every test above calls the exported handlers DIRECTLY with mock req/res, which is the right
+ * shape for testing composition logic but means all of them bypass requireAuth by design. So the
+ * property the fleet panel's retirement decision leans on -- "leaving these three routes in place
+ * is fine BECAUSE they are auth-gated" -- was asserted by exactly one line in server/index.js that
+ * nothing pinned. Flipping it to optionalAuth would fail no test. That is precisely how the panel
+ * itself came to be unauthenticated for its entire life.
+ *
+ * These are not read-only routes: respawn-fleet and relaunch-under-profile invoke spawn() and
+ * relaunchUnderProfile(), i.e. process execution under an account profile. requireAuth is only
+ * AUTHENTICATION -- no role check, no allowlist, no ownership check -- and EHG_Engineer and EHG
+ * share one Supabase project, so any EHG-app JWT passes here. The present bound is that EHG has
+ * no public signup surface, which is an incidental property, NOT a control.
+ *
+ * THIS IS A SOURCE-TEXT PROXY, deliberately labelled as one. server/index.js calls startServer()
+ * at import time (no main-module guard), so it cannot be imported to inspect its router. The pin
+ * therefore reads the mount line as text. It will need re-anchoring if that line is reformatted --
+ * accepted, because the regression it catches (a silent swap to optionalAuth) is the one that
+ * matters and is otherwise invisible.
+ */
+describe('SD-LEO-FIX-UNOWNED-PARENT-SLICE-001: /api/fleet-actions stays behind requireAuth', () => {
+  it('is mounted with requireAuth, not optionalAuth', async () => {
+    const fs = await import('node:fs');
+    const path = await import('node:path');
+    const src = fs.readFileSync(
+      path.join(process.cwd(), 'server', 'index.js'), 'utf8'
+    );
+    const mount = src.split('\n').find((l) => l.includes("app.use('/api/fleet-actions'"));
+    expect(mount, 'the fleet-actions mount line was not found -- re-anchor this pin').toBeTruthy();
+    expect(mount).toContain('requireAuth');
+    expect(mount).not.toContain('optionalAuth');
+  });
+});
+
+// ─────────────────────────────────────────────────────────────────────────────
+// SD-FDBK-INFRA-SPAWN-SOURCE-CURRENCY-001 FR-4 — refusals must RENDER their reason.
+//
+// spawn()'s guards THROW refusals whose messages carry the remedy (tree-currency names
+// `git pull --ff-only`). Unhandled, those throws reached the EVA error handler, which maps
+// unknown errors to a bare 422 with no reason field — so the operator saw a status code
+// instead of the fix the guard had already written for them.
+//
+// QF-20260731-222 (PR #6669) fixed this for addSession ONLY. These pin the two siblings,
+// which is the partial-application shape CLAUDE_EXEC.md's uniformity audit exists to catch.
+// ─────────────────────────────────────────────────────────────────────────────
+describe('FR-4: spawn refusals render their reason on every operator route', () => {
+  const REFUSAL = 'tree is 12 behind origin/main — run: git pull --ff-only';
+
+  it('respawnFleet: a refused slot reports its reason AND the sweep still completes', async () => {
+    // Per-iteration catch, not a whole-route one: previously a single refusable slot threw out
+    // of the loop and discarded every other slot's result, so one stale slot silently cost the
+    // operator the entire batch.
+    spawn.mockRejectedValueOnce(new Error(REFUSAL));
+    const req = mockReq();
+    const res = mockRes();
+    await respawnFleet(req, res);
+
+    expect(res.status).not.toHaveBeenCalled();          // route itself did not error out
+    const payload = res.json.mock.calls[0][0];
+    expect(payload.respawned).toHaveLength(1);           // the sweep completed
+    expect(payload.respawned[0]).toMatchObject({ name: 'Golf-4', ok: false });
+    expect(payload.respawned[0].reason).toContain('git pull --ff-only');
+    expect(payload.unchanged).toBe(1);                   // untouched slots still reported
+  });
+
+  it('relaunchSessionUnderProfile: a thrown refusal becomes {ok:false, reason}, not a bare 422', async () => {
+    relaunchUnderProfile.mockRejectedValueOnce(new Error(REFUSAL));
+    const req = mockReq({ target: 'Golf-4', accountProfile: 'RickFelix' });
+    const res = mockRes();
+    await relaunchSessionUnderProfile(req, res);
+
+    expect(res.status).toHaveBeenCalledWith(422);
+    const payload = res.json.mock.calls[0][0];
+    expect(payload.ok).toBe(false);
+    expect(payload.reason).toContain('git pull --ff-only');
+  });
+
+  it('the happy path is unchanged on both routes', async () => {
+    const r1 = mockRes();
+    await respawnFleet(mockReq(), r1);
+    expect(r1.status).not.toHaveBeenCalled();
+    expect(r1.json.mock.calls[0][0].respawned[0].ok).not.toBe(false);
+
+    const r2 = mockRes();
+    await relaunchSessionUnderProfile(mockReq({ target: 'Golf-4', accountProfile: 'RickFelix' }), r2);
+    expect(r2.status).not.toHaveBeenCalled();
+    expect(r2.json.mock.calls[0][0]).toMatchObject({ ok: true });
   });
 });

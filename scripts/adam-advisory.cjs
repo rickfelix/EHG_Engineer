@@ -53,6 +53,8 @@ const { detectVersionSkew } = require('../lib/coordinator/protocol-comms-version
 const { warnIfCheckoutStale } = require('../lib/coordinator/checkout-staleness.cjs');
 const { PEER_KINDS } = require('../lib/coordinator/peer-target.cjs');
 const { enqueueRelayRequest } = require('../lib/coordinator/relay-queue.cjs');
+const { bodyFromArgv } = require('../lib/coordinator/argv-body.cjs');
+const { MAX_PARTS } = require('../lib/coordinator/multi-part-reply.cjs');
 const { PAYLOAD_KINDS, DIRECTIVE_KINDS, ADAM_EXCLUDED_KINDS, DRAIN_SETS } = require('../lib/fleet/worker-status.cjs');
 // SD-LEO-INFRA-FW3-FRAMING-PLUMBING-001-C: fail-closed pick-vs-instrument routing predicate
 // (consumes the -B framing_class contract; FRAMING_CLASSES matching now lives in the router).
@@ -61,7 +63,7 @@ const { routeFraming, FRAMING_ROUTES } = require('../lib/governance/fw3-framing-
 // primary, body-column fallback) — closes instance 4, the coordinator_request body-drop below.
 const { readCanonicalBody } = require('../lib/coordination/lane-contract.cjs');
 // SD-LEO-INFRA-ROLE-BASED-COMMS-ROUTING-PROTOCOL-001-C: sender-stamped reply_class SSOT.
-const { REPLY_CLASSES, isValidReplyClass, computeReplyExpectedBy, checkAndPingOverdueReplies, reconcileLateVerdicts } = require('../lib/coordinator/reply-class.cjs');
+const { REPLY_CLASSES, isValidReplyClass, computeReplyExpectedBy, checkAndPingOverdueReplies, reconcileLateVerdicts, alreadyAnswered } = require('../lib/coordinator/reply-class.cjs');
 // SD-LEO-FIX-ADAM-INBOX-FULL-LANE-001: reuse the canonical Adam-session resolver for the unattended
 // full-lane tick (env vars are not reliably propagated to cron subprocesses).
 const { resolveAdamSessionId } = require('./read-adam-directives.cjs');
@@ -95,8 +97,35 @@ function advisoryExpiresAt(nowMs) {
 // body ('your packet ends mid-sentence at Two; the findings this consult exists FOR are invisible
 // to me' — Solomon advisory 97cf4e3e, recurred ~9x). The prefix is inside the cap so the tail the
 // consult exists to check is never dropped. PURE + exported for tests.
-function buildPreSendConsultBody(body) {
-  return capBody(`[PRE-SEND CONSULT] ${body ?? ''}`);
+// QF-20260727-709: the envelope also has to say WHO THE MESSAGE IS FOR. Forwarding only the raw
+// body hands the reviewer second-person prose written to a DIFFERENT party, with no field that
+// disambiguates it — so every "you"/"your" silently re-points at the reviewer. Witnessed live: an
+// advisory correctly addressed to the coordinator was read by Solomon as crediting HIM with editing
+// SD row descriptions. He is propose-only under CONST-002 and has edited zero rows, so the omission
+// manufactured a false governance-violation record against the oracle, stripped credit from the
+// party who actually did the work, and burned a consult round-trip on a problem that did not exist.
+// THE REVIEWER CANNOT RECOVER THIS ON HIS OWN: no amount of care recovers a field never transmitted.
+//
+// `addressee` is OPTIONAL and the no-arg call is byte-identical to before, so existing callers and
+// tests are unaffected. The header sits INSIDE capBody for the same reason the prefix does
+// (QF-20260720-729): anything outside the cap can be the thing that gets dropped.
+function formatConsultAddressee(addressee) {
+  if (!addressee) return '';
+  const role = typeof addressee === 'string' ? addressee : addressee.role;
+  const sessionId = typeof addressee === 'string' ? null : addressee.sessionId;
+  if (!role && !sessionId) return '';
+  const idPrefix = typeof sessionId === 'string' && sessionId.length > 0 ? ` ${sessionId.slice(0, 8)}` : '';
+  return ` -> ${role || 'unknown-role'}${idPrefix}`;
+}
+
+function buildPreSendConsultBody(body, addressee) {
+  const to = formatConsultAddressee(addressee);
+  // The pronoun note is not padding: the reviewer's failure mode was resolving second person to
+  // himself, and naming the addressee alone still leaves that reading available on a skim.
+  const orientation = to
+    ? `[PRE-SEND CONSULT${to}] (second-person pronouns below refer to the ADDRESSEE, not to you) `
+    : '[PRE-SEND CONSULT] ';
+  return capBody(`${orientation}${body ?? ''}`);
 }
 
 // SD-REFILL-00XK256L: the 2-hypothesis-bar guard for Adam urgent operational broadcasts. Adam's web-
@@ -181,7 +210,24 @@ function extractEmbeddedPeerDirective(rawPeerArg, rawBody) {
 // filters on (lib/fleet/worker-status.cjs) -- never a second hand-maintained list.
 const KNOWN_SEND_KINDS = new Set([...Object.values(PAYLOAD_KINDS), ...DIRECTIVE_KINDS]);
 
-function buildAdvisoryPayload({ body, senderCallsign, repo, correlationId, expectsReply, scopeKey, reuseClass, appliesToScopes, replyTo, via, replyClass, replyWindowMs, now, addressee, kind }) {
+// SD-LEO-INFRA-CONSULT-CORRELATION-CONVENTIONS-001 / FR-1 — flag names, not argv indices.
+//
+// This file previously built its message body by excluding a hand-maintained Set of argv INDEXES.
+// Its list happened to be complete; Solomon's, which used the identical idiom, had drifted from its
+// parse by THREE flags (--framing-class, --message-kind, --part all shipped inside message bodies).
+// Adding --part here by extending the index list would have been mirroring the defect onto a second
+// sender rather than fixing it, so both senders now derive exclusions from the flag NAMES via one
+// shared helper. Lists are per-PATH so no path strips another's flags out of a legitimate body.
+const VALUE_FLAGS = ['--to', '--kind', '--part', '--reply-class', '--reply-to', '--reply-window-ms', '--timeout'];
+const BOOL_FLAGS = ['--direct'];
+const STATUS_VALUE_FLAGS = ['--eta'];
+const SWEEP_VALUE_FLAGS = ['--window'];
+// Bound to the send path's own lists and used verbatim at the call site — a test that supplied its
+// own lists would prove the helper works while saying nothing about whether the send path hands it
+// the right ones, which is exactly where the Solomon defect lived.
+const sendBodyFromArgv = (argv) => bodyFromArgv(argv, { valueFlags: VALUE_FLAGS, boolFlags: BOOL_FLAGS });
+
+function buildAdvisoryPayload({ body, senderCallsign, repo, correlationId, expectsReply, scopeKey, reuseClass, appliesToScopes, replyTo, via, replyClass, replyWindowMs, now, addressee, kind, partIndex, partTotal }) {
   // request mode (expectsReply) is always live-handshake (synchronous, bounded-timeout await);
   // send mode defaults to fire-and-forget unless the sender opts into reply-needed via --reply-class
   // (SD-LEO-INFRA-ROLE-BASED-COMMS-ROUTING-PROTOCOL-001-C).
@@ -210,6 +256,26 @@ function buildAdvisoryPayload({ body, senderCallsign, repo, correlationId, expec
   if (addressee) payload.addressee = addressee;
   if (reuseClass) payload.reuse_class = reuseClass;
   if (Array.isArray(appliesToScopes) && appliesToScopes.length) payload.applies_to_scopes = appliesToScopes;
+  // SD-LEO-INFRA-CONSULT-CORRELATION-CONVENTIONS-001 / FR-1: ordered parts of ONE logical consult
+  // share a correlation_id and carry first-class part_index/part_total — the capability Solomon
+  // already had and Adam did not, which is why "one correlation convention" was not expressible at
+  // all. Written to the PAYLOAD, never the session_coordination.correlation_id column: measured over
+  // the full 6435-row population, the column is populated on 6.5% and the payload on 84.2%, and
+  // nothing in the repo has ever written the column. A column-keyed version of this would ship fully
+  // green and fully inert.
+  //
+  // Both fields required together (a part_index with no total is unorderable by the reader), and the
+  // bound is enforced HERE as well as at the CLI because buildAdvisoryPayload is exported and the CLI
+  // is not its only caller. A bound checked only at the outermost layer is not a bound.
+  if (partIndex != null && partTotal != null) {
+    const pi = Number(partIndex);
+    const pt = Number(partTotal);
+    if (!Number.isInteger(pi) || !Number.isInteger(pt) || pi < 1 || pt < 1 || pi > pt || pt > MAX_PARTS) {
+      throw new Error(`INVALID_PART: expected integers 1 <= part_index <= part_total <= ${MAX_PARTS} (got ${partIndex}/${partTotal}).`);
+    }
+    payload.part_index = pi;
+    payload.part_total = pt;
+  }
   if (body) {
     // Prefix the body with [<scope_key>] so a delivered-but-ignored advisory stays
     // scannable by scope. Prefix BEFORE the hard-cap check so the tag counts against it.
@@ -389,6 +455,13 @@ async function stampSurfaced(supabase, ids, { background = false } = {}) {
  * sanctioned action-time stamp for the Adam lane (chairman directives keep
  * scripts/ack-chairman-directive.cjs). Stamps acknowledged_at (only where NULL) and
  * backfills read_at where NULL (an actioned row was necessarily seen). Idempotent.
+ *
+ * QF-20260727-454 (part b, WARN strictness): the UPDATE...RETURNING now also reads back
+ * payload/body — the SAME atomic operation that stamps the ack now surfaces the content it
+ * acked, instead of confirming a bare id. This is a batch, multi-id CLI (cron + interactive
+ * callers ack legitimate rows that occasionally carry no readable body), so an empty body WARNS
+ * rather than refuses — refusing here would break real callers; ack-chairman-directive.cjs (a
+ * single, high-stakes, always-has-a-body chairman lane) is where this class hard-refuses instead.
  */
 async function ackRows(supabase, ids, { expectedTarget = null } = {}) {
   const now = new Date().toISOString();
@@ -403,14 +476,19 @@ async function ackRows(supabase, ids, { expectedTarget = null } = {}) {
       .eq('id', id)
       .is('acknowledged_at', null);
     if (expectedTarget) q = q.eq('target_session', expectedTarget);
-    const { data, error } = await q.select('id, read_at');
+    const { data, error } = await q.select('id, read_at, payload, body');
     if (error) { console.error(`ERROR: ack failed for ${id}: ${error.message}`); continue; }
     if (data && data.length > 0) {
       acked += 1;
       if (data[0].read_at == null) {
         await supabase.from('session_coordination').update({ read_at: now }).eq('id', id).is('read_at', null);
       }
-      console.log(`  ✓ acked ${id}`);
+      const bodyText = (data[0].payload && data[0].payload.body) || data[0].body || '';
+      if (bodyText) {
+        console.log(`  ✓ acked ${id} — body read (${String(bodyText).length} chars): ${String(bodyText).slice(0, 120)}${String(bodyText).length > 120 ? '…' : ''}`);
+      } else {
+        console.warn(`  ⚠ acked ${id} but it carries no readable body/payload.body — could not surface content to confirm against`);
+      }
     } else {
       console.log(`  • ${id} already acked, not found, or not targeted at this Adam session — no-op`);
     }
@@ -960,8 +1038,30 @@ async function main() {
   const toArg = toIdx >= 0 ? (argv[toIdx + 1] || '').toLowerCase() || null : null;
   const directIdx = argv.indexOf('--direct');
   const rawPeerArg = toArg || (directIdx >= 0 ? 'solomon' : null);
-  const flagValueIdxs = new Set([tIdx, tIdx + 1, rIdx, rIdx + 1, rcIdx, rcIdx + 1, rwIdx, rwIdx + 1, toIdx, toIdx + 1, directIdx, kIdx, kIdx + 1].filter(i => i >= 0));
-  const rawBody = argv.slice(1).filter((a, i) => !flagValueIdxs.has(i + 1)).join(' ').trim();
+  // FR-1: `--part N/M` sends ordered parts of one long consult on ONE correlation_id. Parsed as a
+  // pair because a part index without a total cannot be reassembled by the reader. Mirrors
+  // solomon-advisory.cjs's parse and shares its MAX_PARTS ceiling from multi-part-reply.cjs.
+  const partIdx = argv.indexOf('--part');
+  let partIndexArg = null;
+  let partTotalArg = null;
+  if (partIdx >= 0) {
+    const m = /^(\d+)\/(\d+)$/.exec(String(argv[partIdx + 1] || ''));
+    if (!m) {
+      console.error(`ERROR: --part must look like N/M (got "${argv[partIdx + 1] || ''}").`);
+      process.exit(2);
+    }
+    partIndexArg = Number(m[1]);
+    partTotalArg = Number(m[2]);
+    if (partIndexArg < 1 || partTotalArg < 1 || partIndexArg > partTotalArg) {
+      console.error(`ERROR: --part N/M requires 1 <= N <= M (got "${partIndexArg}/${partTotalArg}").`);
+      process.exit(2);
+    }
+    if (partTotalArg > MAX_PARTS) {
+      console.error(`ERROR: --part total exceeds MAX_PARTS (${MAX_PARTS}); got ${partTotalArg}. Link an artifact instead of splitting further.`);
+      process.exit(2);
+    }
+  }
+  const rawBody = sendBodyFromArgv(argv);
   // QF-20260707-114: a caller (confirmed live: Adam) sometimes embeds `--to <peer>` / `--direct`
   // INSIDE the quoted body instead of passing it as a separate CLI arg (the whole message ends
   // in the literal trailing text "--to solomon"). argv.indexOf('--to') then finds nothing (it's
@@ -1052,7 +1152,7 @@ async function main() {
   }
   // FR-1: scope-tag the advisory from the sending repo (reuse-first, fail-soft).
   const { scopeKey, reuseClass, appliesToScopes } = await resolveScopeForSend(supabase, process.cwd());
-  const payload = buildAdvisoryPayload({ body, senderCallsign, repo: process.cwd(), correlationId, expectsReply, scopeKey, reuseClass, appliesToScopes, replyTo, via, replyClass: replyClassArg, replyWindowMs, addressee, kind: kindArg });
+  const payload = buildAdvisoryPayload({ body, senderCallsign, repo: process.cwd(), correlationId, expectsReply, scopeKey, reuseClass, appliesToScopes, replyTo, via, replyClass: replyClassArg, replyWindowMs, addressee, kind: kindArg, partIndex: partIndexArg, partTotal: partTotalArg });
   // R1 (QF-20260703-964): the addressee-vs-target divergence WARN lives ONE place — the
   // insertCoordinationRow choke point (lib/coordinator/dispatch.cjs) — not duplicated here.
   // SD-REFILL-00XK256L: the 2-hypothesis-bar GATE. Block an UNATTESTED urgent model-availability
@@ -1127,7 +1227,19 @@ async function main() {
       // Adam advisories target the coordinator/Solomon, never the chairman directly, so this
       // send path is not chairman-targeted (a chairman-facing send path would pass true).
       const outcome = await runPreSendConsultLane(
-        { subject, body: payload.body, senderCallsign, sessionId, repo: process.cwd(), expiresAt, isChairmanTargeted: false },
+        // QF-20260727-709: pass the resolved ADDRESSEE so the reviewer can resolve second-person
+        // pronouns in the body. `target` and the role are already computed above for the send
+        // itself; this threads them, it does not re-derive them.
+        {
+          subject,
+          body: payload.body,
+          senderCallsign,
+          sessionId,
+          repo: process.cwd(),
+          expiresAt,
+          isChairmanTargeted: false,
+          addressee: { role: isDirectTarget ? peerArg : (toSolomon ? 'solomon' : 'coordinator'), sessionId: target },
+        },
         {
           evaluatePreSendConsult,
           performBoundedConsult,
@@ -1166,6 +1278,28 @@ async function main() {
   } else if ((process.env.ADAM_PRE_SEND_CONSULT || 'on') === 'off') {
     // Never let a silently-off safety gate leave no trace (security-review finding #5).
     console.warn('[adam-advisory] ⚠ PRE-SEND CONSULT GATE DISABLED (ADAM_PRE_SEND_CONSULT=off) — sending without Solomon-consult review.');
+  }
+
+  // SD-LEO-INFRA-CONSULT-CORRELATION-CONVENTIONS-001 / FR-1 (AC-2): PRE-SEND dedup, mirroring
+  // solomon-advisory.cjs:1012 verbatim in shape. Adam had NO dedup wiring at all — zero
+  // alreadyAnswered call sites — so a re-run answered the same correlation twice while Solomon's
+  // identical path short-circuited.
+  //
+  // The discriminators are the point. Passing message_kind and part_index makes the guard ask "has
+  // THIS kind of message already been posted here?" rather than "has anything been posted here?",
+  // which is what lets FR-1's multi-part consults share ONE correlation without the dedup eating
+  // parts 2..N. Omitting them would make --part unusable on Adam the moment it shipped.
+  //
+  // WHY THIS IS A GRACEFUL RETURN, NOT A THROW: I initially deferred this, arguing it added a
+  // blocking refusal to a path that never refuses, and cited QF-20260705-488. VALIDATION (evidence
+  // a499aa47) pushed back and was right — that incident was the FR-2 CHOKE-level lock swallowing
+  // ensureOriginatorCc's throw, a different layer. This check short-circuits before the insert and
+  // returns cleanly, which is the same mechanism that CLOSED that incident, not the one that caused
+  // it. Adam has no originator-CC leg to heal (grep: ensureOriginatorCc is Solomon-only), so the
+  // heal branch is deliberately absent rather than copied.
+  if (replyTo && (await alreadyAnswered(supabase, replyTo, { messageKind: payload.message_kind, partIndex: payload.part_index }))) {
+    console.log(`(dedup) consult ${String(replyTo).slice(0, 8)} already answered — not re-sending.`);
+    return;
   }
 
   // FR-6: route through the validated dispatch writer. insertCoordinationRow THROWS
@@ -1238,7 +1372,7 @@ async function drainAdamOutbound(supabase, { newSessionId, oldSessionIds } = {})
   }
 }
 
-module.exports = { buildAdvisoryPayload, advisoryExpiresAt, ADVISORY_TTL_MS, buildPreSendConsultBody, sanityCheckUrgentAdvisory, resolveScopeForSend, resolveReplyToCorrelation, drainReplies, isReplyRow, drainInbox, isDirectiveRow, isAdamInboxRow, ADAM_INBOX_KINDS, drainAdamOutbound, isOrphanedAdamRow, EXCLUDED_KINDS, resolveAdamAdvisoryTarget, classifyDirectTarget, extractEmbeddedPeerDirective, windowSweep, parseSweepWindowMs, DEFAULT_SWEEP_WINDOW_MS, stampSurfaced, ackRows, DEFAULT_DRAIN_WINDOW_MS, KNOWN_SEND_KINDS };
+module.exports = { buildAdvisoryPayload, sendBodyFromArgv, VALUE_FLAGS, BOOL_FLAGS, STATUS_VALUE_FLAGS, SWEEP_VALUE_FLAGS, advisoryExpiresAt, ADVISORY_TTL_MS, buildPreSendConsultBody, sanityCheckUrgentAdvisory, resolveScopeForSend, resolveReplyToCorrelation, drainReplies, isReplyRow, drainInbox, isDirectiveRow, isAdamInboxRow, ADAM_INBOX_KINDS, drainAdamOutbound, isOrphanedAdamRow, EXCLUDED_KINDS, resolveAdamAdvisoryTarget, classifyDirectTarget, extractEmbeddedPeerDirective, windowSweep, parseSweepWindowMs, DEFAULT_SWEEP_WINDOW_MS, stampSurfaced, ackRows, DEFAULT_DRAIN_WINDOW_MS, KNOWN_SEND_KINDS };
 
 if (require.main === module) {
   main().catch(err => { console.error('UNHANDLED:', err.message || err); process.exit(1); });

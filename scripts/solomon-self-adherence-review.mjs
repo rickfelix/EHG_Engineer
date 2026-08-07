@@ -22,13 +22,66 @@ const REPO_ROOT = resolve(__dirname, '..');
 // NOTHING to the DB — its self-scoring was dormant/invisible. We persist each review cycle to the
 // EXISTING feedback table (no new chairman-gated table), mirroring the sibling solomon_self_assessment
 // writer convention (category-scoped, review_key-idempotent, service-role client).
-const SELF_ADHERENCE_CATEGORY = 'solomon_self_adherence';
+// SD-FDBK-INFRA-SOLOMON-SCORECARD-MEASURES-001 FR-4: aligned to the CONTRACT.
+// The authoritative Solomon role contract (leo_protocol_sections id=611) mandates
+// category='solomon_adherence_drift' in three places and never once mentions the
+// spelling this loop used. The contract is the governing representation and the loop
+// is the implementation that drifted, so the loop moves — not the contract.
+// CLAUDE_SOLOMON.md and CLAUDE_ADAM.md already documented the contract spelling as if
+// it were live, so this closes a pre-existing doc/code mismatch rather than inventing
+// a convention. 16 historical rows under the old spelling were backfilled WITH a
+// rename marker (scripts/one-off/backfill-solomon-adherence-category.mjs) so a trend
+// spanning the rename stays continuous and the rewrite stays auditable.
+const SELF_ADHERENCE_CATEGORY = 'solomon_adherence_drift';
 
 /**
  * Pure: build the self-adherence verdict. Reads CLAUDE_SOLOMON.md (if present) and reports which
  * durable contract duties have drifted out of SOLOMON_LOOPS. Returns { ok, drifted:[], note }.
  * ok=true means parity holds (or the contract isn't seeded yet — a skip, not a failure). Exported.
  */
+/**
+ * Run Solomon's CONDUCT probes alongside the duty-presence verdict.
+ * SD-LEO-INFRA-ROLE-SESSION-SELF-001 FR-3 — THE WIRING, without which the probes are decoration.
+ *
+ * buildSelfAdherenceVerdict below is duty-presence ONLY: pure set-membership of duty slugs, zero
+ * behaviour inputs. That is why it returned CLEAN on the night of a self-reported execution breach.
+ * Conduct is a SEPARATE question, answered separately, and labelled so the two greens can never be
+ * read as the same claim.
+ *
+ * Fail-open on the read (a resolver that cannot answer yields 'unknown', never 'pass') and
+ * fail-soft on the call itself: an audit that died because its new half threw would be worse than
+ * the blindness it replaces.
+ *
+ * @returns {Promise<Array<{probe, duty, verdict, detail, check_class}>>}
+ */
+export async function runConductVerdicts(supabase, { now = new Date() } = {}) {
+  try {
+    const { resolveSolomonConductFacts, runSolomonConductProbes } = await import('../lib/solomon/conduct-probes.js');
+    const facts = await resolveSolomonConductFacts(supabase, { now });
+    return runSolomonConductProbes(facts);
+  } catch (err) {
+    console.warn(`[solomon-self-adherence] conduct probes unavailable (non-blocking): ${err.message}`);
+    return [];
+  }
+}
+
+/**
+ * THE JOIN: run the conduct probes and persist them WITH the duty verdict, in one cycle.
+ *
+ * Extracted from main() so the join itself is testable. Testing runConductVerdicts and
+ * persistSelfAdherenceReview separately proved each half worked while leaving the CALL SITE that
+ * connects them unguarded — deleting the hand-off left every test green. That is the same
+ * tested-module/unwired-caller shape this SD exists to remove, one level up from where it removed
+ * it, so it gets a seam rather than a source-text assertion.
+ *
+ * @returns {Promise<string|null>} the persisted feedback row id, or null (fail-soft)
+ */
+export async function runAndPersistCycle(supabase, verdict, { sessionId = null, now = new Date(), log = console.log } = {}) {
+  const conductVerdicts = await runConductVerdicts(supabase, { now });
+  for (const cv of conductVerdicts) log(`  conduct: ${cv.probe} = ${cv.verdict} — ${cv.detail}`);
+  return persistSelfAdherenceReview(supabase, verdict, { sessionId, now, conductVerdicts });
+}
+
 export function buildSelfAdherenceVerdict(repoRoot = REPO_ROOT) {
   let md = null;
   try { md = readFileSync(resolve(repoRoot, ROLE_CONTEXT_DOC), 'utf8'); } catch { md = null; }
@@ -73,7 +126,7 @@ export function selfAdherenceReviewKey(now = new Date()) {
  * @param {{ok:boolean, drifted:string[], note:string}} verdict
  * @param {{ reviewKey?: string, sessionId?: string|null, now?: Date }} [opts]
  */
-export async function persistSelfAdherenceReview(supabase, verdict, { reviewKey, sessionId = null, now = new Date() } = {}) {
+export async function persistSelfAdherenceReview(supabase, verdict, { reviewKey, sessionId = null, now = new Date(), conductVerdicts = [] } = {}) {
   const key = reviewKey || selfAdherenceReviewKey(now);
   try {
     // Idempotent on review_key — a re-run within the same 12h slot must not double-write.
@@ -105,6 +158,13 @@ export async function persistSelfAdherenceReview(supabase, verdict, { reviewKey,
         drifted,
         session_id: sessionId,
         sd: 'SD-LEO-INFRA-ROLE-MEASUREMENT-INTEGRITY-001',
+        // SD-LEO-INFRA-ROLE-SESSION-SELF-001 FR-2/FR-3: SAY WHICH KIND OF GREEN THIS `ok` IS.
+        // Everything above it is duty-presence — a set-membership check with no behaviour input —
+        // so an `ok:true` here has never meant "Solomon behaved". conduct_verdicts carries the
+        // separate, behaviour-derived answer; when it is empty the conduct question was simply not
+        // asked, which is different again from being asked and passing.
+        check_class: 'duty',
+        conduct_verdicts: Array.isArray(conductVerdicts) ? conductVerdicts : [],
       },
     };
     // A parity-holds cycle is a self-resolved AUDIT record (not an open queue item): status='resolved'
@@ -131,11 +191,30 @@ async function main() {
   if (!dryRun) {
     try {
       const supabase = createSupabaseServiceClient();
-      const id = await persistSelfAdherenceReview(supabase, verdict, { sessionId: process.env.CLAUDE_SESSION_ID || null });
+      const id = await runAndPersistCycle(supabase, verdict, { sessionId: process.env.CLAUDE_SESSION_ID || null });
       console.log(id ? `  self-adherence cycle persisted → feedback ${id}` : '  self-adherence cycle NOT persisted (fail-soft)');
     } catch (err) {
       console.log('  solomon-self-adherence persist fail-open:', err?.message || String(err));
     }
+  }
+  // SD-LEO-INFRA-FORCE-ROLE-SESSIONS-001 (FR-3): Solomon's leg of the forced-capture obligation.
+  // Solomon has NO quiet tick and NO COMPOSED_CORES registry, so unlike Adam and the coordinator
+  // he cannot be wired by adding one core entry — this direct call IS his recurring choke, and
+  // asserting the three roles separately is why AC-4 exists: two roles sharing a registration
+  // pattern makes it easy to ship two legs and believe three shipped.
+  // check-only and fail-open, matching this script's own contract: it reports the obligation, it
+  // never records on Solomon's behalf (a gate that satisfies itself measures nothing) and it never
+  // blocks the tick.
+  try {
+    const { evaluateRoleCaptureGate } = await import('../lib/learning/role-capture-gate.js');
+    const supabase = createSupabaseServiceClient();
+    const gate = await evaluateRoleCaptureGate({ supabase, role: 'solomon' });
+    console.log(
+      `ROLE_CAPTURE_GATE=solomon state=${gate.state} kind=${gate.kind ?? 'none'} window=${gate.windowSeconds ?? 'na'}` +
+      (gate.error ? ` error=${gate.error}` : '')
+    );
+  } catch (err) {
+    console.log('ROLE_CAPTURE_GATE=solomon state=STORE_ERROR error=' + (err?.message || String(err)));
   }
   process.exit(0);
 }

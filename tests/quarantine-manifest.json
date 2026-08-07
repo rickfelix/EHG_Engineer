@@ -3,6 +3,15 @@
   "generated_at": "2026-06-11T10:09:40.368Z",
   "quarantined": [
     {
+      "file": "scripts/lib/branch-resolver.test.js",
+      "reason_class": "timeout",
+      "error_signature": "Error: Test timed out in 60000ms. // 'should not find branches for non-existent SD ID' — discoverBranchFromGit runs 'git fetch --all' (scripts/lib/branch-resolver/domains/discovery.js:40), a live network fetch inside a unit test; hung ~111s on the runner in two consecutive main runs (30796370865 @ 881f1498, 30798078480 @ 8bd86b591) after three greens the same morning",
+      "linked_ref": "feedback:8b36c8e3-bf51-4325-8f79-9ab31dc0c7fd",
+      "quarantined_at": "2026-08-03T09:20:00.000Z",
+      "quarantined_by": "0ab6a99c-3f30-4061-badc-304785aa8185",
+      "triage_note": "EMERGENCY coordinator quarantine — red main was blocking every PR carrying the required Unit Tier check. Passes 52/52 locally; failure is runner-network-dependent, not code. De-quarantine when the fetch is injectable/skippable under test (fixture repo) per the linked feedback's fix shape. [reason_class set to the registered \"timeout\" class; precise cause is network-dependent (git fetch --all in a unit test) per error_signature + linked feedback.]"
+    },
+    {
       "file": "lib/__tests__/repo-paths-git-capable.test.js",
       "reason_class": "assertion-drift",
       "error_signature": "AssertionError: expected true to be false // Object.is equality",
@@ -45,14 +54,6 @@
       "quarantined_at": "2026-06-11T10:09:40.363Z",
       "quarantined_by": "aa0de85c-9877-4cc1-b561-4f38b30e4a6b",
       "reclassified_note": "module exists at a different extension (e.g. .js->.cjs rename); test import path is stale. follow-up SD-REFILL-00CO4E8Q: update the import extension and de-quarantine."
-    },
-    {
-      "file": "lib/sub-agents/modules/stories/llm-story-generator.test.js",
-      "reason_class": "assertion-drift",
-      "error_signature": "AssertionError: expected true to be false // Object.is equality",
-      "linked_ref": "feedback:65fce396-3dfb-4fda-b9d4-81417d7205f7",
-      "quarantined_at": "2026-06-11T10:09:40.363Z",
-      "quarantined_by": "aa0de85c-9877-4cc1-b561-4f38b30e4a6b"
     },
     {
       "file": "lib/utils/work-item-router.test.js",
@@ -164,14 +165,6 @@
       "quarantined_by": "aa0de85c-9877-4cc1-b561-4f38b30e4a6b"
     },
     {
-      "file": "scripts/modules/handoff/executors/lead-final-approval/gates/pr-merge-verification.test.js",
-      "reason_class": "assertion-drift",
-      "error_signature": "AssertionError: expected true to be false // Object.is equality",
-      "linked_ref": "feedback:65fce396-3dfb-4fda-b9d4-81417d7205f7",
-      "quarantined_at": "2026-06-11T10:09:40.363Z",
-      "quarantined_by": "aa0de85c-9877-4cc1-b561-4f38b30e4a6b"
-    },
-    {
       "file": "scripts/modules/handoff/executors/lead-to-plan/gates/verifier-parity.test.js",
       "reason_class": "node-test-runner",
       "error_signature": "Error: No test suite found in file C:/Users/rickf/Projects/_EHG/EHG_Engineer/.worktrees/SD-LEO-FIX-GREEN-MAIN-TRIAGE-001/scripts/modules/handoff/executors/lead-to-plan/gates/verifier-parity.test.js",
@@ -215,14 +208,6 @@
       "quarantined_by": "aa0de85c-9877-4cc1-b561-4f38b30e4a6b",
       "triage_note": "TypeError: path argument must be string — test harness/setup passes non-string path",
       "triaged_by": "SD-REFILL-00L29WFH"
-    },
-    {
-      "file": "scripts/modules/shipping/__tests__/post-merge-worktree-cleanup-claim-protect.test.js",
-      "reason_class": "assertion-drift",
-      "error_signature": "AssertionError: expected -1 to be greater than 662",
-      "linked_ref": "feedback:65fce396-3dfb-4fda-b9d4-81417d7205f7",
-      "quarantined_at": "2026-06-11T10:09:40.363Z",
-      "quarantined_by": "aa0de85c-9877-4cc1-b561-4f38b30e4a6b"
     },
     {
       "file": "scripts/twoway-roundtrip.test.js",

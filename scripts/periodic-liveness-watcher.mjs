@@ -26,6 +26,9 @@ import { pathToFileURL } from 'node:url';
 
 const require = createRequire(import.meta.url);
 const { hasFreshHeartbeat, hasTickAlive, hasPidAlive } = require('../lib/fleet/session-liveness.cjs');
+// FR-3a: same venue predicate the sweep uses (stale-session-sweep.cjs:545), so both consumers
+// abstain on the same evidence rather than each deciding for itself what "no answer" means.
+const { pidVenueCapability } = require('../lib/fleet/pid-venue.cjs');
 import { parseLivenessClasses, partitionRowsByClasses } from '../lib/periodic-liveness/class-split.mjs';
 import { resolveOwnerTarget } from '../lib/periodic-liveness/owner-target-resolver.mjs';
 import { climbLadder, resetConsecutiveMiss, emitLadderDigest } from '../lib/periodic-liveness/ladder-escalation.mjs';
@@ -61,33 +64,100 @@ function overdueThresholdMs(row) {
 // use so this can never become exploitable even if that assumption changes later.
 const ALLOWED_METADATA_FILTER_KEYS = new Set(['role', 'is_coordinator']);
 
-async function resolveRoleSession(row) {
+// SD-LEO-INFRA-PID-LIVENESS-DURABLE-VENUE-001 (FR-3c) — evaluate EVERY seat, not one.
+//
+// THE MEASURED RESIDUAL THIS CLOSES. The SD recorded that the session-bound loop DID fire — Golf-3
+// was stamped at 14:46:49, inside a :47 slot — yet the OTHER FOUR dead seats carried no stale
+// marker at all, and warned: "a venue fix that leaves four of five deaths undetected would ship
+// green and change nothing." This is that fifth-of-five, and it is not invoker fragility.
+//
+// This function used to end in `.order('heartbeat_at', {ascending:false}).limit(1).maybeSingle()`.
+// It examined exactly ONE seat per class — the single FRESHEST-heartbeat row — and let that one
+// row's verdict stand for the entire class. Every other seat in the class was never looked at, on
+// any run, however durable the invoker. Worse, ordering by heartbeat_at DESC selects for the very
+// pathology the SD was filed about: a dead seat whose immortal tick kept stamping fresh heartbeats
+// SORTS FIRST, so the one row examined was preferentially the forged one, and it reported OK.
+//
+// A class-level "is anything in this role alive" question is a legitimate thing for the registry
+// row to ask, so the aggregate verdict semantics are UNCHANGED (any genuinely-fresh seat => OK;
+// the existing comment explains why false-positive-alive is the safe direction here). What changes
+// is that the answer is now derived from ALL seats, the per-seat dead ones are named rather than
+// silently skipped, and the row count examined is stated so "found nothing" can never again be
+// mistaken for "looked at everything".
+async function resolveRoleSession(row, pidVenue = pidVenueCapability()) {
+  const empty = { lastFiredAt: null, signals: {}, evaluableCount: 0, examined: 0, seats: [] };
   const filter = row.liveness_source_ref?.metadata_filter;
-  if (!filter) return { lastFiredAt: null, signals: {}, evaluableCount: 0 };
+  if (!filter) return empty;
 
   const safeEntries = Object.entries(filter).filter(([k]) => ALLOWED_METADATA_FILTER_KEYS.has(k));
-  if (safeEntries.length === 0) return { lastFiredAt: null, signals: {}, evaluableCount: 0 };
+  if (safeEntries.length === 0) return empty;
 
   const orClauses = safeEntries.map(([k, v]) => `metadata->>${k}.eq.${v}`).join(',');
   const { data, error } = await supabase
     .from('claude_sessions')
-    .select('heartbeat_at, terminal_id, tty, process_alive_at, is_alive')
+    .select('session_id, heartbeat_at, terminal_id, tty, process_alive_at, is_alive')
     .or(orClauses)
-    .order('heartbeat_at', { ascending: false })
-    .limit(1)
-    .maybeSingle();
+    .order('heartbeat_at', { ascending: false });
 
-  if (error || !data) return { lastFiredAt: null, signals: {}, evaluableCount: 0 };
+  if (error || !data || data.length === 0) return empty;
 
   const nowMs = Date.now();
-  const signals = {
-    heartbeatFresh: data.heartbeat_at != null ? hasFreshHeartbeat(data, nowMs) : null,
-    pidAlive: data.terminal_id != null ? hasPidAlive(data) : null,
-    tickAlive: data.process_alive_at != null ? hasTickAlive(data, nowMs) : null,
-  };
-  const evaluableCount = Object.values(signals).filter((v) => v !== null).length;
+  // FR-3a IN THIS FILE TOO. stale-session-sweep.cjs:2165 already derives `pidUnverifiable =
+  // !pidVenue.capable` — "not 'the PID is not alive', but 'we are somewhere the answer was never
+  // written'". The watcher had NO such gate, so in a PID-blind venue every stale-heartbeat seat
+  // produced a hard pidAlive=false that COUNTED AS A CORROBORATING STALE SIGNAL.
+  //
+  // Why the per-seat guard below cannot carry this on its own: session_id is TEXT NOT NULL UNIQUE
+  // (20251204_multi_session_coordination.sql), so `terminal_id != null || session_id != null` is
+  // ALWAYS TRUE on a production row. The ternary could therefore never yield null, and hasPidAlive
+  // returns a bare false for BOTH "marker says the process is gone" (a real negative) and "no
+  // marker exists anywhere" (no answer at all). Conflating those is exactly the defect this SD
+  // exists to eliminate, and it was live in the file implementing FR-3c.
+  //
+  // `pidVenue` is a PARAMETER with a live default rather than a call here, because
+  // lib/fleet/pid-venue.cjs loads through createRequire() and vi.mock() is a silent no-op on that
+  // path (this file's test header documents the same trap for session-liveness.cjs). An injected
+  // seam is the only way a hermetic test can drive BOTH venue verdicts; production is unchanged.
+  const seats = data.map((seat) => {
+    const s = {
+      heartbeatFresh: seat.heartbeat_at != null ? hasFreshHeartbeat(seat, nowMs) : null,
+      // FR-1 (C2) made hasPidAlive resolvable from session_id alone, so a NULL terminal_id is no
+      // longer a reason to skip the PID rung — gating on terminal_id here would discard a real
+      // answer for the 25% of live rows that carry no terminal_id but do have a marker.
+      // The venue check is the OUTER gate: where no marker was ever written, the rung ABSTAINS
+      // (null) rather than voting. Where markers DO exist, "no marker for this seat" stays a real
+      // negative the class verdict may act on — the distinction pid-venue.cjs:59 draws deliberately.
+      pidAlive: !pidVenue.capable
+        ? null
+        : (seat.terminal_id != null || seat.session_id != null) ? hasPidAlive(seat) : null,
+      tickAlive: seat.process_alive_at != null ? hasTickAlive(seat, nowMs) : null,
+    };
+    return {
+      session_id: seat.session_id,
+      heartbeat_at: seat.heartbeat_at,
+      signals: s,
+      evaluableCount: Object.values(s).filter((v) => v !== null).length,
+      anyFresh: Object.values(s).some((v) => v === true),
+    };
+  });
 
-  return { lastFiredAt: data.heartbeat_at, signals, evaluableCount };
+  // The class is alive if ANY seat is positively alive — but lastFiredAt still reports the
+  // freshest heartbeat in the class, preserving the existing age comparison downstream.
+  const freshest = seats.find((s) => s.heartbeat_at != null) || seats[0];
+  const aliveSeats = seats.filter((s) => s.anyFresh);
+  const representative = aliveSeats[0] || freshest;
+
+  return {
+    lastFiredAt: freshest?.heartbeat_at ?? null,
+    signals: representative.signals,
+    evaluableCount: representative.evaluableCount,
+    examined: seats.length,
+    seats,
+    aliveCount: aliveSeats.length,
+    // Named, not merely counted: a seat that is evaluable and NOT alive is a candidate death the
+    // old single-row probe could not have surfaced even in principle.
+    deadSeatIds: seats.filter((s) => !s.anyFresh && s.evaluableCount >= 2).map((s) => s.session_id),
+  };
 }
 
 async function resolveSchedulerRound(row) {
@@ -133,7 +203,7 @@ async function evaluateRow(row, ctx = {}) {
     }
     lastFiredAt = decision.ranAtIso;
   } else if (row.liveness_source === 'claude_sessions_heartbeat') {
-    const resolved = await resolveRoleSession(row);
+    const resolved = await resolveRoleSession(row, ctx.pidVenue);
     lastFiredAt = resolved.lastFiredAt;
     const staleSignals = Object.entries(resolved.signals).filter(([, v]) => v === false).length;
     const freshSignals = Object.entries(resolved.signals).filter(([, v]) => v === true).length;
@@ -141,18 +211,33 @@ async function evaluateRow(row, ctx = {}) {
     // (the "insufficient signals" gate below exists to protect the DEATH declaration only; a
     // false-positive-alive is harmless, a false-positive-dead is the fleet's own documented
     // recurring failure mode). Check this BEFORE the evaluable-count gate.
+    // FR-3c: state the population on EVERY return path. A class-level OK that silently covers N-1
+    // unexamined seats is how four of five dead seats stayed invisible; the count is what makes
+    // "all clear" distinguishable from "barely looked".
+    const seatCensus = `examined ${resolved.examined} seat(s), ${resolved.aliveCount ?? 0} alive`;
+    const deadNote = resolved.deadSeatIds?.length
+      ? `; ${resolved.deadSeatIds.length} evaluable-but-not-alive: ${resolved.deadSeatIds.join(', ')}`
+      : '';
     if (freshSignals > 0) {
-      return { process_key: row.process_key, state: STATE.OK, last_fired_at: lastFiredAt };
+      // The class is alive, but individual dead seats inside it are REPORTED rather than absorbed.
+      return {
+        process_key: row.process_key,
+        state: STATE.OK,
+        last_fired_at: lastFiredAt,
+        reason: `${seatCensus}${deadNote}`,
+        seats_examined: resolved.examined,
+        dead_seat_ids: resolved.deadSeatIds ?? [],
+      };
     }
     if (resolved.evaluableCount < 2) {
-      return { process_key: row.process_key, state: STATE.UNVERIFIED, reason: 'fewer_than_2_evaluable_signals', last_fired_at: lastFiredAt };
+      return { process_key: row.process_key, state: STATE.UNVERIFIED, reason: `fewer_than_2_evaluable_signals (${seatCensus})`, last_fired_at: lastFiredAt, seats_examined: resolved.examined };
     }
     // freshSignals===0 is guaranteed here (the freshSignals>0 branch above already returned), and
     // evaluableCount>=2 is guaranteed here too -- so staleSignals (evaluableCount - freshSignals)
     // is always >=2 at this point. There is no reachable "signals disagree" state with this
     // 3-signal model (adversarial review, PR #5562 INFO): any single fresh signal short-circuits
     // to OK above before this line is reached.
-    signalNote = `${staleSignals} corroborating stale signals`;
+    signalNote = `${staleSignals} corroborating stale signals (${seatCensus}${deadNote})`;
   } else if (row.liveness_source === 'eva_scheduler_heartbeat') {
     const resolved = await resolveSchedulerRound(row);
     lastFiredAt = resolved.lastFiredAt;
@@ -160,6 +245,45 @@ async function evaluateRow(row, ctx = {}) {
   // self_stamped: lastFiredAt already = row.last_fired_at
 
   if (!lastFiredAt) {
+    // SD-LEO-INFRA-STAMP-ARMING-TIME-001 FR-2 — a null last_fired_at CONFLATES two states:
+    // "not due yet" and "never produced when it should have". That conflation is why AC-8/FR-7 of
+    // SD-LEO-INFRA-DRIVE-LOOP-INSTRUMENT-001-B shipped UNMET: the alarm works once a report has
+    // succeeded ONCE, and is blind precisely for a report that has NEVER been produced — which is
+    // the state at merge and the most missing a report can be.
+    //
+    // An arming time separates them, so BOTH acceptance criteria survive: FR-7 gets its alarm, and
+    // the never-false-OVERDUE criterion is untouched because this branch requires an EXPLICIT
+    // armed_at that only registration writes.
+    //
+    // THE GUARD IS THE POINT, not a formality. This early return is reached by far more than armed
+    // rows. Measured live before writing this: of the 66 rows carrying a null last_fired_at, only
+    // 27 are self_stamped; the other 39 resolve lastFiredAt in the branches above and 16 of them
+    // already read OK. Keying this on row age instead of an explicit armed_at would have emitted
+    // 60 alarms, roughly 33 of them false — role_session:adam/coordinator/solomon sit at ~1487
+    // cadences elapsed with a null last_fired_at and last_state OK. Requiring armed_at makes this
+    // branch STRUCTURALLY unable to reach them.
+    const armedAt = row.liveness_source_ref?.armed_at;
+    const armedMs = armedAt ? Date.parse(armedAt) : NaN;
+    // A malformed armed_at falls through to UNVERIFIED — an unparseable timestamp is not evidence
+    // that something is overdue, and fail-soft here keeps the never-false-OVERDUE property.
+    // overdueThresholdMs does Number(row.grace_multiplier), and Number(null) is 0 — a row carrying
+    // an armed_at but no grace_multiplier would get a threshold of 0 and alarm INSTANTLY. Today
+    // that is unreachable because the only writer of armed_at also writes grace_multiplier, which
+    // is precisely the kind of cross-file coupling a later edit breaks silently. Require a real
+    // positive window.
+    const thresholdMs = overdueThresholdMs(row);
+    if (Number.isFinite(armedMs) && Number.isFinite(thresholdMs) && thresholdMs > 0) {
+      const armedAgeMs = Date.now() - armedMs;
+      if (armedAgeMs > thresholdMs) {
+        return {
+          process_key: row.process_key,
+          state: STATE.OVERDUE,
+          armed_at: armedAt,
+          age_ms: armedAgeMs,
+          reason: 'armed_never_produced',
+        };
+      }
+    }
     return { process_key: row.process_key, state: STATE.UNVERIFIED, reason: 'no_last_fired_data_available' };
   }
 

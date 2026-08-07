@@ -12,7 +12,6 @@
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import fs from 'node:fs';
 import path from 'node:path';
-import os from 'node:os';
 
 const HOOK_PATH = path.resolve(__dirname, '../session-role-orient.cjs');
 
@@ -41,8 +40,16 @@ describe('decide()', () => {
   });
 
   it('returns workerLines when coord file points to a different session', () => {
+    // SD-LEO-INFRA-SILENT-TRUNCATION-ONE-001 FR-1: this assertion previously pinned
+    // `session=coord-uu.` — the 8-character truncation — and so ENCODED the defect. A worker
+    // addressing the coordinator builds target_session from this line, and an 8-char prefix stores,
+    // prints success, and threads to nothing. The assertion is updated because the behaviour was
+    // deliberately changed, not to chase a test green.
     const out = decide('worker-uuid', { callsign: 'Bravo' }, { session_id: 'coord-uuid-12345678' });
-    expect(out[0]).toMatch(/WORKER \(callsign: Bravo\) under coordinator session=coord-uu\./);
+    expect(out[0]).toMatch(/WORKER \(callsign: Bravo\) under coordinator session=coord-uuid-12345678\./);
+    // The negative half is the one that matters: the full id must not be accompanied by a
+    // copyable abbreviation of itself.
+    expect(out[0]).not.toMatch(/coord-uu[^i]/);
     expect(out[1]).toMatch(/\/signal <type>/);
     expect(out[2]).toMatch(/Types: stuck \| need-sweep/);
   });
@@ -95,6 +102,28 @@ describe('readCoordFile()', () => {
     fs.mkdirSync(path.dirname(COORD_PATH), { recursive: true });
     fs.writeFileSync(COORD_PATH, '{not json');
     expect(readCoordFile()).toBeNull();
+  });
+
+  // QF-20260727-391 — the regression that mattered. These are VALID JSON, so the pre-fix
+  // `JSON.parse` inside try/catch returned them happily; the bare string in particular is TRUTHY,
+  // which made `if (!coordFile && sessionId)` false in main(), skipped findActiveCoord() entirely,
+  // and left decide() reading `undefined` off a string — so every starting session was told SOLO
+  // while a coordinator was live. A corrupt CACHE must degrade to the AUTHORITY, never override it,
+  // and returning null is precisely what re-enables the DB fallback.
+  it('returns null for a bare JSON string — truthy, valid JSON, and NOT a pointer', () => {
+    fs.mkdirSync(path.dirname(COORD_PATH), { recursive: true });
+    fs.writeFileSync(COORD_PATH, JSON.stringify('a59441f4-da45-4505-bb29-2b0d00cc70e1'));
+    // Sanity: this parses to a truthy value, which is exactly why the old reader was fooled.
+    expect(JSON.parse(fs.readFileSync(COORD_PATH, 'utf8'))).toBeTruthy();
+    expect(readCoordFile()).toBeNull();
+  });
+
+  it('returns null for other truthy-but-shapeless payloads (number, array, object without session_id)', () => {
+    fs.mkdirSync(path.dirname(COORD_PATH), { recursive: true });
+    for (const payload of [42, ['a59441f4'], { started_at: 'now', host: 'h' }, { session_id: 123 }]) {
+      fs.writeFileSync(COORD_PATH, JSON.stringify(payload));
+      expect(readCoordFile(), `${JSON.stringify(payload)} must read as ABSENT`).toBeNull();
+    }
   });
 });
 
@@ -236,5 +265,65 @@ describe('static-pin: [ROLE] block content', () => {
     expect(lines).toMatch(/WORK_ASSIGNMENT/);
     expect(lines).toMatch(/comms-check ack/);
     expect(lines).toMatch(/fleet-worker-loop-directive\.md/);
+  });
+});
+
+// ─────────────────────────────────────────────────────────────────────────────────────────────
+// SD-LEO-INFRA-ROLE-BLIND-SESSION-001 FR-3 — decide() reads metadata.role before falling through
+// to the worker directive. Two-sided: the role seat must LOSE the worker doctrine and the worker
+// seat must KEEP it, because a fix that quiets a worker guard is worse than the noise it removes.
+// ─────────────────────────────────────────────────────────────────────────────────────────────
+describe('FR-3 role-aware SessionStart', () => {
+  // Same load pattern as the rest of this suite: the hook is .cjs and exports its pure
+  // helpers, so we require() with a cache bust rather than importing at module scope.
+  const { decide, workerLines, COORDINATOR } = loadHook();
+  const COORD = { session_id: 'coord-abc' };
+  // Match worker INSTRUCTIONS, not worker WORDS. The first version of this regex included
+  // /belt|no callsign/ and failed on correct code, because the role lines legitimately say
+  // "no claim, no belt, no callsign" — i.e. they name those things in order to DISCLAIM them.
+  // Asserting the absence of a word is not the same as asserting the absence of a directive.
+  const workerDoctrine = /SAME-TURN NEXT-CLAIM|WIND-DOWN HANDSHAKE|Coordinator check-in EVERY|\[ROLE\] WORKER \(/;
+
+  it('a SOLOMON seat gets role lines, not the worker directive', () => {
+    const out = decide('sess-solomon', { role: 'solomon' }, COORD).join('\n');
+    expect(out).toMatch(/SOLOMON session \(non_fleet\)/);
+    expect(out).not.toMatch(workerDoctrine);
+  });
+
+  it('an ADAM seat gets role lines — two distinct roles, so the axis is metadata.role not one name', () => {
+    // Success criterion 5: a solomon-only test would admit a solomon-keyed implementation.
+    const out = decide('sess-adam', { role: 'adam' }, COORD).join('\n');
+    expect(out).toMatch(/ADAM session \(non_fleet\)/);
+    expect(out).not.toMatch(workerDoctrine);
+  });
+
+  it('TWO-SIDED: a WORKER seat still gets the full worker directive, unchanged', () => {
+    // The half that matters most. If this ever passes because the worker branch went quiet, the
+    // fix has broken the guard it was supposed to preserve.
+    const out = decide('sess-worker', { callsign: 'Alpha' }, COORD).join('\n');
+    expect(out).toMatch(/WORKER \(callsign: Alpha\)/);
+    expect(out).toMatch(/SAME-TURN NEXT-CLAIM/);
+    expect(out).toMatch(/WIND-DOWN HANDSHAKE/);
+  });
+
+  it('an UNRECOGNISED role still gets the worker directive — the predicate gates on known roles', () => {
+    const out = decide('sess-x', { role: 'gardener', callsign: 'Bravo' }, COORD).join('\n');
+    expect(out).toMatch(/WORKER \(callsign: Bravo\)/);
+  });
+
+  it('the coordinator branch still wins, and still keys on its own signal', () => {
+    // Pre-existing behaviour: coordinator is detected via is_coordinator, a DIFFERENT signal from
+    // metadata.role. Pinning it so the new role branch cannot shadow it.
+    expect(decide('c', { is_coordinator: true }, COORD)).toEqual(COORDINATOR);
+  });
+
+  it('CONTROL: the role assertions fail against the pre-fix behaviour', () => {
+    // Without this, "role seat has no worker doctrine" would be satisfied by any output that
+    // simply lacks those words — including an empty array. This proves the worker directive
+    // really does contain what we assert its absence of.
+    const preFix = workerLines('Alpha', COORD.session_id).join('\n');
+    expect(preFix).toMatch(workerDoctrine);          // the doctrine is genuinely present...
+    const roleOut = decide('sess-solomon', { role: 'solomon' }, COORD).join('\n');
+    expect(roleOut).not.toBe(preFix);                // ...and the role path genuinely differs
   });
 });

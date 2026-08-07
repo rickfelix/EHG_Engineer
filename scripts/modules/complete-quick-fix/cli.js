@@ -96,6 +96,12 @@ export function parseArguments(args) {
       // merged-PR witness alone proves only that code landed, so it now reconciles NON-TERMINAL;
       // this flag is what makes 'completed' truthful. Value names who/why for the audit trail.
       'scope-accepted':     { type: 'string' },
+      // SD-LEO-INFRA-COMPLETION-EVIDENCE-RUNTIME-001 FR-1: one observation of the RUNNING system at
+      // close time (a probe, a render, a status code) — NOT a merge SHA, which commit_sha already
+      // witnesses. Omitting it is allowed and is recorded EXPLICITLY as declared:false rather than
+      // left null, so a later reader can tell "nobody declared one" from "not applicable".
+      'runtime-observation': { type: 'string' },
+      'observation-method':  { type: 'string' },
       'skip-tests':         { type: 'boolean' },
       'tests-pass':         { type: 'string' },
       'skip-typecheck':     { type: 'boolean' },
@@ -111,6 +117,14 @@ export function parseArguments(args) {
       // audited escape hatch for the rare case that still needs to merge immediately.
       'skip-ci-wait':       { type: 'boolean' },
       'reason':             { type: 'string' },
+      // QF-20260727-714: a QF whose deliverable is a DB write, a refutation, or a decision has
+      // NO commit and NO PR — and validatePR unconditionally requires a github.com URL, so the
+      // harness could not complete it at all. --auto-pr is not a path either: it merely DEFERS
+      // validation until a post-push `gh pr create`, which correctly refuses with "No commits
+      // between main and main" on an empty branch. The only remaining route was a coordinator
+      // hand-writing the row out-of-band. This flag replaces that hand-write with an audited one.
+      'no-code-deliverable':  { type: 'boolean' },
+      'deliverable-evidence': { type: 'string' },
       // QF-20260604-479: explicit override to complete a QF with an EMPTY branch diff
       // (false-completion guard). The ONLY way past the guard; NOT bypassable by --force-complete.
       'allow-empty-diff':   { type: 'boolean' },
@@ -141,6 +155,19 @@ export function parseArguments(args) {
     throw new Error(
       '[FORCE_COMPLETE_NO_REASON] --force-complete requires --reason "<text>". ' +
       'The reason is recorded in verification_notes as a structured audit trail.'
+    );
+  }
+
+  // QF-20260727-714: --no-code-deliverable REQUIRES --deliverable-evidence, mirroring the
+  // force-complete/--reason contract above. A no-code completion with no stated evidence is a
+  // vanity completion — the exact "signal-production accepted as work-production" failure this
+  // repo keeps re-finding — and it would turn this flag into a universal PR-requirement bypass.
+  // The evidence string is what a reader uses to check the deliverable actually landed.
+  if (values['no-code-deliverable'] && !values['deliverable-evidence']) {
+    throw new Error(
+      '[NO_CODE_DELIVERABLE_NO_EVIDENCE] --no-code-deliverable requires --deliverable-evidence "<text>". ' +
+      'State WHERE the deliverable landed (table + row id, decision record, or refuting measurement) — ' +
+      'it is recorded in verification_notes as the standing audit trail.'
     );
   }
 
@@ -209,6 +236,8 @@ export function parseArguments(args) {
     actualTestLoc:     values['actual-test-loc']   != null ? parseInt(values['actual-test-loc'], 10) : undefined,
     prUrl:             values['pr-url'],
     scopeAccepted:     values['scope-accepted'],
+    runtimeObservation: values['runtime-observation'],
+    observationMethod:  values['observation-method'],
     skipTestRun:       values['skip-tests']       || false,
     testsPass:         values['tests-pass']       != null ? values['tests-pass'].toLowerCase().startsWith('y') : undefined,
     skipTypeCheck:     values['skip-typecheck']   || false,
@@ -220,6 +249,10 @@ export function parseArguments(args) {
     // QF-20260702-515: separate CI-wait bypass; only takes effect alongside forceComplete.
     skipCiWait:        values['skip-ci-wait']     || false,
     reason:            values['reason'],
+    // QF-20260727-714: zero-code completion path. Guaranteed to carry evidence by the
+    // NO_CODE_DELIVERABLE_NO_EVIDENCE check above, so downstream may rely on it being present.
+    noCodeDeliverable:  values['no-code-deliverable'] || false,
+    deliverableEvidence: values['deliverable-evidence'],
     overCapReason:     values['over-cap-reason']   || undefined,
     acceptComplianceWarn: values['accept-compliance-warn'] || false,
     acceptLowConfidence: values['accept-low-confidence'] || false,
@@ -269,6 +302,14 @@ Options:
   --uat-verified        UAT verified (yes/no, will prompt if not provided)
   --verification-notes  Optional notes about verification
   --force-complete      Bypass self-verification + LOC-cap blocks; sets quick_fixes.force_completed=true.
+  --no-code-deliverable Complete a QF whose deliverable is NOT a code change (a DB write, a
+                        refutation, a decision). Skips the PR requirement ONLY for this path —
+                        validatePR and the normal path are unchanged. Sets force_completed=true.
+                        REQUIRES --deliverable-evidence.
+  --deliverable-evidence
+                        Required with --no-code-deliverable. State WHERE the deliverable landed
+                        (table + row id, decision record, refuting measurement). Recorded in
+                        verification_notes; it is the only artifact a reader can audit.
                         REQUIRES --reason "<text>". Used for already-merged PRs or audit-trailed exceptions.
                         Does NOT skip waiting for CI to complete before an auto-merge — see --skip-ci-wait.
   --skip-ci-wait        Skip the wait-for-CI-completion gate that --force-complete otherwise enforces

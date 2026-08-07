@@ -46,14 +46,33 @@ appear.
 
 | Caller | Path | Workload shape | Notes |
 |---|---|---|---|
-| Stage 17 archetype generation | `lib/eva/stage-17/archetype-generator.js:862` | HTML generation; tokens stream continuously | The motivating S17 caller — routes through `getLLMClient → AnthropicAdapter.complete → _completeWithStreaming`, auto-protected by the watchdog. |
-| Stage 17 design refinement | `lib/eva/stage-17/archetype-generator.js:1055` | Same as above, refinement pass | Same routing, same protection. |
+| Stage 17 archetype generation | `lib/eva/stage-17/archetype-generator.js:110` | HTML generation; tokens stream continuously | The motivating S17 caller — routes through `getLLMClient → AnthropicAdapter.complete → _completeWithStreaming`, auto-protected by the watchdog. |
+| Stage 17 design refinement | `lib/eva/stage-17/refinement.js:107` | Same as above, refinement pass | Same routing, same protection. |
+| PRD generation | `scripts/prd/llm-generator.js:104` | Long-form PRD body; continuous | Third live `{stream: true}` caller, previously undocumented here. |
+
+> **Corrected by SD-LEO-INFRA-LLM-ADAPTER-STREAMING-ABSENT-001.** The first two rows previously
+> cited lines 862 and 1055 of `archetype-generator.js` — a file that is 184 lines long, so both
+> pointed past EOF — and attributed the refinement caller to that file rather than to
+> `refinement.js`. These are the rows describing the LIVE streaming callers, so a reader repairing
+> streaming was sent to line numbers that do not exist in a file that does not contain the caller.
+> The historical line numbers are named here, in prose, rather than in the table: a stale pointer
+> inside a table is one a reader will follow.
 
 ### Direct SDK callers (currently unprotected)
 
-| Caller | Path | Reason | Follow-up |
-|---|---|---|---|
-| EVA chat service | `lib/integrations/eva-chat-service.js:318` | Bypasses the provider adapter — calls `client.messages.stream()` directly to wire `stream.on('text', ...)` for token-streaming UX | Wrap with `withStreamWatchdog(stream, { callerLabel: 'eva-chat' })` in a follow-up QF. Token-streaming UX is bursty, but never legitimately silent for >90s on a sonnet-tier 1024-token reply. |
+**None.** This section previously listed one, and both halves of that entry were wrong.
+
+It named `lib/integrations/eva-chat-service.js:318` and said the site "bypasses the provider adapter
+— calls `client.messages.stream()` directly". It never did: the function obtained its client from
+`createLLMClient`, a symbol `client-factory.js` has never exported, so it threw on a missing symbol
+before reaching any SDK call. And the line reference had drifted to `:335` before the function was
+removed entirely by SD-LEO-INFRA-LLM-ADAPTER-STREAMING-ABSENT-001 — its consumer had been retired
+by Chairman decision `cff73055` two months before anyone filed it as a defect.
+
+The prescribed follow-up (wrap it with the watchdog) was therefore unexecutable against a call that
+could not run, in a file that no longer contains it. Recorded rather than silently dropped, because
+a stale row that sends a reader to a line past EOF costs more than an absent one — which is exactly
+what the two rows above did until this SD.
 
 ### Non-streaming callers (out of scope)
 

@@ -1,0 +1,107 @@
+# Control seed-test merge gate — a NEW control must prove it can catch its own seeded defect.
+# SD-FDBK-INFRA-CONTROL-MERGE-WITHOUT-001 (FR-2/FR-3/FR-4).
+#
+# Fifteen controls in one day emitted output that did not correspond to what they certified,
+# and every one was found by INCIDENT because nothing at merge time asked a control to prove it
+# could detect anything. This is that ask. It does NOT check a seed-test exists — presence is
+# exactly as blind as the gauge it inspects — it RUNS the control against a real seeded defect
+# and requires it to fire.
+#
+# *** THE ADVISORY SOAK IS AN IRONY AND I AM NAMING IT RATHER THAN HIDING IT ***
+# Repo convention (schema-reference-lint, diagnostic-gauge-citation-lint) is continue-on-error
+# for a 7-day soak on any brand-new lint. But "advisory controls block nothing at merge time" is
+# finding #2 of this SD's own FR-1 census — session-coordination-insert-classguard-lint found a
+# real seeded violation, named the file, and exited 0. So this gate ships in precisely the state
+# it exists to criticise, and that is a deliberate, bounded trade rather than an oversight:
+#   - WHY SOAK ANYWAY: this gate EXECUTES other people's controls inside CI. That is a genuine
+#     flake surface (one sampled control already crashed on a git revision error against a
+#     scratch repo), and a new gate that flakes gets disabled rather than fixed.
+#   - WHY THE SOAK IS SHORT AND NARROW: it only evaluates files ADDED in the diff that match the
+#     control globs. It does not sweep existing code, so there is no pre-existing backlog able to
+#     block an unrelated PR — the usual reason a soak runs long does not apply.
+# FLIP CRITERION, dated and falsifiable: 7 days from merge with zero false-positive reports in
+# the harness backlog -> set continue-on-error to false. If that flip has not happened by then,
+# the correct read is that this gate joined the census, not that it is still soaking.
+name: Control Seed-Test Lint
+
+on:
+  pull_request:
+    paths:
+      - 'scripts/lint/**'
+      - 'scripts/audit/**'
+      - 'scripts/audit/control-seed-specs.json'
+      - '.github/workflows/control-seed-test-lint.yml'
+
+concurrency:
+  group: control-seed-test-lint-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  control-seed-test-lint:
+    name: control-seed-test-lint
+    runs-on: ubuntu-latest
+    # ADVISORY SOAK — see the flip criterion in the header. Not a permanent state.
+    continue-on-error: true
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          # Full history: the gate REFUSES to report a pass when it cannot establish its diff
+          # base, rather than degrading to advisory. A shallow clone would trip that by design.
+          fetch-depth: 0
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'npm'
+
+      # REQUIRED, and its absence was caught by this gate on its own first CI run.
+      # The `seedTest` spec form shells out to `npx vitest`, so it needs node_modules —
+      # the `fixtures` form does not. That is a SECOND way seedTest is weaker than a
+      # fixture trial, beyond the one already in KNOWN LIMITATIONS: it takes a dependency
+      # on the test runner being installed, so it can fail for reasons that have nothing
+      # to do with whether the control detects anything.
+      # ⚠️ TRIPWIRE — DO NOT ADD --ignore-scripts HERE WITHOUT READING THIS.
+      # SD-PAT-FIX-FIX-ABSENCE-SIGNAL-001, SECURITY row 72f19e83.
+      #
+      # scripts/audit/control-seed-specs.json is EDITABLE IN A PULL REQUEST, and it drives file
+      # writes and process spawns in this job. SECURITY found three ways to abuse that. They were
+      # accepted as DEFENSE-IN-DEPTH rather than CRITICAL on ONE MEASURED FACT: this job ALREADY
+      # executes PR-controlled code, because `npm ci` runs lifecycle scripts and package.json has
+      # an unconditional `postinstall`. So those bypasses grant an attacker nothing they could not
+      # get more simply. Verified directly — .npmrc carries no ignore-scripts.
+      #
+      # THAT IS SAFETY BY COINCIDENCE, AND THIS COMMENT EXISTS SO IT CANNOT LAPSE SILENTLY.
+      # Adding --ignore-scripts (a sensible hardening for entirely unrelated reasons) CLOSES the
+      # postinstall route and thereby RE-OPENS all three findings as genuinely exploitable, with
+      # nothing anywhere reporting that the trade changed. If you are adding that flag: good, but
+      # first fix the neuter trust model in scripts/audit/control-seed-test.mjs — an allowlist for
+      # spec.env, and stop treating attacker-controlled find/replace against public file content
+      # as safe because the values look reasonable.
+      - name: Install dependencies
+        run: npm ci --prefer-offline --no-audit
+
+      - name: Seed-test every new control in this diff
+        run: |
+          git fetch origin ${{ github.base_ref }} --depth=0 || true
+          # FR-2: `2>&1` IS LOAD-BEARING, NOT TIDINESS. A bare pipe carries STDOUT ONLY, and
+          # every failure line in the lint is console.error while both success lines are
+          # console.log. Measured: running the real lint against a repo with one added
+          # control produced ZERO BYTES on stdout. So this summary was POPULATED ON PASS and
+          # BLANK ON FAIL — it rendered "A control that cannot catch its own seeded defect
+          # does not merge." above an empty code block exactly when the gate found something.
+          #
+          # FR-1/FR-5: `--diff` removed — it was never read (changedFiles() ignores argv), and
+          # enforcing is now the lint's DEFAULT, so no flag is needed to make this gate able
+          # to fail. Pass --advisory only to deliberately opt out.
+          node scripts/lint/control-seed-test-lint.mjs 2>&1 | tee seed-output.txt
+          exit_code=${PIPESTATUS[0]}
+          {
+            echo "## Control Seed-Test Gate"
+            echo ""
+            echo "A control that cannot catch its own seeded defect does not merge."
+            echo ""
+            echo '```'
+            cat seed-output.txt
+            echo '```'
+          } >> "$GITHUB_STEP_SUMMARY"
+          exit $exit_code

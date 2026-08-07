@@ -5,7 +5,7 @@
  * Read-only assessor that AGGREGATES existing GitHub-health producers into ONE ranked advisory for the
  * coordinator (it computes nothing new except the dependabot/code-scanning alert reads). Producers:
  *   (1) CI red on main      — codebase_health_snapshots latest dimension='ci_test_failure_count'
- *   (2) failed runs (3d)    — feedback rows category='ci_failure' (gh-failure-monitor.cjs)
+ *   (2) failed runs (3d)    — gh Actions runs API, conclusion=failure, PAGED TO EXHAUSTION
  *   (3) PR hygiene          — gh pr list --json: open / stale(>14d) / oversized(>400 LOC) / conflicts
  *   (4) merge conflicts     — derived from the same gh pr list (mergeable=CONFLICTING)
  *   (5) security alerts     — gh api open dependabot + code-scanning alerts (the one genuinely-new read)
@@ -38,6 +38,30 @@ function ghJson(args) {
   } catch { return null; }
 }
 
+/** Run a gh command, returning raw stdout (or null on any failure — fail-soft). */
+function ghRaw(args) {
+  try {
+    return execFileSync('gh', args, { encoding: 'utf8', stdio: ['ignore', 'pipe', 'ignore'], timeout: 120_000 });
+  } catch { return null; }
+}
+
+/**
+ * PURE/TOTAL: count failed workflow runs from the stdout of
+ * `gh api ... --paginate -q '.workflow_runs[].conclusion'` — one conclusion per line, pages
+ * concatenated (so exhaustion is counted, never a bare first page).
+ *
+ * QF-20260728-823 D2: a NON-STRING stdout (the gh read failed) returns null = UNKNOWN, NEVER 0.
+ * The old gauge counted `feedback` rows written by gh-failure-monitor.cjs, so a dead recorder was
+ * indistinguishable from a green CI — silence read as health. Unmeasurable must never read as clean.
+ */
+export function countFailedRuns(stdout) {
+  if (typeof stdout !== 'string') return null;
+  return stdout.split('\n')
+    .map((s) => s.trim().replace(/^"|"$/g, ''))
+    .filter((c) => c === 'failure')
+    .length;
+}
+
 /**
  * PURE/TOTAL: derive PR-hygiene counts from a `gh pr list` JSON array. Drafts are excluded from the
  * actionable counts. nowMs injected for deterministic tests.
@@ -59,7 +83,9 @@ export function summarizePrs(prs, { nowMs = Date.now(), staleDays = STALE_PR_DAY
 /**
  * PURE/TOTAL: rank the assembled facts into severity-ordered findings + a one-line summary. Returns
  * { findings:[{area,severity,detail}], summary, clean:boolean }. `clean` => the caller stays SILENT.
- * Unknown/unmeasured facts (null) are simply omitted (never a fabricated alarm).
+ * Unknown/unmeasured facts (null) are simply omitted (never a fabricated alarm) — with ONE
+ * deliberate exception: a null `failedRuns` alarms, because an unreadable CI must not render as
+ * "all clear" (QF-20260728-823 D2).
  */
 export function rankGithubHealth(facts = {}) {
   const f = facts || {};
@@ -71,6 +97,10 @@ export function rankGithubHealth(facts = {}) {
   if (Number(f.alertsCodeScanning) > 0) push('security', 'high', `${f.alertsCodeScanning} open code-scanning alert(s)`);
   if (Number(f.prConflicts) > 0) push('pr', 'medium', `${f.prConflicts} PR(s) with merge conflicts`);
   if (Number(f.failedRuns) > 0) push('ci', 'medium', `${f.failedRuns} failed CI run(s) in ${f.windowDays || WINDOW_DAYS}d`);
+  // Load-bearing half of QF-20260728-823 D2: UNKNOWN is a finding, not a silence. `undefined`
+  // (fact never supplied, e.g. pure-function callers) stays omitted; only an explicit null —
+  // meaning we TRIED to measure and could not — alarms.
+  if (f.failedRuns === null) push('ci', 'medium', 'failed CI run count UNKNOWN (Actions runs API unreadable) — NOT 0');
   if (Number(f.prStale) > 0) push('pr', 'low', `${f.prStale} stale PR(s) (>${STALE_PR_DAYS}d)`);
   if (Number(f.prOversized) > 0) push('pr', 'low', `${f.prOversized} oversized PR(s) (>${OVERSIZED_PR_LOC} LOC)`);
   const rank = { high: 0, medium: 1, low: 2 };
@@ -106,12 +136,14 @@ export async function resolveGithubHealth(supabase, { windowDays = WINDOW_DAYS, 
     facts.openRedMergeQfs = (rmRows || []).filter((qf) => !isFixtureQf(qf)).length;
   } catch { /* null */ }
 
-  // (2) failed CI runs in window.
-  try {
-    const { count } = await supabase.from('feedback')
-      .select('id', { count: 'exact', head: true }).eq('category', 'ci_failure').gte('created_at', since);
-    if (Number.isFinite(count)) facts.failedRuns = count;
-  } catch { /* null */ }
+  // (2) failed CI runs in window — counted from the Actions runs API itself, paged to exhaustion.
+  // NOT from feedback rows: that measured a different population (gh-failure-monitor's recordings)
+  // under the same label, and a stopped recorder reported ZERO failures = a perfectly green CI.
+  facts.failedRuns = countFailedRuns(ghRaw([
+    'api', '-X', 'GET', `repos/${REPO}/actions/runs`,
+    '-f', 'status=failure', '-f', `created=>=${since}`, '-F', 'per_page=100',
+    '--paginate', '-q', '.workflow_runs[].conclusion',
+  ]));
 
   // (3)+(4) PR hygiene + conflicts via one gh pr list.
   const prs = ghJson(['pr', 'list', '--repo', REPO, '--state', 'open', '--limit', '100', '--json', 'number,createdAt,additions,deletions,mergeable,isDraft']);

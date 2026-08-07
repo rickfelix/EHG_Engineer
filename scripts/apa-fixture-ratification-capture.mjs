@@ -24,6 +24,7 @@
 import { createClient } from '@supabase/supabase-js';
 import 'dotenv/config';
 import { recordDisposition } from '../lib/decision-binding/disposition.js';
+import { isMainModule } from '../lib/utils/is-main-module.js';
 
 function parseArgs(argv) {
   const out = { fixtureSet: null, confirmed: [], flagged: [], authority: 'chairman' };
@@ -93,7 +94,7 @@ async function main() {
   console.log(`\n${results.length} ratification(s) captured for fixture-set "${args.fixtureSet}".`);
 }
 
-if (import.meta.url === `file://${process.argv[1]}`) {
+if (isMainModule(import.meta.url)) {
   main().catch((err) => {
     console.error('apa-fixture-ratification-capture: FAILED:', err.message);
     process.exit(1);

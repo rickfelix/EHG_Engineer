@@ -20,14 +20,28 @@ import {
 
 // Mock git runner: (args, cwd) -> { stdout, stderr, code }. Simulates a
 // dirty/clean working tree and N unpushed commits without touching real git.
-function mockGit({ dirty = false, unpushed = 0, statusCode = 0, cherryCode = 0 } = {}) {
-  return (args) => {
+function mockGit({ dirty = false, unpushed = 0, statusCode = 0, cherryCode = 0, ownsGitState = true } = {}) {
+  return (args, cwd) => {
     if (args[0] === 'status') {
       return { code: statusCode, stdout: dirty ? ' M lib/file.js\n?? new.txt\n' : '', stderr: '' };
     }
     if (args[0] === 'cherry') {
       const lines = Array.from({ length: unpushed }, (_, i) => `+ ${i}abc123 commit ${i}`).join('\n');
       return { code: cherryCode, stdout: lines, stderr: '' };
+    }
+    // A mock standing in for a REAL worktree must be able to SAY it is one. Since -C the
+    // helpers assert ownership before letting a BLOCKING answer through, and a runner
+    // that cannot answer rev-parse is indistinguishable from a directory that owns no
+    // git state. Note what changed here and what did not: the fixture now ANSWERS a
+    // question it previously fell through on — no existing assertion was weakened.
+    // ownsGitState:false simulates THE WALK-UP by naming a DIFFERENT toplevel, which is
+    // what git really does from a .git-less directory nested in a repo.
+    if (args[0] === 'rev-parse' && args[1] === '--show-toplevel') {
+      return {
+        code: 0,
+        stdout: ownsGitState ? String(cwd) : path.join(os.tmpdir(), 'some-ancestor-repo'),
+        stderr: '',
+      };
     }
     return { code: 0, stdout: '', stderr: '' };
   };

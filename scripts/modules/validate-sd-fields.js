@@ -13,6 +13,10 @@
  *   // result.enriched contains auto-fixed fields (if any)
  */
 
+// SD-LEO-INFRA-STRUCTURED-FIELDS-HONEST-001 / FR-2: the explicit unpopulated marker that replaces
+// the three plausible filler constants this file used to stamp. See lib/sd-fields/unpopulated.js
+// for why a sentinel rather than null or an omitted key (live consumers validate both keys truthy).
+import { UNPOPULATED } from '../../lib/sd-fields/unpopulated.js';
 import {
   computeQualityScore,
   SD_TYPE_THRESHOLDS,
@@ -36,22 +40,33 @@ function autoEnrichStructure(sdData) {
     const value = sdData[field];
     if (!isPopulated(value)) continue;
 
+    // SD-LEO-INFRA-STRUCTURED-FIELDS-HONEST-001 / FR-2. THIS COERCION IS WHERE PROSE BECAME FAKE
+    // STRUCTURE. A string entry carries ONE piece of information; coercing it to an object invents
+    // a second key, and this used to invent it as 'See description for details' — a phrase that
+    // reads like content and is not. Because this runs PRE-INSERT, every post-creation lint saw a
+    // 100% populated field, which is how 1,096 rows accumulated unmeasured.
+    //
+    // The shape still has to be produced (consumers validate {criterion, measure} with BOTH truthy
+    // — see transition-readiness.js Format 2 — so null or an omitted key would make every entry
+    // invalid and hard-block the SD). So the second key is stamped with an EXPLICIT MARKER that
+    // announces itself instead of impersonating content.
     const enriched = value.map(entry => {
       if (typeof entry === 'string') {
         // Convert plain string to object with expected keys
         const obj = {};
         obj[rule.expectedKeys[0]] = entry;
-        obj[rule.expectedKeys[1]] = 'See description for details';
+        obj[rule.expectedKeys[1]] = UNPOPULATED;
         return obj;
       }
       if (typeof entry === 'object' && entry !== null) {
         const hasExpectedKeys = rule.expectedKeys.some(key => key in entry);
         if (!hasExpectedKeys) {
-          // Object but missing expected keys — try to map existing keys
+          // Object but missing expected keys — try to map existing keys.
+          // Real authored values still win; only the fallback changes.
           const textContent = entry.text || entry.name || entry.title || entry.description || JSON.stringify(entry);
           const obj = {};
           obj[rule.expectedKeys[0]] = textContent;
-          obj[rule.expectedKeys[1]] = entry.impact || entry.measure || entry.reason || 'See description for details';
+          obj[rule.expectedKeys[1]] = entry.impact || entry.measure || entry.reason || UNPOPULATED;
           return obj;
         }
       }
@@ -115,9 +130,12 @@ function autoPopulateMissingFields(sdData) {
     fieldsWritten.push('strategic_objectives');
   }
 
+  // SD-LEO-INFRA-STRUCTURED-FIELDS-HONEST-001 / FR-2: the criterion is still derived from the
+  // title (that much IS known), but the MEASURE is not invented. 'Implementation verified and
+  // tests passing' asserts a verification method nobody chose, on an SD nobody wrote criteria for.
   if (!isPopulated(sdData.success_criteria)) {
-    sdData.success_criteria = [{ criterion: title.substring(0, 100), measure: 'Implementation verified and tests passing' }];
-    actions.push('success_criteria: populated with default criterion');
+    sdData.success_criteria = [{ criterion: title.substring(0, 100), measure: UNPOPULATED }];
+    actions.push('success_criteria: criterion from title, measure marked UNPOPULATED (no measurable input)');
     fieldsWritten.push('success_criteria');
   }
 
@@ -128,8 +146,8 @@ function autoPopulateMissingFields(sdData) {
   }
 
   if (!isPopulated(sdData.key_changes)) {
-    sdData.key_changes = [{ change: title.substring(0, 100), impact: 'See SD description for details' }];
-    actions.push('key_changes: populated from SD title');
+    sdData.key_changes = [{ change: title.substring(0, 100), impact: UNPOPULATED }];
+    actions.push('key_changes: change from title, impact marked UNPOPULATED (no impact stated)');
     fieldsWritten.push('key_changes');
   }
 

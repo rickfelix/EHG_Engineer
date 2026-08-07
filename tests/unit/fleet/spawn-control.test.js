@@ -2,6 +2,7 @@
  * SD-LEO-INFRA-FLEET-SPAWN-CONTROL-001 -- six-verb control API (TS-1..TS-10 unit-testable subset).
  */
 import { describe, it, expect, vi, beforeEach } from 'vitest';
+import { classifyHideRefusal } from '../../../lib/fleet/window-visibility-writer.js';
 
 // QF-20260725-757: spread the ORIGINAL module rather than replacing it wholesale. spawn() now reads
 // the canonical FLEET_WORKER_STARTUP_PROMPT from here (the keepalive it must forward), and a
@@ -46,6 +47,28 @@ const {
  * refuses -- 21 red tests whose behaviour depended on the physical location of the checkout.
  * A unit test must never depend on real git state or on network egress.
  */
+/**
+ * HERMETICITY PIN — SD-FDBK-INFRA-SPAWN-SOURCE-CURRENCY-001, added after this suite performed a
+ * REAL `git worktree add` against the SHARED repo root.
+ *
+ * spawn()'s FR-2 block reads `opts.currencyEnv || process.env`, and the 24 spawn() calls in this
+ * file pass no currencyEnv — so they read the AMBIENT environment. They also pass no
+ * spawnSourceRunner / spawnSourceExists / repoRoot, and those default to REAL execFileSync, REAL
+ * fs.existsSync and the REAL main repo root (correct for production, catastrophic for a unit test).
+ * The moment anything makes the flag read true, every one of these unit tests becomes a live
+ * integration test against the shared root.
+ *
+ * That is not hypothetical: mutant M5 (flag gate defaults ON) did exactly this during a mutation
+ * run and created a real `.spawn-source` worktree in the shared root, which vitest then globbed
+ * into — running the entire repo's suite a second time and rewriting 16 tracked files' line
+ * endings. A unit test that reads an ambient feature flag is non-hermetic by construction.
+ *
+ * Pinned to an explicit falsy value rather than deleted, so the ambient environment cannot decide.
+ * This does NOT weaken M5: the default-OFF contract is asserted directly in
+ * spawn-source-flag-gate.test.js, which passes an explicit `{}` and is where that mutant is caught.
+ */
+beforeEach(() => { vi.stubEnv('FLEET_SPAWN_SOURCE_TREE', '0'); });
+
 const CURRENT_RUNNER = (args) => {
   if (args[0] === 'fetch') return '';
   if (args.includes('--abbrev-ref')) return 'main\n';
@@ -126,18 +149,83 @@ function makeFakeSupabase({ sessions = [], coordinationInsertError = null } = {}
   };
 }
 
-describe('module surface (TS-10: exactly six named verbs, no more)', () => {
-  it('exports exactly {spawn, attach, stop, restart, relaunchUnderProfile, drainAndRestart} as the verb set', async () => {
+describe('module surface (TS-10: exactly seven named verbs, no more)', () => {
+  it('exports exactly {spawn, attach, stop, restart, relaunchUnderProfile, drainAndRestart, setSessionWindowVisibility} as the verb set', async () => {
     const mod = await import('../../../lib/fleet/spawn-control.js');
-    const verbNames = ['spawn', 'attach', 'stop', 'restart', 'relaunchUnderProfile', 'drainAndRestart'];
+    // SEVENTH VERB ADDED DELIBERATELY — SD-LEO-INFRA-SESSIONS-PAGE-TRUE-001-A FR-4.
+    // This guard exists to make growing the verb set a conscious act, and it did its job: adding
+    // setSessionWindowVisibility failed this test rather than slipping in unannounced. It is
+    // declared HERE, as a verb, and NOT added to the helper allowlist below — an operator invokes it
+    // (POST /:id/hide and /:id/show), which is exactly what distinguishes a verb from a helper, so
+    // hiding it among the helpers would have dodged the guard instead of satisfying it.
+    const verbNames = ['spawn', 'attach', 'stop', 'restart', 'relaunchUnderProfile', 'drainAndRestart', 'setSessionWindowVisibility'];
     for (const name of verbNames) expect(typeof mod[name]).toBe('function');
     // Every OTHER export must be a helper, never an undocumented 7th verb.
     // The guard exists to catch an undocumented 7th VERB, not to freeze the helper surface. The two
     // session-bind constants are exported so the budget can be asserted directly instead of by
     // wall-clock; they are values, not verbs, so they belong on this allowlist.
+    // retirePredecessorProcess (FR-3 / AC-3-6) is a HELPER, not a verb: an operator never invokes
+    // it, restart() calls it internally once succession is proven. It is exported solely so its
+    // fail-closed refusals can be asserted directly — a pid whose identity cannot be confirmed must
+    // never be signalled, and that is not reachable through restart() without real processes.
+    // isWorktreeExemptPath / assertSpawnSourceNotExempt (SD-FDBK-INFRA-SPAWN-SOURCE-CURRENCY-001
+    // FR-1) are HELPERS by the same test this file already applies: an operator never invokes
+    // them, and they are not reachable from any route. They are pure predicates, exported for two
+    // reasons. First, isWorktreeExemptPath was an INLINE expression inside spawn(); extracting it
+    // gives the exemption and the guard that depends on it ONE representation, so they cannot
+    // drift. Second, assertSpawnSourceNotExempt guards a failure that is invisible by
+    // construction — a spawn-source tree sited under .worktrees/ would be silently exempted from
+    // the currency check and would appear to work while asserting nothing — so it must be
+    // assertable directly rather than only through spawn().
+    //
+    // This guard did its job again: adding these failed the test rather than slipping in
+    // unannounced, which is why they are declared here with a reason instead of the test being
+    // loosened to accommodate them.
     const helperNames = ['roleOf', 'isSingletonRole', 'resolveProfileDir', 'isLiveEnabled', 'buildLiveSpawnInvocation',
       'SESSION_BIND_MAX_ATTEMPTS', 'SESSION_BIND_DELAY_MS',
-      'CANARY_PROFILE', 'CANARY_CALLSIGN_PREFIX'];
+      'CANARY_PROFILE', 'CANARY_CALLSIGN_PREFIX', 'retirePredecessorProcess',
+      'isWorktreeExemptPath', 'assertSpawnSourceNotExempt',
+      // resolveSpawnSourceDir is a HELPER by the same test: an operator never invokes it, and it
+      // is not reachable from a route — spawn() will consume it internally once FR-1's machinery
+      // lands. It is exported so the two siting constraints can be asserted directly, which
+      // matters because BOTH failure modes are invisible at runtime (a tree under .worktrees/ is
+      // silently unguarded; an unignored tree silently dirties the root). SPAWN_SOURCE_DIRNAME is
+      // a VALUE, belonging here for the same reason as the SESSION_BIND_* constants above.
+      'resolveSpawnSourceDir', 'SPAWN_SOURCE_DIRNAME',
+      // ensureSpawnSourceWorktree / buildSpawnSourceWorktreeArgs — helpers, not verbs. No operator
+      // invokes them and no route reaches them; spawn() consumes them internally. Exported because
+      // both take injected deps (exists probe, git runner) so the create-vs-reuse decision and the
+      // argv shape are assertable without a real repo — the reuse path in particular would only
+      // fail under repeated spawns, which is exactly when it is hardest to observe.
+      'ensureSpawnSourceWorktree', 'buildSpawnSourceWorktreeArgs',
+      // resolveMainRepoRoot — helper, not a verb. Resolves the MAIN repo root from any worktree by
+      // asking git (rev-parse --git-common-dir) rather than parsing the '/.worktrees/' literal.
+      // Exported because it takes an injected runner and must be assertable without a real repo:
+      // both wrong answers it replaces (path.dirname of cwd, and getRepoRoot's process.cwd-bound
+      // lookup) fail SILENTLY on the spawn path, so the correct one needs pinned tests.
+      'resolveMainRepoRoot',
+      // isSpawnSourceTreeEnabled — a flag PREDICATE, exactly like isLiveEnabled above and
+      // isFrTraceabilityEnforced on the FR gates. No operator invokes it; spawn() reads it
+      // internally. Exported so the DEFAULT-OFF contract is assertable directly, which is the
+      // whole safety claim of the FR-2 rollout: with FLEET_SPAWN_SOURCE_TREE unset, spawn
+      // behaviour must be byte-identical to before this SD.
+      'isSpawnSourceTreeEnabled',
+      // buildSpawnSourceUpdateArgs / SPAWN_SOURCE_BRANCH — helper and value, by the same test as
+      // everything above: no operator invokes them and no route reaches them. Both exist because
+      // the tree shipped DETACHED, which assessTreeCurrency rejects as detached_head no matter how
+      // pristine the tree is — so under FLEET_SPAWN_SOURCE_TREE every spawn in the fleet would have
+      // been refused. The branch name is exported so the seam test can assert the guard's verdict
+      // on the branch we actually create, and the update argv is exported because a fast-forward on
+      // reuse is REQUIRED (self-heal only ever advances a clean tree on 'main', which this
+      // deliberately is not) and its shape must be assertable without a real repo.
+      'buildSpawnSourceUpdateArgs', 'SPAWN_SOURCE_BRANCH',
+      // SPAWN_SOURCE_SITING_ERROR — a VALUE, like the SESSION_BIND_* constants. It exists so the
+      // spawn() call-site can tell a CORRECTNESS violation from a git hiccup: creation failures now
+      // fail soft to the spawning tree (C3, independent review 6ecbbd8c), but a tree sited under
+      // .worktrees/ must stay FATAL, because that path is exempt from the currency check and
+      // tolerating it would leave the spawn silently unguarded. Exported rather than matched on
+      // message text so the distinction cannot drift when the wording changes.
+      'SPAWN_SOURCE_SITING_ERROR'];
     const unexpected = Object.keys(mod).filter((k) => !verbNames.includes(k) && !helperNames.includes(k));
     expect(unexpected).toEqual([]);
   });
@@ -373,6 +461,45 @@ describe('spawn (FR-1)', () => {
     expect(merged.role).toBe('worker');
     expect(merged.window_handle).toBe(131074);
     expect(merged.handle_capture_failed).toBe(false);
+  });
+
+  it('FR-2: capture PERSISTS the owner identity — without this the whole hide feature is inert', async () => {
+    // THE BUG THIS CATCHES SHIPPED GREEN. setWindowOwner had zero production callers and
+    // selectNewWindowHandle returned a bare handle, so readWindowOwner() was null for every real
+    // session and classifyHideRefusal refused EVERY hide — while 60/60 unit tests passed. Both the
+    // TESTING and SECURITY sub-agents found it independently at EXEC.
+    //
+    // The tests that missed it asserted the pure functions in isolation. Nothing asserted the WRITE.
+    // So this drives the real spawn bind-loop and inspects the merged row, which is the only place
+    // the producer and the consumer actually meet.
+    const nowMs = 1_800_000_000_000;
+    const spawnFn = vi.fn().mockReturnValue({ pid: 4242 });
+    // Answers the enumeration calls AND the separate start-ticks read, which enumExec cannot.
+    let call = 0;
+    const execFn = vi.fn(async (_program, args) => {
+      const script = String(args?.[3] || '');
+      if (script.includes('StartTime.Ticks')) return { stdout: 'TICKS|638600000000000000' };
+      call += 1;
+      return { stdout: call === 1 ? '' : '131074|5555|WindowsTerminal|Claude Code' };
+    });
+    const supabaseClient = makeFakeSupabase({
+      sessions: [{
+        session_id: MINTED_SESSION_ID, pid: 4242, status: 'active',
+        created_at: new Date(nowMs - 5_000).toISOString(),
+        metadata: { fleet_identity: { callsign: 'Alpha-5' }, role: 'worker' },
+      }],
+    });
+    await spawn({ role: 'worker', callsign: 'Beta-1' }, { live: true, currencyRunner: CURRENT_RUNNER, spawnFn, execFn, sleepFn: vi.fn(), supabaseClient, nowMs, skipDedup: true, uuidFn: () => MINTED_SESSION_ID });
+    const merged = supabaseClient._store.get(MINTED_SESSION_ID).metadata;
+    // All THREE conjuncts, namespaced. pid alone cannot discriminate: every fleet window on this
+    // host shares one owning pid, so start time is the conjunct that does the work.
+    expect(merged.window_owner_pid).toBe(5555);
+    expect(merged.window_owner_proc).toBe('WindowsTerminal');
+    expect(merged.window_owner_start_ticks).toBe('638600000000000000');
+    // NEVER a bare `pid` key in metadata — that is the shared terminal host, not the seat process.
+    expect(merged).not.toHaveProperty('pid');
+    // And the row this produces must be one the hide guard actually accepts, end to end.
+    expect(classifyHideRefusal(merged)).toBeNull();
   });
 
   it('ADVERSARIAL-REVIEW FIX: never writes metadata for a stale/recycled pid match (created_at outside the freshness window)', async () => {
@@ -890,9 +1017,17 @@ describe('restart (FR-4 singleton-serial / FR-5 worker-parallel)', () => {
       sessions: [{ session_id: 's1', status: 'active', metadata: { fleet_identity: { callsign: 'Canary-1' }, role: 'worker', account_profile: 'canary' } }],
     });
 
+    // SD-LEO-INFRA-THREE-REFUSAL-TESTS-001 FR-1: baseDir was `null` here, which never created
+    // the "NO profiles dir configured" precondition this test's own name claims. resolveProfileDir
+    // (lib/fleet/spawn-control.js:103) is `opts.baseDir ?? process.env.FLEET_ACCOUNT_PROFILES_DIR
+    // ?? null`, and `??` treats an explicit null as ABSENT — so on any host that sets the env var
+    // (this repo's .env does) the caller's "none" was discarded, the fail-loud never armed, and
+    // restart() resolved { ok: true }. '' is falsy but NOT nullish: it survives `??` and trips the
+    // `if (!baseDir)` guard on the next line, so the refusal is now asserted on every host rather
+    // than borrowed from operator environment. The assertion below is deliberately unchanged.
     await expect(restart('Canary-1', {
       supabaseClient, live: true, currencyRunner: CURRENT_RUNNER, spawnFn, execFn: enumExec(),
-      sleepFn: vi.fn(), baseDir: null,
+      sleepFn: vi.fn(), baseDir: '',
     })).rejects.toThrow(/FLEET_ACCOUNT_PROFILES_DIR/);
   });
 

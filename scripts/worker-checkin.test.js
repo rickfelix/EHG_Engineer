@@ -97,10 +97,23 @@ function makeStub(cfg) {
           }
           return Promise.resolve({ data: rows, error: null });
         }
-        // adoptOrphanInProgress listing (SD-FDBK-INFRA-ORPHAN-ADOPTION-WORKER-001): a third
-        // STRING discriminant (.eq('status','in_progress')) — placed ABOVE the draft fallthrough.
-        // Honors the .lt('updated_at') age guard and the server-side .neq('sd_type') exclusion.
-        if (state.filters.status === 'in_progress') {
+        // adoptOrphanInProgress listing (SD-FDBK-INFRA-ORPHAN-ADOPTION-WORKER-001).
+        //
+        // SD-LEO-INFRA-RELEASED-MID-PHASE-001 / FR-2: this discriminant USED TO BE a string
+        // compare (state.filters.status === 'in_progress'), which was correct only while the
+        // adoption query used .eq(). It now uses .in(['in_progress','active']) — and because
+        // eq() and in() write the SAME key in this stub, a string compare stops matching and
+        // the orphan query FALLS THROUGH to the draft branch below. That failure mode is
+        // uniquely nasty: the four "expect idle" cases would have gone GREEN because the stub
+        // returned drafts-shaped nothing, not because any guard fired. A test that passes for
+        // the wrong reason is worse than one that fails.
+        //
+        // Discriminate on ARRAY CONTENTS, and note both allowlists contain 'active' — the
+        // draft tier queries ['draft','active'] — so membership of 'active' alone cannot
+        // distinguish them. 'in_progress' is the token unique to the adoption tier.
+        if (Array.isArray(state.filters.status)
+              ? state.filters.status.includes('in_progress')
+              : state.filters.status === 'in_progress') {
           if (cfg.orphansThrow) return Promise.reject(new Error('orphan query failed'));
           let rows = cfg.orphans || [];
           if (state.filters.lt_updated_at !== undefined) {
@@ -169,7 +182,15 @@ describe('FR-2: runCheckin deterministic resolution', () => {
 
   it('resume on a self-claimed QF routes to /quick-fix, NOT sd-start', async () => {
     // qfRows seeds the quick-fix as EXISTING + open so the QF resumability check resumes it.
-    const sb = makeStub({ session: { metadata: {}, sd_key: 'QF-20260607-583' }, qfRows: { 'QF-20260607-583': { status: 'open' } } });
+    // SD-LEO-INFRA-CLAIM-LIFECYCLE-RELEASE-002 (FR-1): claiming_session_id is now REQUIRED in this
+    // fixture. Resume tests OWNERSHIP rather than terminal-ness, so a QF at status=open whose
+    // authoritative column does not name this session is treated as RETURNED-to-the-queue and healed.
+    // The fixture previously omitted the column because the old code never read it — a self-claimed
+    // QF always carries it in production, so seeding it makes the fixture match what it claims to be.
+    const sb = makeStub({
+      session: { metadata: {}, sd_key: 'QF-20260607-583' },
+      qfRows: { 'QF-20260607-583': { status: 'open', claiming_session_id: 'sess-1' } },
+    });
     const r = await runCheckin(sb, 'sess-1', noCoord);
     expect(r.action).toBe('resume');
     expect(r.sd).toBe('QF-20260607-583');
@@ -177,6 +198,28 @@ describe('FR-2: runCheckin deterministic resolution', () => {
     expect(r.message).toMatch(/read-quick-fix\.js QF-20260607-583/);
     // must NOT use the SD-resume phrasing (which tells the worker to sd-start/re-attach a worktree)
     expect(r.message).not.toMatch(/re\)?attach the worktree/i);
+  });
+
+  // SD-LEO-INFRA-CLAIM-LIFECYCLE-RELEASE-002 (FR-1): the RETURNED-QF pin, at the check-in seam.
+  // A QF sent back to the queue keeps status='open' but loses its claim, so the mirror still points
+  // here while the authoritative column does not. That state used to resume FOREVER — and worse, the
+  // QF was simultaneously claimable, so a second seat could build it concurrently.
+  it('does NOT resume a QF that was returned to the queue (mirror points here, claim does not)', async () => {
+    const sb = makeStub({
+      session: { metadata: {}, sd_key: 'QF-20260607-583' },
+      qfRows: { 'QF-20260607-583': { status: 'open', claiming_session_id: null } },
+    });
+    const r = await runCheckin(sb, 'sess-1', noCoord);
+    expect(r.action).not.toBe('resume');
+  });
+
+  it('does NOT resume a QF re-claimed by a DIFFERENT session', async () => {
+    const sb = makeStub({
+      session: { metadata: {}, sd_key: 'QF-20260607-583' },
+      qfRows: { 'QF-20260607-583': { status: 'open', claiming_session_id: 'sess-other' } },
+    });
+    const r = await runCheckin(sb, 'sess-1', noCoord);
+    expect(r.action).not.toBe('resume');
   });
 
   it('claims a pending WORK_ASSIGNMENT via claim_sd', async () => {

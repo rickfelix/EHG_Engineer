@@ -266,14 +266,22 @@ Error: Cannot find module 'some-package'
 
 **Solution**:
 ```bash
-# Re-link node_modules
+# Additive, herd-safe, and the ONLY recommended repair:
 cd .worktrees/SD-XXX-001
-rm -rf node_modules  # Windows: rmdir /s node_modules
-npm run session:worktree:link -- --sd-key SD-XXX-001
-
-# Or run npm ci in the worktree (less efficient)
-npm ci
+npm install --ignore-scripts --no-audit --no-fund
 ```
+
+> **The previous instructions here were actively harmful and are removed.**
+> - `npm run session:worktree:link` **does not exist** — there is no such script in `package.json`.
+> - `npm ci` is **blocked by this repo's own guards** (`lib/npm-ci-junction-guard.cjs`), because its
+>   internal `rm -rf` follows a `node_modules` junction and guts the **shared** store, bricking every
+>   parallel session.
+> - `rm -rf node_modules` has the same hazard when that path is a junction. Use
+>   `npm run worktree:remove` if you need to remove a worktree; it pre-unlinks first.
+>
+> A hollow `node_modules` (one holding only `.vite` or a stray lock file and no packages) is now
+> detected and re-provisioned automatically, and `validateWorktreeSubstrate` reports it as
+> incomplete rather than healthy — it used to check presence only.
 
 ### "Worktree creation failed"
 
@@ -380,7 +388,23 @@ Worktrees solve all these issues.
 
 ### Do I need to install node_modules in each worktree?
 
-**Answer**: No. The system automatically creates a symlink/junction to the main repo's `node_modules`. This saves disk space (~300MB per worktree).
+**Answer**: No — provisioning is automatic, but **it is not always a junction**, and this page said otherwise for long enough to mis-scope an SD.
+
+Since `SD-LEO-INFRA-SMART-PER-WORKTREE-001` (PR #3825), `lib/worktree-provision.js` **decides**:
+
+| outcome | when |
+|---|---|
+| **isolated** — a real, per-worktree `npm install` | the normal case: ≥2 active sessions |
+| **junction** to the main repo's `node_modules` | ≤1 active session, `WORKTREE_ISOLATION_MODE=never`, or <3 GB free disk |
+| **junction** (`isolate_failed_fallback`) | the isolated install threw — e.g. exceeded its 180s timeout, which gets *more* likely under load |
+
+So a junction can appear at **both ends** of the concurrency curve. Check which you have — do not assume:
+
+```bash
+cat .worktrees/SD-XXX-001/.worktree-nm-mode   # e.g. isolated:auto_concurrent, junction:auto_solo
+```
+
+A value of `junction:isolate_failed_fallback` means the isolated install **failed** and the worktree silently fell back to sharing the main store. That is worth investigating, not ignoring.
 
 ### What happens to the worktree when the SD is completed?
 
@@ -410,7 +434,8 @@ ls .worktrees/  # Shows SD keys
 |---------|---------|
 | `npm run session:worktree -- --sd-key X --branch Y` | Create worktree manually |
 | `npm run session:cleanup -- --sd-key X` | Remove worktree manually |
-| `npm run session:worktree:link -- --sd-key X` | Re-link node_modules |
+| `npm install --ignore-scripts --no-audit --no-fund` | Re-provision a worktree's node_modules (run inside the worktree). Replaces the documented-but-nonexistent `session:worktree:link`. |
+| `npm run audit:worktree-reparse` | Check no worktree node_modules is a junction; self-tests its own detector first and treats 0/0 as a failure to measure |
 | `git worktree list` | List all worktrees |
 | `git worktree remove --force .worktrees/X` | Force remove worktree |
 | `git worktree prune` | Clean up stale worktree metadata |

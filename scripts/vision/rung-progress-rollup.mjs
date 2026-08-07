@@ -16,7 +16,12 @@ import { makeDefaultGrepSeam } from '../../lib/vision/vdr-grep-seam.js';
 import { runRollup } from '../../lib/vision/rung-progress-rollup.mjs';
 import { isMainModule } from '../../lib/utils/is-main-module.js';
 import { stampLastFired } from '../../lib/periodic-liveness/stamp-last-fired.js';
-import { computeWaveLinkageCoverage, COVERAGE_THRESHOLD, STARVATION_NAME } from '../../lib/roadmap/wave-linkage-coverage.js';
+import { computeWaveLinkageCoverage, COVERAGE_THRESHOLD, STARVATION_NAME, ERR_NO_CANONICAL_ROADMAP } from '../../lib/roadmap/wave-linkage-coverage.js';
+
+// SD-LEO-INFRA-ROADMAP-REGENERATION-DUPLICATES-001 SEC-3: a distinct dedup_key from
+// STARVATION_NAME, because "coverage is low" and "coverage could not be computed" are different
+// facts and must not collapse into one feedback row.
+const NO_CANONICAL_ROADMAP_NAME = 'WAVE_LINKAGE_NO_CANONICAL_ROADMAP';
 import { emitFeedback } from '../../lib/governance/emit-feedback.js';
 import { buildPlanLinkageRetroPayload, PLAN_LINKAGE_RETRO_CATEGORY } from '../../lib/roadmap/plan-linkage-retro.js';
 
@@ -107,7 +112,35 @@ async function main() {
       }
     }
   } catch (covErr) {
-    console.error(`  [coverage] WARN: wave-linkage coverage computation failed: ${covErr.message}`);
+    // SD-LEO-INFRA-ROADMAP-REGENERATION-DUPLICATES-001 (EXEC security review SEC-3, LIVE).
+    // This catch previously collapsed EVERY failure into one WARN line. That mattered because
+    // "no canonical roadmap" is not a bug — it is the normal state between a roadmap being
+    // created and being approved (a successful --full --replace-active ends at old=archived,
+    // new=draft, i.e. zero active), and this file runs on a 6-hourly cron with --apply. In that
+    // window the named WAVE_LINKAGE_STARVATION signal and the FR-3 retro row were both skipped
+    // and the job still exited green: a silent control failure, which is exactly the shape this
+    // SD exists to remove. So the reportable state now gets REPORTED, and only genuine
+    // computation failures stay a WARN.
+    if (covErr && covErr.code === ERR_NO_CANONICAL_ROADMAP) {
+      console.error(`  ❌ ${NO_CANONICAL_ROADMAP_NAME}: wave-linkage coverage NOT COMPUTED — ${covErr.message}`);
+      console.error('     (this is a reportable state, not a crash: expected between roadmap creation and approval)');
+      if (apply) {
+        await emitFeedback({
+          supabase,
+          title: `${NO_CANONICAL_ROADMAP_NAME}: wave-linkage coverage could not be computed`,
+          description:
+            'No status=active strategic_roadmaps row exists, so wave-linkage coverage has no defined corpus and was NOT computed. '
+            + 'This is the normal window between roadmap creation and chairman approval; it is reported rather than swallowed so that '
+            + '"not measured" is never indistinguishable from "measured and healthy". If this persists, approve the pending roadmap '
+            + '(/distill approve --roadmap-id <id>) or investigate why none is active.',
+          category: 'harness_backlog',
+          severity: 'medium',
+          dedup_key: NO_CANONICAL_ROADMAP_NAME,
+        });
+      }
+    } else {
+      console.error(`  [coverage] WARN: wave-linkage coverage computation failed: ${covErr.message}`);
+    }
   }
 
   console.log(`\n  Active build rung: ${res.activeRungKey} | build gauge: ${res.gaugeBuildPct}%`);

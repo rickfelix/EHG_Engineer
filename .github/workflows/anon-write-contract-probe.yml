@@ -1,0 +1,68 @@
+# Anon write-contract probe — SD-LEO-INFRA-DEAD-VENTURE-USER-001 FR-6.
+#
+# The probe binary is invoked DIRECTLY so its exit code is the gate. That is not a style choice:
+# the vitest `db` project on this repo has an empty DESIGNATED_NON_PROD_REFS, so assessDbTarget
+# returns {allowed:false} and any live-tier test placed there SKIPS — and a skip reports green.
+#
+# Path filters below use literal per-extension entries. GitHub Actions does NOT expand brace
+# alternation, so 'scripts/**/*.{js,mjs,cjs}' matches nothing — four workflows in this repo carry
+# that pattern and have effectively never fired. tests/unit/anon-write-contract-probe.test.js
+# enforces this repo-wide, so the next one cannot repeat it either.
+name: anon-write-contract-probe
+
+# Least privilege: the default repo token is write-capable and checkout persists it into
+# .git/config before npm ci runs dependency lifecycle scripts.
+permissions:
+  contents: read
+
+on:
+  push:
+    paths:
+      - 'scripts/anon-write-contract-probe.mjs'
+      - 'tests/unit/anon-write-contract-probe.test.js'
+      - '.github/workflows/anon-write-contract-probe.yml'
+  pull_request:
+    paths:
+      - 'scripts/anon-write-contract-probe.mjs'
+      - 'tests/unit/anon-write-contract-probe.test.js'
+      - '.github/workflows/anon-write-contract-probe.yml'
+  schedule:
+    # The contract can change without anyone touching this repo — a sibling SD altering an anon
+    # policy is exactly the event this probe exists to catch, and it produces no diff here.
+    - cron: '17 6 * * *'
+  workflow_dispatch:
+
+jobs:
+  probe:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - run: npm ci
+      # No continue-on-error anywhere in this file, and no job-level if:. A step that cannot fail
+      # the build is indistinguishable from a step that was never added.
+      - name: unit tier (pure — cannot skip)
+        run: npx vitest run --project unit tests/unit/anon-write-contract-probe.test.js
+      # A missing secret must NAME ITSELF. SUPABASE_DB_PASSWORD was referenced here and is not a
+      # repo secret at all: it resolved to '' and the probe died on a connection error, so the
+      # live gate could never once have asserted the contract. Fail-closed is the right direction,
+      # but a permanently-red scheduled job is exactly how a genuine exit-2 gets ignored.
+      - name: assert credentials are present
+        env:
+          DATABASE_URL: ${{ secrets.DATABASE_URL }}
+        run: |
+          if [ -z "$DATABASE_URL" ]; then
+            echo "::error::DATABASE_URL secret is empty or unset — the live contract assertion cannot run."
+            exit 1
+          fi
+      # The probe reads only the DB connection. SUPABASE_SERVICE_ROLE_KEY is deliberately NOT
+      # injected: it is consumed by a different export this script never calls, and a service-role
+      # key in a step that does not need it is gratuitous blast radius.
+      - name: live contract assertion
+        env:
+          DATABASE_URL: ${{ secrets.DATABASE_URL }}
+        run: node scripts/anon-write-contract-probe.mjs

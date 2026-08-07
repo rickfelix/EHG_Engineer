@@ -94,19 +94,48 @@ async function gatherSignals(sb) {
     }
   })();
 
-  // D8: advisory deliverability = adam_advisory rows read / total (last 7d)
+  // D8: advisory deliverability = adam_advisory rows DELIVERED (not dead-lettered) / total, last 7d.
+  //
+  // QF-20260726-409. This previously counted `read_at != null`, which is a RECIPIENT READ RATE, not
+  // deliverability -- it told you how promptly the coordinator drains its inbox and contained no
+  // Adam-side signal at all. Two consequences, both measured against live data before this change:
+  //
+  //  1. IT INVERTED THE SIGNAL ITS OWN PROVENANCE CLAIMS. Of 218 live adam_advisory rows, 27 are
+  //     dead-lettered (payload.dead_letter === true, every one reason 'target_dead') -- and ALL 27
+  //     carry a non-null read_at. So each genuine delivery FAILURE was being scored as a success.
+  //     Real delivery rate 0.876; the read-rate proxy was scoring 0.729.
+  //  2. IT COULD NOT BE SATISFIED. Every advisory is created with read_at NULL, so sending more
+  //     advisories LOWERED the score whenever the recipient's drain lagged -- penalising exactly the
+  //     behaviour D8 exists to encourage, with no action available to Adam that improved it.
+  //
+  // Dead-lettering IS the Adam-controlled signal, and it is the one D8 already documents: the
+  // dimension is defined as 'clear advisories, CORRECT LANE/TARGET, <=1 per tick', and 'target_dead'
+  // means the advisory was addressed to a session that was not alive. So the provenance string
+  // 'advisories delivered vs dead-lettered' was right all along -- the code simply never implemented
+  // it. Fixed by implementing it literally rather than by renaming the dimension to match the broken
+  // measurement (the D8 key is load-bearing: leo_protocol_sections id=601, CLAUDE_ADAM.md, the
+  // coordinator hourly-review prompt, and every historical adam_self_assessment feedback row).
+  //
+  // A fresh advisory is not dead-lettered, so recency no longer counts as failure and no settle
+  // window is needed.
   signals.advisory_deliverability = await (async () => {
     try {
+      // The 'last 7d' the old comment asserted was never implemented -- there was NO date filter,
+      // just an unordered .limit(500). It spanned ~7d only because Adam has only been sending for
+      // ~7d (293 rows total, under the cap), so the cap was not even binding yet: as volume grows
+      // the window would have silently narrowed instead. Filter and ordering are now explicit.
+      const sinceIso = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000).toISOString();
       const { data, error } = await sb
         .from('session_coordination')
         .select('read_at, payload')
         .eq('sender_type', 'adam')
+        .gte('created_at', sinceIso)
+        .order('created_at', { ascending: false })
         .limit(500);
       if (error || !Array.isArray(data) || data.length === 0) return null;
-      const adv = data.filter((r) => r.payload && r.payload.kind === 'adam_advisory');
-      if (adv.length === 0) return null;
-      const delivered = adv.filter((r) => r.read_at != null).length;
-      return delivered / adv.length;
+      // Delegates to the shared pure predicate rather than re-implementing it here — one definition
+      // of "delivered", unit-tested against fixtures.
+      return core.computeAdvisoryDeliverability(data);
     } catch {
       return null;
     }
@@ -152,7 +181,7 @@ async function main() {
     const newCycle = (state.cycle || 0) + 1;
 
     const signals = await gatherSignals(sb);
-    const { dimensions, provenance } = core.scoreDimensions(signals);
+    const { dimensions, provenance, inconclusive } = core.scoreDimensions(signals);
     const belowThreshold = core.classifyBelowThreshold(dimensions);
 
     // prior cycle (most recent self-assessment row)
@@ -172,7 +201,7 @@ async function main() {
     const priorOutcomes = core.derivePriorOutcomes(priorScore, dimensions);
     const committedActions = core.generateCommittedActions(belowThreshold, provenance);
     const score = core.assembleScore({
-      dimensions, cycle: newCycle, session: sessionId, committedActions, priorOutcomes, provenance, belowThreshold, date,
+      dimensions, cycle: newCycle, session: sessionId, committedActions, priorOutcomes, provenance, belowThreshold, date, inconclusive,
     });
 
     // validate via the shipped contract (literal dynamic import — WIRE_CHECK-traceable)

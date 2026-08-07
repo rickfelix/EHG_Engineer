@@ -7,6 +7,11 @@
 import { colors } from '../colors.js';
 import { analyzeClaimRelationship } from '../claim-analysis.js';
 import { getStaleThresholdSeconds } from '../../../../lib/claim/stale-threshold.js';
+// SD-LEO-INFRA-REPO-WIDE-TIMEZONE-001: the canonical normalizer is CJS, and ESM imports CJS
+// unconditionally — this import is the ESM half of the proof that one home serves both module
+// systems. The CJS half is the require() in scripts/worker-checkin.cjs.
+import pgTimestamp from '../../../../lib/time/pg-timestamp.cjs';
+const { pgTimestampAgeMs } = pgTimestamp;
 
 const MAX_DISPLAY = 10;
 
@@ -163,7 +168,22 @@ export function classifyQuickFixes(quickFixes, triageResults = new Map(), sessio
   // => claiming_session_id null, no PR) would otherwise be emitted as AUTO_PROCEED_ACTION:
   // qf_start and auto-started without verify-first. in_progress is either actively owned or
   // orphaned; neither is auto-startable.
-  summary.topStartableQF = classified.find(qf => qf.status === 'open' && !qf._escalate && !qf._isClaimedByOther && !qf._verifyFirst && !qf._deferred && !qf._factoryLane) || null;
+  // SD-LEO-INFRA-CORRECTION-DELIVERY-PATH-001-B FR-3: withhold QFs already in flight in git.
+  // The _verifyFirst guard above keys on pr_url/commit_sha, which are NULL for 23/30 (77%) of
+  // non-terminal QFs even when a real PR is open — so it cannot see the case that mis-dispatched
+  // QF-20260726-425. The snapshot is precomputed by the caller (sync + injected keeps this
+  // function pure); absent or UNAVAILABLE withholds nothing, so a probe outage never empties
+  // the queue (AC-3).
+  // The caller passes an already-computed id Set rather than a raw snapshot: this function is
+  // SYNCHRONOUS and this module is ESM while the predicate is CJS, so resolving it here would
+  // force an await and change the signature for every existing caller. An empty/absent Set
+  // withholds nothing.
+  const inFlightIds = sessionContext.inFlightQfIds instanceof Set ? sessionContext.inFlightQfIds : new Set();
+  for (const qf of classified) {
+    if (inFlightIds.has(qf.id)) qf._inFlight = true;
+  }
+
+  summary.topStartableQF = classified.find(qf => qf.status === 'open' && !qf._escalate && !qf._isClaimedByOther && !qf._verifyFirst && !qf._deferred && !qf._factoryLane && !inFlightIds.has(qf.id)) || null;
 
   return { summary, classified };
 }
@@ -259,7 +279,14 @@ function inferTier(estimatedLoc) {
  */
 function ageDays(createdAt) {
   if (!createdAt) return 0;
-  return Math.floor((Date.now() - new Date(createdAt).getTime()) / (1000 * 60 * 60 * 24));
+  // SD-LEO-INFRA-REPO-WIDE-TIMEZONE-001. quick_fixes.created_at is `timestamp without time
+  // zone`, so PostgREST returns it with no designator and new Date() reads it as LOCAL —
+  // shifting this age by the host's UTC offset. This site was INVISIBLE to the repo scan that
+  // sized this SD, because the column is renamed to camelCase `createdAt` and so the literal
+  // string `created_at` never shares a line with Date.now(). It carries the identical defect to
+  // scripts/worker-checkin.cjs:isAutoStartableQF, independently — the two are separate
+  // implementations of the same predicate.
+  return Math.floor(pgTimestampAgeMs(createdAt) / (1000 * 60 * 60 * 24));
 }
 
 /**

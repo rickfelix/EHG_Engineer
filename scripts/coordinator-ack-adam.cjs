@@ -75,8 +75,111 @@ function isNoArtifactRef(ref) {
  * Returns { ref } (string|null) on success, or { error } when linkage is mandatory and missing.
  * Exported for tests.
  */
+/**
+ * SD-LEO-INFRA-ADVICE-OUTCOME-LEDGER-001 FR-5 — is this ref one the matcher could ever match?
+ *
+ * THE STARVATION THIS CLOSES. The FR-4 negative back-propagation attributes ONLY through exact
+ * equality against identifiers harvested from audit metadata (NEGATIVE_REF_KEYS in
+ * solomon-ledger-reconcile.cjs: sha, commit_sha, sd_key, sd_id, ref, outcome_ref, pr, pr_url,
+ * pr_number, signature). This function's caller accepted ANY non-empty string, and the CLI's
+ * `--outcome-ref <artifact-id>` was only a hint — so operators typed sentences. Measured 2026-07-29:
+ * 158 of 170 populated refs are free English prose, median 134 chars, longest 1260. Running the
+ * production selector over the live table returns ZERO matches.
+ *
+ * A prose ref is the worst possible outcome: it LOOKS recorded, satisfies the FR-3 mandatory-linkage
+ * check, and can never match anything. The row is billed as linked and is permanently unreachable.
+ * Rejecting at write time is the whole point — the alternative is a value that fails silently
+ * forever, which is the defect class this SD exists to remove.
+ *
+ * THE RULE IS TOKEN-VS-SENTENCE, not a scheme allow-list. My first version enumerated the schemes I
+ * could think of (sha / SD|QF|PRD|US key / uuid / number / URL) and promptly rejected `PR-6284` — a
+ * perfectly matchable identifier already used in the test suite. A false rejection here is worse
+ * than the problem: it blocks a legitimate accept at the CLI and teaches operators to route around
+ * the check.
+ *
+ * The matcher compares by EXACT EQUALITY, so it does not care what scheme a token belongs to — any
+ * stable token works, including schemes nobody has invented yet. The only thing it can never match
+ * is a sentence. So the rule is exactly that: no whitespace, bounded length, and at least one
+ * alphanumeric. Cheap, and it cannot be wrong about a scheme it has never seen.
+ * @param {string} ref
+ * @returns {boolean}
+ */
+function isMatchableRef(ref) {
+  if (typeof ref !== 'string') return false;
+  const s = ref.trim();
+  if (!s || /\s/.test(s)) return false;              // an identifier has no spaces; a sentence does
+  if (s.length > 500) return false;                  // 200 rejected a real signed CI-run URL (220 chars)
+
+  // PRINTABLE ASCII ONLY — the same hole as prose, re-entering through the character set.
+  //
+  // The whitespace check closes newline log-forging but not NUL, BS, ESC, C1, U+200B zero-widths, or
+  // U+202E bidi overrides. Security review verified all of those were ACCEPTED and persisted. Two
+  // harms, and the first is the one that matters: a zero-width or homoglyph ref is BILLED AS LINKED
+  // and can never match — FR-5's own stated failure mode arriving by a different door. The control
+  // had a hole shaped exactly like the defect it closes. (The second is terminal injection: an
+  // OSC/backspace-overwrite ref renders as a different string than it stores.)
+  //
+  // One line rather than an enumeration of bad characters, consistent with why PLACEHOLDER_REFS was
+  // deleted. URLs are ASCII by spec; measured, all 5 live accepted refs pass and zero are newly
+  // rejected.
+  if (!/^[\x21-\x7e]+$/.test(s)) return false;
+
+  // MINIMUM LENGTH 3, AND THIS IS A DELIBERATE REVERSAL OF AN EARLIER REVIEW FINDING.
+  //
+  // My testing reviewer called rejecting '#7'/'42' a FALSE REJECTION, since pr_number is one of the
+  // matcher's harvest keys — correct in its own frame, and I widened the rule to admit them.
+  // Security review then demonstrated end-to-end that this is a COLLISION PRIMITIVE: audit metadata
+  // carrying pr_number=42 harvests as the string '42', matches a ledger row whose outcome_ref is
+  // '42', and flips it shipped_clean -> reverted. There is no repo or type qualifier on either side,
+  // 'reverted' is TERMINAL, and the idempotency skip means it never self-heals — governance-metric
+  // poisoning wearing the mechanism's own provenance.
+  //
+  // The two findings genuinely conflict. Safety wins: the cost of rejecting is one CLI error telling
+  // the operator to pass the qualified form (a PR URL, which is accepted), while the cost of
+  // accepting is a silent, permanent, unattributable corruption of the accuracy ledger this SD
+  // exists to make trustworthy. Longer numbers ('6284') still pass — only the low-entropy tokens
+  // that can collide by accident are refused.
+  if (s.length < 3) return false;
+
+  // A NEAR-MISS SPELLING OF THE SENTINEL IS THE WORST CASE OF ALL: 'no_artifact' lowercase or
+  // 'NO-ARTIFACT' hyphenated fails isNoArtifactRef, so the operator believes they recorded "nothing
+  // to track" while the row is billed as a real, permanently unmatchable link the back-prop will NOT
+  // skip. END-ANCHORED — my first version was a bare prefix rule and wrongly rejected
+  // 'no-artifact-handling-001', which is a false rejection, the mode I keep calling worse than the
+  // defect. Only the near-misses themselves are caught now.
+  if (/^no[-_. ]?artifact$/i.test(s) && !isNoArtifactRef(s)) return false;
+
+  // THE STRUCTURAL DISCRIMINANT — a digit, or a URL.
+  //
+  // My previous attempt was a PLACEHOLDER_REFS enumeration, and review correctly identified it as
+  // the same failure mode as my v1 scheme allow-list, pointed the other way: 'already-merged',
+  // 'see-adam-note' and ~24 unlisted words sailed through, and one trailing character defeated it
+  // ('n/a' blocked, 'na.' not). An enumeration of what to reject rots exactly like an enumeration of
+  // what to accept.
+  //
+  // The structural fact is that an artifact identifier CARRIES A NUMBER — a sha, an SD/QF key, a PR
+  // or issue number, a uuid, a versioned URL — while a placeholder is words. Verified against the
+  // live corpus: all 5 currently-accepted refs satisfy it, and every placeholder review supplied
+  // fails it. It cannot be defeated by a word nobody thought to enumerate.
+  //
+  // All-zeros is the one numeric placeholder ('0', '#00'), so it is excluded explicitly.
+  if (/^#?0+$/.test(s)) return false;
+  return /\d/.test(s) || /^https?:\/\/\S+$/i.test(s);
+}
+
 function resolveOutcomeRef(disposition, { outcomeRef = null, noArtifact = null } = {}) {
   const cleanRef = typeof outcomeRef === 'string' ? outcomeRef.trim() : (outcomeRef ? String(outcomeRef).trim() : '');
+  // FR-5: a ref the matcher can never match is worse than no ref, because it passes the linkage
+  // check while guaranteeing the negative path stays dead for that row. The NO_ARTIFACT sentinel is
+  // exempt — it is DELIBERATELY unmatchable and says so.
+  if (cleanRef && !isNoArtifactRef(cleanRef) && !isMatchableRef(cleanRef)) {
+    return {
+      error: `outcome_ref "${cleanRef.slice(0, 60)}${cleanRef.length > 60 ? '…' : ''}" is prose, not an artifact identifier. `
+        + 'The negative back-propagation matches by EXACT equality against a sha, SD/QF key, uuid, PR number or URL, '
+        + 'so a sentence here records a link that can never resolve. Supply the identifier, or --no-artifact "<reason>" '
+        + 'if there genuinely is no artifact (FR-5).',
+    };
+  }
   if (LINKAGE_REQUIRED_DISPOSITIONS.includes(disposition)) {
     if (cleanRef) return { ref: cleanRef };
     if (noArtifact) {
@@ -144,6 +247,37 @@ async function recordLedgerDecision(supabase, { correlationId, disposition, deci
       decision_at: decisionAt,
     };
     if (resolvedOutcomeRef) row.outcome_ref = resolvedOutcomeRef;
+    // SD-LEO-INFRA-ADVICE-OUTCOME-LEDGER-001 FR-6 — ALSO populate outcome_sd_key when the artifact
+    // IS an SD/QF key.
+    //
+    // This column is not decoration: it drives the FORWARD reconciliation path.
+    // solomon-ledger-reconcile.cjs:64 skips every row without it ("no outcome_sd_key") and :70 looks
+    // the SD up by it to derive the outcome via mapSdStatusToOutcome. It had NO production writer —
+    // the 47 populated rows came from one-off scripts — so it is NULL on 1062 of 1109 rows, and that
+    // is the reason the reconciler is inert on ~95% of the ledger.
+    //
+    // Same starvation as FR-5, on the other leg: the negative path was starved of matchable refs,
+    // the forward path is starved of this key. Both were built and neither was fed.
+    //
+    // Derived rather than separately supplied, deliberately: a second hand-entered field would drift
+    // from outcome_ref, and then two columns would disagree about which artifact a decision tracked.
+    // SD KEYS ONLY, AND UPPERCASE ONLY — both narrowings came from review of my first version.
+    //
+    // I originally matched /^(SD|QF)-[A-Z0-9-]+$/i. Two defects, each of which turns an inert path
+    // into a NOISY one — the exact harm my own negative control was written to prevent, which it
+    // missed because it covered the commit-sha case and not the case FR-6 actually adds:
+    //   - QF: the reconciler resolves this key against strategic_directives_v2, and QUICK FIXES DO
+    //     NOT LIVE THERE (2 of 5453 rows carry a QF- key, and those are anomalies). A QF artifact
+    //     would write a key that never resolves, so the row is re-selected by every scheduled batch
+    //     forever, burning a slot and logging a skip line each time. Measured: 13 of the 31 existing
+    //     outcome_sd_key values already fail to resolve. Settled by direct count: 6 DISTINCT QF
+    //     keys across 8 ROWS (an earlier "4" came from a truncated sample read as a population).
+    //   - /i: sd_key is stored uppercase, so a lowercased ref derives a key that never matches.
+    // A key that cannot resolve is worse than no key: the forward path stays dead AND the batch is
+    // permanently polluted.
+    if (resolvedOutcomeRef && !isNoArtifactRef(resolvedOutcomeRef) && /^SD-[A-Z0-9-]+$/.test(resolvedOutcomeRef)) {
+      row.outcome_sd_key = resolvedOutcomeRef;
+    }
     if (disposition === 'deferred') row.defer_trigger = deferTrigger;
     const { error } = await supabase
       .from('solomon_advice_outcome_ledger') // schema-lint-disable-line — new table (this PR's migration), chairman-apply-gated, not yet in the live snapshot
@@ -173,6 +307,65 @@ function parseArgs(argv) {
   return { flags, positional };
 }
 
+/**
+ * QF-20260727-380: send the coordinator's reply and VERIFY delivery, before anything retires the
+ * advisory. Any failure exits non-zero with the advisory still unactioned — a dropped body must
+ * never be indistinguishable from an answered one.
+ *
+ * (B) NON-UUID SENDERS ARE REPLIABLE NOW. Advisories are not all session-emitted: measured over a
+ * 500-row sample (a FLOOR, not the population — PostgREST caps at 1000 and the sample was not
+ * paginated), 73 adam_advisory rows carried sender_session=null and 4 carried the literal
+ * 'adam-coordinator-health-cron' — ~15% with no repliable sender. The old guard ran isFullUuid on
+ * the ORIGINATOR and refused outright, which made the coordinator structurally unable to answer its
+ * own governance probes through the lane they arrive on. resolveAdamReplyTarget already resolves the
+ * live Adam via getActiveAdamId and only falls back to the originator, so the fix is simply to
+ * validate the RESOLVED TARGET instead of the originator.
+ *
+ * Deliberately NOT done (the QF names this as the wrong fix): widening coordinator-reply.cjs to
+ * accept a non-UUID target. That would write a row nothing can deliver — converting a loud refusal
+ * into the silent drop this whole change exists to remove. When no live Adam can be resolved we
+ * fail LOUD and leave the advisory unactioned.
+ *
+ * @returns {Promise<{replyId:string, adamSession:string, correlationId:string}>}
+ */
+async function deliverReplyOrExit(supabase, { adv, replyBody, coordinatorSession }) {
+  if (!replyBody) { console.error('ERROR: --reply requires a body.'); process.exit(2); }
+  const originator = adv.sender_session;
+  const correlationId = adv.payload && adv.payload.correlation_id;
+  if (!correlationId) { console.error('ERROR: advisory carries no payload.correlation_id (not replyable).'); process.exit(1); }
+
+  // FR-1: target the CURRENT live Adam, never a stale originating session.
+  const { target: adamSession, retargeted } = await resolveAdamReplyTarget(supabase, originator);
+  if (!isFullUuid(adamSession)) {
+    console.error(
+      `ERROR: no live Adam session to reply to (advisory sender_session ${JSON.stringify(originator)} `
+      + 'is not a full UUID, and no session with role=adam is currently live). '
+      + 'The advisory was NOT actioned and the reply body was NOT discarded — re-run once an Adam session is up.'
+    );
+    process.exit(1);
+  }
+  if (retargeted) {
+    console.log(`  ↻ re-targeted from ${isFullUuid(originator) ? 'stale originator' : 'non-session sender'} ${JSON.stringify(originator)} → live Adam ${adamSession}`);
+    // FR-2: recover any prior unread inbound stuck at the stale originator. Only meaningful for a
+    // real session id — a cron sender string was never a deliverable target to begin with.
+    if (isFullUuid(originator)) {
+      const rec = await retargetStaleAdamInbound(supabase, { staleOriginator: originator, liveAdam: adamSession });
+      if (rec.error) console.error('  WARN: stuck-inbound recovery error:', rec.error);
+      else if (rec.retargeted > 0) console.log(`  ↻ recovered ${rec.retargeted} prior unread message(s) to the live Adam`);
+    }
+  }
+
+  const { data, error } = await sendCoordinatorReply(supabase, { coordinatorSession, workerSession: adamSession, correlationId, body: replyBody });
+  if (error) { console.error('ERROR: failed to send reply (advisory NOT actioned):', error.message); process.exit(1); }
+  // FR-3: verify delivery (send != delivered) — fail loud if the row cannot be confirmed.
+  const delivered = await verifyReplyDelivered(supabase, data && data.id);
+  if (!delivered) {
+    console.error('ERROR: reply send reported success but the row could not be confirmed (delivery NOT verified) — failing loud, advisory NOT actioned.');
+    process.exit(1);
+  }
+  return { replyId: data.id, adamSession, correlationId };
+}
+
 async function main() {
   const { flags, positional } = parseArgs(process.argv);
   const advisoryId = typeof flags.advisory === 'string' ? flags.advisory : null;
@@ -195,6 +388,19 @@ async function main() {
   const { row: adv, error: fErr } = await fetchAdvisory(supabase, advisoryId);
   if (fErr) { console.error('ERROR: advisory lookup failed:', fErr.message); process.exit(1); }
   if (!adv) { console.error('ERROR: advisory not found:', advisoryId); process.exit(1); }
+
+  // QF-20260727-380 (A) DELIVER BEFORE RETIRING. actioned_at used to be stamped first and the
+  // reply attempted second, so a failed reply left the advisory reading ACTIONED to every gauge
+  // (the drain loop, the QF-298 gauge, the relay-drop gauge) with the response body discarded —
+  // a ~2000-char substantive answer was lost that way on 2026-07-27. "Actioned" must never mean
+  // "answered" by accident, so when a reply is requested the delivery is verified FIRST and any
+  // failure exits non-zero with the advisory STILL UNACTIONED for the drain loop to retry.
+  // The reply-less ack path and the COORDINATOR_TWOWAY_V2=off path are deliberately unchanged.
+  const twoWayEnabled = isTwoWayV2Enabled();
+  let replyOutcome = null;
+  if (wantsReply && twoWayEnabled) {
+    replyOutcome = await deliverReplyOrExit(supabase, { adv, replyBody, coordinatorSession });
+  }
 
   // Stage 2: stamp actioned_at — the only thing that retires the advisory (idempotent).
   // SD-LEO-FIX-SOLOMON-MULTI-PART-001 (FR-3): resolve the FULL multi-part group this
@@ -241,37 +447,20 @@ async function main() {
   }
 
   if (wantsReply) {
-    if (!isTwoWayV2Enabled()) {
+    if (!twoWayEnabled) {
       console.error('NOTE: --reply skipped — COORDINATOR_TWOWAY_V2 is OFF (advisory was still actioned).');
       process.exit(0);
     }
-    if (!replyBody) { console.error('ERROR: --reply requires a body.'); process.exit(2); }
-    const originator = adv.sender_session;
-    const correlationId = adv.payload && adv.payload.correlation_id;
-    if (!isFullUuid(originator)) { console.error('ERROR: advisory sender_session is not a full UUID:', JSON.stringify(originator)); process.exit(1); }
-    if (!correlationId) { console.error('ERROR: advisory carries no payload.correlation_id (not replyable).'); process.exit(1); }
-    // FR-1: target the CURRENT live Adam, never a stale originating session.
-    const { target: adamSession, retargeted } = await resolveAdamReplyTarget(supabase, originator);
-    if (retargeted) {
-      console.log(`  ↻ re-targeted from stale originator ${originator} → live Adam ${adamSession}`);
-      // FR-2: recover any prior unread inbound stuck at the stale originator.
-      const rec = await retargetStaleAdamInbound(supabase, { staleOriginator: originator, liveAdam: adamSession });
-      if (rec.error) console.error('  WARN: stuck-inbound recovery error:', rec.error);
-      else if (rec.retargeted > 0) console.log(`  ↻ recovered ${rec.retargeted} prior unread message(s) to the live Adam`);
-    }
-    const { data, error } = await sendCoordinatorReply(supabase, { coordinatorSession, workerSession: adamSession, correlationId, body: replyBody });
-    if (error) { console.error('ERROR: failed to send reply:', error.message); process.exit(1); }
-    // FR-3: verify delivery (send != delivered) — fail loud if the row cannot be confirmed.
-    const delivered = await verifyReplyDelivered(supabase, data && data.id);
-    if (!delivered) { console.error('ERROR: reply send reported success but the row could not be confirmed (delivery NOT verified) — failing loud.'); process.exit(1); }
+    // The send + delivery verification already happened above, BEFORE the advisory was retired.
     console.log('✓ Coordinator reply sent to Adam (delivery verified)');
-    console.log('  reply_id:', data.id);
-    console.log('  to_adam:', adamSession);
-    console.log('  reply_to:', correlationId);
+    console.log('  reply_id:', replyOutcome.replyId);
+    console.log('  to_adam:', replyOutcome.adamSession);
+    console.log('  reply_to:', replyOutcome.correlationId);
   }
 }
 
-module.exports = { parseArgs, recordLedgerDecision, inheritTailDecisions, VALID_DISPOSITIONS, resolveOutcomeRef, isNoArtifactRef, NO_ARTIFACT_MARKER, LINKAGE_REQUIRED_DISPOSITIONS };
+module.exports = {
+  isMatchableRef, parseArgs, recordLedgerDecision, inheritTailDecisions, VALID_DISPOSITIONS, resolveOutcomeRef, isNoArtifactRef, NO_ARTIFACT_MARKER, LINKAGE_REQUIRED_DISPOSITIONS };
 
 if (require.main === module) {
   main().catch(err => { console.error('UNHANDLED:', err.message || err); process.exit(1); });

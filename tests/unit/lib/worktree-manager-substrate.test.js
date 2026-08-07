@@ -23,6 +23,11 @@ function buildHealthyWorktree(root) {
       fs.mkdirSync(full, { recursive: true });
     }
   }
+  // SD-FDBK-ENH-SCOPE-REPLACE-WORKTREE-001 FR-4: a HEALTHY worktree now needs a POPULATED
+  // node_modules, not merely a present one. Before FR-4 this fixture created an EMPTY directory
+  // and the presence-only check accepted it -- which is precisely the hollow-worktree state that
+  // reported healthy while every downstream tool failed module-not-found.
+  fs.mkdirSync(path.join(root, 'node_modules', 'vitest'), { recursive: true });
 }
 
 describe('SD-LEO-INFRA-LEO-INFRA-WORKTREE-001 — SUBSTRATE_ITEMS const', () => {

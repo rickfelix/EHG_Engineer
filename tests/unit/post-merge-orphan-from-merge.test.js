@@ -73,7 +73,14 @@ describe('cleanupOrphanFromMergeOutput (FR-2 detector wiring)', () => {
     expect(res.candidate.replace(/\\/g, '/')).toMatch(/\.worktrees\/qf\/QF-20260101-001$/);
   });
 
-  it('TS-6: orphan detected + live claim → archived (claim-aware, NOT hard-deleted)', async () => {
+  // SD-LEO-INFRA-WORKTREE-LIFECYCLE-FAILS-001 (FR-1): assertions amended, intent PRESERVED.
+  // This test's purpose is "a live-claimed worktree must not be destroyed by the orphan
+  // detector", and that still holds — more strongly than before. It used to be satisfied by
+  // ARCHIVING (fs.renameSync, a MOVE), which protected the bytes but still yanked the
+  // directory out from under a live holder and produced ENOENT on its next command. The
+  // protect branch now performs no filesystem mutation at all, so the holder's worktree is
+  // left exactly where it is. Same guarantee, one step stronger: not deleted AND not moved.
+  it('TS-6: orphan detected + live claim → left in place (claim-aware, NOT deleted, NOT moved)', async () => {
     const mainRepoPath = makeTmpRepo();
     const wt = path.join(mainRepoPath, '.worktrees', 'SD-FOO-001');
     fs.mkdirSync(wt, { recursive: true });
@@ -93,14 +100,17 @@ describe('cleanupOrphanFromMergeOutput (FR-2 detector wiring)', () => {
       { mainRepoPath, supabase }
     );
 
-    // Routed through claim-aware cleanup → archived, not deleted.
+    // Routed through claim-aware cleanup → refused, and nothing on disk was touched.
     expect(res.cleaned).toBe(false);
     expect(res.reason).toBe('active_claim_protect');
-    expect(res.archived).toBe(true);
+    expect(res.archived).toBe(false);
     expect(res.source).toBe('merge_output_detector');
-    // Original worktree dir moved out (archived), not left in place or hard-removed silently.
-    expect(fs.existsSync(wt)).toBe(false);
-    expect(fs.existsSync(res.archivePath)).toBe(true);
+    // The live holder's worktree is still exactly where it was, contents intact.
+    expect(fs.existsSync(wt)).toBe(true);
+    expect(fs.readFileSync(path.join(wt, 'marker.txt'), 'utf8')).toBe('work in progress');
+    // ...and nothing was archived on this path.
+    expect(res.archivePath).toBeUndefined();
+    expect(fs.existsSync(path.join(mainRepoPath, '.worktrees', '_archive'))).toBe(false);
   });
 
   it('advisory: never throws on negative/absent inputs (does not hard-fail /ship)', async () => {

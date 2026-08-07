@@ -26,7 +26,12 @@ const path = require('path');
 const { randomUUID } = require('crypto');
 const { createSupabaseServiceClient } = require('../lib/supabase-client.cjs');
 const { PLAN_CONTENT_MARKER } = require('../lib/sd-enrichment-markers.cjs');
+// SD-LEO-INFRA-WORK-ASSIGNMENT-UNREADABLE-001 (FR-3): the readability invariant, shared with the
+// dispatch choke point this file's WORK_ASSIGNMENT insert deliberately bypasses.
+const { describeUnreadableAssignment } = require('../lib/fleet/assignment-target.cjs');
 const { parseSdDependencies } = require('../lib/utils/parse-sd-dependencies.cjs'); // QF-20260525-542
+const { buildRetentionAckPayload } = require('../lib/retention/retention-ack-marker.cjs'); // FR-7
+const { PROMOTION_ACK_KEY, isPromotionAcked } = require('../lib/coordinator/promotion-ack.cjs'); // SIGNAL-ROUTER-AUTO-001 FR-8
 // SD-LEO-FIX-COORDINATOR-SWEEP-CLAIMED-001: shared dispatch-eligibility predicate (same one the
 // worker self_claim path uses) so CLAIM_FIX never re-affirms an orchestrator PARENT / dep-blocked SD.
 const { evaluateDispatchEligibility, classifyDispatchIneligibility, TEST_FIXTURE_KEY_RE } = require('../lib/fleet/claim-eligibility.cjs');
@@ -223,23 +228,30 @@ async function runClaimBoundaryProbe(supabase, classified, telemetryMap, now, ac
         continue;
       }
 
-      // 2a. QF supplement: release_sd clears claiming_session_id but leaves
-      // status='in_progress', which the checkin open-QF picker (status='open')
-      // cannot see — reset it, guarded on every column so a QF with real work
-      // (PR/commit) or a new claimant is never touched.
-      if (/^QF-/.test(releasedSd)) {
-        // The status guard uses the .filter('status','eq',...) spelling (wire-identical
-        // to the .eq form) because stale-session-sweep-claim-safety.test.js anchors its
-        // "phantom in_progress scan" SD-TEST-exclusion window on the FIRST eq-form
-        // status/in_progress match in this file's source — and this quick_fixes UPDATE
-        // (id-scoped; the table has no sd_key column) is outside that guarded
-        // strategic_directives_v2 QA class.
-        await supabase.from('quick_fixes').update({ status: 'open' })
-          .eq('id', releasedSd).filter('status', 'eq', 'in_progress')
-          .is('claiming_session_id', null).is('pr_url', null).is('commit_sha', null);
-      } else {
-        // 2b. SD supplement: phase-boundary reset, parity with the dead-session release loop.
-        try { await resetSdPhaseOnRelease(releasedSd, 'CLAIM_BOUNDARY_PROBE'); } catch { /* best-effort */ }
+      // 2. Work-item supplement. release_sd clears claiming_session_id but leaves a QF at
+      // status='in_progress', which the checkin open-QF picker (status='open') cannot see;
+      // an SD is left mid-phase. Hand the item back so a picker can reach it again.
+      //
+      // SD-LEO-FEAT-FLEET-SESSION-LIFECYCLE-001 / FR-1b slice 2: this WAS the only
+      // implementation of that reset in the codebase — the "exactly ONE release path" the SD
+      // names. It now delegates to the shared lib/fleet/release-work-item.mjs helper, which
+      // owns the QF column predicate and the SD phase-boundary rewind for all sixteen sites.
+      //
+      // DELIBERATELY NOT BEHIND LEO_RELEASE_WORKITEM_RESET. That flag gates ADDING the reset
+      // to the fifteen paths that never had it. This site ALREADY HAS the behaviour, so
+      // gating it would mean the default-OFF flag SILENTLY DISABLES live fleet protection —
+      // a refactor that turns a working guard off is not a refactor.
+      const { releaseWorkItemOnSessionEnd } = await import('../lib/fleet/release-work-item.mjs');
+      // rewindPhase:true is REQUIRED here and is not the helper's default. The sweep's
+      // PHASE_RESET_MAP exists precisely so an SD is not left in mid-phase limbo with no active
+      // claimer, so this site must keep rewinding. Other release paths (cold-recovery,
+      // claim-validity-gate) deliberately PRESERVE the phase for resume — which is why the
+      // helper makes the rewind opt-in rather than automatic.
+      const handback = await releaseWorkItemOnSessionEnd(
+        supabase, releasedSd, 'CLAIM_BOUNDARY_PROBE',
+        { rewindPhase: true, onLog: (m) => console.log('  ' + m) });
+      if (!handback.ok) {
+        warnings.push('CLAIM_BOUNDARY_PROBE: work-item handback failed for ' + releasedSd + ' — ' + handback.detail);
       }
 
       // 3. Quarantine (QF-193 provenance convention). Read-modify-write on FRESH
@@ -367,7 +379,25 @@ function isHeadlessZombie(session, telemetry, nowMs) {
   return claimAgeMs > HEADLESS_ZOMBIE_MIN_MS;
 }
 // SD-LEO-INFRA-STALE-SWEEP-PID-LIVENESS-GUARD-001: PID-liveness guard for the conflict-eviction path.
-const { shouldHoldClaim } = require('../lib/fleet/claim-release-guard.cjs');
+const { shouldHoldClaim, refuseConflictEviction } = require('../lib/fleet/claim-release-guard.cjs');
+
+// SD-LEO-INFRA-STALE-SESSION-SWEEP-001 FR-1 — the columns every release seam in this file reads.
+//
+// Hoisted out of the inline .select() so tests/unit/fleet/liveness-input-parity.test.js can assert
+// it against LIVENESS_INPUT_FIELDS instead of scraping a string literal out of this source.
+//
+// THE LAST TWO ENTRIES ARE THE FIX. process_alive_at and expected_silence_until were
+// never selected, so three of the five rungs in isSessionAlive() could not fire at ANY of the three
+// seams that consult shouldHoldClaim() (completed-SD release, orphaned-claim release, conflict
+// eviction) — all three filter the same `classified` array built from this query. On
+// 2026-07-27T18:18:27.855Z that released session b25ec3e5 at 344.4s heartbeat age (threshold 300s)
+// with pid and terminal_id both NULL: every rung the guard could still read was blind, while this
+// same query's computed_status had already classified it ALIVE_SOURCE_SIDE.
+//
+// DO NOT NARROW THIS LIST to "the columns we happen to use today" — the guard reads it, not this
+// file, and the parity test fails if a rung's column goes missing again.
+const SESSION_SELECT_COLUMNS = 'session_id, sd_key, sd_title, heartbeat_age_seconds, heartbeat_age_human, computed_status, hostname, tty, pid, track, is_virtual, parent_session_id, terminal_id, current_branch, process_alive_at, expected_silence_until';
+module.exports.SESSION_SELECT_COLUMNS = SESSION_SELECT_COLUMNS;
 // SD-LEO-INFRA-TWO-WAY-COORDINATOR-001 / FR-3b — top-level require so wire-check
 // call-graph builder can statically resolve the dependency on lib/coordinator/signal-router.cjs.
 const _signalRouterModule = require('../lib/coordinator/signal-router.cjs');
@@ -533,35 +563,16 @@ const supabase = createSupabaseServiceClient();
  * @param {string} [sessionId] - Used for UUID-format pid-*.json lookup
  * @returns {number|null} numeric PID or null when no match
  */
-function resolveCcPidFromTerminalId(terminalId, sessionId) {
-  if (!terminalId || typeof terminalId !== 'string') return null;
-  // Format 1: win-cc-PORT-PID (CLI)
-  const cliMatch = /^win-cc-\d+-(\d+)$/.exec(terminalId);
-  if (cliMatch) return Number(cliMatch[1]);
-  // Format 2: win-PID (Desktop)
-  const dtMatch = /^win-(\d+)$/.exec(terminalId);
-  if (dtMatch) return Number(dtMatch[1]);
-  // Format 3: UUID — scan .claude/session-identity/pid-*.json by session_id match
-  try {
-    const markerDir = path.resolve(__dirname, '..', '.claude', 'session-identity');
-    if (!fs.existsSync(markerDir)) return null;
-    const files = fs.readdirSync(markerDir)
-      .filter(f => /^pid-\d+\.json$/.test(f));
-    for (const file of files) {
-      try {
-        const data = JSON.parse(fs.readFileSync(path.join(markerDir, file), 'utf8'));
-        if (data?.cc_pid && (
-          data.session_id === sessionId
-          || data.session_id === terminalId
-        )) {
-          return Number(data.cc_pid);
-        }
-      } catch { /* skip malformed */ }
-    }
-  } catch { /* directory missing or unreadable */ }
-  return null;
-}
+// SD-LEO-INFRA-PID-LIVENESS-DURABLE-VENUE-001 (C2): the implementation MOVED to
+// lib/fleet/resolve-cc-pid.cjs so hasPidAlive consumes the same resolver this sweep does.
+// Re-exported here unchanged so the existing consumers keep working by their current import
+// path (scripts/coordinator-charter-audit.mjs:76 and tests/unit/stale-session-sweep-terminal-parser.test.js).
+// Behavior is identical — only the home moved. Do NOT reintroduce a local copy.
+const { resolveCcPidFromTerminalId } = require('../lib/fleet/resolve-cc-pid.cjs');
 module.exports.resolveCcPidFromTerminalId = resolveCcPidFromTerminalId;
+
+// SD-LEO-INFRA-PID-LIVENESS-DURABLE-VENUE-001 (FR-3a): whether THIS venue can see PIDs at all.
+const { pidVenueCapability, pidBlindNotice } = require('../lib/fleet/pid-venue.cjs');
 
 // SD-FDBK-INFRA-EXEC-CONTEXT-GUARD-001 (FR-3): lazy-load the ESM exec-context-guard
 // from this CJS module. Cached after first import to avoid repeated module
@@ -1111,7 +1122,10 @@ async function clearStaleQfClaims(supabase, now, actions, warnings) {
       try {
         holderRows = await fapPaginate(() => supabase
           .from('claude_sessions')
-          .select('session_id, heartbeat_at')
+          // Widened for the liveness SSOT: isSessionAlive reads is_alive, heartbeat_at,
+          // terminal_id (PID), process_alive_at (tick) and expected_silence_until (armed silence).
+          // Selecting heartbeat_at ALONE is what reduced this decider to a single signal.
+          .select('session_id, heartbeat_at, is_alive, terminal_id, process_alive_at, expected_silence_until')
           .in('session_id', holderIds)
           .order('session_id', { ascending: true })); // unique tiebreaker (FR-6)
       } catch (guardErr) {
@@ -1119,19 +1133,78 @@ async function clearStaleQfClaims(supabase, now, actions, warnings) {
         return;
       }
       const hbAgeBySession = new Map();
+      const holderBySession = new Map();
       for (const r of (holderRows || [])) {
         hbAgeBySession.set(r.session_id, r.heartbeat_at ? (now.getTime() - Date.parse(r.heartbeat_at)) / 1000 : Infinity);
+        holderBySession.set(r.session_id, r);
       }
+      // SD-LEO-INFRA-DISPATCH-DELIVERY-INTEGRITY-001: ADOPT THE LIVENESS SSOT AT THIS DECIDER.
+      //
+      // This path used a heartbeat-only threshold (900s, commented "definitely dead") and inferred
+      // DEATH FROM A SINGLE ABSENT SIGNAL. On 2026-07-27 Golf-3 went QUIET at 935s — parked, not
+      // dead — and this loop took all three of its claims, one of them severity=critical. The
+      // reverting half of that incident is what FR-1/FR-3 fix; THIS is why the clear happened at all.
+      //
+      // lib/fleet/session-liveness.cjs isSessionAlive() only ACCUMULATES REASONS TO BE ALIVE —
+      // raw is_alive, fresh heartbeat, live PID, process tick, armed silence — and is already the
+      // named SSOT for claim-release-guard. Its armed-silence branch (capped at ARMED_SILENCE_MAX_MS
+      // so a stale declaration cannot shield a corpse forever) is the one that classifies a parked
+      // worker correctly, and it is precisely the signal a heartbeat-only check cannot see.
+      //
+      // Note it is used ONLY to HOLD a claim, never to reap one: is_alive=false is not treated as
+      // evidence of death anywhere here. claim-validity-gate.js:220-224 and :266-270 document that a
+      // live worker can transiently read is_alive=false and that reaping on it alone caused
+      // GATE_CLAIM_VALIDITY_FAILED twice, so inverting this would rebuild that defect.
+      const { isSessionAlive } = require('../lib/fleet/session-liveness.cjs');
+      // Computed ONCE for the whole loop. hasPidAlive falls back to reading PID markers fresh when
+      // this is null, and that read walks host-local marker files — per-QF it would repeat the same
+      // scan for every claimed row. Fail-soft to null: the SSOT then simply drops the pid signal and
+      // still evaluates heartbeat, tick and armed silence.
+      let qfSweepAliveCcPids = null;
+      try {
+        qfSweepAliveCcPids = new Set((detectIdentityCollisions().aliveMarkers || []).map((m) => String(m.pid)));
+      } catch { qfSweepAliveCcPids = null; }
       for (const qf of claimedQfs) {
         const ageSec = hbAgeBySession.has(qf.claiming_session_id) ? hbAgeBySession.get(qf.claiming_session_id) : Infinity;
-        if (ageSec <= veryStaleSeconds) continue; // holder alive/recent — leave claimed
-        const { error } = await supabase
-          .from('quick_fixes')
-          .update({ claiming_session_id: null })
-          .eq('id', qf.id)
-          .eq('claiming_session_id', qf.claiming_session_id); // race guard: only if still held by the same dead session
-        if (!error) {
-          actions.push('QF: cleared stale claiming_session_id on ' + qf.status + ' ' + qf.id + ' (holder ' + String(qf.claiming_session_id).slice(0, 8) + ' hb ' + (ageSec === Infinity ? 'gone' : Math.round(ageSec) + 's') + ')');
+        const holder = holderBySession.get(qf.claiming_session_id) || null;
+        const liveness = isSessionAlive(holder, { nowMs: now.getTime(), aliveCcPids: qfSweepAliveCcPids });
+        if (liveness.alive) continue;         // SSOT says alive (incl. parked) — leave claimed
+        if (ageSec <= veryStaleSeconds) continue; // holder recent — leave claimed
+        // SD-LEO-INFRA-DISPATCH-DELIVERY-INTEGRITY-001 (FR-3): clear AND reopen in ONE call.
+        // Clearing alone left the row at status='in_progress' with a NULL claimant — invisible to
+        // all five open-only chokepoints while two supply gauges still counted it, so the work
+        // silently left the belt. The helper keeps the race guard (CAS on the same dead holder, so
+        // a live re-claim is never clobbered) and refuses any row carrying real work.
+        // Dynamic import: this file is CJS and the helper is ESM. Same pattern already used for
+        // bestEffortReleaseSd from this very module at the claim-boundary probe above.
+        const { clearAndReopenQf } = await import('../lib/fleet/best-effort-release.mjs');
+        const { changed } = await clearAndReopenQf(supabase, qf.id, {
+          expectedHolder: qf.claiming_session_id,
+          // APPEND-ONLY DETECTION RECORD, one row per detection. The acceptance criterion is
+          // "zero NEW class-A detections over N hours of continuous sampling" — a COUNT over time —
+          // and a column cannot answer it: a row that strands, is reverted, and strands again
+          // overwrites its own timestamp. Multiplicity is the whole requirement, so an existing
+          // append-only surface is sufficient and no migration is needed.
+          onDetect: async (record) => {
+            await supabase.from('feedback').insert({
+              category: 'harness_backlog',
+              severity: 'high',
+              title: `STRANDED-QF DETECTION ${record.qf_id} at ${record.detected_at}`,
+              description:
+                `SD-LEO-INFRA-DISPATCH-DELIVERY-INTEGRITY-001 class-A detection. A quick-fix was found `
+                + `cleared-but-not-reopened (unreachable by all five open-only chokepoints while the supply `
+                + `gauges still counted it) and was reverted to open by the stale-claim sweep.\n`
+                + `Column values AS MATCHED at detection: status=${record.status} `
+                + `claiming_session_id=${record.claiming_session_id} pr_url=${record.pr_url} `
+                + `commit_sha=${record.commit_sha}\n`
+                + `Recorded because the revert makes the row unattributable afterwards, and because the `
+                + `acceptance criterion counts detections over a window rather than sampling a live query.`,
+              metadata: { detection_class: 'stranded_qf_class_a', ...record },
+            });
+          },
+        });
+        if (changed) {
+          actions.push('QF: cleared stale claim AND reopened ' + qf.id + ' (holder ' + String(qf.claiming_session_id).slice(0, 8) + ' hb ' + (ageSec === Infinity ? 'gone' : Math.round(ageSec) + 's') + ')');
         }
       }
     }
@@ -1193,6 +1266,27 @@ async function dispatchWorkAssignmentsIfAllowed(supabase, activeSessions, availa
       continue;
     }
 
+    // SD-LEO-INFRA-WORK-ASSIGNMENT-UNREADABLE-001 (FR-3): this insert deliberately BYPASSES
+    // insertCoordinationRow — an informational nudge must not acquire the tier/door/fleet-target
+    // guards the choke point applies to directed assignments. But bypassing the choke point must
+    // not mean bypassing the READABILITY invariant, or the fix ships as a choke point with a
+    // documented hole. Same shared verdict function the choke point uses; no second copy of the
+    // rule, and no other guard imported.
+    //
+    // This nudge is EXPECTED to pass: target_sd is null on purpose (QF-20260705-914, to break a
+    // release->reclaim loop), but payload.available_sds/current_sd are readable by the worker
+    // profile, so a worker can always tell what the row refers to. A warning here would mean the
+    // nudge shape had drifted into unreadability — which is worth knowing.
+    const unreadableNudge = describeUnreadableAssignment(row);
+    if (unreadableNudge) {
+      console.warn(JSON.stringify({
+        event: 'sweep.assignment_target_unresolvable',
+        mode: 'observe_only',
+        session_id: s.session_id,
+        detail: unreadableNudge.detail,
+        payload_keys: unreadableNudge.payloadKeys
+      }));
+    }
     await supabase.from('session_coordination').insert(row); // schema-lint-disable-line — `row` columns are valid; lint mis-reads the return-object keys (skipped/blocked) below as insert columns (false positive, stale snapshot)
     dispatched++;
   }
@@ -1212,7 +1306,11 @@ async function dispatchWorkAssignmentsIfAllowed(supabase, activeSessions, availa
 // migration. Called from main() via the shared sweepPassCtx (supabase/now/classified/
 // actions), same ctx bag MAIN_PASSES already reuses.
 async function runQaFixtureScan(ctx) {
-  const { supabase, now, classified, actions } = ctx;
+  // `warnings` was already carried on sweepPassCtx but never destructured here; the
+  // half-released-claim guards report through it, so it is pulled in rather than routed into `actions`
+  // (a skipped safety guard is not an action taken). Defaulted so a caller that omits it cannot
+  // turn a guard message into a ReferenceError mid-sweep.
+  const { supabase, now, classified, actions, warnings = [] } = ctx;
 
   // 3b. QA — detect sessions working on completed SDs
   const claimedSdKeys = [...new Set(classified.map(s => s.sd_key).filter(Boolean))];
@@ -1511,10 +1609,107 @@ async function runQaFixtureScan(ctx) {
     }
   }
 
+  // SD-SIDE HALF-RELEASED CLAIM (QF-20260727-031).
+  // A claim is a TWO-SIDED FACT, and every detector above scans only the SESSION side. When the
+  // session half of a release completes (status=released, sd_key=null) but the SD half does not,
+  // there is NO ROW LEFT FOR THE SWEEP TO ITERATE — this is not a threshold being too slow, it is
+  // a population the scan never visits. Measured: the founding instance survived FIVE consecutive
+  // sweeps under direct observation. adoptOrphanInProgress cannot rescue it either, because its
+  // orphan path requires claiming_session_id IS NULL while this row's pointer is NON-null — the
+  // rescue is gated on the exact field that is wrong. The row therefore reads CLAIMED to every
+  // dispatch surface, is worked by nobody, and is adoptable by nothing: invisible both ways at once.
+  // Deliberately NOT added to the return below: nothing at the call site consumes it, and
+  // tests/unit/lib/sweep/pass-registry.test.js pins that return to EXACTLY the five
+  // formerly-main()-scoped locals. Widening a pinned contract for an unread value is a bad trade.
+  await clearHalfReleasedSdClaims(supabase, actions, warnings);
+
   // Adversarial-review fix (PR #5755): main() still consumes these five locals after the
   // hoist (dead-release cross-signal gate, CLAIM_RELEASED announce, QA summary) — return
   // them so the call site can rebind what used to be main()-scoped declarations.
   return { sdStatusMap, workingOnCompleted, orphanedClaims, stuckApproval, terminalWithClaims };
+}
+
+/**
+ * SD-SIDE HALF-RELEASED CLAIM (QF-20260727-031): clear an SD pointing at a dead session.
+ *
+ * DELIBERATELY NOT LABELLED WITH THE NUMBERED "FIX #<n>" SCHEME USED ELSEWHERE IN THIS FILE.
+ * That namespace is load-bearing: tests/unit/coord-adam-comms-resilient.test.js isolates the
+ * dead/gone-session cleanup section by indexOf() on one of those literal labels. A second
+ * occurrence EARLIER in the file silently captures the anchor, and the pin then asserts against
+ * the wrong section entirely — which is exactly what this change did on its first CI run.
+ *
+ * Note the second-order trap, since it cost a round too: a comment EXPLAINING the collision must
+ * not itself contain the literal token, or it becomes the earlier occurrence it warns about.
+ * Hence the periphrasis here. Named rather than numbered, so neither can recur.
+ *
+ * Its own function, mirroring clearStaleQfClaims, so the regression test can drive the REAL code
+ * path against a fake client instead of asserting on a re-implementation.
+ *
+ * @param {object} supabase
+ * @param {string[]} actions - appended: one line per cleared row
+ * @param {string[]} warnings - appended: one line when the guard makes it skip the tick
+ * @returns {Promise<Array>} the rows it judged half-released (empty when it skipped)
+ */
+async function clearHalfReleasedSdClaims(supabase, actions, warnings) {
+  let halfReleasedClaims = [];
+  try {
+    // CANONICAL LIVENESS, NOT A SECOND DEFINITION. loadLiveSessionIds is exported precisely so
+    // every consumer resolves the live-session set through ONE implementation; a private cutoff
+    // here would drift from the session-side releases and convert this gap into a split-brain —
+    // the two halves disagreeing about who is alive is strictly worse than the hole it patches.
+    // It returns null (never an empty Set) when it cannot measure, so null is already fail-closed.
+    const liveSessions = await loadLiveSessionIds(supabase);
+
+    // FAIL CLOSED ON UNREADABLE *OR* EMPTY. If the live set cannot be measured, every claim in the
+    // fleet looks dead and this loop would clear all of them. The asymmetry decides it: skipping
+    // costs one delayed cleanup the next tick repeats, while proceeding on a bad read could strip
+    // every active claim at once. Empty means "cannot measure", never "nobody is alive".
+    // Both branches fail closed, but they are DIFFERENT facts and an operator needs to know which:
+    // null means the read failed (loadLiveSessionIds swallows its own cause and returns null),
+    // while an empty Set means the read SUCCEEDED and measured nobody alive. Collapsing them into
+    // one message would hide a broken liveness read behind a plausible-looking quiet-fleet report.
+    if (!liveSessions) {
+      warnings.push('GUARD_UNAVAILABLE: SD-side half-released-claim check skipped this tick — live-session set UNREADABLE (loadLiveSessionIds returned null)');
+    } else if (liveSessions.size === 0) {
+      warnings.push('GUARD_UNAVAILABLE: SD-side half-released-claim check skipped this tick — live-session set measured EMPTY (treated as unmeasurable, never as all-dead)');
+    } else {
+      const claimed = await fapPaginate(() => supabase
+        .from('strategic_directives_v2')
+        .select('sd_key, status, claiming_session_id, metadata')
+        .not('status', 'in', '(completed,cancelled)') // terminal rows are FIX #2's job
+        .not('claiming_session_id', 'is', null)
+        .not('sd_key', 'like', TEST_FIXTURE_SD_KEY_LIKE) // FR-3: never touch SD-TEST-* fixtures
+        .order('sd_key', { ascending: true })); // unique tiebreaker (FR-6)
+      halfReleasedClaims = (claimed || []).filter((sd) => !liveSessions.has(sd.claiming_session_id));
+    }
+  } catch (e) {
+    halfReleasedClaims = []; // fail-closed: a failed read clears nothing
+    warnings.push('GUARD_UNAVAILABLE: SD-side half-released-claim check skipped this tick — read failed (' + ((e && e.message) || 'unknown') + ')');
+  }
+
+  for (const sd of halfReleasedClaims) {
+    const { error } = await supabase
+      .from('strategic_directives_v2')
+      // Preserve the prior claim for reversibility, matching the provenance convention the sweep's
+      // other release paths already use rather than inventing a second shape.
+      .update({
+        claiming_session_id: null,
+        active_session_id: null,
+        is_working_on: false,
+        metadata: { ...(sd.metadata || {}), half_released_prior_claim: sd.claiming_session_id }
+      })
+      .eq('sd_key', sd.sd_key)
+      // CAS on the claimant we actually read: a live session may have re-claimed this row between
+      // the read and this write, and clearing that would recreate the stranding from the other side.
+      .eq('claiming_session_id', sd.claiming_session_id)
+      .select();
+
+    if (!error) {
+      actions.push('QA: cleared half-released claim on ' + sd.sd_key + ' — claimant ' + String(sd.claiming_session_id).slice(0, 8) + ' has no live session');
+    }
+  }
+
+  return halfReleasedClaims;
 }
 
 // SD-ARCH-HOTSPOT-SWEEP-001 (main()-line-count acceptance criterion): the tail-of-tick
@@ -1842,7 +2037,7 @@ async function main() {
   try {
     sessions = await fapPaginate(() => supabase
       .from('v_active_sessions')
-      .select('session_id, sd_key, sd_title, heartbeat_age_seconds, heartbeat_age_human, computed_status, hostname, tty, pid, track, is_virtual, parent_session_id, terminal_id, current_branch')
+      .select(SESSION_SELECT_COLUMNS)
       .not('sd_key', 'is', null)
       .order('heartbeat_age_seconds', { ascending: true })
       .order('session_id', { ascending: true })); // unique tiebreaker APPENDED after the non-unique order (FR-6)
@@ -1943,6 +2138,13 @@ async function main() {
   // Match by extracting the last segment from terminal_id and checking the alive set.
   const aliveCcPids = new Set(aliveMarkers.map(m => String(m.pid)));
 
+  // SD-LEO-INFRA-PID-LIVENESS-DURABLE-VENUE-001 (FR-3a): resolved ONCE per sweep, because it is a
+  // property of the venue, not of any row. When the marker directory is absent — which is every
+  // scheduled run of .github/workflows/sweep-cron.yml, since .claude/session-identity is host-local
+  // and gitignored — the PID rung cannot be asked, and `hasPidAlive === false` below is an artefact
+  // of where we are standing rather than a fact about the process.
+  const pidVenue = pidVenueCapability();
+
   // ── SD-LEO-INFRA-WORKER-SOURCE-SIDE-001: source-side telemetry lookup ────────
   // Fetch process_alive_at / expected_silence_until / current_tool_expected_end_at
   // for all session_ids in this sweep. These signals take precedence over
@@ -2010,7 +2212,17 @@ async function main() {
     // than naive last-segment-of-hyphen-split (which silently mis-classified UUID-format
     // terminal_ids as having last-segment hex chars instead of a real PID).
     let hasPidAlive = false;
-    if (s.terminal_id) {
+    // FR-3a: not "the PID is not alive" — "we are somewhere the answer was never written".
+    const pidUnverifiable = !pidVenue.capable;
+    // SD-LEO-INFRA-PID-LIVENESS-DURABLE-VENUE-001 (C2): the guard here used to be
+    // `if (s.terminal_id)`, which skipped resolution entirely for rows with no terminal_id.
+    // That is now wrong: resolveCcPidFromTerminalId matches pid-*.json markers by SESSION_ID, so a
+    // NULL terminal_id is resolvable whenever a marker carries the session. MEASURED on the full
+    // live population (exact head-count 12 == 12 examined): 3 rows have terminal_id NULL and ALL
+    // THREE have a resolvable marker — including the fleet coordinator. Gating on terminal_id left
+    // this sweep blind to 25% of live sessions while the answer sat on disk. Resolve on EITHER
+    // identifier; the resolver itself returns null when neither can match.
+    if (s.terminal_id || s.session_id) {
       const ccPid = resolveCcPidFromTerminalId(s.terminal_id, s.session_id);
       if (ccPid != null) {
         hasPidAlive = aliveCcPids.has(String(ccPid));
@@ -2046,6 +2258,12 @@ async function main() {
       // PID is alive but heartbeat is stale — session is loading context,
       // compacting, or between tool calls. NOT stale.
       status = 'ALIVE_NO_HEARTBEAT';
+    } else if (pidUnverifiable) {
+      // SD-LEO-INFRA-PID-LIVENESS-DURABLE-VENUE-001 (FR-3a): this venue cannot see the PID
+      // marker directory at all, so hasPidAlive===false above is NOT-ASKED, not NO. Every
+      // branch below states "...AND no living PID" as part of its meaning; none of them may be
+      // reached on an answer we never obtained. Abstain explicitly instead.
+      status = 'PID_UNVERIFIABLE';
     } else if (isVeryStale || exceedsDesktopCap) {
       status = 'DEAD'; // No heartbeat for 15min+ (CLI) or 30min+ (Desktop) AND no living PID
     } else {
@@ -2064,12 +2282,31 @@ async function main() {
 
     return {
       ...s,
-      isStale: isStale && !hasPidAlive && !(sourceSide && sourceSide.alive),
+      // FR-3a: `!hasPidAlive` is only a REASON to call something stale when the PID leg was
+      // actually askable. In a PID-blind venue it is an artefact of the venue, so it must not
+      // carry a death verdict — releases downstream key off isStale.
+      isStale: isStale && !hasPidAlive && !pidUnverifiable && !(sourceSide && sourceSide.alive),
       status,
       sourceSideReason: sourceSide?.reason || null,
       hasPidAlive, // QF-20260426-SWEEP-HARDCAP-PIDALIVE: preserve for hard-cap guard
+      pidUnverifiable, // FR-3a: true => this row's PID leg abstained (venue blind), never "dead"
     };
   });
+
+  // SD-LEO-INFRA-PID-LIVENESS-DURABLE-VENUE-001 (FR-3a + FR-3c): SAY the abstention out loud, and
+  // STATE THE ROW COUNT either way. A sweep that quietly examined nothing, and a sweep that
+  // examined everything and found nothing, print the same "All clear" — that ambiguity is how the
+  // 5-of-11 dead-seat population stayed invisible across four prior builds of this fix.
+  if (!pidVenue.capable) {
+    console.warn(pidBlindNotice(pidVenue, { examined: classified.length }));
+  } else {
+    const withPidVerdict = classified.filter(s => s.hasPidAlive).length;
+    console.log(
+      `[sweep] PID venue OK (${pidVenue.markerDir}). Examined ${classified.length} row(s); ` +
+      `${withPidVerdict} resolved to a live PID.`
+    );
+  }
+
   // SD-ARCH-HOTSPOT-SWEEP-001: shared ctx bag for MAIN_PASSES (lib/sweep/pass-registry.cjs).
   // Built once here (right after classification) and reused at each later registry
   // call site in main() — same actions/warnings/collisionsDetected arrays, mutated
@@ -2156,8 +2393,24 @@ async function main() {
   // the fixture. Fixtures never participate in keeper selection; they are bilaterally released later.
   const { isFixtureSession } = await import('../lib/fleet/session-predicates.mjs');
   const bySD = {};
+  // SD-LEO-INFRA-STALE-SESSION-SWEEP-001 / FR-3: DEDUPE BY session_id.
+  //
+  // This bucket decides who gets EVICTED, and its only filter was isFixtureSession. One session
+  // appearing twice therefore satisfied `arr.length > 1` and CONFLICTED WITH ITSELF: sorted[0]
+  // became the keeper and sorted[1] the evictee, the same row on both sides.
+  //
+  // DEFENCE-IN-DEPTH, NOT THE PRIMARY FIX, and the distinction matters. The known duplicate
+  // route — a LEFT JOIN fan-out on qf_active inside v_active_sessions — was already fixed live
+  // by QF-20260727-574 (LATERAL + LIMIT 1). A second dormant route remains: fapPaginate uses
+  // OFFSET pagination, which can repeat a row when the underlying set shifts between pages. So
+  // this guards a producer that is currently fixed and one that is not, and it must not be read
+  // as making FR-1/FR-2 redundant — FR-1 protects GENUINE multi-claimant conflicts, which no
+  // dedupe touches.
+  const seenSessionIds = new Set();
   classified.forEach(s => {
     if (isFixtureSession(s.session_id)) return; // fixture: never a conflict keeper/evictor
+    if (seenSessionIds.has(s.session_id)) return; // FR-3: a session cannot conflict with itself
+    seenSessionIds.add(s.session_id);
     if (!bySD[s.sd_key]) bySD[s.sd_key] = [];
     bySD[s.sd_key].push(s);
   });
@@ -2427,12 +2680,48 @@ async function main() {
         const { checkPreClaimEvidence } = await import('./modules/claim-health/triangulate.js');
         const evidence = await checkPreClaimEvidence(supabase, s.sd_key, { mySessionId: s.session_id });
         if (!evidence.allowReclaim) {
+          // SD-LEO-INFRA-RECLAIMSAFE-CANNOT-TELL-001 / FR-3: the sweep asks a DIFFERENT question
+          // from every other consumer of this gate. It is not asking "may I take this" — it is
+          // iterating OTHER sessions' claims asking "may I release THIS one". So the relevant
+          // question is not whether evidence exists, but whether the evidence was produced by a
+          // session OTHER than the dead one under evaluation.
+          //
+          // Three of the gate's witnesses are SD-keyed and name nobody (branch/plan/sub-agent
+          // activity). Holding on those alone means a verifiably dead session's claim stays held
+          // by its OWN leftover footprint — the strand this SD is about, seen from the reaper
+          // side. Conversely, evidence attributed to a live PEER must still hold.
+          //
+          // NOTE: resolveSelfOwnership (used by sd-start and BaseExecutor) is deliberately NOT
+          // used here. It answers "am I the owner", but this loop's cwd has no relationship to
+          // the SDs it evaluates — applying it would be a category error.
+          //
+          // Sibling attribution is liveness-filtered upstream (buildSiblingSessionMap selects
+          // only sessions with a recent heartbeat), so a named peer is a live peer.
+          // Decision lives in lib/claim/evidence-attribution-decisions.mjs so the tests
+          // exercise THIS function rather than a copy of it. An earlier cut inlined it and
+          // tested a re-implementation; a negative control showed that reverting this whole
+          // block produced ZERO test failures — green tests protecting nothing.
+          const { sweepShouldHoldRelease } = await import('../lib/claim/evidence-attribution-decisions.mjs');
+          const att = evidence.evidenceAttribution;
+          const otherLiveSessions = (att?.sessionIds || []).filter(id => id !== s.session_id);
+          if (sweepShouldHoldRelease({ evaluatedSessionId: s.session_id, evidenceAttribution: att })) {
+            warnings.push(
+              'WIP_GUARD_CROSS_SIGNAL: ' + s.session_id + ' SD=' + s.sd_key +
+              ' has evidence-of-life (' + (evidence.evidence || []).join(',') +
+              ') attributed to LIVE peer(s) [' + otherLiveSessions.join(',') + ']' +
+              ' classification=' + evidence.classification + ' — HOLDING release (SD-LEO-FIX-CROSS-SIGNAL-CLAIM-001)'
+            );
+            continue;
+          }
+          // Nothing that fired names a session other than the dead one under evaluation. The
+          // heartbeat / PID / MC gates above already established THIS session is gone, so the
+          // remaining evidence is its own residue and must not keep its claim held.
           warnings.push(
-            'WIP_GUARD_CROSS_SIGNAL: ' + s.session_id + ' SD=' + s.sd_key +
-            ' has evidence-of-life (' + (evidence.evidence || []).join(',') +
-            ') classification=' + evidence.classification + ' — HOLDING release (SD-LEO-FIX-CROSS-SIGNAL-CLAIM-001)'
+            'CROSS_SIGNAL_UNATTRIBUTED: ' + s.session_id + ' SD=' + s.sd_key +
+            ' evidence (' + (evidence.evidence || []).join(',') + ') names no OTHER live session' +
+            ' [unattributed: ' + ((att?.unattributed || []).join(',') || 'none') + '] —' +
+            ' proceeding with release (SD-LEO-INFRA-RECLAIMSAFE-CANNOT-TELL-001 FR-3)'
           );
-          continue;
         }
       } catch (egErr) {
         // Evidence gate must fail-open: if the import or query fails, fall through to
@@ -2502,7 +2791,13 @@ async function main() {
   // 4a. Worktree conflict detection (SD-MAN-INFRA-WORKER-WORKTREE-SELF-001)
   // Detect multiple active sessions on the same feature branch (excludes main/QF)
   const branchSessions = new Map();
+  // FR-3, second grouping site. Non-destructive (this one only emits a WARNING), but a
+  // WORKTREE_CONFLICT naming the same session twice is a false alarm an operator acts on, and
+  // an alarm that cries wolf is how a real one gets ignored. Same invariant, same one-line shape.
+  const seenBranchSessionIds = new Set();
   for (const s of classified.filter(c => c.status === 'ACTIVE' && c.current_branch && c.current_branch !== 'main')) {
+    if (seenBranchSessionIds.has(s.session_id)) continue;
+    seenBranchSessionIds.add(s.session_id);
     if (!branchSessions.has(s.current_branch)) branchSessions.set(s.current_branch, []);
     branchSessions.get(s.current_branch).push(s);
   }
@@ -2541,6 +2836,18 @@ async function main() {
       // Skip if already released in step 4
       if (dead.find(d => d.session_id === evict.session_id)) continue;
 
+      // SD-LEO-INFRA-STALE-SESSION-SWEEP-001 / FR-2 + FR-6 — refusals that must precede any
+      // mutation. Both live in lib/fleet/claim-release-guard.cjs as a pure function so the tested
+      // path IS the shipped path; see refuseConflictEviction() for why each one exists.
+      const refusal = refuseConflictEviction({ evict, keeper, bucketSize: claimants.length });
+      if (refusal.refuse) {
+        const line = 'EVICTION_REFUSED[' + refusal.code + '] on ' + sdId + ' — ' + refusal.detail;
+        // keeper_is_evictee is a corrupt bucket an operator should see; classified_alive is the
+        // guard doing its ordinary job, so it is an action rather than a warning.
+        if (refusal.code === 'keeper_is_evictee') warnings.push(line); else actions.push(line);
+        continue;
+      }
+
       // SD-LEO-INFRA-STALE-SWEEP-PID-LIVENESS-GUARD-001 (FR-2/FR-3): never evict a claimant whose
       // PID is ALIVE — a parked-but-live worker with an older heartbeat must not lose its claim to
       // a fresher (possibly zombie) claimant. The keeper was chosen by heartbeat alone; liveness
@@ -2573,7 +2880,58 @@ async function main() {
       if (!error) {
         const tag = evict.status === 'ACTIVE' ? ' (was active)' : '';
         await resetSdPhaseOnRelease(sdId, 'SWEEP_CONFLICT_RESOLUTION');
+        // SD-LEO-INFRA-DISPATCH-DELIVERY-INTEGRITY-001: THE MIRROR OF THE STRANDING CLASS.
+        // The UPDATE above clears the SEAT POINTER (claude_sessions.sd_key) and
+        // resetSdPhaseOnRelease handles strategic_directives_v2 — NEITHER touches
+        // quick_fixes.claiming_session_id. So evicting a QF claimant left the seat reading IDLE
+        // while still formally HOLDING the quick-fix: the worker looks free to the self-claim path
+        // and the idle-QF hint, and can take a second item while owning the first (double-hold).
+        // Same invariant as the strand, opposite direction — two surfaces record one claim and are
+        // written by different legs. Observed live 2026-07-27 on QF-20260726-757.
+        if (/^QF-/.test(sdId)) {
+          const { clearAndReopenQf } = await import('../lib/fleet/best-effort-release.mjs');
+          // CAS on the EVICTED holder so a concurrent re-claim by the keeper is never clobbered.
+          // The four-column guard still refuses any row carrying real work.
+          await clearAndReopenQf(supabase, sdId, { expectedHolder: evict.session_id });
+        }
         actions.push('CONFLICT on ' + sdId + ': released ' + evict.session_id + tag + ' (kept ' + keeper.session_id + ')');
+
+        // SD-LEO-INFRA-STALE-SESSION-SWEEP-001 / FR-4 — PERSIST THE EVIDENCE.
+        //
+        // Keeper identity was stdout-only, which is precisely why the 2026-07-27 eviction can be
+        // corroborated but never PROVEN: whether it was a self-eviction is unfalsifiable from the
+        // database. Recording keeper, evictee, bucket size and the classifier's own verdict makes
+        // the next occurrence decidable instead of arguable.
+        //
+        // session_lifecycle_events, not claude_sessions.metadata (PLAN decision 2026-08-02): both
+        // are DDL-free, but an append-only event survives the release that clears the seat, and a
+        // metadata blob on a row the sweep is actively blanking is the worst place to keep the
+        // record of what the sweep did to it.
+        //
+        // FAIL-SOFT, and that direction is deliberate: evidence-writing must never be able to
+        // block or reverse a release that already committed. A lost audit row costs a future
+        // argument; a throw here would strand the claim this loop just freed.
+        try {
+          await supabase.from('session_lifecycle_events').insert({
+            event_type: 'SWEEP_CONFLICT_EVICTION',
+            session_id: evict.session_id,
+            reason: 'SWEEP_CONFLICT_RESOLUTION',
+            metadata: {
+              sd_key: sdId,
+              keeper_session_id: keeper.session_id,
+              evictee_session_id: evict.session_id,
+              bucket_size: claimants.length,
+              evictee_status: evict.status ?? null,
+              evictee_is_stale: evict.isStale ?? null,
+              evictee_source_side_reason: evict.sourceSideReason ?? null,
+              evictee_heartbeat_age_seconds: evict.heartbeat_age_seconds ?? null,
+              keeper_heartbeat_age_seconds: keeper.heartbeat_age_seconds ?? null,
+              guard_hold: evictGuard.hold ?? null,
+              guard_reason: evictGuard.reason ?? null,
+              sd: 'SD-LEO-INFRA-STALE-SESSION-SWEEP-001',
+            },
+          });
+        } catch { /* fail-open: never let an audit write undo a completed release */ }
 
         // Send coordination message to the evicted session so it picks up other work
         conflictEvicted.push(evict);
@@ -2907,12 +3265,35 @@ async function main() {
             .eq('sd_key', s.sd_key); // race guard: only clear if still pointing at this SD
           actions.push('CLAIM_FIX: cleared stale sd_key binding on session ' + s.session_id.substring(0, 20) + ' (SD ' + s.sd_key + ' authoritatively claimed by live session ' + sd.claiming_session_id.substring(0, 20) + ')');
         } else {
-          await supabase
-            .from('strategic_directives_v2')
-            .update({ claiming_session_id: s.session_id, is_working_on: true })
-            .eq('sd_key', s.sd_key)
-            .select();
-          actions.push('CLAIM_FIX: set claiming_session_id on ' + s.sd_key + ' → ' + s.session_id.substring(0, 20));
+          // SD-LEO-INFRA-CLAIM-LIVENESS-FENCE-001 FR-2: do NOT re-issue a claim to a dead session.
+          //
+          // This branch re-attaches an unclaimed SD to whatever session still has it in its sd_key
+          // binding. If that session's process is gone, THE SWEEP ITSELF pins the SD to a corpse —
+          // the exact mechanism this SD exists to stop, performed by the machinery meant to prevent
+          // it, and the result is camouflaged (status=in_progress WITH a claimant).
+          //
+          // This file's own liveness helpers cannot be reused here: isProcessRunning (:687-697) is a
+          // bare process.kill(pid,0) with no name match, and anyClaudeProcessRunning (:699-709) is
+          // HOST-WIDE existence — neither can tell that a SPECIFIC pid is claude, which is what pid
+          // recycling defeats.
+          let livenessRefusal = null;
+          try {
+            const { claimantLivenessFence } = require('../lib/fleet/claimant-liveness.cjs');
+            const { reason, detail } = await claimantLivenessFence(supabase, s.session_id);
+            if (reason) livenessRefusal = detail;
+          } catch { /* fail open — a broken probe must never stop the sweep from doing its job */ }
+
+          if (livenessRefusal) {
+            actions.push('CLAIM_FIX SKIPPED: refused to re-issue ' + s.sd_key + ' to ' + s.session_id.substring(0, 20)
+              + ' — claimant not live (' + livenessRefusal.deciding_signal + ')');
+          } else {
+            await supabase
+              .from('strategic_directives_v2')
+              .update({ claiming_session_id: s.session_id, is_working_on: true })
+              .eq('sd_key', s.sd_key)
+              .select();
+            actions.push('CLAIM_FIX: set claiming_session_id on ' + s.sd_key + ' → ' + s.session_id.substring(0, 20));
+          }
         }
       } else if (!sd.is_working_on) {
         // Fix incomplete claim: claiming_session_id matches but is_working_on is false
@@ -3025,9 +3406,25 @@ async function main() {
     try {
       stuckSignals = await fapPaginate(() => supabase
         .from('session_coordination')
-        .select('id, sender_session, created_at')
+        // QF-20260727-190: `payload` is now selected because SEVERITY decides whether the age
+        // branch may retire a signal. Without it the drain could not tell a routine flood-control
+        // candidate from a live worker's blocked high-severity call for help.
+        .select('id, sender_session, created_at, payload')
         .eq('payload->>signal_type', 'stuck')
         .is('acknowledged_at', null)
+        // SD-LEO-INFRA-SIGNAL-ROUTER-AUTO-001 (FR-8) — WITHOUT THIS THE ROUTER FIX IS INERT.
+        // The router now leaves acknowledged_at null when it promotes a signal, so promoted
+        // type=stuck rows became eligible for this drain, which re-stamps acknowledged_at at the
+        // bottom of this block. Three of the nine measured swallowed signals are type=stuck: the
+        // drain would have re-acked them within the hour and put them straight back into the
+        // swallowed state, with every other acceptance criterion still passing.
+        //
+        // The severity gate below does not cover this: HELD_SEVERITIES protects rows whose sender
+        // is still LIVE, but senderIsDead() drains at any severity — and the condition that makes
+        // a signal most worth preserving (its sender has gone away) is exactly what makes it
+        // drainable. A promotion-marked row is already filed and awaiting disposition; it is not
+        // an unacked row rotting in the lane, which is what this drain exists to clear.
+        .is(`payload->>${PROMOTION_ACK_KEY}`, null)
         .order('id', { ascending: true })); // unique tiebreaker (FR-6)
     } catch { stuckSignals = []; } // prior behavior: read error ignored
     const stuck = stuckSignals || [];
@@ -3052,15 +3449,76 @@ async function main() {
         warnings.push('GUARD_UNAVAILABLE: stuck-signal drain skipped this tick — sender liveness read failed (' + (guardErr && guardErr.message ? guardErr.message : 'unknown') + ')');
       }
     }
-    const drainStuckIds = senderGuardFailed ? [] : stuck
-      .filter(s => s.created_at < stuckAgeCutoff || !s.sender_session || !liveSenders.has(s.sender_session))
-      .map(s => s.id);
-    for (let i = 0; i < drainStuckIds.length; i += 50) {
-      const batch = drainStuckIds.slice(i, i + 50);
-      await supabase.from('session_coordination').update({ acknowledged_at: now.toISOString() }).in('id', batch);
+    // QF-20260727-190. TWO CHANGES, AND THE LIVENESS BRANCH IS DELIBERATELY UNTOUCHED.
+    //
+    // (1) THE AGE BRANCH NO LONGER RETIRES high/critical SIGNALS FROM LIVE SENDERS. Draining
+    // stamps acknowledged_at, which under the two-stage ack contract means ACTIONED — but nothing
+    // actions it. Two measured instances in four hours, both severity=high, both from senders
+    // heartbeating at 0m, both carrying a question that needed an answer:
+    //   f191a23a Alpha-3, "BLOCKED — HARD RESOURCE LIMIT", drained UNREAD at 63 min
+    //   b6f9bbab Alpha-4, "needs a one-line additive DDL", drained READ at 63 min
+    // The second rules out "nobody saw it" and isolates the age branch as the sole cause.
+    //
+    // RAISING THE 1h THRESHOLD WOULD NOT HAVE FIXED EITHER. The QF is explicit: that converts a
+    // signal lost at 60 minutes into one lost at 180. The Alpha-3 worker was blocked across a
+    // multi-day quota reset, so NO finite age cutoff makes age a valid proxy for irrelevance.
+    // Severity is the right discriminant: flood control should never retire a severity the fleet
+    // defines as needing a human.
+    //
+    // (2) THE DEAD-SENDER BRANCH IS UNCHANGED AND STILL APPLIES AT EVERY SEVERITY. A signal whose
+    // sender is gone has nobody left to answer it, so retiring it is correct regardless of how
+    // urgent it was. The fail-CLOSED guard above (senderGuardFailed -> skip the tick) is likewise
+    // untouched: a failed liveness read must never read as "all senders dead".
+    const HELD_SEVERITIES = new Set(['high', 'critical']);
+    const senderIsDead = (s) => !s.sender_session || !liveSenders.has(s.sender_session);
+    const drainRows = senderGuardFailed ? [] : stuck.filter((s) => {
+      if (senderIsDead(s)) return true;                       // dead sender — drain at any severity
+      if (HELD_SEVERITIES.has(String(s.payload?.severity || '').toLowerCase())) return false; // live + urgent — HOLD
+      return s.created_at < stuckAgeCutoff;                   // live + routine — age-drain as before
+    });
+    const drainStuckIds = drainRows.map(s => s.id);
+    // SD-LEO-INFRA-WORKER-ESCALATION-WRITE-001 (FR-7): this drain used to stamp a BARE
+    // acknowledged_at via `.in('id', batch)`, which made a flood-control retirement permanently
+    // indistinguishable from a genuine coordinator answer — and acknowledged_at is the substrate of
+    // the answered-rate metric, so an unmarked stamp INFLATES exactly the number used to judge
+    // whether this lane is healthy. Every stamp now carries payload.auto_acked (the convention
+    // convergeAckTTL already established) plus WHY it drained, which the log line below has always
+    // reported but never persisted.
+    //
+    // Per-row rather than `.in()` because payload is JSONB and must be MERGED — the row's
+    // signal_type / severity / sender_callsign are load-bearing downstream and a blanket write
+    // would erase them. Concurrency stays bounded at the same 50 the batching already used.
+    for (let i = 0; i < drainRows.length; i += 50) {
+      const batch = drainRows.slice(i, i + 50);
+      await Promise.all(batch.map((s) => supabase
+        .from('session_coordination')
+        .update({
+          acknowledged_at: now.toISOString(),
+          payload: buildRetentionAckPayload(s.payload, senderIsDead(s) ? 'dead_sender' : 'aged_out'),
+        })
+        .eq('id', s.id)));
     }
     if (drainStuckIds.length > 0) {
-      actions.push('CLEANUP: drained ' + drainStuckIds.length + ' stale/dead-sender STUCK signal(s) (acknowledged_at stamped)');
+      // QF-20260727-190: the old line read "drained N stale/dead-sender STUCK signal(s)" — ONE
+      // label for TWO disjoint reasons. A coordinator read "dead-sender", verified the sender was
+      // alive at 0m heartbeat, and concluded the sweep had misclassified a live session. It had
+      // not; the age branch had fired. That single ambiguous word cost an hour of misdiagnosis and
+      // pointed at the wrong subsystem, so the counts are now reported separately.
+      const deadCount = drainRows.filter(senderIsDead).length;
+      const ageCount = drainStuckIds.length - deadCount;
+      const parts = [];
+      if (deadCount > 0) parts.push(deadCount + ' dead-sender');
+      if (ageCount > 0) parts.push(ageCount + ' aged-out (live sender, severity below high)');
+      actions.push('CLEANUP: drained ' + drainStuckIds.length + ' STUCK signal(s) — ' + parts.join(' + ') + ' (acknowledged_at stamped, payload.auto_acked=true — NOT an answer)');
+    }
+    // Report what was deliberately NOT drained, so a held signal is visible rather than merely
+    // un-retired. Without this the fix would be silent in exactly the way the bug was.
+    const heldLive = senderGuardFailed ? [] : stuck.filter(s =>
+      !senderIsDead(s) &&
+      HELD_SEVERITIES.has(String(s.payload?.severity || '').toLowerCase()) &&
+      s.created_at < stuckAgeCutoff);
+    if (heldLive.length > 0) {
+      actions.push('WORKER SIGNALS: ' + heldLive.length + ' high/critical STUCK signal(s) from LIVE senders held past 1h AWAITING COORDINATOR DISPOSITION (not drained): ' + heldLive.map(s => String(s.id).slice(0, 8)).join(', '));
     }
   } catch (e) {
     warnings.push('STUCK_SIGNAL_DRAIN: skipped due to error: ' + (e && e.message ? e.message : e));
@@ -3435,6 +3893,29 @@ function planDeadLetters(unreadMsgs, { allSessionIds, deadIds }, nowMs) {
     .filter(m => !allSessionIds.has(m.target_session) || deadIds.has(m.target_session))
     .filter(m => !m.expires_at || new Date(m.expires_at).getTime() <= nowMs)
     .filter(m => !(m.payload && m.payload.dead_letter === true))
+    // SD-LEO-INFRA-SIGNAL-ROUTER-AUTO-001 (FR-8, FOURTH site) — and the only automatic one left.
+    //
+    // Guarded HERE, in the pure planner, rather than in each executor's select. Three reasons:
+    // one edit covers BOTH twins (dead-letter-planning.cjs and legacy-fallback.cjs, which
+    // sweep-legacy-twin-parity requires stay in lockstep); this function is pure, exported and
+    // already unit-tested, so the guard gets a real behavioural test instead of a fourth source
+    // scan; and it avoids a fourth call site to keep in sync.
+    //
+    // WHY THIS PATH IS THE DANGEROUS ONE. It never stamps acknowledged_at, so the inbox, the
+    // sender's view and the starvation gauge all keep showing the row — it looks harmless. What
+    // it stamps is read_at, and a non-null read_at ARMS THE SECOND DISJUNCT of
+    // cleanup_expired_coordination (`read_at IS NOT NULL AND read_at <= now() - 7 days`). Before
+    // the stamp a promoted row has both columns NULL and is permanently immune to cleanup — that
+    // immunity IS the preservation this SD buys. After it, the row is archived and deleted seven
+    // days later, still unread and undispositioned. payload is spread rather than clobbered, so
+    // promotion_ack survives on the row it can no longer protect.
+    //
+    // Newly reachable BECAUSE of this SD: pre-fix, promoted rows carried acknowledged_at and the
+    // executors' `.is('acknowledged_at', null)` excluded them outright. Measured against the 10
+    // live promoted rows: 10/10 uuid-like target, 10/10 not already dead-lettered, 9/10 read_at
+    // null. And unlike the STUCK-drain this runs on the */5 cron in BOTH flag modes and is NOT
+    // gated on _coordMutationAllowed.
+    .filter(m => !isPromotionAcked(m))
     .map(m => ({
       id: m.id,
       update: {
@@ -3585,3 +4066,7 @@ module.exports.reapPhantomSessionClaims = reapPhantomSessionClaims;
 // SD-LEO-INFRA-SWEEP-LEGACY-KILL-SWITCH-RETIRE-001: exported so its shape (owner/condition/
 // retirement_action all present and non-empty) is unit-testable.
 module.exports.SWEEP_PASS_REGISTRY_RETIREMENT = SWEEP_PASS_REGISTRY_RETIREMENT;
+
+// QF-20260727-031: exported so the regression test drives the REAL SD-side half-released-claim
+// detector (fake client, real code path) rather than asserting against a re-implementation.
+module.exports.clearHalfReleasedSdClaims = clearHalfReleasedSdClaims;

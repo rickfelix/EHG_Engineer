@@ -4,7 +4,8 @@
     "tests/unit/venture-email/provision-venture-email.test.mjs": "vitest unit project include (vitest.config.js **/tests/unit/venture-email/**/*.test.mjs)",
     "tests/unit/session-tick-heartbeat.test.mjs": "npm run test:session-tick (.github/workflows/unit-tier.yml)",
     "tests/unit/session-tick-release-on-exit.test.mjs": "npm run test:session-tick (.github/workflows/unit-tier.yml)",
-    "tests/unit/session-tick-spawn-observe.test.mjs": "npm run test:session-tick (.github/workflows/unit-tier.yml)"
+    "tests/unit/session-tick-spawn-observe.test.mjs": "npm run test:session-tick (.github/workflows/unit-tier.yml)",
+    "tests/unit/session-tick-marker-pid-refresh.test.mjs": "npm run test:session-tick (.github/workflows/unit-tier.yml)"
   },
   "legacy_unaudited": {
     "_doc": "DEBT REGISTER (pre-QF-20260712-023 files with no verified CI runner at seeding time — audit each: wire a lane and move it to lanes{}, or archive the file). Adding NEW entries here defeats the check's purpose.",
@@ -14,7 +15,6 @@
       "tests/sd-start-dependency-gate.test.mjs",
       "tests/unit/adam-doc-drift-review.test.mjs",
       "tests/unit/adam-github-assessment.test.mjs",
-      "tests/unit/adam-sourcing-state-probe.test.mjs",
       "tests/unit/adam-startup-check.test.mjs",
       "tests/unit/calculate-sd-progress.test.mjs",
       "tests/unit/coordinator-startup-check.test.mjs",
@@ -25,7 +25,6 @@
       "tests/unit/sd-key-generator-coverage.test.mjs",
       "tests/unit/session-tick-patch-failure-telemetry.test.mjs",
       "tests/unit/v-sd-next-candidates-fixture-exclusion.test.mjs",
-      "tests/unit/vision/rung-progress-rollup.test.mjs",
       "tests/unit/worktree-stale-base-guard.test.mjs"
     ]
   }

@@ -17,9 +17,14 @@
  * is 5), so exactly one of the two fires maps to 05:45 ET per season and does work — the other
  * exits inert. The per-ET-date dedupeKey is the idempotency backstop against a double-fire.
  *
- * FAIL-SOFT: while the STAGED sms_outbound_obligations table is unapplied, enqueueChairmanSms
- * returns {enqueued:false, reason:'table_absent...'} without throwing and this sweep logs inert
- * + exits 0 (no crash, no direct provider.send fallback).
+ * FAIL-SOFT (mechanism, still correct): if the table were absent, enqueueChairmanSms returns
+ * {enqueued:false, reason:'table_absent...'} without throwing and this sweep logs inert + exits 0
+ * (no crash, no direct provider.send fallback).
+ *
+ * THE TABLE IS PRESENT. This header previously said it "is unapplied". MEASURED 2026-08-02:
+ * 17 columns, 395 rows, to_regclass resolves (control query on a known table confirms the probe
+ * works). This sweep enqueues for real — do not reason about it as inert.
+ * SD-LEO-INFRA-DECISION-RESURFACE-GUARDS-001 FR-3.
  *
  * Usage:
  *   node scripts/cron/chairman-morning-review-sweep.mjs --once
@@ -35,6 +40,7 @@ import { enqueueChairmanSms } from '../../lib/chairman/sms-bridge.js';
 import { computeForecast, formatForecastLine } from '../../lib/vision/build-completion-forecast.mjs';
 import { etLocalHour, etDateStr, et6amIso, etPrior545Iso } from '../../lib/time/chairman-et-wall-clock.js';
 import { fetchAllPaginated } from '../../lib/db/fetch-all-paginated.mjs';
+import { resolveCanonicalRoadmap } from '../../lib/roadmap/canonical-roadmap.js';
 import { buildRoadmapStatusDoc } from '../../lib/chairman/daily-review/roadmap-status-doc.js';
 import { renderGanttPng } from '../../lib/chairman/daily-review/gantt-renderer.js';
 import { uploadPrivateAndSign } from '../../lib/storage/private-signed-upload.js';
@@ -93,18 +99,82 @@ async function gatherForecastInputs(supabase, nowMs, windowDays = 14) {
   return { buildPct: null, buildableRemaining, velocityPerDay, sourcingPerDay, queueDepth };
 }
 
-async function gatherWaves(supabase) {
+/**
+ * SD-LEO-INFRA-ROADMAP-REGENERATION-DUPLICATES-001 FR-1/FR-2.
+ *
+ * This previously did `.order('created_at', desc).limit(1)` — it SELECTED status and never
+ * FILTERED on it, so it returned whichever roadmap was newest. Measured live on 2026-07-29:
+ * that was 8ffa7fdf, an ARCHIVED duplicate (4 waves, 503 items, 0 dispositioned), while the
+ * plan of record 3aa2f3e2 (8 waves, 261 items) is older and was never chosen. The chairman's
+ * morning brief was reporting wave/progress numbers off an orphan roadmap.
+ *
+ * Deliberately NOT fixed by deleting the duplicate rows: that would have made this query
+ * return the right answer BY ACCIDENT while leaving the broken predicate to pick the next
+ * wrong roadmap as soon as another row existed.
+ *
+ * Returns a TAGGED state rather than bare counts. resolveCanonicalRoadmap is deliberately
+ * fail-loud (it THROWS on >1 active), and the old bare try/catch collapsed every failure into
+ * `waveCount: 0`, which the caller rendered as "(no active roadmap)". That turns a loud,
+ * correct signal into a confident falsehood — the same silent-wrong shape this SD exists to
+ * remove, and it would have been reintroduced BY this fix if left unaddressed.
+ *
+ * @returns {Promise<{state:'resolved'|'none'|'ambiguous'|'unavailable', ...}>}
+ */
+export async function gatherWaves(supabase) {
+  let rm;
   try {
-    const { data: roadmaps } = await supabase.from('strategic_roadmaps').select('id, status, created_at').order('created_at', { ascending: false }).limit(1);
-    const rm = roadmaps?.[0];
-    if (!rm) return { waveCount: 0, doneWaves: 0, avgPct: null };
-    const { data: waves } = await supabase.from('roadmap_waves').select('status, progress_pct').eq('roadmap_id', rm.id);
+    rm = await resolveCanonicalRoadmap(supabase);
+  } catch (err) {
+    const n = /(\d+)\s+status='active'/.exec(err?.message || '')?.[1];
+    return { state: 'ambiguous', activeCount: n ? Number(n) : null, waveCount: 0, doneWaves: 0, avgPct: null };
+  }
+  if (!rm) return { state: 'none', waveCount: 0, doneWaves: 0, avgPct: null };
+  try {
+    // SD-LEO-INFRA-ROADMAP-WAVES-PROGRESS-001 (FR-2): progress_pct is no longer read here.
+    //
+    // This was the THIRD chairman-facing consumer and the least honest of them. progress_pct is a
+    // RUNG-level value stored on a per-wave row, so `avgPct` averaged copies of one measurement —
+    // and `Number(w.progress_pct || 0)` coerced NULL to 0, which is precisely the fabrication the
+    // rollup's own contract forbids ("never fabricated as 0%"). An unmeasured wave therefore
+    // dragged the chairman's headline build % downward as though it had been measured at zero.
+    //
+    // doneWaves now keys on the wave's own status, which is a genuine per-wave fact. No average is
+    // computed: there is no honest roadmap-level percentage to derive from a rung-level column.
+    const { data: waves, error } = await supabase.from('roadmap_waves').select('status').eq('roadmap_id', rm.id);
+    if (error) throw new Error(error.message);
     const ws = waves || [];
     const waveCount = ws.length;
-    const doneWaves = ws.filter((w) => Number(w.progress_pct || 0) >= 100 || w.status === 'completed').length;
-    const avgPct = waveCount ? Math.round(ws.reduce((s, w) => s + Number(w.progress_pct || 0), 0) / waveCount) : null;
-    return { waveCount, doneWaves, avgPct };
-  } catch { return { waveCount: 0, doneWaves: 0, avgPct: null }; }
+    const doneWaves = ws.filter((w) => w.status === 'completed').length;
+    return { state: 'resolved', roadmapId: rm.id, waveCount, doneWaves, avgPct: null };
+  } catch {
+    return { state: 'unavailable', waveCount: 0, doneWaves: 0, avgPct: null };
+  }
+}
+
+/**
+ * FR-2: the four states must render PAIRWISE DISTINCTLY. Before this, zero-active and
+ * two-active both produced "waves 0/N done" — provably indistinguishable to the reader.
+ * Note 'resolved' with zero waves is NOT "(no active roadmap)": an active roadmap that has
+ * no waves yet is a different fact from having no roadmap at all.
+ */
+export function formatRoadmapLine(waves) {
+  switch (waves?.state) {
+    case 'resolved':
+      // FR-2 (SD-LEO-INFRA-ROADMAP-WAVES-PROGRESS-001): the "N% build" clause is gone with the
+      // column it came from. Rendering '?%' instead would keep asserting that a roadmap-level
+      // percentage exists and is merely unavailable; it does not exist. The wave counts beside it
+      // are real, and the four states stay pairwise distinct without it.
+      return waves.waveCount
+        ? `Roadmap: waves ${waves.doneWaves}/${waves.waveCount} done`
+        : 'Roadmap: active roadmap has no waves yet';
+    case 'ambiguous':
+      return `Roadmap: AMBIGUOUS — ${waves.activeCount ?? 'multiple'} active roadmaps, numbers withheld until resolved`;
+    case 'unavailable':
+      return 'Roadmap: unavailable (roadmap query failed)';
+    case 'none':
+    default:
+      return 'Roadmap: (no active roadmap)';
+  }
 }
 
 async function gatherYesterday(supabase, priorMorningIso) {
@@ -129,9 +199,7 @@ export async function buildMorningReviewBody(supabase, { now = new Date() } = {}
   const forecastLine = formatForecastLine(computeForecast({ ...inputs, nowMs }), null);
 
   const waves = await gatherWaves(supabase);
-  const roadmapLine = waves.waveCount
-    ? `Roadmap: ${waves.avgPct == null ? '?' : waves.avgPct}% build, waves ${waves.doneWaves}/${waves.waveCount} done`
-    : 'Roadmap: (no active roadmap)';
+  const roadmapLine = formatRoadmapLine(waves);
 
   const { shipped, inFlight } = await gatherYesterday(supabase, etPrior545Iso(now));
   const yesterdayLine = `Yesterday: ${shipped} shipped, ${inFlight} in-flight`;

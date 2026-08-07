@@ -85,6 +85,11 @@ const markerPath = path.join(pidsDir, `tick-${sessionId}.json`);
 
 // ── Marker management ────────────────────────────────────────────────────────
 
+// Captured ONCE. The marker is rewritten on parent-PID adoption (see parentInterval below), and
+// started_at means "when this tick daemon started" — recomputing it per write would silently
+// convert it into "time of last rewrite" for any reader that treats it as a daemon age.
+const markerStartedAt = new Date().toISOString();
+
 function writeMarker() {
   try {
     fs.mkdirSync(pidsDir, { recursive: true });
@@ -92,7 +97,7 @@ function writeMarker() {
       session_id: sessionId,
       tick_pid: process.pid,
       cc_parent_pid: parentPid,
-      started_at: new Date().toISOString(),
+      started_at: markerStartedAt,
       hostname: require('os').hostname(),
     };
     fs.writeFileSync(markerPath, JSON.stringify(marker, null, 2));
@@ -156,6 +161,28 @@ async function rediscoverParentPid() {
     const rows = await res.json();
     const candidate = Array.isArray(rows) && rows[0] ? Number(rows[0].pid) : 0;
     if (!candidate || candidate === parentPid) return 0;
+    // SD-LEO-INFRA-PID-LIVENESS-DURABLE-VENUE-001 (C1): NEVER ADOPT OUR OWN PID.
+    //
+    // This is the self-relatch that made a dead session report fresh heartbeats for 21+ minutes
+    // after the OS confirmed its Claude Code parent was gone. The first-tick POST below (~:232)
+    // writes `pid: process.pid` — THIS DAEMON'S pid, not the parent's. When the tick created the
+    // row, the column therefore holds our own pid. On parent death we re-read it here, see
+    // candidate !== parentPid (true — it is us), call process.kill(candidate, 0) which ALWAYS
+    // succeeds against ourselves, adopt it, and reset parentMissCount. MAX_PARENT_MISSES is then
+    // unreachable and the daemon becomes immortal, stamping heartbeat_at and process_alive_at
+    // forever for a session whose parent no longer exists.
+    //
+    // CONDITIONAL, and the condition matters for scoping: the every-tick PATCH writes ONLY the
+    // two timestamps and never `pid`, and the first-tick POST carries
+    // Prefer: resolution=ignore-duplicates. So our pid lands in that column ONLY when the tick
+    // won the row-creation race. If capture-session-id.cjs created the row first, the column
+    // holds the real parent pid, rediscovery gets ESRCH, and the exit path works correctly.
+    //
+    // DO NOT "fix" this by deleting rediscovery. It exists to survive legitimate Claude Code
+    // parent-PID rotation across /clear, reconnect and compaction
+    // (SD-FDBK-FIX-PARKED-LOOP-WORKER-001); removing it re-breaks parked workers and trades
+    // false-life for false-death — the seam all five prior attempts at this defect fell down.
+    if (candidate === process.pid) return 0;
     // Only adopt a PID that is actually alive and different from the one we already track —
     // the caller debounces a genuine miss with MAX_PARENT_MISSES.
     try {
@@ -170,6 +197,36 @@ async function rediscoverParentPid() {
   } finally {
     clearTimeout(timer);
   }
+}
+
+/**
+ * QF-20260729-704: write an adopted parent pid back to claude_sessions.pid.
+ *
+ * Scoped exactly like the steady-state PATCH — same session, same non-released statuses — so a
+ * released row is never resurrected. Fire-and-forget and fully swallowed: this is telemetry
+ * correctness, and it must never be able to stop a healthy tick.
+ *
+ * The pid written has ALREADY been proven live by rediscoverParentPid (process.kill(pid,0)), so
+ * this only ever replaces a stale value with a verified one.
+ */
+function persistAdoptedPid(pid) {
+  try {
+    const supabaseUrl = process.env.SUPABASE_URL || process.env.NEXT_PUBLIC_SUPABASE_URL;
+    const supabaseKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
+    if (!supabaseUrl || !supabaseKey || !pid) return;
+    const url = `${supabaseUrl.replace(/\/$/, '')}/rest/v1/claude_sessions` +
+      `?session_id=eq.${encodeURIComponent(sessionId)}&status=in.(active,idle,stale)`;
+    fetch(url, {
+      method: 'PATCH',
+      headers: {
+        apikey: supabaseKey,
+        Authorization: `Bearer ${supabaseKey}`,
+        'Content-Type': 'application/json',
+        Prefer: 'return=minimal',
+      },
+      body: JSON.stringify({ pid }),
+    }).catch(() => { /* telemetry only — never block or kill the tick */ });
+  } catch { /* never throw from the parent-poll path */ }
 }
 
 // ── Telemetry write ──────────────────────────────────────────────────────────
@@ -518,6 +575,34 @@ const parentInterval = setInterval(async () => {
   }
   if (rediscovered) {
     parentPid = rediscovered; // adopt the live PID; keep ticking
+    // QF-20260727-703: PERSIST the adoption. lib/fleet/claimant-liveness.cjs treats this marker's
+    // cc_parent_pid as its STRONGEST signal ("the only artifact that ties a pid back to the session
+    // that owns it") and it is that classifier's ONLY path to a DEAD verdict — every other path
+    // fails open to INDETERMINATE precisely because a recorded pid goes stale on rotation. The
+    // marker was written once at spawn, so adopting in memory alone left it naming the DEAD pid:
+    // a session that survives a /clear, reconnect or compaction then classified DEAD while alive,
+    // and its claims refused or reaped. Only long-lived sessions rotate their PID, so the failure
+    // was INVERTED WITH USEFULNESS — the more work a seat did, the likelier it got reaped.
+    // rediscoverParentPid() has already verified this pid is live, so the value written is sound.
+    writeMarker();
+    // QF-20260729-704: PERSIST THE ADOPTION TO THE ROW TOO, NOT ONLY THE MARKER.
+    //
+    // QF-20260727-703 (above) found that adopting in memory alone left the MARKER naming the dead
+    // pid. It fixed the marker. THE ROW'S `pid` COLUMN HAS THE IDENTICAL DEFECT AND WAS MISSED:
+    // the steady-state PATCH deliberately writes only the two timestamps and never `pid` (see the
+    // rediscoverParentPid docblock), so after a rotation the row advertises the ORIGINAL pid
+    // forever while this daemon correctly keeps its heartbeat fresh under the new one.
+    //
+    // MEASURED, live, on session e7c92ad8: row pid 35464 = ESRCH, watched parent 13028 = RUNNING
+    // (claude), tick daemon 6888 = RUNNING (node), heartbeat advancing every 60s. Three instruments,
+    // three answers — and the one that is WRONG is the one every consumer OS-checks. That row held
+    // an SD claim while reading as a corpse.
+    //
+    // This is NOT the phantom-heartbeat defect it looks like: the writer is alive and correct, so
+    // "stop the writer" would kill a healthy session. The row is simply lying about which process
+    // owns it. Note the failure INVERTS WITH USEFULNESS for the same reason :554 gives — only
+    // long-lived sessions rotate their pid, so the busiest seats are the ones advertising corpses.
+    persistAdoptedPid(rediscovered);
     parentMissCount = 0;
     return;
   }

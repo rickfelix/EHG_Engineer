@@ -152,8 +152,34 @@ describe('QF-20260719-365 — rank-time reason-band stamp is authoritative', () 
     const r = deriveDispatchReasons(rows);
     expect(r.stamped).toBe(2);
     expect(r.stamped_coverage).toBeCloseTo(2 / 3);
-    expect(r.partition).toEqual({ direct_dispatch: 1, self_claim: 1 });
+    expect(r.sd_dispatch_partition).toEqual({ direct_dispatch: 1, self_claim: 1 });
     expect(r.counts.feedback).toBe(1);
     expect(r.counts.chairman_directed).toBe(1);
+  });
+
+  // QF-20260727-978: the partition read metadata.directed_assignment, which NO production code
+  // ever wrote (4 repo occurrences: 2 reads, 1 comment, 1 fixture). direct_dispatch was therefore
+  // structurally pinned at 0 — arithmetic of an absent field, not a measurement. The writer now
+  // exists in lib/checkin/steps/directed-assignment.cjs; these two tests pin the honesty contract.
+  it('names its population, so a QF-heavy day cannot be misread as "the coordinator never direct-dispatches"', () => {
+    // Replays 2026-07-27: five QF dispatches, two of them chairman-directed. None can appear
+    // here — deriveDispatchReasons takes strategic_directives_v2 rows and quick_fixes has no
+    // metadata column to carry the marker. The gauge must SAY that rather than imply coverage.
+    const r = deriveDispatchReasons([
+      { sd_key: 'SD-A-001', metadata: { dispatch_reason_band: 'feedback' } },
+    ]);
+    expect(r.sd_dispatch_partition_scope).toMatch(/strategic_directives_v2 rows only/);
+    expect(r.sd_dispatch_partition_scope).toMatch(/quick-fix dispatch is not counted/);
+    expect(r.partition).toBeUndefined(); // renamed: an unscoped `partition` must not come back
+  });
+
+  it('direct_dispatch can actually reach non-zero once the marker is written', () => {
+    // Pre-fix this was impossible for any input a live writer could produce.
+    const r = deriveDispatchReasons([
+      { sd_key: 'SD-D-001', metadata: { dispatch_reason_band: 'chairman-directed', directed_assignment: true } },
+      { sd_key: 'SD-E-001', metadata: { dispatch_reason_band: 'chairman-directed', directed_assignment: true } },
+    ]);
+    expect(r.sd_dispatch_partition.direct_dispatch).toBe(2);
+    expect(r.sd_dispatch_partition.self_claim).toBe(0);
   });
 });

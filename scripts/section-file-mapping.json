@@ -70,9 +70,7 @@
       "child_sd_context_loading",
       "lead_operations",
       "lead_explore_integration",
-      "directive_submission_review",
       "lead_strategic_validation_q7",
-      "lead_strategic_validation_q9",
       "lead_anti_pattern_confirmation_fishing",
       "lead_code_review_requirement",
       "simplicity_first_enforcement",
@@ -80,22 +78,37 @@
       "sd_evaluation",
       "lead_refactor_evaluation",
       "knowledge_retrieval",
-      "parent_child_sd_governance",
       "parent_child_lead",
       "venture_lifecycle_pipeline",
-      "multi_track_parallel_execution",
       "vision_v2_lead",
       "governance_okr_alignment_lead",
       "sub_agent_phase_guidance_lead",
-      "lead_testing_agent_harness_fix_cadence"
+      "lead_testing_agent_harness_fix_cadence",
+      "directive_submission_review"
     ],
     "_removed_sections_note": "migration_execution_protocol_lead (duplicate of CORE migration_execution_protocol), mandatory_phase_transitions_lead (duplicate of CORE mandatory_phase_transitions). RCA mandate removed from generator — already in router."
+  },
+  "CLAUDE_LEAD_MANUAL.md": {
+    "description": "LEAD reference companion (SD-FDBK-INFRA-CLAUDE-LEAD-EXCEEDS-001). Long-form procedure lifted out of CLAUDE_LEAD.md so the gated file fits the Read tool 25k single-call cap. RULES AND PROHIBITIONS DO NOT LIVE HERE — they stay in CLAUDE_LEAD.md and bind whether or not this file is read.",
+    "sections": [
+      "parent_child_sd_governance",
+      "multi_track_parallel_execution",
+      "lead_strategic_validation_q9"
+    ],
+    "_move_justification": {
+      "parent_child_sd_governance": "Parent/child governance reference; the binding orchestrator rules live in the SD Continuation truth table in CLAUDE.md.",
+      "multi_track_parallel_execution": "Track-execution reference material, descriptive rather than prescriptive.",
+      "lead_strategic_validation_q9": "STAYS IN THE COMPANION, and the reasoning was re-derived AFTER a failed pullback rather than assumed. VALIDATION flagged this as a visible-became-invisible instance (old line 947, inside the 1231 cutoff) and I pulled it back. The FR-4 guard then fired on its own first live run: LEAD went 679 tokens OVER cap. Searching for something else to move found NOTHING eligible — every remaining section was either visible pre-fix or carries rule lines. So the choice was forced, which is exactly when a convenient justification is most suspect. THE EVIDENCE, checked before deciding and independent of the budget: the Q9 OBLIGATION appears FOUR times in the GATED file (lines 442, 443, 464 in the canonical 9-question list, and 943) including the literal instruction to populate smoke_test_steps; and smoke-test-specification.js BLOCKS feature SDs without it regardless of whether any doc is read. What moved is the RATING TABLE AND EVALUATION DETAIL, not the rule. That is categorically unlike directive_submission_review, which had no code backstop and whose entire content moved. Test applied: would this evidence have justified the move BEFORE the arithmetic was known? Yes — four in-file statements plus a blocking code gate is an independent case. Flagged to the coordinator rather than settled silently."
+    },
+    "_allow_list_note": "This list is an ALLOW-LIST reviewed section by section, not the output of a keyword scan. The original scan (/BLOCKING|MUST NOT|NEVER|MANDATORY|PROHIBITED/, case-sensitive) scored negative_constraints_plan at zero despite that section being nothing but NC-PLAN-001..005, so a lexical detector cannot be the authority. Adding a section here requires a written justification above.",
+    "_excluded_deliberately": {
+      "directive_submission_review": "PULLED BACK AT EXEC after SECURITY review. It sat at OLD line 878 — INSIDE the old readable head — so moving it made something VISIBLE become INVISIBLE. That is a reachability regression this SD introduced, not a pre-existing one it failed to fix, and it falsifies any \"nothing visible became invisible\" claim. Procedural rather than a labeled rule, so the harm was bounded, but the direction was wrong and the budget can afford it."
+    }
   },
   "CLAUDE_PLAN.md": {
     "description": "PLAN phase operations (~20-25k chars). Lean PLAN (2026-02-16).",
     "sections": [
       "signaling_friction_pointer_phase",
-      "workflow",
       "PHASE_2_PLANNING",
       "prd_creation_anti_pattern",
       "plan_multi_perspective",
@@ -105,29 +118,54 @@
       "plan_test_infrastructure_gate",
       "testing_tier_strategy_updated",
       "plan_cicd_verification",
-      "plan_presentation_template",
-      "plan_refactor_brief_guide",
       "PHASE_4_VERIFICATION",
-      "plan_verify_explore",
-      "bmad_enhancements",
-      "design_database_validation_gates",
       "gate_2_5_human_inspectability",
       "qa_engineering_enhanced",
-      "handoff_quality_gates",
-      "parent_child_plan",
-      "parent_child_validation",
       "vision_v2_plan",
       "negative_constraints_plan",
-      "prd_template_scaffold",
       "documentation_link_validation_gate",
-      "governance_kr_linkage_plan",
       "plan_smoke_test_requirement",
       "plan_failure_chain_ordering",
       "sub_agent_phase_guidance_plan",
-      "cascade_invalidation_plan",
-      "plan_keyword_list_substring_audit"
+      "plan_keyword_list_substring_audit",
+      "bmad_enhancements",
+      "design_database_validation_gates"
     ],
     "_removed_sections_note": "migration_execution_protocol_plan (duplicate of CORE), mandatory_phase_transitions_plan (duplicate of CORE), testing_tier_strategy (superseded by testing_tier_strategy_updated), schema_documentation_access + schema_documentation_reference + database_schema_overview (reference data, on-demand lookup via docs/), plan_visual_documentation_examples (Mermaid examples, reference doc). RCA mandate removed from generator — already in router."
+  },
+  "CLAUDE_PLAN_MANUAL.md": {
+    "description": "PLAN reference companion (SD-FDBK-INFRA-CLAUDE-LEAD-EXCEEDS-001). Long-form reference lifted out of CLAUDE_PLAN.md so the gated file fits the Read tool 25k single-call cap. RULES AND PROHIBITIONS DO NOT LIVE HERE — they stay in CLAUDE_PLAN.md and bind whether or not this file is read.",
+    "sections": [
+      "workflow",
+      "handoff_quality_gates",
+      "parent_child_plan",
+      "plan_refactor_brief_guide",
+      "parent_child_validation",
+      "plan_verify_explore",
+      "prd_template_scaffold",
+      "governance_kr_linkage_plan",
+      "plan_presentation_template",
+      "cascade_invalidation_plan"
+    ],
+    "_move_justification": {
+      "workflow": "ARITHMETIC-DRIVEN, FLAG AT REVIEW. Three unrelated rows share this generic type: Triangulated Runtime Audit Protocol (6612b, a manual /runtime-audit doc unrelated to PLAN gating, 72% of the type) plus two branch-creation notes. Branch creation is AUTOMATED at LEAD-TO-PLAN per its own text, and the type still renders into CLAUDE_EXEC.md, so nothing leaves the protocol. Excluding it leaves the budget 274 tok SHORT, which is why it is here — that is a weaker reason than the others and should get a second look.",
+      "handoff_quality_gates": "Documented reference-only by a PRIOR, independent judgment: the digest mapping already excludes it as \"8.6K, gates run in code not from agent reading MD — reference only\". The gates execute in code; reading them is informational.",
+      "parent_child_plan": "Orchestrator decomposition reference.",
+      "plan_refactor_brief_guide": "Refactor-SD-specific how-to, consulted only for refactor work.",
+      "parent_child_validation": "Child-SD field validation reference.",
+      "plan_verify_explore": "Explore-before-validation technique guide.",
+      "prd_template_scaffold": "A template, consulted while authoring.",
+      "governance_kr_linkage_plan": "KR-linkage governance reference.",
+      "plan_presentation_template": "A template.",
+      "cascade_invalidation_plan": "Cascade-invalidation procedure."
+    },
+    "_excluded_deliberately": {
+      "signaling_friction_pointer_phase": "SHARED — renders into LEAD, PLAN and EXEC and IS the /signal pointer. Moving it would strip the friction channel from every phase file.",
+      "PHASE_2_PLANNING": "Not needed for the budget (16,482 moved vs 13,166 required) and its name signals core PLAN identity. Kept in the gated file by choice, not by accident.",
+      "bmad_enhancements": "PULLED BACK AT EXEC. AC-7 caught it: this section carries three BINDING rules — \"Never Bypass\", \"Never create PRDs as markdown files\", \"Never skip validation gates\". My structural classifier missed them because it matched uppercase NEVER and these are title-case with a warning emoji. Third case-sensitivity miss on this SD; the verification, not the classifier, is what caught it.",
+      "design_database_validation_gates": "PULLED BACK AT EXEC. Contributes \"4 mandatory gates ensuring sub-agent execution and implementation fidelity\". That line describes rather than instructs, so it was arguably fine to move — but the budget has margin, and spending 787 tokens to avoid a judgment call about whether MANDATORY-in-prose counts is the cheaper trade."
+    },
+    "_allow_list_note": "ALLOW-LIST reviewed section by section, not a keyword-scan output. Classification is by WHERE a marker sits — a rule in rule position vs the same word in prose — because tuning keyword BREADTH failed in both directions on this SD."
   },
   "CLAUDE_EXEC.md": {
     "description": "EXEC phase operations (~15-20k chars). Lean EXEC (2026-02-16).",
@@ -176,6 +214,18 @@
       "role_partnership_contract"
     ]
   },
+  "CLAUDE_ADAM_MANUAL.md": {
+    "description": "Adam MANUAL companion — how-to procedures (SD creation field shapes, migration ceremony steps, gauge inputs). Read at the moment of doing, not at session start. Governed: chairman decision A-GOVERN 2026-07-31.",
+    "sections": [
+      "adam_manual"
+    ]
+  },
+  "CLAUDE_ADAM_PROVENANCE.md": {
+    "description": "Adam PROVENANCE companion — dated rationale, live witnesses, superseded cadences. Every rule in CLAUDE_ADAM.md is in force regardless of whether its history is read. Governed: chairman decision A-GOVERN 2026-07-31.",
+    "sections": [
+      "adam_provenance"
+    ]
+  },
   "CLAUDE_COORDINATOR.md": {
     "description": "Coordinator role contract + SRE charter — fleet supervisor/orchestration role. Loaded by the /coordinator skill or when orienting a fleet-coordinator session, as workers load CLAUDE_CORE.",
     "sections": [
@@ -188,6 +238,20 @@
     "sections": [
       "solomon_role_contract"
     ]
+  },
+  "CLAUDE_SOLOMON_MANUAL.md": {
+    "description": "Solomon reference companion (SD-FDBK-INFRA-CLAUDE-SOLOMON-EXCEEDS-001). Long-form reference and procedure lifted out of CLAUDE_SOLOMON.md so the gated contract fits the Read tool's 25k single-call cap. RULES, PROHIBITIONS AND DURABLE DUTIES DO NOT LIVE HERE — they stay in CLAUDE_SOLOMON.md and bind whether or not this file is read.",
+    "sections": [
+      "solomon_manual"
+    ],
+    "_move_justification": {
+      "1. Background & History": "Origin narrative — the Chairman's Canary idea, the Fable token-limit incident, the pantheon naming convention. Zero binding clauses; the unbiased-perspective idea it recounts binds via §4b, which stays in the gated file.",
+      "11. Advice-Outcome Ledger, Accuracy Review & Success Metrics": "Ledger field semantics and the keep/expand/kill evaluation procedure. MOVED WITH AN EXCEPTION: ACCURACY REVIEW DUTY is a DURABLE DUTY and was retained in §9 of the gated file.",
+      "Web Research & Source-Escalation Rubric": "The routing rubric and source-escalation ladder — a procedure performed at a moment. MOVED WITH AN EXCEPTION: the HARD security stop on secrets/credentials/chairman-private queries, the re-derive-never-inherit rule and the task_budget bound were retained in the gated file as 'Web Research — binding constraints'.",
+      "Crew-comms routing protocol (organizing layer)": "A pointer to the canonical docs/protocol/crew-comms-routing-protocol.md, which remains authoritative. Moved by RETYPING its existing row, with no content edit, so it could not be corrupted in transit."
+    },
+    "_allow_list_note": "This list is an ALLOW-LIST reviewed section by section, not the output of a keyword scan. The scan is only a TRIPWIRE that prompts the review: the LEAD precedent recorded that /BLOCKING|MUST NOT|NEVER|MANDATORY|PROHIBITED/ scored 'PLAN Phase Negative Constraints' at ZERO despite that section being nothing but NC-PLAN-001..005. Here the tripwire fired 24 times across the move-set and each hit was dispositioned individually; two hits were promoted to retained clauses in the gated file. Adding a section here requires a written justification above.",
+    "_acceptance": "Harness-measured, never computed: a no-offset Read of CLAUDE_SOLOMON.md must return ALL lines with NO 'PARTIAL view' notice. Baseline before this split: 'showing lines 1-301 of 371 total (26138 tokens, cap 25000)'. Byte counts and general-purpose tokenizers cannot verify this — the repo's own calibrated instrument read this file ~23% high."
   },
   "SHARED": {
     "description": "Sections that appear in multiple files or are general reference",

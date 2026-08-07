@@ -1,9 +1,9 @@
 <!-- GENERATED FILE - DO NOT EDIT DIRECTLY. Source of truth: leo_protocol_sections (DB). Regenerate: node scripts/generate-claude-md-from-db.js. Drift check: node scripts/check-claude-md-drift.cjs -->
 <!-- DIGEST FILE - Enforcement-focused protocol content -->
-<!-- generated_at: 2026-07-20T19:47:06.145Z -->
-<!-- git_commit: 9c631a0a -->
-<!-- db_snapshot_hash: 15274e313a3b8c43 -->
-<!-- file_content_hash: c1a739630af7dfe7 -->
+<!-- generated_at: 2026-08-03T13:37:56.000Z -->
+<!-- git_commit: 9809add6 -->
+<!-- db_snapshot_hash: 31945d3b870a9f44 -->
+<!-- file_content_hash: 8e793099b375a84d -->
 
 # CLAUDE_CORE_DIGEST.md - Core Protocol (Enforcement)
 
@@ -39,9 +39,17 @@ Every sub-agent invocation MUST include these five elements:
 
 **Anti-patterns** (NEVER do these):
 - ❌ "Analyze why [issue] is occurring" — too vague, agent has nothing to anchor on
-- ❌ Dum
+- ❌ Dumping entire conversation context — unrelated tokens waste investigation capacity
+- ❌ Omitting prior attempts — agent repeats your failed approaches
 
-*...truncated. Read full file for complete section.*
+**Example invocation (GOOD - RCA agent):**
+**Example invocation (BAD - too vague):**
+**Why this matters:**
+- Root cause fixes prevent recurrence
+- Issues captured in `issue_patterns` table benefit future sessions
+- Systematic analysis produces better solutions than quick fixes
+
+**The only acceptable response to an issue is understanding WHY it happened.**
 
 ## 🚫 MANDATORY: Phase Transition Commands (BLOCKING)
 
@@ -137,9 +145,11 @@ These anti-patterns apply across ALL phases. Violating them leads to failed hand
 
 ### NC-7: No Silent Hook Failures
 ❌ Catching post-stage hook errors and logging as "non-fatal" when the hook produced zero expected output rows
-✅ Hooks that write to database tables must ve
+✅ Hooks that write to database tables must verify their output exists after execution. Zero rows written = escalation to chairman dashboard, not a warning log.
 
-*...truncated. Read full file for complete section.*
+**Why**: SD-LEO-INFRA-CENTRALIZED-POST-STAGE-001 revealed that the S17 doc-gen hook failed silently on every run since it was shipped (wrong column name in query). Because the error was caught as non-fatal, the pipeline continued without vision/architecture docs, and S19 generated an unvalidated sprint plan.
+
+**Rule**: "Non-fatal" means the hook threw an unexpected exception. "Hook ran but wrote zero rows to its target table" is a **data integrity failure** that must surface.
 
 ## Critical Term Definitions
 
@@ -166,9 +176,23 @@ These definitions are BINDING. Misinterpretation is a protocol violation.
 **AUTO-PROCEED**: Phase transitions *within* an SD run automatically. Post-completion sequence (/document → /ship → /learn) and next-SD selection also run automatically — modulated by the SD Continuation Truth Table and Chaining setting.
 
 **ONLY STOP IF** (Canonical Pause Points — same list as AUTO-PROCEED Mode):
-1. **Orchestrato
+1. **Orchestrator completion** — after all children, when Chaining is OFF
+2. **Blocking error requiring human decision** — merge conflicts, ambiguous requirements
+3. **Test failures after 2 retry attempts**
+4. **All children blocked**
+5. **Critical security or data-loss scenario** (includes DB/code status mismatch)
 
-*...truncated. Read full file for complete section.*
+**NOT a stop condition**: scope size, "substantial" upcoming work, decomposition into multiple children, PRD creation, large refactors, "warrants confirmation" rationalization, asking "which option?" or "should I do X or Y?" instead of executing. Phase boundaries are NOT pause points. If your reason for stopping is not on the five-point list above, KEEP WORKING.
+
+### "Child SD"
+**Definition**: An INDEPENDENT Strategic Directive that requires its own full LEAD→PLAN→EXEC cycle.
+**NOT**: A sub-task or implementation detail of the parent.
+**Each child**: Has its own PRD, handoffs, retrospective, and completion validation.
+
+### "Ship" vs "Complete"
+**Ship**: Code merged to main branch.
+**Complete**: Ship + database status 'completed' + all handoffs + retrospective.
+**CRITICAL**: Shipping is NECESSARY but NOT SUFFICIENT for completion.
 
 ## SD Type-Aware Workflow Paths
 
@@ -270,5 +294,5 @@ These anti-patterns apply across ALL phases. Violating them leads to failed hand
 
 ---
 
-*DIGEST generated: 2026-07-20 3:47:06 PM*
+*DIGEST generated: 2026-08-03 9:37:56 AM*
 *Protocol: 4.4.1*

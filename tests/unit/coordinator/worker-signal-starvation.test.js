@@ -50,8 +50,8 @@ describe('reportWorkerSignalStarvation', () => {
   it('counts an unanswered worker signal past the threshold and reports the oldest age', async () => {
     const { lines, log } = capture();
     const r = await reportWorkerSignalStarvation(fakeSupabase([
-      { id: 's-old', sender_session: 'w1', sender_type: 'worker', created_at: minsAgo(80), payload: {} },
-      { id: 's-mid', sender_session: 'w2', sender_type: 'worker', created_at: minsAgo(45), payload: {} },
+      { id: 's-old', sender_session: 'w1', sender_type: 'worker', created_at: minsAgo(80), payload: { signal_type: 'stuck' } },
+      { id: 's-mid', sender_session: 'w2', sender_type: 'worker', created_at: minsAgo(45), payload: { signal_type: 'stuck' } },
     ]), { now: NOW, log, env: {} });
     expect(r.starved).toBe(2);
     expect(r.oldestMin).toBe(80);
@@ -62,16 +62,51 @@ describe('reportWorkerSignalStarvation', () => {
     expect(lines.filter((l) => l.includes('WORKER_SIGNAL_UNANSWERED')).length).toBe(2);
   });
 
-  it('does NOT count signals that are answered, read, routed, or under threshold, or non-worker senders', async () => {
+  it('does NOT count signals that are answered, routed, under threshold, or from non-worker senders', async () => {
+    // SD-LEO-INFRA-WORKER-ESCALATION-WRITE-001 FR-3: row 'b' (read but never answered) was removed
+    // from this fixture and promoted to its own test below. Asserting starved===0 over a set that
+    // included a read-but-unanswered row locked in the defect that blinded this gauge to 99.85% of
+    // its population.
     const { log } = capture();
     const r = await reportWorkerSignalStarvation(fakeSupabase([
-      { id: 'a', sender_session: 'w', sender_type: 'worker', created_at: minsAgo(90), acknowledged_at: minsAgo(5), payload: {} },
-      { id: 'b', sender_session: 'w', sender_type: 'worker', created_at: minsAgo(90), read_at: minsAgo(5), payload: {} },
-      { id: 'c', sender_session: 'w', sender_type: 'worker', created_at: minsAgo(90), payload: { routed_to_feedback_id: 'f-1' } },
-      { id: 'd', sender_session: 'w', sender_type: 'worker', created_at: minsAgo(10), payload: {} },   // too young
-      { id: 'e', sender_session: 'adam', sender_type: 'adam', created_at: minsAgo(90), payload: {} },  // not a worker
+      { id: 'a', sender_session: 'w', sender_type: 'worker', created_at: minsAgo(90), acknowledged_at: minsAgo(5), payload: { signal_type: 'stuck' } },
+      { id: 'c', sender_session: 'w', sender_type: 'worker', created_at: minsAgo(90), payload: { signal_type: 'stuck', routed_to_feedback_id: 'f-1' } },
+      { id: 'd', sender_session: 'w', sender_type: 'worker', created_at: minsAgo(10), payload: { signal_type: 'stuck' } },   // too young
+      { id: 'e', sender_session: 'adam', sender_type: 'adam', created_at: minsAgo(90), payload: { signal_type: 'stuck' } },  // not a worker
     ]), { now: NOW, log, env: {} });
     expect(r.starved).toBe(0);
+  });
+
+  it('DOES count a read-but-unanswered signal (FR-3 — read_at is delivery, not disposition)', async () => {
+    const { log } = capture();
+    const r = await reportWorkerSignalStarvation(fakeSupabase([
+      { id: 'b', sender_session: 'w', sender_type: 'worker', created_at: minsAgo(90), read_at: minsAgo(5), payload: { signal_type: 'stuck' } },
+    ]), { now: NOW, log, env: {} });
+    expect(r.starved).toBe(1);
+  });
+
+  // QF-20260727-683: every /checkin emits a fresh payload.kind='roll_call' availability
+  // ping with an empty body and deliberately NO payload.signal_type (contract stated in
+  // .claude/commands/checkin.md). The sweep counted these as WORKER_SIGNAL_UNANSWERED
+  // anyway, so the gauge could never reach zero — measured: 4 of 5 rows named on one tick
+  // were roll_calls. This exercises the fix end-to-end through the reporter, not just the
+  // pure detector (see tests/unit/coordinator/detectors.test.js for the predicate-level cases).
+  it('QF-20260727-683: does NOT count empty-bodied roll_call rows, but still counts a real payload.signal_type row', async () => {
+    const { lines, log } = capture();
+    const r = await reportWorkerSignalStarvation(fakeSupabase([
+      { id: 'rc-1', sender_session: 'w1', sender_type: 'worker', created_at: minsAgo(80), body: null, payload: { kind: 'roll_call', sender_callsign: 'Bravo', available: true } },
+      { id: 'rc-2', sender_session: 'w1', sender_type: 'worker', created_at: minsAgo(60), body: null, payload: { kind: 'roll_call', sender_callsign: 'Bravo', available: true } },
+      { id: 'bare-1', sender_session: 'w1', sender_type: 'worker', created_at: minsAgo(50), body: null, payload: {} }, // neither kind nor signal_type
+      { id: 'sig-1', sender_session: 'w2', sender_type: 'worker', created_at: minsAgo(117), body: 'handing off a utilization decision', payload: { signal_type: 'feedback', sender_callsign: 'Charlie' } },
+    ]), { now: NOW, log, env: {} });
+    expect(r.starved).toBe(1);
+    expect(r.oldestMin).toBe(117);
+    const line = lines.find((l) => l.startsWith('WORKER SIGNALS:'));
+    expect(line).toContain('unanswered_over_30m=1');
+    expect(lines.some((l) => l.includes('WORKER_SIGNAL_UNANSWERED: id=sig-1'))).toBe(true);
+    expect(lines.some((l) => l.includes('WORKER_SIGNAL_UNANSWERED: id=rc-1'))).toBe(false);
+    expect(lines.some((l) => l.includes('WORKER_SIGNAL_UNANSWERED: id=rc-2'))).toBe(false);
+    expect(lines.some((l) => l.includes('WORKER_SIGNAL_UNANSWERED: id=bare-1'))).toBe(false);
   });
 
   it('REGRESSION: fails OPEN but says NOT MEASURED out loud — a silent catch would recreate the bug', async () => {
@@ -88,7 +123,7 @@ describe('reportWorkerSignalStarvation', () => {
     const { lines, log } = capture();
     // COORD_DETECTORS_V2 explicitly off (its real default) — the counter must still report.
     await reportWorkerSignalStarvation(fakeSupabase([
-      { id: 'z', sender_session: 'w', sender_type: 'worker', created_at: minsAgo(99), payload: {} },
+      { id: 'z', sender_session: 'w', sender_type: 'worker', created_at: minsAgo(99), payload: { signal_type: 'stuck' } },
     ]), { now: NOW, log, env: { COORD_DETECTORS_V2: 'false' } });
     expect(lines.find((l) => l.startsWith('WORKER SIGNALS:'))).toContain('unanswered_over_30m=1');
   });
@@ -99,12 +134,25 @@ describe('reportWorkerSignalStarvation', () => {
     expect(resolveThresholdMs({ COORD_REPLY_STARVATION_SEC: '600' })).toBe(600 * 1000);
   });
 
-  it('is READ-ONLY: only session_coordination is read, and no write verb is ever invoked', async () => {
+  // SD-LEO-INFRA-RETENTION-DESTROYS-REPLY-001 (FR-1): this asserted `from` was called EXACTLY ONCE
+  // with session_coordination. That pinned the TABLE COUNT as a proxy for read-only-ness, and the
+  // proxy broke when a second READ was legitimately added: retention_archive holds the acknowledged
+  // replies that retention moves out of the live table roughly an hour after ack, and without them
+  // an answered signal reported as starved for the remaining ~23 hours of the lookback.
+  //
+  // The property this test exists to protect is NO WRITES, not one table — so it now asserts that
+  // directly. Asserting the read set as well keeps it from silently widening further.
+  it('is READ-ONLY: reads only the two evidence tables, and no write verb is ever invoked', async () => {
     const { log } = capture();
     const sb = fakeSupabase([]);
     await reportWorkerSignalStarvation(sb, { now: NOW, log, env: {} });
-    expect(sb.from).toHaveBeenCalledWith('session_coordination');
-    expect(sb.from).toHaveBeenCalledTimes(1);
+    const tables = sb.from.mock.calls.map((c) => c[0]);
+    expect(tables).toContain('session_coordination');
+    expect(new Set(tables)).toEqual(new Set(['session_coordination', 'retention_archive']));
+    // The actual contract: no mutation verb reached the client on any path.
+    for (const verb of ['insert', 'update', 'upsert', 'delete', 'rpc']) {
+      expect(sb[verb], `${verb} must never be called`).toBeUndefined();
+    }
   });
 });
 

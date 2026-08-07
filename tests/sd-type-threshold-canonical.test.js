@@ -45,7 +45,17 @@ const EXPECTED_LITERAL_FILES = [
   // (PR #4657) consolidated it into the shared single-source lib/handoff/threshold-resolver.js,
   // which vision-score.js now imports/re-exports. Pin the canonical literal at its new home.
   'lib/handoff/threshold-resolver.js',
-  'scripts/modules/handoff/executors/plan-to-lead/gates/heal-before-complete.js',
+  // SD-FDBK-FIX-HEAL-BEFORE-COMPLETE-001 FR-2: heal-before-complete.js REMOVED from this list, and
+  // the removal is the deliverable rather than a casualty of it. That gate declared its own
+  // SD_TYPE_THRESHOLDS while importing only the FUNCTIONS from threshold-resolver.js, so two tables
+  // governed one decision. Measured at deletion: four types disagreed (enhancement 85->80,
+  // refactor 85->70, documentation 80->70, bugfix 60->70) while feature/security/infrastructure
+  // AGREED — a partial drift, which is why it survived: any spot-check landing on those three
+  // confirmed the tables matched. Six keys were missing from the gate copy entirely (governance,
+  // database, maintenance, protocol, orchestrator, _default) and that absence, not the disagreement,
+  // is the larger live effect: 4 in-flight orchestrator SDs move 85->70 through a MISSING key.
+  // This pin did its job — it went red the moment the site was deleted and told the deleter to come
+  // here. Updated deliberately, not silenced.
   'scripts/story-requirements-template.js',
 ];
 

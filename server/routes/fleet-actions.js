@@ -21,6 +21,8 @@ import {
   assertRoleCallsignCompatible,
 } from '../../lib/fleet/role-startup-prompt.js';
 import fleetIdentityPool from '../../scripts/assign-fleet-identities.cjs';
+// SD-LEO-FEAT-FLEET-SESSION-LIFECYCLE-001 / FR-4 — the SAME decision the panel renders.
+import { decideSingletonSpawn, isSingletonRole } from '../../lib/fleet/singleton-spawn-decision.mjs';
 
 // QF-20260726-607: reuse the coordinator cron's pool + picker rather than inventing a second
 // naming path. assign-fleet-identities.cjs:119-122 states outright that nextAvailable was hoisted
@@ -58,11 +60,24 @@ export async function respawnFleet(req, res) {
   const results = [];
   for (const missingSlot of drift.missing) {
     const desired = desiredSlots.find((d) => d.name === missingSlot.name) || {};
-    const result = await spawn(
-      { role: desired.role, callsign: missingSlot.name, accountProfile: desired.account_profile },
-      { supabaseClient: supabase },
-    );
-    results.push({ name: missingSlot.name, ...result });
+    try {
+      const result = await spawn(
+        { role: desired.role, callsign: missingSlot.name, accountProfile: desired.account_profile },
+        { supabaseClient: supabase },
+      );
+      results.push({ name: missingSlot.name, ...result });
+    } catch (err) {
+      // SD-FDBK-INFRA-SPAWN-SOURCE-CURRENCY-001 FR-4: spawn()'s guards THROW refusals whose
+      // messages carry the remedy (tree-currency names `git pull --ff-only`). Unhandled, the
+      // throw escaped to the EVA error handler, which flattens it to a bare 422 with no reason.
+      //
+      // Caught PER ITERATION rather than around the whole loop, deliberately: a single stale or
+      // dirty slot used to abort the entire respawn and discard every other slot's result, so one
+      // refusable slot silently cost the operator the whole batch. Now each slot reports its own
+      // outcome and the sweep completes. Same {ok:false, reason} shape the sessions page already
+      // renders verbatim (QF-20260731-222, PR #6669) — no new client contract.
+      results.push({ name: missingSlot.name, ok: false, reason: (err && err.message) || String(err) });
+    }
   }
 
   res.json({ live: isLiveEnabled(), respawned: results, unchanged: drift.present.length });
@@ -79,7 +94,17 @@ export async function relaunchSessionUnderProfile(req, res) {
     res.status(400).json({ ok: false, reason: 'target and accountProfile are required' });
     return;
   }
-  const result = await relaunchUnderProfile(target, accountProfile, { supabaseClient: supabase, newSessionId });
+  let result;
+  try {
+    result = await relaunchUnderProfile(target, accountProfile, { supabaseClient: supabase, newSessionId });
+  } catch (err) {
+    // SD-FDBK-INFRA-SPAWN-SOURCE-CURRENCY-001 FR-4: mirrors the addSession handler shipped in
+    // QF-20260731-222 (PR #6669). relaunch crosses the same tree-currency guard as spawn, so an
+    // unhandled refusal reached the EVA error handler and surfaced as a bare 422 — the operator
+    // saw a status code instead of the remedy the guard had already written for them.
+    res.status(422).json({ ok: false, reason: (err && err.message) || String(err) });
+    return;
+  }
   res.json({ live: isLiveEnabled(), ...result });
 }
 
@@ -115,6 +140,62 @@ export async function mintCallsign(supabase) {
  * failed. An explicitly supplied callsign is still honoured for the manifest/canary callers that
  * legitimately name their slots; only the requirement is dropped.
  */
+/**
+ * Holder identity from the CANONICAL resolvers — the same ones registration uses, so the route
+ * and registration can never disagree about WHO holds the role. Injectable purely so the verdict
+ * logic is testable without standing up three CJS identity modules.
+ */
+async function defaultResolveHolderId(supabase, role) {
+  if (role === 'adam') {
+    const { getActiveAdamId } = await import('../../lib/coordinator/adam-identity.cjs');
+    return getActiveAdamId(supabase, {});
+  }
+  if (role === 'solomon') {
+    const { getActiveSolomonId } = await import('../../lib/coordinator/solomon-identity.cjs');
+    return getActiveSolomonId(supabase, {});
+  }
+  // coordinator: resolved for LABELLING only — it is never refused.
+  const { getActiveCoordinatorId } = await import('../../lib/coordinator/resolve.cjs');
+  return getActiveCoordinatorId(supabase);
+}
+
+/**
+ * SD-LEO-FEAT-FLEET-SESSION-LIFECYCLE-001 / FR-4.
+ * Resolve the live holder of a singleton role and decide whether a spawn may proceed.
+ * Exported for tests. NEVER throws: an unresolvable holder must not manufacture a refusal —
+ * spawn()'s own dedup remains the backstop and answers honestly.
+ */
+export async function resolveSingletonSpawnVerdict(supabase, role, deps = {}) {
+  const { decide = decideSingletonSpawn, resolveHolderId = defaultResolveHolderId } = deps;
+  try {
+    if (!isSingletonRole(role)) return decide({ role, holder: null });
+
+    const holderId = await resolveHolderId(supabase, role);
+    if (!holderId) return decide({ role, holder: null });
+
+    // Freshness is computed against the GUARD's window, not the panel's (see the call site).
+    const { data: row } = await supabase
+      .from('claude_sessions')
+      .select('session_id, heartbeat_at, metadata')
+      .eq('session_id', holderId)
+      .maybeSingle();
+    if (!row) return decide({ role, holder: null });
+
+    const hb = row.heartbeat_at ? Date.parse(row.heartbeat_at) : NaN;
+    return decide({
+      role,
+      holder: {
+        session_id: row.session_id,
+        identity_kind: (row.metadata && row.metadata.role) || role,
+        heartbeat_age_ms: Number.isFinite(hb) ? Date.now() - hb : Infinity,
+      },
+    });
+  } catch {
+    // Fail-open: never invent a refusal from a resolver failure.
+    return decideSingletonSpawn({ role, holder: null });
+  }
+}
+
 export async function addSession(req, res) {
   const supabase = resolveServiceClient(req);
   const { role, callsign, accountProfile } = req.body || {};
@@ -129,6 +210,27 @@ export async function addSession(req, res) {
   // fleet_desired_slots, not from an operator.
   if (!isSpawnableRole(role)) {
     res.status(400).json({ ok: false, reason: `role must be one of ${SPAWNABLE_ROLES.join(', ')}` });
+    return;
+  }
+
+  // SD-LEO-FEAT-FLEET-SESSION-LIFECYCLE-001 / FR-4 — SINGLETON REFUSAL AT THE ROUTE.
+  //
+  // SERVER FIRST, deliberately. A UI-only gate is the failure this SD records as having already
+  // happened on this page (`role` written as FLEET_WORKER_ROLE with zero readers: the UI reported
+  // success while the session came up on the worker path). The panel calls the SAME
+  // decideSingletonSpawn and only renders what this route would answer.
+  //
+  // Holder IDENTITY comes from the canonical resolvers registration itself uses, so the route and
+  // registration can never disagree about WHO holds the role. Only the freshness arithmetic is
+  // local, and that is the point: it uses the GUARD's 600s window, not the panel's 3600s. Gating
+  // on the panel's would block for up to fifty minutes during which the spawn would have SUCCEEDED.
+  //
+  // Coordinator is never refused — silent takeover is designed, and refusing it breaks succession.
+  // Fail-open: if the holder cannot be resolved we do NOT invent a refusal; spawn()'s own dedup
+  // still answers honestly with skipped:already_live.
+  const singletonVerdict = await resolveSingletonSpawnVerdict(supabase, role);
+  if (!singletonVerdict.allowed) {
+    res.status(singletonVerdict.httpStatus).json({ ok: false, reason: singletonVerdict.reason });
     return;
   }
 
@@ -160,10 +262,21 @@ export async function addSession(req, res) {
   // FR-1: spread CONDITIONALLY. resolveRoleSpawnOpts returns {} for 'worker' so the key is ABSENT,
   // which is what makes spawn() fall through to callsign-namespace selection. Passing
   // `startupPrompt: undefined` would make the key present and suppress the pointer entirely.
-  const result = await spawn(
-    { role, callsign: resolvedCallsign, accountProfile },
-    { supabaseClient: supabase, ...resolveRoleSpawnOpts(role) },
-  );
+  let result;
+  try {
+    result = await spawn(
+      { role, callsign: resolvedCallsign, accountProfile },
+      { supabaseClient: supabase, ...resolveRoleSpawnOpts(role) },
+    );
+  } catch (err) {
+    // Quick-fix QF-20260731-222: spawn()'s guards throw refusals whose messages carry the remedy
+    // (tree-currency names `git pull --ff-only`; the launch contract names its violations). Letting
+    // them fall through to the EVA error handler flattens them to a bare 422 with no reason field,
+    // while the sessions page already renders {ok:false, reason} verbatim — so answer in that shape
+    // and the operator sees the refusal instead of a status code.
+    res.status(422).json({ ok: false, reason: (err && err.message) || String(err) });
+    return;
+  }
   // callsign LAST and authoritative: the UI must report the name that was actually spawned, not the
   // (now absent) one the operator typed.
   res.json({ live: isLiveEnabled(), ...result, callsign: resolvedCallsign, callsign_minted: !supplied });

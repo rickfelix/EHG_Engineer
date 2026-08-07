@@ -16,6 +16,13 @@
  * AND the phase started within RACE_WINDOW_SECONDS (the agent may be mid-write),
  * return a WAIT verdict instead of FAIL so the orchestrator re-checks later
  * without burning retry budget. Outside the window → FAIL (unchanged).
+ *
+ * SD-FDBK-FIX-GATE-SUBAGENT-EVIDENCE-001: the gate used to select `verdict` and
+ * then DISCARD it — presence of a row satisfied the gate regardless of outcome,
+ * so a sub-agent that crashed and wrote an error row (verdict=FAIL) counted
+ * exactly like a genuine PASS. The gate now (a) reduces evidence to the LATEST
+ * row per agent and (b) compares that row's verdict against an explicit policy.
+ * Rollout is warn-first via SUBAGENT_VERDICT_MODE (see resolveSubagentVerdictMode).
  */
 import { buildWaitResult, buildFailResult, isWithinRaceWindow } from '../../../../lib/handoff/wait-verdict.js';
 import { REQUIRED_SUBAGENTS } from '../required-subagents.js';
@@ -25,6 +32,102 @@ import { REQUIRED_SUBAGENTS } from '../required-subagents.js';
  * transient write-lag (WAIT) rather than a real absence (FAIL).
  */
 const RACE_WINDOW_SECONDS = 30;
+
+/**
+ * Verdicts that SATISFY a required sub-agent.
+ * Sized against the live population, not a recent sample (n=27,694 rows,
+ * whole table, measured 2026-07-31). CONDITIONAL_PASS is a pass with caveats —
+ * it is 1,107 rows table-wide and 217/570 of VALIDATION's last 30 days, so
+ * rejecting it would blank out the single most-required agent. WARNING is an
+ * agent that ran to completion and reported non-blocking concerns.
+ */
+const ACCEPT_VERDICTS = new Set(['PASS', 'CONDITIONAL_PASS', 'WARNING']);
+
+/**
+ * Verdicts that DO NOT satisfy a required sub-agent.
+ *   FAIL            — the agent ran and rejected, or crashed and wrote an error row.
+ *   BLOCKED         — the agent could not reach a verdict. NOT a pass.
+ *   PENDING         — the run never finished (2,330 rows table-wide, 2,265 of them
+ *                     VISION_FIDELITY LLM timeouts; zero among the required set).
+ *   MANUAL_REQUIRED — "a human must still act". Absent from the original policy
+ *                     brief; found by measuring the table (92 rows, all STORIES/
+ *                     DOCMON, zero among the required set). Explicitly classified
+ *                     rather than left to fall through to `unknown`, because
+ *                     "manual action outstanding" is the opposite of validated.
+ */
+//   ERROR           — added after checking the CHECK constraint rather than the data. The
+//                     valid_verdict domain (database/migrations/20260130_fix_sub_agent_verdict_
+//                     constraint.sql:13-22) is PASS/FAIL/BLOCKED/CONDITIONAL_PASS/WARNING/
+//                     MANUAL_REQUIRED/PENDING/ERROR. ERROR has zero rows today, so measuring the
+//                     TABLE could not surface it — only reading the constraint could. Left
+//                     unclassified it fell through to `unknown`, which this gate ACCEPTS: a verdict
+//                     whose migration comment reads "When execution errors occur" would have been
+//                     accepted with a warning. That is the exact defect this SD exists to fix,
+//                     surviving inside its own fix. THE POPULATION IS NOT THE DOMAIN — a value with
+//                     no rows yet is still a value the writer is allowed to emit.
+const REJECT_VERDICTS = new Set(['FAIL', 'BLOCKED', 'PENDING', 'MANUAL_REQUIRED', 'ERROR']);
+
+/**
+ * Classify one verdict value into accept / reject / unknown.
+ *
+ * NULL, empty, and unrecognised strings resolve to `unknown`, which the gate
+ * ACCEPTS while emitting a warning. Rationale: measured 0 NULL and 0 empty
+ * verdicts across all 27,694 rows, so this branch protects against a FUTURE
+ * writer emitting an unmodelled value — and on that path a fail-open warning is
+ * strictly better than a manufactured block, matching how the sibling
+ * invocation-path gate fails open on infra surprises. An unknown verdict is
+ * deliberately NOT silent: it warns in both modes so a new value gets noticed
+ * and classified rather than quietly re-hollowing the gate.
+ *
+ * @param {string|null|undefined} verdict
+ * @returns {'accept'|'reject'|'unknown'}
+ */
+/**
+ * QF-20260804-569 — verdicts that mean THE CHECK NEVER RAN, as distinct from ran-and-rejected.
+ *
+ * ERROR is written when the executor CRASHES (e.g. `--code EXPLORE` dies with "Failed to load
+ * sub-agent EXPLORE from database" and still writes a row). PENDING is written when a run never
+ * finished. Neither is a verdict about the SD — they are the absence of one.
+ *
+ * They used to sit in REJECT_VERDICTS alongside FAIL, which made them subject to
+ * SUBAGENT_VERDICT_MODE — advisory by default. So a crashed run bought the same passage as a real
+ * one: "a row exists" was being read as "the check ran". Measured on two separate SDs.
+ *
+ * This is a PREDICATE change, not a policy change. It does not make the gate stricter about real
+ * verdicts — FAIL/BLOCKED/MANUAL_REQUIRED keep exactly their current advisory-or-block behaviour.
+ * It stops a crash from counting as evidence at all.
+ */
+const NON_EVIDENCE_VERDICTS = new Set(['ERROR', 'PENDING']);
+
+export function classifyVerdict(verdict) {
+  if (verdict === null || verdict === undefined) return 'unknown';
+  const v = String(verdict).trim().toUpperCase();
+  if (v === '') return 'unknown';
+  if (ACCEPT_VERDICTS.has(v)) return 'accept';
+  // Checked BEFORE reject: both sets list ERROR/PENDING today, and this ordering is what makes
+  // them non-evidence rather than a rejection. Do not reorder.
+  if (NON_EVIDENCE_VERDICTS.has(v)) return 'nonevidence';
+  if (REJECT_VERDICTS.has(v)) return 'reject';
+  return 'unknown';
+}
+
+/**
+ * Warn-first rollout resolver, mirroring resolveInvocationMode in
+ * executors/lead-final-approval/gates/invocation-path-gate.js.
+ *
+ * Default ADVISORY: a rejecting verdict is surfaced as a WARNING and the gate
+ * still passes. SUBAGENT_VERDICT_MODE=block promotes it to a hard failure.
+ * The default must stay advisory — this gate has been presence-only since it
+ * shipped, so a blocking default would retroactively fail in-flight SDs whose
+ * evidence was collected under the old contract. See the promotion precondition
+ * documented in ../required-subagents.js before flipping this.
+ *
+ * @param {object} [env]
+ * @returns {'advisory'|'block'}
+ */
+export function resolveSubagentVerdictMode(env = process.env) {
+  return (env && env.SUBAGENT_VERDICT_MODE) === 'block' ? 'block' : 'advisory';
+}
 
 /**
  * Required sub-agents per handoff type.
@@ -250,33 +353,175 @@ export async function validateSubagentEvidence(ctx, supabase) {
     };
   }
 
-  // Normalize: group by sub_agent_code, keep MAX(created_at)
-  const present = new Set();
-  for (const r of rows) {
-    if (r?.sub_agent_code) present.add(r.sub_agent_code);
-  }
-
   // Compare (case-insensitive) — required may be "VALIDATION" while rows write "validation-agent"
   // Match by normalized prefix: uppercase and strip "-agent"
   const norm = s => String(s || '').toUpperCase().replace(/-AGENT$/, '').replace(/-+/g, '_');
-  const presentNorm = new Set([...present].map(norm));
 
-  const missing = required.filter(r => !presentNorm.has(norm(r)));
+  // Group by NORMALIZED sub_agent_code, keep MAX(created_at) — what the old
+  // comment claimed but the old code never did (it flattened every row into a
+  // presence Set). Under presence-only that was harmless; under verdict-checking
+  // it is load-bearing, because an agent that FAILED then SUCCEEDED (or the
+  // reverse) is otherwise ambiguous. Latest-wins also gives "re-run after fixing"
+  // the correct semantics for free.
+  //
+  // Grouping on the NORMALIZED key (not the raw code) is deliberate: the presence
+  // check has always treated 'Explore'/'EXPLORE' and 'TESTING'/'testing-agent' as
+  // the same agent, so the verdict check must collapse them the same way. Grouping
+  // raw would let a stale variant's verdict survive alongside the current one.
+  //
+  // parseAsUTC (not string compare) because created_at arrives in mixed shapes —
+  // naive, '+00:00', and varying fractional-second precision all coexist in this table.
+  const present = new Set();
+  const latestByCode = new Map();
+  for (const r of rows) {
+    if (!r?.sub_agent_code) continue;
+    present.add(r.sub_agent_code);
+    const key = norm(r.sub_agent_code);
+    const prev = latestByCode.get(key);
+    // An unparseable created_at yields NaN, and every NaN comparison is false —
+    // which would silently pin the group to whichever row happened to arrive
+    // first. Coerce to 0 so such a row can only ever LOSE to a real timestamp.
+    const parsed = parseAsUTC(r.created_at)?.getTime();
+    const t = Number.isFinite(parsed) ? parsed : 0;
+    if (!prev || t >= prev._t) latestByCode.set(key, { ...r, _t: t });
+  }
+
+  const missing = required.filter(r => !latestByCode.has(norm(r)));
+
+  // SD-FDBK-FIX-GATE-SUBAGENT-EVIDENCE-001: agents that DID write evidence, but
+  // whose latest row is a rejecting verdict. Kept separate from `missing` so the
+  // FR-2 race-window WAIT below stays keyed on true absence only — a row that
+  // exists and says FAIL is not "the agent may still be mid-write".
+  const failing = [];
+  const unknownVerdicts = [];
+  // QF-20260804-569: agents whose latest row proves the check DID NOT RUN (crash / never
+  // finished). Tracked separately from `failing` because a rejection is a verdict and these are
+  // the absence of one — and separately from `missing` because these are NOT the FR-2 race window
+  // (a row exists; the agent is not mid-write). They block unconditionally, ignoring
+  // SUBAGENT_VERDICT_MODE, since there is no verdict for that mode to be lenient about.
+  const nonEvidence = [];
+  for (const r of required) {
+    const row = latestByCode.get(norm(r));
+    if (!row) continue;
+    const klass = classifyVerdict(row.verdict);
+    if (klass === 'nonevidence') nonEvidence.push({ agent: r, verdict: row.verdict, created_at: row.created_at });
+    else if (klass === 'reject') failing.push({ agent: r, verdict: row.verdict, created_at: row.created_at });
+    else if (klass === 'unknown') unknownVerdicts.push({ agent: r, verdict: row.verdict });
+  }
 
   if (missing.length === 0) {
-    console.log(`   ✅ All required sub-agents have fresh evidence (${required.length}/${required.length})`);
+    // Every required agent wrote a row. Presence used to end the check here;
+    // now the LATEST row's verdict decides. SUBAGENT_VERDICT_MODE governs whether
+    // a rejecting verdict warns (advisory, default) or fails (block).
+    const mode = resolveSubagentVerdictMode();
+    const verdictDetails = {
+      required,
+      present: [...present],
+      missing: [],
+      verdict_mode: mode,
+      latest_verdicts: required.map(r => ({ agent: r, verdict: latestByCode.get(norm(r))?.verdict ?? null })),
+      failing,
+      unknown_verdicts: unknownVerdicts,
+      phase_started_at: phaseStartedAt.toISOString()
+    };
+
+    // Unknown verdicts never block (see classifyVerdict) but must never be silent.
+    const unknownWarnings = unknownVerdicts.map(
+      u => `SUBAGENT_VERDICT_UNKNOWN: ${u.agent} latest evidence carries unrecognised verdict ${JSON.stringify(u.verdict)} — accepted (fail-open), but classify it in ACCEPT_VERDICTS/REJECT_VERDICTS.`
+    );
+    for (const u of unknownVerdicts) console.log(`   ❔ ${u.agent}: unrecognised verdict ${JSON.stringify(u.verdict)} — accepted with warning`);
+
+    // QF-20260804-569: a crashed or never-finished run is NOT evidence. Checked before the
+    // verdict-mode branch below, and deliberately not routed through it — SUBAGENT_VERDICT_MODE
+    // decides how lenient to be about a VERDICT, and there is no verdict here.
+    if (nonEvidence.length > 0) {
+      const ne = nonEvidence.map(f => `${f.agent}=${f.verdict}`).join(', ');
+      const head = `SUBAGENT_EVIDENCE_NOT_RUN: ${ne} — the run crashed or never finished, so no check was performed. A row existing is not the check having run.`;
+
+      // QF-20260804-926 — RESTORE THE DOCUMENTED SAFETY VALVE.
+      //
+      // QF-20260804-569 made non-evidence block UNCONDITIONALLY, ignoring verdict mode. That half
+      // is correct and hard-won — a crashed run must not buy the same passage as a real one — but
+      // it shipped WITHOUT its satisfiability half, and required-subagents.js:49-56 had already
+      // named the precondition verbatim:
+      //
+      //   "PRECONDITION FOR PROMOTING SUBAGENT_VERDICT_MODE=block: the residual ~10% ... is 100%
+      //    attributable to the unregistered-EXPLORE CLI path leaving a tombstone as the last row.
+      //    Resolve that first ... Until then the gate's advisory default keeps this cost at zero."
+      //
+      // LEAD-TO-PLAN still requires 'Explore', a Claude Code BUILT-IN absent from leo_sub_agents,
+      // so `--code EXPLORE` throws and writes a tombstone. Blocking on it makes LEAD-TO-PLAN
+      // unpassable for any seat restricted to the CLI path — no action available to that worker
+      // produces a passing row. Measured cohort: ~10% of SDs (187/209 = 89.5% unaffected).
+      //
+      // So non-evidence now honours the SAME mode flag as a rejecting verdict, until Explore is
+      // resolved (harness_backlog 6529e3a3). This is NOT re-softening ERROR/PENDING generally:
+      // they remain a DISTINCT class, they are still never accepted, and under
+      // SUBAGENT_VERDICT_MODE=block they still block. What returns is the operator's ability to
+      // turn the enforcement on deliberately rather than having it arrive as a side effect.
+      if (mode !== 'block') {
+        const warn = `${head} (mode: ${mode} — advisory until the required-agent list is satisfiable from every invocation path; see required-subagents.js:49-56)`;
+        console.log(`   ⚠️  ${warn}`);
+        return {
+          passed: true,
+          score: 100,
+          max_score: 100,
+          issues: [],
+          warnings: [...unknownWarnings, warn],
+          details: { reason: 'SUBAGENT_EVIDENCE_NOT_RUN_ADVISORY', non_evidence: nonEvidence, ...verdictDetails }
+        };
+      }
+
+      console.log(`   ❌ ${head}`);
+      return buildFailResult({
+        score: 0,
+        max_score: 100,
+        issues: [head],
+        details: { reason: 'SUBAGENT_EVIDENCE_NOT_RUN', non_evidence: nonEvidence, ...verdictDetails },
+        remediation: `Re-run ${nonEvidence.map(f => f.agent).join(', ')} for SD ${sdKey} until it writes a real verdict. If the agent code cannot be executed at all (e.g. it names a Claude Code agent TYPE with no row in the sub-agent catalog), that is a REQUIREMENT defect, not a worker error — the required-agent list is naming something no CLI path can satisfy.`
+      });
+    }
+
+    if (failing.length === 0) {
+      console.log(`   ✅ All required sub-agents have fresh PASSING evidence (${required.length}/${required.length})`);
+      return {
+        passed: true,
+        score: 100,
+        max_score: 100,
+        issues: [],
+        warnings: unknownWarnings,
+        details: verdictDetails
+      };
+    }
+
+    const summary = failing.map(f => `${f.agent}=${f.verdict}`).join(', ');
+    const headline = `SUBAGENT_EVIDENCE_BAD_VERDICT: latest evidence for ${summary} does not indicate a pass`;
+    const remediation = `Re-run the sub-agent(s) (${failing.map(f => f.agent).join(', ')}) for SD ${sdKey} and let them write a fresh passing row — the gate reads the LATEST row per agent, so a successful re-run supersedes the failed one. Accepted verdicts: ${[...ACCEPT_VERDICTS].join('/')}.`;
+    console.log(`   ${mode === 'block' ? '❌' : '⚠️ '} ${headline} (mode: ${mode})`);
+
+    if (mode === 'block') {
+      return buildFailResult({
+        score: 0,
+        max_score: 100,
+        issues: [headline],
+        details: { reason: 'SUBAGENT_EVIDENCE_BAD_VERDICT', ...verdictDetails },
+        remediation
+      });
+    }
+
+    // advisory (default): warn, do not fail — a gate that has been presence-only
+    // since it shipped must not start blocking in-flight SDs without an opt-in.
     return {
       passed: true,
       score: 100,
       max_score: 100,
       issues: [],
-      warnings: [],
-      details: {
-        required,
-        present: [...present],
-        missing: [],
-        phase_started_at: phaseStartedAt.toISOString()
-      }
+      warnings: [
+        `[ADVISORY] ${headline}. ${remediation}`,
+        'Enforcement is opt-in: set SUBAGENT_VERDICT_MODE=block to FAIL on non-passing sub-agent evidence.',
+        ...unknownWarnings
+      ],
+      details: verdictDetails
     };
   }
 
@@ -286,10 +531,14 @@ export async function validateSubagentEvidence(ctx, supabase) {
   // phase-start anchor is derived from the prior handoff's accepted_at (RISK-1:
   // there is NO invoked_at column). A missing/epoch anchor is far in the past,
   // so isWithinRaceWindow returns false → FAIL (safe default).
+  // `failing` is carried here too: when some agents are absent AND others wrote a
+  // rejecting row, absence still decides the verdict (unchanged behavior), but the
+  // bad verdicts must remain visible in details rather than being dropped.
   const sharedDetails = {
     required,
     present: [...present],
     missing,
+    failing,
     phase_started_at: phaseStartedAt.toISOString()
   };
 
@@ -332,4 +581,9 @@ export function createSubagentEvidenceGate(supabase) {
 }
 
 // Internal helpers exported for test access
-export const _internals = { resolveCurrentPhaseStartedAt, killSwitchActive };
+export const _internals = {
+  resolveCurrentPhaseStartedAt,
+  killSwitchActive,
+  ACCEPT_VERDICTS,
+  REJECT_VERDICTS
+};

@@ -42,6 +42,9 @@ import {
 
 // Import state management
 import { loadState, dashboardState } from './state.js';
+// QF-20260725-096: retired-route matchers, kept in their own side-effect-free module so the scope
+// pins can import the real pattern without booting the server.
+import { installFleetUiSurface } from './retired-routes.js';
 
 // Import WebSocket handler
 import { initializeWebSocket, broadcastUpdate } from './websocket.js';
@@ -161,10 +164,70 @@ app.all('/api/webhooks/twilio-status', express.urlencoded({ extended: false }), 
 
 app.use(express.json());
 
+// QF-20260725-096 — the standalone /fleet-ui session view is RETIRED (chairman-ratified
+// 2026-07-27). EHG's BuilderSessionsPage is the session list, and the terminal is the detail
+// surface. Registered AHEAD of the static mount below because that is the only thing serving
+// these files; anything after it never runs.
+//
+// FILE-SCOPED, NOT ROUTE-SCOPED, and that distinction is the whole point: session-view.*,
+// fleet-panel.* and vision.* all live under the SAME /fleet-ui static mount, so retiring the
+// mount — or matching a prefix any looser than this — would take the other two pages down with
+// it. The anchored regex matches session-view.<ext> and nothing else: not fleet-panel.html, not
+// vision.html, and not a nested path, because [^/]* cannot cross a segment boundary.
+// A raw RegExp rather than a string pattern: this is Express 5 (path-to-regexp v8), where the
+// old '*' string wildcard no longer means what it did in v4.
+//
+// *** BYPASS FIX (same QF, second pass). THE FIRST VERSION OF THIS MATCHER WAS CIRCUMVENTABLE. ***
+// It was `/^\/fleet-ui\/session-view\.[^/]*$/` — case-SENSITIVE and anchored on exactly one slash.
+// express.static resolves through a case-INSENSITIVE filesystem on this host, so it happily served
+// every one of these while the matcher never fired (all measured returning 200 against the running
+// server):
+//     /fleet-ui/Session-View.html   /fleet-ui/SESSION-VIEW.HTML   /fleet-ui/Session-View.js
+//     /FLEET-UI/session-view.html   /Fleet-UI/session-view.html
+//     /fleet-ui//session-view.html  /fleet-ui///session-view.html
+// So `i` for the case axis, and `\/+` for the repeated-slash axis. A guard that the server routes
+// around is not a guard, and it fails SILENTLY — the page kept serving and nothing recorded it.
+//
+// WORSE, AND THE REASON THIS IS CALLED OUT AT LENGTH: the QF-20260727-484 hit-logging below lives
+// INSIDE this handler, so a bypassing request logged NOTHING. The instrument inherited the guard's
+// blind spot because it was built into the guard. Seven days of that silence would have been read
+// as "nobody wanted the page" when the truth was "the page was still reachable four ways".
+//
+// HOW IT SURVIVED REVIEW: the original change shipped with a regex "proof" against nine paths —
+// every one of them lowercase and single-slash, because they were written from the same mental
+// model as the pattern. A negative control only controls for what you thought to vary. The variant
+// list is now pinned as a test (tests/unit/server/fleet-ui-410-scope.test.js) so the axes are
+// asserted rather than imagined.
+//
+// 410 Gone, deliberately, not 404: it asserts the resource was real and is intentionally
+// withdrawn, so a hit shows up as a decision rather than a broken link. That matters because
+// the disposition depends on watching for hits during the soak — silence is the evidence.
+// DELETES NOTHING. server/public/fleet-ui/session-view.js stays on disk (its unit test still
+// imports it), and rollback is removing this block — one commit, no file resurrection.
+//
+// The pattern lives in server/retired-routes.js so the scope pins can assert THIS regex without
+// booting the server — startServer() runs unconditionally on import of this file, so a test that
+// imported from here would open DB connections and bind a port just to check a regex. A test that
+// re-declares the pattern instead would prove only that its own copy behaves, which is exactly how
+// the circumventable first version passed review.
+// QF-20260728-458: MIDDLEWARE, NOT `app.all(<regex>)`. Express matches a route regex against the
+// RAW pathname, so a normalise-then-match design cannot be expressed as a route pattern at all —
+// the normalisation has to happen before the decision. That is the whole reason three spellings
+// kept getting served: the guard was matching a different string than the file server resolved.
+// Registered here, still ahead of the /fleet-ui static mount below, so the retirement wins.
+// SD-LEO-FIX-UNOWNED-PARENT-SLICE-001: the retirement guards AND the static mount are installed
+// together by one function, because THE ORDER IS THE SECURITY PROPERTY. A 410 registered after
+// express.static is shadowed, unreachable, and still reads as correct in review. While both
+// registrations lived inline here, nothing could assert the guard was even MOUNTED — deleting the
+// app.use line left every matcher unit test green while the retired page went straight back to
+// being served, because index.js calls startServer() at import so no test can import it. Behind
+// the seam, tests/unit/server/fleet-ui-410-scope.test.js builds a bare express app, calls this
+// same function, and issues real requests: ordering is EXERCISED, not asserted.
+//
 // Fleet-launcher operator UI static assets (SD-LEO-INFRA-LEO-LAUNCHER-SHELL-001-B): the
 // Session View pane fragment, mountable into the parent shell. See the ARCH-007 exception
 // note at the top of this file.
-app.use('/fleet-ui', express.static(path.join(PROJECT_ROOT, 'server', 'public', 'fleet-ui')));
+installFleetUiSurface(app, { root: path.join(PROJECT_ROOT, 'server', 'public', 'fleet-ui') });
 
 // NOTE: /api/webhooks/github-ci-status (api/webhooks/github-ci-status.js) is
 // intentionally NOT mounted here. Its ESM/CJS crash and an unauthenticated
@@ -308,6 +371,31 @@ async function startServer() {
     await storyBootstrap.initialize();
     console.log('🎯 STORY Agent initialized');
   }
+
+  // QF-20260726-175 (b) — PROCESS-LEVEL BACKSTOP. Registered BEFORE listen, so it covers startup
+  // rejections too, and before RCA monitoring specifically because that subsystem caused the
+  // outage this fixes.
+  //
+  // WHY THIS EXISTS: on 2026-07-26 a single unhandled rejection — an RLS denial on a DIAGNOSTIC
+  // side-write into root_cause_reports — terminated this entire API process for 1h45m under
+  // Node's default --unhandled-rejections=throw. Part (a) fixes that one call path; this fixes
+  // the CLASS, so the next un-caught await anywhere in the server cannot kill the control plane.
+  //
+  // DELIBERATELY REJECTIONS ONLY, NOT uncaughtException. lib/feedback-capture.js
+  // initializeErrorHandlers() would install both, but its uncaughtException arm swallows the
+  // error with the re-throw commented out — and resuming after a genuine uncaught exception can
+  // continue from corrupt state, which is a different and riskier trade than the one this QF
+  // asks for. (Separately: that function is never called anywhere in the repo — a crash backstop
+  // built and never wired. Reported as its own finding rather than silently adopted here.)
+  process.on('unhandledRejection', (reason) => {
+    const err = reason instanceof Error ? reason : new Error(String(reason));
+    console.error(
+      '[server] UNHANDLED REJECTION — logged, NOT fatal. The API stays up deliberately; '
+      + 'investigate this, it is a real defect.\n'
+      + `  code=${err?.code ?? '<none>'} message=${err?.message ?? String(err)}\n`
+      + `  stack=${err?.stack ?? '<no stack>'}`,
+    );
+  });
 
   // Initialize RCA runtime monitoring (SD-RCA-001)
   await bootstrapRCAMonitoring();

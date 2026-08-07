@@ -61,12 +61,184 @@ function formatSectionCompact(section, options = {}) {
 
   let result = `## ${section.title}\n\n${content.trim()}`;
 
-  // Hard cap: truncate if still over budget
-  if (result.length > maxChars) {
+  // Over budget: keep what CONSTRAINS, not what comes FIRST — but only where head-truncation is
+  // actually catastrophic. See AUTHORITY_SELECT_MIN_CHARS for why this is gated rather than global.
+  if (result.length > maxChars && result.length > AUTHORITY_SELECT_MIN_CHARS) {
+    result = retainAuthorityClauses(section.title, content.trim(), maxChars);
+  } else if (result.length > maxChars) {
     result = result.substring(0, maxChars - 80) + '\n\n*...truncated. Read full file for complete section.*';
   }
 
   return result;
+}
+
+/**
+ * Head-truncation is fine when it keeps most of a section and catastrophic when it keeps a tenth.
+ * Engage authority selection only in the second regime.
+ *
+ * WHY THIS IS A THRESHOLD AND NOT A GLOBAL SWITCH — I tried global first and the measurement said no.
+ * Authority selection replacing head-truncation EVERYWHERE cost authority lines in three digests
+ * that were only slightly over budget (CLAUDE_DIGEST 9->6, EXEC 12->11, SOLOMON 6->5): a section
+ * 1.2x its budget keeps ~all of itself under head-truncation, so ANY re-selection can only take
+ * things away. Adding a backfill pass recovered part of it but not all, and chasing the rest would
+ * have meant tuning a heuristic against digests this SD has no business changing.
+ *
+ * ABSOLUTE, NOT A MULTIPLE OF THE BUDGET — AND THE MULTIPLE VERSION SILENTLY UNDID THE FIX.
+ * This was `maxChars * 3`, which coupled the threshold to the very number the other half of this
+ * repair raises. Setting the Adam budget to 16,000 moved the threshold to 48,000, the 38,979-char
+ * contract stopped qualifying, and it fell back to head-truncation — so the two fixes cancelled and
+ * the digest lost the canonical SD-creation prohibition again. It presented as a stuck measurement:
+ * output frozen at 17,915 bytes across budgets from 12,000 to 30,000, which I first read as
+ * "saturated" when it actually meant "this knob stopped being connected". The tell was the file
+ * carrying BOTH markers at once — the authority NOTE from one section and the old truncation
+ * marker from another — i.e. two sections taking two different paths.
+ *
+ * An absolute floor cannot be moved by the budget. 9,000 chars is where head-truncating a 3,000-char
+ * digest section throws away two thirds or more and WHICH two thirds becomes the whole question;
+ * below it, behaviour is unchanged and the other seven digests stay untouched, verified rather than
+ * assumed (tests/unit/adam/adam-digest-authority-survives.test.js). The Adam contract is 38,979.
+ */
+const AUTHORITY_SELECT_MIN_CHARS = 9000;
+
+/**
+ * The subset that must survive even when the budget forces a choice. These name a SPECIFIC
+ * prohibition or control ("CHAIRMAN-ONLY", "kill switch", "NEVER hand-insert"), where the general
+ * markers below also fire on ordinary prose that merely contains "must" or "gate".
+ */
+const STRONG_MARKERS = [
+  /CHAIRMAN-ONLY/i, /never delegatable/i, /non-delegatable/i, /fail-closed/i, /fail closed/i,
+  /kill.?switch/i, /\bNEVER\b/, /\bforbidden\b/i, /\bprohibited\b/i,
+  /\bis NOT\b/, /\bdoes NOT\b/, /\brequires? (?:the )?chairman\b/i,
+];
+
+/**
+ * Markers of a clause that BINDS. A digest that drops these is not a shorter contract,
+ * it is a contract with no authority in it.
+ */
+const AUTHORITY_MARKERS = [
+  /CHAIRMAN-ONLY/i, /never delegatable/i, /non-delegatable/i, /fail-closed/i, /fail closed/i,
+  /kill.?switch/i, /\bnever\b/i, /\bmust\b/i, /\bonly\b/i, /\bforbidden\b/i, /\bprohibited\b/i,
+  /\brejected to the chairman\b/i, /\brequires? (?:the )?chairman\b/i, /\bgate\b/i,
+  // NEGATIVE IDENTITY IS AUTHORITY. A role contract's sharpest boundaries are written as what the
+  // role is NOT — "Solomon is NOT a sub-agent", "Adam is NOT a worker" — and dropping those lets a
+  // session assume a role it was explicitly denied. Found by measurement: the Solomon digest lost
+  // exactly these two lines and nothing else.
+  /\bis NOT\b/, /\bdoes NOT\b/, /\bNOT a\b/, /\bnot\b.{0,30}\bdelegat/i,
+];
+// CASE MATTERS HERE, AND GETTING IT WRONG IS HOW I MIS-MEASURED MY OWN FIX.
+// never/must/only are case-INSENSITIVE because prose carries them in lowercase ("the only way to
+// get a context-fresh perspective") and that sentence is as binding as a shouted one. The NOT forms
+// stay case-SENSITIVE: capitalised NOT is the deliberate emphasis role contracts use for identity
+// boundaries, while lowercase "not" appears in nearly every sentence and would mark everything.
+// My first measurement used a case-insensitive grep against a partly case-sensitive selector, so
+// the instrument and the implementation disagreed and the audit read clean while lines were lost.
+
+/**
+ * Budget-bounded compression that selects by AUTHORITY rather than by POSITION.
+ *
+ * WHY THIS EXISTS — a regression this SD caused and this function repairs.
+ * The previous rule was `substring(0, maxChars)`: keep the first N characters, drop the rest.
+ * That is safe only while a section is roughly as long as the budget, which held while the Adam
+ * contract was ~40 rows of ~1-3KB each — every clause was its own section and survived
+ * independently. SD-LEO-INFRA-ADAM-CONTRACT-READABLE-001 consolidated the contract into ONE
+ * 38,979-char row, and head-truncation then decapitated it: CLAUDE_ADAM_DIGEST.md fell from 18,903
+ * to 4,727 bytes and lost EVERY authority clause — the CHAIRMAN-ONLY permission-change
+ * prohibition, the delegation kill-switch, the verbal-scribe ceremony and the pre-send consult
+ * rubric. All four sit past char 3,000. The digest is what a context-pressured session loads, so
+ * the result was a governance surface advertising Adam's duties with none of Adam's limits: the
+ * exact failure this SD exists to prevent, produced by this SD.
+ *
+ * Position is the wrong axis. Contracts open with purpose and close with prohibitions, so a
+ * head-truncated contract keeps the prose and discards the teeth EVERY time — the failure is
+ * systematic, not unlucky. Selecting on authority markers inverts that: the clauses most worth the
+ * budget are kept whatever their offset, and each keeps its nearest heading so a retained "NEVER"
+ * cannot be read against the wrong subject. Elisions are marked inline, so the reader can see that
+ * material was dropped and where — a silent truncation reads as a complete document.
+ *
+ * PRIORITY, NOT A FILTER — AND I SHIPPED THE FILTER FIRST AND MEASURED IT WRONG.
+ * The first version kept ONLY marked lines, and the comment here asserted it "cannot regress" the
+ * other digests. That was an assumption stated as a fact, and measuring it refuted it: authority
+ * lines fell 9->6 in CLAUDE_DIGEST.md, 12->11 in EXEC, 6->5 in SOLOMON. The reason is that a
+ * section only SLIGHTLY over budget used to keep nearly all of itself under head-truncation, so
+ * replacing that with a filter DISCARDS unmarked lines that comfortably fit. The Adam contract is
+ * 13x its budget and the others are barely over — one rule, two very different regimes.
+ *
+ * So authority is an ORDERING over the budget, not a membership test on the text: marked lines are
+ * seated first, then the remainder backfills in document order until the budget is gone. A
+ * slightly-over section keeps essentially what it always did; a massively-over section keeps its
+ * prohibitions instead of its preamble. Strictly better in BOTH regimes, which the filter was not.
+ */
+function retainAuthorityClauses(title, content, maxChars) {
+  const head = `## ${title}\n\n`;
+  const NOTE = '\n\n*Authority-selected digest — lower-priority prose elided. Read the full file for complete content.*';
+  const budget = maxChars - head.length - NOTE.length;
+
+  const lines = content.split('\n');
+  const binding = new Set();
+  let heading = -1;
+
+  lines.forEach((line, i) => {
+    if (/^#{2,6}\s/.test(line)) { heading = i; return; }
+    if (!AUTHORITY_MARKERS.some((re) => re.test(line))) return;
+    binding.add(i);
+    // Carry the nearest heading, or an orphaned prohibition attaches to the wrong subject.
+    if (heading >= 0) binding.add(heading);
+  });
+
+  // Always seat the opening lines: they say WHO the contract binds, which every clause presumes.
+  for (let i = 0; i < Math.min(4, lines.length); i++) binding.add(i);
+
+  // SEAT THE BINDING LINES FIRST, AND NEVER LET PROSE CROWD THEM OUT.
+  // This ordering is not cosmetic — getting it wrong cost me the "NEVER hand-insert" clause and
+  // took a failing test to find. The earlier version backfilled prose up to the FULL budget and
+  // then rendered everything in one pass that `break`-ed at the first overflow. Two faults
+  // compounded: the elision markers cost budget nobody had reserved, so the render always ran over;
+  // and `break` (rather than skip) meant the overflow discarded the entire TAIL — which is exactly
+  // where a contract keeps its prohibitions. It also faked saturation, because the backfill spent
+  // whatever budget it was given and the render then overran at the same proportion — the output
+  // was 17,915 bytes at a 16,000 budget AND at 36,000, which reads as "nothing more to add" when
+  // the truth was "the tail is being cut every time". A number that does not move is not evidence
+  // that it cannot.
+  const spend = (n, i) => n + lines[i].length + 1 + 2; // +2 = worst-case elision marker
+  const seated = new Set();
+  let used = 0;
+
+  // THE BUDGET IS REAL, SO SOMETHING HAS TO YIELD — AND IT MUST NOT BE THE STRONGEST CLAUSE.
+  // Letting every marked line override the cap ballooned this digest to 29,579 bytes, 63% of the
+  // contract, which stops being a digest. But cutting the overflow in document order re-loses the
+  // tail, which is the bug this whole function exists to fix. So seat in THREE passes, strongest
+  // first: explicit prohibitions, then general modals, then prose backfill. Position stops deciding
+  // what survives at every tier, not just the first.
+  const tier = (i) => (STRONG_MARKERS.some((re) => re.test(lines[i])) ? 0 : 1);
+  const ordered = [...binding].sort((a, b) => tier(a) - tier(b) || a - b);
+
+  for (const i of ordered) {
+    const next = spend(used, i);
+    if (next > budget) continue;   // skip, never break — one long line must not end the selection
+    seated.add(i);
+    used = next;
+  }
+  // Backfill whatever room the binding lines left, in document order.
+  for (let i = 0; i < lines.length; i++) {
+    if (seated.has(i)) continue;
+    const next = spend(used, i);
+    if (next > budget) continue;
+    seated.add(i);
+    used = next;
+  }
+
+  const keep = [...seated].sort((a, b) => a - b);
+  const out = [];
+  let prev = -1;
+
+  for (const i of keep) {
+    if (prev >= 0 && i > prev + 1) out.push('…');
+    out.push(lines[i]);
+    prev = i;
+  }
+  if (prev >= 0 && prev < lines.length - 1) out.push('…');
+
+  return head + out.join('\n').replace(/\n{3,}/g, '\n\n').trim() + NOTE;
 }
 
 /**
@@ -165,7 +337,7 @@ function generateCoreDigest(data, fileMapping, metadata) {
   const { today, time } = getMetadata(protocol);
 
   const coreSections = getSectionsByMapping(sections, 'CLAUDE_CORE_DIGEST.md', fileMapping);
-  const coreContent = coreSections.map(s => formatSectionCompact(s, { maxChars: 1500 })).join('\n\n');
+  const coreContent = coreSections.map(s => formatSectionCompact(s, { maxChars: 30000 })).join('\n\n');
 
   // Compact trigger reference (full table in CLAUDE_CORE.md)
   const triggerReference = `## Sub-Agent Routing
@@ -351,7 +523,13 @@ function generateAdamDigest(data, fileMapping, metadata) {
   const sections = protocol.sections;
 
   const adamSections = getSectionsByMapping(sections, 'CLAUDE_ADAM_DIGEST.md', fileMapping);
-  const adamContent = adamSections.map(s => formatSectionCompact(s)).join('\n\n');
+  // SIZED BY WHAT IT MUST CONTAIN, NOT BY A ROUND NUMBER. The contract is now ONE ~39,000-char
+  // row, so the 3,000 default kept only its opening prose and dropped every limit Adam operates
+  // under. Authority selection saturates at 14,103 bytes — 16,000 and 24,000 produce a
+  // byte-identical file — so this budget no longer binds and nothing marked authoritative is
+  // dropped for want of room. The result is still 25% SMALLER than the 18,903-byte digest this
+  // replaces, because prose is what got cut instead of prohibitions.
+  const adamContent = adamSections.map(s => formatSectionCompact(s, { maxChars: 16000 })).join('\n\n');
 
   const header = generateDigestHeader('CLAUDE_ADAM_DIGEST.md', metadata);
   const fullLoadInstr = generateFullLoadInstructions('CLAUDE_ADAM.md');
@@ -359,7 +537,7 @@ function generateAdamDigest(data, fileMapping, metadata) {
   return `${header}# CLAUDE_ADAM_DIGEST.md - Adam Role (Enforcement)
 
 **Protocol**: LEO ${protocol.version}
-**Purpose**: Adam role contract essentials — Chairman-attached advisory/analysis session (<3k chars)
+**Purpose**: Adam role contract essentials — Chairman-attached advisory/analysis session. Authority-selected: every binding clause is here, non-binding prose is not.
 
 ${fullLoadInstr}
 

@@ -14,6 +14,14 @@ import { spawnSync } from 'child_process';
 import { appendFileSync, mkdirSync } from 'fs';
 import { dirname, join } from 'path';
 import { fileURLToPath } from 'url';
+import { createRequire } from 'module';
+
+// SD-LEO-INFRA-SHIP-AUTO-HANDOFF-001 (FR-3): the hold SSOT lives in a CommonJS module, so it is
+// pulled in via createRequire rather than re-implemented on this side of the boundary. Re-stating
+// the hold vocabulary here is exactly the second fence-reader FR-3 forbids — a copy drifts the
+// first time either side learns a new hold key, and the drift is silent because both halves keep
+// returning plausible answers.
+const { resolveHoldProvenance, formatHoldProvenance } = createRequire(import.meta.url)('../lib/fleet/claim-eligibility.cjs');
 
 const LOG_FILE = join(process.cwd(), '.claude', 'post-merge-orchestrator.log');
 const HANDOFF_CHAIN = ['EXEC-TO-PLAN', 'PLAN-TO-LEAD', 'LEAD-FINAL-APPROVAL'];
@@ -29,9 +37,39 @@ function logEvent(event) {
 }
 
 // Classify SD state for routing. Pure function — no side effects.
-export function classifyState({ status, current_phase }) {
+//
+// SD-LEO-INFRA-SHIP-AUTO-HANDOFF-001 (FR-1): `metadata` is now read so a RECORDED HOLD can refuse
+// the chain. Previously this function could not see holds at all, so /ship step 6.5 would drive an
+// SD that TESTING and VALIDATION had deliberately fenced at LEAD_FINAL straight through to
+// completed — and NO GATE WOULD HAVE FAILED, because each handoff is legitimately satisfied on its
+// own terms. The SD simply ARRIVES at completed with the work undelivered, and `completed` is
+// affirmatively excluded from every sweep, so nothing downstream can ever detect it.
+//
+// The only thing that previously prevented this was a worker happening to know
+// LEO_AUTOHANDOFF_ENABLED=false exists. Safety that depends on the operator already knowing the
+// escape hatch is not safety, so the default is inverted: held SDs are refused unless something
+// says otherwise, rather than advanced unless someone opts out.
+//
+// Stays PURE — metadata is passed in by the caller that already fetched the row, and
+// resolveHoldProvenance is itself pure over metadata. That purity is what keeps FR-4's regression
+// test a plain unit test with no database, no merge and no spawn.
+export function classifyState({ status, current_phase, metadata }) {
   if (status === 'completed' || current_phase === 'LEAD-FINAL-APPROVAL') {
     return { action: 'idempotent_skip', reason: 'already_completed_no_op' };
+  }
+  // Checked BEFORE the advance decision and after the no-op check: an already-completed SD has
+  // nothing to refuse, but everything still in flight must be tested for a hold first so the
+  // refusal reason is the informative one rather than a generic phase skip.
+  //
+  // FR-3: resolveHoldProvenance is reused verbatim — it is described in its own source as "the SSOT
+  // coalescer for the ad-hoc hold-reason keys". Deliberately NOT classifyDispatchIneligibility:
+  // that answers "may a worker CLAIM this?", a different question. claim-eligibility.cjs:187
+  // records that metadata.exec_boundary_hold is claim-ALLOWING by design, so the claim verdict is
+  // blind to at least one real hold, and axes like orchestrator_parent say nothing about whether a
+  // built SD should be completed. Aliasing it would import the wrong question.
+  const hold = resolveHoldProvenance(metadata);
+  if (hold && hold.reason) {
+    return { action: 'refuse_held', reason: 'sd_on_hold', hold };
   }
   if (current_phase === 'LEAD' && status === 'draft') {
     return { action: 'warn_skip', reason: 'no_exec_work_to_advance' };
@@ -125,7 +163,10 @@ export async function runOrchestrator({ sdKey, supabase, runner = defaultRunner,
 
   const { data: sd, error: lookupErr } = await supabase
     .from('strategic_directives_v2')
-    .select('status, current_phase, sd_key')
+    // FR-1: metadata is REQUIRED here — classifyState cannot see a hold that was never fetched,
+    // and an unselected column arrives as undefined rather than as an error, so omitting it would
+    // silently restore the old advance-everything behaviour with every test still green.
+    .select('status, current_phase, sd_key, metadata')
     .eq('sd_key', sdKey)
     .maybeSingle();
   if (lookupErr || !sd) {
@@ -134,6 +175,29 @@ export async function runOrchestrator({ sdKey, supabase, runner = defaultRunner,
   }
 
   const decision = classifyState(sd);
+
+  // SD-LEO-INFRA-SHIP-AUTO-HANDOFF-001 (FR-2): a refusal is NOT an idempotent skip and must not be
+  // reported as one. Every non-advance action previously logged 'idempotent_skip' and returned
+  // exitCode 0 — so a fenced SD would have been recorded as a routine no-op and reported success to
+  // /ship. A refusal gets its own event and its own exit code precisely so the caller can tell
+  // "refused because held" from "nothing to do" and from "the chain broke".
+  //
+  // It RENDERS the holder and the release condition rather than failing silently: a silent no-op
+  // teaches the operator nothing and is indistinguishable from a bug, which is how the escape-hatch
+  // flag came to be the only thing anyone knew about.
+  if (decision.action === 'refuse_held') {
+    const h = decision.hold || {};
+    logEvent({
+      event: 'refused_held', sd_key: sdKey, reason: decision.reason,
+      hold_reason: h.reason, hold_set_by: h.set_by, hold_source_key: h.source_key,
+    });
+    console.error(`⛔ REFUSED: ${sdKey} carries a recorded hold — auto-handoff will not advance it.`);
+    console.error(`   ${typeof formatHoldProvenance === 'function' ? formatHoldProvenance(h) : h.reason}`);
+    console.error('   The hold must be released by the party that set it; this is not a bug and');
+    console.error('   LEO_AUTOHANDOFF_ENABLED=false is not the remedy — the fence is doing its job.');
+    return { exitCode: 5, action: decision.action, reason: decision.reason, hold: h };
+  }
+
   if (decision.action !== 'advance') {
     logEvent({ event: 'idempotent_skip', sd_key: sdKey, reason: decision.reason, action: decision.action });
     return { exitCode: 0, action: decision.action, reason: decision.reason };

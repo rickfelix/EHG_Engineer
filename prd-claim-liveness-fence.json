@@ -1,0 +1,219 @@
+{
+  "executive_summary": "Dead sessions are acquiring FRESH work off the belt — four measured instances on 2026-07-26, two of them chairman-priority items — and the result is camouflaged rather than visibly stalled, because a pinned item reads status=in_progress WITH a claimant, which is indistinguishable from healthy work in every listing that reads the claim columns. This PRD gates the claim WRITE on claimant liveness. The liveness test is the whole design and the obvious choices are all wrong: process_alive_at is written by session-tick.cjs, the very daemon being fenced out, whose parentAlive() is a bare process.kill(pid,0) that returns TRUE on EPERM, so a recycled pid pins the field indefinitely; heartbeat_at has 23+ production writers plus 47 SQL sites across 31 migrations, a column DEFAULT, and a cross-session writer keyed on sd_key that stamps ANOTHER session's heartbeat with no liveness check; and status is useless because a dead seat sits at status=active. The accepted test is ESRCH for death, a PER-PID ProcessName match for life, and .claude/pids/tick-{SESSION_ID}.json as the tiebreak that defeats PID recycling. Two LEAD findings shape the build: there is NO single choke point (six direct-write surfaces bypass claim_sd and the existing fence entirely, and all three cited QF incidents occurred on the QF lane), and the fence is ASYMMETRIC — admitting a corpse leaves one pinned item a sweep later clears, but falsely fencing a LIVE worker silently stops real work and looks exactly like an idle fleet, so the false-negative side must be tested, not just narrated.",
+  "functional_requirements": [
+    {
+      "id": "FR-1",
+      "title": "Per-PID claimant liveness classifier with an explicit INDETERMINATE verdict",
+      "description": "Add a single shared module that answers 'is the session that is about to write a claim actually alive?' and returns one of ALIVE / DEAD / INDETERMINATE — never a bare boolean, because collapsing INDETERMINATE into DEAD is what starves live workers. DEATH is established by ESRCH: a missing process is genuinely gone. LIFE requires a PER-PID process-name match — tasklist /FI \"PID eq <pid>\" /FI \"IMAGENAME eq claude.exe\" — never bare existence, because Windows recycles PIDs and this host runs ~15 claude processes plus dozens of node children, so a recycled PID trivially reads alive. The TIEBREAK is .claude/pids/tick-{SESSION_ID}.json, the only artifact binding a pid back to its owning session: it carries {session_id, tick_pid, cc_parent_pid, started_at, hostname} and cc_parent_pid is the pid to name-check. This per-PID check does not exist anywhere in the repo today and must be built: scripts/stale-session-sweep.cjs:699-709 anyClaudeProcessRunning() is HOST-WIDE existence and can never confirm a SPECIFIC pid is claude.exe. Do NOT reuse lib/fleet/cc-pid-liveness.cjs or lib/claim/owner-liveness.js unmodified — they look like the natural reuse targets and both implement exactly what this SD forbids (bare process.kill(pid,0) with EPERM-as-alive, and status/heartbeat keying).",
+      "priority": "critical",
+      "acceptance_criteria": [
+        "Returns DEAD when the pid probe yields ESRCH (no such process).",
+        "Returns ALIVE only when a PER-PID name match confirms the pid is claude.exe; a live NON-claude process at that pid MUST NOT return ALIVE.",
+        "Returns INDETERMINATE (never DEAD) when the pid cannot be classified — EPERM, tasklist failure, or missing tick pidfile.",
+        "Reads cc_parent_pid from .claude/pids/tick-{SESSION_ID}.json and prefers it over claude_sessions.pid when the two disagree.",
+        "Does NOT read process_alive_at, heartbeat_at, or status at any point — asserted by a test that greps the module source for those identifiers."
+      ]
+    },
+    {
+      "id": "FR-2",
+      "title": "Gate every claim WRITE, including the six surfaces that bypass the existing fence",
+      "description": "The claim write must be refused when FR-1 returns DEAD for the claiming session. 'Fence the claim write' reads like one insertion point; it is not. Four sites go through the claim_sd RPC: lib/claim-guard.mjs:652,665 (the ONLY write path for scripts/sd-start.js), scripts/worker-checkin.cjs:372-388 tryClaim() (covering every checkin lane — resume_final, orphan-adopt, draft self-claim, directed assignment), scripts/qf-start.js:78-82, and lib/session-conflict-checker.mjs:302. SIX further surfaces write claiming_session_id directly and call neither the RPC nor liveClaimWriteFenceReason: lib/quick-fix-claim.mjs:47-58, scripts/create-quick-fix.js:524-529, lib/claim-validity-gate.js:260 and :602, lib/drain-orchestrator.mjs:237-239, and scripts/claim-orchestrator-for-rollup.mjs:99-102 (whose own liveness check at :84-96 is heartbeat_at + status===active with no process signal at all). lib/fleet/claim-eligibility.cjs:733 liveClaimWriteFenceReason() is the best existing JS insertion point and already fails closed, but closing it alone leaves those six open. EXEC must either route all ten surfaces through the shared check or enforce at a Postgres trigger/CHECK on claiming_session_id so no JS call site can bypass it; given the number of independent JS writers the trigger is materially safer, and the chosen option must be stated in the implementation with its rationale.",
+      "priority": "critical",
+      "acceptance_criteria": [
+        "A claim write attempted by a session classified DEAD is refused on every enumerated surface, proven per-surface rather than only at the shared helper.",
+        "The enumerated surface list is pinned by a test that fails if a new direct .update({claiming_session_id}) site is added without routing through the fence.",
+        "The chosen enforcement point (shared helper vs DB trigger) is documented in-code with the bypass-surface count that motivated it."
+      ]
+    },
+    {
+      "id": "FR-3",
+      "title": "The QF lane specifically — it is where every cited incident actually happened",
+      "description": "All three cited QF incidents (QF-20260726-529, QF-20260726-030, QF-20260726-607) are QF claims, and QF claiming has THREE separate surfaces: scripts/qf-start.js via the RPC, lib/quick-fix-claim.mjs direct CAS, and scripts/create-quick-fix.js creator-self-claim at filing time. An SD-only fence, or a fence placed only at liveClaimWriteFenceReason, reproduces the exact observed defect on the exact path where it was observed. This FR exists separately from FR-2 so the QF lane cannot be quietly dropped as an edge case.",
+      "priority": "critical",
+      "acceptance_criteria": [
+        "A DEAD session cannot acquire a quick_fixes row through qf-start.js, lib/quick-fix-claim.mjs, or create-quick-fix.js.",
+        "Each of the three QF surfaces has its own test; a single shared test that exercises only one surface does not satisfy this."
+      ]
+    },
+    {
+      "id": "FR-4",
+      "title": "False-negative protection — a LIVE worker must never be fenced out",
+      "description": "The fence is asymmetric. Admitting a corpse leaves one pinned item that a sweep later clears; falsely fencing a LIVE worker silently stops real work and presents as an idle fleet, which is the more expensive and less visible error. It is also the likelier error here, because a recorded pid is a snapshot taken once and does not survive restart, resume or compaction — so the longest-lived, hardest-working session is exactly the one whose pid goes stale. This is measured, not hypothetical: session 24ca166f has claude_sessions.pid=21864 which returns NOT FOUND via tasklist, while that same session's tick pidfile carries cc_parent_pid=7440, a confirmed-live claude.exe. That session claimed and shipped QF-20260726-030 end to end (PR ehg#777, merged, verified on origin/main at a1b37d65) on the same day it was cited in this SD's evidence as a dead claimant.",
+      "priority": "critical",
+      "acceptance_criteria": [
+        "AC-N1: a LIVE session whose recorded claude_sessions.pid is stale or recycled MUST still be permitted to claim, resolved via the tick pidfile. Regression fixture: session 24ca166f, stale pid 21864, live cc_parent_pid 7440 — the test must name both pids and assert the stale one does not produce a DEAD verdict.",
+        "AC-N2: a live session with NO tick pidfile must not be fenced out on that basis alone; the chosen fail-direction is stated and justified in-code. .claude/pids/ currently holds 66 files against roughly 20 live sessions, and the marker is written ONCE at spawn (session-tick.cjs:484) with best-effort cleanup, so absence is weak evidence.",
+        "AC-N3: the fence keys on SESSION_ID and never on callsign — 34+ distinct sessions have held the callsign 'Charlie', so any callsign-keyed check is ambiguous by construction.",
+        "A gate-internal failure (tasklist shell-out error, unreadable pidfile) MUST fail OPEN and allow the claim, so a broken probe cannot wedge all claiming fleet-wide."
+      ]
+    },
+    {
+      "id": "FR-5",
+      "title": "Every refusal is recorded with a reason",
+      "description": "A silent refusal converts one failure mode (a corpse holding work) into another (a live worker mysteriously unable to claim, with nothing to diagnose from). Each refusal must persist the session id, the pid(s) consulted, the verdict, and which signal produced it, so the next operator can tell a correct fence from a false one without re-deriving the classification by hand.",
+      "priority": "high",
+      "acceptance_criteria": [
+        "Each refused claim write emits a durable record naming session_id, the recorded pid, the tick-pidfile pid if present, the verdict, and the deciding signal.",
+        "The record distinguishes DEAD-refused from INDETERMINATE-allowed, so false-fence investigations can be separated from genuine corpse blocks."
+      ]
+    }
+  ],
+  "technical_requirements": [
+    {
+      "id": "TR-1",
+      "title": "Windows-correct process identity",
+      "description": "Liveness must work on Windows where this fleet runs. Use tasklist with BOTH a PID filter and an IMAGENAME filter; process.kill(pid,0) is existence-only and returns true on EPERM, which is precisely the unsound test this SD exists to replace."
+    },
+    {
+      "id": "TR-2",
+      "title": "No dependency on the daemon being fenced",
+      "description": "The classifier must not read any field written by session-tick.cjs (process_alive_at at :232 and :284), nor heartbeat_at (23+ JS writers, 47 SQL sites across 31 migrations, a column DEFAULT, and a cross-session sd_key-keyed writer at BaseExecutor.js:1121-1140), nor status. An instrument written by the thing it measures cannot answer the question."
+    },
+    {
+      "id": "TR-3",
+      "title": "Additive and reversible",
+      "description": "The fence is additive: no existing claim path changes shape, and the enforcement point must be disableable without a code edit so a false-fence incident can be stopped fast."
+    }
+  ],
+  "test_scenarios": [
+    {
+      "id": "TS-1",
+      "scenario": "Dead claimant is refused on the SD lane",
+      "type": "unit",
+      "expected": "claim_sd path refuses; a durable refusal record naming the session and pid is written."
+    },
+    {
+      "id": "TS-2",
+      "scenario": "Dead claimant is refused on all three QF surfaces",
+      "type": "unit",
+      "expected": "qf-start.js, lib/quick-fix-claim.mjs and create-quick-fix.js each refuse independently."
+    },
+    {
+      "id": "TS-3",
+      "scenario": "LIVE session with a STALE recorded pid still claims (AC-N1)",
+      "type": "unit",
+      "expected": "Fixture pid 21864 (stale) with tick-pidfile cc_parent_pid 7440 (live claude.exe) classifies ALIVE and the claim succeeds."
+    },
+    {
+      "id": "TS-4",
+      "scenario": "Recycled pid — a live NON-claude process occupies the recorded pid",
+      "type": "unit",
+      "expected": "Classifier returns DEAD or INDETERMINATE, never ALIVE; bare existence must not satisfy the check."
+    },
+    {
+      "id": "TS-5",
+      "scenario": "Probe failure fails OPEN",
+      "type": "unit",
+      "expected": "tasklist error or unreadable pidfile yields INDETERMINATE and the claim is ALLOWED; claiming is never wedged fleet-wide."
+    },
+    {
+      "id": "TS-6",
+      "scenario": "New unfenced claim-write surface is added",
+      "type": "unit",
+      "expected": "The surface-inventory test FAILS, forcing the new site through the fence."
+    }
+  ],
+  "acceptance_criteria": [
+    "A session classified DEAD cannot acquire fresh work on ANY of the ten enumerated claim-write surfaces, including all three QF surfaces.",
+    "A LIVE session with a stale or recycled recorded pid CAN still claim, proven with the 21864/7440 fixture.",
+    "The classifier reads none of process_alive_at, heartbeat_at, or status, asserted by a source-level test.",
+    "Probe failure fails OPEN; a broken liveness check cannot stop the fleet from claiming.",
+    "Every refusal is durably recorded with session id, pids consulted, verdict and deciding signal, and distinguishes DEAD-refused from INDETERMINATE-allowed."
+  ],
+  "risks": [
+    {
+      "risk": "The fence falsely classifies a LIVE long-running session as dead (its recorded pid is stale) and silently stops real work, presenting as an idle fleet.",
+      "mitigation": "INDETERMINATE is a first-class verdict that never blocks; the tick pidfile resolves stale recorded pids; AC-N1 pins the measured 21864/7440 case as a regression fixture; probe failure fails open.",
+      "severity": "high"
+    },
+    {
+      "risk": "Only the RPC path is fenced, leaving the six direct-write surfaces — and therefore the QF lane where every cited incident actually occurred — still open.",
+      "mitigation": "FR-3 carves the QF lane out as its own requirement; FR-2 requires per-surface proof and a pinned surface inventory that fails when a new unfenced writer appears.",
+      "severity": "high"
+    },
+    {
+      "risk": "An implementer reuses lib/fleet/cc-pid-liveness.cjs or lib/claim/owner-liveness.js because they look like the obvious helpers, silently reintroducing bare kill(pid,0) with EPERM-as-alive.",
+      "mitigation": "Both modules are named as forbidden in FR-1 with the reason; the source-level test asserts the forbidden fields and the bare-existence pattern are absent.",
+      "severity": "medium"
+    },
+    {
+      "risk": "Attempting to isolate WHICH process is claiming (ticker mapping) as a prerequisite. Solomon's ticker-mapping script produced a confident WRONG kill list three times, each including the coordinator's own ticker.",
+      "mitigation": "The SD makes isolation explicitly OPTIONAL: fence the write and attribution becomes a nice-to-have. Do not map-then-kill on this host.",
+      "severity": "medium"
+    }
+  ],
+  "integration_operationalization": {
+    "consumers": [
+      "scripts/sd-start.js and lib/claim-guard.mjs (SD claims)",
+      "scripts/worker-checkin.cjs tryClaim() — every checkin claim lane",
+      "scripts/qf-start.js, lib/quick-fix-claim.mjs, scripts/create-quick-fix.js (QF claims)",
+      "lib/drain-orchestrator.mjs, lib/claim-validity-gate.js, scripts/claim-orchestrator-for-rollup.mjs, lib/session-conflict-checker.mjs"
+    ],
+    "dependencies": [
+      "scripts/session-tick.cjs writes .claude/pids/tick-{SESSION_ID}.json (once at spawn)",
+      "Windows tasklist for per-PID IMAGENAME matching",
+      "lib/fleet/claim-eligibility.cjs liveClaimWriteFenceReason() as the existing fail-closed JS insertion point"
+    ],
+    "data_contracts": [
+      "Reads claude_sessions.pid and .claude/pids/tick-{SESSION_ID}.json; writes a refusal record. No change to the claiming_session_id column shape. A Postgres trigger on claiming_session_id writes is in scope if EXEC chooses that enforcement point."
+    ],
+    "runtime_config": [
+      "The fence must be disableable without a code edit (flag or config row) so a false-fence incident can be halted immediately."
+    ],
+    "observability_rollout": [
+      "Refusal records are the primary signal: watch the DEAD-refused vs INDETERMINATE-allowed ratio after rollout. A rising INDETERMINATE rate means the pidfile is unreliable; any DEAD refusal for a session that is provably working is a false fence and triggers the kill switch."
+    ]
+  },
+  "system_architecture": {
+    "summary": "One shared liveness classifier consulted at the claim-write boundary, with enforcement either routed through the existing fail-closed helper or pushed into a Postgres trigger so no JS call site can bypass it.",
+    "components": [
+      {
+        "name": "lib/fleet/claimant-liveness.cjs",
+        "change": "NEW — ESRCH/name-match/pidfile classifier returning ALIVE | DEAD | INDETERMINATE"
+      },
+      {
+        "name": "lib/fleet/claim-eligibility.cjs",
+        "change": "liveClaimWriteFenceReason() consults the classifier (existing fail-closed insertion point, :733)"
+      },
+      {
+        "name": "lib/quick-fix-claim.mjs, scripts/create-quick-fix.js, scripts/qf-start.js",
+        "change": "QF lane routed through the fence — three independent surfaces"
+      },
+      {
+        "name": "lib/claim-validity-gate.js, lib/drain-orchestrator.mjs, scripts/claim-orchestrator-for-rollup.mjs, lib/session-conflict-checker.mjs",
+        "change": "Direct-write surfaces routed through the fence (or superseded by the DB trigger)"
+      }
+    ]
+  },
+  "implementation_approach": {
+    "summary": "Build the classifier first with the false-negative fixture, then close the surfaces, QF lane first.",
+    "steps": [
+      "Build lib/fleet/claimant-liveness.cjs with the three-verdict contract and unit tests, including the 21864/7440 stale-pid fixture and the recycled-pid case, BEFORE wiring any call site.",
+      "Decide and document the enforcement point: route all ten surfaces through the shared check, or a Postgres trigger on claiming_session_id. State the bypass-surface count as the rationale.",
+      "Wire the QF lane first (all three surfaces) — that is where every cited incident occurred.",
+      "Wire the SD/RPC lane via liveClaimWriteFenceReason and the remaining direct-write surfaces.",
+      "Add the surface-inventory test that fails when a new unfenced claiming_session_id writer appears.",
+      "Add the refusal record and the runtime kill switch before rollout."
+    ]
+  },
+  "smoke_test_steps": [
+    {
+      "step_number": 1,
+      "instruction": "Run the classifier against session 24ca166f using recorded pid 21864 and its tick pidfile (cc_parent_pid 7440).",
+      "expected_outcome": "Verdict ALIVE — the stale recorded pid does not produce DEAD, and the claim would be permitted."
+    },
+    {
+      "step_number": 2,
+      "instruction": "Run the classifier against a session id whose recorded pid is absent from the process table (ESRCH) and which has no tick pidfile.",
+      "expected_outcome": "Verdict DEAD, and a claim write attempted for that session is refused with a durable record naming the session and pid."
+    },
+    {
+      "step_number": 3,
+      "instruction": "Force the probe to fail (simulate a tasklist shell-out error) and attempt a claim.",
+      "expected_outcome": "Verdict INDETERMINATE and the claim is ALLOWED — the fence fails open and does not wedge claiming."
+    }
+  ],
+  "metadata": {
+    "sd_key": "SD-LEO-INFRA-CLAIM-LIVENESS-FENCE-001"
+  }
+}

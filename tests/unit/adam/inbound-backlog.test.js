@@ -111,12 +111,72 @@ describe('TS-15 — excluding undrained kinds must NOT hide a real drain-set gap
   it('surfaces undrained kinds separately from the terminal-by-design ones', () => {
     const rows = [
       row({ payload: { kind: 'cross_party_ping' } }),
-      row({ payload: { kind: 'solomon_ledger_pending_resurface' } })
+      // QF-20260727-934: this assertion previously used solomon_ledger_pending_resurface as its
+      // stand-in for "absent from DRAIN_SETS.adam". That kind is now a REVIEWED-and-ACCEPTED
+      // absence, so an UNDECIDED kind is needed to prove the signal still works. The property
+      // under test is unchanged — only the fixture moved off a now-decided kind.
+      row({ payload: { kind: 'some_brand_new_unreviewed_kind' } })
     ];
     const { undrainedKinds } = partitionUndrained(rows);
-    expect(undrainedKinds).toContain('solomon_ledger_pending_resurface');
+    expect(undrainedKinds).toContain('some_brand_new_unreviewed_kind');
     // cross_party_ping is terminal-by-design, NOT a drain-set gap — must not be reported as one.
     expect(undrainedKinds).not.toContain('cross_party_ping');
+  });
+});
+
+// ── QF-20260727-934: a DECIDED absence must stop re-alarming ────────────────────
+//
+// The undrained_kind_in_lane signal fired identically on 2026-07-25, -26 and -27 and
+// auto-promoted at x3 into a high-severity QF. Every firing was CORRECT — the exclusion is
+// deliberate (a self-refilling cron queue that would pin age-of-oldest ON permanently). An
+// alarm that is always right and never actionable is how a lane trains its readers to ignore
+// it, so a reviewed absence is now declared rather than re-reported.
+describe('QF-20260727-934 — reviewed-and-accepted undrainable kinds stop alarming', () => {
+  it('does NOT report an acknowledged-undrainable kind as a drain-set gap', () => {
+    const { undrainedKinds } = partitionUndrained([
+      row({ payload: { kind: 'solomon_ledger_pending_resurface' } })
+    ]);
+    expect(undrainedKinds).toEqual([]);
+  });
+
+  it('covers the digest form of the same producer', () => {
+    const { undrainedKinds } = partitionUndrained([
+      row({ payload: { kind: 'solomon_ledger_pending_digest' } })
+    ]);
+    expect(undrainedKinds).toEqual([]);
+  });
+
+  it('STILL alarms for an undeclared kind — the signal keeps its whole purpose', () => {
+    const { undrainedKinds } = partitionUndrained([
+      row({ payload: { kind: 'solomon_ledger_pending_resurface' } }),
+      row({ payload: { kind: 'solomon_ledger_pending_something_new' } })
+    ]);
+    // Listed explicitly rather than prefix-matched, so a NEW kind in the same family is
+    // still surfaced for triage instead of being silently absorbed by its neighbours.
+    expect(undrainedKinds).toEqual(['solomon_ledger_pending_something_new']);
+  });
+
+  it('does not change the BREACH computation — these rows were already excluded from the age alarm', () => {
+    // isExcludedKind is deliberately untouched: the reporting changed, the exclusion did not.
+    expect(isExcludedKind('solomon_ledger_pending_resurface')).toBe(true);
+    expect(isExcludedKind('solomon_ledger_pending_digest')).toBe(true);
+    const v = classifyBacklog([
+      row({ id: 'r1', payload: { kind: 'solomon_ledger_pending_resurface' }, created_at: ago(600 * MIN) })
+    ], NOW);
+    expect(v.breaching).toBe(false);
+  });
+
+  it('every declared entry carries a justification comment, and none is smuggled into ADAM_EXCLUDED_KINDS', async () => {
+    const { ACKNOWLEDGED_UNDRAINABLE_KINDS } = await import('../../../lib/adam/inbound-backlog.js');
+    const mod = await import('../../../lib/fleet/worker-status.cjs');
+    const excluded = mod.default?.ADAM_EXCLUDED_KINDS || mod.ADAM_EXCLUDED_KINDS || [];
+    expect(ACKNOWLEDGED_UNDRAINABLE_KINDS.length).toBeGreaterThan(0);
+    for (const k of ACKNOWLEDGED_UNDRAINABLE_KINDS) {
+      // Must NOT be in ADAM_EXCLUDED_KINDS — that set is subtracted from Adam's real inbox
+      // (adam-advisory.cjs ADAM_INBOX_KINDS), so parking them there would hide Adam's own
+      // disposition queue from the surfaces Adam reads.
+      expect(excluded).not.toContain(k);
+    }
   });
 });
 

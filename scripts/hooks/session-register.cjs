@@ -175,6 +175,43 @@ async function emitSessionCreated(supabase, { sessionId, payload, prior }) {
  * real answer downstream, and this whole defect family is honest values answering the wrong
  * question. Absent is the honest representation of "not determined".
  */
+/**
+ * QF-20260727-013 — fallback resolver, deliberately reachable ONLY via CLAUDE_CONFIG_DIR.
+ *
+ * lib/fleet/account-identity.cjs getAccountIdentity() reads ~/.claude.json oauthAccount and
+ * works on this host where the CLI returned nulls — which is why coordinator-quiet-tick could
+ * print a real account in the same process tree where this path resolved null. Two resolvers,
+ * same host, same second, opposite answers.
+ *
+ * BUT CALLING IT BARE IS THE TRAP, and it is the exact defect QF-20260726-514 was created to
+ * fix. With no argument it uses resolveRealConfigPath() = USERPROFILE/.claude.json, which does
+ * NOT respect CLAUDE_CONFIG_DIR: host-global, last-writer-wins, every seat reporting the same
+ * account. That looks correct right up until the fleet splits across accounts, which is the
+ * only time this field matters. So we pass the PATH SEAM explicitly and return null rather
+ * than read the host-global default — an unresolved account must stay absent, never guessed.
+ *
+ * @returns {object|null} same shape as resolveAccountIdentity, or null
+ */
+function resolveAccountFromConfigDir() {
+  const dir = process.env.CLAUDE_CONFIG_DIR;
+  if (!dir) return null; // no per-profile scope => refuse; see above
+  try {
+    const { getAccountIdentity } = require('../../lib/fleet/account-identity.cjs');
+    const id = getAccountIdentity(path.join(dir, '.claude.json'));
+    if (!id || !id.email) return null;
+    return {
+      account_email: id.email,
+      account_org_name: id.orgName || null,
+      account_org_id: null,              // not carried by oauthAccount — absent, not invented
+      account_subscription_type: null,   // ditto
+      account_auth_method: 'config_dir',
+      account_captured_at: new Date().toISOString(),
+    };
+  } catch {
+    return null;
+  }
+}
+
 function resolveAccountIdentity() {
   try {
     // execSync with a single command string, matching lib/simplifier/plugin-bridge.js — the
@@ -193,7 +230,11 @@ function resolveAccountIdentity() {
       windowsHide: true,
     });
     const j = JSON.parse(raw);
-    if (!j || j.loggedIn !== true || !j.email) return null;
+    // QF-20260727-013: the CLI can answer loggedIn:true while every identity field is null
+    // (measured 2026-07-28: email/orgId/orgName/subscriptionType all null). The guard below is
+    // CORRECT to reject that — absent beats a placeholder — but it left the stamp 100% dark.
+    // Fall back through the per-profile seam before giving up.
+    if (!j || j.loggedIn !== true || !j.email) return resolveAccountFromConfigDir();
     return {
       account_email: j.email,
       account_org_name: j.orgName || null,
@@ -203,7 +244,12 @@ function resolveAccountIdentity() {
       account_captured_at: new Date().toISOString(),
     };
   } catch {
-    return null; // never abort SessionStart for telemetry
+    // QF-20260727-013: the fallback must be reachable from HERE too, not only from the
+    // null-identity branch above. A missing/failing `claude` binary throws rather than
+    // returning a null-identity payload, and the original code returned null from this catch
+    // without ever consulting the per-profile config — so the seat stayed dark for the one
+    // failure mode where an on-disk answer was still available. Caught by its own unit test.
+    return resolveAccountFromConfigDir(); // still null-safe; never aborts SessionStart
   }
 }
 
@@ -228,12 +274,120 @@ async function captureAccountIdentity(supabase, sessionId) {
       ? data.metadata : {};
     if (meta.account_email) return;                   // already captured — nothing to do
     const acct = resolveAccountIdentity();
-    if (!acct) return;                                // unresolved => leave ABSENT, not null
+    if (!acct) {
+      // QF-20260727-013: RECORD THE DARKNESS. Leaving the identity keys absent is still right —
+      // a null account stored as a value is indistinguishable from a real answer downstream.
+      // But absent-because-unresolved and absent-because-never-asked were ALSO indistinguishable,
+      // and that is why a 100%-dark instrument survived unnoticed from 2026-07-26: nothing said
+      // it was dark. This key answers only "did we ask and fail", so the identity fields keep
+      // their honest absence while the failure itself stops being silent.
+      await supabase.from('claude_sessions')
+        .update({ metadata: { ...meta, account_unresolved_at: new Date().toISOString() } })
+        .eq('session_id', sessionId);
+      return;
+    }
     await supabase.from('claude_sessions')
       .update({ metadata: { ...meta, ...acct } })
       .eq('session_id', sessionId);
   } catch {
     // telemetry — never abort SessionStart
+  }
+}
+
+/**
+ * SD-LEO-INFRA-SESSION-TICK-DAEMONS-001 FR-1 — close the session ids this rotation replaced.
+ *
+ * /clear and compaction-resume mint a NEW session_id while the Claude Code process survives.
+ * session-tick.cjs has exactly two exits — parent-PID death (:181, which DELIBERATELY survives
+ * /clear) and the 0-row PATCH self-exit (:350) — and nothing flipped either at rotation, so the
+ * outgoing session's daemon became immortal, stamping heartbeat_at AND process_alive_at every 30s
+ * for a conversation that can never act again.
+ *
+ * status='released' is necessary and SUFFICIENT: the daemon's PATCH filters
+ * `status=in.(active,idle,stale)` (session-tick.cjs:331), so releasing the row 0-rows its next
+ * write and it exits itself. Verified at the consumer, not at this write.
+ *
+ * WHY THIS HOOK. SessionStart fires on /clear and on compaction resume (both ROTATE the id) and
+ * does NOT fire when a ScheduleWakeup tick resumes an already-running session — documented in the
+ * header of loop-state-resume-clear.cjs as a defect for loop_state. Read the other way it is the
+ * guarantee this FR needs: we see every rotation and never see a parked worker waking up.
+ *
+ * A PARKED /loop WORKER IS EXCLUDED STRUCTURALLY, NOT CAREFULLY. One Claude Code process hosts one
+ * conversation, so a row sharing our cc_parent_pid with a DIFFERENT session_id has necessarily
+ * rotated out. There is no elapsed-time, last_tool_at or heartbeat condition anywhere below, and
+ * adding one would re-open the seam session-tick.cjs:181-184 names verbatim: it "trades false-life
+ * for false-death — the seam all five prior attempts at this defect fell down."
+ *
+ * Fire-and-forget and totally swallowed: this runs at every SessionStart on the host, so it must
+ * never be able to stop a session from starting.
+ */
+async function closeRotatedOutSessions(supabase, currentSessionId, overrides = {}) {
+  try {
+    const { sessionsToClose, readTickMarkers } = require('../../lib/sessions/rotation-closure.cjs');
+
+    // Derive the pid EXACTLY as capture-session-id.cjs:492-493 does — that process writes the
+    // markers we are about to join against, so agreeing by construction is the point. Using this
+    // hook's own process.ppid instead would silently match nothing (see rotation-closure.cjs
+    // header): findClaudeCodePid() is primary, ppid only its logged-degraded fallback.
+    //
+    // `overrides` exists so tests can pin the pid and marker dir. Production passes neither: a
+    // test that had to stub live PID discovery would be asserting against its own stub.
+    let parentPid = overrides.parentPid;
+    if (parentPid === undefined) {
+      const { findClaudeCodePid } = require('./capture-session-id.cjs');
+      parentPid = findClaudeCodePid() || process.ppid || process.pid;
+    }
+
+    const markers = readTickMarkers(
+      overrides.pidsDir || path.resolve(__dirname, '../../.claude/pids')
+    );
+    const candidateIds = [...markers.keys()];
+    if (!candidateIds.length) return;
+
+    // FAIL-CLOSED IDENTITY GUARD. This predicate is "everything on our pid EXCEPT us", so it is
+    // only as safe as `us`. Measured on live data: with a correct currentSessionId the pid-22196
+    // group closes exactly the one rotated-out id; with an id matching NO row it closes BOTH —
+    // including the live session. Nothing downstream notices, because releasing our own row is a
+    // perfectly ordinary-looking write.
+    //
+    // What made that unreachable in practice was only that our own marker usually does not exist
+    // yet when this runs (the new daemon spawns concurrently), so our row is never among the
+    // candidates. That is safety by coincidence, not by design, and it evaporates the moment the
+    // spawn order changes. So: if we DO have a marker, it must name the pid we are about to act
+    // on. Disagreement means identity resolution and the marker record contradict each other —
+    // exactly the smear this file's getCurrentSessionId() comment describes — and the only safe
+    // reading of a contradiction is to close nothing.
+    const ownMarkerPid = markers.get(String(currentSessionId));
+    if (ownMarkerPid !== undefined && String(ownMarkerPid) !== String(parentPid)) {
+      process.stderr.write(
+        `[session-register] rotation.skipped reason=identity_pid_mismatch ` +
+        `marker=${ownMarkerPid} discovered=${parentPid}\n`
+      );
+      return;
+    }
+
+    const { data, error } = await supabase
+      .from('claude_sessions').select('session_id,status').in('session_id', candidateIds);
+    if (error || !data) return;
+
+    // The predicate's row shape carries cc_parent_pid, which claude_sessions does NOT have as a
+    // column — the marker supplies it. Attaching it here keeps the shipped, unit-tested predicate
+    // untouched and confines the file-join to the wiring.
+    const rows = data.map((r) => ({ ...r, cc_parent_pid: markers.get(r.session_id) }));
+    const toClose = [...new Set(sessionsToClose({ currentSessionId, parentPid, rows }))];
+    if (!toClose.length) return;
+
+    const { error: relErr } = await supabase
+      .from('claude_sessions').update({ status: 'released' }).in('session_id', toClose);
+    process.stderr.write(
+      `[session-register] rotation.closed pid=${parentPid} n=${toClose.length} ` +
+      `ids=${toClose.map((s) => String(s).slice(0, 8)).join(',')}` +
+      (relErr ? ` error=${relErr.message}` : '') + `\n`
+    );
+  } catch (err) {
+    process.stderr.write(
+      `[session-register] rotation.failed reason=${(err?.message || String(err)).slice(0, 200)}\n`
+    );
   }
 }
 
@@ -335,6 +489,10 @@ async function main() {
       .eq('session_id', sessionId)
       .eq('loop_state', LOOP_STATE_AWAITING_TICK);
   } catch { /* best-effort observability; never block SessionStart */ }
+
+  // SD-LEO-INFRA-SESSION-TICK-DAEMONS-001 (FR-1). Last, and awaited only so its stderr lands
+  // inside this hook's output — it cannot throw (fully wrapped) and cannot block startup.
+  await closeRotatedOutSessions(supabase, sessionId);
 }
 
 // SD-LEO-INFRA-FIX-SESSION-REGISTER-001: only auto-invoke main() when this
@@ -367,6 +525,8 @@ if (require.main === module) {
 
 module.exports = {
   getCurrentSessionId, main, emitSessionCreated,
+  // FR-1 — exported so the rotation closure is testable without running SessionStart.
+  closeRotatedOutSessions,
   // QF-20260726-514 — exported so the account capture is testable without running SessionStart.
   resolveAccountIdentity, captureAccountIdentity,
 };

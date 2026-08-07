@@ -35,7 +35,16 @@ $Stamp     = (Get-Date).ToString('yyyy-MM-dd HH:mm:ss')
 # --- Run the check ----------------------------------------------------------
 Push-Location $RepoRoot
 try {
-  $output = & node $Report --check --max-daily-usd $MaxDailyUsd --max-daily-calls $MaxDailyCalls --spike $SpikeFactor 2>&1 | Out-String
+  # QF-20260727-360: llm-cost-report.mjs writes its ALERT LINE TO STDERR (verified:
+  # `node scripts/llm-cost-report.mjs --check 2>/dev/null` prints nothing, `2>&1 1>/dev/null`
+  # prints the alert). In Windows PowerShell 5.1, `2>&1` on a NATIVE command wraps each stderr
+  # line in an ErrorRecord, so Out-String rendered the record's formatting — the log and the
+  # alert file recorded "+ FullyQualifiedErrorId : NativeCommandError" INSTEAD of the message.
+  # i.e. the alert text was destroyed in exactly the case the alert exists for. Unwrap each
+  # ErrorRecord back to its message so a breach reads as a breach.
+  $output = & node $Report --check --max-daily-usd $MaxDailyUsd --max-daily-calls $MaxDailyCalls --spike $SpikeFactor 2>&1 |
+    ForEach-Object { if ($_ -is [System.Management.Automation.ErrorRecord]) { $_.Exception.Message } else { $_ } } |
+    Out-String
   $code = $LASTEXITCODE
 } catch {
   $output = "wrapper exception: $($_.Exception.Message)"

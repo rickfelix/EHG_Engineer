@@ -69,14 +69,14 @@ describe('deferQuickFix', () => {
   it('updates not_before (and not status) when reopen is not set', async () => {
     const stub = makeSupabaseStub({ id: 'QF-X', status: 'escalated', not_before: '2026-07-05T21:00:00.000Z' });
     const result = await deferQuickFix('QF-X', '2026-07-05T21:00:00Z', { supabaseClient: stub.client });
-    expect(stub.update).toHaveBeenCalledWith({ not_before: '2026-07-05T21:00:00.000Z' });
+    expect(stub.update).toHaveBeenCalledWith({ claiming_session_id: null, not_before: '2026-07-05T21:00:00.000Z' });
     expect(result.id).toBe('QF-X');
   });
 
   it('updates both not_before and status=open when reopen=true', async () => {
     const stub = makeSupabaseStub({ id: 'QF-X', status: 'open', not_before: '2026-07-05T21:00:00.000Z' });
     await deferQuickFix('QF-X', '2026-07-05T21:00:00Z', { reopen: true, supabaseClient: stub.client });
-    expect(stub.update).toHaveBeenCalledWith({ not_before: '2026-07-05T21:00:00.000Z', status: 'open' });
+    expect(stub.update).toHaveBeenCalledWith({ claiming_session_id: null, not_before: '2026-07-05T21:00:00.000Z', status: 'open' });
   });
 
   it('throws when the row is not found', async () => {
@@ -146,7 +146,7 @@ describe('deferQuickFix — hold-state contract (SD-LEO-INFRA-HOLD-STATE-CONTRAC
     delete process.env.HOLD_STATE_CONTRACT_MODE;
     const stub = makeSupabaseStub({ id: 'QF-X', status: 'open', not_before: '2026-07-05T21:00:00.000Z' });
     await deferQuickFix('QF-X', '2026-07-05T21:00:00Z', { supabaseClient: stub.client });
-    expect(stub.update).toHaveBeenCalledWith({ not_before: '2026-07-05T21:00:00.000Z' });
+    expect(stub.update).toHaveBeenCalledWith({ claiming_session_id: null, not_before: '2026-07-05T21:00:00.000Z' });
   });
 
   it('TS-4: enforce mode with a full stamp writes reason/owner/release_condition alongside not_before', async () => {
@@ -157,6 +157,9 @@ describe('deferQuickFix — hold-state contract (SD-LEO-INFRA-HOLD-STATE-CONTRAC
       supabaseClient: stub.client,
     });
     expect(stub.update).toHaveBeenCalledWith({
+      // SD-LEO-INFRA-CLAIM-LIFECYCLE-RELEASE-002 (FR-1): deferring now RELEASES the claim. The
+      // assertion stays exact-payload — it is the payload that changed, not the strictness.
+      claiming_session_id: null,
       not_before: '2026-07-05T21:00:00.000Z',
       reason: 'waiting on sibling', owner: 'coordinator', release_condition: 'sibling merges',
     });

@@ -9,6 +9,9 @@
 import 'dotenv/config';
 import { createClient } from '@supabase/supabase-js';
 import { classifyDeadLetterRow, summarizeDrain, HIGH_VALUE_KINDS } from '../lib/coordination/dead-letter-drain.js';
+import { createRequire } from 'module';
+// SD-LEO-INFRA-SIGNAL-ROUTER-AUTO-001 (FR-8, third site).
+const { PROMOTION_ACK_KEY } = createRequire(import.meta.url)('../lib/coordinator/promotion-ack.cjs');
 
 const APPLY = process.argv.includes('--apply');
 const db = createClient(process.env.SUPABASE_URL, process.env.SUPABASE_SERVICE_ROLE_KEY);
@@ -34,7 +37,21 @@ async function main() {
   const isLive = (sid) => { const s = byId.get(sid); return !!s && (s.status === 'active' || s.status === 'idle'); };
   const successors = { coordinator: LIVE_COORDINATOR }; // solomon/adam resolved only if role-orphans exist (none in the verified set)
 
-  const unacked = await all('session_coordination', 'id,target_session,payload,message_type,subject', (q) => q.is('acknowledged_at', null));
+  // SD-LEO-INFRA-SIGNAL-ROUTER-AUTO-001 (FR-8, THIRD site) — and the worst of the three.
+  //
+  // The STUCK-drain and the TTL convergence pass both stamp acknowledged_at; this one stamps
+  // acknowledged_at AND read_at together, so a single write blinds four surfaces at once: the
+  // coordinator inbox, the sender's outstanding view, isRouterSwallowed (which requires
+  // !read_at), and REPLY_STARVATION — the last because no auto_acked marker is written either,
+  // so isGenuinelyAcknowledged reads it as a HUMAN answer rather than a machine stamp.
+  //
+  // Newly reachable BECAUSE of this SD: pre-fix, promoted rows carried acknowledged_at and never
+  // entered this selector at all. Measured during review, the real 9 promoted rows classify
+  // 9/9 as action='stamp' here. It is manual-only and dry-run by default, which is why it is not
+  // the emergency the STUCK-drain was — but "requires a human to run it" is not a guard.
+  const unacked = await all('session_coordination', 'id,target_session,payload,message_type,subject', (q) => q
+    .is('acknowledged_at', null)
+    .is(`payload->>${PROMOTION_ACK_KEY}`, null));
   const dead = unacked.filter((r) => { const t = r.target_session; return !t || !byId.has(t) || !isLive(t); });
   console.log(`unacked=${unacked.length} live-backlog(excluded)=${unacked.length - dead.length} dead-letter=${dead.length}`);
 

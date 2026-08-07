@@ -4,13 +4,15 @@
 const os = require('os');
 const fs = require('fs');
 const path = require('path');
+// SD-LEO-INFRA-REPO-WIDE-TIMEZONE-001: naive PostgREST timestamps must not be parsed as local.
+const { pgTimestampAgeMs } = require('../lib/time/pg-timestamp.cjs');
 const crypto = require('crypto');
 const util = require('util');
 const { spawnSync } = require('child_process');
 const { createSupabaseServiceClient } = require('../lib/supabase-client.cjs');
 // SD-LEO-INFRA-IS-ALIVE-LIVENESS-SSOT-001 (FR-2): the read-time liveness SSOT — the gauge reconcile
 // wraps isSessionAlive so the P(alive) override and the authoritative-liveness definition can never diverge.
-const { isSessionAlive } = require('../lib/fleet/session-liveness.cjs');
+const { isSessionAlive, hasPidAlive: sharedHasPidAlive } = require('../lib/fleet/session-liveness.cjs');
 
 // Idle-fleet diff suppression — coordinator was generating ~120 identical
 // dashboard renders overnight. After N consecutive identical renders, emit a
@@ -277,11 +279,15 @@ async function loadData() {
   // A session with stale heartbeat but living CC PID is loading context or between tool calls.
   // terminal_id format: "win-cc-{port}-{ccPid}" — extract ccPid and check marker files.
   const aliveCcPids = getAliveCcPids();
-  const hasPidAlive = (s) => {
-    if (!s.terminal_id) return false;
-    const parts = s.terminal_id.split('-');
-    return aliveCcPids.has(parts[parts.length - 1]);
-  };
+  // SD-LEO-INFRA-PID-LIVENESS-DURABLE-VENUE-001 (C2): this WAS a local re-implementation doing
+  // s.terminal_id.split('-') and taking the last segment — a third copy of logic that is simply
+  // wrong for the bare-UUID terminal_ids sessions actually write (the last segment is a hex group,
+  // never a PID), so this dashboard's PID rung resolved nothing. Unlike scripts/stale-session-sweep.cjs
+  // (which already calls the shared resolver), this shadow was NOT reached by the C2 migration.
+  // Now delegates to the canonical predicate so the dashboard cannot disagree with the SSOT.
+  // Wrapped to preserve the existing single-argument call sites below and to keep injecting the
+  // already-computed aliveCcPids set rather than re-reading the markers per row.
+  const hasPidAlive = (s) => sharedHasPidAlive(s, aliveCcPids);
   // ── SD-LEO-INFRA-WORKER-SOURCE-SIDE-001: source-side telemetry merge ──
   const telemetryById = new Map();
   try {
@@ -335,6 +341,22 @@ async function loadData() {
     hasTickAlive(s) ||
     hasExpectedSilence(s)
   );
+  // SD-LEO-INFRA-FLEET-HEALTH-VERDICT-001: liveness for the HEALTH VERDICT arrives by a second query.
+  // v_active_sessions above does NOT expose last_tool_at (measured, not assumed) — the only signal that
+  // did not lie on any of the three stalled specimens. So the verdict joins claude_sessions by
+  // session_id rather than trusting the heartbeat-led OR, which counts a frozen seat as a working one.
+  // A failure here yields NO rows, which the verdict reports as UNKNOWN rather than as a fleet-wide
+  // DOWN — the gauge being blind is not the same claim as the fleet being dead.
+  let livenessRows = [];
+  let livenessTruncated = false;
+  try {
+    const { fetchPopulation } = require('../lib/fleet/stuck-seat-population.cjs');
+    const pop = await fetchPopulation(supabase);
+    livenessRows = pop.seats;
+    livenessTruncated = pop.truncated;
+  } catch (e) {
+    livenessTruncated = true; // unreadable is not healthy, and it is not DOWN either
+  }
   const staleSessions = sessions.filter(s =>
     s.heartbeat_age_seconds >= STALE_THRESHOLD &&
     !hasPidAlive(s) &&
@@ -370,6 +392,31 @@ async function loadData() {
       .select('sd_key, title, status, progress_percentage, completion_date, current_phase')
       .in('sd_key', missingKeys);
     (extraSds || []).forEach(sd => { sdStatusMap[sd.sd_key] = sd; });
+  }
+
+  // QF-20260727-713: a claim key can be a QUICK-FIX id, which lives in quick_fixes and NEVER in
+  // strategic_directives_v2. Resolving only against the SD table made every QF-claiming worker a
+  // false ORPHAN (measured 2026-07-27: 4 of 4 flagged keys present in quick_fixes with the correct
+  // claiming_session_id, 0 of 4 in strategic_directives_v2), which in turn made a REAL orphan
+  // undetectable — the false positives are indistinguishable from a true one.
+  //
+  // Kept as a SEPARATE map rather than merged into sdStatusMap: the other QA checks read
+  // sdStatusMap for SD-shaped fields (progress_percentage, completion_date) that quick_fixes does
+  // not have, so merging would silently change their behaviour. This map is consulted only by the
+  // ORPHAN check.
+  //
+  // Deliberately UNFILTERED by status (unlike the open/in_progress QUICK FIXES section below): a
+  // worker holding a completed/closed/cancelled QF is not an orphan — the key still resolves.
+  let qfStatusMap = {};
+  const qfClaimKeys = allSdKeys.filter(k => !sdStatusMap[k] && /^QF-/i.test(k));
+  if (qfClaimKeys.length > 0) {
+    try {
+      const { data: qfClaimRows } = await supabase
+        .from('quick_fixes')
+        .select('id, title, status')
+        .in('id', qfClaimKeys);
+      (qfClaimRows || []).forEach(qf => { qfStatusMap[qf.id] = qf; });
+    } catch { /* degrade-safe: unresolved keys stay ORPHAN, i.e. exactly the pre-fix behaviour */ }
   }
 
   // Detect bare-shell SDs: title == description, no real scope, not child stubs
@@ -430,8 +477,8 @@ async function loadData() {
   } catch { /* degrade-safe: empty QF section */ }
 
   return {
-    sessions, allSessions, children, workable, coordMessages, rawSessions, sdStatusMap,
-    claimedSdIds, activeSessions, staleSessions, idleSessions,
+    sessions, allSessions, children, workable, coordMessages, rawSessions, sdStatusMap, qfStatusMap,
+    claimedSdIds, activeSessions, staleSessions, idleSessions, livenessRows, livenessTruncated,
     completedChildren, totalChildren, orchPct,
     unclaimedChildren, unclaimedStandalone, bareShellSDs: bareShells,
     humanActionHolds,
@@ -728,7 +775,18 @@ function printQuickFixes(d) {
   const now = Date.now();
   console.log('  ' + pad('ID', 18) + pad('Status', 12) + pad('Age', 6) + pad('Holder', 10) + 'Title');
   for (const qf of qfs) {
-    const ageH = qf.created_at ? Math.max(0, Math.round((now - Date.parse(qf.created_at)) / 3600000)) + 'h' : '?';
+    // SD-LEO-INFRA-REPO-WIDE-TIMEZONE-001 FR-5. This line previously read:
+    //     Math.max(0, Math.round((now - Date.parse(qf.created_at)) / 3600000)) + 'h'
+    // Two defects in one expression. The bare Date.parse read the naive created_at as LOCAL,
+    // so on a UTC-4 host every QF younger than 4h computed a NEGATIVE age — and the
+    // Math.max(0, ...) then printed that impossible value as a perfectly plausible "0h".
+    // THE CLAMP IS WHY THIS SURVIVED: a negative age was the only self-evident symptom this
+    // bug class ever produces, and the clamp deleted it. The coordinator read this column all
+    // night without seeing anything wrong.
+    // The parse is now correct, so ages are truthful; the clamp is gone rather than merely
+    // unnecessary, and a negative would print loudly if this ever regresses.
+    const ageMs = qf.created_at ? pgTimestampAgeMs(qf.created_at, now) : NaN;
+    const ageH = Number.isFinite(ageMs) ? Math.round(ageMs / 3600000) + 'h' : '?';
     const holder = qf.claiming_session_id ? String(qf.claiming_session_id).substring(0, 8) : '—';
     // SD-LEO-INFRA-EXCLUDE-CHAIRMAN-GATED-001: gated rows are NOT claimable open work —
     // badge them here so the primary list agrees with the worker-lane exclusion.
@@ -848,14 +906,41 @@ async function printCoaching(d) {
 
 // ── Section: Health ──
 function printHealth(d) {
-  const health = d.activeSessions.length >= 3 ? 'HEALTHY' : d.activeSessions.length >= 1 ? 'DEGRADED' : 'DOWN';
-  const icon = health === 'HEALTHY' ? '[OK]' : health === 'DEGRADED' ? '[!!]' : '[XX]';
+  // SD-LEO-INFRA-FLEET-HEALTH-VERDICT-001. THIS USED TO BE A PURE COUNT OF activeSessions, and that
+  // count was satisfied by the very condition it should have reported: three stalled seats — exactly
+  // the >=3 threshold — printed [OK] while operators escalated, with the contradicting stale count
+  // rendered two lines below. The verdict now consults the stuck-seat classifier this file has
+  // imported all along, ~790 lines down at printStuckSeatStrip.
+  const { computeHealthVerdict, HEALTH } = require('../lib/fleet/health-verdict.cjs');
+  const hv = computeHealthVerdict({
+    sessions: d.activeSessions,
+    livenessRows: d.livenessRows,
+    truncated: d.livenessTruncated,
+    cutPointMinutes: STUCK_SEAT_CUT_POINT_MINUTES,
+  });
+  const health = hv.verdict;
+  const icon = health === HEALTH.HEALTHY ? '[OK]' : health === HEALTH.DEGRADED ? '[!!]'
+    : health === HEALTH.UNKNOWN ? '[??]' : '[XX]';
 
   console.log('FLEET HEALTH ' + icon);
   console.log('─'.repeat(72));
-  console.log('  Active:  ' + d.activeSessions.length + ' workers');
+  console.log('  Working: ' + hv.live + ' of ' + hv.evaluated + ' claimed seats (tool-verified)');
   console.log('  Unclaimed: ' + d.idleSessions.length + ' sessions (no SD claim)');
   console.log('  Stale:   ' + d.staleSessions.length + ' sessions');
+  if (hv.blindReason) {
+    console.log('  ?? UNKNOWN: ' + hv.blindReason + ' — the gauge could not measure. NOT a healthy');
+    console.log('     fleet, and NOT a dead one; no verdict is being asserted here.');
+  }
+  if (hv.excluded.length) {
+    const by = {};
+    for (const e of hv.excluded) by[e.reason] = (by[e.reason] || 0) + 1;
+    console.log('  Excluded: ' + Object.entries(by).map(([k, v]) => v + ' ' + k).join(', '));
+    console.log('     (heartbeat-fresh but not working — the gap this verdict used to miss)');
+  }
+  // SCOPE LIMIT, STATED BESIDE THE VERDICT IT QUALIFIES (lib/fleet/stuck-seat-predicate.cjs:32):
+  // a liveness gauge, not a tamper-evident control. Both columns are writable by the seat being
+  // judged; the threat model is an accident, and a wedged worker is by definition not writing.
+  console.log('  Basis:   last_tool_at + loop_state — a liveness gauge, NOT a tamper-evident control');
   console.log('  Orch:    ' + d.completedChildren + '/' + d.totalChildren + ' children complete (' + d.orchPct + '%)');
   console.log('  Status:  ' + health);
 
@@ -981,12 +1066,15 @@ function printQA(d) {
     });
   });
 
-  // QA 3: Orphaned claims (SD not in DB)
-  recentRaw.filter(s => !d.sdStatusMap[s.sd_key]).forEach(s => {
+  // QA 3: Orphaned claims (claim key resolves in NEITHER strategic_directives_v2 NOR quick_fixes).
+  // QF-20260727-713: a QF id is a valid claim key; checking only sdStatusMap flagged every
+  // QF-holding worker as an orphan and buried any genuine one in the noise.
+  const qfMap = d.qfStatusMap || {};
+  recentRaw.filter(s => !d.sdStatusMap[s.sd_key] && !qfMap[s.sd_key]).forEach(s => {
     issues.push({
       severity: 'MED',
       check: 'ORPHAN',
-      msg: s.tty + ' claims ' + s.sd_key.substring(0, 30) + '… — SD not found in DB'
+      msg: s.tty + ' claims ' + s.sd_key.substring(0, 30) + '… — key not found in strategic_directives_v2 or quick_fixes'
     });
   });
 
@@ -1608,6 +1696,63 @@ async function printAttentionStrip() {
   console.log('');
 }
 
+/**
+ * STUCK-SEAT STRIP — SD-FDBK-INFRA-STUCK-SEAT-DETECTION-001, FR-6.
+ *
+ * A summary line, deliberately NOT a per-row cell: fleet-dashboard's worker table renders inside a
+ * per-seat loop, so a fleet-wide count placed there would print once per seat.
+ *
+ * THE UNKNOWN COUNT IS RENDERED BESIDE THE STUCK COUNT AND THAT IS THE POINT. last_tool_at has
+ * silent-loss paths (its sole writer swallows failures with an empty catch, and hooks run from each
+ * session's own checkout), so a detector that can see nothing and a fleet that is genuinely fine
+ * both produce zero findings. Printing only "0 stuck" would make those two states identical — the
+ * exact defect class this SD exists to remove, reproduced in its own instrumentation.
+ *
+ * THE CUT POINT IS NAMED IN THE OUTPUT. The predicate ships no default and throws without one
+ * (TR-4: the ordering is established 6/6, the cut point is not — n=1 per class on the false-negative
+ * side, and healthy-latency data is right-censored). That pushes the number to the caller, so the
+ * caller states it where it is consumed rather than burying it in a render call.
+ *
+ * ADVISORY ONLY. This drives no release, quarantine or handback — see PRECEDENCE in the predicate.
+ */
+const STUCK_SEAT_CUT_POINT_MINUTES = 120;   // operator-facing display threshold, NOT a calibration
+
+// `client` is injectable ONLY so the render path can be unit-tested; production passes nothing and
+// uses the module-scope client. Every sibling renderer here is exported "for unit testing" and this
+// one was omitted from module.exports, which is the actual reason its render was uncovered — a
+// reviewer attributed that to "no test imports fleet-dashboard", but eight test files do.
+async function printStuckSeatStrip(client) {
+  try {
+    const { fetchPopulation } = require('../lib/fleet/stuck-seat-population.cjs');
+    const { classifySeat, VERDICT } = require('../lib/fleet/stuck-seat-predicate.cjs');
+    const { seats: population, truncated } = await fetchPopulation(client || supabase);
+    const results = population.map((row) => classifySeat(row, { cutPointMinutes: STUCK_SEAT_CUT_POINT_MINUTES }));
+    const stuck = results.filter((r) => r.verdict === VERDICT.STUCK);
+    const unknown = results.filter((r) => r.verdict === VERDICT.UNKNOWN);
+    // THE STRIP ALWAYS RENDERS AND ALWAYS STATES ITS DENOMINATOR. An earlier version returned early
+    // when both counts were zero; a reviewer mutated the population query and the strip then printed
+    // NOTHING AT ALL — no header, no zero, no error. Silent-empty was indistinguishable from a
+    // healthy fleet AND from the strip not being wired, which is precisely the confusion this SD
+    // exists to remove. The unknown counter alone does not cover it: population-level blindness
+    // produces zero unknowns too, so the SEATS SCANNED number is the load-bearing one.
+    console.log('STUCK SEATS  (tool-silent >= ' + STUCK_SEAT_CUT_POINT_MINUTES + 'm; advisory, no action taken)');
+    console.log('─'.repeat(72));
+    for (const r of stuck.sort((a, b) => b.toolSilentMinutes - a.toolSilentMinutes)) {
+      console.log('  ' + pad(r.session_id, 38) + pad(r.toolSilentMinutes + 'm silent', 16) + 'wake:' + r.wake.state);
+    }
+    console.log('  seats scanned=' + population.length + '  stuck=' + stuck.length + '  unknown=' + unknown.length +
+      (truncated ? '  [TRUNCATED at the row cap — the count is over a partial page]' : '') +
+      (population.length === 0 ? '  <- SCANNED NOTHING. This is a blind detector, not a healthy fleet.' : '') +
+      (unknown.length ? '  <- UNKNOWN means the detector could not see those seats, not that they are healthy' : ''));
+    console.log('');
+  } catch (e) {
+    // Never let an advisory strip take the dashboard down — but say so, rather than rendering a
+    // silent zero that would read as "no stuck seats".
+    console.log('STUCK SEATS: check unavailable (' + e.message + ')');
+    console.log('');
+  }
+}
+
 // ── Section: Operator cockpit session actions (SD-LEO-INFRA-LEO-COMPLETION-001-E, FR-1) ──
 // Wires lib/fleet/session-detail-view.js's buildSessionDetailView() and lib/fleet/browser-control.js's
 // requestBrowserSession()/signalTakeover() into REAL production callers (G3 no-unit-mock proof: these
@@ -1924,7 +2069,23 @@ function computeSolomonLedgerRollup(rows, nowMs = Date.now()) {
   // batch_stamped marker are the 2026-07-12 non-contemporaneous retro backfill. They are EXCLUDED
   // from the accuracy math — numerator AND denominator — so accuracy reflects only trustworthy
   // contemporaneous evidence. Deterministic: keys on the durable column, never a timestamp heuristic.
-  const decidedAll = all.filter((r) => r.decision && r.decision !== 'pending');
+  // SD-LEO-INFRA-ADVICE-OUTCOME-LEDGER-001 FR-4 — EXPLICIT ALLOW-LIST, not a negation.
+  //
+  // This was `r.decision !== 'pending'`, which silently admits EVERY future decision value into the
+  // accuracy DENOMINATOR while the numerator below uses a positive allow-list. Any new terminal
+  // state therefore lands in the denominator and can never reach the numerator, so adding one
+  // mechanically drives accuracy DOWN with no change in the world. Simulated on live data at the
+  // time of writing: routing judgment-expiry through `decision` (this SD's original design) would
+  // have moved 566 rows and dropped accuracy from 16% to 6%.
+  //
+  // That design was reversed — expiry now lives in its own column and never touches `decision` —
+  // so this is no longer load-bearing for THIS change. It is fixed anyway because the trap is
+  // aimed at whoever adds the next value, and the reversal removed the current victim, not the trap.
+  //
+  // BEHAVIOUR-PRESERVING: this list is exactly the complement of 'pending' under today's CHECK
+  // constraint (pending|accepted|rejected|partial|deferred), so the computed number is unchanged.
+  const JUDGED_DECISIONS = ['accepted', 'rejected', 'partial', 'deferred'];
+  const decidedAll = all.filter((r) => JUDGED_DECISIONS.includes(r.decision));
   const batchExcludedCount = decidedAll.filter((r) => r.batch_stamped === true).length;
   const decided = decidedAll.filter((r) => r.batch_stamped !== true);
   const pending = all.filter((r) => !r.decision || r.decision === 'pending');
@@ -2180,6 +2341,33 @@ async function printStrandAgeGauge() {
   console.log('');
 }
 
+// QF-20260727-962: surface claim burn, split by WHO burned it. The two shapes are printed as
+// SEPARATE lines on purpose — one seat retaking one item is an idempotency failure, many seats
+// bouncing off is a dependency wall, and a single combined count sends the fix the wrong way.
+async function printClaimBurnGauge() {
+  const { planClaimBurnGauge, formatClaimBurnSummary } = require('../lib/coordinator/claim-burn-gauge.cjs');
+
+  console.log('CLAIM-BURN GAUGE');
+  console.log('─'.repeat(72));
+
+  const gauge = await planClaimBurnGauge(supabase);
+  console.log('  ' + formatClaimBurnSummary(gauge));
+
+  const section = (label, rows, detail) => {
+    console.log('  ' + label + ': ' + rows.length);
+    for (const r of rows.slice(0, 5)) console.log('    • ' + r.sd_key + ' — ' + detail(r) + ' [' + r.status + ']');
+  };
+  // Idempotency first: it is the larger half on the live table (189 vs 117 SDs measured 2026-07-28)
+  // and is the one an aggregate hides, since a single holder looks like a single claim.
+  section('REPEAT-HOLDER (one seat retaking — idempotency/resume)', gauge.repeatHolder,
+    (r) => r.events + ' events, ' + r.repeatEvents + ' repeats, 1 holder');
+  section('DISTINCT-HOLDER (seats bouncing off — dependency/spec wall)', gauge.distinctHolders,
+    (r) => r.events + ' events across ' + r.distinctHolders + ' holders');
+  section('MIXED', gauge.mixed,
+    (r) => r.events + ' events, ' + r.distinctHolders + ' holders, ' + r.repeatEvents + ' repeats');
+  console.log('');
+}
+
 // SD-LEO-INFRA-RELAY-QUEUE-CONFIRM-ON-RELAY-DELIVERY-GUARANTEE-001 / FR-3: surface the
 // relay/decision/review drop gauge — mirrors printUndeliveredOutbound()'s shape. Read-only
 // + fail-open (planRelayDrops never throws).
@@ -2201,7 +2389,10 @@ async function printRelayDropGauge() {
   for (const d of flagged) {
     const ageMin = Math.floor(d.ageMs / 60_000);
     const ageStr = ageMin < 60 ? ageMin + 'm' : Math.floor(ageMin / 60) + 'h';
-    console.log('  • [' + String(d.id).slice(0, 8) + '] correlation=' + String(d.correlationId).slice(0, 8) + ' | unactioned ' + ageStr + ' | ' + d.reason);
+    // SD-LEO-INFRA-SILENT-TRUNCATION-ONE-001 FR-1: byte-identical duplicate of the relay-drop line
+    // in scripts/coordinator-hourly-review.cjs. Fixed in the same change deliberately — leaving the
+    // copy truncated would keep the defect alive in the surface most people actually read.
+    console.log('  • [' + String(d.id) + '] correlation=' + String(d.correlationId) + ' | unactioned ' + ageStr + ' | ' + d.reason);
   }
   console.log('');
 }
@@ -2434,7 +2625,7 @@ async function main() {
   const d = await loadData();
 
   const sections = {
-    workers:       async () => { printWorkers(d); await printAttentionStrip(); },
+    workers:       async () => { printWorkers(d); await printAttentionStrip(); await printStuckSeatStrip(); },
     orchestrator:  () => printOrchestrator(d),
     available:     () => printAvailable(d),
     quickfixes:    async () => { printQuickFixes(d); await printChairmanGatedQfs(); }, // QF-20260525-836 + SD-LEO-INFRA-EXCLUDE-CHAIRMAN-GATED-001
@@ -2448,6 +2639,7 @@ async function main() {
     predictions:   async () => await printPredictions(d),
     drain:         () => printDrainAgents(d),
     strand:        async () => await printStrandAgeGauge(), // SD-LEO-INFRA-ADOPTED-RESUME-FINAL-001 (FR-2)
+    'claim-burn':  async () => await printClaimBurnGauge(), // QF-20260727-962
     inbox:         async () => {
       // SD-LEO-FIX-FLEET-WORKER-DIRECTIVE-001: the coordinator view is no longer the
       // unconditional default — a worker invoking the fallback gets ITS OWN inbox.
@@ -2490,6 +2682,7 @@ async function main() {
       if (d.executeTeams && d.executeTeams.length > 0) printTeam(d);
       printWorkers(d);
       await printAttentionStrip();
+      await printStuckSeatStrip();
       printDrainAgents(d);
       printOrchestrator(d);
       printAvailable(d);
@@ -2560,7 +2753,7 @@ async function main() {
 }
 
 // Export read-only renderers for unit testing (SD-LEO-INFRA-COORDINATOR-DASHBOARD-SURFACES-001).
-module.exports = { printFeedback, reconcilePAliveWithLiveness, computeSolomonLedgerRollup, printWorkers, printChairmanEmailChannelHealth, printAvailable, printWorkerInbox, resolveInboxAudience, printAttentionStrip };
+module.exports = { printFeedback, reconcilePAliveWithLiveness, computeSolomonLedgerRollup, printWorkers, printChairmanEmailChannelHealth, printAvailable, printWorkerInbox, resolveInboxAudience, printAttentionStrip, printQA, printStuckSeatStrip };
 
 // Only run the CLI when invoked directly, so requiring this module in a test does
 // not execute main() against the live database.

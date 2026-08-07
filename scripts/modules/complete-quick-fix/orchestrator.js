@@ -8,7 +8,11 @@
 import { createClient } from '@supabase/supabase-js';
 import dotenv from 'dotenv';
 import path from 'path';
+import { createRequire } from 'module';
 import { fileURLToPath, pathToFileURL } from 'url';
+// Reuse the SAME redaction the coordination channel already applies, rather than rolling a second
+// set of patterns that would drift from it (lib/shared/body-cap.cjs is CJS, hence createRequire).
+const { redact, capBodySafe, BODY_HARD_CAP } = createRequire(import.meta.url)('../../../lib/shared/body-cap.cjs');
 import { restartLeoStack } from '../../../lib/server-manager.js';
 import { runSelfVerification } from '../../../lib/quickfix-self-verifier.js';
 import {
@@ -58,7 +62,203 @@ dotenv.config({ path: path.resolve(__dirname, '../../../.env') });
  * @param {{ qf?:object, prUrl:string, mergeSha?:string|null, nowIso:string }} args
  * @returns {object} the UPDATE payload
  */
-export function buildMergedReconcileUpdate({ qf = {}, prUrl, mergeSha = null, nowIso, scopeAcceptedBy = null }) {
+/**
+ * SD-LEO-INFRA-COMPLETION-EVIDENCE-RUNTIME-001 FR-2 — pull the WITNESS NAME out of a
+ * --scope-accepted value so verified_by holds an identity rather than a paragraph.
+ *
+ * verified_by is TEXT and every existing writer puts a short identity in it ('EXEC',
+ * 'ORPHAN_REAPER', 'FORCE_COMPLETE'). --scope-accepted is written as "<who> — <why>", where the
+ * why can run to hundreds of words. Storing the whole attestation would make the column unreadable
+ * at a glance, which defeats the point: FR-2 exists so a thin stamp's witness is VISIBLE in the
+ * row, not so the row carries more prose. The full attestation still lands in verification_notes.
+ *
+ * Falls back to the trimmed whole string when there is no separator, and caps length so a caller
+ * who ignores the convention still yields something readable rather than a wall of text.
+ * @param {string|null} scopeAcceptedBy
+ * @returns {string|null}
+ */
+export function witnessNameFrom(scopeAcceptedBy) {
+  if (!scopeAcceptedBy || typeof scopeAcceptedBy !== 'string') return null;
+  const trimmed = scopeAcceptedBy.trim();
+  if (!trimmed) return null;
+  // em-dash is the documented convention; hyphen-with-spaces accepted so a caller who cannot type
+  // an em-dash is not silently degraded to storing the entire attestation.
+  const head = trimmed.split(/\s+(?:—|--|-)\s+/)[0].trim();
+  const name = head || trimmed;
+  return name.length > 120 ? `${name.slice(0, 117)}...` : name;
+}
+
+/**
+ * SD-LEO-INFRA-COMPLETION-EVIDENCE-RUNTIME-001 FR-2, second writer — build the verified_by stamp
+ * for the direct completion path.
+ *
+ * EXTRACTED FROM AN INLINE IIFE SO IT CAN BE ASSERTED, and that is the whole point of this change:
+ * the behaviour was already shipped but UNPINNED, and unpinned in the specific way that hides a
+ * regression. The only test naming FORCE_COMPLETE asserts FORCE_COMPLETE_NO_REASON — a different
+ * thing — so nothing covered this value. Worse, the fallback makes the gap invisible: under test
+ * CLAUDE_SESSION_ID is unset and no --scope-accepted is passed, so `who` is null and the function
+ * returns the bare mode label. A test written against the live behaviour would therefore have
+ * observed EXACTLY the pre-FR-2 output and passed, certifying the old behaviour while the
+ * improvement went unexercised. Reverting the identity logic entirely would not have failed a
+ * single test.
+ *
+ * Pure by construction — sessionId is a PARAMETER, not a process.env read — because a function that
+ * reaches for ambient state can only be tested by mutating the environment, and the branch that
+ * matters here is precisely the one ambient state suppresses.
+ *
+ * BEHAVIOUR IS UNCHANGED, deliberately: same precedence (explicit scope-accepter, then the operator
+ * session, then neither), same `<who> (<MODE>)` shape, same bare-mode fallback. The mode is kept as
+ * a suffix so anything classifying rows on these literals keeps the distinction it relied on.
+ *
+ * @param {{forceComplete?: boolean, scopeAcceptedBy?: string|null, sessionId?: string|null}} args
+ * @returns {string} never null — a close is always attributable to at least its mode
+ */
+export function completionModeStamp({ forceComplete = false, scopeAcceptedBy = null, sessionId = null } = {}) {
+  const mode = forceComplete ? 'FORCE_COMPLETE' : 'UAT_AGENT';
+  const who = witnessNameFrom(scopeAcceptedBy) || sessionId || null;
+  return who ? `${who} (${mode})` : mode;
+}
+
+/**
+ * Bridge the CLI options object to completionModeStamp, and pin the property NAME.
+ *
+ * THIS EXISTS BECAUSE THE NAME WAS WRONG IN SHIPPED CODE. FR-2 read `options.scopeAcceptedBy`
+ * while cli.js has always produced `options.scopeAccepted`, so the value was permanently
+ * `undefined` and the documented precedence — prefer the scope-accepter over the operator session
+ * — COULD NEVER FIRE. It degraded silently to the session id, which looks like a working stamp.
+ *
+ * The FR-2 pins did not catch it because they call completionModeStamp DIRECTLY with explicit
+ * arguments: the function was correct, the CALL SITE handed it the wrong key. Unit verified,
+ * consumer not. Routing both call sites through one exported bridge makes the option name an
+ * executable contract that a test can drive with a REAL parsed-argv options object, instead of a
+ * spelling that has to be re-checked by eye at every call site.
+ *
+ * @param {object} options - the options object built by cli.js
+ * @param {string|null} sessionId
+ * @returns {string}
+ */
+export function completionStampFromOptions(options = {}, sessionId = null) {
+  return completionModeStamp({
+    forceComplete: options.forceComplete,
+    scopeAcceptedBy: options.scopeAccepted,
+    sessionId
+  });
+}
+
+/**
+ * SD-LEO-INFRA-COMPLETION-EVIDENCE-RUNTIME-001 FR-1 — build the runtime_observation value.
+ *
+ * WHAT THIS IS FOR. commit_sha and pr_url already witness that CODE LANDED. This SD exists because
+ * landing is not running, so FR-1 wants one observation of the RUNNING system at close time. The
+ * shape is fixed by precedent, not invented here: Adam recorded the first real observation on
+ * QF-20260725-096 using {observed_at, method, observation, declared_by}, so this conforms to what
+ * is already in the column rather than introducing a second dialect one table over — which is the
+ * exact collision that ruled out compliance_details as a home in the first place.
+ *
+ * ABSENCE IS RECORDED, NOT LEFT BLANK. When nothing is declared, this returns an explicit
+ * `declared: false` record instead of null. That is the FR-1 acceptance criterion verbatim: the
+ * absence must be explicit "so silence is distinguishable from not applicable". A null column
+ * cannot carry that distinction — it reads identically whether nobody looked, nobody thought to
+ * look, or looking was genuinely irrelevant.
+ *
+ * THE HONEST LIMITATION, kept next to the code rather than in a doc nobody opens: the FR-1 trigger
+ * is worker-DECLARED, not detected. Nothing on quick_fixes can decide "this row's acceptance
+ * depends on runtime behaviour" — the LEAD survey looked and found no mechanical discriminator. So
+ * `declared: false` means NOBODY DECLARED ONE. It is not evidence that none was needed, and must
+ * never be read as an all-clear.
+ *
+ * NEVER CLOBBERS. An existing observation is returned untouched. Re-running a completion must not
+ * overwrite a probe someone actually performed with a fresh "nobody declared one" — that would
+ * destroy real evidence to record its absence, which is worse than either outcome alone.
+ *
+ * Pure: the caller passes nowIso and the identity. No clock, no env, no DB.
+ *
+ * @param {{existing?: object|null, observation?: string|null, method?: string|null,
+ *          declaredBy?: string|null, nowIso: string}} args
+ * @returns {object} always an object — the column is never left silently empty by this path
+ */
+export function buildRuntimeObservation({ existing = null, observation = null, method = null, declaredBy = null, nowIso }) {
+  // Real evidence already on the row wins over anything this close would write.
+  if (existing && typeof existing === 'object' && Object.keys(existing).length > 0) return existing;
+
+  // SECURITY S3 — REDACT AND CAP. This field is the WORSE one to leave raw, not the safer one: its
+  // own column comment and method vocabulary (http_probe, log_grep) actively invite pasting request
+  // /response and log text, which is exactly where bearer tokens and signed URLs live. The one real
+  // observation in the column is literal HTTP probe output. worker-signal.cjs already routes its
+  // bodies through the same helper; leaving this path raw was an ASYMMETRY, not a considered choice.
+  // capBody() redacts internally and THROWS over the cap; capBodySafe() adapts that to a
+  // {value, error} tuple. Neither TRUNCATES — and dropping an over-long observation would leave
+  // this function recording declared:false, manufacturing the exact false absence FR-1 exists to
+  // stop. So an over-cap observation is truncated and SAID SO in the stored text, rather than
+  // silently becoming an absence.
+  const raw = typeof observation === 'string' ? observation.trim() : '';
+  const capped = raw ? capBodySafe(raw) : { value: '', error: null };
+  const text = capped.error
+    ? `${redact(raw).slice(0, BODY_HARD_CAP - 60)} … [TRUNCATED at ${BODY_HARD_CAP} chars]`
+    : (capped.value || '');
+  if (!text) {
+    return {
+      declared: false,
+      observed_at: nowIso,
+      declared_by: declaredBy || null,
+      note: 'No runtime observation declared at close. The FR-1 trigger is worker-DECLARED, not detected — nothing on quick_fixes can decide whether acceptance depends on runtime behaviour. So this records that NOBODY DECLARED ONE; it is not evidence that none was applicable.'
+    };
+  }
+  return {
+    observed_at: nowIso,
+    method: (typeof method === 'string' && method.trim()) || 'declared',
+    observation: text,
+    declared_by: declaredBy || null
+  };
+}
+
+/**
+ * QF-20260727-731 — the merged-reconcile path SILENTLY DROPPED --uat-verified and --actual-loc.
+ *
+ * The payload carried neither key, so both values vanished while the CLI exited success: the row
+ * read uat_verified=false, actual_loc=null, and that is INDISTINGUISHABLE from never having passed
+ * them. Reported independently from two separate closures (QF-20260726-575, QF-20260726-222), which
+ * is what makes it a pattern rather than an anecdote.
+ *
+ * THE TWO FLAGS GET DIFFERENT TREATMENT, deliberately, because they are different KINDS of thing.
+ *
+ * --actual-loc is HONOURED. It is a measurement carrying no truth claim about verification, so
+ * dropping it only lost data. Same for its source/test siblings.
+ *
+ * --uat-verified is REFUSED LOUDLY. UAT provably does not run on this path — that is the whole
+ * reason force_completed carries the completed_requires_verification CHECK here rather than
+ * fabricating uat_verified (see the rationale below). Honouring a BARE BOOLEAN would write an
+ * anonymous truth claim that UAT ran, on a path where it did not, with nobody named. --scope-accepted
+ * is the attestation mechanism on this path precisely because it names a witness; --uat-verified
+ * cannot, so it is rejected with a message that says where to go instead.
+ *
+ * Refusing is not a workaround for the drop: silence was the defect. A caller now learns
+ * immediately, instead of reading the row later and finding their input gone.
+ *
+ * @throws {Error} UAT_VERIFIED_UNSUPPORTED_ON_RECONCILE when --uat-verified is passed here
+ */
+export function assertReconcileFlagsSupported(options = {}) {
+  if (options.uatVerified === undefined) return;
+  const err = new Error(
+    '[UAT_VERIFIED_UNSUPPORTED_ON_RECONCILE] --uat-verified is not honoured on the already-MERGED ' +
+    'reconcile path: UAT does not re-run here, so the flag would assert that it did. This path sets ' +
+    'force_completed=true instead, which satisfies the completed_requires_verification CHECK without ' +
+    'claiming a UAT that never ran. To attest on this path use --scope-accepted "<who> — <why>", ' +
+    'which records a NAMED witness. Re-run without --uat-verified.'
+  );
+  err.code = 'UAT_VERIFIED_UNSUPPORTED_ON_RECONCILE';
+  throw err;
+}
+
+export function buildMergedReconcileUpdate({ qf = {}, prUrl, mergeSha = null, nowIso, scopeAcceptedBy = null, runtimeObservation = null, observationMethod = null, options = {} }) {
+  // Accept the CLI options object as a FALLBACK source for the FR-1 fields, not only explicit
+  // args. Two named params were declared here and the sole production call site passed NEITHER, so
+  // the feature was dead on this path while the unit tests passed — they supplied the args by hand,
+  // reproducing in the test the exact plumbing production omitted. Reading from `options` means the
+  // only way to break it again is to drop `options` entirely, which also breaks scopeAcceptedBy and
+  // fails loudly instead of silently recording a false absence.
+  const declaredObservation = runtimeObservation ?? options.runtimeObservation ?? null;
+  const declaredMethod = observationMethod ?? options.observationMethod ?? null;
   // QF-20260725-691: a merged PR witnesses that CODE LANDED. Terminal `completed` asserts that
   // the QF's SCOPE WAS SATISFIED. Those are different propositions and this path used to
   // substitute one for the other silently — invisible precisely because the merge really did
@@ -95,6 +295,36 @@ export function buildMergedReconcileUpdate({ qf = {}, prUrl, mergeSha = null, no
     // force_completed. UAT genuinely did not re-run here, so force_completed carries it rather
     // than fabricating uat_verified — unchanged from SD-REFILL-00QQ60BN.
     force_completed: true,
+    // SD-LEO-INFRA-COMPLETION-EVIDENCE-RUNTIME-001 FR-2. This path wrote force_completed=true with
+    // uat_verified left false and verified_by OMITTED ENTIRELY, so the row asserted a close with
+    // nobody attached to it. Measured across the table: 392 of 629 force-completed rows carry
+    // uat_verified=false AND verified_by=null — 62 percent, the majority pattern, not an exception.
+    //
+    // The fix is nearly free because the witness was ALREADY IN SCOPE: --scope-accepted is mandatory
+    // to reach this terminal branch at all, so a name exists at the moment the row is written and was
+    // simply not carried across. Defaulting to already-captured data instead of adding a prompt is
+    // deliberate — a field nobody has to fill is a field that stays accurate.
+    //
+    // The point is VISIBILITY, not blocking. FR-2 does not stop a thin close; it stops a thin close
+    // being ANONYMOUS. "accepted on merge evidence alone" is a legitimate value here; nothing at all
+    // is not, because an empty witness is indistinguishable from a close nobody thought about.
+    verified_by: witnessNameFrom(scopeAcceptedBy),
+    // SD-LEO-INFRA-COMPLETION-EVIDENCE-RUNTIME-001 FR-1. Written on EVERY terminal close, including
+    // when nothing was declared — an explicit `declared: false` record, never a silent null, so a
+    // later reader can tell "nobody declared one" from "not applicable". Existing evidence wins.
+    runtime_observation: buildRuntimeObservation({
+      existing: qf.runtime_observation,
+      observation: declaredObservation,
+      method: declaredMethod,
+      declaredBy: witnessNameFrom(scopeAcceptedBy),
+      nowIso
+    }),
+    // QF-20260727-731: honour the LOC measurements. They carry no truth claim about
+    // verification, so dropping them only lost data. Omitted keys are left absent rather than
+    // written as null, so a re-run without the flag cannot ERASE a value recorded earlier.
+    ...(options.actualLoc       !== undefined ? { actual_loc: options.actualLoc } : {}),
+    ...(options.actualSourceLoc !== undefined ? { actual_source_loc: options.actualSourceLoc } : {}),
+    ...(options.actualTestLoc   !== undefined ? { actual_test_loc: options.actualTestLoc } : {}),
     verification_notes,
     completed_at: qf.completed_at || nowIso,
     // QF-20260711-176: a completed QF has no holder. Leaving claiming_session_id set made the
@@ -208,14 +438,22 @@ export async function completeQuickFix(qfId, options = {}) {
       } else {
         console.log(`\n📌 QF own PR ${probeWitness.prUrl} (head ${probeWitness.headBranch}) is MERGED + reachable from origin/main.`);
         console.log(`   Recording the merge and leaving ${qfId} IN_PROGRESS — a merged PR proves the code landed, NOT that this QF's scope is satisfied (QF-20260725-691).`);
-        console.log(`   Re-read the QF's stated scope. If every named surface is genuinely done, attest it:`);
+        console.log('   Re-read the QF\'s stated scope. If every named surface is genuinely done, attest it:');
         console.log(`     node scripts/complete-quick-fix.js ${qfId} --pr-url ${probeWitness.prUrl} --scope-accepted "<who/why>"`);
-        console.log(`   If only part shipped, file the remainder rather than closing this row.\n`);
+        console.log('   If only part shipped, file the remainder rather than closing this row.\n');
       }
       // SD-REFILL-00QQ60BN: preserve the verification-column stamping the
       // completed_requires_verification CHECK demands, now with the SELF-DERIVED pr_url.
+      // QF-20260727-731: refuse BEFORE building, so the caller never gets a success exit with
+      // their input discarded. Silence was the defect; a loud failure is the fix.
+      assertReconcileFlagsSupported(options);
       const reconcileUpdate = buildMergedReconcileUpdate({
-        qf, prUrl: probeWitness.prUrl, mergeSha, nowIso: new Date().toISOString(), scopeAcceptedBy
+        qf, prUrl: probeWitness.prUrl, mergeSha, nowIso: new Date().toISOString(), scopeAcceptedBy,
+        // THIS LINE WAS MISSING AND IT MATTERED. Without it a real --runtime-observation was
+        // dropped here and the row recorded declared:false — a MANUFACTURED FALSE ABSENCE over an
+        // operator's actual declaration, which the never-clobber guard then made permanent. Worse
+        // than a null: FR-1 exists so absence is honest, and this asserted absence that was false.
+        options
       });
       const { error: reconcileErr } = await supabase
         .from('quick_fixes')
@@ -461,15 +699,26 @@ export async function completeQuickFix(qfId, options = {}) {
   // against an unpushed/commit-less branch and then wedged on the PR-URL prompt
   // under --non-interactive. Only the PR-creation side effect moves — the commit
   // still happens after verification (this is NOT the commit-before-verify reorder).
-  const deferAutoPr = !prUrl && options.autoPr;
+  // QF-20260727-714: --no-code-deliverable suppresses auto-PR entirely. A zero-code QF has an
+  // empty branch, so a deferred `gh pr create` would correctly refuse ("No commits between main
+  // and main") — and suppressing it here also keeps the SECOND validatePR (in the deferAutoPr
+  // block further down) unreachable on this path, rather than patching two gates that must stay
+  // in agreement.
+  const deferAutoPr = !prUrl && options.autoPr && !options.noCodeDeliverable;
 
-  if (!prUrl && !options.autoPr) {
+  if (!prUrl && !options.autoPr && !options.noCodeDeliverable) {
     const prInput = await prompt('\nGitHub PR URL (required): ');
     prUrl = prInput.trim();
   }
 
   // When the PR will be auto-created post-push, there is no URL to validate yet.
-  if (!deferAutoPr && !validatePR(prUrl, qfId, qf.title)) {
+  //
+  // QF-20260727-714: --no-code-deliverable also skips it, because the deliverable is a DB write,
+  // a refutation, or a decision — there is nothing to commit and a PR URL could only be
+  // fabricated. THE NORMAL PATH IS UNCHANGED: without this flag a PR is still mandatory, and
+  // validatePR itself is untouched, so this is a scoped exemption rather than a weakened guard.
+  // The flag cannot be passed without --deliverable-evidence (enforced in cli.js).
+  if (!deferAutoPr && !options.noCodeDeliverable && !validatePR(prUrl, qfId, qf.title)) {
     process.exit(1);
   }
 
@@ -675,6 +924,20 @@ export async function completeQuickFix(qfId, options = {}) {
       timestamp: new Date().toISOString(),
       operator_supplied_notes: verificationNotes || null
     });
+  } else if (options.noCodeDeliverable) {
+    // QF-20260727-714: audit-trail the zero-code completion. THE EVIDENCE IS THE WHOLE POINT —
+    // it is the only artifact a reader can use to check the deliverable actually landed, because
+    // there is no commit, no diff and no PR to inspect. cli.js refuses the flag without it, so
+    // this field is never empty. no_pr_reason records WHY the PR requirement was exempted rather
+    // than leaving a reader to infer that the gate simply failed to run.
+    finalVerificationNotes = JSON.stringify({
+      no_code_deliverable: true,
+      deliverable_evidence: options.deliverableEvidence,
+      no_pr_reason: 'deliverable is not a code change — no commit exists to open a PR against',
+      operator: process.env.CLAUDE_SESSION_ID || 'unknown',
+      timestamp: new Date().toISOString(),
+      operator_supplied_notes: verificationNotes || null
+    });
   }
 
   const { error: updateError } = await supabase
@@ -684,13 +947,33 @@ export async function completeQuickFix(qfId, options = {}) {
       actual_loc: actualLoc,
       actual_source_loc: actualSourceLoc,
       actual_test_loc: actualTestLoc,
-      force_completed: Boolean(options.forceComplete),
+      // QF-20260727-714: a no-code completion is force_completed too. The row's
+      // completed_requires_verification CHECK is satisfied WITHOUT fabricating uat_verified or a
+      // commit — same contract this file already documents for --force-complete. Marking it
+      // force_completed is also the honest label: no PR was reviewed and no diff was merged, so
+      // the row must not read like an ordinary verified completion.
+      force_completed: Boolean(options.forceComplete || options.noCodeDeliverable),
       commit_sha: commitSha,
       branch_name: branchName,
       pr_url: finalPrUrl,
       tests_passing: testsPass,
       uat_verified: uatVerified,
-      verified_by: options.forceComplete ? 'FORCE_COMPLETE' : 'UAT_AGENT',
+      // SD-LEO-INFRA-COMPLETION-EVIDENCE-RUNTIME-001 FR-2, second writer. 'FORCE_COMPLETE' and
+      // 'UAT_AGENT' are MODE LABELS, not witnesses — they say HOW the row closed, never WHO closed
+      // it, so every forced completion in the table is attributed identically and anonymously.
+      // Prefer a real identity when one exists: the scope-accepter, else the operator session that
+      // ran the command. The mode is preserved as a suffix so nothing that reads these values for
+      // classification loses the distinction it relied on.
+      verified_by: completionStampFromOptions(options, process.env.CLAUDE_SESSION_ID || null),
+      // FR-1, second writer — same contract as the reconcile path above: always an explicit
+      // record, existing evidence never clobbered.
+      runtime_observation: buildRuntimeObservation({
+        existing: qf?.runtime_observation,
+        observation: options.runtimeObservation,
+        method: options.observationMethod,
+        declaredBy: completionStampFromOptions(options, process.env.CLAUDE_SESSION_ID || null),
+        nowIso: new Date().toISOString()
+      }),
       verification_notes: finalVerificationNotes,
       files_changed: filesChanged.length > 0 ? filesChanged : null,
       completed_at: new Date().toISOString(),

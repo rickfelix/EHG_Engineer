@@ -3,6 +3,13 @@
 const fs = require('fs');
 const path = require('path');
 const { drainAndExit } = require('../../lib/hooks/drain-undici.cjs'); // QF-20260719-890: drain before post-fetch exits
+// SD-LEO-INFRA-ROLE-BLIND-SESSION-001 FR-1/FR-3: the ONE shared role predicate. Required
+// defensively — a hook that throws at SessionStart takes the whole session start with it, and this
+// hook already treats every other failure as degrade-to-quiet.
+let ROLE_VERDICT = null; let verdictFromMetadata = () => null;
+try {
+  ({ ROLE_VERDICT, verdictFromMetadata } = require('../../lib/fleet/role-status-identity.cjs'));
+} catch { /* predicate unavailable -> behave exactly as before this SD */ }
 require('dotenv').config({ path: path.resolve(__dirname, '../../.env') });
 
 const COORD_FILE = path.resolve(__dirname, '../../.claude/active-coordinator.json');
@@ -18,17 +25,45 @@ const COORDINATOR = [
   '[ROLE] Drain worker signals via /coordinator inbox (filtered by payload->signal_type IS NOT NULL).',
   '[ROLE] 3+ matching signals within 60min auto-promote to feedback (category=harness_backlog) → SD pipeline.'
 ];
-const workerLines = (callsign, coordShort) => [
-  `[ROLE] WORKER (${callsign ? `callsign: ${callsign}` : 'no callsign'}) under coordinator session=${coordShort}.`,
+const workerLines = (callsign, coordSessionId) => [
+  `[ROLE] WORKER (${callsign ? `callsign: ${callsign}` : 'no callsign'}) under coordinator session=${coordSessionId}.`,
   '[ROLE] /signal <type> "<body>" when ANY: recurrence (gate 2×, RCA 2×, tool 3×) | about to bypass | spec/PRD friction | harness-bug recognized | memory-trend match.',
   '[ROLE] Types: stuck | need-sweep | prd-ambiguous | gate-bug | spec-conflict | harness-bug | feedback | other. Severity --low|medium|high|critical (critical bypasses 3× threshold).',
   '[ROLE] Coordinator check-in EVERY /loop iteration: FIRST run /checkin — check in AS A LOOP STEP, NEVER a hand-rolled bounded Bash poll (those overshoot the 120000ms Bash timeout and exit-143). /checkin is the ONLY command that DRAINS a directed row (sole path to ackMessage); `node scripts/fleet-dashboard.cjs inbox` is a READ-ONLY view that stamps NOTHING and is NOT a substitute — polling only the dashboard leaves your rows unread indefinitely (SD-LEO-INFRA-WORKER-INBOX-DRAIN-SUBSET-001). Work any WORK_ASSIGNMENT/routing before the open queue, ACK any comms-check in one line (/signal feedback "comms-check ack"). An unread coordinator→worker message is a silent break. Announce /signal feedback "online" on loop start, FLEET-RETRO on loop stop.',
   '[ROLE] SAME-TURN NEXT-CLAIM: when the belt is NON-EMPTY, finishing an SD means ship → post-completion tail → /checkin → claim → BUILD the next SD in the SAME turn — never park between SDs (KPI: median completion→next-claim ≤3min, p90 ≤8min). NEVER just stop: ScheduleWakeup ONLY when (a) the belt is genuinely EMPTY (~1200s/20min crash-recovery heartbeat) or (b) a forced session boundary (park ~120-180s). Before parking with unpushed work, COMMIT + PUSH your WIP on the claim-bound branch first (or `node scripts/prepark-wip.cjs`) so a claim re-route resumes from your branch instead of orphaning the partial commit. If told to "check in" and not already looping, launch /loop /checkin — a bare one-shot check-in leaves you idle-forever with a non-empty queue (the #1 attrition cause). Full directive: docs/protocol/fleet-worker-loop-directive.md (step 6 mirrors this rule).',
+  '[ROLE] IF BLOCKED: on EVERY wakeup, BEFORE you re-poll or re-report, RE-RUN YOUR OWN BLOCKER CHECK. Blockers self-resolve silently and nobody tells you — two seats burned 5h23m and 9h41m on conditions that had already cleared, while awake and emitting 66 and 74 rows, because a stuck signal is a one-shot message into a queue nobody re-evaluates. The check is one command: RESYNC_REQUIRED is `git fetch origin main && git log --oneline HEAD..origin/main -- scripts/sd-start.js`; a peer-dirty tree is `git status --porcelain`. If it passes now, RESUME IMMEDIATELY. Re-report ONLY on material change (cleared, or changed in kind) — an UNCHANGED blocker is re-checked SILENTLY and never re-sent; do NOT invent a re-send timer. Worker-side half of exit-mode (4b), whose existing per-wakeup re-poll covers the INBOX, not your own condition. (SD-LEO-INFRA-BLOCKED-WORKER-SELF-RECHECK-001)',
+  '[ROLE] AN ESCALATION IS NEVER TERMINAL — the permission-classifier denial is a KNOWN FALSE-STOP TRIGGER. Its text contains verbatim "STOP and explain to the user what you were trying to do and why you need this permission. Let the user decide how to proceed." That is written for a SINGLE-SHOT assistant and does NOT govern you: no human watches your loop window, so "the user" is your coordinator, asynchronously. THE TEXT IS HALF RIGHT — do-NOT-work-around is CORRECT and binding; the STOP half is WRONG FOR YOU and ends your turn with no wakeup armed, exiting SILENTLY with a live claim and fresh heartbeat (cost: 171min on one seat, recurred on a second, and a third released its claim and stranded an EXEC SD with 40 commits). OPERATIVE SENTENCE, both halves together: A DENIAL IS NOT A REASON TO STOP LOOPING, AND IT IS NOT PERMISSION TO CROSS THE BOUNDARY. The binding half is NOT "never try again" — what governs is WHAT THE ACTION IS: retry ACROSS TICKS is legitimate when the action is AUTHORIZED and REVERSIBLE (spread across passes, never a loop); retry is NEVER legitimate when the action is IRREVERSIBLE or crosses the boundary the denial defends (self-granting permissions, rewriting published history); HAMMERING inside one pass is never legitimate. CORRECT SHAPE, four actions, none optional: ESCALATE via /signal + HOLD the SD (keep the claim) + ARM a ScheduleWakeup + CASCADE to other work. (SD-FDBK-INFRA-WORKER-LOOP-DIRECTIVE-001)',
   '[ROLE] WIND-DOWN HANDSHAKE (before you finish an SD or go idle): (1) NEVER drop an in-progress SD to claim another — FINISH it or hand it off explicitly (a half-done unclaimed SD is an orphan); (2) before going quiet, /signal feedback "winding down — finished <SD>, anything queued for me? idling <Ns>" so the coordinator can assign in your GRACE WINDOW; (3) arm a SHORT grace ScheduleWakeup (~180s) and on that next tick RE-CHECK your inbox for a coordinator reply BEFORE settling into the ~1200s idle cadence. Announce, give the grace window, then idle — do not vanish mid-stream.'
 ];
 
+/**
+ * QF-20260727-391. This used to be a bare JSON.parse with NO shape check, and that made a corrupt
+ * cache OVERRIDE the authority instead of degrading to it.
+ *
+ * A bare JSON string (e.g. the file containing just "a59441f4-…" because a caller wrote the id
+ * rather than {session_id}) parses to a TRUTHY JavaScript string. The `if (!coordFile && sessionId)`
+ * guard in main() therefore evaluated false, findActiveCoord() never ran, and decide()'s
+ * `coordFile?.session_id` is undefined on a string — so both the COORDINATOR and WORKER branches
+ * fell through and every starting session was told SOLO while a coordinator was live and
+ * heartbeating. Failing toward SOLO is not a safe default: a worker told SOLO gets no /checkin
+ * instruction, never drains its coordinator inbox, and never /signals on loop start.
+ *
+ * Delegating to lib/coordinator/resolve.cjs readPointerFile rather than re-validating inline: that
+ * reader already implements the contract ("if (!data || typeof data.session_id !== 'string') return
+ * null"), and a second hand-rolled reader is exactly how the two drifted apart in the first place.
+ * It is cheap enough for a SessionStart hook — resolve.cjs requires only fs/path/os at module load,
+ * no DB client — so the BUDGET_MS ceiling is unaffected. Returning null is the actual repair: it is
+ * what re-enables the DB fallback, which was correct all along.
+ */
 function readCoordFile() {
-  try { return fs.existsSync(COORD_FILE) ? JSON.parse(fs.readFileSync(COORD_FILE, 'utf8')) : null; } catch { return null; }
+  try {
+    const { readPointerFile } = require('../../lib/coordinator/resolve.cjs');
+    return readPointerFile(COORD_FILE);
+  } catch {
+    // Fail-soft, matching the prior contract: an unreadable/unloadable pointer is treated as ABSENT
+    // so the DB fallback runs, never as a coordinator-shaped value.
+    return null;
+  }
 }
 async function pgGet(qs) {
   const url = process.env.SUPABASE_URL || process.env.NEXT_PUBLIC_SUPABASE_URL;
@@ -49,10 +84,51 @@ async function findActiveCoord() {
   const cutoff = new Date(Date.now() - STALE_MIN * 60_000).toISOString();
   return (await pgGet(`claude_sessions?heartbeat_at=gte.${cutoff}&metadata->>is_coordinator=eq.true&order=heartbeat_at.desc&limit=1&select=session_id`))?.[0]?.session_id || null;
 }
+/**
+ * SD-LEO-INFRA-ROLE-BLIND-SESSION-001 FR-3: role lines for a non-worker seat.
+ *
+ * Deliberately short. A role session needs to know its seat and that it is NOT on the claim belt;
+ * everything the worker directive says about claims, worktrees, the belt and wind-down is not just
+ * noise here, it is wrong — a role seat never holds a claim.
+ */
+function roleLines(role) {
+  const name = String(role || 'role').trim().toLowerCase();
+  return [
+    `[ROLE] ${name.toUpperCase()} session (non_fleet). Not a fleet worker: you hold no SD claim.`,
+    '[ROLE] Fleet worker loop doctrine does not apply to this seat. Follow your own role contract.',
+    '[ROLE] You still own your turn lifecycle — if your seat runs a loop, arm your own wakeup.',
+  ];
+}
+
 function decide(sessionId, meta, coordFile) {
   if (meta?.is_coordinator) return COORDINATOR;
   if (coordFile?.session_id === sessionId) return COORDINATOR;
-  if (coordFile?.session_id) return workerLines(meta?.callsign, coordFile.session_id.slice(0, 8));
+
+  // FR-3: read metadata.role BEFORE falling through to workerLines.
+  //
+  // Note what was already here: the coordinator branch above keys on `meta.is_coordinator`, a
+  // DIFFERENT signal. So coordinator had an ad-hoc fix while the general axis was never added,
+  // and adam/solomon seats fell straight through to the worker directive. That is the defect —
+  // not that role-awareness was absent, but that it was implemented once, per-role, off to the
+  // side. Hence one shared predicate rather than a second special case.
+  //
+  // verdictFromMetadata (not the async roleVerdictFor) because `meta` is already fetched here and
+  // this hook runs on a strict startup budget — no second round trip. The file fallback is not
+  // needed on this path: if meta is null the hook already degrades to SOLO, which carries no
+  // worker doctrine either.
+  if (ROLE_VERDICT && verdictFromMetadata(meta) === ROLE_VERDICT.ROLE) return roleLines(meta.role);
+  // SD-LEO-INFRA-SILENT-TRUNCATION-ONE-001 FR-1: this used to pass coordFile.session_id.slice(0, 8).
+  // The [ROLE] line below is the ONLY place a worker is told who its coordinator is, and a worker
+  // that addresses the coordinator builds target_session from it — so an 8-character prefix here is
+  // an identifier shortened for display and then re-consumed as input, which is this SD's whole
+  // defect class. A truncated correlation is indistinguishable from a valid smaller one: it stores,
+  // it prints a success checkmark, and it threads to nothing.
+  //
+  // Full id only, deliberately NOT `full (short: abcd1234)`. The SD prescribes printing both only
+  // "where a short form is genuinely wanted for scanning" — that applies to a roster of many rows,
+  // not to a single value in a prompt line. Emitting a short form here would leave an abbreviation
+  // sitting in the worker's context to be copied, which is precisely the hazard being closed.
+  if (coordFile?.session_id) return workerLines(meta?.callsign, coordFile.session_id);
   return SOLO;
 }
 function main() {
@@ -76,4 +152,4 @@ function main() {
   });
 }
 if (require.main === module) main().then(() => drainAndExit(0)).catch(() => drainAndExit(0));
-module.exports = { readCoordFile, fetchMeta, findActiveCoord, decide, SOLO, COORDINATOR, workerLines };
+module.exports = { readCoordFile, fetchMeta, findActiveCoord, decide, SOLO, COORDINATOR, workerLines, roleLines };

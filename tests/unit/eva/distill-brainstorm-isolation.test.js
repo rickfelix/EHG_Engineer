@@ -84,30 +84,79 @@ describe('SD-...-001-D: distiller observability + bounds + isolation', () => {
     expect(results.length).toBe(50);
   });
 
-  it('FR-1: dispositionCoverage = (item_disposition <> pending) / total', async () => {
-    // count probe mock: head/count select; .neq() narrows the numerator
-    const sb = {
-      from() {
-        let neq = false;
-        const chain = {
-          select() { return chain; },
-          neq() { neq = true; return chain; },
-          then(resolve) { resolve({ count: neq ? 33 : 741, error: null }); },
+  // SD-LEO-INFRA-ROADMAP-REGENERATION-DUPLICATES-001 FR-3: dispositionCoverage is now scoped to
+  // the canonical roadmap, so this mock models strategic_roadmaps/roadmap_waves and APPLIES the
+  // operators it receives.
+  //
+  // The previous mock was table-blind — it returned {count: neq ? 33 : 741} for EVERY query
+  // regardless of table or filter — so a correctly-scoped implementation reproduced 33/741
+  // exactly. It could not distinguish a scoped read from an unscoped one, which is precisely
+  // the defect under test. Counts here are derived from rows, so the numbers mean something.
+  function coverageDb({ items, waves, roadmaps } = {}) {
+    const src = {
+      strategic_roadmaps: roadmaps ?? [{ id: 'rm-canon', status: 'active' }],
+      roadmap_waves: waves ?? [{ id: 'w-canon', roadmap_id: 'rm-canon' }],
+      roadmap_wave_items: items ?? [],
+    };
+    return {
+      from(table) {
+        let rows = [...(src[table] || [])];
+        let counting = false;
+        const c = {
+          select(_col, opts) { counting = Boolean(opts?.count); return c; },
+          eq(k, v) { rows = rows.filter((r) => r[k] === v); return c; },
+          in(k, vs) { rows = rows.filter((r) => vs.includes(r[k])); return c; },
+          neq(k, v) { rows = rows.filter((r) => r[k] !== v); return c; },
+          then(resolve) { resolve(counting ? { count: rows.length, error: null } : { data: rows, error: null }); },
         };
-        return chain;
+        return c;
       },
     };
-    const cov = await dispositionCoverage(sb);
+  }
+
+  const mkItems = (waveId, total, nonPending) =>
+    Array.from({ length: total }, (_, i) => ({
+      id: `${waveId}-${i}`, wave_id: waveId, item_disposition: i < nonPending ? 'promoted' : 'pending',
+    }));
+
+  it('FR-1: dispositionCoverage = (item_disposition <> pending) / total, scoped to the canonical roadmap', async () => {
+    const cov = await dispositionCoverage(coverageDb({ items: mkItems('w-canon', 741, 33) }));
     expect(cov.denominator).toBe(741);
     expect(cov.numerator).toBe(33);
     expect(cov.value).toBeCloseTo(33 / 741, 5);
     expect(cov.status).toBe('ok');
   });
 
+  it('FR-1: items under an ARCHIVED roadmap are excluded from BOTH numerator and denominator', async () => {
+    // The regression this SD exists to prevent. Measured live 2026-07-29 before the fix:
+    // 95/1864 = 5.1% unscoped versus 20/261 = 7.7% scoped. Note the orphans here are NOT all
+    // pending — 60 of them are dispositioned — because the real archived corpus is not either,
+    // so a denominator-only fix must fail this too.
+    const cov = await dispositionCoverage(coverageDb({
+      roadmaps: [{ id: 'rm-canon', status: 'active' }, { id: 'rm-old', status: 'archived' }],
+      waves: [{ id: 'w-canon', roadmap_id: 'rm-canon' }, { id: 'w-orphan', roadmap_id: 'rm-old' }],
+      items: [...mkItems('w-canon', 741, 33), ...mkItems('w-orphan', 1100, 60)],
+    }));
+    expect(cov.denominator).toBe(741);
+    expect(cov.numerator).toBe(33);
+  });
+
   it('FR-1: dispositionCoverage returns status=unknown on empty corpus', async () => {
-    const sb = { from() { const c = { select() { return c; }, neq() { return c; }, then(r) { r({ count: 0, error: null }); } }; return c; } };
-    const cov = await dispositionCoverage(sb);
+    const cov = await dispositionCoverage(coverageDb({ items: [] }));
     expect(cov.status).toBe('unknown');
     expect(cov.value).toBe(null);
+  });
+
+  it('FR-1: no active roadmap and ambiguity are distinct from an empty corpus', async () => {
+    const none = await dispositionCoverage(coverageDb({ roadmaps: [] }));
+    expect(none.status).toBe('unknown');
+    expect(none.detail).toMatch(/no active roadmap/);
+
+    const ambiguous = await dispositionCoverage(coverageDb({
+      roadmaps: [{ id: 'a', status: 'active' }, { id: 'b', status: 'active' }],
+    }));
+    expect(ambiguous.status).toBe('unknown');
+    expect(ambiguous.detail).toMatch(/ambiguous/i);
+    expect(ambiguous.detail).not.toMatch(/empty corpus/);
   });
 });

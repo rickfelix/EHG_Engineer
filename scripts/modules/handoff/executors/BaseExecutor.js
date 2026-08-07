@@ -244,7 +244,18 @@ export class BaseExecutor {
             issues: [`NO_CLAIM: handoff_${this.handoffType} attempted on unclaimed SD ${sdKeyForGate} — ${noClaim.detail}`],
             score: 0,
             max_score: 100,
-            warnings: [`Acquire the claim first: node scripts/sd-start.js ${sdKeyForGate}`]
+            // QF-20260726-425 ITEM B: the bare form is a DEAD END for orchestrator PARENTS, which
+            // are a large share of the population that trips this gate — it routes orchestrators to
+            // leaves, so the operator follows the advice, watches it claim something else, and is
+            // no closer. Both working forms are listed. Verified present before being suggested:
+            // sd-start.js reads --parent/--confirm (scripts/sd-start.js:637-638) and
+            // scripts/claim-orchestrator-for-rollup.mjs exists.
+            warnings: [
+              `Acquire the claim first: node scripts/sd-start.js ${sdKeyForGate}`,
+              `If ${sdKeyForGate} is an ORCHESTRATOR PARENT the bare form above will not claim it — use one of:`,
+              `  node scripts/sd-start.js ${sdKeyForGate} --parent --confirm`,
+              '  node scripts/claim-orchestrator-for-rollup.mjs',
+            ]
           }, `NO_CLAIM: ${sdKeyForGate} is unclaimed — handoffs require the claim-holding session`);
         }
         if (noClaim.alreadyCompleted) {

@@ -24,13 +24,59 @@ import { isLeadDecisionPaused } from '../status-helpers.js';
  * @param {Object} options  - { skipBaselineWarning, sessionContext, openQuickFixes, qfTriageResults }
  * @returns {Promise<Object>} qfSummary with topStartableQF (or empty summary if no QFs passed)
  */
+/**
+ * PRODUCER for sessionContext.inFlightQfIds — SD-LEO-INFRA-CORRECTION-DELIVERY-PATH-001-B FR-3.
+ *
+ * classifyQuickFixes is synchronous and this module is ESM while the predicate is CJS, so the id
+ * Set has to be resolved out here. The first cut shipped the CONSUMER WITH NO PRODUCER: the
+ * `!inFlightIds.has(qf.id)` clause in topStartableQF read a field nothing set, so it was a
+ * permanent no-op — a guard that cannot fire and says nothing about it.
+ *
+ * Grouped by target_application because the live population is heterogeneous (94 non-terminal QFs
+ * across EHG_Engineer/EHG/apexniche-ai); one repo for the whole batch would probe the wrong
+ * repository for everything after the first and return a false CLEAR.
+ *
+ * Delegates to filterOutInFlight so it inherits that helper's guards wholesale: empty-list
+ * short-circuit, no-network-under-VITEST, and fail-open on every fault. An empty Set withholds
+ * nothing, which is exactly the pre-existing behaviour.
+ */
+export async function computeInFlightQfIds(quickFixes) {
+  const ids = new Set();
+  if (!Array.isArray(quickFixes) || quickFixes.length === 0) return ids;
+  try {
+    const mod = await import('../../../../lib/fleet/inflight-git-state.cjs');
+    const { filterOutInFlight } = mod.default || mod;
+    const { resolveGitHubRepo } = await import('../../../../lib/repo-paths.js');
+
+    const byApp = new Map();
+    for (const qf of quickFixes) {
+      const app = qf.target_application || 'EHG_Engineer';
+      if (!byApp.has(app)) byApp.set(app, []);
+      byApp.get(app).push(qf);
+    }
+    for (const [app, group] of byApp) {
+      let repo = null;
+      try { repo = resolveGitHubRepo(app); } catch { /* gh infers from cwd */ }
+      const { withheld } = filterOutInFlight(group, (q) => q.id, { repo, forApp: app });
+      for (const w of withheld) ids.add(w.id);
+    }
+  } catch { /* fail-open: an empty Set withholds nothing */ }
+  return ids;
+}
+
 export async function showFallbackQueue(supabase, options = {}) {
   const {
     skipBaselineWarning = false,
-    sessionContext = {},
+    sessionContext: rawSessionContext = {},
     openQuickFixes = [],
     qfTriageResults = new Map(),
   } = options;
+
+  // Thread the in-flight ids into the context BOTH classifyQuickFixes call sites below receive.
+  const sessionContext = {
+    ...rawSessionContext,
+    inFlightQfIds: await computeInFlightQfIds(openQuickFixes),
+  };
 
   // Load configurable OKR blend weight (shared with baseline path).
   let okrBlendWeight = 0.30;
@@ -73,6 +119,12 @@ export async function showFallbackQueue(supabase, options = {}) {
     const sdUUIDs = sds.map(s => s.id);
     const { data: krAlignments } = await supabase
       .from('sd_key_result_alignment')
+      // schema-lint-disable-line: key_results!inner is a PostgREST EMBEDDED RESOURCE, not a column
+      // on sd_key_result_alignment — schema-reference-lint parses it as the latter and reports it
+      // missing. Pre-existing line (unchanged since origin/main); it only trips the diff-scoped
+      // lint because edits elsewhere in this file pulled it into the changed set. Verified against
+      // the live DB before suppressing: this exact select returns rows, and both
+      // sd_key_result_alignment and key_results are present in the snapshot.
       .select('sd_id, key_result_id, contribution_type, contribution_weight, key_results!inner(id, status)')
       .in('sd_id', sdUUIDs);
 

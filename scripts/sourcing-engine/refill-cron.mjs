@@ -24,6 +24,8 @@ import { selectRefillBatch, promoteStagedCandidate, isDistilledOnly } from '../.
 import { pathToFileURL } from 'node:url';
 import { normalizeTitleForCompare, crossRefShippedTitleAdvisory } from '../../lib/sourcing-engine/refill-candidate-validity.js';
 import { readSourcingEngineFlagsFromDb } from '../lib/sourcing-engine-awareness.mjs';
+import { measureDemand, recordDemandDecision, resolveDemandFloor } from '../../lib/governance/demand-gate-emit.js';
+import { formatDemandDecision } from '../../lib/governance/demand-gate.js';
 // SD-LEO-INFRA-COUNT-TRUNCATION-DISCIPLINE-001 FR-6 batch 9 — the staged-candidate read feeds
 // the promotion loop (a capped read silently drops promotable candidates with no error); the
 // shipped-title and accepted-fingerprint sets feed quality gates whose exactly-cap .limit(1000)
@@ -103,6 +105,41 @@ export async function resolveActiveWaveIds(supabase) {
     .in('roadmap_id', roadmapIds);
   if (wErr) { console.error('refill-cron: active-wave lookup failed:', wErr.message); return []; }
   return (waves || []).map((w) => w.id).filter(Boolean);
+}
+
+/** The engine name for this producer. MUST match its BELT_DEPTH_GATED_PRODUCERS entry — the badge
+ * reads decisions BY engine name, so a typo here renders NEVER RAN forever while the cron runs. */
+export const REFILL_ENGINE = 'refill-auto-promote';
+
+/**
+ * Measure demand, record the verdict, and select — the WHOLE gated call, exported as ONE seam.
+ *
+ * SD-LEO-INFRA-SOURCING-ENGINE-BELT-GATED-001, TESTING review 57879900 (C1). This existed inline
+ * in main() and was the single most dangerous thing in the SD: main() has NO test that reaches it
+ * (the three refill-cron suites import only the pure helpers), so mutation testing showed FIVE
+ * separate one-line edits at the call site surviving 8,180 tests — including simply DELETING
+ * `demand` from the opts object, which makes the entire gate a no-op because selectRefillBatch is
+ * opt-in on opts.demand. The gate inside selectRefillBatch was well covered; the wiring that
+ * feeds it was not, and a guard inside one code path is not a guard on the invariant.
+ *
+ * Extracted so every one of those mutants is now killable, and it FAILS LOUD rather than
+ * degrading: a missing decision throws instead of quietly selecting ungated.
+ *
+ * @returns {Promise<{sel: object, demand: object}>}
+ */
+export async function gatedSelectRefillBatch(supabase, rows, opts = {}, env = process.env) {
+  const demand = await measureDemand(supabase, {
+    engine: REFILL_ENGINE,
+    floor: resolveDemandFloor(env),
+  });
+  await recordDemandDecision(supabase, demand);
+  console.log(formatDemandDecision(demand));
+  if (!demand || typeof demand.decision !== 'string') {
+    // Unreachable via measureDemand, which always returns a decision. Present because the failure
+    // it guards — selecting with demand undefined — is SILENT and indistinguishable from success.
+    throw new Error('refill-cron: refusing to select a batch without a demand decision');
+  }
+  return { sel: selectRefillBatch(rows, { ...opts, demand }), demand };
 }
 
 async function main() {
@@ -185,7 +222,15 @@ async function main() {
   // SD-LEO-INFRA-CORPUS-PROMOTE-ONLY-VIA-DISTILL-001 (FR-2): forward the distilled-only flag so the
   // batch selector applies CHECK #11 — only /distill build-dispositioned items promote. Now fail-closed
   // by default (isDistilledOnly), so an un-distilled raw corpus item is never minted onto the belt.
-  const sel = selectRefillBatch(rows, { limit, shippedTitleSet, acceptedFingerprintSet, distilledOnly: isDistilledOnly() });
+  // SD-LEO-INFRA-SOURCING-ENGINE-BELT-GATED-001 (FR-2/FR-3): measure DEMAND before minting, and
+  // RECORD the verdict whichever way it goes. This cron is the only unattended belt minter (hourly,
+  // 10/run, 240/day), so it is the one place where "the belt is already full" has to be able to
+  // stop production. Recorded BEFORE the batch is selected and unconditionally — a withheld run
+  // that leaves no trace is indistinguishable from a cron that never fired, which is the exact
+  // ambiguity this SD exists to remove.
+  const { sel, demand } = await gatedSelectRefillBatch(supabase, rows, {
+    limit, shippedTitleSet, acceptedFingerprintSet, distilledOnly: isDistilledOnly(),
+  });
   const results = [];
   // SD-LEO-INFRA-WIRE-ALREADY-SHIPPED-001 (Phase 1 — ADVISORY): wire the exported-but-unused
   // crossRefShippedTitleAdvisory into the live promotion caller (its only production call site). It
@@ -212,6 +257,7 @@ async function main() {
       mode: apply ? 'apply' : 'dry_run',
       total: sel.total, validCount: sel.validCount, selected: sel.batch.length, limit: sel.limit,
       promoted, results,
+      demand, withheldByDemand: sel.withheldByDemand === true, // FR-3: the verdict travels with the run's own report
       advisoryByReason, advisoryMatches, // Phase 1 advisory (no verdict change) — for FP-rate measurement
     }, null, 2));
   } else {
