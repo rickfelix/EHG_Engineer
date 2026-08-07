@@ -290,22 +290,34 @@ describe('gather — what this job can HONESTLY measure today', () => {
     expect(sections.plan_position.remainder.value, 'must be open_total, never the capped list length').not.toBe(status.next.length);
   });
 
-  it('every unsourced section is unavailable WITH A SPECIFIC REASON, never zero', async () => {
+  it('every STILL-unsourced section is unavailable WITH A SPECIFIC REASON, never zero', async () => {
+    // SD-LEO-INFRA-UNCAPPED-ROADMAP-ITEMS-001 FR-2/FR-3: this list used to name all four. The
+    // three item-based sections are now SOURCED from the uncapped join, so only stall_deltas
+    // remains — and it stays deliberately (FR-4 is CONDITIONAL: its `suppressed` park predicate,
+    // documented as supplied by FR_A/-E, has no implementation anywhere in the repo).
     const { sections } = await gather();
-    for (const id of ['belt_diagnosis', 'chain_to_gate', 'next_acts', 'stall_deltas']) {
+    for (const id of ['stall_deltas']) {
       expect(sections[id].unavailable.available).toBe(false);
       expect(sections[id].unavailable.value).toBe(null);
       expect(sections[id].unavailable.reason.length, `${id} reason is a shrug`).toBeGreaterThan(40);
     }
   });
 
-  it('the three item-based sections name the CAP as the blocker, not "todo"', async () => {
-    // The reason has to be actionable enough that a future reader does not "finish" it by
-    // wiring status.next — which is capped at 10 and would produce a wrong number that looks
-    // completely reasonable.
+  it('THE THREE ITEM-BASED SECTIONS ARE NOW SOURCED, not unavailable', async () => {
+    // Replaces the old "name the CAP as the blocker" test, whose comment warned that a future
+    // reader must not "finish" this by wiring status.next — capped at 10, producing a wrong
+    // number that looks completely reasonable. That warning is honoured: buildGather feeds these
+    // sections computePlanCheckStatus().open_items_all, the UNCAPPED set, never status.next.
+    //
+    // Asserting `unavailable === undefined` is the load-bearing half. The sections are PURE
+    // functions, so a wiring that handed them the capped array would still return well-shaped
+    // output and every section-level unit test would stay green — the bug would just move one
+    // layer up into buildGather. The companion assertion that the set is genuinely uncapped
+    // lives in tests/unit/roadmap/plan-check-uncapped-pagination.test.js, mutation-proven there.
     const { sections } = await gather();
     for (const id of ['belt_diagnosis', 'chain_to_gate', 'next_acts']) {
-      expect(sections[id].unavailable.reason).toMatch(/CAPPED AT 10/);
+      expect(sections[id].unavailable, `${id} should now be SOURCED`).toBeUndefined();
+      expect(sections[id].section).toBe(id);
     }
   });
 
@@ -334,8 +346,12 @@ describe('gather — what this job can HONESTLY measure today', () => {
     const { composeReport } = await import('../../../lib/drive-loop/compose-report.js');
     const { sections, driveScore } = await gather();
     const row = composeReport({ sections, driveScore, generatedAt: '2026-07-15T09:00:00.000Z', runId: 'drive-2026-07-15' });
+    // FR-2/FR-3: three of these four are now SOURCED from the uncapped join. stall_deltas is
+    // the only remaining unavailable section, and it stays that way on purpose (FR-4 CONDITIONAL
+    // — no FR_A/-E suppression predicate exists in the repo). This list shrinking from 4 to 1 IS
+    // the deliverable; it is asserted exactly rather than loosened to "at most 4".
     expect(row.metadata.unavailable_sections.map((u) => u.section).sort())
-      .toEqual(['belt_diagnosis', 'chain_to_gate', 'next_acts', 'stall_deltas']);
+      .toEqual(['stall_deltas']);
     expect(row.metadata.section_ids).toContain('plan_position');
   });
 });
@@ -376,7 +392,8 @@ describe('[END-TO-END] the sweep drives the REAL producer — no stub in between
     expect(rows[0].run_id).toBe('drive-2026-07-15');
     expect(rows[0].cadence).toBe('scheduled');
     expect(rows[0].sections.plan_position.remainder.value).toBe(42);
-    expect(rows[0].metadata.unavailable_sections).toHaveLength(4);
+    // FR-2/FR-3: was 4; only stall_deltas remains unavailable (FR-4 CONDITIONAL, unowned predicate).
+    expect(rows[0].metadata.unavailable_sections).toHaveLength(1);
   });
 
   it('the second tick of the same window writes NOTHING and reports the skip', async () => {
