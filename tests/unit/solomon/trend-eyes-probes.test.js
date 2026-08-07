@@ -34,7 +34,9 @@ import {
   CANDIDATE_CATEGORY,
   questionClass,
   isAutomatedMessage,
+  resolveT1Facts,
   resolveT2Facts,
+  toProbeFacts,
   resolveT3Facts,
 } from '../../../scripts/solomon/trend-eyes-sweep.mjs';
 
@@ -482,6 +484,149 @@ describe('T3 resolver — distinct counting, and a span guard that is reachable 
     const out = await resolveT3Facts(sbWith([], []), { now: new Date('2026-08-07T00:00:00Z'), days: 3 });
     expect(out.readings).toBeNull();
     expect(probeLessonDisjunctionDrift({ readings: out.readings ?? undefined }).verdict).toBe(VERDICT.UNKNOWN);
+  });
+});
+
+describe('THE CONSUMER SIDE — where the blindness fix is actually delivered', () => {
+  // M49/M50. The resolvers returning null was verified at the MERGE; nothing tested the CONSUMER,
+  // where runSweep converts null -> undefined for the probe. Flipping `?? undefined` to `?? []` is
+  // one token, leaves all 52 tests green, and restores the false all-clear against LIVE data — T2
+  // goes from UNKNOWN back to "no class recurred after its fix". A fix proven only at the merge is
+  // not proven. These pin the conversion itself.
+  // These call toProbeFacts — THE ACTUAL CONVERSION runSweep uses. An earlier version of this test
+  // asserted on a `classes ?? undefined` expression written inline in the test itself, which tested
+  // the test and not the code: the M49 mutation survived it untouched. Exercising the real function
+  // is the difference between a guard and a decoration.
+  it('toProbeFacts turns a null resolver bundle into UNKNOWN at the probe, never FLAT', () => {
+    const facts = toProbeFacts({ clusters: [] }, { classes: null }, { readings: null });
+    expect(facts.classes).toBeUndefined();
+    expect(facts.readings).toBeUndefined();
+    expect(probeRecurrenceAfterFix(facts).verdict).toBe(VERDICT.UNKNOWN);
+    expect(probeLessonDisjunctionDrift(facts).verdict).toBe(VERDICT.UNKNOWN);
+  });
+
+  // The mutation stated explicitly, so the wrongness of the alternative is on the record: had
+  // toProbeFacts used `?? []`, this is the verdict the live sweep would report instead.
+  it('an empty-array bundle would report FLAT — which is why the conversion must not produce one', () => {
+    expect(probeRecurrenceAfterFix({ classes: [] }).verdict).toBe(VERDICT.FLAT);
+  });
+
+  it('toProbeFacts passes real resolver output through unchanged', () => {
+    const clusters = [{ questionClass: 'sms-coverage', occurrences: [] }];
+    const facts = toProbeFacts({ clusters }, { classes: [] }, { readings: [] });
+    expect(facts.clusters).toBe(clusters);
+    expect(facts.classes).toEqual([]);
+  });
+
+  // SEC-TE-04. A series too short to measure was reporting FLAT — an admission of not-knowing
+  // wearing the label of a clean look. Live, days=14/30/60 all yield exactly 2 readings, so this
+  // was not a transient state: T3 would have said "stable" forever without ever being able to look.
+  it('a series too short to measure is UNKNOWN, not a reassuring FLAT', () => {
+    const v = probeLessonDisjunctionDrift({
+      readings: [
+        { windowStart: '2026-07-01T00:00:00Z', windowEnd: '2026-07-01T23:59:59Z', laneNamed: 10, reachedPatterns: 8 },
+        { windowStart: '2026-07-02T00:00:00Z', windowEnd: '2026-07-02T23:59:59Z', laneNamed: 10, reachedPatterns: 8 },
+      ],
+    });
+    expect(v.verdict).toBe(VERDICT.UNKNOWN);
+    expect(v.detail).toMatch(/needed before drift is measurable/);
+  });
+});
+
+describe('T3 zero-overlap guard — a join key that parses but does not correspond', () => {
+  function sbWith(patterns, lane) {
+    return {
+      from(table) {
+        const rows = table === 'issue_patterns' ? patterns : lane;
+        const chain = { select: () => chain, eq: () => chain, gte: () => chain, then: (r) => r({ data: rows, error: null }) };
+        return chain;
+      },
+    };
+  }
+
+  // SEC-TE-03. Repairing the phantom `pattern_name` by swapping in `pattern_id` made the query
+  // succeed while the numerator became structurally always zero: lane keys are values like
+  // 'harness-bug', pattern_ids are 'PAT-AUTO-…'. A ratio that can never be non-zero reports the
+  // absence of a join key as though it were total disjunction.
+  it('reports UNKNOWN when lane keys and pattern ids share nothing at all', async () => {
+    const at = '2026-08-06T10:00:00Z';
+    const out = await resolveT3Facts(
+      sbWith(
+        [{ id: 1, pattern_id: 'PAT-AUTO-b442fd90', created_at: at }],
+        [{ id: 1, created_at: at, payload: { signal_type: 'harness-bug' } }],
+      ),
+      { now: new Date('2026-08-07T00:00:00Z'), days: 3 },
+    );
+    expect(out.readings).toBeNull();
+    expect(out.blind).toMatch(/do not intersect/);
+    expect(probeLessonDisjunctionDrift({ readings: out.readings ?? undefined }).verdict).toBe(VERDICT.UNKNOWN);
+  });
+
+  it('does NOT trip the guard when the vocabularies genuinely correspond', async () => {
+    const at = '2026-08-06T10:00:00Z';
+    const out = await resolveT3Facts(
+      sbWith(
+        [{ id: 1, pattern_id: 'harness-bug', created_at: at }],
+        [{ id: 1, created_at: at, payload: { signal_type: 'harness-bug' } }, { id: 2, created_at: at, payload: { signal_type: 'stuck' } }],
+      ),
+      { now: new Date('2026-08-07T00:00:00Z'), days: 3 },
+    );
+    expect(out.blind).toBeNull();
+    expect(out.overlap).toBe(1);
+  });
+});
+
+describe('questionClass against the REAL corpus, not fixtures I invented', () => {
+  // The prior questionClass tests asserted on synthetic strings written from the same mental model
+  // as the fix — so they confirmed the fix and missed the population. These are VERBATIM bodies
+  // from sms_relay_staging. The 08-05 one is the SD's own founding case, and it returned null.
+  it('classifies the founding case from the charter', () => {
+    expect(questionClass('Does Solomon have a CRON job that reviews the SMS message history?')).toBe('sms-coverage');
+  });
+
+  // The watchdog is 76 of 342 rows AND classifies as sms-coverage on its own text — so exclusion
+  // must happen BEFORE classification. Only the ordering of two lines in resolveT1Facts prevents a
+  // guaranteed daily false positive, and nothing tested that ordering.
+  it('the watchdog body classifies as sms-coverage, which is exactly why it must be excluded first', () => {
+    const watchdog = "I haven't received any text messages from you in over an hour. are you still there?";
+    expect(questionClass(watchdog)).toBe('sms-coverage');
+    expect(isAutomatedMessage(watchdog)).toBe(true);
+  });
+
+  // THE ORDERING, tested through resolveT1Facts itself. Asserting questionClass and
+  // isAutomatedMessage separately proves neither: both can be perfect while the resolver calls them
+  // in the wrong order. The M33 mutation — dropping the `continue` after the automated branch —
+  // took the live run from 2 firing classes to 3 and left the whole suite green, because nothing
+  // exercised resolveT1Facts at all. 76 of 342 corpus rows are this watchdog.
+  function laneDouble(inboundBodies) {
+    const rows = inboundBodies.map((body, i) => ({
+      id: `m${i}`, from_phone: '+15551230000', to_phone: '+15559999999',
+      body_raw: body, received_at: new Date(Date.parse('2026-08-01T00:00:00Z') + i * 36 * 3600_000).toISOString(),
+    }));
+    return {
+      from(table) {
+        const data = table === 'sms_relay_staging' ? rows : [];
+        const chain = { select: () => chain, gte: () => chain, lte: () => chain, order: () => chain, then: (r) => r({ data, error: null }) };
+        return chain;
+      },
+    };
+  }
+
+  it('excludes the watchdog BEFORE classifying, so it can never form a cluster', async () => {
+    const watchdog = "I haven't received any text messages from you in over an hour. are you still there?";
+    const out = await resolveT1Facts(laneDouble([watchdog, watchdog, watchdog]), { now: new Date('2026-08-07T00:00:00Z') });
+    expect(out.clusters).toEqual([]);
+    expect(out.coverage.automated).toBe(3);
+    expect(out.coverage.classified).toBe(0);
+  });
+
+  it('still clusters genuine chairman repeats alongside the excluded watchdog', async () => {
+    const watchdog = 'are you still there?';
+    const real = 'Does Solomon have a CRON job that reviews the SMS message history?';
+    const out = await resolveT1Facts(laneDouble([real, watchdog, real]), { now: new Date('2026-08-07T00:00:00Z') });
+    const cluster = out.clusters.find((c) => c.questionClass === 'sms-coverage');
+    expect(cluster.occurrences).toHaveLength(2);
+    expect(out.coverage.automated).toBe(1);
   });
 });
 

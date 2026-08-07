@@ -65,7 +65,11 @@ export function questionClass(body) {
   // and were dropped, and of the 97 inbound rows mentioning sms/text/message, ZERO were assigned
   // sms-coverage. T1 could not have fired on the founding case the SD is built around.
   const classes = [
-    ['sms-coverage', /\b(sms|texts?|messages?)\b/, /\b(cover(age|ed|ing)?|reach(ed|ing)?|miss(ed|ing)?|get(ting)? through|deliver(ed|y)?|receiv(e|ed|ing))\b/],
+    // The predicate set includes review/history/log/cron because the SD's OWN founding case —
+    // "Does Solomon have a CRON job that reviews the SMS message history?" — matched the subject
+    // and carried none of the original predicates, so it classified to null. An instrument that
+    // cannot see the specimen it was built around is not calibrated, whatever its other coverage.
+    ['sms-coverage', /\b(sms|texts?|messages?)\b/, /\b(cover(age|ed|ing)?|reach(ed|ing)?|miss(ed|ing)?|get(ting)? through|deliver(ed|y)?|receiv(e|ed|ing)|review(s|ed|ing)?|histor(y|ies)|logs?|cron)\b/],
     ['belt-depth', /\bbelts?\b/, /\b(depth|deep|empty|dry|starv(ed|ing|ation)?|refill|claimable)\b/],
     ['fleet-liveness', /\b(workers?|seats?|fleets?|sessions?)\b/, /\b(alive|dead|idle|stuck|dormant|quiet|silent|reap(ed)?|working)\b/],
     ['cost-quota', /\b(quotas?|costs?|burn|spend(ing)?|usage|budget)\b/, null],
@@ -247,10 +251,35 @@ export async function resolveT3Facts(supabase, { now, days = 14 } = {}) {
     });
   }
 
-  // NULL, NOT []. An empty series is not a flat series. If no window had a denominator at all, the
-  // ratio is undefined rather than stable, and the probe must say UNKNOWN.
-  const blind = windowsWithDenominator === 0 ? 'no window carried a lane-named class — the disjunction ratio has no denominator' : null;
-  return { readings: blind ? null : readings, blind };
+  // ZERO-OVERLAP GUARD — the correspondence T3 assumes may simply not exist.
+  //
+  // The first cut selected a `pattern_name` column that does not exist, so every run threw. The
+  // obvious repair was to swap in `pattern_id`, which PARSES — and that is the trap: it made the
+  // query succeed while the numerator became structurally always zero. Measured over 60 days, the
+  // lane's class keys are values like 'feedback', 'harness-bug', 'stuck', 'spec-conflict', while
+  // issue_patterns.pattern_id holds 'PAT-AUTO-b442fd90'-style synthetic ids. The two vocabularies
+  // do not intersect anywhere, by construction rather than by accident.
+  //
+  // A ratio whose numerator can never be non-zero is not measuring a disjunction — it is reporting
+  // its own inability to join, dressed as a finding of total disjunction. Solomon's founding
+  // "0-of-12" observation may be exactly this artifact rather than a real gap, which is a question
+  // for the PRD and not something a resolver may decide by picking a plausible-looking key.
+  // Until a real correspondence is ratified, say UNKNOWN and name why.
+  const laneKeyUniverse = new Set();
+  for (const r of lane.data || []) {
+    const k = r.payload?.lesson_class || r.payload?.signal_type;
+    if (k) laneKeyUniverse.add(k);
+  }
+  const patternKeyUniverse = new Set((patterns.data || []).map((p) => p.pattern_id).filter(Boolean));
+  const overlap = [...laneKeyUniverse].filter((k) => patternKeyUniverse.has(k));
+
+  const blind = windowsWithDenominator === 0
+    ? 'no window carried a lane-named class — the disjunction ratio has no denominator'
+    : overlap.length === 0 && patternKeyUniverse.size > 0
+      ? `lane class keys and issue_patterns.pattern_id do not intersect at all (${laneKeyUniverse.size} lane keys vs ${patternKeyUniverse.size} pattern ids, 0 shared) — the ratio would be structurally zero, which measures the absence of a join key rather than a real disjunction`
+      : null;
+
+  return { readings: blind ? null : readings, blind, laneKeys: laneKeyUniverse.size, patternKeys: patternKeyUniverse.size, overlap: overlap.length };
 }
 
 /** Write one candidate per fired trend. Self-describing: metadata carries the reproducing query. */
@@ -327,20 +356,36 @@ async function writeReceipt(supabase, { verdicts, candidates, truncated, explora
   return { findings };
 }
 
+/**
+ * Convert resolver output into the probe's facts bundle.
+ *
+ * EXTRACTED SO IT CAN BE TESTED. This one line is where the entire blindness fix is DELIVERED:
+ * the resolvers return null for "could not look", and the probes distinguish absent facts
+ * (UNKNOWN) from an empty result (FLAT). Turning `?? undefined` into `?? []` is a single token
+ * that silently restores the false all-clear against live data — and while it lived inline in
+ * runSweep, which has no tests, the whole suite stayed green through exactly that mutation. A fix
+ * verified at the merge and not at the consumer is not verified; giving the conversion a name and
+ * a test is what makes it real.
+ *
+ * `undefined` is deliberate and not interchangeable with `null` here: the probes treat BOTH as
+ * unusable, but passing the bundle key through as `undefined` keeps "the resolver declined to
+ * answer" and "the resolver was never asked" the same shape at the probe boundary.
+ */
+export function toProbeFacts(t1, t2, t3) {
+  return {
+    clusters: t1?.clusters ?? undefined,
+    classes: t2?.classes ?? undefined,
+    readings: t3?.readings ?? undefined,
+  };
+}
+
 export async function runSweep(supabase, { now = new Date(), dryRun = false } = {}) {
   const runAt = now.toISOString();
   const t1 = await resolveT1Facts(supabase, { now });
   const t2 = await resolveT2Facts(supabase, { now });
   const t3 = await resolveT3Facts(supabase, { now });
 
-  // A null from any resolver is deliberate and means "could not look" — it reaches the probe as
-  // undefined-facts and comes back UNKNOWN rather than FLAT. Passing [] here would convert a blind
-  // instrument into a confident all-clear, which is the failure this SD was chartered against.
-  const verdicts = runTrendEyesProbes({
-    clusters: t1.clusters,
-    classes: t2.classes ?? undefined,
-    readings: t3.readings ?? undefined,
-  });
+  const verdicts = runTrendEyesProbes(toProbeFacts(t1, t2, t3));
   const { written: candidates, truncated } = await writeCandidates(supabase, verdicts, { runAt, dryRun });
 
   // The exploration floor runs over ALL raw clusters, including the ones no probe fired on.
