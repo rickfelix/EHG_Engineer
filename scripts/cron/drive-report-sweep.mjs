@@ -170,7 +170,26 @@ export async function scoreCapacityLeg({ gatherCapacity, persistVerdict, runId =
       belt_depth: forecast.beltDepth,
       demand_soon: forecast.demandSoon,
       deficit: forecast.deficit,
+      // Names the producer. Without it the sweep's rows land with detail null and the two writers
+      // (this and the 10-minute capacity forecast) are distinguishable only by inferring from
+      // run_id — which is exactly the kind of implicit join that stops being true quietly.
+      detail: { source: 'drive-report-sweep' },
     });
+
+    // A WRITE THAT RETURNED NO ROW IS NOT A WRITE THAT SUCCEEDED, and this guard is the one that
+    // can actually fire. The VALIDATION sub-agent found the asymmetry: the field re-check below
+    // compares values that both derive from the same pure function over the same closed-over
+    // inputs, so it can only fire if leg4 is later edited — a real drift guard, but inert today.
+    // `written.id` is the single value arriving from OUTSIDE, and it was unchecked. A persist
+    // resolving {}, null or {id: null} scored the full 2 points with verdict_row_id: null, and
+    // leg4 rendered "Provenance is the persisted row (unwritten)" — it anticipated the state and
+    // printed it honestly while NOTHING failed. Unreachable through the real writer today, because
+    // PostgREST .single() guarantees data when error is null; that is a property of the current
+    // writer, not of the contract, and it is the wrong thing to depend on silently.
+    if (!written?.id) {
+      throw new Error('leg4 persist: the durable write returned no row id — refusing to score a leg '
+        + 'whose provenance is unproven. A resolved promise is not evidence that a row exists.');
+    }
 
     const persist = (row) => {
       for (const [k, expected] of Object.entries({

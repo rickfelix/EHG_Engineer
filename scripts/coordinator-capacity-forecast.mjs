@@ -274,6 +274,12 @@ async function main() {
         source: 'coordinator-capacity-forecast',
         corpus_gated: corpusGate.corpusGated === true,
         rendered_verdict: verdict,
+        // The gate's INPUTS, not just the fact that it fired. Recording only corpus_gated tells an
+        // auditor THAT the deficit was reclassified and nothing about WHY, which is the half that
+        // matters when someone later asks whether a quiet stretch was a healthy belt or a
+        // suppressed one.
+        auto_refill_on: autoRefillOn,
+        unpromoted_count: unpromotedCount,
       },
     });
   } catch (err) {

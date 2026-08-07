@@ -2,9 +2,25 @@
  * SHARED CAPACITY INPUTS — SD-LEO-INFRA-PERSIST-BELT-CAPACITY-001, FR-3.
  *
  * The four numbers the belt verdict ladder consumes — idleNow, freeingSoon, claimable SDs and open
- * QFs — plus the per-worker rows the forecast renders. EXTRACTED VERBATIM from
- * scripts/coordinator-capacity-forecast.mjs main(); this module changes no arithmetic, no predicate
- * and no query. The move is the deliverable.
+ * QFs — plus the per-worker rows the forecast renders. EXTRACTED from
+ * scripts/coordinator-capacity-forecast.mjs main(). No arithmetic, no predicate and no query
+ * changed. The move is the deliverable.
+ *
+ * ── "VERBATIM" WITH THE THREE EXCEPTIONS NAMED, BECAUSE AN UNQUALIFIED CLAIM INVITES NO CHECK ──
+ * Both the REGRESSION and VALIDATION sub-agents diffed this against the pre-extraction original and
+ * found the belt derivation byte-identical — the claimable loop, every exclusion predicate, both
+ * SELECT column lists, the pagination and its fail-opens, the QF term, the live-worker filter and
+ * the ETA/rows loop. Three things did change, none touching belt depth:
+ *   1. the signature (`sb` was a module-scope const; it is now injected);
+ *   2. `now` moved from a const sampled AFTER the DB round-trips to a parameter sampled before
+ *      them. It feeds only the stall detectors, whose thresholds are minute-scale, and it is not
+ *      an input to belt depth at all. (`liveCutoff` still calls Date.now() directly, so the
+ *      injection is partial — faithful to the original, and worth knowing before relying on it.)
+ *   3. MASKED_STALL_DETECT_ON was a module-load const and is now a call-time read. Same value in
+ *      production; a PREDICATE'S EVALUATION TIME changed, which is why this file no longer claims
+ *      "no predicate changed" flatly. The earlier wording was true of what the predicates DO and
+ *      false about when one of them is decided, and that is the kind of overstatement that gets a
+ *      reader to stop looking.
  *
  * ── WHY IT MOVED, WHICH IS THE ONLY REASON THIS FILE EXISTS ───────────────────────────────────
  * FR-3 requires scripts/cron/drive-report-sweep.mjs to inject a computeVerdict for leg4, and

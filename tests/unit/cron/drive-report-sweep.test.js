@@ -628,3 +628,49 @@ describe('[BOUND] scoreCapacityLeg against the REAL writer, not a stub', () => {
     expect(leg.points).toBeUndefined();
   });
 });
+
+/**
+ * SD-LEO-INFRA-PERSIST-BELT-CAPACITY-001 — the guard that could actually fire.
+ *
+ * The VALIDATION sub-agent's finding, and it is a sharper shape than "a missing check": the sync
+ * persist re-checked four fields that both sides derive from the SAME pure function over the SAME
+ * closed-over inputs, so that check cannot disagree today — it is a drift guard for a future edit
+ * to leg4. Meanwhile `written.id`, the ONE value arriving from outside, was unchecked. So the guard
+ * that existed could not fire and the guard that could fire was missing.
+ *
+ * What it let through: a persistVerdict resolving {}, null or {id: null} scored the full 2 points
+ * with verdict_row_id null — and leg4 rendered "Provenance is the persisted row (unwritten)",
+ * anticipating the state and printing it honestly while nothing failed. It is unreachable through
+ * the real writer because PostgREST .single() guarantees data when error is null; that is a
+ * property of today's writer, not of the injection contract.
+ */
+describe('[PROVENANCE] a resolved promise is not evidence that a row exists', () => {
+  const gatherCapacity = async () => ({ idleNow: 1, freeingSoon: 0, claimableCount: 2, openQfCount: 0 });
+
+  it.each([
+    ['undefined', undefined],
+    ['null', null],
+    ['an empty object', {}],
+    ['a row with a null id', { id: null }],
+  ])('refuses to score when the write returns %s', async (_label, resolved) => {
+    const leg = await scoreCapacityLeg({ gatherCapacity, persistVerdict: async () => resolved });
+    expect(leg.points, 'scoring here means the leg cited a row it cannot prove exists').toBeUndefined();
+    expect(leg.unavailable.available).toBe(false);
+    expect(leg.unavailable.reason).toMatch(/returned no row id/);
+  });
+
+  it('[CONTROL] and a real id still scores — the guard is not simply always-on', async () => {
+    const leg = await scoreCapacityLeg({ gatherCapacity, persistVerdict: async () => ({ id: 'row-42' }) });
+    expect(leg.points.value).toBe(2);
+    expect(leg.verdict_row_id).toBe('row-42');
+  });
+
+  it('the sweep names itself in the row it writes, so two producers stay distinguishable', async () => {
+    const captured = [];
+    await scoreCapacityLeg({
+      gatherCapacity,
+      persistVerdict: async (row) => { captured.push(row); return { id: 'row-42' }; },
+    });
+    expect(captured[0].detail).toMatchObject({ source: 'drive-report-sweep' });
+  });
+});
