@@ -8,7 +8,7 @@
  */
 import 'dotenv/config';
 import { createClient } from '@supabase/supabase-js';
-import { classifyDeadLetterRow, summarizeDrain, HIGH_VALUE_KINDS, isSessionLive } from '../lib/coordination/dead-letter-drain.js';
+import { classifyDeadLetterRow, summarizeDrain, HIGH_VALUE_KINDS, isSessionLive, buildStampPatch } from '../lib/coordination/dead-letter-drain.js';
 import { createRequire } from 'module';
 const require_ = createRequire(import.meta.url);
 // SD-LEO-INFRA-SIGNAL-ROUTER-AUTO-001 (FR-8, third site).
@@ -71,18 +71,21 @@ async function main() {
   }
   console.log(`live successors: ${Object.keys(successors).length ? Object.entries(successors).map(([r, s]) => `${r}=${String(s).slice(0, 8)}`).join(' ') : '(none)'}`);
 
-  // SD-LEO-INFRA-SIGNAL-ROUTER-AUTO-001 (FR-8, THIRD site) — and the worst of the three.
+  // SD-LEO-INFRA-SIGNAL-ROUTER-AUTO-001 (FR-8, THIRD site).
   //
-  // The STUCK-drain and the TTL convergence pass both stamp acknowledged_at; this one stamps
-  // acknowledged_at AND read_at together, so a single write blinds four surfaces at once: the
-  // coordinator inbox, the sender's outstanding view, isRouterSwallowed (which requires
-  // !read_at), and REPLY_STARVATION — the last because no auto_acked marker is written either,
-  // so isGenuinelyAcknowledged reads it as a HUMAN answer rather than a machine stamp.
+  // HISTORY, kept because the reasoning is load-bearing and the fix is easy to undo by accident.
+  // This drain USED TO stamp acknowledged_at AND read_at together, blinding four surfaces in one
+  // write: the coordinator inbox, the sender's outstanding view, isRouterSwallowed (which requires
+  // !read_at), and REPLY_STARVATION (isGenuinelyAcknowledged read an unmarked stamp as a HUMAN
+  // answer). SD-LEO-INFRA-COORDINATION-LANE-DRAIN-001 removed that in two steps: FR-1a dropped
+  // read_at, and FR-1d dropped acknowledged_at as well — see the stamp branch below for why
+  // dropping read_at alone was not enough.
   //
   // Newly reachable BECAUSE of this SD: pre-fix, promoted rows carried acknowledged_at and never
   // entered this selector at all. Measured during review, the real 9 promoted rows classify
-  // 9/9 as action='stamp' here. It is manual-only and dry-run by default, which is why it is not
-  // the emergency the STUCK-drain was — but "requires a human to run it" is not a guard.
+  // 9/9 as action='stamp' here. It is manual-only and dry-run by default, which is why it was not
+  // the emergency the STUCK-drain was — but "requires a human to run it" is not a guard, and this
+  // SD exists to put it on a cron, at which point every one of these properties becomes load-bearing.
   const unacked = await all('session_coordination', 'id,target_session,payload,message_type,subject', (q) => q
     .is('acknowledged_at', null)
     .is(`payload->>${PROMOTION_ACK_KEY}`, null));
@@ -111,16 +114,18 @@ async function main() {
       if (error) { console.log(`  retarget ERR ${c.id}: ${error.message}`); continue; }
       retargeted++;
     } else {
-      p.dead_letter_drained = { orig_target: c.target_session, reason: c.reason, at: now, qf: 'QF-20260721-737' };
-      // SD-LEO-INFRA-COORDINATION-LANE-DRAIN-001 / FR-1(a): stamp acknowledged_at ALONE, and mark
-      // the stamp as machine-authored. The prior write set read_at in the same patch and wrote no
-      // auto_acked marker, which blinded four surfaces at once (coordinator inbox, sender
-      // outstanding view, isRouterSwallowed which requires !read_at, and REPLY_STARVATION — that
-      // last because isGenuinelyAcknowledged read an unmarked stamp as a HUMAN answer). Harmless
-      // while this stayed manual and dry-run by default; this SD puts it on a cron, which is what
-      // makes it load-bearing. auto_acked mirrors the retention convergeAckTTL convention.
-      p.auto_acked = true;
-      const { error } = await db.from('session_coordination').update({ acknowledged_at: now, payload: p }).eq('id', c.id);
+      // SD-LEO-INFRA-COORDINATION-LANE-DRAIN-001 / FR-1d: the stamp writes NO timestamp column.
+      // FR-1a removed read_at from this patch because setting both blinded four surfaces at once —
+      // correct, but it kept the arm with NO grace. acknowledged_at arms
+      // cleanup_expired_coordination() INSTANTLY, and ~96% of these rows already have expires_at in
+      // the past, so the "remedy" deleted the row on the next 5-minute tick. Fixing the liveness
+      // oracle then grew the visible population and took that from ~589 rows to ~3,010.
+      // The drain's job is to record that it CONSIDERED a row and found it moot — not to delete it.
+      // Retention already owns the lifecycle (and the dead-letter PLANNING pass owns the read_at
+      // clock), so disposition goes in the payload and the row dies on the schedule it already had.
+      const { error } = await db.from('session_coordination')
+        .update(buildStampPatch({ ...c, payload: p }, { nowMs: Date.parse(now), reason: c.reason }))
+        .eq('id', c.id);
       if (error) { console.log(`  stamp ERR ${c.id}: ${error.message}`); continue; }
       stamped++;
     }
