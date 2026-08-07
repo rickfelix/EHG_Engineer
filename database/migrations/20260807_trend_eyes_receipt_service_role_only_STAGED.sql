@@ -1,11 +1,32 @@
 -- @approved-by: rickfelix2000@gmail.com
 -- (Chairman ratification 2026-08-07 12:58:56Z, verbatim 'Yes', decision row 74f2a2c9 approved, capture 54769df1, relayed via Adam a31ae727 — scoped to the single RESTRICTIVE SELECT policy on codebase_health_snapshots, dry-run verified sha256 799110f2; header transcribed per the chairman transcription ruling of 2026-08-07 15:43:36Z, verbatim 'Yes', row a63434fb, capture 5d86e2e3, scribe-executed at the chairman's live direction in-session.)
--- STAGED — NOT YET APPROVED FOR APPLY. requires-chairman-apply. Do NOT auto-apply on merge; there
--- is no approved-by attestation on this file. Authoring is delegable; APPLYING IS NOT. This file
--- was written by a worker (Alpha-2) as scribe work under coordinator ruling 246c81da so that the
--- chairman's one word can land immediately, and for no other purpose. A migration file is a LEAD,
--- never proof of a live database object — nothing here is in effect until it is applied and read
--- back from pg_policies.
+-- APPLIED 2026-08-07 — this file is now a HISTORICAL RECORD, not a pending action.
+--
+-- The paragraph that stood here said "NOT YET APPROVED FOR APPLY ... there is no approved-by
+-- attestation on this file". Both halves became false the moment the header above was transcribed
+-- and the apply ran, and it is corrected rather than left standing: a file whose own prose denies
+-- the attestation printed directly above it would tell the next reader this migration is still
+-- pending. Stale narration that contradicts the artifact it sits on is exactly the class of defect
+-- this SD spent its whole life catching, so it does not get to ship inside it.
+--
+-- WHAT ACTUALLY HAPPENED: authored by a worker (Alpha-2) as scribe work under coordinator ruling
+-- 246c81da — authoring is delegable, APPLYING IS NOT. Chairman ratified (74f2a2c9), the header was
+-- transcribed at his live direction, and the apply ran from the apply seat at his direction:
+-- MIGRATION_APPLY_PROD_PASS, content sha256 799110f2 verified byte-identical beneath the header.
+--
+-- VERIFIED, BOTH ARMS, and neither on trust:
+--   * CATALOG (apply seat, over the pg driver): pg_policies returns exactly one row —
+--     polname=trend_eyes_receipt_service_role_only, polpermissive=FALSE (restrictive),
+--     roles={anon,authenticated}, qual=(dimension IS DISTINCT FROM 'trend_eyes_sweep_receipt').
+--   * BEHAVIOURAL (worker seat, minted authenticated JWT, scripts/solomon/trend-eyes-receipt-rls-probe.mjs
+--     --verify): a seeded synthetic receipt is INVISIBLE to authenticated (0), where the pre-apply
+--     baseline had proved the identical seed WAS visible (1) — so the check could actually fail;
+--     and non-receipt rows read 3976 against 3976 by service-role at the same instant, proving the
+--     policy is scoped rather than over-broad.
+--
+-- The original standing warning remains true in general and is kept deliberately: a migration file
+-- is a LEAD, never proof of a live database object. Nothing is in effect until it is applied AND
+-- read back from pg_policies. That is what the two arms above are.
 --
 -- Migration: bound read access to the Trend-Eyes run-receipt with a RESTRICTIVE policy
 -- Date: 2026-08-07
