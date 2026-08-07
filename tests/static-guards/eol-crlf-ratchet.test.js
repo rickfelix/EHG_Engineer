@@ -28,6 +28,34 @@
  * pending authority credential. Measured at baseline time: neither currently-pending migration is
  * in the class, so the exclusion is a NO-OP TODAY — recorded anyway, because the class can grow
  * into one and the constraint must outlive the coincidence that it is currently vacuous.
+ *
+ * THE TAX IS LATENT, AND THE OBVIOUS WAY TO VERIFY IT MEASURES THE STAT CACHE INSTEAD. A fresh
+ * worktree of the UNFIXED tree reports only ONE dirty file, not 388 — `git status` trusts stat
+ * info (size + mtime) and never reads the content of a file whose stat matches the index, so the
+ * mismatch stays invisible until something TOUCHES the file. A build, a test run, a formatter or
+ * an editor save is enough; that is why workers hit this at seemingly random moments and why the
+ * single file that did show dirty (tests/unit/mock/firewall.test.js) was indistinguishable from
+ * the other 387 on every axis git reports — same i/crlf, same w/crlf, same attr. It was simply the
+ * one that had been touched.
+ *
+ * MEASURED, both sides, with the stat cache invalidated by touching the class first:
+ *   unfixed main → 388 dirty      fixed branch → 1 dirty (the fenced exclusion below)
+ * Without that touch both sides read ~0 and the "proof" is worthless — it is the same number a
+ * BROKEN tree produces. Any future check of this must invalidate the stat cache and must measure
+ * the unfixed side too, or it is not evidence.
+ *
+ * THIS GUARD IS IMMUNE TO THAT, which is why it is written the way it is: `ls-files --eol` reads
+ * the INDEX and `check-attr` reads the ATTRIBUTES. Neither consults stat info, so the guard sees
+ * the whole class whether or not anything has touched it. Do not "simplify" it into a status-based
+ * check — that would silently convert it into a stat-cache gauge that reads clean on a broken tree.
+ *
+ * ONE MEMBER IS DELIBERATELY LEFT IN THE CLASS: lib/agents/venture-ceo-factory.js is held by a
+ * live FR-6 scope fence (tests/unit/spine-verify-first-teardown.test.js) that asserts zero diff
+ * against origin/main inside VentureFactory._createAgent()/_grantTools(). A renormalize rewrites
+ * every line, so the fenced symbols appear in the diff and the fence fires — on a change that
+ * changes no content at all. Obeyed rather than worked around: a scope fence marks whose work a
+ * file is, and defeating another SD's fence to land a cosmetic change is not ours to do. When that
+ * fence lifts, renormalize the file and this baseline drops to empty.
  */
 
 import { describe, it, expect } from 'vitest';
@@ -74,9 +102,19 @@ describe('CRLF-stored / LF-declared class is frozen (QF-20260804-647)', () => {
     expect(crlfInIndex.length).toBeGreaterThan(0);
   });
 
-  it('the baseline exists and is non-empty', () => {
+  it('the baseline file EXISTS (an empty baseline is the success state, a missing one is not)', () => {
+    // This originally also asserted the baseline was NON-EMPTY. That was right while the class had
+    // 388 members and WRONG the moment the renormalize cleared it — an empty baseline is exactly
+    // what success looks like here, and the guard failed on its own author's success.
+    //
+    // Kept as a lesson rather than quietly relaxed: a non-vacuity arm must be anchored to the
+    // MEASUREMENT (does ls-files still report i/crlf at all — asserted above), never to the
+    // CURRENT VALUE of the thing being fixed. Anchored to the value, it silently encodes "the
+    // defect still exists" as a precondition and fires when the defect is finally gone.
+    //
+    // Existence is still asserted: a DELETED baseline would make the no-new-members check throw
+    // rather than pass, but saying so explicitly is cheaper than relying on that.
     expect(fs.existsSync(BASELINE)).toBe(true);
-    expect(baseline().size).toBeGreaterThan(0);
   });
 
   it('NO NEW member has joined the class', () => {
