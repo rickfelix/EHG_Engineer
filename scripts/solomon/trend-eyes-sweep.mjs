@@ -25,6 +25,7 @@ import { readChairmanSmsExchanges } from '../../lib/solomon/chairman-sms-exchang
 import { runTrendEyesProbes, VERDICT } from '../../lib/solomon/trend-eyes-probes.js';
 import { TREND_EYES_RECEIPT_DIMENSION } from '../../lib/solomon/trend-eyes-liveness.js';
 import { emitFeedback } from '../../lib/governance/emit-feedback.js';
+import { isMainModule } from '../../lib/utils/is-main-module.js';
 
 export const CANDIDATE_CATEGORY = 'solomon_trend_candidate';
 /** Daily sweep; the SMS window is deliberately wider so a 24h+ repeat is visible at all. */
@@ -443,6 +444,13 @@ async function main() {
   console.log(`  candidates: ${out.candidates.length} | sources queried: ${out.sourcesQueried.join(', ')}`);
 }
 
-if (import.meta.url === `file://${process.argv[1]}` || process.argv[1]?.endsWith('trend-eyes-sweep.mjs')) {
+// isMainModule, not a hand-rolled comparison. The raw
+// `import.meta.url === file://${process.argv[1]}` form is Windows-broken — argv[1] is a backslash
+// path while import.meta.url is a proper file:// URL, so they never match and main() silently never
+// runs. I had originally papered over that with an `|| argv[1].endsWith(...)` fallback, which is the
+// tell: a guard needing a second clause to work is a guard that does not work. The canonical helper
+// already existed and I had even seen it imported elsewhere in this repo — re-deriving a solved
+// class instead of reusing it is what produced the bug.
+if (isMainModule(import.meta.url)) {
   main().catch((e) => { console.error(`trend-eyes-sweep failed: ${e.message}`); process.exit(1); });
 }
