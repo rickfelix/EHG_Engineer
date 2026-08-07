@@ -12,7 +12,13 @@ import { classifyDeadLetterRow, summarizeDrain, HIGH_VALUE_KINDS, isSessionLive,
 import { createRequire } from 'module';
 const require_ = createRequire(import.meta.url);
 // SD-LEO-INFRA-SIGNAL-ROUTER-AUTO-001 (FR-8, third site).
-const { PROMOTION_ACK_KEY } = require_('../lib/coordinator/promotion-ack.cjs');
+// KEPT IN THE DIRECT createRequire(...)(...) FORM ON PURPOSE. tests/unit/coordinator/
+// promotion-ack-guards.test.js asserts this exact binding shape to prove PROMOTION_ACK_KEY comes
+// from the real module and is not another export ALIASED into that name. Hoisting the require
+// through the `require_` helper below (which this SD briefly did) is semantically identical and
+// still broke that guard — correctly, because the guard cannot see through an indirection to
+// confirm what it is checking. Do not "tidy" this into require_(...); the strictness is the point.
+const { PROMOTION_ACK_KEY } = createRequire(import.meta.url)('../lib/coordinator/promotion-ack.cjs');
 // SD-LEO-INFRA-COORDINATION-LANE-DRAIN-001 / FR-1b: resolve successors from LIVE role identity,
 // for every role KIND_TARGET_ROLE can name — not a coordinator-only map with a hardcoded UUID.
 const { getActiveCoordinatorId } = require_('../lib/coordinator/resolve.cjs');
