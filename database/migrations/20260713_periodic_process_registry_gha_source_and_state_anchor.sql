@@ -4,6 +4,8 @@
 -- SD: SD-FDBK-ENH-CENTRAL-LIVENESS-STAMPER-001 (FR-1)
 -- Date: 2026-07-13
 -- @approved-by: chairman-ratified build-vs-run D-set (D4)
+-- @approved-by: codestreetlabs@gmail.com
+--   (chairman verbal approval, 2026-07-13 ~06:25 ET, Adam session d02c9e34 — D4 apply-ceremony)
 --
 -- Two additive changes, bundled in one migration per this SD's own PRD (TR-2):
 --
