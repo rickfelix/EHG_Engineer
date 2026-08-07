@@ -330,10 +330,6 @@ export async function runArc({ runId, entryStage = 20, toStage = 26, clockStart,
     journal.append({ kind: 'lifecycle', event: `capability-gap bridge failed (non-blocking): ${err.message}` });
   }
 
-  // FR-3/FR-4 (SD-LEO-INFRA-RUN-EVIDENCE-DURABILITY-001): durable system_events mirror of
-  // the journal, independent of both .harness-runs scratch and the fixture's own lifecycle.
-  const mirror = await finalizeMirror({ supabase, journal, ventureId, seams: seams.finalizeMirror ? { insertEvent: seams.finalizeMirror } : {} });
-
   // O10 run-meta verdict, graded ONCE at run level: every per-loop O-req mapped (not dead)
   // AND the containment sweep found no residue AND the journal is non-empty/durable.
   const o10AllMapped = coverage.uncovered.length === 0;
@@ -345,6 +341,18 @@ export async function runArc({ runId, entryStage = 20, toStage = 26, clockStart,
   } else {
     journal.finding('DEAD_LOOP', `O10 run-meta verdict FAILED: all_mapped=${o10AllMapped} residue_clean=${o10ResidueClean} journal_durable=${o10JournalDurable}`, { o_requirements: ['O10'] });
   }
+
+  // FR-3/FR-4 (SD-LEO-INFRA-RUN-EVIDENCE-DURABILITY-001): durable system_events mirror of the
+  // journal, independent of both .harness-runs scratch and the fixture's own lifecycle.
+  //
+  // QF-20260807-067 — THE TIMING DEFECT. This used to run BEFORE the coverage close-out and the
+  // O10 verdict, so the durable record was a PRE-VERIFICATION SNAPSHOT presenting itself as the
+  // run of record: on s2026-alpha4-0807 it froze at 44 of 52 entries and carried none of the
+  // verification outcomes. Since the mirror is write-once, nothing could ever repair it. It now
+  // runs LAST, after every verification entry (coverage findings, O10 verdict, and any §H10
+  // verifier disagreement), so the durable record is what was actually concluded — not what was
+  // known before anyone checked. Sequencing, not a second write: still exactly one finalize.
+  const mirror = await finalizeMirror({ supabase, journal, ventureId, seams: seams.finalizeMirror ? { insertEvent: seams.finalizeMirror } : {} });
 
   return { runId, ventureId, coverage, mirror, o10: { pass: o10Pass, allMapped: o10AllMapped, residueClean: o10ResidueClean, journalDurable: o10JournalDurable }, journalPath: journal.path };
 }
