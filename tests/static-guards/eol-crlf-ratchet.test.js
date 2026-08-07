@@ -74,9 +74,19 @@ describe('CRLF-stored / LF-declared class is frozen (QF-20260804-647)', () => {
     expect(crlfInIndex.length).toBeGreaterThan(0);
   });
 
-  it('the baseline exists and is non-empty', () => {
+  it('the baseline file EXISTS (an empty baseline is the success state, a missing one is not)', () => {
+    // This originally also asserted the baseline was NON-EMPTY. That was right while the class had
+    // 388 members and WRONG the moment the renormalize cleared it — an empty baseline is exactly
+    // what success looks like here, and the guard failed on its own author's success.
+    //
+    // Kept as a lesson rather than quietly relaxed: a non-vacuity arm must be anchored to the
+    // MEASUREMENT (does ls-files still report i/crlf at all — asserted above), never to the
+    // CURRENT VALUE of the thing being fixed. Anchored to the value, it silently encodes "the
+    // defect still exists" as a precondition and fires when the defect is finally gone.
+    //
+    // Existence is still asserted: a DELETED baseline would make the no-new-members check throw
+    // rather than pass, but saying so explicitly is cheaper than relying on that.
     expect(fs.existsSync(BASELINE)).toBe(true);
-    expect(baseline().size).toBeGreaterThan(0);
   });
 
   it('NO NEW member has joined the class', () => {
