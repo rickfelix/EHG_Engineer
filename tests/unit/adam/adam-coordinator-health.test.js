@@ -12,6 +12,9 @@ import {
   pushCoordinatorHealthAdvisory,
   persistReading,
   runProbe,
+  computeCoordinatorLiveness,
+  applyCoordinatorLiveness,
+  COORDINATOR_LIVENESS_MAX_AGE_MINUTES,
 } from '../../../scripts/adam-coordinator-health.mjs';
 import * as waveLinkage from '../../../lib/roadmap/wave-linkage-coverage.js';
 import * as genuineWorker from '../../../lib/fleet/genuine-worker.mjs';
@@ -19,12 +22,29 @@ import * as coordinatorResolve from '../../../lib/coordinator/resolve.cjs';
 
 const minutesAgo = (m) => new Date(Date.now() - m * 60_000).toISOString();
 
+/** QF-20260805-181: a coordinator row that is alive by the WORK-PROVING field (last_tool_at). */
+const liveCoordinatorRow = (lastToolMinutesAgo = 1) => ({
+  session_id: 'coord-1', sd_key: null, status: 'active',
+  heartbeat_at: minutesAgo(0), last_tool_at: minutesAgo(lastToolMinutesAgo),
+  metadata: { is_coordinator: true },
+});
+
 /**
  * Minimal fake Supabase: select().eq()/.in()/.not()/.order()/.limit() over seeded tables; insert() logs rows.
  * capAt: { tableName: n } simulates PostgREST's default page cap (QF-20260720-161 regression coverage) —
  * applied post-filter/post-sort like the real server-side default, so an unordered query truncates to an
  * arbitrary slice while an explicitly-ordered one keeps the correct (e.g. freshest) rows within the cap.
  */
+/**
+ * QF-20260805-181: resolve a PostgREST `column->>key` jsonb path (plain columns pass through).
+ * Without this the coordinator-liveness filter matches nothing in the fake, so a seeded HEALTHY
+ * coordinator would read as "no coordinator row" and the test would pass for the wrong reason.
+ */
+function jsonbPath(row, col) {
+  const [base, key] = col.split('->>');
+  return key === undefined ? row[base] : row[base]?.[key];
+}
+
 function makeFakeSupabase(tables, { onInsert, capAt } = {}) {
   return {
     from(tableName) {
@@ -37,7 +57,7 @@ function makeFakeSupabase(tables, { onInsert, capAt } = {}) {
       let countMode = false;
       const builder = {
         select(_cols, opts) { if (opts && opts.count === 'exact') countMode = true; return builder; },
-        eq(col, val) { filters.push((r) => r[col] === val); return builder; },
+        eq(col, val) { filters.push((r) => (col.includes('->>') ? String(jsonbPath(r, col) ?? '') === String(val) : r[col] === val)); return builder; },
         in(col, vals) { filters.push((r) => vals.includes(r[col])); return builder; },
         is(col, val) { filters.push((r) => (r[col] ?? null) === val); return builder; },
         not(col, op, val) { filters.push((r) => r[col] !== val); return builder; },
@@ -383,6 +403,88 @@ describe('persistReading (TS-6)', () => {
   });
 });
 
+/**
+ * QF-20260805-181 — the probe could not distinguish a dead coordinator from a healthy one.
+ * The measured window (2026-08-04 21:55Z → 2026-08-05 10:53Z, 13h dark) had FIVE probe runs
+ * report integrity_ok=true, because a tick daemon kept heartbeat_at fresh while the seat sat
+ * frozen. So the load-bearing case here is the freeze signature specifically: fresh heartbeat,
+ * stale last_tool_at. A liveness check keyed on heartbeat_at would pass that case.
+ */
+describe('coordinator liveness (QF-20260805-181)', () => {
+  const sessions = (rows) => makeFakeSupabase({ claude_sessions: rows });
+
+  it('alarms on the FREEZE signature — heartbeat_at fresh, last_tool_at 13h stale', async () => {
+    const frozen = { ...liveCoordinatorRow(), heartbeat_at: minutesAgo(0), last_tool_at: minutesAgo(13 * 60) };
+    const liveness = await computeCoordinatorLiveness(sessions([frozen]));
+    expect(liveness.coordinator_liveness_ok).toBe(false);
+    expect(liveness.reason).toBe('last_tool_at_stale');
+    expect(liveness.coordinator_last_tool_age_minutes).toBeCloseTo(780, 0);
+    // The heartbeat this check must NOT be fooled by is genuinely fresh in this fixture.
+    expect(new Date(frozen.heartbeat_at).getTime()).toBeGreaterThan(Date.now() - 60_000);
+  });
+
+  it('passes a genuinely live coordinator (two-sided — the check is not stuck reporting dead)', async () => {
+    const liveness = await computeCoordinatorLiveness(sessions([liveCoordinatorRow(2)]));
+    expect(liveness.coordinator_liveness_ok).toBe(true);
+    expect(liveness.coordinator_session_id).toBe('coord-1');
+    expect(liveness.reason).toBeUndefined();
+  });
+
+  it.each([
+    ['no coordinator row at all', [], 'no_coordinator_row'],
+    ['a coordinator row with a null last_tool_at', [{ ...liveCoordinatorRow(), last_tool_at: null }], 'last_tool_at_missing'],
+    ['an unparseable last_tool_at', [{ ...liveCoordinatorRow(), last_tool_at: 'not-a-date' }], 'last_tool_at_unparseable'],
+  ])('never reads healthy for %s, and reports a DISTINCT reason', async (_label, rows, reason) => {
+    const liveness = await computeCoordinatorLiveness(sessions(rows));
+    expect(liveness.coordinator_liveness_ok).toBe(false);
+    expect(liveness.reason).toBe(reason);
+    // A null age must never narrate as a fresh 0.
+    expect(liveness.coordinator_last_tool_age_minutes).toBeNull();
+  });
+
+  it('a stale verdict flips integrity_ok and names coordinator_liveness WITHOUT dropping prior divergences', () => {
+    const merged = applyCoordinatorLiveness(
+      { integrity_ok: false, divergent_fields: ['dispatchable_count'] },
+      { coordinator_liveness_ok: false, reason: 'last_tool_at_stale', coordinator_session_id: 'c1', coordinator_last_tool_age_minutes: 780 },
+    );
+    expect(merged.integrity_ok).toBe(false);
+    expect(merged.divergent_fields).toEqual(['dispatchable_count', 'coordinator_liveness']);
+  });
+
+  it('a live verdict attaches the age field but never flips a passing integrity verdict', () => {
+    const merged = applyCoordinatorLiveness(
+      { integrity_ok: true, divergent_fields: [] },
+      { coordinator_liveness_ok: true, coordinator_session_id: 'c1', coordinator_last_tool_age_minutes: 2 },
+    );
+    expect(merged.integrity_ok).toBe(true);
+    expect(merged.divergent_fields).toEqual([]);
+    expect(merged.coordinator_last_tool_age_minutes).toBe(2);
+  });
+
+  it('drives a full-probe breach + advisory naming coordinator_liveness (end-to-end, the 5 all-clear runs)', async () => {
+    vi.spyOn(waveLinkage, 'computeWaveLinkageCoverage').mockResolvedValueOnce({ coverage: null, linked: 0, total: 0, starved: false, unlinkedKeys: [] });
+    const inserted = [];
+    const supabase = makeFakeSupabase(
+      {
+        claude_sessions: [{ ...liveCoordinatorRow(), last_tool_at: minutesAgo(13 * 60) }],
+        strategic_directives_v2: [],
+        codebase_health_snapshots: [],
+      },
+      { onInsert: (t, r) => inserted.push({ t, r }) },
+    );
+    const reading = await runProbe(supabase, {
+      makePgClient: async () => { throw new Error('pg-disabled-in-unit'); },
+      recipients: { coordinatorId: 'c-test' },
+    });
+    expect(reading.integrity.integrity_ok).toBe(false);
+    expect(reading.integrity.divergent_fields).toContain('coordinator_liveness');
+    expect(reading.integrity.coordinator_last_tool_age_minutes).toBeGreaterThan(COORDINATOR_LIVENESS_MAX_AGE_MINUTES);
+    expect(reading.breach.breach).toBe(true);
+    const advisory = inserted.find((i) => i.t === 'session_coordination');
+    expect(advisory.r.subject).toContain('coordinator_liveness');
+  });
+});
+
 describe('runProbe integration (TS-1..TS-5 wired end-to-end)', () => {
   // SD-LEO-FIX-ADAM-COORDINATOR-HEALTH-001: runProbe's raw-SQL recompute creates its
   // OWN pg client (createDatabaseClient) OUTSIDE the injected supabase; without an
@@ -395,11 +497,18 @@ describe('runProbe integration (TS-1..TS-5 wired end-to-end)', () => {
     vi.spyOn(waveLinkage, 'computeWaveLinkageCoverage').mockResolvedValueOnce({ coverage: null, linked: 0, total: 0, starved: false, unlinkedKeys: [] });
     const inserted = [];
     const supabase = makeFakeSupabase(
-      { claude_sessions: [], strategic_directives_v2: [], codebase_health_snapshots: [] },
+      {
+        // QF-20260805-181: a healthy run now requires a LIVE coordinator. An empty session table
+        // is the dead-coordinator condition, so seeding [] here would make "no breach" unreachable.
+        claude_sessions: [liveCoordinatorRow()],
+        strategic_directives_v2: [],
+        codebase_health_snapshots: [],
+      },
       { onInsert: (t, r) => inserted.push({ t, r }) },
     );
     const reading = await runProbe(supabase, { makePgClient: pgDisabled });
     expect(reading.recompute.recompute_ok).toBeNull(); // pg seam stubbed — no live recompute, deterministic
+    expect(reading.integrity.coordinator_last_tool_age_minutes).toBeLessThan(COORDINATOR_LIVENESS_MAX_AGE_MINUTES);
     expect(reading.utilization).toBeDefined();
     expect(reading.plan_adherence.status).toBe('unmeasurable_until_linkage');
     expect(reading.integrity.integrity_ok).toBe(true);

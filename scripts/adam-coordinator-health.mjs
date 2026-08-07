@@ -157,6 +157,67 @@ async function countRoadmapLinkExceptionsLive(supabase) {
 }
 
 /**
+ * QF-20260805-181: coordinator LIVENESS. Every field above is worker- or backlog-scoped, so a
+ * dead coordinator read identically to a healthy one (measured: 13h dark, five probe runs inside
+ * the window all reported integrity_ok=true).
+ *
+ * Key on last_tool_at, NEVER heartbeat_at: a tick daemon stamps the heartbeat fresh while the
+ * seat sits frozen at an interactive prompt, which is the exact class that went unseen.
+ * Resolve via the narrow metadata.is_coordinator filter — not getActiveCoordinatorId (returns
+ * the fixture 'sess-987', separate defect), and not the capped 1000-row page above.
+ * Every unmeasurable outcome fails loud under its own reason: an unreadable instrument must not
+ * look like a healthy coordinator, and a null age must never narrate as a fresh 0.
+ */
+export const COORDINATOR_LIVENESS_MAX_AGE_MINUTES = 30;
+
+export async function computeCoordinatorLiveness(supabase, { nowMs = Date.now() } = {}) {
+  const base = { coordinator_session_id: null, coordinator_last_tool_age_minutes: null, coordinator_liveness_ok: false };
+  const { data, error } = await supabase
+    .from('claude_sessions')
+    .select('session_id, last_tool_at, heartbeat_at')
+    .eq('metadata->>is_coordinator', 'true')
+    .order('heartbeat_at', { ascending: false })
+    .limit(1);
+  if (error) return { ...base, reason: 'query_failed', error: error.message };
+  const row = (data || [])[0];
+  if (!row) return { ...base, reason: 'no_coordinator_row' };
+  if (!row.last_tool_at) return { ...base, coordinator_session_id: row.session_id, reason: 'last_tool_at_missing' };
+  const ageMinutes = (nowMs - new Date(row.last_tool_at).getTime()) / 60000;
+  if (!Number.isFinite(ageMinutes)) {
+    return { ...base, coordinator_session_id: row.session_id, reason: 'last_tool_at_unparseable' };
+  }
+  const ok = ageMinutes <= COORDINATOR_LIVENESS_MAX_AGE_MINUTES;
+  return {
+    coordinator_liveness_ok: ok,
+    coordinator_session_id: row.session_id,
+    coordinator_last_tool_age_minutes: Math.round(ageMinutes * 10) / 10,
+    ...(ok ? {} : { reason: 'last_tool_at_stale' }),
+  };
+}
+
+/**
+ * Pure merge (QF-20260805-181). Liveness rides ON the integrity verdict rather than becoming a
+ * second breach axis, so classifyBreach's `integrity_ok === false` test and the advisory's
+ * divergent_fields rendering both carry it with no further wiring. ALARM goes to stderr so it
+ * never corrupts the JSON payload main() writes to stdout.
+ */
+export function applyCoordinatorLiveness(integrity, liveness) {
+  const merged = {
+    ...integrity,
+    coordinator_session_id: liveness.coordinator_session_id,
+    coordinator_last_tool_age_minutes: liveness.coordinator_last_tool_age_minutes,
+  };
+  if (liveness.coordinator_liveness_ok !== false) return merged;
+  console.error(`[adam-coordinator-health] ALARM coordinator_liveness: ${liveness.reason} (coordinator=${liveness.coordinator_session_id ?? 'none'}, last_tool_age_minutes=${liveness.coordinator_last_tool_age_minutes ?? 'null'}, threshold=${COORDINATOR_LIVENESS_MAX_AGE_MINUTES}m)`);
+  return {
+    ...merged,
+    integrity_ok: false,
+    coordinator_liveness_reason: liveness.reason,
+    divergent_fields: [...(integrity.divergent_fields || []), 'coordinator_liveness'],
+  };
+}
+
+/**
  * KPI-3: fail-loud integrity guard. Independently recomputes a raw dispatchable-count signal
  * (draft + unclaimed) and cross-checks it against the coordinator's OWN self-reported count —
  * computeClaimableLeaves (scripts/coordinator-backlog-rank.mjs), the same dependency/hold-aware
@@ -394,7 +455,12 @@ export async function computeSharpenings(supabase, { utilization, integrity, now
 export async function runProbe(supabase, opts = {}) {
   const utilization = await computeUtilization(supabase, opts);
   const planAdherence = await computePlanAdherence(supabase);
-  const integrity = await computeFailLoudIntegrity(supabase, opts);
+  // QF-20260805-181: injectable seam mirrors claimableLeavesFn/gitGrep/makePgClient in this file.
+  const livenessFn = opts.coordinatorLivenessFn || computeCoordinatorLiveness;
+  const integrity = applyCoordinatorLiveness(
+    await computeFailLoudIntegrity(supabase, opts),
+    await livenessFn(supabase, opts),
+  );
   const baseBreach = classifyBreach({ utilization, planAdherence, integrity });
   // KPI-0 delta: outcome/flow leads the reading (S1); the six classes + band
   // extend the breach signal (S2/S3) without altering the base classifier.
@@ -483,7 +549,12 @@ async function main() {
   let reading;
   if (dryRun) {
     const utilization = await computeUtilization(supabase);
-    const integrity = await computeFailLoudIntegrity(supabase);
+    // QF-20260805-181: --dry-run must not read healthier than the real run — it is the mode a
+    // human invokes when asking "is the coordinator alive?", so it carries the same verdict.
+    const integrity = applyCoordinatorLiveness(
+      await computeFailLoudIntegrity(supabase),
+      await computeCoordinatorLiveness(supabase),
+    );
     const sharp = await computeSharpenings(supabase, { utilization, integrity });
     reading = {
       timestamp: new Date().toISOString(),
