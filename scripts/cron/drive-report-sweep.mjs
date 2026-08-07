@@ -57,6 +57,10 @@ import { aggregateScore } from '../../lib/drive-loop/score/aggregate.js';
 import { unavailable, LAST_RUN_FIELD } from '../../lib/drive-loop/report-posture.js';
 import { armedProcessKey } from '../../lib/machinery-class/armed-registration.js';
 import { produceDriveReport } from '../drive-report-produce.mjs';
+// QF-20260807-118: canonical cross-platform entry guard. The hand-rolled
+// `file://${process.argv[1]}`.replace(...) form this replaces NEVER fired on Windows — and the
+// widened class-guard lint found this file only after that blind spot was closed.
+import { isMainModule } from '../../lib/utils/is-main-module.js';
 
 export const ET_ZONE = 'America/New_York';
 
@@ -357,7 +361,7 @@ export async function runDriveReportSweep({ nowMs, produce, gather, persist, reg
 // ── CLI ────────────────────────────────────────────────────────────────────────────────────
 // Everything above is pure of clocks and clients; this block is the thin edge that supplies the
 // real ones. Nothing here is decision logic, deliberately.
-if (import.meta.url === `file://${process.argv[1]}`.replace(/\\/g, '/')) {
+if (isMainModule(import.meta.url)) {
   const { createClient } = await import('@supabase/supabase-js');
   const { computePlanCheckStatus } = await import('../../lib/roadmap/plan-check-status.js');
   const { registerArmedMachinery } = await import('../../lib/machinery-class/armed-registration.js');

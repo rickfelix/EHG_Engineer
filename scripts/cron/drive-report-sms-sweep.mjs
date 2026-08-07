@@ -46,6 +46,10 @@
  */
 
 import { sendDriveSms, factsFromReport } from '../drive-report-sms.mjs';
+// QF-20260807-118: canonical cross-platform entry guard. The hand-rolled
+// `file://${process.argv[1]}`.replace(...) form this replaces NEVER fired on Windows — and the
+// widened class-guard lint found this file only after that blind spot was closed.
+import { isMainModule } from '../../lib/utils/is-main-module.js';
 import { etParts, windowKey } from './drive-report-sweep.mjs';
 import { LAST_RUN_FIELD } from '../../lib/drive-loop/report-posture.js';
 
@@ -255,7 +259,7 @@ export async function runDriveSmsSweep({ nowMs, findLatestReport, enqueue, findO
 }
 
 // ── CLI ────────────────────────────────────────────────────────────────────────────────────
-if (import.meta.url === `file://${process.argv[1]}`.replace(/\\/g, '/')) {
+if (isMainModule(import.meta.url)) {
   if (!process.env.SUPABASE_URL || !process.env.SUPABASE_SERVICE_ROLE_KEY) {
     throw new Error('drive-report-sms-sweep: SUPABASE_URL and SUPABASE_SERVICE_ROLE_KEY are required');
   }
