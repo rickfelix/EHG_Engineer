@@ -1,0 +1,56 @@
+# Trend-Eyes sweep — SD-LEO-INFRA-TREND-EYES-OFF-001 FR-8.
+#
+# OFF-SEAT EYES: this fires whether or not any seat is alive. The motivating case is the
+# 2026-08-04 13-hour freeze, when GHA crons kept running while every seat-tick duty died.
+#
+# THE SCHEDULE BELOW IS ACTIVE AND MUST STAY ACTIVE. Deliberately NOT copied from
+# solomon-judgment-expiry.yml, whose schedule is commented out so it ships disabled — as that
+# file says at :22-25, "that is not a disabled mechanism, it is an ABSENT one." Copied instead
+# from solomon-ledger-reconcile.yml, the canonical daily template.
+#
+# Ship evidence for this SD is a real executed run leaving a run-receipt row in
+# codebase_health_snapshots — NOT the presence of this file. Two trend scripts
+# (scripts/eva/eva-trend-snapshot.mjs, scripts/eva/trend-detector.mjs) already reached COMPLETED
+# under prior SDs while never being wired; a merged YAML proves nothing on its own.
+#
+# AUTH: supabase-js + service-role only. Do NOT add SUPABASE_POOLER_URL or a DATABASE_URL/pg
+# path — the pooler secret is injected into zero cron workflows here and is silently undefined
+# on a runner, which fails as a confusing timeout rather than a clean credential error.
+name: Solomon Trend-Eyes Sweep
+
+on:
+  schedule:
+    - cron: '0 6 * * *'
+  workflow_dispatch:
+    inputs:
+      dry_run:
+        description: 'Scan and report without writing candidate rows'
+        type: boolean
+        default: false
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ${{ github.workflow }}
+  cancel-in-progress: true
+
+jobs:
+  trend-eyes-sweep:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    env:
+      SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+      SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: 'npm'
+
+      - run: npm ci --ignore-scripts
+
+      - name: Run Trend-Eyes sweep
+        run: node scripts/solomon/trend-eyes-sweep.mjs ${{ inputs.dry_run && '--dry-run' || '' }}
