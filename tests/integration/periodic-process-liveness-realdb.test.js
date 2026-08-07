@@ -56,6 +56,31 @@ describe.skipIf(!HAS_REAL_DB)('Periodic-process liveness registry -- REAL DB', (
       await supabase.from('session_coordination').delete().eq('payload->>process_key', key);
       await supabase.from('periodic_process_registry').delete().eq('process_key', key);
     }
+
+    // QF-20260807-190 — SWEEP THIS RUN'S WHOLE PREFIX, not just the keys this process remembers.
+    //
+    // The header above claimed "zero residue". 53 fixture rows in the production registry
+    // falsified it, and the leak distribution NAMES THE MECHANISM: counts fall monotonically in
+    // fixture-creation order — silenced 22, recovers_then_relapses 15, healthy 6, stood_down 4,
+    // owner_first 3, ladder_pre_migration 3. A silently-failing delete would leak all six EQUALLY,
+    // because every run creates all six. Leaking fewer of the later ones is what happens when the
+    // run TERMINATES PART-WAY and afterAll never executes at all.
+    //
+    // So the loop above cannot be the whole cleanup: it is driven by an in-memory array that only
+    // exists while the process does. This sweep is keyed on `ts`, which is stamped once at module
+    // load, so it removes every fixture from THIS run — including any whose insert succeeded
+    // before a crash — and touches no other run's rows.
+    //
+    // It does NOT fix an aborted run (nothing in-process can); scripts/reap-e2e-liveness-fixtures.mjs
+    // is the out-of-band recovery for residue already in the table. This closes the narrower gap:
+    // a run that reaches afterAll now cleans up completely rather than only what it recorded.
+    const { error: sweepErr } = await supabase
+      .from('periodic_process_registry')
+      .delete()
+      .like('process_key', `__e2e_periodic_liveness_%_${ts}__`);
+    // SURFACED, not swallowed. The deletes above ignore their error entirely, which is how a
+    // cleanup can fail on every run while its header still claims zero residue.
+    if (sweepErr) console.warn(`[e2e-cleanup] prefix sweep for ts=${ts} failed: ${sweepErr.message}`);
   });
 
   it('TS-1: a self-stamped fixture fired twice then silenced 3x its interval is flagged OVERDUE with exactly one session_coordination row', async () => {
