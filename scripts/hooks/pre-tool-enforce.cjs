@@ -282,11 +282,41 @@ async function resolveSessionClaimedSdKey(sessionId) {
   }
 }
 
+// QF-20260804-087: the lookup above reads strategic_directives_v2 ONLY, so a QF claim — which
+// lives in quick_fixes — is invisible to it. This is the SECOND fail-soft lookup, same REST shape
+// and 1.5s timeout as its SD sibling. Returns the TRI-STATE true/false/null that
+// worktree-claim-decision.cjs documents and depends on — null (no creds / timeout / non-ok) is
+// NOT false, and collapsing the two rebuilds the bug.
+// quick_fixes.id IS the QF key (no qf_key column) and carries the same claiming_session_id column
+// name as the SD table — both live-verified against the schema, as was the id=eq. scoping.
+async function sessionHoldsQuickFixClaim(sessionId, qfKey) {
+  try {
+    const supabaseUrl = process.env.SUPABASE_URL;
+    const serviceKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
+    if (!supabaseUrl || !serviceKey || !sessionId || !qfKey) return null;
+    const url = supabaseUrl +
+      '/rest/v1/quick_fixes?claiming_session_id=eq.' + encodeURIComponent(sessionId) +
+      '&id=eq.' + encodeURIComponent(qfKey) + '&select=id&limit=1';
+    const resp = await Promise.race([
+      fetch(url, { headers: { apikey: serviceKey, Authorization: 'Bearer ' + serviceKey } }),
+      new Promise((_, reject) => setTimeout(() => reject(new Error('timeout')), 1500)),
+    ]);
+    if (!resp || !resp.ok) return null;
+    const rows = await resp.json();
+    if (!Array.isArray(rows)) return null;
+    return rows.length > 0;
+  } catch {
+    return null;
+  }
+}
+
 // SD-FDBK-ENH-ENFORCEMENT-IDEA-OPERATOR-001: resolve THIS session's claude_sessions.metadata
 // (mirrors resolveSessionClaimedSdKey: REST + 1.5s timeout + fail-open → null on any error).
 // Used only by the AskUserQuestion guard, so the lookup happens at most once per
 // AskUserQuestion call (a rare tool), never on the hot path of other tools.
 const { isBlockableWorker, decideAskUserBlock, ASKUSER_DENY_MESSAGE } = require('./askuser-worker-policy.cjs');
+// QF-20260804-087: worktree-claim decision, extracted for the same reason as the policy above.
+const { shouldBlockWorktreeEdit, isQuickFixWorktree } = require('./worktree-claim-decision.cjs');
 // Resolves the calling session's { metadata, loopState } for the AskUserQuestion guard.
 // loop_state is a TOP-LEVEL claude_sessions column (active|awaiting_tick|exited|unknown) — it is
 // the autonomy signal that catches a /loop worker the coordinator has not yet callsigned.
@@ -922,7 +952,13 @@ async function main() {
         const worktreeSdKey = match[1];
         try {
           const claimedSdKey = await resolveSessionClaimedSdKey(_SESSION_ID);
-          if (claimedSdKey && claimedSdKey !== worktreeSdKey) {
+          // QF-20260804-087: NOT a wholesale `startsWith('QF-') -> allow` exemption — editing a QF
+          // worktree you do not hold is still blocked, and SD-vs-SD is untouched. See the decision
+          // module for why the qfHeld tri-state carries the whole fix.
+          const qfHeld = isQuickFixWorktree(worktreeSdKey)
+            ? await sessionHoldsQuickFixClaim(_SESSION_ID, worktreeSdKey)
+            : false; // not a QF target — the SD test is the whole guard, unchanged
+          if (shouldBlockWorktreeEdit({ worktreeKey: worktreeSdKey, claimedSdKey, qfHeld })) {
             const auditPromise = auditPermissionDecision(_SESSION_ID, TOOL_NAME, 'PAT-CLMMULTI-002', 'Worktree claim guard (DB-corroborated)', 'block', { worktreeSdKey, claimedSdKey });
             process.stderr.write(
               `CLAIM GUARD (PAT-CLMMULTI-002): Edit/Write blocked.\n` +
