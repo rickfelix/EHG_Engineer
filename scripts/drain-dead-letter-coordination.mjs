@@ -8,15 +8,20 @@
  */
 import 'dotenv/config';
 import { createClient } from '@supabase/supabase-js';
-import { classifyDeadLetterRow, summarizeDrain, HIGH_VALUE_KINDS } from '../lib/coordination/dead-letter-drain.js';
+import { classifyDeadLetterRow, summarizeDrain, HIGH_VALUE_KINDS, isSessionLive } from '../lib/coordination/dead-letter-drain.js';
 import { createRequire } from 'module';
+const require_ = createRequire(import.meta.url);
 // SD-LEO-INFRA-SIGNAL-ROUTER-AUTO-001 (FR-8, third site).
-const { PROMOTION_ACK_KEY } = createRequire(import.meta.url)('../lib/coordinator/promotion-ack.cjs');
+const { PROMOTION_ACK_KEY } = require_('../lib/coordinator/promotion-ack.cjs');
+// SD-LEO-INFRA-COORDINATION-LANE-DRAIN-001 / FR-1b: resolve successors from LIVE role identity,
+// for every role KIND_TARGET_ROLE can name — not a coordinator-only map with a hardcoded UUID.
+const { getActiveCoordinatorId } = require_('../lib/coordinator/resolve.cjs');
+const { getActiveAdamId } = require_('../lib/coordinator/adam-identity.cjs');
+const { getActiveSolomonId } = require_('../lib/coordinator/solomon-identity.cjs');
 
 const APPLY = process.argv.includes('--apply');
 const db = createClient(process.env.SUPABASE_URL, process.env.SUPABASE_SERVICE_ROLE_KEY);
 const PAGE = 1000;
-const LIVE_COORDINATOR = process.env.LIVE_COORDINATOR_SESSION || '185c0ecf-5467-4354-a14a-83ce0ceae33c';
 
 async function all(table, cols, filter) {
   let out = [], from = 0;
@@ -32,10 +37,39 @@ async function all(table, cols, filter) {
 }
 
 async function main() {
-  const sessions = await all('claude_sessions', 'session_id,status');
+  // FR-1c: liveness by HEARTBEAT RECENCY. The previous oracle was status IN ('active','idle'),
+  // and status/is_alive were measured wrong in BOTH directions — the dominant dead target held
+  // 91.6% of the backlog while reporting status='active'/is_alive=true with a 45h-stale heartbeat,
+  // so the drain skipped nine-tenths of its own problem as "live backlog". Selecting the heartbeat
+  // columns is load-bearing: a column you never SELECT reads as undefined, which this oracle
+  // fails closed on, so an omission here would silently mark the whole fleet dead.
+  const sessions = await all('claude_sessions', 'session_id,status,heartbeat_at,last_tool_at');
   const byId = new Map(sessions.map((s) => [s.session_id, s]));
-  const isLive = (sid) => { const s = byId.get(sid); return !!s && (s.status === 'active' || s.status === 'idle'); };
-  const successors = { coordinator: LIVE_COORDINATOR }; // solomon/adam resolved only if role-orphans exist (none in the verified set)
+  const nowMs = Date.now();
+  const isLive = (sid) => isSessionLive(byId.get(sid), { nowMs });
+
+  // FR-1b: resolve EVERY role KIND_TARGET_ROLE can name, from live identity. The prior map was
+  // coordinator-only with a hardcoded fallback ('185c0ecf...') that was itself released on
+  // 2026-07-25 with a 13.4-day-stale heartbeat — and because LIVE_COORDINATOR_SESSION is unset in
+  // practice, that dead id was the LIVE path, so retargets moved rows to a two-week-dead session
+  // and instantly re-created the dead-letter they were meant to fix. A role with no live holder
+  // now resolves to undefined, which classifyDeadLetterRow already treats as "no successor ->
+  // stamp" — no retarget to a corpse, and no invented fallback.
+  const successors = {};
+  for (const [role, resolve] of [
+    ['coordinator', getActiveCoordinatorId],
+    ['adam', getActiveAdamId],
+    ['solomon', getActiveSolomonId]
+  ]) {
+    try {
+      const id = await resolve(db);
+      if (id && isLive(id)) successors[role] = id;
+      else if (id) console.log(`  WARN ${role} resolver returned ${id} but its heartbeat is stale — treating as no successor`);
+    } catch (e) {
+      console.log(`  WARN ${role} identity unresolved (${e.message}) — no successor for this role`);
+    }
+  }
+  console.log(`live successors: ${Object.keys(successors).length ? Object.entries(successors).map(([r, s]) => `${r}=${String(s).slice(0, 8)}`).join(' ') : '(none)'}`);
 
   // SD-LEO-INFRA-SIGNAL-ROUTER-AUTO-001 (FR-8, THIRD site) — and the worst of the three.
   //
