@@ -17,8 +17,12 @@
 
 import { describe, it, expect } from 'vitest';
 import { createRequire } from 'module';
+import fs from 'node:fs';
+import path from 'node:path';
+import { fileURLToPath } from 'node:url';
 
 const require_ = createRequire(import.meta.url);
+const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '../../..');
 const hook = require_('../../../scripts/hooks/session-role-orient.cjs');
 const { decide, roleLines, SOLO, COORDINATOR, isAdamSeat } = hook;
 
@@ -205,5 +209,113 @@ describe('FR-2 wiring — orient() invokes the receipt writer for the Adam seat'
     expect(v).toBeNull();
     // The seat is still oriented and still told the report is unavailable.
     expect(t.lines.join('\n')).toMatch(/unavailable this session/);
+  });
+
+  // THE COORDINATOR-FLAGGED ADAM SEAT. Found by the SECURITY sub-agent driving orient() rather than
+  // reading it. decide() checks both coordinator rungs BEFORE the adam rung, but orient() used to
+  // gate its fetch and its stamp on isAdamSeat(meta) alone — so this seat was shown COORDINATOR
+  // lines, no headline, and stamped a receipt claiming it had consumed the report anyway.
+  //
+  // A receipt that can attest to a delivery that did not happen is worse than no receipt: it is
+  // indistinguishable in the table from a real one, so it corrupts the very measurement this SD
+  // family exists to produce. Both arms are asserted together on purpose — "no drive line" and
+  // "no receipt" are the two halves of one claim, and a fix that restored the content while leaving
+  // the stamp (or vice versa) would still be wrong.
+  for (const [name, seat] of [
+    ['is_coordinator flag', { meta: { role: 'adam', is_coordinator: true }, coordFile: null }],
+    ['holds the coordinator pointer', { meta: { role: 'adam' }, coordFile: { session_id: 's' } }],
+  ]) {
+    it(`an adam seat that is ALSO the coordinator (${name}) gets no drive line AND no receipt`, async () => {
+      const t = mk();
+      const v = await hook.orient({
+        sessionId: 's', meta: seat.meta, coordFile: seat.coordFile,
+        fetchReport: async () => REPORT,
+        stamp: async (id) => { t.stamped.push(id); return { written: true, lane: 'adam' }; },
+        log: t.log,
+      });
+      expect(t.lines.join('\n')).not.toMatch(DRIVE_LINE);
+      expect(t.stamped).toEqual([]);
+      expect(v).toBeNull();
+      // Not merely "no adam content" — it received the coordinator orientation it was owed.
+      expect(t.lines).toEqual(COORDINATOR);
+    });
+  }
+
+  // TR-2's kill switch. The env-gate half of the "env-gated + fail-open" contract was claimed by
+  // the PRD and absent from the code until the SECURITY sub-agent measured it.
+  describe('TR-2 — LEO_DRIVE_REPORT_INJECT=off', () => {
+    const withEnv = async (value, fn) => {
+      const prior = process.env.LEO_DRIVE_REPORT_INJECT;
+      if (value === undefined) delete process.env.LEO_DRIVE_REPORT_INJECT;
+      else process.env.LEO_DRIVE_REPORT_INJECT = value;
+      try { return await fn(); } finally {
+        if (prior === undefined) delete process.env.LEO_DRIVE_REPORT_INJECT;
+        else process.env.LEO_DRIVE_REPORT_INJECT = prior;
+      }
+    };
+
+    it('suppresses the fetch and the receipt without breaking the seat', async () => {
+      const t = mk(); const fetched = [];
+      await withEnv('off', () => hook.orient({
+        sessionId: 's', meta: ADAM, coordFile: null,
+        fetchReport: async () => { fetched.push(1); return REPORT; },
+        stamp: async (id) => { t.stamped.push(id); return { written: true }; },
+        log: t.log,
+      }));
+      expect(fetched).toEqual([]);
+      expect(t.stamped).toEqual([]);
+      // The seat is STILL oriented — the switch kills the Drive Report injection, not the hook.
+      // Gating the whole hook off would tell every worker in the fleet it was SOLO.
+      expect(t.lines.slice(0, 3)).toEqual(roleLines('adam'));
+    });
+
+    it('DEFAULT ON — unset and any other value still inject', async () => {
+      for (const value of [undefined, '', 'on', 'true', 'anything']) {
+        const t = mk();
+        await withEnv(value, () => hook.orient({
+          sessionId: 's', meta: ADAM, coordFile: null,
+          fetchReport: async () => REPORT,
+          stamp: async (id) => { t.stamped.push(id); return { written: true }; },
+          log: t.log,
+        }));
+        expect(t.stamped).toEqual(['rep-1']);
+      }
+    });
+  });
+});
+
+// FR-1 — WHAT THE HOOK ACTUALLY ASKS THE DATABASE FOR.
+//
+// This shipped as `select=id,headline`. There is no headline column: drive_reports is
+// (id, generated_at, run_id, cadence, sections, drive_score, schema_version, metadata). PostgREST
+// answers a phantom column with 400/42703 across the WHOLE projection — so the read failed, pgGet
+// returned null, and FR-1 and FR-2 were both permanently dead while the seat's "unavailable" line
+// and the code's own comments explained the silence away as waiting on the gated migration.
+//
+// Asserted against the MIGRATION rather than a hand-copied column list, so the day a column is
+// renamed this test fails instead of agreeing with a stale copy of the schema.
+describe('FR-1 — the drive_reports read names only columns that exist', () => {
+  const hookSrc = fs.readFileSync(path.join(root, 'scripts/hooks/session-role-orient.cjs'), 'utf8');
+  const ddl = fs.readFileSync(path.join(root, 'database/migrations/20260803_drive_reports.sql'), 'utf8');
+
+  it('every column in the select exists in the drive_reports DDL', () => {
+    const select = hookSrc.match(/drive_reports\?select=([^&']+)/);
+    expect(select, 'the hook must still read drive_reports').not.toBeNull();
+
+    const createTable = ddl.match(/CREATE TABLE IF NOT EXISTS public\.drive_reports \(([\s\S]*?)\n\);/);
+    expect(createTable, 'the drive_reports CREATE TABLE must be parseable').not.toBeNull();
+    const columns = createTable[1]
+      .split('\n')
+      .map((l) => l.trim())
+      .filter((l) => l && !l.startsWith('--'))
+      .map((l) => l.split(/\s+/)[0].replace(/[^a-z_]/gi, ''))
+      .filter(Boolean);
+
+    expect(columns).toContain('drive_score');   // the parse itself must be working
+    expect(columns).not.toContain('headline');  // and it must agree that this one is absent
+
+    for (const col of select[1].split(',').map((c) => c.trim())) {
+      expect(columns, `select names a column absent from drive_reports: ${col}`).toContain(col);
+    }
   });
 });

@@ -140,23 +140,65 @@ function adamLines(headline) {
 }
 
 /**
- * FR-1 — read the current Drive Report headline. Returns null on ANY failure.
+ * TR-2 — the kill switch for the Drive Report injection, and ONLY for it.
+ *
+ * TR-2 says this branch inherits the "env-gated + fail-open" pattern of session-doc-drift-warn.cjs.
+ * The fail-open half was inherited; the env gate was NOT — that sibling has LEO_DOC_DRIFT_WARN=off
+ * and this hook had no equivalent, so a misbehaving injection could only be stopped by editing the
+ * hook. (Found by the SECURITY sub-agent, which measured the claim rather than accepting it.)
+ *
+ * SCOPED TO THE DRIVE LINES, NOT THE HOOK. Gating the whole hook off would silence orientation for
+ * every seat — this file has been the only thing telling a worker it is a worker since
+ * QF-20260511-026, and a fleet of seats that think they are SOLO is a far worse failure than a
+ * stuck headline. So `off` costs Adam the Drive Report line and its receipt, and costs no one else
+ * anything. DEFAULT ON: a kill switch that must be set to get the feature is not a kill switch, it
+ * is an unshipped feature.
+ */
+function driveInjectionEnabled() {
+  return String(process.env.LEO_DRIVE_REPORT_INJECT || '').trim().toLowerCase() !== 'off';
+}
+
+/**
+ * FR-1 — read the current Drive Report and DERIVE its headline. Returns null on ANY failure.
+ *
+ * ── THERE IS NO headline COLUMN, AND ASKING FOR ONE BREAKS THE WHOLE READ ─────────────────
+ * This first shipped as `select=id,headline`. drive_reports is
+ * (id, generated_at, run_id, cadence, sections, drive_score, schema_version, metadata) — MEASURED
+ * against the migration and confirmed by probe: PostgREST answers a phantom column with 400/42703
+ * over the ENTIRE projection, so `res.ok` is false, pgGet returns null, and this returned null
+ * FOREVER — not just until the gated migration applies, but permanently after it too. The seat
+ * would have shown the "unavailable" line every session, the FR-2 receipt (gated on the report id)
+ * would never have been stamped, and the comment three lines down would have explained the silence
+ * away as the designed degraded path. A dead consumer wearing the costume of a waiting one.
+ *
+ * ── THE HEADLINE IS DERIVED, AND FROM CLOSED VOCABULARY ONLY ──────────────────────────────
+ * factsFromReport + formatBody are the SAME pair that builds the chairman's drive SMS, imported
+ * rather than re-implemented so the hook and the SMS cannot come to disagree about what one row
+ * says. Their output is numbers and members of a frozen enum — no report free text (SD titles,
+ * predicates, limitation strings, all authored upstream by agents) can reach this hook's stdout.
+ * That matters more here than on the SMS: this text lands in the Adam governance seat's context at
+ * SessionStart, where a newline-bearing string would render as additional [ROLE] doctrine lines
+ * indistinguishable from the real ones. Unrepresentable beats escaped.
  *
  * Fail-open by construction, matching every other read in this hook: a SessionStart hook that
  * throws takes the whole session start with it. pgGet already carries the BUDGET_MS timeout, so an
- * unreachable or slow table costs the budget, not the session. TODAY this always returns null —
- * drive_reports is not live until PR #6784 (sibling -B) merges and is applied — and that is the
- * designed degraded path, not a stub to replace later.
+ * unreachable or slow table costs the budget, not the session. Until the chairman-gated migration
+ * for drive_reports applies, the table is absent and this returns null — which is the same answer
+ * it gives for an unreadable score, so the caller says "unavailable" either way.
  */
 async function fetchDriveReport() {
   try {
-    // id as well as headline: FR-2 stamps a consumption receipt against this report, and a receipt
+    // id as well as the score: FR-2 stamps a consumption receipt against this report, and a receipt
     // without the report it acknowledges is not a receipt.
-    const rows = await pgGet('drive_reports?select=id,headline&order=generated_at.desc&limit=1');
+    const rows = await pgGet('drive_reports?select=id,drive_score&order=generated_at.desc&limit=1');
     const r = rows?.[0];
-    const h = r?.headline;
-    if (!r?.id || typeof h !== 'string' || !h.trim()) return null;
-    return { id: r.id, headline: h.trim() };
+    if (!r?.id) return null;
+    const { factsFromReport, formatBody } = await import('../drive-report-sms.mjs');
+    const facts = factsFromReport(r);
+    // null facts = the score is absent or corrupt. Reported as no-headline rather than as a zero:
+    // "Drive 0/0" is a measurement nobody made.
+    if (!facts) return null;
+    return { id: r.id, headline: formatBody(facts) };
   } catch { return null; }
 }
 
@@ -184,13 +226,46 @@ async function stampAdamReceipt(reportId) {
     ]);
     const url = process.env.SUPABASE_URL, key = process.env.SUPABASE_SERVICE_ROLE_KEY;
     if (!url || !key) return null;
-    return await writeConsumptionReceipt(createClient(url, key), { reportId, lane: 'adam' });
+    return await writeConsumptionReceipt(createClient(url, key), {
+      reportId,
+      lane: 'adam',
+      // What the row attests, stated ON it: the headline was emitted into this seat's SessionStart
+      // context. That IS delivery for this lane — unlike the chairman_brief lane, there is no
+      // transport downstream that could still drop it — but saying so costs one field and stops a
+      // future reader from having to infer it from the lane name.
+      metadata: { attests: 'injected_into_session_context' },
+    });
   } catch { return null; }
 }
 
-function decide(sessionId, meta, coordFile, driveHeadline = null) {
-  if (meta?.is_coordinator) return COORDINATOR;
-  if (coordFile?.session_id === sessionId) return COORDINATOR;
+/**
+ * The seats this hook can route to. A token rather than a boolean per rung, because the question
+ * "which rung won?" has one answer and every caller needs the same one.
+ */
+const SEAT = Object.freeze({ COORDINATOR: 'coordinator', ADAM: 'adam', ROLE: 'role', WORKER: 'worker', SOLO: 'solo' });
+
+/**
+ * WHICH SEAT IS THIS — the ONE place rung precedence lives.
+ *
+ * Extracted from decide() by SD-LEO-INFRA-DRIVE-LOOP-INSTRUMENT-001-D because precedence had
+ * quietly acquired a SECOND, disagreeing representation. decide() checks the two coordinator rungs
+ * BEFORE the adam rung, but orient() gated its fetch and its RECEIPT on isAdamSeat(meta) alone. A
+ * seat with role='adam' AND is_coordinator (or holding the coordinator pointer) therefore received
+ * COORDINATOR lines — no headline, no Drive Report, nothing — and stamped a consumption receipt
+ * saying it had read one. MEASURED by driving orient(), not reasoned about.
+ *
+ * That is precisely the failure this SD family exists to prevent, committed by the instrument
+ * itself: a receipt is worthless the moment it can attest to a delivery that did not happen, and
+ * this one would have been indistinguishable from a real one in the table. The lesson is not "add
+ * the coordinator checks to the gate too" — two copies of a precedence rule drift, and the copy
+ * that drifts is the one nobody reads. It is that the routing decision must be asked once and
+ * answered once.
+ *
+ * @returns {string} a SEAT token
+ */
+function resolveSeat(sessionId, meta, coordFile) {
+  if (meta?.is_coordinator) return SEAT.COORDINATOR;
+  if (coordFile?.session_id === sessionId) return SEAT.COORDINATOR;
 
   // FR-3: read metadata.role BEFORE falling through to workerLines.
   //
@@ -216,8 +291,8 @@ function decide(sessionId, meta, coordFile, driveHeadline = null) {
   // Adam is not a special case bolted beside the role axis — he IS a role seat, which is why this
   // returns roleLines plus one line rather than a parallel block. The rung above him is the general
   // one; this rung only adds what is specific to him.
-  if (isAdamSeat(meta)) return adamLines(driveHeadline);
-  if (ROLE_VERDICT && verdictFromMetadata(meta) === ROLE_VERDICT.ROLE) return roleLines(meta.role);
+  if (isAdamSeat(meta)) return SEAT.ADAM;
+  if (ROLE_VERDICT && verdictFromMetadata(meta) === ROLE_VERDICT.ROLE) return SEAT.ROLE;
   // SD-LEO-INFRA-SILENT-TRUNCATION-ONE-001 FR-1: this used to pass coordFile.session_id.slice(0, 8).
   // The [ROLE] line below is the ONLY place a worker is told who its coordinator is, and a worker
   // that addresses the coordinator builds target_session from it — so an 8-character prefix here is
@@ -229,8 +304,22 @@ function decide(sessionId, meta, coordFile, driveHeadline = null) {
   // "where a short form is genuinely wanted for scanning" — that applies to a roster of many rows,
   // not to a single value in a prompt line. Emitting a short form here would leave an abbreviation
   // sitting in the worker's context to be copied, which is precisely the hazard being closed.
-  if (coordFile?.session_id) return workerLines(meta?.callsign, coordFile.session_id);
-  return SOLO;
+  if (coordFile?.session_id) return SEAT.WORKER;
+  return SEAT.SOLO;
+}
+
+/**
+ * The lines this seat is shown. Signature and output unchanged — this is now a thin renderer over
+ * resolveSeat, which is where the precedence comments above belong and now live.
+ */
+function decide(sessionId, meta, coordFile, driveHeadline = null) {
+  switch (resolveSeat(sessionId, meta, coordFile)) {
+    case SEAT.COORDINATOR: return COORDINATOR;
+    case SEAT.ADAM: return adamLines(driveHeadline);
+    case SEAT.ROLE: return roleLines(meta.role);
+    case SEAT.WORKER: return workerLines(meta?.callsign, coordFile.session_id);
+    default: return SOLO;
+  }
 }
 /**
  * FR-2 — emit the orientation and stamp Adam's receipt.
@@ -251,7 +340,12 @@ async function orient({
   log = console.log,
   describe = null,
 } = {}) {
-  const driveReport = isAdamSeat(meta) ? await fetchReport() : null;
+  // THE SAME QUESTION THE RENDERER ASKS, ASKED ONCE. Gating on isAdamSeat(meta) here instead of on
+  // the resolved seat is what let a coordinator-flagged Adam seat stamp a receipt for content it
+  // was never shown — see resolveSeat. Gating on the seat also keeps the round trip off every
+  // other seat's startup budget, which is what the isAdamSeat gate was originally for.
+  const isAdam = resolveSeat(sessionId, meta, coordFile) === SEAT.ADAM;
+  const driveReport = isAdam && driveInjectionEnabled() ? await fetchReport() : null;
   decide(sessionId, meta, coordFile, driveReport?.headline || null).forEach((l) => log(l));
   // The receipt is stamped AFTER the lines are emitted: the injection IS the delivery, and a
   // receipt may only claim what was actually delivered. Stamping first would record a consumption
@@ -296,4 +390,4 @@ function main() {
   });
 }
 if (require.main === module) main().then(() => drainAndExit(0)).catch(() => drainAndExit(0));
-module.exports = { readCoordFile, fetchMeta, findActiveCoord, decide, SOLO, COORDINATOR, workerLines, roleLines, isAdamSeat, adamLines, fetchDriveReport, stampAdamReceipt, orient };
+module.exports = { readCoordFile, fetchMeta, findActiveCoord, decide, resolveSeat, SEAT, SOLO, COORDINATOR, workerLines, roleLines, isAdamSeat, adamLines, driveInjectionEnabled, fetchDriveReport, stampAdamReceipt, orient };

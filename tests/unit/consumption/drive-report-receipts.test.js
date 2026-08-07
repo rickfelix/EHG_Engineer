@@ -61,6 +61,23 @@ describe('FR-2/FR-4 — a receipt is written for a valid lane', () => {
   });
 });
 
+describe('a write with nothing returned is UNCONFIRMED, never written', () => {
+  // The one shape that produces {data: null, error: null}: an RLS posture permitting the INSERT
+  // while denying the returning SELECT. Unreachable under the shipped DDL (service_role FOR ALL),
+  // but "no error came back" is not the same evidence as "the row is there", and this module's
+  // invariant does not bend for how unlikely the path is. Found by the SECURITY sub-agent.
+  it('reports not-written when the upsert returns no row and no error', async () => {
+    const c = stubClient({ row: null });
+    const v = await writeConsumptionReceipt(c, { reportId: REPORT, lane: 'adam' });
+    expect(v.written).toBe(false);
+    expect(v.reason).toBe(RECEIPT_OUTCOME.UNCONFIRMED);
+    // A distinct reason, not folded into write_refused: the write may well have landed. Collapsing
+    // the two would tell whoever reads this verdict the wrong thing about what to do next.
+    expect(v.reason).not.toBe(RECEIPT_OUTCOME.WRITE_REFUSED);
+    expect(describeReceiptOutcome(v)).toMatch(/NOT WRITTEN/);
+  });
+});
+
 describe('TS-6 — THE SWALLOW TEST: a refused write is never reportable as written', () => {
   it('a database refusal reports NOT WRITTEN and surfaces the cause', async () => {
     const c = stubClient({ error: { message: 'new row violates check constraint "drive_report_receipts_lane_check"' } });
