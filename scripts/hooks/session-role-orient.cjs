@@ -186,11 +186,14 @@ function driveInjectionEnabled() {
  * for drive_reports applies, the table is absent and this returns null — which is the same answer
  * it gives for an unreadable score, so the caller says "unavailable" either way.
  */
-async function fetchDriveReport() {
+async function fetchDriveReport(get = pgGet) {
   try {
     // id as well as the score: FR-2 stamps a consumption receipt against this report, and a receipt
     // without the report it acknowledges is not a receipt.
-    const rows = await pgGet('drive_reports?select=id,drive_score&order=generated_at.desc&limit=1');
+    // `get` is injectable for the same reason orient()'s dependencies are: the derivation below is
+    // the part that was wrong, and a test should be able to drive it without credentials or a
+    // stubbed global. The default is the real reader, so no caller changes.
+    const rows = await get('drive_reports?select=id,drive_score&order=generated_at.desc&limit=1');
     const r = rows?.[0];
     if (!r?.id) return null;
     const { factsFromReport, formatBody } = await import('../drive-report-sms.mjs');

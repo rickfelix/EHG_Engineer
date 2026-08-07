@@ -298,6 +298,31 @@ describe('FR-1 — the drive_reports read names only columns that exist', () => 
   const hookSrc = fs.readFileSync(path.join(root, 'scripts/hooks/session-role-orient.cjs'), 'utf8');
   const ddl = fs.readFileSync(path.join(root, 'database/migrations/20260803_drive_reports.sql'), 'utf8');
 
+  // AND THE WIRING, not just the query string. The column test above would still pass if
+  // fetchDriveReport never derived a headline from what it fetched — "the pieces are right and
+  // nothing joins them" is the exact gap this SD family has now hit three times. So this drives the
+  // real function against a stubbed transport and asserts on what comes out the other end.
+  it('derives a headline from a real row shape, through the real function', async () => {
+    const requested = [];
+    const out = await hook.fetchDriveReport(async (qs) => {
+      requested.push(qs);
+      // The shape sibling -B's aggregate actually writes.
+      return [{ id: 'rep-42', drive_score: { score: { value: 5 }, possible: 8, capacity_verdict: 'TIGHT', unavailable_legs: [{ leg: 'leg4' }] } }];
+    });
+    expect(out).toEqual({ id: 'rep-42', headline: 'Drive 5/8 | capacity TIGHT | 1 leg(s) unmeasured' });
+    // Closed vocabulary only: numbers and enum members. No upstream free text is even reachable,
+    // which is what keeps a newline-bearing string from forging [ROLE] lines in Adam's context.
+    expect(out.headline).not.toMatch(/[\n\r]/);
+    expect(requested[0]).toContain('drive_reports?select=id,drive_score');
+  });
+
+  it('an unreadable score is no headline, never a fabricated zero', async () => {
+    // "Drive 0/0" would be a measurement nobody made. The seat is told unavailable instead.
+    expect(await hook.fetchDriveReport(async () => [{ id: 'rep-43', drive_score: {} }])).toBeNull();
+    // And a row with no id cannot be receipted against, so it is no report at all.
+    expect(await hook.fetchDriveReport(async () => [{ drive_score: { score: { value: 1 }, possible: 8 } }])).toBeNull();
+  });
+
   it('every column in the select exists in the drive_reports DDL', () => {
     const select = hookSrc.match(/drive_reports\?select=([^&']+)/);
     expect(select, 'the hook must still read drive_reports').not.toBeNull();
