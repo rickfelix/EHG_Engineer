@@ -699,15 +699,26 @@ export async function completeQuickFix(qfId, options = {}) {
   // against an unpushed/commit-less branch and then wedged on the PR-URL prompt
   // under --non-interactive. Only the PR-creation side effect moves — the commit
   // still happens after verification (this is NOT the commit-before-verify reorder).
-  const deferAutoPr = !prUrl && options.autoPr;
+  // QF-20260727-714: --no-code-deliverable suppresses auto-PR entirely. A zero-code QF has an
+  // empty branch, so a deferred `gh pr create` would correctly refuse ("No commits between main
+  // and main") — and suppressing it here also keeps the SECOND validatePR (in the deferAutoPr
+  // block further down) unreachable on this path, rather than patching two gates that must stay
+  // in agreement.
+  const deferAutoPr = !prUrl && options.autoPr && !options.noCodeDeliverable;
 
-  if (!prUrl && !options.autoPr) {
+  if (!prUrl && !options.autoPr && !options.noCodeDeliverable) {
     const prInput = await prompt('\nGitHub PR URL (required): ');
     prUrl = prInput.trim();
   }
 
   // When the PR will be auto-created post-push, there is no URL to validate yet.
-  if (!deferAutoPr && !validatePR(prUrl, qfId, qf.title)) {
+  //
+  // QF-20260727-714: --no-code-deliverable also skips it, because the deliverable is a DB write,
+  // a refutation, or a decision — there is nothing to commit and a PR URL could only be
+  // fabricated. THE NORMAL PATH IS UNCHANGED: without this flag a PR is still mandatory, and
+  // validatePR itself is untouched, so this is a scoped exemption rather than a weakened guard.
+  // The flag cannot be passed without --deliverable-evidence (enforced in cli.js).
+  if (!deferAutoPr && !options.noCodeDeliverable && !validatePR(prUrl, qfId, qf.title)) {
     process.exit(1);
   }
 
@@ -913,6 +924,20 @@ export async function completeQuickFix(qfId, options = {}) {
       timestamp: new Date().toISOString(),
       operator_supplied_notes: verificationNotes || null
     });
+  } else if (options.noCodeDeliverable) {
+    // QF-20260727-714: audit-trail the zero-code completion. THE EVIDENCE IS THE WHOLE POINT —
+    // it is the only artifact a reader can use to check the deliverable actually landed, because
+    // there is no commit, no diff and no PR to inspect. cli.js refuses the flag without it, so
+    // this field is never empty. no_pr_reason records WHY the PR requirement was exempted rather
+    // than leaving a reader to infer that the gate simply failed to run.
+    finalVerificationNotes = JSON.stringify({
+      no_code_deliverable: true,
+      deliverable_evidence: options.deliverableEvidence,
+      no_pr_reason: 'deliverable is not a code change — no commit exists to open a PR against',
+      operator: process.env.CLAUDE_SESSION_ID || 'unknown',
+      timestamp: new Date().toISOString(),
+      operator_supplied_notes: verificationNotes || null
+    });
   }
 
   const { error: updateError } = await supabase
@@ -922,7 +947,12 @@ export async function completeQuickFix(qfId, options = {}) {
       actual_loc: actualLoc,
       actual_source_loc: actualSourceLoc,
       actual_test_loc: actualTestLoc,
-      force_completed: Boolean(options.forceComplete),
+      // QF-20260727-714: a no-code completion is force_completed too. The row's
+      // completed_requires_verification CHECK is satisfied WITHOUT fabricating uat_verified or a
+      // commit — same contract this file already documents for --force-complete. Marking it
+      // force_completed is also the honest label: no PR was reviewed and no diff was merged, so
+      // the row must not read like an ordinary verified completion.
+      force_completed: Boolean(options.forceComplete || options.noCodeDeliverable),
       commit_sha: commitSha,
       branch_name: branchName,
       pr_url: finalPrUrl,

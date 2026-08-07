@@ -135,7 +135,11 @@ function prompt(rl, question) {
 async function fetchFeedbackItems(includeAll = false) {
   let query = supabase
     .from('feedback')
-    .select('id, type, title, description, priority, status, source_type, created_at')
+    // QF-20260727-475: `category` MUST be selected — deriveClaimProvenance() reads its VALUE to
+    // decide whether this row's claims are first-hand or relayed. Selecting it is not optional
+    // just because a filter elsewhere mentions it; an unselected column reads undefined and the
+    // deriver would silently classify every row the same way.
+    .select('id, type, title, description, priority, status, source_type, category, created_at')
     .order('priority', { ascending: true })
     .order('created_at', { ascending: true });
 
@@ -234,6 +238,65 @@ async function resolveParentSd(parentKey) {
 }
 
 /**
+ * QF-20260727-475 — categories whose rows are AUTHORED BY AN AGENT relaying something it did not
+ * measure first-hand: a worker signal, a sub-agent finding, another role's review.
+ *
+ * TWO INDEPENDENT WITNESSES, EIGHT HOURS APART. An SD embedded three material claims that were
+ * WRONG — a named insertion point that could not see the rows its own ACs staged, a security
+ * assertion false on win32 (this fleet IS win32), and an in-flight rule contradicted by live
+ * measurement — each stated with the SAME CONFIDENCE as the verified parts. The worker's words:
+ * "I ACTED ON ALL FOUR BECAUSE NOTHING IN THE ARTIFACT DISTINGUISHED THEM FROM VERIFIED FACT."
+ * Then a sub-agent INFO finding travelled sub-agent -> worker -> coordinator -> worker -> a
+ * DURABLE MIGRATION HEADER with no verification at any hop, and was false in all three parts
+ * against pg_catalog — the named object did not exist in the database at all.
+ */
+const RELAYED_CLAIM_CATEGORIES = new Set([
+  'harness_backlog', 'coordinator_review', 'coordinator_adam_review', 'fleet_retro',
+  'invariant_gauge_finding', 'adam_adherence_drift', 'solomon_adherence_drift',
+  'adam_solomon_health', 'adam_self_assessment', 'completion_flag', 'completion_flag_witness',
+  'wind_down_survey',
+]);
+
+/**
+ * Classify how this row's substantive claims were obtained.
+ *
+ * NEVER returns 'measured'. Nothing available here can prove first-hand measurement, and awarding
+ * it would recreate the defect at one remove — a provenance tag that lies is worse than none.
+ * Absence of evidence is not evidence of verification, so the floor is 'unverified'.
+ *
+ * @param {{category?:string, source_type?:string}} feedback
+ * @returns {'relayed_unverified'|'unverified'}
+ */
+export function deriveClaimProvenance(feedback) {
+  const category = String((feedback && feedback.category) || '').toLowerCase();
+  if (RELAYED_CLAIM_CATEGORIES.has(category)) return 'relayed_unverified';
+  if (String((feedback && feedback.source_type) || '').toLowerCase() === 'auto_capture') {
+    return 'relayed_unverified';
+  }
+  return 'unverified';
+}
+
+/**
+ * The banner an EXEC agent reads before the inherited text.
+ *
+ * Per-SENTENCE provenance cannot be derived automatically — no reader here knows which clause the
+ * author measured. So this marks the ROW and names the four claim types that have actually caused
+ * harm (mechanism, insertion point, root cause, proposed fix), telling the consumer which
+ * sentences to re-derive. That is the stated acceptance: a worker can tell verified fact from
+ * relayed inference and knows what to check before acting.
+ */
+export function claimProvenanceBanner(provenance) {
+  return [
+    `> **CLAIM PROVENANCE: ${provenance.toUpperCase().replace(/_/g, '-')}.**`,
+    '> The text below was authored from a signal, sub-agent finding, or review — NOT from',
+    '> first-hand measurement by this SD. Any **mechanism, insertion point, root cause or',
+    '> proposed fix** in it is a LEAD, not a specification: re-derive it against the live',
+    '> system before acting. Verified parts and inferred parts are NOT distinguished here.',
+    '',
+  ].join('\n');
+}
+
+/**
  * Create SD from feedback item
  */
 async function createSdFromFeedback(feedback, parentId = null) {
@@ -252,11 +315,17 @@ async function createSdFromFeedback(feedback, parentId = null) {
     ? sanitizeUserText(feedback.description || feedback.title).content
     : (feedback.description || feedback.title);
 
+  // QF-20260727-475: stamp provenance ON THE DESCRIPTION, because the description is what a
+  // full-authority EXEC agent reads verbatim as its work instructions (see FR-5 note above).
+  // Putting it only in metadata would leave the consumer that actually acts on the text unmarked.
+  const claimProvenance = deriveClaimProvenance(feedback);
+  const describedBody = `${claimProvenanceBanner(claimProvenance)}\n${safeDescription}`;
+
   const sdData = {
     id: sdKey,  // Human-readable key (per schema: id=VARCHAR for main identifier)
     sd_key: sdKey,  // Same for backward compatibility
     title: feedback.title,
-    description: safeDescription,
+    description: describedBody,
     rationale: `Created from feedback item. Source: ${feedback.source_type || 'manual'}. Original ID: ${feedback.id}`,
     sd_type: sdType,
     status: 'draft',
@@ -272,11 +341,13 @@ async function createSdFromFeedback(feedback, parentId = null) {
     sdData.metadata = JSON.stringify({
       contract_governed: true,
       contract_parent_chain: [parentId],
-      source_feedback_id: feedback.id
+      source_feedback_id: feedback.id,
+      claim_provenance: claimProvenance
     });
   } else {
     sdData.metadata = JSON.stringify({
-      source_feedback_id: feedback.id
+      source_feedback_id: feedback.id,
+      claim_provenance: claimProvenance
     });
   }
 

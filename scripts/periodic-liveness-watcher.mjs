@@ -245,6 +245,45 @@ async function evaluateRow(row, ctx = {}) {
   // self_stamped: lastFiredAt already = row.last_fired_at
 
   if (!lastFiredAt) {
+    // SD-LEO-INFRA-STAMP-ARMING-TIME-001 FR-2 — a null last_fired_at CONFLATES two states:
+    // "not due yet" and "never produced when it should have". That conflation is why AC-8/FR-7 of
+    // SD-LEO-INFRA-DRIVE-LOOP-INSTRUMENT-001-B shipped UNMET: the alarm works once a report has
+    // succeeded ONCE, and is blind precisely for a report that has NEVER been produced — which is
+    // the state at merge and the most missing a report can be.
+    //
+    // An arming time separates them, so BOTH acceptance criteria survive: FR-7 gets its alarm, and
+    // the never-false-OVERDUE criterion is untouched because this branch requires an EXPLICIT
+    // armed_at that only registration writes.
+    //
+    // THE GUARD IS THE POINT, not a formality. This early return is reached by far more than armed
+    // rows. Measured live before writing this: of the 66 rows carrying a null last_fired_at, only
+    // 27 are self_stamped; the other 39 resolve lastFiredAt in the branches above and 16 of them
+    // already read OK. Keying this on row age instead of an explicit armed_at would have emitted
+    // 60 alarms, roughly 33 of them false — role_session:adam/coordinator/solomon sit at ~1487
+    // cadences elapsed with a null last_fired_at and last_state OK. Requiring armed_at makes this
+    // branch STRUCTURALLY unable to reach them.
+    const armedAt = row.liveness_source_ref?.armed_at;
+    const armedMs = armedAt ? Date.parse(armedAt) : NaN;
+    // A malformed armed_at falls through to UNVERIFIED — an unparseable timestamp is not evidence
+    // that something is overdue, and fail-soft here keeps the never-false-OVERDUE property.
+    // overdueThresholdMs does Number(row.grace_multiplier), and Number(null) is 0 — a row carrying
+    // an armed_at but no grace_multiplier would get a threshold of 0 and alarm INSTANTLY. Today
+    // that is unreachable because the only writer of armed_at also writes grace_multiplier, which
+    // is precisely the kind of cross-file coupling a later edit breaks silently. Require a real
+    // positive window.
+    const thresholdMs = overdueThresholdMs(row);
+    if (Number.isFinite(armedMs) && Number.isFinite(thresholdMs) && thresholdMs > 0) {
+      const armedAgeMs = Date.now() - armedMs;
+      if (armedAgeMs > thresholdMs) {
+        return {
+          process_key: row.process_key,
+          state: STATE.OVERDUE,
+          armed_at: armedAt,
+          age_ms: armedAgeMs,
+          reason: 'armed_never_produced',
+        };
+      }
+    }
     return { process_key: row.process_key, state: STATE.UNVERIFIED, reason: 'no_last_fired_data_available' };
   }
 

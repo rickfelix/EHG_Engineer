@@ -25,6 +25,13 @@ function makeMock({ obligations = [], selectError = null, registryError = null }
       update: (p) => { state.op = 'update'; state.payload = p; return c; },
       upsert: (p) => { state.op = 'upsert'; state.payload = p; return finishThenable(); },
       eq: () => c, in: () => c, is: () => c, gte: () => c, order: () => c, limit: () => c,
+      // SD-LEO-INFRA-STAMP-ARMING-TIME-001: registerArmedMachinery now READS the existing row
+      // before upserting, so armed_at is written once and then AGES instead of being reset on
+      // every in-window tick. data:null models "no prior row" (first registration); registryError
+      // still surfaces so the existing failure-path assertions keep exercising a real error.
+      maybeSingle: async () => (registryError
+        ? { data: null, error: { message: registryError } }
+        : { data: null, error: null }),
       then: (res, rej) => finish().then(res, rej),
     };
     function finishThenable() { return { then: (res, rej) => finish().then(res, rej), select: () => finishThenable() }; }
