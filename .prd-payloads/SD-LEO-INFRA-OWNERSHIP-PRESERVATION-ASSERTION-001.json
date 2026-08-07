@@ -1,0 +1,94 @@
+{
+  "executive_summary": "Give the p.*-refreeze column-drift class a STANDING detector, by extending an instrument that already exists and has never been invoked. THE JUSTIFICATION IS NOT AN ARGUMENT, IT IS A LIVE MEASUREMENT: v_patterns_with_decay is drifted RIGHT NOW — 30 view columns against 29 base columns, six base columns absent, INCLUDING both columns its only direct consumer selects. So context-builder.js:413 raises 42703 on every run, :421 catches any error whose message contains 'column', and it SILENTLY falls back to the base table. The defect is ACTIVE, not historical, and no instrument in the repo noticed. SCOPE NOTE: this SD's ORIGINAL deliverable — the three-piece ownership-preservation assertion — is ALREADY DELIVERED on main (PR #6727 / commit c6daedd1) and MUST NOT be rebuilt; see metadata.satisfied_elsewhere. This SD was rescoped by coordinator ruling, amended once on a measured correction.",
+  "functional_requirements": [
+    {
+      "id": "FR-1",
+      "title": "Add a CLASS-WIDE view-vs-base-table column-parity comparator to lib/policy/severity-pair-coupling.js",
+      "description": "compareViewBaseParity({ viewCols, baseCols }) returning { verdict, viewCols, baseCols, missingFromView, detail }. PURELY ADDITIVE — the aggregator allCouplingsAgree(results):235 reads ONLY .verdict, so the new comparator slots beside compareSeverityPair:94 and compareCountVisibility:137 with NO aggregator change. TWO HARD RULES, both measured from the existing module: (a) it MUST ALWAYS return an object, never null — allCouplingsAgree returns FALSE for a non-array or empty list (:237, 'nothing measured is not success'), and a null element would be read as not-AGREES by accident rather than by design; (b) on an empty or unreadable column list it MUST return UNREADABLE, NEVER AGREES — UNREADABLE is explicitly not a pass (:20-22), and a parity check that reports agreement because it read nothing is the fail-open this whole family exists to abolish. CLASS-WIDE is the point: the catalog query is naturally class-wide across ~185 views, and that breadth is what earns the instrument a schedule. v_patterns_with_decay is the NAMED CASE, not the whole scope."
+    },
+    {
+      "id": "FR-2",
+      "title": "Extend scripts/severity-pair-divergence-fence.mjs to run the parity coupling — EXTEND, never rebuild",
+      "description": "Push the parity result into the results array at fence:115. THE EXTEND-VS-REBUILD DECISION WAS ADJUDICATED, not assumed: this fence is DORMANT on four independently-measured surfaces (zero workflow refs, zero npm scripts, ZERO ROWS in the live periodic_process_registry across 246 registered processes — a registry read, not a file grep — and its unit test never spawns the script). It is extended rather than replaced because it has a PROVEN TRUE POSITIVE (its first genuine non-seeded run caught a real FR-3 divergence against the production catalog, commit 8efe46502a3) and already encodes disciplines a rebuild would silently lose: UNREADABLE exits non-zero rather than passing, and the seeded self-test must FAIL or the fence self-reports BROKEN. Building a third instrument beside a working-but-unscheduled one is the single-representation violation this SD family exists to kill. The parity read fits the existing pg.Client and its try/finally naturally (pg_attribute/pg_class, same connection)."
+    },
+    {
+      "id": "FR-3",
+      "title": "--seed-divergence MUST gain a parity-specific mutation",
+      "description": "NOT optional, and the reason is a real blind spot rather than tidiness. The exit-3 BROKEN check asserts only that the AGGREGATE seeded run FAILS. The two existing seeds already make it fail, so a new comparator with no seed of its own would ride along permanently untested — a positive control that validates the mechanism while proving nothing about the pattern just added. The seed is an in-memory mutation of the parity side (drop a column from the view list), consistent with the existing seeds being pure in-memory string mutation, deliberately not a transaction and not DDL."
+    },
+    {
+      "id": "FR-4",
+      "title": "Register as armed machinery and WIRE IT TO A CONSUMER",
+      "description": "registerArmedMachinery(supabase, { sd_key }, { activationTrigger: '<the workflow path>', expectedIntervalSeconds }) plus a paired cron workflow and a tests/unit/cron/*-wiring.test.js proving the workflow actually invokes the script. ORDERING IS LOAD-BEARING AND IS THE OPPOSITE OF THE OBVIOUS ONE: register BEFORE stamping, because registerArmedMachinery upserts last_fired_at: null on insert — stamping first erases the stamp on every run and puts the staleness alarm permanently back into the stuck-on state. THE CONSUMER WIRE IS THE POINT OF THE WHOLE SD: emitBreakageAlert('schema-drift', '<detector-name>', {...}) — the 'schema-drift' break class ALREADY EXISTS (defaultSeverity critical, alertType system_health) so no new class is needed, and the emitter is fail-soft by construction so it can never corrupt the detector's exit code. A detector nobody reads is indistinguishable from an absent one; that is precisely the condition this fence has been in since it was written."
+    },
+    {
+      "id": "FR-5",
+      "title": "Hoist the context-builder select literal inline — ADJACENT action, NOT the scope boundary",
+      "description": "context-builder.js:411 holds its column list in a const named VIEW_SELECT and calls .select(VIEW_SELECT). The existing BLOCKING lint's extractor records only INLINE literal select lists, so it sees a table reference and zero column refs — measured by running the real extractor: as-committed 0 violations, hoisted inline 22 column refs and exactly 2 violations. The hoist is cheap and it trips TODAY. IT IS EXPLICITLY NOT THE SCOPE BOUNDARY (coordinator ruling AMENDED on this point): the hoist answers 'do the columns this consumer NAMES still exist?', while the detector answers 'does the view still expose everything the base table HAS?' Those are DISJOINT questions and the hoist subtracts NOTHING from FR-1..FR-4. FORBIDDEN BY NAME, because each is a tempting way to make the hoist PR green while re-blinding the lint: (a) adding the file or either relation to scripts/lint/schema-reference-allowlist.json; (b) a schema-lint-disable-line pragma; (c) dropping metadata/dedup_fingerprint from the select. THE CORRECT WAY TO GREEN IT is to apply the 20260801 migration and regenerate the snapshot."
+    },
+    {
+      "id": "FR-6",
+      "title": "State the live-drift measurement in the PR and the completion message",
+      "description": "The standing-detector case is evidenced, not argued, and the evidence must travel with the change: the view is drifted now, its only direct consumer degrades silently on every run, and nothing reported it. Recording that in the PR is what stops a later reader from reading this SD as speculative hardening."
+    }
+  ],
+  "technical_requirements": [
+    { "id": "TR-1", "title": "ZERO edits to the hash-bound migration", "description": "database/migrations/20260801_refresh_v_patterns_with_decay_column_drift.sql has sha256 32f28e1a9cf967366cb523b178f5363dd68e932fcb85c75a7803df347000b59a, byte-identical to the blob a chairman verbal is bound to — and that verbal is ALREADY IN FRONT OF THE CHAIRMAN. Editing the file moves the hash out from under a live ask for the second time and costs a re-bind. The detector reads catalogs at RUNTIME and never touches migration files, so this constraint costs the design nothing. Verified twice independently (by the builder and by VALIDATION)." },
+    { "id": "TR-2", "title": "UNREADABLE must never resolve to AGREES", "description": "A parity comparator that cannot read the catalog must say so. Reporting agreement from an empty read is a false green on the exact axis the instrument exists to guard, and it is indistinguishable from a healthy run on every surface downstream." },
+    { "id": "TR-3", "title": "Two clients, two credential sets — this is NEW WORK, not a copy", "description": "MEASURED COMPLICATION: the fence connects via node-postgres to SUPABASE_POOLER_URL/SUPABASE_DB_URL and imports no supabase-js at all. But every consumer wire runs on supabase-js — registerArmedMachinery, stampLastFired, and emitBreakageAlert's default client. So the extended script must hold BOTH, and its workflow env must carry the pg connection string IN ADDITION TO SUPABASE_URL + SUPABASE_SERVICE_ROLE_KEY. No existing cron exemplar demonstrates a pg connection string (chairman-decision-sla-cron.yml carries only the supabase pair), so that env block cannot be copied and must be written and verified." },
+    { "id": "TR-4", "title": "Exit code 1 conflates DIVERGED with UNREADABLE", "description": "Pre-existing in the fence and inherited by this extension: exit 1 covers both. A consumer that must distinguish them has to parse --json, which the fence already emits. Named here rather than silently inherited, so a later reader does not mistake exit 1 for 'drift found'." }
+  ],
+  "test_scenarios": [
+    { "id": "TS-1", "scenario": "POSITIVE CONTROL — a genuinely drifted view is DETECTED", "type": "unit", "expected": "compareViewBaseParity with baseCols containing a column absent from viewCols returns DIVERGED and names the missing column in missingFromView. Seeded from the REAL measured case: six columns absent from v_patterns_with_decay." },
+    { "id": "TS-2", "scenario": "SEEDED — an unreadable catalog returns UNREADABLE, never AGREES", "type": "unit", "expected": "Empty or null viewCols/baseCols yields UNREADABLE. An implementation that returns AGREES here passes every other scenario while reporting a healthy belt it never read — the fail-open this SD exists to prevent." },
+    { "id": "TS-3", "scenario": "SEEDED — the comparator never returns null", "type": "unit", "expected": "Every input shape returns an object with a .verdict. A null return would be read by allCouplingsAgree as not-AGREES by accident, which happens to be safe today and is not a contract." },
+    { "id": "TS-4", "scenario": "NEGATIVE CONTROL — a view at parity does NOT fire", "type": "unit", "expected": "viewCols a superset of baseCols returns AGREES. Without this, a comparator that returned DIVERGED unconditionally would satisfy TS-1 and TS-2 and alarm on all ~185 views forever." },
+    { "id": "TS-5", "scenario": "--seed-divergence makes the PARITY coupling fail specifically", "type": "integration", "expected": "With the parity seed applied and the OTHER couplings forced to agree, the fence still trips. Asserting only the aggregate seeded failure would pass on the pre-existing seeds alone and prove nothing about the comparator this SD adds (FR-3)." },
+    { "id": "TS-6", "scenario": "WIRING — the workflow actually invokes the script and ACTIVATION_TRIGGER equals the workflow path", "type": "unit", "expected": "Static fs assertions, no DB or network. Armed logic with no dispatcher is indistinguishable from logic that always passes, and the failure is silent because absence has no error message." },
+    { "id": "TS-7", "scenario": "Registration precedes stamping", "type": "unit", "expected": "register is called before stamp. Reversed, registerArmedMachinery's last_fired_at: null erases the stamp every run and re-arms the staleness alarm permanently, while every individual piece still looks correct." },
+    { "id": "TS-8", "scenario": "The hoisted select trips the EXISTING blocking lint", "type": "integration", "expected": "Running the real extractor over the hoisted context-builder yields the 2 violations. And the three forbidden escapes are absent: no allowlist entry for the file or either relation, no disable pragma, and both columns still present in the select." }
+  ],
+  "acceptance_criteria": [
+    "compareViewBaseParity exists, is class-wide, and returns UNREADABLE (never AGREES, never null) when it cannot read.",
+    "The fence runs the parity coupling; the aggregator is UNCHANGED.",
+    "--seed-divergence mutates the parity side, and a test proves the parity coupling fails on its own seed rather than riding the existing ones.",
+    "The detector is registered in periodic_process_registry, paired with a cron workflow and a wiring test, and register precedes stamp.",
+    "The detector emits to a CONSUMER via the existing 'schema-drift' break class — the dormancy that made the substrate worth extending is closed by the extension.",
+    "The context-builder literal is hoisted inline and none of the three named re-blinding escapes appears in the diff.",
+    "database/migrations/20260801_refresh_v_patterns_with_decay_column_drift.sql has ZERO diff lines; its sha256 still reads 32f28e1a…",
+    "The PR and completion message state the live-drift measurement as the detector's justification."
+  ],
+  "risks": [
+    { "risk": "The parity comparator reports AGREES when it could not read the catalog.", "mitigation": "TR-2 + TS-2. This is the highest-value failure to seed because it makes every run look healthy and is invisible on every downstream surface." },
+    { "risk": "A third instrument gets built beside the dormant fence because extending an unfamiliar file is harder than starting fresh.", "mitigation": "FR-2 records the adjudication and its evidence: four measured dormancy surfaces plus a proven true positive. The dormancy is the thing being fixed, not a reason to abandon the substrate." },
+    { "risk": "The hoist is read as the scope boundary and FR-1..FR-4 get trimmed as 'residual'.", "mitigation": "FR-5 states the disjointness explicitly and the coordinator ruling was AMENDED on this exact point after the 2-of-6 coverage measurement. A PRD written on the residual framing under-scopes by the whole defect class." },
+    { "risk": "The hoist PR is greened by silencing the lint rather than fixing the drift.", "mitigation": "FR-5 forbids the three escapes BY NAME and states the correct remedy. Naming them matters because each is individually reasonable-looking." },
+    { "risk": "The migration file is edited to 'also fix the drift', invalidating a live chairman verbal.", "mitigation": "TR-1, plus a zero-diff acceptance criterion on that path." },
+    { "risk": "The workflow ships without the pg connection string and the detector fails on every tick.", "mitigation": "TR-3 names it as new work rather than a copy, because no existing cron exemplar carries that env." }
+  ],
+  "integration_operationalization": {
+    "consumers": "system_alerts via emitBreakageAlert('schema-drift', …) — the operator-facing surface. Downstream: anyone asking 'has any view drifted from its base table', which is unanswerable today. Also SD-FDBK-ENH-LEARNING-LOOP-DESTROYS-001, whose FR-5 migration repairs the one instance this detector would have caught six months earlier.",
+    "dependencies": "lib/policy/severity-pair-coupling.js (additive); scripts/severity-pair-divergence-fence.mjs (substrate); lib/machinery-class/armed-registration.js; lib/breakage/emit-breakage-alert.cjs; lib/coordinator/break-class-taxonomy.cjs ('schema-drift' exists); pg via SUPABASE_POOLER_URL/SUPABASE_DB_URL AND supabase-js via SUPABASE_URL/SUPABASE_SERVICE_ROLE_KEY.",
+    "data_contracts": "No schema changes. Reads pg_attribute/pg_class at runtime. Writes only a periodic_process_registry row and system_alerts rows through existing writers.",
+    "runtime_config": "One new cron workflow. Its env block is NOT copyable from an existing exemplar (TR-3).",
+    "observability_rollout": "Before: the class is undetected and a live instance is drifting unnoticed. After: one scheduled check across ~185 views emitting to system_alerts. The fence's own four-surface dormancy is closed as a side effect — the never-invoked instrument dies with its extension."
+  },
+  "system_architecture": {
+    "objects_touched": "MODIFIED: lib/policy/severity-pair-coupling.js (+1 comparator), scripts/severity-pair-divergence-fence.mjs (run it, seed it, register, stamp, emit), scripts/modules/learning/context-builder.js (hoist one literal). NEW: a cron workflow + a wiring test + comparator tests. UNCHANGED, with a zero-diff criterion: database/migrations/20260801_refresh_v_patterns_with_decay_column_drift.sql.",
+    "invariant": "A parity verdict is reported only when the catalog was actually read. Unreadable is reported as unreadable, never as agreement — the reading and its provenance live or die together.",
+    "coupling_map": "pg catalog (pg_attribute/pg_class) -> compareViewBaseParity -> allCouplingsAgree (UNCHANGED) -> fence exit code -> emitBreakageAlert('schema-drift') -> system_alerts. Schedule: cron workflow -> registerArmedMachinery -> periodic_process_registry -> liveness watcher."
+  },
+  "implementation_approach": {
+    "sequence": "TR-1 first as a standing constraint, not a step. Then FR-1 (pure, testable without a database), then FR-3's seed alongside it so the comparator is never momentarily unfalsifiable, then FR-2 wiring into the fence, then FR-4 registration + consumer, then FR-5 the hoist last since it is adjacent and independent.",
+    "verification_discipline": "Seed the two failures that would make this look finished while being wrong: UNREADABLE resolving to AGREES, and a parity seed that never fires because the aggregate was already failing on the pre-existing seeds. Keep TS-4 as the negative control — a comparator that fired unconditionally would satisfy every positive scenario while alarming on 185 views forever.",
+    "out_of_scope": "The ownership-preservation assertion (ALREADY DELIVERED — metadata.satisfied_elsewhere). Applying the 20260801 migration (chairman-gated). TWO SEPARATE DEFECTS found in the existing blocking lint while validating the hoist, both real and neither this SD: (a) filter-clause blindness — the extractor parses columns only inside select/insert/update/upsert, so .order() and .eq() column references are invisible; (b) substring membership — findViolations calls String.includes() against array-literal strings, so a missing column whose name is a substring of a survivor is invisible forever. Both are blind spots inside a BLOCKING gate and deserve their own item."
+  },
+  "metadata": {
+    "rescoped": true,
+    "original_deliverable_already_shipped": "PR #6727 / commit c6daedd1",
+    "coordinator_ruling_amended": "detector justified on the CLASS, not on the hoist residual",
+    "live_drift_measured": "view 30 cols vs base 29; six absent incl. both the consumer selects; consumer 42703s and silently falls back",
+    "hash_bound_file_zero_diff": true,
+    "evidence_rows": "VALIDATION 0da50ff6-ec2b-4526-b913-19d3937d6fdf; Explore 3e457a67-cc37-4d8d-82be-472f71ee8363"
+  }
+}
