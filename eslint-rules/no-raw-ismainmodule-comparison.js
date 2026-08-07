@@ -18,11 +18,31 @@
  *
  * Correct pattern: `isMainModule(import.meta.url)` (lib/utils/is-main-module.js).
  *
- * Deliberately NARROW by design: only the bare `process.argv[1]` MemberExpression
- * is matched, not a wrapped/transformed variant (`.replace(...)`, `new URL(...)`) —
- * those are structurally different, unproven-instance shapes out of this SD's scope
- * (matches the precision philosophy of the sibling rules over broad matching that
- * risks false positives).
+ * SCOPE CORRECTION (QF-20260807-118). This rule USED to say it deliberately did not match
+ * "a wrapped/transformed variant (`.replace(...)`, `new URL(...)`) — those are structurally
+ * different, unproven-instance shapes out of this SD's scope". That scoping decision was
+ * reasonable when written and has since been FALSIFIED BY A LIVE INSTANCE:
+ * scripts/drive-report-produce.mjs shipped
+ *
+ *     import.meta.url === `file://${process.argv[1]}`.replace(/\\/g, '/')
+ *
+ * — the SAME broken comparison with a normalization suffix — and it silently no-opped the
+ * only writer of drive_reports on every non-Linux seat: exit 0, no output, no row. The
+ * `.replace()` was an ATTEMPT to fix the Windows backslash problem, which is exactly why the
+ * suffixed form is the one a careful author reaches for. It does not work: the replace fixes
+ * the separators but not the `file://` vs `file:///` prefix, so the comparison still never
+ * matches. THE MORE SOPHISTICATED-LOOKING FORM IS THE MORE BROKEN ONE, and it was the form
+ * the guard could not see.
+ *
+ * MEASURED before this change, on the real file: the BARE pattern was caught at 91:5, the
+ * SUFFIXED pattern in the identical position reported "0 ungoverned violations across 2162
+ * files". Same file, same run, one variable. So the guard ran in CI, went green, and missed
+ * the defect it exists to prevent.
+ *
+ * Still narrow, deliberately: the BASE of the chain must be the exact banned construction.
+ * `new URL(process.argv[1], ...)` is NOT matched — that is a genuinely different shape with a
+ * legitimate reading, and no live instance has been observed. Precision is preserved; the
+ * unproven-instance exclusion is simply no longer applied to a shape that has been proven.
  *
  * Escape hatch (REQUIRES a non-empty REASON after the `--` separator):
  *
@@ -85,7 +105,38 @@ function isFileUrlLiteral(node) {
  * @param {import('estree').Node} node
  * @returns {boolean}
  */
+/**
+ * Strip any chain of string-method calls off an expression and return its base.
+ *
+ * QF-20260807-118: `` `file://${process.argv[1]}`.replace(/\\/g, '/') `` parses as a
+ * CallExpression whose callee is a MemberExpression on the TemplateLiteral — so a matcher that
+ * only inspected the node itself saw a CallExpression, found no TemplateLiteral, and returned
+ * false. Unwrapping is what makes the guard see through the normalization suffix.
+ *
+ * A LOOP, not a single unwrap: `.replace(a,b).replace(c,d)` and `.replace(…).toLowerCase()` are
+ * the same anti-pattern one link further out, and a single unwrap would miss them — the exact
+ * shape of the bug being fixed, reintroduced in the fix.
+ *
+ * Only method-call chains are unwrapped. The base must still be the exact banned construction,
+ * so this widens WHAT WRAPS the pattern, never what the pattern is.
+ * @param {import('estree').Node} node
+ * @returns {import('estree').Node}
+ */
+function unwrapStringMethodCalls(node) {
+  let current = node;
+  // Bounded to keep a pathological chain from spinning; far beyond any real expression.
+  for (let i = 0; i < 20; i += 1) {
+    if (!current || current.type !== 'CallExpression') return current;
+    const callee = current.callee;
+    if (!callee || callee.type !== 'MemberExpression' || callee.computed) return current;
+    current = callee.object;
+  }
+  return current;
+}
+
 function isFileUrlArgv1Expression(node) {
+  // Unwrap FIRST so every check below sees through `.replace(…)` and friends.
+  node = unwrapStringMethodCalls(node);
   if (!node) return false;
   if (node.type === 'TemplateLiteral') {
     if (node.expressions.length !== 1 || node.quasis.length !== 2) return false;
