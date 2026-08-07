@@ -33,6 +33,10 @@ import { checkFeedbackPremiseLiveness, logForceLivenessOverride } from '../lib/e
 import { normalizeToUTC } from './hooks/stop-subagent-enforcement/time-utils.js';
 import { renderCount } from '../lib/db/fetch-all-paginated.mjs';
 import { loadActiveApplications, validateTargetApplication, detectMisdesignation } from '../lib/fleet/qf-target-application.js';
+// QF-20260807-594: faucet-side severity rule + finding-identity dedup. 96/96 of last-7d
+// arrivals are UAT filings and 60% come in elevated; both gates live HERE, at the filing
+// site, because the drain cannot outrun the faucet.
+import { applySeverityRule, findDuplicateFinding } from '../lib/quick-fix/uat-filing-gate.js';
 
 // Cross-platform path resolution (SD-WIN-MIG-005 fix)
 const __filename = fileURLToPath(import.meta.url);
@@ -168,6 +172,22 @@ async function createQuickFix(options = {}) {
     console.log(`   Valid severities: ${validSeverities.join(', ')}`);
     process.exit(1);
   }
+
+  // QF-20260807-594 RULE 1 — severity at the filing site. HIGH is for MEASURED harm to work or
+  // safety (ratified 2026-08-03); everything else files medium and is STILL ROUTED. Applied
+  // here, before routing and insert, so the tier decision downstream sees the real severity.
+  // The downgrade is announced rather than applied silently: a quietly rewritten field is
+  // indistinguishable, to the filer, from having been ignored, and teaches nobody the rule.
+  const severityVerdict = applySeverityRule(
+    { severity, title, description, expected, actual, steps },
+    { override: options.severityJustification }
+  );
+  if (severityVerdict.downgraded) {
+    console.log(`\n⚠️  [SEVERITY_RULE] ${severityVerdict.from} → ${severityVerdict.severity}`);
+    console.log(`   ${severityVerdict.reason}`);
+    console.log('   Override (audited): --severity-justification "<the measured harm>"');
+  }
+  severity = severityVerdict.severity;
 
   // EVA Pre-Check: warn if vision/architecture docs exist for this topic
   try {
@@ -325,6 +345,55 @@ async function createQuickFix(options = {}) {
         }
         console.warn(`\n⚠️  [ALLOW_DUPLICATE] proceeding anyway: ${options.allowDuplicate}`);
       }
+    }
+
+    // QF-20260807-594 RULE 2 — fold a RE-FILED FINDING, keyed on finding IDENTITY.
+    //
+    // The gate above keys on a 40-char title prefix inside a 60-minute window; that catches a
+    // double-submit but not the same finding arriving again on Thursday. Widening THAT gate
+    // would have been the cheap move and the wrong one: a surface-keyed fold with a long window
+    // silences every later finding about the same page forever. Ask what state would silence
+    // the alarm — with a surface key the answer is "one filing, ever".
+    //
+    // So this keys on what the finding CLAIMS (title + expected + actual), not where it was
+    // found. A genuinely new finding on an already-filed surface has a different identity and
+    // still arrives; that is a required acceptance side, not a nice-to-have.
+    //
+    // Fails OPEN, matching every other scan on this hot path: a DB error must never brick QF
+    // creation. Note that failing open here means UNDER-folding, which is the recoverable
+    // direction — a duplicate that gets through is visible, a real finding that never arrives
+    // is not.
+    // NO TIME WINDOW, and that is a correction rather than an oversight. This first shipped with
+    // a 7-day window, and the wiring proof happened to replay a 10-day-old open QF straight
+    // through it — the gate stayed silent on an exact duplicate. AGE IS THE WRONG KEY: an OPEN
+    // quick-fix is unfixed no matter when it was filed, so re-filing it is a duplicate on day 8
+    // exactly as much as on day 6. A window here buys nothing and leaves a hole that widens
+    // every day. Status is the gate. The set is small (~157 open repo-wide) and explicitly
+    // capped below so this can never silently measure the cap instead of the population.
+    const DUP_SCAN_CAP = 2000;
+    try {
+      const { data: recent, error: dupErr } = await supabase
+        .from('quick_fixes').select('id, title, expected_behavior, actual_behavior, status, created_at')
+        .in('status', ['open', 'in_progress']).limit(DUP_SCAN_CAP);
+      if (dupErr) throw dupErr;
+      if ((recent || []).length >= DUP_SCAN_CAP) {
+        console.warn(`\n⚠️  [FINDING_DEDUP_TRUNCATED] open-QF scan hit its ${DUP_SCAN_CAP}-row cap; dedup saw a subset, not the population.`);
+      }
+      const hit = findDuplicateFinding({ title, expected, actual }, recent || []);
+      if (hit) {
+        console.error(`\n❌ [DUPLICATE_FINDING] this finding was already filed as ${hit.row.id} (${hit.row.status}):`);
+        console.error(`     ${(hit.row.title || '').slice(0, 90)}`);
+        console.error(`   identity overlap ${(hit.score * 100).toFixed(0)}% — keyed on the FINDING, not the surface.`);
+        console.error('   A genuinely different finding on this same surface would not match here.');
+        if (!options.allowDuplicate) {
+          console.error('   Inspect: node scripts/read-quick-fix.js ' + hit.row.id);
+          console.error('   Override (audited): --allow-duplicate "<reason>"');
+          process.exit(1);
+        }
+        console.warn(`\n⚠️  [ALLOW_DUPLICATE] proceeding anyway: ${options.allowDuplicate}`);
+      }
+    } catch (e) {
+      console.warn(`\n⚠️  [FINDING_DEDUP_DEGRADED] identity dedup failed-open (${e?.message || e}); proceeding without it.`);
     }
   }
 
@@ -719,6 +788,10 @@ for (let i = 0; i < args.length; i++) {
     options.type = args[++i];
   } else if (arg === '--severity') {
     options.severity = args[++i];
+  } else if (arg === '--severity-justification') {
+    // QF-20260807-594: audited escape from the severity rule. The rule is a heuristic over
+    // free text and will sometimes be wrong; this is how a real HIGH gets filed anyway.
+    options.severityJustification = args[++i];
   } else if (arg === '--description') {
     options.description = args[++i];
   } else if (arg === '--steps') {
@@ -767,6 +840,8 @@ Options:
   --title                Issue title
   --type                 Issue type (bug, polish, typo, documentation)
   --severity             Severity (critical, high, medium, low)
+  --severity-justification  Audited override for the severity rule; high/critical is otherwise
+                         reserved for MEASURED harm to work or safety and files medium instead.
   --description          Brief description
   --steps                Steps to reproduce
   --expected             Expected behavior
