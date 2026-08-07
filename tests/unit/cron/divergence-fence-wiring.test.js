@@ -117,6 +117,52 @@ describe('the divergence fence names its dispatcher', () => {
     expect(fs.existsSync(path.join(repoRoot, 'scripts/check-severity-pair-divergence.mjs'))).toBe(false);
   });
 
+  it('[CREDENTIALS] the workflow injects a secret name the script ACTUALLY READS', () => {
+    // THE DEFECT THIS PINS SHIPPED IN THE FIRST VERSION OF THIS FILE, and two independent
+    // reviewers found it before CI did. The workflow injected SUPABASE_POOLER_URL, which is NOT a
+    // repo secret — it expanded empty, `conn` was falsy, the script exited 2, and the fence never
+    // ran. Meanwhile DATABASE_URL is a real secret that was injected and read by nothing.
+    //
+    // Asserting the INTERSECTION rather than either side alone: a workflow env var the script
+    // never reads is decoration, and a script env var the workflow never sets is a dead fence.
+    // It passed locally because .env carries the pooler URL — a green hand-run says nothing about
+    // a runner's environment.
+    // ⚠️ WHAT THIS TEST CANNOT DO, stated so nobody mistakes it for the whole check: a static file
+    // read CANNOT tell whether a GitHub secret EXISTS. The shipped defect was exactly that —
+    // SUPABASE_POOLER_URL was spelled correctly, injected correctly, read correctly, and simply
+    // did not exist as a secret. Only `gh secret list` finds that, and that is how it was caught.
+    // What IS pinnable here is the MAPPING onto a secret known to exist, so this asserts that
+    // specific edge rather than a generic "some connection var is present" (my first version
+    // asserted exactly that, and it stayed GREEN when I re-introduced the defect — the surviving
+    // SUPABASE_POOLER_URL line satisfied it).
+    const yml = read(WORKFLOW);
+    const src = code(SCRIPT);
+    expect(src, 'the script must read SUPABASE_DB_URL as a fallback').toMatch(/process\.env\.SUPABASE_DB_URL/);
+    expect(yml, 'SUPABASE_DB_URL must be fed from secrets.DATABASE_URL — the secret that actually exists')
+      .toMatch(/SUPABASE_DB_URL:\s*\$\{\{\s*secrets\.DATABASE_URL\s*\}\}/);
+  });
+
+  it('[STAMP] a healthy run stamps last_fired_at, or the alarm inverts into a permanent false positive', () => {
+    // Registering before the credential check gives the watcher a row to read. A row that is
+    // never stamped reads armed-never-produced FOREVER — so fixing the credentials alone would
+    // turn a true positive into a permanent false one. These two had to land together.
+    // Matched at the CALL SITE (`await stampIfHealthy(`), not the bare name. My first version
+    // asserted /stampIfHealthy\(/, which matches the FUNCTION DEFINITION — so deleting the call
+    // left the test green. A helper that exists and is never invoked is the same nothing as a
+    // helper that does not exist, which is the defect class this entire SD is about.
+    const src = code(SCRIPT);
+    expect(src, 'the fence must stamp on success').toMatch(/stampLastFired/);
+    expect(src, 'and the stamp must actually be CALLED, not merely defined').toMatch(/await\s+stampIfHealthy\(/);
+  });
+
+  it('[DEDUP] the UNREADABLE alert has its OWN source_service', () => {
+    // recordSystemAlert dedups on (source_service, break_class, resolved_at IS NULL). A tripped
+    // -fence alert sits open almost by definition — the drift it reports is what nobody has fixed
+    // yet — so a shared source_service would let that open row SWALLOW the unreadable alert, and
+    // the fix for the dead-and-invisible mode would be invisible in exactly the same way.
+    expect(code(SCRIPT)).toMatch(/divergence-fence-unreadable/);
+  });
+
   it('[CONTROL] the comment-stripper really removes prose, or the assertions above are vacuous', () => {
     // These tests distinguish "the code calls X" from "a comment mentions X". If the stripper were
     // inert, a deleted call site would still pass because the header would still name it.

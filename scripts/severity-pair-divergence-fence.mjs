@@ -44,6 +44,7 @@
  */
 import 'dotenv/config';
 import pg from 'pg';
+import { pathToFileURL } from 'node:url';
 import {
   compareSeverityPair,
   compareCountVisibility,
@@ -53,7 +54,7 @@ import {
   AGREES,
   UNREADABLE,
 } from '../lib/policy/severity-pair-coupling.js';
-import { registerArmedMachinery } from '../lib/machinery-class/armed-registration.js';
+import { registerArmedMachinery, armedProcessKey } from '../lib/machinery-class/armed-registration.js';
 import { createSupabaseServiceClient } from '../lib/supabase-client.js';
 
 const VIEW_NAME = 'chairman_all_decision_signals';
@@ -173,20 +174,45 @@ async function ensureArmedRegistration() {
  * only asserts "the fence still exits 1" would pass with the alert permanently broken. The
  * 'schema-drift' break class already exists (critical / system_health); no new class is minted.
  */
-async function emitDriftAlert(divergedResults, deps = {}) {
+export async function emitDriftAlert(divergedResults, deps = {}, sourceService = 'divergence-fence') {
   if (!divergedResults.length) return { ok: true, skipped: 'no_divergence' };
   try {
     const { emitBreakageAlert } = deps.emitBreakageAlert
       ? { emitBreakageAlert: deps.emitBreakageAlert }
       : await import('../lib/breakage/emit-breakage-alert.cjs');
     const detail = divergedResults.map((r) => r.detail).join(' | ');
-    return await emitBreakageAlert('schema-drift', 'divergence-fence', {
+    return await emitBreakageAlert('schema-drift', sourceService, {
       title: `Divergence fence tripped: ${divergedResults.length} coupling(s)`,
       message: detail,
       metadata: { sd_key: SD_KEY, couplings: divergedResults.length },
     });
   } catch (e) {
     console.warn(`alert: emit threw (${e.message}) — continuing`);
+    return { ok: false, error: e.message };
+  }
+}
+
+/**
+ * Stamp last_fired_at on a HEALTHY completed run.
+ *
+ * WITHOUT THIS THE FIX ABOVE INVERTS INTO A PERMANENT FALSE ALARM, which is the whole reason it
+ * is here. Registering-before-the-credential-check gives the staleness watcher a row to read —
+ * but a row that is never stamped reads as armed-and-never-produced FOREVER, no matter how many
+ * healthy runs happen. So the moment the credentials are fixed, a true positive would become a
+ * permanent false one, and an alarm that cannot clear is an alarm everyone learns to ignore.
+ * Registration and stamping had to land in the same change; shipping either alone is worse than
+ * shipping neither.
+ *
+ * Stamped ONLY on a clean run: a tripped or unreadable fence has not successfully produced.
+ */
+async function stampIfHealthy(ok) {
+  if (!ok) return { ok: false, skipped: 'not_healthy' };
+  try {
+    const { stampLastFired } = await import('../lib/periodic-liveness/stamp-last-fired.js');
+    const supabase = createSupabaseServiceClient();
+    return await stampLastFired(supabase, armedProcessKey(SD_KEY));
+  } catch (e) {
+    console.warn(`registry: stamp threw (${e.message}) — continuing`);
     return { ok: false, error: e.message };
   }
 }
@@ -200,7 +226,18 @@ async function main() {
     console.error('UNREADABLE: no SUPABASE_POOLER_URL / SUPABASE_DB_URL in env — cannot read the catalog.');
     // Tell a consumer rather than dying quietly. Unmeasurable is a reportable state, not a pass
     // and not a silence — and this is the branch a GHA runner without the secret actually takes.
-    await emitDriftAlert([{ detail: 'UNREADABLE: the divergence fence has no pooler credentials on this runner, so no coupling was measured. An unmeasured fence is not a passing fence.' }]);
+    //
+    // A DISTINCT source_service, AND THAT IS NOT COSMETIC. recordSystemAlert dedups on
+    // (source_service, break_class, resolved_at IS NULL). A tripped-fence alert from an earlier
+    // run sits open almost by definition — the drift it reports is exactly what nobody has fixed
+    // yet — so sharing a source_service would let that open row SWALLOW this one, and the alert
+    // built to cure the dead-and-invisible mode would itself be invisible. The obvious fix for a
+    // silent failure is easy to make silent in the same way.
+    await emitDriftAlert(
+      [{ detail: 'UNREADABLE: the divergence fence has no catalog credentials on this runner (SUPABASE_POOLER_URL / SUPABASE_DB_URL both unset), so NO coupling was measured. An unmeasured fence is not a passing fence.' }],
+      {},
+      'divergence-fence-unreadable',
+    );
     process.exit(2);
   }
 
@@ -289,6 +326,9 @@ async function main() {
   if (!ok && !SEED) {
     await emitDriftAlert(results.filter((r) => r.verdict !== AGREES));
   }
+  // Stamp only a clean, non-seeded run. See stampIfHealthy: without this the registry row never
+  // ages out of armed-never-produced and the watcher alarms forever on a healthy fence.
+  if (!SEED) await stampIfHealthy(ok);
 
   if (SEED && ok) {
     // The seeded run MUST fail. If it passed, the fence cannot detect divergence and
@@ -303,7 +343,24 @@ function fmt(pair) {
   return Array.isArray(pair) ? `[${pair.join(', ')}]` : '(unreadable)';
 }
 
-main().catch((err) => {
-  console.error(`UNREADABLE: ${err.message}`);
-  process.exit(2);
-});
+/**
+ * ENTRYPOINT GUARD — SD-LEO-INFRA-OWNERSHIP-PRESERVATION-ASSERTION-001.
+ *
+ * main() used to run UNCONDITIONALLY at import, and every terminus calls process.exit(). That made
+ * the module physically unimportable: any test that touched it would open a database connection
+ * and then kill the test runner. So EVERY assertion about this file had to be a regex over its
+ * source text, and anything invisible in the text was invisible to the suite — measured, five
+ * separate mutations to this script stayed GREEN across the entire 36,000-test unit project.
+ *
+ * The guard is the shape scripts/cron/payment-attribution-sweep.mjs already uses. It changes
+ * nothing about how the CLI behaves and makes the exported seams (emitDriftAlert's deps parameter,
+ * in particular) actually reachable by a test — which is what lets the consumer wire be asserted
+ * two-sided instead of trusted because one live row appeared once.
+ */
+const isMain = process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href;
+if (isMain) {
+  main().catch((err) => {
+    console.error(`UNREADABLE: ${err.message}`);
+    process.exit(2);
+  });
+}

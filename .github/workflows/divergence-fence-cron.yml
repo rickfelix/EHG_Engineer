@@ -51,12 +51,20 @@ jobs:
       # the right fix is having the secret, not relying on the report.
       SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
       SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
+      # SUPABASE_DB_URL IS FED FROM secrets.DATABASE_URL, AND THE MAPPING IS THE WHOLE POINT.
+      # The first version of this file injected SUPABASE_POOLER_URL — WHICH IS NOT A REPO SECRET
+      # (confirmed against the live secret list by two independent reviewers). It would have
+      # expanded EMPTY on every run, so `conn` was falsy, the script exited 2, and the seed step
+      # died before the fence ever ran: a daily red workflow whose parity check never executed.
+      # Meanwhile DATABASE_URL IS a real secret, WAS already injected here, and was read by
+      # nothing in the import graph. The script accepts SUPABASE_POOLER_URL || SUPABASE_DB_URL,
+      # so mapping the secret that exists onto the name the script reads is the entire fix.
+      #
+      # It passed locally because .env carries the pooler URL — a green hand-run says nothing
+      # about a runner's environment, and that is exactly the gap this cost.
+      SUPABASE_DB_URL: ${{ secrets.DATABASE_URL }}
+      # Kept so the workflow starts working the moment this secret is added, without another PR.
       SUPABASE_POOLER_URL: ${{ secrets.SUPABASE_POOLER_URL }}
-      DATABASE_URL: ${{ secrets.DATABASE_URL }}
-      # SD-FDBK-INFRA-RESTORE-STRICT-TLS-001: the pooler presents the Supabase Root 2021 CA,
-      # which is absent from the runner trust store. Trust that CA explicitly via the committed
-      # bundle rather than disabling verification.
-      NODE_EXTRA_CA_CERTS: ${{ github.workspace }}/certs/supabase-root-2021-ca.pem
 
     steps:
       - name: Checkout
