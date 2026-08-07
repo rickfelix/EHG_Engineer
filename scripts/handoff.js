@@ -32,6 +32,25 @@ import { spawnSync } from 'node:child_process';
 import { assertCwdValid, ExecContextError } from '../lib/exec-context-guard.mjs';
 import { getRepoRoot } from '../lib/repo-paths.js';
 import { planHandoffReexec } from '../lib/handoff-reexec.mjs';
+import { findUnknownFlags, formatUnknownFlagError } from '../lib/handoff-argv-guard.mjs';
+
+// === QF-20260807-289: fail-closed argv, FIRST statement that inspects input ===
+// Runs ahead of the re-exec preflight, the claim guard and the heavy import graph, so a
+// rejected invocation cannot spawn a child, touch a claim, or reach an executor. Placed
+// here rather than in cli/index.js because by the time main() dispatches, `execute` has
+// already been chosen and the only thing between argv and an UPDATE is gate scoring.
+//
+// Previously an unrecognised flag was simply not read. Positional parsing means a typo
+// and a supported option are byte-identical in effect: both are dropped, and the command
+// proceeds. That let `execute PLAN-TO-EXEC <SD> --precheck` run a real phase transition
+// while its author believed they had asked for a rehearsal — the silent no-op is the
+// defect, not the missing feature. Both dry-run paths already exist (`precheck` and
+// `dry-run` commands, plus `--dry-run` on execute), so the guard names them on rejection.
+const _unknownFlags = findUnknownFlags(process.argv.slice(2));
+if (_unknownFlags.length > 0) {
+  console.error(formatUnknownFlagError(_unknownFlags));
+  process.exit(2);
+}
 
 // === FR-1 (SD-FDBK-INFRA-WORKTREE-AUTO-REMOVED-001): re-exec recovery ===
 // When cwd is an orphaned worktree (its branch was deleted by

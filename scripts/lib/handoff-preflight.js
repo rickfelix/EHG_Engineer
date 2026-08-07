@@ -236,7 +236,12 @@ async function validateSDHandoffState(sdId, targetPhase, _options = {}) {
         requiredHandoffs.find(r => !result.handoffs.accepted.includes(r));
 
       if (firstMissing) {
-        result.command = `node scripts/handoff.js execute ${firstMissing} --sd-id ${sd.sd_key || sd.id}`;
+        // QF-20260807-289: was `execute ${firstMissing} --sd-id ${key}`. handoff.js reads
+        // the SD id POSITIONALLY from args[2], so that form handed it the literal string
+        // '--sd-id' as the SD key and the real key was never read at all. Surfaced by the
+        // fail-closed argv guard, which rejects '--sd-id' because nothing parses it —
+        // registering the flag instead would have preserved the silent misfire.
+        result.command = `node scripts/handoff.js execute ${firstMissing} ${sd.sd_key || sd.id}`;
       }
     }
 
@@ -355,7 +360,11 @@ async function verifyCompleteHandoffChain(sdId) {
 
     if (!result.canComplete && result.chain.missing.length > 0) {
       result.blockers.push(
-        `Run: node scripts/handoff.js execute ${result.chain.missing[0]} --sd-id ${sd.sd_key || sd.id}`
+        // QF-20260807-289: second instance of the positional-vs-flag mistake in this same
+        // file (see the remediation builder above). Fixing only the first would have been
+        // the fix-the-instance error, and the sibling sits 120 lines away where a diff
+        // review never looks.
+        `Run: node scripts/handoff.js execute ${result.chain.missing[0]} ${sd.sd_key || sd.id}`
       );
     }
 

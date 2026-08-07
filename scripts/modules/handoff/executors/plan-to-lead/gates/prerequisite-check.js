@@ -115,7 +115,12 @@ export function createPrerequisiteCheckGate(supabase) {
           max_score: 100,
           issues: ['BLOCKING: No accepted EXEC-TO-PLAN handoff found - LEO Protocol violation'],
           warnings: [],
-          remediation: 'Complete EXEC-TO-PLAN handoff before attempting PLAN-TO-LEAD. Run: node scripts/handoff.js exec-to-plan --sd-id <SD-ID>'
+          // QF-20260807-289: this remediation named a command that does not exist. There is
+          // no `exec-to-plan` subcommand (the verb is `execute`, the type is its argument),
+          // and the SD id is positional, not a --sd-id flag. An operator following it
+          // verbatim got the help text and no handoff — a gate that blocks you and then
+          // hands you an invocation that cannot work.
+          remediation: 'Complete EXEC-TO-PLAN handoff before attempting PLAN-TO-LEAD. Run: node scripts/handoff.js execute EXEC-TO-PLAN <SD-ID>'
         };
       }
 
