@@ -35,10 +35,14 @@ describe('TS-2 workClassAxes ctx-gating (via classifyDispatchIneligibility)', ()
     expect(classifyDispatchIneligibility(general, { session_model: 'opus' })).toBeNull();
     expect(classifyDispatchIneligibility(general, { session_model: 'claude-sonnet-5' })).toBeNull();
   });
-  it('fable session: general fenced, creative admitted, unclassified fail-closed', () => {
+  // QF-20260807-195: 'unclassified fail-closed' was the INVERSION — the module's own C-STARVE
+  // policy says only clearly-general work is hard-denied, and no-signal text is not evidence of
+  // a wrong class. The two-sided halves of this test (general fenced, creative admitted) are
+  // UNCHANGED and still asserted; only the no-signal default flipped, deliberately.
+  it('fable session: general fenced, creative admitted, unclassified ADMITTED (not fail-closed)', () => {
     expect(classifyDispatchIneligibility(general, { session_model: 'claude-fable-5' })).toBe('work_class_mismatch');
     expect(classifyDispatchIneligibility(creative, { session_model: 'fable' })).toBeNull();
-    expect(classifyDispatchIneligibility(blank, { session_model: 'fable' })).toBe('work_class_unclassified');
+    expect(classifyDispatchIneligibility(blank, { session_model: 'fable' })).toBeNull();
   });
   it('override work_class_override=any admits everywhere', () => {
     expect(classifyDispatchIneligibility(sd({ title: 'Fix cron', metadata: { work_class_override: 'any' } }), { session_model: 'fable' })).toBeNull();
