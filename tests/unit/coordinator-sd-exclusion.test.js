@@ -28,7 +28,13 @@ import {
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const RANKER = resolve(__dirname, '../../scripts/coordinator-backlog-rank.mjs');
-const FORECASTER = resolve(__dirname, '../../scripts/coordinator-capacity-forecast.mjs');
+// SD-LEO-INFRA-PERSIST-BELT-CAPACITY-001: REPOINTED, not relaxed. The forecaster's belt build —
+// the exclusion call and the SELECT that feeds it — moved verbatim into scripts/lib/capacity-inputs.mjs
+// so the drive-report sweep could share ONE derivation instead of growing a second one. This guard
+// exists to catch call-site DELETION, and the call site still exists; pointing it at the file that
+// now holds the code keeps it doing that. Loosening the pattern instead (or dropping the assertion
+// because "it moved") would retire a guard over a file move and leave the deletion undetected.
+const FORECASTER = resolve(__dirname, '../../scripts/lib/capacity-inputs.mjs');
 
 describe('isFixtureSd — fixture inclusion', () => {
   it('excludes the witnessed epoch-stamped UAT fixture keys (the b5f21465 gap)', () => {
@@ -240,7 +246,9 @@ describe('production wiring guards (catch call-site deletion)', () => {
   });
 
   it('the forecaster imports and applies the belt exclusion', () => {
-    expect(forecasterSrc).toMatch(/from '\.\.\/lib\/coordinator\/sd-exclusion\.mjs'/);
+    // The relative depth is allowed to vary (the belt build now sits one directory deeper); the
+    // MODULE and the CALL are what this guard is about, and both are still asserted exactly.
+    expect(forecasterSrc).toMatch(/from '(\.\.\/)+lib\/coordinator\/sd-exclusion\.mjs'/);
     expect(forecasterSrc).toContain('isExcludedFromBelt(d)');
   });
 
