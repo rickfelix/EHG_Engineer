@@ -267,17 +267,48 @@ export async function runPostLaunchDrivers({ supabase, journal, ventureId, clock
   }
 }
 
+/**
+ * §H5.6 names the ghost-venture scheduler class as a STANDING check — it must run even on a leg
+ * that never wrote to these tables (the spec's cited harm is 35 stale rows left by OTHER cancelled
+ * ventures). It is unioned into the journal-derived list, never a substitute for it.
+ */
+export const SCHEDULER_FENCE_TABLES = Object.freeze(['eva_scheduler_queue', 'eva_scheduler_metrics']);
+
 /** §H6 containment sweep (run-level; teardown is the separate explicit step). */
 export async function containmentSweep({ supabase, journal, runId, ventureId, advancePolicy = 'real-gates' }) {
-  // Fence 6: ghost-venture scheduler residue must be zero DURING the run too.
-  for (const table of ['eva_scheduler_queue', 'eva_scheduler_metrics']) {
+  // QF-20260807-269: this was the hard-coded literal ['eva_scheduler_queue',
+  // 'eva_scheduler_metrics'], copied from the §H5.6 fence TEXT rather than derived from what the
+  // run actually did. §H6 requires the opposite — the assertion list is GENERATED from the
+  // journal's touched-tables set.
+  //
+  // The hand-coded list produced an exactly INVERTED guard, measured on s2026-alpha4-0807: it
+  // asserted zero rows for those two tables (which appear in NO entry's touched_tables, so the
+  // assertions were vacuous) while asserting NOTHING about the four tables the run demonstrably
+  // wrote — ventures=1, venture_stage_work=20, venture_artifacts=36, system_events=2. The sweep
+  // printed "containment complete" with 59 rows of fixture residue in tables it never examined.
+  //
+  // 1-REP: the fence-text literal is DELETED, not kept beside the derived list. Keeping both
+  // recreates the drift the instant a run touches a table the fence text never named — exactly
+  // what the acceptance test exercises. SCHEDULER_FENCE_TABLES survives ONLY because §H5.6 makes
+  // the ghost-venture class a STANDING check that must run even on a leg that never wrote there;
+  // it is unioned in, and it is not the source of truth.
+  const tables = [...new Set([...SCHEDULER_FENCE_TABLES, ...journal.touchedTables()])];
+  for (const table of tables) {
     const { count, error } = await supabase.from(table).select('*', { count: 'exact', head: true }).eq('venture_id', ventureId);
     if (error) {
       journal.finding('NO_DATA_GAUGE', `containment: ${table} unverifiable: ${error.message}`, { table });
     } else if ((count ?? 0) > 0) {
       journal.finding('RESIDUE', `containment: ${count} ${table} row(s) reference the fixture MID-RUN (ghost-venture class)`, { table, count });
     } else {
-      journal.append({ kind: 'fence_assertion', event: `containment: zero ${table} rows for fixture`, detail: { table } });
+      // detail.count records the MEASUREMENT, not just the table name. Without it a real
+      // zero-row query is indistinguishable from a hard-coded pass-through log line — the
+      // second half of the same s2026-alpha4-0807 finding. detail.source says WHY the table
+      // was checked, so a reader can tell a derived assertion from the standing fence.
+      journal.append({
+        kind: 'fence_assertion',
+        event: `containment: zero ${table} rows for fixture`,
+        detail: { table, count: count ?? 0, source: SCHEDULER_FENCE_TABLES.includes(table) ? 'h5.6_standing_fence' : 'journal_touched_tables' },
+      });
     }
   }
   // Enumerated divergences the run exercises are journaled up-front for the diff auditor.
