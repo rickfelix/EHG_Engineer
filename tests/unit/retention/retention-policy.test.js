@@ -15,7 +15,7 @@ const __dirname = dirname(fileURLToPath(import.meta.url));
 const REPO_ROOT = resolve(__dirname, '../../../');
 
 describe('policy registry (TS-1)', () => {
-  it('registers all 12 unbounded tables with the VERIFIED timestamp columns', () => {
+  it('registers all 13 unbounded tables with the VERIFIED timestamp columns', () => {
     const m = Object.fromEntries(RETENTION_POLICIES.map((p) => [p.table, p.timestampColumn]));
     expect(m).toEqual({
       workflow_trace_log: 'created_at',
@@ -38,6 +38,12 @@ describe('policy registry (TS-1)', () => {
       // per sample and would grow forever; keyed on created_at (insert time) rather than
       // fetched_at, which is derived from an upstream value.
       account_usage_snapshots: 'created_at',
+      // SD-LEO-INFRA-PERSIST-BELT-CAPACITY-001: belt_capacity_verdicts takes one row per
+      // capacity-forecast tick (every 10 min, ~52,500/yr) and exists to be queried over time —
+      // a trend table with no reaper is the archetypal slow leak. Keyed on recorded_at, which is
+      // DATABASE-stamped (DEFAULT now(), deliberately never sent by the writer), so it is exactly
+      // the kind of column this registry's header asks for: one no upstream value can influence.
+      belt_capacity_verdicts: 'recorded_at',
     });
   });
 
