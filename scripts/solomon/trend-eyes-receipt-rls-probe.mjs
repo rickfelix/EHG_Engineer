@@ -34,6 +34,13 @@ const BASELINE_FILE = '.artifacts/receipt-rls-baseline.json';
 const RECEIPT_DIMENSION = 'trend_eyes_sweep_receipt';
 const SYNTHETIC_MARKER = 'RLS_PROBE_SYNTHETIC_DELETE_ME';
 
+// MODULE-SCOPED so the exit happens AFTER `finally` has deleted the seed, and outside main().
+// A `return` inside the try runs finally and then leaves main() entirely — so a trailing
+// `process.exit(exitCode)` at the end of main() is unreachable on exactly the failure paths that
+// need it. Observed live: a FAILED verify exited 0. A gate whose failure exits 0 is worse than no
+// gate, because every caller reads it as a pass.
+let exitCode = 0;
+
 /** Mint an HS256 `authenticated` JWT. No dependency — jsonwebtoken is not installed here. */
 function mintAuthenticatedJwt(secret, ttlSeconds = 300) {
   const b64 = (o) => Buffer.from(JSON.stringify(o)).toString('base64url');
@@ -76,6 +83,15 @@ async function main() {
   // apikey stays the anon key; the Authorization bearer is what selects the `authenticated` role.
   const authed = createClient(url, anonKey, { global: { headers: { Authorization: `Bearer ${token}` } } });
 
+  // EXIT CODE IS SET, NEVER CALLED, inside the try.
+  //
+  // The first version called process.exit() directly on the failure paths. process.exit terminates
+  // immediately and the `finally` NEVER RUNS — so the probe leaked its synthetic receipt row
+  // precisely when it FAILED, which is the worst possible time. Observed live: two orphaned seeds
+  // accumulated across two failing runs, and the second run then read "2 receipt rows visible" and
+  // partly measured its own litter. A leaked synthetic receipt is not merely untidy either: the
+  // liveness predicate keys on the presence and age of a receipt row, so a stray seed makes a sweep
+  // that has never run look alive. Set the code, let finally delete the seed, exit afterwards.
   let seedId = null;
   try {
     seedId = await seedSyntheticReceipt(svc);
@@ -84,14 +100,21 @@ async function main() {
       .select('id', { count: 'exact', head: true }).eq('dimension', RECEIPT_DIMENSION);
     const others = await authed.from('codebase_health_snapshots')
       .select('id', { count: 'exact', head: true }).neq('dimension', RECEIPT_DIMENSION);
+    // SAME-INSTANT CONTROL, taken as close in time to the authenticated read as possible.
+    // See the note on the over-broad arm below for why this replaced a baseline comparison.
+    const othersSvc = await svc.from('codebase_health_snapshots')
+      .select('id', { count: 'exact', head: true }).neq('dimension', RECEIPT_DIMENSION);
     if (seen.error) throw new Error(`authenticated receipt read failed: ${seen.error.message}`);
     if (others.error) throw new Error(`authenticated non-receipt read failed: ${others.error.message}`);
+    if (othersSvc.error) throw new Error(`service-role non-receipt read failed: ${othersSvc.error.message}`);
 
     const receiptVisible = seen.count ?? 0;
     const nonReceiptVisible = others.count ?? 0;
+    const nonReceiptTruth = othersSvc.count ?? 0;
     console.log(`mode=${mode} seeded=${seedId}`);
     console.log(`  receipt rows visible to AUTHENTICATED: ${receiptVisible}`);
     console.log(`  non-receipt rows visible to AUTHENTICATED: ${nonReceiptVisible}`);
+    console.log(`  non-receipt rows by SERVICE-ROLE at the same instant: ${nonReceiptTruth}`);
 
     if (mode === 'baseline') {
       // POSITIVE CONTROL. If the seeded row is NOT visible pre-apply, the probe cannot see its own
@@ -100,7 +123,8 @@ async function main() {
       if (receiptVisible < 1) {
         console.error('\nBASELINE FAILED: the authenticated role cannot see the seeded receipt even BEFORE the policy.');
         console.error('The probe cannot detect its own subject, so a post-apply 0 would prove nothing. Fix the probe, not the gate.');
-        process.exit(3);
+        exitCode = 3;
+        return;
       }
       fs.mkdirSync('.artifacts', { recursive: true });
       fs.writeFileSync(BASELINE_FILE, JSON.stringify({
@@ -118,21 +142,37 @@ async function main() {
     if (!fs.existsSync(BASELINE_FILE)) {
       console.error(`\nVERIFY REFUSED: ${BASELINE_FILE} is missing. Without the pre-apply baseline the`);
       console.error('non-receipt arm has nothing to compare against and the receipt arm has no positive control.');
-      process.exit(3);
+      exitCode = 3;
+      return;
     }
     const baseline = JSON.parse(fs.readFileSync(BASELINE_FILE, 'utf8'));
     const failures = [];
     if (receiptVisible !== 0) {
       failures.push(`receipt rows STILL VISIBLE to authenticated (${receiptVisible}) — the policy is not in effect`);
     }
-    if (nonReceiptVisible !== baseline.non_receipt_visible_pre_apply) {
-      failures.push(`non-receipt visibility CHANGED (${baseline.non_receipt_visible_pre_apply} -> ${nonReceiptVisible}) — the policy is OVER-BROAD and closed rows it should not have`);
+    // OVER-BROAD ARM — compared SAME-INSTANT against service-role, NOT against the pre-apply
+    // baseline count.
+    //
+    // The first version of this arm compared nonReceiptVisible to the baseline number and failed
+    // the moment they differed. That was wrong twice over, and it fired on its first real run:
+    // codebase_health_snapshots is a LIVE table that other processes write to, so it had grown
+    // 3965 -> 3966 between the two readings — a spurious FAIL caused by an unrelated insert. Worse,
+    // it reported that INCREASE as "the policy is OVER-BROAD and closed rows it should not have",
+    // when over-broad means visibility goes DOWN. A confidently-wrong diagnosis at the final gate.
+    //
+    // Comparing the two ROLES at the same instant removes the time axis entirely: whatever the
+    // table's size right now, an authenticated client must see exactly the same NON-receipt rows a
+    // service-role client sees. Any shortfall is the policy reaching beyond its dimension.
+    if (nonReceiptVisible !== nonReceiptTruth) {
+      const verb = nonReceiptVisible < nonReceiptTruth ? 'OVER-BROAD — it hid rows outside its dimension' : 'INCOHERENT — authenticated sees MORE than service-role, which should be impossible';
+      failures.push(`non-receipt visibility differs from ground truth at the same instant (authenticated ${nonReceiptVisible} vs service-role ${nonReceiptTruth}) — the policy is ${verb}`);
     }
-    console.log(`  baseline non-receipt was: ${baseline.non_receipt_visible_pre_apply}`);
+    console.log(`  (baseline receipt-visible pre-apply was ${baseline.receipt_visible_pre_apply} — the positive control)`);
     if (failures.length) {
       console.error('\nVERIFY FAILED:');
       for (const f of failures) console.error(`  - ${f}`);
-      process.exit(1);
+      exitCode = 1;
+      return;
     }
     console.log('\nVERIFY PASS — both arms green:');
     console.log('  receipt dimension hidden from authenticated (and the baseline proved it was visible before)');
@@ -141,8 +181,11 @@ async function main() {
     if (seedId) {
       const { error } = await svc.from('codebase_health_snapshots').delete().eq('id', seedId);
       console.log(error ? `  WARNING: seed ${seedId} NOT deleted: ${error.message}` : `  seed ${seedId} deleted`);
+      if (error) exitCode = Math.max(exitCode, 2); // a leaked seed is itself a failure to report
     }
   }
 }
 
-main().catch((e) => { console.error(`probe failed: ${e.message}`); process.exit(2); });
+main()
+  .then(() => { if (exitCode) process.exit(exitCode); })
+  .catch((e) => { console.error(`probe failed: ${e.message}`); process.exit(2); });
