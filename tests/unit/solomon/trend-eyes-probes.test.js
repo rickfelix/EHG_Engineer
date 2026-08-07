@@ -39,6 +39,7 @@ import {
   toProbeFacts,
   writeCandidates,
   MAX_CANDIDATES_PER_CLASS,
+  T3_DESCOPE,
   resolveT3Facts,
 } from '../../../scripts/solomon/trend-eyes-sweep.mjs';
 
@@ -696,6 +697,28 @@ describe('writeCandidates — one row per finding, a cap, and truncation that an
       { trigger: 't3_lesson_disjunction_drift', verdict: VERDICT.FLAT, detail: 'stable', evidence: null },
     ], { runAt: '2026-08-07T00:00:00Z', dryRun: true });
     expect(written).toHaveLength(0);
+  });
+});
+
+describe('T3 descope marker — the return trigger must not fire on a key that carries nothing', () => {
+  it('is descoped with a reason and a named return trigger', () => {
+    expect(T3_DESCOPE.descoped).toBe(true);
+    expect(T3_DESCOPE.return_trigger).toBeTruthy();
+    expect(T3_DESCOPE.ruled_by).toMatch(/Solomon/);
+  });
+
+  // THE CORRECTION THAT MATTERS. Measured: all 1,693 issue_patterns rows carry
+  // source_feedback_ids as a NON-NULL EMPTY ARRAY. So `IS NOT NULL` returns 1,693 of 1,693 and a
+  // reader concludes the provenance key is fully populated. A return trigger phrased on non-null
+  // would fire immediately, re-admitting T3 against a join key that has never held a value —
+  // reinstating exactly the structurally-zero ratio the descope exists to avoid.
+  it('the trigger tests NON-EMPTY, never non-null', () => {
+    expect(T3_DESCOPE.return_trigger).toMatch(/NON-EMPTY/i);
+    expect(T3_DESCOPE.return_trigger).toMatch(/not.*non-null/i);
+  });
+
+  it('records that coverage was measured at zero, not assumed', () => {
+    expect(T3_DESCOPE.reason).toMatch(/0\.00%|empty array/i);
   });
 });
 

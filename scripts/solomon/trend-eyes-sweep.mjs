@@ -33,6 +33,29 @@ export const SMS_WINDOW_HOURS = 168;
 export const LESSON_WINDOW_DAYS = 120;
 /** Exploration floor: the receipt always lists this many raw clusters, even below threshold. */
 export const EXPLORATION_TOP_N = 5;
+
+/**
+ * T3 is DESCOPED FROM V1, with a named return trigger — Solomon's ruling, relayed via Adam
+ * (a31ae727), after his counterfactual was measured rather than assumed.
+ *
+ * THE MEASUREMENT THAT PICKED THIS BRANCH. Solomon asked whether issue_patterns.source_feedback_ids
+ * genuinely chains to lane rows at >0 coverage, preferring a NARROWED T3 printing its coverage
+ * fraction over a descope if it did. Measured on the COMPLETE issue_patterns population (407 rows
+ * in the 60-day window against an exact count of 407, and 1,693 all-time): the chain is empty.
+ * Coverage is 0.00%.
+ *
+ * AND IT IS WORSE THAN LOW COVERAGE, which is what makes the descope right rather than merely safe:
+ * all 1,693 rows carry source_feedback_ids as a NON-NULL EMPTY ARRAY. The column exists and has
+ * never held a value. A reader checking `source_feedback_ids IS NOT NULL` gets 1,693 of 1,693 and
+ * concludes the provenance key is fully populated — so the return trigger below must test for
+ * NON-EMPTY, never for non-null, or it fires immediately and wrongly on a key that carries nothing.
+ */
+export const T3_DESCOPE = Object.freeze({
+  descoped: true,
+  reason: 'issue_patterns.source_feedback_ids is a non-null EMPTY array on all 1,693 rows (0.00% chain coverage) — the provenance key has no writer, so the disjunction ratio has no join',
+  return_trigger: 'the lane-to-pattern promotion SD ships its provenance key AND issue_patterns.source_feedback_ids carries NON-EMPTY arrays (test non-empty, NOT non-null — non-null is already 100% and would fire this trigger falsely)',
+  ruled_by: 'Solomon via Adam a31ae727',
+});
 /**
  * Hard cap on candidate rows per run, per trend class.
  *
@@ -343,6 +366,10 @@ async function writeReceipt(supabase, { verdicts, candidates, truncated, explora
     blindness: blindness && blindness.length ? blindness : null,
     // What the per-class cap dropped, if anything. A silent cap reads as "that's all there was".
     truncated: truncated || null,
+    // V1 ships T1+T2. T3 is descoped WITH ITS RETURN TRIGGER printed on every receipt, so the
+    // descope stays visible as a standing state rather than decaying into an unexplained silence
+    // that a later reader mistakes for a class that simply never fires.
+    t3_descoped: T3_DESCOPE,
   }];
   if (dryRun) return { dryRun: true, findings };
   const { error } = await supabase.from('codebase_health_snapshots').insert({
