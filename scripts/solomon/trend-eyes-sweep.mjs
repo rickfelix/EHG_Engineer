@@ -283,7 +283,9 @@ export async function resolveT3Facts(supabase, { now, days = 14 } = {}) {
 }
 
 /** Write one candidate per fired trend. Self-describing: metadata carries the reproducing query. */
-async function writeCandidates(supabase, verdicts, { runAt, dryRun }) {
+// Exported for test. It was private, and its entire purpose — one row per finding, a per-class cap,
+// and truncation that announces itself — went unguarded through two review rounds as a result.
+export async function writeCandidates(supabase, verdicts, { runAt, dryRun }) {
   const written = [];
   const truncated = [];
   for (const v of verdicts) {

@@ -37,6 +37,8 @@ import {
   resolveT1Facts,
   resolveT2Facts,
   toProbeFacts,
+  writeCandidates,
+  MAX_CANDIDATES_PER_CLASS,
   resolveT3Facts,
 } from '../../../scripts/solomon/trend-eyes-sweep.mjs';
 
@@ -627,6 +629,73 @@ describe('questionClass against the REAL corpus, not fixtures I invented', () =>
     const cluster = out.clusters.find((c) => c.questionClass === 'sms-coverage');
     expect(cluster.occurrences).toHaveLength(2);
     expect(out.coverage.automated).toBe(1);
+  });
+});
+
+describe('writeCandidates — one row per finding, a cap, and truncation that announces itself', () => {
+  const fire = (trigger, n) => ({
+    trigger, verdict: VERDICT.FIRE, detail: `${n} finding(s)`,
+    evidence: Array.from({ length: n }, (_, i) => ({ questionClass: `cls-${i}` })),
+  });
+
+  // Dry-run must be genuinely inert. This is the mode the workflow exposes to a human operator, so
+  // a dry-run that writes is worse than no dry-run at all.
+  it('writes nothing in dry-run, but still reports what it WOULD have written', async () => {
+    const { written, truncated } = await writeCandidates(null, [fire('t1_repeat_question', 2)], { runAt: '2026-08-07T00:00:00Z', dryRun: true });
+    expect(written).toHaveLength(2);
+    expect(written.every((w) => w.dryRun)).toBe(true);
+    expect(truncated).toBeNull();
+  });
+
+  // emit-feedback hashes today::description::dedup_key, so a shared key collapses same-day findings
+  // of one class into ONE row. Two real findings would silently become one, with every gauge green.
+  // THE FIXTURE MATTERS MORE THAN THE ASSERTION HERE. A first version of this test gave each
+  // finding a distinct questionClass, so the keys differed with or without the index suffix and the
+  // mutation that removes the suffix survived untouched. The collapse case is evidence that carries
+  // NO class key — T3's series evidence falls back to the literal 'series', so the index is the
+  // only thing separating two same-day findings. Same-day collapse is silent: emit-feedback hashes
+  // today::description::dedup_key, so the second finding would simply never become a row.
+  it('gives same-day findings with no class key DISTINCT dedup_keys', async () => {
+    const seriesFindings = {
+      trigger: 't3_lesson_disjunction_drift', verdict: VERDICT.FIRE, detail: 'two drifts',
+      evidence: [{ delta: -0.4 }, { delta: 0.6 }],
+    };
+    const { written } = await writeCandidates(null, [seriesFindings], { runAt: '2026-08-07T00:00:00Z', dryRun: true });
+    const keys = written.map((w) => w.dedupKey);
+    expect(keys).toHaveLength(2);
+    expect(new Set(keys).size).toBe(2);
+    expect(keys.every((k) => k.includes('::series::'))).toBe(true);
+  });
+
+  it('keeps distinct classes distinct too', async () => {
+    const { written } = await writeCandidates(null, [fire('t1_repeat_question', 3)], { runAt: '2026-08-07T00:00:00Z', dryRun: true });
+    expect(new Set(written.map((w) => w.dedupKey)).size).toBe(3);
+  });
+
+  // T2 fans out one row per distinct classKey over a 120-day window with nothing bounding it, and
+  // `feedback` is a shared table already carrying ~19k rows.
+  it('caps per class at MAX_CANDIDATES_PER_CLASS', async () => {
+    const { written } = await writeCandidates(null, [fire('t2_recurrence_after_fix', MAX_CANDIDATES_PER_CLASS + 5)], { runAt: '2026-08-07T00:00:00Z', dryRun: true });
+    expect(written).toHaveLength(MAX_CANDIDATES_PER_CLASS);
+  });
+
+  // A cap that does not announce itself makes a truncated run indistinguishable from a small one —
+  // the same silent-loss shape as every other defect on this SD.
+  it('RECORDS what the cap dropped rather than truncating silently', async () => {
+    const { truncated } = await writeCandidates(null, [fire('t2_recurrence_after_fix', MAX_CANDIDATES_PER_CLASS + 5)], { runAt: '2026-08-07T00:00:00Z', dryRun: true });
+    expect(truncated).toHaveLength(1);
+    expect(truncated[0]).toMatchObject({ trigger: 't2_recurrence_after_fix', found: MAX_CANDIDATES_PER_CLASS + 5, written: MAX_CANDIDATES_PER_CLASS });
+  });
+
+  // UNKNOWN IS NOT A FINDING. If a blind class emitted candidates, the honest "I could not look"
+  // would become noise in the lane Solomon grades — turning the fix for the false all-clear into a
+  // different way of misreporting.
+  it('emits candidates ONLY for FIRE — never for UNKNOWN or FLAT', async () => {
+    const { written } = await writeCandidates(null, [
+      { trigger: 't2_recurrence_after_fix', verdict: VERDICT.UNKNOWN, detail: 'could not look', evidence: null },
+      { trigger: 't3_lesson_disjunction_drift', verdict: VERDICT.FLAT, detail: 'stable', evidence: null },
+    ], { runAt: '2026-08-07T00:00:00Z', dryRun: true });
+    expect(written).toHaveLength(0);
   });
 });
 
