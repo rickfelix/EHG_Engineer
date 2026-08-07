@@ -30,6 +30,13 @@ import {
 } from '../../../lib/solomon/trend-eyes-liveness.js';
 import { classifyRequiresInvocation } from '../../../lib/invocation-detector/requires-invocation.js';
 import { MACHINE_TELEMETRY_CATEGORIES } from '../../../lib/governance/feedback-audience.js';
+import {
+  CANDIDATE_CATEGORY,
+  questionClass,
+  isAutomatedMessage,
+  resolveT2Facts,
+  resolveT3Facts,
+} from '../../../scripts/solomon/trend-eyes-sweep.mjs';
 
 describe('T1 REPEAT-QUESTION', () => {
   // TS-1 POSITIVE — the founding specimen, verbatim from the SD: the SMS-coverage question asked
@@ -283,8 +290,17 @@ describe('TS-11 candidate category must not be force-aggregated', () => {
   // dedup hash is always `${today}::telemetry::${category}`, collapsing every row of that category
   // into ONE PER DAY and ignoring the caller's own dedup_key. For a candidate writer that is
   // silent data loss: findings would vanish with every gauge still green.
-  it('solomon_trend_candidate is NOT a machine-telemetry category', () => {
-    expect(MACHINE_TELEMETRY_CATEGORIES).not.toContain('solomon_trend_candidate');
+  //
+  // THE CONSTANT IS IMPORTED, NOT RETYPED. An earlier version of this test hardcoded the literal
+  // 'solomon_trend_candidate', which meant the writer could be repointed at an aggregating category
+  // and this test — the very test that exists to prevent that — would still pass. Asserting against
+  // the value the writer actually uses is what makes the guard real. (Surviving mutant M23.)
+  it('the category the writer actually uses is NOT a machine-telemetry category', () => {
+    expect(MACHINE_TELEMETRY_CATEGORIES).not.toContain(CANDIDATE_CATEGORY);
+  });
+
+  it('the candidate category is still the expected value', () => {
+    expect(CANDIDATE_CATEGORY).toBe('solomon_trend_candidate');
   });
 });
 
@@ -310,5 +326,203 @@ describe('TS-12 WIRING REGRESSION', () => {
 
   it('the receipt dimension is a shared constant, not a duplicated literal', () => {
     expect(TREND_EYES_RECEIPT_DIMENSION).toBe('trend_eyes_sweep_receipt');
+  });
+});
+
+describe('questionClass — the classifier that silently dropped 95.9% of the corpus', () => {
+  // Measured against the full population of sms_relay_staging (342 rows, all fetched): the first
+  // cut classified 328 to null, and assigned sms-coverage to ZERO of the 97 rows mentioning
+  // sms/text/message. Two causes, both fixed and both pinned below: the anchors required
+  // subject-before-predicate ORDER, and \btext\b/\bworker\b rejected the plural forms.
+  it('matches regardless of subject/predicate ORDER', () => {
+    expect(questionClass('Are we missing any texts?')).toBe('sms-coverage');
+    expect(questionClass('Are texts being missed?')).toBe('sms-coverage');
+  });
+
+  it('matches PLURAL forms', () => {
+    expect(questionClass('did the texts get through')).toBe('sms-coverage');
+    expect(questionClass('are the workers still alive')).toBe('fleet-liveness');
+    expect(questionClass('are the belts empty')).toBe('belt-depth');
+  });
+
+  it('still returns null for genuinely unrelated content rather than over-matching', () => {
+    expect(questionClass('thanks, looks good')).toBeNull();
+    expect(questionClass('')).toBeNull();
+    expect(questionClass(null)).toBeNull();
+  });
+
+  // 73 rows across 12 distinct days on the inbound lane are the 80-minute watchdog, and the whole
+  // lane shares one from_phone so nothing upstream separates it from the chairman. Admitting it
+  // would give T1 a guaranteed daily false positive built entirely from a robot repeating itself.
+  it('excludes the automated watchdog from the chairman corpus', () => {
+    expect(isAutomatedMessage('Are you still there?')).toBe(true);
+    expect(isAutomatedMessage('are we missing any texts?')).toBe(false);
+  });
+});
+
+describe('TS-3 resolver — the retention_archive UNION is real, not assumed', () => {
+  /** Records every table queried, so the union can be asserted rather than trusted. */
+  function recordingSupabase(byTable) {
+    const queried = [];
+    return {
+      queried,
+      from(table) {
+        queried.push(table);
+        const rows = byTable[table] || [];
+        const chain = {
+          select: () => chain,
+          eq: () => chain,
+          gte: () => chain,
+          then: (resolve) => resolve({ data: rows, error: null }),
+        };
+        return chain;
+      },
+    };
+  }
+
+  it('queries BOTH session_coordination and retention_archive', async () => {
+    const sb = recordingSupabase({ session_coordination: [], retention_archive: [] });
+    const out = await resolveT2Facts(sb, { now: new Date('2026-08-07T12:00:00Z') });
+    expect(sb.queried).toContain('session_coordination');
+    expect(sb.queried).toContain('retention_archive');
+    expect(out.queried).toEqual(['session_coordination', 'retention_archive']);
+  });
+
+  // The archived row nests the original under row_data — retention_archive has NO `payload` column
+  // (verified live: id, source_table, source_id, row_data, row_timestamp, archived_at, archived_by,
+  // run_id). Selecting the phantom name returned 42703 and threw before anything was written.
+  it('reads the archived payload from row_data, and detects a recurrence carried ONLY by the archive', async () => {
+    const sb = recordingSupabase({
+      session_coordination: [
+        { id: 1, created_at: '2026-08-05T10:00:00Z', payload: { lesson_class: 'pointer-writer', fix_shipped_at: '2026-06-01T00:00:00Z' } },
+      ],
+      retention_archive: [
+        { id: 2, source_table: 'session_coordination', archived_at: '2026-05-02T10:00:00Z', row_data: { payload: { lesson_class: 'pointer-writer', fix_shipped_at: '2026-06-01T00:00:00Z' } } },
+      ],
+    });
+    const out = await resolveT2Facts(sb, { now: new Date('2026-08-07T12:00:00Z') });
+    expect(out.blind).toBeNull();
+    const cls = out.classes.find((c) => c.classKey === 'pointer-writer');
+    expect(cls.occurrences.map((o) => o.source).sort()).toEqual(['retention_archive', 'session_coordination']);
+  });
+
+  // THE FALSE ALL-CLEAR. fix_shipped_at appears in 0 of 3,786 live rows, so a corpus that cannot
+  // answer "did it recur AFTER the fix" must reach the probe as UNKNOWN. Returning [] here would
+  // have produced FLAT — "no class recurred after its fix" — from an absent field rather than an
+  // observation, which is exactly the lie this instrument exists to catch in others.
+  // The OTHER blindness branch. Found by mutation: disabling `classedRows === 0` left the whole
+  // suite green, because the only blindness test exercised the fix_shipped_at branch. Two reasons
+  // to be blind need two tests — a single one lets its sibling rot unnoticed.
+  it('returns null (-> UNKNOWN) when no row carries a class key at all', async () => {
+    const sb = recordingSupabase({
+      session_coordination: [{ id: 1, created_at: '2026-08-05T10:00:00Z', payload: { unrelated: true } }],
+      retention_archive: [],
+    });
+    const out = await resolveT2Facts(sb, { now: new Date('2026-08-07T12:00:00Z') });
+    expect(out.classes).toBeNull();
+    expect(out.blind).toMatch(/lesson_class or signal_type/);
+    expect(probeRecurrenceAfterFix({ classes: out.classes ?? undefined }).verdict).toBe(VERDICT.UNKNOWN);
+  });
+
+  it('returns null (-> UNKNOWN), never [], when no row carries a fix timestamp', async () => {
+    const sb = recordingSupabase({
+      session_coordination: [
+        { id: 1, created_at: '2026-08-05T10:00:00Z', payload: { lesson_class: 'pointer-writer' } },
+      ],
+      retention_archive: [],
+    });
+    const out = await resolveT2Facts(sb, { now: new Date('2026-08-07T12:00:00Z') });
+    expect(out.classes).toBeNull();
+    expect(out.blind).toMatch(/fix_shipped_at/);
+    expect(probeRecurrenceAfterFix({ classes: out.classes ?? undefined }).verdict).toBe(VERDICT.UNKNOWN);
+  });
+});
+
+describe('T3 resolver — distinct counting, and a span guard that is reachable in production', () => {
+  function sbWith(patterns, lane) {
+    return {
+      from(table) {
+        const rows = table === 'issue_patterns' ? patterns : lane;
+        const chain = { select: () => chain, eq: () => chain, gte: () => chain, then: (r) => r({ data: rows, error: null }) };
+        return chain;
+      },
+    };
+  }
+
+  // Counting ROWS rather than DISTINCT pattern_ids let one lane class matched by three
+  // issue_patterns rows contribute 3 to a numerator whose denominator counts it once — emitting
+  // 1.000 where the truth was 0.5.
+  it('counts DISTINCT pattern_ids, so duplicate rows cannot inflate the numerator', async () => {
+    const at = '2026-08-06T10:00:00Z';
+    const out = await resolveT3Facts(
+      sbWith(
+        [{ id: 1, pattern_id: 'PAT-X', created_at: at }, { id: 2, pattern_id: 'PAT-X', created_at: at }, { id: 3, pattern_id: 'PAT-X', created_at: at }],
+        [{ id: 1, created_at: at, payload: { lesson_class: 'PAT-X' } }, { id: 2, created_at: at, payload: { lesson_class: 'PAT-Y' } }],
+      ),
+      { now: new Date('2026-08-07T00:00:00Z'), days: 3 },
+    );
+    const r = out.readings.find((x) => x.laneNamed === 2);
+    expect(r.reachedPatterns).toBe(1); // not 3
+  });
+
+  // The clamp that made the guard dead code is gone, so a genuinely mismatched extent now reaches
+  // the probe and is refused there. A guard only reachable from a test fixture guards nothing.
+  it('emits an out-of-range numerator to the probe rather than clamping it away', () => {
+    const v = probeLessonDisjunctionDrift({
+      readings: [
+        { windowStart: '2026-07-01T00:00:00Z', windowEnd: '2026-07-01T23:59:59Z', laneNamed: 10, reachedPatterns: 8 },
+        { windowStart: '2026-07-02T00:00:00Z', windowEnd: '2026-07-02T23:59:59Z', laneNamed: 10, reachedPatterns: 8 },
+        { windowStart: '2026-07-03T00:00:00Z', windowEnd: '2026-07-03T23:59:59Z', laneNamed: 2, reachedPatterns: 5 },
+      ],
+    });
+    expect(v.verdict).toBe(VERDICT.UNKNOWN);
+  });
+
+  it('returns null (-> UNKNOWN), never [], when no window has a denominator', async () => {
+    const out = await resolveT3Facts(sbWith([], []), { now: new Date('2026-08-07T00:00:00Z'), days: 3 });
+    expect(out.readings).toBeNull();
+    expect(probeLessonDisjunctionDrift({ readings: out.readings ?? undefined }).verdict).toBe(VERDICT.UNKNOWN);
+  });
+});
+
+describe('surviving-mutant kills', () => {
+  // M9: with Math.abs(delta) mutated to (-delta) the detector becomes downward-only, and the sole
+  // T3 positive was a FALLING ratio — so a one-sided detector shipped green.
+  it('T3 fires on UPWARD drift, not only downward', () => {
+    const v = probeLessonDisjunctionDrift({
+      readings: [
+        { windowStart: '2026-07-01T00:00:00Z', windowEnd: '2026-07-01T23:59:59Z', laneNamed: 10, reachedPatterns: 1 },
+        { windowStart: '2026-07-02T00:00:00Z', windowEnd: '2026-07-02T23:59:59Z', laneNamed: 10, reachedPatterns: 1 },
+        { windowStart: '2026-07-03T00:00:00Z', windowEnd: '2026-07-03T23:59:59Z', laneNamed: 10, reachedPatterns: 9 },
+      ],
+    });
+    expect(v.verdict).toBe(VERDICT.FIRE);
+    expect(v.evidence.delta).toBeGreaterThan(0);
+  });
+
+  // M3: the positive spanned 43.65h and the negative 3h, so ANY threshold in (3h, 43.65h] survived
+  // — T1's "across days, not one thread" semantic was pinned by nothing. These bracket 24h.
+  it('T1 threshold is pinned at 24h from both sides', () => {
+    const cluster = (hours) => ({
+      clusters: [{
+        questionClass: 'sms-coverage',
+        occurrences: [
+          { at: '2026-08-03T00:00:00Z', id: 'a' },
+          { at: new Date(Date.parse('2026-08-03T00:00:00Z') + hours * 3600000).toISOString(), id: 'b' },
+        ],
+      }],
+    });
+    expect(probeRepeatQuestion(cluster(23.5)).verdict).toBe(VERDICT.FLAT);
+    expect(probeRepeatQuestion(cluster(24.5)).verdict).toBe(VERDICT.FIRE);
+  });
+
+  // M21: a future-dated receipt yields a negative age, which fails `> threshold` and pinned the
+  // predicate to alarm:false for as long as the timestamp stayed ahead of the clock — silencing
+  // the one alarm that notices a dead sweep.
+  it('a future-dated receipt alarms rather than reading as fresh', () => {
+    const now = Date.parse('2026-08-07T12:00:00Z');
+    const r = checkTrendEyesLiveness('2026-09-01T00:00:00Z', now);
+    expect(r.alarm).toBe(true);
+    expect(r.reason).toMatch(/FUTURE/);
   });
 });

@@ -39,9 +39,6 @@ jobs:
   trend-eyes-sweep:
     runs-on: ubuntu-latest
     timeout-minutes: 10
-    env:
-      SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
-      SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
     steps:
       - uses: actions/checkout@v4
 
@@ -52,5 +49,11 @@ jobs:
 
       - run: npm ci --ignore-scripts
 
+      # Secrets are STEP-level, not job-level. This key is service-role and bypasses RLS, so
+      # checkout / setup-node / npm ci have no business seeing it — only the one step that talks
+      # to Supabase does. Mirrors solomon-judgment-expiry.yml:51-53.
       - name: Run Trend-Eyes sweep
+        env:
+          SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+          SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
         run: node scripts/solomon/trend-eyes-sweep.mjs ${{ inputs.dry_run && '--dry-run' || '' }}
