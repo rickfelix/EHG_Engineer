@@ -4,8 +4,8 @@
 **Database**: dedlbzhpgkmetvhbkyzq
 **Repository**: EHG_Engineer (this repository)
 **Purpose**: Strategic Directive management, PRD tracking, retrospectives, LEO Protocol configuration
-**Generated**: 2026-07-02T14:19:23.450Z
-**Rows**: 226
+**Generated**: 2026-08-01T20:27:50.592Z
+**Rows**: 658
 **RLS**: Enabled (2 policies)
 
 ⚠️ **This is a REFERENCE document** - Query database directly for validation
@@ -14,7 +14,7 @@
 
 ---
 
-## Columns (28 total)
+## Columns (36 total)
 
 | Column | Type | Nullable | Default | Description |
 |--------|------|----------|---------|-------------|
@@ -46,6 +46,14 @@
 | deleted_at | `timestamp with time zone` | YES | - | - |
 | decided_by_user_id | `uuid` | YES | - | auth.users.id of the chairman who approved/rejected. NULL for system/trigger writes (venture_monitor, telegram, agent paths). RLS still gates on existing fn_is_chairman() row-level policy. Added by SD-EHG-INFRA-CHAIRMAN-DECISIONS-USER-ID-001. |
 | approval_type | `USER-DEFINED` | YES | - | Discriminates AI-generated (chairman-reviewed) approvals from chairman-authored ones. Orthogonal to decision_type (which classifies decision context: stage_gate, gate_failure_escalation, review). NULL = legacy/unknown (rows pre-dating SD-ACTIVATE-S18-MARKETING-COPY-ORCH-001). |
+| sms_reply_token | `text` | YES | - | Single-use opaque nonce binding an outbound SMS question to its reply; unique so no two decisions can share a token |
+| sms_reply_token_expires_at | `timestamp with time zone` | YES | - | Token TTL — a reply after this time is rejected and logged as expired |
+| sms_reply_used_at | `timestamp with time zone` | YES | - | Stamped on first successful reply — enforces single-use (a replay of the same token after this is set is rejected) |
+| consequence_level | `text` | YES | - | Fail-closed LOW/MEDIUM/HIGH classification from lib/chairman/consequence-classifier.js; HIGH is never SMS-eligible |
+| amount_usd | `numeric` | YES | - | Structured spend amount for an SMS-channel spend-class decision (SD-LEO-FEAT-SMS-CHAIRMAN-DECISION-001-B FR-2). consumeSmsReply reads THIS, never the consequence-classifier regex. NULL on a spend-class decision => fail-closed to console (unknown amount). CALLER-POPULATION IS DEFERRED to a follow-up SD. |
+| undo_deadline | `timestamp with time zone` | YES | - | now()+UNDO_WINDOW for a spend-class reply; consumeSmsReply is non-actionable until now()>=undo_deadline (FR-3). |
+| undone_at | `timestamp with time zone` | YES | - | Set by an inbound UNDO (atomic conditional UPDATE) within the window; consumeSmsReply then returns undone, never executes (FR-3). |
+| consumed_at | `timestamp with time zone` | YES | - | Single-execution claim stamp set atomically by consumeSmsReply; a second consume is idempotent already-consumed (FR-1). |
 
 ## Constraints
 
@@ -58,9 +66,12 @@
 - `chairman_decisions_venture_id_fkey`: venture_id → ventures(id)
 
 ### Unique Constraints
-- `uq_chairman_decision_attempt`: UNIQUE (venture_id, lifecycle_stage, attempt_number)
+- `chairman_decisions_sms_reply_token_key`: UNIQUE (sms_reply_token)
+- `uq_chairman_decision_attempt`: UNIQUE (venture_id, lifecycle_stage, decision_type, attempt_number)
 
 ### Check Constraints
+- `chairman_decisions_amount_usd_check`: CHECK (((amount_usd IS NULL) OR (amount_usd >= (0)::numeric)))
+- `chairman_decisions_consequence_level_check`: CHECK ((consequence_level = ANY (ARRAY['low'::text, 'medium'::text, 'high'::text])))
 - `chairman_decisions_decision_check`: CHECK (((decision)::text = ANY (ARRAY['pass'::text, 'revise'::text, 'kill'::text, 'conditional_pass'::text, 'go'::text, 'conditional_go'::text, 'no_go'::text, 'complete'::text, 'continue'::text, 'blocked'::text, 'fail'::text, 'approve'::text, 'conditional'::text, 'reject'::text, 'release'::text, 'hold'::text, 'cancel'::text, 'no-go'::text, 'pivot'::text, 'expand'::text, 'sunset'::text, 'exit'::text, 'proceed'::text, 'fix'::text, 'pause'::text, 'override'::text, 'pending'::text, 'terminate'::text, 'review'::text, 'advisory'::text])))
 - `chairman_decisions_health_score_check`: CHECK (((health_score)::text = ANY ((ARRAY['green'::character varying, 'yellow'::character varying, 'red'::character varying])::text[])))
 - `chairman_decisions_recommendation_check`: CHECK (((recommendation)::text = ANY ((ARRAY['proceed'::character varying, 'pivot'::character varying, 'fix'::character varying, 'kill'::character varying, 'pause'::character varying])::text[])))
@@ -71,6 +82,10 @@
 - `chairman_decisions_pkey`
   ```sql
   CREATE UNIQUE INDEX chairman_decisions_pkey ON public.chairman_decisions USING btree (id)
+  ```
+- `chairman_decisions_sms_reply_token_key`
+  ```sql
+  CREATE UNIQUE INDEX chairman_decisions_sms_reply_token_key ON public.chairman_decisions USING btree (sms_reply_token)
   ```
 - `idx_cd_venture_user_created`
   ```sql
@@ -110,7 +125,7 @@
   ```
 - `idx_chairman_decisions_unique_pending`
   ```sql
-  CREATE UNIQUE INDEX idx_chairman_decisions_unique_pending ON public.chairman_decisions USING btree (venture_id, lifecycle_stage) WHERE (status = 'pending'::text)
+  CREATE UNIQUE INDEX idx_chairman_decisions_unique_pending ON public.chairman_decisions USING btree (venture_id, lifecycle_stage, decision_type) WHERE (status = 'pending'::text)
   ```
 - `idx_chairman_decisions_updated`
   ```sql
@@ -122,7 +137,7 @@
   ```
 - `uq_chairman_decision_attempt`
   ```sql
-  CREATE UNIQUE INDEX uq_chairman_decision_attempt ON public.chairman_decisions USING btree (venture_id, lifecycle_stage, attempt_number)
+  CREATE UNIQUE INDEX uq_chairman_decision_attempt ON public.chairman_decisions USING btree (venture_id, lifecycle_stage, decision_type, attempt_number)
   ```
 
 ## RLS Policies

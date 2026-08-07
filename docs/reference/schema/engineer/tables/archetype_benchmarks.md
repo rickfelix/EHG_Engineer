@@ -4,7 +4,7 @@
 **Database**: dedlbzhpgkmetvhbkyzq
 **Repository**: EHG_Engineer (this repository)
 **Purpose**: Strategic Directive management, PRD tracking, retrospectives, LEO Protocol configuration
-**Generated**: 2026-07-02T14:19:23.450Z
+**Generated**: 2026-08-01T20:27:50.592Z
 **Rows**: 17
 **RLS**: Enabled (2 policies)
 
@@ -45,9 +45,7 @@
 ### 1. archetype_benchmarks_admin (ALL)
 
 - **Roles**: {public}
-- **Using**: `(EXISTS ( SELECT 1
-   FROM auth.users
-  WHERE ((auth.uid() = users.id) AND ((users.raw_user_meta_data ->> 'role'::text) = ANY (ARRAY['admin'::text, 'chairman'::text])))))`
+- **Using**: `is_chairman_role()`
 
 ### 2. archetype_benchmarks_select (SELECT)
 
