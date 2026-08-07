@@ -48,7 +48,11 @@ import { SECTION_ID as ACTS_ID } from '../../lib/drive-loop/sections/next-acts.j
 import { SECTION_ID as STALL_ID } from '../../lib/drive-loop/sections/stall-deltas.js';
 import { LEG_ID as LEG1_ID } from '../../lib/drive-loop/score/leg1-landed.js';
 import { LEG_ID as LEG2_ID } from '../../lib/drive-loop/score/leg2-uptake.js';
-import { LEG_ID as LEG4_ID } from '../../lib/drive-loop/score/leg4-capacity.js';
+import { LEG_ID as LEG4_ID, scoreLeg4 } from '../../lib/drive-loop/score/leg4-capacity.js';
+// SD-LEO-INFRA-PERSIST-BELT-CAPACITY-001 (FR-3): the ladder, shared with the capacity forecast so
+// the two ends cannot drift into two spellings; and BELT_BUFFER, whose calibration the forecast owns.
+import { computeBeltVerdict } from '../../lib/drive-loop/belt-verdict.js';
+import { BELT_BUFFER } from '../lib/capacity-inputs.mjs';
 import { aggregateScore } from '../../lib/drive-loop/score/aggregate.js';
 import { unavailable, LAST_RUN_FIELD } from '../../lib/drive-loop/report-posture.js';
 import { armedProcessKey } from '../../lib/machinery-class/armed-registration.js';
@@ -116,13 +120,102 @@ export function withinWindow(nowMs) {
 }
 
 /**
+ * leg4, WIRED — SD-LEO-INFRA-PERSIST-BELT-CAPACITY-001, FR-3.
+ *
+ * Replaces the `unavailable` branch whose reason string named exactly what was missing:
+ * "coordinator-capacity-forecast's computeVerdict AND a persist for the durable verdict row it
+ * cites". Both now exist, so both are supplied.
+ *
+ * ── scoreLeg4 IS SYNCHRONOUS ALL THE WAY THROUGH, AND THAT DICTATES THIS SHAPE ────────────────
+ * leg4-capacity.js:61 calls `computeVerdict()` and :74 calls `persist(...)` WITHOUT await, then
+ * reads `row?.id`. Handing it an async persist would have been the quiet disaster: the insert
+ * returns a Promise, `row?.id` is undefined so the leg cites nothing, the write is never awaited,
+ * and a REJECTION becomes an unhandled rejection that scoreLeg4 cannot see — so :72's "fail the leg
+ * when persistence throws", the single guarantee TR-2 exists to protect, would silently never fire
+ * while the leg scored its 2 points. An async function is type-correct here and behaviourally
+ * catastrophic; FR-4 forbids editing the reader, and the reader is right.
+ *
+ * So durability is PROVEN FIRST: the verdict is computed (pure), the row is written and AWAITED,
+ * and only then does scoreLeg4 run with a synchronous persist that hands back the row already on
+ * disk. Persist-before-score is not merely preserved, it is strengthened — no score can exist
+ * before the write has landed.
+ *
+ * THE SYNC persist RE-CHECKS RATHER THAN RUBBER-STAMPS. It compares the row leg4 built against the
+ * row that was actually written and throws on any disagreement. Without that it would be a shell
+ * game: returning an id for a row assembled from a second, parallel derivation. If a future edit
+ * changes leg4's ladder or its row shape, the two stop matching and the leg fails loudly instead of
+ * citing a durable row that does not describe it.
+ *
+ * A FAILURE DEGRADES TO `unavailable` WITH THE REAL REASON, NEVER TO A SCORE OF 0. That is this
+ * report's house posture (report-posture.js) and aggregateScore excludes unavailable legs from the
+ * denominator rather than scoring them zero. Letting the throw escape would take the ENTIRE drive
+ * report down over one leg — strictly worse than today, where leg4 is simply unavailable.
+ */
+export async function scoreCapacityLeg({ gatherCapacity, persistVerdict, runId = null } = {}) {
+  try {
+    const inputs = await gatherCapacity();
+    const computeVerdict = () => computeBeltVerdict({
+      idleNow: inputs.idleNow,
+      freeingSoon: inputs.freeingSoon,
+      claimableCount: inputs.claimableCount,
+      openQfCount: inputs.openQfCount,
+      buffer: BELT_BUFFER,
+    });
+
+    // Pure and deterministic, so calling it here and again inside scoreLeg4 yields the same answer.
+    const forecast = computeVerdict();
+    const written = await persistVerdict({
+      run_id: runId,
+      verdict: forecast.verdict,
+      belt_depth: forecast.beltDepth,
+      demand_soon: forecast.demandSoon,
+      deficit: forecast.deficit,
+    });
+
+    const persist = (row) => {
+      for (const [k, expected] of Object.entries({
+        verdict: forecast.verdict,
+        belt_depth: forecast.beltDepth,
+        demand_soon: forecast.demandSoon,
+        deficit: forecast.deficit,
+      })) {
+        if (row?.[k] !== expected) {
+          throw new Error(`leg4 persist: the leg built ${k}=${JSON.stringify(row?.[k])} but the durable row `
+            + `carries ${JSON.stringify(expected)} — refusing to cite a row that does not describe this score`);
+        }
+      }
+      return written;
+    };
+
+    return scoreLeg4({ computeVerdict, persist, runId });
+  } catch (err) {
+    // Between merge and the chairman ceremony this is the EXPECTED path: the table is staged and
+    // unapplied, the write throws PGRST205/42P01, and leg4 reports unavailable exactly as it does
+    // today. That outcome is a PASS (FR-5/TS-7), not a regression — recorded here so a later reader
+    // does not "fix" it.
+    return { leg: LEG4_ID, unavailable: unavailable(`scoreLeg4 could not be scored this run: ${err?.message || err}`) };
+  }
+}
+
+/**
  * Build the gather function the producer calls.
  *
  * Every `unavailable` reason below is a MEASURED blocker, not a shrug. Read them before
  * "finishing" any of them — two are traps where the obvious wiring produces a confidently wrong
  * number rather than an incomplete one.
  */
-export function buildGather({ supabase, computePlanCheckStatus }) {
+export function buildGather({ supabase, computePlanCheckStatus, gatherCapacity, persistVerdict, capacityRunId = null }) {
+  // SD-LEO-INFRA-PERSIST-BELT-CAPACITY-001 (FR-3): leg4's two injections are REQUIRED here, not
+  // defaulted to the real implementations. A default would make this function look wired while the
+  // CLI passed nothing — which is precisely how `persist` went missing from runDriveReportSweep and
+  // threw on every in-window tick with the whole suite green (see that function's comment). The
+  // wiring test asserts the CLI passes the real ones; the behaviour tests pass stubs. Neither can
+  // stand in for the other unless the argument is mandatory.
+  if (typeof gatherCapacity !== 'function' || typeof persistVerdict !== 'function') {
+    throw new Error('buildGather(): gatherCapacity and persistVerdict must be injected — leg4 refuses '
+      + 'without them (leg4-capacity.js:57), and a defaulted injection hides an unwired CLI behind a green suite');
+  }
+
   // Stated once; three sections share it.
   const CAPPED_SOURCE = 'the only item set available today is computePlanCheckStatus().next, which is CAPPED AT 10. '
     + 'Classifying those as the belt would describe ten items while rendering as the whole belt — a wrong number, not a short list. '
@@ -156,7 +249,7 @@ export function buildGather({ supabase, computePlanCheckStatus }) {
     const legs = [
       { leg: LEG1_ID, unavailable: unavailable('scoreLeg1 needs the same uncapped chain-item set as the belt sections, plus a git runner in the job; neither is wired into this cron') },
       { leg: LEG2_ID, unavailable: unavailable('scoreLeg2 needs the ranked top-5 backlog, which this job does not query') },
-      { leg: LEG4_ID, unavailable: unavailable('scoreLeg4 needs coordinator-capacity-forecast\'s computeVerdict AND a persist for the durable verdict row it cites (FR-2); that writer belongs in this script layer and is not built') },
+      await scoreCapacityLeg({ gatherCapacity, persistVerdict, runId: capacityRunId }),
     ];
 
     return { sections, driveScore: aggregateScore({ legs }) };
@@ -249,6 +342,9 @@ if (import.meta.url === `file://${process.argv[1]}`.replace(/\\/g, '/')) {
   const { createClient } = await import('@supabase/supabase-js');
   const { computePlanCheckStatus } = await import('../../lib/roadmap/plan-check-status.js');
   const { registerArmedMachinery } = await import('../../lib/machinery-class/armed-registration.js');
+  // FR-3 / FR-2: leg4's two injections, resolved at the edge like every other real dependency.
+  const { gatherCapacityInputs } = await import('../lib/capacity-inputs.mjs');
+  const { makeCapacityVerdictPersist } = await import('../lib/capacity-verdict-store.mjs');
 
   // BEFORE createClient, not after. This check sat below it and was unreachable dead code:
   // createClient(undefined, undefined) throws "supabaseUrl is required" first. Both orders fail
@@ -260,10 +356,22 @@ if (import.meta.url === `file://${process.argv[1]}`.replace(/\\/g, '/')) {
   }
   const supabase = createClient(process.env.SUPABASE_URL, process.env.SUPABASE_SERVICE_ROLE_KEY);
 
+  // Read the clock ONCE. The sweep's window gate and leg4's run_id must describe the same tick;
+  // two Date.now() calls could straddle an ET hour boundary and key them to different windows.
+  const cliNowMs = Date.now();
+
   const out = await runDriveReportSweep({
-    nowMs: Date.now(),
+    nowMs: cliNowMs,
     produce: produceDriveReport,
-    gather: buildGather({ supabase, computePlanCheckStatus }),
+    gather: buildGather({
+      supabase,
+      computePlanCheckStatus,
+      gatherCapacity: () => gatherCapacityInputs(supabase),
+      persistVerdict: makeCapacityVerdictPersist(supabase),
+      // The SAME window key the report row is written under, so an auditor can join a verdict to
+      // the report that cites it. Derived from cliNowMs, not a second clock read.
+      capacityRunId: windowKey(cliNowMs),
+    }),
     persist: async (row) => {
       const { data, error } = await supabase.from('drive_reports').insert(row).select('id').single();
       if (error) {

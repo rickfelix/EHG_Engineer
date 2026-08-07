@@ -28,27 +28,23 @@ import { createRequire } from 'module';
 import { readFileSync, writeFileSync, existsSync } from 'fs';
 import { fileURLToPath, pathToFileURL } from 'url';
 import { dirname, join } from 'path';
-// SD-FDBK-INFRA-BACKLOG-RANK-EXCLUSION-001: shared belt-exclusion predicate so test/UAT
-// fixtures AND bare-shell stubs (neither can pass LEAD-TO-PLAN) never inflate belt depth —
-// counting them as claimable over-reports capacity and suppresses the deficit/Adam alert.
-import { isExcludedFromBelt } from '../lib/coordinator/sd-exclusion.mjs';
-import { fetchAllPaginated, renderCount } from '../lib/db/fetch-all-paginated.mjs';
 import { stampLastFired } from '../lib/periodic-liveness/stamp-last-fired.js';
-// SD-LEO-INFRA-BACKLOG-RANK-CLAIMABLE-ELIGIBILITY-ALIGN-001: the forecaster builds its OWN claimable
-// belt (it does not read the ranker's dispatch_rank), so it must apply the SAME shared claim-eligibility
-// predicate the worker resolver uses — else RHA-held / co_author_pending SDs inflate belt depth and the
-// forecaster emits false belt-low DEFICITs (the exact masked-starvation symptom this SD targets).
-import { classifyDispatchIneligibility } from '../lib/fleet/claim-eligibility.cjs';
-// SD-LEO-INFRA-GATE-SIDE-BELT-001: the QF term is no longer derived here. See the call site.
-import { countClaimableQuickFixes } from '../lib/fleet/belt-depth.cjs';
+// Still used by countUnpromotedRoadmapItems below; the belt/session reads that also used it moved.
+import { fetchAllPaginated } from '../lib/db/fetch-all-paginated.mjs';
+// SD-LEO-INFRA-PERSIST-BELT-CAPACITY-001 (FR-3): the capacity inputs — the claimable belt, the QF
+// term, the live-worker classification and the ETA model — moved verbatim into a shared module so
+// the drive-report sweep can build leg4's computeVerdict from the SAME derivation instead of a
+// second one. Every belt-exclusion / claim-eligibility / stall predicate this file used to import
+// directly now lives behind gatherCapacityInputs; the predicates themselves are unchanged.
+import { gatherCapacityInputs, BELT_BUFFER } from './lib/capacity-inputs.mjs';
+// The verdict ladder, extracted so producer and consumer share one spelling (FR-3).
+import { computeBeltVerdict } from '../lib/drive-loop/belt-verdict.js';
+// FR-2: the durable writer. It THROWS on a failed write by contract — see its header and the call
+// site at the end of main(), which tolerates exactly one error class and rethrows the rest.
+import { makeCapacityVerdictPersist, isTableAbsentError, CAPACITY_VERDICT_TABLE } from './lib/capacity-verdict-store.mjs';
 // SD-LEO-INFRA-BELT-TIER-AWARE-CLAIMABILITY-001 (FR-3): per-tier claimable depth (not a single aggregate).
 import { tierClaimableBreakdown } from '../lib/fleet/tier-claimable.cjs';
 import { isTieringActive } from '../lib/fleet/tier-ladder.cjs';
-// SD-LEO-INFRA-FORECASTER-FIXTURE-WORKER-EXCLUSION-001: the pure live-worker predicate. It wraps the
-// canonical isDispatchableFleetMember SSOT the dashboard uses (so the forecaster AGREES with
-// fleet-dashboard.cjs on coordinator/adam/non_fleet/fixture exclusion) and ADDS a released-status
-// guard (FR-2; the forecaster is deliberately stricter than the dashboard on status).
-import { isLiveCountableWorker } from './lib/live-countable-worker.mjs';
 // SD-LEO-INFRA-COORDINATOR-SOURCING-ENGINE-AWARENESS-001 (FR-2): surface the sourcing-engine
 // flag state + unpromoted roadmap depth so a belt-low/DEFICIT ping says "engine OFF, N unpromoted
 // -> activate/distill" instead of only "source N candidates" (manual backfill is the anti-pattern).
@@ -70,27 +66,13 @@ import { scanPendingProposals, drainPendingProposals, shouldMaterializeBeforeSou
 
 const require = createRequire(import.meta.url);
 const { insertCoordinationRow } = require('../lib/coordinator/dispatch.cjs');
-const { stalledLoopSessionIds, maskedStallSessionIds } = require('../lib/coordinator/detectors.cjs');
 const { getActiveAdamId } = require('../lib/coordinator/adam-identity.cjs');
 
-// SD-FDBK-INFRA-STALL-AFTER-COMPLETION-001 — DORMANT BY DEFAULT. Adversarial validation
-// (sub_agent_execution_results b71d405b) empirically found process_alive_at is currently
-// "fleet-broken": the detached session-tick is not running for most workers, so a STALE
-// process_alive_at is the NORMAL state of a HEALTHY worker, not proof of a dead loop. Keying the
-// masked-stall detector on it today would mostly emit FALSE POSITIVES (a healthy just-completed
-// worker: active + no claim + fresh hb + stale tick). The detector + surface are shipped and
-// tested, but gated OFF until session-tick reliability is restored (or a second liveness witness
-// is added). Flip LEO_MASKED_STALL_DETECT=on once process_alive_at is trustworthy.
-const MASKED_STALL_DETECT_ON = process.env.LEO_MASKED_STALL_DETECT === 'on';
-// SD-LEO-INFRA-FORECASTER-FIXTURE-WORKER-EXCLUSION-001: resolve the active coordinator id so the
-// shared isDispatchableFleetMember excludes the coordinator by id exactly like the dashboard does.
-const { getActiveCoordinatorId } = require('../lib/coordinator/resolve.cjs');
-// SD-LEO-INFRA-FORECASTER-DEP-SENTINEL-BELTDEPTH-001: resolve dependency keys via the canonical
-// blocker rule (lib/utils/parse-sd-dependencies.cjs, same SSOT coordinator-audit.mjs uses) instead of
-// a hand-rolled resolver. parseSdDependencies counts ONLY /^SD-/ entries as real blockers, so the
-// documented 'no dependencies' sentinel ({sd_key:'none'} / bare 'none') and free-text placeholders
-// resolve to zero blockers — a freshly-sourced SD is no longer mis-counted out of belt depth.
-const { parseSdDependencies } = require('../lib/utils/parse-sd-dependencies.cjs');
+// SD-LEO-INFRA-PERSIST-BELT-CAPACITY-001: RE-EXPORTED, not re-implemented. These moved into
+// scripts/lib/capacity-inputs.mjs with the rest of the ETA model, and
+// tests/unit/coordinator/capacity-forecast-eta-seam.test.js imports them from HERE. Re-exporting
+// keeps that seam's import path valid rather than editing a test to chase a file move.
+export { PHASE_MIN_STATIC, etaMinForClaim, computePhaseMinsFromActuals } from './lib/capacity-inputs.mjs';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const REPO_ROOT = join(__dirname, '..');
@@ -99,17 +81,6 @@ const COOLDOWN_FILE = join(REPO_ROOT, '.coord-capacity-source-last.json');
 // so it does not conflate with the Adam belt-low source_work cooldown.
 const MASKED_STALL_COOLDOWN_FILE = join(REPO_ROOT, '.coord-masked-stall-last.json');
 
-// ── tunables ──
-const HEARTBEAT_LIVE_MS = 5 * 60 * 1000;   // a session is "live" if it heartbeat within 5 min
-const HORIZON_MIN = 20;                      // "freeing soon" = ETA-to-free within this window
-const PROGRESS_SOON = 65;                    // ...or overall progress >= this
-const BELT_BUFFER = 1;                       // keep at least this many claimable SDs beyond demand
-// phase-median minutes (infrastructure-weighted; from coordinator.md fleet-eta reference table)
-// SD-LEO-INFRA-FLEET-DIAL-TOKEN-EFFORT-BUILD-001: static fallback (renamed _STATIC). The dial now
-// prefers a rolling per-phase actuals feed (computePhaseMinsFromActuals) and falls back to these
-// when actuals are insufficient — it never silently degrades.
-export const PHASE_MIN_STATIC = { LEAD: 3, PLAN: 12, EXEC: 30, FINAL: 5 };
-const TOTAL_MIN_STATIC = PHASE_MIN_STATIC.LEAD + PHASE_MIN_STATIC.PLAN + PHASE_MIN_STATIC.EXEC; // ~45m fresh SD
 
 const argv = process.argv.slice(2);
 const DISPATCH = argv.includes('--dispatch');
@@ -123,269 +94,25 @@ const sb = createClient(
   process.env.SUPABASE_SERVICE_ROLE_KEY,
 );
 
-function normPhase(p) {
-  const u = String(p || '').toUpperCase();
-  if (u.includes('EXEC')) return 'EXEC';
-  if (u.includes('PLAN')) return 'PLAN';
-  if (u.includes('FINAL') || u.includes('VERIF') || u.includes('APPROV')) return 'FINAL';
-  return 'LEAD';
-}
-// ETA-to-free for a single claim: overall-progress-driven remaining of a ~TOTAL_MIN SD, floored.
-// SD-LEO-INFRA-FLEET-DIAL-TOKEN-EFFORT-BUILD-001: phaseMinOverride (a { LEAD, PLAN, EXEC, FINAL }
-// rolling-actuals object) replaces the static table when provided; null → byte-identical static
-// behavior. tMin is derived from the override when present. FINAL branch + Math.max(2,…) floor
-// preserved exactly.
-export function etaMinForClaim(progress, phase, phaseMinOverride = null) {
-  const ph = normPhase(phase);
-  const pm = phaseMinOverride || PHASE_MIN_STATIC;
-  const tMin = phaseMinOverride ? (pm.LEAD + pm.PLAN + pm.EXEC) : TOTAL_MIN_STATIC;
-  if (ph === 'FINAL') return Math.max(2, pm.FINAL * (1 - (progress || 0) / 100));
-  const remaining = tMin * (1 - Math.min(99, progress || 0) / 100);
-  return Math.max(2, Math.round(remaining));
-}
-
-// SD-LEO-INFRA-FLEET-DIAL-TOKEN-EFFORT-BUILD-001: rolling per-phase actuals feed. Aggregates recent
-// sub_agent_execution_results (bounded lookback — NOT a full scan of the ~31K-row table) into a
-// per-phase median elapsed-minutes for the fleet's dominant sd_type (infrastructure, matching the
-// static table's weighting). Returns a { LEAD, PLAN, EXEC, FINAL } object or null when any phase has
-// insufficient data → caller falls back to PHASE_MIN_STATIC. Fail-open: any error → null.
-const ACTUALS_LOOKBACK_DAYS = 30;
-const ACTUALS_ROW_CAP = 4000;          // bounded scan
-const ACTUALS_MIN_SAMPLES = 5;         // per-phase minimum SD-phase samples to trust a median
-const ACTUALS_SD_TYPE = 'infrastructure';
-function _median(nums) {
-  if (!nums.length) return null;
-  const a = [...nums].sort((x, y) => x - y);
-  const mid = Math.floor(a.length / 2);
-  return a.length % 2 ? a[mid] : (a[mid - 1] + a[mid]) / 2;
-}
-export async function computePhaseMinsFromActuals(supabase) {
-  try {
-    const sinceIso = new Date(Date.now() - ACTUALS_LOOKBACK_DAYS * 24 * 3600 * 1000).toISOString();
-    // SD-LEO-INFRA-COUNT-TRUNCATION-DISCIPLINE-001 FR-6 batch 9 — ACTUALS_ROW_CAP (4000) exceeds
-    // the PostgREST max-rows clamp (1000), so the prior `.limit(ACTUALS_ROW_CAP)` never actually
-    // returned more than 1000 rows regardless of the declared "up to 4000" sample size. maxRows
-    // honors the declared cap for real via genuine pagination.
-    const rows = await fetchAllPaginated(() => supabase
-      .from('sub_agent_execution_results')
-      .select('sd_id, phase, execution_time, created_at')
-      .gte('created_at', sinceIso)
-      .not('execution_time', 'is', null)
-      .order('created_at', { ascending: false })
-      .order('id', { ascending: false }), { maxRows: ACTUALS_ROW_CAP });
-    if (!rows.length) return null;
-    // Restrict to the dominant sd_type (infrastructure) so the median is apples-to-apples with the
-    // static table; resolve sd_type for the distinct sd_ids in the window.
-    const sdIds = [...new Set(rows.map((r) => r.sd_id).filter(Boolean))];
-    if (!sdIds.length) return null;
-    const typeById = new Map();
-    for (let i = 0; i < sdIds.length; i += 200) {
-      const { data: sds } = await supabase
-        .from('strategic_directives_v2')
-        .select('id, sd_type')
-        .in('id', sdIds.slice(i, i + 200));
-      for (const s of (sds || [])) typeById.set(s.id, s.sd_type);
-    }
-    // Sum execution_time (seconds) per (sd_id, phase) → that SD-phase's elapsed minutes; collect per phase.
-    const sumBy = new Map(); // key `${sd_id}|${PHASE}` → seconds
-    for (const r of rows) {
-      if (typeById.get(r.sd_id) !== ACTUALS_SD_TYPE) continue;
-      const ph = normPhase(r.phase);
-      const key = `${r.sd_id}|${ph}`;
-      sumBy.set(key, (sumBy.get(key) || 0) + (Number(r.execution_time) || 0));
-    }
-    const perPhase = { LEAD: [], PLAN: [], EXEC: [], FINAL: [] };
-    for (const [key, secs] of sumBy) {
-      const ph = key.split('|')[1];
-      if (perPhase[ph]) perPhase[ph].push(secs / 60);
-    }
-    const out = {};
-    for (const ph of ['LEAD', 'PLAN', 'EXEC', 'FINAL']) {
-      if (perPhase[ph].length < ACTUALS_MIN_SAMPLES) return null; // insufficient → fall back to static
-      out[ph] = Math.max(1, Math.round(_median(perPhase[ph])));
-    }
-    return out;
-  } catch {
-    return null; // fail-open → static
-  }
-}
 
 async function main() {
-  const liveCutoff = new Date(Date.now() - HEARTBEAT_LIVE_MS).toISOString();
-  const [sessions, sds, openQfCountRaw] = await Promise.all([
-    // SD-LEO-INFRA-COUNT-TRUNCATION-DISCIPLINE-001 FR-6 batch 9: claude_sessions is a growing
-    // table and this read feeds worker-count/capacity math directly (filtered + iterated
-    // below) — paginate to completion. Preserve the prior fail-open policy (undefined `data`
-    // on error → `(sessions || [])` fallback below) by catching the throw and returning [].
-    fetchAllPaginated(() => sb.from('claude_sessions')
-      // SD-LEO-INFRA-FORECASTER-FIXTURE-WORKER-EXCLUSION-001: + status so released/terminal sessions
-      // are not counted as available workers even with a recent heartbeat (FR-2).
-      // SD-LEO-FEAT-COORDINATOR-CAPACITY-FORECAST-001: + expected_silence_until — detectStalledLoop
-      // reads it (top-level column) to EXCLUDE legitimately-parked workers. Omitting it makes
-      // toMs(undefined)=0 → the parked guard silently fails open → a parked worker is mis-flagged
-      // STALLED. Reusing a detector requires replicating its full input-column contract (mirrors the
-      // canonical coordinator-audit.mjs select).
-      // SD-FDBK-INFRA-STALL-AFTER-COMPLETION-001: + process_alive_at — the authoritative tick-liveness
-      // signal (written every 30s by the detached session-tick). detectMaskedStall uses it to tell a
-      // CONFIRMED dead loop (live parent / fresh heartbeat but dead tick) from a momentarily-idle one.
-      // SD-LEO-INFRA-STALLED-POSTCOMPLETION-TAIL-FP-001: + released_reason,released_at so detectStalledLoop
-      // excludes a worker running its post-completion tail (else the per-session stalled mark over-escalates
-      // a fleet-down false alarm to the operator). Replicate the detector input-column contract.
-      .select('session_id, terminal_id, sd_key, heartbeat_at, process_alive_at, loop_state, expected_silence_until, metadata, status, released_reason, released_at')
-      .gte('heartbeat_at', liveCutoff)
-      .order('session_id', { ascending: true })) // unique tiebreaker: stable page boundaries (FR-6)
-      .catch(() => []),
-    // SD-LEO-INFRA-COUNT-TRUNCATION-DISCIPLINE-001 FR-6 batch 9: strategic_directives_v2 is a
-    // growing table and this read feeds belt-depth/dependency resolution directly (iterated +
-    // acted on below) — paginate to completion. Preserve the prior fail-open policy (undefined
-    // `data` on error → `(sds || [])` fallbacks below) by catching the throw and returning [].
-    // SD-FDBK-INFRA-BACKLOG-RANK-EXCLUSION-001: + metadata (is_fixture marker) and
-    // title/description (bare-shell detection) so excluded rows do not inflate belt depth.
-    // SD-REFILL-00306WTS: + target_application so un-actionable auto-filed venture remediation
-    // SDs (target_application != EHG_Engineer) are excluded from belt depth (false-SURPLUS fix).
-    fetchAllPaginated(() => sb.from('strategic_directives_v2')
-      .select('sd_key, title, description, status, sd_type, current_phase, progress_percentage, claiming_session_id, dependencies, metadata, target_application')
-      .not('status', 'in', '("completed","cancelled","deferred")')
-      .order('sd_key', { ascending: true })) // unique tiebreaker (FR-6)
-      .catch(() => []),
-    // Open QFs are claimable belt too (a worker can claim a QF) — counting only SDs
-    // under-reports belt depth and over-reports deficit (workers self-claim QFs).
-    //
-    // SD-LEO-INFRA-GATE-SIDE-BELT-001: this was a local head-count on `status='open'` that IGNORED
-    // claiming_session_id, while the SD term ~20 lines below skips claimed rows — one surface, two
-    // claimability rules, over-reporting by 3 (148 counted, 145 actually claimable). It now shares
-    // the coordinator's QF supply predicate through lib/fleet/belt-depth.cjs, so this number and the
-    // coordinator's own supply reads cannot disagree again.
-    //
-    // FAIL-OPEN IS PRESERVED DELIBERATELY, AND SAID OUT LOUD. countClaimableQuickFixes is fail-LOUD
-    // by contract, because a gauge that reports 0 when it cannot read is indistinguishable from an
-    // empty belt. THIS surface has always fallen back to a 0 QF contribution rather than aborting the
-    // whole forecast, so the catch keeps that behaviour at the call site where a reader can see it,
-    // instead of weakening the shared gauge for every other consumer.
-    countClaimableQuickFixes(sb).catch(() => null),
-  ]);
-  const openQfCountRendered = renderCount(openQfCountRaw);
-  const openQfCount = typeof openQfCountRendered === 'number' ? openQfCountRendered : 0; // fail-open: unreadable → 0 belt contribution, unchanged from the prior fallback
+  // SD-LEO-INFRA-PERSIST-BELT-CAPACITY-001 (FR-3): ONE derivation of the capacity inputs, shared
+  // with the drive-report sweep so leg4 can inject the SAME computeVerdict this forecast reads.
+  // Extracted verbatim to scripts/lib/capacity-inputs.mjs — no arithmetic, predicate or query
+  // changed. Its header records why re-deriving them at the sweep was the wrong half of the choice.
+  const inputs = await gatherCapacityInputs(sb, { now: Date.now() });
+  const {
+    idleNow, freeingSoon, building, stalled,
+    claimableCount, openQfCount, claimable, rows, workers, maskedIds,
+  } = inputs;
 
-  // ── resolve dependency statuses → claimable belt ──
-  // parseSdDependencies handles the live shape mix ([{sd_id}], [{sd_key}], raw strings) AND drops the
-  // 'none' sentinel + free-text non-SD placeholders, returning only real /^SD-/ blocker keys.
-  const depKeys = new Set();
-  (sds || []).forEach(d => parseSdDependencies(d.dependencies).forEach(k => depKeys.add(k)));
-  let depStatus = {};
-  if (depKeys.size) {
-    // SD-LEO-INFRA-COUNT-TRUNCATION-DISCIPLINE-001 FR-6 batch 9: bounded by design — depKeys is
-    // the set of distinct /^SD-/ dependency references parsed from the active-SD set above, an
-    // operationally small cardinality (dependency graphs stay in the tens/hundreds, not 1000s).
-    const { data: deps } = await sb.from('strategic_directives_v2').select('sd_key,status').in('sd_key', Array.from(depKeys));
-    (deps || []).forEach(d => { depStatus[d.sd_key] = d.status; });
-  }
-  const claimable = [];
-  const claimsBySession = {};
-  let beltExcludes = 0;
-  let ineligibleExcludes = 0;
-  for (const d of (sds || [])) {
-    if (d.claiming_session_id) {
-      (claimsBySession[d.claiming_session_id] ||= []).push(d);
-      continue;
-    }
-    // SD-FDBK-INFRA-BACKLOG-RANK-EXCLUSION-001: fixtures and bare-shell stubs are not real
-    // belt — neither can pass LEAD-TO-PLAN. Excluding them keeps beltDepth honest so a
-    // forecast deficit (and the proactive Adam reach-out) is not masked by non-distributable rows.
-    if (isExcludedFromBelt(d)) { beltExcludes++; continue; }
-    // SD-LEO-INFRA-BACKLOG-RANK-CLAIMABLE-ELIGIBILITY-ALIGN-001: apply the SHARED claim-eligibility
-    // predicate (the SSOT the worker resolver uses) so belt depth == actually-claimable depth. Catches
-    // orchestrator_parent, human_action_required (the previously-missing axis), co_author_pending,
-    // sd_deferred, sd_terminal, test_fixture_key. Without this the forecaster over-counted RHA-held +
-    // co-author-pending SDs and fired false belt-low DEFICITs that masked genuine starvation.
-    const ineligible = classifyDispatchIneligibility(d);
-    if (ineligible) {
-      ineligibleExcludes++;
-      console.log(`  [belt-skip] ${ineligible} (not worker-claimable): ${d.sd_key}`);
-      continue;
-    }
-    const unmet = parseSdDependencies(d.dependencies).filter(k => depStatus[k] !== 'completed');
-    if (unmet.length === 0) claimable.push(d);
-  }
-  if (beltExcludes) console.log(`[CAPACITY-FORECAST] ${beltExcludes} non-distributable SD(s) (fixture/bare-shell/un-actionable-venture-remediation) excluded from belt depth`);
-  if (ineligibleExcludes) console.log(`[CAPACITY-FORECAST] ${ineligibleExcludes} dispatch-ineligible SD(s) (human-action/orchestrator/co-author-pending/deferred/terminal) excluded from belt depth (claim-eligibility SSOT)`);
-
-  // ── classify live workers (exclude coordinator + adam + non_fleet + fixtures + released) ──
-  // SD-LEO-INFRA-FORECASTER-FIXTURE-WORKER-EXCLUSION-001: use the canonical isDispatchableFleetMember
-  // SSOT (the dashboard's predicate) so a fixture/test session (FR-1) never counts as live idle/at-risk
-  // demand; ALSO drop released/terminal sessions (FR-2) which are not available workers even with a
-  // recent heartbeat. Keep the metadata.is_coordinator guard so a stale coordinator-marked session is
-  // excluded even when it is not the CURRENTLY-active coordinator id.
-  let coordinatorId = null;
-  try { coordinatorId = await getActiveCoordinatorId(sb); } catch { coordinatorId = null; }
-  const workers = (sessions || []).filter(s => isLiveCountableWorker(s, coordinatorId));
-
-  // SD-LEO-FEAT-COORDINATOR-CAPACITY-FORECAST-001: compute the genuinely-stalled idle workers via the
-  // canonical detector (loop alive + no claim + claimable work waiting, parked workers excluded). The
-  // belt-depth (claimable SDs + open QFs) is the "unclaimed work" input; an empty belt → no stalls.
-  const now = Date.now();
-  const stalledIds = stalledLoopSessionIds({
-    sessions: workers, unclaimedItems: claimable.length + openQfCount, now,
-  });
-  // SD-FDBK-INFRA-STALL-AFTER-COMPLETION-001: the CONFIRMED (dead-tick) subset — a fresh heartbeat
-  // masking a dead loop. DORMANT until process_alive_at is trustworthy (see MASKED_STALL_DETECT_ON):
-  // an empty Set when the flag is off → no MASKED-STALL rendering, no escalation, zero false-positive
-  // noise. The detector remains exported + unit-tested for activation.
-  const maskedIds = MASKED_STALL_DETECT_ON
-    ? maskedStallSessionIds({ sessions: workers, unclaimedItems: claimable.length + openQfCount, now })
-    : new Set();
-
-  // SD-LEO-INFRA-FLEET-DIAL-TOKEN-EFFORT-BUILD-001: compute the rolling actuals ONCE per run; null →
-  // etaMinForClaim falls back to the static table (no silent degradation).
-  // PROBE-REPOINT NOTE (do NOT edit vdr-registry.js in this build): once actuals accrue, the VDR
-  // fleet-dial probe in lib/vision/vdr-registry.js should repoint from a code_grep signal to a
-  // count_ratio signal measuring how often phaseMinActuals is non-null (the dial is actually fed).
-  const phaseMinActuals = await computePhaseMinsFromActuals(sb);
-
-  const rows = [];
-  let idleNow = 0, freeingSoon = 0, building = 0, stalled = 0;
-  for (const w of workers) {
-    const mine = claimsBySession[w.session_id] || [];
-    const callsign = (w.metadata && w.metadata.callsign) || '—';
-    if (mine.length) {
-      building++;
-      // multi-claim worker frees only after ALL its claims finish → sum remaining
-      const eta = mine.reduce((sum, d) => sum + etaMinForClaim(d.progress_percentage, d.current_phase, phaseMinActuals), 0);
-      const soon = eta <= HORIZON_MIN || mine.some(d => (d.progress_percentage || 0) >= PROGRESS_SOON);
-      if (soon) freeingSoon++;
-      rows.push({
-        sess: w.session_id.slice(0, 8), callsign, state: 'BUILDING',
-        detail: mine.map(d => `${d.sd_key.replace('SD-LEO-INFRA-', '')}(${normPhase(d.current_phase)} ${d.progress_percentage || 0}%)`).join(' + '),
-        eta: `~${eta}m to free${soon ? ' ⏰SOON' : ''}`,
-      });
-    } else {
-      // idle: a healthy idle worker (re-polling on its /loop wake) vs a genuinely stalled loop, per the
-      // canonical detectStalledLoop verdict computed above (NOT a raw heartbeat-age threshold).
-      idleNow++;
-      const hbAgeS = Math.round((now - new Date(w.heartbeat_at).getTime()) / 1000);
-      const maskedFlag = maskedIds.has(w.session_id);
-      const stalledFlag = stalledIds.has(w.session_id);
-      if (stalledFlag) stalled++;
-      // MASKED-STALL is the higher-confidence (dead-tick) subset and takes display priority over the
-      // generic IDLE⚠STALLED advisory: the loop is CONFIRMED dead (fresh parent, stale tick).
-      rows.push({
-        sess: w.session_id.slice(0, 8), callsign,
-        state: maskedFlag ? 'MASKED-STALL⚠' : stalledFlag ? 'IDLE⚠STALLED' : 'IDLE',
-        detail: maskedFlag ? 'tick dead + no claim while ranked work waits — needs /loop re-arm'
-          : stalledFlag ? 'alive but loop not claiming (needs /loop re-arm)' : 'available',
-        eta: `idle ${hbAgeS}s`,
-      });
-    }
-  }
-
-  const demandSoon = idleNow + freeingSoon;
-  const beltDepth = claimable.length + openQfCount; // claimable SDs + open QFs (both worker-claimable)
-  const deficit = (demandSoon + BELT_BUFFER) - beltDepth;
-  let verdict;
-  if (beltDepth === 0 && idleNow > 0) verdict = 'DEFICIT-URGENT';
-  else if (deficit > 0) verdict = 'DEFICIT';
-  else if (deficit === 0) verdict = 'TIGHT';
-  else verdict = 'SURPLUS';
+  // THE LADDER IS NO LONGER SPELLED HERE. computeBeltVerdict owns it, and drive-report-sweep.mjs
+  // injects that same function into leg4 — so the two ends cannot drift into two ladders that
+  // merely agree today. capacity.verdict is the FROZEN-DOMAIN reading; the `verdict` binding below
+  // may be rewritten by the corpus gate, which speaks a DIFFERENT vocabulary. See the persist.
+  const capacity = computeBeltVerdict({ idleNow, freeingSoon, claimableCount, openQfCount, buffer: BELT_BUFFER });
+  const { beltDepth, demandSoon, deficit } = capacity;
+  let verdict = capacity.verdict;
 
   // ── render ──
   const ts = new Date().toISOString();
@@ -518,6 +245,47 @@ async function main() {
     await stampLastFired(sb, 'standard_loop:capacity-forecast');
   } catch (err) {
     console.error(`[capacity-forecast] stampLastFired failed (non-fatal): ${err.message}`);
+  }
+
+  // ── FR-2: PERSIST THE VERDICT THIS RUN REACHED ─────────────────────────────────────────────
+  // This value used to be computed a hundred lines up and thrown away — the file contained no
+  // insert and no upsert anywhere — so "how long has the belt been in DEFICIT" was unanswerable
+  // for want of anybody writing the number down. That is the whole defect this SD closes.
+  //
+  // IT WRITES capacity.verdict, NOT verdict, AND THE DIFFERENCE IS LOAD-BEARING. The `verdict`
+  // binding above may have been rewritten to 'OK-CORPUS-GATED' by classifyCorpusGatedDeficit —
+  // a POLICY overlay answering "is this deficit fillable", on a DIFFERENT vocabulary from the
+  // capacity ladder. It is outside leg4's frozen four (lib/drive-loop/score/leg4-capacity.js:38),
+  // so persisting it would write a row the reader that cites it throws on at :66. Found by reading
+  // the gate's OUTPUT DOMAIN rather than trusting that one variable named verdict holds one kind
+  // of thing. Both readings go into the row, so the overlay is recorded and nothing is lost.
+  //
+  // PLACED LAST, DELIBERATELY: everything this forecast already did — the render, the Adam
+  // reach-out, the liveness stamp — has completed by now, so a throw here costs no prior work and
+  // stays loud. It is the new durable write, and it is allowed to be the thing that fails.
+  try {
+    await makeCapacityVerdictPersist(sb)({
+      run_id: null,
+      verdict: capacity.verdict,
+      belt_depth: beltDepth,
+      demand_soon: demandSoon,
+      deficit,
+      detail: {
+        source: 'coordinator-capacity-forecast',
+        corpus_gated: corpusGate.corpusGated === true,
+        rendered_verdict: verdict,
+      },
+    });
+  } catch (err) {
+    // TABLE-ABSENT IS THE EXPECTED STATE BETWEEN MERGE AND THE CHAIRMAN CEREMONY (FR-5), and it is
+    // the ONLY error tolerated here. It is classified by ERROR CODE — never by a null row count,
+    // which a missing relation and an empty one both produce.
+    //
+    // EVERY OTHER ERROR RETHROWS. Softening this catch into a log line is risk #1 on this SD's own
+    // register: it would read as defensive programming, make every run look healthier, and rebuild
+    // the exact defect being closed one layer down — a verdict that nobody can prove was recorded.
+    if (!isTableAbsentError(err)) throw err;
+    console.log(`  VERDICT-PERSIST: skipped — ${CAPACITY_VERDICT_TABLE} is staged but not applied (chairman-gated). Nothing is trending yet, and drive_score leg4 stays unavailable until the ceremony runs.`);
   }
 }
 
