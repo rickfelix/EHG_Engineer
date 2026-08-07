@@ -4,10 +4,12 @@
     {
       "id": "FR-1",
       "title": "Mechanical scan script with a pure-probe / injectable-resolver split",
-      "description": "New scripts/solomon/trend-eyes-scan.mjs runs the daily mechanical SCAN. It follows the shape already established by lib/solomon/conduct-probes.js: pure probe functions that take facts and return verdicts, plus a separate injectable resolver that does the Supabase IO. This split is what makes the two-sided validation in FR-7 possible without a database. The scan NEVER judges and NEVER promotes — it emits candidates only. It never messages the chairman (observe-never-join) and never gates anything (diagnostics only; tracesToLayer null). Auth is supabase-js + service-role ONLY: SUPABASE_POOLER_URL is injected into zero cron workflows in this repo and is silently undefined on a GHA runner (solomon-late-verdict-reconcile-cron.yml:38-40), so no pg/DATABASE_URL path may be introduced.",
+      "description": "New scripts/solomon/trend-eyes-sweep.mjs runs the daily mechanical SCAN. THE FILENAME IS LOAD-BEARING AND WAS CHANGED AT PLAN TIME (was trend-eyes-scan.mjs): the invocation classifier at lib/invocation-detector/requires-invocation.js:26 matches AUTONOMOUS_SUFFIX_RE = /-(?:loop|cron|sweep|sweeper|daemon|worker|autotriage)\\.[cm]?js$/i and AUTONOMOUS_DIR_RE = /(?:^|\\/)(?:cron|clockwork)\\//i. A '-scan.mjs' name under scripts/solomon/ matches NEITHER, so classifyRequiresInvocation returns false and INVOCATION_PATH_PROOF would never see this script — the exact blind spot that let scripts/eva/eva-trend-snapshot.mjs and scripts/eva/trend-detector.mjs ship unwired. The '-sweep' suffix puts it permanently under the classifier. It follows the shape already established by lib/solomon/conduct-probes.js: pure probe functions that take facts and return verdicts, plus a separate injectable resolver that does the Supabase IO. This split is what makes the two-sided validation in FR-7 possible without a database. The sweep NEVER judges and NEVER promotes — it emits candidates only. It never messages the chairman (observe-never-join) and never gates anything (diagnostics only; tracesToLayer null). Auth is supabase-js + service-role ONLY: SUPABASE_POOLER_URL is injected into zero cron workflows in this repo and is silently undefined on a GHA runner (solomon-late-verdict-reconcile-cron.yml:38-40), so no pg/DATABASE_URL path may be introduced.",
       "priority": "critical",
       "acceptance_criteria": [
-        "scripts/solomon/trend-eyes-scan.mjs exists and exits 0 on a run that finds nothing",
+        "scripts/solomon/trend-eyes-sweep.mjs exists and exits 0 on a run that finds nothing",
+        "node scripts/invocation-check.mjs reports requiresInvocation:true for the entrypoint — asserted by test, not by inspection",
+        "A loop-contract registry entry exists for the entrypoint as a second, name-independent anchor",
         "Probe logic is importable and callable with injected facts, with zero Supabase access in the pure path",
         "grep confirms no pg / DATABASE_URL / SUPABASE_POOLER_URL usage anywhere in the new code",
         "The scan writes no row to any table other than feedback (candidates) and codebase_health_snapshots (receipt)"
@@ -126,17 +128,21 @@
     }
   ],
   "test_scenarios": [
-    { "id": "TS-1", "scenario": "T1 fires on the founding specimen: SMS-coverage question 08-03 and 08-05", "type": "unit", "expected": "One T1 candidate emitted, citing both messages" },
-    { "id": "TS-2", "scenario": "T1 flat case: two same-class messages 3 hours apart", "type": "unit", "expected": "No candidate — the 24h separation rule holds" },
-    { "id": "TS-3", "scenario": "T2 detects a recurrence whose pre-fix occurrences exist ONLY in retention_archive", "type": "unit", "expected": "Candidate emitted; proves the union read rather than the survivor table" },
-    { "id": "TS-4", "scenario": "T2 flat case: a class that appeared once and never returned after its fix", "type": "unit", "expected": "No candidate" },
-    { "id": "TS-5", "scenario": "T3 emits a ratio whose numerator and denominator span the same extent", "type": "unit", "expected": "Series reading emitted; a mismatched-span fixture fails the assertion" },
-    { "id": "TS-6", "scenario": "T3 flat case: a stable ratio across the window", "type": "unit", "expected": "No drift candidate" },
-    { "id": "TS-7", "scenario": "Scan finds nothing at all", "type": "integration", "expected": "Zero candidates AND one run-receipt row — quiet is distinguishable from dead" },
+    { "id": "TS-1", "scenario": "T1 POSITIVE — fires on the founding specimen: SMS-coverage question 08-03 and 08-05", "type": "unit", "expected": "One T1 candidate emitted, asserting the TRIGGER NAME and citing both messages (not merely toHaveLength(1))" },
+    { "id": "TS-2", "scenario": "T1 NEGATIVE, DIFFERENT AXIS — two messages 26h apart of DIFFERENT classes. The positive varies TIME, so the negative must vary CLASS: a negative that only shortens the gap is passed by a classifier broken in the over-collapse direction, which is the likely break since clustering is new work", "type": "unit", "expected": "No candidate — proves the classifier actually discriminates class, not just elapsed time" },
+    { "id": "TS-2b", "scenario": "T1 THIRD ARM — null/absent facts", "type": "unit", "expected": "Returns UNKNOWN, never a silent no-fire (contract established at lib/solomon/conduct-probes.js:49-58)" },
+    { "id": "TS-3", "scenario": "T2 POSITIVE — recurrence whose pre-fix occurrences exist ONLY in retention_archive. Recast as a RESOLVER test with a table-recording supabase double: the union lives in the resolver, so a pure probe fed pre-unioned facts would prove nothing", "type": "unit", "expected": "Candidate emitted AND the double records that BOTH retention_archive and session_coordination were queried" },
+    { "id": "TS-4", "scenario": "T2 NEGATIVE, DIFFERENT AXIS — two occurrences that BOTH precede the fix timestamp. The positive varies WHERE ROWS LIVE, so the negative varies TEMPORAL ORDER VS THE FIX. A degenerate n=1 negative is satisfied by any count>=2 detector without ever consulting the fix timestamp, leaving T2's entire semantic content unexercised", "type": "unit", "expected": "No candidate — proves the after-fix pivot is actually evaluated" },
+    { "id": "TS-4b", "scenario": "T2 THIRD ARM — null/absent facts", "type": "unit", "expected": "Returns UNKNOWN, never a silent no-fire" },
+    { "id": "TS-5", "scenario": "T3 POSITIVE — a seeded drifting ratio MUST FIRE. This was the clearest FR-7 violation in the first draft: the original TS-5 only asserted that a reading was emitted, so T3 could ship with a detector that can never fire and the suite would stay green", "type": "unit", "expected": "One T3 drift candidate emitted, asserted by trigger name" },
+    { "id": "TS-6", "scenario": "T3 NEGATIVE, DIFFERENT AXIS — an identical series skeleton with LOW VARIANCE. The positive varies drift magnitude, so the negative varies variance on the same skeleton rather than substituting a different-shaped series", "type": "unit", "expected": "No drift candidate" },
+    { "id": "TS-6b", "scenario": "T3 SPAN GUARD — a ratio whose numerator and denominator are measured over different extents", "type": "unit", "expected": "Assertion fails / UNKNOWN — a ratio spanning mismatched extents must never be emitted as a reading" },
+    { "id": "TS-7", "scenario": "Sweep finds nothing at all", "type": "db", "expected": "Zero candidates AND one run-receipt row. MUST be named *.db.test.js so it routes to the gated db project — an unguarded DB test in tests/unit/ is blocked by pre-commit Stage 1.6" },
     { "id": "TS-8", "scenario": "Liveness predicate reads a null / stale receipt", "type": "unit", "expected": "alarm:true in both cases" },
-    { "id": "TS-9", "scenario": "Two candidates of the same class on the same day", "type": "integration", "expected": "Two distinct feedback rows, not one collapsed row" },
-    { "id": "TS-10", "scenario": "Candidate insert against the real feedback contract", "type": "integration", "expected": "All four NOT NULL columns populated with CHECK-valid values; no 23514" },
-    { "id": "TS-11", "scenario": "solomon_trend_candidate membership in MACHINE_TELEMETRY_CATEGORIES", "type": "unit", "expected": "Asserted ABSENT — a regression here would silently collapse candidates to one per day" }
+    { "id": "TS-9", "scenario": "Two candidates of the same class on the same day", "type": "db", "expected": "Two distinct feedback rows, not one collapsed row. Named *.db.test.js (gated db project)" },
+    { "id": "TS-10", "scenario": "Candidate insert against the real feedback contract", "type": "db", "expected": "All four NOT NULL columns populated with CHECK-valid values; no 23514. Named *.db.test.js (gated db project)" },
+    { "id": "TS-11", "scenario": "solomon_trend_candidate membership in MACHINE_TELEMETRY_CATEGORIES", "type": "unit", "expected": "Asserted ABSENT — a regression here would silently collapse candidates to one per day" },
+    { "id": "TS-12", "scenario": "WIRING REGRESSION — the entrypoint is visible to the invocation classifier", "type": "unit", "expected": "classifyRequiresInvocation returns requiresInvocation:true for scripts/solomon/trend-eyes-sweep.mjs. This is the test that would have caught the two unwired eva scripts at ship time; without it FR-8 rests on a one-time manual receipt check that cannot regress-protect" }
   ],
   "acceptance_criteria": [
     "A real scheduled GHA run has executed and left a run-receipt row dated after merge — a merged workflow file is not accepted as evidence",
@@ -210,7 +216,7 @@
   "system_architecture": {
     "summary": "A daily GHA cron runs a pure-probe scan over existing sources, writing candidate rows and a run-receipt; Solomon's existing seat crons grade and promote at most one per day.",
     "components": [
-      { "name": "scripts/solomon/trend-eyes-scan.mjs", "change": "NEW — scan entrypoint (IO + orchestration)" },
+      { "name": "scripts/solomon/trend-eyes-sweep.mjs", "change": "NEW — scan entrypoint (IO + orchestration)" },
       { "name": "lib/solomon/trend-eyes-probes.js", "change": "NEW — pure probe functions for T1/T2/T3, no IO" },
       { "name": "lib/solomon/trend-eyes-liveness.js", "change": "NEW — pure run-receipt liveness predicate" },
       { "name": ".github/workflows/solomon-trend-eyes-scan.yml", "change": "NEW — daily cron, copied from solomon-ledger-reconcile.yml" },
@@ -224,7 +230,7 @@
     "steps": [
       "Write lib/solomon/trend-eyes-probes.js with pure T1/T2/T3 probes taking injected facts",
       "Write the per-class two-sided test suite BEFORE the IO layer, so each class has a firing positive and a silent negative",
-      "Write the resolver/IO half in scripts/solomon/trend-eyes-scan.mjs, including the retention_archive UNION session_coordination read for T2",
+      "Write the resolver/IO half in scripts/solomon/trend-eyes-sweep.mjs, including the retention_archive UNION session_coordination read for T2",
       "Add the candidate writer through lib/governance/emit-feedback.js, honouring the four-NOT-NULL insert contract",
       "Add the run-receipt writer plus the external pure liveness predicate (copy the gauge-runner triple)",
       "Add the GHA workflow with an ACTIVE schedule, copied from solomon-ledger-reconcile.yml",
@@ -234,7 +240,7 @@
   "smoke_test_steps": [
     {
       "step_number": 1,
-      "instruction": "node scripts/solomon/trend-eyes-scan.mjs --dry-run",
+      "instruction": "node scripts/solomon/trend-eyes-sweep.mjs --dry-run",
       "expected_outcome": "Exits 0, prints the window it scanned and a per-class candidate count, and writes no rows in dry-run mode"
     },
     {
