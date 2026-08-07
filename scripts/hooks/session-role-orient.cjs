@@ -237,8 +237,9 @@ async function fetchDriveReport(get = pgGet) {
  */
 async function stampAdamReceipt(reportId) {
   try {
-    const [{ writeConsumptionReceipt }, { createClient }] = await Promise.all([
+    const [{ writeConsumptionReceipt }, { DRIVE_REPORT_LANE }, { createClient }] = await Promise.all([
       import('../../lib/consumption/drive-report-receipts.js'),
+      import('../../lib/drive-loop/lanes.js'),
       import('@supabase/supabase-js'),
     ]);
     const url = process.env.SUPABASE_URL, key = process.env.SUPABASE_SERVICE_ROLE_KEY;
@@ -254,7 +255,7 @@ async function stampAdamReceipt(reportId) {
     try {
       return await writeConsumptionReceipt(createClient(url, key), {
         reportId,
-        lane: 'adam',
+        lane: DRIVE_REPORT_LANE.ADAM,
         // What the row attests, stated ON it: the headline was emitted into this seat's SessionStart
         // context. That IS delivery for this lane — unlike the chairman_brief lane, there is no
         // transport downstream that could still drop it — but saying so costs one field and stops a
