@@ -21,6 +21,7 @@ const { isTwoWayV2Enabled } = require('../lib/coordinator/resolve.cjs');
 const { isFullUuid } = require('../lib/coordinator/dispatch.cjs');
 const { capBody } = require('./worker-signal.cjs');
 const { resolveAdamReplyTarget, retargetStaleAdamInbound, verifyReplyDelivered } = require('../lib/coordinator/adam-identity.cjs');
+const { enforceClockStamp } = require('../lib/coordinator/clock-stamp-guard.cjs');
 
 // Default reply lifetime — comfortably exceeds the worker await window (30s) plus margin.
 const REPLY_DEFAULT_TTL_MS = 60 * 60_000;
@@ -40,6 +41,15 @@ function buildReplyPayload({ correlationId, body, coordinatorSession }) {
     // always fire-and-forget (SD-LEO-INFRA-ROLE-BASED-COMMS-ROUTING-PROTOCOL-001-C).
     reply_class: 'fire-and-forget'
   };
+  // Clock guard BEFORE capBody: a "clock read <t>" header asserts the value was READ. This
+  // coordinator fabricated one twice on 2026-07-29 (+10h36m, then +93m after resolving to read
+  // it every message), so the check lives here rather than in any caller — buildReplyPayload is
+  // the single door both coordinator-reply.cjs and coordinator-ack-adam.cjs pass through.
+  // Rewrites rather than refuses: a bad header must never cost a real message.
+  if (body) body = enforceClockStamp(body, {
+    onRewrite: ({ claimed, truth, driftMin }) => console.error(
+      `  *** CLOCK STAMP OFF BY ${driftMin.toFixed(0)} MIN — rewrote "${claimed}" -> "${truth}" ***`),
+  });
   if (body) payload.body = capBody(body); // QF-20260710-560: reject over-cap, never silently clip
   // INVARIANT: no signal_type (would be scooped by signal-router) / no intent_action.
   return payload;
