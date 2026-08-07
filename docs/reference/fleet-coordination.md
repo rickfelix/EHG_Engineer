@@ -1,10 +1,10 @@
 ---
 category: Reference
 status: Draft
-version: 1.2.0
+version: 1.3.0
 author: Claude Code
-last_updated: 2026-07-10
-tags: [fleet, coordinator, workers, sessions, coordination, monte-carlo, liveness, reservation-fence]
+last_updated: 2026-07-31
+tags: [fleet, coordinator, workers, sessions, coordination, monte-carlo, liveness, reservation-fence, receipts, answered-rate]
 ---
 
 # Fleet Coordination System
@@ -170,6 +170,45 @@ leaves the worker nameless (named by the next cron pass), never breaking check-i
 3. **Acknowledged** — set when worker acts on the message (or auto-ack for non-actionable types)
 4. **Expired** — sweep cleans up messages past `expires_at`
 
+### Coordination Receipts
+
+A read stamp is not an answer. `read_at` says a message was rendered; it says nothing about whether
+anyone acted. Receipts add the missing half — a **durable, observable return state** so a sender can
+distinguish "answered" from "shouted into a queue nobody re-reads" (SD-LEO-INFRA-WORKER-ESCALATION-WRITE-001).
+
+Receipts live in `coordination_receipts`, written by `lib/coordination/receipt-ledger.cjs`. Three lanes
+write them:
+
+| Lane | Written by | Covers |
+|------|-----------|--------|
+| `signal` | `scripts/coordinator-ack-signal.cjs` | worker → coordinator friction signals |
+| `work_assignment` | `lib/checkin/steps/directed-assignment.cjs` | coordinator → worker directed assignments |
+| `advisory` | `lib/coordinator/adam-advisory-store.cjs` | Adam advisories the coordinator disposes of |
+
+States are `delivered` → `seen` → `disposed`; a disposed receipt carries a disposition of `actioned`,
+`declined` or `superseded`. **A retention stamp is not an answer** — `is_retention` rows are excluded
+from the answered rate, otherwise flood control would improve the very gauge that exists to notice
+nobody replied.
+
+**Read the ledger, never `session_coordination`, to compute a rate.** `cleanup_expired_coordination()`
+deletes *acked* rows at `created + 24h` while *unacked* rows persist, so a survivor-table rate measures
+the deletion policy rather than anyone's conduct. Measured 2026-07-31: 0 of 31 acked rows survived 24h
+against 1,930 unacked that did.
+
+**Unmeasured is not unanswered.** A window in which the writer was not deployed produces zero receipts —
+identical, to a naive query, to a window in which nobody answered. `lib/coordination/answered-rate.cjs`
+therefore returns **UNKNOWN rather than 0** whenever coverage cannot be established, and its `verdict`
+field names why, so a caller cannot render UNKNOWN as a healthy zero by accident.
+
+Two traps worth naming, both found by wiring the first reader:
+
+- **Group by `payload.sender_callsign`.** There is no top-level `sender_callsign` column on
+  `session_coordination`; a reader that passes raw DB rows and reads the top-level field buckets every
+  seat as `unknown`, which makes "no seat at zero" unfalsifiable while still returning a confident number.
+- **Page past the 1000-row cap.** PostgREST returns at most 1000 rows by default, *without error*, so an
+  unpaginated read yields a rate over a truncated page. A silent truncation does not merely understate a
+  total — it manufactures specific, nameable, wrong conclusions about individual seats.
+
 ## Coordinator Startup Flow
 
 When `/coordinator start` runs:
@@ -177,7 +216,12 @@ When `/coordinator start` runs:
 1. **Sweep** — `stale-session-sweep.cjs` cleans dead claims, resolves conflicts
 2. **Identity assignment** — `assign-fleet-identities.cjs` assigns colors/callsigns
 3. **Dashboard** — `fleet-dashboard.cjs all` shows full fleet status
-4. **Cron loops** — the coordinator runs **eight** standard loops (`STANDARD_LOOPS` in `scripts/coordinator-startup-check.mjs`):
+4. **Answered rate** — `renderAnsweredRate()` prints the 7-day signal answered rate and a per-seat
+   breakdown from `coordination_receipts` (see [Coordination Receipts](#coordination-receipts)). This is
+   the ledger's first production reader: the coordinator is both the party whose conduct the rate measures
+   and the one who can act on it. It is **fail-open** — a broken query prints a notice and never blocks
+   startup.
+5. **Cron loops** — the coordinator runs **eight** standard loops (`STANDARD_LOOPS` in `scripts/coordinator-startup-check.mjs`):
    - Stale-session sweep — every 5 min
    - Fleet dashboard — every 5 min (offset +2 min)
    - Fleet identity refresh — every 5 min (offset +4 min)
