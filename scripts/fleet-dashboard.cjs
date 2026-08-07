@@ -341,6 +341,22 @@ async function loadData() {
     hasTickAlive(s) ||
     hasExpectedSilence(s)
   );
+  // SD-LEO-INFRA-FLEET-HEALTH-VERDICT-001: liveness for the HEALTH VERDICT arrives by a second query.
+  // v_active_sessions above does NOT expose last_tool_at (measured, not assumed) — the only signal that
+  // did not lie on any of the three stalled specimens. So the verdict joins claude_sessions by
+  // session_id rather than trusting the heartbeat-led OR, which counts a frozen seat as a working one.
+  // A failure here yields NO rows, which the verdict reports as UNKNOWN rather than as a fleet-wide
+  // DOWN — the gauge being blind is not the same claim as the fleet being dead.
+  let livenessRows = [];
+  let livenessTruncated = false;
+  try {
+    const { fetchPopulation } = require('../lib/fleet/stuck-seat-population.cjs');
+    const pop = await fetchPopulation(supabase);
+    livenessRows = pop.seats;
+    livenessTruncated = pop.truncated;
+  } catch (e) {
+    livenessTruncated = true; // unreadable is not healthy, and it is not DOWN either
+  }
   const staleSessions = sessions.filter(s =>
     s.heartbeat_age_seconds >= STALE_THRESHOLD &&
     !hasPidAlive(s) &&
@@ -462,7 +478,7 @@ async function loadData() {
 
   return {
     sessions, allSessions, children, workable, coordMessages, rawSessions, sdStatusMap, qfStatusMap,
-    claimedSdIds, activeSessions, staleSessions, idleSessions,
+    claimedSdIds, activeSessions, staleSessions, idleSessions, livenessRows, livenessTruncated,
     completedChildren, totalChildren, orchPct,
     unclaimedChildren, unclaimedStandalone, bareShellSDs: bareShells,
     humanActionHolds,
@@ -890,14 +906,41 @@ async function printCoaching(d) {
 
 // ── Section: Health ──
 function printHealth(d) {
-  const health = d.activeSessions.length >= 3 ? 'HEALTHY' : d.activeSessions.length >= 1 ? 'DEGRADED' : 'DOWN';
-  const icon = health === 'HEALTHY' ? '[OK]' : health === 'DEGRADED' ? '[!!]' : '[XX]';
+  // SD-LEO-INFRA-FLEET-HEALTH-VERDICT-001. THIS USED TO BE A PURE COUNT OF activeSessions, and that
+  // count was satisfied by the very condition it should have reported: three stalled seats — exactly
+  // the >=3 threshold — printed [OK] while operators escalated, with the contradicting stale count
+  // rendered two lines below. The verdict now consults the stuck-seat classifier this file has
+  // imported all along, ~790 lines down at printStuckSeatStrip.
+  const { computeHealthVerdict, HEALTH } = require('../lib/fleet/health-verdict.cjs');
+  const hv = computeHealthVerdict({
+    sessions: d.activeSessions,
+    livenessRows: d.livenessRows,
+    truncated: d.livenessTruncated,
+    cutPointMinutes: STUCK_SEAT_CUT_POINT_MINUTES,
+  });
+  const health = hv.verdict;
+  const icon = health === HEALTH.HEALTHY ? '[OK]' : health === HEALTH.DEGRADED ? '[!!]'
+    : health === HEALTH.UNKNOWN ? '[??]' : '[XX]';
 
   console.log('FLEET HEALTH ' + icon);
   console.log('─'.repeat(72));
-  console.log('  Active:  ' + d.activeSessions.length + ' workers');
+  console.log('  Working: ' + hv.live + ' of ' + hv.evaluated + ' claimed seats (tool-verified)');
   console.log('  Unclaimed: ' + d.idleSessions.length + ' sessions (no SD claim)');
   console.log('  Stale:   ' + d.staleSessions.length + ' sessions');
+  if (hv.blindReason) {
+    console.log('  ?? UNKNOWN: ' + hv.blindReason + ' — the gauge could not measure. NOT a healthy');
+    console.log('     fleet, and NOT a dead one; no verdict is being asserted here.');
+  }
+  if (hv.excluded.length) {
+    const by = {};
+    for (const e of hv.excluded) by[e.reason] = (by[e.reason] || 0) + 1;
+    console.log('  Excluded: ' + Object.entries(by).map(([k, v]) => v + ' ' + k).join(', '));
+    console.log('     (heartbeat-fresh but not working — the gap this verdict used to miss)');
+  }
+  // SCOPE LIMIT, STATED BESIDE THE VERDICT IT QUALIFIES (lib/fleet/stuck-seat-predicate.cjs:32):
+  // a liveness gauge, not a tamper-evident control. Both columns are writable by the seat being
+  // judged; the threat model is an accident, and a wedged worker is by definition not writing.
+  console.log('  Basis:   last_tool_at + loop_state — a liveness gauge, NOT a tamper-evident control');
   console.log('  Orch:    ' + d.completedChildren + '/' + d.totalChildren + ' children complete (' + d.orchPct + '%)');
   console.log('  Status:  ' + health);
 

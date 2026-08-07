@@ -1,0 +1,73 @@
+name: "Role capture gate (cron)"
+
+# SD-LEO-INFRA-FORCE-ROLE-SESSIONS-001 (FR-4) — durable, session-independent measurement of the
+# forced-capture obligation for Adam, Solomon and the coordinator.
+#
+# WHY THIS IS REQUIRED AND NOT DECORATIVE. The gate's primary homes are session-scoped: the
+# coordinator's quiet tick is armed as a harness CronCreate loop whose 'quiet-tick' entry is
+# explicitly torn down by lib/coordinator/teardown-coordinator.cjs on sustained idle, Adam's lives
+# in ADAM_LOOPS in scripts/adam-startup-check.mjs, and Solomon's self-adherence loop is re-armed
+# per /solomon startup. All three therefore go dark for exactly the seat that has stopped ticking —
+# which is the population this SD exists to catch. Measured 2026-08-02: four seats wedged
+# mid-iteration carrying loop_state=active with a stale last_tool_at, one of them a role seat at
+# 386m. A gate reachable only through a session-armed loop cannot see any of them.
+#
+# This is the THIRD instance of an established repo idiom, not a novel design: backlog-rank-cron.yml
+# and singleton-relaunch-cron.yml are both durable GitHub Actions mirrors of a session-armed loop.
+#
+# CHECK-ONLY, DELIBERATELY. This workflow never invokes the record or no-capture verbs. A gate that
+# can satisfy itself on a role's behalf measures nothing — it would report SATISFIED forever while
+# the role contributed nothing, which is precisely the false-green this SD exists to remove.
+#
+# scripts/role-capture-gate.mjs always exits 0, including on REQUIRED, so this job reports the
+# obligation rather than failing the build on it: a red X every 30 minutes for a role that simply
+# has not written its learning yet would be alert fatigue, which is the trap QF-20260725-638
+# removed. The verdict lives in the step output and in the gate's own store.
+
+on:
+  schedule:
+    # Every 30 minutes, matching the 1800s role_session cadence in periodic_process_registry.
+    # Offset to :13/:43 to dodge the other recurring crons (fleet-down-alert 11,26,41,56;
+    # backlog-rank 9,24,39,54; charter-audit 8,23,38,53).
+    - cron: '13,43 * * * *'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ${{ github.workflow }}
+  cancel-in-progress: true
+
+jobs:
+  check:
+    name: Check the role capture obligation
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+
+    env:
+      SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+      SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: 'npm'
+
+      - name: Install dependencies
+        run: npm ci --ignore-scripts
+
+      # Each role is checked separately so one role's store error cannot mask the other two.
+      - name: Check Adam
+        run: node scripts/role-capture-gate.mjs check --role adam
+
+      - name: Check the coordinator
+        run: node scripts/role-capture-gate.mjs check --role coordinator
+
+      - name: Check Solomon
+        run: node scripts/role-capture-gate.mjs check --role solomon

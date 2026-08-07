@@ -119,6 +119,19 @@ export const ADAM_LOOPS = [
     prompt: 'node scripts/adam-advisory.cjs inbox --quiet',
   },
   {
+    // SD-LEO-INFRA-FORCE-ROLE-SESSIONS-001 (FR-3/FR-4): Adam's forced-capture obligation, evaluated
+    // at a recurring operating choke rather than at turn end — a wedged session never reaches
+    // turn-end, so a Stop hook would have nothing to hook (four seats measured wedged
+    // mid-iteration 2026-08-02, one of them a role seat at 386m).
+    key: 'capture-gate',
+    folded: true, // composed by adam-quiet-tick's capture-gate core — never armed standalone
+    gha_backed: true, // role-capture-gate-cron.yml — survives this session-armed leg going dark
+    label: 'Adam forced-capture obligation (check-only)',
+    script: 'role-capture-gate.mjs',
+    cron: '13,43 * * * *',
+    prompt: 'node scripts/role-capture-gate.mjs check --role adam',
+  },
+  {
     key: 'offer-help',
     folded: true, // SD-LEO-INFRA-TOKEN-BURN-AUTOPILOT-001: composed by adam-quiet-tick — never armed standalone
     label: 'Offer coordinator help (agent judgment, propose-only, silence-by-default)',

@@ -210,6 +210,14 @@ export const STANDARD_LOOPS = [
   { key: 'unranked-gauge', label: 'Eligible-but-unranked-leaf-count invariant gauge', script: 'gauge-unranked-claimable-leaves.mjs', cron: '9,24,39,54 * * * *',
     gha_backed: true,
     prompt: 'node scripts/gauge-unranked-claimable-leaves.mjs' },
+  // SD-LEO-INFRA-FORCE-ROLE-SESSIONS-001 (FR-3/FR-4): the coordinator's forced-capture obligation,
+  // evaluated at a recurring operating choke rather than at turn end (a wedged session never
+  // reaches turn-end, so a Stop hook would have nothing to hook). folded — composed by
+  // coordinator-quiet-tick's capture-gate core, never armed standalone. gha_backed via
+  // role-capture-gate-cron.yml, because teardown-discipline deletes this session-armed leg on
+  // sustained idle and that is exactly the seat whose silence needs measuring.
+  { key: 'capture-gate', folded: true, gha_backed: true, label: 'Coordinator forced-capture obligation (check-only)', script: 'role-capture-gate.mjs', cron: '13,43 * * * *',
+    prompt: 'node scripts/role-capture-gate.mjs check --role coordinator' },
   // QF-20260702-976: the OPERATING layer for SD-LEO-INFRA-COORDINATOR-ORCHESTRATED-SINGLETON-REFRESH-001-A.
   // The trigger + scheduler logic (lib/coordinator/singleton-relaunch-trigger.js, scripts/
   // singleton-relaunch-scheduler.mjs, npm-wired as singleton-relaunch:run) shipped but nothing

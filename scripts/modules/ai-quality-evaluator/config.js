@@ -26,7 +26,29 @@ export const SD_TYPE_PASS_THRESHOLDS = {
   database: 65,
 
   // Security SDs: Stricter (but not blocking)
-  security: 65
+  security: 65,
+
+  // Refactor SDs: raised 60 -> 65 by SD-LEO-INFRA-GATE-THRESHOLD-TUNING-002.
+  // BEFORE VALUE FOR ROLLBACK: no key at all — refactor fell through to DEFAULT_THRESHOLD (60).
+  // Deleting this line restores the prior behaviour exactly; that is the whole rollback.
+  //
+  // WHY THIS ONE AND NOT THE OTHER THREE RECOMMENDED. The tuning view recommends per
+  // (sd_type x content_type), but this table is keyed by sd_type ALONE and
+  // scripts/modules/ai-quality-evaluator/scoring.js:88 never passes content_type — so a per-cell
+  // recommendation cannot be applied without moving every other content_type in that type.
+  // refactor is the only one where that is harmless: ALL THREE of its cells clear 65 (prd 78.5,
+  // retrospective 88.4, user_story 82.4), so one key satisfies two recommendations with no
+  // collateral. feature 60->65 and infrastructure 55->60 were REFUSED, because each would also
+  // raise the bar on its user_story cell — feature x user_story at 40.5 avg / 15.6% pass, and
+  // infrastructure x user_story at 41.5 / 21.4% over n=1466, the largest cell in the view. Both are
+  // lanes SD-LEO-INFRA-GATE-THRESHOLD-TUNING-001 deliberately HELD, so raising them would be the
+  // exact opposite of what the same view recommends for them.
+  //
+  // CONSEQUENCE, RECORDED RATHER THAN LEFT AS A SIDE EFFECT: refactor x user_story is the control
+  // TUNING-001 used to exonerate the scorer — the healthy user_story lane proving the same scorer
+  // CAN pass user stories. This raises that control's bar on 2026-08-04. Anyone re-reading that
+  // exoneration needs to know the instrument moved, and when.
+  refactor: 65
 };
 
 // SD-type-aware blocking thresholds for feedback generation

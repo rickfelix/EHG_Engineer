@@ -60,13 +60,40 @@ jobs:
       # fixture trial, beyond the one already in KNOWN LIMITATIONS: it takes a dependency
       # on the test runner being installed, so it can fail for reasons that have nothing
       # to do with whether the control detects anything.
+      # ⚠️ TRIPWIRE — DO NOT ADD --ignore-scripts HERE WITHOUT READING THIS.
+      # SD-PAT-FIX-FIX-ABSENCE-SIGNAL-001, SECURITY row 72f19e83.
+      #
+      # scripts/audit/control-seed-specs.json is EDITABLE IN A PULL REQUEST, and it drives file
+      # writes and process spawns in this job. SECURITY found three ways to abuse that. They were
+      # accepted as DEFENSE-IN-DEPTH rather than CRITICAL on ONE MEASURED FACT: this job ALREADY
+      # executes PR-controlled code, because `npm ci` runs lifecycle scripts and package.json has
+      # an unconditional `postinstall`. So those bypasses grant an attacker nothing they could not
+      # get more simply. Verified directly — .npmrc carries no ignore-scripts.
+      #
+      # THAT IS SAFETY BY COINCIDENCE, AND THIS COMMENT EXISTS SO IT CANNOT LAPSE SILENTLY.
+      # Adding --ignore-scripts (a sensible hardening for entirely unrelated reasons) CLOSES the
+      # postinstall route and thereby RE-OPENS all three findings as genuinely exploitable, with
+      # nothing anywhere reporting that the trade changed. If you are adding that flag: good, but
+      # first fix the neuter trust model in scripts/audit/control-seed-test.mjs — an allowlist for
+      # spec.env, and stop treating attacker-controlled find/replace against public file content
+      # as safe because the values look reasonable.
       - name: Install dependencies
         run: npm ci --prefer-offline --no-audit
 
       - name: Seed-test every new control in this diff
         run: |
           git fetch origin ${{ github.base_ref }} --depth=0 || true
-          node scripts/lint/control-seed-test-lint.mjs --diff | tee seed-output.txt
+          # FR-2: `2>&1` IS LOAD-BEARING, NOT TIDINESS. A bare pipe carries STDOUT ONLY, and
+          # every failure line in the lint is console.error while both success lines are
+          # console.log. Measured: running the real lint against a repo with one added
+          # control produced ZERO BYTES on stdout. So this summary was POPULATED ON PASS and
+          # BLANK ON FAIL — it rendered "A control that cannot catch its own seeded defect
+          # does not merge." above an empty code block exactly when the gate found something.
+          #
+          # FR-1/FR-5: `--diff` removed — it was never read (changedFiles() ignores argv), and
+          # enforcing is now the lint's DEFAULT, so no flag is needed to make this gate able
+          # to fail. Pass --advisory only to deliberately opt out.
+          node scripts/lint/control-seed-test-lint.mjs 2>&1 | tee seed-output.txt
           exit_code=${PIPESTATUS[0]}
           {
             echo "## Control Seed-Test Gate"

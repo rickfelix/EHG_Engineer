@@ -92,6 +92,14 @@ export const COMPOSED_CORES = [
   // stdout is truncated to one line (scriptCore below), so it must NEVER consume (read_at);
   // it stamps delivered_at only. Operator-visible surfacing is FR-3's surfaceInboxItems.
   { key: 'inbox-monitor', script: 'adam-advisory.cjs', args: ['scripts/adam-advisory.cjs', 'inbox', '--quiet', '--background'], quiescentSkip: false, safety: true },
+  // SD-LEO-INFRA-FORCE-ROLE-SESSIONS-001 (FR-3): the forced-capture obligation, evaluated at a
+  // RECURRING OPERATING CHOKE rather than at turn end. A turn-end / Stop-hook guard is blind to
+  // how role sessions actually die — four seats were measured wedged mid-iteration on 2026-08-02
+  // with loop_state=active and a stale last_tool_at, and a wedged session never reaches turn-end.
+  // Riding here means a frozen seat visibly stops passing, which is correct AND observable.
+  // check-only: the tick never records on Adam's behalf — a gate that satisfies itself measures
+  // nothing. The CLI always exits 0, so this contributes a state token and never a core failure.
+  { key: 'capture-gate', script: 'role-capture-gate.mjs', args: ['scripts/role-capture-gate.mjs', 'check', '--role', 'adam'], quiescentSkip: false },
 ];
 export const DELTA_GATED_LOOPS = ['belt-countdown', 'offer-help'];
 
@@ -147,7 +155,12 @@ export async function readCriticalPathParents(sb) {
     // already finished, instead of escalating a stale board row.
     const data = await fetchAllPaginated(() => sb
       .from(TASK_LEDGER_TABLE)
-      .select('id, title, updated_at, status, source_kind, source_ref')
+      // QF-20260728-544: `tier` MUST be selected. stall-alert.js decides suppression on
+      // node.tier, and omitting it here left that value undefined on every row — the predicate
+      // could not see its own input, so QF-20260725-639's anchor suppression never fired once
+      // and 49 alerts/tick recurred. Selecting a column the WHERE clause already pins looks
+      // redundant; it is not, because the consumer reads the VALUE, not the filter.
+      .select('id, title, updated_at, status, tier, source_kind, source_ref')
       .eq('tier', 'parent')
       .in('status', ['open', 'in_progress', 'blocked'])
       .order('id', { ascending: true })); // unique tiebreaker (FR-6)

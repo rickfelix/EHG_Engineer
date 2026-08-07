@@ -79,3 +79,58 @@ describe('the premise this test rests on is still true', () => {
     expect(enforces).toBe(false);
   });
 });
+
+/**
+ * QF-20260729-221 — THE SECOND FALSE-ASSURANCE CLAIM IN THE SAME PROMPT SURFACE.
+ *
+ * This file already pinned the QUOTA claim. It did NOT cover the task_budget claim, and that
+ * is exactly why the second one survived: a file named "no false assurance" guarded one of the
+ * two false assurances Solomon was being told. A guard is only as wide as the claims it
+ * enumerates, and the unenumerated claim is the one that drifts.
+ *
+ * .claude/commands/solomon.md called enforceSweepBudget "the runtime backstop". It cannot fire:
+ * it takes `spent` as an argument, nothing supplies it, and it is registered expectedWired:false
+ * in lib/governance/guard-wiring-registry.js. Called the way the deep-sweep prompt spelled it —
+ * with no arguments — `spent` defaults to {} and every comparison evaluates 0 >= ceiling.
+ */
+describe('QF-20260729-221: the task_budget claim stays honest', () => {
+  const SOLOMON_CMD = join(here, '..', '..', '.claude', 'commands', 'solomon.md');
+
+  it('solomon.md never describes the task_budget as an enforced runtime backstop', () => {
+    const cmd = readFileSync(SOLOMON_CMD, 'utf8');
+    // The phrase may survive only inside a NEGATION ("there is NO runtime backstop").
+    const asserted = /(?<!no\s)(?<!NO\s)runtime backstop(?!\s*behind)/i.test(
+      cmd.replace(/There is NO runtime backstop behind them\./i, '')
+    );
+    expect(asserted).toBe(false);
+    expect(cmd).toMatch(/NOT CURRENTLY ENFORCED AT RUNTIME/);
+    expect(cmd).toMatch(/guard-wiring-registry/);
+  });
+
+  it('the deep-sweep prompt warns that the ARGUMENT-LESS call cannot fail', () => {
+    // The prompt already said "YOU are the enforcer" — but then handed the enforcer a call
+    // shape that can only ever return withinBudget:true. Disclosure plus a rubber stamp still
+    // reads as a passing check.
+    const src = readFileSync(STARTUP_CHECK, 'utf8');
+    expect(src).toMatch(/CANNOT FAIL/);
+    expect(src).toMatch(/enforceSweepBudget\(null,\{count:/);
+  });
+
+  it('PREMISE CONTROL, two-sided: the bare call always passes, a real spend refuses', async () => {
+    // Anchors the claim to measured behaviour rather than to a comment. If a future SD wires
+    // `spent`, the second assertion still holds and the FIRST should start failing — which is
+    // the signal that both documents must be corrected in that same change-set.
+    const { createRequire } = await import('node:module');
+    const req = createRequire(import.meta.url);
+    const { enforceSweepBudget } = req(ADVISORY);
+
+    expect(enforceSweepBudget().withinBudget).toBe(true);
+    expect(enforceSweepBudget(null, { count: 500, elapsedMs: 0, tokens: 0 }).withinBudget).toBe(false);
+  });
+
+  it('the registry still records the guard as unwired — the premise both docs rest on', () => {
+    const registry = readFileSync(join(here, '..', '..', 'lib', 'governance', 'guard-wiring-registry.js'), 'utf8');
+    const entry = registry.slice(registry.indexOf("name: 'enforceSweepBudget'"));
+    expect(entry.slice(0, 400)).toMatch(/expectedWired:\s*false/);
+  });
+});
