@@ -29,6 +29,9 @@ import { readFileSync, existsSync, readdirSync } from 'node:fs';
 import { execSync } from 'node:child_process';
 import path from 'node:path';
 import { CITATION_RE } from './diagnostic-gauge-citation-patterns.mjs';
+// SD-LEO-INFRA-SWEEP-REPO-SCANNERS-001 (FR-2). Shape B: only isFixturePath — see the helper for why
+// stripComments is shape-A-only and would be cargo-cult here.
+import { isFixturePath, isFixtureEntry } from '../../lib/lint/added-line-text.mjs';
 
 const ALLOWLIST_PATH = 'scripts/lint/diagnostic-gauge-citation-allowlist.json';
 const RUNTIME_DIRS = ['scripts', 'lib', 'src', 'server', 'api', 'app'];
@@ -63,7 +66,9 @@ function candidateFiles() {
         .filter((f) => CODE_RE.test(f))
         .filter((f) => RUNTIME_DIRS.includes(f.split('/')[0]))
         .filter((f) => !SKIP_DIR_RE.test(f))
-        .filter((f) => f.split('/')[0] !== 'tests');
+        // Supersedes the old top-level-only `split('/')[0] !== 'tests'`: that missed NESTED tests/,
+        // __tests__/ and .test./.spec. files entirely — 346 of them are selectable in this repo.
+        .filter((f) => !isFixturePath(f));
     } catch (e) {
       console.warn(`⚠️  diff base unavailable (${e.message.split('\n')[0]}) — falling back to --all (advisory)`);
       return candidateFilesAll();
@@ -80,6 +85,10 @@ function candidateFilesAll() {
     for (const e of entries) {
       const p = path.join(dir, e.name).replace(/\\/g, '/');
       if (SKIP_DIR_RE.test(p)) continue;
+      // The --all sweep is a SECOND DOOR, and the diff path FALLS BACK to it when the base is
+      // unresolvable — fixing only the diff filter would leave this one serving fixtures. Directories
+      // need a trailing '/', which isFixtureEntry encodes so no call site has to remember it.
+      if (isFixtureEntry(p, e.isDirectory())) continue;
       if (e.isDirectory()) walk(p);
       else if (CODE_RE.test(e.name)) out.push(p);
     }

@@ -36,6 +36,9 @@ import rule from '../../eslint-rules/no-raw-session-coordination-insert.js';
 // sharing this driver's diff/all/exclusion machinery — flags target_session sourced from an
 // echoed row field instead of a fresh identity-resolver call.
 import echoedTargetRule from '../../eslint-rules/no-echoed-session-coordination-target.js';
+// SD-LEO-INFRA-SWEEP-REPO-SCANNERS-001 (FR-2). Shape B: only isFixturePath — see the helper for why
+// stripComments is shape-A-only and would be cargo-cult here.
+import { isFixturePath } from '../../lib/lint/added-line-text.mjs';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const REPO_ROOT = path.resolve(__dirname, '..', '..');
@@ -95,6 +98,16 @@ function walk(dir, out) {
 
 function isExcluded(relPath) {
   if (EXCLUDE_PATHS.has(relPath)) return true;
+  // FR-2 lands HERE rather than at the two call sites because both candidateFilesDiff and
+  // candidateFilesAll already funnel through this predicate — one door, so the diff path and the
+  // --all sweep cannot drift apart.
+  //
+  // This scanner ALREADY MEANT to exclude test material and covered three of the four shapes
+  // (EXCLUDE_FILE_RE catches .test./.spec. basenames, EXCLUDE_DIR_PREFIXES catches a top-level
+  // tests/); a file merely NESTED under __tests__/ without .test. in its name slipped through, which
+  // is 5 live files (scripts/__tests__/replay/*.mjs). So this closes an inconsistency in the
+  // scanner's OWN exclusion policy — it is not a new policy imported from elsewhere.
+  if (isFixturePath(relPath)) return true;
   return EXCLUDE_DIR_PREFIXES.some((prefix) => relPath.startsWith(prefix));
 }
 
