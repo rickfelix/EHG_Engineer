@@ -54,16 +54,28 @@ const COORDINATOR_DUTIES = [
   'Teardown discipline: never tear down while workers are active.',
 ];
 
+// DRIFT-CHECK, NOT FULL RE-READ (coordinator 0ab6a99c, 2026-08-01, on Adam's ruling; reported by Solomon
+// 52f5bab8, correlation 0be4e4f9). The previous wording said "re-read", which LITERALLY mandates re-reading
+// ~30k tokens of provably-unchanged foundation docs EVERY HOUR. Solomon complied via a drift-check
+// (content-hash / mtime / row-count, full re-read only on change) — but that was HIS INTERPRETATION, not the
+// text. That gap is the defect: a directive whose literal reading and whose efficient reading diverge gets
+// obeyed LITERALLY by exactly the sessions least able to afford it, and nothing signals when that happens.
+// The drift-check gives the IDENTICAL grounding guarantee at ~1/30th the cost. Do NOT revert this to
+// "re-read" — the grounding requirement is unchanged, only the method of establishing it is stated.
+// Adam ruled it applies to BOTH role reminders because the same hazard sat in his own.
+
 // Adam role-contract reminders — mirrors CLAUDE_ADAM.md / CONST-002 + the 8-dim self-rubric.
 const ADAM_REMINDER =
-  'Hourly responsibilities review: re-read your role contract — CONST-002 (PROPOSE, never execute/accept/graduate), ' +
+  'Hourly responsibilities review: VERIFY your role contract UNCHANGED (content-hash / mtime / row-count); ' +
+  'fully re-read ONLY what changed — CONST-002 (PROPOSE, never execute/accept/graduate), ' +
   'silence-by-default, one-advisory-per-tick, the hard rationale bar (cite a LIVE KR + counterfactual + dedup + CONST self-check), ' +
   'and your 8-dim self-rubric (D1_proactive_sourcing..D8_interface_clarity). Stay silent unless you have ONE ranked, defensible advisory.';
 
 // SD-LEO-INFRA-SOLOMON-HOURLY-ROLE-REFRESHER-001: Solomon role-contract reminder — mirrors CLAUDE_SOLOMON.md
 // / CONST-002 propose-only, silence-by-default, the consult triage gate, and Solomon's 5-dim self-rubric.
 const SOLOMON_REMINDER =
-  'Hourly responsibilities review: re-read your Solomon role contract (CLAUDE_SOLOMON.md) — CONST-002 ' +
+  'Hourly responsibilities review: VERIFY your Solomon role contract (CLAUDE_SOLOMON.md) UNCHANGED ' +
+  '(content-hash / mtime / row-count); fully re-read ONLY what changed — CONST-002 ' +
   '(PROPOSE, never execute/accept/graduate), silence-by-default, the consult triage gate (answer routed ' +
   'solomon_consult only — do not poll for problems), the per-sweep task_budget at ENTRY before any Read/Grep, ' +
   'and your 5-dim self-rubric. Stay silent unless you have a deep, defensible oracle answer.';
@@ -83,22 +95,28 @@ const CANONICAL_OPERATING_MODEL_DOCS = [
 ];
 
 async function buildFoundationsPointer(sb) {
-  let constPart = 'Constitution: re-read ' + CANONICAL_CONSTITUTION_TABLE + ' (CONST-001..014) directly.';
+  // DRIFT-CHECK SHAPE (see the ADAM_REMINDER comment above for provenance). This pointer is the ~30k-token
+  // bulk Solomon named. Note it ALREADY computes the row count below — that IS the drift signal, so the
+  // reminder now hands it over as the verification anchor instead of computing it and then saying "re-read".
+  let constPart = 'Constitution: VERIFY ' + CANONICAL_CONSTITUTION_TABLE +
+    ' unchanged by row-count (CONST-001..014); full re-read ONLY if the count or any rule_code moved.';
   try {
     const { data } = await sb.from(CANONICAL_CONSTITUTION_TABLE).select('rule_code').order('rule_code');
     const codes = (data || []).map(function (r) { return r.rule_code; }).filter(Boolean);
     if (codes.length > 0) {
-      constPart = 'Constitution: re-read ' + CANONICAL_CONSTITUTION_TABLE + ' — ' + codes.length +
-        ' live rule(s) (' + codes[0] + '..' + codes[codes.length - 1] + ').';
+      constPart = 'Constitution: ' + CANONICAL_CONSTITUTION_TABLE + ' has ' + codes.length +
+        ' rule(s) (' + codes[0] + '..' + codes[codes.length - 1] + ') — VERIFY count+range vs your last ' +
+        'grounding; full re-read ONLY on mismatch.';
     }
   } catch (e) {
     // fail-open to the static pointer above — a foundations refresh must never block the reminder
   }
   return (
     constPart + ' ' +
-    'Mission/Vision: re-read ' + CANONICAL_MISSION_VISION_DOC + ' (chairman-approved canonical) plus your ' +
-    'current eva_vision_documents entries. ' +
-    'Operating model: re-read ' + CANONICAL_OPERATING_MODEL_DOCS.join(' and ') + '.'
+    'Mission/Vision: VERIFY ' + CANONICAL_MISSION_VISION_DOC + ' (chairman-approved canonical) unchanged by ' +
+    'content-hash/mtime, and your eva_vision_documents entries by updated_at; full re-read ONLY on change. ' +
+    'Operating model: VERIFY ' + CANONICAL_OPERATING_MODEL_DOCS.join(' and ') +
+    ' unchanged by content-hash/mtime; full re-read ONLY on change.'
   );
 }
 
