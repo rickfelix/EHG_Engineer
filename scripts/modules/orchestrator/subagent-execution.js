@@ -77,7 +77,17 @@ export async function executeSubAgent(subAgent, sdId, options = {}) {
     // stored RAW via safeInsert with no mapVerdict and no original_verdict.
     // The verdict is now passed through UNMODIFIED; mapping and provenance belong to the canonical
     // writer, which this path already invokes via realExecuteSubAgent.
-    verdict: result.verdict,
+    //
+    // QF-20260808-450: the edit above also deleted this `return {` opener and the two identity
+    // fields, leaving `verdict: result.verdict,` dangling with no enclosing object — the file
+    // stopped parsing (node --check: Unexpected token ':' at the next line). Restored to match
+    // the error path below, which returns the same sub_agent_code/sub_agent_name pair. The
+    // verdict pass-through itself is UNCHANGED: this fixes the syntax the removal broke, it does
+    // not reinstate the `|| 'WARNING'` laundering that removal was correct to delete.
+    return {
+      sub_agent_code: code,
+      sub_agent_name: name,
+      verdict: result.verdict,
       confidence: result.confidence !== undefined ? result.confidence : 50,
       critical_issues: result.critical_issues || [],
       warnings: result.warnings || [],

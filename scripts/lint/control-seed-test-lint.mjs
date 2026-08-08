@@ -82,6 +82,45 @@ const SPEC_PATH = 'scripts/audit/control-seed-specs.json';
 // ("may not catch everything") is not a blind spot; it is a shrug.
 const KNOWN_LIMITATION_RE = /KNOWN LIMITATION/i;
 
+/**
+ * SD-LEO-INFRA-STANDING-OBSERVABILITY-ACCEPTANCE-001 (FR-1).
+ *
+ * Placeholders that LOOK like a declaration and say nothing. Rejected explicitly, because the top
+ * risk this check carries is becoming a formality: the obvious fix for a blind guard is usually
+ * blind too, and a proof field nobody reads would pass forever while proving nothing.
+ */
+const PROOF_PLACEHOLDER_RE = /^(?:none|n\/?a|tbd|todo|unknown|yes|ok|done|see above|-+)$/i;
+
+/**
+ * True when a spec declares a USABLE observability proof.
+ *
+ * Requires BOTH halves, because either alone is unfalsifiable:
+ *   `input` — the exact thing the control consumes (columns / keys / exit-signal / env-artifact).
+ *             Without it, "it works" cannot be checked against what it actually reads.
+ *   `seen`  — where a REAL positive was observed in the DEPLOYMENT environment. Without it, the
+ *             only evidence is the fixture trial, which is the gap this whole check exists to close.
+ *
+ * KNOWN LIMITATION: this predicate verifies PRESENCE and NON-PLACEHOLDER-NESS, not TRUTH. A spec
+ * claiming `seen: "CI run 123"` passes even if run 123 never observed anything — the check cannot
+ * dereference the citation. That is deliberate: the alternative is a checker that tries to validate
+ * free text and silently accepts everything it fails to parse, which would be a FALSE NEGATIVE and
+ * strictly worse than an honest, narrow presence check. The citation is for a human reviewer; this
+ * gate only guarantees one was made and is concrete enough to check.
+ *
+ * @param {object} spec entry from control-seed-specs.json
+ * @returns {boolean}
+ */
+export function hasObservabilityProof(spec) {
+  const p = spec?.observability_proof;
+  if (!p || typeof p !== 'object' || Array.isArray(p)) return false;
+  const usable = (v) => {
+    if (typeof v !== 'string') return false;
+    const t = v.trim();
+    return t.length > 0 && !PROOF_PLACEHOLDER_RE.test(t);
+  };
+  return usable(p.input) && usable(p.seen);
+}
+
 function changedFiles(repoRoot) {
   for (const base of ['origin/main...HEAD', 'HEAD~1']) {
     try {
@@ -193,6 +232,32 @@ export function evaluate(repoRoot, files, specs, isControlFn = isControl, prevSp
     const src = existsSync(join(repoRoot, rel)) ? readFileSync(join(repoRoot, rel), 'utf8') : '';
     if (!KNOWN_LIMITATION_RE.test(src)) {
       failures.push({ file: rel, reason: 'NO_KNOWN_LIMITATION', detail: 'no KNOWN LIMITATION declaration naming a concrete undetected condition. All fifteen census instances were controls that did not say what they could not see.' });
+    }
+
+    // SD-LEO-INFRA-STANDING-OBSERVABILITY-ACCEPTANCE-001 (FR-1): it must declare what it can SEE,
+    // and WHERE IT ACTUALLY RUNS.
+    //
+    // The seed trial above proves the control FIRES on a planted defect — but in a FIXTURE. That is
+    // proof of LOGIC, not proof of OBSERVABILITY-WHERE-IT-RUNS, and the two come apart constantly:
+    // five measured instances on 2026-08-08 were controls whose logic was sound every time and that
+    // never RECEIVED the input they needed to see their subject. A guard fed the wrong input cannot
+    // fail, because it cannot see. The sharpest instance was found by this very SD's own LEAD gate,
+    // which accepted a verdict=ERROR row written by a crashing executor for a sub-agent that is not
+    // registered at all — it read ROW EXISTENCE and never read the verdict.
+    //
+    // So the spec must NAME THE INPUT (columns / keys / exit-signal / environment-artifact) and say
+    // where a real positive was SEEN in the deployment environment.
+    if (!hasObservabilityProof(spec)) {
+      failures.push({
+        file: rel,
+        reason: 'NO_OBSERVABILITY_PROOF',
+        detail:
+          `no usable observability_proof in ${SPEC_PATH}. A seed trial proves the control's LOGIC in a fixture; `
+          + 'it does not prove the control RECEIVES its subject where it actually runs. Declare '
+          + 'observability_proof { input, seen } — `input` naming the exact columns / keys / exit-signal / '
+          + 'environment-artifact consumed, and `seen` naming where a REAL positive was observed in the '
+          + 'deployment environment (a CI run, a live invocation), not in a temp-dir fixture.',
+      });
     }
 
     // *** SECOND SEED FORM: A COMMITTED TEST — AND IT IS THE WEAKER ONE ***

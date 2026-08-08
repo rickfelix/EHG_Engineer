@@ -172,6 +172,10 @@
       "find": "reason: 'SEED_DID_NOT_FIRE'",
       "replace": "reason: 'SEED_DID_NOT_FIRE_NEUTERED'",
       "why": "the gate stops emitting the SEED_DID_NOT_FIRE reason its own seed-test asserts on"
+    },
+    "observability_proof": {
+      "input": "The set of control files CHANGED IN THE DIFF (git diff --name-only against the merge base) intersected with the specs in scripts/audit/control-seed-specs.json; each control's OWN SOURCE TEXT (scanned for the KNOWN LIMITATION declaration); and, per seeded trial, the child process EXIT CODE plus stdout of the control run against a planted fixture. It consumes NO database columns and NO environment variables.",
+      "seen": "Real positive observed in the deployment environment on 2026-08-08: this control BLOCKED PR #6875 in CI with 5 findings across 5 controls (NO_SEED_TEST x3, NO_KNOWN_LIMITATION x2), which is a live CI block, not a fixture trial. Additionally the NO_OBSERVABILITY_PROOF reason added by SD-LEO-INFRA-STANDING-OBSERVABILITY-ACCEPTANCE-001 was observed firing against THIS control at HEAD in a live run (matched 1, TRIALS RUN 1, PROVEN_RED:1) before this proof was declared."
     }
   },
   {
