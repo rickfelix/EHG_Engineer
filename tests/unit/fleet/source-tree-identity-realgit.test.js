@@ -329,9 +329,20 @@ describe('S2-R: a PLAIN directory inside the repo is not a worktree, and real gi
       GIT_SSH_COMMAND: 'evil', GIT_EXTERNAL_DIFF: 'evil', GIT_EXEC_PATH: '/tmp',
       PATH: 'keep',
     });
+    // NOT a blanket "no GIT_CONFIG_* survives": R5-1 added POSITIVE hardening, so the scrub
+    // deliberately SETS GIT_CONFIG_NOSYSTEM and GIT_CONFIG_GLOBAL to safe values of its own.
+    // The property is that no ATTACKER-SUPPLIED key survives, which is a different assertion —
+    // a blanket one would now fail on our own hardening and invite someone to delete it.
+    const OURS = new Set(['GIT_CONFIG_NOSYSTEM', 'GIT_CONFIG_GLOBAL']);
     for (const k of Object.keys(scrubbed)) {
-      expect(k, `${k} must not survive the scrub`).not.toMatch(/^GIT_CONFIG_/);
+      if (!/^GIT_CONFIG_/.test(k)) continue;
+      expect(OURS.has(k), `${k} must not survive the scrub`).toBe(true);
     }
+    expect(scrubbed.GIT_CONFIG_COUNT).toBeUndefined();
+    expect(scrubbed.GIT_CONFIG_KEY_0).toBeUndefined();
+    expect(scrubbed.GIT_CONFIG_KEY_7).toBeUndefined();
+    expect(scrubbed.GIT_CONFIG_NOSYSTEM).toBe('1');        // ours, and set ON
+    expect(scrubbed.GIT_CONFIG_GLOBAL).not.toBe('evil');   // ours, not the caller's
     expect(scrubbed.GIT_SSH_COMMAND).toBeUndefined();
     expect(scrubbed.GIT_EXTERNAL_DIFF).toBeUndefined();
     expect(scrubbed.GIT_EXEC_PATH).toBeUndefined();

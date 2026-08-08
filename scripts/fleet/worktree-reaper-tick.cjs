@@ -24,7 +24,7 @@ const { spawn, spawnSync } = require('node:child_process');
 // Module-level, NOT the lazy require inside resolveReaperSourceRoot: the reaper child spawn in
 // tick() needs it too, and a function-scoped binding would be a ReferenceError on exactly the
 // branch that launches the destructive process — a crash that only appears when the reaper runs.
-const { scrubGitEnv } = require('../../lib/fleet/source-tree-refresh.cjs');
+const { scrubGitEnv, makeScrubbedGitRunner } = require('../../lib/fleet/source-tree-refresh.cjs');
 
 // SD-LEO-INFRA-SPAWN-ROOT-CURRENCY-INVARIANT-001 FR-3: resolved from this module's own
 // location, so the reaper's root is a property of the installed code rather than of
@@ -242,16 +242,9 @@ function resolveReaperSourceRoot({ repoRoot, logger, env = process.env, runner, 
   const {
     ensureSourceTreeWorktree, REAPER_SOURCE_DIRNAME, REAPER_SOURCE_BRANCH,
   } = require('../../lib/fleet/source-tree-refresh.cjs');
-  const gitRunner = runner || ((args) => {
-    // EXEC SECURITY: scrubbed env. GIT_DIR/GIT_WORK_TREE in the inherited environment let a BARE
-    // mkdir pass as a source tree, and redirect the subsequent fetch/merge at the shared root's
-    // own refs. spawnSync inherits process.env unless told otherwise.
-    const r = spawnSync('git', args, {
-      cwd: repoRoot, encoding: 'utf8', windowsHide: true, env: scrubGitEnv(process.env),
-    });
-    if (r.status !== 0) throw new Error(`git ${args.join(' ')} failed: ${(r.stderr || '').trim()}`);
-    return r.stdout;
-  });
+  // R5-4: built by the SHARED factory, not by a hand-applied scrub. The scrub used to be inlined
+  // here and at spawn-control's equivalent, and could be unwired at BOTH with the suite green.
+  const gitRunner = runner || makeScrubbedGitRunner(repoRoot, { spawnSync });
   try {
     const res = ensureSourceTreeWorktree({
       repoRoot,
