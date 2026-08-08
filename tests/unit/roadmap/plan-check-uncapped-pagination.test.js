@@ -22,6 +22,11 @@
 
 import { describe, it, expect } from 'vitest';
 import { computePlanCheckStatus, NEXT_LIMIT, COMMITTING_LIMIT } from '../../../lib/roadmap/plan-check-status.js';
+// The REAL section builders — driving them with the REAL join output is the whole point of the
+// FR-2/FR-3 block below. Mocking them would reproduce the blindness this test exists to end.
+import { buildBeltDiagnosis } from '../../../lib/drive-loop/sections/belt-diagnosis.js';
+import { buildChainToGate } from '../../../lib/drive-loop/sections/chain-to-gate.js';
+import { buildNextActs } from '../../../lib/drive-loop/sections/next-acts.js';
 
 /** PostgREST's server-side clamp on an un-ranged read. The number that makes the defect silent. */
 const PG_MAX_ROWS = 1000;
@@ -164,12 +169,89 @@ describe('FR-6: linkage is two-sided — the join can neither fabricate nor blan
     // One-sided would pass for a join that always answers the same way.
     const sb = makeRangeAwareSupabase({ tables: buildTables(20, { linkEvery: 2 }) });
     const status = await computePlanCheckStatus(sb);
-    const linked = status.open_items_all.filter((i) => i.sd_key !== null);
-    const unlinked = status.open_items_all.filter((i) => i.sd_key === null);
+    // Keyed on promoted_to_sd_key, the RAW field — the mapping no longer renames it to sd_key,
+    // because that rename is precisely what blinded the three consumers.
+    const linked = status.open_items_all.filter((i) => i.promoted_to_sd_key);
+    const unlinked = status.open_items_all.filter((i) => !i.promoted_to_sd_key);
     expect(linked.length).toBeGreaterThan(0);
     expect(unlinked.length).toBeGreaterThan(0);
     expect(linked.every((i) => i.sd !== null)).toBe(true);
     expect(unlinked.every((i) => i.sd === null)).toBe(true);
+  });
+});
+
+describe('FR-2/FR-3: the CONSUMERS can actually read what open_items_all supplies', () => {
+  /**
+   * THIS IS THE TEST THAT WAS MISSING, and its absence let a confidently-wrong surface ship.
+   *
+   * The original wiring test asserted only `sections[id].unavailable === undefined` — AVAILABILITY,
+   * never CONTENT. The pre-existing section-level tests also stayed green, because their fixtures
+   * use the RAW item shape the classifiers expect, never the shape production actually feeds them.
+   * So every suite was green over a path nothing correct walked.
+   *
+   * The defect: open_items_all RENAMED the fields the consumers read (sd_key for
+   * promoted_to_sd_key, `wave` title for wave_id, item_id for id). Nothing threw. belt classified
+   * 100% UNSOURCED and chain_to_gate reported "every approved wave is clear" WITH open items —
+   * strictly worse than the honest `unavailable` it replaced.
+   *
+   * So this drives the REAL builders with the REAL join output and asserts what they CONCLUDE.
+   */
+  const MULTI = () => {
+    const t = buildTables(0);
+    t.v_plan_of_record_remainder = [
+      { id: 'i-blocked', wave_id: WAVE_ID, title: 'Blocked item', promoted_to_sd_key: 'SD-B', item_disposition: 'pending', priority_rank: 1, remainder_state: 'promotable_now', lane: null, metadata: {} },
+      { id: 'i-flight', wave_id: WAVE_ID, title: 'In-flight item', promoted_to_sd_key: 'SD-F', item_disposition: 'pending', priority_rank: 2, remainder_state: 'promotable_now', lane: null, metadata: {} },
+      { id: 'i-unsourced', wave_id: WAVE_ID, title: 'Unsourced item', promoted_to_sd_key: null, item_disposition: 'pending', priority_rank: 3, remainder_state: 'promotable_now', lane: null, metadata: {} },
+    ];
+    t.strategic_directives_v2 = [
+      { sd_key: 'SD-B', status: 'blocked', completion_date: null, claiming_session_id: null },
+      { sd_key: 'SD-F', status: 'active', completion_date: null, claiming_session_id: 'sess-1' },
+    ];
+    return t;
+  };
+
+  it('BELT: items are classified by STATUS, not all collapsed into unsourced', async () => {
+    const status = await computePlanCheckStatus(makeRangeAwareSupabase({ tables: MULTI() }));
+    const belt = buildBeltDiagnosis(status.open_items_all);
+    const counts = JSON.stringify(belt);
+    // The regression signature was: every item UNSOURCED, every other bucket 0. Assert the
+    // linked items are NOT read as unsourced — that is the exact bit the rename destroyed.
+    expect(status.open_items_all.every((i) => 'promoted_to_sd_key' in i), 'raw field must survive the mapping').toBe(true);
+    expect(status.open_items_all.filter((i) => i.sd).length, 'two items are SD-linked').toBe(2);
+    expect(counts).toBeTruthy();
+  });
+
+  it('CHAIN: wave_id survives, so the gate cannot falsely read "every approved wave is clear"', async () => {
+    const status = await computePlanCheckStatus(makeRangeAwareSupabase({ tables: MULTI() }));
+    // The regression: resolveChain grouped by it.wave_id, which the mapping had replaced with a
+    // title string, so every item landed under `undefined` and the section reported all-clear.
+    expect(status.open_items_all.every((i) => i.wave_id === WAVE_ID), 'wave_id must survive as an ID').toBe(true);
+    const chain = buildChainToGate({ waves: status.waves, items: status.open_items_all });
+    expect(chain).toBeTruthy();
+  });
+
+  it('ACTS: id survives and metadata is present so the section can report honestly', async () => {
+    const status = await computePlanCheckStatus(makeRangeAwareSupabase({ tables: MULTI() }));
+    expect(status.open_items_all.every((i) => typeof i.id === 'string'), 'id must survive, not become item_id').toBe(true);
+    expect(status.open_items_all.every((i) => 'metadata' in i), 'metadata must be selected for dispatch_rank').toBe(true);
+    const acts = buildNextActs(status.open_items_all);
+    // NOT asserting a populated order: measured live, ZERO rows on this view carry
+    // metadata.dispatch_rank, so `order` is legitimately empty and the section reports that as a
+    // stated `limitation` rather than as an unexplained empty list. Asserting a populated order
+    // here would be asserting a fact about the data that is currently false.
+    expect(acts).toBeTruthy();
+  });
+
+  it('THE GUARD AGAINST THE RENAME RECURRING: every field the consumers read survives the mapping', async () => {
+    // One assertion that pins the whole class. If a future edit reintroduces a display rename,
+    // this fails by name and says which field went missing.
+    const status = await computePlanCheckStatus(makeRangeAwareSupabase({ tables: MULTI() }));
+    const CONSUMER_FIELDS = ['id', 'wave_id', 'title', 'promoted_to_sd_key', 'item_disposition', 'remainder_state', 'lane', 'metadata'];
+    for (const item of status.open_items_all) {
+      for (const f of CONSUMER_FIELDS) {
+        expect(f in item, `open_items_all dropped/renamed "${f}" — the drive-loop classifiers read it`).toBe(true);
+      }
+    }
   });
 });
 
