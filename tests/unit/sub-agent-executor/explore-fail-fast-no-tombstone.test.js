@@ -107,6 +107,37 @@ describe('EXPLORE fail-fast writes no tombstone', () => {
     expect(verdicts).toContain('ERROR');
   });
 
+  it('EXPLORE-AGENT is refused too — the guard and the gate must agree on identity', async () => {
+    // A MEASURED BYPASS, found by adversarial review. The guard originally keyed on plain
+    // toUpperCase() while the evidence gate keys agent IDENTITY on a normalizer that strips a
+    // trailing -AGENT (subagent-evidence-gate.js:358). So `EXPLORE-AGENT` slipped past the refusal,
+    // reached the lookup, wrote the ERROR tombstone — and the gate then folded it back to EXPLORE
+    // and attributed it to the required `Explore`. The refusal was unreachable under an alias.
+    //
+    // A guard whose notion of "which agent is this" differs from its consumer's is the defect shape
+    // this SD is about, not a naming detail.
+    const err = await runExecutor('EXPLORE-AGENT', capture);
+    expect(err?.isBuiltinAgentRefusal, 'the -AGENT alias evaded the refusal').toBe(true);
+    expect(capture.inserts, 'the alias wrote a tombstone the gate would fold back to EXPLORE').toEqual([]);
+  });
+
+  it('lowercase and padded spellings are refused', async () => {
+    for (const variant of ['explore', 'Explore', '  EXPLORE  ']) {
+      const c = { inserts: [] };
+      const err = await runExecutor(variant, c);
+      expect(err?.isBuiltinAgentRefusal, `variant ${JSON.stringify(variant)} evaded the refusal`).toBe(true);
+      expect(c.inserts, `variant ${JSON.stringify(variant)} wrote a row`).toEqual([]);
+    }
+  });
+
+  it('CONTROL: a NON-built-in code is still allowed through to the lookup', async () => {
+    // Two-sided. A guard that refused everything would satisfy every assertion above while breaking
+    // the executor for all 33 registered agents.
+    const c = { inserts: [] };
+    const err = await runExecutor('TESTING', c);
+    expect(err?.isBuiltinAgentRefusal, 'a registered code was wrongly refused as a built-in').toBeFalsy();
+  });
+
   it('carries the refusal sentinel, so the catch can tell "must not run" from "run failed"', async () => {
     const err = await runExecutor('EXPLORE', capture);
     expect(err.isBuiltinAgentRefusal).toBe(true);

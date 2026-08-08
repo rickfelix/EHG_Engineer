@@ -539,11 +539,18 @@ export async function validateSubagentEvidence(ctx, supabase) {
   // `failing` is carried here too: when some agents are absent AND others wrote a
   // rejecting row, absence still decides the verdict (unchanged behavior), but the
   // bad verdicts must remain visible in details rather than being dropped.
+  // SD-LEO-INFRA-EXPLORE-UNREGISTERED-LEO-001: nonEvidence is carried for the SAME reason failing
+  // is, and omitting it reproduced the defect one level down. In a MIXED state — one agent absent,
+  // another holding a crash row — absence decides the verdict, but details.non_evidence was
+  // undefined, so prerequisite-preflight's non-evidence branch had nothing to read and reported
+  // only the missing agent. The tombstone stayed invisible behind the absence diagnosis: the same
+  // "wrong diagnosis, right block" shape the preflight edit exists to prevent, mirrored.
   const sharedDetails = {
     required,
     present: [...present],
     missing,
     failing,
+    non_evidence: nonEvidence,
     phase_started_at: phaseStartedAt.toISOString()
   };
 
