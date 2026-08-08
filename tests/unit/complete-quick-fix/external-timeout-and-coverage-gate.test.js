@@ -29,6 +29,23 @@ const GITOPS_PATH = path.join(MOD, 'git-operations.js');
 const ORCH_PATH = path.join(MOD, 'orchestrator.js');
 const CLI_PATH = path.join(MOD, 'cli.js');
 
+/**
+ * QF-20260807-509: strip ANSI before comparing a child process's stdout.
+ *
+ * THE DEFECT. These two cases assert on `console.log(m.EXTERNAL_STEP_TIMEOUT_MS)` from a child.
+ * A bare number goes through util.inspect, which COLOURS it whenever colour is enabled — and this
+ * fleet's seats run with FORCE_COLOR=1, which `{...process.env}` faithfully inherits. So the child
+ * emits "[33m60000[39m" and the literal comparison fails. CI disables colour, so CI
+ * stayed GREEN while every seat completing a QF locally went RED — and a red required test is what
+ * trains a seat to reach for --force-complete. That is why this is filed as a
+ * COMPLETION-GATE-BYPASS-PRESSURE-GENERATOR: the gate only stays meaningful if it is not routinely
+ * wrong.
+ *
+ * Stripping is deliberately narrow: it removes SGR colour bytes and nothing else, so the assertion
+ * still tests the NUMBER. A wrong timeout value still fails — pinned by the control test below.
+ */
+const stripAnsi = (s) => String(s).replace(/\[[0-9;]*m/g, '');
+
 // ── FR-1: shared timeout constant + env override ──────────────────────────────
 describe('FR-1 EXTERNAL_STEP_TIMEOUT_MS', () => {
   it('defaults to a positive 60s bound, well under the 2-minute external SIGTERM', () => {
@@ -44,7 +61,7 @@ describe('FR-1 EXTERNAL_STEP_TIMEOUT_MS', () => {
       'node -e "import(\'./scripts/modules/complete-quick-fix/constants.js\').then(m=>console.log(m.EXTERNAL_STEP_TIMEOUT_MS))"',
       { cwd: process.cwd(), encoding: 'utf8', env: { ...process.env, LEO_QF_EXTERNAL_STEP_TIMEOUT_MS: '12345' }, timeout: 30000 }
     ).trim();
-    expect(out).toBe('12345');
+    expect(stripAnsi(out)).toBe('12345');
   });
 
   it('falls back to the default on an invalid env override', () => {
@@ -52,7 +69,27 @@ describe('FR-1 EXTERNAL_STEP_TIMEOUT_MS', () => {
       'node -e "import(\'./scripts/modules/complete-quick-fix/constants.js\').then(m=>console.log(m.EXTERNAL_STEP_TIMEOUT_MS))"',
       { cwd: process.cwd(), encoding: 'utf8', env: { ...process.env, LEO_QF_EXTERNAL_STEP_TIMEOUT_MS: 'not-a-number' }, timeout: 30000 }
     ).trim();
-    expect(out).toBe('60000');
+    expect(stripAnsi(out)).toBe('60000');
+  });
+
+  it('CONTROL: stripping colour does NOT mask a wrong timeout value', () => {
+    // Two-sided. Stripping bytes from the compared string is exactly the kind of "fix" that can
+    // quietly make an assertion unfalsifiable, so prove the NUMBER is still what is tested: a
+    // deliberately wrong override must still be caught after stripping.
+    const out = execSync(
+      'node -e "import(\'./scripts/modules/complete-quick-fix/constants.js\').then(m=>console.log(m.EXTERNAL_STEP_TIMEOUT_MS))"',
+      { cwd: process.cwd(), encoding: 'utf8', env: { ...process.env, LEO_QF_EXTERNAL_STEP_TIMEOUT_MS: '999' }, timeout: 30000 }
+    ).trim();
+
+    expect(stripAnsi(out)).toBe('999');
+    expect(stripAnsi(out)).not.toBe('60000');
+  });
+
+  it('CONTROL: stripAnsi removes only SGR bytes, leaving the payload intact', () => {
+    // Pins the helper itself — a stripper that ate digits would make every arm above vacuous.
+    expect(stripAnsi('[33m60000[39m')).toBe('60000');
+    expect(stripAnsi('60000')).toBe('60000');
+    expect(stripAnsi('[1m[33m12345[39m[22m')).toBe('12345');
   });
 });
 
