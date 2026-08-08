@@ -3802,6 +3802,26 @@ async function main() {
     if (outcome.invoked) {
       console.log('  reaper_tick result=' + outcome.result + ' counter=' + outcome.counter);
       console.log('');
+    } else if (outcome.result === 'refused_stale_tree') {
+      // SD-LEO-INFRA-SCHEDULED-WORKTREE-REAPER-001 FR-4 — CONSUME THE REFUSAL.
+      //
+      // This branch is the whole fix for the undrained gauge. tick() has RETURNED
+      // consecutiveRefusals + pool since QF-20260726-794, but the `outcome.invoked` gate above is
+      // FALSE on the refusal path, so every refusal was discarded here — which is precisely why
+      // gauge-registry.js records this counter as undrained and drain-inventory pins it
+      // NO_CONSUMER. The data was never missing; nobody read it.
+      //
+      // Alarms only when the streak crosses the threshold AND the pool is non-empty (see
+      // detectReaperStarvation). Fail-open and awaited-but-guarded: an alert failure must never
+      // abort the sweep's claim-cleanup work, which is the same contract as the try/catch around it.
+      const { runReaperStarvationSurfacing } = require('../lib/coordinator/coordination-events.cjs');
+      const starvation = await runReaperStarvationSurfacing(supabase, outcome);
+      if (starvation && starvation.matched) {
+        console.log('  REAPER STARVATION ALARM: ' + starvation.streak + ' consecutive refusals, pool '
+          + starvation.evidence.pool_used + '/' + starvation.evidence.pool_cap
+          + (starvation.alert && starvation.alert.skipped ? ' (alert already open)' : ' (alert emitted)'));
+        console.log('');
+      }
     }
   } catch (reaperErr) {
     console.log('WORKTREE REAPER TICK: ' + (reaperErr && reaperErr.message ? reaperErr.message : 'unknown'));
