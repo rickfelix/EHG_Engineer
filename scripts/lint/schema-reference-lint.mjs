@@ -22,7 +22,14 @@
  * (never a failure).
  */
 import { readFileSync, existsSync, readdirSync } from 'node:fs';
-import { execSync } from 'node:child_process';
+// SD-LEO-FIX-SHELL-INJECTION-REACHABLE-001: execFileSync, NOT execSync and NOT spawnSync.
+// execFileSync takes an argv ARRAY and never involves a shell, which is the whole fix. It is also
+// the only drop-in for the contract this file already relies on: like execSync it returns stdout as
+// a string and THROWS on a non-zero exit. Both catches below depend on that throw — the one at :92
+// degrades to an advisory full sweep, and the one in baselineViolationKeys treats a throw as
+// "file did not exist at the merge base". spawnSync returns {stdout,stderr,status} and does NOT
+// throw, so swapping it in would silently stop BOTH catches from ever firing.
+import { execFileSync } from 'node:child_process';
 import path from 'node:path';
 import { extractReferences, findViolations } from './schema-reference-extract.mjs';
 // SD-LEO-INFRA-SCHEMA-LINT-DEGRADED-FAILOPEN-001: a degraded --diff run (unresolvable base ->
@@ -37,6 +44,33 @@ const RUNTIME_DIRS = ['scripts', 'lib', 'src', 'server', 'api', 'app'];
 const SKIP_DIR_RE = /(^|\/)(node_modules|\.git|\.worktrees|dist|build|coverage|\.next|archive|one-off|one-time|tmp|temp|fixtures?)(\/|$)/;
 const CODE_RE = /\.(js|cjs|mjs|ts|tsx|jsx)$/;
 const STALE_DAYS = 7;
+
+// SD-LEO-FIX-SHELL-INJECTION-REACHABLE-001.
+//
+// ONE RUNNER, NOT A FIX PER CALL SITE. Every git invocation in this file goes through here, so no
+// future call can reintroduce a shell by forgetting an argument. That is the stated principle at
+// lib/gates/operator-contract/harness-adapter.js:81-84, carried across rather than re-derived.
+//
+// NO --literal-pathspecs HERE, DELIBERATELY. It closes PATHSPEC MAGIC, and this file passes no
+// pathspec: the diffs take only refs, and the baseline read uses the <rev>:<path> OBJECT-NAME form,
+// which git parses as a SINGLE argv token. Adding the flag here would be an inert decoration that a
+// later reader could mistake for the protection. (docmon.js DOES pass a pathspec and DOES need it.)
+// `opts` exists so per-call stdio survives the conversion. The baseline read deliberately keeps
+// stderr on 'ignore'; folding that into the runner for every call would change unrelated output.
+const runGit = (args, opts = {}) => execFileSync('git', args, {
+  encoding: 'utf8', timeout: 30000, maxBuffer: 32 * 1024 * 1024, ...opts,
+});
+
+// SEC: argv-safety stops SHELLS, not ARGUMENT injection. `base` reaches git as a positional
+// argument, and a value LEADING WITH A DASH is parsed by git as an OPTION rather than a ref —
+// `--upload-pack=<program>` makes git EXECUTE the named program. This value is ENV-SUPPLIED
+// (process.env.SCHEMA_LINT_BASE below) and in CI is set from a workflow context expression at
+// .github/workflows/schema-reference-lint.yml:60, so it is not a hypothetical.
+//
+// This repo already adopted exactly this control for the identical sink — lib/fleet/tree-currency.cjs:53,
+// applied at :105 for its own SEC-1 finding — and it simply was not carried here. Same regex, reused
+// verbatim: two shape-guards that drift apart are worse than one shared one.
+const VALID_BASE_REF = /^[A-Za-z0-9._][A-Za-z0-9._/-]*$/;
 
 const args = process.argv.slice(2);
 const mode = args.includes('--all') ? 'all' : 'diff';
@@ -81,23 +115,42 @@ if (Number.isFinite(ageDays) && ageDays > STALE_DAYS) {
 /** Candidate files per mode. */
 function candidateFiles() {
   if (mode === 'diff') {
+    // SD-LEO-FIX-SHELL-INJECTION-REACHABLE-001: validated OUTSIDE the try, deliberately.
+    // The catch below is fail-soft — it degrades an unresolvable base to an advisory whole-repo
+    // sweep so a transient git problem never false-blocks a PR. That is right for git failures and
+    // WRONG for this one: an option-shaped SCHEMA_LINT_BASE is an attack indicator, not a transient
+    // fault, and routing it into the same catch would let an attacker DISABLE this blocking lint
+    // just by supplying a malformed ref. So the refusal is loud and uncatchable here: a rejected
+    // ref must never be indistinguishable from an accepted one, which is the confusion the rest of
+    // this function exists to prevent.
+    const base = process.env.SCHEMA_LINT_BASE || 'origin/main';
+    if (!VALID_BASE_REF.test(base)) {
+      throw new Error(
+        `schema-reference-lint: refusing SCHEMA_LINT_BASE with option-like or unsafe shape: ${base}`
+      );
+    }
     try {
-      const base = process.env.SCHEMA_LINT_BASE || 'origin/main';
       // QF-20260802-742: resolve the merge base EXPLICITLY instead of leaning on the `...`
       // shorthand. The SHA becomes printable, so two runs whose scope is disputed can be
       // compared directly — on PR #6738 the checked set drifted 79 -> 140 files across 24
       // minutes with the violation count pinned, and there was no way to tell which run was
       // right. An explicit two-dot diff from that SHA also cannot widen if origin/main
       // advances between the fetch and the diff.
-      mergeBase = execSync(`git merge-base ${base} HEAD`, { encoding: 'utf8', timeout: 30000 }).trim();
+      mergeBase = runGit(['merge-base', base, 'HEAD']).trim();
       // QF-20260802-742: git merge-base exits 1 with no common ancestor (verified against a
       // deliberately shallowed clone), so the throw above normally covers it. This guard closes
       // the exit-0-but-empty case explicitly: a falsy mergeBase would make every baseline lookup
       // return null, and EVERY pre-existing violation would then read as new — the original bug,
       // silently restored. Routed into the same catch so it degrades to advisory, never blocks.
       if (!mergeBase) throw new Error(`merge-base ${base}..HEAD resolved empty (shallow clone?)`);
+      // SD-LEO-FIX-SHELL-INJECTION-REACHABLE-001: -z on every enumeration. It is NUL-delimited AND
+      // suppresses git's path quoting, which fixes a latent parsing bug independent of the shell
+      // fix: a filename containing a literal NEWLINE is legal in a git tree, and the previous
+      // split('\n') never recovered it. Measured on the sibling SD — without -z git C-QUOTES such a
+      // name to "we\nird.js", so the old parser produced ONE CONFIDENTLY WRONG path rather than
+      // obvious fragments. A wrong name still looks like a name.
       const sources = [
-        execSync(`git diff --name-only --diff-filter=ACMR ${mergeBase}..HEAD`, { encoding: 'utf8', timeout: 30000 }),
+        runGit(['diff', '--name-only', '--diff-filter=ACMR', '-z', `${mergeBase}..HEAD`]),
       ];
       // QF-20260802-742: the previous code ALWAYS unioned staged + working-tree + untracked
       // files, on the stated assumption that "the latter two are empty in CI". They are not.
@@ -108,13 +161,17 @@ function candidateFiles() {
       // where the working tree is not the developer's: CI.
       if (!committedOnly) {
         sources.push(
-          execSync('git diff --name-only --diff-filter=ACMR --cached', { encoding: 'utf8', timeout: 30000 }),
-          execSync('git diff --name-only --diff-filter=ACMR', { encoding: 'utf8', timeout: 30000 }),
-          execSync('git ls-files --others --exclude-standard', { encoding: 'utf8', timeout: 30000 }),
+          runGit(['diff', '--name-only', '--diff-filter=ACMR', '--cached', '-z']),
+          runGit(['diff', '--name-only', '--diff-filter=ACMR', '-z']),
+          runGit(['ls-files', '--others', '--exclude-standard', '-z']),
         );
       }
-      const out = sources.join('\n');
-      return [...new Set(out.split('\n').map(s => s.trim()).filter(Boolean))]
+      // Each -z source is already NUL-TERMINATED, so a plain join concatenates cleanly and the
+      // split below needs no separator bookkeeping. No .trim() per entry, deliberately: with NUL
+      // delimiters the bytes BETWEEN separators ARE the path, and trimming would corrupt a filename
+      // that legitimately begins or ends with a space.
+      const out = sources.join('');
+      return [...new Set(out.split('\0').filter(Boolean))]
         .filter(f => CODE_RE.test(f))
         .filter(f => RUNTIME_DIRS.includes(f.split('/')[0]))
         .filter(f => !SKIP_DIR_RE.test(f))
@@ -150,9 +207,19 @@ function baselineViolationKeys(file) {
   if (!mergeBase) return null; // --all sweep or degraded fallback: nothing to compare against
   let prev;
   try {
-    prev = execSync(`git show ${mergeBase}:${file}`, {
-      encoding: 'utf8', timeout: 30000, maxBuffer: 32 * 1024 * 1024, stdio: ['ignore', 'pipe', 'ignore'],
-    });
+    // SD-LEO-FIX-SHELL-INJECTION-REACHABLE-001. THIS WAS THE WORST OF THE THREE SINKS IN THIS FILE:
+    // `git show ${mergeBase}:${file}` with NO quoting at all, where `file` comes from
+    // git diff --name-only above — i.e. any name an attacker can commit. Unquoted means `;` `&` `|`
+    // were live under sh in addition to $(...) and backticks, and this runs on ubuntu on every PR
+    // touching lib/api/app/scripts. It is also DOUBLY SILENT: stderr is 'ignore' and the catch
+    // returns an empty Set, so an injected payload produced no error and no output to notice.
+    //
+    // The <rev>:<path> OBJECT-NAME form is a SINGLE argv token, so there is no pathspec to make
+    // literal — argv conversion alone fully closes this one.
+    // stdio keeps stderr on 'ignore' EXACTLY as before. That silence is pre-existing behaviour for
+    // the common "file is new, so it has no baseline" case; un-silencing it here would spam a line
+    // per added file and would be a behaviour change this SD has no mandate to make.
+    prev = runGit(['show', `${mergeBase}:${file}`], { stdio: ['ignore', 'pipe', 'ignore'] });
   } catch {
     return new Set(); // file did not exist at the merge base -> every violation in it is genuinely new
   }
