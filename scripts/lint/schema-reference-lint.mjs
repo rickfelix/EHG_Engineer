@@ -35,6 +35,12 @@ import { isFixturePath, isFixtureEntry } from '../../lib/lint/added-line-text.mj
 // QF-20260802-742: the new-vs-pre-existing split, kept pure so both polarities are fixture-testable.
 import { violationKey, partitionViolations } from './schema-lint-scope.mjs';
 
+// KNOWN LIMITATION (SD-LEO-INFRA-SWEEP-REPO-SCANNERS-001): this control compares references against
+// a COMMITTED SNAPSHOT, so its truth is only as current as that file. Concretely, a table CREATED by
+// a migration in THIS SAME PR is not in the snapshot yet and reads as a PHANTOM (false positive),
+// and a table DROPPED since the snapshot was taken still reads as valid (false negative). The
+// staleness warning below is advisory and never blocks, so the false negative is the silent
+// direction. Regenerate with: npm run schema:snapshot:lint
 const SNAPSHOT_PATH = 'database/schema-reference-snapshot.json';
 const ALLOWLIST_PATH = 'scripts/lint/schema-reference-allowlist.json';
 const RUNTIME_DIRS = ['scripts', 'lib', 'src', 'server', 'api', 'app'];

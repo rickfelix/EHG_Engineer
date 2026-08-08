@@ -33,6 +33,14 @@ import { CITATION_RE } from './diagnostic-gauge-citation-patterns.mjs';
 // stripComments is shape-A-only and would be cargo-cult here.
 import { isFixturePath, isFixtureEntry } from '../../lib/lint/added-line-text.mjs';
 
+// KNOWN LIMITATION (SD-LEO-INFRA-SWEEP-REPO-SCANNERS-001): this control matches ONE LINE AT A TIME
+// (CITATION_RE.test(line) below), so a citation SPLIT ACROSS LINES is invisible to it. Concretely,
+//   const threshold = retro.quality_score;
+//   if (threshold >= 90) ship();
+// is a real diagnostic-gauge gating citation and this control WILL NOT SEE IT, because neither line
+// contains both the gauge and the comparison. Naming it here rather than leaving it to be
+// rediscovered: a control that will not say what it cannot see is indistinguishable from one that
+// sees everything.
 const ALLOWLIST_PATH = 'scripts/lint/diagnostic-gauge-citation-allowlist.json';
 const RUNTIME_DIRS = ['scripts', 'lib', 'src', 'server', 'api', 'app'];
 const SKIP_DIR_RE = /(^|\/)(node_modules|\.git|\.worktrees|dist|build|coverage|\.next|archive|one-off|one-time|tmp|temp|fixtures?)(\/|$)/;

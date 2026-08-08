@@ -32,6 +32,13 @@ import path from 'node:path';
 // stripComments is shape-A-only and would be cargo-cult here.
 import { isFixturePath, isFixtureEntry } from '../../lib/lint/added-line-text.mjs';
 
+// KNOWN LIMITATION (SD-LEO-INFRA-SWEEP-REPO-SCANNERS-001): two concrete blind spots, both by
+// construction. (1) Matching is PER LINE, so a write whose assignment spans lines -- a .update({
+// object literal with current_lifecycle_stage on a later line than the .update( -- is not seen.
+// (2) READ_CONTEXT_RE below skips any line OPENING with SELECT/WHERE/AND/OR/JOIN/ON/--, so a
+// genuine write placed on such a line (e.g. a CTE line beginning with a JOIN keyword that also
+// carries a SET) is skipped with it. That exclusion exists to kill read-context false positives and
+// it buys that at the cost of these writes.
 const ALLOWLIST_PATH = 'scripts/lint/stage-advancement-chokepoint-allowlist.json';
 const RUNTIME_DIRS = ['scripts', 'lib', 'database'];
 const SKIP_DIR_RE = /(^|\/)(node_modules|\.git|\.worktrees|dist|build|coverage|\.next|archive|one-off|one-time|tmp|temp|fixtures?)(\/|$)/i;

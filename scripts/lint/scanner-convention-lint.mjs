@@ -31,6 +31,13 @@
  * line. An unexplained exemption is how a guard erodes into a formality.
  */
 
+// KNOWN LIMITATION: a string that OPENS with the command -- `'git diff failed to run'` -- is
+// indistinguishable from an INVOCATION by this heuristic and IS reported. Stated here and pinned as
+// a passing test rather than hidden, because discriminating further (demanding a following ref or
+// flag) would trade this rare false positive for a class of false NEGATIVES, and a scanner that
+// slips past the guard entirely is the strictly worse, silent direction. The reasoned opt-out marker
+// exists for exactly this case. Also: shape B is OUT OF SCOPE here by design -- it gets fixture
+// exclusion instead, a different check for a different hazard.
 import fs from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';

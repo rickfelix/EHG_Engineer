@@ -44,6 +44,13 @@ const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const REPO_ROOT = path.resolve(__dirname, '..', '..');
 
 const SCAN_DIRS = ['scripts', 'lib'];
+// KNOWN LIMITATION (SD-LEO-INFRA-SWEEP-REPO-SCANNERS-001): this control is EXCLUSION-SCOPED, so a
+// raw insert introduced inside anything it skips is invisible BY DESIGN -- concretely, a raw
+// .from('session_coordination').insert(...) added to lib/coordinator/dispatch.cjs (EXCLUDE_PATHS),
+// to any fixture/test path (isFixturePath), or to a file outside scripts/ and lib/ is never
+// reported. The dispatch.cjs exclusion is deliberate (it IS the choke point), but it means the choke
+// point itself is unguarded by this control: nothing here stops a SECOND raw insert being added
+// beside the canonical one.
 const SCAN_EXTENSIONS = new Set(['.js', '.mjs', '.cjs']);
 const EXCLUDE_DIR_SEGMENTS = ['node_modules', '.git', '.worktrees', 'dist', 'build', 'coverage', 'archive', 'one-time', 'temp'];
 const EXCLUDE_FILE_RE = /(\.test\.|\.spec\.|\.d\.ts$|\.min\.js$)/i;
