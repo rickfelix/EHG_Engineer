@@ -266,12 +266,24 @@ describe('registry bookkeeping — the stamp is what lets the FR-7 alarm CLEAR',
 });
 
 describe('gather — what this job can HONESTLY measure today', () => {
+  // SD-LEO-INFRA-UNCAPPED-ROADMAP-ITEMS-001: `next` and `open_items_all` carry DELIBERATELY
+  // DIFFERENT rows. That difference is the whole instrument — it is what lets a test tell which
+  // field buildGather actually fed the sections. Previously this stub had no open_items_all at
+  // all, so the sections received [] and every assertion about them passed trivially: swapping
+  // the wiring back to the capped `next` left the entire suite green.
   const status = {
     open_total: 42,
     next: [{ item_id: 'i1' }, { item_id: 'i2' }],
     next_truncated: true,
     done: [{ item_id: 'd1' }],
     slipped: [],
+    waves: [{ id: 'w1', title: 'Wave 1', sequence_rank: 1, status: 'approved' }],
+    // RAW consumer-read field names — the rename of these is the defect this SD had to fix.
+    open_items_all: [
+      { id: 'UNCAPPED-a', wave_id: 'w1', title: 'A', promoted_to_sd_key: null, item_disposition: 'pending', remainder_state: 'promotable_now', lane: null, metadata: {}, sd: null },
+      { id: 'UNCAPPED-b', wave_id: 'w1', title: 'B', promoted_to_sd_key: null, item_disposition: 'pending', remainder_state: 'promotable_now', lane: null, metadata: {}, sd: null },
+      { id: 'UNCAPPED-c', wave_id: 'w1', title: 'C', promoted_to_sd_key: null, item_disposition: 'pending', remainder_state: 'promotable_now', lane: null, metadata: {}, sd: null },
+    ],
   };
   // SD-LEO-INFRA-PERSIST-BELT-CAPACITY-001 (TS-7): leg4's injections, in the state this SD SHIPS
   // in — the verdict table is staged chairman-gated and NOT applied, so the write fails
@@ -301,6 +313,21 @@ describe('gather — what this job can HONESTLY measure today', () => {
       expect(sections[id].unavailable.value).toBe(null);
       expect(sections[id].unavailable.reason.length, `${id} reason is a shrug`).toBeGreaterThan(40);
     }
+  });
+
+  it('WIRING PINNED: the sections are fed open_items_all, PROVABLY not the capped `next`', async () => {
+    // THIS IS THE TEST WHOSE ABSENCE WAS THE REAL GAP. A re-review demonstrated that swapping
+    // buildGather's `planStatus.open_items_all` for `planStatus.next` — reverting the exact thing
+    // this SD exists to do — left 624/624 tests GREEN. The suite asserted that the sections were
+    // AVAILABLE and that the pure functions behaved, but nothing anywhere asserted WHICH FIELD
+    // they were handed. The code comment claimed the wiring test did this; it did not.
+    //
+    // The stub's `next` and `open_items_all` hold disjoint ids, so the built section's own row
+    // ids say unambiguously which field reached it. This fails if the wiring is ever reverted.
+    const { sections } = await gather();
+    const emitted = JSON.stringify(sections.belt_diagnosis);
+    expect(emitted, 'belt must reflect the UNCAPPED set').toMatch(/UNCAPPED-/);
+    expect(emitted, 'belt must NOT be fed the capped `next` rows').not.toMatch(/"i1"|"i2"/);
   });
 
   it('THE THREE ITEM-BASED SECTIONS ARE NOW SOURCED, not unavailable', async () => {

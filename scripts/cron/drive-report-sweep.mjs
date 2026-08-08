@@ -259,7 +259,15 @@ export function buildGather({ supabase, computePlanCheckStatus, gatherCapacity, 
     const sections = {
       // The only section with a real, single-representation source today (TR-5: cite the
       // enriched computePlanCheckStatus rather than becoming a fourth wave rollup).
-      plan_position: await buildPlanPosition({ computePlanCheckStatus, supabase }),
+      // DEDUPE: computePlanCheckStatus was being called TWICE per tick — once above for
+      // beltItems and again inside buildPlanPosition — measured with a call counter. That is two
+      // full paginated scans of v_plan_of_record_remainder, strategic_directives_v2,
+      // roadmap_waves and adam_task_ledger every cron tick, plus a narrow window where the two
+      // halves of one report could disagree if the DB moved between them. Passing a thunk over
+      // the already-fetched result keeps buildPlanPosition's contract intact — it still receives
+      // a FUNCTION, and its "the citation target is part of the contract" guard still holds —
+      // while the query runs once.
+      plan_position: await buildPlanPosition({ computePlanCheckStatus: async () => planStatus, supabase }),
 
       [BELT_ID]: buildBeltDiagnosis(beltItems),
       [CHAIN_ID]: buildChainToGate({ waves: planStatus.waves || [], items: beltItems }),
