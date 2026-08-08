@@ -20,6 +20,8 @@
 import 'dotenv/config';
 import { createRequire } from 'node:module';
 import { fetchAllPaginated } from '../lib/db/fetch-all-paginated.mjs';
+// QF-20260807-992's canonical cross-platform entry guard — see the CLI block at the bottom.
+import { isMainModule } from '../lib/utils/is-main-module.js';
 
 const require = createRequire(import.meta.url);
 const { createClient } = require('@supabase/supabase-js');
@@ -104,6 +106,27 @@ async function main() {
   process.exitCode = residue.length - fixed === 0 ? 0 : 1;
 }
 
-if (process.argv[1] && import.meta.url.endsWith(process.argv[1].replace(/\\/g, '/').split('/').pop())) {
-  main().catch((e) => { console.error(e.message); process.exit(1); });
+// SD-LEO-INFRA-ONE-SYNTHETIC-ROW-001-E (FR-5) — TWO DEFECTS FIXED HERE, both of which made this
+// file contradict the comment four lines above it.
+//
+// 1. THE ENTRY GUARD WAS A SUFFIX MATCH, NOT AN IDENTITY CHECK. It read
+//    `import.meta.url.endsWith(basename(argv[1]))`, which is the same hand-rolled pattern
+//    QF-20260807-992 proved SILENTLY NEVER FIRES ON WINDOWS (a manual `file://C:/...` has two
+//    slashes; import.meta.url has three, so main() never ran and the script exited 0 printing
+//    nothing). It is also too loose in the other direction: ANY entry script whose basename ends
+//    the same way — say another `residue.mjs` — would fire main() here, and run --fix if that flag
+//    happened to be in argv. isMainModule uses Node's own pathToFileURL encoder, so it also
+//    survives spaces, '#' and unicode in a path.
+//
+// 2. THE CATCH HARD-EXITED, DEFEATING THE LINE ABOVE IT. `process.exit(1)` here undid the
+//    deliberate `process.exitCode` at :104 — the comment there explains that hard-exiting with live
+//    Supabase handles trips a libuv teardown assert on Windows (exit 127 AFTER printing CLEAN=true),
+//    and this line reintroduced exactly that, four lines later, on the FAILURE path. That matters
+//    most precisely when it fires: an error after partial soft-deletes is when you most need a
+//    trustworthy exit code and a clean teardown. process.exit also terminates before any `finally`
+//    runs, which is the mechanism by which a sibling probe leaked synthetic rows on its failure
+//    path — the inherited rule for this whole SD is that CLEANUP MUST NOT DEPEND ON CONTROL FLOW:
+//    SET an exit code, let the process end on its own.
+if (isMainModule(import.meta.url)) {
+  main().catch((e) => { console.error(e.message); process.exitCode = 1; });
 }
