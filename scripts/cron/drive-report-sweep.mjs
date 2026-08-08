@@ -42,9 +42,9 @@
  */
 
 import { buildPlanPosition } from '../../lib/drive-loop/sections/plan-position.js';
-import { SECTION_ID as BELT_ID } from '../../lib/drive-loop/sections/belt-diagnosis.js';
-import { SECTION_ID as CHAIN_ID } from '../../lib/drive-loop/sections/chain-to-gate.js';
-import { SECTION_ID as ACTS_ID } from '../../lib/drive-loop/sections/next-acts.js';
+import { SECTION_ID as BELT_ID, buildBeltDiagnosis } from '../../lib/drive-loop/sections/belt-diagnosis.js';
+import { SECTION_ID as CHAIN_ID, buildChainToGate } from '../../lib/drive-loop/sections/chain-to-gate.js';
+import { SECTION_ID as ACTS_ID, buildNextActs } from '../../lib/drive-loop/sections/next-acts.js';
 import { SECTION_ID as STALL_ID } from '../../lib/drive-loop/sections/stall-deltas.js';
 import { LEG_ID as LEG1_ID } from '../../lib/drive-loop/score/leg1-landed.js';
 import { LEG_ID as LEG2_ID } from '../../lib/drive-loop/score/leg2-uptake.js';
@@ -239,20 +239,39 @@ export function buildGather({ supabase, computePlanCheckStatus, gatherCapacity, 
       + 'without them (leg4-capacity.js:57), and a defaulted injection hides an unwired CLI behind a green suite');
   }
 
-  // Stated once; three sections share it.
-  const CAPPED_SOURCE = 'the only item set available today is computePlanCheckStatus().next, which is CAPPED AT 10. '
-    + 'Classifying those as the belt would describe ten items while rendering as the whole belt — a wrong number, not a short list. '
-    + 'This needs an UNCAPPED roadmap_wave_items-to-SD join, and it must be the same representation section 1 cites rather than a second derivation of the remainder (TR-5)';
-
   return async function gather() {
+    // SD-LEO-INFRA-UNCAPPED-ROADMAP-ITEMS-001 FR-2/FR-3: the CAPPED_SOURCE blocker is gone.
+    // computePlanCheckStatus now paginates to completion and exposes `open_items_all` (the
+    // UNCAPPED item set) plus `waves`, so the three item-based sections read the SAME
+    // representation section 1 cites — no second derivation of the remainder (TR-5).
+    //
+    // THEY ARE FED open_items_all, NEVER status.next. `next` is still capped at NEXT_LIMIT=10
+    // by design, and handing it to these classifiers is the precise failure the previous
+    // unavailable-reason warned about: they would emit correctly-shaped output describing ten
+    // items while rendering as the whole belt — a wrong number that looks completely reasonable,
+    // with every section unit test still green because they are pure functions and would have
+    // been handed exactly what they were asked for. The bug would simply move one layer up into
+    // this file. That is why the wiring test asserts WHAT IS PASSED here, not what the sections
+    // do with it.
+    const planStatus = await computePlanCheckStatus(supabase);
+    const beltItems = planStatus.open_items_all || [];
+
     const sections = {
       // The only section with a real, single-representation source today (TR-5: cite the
       // enriched computePlanCheckStatus rather than becoming a fourth wave rollup).
-      plan_position: await buildPlanPosition({ computePlanCheckStatus, supabase }),
+      // DEDUPE: computePlanCheckStatus was being called TWICE per tick — once above for
+      // beltItems and again inside buildPlanPosition — measured with a call counter. That is two
+      // full paginated scans of v_plan_of_record_remainder, strategic_directives_v2,
+      // roadmap_waves and adam_task_ledger every cron tick, plus a narrow window where the two
+      // halves of one report could disagree if the DB moved between them. Passing a thunk over
+      // the already-fetched result keeps buildPlanPosition's contract intact — it still receives
+      // a FUNCTION, and its "the citation target is part of the contract" guard still holds —
+      // while the query runs once.
+      plan_position: await buildPlanPosition({ computePlanCheckStatus: async () => planStatus, supabase }),
 
-      [BELT_ID]: { section: BELT_ID, unavailable: unavailable(`belt items are not sourced: ${CAPPED_SOURCE}`) },
-      [CHAIN_ID]: { section: CHAIN_ID, unavailable: unavailable(`chain resolution is not sourced: roadmap waves are not queried by this job, and ${CAPPED_SOURCE}`) },
-      [ACTS_ID]: { section: ACTS_ID, unavailable: unavailable(`per-item next acts are not sourced: ${CAPPED_SOURCE}`) },
+      [BELT_ID]: buildBeltDiagnosis(beltItems),
+      [CHAIN_ID]: buildChainToGate({ waves: planStatus.waves || [], items: beltItems }),
+      [ACTS_ID]: buildNextActs(beltItems),
 
       // NOT an empty array. computeItemDeltas with an empty current set and a prior report
       // returns closed = EVERY item the prior report saw — it would report the entire belt as
