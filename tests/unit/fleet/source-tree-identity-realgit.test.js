@@ -190,11 +190,30 @@ describe('S2-R: a PLAIN directory inside the repo is not a worktree, and real gi
   });
 
   it('scrubGitEnv removes every redirection var, and does not mutate its input', () => {
+    // SELF-CAUGHT VACUITY, third instance of this class in my own work. This assertion used to be
+    // `for (const k of GIT_REDIRECT_ENV_KEYS) expect(after[k]).toBeUndefined()` — a loop over the
+    // PRODUCTION array. MEASURED: emptying that constant makes scrubGitEnv a no-op
+    // (scrubGitEnv({GIT_DIR:'/evil'}).GIT_DIR === '/evil') and this test STILL PASSED, because the
+    // loop simply ran zero times. The entire env scrub could be gutted with the suite green.
+    //
+    // The two keys that actually carry the attack are now named as LITERALS, so the assertion
+    // exists whether or not the constant does.
     const before = { GIT_DIR: 'x', GIT_WORK_TREE: 'y', GIT_COMMON_DIR: 'z', PATH: 'keep' };
     const after = scrubGitEnv(before);
-    for (const k of GIT_REDIRECT_ENV_KEYS) expect(after[k]).toBeUndefined();
-    expect(after.PATH).toBe('keep');          // does not over-scrub
-    expect(before.GIT_DIR).toBe('x');          // does not mutate the caller's env
+    expect(after.GIT_DIR).toBeUndefined();        // the S2-R3 attack vector
+    expect(after.GIT_WORK_TREE).toBeUndefined();  // the other half of it
+    expect(after.GIT_COMMON_DIR).toBeUndefined();
+    expect(after.PATH).toBe('keep');              // does not over-scrub
+    expect(before.GIT_DIR).toBe('x');             // does not mutate the caller's env
+  });
+
+  it('the scrub list is the SUBJECT of an assertion, not just the source of one', () => {
+    // The anti-vacuity anchor: trimming the constant fails HERE, loudly, instead of silently
+    // reducing some other test to zero assertions.
+    expect(GIT_REDIRECT_ENV_KEYS.length).toBeGreaterThan(0);
+    for (const required of ['GIT_DIR', 'GIT_WORK_TREE', 'GIT_COMMON_DIR']) {
+      expect(GIT_REDIRECT_ENV_KEYS, `${required} must stay in the scrub list`).toContain(required);
+    }
   });
 
   it('S2-R4: REFUSES a GENUINE worktree that is AHEAD of the base ref — identity is not integrity', () => {
