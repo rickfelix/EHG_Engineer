@@ -61,11 +61,21 @@ jobs:
           import { createClient } from '@supabase/supabase-js';
           import fs from 'node:fs';
           const sb = createClient(process.env.SUPABASE_URL, process.env.SUPABASE_SERVICE_ROLE_KEY);
-          const { data } = await sb
+          const { data, error } = await sb
             .from('leo_feature_flags')
             .select('is_enabled')
             .eq('flag_key', 'VENTURE_FIXTURE_SWEEP_V1')
             .maybeSingle();
+          // QF-20260807-690: the error used to be DISCARDED, so a broken query quiet-no-opped the
+          // entire sweep. Measured against the live table: an ABSENT flag row returns
+          // {data:null, error:null} while a BAD COLUMN returns {data:null, error:"column ... does
+          // not exist"} — identical `data`, so `error` is the ONLY thing separating "flag is off"
+          // from "I could not read the flag". Discarding it collapsed those into one silent
+          // no-op. Fail LOUD here; an empty result is still legitimately quiet below.
+          if (error) {
+            console.error(`FATAL: VENTURE_FIXTURE_SWEEP_V1 flag query failed — cannot distinguish "flag disabled" from "cannot read the flag": ${error.message}`);
+            process.exit(1);
+          }
           const enabled = data?.is_enabled === true;
           fs.appendFileSync(process.env.GITHUB_OUTPUT, `enabled=${enabled}\n`);
           console.log(enabled
