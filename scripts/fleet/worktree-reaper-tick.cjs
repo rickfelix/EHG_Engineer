@@ -205,6 +205,59 @@ function buildReaperArgs({ reaperScript, execute, stage2, allPools }) {
  * @param {boolean} [opts.force]   - run now regardless of counter (tests)
  * @returns {object} { invoked, counter, cadence, result, enabled }
  */
+/**
+ * Resolve the tree the reaper's CODE comes from — SD-LEO-INFRA-SCHEDULED-WORKTREE-REAPER-001 FR-1.
+ *
+ * THE SPLIT THIS INTRODUCES, which is the whole fix: repoRoot supplies the POOL (the worktrees
+ * being reaped), while this supplies the CODE (worktree-reaper.mjs and its guards). Those were the
+ * same tree, and that is why reaping starved: the shared root goes behind within minutes of any
+ * peer merge because QFs are worked on main, the currency check correctly refuses to execute
+ * possibly-stale destructive code, and the refusal then persists for as long as nobody pulls —
+ * an UNBOUNDED starvation window. A dedicated tree that refreshes itself ends the window without
+ * touching the shared root, so the refusal stops being the steady state instead of being relaxed.
+ *
+ * DEGRADATION IS DELIBERATE AND NON-REGRESSIVE: a git failure here returns null and the caller
+ * falls back to repoRoot — i.e. exactly today's behaviour, guard fully intact. It is logged
+ * loudly because a silent fallback would look identical to a working refresh (this SD exists
+ * because a workflow was green daily while doing nothing).
+ *
+ * A MIS-SITED TREE IS NOT CAUGHT... except that it must be, here, for a specific reason: this
+ * function's contract is "return a usable source root or null". resolveSourceTreeDir throws on a
+ * .worktrees/ location because paths there are EXEMPT from the currency check, so such a tree
+ * would be silently unguarded. That throw is surfaced in the log and degrades to repoRoot rather
+ * than crashing the sweep — the sweep must never die on the reaper — but it degrades to the
+ * GUARDED path, never to an unguarded one.
+ */
+function resolveReaperSourceRoot({ repoRoot, logger, env = process.env, runner, exists }) {
+  const {
+    ensureSourceTreeWorktree, REAPER_SOURCE_DIRNAME, REAPER_SOURCE_BRANCH,
+  } = require('../../lib/fleet/source-tree-refresh.cjs');
+  const gitRunner = runner || ((args) => {
+    const r = spawnSync('git', args, { cwd: repoRoot, encoding: 'utf8', windowsHide: true });
+    if (r.status !== 0) throw new Error(`git ${args.join(' ')} failed: ${(r.stderr || '').trim()}`);
+    return r.stdout;
+  });
+  try {
+    const res = ensureSourceTreeWorktree({
+      repoRoot,
+      dirname: REAPER_SOURCE_DIRNAME,
+      branch: REAPER_SOURCE_BRANCH,
+      envOverride: 'FLEET_REAPER_SOURCE_DIR',
+      label: 'reaper-source',
+      exists: exists || fs.existsSync,
+      runner: gitRunner,
+      env,
+    });
+    if (res.refreshed === false) {
+      logger(`  reaper source tree refresh FAILED (${res.dir}) — the currency check below decides; not silently proceeding`);
+    }
+    return res.dir;
+  } catch (err) {
+    logger(`  reaper source tree UNAVAILABLE (${err && err.message ? err.message : err}) — falling back to the shared root, which is today's behaviour and may refuse`);
+    return null;
+  }
+}
+
 function tick(opts = {}) {
   // SD-LEO-INFRA-SPAWN-ROOT-CURRENCY-INVARIANT-001 FR-3: the fallback was process.cwd(),
   // which meant the reaper's ROOT — and therefore, via reaperScript below, the reaper's
@@ -234,7 +287,14 @@ function tick(opts = {}) {
   }
 
   const { execute, stage2 } = resolveExecuteMode();
-  const reaperScript = path.join(repoRoot, 'scripts', 'worktree-reaper.mjs');
+  // FR-1: CODE comes from the self-refreshing source tree; the POOL stays repoRoot (the spawn
+  // below keeps cwd: repoRoot). Null means the source tree was unavailable — fall back to
+  // repoRoot, which is exactly today's behaviour with the currency guard fully intact.
+  const sourceRoot = resolveReaperSourceRoot({
+    repoRoot, logger, env: opts.currencyEnv || process.env,
+    runner: opts.sourceRunner, exists: opts.sourceExists,
+  }) || repoRoot;
+  const reaperScript = path.join(sourceRoot, 'scripts', 'worktree-reaper.mjs');
   if (!fs.existsSync(reaperScript)) {
     state.last_run_at = new Date().toISOString();
     state.last_result = 'script_missing';
@@ -256,7 +316,11 @@ function tick(opts = {}) {
   try {
     const { enforceTreeCurrency } = require('../../lib/fleet/tree-currency.cjs');
     enforceTreeCurrency({
-      dir: repoRoot,
+      // FR-1: guard the tree the SCRIPT came from, not the pool. These were the same directory,
+      // and that identity is what made the refusal permanent. reaperScript above now resolves out
+      // of sourceRoot, so this must check sourceRoot — checking repoRoot would guard a tree that
+      // no longer determines the code being executed, which is a guard pointed at the wrong thing.
+      dir: sourceRoot,
       logger: { warn: (m) => logger(m) },
       label: 'worktree-reaper source tree',
       // The reaper REFUSES; it never heals. It runs unattended against a shared root, so a
