@@ -84,14 +84,53 @@ describe('R5-4: the scrub is asserted by EFFECT, so unwiring it is detectable', 
     }
   });
 
-  it('scrubGitEnv pins system/global config OFF rather than only deleting overrides', () => {
-    // R5-1 positive hardening: deleting GIT_CONFIG_* still leaves whatever /etc/gitconfig or
-    // ~/.gitconfig says, and core.hooksPath there is the same primitive.
+  it('the scrub does NOT disable system/global config — that broke authenticated fetch', () => {
+    // REVERSAL OF MY OWN CHANGE, pinned so nobody re-adds it. I briefly set GIT_CONFIG_NOSYSTEM=1
+    // and pointed GIT_CONFIG_GLOBAL at a nonexistent file to neutralise core.hooksPath in
+    // system/global config. MEASURED: that kills credential resolution on this fleet — origin is
+    // https://github.com, credential.helper=manager lives in the SYSTEM config and the
+    // github-specific helpers in the GLOBAL config. A source tree that cannot fetch cannot
+    // fast-forward, goes stale, and the reaper then REFUSES: exactly the starvation this SD exists
+    // to fix. The real-git fixture could not see it because its remote is a local bare repo with
+    // no auth.
     const out = scrubGitEnv({ PATH: 'keep' });
-    expect(out.GIT_CONFIG_NOSYSTEM).toBe('1');
-    expect(out.GIT_CONFIG_GLOBAL).toBeTruthy();
-    expect(fs.existsSync(out.GIT_CONFIG_GLOBAL)).toBe(false); // "no global config"
+    expect(out.GIT_CONFIG_NOSYSTEM).toBeUndefined();
+    expect(out.GIT_CONFIG_GLOBAL).toBeUndefined();
     expect(out.PATH).toBe('keep');
+  });
+
+  it('EFFECT: a real credential helper still resolves through the scrub', () => {
+    // The behavioural half of the above — asserts the CONSEQUENCE (fetch can authenticate), not
+    // just the absence of two keys. Skipped where the machine has no helper configured, so it
+    // never fails for an unrelated reason.
+    const raw = spawnSync('git', ['config', '--get', 'credential.helper'], {
+      cwd: REPO, encoding: 'utf8', env: process.env,
+    });
+    const hasHelper = Boolean((raw.stdout || '').trim());
+    if (!hasHelper) return; // nothing to protect on this machine
+    const scrubbedRun = spawnSync('git', ['config', '--get', 'credential.helper'], {
+      cwd: REPO, encoding: 'utf8', env: scrubGitEnv(process.env),
+    });
+    expect((scrubbedRun.stdout || '').trim(), 'the scrub must not break credential resolution')
+      .toBeTruthy();
+  });
+
+  it('tree-currency defaultRunner is scrubbed too — SCRUB-2, the second door', () => {
+    // STRUCTURAL, labelled. assessTreeCurrency runs `git status --porcelain` and `git fetch`
+    // through this runner, and worktree-reaper-tick only injects a runner in TESTS — so this is
+    // the production path. Measured by the reviewer: with GIT_CONFIG_COUNT/core.fsmonitor set the
+    // injected command RAN and the function still returned "current". Driving it behaviourally
+    // here would mean a real fetch, so the wire is asserted structurally.
+    // Sliced to the FUNCTION BODY rather than matched with a character-bounded regex. My first
+    // version used {0,600} and failed because the explanatory comment inside pushed the distance
+    // past the bound — a test failing for a reason unrelated to its property, which is how a
+    // brittle assertion gets "fixed" by deleting it.
+    const src = fs.readFileSync(path.join(REPO, 'lib', 'fleet', 'tree-currency.cjs'), 'utf8');
+    const start = src.indexOf('function defaultRunner');
+    expect(start, 'defaultRunner must exist').toBeGreaterThan(-1);
+    const next = src.indexOf('\nfunction ', start + 1);
+    const body = src.slice(start, next > -1 ? next : src.length);
+    expect(body).toContain('scrubGitEnv(process.env)');
   });
 });
 

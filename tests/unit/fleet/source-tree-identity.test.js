@@ -26,6 +26,7 @@ import path from 'node:path';
 const require_ = createRequire(import.meta.url);
 const {
   ensureSourceTreeWorktree, REAPER_SOURCE_DIRNAME, REAPER_SOURCE_BRANCH, resolveSourceTreeDir,
+  SOURCE_TREE_BASENAME_ERROR,
 } = require_('../../../lib/fleet/source-tree-refresh.cjs');
 
 describe('IDLE-3: the override may RELOCATE the tree but may not RENAME it', () => {
@@ -48,6 +49,20 @@ describe('IDLE-3: the override may RELOCATE the tree but may not RENAME it', () 
         `${bad} must be refused`,
       ).toThrow(/must keep the basename/i);
     }
+  });
+
+  it('IDLE-3-CODE: the rename refusal carries its OWN code, so a typo is not a fleet outage', () => {
+    // It used to reuse the caller's siting code, which spawn-control keeps must-stay-fatal — so an
+    // env typo became a fleet-wide spawn outage reported as "SITED_IN_EXEMPT_PATH", re-committing
+    // the very conflation this module fixed for the identity refusal.
+    let err = null;
+    try {
+      resolveSourceTreeDir('/repo', { ...opts, code: 'SPAWN_SOURCE_SITED_IN_EXEMPT_PATH' },
+        { FLEET_REAPER_SOURCE_DIR: '/mnt/fast/wrong-name' });
+    } catch (e) { err = e; }
+    expect(err).toBeTruthy();
+    expect(err.code).toBe(SOURCE_TREE_BASENAME_ERROR);
+    expect(err.code).not.toBe('SPAWN_SOURCE_SITED_IN_EXEMPT_PATH');
   });
 
   it('the refusal names the CONSEQUENCE, not just the rule', () => {

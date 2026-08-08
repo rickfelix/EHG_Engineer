@@ -89,6 +89,19 @@ describe('BOTH stage-2 routes refuse the source trees, and agree with each other
     expect(r.reason).toBe('source_tree_protected');
   });
 
+  it('IDLE-2-R: a spoofed wt.key cannot make the two routes disagree', () => {
+    // hasOrphanSD reads `wt.key || basename` while isIdle reads the basename. With a stale or
+    // spoofed key on a directory that IS a source tree, the orphan route reaped while the idle
+    // route protected. Not reachable from the production caller (which sets key=basename), so
+    // "both routes agree" was true by caller CONVENTION rather than by construction — the same
+    // shape as the claim IDLE-2 retracted. Protection is about WHERE the tree is; wt.key is a
+    // claim about WHICH SD it belongs to.
+    const wt = { ...wtAt(REAPER_SRC), key: 'SD-GONE-999' };
+    const r = hasOrphanSD(wt, orphanCtx);
+    expect(r.matched).toBe(false);
+    expect(r.reason).toBe('source_tree_protected');
+  });
+
   it('the two routes AGREE on a near-miss name — IDLE-2 regression pin', () => {
     // `.reaper-source-2` previously split: protected on orphan-sd (startsWith), reapable on idle
     // (exact). One name must get ONE answer from both classifiers.
