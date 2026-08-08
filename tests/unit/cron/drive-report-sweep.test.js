@@ -266,12 +266,24 @@ describe('registry bookkeeping — the stamp is what lets the FR-7 alarm CLEAR',
 });
 
 describe('gather — what this job can HONESTLY measure today', () => {
+  // SD-LEO-INFRA-UNCAPPED-ROADMAP-ITEMS-001: `next` and `open_items_all` carry DELIBERATELY
+  // DIFFERENT rows. That difference is the whole instrument — it is what lets a test tell which
+  // field buildGather actually fed the sections. Previously this stub had no open_items_all at
+  // all, so the sections received [] and every assertion about them passed trivially: swapping
+  // the wiring back to the capped `next` left the entire suite green.
   const status = {
     open_total: 42,
     next: [{ item_id: 'i1' }, { item_id: 'i2' }],
     next_truncated: true,
     done: [{ item_id: 'd1' }],
     slipped: [],
+    waves: [{ id: 'w1', title: 'Wave 1', sequence_rank: 1, status: 'approved' }],
+    // RAW consumer-read field names — the rename of these is the defect this SD had to fix.
+    open_items_all: [
+      { id: 'UNCAPPED-a', wave_id: 'w1', title: 'A', promoted_to_sd_key: null, item_disposition: 'pending', remainder_state: 'promotable_now', lane: null, metadata: {}, sd: null },
+      { id: 'UNCAPPED-b', wave_id: 'w1', title: 'B', promoted_to_sd_key: null, item_disposition: 'pending', remainder_state: 'promotable_now', lane: null, metadata: {}, sd: null },
+      { id: 'UNCAPPED-c', wave_id: 'w1', title: 'C', promoted_to_sd_key: null, item_disposition: 'pending', remainder_state: 'promotable_now', lane: null, metadata: {}, sd: null },
+    ],
   };
   // SD-LEO-INFRA-PERSIST-BELT-CAPACITY-001 (TS-7): leg4's injections, in the state this SD SHIPS
   // in — the verdict table is staged chairman-gated and NOT applied, so the write fails
@@ -290,22 +302,49 @@ describe('gather — what this job can HONESTLY measure today', () => {
     expect(sections.plan_position.remainder.value, 'must be open_total, never the capped list length').not.toBe(status.next.length);
   });
 
-  it('every unsourced section is unavailable WITH A SPECIFIC REASON, never zero', async () => {
+  it('every STILL-unsourced section is unavailable WITH A SPECIFIC REASON, never zero', async () => {
+    // SD-LEO-INFRA-UNCAPPED-ROADMAP-ITEMS-001 FR-2/FR-3: this list used to name all four. The
+    // three item-based sections are now SOURCED from the uncapped join, so only stall_deltas
+    // remains — and it stays deliberately (FR-4 is CONDITIONAL: its `suppressed` park predicate,
+    // documented as supplied by FR_A/-E, has no implementation anywhere in the repo).
     const { sections } = await gather();
-    for (const id of ['belt_diagnosis', 'chain_to_gate', 'next_acts', 'stall_deltas']) {
+    for (const id of ['stall_deltas']) {
       expect(sections[id].unavailable.available).toBe(false);
       expect(sections[id].unavailable.value).toBe(null);
       expect(sections[id].unavailable.reason.length, `${id} reason is a shrug`).toBeGreaterThan(40);
     }
   });
 
-  it('the three item-based sections name the CAP as the blocker, not "todo"', async () => {
-    // The reason has to be actionable enough that a future reader does not "finish" it by
-    // wiring status.next — which is capped at 10 and would produce a wrong number that looks
-    // completely reasonable.
+  it('WIRING PINNED: the sections are fed open_items_all, PROVABLY not the capped `next`', async () => {
+    // THIS IS THE TEST WHOSE ABSENCE WAS THE REAL GAP. A re-review demonstrated that swapping
+    // buildGather's `planStatus.open_items_all` for `planStatus.next` — reverting the exact thing
+    // this SD exists to do — left 624/624 tests GREEN. The suite asserted that the sections were
+    // AVAILABLE and that the pure functions behaved, but nothing anywhere asserted WHICH FIELD
+    // they were handed. The code comment claimed the wiring test did this; it did not.
+    //
+    // The stub's `next` and `open_items_all` hold disjoint ids, so the built section's own row
+    // ids say unambiguously which field reached it. This fails if the wiring is ever reverted.
+    const { sections } = await gather();
+    const emitted = JSON.stringify(sections.belt_diagnosis);
+    expect(emitted, 'belt must reflect the UNCAPPED set').toMatch(/UNCAPPED-/);
+    expect(emitted, 'belt must NOT be fed the capped `next` rows').not.toMatch(/"i1"|"i2"/);
+  });
+
+  it('THE THREE ITEM-BASED SECTIONS ARE NOW SOURCED, not unavailable', async () => {
+    // Replaces the old "name the CAP as the blocker" test, whose comment warned that a future
+    // reader must not "finish" this by wiring status.next — capped at 10, producing a wrong
+    // number that looks completely reasonable. That warning is honoured: buildGather feeds these
+    // sections computePlanCheckStatus().open_items_all, the UNCAPPED set, never status.next.
+    //
+    // Asserting `unavailable === undefined` is the load-bearing half. The sections are PURE
+    // functions, so a wiring that handed them the capped array would still return well-shaped
+    // output and every section-level unit test would stay green — the bug would just move one
+    // layer up into buildGather. The companion assertion that the set is genuinely uncapped
+    // lives in tests/unit/roadmap/plan-check-uncapped-pagination.test.js, mutation-proven there.
     const { sections } = await gather();
     for (const id of ['belt_diagnosis', 'chain_to_gate', 'next_acts']) {
-      expect(sections[id].unavailable.reason).toMatch(/CAPPED AT 10/);
+      expect(sections[id].unavailable, `${id} should now be SOURCED`).toBeUndefined();
+      expect(sections[id].section).toBe(id);
     }
   });
 
@@ -334,8 +373,12 @@ describe('gather — what this job can HONESTLY measure today', () => {
     const { composeReport } = await import('../../../lib/drive-loop/compose-report.js');
     const { sections, driveScore } = await gather();
     const row = composeReport({ sections, driveScore, generatedAt: '2026-07-15T09:00:00.000Z', runId: 'drive-2026-07-15' });
+    // FR-2/FR-3: three of these four are now SOURCED from the uncapped join. stall_deltas is
+    // the only remaining unavailable section, and it stays that way on purpose (FR-4 CONDITIONAL
+    // — no FR_A/-E suppression predicate exists in the repo). This list shrinking from 4 to 1 IS
+    // the deliverable; it is asserted exactly rather than loosened to "at most 4".
     expect(row.metadata.unavailable_sections.map((u) => u.section).sort())
-      .toEqual(['belt_diagnosis', 'chain_to_gate', 'next_acts', 'stall_deltas']);
+      .toEqual(['stall_deltas']);
     expect(row.metadata.section_ids).toContain('plan_position');
   });
 });
@@ -376,7 +419,8 @@ describe('[END-TO-END] the sweep drives the REAL producer — no stub in between
     expect(rows[0].run_id).toBe('drive-2026-07-15');
     expect(rows[0].cadence).toBe('scheduled');
     expect(rows[0].sections.plan_position.remainder.value).toBe(42);
-    expect(rows[0].metadata.unavailable_sections).toHaveLength(4);
+    // FR-2/FR-3: was 4; only stall_deltas remains unavailable (FR-4 CONDITIONAL, unowned predicate).
+    expect(rows[0].metadata.unavailable_sections).toHaveLength(1);
   });
 
   it('the second tick of the same window writes NOTHING and reports the skip', async () => {

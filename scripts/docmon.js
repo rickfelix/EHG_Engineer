@@ -18,7 +18,14 @@
 
 import fs from 'fs';
 import path from 'path';
-import { execSync } from 'child_process';
+// SD-LEO-FIX-SHELL-INJECTION-REACHABLE-001: execFileSync, NOT execSync and NOT spawnSync.
+// execFileSync takes an argv ARRAY and never involves a shell, which is the whole fix. It is also
+// the only drop-in for the contract this file relies on: like execSync it returns stdout as a
+// string and THROWS on a non-zero exit. Three separate catches here depend on that throw — the
+// merge-base fallbacks to 'HEAD~1', the getChangedFiles fallback to a full scan, and
+// getBeforeWordCount's `return 0 // New file`. spawnSync returns {stdout,stderr,status} and does
+// NOT throw, so swapping it in would silently stop ALL THREE from ever firing.
+import { execFileSync } from 'child_process';
 import { fileURLToPath } from 'url';
 import { minimatch } from 'minimatch';
 
@@ -71,19 +78,44 @@ Configuration:
  * Get files changed in current diff
  * @returns {string[]} Array of changed file paths
  */
+// SD-LEO-FIX-SHELL-INJECTION-REACHABLE-001.
+//
+// ONE RUNNER, NOT A FIX PER CALL SITE. Every git invocation in this file goes through here, so no
+// future call can reintroduce a shell by forgetting an argument. That is the stated principle at
+// lib/gates/operator-contract/harness-adapter.js:81-84, carried across rather than re-derived.
+//
+// --literal-pathspecs IS LOAD-BEARING HERE, unlike in the sibling lint. getChangedLines passes the
+// filename as a PATHSPEC after `--`, and `--` ends OPTION parsing WITHOUT disabling PATHSPEC MAGIC:
+// git still reads `:(glob)` and `:(literal)` as SYNTAX in an argument after `--`. MEASURED: with
+// argv-ization alone, a :(glob)-prefixed filename makes git return an EMPTY diff and throw NOTHING,
+// so the file becomes INVISIBLE to the Strunkian gate. Argv-safety alone would therefore have
+// converted this RCE into SILENT EVASION — worse than the defect, because a gate that can be made
+// to see nothing is worse than one that crashes. This is SEC-R1 from PR #6872 recurring verbatim.
+//
+// Applied in the RUNNER, so it also covers `git show` below, where it is INERT (a <rev>:<path>
+// object name is a single argv token, not a pathspec). Kept uniform on purpose: excluding it there
+// would need per-call-site logic, which is exactly the fragility the runner principle warns about.
+const runGit = (args) => execFileSync('git', ['--literal-pathspecs', ...args], { encoding: 'utf-8' });
+
 function getChangedFiles() {
   try {
     // Try to get merge base for PR context
     let mergeBase;
     try {
-      mergeBase = execSync('git merge-base origin/main HEAD', { encoding: 'utf-8' }).trim();
+      mergeBase = runGit(['merge-base', 'origin/main', 'HEAD']).trim();
     } catch {
       // Fallback to HEAD~1 for local pre-push
       mergeBase = 'HEAD~1';
     }
 
-    const diff = execSync(`git diff --name-only ${mergeBase}...HEAD`, { encoding: 'utf-8' });
-    return diff.split('\n').filter(f => f.trim());
+    // -z is NUL-delimited AND suppresses git's path quoting. Beyond the shell fix it closes a
+    // latent parsing bug: a filename containing a literal NEWLINE is legal in a git tree, and the
+    // old split('\n') never recovered it — git C-QUOTES such a name to "we\nird.md", so the parser
+    // produced ONE CONFIDENTLY WRONG path rather than obvious fragments. No .trim() per entry now:
+    // with NUL delimiters the bytes BETWEEN separators ARE the path, and trimming would corrupt a
+    // filename that legitimately begins or ends with a space.
+    const diff = runGit(['diff', '--name-only', '-z', `${mergeBase}...HEAD`]);
+    return diff.split('\0').filter(Boolean);
   } catch {
     console.warn('⚠️ Could not get git diff, scanning all files...');
     return getAllDocFiles();
@@ -154,12 +186,22 @@ function getChangedLines(filePath) {
   try {
     let mergeBase;
     try {
-      mergeBase = execSync('git merge-base origin/main HEAD', { encoding: 'utf-8' }).trim();
+      mergeBase = runGit(['merge-base', 'origin/main', 'HEAD']).trim();
     } catch {
       mergeBase = 'HEAD~1';
     }
 
-    const diff = execSync(`git diff -U0 ${mergeBase}...HEAD -- "${filePath}"`, { encoding: 'utf-8' });
+    // SD-LEO-FIX-SHELL-INJECTION-REACHABLE-001. This was a live RCE: the filename was interpolated
+    // inside double quotes in a shell string. Double quotes do NOT save you — under POSIX sh they
+    // suppress `;` and `&` while $(...) and backticks STILL EXPAND inside them, and an embedded `"`
+    // ends the quoting and re-arms everything else. `filePath` comes from getChangedFiles above,
+    // i.e. any name an attacker can commit, and this runs on ubuntu on every PR touching docs/ or
+    // *.md — and unconditionally on every developer push via .husky/pre-push.
+    //
+    // The path is now its own argv element after `--`, so no SHELL parses it, and the runner's
+    // --literal-pathspecs stops GIT from parsing it as pathspec syntax. Both are required: the
+    // first closes execution, the second closes the silent-evasion hole the first opens.
+    const diff = runGit(['diff', '-U0', `${mergeBase}...HEAD`, '--', filePath]);
     const changedLines = new Set();
 
     // Parse unified diff to get line numbers
@@ -378,12 +420,17 @@ function getBeforeWordCount(filePath) {
   try {
     let mergeBase;
     try {
-      mergeBase = execSync('git merge-base origin/main HEAD', { encoding: 'utf-8' }).trim();
+      mergeBase = runGit(['merge-base', 'origin/main', 'HEAD']).trim();
     } catch {
       mergeBase = 'HEAD~1';
     }
 
-    const beforeContent = execSync(`git show ${mergeBase}:${filePath}`, { encoding: 'utf-8' });
+    // SD-LEO-FIX-SHELL-INJECTION-REACHABLE-001. The WORST sink in this file: no quoting at all, so
+    // `;` `&` `|` were live under sh in addition to $(...) and backticks. It is also SILENT — the
+    // catch below returns 0 and the file is simply treated as new — so an injected payload left no
+    // trace in the output. The <rev>:<path> OBJECT-NAME form is a SINGLE argv token, so argv
+    // conversion alone fully closes this one; the runner's --literal-pathspecs is inert here.
+    const beforeContent = runGit(['show', `${mergeBase}:${filePath}`]);
     return countWords(beforeContent);
   } catch {
     return 0; // New file

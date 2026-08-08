@@ -381,12 +381,50 @@ async function stampStateChangeAnchor(row, evaluation) {
   }
 }
 
-async function main() {
+/**
+ * @param {{includeFixtures?: boolean}} [opts] — includeFixtures:true KEEPS __e2e_ rows in the
+ *   evaluation set. Exists for ONE caller: tests/integration/periodic-process-liveness-realdb.test.js,
+ *   whose fixtures are themselves named __e2e_periodic_liveness_*__ and which asserts that this
+ *   watcher EMITS OVERDUE for them. That suite needs the real path over synthetic rows, so filtering
+ *   them would break the regression suite that guards this very file. It is the same shape as the
+ *   reaper: a consumer for which seeing fixture rows IS the function.
+ *   THE OPT-OUT ANNOUNCES ITSELF on every use — an escape hatch that engages silently is the
+ *   fence-bypass class, and this one is quiet by nature because it only ever runs in tests.
+ */
+async function main({ includeFixtures = false } = {}) {
   const { data: rows, error } = await supabase.from('periodic_process_registry').select('*').neq('process_key', WATCHER_SELF_KEY);
   if (error) throw new Error(`registry query failed: ${error.message}`);
 
+  // SD-LEO-INFRA-ONE-SYNTHETIC-ROW-001-B FR-4: drop e2e fixture residue before evaluating liveness.
+  //
+  // This is the ALARM PRODUCER, so an unfiltered fixture row here does not merely look wrong on a
+  // panel — it emits a real OVERDUE signal for a process that was never meant to exist, and the
+  // resulting noise is what trains people to ignore the alarm.
+  //
+  // ADDED, NOT SUBSTITUTED: the .neq above is a SELF-exclusion (the watcher not evaluating itself)
+  // and isFixtureProcessKey('__watcher_self__') is FALSE, so replacing one with the other would put
+  // the watcher back into its own evaluation set. Two different concerns.
+  //
+  // Keyed on '__e2e_' ONLY, never the canonical FIXTURE_KEY_RE: that regex carries a bare ^__ branch
+  // which would classify the REAL rows __watcher_self__ and __eva_scheduler_watcher_self__ as
+  // fixtures and blind the very instrument this watcher exists to keep honest.
+  let liveRows = rows || [];
+  if (includeFixtures) {
+    console.log('[periodic-liveness-watcher] includeFixtures=true — EVALUATING __e2e_ FIXTURE ROWS. This opt-out exists for the realdb regression suite only; it must never be set in production.');
+  } else try {
+    const { isFixtureProcessKey } = await import('../lib/governance/fixture-exclusion.mjs');
+    const before = liveRows.length;
+    liveRows = liveRows.filter((r) => !isFixtureProcessKey(r.process_key));
+    const dropped = before - liveRows.length;
+    if (dropped > 0) console.log(`[periodic-liveness-watcher] excluded ${dropped} e2e fixture row(s) from evaluation`);
+  } catch (e) {
+    // Announce rather than silently evaluating unfiltered — an unreported fallback is
+    // indistinguishable from a working filter.
+    console.error(`[periodic-liveness-watcher] fixture predicate unavailable, EVALUATING UNFILTERED: ${e?.message || e}`);
+  }
+
   const classes = parseLivenessClasses(process.env.LIVENESS_CLASSES);
-  const { evaluate, skipped } = partitionRowsByClasses(rows || [], classes);
+  const { evaluate, skipped } = partitionRowsByClasses(liveRows, classes);
   if (classes) {
     console.log(`[periodic-liveness-watcher] class filter active (${[...classes].join(',')}): evaluating ${evaluate.length}, skipping ${skipped.length} row(s) owned by the other venue`);
   }

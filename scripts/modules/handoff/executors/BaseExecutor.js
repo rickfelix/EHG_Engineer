@@ -709,6 +709,20 @@ export class BaseExecutor {
           // top-level so recordFailure persists them — retries follow rejections, so
           // without this the cache has nothing to reuse.
           gateFailureResult.gateResults = gateResults.gateResults;
+          // FR-3 (SD-LEO-INFRA-OPERATOR-CONTRACT-GATE-002). HandoffRecorder.js already READS
+          // result.failedGate when building validation_details.summary — nobody was setting it.
+          // ResultBuilder.gateFailure() takes the gate name only to shape the reasonCode and
+          // delegates to .rejected(), which returns no failedGate; the skip-and-continue path
+          // above DOES carry it, so this branch was the odd one out. Measured before the fix:
+          // failed_gate null on 25 of 25 rejected rows, leaving the gate NAME recoverable only
+          // by string-parsing `message`.
+          //
+          // This is the WHOLE persistence fix. The PRD originally also proposed copying
+          // gate_results into validation_details; TESTING measured that they are ALREADY
+          // persisted there (13/25 rows carry metadata.gate_results, 13/13 of those with
+          // OPERATOR_CONTRACT.details), so that half would have been a second representation
+          // of one fact — and a test for it would have gone green before EXEC began.
+          gateFailureResult.failedGate = gateResults.failedGate;
           return gateFailureResult;
         }
       }

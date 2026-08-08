@@ -15,7 +15,20 @@ name: Venture Fixture Sweep
 on:
   schedule:
     - cron: '23 4 * * 6'   # Saturdays 04:23 UTC (low-traffic; distinct from the canary's Sun 06:17)
-  workflow_dispatch: {}
+  workflow_dispatch:
+    # SD-LEO-INFRA-ONE-SYNTHETIC-ROW-001-E (FR-4). This input did not exist, and its absence was a
+    # real gap: the flag's own precedent (CANARY_VENTURE_PROBE_V1) says "ships OFF; enable after the
+    # first supervised incremental run" — but with no inputs and --fix as the only run step, there
+    # was NO WAY TO PERFORM that supervised run. You could only choose between doing nothing and
+    # doing everything. Measured blast radius makes that a real problem, not a theoretical one: the
+    # first armed run soft-deletes 87 of 89 live ventures (all 87 via is_demo alone), sparing only
+    # "Image Alt Text Generator" — the live first-revenue venture — and "ApexNiche AI".
+    inputs:
+      dry_run:
+        description: 'Report what WOULD be swept without writing (leave true to preview)'
+        type: boolean
+        required: false
+        default: true
 
 permissions:
   contents: read
@@ -60,6 +73,16 @@ jobs:
             : 'VENTURE_FIXTURE_SWEEP_V1 disabled (or absent) — quiet no-op.');
           EOF
 
+      # ALWAYS RUNS. Reports the residue count without writing, so a disabled flag is an OBSERVABLE
+      # state rather than a silent one — you can see what WOULD be swept before anyone arms it, and
+      # a manual dry_run dispatch stops here. (FR-4)
+      - name: Report fixture residue (dry run — always)
+        run: node scripts/sweep-fixture-residue.mjs
+
+      # SOFT-DELETE PATH. Requires BOTH the flag AND a non-dry-run dispatch: a scheduled run has no
+      # inputs, so `inputs.dry_run` is empty and this is armed by the flag alone; a manual run must
+      # explicitly uncheck dry_run. Defaulting the input to true means the safe choice is the one
+      # you get by doing nothing.
       - name: Run fixture residue sweep (soft-delete; flag-gated)
-        if: steps.gate.outputs.enabled == 'true'
+        if: steps.gate.outputs.enabled == 'true' && inputs.dry_run != true
         run: node scripts/sweep-fixture-residue.mjs --fix

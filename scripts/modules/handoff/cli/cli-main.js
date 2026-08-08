@@ -302,6 +302,44 @@ export async function introspectGateStatus(sdId, { json = true } = {}) {
  * @param {string} sdId - SD identifier
  * @returns {Promise<Object>} Result
  */
+/**
+ * QF-20260807-278: render the dry-run verdict so it states its OWN reason.
+ *
+ * The old line printed only two numbers and a verdict:
+ *   Aggregate: 83% (threshold: 75%) => WOULD FAIL
+ * 83 is ABOVE 75. The verdict was correct — a blocking gate fails the handoff at any score —
+ * but those two numbers are all a reader has, so the line taught a threshold rule that is not
+ * the rule. A preview whose output cannot be trusted at face value is the defect this QF names.
+ *
+ * VERDICT LOGIC IS UNCHANGED; only what it SAYS changes. Blocking gates are read from the same
+ * `evaluationResults` the FAILED GATE DETAILS block already uses — one source, not a second
+ * computation (1-REP). Extracted as a pure function so it is testable without a database:
+ * the CLI builds its orchestrator internally, so an inline block could only be exercised by a
+ * live run against real data.
+ *
+ * @param {object} result dryRunHandoff result
+ * @returns {string[]} lines to print
+ */
+export function formatDryRunVerdict(result = {}) {
+  const blockingGates = (result.evaluationResults || [])
+    .filter((r) => r && r.enabled && r.passed === false)
+    .map((r) => r.name);
+  const lines = [
+    `  Aggregate: ${result.aggregateScore}% (threshold: ${result.gateThreshold}%) => ${result.wouldPass ? 'WOULD PASS' : 'WOULD FAIL'}`,
+  ];
+  if (!result.wouldPass && blockingGates.length > 0) {
+    // Only say "the aggregate met the threshold" when it actually did — a note that prints on
+    // every failure would be a sentence nobody can learn anything from.
+    const meets = typeof result.aggregateScore === 'number'
+      && typeof result.gateThreshold === 'number'
+      && result.aggregateScore >= result.gateThreshold;
+    lines.push(meets
+      ? `  NOTE: the aggregate MEETS the threshold; the verdict is set by BLOCKING GATE(S): ${blockingGates.join(', ')}`
+      : `  Blocking gate(s): ${blockingGates.join(', ')}`);
+  }
+  return lines;
+}
+
 export async function handleDryRunCommand(handoffType, sdId, options = {}) {
   if (!handoffType || !sdId) {
     console.log('Usage: node scripts/handoff.js dry-run HANDOFF_TYPE SD-ID [--evaluate]');
@@ -364,7 +402,17 @@ export async function handleDryRunCommand(handoffType, sdId, options = {}) {
     }
 
     console.log('  ' + '-'.repeat(86));
-    console.log(`  Aggregate: ${result.aggregateScore}% (threshold: ${result.gateThreshold}%) => ${result.wouldPass ? 'WOULD PASS' : 'WOULD FAIL'}`);
+    // QF-20260807-278: this line used to print only the aggregate and the verdict, e.g.
+    //   Aggregate: 83% (threshold: 75%) => WOULD FAIL
+    // 83 is ABOVE 75, so the arithmetic on display contradicts the verdict beside it. The
+    // verdict is not decided by the aggregate alone — a blocking gate fails the handoff at
+    // any score — but a reader has only these two numbers to reason from, so the line
+    // teaches a threshold rule that is not the rule.
+    //
+    // The VERDICT LOGIC IS UNCHANGED. Only what it SAYS changes, so the displayed reason
+    // matches the real one. Blocking gates are read from the same evaluationResults the
+    // FAILED GATE DETAILS block below already uses — one source, not a second computation.
+    for (const line of formatDryRunVerdict(result)) console.log(line);
     console.log('');
 
     // Show failed gate details

@@ -1,0 +1,3 @@
+{
+  "vacuousRegex": "^(n/?a|none|nothing|no comment|nothing to (report|add|note|say|improve)|no (significant|major|notable|other) (issues?|problems?|concerns?|improvements?|areas?|findings?)( to report| identified| found| noted)?)[.!]*$"
+}

@@ -53,6 +53,26 @@ describe('FR-4: gauge and chokepoint agree on the axis where they used to disagr
     { name: 'held by a live session (fit but NOT free)', row: base({ claiming_session_id: 'sess-1' }), supply: false, claimable: true },
     { name: 'merge-witnessed, awaiting attestation', row: base({ status: 'in_progress', pr_url: 'https://x/pull/1', commit_sha: 'abc' }), supply: false, claimable: false },
     { name: 'completed', row: base({ status: 'completed' }), supply: false, claimable: false },
+
+    // SD-LEO-INFRA-ONE-SYNTHETIC-ROW-001-C FR-1 — THE FIXTURE AXIS.
+    //
+    // These rows are here because this suite went GREEN THROUGH A REAL REGRESSION. When
+    // isAutoStartableQF began rejecting fixture QFs, a free fixture row became phantom supply —
+    // COUNTED here, UNCLAIMABLE there — which is precisely what the free-row biconditional below
+    // exists to catch. It caught nothing, because every row in this table was real-shaped. The
+    // assertion was right; the input set could not exercise it. A correct assertion over an
+    // unrepresentative population is indistinguishable from a passing one.
+    //
+    // Both are supply:false + claimable:false, so the biconditional now spans the fixture axis.
+    { name: 'FIXTURE by id — not supply, not claimable', row: base({ id: 'QF-TEST-001' }), supply: false, claimable: false },
+    { name: 'FIXTURE by title — not supply, not claimable', row: base({ title: 'ZZZ_seed row' }), supply: false, claimable: false },
+
+    // THE OVER-EATING CONTROL, and the direction that matters here: under-counting supply makes
+    // `value <= floor` MORE likely and therefore OVER-MINTS work, while wrongly excluding a real QF
+    // strands it with nothing reporting it. Two live bug reports in two weeks carried titles like
+    // this one (PR #6186), which is why isFixtureQf's TEST-/UAT-/DEMO title branches were removed
+    // and only unambiguous ZZZ_/dunder prefixes remain. This row must stay on the supply side.
+    { name: 'REAL bug report merely NAMING fixtures — still supply, still claimable', row: base({ title: 'Test-fixture ventures leak into gauges' }), supply: true, claimable: true },
   ];
 
   for (const f of fixtures) {
