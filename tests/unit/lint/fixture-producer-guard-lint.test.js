@@ -6,7 +6,7 @@
  */
 import { describe, it, expect } from 'vitest';
 import {
-  findUnguardedWrites, usesGuard, loadAllowlist, stripNonCode, SCAN_ROOTS,
+  findUnguardedWrites, countGuardedWrites, loadAllowlist, stripNonCode, SCAN_ROOTS, selfTest,
 } from '../../../scripts/lint/fixture-producer-guard-lint.mjs';
 import { writeFileSync, mkdtempSync } from 'node:fs';
 import { tmpdir } from 'node:os';
@@ -71,13 +71,20 @@ describe('prose about the pattern is not the pattern', () => {
   });
 });
 
-describe('usesGuard recognises a converted producer', () => {
-  it('is true when the file routes through insertGuarded', () => {
-    expect(usesGuard("import { insertGuarded } from 'x';\nawait insertGuarded(sb,'ventures',row,{});")).toBe(true);
+describe('countGuardedWrites is the positive denominator', () => {
+  it('counts real guarded call sites', () => {
+    expect(countGuardedWrites("insertGuarded(sb,'ventures',r,{});insertGuarded(sb,'ventures',r2,{});")).toBe(2);
   });
 
-  it('is false when only a comment mentions it — narration is not adoption', () => {
-    expect(usesGuard('// this file should use insertGuarded one day'.replace('insertGuarded', 'insertGuarded'))).toBe(false);
+  it('does not count a comment mentioning it — narration is not adoption', () => {
+    expect(countGuardedWrites('// one day this should use insertGuarded(')).toBe(0);
+  });
+});
+
+describe('the extractor self-test is the finder control', () => {
+  it('passes while the finder can see a write and ignore a read', () => {
+    // A blind finder and a clean tree print the same green; this is what tells them apart.
+    expect(selfTest()).toBeNull();
   });
 });
 

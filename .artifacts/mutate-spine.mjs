@@ -13,6 +13,7 @@ const MUT = [
    '    const ventureRow = buildVentureRow\n      ? buildVentureRow(runId)\n      : ', '    const ventureRow = false\n      ? buildVentureRow(runId)\n      : '],
 ];
 let survivors = [];
+try {
 for (const [name, from, to] of MUT) {
   if (!orig.includes(from)) { console.log(`INVALID   ${name}`); survivors.push(name); continue; }
   writeFileSync(P, orig.replace(from, to));
@@ -23,5 +24,9 @@ for (const [name, from, to] of MUT) {
   console.log(`${killed ? 'KILLED  ' : 'SURVIVED'}  ${name}${m ? `  (${m[1]} failed)` : ''}`);
   if (!killed) survivors.push(name);
 }
-writeFileSync(P, orig);
+} finally {
+  // RESTORE ON ANY EXIT. Without this a crash or Ctrl-C leaves the guard MUTATED in the tree —
+  // e.g. with its sanctioned-set check deleted — and the next run would test a weakened module.
+  writeFileSync(P, orig);
+}
 console.log(survivors.length ? `\n${survivors.length} SURVIVED` : `\nALL ${MUT.length} KILLED`);

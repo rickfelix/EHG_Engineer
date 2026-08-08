@@ -44,6 +44,9 @@ on:
       - '.github/workflows/fixture-producer-guard-lint.yml'
   workflow_dispatch:
 
+permissions:
+  contents: read
+
 jobs:
   fixture-producer-guard-lint:
     runs-on: ubuntu-latest
@@ -52,8 +55,7 @@ jobs:
       - uses: actions/setup-node@v4
         with:
           node-version: '20'
-      # The lint is dependency-free (node:fs / node:path only), but npm ci keeps this job
-      # identical in shape to the other blocking class-guards rather than quietly special.
-      - run: npm ci
+      # NO npm ci: the lint imports only node:fs and node:path. Installing on a blocking gate would
+      # add arbitrary-code-execution-at-install (this repo has a postinstall) for zero benefit.
       - name: Every ventures write routes through insertGuarded
         run: node scripts/lint/fixture-producer-guard-lint.mjs

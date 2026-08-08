@@ -85,9 +85,18 @@ export function findUnguardedWrites(src) {
   return findings;
 }
 
-/** True when the file routes its writes through the guard. */
-export function usesGuard(src) {
-  return /insertGuarded/.test(stripNonCode(src));
+/**
+ * Count GUARDED sites. This is the POSITIVE DENOMINATOR, and it exists because the first cut of
+ * this lint had no way to tell "everything is converted" from "the extractor is blind".
+ *
+ * Two independent reviews landed the same finding: with only a violations count, mutating
+ * findUnguardedWrites to `return []` produced output BYTE-IDENTICAL to the real green state. A
+ * verdict that reads the same when the instrument is dead is not a verdict. So the run now reports
+ * guarded sites too and FAILS if that number is zero — a lint that can no longer see anything says
+ * so instead of congratulating itself.
+ */
+export function countGuardedWrites(src) {
+  return (stripNonCode(src).match(/\binsertGuarded\s*\(/g) || []).length;
 }
 
 export function loadAllowlist(path = ALLOWLIST_PATH) {
@@ -123,40 +132,76 @@ const relOf = (full) => full.replace(ROOT, '').replace(/\\/g, '/').replace(/^\//
 export function scan({ root = ROOT, allowlist = loadAllowlist() } = {}) {
   const violations = [];
   let scannedFiles = 0;
-  let writeSites = 0;
+  let rawWriteSites = 0;
+  let guardedSites = 0;
   for (const sub of SCAN_ROOTS) {
     for (const full of walk(join(root, sub))) {
       const rel = relOf(full);
       let src;
       try { src = readFileSync(full, 'utf8'); } catch { continue; }
       scannedFiles++;
+      guardedSites += countGuardedWrites(src);
       const writes = findUnguardedWrites(src);
       if (!writes.length) continue;
-      writeSites += writes.length;
-      if (usesGuard(src)) continue;                       // converted
-      if (allowlist[rel]) continue;                       // whole-file exemption, reason required
+      rawWriteSites += writes.length;
+      // NO WHOLE-FILE EXEMPTION. The first cut short-circuited here on `usesGuard(src)` — a
+      // file-level /insertGuarded/ test — so ONE converted call site exempted every remaining raw
+      // write in the same file. That made all 26 files this SD converted invisible to the gate it
+      // landed, and reproduced at file granularity the exact existence-vs-coverage defect this
+      // lint's own header indicts metadata-flag-lint for. Found independently by two reviews;
+      // removing it is measured zero-risk, because a converted call site contains no
+      // `.from('ventures')` and therefore was never counted as a raw write in the first place.
+      if (allowlist[rel]) continue;                       // explicit whole-file exemption, reason required
       for (const w of writes) {
         if (allowlist[`${rel}:${w.line}`]) continue;      // per-site exemption
         violations.push({ file: rel, ...w });
       }
     }
   }
-  // COVERAGE, not existence: these counts are the point. A lint that reported only "the guard
-  // exists" would give an identical verdict for 1 adopter and for 25.
-  return { violations, scannedFiles, writeSites };
+  return { violations, scannedFiles, rawWriteSites, guardedSites };
+}
+
+/**
+ * SELF-TEST: prove the extractor can still SEE a violation before trusting it not to find one.
+ *
+ * A clean tree and a blind extractor print the same green — mutating findUnguardedWrites to
+ * `return []` produced output byte-identical to a healthy pass. The guarded-site counter catches a
+ * dead COUNTER but not a dead FINDER, so the finder gets its own positive control: a synthetic
+ * unguarded write that MUST be flagged, and a read that must NOT be. Runs on every invocation
+ * because a control you have to remember to run is one you eventually don't.
+ */
+export function selfTest() {
+  const mustFlag = findUnguardedWrites("sb.from('ventures').insert({ name: 'x' });");
+  const mustNotFlag = findUnguardedWrites("sb.from('ventures').select('id').limit(1);");
+  if (mustFlag.length !== 1 || mustNotFlag.length !== 0) {
+    return `extractor self-test FAILED (flagged ${mustFlag.length} write, ${mustNotFlag.length} read) `
+      + '— this lint cannot see its own pattern and its verdict is meaningless';
+  }
+  return null;
 }
 
 function main(argv = process.argv.slice(2)) {
   const asJson = argv.includes('--json');
+  const broken = selfTest();
+  if (broken) { console.error(`❌ fixture-producer-guard-lint: ${broken}`); return 1; }
   let result;
   try { result = scan(); } catch (e) { console.error(`fixture-producer-guard-lint: ${e.message}`); return 1; }
-  const { violations, scannedFiles, writeSites } = result;
-  if (asJson) { console.log(JSON.stringify(result, null, 2)); return violations.length ? 1 : 0; }
+  const { violations, scannedFiles, rawWriteSites, guardedSites } = result;
+  if (asJson) { console.log(JSON.stringify(result, null, 2)); return violations.length || !guardedSites ? 1 : 0; }
 
   console.log(`fixture-producer-guard-lint: scanned ${scannedFiles} file(s) across ${SCAN_ROOTS.length} root(s); `
-    + `${writeSites} ${TABLE} write-site(s) found.`);
+    + `${guardedSites} guarded site(s), ${rawWriteSites} unguarded ${TABLE} write-site(s).`);
+
+  // SELF-CHECK, and it is two-sided on purpose. Zero guarded sites means either every producer was
+  // deleted or this extractor has gone blind — and a blind run would otherwise print the same green
+  // as a healthy one. Refusing to pass on zero is what makes the ✅ mean something.
+  if (!guardedSites) {
+    console.error('\n❌ ZERO guarded sites found. Either every producer was removed, or this lint '
+      + 'can no longer see its own pattern. Refusing to report success on an unverifiable scan.');
+    return 1;
+  }
   if (!violations.length) {
-    console.log('✅ every ventures write under the scanned roots routes through insertGuarded (or is allowlisted with a reason).');
+    console.log(`✅ all ${guardedSites} ${TABLE} write(s) under the scanned roots route through insertGuarded (or are allowlisted with a reason).`);
     return 0;
   }
   console.error(`\n❌ ${violations.length} unguarded ${TABLE} write(s) — each creates a row no producer-side assert ever checked:\n`);

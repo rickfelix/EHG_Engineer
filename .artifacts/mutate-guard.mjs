@@ -12,12 +12,16 @@ const MUT = [
   ['M4  sanctioned trips-canonical half removed',
    '  if (!tripsCanonical) {\n    return {\n      ok: false,\n      tripsCanonical,\n      reason: \'declared SANCTIONED_PERMANENT and is in the sanctioned set,', '  if (false) {\n    return {\n      ok: false,\n      tripsCanonical,\n      reason: \'declared SANCTIONED_PERMANENT and is in the sanctioned set,'],
   ['M5  opt-out emits only on FAILURE (spreading opt-out invisible)',
-   '    logger.log(formatOptOutNotice({ table, classification, source, reason }));',
-   '    if (!verdict.ok) logger.log(formatOptOutNotice({ table, classification, source, reason }));'],
+   '    console.error(notice);',
+   '    if (!verdict.ok) console.error(notice);'],
+  ['M5b unconditional stderr removed (a silencing logger hides the opt-out)',
+   '    console.error(notice);', '    void notice;'],
   ['M6  opt-out emits for FIXTURE too (destroys the signal)',
    "  if (classification !== CLASSIFICATION.FIXTURE) {", '  if (true) {'],
   ['M7  blank reason accepted',
-   '    if (!reason) {', '    if (false) {'],
+   '    if (!reason || !String(reason).trim()) {', '    if (false) {'],
+  ['M7b whitespace-only reason accepted (allowlist uses trim, guard must too)',
+   '    if (!reason || !String(reason).trim()) {', '    if (!reason) {'],
   ['M8  FIXTURE branch no longer requires tripping canonical',
    '    return tripsCanonical\n      ? { ok: true, reason: null, tripsCanonical }', '    return true\n      ? { ok: true, reason: null, tripsCanonical }'],
   ['M9  bind to the WATCHER instead of canonical',
@@ -28,6 +32,7 @@ const MUT = [
    '  if (!source) {', '  if (false) {'],
 ];
 let survivors = [];
+try {
 for (const [name, from, to] of MUT) {
   if (!orig.includes(from)) { console.log(`INVALID   ${name}`); survivors.push(name); continue; }
   writeFileSync(P, orig.replace(from, to));
@@ -38,5 +43,9 @@ for (const [name, from, to] of MUT) {
   console.log(`${killed ? 'KILLED  ' : 'SURVIVED'}  ${name}${m ? `  (${m[1]} failed)` : ''}`);
   if (!killed) survivors.push(name);
 }
-writeFileSync(P, orig);
+} finally {
+  // RESTORE ON ANY EXIT. Without this a crash or Ctrl-C leaves the guard MUTATED in the tree —
+  // e.g. with its sanctioned-set check deleted — and the next run would test a weakened module.
+  writeFileSync(P, orig);
+}
 console.log(survivors.length ? `\n${survivors.length} SURVIVED` : `\nALL ${MUT.length} MUTATIONS KILLED`);

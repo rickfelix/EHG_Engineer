@@ -137,6 +137,61 @@ describe('the opt-out NAMES ITSELF every time it fires', () => {
     expect(logger.lines).toEqual([]);
   });
 
+  /**
+   * PIN THE UNCONDITIONAL SINK, not the injected one.
+   *
+   * Every other loudness test here asserts on the INJECTED logger — and that seam is
+   * caller-supplied, so those tests stay green in a world where every production caller passes
+   * `logger: { log: () => {} }` and no opt-out is ever seen. Mutation proved it: removing the
+   * unconditional stderr emission killed nothing until this test existed. stderr is also the right
+   * sink because CI reporters swallow stdout on PASSING tests — precisely when a quiet opt-out
+   * spreads unnoticed.
+   */
+  it('emits to stderr even when the caller supplies a SILENCING logger', () => {
+    const sb = mkSupabase();
+    const seen = [];
+    const realError = console.error;
+    console.error = (m) => seen.push(String(m));
+    try {
+      insertGuarded(sb, 'ventures', REAL_ROW, {
+        classification: CLASSIFICATION.DELIBERATELY_REAL,
+        source: 'silenced.test.js', reason: 'tries to hide', logger: { log: () => {} },
+      });
+    } finally { console.error = realError; }
+    expect(seen).toHaveLength(1);
+    expect(seen[0]).toMatch(/OPT-OUT FIRED/);
+    expect(seen[0]).toMatch(/silenced\.test\.js/);
+  });
+
+  it('emits to stderr on the SUCCESS path, not only on failure', () => {
+    const sb = mkSupabase();
+    const seen = [];
+    const realError = console.error;
+    console.error = (m) => seen.push(String(m));
+    try {
+      insertGuarded(sb, 'ventures', REAL_ROW, {
+        classification: CLASSIFICATION.DELIBERATELY_REAL,
+        source: 'test', reason: 'passes cleanly', logger: mkLogger(),
+      });
+    } finally { console.error = realError; }
+    // The write succeeded AND the opt-out announced itself. Emitting only on failure would make a
+    // spreading opt-out invisible — the exact property this guard exists to create.
+    expect(sb.inserted).toHaveLength(1);
+    expect(seen).toHaveLength(1);
+  });
+
+  it('refuses a WHITESPACE-ONLY reason, matching the allowlist loader definition of blank', () => {
+    // The allowlist 60 lines away uses !v.trim(); the guard used !reason. Two halves of one SD
+    // disagreeing on what "blank" means is how a blank justification gets in through the softer one.
+    const sb = mkSupabase();
+    for (const blank of ['   ', '\t', '\n ']) {
+      expect(() => insertGuarded(sb, 'ventures', REAL_ROW, {
+        classification: CLASSIFICATION.DELIBERATELY_REAL, source: 'test', reason: blank,
+      })).toThrow(/requires a non-empty/);
+    }
+    expect(sb.inserted).toEqual([]);
+  });
+
   it('refuses an opt-out with a blank reason', () => {
     const sb = mkSupabase();
     expect(() => insertGuarded(sb, 'ventures', REAL_ROW, {
@@ -178,8 +233,11 @@ describe('SANCTIONED_PERMANENT constrains — it is not a force flag', () => {
 
   it('imports CANARY_NAME rather than re-declaring it', () => {
     // A third hardcoded copy would be the parallel convention this SD exists to abolish.
-    expect(SANCTIONED_PERMANENT_NAMES.has(CANARY_NAME)).toBe(true);
-    expect(SANCTIONED_PERMANENT_NAMES.size).toBe(1);
+    expect(SANCTIONED_PERMANENT_NAMES).toContain(CANARY_NAME);
+    expect(SANCTIONED_PERMANENT_NAMES).toHaveLength(1);
+    // Frozen ARRAY, not a frozen Set: Object.freeze does not freeze Set contents, so the old
+    // export reported isFrozen()===true while .add() still worked.
+    expect(Object.isFrozen(SANCTIONED_PERMANENT_NAMES)).toBe(true);
   });
 });
 
