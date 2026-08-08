@@ -127,7 +127,10 @@ const walk = (dir, out = []) => {
   return out;
 };
 
-const relOf = (full) => full.replace(ROOT, '').replace(/\\/g, '/').replace(/^\//, '');
+// Root-relative, against the root ACTUALLY scanned. Hardcoding the module-level ROOT here made
+// every path absolute once --root aimed the scan elsewhere, which broke both the allowlist keys
+// and the seed-trial's filename-based detection.
+const relOf = (full, root = ROOT) => full.replace(root, '').replace(/\\/g, '/').replace(/^\//, '');
 
 export function scan({ root = ROOT, allowlist = loadAllowlist() } = {}) {
   const violations = [];
@@ -136,7 +139,7 @@ export function scan({ root = ROOT, allowlist = loadAllowlist() } = {}) {
   let guardedSites = 0;
   for (const sub of SCAN_ROOTS) {
     for (const full of walk(join(root, sub))) {
-      const rel = relOf(full);
+      const rel = relOf(full, root);
       let src;
       try { src = readFileSync(full, 'utf8'); } catch { continue; }
       scannedFiles++;
@@ -182,10 +185,16 @@ export function selfTest() {
 
 function main(argv = process.argv.slice(2)) {
   const asJson = argv.includes('--json');
+  // --root AIMS the scan at another tree. Required by the control-seed-test harness, which plants
+  // a seeded defect in a scratch dir and must be able to point this lint at it: without a flag the
+  // root is derived from this file's own location, so the lint would scan the REAL repo and report
+  // a confident green about a tree the seed never touched.
+  const rootIdx = argv.indexOf('--root');
+  const root = rootIdx >= 0 && argv[rootIdx + 1] ? resolve(argv[rootIdx + 1]) : ROOT;
   const broken = selfTest();
   if (broken) { console.error(`❌ fixture-producer-guard-lint: ${broken}`); return 1; }
   let result;
-  try { result = scan(); } catch (e) { console.error(`fixture-producer-guard-lint: ${e.message}`); return 1; }
+  try { result = scan({ root }); } catch (e) { console.error(`fixture-producer-guard-lint: ${e.message}`); return 1; }
   const { violations, scannedFiles, rawWriteSites, guardedSites } = result;
   if (asJson) { console.log(JSON.stringify(result, null, 2)); return violations.length || !guardedSites ? 1 : 0; }
 

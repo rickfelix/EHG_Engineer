@@ -217,5 +217,21 @@
       "replace": "if (false) continue;",
       "why": "the --all walk stops pruning fixture directories, so the planted lib/__tests__ file is scanned and flagged, and the assertion that no hit contains __tests__ goes RED"
     }
+  },
+  {
+    "name": "fixture-producer-guard-lint",
+    "script": "scripts/lint/fixture-producer-guard-lint.mjs",
+    "rootFlag": "--root",
+    "note": "SD-LEO-INFRA-ONE-SYNTHETIC-ROW-001-D (FR-6). TWO fixtures, and the second is load-bearing rather than decoration. This lint REFUSES to report success on zero guarded sites (a blind extractor and a clean tree otherwise print the same green), and that refusal returns BEFORE the violation listing. Seeding only the defect would therefore exercise the zero-guarded branch and never emit the seeded filename, scoring a firing control SILENT. The guarded twin puts the denominator above zero so the trial drives the REAL violation-reporting path. DETECTION IS DELIBERATELY KEYED ON THE SEEDED FILENAME ALONE: the summary line prints 'N unguarded ventures write-site(s)' on every run including a clean one, so declaring that phrase a detectToken would mark this control as firing when it found nothing.",
+    "fixtures": [
+      {
+        "path": "tests/integration/seeded-fixture-producer-defect.js",
+        "content": "// SEEDED DEFECT: a raw ventures insert that no producer-side assert ever checked.\nexport async function make(supabase) {\n  return supabase.from('ventures').insert({ name: 'seeded-unguarded-row', is_demo: true });\n}\n"
+      },
+      {
+        "path": "scripts/harness/seeded-fixture-producer-guarded.js",
+        "content": "// NOT the defect. A correctly guarded producer, present so the coverage denominator is\n// non-zero — see the note on this spec. The lint reads source as TEXT and never imports it,\n// so the unresolvable path below is irrelevant to the trial.\nimport { insertGuarded, CLASSIFICATION } from '../../lib/governance/fixture-producer-guard.mjs';\nexport async function ok(supabase) {\n  return insertGuarded(supabase, 'ventures', { name: 'TEST-seeded-guarded', is_demo: true },\n    { classification: CLASSIFICATION.FIXTURE, source: 'seed-trial' });\n}\n"
+      }
+    ]
   }
 ]

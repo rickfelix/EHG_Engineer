@@ -6,9 +6,9 @@
  */
 import { describe, it, expect } from 'vitest';
 import {
-  findUnguardedWrites, countGuardedWrites, loadAllowlist, SCAN_ROOTS, selfTest,
+  findUnguardedWrites, countGuardedWrites, loadAllowlist, SCAN_ROOTS, selfTest, scan,
 } from '../../../scripts/lint/fixture-producer-guard-lint.mjs';
-import { writeFileSync, mkdtempSync } from 'node:fs';
+import { writeFileSync, mkdtempSync, mkdirSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 
@@ -118,5 +118,47 @@ describe('the scanned boundary is deliberate', () => {
     expect(SCAN_ROOTS).toEqual([
       'tests/integration', 'tests/database', 'scripts/harness', 'scripts/canary',
     ]);
+  });
+});
+
+/**
+ * The scan must be AIMABLE, and its paths must be relative to the root it actually scanned.
+ *
+ * Without this the root is derived from the lint's own file location, so pointing it at another
+ * tree silently rescanned the real repo — a confident verdict about a tree the caller never named.
+ * The control-seed-test harness depends on exactly this: it plants a seeded defect in a scratch
+ * directory and can only prove the control fires if the control can be aimed there.
+ */
+describe('scan is aimable via root', () => {
+  const plant = (rel, src) => {
+    const dir = mkdtempSync(join(tmpdir(), 'fpg-root-'));
+    mkdirSync(join(dir, rel.split('/').slice(0, -1).join('/')), { recursive: true });
+    writeFileSync(join(dir, rel), src);
+    return dir;
+  };
+
+  it('finds a planted violation in the named root, reported root-relative', () => {
+    const dir = plant('tests/integration/planted.js', "sb.from('ventures').insert({ name: 'x' });\n");
+    const { violations, scannedFiles } = scan({ root: dir, allowlist: {} });
+    expect(scannedFiles).toBe(1);
+    expect(violations).toHaveLength(1);
+    // Root-relative, not absolute: an absolute path breaks allowlist keys AND the seed trial's
+    // filename-based detection.
+    expect(violations[0].file).toBe('tests/integration/planted.js');
+  });
+
+  it('counts guarded sites in the named root', () => {
+    const dir = plant('scripts/harness/ok.js', "insertGuarded(sb, 'ventures', row, decl);\n");
+    const { violations, guardedSites } = scan({ root: dir, allowlist: {} });
+    expect(guardedSites).toBe(1);
+    expect(violations).toHaveLength(0);
+  });
+
+  it('does not fall back to the real repo when the named root is empty', () => {
+    const dir = mkdtempSync(join(tmpdir(), 'fpg-empty-'));
+    const { scannedFiles, guardedSites, violations } = scan({ root: dir, allowlist: {} });
+    expect(scannedFiles).toBe(0);
+    expect(guardedSites).toBe(0);
+    expect(violations).toHaveLength(0);
   });
 });
