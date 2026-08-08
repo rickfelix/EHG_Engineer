@@ -12,7 +12,7 @@
  * Part of SD-LEO-INFRA-INTEGRATION-AWARE-PRD-001 (FR-1)
  */
 
-import { execSync } from 'child_process';
+import { execFileSync, execSync } from 'child_process';
 import fs from 'fs';
 import path from 'path';
 // crypto import removed - unused
@@ -132,6 +132,42 @@ export function scanBarrelExports(repoRoot, scopePaths = ['lib', 'scripts']) {
 }
 
 /**
+ * Run `git grep -l -E <pattern> -- <paths>` with NO shell involved.
+ *
+ * WHY ARGV AND NOT A SHELL. The previous form interpolated the alternation regex into a shell
+ * string. On Windows `execSync` runs it through cmd.exe, which reads the `|` between patterns
+ * as a PIPE: it split the command and tried to execute `router\.post\(` as a program. Measured
+ * on win32 — shell form exits 255 with "'router\.post\' is not recognized as an internal or
+ * external command"; this argv form returns 7 files for the identical pattern. Every caller
+ * wrapped the call in a bare `catch {}`, so the scan returned EMPTY on every Windows seat and
+ * STEP 0 reported a successful discovery that had examined nothing.
+ *
+ * WHY `status === 1` IS NOT A FAILURE. git grep exits 1 for "no matches found", and that
+ * includes a scope path that does not exist — measured: a nonexistent pathspec exits 1 with
+ * EMPTY stderr, indistinguishable from an ordinary empty result, so it cannot be treated as an
+ * error. Genuine failures (not a repository, malformed regex, git missing, timeout) exit 128
+ * or fail to spawn; those are rethrown so they surface instead of degrading into a silent
+ * empty scan, which is the exact defect this replaces.
+ *
+ * @param {string} repoRoot - Repository root to scan from
+ * @param {string} pattern - Extended-regex pattern, passed as ONE argv element
+ * @param {string[]} scopePaths - Pathspecs, each its own argv element
+ * @returns {string} Newline-separated matching file paths, or '' when there are no matches
+ */
+function gitGrepFiles(repoRoot, pattern, scopePaths) {
+  try {
+    return execFileSync(
+      'git',
+      ['grep', '-l', '-E', pattern, '--', ...scopePaths],
+      { encoding: 'utf8', cwd: repoRoot, timeout: SCAN_TIMEOUT_MS }
+    ).trim();
+  } catch (err) {
+    if (err.status === 1) return '';
+    throw err;
+  }
+}
+
+/**
  * Scan for router registrations (Express/Fastify route patterns).
  *
  * @param {string} repoRoot - Repository root path
@@ -157,12 +193,8 @@ export function scanRouterRegistrations(repoRoot, scopePaths = ['lib', 'scripts'
     ];
 
     const grepPattern = routePatterns.join('|');
-    const scopeArgs = scopePaths.map(p => `"${p}"`).join(' ');
 
-    const output = execSync(
-      `git grep -l -E '${grepPattern}' -- ${scopeArgs} 2>/dev/null || echo ""`,
-      { encoding: 'utf8', cwd: repoRoot, timeout: SCAN_TIMEOUT_MS }
-    ).trim();
+    const output = gitGrepFiles(repoRoot, grepPattern, scopePaths);
 
     if (!output) return results;
 
@@ -187,8 +219,10 @@ export function scanRouterRegistrations(repoRoot, scopePaths = ['lib', 'scripts'
         });
       }
     }
-  } catch {
-    // Scanning failed, return empty
+  } catch (err) {
+    // LOUD, not silent. This bare catch is the second half of the defect: it swallowed the
+    // cmd.exe breakage whole, so STEP 0 reported a discovery that had scanned nothing.
+    console.error(`   scanRouterRegistrations failed: ${String(err.message).split('\n')[0]}`);
   }
 
   return results;
@@ -215,12 +249,8 @@ export function scanRegistryPatterns(repoRoot, scopePaths = ['lib', 'scripts', '
     ];
 
     const grepPattern = registryPatterns.join('|');
-    const scopeArgs = scopePaths.map(p => `"${p}"`).join(' ');
 
-    const output = execSync(
-      `git grep -l -E '${grepPattern}' -- ${scopeArgs} 2>/dev/null || echo ""`,
-      { encoding: 'utf8', cwd: repoRoot, timeout: SCAN_TIMEOUT_MS }
-    ).trim();
+    const output = gitGrepFiles(repoRoot, grepPattern, scopePaths);
 
     if (!output) return results;
 
@@ -244,8 +274,8 @@ export function scanRegistryPatterns(repoRoot, scopePaths = ['lib', 'scripts', '
         });
       }
     }
-  } catch {
-    // Scanning failed
+  } catch (err) {
+    console.error(`   scanRegistryPatterns failed: ${String(err.message).split('\n')[0]}`);
   }
 
   return results;
@@ -273,12 +303,8 @@ export function scanValidationSchemas(repoRoot, scopePaths = ['lib', 'scripts', 
     ];
 
     const grepPattern = schemaPatterns.join('|');
-    const scopeArgs = scopePaths.map(p => `"${p}"`).join(' ');
 
-    const output = execSync(
-      `git grep -l -E '${grepPattern}' -- ${scopeArgs} 2>/dev/null || echo ""`,
-      { encoding: 'utf8', cwd: repoRoot, timeout: SCAN_TIMEOUT_MS }
-    ).trim();
+    const output = gitGrepFiles(repoRoot, grepPattern, scopePaths);
 
     if (!output) return results;
 
@@ -303,8 +329,8 @@ export function scanValidationSchemas(repoRoot, scopePaths = ['lib', 'scripts', 
         });
       }
     }
-  } catch {
-    // Scanning failed
+  } catch (err) {
+    console.error(`   scanValidationSchemas failed: ${String(err.message).split('\n')[0]}`);
   }
 
   return results;
@@ -326,10 +352,11 @@ export function scanConsumers(repoRoot, targetFiles = []) {
       const baseName = path.basename(targetFile, path.extname(targetFile));
       const _dirName = path.dirname(targetFile);
 
-      const output = execSync(
-        `git grep -l -E "from\\s+['\"].*${baseName}['\"]" -- "lib" "scripts" "src" 2>/dev/null || echo ""`,
-        { encoding: 'utf8', cwd: repoRoot, timeout: SCAN_TIMEOUT_MS }
-      ).trim();
+      const output = gitGrepFiles(
+        repoRoot,
+        `from\\s+['"].*${baseName}['"]`,
+        ['lib', 'scripts', 'src']
+      );
 
       if (!output) continue;
 
@@ -341,8 +368,8 @@ export function scanConsumers(repoRoot, targetFiles = []) {
           type: 'consumer'
         });
       }
-    } catch {
-      // Continue with next file
+    } catch (err) {
+      console.error(`   scanConsumers failed for ${targetFile}: ${String(err.message).split('\n')[0]}`);
     }
   }
 

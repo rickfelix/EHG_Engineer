@@ -233,6 +233,33 @@ export async function createPRDWithValidatedContent(
   llmContent,
   stakeholderPersonas = []
 ) {
+  // QF-20260808-528: two named pre-checks, so a mis-call fails HERE instead of as a bare
+  // Postgres error that names neither the argument nor the column.
+  //
+  // (a) CLIENT-FIRST SIGNATURE. This function takes the supabase client as argument ONE, which
+  //     is easy to mis-order; without this guard the mistake surfaces much deeper as a
+  //     "cannot read properties of undefined" on some unrelated line.
+  if (!supabase || typeof supabase.from !== 'function') {
+    throw new Error(
+      'createPRDWithValidatedContent: argument 1 must be a Supabase client — this signature is ' +
+      'client-first: (supabase, prdId, sdId, sdIdValue, prdTitle, sdData, llmContent, personas).'
+    );
+  }
+
+  // (b) WRONG ID FOR THE FK. sdIdValue is written to product_requirements_v2.sd_id, whose FK
+  //     prd_sd_fk targets strategic_directives_v2.id — and that PK is the SD KEY STRING
+  //     (measured: id = "SD-LEO-FEAT-INTELLIGENT-UAT-FEEDBACK-001"), NOT the UUID that the
+  //     creation scripts print as the SD's uuid (uuid_id / uuid_internal_pk). Passing the UUID
+  //     raises 23503 with no hint about which of the two id-ish values was wrong.
+  const UUID_SHAPE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+  if (UUID_SHAPE.test(String(sdIdValue ?? '').trim())) {
+    throw new Error(
+      `createPRDWithValidatedContent: sdIdValue must be the SD key (strategic_directives_v2.id, ` +
+      `e.g. "SD-LEO-FEAT-EXAMPLE-001") but received a UUID (${sdIdValue}). The FK prd_sd_fk targets ` +
+      `the key column, not uuid_id — passing the UUID raises Postgres 23503. Pass sdData.id / sd_key.`
+    );
+  }
+
   // SD-LEARN-FIX-ADDRESS-PATTERN-LEARN-077 FR-001: Validate executive_summary at creation
   // Check the provided value explicitly (empty/short strings should not silently fall through to defaults)
   if (llmContent.executive_summary !== undefined && llmContent.executive_summary !== null) {
