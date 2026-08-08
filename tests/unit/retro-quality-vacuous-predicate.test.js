@@ -135,6 +135,21 @@ describe('the SQL and this mirror cannot drift', () => {
     expect(/^\s*--\s*(@chairman-gated|requires[-_]chairman[-_]apply)\b/im.test(sql)).toBe(true);
   });
 
+  it('carries the LIVE specificity regex forward — a full-body replace must not revert its incumbent', () => {
+    // Caught at the apply safeguard, not by me. This file restates the WHOLE function, and I
+    // transcribed line 259 from 20260523 as `\d+`, which POSIX ERE does not honour. QF-20260529-565
+    // had already fixed it live to [0-9]+ via pg_get_functiondef + replace + EXECUTE — a migration
+    // that mutates WITHOUT restating, and therefore invisible to every repo-text census I ran:
+    // it contains neither the function's CREATE OR REPLACE text nor the predicate I searched for.
+    // Applying my file as-is would have silently reverted a live fix, last-applied-wins.
+    const sql = readFileSync(MIGRATION, 'utf8');
+    expect(sql).toContain('[0-9]+ (lines?|files?|tests?|hours?|minutes?|LOC|components?)');
+    // Two-sided: the dead form must be gone from executable SQL. Comments are stripped because
+    // the fold-forward note above quotes the dead form to explain itself.
+    const code = sql.replace(/^\s*--.*$/gm, '');
+    expect(code).not.toContain('\\d+ (lines?');
+  });
+
   it('the migration declares the predicate EXACTLY ONCE', () => {
     const sql = readFileSync(MIGRATION, 'utf8');
     expect((sql.match(/btrim\(lower\(item\)\) ~ '/g) || []).length).toBe(1);
