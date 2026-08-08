@@ -21,6 +21,7 @@ dotenv.config();
 const supabase = createSupabaseServiceClient();
 
 import { handleSdCompleted } from '../../lib/eva/event-bus/handlers/sd-completed.js';
+import { insertGuarded, CLASSIFICATION } from '../../lib/governance/fixture-producer-guard.mjs';
 
 // Required fields for strategic_directives_v2 inserts
 const SD_DEFAULTS = {
@@ -61,9 +62,7 @@ async function createTestVenture() {
     return ventures[0].id;
   }
 
-  const { data, error } = await supabase
-    .from('ventures')
-    .insert({ name: `Test Venture (sd-completed-tests-${PREFIX})`, is_demo: true })
+  const { data, error } = await insertGuarded(supabase, 'ventures', { name: `Test Venture (sd-completed-tests-${PREFIX})`, is_demo: true }, { classification: CLASSIFICATION.FIXTURE, source: 'tests/integration/sd-completed-handler.test.js' })
     .select('id')
     .single();
 
