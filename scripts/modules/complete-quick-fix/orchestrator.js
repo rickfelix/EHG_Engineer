@@ -270,6 +270,16 @@ export function buildMergedReconcileUpdate({ qf = {}, prUrl, mergeSha = null, no
   // (--scope-accepted). No status-CHECK widening: 'in_progress' is already in the enum
   // ('open','in_progress','completed','escalated'), so this needs no migration.
   const merged = `PR ${prUrl} MERGED and reachable from origin/main${mergeSha ? ` (${mergeSha})` : ''}`;
+  // QF-20260808-734: honour --verification-notes on this path instead of silently discarding it.
+  // Chose HONOUR over the loud-refusal pattern used for --uat-verified above, because the two
+  // flags differ in kind: --uat-verified would assert a UAT that genuinely did not re-run here
+  // (a false claim), whereas an operator's notes are a human attestation that is MORE valuable on
+  // this path, not less — the row closes on a merge rather than on a test run, so the prose is
+  // often the only thing explaining why the close is legitimate. Labelled so a reader can tell
+  // operator-supplied text from the machine-generated witness line it sits beside.
+  const rawOperatorNote = typeof options.verificationNotes === 'string' ? options.verificationNotes.trim() : '';
+  const operatorNote = rawOperatorNote ? `OPERATOR NOTES: ${rawOperatorNote}` : '';
+
   if (!scopeAcceptedBy) {
     const witnessNote = `${merged} — merge witnessed, SCOPE ACCEPTANCE OUTSTANDING (QF-20260725-691: a merged PR proves code landed, not that this QF's scope is satisfied; UAT not re-run in the reconcile path). Attest with: node scripts/complete-quick-fix.js ${qf.id || '<QF>'} --pr-url ${prUrl} --scope-accepted "<who/why>".`;
     return {
@@ -278,14 +288,18 @@ export function buildMergedReconcileUpdate({ qf = {}, prUrl, mergeSha = null, no
       commit_sha: mergeSha,
       // The merge IS a genuine CI witness — that part was never the lie.
       tests_passing: true,
-      verification_notes: [qf.verification_notes, witnessNote].filter(Boolean).join(' | '),
+      // QF-20260808-734: the operator's --verification-notes used to be dropped here without a
+      // word. The flag is parsed (cli.js) and advertised in --help, so it accepted the text,
+      // reported success, and the attestation never landed anywhere — a caller could only find
+      // out by reading the row back and comparing LENGTHS, since status said `completed`.
+      verification_notes: [qf.verification_notes, operatorNote, witnessNote].filter(Boolean).join(' | '),
       // QF-20260711-176 preserved: an unheld QF must not pin worktree reaping. The row is left
       // discoverable rather than closed, which is the point — it is NOT finished.
       claiming_session_id: null
     };
   }
   const reconcileNote = `${merged}; SCOPE ACCEPTED by ${scopeAcceptedBy} (QF-20260725-691 attestation; UAT not re-run in reconcile path).`;
-  const verification_notes = [qf.verification_notes, reconcileNote].filter(Boolean).join(' | ');
+  const verification_notes = [qf.verification_notes, operatorNote, reconcileNote].filter(Boolean).join(' | ');
   return {
     status: 'completed',
     pr_url: prUrl,
