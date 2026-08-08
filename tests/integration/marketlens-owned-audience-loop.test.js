@@ -12,6 +12,7 @@ import { createSupabaseServiceClient } from '../../lib/supabase-client.js';
 import { describe, it, expect, beforeAll, afterAll, vi } from 'vitest';
 import { v4 as uuidv4 } from 'uuid';
 import dotenv from 'dotenv';
+import { insertGuarded, CLASSIFICATION } from '../../lib/governance/fixture-producer-guard.mjs';
 
 dotenv.config();
 
@@ -48,7 +49,7 @@ describe.skipIf(!HAS_REAL_DB)('MarketLens Owned-Audience Content Loop (integrati
     testVentureId = uuidv4();
 
     await supabase.from('companies').insert({ id: testCompanyId, name: 'Test Company for Owned-Audience Loop', created_at: new Date().toISOString() });
-    await supabase.from('ventures').insert({
+    await insertGuarded(supabase, 'ventures', {
       id: testVentureId,
       name: 'Test Venture for Owned-Audience Loop',
       is_demo: true, // SD-LEO-INFRA-CHAIRMAN-DECISION-QUEUE-002: fixture flagged at creation
@@ -57,7 +58,7 @@ describe.skipIf(!HAS_REAL_DB)('MarketLens Owned-Audience Content Loop (integrati
       current_lifecycle_stage: 24,
       status: 'active',
       created_at: new Date().toISOString(),
-    });
+    }, { classification: CLASSIFICATION.FIXTURE, source: 'tests/integration/marketlens-owned-audience-loop.test.js' });
 
     // Stub distribution_channel_config artifact — deliberately includes a PAID channel
     // (google_ads) to prove provisioning excludes it, mirroring the real MarketLens stub.

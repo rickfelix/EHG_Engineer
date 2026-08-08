@@ -18,6 +18,7 @@ import dotenv from 'dotenv';
 import { createSupabaseServiceClient } from '../../lib/supabase-client.js';
 import { getPipelineHistory } from '../../lib/marketing/content-pipeline.js';
 import { getFeedbackHistory } from '../../lib/marketing/feedback-loop.js';
+import { insertGuarded, CLASSIFICATION } from '../../lib/governance/fixture-producer-guard.mjs';
 
 dotenv.config();
 
@@ -45,10 +46,10 @@ describe.skipIf(!HAS_REAL_DB)('Marketing Producer Binding (SD-EHG-MARKETING-DIST
       id: testCompanyId,
       name: 'Test Company for Producer Binding',
       created_at: new Date().toISOString(),
-    });
+    }, { classification: CLASSIFICATION.FIXTURE, source: 'tests/integration/marketing-producer-binding.test.js' });
     if (companyError) throw new Error(`Fixture company insert failed: ${companyError.message}`);
 
-    const { error: ventureError } = await supabase.from('ventures').insert({
+    const { error: ventureError } = await insertGuarded(supabase, 'ventures', {
       id: testVentureId,
       name: 'Test Venture for Producer Binding',
       is_demo: true, // SD-LEO-INFRA-CHAIRMAN-DECISION-QUEUE-002: fixture flagged at creation
