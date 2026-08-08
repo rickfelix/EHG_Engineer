@@ -149,21 +149,19 @@ function commitRaw(dir, files) {
 /**
  * Run the REAL docmon against a fixture repo. Never throws; the side effects are what matter.
  *
- * MEASURED LIMIT OF THE "THE FIX" ASSERTIONS BELOW, stated because a green test that cannot fail is
- * worse than no test. A mutation run reverting :386 to its pre-fix shell string produced ZERO red on
- * this Windows host. Diagnosed with the TRUE pre-fix file from git history, not a reconstruction:
- * the sink IS reached (git reports `fatal: path 'docs/pwn` + backtick + `touch' does not exist`),
+ * HOW THIS BECAME DISCRIMINATING, recorded because the first version was not and looked identical.
+ * With a backtick payload, a mutation reverting :386 to its pre-fix shell string produced ZERO red
+ * on Windows. Diagnosed with the TRUE pre-fix file from git history rather than a reconstruction:
+ * the sink IS reached (git reported `fatal: path 'docs/pwn` + backtick + `touch' does not exist`),
  * but Windows splits the command line on spaces and leaves the backtick LITERAL, so the payload
- * never executes and no marker appears — with or without the fix.
+ * could not fire with or without the fix. The assertion was true for the wrong reason.
  *
- * A ComSpec override pointing at a real sh was tried and MEASURED NOT TO WORK; the child still ran
- * under cmd. That attempt was removed rather than left in place with a comment claiming otherwise.
+ * A ComSpec override pointing at a real sh was tried and MEASURED NOT TO WORK — the child still ran
+ * under cmd — and was removed rather than left with a comment claiming otherwise.
  *
- * So on win32 these assertions are TRUE BUT NON-DISCRIMINATING. They discriminate on ubuntu, which
- * is where CI runs and where the ARM above proves the payload fires. The honest local coverage is:
- * the ARM tests (which force `shell: SH` and DO fire here) and the lint's guard tests. A Windows-
- * native payload using `&` — live under cmd.exe at the unquoted sink — would close this gap and is
- * the correct next step; it is not yet done, and this comment is not a substitute for it.
+ * The payload now chains `&`-separated commands that fire under BOTH cmd.exe and sh (see the :386
+ * describe). MEASURED end-to-end against the true pre-fix file: marker CREATED before the fix,
+ * ABSENT after, with the file still reported. The pair discriminates on this host, not merely on CI.
  */
 function runDocmon(dir) {
   try {
@@ -178,41 +176,102 @@ function runDocmon(dir) {
 const rm = (d) => { try { fs.rmSync(d, { recursive: true, force: true }); } catch { /* best effort */ } };
 
 describe('ARMED: docmon :386 — the UNQUOTED git show sink', () => {
-  const canRun = !!SH;
-  const NAME = 'docs/pwn`touch MARKER386.txt`end.md';
+  /**
+   * THE PAYLOAD IS CROSS-PLATFORM BY CONSTRUCTION, and it had to be. A backtick payload was tried
+   * first and MEASURED not to discriminate: reverting the fix left this test green, because Windows
+   * splits the command line on spaces and treats a backtick as a LITERAL character. The assertion
+   * was true for the wrong reason — the payload could not fire, so "no marker" said nothing about
+   * the fix. A ComSpec override to route the child through sh was also tried and measured NOT to
+   * work; the child still ran under cmd.
+   *
+   * `&` is the operator that IS live under cmd.exe at an unquoted sink, and it also separates
+   * commands under sh. Chaining BOTH shells' file-creating commands means one filename arms on
+   * either platform with no skip and no shell forcing:
+   *   cmd.exe -> `git show <rev>:docs/x` | `copy nul MARKER` | `touch ...`(fails) | `y.md`(fails)
+   *   sh      -> `git show ...&` | `copy ...`(fails) | `touch MARKER &` | `y.md &`(fails)
+   * Either way the marker appears. `copy nul <f>` is used rather than a redirect because `>` is
+   * illegal in an NTFS filename.
+   */
+  const NAME = 'docs/x&copy nul MARKER386.txt&touch MARKER386.txt&y.md';
   let dir; let marker;
 
   beforeAll(() => {
-    if (!canRun) return;
     dir = initRepo();
     commitOrdinary(dir, { [NAME]: '# Payload\n\nAdded prose line.\n' });
     marker = path.join(dir, 'MARKER386.txt');
   });
   afterAll(() => { if (dir) rm(dir); });
 
-  it.runIf(canRun)('git returns the metacharacter filename BYTE-VERBATIM — it does not escape it for you', () => {
+  it('git returns the metacharacter filename BYTE-VERBATIM — it does not escape it for you', () => {
     const out = git(dir, ['diff', '--name-only', '-z', 'HEAD~1...HEAD']).split('\0').filter(Boolean);
     expect(out).toContain(NAME);
   });
 
-  it.runIf(canRun)('THE ARM: the ORIGINAL unquoted shape CREATES THE MARKER — the payload can fire', () => {
-    // The pre-fix line reconstructed verbatim, run through a real sh. If this does not create the
-    // marker, every "no marker" assertion below is meaningless and this file is theatre.
+  it('THE ARM: the ORIGINAL unquoted shape CREATES THE MARKER — the payload can fire', () => {
+    // The pre-fix line reconstructed verbatim, run through whatever shell this host actually uses.
+    // MEASURED against the TRUE pre-fix file from git history: it creates the marker. If this ever
+    // stops firing, every "no marker" assertion below becomes meaningless and this file is theatre.
+    fs.rmSync(marker, { force: true });
     const base = git(dir, ['rev-parse', 'HEAD~1']).trim();
     try {
-      execSync(`git show ${base}:${NAME}`, { cwd: dir, encoding: 'utf8', stdio: ['ignore', 'pipe', 'ignore'], shell: SH });
-    } catch { /* non-zero exit is fine; the side effect is the point */ }
+      execSync(`git show ${base}:${NAME}`, { cwd: dir, encoding: 'utf8', stdio: ['ignore', 'pipe', 'ignore'] });
+    } catch { /* non-zero exit is expected; the side effect is the point */ }
     expect(path.resolve(marker).startsWith(path.resolve(dir)), 'marker must be inside the temp dir').toBe(true);
     expect(fs.existsSync(marker), 'vulnerable form did not execute — this test cannot fail, so it proves nothing').toBe(true);
   });
 
-  it.runIf(canRun)('THE FIX: docmon creates NO marker, AND still reports the adversarial file', () => {
+  it('THE FIX: docmon creates NO marker, AND still reports the adversarial file', () => {
     // Both halves required. "No marker" alone would also be satisfied by a fix that simply stopped
     // seeing the file — trading execution for silent evasion, which is worse than the defect.
     fs.rmSync(marker, { force: true });
     const out = runDocmon(dir);
     expect(fs.existsSync(marker), 'the fixed path executed the filename').toBe(false);
-    expect(out, 'the adversarial file must remain VISIBLE to docmon, not silently dropped').toContain('pwn');
+    expect(out, 'the adversarial file must remain VISIBLE to docmon, not silently dropped').toContain('MARKER386');
+  });
+});
+
+describe('ARMED: docmon :162 — the DOUBLE-QUOTED sink, via the %VAR% vector', () => {
+  /**
+   * WHY %VAR% AND NOT `&` HERE. :162 interpolates the filename INSIDE DOUBLE QUOTES. Under cmd.exe
+   * that suppresses `&` and `|` — measured — so the payload that arms the unquoted sink is INERT
+   * here and would produce a test that cannot fail. `%VAR%` is the one construct cmd.exe still
+   * expands inside double quotes.
+   *
+   * THE FAILURE IS SILENT, WHICH IS WHY THE ASSERTION IS ABOUT WHAT IS SEEN, NOT ABOUT A MARKER.
+   * cmd expands %PATH% BEFORE git sees the argument, so git matches no pathspec and exits 0 with an
+   * EMPTY diff and NO error. getChangedLines therefore returns an empty set, and because
+   * checkBlacklist is gated on changed lines, the blacklisted word on the added line is NEVER
+   * REPORTED. The gate is made to see nothing — worse than a crash, and invisible in CI.
+   */
+  const NAME = 'docs/note%PATH%x.md';
+  let dir;
+
+  beforeAll(() => {
+    dir = initRepo();
+    // 'crucial' is a blacklisted word. It is only reported if getChangedLines recovered this line.
+    commitOrdinary(dir, { [NAME]: '# Note\n\nThis is a crucial improvement to the system.\n' });
+  });
+  afterAll(() => { if (dir) rm(dir); });
+
+  it('THE ARM: the ORIGINAL double-quoted shape yields an EMPTY diff and throws NOTHING', () => {
+    // Zero bytes AND no throw is what makes it silent — no catch fires, so the file reads as
+    // "present, nothing changed" rather than "unreadable".
+    const base = git(dir, ['rev-parse', 'HEAD~1']).trim();
+    let threw = false; let out = null;
+    try {
+      out = execSync(`git diff -U0 ${base}...HEAD -- "${NAME}"`, { cwd: dir, encoding: 'utf8', stdio: ['ignore', 'pipe', 'ignore'] });
+    } catch { threw = true; }
+    expect(threw, 'the vector must NOT throw — that is what makes it silent').toBe(false);
+    expect(out.trim(), 'the shell did not expand the variable here, so this arm cannot discriminate').toBe('');
+  });
+
+  it('THE FIX: docmon recovers the changed line and REPORTS the blacklisted word', () => {
+    // If :162 regresses, changedLines is empty, checkBlacklist reports nothing, and this count is 0
+    // while the run still exits cleanly. That silent zero is the whole failure mode.
+    const out = runDocmon(dir);
+    const parsed = JSON.parse(out);
+    expect(parsed.summary.filesScanned, 'the payload file was not scanned at all').toBeGreaterThan(0);
+    expect(parsed.summary.blacklistViolations, 'no violation reported — the changed line was never recovered, so the gate saw nothing').toBeGreaterThan(0);
   });
 });
 

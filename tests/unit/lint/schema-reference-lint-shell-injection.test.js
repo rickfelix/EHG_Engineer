@@ -68,7 +68,7 @@ const git = (repo, args) => execFileSync('git', args, { cwd: repo, encoding: 'ut
  * A repo the lint will actually WORK ON: real snapshot in place, a `basebranch` ref to diff from,
  * and a payload file under a RUNTIME_DIR matching CODE_RE so it survives candidateFiles filtering.
  */
-function makeRepo(payloadName) {
+function makeRepo(payloadName, { violating = true } = {}) {
   const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'schemalint-inj-'));
   git(dir, ['init', '-q', '-b', 'main']);
   git(dir, ['config', 'user.email', 'test@example.invalid']);
@@ -88,7 +88,14 @@ function makeRepo(payloadName) {
   if (payloadName) {
     const full = path.join(dir, payloadName);
     fs.mkdirSync(path.dirname(full), { recursive: true });
-    fs.writeFileSync(full, 'export const b = 2;\n');
+    // THE CONTENT IS LOAD-BEARING, not filler. baselineViolationKeys — which contains the :153 sink
+    // — is only called for a file that HAS a violation to partition into new-vs-pre-existing. The
+    // first version of this fixture wrote `export const b = 2;`, produced no violation, and so never
+    // reached the sink at all: a mutation reverting :153 to a shell string left this suite GREEN.
+    // A .from() reference to a table absent from the snapshot is what makes the sink reachable.
+    fs.writeFileSync(full, violating
+      ? "export const q = db.from('totally_not_a_real_table_zz').select('*');\n"
+      : 'export const b = 2;\n');
     git(dir, ['add', '-A']);
     git(dir, ['commit', '-q', '-m', 'payload']);
   }
@@ -100,13 +107,10 @@ function makeRepo(payloadName) {
  * Trap 2 closed: SCHEMA_LINT_BASE is always set, or the run returns before the :153 sink.
  */
 function runLint(dir, baseRef, extraEnv = {}) {
-  // MEASURED LIMIT: reverting :153 to its pre-fix shell string produces ZERO red on this Windows
-  // host. Windows splits the command line on spaces and leaves backticks LITERAL, so the payload
-  // cannot execute here regardless of the fix. A ComSpec override to a real sh was tried and
-  // measured NOT to work — the child still ran under cmd — and was removed rather than kept with a
-  // comment claiming otherwise. These assertions discriminate on ubuntu (where CI runs and where
-  // the ARM proves the payload fires); locally the discriminating coverage is the GUARD tests below,
-  // which do go red when VALID_BASE_REF is removed.
+  // A ComSpec override to route this child through a real sh was tried and MEASURED NOT to work —
+  // the child still ran under cmd — and was removed rather than kept with a comment claiming
+  // otherwise. Discrimination on Windows comes instead from the `&` payload above, which is live
+  // under cmd.exe at an unquoted sink. No shell forcing anywhere in this file.
   try {
     const stdout = execFileSync(process.execPath, [LINT, '--diff'], {
       cwd: dir,
@@ -124,41 +128,50 @@ function runLint(dir, baseRef, extraEnv = {}) {
 const rm = (d) => { try { fs.rmSync(d, { recursive: true, force: true }); } catch { /* best effort */ } };
 
 describe('ARMED: schema-reference-lint :153 — the UNQUOTED git show sink', () => {
-  const canRun = !!SH;
-  const NAME = 'scripts/pwn`touch MARKER153.txt`end.js';
+  // CROSS-PLATFORM PAYLOAD, and it had to be. A backtick payload was MEASURED not to discriminate:
+  // Windows splits the command line on spaces and treats a backtick as LITERAL, so reverting the fix
+  // left the test green — true for the wrong reason. `&` IS live under cmd.exe at an unquoted sink
+  // and also separates commands under sh, so chaining both shells' file-creating commands arms on
+  // either platform with no skip and no shell forcing. `copy nul <f>` rather than a redirect,
+  // because `>` is illegal in an NTFS filename.
+  const NAME = 'scripts/x&copy nul MARKER153.txt&touch MARKER153.txt&y.js';
   let dir; let marker;
 
   beforeAll(() => {
-    if (!canRun) return;
     dir = makeRepo(NAME);
     marker = path.join(dir, 'MARKER153.txt');
   });
   afterAll(() => { if (dir) rm(dir); });
 
-  it.runIf(canRun)('git returns the metacharacter filename BYTE-VERBATIM', () => {
+  it('git returns the metacharacter filename BYTE-VERBATIM', () => {
     const out = git(dir, ['diff', '--name-only', '-z', 'basebranch..HEAD']).split('\0').filter(Boolean);
     expect(out).toContain(NAME);
   });
 
-  it.runIf(canRun)('THE ARM: the ORIGINAL unquoted shape CREATES THE MARKER — the payload can fire', () => {
-    // The pre-fix line reconstructed verbatim, through a real sh. If this does not create the
-    // marker, every "no marker" assertion below proves nothing and this file is theatre.
+  it('THE ARM: the ORIGINAL unquoted shape CREATES THE MARKER — the payload can fire', () => {
+    // The pre-fix line reconstructed verbatim, through whatever shell this host actually uses.
+    // If this stops creating the marker, every "no marker" assertion below proves nothing.
+    fs.rmSync(marker, { force: true });
     const base = git(dir, ['rev-parse', 'basebranch']).trim();
     try {
-      execSync(`git show ${base}:${NAME}`, { cwd: dir, encoding: 'utf8', stdio: ['ignore', 'pipe', 'ignore'], shell: SH });
-    } catch { /* non-zero exit is fine; the side effect is the point */ }
+      execSync(`git show ${base}:${NAME}`, { cwd: dir, encoding: 'utf8', stdio: ['ignore', 'pipe', 'ignore'] });
+    } catch { /* non-zero exit is expected; the side effect is the point */ }
     expect(path.resolve(marker).startsWith(path.resolve(dir)), 'marker must be inside the temp dir').toBe(true);
     expect(fs.existsSync(marker), 'vulnerable form did not execute — this test cannot fail, so it proves nothing').toBe(true);
   });
 
-  it.runIf(canRun)('THE FIX: the lint REACHES the sink, creates NO marker, and still checks the file', () => {
+  it('THE FIX: the lint REACHES the sink, creates NO marker, and still checks the file', () => {
     // Three assertions, and the reachability one is not optional: "no marker" is worthless if the
     // sink was never entered. The scope line proves the merge base resolved and files were checked.
     fs.rmSync(marker, { force: true });
     const { stdout, stderr } = runLint(dir, 'basebranch');
     const out = stdout + stderr;
-    expect(out, 'the lint never got as far as resolving a merge base — the sink was not reached').toMatch(/merge_base=/);
+    // REACHABILITY FIRST. The reported violation is the proof: baselineViolationKeys — which holds
+    // the :153 sink — is only called for a file that HAS a violation to classify as new vs
+    // pre-existing. Reaching that report means the baseline read ran. Asserting only "no marker"
+    // would pass just as happily on a run that never entered the function.
     expect(out, 'zero files checked means candidateFiles filtered the payload out before the sink').toMatch(/file\(s\) checked/);
+    expect(out, 'no violation reported — baselineViolationKeys was never called, so :153 was not reached').toMatch(/totally_not_a_real_table_zz/);
     expect(fs.existsSync(marker), 'the fixed path executed the filename').toBe(false);
   });
 });
@@ -212,7 +225,9 @@ describe('ARMED: schema-reference-lint :92 — the env-supplied base ref', () =>
 
 describe('the lint still does its job after the conversion', () => {
   let dir;
-  beforeAll(() => { dir = makeRepo('scripts/ordinary.js'); });
+  // Clean content on purpose: this describe exercises the SUCCESS path, which is the only one that
+  // prints the scope line. A violating fixture takes the failure path and prints a different shape.
+  beforeAll(() => { dir = makeRepo('scripts/ordinary.js', { violating: false }); });
   afterAll(() => { if (dir) rm(dir); });
 
   it('an ordinary diff run reports a checked-file count and a resolved scope', () => {
