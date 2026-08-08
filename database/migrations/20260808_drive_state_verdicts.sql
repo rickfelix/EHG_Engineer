@@ -84,7 +84,71 @@ CREATE INDEX IF NOT EXISTS drive_state_verdicts_axis_recorded_idx
 CREATE INDEX IF NOT EXISTS drive_state_verdicts_run_idx
   ON public.drive_state_verdicts (run_id);
 
+-- ─────────────────────────────────────────────────────────────────────────────────────────────
+-- POSTURE. The first draft of this file shipped ENABLE ROW LEVEL SECURITY and nothing else, which
+-- SECURITY review flagged against the sibling's MEASURED decision: 20260803_drive_reports.sql:12-18
+-- surveyed recent table migrations and found "RLS on, no policy" was the OUTLIER — five of six use
+-- an explicit service_role policy and four carry a verify block.
+--
+-- Why the bare form is wrong even though nothing is exposed today: Supabase's ALTER DEFAULT
+-- PRIVILEGES grants anon/authenticated on new public tables. RLS-with-no-policy blocks the ROWS,
+-- so reads return nothing — but THE GRANT STILL EXISTS and nothing says so. Per
+-- 20260803_drive_reports.sql:8-10, any non-service grant on a table of this class is a
+-- RECLASSIFICATION TRIGGER. It would then sit one permissive policy away from publishing chairman
+-- decision titles and fleet diagnosis to anon. Revoking is the difference between "not exposed"
+-- and "cannot be exposed by an accident nobody would see".
+-- ─────────────────────────────────────────────────────────────────────────────────────────────
 ALTER TABLE public.drive_state_verdicts ENABLE ROW LEVEL SECURITY;
+
+DROP POLICY IF EXISTS drive_state_verdicts_service_role ON public.drive_state_verdicts;
+CREATE POLICY drive_state_verdicts_service_role
+  ON public.drive_state_verdicts
+  FOR ALL
+  TO service_role
+  USING (true)
+  WITH CHECK (true);
+
+-- PUBLIC included deliberately: the tripwire reclassifies on ANY non-service grant, so revoking
+-- only the two named roles would be narrower than the rule it serves.
+REVOKE ALL ON public.drive_state_verdicts FROM anon, authenticated, PUBLIC;
+GRANT ALL ON public.drive_state_verdicts TO service_role;
+
+-- VERIFY, because CREATE TABLE IF NOT EXISTS above advertises an idempotence that hides a real
+-- failure: if the table already exists in some other shape, every CHECK and the UNIQUE silently
+-- do NOT land and this file still reports success. An unapplied-or-partially-applied migration
+-- would be indistinguishable from a correct one. This block aborts the deploy instead.
+DO $verify$
+DECLARE
+  missing text;
+BEGIN
+  IF NOT EXISTS (
+    SELECT 1 FROM pg_constraint
+    WHERE conrelid = 'public.drive_state_verdicts'::regclass
+      AND contype = 'u' AND conname = 'drive_state_verdicts_one_row_per_run_axis'
+  ) THEN
+    RAISE EXCEPTION 'drive_state_verdicts: UNIQUE (run_id, axis) did not land — a retry could write twelve rows';
+  END IF;
+
+  FOR missing IN
+    SELECT c FROM unnest(ARRAY['axis', 'state', 'action_taken']) AS c
+    WHERE NOT EXISTS (
+      SELECT 1 FROM pg_constraint
+      WHERE conrelid = 'public.drive_state_verdicts'::regclass
+        AND contype = 'c' AND pg_get_constraintdef(oid) ILIKE '%' || c || ' = ANY%'
+    )
+  LOOP
+    RAISE EXCEPTION 'drive_state_verdicts: CHECK on % did not land — its closed vocabulary is unenforced and the drift guard has nothing to diverge from', missing;
+  END LOOP;
+
+  IF EXISTS (
+    SELECT 1 FROM information_schema.role_table_grants
+    WHERE table_schema = 'public' AND table_name = 'drive_state_verdicts'
+      AND grantee IN ('anon', 'authenticated', 'PUBLIC')
+  ) THEN
+    RAISE EXCEPTION 'drive_state_verdicts: a non-service grant is present — this table is permission-class and must not carry one';
+  END IF;
+END
+$verify$;
 
 COMMENT ON TABLE public.drive_state_verdicts IS
   'SD-LEO-INFRA-DRIVE-STATE-OBSERVABILITY-001: durable history of the six-axis drive-state verdict, one row per (run_id, axis). Written only by the coordinator hourly review. No boolean or numeric health column exists here by design — see the header.';

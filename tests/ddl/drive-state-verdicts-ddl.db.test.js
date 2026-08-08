@@ -18,7 +18,25 @@ import path from 'node:path';
 import pg from 'pg';
 
 const MIGRATION = path.resolve(process.cwd(), 'database/migrations/20260808_drive_state_verdicts.sql');
-const CONN = process.env.DATABASE_URL || 'postgres://postgres:postgres@localhost:5432/postgres';
+/**
+ * NO connectionString, and NO DATABASE_URL. Both were wrong, and SECURITY measured why:
+ * pg's connectionString OVERRIDES the PGHOST/PGUSER/PGPASSWORD/PGDATABASE block the workflow sets
+ * (.github/workflows/drive-reports-ddl.yml:70-75), and the service container creates only the role
+ * ddl_runner — there is no 'postgres' role — so in CI this connected as a non-existent role and
+ * beforeAll failed, meaning NONE of the constraint proofs below would ever have run.
+ *
+ * Worse, DATABASE_URL is this repo's convention for the REAL database (~20 scripts resolve it).
+ * vitest.ddl.config.mjs:19-21 justifies gating on nothing precisely because 'there is no
+ * production database it could possibly be pointed at by mistake' — reading DATABASE_URL made
+ * that false. Same construction as the sibling, tests/ddl/drive-reports-ddl.db.test.js:106-107.
+ */
+const PG = {
+  host: process.env.PGHOST || '127.0.0.1',
+  port: Number(process.env.PGPORT || 5432),
+  user: process.env.PGUSER || 'postgres',
+  password: process.env.PGPASSWORD || 'postgres',
+  database: process.env.PGDATABASE || 'postgres',
+};
 
 let client;
 
@@ -35,11 +53,18 @@ const insert = (over = {}) => {
 };
 
 beforeAll(async () => {
-  client = new pg.Client({ connectionString: CONN });
+  client = new pg.Client(PG);
   await client.connect();
   await client.query(fs.readFileSync(MIGRATION, 'utf8'));
 });
-afterAll(async () => { if (client) await client.end(); });
+// CLEANUP. The prior version only closed the client, leaving ~11 rows behind on whatever it had
+// connected to. Cheap here, and the difference between a throwaway container and a table someone
+// later finds mysterious rows in.
+afterAll(async () => {
+  if (!client) return;
+  try { await client.query('DROP TABLE IF EXISTS public.drive_state_verdicts'); } catch { /* best effort */ }
+  await client.end();
+});
 
 describe('[CONTROL, asserted first] a sound row is ACCEPTED', () => {
   it('accepts a well-formed verdict row', async () => {

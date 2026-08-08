@@ -19,8 +19,28 @@
 // vocabulary — the precise thing this SD is forbidden to create. The schema CHECK is the one
 // unavoidable second copy, and it is held in agreement by a two-sided drift test.
 const { AXES, STATE, STATES, ACTIONS } = require('../../lib/governance/drive-state/contract.cjs');
+const { safeCitation } = require('../../lib/governance/drive-state/render.cjs');
 
 const TABLE = 'drive_state_verdicts';
+
+/**
+ * SANITISE AT THE SINK, not only at the sources. (SECURITY SEC-3.)
+ *
+ * Citations carry genuinely untrusted text: chairman-decisions.cjs:139 puts `feedback` titles into
+ * one, and that table's anon INSERT policy constrains only source_type — an unauthenticated party
+ * can supply the string. Every adapter wraps its own citation in safeCitation, EXCEPT the
+ * adapter_threw path at index.cjs:60, which interpolates a raw error message unbounded.
+ *
+ * That was tolerable while a citation was a console line that scrolled away. THIS SD CONVERTS IT
+ * INTO A DURABLE ROW, and a rendered string and a stored one have completely different exposure
+ * lifetimes — which makes the sink the right place for the guarantee. Relying on every current and
+ * FUTURE adapter to remember is convention; doing it here is construction.
+ */
+const CITATION_MAX = 400;
+function cleanText(v, max = CITATION_MAX) {
+  if (typeof v !== 'string') return v;
+  try { return safeCitation(v, max); } catch { return v.slice(0, max); }
+}
 
 /**
  * Persist one computed verdict as SIX rows, one per (run_id, axis).
@@ -79,10 +99,10 @@ async function persistDriveState({ supabase, runId, entries, table = TABLE } = {
       run_id: runId,
       axis: e.axis,
       state: e.state,
-      citation: e.citation,
-      reason: typeof e.reason === 'string' && e.reason.trim() !== '' ? e.reason : null,
+      citation: cleanText(e.citation),
+      reason: typeof e.reason === 'string' && e.reason.trim() !== '' ? cleanText(e.reason) : null,
       action_taken: e.action_taken,
-      action_citation: typeof e.action_citation === 'string' && e.action_citation.trim() !== '' ? e.action_citation : null,
+      action_citation: typeof e.action_citation === 'string' && e.action_citation.trim() !== '' ? cleanText(e.action_citation) : null,
     };
   });
 
