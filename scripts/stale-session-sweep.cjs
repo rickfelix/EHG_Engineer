@@ -3802,7 +3802,13 @@ async function main() {
     if (outcome.invoked) {
       console.log('  reaper_tick result=' + outcome.result + ' counter=' + outcome.counter);
       console.log('');
-    } else if (outcome.result === 'refused_stale_tree') {
+    } else if (outcome.result !== 'skipped_not_due') {
+      // WIDENED — EXEC SECURITY (medium). This branch used to test `=== 'refused_stale_tree'`,
+      // which is the same shape of bug one level down from the `outcome.invoked` gate it replaced:
+      // it consumes ONE silent-stop class and discards the others. script_missing,
+      // skipped_in_flight (a wedged pid) and spawn_error all reap nothing and said nothing — and
+      // FR-1 made script_missing MORE reachable by resolving the script out of the source tree.
+      // 'skipped_not_due' stays excluded: that is the cadence working as designed.
       // SD-LEO-INFRA-SCHEDULED-WORKTREE-REAPER-001 FR-4 — CONSUME THE REFUSAL.
       //
       // This branch is the whole fix for the undrained gauge. tick() has RETURNED
@@ -3817,9 +3823,14 @@ async function main() {
       const { runReaperStarvationSurfacing } = require('../lib/coordinator/coordination-events.cjs');
       const starvation = await runReaperStarvationSurfacing(supabase, outcome);
       if (starvation && starvation.matched) {
-        console.log('  REAPER STARVATION ALARM: ' + starvation.streak + ' consecutive refusals, pool '
-          + starvation.evidence.pool_used + '/' + starvation.evidence.pool_cap
-          + (starvation.alert && starvation.alert.skipped ? ' (alert already open)' : ' (alert emitted)'));
+        const emitted = starvation.alert && starvation.alert.skipped ? ' (alert already open)' : ' (alert emitted)';
+        if (starvation.alertKind === 'reaper_not_invoked_alert') {
+          console.log('  REAPER NOT-INVOKED ALARM: ' + starvation.streak + ' consecutive tick(s) without running'
+            + ' (last=' + starvation.evidence.last_result + ')' + emitted);
+        } else {
+          console.log('  REAPER STARVATION ALARM: ' + starvation.streak + ' consecutive refusals, pool '
+            + starvation.evidence.pool_used + '/' + starvation.evidence.pool_cap + emitted);
+        }
         console.log('');
       }
     }

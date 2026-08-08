@@ -55,6 +55,12 @@ function readState(statePath) {
       // makes the field durable — a key absent here is silently dropped on every read, so
       // the streak could never accumulate. Missing in an old state file reads as 0 via `|| 0`.
       consecutive_refusals: Number.isFinite(parsed.consecutive_refusals) ? parsed.consecutive_refusals : 0,
+      // EXEC SECURITY (medium): the refusal streak only covers ONE way the reaper stops. A
+      // script_missing tick also reaps nothing, and FR-1 made that path materially MORE reachable
+      // by resolving the script from the source tree instead of repoRoot — so this SD's own change
+      // widened a silent-stop path. Same whitelist rule as above: omit the key here and the streak
+      // is dropped on every read and can never accumulate.
+      consecutive_not_invoked: Number.isFinite(parsed.consecutive_not_invoked) ? parsed.consecutive_not_invoked : 0,
     };
   } catch {
     return { schema_version: STATE_SCHEMA_VERSION, sweep_counter: 0, last_run_at: null, last_result: null, last_pid: null, last_spawn_at: null };
@@ -298,8 +304,15 @@ function tick(opts = {}) {
   if (!fs.existsSync(reaperScript)) {
     state.last_run_at = new Date().toISOString();
     state.last_result = 'script_missing';
+    // A missing script reaps NOTHING, forever, in total silence — and FR-1 widened this path by
+    // resolving the script from the source tree. Counted so it can alarm; NOT counted for
+    // 'skipped_not_due', which is the cadence working as designed and would alarm every tick.
+    state.consecutive_not_invoked = (state.consecutive_not_invoked || 0) + 1;
     writeState(statePath, state);
-    return { invoked: false, counter: state.sweep_counter, cadence, result: 'script_missing', enabled: true };
+    return {
+      invoked: false, counter: state.sweep_counter, cadence, result: 'script_missing', enabled: true,
+      consecutiveNotInvoked: state.consecutive_not_invoked,
+    };
   }
 
   // SD-LEO-INFRA-SPAWN-ROOT-CURRENCY-INVARIANT-001 FR-3 — REFUSE TO REAP FROM A STALE TREE.
@@ -368,8 +381,14 @@ function tick(opts = {}) {
     logger(`WORKTREE REAPER TICK: sweep=${state.sweep_counter} — prior reaper (pid=${state.last_pid}) still running; skipping launch`);
     state.last_run_at = new Date().toISOString();
     state.last_result = 'skipped_in_flight';
+    // A single in-flight skip is healthy. A PERSISTENT one is a wedged reaper holding its pid
+    // forever, which reaps nothing and says nothing — so it accumulates on the same counter.
+    state.consecutive_not_invoked = (state.consecutive_not_invoked || 0) + 1;
     writeState(statePath, state);
-    return { invoked: false, counter: state.sweep_counter, cadence, result: 'skipped_in_flight', pid: state.last_pid, enabled: true };
+    return {
+      invoked: false, counter: state.sweep_counter, cadence, result: 'skipped_in_flight',
+      pid: state.last_pid, enabled: true, consecutiveNotInvoked: state.consecutive_not_invoked,
+    };
   }
 
   const args = buildReaperArgs({ reaperScript, execute, stage2, allPools: isAllPoolsEnabled() });
@@ -434,14 +453,23 @@ function tick(opts = {}) {
   state.last_run_at = new Date().toISOString();
   state.last_result = result;
   if (result === 'spawned') {
+    // THE RESET, and it is load-bearing in both directions: without it the counter only ever
+    // climbs and the alarm, once tripped, fires forever regardless of recovery. A spawn_error
+    // deliberately does NOT reset — that is another way to reap nothing.
+    state.consecutive_not_invoked = 0;
     state.last_pid = pid;
     state.last_spawn_at = new Date().toISOString();
   } else {
+    // spawn_error / unknown: the reaper did not run. Same silent-stop class as script_missing.
+    state.consecutive_not_invoked = (state.consecutive_not_invoked || 0) + 1;
     state.last_pid = null;
   }
   writeState(statePath, state);
 
-  return { invoked: result === 'spawned', counter: state.sweep_counter, cadence, result, pid, enabled: true, watchdog };
+  return {
+    invoked: result === 'spawned', counter: state.sweep_counter, cadence, result, pid, enabled: true, watchdog,
+    consecutiveNotInvoked: state.consecutive_not_invoked,
+  };
 }
 
 module.exports = {
