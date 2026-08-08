@@ -116,7 +116,14 @@ describe('the CI scope pin is wired in the lint itself', () => {
   const CODE = SRC.replace(/\/\*[\s\S]*?\*\//g, '').replace(/^\s*\/\/.*$/gm, '');
 
   it('resolves an explicit merge-base rather than relying on the ... shorthand', () => {
-    expect(CODE).toMatch(/git merge-base/);
+    // SD-LEO-FIX-SHELL-INJECTION-REACHABLE-001 widened the first pattern, and the reason matters
+    // more than the edit. This assertion greps SOURCE TEXT, so it was pinned to one STATEMENT FORM
+    // — the shell string `git merge-base ...`. Converting that call to an argv array (execFileSync,
+    // to close a live shell-injection sink) left the BEHAVIOUR this test cares about completely
+    // intact while breaking the pattern. A grep for one statement form is not a test for the
+    // behaviour. The pattern now matches either spelling, so the next legitimate refactor of the
+    // call shape does not read as a regression of the merge-base pin.
+    expect(CODE).toMatch(/git merge-base|['"]merge-base['"]/);
     expect(CODE).toMatch(/\$\{mergeBase\}\.\.HEAD/);
   });
 
