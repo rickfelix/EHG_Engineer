@@ -11,16 +11,14 @@
  * point would perform the exact harm the test forbids.
  */
 import { describe, it, expect } from 'vitest';
-import { createRequire } from 'node:module';
 import fs from 'node:fs';
 import path from 'node:path';
 
-const require_ = createRequire(import.meta.url);
 const ROOT = process.cwd();
 
 describe('TS-10: the descriptor route to a green gauge stays closed', () => {
   it('BOTH strings, no reader — the outcome is still NOT passing', async () => {
-    const { classifyStructural, classifyObserved, isFailing, VERDICT } =
+    const { classifyStructural, classifyObserved, VERDICT } =
       await import('../../../lib/governance/drain-inventory.js');
 
     // A FIXTURE standing in for worktree-reaper-refusals. Same source kind: a git-ignored local
