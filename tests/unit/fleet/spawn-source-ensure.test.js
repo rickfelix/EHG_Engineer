@@ -91,12 +91,18 @@ const gitMock = (impl) => vi.fn((args) => {
   // "ancestry unverifiable", a different condition from "the refresh failed". The AHEAD case is
   // exercised against real git in source-tree-identity-realgit.test.js.
   if (args.includes('merge-base')) return '';
+  // CI-1 content probe, answered as CLEAN. Also deliberately not routed through `impl`: a fixture
+  // that threw here would assert "content unverifiable", which is a different condition from
+  // "the refresh failed". The dirty/gitignored-plant cases are driven against real git in
+  // source-tree-identity-realgit.test.js, because a mock cannot model gitignore semantics.
+  if (args.includes('status')) return '';
   return impl ? impl(args) : undefined;
 });
 // common-dir on the candidate, common-dir on the repo root, --show-toplevel on the candidate, and
 // --absolute-git-dir on the candidate (check 3, which is the only one that rejects a forged linkage).
 const IDENTITY_PROBES = 4; // reuse path only
 const ANCESTRY_PROBES = 1; // merge-base --is-ancestor HEAD <baseRef>, after the refresh
+const CONTENT_PROBES = 1;  // status --porcelain --untracked-files=all --ignored=matching (CI-1)
 
 describe('FR-1: ensureSpawnSourceWorktree', () => {
   const deps = (existsResult) => ({
@@ -134,7 +140,7 @@ describe('FR-1: ensureSpawnSourceWorktree', () => {
     const out = ensureSpawnSourceWorktree(d);
     expect(out.refreshed).toBe(true);
     // identity probes, then fetch + ff-only merge, then the S2-R4 ancestry probe.
-    expect(d.runner).toHaveBeenCalledTimes(2 + IDENTITY_PROBES + ANCESTRY_PROBES);
+    expect(d.runner).toHaveBeenCalledTimes(2 + IDENTITY_PROBES + ANCESTRY_PROBES + CONTENT_PROBES);
   });
 
   it('a FAILED refresh does not throw — the currency check is the authority, not this', () => {

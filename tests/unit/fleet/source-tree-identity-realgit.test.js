@@ -30,7 +30,7 @@ const require_ = createRequire(import.meta.url);
 const {
   ensureSourceTreeWorktree, SOURCE_TREE_IDENTITY_ERROR,
   REAPER_SOURCE_DIRNAME, REAPER_SOURCE_BRANCH,
-  scrubGitEnv, GIT_REDIRECT_ENV_KEYS, SOURCE_TREE_AHEAD_ERROR,
+  scrubGitEnv, GIT_REDIRECT_ENV_KEYS, SOURCE_TREE_AHEAD_ERROR, SOURCE_TREE_DIRTY_ERROR,
 } = require_('../../../lib/fleet/source-tree-refresh.cjs');
 
 /** The real runner shape production uses: (args, o) => execFileSync('git', args, {...}). */
@@ -57,6 +57,14 @@ beforeAll(() => {
   originDir = fs.realpathSync(fs.mkdtempSync(path.join(os.tmpdir(), 's2r-origin-')));
   realGit(['-C', originDir, 'init', '-q', '--bare']);
   realGit(['-C', root, 'remote', 'add', 'origin', originDir]);
+  realGit(['-C', root, 'push', '-q', 'origin', 'HEAD:refs/heads/main']);
+  realGit(['-C', root, 'fetch', '-q', 'origin']);
+
+  // CI-2 needs a real .gitignore: the whole point is that a GITIGNORED plant is invisible to plain
+  // porcelain. Committed to origin/main so every worktree created below inherits it.
+  fs.writeFileSync(path.join(root, '.gitignore'), 'node_modules/\n');
+  realGit(['-C', root, 'add', '-A']);
+  realGit(['-C', root, 'commit', '-qm', 'add gitignore']);
   realGit(['-C', root, 'push', '-q', 'origin', 'HEAD:refs/heads/main']);
   realGit(['-C', root, 'fetch', '-q', 'origin']);
 
@@ -245,6 +253,89 @@ describe('S2-R: a PLAIN directory inside the repo is not a worktree, and real gi
     // A DISTINCT code from the identity refusal: "not ours" and "ours but tampered" are different
     // operator problems, even though both fail soft.
     expect(err.code).not.toBe(SOURCE_TREE_IDENTITY_ERROR);
+  });
+
+  it('CI-1: REFUSES a GENUINE worktree whose FILES were overwritten — one write, no forgery', () => {
+    // The axis four rounds of identity hardening never touched. Identity and ancestry are checks on
+    // git METADATA; the reaper executes FILES. Let the module create the tree legitimately, then
+    // overwrite the payload and commit NOTHING: checks 1/2/3 pass (it IS our worktree), ff-only
+    // succeeds ("already up to date"), merge-base --is-ancestor passes (HEAD == origin/main), and
+    // enforceTreeCurrency reports current:true because it computes `dirty` and discards it.
+    // Capability: ONE FILE WRITE — strictly less than every attack already closed here.
+    const dir = path.join(root, '.content-plant');
+    realGit(['-C', root, 'worktree', 'add', '-q', '-B', 'contentwt', dir, 'origin/main']);
+    // Tracked file, overwritten in place. Nothing is committed.
+    fs.writeFileSync(path.join(dir, 'f.txt'), "console.log('PWNED')\n");
+
+    let err = null;
+    try {
+      ensureSourceTreeWorktree({
+        repoRoot: root, dirname: '.content-plant', branch: 'contentwt', label: 'reaper-source',
+        exists: fs.existsSync, runner: realGit,
+      });
+    } catch (e) { err = e; }
+    expect(err, 'an overwritten working tree must be REFUSED').toBeTruthy();
+    expect(err.code).toBe(SOURCE_TREE_DIRTY_ERROR);
+    expect(fs.readFileSync(path.join(dir, 'f.txt'), 'utf8')).toContain('PWNED'); // untouched
+  });
+
+  it('CI-2: REFUSES a GITIGNORED plant — the flag that separates the fix from the blind fix', () => {
+    // The obvious fix is also blind. Plain `git status --porcelain` cannot see a gitignored path,
+    // node_modules/ is gitignored in the real repo, and node resolution walks UP from <dir>/scripts/
+    // so <dir>/node_modules/<pkg> SHADOWS the root copy and executes with no status output at all.
+    // Without this case, a test cannot tell --ignored=matching from a plain porcelain check.
+    const dir = path.join(root, '.ignored-plant');
+    realGit(['-C', root, 'worktree', 'add', '-q', '-B', 'ignoredwt', dir, 'origin/main']);
+    fs.mkdirSync(path.join(dir, 'node_modules', 'evil'), { recursive: true });
+    fs.writeFileSync(path.join(dir, 'node_modules', 'evil', 'index.js'), "module.exports = 'PWNED'\n");
+
+    // Prove the naive predicate really is blind here, so this test cannot pass for the wrong reason.
+    const naive = realGit(['-C', dir, 'status', '--porcelain']).trim();
+    expect(naive, 'plain porcelain must be blind to the gitignored plant').not.toMatch(/node_modules/);
+
+    let err = null;
+    try {
+      ensureSourceTreeWorktree({
+        repoRoot: root, dirname: '.ignored-plant', branch: 'ignoredwt', label: 'reaper-source',
+        exists: fs.existsSync, runner: realGit,
+      });
+    } catch (e) { err = e; }
+    expect(err, 'a gitignored plant must be REFUSED').toBeTruthy();
+    expect(err.code).toBe(SOURCE_TREE_DIRTY_ERROR);
+  });
+
+  it('CI-1 POSITIVE CONTROL — a pristine tree is accepted, and the marker is allowlisted', () => {
+    // Load-bearing twice over: a content check that refused everything would satisfy both cases
+    // above, AND this module writes .reap-protected.json into the tree itself before the check
+    // runs — so a naive "porcelain must be empty" rule would refuse 100% of the time.
+    const dir = path.join(root, '.pristine-source');
+    realGit(['-C', root, 'worktree', 'add', '-q', '-B', 'pristinewt', dir, 'origin/main']);
+    const out = ensureSourceTreeWorktree({
+      repoRoot: root, dirname: '.pristine-source', branch: 'pristinewt', label: 'reaper-source',
+      exists: fs.existsSync, runner: realGit,
+    });
+    expect(out.created).toBe(false);
+    expect(fs.existsSync(path.join(dir, '.reap-protected.json'))).toBe(true);
+  });
+
+  it('SCRUB-1: the GIT_CONFIG_* indexed family is scrubbed, not just fixed names', () => {
+    // GIT_CONFIG_COUNT + GIT_CONFIG_KEY_<n>/VALUE_<n> inject arbitrary config, and core.fsmonitor
+    // is a command git RUNS — on a plain `git status --porcelain`, which is exactly what
+    // assessTreeCurrency runs. A fixed-name list structurally cannot cover an indexed family, so
+    // the scrub matches by PREFIX and this asserts the family, not three sample names.
+    const scrubbed = scrubGitEnv({
+      GIT_CONFIG_COUNT: '1', GIT_CONFIG_KEY_0: 'core.fsmonitor', GIT_CONFIG_VALUE_0: 'evil',
+      GIT_CONFIG_KEY_7: 'core.hooksPath', GIT_CONFIG_VALUE_7: '/tmp/evil',
+      GIT_SSH_COMMAND: 'evil', GIT_EXTERNAL_DIFF: 'evil', GIT_EXEC_PATH: '/tmp',
+      PATH: 'keep',
+    });
+    for (const k of Object.keys(scrubbed)) {
+      expect(k, `${k} must not survive the scrub`).not.toMatch(/^GIT_CONFIG_/);
+    }
+    expect(scrubbed.GIT_SSH_COMMAND).toBeUndefined();
+    expect(scrubbed.GIT_EXTERNAL_DIFF).toBeUndefined();
+    expect(scrubbed.GIT_EXEC_PATH).toBeUndefined();
+    expect(scrubbed.PATH).toBe('keep'); // still does not over-scrub
   });
 
   it('a FOREIGN repository at the path is refused too — check 1 still does its job', () => {
