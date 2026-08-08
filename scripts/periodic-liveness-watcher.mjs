@@ -381,7 +381,17 @@ async function stampStateChangeAnchor(row, evaluation) {
   }
 }
 
-async function main() {
+/**
+ * @param {{includeFixtures?: boolean}} [opts] — includeFixtures:true KEEPS __e2e_ rows in the
+ *   evaluation set. Exists for ONE caller: tests/integration/periodic-process-liveness-realdb.test.js,
+ *   whose fixtures are themselves named __e2e_periodic_liveness_*__ and which asserts that this
+ *   watcher EMITS OVERDUE for them. That suite needs the real path over synthetic rows, so filtering
+ *   them would break the regression suite that guards this very file. It is the same shape as the
+ *   reaper: a consumer for which seeing fixture rows IS the function.
+ *   THE OPT-OUT ANNOUNCES ITSELF on every use — an escape hatch that engages silently is the
+ *   fence-bypass class, and this one is quiet by nature because it only ever runs in tests.
+ */
+async function main({ includeFixtures = false } = {}) {
   const { data: rows, error } = await supabase.from('periodic_process_registry').select('*').neq('process_key', WATCHER_SELF_KEY);
   if (error) throw new Error(`registry query failed: ${error.message}`);
 
@@ -399,7 +409,9 @@ async function main() {
   // which would classify the REAL rows __watcher_self__ and __eva_scheduler_watcher_self__ as
   // fixtures and blind the very instrument this watcher exists to keep honest.
   let liveRows = rows || [];
-  try {
+  if (includeFixtures) {
+    console.log('[periodic-liveness-watcher] includeFixtures=true — EVALUATING __e2e_ FIXTURE ROWS. This opt-out exists for the realdb regression suite only; it must never be set in production.');
+  } else try {
     const { isFixtureProcessKey } = await import('../lib/governance/fixture-exclusion.mjs');
     const before = liveRows.length;
     liveRows = liveRows.filter((r) => !isFixtureProcessKey(r.process_key));

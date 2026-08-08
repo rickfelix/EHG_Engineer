@@ -32,7 +32,11 @@ const ts = Date.now();
 const fixtureKeys = [];
 
 async function insertFixture({ suffix = 'fixture', ...overrides } = {}) {
-  const processKey = `__e2e_periodic_liveness_${suffix}_${ts}__`;
+    // SD-LEO-INFRA-ONE-SYNTHETIC-ROW-001-B: these fixture keys are __e2e_-prefixed, which the new
+  // canonical fixture filter in the watcher excludes from evaluation. This suite asserts the watcher
+  // EMITS OVERDUE for exactly these rows, so it must opt in via runWatcher({ includeFixtures: true }).
+  // Seeing fixture rows IS this suite's function — the same carve-out the reaper gets.
+const processKey = `__e2e_periodic_liveness_${suffix}_${ts}__`;
   fixtureKeys.push(processKey);
   const { error } = await supabase.from('periodic_process_registry').insert({
     process_key: processKey,
@@ -96,8 +100,8 @@ describe.skipIf(!HAS_REAL_DB)('Periodic-process liveness registry -- REAL DB', (
     expect(evaluation.state).toBe(STATE.OVERDUE);
 
     // Run the full watcher (not just evaluateRow) to exercise the real emission+dedup path.
-    await runWatcher();
-    await runWatcher(); // second run -- must NOT double-emit
+    await runWatcher({ includeFixtures: true });
+    await runWatcher({ includeFixtures: true }); // second run -- must NOT double-emit
 
     const { data: flags } = await supabase
       .from('session_coordination')
@@ -114,14 +118,14 @@ describe.skipIf(!HAS_REAL_DB)('Periodic-process liveness registry -- REAL DB', (
     await supabase.from('periodic_process_registry')
       .update({ last_fired_at: new Date(Date.now() - 60_000).toISOString() })
       .eq('process_key', processKey);
-    await runWatcher();
+    await runWatcher({ includeFixtures: true });
     const { data: afterEpisode1 } = await supabase.from('session_coordination').select('id').eq('payload->>process_key', processKey).eq('payload->>state', 'OVERDUE');
     expect(afterEpisode1.length).toBe(1);
 
     // Recovery: stamp it fresh -> OK. The watcher must persist last_state=OK so a future OVERDUE
     // is recognized as a NEW transition, not swallowed by a permanent "already flagged once" latch.
     await stampLastFired(supabase, processKey);
-    await runWatcher();
+    await runWatcher({ includeFixtures: true });
     const { data: row1 } = await supabase.from('periodic_process_registry').select('last_state').eq('process_key', processKey).single();
     expect(row1.last_state).toBe(STATE.OK);
 
@@ -129,7 +133,7 @@ describe.skipIf(!HAS_REAL_DB)('Periodic-process liveness registry -- REAL DB', (
     await supabase.from('periodic_process_registry')
       .update({ last_fired_at: new Date(Date.now() - 60_000).toISOString() })
       .eq('process_key', processKey);
-    await runWatcher();
+    await runWatcher({ includeFixtures: true });
 
     const { data: afterEpisode2 } = await supabase.from('session_coordination').select('id').eq('payload->>process_key', processKey).eq('payload->>state', 'OVERDUE');
     expect(afterEpisode2.length).toBe(2); // one row per genuine episode, not stuck at 1 forever
@@ -143,7 +147,7 @@ describe.skipIf(!HAS_REAL_DB)('Periodic-process liveness registry -- REAL DB', (
     const evaluation = await evaluateRow(row);
     expect(evaluation.state).toBe(STATE.OK);
 
-    await runWatcher();
+    await runWatcher({ includeFixtures: true });
     const { data: flags } = await supabase.from('session_coordination').select('id').eq('payload->>process_key', processKey);
     expect(flags.length).toBe(0);
   });
@@ -158,7 +162,7 @@ describe.skipIf(!HAS_REAL_DB)('Periodic-process liveness registry -- REAL DB', (
     const evaluation = await evaluateRow(row);
     expect(evaluation.state).toBe(STATE.INTENTIONALLY_DOWN);
 
-    await runWatcher();
+    await runWatcher({ includeFixtures: true });
     const { data: flags } = await supabase.from('session_coordination').select('id').eq('payload->>process_key', processKey);
     expect(flags.length).toBe(0);
   });
@@ -178,7 +182,7 @@ describe.skipIf(!HAS_REAL_DB)('Periodic-process liveness registry -- REAL DB', (
       .update({ last_fired_at: new Date(Date.now() - 60_000).toISOString() })
       .eq('process_key', processKey);
 
-    await runWatcher();
+    await runWatcher({ includeFixtures: true });
 
     const { data: flags } = await supabase
       .from('session_coordination')
@@ -200,8 +204,8 @@ describe.skipIf(!HAS_REAL_DB)('Periodic-process liveness registry -- REAL DB', (
       .update({ last_fired_at: new Date(Date.now() - 60_000).toISOString() })
       .eq('process_key', processKey);
 
-    await expect(runWatcher()).resolves.toBeDefined(); // first miss: owner-first
-    await expect(runWatcher()).resolves.toBeDefined(); // second miss: ladder attempt (fails soft)
+    await expect(runWatcher({ includeFixtures: true })).resolves.toBeDefined(); // first miss: owner-first
+    await expect(runWatcher({ includeFixtures: true })).resolves.toBeDefined(); // second miss: ladder attempt (fails soft)
 
     const { data: row } = await supabase.from('periodic_process_registry').select('last_state').eq('process_key', processKey).single();
     expect(row.last_state).toBe(STATE.OVERDUE);
