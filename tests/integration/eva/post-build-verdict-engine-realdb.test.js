@@ -31,6 +31,7 @@ import {
   resolveVentureRepoPath,
 } from '../../../lib/eva/post-build-verdict-engine.js';
 import { recordDeviation } from '../../../lib/eva/deviation-ledger.js';
+import { insertGuarded, CLASSIFICATION } from '../../../lib/governance/fixture-producer-guard.mjs';
 
 dotenv.config({ path: resolve(process.cwd(), '.env') });
 
@@ -46,15 +47,13 @@ let ventureId;
 
 describeDb('post-build-verdict-engine (real DB)', () => {
   beforeAll(async () => {
-    const { data, error } = await supabase
-      .from('ventures')
-      .insert({
+    const { data, error } = await insertGuarded(supabase, 'ventures', {
         name: `__e2e_verdict_engine_${ts}__`,
         problem_statement: 'Disposable venture for SD-LEO-INFRA-POST-BUILD-ARTIFACT-001-B real-DB grain test',
         current_lifecycle_stage: 19,
         is_demo: true,
         status: 'active',
-      })
+      }, { classification: CLASSIFICATION.FIXTURE, source: 'tests/integration/eva/post-build-verdict-engine-realdb.test.js' })
       .select('id')
       .single();
     if (error) throw new Error(`Failed to create venture: ${error.message}`);

@@ -24,6 +24,7 @@ import dotenv from 'dotenv';
 import { resolve } from 'path';
 import { describeDb } from '../../helpers/db-available.js';
 import { recordDeviation, readDeviations } from '../../../lib/eva/deviation-ledger.js';
+import { insertGuarded, CLASSIFICATION } from '../../../lib/governance/fixture-producer-guard.mjs';
 
 dotenv.config({ path: resolve(process.cwd(), '.env') });
 
@@ -38,15 +39,13 @@ let ventureId;
 
 describeDb('deviation-ledger (real DB)', () => {
   beforeAll(async () => {
-    const { data, error } = await supabase
-      .from('ventures')
-      .insert({
+    const { data, error } = await insertGuarded(supabase, 'ventures', {
         name: `__e2e_deviation_ledger_${ts}__`,
         problem_statement: 'Disposable venture for SD-LEO-INFRA-POST-BUILD-ARTIFACT-001-A real-DB ledger test',
         current_lifecycle_stage: 19,
         is_demo: false,
         status: 'active',
-      })
+      }, { classification: CLASSIFICATION.FIXTURE, source: 'tests/integration/eva/deviation-ledger-realdb.test.js' })
       .select('id')
       .single();
     if (error) throw new Error(`Failed to create venture: ${error.message}`);
