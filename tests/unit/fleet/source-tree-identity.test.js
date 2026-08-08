@@ -35,18 +35,33 @@ afterEach(() => { try { fs.rmSync(tmp, { recursive: true, force: true }); } catc
  * A runner that answers `rev-parse --git-common-dir` per-directory from a lookup, so a fixture can
  * express "this dir belongs to repo X" without building real repositories.
  */
-function runnerWith(commonDirs) {
+const isProbe = (args) => args.includes('rev-parse') && args.includes('--git-common-dir');
+
+function runnerWith(commonDirs, log) {
   // Matched by CONTENT, not argv position: the probe gained --path-format=absolute mid-review, and
   // a position-indexed fixture would have silently stopped matching and returned '' — which reads
   // as "unverifiable => refuse" and would have turned every reuse test green for the wrong reason.
   return (args) => {
-    if (args[0] === '-C' && args.includes('rev-parse') && args.includes('--git-common-dir')) {
+    if (log) log.push(args.join(' '));
+    if (args[0] === '-C' && isProbe(args)) {
       const d = args[1];
       if (!(d in commonDirs)) throw new Error(`not a git repository: ${d}`);
       return commonDirs[d] + '\n';
     }
     return '';
   };
+}
+
+/**
+ * G1 (PLAN TESTING, re-review): every identity test asserted a VERDICT, and none asserted that git
+ * had not already run in the unverified directory. Measured by the reviewer: moving the probe to
+ * AFTER fetch + merge --ff-only left all 3432 tests green — the refusal still threw the same
+ * message, just after git had already executed with the attacker's config, which IS the S2 threat
+ * model. A verdict-only assertion cannot see ORDER. This pins the order.
+ */
+function expectNoGitRanBeforeRefusal(calls) {
+  const nonProbe = calls.filter((c) => !isProbe(c.split(' ')));
+  expect(nonProbe).toEqual([]); // fetch/merge/anything in an unverified dir = the vulnerability
 }
 
 describe('S2: an existing directory is only reused if it belongs to THIS repo', () => {
@@ -70,21 +85,26 @@ describe('S2: an existing directory is only reused if it belongs to THIS repo', 
     const dir = dirOf(tmp);
     fs.mkdirSync(dir, { recursive: true });
     const evil = path.join(tmp, 'attacker-repo', '.git');
+    const calls = [];
     expect(() => ensureSourceTreeWorktree({
       repoRoot: tmp, dirname: REAPER_SOURCE_DIRNAME, branch: REAPER_SOURCE_BRANCH, label: 'reaper-source',
       exists: () => true,
-      runner: runnerWith({ [dir]: evil, [tmp]: path.join(tmp, '.git') }),
+      runner: runnerWith({ [dir]: evil, [tmp]: path.join(tmp, '.git') }, calls),
     })).toThrow(/NOT a linked worktree/i);
+    // G1: the refusal must come BEFORE any git runs in the attacker's directory, not after.
+    expectNoGitRanBeforeRefusal(calls);
   });
 
   it('REFUSES a directory git cannot identify at all — fails CLOSED', () => {
     const dir = dirOf(tmp);
     fs.mkdirSync(dir, { recursive: true });
+    const calls = [];
     expect(() => ensureSourceTreeWorktree({
       repoRoot: tmp, dirname: REAPER_SOURCE_DIRNAME, branch: REAPER_SOURCE_BRANCH, label: 'reaper-source',
       exists: () => true,
-      runner: runnerWith({ [tmp]: path.join(tmp, '.git') }), // dir throws => unverifiable
+      runner: runnerWith({ [tmp]: path.join(tmp, '.git') }, calls), // dir throws => unverifiable
     })).toThrow(/NOT a linked worktree/i);
+    expectNoGitRanBeforeRefusal(calls);
   });
 
   it('the refusal names the consequence, not just the rule', () => {

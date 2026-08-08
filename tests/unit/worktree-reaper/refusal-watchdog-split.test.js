@@ -24,7 +24,9 @@
  * than no test — it reads as coverage:
  *   - TS-3  detects the CENSUS moving back below the early return.        (real discriminating power)
  *   - TS-9  detects ANY reaper execution during a refusal.                (real discriminating power)
- *   - TS-9b detects the ESCALATION being hoisted above the refusal return. (the ONLY test that does)
+ *   - TS-9b detects the ESCALATION being hoisted above the refusal return. (the only test that
+ *     covers it BY DESIGN — measured: tick.test.js:329 also reddens under that hoist, but
+ *     incidentally, so it would not survive an unrelated refactor of that suite)
  * TS-3 and TS-9 do NOT detect the escalation hoist — in a tmp fixture the >=80% watchdog never
  * triggers, so that branch is unreachable and both pass unchanged. I originally claimed otherwise.
  */
