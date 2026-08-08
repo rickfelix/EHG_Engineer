@@ -84,11 +84,13 @@ const gitMock = (impl) => vi.fn((args) => {
   // --show-toplevel is the S2-R position check: real git returns an absolute path, and for a
   // genuine linked worktree that path IS the directory itself.
   if (args.includes('--show-toplevel')) return path.resolve(args[1]) + '\n';
+  if (args.includes('--absolute-git-dir')) return `/repo/.git/worktrees/${path.basename(args[1])}\n`;
   if (isIdentityProbe(args)) return '/repo/.git\n';
   return impl ? impl(args) : undefined;
 });
-// common-dir on the candidate, common-dir on the repo root, then --show-toplevel on the candidate.
-const IDENTITY_PROBES = 3; // reuse path only
+// common-dir on the candidate, common-dir on the repo root, --show-toplevel on the candidate, and
+// --absolute-git-dir on the candidate (check 3, which is the only one that rejects a forged linkage).
+const IDENTITY_PROBES = 4; // reuse path only
 
 describe('FR-1: ensureSpawnSourceWorktree', () => {
   const deps = (existsResult) => ({

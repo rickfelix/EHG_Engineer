@@ -60,6 +60,7 @@ function run(extra = {}) {
       sourceRunner: (args) => {
         gitCalls.push(args.join(' '));
         if (args.includes('--show-toplevel')) return path.resolve(args[1]) + '\n';
+        if (args.includes('--absolute-git-dir')) return `${poolRoot}/.git/worktrees/${path.basename(args[1])}\n`;
         if (args.includes('rev-parse') && args.includes('--git-common-dir')) return `${poolRoot}/.git\n`;
         return undefined;
       },

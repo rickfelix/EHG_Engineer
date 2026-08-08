@@ -36,7 +36,8 @@ afterEach(() => { try { fs.rmSync(tmp, { recursive: true, force: true }); } catc
  * express "this dir belongs to repo X" without building real repositories.
  */
 const isProbe = (args) => args.includes('rev-parse')
-  && (args.includes('--git-common-dir') || args.includes('--show-toplevel'));
+  && (args.includes('--git-common-dir') || args.includes('--show-toplevel')
+    || args.includes('--absolute-git-dir'));
 
 /**
  * S2-R: the guard gained a SECOND, position-sensitive probe (--show-toplevel), because
@@ -56,7 +57,17 @@ function runnerWith(commonDirs, log) {
       if (!(d in commonDirs)) throw new Error(`not a git repository: ${d}`);
       // Real git answers --show-toplevel with an ABSOLUTE path; for every directory this fixture
       // can express, that is the directory itself (a lookup table cannot model a plain subdir).
-      if (args.includes('--show-toplevel')) return path.resolve(d) + '\n';
+      // realpath, mirroring real git: the guard compares against fs.realpathSync.native, and on
+      // Windows os.tmpdir() can differ from its canonical form, so path.resolve alone would make
+      // the POSITIVE control fail for a reason that has nothing to do with identity.
+      if (args.includes('--show-toplevel')) {
+        try { return fs.realpathSync.native(d) + '\n'; } catch { return path.resolve(d) + '\n'; }
+      }
+      // CHECK 3: a genuine linked worktree's gitdir lives under <common>/worktrees/<name>. This
+      // fixture can only express the honest shape — the FORGERIES that answer <common> itself
+      // (a .git-file plant, a GIT_DIR env plant) live in source-tree-identity-realgit.test.js,
+      // because a lookup table cannot reproduce how git resolves them.
+      if (args.includes('--absolute-git-dir')) return `${commonDirs[d]}/worktrees/${path.basename(d)}\n`;
       return commonDirs[d] + '\n';
     }
     return '';

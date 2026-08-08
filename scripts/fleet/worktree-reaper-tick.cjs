@@ -236,10 +236,15 @@ function buildReaperArgs({ reaperScript, execute, stage2, allPools }) {
  */
 function resolveReaperSourceRoot({ repoRoot, logger, env = process.env, runner, exists }) {
   const {
-    ensureSourceTreeWorktree, REAPER_SOURCE_DIRNAME, REAPER_SOURCE_BRANCH,
+    ensureSourceTreeWorktree, REAPER_SOURCE_DIRNAME, REAPER_SOURCE_BRANCH, scrubGitEnv,
   } = require('../../lib/fleet/source-tree-refresh.cjs');
   const gitRunner = runner || ((args) => {
-    const r = spawnSync('git', args, { cwd: repoRoot, encoding: 'utf8', windowsHide: true });
+    // EXEC SECURITY: scrubbed env. GIT_DIR/GIT_WORK_TREE in the inherited environment let a BARE
+    // mkdir pass as a source tree, and redirect the subsequent fetch/merge at the shared root's
+    // own refs. spawnSync inherits process.env unless told otherwise.
+    const r = spawnSync('git', args, {
+      cwd: repoRoot, encoding: 'utf8', windowsHide: true, env: scrubGitEnv(process.env),
+    });
     if (r.status !== 0) throw new Error(`git ${args.join(' ')} failed: ${(r.stderr || '').trim()}`);
     return r.stdout;
   });
@@ -344,7 +349,16 @@ function tick(opts = {}) {
       ...(opts.currencyRunner ? { runner: opts.currencyRunner } : {}),
       ...(opts.currencyEnv ? { env: opts.currencyEnv } : {}),
     });
-    state.consecutive_refusals = 0; // currency restored — the refusal streak ends here
+    // NI-R1 (EXEC SECURITY, MEASURED): the reset used to happen HERE, above the single-flight
+    // check at :380 — so a tick that passed currency and then did NOT run still erased the refusal
+    // streak. Traced over a real state file with the pattern [stale x5, inflight]: refusals went
+    // 1,2,3,4,5,0,1,2,3,4,5,0,... and NEVER reached the threshold of 6 across 48 due ticks, so
+    // reaper_starvation_alert never fired at all; the not-invoked alarm first fired at due-tick 36
+    // instead of 6 (~36h instead of ~6h). A wedged pid on a chronically-behind tree is precisely
+    // the combination this SD exists to catch. The streak now ends where the OTHER counter's does
+    // — on an actual spawn — so both counters mean "since the reaper last really ran".
+    // (Deliberately NO state write here: a field written and never read is indistinguishable from
+    // a guard, and this one would be dropped by readState's whitelist anyway.)
   } catch (err) {
     // QF-20260726-794 — REFUSE TO REAP, BUT STILL REPORT.
     //
@@ -457,6 +471,10 @@ function tick(opts = {}) {
     // climbs and the alarm, once tripped, fires forever regardless of recovery. A spawn_error
     // deliberately does NOT reset — that is another way to reap nothing.
     state.consecutive_not_invoked = 0;
+    // NI-R1: the refusal streak resets HERE too, not at the currency check. Both counters now
+    // mean the same thing — "since the reaper last actually ran" — so neither can be silently
+    // rewound by a tick that passed a check and then did nothing.
+    state.consecutive_refusals = 0;
     state.last_pid = pid;
     state.last_spawn_at = new Date().toISOString();
   } else {

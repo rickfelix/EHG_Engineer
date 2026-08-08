@@ -100,6 +100,7 @@ function spawnOpts({ branch, behind, exists = true }) {
         // NOT logged — these tests assert an ORDER (refresh before the guard reads the tree), and
         // folding a bookkeeping probe into that ordered log would rewrite the contract under test.
         if (args.includes('--show-toplevel')) return path.resolve(args[1]) + '\n';
+        if (args.includes('--absolute-git-dir')) return `${REPO_ROOT}/.git/worktrees/${path.basename(args[1])}\n`;
         if (args.includes('rev-parse') && args.includes('--git-common-dir')) return `${REPO_ROOT}/.git\n`;
         gitCalls.push(args.join(' '));
         sequence.push(args.includes('--ff-only') ? 'refresh' : 'spawnsource:' + args.join(' ').slice(0, 24));

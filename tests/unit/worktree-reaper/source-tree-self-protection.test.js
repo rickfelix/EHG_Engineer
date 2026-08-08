@@ -71,6 +71,7 @@ describe('S1: the reaper must never be able to delete the tree it executes from'
       // assertion below would never run.
       runner: (args) => {
         if (args.includes('--show-toplevel')) return path.resolve(args[1]) + '\n';
+        if (args.includes('--absolute-git-dir')) return `${tmp}/.git/worktrees/${path.basename(args[1])}\n`;
         if (args.includes('rev-parse') && args.includes('--git-common-dir')) return `${tmp}/.git\n`;
         return undefined;
       },

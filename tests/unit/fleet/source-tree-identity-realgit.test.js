@@ -30,6 +30,7 @@ const require_ = createRequire(import.meta.url);
 const {
   ensureSourceTreeWorktree, SOURCE_TREE_IDENTITY_ERROR,
   REAPER_SOURCE_DIRNAME, REAPER_SOURCE_BRANCH,
+  scrubGitEnv, GIT_REDIRECT_ENV_KEYS,
 } = require_('../../../lib/fleet/source-tree-refresh.cjs');
 
 /** The real runner shape production uses: (args, o) => execFileSync('git', args, {...}). */
@@ -119,6 +120,69 @@ describe('S2-R: a PLAIN directory inside the repo is not a worktree, and real gi
     const out = ensureAt('.real-source');
     expect(out.created).toBe(false);
     expect(fs.existsSync(path.join(realWtDir, '.reap-protected.json'))).toBe(true);
+  });
+
+  it('S2-R2: REFUSES a `.git` FILE plant — one dir + one ~50-byte file, no git init', () => {
+    // The attack that defeated checks 1 AND 2 simultaneously. A file named `.git` containing
+    // `gitdir: <repoRoot>/.git` makes git treat the CONTAINING directory as the worktree, so
+    // --show-toplevel returns the candidate (check 2 passes) while --git-common-dir returns
+    // repoRoot's own .git (check 1 passes). Measured on real git before the fix.
+    //
+    // Worse than the bare-mkdir hole it replaced: because the plant points at repoRoot's gitdir,
+    // the reuse `merge --ff-only` operates on THE SHARED ROOT'S OWN REFS.
+    const dir = path.join(root, '.gitfile-plant');
+    fs.mkdirSync(path.join(dir, 'scripts'), { recursive: true });
+    fs.writeFileSync(path.join(dir, 'scripts', 'worktree-reaper.mjs'), "console.log('PWNED')\n");
+    fs.writeFileSync(path.join(dir, '.git'), `gitdir: ${root.replace(/\\/g, '/')}/.git\n`);
+
+    // Both original checks really do pass on this shape — asserted so the test cannot silently
+    // become a tautology if the plant stops working on a future git.
+    const g = (d, ...a) => realGit(['-C', d, 'rev-parse', ...a]).trim();
+    expect(fs.realpathSync.native(g(dir, '--path-format=absolute', '--git-common-dir')))
+      .toBe(fs.realpathSync.native(g(root, '--path-format=absolute', '--git-common-dir')));
+    expect(fs.realpathSync.native(g(dir, '--path-format=absolute', '--show-toplevel')))
+      .toBe(fs.realpathSync.native(dir));
+
+    let err = null;
+    try { ensureAt('.gitfile-plant'); } catch (e) { err = e; }
+    expect(err, 'the .git-file plant must be REFUSED').toBeTruthy();
+    expect(err.code).toBe(SOURCE_TREE_IDENTITY_ERROR);
+    // And nothing was done to it: no marker, payload untouched.
+    expect(fs.existsSync(path.join(dir, '.reap-protected.json'))).toBe(false);
+    expect(fs.readFileSync(path.join(dir, 'scripts', 'worktree-reaper.mjs'), 'utf8')).toContain('PWNED');
+  });
+
+  it('S2-R3: REFUSES a bare mkdir carrying GIT_DIR/GIT_WORK_TREE in the environment', () => {
+    // No file at all — the exact shape check 2 was added to reject, resurrected via env. Both
+    // production runners inherit process.env, so this is inside the module's declared threat model
+    // (it already names the FLEET_*_SOURCE_DIR overrides as untrusted).
+    const dir = path.join(root, '.env-plant');
+    fs.mkdirSync(dir, { recursive: true });
+    const hostileEnv = {
+      ...process.env,
+      GIT_DIR: path.join(root, '.git'),
+      GIT_WORK_TREE: dir,
+    };
+    const hostileRunner = (args) => execFileSync('git', args, {
+      encoding: 'utf8', stdio: ['ignore', 'pipe', 'pipe'], env: hostileEnv,
+    });
+    let err = null;
+    try {
+      ensureSourceTreeWorktree({
+        repoRoot: root, dirname: '.env-plant', branch: REAPER_SOURCE_BRANCH, label: 'reaper-source',
+        exists: fs.existsSync, runner: hostileRunner,
+      });
+    } catch (e) { err = e; }
+    expect(err, 'the GIT_DIR/GIT_WORK_TREE plant must be REFUSED').toBeTruthy();
+    expect(err.code).toBe(SOURCE_TREE_IDENTITY_ERROR);
+  });
+
+  it('scrubGitEnv removes every redirection var, and does not mutate its input', () => {
+    const before = { GIT_DIR: 'x', GIT_WORK_TREE: 'y', GIT_COMMON_DIR: 'z', PATH: 'keep' };
+    const after = scrubGitEnv(before);
+    for (const k of GIT_REDIRECT_ENV_KEYS) expect(after[k]).toBeUndefined();
+    expect(after.PATH).toBe('keep');          // does not over-scrub
+    expect(before.GIT_DIR).toBe('x');          // does not mutate the caller's env
   });
 
   it('a FOREIGN repository at the path is refused too — check 1 still does its job', () => {
