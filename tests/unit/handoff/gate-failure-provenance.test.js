@@ -98,12 +98,17 @@ describe('M6 — THE WIRE from BaseExecutor to the recorder', () => {
    * (deleting that line) left all four GREEN. That is unit-tests-the-function-but-not-the-wiring,
    * the same class this SD exists to catch, committed inside it.
    *
-   * BaseExecutor.execute() is not drivable from a unit test without standing up the whole gate
-   * pipeline, so this is a SOURCE-SHAPE assertion — a weaker instrument than a behaviour test,
-   * matching the precedent in base-executor-gate-autosignal-defer.test.js. A grep for a
-   * statement form is NOT a test for behaviour, and saying so here is the point: the pair
-   * (behaviour at the recorder + shape at the producer) is what makes M6 detectable at all.
-   * If BaseExecutor ever becomes drivable, replace this with the real thing.
+   * I THEN CLAIMED BaseExecutor.execute() WAS NOT DRIVABLE FROM A UNIT TEST. That was FALSE,
+   * and TESTING (row ee56bca1) falsified it BY CONSTRUCTION rather than by argument — the real
+   * behaviour test now lives in base-executor-failed-gate-wire.test.js and drives
+   * execute() -> HandoffRecorder.recordFailure -> validation_details.summary.failed_gate with
+   * nothing hand-assembled in between. The unlock was that `gateResults` comes from an INJECTED
+   * constructor dependency (this.validationOrchestrator.validateGates), so stubbing it lands
+   * you on the branch. Worth knowing: the "not unit-testable" claim is repeated across three
+   * BaseExecutor test files — an inherited assumption nobody had measured, and I repeated it.
+   *
+   * These source-shape assertions are KEPT as a cheap second signal, not as the acceptance.
+   * A grep for a statement form is not a test for behaviour; the file named above is.
    */
   const src = readFileSync(resolve(process.cwd(), 'scripts/modules/handoff/executors/BaseExecutor.js'), 'utf8');
 

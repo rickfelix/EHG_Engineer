@@ -87,7 +87,15 @@ async function main() {
   }
   const { createClient } = await import('@supabase/supabase-js');
   await import('dotenv/config');
-  const supabase = createClient(process.env.SUPABASE_URL, process.env.SUPABASE_SERVICE_ROLE_KEY);
+  // ANON, NOT SERVICE-ROLE (SECURITY row 4a1d302b). This job is read-only, and SECURITY
+  // MEASURED that anon suffices for both tables it touches. It matters more than usual here:
+  // this is the one process that runs git tooling against a DATABASE-SUPPLIED path, and a
+  // hostile repo's .git/config can execute a command that inherits this process's env. Holding
+  // the highest-privilege secret in exactly that process turns a local integrity problem into
+  // credential theft. Service-role is available as a fallback only so the tool still works
+  // where anon is unavailable.
+  const key = process.env.SUPABASE_ANON_KEY || process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY || process.env.SUPABASE_SERVICE_ROLE_KEY;
+  const supabase = createClient(process.env.SUPABASE_URL, key);
   const out = await explainOperatorContract(supabase, args[0]);
   process.stdout.write(JSON.stringify(out, null, 2) + '\n');
   if (!out.reproducible) process.exit(2);
