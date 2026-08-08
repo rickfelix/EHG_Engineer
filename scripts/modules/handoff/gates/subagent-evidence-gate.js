@@ -438,40 +438,39 @@ export async function validateSubagentEvidence(ctx, supabase) {
       const ne = nonEvidence.map(f => `${f.agent}=${f.verdict}`).join(', ');
       const head = `SUBAGENT_EVIDENCE_NOT_RUN: ${ne} — the run crashed or never finished, so no check was performed. A row existing is not the check having run.`;
 
-      // QF-20260804-926 — RESTORE THE DOCUMENTED SAFETY VALVE.
+      // SD-LEO-INFRA-EXPLORE-UNREGISTERED-LEO-001: THE QF-20260804-926 SAFETY VALVE IS RETIRED
+      // BECAUSE ITS OWN STATED PRECONDITION IS NOW MET.
       //
-      // QF-20260804-569 made non-evidence block UNCONDITIONALLY, ignoring verdict mode. That half
-      // is correct and hard-won — a crashed run must not buy the same passage as a real one — but
-      // it shipped WITHOUT its satisfiability half, and required-subagents.js:49-56 had already
-      // named the precondition verbatim:
+      // QF-20260804-569 made non-evidence block unconditionally. QF-20260804-926 softened it back to
+      // honour SUBAGENT_VERDICT_MODE, and said exactly why, quoting required-subagents.js:49-56:
       //
       //   "PRECONDITION FOR PROMOTING SUBAGENT_VERDICT_MODE=block: the residual ~10% ... is 100%
       //    attributable to the unregistered-EXPLORE CLI path leaving a tombstone as the last row.
       //    Resolve that first ... Until then the gate's advisory default keeps this cost at zero."
       //
-      // LEAD-TO-PLAN still requires 'Explore', a Claude Code BUILT-IN absent from leo_sub_agents,
-      // so `--code EXPLORE` throws and writes a tombstone. Blocking on it makes LEAD-TO-PLAN
-      // unpassable for any seat restricted to the CLI path — no action available to that worker
-      // produces a passing row. Measured cohort: ~10% of SDs (187/209 = 89.5% unaffected).
+      // That is precisely what this SD resolved, and in the order the precondition implies:
+      //   - scripts/record-explore-evidence.js gives Explore a sanctioned producer, so a seat is no
+      //     longer restricted to a CLI path that cannot succeed. THAT was the whole reason blocking
+      //     here was unfair: no action available to the worker produced a passing row. Now one does.
+      //   - execute-subagent --code EXPLORE now REFUSES before the leo_sub_agents lookup and writes
+      //     NO row, so this branch can no longer be reached by the crash that used to populate it.
       //
-      // So non-evidence now honours the SAME mode flag as a rejecting verdict, until Explore is
-      // resolved (harness_backlog 6529e3a3). This is NOT re-softening ERROR/PENDING generally:
-      // they remain a DISTINCT class, they are still never accepted, and under
-      // SUBAGENT_VERDICT_MODE=block they still block. What returns is the operator's ability to
-      // turn the enforcement on deliberately rather than having it arrive as a side effect.
-      if (mode !== 'block') {
-        const warn = `${head} (mode: ${mode} — advisory until the required-agent list is satisfiable from every invocation path; see required-subagents.js:49-56)`;
-        console.log(`   ⚠️  ${warn}`);
-        return {
-          passed: true,
-          score: 100,
-          max_score: 100,
-          issues: [],
-          warnings: [...unknownWarnings, warn],
-          details: { reason: 'SUBAGENT_EVIDENCE_NOT_RUN_ADVISORY', non_evidence: nonEvidence, ...verdictDetails }
-        };
-      }
-
+      // AND THE SOFTENING WAS WORSE THAN A LENIENCY, which is what justifies retiring it rather than
+      // waiting for the global flag. Measured: with no row at all the gate BLOCKS here in both modes
+      // (:556 below, not mode-gated), but with an ERROR tombstone as the newest row it PASSED at
+      // score 100. So RUNNING THE BROKEN CLI CONVERTED A BLOCK INTO A PASS — the crash was the key.
+      // A worker who never invoked it was stopped; one who invoked it and let it crash was let
+      // through. That is not a safety valve, it is a laundering path, and it is closed here.
+      //
+      // SCOPE, deliberately narrow: this changes ONLY the non-evidence class. The rejecting-verdict
+      // branch below still honours SUBAGENT_VERDICT_MODE, resolveSubagentVerdictMode is untouched,
+      // and the global advisory->block flip (measured at 32/313 SDs) remains a separate decision.
+      // ERROR was always documented as a DISTINCT class from a rejection — "there is no verdict for
+      // that mode to be lenient about" (:397-401) — so only that class stops being negotiable.
+      //
+      // Blast radius, measured rather than inherited: 8 of 314 SDs hold an ERROR-newest Explore row
+      // (2.5%, not the ~10% this comment block used to assert), and SEVEN of those eight are already
+      // completed. Each is remediable with the new writer.
       console.log(`   ❌ ${head}`);
       return buildFailResult({
         score: 0,
