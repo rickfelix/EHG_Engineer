@@ -30,7 +30,7 @@ const require_ = createRequire(import.meta.url);
 const {
   ensureSourceTreeWorktree, SOURCE_TREE_IDENTITY_ERROR,
   REAPER_SOURCE_DIRNAME, REAPER_SOURCE_BRANCH,
-  scrubGitEnv, GIT_REDIRECT_ENV_KEYS,
+  scrubGitEnv, GIT_REDIRECT_ENV_KEYS, SOURCE_TREE_AHEAD_ERROR,
 } = require_('../../../lib/fleet/source-tree-refresh.cjs');
 
 /** The real runner shape production uses: (args, o) => execFileSync('git', args, {...}). */
@@ -40,6 +40,8 @@ let root;          // a real git repo
 let plantedDir;    // <root>/.reaper-source as a PLAIN directory (the attack)
 let realWtDir;     // <root>/.real-source as a GENUINE linked worktree (the control)
 
+let originDir;     // a real bare remote, so origin/main actually resolves
+
 beforeAll(() => {
   root = fs.realpathSync(fs.mkdtempSync(path.join(os.tmpdir(), 's2r-')));
   realGit(['-C', root, 'init', '-q']);
@@ -48,6 +50,15 @@ beforeAll(() => {
   fs.writeFileSync(path.join(root, 'f.txt'), 'v1\n');
   realGit(['-C', root, 'add', '-A']);
   realGit(['-C', root, 'commit', '-qm', 'init']);
+
+  // A REAL remote. The ancestry check (S2-R4) resolves `origin/main`, and a scratch repo without a
+  // remote would make every case refuse for the wrong reason — the fixture would stop resembling
+  // production, which is exactly the failure mode this whole file exists to avoid.
+  originDir = fs.realpathSync(fs.mkdtempSync(path.join(os.tmpdir(), 's2r-origin-')));
+  realGit(['-C', originDir, 'init', '-q', '--bare']);
+  realGit(['-C', root, 'remote', 'add', 'origin', originDir]);
+  realGit(['-C', root, 'push', '-q', 'origin', 'HEAD:refs/heads/main']);
+  realGit(['-C', root, 'fetch', '-q', 'origin']);
 
   // THE ATTACK: a plain directory at the default source-tree path, holding attacker code.
   plantedDir = path.join(root, REAPER_SOURCE_DIRNAME);
@@ -61,6 +72,7 @@ beforeAll(() => {
 
 afterAll(() => {
   try { fs.rmSync(root, { recursive: true, force: true }); } catch { /* best effort */ }
+  try { fs.rmSync(originDir, { recursive: true, force: true }); } catch { /* best effort */ }
 });
 
 const ensureAt = (dirname) => ensureSourceTreeWorktree({
@@ -183,6 +195,37 @@ describe('S2-R: a PLAIN directory inside the repo is not a worktree, and real gi
     for (const k of GIT_REDIRECT_ENV_KEYS) expect(after[k]).toBeUndefined();
     expect(after.PATH).toBe('keep');          // does not over-scrub
     expect(before.GIT_DIR).toBe('x');          // does not mutate the caller's env
+  });
+
+  it('S2-R4: REFUSES a GENUINE worktree that is AHEAD of the base ref — identity is not integrity', () => {
+    // The residual attack after every identity check passes. This tree really IS our worktree, so
+    // identity says yes; `merge --ff-only` is a harmless no-op because it is already up to date;
+    // and enforceTreeCurrency measures BEHIND, which is 0 — because the tree is AHEAD, and nothing
+    // rejects ahead. So one unreviewed commit executes with the reaper's destructive privileges,
+    // and persists: `-B` only force-resets on the CREATE path, and the dir is gitignored.
+    const dir = path.join(root, '.ahead-source');
+    realGit(['-C', root, 'worktree', 'add', '-q', '-B', 'aheadwt', dir, 'origin/main']);
+    fs.writeFileSync(path.join(dir, 'evil.txt'), 'ATTACKER REAPER\n');
+    realGit(['-C', dir, 'add', '-A']);
+    realGit(['-C', dir, 'commit', '-qm', 'unreviewed commit on top of base']);
+
+    // It genuinely passes the identity probes — asserted, so this test cannot quietly become a
+    // duplicate of the foreign-repo case.
+    const gitDir = realGit(['-C', dir, 'rev-parse', '--absolute-git-dir']).trim().replace(/\\/g, '/');
+    expect(gitDir.toLowerCase()).toContain('/worktrees/');
+
+    let err = null;
+    try {
+      ensureSourceTreeWorktree({
+        repoRoot: root, dirname: '.ahead-source', branch: 'aheadwt', label: 'reaper-source',
+        exists: fs.existsSync, runner: realGit, // default baseRef 'origin/main'
+      });
+    } catch (e) { err = e; }
+    expect(err, 'a tree carrying commits not in the base ref must be REFUSED').toBeTruthy();
+    expect(err.code).toBe(SOURCE_TREE_AHEAD_ERROR);
+    // A DISTINCT code from the identity refusal: "not ours" and "ours but tampered" are different
+    // operator problems, even though both fail soft.
+    expect(err.code).not.toBe(SOURCE_TREE_IDENTITY_ERROR);
   });
 
   it('a FOREIGN repository at the path is refused too — check 1 still does its job', () => {

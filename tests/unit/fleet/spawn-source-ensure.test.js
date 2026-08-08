@@ -86,11 +86,17 @@ const gitMock = (impl) => vi.fn((args) => {
   if (args.includes('--show-toplevel')) return path.resolve(args[1]) + '\n';
   if (args.includes('--absolute-git-dir')) return `/repo/.git/worktrees/${path.basename(args[1])}\n`;
   if (isIdentityProbe(args)) return '/repo/.git\n';
+  // S2-R4 ancestry probe, answered as "at or behind" — the honest shape for a tree that tracks its
+  // base. Deliberately NOT routed through `impl`: a fixture that throws here would be asserting
+  // "ancestry unverifiable", a different condition from "the refresh failed". The AHEAD case is
+  // exercised against real git in source-tree-identity-realgit.test.js.
+  if (args.includes('merge-base')) return '';
   return impl ? impl(args) : undefined;
 });
 // common-dir on the candidate, common-dir on the repo root, --show-toplevel on the candidate, and
 // --absolute-git-dir on the candidate (check 3, which is the only one that rejects a forged linkage).
 const IDENTITY_PROBES = 4; // reuse path only
+const ANCESTRY_PROBES = 1; // merge-base --is-ancestor HEAD <baseRef>, after the refresh
 
 describe('FR-1: ensureSpawnSourceWorktree', () => {
   const deps = (existsResult) => ({
@@ -127,7 +133,8 @@ describe('FR-1: ensureSpawnSourceWorktree', () => {
     const d = deps(true);
     const out = ensureSpawnSourceWorktree(d);
     expect(out.refreshed).toBe(true);
-    expect(d.runner).toHaveBeenCalledTimes(2 + IDENTITY_PROBES); // identity probes, then fetch + ff-only merge
+    // identity probes, then fetch + ff-only merge, then the S2-R4 ancestry probe.
+    expect(d.runner).toHaveBeenCalledTimes(2 + IDENTITY_PROBES + ANCESTRY_PROBES);
   });
 
   it('a FAILED refresh does not throw — the currency check is the authority, not this', () => {
