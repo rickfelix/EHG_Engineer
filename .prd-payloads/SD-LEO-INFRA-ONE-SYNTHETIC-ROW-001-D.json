@@ -1,0 +1,184 @@
+{
+  "executive_summary": "Generalize the producer-side assert-before-insert rule that exists exactly once, and give it a two-sided opt-out. Today scripts/harness/s20-fixture.mjs:127 asserts a fixture predicate on the row and throws before .from('ventures').insert(row) at :129; a second FK-derived variant at :203 asserts the parent venture before writing a child row at :218. That is the rule. This SD generalizes those two shapes rather than inventing a third convention.\n\nTWO LEAD MEASUREMENTS CHANGED THE WORK, both refuting the author's own first reading, both ratified by the coordinator on 2026-08-08.\n\nFIRST: the existing rule does NOT bind to the canonical module. s20-fixture.mjs:35 imports isFixtureVenture from lib/eva/chairman-decision-watcher.js while its own comments at :66 and :126 both call it 'canonical'. That is stale narration and it was quoted as evidence. Binding the generalized rule to lib/governance/fixture-exclusion.mjs is therefore a BEHAVIOUR CHANGE, not a generalization: three independent JS definitions of isFixtureVenture were proven divergent BY EXECUTION on 8 of 14 sample names (16 of 23 on the validator's wider set). The coordinator ruled BIND TO CANONICAL anyway, on two grounds recorded here: the assert's name branch is UNEXERCISED today because the row sets is_demo:true at :66 and short-circuits before it, so binding to the watcher would preserve an untested accident rather than behaviour; and binding anywhere but fixture-exclusion.mjs would create a SECOND producer-side authority, the exact second convention this SD exists to prevent. The behaviour change is real and BOUNDED to producers that omit is_demo.\n\nSECOND: the opt-out must be two-sided. The SD's own exemplar opt-out, tests/integration/eva/high-consequence-blocking-gate-realdb.test.js:81, deliberately writes a venture it intends to be REAL so it can exercise the real path — and its name 'HCGate-RealDB-<tag>-<epoch-ms>' is ACCIDENTALLY certified a fixture by canonical (EPOCH_TAIL_RE) and by chairman-actionable (an unanchored /-realdb-/ substring), while only the one predicate its author's comment cites agrees with its intent. So the escape hatch is not 'permission to leave a row unmarked' — the row is already marked by accident. An opt-out that merely skips the assert is unfalsifiable: it lets the write through while the row stays misclassified downstream, which is the could-not-fail-the-run defect class wearing an opt-out costume.\n\nSCOPE IS DELIBERATELY BOUNDED. 81 candidate producer files were measured across tests/integration, tests/database, scripts/harness and scripts/canary. Only 25 WRITE to ventures (30 touch it; 5 are select/update-only). Zero of the 81 import the canonical module today, confirming the marker is inert pending this SD. The 56 non-ventures writers are EXPLICITLY EXCLUDED here with reasons, not silently skipped.\n\nENFORCEMENT IS HONESTLY UNMEASURED. The parent scope claimed metadata-flag-lint gives this SD free CI enforcement. That is false, refuted three independent ways, and the claim is deleted rather than repeated.",
+  "functional_requirements": [
+    {
+      "id": "FR-1",
+      "title": "Generalize the producer assert as a shared helper bound to the CANONICAL predicate",
+      "description": "Extract the assert-then-throw shape from scripts/harness/s20-fixture.mjs:127 into a reusable producer-side helper that imports isFixtureVenture from lib/governance/fixture-exclusion.mjs — the canonical module — and NOT from lib/eva/chairman-decision-watcher.js. RATIFIED BINDING (coordinator, 2026-08-08): canonical, because the watcher binding is an untested accident (the name branch never executes today, is_demo:true short-circuits at s20-fixture.mjs:66) and because any other binding creates a second producer-side authority. If the helper lives in fixture-exclusion.mjs it MUST stay synchronous, pure and zero-import per that module's TOP-LEVEL-AWAIT-FREE constraint at :10-16, or scripts/fleet-dashboard.cjs:475's require() silently degrades to unfiltered. The FK-derived variant at s20-fixture.mjs:203 (fetch parent venture, assert, then write the child row) is the second shape and must be preserved for venture_id-keyed children."
+    },
+    {
+      "id": "FR-2",
+      "title": "Convert the two scripts/harness producers, starting with the unguarded one",
+      "description": "spine-verify-first-run.mjs:100-102 spreads buildFixtureVentureRow(...) and inserts into ventures with NO assert; it imports the row builder from s20-fixture.mjs:26 but not the guard, and its only mention of the predicate is a prose comment at :90 that reads as compliance to a grep while executing nothing. It is the smallest population, the highest signal, and uncontested by any sibling SD — convert it first. Then rebind s20-fixture.mjs itself to the canonical import and correct the two stale 'canonical' comments at :66 and :126 so the narration stops contradicting the code."
+    },
+    {
+      "id": "FR-3",
+      "title": "Two-sided loud opt-out, codifying the incumbent rather than inventing one",
+      "description": "RATIFIED SHAPE (coordinator, 2026-08-08), both halves mandatory. (1) LOUD: the opt-out NAMES ITSELF in output every time it fires, so a spreading opt-out is visible in logs rather than discovered years later by counting. (2) NEGATIVE ASSERT: a producer declaring a row deliberately REAL must assert the row does NOT trip the canonical discriminant, and fail loudly if it does. Half (2) is not new — it CODIFIES AN INCUMBENT: tests/integration/eva/high-consequence-blocking-gate-realdb.test.js:180-182 already runs it('sanity: disposable ventures are NOT treated as fixtures'). Cite those lines as the practice being generalized. Reuse the allowlist precedent at scripts/lint/fleet-liveness-select-lint.mjs:119-126 plus its JSON: keys are '<repo-relative-file>:<line>', values are free-text reasons, and :126 THROWS if any reason is empty."
+    },
+    {
+      "id": "FR-4",
+      "title": "Per-predicate classification table, not a boolean opt-out",
+      "description": "RATIFIED (coordinator): a boolean cannot express the sanctioned-permanent case. scripts/canary/run-canary-probe.mjs writes 'Canary Venture Probe' with is_demo:true — a fixture to all three name predicates — which scripts/sweep-fixture-residue.mjs:28-29 deliberately exempts by an explicit CANARY_NAME carve-out. A producer therefore declares an intended CLASSIFICATION (fixture | deliberately-real | sanctioned-permanent), and the assert checks the row against that declaration. The opt-out population is 3 files, not 1: HCGate-RealDB-, ProductReviewGate-RealDB- and StageArtifactGate-RealDB- share the shape."
+    },
+    {
+      "id": "FR-5",
+      "title": "Explicit, reasoned exclusion of the non-ventures writers",
+      "description": "Name the boundary in the PRD so it is deliberate rather than silent. IN SCOPE: the 25 ventures WRITERS. EXPLICITLY EXCLUDED, with reasons: GROUP B claude_sessions (26 files) whose predicate isFixtureSession lives in lib/fleet/session-predicates.mjs:52, NOT in fixture-exclusion.mjs — binding there would create the second convention this SD forbids, and folding it in is a scope expansion into sibling A's finished module. GROUP C venture_id-FK children (~24 tables) and GROUP D sd_key-FK children (~12 tables) are DERIVABLE via the shipped FK shape at s20-fixture.mjs:197-203 and are deferred, not denied. GROUP E (~13 tables including gate_witness_registry, security_audit_events, eva_config) has NO predicate and no classifiable parent — it cannot be asserted against today without minting new predicates in A's module."
+    },
+    {
+      "id": "FR-6",
+      "title": "Delete the free-enforcement claim; state enforcement honestly",
+      "description": "The parent scope asserts that scripts/lint/metadata-flag-lint.mjs plus its allowlist already fail CI on any written-but-never-read metadata.is_* flag, giving this SD free enforcement. REFUTED THREE INDEPENDENT WAYS by VALIDATION and Explore separately: (1) .github/workflows/metadata-flag-lint.yml:38 sets continue-on-error:true and its own header states it CANNOT turn a PR red; (2) its EXCLUDE_DIR_SEGMENTS drops tests/test/__tests__ and EXCLUDE_FILE_RE drops *.test.*, so 22 of the 25 producers are invisible to it, and it matches only is_*-shaped keys so metadata.synthetic is uncovered; (3) it is an EXISTENCE check, not a COVERAGE check — the live run is green at 'HEALTHY is_fixture w=1 r=3', so 1 adopter and 25 adopters produce an identical verdict. It is also ALREADY RED on main (exit 1, un-allowlisted ORPHAN is_boilerplate). No is_*-shaped marker can rescue it. This SD therefore states plainly that mechanical CI enforcement of producer coverage is UNMEASURED and deferred to a named vehicle, rather than claiming a gate it does not have."
+    }
+  ],
+  "technical_requirements": [
+    {
+      "id": "TR-1",
+      "title": "Do not collapse the deliberate divergence",
+      "description": "lib/governance/fixture-exclusion.mjs:29-39 carries the heading 'DELIBERATE DIVERGENCE — DO NOT COLLAPSE' and lists both consumer predicates with a stated reason each: the watcher excludes bare __ on purpose so __citest_chairman__ can exercise the real write path, and chairman-actionable is a deliberate superset mirroring a separate SQL canonical source (get_pending_chairman_items), pinned in lockstep by tests/unit/chairman/fixture-pattern-parity.test.js so it cannot be edited unilaterally. A separate 'UNPAID DRIFT — should converge' list at :22-27 names NEITHER. This PRD must not imply unification. Structural one-predicate unification is founding instance 4 on the parent SD, absorbed by Alpha-2; B/C converge only the UNPAID DRIFT list and touch nothing under the DO-NOT-COLLAPSE heading."
+    },
+    {
+      "id": "TR-2",
+      "title": "Sibling file boundaries — do not edit contested files",
+      "description": "STAY OUT of scripts/fleet-dashboard.cjs (siblings B and C both claim printPeriodicLiveness). STAY OUT of scripts/sweep-fixture-residue.mjs, scripts/reap-e2e-liveness-fixtures.mjs and tests/integration/periodic-process-liveness-realdb.test.js (sibling E holds all three; the last is also the only periodic_process_registry producer in this population — direct contention, and a reason it is excluded from FR-5's in-scope set). CLEAN FOR THIS SD: scripts/harness/s20-fixture.mjs, scripts/harness/spine-verify-first-run.mjs, the ventures-writing test files, and any new eslint-rule / lint script / allowlist / workflow."
+    },
+    {
+      "id": "TR-3",
+      "title": "Static-analysis parser to reuse rather than write",
+      "description": "If a producer-coverage lint is built, reuse the object-literal extractor at scripts/lint/venture-artifacts-write-lint.mjs:100-177, which statically extracts the object passed to .from('X').insert({...}). For a BLOCKING workflow copy .github/workflows/ismainmodule-classguard-lint.yml or count-delta-gate-lint.yml — never the advisory continue-on-error shape. Heed the path-filter trap documented at ismainmodule-classguard-lint.yml:26-38: a brace-glob path filter matched nothing and that workflow ran exactly once ever while 7 violations landed. Use one path entry per extension."
+    },
+    {
+      "id": "TR-4",
+      "title": "Read-only, no schema change, no DDL",
+      "description": "This SD adds producer-side assertions, a helper, an allowlist and optionally a lint. It creates no table, alters no policy, and writes no migration. It must not touch database/migrations/20260801_refresh_v_patterns_with_decay_column_drift.sql, which is under a standing chairman hold."
+    }
+  ],
+  "test_scenarios": [
+    {
+      "id": "TS-1",
+      "scenario": "THE MISSING THIRD CONTROL — a real-shaped name with is_demo:false must classify true under canonical, finally exercising the name branch",
+      "type": "unit",
+      "expected": "isFixtureVenture({name:'parity-test-alpha', is_demo:false}) === true under lib/governance/fixture-exclusion.mjs. RATIFIED AS THE PARITY TEST (coordinator): the author's original two-sided control was two-sided on POLARITY but SINGLE-BRANCH ON MECHANISM — is_demo===true short-circuits before the name branch, and all-false is indistinguishable from a name that never arrived, so an adapter passing no name at all still passed both controls. This scenario is the control that catches that, and it is the first test in the repo to exercise the name branch of the producer assert at all."
+    },
+    {
+      "id": "TS-2",
+      "scenario": "The generalized helper THROWS before the insert, and the insert is never issued",
+      "type": "unit",
+      "expected": "Given a row that does not satisfy the canonical predicate, the helper throws and the fake query function records ZERO insert statements. Asserting only that it threw is insufficient — the point of assert-before-insert is that the write never happens, so the test must assert on what was NOT sent."
+    },
+    {
+      "id": "TS-3",
+      "scenario": "spine-verify-first-run.mjs is guarded after conversion",
+      "type": "unit",
+      "expected": "The converted producer refuses to insert a row that fails the canonical predicate. MUTATION-PROVEN: deleting the assert call turns this test red. A grep for the helper name is NOT sufficient evidence — the pre-conversion file already carried a prose comment at :90 that reads as compliance while executing nothing."
+    },
+    {
+      "id": "TS-4",
+      "scenario": "The opt-out NAMES ITSELF in output every single time it fires",
+      "type": "unit",
+      "expected": "Every opt-out invocation emits a line identifying the file, the declared classification and the reason. MUTATION-PROVEN: removing the emission turns this test red. An opt-out that is silent is indistinguishable from an assert that passed."
+    },
+    {
+      "id": "TS-5",
+      "scenario": "The NEGATIVE assert fires on the SD's own exemplar opt-out — it is not hypothetical",
+      "type": "unit",
+      "expected": "A producer declaring classification 'deliberately-real' for name 'HCGate-RealDB-alpha-1786000000000' FAILS LOUDLY, because canonical's EPOCH_TAIL_RE certifies that name as a fixture. This is the measured live case, not a constructed one: the file intends a real venture and two of three live predicates already disagree. Without half (2) of the opt-out this case passes silently and stays misclassified downstream."
+    },
+    {
+      "id": "TS-6",
+      "scenario": "A correctly-declared deliberately-real row PASSES — the negative assert is not stuck-on",
+      "type": "unit",
+      "expected": "A producer declaring 'deliberately-real' for a name that trips no canonical pattern and carries is_demo:false completes without throwing and without emitting a failure. Two-sided: TS-5 proves the assert fires, TS-6 proves it can be satisfied. An assert that always throws is as useless as one that never does."
+    },
+    {
+      "id": "TS-7",
+      "scenario": "The sanctioned-permanent classification is expressible and distinct from both other classes",
+      "type": "unit",
+      "expected": "A producer declaring 'sanctioned-permanent' for 'Canary Venture Probe' (is_demo:true) passes, while the same row declared 'deliberately-real' fails. This is why FR-4 requires a classification table rather than a boolean: the canary is simultaneously a fixture to every name predicate AND deliberately exempted from reaping by CANARY_NAME at scripts/sweep-fixture-residue.mjs:28-29."
+    },
+    {
+      "id": "TS-8",
+      "scenario": "The allowlist rejects an entry with an empty reason",
+      "type": "unit",
+      "expected": "Loading an allowlist containing an entry whose reason is empty or missing THROWS, mirroring scripts/lint/fleet-liveness-select-lint.mjs:126. An escape hatch that accepts a blank justification is an escape hatch with no author."
+    },
+    {
+      "id": "TS-9",
+      "scenario": "The helper is bound to the canonical module, proven by behaviour rather than by import text",
+      "type": "unit",
+      "expected": "The helper classifies 'ZZZ_scratch_venture' and an epoch-tailed name as fixtures — both of which the watcher predicate returns FALSE for. This distinguishes the bindings BEHAVIOURALLY. A grep asserting the import path would pass against a re-export or a same-named local constant; the shadowed FIXTURE_VENTURE_NAME_RE at chairman-decision-watcher.js:32 is exactly why import text is not proof."
+    },
+    {
+      "id": "TS-10",
+      "scenario": "The bounded behaviour change is documented and asserted, not discovered",
+      "type": "unit",
+      "expected": "A test enumerates the name shapes whose classification changes under the canonical binding (ZZZ_*, UAT[-_]*, 'Test Venture for *', bare TEST-*, epoch-tailed) and asserts the new verdict for each. The change is BOUNDED to producers that omit is_demo — for any row with is_demo:true the binding is a no-op, and that no-op must also be asserted so the bound is proven rather than claimed."
+    }
+  ],
+  "acceptance_criteria": [
+    "The generalized producer helper imports isFixtureVenture from lib/governance/fixture-exclusion.mjs, and this is proven BEHAVIOURALLY by TS-9 (a name the watcher classifies differently) rather than by grepping the import line.",
+    "scripts/harness/spine-verify-first-run.mjs asserts before its ventures insert, mutation-proven by TS-3: deleting the assert turns a test red.",
+    "scripts/harness/s20-fixture.mjs is rebound to canonical and its two stale 'canonical' comments at :66 and :126 no longer contradict the code they describe.",
+    "The opt-out is TWO-SIDED and both halves are mutation-proven independently: TS-4 (removing the self-naming emission goes red) and TS-5 (removing the negative assert lets the SD's own exemplar pass silently).",
+    "The negative assert fires on the real measured case 'HCGate-RealDB-<tag>-<epoch>' (TS-5) AND is satisfiable by a correctly-declared real row (TS-6) — two-sided, so it is neither stuck-on nor stuck-off.",
+    "The classification table expresses fixture, deliberately-real and sanctioned-permanent as distinct outcomes, with the canary case (TS-7) proving a boolean would have been insufficient.",
+    "The allowlist throws on an entry with an empty reason (TS-8), matching the fleet-liveness-select-lint precedent.",
+    "TS-1 exists and passes: the first test in this repo to exercise the NAME BRANCH of the producer assert, closing the author's own single-branch control gap.",
+    "The PRD and the shipped code state that mechanical CI enforcement of producer coverage is UNMEASURED and deferred to a named vehicle. No claim that metadata-flag-lint enforces this SD survives anywhere in the codebase or the record.",
+    "The 56 non-ventures writers are excluded with a written reason per group (B/C/D/E), so a future reader can see the boundary was chosen rather than overlooked.",
+    "No file claimed by siblings B, C or E is modified — verified by diff before the PR opens.",
+    "The bounded behaviour change is named in the PRD with its census attached, and asserted by TS-10 in both directions (changed for is_demo-omitting rows, no-op for is_demo:true rows)."
+  ],
+  "risks": [
+    {
+      "risk": "Binding to canonical silently changes classification for rows that omit is_demo, and a consumer acts on the new verdict before B/C converge.",
+      "mitigation": "The change is BOUNDED and measured: it affects only producers that omit is_demo, since is_demo:true short-circuits before the name branch in all three predicates. TS-10 asserts both directions so the bound is proven rather than assumed. The coordinator has already delivered the behaviour-change warning to Alpha-2 with the three name shapes named, so B/C encode the flip in their acceptance text deliberately instead of meeting it as a surprise diff."
+    },
+    {
+      "risk": "Adding a helper to lib/governance/fixture-exclusion.mjs breaks its consumers, because that module is imported by siblings B and C and by a CJS require().",
+      "mitigation": "The module documents a TOP-LEVEL-AWAIT-FREE constraint at :10-16; any helper added there stays synchronous, pure and zero-import. If the helper needs I/O (the FK-derived variant does), it goes in a NEW producer-side module that imports the canonical predicate, rather than into A's finished module. Verified by scripts/fleet-dashboard.cjs:475 continuing to filter after the change — a degraded require() there fails open to unfiltered, which is silent."
+    },
+    {
+      "risk": "The opt-out spreads and becomes the norm, which is the fence-bypass class this SD explicitly exists to avoid.",
+      "mitigation": "Loudness is the control: every invocation names itself in output, so growth is visible in logs rather than discovered by counting years later. The allowlist requires a non-empty reason per site and throws otherwise (TS-8), and the negative assert (TS-5) means an opt-out cannot be used to wave through a row that is misclassified anyway."
+    },
+    {
+      "risk": "A dry-run PASS is mistaken for readiness at PLAN-TO-EXEC, burning a permanent audit record on a rejected execute.",
+      "mitigation": "Measured on sibling E on 2026-08-07: dry-run reported prdQualityValidation 100/100 while the real execute scored the same PRD 57 against an 80 threshold minutes later. Dry-run is trusted for the MANIFEST (which gates run, what they want) and never for the verdict. This PRD is written to the gate's substance, not iterated against a dry-run green."
+    },
+    {
+      "risk": "The SD is read later as having unified the three predicates, when the divergence is deliberate and documented.",
+      "mitigation": "TR-1 states the DO-NOT-COLLAPSE heading explicitly and records that structural unification is founding instance 4 on the parent SD, absorbed by Alpha-2. The coordinator has already corrected an earlier fleet relay that overstated this. No FR in this PRD edits either consumer predicate."
+    },
+    {
+      "risk": "Producer coverage regresses after this SD because nothing mechanically enforces it.",
+      "mitigation": "Stated honestly rather than papered over — FR-6 deletes the false free-enforcement claim. Enforcement is either a real coverage lint built in scope (blocking workflow, reusing the venture-artifacts-write-lint parser) or an explicit deferral to a named vehicle. What is NOT acceptable is repeating the metadata-flag-lint claim, which is continue-on-error, blind to 22 of 25 producers, an existence-not-coverage check, and already red on main."
+    }
+  ],
+  "integration_operationalization": {
+    "consumers": "The producer assert has no runtime consumer — it is a fail-fast guard inside producers. Its OUTPUT (correctly-classified rows) is consumed by the fixture-exclusion predicates already live in 12 production importers, none of which change here. Sibling A's canonical module is the only dependency direction: producers import from it, it imports from nothing.",
+    "dependencies": "Depends on SD-LEO-INFRA-ONE-SYNTHETIC-ROW-001-A (completed) for lib/governance/fixture-exclusion.mjs. Siblings B and C (consumer-side) and E (cleanup) are in flight; TR-2 names the files they hold so this SD edits none of them. If a helper is added to A's module it must respect that module's TOP-LEVEL-AWAIT-FREE constraint at :10-16, because scripts/fleet-dashboard.cjs:475 reaches it through require() and a degraded load there fails open to unfiltered.",
+    "data_contracts": "No schema change, no migration, no DDL. The contract is the row shape passed to .insert(): a producer declares an intended classification (fixture | deliberately-real | sanctioned-permanent) and the assert checks the row against the canonical predicate before the write is issued. Rows are unchanged on the wire; only whether the write happens changes.",
+    "runtime_config": "The per-site allowlist is the only configuration surface: keys are '<repo-relative-file>:<line>', values are free-text reasons, and loading THROWS on an empty reason (mirroring scripts/lint/fleet-liveness-select-lint.mjs:126). No env var, no feature flag, no schedule — the guard is active the moment a converted producer runs, which is deliberate because an instrument nobody invokes is indistinguishable from an absent one.",
+    "observability_rollout": "The opt-out is the observable surface: it names itself in output on EVERY firing, so opt-out growth shows up in ordinary run logs rather than being discovered years later by counting. The assert itself is silent on success and throws on failure. Rollout is per-producer and reversible — revert the PR and converted producers fall back to their prior unguarded behaviour, with no state to unwind because this SD writes and migrates no data. Mechanical CI enforcement of producer COVERAGE is explicitly UNMEASURED (see FR-6) and deferred to a named vehicle."
+  },
+  "system_architecture": {
+    "shape": "One canonical predicate module (sibling A's lib/governance/fixture-exclusion.mjs, completed) + one producer-side assert helper bound to it + a per-site allowlist carrying reasons. Two assert shapes are preserved from the incumbent: the direct row assert (s20-fixture.mjs:127) and the FK-derived parent assert (s20-fixture.mjs:203).",
+    "deliberate_three_seam_design": "Three JS predicates exist and TWO of them are deliberately divergent per fixture-exclusion.mjs:29-39 (DO NOT COLLAPSE), with a stated reason each. A fourth JS predicate exists at scripts/sweep-fixture-residue.mjs (isFixtureClassVenture, which already reads metadata.is_fixture) and a fifth in SQL (get_pending_chairman_items). This SD binds the PRODUCER to canonical and changes no consumer.",
+    "boundary": "Producer-side only. The parent SD's founding instance 3 closes producer-side ONLY — no consumer-side filter can close it, because the phantom QF's title was verbatim-identical to a real open row (QF-20260728-967) and no pattern can distinguish them."
+  },
+  "implementation_approach": {
+    "order": "1) Add the helper bound to canonical with its unit tests including TS-1 (the missing third control). 2) Convert spine-verify-first-run.mjs — smallest population, highest signal, uncontested. 3) Rebind s20-fixture.mjs and fix its two stale 'canonical' comments. 4) Add the two-sided opt-out plus allowlist, reusing the fleet-liveness-select-lint precedent. 5) Convert the remaining ventures writers. 6) Decide enforcement: real coverage lint in scope, or explicit deferral.",
+    "measurement_first": "Every count in this PRD was measured, and two were corrected by review: ventures writers are 25 not 28 (5 of 30 are select/update-only), and the opt-out population is 3 files not 1. The 81 candidate total is exact.",
+    "mutation_discipline": "Every seeded failure is mutation-proven. The author's own prior harness on a different SD passed clean and was still incomplete, because an author's mutation set only breaks what the author thought to break — so the acceptance here names the specific deletion that must turn each test red."
+  },
+  "metadata": {
+    "sd_key": "SD-LEO-INFRA-ONE-SYNTHETIC-ROW-001-D",
+    "parent_sd": "SD-LEO-INFRA-ONE-SYNTHETIC-ROW-001",
+    "depends_on": "SD-LEO-INFRA-ONE-SYNTHETIC-ROW-001-A (completed)",
+    "coordinator_rulings": "2026-08-08: (a) two-sided opt-out CONFIRMED, codifying the incumbent at high-consequence-blocking-gate-realdb.test.js:180-182; (b) BIND PRODUCER TO CANONICAL, with the 16-of-23 behaviour change named as deliberate and bounded to is_demo-omitting producers; free-enforcement paragraph DELETED; per-predicate classification table ratified over a boolean; number corrections (25 writers, 3 opt-out files) accepted.",
+    "evidence": "metadata.lead_measurement_20260807_charlie (10 keys), metadata.lead_refutations_20260807 (7 keys), metadata.mechanism_verifications (3). VALIDATION row 9ce218f8-7b3d-417e-a9af-afa0f2bd07fc, Explore row cc1de5a0-9384-4883-aa8b-56e9657ba4ef.",
+    "excluded_with_reason": "56 non-ventures writers: GROUP B claude_sessions (predicate in a different module — binding there creates the second convention this SD forbids), GROUPS C and D (FK-derivable, deferred not denied), GROUP E (no predicate and no classifiable parent — cannot be asserted today without minting new predicates in A's finished module)."
+  }
+}
