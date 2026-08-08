@@ -16,6 +16,7 @@
  * the guard concluded about the tree we actually point it at.
  */
 import { describe, it, expect, vi, beforeEach } from 'vitest';
+import path from 'node:path';
 import { spawn, SPAWN_SOURCE_BRANCH, resolveSpawnSourceDir } from '../../../lib/fleet/spawn-control.js';
 
 vi.mock('node:child_process', async (orig) => {
@@ -98,6 +99,7 @@ function spawnOpts({ branch, behind, exists = true }) {
         // EXEC SECURITY S2 identity probe: answered as a genuine linked worktree, and deliberately
         // NOT logged — these tests assert an ORDER (refresh before the guard reads the tree), and
         // folding a bookkeeping probe into that ordered log would rewrite the contract under test.
+        if (args.includes('--show-toplevel')) return path.resolve(args[1]) + '\n';
         if (args.includes('rev-parse') && args.includes('--git-common-dir')) return `${REPO_ROOT}/.git\n`;
         gitCalls.push(args.join(' '));
         sequence.push(args.includes('--ff-only') ? 'refresh' : 'spawnsource:' + args.join(' ').slice(0, 24));

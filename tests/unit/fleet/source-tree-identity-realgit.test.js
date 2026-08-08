@@ -1,0 +1,135 @@
+/**
+ * S2-R (EXEC SECURITY re-review, BLOCKING) — SD-LEO-INFRA-SCHEDULED-WORKTREE-REAPER-001.
+ *
+ * WHY THIS FILE EXISTS AND THE OTHER IDENTITY SUITE WAS NOT ENOUGH. My first identity guard
+ * compared `rev-parse --git-common-dir` between the candidate and the repo root. That is defeated
+ * by a bare `mkdir`, because rev-parse WALKS UP PARENT DIRECTORIES and the default source-tree path
+ * sits INSIDE repoRoot's working tree — so a plain directory with no .git of its own answers with
+ * repoRoot's OWN common dir and compares equal. Capability required: one mkdir plus one file write,
+ * strictly LESS than the `git init` + fake-remote attack the guard was written against. And
+ * .reaper-source/ is gitignored, so the plant is invisible to `git status`.
+ *
+ * THE TESTS WERE GREEN OVER THE DEFEATED GUARD. Every arm of source-tree-identity.test.js uses a
+ * synthetic per-directory lookup runner, and that fixture ENCODES THE VERY ASSUMPTION REAL GIT
+ * VIOLATES: it answers per-directory, so a "plain subdirectory" simply cannot be expressed in it.
+ * A guard that runs but cannot observe its subject is not tested by a fixture that shares its blind
+ * spot — being two-sided in that fixture proved logic, not observability.
+ *
+ * SO THIS SUITE DRIVES REAL GIT against real temporary repositories. It is the only construction
+ * that can see this class. It builds its own scratch repos under os.tmpdir() and NEVER touches the
+ * live repo or the live worktree pool.
+ */
+import { describe, it, expect, beforeAll, afterAll } from 'vitest';
+import { createRequire } from 'node:module';
+import { execFileSync } from 'node:child_process';
+import fs from 'node:fs';
+import os from 'node:os';
+import path from 'node:path';
+
+const require_ = createRequire(import.meta.url);
+const {
+  ensureSourceTreeWorktree, SOURCE_TREE_IDENTITY_ERROR,
+  REAPER_SOURCE_DIRNAME, REAPER_SOURCE_BRANCH,
+} = require_('../../../lib/fleet/source-tree-refresh.cjs');
+
+/** The real runner shape production uses: (args, o) => execFileSync('git', args, {...}). */
+const realGit = (args) => execFileSync('git', args, { encoding: 'utf8', stdio: ['ignore', 'pipe', 'pipe'] });
+
+let root;          // a real git repo
+let plantedDir;    // <root>/.reaper-source as a PLAIN directory (the attack)
+let realWtDir;     // <root>/.real-source as a GENUINE linked worktree (the control)
+
+beforeAll(() => {
+  root = fs.realpathSync(fs.mkdtempSync(path.join(os.tmpdir(), 's2r-')));
+  realGit(['-C', root, 'init', '-q']);
+  realGit(['-C', root, 'config', 'user.email', 'test@example.com']);
+  realGit(['-C', root, 'config', 'user.name', 'test']);
+  fs.writeFileSync(path.join(root, 'f.txt'), 'v1\n');
+  realGit(['-C', root, 'add', '-A']);
+  realGit(['-C', root, 'commit', '-qm', 'init']);
+
+  // THE ATTACK: a plain directory at the default source-tree path, holding attacker code.
+  plantedDir = path.join(root, REAPER_SOURCE_DIRNAME);
+  fs.mkdirSync(path.join(plantedDir, 'scripts'), { recursive: true });
+  fs.writeFileSync(path.join(plantedDir, 'scripts', 'worktree-reaper.mjs'), '// ATTACKER CODE\n');
+
+  // THE CONTROL: a genuine linked worktree of the same repo.
+  realWtDir = path.join(root, '.real-source');
+  realGit(['-C', root, 'worktree', 'add', '-q', '-B', 'realwt', realWtDir, 'HEAD']);
+});
+
+afterAll(() => {
+  try { fs.rmSync(root, { recursive: true, force: true }); } catch { /* best effort */ }
+});
+
+const ensureAt = (dirname) => ensureSourceTreeWorktree({
+  repoRoot: root,
+  dirname,
+  branch: REAPER_SOURCE_BRANCH,
+  label: 'reaper-source',
+  exists: fs.existsSync,
+  runner: realGit,
+});
+
+describe('S2-R: a PLAIN directory inside the repo is not a worktree, and real git says so', () => {
+  it('the bypass is real: --git-common-dir alone CANNOT tell them apart', () => {
+    // The finding itself, pinned as an executable fact rather than a claim in a commit message.
+    // If a future git changes this, the guard's second check becomes redundant rather than wrong —
+    // and whoever reads this test will know why the second check was added.
+    const common = (d) => realGit(['-C', d, 'rev-parse', '--path-format=absolute', '--git-common-dir']).trim();
+    expect(common(plantedDir)).toBe(common(root)); // <-- identical. one mkdir defeats check 1.
+
+    // ...while the position-sensitive question separates them cleanly.
+    const top = (d) => realGit(['-C', d, 'rev-parse', '--path-format=absolute', '--show-toplevel']).trim();
+    expect(top(plantedDir)).not.toBe(plantedDir);  // resolves to the ENCLOSING repo
+    expect(fs.realpathSync(top(realWtDir))).toBe(fs.realpathSync(realWtDir)); // a real worktree IS its own top
+  });
+
+  it('REFUSES the planted plain directory — the exact bypass SECURITY measured', () => {
+    let err = null;
+    try { ensureAt(REAPER_SOURCE_DIRNAME); } catch (e) { err = e; }
+    expect(err).toBeTruthy();
+    expect(err.message).toMatch(/NOT a linked worktree/i);
+  });
+
+  it('does NOT run git in the planted directory, and does NOT mark it as protected', () => {
+    // The two observable side effects of the pre-fix behaviour, measured by the reviewer:
+    // it returned {created:false, refreshed:true} and wrote its protection marker INTO the
+    // attacker's directory. Asserting the throw alone would not have caught either.
+    try { ensureAt(REAPER_SOURCE_DIRNAME); } catch { /* expected */ }
+    expect(fs.existsSync(path.join(plantedDir, '.reap-protected.json'))).toBe(false);
+    // The attacker's file is untouched and, critically, the repo was never fast-forwarded from it.
+    expect(fs.readFileSync(path.join(plantedDir, 'scripts', 'worktree-reaper.mjs'), 'utf8'))
+      .toContain('ATTACKER CODE');
+  });
+
+  it('the refusal carries its OWN code, so callers fail SOFT instead of taking the fleet down', () => {
+    // spawn-control treats SPAWN_SOURCE_SITING_ERROR as its one must-stay-fatal class. Reusing that
+    // code here would turn an identity refusal — or a transient git failure — into a fleet-wide
+    // spawn outage.
+    let err = null;
+    try { ensureAt(REAPER_SOURCE_DIRNAME); } catch (e) { err = e; }
+    expect(err.code).toBe(SOURCE_TREE_IDENTITY_ERROR);
+    expect(err.code).not.toBe('SPAWN_SOURCE_SITED_IN_EXEMPT_PATH');
+  });
+
+  it('POSITIVE CONTROL — a GENUINE linked worktree is still reused and refreshed', () => {
+    // Load-bearing: a guard that refuses everything would pass every test above. This is the case
+    // production actually depends on, driven through the same real git.
+    const out = ensureAt('.real-source');
+    expect(out.created).toBe(false);
+    expect(fs.existsSync(path.join(realWtDir, '.reap-protected.json'))).toBe(true);
+  });
+
+  it('a FOREIGN repository at the path is refused too — check 1 still does its job', () => {
+    // Guards against "fixing" this by replacing check 1 with check 2 instead of requiring both:
+    // a foreign repo IS its own toplevel, so check 2 alone would accept it.
+    const foreign = path.join(root, '.foreign-source');
+    fs.mkdirSync(foreign, { recursive: true });
+    realGit(['-C', foreign, 'init', '-q']);
+    let err = null;
+    try { ensureAt('.foreign-source'); } catch (e) { err = e; }
+    expect(err).toBeTruthy();
+    expect(err.code).toBe(SOURCE_TREE_IDENTITY_ERROR);
+  });
+});

@@ -69,9 +69,11 @@ describe('S1: the reaper must never be able to delete the tree it executes from'
       // Answers the S2 identity probe as a genuine linked worktree, so this test still exercises
       // the REUSE path it is named for. Left unanswered it would refuse, and the self-heal
       // assertion below would never run.
-      runner: (args) => (
-        args.includes('rev-parse') && args.includes('--git-common-dir') ? `${tmp}/.git\n` : undefined
-      ),
+      runner: (args) => {
+        if (args.includes('--show-toplevel')) return path.resolve(args[1]) + '\n';
+        if (args.includes('rev-parse') && args.includes('--git-common-dir')) return `${tmp}/.git\n`;
+        return undefined;
+      },
     });
     expect(res.created).toBe(false);
     expect(hasReapProtectedMarker(res.dir)).toBe(true);

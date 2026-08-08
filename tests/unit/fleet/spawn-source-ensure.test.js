@@ -10,6 +10,7 @@
  * spawn — a defect that would only surface under load.
  */
 import { describe, it, expect, vi } from 'vitest';
+import path from 'node:path';
 import {
   ensureSpawnSourceWorktree,
   buildSpawnSourceWorktreeArgs,
@@ -77,12 +78,17 @@ describe('FR-2: buildSpawnSourceUpdateArgs', () => {
  * mocks answer the probe as a GENUINE linked worktree — same common dir as the repo root.
  * The REFUSAL cases are not smuggled in here; they live in tests/unit/fleet/source-tree-identity.test.js.
  */
-const isIdentityProbe = (args) => args.includes('rev-parse') && args.includes('--git-common-dir');
+const isIdentityProbe = (args) => args.includes('rev-parse')
+  && (args.includes('--git-common-dir') || args.includes('--show-toplevel'));
 const gitMock = (impl) => vi.fn((args) => {
+  // --show-toplevel is the S2-R position check: real git returns an absolute path, and for a
+  // genuine linked worktree that path IS the directory itself.
+  if (args.includes('--show-toplevel')) return path.resolve(args[1]) + '\n';
   if (isIdentityProbe(args)) return '/repo/.git\n';
   return impl ? impl(args) : undefined;
 });
-const IDENTITY_PROBES = 2; // the candidate dir and the repo root, both only on the reuse path
+// common-dir on the candidate, common-dir on the repo root, then --show-toplevel on the candidate.
+const IDENTITY_PROBES = 3; // reuse path only
 
 describe('FR-1: ensureSpawnSourceWorktree', () => {
   const deps = (existsResult) => ({

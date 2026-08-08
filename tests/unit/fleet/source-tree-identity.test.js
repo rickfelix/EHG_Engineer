@@ -35,8 +35,16 @@ afterEach(() => { try { fs.rmSync(tmp, { recursive: true, force: true }); } catc
  * A runner that answers `rev-parse --git-common-dir` per-directory from a lookup, so a fixture can
  * express "this dir belongs to repo X" without building real repositories.
  */
-const isProbe = (args) => args.includes('rev-parse') && args.includes('--git-common-dir');
+const isProbe = (args) => args.includes('rev-parse')
+  && (args.includes('--git-common-dir') || args.includes('--show-toplevel'));
 
+/**
+ * S2-R: the guard gained a SECOND, position-sensitive probe (--show-toplevel), because
+ * --git-common-dir alone is defeated by a bare mkdir inside the repo. THIS FIXTURE CANNOT OBSERVE
+ * THAT CLASS AT ALL — a per-directory lookup table has no way to express "a plain subdirectory
+ * whose answers come from its parent". That is why tests/unit/fleet/source-tree-identity-realgit.js
+ * exists and drives real git. Kept here only for the cases a lookup table CAN express.
+ */
 function runnerWith(commonDirs, log) {
   // Matched by CONTENT, not argv position: the probe gained --path-format=absolute mid-review, and
   // a position-indexed fixture would have silently stopped matching and returned '' — which reads
@@ -46,6 +54,9 @@ function runnerWith(commonDirs, log) {
     if (args[0] === '-C' && isProbe(args)) {
       const d = args[1];
       if (!(d in commonDirs)) throw new Error(`not a git repository: ${d}`);
+      // Real git answers --show-toplevel with an ABSOLUTE path; for every directory this fixture
+      // can express, that is the directory itself (a lookup table cannot model a plain subdir).
+      if (args.includes('--show-toplevel')) return path.resolve(d) + '\n';
       return commonDirs[d] + '\n';
     }
     return '';

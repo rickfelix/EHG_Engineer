@@ -59,6 +59,7 @@ function run(extra = {}) {
       // are about source-tree RESOLUTION, not about the refusal path (source-tree-identity.test.js).
       sourceRunner: (args) => {
         gitCalls.push(args.join(' '));
+        if (args.includes('--show-toplevel')) return path.resolve(args[1]) + '\n';
         if (args.includes('rev-parse') && args.includes('--git-common-dir')) return `${poolRoot}/.git\n`;
         return undefined;
       },
