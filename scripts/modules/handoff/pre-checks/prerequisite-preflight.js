@@ -167,7 +167,9 @@ export async function runPrerequisitePreflight(supabase, handoffType, sdId) {
     // an ordering speed-bump, not a quality catch). A WAIT verdict (evidence may
     // still be mid-write) is intentionally NOT treated as a preflight failure.
     try {
-      const { validateSubagentEvidence } = await import('../gates/subagent-evidence-gate.js');
+      // QF-20260807-283: pull the published contract from the GATE rather than restating it here —
+      // a second copy of the writer contract is the drift this QF exists to prevent.
+      const { validateSubagentEvidence, EVIDENCE_WRITER_CONTRACT } = await import('../gates/subagent-evidence-gate.js');
       const evidenceResult = await validateSubagentEvidence(
         { sd, handoffType: handoffType.toUpperCase(), supabase, sdId: sd.id },
         supabase
@@ -218,7 +220,12 @@ export async function runPrerequisitePreflight(supabase, handoffType, sdId) {
           issues.push({
             code: 'SUBAGENT_EVIDENCE_MISSING',
             message: `Missing sub-agent evidence for: ${missing.join(', ') || 'required agent(s)'}`,
-            remediation: evidenceResult.remediation || 'Invoke the missing sub-agent(s) via the Task tool before re-running the handoff.'
+            // QF-20260807-283: the bare fallback used to say "invoke via the Task tool", which
+            // names work the gate cannot see — a Task-tool agent alone writes no evidence row, so
+            // a worker who follows it is blocked identically on the next attempt. Fall back to the
+            // gate's published contract instead of a second, weaker statement of it.
+            remediation: evidenceResult.remediation
+              || `Produce evidence for the required sub-agent(s) before re-running the handoff. ${EVIDENCE_WRITER_CONTRACT}`
           });
         }
       }

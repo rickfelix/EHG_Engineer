@@ -44,6 +44,29 @@ const RACE_WINDOW_SECONDS = 30;
 const ACCEPT_VERDICTS = new Set(['PASS', 'CONDITIONAL_PASS', 'WARNING']);
 
 /**
+ * QF-20260807-283 — PUBLISH THE CONTRACT, don't patch the Nth rediscovery.
+ *
+ * The old remediation said "invoke the missing sub-agent(s) via Task tool", which points at work
+ * THIS GATE CANNOT SEE: a Task-tool sub-agent does NOT write sub_agent_execution_results by
+ * itself. A worker who obeys that hint produces nothing the gate can read, re-runs, and is blocked
+ * identically — the hint actively costs a round trip. Measured, not theoretical: one seat burned
+ * two failed handoffs and a blocked tick rediscovering the real writers while precedent rows
+ * written the correct way already sat in the table, and a second seat had independently used the
+ * same writer hours earlier. Independent rediscoveries of one contract measure its
+ * DISCOVERABILITY, so the fix is to publish it at the moment of need rather than patch site N+1.
+ *
+ * Both writers are named WITH their applicability, because choosing the wrong one — not ignorance
+ * that a writer exists — is the actual failure mode. Single representation: every remediation
+ * string below interpolates THIS constant, so the contract cannot drift between sites.
+ */
+export const EVIDENCE_WRITER_CONTRACT =
+  'Evidence must reach sub_agent_execution_results — a Task-tool sub-agent alone does NOT write it. '
+  + 'Two canonical writers: (1) REGISTERED codes — `node scripts/execute-subagent.js --code <CODE> --sd-id <SD>`; '
+  + '(2) Task-tool runs and read-only built-ins — persist via `storeSubAgentResults` from '
+  + "lib/sub-agent-executor/results-storage.js with source='manual' "
+  + '(metadata.repo_path canonical + metadata.executed_from_cwd; there are no top-level repo_path/local_path columns).';
+
+/**
  * Verdicts that DO NOT satisfy a required sub-agent.
  *   FAIL            — the agent ran and rejected, or crashed and wrote an error row.
  *   BLOCKED         — the agent could not reach a verdict. NOT a pass.
@@ -561,7 +584,7 @@ export async function validateSubagentEvidence(ctx, supabase) {
       max_score: 100,
       wait_reason: `Sub-agent evidence not yet written for ${missing.join(', ')} (phase started <${RACE_WINDOW_SECONDS}s ago; agent may be mid-write)`,
       details: { reason: 'SUBAGENT_EVIDENCE_WRITE_LAG', race_window_seconds: RACE_WINDOW_SECONDS, ...sharedDetails },
-      remediation: `Re-check shortly; the required sub-agent(s) (${missing.join(', ')}) may still be writing to sub_agent_execution_results. If still missing after the race window, invoke them via the Task tool.`
+      remediation: `Re-check shortly; the required sub-agent(s) (${missing.join(', ')}) may still be writing to sub_agent_execution_results. If still missing after the race window: ${EVIDENCE_WRITER_CONTRACT}`
     });
   }
 
@@ -571,7 +594,7 @@ export async function validateSubagentEvidence(ctx, supabase) {
     max_score: 100,
     issues: [`SUBAGENT_EVIDENCE_MISSING: ${missing.join(', ')}`],
     details: { reason: 'SUBAGENT_EVIDENCE_MISSING', ...sharedDetails },
-    remediation: `Invoke the missing sub-agent(s) via Task tool for SD ${sdKey} before re-running the ${handoffType} handoff, OR set LEO_DISABLE_SUBAGENT_EVIDENCE_GATE=1 as an emergency bypass.`
+    remediation: `Produce evidence for ${missing.join(', ')} on SD ${sdKey}, then re-run the ${handoffType} handoff. ${EVIDENCE_WRITER_CONTRACT} Emergency bypass: LEO_DISABLE_SUBAGENT_EVIDENCE_GATE=1 (audit-logged).`
   });
 }
 
@@ -587,8 +610,9 @@ export function createSubagentEvidenceGate(supabase) {
     validator: async (ctx) => validateSubagentEvidence(ctx, supabase),
     required: true,
     remediation:
-      'Invoke the missing sub-agent(s) via Task tool for this SD before re-running the handoff. ' +
-      'Emergency bypass: LEO_DISABLE_SUBAGENT_EVIDENCE_GATE=1 (logs audit_log warning).'
+      'Produce evidence for the missing sub-agent(s) on this SD, then re-run the handoff. ' +
+      EVIDENCE_WRITER_CONTRACT +
+      ' Emergency bypass: LEO_DISABLE_SUBAGENT_EVIDENCE_GATE=1 (logs audit_log warning).'
   };
 }
 
