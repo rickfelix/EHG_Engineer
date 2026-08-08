@@ -975,8 +975,13 @@ function printHealth(d) {
 }
 
 // ── Section: Periodic-Process Liveness (SD-LEO-INFRA-PERIODIC-PROCESS-LIVENESS-001, FR-5) ──
-async function printPeriodicLiveness() {
-  const { data: rows, error } = await supabase
+// `client` is injectable ONLY so the render path can be unit-tested; production passes nothing and
+// uses the module-scope client — the same treatment printStuckSeatStrip got, and for the same
+// reason: this renderer was omitted from module.exports, so nothing could reach it from a test.
+// (SD-LEO-INFRA-ONE-SYNTHETIC-ROW-001-B FR-1, prerequisite for FR-4.)
+async function printPeriodicLiveness(client) {
+  const sb = client || supabase;
+  let { data: rows, error } = await sb
     .from('periodic_process_registry')
     .select('process_key, display_name, process_type, currently_expected_active, last_fired_at, last_state, updated_at')
     .order('process_type', { ascending: true });
@@ -993,6 +998,29 @@ async function printPeriodicLiveness() {
     console.log('  (registry empty)');
     console.log('');
     return;
+  }
+
+  // SD-LEO-INFRA-ONE-SYNTHETIC-ROW-001-B FR-4: exclude e2e fixture residue from the panel.
+  //
+  // THE FILTER IS ADDED, NOT SUBSTITUTED, and that distinction is the whole point. The
+  // `__watcher_self__` exclusion below is a SELF-exclusion — the watcher declining to list itself,
+  // while still using its own row for the age line — and isFixtureProcessKey('__watcher_self__')
+  // is FALSE. So swapping one for the other would make the watcher appear in its own list: a
+  // regression that reads like a tidy-up. Two different concerns, both required.
+  //
+  // Degrade-safe like the rest of this file, but LOUDLY: if the predicate cannot load we say so
+  // rather than silently rendering unfiltered. An unannounced fallback here is indistinguishable
+  // from a working filter, which is the failure this SD family exists to abolish.
+  let isFixtureProcessKey = null;
+  try { ({ isFixtureProcessKey } = require('../lib/governance/fixture-exclusion.mjs')); } catch { /* announced below */ }
+  let fixtureCount = 0;
+  if (typeof isFixtureProcessKey === 'function') {
+    const before = rows.length;
+    rows = rows.filter((r) => !isFixtureProcessKey(r.process_key));
+    fixtureCount = before - rows.length;
+    if (fixtureCount > 0) console.log(`  (${fixtureCount} e2e fixture row(s) excluded)`);
+  } else {
+    console.log('  (fixture predicate unavailable — rendering UNFILTERED)');
   }
 
   const self = rows.find((r) => r.process_key === '__watcher_self__');
@@ -2753,7 +2781,7 @@ async function main() {
 }
 
 // Export read-only renderers for unit testing (SD-LEO-INFRA-COORDINATOR-DASHBOARD-SURFACES-001).
-module.exports = { printFeedback, reconcilePAliveWithLiveness, computeSolomonLedgerRollup, printWorkers, printChairmanEmailChannelHealth, printAvailable, printWorkerInbox, resolveInboxAudience, printAttentionStrip, printQA, printStuckSeatStrip };
+module.exports = { printFeedback, printPeriodicLiveness, reconcilePAliveWithLiveness, computeSolomonLedgerRollup, printWorkers, printChairmanEmailChannelHealth, printAvailable, printWorkerInbox, resolveInboxAudience, printAttentionStrip, printQA, printStuckSeatStrip };
 
 // Only run the CLI when invoked directly, so requiring this module in a test does
 // not execute main() against the live database.
