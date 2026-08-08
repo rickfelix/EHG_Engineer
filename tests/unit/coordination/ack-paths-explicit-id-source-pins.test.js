@@ -21,6 +21,10 @@ const read = (rel) => readFileSync(path.join(REPO_ROOT, rel), 'utf8');
 
 const ACK_PATHS = [
   'scripts/worker-ack-directive.cjs',
+  // SD-LEO-INFRA-WORKER-REACHABLE-ACK-001 / FR-2: the advisory lane's own verb is a NEW sanctioned
+  // ack surface, so it joins this pin rather than sitting outside it — the whole point of this
+  // file is that the guarantee covers the entire surface, not a subset that happens to be listed.
+  'scripts/worker-ack-advisory.cjs',
   'scripts/coordinator-ack-adam.cjs',
   'scripts/coordinator-ack-signal.cjs',
   'scripts/ack-chairman-directive.cjs',
