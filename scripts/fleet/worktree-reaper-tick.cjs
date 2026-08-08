@@ -65,6 +65,11 @@ function readState(statePath) {
       // widened a silent-stop path. Same whitelist rule as above: omit the key here and the streak
       // is dropped on every read and can never accumulate.
       consecutive_not_invoked: Number.isFinite(parsed.consecutive_not_invoked) ? parsed.consecutive_not_invoked : 0,
+      // REBUILD-CHURN: a gitignored artifact that REAPPEARS makes the tree content-unverified every
+      // tick, so STARVE-1's remediation deletes and recreates the source tree hourly, forever, and
+      // only LOGS it. Silent churn that looks like "working normally" is this SD's whole subject.
+      // Same whitelist rule as above: omit the key and the streak is dropped on every read.
+      consecutive_rebuilds: Number.isFinite(parsed.consecutive_rebuilds) ? parsed.consecutive_rebuilds : 0,
     };
   } catch {
     return { schema_version: STATE_SCHEMA_VERSION, sweep_counter: 0, last_run_at: null, last_result: null, last_pid: null, last_spawn_at: null };
@@ -238,7 +243,7 @@ function buildReaperArgs({ reaperScript, execute, stage2, allPools }) {
  * than crashing the sweep — the sweep must never die on the reaper — but it degrades to the
  * GUARDED path, never to an unguarded one.
  */
-function resolveReaperSourceRoot({ repoRoot, logger, env = process.env, runner, exists }) {
+function resolveReaperSourceRoot({ repoRoot, logger, env = process.env, runner, exists, onResolved }) {
   const {
     ensureSourceTreeWorktree, REAPER_SOURCE_DIRNAME, REAPER_SOURCE_BRANCH,
   } = require('../../lib/fleet/source-tree-refresh.cjs');
@@ -255,7 +260,9 @@ function resolveReaperSourceRoot({ repoRoot, logger, env = process.env, runner, 
       exists: exists || fs.existsSync,
       runner: gitRunner,
       env,
+      logger,
     });
+    if (onResolved) onResolved.rebuilt = Boolean(res && res.rebuilt);
     if (res.refreshed === false) {
       logger(`  reaper source tree refresh FAILED (${res.dir}) — the currency check below decides; not silently proceeding`);
     }
@@ -298,10 +305,16 @@ function tick(opts = {}) {
   // FR-1: CODE comes from the self-refreshing source tree; the POOL stays repoRoot (the spawn
   // below keeps cwd: repoRoot). Null means the source tree was unavailable — fall back to
   // repoRoot, which is exactly today's behaviour with the currency guard fully intact.
+  const sourceResolution = { rebuilt: false };
   const sourceRoot = resolveReaperSourceRoot({
     repoRoot, logger, env: opts.currencyEnv || process.env,
-    runner: opts.sourceRunner, exists: opts.sourceExists,
+    runner: opts.sourceRunner, exists: opts.sourceExists, onResolved: sourceResolution,
   }) || repoRoot;
+
+  // REBUILD-CHURN: count consecutive ticks that had to rebuild. Reset on any tick that did
+  // not — one rebuild is the remediation working; a STREAK means something keeps putting a
+  // gitignored artifact back and the tree is being deleted and recreated every tick.
+  state.consecutive_rebuilds = sourceResolution.rebuilt ? (state.consecutive_rebuilds || 0) + 1 : 0;
   const reaperScript = path.join(sourceRoot, 'scripts', 'worktree-reaper.mjs');
   if (!fs.existsSync(reaperScript)) {
     state.last_run_at = new Date().toISOString();
@@ -489,6 +502,7 @@ function tick(opts = {}) {
   return {
     invoked: result === 'spawned', counter: state.sweep_counter, cadence, result, pid, enabled: true, watchdog,
     consecutiveNotInvoked: state.consecutive_not_invoked,
+    consecutiveRebuilds: state.consecutive_rebuilds,
   };
 }
 
