@@ -58,20 +58,30 @@ describe('UNDRAINED fires on data — the gap this SD closes', () => {
 
   it('an ANCIENT but shallow queue also returns UNDRAINED (either dimension suffices)', () => {
     // Requiring BOTH dimensions would let a two-row queue a year old pass simply for being small.
-    const ancient = { count: 2, oldestAgeMs: DEFAULT_BACKLOG_AGE_MS + 1, closingPathUses: 5 };
+    const ancient = { count: 2, oldestAgeMs: DEFAULT_BACKLOG_AGE_MS + 1, closingPathUses: 0 };
     expect(exceedsBacklogThreshold(SOUND, ancient)).toBe(true);
     expect(classifyObserved(SOUND, ancient)).toBe(VERDICT.UNDRAINED);
   });
 
+  it('[THE RULING] a DEEP queue that is ACTIVELY DRAINING passes — depth alone is not a finding', () => {
+    // The model entry: 848 outstanding WITH 53 closing-path uses. That is high VOLUME and working,
+    // not neglect. My first version fired on raw count and turned another author's accept control
+    // red; failing healthy busy queues would make the inventory cry wolf, which ends in the same
+    // place as a control that cannot fire at all — ignored — just approached from the other side.
+    const busyButWorking = { count: 848, oldestAgeMs: 30 * 24 * 60 * 60 * 1000, closingPathUses: 53 };
+    expect(exceedsBacklogThreshold(SOUND, busyButWorking)).toBe(false);
+    expect(classifyObserved(SOUND, busyButWorking)).toBe(VERDICT.PASS);
+  });
+
   it('fires at exactly the threshold, not one past it', () => {
-    expect(exceedsBacklogThreshold(SOUND, { count: DEFAULT_BACKLOG_COUNT, closingPathUses: 1 })).toBe(true);
+    expect(exceedsBacklogThreshold(SOUND, { count: DEFAULT_BACKLOG_COUNT, closingPathUses: 0 })).toBe(true);
   });
 
   it('honours a per-descriptor threshold override instead of forcing the global default', () => {
     const loose = { ...SOUND, backlogCountThreshold: 10_000 };
-    expect(exceedsBacklogThreshold(loose, { count: 5417, closingPathUses: 1 })).toBe(false);
+    expect(exceedsBacklogThreshold(loose, { count: 5417, closingPathUses: 0 })).toBe(false);
     const strict = { ...SOUND, backlogCountThreshold: 2 };
-    expect(exceedsBacklogThreshold(strict, { count: 3, closingPathUses: 1 })).toBe(true);
+    expect(exceedsBacklogThreshold(strict, { count: 3, closingPathUses: 0 })).toBe(true);
   });
 
   it('[ORDERING IS LOAD-BEARING] a deep queue whose closing path was NEVER exercised reports UNDRAINED, not CLOSING_PATH_UNEXERCISED', () => {
