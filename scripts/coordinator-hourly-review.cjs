@@ -335,15 +335,70 @@ async function reportDriveState(sb) {
   const { renderDriveState, renderRefusal } = require('../lib/governance/drive-state/render.cjs');
 
   let lines;
+  let verdict = null;
   try {
-    const verdict = await computeDriveState({ adapters: ADAPTERS, supabase: sb });
+    verdict = await computeDriveState({ adapters: ADAPTERS, supabase: sb });
     lines = renderDriveState(verdict); // returns an ARRAY of lines
   } catch (e) {
+    verdict = null;
     lines = renderRefusal(e && e.message ? e.message : String(e));
   }
   console.log('');
   for (const line of lines) console.log(line);
+
+  // SD-LEO-INFRA-DRIVE-STATE-OBSERVABILITY-001 FR-3 — THE SINGLE WRITER.
+  //
+  // This review is the ONLY caller that persists. adam-pm-board.mjs computes the same verdict and
+  // deliberately does NOT write: both writing would record the same instant under two run_ids and
+  // silently inflate every count and duration derived from the table. This review is chosen because
+  // its cadence is regular and external, which is what makes a time series interpretable; the PM
+  // board is on-demand and would sample irregularly. THAT IS A DECISION WITH A REASON — if you are
+  // here to "fix" the missing write on the PM board, this comment is why it is missing.
+  //
+  // ORDER IS LOAD-BEARING: the render above has already happened and is never gated on the write.
+  //
+  // THE FAILURE IS VISIBLE, NOT SWALLOWED. An earlier draft required the output be byte-identical
+  // under a persistence failure — but byte-identical means INVISIBLE, and persistence could then be
+  // dead for weeks while every hourly report looked perfectly normal. That is precisely the defect
+  // this SD exists to remove, recreated one layer down. So the existing lines are untouched AND a
+  // distinguishable banner is printed when the write fails.
+  await persistRenderedVerdict(verdict, sb);
 }
+
+/**
+ * EXPORTED SO IT CAN BE EXECUTED BY A TEST, and that is the whole reason it is a function.
+ *
+ * The first version of this lived inline in reportDriveState and was "covered" by two regexes over
+ * this file's own source text. A mutation review then dead-coded the call — `if (false) await
+ * persistDriveState(...)` — and it SURVIVED the entire unit project, 3063 files and 37,365 tests.
+ * Silent in production too: no write, no banner, no failure. That is precisely this SD's own thesis
+ * ("an axis can sit stalled indefinitely while every hourly render reads as normal") reproduced one
+ * layer down, inside the fix written to remove it. A regex pins a STATEMENT FORM; only an executed
+ * test pins the DATA FLOW.
+ *
+ * @param {object|null} verdict computeDriveState's return: {axes, summary, measured_at}
+ * @param {object} sb supabase client
+ */
+async function persistRenderedVerdict(verdict, sb) {
+  // The verdict's own field is `axes` (index.cjs:70), NOT `entries`.
+  if (!verdict || !Array.isArray(verdict.axes)) return { persisted: false, reason: 'no_verdict' };
+
+  const { persistDriveState } = require('./lib/drive-state-verdict-store.cjs');
+  // measured_at is the compute's SINGLE clock read. Taking a fresh timestamp here would stamp the
+  // six rows a moment after the verdict they came from, so the history and the report would
+  // disagree about when the reading happened.
+  const runId = verdict.measured_at;
+  try {
+    const res = await persistDriveState({ supabase: sb, runId, entries: verdict.axes });
+    return { persisted: true, run_id: runId, written: res.written };
+  } catch (e) {
+    // VISIBLE, never swallowed. Byte-identical output under failure would mean persistence could
+    // be dead for weeks while every report looked normal.
+    console.log(`⚠️  DRIVE-STATE HISTORY NOT WRITTEN (${e && e.message ? e.message : String(e)}) — the verdict above rendered, but it was NOT recorded, so no duration question can be answered about this run.`);
+    return { persisted: false, reason: 'write_failed', error: e && e.message ? e.message : String(e) };
+  }
+}
+
 
 async function main() {
   let sb;
@@ -482,4 +537,4 @@ if (require.main === module) {
   }).catch(function (e) { console.error('[HOURLY-REVIEW] error (non-fatal): ' + e.message); }).finally(function () { process.exit(0); });
 }
 
-module.exports = { dispatchSolomonReminder, SOLOMON_REMINDER, buildFoundationsPointer, reconcileStaleSolomonInbound };
+module.exports = { dispatchSolomonReminder, SOLOMON_REMINDER, buildFoundationsPointer, reconcileStaleSolomonInbound, persistRenderedVerdict };
