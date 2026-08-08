@@ -30,6 +30,7 @@ import os from 'node:os';
 import path from 'node:path';
 import { createRequire } from 'node:module';
 import { fileURLToPath } from 'node:url';
+import { findUnknownFlags, formatUnknownFlagError } from '../lib/argv-guard.mjs';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const require = createRequire(import.meta.url);
@@ -440,11 +441,87 @@ export async function safeRootResync(opts = {}) {
 
 // ─── CLI entry point ─────────────────────────────────────────────────────────
 
+/**
+ * Usage text. States the DESTRUCTIVE step in the same breath as the flag that enables it,
+ * because the reason this script has a two-flag confirmation at all is that `git clean -fd`
+ * permanently deletes untracked non-gitignored work.
+ */
+const USAGE = `safe-root-resync.mjs — safe shared-root git resync (fetch + ff-only merge).
+
+Usage:
+  node scripts/safe-root-resync.mjs                                   fetch + ff-only merge, no clean
+  node scripts/safe-root-resync.mjs --clean-untracked                 + PREVIEW ONLY (git clean -fdn, deletes nothing)
+  node scripts/safe-root-resync.mjs --clean-untracked --confirm-clean + ACTUAL git clean -fd (PERMANENTLY DELETES
+                                                                       untracked, non-gitignored files)
+  node scripts/safe-root-resync.mjs --help                            this text; mutates nothing
+
+Flags:
+  --clean-untracked   Enable the untracked-file clean. On its own this is preview-only.
+  --confirm-clean     Second, explicit confirmation required for the real delete. Ignored
+                      without --clean-untracked.
+  --help              Print this and exit 0.
+
+Never runs 'git clean -fdx'. The -x flag would delete gitignored runtime state
+(node_modules, .claude/active-coordinator.json) — 3 confirmed production incidents.
+Aborts before any clean if cwd is a git worktree.
+
+Exit codes: 0 success · 1 aborted/conflict/incomplete node_modules repair · 2 bad usage.
+`;
+
+
 const isMain = process.argv[1] &&
   (fileURLToPath(import.meta.url) === path.resolve(process.argv[1]) ||
    process.argv[1].endsWith('safe-root-resync.mjs'));
 
 if (isMain) {
+  // QF-20260807-359. Measured (coordinator 34e723d4): invoked with `--help` this script
+  // silently ignored the unknown flag and RAN — it cleared a stale index.lock, then evaluated
+  // the resync. A tool that MUTATES STATE when asked for help is the same unknown-argv-runs-
+  // anyway shape QF-20260807-289 abolished on handoff.js; it was merely survivable here
+  // because the script is idempotent behind a good staleness guard. Survivable is not correct.
+  //
+  // The flag set is enumerated by READING THE PARSE SITES immediately below, which is the
+  // whole point of the 289 pattern — a set guessed from the header comment would drift from
+  // what the code actually consumes. Both entries are cited to their reader.
+  const KNOWN_FLAGS = new Set([
+    '--clean-untracked', // :460 below — gates the git clean preview
+    '--confirm-clean',   // :461 below — second explicit confirmation for the real -fd
+    '--help',            // handled here; mutates nothing, per the 289 precedent of never
+                         // rejecting the universal help convention
+  ]);
+  const NEAR_MISS_FLAGS = new Map([
+    ['--clean', '--clean-untracked (preview only), then --confirm-clean to actually delete'],
+    ['--confirm', '--confirm-clean (requires --clean-untracked as well)'],
+    ['--dry-run', '--clean-untracked on its own — it is ALREADY preview-only'],
+    ['--force', '--clean-untracked --confirm-clean'],
+    ['-h', '--help'],
+  ]);
+
+  // singleDash:true — this script takes NO short flags, so any `-x` is a mistake. Without it
+  // `-h` sailed past the guard and RAN the script, and the `-h` near-miss entry below was
+  // structurally unreachable. Caught by testing both sides rather than only the happy one.
+  const unknownFlags = findUnknownFlags(process.argv.slice(2), KNOWN_FLAGS, { singleDash: true });
+  if (unknownFlags.length > 0) {
+    process.stderr.write(formatUnknownFlagError({
+      tool: 'safe-root-resync.mjs',
+      unknown: unknownFlags,
+      knownFlags: KNOWN_FLAGS,
+      nearMiss: NEAR_MISS_FLAGS,
+      rationale: [
+        '   NOTHING WAS EXECUTED. This script fetches, fast-forwards the shared root and can',
+        '   delete untracked files, so an unrecognised flag is refused rather than ignored —',
+        '   running when you asked a question is worse than answering with an error.',
+      ],
+      usage: 'node scripts/safe-root-resync.mjs --help',
+    }) + '\n');
+    process.exit(2);
+  }
+
+  if (process.argv.includes('--help')) {
+    process.stdout.write(USAGE);
+    process.exit(0);
+  }
+
   const cleanUntracked = process.argv.includes('--clean-untracked');
   const confirmClean = process.argv.includes('--confirm-clean');
 
