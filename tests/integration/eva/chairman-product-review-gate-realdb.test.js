@@ -56,6 +56,7 @@ vi.mock('../../../lib/eva/chairman-product-review.js', () => ({
 
 import { StageExecutionWorker } from '../../../lib/eva/stage-execution-worker.js';
 import { isFixtureVenture } from '../../../lib/eva/chairman-decision-watcher.js';
+import { insertGuarded, CLASSIFICATION } from '../../../lib/governance/fixture-producer-guard.mjs';
 
 dotenv.config({ path: resolve(process.cwd(), '.env') });
 
@@ -70,24 +71,29 @@ const HAS_REAL_DB = process.env.SUPABASE_URL
   && process.env.SUPABASE_SERVICE_ROLE_KEY
   && !process.env.SUPABASE_SERVICE_ROLE_KEY.includes('test-service-role-key-not-real');
 
-const ts = Date.now();
+// SD-LEO-INFRA-ONE-SYNTHETIC-ROW-001-D: this was Date.now(), which appended a 13-digit epoch to
+// the venture name and made canonical isFixtureVenture classify these DELIBERATELY-REAL rows as
+// FIXTURES via EPOCH_TAIL_RE — the exact opposite of what this suite needs. Measured: with an
+// epoch tail canonical=true; with this uuid slice canonical=false AND watcher=false, so both
+// predicates now agree the row is real. A module-level Date.now() was also SHARED by every row in
+// a run, so a per-run uuid slice is no less unique. (chairman-actionable still matches via its
+// UNANCHORED /-realdb-/ substring — a known defect routed to QF-20260807-014, out of scope here.)
+const runId = randomUUID().slice(0, 8);
 const ventureIds = [];
 
 async function createVenture(tag) {
-  const { data, error } = await supabase
-    .from('ventures')
-    .insert({
+  const { data, error } = await insertGuarded(supabase, 'ventures', {
       // SD-LEO-INFRA-CHAIRMAN-DECISION-QUEUE-002: renamed off the watcher's FIXTURE_VENTURE_NAME_RE
       // (QF-20260710-243 widened it to match __e2e_*, latently breaking the sanity pin below) onto
       // the HCGate suite's *-RealDB-* convention: misses the WRITE-guard regex (real code path
       // preserved) while the extended SURFACE patterns ('%-realdb-%') cover any interrupted-teardown
       // residue so it can never reach the chairman queue/digest.
-      name: `ProductReviewGate-RealDB-${tag}-${ts}`,
+      name: `ProductReviewGate-RealDB-${tag}-${runId}`,
       problem_statement: 'Disposable venture for SD-LEO-INFRA-CHAIRMAN-PRODUCT-REVIEW-001 real-DB gate test',
       current_lifecycle_stage: 23,
       is_demo: false,
       status: 'active',
-    })
+    }, { classification: CLASSIFICATION.DELIBERATELY_REAL, source: 'tests/integration/eva/chairman-product-review-gate-realdb.test.js', reason: 'Exercises the REAL (non-fixture) chairman path end to end; the venture must NOT be excluded by fixture predicates.' })
     .select('id, name, is_demo')
     .single();
   if (error) throw new Error(`Failed to create ${tag} venture: ${error.message}`);

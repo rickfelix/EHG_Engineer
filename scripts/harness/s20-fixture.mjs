@@ -32,7 +32,15 @@
 import 'dotenv/config';
 import { createRequire } from 'node:module';
 import { RunJournal } from '../../lib/harness/run-journal.mjs';
-import { isFixtureVenture } from '../../lib/eva/chairman-decision-watcher.js';
+// REBOUND to the canonical module (SD-LEO-INFRA-ONE-SYNTHETIC-ROW-001-D). This previously imported
+// isFixtureVenture from lib/eva/chairman-decision-watcher.js while two comments below called it
+// "canonical" — it was not. The watcher declares its OWN FIXTURE_VENTURE_NAME_RE with a different
+// alternation than the canonical export of that same name, so the two disagree on 16 of 23 measured
+// names. The rebind is a real behaviour change, and it is BOUNDED: this file's row sets is_demo:true,
+// which short-circuits every predicate before the name branch, so nothing here moves. It becomes
+// load-bearing only for producers that OMIT is_demo.
+import { isFixtureVenture } from '../../lib/governance/fixture-exclusion.mjs';
+import { insertGuarded, CLASSIFICATION } from '../../lib/governance/fixture-producer-guard.mjs';
 
 const require = createRequire(import.meta.url);
 const { createClient } = require('@supabase/supabase-js');
@@ -63,7 +71,7 @@ export function buildFixtureVentureRow(runId, { entryStage = 20 } = {}) {
     origin_type: 'synthetic_pipeline',
     current_lifecycle_stage: entryStage,
     status: 'active',
-    is_demo: true,        // canonical isFixtureVenture discriminant
+    is_demo: true,        // canonical isFixtureVenture discriminant (now genuinely canonical — see the import)
     // NOTE (smoke-run finding 2026-07-10): the LIVE ventures table has NO
     // is_synthetic column (only is_demo + is_scaffolding) — the insert failed
     // with a PostgREST schema error. metadata.synthetic below carries the
@@ -123,10 +131,14 @@ export async function createFixture(supabase, runId, { entryStage = 20, journal 
   const j = journal || new RunJournal(runId);
   const row = buildFixtureVentureRow(runId, { entryStage });
 
-  // Guard sanity BEFORE insert: the row must trip the canonical fixture discriminant.
-  if (!isFixtureVenture(row)) throw new Error('fixture row does not satisfy isFixtureVenture — refusing to create an unguarded fixture');
-
-  const { data: venture, error } = await supabase.from('ventures').insert(row).select('id, name').single();
+  // Guard BEFORE insert, and the guard now OWNS the write: the row that is checked is the row that
+  // lands, with no window between them. This assert-then-insert shape is the rule child D
+  // generalized — it originated here, and this call site is now an adopter of the shared helper
+  // rather than the only place the rule exists.
+  const { data: venture, error } = await insertGuarded(supabase, 'ventures', row, {
+    classification: CLASSIFICATION.FIXTURE,
+    source: 'scripts/harness/s20-fixture.mjs createFixture',
+  }).select('id, name').single();
   if (error) throw new Error(`fixture venture insert failed: ${error.message}`);
   j.append({ kind: 'lifecycle', event: 'fixture venture created', touched_tables: ['ventures'], detail: { venture_id: venture.id, name: venture.name, entry_stage: entryStage } });
 

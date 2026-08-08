@@ -111,8 +111,12 @@ describe('observed verdicts', () => {
   });
 
   it('distinguishes a closing path that EXISTS but was NEVER used (TS-4)', () => {
-    // The invariant_gauge_finding case: 4,235 findings, zero dispositions ever written.
-    const v = classifyObserved(sound, { count: 4235, closingPathUses: 0 });
+    // Fixture shallowed by SD-LEO-INFRA-DRAIN-INVENTORY-CANNOT-001. This test's subject is
+    // distinguishing a path that EXISTS but was never used from having NO path — asserted below.
+    // A DEEP unexercised queue now reports UNDRAINED (that is the whole point of that SD, and the
+    // real invariant_gauge_finding case at 5,417 rows is covered in drain-inventory-undrained.test.js),
+    // so the depth is reduced here to keep this test measuring the discrimination it names.
+    const v = classifyObserved(sound, { count: 3, closingPathUses: 0 });
     expect(v).toBe(VERDICT.CLOSING_PATH_UNEXERCISED);
     expect(v).not.toBe(VERDICT.PASS);
     expect(v).not.toBe(VERDICT.NO_CLOSING_PATH); // not the same as having no path at all
@@ -157,9 +161,14 @@ describe('exit code contract (TS-17)', () => {
       VERDICT.PASS, VERDICT.MEASURED_ELSEWHERE, VERDICT.CLOSING_PATH_UNEXERCISED, VERDICT.UNAVAILABLE,
     ])).toBe(0);
   });
-  it('FAILING_VERDICTS is exactly the three structural findings', () => {
+  it('FAILING_VERDICTS is the three structural findings PLUS the one observed finding', () => {
+    // SD-LEO-INFRA-DRAIN-INVENTORY-CANNOT-001: this assertion USED to pin exactly the three
+    // structural verdicts, which is precisely the defect that SD removed — with only structural
+    // members, the failing set and the data-reachable set were DISJOINT and no reading of the data
+    // could ever fail. UNDRAINED is the first OBSERVED member, so the sets now intersect.
+    // The exactness is retained: this still catches an accidental addition.
     expect([...FAILING_VERDICTS].sort()).toEqual(
-      [VERDICT.NO_CONSUMER, VERDICT.NO_CLOSING_PATH, VERDICT.UNDECLARED].sort());
+      [VERDICT.NO_CONSUMER, VERDICT.NO_CLOSING_PATH, VERDICT.UNDECLARED, VERDICT.UNDRAINED].sort());
   });
 });
 

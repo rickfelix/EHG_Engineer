@@ -492,13 +492,33 @@ export class HandoffOrchestrator {
         console.log('');
         console.log('📊 GATE SCORES (Precheck)');
         console.log('─'.repeat(60));
+        // QF-20260807-278: a gate SKIPPED in precheck is recorded as { passed: true, score: 0,
+        // maxScore: 0 } (ValidationOrchestrator.js:1149 — LLM gates are deliberately not run
+        // here). This loop then rendered it as a green check at 0%, indistinguishable from a
+        // gate that actually ran and passed. A preview that shows a tick for a check it never
+        // performed is the trusted-optimistic preview this QF exists to stop.
+        //
+        // DISPLAY ONLY. `passed` is read 115 times across 44 files in this module; changing
+        // what a skip RECORDS is a contract change and is deliberately NOT done here. This
+        // reads the ALREADY-POPULATED results.skippedGates — the data existed and simply had
+        // no consumer anywhere in scripts/.
+        const skipped = new Set(result.skippedGates || []);
         for (const [gateName, gr] of Object.entries(result.gateResults)) {
           const pct = gr.maxScore > 0 ? Math.round((gr.score / gr.maxScore) * 100) : 0;
           const threshold = gr.threshold || 70;
+          if (skipped.has(gateName)) {
+            console.log(`   ⏭️  ${gateName}: NOT RUN in precheck (LLM gate — execute will evaluate it)`);
+            continue;
+          }
           const status = gr.passed !== false ? '✅' : '❌';
           console.log(`   ${status} ${gateName}: ${pct}% (threshold: ${threshold}%)`);
         }
         console.log(`   📈 Overall: ${result.normalizedScore || 0}%`);
+        if (skipped.size > 0) {
+          // Say it once more where a reader forms their conclusion: this preview is incomplete,
+          // and NAME what is missing so the gap is specific rather than a general disclaimer.
+          console.log(`   ⚠️  NOT AUTHORITATIVE: ${skipped.size} gate(s) were NOT RUN — ${[...skipped].join(', ')}. Execute evaluates them and can still reject.`);
+        }
         console.log('─'.repeat(60));
       }
 

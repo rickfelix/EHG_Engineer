@@ -641,18 +641,26 @@ describe('QF-20260804-569: ERROR/PENDING are non-evidence, not rejections', () =
 });
 
 // ─────────────────────────────────────────────────────────────────────────────────────────────
-// QF-20260804-926 — the safety valve QF-20260804-569 removed.
+// SD-LEO-INFRA-EXPLORE-UNREGISTERED-LEO-001 SUPERSEDES QF-20260804-926 HERE.
 //
-// required-subagents.js:49-56 names the precondition verbatim: promoting to block is gated on the
-// unregistered-EXPLORE CLI tombstone being resolved first, and "until then the gate's advisory
-// default keeps this cost at zero". The strict half shipped without the satisfiability half, so
-// LEAD-TO-PLAN became unpassable for seats restricted to the CLI path.
+// QF-20260804-926 made non-evidence honour SUBAGENT_VERDICT_MODE, and named its own expiry:
+// required-subagents.js:49-56 gated promotion on the unregistered-EXPLORE CLI tombstone being
+// resolved first, "until then the gate's advisory default keeps this cost at zero". That
+// precondition is now met — Explore has a sanctioned producer (scripts/record-explore-evidence.js)
+// and the CLI refuses without writing a row — so the advisory branch is retired.
 //
-// Non-evidence therefore honours the SAME mode flag as a rejecting verdict. This is NOT a
-// re-softening: ERROR/PENDING remain a distinct class, are never ACCEPTED, and still block under
-// SUBAGENT_VERDICT_MODE=block.
+// WHY IT HAD TO GO RATHER THAN WAIT FOR THE GLOBAL FLAG: with NO row the gate blocks in both modes,
+// but with an ERROR tombstone as the newest row it PASSED at score 100. Running the broken CLI
+// therefore converted a block into a pass. That is a laundering path wearing a safety valve's name.
+//
+// TWO TESTS BELOW WERE REPLACED, NOT DELETED (the advisory-passes assertion, and the mode CONTROL
+// that used ERROR as its input). The control MOVED to a FAIL verdict rather than being dropped:
+// without a two-sided control on some input, a one-sided "ERROR blocks" test would still pass if
+// the mode flag stopped being consulted at all.
+//
+// SCOPE: only the non-evidence class changed. A REJECTING verdict still honours the mode flag.
 // ─────────────────────────────────────────────────────────────────────────────────────────────
-describe('QF-20260804-926: non-evidence respects verdict mode', () => {
+describe('non-evidence blocks unconditionally (SD-LEO-INFRA-EXPLORE-UNREGISTERED-LEO-001, superseding QF-20260804-926)', () => {
   const errorRow = [{ sub_agent_code: 'TESTING', created_at: '2026-04-24T21:00:00Z', verdict: 'ERROR' }];
 
   it('BLOCKS under SUBAGENT_VERDICT_MODE=block — the strict half is intact', async () => {
@@ -663,14 +671,28 @@ describe('QF-20260804-926: non-evidence respects verdict mode', () => {
     expect(r.details.reason).toBe('SUBAGENT_EVIDENCE_NOT_RUN');
   });
 
-  it('WARNS (does not block) in the advisory default — the documented safety valve', async () => {
+  it('an ERROR tombstone BLOCKS in the advisory default — the laundering is closed', async () => {
+    // REPLACES the QF-20260804-926 assertion that this advisory-PASSED at score 100. That pass is
+    // the defect SD-LEO-INFRA-EXPLORE-UNREGISTERED-LEO-001 exists to close: it meant running the
+    // broken EXPLORE CLI converted a block into a pass, so the crash was the key to the gate.
     delete process.env.SUBAGENT_VERDICT_MODE;
     const supabase = makeSupabase({ phaseStart: PHASE_START_ISO, evidenceRows: errorRow });
     const r = await validateSubagentEvidence({ sd: makeSD(), handoffType: 'PLAN-TO-EXEC' }, supabase);
-    expect(r.passed).toBe(true);
-    expect(r.details.reason).toBe('SUBAGENT_EVIDENCE_NOT_RUN_ADVISORY');
-    // Never silent: an advisory pass must still say the check did not run.
-    expect(r.warnings.join('\n')).toMatch(/SUBAGENT_EVIDENCE_NOT_RUN/);
+    expect(r.passed).toBe(false);
+    expect(r.details.reason).toBe('SUBAGENT_EVIDENCE_NOT_RUN');
+    expect(r.details.non_evidence).toEqual([expect.objectContaining({ agent: 'TESTING', verdict: 'ERROR' })]);
+  });
+
+  it('CONTROL: a MISSING row already blocked in both modes — so this test proves nothing on its own', async () => {
+    // Kept deliberately, and labelled for what it is. The missing-row branch is not mode-gated and
+    // was already blocking before this SD, so it is green before the change, after it, and under
+    // every mutation. It pins a FACT, not the BEHAVIOUR under test. It earns its place only as the
+    // contrast that shows which of the two states actually changed.
+    delete process.env.SUBAGENT_VERDICT_MODE;
+    const supabase = makeSupabase({ phaseStart: PHASE_START_ISO, evidenceRows: [] });
+    const r = await validateSubagentEvidence({ sd: makeSD(), handoffType: 'PLAN-TO-EXEC' }, supabase);
+    expect(r.passed).toBe(false);
+    expect(r.details.missing.length).toBeGreaterThan(0);
   });
 
   it('is still NOT accepted as a passing verdict in either mode', async () => {
@@ -682,10 +704,17 @@ describe('QF-20260804-926: non-evidence respects verdict mode', () => {
     expect(classifyVerdict('ERROR')).toBe('nonevidence');   // still a distinct class
   });
 
-  it('CONTROL: the two modes genuinely differ — the flag is actually consulted', async () => {
-    // Without this, both branches could return the same verdict and the "restoration" would be
-    // cosmetic. Same input, two modes, opposite outcomes.
-    const supabase = () => makeSupabase({ phaseStart: PHASE_START_ISO, evidenceRows: errorRow });
+  it('RETAINED TWO-SIDED CONTROL: the mode flag is still consulted — on a REJECTING verdict', async () => {
+    // MOVED, not deleted. The QF-20260804-926 version of this control used an ERROR row, which no
+    // longer discriminates now that non-evidence blocks in both modes. Dropping it outright would
+    // have left the suite with only one-sided "ERROR blocks" assertions — and those stay green even
+    // if resolveSubagentVerdictMode stops being consulted at all, which is exactly the regression a
+    // control exists to catch.
+    //
+    // A FAIL verdict is the right carrier: it is the REJECTING class, which this SD deliberately
+    // left mode-gated. Same input, two modes, opposite outcomes.
+    const failRow = [{ sub_agent_code: 'TESTING', created_at: '2026-04-24T21:00:00Z', verdict: 'FAIL' }];
+    const supabase = () => makeSupabase({ phaseStart: PHASE_START_ISO, evidenceRows: failRow });
     process.env.SUBAGENT_VERDICT_MODE = 'block';
     const blocked = await validateSubagentEvidence({ sd: makeSD(), handoffType: 'PLAN-TO-EXEC' }, supabase());
     delete process.env.SUBAGENT_VERDICT_MODE;

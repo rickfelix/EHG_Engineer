@@ -2,6 +2,7 @@ import { beforeAll, afterAll, afterEach, expect } from 'vitest';
 import { createClient } from '@supabase/supabase-js';
 import { createHash, randomUUID } from 'crypto';
 import { describeDb, itDb, HAS_REAL_DB } from '../helpers/db-available.js';
+import { insertGuarded, CLASSIFICATION } from '../../lib/governance/fixture-producer-guard.mjs';
 
 // SD-LEO-INFRA-UNIVERSAL-VENTURE-TELEMETRY-001
 // TS-3: fingerprint aggregation — many identical errors produce ONE row.
@@ -49,8 +50,7 @@ beforeAll(async () => {
 
   await sweepStaleFixtures(svc);
 
-  const { data: v1, error: e1 } = await svc.from('ventures')
-    .insert({ name: `TS-fixture-${randomUUID()}`, is_demo: true, problem_statement: 'fixture for venture-error-aggregation.db.test.js' })
+  const { data: v1, error: e1 } = await insertGuarded(svc, 'ventures', { name: `TS-fixture-${randomUUID()}`, is_demo: true, problem_statement: 'fixture for venture-error-aggregation.db.test.js' }, { classification: CLASSIFICATION.FIXTURE, source: 'tests/integration/venture-error-aggregation.db.test.js' })
     .select('id').single();
   if (e1) throw e1;
   ventureId = v1.id;
@@ -58,8 +58,7 @@ beforeAll(async () => {
   // Guarded second insert (QF-20260709-797): if it fails, remove the first fixture before
   // rethrowing so a half-created pair never persists into the venture list.
   try {
-    const { data: v2, error: e2 } = await svc.from('ventures')
-      .insert({ name: `TS-fixture-other-${randomUUID()}`, is_demo: true, problem_statement: 'fixture for venture-error-aggregation.db.test.js (revocation-isolation control)' })
+    const { data: v2, error: e2 } = await insertGuarded(svc, 'ventures', { name: `TS-fixture-other-${randomUUID()}`, is_demo: true, problem_statement: 'fixture for venture-error-aggregation.db.test.js (revocation-isolation control)' }, { classification: CLASSIFICATION.FIXTURE, source: 'tests/integration/venture-error-aggregation.db.test.js' })
       .select('id').single();
     if (e2) throw e2;
     otherVentureId = v2.id;

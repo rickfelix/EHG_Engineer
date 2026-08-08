@@ -24,6 +24,7 @@ import { createClient } from '@supabase/supabase-js';
 import dotenv from 'dotenv';
 import { resolve } from 'path';
 import { describeDb } from '../../helpers/db-available.js';
+import { insertGuarded, CLASSIFICATION } from '../../../lib/governance/fixture-producer-guard.mjs';
 
 dotenv.config({ path: resolve(process.cwd(), '.env') });
 
@@ -39,15 +40,13 @@ let decisionId;
 
 describeDb('park_venture_decision RPC (real DB) — QF-20260710-291', () => {
   beforeAll(async () => {
-    const { data: venture, error: vErr } = await supabase
-      .from('ventures')
-      .insert({
+    const { data: venture, error: vErr } = await insertGuarded(supabase, 'ventures', {
         name: `__e2e_park_status_${ts}__`,
         problem_statement: 'Disposable venture for QF-20260710-291 park-status regression',
         current_lifecycle_stage: 1,
         is_demo: true,
         status: 'paused',
-      })
+      }, { classification: CLASSIFICATION.FIXTURE, source: 'tests/integration/eva/park-decision-status-realdb.test.js' })
       .select('id')
       .single();
     if (vErr) throw new Error(`Failed to create venture: ${vErr.message}`);

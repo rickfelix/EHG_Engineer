@@ -25,6 +25,8 @@ const {
   listPendingFramings, recordVerdict, checkStructuralSeparation, detectFakeSeparation,
 } = require('../lib/governance/fw3-cmv-rejecter.cjs');
 const { getActiveSolomonId } = require('../lib/coordinator/solomon-identity.cjs');
+// QF-20260808-447: adopt the canonical dual-read instead of hand-rolling a 36th variant.
+const { readCanonicalBody } = require('../lib/coordination/lane-contract.cjs');
 
 async function main() {
   const argv = process.argv.slice(2);
@@ -49,7 +51,9 @@ async function main() {
     for (const f of items) {
       console.log(`\n• id=${f.id} from=${String(f.sender_session).slice(0, 8)} at=${f.created_at}`);
       console.log(`  subject: ${f.subject}`);
-      const body = (f.payload && f.payload.body) || '';
+      // QF-20260808-447: was payload.body only, so a row carrying prose in the TOP-LEVEL
+      // body column printed "body:" empty — the lane looked empty rather than broken.
+      const body = readCanonicalBody(f);
       console.log(`  body: ${String(body).slice(0, 400)}${body.length > 400 ? '…' : ''}`);
     }
     console.log('\nAdversarial pass: for each framing, try to REJECT on CMV grounds (does it drift from the north-star? is the framing foreclosing the real problem?). Then: record <id> rejected|survived --grounds "..."');

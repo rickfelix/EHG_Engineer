@@ -26,6 +26,10 @@ import { createClient } from '@supabase/supabase-js';
 import { randomUUID } from 'node:crypto';
 import { config } from 'dotenv';
 import { armCliTeardown } from '../../lib/cli-graceful-exit.js';
+import { insertGuarded, CLASSIFICATION } from '../../lib/governance/fixture-producer-guard.mjs';
+// CANARY_NAME is IMPORTED, not spelled again. It was already declared in two places and this file
+// carried a third copy as a bare string literal — the parallel convention child D exists to abolish.
+import { CANARY_NAME } from '../../lib/governance/venture-archive-predicate.mjs';
 import {
   CANARY_KEY, CANARY_FLAG, EXTERNAL_DEP_STAGES, STAGE_STATUS,
   buildRunId, alertDedupKey, classifyExecutionRow, buildRunReport,
@@ -73,10 +77,12 @@ async function provisionCanary() {
     .maybeSingle();
   if (existing) return { venture: existing, created: false };
 
-  const { data: created, error } = await supabase
-    .from('ventures')
-    .insert({
-      name: 'Canary Venture Probe',
+  // SANCTIONED_PERMANENT, and this row is why a boolean opt-out could not express the model: the
+  // canary is a fixture to every name predicate (is_demo=true) AND is deliberately exempt from
+  // reaping. The guard asserts BOTH halves — it must trip the canonical discriminant and be in the
+  // closed sanctioned set — so this declaration constrains rather than merely permits.
+  const { data: created, error } = await insertGuarded(supabase, 'ventures', {
+      name: CANARY_NAME,
       problem_statement: 'Synthetic SRE canary: scheduled isolated pipeline probe (SD-LEO-INFRA-SYNTHETIC-CANARY-VENTURE-001). Not a real venture.',
       origin_type: 'manual',
       is_demo: true,
@@ -109,6 +115,11 @@ async function provisionCanary() {
           source: 'synthetic-canary-fixture',
         },
       },
+    }, {
+      classification: CLASSIFICATION.SANCTIONED_PERMANENT,
+      source: 'scripts/canary/run-canary-probe.mjs',
+      reason: 'The one sanctioned permanently-flagged is_demo venture: a synthetic SRE canary driven '
+        + 'through the real stage machinery on a schedule. Deliberately never reaped.',
     })
     .select('id, name, current_lifecycle_stage, is_demo')
     .single();

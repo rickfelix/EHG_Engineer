@@ -22,6 +22,7 @@ import dotenv from 'dotenv';
 import { createSupabaseServiceClient } from '../../lib/supabase-client.js';
 import { generateLegalDocsForVenture } from '../../lib/eva/legal-doc-producer.js';
 import { checkRequiredLegalDocs } from '../../lib/eva/stage-templates/analysis-steps/stage-23-launch-readiness.js';
+import { insertGuarded, CLASSIFICATION } from '../../lib/governance/fixture-producer-guard.mjs';
 
 dotenv.config();
 
@@ -48,10 +49,10 @@ describe.skipIf(!HAS_REAL_DB)('Legal-doc producer activation invariant (SD-FDBK-
       name: 'Activation Invariant Test Co',
       website: 'https://activation-invariant-test.example.com/about',
       created_at: new Date().toISOString(),
-    });
+    }, { classification: CLASSIFICATION.FIXTURE, source: 'tests/integration/legal-doc-producer-activation.test.js' });
     if (companyError) throw new Error(`Fixture company insert failed: ${companyError.message}`);
 
-    const { error: ventureError } = await supabase.from('ventures').insert({
+    const { error: ventureError } = await insertGuarded(supabase, 'ventures', {
       id: testVentureId,
       name: 'Activation Invariant Test Venture',
       is_demo: true, // SD-LEO-INFRA-CHAIRMAN-DECISION-QUEUE-002: fixture flagged at creation

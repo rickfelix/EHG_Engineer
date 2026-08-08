@@ -14,6 +14,7 @@ import { createSupabaseServiceClient } from '../../lib/supabase-client.js';
 import { describe, it, expect, beforeAll, afterAll } from 'vitest';
 import { v4 as uuidv4 } from 'uuid';
 import dotenv from 'dotenv';
+import { insertGuarded, CLASSIFICATION } from '../../lib/governance/fixture-producer-guard.mjs';
 
 dotenv.config();
 
@@ -72,11 +73,11 @@ describe.skipIf(!HAS_REAL_DB)('Financial Engine API', () => {
       id: testCompanyId,
       name: 'Test Company for Financial Engine',
       created_at: new Date().toISOString()
-    });
+    }, { classification: CLASSIFICATION.FIXTURE, source: 'tests/integration/financial-engine-api.test.js' });
     if (companyError) console.error('Company insert error:', companyError.message);
 
     // Insert test venture with all required fields
-    const { error: ventureError } = await supabase.from('ventures').insert({
+    const { error: ventureError } = await insertGuarded(supabase, 'ventures', {
       id: testVentureId,
       name: 'Test Venture for Financial Engine',
       is_demo: true, // SD-LEO-INFRA-CHAIRMAN-DECISION-QUEUE-002: fixture flagged at creation

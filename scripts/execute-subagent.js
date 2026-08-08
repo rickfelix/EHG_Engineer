@@ -240,6 +240,26 @@ async function main() {
     process.exit(exitCode);
 
   } catch (error) {
+    // SD-LEO-INFRA-EXPLORE-UNREGISTERED-LEO-001: a REFUSAL exits 4, distinct from the generic
+    // fatal-error 3 below. The distinction is load-bearing for verification, not cosmetic: this
+    // path ALREADY exited non-zero when the unregistered code crashed, so any test asserting only
+    // "exits non-zero" would pass against the old broken behaviour and prove nothing about the fix.
+    // A refusal is also not a stack-trace situation — the message says what to do instead.
+    if (error?.isBuiltinAgentRefusal) {
+      console.error(`\n⛔ Refused: ${error.message}`);
+      // process.exitCode, NOT process.exit(). MEASURED: process.exit(4) here aborted the process
+      // with a libuv assertion (!(handle->flags & UV_HANDLE_CLOSING)) and the shell observed 127,
+      // deterministically 5/5 — never the 4 this branch claimed to produce. Exiting hard fires
+      // before the async handles opened during startup have settled. Setting exitCode lets node
+      // drain and exit with the intended status.
+      //
+      // Worth stating plainly because I asserted the opposite in a commit message: this branch
+      // advertised "exit 4, distinct from the crash's 3" as a VERIFICATION property, and the
+      // property did not hold until this change. 127 is also the shell's "command not found",
+      // which would have made the refusal look like a missing binary.
+      process.exitCode = 4;
+      return;
+    }
     console.error('\n💥 Fatal Error:', error.message);
     console.error('\nStack Trace:', error.stack);
     process.exit(3);
