@@ -142,15 +142,34 @@ export function isHealthDerivedSD(sd) {
  * @param {Object} [supabase] - Supabase client
  * @returns {Promise<{ stale: boolean, message: string, lastScan: string|null, hoursOld: number|null }>}
  */
+// SD-LEO-INFRA-ONE-SYNTHETIC-ROW-001-B FR-2. How many recent rows to scan past before giving up.
+// A window is needed because the NEWEST row may be synthetic: the previous implementation took
+// LIMIT 1 unconditionally, so a single synthetic row anywhere in ANY dimension became "the latest
+// scan" and a stale scanner reported FRESH. That is the quiet-failure direction this SD closes, and
+// it is why this read is converted before the dimension-scoped one — this one has no dimension
+// filter at all, so every dimension can defeat it.
+const FRESHNESS_SCAN_WINDOW = 50;
+
 export async function checkHealthFreshness(supabase) {
   const sb = supabase || getSupabase();
 
-  const { data: latest } = await sb
+  const { data: recent } = await sb
     .from('codebase_health_snapshots')
-    .select('scanned_at')
+    .select('scanned_at, metadata')
     .order('scanned_at', { ascending: false })
-    .limit(1)
-    .single();
+    .limit(FRESHNESS_SCAN_WINDOW);
+
+  // First NON-SYNTHETIC row wins. If the predicate cannot load we keep every row rather than
+  // silently dropping data — for a staleness check, over-reporting freshness is the dangerous
+  // direction, so an unavailable filter must not also start hiding real rows.
+  let isFixtureHealthSnapshot = null;
+  try { ({ isFixtureHealthSnapshot } = await import('../../lib/governance/fixture-exclusion.mjs')); } catch { /* keep all rows */ }
+  const usable = typeof isFixtureHealthSnapshot === 'function'
+    ? (recent || []).filter((r) => !isFixtureHealthSnapshot(r))
+    : (recent || []);
+  // Exhausting the window without finding a real row falls through to the not-found branch, which
+  // reports STALE. That is deliberate: a staleness alarm must fail toward stale, never toward fresh.
+  const latest = usable[0] || null;
 
   if (!latest) {
     return {
