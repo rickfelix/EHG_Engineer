@@ -163,7 +163,14 @@ export async function checkHealthFreshness(supabase) {
   // silently dropping data — for a staleness check, over-reporting freshness is the dangerous
   // direction, so an unavailable filter must not also start hiding real rows.
   let isFixtureHealthSnapshot = null;
-  try { ({ isFixtureHealthSnapshot } = await import('../../lib/governance/fixture-exclusion.mjs')); } catch { /* keep all rows */ }
+  try {
+    ({ isFixtureHealthSnapshot } = await import('../../lib/governance/fixture-exclusion.mjs'));
+  } catch (e) {
+    // ANNOUNCE, never degrade in silence. The panel and the watcher both say so when their
+    // predicate cannot load; these two readers were left quiet, which is the inconsistency an
+    // adversarial review caught. An unreported fallback is indistinguishable from a working filter.
+    console.error(`[health-urgency] fixture predicate unavailable, freshness computed UNFILTERED: ${e?.message || e}`);
+  }
   const usable = typeof isFixtureHealthSnapshot === 'function'
     ? (recent || []).filter((r) => !isFixtureHealthSnapshot(r))
     : (recent || []);

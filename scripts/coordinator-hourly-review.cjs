@@ -235,7 +235,12 @@ try {
     .order('scanned_at', { ascending: false })
     .limit(25);
   let isFixtureHealthSnapshot = null;
-  try { ({ isFixtureHealthSnapshot } = await import('../lib/governance/fixture-exclusion.mjs')); } catch { /* keep all rows */ }
+  try {
+    ({ isFixtureHealthSnapshot } = await import('../lib/governance/fixture-exclusion.mjs'));
+  } catch (e) {
+    // ANNOUNCE rather than silently evaluating unfiltered — see the same note in health-urgency.js.
+    console.error(`[coordinator-hourly-review] fixture predicate unavailable, heartbeat read UNFILTERED: ${e?.message || e}`);
+  }
   const hbUsable = typeof isFixtureHealthSnapshot === 'function'
     ? (hbRows || []).filter((r) => !isFixtureHealthSnapshot(r))
     : (hbRows || []);
