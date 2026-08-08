@@ -247,16 +247,37 @@ export async function createPRDWithValidatedContent(
   }
 
   // (b) WRONG ID FOR THE FK. sdIdValue is written to product_requirements_v2.sd_id, whose FK
-  //     prd_sd_fk targets strategic_directives_v2.id — and that PK is the SD KEY STRING
-  //     (measured: id = "SD-LEO-FEAT-INTELLIGENT-UAT-FEEDBACK-001"), NOT the UUID that the
-  //     creation scripts print as the SD's uuid (uuid_id / uuid_internal_pk). Passing the UUID
-  //     raises 23503 with no hint about which of the two id-ish values was wrong.
-  const UUID_SHAPE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
-  if (UUID_SHAPE.test(String(sdIdValue ?? '').trim())) {
+  //     prd_sd_fk targets strategic_directives_v2.id — see
+  //     database/migrations/2025-09-22-prd-add-sd-id.sql:46.
+  //
+  //     QF-20260808-269 CORRECTS QF-20260808-528. The previous version of this guard was a SHAPE
+  //     check that threw whenever sdIdValue looked like a UUID, asserting that .id "is the SD KEY
+  //     STRING". That came from n=1 — one row whose id happened to equal its sd_key. Measured over
+  //     the WHOLE table, paged: .id is a UUID for 4228 of 5574 rows (75.9%) and a key string for
+  //     1346 (24.1%). The column is HETEROGENEOUS, and ALL 26 open SDs carry a UUID id — so the
+  //     shape check threw on the CORRECT value for every SD anyone was actually working on, and
+  //     its comment sent callers to the sd_key, which then failed the FK with a real 23503.
+  //
+  //     A shape check can only ever encode ONE of two shapes. An EXISTENCE check is correct for
+  //     both, so this resolves the value against the column the FK actually references and names
+  //     all three candidates when it does not resolve — the ambiguity is the whole footgun, so the
+  //     error has to disambiguate rather than assert.
+  const sdIdStr = String(sdIdValue ?? '').trim();
+  if (!sdIdStr) {
+    throw new Error('createPRDWithValidatedContent: sdIdValue is required — it is written to product_requirements_v2.sd_id (FK prd_sd_fk -> strategic_directives_v2.id).');
+  }
+  const { data: sdIdRow, error: sdIdErr } = await supabase
+    .from('strategic_directives_v2').select('id').eq('id', sdIdStr).maybeSingle();
+  if (sdIdErr) {
+    throw new Error(`createPRDWithValidatedContent: could not verify sdIdValue against strategic_directives_v2.id: ${sdIdErr.message}`);
+  }
+  if (!sdIdRow) {
     throw new Error(
-      `createPRDWithValidatedContent: sdIdValue must be the SD key (strategic_directives_v2.id, ` +
-      `e.g. "SD-LEO-FEAT-EXAMPLE-001") but received a UUID (${sdIdValue}). The FK prd_sd_fk targets ` +
-      `the key column, not uuid_id — passing the UUID raises Postgres 23503. Pass sdData.id / sd_key.`
+      `createPRDWithValidatedContent: sdIdValue ${JSON.stringify(sdIdStr)} does not exist in ` +
+      'strategic_directives_v2.id, which is the column FK prd_sd_fk references — inserting it would ' +
+      'raise Postgres 23503. That column is heterogeneous (some rows hold a UUID, some hold the SD ' +
+      'key), so pass the row\'s OWN .id value. If you are holding an SD row, the candidates are ' +
+      'sdData.id (correct), sdData.sd_key, and sdData.uuid_id — .id is the one the FK resolves.'
     );
   }
 
