@@ -4,7 +4,7 @@
     {
       "id": "FR-1",
       "title": "Generalize the producer assert as a shared helper bound to the CANONICAL predicate",
-      "description": "Extract the assert-then-throw shape from scripts/harness/s20-fixture.mjs:127 into a reusable producer-side helper that imports isFixtureVenture from lib/governance/fixture-exclusion.mjs — the canonical module — and NOT from lib/eva/chairman-decision-watcher.js. RATIFIED BINDING (coordinator, 2026-08-08): canonical, because the watcher binding is an untested accident (the name branch never executes today, is_demo:true short-circuits at s20-fixture.mjs:66) and because any other binding creates a second producer-side authority. If the helper lives in fixture-exclusion.mjs it MUST stay synchronous, pure and zero-import per that module's TOP-LEVEL-AWAIT-FREE constraint at :10-16, or scripts/fleet-dashboard.cjs:475's require() silently degrades to unfiltered. The FK-derived variant at s20-fixture.mjs:203 (fetch parent venture, assert, then write the child row) is the second shape and must be preserved for venture_id-keyed children."
+      "description": "THE HELPER MUST PERFORM THE WRITE, not merely bless a row. Export insertGuarded(supabase, table, row, declaration) which asserts and then issues the insert itself. RATIONALE — a separate assert() leaves an OBJECT-IDENTITY SEAM that review proved is already live in the code being converted: scripts/harness/spine-verify-first-run.mjs:100 reads { ...buildFixtureVentureRow(...), name: `TEST-${uniqueSuffix}-SD-A` }, overriding the name AFTER the builder. With a detached assert, a producer can assert(stubRow) and then insert({...stubRow, name: <something else>}) — satisfying the loud emission and the negative assert while inserting a different row than the one checked. Making the helper own the write closes the seam by construction. Extract the assert-then-throw shape from scripts/harness/s20-fixture.mjs:127 and bind isFixtureVenture from lib/governance/fixture-exclusion.mjs — the canonical module — NOT from lib/eva/chairman-decision-watcher.js. RATIFIED BINDING (coordinator, 2026-08-08): canonical, because the watcher binding is an untested accident (the name branch never executes today, is_demo:true short-circuits at s20-fixture.mjs:66) and because any other binding creates a second producer-side authority. If the helper lives in fixture-exclusion.mjs it MUST stay synchronous, pure and zero-import per that module's TOP-LEVEL-AWAIT-FREE constraint at :10-16, or scripts/fleet-dashboard.cjs:475's require() silently degrades to unfiltered. The FK-derived variant at s20-fixture.mjs:203 (fetch parent venture, assert, then write the child row) is the second shape and must be preserved for venture_id-keyed children."
     },
     {
       "id": "FR-2",
@@ -19,7 +19,7 @@
     {
       "id": "FR-4",
       "title": "Per-predicate classification table, not a boolean opt-out",
-      "description": "RATIFIED (coordinator): a boolean cannot express the sanctioned-permanent case. scripts/canary/run-canary-probe.mjs writes 'Canary Venture Probe' with is_demo:true — a fixture to all three name predicates — which scripts/sweep-fixture-residue.mjs:28-29 deliberately exempts by an explicit CANARY_NAME carve-out. A producer therefore declares an intended CLASSIFICATION (fixture | deliberately-real | sanctioned-permanent), and the assert checks the row against that declaration. The opt-out population is 3 files, not 1: HCGate-RealDB-, ProductReviewGate-RealDB- and StageArtifactGate-RealDB- share the shape."
+      "description": "RATIFIED (coordinator): a boolean cannot express the sanctioned-permanent case. scripts/canary/run-canary-probe.mjs writes 'Canary Venture Probe' with is_demo:true — a fixture to all three name predicates — which is deliberately exempted from reaping. A producer declares an intended CLASSIFICATION (fixture | deliberately-real | sanctioned-permanent) and the assert checks the row against that declaration. EVERY CLASS MUST CARRY ITS OWN ASSERT — review found that if 'sanctioned-permanent' ships with no check of its own it degenerates into a --force flag that waves ANY row through, which is WIDER than the boolean FR-4 rejected (a boolean at least forced a visibly false declaration). So sanctioned-permanent must BOTH trip the canonical discriminant AND belong to a closed, named sanctioned set. REUSE, DO NOT RE-DECLARE: lib/governance/venture-archive-predicate.mjs:20-23 is already exactly this idiom — canonical import plus a declared CANARY_NAME plus one carve-out, import-clean and unit-tested. CANARY_NAME is already declared twice in the repo; a third hardcoding inside D's table would be the second convention this SD exists to prevent. The opt-out population is 3 files: HCGate-RealDB-, ProductReviewGate-RealDB-, StageArtifactGate-RealDB-."
     },
     {
       "id": "FR-5",
@@ -57,9 +57,9 @@
   "test_scenarios": [
     {
       "id": "TS-1",
-      "scenario": "THE MISSING THIRD CONTROL — a real-shaped name with is_demo:false must classify true under canonical, finally exercising the name branch",
+      "scenario": "The name branch is exercised AT THE PRODUCER CALL SITE, not at the predicate",
       "type": "unit",
-      "expected": "isFixtureVenture({name:'parity-test-alpha', is_demo:false}) === true under lib/governance/fixture-exclusion.mjs. RATIFIED AS THE PARITY TEST (coordinator): the author's original two-sided control was two-sided on POLARITY but SINGLE-BRANCH ON MECHANISM — is_demo===true short-circuits before the name branch, and all-false is indistinguishable from a name that never arrived, so an adapter passing no name at all still passed both controls. This scenario is the control that catches that, and it is the first test in the repo to exercise the name branch of the producer assert at all."
+      "expected": "A converted producer, given a row with is_demo OMITTED and a name that trips no canonical pattern, throws before inserting. CLAIM CORRECTED AFTER REVIEW — the original TS-1 asserted isFixtureVenture({name:'parity-test-alpha', is_demo:false})===true and claimed to be the first test in the repo to exercise the name branch. THAT CLAIM IS FALSE: tests/unit/governance/fixture-exclusion.test.js:71-74 already loops seven names including 'parity-test-1' through the canonical predicate with is_demo omitted, two-sided (line 74 pins 'Testify Analytics' → false), and tests/unit/eva/chairman-decision-watcher.test.js:663-665 is literally titled 'even without is_demo'. The original wording transposed a finding about a throwaway divergence-measurement ADAPTER into a claim about repo coverage. THE TRUE GAP, which this scenario now targets: no test drives the producer assert CALL SITE at the name branch — s20-harness-slice.test.js:22-23 is the closest and calls the predicate directly on a row whose is_demo:true short-circuits."
     },
     {
       "id": "TS-2",
@@ -69,9 +69,9 @@
     },
     {
       "id": "TS-3",
-      "scenario": "spine-verify-first-run.mjs is guarded after conversion",
+      "scenario": "spine-verify-first-run.mjs is guarded after conversion — via an INJECTION SEAM, because today no reachable input can fail",
       "type": "unit",
-      "expected": "The converted producer refuses to insert a row that fails the canonical predicate. MUTATION-PROVEN: deleting the assert call turns this test red. A grep for the helper name is NOT sufficient evidence — the pre-conversion file already carried a prose comment at :90 that reads as compliance while executing nothing."
+      "expected": "The converted producer refuses to insert a row that fails the canonical predicate. THE CONVERSION MUST ADD A SEAM FIRST: review proved this test would SURVIVE ITS OWN STATED MUTATION as written. runSeededThread builds its row internally at :100 and accepts no row or builder parameter, and that row satisfies the predicate TWO independent ways — buildFixtureVentureRow hardcodes is_demo:true, and the overridden name starts with TEST- which FIXTURE_VENTURE_NAME_RE matches anyway. With no reachable failing input, deleting the assert is unobservable and the test stays green — a grep with a .test.js extension, the exact failure mode this scenario's own text warns about. So FR-2 must give runSeededThread an injectable row/builder, and only then is 'deleting the assert turns this red' a true statement."
     },
     {
       "id": "TS-4",
@@ -95,7 +95,13 @@
       "id": "TS-7",
       "scenario": "The sanctioned-permanent classification is expressible and distinct from both other classes",
       "type": "unit",
-      "expected": "A producer declaring 'sanctioned-permanent' for 'Canary Venture Probe' (is_demo:true) passes, while the same row declared 'deliberately-real' fails. This is why FR-4 requires a classification table rather than a boolean: the canary is simultaneously a fixture to every name predicate AND deliberately exempted from reaping by CANARY_NAME at scripts/sweep-fixture-residue.mjs:28-29."
+      "expected": "A producer declaring 'sanctioned-permanent' for 'Canary Venture Probe' (is_demo:true) passes, while the same row declared 'deliberately-real' fails. This is why FR-4 requires a classification table rather than a boolean: the canary is simultaneously a fixture to every name predicate AND deliberately exempt from reaping. CITE the CANARY_NAME declaration at lib/governance/venture-archive-predicate.mjs:20-23 rather than importing scripts/sweep-fixture-residue.mjs — sibling E holds that file and it does `import 'dotenv/config'` at module scope, which is the credential-leak-into-unit-tier hazard vitest.config.js documents."
+    },
+    {
+      "id": "TS-7b",
+      "scenario": "sanctioned-permanent is NOT a force flag — it constrains, it does not merely permit",
+      "type": "unit",
+      "expected": "A row declared 'sanctioned-permanent' that is NOT in the closed sanctioned set is REJECTED, even though it trips the canonical discriminant; and a row in the set that does NOT trip the discriminant is also rejected. ADDED AFTER REVIEW: TS-7's failing half was carried entirely by TS-5's mechanism, so a third class shipped with no assert of its own would keep TS-7 green while waving ANY row through — wider than the boolean FR-4 rejected. MUTATION-PROVEN: removing the sanctioned-set membership check turns this test red while leaving TS-7 green, which is precisely why TS-7 alone was insufficient."
     },
     {
       "id": "TS-8",
@@ -108,6 +114,12 @@
       "scenario": "The helper is bound to the canonical module, proven by behaviour rather than by import text",
       "type": "unit",
       "expected": "The helper classifies 'ZZZ_scratch_venture' and an epoch-tailed name as fixtures — both of which the watcher predicate returns FALSE for. This distinguishes the bindings BEHAVIOURALLY. A grep asserting the import path would pass against a re-export or a same-named local constant; the shadowed FIXTURE_VENTURE_NAME_RE at chairman-decision-watcher.js:32 is exactly why import text is not proof."
+    },
+    {
+      "id": "TS-9b",
+      "scenario": "The negative assert is CANONICAL-ONLY, and that residual is stated rather than left to read as coverage",
+      "type": "unit",
+      "expected": "RULED IN WRITING, because review found the third leak path and it is the cheapest to hit by accident: renaming 'HCGate-RealDB-alpha-<epoch>' to 'HCGate-RealDB-alpha' drops the epoch tail, so canonical returns FALSE and BOTH TS-5 and TS-6 are satisfied — while chairman-actionable's unanchored /-realdb-/ still hides the row from the chairman queue, the surface that actually matters. Renaming is the obvious way to make TS-5 pass, so the trap is on the path of least resistance. DECISION: the negative assert checks the CANONICAL predicate ONLY. This test pins that scope explicitly — a deliberately-real row that passes canonical but is still classified fixture by chairman-actionable PASSES here, and the test's own name records that this is a KNOWN, BOUNDED residual, not coverage. Closing it belongs to QF-20260807-014 (anchoring the unanchored patterns) and to founding instance 4 on the parent SD, both already routed."
     },
     {
       "id": "TS-10",
@@ -124,8 +136,11 @@
     "The negative assert fires on the real measured case 'HCGate-RealDB-<tag>-<epoch>' (TS-5) AND is satisfiable by a correctly-declared real row (TS-6) — two-sided, so it is neither stuck-on nor stuck-off.",
     "The classification table expresses fixture, deliberately-real and sanctioned-permanent as distinct outcomes, with the canary case (TS-7) proving a boolean would have been insufficient.",
     "The allowlist throws on an entry with an empty reason (TS-8), matching the fleet-liveness-select-lint precedent.",
-    "TS-1 exists and passes: the first test in this repo to exercise the NAME BRANCH of the producer assert, closing the author's own single-branch control gap.",
-    "The PRD and the shipped code state that mechanical CI enforcement of producer coverage is UNMEASURED and deferred to a named vehicle. No claim that metadata-flag-lint enforces this SD survives anywhere in the codebase or the record.",
+    "TS-1 exercises the name branch AT THE PRODUCER CALL SITE. It does NOT claim to be the first test to reach the canonical predicate's name branch — that claim was refuted (tests/unit/governance/fixture-exclusion.test.js:71-74 and tests/unit/eva/chairman-decision-watcher.test.js:663-665 already do), and the refutation is recorded rather than quietly dropped.",
+    "The helper PERFORMS the write (insertGuarded), and a reference-identity test proves the asserted row is the inserted row — closing the object-identity seam that is already live at spine-verify-first-run.mjs:100.",
+    "TS-7b passes: sanctioned-permanent constrains rather than permits, mutation-proven by removing the sanctioned-set membership check (TS-7b red, TS-7 still green).",
+    "TS-9b passes and the canonical-only scope of the negative assert is stated in the PRD, so the chairman-actionable residual reads as a known bound rather than as coverage.",
+    "The PRD and the shipped code state that mechanical CI enforcement of producer coverage is UNMEASURED and deferred to a named vehicle. No claim that metadata-flag-lint enforces this SD survives anywhere in the codebase or the record. The supporting measurement is pinned to a commit — RED ON MAIN AT cdceaff1df3 — because the same lint exits 0 at this worktree's branch point, and an EXEC seat running it locally would otherwise see green and conclude the PRD is wrong.",
     "The 56 non-ventures writers are excluded with a written reason per group (B/C/D/E), so a future reader can see the boundary was chosen rather than overlooked.",
     "No file claimed by siblings B, C or E is modified — verified by diff before the PR opens.",
     "The bounded behaviour change is named in the PRD with its census attached, and asserted by TS-10 in both directions (changed for is_demo-omitting rows, no-op for is_demo:true rows)."
@@ -142,6 +157,10 @@
     {
       "risk": "The opt-out spreads and becomes the norm, which is the fence-bypass class this SD explicitly exists to avoid.",
       "mitigation": "Loudness is the control: every invocation names itself in output, so growth is visible in logs rather than discovered by counting years later. The allowlist requires a non-empty reason per site and throws otherwise (TS-8), and the negative assert (TS-5) means an opt-out cannot be used to wave through a row that is misclassified anyway."
+    },
+    {
+      "risk": "The three opt-out producers live in a DISABLED test project, so converting them produces code no suite will ever run — and the incumbent this PRD cites as precedent would silently invert.",
+      "mitigation": "Named rather than discovered. All three FR-4 opt-out files are tests/integration/eva/*-realdb.test.js, and the vitest db project is DISABLED on this repo (no_designated_target, ref dedlbzhpgkmetvhbkyzq), so nothing there executes. Worse, the incumbent negative assert cited as this SD's precedent — high-consequence-blocking-gate-realdb.test.js:180-182 — imports isFixtureVenture from the WATCHER at :56, so under the canonical binding its expectation flips from false to true and no runnable suite would catch it. The FR-6 honesty standard applies here too: converting those three files is a CORRECTNESS improvement whose verification is UNMEASURED while the db project stays disabled. The runnable coverage for this SD is the unit tier (TS-1..TS-10), which exercises the helper and the classification table directly rather than through those files."
     },
     {
       "risk": "A dry-run PASS is mistaken for readiness at PLAN-TO-EXEC, burning a permanent audit record on a rejected execute.",
