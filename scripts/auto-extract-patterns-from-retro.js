@@ -49,6 +49,28 @@ const CATEGORY_SUBAGENT_MAPPING = {
 /**
  * Get related sub-agents for a category
  */
+/**
+ * QF-20260808-463: action_items entries are NOT reliably strings. Passing one straight through as
+ * `solution` put an object into proven_solutions, and the knowledge base then threw
+ * "s.solution.toLowerCase is not a function" on the next comparison — killing the update and
+ * losing the lesson. Fixed at BOTH ends: this coerces at the producer, and the KB no longer
+ * assumes its element shapes.
+ *
+ * NOT `String(item)`: that renders every object as '[object Object]', so two unrelated action
+ * items would become the same string and get merged into one another's stats. JSON is used only
+ * as a last resort because it is at least distinct per item and preserves the content.
+ */
+export function actionItemToText(item) {
+  if (typeof item === 'string') return item;
+  if (item && typeof item === 'object') {
+    for (const key of ['action', 'text', 'description', 'title', 'item', 'summary']) {
+      if (typeof item[key] === 'string' && item[key].trim()) return item[key];
+    }
+    return JSON.stringify(item);
+  }
+  return null;
+}
+
 function getRelatedSubAgents(category) {
   return CATEGORY_SUBAGENT_MAPPING[category] || ['VALIDATION'];
 }
@@ -186,7 +208,8 @@ async function extractPatternsFromImprovements(retro, sdId, _sdKey, linkedFeedba
         category: category,
         severity: severity,
         sd_id: sdId,
-        solution: retro.action_items.length > 0 ? retro.action_items[0] : null,
+        // QF-20260808-463: was `retro.action_items[0]` raw — an object reached the KB and threw.
+        solution: retro.action_items.length > 0 ? actionItemToText(retro.action_items[0]) : null,
         resolution_time_minutes: null,
         related_sub_agents: relatedSubAgents,
         source_feedback_ids: linkedFeedbackIds
