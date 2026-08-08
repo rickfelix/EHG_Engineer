@@ -111,3 +111,37 @@ describe('degrades honestly instead of throwing', () => {
     expect(res.repo_path).toBe('C:/gone');
   });
 });
+
+describe('GAP-1 — the reader re-runs against the PINNED base, not a moving ref', () => {
+  /**
+   * VALIDATION (row 419fe764) measured this with the tree BYTE-IDENTICAL: advancing origin/main
+   * past the SD's own commit flipped the same recorded verdict from reproduced:true to false.
+   * That is what happens when this very PR merges — the headline acceptance criterion would
+   * decay on contact. A `reproduced:false` must mean the tree disagrees, never "time passed".
+   */
+  it('passes the recorded base_sha as baseRef — the mutation that matters is dropping it', () => {
+    let seen;
+    return explainOperatorContract(
+      makeSupabase({ rows: [rowWith({ repo_path: 'C:/repo', creator_kinds: ['flag'], base_sha: 'abc123' })] }),
+      'SD-X',
+      { collect: (o) => { seen = o; return collectStub(); }, detect: () => ({ creator_kinds: ['flag'] }) },
+    ).then((res) => {
+      expect(seen.baseRef).toBe('abc123');
+      expect(res.pinned).toBe(true);
+      expect(res.base_sha).toBe('abc123');
+    });
+  });
+
+  it('an UNPINNED verdict still explains, but says so rather than implying rigour', async () => {
+    // Rows recorded before base_sha shipped are legitimately unpinned. Reporting them as pinned
+    // would be the field-name-is-a-claim failure; refusing them outright would strand history.
+    let seen;
+    const res = await explainOperatorContract(
+      makeSupabase({ rows: [rowWith({ repo_path: 'C:/repo', creator_kinds: [] })] }),
+      'SD-X', { collect: (o) => { seen = o; return collectStub(); }, detect: () => ({ creator_kinds: [] }) },
+    );
+    expect(seen.baseRef).toBeUndefined();
+    expect(res.pinned).toBe(false);
+    expect(res.reproducible).toBe(true);
+  });
+});

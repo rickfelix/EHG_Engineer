@@ -60,15 +60,26 @@ export async function explainOperatorContract(supabase, sdKey, { collect = colle
     return { reproducible: false, why: 'verdict names no tree (recorded before repo_path was emitted)', recorded };
   }
 
+  // GAP-1: re-run against the PINNED base, not the moving default. Without this the reader
+  // diffs against wherever origin/main happens to be NOW, so the same recorded verdict changes
+  // answer as main advances — measured flipping reproduced:true -> false on a byte-identical
+  // tree. `reproduced:false` must mean the tree disagrees, never "time passed".
+  const baseSha = details.base_sha;
   let observed;
   try {
-    const diff = collect({ appPath: repoPath });
+    const diff = collect(baseSha ? { appPath: repoPath, baseRef: baseSha } : { appPath: repoPath });
     observed = detect({ changedFiles: diff.changedFiles, migrations: diff.migrations }).creator_kinds;
   } catch (e) {
     return { reproducible: false, why: `cannot read the named tree: ${e?.message || e}`, repo_path: repoPath, recorded };
   }
 
-  return { reproducible: true, repo_path: repoPath, recorded: recorded || [], observed, reproduced: sameKinds(recorded, observed) };
+  return {
+    reproducible: true, repo_path: repoPath, recorded: recorded || [], observed,
+    reproduced: sameKinds(recorded, observed),
+    // Surfaced so a reader can see WHICH endpoints were used. An unpinned verdict (recorded
+    // before base_sha shipped) is still explained, but says so rather than implying rigour.
+    base_sha: baseSha || null, pinned: Boolean(baseSha),
+  };
 }
 
 const USAGE = `explain-operator-contract.mjs <SD-KEY>
