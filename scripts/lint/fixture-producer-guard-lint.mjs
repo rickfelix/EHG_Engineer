@@ -27,9 +27,29 @@
  * or '<repo-relative-file>:<line>', values are free-text reasons, and loading THROWS if any reason
  * is blank. An escape hatch that accepts an empty justification has no author.
  *
+ * ── KNOWN LIMITATION — what this control CANNOT see ────────────────────────────────────────────
+ * Stated concretely, because a control that will not name its blind spots is asking to be read as
+ * total coverage. Each of these is a write this lint will pass in silence:
+ *
+ *   1. A TABLE NAME THAT IS NOT A STRING LITERAL. The matcher requires a quoted 'ventures', so
+ *      `const t = 'ventures'; sb.from(t).insert(row)` is invisible. This is the cheapest evasion
+ *      and it is not hypothetical — it is ordinary refactoring.
+ *   2. A WRITE BEHIND A WRAPPER. `db.createVenture(row)` or any helper that owns the .from() call
+ *      emits no `.from('ventures')` token at the call site, so the producer is unseen.
+ *   3. PRODUCERS OUTSIDE THE FOUR NAMED ROOTS. SCAN_ROOTS is enumerated, not globbed, so a
+ *      ventures write in lib/, scripts/one-off/, or any new directory is out of scope by
+ *      construction — deliberate, but it means "0 unguarded" is a statement about four roots.
+ *   4. FK-DERIVED CHILD ROWS. Only `ventures` has a row-shaped predicate; venture_id- and
+ *      sd_key-keyed children are excluded, so a synthetic child under a real parent is unseen.
+ *   5. ANYTHING NOT IN SOURCE TEXT. Rows created by RPC, raw SQL, a migration, or a fixture
+ *      loaded from JSON never appear to a static scan.
+ *   6. IT PROVES ROUTING, NOT CORRECTNESS. A producer can route through insertGuarded and declare
+ *      the WRONG classification; only the guard's own runtime asserts catch that, not this lint.
+ *
  * Usage:
  *   node scripts/lint/fixture-producer-guard-lint.mjs           # report, exit 1 on findings
  *   node scripts/lint/fixture-producer-guard-lint.mjs --json
+ *   node scripts/lint/fixture-producer-guard-lint.mjs --root D  # aim the scan at another tree
  */
 import { readFileSync, readdirSync, statSync } from 'node:fs';
 import { join, resolve } from 'node:path';
