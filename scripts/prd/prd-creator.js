@@ -262,6 +262,28 @@ export async function createPRDWithValidatedContent(
   //     both, so this resolves the value against the column the FK actually references and names
   //     all three candidates when it does not resolve — the ambiguity is the whole footgun, so the
   //     error has to disambiguate rather than assert.
+  //     ORDERING, and it is load-bearing: this check is a DB ROUND-TRIP, so it runs AFTER the pure
+  //     content validations below, not before them. Placing it first made
+  //     tests/unit/prd-creator-prevalidation.test.js red on CI — four cases that assert
+  //     empty/short executive_summary and empty/null functional_requirements are rejected on
+  //     content. Those callers never reach the database, and a cheap pure check must not start
+  //     costing a network hop. See the block after the content validations.
+
+  // SD-LEARN-FIX-ADDRESS-PATTERN-LEARN-077 FR-001: Validate executive_summary at creation
+  // Check the provided value explicitly (empty/short strings should not silently fall through to defaults)
+  if (llmContent.executive_summary !== undefined && llmContent.executive_summary !== null) {
+    if (typeof llmContent.executive_summary !== 'string' || llmContent.executive_summary.trim().length < 50) {
+      throw new Error(`PRD creation blocked: executive_summary is too short (${llmContent.executive_summary?.length || 0} chars, minimum 50). Generate or provide a substantive executive summary.`);
+    }
+  }
+
+  // SD-LEARN-FIX-ADDRESS-PATTERN-LEARN-077 FR-002: Validate functional_requirements at creation
+  if (!llmContent.functional_requirements || !Array.isArray(llmContent.functional_requirements) || llmContent.functional_requirements.length === 0) {
+    throw new Error('PRD creation blocked: functional_requirements is empty. At least 1 functional requirement is needed. Generate requirements from SD scope before creating PRD.');
+  }
+
+  // (b) continued — the EXISTENCE check itself, positioned immediately before the first DB work so
+  //     pure content failures still short-circuit without a round-trip.
   const sdIdStr = String(sdIdValue ?? '').trim();
   if (!sdIdStr) {
     throw new Error('createPRDWithValidatedContent: sdIdValue is required — it is written to product_requirements_v2.sd_id (FK prd_sd_fk -> strategic_directives_v2.id).');
@@ -279,19 +301,6 @@ export async function createPRDWithValidatedContent(
       'key), so pass the row\'s OWN .id value. If you are holding an SD row, the candidates are ' +
       'sdData.id (correct), sdData.sd_key, and sdData.uuid_id — .id is the one the FK resolves.'
     );
-  }
-
-  // SD-LEARN-FIX-ADDRESS-PATTERN-LEARN-077 FR-001: Validate executive_summary at creation
-  // Check the provided value explicitly (empty/short strings should not silently fall through to defaults)
-  if (llmContent.executive_summary !== undefined && llmContent.executive_summary !== null) {
-    if (typeof llmContent.executive_summary !== 'string' || llmContent.executive_summary.trim().length < 50) {
-      throw new Error(`PRD creation blocked: executive_summary is too short (${llmContent.executive_summary?.length || 0} chars, minimum 50). Generate or provide a substantive executive summary.`);
-    }
-  }
-
-  // SD-LEARN-FIX-ADDRESS-PATTERN-LEARN-077 FR-002: Validate functional_requirements at creation
-  if (!llmContent.functional_requirements || !Array.isArray(llmContent.functional_requirements) || llmContent.functional_requirements.length === 0) {
-    throw new Error('PRD creation blocked: functional_requirements is empty. At least 1 functional requirement is needed. Generate requirements from SD scope before creating PRD.');
   }
 
   // PAT-SDCREATE-001: Pre-check for existing PRD by sd_id to prevent duplicates
