@@ -101,8 +101,12 @@ describe('S1: the reaper must never be able to delete the tree it executes from'
         { activeSdSet: new Set(), claimMap: new Map() },
       );
       expect(r.matched, `${dirname} must never classify as an orphan SD`).toBe(false);
-      expect(r.reason, `${dirname} must be refused BY THE PREFIX LIST, not by fail-closed`)
-        .toBe('non_sd_prefix');
+      // IDLE-2: the source trees moved off the PREFIX list onto an EXACT-match predicate, because
+      // spreading them into a startsWith list gave one name two answers ('.reaper-source-2' was
+      // protected here and reapable via isIdle). The reason changed with it, and asserting the
+      // reason is still what separates this rule from the fail-closed fallback.
+      expect(r.reason, `${dirname} must be refused BY THE SOURCE-TREE rule, not by fail-closed`)
+        .toBe('source_tree_protected');
     }
   });
 

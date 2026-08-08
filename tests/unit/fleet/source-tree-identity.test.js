@@ -24,8 +24,45 @@ import os from 'node:os';
 import path from 'node:path';
 
 const require_ = createRequire(import.meta.url);
-const { ensureSourceTreeWorktree, REAPER_SOURCE_DIRNAME, REAPER_SOURCE_BRANCH } =
-  require_('../../../lib/fleet/source-tree-refresh.cjs');
+const {
+  ensureSourceTreeWorktree, REAPER_SOURCE_DIRNAME, REAPER_SOURCE_BRANCH, resolveSourceTreeDir,
+} = require_('../../../lib/fleet/source-tree-refresh.cjs');
+
+describe('IDLE-3: the override may RELOCATE the tree but may not RENAME it', () => {
+  const opts = { dirname: REAPER_SOURCE_DIRNAME, envOverride: 'FLEET_REAPER_SOURCE_DIR', label: 'reaper-source' };
+
+  it('ACCEPTS a relocated tree that keeps the basename', () => {
+    // The part of the override people actually use: put the tree on another disk or outside the
+    // repo. That must keep working.
+    const dir = resolveSourceTreeDir('/repo', opts, { FLEET_REAPER_SOURCE_DIR: `/mnt/fast/${REAPER_SOURCE_DIRNAME}` });
+    expect(dir).toBe(`/mnt/fast/${REAPER_SOURCE_DIRNAME}`);
+  });
+
+  it('REFUSES a renamed tree — both reap-protection layers key on the literal basename', () => {
+    // Measured before the fix: '.reaper-src', 'reaper-source' and '.Reaper-Source' were all
+    // stage-2 eligible via BOTH the idle and orphan-sd routes, leaving only the reap-protected
+    // marker — which is best-effort and is a deletable file, i.e. exactly why layer 2 exists.
+    for (const bad of ['.reaper-src', 'reaper-source', '.Reaper-Source', 'src']) {
+      expect(
+        () => resolveSourceTreeDir('/repo', opts, { FLEET_REAPER_SOURCE_DIR: `/mnt/fast/${bad}` }),
+        `${bad} must be refused`,
+      ).toThrow(/must keep the basename/i);
+    }
+  });
+
+  it('the refusal names the CONSEQUENCE, not just the rule', () => {
+    let msg = '';
+    try {
+      resolveSourceTreeDir('/repo', opts, { FLEET_REAPER_SOURCE_DIR: '/mnt/fast/wrong-name' });
+    } catch (e) { msg = e.message; }
+    expect(msg).toMatch(/stage-2 REMOVAL|delete the tree it executes from/i);
+  });
+
+  it('no override still resolves to the default path — the check does not block the default', () => {
+    // Negative arm on a different axis: absence of an override, not a bad one.
+    expect(resolveSourceTreeDir('/repo', opts, {})).toBe(path.join('/repo', REAPER_SOURCE_DIRNAME));
+  });
+});
 
 let tmp;
 beforeEach(() => { tmp = fs.mkdtempSync(path.join(os.tmpdir(), 'src-identity-')); });

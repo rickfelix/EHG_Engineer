@@ -33,7 +33,10 @@ function mk(dir) { fs.mkdirSync(dir, { recursive: true }); return dir; }
 beforeEach(() => {
   tmp = fs.mkdtempSync(path.join(os.tmpdir(), 'reaper-src-'));
   poolRoot = mk(path.join(tmp, 'pool'));
-  sourceDir = mk(path.join(tmp, 'reaper-source'));
+  // IDLE-3: the basename must match REAPER_SOURCE_DIRNAME exactly — an override may relocate the
+  // tree but not rename it, because both reap-protection layers key on that literal. The old
+  // fixture name here ('reaper-source', no dot) was incidental.
+  sourceDir = mk(path.join(tmp, '.reaper-source'));
   // The script exists ONLY in the source tree. This asymmetry IS the discriminator.
   mk(path.join(sourceDir, 'scripts'));
   fs.writeFileSync(path.join(sourceDir, 'scripts', 'worktree-reaper.mjs'), '// stub\n');
