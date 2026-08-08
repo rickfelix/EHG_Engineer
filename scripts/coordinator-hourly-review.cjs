@@ -225,12 +225,28 @@ async function reportGaugeHealth(sb) {
 // single invariant drifting (false all-clear) -- so a stale/missing heartbeat alarms here.
 try {
   const { checkGaugeRunnerLiveness } = await import('../lib/governance/gauge-runner-liveness.js');
-  const { data: hb } = await sb.from('codebase_health_snapshots')
-    .select('scanned_at, findings')
+  // SD-LEO-INFRA-ONE-SYNTHETIC-ROW-001-B FR-3: take the newest NON-SYNTHETIC heartbeat, not simply
+  // the newest row. This read takes ORDER BY scanned_at DESC LIMIT 1, so ONE synthetic row in this
+  // dimension was enough to make a DEAD gauge runner report ALIVE — a single row defeats it, which
+  // is why the fix is a scan window rather than a bigger sample.
+  const { data: hbRows } = await sb.from('codebase_health_snapshots')
+    .select('scanned_at, findings, metadata')
     .eq('dimension', 'gauge_runner_heartbeat')
     .order('scanned_at', { ascending: false })
-    .limit(1)
-    .maybeSingle();
+    .limit(25);
+  let isFixtureHealthSnapshot = null;
+  try {
+    ({ isFixtureHealthSnapshot } = await import('../lib/governance/fixture-exclusion.mjs'));
+  } catch (e) {
+    // ANNOUNCE rather than silently evaluating unfiltered — see the same note in health-urgency.js.
+    console.error(`[coordinator-hourly-review] fixture predicate unavailable, heartbeat read UNFILTERED: ${e?.message || e}`);
+  }
+  const hbUsable = typeof isFixtureHealthSnapshot === 'function'
+    ? (hbRows || []).filter((r) => !isFixtureHealthSnapshot(r))
+    : (hbRows || []);
+  // No real heartbeat in the window leaves hb undefined, so checkGaugeRunnerLiveness receives
+  // undefined and reports DEAD — the correct direction for a liveness alarm.
+  const hb = hbUsable[0];
   const liveness = checkGaugeRunnerLiveness(hb?.scanned_at, Date.now());
   if (liveness.alarm) {
     const ageNote = liveness.ageMs == null ? 'no heartbeat ever recorded' : Math.floor(liveness.ageMs / 60000) + 'm stale';
