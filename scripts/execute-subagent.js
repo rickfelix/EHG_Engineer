@@ -240,6 +240,15 @@ async function main() {
     process.exit(exitCode);
 
   } catch (error) {
+    // SD-LEO-INFRA-EXPLORE-UNREGISTERED-LEO-001: a REFUSAL exits 4, distinct from the generic
+    // fatal-error 3 below. The distinction is load-bearing for verification, not cosmetic: this
+    // path ALREADY exited non-zero when the unregistered code crashed, so any test asserting only
+    // "exits non-zero" would pass against the old broken behaviour and prove nothing about the fix.
+    // A refusal is also not a stack-trace situation — the message says what to do instead.
+    if (error?.isBuiltinAgentRefusal) {
+      console.error(`\n⛔ Refused: ${error.message}`);
+      process.exit(4);
+    }
     console.error('\n💥 Fatal Error:', error.message);
     console.error('\nStack Trace:', error.stack);
     process.exit(3);
