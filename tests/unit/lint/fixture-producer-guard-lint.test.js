@@ -6,7 +6,7 @@
  */
 import { describe, it, expect } from 'vitest';
 import {
-  findUnguardedWrites, countGuardedWrites, loadAllowlist, stripNonCode, SCAN_ROOTS, selfTest,
+  findUnguardedWrites, countGuardedWrites, loadAllowlist, SCAN_ROOTS, selfTest,
 } from '../../../scripts/lint/fixture-producer-guard-lint.mjs';
 import { writeFileSync, mkdtempSync } from 'node:fs';
 import { tmpdir } from 'node:os';
