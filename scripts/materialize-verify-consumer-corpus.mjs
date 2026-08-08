@@ -27,7 +27,7 @@ const SIX_FLAG = '06627c75-8279-4a6d-9d53-5b3595b002d6';
  * SD ships catches it". Conflating the two would let the replay hit rate read as a capability
  * claim. Recall is reported against this subset with the out-of-class count on the same line.
  */
-const CORPUS = [
+export const CORPUS = [
   { n: 1, source: 'alpha2_flag_six', label: 'resolver fixed, runSweep untested',
     what: 'Resolver fixed and runSweep left untested; a one-token revert restored a false all-clear with the suite green.',
     in_class: true, reason: 'A changed producer whose only caller is exercised by nothing is visible in the diff.',
@@ -113,7 +113,7 @@ const RECONCILIATION = {
   ledger_source_lost: 'The ledger itself was coordinator advisory 5cc83246, absent from all 4362 session_coordination rows (advisory-lane 24h expiry + prune). Three surviving rows reference it: 2c165276, dd408d1e, f423bb7c. The five labels were expanded from the SD own description, then traced to primary incident records.',
 };
 
-const SUMMARY = {
+export const SUMMARY = {
   total: CORPUS.length,
   in_class: inClass.length,
   out_of_class: outClass.length,
@@ -162,4 +162,10 @@ async function main() {
   console.log(`   recall rule: ${SUMMARY.recall_reporting_rule}`);
 }
 
-main().catch((e) => { console.error(`❌ ${e.message}`); process.exit(1); });
+// Guarded so importing this module for its CORPUS constant does NOT write to the database.
+// An unguarded side effect here would make a unit test a DB writer — the exact shape the
+// repo's DB-test guard exists to stop.
+import { fileURLToPath } from 'node:url';
+if (process.argv[1] && fileURLToPath(import.meta.url) === process.argv[1]) {
+  main().catch((e) => { console.error(`❌ ${e.message}`); process.exit(1); });
+}
