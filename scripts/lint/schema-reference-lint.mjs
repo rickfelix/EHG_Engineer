@@ -62,8 +62,16 @@ const runGit = (args, opts = {}) => execFileSync('git', args, {
 });
 
 // SEC: argv-safety stops SHELLS, not ARGUMENT injection. `base` reaches git as a positional
-// argument, and a value LEADING WITH A DASH is parsed by git as an OPTION rather than a ref —
-// `--upload-pack=<program>` makes git EXECUTE the named program. This value is ENV-SUPPLIED
+// argument, and a value LEADING WITH A DASH is parsed by git as an OPTION rather than a ref.
+//
+// PRECISION, because the prior art's wording does not transfer and an adversarial review caught it:
+// tree-currency.cjs cites `--upload-pack=<program>` making git EXECUTE the named program, which is
+// true for its FETCH-family sink. MEASURED HERE: `git merge-base --upload-pack=... HEAD` exits 129
+// with "error: unknown option" — merge-base has no exec-capable option, so THIS sink is not a
+// command-execution primitive today. The guard is still correct and still wanted: it fails CLOSED
+// against a whole class of option-shaped input rather than depending on the current option surface
+// of one subcommand, which is exactly the kind of thing that changes under you. Stated accurately
+// so a third site does not inherit an over-claim. This value is ENV-SUPPLIED
 // (process.env.SCHEMA_LINT_BASE below) and in CI is set from a workflow context expression at
 // .github/workflows/schema-reference-lint.yml:60, so it is not a hypothetical.
 //
@@ -119,10 +127,15 @@ function candidateFiles() {
     // The catch below is fail-soft — it degrades an unresolvable base to an advisory whole-repo
     // sweep so a transient git problem never false-blocks a PR. That is right for git failures and
     // WRONG for this one: an option-shaped SCHEMA_LINT_BASE is an attack indicator, not a transient
-    // fault, and routing it into the same catch would let an attacker DISABLE this blocking lint
-    // just by supplying a malformed ref. So the refusal is loud and uncatchable here: a rejected
-    // ref must never be indistinguishable from an accepted one, which is the confusion the rest of
-    // this function exists to prevent.
+    // fault, and it should never be absorbed by the same path that forgives a shallow clone.
+    //
+    // SCOPED HONESTLY, because the first version of this comment over-claimed and a review measured
+    // it: this does NOT stop someone disabling the lint by supplying a bad ref. SCHEMA_LINT_BASE=
+    // zzz-no-such-branch PASSES the guard, lands in the catch below, prints "NOT blocking this PR"
+    // and exits 0 — that degraded-advisory behaviour is deliberate
+    // (SD-LEO-INFRA-SCHEMA-LINT-DEGRADED-FAILOPEN-001), not a hole this guard was ever going to
+    // close. What the guard closes is the OPTION-SHAPED SUBSET, and it closes it loudly: a rejected
+    // ref must never be indistinguishable from an accepted one.
     const base = process.env.SCHEMA_LINT_BASE || 'origin/main';
     if (!VALID_BASE_REF.test(base)) {
       throw new Error(

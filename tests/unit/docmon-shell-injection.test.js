@@ -232,10 +232,17 @@ describe('ARMED: docmon :386 — the UNQUOTED git show sink', () => {
 
 describe('ARMED: docmon :162 — the DOUBLE-QUOTED sink, via the %VAR% vector', () => {
   /**
-   * WHY %VAR% AND NOT `&` HERE. :162 interpolates the filename INSIDE DOUBLE QUOTES. Under cmd.exe
-   * that suppresses `&` and `|` — measured — so the payload that arms the unquoted sink is INERT
-   * here and would produce a test that cannot fail. `%VAR%` is the one construct cmd.exe still
-   * expands inside double quotes.
+   * WHY NOT `&` HERE. :162 interpolates the filename INSIDE DOUBLE QUOTES. Under cmd.exe that
+   * suppresses `&` and `|` — measured — so the payload that arms the unquoted sink is INERT here and
+   * would produce a test that cannot fail.
+   *
+   * THE NAME CARRIES BOTH SHELLS' EXPANSIONS, and it has to. A %VAR%-only payload was written first
+   * and an EXEC review caught that it would go RED on ubuntu: %VAR% is a cmd.exe-only expansion, so
+   * under sh the name stays literal, git MATCHES the file, and the diff is non-empty — the arm's
+   * `toBe('')` would fail on the very platform CI runs. `$(...)` is the mirror image: live under sh
+   * inside double quotes, inert under cmd. Carrying BOTH means exactly one of them expands on any
+   * host, the pathspec stops matching the real filename either way, and the arm holds everywhere
+   * without a platform gate.
    *
    * THE FAILURE IS SILENT, WHICH IS WHY THE ASSERTION IS ABOUT WHAT IS SEEN, NOT ABOUT A MARKER.
    * cmd expands %PATH% BEFORE git sees the argument, so git matches no pathspec and exits 0 with an
@@ -243,7 +250,7 @@ describe('ARMED: docmon :162 — the DOUBLE-QUOTED sink, via the %VAR% vector', 
    * checkBlacklist is gated on changed lines, the blacklisted word on the added line is NEVER
    * REPORTED. The gate is made to see nothing — worse than a crash, and invisible in CI.
    */
-  const NAME = 'docs/note%PATH%x.md';
+  const NAME = 'docs/note%PATH%$(echo z)x.md';
   let dir;
 
   beforeAll(() => {
