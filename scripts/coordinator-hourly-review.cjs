@@ -335,14 +335,45 @@ async function reportDriveState(sb) {
   const { renderDriveState, renderRefusal } = require('../lib/governance/drive-state/render.cjs');
 
   let lines;
+  let verdict = null;
   try {
-    const verdict = await computeDriveState({ adapters: ADAPTERS, supabase: sb });
+    verdict = await computeDriveState({ adapters: ADAPTERS, supabase: sb });
     lines = renderDriveState(verdict); // returns an ARRAY of lines
   } catch (e) {
+    verdict = null;
     lines = renderRefusal(e && e.message ? e.message : String(e));
   }
   console.log('');
   for (const line of lines) console.log(line);
+
+  // SD-LEO-INFRA-DRIVE-STATE-OBSERVABILITY-001 FR-3 — THE SINGLE WRITER.
+  //
+  // This review is the ONLY caller that persists. adam-pm-board.mjs computes the same verdict and
+  // deliberately does NOT write: both writing would record the same instant under two run_ids and
+  // silently inflate every count and duration derived from the table. This review is chosen because
+  // its cadence is regular and external, which is what makes a time series interpretable; the PM
+  // board is on-demand and would sample irregularly. THAT IS A DECISION WITH A REASON — if you are
+  // here to "fix" the missing write on the PM board, this comment is why it is missing.
+  //
+  // ORDER IS LOAD-BEARING: the render above has already happened and is never gated on the write.
+  //
+  // THE FAILURE IS VISIBLE, NOT SWALLOWED. An earlier draft required the output be byte-identical
+  // under a persistence failure — but byte-identical means INVISIBLE, and persistence could then be
+  // dead for weeks while every hourly report looked perfectly normal. That is precisely the defect
+  // this SD exists to remove, recreated one layer down. So the existing lines are untouched AND a
+  // distinguishable banner is printed when the write fails.
+  // The verdict's own field is `axes` (index.cjs:70), NOT `entries`, and `measured_at` is the
+  // compute's single clock read — reusing it as run_id avoids a second, slightly-later timestamp
+  // that would make the six rows disagree with the verdict they came from.
+  if (verdict && Array.isArray(verdict.axes)) {
+    const { persistDriveState } = require('./lib/drive-state-verdict-store.cjs');
+    const runId = verdict.measured_at;
+    try {
+      await persistDriveState({ supabase: sb, runId, entries: verdict.axes });
+    } catch (e) {
+      console.log(`⚠️  DRIVE-STATE HISTORY NOT WRITTEN (${e && e.message ? e.message : String(e)}) — the verdict above rendered, but it was NOT recorded, so no duration question can be answered about this run.`);
+    }
+  }
 }
 
 async function main() {
