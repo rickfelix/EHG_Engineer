@@ -639,6 +639,27 @@ async function rehydrateCallsign(sb, sessionId, currentMeta) {
  */
 function isAutoStartableQF(qf, nowMs) {
   if (!qf || qf.status !== 'open') return false;
+  // SD-LEO-INFRA-ONE-SYNTHETIC-ROW-001-C FR-1: fixture rows are never self-claimable.
+  //
+  // THIS IS THE CONSEQUENTIAL SITE IN THE WHOLE SD. Everywhere else an unfiltered fixture row makes
+  // a number wrong; HERE it is handed to a REAL WORKER, who then builds against a row that was never
+  // real work. The other converted surfaces protect gauges — this one protects a person's afternoon.
+  //
+  // The defect was INCONSISTENCY, not absence: five surfaces already filter quick_fixes with this
+  // exact predicate (recursion-governor.js:128, adam-github-assessment.mjs:136,
+  // adam-self-adherence-review.mjs:105, fleet-dashboard.cjs:476 and sd-next/data-loaders.js:473 —
+  // the dispatch queue itself) while the CLAIM PATH did not. Five consumers agreed on a convention
+  // and the door that hands out work was left out of it.
+  //
+  // ADDED, never substituted: every exclusion below is a different concern and all of them still run.
+  // Degrade-safe like the surrounding predicate, but LOUDLY — an unreported fallback here is
+  // indistinguishable from a working filter, and this is the last gate before a worker is dispatched.
+  try {
+    const { isFixtureQf } = require('../lib/governance/fixture-exclusion.mjs');
+    if (isFixtureQf(qf)) return false;
+  } catch (e) {
+    console.error(`[worker-checkin] fixture predicate unavailable — self-claim UNFILTERED: ${e?.message || e}`);
+  }
   if (qf.pr_url || qf.commit_sha) return false;        // already in PR/commit (verify-first / merge-race guard)
   // SD-FDBK-FIX-DISPATCH-ELIGIBILITY-HONOR-001: quick_fixes.factory_lane is the structured
   // "coordinator-dispatch only, not worker-self-claimable" marker (replaces the pre-fix free-text

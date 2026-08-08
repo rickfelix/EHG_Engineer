@@ -174,3 +174,59 @@ describe('ventures — phantom is_synthetic branch removed (FR-4)', () => {
     })).toBe(false);
   });
 });
+
+// ─── quick_fixes CLAIM PATH — SD-LEO-INFRA-ONE-SYNTHETIC-ROW-001-C FR-1 ─────────────────────
+//
+// WHY THESE LIVE HERE AND NOT BESIDE THE CODE THEY PIN. Their natural home,
+// tests/unit/worker-checkin-critical-qf-priority-jump.test.js, is in the unit project's EXCLUDE
+// list — vitest reports "No test files found" for it. Assertions added there could never fail,
+// which is strictly worse than no assertion at all because the file reads as coverage. This file
+// is confirmed to execute (20 passing before this block), so the pins land where they can run.
+//
+// WHAT THEY PIN. The priority-jump lane needed no code change: isCriticalQfJumpEligible defers to
+// isAutoStartableQF on its first line, and the lane's query already selects the id/title that
+// isFixtureQf reads. That was proven once by execution — but "proven by the author" and "guarded
+// against regression" are different properties, and only the second survives a later edit that
+// stops delegating. The jump lane PRE-EMPTS SD self-claim, so an unfiltered fixture row there
+// outranks real work rather than merely sitting beside it.
+describe('quick_fixes claim path — fixture rows are never dispatched to a worker', () => {
+  const { createRequire } = require('node:module');
+  const req = createRequire(import.meta.url);
+  const { isAutoStartableQF, isCriticalQfJumpEligible } = req('../../../scripts/worker-checkin.cjs');
+
+  const NOW = Date.now();
+  // Aged past the 10-minute jump grace, inside the 3-day staleness bound. Held byte-identical
+  // across every case below so the ONLY varying field is the one under test.
+  const openQf = (over) => ({
+    id: 'QF-20260808-900', status: 'open', severity: 'critical',
+    created_at: new Date(NOW - 3600_000).toISOString(),
+    pr_url: null, commit_sha: null, routing_tier: null, factory_lane: false,
+    owner: null, release_condition: null, not_before: null,
+    title: 'Belt depth gauge over-counts', description: 'benign', ...over,
+  });
+
+  test('a REAL open critical QF is both self-claimable and jump-eligible (positive control)', () => {
+    expect(isAutoStartableQF(openQf(), NOW)).toBe(true);
+    expect(isCriticalQfJumpEligible(openQf(), NOW)).toBe(true);
+  });
+
+  test('fixture by id is excluded from BOTH the self-claim and the priority-jump lane', () => {
+    expect(isAutoStartableQF(openQf({ id: 'QF-TEST-001' }), NOW)).toBe(false);
+    expect(isCriticalQfJumpEligible(openQf({ id: 'QF-TEST-001' }), NOW)).toBe(false);
+  });
+
+  test('fixture by title is excluded from BOTH lanes', () => {
+    expect(isAutoStartableQF(openQf({ title: 'ZZZ_seed critical' }), NOW)).toBe(false);
+    expect(isCriticalQfJumpEligible(openQf({ title: 'ZZZ_seed critical' }), NOW)).toBe(false);
+  });
+
+  // THE OVER-EATING CONTROL, and the direction that actually costs something: a real CRITICAL QF
+  // wrongly excluded is stranded permanently with nothing reporting it. Two live bug reports in
+  // two weeks carried titles of exactly this shape (PR #6186), which is why isFixtureQf keeps only
+  // unambiguous ZZZ_/dunder prefixes and dropped its TEST-/UAT-/DEMO title branches.
+  test('a REAL bug report that merely NAMES fixtures survives BOTH lanes', () => {
+    const row = openQf({ title: 'Test-fixture ventures leak into gauges' });
+    expect(isAutoStartableQF(row, NOW)).toBe(true);
+    expect(isCriticalQfJumpEligible(row, NOW)).toBe(true);
+  });
+});
