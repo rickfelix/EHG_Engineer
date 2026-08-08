@@ -80,12 +80,17 @@ describe('TS-11: one representation of the refresh mechanism', () => {
     expect(spawn).toContain('source-tree-refresh.cjs');
   });
 
-  it('no THIRD definition of MAX_WORKTREE_COUNT is introduced', () => {
+  it('MAX_WORKTREE_COUNT is defined only in its two sanctioned homes', () => {
     // MEASURED: exactly two real assignments today — lib/worktree-quota.js:44 (canonical) and
     // scripts/fleet/worktree-reaper-tick.cjs:37 (a manually-synced copy, because the CJS tick
     // cannot require the ESM quota module). TR-3 forbids adding a third; it does not require
-    // collapsing the existing two, so this asserts an upper bound rather than an exact count —
-    // a future consolidation to one must not fail this test.
+    // collapsing the existing two.
+    //
+    // STRENGTHENED AFTER PLAN TESTING: this asserted `length <= 2`, which a SWAP sails straight
+    // through — rename the real copy and add a rogue one and the count is still 2, so the bound
+    // holds while single-representation is actually broken. A count cannot see identity. The two
+    // legitimate files are therefore NAMED, and consolidation to one is still allowed because the
+    // assertion is membership, not equality.
     const files = [];
     const walk = (dir) => {
       for (const e of fs.readdirSync(dir, { withFileTypes: true })) {
@@ -102,7 +107,17 @@ describe('TS-11: one representation of the refresh mechanism', () => {
     // Match the ASSIGNMENT, not any mention. scripts/one-off/ is skipped above precisely because an
     // evidence file there DISCUSSES the constant in prose — and a source assertion that matches
     // narration instead of code is a defect this SD already committed once.
-    const defs = files.filter((f) => /MAX_WORKTREE_COUNT\s*=/.test(fs.readFileSync(f, 'utf8')));
-    expect(defs.length).toBeLessThanOrEqual(2);
+    const defs = files
+      .filter((f) => /MAX_WORKTREE_COUNT\s*=/.test(fs.readFileSync(f, 'utf8')))
+      .map((f) => path.relative(ROOT, f).replace(/\\/g, '/'));
+
+    const SANCTIONED = [
+      'lib/worktree-quota.js',                    // canonical
+      'scripts/fleet/worktree-reaper-tick.cjs',   // manually-synced CJS copy
+    ];
+    // IDENTITY, not count: a rogue definition fails here even if it replaced one of the two.
+    for (const d of defs) expect(SANCTIONED).toContain(d);
+    // And the canonical home must still be one of them — otherwise "zero definitions" would pass.
+    expect(defs).toContain('lib/worktree-quota.js');
   });
 });

@@ -18,6 +18,15 @@
  * SO THESE ARE REGRESSION GUARDS, NOT PROOF OF A FIX. They CANNOT FAIL against today's code. That
  * is stated deliberately: an unlabelled fact-pin reads as behaviour coverage, and this SD has
  * already been bitten by a suite that went green through the regression it guarded.
+ *
+ * COVERAGE MAP, corrected after PLAN TESTING refuted my first account of it. Each test names the
+ * regression it can actually detect, because a test named for a property it CANNOT detect is worse
+ * than no test — it reads as coverage:
+ *   - TS-3  detects the CENSUS moving back below the early return.        (real discriminating power)
+ *   - TS-9  detects ANY reaper execution during a refusal.                (real discriminating power)
+ *   - TS-9b detects the ESCALATION being hoisted above the refusal return. (the ONLY test that does)
+ * TS-3 and TS-9 do NOT detect the escalation hoist — in a tmp fixture the >=80% watchdog never
+ * triggers, so that branch is unreachable and both pass unchanged. I originally claimed otherwise.
  */
 import { describe, it, expect, beforeEach, afterEach } from 'vitest';
 import { createRequire } from 'node:module';
@@ -79,9 +88,21 @@ describe('FR-1b: the census runs during a refusal; the destructive escalation do
 
   it('TS-9 BEHAVIOURAL: a refusal executes NOTHING — no reaper process, destructive or otherwise', async () => {
     // The sentinel is the load-bearing part: it appears only if worktree-reaper.mjs actually ran.
-    // If a future edit hoists the --stage0 --execute escalation above the currency early-return,
-    // the reaper WOULD run here and this sentinel WOULD appear. That makes this test fail on the
-    // exact diff the PRD's Risks section calls a blocking finding.
+    //
+    // CORRECTED AFTER PLAN TESTING REFUTED ME. This comment used to claim that hoisting the
+    // --stage0 --execute escalation above the currency early-return would make this test fail.
+    // THAT WAS FALSE, and I asserted it without executing it. Under that hoist this test PASSES
+    // UNCHANGED: countActiveWorktrees reports ZERO worktrees in a tmp fixture, so watchdog.triggered
+    // is false and the escalation line is never reached at all. TS-9 has ZERO discriminating power
+    // against the escalation-placement regression.
+    //
+    // What TS-9 ACTUALLY pins, and all it pins: during a refusal, NO reaper process runs by any
+    // path. That is worth pinning. Escalation PLACEMENT is protected only by TS-9b below — which is
+    // why TS-9b is structural rather than decorative, and why deleting it would leave the
+    // PRD's blocking-finding diff completely uncovered.
+    //
+    // The general lesson, recorded because it cost a reviewer's time: an unverified caveat is a
+    // confident guess wearing humility. Execute the mutation before describing how a test fails.
     writeSentinelReaper(tmpRoot);
     const { tick } = require_(TICK_PATH);
     const res = tick({
