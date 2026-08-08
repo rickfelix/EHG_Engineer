@@ -6,7 +6,7 @@
  * persistence, and the safety contract (never throws).
  */
 
-import { describe, it, expect, beforeEach, afterEach } from 'vitest';
+import { describe, it, expect, beforeEach, afterEach, afterAll } from 'vitest';
 import fs from 'node:fs';
 import path from 'node:path';
 import os from 'node:os';
@@ -44,6 +44,33 @@ function loadTickModule() {
   delete require.cache[tickModPath];
   return require(tickModPath);
 }
+
+/**
+ * RECURRENCE GUARD: no test in this file may create a source tree in the REAL repository.
+ *
+ * MEASURED IN CI, and it cost three unrelated static guards. The one tick() call here without an
+ * injected repoRoot resolved to CANONICAL_REPO_ROOT — the actual checkout — and the production git
+ * runner then created <repo>/.reaper-source for real. That is a SECOND FULL COPY of the repository
+ * INSIDE the repository, so every guard that walks the filesystem rather than git found a duplicate
+ * of every file: cleanup-pending-pairing reported five "new writer sites", drain-set-registry-readers
+ * reported nine files with hand-rolled kind lists, and role-drain-sets-staged reported an
+ * apply-migration reference. All of them were .reaper-source/ copies of files already pinned.
+ *
+ * The failure is loud but the CAUSE is not: nothing in those three guards mentions this SD, and the
+ * natural reading is "someone added writer sites". This asserts the cause directly so the next
+ * person sees it in one line instead of three false leads.
+ */
+afterAll(() => {
+  const repoRoot = path.resolve(tickModPath, '..', '..', '..');
+  for (const dirname of ['.reaper-source', '.spawn-source']) {
+    expect(
+      fs.existsSync(path.join(repoRoot, dirname)),
+      `${dirname} was created in the REAL repo by this test file. A test must not mutate the `
+      + 'repository it runs in: a source tree is a full second copy, and every repo-walking static '
+      + 'guard then double-counts every file. Inject sourceExists/sourceRunner.',
+    ).toBe(false);
+  }
+});
 
 describe('worktree-reaper-tick', () => {
   let tmpRoot;
@@ -330,6 +357,25 @@ describe('FR-3: the reaper refuses to reap from a tree it cannot prove is curren
       cadence: 3, force: true, logger: () => {},
       currencyRunner: (args, o) => { seen.push(o && o.cwd); return staleRunner(args); },
       currencyEnv: {},
+      // NO SOURCE TREE, and this is load-bearing for two separate reasons.
+      //
+      // (1) CORRECTNESS OF THIS ASSERTION. FR-1 deliberately points the currency check at the
+      // dedicated SOURCE tree when one is available, so with a tree present seen[0] would be
+      // <repoRoot>/.reaper-source rather than repoRoot — which is what broke this test in CI.
+      // This case is about repoRoot RESOLUTION (module location, not ambient cwd); source-tree
+      // SELECTION is reaper-source-tree.test.js's job. Forcing the fallback keeps each test
+      // measuring one thing.
+      //
+      // (2) IT WAS CREATING A REAL WORKTREE IN THE REAL REPO. This is the only tick() call in
+      // the file with no repoRoot, so repoRoot resolved to CANONICAL_REPO_ROOT — the actual
+      // checkout — and the production runner then ran `git worktree add` against it. In CI that
+      // materialised a SECOND FULL COPY of the repo at .reaper-source, and every repo-WALKING
+      // static guard then found a duplicate of every file: cleanup-pending-pairing,
+      // drain-set-registry-readers and role-drain-sets-staged all failed with paths under
+      // .reaper-source/. Three unrelated guards, one cause. A test may not mutate the repo it
+      // runs in.
+      sourceExists: () => false,
+      sourceRunner: () => { throw new Error('no source tree in this test'); },
     });
     expect(seen.length).toBeGreaterThan(0);
     expect(seen[0]).toBeTruthy();

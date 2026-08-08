@@ -1,0 +1,151 @@
+{
+  "executive_summary": "Worktree reaping has two automated paths and BOTH are inert, for two different deliberate reasons — so the pool drifts upward with nothing automated retiring slots. PATH 1 is dead by construction: worktree-reaper-cadence.yml runs daily on ubuntu-latest via actions/checkout fetch-depth 1, and .worktrees/ is gitignored, so listActiveWorktrees (lib/worktree-quota.js) sees exactly zero registered worktrees in that fresh clone. Production run 31238967008 executed --execute in 2.45 seconds and printed 'Stage 1 (auto-safe): 0'; run 31149072911 matches. It has been green >=5 consecutive days precisely BECAUSE it does nothing. PATH 2 is the operative one and is NOT permanently broken: the local tick DOES reap — worktree-reaper-last.log records 20+ successful spawns on 2026-08-07, the last at 02:38:11.132Z, byte-identical to state.last_spawn_at. It refuses only SINCE that point (consecutive_refusals 12+) because worktree-reaper-tick.cjs:256-298 calls enforceTreeCurrency({allowSelfHeal:false}) and refuses on ANY behind>0, and nothing keeps the shared root current (measured 40 commits / ~5.5h behind). The defect is therefore an UNBOUNDED STARVATION WINDOW, not a permanent failure, and it compounds: the >=80% pool watchdog that would force an emergency Stage-0 reap sits DOWNSTREAM of the same early-return, so a stale tree removes routine reaping AND emergency relief together. Each individual refusal is a CORRECT, well-logged decision; the cost is visible only in the accumulated count, and that count is provably unconsumed. SCOPE HONESTY: the pool is NOT at cap — measured 22/28 (78.6%), day range 71-86%, never observed at 28/28. The original 'cron times out mid-scan' framing is RETRACTED: the workflow is daily with a 600s budget against a 300-420s pass, the reaper has no timeout logic at all, and the tick spawns detached. The 5-7min measurement was real but of a MANUAL LOCAL invocation and was inferred onto the scheduled path without checking where that path runs.",
+  "functional_requirements": [
+    {
+      "id": "FR-1",
+      "title": "Self-refreshing tree for the reaper — PORT the working refresh, do not repoint the check",
+      "description": "The reaper tick must execute against a tree that STAYS CURRENT on its own, so refusal stops being the steady state. The .spawn-source pattern (lib/fleet/spawn-control.js) is the right shape but is NOT a drop-in and must not be cargo-culted: (i) it is DORMANT — gated on FLEET_SPAWN_SOURCE_TREE which defaults OFF (:364-369), no .spawn-source directory exists on disk, and nothing assigns that env anywhere; (ii) its self-heal NEVER FIRES — SELF_HEALABLE_BRANCH is hardcoded 'main' (tree-currency.cjs:47) while that tree sits on branch 'spawn-source' (:229), so enforceTreeCurrency's internal git pull (:236) is unreachable for it. What actually keeps it current is ensureSpawnSourceWorktree's OWN fetch + `merge --ff-only` (spawn-control.js:251-260, :289-303), which reaches behind===0 BEFORE the currency check runs and short-circuits at tree-currency.cjs:141-142. THEREFORE: port that refresh mechanism. Merely pointing enforceTreeCurrency at a different dir reproduces today's refuse-only tree with extra steps.",
+      "acceptance": "With the shared root deliberately behind origin/main, a tick reaps successfully instead of recording refused_stale_tree."
+    },
+    {
+      "id": "FR-2",
+      "title": "Resolve the ESM/CJS wall that blocks the port",
+      "description": "spawn-control.js is ESM; scripts/fleet/worktree-reaper-tick.cjs is CJS and tick() is called SYNCHRONOUSLY from scripts/stale-session-sweep.cjs:3801, so a plain require() of the ESM module is not available. Two admissible routes: a dynamic import() (requires making the call path async, which touches the synchronous sweep caller) or extracting the pure helpers (resolveSpawnSourceDir / ensureSpawnSourceWorktree / build*Args) into a .cjs sibling. lib/fleet/tree-currency.cjs is the PRECEDENT — it already serves both ESM and CJS callers from one file. Pick one and record why; do not duplicate the helpers into the tick, which would create a second representation of the refresh.",
+      "acceptance": "One shared definition of the refresh mechanism, reachable from both module systems, with no copy-paste duplicate in the tick."
+    },
+    {
+      "id": "FR-3",
+      "title": "PRESERVE the existing census-on-refusal (regression guard) — the relocation I originally specified is ALREADY DONE",
+      "description": "CORRECTED, and the correction is mine. I originally wrote that the pool watchdog sits downstream of the currency early-return so it never runs during a refusal, citing gauge-registry.js:397. PLAN TESTING refuted it and the refutation is right: the refusal catch block (worktree-reaper-tick.cjs:271-297) ALREADY computes countActiveWorktrees + poolWatchdogDecision and emits the BACKLOG line on every refusal. QF-20260726-794 moved it there — a fact I quoted in my own analysis while asserting its opposite. The gauge-registry comment describes the PRE-QF-794 state and is stale narration. SO THERE IS NOTHING TO MOVE. What remains true and worth keeping: the DESTRUCTIVE `--stage0 --execute` escalation is correctly unreachable during a refusal (the catch returns early) and MUST STAY THAT WAY — running a destructive reap from a stale tree is the hazard the refusal exists to prevent, since the reaper's code identity is that tree's HEAD (this is how the reap-protected marker went inert once already). This FR therefore becomes a REGRESSION GUARD, not a change: pin that the census still runs on the refusal path, and pin that the destructive escalation still does not. Any future diff that relocates the escalation above the currency check is a BLOCKING finding.",
+      "acceptance": "Two pinned properties, both asserted: (a) during a refusal, pool utilization is still measured and emitted; (b) no destructive escalation is issued from a stale tree. Neither is a new behaviour — both are existing behaviour that must not regress, and the PRD says so rather than claiming credit for them."
+    },
+    {
+      "id": "FR-4",
+      "title": "Give consecutive_refusals a consumer that ALARMS — it is currently pinned NO_CONSUMER",
+      "description": "This is not speculative: lib/governance/gauge-registry.js:390-398 already records the counter as undrained ('the counter exists and logs a BACKLOG line; nothing consumes it'), and tests/unit/governance/drain-inventory.test.js:326 PINS classifyStructural(...) === VERDICT.NO_CONSUMER. The registry that documents the gap is itself only readable via scripts/drain-inventory.mjs, a manual CLI no workflow schedules — so the gap is recorded and still invisible. Wire an actual consumer that raises an alarm when refusals accumulate over a NON-EMPTY pool (both conditions: a refusal streak against an empty pool is not an incident). Do NOT add another counter beside the existing one — that reproduces the defect class. THE ACCEPTANCE CRITERION IS DELIBERATELY *NOT* 'drain-inventory stops saying NO_CONSUMER', and PLAN TESTING is why: classifyStructural (lib/governance/drain-inventory.js:89-100) is a PURE STATIC FIELD CHECK — `if (!descriptor.consumer) return NO_CONSUMER` — so that verdict flips by adding ONE STRING to the descriptor with ZERO runtime change. An acceptance criterion satisfiable by a lie is worse than none, because it certifies. TESTING also found drain-inventory has no reader branch for source.kind==='artifact' (this gauge's actual kind), so even a truthful descriptor edit lands UNAVAILABLE rather than PASS — that reader branch is in scope. And tests/unit/governance/drain-inventory.test.js:326 currently PINS the NO_CONSUMER verdict, so this SD must edit that test; it is named here as an in-scope file rather than discovered as a surprise failure.",
+      "acceptance": "RUNTIME, not static: a real accumulated refusal streak over a non-empty pool causes an alarm to actually FIRE where the guard runs. The static drain-inventory verdict changing is necessary but explicitly NOT sufficient, and a descriptor-only edit must fail acceptance. The named alarm delivery mechanism must be stated in the implementation, since 'proven in the deployment environment' is untestable until it is."
+    },
+    {
+      "id": "FR-5",
+      "title": "Make the scheduled CI path honest — fix it or stop it certifying",
+      "description": "worktree-reaper-cadence.yml cannot reap the operator pool: it runs on a GitHub-hosted fresh clone where .worktrees/ (gitignored) does not exist, so it scans 0 and exits 0 daily. Its own header claims it closes PAT-LEO-INFRA-WRITER-CONSUMER-ASYMMETRY-001 ('the reaper script existed, no automation invoked it') — invoking it where there is no pool did not close that asymmetry, it converted it into a daily green certification that reaping happens. Either run it where a pool exists (self-hosted runner / a real local scheduled invocation) or make scanned==0 a LOUD non-success for that workflow so it stops reading as coverage. A guard that cannot fire must not report green.",
+      "acceptance": "The scheduled path either reaps a real pool, or fails/warns visibly when it scanned nothing — it never again reports success for doing nothing."
+    },
+    {
+      "id": "FR-6",
+      "title": "SECONDARY (demoted, keep): serial per-worktree git cost",
+      "description": "The per-worktree git work (git cherry -v origin/main, merge-base, status) is genuinely serial and a full pass measures 5-7 minutes over ~26 worktrees. This is REAL but it explains MANUAL invocation ergonomics, NOT the starvation window — neither automated path has a budget that this exceeds (the daily workflow allows 600s; the tick spawns detached with no timeout; worktree-reaper.mjs contains no timeout/deadline logic at all). Address it only after FR-1/FR-3/FR-4, and do not let it re-acquire headline status.",
+      "acceptance": "Documented as secondary with the measurement attached; no FR depends on it."
+    }
+  ],
+  "technical_requirements": [
+    {
+      "id": "TR-1",
+      "title": "allowSelfHeal:false on the SHARED ROOT is load-bearing — never flip it",
+      "description": "A `git pull --ff-only` on the shared root is an uncoordinated mutation of a tree other live sessions are reading; CLAUDE.md's own session prologue (items 8/9) documents that shared-tree git mutations break concurrent sessions with tool-result 'internal error's, and tick.cjs:262-269 records the same rationale. The fix is a tree nobody else shares, NOT relaxing the guard. VALIDATION attacked this position looking for overstatement and it held."
+    },
+    {
+      "id": "TR-2",
+      "title": "Every removal path stays on the junction-safe chokepoint",
+      "description": "A plain `git worktree remove` (or rm -rf) follows the node_modules junction and destroys the shared target. scripts/safe-worktree-remove.mjs routes through lib/worktree-manager.js removeWorktreeViaGit, which pre-unlinks the junction BEFORE removal; safeRecursiveRm is the orphan fallback. Safety is baked into the chokepoint — do not add a removal call that bypasses it."
+    },
+    {
+      "id": "TR-3",
+      "title": "Do not add a third representation of anything",
+      "description": "MAX_WORKTREE_COUNT is already defined twice — lib/worktree-quota.js:44 and a manually-synced copy at worktree-reaper-tick.cjs:37 (the CJS tick cannot require the ESM quota module). If FR-2's .cjs extraction happens anyway, prefer collapsing that duplication over adding to it. Likewise the refresh mechanism gets ONE definition (FR-2), not a tick-local copy."
+    },
+    {
+      "id": "TR-4",
+      "title": "Never exercise destructive reaping against the live pool",
+      "description": "Tests must inject/scaffold their own worktrees or run dry-run. The live pool carries other seats' claimed work; a test that reaps it destroys in-flight sessions. The reaper already refuses to run from inside a worktree (worktree-reaper.mjs:322) — preserve that."
+    },
+    {
+      "id": "TR-5",
+      "title": "Do not ship the fix dormant",
+      "description": "The .spawn-source pattern is itself a cautionary precedent: shipped, flag-gated OFF, and never turned on — so it has protected nothing since it landed. Whatever FR-1 introduces must be ON by default in the environment that has the pool, or the SD reproduces the exact class it is fixing (a mechanism that exists and never runs)."
+    }
+  ],
+  "test_scenarios": [
+    { "id": "TS-1", "scenario": "Shared root deliberately behind origin/main; run the tick", "type": "integration", "expected": "The tick REAPS (or dry-run-plans a reap) instead of recording refused_stale_tree. THIS IS THE LOAD-BEARING TEST — it must FAIL against today's code, which is the proof it is testing the fix rather than restating it." },
+    { "id": "TS-2", "scenario": "NEGATIVE ARM, DIFFERENT AXIS — shared root already CURRENT (behind===0), tree clean", "type": "integration", "expected": "Behaviour is unchanged from today: the tick reaps exactly as it did before. Varies currency, not the fix's own switch, so it cannot pass by inheriting TS-1's assumption." },
+    { "id": "TS-3", "scenario": "REGRESSION GUARD (relabelled — this pins EXISTING behaviour, it does NOT verify the fix): currency refuses; assert the census still runs and the destructive escalation still does not", "type": "unit", "expected": "Utilization measured+emitted, AND no --stage0 --execute issued. HONEST SCOPE, per PLAN TESTING: BOTH properties are ALREADY TRUE today (the refusal catch block at worktree-reaper-tick.cjs:271-297 already computes the census; the destructive block is unreachable because the catch returns early). So this test CANNOT fail against today's code and must never be counted as evidence the fix works — it exists solely to catch a future regression. Its discriminating power comes from TS-9, not from itself. Labelling it this way is the point: an unlabelled fact-pin reads as behaviour coverage." },
+    { "id": "TS-4", "scenario": "Refusal streak accumulates while the pool is NON-EMPTY", "type": "integration", "expected": "An alarm fires. Proven in the deployment environment, not only a fixture (observability requirement)." },
+    { "id": "TS-5", "scenario": "ANTI-VACUITY CONTROL for TS-4 — refusal streak while the pool is EMPTY", "type": "unit", "expected": "NO alarm. Without this, an always-alarming consumer would satisfy TS-4 while being useless, and nothing would distinguish the two." },
+    { "id": "TS-6", "scenario": "OVER-EATING CONTROL — a LIVE, actively-claimed, or dirty worktree is present when the new path reaps", "type": "integration", "expected": "It is NOT removed. Over-exclusion of real work is the failure direction that costs a person their afternoon; the existing active-claim and dirty guards must survive the change untouched." },
+    { "id": "TS-7", "scenario": "MUTATION PROOF, both directions, for every new guard", "type": "unit", "expected": "Neuter each new branch and confirm EXACTLY the intended test fails while the controls stay green; confirm the mutation actually APPLIED via git diff --stat (a mutation that silently fails to match is indistinguishable from a test that catches nothing); then revert and confirm the tree is clean." },
+    { "id": "TS-8", "scenario": "The scheduled CI workflow scans zero worktrees", "type": "integration", "expected": "It does NOT report plain success (FR-5). A run that scanned nothing is visibly distinguishable from a run that reaped nothing because there was nothing to reap." },
+    { "id": "TS-9", "scenario": "THE BLOCKING MUTATION, which TS-7 originally omitted: relocate the destructive --stage0 --execute escalation ABOVE the currency refusal", "type": "unit", "expected": "A test FAILS. The PRD's own Risks section calls this diff a blocking finding, so there must be a test that actually blocks it — otherwise the risk is documented and unenforced. This is what gives TS-3 its discriminating power, since TS-3 alone cannot fail." },
+    { "id": "TS-10", "scenario": "FR-4 ANTI-GAMING: add ONLY a `consumer` string to the gauge-registry descriptor, changing no runtime behaviour", "type": "unit", "expected": "Acceptance still FAILS. classifyStructural is a pure static field check (drain-inventory.js:89-100), so a descriptor-only edit flips the verdict while nothing alarms. If this scenario passes, the acceptance criterion is satisfiable by a lie and FR-4 is unverified." },
+    { "id": "TS-11", "scenario": "FR-2 SINGLE REPRESENTATION: after the ESM/CJS resolution, search for a second definition of the refresh mechanism or a third MAX_WORKTREE_COUNT literal", "type": "unit", "expected": "Exactly one definition of the refresh reachable from both module systems; no new duplicate of the cap. Covers FR-2 and TR-3, which had no scenario." },
+    { "id": "TS-12", "scenario": "TR-1/TR-4 SAFETY PINS: assert enforceTreeCurrency is never called with allowSelfHeal:true against the shared root, and that no test path issues a destructive reap against the live pool", "type": "unit", "expected": "Both hold. These are the two constraints whose violation causes data loss rather than a wrong number, and neither had a scenario." }
+  ],
+  "acceptance_criteria": [
+    "With the shared root behind origin/main, the reaper makes progress — demonstrated against a real stale tree, not a mock.",
+    "A stale tree no longer hides pool utilization: the census is observed and reported even while a reap is refused.",
+    "No destructive reap is ever executed from a stale tree — the split in FR-3 is asserted in both directions.",
+    "consecutive_refusals has a real consumer that alarms over a non-empty pool, proven in the deployment environment, and drain-inventory no longer returns NO_CONSUMER for it.",
+    "The scheduled CI workflow can no longer report green for scanning nothing.",
+    "Every new guard is mutation-proved with the mutation confirmed applied, and every negative arm varies a different axis than its positive.",
+    "The measured pool range (22/28, 71-86% over the observed day, never at cap) is what gets cited — no 28/28 cap-breach claim survives into any artifact.",
+    "No new duplicate of MAX_WORKTREE_COUNT or of the refresh mechanism is introduced.",
+    "Nothing lands flag-gated OFF in the environment that owns the pool (TR-5)."
+  ],
+  "risks": [
+    { "risk": "The dedicated tree is sited under .worktrees/, which is EXEMPT from the currency check (spawn-control.js assertSpawnSourceNotExempt exists precisely because this was tried). The change then appears to work while asserting nothing.", "mitigation": "Reuse assertSpawnSourceNotExempt, or replicate its throw. Site the tree outside .worktrees/ and prove the currency invariant still applies to it." },
+    { "risk": "The fix ships flag-gated OFF and protects nothing — exactly what happened to the .spawn-source pattern it is modelled on.", "mitigation": "TR-5. Default ON where the pool lives, and add an acceptance step that observes it running in that environment." },
+    { "risk": "FR-3 is implemented by moving the WHOLE watchdog above the currency check, so a destructive Stage-0 reap runs from a stale tree — trading a starvation bug for a data-loss bug.", "mitigation": "FR-3 splits census from escalation explicitly, and TS-3 asserts BOTH halves. Reviewers should treat any diff that moves the escalation above the refusal as a blocking finding." },
+    { "risk": "A new alarm is added beside the existing counter rather than consuming it, so the fleet gains a second undrained gauge.", "mitigation": "FR-4 forbids a new counter; the acceptance criterion is that drain-inventory stops classifying the EXISTING gauge NO_CONSUMER." },
+    { "risk": "The starvation window is bounded by a timeout/attempt cap instead of by keeping the tree current, so refusals resume as soon as the bound lapses.", "mitigation": "FR-1 is the primary. A bound is acceptable only as defence-in-depth, never as the fix." }
+  ],
+  "integration_operationalization": {
+    "consumers": [
+      "scripts/stale-session-sweep.cjs:3801 — calls worktree-reaper-tick.cjs tick() SYNCHRONOUSLY on every 5-minute sweep; the only local invoker.",
+      "Windows Task Scheduler task 'EHG LEO Stale-Session Sweep' -> scripts/cron/stale-session-sweep-task.cmd — the 5-minute trigger behind the above.",
+      ".github/workflows/worktree-reaper-cadence.yml — calls scripts/worktree-reaper.mjs DIRECTLY (bypassing the tick, so it never calls enforceTreeCurrency at all).",
+      "lib/governance/gauge-registry.js:390-398 — the drain descriptor that will stop reading NO_CONSUMER once FR-4 lands.",
+      "scripts/resolve-sd-workdir.js::createWorktree and lib/worktree-manager.js::createWorkTypeWorktree — quota enforcement points that fail when the pool is full."
+    ],
+    "dependencies": [
+      "The invoker census above is COMPLETE, not exemplary: exactly two automated invocation points exist. Any FR-5 change that adds a third must state which of the two it replaces, or the census grows again.",
+      "lib/fleet/spawn-control.js must keep exporting (or expose via the FR-2 extraction) resolveSpawnSourceDir / ensureSpawnSourceWorktree / assertSpawnSourceNotExempt — FR-1 depends on porting them rather than re-deriving.",
+      "lib/fleet/tree-currency.cjs contract is a dependency, NOT a change target: refusal on behind>0 stays, and allowSelfHeal:false on the shared root stays (TR-1)."
+    ],
+    "runtime_config": [
+      "FLEET_SPAWN_SOURCE_TREE — the existing flag for the donor pattern; currently default OFF and set nowhere, which is why that pattern has protected nothing. Whatever FR-1 introduces must NOT repeat this (TR-5).",
+      "WORKTREE_POOL_THRESHOLD (default 0.8) and WORKTREE_POOL_WATCHDOG=off — the census/escalation controls FR-3 splits.",
+      "FLEET_TREE_CURRENCY_BYPASS_REASON — an existing escape hatch keyed on a non-empty REASON STRING, not a boolean, and set nowhere today. Do not use it as the fix."
+    ],
+    "observability_rollout": "FR-4's alarm must be proven WHERE THE GUARD RUNS — the deployment environment that owns the pool — not against a fixture. The precedent this SD exists to correct is a workflow that was green daily while scanning nothing, so a fixture-only proof would reproduce the defect class: the alarm would exist, pass its test, and never fire in the place that matters. Acceptance is an observed alarm on a real accumulated refusal streak over a non-empty pool, plus drain-inventory no longer returning NO_CONSUMER for the worktree-reaper-refusals descriptor."
+  },
+  "system_architecture": {
+    "summary": "Reaping moves off a tree that goes stale within minutes of any peer merge and onto one that refreshes itself, while pool observation is decoupled from the destructive path so a stale tree can no longer blind the fleet to its own utilization.",
+    "components": [
+      "lib/fleet/tree-currency.cjs — unchanged contract (refusal on behind>0; dirt alone never blocks). Not relaxed.",
+      "lib/fleet/spawn-control.js — donor of the refresh mechanism (ensureSpawnSourceWorktree fetch + merge --ff-only), not of the dormant flag.",
+      "scripts/fleet/worktree-reaper-tick.cjs — consumer; gains a current tree and a census that runs unconditionally.",
+      "lib/governance/gauge-registry.js — the drain descriptor whose verdict flips once the counter is consumed."
+    ]
+  },
+  "implementation_approach": {
+    "summary": "Port the refresh, split census from escalation, wire the existing counter to an alarm, then make the CI path stop certifying.",
+    "steps": [
+      "Decide the ESM/CJS route (dynamic import vs .cjs extraction) and record why; tree-currency.cjs is the precedent for a shared file.",
+      "Stand up the reaper's tree OUTSIDE .worktrees/ and refresh it with the ported fetch + merge --ff-only before the currency check runs.",
+      "Move countActiveWorktrees/poolWatchdogDecision above the currency early-return; leave the --stage0 --execute escalation gated on a current tree.",
+      "Wire a consumer for consecutive_refusals that alarms only when the pool is non-empty; prove it in the deployment environment.",
+      "Make the scheduled workflow fail or warn loudly when it scanned zero.",
+      "Mutation-prove each guard, confirming the mutation applied via git diff --stat, then revert."
+    ]
+  },
+  "smoke_test_steps": [
+    { "step_number": 1, "instruction": "Read .claude/worktree-reaper-state.json and record last_result, consecutive_refusals, last_spawn_at; then run `git rev-list --count HEAD..origin/main` in the shared root.", "expected_outcome": "Baseline captured. A non-zero behind-count with last_result=refused_stale_tree reproduces the starvation precondition. NOTE: last_spawn_at proves the tick DOES reap when current — do not read a refusal streak as a permanent failure." },
+    { "step_number": 2, "instruction": "THE DISCRIMINATING STEP. With the shared root behind, invoke the tick and observe whether a reap occurs.", "expected_outcome": "Post-fix: a reap occurs. This step FAILS against today's code — that failure is the proof the test discriminates." },
+    { "step_number": 3, "instruction": "With the currency check refusing, inspect the tick output for pool utilization and for any --stage0 --execute escalation.", "expected_outcome": "Utilization IS reported; NO destructive escalation is issued from the stale tree." },
+    { "step_number": 4, "instruction": "Run scripts/drain-inventory.mjs and inspect the worktree-reaper-refusals descriptor.", "expected_outcome": "No longer NO_CONSUMER." }
+  ],
+  "metadata": {
+    "sd_key": "SD-LEO-INFRA-SCHEDULED-WORKTREE-REAPER-001",
+    "diagnosis_provenance": "Root cause corrected three times before this PRD. Retracted: (1) 'the cron times out mid-scan' — the workflow is daily with a 600s budget, the reaper has no timeout logic, the tick spawns detached; the 5-7min figure was a MANUAL-invocation measurement inferred onto the scheduled path. (2) 'the local tick never reaps' — worktree-reaper-last.log shows 20+ successful spawns on 08-07, last 02:38:11.132Z matching state.last_spawn_at; the refusals span only the ticks since. (3) 'the pool is at 28/28' — measured 22/28, day range 71-86%, never at cap. Corrections 2 and 3 were caught by the VALIDATION sub-agent (row 7983c589) after being explicitly asked to REFUTE rather than confirm.",
+    "row_field_divergence": "The SD row's `scope` field STILL carries the retracted 'times out mid-scan / bounded runs must always make progress' text, although title, strategic_objectives and success_criteria were all corrected (row updated 08:23:12). This PRD is written against the CORRECTED fields and success_criteria #5, which itself requires citing the measured pool range. Flagged rather than inherited."
+  }
+}

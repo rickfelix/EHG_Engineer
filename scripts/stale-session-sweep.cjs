@@ -3802,6 +3802,45 @@ async function main() {
     if (outcome.invoked) {
       console.log('  reaper_tick result=' + outcome.result + ' counter=' + outcome.counter);
       console.log('');
+    } else if (outcome.result !== 'skipped_not_due' && outcome.result !== 'disabled') {
+      // 'disabled' excluded for HONESTY, not because it is safe (EXEC SECURITY NI-R2). That path
+      // returns before the state file is even read, so both counters arrive undefined and no alarm
+      // can ever fire — it would pass through this gate LOOKING checked while being uncheckable.
+      // WORKTREE_REAPER_ENABLED=false is therefore still a permanently silent stop, and no counter
+      // in this design can see it: both are tick-relative, and a disabled reaper has no ticks.
+      // The control that WOULD see it is a wall-clock gauge on (now - state.last_spawn_at), which
+      // also subsumes NI-R1. Deliberately NOT built here — it is a new gauge with its own
+      // threshold, owner and drain path — and recorded as a completion flag instead.
+      // WIDENED — EXEC SECURITY (medium). This branch used to test `=== 'refused_stale_tree'`,
+      // which is the same shape of bug one level down from the `outcome.invoked` gate it replaced:
+      // it consumes ONE silent-stop class and discards the others. script_missing,
+      // skipped_in_flight (a wedged pid) and spawn_error all reap nothing and said nothing — and
+      // FR-1 made script_missing MORE reachable by resolving the script out of the source tree.
+      // 'skipped_not_due' stays excluded: that is the cadence working as designed.
+      // SD-LEO-INFRA-SCHEDULED-WORKTREE-REAPER-001 FR-4 — CONSUME THE REFUSAL.
+      //
+      // This branch is the whole fix for the undrained gauge. tick() has RETURNED
+      // consecutiveRefusals + pool since QF-20260726-794, but the `outcome.invoked` gate above is
+      // FALSE on the refusal path, so every refusal was discarded here — which is precisely why
+      // gauge-registry.js records this counter as undrained and drain-inventory pins it
+      // NO_CONSUMER. The data was never missing; nobody read it.
+      //
+      // Alarms only when the streak crosses the threshold AND the pool is non-empty (see
+      // detectReaperStarvation). Fail-open and awaited-but-guarded: an alert failure must never
+      // abort the sweep's claim-cleanup work, which is the same contract as the try/catch around it.
+      const { runReaperStarvationSurfacing } = require('../lib/coordinator/coordination-events.cjs');
+      const starvation = await runReaperStarvationSurfacing(supabase, outcome);
+      if (starvation && starvation.matched) {
+        const emitted = starvation.alert && starvation.alert.skipped ? ' (alert already open)' : ' (alert emitted)';
+        if (starvation.alertKind === 'reaper_not_invoked_alert') {
+          console.log('  REAPER NOT-INVOKED ALARM: ' + starvation.streak + ' consecutive tick(s) without running'
+            + ' (last=' + starvation.evidence.last_result + ')' + emitted);
+        } else {
+          console.log('  REAPER STARVATION ALARM: ' + starvation.streak + ' consecutive refusals, pool '
+            + starvation.evidence.pool_used + '/' + starvation.evidence.pool_cap + emitted);
+        }
+        console.log('');
+      }
     }
   } catch (reaperErr) {
     console.log('WORKTREE REAPER TICK: ' + (reaperErr && reaperErr.message ? reaperErr.message : 'unknown'));
