@@ -79,16 +79,30 @@ describe('S1: the reaper must never be able to delete the tree it executes from'
     expect(hasReapProtectedMarker(res.dir)).toBe(true);
   });
 
-  it('LAYER 2 — both dirnames are registered in the reaper\'s NON_SD_PREFIXES', () => {
+  it('LAYER 2 — the classifier REFUSES both dirnames as orphan SDs', async () => {
     // Independent of the marker: if the file is deleted, the classifier must STILL not treat these
-    // as abandoned SD worktrees. Reads the detector source because NON_SD_PREFIXES is module-local.
-    const src = fs.readFileSync(
-      path.join(process.cwd(), 'lib', 'worktree-reaper', 'detectors.js'), 'utf8',
-    );
-    const line = src.split('\n').find((l) => l.includes('const NON_SD_PREFIXES'));
-    expect(line).toBeTruthy();
-    expect(line).toContain(REAPER_SOURCE_DIRNAME);
-    expect(line).toContain(SPAWN_SOURCE_DIRNAME);
+    // as abandoned SD worktrees.
+    //
+    // REWRITTEN TWICE, and the second rewrite is the point. This used to grep the
+    // `const NON_SD_PREFIXES` SOURCE LINE for the two literals, which broke on a harmless refactor
+    // to spread SOURCE_TREE_DIRNAMES. Replacing it with `expect(r.matched).toBe(false)` looked
+    // cleaner and was VACUOUS: matched:false is reachable by TWO paths — the prefix check at
+    // detectors.js:164 AND the fail-closed fallback below it — so deleting the source trees from
+    // NON_SD_PREFIXES left the test fully GREEN. Measured, not assumed.
+    //
+    // THE REASON STRING IS THE DISCRIMINATOR. Asserting it is what separates "refused because it is
+    // a known non-SD prefix" from "refused because we could not verify anything", which is the
+    // whole property this layer exists to provide.
+    const { hasOrphanSD } = await import('../../../lib/worktree-reaper/detectors.js');
+    for (const dirname of [REAPER_SOURCE_DIRNAME, SPAWN_SOURCE_DIRNAME]) {
+      const r = hasOrphanSD(
+        { path: path.join('C:', 'pool', '.worktrees', dirname), branch: 'x', key: dirname },
+        { activeSdSet: new Set(), claimMap: new Map() },
+      );
+      expect(r.matched, `${dirname} must never classify as an orphan SD`).toBe(false);
+      expect(r.reason, `${dirname} must be refused BY THE PREFIX LIST, not by fail-closed`)
+        .toBe('non_sd_prefix');
+    }
   });
 
   it('the marker names WHY, so a human deleting it understands the consequence', () => {
