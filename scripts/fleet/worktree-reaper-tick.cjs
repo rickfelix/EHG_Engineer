@@ -21,6 +21,10 @@
 const fs = require('node:fs');
 const path = require('node:path');
 const { spawn, spawnSync } = require('node:child_process');
+// Module-level, NOT the lazy require inside resolveReaperSourceRoot: the reaper child spawn in
+// tick() needs it too, and a function-scoped binding would be a ReferenceError on exactly the
+// branch that launches the destructive process — a crash that only appears when the reaper runs.
+const { scrubGitEnv } = require('../../lib/fleet/source-tree-refresh.cjs');
 
 // SD-LEO-INFRA-SPAWN-ROOT-CURRENCY-INVARIANT-001 FR-3: resolved from this module's own
 // location, so the reaper's root is a property of the installed code rather than of
@@ -236,7 +240,7 @@ function buildReaperArgs({ reaperScript, execute, stage2, allPools }) {
  */
 function resolveReaperSourceRoot({ repoRoot, logger, env = process.env, runner, exists }) {
   const {
-    ensureSourceTreeWorktree, REAPER_SOURCE_DIRNAME, REAPER_SOURCE_BRANCH, scrubGitEnv,
+    ensureSourceTreeWorktree, REAPER_SOURCE_DIRNAME, REAPER_SOURCE_BRANCH,
   } = require('../../lib/fleet/source-tree-refresh.cjs');
   const gitRunner = runner || ((args) => {
     // EXEC SECURITY: scrubbed env. GIT_DIR/GIT_WORK_TREE in the inherited environment let a BARE
@@ -450,6 +454,11 @@ function tick(opts = {}) {
         detached: true,
         windowsHide: true,
         stdio: ['ignore', logFd, logFd],
+        // SCRUB-2 (EXEC SECURITY): the GUARD's runners were scrubbed but THIS — the process that
+        // actually deletes worktrees — inherited process.env untouched. Every git command the
+        // reaper runs would honour GIT_CONFIG_* injection, and core.fsmonitor is a command git
+        // runs. Hardening the check while leaving the executor open is the wrong half.
+        env: scrubGitEnv(process.env),
       });
       child.unref();
       pid = child.pid || null;
