@@ -21,6 +21,7 @@ import { createClient } from '@supabase/supabase-js';
 import dotenv from 'dotenv';
 import { resolve } from 'path';
 import { randomUUID } from 'crypto';
+import { insertGuarded, CLASSIFICATION } from '../../lib/governance/fixture-producer-guard.mjs';
 
 // Load main .env (not .env.test which may lack Supabase credentials)
 dotenv.config({ path: resolve(process.cwd(), '.env') });
@@ -57,15 +58,17 @@ const HAS_REAL_DB = process.env.SUPABASE_URL
 describe.skipIf(!HAS_REAL_DB)('fn_advance_venture_stage artifact precondition gate', () => {
   beforeAll(async () => {
     // Create a test venture at stage 1
-    const { data, error } = await supabase
-      .from('ventures')
-      .insert({
+    // Note on the NAME, measured rather than assumed: `artifact-gate-test-<epoch-ms>` trips
+    // canonical via EPOCH_TAIL_RE (a '-' followed by 10+ digits at the end), NOT via any
+    // fixture-name prefix. The is_demo flag below is what the declaration actually rests on;
+    // the epoch tail is a second, incidental route to the same verdict.
+    const { data, error } = await insertGuarded(supabase, 'ventures', {
         name: `artifact-gate-test-${Date.now()}`,
         is_demo: true, // SD-LEO-INFRA-CHAIRMAN-DECISION-QUEUE-002: fixture flagged at creation
         current_lifecycle_stage: 1,
         status: 'active',
         problem_statement: 'Test venture for artifact gate integration tests'
-      })
+      }, { classification: CLASSIFICATION.FIXTURE, source: 'tests/integration/artifact-gate.test.js' })
       .select('id')
       .single();
 
