@@ -76,7 +76,17 @@ jobs:
       # ALWAYS RUNS. Reports the residue count without writing, so a disabled flag is an OBSERVABLE
       # state rather than a silent one — you can see what WOULD be swept before anyone arms it, and
       # a manual dry_run dispatch stops here. (FR-4)
+      #
+      # continue-on-error IS LOAD-BEARING HERE, and it does NOT soften the gate — the final
+      # verification step below is what reddens the job now. Without it this REPORT step exited 1
+      # whenever residue existed, and a failed step ABORTS THE JOB, so the flag-gated --fix step
+      # below was UNREACHABLE EXACTLY WHEN RESIDUE EXISTED — the only condition under which it has
+      # any work to do. The remedy was gated behind its own alarm: measured 2026-08-08, run
+      # 31241155316, "FIXTURE_RESIDUE_CLEAN=false residue=87 fixed=0". The 08-01 and 07-25 greens
+      # were weeks with ZERO residue, so this workflow had been proven able to PASS but never able
+      # to FIX.
       - name: Report fixture residue (dry run — always)
+        continue-on-error: true
         run: node scripts/sweep-fixture-residue.mjs
 
       # SOFT-DELETE PATH. Requires BOTH the flag AND a non-dry-run dispatch: a scheduled run has no
@@ -86,3 +96,17 @@ jobs:
       - name: Run fixture residue sweep (soft-delete; flag-gated)
         if: steps.gate.outputs.enabled == 'true' && inputs.dry_run != true
         run: node scripts/sweep-fixture-residue.mjs --fix
+
+      # THE GATE. This step, not the report above, decides red/green — it re-measures AFTER any
+      # fix attempt and fails if residue remains. Two properties had to hold together and the
+      # obvious one-line fix (continue-on-error alone) would have broken the second:
+      #   1. the --fix step must be REACHABLE while residue exists (the defect above), and
+      #   2. residue must still turn the job RED, including when the flag is OFF and the fix step
+      #      was skipped. A gate that goes green with 87 unswept rows has traded a loud signal for
+      #      a silent one — the continue-on-error-cannot-turn-a-PR-red failure this repo already
+      #      carries in metadata-flag-lint.
+      # if: always() so the true residue state is reported even when the --fix step was skipped or
+      # itself failed; a verification that only runs on the happy path verifies nothing.
+      - name: Verify residue cleared (this is the gate)
+        if: always()
+        run: node scripts/sweep-fixture-residue.mjs
