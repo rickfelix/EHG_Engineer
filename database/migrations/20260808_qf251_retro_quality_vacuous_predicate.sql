@@ -256,7 +256,12 @@ BEGIN
   -- Specificity bonus (references to quantitative data)
   -- ==========================================================================
   IF (NEW.what_went_well::text || NEW.key_learnings::text || NEW.what_needs_improvement::text)
-     ~ '\d+ (lines?|files?|tests?|hours?|minutes?|LOC|components?)' THEN
+     -- FOLD-FORWARD (QF-20260807-251, caught at the apply safeguard): this line was transcribed
+     -- from 20260523 as `\d+`, which POSIX ERE does not honour, so the +10 specificity bonus
+     -- never fired. QF-20260529-565 already fixed it LIVE to [0-9]+ — and applying this
+     -- full-body replace with the dead form would have silently reverted that fix, last-applied-
+     -- wins. Carrying the live incumbent forward is fidelity to the approval, not new scope.
+     ~ '[0-9]+ (lines?|files?|tests?|hours?|minutes?|LOC|components?)' THEN
     score := score + 10;
   END IF;
 
