@@ -91,6 +91,10 @@ describe('the counter actually SURVIVES a state round-trip', () => {
       path.join(process.cwd(), 'scripts', 'stale-session-sweep.cjs'), 'utf8',
     );
     expect(src).toContain("outcome.result !== 'skipped_not_due'");
+    // NI-R2: 'disabled' is excluded too, and the exclusion must stay EXPLICIT rather than being
+    // quietly folded back in — that path cannot produce a verdict (it returns before the state
+    // file is read), so admitting it would look like coverage while alarming never.
+    expect(src).toContain("outcome.result !== 'disabled'");
     // The narrow gate must be GONE, not merely supplemented.
     expect(src).not.toContain("} else if (outcome.result === 'refused_stale_tree') {");
     // And the not-invoked branch must actually be reported, or the alarm is emitted into silence.

@@ -3802,7 +3802,15 @@ async function main() {
     if (outcome.invoked) {
       console.log('  reaper_tick result=' + outcome.result + ' counter=' + outcome.counter);
       console.log('');
-    } else if (outcome.result !== 'skipped_not_due') {
+    } else if (outcome.result !== 'skipped_not_due' && outcome.result !== 'disabled') {
+      // 'disabled' excluded for HONESTY, not because it is safe (EXEC SECURITY NI-R2). That path
+      // returns before the state file is even read, so both counters arrive undefined and no alarm
+      // can ever fire — it would pass through this gate LOOKING checked while being uncheckable.
+      // WORKTREE_REAPER_ENABLED=false is therefore still a permanently silent stop, and no counter
+      // in this design can see it: both are tick-relative, and a disabled reaper has no ticks.
+      // The control that WOULD see it is a wall-clock gauge on (now - state.last_spawn_at), which
+      // also subsumes NI-R1. Deliberately NOT built here — it is a new gauge with its own
+      // threshold, owner and drain path — and recorded as a completion flag instead.
       // WIDENED — EXEC SECURITY (medium). This branch used to test `=== 'refused_stale_tree'`,
       // which is the same shape of bug one level down from the `outcome.invoked` gate it replaced:
       // it consumes ONE silent-stop class and discards the others. script_missing,
