@@ -33,8 +33,22 @@ const {
   scrubGitEnv, GIT_REDIRECT_ENV_KEYS, SOURCE_TREE_AHEAD_ERROR, SOURCE_TREE_DIRTY_ERROR,
 } = require_('../../../lib/fleet/source-tree-refresh.cjs');
 
-/** The real runner shape production uses: (args, o) => execFileSync('git', args, {...}). */
-const realGit = (args) => execFileSync('git', args, { encoding: 'utf8', stdio: ['ignore', 'pipe', 'pipe'] });
+/**
+ * The real runner shape production uses: (args, o) => execFileSync('git', args, {...}).
+ *
+ * BOUND TO THE SCRATCH ROOT, and that binding is the fix for a CLASS rather than an instance.
+ * buildSourceTreeWorktreeArgs and `worktree prune` carry no -C of their own, so they run wherever
+ * the runner points. In production the runner is bound to repoRoot and this is invisible; this
+ * runner was UNBOUND, and when the rebuild path started issuing those verbs they executed AGAINST
+ * THE LIVE REPOSITORY — a stale worktree entry and two stray branches appeared in the real repo and
+ * had to be cleaned up by hand. The rebuild now passes -C explicitly, which fixed the symptom, but
+ * the construction that produced it survived here. Binding cwd closes the class: an unguarded verb
+ * can now only reach the scratch repo. `root` is assigned in beforeAll; the os.tmpdir() fallback
+ * exists so that even a call ordered before it lands somewhere harmless rather than in the repo.
+ */
+const realGit = (args) => execFileSync('git', args, {
+  cwd: root || os.tmpdir(), encoding: 'utf8', stdio: ['ignore', 'pipe', 'pipe'],
+});
 
 let root;          // a real git repo
 let plantedDir;    // <root>/.reaper-source as a PLAIN directory (the attack)
