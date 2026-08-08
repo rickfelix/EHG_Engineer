@@ -50,13 +50,27 @@ describe('FR-4: a refusal streak alarms only when it is actually starving someth
     expect(r.reason).toBe('streak_below_threshold');
   });
 
-  it('an UNKNOWN pool does not alarm, and says so distinctly', () => {
-    // Deliberate, and it cuts against fail-toward-alarm: the census failing is reported by its own
-    // path, and firing a starvation alarm off a number we could not read would attribute a pool
-    // problem to a reaper problem. The distinct reason keeps the silence greppable, not blank.
+  it('an UNKNOWN pool DOES alarm, under a distinct kind — corrected after EXEC SECURITY S3', () => {
+    // I originally suppressed this, reasoning the census failure "reports itself". That was WRONG
+    // in this SD's own signature way: the census failure is a console.log, the SAME unmonitored
+    // channel this alarm replaces. And the failure modes are CORRELATED — if git breaks host-wide,
+    // the currency check and the census fail together, so refusals pile up forever and the old
+    // logic would never alarm at any streak length. Suppressing the alarm exactly when the
+    // instrument goes blind is the guard-that-cannot-fire pattern one layer up.
     const r = detectReaperStarvation({ consecutiveRefusals: T * 3, pool: { used: null, cap: 28 } });
-    expect(r.matched).toBe(false);
+    expect(r.matched).toBe(true);
     expect(r.reason).toBe('pool_unknown');
+    // A DISTINCT kind: "the pool is starving" and "we cannot read the pool" have different first
+    // moves, and they must also de-dupe separately or one silences the other.
+    expect(r.alertKind).toBe('reaper_census_blind_alert');
+  });
+
+  it('the two alarm kinds are distinct, so neither can suppress the other', () => {
+    const starving = detectReaperStarvation({ consecutiveRefusals: T, pool: pool(22) });
+    const blind = detectReaperStarvation({ consecutiveRefusals: T, pool: { used: null, cap: 28 } });
+    expect(starving.alertKind).toBe('reaper_starvation_alert');
+    expect(blind.alertKind).toBe('reaper_census_blind_alert');
+    expect(starving.alertKind).not.toBe(blind.alertKind);
   });
 
   it('BOTH conditions are load-bearing — neither alone is sufficient', () => {

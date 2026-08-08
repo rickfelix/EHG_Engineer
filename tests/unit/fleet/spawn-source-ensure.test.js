@@ -70,11 +70,25 @@ describe('FR-2: buildSpawnSourceUpdateArgs', () => {
   });
 });
 
+/**
+ * EXEC SECURITY S2: the reuse path now IDENTITY-PROBES the directory (`rev-parse --git-common-dir`
+ * on both the candidate and the repo root) before running git in it, because existence was never
+ * identity. A fixture whose runner answers nothing reads as "unverifiable => refuse", so these
+ * mocks answer the probe as a GENUINE linked worktree — same common dir as the repo root.
+ * The REFUSAL cases are not smuggled in here; they live in tests/unit/fleet/source-tree-identity.test.js.
+ */
+const isIdentityProbe = (args) => args.includes('rev-parse') && args.includes('--git-common-dir');
+const gitMock = (impl) => vi.fn((args) => {
+  if (isIdentityProbe(args)) return '/repo/.git\n';
+  return impl ? impl(args) : undefined;
+});
+const IDENTITY_PROBES = 2; // the candidate dir and the repo root, both only on the reuse path
+
 describe('FR-1: ensureSpawnSourceWorktree', () => {
   const deps = (existsResult) => ({
     repoRoot: '/repo',
     exists: vi.fn(() => existsResult),
-    runner: vi.fn(),
+    runner: gitMock(),
     env: {},
   });
 
@@ -105,13 +119,15 @@ describe('FR-1: ensureSpawnSourceWorktree', () => {
     const d = deps(true);
     const out = ensureSpawnSourceWorktree(d);
     expect(out.refreshed).toBe(true);
-    expect(d.runner).toHaveBeenCalledTimes(2); // fetch, then ff-only merge
+    expect(d.runner).toHaveBeenCalledTimes(2 + IDENTITY_PROBES); // identity probes, then fetch + ff-only merge
   });
 
   it('a FAILED refresh does not throw — the currency check is the authority, not this', () => {
     // Throwing here would turn a transient network blip into a fleet-wide spawn outage. The tree
     // simply stays behind and enforceTreeCurrency refuses it with the real reason.
-    const d = { ...deps(true), runner: vi.fn(() => { throw new Error('network unreachable'); }) };
+    // The identity probe SUCCEEDS and the refresh fails — that is the real shape of a network blip.
+    // (A runner that threw on the probe too would be refused as unverifiable, testing nothing here.)
+    const d = { ...deps(true), runner: gitMock(() => { throw new Error('network unreachable'); }) };
     const out = ensureSpawnSourceWorktree(d);
     expect(out.refreshed).toBe(false);
     expect(out.dir).toBe(resolveSpawnSourceDir('/repo', {}));

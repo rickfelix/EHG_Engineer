@@ -95,6 +95,10 @@ function spawnOpts({ branch, behind, exists = true }) {
       repoRoot: REPO_ROOT,
       spawnSourceExists: () => exists,
       spawnSourceRunner: (args) => {
+        // EXEC SECURITY S2 identity probe: answered as a genuine linked worktree, and deliberately
+        // NOT logged — these tests assert an ORDER (refresh before the guard reads the tree), and
+        // folding a bookkeeping probe into that ordered log would rewrite the contract under test.
+        if (args.includes('rev-parse') && args.includes('--git-common-dir')) return `${REPO_ROOT}/.git\n`;
         gitCalls.push(args.join(' '));
         sequence.push(args.includes('--ff-only') ? 'refresh' : 'spawnsource:' + args.join(' ').slice(0, 24));
         return '';

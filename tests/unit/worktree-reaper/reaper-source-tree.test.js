@@ -54,7 +54,14 @@ function run(extra = {}) {
       force: true,
       logger: () => {},
       sourceExists: () => true,          // the source tree is already present
-      sourceRunner: (args) => { gitCalls.push(args.join(' ')); }, // refresh succeeds
+      // Refresh succeeds. The identity probe (EXEC SECURITY S2) is answered as a GENUINE linked
+      // worktree — same --git-common-dir for the candidate and the repo root — because these tests
+      // are about source-tree RESOLUTION, not about the refusal path (source-tree-identity.test.js).
+      sourceRunner: (args) => {
+        gitCalls.push(args.join(' '));
+        if (args.includes('rev-parse') && args.includes('--git-common-dir')) return `${poolRoot}/.git\n`;
+        return undefined;
+      },
       currencyEnv: { ...process.env, FLEET_REAPER_SOURCE_DIR: sourceDir },
       ...extra,
     }),
