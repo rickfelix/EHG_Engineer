@@ -1,0 +1,59 @@
+name: Fixture Producer Guard Coverage Lint
+
+# SD-LEO-INFRA-ONE-SYNTHETIC-ROW-001-D (FR-6)
+#
+# Blocks any PR that adds a `ventures` INSERT/UPSERT under tests/integration, tests/database,
+# scripts/harness or scripts/canary without routing it through insertGuarded() from
+# lib/governance/fixture-producer-guard.mjs. An unguarded producer creates a row that no
+# producer-side assert ever checked — the synthetic-row class this SD exists to close.
+#
+# GENUINELY BLOCKING — no continue-on-error. That is deliberate and it is the whole point:
+# the parent scope claimed metadata-flag-lint already enforced this, and it did not. That lint
+# is continue-on-error (its own header says it "CANNOT turn a PR red"), it EXCLUDES tests/ so
+# 22 of the 25 producers were invisible to it, and it is an EXISTENCE check rather than a
+# COVERAGE check — its verdict is identical whether 1 producer or 25 have adopted the marker.
+# This workflow is the coverage half that did not exist.
+#
+# ENABLED ONLY NOW, WITH THE LAST CONVERSION IN THE SAME COMMIT. All 26 measured write-sites
+# were converted first, so the guard is GREEN ON ARRIVAL. A guard that is red the day it lands
+# is a guard everybody learns to route around — see ismainmodule-classguard-lint.yml, whose
+# header records exactly that reasoning.
+#
+# PATH FILTER: ONE ENTRY PER EXTENSION, never a brace-glob. GitHub Actions does not expand brace
+# alternation; ismainmodule-classguard-lint.yml used one and matched NOTHING, running exactly once
+# ever while seven violations landed underneath it over 32 days.
+
+on:
+  pull_request:
+    paths:
+      - 'tests/integration/**/*.js'
+      - 'tests/integration/**/*.mjs'
+      - 'tests/integration/**/*.cjs'
+      - 'tests/database/**/*.js'
+      - 'tests/database/**/*.mjs'
+      - 'tests/database/**/*.cjs'
+      - 'scripts/harness/**/*.js'
+      - 'scripts/harness/**/*.mjs'
+      - 'scripts/harness/**/*.cjs'
+      - 'scripts/canary/**/*.js'
+      - 'scripts/canary/**/*.mjs'
+      - 'scripts/canary/**/*.cjs'
+      - 'lib/governance/fixture-producer-guard.mjs'
+      - 'scripts/lint/fixture-producer-guard-lint.mjs'
+      - 'scripts/lint/fixture-producer-guard-allowlist.json'
+      - '.github/workflows/fixture-producer-guard-lint.yml'
+  workflow_dispatch:
+
+jobs:
+  fixture-producer-guard-lint:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+      # The lint is dependency-free (node:fs / node:path only), but npm ci keeps this job
+      # identical in shape to the other blocking class-guards rather than quietly special.
+      - run: npm ci
+      - name: Every ventures write routes through insertGuarded
+        run: node scripts/lint/fixture-producer-guard-lint.mjs
