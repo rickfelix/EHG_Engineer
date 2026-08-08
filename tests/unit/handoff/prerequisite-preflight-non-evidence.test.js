@@ -79,6 +79,37 @@ describe('preflight diagnoses non-evidence by name (SD-LEO-INFRA-EXPLORE-UNREGIS
     expect(notRun.remediation).toMatch(/record-explore-evidence\.js|Task tool/);
   });
 
+  it('MIXED STATE: one agent MISSING and another NON-EVIDENCE yields BOTH named diagnoses', async () => {
+    // RE-DERIVED FROM A DESTROYED LEAD. A sibling security agent left an untracked scratch test
+    // asserting exactly this, and it FAILED ("non-evidence diagnosis lost"). I deleted that scratch
+    // in a cleanup sweep before reading it, so the failing case could not be re-read — a peer who
+    // had run it relayed the assertion text, and this reconstructs it.
+    //
+    // WHY IT IS THE INTERESTING CASE. When some agents are absent AND another holds a crash row,
+    // absence decides the verdict, so the gate returns through the MISSING branch. That branch built
+    // sharedDetails carrying `failing` but NOT `nonEvidence`, so details.non_evidence was undefined
+    // and the tombstone vanished behind the absence diagnosis. A worker would fix the missing agent,
+    // re-run, and only then discover the second problem — one round trip per hidden class.
+    //
+    // That is the "reports a subset and reads as complete" shape this SD family exists to close, so
+    // a fix for it that is itself only tested in the single-class case would be exactly the kind of
+    // partial coverage the SD is about.
+    const supabase = makeMockSupabase({
+      sdRow: BASE_SD,
+      evidenceRows: [{ sub_agent_code: 'TESTING', verdict: 'ERROR', created_at: '2099-01-01T00:00:00Z' }]
+    });
+    // EXEC-TO-PLAN requires TESTING and SECURITY: TESTING holds a crash row, SECURITY is absent.
+    const result = await runPrerequisitePreflight(supabase, 'EXEC-TO-PLAN', 'SD-TEST-NONEVIDENCE-001');
+
+    const missing = result.issues.find((i) => i.code === 'SUBAGENT_EVIDENCE_MISSING');
+    const notRun = result.issues.find((i) => i.code === 'SUBAGENT_EVIDENCE_NOT_RUN');
+
+    expect(missing, 'the absent agent was not reported').toBeTruthy();
+    expect(missing.message).toContain('SECURITY');
+    expect(notRun, 'non-evidence diagnosis lost — the tombstone is hidden behind the absence').toBeTruthy();
+    expect(notRun.message).toContain('TESTING');
+  });
+
   it('CONTROL: a genuinely MISSING row still reports SUBAGENT_EVIDENCE_MISSING and names the agent', async () => {
     // Two-sided. Without this, suppressing the fallback could have suppressed it everywhere, and
     // the absence case — which was always correct — would have lost its diagnosis.
