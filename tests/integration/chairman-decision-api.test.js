@@ -12,6 +12,7 @@ import { describe, it, expect, beforeAll, afterAll } from 'vitest';
 import 'dotenv/config';
 import { randomUUID } from 'node:crypto';
 import { createOrReusePendingDecision, waitForDecision } from '../../lib/eva/chairman-decision-watcher.js';
+import { insertGuarded, CLASSIFICATION } from '../../lib/governance/fixture-producer-guard.mjs';
 
 const supabase = createSupabaseServiceClient();
 
@@ -58,9 +59,15 @@ describe.skipIf(!HAS_REAL_DB)('Chairman Decision API', () => {
     // assertion below). Root-caused instead via the CI-workflow fix (package.json
     // test:coverage now scopes --project unit) so this suite never runs unintentionally
     // against production; it remains valid to run intentionally (npm run test:integration).
-    const { data, error } = await supabase
-      .from('ventures')
-      .insert({ name: RUN_MARKER, problem_statement: RUN_MARKER })
+    // This row carries NO is_demo, so its classification rests entirely on the NAME branch —
+    // measured before declaring, not after: RUN_MARKER starts with '__', which canonical's
+    // FIXTURE_VENTURE_NAME_RE matches, so FIXTURE is the correct declaration. The watcher
+    // predicate deliberately EXCLUDES a bare '__' prefix precisely so __citest_chairman__ rows
+    // exercise the real write path; that divergence is by design and is untouched here — the
+    // guard checks canonical only.
+    const { data, error } = await insertGuarded(supabase, 'ventures',
+      { name: RUN_MARKER, problem_statement: RUN_MARKER },
+      { classification: CLASSIFICATION.FIXTURE, source: 'tests/integration/chairman-decision-api.test.js' })
       .select('id')
       .single();
     if (error) {

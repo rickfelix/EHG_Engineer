@@ -221,5 +221,25 @@
       "replace": "if (false) continue;",
       "why": "the --all walk stops pruning fixture directories, so the planted lib/__tests__ file is scanned and flagged, and the assertion that no hit contains __tests__ goes RED"
     }
+  },
+  {
+    "name": "fixture-producer-guard-lint",
+    "script": "scripts/lint/fixture-producer-guard-lint.mjs",
+    "rootFlag": "--root",
+    "observability_proof": {
+      "input": "The SOURCE TEXT of every *.mjs/*.js/*.cjs file found by a recursive walk of four named roots (tests/integration, tests/database, scripts/harness, scripts/canary), read with readFileSync and stripped of comments and string bodies before matching; plus scripts/lint/fixture-producer-guard-allowlist.json, whose keys are '<repo-relative-file>' or '<repo-relative-file>:<line>'. Its OUTPUT SIGNAL is the process exit code (0 = clean, 1 = violations found OR zero guarded sites OR the startup selfTest failed) plus a stdout summary line carrying the guarded-site and unguarded-write counts, and one stderr line per violation naming file:line. It consumes NO database columns and NO environment variables.",
+      "seen": "Real UNPLANTED positive observed in the deployment environment (live invocation against the actual repository working tree, 2026-08-08): during the conversion sweep this control reported an unguarded ventures write in tests/integration/eva/venture-error-aggregation-realdb.test.js that a bulk rewrite had silently failed to convert — that file binds its supabase client as 'svc', so a rewrite keyed to one spelling matched zero sites there while reporting success on the other files. The control's count is what exposed it; the rewrite's own report said success. Separately, a planted two-sided probe on the same real tree showed the pre-fix build printing '2 write-site(s) found' AND 'every ventures write routes through insertGuarded' at exit 0, and the post-fix build exiting 1 naming both sites. HONEST LIMIT ON THIS FIELD: the .github/workflows/fixture-producer-guard-lint.yml job has so far only ever run GREEN — this control has NOT yet blocked a pull request in CI, so the positives cited above are live local invocations, not CI blocks."
+    },
+    "note": "SD-LEO-INFRA-ONE-SYNTHETIC-ROW-001-D (FR-6). TWO fixtures, and the second is load-bearing rather than decoration. This lint REFUSES to report success on zero guarded sites (a blind extractor and a clean tree otherwise print the same green), and that refusal returns BEFORE the violation listing. Seeding only the defect would therefore exercise the zero-guarded branch and never emit the seeded filename, scoring a firing control SILENT. The guarded twin puts the denominator above zero so the trial drives the REAL violation-reporting path. DETECTION IS DELIBERATELY KEYED ON THE SEEDED FILENAME ALONE: the summary line prints 'N unguarded ventures write-site(s)' on every run including a clean one, so declaring that phrase a detectToken would mark this control as firing when it found nothing.",
+    "fixtures": [
+      {
+        "path": "tests/integration/seeded-fixture-producer-defect.js",
+        "content": "// SEEDED DEFECT: a raw ventures insert that no producer-side assert ever checked.\nexport async function make(supabase) {\n  return supabase.from('ventures').insert({ name: 'seeded-unguarded-row', is_demo: true });\n}\n"
+      },
+      {
+        "path": "scripts/harness/seeded-fixture-producer-guarded.js",
+        "content": "// NOT the defect. A correctly guarded producer, present so the coverage denominator is\n// non-zero — see the note on this spec. The lint reads source as TEXT and never imports it,\n// so the unresolvable path below is irrelevant to the trial.\nimport { insertGuarded, CLASSIFICATION } from '../../lib/governance/fixture-producer-guard.mjs';\nexport async function ok(supabase) {\n  return insertGuarded(supabase, 'ventures', { name: 'TEST-seeded-guarded', is_demo: true },\n    { classification: CLASSIFICATION.FIXTURE, source: 'seed-trial' });\n}\n"
+      }
+    ]
   }
 ]

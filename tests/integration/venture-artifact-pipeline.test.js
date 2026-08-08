@@ -16,6 +16,7 @@ import { createSupabaseServiceClient } from '../../lib/supabase-client.js';
 import { randomUUID } from 'crypto';
 import dotenv from 'dotenv';
 import { describe, it, expect, beforeAll, afterAll } from 'vitest';
+import { insertGuarded, CLASSIFICATION } from '../../lib/governance/fixture-producer-guard.mjs';
 
 dotenv.config({ path: '.env', override: true });
 
@@ -77,16 +78,14 @@ describe.skipIf(!HAS_REAL_DB)('Venture Artifact Pipeline E2E', () => {
   });
 
   it('should create a test venture', async () => {
-    const { data, error } = await supabase
-      .from('ventures')
-      .insert({
+    const { data, error } = await insertGuarded(supabase, 'ventures', {
         id: TEST_VENTURE_ID,
         name: TEST_VENTURE_NAME,
         status: 'active',
         current_lifecycle_stage: 1,
         origin_type: 'manual',
         problem_statement: 'Integration test venture for artifact pipeline verification',
-      })
+      }, { classification: CLASSIFICATION.FIXTURE, source: 'tests/integration/venture-artifact-pipeline.test.js' })
       .select('id, name, status, current_lifecycle_stage')
       .single();
 
@@ -362,9 +361,7 @@ describe('Chairman Gate Blocking at Stage 3 (FR-004)', () => {
 
   beforeAll(async () => {
     // Create venture at stage 3 (Kill Gate)
-    const { error } = await supabase
-      .from('ventures')
-      .insert({
+    const { error } = await insertGuarded(supabase, 'ventures', {
         id: GATE_VENTURE_ID,
         name: GATE_VENTURE_NAME,
         status: 'active',
@@ -372,7 +369,7 @@ describe('Chairman Gate Blocking at Stage 3 (FR-004)', () => {
         orchestrator_state: 'idle',
         origin_type: 'manual',
         problem_statement: 'Gate blocking test venture',
-      });
+      }, { classification: CLASSIFICATION.FIXTURE, source: 'tests/integration/venture-artifact-pipeline.test.js' });
 
     expect(error).toBeNull();
   });
@@ -472,9 +469,7 @@ describe('Orchestrator State Transitions', () => {
   const STATE_VENTURE_NAME = `State-Test-${Date.now()}`;
 
   beforeAll(async () => {
-    const { error } = await supabase
-      .from('ventures')
-      .insert({
+    const { error } = await insertGuarded(supabase, 'ventures', {
         id: STATE_VENTURE_ID,
         name: STATE_VENTURE_NAME,
         status: 'active',
@@ -482,7 +477,7 @@ describe('Orchestrator State Transitions', () => {
         orchestrator_state: 'idle',
         origin_type: 'manual',
         problem_statement: 'State transition test venture',
-      });
+      }, { classification: CLASSIFICATION.FIXTURE, source: 'tests/integration/venture-artifact-pipeline.test.js' });
 
     expect(error).toBeNull();
   });
