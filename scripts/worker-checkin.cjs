@@ -83,7 +83,7 @@ function getDispatchAuthMode() {
 }
 // SD-LEO-INFRA-COMPLEXITY-TIERED-WORKER-ASSIGNMENT-001 (FR-3): WORK-DOWN-NEVER-UP on the PULL path.
 // SD-LEO-INFRA-AUTO-TIERING-ACTIVATION-001-B (FR-3): --model/--effort capture at check-in.
-const { resolveWorkerTierRank, isTieringActive, normalizeModel, normalizeEffort, rankForModelEffort, ladderTopRank, familyFromModelId, seatCapabilityIsVerified } = require('../lib/fleet/tier-ladder.cjs');
+const { resolveWorkerTierRank, isTieringActive, normalizeModel, normalizeEffort, rankForModelEffort, ladderTopRank, familyFromModelId, seatCapabilityIsVerified, isKnownEffort, isKnownModel } = require('../lib/fleet/tier-ladder.cjs');
 // SD-LEO-INFRA-BELT-TIER-AWARE-CLAIMABILITY-001 (FR-2): tier-aware "claimable-to-MY-rung" rollup.
 const { claimableForTier, claimableForRepo } = require('../lib/fleet/tier-claimable.cjs');
 // SD-LEO-INFRA-AUTO-TIERING-ACTIVATION-001-E (FR-6): backlog-gated downward claims. The fetcher is
@@ -1839,22 +1839,60 @@ function mergeCheckinModelEffort(sessionMetadata, { model: cliModel = null, effo
     // never silently overwritten by a self-report. The two automatic sources
     // (worker_self_report, sessionstart_observed) may replace each other.
     const priorSource = current.model_source;
+    // QF-20260807-159: 'conservative_up_guess' joins the AUTOMATIC set. It is this fix's own
+    // second-order trap — the guard reads "anything not in this list is authoritative", so a
+    // new automatic value silently acquires chairman standing and a later GENUINE self-report
+    // could never overwrite a guess. That is strictly worse than the defect being fixed:
+    // it would pin a seat to a mis-guessed tier permanently.
     const externallyStamped = priorSource
-      && priorSource !== 'worker_self_report' && priorSource !== 'sessionstart_observed';
-    if (!externallyStamped && next.model_source !== 'worker_self_report') {
-      next.model_source = 'worker_self_report';
+      && priorSource !== 'worker_self_report' && priorSource !== 'sessionstart_observed'
+      && priorSource !== 'conservative_up_guess';
+    // QF-20260807-159 (item 2): a model id naming no known family does NOT get ranked as
+    // reported — it is silently resolved conservative-UP to the strongest family. Stamping
+    // that as worker_self_report dresses a GUESS as a REPORT, and this very field is what
+    // authoritative-wins-over-worker keys on, so the guess inherits a real report's standing.
+    // Name the guess instead. The value still ranks conservative-UP (unchanged); only its
+    // PROVENANCE becomes honest, so a reader can tell "the seat said this" from "we assumed".
+    const modelSource = isKnownModel(cliModel) ? 'worker_self_report' : 'conservative_up_guess';
+    if (!externallyStamped && next.model_source !== modelSource) {
+      next.model_source = modelSource;
       changed = true;
     }
   }
 
   if (cliEffort) {
     const effortSource = current.effort_source;
-    const chairmanWins = effortSource && effortSource !== 'worker_self_report';
+    // QF-20260807-159: same second-order trap as model_source above — a prior
+    // 'conservative_up_guess' must NOT read as a chairman stamp, or a guess would
+    // permanently outrank the worker's own later, correct report.
+    const chairmanWins = effortSource
+      && effortSource !== 'worker_self_report' && effortSource !== 'conservative_up_guess';
     if (!chairmanWins) {
       const normalized = normalizeEffort(cliEffort);
       if (next.effort !== normalized) { next.effort = normalized; changed = true; }
-      if (next.effort_source !== 'worker_self_report') { next.effort_source = 'worker_self_report'; changed = true; }
+      // QF-20260807-159 (item 2): same guess-vs-report distinction as model above. An
+      // unrecognised effort lands on xhigh by conservative-UP fallback, which is the RIGHT
+      // value and the WRONG provenance if it is recorded as a self-report.
+      const effortSourceNext = isKnownEffort(cliEffort) ? 'worker_self_report' : 'conservative_up_guess';
+      if (next.effort_source !== effortSourceNext) { next.effort_source = effortSourceNext; changed = true; }
     }
+  }
+
+  // QF-20260807-159 (item 4): SURFACE a re-attestation that changes the seat's model FAMILY.
+  // Measured twice on 2026-08-07: two seats sat in a doctrine hold that every dashboard
+  // rendered as healthy idle — Bravo went idle_fable_propose -> idle on re-attesting, with
+  // belt_ranked_claimable=22 and claimable_at_my_tier=3 available the whole time; Charlie was
+  // held off nine claimable SDs the same way. Neither hold was visible; only the FLIP was, and
+  // the flip was being absorbed silently. Announce it here, where the prior family is still in
+  // hand — a correction nobody can see is indistinguishable from a seat that was never held.
+  // Emitted to stderr so it cannot corrupt the single-JSON-object stdout contract.
+  const priorFamily = current.model_family || (current.model ? familyFromModelId(current.model) : null);
+  const nextFamily = next.model_family || (next.model ? familyFromModelId(next.model) : null);
+  if (changed && priorFamily && nextFamily && priorFamily !== nextFamily) {
+    console.error(`[checkin] MODEL FAMILY RE-ATTESTED: ${priorFamily} -> ${nextFamily}. `
+      + 'If this seat was held by a family-keyed doctrine (e.g. the Fable no-general-work hold), '
+      + 'that hold is LIFTING NOW and the belt it was hiding becomes claimable this pass. '
+      + 'A silent flip is the tell that a hold existed (QF-20260807-159).');
   }
 
   if (changed) {
