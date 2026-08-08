@@ -36,11 +36,21 @@ import rule from '../../eslint-rules/no-raw-session-coordination-insert.js';
 // sharing this driver's diff/all/exclusion machinery — flags target_session sourced from an
 // echoed row field instead of a fresh identity-resolver call.
 import echoedTargetRule from '../../eslint-rules/no-echoed-session-coordination-target.js';
+// SD-LEO-INFRA-SWEEP-REPO-SCANNERS-001 (FR-2). Shape B: only isFixturePath — see the helper for why
+// stripComments is shape-A-only and would be cargo-cult here.
+import { isFixturePath } from '../../lib/lint/added-line-text.mjs';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const REPO_ROOT = path.resolve(__dirname, '..', '..');
 
 const SCAN_DIRS = ['scripts', 'lib'];
+// KNOWN LIMITATION (SD-LEO-INFRA-SWEEP-REPO-SCANNERS-001): this control is EXCLUSION-SCOPED, so a
+// raw insert introduced inside anything it skips is invisible BY DESIGN -- concretely, a raw
+// .from('session_coordination').insert(...) added to lib/coordinator/dispatch.cjs (EXCLUDE_PATHS),
+// to any fixture/test path (isFixturePath), or to a file outside scripts/ and lib/ is never
+// reported. The dispatch.cjs exclusion is deliberate (it IS the choke point), but it means the choke
+// point itself is unguarded by this control: nothing here stops a SECOND raw insert being added
+// beside the canonical one.
 const SCAN_EXTENSIONS = new Set(['.js', '.mjs', '.cjs']);
 const EXCLUDE_DIR_SEGMENTS = ['node_modules', '.git', '.worktrees', 'dist', 'build', 'coverage', 'archive', 'one-time', 'temp'];
 const EXCLUDE_FILE_RE = /(\.test\.|\.spec\.|\.d\.ts$|\.min\.js$)/i;
@@ -95,6 +105,16 @@ function walk(dir, out) {
 
 function isExcluded(relPath) {
   if (EXCLUDE_PATHS.has(relPath)) return true;
+  // FR-2 lands HERE rather than at the two call sites because both candidateFilesDiff and
+  // candidateFilesAll already funnel through this predicate — one door, so the diff path and the
+  // --all sweep cannot drift apart.
+  //
+  // This scanner ALREADY MEANT to exclude test material and covered three of the four shapes
+  // (EXCLUDE_FILE_RE catches .test./.spec. basenames, EXCLUDE_DIR_PREFIXES catches a top-level
+  // tests/); a file merely NESTED under __tests__/ without .test. in its name slipped through, which
+  // is 5 live files (scripts/__tests__/replay/*.mjs). So this closes an inconsistency in the
+  // scanner's OWN exclusion policy — it is not a new policy imported from elsewhere.
+  if (isFixturePath(relPath)) return true;
   return EXCLUDE_DIR_PREFIXES.some((prefix) => relPath.startsWith(prefix));
 }
 

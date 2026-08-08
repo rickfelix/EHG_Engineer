@@ -28,9 +28,19 @@ import { extractReferences, findViolations } from './schema-reference-extract.mj
 // SD-LEO-INFRA-SCHEMA-LINT-DEGRADED-FAILOPEN-001: a degraded --diff run (unresolvable base ->
 // whole-repo fallback) is ADVISORY and must not block; the pure helper encodes that exit rule.
 import { computeExitCode } from './schema-lint-exit.mjs';
+// SD-LEO-INFRA-SWEEP-REPO-SCANNERS-001 (FR-2). This scanner is the SD's RECORDED INSTANCE (3): it
+// read fixtures across 7 suites plus two worked-example comments as live schema references. Shape B,
+// so only isFixturePath — see the helper for why stripComments is shape-A-only.
+import { isFixturePath, isFixtureEntry } from '../../lib/lint/added-line-text.mjs';
 // QF-20260802-742: the new-vs-pre-existing split, kept pure so both polarities are fixture-testable.
 import { violationKey, partitionViolations } from './schema-lint-scope.mjs';
 
+// KNOWN LIMITATION (SD-LEO-INFRA-SWEEP-REPO-SCANNERS-001): this control compares references against
+// a COMMITTED SNAPSHOT, so its truth is only as current as that file. Concretely, a table CREATED by
+// a migration in THIS SAME PR is not in the snapshot yet and reads as a PHANTOM (false positive),
+// and a table DROPPED since the snapshot was taken still reads as valid (false negative). The
+// staleness warning below is advisory and never blocks, so the false negative is the silent
+// direction. Regenerate with: npm run schema:snapshot:lint
 const SNAPSHOT_PATH = 'database/schema-reference-snapshot.json';
 const ALLOWLIST_PATH = 'scripts/lint/schema-reference-allowlist.json';
 const RUNTIME_DIRS = ['scripts', 'lib', 'src', 'server', 'api', 'app'];
@@ -118,7 +128,9 @@ function candidateFiles() {
         .filter(f => CODE_RE.test(f))
         .filter(f => RUNTIME_DIRS.includes(f.split('/')[0]))
         .filter(f => !SKIP_DIR_RE.test(f))
-        .filter(f => f.split('/')[0] !== 'tests');
+        // Supersedes the old top-level-only `split('/')[0] !== 'tests'`: that missed NESTED tests/,
+        // __tests__/ and .test./.spec. files entirely — which is how instance (3) happened.
+        .filter(f => !isFixturePath(f));
     } catch (e) {
       // Fail-soft: no diff base resolvable → advisory full sweep instead of a false block.
       console.warn(`⚠️  diff base unavailable (${e.message.split('\n')[0]}) — falling back to --all (advisory)`);
@@ -137,6 +149,10 @@ function candidateFilesAll() {
     for (const e of entries) {
       const p = path.join(dir, e.name).replace(/\\/g, '/');
       if (SKIP_DIR_RE.test(p)) continue;
+      // The --all sweep is a SECOND DOOR, and the diff path FALLS BACK to it when the base is
+      // unresolvable — fixing only the diff filter would leave this one serving fixtures. Directories
+      // need a trailing '/', which isFixtureEntry encodes so no call site has to remember it.
+      if (isFixtureEntry(p, e.isDirectory())) continue;
       if (e.isDirectory()) walk(p);
       else if (CODE_RE.test(e.name)) out.push(p);
     }
