@@ -124,6 +124,17 @@ describe('the SQL and this mirror cannot drift', () => {
     expect(sql).toContain(`btrim(lower(item)) ~ '${vacuousRegex}' THEN`);
   });
 
+  it('the migration declares itself chairman-gated — the apply is deferred BY DESIGN', () => {
+    // Adam ruled 2026-08-08 that CREATE OR REPLACE FUNCTION is outside the delegated-apply lane
+    // and that this function, being the gate instrument, also invokes proposer-is-not-approver.
+    // check-migration-readiness reads this marker (CHAIRMAN-GATED-EXEMPT-001) and reports
+    // EXPECTED_PENDING instead of DRIFT_DETECTED — because the live body genuinely differs from
+    // this file and is SUPPOSED to until the ceremony runs. Pinned so the ruling travels with
+    // the artifact: if someone deletes the marker, the divergence goes red again, correctly.
+    const sql = readFileSync(MIGRATION, 'utf8');
+    expect(/^\s*--\s*(@chairman-gated|requires[-_]chairman[-_]apply)\b/im.test(sql)).toBe(true);
+  });
+
   it('the migration declares the predicate EXACTLY ONCE', () => {
     const sql = readFileSync(MIGRATION, 'utf8');
     expect((sql.match(/btrim\(lower\(item\)\) ~ '/g) || []).length).toBe(1);

@@ -15,8 +15,22 @@
 -- applied wins, silently. If another migration touching
 -- public.auto_validate_retrospective_quality is in flight, reconcile them BEFORE applying.
 --
--- Live body UNVERIFIED from the authoring seat (no exec_sql RPC there); the apply seat reads
--- the deployed function and diffs it against this file before applying.
+-- @chairman-gated
+-- Ruled by Adam 2026-08-08: CREATE OR REPLACE FUNCTION is NOT in the delegated-apply lane
+-- (that lane is a strict additive subset — CREATE TABLE/INDEX, nullable columns, CHECK-widen,
+-- allow-listed INSERTs; behaviour mutations default-deny), and this function IS the gate
+-- instrument, which invokes proposer-is-not-approver on top. Path is the chairman ceremony:
+-- @approved-by header, 3-factor apply from the coordinator seat.
+--
+-- The marker is why check-migration-readiness reports EXPECTED_PENDING rather than
+-- DRIFT_DETECTED for this file (CHAIRMAN-GATED-EXEMPT-001). It is a statement of fact about a
+-- ruling, not a way to quiet a red check: the live body genuinely differs from this file, and
+-- it is SUPPOSED to until the ceremony runs. Remove it and the divergence must go red again.
+--
+-- Live body was UNVERIFIED from the authoring seat (no exec_sql RPC there). The readiness probe
+-- has since read the deployed function directly and its diff shows the OLD substring predicate
+-- still live — which confirms the deployed body matches 20260523 and turns that inference into
+-- a measurement. The apply seat re-reads and diffs again before applying.
 
 BEGIN;
 
