@@ -477,7 +477,13 @@ export async function validateSubagentEvidence(ctx, supabase) {
         max_score: 100,
         issues: [head],
         details: { reason: 'SUBAGENT_EVIDENCE_NOT_RUN', non_evidence: nonEvidence, ...verdictDetails },
-        remediation: `Re-run ${nonEvidence.map(f => f.agent).join(', ')} for SD ${sdKey} until it writes a real verdict. If the agent code cannot be executed at all (e.g. it names a Claude Code agent TYPE with no row in the sub-agent catalog), that is a REQUIREMENT defect, not a worker error — the required-agent list is naming something no CLI path can satisfy.`
+        // SD-LEO-INFRA-EXPLORE-UNREGISTERED-LEO-001 corrected the second half of this text. It used
+        // to say an unexecutable agent code was "a REQUIREMENT defect, not a worker error — the
+        // required-agent list is naming something no CLI path can satisfy". That was true when
+        // written and is now FALSE for the case it was written about: Explore has a sanctioned
+        // producer. Leaving it would send a worker to file a defect instead of running the writer —
+        // a remediation that was accurate once and quietly stopped being so.
+        remediation: `Re-run ${nonEvidence.map(f => f.agent).join(', ')} for SD ${sdKey} until it writes a real verdict. If the agent is a read-only Claude Code BUILT-IN (Explore), it has no CLI producer BY DESIGN — use the Task tool, or record the run with scripts/record-explore-evidence.js. If some OTHER code cannot be executed at all, that is a REQUIREMENT defect rather than a worker error: the required-agent list is naming something no path can satisfy.`
       });
     }
 
