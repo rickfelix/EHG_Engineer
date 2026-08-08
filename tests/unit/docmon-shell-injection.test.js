@@ -11,9 +11,15 @@
  * and the credentials are real.
  *
  * .test.js, NOT .test.mjs, DELIBERATELY. The vitest unit project includes a recursive .test.js glob
- * plus two narrow .mjs anchors that do not cover this directory. A file named with a .test.mjs
- * extension here is collected by ZERO projects and silently never runs — measured by A-B probe
- * during PLAN, which is the single most likely way this suite ends up decorative. Prove collection with
+ * plus two narrow .mjs anchors that do not cover this directory, so a .test.mjs file here is
+ * collected by ZERO projects — measured by A-B probe.
+ *
+ * WHERE THAT BECOMES SILENT, stated precisely rather than overstated: a TARGETED run of a
+ * non-collected file EXITS 1 with "No test files found", so running this file by name is safe and
+ * loud. The vacuity is SUITE-WIDE only. `npm test` and CI's test:coverage both run
+ * `vitest run --project unit`, and an uncollected file is simply ABSENT from that sweep — no error,
+ * no skip notice, just green. So the danger is not that the file fails quietly; it is that the
+ * suite succeeds without it and nothing reports a file that was never collected. Prove collection with
  * `npx vitest list --project unit tests/unit/docmon-shell-injection.test.js`; a green run is not
  * proof, because a file that never ran is also green.
  *
@@ -140,7 +146,25 @@ function commitRaw(dir, files) {
   git(dir, ['update-ref', 'refs/heads/main', commit]);
 }
 
-/** Run the REAL docmon against a fixture repo. Never throws; the side effects are what matter. */
+/**
+ * Run the REAL docmon against a fixture repo. Never throws; the side effects are what matter.
+ *
+ * MEASURED LIMIT OF THE "THE FIX" ASSERTIONS BELOW, stated because a green test that cannot fail is
+ * worse than no test. A mutation run reverting :386 to its pre-fix shell string produced ZERO red on
+ * this Windows host. Diagnosed with the TRUE pre-fix file from git history, not a reconstruction:
+ * the sink IS reached (git reports `fatal: path 'docs/pwn` + backtick + `touch' does not exist`),
+ * but Windows splits the command line on spaces and leaves the backtick LITERAL, so the payload
+ * never executes and no marker appears — with or without the fix.
+ *
+ * A ComSpec override pointing at a real sh was tried and MEASURED NOT TO WORK; the child still ran
+ * under cmd. That attempt was removed rather than left in place with a comment claiming otherwise.
+ *
+ * So on win32 these assertions are TRUE BUT NON-DISCRIMINATING. They discriminate on ubuntu, which
+ * is where CI runs and where the ARM above proves the payload fires. The honest local coverage is:
+ * the ARM tests (which force `shell: SH` and DO fire here) and the lint's guard tests. A Windows-
+ * native payload using `&` — live under cmd.exe at the unquoted sink — would close this gap and is
+ * the correct next step; it is not yet done, and this comment is not a substitute for it.
+ */
 function runDocmon(dir) {
   try {
     return execFileSync(process.execPath, [DOCMON, '--json'], {
