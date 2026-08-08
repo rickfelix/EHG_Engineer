@@ -62,7 +62,11 @@ beforeAll(() => {
 
   // CI-2 needs a real .gitignore: the whole point is that a GITIGNORED plant is invisible to plain
   // porcelain. Committed to origin/main so every worktree created below inherits it.
-  fs.writeFileSync(path.join(root, '.gitignore'), 'node_modules/\n');
+  // *.log is here because the REAL repo ignores it (line 9 of the live .gitignore), and STARVE-1 is
+  // about a stray IGNORED artifact starving the reaper. A fixture that ignores only node_modules/
+  // cannot express that case — the same "fixture does not model production" trap this file exists
+  // to avoid, which is why the first version of the STARVE-1 test failed for the wrong reason.
+  fs.writeFileSync(path.join(root, '.gitignore'), 'node_modules/\n*.log\n');
   realGit(['-C', root, 'add', '-A']);
   realGit(['-C', root, 'commit', '-qm', 'add gitignore']);
   realGit(['-C', root, 'push', '-q', 'origin', 'HEAD:refs/heads/main']);
@@ -267,16 +271,44 @@ describe('S2-R: a PLAIN directory inside the repo is not a worktree, and real gi
     // Tracked file, overwritten in place. Nothing is committed.
     fs.writeFileSync(path.join(dir, 'f.txt'), "console.log('PWNED')\n");
 
-    let err = null;
-    try {
-      ensureSourceTreeWorktree({
-        repoRoot: root, dirname: '.content-plant', branch: 'contentwt', label: 'reaper-source',
-        exists: fs.existsSync, runner: realGit,
-      });
-    } catch (e) { err = e; }
-    expect(err, 'an overwritten working tree must be REFUSED').toBeTruthy();
-    expect(err.code).toBe(SOURCE_TREE_DIRTY_ERROR);
-    expect(fs.readFileSync(path.join(dir, 'f.txt'), 'utf8')).toContain('PWNED'); // untouched
+    // STARVE-1 CHANGED THE MECHANISM, NOT THE PROPERTY. This used to assert a THROW. Refusing
+    // outright starved the reaper on any stray gitignored artifact (*.log, .env, .worktree.json
+    // are all in the real .gitignore), which re-opened the pre-SD starvation through a door this
+    // SD opened. The tree is machine-managed, so the guard now REBUILDS and re-verifies.
+    //
+    // The security property is unchanged and is what is asserted here: THE ATTACKER'S CODE MUST
+    // NOT SURVIVE. Rebuilding is strictly stronger than refusing — refusing left the plant on disk
+    // for the next tick to trip over; rebuilding destroys it.
+    const out = ensureSourceTreeWorktree({
+      repoRoot: root, dirname: '.content-plant', branch: 'contentwt', label: 'reaper-source',
+      exists: fs.existsSync, runner: realGit,
+    });
+    expect(out.rebuilt, 'a content-unverified tree must be rebuilt').toBe(true);
+    expect(fs.readFileSync(path.join(dir, 'f.txt'), 'utf8')).not.toContain('PWNED');
+    // ...and the rebuilt tree is genuinely clean, not merely re-created.
+    const after = realGit(['-C', dir, 'status', '--porcelain', '--untracked-files=all', '--ignored=matching']);
+    const offenders = after.split('\n').map((l) => l.slice(3).trim()).filter(Boolean)
+      .filter((x) => x !== '.reap-protected.json');
+    expect(offenders).toEqual([]);
+  });
+
+  it('STARVE-1: a stray GITIGNORED artifact rebuilds instead of starving the reaper', () => {
+    // MEASURED reachability: the real .gitignore has *.log, .env, .env.*, *.backup,
+    // .ehg-session.json and .worktree.json. Before this, one stray debug.log refused the tree ->
+    // resolveReaperSourceRoot returned null -> fell back to repoRoot -> currency refused the
+    // chronically-behind shared root -> refused_stale_tree. The exact pre-SD starvation.
+    const dir = path.join(root, '.stray-log');
+    realGit(['-C', root, 'worktree', 'add', '-q', '-B', 'straywt', dir, 'origin/main']);
+    fs.writeFileSync(path.join(dir, 'debug.log'), 'noise\n');
+    // It really is ignored, so plain porcelain cannot see it — that is why the check trips.
+    expect(realGit(['-C', dir, 'status', '--porcelain']).trim()).not.toMatch(/debug\.log/);
+
+    const out = ensureSourceTreeWorktree({
+      repoRoot: root, dirname: '.stray-log', branch: 'straywt', label: 'reaper-source',
+      exists: fs.existsSync, runner: realGit,
+    });
+    expect(out.rebuilt).toBe(true);
+    expect(fs.existsSync(path.join(dir, 'debug.log'))).toBe(false); // rebuilt clean
   });
 
   it('CI-2: REFUSES a GITIGNORED plant — the flag that separates the fix from the blind fix', () => {
@@ -293,14 +325,35 @@ describe('S2-R: a PLAIN directory inside the repo is not a worktree, and real gi
     const naive = realGit(['-C', dir, 'status', '--porcelain']).trim();
     expect(naive, 'plain porcelain must be blind to the gitignored plant').not.toMatch(/node_modules/);
 
+    // Property, not mechanism (see CI-1): the plant must NOT survive. Rebuild destroys it.
+    const out = ensureSourceTreeWorktree({
+      repoRoot: root, dirname: '.ignored-plant', branch: 'ignoredwt', label: 'reaper-source',
+      exists: fs.existsSync, runner: realGit,
+    });
+    expect(out.rebuilt).toBe(true);
+    expect(fs.existsSync(path.join(dir, 'node_modules', 'evil', 'index.js')),
+      'the shadowing node_modules plant must be gone').toBe(false);
+  });
+
+  it('STARVE-1 NEGATIVE ARM: if the rebuild cannot produce a clean tree, it still REFUSES', () => {
+    // Load-bearing. Without this, "rebuild" could silently become "accept anything" — the guard
+    // would look like it still checks content while never refusing. The runner here lets the
+    // removal happen but makes the re-create a no-op, so the tree cannot come back clean.
+    const dir = path.join(root, '.unfixable');
+    realGit(['-C', root, 'worktree', 'add', '-q', '-B', 'unfixwt', dir, 'origin/main']);
+    fs.writeFileSync(path.join(dir, 'f.txt'), 'PWNED\n');
+    const noRecreate = (args) => {
+      if (args.includes('worktree') && args.includes('add')) return ''; // swallow the re-create
+      return realGit(args);
+    };
     let err = null;
     try {
       ensureSourceTreeWorktree({
-        repoRoot: root, dirname: '.ignored-plant', branch: 'ignoredwt', label: 'reaper-source',
-        exists: fs.existsSync, runner: realGit,
+        repoRoot: root, dirname: '.unfixable', branch: 'unfixwt', label: 'reaper-source',
+        exists: fs.existsSync, runner: noRecreate,
       });
     } catch (e) { err = e; }
-    expect(err, 'a gitignored plant must be REFUSED').toBeTruthy();
+    expect(err, 'an unrebuildable dirty tree must still be refused').toBeTruthy();
     expect(err.code).toBe(SOURCE_TREE_DIRTY_ERROR);
   });
 
