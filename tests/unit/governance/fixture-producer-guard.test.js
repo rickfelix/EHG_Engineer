@@ -38,10 +38,10 @@ const NAME_BRANCH_FIXTURE = { name: 'TS-fixture-alpha' };
 const REAL_ROW = { name: 'Image Alt Text Generator', is_demo: false };
 
 describe('the guard OWNS the write — the object-identity seam is closed by construction', () => {
-  it('inserts the EXACT object it asserted, by reference', async () => {
+  it('inserts the EXACT object it asserted, by reference', () => {
     const sb = mkSupabase();
     const row = { ...NAME_BRANCH_FIXTURE };
-    await insertGuarded(sb, 'ventures', row, {
+    insertGuarded(sb, 'ventures', row, {
       classification: CLASSIFICATION.FIXTURE, source: 'test',
     });
     expect(sb.inserted).toHaveLength(1);
@@ -51,11 +51,11 @@ describe('the guard OWNS the write — the object-identity seam is closed by con
     expect(sb.inserted[0].row).toBe(row);
   });
 
-  it('issues NO insert at all when the assert fails', async () => {
+  it('issues NO insert at all when the assert fails', () => {
     const sb = mkSupabase();
-    await expect(insertGuarded(sb, 'ventures', REAL_ROW, {
+    expect(() => insertGuarded(sb, 'ventures', REAL_ROW, {
       classification: CLASSIFICATION.FIXTURE, source: 'test',
-    })).rejects.toThrow(/refusing to create an unguarded fixture/);
+    })).toThrow(/refusing to create an unguarded fixture/);
     // The point of assert-BEFORE-insert is that the write never happens. Asserting only that it
     // threw would pass even if the row had already landed.
     expect(sb.inserted).toEqual([]);
@@ -67,15 +67,15 @@ describe('FIXTURE — the incumbent rule, now reachable at the NAME branch', () 
   // branch is already covered by tests/unit/governance/fixture-exclusion.test.js. What had NO
   // coverage is the producer CALL SITE at that branch, because the one existing producer sets
   // is_demo:true and short-circuits before the name is ever consulted.
-  it('accepts a row that trips canonical via the NAME, with is_demo absent', async () => {
+  it('accepts a row that trips canonical via the NAME, with is_demo absent', () => {
     const sb = mkSupabase();
-    await insertGuarded(sb, 'ventures', NAME_BRANCH_FIXTURE, {
+    insertGuarded(sb, 'ventures', NAME_BRANCH_FIXTURE, {
       classification: CLASSIFICATION.FIXTURE, source: 'test',
     });
     expect(sb.inserted).toHaveLength(1);
   });
 
-  it('REJECTS a row that trips nothing — mutation: delete the FIXTURE branch check', async () => {
+  it('REJECTS a row that trips nothing — mutation: delete the FIXTURE branch check', () => {
     expect(evaluateDeclaration(REAL_ROW, CLASSIFICATION.FIXTURE).ok).toBe(false);
   });
 });
@@ -87,22 +87,22 @@ describe('DELIBERATELY_REAL — the negative assert, two-sided', () => {
    * fixture, so it can exercise the real path — and canonical's EPOCH_TAIL_RE certifies that name
    * AS a fixture. The producer's declaration and its row already disagree today.
    */
-  it('FIRES on the epoch-tailed name the SD names as its exemplar opt-out', async () => {
+  it('FIRES on the epoch-tailed name the SD names as its exemplar opt-out', () => {
     const sb = mkSupabase();
     const logger = mkLogger();
-    await expect(insertGuarded(sb, 'ventures', { name: 'HCGate-RealDB-alpha-1786000000000' }, {
+    expect(() => insertGuarded(sb, 'ventures', { name: 'HCGate-RealDB-alpha-1786000000000' }, {
       classification: CLASSIFICATION.DELIBERATELY_REAL,
       source: 'high-consequence-blocking-gate-realdb.test.js',
       reason: 'must exercise the real chairman path',
       logger,
-    })).rejects.toThrow(/TRIPS the canonical discriminant/);
+    })).toThrow(/TRIPS the canonical discriminant/);
     expect(sb.inserted).toEqual([]);
   });
 
-  it('is SATISFIABLE — a genuinely real row passes, so the assert is not stuck-on', async () => {
+  it('is SATISFIABLE — a genuinely real row passes, so the assert is not stuck-on', () => {
     const sb = mkSupabase();
     const logger = mkLogger();
-    await insertGuarded(sb, 'ventures', REAL_ROW, {
+    insertGuarded(sb, 'ventures', REAL_ROW, {
       classification: CLASSIFICATION.DELIBERATELY_REAL,
       source: 'test', reason: 'exercises the real path', logger,
     });
@@ -111,10 +111,10 @@ describe('DELIBERATELY_REAL — the negative assert, two-sided', () => {
 });
 
 describe('the opt-out NAMES ITSELF every time it fires', () => {
-  it('emits on the SUCCESS path too, not only on failure', async () => {
+  it('emits on the SUCCESS path too, not only on failure', () => {
     const sb = mkSupabase();
     const logger = mkLogger();
-    await insertGuarded(sb, 'ventures', REAL_ROW, {
+    insertGuarded(sb, 'ventures', REAL_ROW, {
       classification: CLASSIFICATION.DELIBERATELY_REAL,
       source: 'spine-verify-first-run.mjs', reason: 'real path under test', logger,
     });
@@ -126,10 +126,10 @@ describe('the opt-out NAMES ITSELF every time it fires', () => {
     expect(logger.lines[0]).toMatch(/real path under test/);
   });
 
-  it('stays SILENT for a plain FIXTURE — the normal path is not noise', async () => {
+  it('stays SILENT for a plain FIXTURE — the normal path is not noise', () => {
     const sb = mkSupabase();
     const logger = mkLogger();
-    await insertGuarded(sb, 'ventures', NAME_BRANCH_FIXTURE, {
+    insertGuarded(sb, 'ventures', NAME_BRANCH_FIXTURE, {
       classification: CLASSIFICATION.FIXTURE, source: 'test', logger,
     });
     // Two-sided: without this, "log everything" would pass the test above while destroying the
@@ -137,11 +137,11 @@ describe('the opt-out NAMES ITSELF every time it fires', () => {
     expect(logger.lines).toEqual([]);
   });
 
-  it('refuses an opt-out with a blank reason', async () => {
+  it('refuses an opt-out with a blank reason', () => {
     const sb = mkSupabase();
-    await expect(insertGuarded(sb, 'ventures', REAL_ROW, {
+    expect(() => insertGuarded(sb, 'ventures', REAL_ROW, {
       classification: CLASSIFICATION.DELIBERATELY_REAL, source: 'test', reason: '',
-    })).rejects.toThrow(/requires a non-empty/);
+    })).toThrow(/requires a non-empty/);
     expect(sb.inserted).toEqual([]);
   });
 });
@@ -149,27 +149,27 @@ describe('the opt-out NAMES ITSELF every time it fires', () => {
 describe('SANCTIONED_PERMANENT constrains — it is not a force flag', () => {
   const CANARY = { name: CANARY_NAME, is_demo: true };
 
-  it('accepts the canary', async () => {
+  it('accepts the canary', () => {
     const sb = mkSupabase();
-    await insertGuarded(sb, 'ventures', CANARY, {
+    insertGuarded(sb, 'ventures', CANARY, {
       classification: CLASSIFICATION.SANCTIONED_PERMANENT,
       source: 'run-canary-probe.mjs', reason: 'sanctioned live canary', logger: mkLogger(),
     });
     expect(sb.inserted).toHaveLength(1);
   });
 
-  it('REJECTS a fixture-shaped row that is not in the sanctioned set', async () => {
+  it('REJECTS a fixture-shaped row that is not in the sanctioned set', () => {
     // The whole reason TS-7b exists. Without the closed-set check this row would sail through and
     // the third class would be strictly WIDER than the boolean it replaced.
     const sb = mkSupabase();
-    await expect(insertGuarded(sb, 'ventures', { name: 'TS-fixture-impostor', is_demo: true }, {
+    expect(() => insertGuarded(sb, 'ventures', { name: 'TS-fixture-impostor', is_demo: true }, {
       classification: CLASSIFICATION.SANCTIONED_PERMANENT,
       source: 'test', reason: 'trying it on', logger: mkLogger(),
-    })).rejects.toThrow(/not in the closed sanctioned set/);
+    })).toThrow(/not in the closed sanctioned set/);
     expect(sb.inserted).toEqual([]);
   });
 
-  it('REJECTS a sanctioned NAME whose row no longer reads as a fixture', async () => {
+  it('REJECTS a sanctioned NAME whose row no longer reads as a fixture', () => {
     // The other half. Membership alone is not sufficient: if the canary stops tripping the
     // discriminant it has changed shape and the exemption no longer describes it.
     expect(evaluateDeclaration({ name: CANARY_NAME, is_demo: false },
@@ -188,13 +188,13 @@ describe('binding is CANONICAL, proven behaviourally rather than by import text'
     ['ZZZ_scratch_venture'],
     ['UAT-thing'],
     ['job-1786000000000'],
-  ])('classifies %s as a fixture — a name the watcher predicate returns FALSE for', async (name) => {
+  ])('classifies %s as a fixture — a name the watcher predicate returns FALSE for', (name) => {
     // A grep asserting the import path would pass against a re-export or a same-named local
     // constant. chairman-decision-watcher.js declares its OWN FIXTURE_VENTURE_NAME_RE with a
     // different alternation than the canonical export of that name, which is exactly why import
     // text is not proof of binding. These three names discriminate the two behaviourally.
     const sb = mkSupabase();
-    await insertGuarded(sb, 'ventures', { name }, {
+    insertGuarded(sb, 'ventures', { name }, {
       classification: CLASSIFICATION.FIXTURE, source: 'test',
     });
     expect(sb.inserted).toHaveLength(1);
@@ -202,14 +202,14 @@ describe('binding is CANONICAL, proven behaviourally rather than by import text'
 });
 
 describe('the canonical-only scope of the negative assert is pinned, not left to read as coverage', () => {
-  it('PASSES a row that canonical clears but chairman-actionable would still call a fixture', async () => {
+  it('PASSES a row that canonical clears but chairman-actionable would still call a fixture', () => {
     // KNOWN, BOUNDED RESIDUAL. Dropping the epoch tail from the exemplar name clears canonical —
     // and chairman-actionable's UNANCHORED /-realdb-/ still hides the row from the chairman queue.
     // Renaming is the obvious way to make the negative assert pass, so this trap sits on the path
     // of least resistance. This test records the bound deliberately; closing it belongs to
     // QF-20260807-014 and to founding instance 4 on the parent SD.
     const sb = mkSupabase();
-    await insertGuarded(sb, 'ventures', { name: 'HCGate-RealDB-alpha' }, {
+    insertGuarded(sb, 'ventures', { name: 'HCGate-RealDB-alpha' }, {
       classification: CLASSIFICATION.DELIBERATELY_REAL,
       source: 'test', reason: 'documents the canonical-only bound', logger: mkLogger(),
     });
@@ -218,11 +218,11 @@ describe('the canonical-only scope of the negative assert is pinned, not left to
 });
 
 describe('unsupported surfaces fail loudly rather than silently passing', () => {
-  it('refuses a table with no row-shaped predicate', async () => {
+  it('refuses a table with no row-shaped predicate', () => {
     const sb = mkSupabase();
-    await expect(insertGuarded(sb, 'venture_artifacts', { id: 'x' }, {
+    expect(() => insertGuarded(sb, 'venture_artifacts', { id: 'x' }, {
       classification: CLASSIFICATION.FIXTURE, source: 'test',
-    })).rejects.toThrow(/no row-shaped predicate/);
+    })).toThrow(/no row-shaped predicate/);
     expect(sb.inserted).toEqual([]);
   });
 
@@ -230,10 +230,10 @@ describe('unsupported surfaces fail loudly rather than silently passing', () => 
     expect(evaluateDeclaration(NAME_BRANCH_FIXTURE, 'whatever').ok).toBe(false);
   });
 
-  it('requires a source', async () => {
-    await expect(insertGuarded(mkSupabase(), 'ventures', NAME_BRANCH_FIXTURE, {
+  it('requires a source', () => {
+    expect(() => insertGuarded(mkSupabase(), 'ventures', NAME_BRANCH_FIXTURE, {
       classification: CLASSIFICATION.FIXTURE,
-    })).rejects.toThrow(/`source` is required/);
+    })).toThrow(/`source` is required/);
   });
 });
 
