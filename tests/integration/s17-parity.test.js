@@ -13,6 +13,7 @@ import { describe, it, expect, beforeAll, afterAll } from 'vitest';
 import dotenv from 'dotenv';
 dotenv.config();
 import { getSupabaseClient } from '../helpers/database-helpers.js';
+import { insertGuarded, CLASSIFICATION } from '../../lib/governance/fixture-producer-guard.mjs';
 
 const TYPED_COLUMNS = [
   'archetype', 'target_market', 'origin_type', 'solution',
@@ -79,9 +80,7 @@ beforeAll(async () => {
   await cleanParityFixtures(supabase, (stale ?? []).map((v) => v.id));
 
   // Seed CLI-path venture (mirrors chairman-review.js insert pattern)
-  const { data: cliVenture, error: cliErr } = await supabase
-    .from('ventures')
-    .insert({
+  const { data: cliVenture, error: cliErr } = await insertGuarded(supabase, 'ventures', {
       name: FIXTURE.name_cli,
       description: FIXTURE.problem_statement,
       problem_statement: FIXTURE.problem_statement,
@@ -110,7 +109,7 @@ beforeAll(async () => {
           origin_metadata: { discovery_strategy: FIXTURE.discovery_strategy },
         },
       },
-    })
+    }, { classification: CLASSIFICATION.FIXTURE, source: 'tests/integration/s17-parity.test.js' })
     .select('id')
     .single();
 
@@ -118,9 +117,7 @@ beforeAll(async () => {
   cliVentureId = cliVenture.id;
 
   // Seed frontend-path venture (mirrors VentureCreationPage extractTypedColumns pattern)
-  const { data: feVenture, error: feErr } = await supabase
-    .from('ventures')
-    .insert({
+  const { data: feVenture, error: feErr } = await insertGuarded(supabase, 'ventures', {
       name: FIXTURE.name_frontend,
       description: FIXTURE.problem_statement,
       problem_statement: FIXTURE.problem_statement,
@@ -138,7 +135,7 @@ beforeAll(async () => {
       status: 'active',
       is_demo: true, // SD-LEO-FIX-VENTURE-PROVISIONING-PARITY-001: flag fixture so it never surfaces in the Ventures route
       metadata: { problem_statement: FIXTURE.problem_statement },
-    })
+    }, { classification: CLASSIFICATION.FIXTURE, source: 'tests/integration/s17-parity.test.js' })
     .select('id')
     .single();
 
@@ -266,9 +263,7 @@ describe('S17 Parity: CLI vs Frontend venture state', () => {
 
   it('detects drift when frontend write path diverges', async () => {
     // Intentionally create a divergent frontend venture (missing moat_strategy)
-    const { data: driftVenture } = await supabase
-      .from('ventures')
-      .insert({
+    const { data: driftVenture } = await insertGuarded(supabase, 'ventures', {
         name: `parity-test-drift-${Date.now()}`,
         description: FIXTURE.problem_statement,
         problem_statement: FIXTURE.problem_statement,
@@ -282,7 +277,7 @@ describe('S17 Parity: CLI vs Frontend venture state', () => {
         status: 'active',
         is_demo: true, // SD-LEO-FIX-VENTURE-PROVISIONING-PARITY-001: flag drift fixture too
         metadata: {},
-      })
+      }, { classification: CLASSIFICATION.FIXTURE, source: 'tests/integration/s17-parity.test.js' })
       .select('id')
       .single();
 
