@@ -8,7 +8,7 @@
 // Mirrors scripts/chairman-product-review-packet.js — the existing per-venture chairman surface.
 import 'dotenv/config';
 import { createClient } from '@supabase/supabase-js';
-import { buildHonestyAudit, renderHonestyAudit } from '../lib/marketing/venture-honesty-audit.js';
+import { buildHonestyAudit, renderHonestyAudit, registerHonestyAuditOwner } from '../lib/marketing/venture-honesty-audit.js';
 import { armCliTeardown } from '../lib/cli-graceful-exit.js';
 
 const [ventureId, ...rest] = process.argv.slice(2);
@@ -23,6 +23,10 @@ const supabase = createClient(
   process.env.SUPABASE_URL || process.env.NEXT_PUBLIC_SUPABASE_URL,
   process.env.SUPABASE_SERVICE_ROLE_KEY,
 );
+
+// Fail-soft bookkeeping: records the ARMED operator contract for this machinery so an
+// audit that never fires is visible to the periodic-liveness watcher. Never blocks the run.
+await registerHonestyAuditOwner(supabase);
 
 const audit = await buildHonestyAudit({ supabase, ventureId });
 
