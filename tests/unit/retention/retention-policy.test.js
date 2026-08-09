@@ -60,6 +60,13 @@ describe('policy registry (TS-1)', () => {
       // never supplied by the writer, since a writer that stamps its own time can backdate a
       // verdict on a table whose whole purpose is to be unfakeable).
       venture_demand_verdicts: 'computed_at',
+      // SD-LEO-FEAT-VENTURE-DEMAND-VALIDATION-001 FR-7: venture_consent_events is append-only
+      // (freeze on UPDATE, guard on DELETE) so it cannot self-limit, and it stores RECIPIENT
+      // EMAIL ADDRESSES — which makes a bounded hot window a data-minimization control, not just
+      // a size one. Keyed on occurred_at, DATABASE-stamped: ordering decides permission here
+      // (latest event wins), so a writer-supplied timestamp could backdate an opt_in to outrank a
+      // later opt_out and resurrect someone who unsubscribed.
+      venture_consent_events: 'occurred_at',
     });
   });
 
