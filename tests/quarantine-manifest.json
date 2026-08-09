@@ -1358,6 +1358,24 @@
       "quarantined_by": "89b12649-6a0a-44ce-9208-424b564f6611",
       "triage_note": "GT-1 golden regression test ('status is closed when the reaper last fired 29 days ago AND the backlog shows a measured decline') fails deterministically (fixed clock 2026-07-16T12:00:00Z, not time-flaky) on a clean origin/main checkout — verified in an isolated throwaway worktree with zero file overlap with SD-LEO-FEAT-SMS-INBOUND-RELAY-001. Pre-existing regression, not caused by this SD; discovered only because it blocked this SD's required unit-tier CI check on merge.",
       "triaged_by": "SD-LEO-FEAT-SMS-INBOUND-RELAY-001"
+    },
+    {
+      "file": "tests/unit/agents/venture-state-machine-jit-check.test.js",
+      "reason_class": "assertion-drift",
+      "error_signature": "TypeError: stateMachine._approveHandoff is not a function // 4 tests; also \"TypeError: Cannot destructure property 'data' of '(intermediate value)' as it is undefined\". The suite targets a method that no longer exists on VentureStateMachine — the implementation moved on while the test could not fail, because vitest never collected it.",
+      "linked_ref": "feedback:16fe70aa-ecc9-439f-b050-7b8c930103bb",
+      "quarantined_at": "2026-08-09T03:35:00.000Z",
+      "quarantined_by": "cff8013c-93e3-41d2-bea1-f511c2189051",
+      "triage_note": "NEVER COLLECTED until SD-LEO-INFRA-FLEET-WIDE-VITEST-001 FR-3 narrowed SHARED_EXCLUDE '**/agents/**' (aimed at lib/agents/**, it also swallowed tests/unit/agents/**). Not a new regression — a pre-existing red that nothing could observe. Quarantined rather than re-excluded so it stays counted in the declared register and visible to the membership guard. De-quarantine by realigning the suite with the current VentureStateMachine API, or delete it if the behaviour it asserts is gone."
+    },
+    {
+      "file": "tests/unit/agents/agent-registry.test.js",
+      "reason_class": "timeout",
+      "error_signature": "Unknown Error: TypeError: fetch failed // a live network call inside a unit test; the unit tier pins a nonexistent spawn root and synthetic credentials, so any real fetch fails by design.",
+      "linked_ref": "feedback:16fe70aa-ecc9-439f-b050-7b8c930103bb",
+      "quarantined_at": "2026-08-09T03:35:00.000Z",
+      "quarantined_by": "cff8013c-93e3-41d2-bea1-f511c2189051",
+      "triage_note": "NEVER COLLECTED until SD-LEO-INFRA-FLEET-WIDE-VITEST-001 FR-3, same cause as the sibling entry. reason_class set to the registered \"timeout\" class; the precise cause is an unmocked network call (TypeError: fetch failed) per error_signature. De-quarantine when the fetch is injected or mocked so the suite is genuinely a unit test."
     }
   ]
 }
