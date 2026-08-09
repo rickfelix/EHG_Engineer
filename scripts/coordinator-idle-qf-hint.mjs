@@ -236,7 +236,9 @@ export async function runIdleQfHintCore(supabase, { nowMs = Date.now(), dryRun =
   // denominator half. `hinted` alone cannot separate 1-of-10 from 9-of-10 — a pass that reports
   // completion while reaching a minority is the same camouflage as a stranded QF that the gauge
   // still counts, which is the other half of this SD.
-  const summary = { idleWorkers: 0, hinted: 0, skippedGated: 0, attempted: 0, undelivered: 0, undeliveredReasons: [] };
+  // QF-20260808-782: skippedCapped/capUnknown are initialised to 0 rather than left undefined —
+  // a counter that only appears once it fires cannot be distinguished from one that never ran.
+  const summary = { idleWorkers: 0, hinted: 0, skippedGated: 0, attempted: 0, undelivered: 0, undeliveredReasons: [], skippedCapped: 0, capUnknown: 0 };
 
   // SD-LEO-INFRA-COUNT-TRUNCATION-DISCIPLINE-001 FR-6 batch 9: claude_sessions is unbounded and this
   // read has no heartbeat/status filter at all (the QF-763 `.order()` only avoids a STALENESS bias
@@ -298,7 +300,44 @@ function recordUndelivered(summary, worker, reason) {
  * @param {Array} ranked - hintable QFs, best first
  * @param {{summary:object, supabase:object, coordinatorId:string, dryRun:boolean, insertRow?:Function}} deps
  */
-export async function deliverHints(idle, ranked, { summary, supabase, coordinatorId, dryRun = false, insertRow = insertCoordinationRow } = {}) {
+/**
+ * QF-20260808-782: how many hints for THIS (qf, target) pair already exist.
+ *
+ * UNKNOWN IS NOT ZERO — and that distinction is the whole guard. If this read fails, or PostgREST
+ * returns a null count (which a `head:true` count does on a table it cannot see, WITHOUT an error),
+ * returning 0 would silently re-uncap the sender: every tick would look like "first hint" forever,
+ * which is precisely the 82-identical-sends bug this QF exists to stop. So an unreadable count
+ * returns null, the caller treats null as UNKNOWN, and the uncertainty is COUNTED in the summary
+ * rather than resolved in the sender's favour.
+ */
+async function countPriorHintsDefault(supabase, { qfId, targetSession }) {
+  try {
+    const { count, error } = await supabase
+      .from('session_coordination')
+      .select('id', { count: 'exact', head: true })
+      .eq('target_session', targetSession)
+      .eq('payload->>qf_id', qfId);
+    if (error) return null;
+    return typeof count === 'number' ? count : null;
+  } catch {
+    // A THROW IS JUST ANOTHER WAY OF "CANNOT READ THE COUNT". It must not kill the sweep — this
+    // file already learned that lesson once (FR-5: one unreachable addressee starved every worker
+    // later in the loop, observed 2026-07-26). Returning null routes a throw to the same UNKNOWN
+    // branch as an error or a null count, so the blindness is COUNTED rather than swallowed.
+    return null;
+  }
+}
+
+/**
+ * QF-20260808-782: at most this many hints for one (qf, target) pair, ever.
+ * Measured motivation: 82 byte-identical hints for ONE qf to ONE seat in 5.7h (04:08–09:50),
+ * plus 12 and 2 for two others — 96 of that seat's last 127 inbox rows, burying a direct
+ * coordinator feedback request for 2h20m. An unacked hint after 3 sends means the reader is not
+ * reading that lane; it does not mean the reader needs 79 more.
+ */
+export const HINT_SEND_CAP = 3;
+
+export async function deliverHints(idle, ranked, { summary, supabase, coordinatorId, dryRun = false, insertRow = insertCoordinationRow, countPriorHints = countPriorHintsDefault } = {}) {
   // One-hint-per-worker, one-QF-per-hint this tick: consume the ranked list as we go so no QF
   // is double-hinted and no worker gets more than one suggestion.
   const remaining = [...ranked];
@@ -309,6 +348,28 @@ export async function deliverHints(idle, ranked, { summary, supabase, coordinato
     );
     if (idx === -1) continue;
     const [qf] = remaining.splice(idx, 1);
+
+    // QF-20260808-782: CAP AND STOP. Checked BEFORE `attempted` because a capped pair was never
+    // attempted — counting it would inflate the denominator of the delivery ratio and make a
+    // working cap look like degraded delivery.
+    //
+    // The QF goes BACK on the list: this WORKER has heard about it enough times, but the work is
+    // still unhinted and another worker in this pass may fit it. Dropping it would silently reduce
+    // supply — the same reasoning the throw/error paths below already use.
+    if (!dryRun) {
+      const prior = await countPriorHints(supabase, { qfId: qf.id, targetSession: worker.session_id });
+      if (prior === null) {
+        // Blind, not clean. Send (matching today's behaviour rather than starving the seat), but
+        // COUNT the blindness so a cap that cannot see is visible instead of indistinguishable
+        // from a cap that saw nothing.
+        summary.capUnknown = (summary.capUnknown || 0) + 1;
+      } else if (prior >= HINT_SEND_CAP) {
+        summary.skippedCapped = (summary.skippedCapped || 0) + 1;
+        remaining.splice(idx, 0, qf);
+        continue;
+      }
+    }
+
     summary.attempted += 1;
     if (!dryRun) {
       // FR-5: SKIP-AND-CONTINUE. insertCoordinationRow -> assertDispatchTarget FAILS CLOSED and
@@ -367,7 +428,8 @@ async function main() {
   const pct = ratio === null ? 'n/a' : `${Math.round(ratio * 100)}%`;
   console.log(
     `IDLE_QF_HINT idleWorkers=${summary.idleWorkers} delivered=${summary.hinted} attempted=${summary.attempted}`
-    + ` ratio=${pct} undelivered=${summary.undelivered} skippedGated=${summary.skippedGated}${dryRun ? ' (dry-run)' : ''}`,
+    + ` ratio=${pct} undelivered=${summary.undelivered} skippedGated=${summary.skippedGated}`
+    + ` skippedCapped=${summary.skippedCapped || 0} capUnknown=${summary.capUnknown || 0}${dryRun ? ' (dry-run)' : ''}`,
   );
   // FR-6: the alarm must be DURABLE, not just loud. emitDeliveryAlarm no-ops unless the pass is
   // genuinely degraded (threshold + minSample floor both applied inside).
