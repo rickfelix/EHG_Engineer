@@ -53,7 +53,23 @@ domains (Pro cap 10; SES re-evaluation at venture 11+). AUP witness:
 `guardSequenceSend({captureRecordId})` refuses sequence-sends without a
 capture-record reference (typed `AupWitnessError`).
 
+**The witness proves PRESENCE, not PROVENANCE.** It refuses an absent or blank
+reference, so it is genuinely two-sided — but any non-empty string passes, because
+there is no capture-record store to resolve the reference against. Read a pass as
+"a reference exists", never as "consent is verified". Tightening belongs in
+`guardSequenceSend` itself so every caller inherits it; a second check added
+downstream becomes a replica that drifts from this one.
+
 ## Callers
+
+`lib/marketing/autonomy-gate.js` `checkConsentInvariant()` calls `guardSequenceSend`
+as the consent gate for autonomous per-send publish authorization
+(SD-LEO-FEAT-CODIFY-HONEST-ACTIVATION-001 FR-1). Before that SD the witness had
+**zero production callers** — defined, unit-tested, documented here, and invoked by
+nobody, which is indistinguishable from absent. It is now load-bearing on an
+authorization path, so the presence-vs-provenance limit above is a live constraint
+rather than a note: a directed channel whose recipients carry any non-empty
+reference will pass consent.
 
 `EVACOOIntegration.onboardVenture()` (`lib/agents/eva-coo-integration.js`) calls
 `provisionVentureEmail` when `venture.domain` is present, fail-soft (a provisioning
