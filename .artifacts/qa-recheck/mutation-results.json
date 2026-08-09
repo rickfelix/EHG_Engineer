@@ -1,0 +1,422 @@
+[
+  {
+    "id": "M1",
+    "note": "T1 cluster floor 2->1",
+    "file": "lib/solomon/trend-eyes-probes.js",
+    "status": "SURVIVED",
+    "detail": ""
+  },
+  {
+    "id": "M2",
+    "note": "T1 cluster floor 2->3",
+    "file": "lib/solomon/trend-eyes-probes.js",
+    "status": "KILLED",
+    "detail": "3 test(s) failed"
+  },
+  {
+    "id": "M3",
+    "note": "T1 separation 24h->1h",
+    "file": "lib/solomon/trend-eyes-probes.js",
+    "status": "KILLED",
+    "detail": "2 test(s) failed"
+  },
+  {
+    "id": "M3b",
+    "note": "T1 separation 24h->48h",
+    "file": "lib/solomon/trend-eyes-probes.js",
+    "status": "KILLED",
+    "detail": "2 test(s) failed"
+  },
+  {
+    "id": "M4",
+    "note": "T1 boundary >= -> >",
+    "file": "lib/solomon/trend-eyes-probes.js",
+    "status": "SURVIVED",
+    "detail": ""
+  },
+  {
+    "id": "M5",
+    "note": "T1 cluster cmp < -> <=",
+    "file": "lib/solomon/trend-eyes-probes.js",
+    "status": "KILLED",
+    "detail": "3 test(s) failed"
+  },
+  {
+    "id": "M6",
+    "note": "T1 spread sign flip",
+    "file": "lib/solomon/trend-eyes-probes.js",
+    "status": "KILLED",
+    "detail": "2 test(s) failed"
+  },
+  {
+    "id": "M7",
+    "note": "T1 non-array -> FLAT not UNKNOWN",
+    "file": "lib/solomon/trend-eyes-probes.js",
+    "status": "KILLED",
+    "detail": "1 test(s) failed"
+  },
+  {
+    "id": "M8",
+    "note": "T2 drop before-fix requirement",
+    "file": "lib/solomon/trend-eyes-probes.js",
+    "status": "SURVIVED",
+    "detail": ""
+  },
+  {
+    "id": "M8b",
+    "note": "T2 drop after-fix requirement",
+    "file": "lib/solomon/trend-eyes-probes.js",
+    "status": "KILLED",
+    "detail": "1 test(s) failed"
+  },
+  {
+    "id": "M9",
+    "note": "T3 downward-only detector",
+    "file": "lib/solomon/trend-eyes-probes.js",
+    "status": "KILLED",
+    "detail": "1 test(s) failed"
+  },
+  {
+    "id": "M9b",
+    "note": "T3 upward-only detector",
+    "file": "lib/solomon/trend-eyes-probes.js",
+    "status": "KILLED",
+    "detail": "1 test(s) failed"
+  },
+  {
+    "id": "M10",
+    "note": "T3 drift delta 0.25->0.01",
+    "file": "lib/solomon/trend-eyes-probes.js",
+    "status": "KILLED",
+    "detail": "1 test(s) failed"
+  },
+  {
+    "id": "M10b",
+    "note": "T3 drift delta 0.25->0.99",
+    "file": "lib/solomon/trend-eyes-probes.js",
+    "status": "KILLED",
+    "detail": "2 test(s) failed"
+  },
+  {
+    "id": "M11",
+    "note": "T3 min readings 3->2",
+    "file": "lib/solomon/trend-eyes-probes.js",
+    "status": "SURVIVED",
+    "detail": ""
+  },
+  {
+    "id": "M12",
+    "note": "T3 SPAN GUARD removed",
+    "file": "lib/solomon/trend-eyes-probes.js",
+    "status": "KILLED",
+    "detail": "2 test(s) failed"
+  },
+  {
+    "id": "M13",
+    "note": "T3 empty denominator -> 0 not UNKNOWN",
+    "file": "lib/solomon/trend-eyes-probes.js",
+    "status": "KILLED",
+    "detail": "1 test(s) failed"
+  },
+  {
+    "id": "M14",
+    "note": "T3 window guard <= -> <",
+    "file": "lib/solomon/trend-eyes-probes.js",
+    "status": "SURVIVED",
+    "detail": ""
+  },
+  {
+    "id": "M15",
+    "note": "T2 never-fixed classes admitted",
+    "file": "lib/solomon/trend-eyes-probes.js",
+    "status": "SURVIVED",
+    "detail": ""
+  },
+  {
+    "id": "M16",
+    "note": "T2 after-fix boundary > -> >=",
+    "file": "lib/solomon/trend-eyes-probes.js",
+    "status": "SURVIVED",
+    "detail": ""
+  },
+  {
+    "id": "M17",
+    "note": "T3 baseline includes latest",
+    "file": "lib/solomon/trend-eyes-probes.js",
+    "status": "SURVIVED",
+    "detail": ""
+  },
+  {
+    "id": "M18",
+    "note": "T1 absent facts -> FLAT",
+    "file": "lib/solomon/trend-eyes-probes.js",
+    "status": "KILLED",
+    "detail": "2 test(s) failed"
+  },
+  {
+    "id": "M19",
+    "note": "T2 unparseable fixedAt guard removed",
+    "file": "lib/solomon/trend-eyes-probes.js",
+    "status": "KILLED",
+    "detail": "1 test(s) failed"
+  },
+  {
+    "id": "M20",
+    "note": "UNKNOWN collapsed into FLAT globally",
+    "file": "lib/solomon/trend-eyes-probes.js",
+    "status": "KILLED",
+    "detail": "10 test(s) failed"
+  },
+  {
+    "id": "M21",
+    "note": "LIVENESS future-dated guard removed",
+    "file": "lib/solomon/trend-eyes-liveness.js",
+    "status": "KILLED",
+    "detail": "1 test(s) failed"
+  },
+  {
+    "id": "M22",
+    "note": "LIVENESS null-receipt guard removed",
+    "file": "lib/solomon/trend-eyes-liveness.js",
+    "status": "KILLED",
+    "detail": "1 test(s) failed"
+  },
+  {
+    "id": "M22b",
+    "note": "LIVENESS threshold 36h->360h",
+    "file": "lib/solomon/trend-eyes-liveness.js",
+    "status": "KILLED",
+    "detail": "1 test(s) failed"
+  },
+  {
+    "id": "M22c",
+    "note": "LIVENESS threshold boundary > -> >=",
+    "file": "lib/solomon/trend-eyes-liveness.js",
+    "status": "SURVIVED",
+    "detail": ""
+  },
+  {
+    "id": "M22d",
+    "note": "LIVENESS unparseable-timestamp guard removed",
+    "file": "lib/solomon/trend-eyes-liveness.js",
+    "status": "KILLED",
+    "detail": "1 test(s) failed"
+  },
+  {
+    "id": "M23",
+    "note": "CATEGORY repointed at aggregating category",
+    "file": "scripts/solomon/trend-eyes-sweep.mjs",
+    "status": "KILLED",
+    "detail": "1 test(s) failed"
+  },
+  {
+    "id": "M24",
+    "note": "questionClass sms plural dropped",
+    "file": "scripts/solomon/trend-eyes-sweep.mjs",
+    "status": "KILLED",
+    "detail": "2 test(s) failed"
+  },
+  {
+    "id": "M25",
+    "note": "questionClass sms predicate: miss removed",
+    "file": "scripts/solomon/trend-eyes-sweep.mjs",
+    "status": "KILLED",
+    "detail": "1 test(s) failed"
+  },
+  {
+    "id": "M26",
+    "note": "questionClass fleet plural dropped",
+    "file": "scripts/solomon/trend-eyes-sweep.mjs",
+    "status": "KILLED",
+    "detail": "1 test(s) failed"
+  },
+  {
+    "id": "M27",
+    "note": "questionClass belt plural dropped",
+    "file": "scripts/solomon/trend-eyes-sweep.mjs",
+    "status": "KILLED",
+    "detail": "1 test(s) failed"
+  },
+  {
+    "id": "M28",
+    "note": "questionClass null-predicate classes disabled",
+    "file": "scripts/solomon/trend-eyes-sweep.mjs",
+    "status": "SURVIVED",
+    "detail": ""
+  },
+  {
+    "id": "M29",
+    "note": "questionClass subject anchor removed",
+    "file": "scripts/solomon/trend-eyes-sweep.mjs",
+    "status": "KILLED",
+    "detail": "1 test(s) failed"
+  },
+  {
+    "id": "M30",
+    "note": "isAutomatedMessage always false (watchdog ADMITTED)",
+    "file": "scripts/solomon/trend-eyes-sweep.mjs",
+    "status": "KILLED",
+    "detail": "1 test(s) failed"
+  },
+  {
+    "id": "M31",
+    "note": "isAutomatedMessage always true (corpus emptied)",
+    "file": "scripts/solomon/trend-eyes-sweep.mjs",
+    "status": "KILLED",
+    "detail": "1 test(s) failed"
+  },
+  {
+    "id": "M32",
+    "note": "isAutomatedMessage: are-you-still-there alternative removed",
+    "file": "scripts/solomon/trend-eyes-sweep.mjs",
+    "status": "KILLED",
+    "detail": "1 test(s) failed"
+  },
+  {
+    "id": "M33",
+    "note": "T1 resolver: watchdog exclusion neutered",
+    "file": "scripts/solomon/trend-eyes-sweep.mjs",
+    "status": "SURVIVED",
+    "detail": ""
+  },
+  {
+    "id": "M34",
+    "note": "T1 resolver: inbound/outbound flipped",
+    "file": "scripts/solomon/trend-eyes-sweep.mjs",
+    "status": "SURVIVED",
+    "detail": ""
+  },
+  {
+    "id": "M35",
+    "note": "T1 coverage: classified tally zeroed",
+    "file": "scripts/solomon/trend-eyes-sweep.mjs",
+    "status": "SURVIVED",
+    "detail": ""
+  },
+  {
+    "id": "M36",
+    "note": "T2 blindness branch A (classedRows) removed",
+    "file": "scripts/solomon/trend-eyes-sweep.mjs",
+    "status": "KILLED",
+    "detail": "1 test(s) failed"
+  },
+  {
+    "id": "M37",
+    "note": "T2 blindness branch B (fixStamped) removed",
+    "file": "scripts/solomon/trend-eyes-sweep.mjs",
+    "status": "KILLED",
+    "detail": "1 test(s) failed"
+  },
+  {
+    "id": "M38",
+    "note": "T2 FALSE ALL-CLEAR restored (always array)",
+    "file": "scripts/solomon/trend-eyes-sweep.mjs",
+    "status": "KILLED",
+    "detail": "2 test(s) failed"
+  },
+  {
+    "id": "M39",
+    "note": "T2 archive payload un-nesting removed",
+    "file": "scripts/solomon/trend-eyes-sweep.mjs",
+    "status": "KILLED",
+    "detail": "1 test(s) failed"
+  },
+  {
+    "id": "M40",
+    "note": "T2 UNION broken (archive not read)",
+    "file": "scripts/solomon/trend-eyes-sweep.mjs",
+    "status": "KILLED",
+    "detail": "2 test(s) failed"
+  },
+  {
+    "id": "M41",
+    "note": "T2 earliest-fix -> latest-fix",
+    "file": "scripts/solomon/trend-eyes-sweep.mjs",
+    "status": "SURVIVED",
+    "detail": ""
+  },
+  {
+    "id": "M42",
+    "note": "T3 DISTINCT counting defeated (row counting)",
+    "file": "scripts/solomon/trend-eyes-sweep.mjs",
+    "status": "KILLED",
+    "detail": "1 test(s) failed"
+  },
+  {
+    "id": "M43",
+    "note": "T3 Math.min CLAMP re-added (span guard dead again)",
+    "file": "scripts/solomon/trend-eyes-sweep.mjs",
+    "status": "SURVIVED",
+    "detail": ""
+  },
+  {
+    "id": "M44",
+    "note": "T3 FALSE ALL-CLEAR restored (always array)",
+    "file": "scripts/solomon/trend-eyes-sweep.mjs",
+    "status": "KILLED",
+    "detail": "1 test(s) failed"
+  },
+  {
+    "id": "M45",
+    "note": "T3 empty-denominator window admitted",
+    "file": "scripts/solomon/trend-eyes-sweep.mjs",
+    "status": "KILLED",
+    "detail": "1 test(s) failed"
+  },
+  {
+    "id": "M46",
+    "note": "candidate cap removed",
+    "file": "scripts/solomon/trend-eyes-sweep.mjs",
+    "status": "SURVIVED",
+    "detail": ""
+  },
+  {
+    "id": "M47",
+    "note": "truncation record silenced",
+    "file": "scripts/solomon/trend-eyes-sweep.mjs",
+    "status": "SURVIVED",
+    "detail": ""
+  },
+  {
+    "id": "M48",
+    "note": "dedup_key collapses same-day findings",
+    "file": "scripts/solomon/trend-eyes-sweep.mjs",
+    "status": "SURVIVED",
+    "detail": ""
+  },
+  {
+    "id": "M49",
+    "note": "runSweep: T2 null->[] FALSE ALL-CLEAR at call site",
+    "file": "scripts/solomon/trend-eyes-sweep.mjs",
+    "status": "SURVIVED",
+    "detail": ""
+  },
+  {
+    "id": "M50",
+    "note": "runSweep: T3 null->[] FALSE ALL-CLEAR at call site",
+    "file": "scripts/solomon/trend-eyes-sweep.mjs",
+    "status": "SURVIVED",
+    "detail": ""
+  },
+  {
+    "id": "M51",
+    "note": "T1 window 168h->1h",
+    "file": "scripts/solomon/trend-eyes-sweep.mjs",
+    "status": "SURVIVED",
+    "detail": ""
+  },
+  {
+    "id": "M52",
+    "note": "exploration floor emptied",
+    "file": "scripts/solomon/trend-eyes-sweep.mjs",
+    "status": "SURVIVED",
+    "detail": ""
+  },
+  {
+    "id": "M53",
+    "note": "T2 lesson window 120d->1d",
+    "file": "scripts/solomon/trend-eyes-sweep.mjs",
+    "status": "SURVIVED",
+    "detail": ""
+  }
+]

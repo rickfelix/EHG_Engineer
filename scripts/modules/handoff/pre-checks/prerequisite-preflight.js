@@ -167,7 +167,9 @@ export async function runPrerequisitePreflight(supabase, handoffType, sdId) {
     // an ordering speed-bump, not a quality catch). A WAIT verdict (evidence may
     // still be mid-write) is intentionally NOT treated as a preflight failure.
     try {
-      const { validateSubagentEvidence } = await import('../gates/subagent-evidence-gate.js');
+      // QF-20260807-283: pull the published contract from the GATE rather than restating it here —
+      // a second copy of the writer contract is the drift this QF exists to prevent.
+      const { validateSubagentEvidence, EVIDENCE_WRITER_CONTRACT } = await import('../gates/subagent-evidence-gate.js');
       const evidenceResult = await validateSubagentEvidence(
         { sd, handoffType: handoffType.toUpperCase(), supabase, sdId: sd.id },
         supabase
@@ -182,6 +184,26 @@ export async function runPrerequisitePreflight(supabase, handoffType, sdId) {
         // that re-invokes an agent that already ran, instead of investigating why it failed.
         const missing = evidenceResult.details?.missing || [];
         const failing = evidenceResult.details?.failing || [];
+        // SD-LEO-INFRA-EXPLORE-UNREGISTERED-LEO-001: NON-EVIDENCE IS A THIRD CLASS, and this
+        // function's own comment above is the reason it must be read here.
+        //
+        // The gate tracks crashed/never-finished runs in `non_evidence`, separate from both
+        // `missing` (no row) and `failing` (a rejecting verdict). Until this SD that branch
+        // advisory-PASSED, so a non-evidence failure never reached this code. Now it blocks — and
+        // with missing=[] AND failing=[] the fallback below would have fired, emitting
+        // "Missing sub-agent evidence for: required agent(s)": no agent named, and the wrong
+        // remedy, telling a worker to re-invoke an agent that already ran. That is verbatim the
+        // defect described at :176-182, which this file was changed to fix. Reproducing it while
+        // closing a laundering path would be trading one silent misdirection for another.
+        const nonEvidence = evidenceResult.details?.non_evidence || [];
+        if (nonEvidence.length > 0) {
+          issues.push({
+            code: 'SUBAGENT_EVIDENCE_NOT_RUN',
+            message: `Sub-agent evidence exists but the run did not complete: ${nonEvidence.map(n => `${n.agent}=${n.verdict}`).join(', ')} — a row existing is not the check having run.`,
+            remediation: evidenceResult.remediation
+              || `Re-run ${nonEvidence.map(n => n.agent).join(', ')} until it writes a real verdict. If the agent is a read-only Claude Code BUILT-IN (e.g. Explore) it has no CLI producer by design — use the Task tool, or scripts/record-explore-evidence.js.`
+          });
+        }
         if (failing.length > 0) {
           issues.push({
             code: 'SUBAGENT_EVIDENCE_BAD_VERDICT',
@@ -190,11 +212,20 @@ export async function runPrerequisitePreflight(supabase, handoffType, sdId) {
               || 'Investigate why the sub-agent(s) returned a non-passing verdict, then re-run them — the gate reads the LATEST row per agent, so a successful re-run supersedes the failed one.'
           });
         }
-        if (missing.length > 0 || failing.length === 0) {
+        // The fallback fires only when NOTHING ELSE explained the failure. nonEvidence joins
+        // failing in suppressing it, for the same reason failing already did: if a named class
+        // accounts for the block, adding an unnamed "required agent(s)" line on top tells the
+        // worker to chase a second, non-existent problem.
+        if (missing.length > 0 || (failing.length === 0 && nonEvidence.length === 0)) {
           issues.push({
             code: 'SUBAGENT_EVIDENCE_MISSING',
             message: `Missing sub-agent evidence for: ${missing.join(', ') || 'required agent(s)'}`,
-            remediation: evidenceResult.remediation || 'Invoke the missing sub-agent(s) via the Task tool before re-running the handoff.'
+            // QF-20260807-283: the bare fallback used to say "invoke via the Task tool", which
+            // names work the gate cannot see — a Task-tool agent alone writes no evidence row, so
+            // a worker who follows it is blocked identically on the next attempt. Fall back to the
+            // gate's published contract instead of a second, weaker statement of it.
+            remediation: evidenceResult.remediation
+              || `Produce evidence for the required sub-agent(s) before re-running the handoff. ${EVIDENCE_WRITER_CONTRACT}`
           });
         }
       }

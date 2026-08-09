@@ -64,8 +64,8 @@ const ALLOWLIST_EXACT = new Set([
 ]);
 const ALLOWLIST_PREFIXES = ['tests/'];
 
-function toRelPosix(absPath) {
-  return path.relative(REPO_ROOT, absPath).split(path.sep).join('/');
+function toRelPosix(absPath, root = REPO_ROOT) {
+  return path.relative(root, absPath).split(path.sep).join('/');
 }
 
 function isAllowlisted(relPath) {
@@ -124,8 +124,8 @@ function walk(node, visit, seen = new Set()) {
   }
 }
 
-function scanFile(absPath) {
-  const relPath = toRelPosix(absPath);
+function scanFile(absPath, root = REPO_ROOT) {
+  const relPath = toRelPosix(absPath, root);
   const findings = [];
   if (isAllowlisted(relPath)) return findings;
 
@@ -160,9 +160,22 @@ function scanFile(absPath) {
   return findings;
 }
 
-export function runLint() {
-  const files = SCAN_ROOTS.flatMap((root) => collectFiles(path.join(REPO_ROOT, root)));
-  const findings = files.flatMap(scanFile);
+/**
+ * Lint a tree for hardcoded platform-repo literals.
+ *
+ * QF-20260807-761: `repoRoot` is OPTIONAL and defaults to this repo, so the CI entry point and
+ * every existing caller are byte-identical. It exists so a TEST can lint a HERMETIC fixture tree
+ * instead of writing a violation into the real scripts/ directory — that fixture was shared disk,
+ * and a whole-repo scan running concurrently would see it and fail `findings === []`. The test was
+ * order-dependent inside the ONE required check, so the race could block unrelated merges at
+ * random. Isolation, not retries, is the fix: with a private root there is nothing to race.
+ *
+ * @param {{repoRoot?: string, scanRoots?: string[]}} [opts]
+ * @returns {{filesScanned: number, findings: Array<{file: string, line: number|string, value: string}>}}
+ */
+export function runLint({ repoRoot = REPO_ROOT, scanRoots = SCAN_ROOTS } = {}) {
+  const files = scanRoots.flatMap((root) => collectFiles(path.join(repoRoot, root)));
+  const findings = files.flatMap((absPath) => scanFile(absPath, repoRoot));
   return { filesScanned: files.length, findings };
 }
 

@@ -169,7 +169,15 @@ describe('runQaFixtureScan scope contract (adversarial-review fix, PR #5755)', (
   const FIVE = ['sdStatusMap', 'workingOnCompleted', 'orphanedClaims', 'stuckApproval', 'terminalWithClaims'];
 
   it('runQaFixtureScan returns the five formerly-main()-scoped locals', () => {
-    const re = new RegExp(`return\\s*\\{\\s*${FIVE.join('\\s*,\\s*')}\\s*\\}`);
+    // QF-20260727-363: this pin used to require the return object to CLOSE immediately after
+    // terminalWithClaims (`\\s*\\}`), which pinned the ARITY as well as the membership. The
+    // regression it exists to catch is a MISSING local — main() consuming something the hoisted
+    // function no longer returns, a guaranteed ReferenceError on every tick that no test can catch
+    // because nothing executes main(). Forbidding ADDITIONAL keys defends nothing and made a
+    // legitimate extension (the `applied` tally) look like that regression. Now membership-only,
+    // matching the sibling rebinding pin below, which has always used `[^}]*` for exactly this
+    // reason. Drop any one of the five and this still goes red — verified by mutation.
+    const re = new RegExp(`return\\s*\\{[^}]*${FIVE.join('[^}]*')}[^}]*\\}`);
     expect(source).toMatch(re);
   });
 

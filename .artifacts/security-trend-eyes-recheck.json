@@ -1,0 +1,232 @@
+{
+  "sub_agent": "SECURITY",
+  "sd_id": "SD-LEO-INFRA-TREND-EYES-OFF-001",
+  "phase": "EXEC",
+  "handoff": "EXEC-TO-PLAN",
+  "review_type": "RE-CHECK",
+  "prior_evidence_id": "c7937d18",
+  "prior_verdict": "FAIL",
+  "verdict": "CONDITIONAL_PASS",
+  "confidence": 95,
+  "summary": "RE-CHECK of SD-LEO-INFRA-TREND-EYES-OFF-001 at EXEC-TO-PLAN against commits 5f67e932c36 and 8a75a311cec. Verified live, not from the author account. SEC-TE-01 RESOLVED (sweep runs, exit 0). SEC-TE-02 t2 arm RESOLVED (UNKNOWN + named blindness). Step-level secret scoping RESOLVED and complete. Candidate cap RESOLVED, unbypassable, truncation genuinely recorded. NO body text escapes any persisted field or log (runtime-dumped). No-send boundary HOLDS by full transitive import trace. TWO NEW HIGH findings: the SEC-TE-01 fix swapped issue_patterns.pattern_name for pattern_id, which resolves but joins disjoint namespaces (measured overlap 0 over 60 days) so T3 can never fire; and the probe returns FLAT rather than UNKNOWN on a too-short series that live data permanently occupies, with the receipt omitting T3 from both unknown_count and blindness. On FINDING-04: classifier_coverage does NOT worsen the exposure and must NOT be redacted; scope the access instead.",
+  "reviewed_commits": [
+    "5f67e932c36",
+    "8a75a311cec"
+  ],
+  "verification_method": "Live execution against production Supabase + minted HS256 authenticated JWT for RLS reachability + full transitive import trace. Comments were not treated as evidence.",
+  "prior_findings_status": [
+    {
+      "id": "SEC-TE-01",
+      "severity": "CRITICAL",
+      "status": "RESOLVED_VERIFIED",
+      "claim": "Two phantom columns threw 42703 and killed every run before any write.",
+      "verification": "Ran `node scripts/solomon/trend-eyes-sweep.mjs --dry-run` against live DB. Exit 0. Three verdicts emitted, 2 candidates, both source tables queried. resolveT2Facts now selects row_data (trend-eyes-sweep.mjs:153-154) and unwraps r.row_data?.payload ?? r.row_data (:161). resolveT3Facts now selects pattern_id/issue_summary (:209-210). No 42703.",
+      "evidence": "runSweep returned runAt=2026-08-07T12:22:18.338Z, sourcesQueried=[session_coordination, retention_archive], candidates=2"
+    },
+    {
+      "id": "SEC-TE-02",
+      "severity": "HIGH",
+      "status": "PARTIALLY_RESOLVED",
+      "claim": "T2/T3 emitted FLAT (false all-clear) over a corpus that could not answer.",
+      "t2_arm": "RESOLVED_VERIFIED. resolveT2Facts returns classes:null when classedRows===0 or fixStamped===0 (trend-eyes-sweep.mjs:188-192). Live run confirms verdict=UNKNOWN with detail 'no lesson-channel classes supplied — NOT verified (this is not a flat reading)', and receipt blindness names the reason: 't2: no row carried fix_shipped_at — after-fix recurrence is unanswerable'.",
+      "t3_arm": "NOT RESOLVED. The fix closed only the zero-denominator arm (trend-eyes-sweep.mjs:252, blind set only when windowsWithDenominator===0). The insufficient-series arm is untouched and is the arm that fires on live data. See SEC-TE-03 and SEC-TE-04."
+    },
+    {
+      "id": "FINDING-05",
+      "severity": "MEDIUM",
+      "status": "RESOLVED_VERIFIED",
+      "claim": "Service-role key was job-level, visible to checkout/setup-node/npm ci.",
+      "verification": "solomon-trend-eyes-sweep.yml has NO job-level env block. Secrets appear exactly once, at step level on the single Supabase-talking step (:55-59). checkout (:43), setup-node (:45-48) and npm ci (:50) run with no secret in scope. Top-level permissions is contents:read (:31-32). npm ci uses --ignore-scripts, so a malicious transitive postinstall cannot run in the job at all, let alone in the secret-bearing step. Scoping is correct AND complete.",
+      "residual": "None. `${{ inputs.dry_run && '--dry-run' || '' }}` (:59) is a typed boolean input, not injectable; on the schedule trigger inputs is null and resolves to empty string."
+    },
+    {
+      "id": "FINDING-06",
+      "severity": "MEDIUM",
+      "status": "RESOLVED_VERIFIED",
+      "claim": "No cap on candidate rows per run; unbounded T2 fan-out is a write storm against a 19k-row shared table.",
+      "verification": "MAX_CANDIDATES_PER_CLASS=10 (trend-eyes-sweep.mjs:45). Cap cannot be bypassed: the write loop iterates `items` (:267), which is the ONLY collection derived from all.slice(0, MAX_CANDIDATES_PER_CLASS) (:263). There is no second write path and no branch that reads `all`. Ceiling is 3 triggers x 10 = 30 rows/run. Truncation genuinely recorded: pushed when all.length > items.length (:266), returned as {written, truncated} (:290) and landed in the receipt (:314). The 8a75a311cec refactor from array-property to pair is a real hardening — an array property does not survive spread/map, so the record would have silently vanished on a later refactor.",
+      "residual": "Cosmetic only: a FIRE verdict with null evidence would write one row with evidence:null (:262). No probe currently does this."
+    },
+    {
+      "id": "FINDING-04",
+      "severity": "MEDIUM",
+      "status": "OPEN_BY_DESIGN_DECISION_REQUIRED",
+      "see": "disclosure_assessment"
+    }
+  ],
+  "new_findings": [
+    {
+      "id": "SEC-TE-03",
+      "severity": "HIGH",
+      "title": "The SEC-TE-01 fix converted a loud crash into a permanently silent false all-clear: T3 joins two disjoint key namespaces, so its numerator is structurally always zero and the probe can never FIRE.",
+      "introduced_by": "5f67e932c36 (the fix itself) — this is the fresh hole in new review-closing code.",
+      "location": "scripts/solomon/trend-eyes-sweep.mjs:235",
+      "detail": "The original code joined lane class keys against issue_patterns.pattern_name, which does not exist, so it threw 42703. The fix swapped the column to pattern_id (:209-210, :235) — which resolves, but never matches. The two sides are different namespaces. MEASURED over 60 days on live data: lane keys drawn from payload.lesson_class||payload.signal_type are ['feedback','harness-bug','stuck','spec-conflict']; issue_patterns.pattern_id values are generated identifiers ['PAT-AUTO-b442fd90','PAT-LES-eeeedf0b296b','PAT-LES-1e4dde82cf3e',...]. Set overlap = 0. namedKeys.has(p.pattern_id) can therefore never be true.",
+      "consequence": "reachedPatterns is 0 in every window (confirmed live: both readings show reachedPatterns:0). The ratio is pinned at 0.000 forever. Once the series reaches 3 readings the probe will report FLAT 'disjunction ratio stable (0.000 vs baseline 0.000, delta 0.000)'. T3 is an alarm that is structurally incapable of sounding while reporting a clean look on every run. This is the exact failure class the SD was chartered to detect elsewhere, now shipped inside the SD.",
+      "corroborating": "issue_summary is SELECTed at :210 and never read anywhere — evidence the join key was swapped for one that parses rather than one that matches.",
+      "proof": "60-day live query: OVERLAP between lane keys and pattern_id = 0"
+    },
+    {
+      "id": "SEC-TE-04",
+      "severity": "HIGH",
+      "title": "probeLessonDisjunctionDrift returns FLAT for a series too short to answer, violating the module's own documented invariant, with zero test coverage — and this is the branch live data actually hits.",
+      "location": "lib/solomon/trend-eyes-probes.js:168-171",
+      "detail": "The module contract at lib/solomon/trend-eyes-probes.js:14-17 states: 'Every probe returns UNKNOWN when its facts are absent or unusable, never FLAT. Collapsing the two would let a broken resolver render as no trend detected.' The short-series branch returns VERDICT.FLAT with detail 'series has N reading(s); 3 needed before drift is meaningful' — i.e. it states in its own detail string that the answer is not meaningful, then returns the verdict that means 'looked, found none'.",
+      "liveness": "This is the live state, not a hypothetical. resolveT3Facts.blind === null (declares itself NOT blind) while readings.length === 2 and T3_MIN_READINGS === 3.",
+      "structural_not_transient": "Widening the horizon does not help. days=14 -> 2 readings, days=30 -> 2 readings, days=60 -> 2 readings. The lane-named corpus is structurally sparse, so T3 will sit in this branch indefinitely.",
+      "receipt_compounds_it": "The run-receipt affirmatively presents T3 as a clean look: unknown_count is 1 (trend-eyes-sweep.mjs:305, counts t2 only) and blindness lists only t2 (:352). Nothing anywhere records that T3 could not answer.",
+      "test_coverage": "ZERO. grep of tests/unit/solomon/trend-eyes-probes.test.js for T3_MIN_READINGS / 'needed before drift' / readings.length returns no match. 52 tests pass without ever exercising the branch that runs in production.",
+      "composition": "SEC-TE-03 + SEC-TE-04 + the receipt's unknown_count/blindness omission are three individually-reasonable behaviours that compose into total invisibility for one third of the instrument."
+    },
+    {
+      "id": "SEC-TE-05",
+      "severity": "MEDIUM",
+      "title": "The no-send boundary is enforced by prose only — the test file cited as its enforcer does not exist.",
+      "location": "lib/solomon/chairman-sms-exchanges.js:22-24",
+      "detail": "That docblock states the read-only boundary 'is enforced by tests/unit/solomon/chairman-sms-no-send-path.test.js, which is two-sided — it fails if a send import is introduced here — because prose alone does not stop the step.' MEASURED: `find . -name '*no-send*'` returns nothing, and `git ls-tree -r main` returns nothing. The file does not exist in this worktree or on main. tests/unit/solomon contains exactly two files: chairman-sms-exchanges.test.js and trend-eyes-probes.test.js.",
+      "pre_existing": "Inherited from SD-LEO-INFRA-CHAIRMAN-SMS-LANE-001, not introduced here.",
+      "why_it_matters_now": "This SD is the first consumer to build a WRITE path (emitFeedback) on top of that read-only lane, so the boundary carries more load than when the claim was written. The comment actively conceals the gap: a reader checking the boundary finds a citation and stops.",
+      "current_state": "The boundary DOES hold — verified by import trace, not by the comment. See no_send_boundary_trace."
+    }
+  ],
+  "no_send_boundary_trace": {
+    "verdict": "HOLDS",
+    "method": "Full transitive import trace from the entrypoint. Comments ignored.",
+    "graph": {
+      "scripts/solomon/trend-eyes-sweep.mjs": [
+        "@supabase/supabase-js",
+        "lib/solomon/chairman-sms-exchanges.js",
+        "lib/solomon/trend-eyes-probes.js",
+        "lib/solomon/trend-eyes-liveness.js",
+        "lib/governance/emit-feedback.js"
+      ],
+      "lib/solomon/chairman-sms-exchanges.js": "ZERO imports (pure + injected supabase)",
+      "lib/solomon/trend-eyes-probes.js": "ZERO imports",
+      "lib/solomon/trend-eyes-liveness.js": "ZERO imports",
+      "lib/governance/emit-feedback.js": [
+        "node:crypto",
+        "lib/security/audit-events-emitter.js",
+        "lib/governance/feedback-audience.js",
+        "lib/eva/event-bus/vision-events.js",
+        "lib/governance/measurement-provenance.js"
+      ],
+      "lib/security/audit-events-emitter.js": [
+        "node:crypto"
+      ],
+      "lib/governance/measurement-provenance.js": [
+        "node:child_process"
+      ],
+      "lib/governance/feedback-audience.js": "ZERO imports (pure category -> audience string)",
+      "lib/eva/event-bus/vision-events.js": [
+        "lib/eva/event-bus/handler-registry.js"
+      ],
+      "lib/eva/event-bus/handler-registry.js": "ZERO imports"
+    },
+    "closed_hops": [
+      "emit-feedback.js:304 publishVisionEvent(FEEDBACK_CREATED) is the only fan-out. vision-events.js does NOT import any handler module; handlers register only via lib/eva/event-bus/index.js -> registerFeedbackCreatedHandlers(), which the sweep never imports. In the sweep's process getHandlers('feedback.created') is empty and _hookObservers is empty, so publish is a no-op.",
+      "Even if registered, lib/eva/event-bus/handlers/feedback-created.js calls detectRecurrence() — a DB read/write, not a send.",
+      "resolveFeedbackAudience is a pure string mapper over MACHINE_TELEMETRY_CATEGORIES=['fleet_dormancy']; solomon_trend_candidate is not a member, so it takes the unchanged-insert branch."
+    ],
+    "conclusion": "No sendChairmanSMS, twilio, sms_outbound write, escalate_to_chairman, or notify path is reachable from the entrypoint at any depth. grep across all four leaf deps for those tokens returns nothing."
+  },
+  "data_exposure_trace": {
+    "question": "Does any raw SMS body text escape into a persisted field or log?",
+    "verdict": "NO — confirmed by runtime dump, not by inspection alone",
+    "body_readers": [
+      "isAutomatedMessage(body) (trend-eyes-sweep.mjs:90-93) — returns boolean only",
+      "questionClass(body) (trend-eyes-sweep.mjs:58-80) — returns a fixed enum label from a 5-member allowlist, or null. Cannot return body-derived text."
+    ],
+    "persisted_surfaces": {
+      "feedback.title": "`Trend candidate: ${v.trigger}` — trigger is a fixed probe id",
+      "feedback.description": "v.detail — counts and class labels only",
+      "feedback.metadata.evidence": "T1 {questionClass, members, spreadMs, ids}; T2 {classKey, fixedAt, occurrencesBeforeFix, occurrencesAfterFix, sources}; T3 {latest, baseline, delta, readings}",
+      "receipt.findings": "verdicts (trigger/verdict/detail), candidates_written, unknown_count, exploration_floor, classifier_coverage, blindness, truncated"
+    },
+    "runtime_dump_confirms": "Full runSweep output captured live. No body text, no phone number, and no message timestamp appears in any candidate or receipt field. phoneKey() output is used only as an in-memory correlation key in foldIntoExchanges and never reaches evidence.",
+    "probe_detail_strings_checked": "The unusable() paths JSON.stringify facts (trend-eyes-probes.js:67, 72, 111, 116) but those facts are {questionClass, occurrences:[{at,id}]} / {classKey,...} — no body field exists in the structure, so no body can be stringified into a detail.",
+    "pointer_residue": {
+      "what": "T1 evidence carries `ids` — sms_relay_staging row UUIDs (6 + 2 in the live run). These are pointers to raw chairman SMS rows, persisted in feedback.metadata.evidence.ids.",
+      "reachability": "CONTAINED. Proven by minted authenticated JWT: feedback SELECT for authenticated is scoped by select_feedback_policy USING (feedback_type LIKE 'user_%' AND venture_id IS NOT NULL) (20260712_feedback_authenticated_select_scope.sql:40-42) — trend candidates carry neither. anon SELECT is scoped by telegram_bot_select_feedback USING (source_type='telegram') (20260223_telegram_bot_feedback_rls.sql:53-56) — the sweep writes source_type='auto_capture'. Empirically: anon sees exactly 1 of 19257 feedback rows, and it is the telegram row.",
+      "and_the_target": "sms_relay_staging is RLS-enabled with NO policy for anon or authenticated (20260717_sms_relay_staging.sql:63). Minted-JWT read returned 0 rows. Even a leaked pointer cannot be dereferenced by a non-service-role caller."
+    },
+    "new_blocks_assessed": {
+      "classifier_coverage": "{inbound:136, automated:41, unclassified:87, classified:8} — four integers. No content.",
+      "blindness": "Fixed diagnostic strings composed in-code (trend-eyes-sweep.mjs:188-189, 252). No interpolated user data.",
+      "truncated": "{trigger, found, written} — a probe id and two integers."
+    }
+  },
+  "disclosure_assessment": {
+    "id": "FINDING-04",
+    "question_posed": "Does the added classifier_coverage block make the receipt's authenticated readability worse?",
+    "reachability_PROVEN_not_inferred": {
+      "method": "Minted an HS256 JWT with role=authenticated using SUPABASE_JWT_SECRET and issued live SELECTs.",
+      "codebase_health_snapshots": "authenticated -> READ OK, rows returned. The policy authenticated_read_snapshots FOR SELECT TO authenticated USING (true) (20260313_codebase_health_tables.sql:51-52) is live and effective. Any authenticated principal reads every snapshot row.",
+      "sms_relay_staging": "authenticated -> 0 rows (deny-all, no policy). Raw bodies unreachable.",
+      "feedback": "authenticated -> 0 rows (venture-scoped policy excludes trend candidates).",
+      "critical_timing": "SVC query confirms ZERO rows exist with dimension='trend_eyes_sweep_receipt'. The sweep has never written a receipt — every run so far was dry-run. This disclosure does not exist yet. It begins at the cron's first live execution (06:00 UTC daily, workflow :23)."
+    },
+    "answer": "NO — classifier_coverage does not materially worsen it, and it is the LESS sensitive half of what is already there.",
+    "reasoning": [
+      "exploration_floor was already cleared and already discloses the sensitive half: the chairman's TOPIC DISTRIBUTION with per-topic counts. Live: [{progress-status:6},{fleet-liveness:2}]. Topic labels are the identifying, interpretable content.",
+      "classifier_coverage adds four aggregate integers: total inbound volume (136/week), automated split (41), unclassified (87), classified (8). It adds DENOMINATOR, not content. It tells a reader how big the corpus was, which is exactly what makes the already-disclosed topic counts interpretable rather than more sensitive in kind.",
+      "The one genuinely new inference is automated:41 as a proxy for how often the 80-minute liveness watchdog fired, i.e. an operational-distress rate. That is a real but modest incremental leak, and it is an infrastructure-health figure rather than chairman content.",
+      "Removing classifier_coverage would be the WRONG fix and would be actively harmful: it is the anti-narrowing instrument added to close SEC-TE-02's sibling defect. Its entire purpose is to make a silently-narrowing classifier visible as a rising unclassified rate. Redacting it reinstates the blindness the fix just closed, in exchange for suppressing four integers while leaving the more sensitive topic labels in place."
+    ],
+    "the_actual_problem": "The content is required by the instrument; the ACCESS is what is wrong. codebase_health_snapshots was designed in March as a code-health table and given a blanket USING(true) read to authenticated. It was never designed to hold chairman-behavioural aggregates. This SD is the first writer to put chairman-derived data into it, which is what makes the blanket policy newly load-bearing.",
+    "RECOMMENDATION": {
+      "do_not": "Do NOT redact or remove classifier_coverage. Do NOT redact exploration_floor either — both are the instrument's own anti-blindness mechanisms and this SD exists to prevent silent narrowing.",
+      "do": "Scope the ACCESS, not the content. Add a RESTRICTIVE policy on codebase_health_snapshots limiting dimension='trend_eyes_sweep_receipt' rows to service_role, leaving the rest of the table authenticated-readable as today. This preserves the instrument in full and closes the disclosure completely.",
+      "timing_is_the_leverage": "Zero receipts exist. This is the one moment where the disclosure can be PREVENTED rather than remediated — after first cron run it becomes a data-removal problem. Either land the policy before merge, or comment out the schedule (keeping workflow_dispatch) until it lands.",
+      "process_caveat": "An RLS/policy change is permission-class and chairman-gated per the precedent recorded at 20260802_bound_anon_feedback_ingress.sql (metadata.chairman_gated_ddl=true, 'NOT APPLIED BY ITS AUTHOR'). So this needs chairman ratification and cannot be self-applied by EXEC. If ratification will not land before merge, disarming the schedule is the correct interim.",
+      "severity_if_unaddressed": "MEDIUM. Aggregate-only, no content, no identifiers, no dereferenceable pointers. Not an emergency — but it is a one-way door that opens on first cron run."
+    }
+  },
+  "informational": [
+    {
+      "id": "INFO-01",
+      "note": "lib/governance/measurement-provenance.js:43 builds a shell string: execSync(`git ${argsString}`). It is reachable from the sweep via emitFeedback -> buildMeasurementProvenance (emit-feedback.js:131) and executes on a GHA runner holding the service-role key. Currently SAFE: every call site passes a compile-time literal, and no sweep-derived or SMS-derived data reaches argsString. Flagged only because the interpolation is a latent injection sink in a path that now runs in a secret-bearing step. Pre-existing, not introduced here."
+    },
+    {
+      "id": "INFO-02",
+      "note": "scripts/solomon/trend-eyes-sweep.mjs:210 selects issue_summary and never reads it. Dead select; also corroborating evidence for SEC-TE-03."
+    }
+  ],
+  "verification_commands_run": [
+    "node scripts/solomon/trend-eyes-sweep.mjs --dry-run  -> exit 0, 3 verdicts, 2 candidates",
+    "runSweep() full JSON dump -> confirmed no body text in any persisted field",
+    "resolveT3Facts at days=14/30/60 -> readings=2 in all three, blind=null",
+    "60-day key-namespace overlap query -> OVERLAP = 0",
+    "minted HS256 authenticated JWT -> codebase_health_snapshots READ OK; sms_relay_staging 0 rows; feedback 0 rows",
+    "anon client -> feedback 1 of 19257 rows (telegram only); codebase_health_snapshots 0 rows",
+    "service_role -> trend_eyes_sweep_receipt rows = 0 (never written); solomon_trend_candidate rows = 0",
+    "npx vitest run tests/unit/solomon/ -> 2 files, 52 tests passed",
+    "find + git ls-tree main for *no-send* -> no results"
+  ],
+  "conditions_for_merge": [
+    {
+      "id": "C1",
+      "blocking": true,
+      "finding": "SEC-TE-03",
+      "requirement": "Fix or explicitly retire the T3 join. namedKeys (lane signal_type/lesson_class values) and issue_patterns.pattern_id are disjoint namespaces with zero measured overlap, so the numerator can never be non-zero. Either join on a key that actually corresponds, or mark T3 UNKNOWN with a named blindness reason until a correspondence exists. Shipping a probe that structurally cannot fire while reporting FLAT is the failure this SD was chartered against."
+    },
+    {
+      "id": "C2",
+      "blocking": true,
+      "finding": "SEC-TE-04",
+      "requirement": "probeLessonDisjunctionDrift must return UNKNOWN, not FLAT, when readings.length < T3_MIN_READINGS, and the resolver must surface that as a named blindness reason so unknown_count and blindness in the receipt reflect it. Add the two-sided test that is currently absent — prove it with the same mutation that exposes the current behaviour."
+    },
+    {
+      "id": "C3",
+      "blocking": true,
+      "finding": "FINDING-04",
+      "requirement": "Before the cron's first LIVE run: either land a RESTRICTIVE service_role-only policy for dimension='trend_eyes_sweep_receipt' on codebase_health_snapshots (chairman-gated), or disarm the schedule block in solomon-trend-eyes-sweep.yml:22-23 while keeping workflow_dispatch. Zero receipts exist today; this is the only window in which prevention is cheaper than remediation."
+    },
+    {
+      "id": "C4",
+      "blocking": false,
+      "finding": "SEC-TE-05",
+      "requirement": "Either create tests/unit/solomon/chairman-sms-no-send-path.test.js as the docblock at lib/solomon/chairman-sms-exchanges.js:22-24 claims exists, or correct the comment. A citation to a nonexistent guard is worse than no citation — it stops the next reader from checking."
+    }
+  ],
+  "verdict_rationale": "Three of four prior findings are genuinely and verifiably resolved against live data — the sweep runs (SEC-TE-01), T2 blindness is honest and named (SEC-TE-02 t2 arm), secret scoping is correct and complete (05), and the cap is unbypassable with truncation genuinely recorded (06). The 8a75a311cec pair refactor is a real hardening, not cosmetic. However the SEC-TE-01 fix introduced a new HIGH: swapping pattern_name for pattern_id turned a loud 42703 crash into a silent, permanent false all-clear, because the new key never matches. Combined with the untested FLAT-on-short-series branch and a receipt that omits T3 from both unknown_count and blindness, one third of the instrument is dead on arrival and reports healthy on every run. CONDITIONAL_PASS for the EXEC-TO-PLAN handoff — the work is not in a broken state, no exposure is live yet, and PLAN is the correct adjudicator — but C1, C2 and C3 are merge-blocking. If PLAN cannot hard-gate them, treat this as FAIL."
+}

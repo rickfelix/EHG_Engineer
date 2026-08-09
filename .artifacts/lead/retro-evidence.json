@@ -1,0 +1,31 @@
+{
+  "sub_agent": "RETRO",
+  "sd_key": "SD-LEO-INFRA-TREND-EYES-OFF-001",
+  "phase": "PLAN_VERIFICATION",
+  "verdict": "PASS",
+  "confidence": 95,
+  "summary": "SD_COMPLETION retrospective persisted (id 496b32f9-5848-4e1a-a341-3bd76e61e9d9), quality_score 100, status PUBLISHED, zero quality_issues. Gate path exercised live rather than inferred: getFilteredRetrospective finds the row and validateSDCompletionReadiness scores 89 with 0 issues.",
+  "retrospective_id": "496b32f9-5848-4e1a-a341-3bd76e61e9d9",
+  "content_counts": {
+    "what_went_well": 11, "what_needs_improvement": 10, "key_learnings": 13,
+    "action_items": 10, "success_patterns": 11, "failure_patterns": 11,
+    "improvement_areas": 6, "related_commits": 14
+  },
+  "dominant_lesson": "VERIFY AT THE CONSUMER, NOT AT THE MERGE — four instances on this SD, all the same shape. The worst: a one-token change (?? undefined -> ?? []) in runSweep restored a false all-clear against live data with the entire suite green, because runSweep had zero tests and the test asserted on an expression written inline in the test itself. Mutation testing was the only reliable detector of all four.",
+  "secondary_lessons": [
+    "A test written by whoever wrote the fix inherits the fix's assumption unless the fixture comes from OUTSIDE it — real corpus rows, or the mutation.",
+    "A key that PARSES is not a key that CORRESPONDS: repairing a phantom pattern_name with pattern_id made the query succeed while the numerator became structurally always zero.",
+    "Name-keyed instruments have filename blind spots: -scan would have been invisible to INVOCATION_PATH_PROOF, the same gap that let two eva trend scripts ship unwired under COMPLETED SDs.",
+    "A survivor table measures the deletion policy, not conduct.",
+    "This SD nearly committed the exact failure it was chartered to detect: phantom columns plus an empty corpus would have produced a confident FLAT."
+  ],
+  "corrections_found_during_retro": [
+    "My own brief said '71 tests in trend-eyes-probes.test.js'. Measured: 57 in that file; 71 is the total across tests/unit/solomon/ (2 files). A correct count attached to the WRONG EXTENT — this SD's own defect class, committed in its own reporting.",
+    "severity_level is not a column on retrospectives — a phantom column, caught by running rather than reading.",
+    "The retrospectives quality trigger docks 20 points on a bare ILIKE '%nothing%' check, firing on emphatic findings such as 'the two vocabularies share nothing'. The heuristic penalizes a substring, not a meaning."
+  ],
+  "verification_arms_green": {
+    "catalog": "pg_policies returns exactly one row: trend_eyes_receipt_service_role_only, polpermissive=FALSE, roles={anon,authenticated}, qual=(dimension IS DISTINCT FROM 'trend_eyes_sweep_receipt')",
+    "behavioural": "minted authenticated JWT: seeded receipt invisible (0) where the pre-apply baseline proved the identical seed visible (1); non-receipt 3976 vs 3976 service-role same-instant, proving scope not over-breadth"
+  }
+}

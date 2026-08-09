@@ -21,6 +21,10 @@
 const fs = require('node:fs');
 const path = require('node:path');
 const { spawn, spawnSync } = require('node:child_process');
+// Module-level, NOT the lazy require inside resolveReaperSourceRoot: the reaper child spawn in
+// tick() needs it too, and a function-scoped binding would be a ReferenceError on exactly the
+// branch that launches the destructive process — a crash that only appears when the reaper runs.
+const { scrubGitEnv, makeScrubbedGitRunner } = require('../../lib/fleet/source-tree-refresh.cjs');
 
 // SD-LEO-INFRA-SPAWN-ROOT-CURRENCY-INVARIANT-001 FR-3: resolved from this module's own
 // location, so the reaper's root is a property of the installed code rather than of
@@ -55,6 +59,17 @@ function readState(statePath) {
       // makes the field durable — a key absent here is silently dropped on every read, so
       // the streak could never accumulate. Missing in an old state file reads as 0 via `|| 0`.
       consecutive_refusals: Number.isFinite(parsed.consecutive_refusals) ? parsed.consecutive_refusals : 0,
+      // EXEC SECURITY (medium): the refusal streak only covers ONE way the reaper stops. A
+      // script_missing tick also reaps nothing, and FR-1 made that path materially MORE reachable
+      // by resolving the script from the source tree instead of repoRoot — so this SD's own change
+      // widened a silent-stop path. Same whitelist rule as above: omit the key here and the streak
+      // is dropped on every read and can never accumulate.
+      consecutive_not_invoked: Number.isFinite(parsed.consecutive_not_invoked) ? parsed.consecutive_not_invoked : 0,
+      // REBUILD-CHURN: a gitignored artifact that REAPPEARS makes the tree content-unverified every
+      // tick, so STARVE-1's remediation deletes and recreates the source tree hourly, forever, and
+      // only LOGS it. Silent churn that looks like "working normally" is this SD's whole subject.
+      // Same whitelist rule as above: omit the key and the streak is dropped on every read.
+      consecutive_rebuilds: Number.isFinite(parsed.consecutive_rebuilds) ? parsed.consecutive_rebuilds : 0,
     };
   } catch {
     return { schema_version: STATE_SCHEMA_VERSION, sweep_counter: 0, last_run_at: null, last_result: null, last_pid: null, last_spawn_at: null };
@@ -205,6 +220,59 @@ function buildReaperArgs({ reaperScript, execute, stage2, allPools }) {
  * @param {boolean} [opts.force]   - run now regardless of counter (tests)
  * @returns {object} { invoked, counter, cadence, result, enabled }
  */
+/**
+ * Resolve the tree the reaper's CODE comes from — SD-LEO-INFRA-SCHEDULED-WORKTREE-REAPER-001 FR-1.
+ *
+ * THE SPLIT THIS INTRODUCES, which is the whole fix: repoRoot supplies the POOL (the worktrees
+ * being reaped), while this supplies the CODE (worktree-reaper.mjs and its guards). Those were the
+ * same tree, and that is why reaping starved: the shared root goes behind within minutes of any
+ * peer merge because QFs are worked on main, the currency check correctly refuses to execute
+ * possibly-stale destructive code, and the refusal then persists for as long as nobody pulls —
+ * an UNBOUNDED starvation window. A dedicated tree that refreshes itself ends the window without
+ * touching the shared root, so the refusal stops being the steady state instead of being relaxed.
+ *
+ * DEGRADATION IS DELIBERATE AND NON-REGRESSIVE: a git failure here returns null and the caller
+ * falls back to repoRoot — i.e. exactly today's behaviour, guard fully intact. It is logged
+ * loudly because a silent fallback would look identical to a working refresh (this SD exists
+ * because a workflow was green daily while doing nothing).
+ *
+ * A MIS-SITED TREE IS NOT CAUGHT... except that it must be, here, for a specific reason: this
+ * function's contract is "return a usable source root or null". resolveSourceTreeDir throws on a
+ * .worktrees/ location because paths there are EXEMPT from the currency check, so such a tree
+ * would be silently unguarded. That throw is surfaced in the log and degrades to repoRoot rather
+ * than crashing the sweep — the sweep must never die on the reaper — but it degrades to the
+ * GUARDED path, never to an unguarded one.
+ */
+function resolveReaperSourceRoot({ repoRoot, logger, env = process.env, runner, exists, onResolved }) {
+  const {
+    ensureSourceTreeWorktree, REAPER_SOURCE_DIRNAME, REAPER_SOURCE_BRANCH,
+  } = require('../../lib/fleet/source-tree-refresh.cjs');
+  // R5-4: built by the SHARED factory, not by a hand-applied scrub. The scrub used to be inlined
+  // here and at spawn-control's equivalent, and could be unwired at BOTH with the suite green.
+  const gitRunner = runner || makeScrubbedGitRunner(repoRoot, { spawnSync });
+  try {
+    const res = ensureSourceTreeWorktree({
+      repoRoot,
+      dirname: REAPER_SOURCE_DIRNAME,
+      branch: REAPER_SOURCE_BRANCH,
+      envOverride: 'FLEET_REAPER_SOURCE_DIR',
+      label: 'reaper-source',
+      exists: exists || fs.existsSync,
+      runner: gitRunner,
+      env,
+      logger,
+    });
+    if (onResolved) onResolved.rebuilt = Boolean(res && res.rebuilt);
+    if (res.refreshed === false) {
+      logger(`  reaper source tree refresh FAILED (${res.dir}) — the currency check below decides; not silently proceeding`);
+    }
+    return res.dir;
+  } catch (err) {
+    logger(`  reaper source tree UNAVAILABLE (${err && err.message ? err.message : err}) — falling back to the shared root, which is today's behaviour and may refuse`);
+    return null;
+  }
+}
+
 function tick(opts = {}) {
   // SD-LEO-INFRA-SPAWN-ROOT-CURRENCY-INVARIANT-001 FR-3: the fallback was process.cwd(),
   // which meant the reaper's ROOT — and therefore, via reaperScript below, the reaper's
@@ -234,12 +302,32 @@ function tick(opts = {}) {
   }
 
   const { execute, stage2 } = resolveExecuteMode();
-  const reaperScript = path.join(repoRoot, 'scripts', 'worktree-reaper.mjs');
+  // FR-1: CODE comes from the self-refreshing source tree; the POOL stays repoRoot (the spawn
+  // below keeps cwd: repoRoot). Null means the source tree was unavailable — fall back to
+  // repoRoot, which is exactly today's behaviour with the currency guard fully intact.
+  const sourceResolution = { rebuilt: false };
+  const sourceRoot = resolveReaperSourceRoot({
+    repoRoot, logger, env: opts.currencyEnv || process.env,
+    runner: opts.sourceRunner, exists: opts.sourceExists, onResolved: sourceResolution,
+  }) || repoRoot;
+
+  // REBUILD-CHURN: count consecutive ticks that had to rebuild. Reset on any tick that did
+  // not — one rebuild is the remediation working; a STREAK means something keeps putting a
+  // gitignored artifact back and the tree is being deleted and recreated every tick.
+  state.consecutive_rebuilds = sourceResolution.rebuilt ? (state.consecutive_rebuilds || 0) + 1 : 0;
+  const reaperScript = path.join(sourceRoot, 'scripts', 'worktree-reaper.mjs');
   if (!fs.existsSync(reaperScript)) {
     state.last_run_at = new Date().toISOString();
     state.last_result = 'script_missing';
+    // A missing script reaps NOTHING, forever, in total silence — and FR-1 widened this path by
+    // resolving the script from the source tree. Counted so it can alarm; NOT counted for
+    // 'skipped_not_due', which is the cadence working as designed and would alarm every tick.
+    state.consecutive_not_invoked = (state.consecutive_not_invoked || 0) + 1;
     writeState(statePath, state);
-    return { invoked: false, counter: state.sweep_counter, cadence, result: 'script_missing', enabled: true };
+    return {
+      invoked: false, counter: state.sweep_counter, cadence, result: 'script_missing', enabled: true,
+      consecutiveNotInvoked: state.consecutive_not_invoked,
+    };
   }
 
   // SD-LEO-INFRA-SPAWN-ROOT-CURRENCY-INVARIANT-001 FR-3 — REFUSE TO REAP FROM A STALE TREE.
@@ -256,7 +344,11 @@ function tick(opts = {}) {
   try {
     const { enforceTreeCurrency } = require('../../lib/fleet/tree-currency.cjs');
     enforceTreeCurrency({
-      dir: repoRoot,
+      // FR-1: guard the tree the SCRIPT came from, not the pool. These were the same directory,
+      // and that identity is what made the refusal permanent. reaperScript above now resolves out
+      // of sourceRoot, so this must check sourceRoot — checking repoRoot would guard a tree that
+      // no longer determines the code being executed, which is a guard pointed at the wrong thing.
+      dir: sourceRoot,
       logger: { warn: (m) => logger(m) },
       label: 'worktree-reaper source tree',
       // The reaper REFUSES; it never heals. It runs unattended against a shared root, so a
@@ -267,7 +359,16 @@ function tick(opts = {}) {
       ...(opts.currencyRunner ? { runner: opts.currencyRunner } : {}),
       ...(opts.currencyEnv ? { env: opts.currencyEnv } : {}),
     });
-    state.consecutive_refusals = 0; // currency restored — the refusal streak ends here
+    // NI-R1 (EXEC SECURITY, MEASURED): the reset used to happen HERE, above the single-flight
+    // check at :380 — so a tick that passed currency and then did NOT run still erased the refusal
+    // streak. Traced over a real state file with the pattern [stale x5, inflight]: refusals went
+    // 1,2,3,4,5,0,1,2,3,4,5,0,... and NEVER reached the threshold of 6 across 48 due ticks, so
+    // reaper_starvation_alert never fired at all; the not-invoked alarm first fired at due-tick 36
+    // instead of 6 (~36h instead of ~6h). A wedged pid on a chronically-behind tree is precisely
+    // the combination this SD exists to catch. The streak now ends where the OTHER counter's does
+    // — on an actual spawn — so both counters mean "since the reaper last really ran".
+    // (Deliberately NO state write here: a field written and never read is indistinguishable from
+    // a guard, and this one would be dropped by readState's whitelist anyway.)
   } catch (err) {
     // QF-20260726-794 — REFUSE TO REAP, BUT STILL REPORT.
     //
@@ -304,8 +405,14 @@ function tick(opts = {}) {
     logger(`WORKTREE REAPER TICK: sweep=${state.sweep_counter} — prior reaper (pid=${state.last_pid}) still running; skipping launch`);
     state.last_run_at = new Date().toISOString();
     state.last_result = 'skipped_in_flight';
+    // A single in-flight skip is healthy. A PERSISTENT one is a wedged reaper holding its pid
+    // forever, which reaps nothing and says nothing — so it accumulates on the same counter.
+    state.consecutive_not_invoked = (state.consecutive_not_invoked || 0) + 1;
     writeState(statePath, state);
-    return { invoked: false, counter: state.sweep_counter, cadence, result: 'skipped_in_flight', pid: state.last_pid, enabled: true };
+    return {
+      invoked: false, counter: state.sweep_counter, cadence, result: 'skipped_in_flight',
+      pid: state.last_pid, enabled: true, consecutiveNotInvoked: state.consecutive_not_invoked,
+    };
   }
 
   const args = buildReaperArgs({ reaperScript, execute, stage2, allPools: isAllPoolsEnabled() });
@@ -353,6 +460,11 @@ function tick(opts = {}) {
         detached: true,
         windowsHide: true,
         stdio: ['ignore', logFd, logFd],
+        // SCRUB-2 (EXEC SECURITY): the GUARD's runners were scrubbed but THIS — the process that
+        // actually deletes worktrees — inherited process.env untouched. Every git command the
+        // reaper runs would honour GIT_CONFIG_* injection, and core.fsmonitor is a command git
+        // runs. Hardening the check while leaving the executor open is the wrong half.
+        env: scrubGitEnv(process.env),
       });
       child.unref();
       pid = child.pid || null;
@@ -370,14 +482,28 @@ function tick(opts = {}) {
   state.last_run_at = new Date().toISOString();
   state.last_result = result;
   if (result === 'spawned') {
+    // THE RESET, and it is load-bearing in both directions: without it the counter only ever
+    // climbs and the alarm, once tripped, fires forever regardless of recovery. A spawn_error
+    // deliberately does NOT reset — that is another way to reap nothing.
+    state.consecutive_not_invoked = 0;
+    // NI-R1: the refusal streak resets HERE too, not at the currency check. Both counters now
+    // mean the same thing — "since the reaper last actually ran" — so neither can be silently
+    // rewound by a tick that passed a check and then did nothing.
+    state.consecutive_refusals = 0;
     state.last_pid = pid;
     state.last_spawn_at = new Date().toISOString();
   } else {
+    // spawn_error / unknown: the reaper did not run. Same silent-stop class as script_missing.
+    state.consecutive_not_invoked = (state.consecutive_not_invoked || 0) + 1;
     state.last_pid = null;
   }
   writeState(statePath, state);
 
-  return { invoked: result === 'spawned', counter: state.sweep_counter, cadence, result, pid, enabled: true, watchdog };
+  return {
+    invoked: result === 'spawned', counter: state.sweep_counter, cadence, result, pid, enabled: true, watchdog,
+    consecutiveNotInvoked: state.consecutive_not_invoked,
+    consecutiveRebuilds: state.consecutive_rebuilds,
+  };
 }
 
 module.exports = {

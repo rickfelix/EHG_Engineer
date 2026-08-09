@@ -16,6 +16,8 @@ require('dotenv').config();
 const { createClient } = require('@supabase/supabase-js');
 const { drainRelayQueue } = require('../lib/coordinator/relay-queue.cjs');
 const { resolvePeerTarget } = require('../lib/coordinator/peer-target.cjs');
+// QF-20260808-447: adopt the canonical dual-read instead of hand-rolling a 36th variant.
+const { readCanonicalBody } = require('../lib/coordination/lane-contract.cjs');
 
 const DRY_RUN = process.argv.includes('--dry-run');
 
@@ -72,7 +74,9 @@ function makeSendRelay(supabase, { resolvePeerTarget: resolvePeer = resolvePeerT
           sender_type: 'coordinator',
           target_session: resolved.target,
           message_type: 'INFO',
-          subject: `[RELAYED] ${String(row.payload.body || '').slice(0, 60)}`,
+          // QF-20260808-447: was payload.body only — a row whose prose lives in the TOP-LEVEL
+      // body column relayed with an empty subject preview.
+      subject: `[RELAYED] ${readCanonicalBody(row).slice(0, 60)}`,
           body: row.payload.body || null,
           // SD-LEO-INFRA-CORRECTION-DELIVERY-PATH-001-C / FR-4: kind stays adam_advisory (that IS the
           // lane every reader drains), but the correction sub-discriminators must SURVIVE the relay.

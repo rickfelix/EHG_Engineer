@@ -1,0 +1,65 @@
+{
+  "sub_agent": "Explore",
+  "sd_key": "SD-LEO-INFRA-TREND-EYES-OFF-001",
+  "phase": "LEAD",
+  "verdict": "PASS",
+  "confidence": 90,
+  "summary": "LEAD-phase discovery for Trend-Eyes. Reusable prior art located and named; two claims in the SD spine require narrowing before PLAN.",
+  "findings": {
+    "gha_cron_template": {
+      "verdict": "CONFIRMED",
+      "canonical_template": ".github/workflows/solomon-ledger-reconcile.yml (daily 0 6 * * *, concurrency group, dry_run input)",
+      "family": [
+        ".github/workflows/solomon-duty-triggers-cron.yml (daily 37 11 * * * plus weekly 20 8 * * 4)",
+        ".github/workflows/solomon-ledger-resurface-cron.yml (13,43 hourly)",
+        ".github/workflows/solomon-late-verdict-reconcile-cron.yml (every 15 min)",
+        ".github/workflows/solomon-ledger-reconcile.yml (daily 06:00)",
+        ".github/workflows/solomon-judgment-expiry.yml (SCHEDULE COMMENTED OUT - ships deliberately disabled, DO NOT COPY)"
+      ],
+      "shape": "permissions contents:read; concurrency group=github.workflow cancel-in-progress; ubuntu-latest; timeout 5-10m; job-level env SUPABASE_URL + SUPABASE_SERVICE_ROLE_KEY; checkout@v4 then setup-node@v4 (node 22, cache npm) then npm ci --ignore-scripts then one node scripts step",
+      "hard_constraint": "supabase-js + service-role ONLY. No pooler/pg/DATABASE_URL path: SUPABASE_POOLER_URL is injected into ZERO cron yml in this repo and is silently undefined on a GHA runner (solomon-late-verdict-reconcile-cron.yml:38-40).",
+      "closest_structural_analog": ".github/workflows/gauge-runner-cron.yml (hourly scan, route findings, write receipt)",
+      "closest_behavioral_analog": ".github/workflows/clockwork-feedback-fingerprint-promoter.yml (window, group, promote candidates, dry-run by default)"
+    },
+    "lib_solomon": {
+      "verdict": "CONFIRMED",
+      "files": ["chairman-sms-exchanges.js", "conduct-probes.js", "conduct-probes.test.js", "judgment-expiry.js", "self-score-config.cjs"],
+      "readChairmanSmsExchanges": "lib/solomon/chairman-sms-exchanges.js:100 - signature (supabase, {windowHours, now}) returns {window, exchanges, counts}. Reads sms_relay_staging + sms_outbound_obligations. Bounded window MANDATORY (throws on non-positive, :102). Errors throw rather than returning empty (:117-120).",
+      "scan_shape_to_copy": "lib/solomon/conduct-probes.js - pure-probe / injectable-resolver split is the shape for the mechanical SCAN half"
+    },
+    "existing_series_instruments": {
+      "verdict": "SPINE CLAIM REFUTED AS WRITTEN",
+      "spine_claim": "no current instrument owns longitudinal SERIES (gauges are point-event)",
+      "true_half": "22 of 25 entries in lib/governance/gauge-registry.js trip on count>0. The registry concedes the gap in its own vocabulary: accumulationSignal defined at lib/governance/gauge-registry.js:320 as the alarm on the SERIES distinct from the per-event signal, recorded MISSING at :356 and :386, and :394 states only the series exposes the outage. CITE THIS INSTEAD.",
+      "refuting_half": "8+ longitudinal instruments exist. Most damaging: lib/ship/witness-adoption.mjs:131 already builds a day-bucketed 60-day series with a consecutive-day streak over merge_witness_telemetry - a source this SD names as its own. Others: lib/governance/recursion-governor.js:53/89/140/157 (wired hourly), lib/vision/rung-health-convergence.mjs:121, lib/vision/gauge-trend.js:39, scripts/row-growth-snapshot.cjs (wired daily).",
+      "reusable_series_mechanic": "lib/governance/recursion-governor.js - writeThroughputSnapshot() appends one row per tick to codebase_health_snapshots; fetchRecentSnapshots(supabase,{dimension,limit}); detectSustainedBreach(recent,{requiredConsecutive}) returns {sustained, streak}. Exactly the append-a-reading / decide-from-the-sequence mechanic, on an EXISTING table.",
+      "t2_prior_art": "lib/learning/outcome-tracker.js:364 detectRecurrence already implements recurrence-after-fix at point-event granularity. Series framing is new; PRD must cite this rather than appear unaware.",
+      "per_day_cap_idiom": "scripts/lib/ci-recurrence-detector.mjs - DEFAULT_THRESHOLD=3, DEFAULT_PER_RUN_CAP=3, DEFAULT_PER_DAY_CAP=10. The at-most-one-finding-per-day cap idiom already exists here."
+    },
+    "run_receipt_pattern": {
+      "verdict": "CONFIRMED - EXISTS AND IS NAMED",
+      "writer": "scripts/gauge-runner.mjs:585-595 writeHeartbeat() inserts dimension=gauge_runner_heartbeat into codebase_health_snapshots with findings[{ran_count, ran_at, routing}]. Non-fatal on error. Header calls it Invariant #0 (who-watches-the-watchmen) - a dead runner is externally observable, not a silent false-all-clear.",
+      "reader": "scripts/coordinator-hourly-review.cjs (~line 230) reads dimension=gauge_runner_heartbeat and calls the pure predicate checkGaugeRunnerLiveness(lastHeartbeatAt, nowMs, thresholdMs) in lib/governance/gauge-runner-liveness.js (STALE_HEARTBEAT_THRESHOLD_MS=2h; null heartbeat is alarm true).",
+      "recommendation": "Copy the TRIPLE: writer / table+dimension / external pure liveness predicate. Also copy the routing tally so dedup-suppressed-everything stays distinguishable from the-scan-broke.",
+      "do_not_confuse": "lib/coordination/receipt-ledger.cjs is a message-disposition ledger (lanes signal/work_assignment/advisory), NOT an execution receipt."
+    },
+    "feedback_category": {
+      "verdict": "CONFIRMED FREE-TEXT - no DB enum, no CHECK constraint on category",
+      "canonical_writer": "lib/governance/emit-feedback.js (canonical-writer-for feedback) - defaults category=harness_backlog, passes it through unvalidated",
+      "distinct_categories_in_code": 23,
+      "blocking_trap": "lib/governance/feedback-audience.js exports MACHINE_TELEMETRY_CATEGORIES (currently fleet_dormancy only). Membership routes a category through an aggregate UPSERT whose dedup hash is ALWAYS today::telemetry::category - ALL rows for that category collapse into ONE PER DAY and the caller own dedup_key is IGNORED. Keep solomon_trend_candidate OUT of that list (one row per finding is wanted); it is however exactly the mechanism if a hard one-per-day is wanted.",
+      "precedent": "scripts/solomon-forecast-trigger-check.mjs writes one feedback row category=solomon_forecast_basis with structured metadata that a later run reads back as its basis - closest precedent for a per-day GRADING seat."
+    },
+    "cautionary_precedent": {
+      "verdict": "LOAD-BEARING",
+      "detail": "SD-LEO-INFRA-CONSULTANT-AGENT-PHASE-001 and -002 both COMPLETED, shipping scripts/eva/eva-trend-snapshot.mjs and scripts/eva/trend-detector.mjs - BOTH VERIFIED UNWIRED (no npm script, no workflow entry). In-repo lesson at .github/workflows/solomon-judgment-expiry.yml:22-25: that is not a disabled mechanism, it is an ABSENT one. The SD wiring success criterion is load-bearing; keep it."
+    }
+  },
+  "recommendations": [
+    "Copy solomon-ledger-reconcile.yml as the workflow template; do NOT copy solomon-judgment-expiry.yml.",
+    "Reuse lib/governance/recursion-governor.js series mechanic and codebase_health_snapshots rather than inventing a series store.",
+    "Copy the gauge-runner run-receipt triple (writer / dimension / external pure liveness predicate).",
+    "Narrow the spine no-existing-series claim to cite gauge-registry.js:320/356/386 accumulationSignal MISSING, and explicitly resolve the merge_witness_telemetry overlap with lib/ship/witness-adoption.mjs:131.",
+    "Keep solomon_trend_candidate out of MACHINE_TELEMETRY_CATEGORIES."
+  ]
+}

@@ -29,6 +29,12 @@ on:
     paths:
       - 'database/migrations/20260803_drive_reports.sql'
       - 'tests/ddl/drive-reports-ddl.db.test.js'
+      # SD-LEO-INFRA-DRIVE-STATE-OBSERVABILITY-001 TR-5. This filter lists LITERAL paths, so a PR
+      # touching only a NEW migration and its NEW ddl test would have triggered NOTHING — green
+      # with zero CI signal, which is the same failure class the drive-state SD exists to remove.
+      # Adding the paths is the whole fix; the tier still refuses to become a general one.
+      - 'database/migrations/20260808_drive_state_verdicts.sql'
+      - 'tests/ddl/drive-state-verdicts-ddl.db.test.js'
       - 'vitest.ddl.config.mjs'
       # Self-validating: edits to this file re-run it.
       - '.github/workflows/drive-reports-ddl.yml'

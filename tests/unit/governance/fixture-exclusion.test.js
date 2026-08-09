@@ -62,7 +62,12 @@ describe('predicate matrix (TS-1)', () => {
   test('venture predicate: flags OR name-prefix backstop; real ventures pass through', () => {
     expect(isFixtureVenture({ name: 'MarketLens', is_demo: false, is_synthetic: false })).toBe(false);
     expect(isFixtureVenture({ name: 'MarketLens', is_demo: true })).toBe(true);
-    expect(isFixtureVenture({ name: 'Real Co', is_synthetic: true })).toBe(true);
+    // SD-LEO-INFRA-ONE-SYNTHETIC-ROW-001-A: this line previously asserted is_synthetic:true
+    // classified as a fixture. ventures.is_synthetic is a PHANTOM column — migration 20260312 was
+    // never applied and a live select reproduces 42703 — so that branch could only ever fire on an
+    // in-memory object like this one, never on a real row. The flag-first behavior under test is
+    // is_demo; the removal itself is pinned in fixture-exclusion-per-table.test.js.
+    expect(isFixtureVenture({ name: 'Real Co', is_demo: true })).toBe(true);
     for (const name of ['ZZZ_seed_venture', '__e2e_venture', 'TEST-venture', 'UAT-venture', 'parity-test-1', 'test-stub', 'Test Venture for claims']) {
       expect(isFixtureVenture({ name }), name).toBe(true);
     }
@@ -116,7 +121,8 @@ describe('computePortfolioMaturity excludes fixture ventures (TS-2)', () => {
       { name: 'CronGenius', is_demo: false, is_synthetic: false },
       { name: 'ZZZ_seed', is_demo: false, is_synthetic: false },
       { name: 'Real-flagged', is_demo: true },
-      { name: 'Synthetic-co', is_synthetic: true },
+      // was is_synthetic:true — a phantom column no live row can carry; is_demo is the real flag
+      { name: 'Synthetic-co', is_demo: true },
     ]));
     expect(result.ventureCount).toBe(2);
   });

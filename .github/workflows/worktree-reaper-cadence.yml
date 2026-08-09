@@ -1,4 +1,11 @@
-# QF-20260511-414: closes 4th-class witness of PAT-LEO-INFRA-WRITER-CONSUMER-ASYMMETRY-001 (reaper script existed, no automation invoked it). Stage 1 only.
+# QF-20260511-414 wired automation to the reaper script, intending to close a 4th-class witness of
+# PAT-LEO-INFRA-WRITER-CONSUMER-ASYMMETRY-001 ("the script existed, no automation invoked it").
+#
+# CORRECTED BY SD-LEO-INFRA-SCHEDULED-WORKTREE-REAPER-001 — IT DID NOT CLOSE IT. This job runs on a
+# GitHub-hosted runner whose fresh clone has no .worktrees/ pool (that path is gitignored), so it
+# scans 0 and exits 0 every day. The asymmetry was not closed; it was converted into a daily green
+# certification that reaping happens. The scanned==0 guard below now refuses to report success for
+# a run that did nothing. Stage 1 only.
 name: Worktree Reaper Cadence
 on:
   schedule:
@@ -42,6 +49,40 @@ jobs:
           else
             npm run worktree:reap:execute 2>&1 | tee reaper.log
           fi
+      # SD-LEO-INFRA-SCHEDULED-WORKTREE-REAPER-001 — A RUN THAT SCANNED NOTHING IS NOT A SUCCESS.
+      #
+      # MEASURED: this job runs on ubuntu-latest via actions/checkout fetch-depth 1, and .worktrees/
+      # is gitignored — so the CI clone contains NO worktree pool and listActiveWorktrees returns
+      # exactly 0. Production run 31238967008 executed --execute in 2.45 SECONDS and printed
+      # "Stage 1 (auto-safe): 0"; the five preceding scheduled runs all concluded success. It has
+      # therefore been GREEN EVERY DAY *BECAUSE* IT DOES NOTHING, while the operator pool it is
+      # believed to protect drifted upward untouched.
+      #
+      # The header above claims this workflow closes PAT-LEO-INFRA-WRITER-CONSUMER-ASYMMETRY-001
+      # ("the reaper script existed, no automation invoked it"). Invoking it where no pool exists did
+      # not close that asymmetry — it converted it into a daily green certification that reaping
+      # happens. A guard that cannot fire must not report success.
+      #
+      # SCHEDULE-ONLY, deliberately: a manual workflow_dispatch (including dry_run) is a human
+      # deliberately exercising the script and should not be failed for the environment it ran in.
+      # The scheduled run is the one that gets read as coverage, so that is the one held to account.
+      # Failure here is ACTIONABLE, not merely red — the "Open issue on failure" step below already
+      # files a ticket naming this run.
+      - name: Fail if the scheduled run scanned nothing
+        if: github.event_name == 'schedule'
+        run: |
+          scanned=$(grep -oE 'Worktrees scanned:[[:space:]]*[0-9]+' reaper.log | grep -oE '[0-9]+$' | head -1)
+          echo "worktrees_scanned=${scanned:-unparsed}"
+          if [ -z "$scanned" ]; then
+            echo "::error::Could not parse 'Worktrees scanned:' from reaper.log — the reaper's output shape changed, so this guard is blind. Treating as failure rather than assuming success."
+            exit 1
+          fi
+          if [ "$scanned" -eq 0 ]; then
+            echo "::error::Scheduled reaper scanned 0 worktrees. This runner has no pool to reap (.worktrees/ is gitignored and this is a fresh fetch-depth-1 clone), so a green result here certifies nothing. Move this job to a runner that HOSTS the pool (self-hosted), or invoke the reaper from the machine that owns .worktrees/. Until then the operator pool is unprotected by this workflow."
+            exit 1
+          fi
+          echo "Scanned $scanned worktree(s) — this run had a real pool to act on."
+
       - name: Write last_run_at to state file
         if: always()
         run: |

@@ -26,7 +26,7 @@ import { dirname, resolve, join } from 'node:path';
 import { readFileSync, writeFileSync } from 'node:fs';
 import 'dotenv/config';
 import { stampLastFired } from '../lib/periodic-liveness/stamp-last-fired.js';
-import { renderCount } from '../lib/db/fetch-all-paginated.mjs';
+import { renderCount, fetchAllPaginated } from '../lib/db/fetch-all-paginated.mjs';
 
 const require = createRequire(import.meta.url);
 const { createClient } = require('@supabase/supabase-js');
@@ -43,6 +43,9 @@ const { emitCrossPartyPing } = require('../lib/coordinator/cross-party-ping.cjs'
 // payload.actioned_at) — the inbox core counts only payload.signal_type rows, so this lane had
 // ZERO tick representation.
 const { selectUnactionedAdvisories } = require('../lib/coordinator/adam-advisory-store.cjs');
+// SD-LEO-INFRA-COORDINATION-LANE-DRAIN-001 / FR-4: read-only full-lane pending counter, kept
+// separate from the advisory store precisely so surfacing scope never widens retirement scope.
+const { summarizePendingLane } = require('../lib/coordination/lane-pending-gauge.cjs');
 const { DIRECTIVE_KINDS, PAYLOAD_KINDS } = require('../lib/fleet/worker-status.cjs');
 // SD-LEO-INFRA-DRAIN-SET-REGISTRY-001-C (Child B) FR-4: readSalientState's openSignalCount below
 // generalizes beyond payload.signal_type-only salience via this registry-reader — deliberately NOT
@@ -351,11 +354,32 @@ async function main() {
   // zero tick representation. Surface the unactioned count so a pending advisory forces a
   // non-NO-OP ping within one tick cycle. Fail-soft: the count never blocks the tick.
   let unactionedAdamAdvisories = 0;
+  let lanePending = { actionable: 0, unrecognized: 0, informational: 0, total: 0, oldestActionableAgeMs: 0 };
   try {
     const coordinatorIdForAdvisories = await getActiveCoordinatorId(sb);
     const { rows } = await selectUnactionedAdvisories(sb, coordinatorIdForAdvisories, { limit: 200 });
     unactionedAdamAdvisories = (rows || []).length;
-  } catch { /* fail-soft: advisory count never blocks the tick */ }
+
+    // SD-LEO-INFRA-COORDINATION-LANE-DRAIN-001 / FR-4: a SEPARATE, READ-ONLY full-lane pending
+    // count. ADAM_ADVISORIES_PENDING above is kind-scoped to adam_advisory, so a pending row of
+    // any other kind reads as ZERO — the false all-clear that let rows aged 20-27h sit while the
+    // gauge printed 0. This deliberately does NOT widen selectUnactionedAdvisories: that selector
+    // is shared by the peek AND the ack verb by design, so widening it would widen RETIREMENT and
+    // stamp actioned_at on ~1800 rows nobody acted on. Surfacing scope stays separate from
+    // retirement scope. UNWINDOWED on purpose — age is the signal here, and the neighbouring
+    // salience counter's 30-minute window is precisely what cannot see this defect.
+    // PAGINATED, not .limit(1000). A capped fetch measures the CAP rather than the population —
+    // the exact under-reporting shape FR-4 exists to fix, so shipping it inside FR-4's own remedy
+    // would have been the defect rebuilt in its cure. Caught by adversarial testing review.
+    const laneRows = await fetchAllPaginated((from, to) => sb
+      .from('session_coordination')
+      .select('id, created_at, acknowledged_at, payload')
+      .in('target_session', [coordinatorIdForAdvisories, 'broadcast-coordinator'])
+      .is('acknowledged_at', null)
+      .order('id', { ascending: true })
+      .range(from, to));
+    lanePending = summarizePendingLane(laneRows || [], { nowMs: Date.now() });
+  } catch { /* fail-soft: neither count ever blocks the tick */ }
 
   // SD-LEO-INFRA-FLEET-ACCOUNT-IDENTITY-001 (FR-2): fail-safe — null/unavailable prints 'unknown'
   // rather than crashing the tick.
@@ -403,6 +427,8 @@ async function main() {
       `fail=${tick.failedCount} skip=${tick.skippedCount} ` +
       `ping=${delta.changed ? delta.fields.join(',') : 'suppressed'} ` +
       `ADAM_ADVISORIES_PENDING=${unactionedAdamAdvisories} ` +
+      `LANE_PENDING=${lanePending.actionable}a/${lanePending.unrecognized}u/${lanePending.informational}i ` +
+      `oldestActionable=${Math.floor(lanePending.oldestActionableAgeMs / 3600000)}h ` +
       `nextWakeSeconds=${delaySeconds} :: ${modeReason}`
     );
     // QF-20260719-298: force a non-NO-OP turn when advisories are unactioned. QUIET_TICK_PING is

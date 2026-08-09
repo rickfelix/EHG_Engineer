@@ -1,0 +1,109 @@
+# E2E liveness-fixture reaper — scheduled cleanup of __e2e_ rows in periodic_process_registry.
+# SD-LEO-INFRA-ONE-SYNTHETIC-ROW-001-E (FR-1, FR-2).
+#
+# WHY THIS FILE EXISTS: scripts/reap-e2e-liveness-fixtures.mjs already worked and was already
+# correct — it just had NOTHING INVOKING IT. Measured at LEAD: 3 references repo-wide (the script,
+# its own predicate unit test, and a prose comment), ZERO in package.json, ZERO across
+# .github/workflows/, and no periodic_process_registry row. An instrument nobody invokes is
+# indistinguishable from an absent one, except that its existence hides the gap from the next
+# person who greps for a reaper. So the convention shipped HALF an invariant: rows were marked and
+# filtered, then accumulated forever.
+#
+# ── THE TRAP THIS WORKFLOW IS SHAPED TO AVOID (FR-2) ──────────────────────────────────────
+# THE REAPER DEFAULTS TO DRY RUN. Scheduling `node scripts/reap-e2e-liveness-fixtures.mjs` with no
+# flag would produce a green, exit-0, ZERO-WRITE job forever — scheduled but still inert, which is
+# the SAME defect this SD exists to close, reproduced one layer up. Dry run also returns BEFORE
+# setting an exit code, so residue > 0 emits no signal at all. A "scheduled" reaper that never
+# reaps is worse than an unscheduled one, because the gap now looks closed.
+#
+# ── WHY --apply IS FLAG-GATED RATHER THAN JUST SWITCHED ON ────────────────────────────────
+# The script's own header (lines 29-37) states that the QF specifying it does NOT authorize
+# production deletes, and that --apply requires authorization obtained separately. A scheduled
+# workflow running --apply IS that authorization, granted by omission. So --apply is gated on
+# leo_feature_flags.E2E_FIXTURE_REAP_V1, which ships ABSENT => disabled => the reap step does not
+# run. Merging this performs ZERO deletes. Enabling it is a deliberate, reviewable registry insert
+# by an operator who holds the authorization the script asks for — the same shape
+# venture-fixture-sweep.yml uses for VENTURE_FIXTURE_SWEEP_V1.
+#
+# The DRY-RUN step runs UNCONDITIONALLY and always reports the residue count, so the disabled state
+# is observable rather than silent: you can see what WOULD be reaped before anyone arms it.
+#
+# ── REGISTRATION IS AUTOMATIC ─────────────────────────────────────────────────────────────
+# Do NOT hand-write a periodic_process_registry row and do NOT call registerArmedMachinery (that is
+# a different convention, keyed g3-armed-<slug>, for machinery-class work). ADDING THIS FILE IS THE
+# REGISTRATION: lib/periodic-liveness/enumerate-processes.mjs:59-78 discovers .github/workflows/*.yml
+# and emits process_key=gha_cron:e2e-fixture-reap.yml. Run scripts/seed-periodic-process-registry.mjs
+# (idempotent) to materialise the row before the next zero-shadow sweep.
+name: E2E Fixture Reap
+
+on:
+  schedule:
+    # Wednesdays 03:41 UTC. Deliberately off-peak and non-colliding with the two neighbouring
+    # cleanup jobs (venture-fixture-sweep Sat 04:23, canary-venture-probe Sun 06:17), and off the
+    # top of the hour so it does not pile into the :00 cron crowd.
+    - cron: '41 3 * * 3'
+  workflow_dispatch: {}
+
+permissions:
+  contents: read
+
+concurrency:
+  # State-mutating when armed, so a second run must never overlap a delete in flight.
+  group: e2e-fixture-reap
+  cancel-in-progress: false
+
+jobs:
+  fixture-reap:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    env:
+      SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+      SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+
+      # --ignore-scripts is load-bearing, not tidiness: --omit=dev alone fires the `prepare`
+      # lifecycle, which runs husky and dies "husky: not found" exit 127
+      # (orphan-qf-reaper.yml:52-56 documents it as PAT-CI-WORKFLOW-LIFECYCLE-001).
+      - name: Install dependencies
+        run: npm ci --omit=dev --ignore-scripts
+
+      # ALWAYS RUNS. This is what stops the disabled state from being silent: even with the flag
+      # absent, the job reports what residue exists and what WOULD be reaped.
+      - name: Report reapable residue (dry run — always)
+        run: node scripts/reap-e2e-liveness-fixtures.mjs
+
+      - name: Authorization gate (E2E_FIXTURE_REAP_V1)
+        id: gate
+        run: |
+          node --input-type=module <<'EOF'
+          import { createClient } from '@supabase/supabase-js';
+          import fs from 'node:fs';
+          const sb = createClient(process.env.SUPABASE_URL, process.env.SUPABASE_SERVICE_ROLE_KEY);
+          // Surface the error rather than folding it into "off": a gate that reports a BROKEN
+          // query as "disabled" cannot see its own death (AC-5, same defect noted in
+          // venture-fixture-sweep.yml:51 which destructures only { data }).
+          const { data, error } = await sb
+            .from('leo_feature_flags')
+            .select('is_enabled')
+            .eq('flag_key', 'E2E_FIXTURE_REAP_V1')
+            .maybeSingle();
+          if (error) {
+            console.error(`E2E_FIXTURE_REAP_V1 gate FAILED TO READ: ${error.message}`);
+            console.error('Refusing to infer "disabled" from an unreadable flag — that is a false negative, not a safe default.');
+            process.exit(1);
+          }
+          const enabled = data?.is_enabled === true;
+          fs.appendFileSync(process.env.GITHUB_OUTPUT, `enabled=${enabled}\n`);
+          console.log(enabled
+            ? 'E2E_FIXTURE_REAP_V1 enabled — reap will run with --apply.'
+            : 'E2E_FIXTURE_REAP_V1 disabled (or absent) — dry run only, no deletes. This is the shipped default.');
+          EOF
+
+      - name: Reap e2e liveness fixtures (--apply; authorization-gated)
+        if: steps.gate.outputs.enabled == 'true'
+        run: node scripts/reap-e2e-liveness-fixtures.mjs --apply

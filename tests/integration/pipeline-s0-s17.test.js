@@ -13,12 +13,23 @@
 import { describe, it, expect, beforeAll, afterAll } from 'vitest';
 import { createClient } from '@supabase/supabase-js';
 import 'dotenv/config';
+import { insertGuarded, CLASSIFICATION } from '../../lib/governance/fixture-producer-guard.mjs';
 
 const SUPABASE_URL = process.env.SUPABASE_URL;
 const SUPABASE_KEY = process.env.SUPABASE_SERVICE_ROLE_KEY;
 const POLL_INTERVAL_MS = 30_000;
 const MAX_WAIT_MS = 20 * 60_000; // 20 minutes
-const VENTURE_PREFIX = '_PIPELINE_TEST_';
+// DOUBLE underscore, deliberately. SD-LEO-INFRA-ONE-SYNTHETIC-ROW-001-D measured this row against
+// all three live fixture predicates: with the previous SINGLE-underscore prefix it was
+// canonical=false, chairman-actionable=true, decision-watcher=false. So the venture WAS marked, but
+// only one of three consumers could see it — and not the canonical one the producer contract binds
+// to. It also carries no is_demo, so nothing else rescued the classification.
+//
+// The fix marks the ROW rather than relaxing the guard: '__' is matched by canonical's
+// FIXTURE_VENTURE_NAME_RE and still by chairman-actionable's /^__/i, so the two now AGREE instead of
+// disagreeing. Nothing else in the repo consumes this prefix — the only other reference is a
+// chairman-actionable unit test that pins its own pattern list, which is unaffected.
+const VENTURE_PREFIX = '__PIPELINE_TEST_';
 const COMPETITOR_URL = 'https://linear.app';
 
 let supabase;
@@ -26,14 +37,14 @@ let ventureId;
 
 async function createTestVenture() {
   // Create venture via direct DB insert (avoids LLM call for S0 which the worker handles)
-  const { data, error } = await supabase.from('ventures').insert({
+  const { data, error } = await insertGuarded(supabase, 'ventures', {
     name: `${VENTURE_PREFIX}${Date.now()}`,
     status: 'active',
     description: 'Automated pipeline integration test venture',
     industry: 'saas',
     target_market: 'b2b',
     metadata: { pipeline_test: true, competitor_url: COMPETITOR_URL },
-  }).select('id, name').single();
+  }, { classification: CLASSIFICATION.FIXTURE, source: 'tests/integration/pipeline-s0-s17.test.js' }).select('id, name').single();
 
   if (error) throw new Error(`Failed to create test venture: ${error.message}`);
   return data;

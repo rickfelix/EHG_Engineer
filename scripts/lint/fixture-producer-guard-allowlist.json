@@ -1,0 +1,6 @@
+{
+  "_doc": "SD-LEO-INFRA-ONE-SYNTHETIC-ROW-001-D (FR-6). Keys are '<repo-relative-file>' (whole-file exemption) or '<repo-relative-file>:<line>' (single write site) for a ventures INSERT/UPSERT that is intentionally NOT routed through insertGuarded. Every entry MUST carry a non-empty reason — loading THROWS otherwise, because an escape hatch that accepts a blank justification has no author. PREFER FIXING over allowlisting: routing a write through insertGuarded is usually a two-line change and gives the row a producer-side assert it otherwise never had.",
+  "allow": {
+    "tests/unit/lint/fixture-producer-guard-lint.test.js": "The lint's OWN unit test — it contains deliberately-unguarded ventures-write string literals as fixtures to prove the extractor flags them. Not real queries; exempt so the guard cannot flag its own test."
+  }
+}

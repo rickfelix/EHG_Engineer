@@ -18,6 +18,8 @@ import { resolve } from 'path';
 
 import { StageExecutionWorker } from '../../../lib/eva/stage-execution-worker.js';
 import { recordDeviation } from '../../../lib/eva/deviation-ledger.js';
+import { randomUUID } from 'crypto';
+import { insertGuarded, CLASSIFICATION } from '../../../lib/governance/fixture-producer-guard.mjs';
 
 dotenv.config({ path: resolve(process.cwd(), '.env') });
 
@@ -32,22 +34,27 @@ const HAS_REAL_DB = process.env.SUPABASE_URL
   && process.env.SUPABASE_SERVICE_ROLE_KEY
   && !process.env.SUPABASE_SERVICE_ROLE_KEY.includes('test-service-role-key-not-real');
 
-const ts = Date.now();
+// SD-LEO-INFRA-ONE-SYNTHETIC-ROW-001-D: this was Date.now(), which appended a 13-digit epoch to
+// the venture name and made canonical isFixtureVenture classify these DELIBERATELY-REAL rows as
+// FIXTURES via EPOCH_TAIL_RE — the exact opposite of what this suite needs. Measured: with an
+// epoch tail canonical=true; with this uuid slice canonical=false AND watcher=false, so both
+// predicates now agree the row is real. A module-level Date.now() was also SHARED by every row in
+// a run, so a per-run uuid slice is no less unique. (chairman-actionable still matches via its
+// UNANCHORED /-realdb-/ substring — a known defect routed to QF-20260807-014, out of scope here.)
+const runId = randomUUID().slice(0, 8);
 const ventureIds = [];
 const FIXTURE_STAGE = 15; // an arbitrary stage with no chairman-review gate, isolating the artifact check
 
 async function createVenture(tag) {
-  const { data, error } = await supabase
-    .from('ventures')
-    .insert({
+  const { data, error } = await insertGuarded(supabase, 'ventures', {
       // SD-LEO-INFRA-CHAIRMAN-DECISION-QUEUE-002: *-RealDB-* convention — misses the write-guard
       // regex (real path preserved), matches the extended surface patterns (residue protected).
-      name: `StageArtifactGate-RealDB-${tag}-${ts}`,
+      name: `StageArtifactGate-RealDB-${tag}-${runId}`,
       problem_statement: 'Disposable venture for SD-LEO-INFRA-STAGE-ADVANCEMENT-ARTIFACT-001 real-DB gate test',
       current_lifecycle_stage: FIXTURE_STAGE,
       is_demo: false,
       status: 'active',
-    })
+    }, { classification: CLASSIFICATION.DELIBERATELY_REAL, source: 'tests/integration/eva/stage-advancement-artifact-gate-realdb.test.js', reason: 'Exercises the REAL (non-fixture) chairman path end to end; the venture must NOT be excluded by fixture predicates.' })
     .select('id, name, is_demo')
     .single();
   if (error) throw new Error(`Failed to create ${tag} venture: ${error.message}`);

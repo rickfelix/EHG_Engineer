@@ -13,6 +13,12 @@ import { fileURLToPath } from 'node:url';
 
 const hookPath = join(dirname(fileURLToPath(import.meta.url)), '..', 'pre-tool-enforce.cjs');
 const hookSrc = readFileSync(hookPath, 'utf8');
+// QF-20260804-087 moved the block/permit DECISION into its own module so it could be tested
+// behaviourally rather than by string-matching (tests/unit/worktree-claim-decision-qf087.test.js).
+// The pins below follow the invariant to its new address — they are not relaxed.
+const decisionSrc = readFileSync(
+  join(dirname(fileURLToPath(import.meta.url)), '..', 'worktree-claim-decision.cjs'), 'utf8',
+);
 
 // Slice covering only ENFORCEMENT 4 so assertions don't accidentally match
 // the other enforcements that legitimately read unified-session-state.json.
@@ -42,8 +48,26 @@ describe('PAT-CLMMULTI-002 — DB-corroborated, session-scoped worktree claim gu
     expect(enf4).not.toContain('state.sd?.id');
   });
 
-  it('compares sd_key (claimedSdKey vs worktreeSdKey), not a UUID id', () => {
-    expect(enf4).toContain('claimedSdKey !== worktreeSdKey');
+  it('compares sd_key (claimedSdKey vs worktreeKey), not a UUID id', () => {
+    // The guard hands the sd_key (never a UUID) to the decision...
+    expect(enf4).toMatch(/shouldBlockWorktreeEdit\(\{\s*worktreeKey: worktreeSdKey, claimedSdKey/);
+    // ...and the decision still performs the sd_key comparison this pin has always guarded.
+    expect(decisionSrc).toContain('claimedSdKey !== worktreeKey');
+  });
+
+  // QF-20260804-087: the guard read strategic_directives_v2 ONLY, so a QF claim (which lives in
+  // quick_fixes) was invisible and the rightful QF owner was blocked with no remedy. These pin the
+  // two properties a future refactor is most likely to quietly drop.
+  it('also resolves a QF claim from quick_fixes, scoped to the one key being edited', () => {
+    expect(hookSrc).toMatch(/async function sessionHoldsQuickFixClaim\(/);
+    expect(hookSrc).toContain('/rest/v1/quick_fixes?claiming_session_id=eq.');
+    // Scoped by id — never a blanket "any QF claim permits any QF worktree".
+    expect(hookSrc).toContain("'&id=eq.' + encodeURIComponent(qfKey)");
+  });
+
+  it('keeps the QF lookup TRI-STATE: null (unreadable) must not collapse into false (not held)', () => {
+    // Collapsing them would re-block the exact worker this fix unblocks on any transient blip.
+    expect(decisionSrc).toContain('if (qfHeld !== false) return false;');
   });
 
   it('exposes the LEO_CLAIM_GUARD=off kill-switch', () => {

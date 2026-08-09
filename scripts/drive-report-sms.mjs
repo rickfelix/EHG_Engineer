@@ -37,6 +37,63 @@ export function isE164(n) {
 }
 
 /**
+ * Turn a drive_reports row into the closed set of facts a message may carry. Returns null when the
+ * row cannot supply them, so the caller sends the missing/stale signal rather than a zero.
+ *
+ * MOVED HERE from scripts/cron/drive-report-sms-sweep.mjs by
+ * SD-LEO-INFRA-DRIVE-LOOP-INSTRUMENT-001-D, which needed it for a second consumer (the Adam
+ * SessionStart hook). It belongs beside formatBody: the two are the reading and writing halves of
+ * one contract — this function's output is formatBody's only legal input, which is why the comment
+ * below about being AT LEAST as strict is a statement about the function six lines down, not about
+ * a module elsewhere. It already reached back into this file for VERDICTS. The sweep re-exports it,
+ * so its callers and tests are unchanged.
+ *
+ * ROW SHAPE, VERIFIED AGAINST THE DDL: it reads `drive_score` ONLY. drive_reports is
+ * (id, generated_at, run_id, cadence, sections, drive_score, schema_version, metadata) — there is
+ * no headline or summary column, and a caller that selects one gets PostgREST 42703 on the WHOLE
+ * projection, not a null field.
+ */
+export function factsFromReport(report) {
+  const score = report?.drive_score;
+  const value = score?.score?.value;
+  const possible = score?.possible;
+
+  // NON-NEGATIVE, not merely finite. This predicate must be AT LEAST as strict as formatBody's,
+  // because anything this function accepts is handed straight to it — and formatBody THROWS on a
+  // negative. The two disagreed: this checked finiteness, formatBody checked range, and a
+  // negative score aborted the entire run instead of degrading to the missing signal. So a
+  // corrupt number silenced the chairman completely rather than telling him something was wrong.
+  // A validator upstream of a stricter validator is not a validator; it is a gap. (SECURITY F2.)
+  const usable = (n) => Number.isFinite(n) && n >= 0;
+  if (!usable(value) || !usable(possible)) return null;
+
+  const legs = Array.isArray(score?.unavailable_legs) ? score.unavailable_legs.length : 0;
+
+  // ABSENT means zero; PRESENT-BUT-CORRUPT means unusable. My first fix collapsed both to 0,
+  // which stopped the crash and replaced it with the exact defect this SD exists to prevent:
+  // a corrupt counter silently rendering as "0 unowned blockers" — an unmeasured value wearing
+  // a measured one. A field that is simply not there is a legitimate zero; a field carrying a
+  // negative is a producer bug, and the honest report of a bug is UNUSABLE, not a reassuring
+  // number nobody will question.
+  const rawBlockers = score?.unowned_blockers;
+  if (rawBlockers !== undefined && rawBlockers !== null && !usable(rawBlockers)) return null;
+  const blockers = usable(rawBlockers) ? rawBlockers : 0;
+
+  // The capacity verdict comes from leg 4 when it was measurable. UNKNOWN is a real member of
+  // VERDICTS, so an unmeasured leg is SAID rather than defaulted to something reassuring.
+  const raw = score?.capacity_verdict;
+  const verdict = VERDICTS.includes(raw) ? raw : 'UNKNOWN';
+
+  return {
+    score: value,
+    possible,
+    verdict,
+    unavailableLegs: legs,
+    unownedBlockers: blockers,
+  };
+}
+
+/**
  * The ONLY way a body is produced. Every parameter is a number or a closed-set token — there is no
  * string passthrough, so no report text can reach the wire.
  *

@@ -1,0 +1,71 @@
+# Scanner-convention lint — the lint-for-the-linters.
+# SD-LEO-INFRA-SWEEP-REPO-SCANNERS-001 (FR-3/FR-4).
+#
+# A scanner that regexes ADDED-LINE TEXT from a git diff false-positives on its own FIXTURES,
+# worked-example COMMENTS and STRING LITERALS, because a fixture or an explanation FOR a
+# pattern-detector necessarily contains pattern-shaped text. The fix was derived INDEPENDENTLY TWICE
+# and propagated to neither sibling, and the fixture-path regex alone appeared THREE TIMES in one
+# file. Publishing lib/lint/added-line-text.mjs makes the convention EXIST; this job makes it FOUND —
+# a new shape-A scanner fails HERE, when the fix is one import, instead of a year later when someone
+# notices their linter flagging its own fixtures.
+#
+# SHAPE A ONLY, deliberately. Shape B (--name-only path selection, then whole-file reads) has no
+# fragment hazard and is governed by fixture exclusion instead — a different check for a different
+# hazard. The discriminator is the single --name-only flag.
+#
+# BLOCKING FROM DAY ONE — a DEPARTURE from the advisory-soak convention used by
+# diagnostic-gauge-citation-lint.yml and schema-reference-lint.yml, and the departure is the point.
+# Those soak because a brand-new lint may false-positive across a large pre-existing surface. This
+# one scans TWO directories, is at ZERO violations as it lands, and exists specifically to abolish
+# guards that never fail: an ADVISORY lint-for-the-linters would let the seventh rediscovery merge
+# silently while reporting green, which is the exact failure mode the SD is about.
+# Escape (always available, one line): add
+#   scanner-convention-lint-exempt: <reason>
+# to the scanner. The REASON IS MANDATORY — a bare marker does not exempt, because an unexplained
+# exemption is how a guard erodes into a formality. lib/gates/operator-contract/harness-adapter.js
+# carries the only current exemption: it owns a purpose-built SQL-aware strip the general helper
+# would regress.
+name: Scanner Convention Lint
+
+on:
+  pull_request:
+    paths:
+      - 'scripts/lint/**'
+      - 'lib/gates/**'
+      - 'lib/lint/added-line-text.mjs'
+      - '.github/workflows/scanner-convention-lint.yml'
+
+concurrency:
+  group: scanner-convention-lint-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  scanner-convention-lint:
+    name: scanner-convention-lint
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+
+      - name: Run scanner-convention lint
+        run: |
+          node scripts/lint/scanner-convention-lint.mjs | tee lint-output.txt
+          exit_code=${PIPESTATUS[0]}
+          {
+            echo "## Scanner Convention Lint"
+            echo ""
+            echo '```'
+            cat lint-output.txt
+            echo '```'
+            echo ""
+            echo "A shape-A scanner (reads git-diff ADDED-LINE text) must import"
+            echo "lib/lint/added-line-text.mjs, or carry a reasoned opt-out:"
+            echo ""
+            echo '```'
+            echo "scanner-convention-lint-exempt: <why this scanner cannot use the helper>"
+            echo '```'
+          } >> "$GITHUB_STEP_SUMMARY"
+          exit $exit_code

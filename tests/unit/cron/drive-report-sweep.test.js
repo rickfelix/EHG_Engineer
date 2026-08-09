@@ -23,12 +23,13 @@ import fs from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import {
-  etParts, windowKey, withinWindow, runDriveReportSweep, buildGather,
+  etParts, windowKey, withinWindow, runDriveReportSweep, buildGather, scoreCapacityLeg,
   WINDOW_START_HOUR, WINDOW_END_HOUR, PROCESS_KEY, ACTIVATION_TRIGGER, SD_KEY,
 } from '../../../scripts/cron/drive-report-sweep.mjs';
 import { armedProcessKey } from '../../../lib/machinery-class/armed-registration.js';
 import { produceDriveReport } from '../../../scripts/drive-report-produce.mjs';
 import { LAST_RUN_FIELD } from '../../../lib/drive-loop/report-posture.js';
+import { makeCapacityVerdictPersist } from '../../../scripts/lib/capacity-verdict-store.mjs';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const repoRoot = path.resolve(__dirname, '../../..');
@@ -265,14 +266,35 @@ describe('registry bookkeeping — the stamp is what lets the FR-7 alarm CLEAR',
 });
 
 describe('gather — what this job can HONESTLY measure today', () => {
+  // SD-LEO-INFRA-UNCAPPED-ROADMAP-ITEMS-001: `next` and `open_items_all` carry DELIBERATELY
+  // DIFFERENT rows. That difference is the whole instrument — it is what lets a test tell which
+  // field buildGather actually fed the sections. Previously this stub had no open_items_all at
+  // all, so the sections received [] and every assertion about them passed trivially: swapping
+  // the wiring back to the capped `next` left the entire suite green.
   const status = {
     open_total: 42,
     next: [{ item_id: 'i1' }, { item_id: 'i2' }],
     next_truncated: true,
     done: [{ item_id: 'd1' }],
     slipped: [],
+    waves: [{ id: 'w1', title: 'Wave 1', sequence_rank: 1, status: 'approved' }],
+    // RAW consumer-read field names — the rename of these is the defect this SD had to fix.
+    open_items_all: [
+      { id: 'UNCAPPED-a', wave_id: 'w1', title: 'A', promoted_to_sd_key: null, item_disposition: 'pending', remainder_state: 'promotable_now', lane: null, metadata: {}, sd: null },
+      { id: 'UNCAPPED-b', wave_id: 'w1', title: 'B', promoted_to_sd_key: null, item_disposition: 'pending', remainder_state: 'promotable_now', lane: null, metadata: {}, sd: null },
+      { id: 'UNCAPPED-c', wave_id: 'w1', title: 'C', promoted_to_sd_key: null, item_disposition: 'pending', remainder_state: 'promotable_now', lane: null, metadata: {}, sd: null },
+    ],
   };
-  const gather = buildGather({ supabase: {}, computePlanCheckStatus: async () => status });
+  // SD-LEO-INFRA-PERSIST-BELT-CAPACITY-001 (TS-7): leg4's injections, in the state this SD SHIPS
+  // in — the verdict table is staged chairman-gated and NOT applied, so the write fails
+  // table-absent and leg4 reports unavailable exactly as it did before. Every assertion in this
+  // block is unchanged, and that is the point: the pre-ceremony state is a PASS, not a regression.
+  const gatherCapacity = async () => ({ idleNow: 1, freeingSoon: 0, claimableCount: 0, openQfCount: 0 });
+  const persistTableAbsent = async () => { const e = new Error('relation does not exist'); e.code = 'PGRST205'; throw e; };
+  const gather = buildGather({
+    supabase: {}, computePlanCheckStatus: async () => status,
+    gatherCapacity, persistVerdict: persistTableAbsent,
+  });
 
   it('section 1 is REAL — the enriched remainder, not next.length', async () => {
     const { sections } = await gather();
@@ -280,22 +302,49 @@ describe('gather — what this job can HONESTLY measure today', () => {
     expect(sections.plan_position.remainder.value, 'must be open_total, never the capped list length').not.toBe(status.next.length);
   });
 
-  it('every unsourced section is unavailable WITH A SPECIFIC REASON, never zero', async () => {
+  it('every STILL-unsourced section is unavailable WITH A SPECIFIC REASON, never zero', async () => {
+    // SD-LEO-INFRA-UNCAPPED-ROADMAP-ITEMS-001 FR-2/FR-3: this list used to name all four. The
+    // three item-based sections are now SOURCED from the uncapped join, so only stall_deltas
+    // remains — and it stays deliberately (FR-4 is CONDITIONAL: its `suppressed` park predicate,
+    // documented as supplied by FR_A/-E, has no implementation anywhere in the repo).
     const { sections } = await gather();
-    for (const id of ['belt_diagnosis', 'chain_to_gate', 'next_acts', 'stall_deltas']) {
+    for (const id of ['stall_deltas']) {
       expect(sections[id].unavailable.available).toBe(false);
       expect(sections[id].unavailable.value).toBe(null);
       expect(sections[id].unavailable.reason.length, `${id} reason is a shrug`).toBeGreaterThan(40);
     }
   });
 
-  it('the three item-based sections name the CAP as the blocker, not "todo"', async () => {
-    // The reason has to be actionable enough that a future reader does not "finish" it by
-    // wiring status.next — which is capped at 10 and would produce a wrong number that looks
-    // completely reasonable.
+  it('WIRING PINNED: the sections are fed open_items_all, PROVABLY not the capped `next`', async () => {
+    // THIS IS THE TEST WHOSE ABSENCE WAS THE REAL GAP. A re-review demonstrated that swapping
+    // buildGather's `planStatus.open_items_all` for `planStatus.next` — reverting the exact thing
+    // this SD exists to do — left 624/624 tests GREEN. The suite asserted that the sections were
+    // AVAILABLE and that the pure functions behaved, but nothing anywhere asserted WHICH FIELD
+    // they were handed. The code comment claimed the wiring test did this; it did not.
+    //
+    // The stub's `next` and `open_items_all` hold disjoint ids, so the built section's own row
+    // ids say unambiguously which field reached it. This fails if the wiring is ever reverted.
+    const { sections } = await gather();
+    const emitted = JSON.stringify(sections.belt_diagnosis);
+    expect(emitted, 'belt must reflect the UNCAPPED set').toMatch(/UNCAPPED-/);
+    expect(emitted, 'belt must NOT be fed the capped `next` rows').not.toMatch(/"i1"|"i2"/);
+  });
+
+  it('THE THREE ITEM-BASED SECTIONS ARE NOW SOURCED, not unavailable', async () => {
+    // Replaces the old "name the CAP as the blocker" test, whose comment warned that a future
+    // reader must not "finish" this by wiring status.next — capped at 10, producing a wrong
+    // number that looks completely reasonable. That warning is honoured: buildGather feeds these
+    // sections computePlanCheckStatus().open_items_all, the UNCAPPED set, never status.next.
+    //
+    // Asserting `unavailable === undefined` is the load-bearing half. The sections are PURE
+    // functions, so a wiring that handed them the capped array would still return well-shaped
+    // output and every section-level unit test would stay green — the bug would just move one
+    // layer up into buildGather. The companion assertion that the set is genuinely uncapped
+    // lives in tests/unit/roadmap/plan-check-uncapped-pagination.test.js, mutation-proven there.
     const { sections } = await gather();
     for (const id of ['belt_diagnosis', 'chain_to_gate', 'next_acts']) {
-      expect(sections[id].unavailable.reason).toMatch(/CAPPED AT 10/);
+      expect(sections[id].unavailable, `${id} should now be SOURCED`).toBeUndefined();
+      expect(sections[id].section).toBe(id);
     }
   });
 
@@ -324,8 +373,12 @@ describe('gather — what this job can HONESTLY measure today', () => {
     const { composeReport } = await import('../../../lib/drive-loop/compose-report.js');
     const { sections, driveScore } = await gather();
     const row = composeReport({ sections, driveScore, generatedAt: '2026-07-15T09:00:00.000Z', runId: 'drive-2026-07-15' });
+    // FR-2/FR-3: three of these four are now SOURCED from the uncapped join. stall_deltas is
+    // the only remaining unavailable section, and it stays that way on purpose (FR-4 CONDITIONAL
+    // — no FR_A/-E suppression predicate exists in the repo). This list shrinking from 4 to 1 IS
+    // the deliverable; it is asserted exactly rather than loosened to "at most 4".
     expect(row.metadata.unavailable_sections.map((u) => u.section).sort())
-      .toEqual(['belt_diagnosis', 'chain_to_gate', 'next_acts', 'stall_deltas']);
+      .toEqual(['stall_deltas']);
     expect(row.metadata.section_ids).toContain('plan_position');
   });
 });
@@ -345,7 +398,11 @@ describe('gather — what this job can HONESTLY measure today', () => {
  */
 describe('[END-TO-END] the sweep drives the REAL producer — no stub in between', () => {
   const status = { open_total: 42, next: [{ item_id: 'i1' }], next_truncated: false, done: [], slipped: [] };
-  const realGather = () => buildGather({ supabase: {}, computePlanCheckStatus: async () => status });
+  const realGather = () => buildGather({
+    supabase: {}, computePlanCheckStatus: async () => status,
+    gatherCapacity: async () => ({ idleNow: 1, freeingSoon: 0, claimableCount: 0, openQfCount: 0 }),
+    persistVerdict: async () => { const e = new Error('relation does not exist'); e.code = 'PGRST205'; throw e; },
+  });
 
   it('writes exactly one real row through the real producer', async () => {
     const rows = [];
@@ -362,7 +419,8 @@ describe('[END-TO-END] the sweep drives the REAL producer — no stub in between
     expect(rows[0].run_id).toBe('drive-2026-07-15');
     expect(rows[0].cadence).toBe('scheduled');
     expect(rows[0].sections.plan_position.remainder.value).toBe(42);
-    expect(rows[0].metadata.unavailable_sections).toHaveLength(4);
+    // FR-2/FR-3: was 4; only stall_deltas remains unavailable (FR-4 CONDITIONAL, unowned predicate).
+    expect(rows[0].metadata.unavailable_sections).toHaveLength(1);
   });
 
   it('the second tick of the same window writes NOTHING and reports the skip', async () => {
@@ -432,5 +490,231 @@ describe('[BLOCKED] table-absent is a known state, not a healthy run and not a c
     // nobody calls is a rule that is not in force.
     const src = fs.readFileSync(path.join(repoRoot, 'scripts', 'cron', 'drive-report-sweep.mjs'), 'utf8');
     expect(src).toMatch(/grace_multiplier:\s*2/);
+  });
+});
+
+/**
+ * SD-LEO-INFRA-PERSIST-BELT-CAPACITY-001 — FR-3: leg4, wired.
+ *
+ * The block above pins the state this SD SHIPS in (table staged, unapplied, leg4 unavailable —
+ * TS-7). This block pins the state it ships FOR: the ceremony has run, the write lands, and the
+ * leg scores. Both are needed. Without the second, an implementation that refused on every path
+ * would satisfy every negative case while leaving leg4 exactly as dark as it is today, which is
+ * the state this SD exists to leave rather than to entrench.
+ */
+describe('FR-3 — leg4 is injected, not declared unavailable', () => {
+  const inputs = { idleNow: 1, freeingSoon: 0, claimableCount: 3, openQfCount: 0 };
+  const gatherCapacity = async () => inputs;
+  const okPersist = (captured) => async (row) => { captured.push(row); return { id: 'verdict-row-1' }; };
+
+  it('TS-1/TS-5 — a working persist writes the row AND the leg scores', async () => {
+    // beltDepth 3, demandSoon 1, buffer 1 -> deficit -1 -> SURPLUS. Deliberately NOT the healthy
+    // verdict; scoring is asserted separately below so a pass here cannot come from the wrong axis.
+    const captured = [];
+    const leg = await scoreCapacityLeg({ gatherCapacity, persistVerdict: okPersist(captured), runId: 'drive-2026-08-07' });
+
+    expect(captured, 'the row must actually be written').toHaveLength(1);
+    expect(captured[0]).toMatchObject({ run_id: 'drive-2026-08-07', verdict: 'SURPLUS', belt_depth: 3, demand_soon: 1, deficit: -1 });
+    expect(leg.unavailable, 'leg4 must no longer be unavailable').toBeUndefined();
+    expect(leg.verdict_row_id, 'the leg must cite the row that was written').toBe('verdict-row-1');
+  });
+
+  it('TS-3 — SURPLUS does not earn the healthy points, TIGHT does', async () => {
+    // The bidirectional gauge, end to end through the wiring. A build that awarded points for
+    // SURPLUS scores HIGHER and fails here — that is what makes the mistake attractive.
+    const surplus = await scoreCapacityLeg({ gatherCapacity, persistVerdict: okPersist([]) });
+    expect(surplus.points.value, 'SURPLUS is the flooded pole, not a good run').toBe(0);
+
+    // beltDepth 2, demandSoon 1, buffer 1 -> deficit 0 -> TIGHT.
+    const tight = await scoreCapacityLeg({
+      gatherCapacity: async () => ({ idleNow: 1, freeingSoon: 0, claimableCount: 2, openQfCount: 0 }),
+      persistVerdict: okPersist([]),
+    });
+    expect(tight.points.value, 'TIGHT is the target — the positive control').toBe(2);
+  });
+
+  it('TS-2 — SEEDED: a failing persist leaves the leg UNMEASURED, never scored', async () => {
+    // The whole invariant: a score is never reported unless the verdict behind it was durably
+    // written. A wiring that swallowed this and scored anyway is the SD's own defect one layer down.
+    const leg = await scoreCapacityLeg({
+      gatherCapacity,
+      persistVerdict: async () => { throw new Error('insert blew up'); },
+    });
+    expect(leg.unavailable.available).toBe(false);
+    expect(leg.unavailable.value, 'unmeasurable is NOT zero').toBe(null);
+    expect(leg.unavailable.reason).toMatch(/insert blew up/);
+    expect(leg.points, 'a failed write must not produce points at all').toBeUndefined();
+  });
+
+  it('TS-7 — table-absent degrades to unavailable, and the whole report still runs', async () => {
+    const leg = await scoreCapacityLeg({
+      gatherCapacity,
+      persistVerdict: async () => { const e = new Error('no relation'); e.code = 'PGRST205'; throw e; },
+    });
+    expect(leg.leg).toBe('leg4_capacity');
+    expect(leg.unavailable.available).toBe(false);
+  });
+
+  it('[TRAP] an ASYNC persist would fire-and-forget — the sync hand-back is what prevents it', async () => {
+    // scoreLeg4 calls persist WITHOUT await and reads row.id. Had the async writer been injected
+    // straight in, row.id would be undefined, the write would never be awaited, and a rejection
+    // would become an unhandled rejection the leg could not see — so leg4-capacity.js:72 would
+    // never fire while the leg happily scored. This asserts the id is real, which it can only be
+    // if durability was proven BEFORE scoring.
+    const leg = await scoreCapacityLeg({ gatherCapacity, persistVerdict: okPersist([]) });
+    expect(leg.verdict_row_id).toBe('verdict-row-1');
+    expect(leg.verdict_row_id, 'undefined here means the write was never awaited').not.toBeUndefined();
+  });
+
+  it('[TRAP] a gather that fails does NOT silently score a confident verdict from zeros', async () => {
+    // Zeros would read beltDepth 0 with idleNow 0 -> SURPLUS, the most reassuring answer available,
+    // built on nothing. It must be unavailable instead.
+    const leg = await scoreCapacityLeg({
+      gatherCapacity: async () => { throw new Error('belt query failed'); },
+      persistVerdict: okPersist([]),
+    });
+    expect(leg.unavailable.reason).toMatch(/belt query failed/);
+  });
+
+  it('buildGather REFUSES an uninjected leg4 rather than defaulting it', () => {
+    // A default would make this read as wired while the CLI passed nothing — exactly how `persist`
+    // went missing from runDriveReportSweep and threw on every tick with the suite green.
+    expect(() => buildGather({ supabase: {}, computePlanCheckStatus: async () => ({}) }))
+      .toThrow(/gatherCapacity and persistVerdict must be injected/);
+  });
+
+  it('[WIRING] the CLI passes the REAL gatherer and the REAL writer', () => {
+    const src = fs.readFileSync(path.join(repoRoot, 'scripts', 'cron', 'drive-report-sweep.mjs'), 'utf8')
+      .replace(/\/\*[\s\S]*?\*\//g, '').replace(/^\s*\/\/.*$/gm, '');
+    expect(src, 'the CLI must resolve the shared gatherer').toMatch(/gatherCapacity:\s*\(\)\s*=>\s*gatherCapacityInputs\(supabase\)/);
+    expect(src, 'and the real durable writer').toMatch(/persistVerdict:\s*makeCapacityVerdictPersist\(supabase\)/);
+    // The legs array must CALL the leg, not declare it dead. Note this is deliberately not a blanket
+    // "no LEG4_ID beside unavailable" scan: scoreCapacityLeg's catch legitimately builds exactly that
+    // shape when a run cannot be measured, and forbidding it would outlaw the honest degradation.
+    expect(src, 'the legs array must score leg4').toMatch(/await\s+scoreCapacityLeg\(/);
+    expect(src, 'the old "writer is not built" declaration must be gone').not.toMatch(/is not built/);
+  });
+});
+
+/**
+ * SD-LEO-INFRA-PERSIST-BELT-CAPACITY-001 — the gap the TESTING sub-agent MEASURED, closed.
+ *
+ * It mutated makeCapacityVerdictPersist to swallow its insert error and return {id:'x'}. The store's
+ * own suite went red (4 failures) and THIS FILE STAYED 35/35 GREEN — because the FR-3 block above
+ * injects only hand-rolled stubs, so `makeCapacityVerdictPersist` appeared in it exactly once, inside
+ * a source-text regex. Gutting the real writer was invisible to the file that claims to test the
+ * wiring. A stub proves the caller matches what the TEST believes the callee wants; only the real
+ * callee proves it matches what the callee ACTUALLY wants — the same lesson the END-TO-END block
+ * above already records about the producer, recurring one level down because the new seam was built
+ * with stubs on both sides.
+ *
+ * These bind scoreCapacityLeg to the REAL writer over a fake supabase client, so the async→sync
+ * bridge is exercised end to end.
+ */
+describe('[BOUND] scoreCapacityLeg against the REAL writer, not a stub', () => {
+  const gatherCapacity = async () => ({ idleNow: 1, freeingSoon: 0, claimableCount: 2, openQfCount: 0 });
+
+  /** Fake supabase. `fail` makes the insert return a PostgREST-shaped error. */
+  const client = ({ fail = null, captured = {} } = {}) => ({
+    from(table) {
+      captured.table = table;
+      return {
+        insert(row) {
+          captured.row = row;
+          return { select: () => ({ single: async () => (fail
+            ? { data: null, error: fail }
+            : { data: { id: 'real-row-9', verdict: row.verdict, recorded_at: '2026-08-07T10:00:00Z' }, error: null }) }) };
+        },
+      };
+    },
+  });
+
+  it('the real writer + the real leg score together, and the row actually lands', async () => {
+    const captured = {};
+    const leg = await scoreCapacityLeg({
+      gatherCapacity,
+      persistVerdict: makeCapacityVerdictPersist(client({ captured })),
+      runId: 'drive-2026-08-07',
+    });
+
+    expect(captured.table).toBe('belt_capacity_verdicts');
+    expect(captured.row, 'the real writer must receive every measurement').toMatchObject({
+      run_id: 'drive-2026-08-07', verdict: 'TIGHT', belt_depth: 2, demand_soon: 1, deficit: 0,
+    });
+    expect(captured.row, 'recorded_at is the DATABASE default, never a client clock')
+      .not.toHaveProperty('recorded_at');
+    expect(leg.verdict_row_id).toBe('real-row-9');
+    expect(leg.points.value).toBe(2);
+  });
+
+  it('[MUTATION GUARD] a writer that swallowed its insert error FAILS here', async () => {
+    // The assertion the stub-only block could not make. If makeCapacityVerdictPersist is ever
+    // changed to catch-and-log, this leg would score against a row that does not exist — so a
+    // scored leg is the failure condition, and unavailable is the pass.
+    const leg = await scoreCapacityLeg({
+      gatherCapacity,
+      persistVerdict: makeCapacityVerdictPersist(client({ fail: { code: '42501', message: 'permission denied' } })),
+      runId: 'drive-2026-08-07',
+    });
+
+    expect(leg.points, 'a leg that scores here means the writer swallowed its failure').toBeUndefined();
+    expect(leg.unavailable.available).toBe(false);
+    expect(leg.unavailable.reason).toMatch(/durable write failed/);
+    expect(leg.unavailable.reason, 'the real code must reach the reason string').toMatch(/42501/);
+  });
+
+  it('table-absent through the REAL writer is still just unavailable (TS-7, unstubbed)', async () => {
+    const leg = await scoreCapacityLeg({
+      gatherCapacity,
+      persistVerdict: makeCapacityVerdictPersist(client({ fail: { code: 'PGRST205', message: 'no relation' } })),
+    });
+    expect(leg.unavailable.available).toBe(false);
+    expect(leg.points).toBeUndefined();
+  });
+});
+
+/**
+ * SD-LEO-INFRA-PERSIST-BELT-CAPACITY-001 — the guard that could actually fire.
+ *
+ * The VALIDATION sub-agent's finding, and it is a sharper shape than "a missing check": the sync
+ * persist re-checked four fields that both sides derive from the SAME pure function over the SAME
+ * closed-over inputs, so that check cannot disagree today — it is a drift guard for a future edit
+ * to leg4. Meanwhile `written.id`, the ONE value arriving from outside, was unchecked. So the guard
+ * that existed could not fire and the guard that could fire was missing.
+ *
+ * What it let through: a persistVerdict resolving {}, null or {id: null} scored the full 2 points
+ * with verdict_row_id null — and leg4 rendered "Provenance is the persisted row (unwritten)",
+ * anticipating the state and printing it honestly while nothing failed. It is unreachable through
+ * the real writer because PostgREST .single() guarantees data when error is null; that is a
+ * property of today's writer, not of the injection contract.
+ */
+describe('[PROVENANCE] a resolved promise is not evidence that a row exists', () => {
+  const gatherCapacity = async () => ({ idleNow: 1, freeingSoon: 0, claimableCount: 2, openQfCount: 0 });
+
+  it.each([
+    ['undefined', undefined],
+    ['null', null],
+    ['an empty object', {}],
+    ['a row with a null id', { id: null }],
+  ])('refuses to score when the write returns %s', async (_label, resolved) => {
+    const leg = await scoreCapacityLeg({ gatherCapacity, persistVerdict: async () => resolved });
+    expect(leg.points, 'scoring here means the leg cited a row it cannot prove exists').toBeUndefined();
+    expect(leg.unavailable.available).toBe(false);
+    expect(leg.unavailable.reason).toMatch(/returned no row id/);
+  });
+
+  it('[CONTROL] and a real id still scores — the guard is not simply always-on', async () => {
+    const leg = await scoreCapacityLeg({ gatherCapacity, persistVerdict: async () => ({ id: 'row-42' }) });
+    expect(leg.points.value).toBe(2);
+    expect(leg.verdict_row_id).toBe('row-42');
+  });
+
+  it('the sweep names itself in the row it writes, so two producers stay distinguishable', async () => {
+    const captured = [];
+    await scoreCapacityLeg({
+      gatherCapacity,
+      persistVerdict: async (row) => { captured.push(row); return { id: 'row-42' }; },
+    });
+    expect(captured[0].detail).toMatchObject({ source: 'drive-report-sweep' });
   });
 });

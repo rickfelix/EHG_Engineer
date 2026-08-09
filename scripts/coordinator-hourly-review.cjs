@@ -54,16 +54,28 @@ const COORDINATOR_DUTIES = [
   'Teardown discipline: never tear down while workers are active.',
 ];
 
+// DRIFT-CHECK, NOT FULL RE-READ (coordinator 0ab6a99c, 2026-08-01, on Adam's ruling; reported by Solomon
+// 52f5bab8, correlation 0be4e4f9). The previous wording said "re-read", which LITERALLY mandates re-reading
+// ~30k tokens of provably-unchanged foundation docs EVERY HOUR. Solomon complied via a drift-check
+// (content-hash / mtime / row-count, full re-read only on change) — but that was HIS INTERPRETATION, not the
+// text. That gap is the defect: a directive whose literal reading and whose efficient reading diverge gets
+// obeyed LITERALLY by exactly the sessions least able to afford it, and nothing signals when that happens.
+// The drift-check gives the IDENTICAL grounding guarantee at ~1/30th the cost. Do NOT revert this to
+// "re-read" — the grounding requirement is unchanged, only the method of establishing it is stated.
+// Adam ruled it applies to BOTH role reminders because the same hazard sat in his own.
+
 // Adam role-contract reminders — mirrors CLAUDE_ADAM.md / CONST-002 + the 8-dim self-rubric.
 const ADAM_REMINDER =
-  'Hourly responsibilities review: re-read your role contract — CONST-002 (PROPOSE, never execute/accept/graduate), ' +
+  'Hourly responsibilities review: VERIFY your role contract UNCHANGED (content-hash / mtime / row-count); ' +
+  'fully re-read ONLY what changed — CONST-002 (PROPOSE, never execute/accept/graduate), ' +
   'silence-by-default, one-advisory-per-tick, the hard rationale bar (cite a LIVE KR + counterfactual + dedup + CONST self-check), ' +
   'and your 8-dim self-rubric (D1_proactive_sourcing..D8_interface_clarity). Stay silent unless you have ONE ranked, defensible advisory.';
 
 // SD-LEO-INFRA-SOLOMON-HOURLY-ROLE-REFRESHER-001: Solomon role-contract reminder — mirrors CLAUDE_SOLOMON.md
 // / CONST-002 propose-only, silence-by-default, the consult triage gate, and Solomon's 5-dim self-rubric.
 const SOLOMON_REMINDER =
-  'Hourly responsibilities review: re-read your Solomon role contract (CLAUDE_SOLOMON.md) — CONST-002 ' +
+  'Hourly responsibilities review: VERIFY your Solomon role contract (CLAUDE_SOLOMON.md) UNCHANGED ' +
+  '(content-hash / mtime / row-count); fully re-read ONLY what changed — CONST-002 ' +
   '(PROPOSE, never execute/accept/graduate), silence-by-default, the consult triage gate (answer routed ' +
   'solomon_consult only — do not poll for problems), the per-sweep task_budget at ENTRY before any Read/Grep, ' +
   'and your 5-dim self-rubric. Stay silent unless you have a deep, defensible oracle answer.';
@@ -83,22 +95,28 @@ const CANONICAL_OPERATING_MODEL_DOCS = [
 ];
 
 async function buildFoundationsPointer(sb) {
-  let constPart = 'Constitution: re-read ' + CANONICAL_CONSTITUTION_TABLE + ' (CONST-001..014) directly.';
+  // DRIFT-CHECK SHAPE (see the ADAM_REMINDER comment above for provenance). This pointer is the ~30k-token
+  // bulk Solomon named. Note it ALREADY computes the row count below — that IS the drift signal, so the
+  // reminder now hands it over as the verification anchor instead of computing it and then saying "re-read".
+  let constPart = 'Constitution: VERIFY ' + CANONICAL_CONSTITUTION_TABLE +
+    ' unchanged by row-count (CONST-001..014); full re-read ONLY if the count or any rule_code moved.';
   try {
     const { data } = await sb.from(CANONICAL_CONSTITUTION_TABLE).select('rule_code').order('rule_code');
     const codes = (data || []).map(function (r) { return r.rule_code; }).filter(Boolean);
     if (codes.length > 0) {
-      constPart = 'Constitution: re-read ' + CANONICAL_CONSTITUTION_TABLE + ' — ' + codes.length +
-        ' live rule(s) (' + codes[0] + '..' + codes[codes.length - 1] + ').';
+      constPart = 'Constitution: ' + CANONICAL_CONSTITUTION_TABLE + ' has ' + codes.length +
+        ' rule(s) (' + codes[0] + '..' + codes[codes.length - 1] + ') — VERIFY count+range vs your last ' +
+        'grounding; full re-read ONLY on mismatch.';
     }
   } catch (e) {
     // fail-open to the static pointer above — a foundations refresh must never block the reminder
   }
   return (
     constPart + ' ' +
-    'Mission/Vision: re-read ' + CANONICAL_MISSION_VISION_DOC + ' (chairman-approved canonical) plus your ' +
-    'current eva_vision_documents entries. ' +
-    'Operating model: re-read ' + CANONICAL_OPERATING_MODEL_DOCS.join(' and ') + '.'
+    'Mission/Vision: VERIFY ' + CANONICAL_MISSION_VISION_DOC + ' (chairman-approved canonical) unchanged by ' +
+    'content-hash/mtime, and your eva_vision_documents entries by updated_at; full re-read ONLY on change. ' +
+    'Operating model: VERIFY ' + CANONICAL_OPERATING_MODEL_DOCS.join(' and ') +
+    ' unchanged by content-hash/mtime; full re-read ONLY on change.'
   );
 }
 
@@ -225,12 +243,28 @@ async function reportGaugeHealth(sb) {
 // single invariant drifting (false all-clear) -- so a stale/missing heartbeat alarms here.
 try {
   const { checkGaugeRunnerLiveness } = await import('../lib/governance/gauge-runner-liveness.js');
-  const { data: hb } = await sb.from('codebase_health_snapshots')
-    .select('scanned_at, findings')
+  // SD-LEO-INFRA-ONE-SYNTHETIC-ROW-001-B FR-3: take the newest NON-SYNTHETIC heartbeat, not simply
+  // the newest row. This read takes ORDER BY scanned_at DESC LIMIT 1, so ONE synthetic row in this
+  // dimension was enough to make a DEAD gauge runner report ALIVE — a single row defeats it, which
+  // is why the fix is a scan window rather than a bigger sample.
+  const { data: hbRows } = await sb.from('codebase_health_snapshots')
+    .select('scanned_at, findings, metadata')
     .eq('dimension', 'gauge_runner_heartbeat')
     .order('scanned_at', { ascending: false })
-    .limit(1)
-    .maybeSingle();
+    .limit(25);
+  let isFixtureHealthSnapshot = null;
+  try {
+    ({ isFixtureHealthSnapshot } = await import('../lib/governance/fixture-exclusion.mjs'));
+  } catch (e) {
+    // ANNOUNCE rather than silently evaluating unfiltered — see the same note in health-urgency.js.
+    console.error(`[coordinator-hourly-review] fixture predicate unavailable, heartbeat read UNFILTERED: ${e?.message || e}`);
+  }
+  const hbUsable = typeof isFixtureHealthSnapshot === 'function'
+    ? (hbRows || []).filter((r) => !isFixtureHealthSnapshot(r))
+    : (hbRows || []);
+  // No real heartbeat in the window leaves hb undefined, so checkGaugeRunnerLiveness receives
+  // undefined and reports DEAD — the correct direction for a liveness alarm.
+  const hb = hbUsable[0];
   const liveness = checkGaugeRunnerLiveness(hb?.scanned_at, Date.now());
   if (liveness.alarm) {
     const ageNote = liveness.ageMs == null ? 'no heartbeat ever recorded' : Math.floor(liveness.ageMs / 60000) + 'm stale';
@@ -301,15 +335,70 @@ async function reportDriveState(sb) {
   const { renderDriveState, renderRefusal } = require('../lib/governance/drive-state/render.cjs');
 
   let lines;
+  let verdict = null;
   try {
-    const verdict = await computeDriveState({ adapters: ADAPTERS, supabase: sb });
+    verdict = await computeDriveState({ adapters: ADAPTERS, supabase: sb });
     lines = renderDriveState(verdict); // returns an ARRAY of lines
   } catch (e) {
+    verdict = null;
     lines = renderRefusal(e && e.message ? e.message : String(e));
   }
   console.log('');
   for (const line of lines) console.log(line);
+
+  // SD-LEO-INFRA-DRIVE-STATE-OBSERVABILITY-001 FR-3 — THE SINGLE WRITER.
+  //
+  // This review is the ONLY caller that persists. adam-pm-board.mjs computes the same verdict and
+  // deliberately does NOT write: both writing would record the same instant under two run_ids and
+  // silently inflate every count and duration derived from the table. This review is chosen because
+  // its cadence is regular and external, which is what makes a time series interpretable; the PM
+  // board is on-demand and would sample irregularly. THAT IS A DECISION WITH A REASON — if you are
+  // here to "fix" the missing write on the PM board, this comment is why it is missing.
+  //
+  // ORDER IS LOAD-BEARING: the render above has already happened and is never gated on the write.
+  //
+  // THE FAILURE IS VISIBLE, NOT SWALLOWED. An earlier draft required the output be byte-identical
+  // under a persistence failure — but byte-identical means INVISIBLE, and persistence could then be
+  // dead for weeks while every hourly report looked perfectly normal. That is precisely the defect
+  // this SD exists to remove, recreated one layer down. So the existing lines are untouched AND a
+  // distinguishable banner is printed when the write fails.
+  await persistRenderedVerdict(verdict, sb);
 }
+
+/**
+ * EXPORTED SO IT CAN BE EXECUTED BY A TEST, and that is the whole reason it is a function.
+ *
+ * The first version of this lived inline in reportDriveState and was "covered" by two regexes over
+ * this file's own source text. A mutation review then dead-coded the call — `if (false) await
+ * persistDriveState(...)` — and it SURVIVED the entire unit project, 3063 files and 37,365 tests.
+ * Silent in production too: no write, no banner, no failure. That is precisely this SD's own thesis
+ * ("an axis can sit stalled indefinitely while every hourly render reads as normal") reproduced one
+ * layer down, inside the fix written to remove it. A regex pins a STATEMENT FORM; only an executed
+ * test pins the DATA FLOW.
+ *
+ * @param {object|null} verdict computeDriveState's return: {axes, summary, measured_at}
+ * @param {object} sb supabase client
+ */
+async function persistRenderedVerdict(verdict, sb) {
+  // The verdict's own field is `axes` (index.cjs:70), NOT `entries`.
+  if (!verdict || !Array.isArray(verdict.axes)) return { persisted: false, reason: 'no_verdict' };
+
+  const { persistDriveState } = require('./lib/drive-state-verdict-store.cjs');
+  // measured_at is the compute's SINGLE clock read. Taking a fresh timestamp here would stamp the
+  // six rows a moment after the verdict they came from, so the history and the report would
+  // disagree about when the reading happened.
+  const runId = verdict.measured_at;
+  try {
+    const res = await persistDriveState({ supabase: sb, runId, entries: verdict.axes });
+    return { persisted: true, run_id: runId, written: res.written };
+  } catch (e) {
+    // VISIBLE, never swallowed. Byte-identical output under failure would mean persistence could
+    // be dead for weeks while every report looked normal.
+    console.log(`⚠️  DRIVE-STATE HISTORY NOT WRITTEN (${e && e.message ? e.message : String(e)}) — the verdict above rendered, but it was NOT recorded, so no duration question can be answered about this run.`);
+    return { persisted: false, reason: 'write_failed', error: e && e.message ? e.message : String(e) };
+  }
+}
+
 
 async function main() {
   let sb;
@@ -448,4 +537,4 @@ if (require.main === module) {
   }).catch(function (e) { console.error('[HOURLY-REVIEW] error (non-fatal): ' + e.message); }).finally(function () { process.exit(0); });
 }
 
-module.exports = { dispatchSolomonReminder, SOLOMON_REMINDER, buildFoundationsPointer, reconcileStaleSolomonInbound };
+module.exports = { dispatchSolomonReminder, SOLOMON_REMINDER, buildFoundationsPointer, reconcileStaleSolomonInbound, persistRenderedVerdict };

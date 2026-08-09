@@ -1366,6 +1366,22 @@ async function runQaFixtureScan(ctx) {
     sweepAliveCcPids = new Set((detectIdentityCollisions().aliveMarkers || []).map(m => String(m.pid)));
   } catch { sweepAliveCcPids = null; } // fail-soft: guard still applies heartbeat/source-side signals
 
+  // QF-20260727-363 — WHAT WAS APPLIED, counted separately from what was DETECTED.
+  //
+  // Every "QA FIXES" line used to be printed from the DETECTED array's length, so the summary
+  // could never learn whether the update it was describing actually happened. The reset line made
+  // that visible and permanent: isSweepResetAllowed correctly refuses to reset an SD whose
+  // PLAN-TO-LEAD handoff is accepted, the loop `continue`s without touching the row, and the
+  // summary still printed "Reset 1 SD(s)". The same run printed "QA: skipped reset on <SD>" three
+  // lines above — the sweep reported a repair in the same breath as reporting it refused to make
+  // it, on roughly fifteen consecutive runs, in the most-read fleet output.
+  //
+  // Counted here rather than at the print site because only the apply path knows the answer. Each
+  // counter is incremented ONLY inside the branch that confirmed the write, so a guard-skip, a DB
+  // error, or a zero-row match can never reach the summary as a repair. The skipped items keep
+  // their own honest line under ACTIONS TAKEN and get no second representation.
+  const applied = { released: 0, releasedOrphaned: 0, completed: 0, reset: 0, cleared: 0 };
+
   const workingOnCompleted = classified.filter(s => {
     const sd = sdStatusMap[s.sd_key];
     if (!sd || (sd.status !== 'completed' && sd.status !== 'cancelled')) return false;
@@ -1405,6 +1421,7 @@ async function runQaFixtureScan(ctx) {
       .eq('session_id', s.session_id);
 
     if (!error) {
+      applied.released++; // QF-20260727-363
       // Also clear claiming_session_id on the SD to break the churn loop
       await supabase
         .from('strategic_directives_v2')
@@ -1492,6 +1509,7 @@ async function runQaFixtureScan(ctx) {
       .eq('session_id', s.session_id);
 
     if (!error) {
+      applied.releasedOrphaned++; // QF-20260727-363
       actions.push('QA: released ' + s.session_id + ' (' + s.tty + ') — SD ' + s.sd_key + ' not found in DB');
     }
   }
@@ -1551,6 +1569,7 @@ async function runQaFixtureScan(ctx) {
         .select();
 
       if (!error) {
+        applied.completed++; // QF-20260727-363
         actions.push('QA: completed ' + sd.sd_key + ' — was stuck at 100%/pending_approval with completion_date');
       }
     } else {
@@ -1560,7 +1579,11 @@ async function runQaFixtureScan(ctx) {
       if (!(await isSweepResetAllowed(sd.sd_key, 'LEAD', 'pending_approval-reset'))) {
         continue;
       }
-      const { error } = await supabase
+      // QF-20260727-363: `.select()` added. Without it this update returned no rows and the code
+      // below inferred success from the ABSENCE OF AN ERROR — but an UPDATE matching zero rows is
+      // not an error, so a reset that changed nothing was indistinguishable from one that worked.
+      // Counting a repair requires knowing a row moved, and the row is the only thing that knows.
+      const { data: resetRows, error } = await supabase
         .from('strategic_directives_v2')
         .update({
           status: 'draft',
@@ -1570,9 +1593,11 @@ async function runQaFixtureScan(ctx) {
           active_session_id: null, // FR-1: co-clear (SD-only update → trigger won't fire)
           is_working_on: false
         })
-        .eq('sd_key', sd.sd_key);
+        .eq('sd_key', sd.sd_key)
+        .select('sd_key');
 
-      if (!error) {
+      if (!error && (resetRows || []).length > 0) {
+        applied.reset++; // QF-20260727-363
         actions.push('QA: reset ' + sd.sd_key + ' from pending_approval → draft/LEAD/0% (no session working on it)');
       }
     }
@@ -1605,6 +1630,7 @@ async function runQaFixtureScan(ctx) {
       .select();
 
     if (!error) {
+      applied.cleared++; // QF-20260727-363
       actions.push('QA: cleared stale claiming_session_id on ' + sd.status + ' ' + sd.sd_key);
     }
   }
@@ -1626,7 +1652,7 @@ async function runQaFixtureScan(ctx) {
   // Adversarial-review fix (PR #5755): main() still consumes these five locals after the
   // hoist (dead-release cross-signal gate, CLAIM_RELEASED announce, QA summary) — return
   // them so the call site can rebind what used to be main()-scoped declarations.
-  return { sdStatusMap, workingOnCompleted, orphanedClaims, stuckApproval, terminalWithClaims };
+  return { sdStatusMap, workingOnCompleted, orphanedClaims, stuckApproval, terminalWithClaims, applied };
 }
 
 /**
@@ -2423,7 +2449,7 @@ async function main() {
   // Adversarial-review fix (PR #5755): rebind the five formerly-main()-scoped locals the
   // hoist relocated — the dead-release cross-signal gate (sdStatusMap), the CLAIM_RELEASED
   // announce loop, and the QA summary below all still read them from main() scope.
-  const { sdStatusMap, workingOnCompleted, orphanedClaims, stuckApproval, terminalWithClaims } =
+  const { sdStatusMap, workingOnCompleted, orphanedClaims, stuckApproval, terminalWithClaims, applied } =
     await runQaFixtureScan(sweepPassCtx);
 
   // QF-20260525-211: the QF stale-claim clear formerly inlined here now runs via
@@ -3674,17 +3700,36 @@ async function main() {
   }
 
   // QA summary
-  const stuckCompleted = stuckApproval.filter(sd => sd.progress_percentage >= 100 && sd.completion_date);
-  const stuckReset = stuckApproval.filter(sd => !(sd.progress_percentage >= 100 && sd.completion_date));
-  const qaIssues = workingOnCompleted.length + orphanedClaims.length + stuckApproval.length + (terminalWithClaims || []).length;
+  //
+  // QF-20260727-363: every line below now reports what was APPLIED. It used to report what was
+  // DETECTED, which made this block claim repairs the sweep had explicitly refused to perform —
+  // the reset line printed "Reset 1 SD(s)" on the same run, about the same SD, as the
+  // "QA: skipped reset" line under ACTIONS TAKEN. That is a false green in the most-read fleet
+  // output, and a permanent one: an SD legitimately resting in pending_approval awaiting
+  // LEAD-FINAL-APPROVAL stays there until a human acts, so the false line reprints forever and
+  // teaches the reader that a non-zero QA FIXES count is normal background. That is how a REAL
+  // repair count stops being noticed.
+  //
+  // The header count is applied-derived too. Leaving it as the detected total would have kept the
+  // headline number lying while the itemised lines told the truth, which is worse than either.
+  // `a.detected` is retained ONLY to decide whether the section is worth printing at all — see
+  // below; a run that detected nothing and repaired nothing prints nothing, as before.
+  const a = applied || { released: 0, releasedOrphaned: 0, completed: 0, reset: 0, cleared: 0 };
+  const detected = workingOnCompleted.length + orphanedClaims.length + stuckApproval.length + (terminalWithClaims || []).length;
+  const qaIssues = a.released + a.releasedOrphaned + a.completed + a.reset + a.cleared;
   if (qaIssues > 0) {
     console.log('QA FIXES (' + qaIssues + '):');
-    if (workingOnCompleted.length > 0) console.log('  Released ' + workingOnCompleted.length + ' session(s) working on completed SDs');
-    if (orphanedClaims.length > 0) console.log('  Released ' + orphanedClaims.length + ' session(s) with orphaned claims');
-    if (stuckCompleted.length > 0) console.log('  Completed ' + stuckCompleted.length + ' SD(s) stuck at 100%/pending_approval');
-    if (stuckReset.length > 0) console.log('  Reset ' + stuckReset.length + ' SD(s) from pending_approval → draft (no session working on them)');
-    if ((terminalWithClaims || []).length > 0) console.log('  Cleared ' + (terminalWithClaims || []).length + ' stale claiming_session_id on completed/cancelled SDs');
+    if (a.released > 0) console.log('  Released ' + a.released + ' session(s) working on completed SDs');
+    if (a.releasedOrphaned > 0) console.log('  Released ' + a.releasedOrphaned + ' session(s) with orphaned claims');
+    if (a.completed > 0) console.log('  Completed ' + a.completed + ' SD(s) stuck at 100%/pending_approval');
+    if (a.reset > 0) console.log('  Reset ' + a.reset + ' SD(s) from pending_approval → draft (no session working on them)');
+    if (a.cleared > 0) console.log('  Cleared ' + a.cleared + ' stale claiming_session_id on completed/cancelled SDs');
     if (claimIntegrityIssues.length > 0) console.log('  Nudged ' + claimIntegrityIssues.length + ' idle session(s) with CLAIM_REMINDER');
+    console.log('');
+  } else if (detected > 0) {
+    // DETECTED BUT NOT REPAIRED IS ITS OWN OUTCOME, and silence would misreport it as "nothing
+    // found". Before this change that state was impossible to see: it rendered as a QA FIX.
+    console.log('QA FIXES (0): ' + detected + ' item(s) detected, none repaired — see ACTIONS TAKEN for why (guards may have correctly declined).');
     console.log('');
   }
 
@@ -3757,6 +3802,45 @@ async function main() {
     if (outcome.invoked) {
       console.log('  reaper_tick result=' + outcome.result + ' counter=' + outcome.counter);
       console.log('');
+    } else if (outcome.result !== 'skipped_not_due' && outcome.result !== 'disabled') {
+      // 'disabled' excluded for HONESTY, not because it is safe (EXEC SECURITY NI-R2). That path
+      // returns before the state file is even read, so both counters arrive undefined and no alarm
+      // can ever fire — it would pass through this gate LOOKING checked while being uncheckable.
+      // WORKTREE_REAPER_ENABLED=false is therefore still a permanently silent stop, and no counter
+      // in this design can see it: both are tick-relative, and a disabled reaper has no ticks.
+      // The control that WOULD see it is a wall-clock gauge on (now - state.last_spawn_at), which
+      // also subsumes NI-R1. Deliberately NOT built here — it is a new gauge with its own
+      // threshold, owner and drain path — and recorded as a completion flag instead.
+      // WIDENED — EXEC SECURITY (medium). This branch used to test `=== 'refused_stale_tree'`,
+      // which is the same shape of bug one level down from the `outcome.invoked` gate it replaced:
+      // it consumes ONE silent-stop class and discards the others. script_missing,
+      // skipped_in_flight (a wedged pid) and spawn_error all reap nothing and said nothing — and
+      // FR-1 made script_missing MORE reachable by resolving the script out of the source tree.
+      // 'skipped_not_due' stays excluded: that is the cadence working as designed.
+      // SD-LEO-INFRA-SCHEDULED-WORKTREE-REAPER-001 FR-4 — CONSUME THE REFUSAL.
+      //
+      // This branch is the whole fix for the undrained gauge. tick() has RETURNED
+      // consecutiveRefusals + pool since QF-20260726-794, but the `outcome.invoked` gate above is
+      // FALSE on the refusal path, so every refusal was discarded here — which is precisely why
+      // gauge-registry.js records this counter as undrained and drain-inventory pins it
+      // NO_CONSUMER. The data was never missing; nobody read it.
+      //
+      // Alarms only when the streak crosses the threshold AND the pool is non-empty (see
+      // detectReaperStarvation). Fail-open and awaited-but-guarded: an alert failure must never
+      // abort the sweep's claim-cleanup work, which is the same contract as the try/catch around it.
+      const { runReaperStarvationSurfacing } = require('../lib/coordinator/coordination-events.cjs');
+      const starvation = await runReaperStarvationSurfacing(supabase, outcome);
+      if (starvation && starvation.matched) {
+        const emitted = starvation.alert && starvation.alert.skipped ? ' (alert already open)' : ' (alert emitted)';
+        if (starvation.alertKind === 'reaper_not_invoked_alert') {
+          console.log('  REAPER NOT-INVOKED ALARM: ' + starvation.streak + ' consecutive tick(s) without running'
+            + ' (last=' + starvation.evidence.last_result + ')' + emitted);
+        } else {
+          console.log('  REAPER STARVATION ALARM: ' + starvation.streak + ' consecutive refusals, pool '
+            + starvation.evidence.pool_used + '/' + starvation.evidence.pool_cap + emitted);
+        }
+        console.log('');
+      }
     }
   } catch (reaperErr) {
     console.log('WORKTREE REAPER TICK: ' + (reaperErr && reaperErr.message ? reaperErr.message : 'unknown'));

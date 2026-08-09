@@ -87,10 +87,14 @@ describe('FR-3/FR-4: finalizeMirror persists to system_events, independent of th
     const insertEvent = vi.fn(async () => undefined);
     const result = await finalizeMirror({ supabase: {}, journal, ventureId: 'v1', seams: { insertEvent } });
 
-    expect(result).toEqual({ persisted: true });
+    // QF-20260807-067: the lifecycle entry is now SEALED BEFORE the write rather than appended
+    // after it, so the mirrored payload actually contains it and mirror-count == journal-count.
+    // The invariant this test guards — one write, and the mirror leaves a journal trace — is
+    // unchanged; only the entry's timing and wording moved, plus entryCount on the result.
+    expect(result).toEqual({ persisted: true, entryCount: journal.readAll().length });
     expect(insertEvent).toHaveBeenCalledTimes(1);
     const events = journal.readAll();
-    expect(events.some((e) => e.event.includes('finalize-mirror persisted'))).toBe(true);
+    expect(events.some((e) => e.event.includes('finalize-mirror snapshot sealed'))).toBe(true);
   });
 
   it('hard-fails (throws) on any write failure — no pending-migration grace window since system_events has no CHECK blocking this write', async () => {

@@ -44,6 +44,29 @@ const RACE_WINDOW_SECONDS = 30;
 const ACCEPT_VERDICTS = new Set(['PASS', 'CONDITIONAL_PASS', 'WARNING']);
 
 /**
+ * QF-20260807-283 — PUBLISH THE CONTRACT, don't patch the Nth rediscovery.
+ *
+ * The old remediation said "invoke the missing sub-agent(s) via Task tool", which points at work
+ * THIS GATE CANNOT SEE: a Task-tool sub-agent does NOT write sub_agent_execution_results by
+ * itself. A worker who obeys that hint produces nothing the gate can read, re-runs, and is blocked
+ * identically — the hint actively costs a round trip. Measured, not theoretical: one seat burned
+ * two failed handoffs and a blocked tick rediscovering the real writers while precedent rows
+ * written the correct way already sat in the table, and a second seat had independently used the
+ * same writer hours earlier. Independent rediscoveries of one contract measure its
+ * DISCOVERABILITY, so the fix is to publish it at the moment of need rather than patch site N+1.
+ *
+ * Both writers are named WITH their applicability, because choosing the wrong one — not ignorance
+ * that a writer exists — is the actual failure mode. Single representation: every remediation
+ * string below interpolates THIS constant, so the contract cannot drift between sites.
+ */
+export const EVIDENCE_WRITER_CONTRACT =
+  'Evidence must reach sub_agent_execution_results — a Task-tool sub-agent alone does NOT write it. '
+  + 'Two canonical writers: (1) REGISTERED codes — `node scripts/execute-subagent.js --code <CODE> --sd-id <SD>`; '
+  + '(2) Task-tool runs and read-only built-ins — persist via `storeSubAgentResults` from '
+  + "lib/sub-agent-executor/results-storage.js with source='manual' "
+  + '(metadata.repo_path canonical + metadata.executed_from_cwd; there are no top-level repo_path/local_path columns).';
+
+/**
  * Verdicts that DO NOT satisfy a required sub-agent.
  *   FAIL            — the agent ran and rejected, or crashed and wrote an error row.
  *   BLOCKED         — the agent could not reach a verdict. NOT a pass.
@@ -438,47 +461,52 @@ export async function validateSubagentEvidence(ctx, supabase) {
       const ne = nonEvidence.map(f => `${f.agent}=${f.verdict}`).join(', ');
       const head = `SUBAGENT_EVIDENCE_NOT_RUN: ${ne} — the run crashed or never finished, so no check was performed. A row existing is not the check having run.`;
 
-      // QF-20260804-926 — RESTORE THE DOCUMENTED SAFETY VALVE.
+      // SD-LEO-INFRA-EXPLORE-UNREGISTERED-LEO-001: THE QF-20260804-926 SAFETY VALVE IS RETIRED
+      // BECAUSE ITS OWN STATED PRECONDITION IS NOW MET.
       //
-      // QF-20260804-569 made non-evidence block UNCONDITIONALLY, ignoring verdict mode. That half
-      // is correct and hard-won — a crashed run must not buy the same passage as a real one — but
-      // it shipped WITHOUT its satisfiability half, and required-subagents.js:49-56 had already
-      // named the precondition verbatim:
+      // QF-20260804-569 made non-evidence block unconditionally. QF-20260804-926 softened it back to
+      // honour SUBAGENT_VERDICT_MODE, and said exactly why, quoting required-subagents.js:49-56:
       //
       //   "PRECONDITION FOR PROMOTING SUBAGENT_VERDICT_MODE=block: the residual ~10% ... is 100%
       //    attributable to the unregistered-EXPLORE CLI path leaving a tombstone as the last row.
       //    Resolve that first ... Until then the gate's advisory default keeps this cost at zero."
       //
-      // LEAD-TO-PLAN still requires 'Explore', a Claude Code BUILT-IN absent from leo_sub_agents,
-      // so `--code EXPLORE` throws and writes a tombstone. Blocking on it makes LEAD-TO-PLAN
-      // unpassable for any seat restricted to the CLI path — no action available to that worker
-      // produces a passing row. Measured cohort: ~10% of SDs (187/209 = 89.5% unaffected).
+      // That is precisely what this SD resolved, and in the order the precondition implies:
+      //   - scripts/record-explore-evidence.js gives Explore a sanctioned producer, so a seat is no
+      //     longer restricted to a CLI path that cannot succeed. THAT was the whole reason blocking
+      //     here was unfair: no action available to the worker produced a passing row. Now one does.
+      //   - execute-subagent --code EXPLORE now REFUSES before the leo_sub_agents lookup and writes
+      //     NO row, so this branch can no longer be reached by the crash that used to populate it.
       //
-      // So non-evidence now honours the SAME mode flag as a rejecting verdict, until Explore is
-      // resolved (harness_backlog 6529e3a3). This is NOT re-softening ERROR/PENDING generally:
-      // they remain a DISTINCT class, they are still never accepted, and under
-      // SUBAGENT_VERDICT_MODE=block they still block. What returns is the operator's ability to
-      // turn the enforcement on deliberately rather than having it arrive as a side effect.
-      if (mode !== 'block') {
-        const warn = `${head} (mode: ${mode} — advisory until the required-agent list is satisfiable from every invocation path; see required-subagents.js:49-56)`;
-        console.log(`   ⚠️  ${warn}`);
-        return {
-          passed: true,
-          score: 100,
-          max_score: 100,
-          issues: [],
-          warnings: [...unknownWarnings, warn],
-          details: { reason: 'SUBAGENT_EVIDENCE_NOT_RUN_ADVISORY', non_evidence: nonEvidence, ...verdictDetails }
-        };
-      }
-
+      // AND THE SOFTENING WAS WORSE THAN A LENIENCY, which is what justifies retiring it rather than
+      // waiting for the global flag. Measured: with no row at all the gate BLOCKS here in both modes
+      // (:556 below, not mode-gated), but with an ERROR tombstone as the newest row it PASSED at
+      // score 100. So RUNNING THE BROKEN CLI CONVERTED A BLOCK INTO A PASS — the crash was the key.
+      // A worker who never invoked it was stopped; one who invoked it and let it crash was let
+      // through. That is not a safety valve, it is a laundering path, and it is closed here.
+      //
+      // SCOPE, deliberately narrow: this changes ONLY the non-evidence class. The rejecting-verdict
+      // branch below still honours SUBAGENT_VERDICT_MODE, resolveSubagentVerdictMode is untouched,
+      // and the global advisory->block flip (measured at 32/313 SDs) remains a separate decision.
+      // ERROR was always documented as a DISTINCT class from a rejection — "there is no verdict for
+      // that mode to be lenient about" (:397-401) — so only that class stops being negotiable.
+      //
+      // Blast radius, measured rather than inherited: 8 of 314 SDs hold an ERROR-newest Explore row
+      // (2.5%, not the ~10% this comment block used to assert), and SEVEN of those eight are already
+      // completed. Each is remediable with the new writer.
       console.log(`   ❌ ${head}`);
       return buildFailResult({
         score: 0,
         max_score: 100,
         issues: [head],
         details: { reason: 'SUBAGENT_EVIDENCE_NOT_RUN', non_evidence: nonEvidence, ...verdictDetails },
-        remediation: `Re-run ${nonEvidence.map(f => f.agent).join(', ')} for SD ${sdKey} until it writes a real verdict. If the agent code cannot be executed at all (e.g. it names a Claude Code agent TYPE with no row in the sub-agent catalog), that is a REQUIREMENT defect, not a worker error — the required-agent list is naming something no CLI path can satisfy.`
+        // SD-LEO-INFRA-EXPLORE-UNREGISTERED-LEO-001 corrected the second half of this text. It used
+        // to say an unexecutable agent code was "a REQUIREMENT defect, not a worker error — the
+        // required-agent list is naming something no CLI path can satisfy". That was true when
+        // written and is now FALSE for the case it was written about: Explore has a sanctioned
+        // producer. Leaving it would send a worker to file a defect instead of running the writer —
+        // a remediation that was accurate once and quietly stopped being so.
+        remediation: `Re-run ${nonEvidence.map(f => f.agent).join(', ')} for SD ${sdKey} until it writes a real verdict. If the agent is a read-only Claude Code BUILT-IN (Explore), it has no CLI producer BY DESIGN — use the Task tool, or record the run with scripts/record-explore-evidence.js. If some OTHER code cannot be executed at all, that is a REQUIREMENT defect rather than a worker error: the required-agent list is naming something no path can satisfy.`
       });
     }
 
@@ -534,11 +562,18 @@ export async function validateSubagentEvidence(ctx, supabase) {
   // `failing` is carried here too: when some agents are absent AND others wrote a
   // rejecting row, absence still decides the verdict (unchanged behavior), but the
   // bad verdicts must remain visible in details rather than being dropped.
+  // SD-LEO-INFRA-EXPLORE-UNREGISTERED-LEO-001: nonEvidence is carried for the SAME reason failing
+  // is, and omitting it reproduced the defect one level down. In a MIXED state — one agent absent,
+  // another holding a crash row — absence decides the verdict, but details.non_evidence was
+  // undefined, so prerequisite-preflight's non-evidence branch had nothing to read and reported
+  // only the missing agent. The tombstone stayed invisible behind the absence diagnosis: the same
+  // "wrong diagnosis, right block" shape the preflight edit exists to prevent, mirrored.
   const sharedDetails = {
     required,
     present: [...present],
     missing,
     failing,
+    non_evidence: nonEvidence,
     phase_started_at: phaseStartedAt.toISOString()
   };
 
@@ -549,7 +584,7 @@ export async function validateSubagentEvidence(ctx, supabase) {
       max_score: 100,
       wait_reason: `Sub-agent evidence not yet written for ${missing.join(', ')} (phase started <${RACE_WINDOW_SECONDS}s ago; agent may be mid-write)`,
       details: { reason: 'SUBAGENT_EVIDENCE_WRITE_LAG', race_window_seconds: RACE_WINDOW_SECONDS, ...sharedDetails },
-      remediation: `Re-check shortly; the required sub-agent(s) (${missing.join(', ')}) may still be writing to sub_agent_execution_results. If still missing after the race window, invoke them via the Task tool.`
+      remediation: `Re-check shortly; the required sub-agent(s) (${missing.join(', ')}) may still be writing to sub_agent_execution_results. If still missing after the race window: ${EVIDENCE_WRITER_CONTRACT}`
     });
   }
 
@@ -559,7 +594,7 @@ export async function validateSubagentEvidence(ctx, supabase) {
     max_score: 100,
     issues: [`SUBAGENT_EVIDENCE_MISSING: ${missing.join(', ')}`],
     details: { reason: 'SUBAGENT_EVIDENCE_MISSING', ...sharedDetails },
-    remediation: `Invoke the missing sub-agent(s) via Task tool for SD ${sdKey} before re-running the ${handoffType} handoff, OR set LEO_DISABLE_SUBAGENT_EVIDENCE_GATE=1 as an emergency bypass.`
+    remediation: `Produce evidence for ${missing.join(', ')} on SD ${sdKey}, then re-run the ${handoffType} handoff. ${EVIDENCE_WRITER_CONTRACT} Emergency bypass: LEO_DISABLE_SUBAGENT_EVIDENCE_GATE=1 (audit-logged).`
   });
 }
 
@@ -575,8 +610,9 @@ export function createSubagentEvidenceGate(supabase) {
     validator: async (ctx) => validateSubagentEvidence(ctx, supabase),
     required: true,
     remediation:
-      'Invoke the missing sub-agent(s) via Task tool for this SD before re-running the handoff. ' +
-      'Emergency bypass: LEO_DISABLE_SUBAGENT_EVIDENCE_GATE=1 (logs audit_log warning).'
+      'Produce evidence for the missing sub-agent(s) on this SD, then re-run the handoff. ' +
+      EVIDENCE_WRITER_CONTRACT +
+      ' Emergency bypass: LEO_DISABLE_SUBAGENT_EVIDENCE_GATE=1 (logs audit_log warning).'
   };
 }
 

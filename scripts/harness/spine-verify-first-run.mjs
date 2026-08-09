@@ -24,6 +24,7 @@ import { fileURLToPath } from 'node:url';
 import { randomUUID } from 'node:crypto';
 import { createClient } from '@supabase/supabase-js';
 import { buildFixtureVentureRow } from './s20-fixture.mjs';
+import { insertGuarded, CLASSIFICATION } from '../../lib/governance/fixture-producer-guard.mjs';
 import { VentureFactory } from '../../lib/agents/venture-ceo-factory.js';
 import { VentureCEORuntime, BudgetManager, TruthLayer } from '../../lib/agents/venture-ceo/index.js';
 import { isMainModule } from '../../lib/utils/is-main-module.js';
@@ -82,7 +83,18 @@ export async function teardownRun(supabase, manifest) {
   return { agentIdsRemoved: agentIds.length, ventureRemoved: Boolean(manifest.ventureId) };
 }
 
-export async function runSeededThread({ supabase, runId }) {
+/**
+ * @param {object} o
+ * @param {object} o.supabase
+ * @param {string} o.runId
+ * @param {(runId: string) => object} [o.buildVentureRow] INJECTION SEAM, and it is load-bearing.
+ *   Without it this function builds its row internally and that row satisfies the canonical
+ *   discriminant TWO independent ways (buildFixtureVentureRow hardcodes is_demo:true, AND the
+ *   overridden name starts with TEST-). No reachable input could make the guard below fail, so
+ *   deleting the guard would be unobservable and its test would be a grep with a .test.js
+ *   extension. The seam is what makes "removing the guard turns a test red" a true statement.
+ */
+export async function runSeededThread({ supabase, runId, buildVentureRow }) {
   const manifest = { runId, ceoAgentId: null, vpAgentIds: {}, crewAgentIds: [], ventureId: null, predictionId: null };
 
   try {
@@ -97,8 +109,16 @@ export async function runSeededThread({ supabase, runId }) {
     // ms timestamp survive truncation, ~100s granularity) — use real randomness within the first
     // 20 normalized chars instead.
     const uniqueSuffix = randomUUID().replace(/-/g, '').slice(0, 10);
-    const ventureRow = { ...buildFixtureVentureRow(`SD-A-${runId}`), name: `TEST-${uniqueSuffix}-SD-A` };
-    const { data: venture, error: ventureError } = await supabase.from('ventures').insert(ventureRow).select('id, name').single();
+    const ventureRow = buildVentureRow
+      ? buildVentureRow(runId)
+      : { ...buildFixtureVentureRow(`SD-A-${runId}`), name: `TEST-${uniqueSuffix}-SD-A` };
+    // Guarded: assert the canonical discriminant, then insert — the guard owns the write, so the
+    // row that was checked is the row that lands. This file previously reused the fixture row
+    // BUILDER from s20-fixture.mjs while skipping its GUARD, and said so only in a comment.
+    const { data: venture, error: ventureError } = await insertGuarded(supabase, 'ventures', ventureRow, {
+      classification: CLASSIFICATION.FIXTURE,
+      source: 'scripts/harness/spine-verify-first-run.mjs',
+    }).select('id, name').single();
     if (ventureError) throw new Error(`fixture venture insert failed: ${ventureError.message}`);
     manifest.ventureId = venture.id;
     console.log(`[1/6] fixture venture created: ${venture.id} (${venture.name})`);

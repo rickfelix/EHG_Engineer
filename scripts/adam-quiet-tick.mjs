@@ -651,7 +651,12 @@ async function main() {
             const { getActiveSolomonId } = require('../lib/coordinator/solomon-identity.cjs');
             const { buildSolomonConsultPayload } = require('./worker-signal.cjs');
             const solomonId = await getActiveSolomonId(sb).catch(() => null);
-            const cp = buildSolomonConsultPayload({ correlationId: crypto.randomUUID(), body: `[PRE-SEND CONSULT] ${body}`, senderCallsign: 'adam-quiet-tick', repo: process.cwd(), severity: 'high' });
+            // SD-LEO-INFRA-COORDINATION-LANE-DRAIN-001 / FR-5: set the STRUCTURAL discriminator.
+            // Without consult_purpose this row is indistinguishable from a genuine consult except
+            // by its body prefix, so Solomon's drain — which sorts on kind and arrival time — lets
+            // a CC needing no answer hold a real question behind it. The field has existed since
+            // SOLOMON-CONSULT-CANNOT-DELIVER-001 FR-2; this producer simply never passed it.
+            const cp = buildSolomonConsultPayload({ correlationId: crypto.randomUUID(), body: `[PRE-SEND CONSULT] ${body}`, senderCallsign: 'adam-quiet-tick', repo: process.cwd(), severity: 'high', consultPurpose: 'pre_send' });
             await insertCoordinationRow(sb, { sender_type: 'adam', target_session: solomonId || 'broadcast-solomon', message_type: 'INFO', subject: '[SOLOMON_CONSULT] pre-send', body: cp.body, payload: cp }, { targetRoleHint: 'solomon' });
           }
         } catch { /* fail-open — see comment above */ }
@@ -808,8 +813,30 @@ async function main() {
     }
     // QF-20260719-848: undrained chairman SMS as first-class hard-interrupt lines (mirrors
     // QUIET_TICK_INBOX_DIRECTIVE) — the contract INBOUND WATCH duty. Act: drain + reply.
+    // QF-20260808-834: the QUIET_TICK_SMS_INBOUND token IS the hard interrupt (adam-startup-check
+    // allowlists these tokens; a tick with none is read as a NO-OP). It points at
+    // scripts/sms-relay-drain.cjs, which is INERT while SMS_RELAY_DRAIN_ENABLED is unset. So an
+    // undrained row re-fired the interrupt EVERY tick toward a remediation nobody could perform,
+    // and a genuinely-new inbound then hid behind the permanent stale one — alert fatigue that
+    // masks the very thing the detector exists to catch.
+    //
+    // DOWNGRADE, DO NOT SILENCE. The ticket offered "skip entirely when the flag is off" and
+    // named the trade itself: pre-cutover inbounds would not be surfaced AT ALL. A detector that
+    // goes fully dark on a CHAIRMAN SMS channel is a worse failure than the one being fixed, and
+    // "what state silences this alarm, and can anyone reach it?" is exactly the question that
+    // should stop a blanket skip. So: withhold the INTERRUPT TOKEN (the thing that falsely
+    // promises an actionable drain) while still printing the row. Visibility is preserved;
+    // only the false call-to-action is removed.
+    const smsDrainEnabled = !['', '0', 'false', 'off', 'no']
+      .includes(String(process.env.SMS_RELAY_DRAIN_ENABLED ?? '').trim().toLowerCase());
     for (const s of smsInbound.rows) {
-      console.log(`QUIET_TICK_SMS_INBOUND=adam id=${s.id} from=${s.fromPhone} chairman=${s.isChairman} sig=${s.signatureValid} age=${s.ageMin}m body="${s.body}" — undrained chairman SMS; DRAIN+reply per CHAIRMAN SMS CHANNEL DUTY (node scripts/sms-relay-drain.cjs)`);
+      const detail = `id=${s.id} from=${s.fromPhone} chairman=${s.isChairman} sig=${s.signatureValid} age=${s.ageMin}m body="${s.body}"`;
+      if (!smsDrainEnabled) {
+        // Deliberately NOT a QUIET_TICK_* token — this line must not re-arm the interrupt.
+        console.log(`  sms-inbound (not interrupting) ${detail} — undrained, but SMS_RELAY_DRAIN_ENABLED is unset so scripts/sms-relay-drain.cjs is a no-op. Surfaced for visibility only. Durable fix: complete the SMS drain cutover.`);
+        continue;
+      }
+      console.log(`QUIET_TICK_SMS_INBOUND=adam ${detail} — undrained chairman SMS; DRAIN+reply per CHAIRMAN SMS CHANNEL DUTY (node scripts/sms-relay-drain.cjs)`);
     }
     for (const p of outboundSilence.probed) {
       console.log(`QUIET_TICK_OUTBOUND_PROBE=adam target=${p.target} row=${p.rowId}`);

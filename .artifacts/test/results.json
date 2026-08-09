@@ -1,0 +1,176 @@
+{
+  "status": "conditional_pass",
+  "verdict": "CONDITIONAL_PASS",
+  "confidence": 88,
+  "sd_id": "SD-LEO-INFRA-TREND-EYES-OFF-001",
+  "phase": "PLAN",
+  "sub_agent": "TESTING",
+  "assessment_type": "test_strategy_review_pre_implementation",
+  "summary": "The architecture (pure-probe / injectable-resolver split modeled on lib/solomon/conduct-probes.js) is the correct and idiomatic choice for this repo, and it makes the FR-7 two-sided requirement achievable without a database. But TS-1..TS-11 as authored do NOT deliver per-class two-sided validation: T3 has no firing positive at all, T1's and T2's negatives share their positives' assumptions and are satisfied by a broken detector, three scenarios (TS-7/9/10) are typed 'integration' and are UNRUNNABLE in this repo's CI today, and the SD's own headline risk (the unwired cron) has ZERO test scenarios. All 12 required additions are additive test scenarios plus one file rename; no architectural change is needed. CONDITIONAL_PASS to enter EXEC with R1-R12 folded into the PRD test_scenarios.",
+
+  "part_1_two_sided_per_class": {
+    "requirement": "FR-7: for EACH of T1/T2/T3 a seeded known-trend MUST fire AND a flat series MUST NOT, in the same suite.",
+    "verdict": "NOT MET for any of the three classes as authored.",
+    "T1_REPEAT_QUESTION": {
+      "positive": "TS-1 (founding specimen 08-03 + 08-05) — adequate.",
+      "negative": "TS-2 (two same-class messages 3h apart) — WEAK.",
+      "defect": "TS-2 varies ONLY the timestamp from TS-1. Both fixtures assert 'two SAME-CLASS messages'. A clustering function broken in the over-collapse direction (every message lands in one class — the most likely failure mode, since FR-2 concedes the clustering is NEW WORK and chairman-sms-exchanges.js:43-46 explicitly REFUSES similarity matching) passes TS-1 (fires) AND passes TS-2 (24h rule still suppresses). Both sides green, detector wrong.",
+      "missing": "A discriminating negative: two messages 24h+ apart but of DIFFERENT question-class must NOT fire. Also missing: n=1 single message; and an OUTBOUND-only pair 24h+ apart (FR-2 says INBOUND chairman SMS — the direction filter is untested).",
+      "note": "FR-2's own acceptance_criteria list has the same hole — it enumerates the 24h boundary both ways but never a different-class case."
+    },
+    "T2_RECURRENCE_AFTER_FIX": {
+      "positive": "TS-3 (pre-fix occurrences only in retention_archive) — adequate as a firing case, but see Part 3: it cannot prove what it claims.",
+      "negative": "TS-4 (a class that appeared once and never returned) — DEGENERATE.",
+      "defect": "TS-4's fixture is n=1. Any detector requiring >=2 occurrences passes it trivially without ever consulting the fix timestamp. T2 therefore degenerates to 'count >= 2' and TS-3 still passes. The 'after-fix' pivot — the entire semantic content of T2 — is unexercised.",
+      "missing": "R3: a class with 2+ occurrences that ALL fall BEFORE the fix, then silence, must NOT fire. That is the only negative that proves the fix timestamp is a pivot rather than decoration. R4: union-dedup — one logical occurrence present in BOTH retention_archive and session_coordination (they overlap 2026-07-24..2026-08-06 by archive-before-delete) must count ONCE. A naive concat union double-counts every row in the overlap and manufactures false T2 fires; no scenario covers it."
+    },
+    "T3_LESSON_DISJUNCTION": {
+      "positive": "MISSING ENTIRELY.",
+      "negative": "TS-6 (stable ratio, no drift candidate) — present.",
+      "defect": "TS-5 is not a firing positive. It asserts 'a series reading is emitted' and that a mismatched-span fixture fails an assertion. Neither is 'a seeded known-trend FIRES'. As written, T3 can ship with a drift detector that can never emit a candidate and the entire suite stays green — the exact one-sided failure FR-7 exists to prevent. This is the clearest and most serious FR-7 violation in the PRD.",
+      "missing": "R1: a seeded genuine drift series (ratio degrading across the window) that FIRES a T3 candidate. Also unexercised: FR-4 AC2 'emitted as a series reading, not a point verdict' has no scenario asserting multi-reading semantics via recursion-governor detectSustainedBreach(recent,{requiredConsecutive}); and FR-4 AC1 'T3 writes no value to issue_patterns.trend' — a hard LEAD condition C2 constraint — has NO test scenario at all."
+    },
+    "cross_class_leakage": {
+      "defect": "No scenario asserts that a seed for one class does not satisfy another class's positive. With three classes emitting into one candidate array, expect(out).toHaveLength(1) alone is satisfiable by the wrong class firing.",
+      "required": "R12: every positive must assert the CLASS NAME, e.g. expect(out).toHaveLength(1); expect(out[0]).toMatchObject({ trigger: 'T1' }). Precedent: tests/unit/row-growth-detector.test.js:22-39 asserts trigger:'abs_spike' / 'growth_factor' by name for exactly this reason."
+    }
+  },
+
+  "part_2_negative_fixture_independence": {
+    "principle": "FR-7 AC4 already states it ('negative fixtures built on a different assumption than the positive ones'), but no TS implements it. A control that inherits the flaw it controls passes while the answer is wrong.",
+    "recommended_construction_per_class": {
+      "T1": "Do NOT build the negative by editing the positive's timestamps (that keeps the clustering assumption fixed and only varies the axis the positive already varies). Build it on the CLASS axis instead: two messages 26h apart whose bodies are drawn from a DIFFERENT question-class than the specimen. This is a one-field delta on an axis the positive holds constant — the coordinator-belt-block.test.js:31 idiom ('same zero depth, ONE field different') and its meta-assertion at :55 that the controls differ by one field each. Keep TS-2 as a boundary test, but it is not the class's negative control.",
+      "T2": "Do NOT build the negative by deleting occurrences (n=1 tests arity, not recurrence). Build it on the TEMPORAL-ORDER axis: same occurrence count, same class, same fix event — only the ordering relative to the fix changes (all occurrences pre-fix). Positive varies 'where the rows live' (archive vs survivor); negative varies 'when they occur relative to the fix'. Different axes, so no shared assumption can green both.",
+      "T3": "Do NOT build the negative as an empty/absent series (that tests arity again). Build it on the VARIANCE axis: same number of readings, same extent, same numerator/denominator sources — only the values are flat. And build the positive on the same skeleton with a monotone degradation. Then add a third fixture varying the SPAN axis (TS-5's mismatched-span case) so span-correctness is independent of drift-detection."
+    },
+    "third_arm_required": {
+      "finding": "TS-2/4/6 all expect 'No candidate', which conflates 'looked, found flat' with 'could not look'. conduct-probes.js:49-58 and :81-83 establish the repo's three-state contract: null/undefined => UNKNOWN, never PASS; 0 => PASS ('looked and found none'); the resolver returns null on ANY failure, never 0. Its test asserts this directly (conduct-probes.test.js:51-62, 'UNAVAILABLE: a resolver that cannot answer yields unknown, NEVER pass' — loops 4 broken clients asserting .not.toBe(VERDICT.PASS)).",
+      "required": "R6: add a THIRD ARM per class — unresolvable/null facts must yield UNKNOWN or propagate, never a silent no-fire. This is also the only test that would enforce PRD risk #6 ('the scan swallows a query error into an empty result'), which currently has a stated mitigation and zero scenarios.",
+      "why_it_matters": "Without it, a scan whose query silently fails produces exactly the same observable as a healthy flat window — and the run-receipt (FR-6) will still be written, so the liveness predicate stays green too. Two safeguards composing into invisibility."
+    },
+    "control_on_the_controls": {
+      "finding": "Any assertion of ABSENCE (no fire, no forbidden import, no write) passes just as happily against an empty string or a vacuous slice.",
+      "required": "Copy the tampered-body CONTROL and the non-vacuous-slice CONTROL from tests/unit/solomon/chairman-sms-exchanges.test.js:110-119 and :121-124 for every absence assertion in this suite, including the wiring test in R7."
+    }
+  },
+
+  "part_3_ci_runnability_split": {
+    "infrastructure_facts_verified": [
+      "vitest.config.js:155-172 gates the ENTIRE db project: DB_TARGET = assessDbTarget(process.env); if not allowed, DB_INCLUDE_GATED = [] so the project resolves ZERO files (passWithNoTests:true at :302).",
+      "tests/helpers/db-target.js:25 DESIGNATED_NON_PROD_REFS = Object.freeze([]) — INTENTIONALLY EMPTY. The only route to DB tests is VITEST_DB_ALLOW_REF naming the ref SUPABASE_URL actually points at (assessDbTarget also rejects opt_in_ref_mismatch).",
+      "vitest.config.js:113-119 DB_INCLUDE routes tests/integration/**, tests/database/**, tests/db-invariants/**, tests/migration-readiness/**, and ANY *.db.test.js into that gated project.",
+      "tests/helpers/db-available.js:83 describeDb = describe.skipIf(!DB_TARGET_IS_DESIGNATED) — every describeDb block currently SKIPS.",
+      "scripts/audit-db-test-guards.mjs (BLOCKING in .husky/pre-commit Stage 1.6, line 413) flags MISROUTED: a unit-project file wrapped in describeDb/itDb must be renamed to *.db.test.js — which lands it back in the gated project.",
+      "vitest.config.js:267-282 the unit project includes **/*.test.js repo-wide, which is why lib/solomon/conduct-probes.test.js runs as a sibling of its source."
+    ],
+    "the_closed_loop": "Any DB-needing test in this SD is unrunnable today: put it in tests/integration/ -> gated db project -> zero files. Put it in tests/unit/ with describeDb -> pre-commit MISROUTED -> rename to *.db.test.js -> gated db project -> zero files. Put it in tests/unit/ WITHOUT a guard -> pre-commit Stage 1.6 blocks the commit (unguarded live-DB access against the test.invalid.local sentinel). There is no placement that both passes pre-commit and executes in CI.",
+    "PURE_UNIT_runs_in_CI_today": {
+      "scenarios": ["TS-1", "TS-2", "TS-3 (after R5 recast)", "TS-4", "TS-5", "TS-6", "TS-8", "TS-11"],
+      "placement": "tests/unit/solomon/trend-eyes-probes.test.js (matches system_architecture) or a lib/solomon/trend-eyes-probes.test.js sibling. MUST NOT be named *.db.test.js, MUST NOT live under tests/integration/, MUST NOT be wrapped in describeDb (R11). No guard needed because no DB is touched."
+    },
+    "TS3_correction": {
+      "finding": "TS-3 is typed 'unit' and its FR-3 acceptance says 'verified by a test that seeds a class present ONLY in retention_archive'. A PURE PROBE test cannot deliver this. The union lives in the RESOLVER (the IO half); a probe fed a pre-unioned facts bag proves nothing about which tables were read. As written TS-3 is satisfied by a resolver that reads session_coordination only, provided the fixture author hand-places the row in the facts bag.",
+      "required": "R5: recast TS-3 as a RESOLVER test using a fake supabase double that RECORDS the table names passed to .from() — still pure, still zero DB. Assert (a) from() was called with BOTH 'retention_archive' and 'session_coordination', and (b) a row present only in the archive double survives into the facts bag. Fixture idiom: the 4-line db(result) double at lib/solomon/conduct-probes.test.js:23-28, extended to push table names onto an array. This converts an unprovable claim into a pure, CI-runnable one."
+    },
+    "GENUINELY_NEEDS_DB": {
+      "scenarios": ["TS-7 (partially)", "TS-9", "TS-10"],
+      "status": "CANNOT RUN IN CI TODAY — and these two protect the two highest-severity insert risks in the PRD (a 23514 on the very first run, and the MACHINE_TELEMETRY dedup collapse).",
+      "required_R10": [
+        "TS-10 recast: export a pure buildCandidateRow(...) from the writer and assert the PAYLOAD OBJECT it returns populates all four NOT NULL columns (type, source_application, source_type, title) with CHECK-valid values, validated against a frozen local copy of the CHECK vocabularies (type in {issue,enhancement}; source_type in {auto_capture,...}). Two-sided: a tampered payload with type deleted or type='bogus' must FAIL the validator. Runs in the unit tier.",
+        "TS-9 recast: assert the dedup_key the writer computes differs for two same-class candidates in one day (pure), AND keep TS-11's non-membership assertion as the structural guard on the collapse path.",
+        "TS-7 recast: drive the scan's orchestration with a fully faked client and assert zero candidates + exactly one receipt payload — pure.",
+        "Keep an OPTIONAL deeper *.db.test.js variant for the true insert, with an explicit in-file comment that it does not execute in CI today and why (db-available.js:30-34 is explicit that skipping must be REPORTED, never patched around by widening the guard).",
+        "Name FR-8's real scheduled run as the LIVE insert-contract proof: if the insert 23514s, no receipt row appears. The FR-8 evidence and the DB-tier gap close each other — state this in the PRD rather than leaving TS-10 silently unrunnable."
+      ]
+    },
+    "verdict": "With R5 + R10 applied, 11 of 11 scenarios run in the default `npm run test:unit` lane and the suite is fully CI-executable. Without them, 3 of 11 never execute and the PRD's own two highest-severity risks ship unguarded."
+  },
+
+  "part_4_unwired_cron_anti_pattern": {
+    "precedent_verified_empirically": {
+      "command": "node scripts/invocation-check.mjs scripts/eva/eva-trend-snapshot.mjs --json  (and trend-detector.mjs)",
+      "result": "BOTH returned {\"invoked\": false, \"triggers\": [], \"excluded\": false, \"warnings\": []}. Zero workflow refs, zero npm scripts, zero loop-contract entries, zero hooks, zero parent-shell callers. The SD's premise is confirmed, not merely asserted.",
+      "only_textual_hits": "scripts/eva/recommendation-engine.mjs:245 mentions 'trend-detector.mjs' inside a console.log string (prose, not invocation); plus a SQL default at database/migrations/20260309_eva_consultant_trends.sql:22 and doc/artifact files."
+    },
+    "why_nothing_caught_it": [
+      "INVOCATION_PATH_PROOF gate (scripts/modules/handoff/executors/lead-final-approval/gates/invocation-path-gate.js): classifyRequiresInvocation (lib/invocation-detector/requires-invocation.js) returns requiresInvocation:FALSE for these files — scripts/eva/ is not cron/ or clockwork/ (AUTONOMOUS_DIR_RE:23), and -snapshot.mjs / -detector.mjs are not in AUTONOMOUS_SUFFIX_RE:26 (-loop|-cron|-sweep|-sweeper|-daemon|-worker|-autotriage). It also uses --diff-filter=A (only files added by the current SD's diff) and is ADVISORY unless INVOCATION_PATH_PROOF_MODE=block.",
+      "WIRE_CHECK_GATE proves static AST reachability from entry points, not invocation — a different question.",
+      "scripts/scripts-reachability-gauge.mjs would call BOTH files REACHABLE (false negative): it counts bare basename substrings across a haystack that includes docs/ and .json (:118-126), so the log-string mention and the audit JSONs make them 'reachable'. It also always exits 0 (:294) and is explicitly 'never CI-blocking' (:26-29).",
+      "lib/governance/gauge-registry.js has no completeness check tying entries to workflows or to scripts on disk."
+    ],
+    "THE_CRITICAL_FINDING_R8": {
+      "severity": "high",
+      "finding": "The PRD names the entrypoint scripts/solomon/trend-eyes-scan.mjs. That path has the IDENTICAL shape to the two eva scripts: not under cron/ or clockwork/, and '-scan.mjs' is NOT in AUTONOMOUS_SUFFIX_RE. classifyRequiresInvocation will return false, so this SD ships straight into the same blind spot it was written to escape — FR-8's protection would rest entirely on a prompt-level promise plus a one-time manual receipt check.",
+      "required": "R8: rename the entrypoint to a suffix the classifier recognises — scripts/solomon/trend-eyes-sweep.mjs (-sweep IS in AUTONOMOUS_SUFFIX_RE) or move it to scripts/cron/. This one-word PLAN-time change puts the script permanently under INVOCATION_PATH_PROOF for every future SD that touches it, converting a promise into a mechanism. Additionally add a lib/loops/loop-contract-registry.js entry so the comment-aware cron-coherence guard at tests/unit/loops/loop-contract-registry.test.js:112-125 covers the cadence."
+    },
+    "REQUIRED_WIRING_TEST_R7": {
+      "finding": "TS-1..TS-11 contain ZERO workflow assertions. FR-8 is the SD's headline risk and its only planned evidence is a one-time manual receipt check — which cannot regress-protect. If someone later comments out the schedule, nothing fails. The receipt is the ONE-TIME half; a unit test is the DURABLE half, and the PRD has only the one-time half.",
+      "required_scenario": "TS-16 — tests/unit/cron/trend-eyes-wiring.test.js, asserting against .github/workflows/solomon-trend-eyes-scan.yml: (a) comment-stripped text has an ACTIVE schedule with a cron; (b) the run step invokes the real entrypoint path; (c) env references exactly SUPABASE_URL and SUPABASE_SERVICE_ROLE_KEY as secrets; (d) comment-stripped text does NOT match /POOLER|DATABASE_URL|PGHOST/ (enforces FR-1's forbidden-auth-path constraint at the workflow layer); (e) workflow_dispatch and concurrency present.",
+      "templates_to_copy": [
+        "tests/unit/cron/prod-error-sweep-loop-wiring.test.js:12-43 — the canonical cron-wiring test. Note its deliberate use of toContain(quoted string) rather than a regex at :37-38 so audit-db-test-guards.mjs's codeNoStrings pass strips the SUPABASE_* tokens and does not misread the test as touching a live DB. Copy that detail or the pre-commit guard will flag the new file.",
+        "tests/unit/adam/inbound-backlog-watchdog.test.js:422 — the comment-strip idiom: wf.split('\\n').filter(l => !l.trim().startsWith('#')).join('\\n') BEFORE asserting. Without it a commented-out schedule satisfies the check.",
+        "tests/unit/solomon-judgment-expiry.test.js:163-164 — the exact assertion pair to INVERT: that file asserts /^\\s*#\\s*schedule:/m present and /^\\s{2}schedule:/m absent. Trend-Eyes asserts the mirror image.",
+        "tests/unit/loops/loop-contract-registry.test.js:19-30 activeCronsFromWorkflow() — a reusable comment-aware cron extractor with a vacuity guard (expect(liveCrons.length).toBeGreaterThan(0))."
+      ],
+      "bind_to_the_repo_SSOT": "Strongest form: import { detectInvocationPath, loadTriggerSources } from lib/invocation-detector/index.js and assert detectInvocationPath('<entrypoint>', await loadTriggerSources()).invoked === true. This is the SAME predicate the LEAD-FINAL gate uses, it is purpose-built to reject commented-out schedules (lib/invocation-detector/index.js:91-133 stripYamlComments + extractOnTriggers + detectSchedule), and it is already adversarially tested at tests/unit/invocation-detector/adversarial-fixes.test.js:17-39. A regex test can drift from the gate; this one cannot.",
+      "two_sided_requirement": "The wiring test MUST carry a tampered-body control: re-run the same assertions against a copy of the workflow text with the schedule block commented out, and assert they FAIL. Otherwise the wiring test passes against an empty string — the identical defect class this SD exists to close. Idiom: chairman-sms-exchanges.test.js:110-119."
+    },
+    "answer_to_how_do_you_test_a_cron_is_wired": "Three layers, all cheap: (1) the classifier-visible FILENAME (R8) makes the gate see the file at all; (2) the comment-stripped workflow unit test with a tampered control (R7) is the blocking, durable regression guard; (3) the real scheduled run leaving a receipt row (FR-8, already in the PRD) is the one-time proof that secrets and permissions actually resolve on a runner. The PRD currently has only layer 3, which is exactly why the eva precedent was invisible."
+  },
+
+  "part_5_idioms_to_copy": {
+    "CORRECTION_to_the_brief": "tests/unit/solomon/chairman-sms-no-send-path.test.js DOES NOT EXIST in this repo (verified via git ls-files; tests/unit/solomon/ contains exactly one file, chairman-sms-exchanges.test.js). The two-sided no-send-path assertions the brief describes are a describe block INSIDE that file at :76-128 ('FR-3 — the boundary is enforced by ABSENCE of a send path'). EXEC must be told this or it will search for a non-existent file.",
+    "primary_idiom_structure": "lib/solomon/conduct-probes.js — pure probe probeAdviceClosure(facts) -> bar (:43); frozen registry SOLOMON_CONDUCT_PROBES (:66); injectable resolver resolveSolomonConductFacts(supabase, opts) (:79); runner runSolomonConductProbes(facts) (:112). Facts are a FLAT object of nullable scalars — no client, no promise, no row arrays. Verdicts are built through verdictBar() which calls assertCheckClass (lib/governance/check-class.js:35) and THROWS on an unlabelled verdict. Trend-Eyes should mirror this exactly: TREND_EYES_PROBES frozen registry of three pure probes + one resolveTrendEyesFacts(supabase, opts).",
+    "primary_idiom_test": "lib/solomon/conduct-probes.test.js — note it is a SIBLING of its source in lib/, not under tests/, and runs because vitest.config.js:268 includes **/*.test.js. Its docblock (:5-13) states the governing rule verbatim: 'a FAIL-ONLY assertion is satisfied by a hardcoded fail. It is the pass/fail DELTA, produced by the same resolver reading different live data, that demonstrates the check is wired to reality.' Its arms are named THE THREE ARMS (:30): BREACH (:31), CLEAN 'the load-bearing arm' (:41), UNAVAILABLE (:51). Each arm asserts the FACT first then the VERDICT — which catches a resolver that returns the same thing for both fixtures. CAVEAT: it has only ONE probe, so it does not demonstrate per-class fan-out; Trend-Eyes needs a describe-per-class on top.",
+    "closest_structural_precedent": "tests/unit/row-growth-detector.test.js — this IS a trend detector with two trigger classes over injected snapshots, pure. One-line fixture factory (:19), positive per class asserting the CLASS NAME (:22 trigger:'abs_spike', :31 trigger:'growth_factor'), then flats (:41, :49, :57, :65). Thresholds injectable per call (:77-85) with a separate pin that the DEFAULTS are the documented ones (:114-116). This is the single best file for EXEC to copy wholesale.",
+    "negative_control_discipline": "tests/unit/governance/guard-sustained-zero.test.js — header :5-12 'every firing case here is paired with a case that must NOT fire'; describe blocks named for their role including 'HEALTHY — the negative control, so the alarm is proven to discriminate' (:49); and the explicit discrimination assertion at :85-90 (suspect.state !== unknown.state AND suspect.detail !== unknown.detail). tests/unit/governance/coordinator-belt-block.test.js:31 + :55 supplies the ONE-FIELD-DELTA discipline and a meta-test proving the controls differ by one field each.",
+    "membership_assertion_TS11": "tests/unit/governance/emit-feedback-telemetry-audience.test.js:41-43 pins the whole frozen array (expect(MACHINE_TELEMETRY_CATEGORIES).toEqual(['fleet_dormancy'])), paired with BEHAVIOURAL assertions through resolveFeedbackAudience (:23-39). For TS-11 use BOTH sides: expect(MACHINE_TELEMETRY_CATEGORIES).not.toContain('solomon_trend_candidate') AND expect(resolveFeedbackAudience('solomon_trend_candidate')).toBe('coordinator-operational'). Do NOT modify the existing toEqual pin at :42 — it is the regression guard, and a bare .not.toContain would pass against a list that grew for other reasons. lib/governance/feedback-audience.js:38-51 already documents this exact trap and a prior revert.",
+    "static_absence_idiom_for_R9": "tests/unit/solomon/chairman-sms-exchanges.test.js:76-128, four load-bearing elements: (i) BOUND the scanned region to executable code (:80 src.slice(src.indexOf('export const ...'))) because the docblock deliberately names the forbidden symbol and 'a check that fires on prose is not a check'; (ii) a STRUCTURAL scanner not a blanket verb regex (:97-108 supabaseChains) with a vacuity guard expect(chains.length).toBeGreaterThan(0); (iii) the TAMPERED-BODY control (:110-119) proving the checks can fail; (iv) the NON-VACUOUS-SLICE control (:121-124). For multi-file scans add comment-stripping per tests/unit/drive-loop/report-posture.test.js:214 and its canonical FORBIDDEN write-verb set at :162-176 (note .rpc( was a hole found by a SECURITY sub-agent).",
+    "weakness_NOT_to_copy": "chairman-sms-exchanges.test.js:136-138 asserts the throw-on-bad-window by SOURCE TEXT match (/an unbounded read is not permitted/) rather than by calling the function. readChairmanSmsExchanges takes the injected supabase as arg 1 and the guard runs before any client use, so it is directly provable: await expect(readChairmanSmsExchanges(null, { windowHours: 0 })).rejects.toThrow(/unbounded/). FR-2 AC4 ('the scan passes an explicit windowHours and never relies on the default') should be asserted behaviourally this way, plus a static check that the call site passes the option. Reserve readFileSync for genuine ABSENCE claims.",
+    "path_resolution": "Use fileURLToPath/resolve from import.meta.url (tests/unit/fleet/canary-session.test.js:20-21) or join(REPO_ROOT, ...) (tests/unit/operator/cash-bank-feed.test.js:153). Do NOT copy chairman-sms-exchanges.test.js:11's bare repo-relative readFileSync path — it depends on vitest cwd being the repo root and is fragile in a worktree."
+  },
+
+  "required_additions": [
+    { "id": "R1", "severity": "critical", "fr": "FR-7/FR-4", "item": "Add a T3 FIRING POSITIVE (seeded genuine drift series emits a T3 candidate). TS-5 is not one. Without this T3 ships one-sided and can never fire." },
+    { "id": "R2", "severity": "high", "fr": "FR-2/FR-7", "item": "Add T1 discriminating negative: two messages 24h+ apart of DIFFERENT question-class must NOT fire. TS-2 varies only the timestamp and is green under an over-collapsing classifier." },
+    { "id": "R3", "severity": "high", "fr": "FR-3/FR-7", "item": "Add T2 discriminating negative: 2+ occurrences ALL pre-fix, then silence, must NOT fire. TS-4's n=1 fixture never exercises the fix pivot." },
+    { "id": "R4", "severity": "high", "fr": "FR-3", "item": "Add T2 union-dedup scenario: one logical occurrence present in BOTH retention_archive and session_coordination (07-24..08-06 overlap) counts ONCE. A naive concat union manufactures false fires across the whole overlap." },
+    { "id": "R5", "severity": "high", "fr": "FR-3", "item": "Recast TS-3 as a RESOLVER test with a table-recording supabase double. A pure probe fed pre-unioned facts cannot prove the union read, which is TS-3's entire stated purpose." },
+    { "id": "R6", "severity": "high", "fr": "FR-1/risk-6", "item": "Add a per-class THIRD ARM: unresolvable/null facts yield UNKNOWN or propagate, never a silent no-fire. Enforces the conduct-probes three-state contract and is the only cover for PRD risk #6." },
+    { "id": "R7", "severity": "critical", "fr": "FR-8", "item": "Add TS-16 workflow-wiring unit test (comment-stripped active schedule, run-step entrypoint, exactly the two SUPABASE_* secrets, no POOLER/DATABASE_URL/PGHOST) WITH a tampered-body control, plus a detectInvocationPath(...).invoked === true assertion. Currently zero scenarios cover the SD's headline risk." },
+    { "id": "R8", "severity": "high", "fr": "FR-8", "item": "RENAME the entrypoint from trend-eyes-scan.mjs to a classifier-visible name (trend-eyes-sweep.mjs, or move under scripts/cron/). '-scan' is not in AUTONOMOUS_SUFFIX_RE, so as named the script inherits the exact eva blind spot and INVOCATION_PATH_PROOF will never see it. Also add a loop-contract-registry entry." },
+    { "id": "R9", "severity": "medium", "fr": "FR-1/FR-4", "item": "Add static-source forbidden-token tests, bounded-region + tampered control + non-vacuous-slice control: (a) no pg / DATABASE_URL / SUPABASE_POOLER_URL (FR-1 AC3, currently untested); (b) no write to issue_patterns.trend (FR-4 AC1, LEAD condition C2, currently untested)." },
+    { "id": "R10", "severity": "critical", "fr": "FR-5/FR-6", "item": "Resolve TS-7/9/10 placement: recast as pure payload-contract tests on an exported buildCandidateRow() (four NOT NULL columns + CHECK vocabularies, two-sided via a tampered payload); keep any true-insert variant as *.db.test.js with an explicit non-execution comment; and name FR-8's real run as the live insert-contract proof. As typed they run nowhere." },
+    { "id": "R11", "severity": "medium", "fr": "infra", "item": "Suite placement constraint: tests/unit/solomon/trend-eyes-probes.test.js. NOT *.db.test.js, NOT tests/integration/, NOT wrapped in describeDb. Use toContain(quoted) for SUPABASE_* tokens so audit-db-test-guards.mjs does not flag the file." },
+    { "id": "R12", "severity": "medium", "fr": "FR-7", "item": "Every positive must assert the CLASS NAME (toMatchObject({trigger:'T1'})), not merely toHaveLength(1), so one class's seed cannot silently satisfy another's positive." }
+  ],
+
+  "what_is_already_good": [
+    "The pure-probe / injectable-resolver split (FR-1) is the correct repo idiom and is what makes per-class two-sided validation possible with zero DB — this is the single most important thing the PRD gets right.",
+    "FR-7 AC4 already articulates the different-assumption requirement for negative fixtures; it just needs scenarios that implement it.",
+    "TS-11 (MACHINE_TELEMETRY_CATEGORIES non-membership) is well-targeted and matches an existing, battle-tested pin at emit-feedback-telemetry-audience.test.js:41-43.",
+    "TS-8 (liveness predicate returns alarm:true for null/stale) correctly copies the gauge-runner triple and is genuinely two-sided in intent.",
+    "FR-8's refusal to accept a merged workflow file as evidence is exactly right and empirically justified — I verified both eva precedent scripts return invoked:false with zero triggers.",
+    "The implementation_approach explicitly sequences the two-sided suite BEFORE the IO layer, which is the correct TDD ordering for this architecture."
+  ],
+
+  "test_commands": {
+    "pure_suite": "npm run test:unit -- tests/unit/solomon/trend-eyes-probes.test.js",
+    "wiring_suite": "npm run test:unit -- tests/unit/cron/trend-eyes-wiring.test.js",
+    "invocation_proof": "node scripts/invocation-check.mjs scripts/solomon/<entrypoint>.mjs --violation --json",
+    "db_guard_precheck": "node scripts/audit-db-test-guards.mjs --staged",
+    "note": "Do NOT rely on npm run test:db — DESIGNATED_NON_PROD_REFS is empty (tests/helpers/db-target.js:25) and no VITEST_DB_ALLOW_REF is set, so that project resolves zero files."
+  },
+
+  "blocking_for_exec": false,
+  "recommendation": "Enter EXEC with R1-R12 written into product_requirements_v2.test_scenarios as TS-12..TS-20 before implementation begins. R1, R7, R8 and R10 are the four that change outcomes rather than coverage percentages: without R1 the T3 class can never fire and nothing notices; without R7+R8 this SD reproduces the precise unwired-cron failure it was chartered to prevent; without R10 the two highest-severity insert risks ship with tests that execute nowhere.",
+  "evidence_basis": [
+    "Read .artifacts/lead/trend-eyes-prd.json (full PRD payload, 264 lines)",
+    "Read vitest.config.js (project split, DB gating at :155-172, unit include at :267-288)",
+    "Read tests/setup.db.js, tests/helpers/db-target.js:20-35 (DESIGNATED_NON_PROD_REFS empty)",
+    "Read scripts/audit-db-test-guards.mjs header + .husky/pre-commit:400-425 (Stage 1.6 blocking guard)",
+    "Read scripts/store-sub-agent-repo-evidence.js",
+    "EXECUTED node scripts/invocation-check.mjs against both eva precedent scripts — both invoked:false, triggers:[]",
+    "Two parallel Explore sweeps over tests/, lib/invocation-detector/, .github/workflows/, and the solomon/governance test estate"
+  ]
+}

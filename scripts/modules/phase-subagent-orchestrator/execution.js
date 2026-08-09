@@ -135,6 +135,14 @@ async function executeSubAgent(subAgent, sdId, options = {}) {
     };
 
   } catch (error) {
+    // SD-LEO-INFRA-EXPLORE-UNREGISTERED-LEO-001: a REFUSAL must not be converted into a verdict.
+    // This catch turns any throw into a synthetic FAIL, which is the REJECTING class — and that
+    // class is still mode-gated, so under the shipping advisory default a refusal laundered through
+    // here would PASS the evidence gate at score 100. Unreachable today only because the
+    // orchestrator runs codes present in leo_sub_agents and none normalize to a built-in; that is
+    // a coincidence of registration, not a guarantee, so the invariant is held here in code.
+    if (error?.isBuiltinAgentRefusal) throw error;
+
     console.error(`   Execution failed: ${error.message}`);
 
     return {

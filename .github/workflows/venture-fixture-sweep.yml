@@ -15,7 +15,20 @@ name: Venture Fixture Sweep
 on:
   schedule:
     - cron: '23 4 * * 6'   # Saturdays 04:23 UTC (low-traffic; distinct from the canary's Sun 06:17)
-  workflow_dispatch: {}
+  workflow_dispatch:
+    # SD-LEO-INFRA-ONE-SYNTHETIC-ROW-001-E (FR-4). This input did not exist, and its absence was a
+    # real gap: the flag's own precedent (CANARY_VENTURE_PROBE_V1) says "ships OFF; enable after the
+    # first supervised incremental run" — but with no inputs and --fix as the only run step, there
+    # was NO WAY TO PERFORM that supervised run. You could only choose between doing nothing and
+    # doing everything. Measured blast radius makes that a real problem, not a theoretical one: the
+    # first armed run soft-deletes 87 of 89 live ventures (all 87 via is_demo alone), sparing only
+    # "Image Alt Text Generator" — the live first-revenue venture — and "ApexNiche AI".
+    inputs:
+      dry_run:
+        description: 'Report what WOULD be swept without writing (leave true to preview)'
+        type: boolean
+        required: false
+        default: true
 
 permissions:
   contents: read
@@ -48,11 +61,21 @@ jobs:
           import { createClient } from '@supabase/supabase-js';
           import fs from 'node:fs';
           const sb = createClient(process.env.SUPABASE_URL, process.env.SUPABASE_SERVICE_ROLE_KEY);
-          const { data } = await sb
+          const { data, error } = await sb
             .from('leo_feature_flags')
             .select('is_enabled')
             .eq('flag_key', 'VENTURE_FIXTURE_SWEEP_V1')
             .maybeSingle();
+          // QF-20260807-690: the error used to be DISCARDED, so a broken query quiet-no-opped the
+          // entire sweep. Measured against the live table: an ABSENT flag row returns
+          // {data:null, error:null} while a BAD COLUMN returns {data:null, error:"column ... does
+          // not exist"} — identical `data`, so `error` is the ONLY thing separating "flag is off"
+          // from "I could not read the flag". Discarding it collapsed those into one silent
+          // no-op. Fail LOUD here; an empty result is still legitimately quiet below.
+          if (error) {
+            console.error(`FATAL: VENTURE_FIXTURE_SWEEP_V1 flag query failed — cannot distinguish "flag disabled" from "cannot read the flag": ${error.message}`);
+            process.exit(1);
+          }
           const enabled = data?.is_enabled === true;
           fs.appendFileSync(process.env.GITHUB_OUTPUT, `enabled=${enabled}\n`);
           console.log(enabled
@@ -60,6 +83,40 @@ jobs:
             : 'VENTURE_FIXTURE_SWEEP_V1 disabled (or absent) — quiet no-op.');
           EOF
 
+      # ALWAYS RUNS. Reports the residue count without writing, so a disabled flag is an OBSERVABLE
+      # state rather than a silent one — you can see what WOULD be swept before anyone arms it, and
+      # a manual dry_run dispatch stops here. (FR-4)
+      #
+      # continue-on-error IS LOAD-BEARING HERE, and it does NOT soften the gate — the final
+      # verification step below is what reddens the job now. Without it this REPORT step exited 1
+      # whenever residue existed, and a failed step ABORTS THE JOB, so the flag-gated --fix step
+      # below was UNREACHABLE EXACTLY WHEN RESIDUE EXISTED — the only condition under which it has
+      # any work to do. The remedy was gated behind its own alarm: measured 2026-08-08, run
+      # 31241155316, "FIXTURE_RESIDUE_CLEAN=false residue=87 fixed=0". The 08-01 and 07-25 greens
+      # were weeks with ZERO residue, so this workflow had been proven able to PASS but never able
+      # to FIX.
+      - name: Report fixture residue (dry run — always)
+        continue-on-error: true
+        run: node scripts/sweep-fixture-residue.mjs
+
+      # SOFT-DELETE PATH. Requires BOTH the flag AND a non-dry-run dispatch: a scheduled run has no
+      # inputs, so `inputs.dry_run` is empty and this is armed by the flag alone; a manual run must
+      # explicitly uncheck dry_run. Defaulting the input to true means the safe choice is the one
+      # you get by doing nothing.
       - name: Run fixture residue sweep (soft-delete; flag-gated)
-        if: steps.gate.outputs.enabled == 'true'
+        if: steps.gate.outputs.enabled == 'true' && inputs.dry_run != true
         run: node scripts/sweep-fixture-residue.mjs --fix
+
+      # THE GATE. This step, not the report above, decides red/green — it re-measures AFTER any
+      # fix attempt and fails if residue remains. Two properties had to hold together and the
+      # obvious one-line fix (continue-on-error alone) would have broken the second:
+      #   1. the --fix step must be REACHABLE while residue exists (the defect above), and
+      #   2. residue must still turn the job RED, including when the flag is OFF and the fix step
+      #      was skipped. A gate that goes green with 87 unswept rows has traded a loud signal for
+      #      a silent one — the continue-on-error-cannot-turn-a-PR-red failure this repo already
+      #      carries in metadata-flag-lint.
+      # if: always() so the true residue state is reported even when the --fix step was skipped or
+      # itself failed; a verification that only runs on the happy path verifies nothing.
+      - name: Verify residue cleared (this is the gate)
+        if: always()
+        run: node scripts/sweep-fixture-residue.mjs

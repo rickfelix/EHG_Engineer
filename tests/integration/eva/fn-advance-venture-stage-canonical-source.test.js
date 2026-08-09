@@ -19,6 +19,7 @@ import { createClient } from '@supabase/supabase-js';
 import dotenv from 'dotenv';
 import { resolve } from 'path';
 import { randomUUID } from 'crypto';
+import { insertGuarded, CLASSIFICATION } from '../../../lib/governance/fixture-producer-guard.mjs';
 
 dotenv.config({ path: resolve(process.cwd(), '.env') });
 
@@ -46,15 +47,13 @@ async function callAdvance(ventureId, fromStage, toStage, handoffData = {}) {
 
 describe.skipIf(!HAS_REAL_DB)('fn_advance_venture_stage canonical artifact source (FR-2)', () => {
   beforeAll(async () => {
-    const { data, error } = await supabase
-      .from('ventures')
-      .insert({
+    const { data, error } = await insertGuarded(supabase, 'ventures', {
         name: `canonical-source-test-${Date.now()}`,
         is_demo: true, // SD-LEO-INFRA-CHAIRMAN-DECISION-QUEUE-002: fixture flagged at creation
         current_lifecycle_stage: 22,
         status: 'active',
         problem_statement: 'Integration test for FR-2 canonical artifact source migration',
-      })
+      }, { classification: CLASSIFICATION.FIXTURE, source: 'tests/integration/eva/fn-advance-venture-stage-canonical-source.test.js' })
       .select('id')
       .single();
     if (error) throw new Error(`Failed to create test venture: ${error.message}`);

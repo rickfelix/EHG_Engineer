@@ -4,6 +4,7 @@
   "description": "LEO Protocol development environment with Claude Code multi-agent workflow support",
   "type": "module",
   "scripts": {
+    "ack:advisory": "node scripts/worker-ack-advisory.cjs",
     "schema:snapshot:prd": "node scripts/snapshot-prd-schema.js",
     "schema:check-drift": "node scripts/snapshot-prd-schema.js --check-drift",
     "migration:apply": "node scripts/apply-migration.js",
@@ -114,7 +115,6 @@
     "lint:venture-artifacts": "node scripts/lint/venture-artifacts-write-lint.mjs",
     "lint:realtime-teardown": "node scripts/lint/realtime-subscribe-teardown-recursion-lint.mjs",
     "lint:count-delta-gate": "node scripts/lint/count-delta-gate-lint.mjs",
-
     "lint:no-process-cwd": "node scripts/lint/no-process-cwd-in-sub-agents-lint.mjs",
     "lint:ismainmodule-classguard": "node scripts/lint/ismainmodule-classguard-lint.mjs",
     "lint:mocked-sut-import": "node scripts/lint/no-mocked-sut-import-lint.mjs",
@@ -634,7 +634,9 @@
     "audit:unreachable-midphase": "node scripts/audit-unreachable-midphase-sds.mjs",
     "audit:worktree-env-divergence": "node scripts/audit-worktree-env-divergence.mjs",
     "flags:enroll-tier-gate": "node scripts/enroll-migration-tier-gate-flag.mjs",
-    "audit:anon-write-contract": "node scripts/anon-write-contract-probe.mjs"
+    "audit:anon-write-contract": "node scripts/anon-write-contract-probe.mjs",
+    "test:cjs-pins": "node tests/unit/governance/fixture-exclusion-cjs-pin.cjs",
+    "lint:fixture-producer-guard": "node scripts/lint/fixture-producer-guard-lint.mjs"
   },
   "dependencies": {
     "@anthropic-ai/sdk": "^0.85.0",

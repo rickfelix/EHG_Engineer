@@ -1,0 +1,127 @@
+/**
+ * EXEC SECURITY S1 (CRITICAL) — SD-LEO-INFRA-SCHEDULED-WORKTREE-REAPER-001.
+ *
+ * THE HAZARD THIS SD CREATED FOR ITSELF. A dedicated execution tree (.reaper-source / .spawn-source)
+ * has a branch matching none of the feat|qf|fix|chore|hotfix patterns and a basename in no SD/QF
+ * map, so the reaper's own detector classifies it `orphan-sd` -> `stage2_remove`. The only thing
+ * standing between it and deletion was the 30-minute tree-residency window — which holds by
+ * COINCIDENCE, because origin/main happens to move often. This host runs
+ * WORKTREE_REAPER_EXECUTE=stage2.
+ *
+ * So the direct consequence of this SD SUCCEEDING — un-starving the reaper — is a reaper that
+ * deletes the tree it is executing from, the first time main goes quiet for half an hour. The SD
+ * about a reaper that cannot run would have handed the newly-working reaper its own source as a
+ * target. Found by the EXEC SECURITY review, not by me; there was no test covering it.
+ *
+ * TWO INDEPENDENT LAYERS ARE ASSERTED, because this is a data-loss path and either one alone is a
+ * single point of failure:
+ *   (1) a .reap-protected.json marker written into the tree at creation AND re-asserted on reuse
+ *       (the reaper honours it at worktree-reaper.mjs:899 and :1372), and
+ *   (2) the dirnames registered in the reaper's own NON_SD_PREFIXES, so protection survives the
+ *       marker file being deleted.
+ */
+import { describe, it, expect, beforeEach, afterEach } from 'vitest';
+import { createRequire } from 'node:module';
+import fs from 'node:fs';
+import os from 'node:os';
+import path from 'node:path';
+
+const require_ = createRequire(import.meta.url);
+const {
+  ensureSourceTreeWorktree, REAPER_SOURCE_DIRNAME, REAPER_SOURCE_BRANCH, SPAWN_SOURCE_DIRNAME,
+} = require_('../../../lib/fleet/source-tree-refresh.cjs');
+const { PROTECTED_MARKER_FILENAME, hasReapProtectedMarker } =
+  require_('../../../lib/worktree-reaper/reap-protected-marker.js');
+
+let tmp;
+beforeEach(() => { tmp = fs.mkdtempSync(path.join(os.tmpdir(), 'src-protect-')); });
+afterEach(() => { try { fs.rmSync(tmp, { recursive: true, force: true }); } catch { /* ignore */ } });
+
+describe('S1: the reaper must never be able to delete the tree it executes from', () => {
+  it('LAYER 1 — a freshly CREATED source tree is marked reap-protected', () => {
+    const created = [];
+    const res = ensureSourceTreeWorktree({
+      repoRoot: tmp,
+      dirname: REAPER_SOURCE_DIRNAME,
+      branch: REAPER_SOURCE_BRANCH,
+      label: 'reaper-source',
+      // Simulate `git worktree add` by materialising the directory, as real git would.
+      exists: () => false,
+      runner: (args) => { created.push(args.join(' ')); fs.mkdirSync(res_dir(tmp), { recursive: true }); },
+    });
+    expect(created.some((c) => c.startsWith('worktree add'))).toBe(true);
+    expect(hasReapProtectedMarker(res.dir)).toBe(true);
+  });
+
+  it('LAYER 1 — protection SELF-HEALS: a reused tree missing its marker gets it back', () => {
+    // A tree created BEFORE this fix has no marker, and a marker can simply be deleted. Asserting
+    // only the creation path would leave every pre-existing tree permanently unprotected.
+    const dir = res_dir(tmp);
+    fs.mkdirSync(dir, { recursive: true });
+    expect(hasReapProtectedMarker(dir)).toBe(false);
+
+    const res = ensureSourceTreeWorktree({
+      repoRoot: tmp,
+      dirname: REAPER_SOURCE_DIRNAME,
+      branch: REAPER_SOURCE_BRANCH,
+      label: 'reaper-source',
+      exists: () => true,
+      // Answers the S2 identity probe as a genuine linked worktree, so this test still exercises
+      // the REUSE path it is named for. Left unanswered it would refuse, and the self-heal
+      // assertion below would never run.
+      runner: (args) => {
+        if (args.includes('--show-toplevel')) return path.resolve(args[1]) + '\n';
+        if (args.includes('--absolute-git-dir')) return `${tmp}/.git/worktrees/${path.basename(args[1])}\n`;
+        if (args.includes('rev-parse') && args.includes('--git-common-dir')) return `${tmp}/.git\n`;
+        return undefined;
+      },
+    });
+    expect(res.created).toBe(false);
+    expect(hasReapProtectedMarker(res.dir)).toBe(true);
+  });
+
+  it('LAYER 2 — the classifier REFUSES both dirnames as orphan SDs', async () => {
+    // Independent of the marker: if the file is deleted, the classifier must STILL not treat these
+    // as abandoned SD worktrees.
+    //
+    // REWRITTEN TWICE, and the second rewrite is the point. This used to grep the
+    // `const NON_SD_PREFIXES` SOURCE LINE for the two literals, which broke on a harmless refactor
+    // to spread SOURCE_TREE_DIRNAMES. Replacing it with `expect(r.matched).toBe(false)` looked
+    // cleaner and was VACUOUS: matched:false is reachable by TWO paths — the prefix check at
+    // detectors.js:164 AND the fail-closed fallback below it — so deleting the source trees from
+    // NON_SD_PREFIXES left the test fully GREEN. Measured, not assumed.
+    //
+    // THE REASON STRING IS THE DISCRIMINATOR. Asserting it is what separates "refused because it is
+    // a known non-SD prefix" from "refused because we could not verify anything", which is the
+    // whole property this layer exists to provide.
+    const { hasOrphanSD } = await import('../../../lib/worktree-reaper/detectors.js');
+    for (const dirname of [REAPER_SOURCE_DIRNAME, SPAWN_SOURCE_DIRNAME]) {
+      const r = hasOrphanSD(
+        { path: path.join('C:', 'pool', '.worktrees', dirname), branch: 'x', key: dirname },
+        { activeSdSet: new Set(), claimMap: new Map() },
+      );
+      expect(r.matched, `${dirname} must never classify as an orphan SD`).toBe(false);
+      // IDLE-2: the source trees moved off the PREFIX list onto an EXACT-match predicate, because
+      // spreading them into a startsWith list gave one name two answers ('.reaper-source-2' was
+      // protected here and reapable via isIdle). The reason changed with it, and asserting the
+      // reason is still what separates this rule from the fail-closed fallback.
+      expect(r.reason, `${dirname} must be refused BY THE SOURCE-TREE rule, not by fail-closed`)
+        .toBe('source_tree_protected');
+    }
+  });
+
+  it('the marker names WHY, so a human deleting it understands the consequence', () => {
+    const res = ensureSourceTreeWorktree({
+      repoRoot: tmp,
+      dirname: REAPER_SOURCE_DIRNAME,
+      branch: REAPER_SOURCE_BRANCH,
+      label: 'reaper-source',
+      exists: () => false,
+      runner: () => { fs.mkdirSync(res_dir(tmp), { recursive: true }); },
+    });
+    const marker = JSON.parse(fs.readFileSync(path.join(res.dir, PROTECTED_MARKER_FILENAME), 'utf8'));
+    expect(String(marker.reason || '')).toMatch(/EXECUTES FROM/i);
+  });
+});
+
+function res_dir(root) { return path.join(root, REAPER_SOURCE_DIRNAME); }

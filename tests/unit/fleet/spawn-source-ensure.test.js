@@ -10,6 +10,7 @@
  * spawn — a defect that would only surface under load.
  */
 import { describe, it, expect, vi } from 'vitest';
+import path from 'node:path';
 import {
   ensureSpawnSourceWorktree,
   buildSpawnSourceWorktreeArgs,
@@ -70,11 +71,44 @@ describe('FR-2: buildSpawnSourceUpdateArgs', () => {
   });
 });
 
+/**
+ * EXEC SECURITY S2: the reuse path now IDENTITY-PROBES the directory (`rev-parse --git-common-dir`
+ * on both the candidate and the repo root) before running git in it, because existence was never
+ * identity. A fixture whose runner answers nothing reads as "unverifiable => refuse", so these
+ * mocks answer the probe as a GENUINE linked worktree — same common dir as the repo root.
+ * The REFUSAL cases are not smuggled in here; they live in tests/unit/fleet/source-tree-identity.test.js.
+ */
+const isIdentityProbe = (args) => args.includes('rev-parse')
+  && (args.includes('--git-common-dir') || args.includes('--show-toplevel'));
+const gitMock = (impl) => vi.fn((args) => {
+  // --show-toplevel is the S2-R position check: real git returns an absolute path, and for a
+  // genuine linked worktree that path IS the directory itself.
+  if (args.includes('--show-toplevel')) return path.resolve(args[1]) + '\n';
+  if (args.includes('--absolute-git-dir')) return `/repo/.git/worktrees/${path.basename(args[1])}\n`;
+  if (isIdentityProbe(args)) return '/repo/.git\n';
+  // S2-R4 ancestry probe, answered as "at or behind" — the honest shape for a tree that tracks its
+  // base. Deliberately NOT routed through `impl`: a fixture that throws here would be asserting
+  // "ancestry unverifiable", a different condition from "the refresh failed". The AHEAD case is
+  // exercised against real git in source-tree-identity-realgit.test.js.
+  if (args.includes('merge-base')) return '';
+  // CI-1 content probe, answered as CLEAN. Also deliberately not routed through `impl`: a fixture
+  // that threw here would assert "content unverifiable", which is a different condition from
+  // "the refresh failed". The dirty/gitignored-plant cases are driven against real git in
+  // source-tree-identity-realgit.test.js, because a mock cannot model gitignore semantics.
+  if (args.includes('status')) return '';
+  return impl ? impl(args) : undefined;
+});
+// common-dir on the candidate, common-dir on the repo root, --show-toplevel on the candidate, and
+// --absolute-git-dir on the candidate (check 3, which is the only one that rejects a forged linkage).
+const IDENTITY_PROBES = 4; // reuse path only
+const ANCESTRY_PROBES = 1; // merge-base --is-ancestor HEAD <baseRef>, after the refresh
+const CONTENT_PROBES = 1;  // status --porcelain --untracked-files=all --ignored=matching (CI-1)
+
 describe('FR-1: ensureSpawnSourceWorktree', () => {
   const deps = (existsResult) => ({
     repoRoot: '/repo',
     exists: vi.fn(() => existsResult),
-    runner: vi.fn(),
+    runner: gitMock(),
     env: {},
   });
 
@@ -105,13 +139,16 @@ describe('FR-1: ensureSpawnSourceWorktree', () => {
     const d = deps(true);
     const out = ensureSpawnSourceWorktree(d);
     expect(out.refreshed).toBe(true);
-    expect(d.runner).toHaveBeenCalledTimes(2); // fetch, then ff-only merge
+    // identity probes, then fetch + ff-only merge, then the S2-R4 ancestry probe.
+    expect(d.runner).toHaveBeenCalledTimes(2 + IDENTITY_PROBES + ANCESTRY_PROBES + CONTENT_PROBES);
   });
 
   it('a FAILED refresh does not throw — the currency check is the authority, not this', () => {
     // Throwing here would turn a transient network blip into a fleet-wide spawn outage. The tree
     // simply stays behind and enforceTreeCurrency refuses it with the real reason.
-    const d = { ...deps(true), runner: vi.fn(() => { throw new Error('network unreachable'); }) };
+    // The identity probe SUCCEEDS and the refresh fails — that is the real shape of a network blip.
+    // (A runner that threw on the probe too would be refused as unverifiable, testing nothing here.)
+    const d = { ...deps(true), runner: gitMock(() => { throw new Error('network unreachable'); }) };
     const out = ensureSpawnSourceWorktree(d);
     expect(out.refreshed).toBe(false);
     expect(out.dir).toBe(resolveSpawnSourceDir('/repo', {}));

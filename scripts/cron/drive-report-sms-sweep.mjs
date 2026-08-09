@@ -45,7 +45,11 @@
  * forbids that under lib/drive-loop.
  */
 
-import { sendDriveSms, VERDICTS } from '../drive-report-sms.mjs';
+import { sendDriveSms, factsFromReport } from '../drive-report-sms.mjs';
+// QF-20260807-118: canonical cross-platform entry guard. The hand-rolled
+// `file://${process.argv[1]}`.replace(...) form this replaces NEVER fired on Windows — and the
+// widened class-guard lint found this file only after that blind spot was closed.
+import { isMainModule } from '../../lib/utils/is-main-module.js';
 import { etParts, windowKey } from './drive-report-sweep.mjs';
 import { LAST_RUN_FIELD } from '../../lib/drive-loop/report-posture.js';
 
@@ -136,48 +140,21 @@ export function ageHoursOf(report, nowMs) {
 }
 
 /**
- * Turn a drive_reports row into the closed set of facts the SMS may carry. Returns null when the
- * row cannot supply them, so the caller sends the missing/stale signal rather than a zero.
+ * RE-EXPORTED, NOT DEFINED HERE — moved to ../drive-report-sms.mjs by
+ * SD-LEO-INFRA-DRIVE-LOOP-INSTRUMENT-001-D.
+ *
+ * It was always the reading half of a pair whose writing half (formatBody) lives there, and it
+ * imported VERDICTS back out of that module to do its job. A SECOND consumer now needs it — the
+ * Adam SessionStart hook, which must turn the same row into the same facts — and importing THIS
+ * file to get it would pull a cron dispatcher, its sibling sweep and report-posture onto a
+ * 1500ms session-start budget. The alternative, re-deriving the read in the hook, is the two-
+ * representations failure this SD family exists to prevent: the hook and the SMS would then be
+ * free to disagree about what the score says while both looking correct.
+ *
+ * The re-export is deliberate rather than a compatibility shim to delete later: this file's
+ * callers and tests import it from here, and that is a fine place to import it from.
  */
-export function factsFromReport(report) {
-  const score = report?.drive_score;
-  const value = score?.score?.value;
-  const possible = score?.possible;
-
-  // NON-NEGATIVE, not merely finite. This predicate must be AT LEAST as strict as formatBody's,
-  // because anything this function accepts is handed straight to it — and formatBody THROWS on a
-  // negative. The two disagreed: this checked finiteness, formatBody checked range, and a
-  // negative score aborted the entire run instead of degrading to the missing signal. So a
-  // corrupt number silenced the chairman completely rather than telling him something was wrong.
-  // A validator upstream of a stricter validator is not a validator; it is a gap. (SECURITY F2.)
-  const usable = (n) => Number.isFinite(n) && n >= 0;
-  if (!usable(value) || !usable(possible)) return null;
-
-  const legs = Array.isArray(score?.unavailable_legs) ? score.unavailable_legs.length : 0;
-
-  // ABSENT means zero; PRESENT-BUT-CORRUPT means unusable. My first fix collapsed both to 0,
-  // which stopped the crash and replaced it with the exact defect this SD exists to prevent:
-  // a corrupt counter silently rendering as "0 unowned blockers" — an unmeasured value wearing
-  // a measured one. A field that is simply not there is a legitimate zero; a field carrying a
-  // negative is a producer bug, and the honest report of a bug is UNUSABLE, not a reassuring
-  // number nobody will question.
-  const rawBlockers = score?.unowned_blockers;
-  if (rawBlockers !== undefined && rawBlockers !== null && !usable(rawBlockers)) return null;
-  const blockers = usable(rawBlockers) ? rawBlockers : 0;
-
-  // The capacity verdict comes from leg 4 when it was measurable. UNKNOWN is a real member of
-  // VERDICTS, so an unmeasured leg is SAID rather than defaulted to something reassuring.
-  const raw = score?.capacity_verdict;
-  const verdict = VERDICTS.includes(raw) ? raw : 'UNKNOWN';
-
-  return {
-    score: value,
-    possible,
-    verdict,
-    unavailableLegs: legs,
-    unownedBlockers: blockers,
-  };
-}
+export { factsFromReport };
 
 /**
  * @param {object} o
@@ -282,7 +259,7 @@ export async function runDriveSmsSweep({ nowMs, findLatestReport, enqueue, findO
 }
 
 // ── CLI ────────────────────────────────────────────────────────────────────────────────────
-if (import.meta.url === `file://${process.argv[1]}`.replace(/\\/g, '/')) {
+if (isMainModule(import.meta.url)) {
   if (!process.env.SUPABASE_URL || !process.env.SUPABASE_SERVICE_ROLE_KEY) {
     throw new Error('drive-report-sms-sweep: SUPABASE_URL and SUPABASE_SERVICE_ROLE_KEY are required');
   }

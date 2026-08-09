@@ -30,7 +30,16 @@ describe('FR-1: resolveSpawnSourceDir', () => {
   });
 
   it('honours FLEET_SPAWN_SOURCE_DIR for differing layouts', () => {
-    expect(resolveSpawnSourceDir('/repo', { FLEET_SPAWN_SOURCE_DIR: '/elsewhere/src' })).toBe('/elsewhere/src');
+    // IDLE-3: the override RELOCATES (any parent directory) but may not RENAME — both reap-
+    // protection layers key on the literal basename, so a renamed tree becomes stage-2 eligible.
+    // This test's basename was incidental ('src'); the capability it pins is the differing PARENT.
+    expect(resolveSpawnSourceDir('/repo', { FLEET_SPAWN_SOURCE_DIR: '/elsewhere/.spawn-source' }))
+      .toBe('/elsewhere/.spawn-source');
+  });
+
+  it('REFUSES an override that renames the tree — IDLE-3', () => {
+    expect(() => resolveSpawnSourceDir('/repo', { FLEET_SPAWN_SOURCE_DIR: '/elsewhere/src' }))
+      .toThrow(/must keep the basename/i);
   });
 
   it('guards the OVERRIDE too — the hazard does not care who chose the path', () => {

@@ -26,3 +26,15 @@ CLAUDE.md text eol=lf
 *.js text eol=lf
 *.mjs text eol=lf
 *.cjs text eol=lf
+
+# SD-FDBK-ENH-LEARNING-LOOP-DESTROYS-001 FR-5 — .sql was omitted when the pins above were added,
+# and migrations are the one file type where the line endings are load-bearing: the DDL approval
+# gate binds an `-- @approved-by:` marker to a CONTENT HASH. Measured on this very migration:
+# blob at HEAD 7c3e6fab, blob at the chairman-approved commit 0f9d0e3c, and the working file on
+# disk c731a7ad — a third value matching no recorded hash. So an approver or auditor who runs
+# sha256sum on the checked-out file concludes the approved content drifted when nothing changed.
+# Pin LF so the worktree and the object store agree.
+#
+# This pin only helps repos that have it. Tooling that hashes a migration for approval should
+# still read the blob (git show <rev>:<path>) rather than the worktree.
+*.sql text eol=lf
