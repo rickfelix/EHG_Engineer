@@ -832,8 +832,21 @@ async function main() {
     for (const s of smsInbound.rows) {
       const detail = `id=${s.id} from=${s.fromPhone} chairman=${s.isChairman} sig=${s.signatureValid} age=${s.ageMin}m body="${s.body}"`;
       if (!smsDrainEnabled) {
-        // Deliberately NOT a QUIET_TICK_* token — this line must not re-arm the interrupt.
-        console.log(`  sms-inbound (not interrupting) ${detail} — undrained, but SMS_RELAY_DRAIN_ENABLED is unset so scripts/sms-relay-drain.cjs is a no-op. Surfaced for visibility only. Durable fix: complete the SMS drain cutover.`);
+        // REGRESSION FIX (mine, from QF-20260808-834): the suppressed line used to carry NO token
+        // at all. But the summary above still prints `sms=${smsInbound.count}` — that count is
+        // rows.length and is completely independent of this flag — so a flag-off tick with
+        // undrained rows printed `sms=1` alongside ZERO surfaced QUIET_TICK_ lines. That is the
+        // count-vs-surface mismatch QF-20260808-673 names as a defect class: a reader trusting
+        // "no lines = no SMS" treats the tick as a NO-OP and misses the chairman. I introduced it
+        // by removing the token without reconciling the counter that still reports the rows.
+        //
+        // FOLLOWS THE ESTABLISHED CONVENTION rather than inventing one: QUIET_TICK_STALL_SUPPRESSED
+        // and QUIET_TICK_VENTURE_PARK_SUPPRESSED are informational tokens DELIBERATELY ABSENT from
+        // the NO-OP allowlist in adam-startup-check.mjs — they exist so an exclusion is never
+        // silent, without waking anyone. This is the same shape: `sms=N` now reconciles against N
+        // machine-greppable lines, and because the token is NOT allowlisted it does not re-arm the
+        // hard interrupt toward a drain that is still inert.
+        console.log(`QUIET_TICK_SMS_SUPPRESSED=adam ${detail} — undrained chairman SMS, but SMS_RELAY_DRAIN_ENABLED is unset so scripts/sms-relay-drain.cjs is a no-op. Recorded so sms=${smsInbound.count} never coexists with zero surfaced rows; INFORMATIONAL, not a hard interrupt. Durable fix: complete the SMS drain cutover.`);
         continue;
       }
       console.log(`QUIET_TICK_SMS_INBOUND=adam ${detail} — undrained chairman SMS; DRAIN+reply per CHAIRMAN SMS CHANNEL DUTY (node scripts/sms-relay-drain.cjs)`);
