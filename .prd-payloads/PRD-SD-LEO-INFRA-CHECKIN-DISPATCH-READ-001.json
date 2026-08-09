@@ -1,0 +1,193 @@
+{
+  "executive_summary": "Check-in hands a worker seat work whose own row markers say it should not be handed. Measured at the def-site (lib/checkin/, a 20-step first-truthy-wins pipeline), the three reported defects do NOT share the root the SD assumed, so this PRD scopes them separately on a coordinator ruling. FR-1 is a genuine hand-time blindness: resume.cjs asks a SD-only predicate whether the seat holds anything, so a seat holding a quick-fix is invisible and the ladder falls through to the self-claim tiers — measured live, 2 of 2 claimed QFs sit in exactly that state. FR-2's premise is FALSE as originally written: the machine-readable guard already exists and already runs at hand-time, and the structured writer already exists; what is missing is that a deliberate release records its rationale as prose while the mechanical sweep clears the claim with no marker, so the QF returns to the queue unmarked. FR-3 holds: every 'freshness' concept on the dispatch path measures whether the RECIPIENT is alive, never whether the instruction's factual claim is still true. Verification is two-sided per FR — each guard is proven to FIRE on the positive control and to NOT fire on the negative control, so a guard that refuses everything cannot pass.",
+  "functional_requirements": [
+    {
+      "id": "FR-1",
+      "title": "resume must see BOTH claim kinds before the ladder falls through to self-claim",
+      "description": "lib/checkin/steps/resume.cjs is step 5 of the first-truthy-wins pipeline in lib/checkin/pipeline.cjs, and it short-circuits every self-claim tier below it. Its `if (!ctx.mySd)` branch (line 19) asks findOwnSdClaim (scripts/worker-checkin.cjs:1566) what this session holds; that function selects ONLY from strategic_directives_v2, with .limit(1), and never queries quick_fixes. The SAME FILE's else branch (line 39) already imports and calls getMyClaims (lib/claim/get-my-claims.cjs), which queries BOTH strategic_directives_v2 and quick_fixes and deliberately carries NO .limit(1) — its own header states it exists to detect multiplicity. So the correct predicate is already present in the file and is used only on the branch that structurally cannot stack. Consequence: a seat whose mirror claude_sessions.sd_key is NULL while it authoritatively holds a QF is invisible to resume, resume returns undefined, and the ladder continues down to merged-pool-self-claim and self-claim-qf — handing additional vehicles onto a seat that already deliberately holds one. Fix: use getMyClaims in the !ctx.mySd branch so resume sees both claim kinds. This EXTENDS a live guard; it introduces no new predicate, no new query surface and no schema change. MEASURED LIVE, whole population not a sample (n=2): 2 of 2 quick_fixes carrying an authoritative claiming_session_id have a NULL mirror — 100% of the live population sits in the stacking-reachable state and ZERO are in the state where resume short-circuits correctly.",
+      "priority": "critical",
+      "acceptance_criteria": [
+        "POSITIVE CONTROL: a session that authoritatively holds a QF (quick_fixes.claiming_session_id = this session) while claude_sessions.sd_key is NULL resolves to action='resume' naming that QF, and is handed ZERO additional vehicles.",
+        "NEGATIVE CONTROL: a session holding nothing (no SD and no QF authoritatively claimed) still falls through resume normally and receives its ordinary single hand — the guard must not refuse everything.",
+        "A session authoritatively holding an SD with a NULL mirror continues to resume that SD exactly as before (no regression to the existing SD-side self-heal path).",
+        "Multiplicity remains DETECTION-ONLY: when getMyClaims reports more than one held claim, ctx.base.claim_multiplicity is still surfaced and NO claim is auto-released. Proven by a test asserting no release/update call is made on the multiplicity path.",
+        "The read-error case does not silently read as 'holds nothing': when getMyClaims returns an error, resume does not treat the seat as empty (a partial read must not authorise a hand)."
+      ]
+    },
+    {
+      "id": "FR-2",
+      "title": "A deliberate release must WRITE the structured marker — not leave the rationale as prose",
+      "description": "RE-SCOPED ON COORDINATOR RULING. The SD as authored asserts the release note 'lives in prose that nothing reads at hand-time' and must be machine-read. Measured at the def-site, that premise is FALSE in both halves. READ SIDE ALREADY EXISTS AND ALREADY RUNS AT HAND-TIME: isAutoStartableQF gates on quick_fixes.not_before (scripts/worker-checkin.cjs:684) and on isChairmanGatedQF (line 692, lib/fleet/qf-gated-hold.cjs — owner='chairman' plus release_condition), each returning false; QF_CANDIDATE_COLUMNS (line 729) already selects not_before, owner and release_condition. WRITE SIDE ALREADY EXISTS: scripts/defer-quick-fix.js is the canonical hold-state contract writer (--not-before / --reason / --owner / --release-condition, SD-LEO-INFRA-HOLD-STATE-CONTRACT-001) and at line 137 it clears claiming_session_id together with not_before atomically. MEASURED: QF-20260804-073 has not_before, reason, owner and release_condition ALL NULL, with the entire blocking rationale sitting in verification_notes as prose; the coordinator independently measured this is FLEET-WIDE, dozens of QFs with all-NULL markers. THE ACTUAL MECHANISM: a worker records a blocking rationale as prose and does not invoke the structured verb; the claim is later cleared MECHANICALLY by the stale-session sweep, which writes no marker because a swept stale claim is not a deliberate release; the QF returns to status='open' with every marker column NULL and is therefore fully claimable again, and is re-handed to a seat that also cannot satisfy the blocking condition. Therefore the deliverable is on the WRITE path, not the read path: a deliberate worker-initiated QF release must write the structured marker, and a deliberate release recorded without one must FAIL LOUDLY rather than silently returning an unmarked row to the queue. EXPLICITLY OUT OF SCOPE, and this boundary is load-bearing: the sweep's mechanical stale-claim clear is NOT a deliberate release and must keep clearing without a marker — requiring one there would strand every genuinely-dead claim. DO NOT BUILD A PROSE PARSER: it would duplicate a working guard and still miss the cause.",
+      "priority": "high",
+      "acceptance_criteria": [
+        "POSITIVE CONTROL: a deliberate worker-initiated QF release that supplies a blocking rationale results in the structured marker being persisted on the row (not_before and/or release_condition + owner + reason), such that the existing isAutoStartableQF guard excludes it on the next hand — proven by asserting isAutoStartableQF returns false for the resulting row.",
+        "FAIL-LOUD CONTROL: a deliberate release recorded with a rationale but NO structured marker is refused loudly (non-zero exit / explicit error naming the missing columns), never silently completing.",
+        "NEGATIVE CONTROL: a release with no blocking rationale at all — ordinary completion or hand-back — is unaffected and still succeeds without a marker. The guard must not make every release require a hold.",
+        "SWEEP BOUNDARY PRESERVED: the stale-session sweep's mechanical clear of a dead session's QF claim still succeeds with no structured marker. Proven by a test that exercises the sweep path and asserts it is NOT refused.",
+        "No prose parsing is introduced anywhere: verification_notes is never read as a source of guard state."
+      ]
+    },
+    {
+      "id": "FR-3",
+      "title": "A dispatch instruction carrying a factual premise must stamp the MEASUREMENT time and default to re-verify",
+      "description": "MEASURED AT THE DEF-SITE. The dispatch path is saturated with the word 'freshness' and every instance measures the RECIPIENT: lib/coordinator/dispatch.cjs:110 and :182 check heartbeat freshness to decide whether a seat is alive; lib/coordinator/detectors.cjs:43 and :338 define live-coordinator and stalled-loop windows; scripts/worker-checkin.cjs:803 DISPATCH_RANK_TTL_MS (1h) bounds the staleness of a dispatch RANK. NONE of these measure whether a factual claim embedded in the instruction is still true. lib/checkin/steps/directed-assignment.cjs carries ZERO handling of an instruction body — no payload.instruction, apply, body or steps — so the prose a worker is expected to act on is never inspected, never bounded and never re-validated. Reported incident: an 08-05 dispatch closed with an apply-instruction ('drive_reports returns PGRST205, prepend-commit-apply') that was FALSE by read-time (the table had been applied), and a worker following it literally would have attempted to apply a live permission-class table. A three-day-old premise is a lead, not a fact. THE DELIVERABLE IS NOT A GENERIC PROSE RE-VALIDATOR — arbitrary claims cannot be mechanically re-checked, and pretending otherwise would produce a guard that asserts what it never measured. Instead, follow the precedent already established at the same choke point: lib/coordinator/dispatch.cjs lines 304-342 already stamp payload.effort_recommendation onto WORK_ASSIGNMENT rows as they pass through. Attach the premise contract at that identical choke point: an instruction carrying a factual premise must record the time that premise was MEASURED (never the time the message was sent — a send-time stamp certifies only that the message is new, which is exactly the false comfort this defect is made of), and at claim-time a premise older than the freshness bound must surface an explicit RE-VERIFY-BEFORE-EXECUTING instruction to the worker rather than being handed on as fact.",
+      "priority": "medium",
+      "acceptance_criteria": [
+        "POSITIVE CONTROL: a WORK_ASSIGNMENT whose premise measurement time is older than the freshness bound surfaces an explicit re-verify directive to the worker at claim-time; the instruction is NOT presented as current fact.",
+        "NEGATIVE CONTROL: a WORK_ASSIGNMENT whose premise was measured within the bound dispatches and is presented normally, with no re-verify noise added.",
+        "A premise stamp records MEASUREMENT time, not send time. Proven by a test in which the two differ and the guard's verdict follows the measurement time, not the send time.",
+        "ABSENT-STAMP CASE IS EXPLICIT: an instruction carrying no premise stamp at all is treated as unverified (surfaced), never as fresh. A missing stamp must not read as a passing one.",
+        "No generic prose re-validation is attempted and none is claimed anywhere in the code or its output."
+      ]
+    }
+  ],
+  "technical_requirements": [
+    {
+      "id": "TR-1",
+      "title": "Extend live guards; introduce no duplicate predicate",
+      "description": "FR-1 reuses getMyClaims (lib/claim/get-my-claims.cjs), already imported in resume.cjs. FR-2 reuses the existing isAutoStartableQF read-guard and the defer-quick-fix.js writer. FR-3 reuses the dispatch.cjs choke point that already stamps effort_recommendation. No new predicate, no new query surface, no schema change. This SD's own prior-art note requires extending live guards rather than re-implementing them, and a prior SD in this session cost ~200 lines by violating exactly that."
+    },
+    {
+      "id": "TR-2",
+      "title": "Every guard is proven two-sided",
+      "description": "For each FR the guard must be proven to FIRE on the positive control AND to NOT fire on the negative control. A guard proven only on the positive side is indistinguishable from one that refuses everything, and would silently halt the fleet's hand-path."
+    },
+    {
+      "id": "TR-3",
+      "title": "Read errors must not read as 'nothing held'",
+      "description": "getMyClaims reports partial-read errors deliberately so a caller can distinguish 'you hold nothing' from 'I could not see one of the two surfaces'. FR-1 must not collapse those two states — a surface that could not be read must never authorise handing more work."
+    }
+  ],
+  "test_scenarios": [
+    {
+      "id": "TS-1",
+      "scenario": "Seat authoritatively holds a QF with a NULL mirror; check-in runs",
+      "type": "unit",
+      "expected": "resume returns action='resume' naming the QF; no self-claim tier is reached and zero additional vehicles are handed"
+    },
+    {
+      "id": "TS-2",
+      "scenario": "Seat holds nothing at all; check-in runs",
+      "type": "unit",
+      "expected": "resume falls through and the seat receives its ordinary single hand — the negative control proving the guard does not refuse everything"
+    },
+    {
+      "id": "TS-3",
+      "scenario": "getMyClaims returns a partial-read error during resume",
+      "type": "unit",
+      "expected": "the seat is not treated as empty; no additional vehicle is handed on the strength of an unreadable surface"
+    },
+    {
+      "id": "TS-4",
+      "scenario": "Session holds two claims; check-in runs",
+      "type": "unit",
+      "expected": "claim_multiplicity is surfaced and NO release/update is issued — multiplicity stays detection-only per ruling"
+    },
+    {
+      "id": "TS-5",
+      "scenario": "Deliberate QF release supplying a blocking rationale",
+      "type": "unit",
+      "expected": "the structured marker is persisted and isAutoStartableQF returns false for the resulting row"
+    },
+    {
+      "id": "TS-6",
+      "scenario": "Deliberate QF release with a rationale but no structured marker",
+      "type": "unit",
+      "expected": "refused loudly with an error naming the missing columns; never silently completes"
+    },
+    {
+      "id": "TS-7",
+      "scenario": "Stale-session sweep mechanically clears a dead session's QF claim",
+      "type": "unit",
+      "expected": "the clear succeeds with no structured marker — the sweep boundary is preserved and dead claims are never stranded"
+    },
+    {
+      "id": "TS-8",
+      "scenario": "WORK_ASSIGNMENT whose premise measurement time is older than the bound, and a second whose send time is fresh but measurement time is stale",
+      "type": "unit",
+      "expected": "both surface a re-verify directive; the verdict follows measurement time, never send time"
+    },
+    {
+      "id": "TS-9",
+      "scenario": "WORK_ASSIGNMENT carrying no premise stamp at all",
+      "type": "unit",
+      "expected": "treated as unverified and surfaced; a missing stamp never reads as fresh"
+    }
+  ],
+  "acceptance_criteria": [
+    "Every FR's guard is proven two-sided: it fires on the positive control and does not fire on the negative control.",
+    "FR-1 changes resume.cjs to consult getMyClaims on the !ctx.mySd branch and introduces no new predicate.",
+    "Multiplicity remains detected and surfaced but unacted-on, per the coordinator ruling that picking a winner is a separate policy directive.",
+    "No prose parser is built for FR-2, and the sweep's mechanical clear still succeeds without a marker.",
+    "FR-3 claims no generic prose re-validation; it stamps measurement time and defaults to re-verify.",
+    "Each behavioural arm is mutation-proven against a baseline verified green FIRST, with every mutation redding at least one named test."
+  ],
+  "risks": [
+    {
+      "risk": "FR-1's guard is too broad and refuses a legitimate hand, halting the fleet's self-claim path across every seat.",
+      "mitigation": "The negative control (TS-2) is mandatory: a seat holding nothing must still receive its ordinary hand. resume already short-circuits for SD holders today, so this only widens visibility to the QF surface — it adds no new refusal class.",
+      "severity": "medium"
+    },
+    {
+      "risk": "FR-2's fail-loud requirement is applied to the sweep, stranding every genuinely-dead QF claim behind a marker nobody can supply.",
+      "mitigation": "TS-7 pins the sweep boundary explicitly as a test, not a comment. The requirement attaches only to a DELIBERATE worker-initiated release.",
+      "severity": "high"
+    },
+    {
+      "risk": "FR-3 is read as promising that stale instructions are mechanically detected, when only stamped premises can be bounded.",
+      "mitigation": "The absent-stamp case (TS-9) is an explicit acceptance criterion and surfaces as UNVERIFIED, never as fresh. The PRD and the code state plainly that no generic prose re-validation is performed.",
+      "severity": "medium"
+    },
+    {
+      "risk": "The live population behind FR-1 is small (n=2), so the measurement could be read as thin evidence.",
+      "mitigation": "It is the WHOLE population of authoritatively-claimed QFs, not a sample of it, and the ratio is 2 of 2 with zero counter-examples. The mechanism is additionally established by reading the code path directly, independent of the population size.",
+      "severity": "low"
+    }
+  ],
+  "system_architecture": {
+    "summary": "Check-in is a 20-step ordered pipeline (lib/checkin/pipeline.cjs runs lib/checkin/steps/index.cjs; the FIRST step returning a truthy value becomes the resolution). resume sits at step 5, above every acquisition tier, so what resume can SEE determines whether a seat can be stacked. Dispatch is a separate choke point (lib/coordinator/dispatch.cjs) that validates and decorates WORK_ASSIGNMENT rows in flight.",
+    "components": [
+      {
+        "name": "lib/checkin/steps/resume.cjs",
+        "change": "FR-1: the !ctx.mySd branch consults getMyClaims (both claim kinds, no limit) instead of the SD-only, limit-1 findOwnSdClaim. Multiplicity handling is untouched and stays detection-only."
+      },
+      {
+        "name": "lib/claim/get-my-claims.cjs",
+        "change": "Reused unchanged — it already answers the ownership question across both tables and already reports partial-read errors."
+      },
+      {
+        "name": "the deliberate QF release path (scripts/defer-quick-fix.js and its callers)",
+        "change": "FR-2: a deliberate release carrying a blocking rationale writes the structured marker; one recorded without a marker fails loudly. The read-guard in isAutoStartableQF is reused unchanged."
+      },
+      {
+        "name": "lib/coordinator/dispatch.cjs",
+        "change": "FR-3: at the same choke point that already stamps effort_recommendation, carry a premise MEASUREMENT-time stamp; claim-time surfaces re-verify when the premise is stale or unstamped."
+      },
+      {
+        "name": "scripts/stale-session-sweep.cjs",
+        "change": "UNCHANGED BY DESIGN — a swept stale claim is not a deliberate release and must keep clearing without a marker. Pinned by TS-7."
+      }
+    ]
+  },
+  "implementation_approach": {
+    "summary": "Three independent, small changes, each extending a guard that already exists, each proven two-sided and mutation-proven against a baseline verified green first. FR-1 is the smallest and closes the whole reported stacking mechanism; FR-2 moves the fix from the read side (already correct) to the write side; FR-3 attaches a freshness contract to the existing dispatch choke point rather than inventing a validator.",
+    "steps": [
+      "Write the failing two-sided arms for FR-1 FIRST (QF-held-with-null-mirror; holds-nothing; partial-read error; multiplicity-unacted), and confirm they fail for the RIGHT reason before touching resume.cjs.",
+      "Change resume.cjs's !ctx.mySd branch to consult getMyClaims, preserving the existing SD self-heal (healOwnClaimPointer) behaviour for SD claims.",
+      "Measure the FR-2 deliberate-release call sites, then make a rationale-bearing release write the structured marker and refuse loudly without one; pin the sweep boundary with TS-7 before changing anything.",
+      "Attach the FR-3 premise stamp at the dispatch choke point alongside effort_recommendation, and surface re-verify at claim-time for stale AND unstamped premises.",
+      "Mutation-prove every arm: verify the baseline is GREEN first, then confirm each mutation reds at least one NAMED test and that no mutation is a no-op.",
+      "Run the full unit project and report the counts."
+    ]
+  },
+  "integration_operationalization": {
+    "consumers": "Every fleet worker seat calling scripts/worker-checkin.cjs each loop pass — the resume step is on the hand-path of all of them, so an FR-1 regression would be fleet-wide and immediate. Secondary consumers: the coordinator dispatch path (lib/coordinator/dispatch.cjs) for FR-3, and any operator running scripts/defer-quick-fix.js for FR-2.",
+    "dependencies": "lib/claim/get-my-claims.cjs (existing, reused unchanged — the ownership predicate across strategic_directives_v2 and quick_fixes). lib/fleet/qf-gated-hold.cjs isChairmanGatedQF and scripts/worker-checkin.cjs isAutoStartableQF (existing read-guard, reused unchanged). scripts/defer-quick-fix.js (existing hold-state contract writer). No new dependency is introduced and no schema change is required — quick_fixes already carries not_before, reason, owner and release_condition.",
+    "data_contracts": "OWNERSHIP is answered by the authoritative claiming_session_id columns on strategic_directives_v2 and quick_fixes; LIVENESS is answered by the claude_sessions.sd_key mirror. Conflating them is the defect FR-1 fixes, and get-my-claims.cjs documents the split explicitly. FR-2 relies on the marker columns already read by isAutoStartableQF. FR-3 adds a premise MEASUREMENT-time field to the WORK_ASSIGNMENT payload, alongside the effort_recommendation field the same choke point already writes; payloads without it remain valid and are treated as unverified.",
+    "runtime_config": "No new environment variables, feature flags or settings. FR-3's freshness bound follows the existing convention of a module-level constant beside DISPATCH_RANK_TTL_MS rather than runtime configuration, so behaviour is identical across every seat with nothing to misconfigure.",
+    "observability_rollout": "FR-1 is observable in the check-in JSON: a QF-holding seat resolves to action='resume' naming the QF instead of self_claimed/self_claimed_qf, and claim_multiplicity continues to surface when present. FR-2 is observable as a loud refusal on the release path plus the marker columns becoming non-NULL on deliberately-released rows — the same live query used to measure this SD (markers all-NULL, fleet-wide) is the rollout check. FR-3 is observable as a re-verify directive on the surfaced assignment. Rollout is a plain merge with no migration and no backfill; the pre-existing fleet-wide all-NULL marker population is NOT retroactively marked by this change and stays visible to that same query."
+  },
+  "metadata": {
+    "sd_key": "SD-LEO-INFRA-CHECKIN-DISPATCH-READ-001"
+  }
+}
