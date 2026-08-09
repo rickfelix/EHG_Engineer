@@ -75,7 +75,16 @@ const SHARED_EXCLUDE = [
   '**/node_modules/**',
   '**/applications/**',
   '**/press-kit/**',
-  '**/agents/**',
+  // SD-LEO-INFRA-FLEET-WIDE-VITEST-001 FR-3. This was '**/agents/**', aimed at the product
+  // source tree — but that glob also matched tests/unit/agents/**, so 12 ordinary unit tests
+  // were members of ZERO collected projects and never ran while the suite reported green.
+  // MEASURED: 12 tracked files under tests/unit/agents/, 0 collected.
+  //
+  // Anchored to the source trees it was actually for. NOT written as an exception list
+  // ("exclude agents EXCEPT tests/unit/agents") — an exception list would grow one entry per
+  // discovery and quietly become the catch-all the membership guard exists to prevent.
+  'lib/agents/**',
+  'scripts/agents/**',
   '**/archive/**',
   // SD-LEO-INFRA-TEST-ESTATE-HYGIENE-001: the unanchored '**/*.test.js' include
   // swept the orphaned legacy test/ root (CI separately --excludes it, so local
