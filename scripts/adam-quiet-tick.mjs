@@ -478,25 +478,84 @@ export async function checkOversightStaleness(sb, { nowMs = Date.now() } = {}) {
   return out;
 }
 
+/** QF-20260808-673: how far back to look for an unanswered chairman inbound. */
+export const SMS_ANSWER_WINDOW_MIN = 60;
+
+/**
+ * QF-20260808-673: surface chairman inbound that was never ANSWERED.
+ *
+ * THE OLD PREDICATE WAS `drained_at IS NULL`, AND IT MISSES THE REAL MISS. `drained_at` means
+ * CONSUMED FROM STAGING BY THE DRAINER — not "the chairman got a reply". Those are different
+ * facts, and conflating them is the read_at-is-not-delivery class. Witnessed: chairman SMS
+ * b09ced65 arrived 19:22:00Z and was auto-drained 19:24:05Z, ~2 minutes later, BEFORE anyone
+ * answered it. The row races the drainer and loses, so by the next tick `drained_at IS NULL`
+ * returns nothing and the alarm is silent about a chairman who is still waiting.
+ *
+ * THE ANSWERED SIGNAL EXISTS AND IS QUERYABLE — the ticket's acceptance criterion asked to ADD a
+ * chairman-reply store, but one is already in service: `sms_outbound_obligations`. The ad-hoc
+ * reply path proves it — lib/comms/adam-outbound/chairman-sms-gate enqueues an obligation,
+ * dispatches it, then reads that row back for status/provider_message_id and only reports
+ * dispatched when it landed. Measured live: 590 rows to the chairman number, 589 with sent_at.
+ *
+ * `sent_at` is a SEND-SIDE fact (Twilio accepted; delivery callback is disabled), and that is the
+ * right bar HERE — this alarm asks "did Adam reply at all", not "did the handset receive it".
+ * The gate's own comment reaches the same conclusion: claiming delivery would be an over-claim.
+ */
 export async function surfaceSmsInbound(sb) {
   try {
     const chairmanPhone = process.env.CHAIRMAN_PHONE || null;
+    const sinceIso = new Date(Date.now() - SMS_ANSWER_WINDOW_MIN * 60_000).toISOString();
     const { data, error } = await sb
       .from('sms_relay_staging')
       .select('id, from_phone, body_raw, signature_valid, received_at')
-      .is('drained_at', null)
+      // WINDOW, deliberately NOT `drained_at IS NULL` — see above.
+      .gte('received_at', sinceIso)
       .order('received_at', { ascending: true })
       .limit(SMS_INBOUND_CAP);
     if (error) return { rows: [], count: 0, error: error.message };
-    const rows = (data || []).map((r) => ({
-      id: r.id,
-      fromPhone: r.from_phone,
-      isChairman: chairmanPhone ? r.from_phone === chairmanPhone : true,
-      signatureValid: r.signature_valid === true,
-      ageMin: Math.floor((Date.now() - new Date(r.received_at).getTime()) / 60_000),
-      body: String(r.body_raw || '').replace(/\s+/g, ' ').slice(0, 120),
-    }));
-    return { rows, count: rows.length };
+
+    const candidates = data || [];
+    if (candidates.length === 0) return { rows: [], count: 0 };
+
+    // One outbound read for the whole window, from the oldest row onward.
+    let replyTimes = null; // null = UNKNOWN, never silently 0
+    if (chairmanPhone) {
+      const { data: outs, error: oerr } = await sb
+        .from('sms_outbound_obligations')
+        .select('sent_at')
+        .eq('recipient_phone', chairmanPhone)
+        .not('sent_at', 'is', null)
+        .gte('sent_at', candidates[0].received_at);
+      if (!oerr) replyTimes = (outs || []).map((o) => new Date(o.sent_at).getTime());
+    }
+
+    // EXCLUDE ONLY ON POSITIVE EVIDENCE OF AN ANSWER. Two existing guarantees are preserved here
+    // deliberately, because the suite that asserts them is defending a real hazard:
+    // "surfaces BOTH (never drops on phone mismatch)" and "an unset env must not re-hide replies".
+    // Filtering by `from_phone === CHAIRMAN_PHONE` would silently hide a genuine chairman message
+    // whose number is formatted differently (missing country code, spacing) — trading the bug this
+    // ticket fixes for a quieter one. `isChairman` therefore remains a LABEL, never a gate.
+    //
+    // UNKNOWN IS NOT ANSWERED: if the reply store could not be read, or no chairman number is
+    // configured, nothing can be shown to have been answered — so every row surfaces. Resolving
+    // unknown to "answered" would silence a chairman-facing alarm on a failed query, the worst
+    // direction to fail on this channel.
+    const answeredUnknown = replyTimes === null;
+    const rows = candidates
+      .filter((r) => {
+        if (answeredUnknown) return true;
+        const t = new Date(r.received_at).getTime();
+        return !replyTimes.some((rt) => rt > t); // answered = a reply left AFTER it arrived
+      })
+      .map((r) => ({
+        id: r.id,
+        fromPhone: r.from_phone,
+        isChairman: chairmanPhone ? r.from_phone === chairmanPhone : true,
+        signatureValid: r.signature_valid === true,
+        ageMin: Math.floor((Date.now() - new Date(r.received_at).getTime()) / 60_000),
+        body: String(r.body_raw || '').replace(/\s+/g, ' ').slice(0, 120),
+      }));
+    return { rows, count: rows.length, answeredUnknown };
   } catch (e) {
     return { rows: [], count: 0, error: e && e.message };
   }
