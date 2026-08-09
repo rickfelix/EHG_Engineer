@@ -13,10 +13,18 @@ import { createSupabaseServiceClient } from '../lib/supabase-client.js';
  *   node scripts/semantic-indexer.js [--application ehg|ehg_engineer] [--incremental]
  */
 
-const fs = require('fs').promises;
-const path = require('path');
-const { parseCodeEntities } = require('./modules/language-parsers');
-require('dotenv').config();
+// SD-LEO-INFRA-SYSTEMATIZE-COMPLETENESS-CRITIC-001 (FR-5a). THIS SCRIPT COULD NEVER RUN.
+// It mixed an ESM `import` (line 2) with CommonJS `require` here, in a package.json `type: module`
+// repo, so `node scripts/semantic-indexer.js` died on load with:
+//   ReferenceError: require is not defined in ES module scope
+// MEASURED BY EXECUTION, not inferred — and executing it (rather than scheduling it) is the only
+// reason this was found: a cron entry would have logged that stack trace forever while
+// codebase_semantic_index stayed empty and every VALIDATION duplicate search reported
+// "Semantic index empty" (64 of 65 runs; 0 of 300 ever searched).
+import { promises as fs } from 'node:fs';
+import path from 'node:path';
+import { parseCodeEntities } from './modules/language-parsers.js';
+import 'dotenv/config';
 
 // Configuration
 const BATCH_SIZE = 50; // Embeddings batch size
