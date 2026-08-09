@@ -184,7 +184,13 @@ async function checkAutoPassConditions(ctx, retrospective, children, allChildren
 
     return {
       passed: true,
-      score: Math.max(retrospective.quality_score || 60, 60),
+      // SD-LEO-INFRA-RETRO-INTEGRITY-RUN-001 FR-3 — stopped citing retrospectives.quality_score.
+      // scripts/lint/diagnostic-gauge-citation-lint.mjs:50 declares it a DIAGNOSTIC gauge that no
+      // consumer may cite as a gating threshold, and this SD's own premise is that the value was
+      // fabricated. The citation here was DECORATIVE: `passed: true` above is unconditional, so
+      // Math.max(quality_score || 60, 60) only populated a reported number and never influenced
+      // the decision. Reporting the floor the arm actually guarantees is the honest value.
+      score: 60,
       max_score: 100,
       issues: [],
       warnings: ['Database auto-pass: Validated via migration success + DATABASE sub-agent'],
@@ -205,7 +211,8 @@ async function checkAutoPassConditions(ctx, retrospective, children, allChildren
 
     return {
       passed: true,
-      score: Math.max(retrospective.quality_score || 50, 50),
+      // FR-3: decorative citation removed — see the DATABASE arm above for the full reasoning.
+      score: 50,
       max_score: 100,
       issues: [],
       warnings: [`${sdType} auto-pass: Simple fix validated via git commit evidence`],
@@ -227,7 +234,8 @@ async function checkAutoPassConditions(ctx, retrospective, children, allChildren
 
     return {
       passed: true,
-      score: Math.max(retrospective.quality_score || 55, 55),
+      // FR-3: decorative citation removed — see the DATABASE arm above for the full reasoning.
+      score: 55,
       max_score: 100,
       issues: [],
       warnings: ['Corrective auto-pass: Heal-generated SD with targeted gap-closure scope'],
@@ -250,7 +258,8 @@ async function checkAutoPassConditions(ctx, retrospective, children, allChildren
 
     return {
       passed: true,
-      score: Math.max(retrospective.quality_score || 55, 55),
+      // FR-3: decorative citation removed — see the DATABASE arm above for the full reasoning.
+      score: 55,
       max_score: 100,
       issues: [],
       warnings: ['Enhancement auto-pass: Narrow-scope improvement SD with inherently thin retrospective'],
@@ -273,7 +282,8 @@ async function checkAutoPassConditions(ctx, retrospective, children, allChildren
 
     return {
       passed: true,
-      score: Math.max(retrospective.quality_score || 55, 55),
+      // FR-3: decorative citation removed — see the DATABASE arm above for the full reasoning.
+      score: 55,
       max_score: 100,
       issues: [],
       warnings: [`${sdType} auto-pass: Thin retrospective expected for ${sdType} SDs`],
