@@ -53,6 +53,10 @@ function createMockSupabase(overrides = {}) {
       error: null
     },
     venture_channel_secrets: { maybeSingle: { data: { secret_ref: TEST_SECRET_REF }, error: null } },
+    // SD-LEO-FEAT-CODIFY-HONEST-ACTIVATION-001 FR-1: the autonomous branch now also
+    // requires the content to have cleared REVIEW. "Everything wired and healthy" now
+    // includes that, so these tests still exercise an authorized publish.
+    marketing_content: { maybeSingle: { data: { lifecycle_state: 'SCHEDULE' }, error: null } },
     channel_budgets: {
       single: {
         data: { status: 'active', current_month_spend_cents: 0, monthly_budget_cents: 10000, daily_limit_cents: null },
@@ -78,7 +82,14 @@ function createMockSupabase(overrides = {}) {
     return chain;
   };
 
-  const mock = { from: vi.fn((table) => builder(table)) };
+  const mock = {
+    from: vi.fn((table) => builder(table)),
+    // FR-1 invariant 4 (AUP volume) delegates to marketlens-caps.checkWriteBudget.
+    rpc: vi.fn(() => Promise.resolve({
+      data: [tableConfig.__writeBudget ?? { is_over_budget: false, writes_used: 1, writes_remaining: 99 }],
+      error: null,
+    })),
+  };
   return mock;
 }
 
