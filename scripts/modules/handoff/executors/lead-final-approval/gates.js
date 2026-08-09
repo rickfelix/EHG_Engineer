@@ -481,14 +481,25 @@ export function createRetrospectiveExistsGate(supabase) {
       const assessment = await validateSDCompletionReadiness(ctx.sd, retrospective);
 
       if (!assessment?.passed || assessment.score < minScore) {
+        // SD-LEO-INFRA-RETRO-INTEGRITY-RUN-001 — REPORT THE REASON THAT ACTUALLY FIRED.
+        // The first version always said "score N% is below minimum 60%", which printed a FALSE
+        // statement whenever the evaluator returned passed:false at a score ABOVE the floor
+        // (observed live: "assessed score 79% is below minimum 60%"). A failure message naming the
+        // wrong cause sends the reader to fix the wrong thing — the same assert-what-you-did-not-
+        // measure defect this SD removes, occurring in its own error path.
+        const assessedScore = assessment?.score ?? 0;
+        const belowFloor = assessedScore < minScore;
+        const evaluatorReasons = (assessment?.issues || []).join('; ') || 'no specific issues returned';
         return {
           passed: false,
-          score: assessment?.score ?? 0,
+          score: assessedScore,
           max_score: 100,
           issues: [
             assessment?.manual_review_required
               ? 'Retrospective could not be assessed (evaluator unavailable) — MANUAL REVIEW REQUIRED. A gate that cannot run has not passed.'
-              : `Retrospective assessed score ${assessment?.score ?? 0}% is below minimum ${minScore}%`
+              : belowFloor
+                ? `Retrospective assessed score ${assessedScore}% is below minimum ${minScore}%`
+                : `Retrospective assessment did NOT pass (score ${assessedScore}%, at or above the ${minScore}% floor) — evaluator reasons: ${evaluatorReasons}`
           ],
           warnings: assessment?.warnings || []
         };
