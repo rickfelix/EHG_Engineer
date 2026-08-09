@@ -186,6 +186,19 @@ describe('FR-6: Image Alt Text Generator blocks honestly with a named path', () 
     expect(out.citation.length).toBeGreaterThan(0);
   });
 
+  it('names the MISSING RATIFIED FLOOR even when every rung is unmeasurable', async () => {
+    // Found by running FR-6 for real: the path named the absent telemetry writer and said nothing
+    // about the absent floor, because the floor branch was only reachable for MEASURED rungs. That
+    // is an incomplete path — instrument telemetry, re-run, and the gate is STILL inert. A path to
+    // pass must name every blocker, not just the first one you would hit.
+    const out = await computeActivationVerdict({
+      supabase: fakeSupabase({ telemetry: null, paymentRows: [] }),
+      ventureId: VENTURE,
+    });
+    expect(out.path_to_pass).toMatch(/RATIFIED FLOOR MISSING/);
+    expect(out.path_to_pass).toMatch(/no venture_telemetry row exists/);
+  });
+
   it('fails CLOSED to NO_DATA when venture_telemetry cannot be READ at all', async () => {
     const out = await computeActivationVerdict({
       supabase: fakeSupabase({ telemetryError: { message: 'permission denied' }, paymentRows: [] }),
