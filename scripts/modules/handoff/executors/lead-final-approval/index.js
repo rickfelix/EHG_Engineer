@@ -77,6 +77,7 @@ import { parseAndExpandFeedbackFooters, resolveFeedback } from '../../../../../l
 
 // Worktree cleanup (SD-LEO-INFRA-INTEGRATE-WORKTREE-CREATION-001)
 import { cleanupWorktree, validateSdKey } from '../../../../../lib/worktree-manager.js';
+import { closeHusk, HUSK_OUTCOME } from '../../../../../lib/worktree-reaper/close-husk.js';
 
 // SD-FDBK-INFRA-REFACTOR-LEADFINALAPPROVALEXECUTOR-LHE-001 FR-1 deploy-lag graceful-degrade + FR-9 LFA-only check
 import { checkProgressBreakdownLheReady } from '../../pre-checks/pending-migrations-check.js';
@@ -922,7 +923,35 @@ export class LeadFinalApprovalExecutor extends BaseExecutor {
       } else if (worktreeCleanupResult.reason === 'dirty_worktree') {
         console.warn('   ⚠️  Worktree has uncommitted changes — run /ship first, then re-run LEAD-FINAL-APPROVAL');
       } else if (worktreeCleanupResult.reason === 'husk_directory_remains') {
-        console.warn(`   ⚠️  Husk: ${sdKey} was deregistered from git but its directory remains at ${worktreeCleanupResult.worktreePath || `.worktrees/${sdKey}`} — invisible to git-based sweeps, safe to delete manually.`);
+        // SD-LEO-INFRA-REAP-COMPLETED-WORKTREE-001: close the husk path.
+        //
+        // cleanupWorktree already DETECTS this state correctly — it deregisters, re-stats the
+        // path, and refuses to report a removal it did not achieve. What it did not do was
+        // finish the job: this branch used to print "safe to delete manually" and stop, so the
+        // directory stayed. MEASURED at the time of this change: 43 directories under
+        // .worktrees against 22 git-registered worktrees, and 2 of 4 SDs completed in one
+        // session left exactly this husk. A husk is invisible to every git-based sweep, so
+        // "the scheduled reaper will get it" was not true for this shape.
+        //
+        // Removal is by REUSE: safeRecursiveRmWithRetry lstat-checks for a junction before
+        // deleting and asserts the path is gone as a post-condition. Nothing here rolls its own
+        // rm — a raw recursive delete already followed a junction into the shared tree once
+        // (SD-FDBK-FIX-WORKTREE-REAPER-DESTROYED-001).
+        //
+        // The residency guard is composed EXPLICITLY because safeRecursiveRm does not carry it,
+        // and this is the self-reap path by definition: the finishing session is the process
+        // most likely to be standing in the tree it is about to delete. A block here is a
+        // correct refusal, never something to switch off.
+        const husk = closeHusk({ huskPath: worktreeCleanupResult.worktreePath || `.worktrees/${sdKey}` });
+        if (husk.outcome === HUSK_OUTCOME.REMOVED) {
+          console.log(`   ✅ Husk directory removed: ${husk.huskPath}`);
+        } else if (husk.outcome === HUSK_OUTCOME.BLOCKED_RESIDENT) {
+          console.warn(`   ⚠️  Husk at ${husk.huskPath} NOT removed — ${husk.reason}: a process may not delete the worktree it is standing in. Re-run from the shared root, or let the scheduled sweep take it.`);
+        } else if (husk.outcome === HUSK_OUTCOME.ALREADY_ABSENT) {
+          console.log(`   ℹ️  Husk already gone: ${husk.huskPath}`);
+        } else {
+          console.warn(`   ⚠️  Husk removal incomplete at ${husk.huskPath} (${husk.reason}) — non-blocking; the scheduled sweep remains the backstop.`);
+        }
       } else {
         console.warn(`   ⚠️  Worktree cleanup incomplete: ${worktreeCleanupResult.reason}`);
       }
