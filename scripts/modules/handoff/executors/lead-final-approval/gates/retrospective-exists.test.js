@@ -143,6 +143,26 @@ describe('createRetrospectiveExistsGate (LEAD-FINAL-APPROVAL)', () => {
     expect(result.issues[0]).toMatch(/below minimum 60%/);
   });
 
+  it('gates on the MEASURED SCORE against the stated 60 floor, NOT on the evaluator own pass flag', async () => {
+    // DELIBERATE, PINNED SO IT IS NOT "FIXED" BACK. Requiring assessment.passed would import the
+    // rubric's internal unstated threshold as the fleet-wide tier-3 bar — observed live, a
+    // retrospective scoring 86 was refused by that flag alone, far above the 60 the contract
+    // states. The original contract was quality_score >= 60; the faithful translation keeps the
+    // threshold and changes only where the number comes from (measured, not writer-supplied).
+    const { getTierForSD } = await import('../../../../sd-type-checker.js');
+    getTierForSD.mockReturnValueOnce(3);
+    getFilteredRetrospective.mockResolvedValue({
+      retrospective: { id: 'r5', quality_score: 10, status: 'PUBLISHED', retro_type: 'SD_COMPLETION', created_at: '2026-04-20T00:00:00.000Z' },
+      leadToPlanAcceptedAt: '2026-04-01T00:00:00.000Z',
+      error: null,
+    });
+    validateSDCompletionReadiness.mockResolvedValue({ passed: false, score: 79, issues: [], warnings: [] });
+    const gate = createRetrospectiveExistsGate({});
+    const result = await gate.validator(makeCtx());
+    expect(result.passed).toBe(true);
+    expect(result.score).toBe(79);
+  });
+
   it('FAILS CLOSED when the evaluator cannot run at all (manual review required)', async () => {
     // Added by FR-3: a gate that cannot run has NOT passed. Previously an evaluator outage
     // fell back to the stored gauge and could auto-pass.

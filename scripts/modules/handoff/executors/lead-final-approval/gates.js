@@ -480,7 +480,17 @@ export function createRetrospectiveExistsGate(supabase) {
       const { validateSDCompletionReadiness } = await import('../../../sd-quality-validation.js');
       const assessment = await validateSDCompletionReadiness(ctx.sd, retrospective);
 
-      if (!assessment?.passed || assessment.score < minScore) {
+      // THE BAR IS THE MEASURED SCORE AGAINST THE STATED FLOOR — deliberately NOT the evaluator's
+      // own `passed` flag. Requiring `passed` would silently import the rubric's internal, unstated
+      // threshold as the fleet-wide tier-3 bar, which is a far bigger behavioural change than
+      // replacing a fabricated gauge with a measured one. Observed live while building this: a
+      // retrospective scoring 86 was refused by `passed` alone, well above the 60 the contract
+      // actually states. The original contract was "quality_score >= 60"; the faithful translation
+      // keeps that threshold and changes only WHERE THE NUMBER COMES FROM — measured instead of
+      // writer-supplied. That satisfies tighten-not-open (the score is now real) without raising a
+      // bar nobody agreed to. manual_review_required still blocks: a gate that cannot run has not
+      // passed.
+      if (assessment?.manual_review_required || !Number.isFinite(assessment?.score) || assessment.score < minScore) {
         // SD-LEO-INFRA-RETRO-INTEGRITY-RUN-001 — REPORT THE REASON THAT ACTUALLY FIRED.
         // The first version always said "score N% is below minimum 60%", which printed a FALSE
         // statement whenever the evaluator returned passed:false at a score ABOVE the floor
@@ -509,11 +519,20 @@ export function createRetrospectiveExistsGate(supabase) {
 
       return {
         passed: true,
-        score: retrospective.quality_score,
+        // FR-3: the MEASURED score. This still read retrospective.quality_score — the pass path
+        // kept citing the fabricated gauge after the decision had stopped using it, so the gate
+        // would have decided on one number and REPORTED a different one. Caught by the test that
+        // pins this contract.
+        score: assessment.score,
         max_score: 100,
         issues: [],
         warnings: [],
-        details: { retrospectiveId: retrospective.id, qualityScore: retrospective.quality_score }
+        details: {
+          retrospectiveId: retrospective.id,
+          assessedScore: assessment.score,
+          // Operator context ONLY — never used to decide the verdict above.
+          observedDiagnosticQualityScore: retrospective.quality_score
+        }
       };
     },
     required: true
