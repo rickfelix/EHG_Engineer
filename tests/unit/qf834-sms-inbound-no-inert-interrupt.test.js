@@ -39,12 +39,38 @@ describe('QF-834 SMS inbound interrupt is gated on the drain flag', () => {
     expect(block).toContain('continue;');
   });
 
-  it('the not-interrupting branch emits NO QUIET_TICK_ token — it must not re-arm', () => {
-    // The whole point. If this branch carried any QUIET_TICK_* token it would be indistinguishable
-    // from the interrupt it replaces, and the fix would be cosmetic.
+  it('the not-interrupting branch never re-arms the INTERRUPT token', () => {
+    // ORIGINALLY this asserted the branch carried NO QUIET_TICK_ token at all. That was WRONG, and
+    // it was my error: the summary still prints `sms=${smsInbound.count}` (rows.length, independent
+    // of the flag), so a tokenless suppressed branch produced `sms=1` alongside ZERO surfaced
+    // lines — the count-vs-surface mismatch QF-20260808-673 names, where a reader trusting
+    // "no lines = no SMS" treats the tick as a NO-OP and misses the chairman.
+    //
+    // The branch now emits QUIET_TICK_SMS_SUPPRESSED, following the established convention of
+    // QUIET_TICK_STALL_SUPPRESSED / QUIET_TICK_VENTURE_PARK_SUPPRESSED: informational, deliberately
+    // ABSENT from the NO-OP allowlist, so the exclusion is never silent and no interrupt re-arms.
+    // What must remain true is narrower and sharper than "no token": not the INTERRUPT token.
     const quiet = block.slice(block.indexOf('if (!smsDrainEnabled)'), block.indexOf('continue;'));
     expect(quiet.length).toBeGreaterThan(0);
-    expect(quiet).not.toContain('QUIET_TICK_');
+    expect(quiet).not.toContain('QUIET_TICK_SMS_INBOUND');
+    expect(quiet).toContain('QUIET_TICK_SMS_SUPPRESSED');
+  });
+
+  it('reconciles the count: the suppressed line references sms=${smsInbound.count}', () => {
+    // Without this the two numbers can drift apart again silently.
+    const quiet = block.slice(block.indexOf('if (!smsDrainEnabled)'), block.indexOf('continue;'));
+    expect(quiet).toContain('smsInbound.count');
+  });
+
+  it('QUIET_TICK_SMS_SUPPRESSED is NOT in the NO-OP allowlist, but SMS_INBOUND still is', () => {
+    // Two-sided, and the reason the exclusion is pinned: allowlisting the suppressed token would
+    // re-arm an interrupt toward an inert drain — the exact alert-fatigue loop QF-834 removed.
+    // Flip the first expectation only if that decision is deliberately reversed.
+    const check = fs.readFileSync(path.join(process.cwd(), 'scripts/adam-startup-check.mjs'), 'utf8');
+    const m = check.match(/If the output contains NO ([\s\S]*?QUIET_TICK_ERROR)/);
+    expect(m).not.toBeNull();
+    expect(m[1]).not.toContain('QUIET_TICK_SMS_SUPPRESSED');
+    expect(m[1]).toContain('QUIET_TICK_SMS_INBOUND');
   });
 
   it('STILL emits the interrupt when the drain IS enabled — two-sided', () => {
