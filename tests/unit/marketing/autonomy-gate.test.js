@@ -10,7 +10,25 @@ vi.mock('../../../lib/chairman/record-pending-decision.mjs', () => ({
 import { recordPendingDecision } from '../../../lib/chairman/record-pending-decision.mjs';
 import { evaluateGraduation, recordPublishOutcome, checkPublishAuthorization } from '../../../lib/marketing/autonomy-gate.js';
 
-function makeSupabase({ recentRows = [], selectError = null, updateError = null, upsertError = null }) {
+/**
+ * SD-LEO-FEAT-VENTURE-DEMAND-VALIDATION-001 FR-5 note for whoever reads this next:
+ * evaluateGraduation now ALSO reads venture_demand_verdicts, because a clean streak proves the
+ * channel publishes well and proves nothing about whether anyone wants what it publishes.
+ * `demandVerdict` DEFAULTS TO null — deliberately matching production's fail-closed behaviour, so
+ * a test that wants graduation has to SAY SO rather than inherit it from a convenient default.
+ * No assertion in this file was weakened; the one test that asserts graduation now states both
+ * of its preconditions explicitly. The refusal side is covered in
+ * tests/unit/marketing/autonomy-requires-demand-verdict.test.js.
+ */
+function makeSupabase({ recentRows = [], selectError = null, updateError = null, upsertError = null, demandVerdict = null }) {
+  const verdictChain = {
+    select: vi.fn(() => verdictChain),
+    eq: vi.fn(() => verdictChain),
+    order: vi.fn(() => verdictChain),
+    limit: vi.fn(() => verdictChain),
+    maybeSingle: vi.fn(() => Promise.resolve({ data: demandVerdict, error: null }))
+  };
+
   const ledgerChain = {
     select: vi.fn(() => ledgerChain),
     eq: vi.fn(() => ledgerChain),
@@ -29,7 +47,11 @@ function makeSupabase({ recentRows = [], selectError = null, updateError = null,
   };
 
   return {
-    from: vi.fn((table) => (table === 'venture_channel_autonomy' ? autonomyChain : ledgerChain)),
+    from: vi.fn((table) => {
+      if (table === 'venture_channel_autonomy') return autonomyChain;
+      if (table === 'venture_demand_verdicts') return verdictChain;
+      return ledgerChain;
+    }),
     _autonomyChain: autonomyChain
   };
 }
@@ -37,7 +59,13 @@ function makeSupabase({ recentRows = [], selectError = null, updateError = null,
 describe('evaluateGraduation', () => {
   it('graduates to autonomous after N consecutive shipped_clean+accepted outcomes', async () => {
     const rows = Array.from({ length: 5 }, () => ({ decision: 'accepted', outcome: 'shipped_clean' }));
-    const supabase = makeSupabase({ recentRows: rows });
+    // FR-5: graduation now requires BOTH a clean streak AND a PASS demand verdict. The streak
+    // alone no longer suffices, so this test states its second precondition explicitly rather
+    // than relying on a default. Its assertions below are unchanged.
+    const supabase = makeSupabase({
+      recentRows: rows,
+      demandVerdict: { verdict: 'PASS', citation: 'test fixture: demand validated', computed_at: '2026-08-09T00:00:00Z' }
+    });
 
     const result = await evaluateGraduation({ supabase, ventureId: 'v-1', channelType: 'x', requiredStreak: 5 });
 
