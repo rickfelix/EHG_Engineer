@@ -32,6 +32,16 @@ export function isContractCompatible(version) {
  * boundary; adding a field requires a data-minimization sign-off (FR-5).
  */
 export const KPI_ALLOWLIST = {
+  // SD-LEO-FEAT-VENTURE-DEMAND-VALIDATION-001 FR-9. The data-minimization sign-off this
+  // docstring requires IS chairman decision 241eaba4 (status=approved, 2026-07-10): "PROCEED,
+  // add visitors to the venture-metrics KPI_ALLOWLIST — the Cloudflare aggregate count is
+  // privacy-preserving and non-PII, unblocks child A." That decision was ratified and then
+  // NEVER IMPLEMENTED; this line is the implementation, ~7 months late.
+  // Load-bearing for the demand gate: without an ingestion path the visitors rung is
+  // permanently UNMEASURABLE. Note it is aggregate BY DESIGN and therefore UNFILTERABLE
+  // downstream — which is exactly why the gate labels that rung DECLARED_UNFILTERED and never
+  // lets it alone produce a PASS.
+  visitors:     (v) => Number.isInteger(v) && v >= 0,
   signups:      (v) => Number.isInteger(v) && v >= 0,
   active_users: (v) => Number.isInteger(v) && v >= 0,
   revenue:      (v) => typeof v === 'number' && Number.isFinite(v) && v >= 0,
