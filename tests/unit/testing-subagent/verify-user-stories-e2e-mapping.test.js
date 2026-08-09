@@ -108,14 +108,22 @@ describe('verifyUserStories — the check must still have teeth', () => {
     expect(res.verified).toBe(false);
   });
 
-  it('ACCEPTS a completed, unvalidated story whose mapped e2e test PASSES', async () => {
+  // SD-LEO-INFRA-STORY-E2E-AUTO-001: this case previously used a path to a file that does not
+  // exist ('tests/e2e/foo.spec.ts') and asserted ACCEPTED — it encoded the very defect that SD
+  // measured, where 641 of 1390 rows claim a passing run of a spec nobody wrote. The INTENT
+  // (a genuinely mapped, genuinely passing e2e run is accepted) is preserved by declaring the
+  // file present, rather than by depending on a real fixture on disk.
+  it('ACCEPTS a completed, unvalidated story whose mapped e2e test PASSES and whose spec EXISTS', async () => {
     const rows = [{
       ...reportedStory(1),
       validation_status: 'pending',
       e2e_test_path: 'tests/e2e/foo.spec.ts',
       e2e_test_status: 'passing',
     }];
-    const res = await verifyUserStories('sd-1', stubSupabase(rows), { sdType: 'bugfix' });
+    const res = await verifyUserStories('sd-1', stubSupabase(rows), {
+      sdType: 'bugfix',
+      specFileExists: () => true,
+    });
     expect(res.verified).toBe(true);
   });
 
