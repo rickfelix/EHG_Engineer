@@ -16,6 +16,27 @@ function makeSupabaseStub(handlers = {}) {
   };
 }
 
+/**
+ * SD-LEO-FEAT-VENTURE-DEMAND-VALIDATION-001 FR-7: processStep now re-reads consent FRESH from the
+ * append-only venture_consent_events log at send time, because the `enrollment.status` field it
+ * previously relied on is a value the CALLER loaded — an opt-out arriving between load and send
+ * was invisible to it.
+ *
+ * This helper supplies that log. It DEFAULTS TO AN EMPTY HISTORY (no consent), deliberately
+ * matching production's fail-closed behaviour, so a test that wants a send to go through has to
+ * SAY it has consent rather than inherit permission from a convenient default.
+ */
+function consentLog(events = []) {
+  const b = {
+    select: () => b,
+    eq: () => b,
+    order: () => b,
+    limit: async () => ({ data: events.slice(0, 1), error: null })
+  };
+  return b;
+}
+const OPT_IN_ON_RECORD = [{ id: 'evt-1', event_type: 'opt_in', provenance: 'test fixture: captured opt-in', occurred_at: '2026-08-01T00:00:00Z' }];
+
 describe('enrollInCampaign (campaign_enrollments INSERT)', () => {
   it('upserts a row and returns the generated enrollmentId', async () => {
     const upsertMock = vi.fn(() => ({
@@ -82,7 +103,13 @@ describe('handleUnsubscribe (campaign_enrollments UPDATE)', () => {
     const ec = createEmailCampaigns({ supabase });
 
     const result = await ec.handleUnsubscribe('a@b.co');
-    expect(result).toEqual({ campaignsRemoved: 3 });
+    // SD-LEO-FEAT-VENTURE-DEMAND-VALIDATION-001 FR-7: the status update is now BOOKKEEPING ONLY —
+    // suppression is derived from the append-only venture_consent_events log, so an unsubscribe
+    // must also RECORD an opt_out or the recipient stays sendable. These fixture rows carry no
+    // venture_id, so no opt_out could be written, and suppressionComplete is correctly FALSE:
+    // three enrollments were marked unsubscribed and nobody was actually suppressed. The original
+    // campaignsRemoved assertion is unchanged.
+    expect(result).toEqual({ campaignsRemoved: 3, optOutsRecorded: 0, suppressionComplete: false });
 
     const [patch] = updateMock.mock.calls[0];
     expect(patch).toMatchObject({ status: ENROLLMENT_STATUS.UNSUBSCRIBED });
@@ -99,7 +126,8 @@ describe('handleUnsubscribe (campaign_enrollments UPDATE)', () => {
       }
     });
     const ec = createEmailCampaigns({ supabase });
-    expect(await ec.handleUnsubscribe('a@b.co')).toEqual({ campaignsRemoved: 0 });
+    // Nothing was removed, so there is nothing to suppress and the claim is honest (FR-7).
+    expect(await ec.handleUnsubscribe('a@b.co')).toEqual({ campaignsRemoved: 0, optOutsRecorded: 0, suppressionComplete: true });
   });
 
   it('returns 0 and logs on DB error (does not throw)', async () => {
@@ -116,7 +144,9 @@ describe('handleUnsubscribe (campaign_enrollments UPDATE)', () => {
     });
     const warn = vi.fn();
     const ec = createEmailCampaigns({ supabase, logger: { warn } });
-    expect(await ec.handleUnsubscribe('a@b.co')).toEqual({ campaignsRemoved: 0 });
+    // On a DB error the unsubscribe did not take effect, so suppressionComplete is FALSE rather
+    // than absent — a caller reading a missing field as falsy would be relying on luck (FR-7).
+    expect(await ec.handleUnsubscribe('a@b.co')).toEqual({ campaignsRemoved: 0, optOutsRecorded: 0, suppressionComplete: false });
     expect(warn).toHaveBeenCalled();
   });
 });
@@ -133,7 +163,9 @@ describe('processStep (campaign_enrollments UPDATE)', () => {
   it('advances current_step and opens windowed next_step_at on successful send', async () => {
     const { updateMock, eqMock } = makeUpdateChain();
     const supabase = makeSupabaseStub({
-      campaign_enrollments: { update: updateMock }
+      campaign_enrollments: { update: updateMock },
+      // FR-7: a send now requires a captured opt-in. Stated explicitly rather than defaulted.
+      venture_consent_events: consentLog(OPT_IN_ON_RECORD)
     });
     const ec = createEmailCampaigns({
       supabase,

@@ -52,6 +52,21 @@ describe('policy registry (TS-1)', () => {
       // not only a size one. Keyed on recorded_at, DATABASE-stamped (DEFAULT now(), deliberately
       // never sent by the writer), which is the column class this registry's header asks for.
       drive_state_verdicts: 'recorded_at',
+      // SD-LEO-FEAT-VENTURE-DEMAND-VALIDATION-001: venture_demand_verdicts is APPEND-ONLY BY
+      // DESIGN (a freeze trigger on UPDATE and a guard on DELETE), so unlike a mutable status
+      // table it can never self-limit by overwriting — a correction is always an additional row.
+      // That makes a reaper structurally necessary rather than merely prudent. Growth is
+      // ventures x evaluation cadence. Keyed on computed_at, DATABASE-stamped (DEFAULT now(),
+      // never supplied by the writer, since a writer that stamps its own time can backdate a
+      // verdict on a table whose whole purpose is to be unfakeable).
+      venture_demand_verdicts: 'computed_at',
+      // SD-LEO-FEAT-VENTURE-DEMAND-VALIDATION-001 FR-7: venture_consent_events is append-only
+      // (freeze on UPDATE, guard on DELETE) so it cannot self-limit, and it stores RECIPIENT
+      // EMAIL ADDRESSES — which makes a bounded hot window a data-minimization control, not just
+      // a size one. Keyed on occurred_at, DATABASE-stamped: ordering decides permission here
+      // (latest event wins), so a writer-supplied timestamp could backdate an opt_in to outrank a
+      // later opt_out and resurrect someone who unsubscribed.
+      venture_consent_events: 'occurred_at',
     });
   });
 
