@@ -16,6 +16,12 @@ function smsBuilder(rows) {
   const b = {
     select: () => b,
     is: (col, val) => { filters.push((r) => (val === null ? (r[col] === null || r[col] === undefined) : r[col] === val)); return b; },
+    // QF-20260808-673: the query now bounds by received_at WINDOW instead of drained_at. Applied
+    // as a REAL filter, like is(), so the test still observes the predicate rather than trusting
+    // a pre-filtered fixture — that observability is the point of this builder.
+    gte: (col, val) => { filters.push((r) => new Date(r[col]).getTime() >= new Date(val).getTime()); return b; },
+    eq: () => b,
+    not: () => b,
     order: () => b,
     limit: () => b,
     then: (resolve, reject) => Promise.resolve({ data: rows.filter((r) => filters.every((f) => f(r))), error: null }).then(resolve, reject),
@@ -24,12 +30,15 @@ function smsBuilder(rows) {
 }
 function errorBuilder(message) {
   const b = {
-    select: () => b, is: () => b, order: () => b, limit: () => b,
+    select: () => b, is: () => b, gte: () => b, eq: () => b, not: () => b, order: () => b, limit: () => b,
     then: (resolve, reject) => Promise.resolve({ data: null, error: { message } }).then(resolve, reject),
   };
   return b;
 }
-const makeSupabase = (builder) => ({ from: () => builder });
+// QF-20260808-673: table-aware now that surfaceSmsInbound also reads the reply store. Returning
+// the staging builder for BOTH tables would feed inbound rows in as 'replies' — a fake that lies.
+const emptyOutbound = () => { const b = { select: () => b, eq: () => b, not: () => b, gte: () => b, then: (res) => res({ data: [], error: null }) }; return b; };
+const makeSupabase = (builder) => ({ from: (t) => (t === 'sms_outbound_obligations' ? emptyOutbound() : builder) });
 
 const CHAIR = '+16135550100';
 const OTHER = '+15125550999';
@@ -40,7 +49,7 @@ afterEach(() => {
 });
 
 describe('surfaceSmsInbound', () => {
-  it('surfaces ONLY undrained rows (a drained row is excluded by the query filter)', async () => {
+  it('surfaces rows in the WINDOW regardless of drained_at (QF-673: drained is not answered)', async () => {
     process.env.CHAIRMAN_PHONE = CHAIR;
     const now = Date.now();
     const sb = makeSupabase(smsBuilder([
@@ -48,8 +57,14 @@ describe('surfaceSmsInbound', () => {
       { id: 'b', from_phone: CHAIR, body_raw: 'old', signature_valid: true, received_at: new Date(now - 120000).toISOString(), drained_at: new Date(now).toISOString() },
     ]));
     const res = await surfaceSmsInbound(sb);
-    expect(res.count).toBe(1);
-    expect(res.rows[0]).toMatchObject({ id: 'a', isChairman: true, signatureValid: true, body: 'YES' });
+    // QF-20260808-673 CHANGED THIS ASSERTION DELIBERATELY, and the old one encoded the bug.
+    // It required row 'b' to be EXCLUDED because it was drained. But drained means CONSUMED BY
+    // THE DRAINER, not ANSWERED — the witnessed miss (b09ced65) was auto-drained ~2 min after it
+    // arrived and never replied to, so the old predicate made a waiting chairman invisible.
+    // Both rows are in the window and neither has a reply after it, so BOTH must surface.
+    expect(res.count).toBe(2);
+    expect(res.rows.map((r) => r.id).sort()).toEqual(['a', 'b']);
+    expect(res.rows.find((r) => r.id === 'a')).toMatchObject({ isChairman: true, signatureValid: true, body: 'YES' });
     expect(res.rows[0].ageMin).toBeGreaterThanOrEqual(0);
   });
 
