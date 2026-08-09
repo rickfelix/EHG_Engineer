@@ -124,7 +124,13 @@ describe('recordPublishOutcome', () => {
 });
 
 describe('checkPublishAuthorization — dedup + FR-7 chairman_decisions routing', () => {
-  function makeAuthSupabase({ autonomyState = null, autonomyError = null, acceptedRow = null, acceptedError = null, existingPending = null, existingPendingError = null, insertData = { id: 'ledger-new' }, insertError = null, ventureRow = { is_demo: false, name: 'Real Venture', launch_mode: 'live' } }) {
+  function makeAuthSupabase({ autonomyState = null, autonomyError = null, acceptedRow = null, acceptedError = null, existingPending = null, existingPendingError = null, insertData = { id: 'ledger-new' }, insertError = null, ventureRow = { is_demo: false, name: 'Real Venture', launch_mode: 'live' },
+    // SD-LEO-FEAT-CODIFY-HONEST-ACTIVATION-001 FR-1: the autonomous branch now evaluates
+    // four honesty invariants before authorizing. Defaults are the honest-and-healthy path
+    // (content past REVIEW, write budget under cap) so the pre-existing autonomous cases
+    // still describe an authorized send rather than silently becoming refusal tests.
+    contentRow = { lifecycle_state: 'SCHEDULE' }, contentError = null,
+    writeBudget = { is_over_budget: false, writes_used: 1, writes_remaining: 99 }, writeBudgetError = null }) {
     let ledgerMaybeSingleCallCount = 0;
     const autonomyChain = {
       select: vi.fn().mockReturnThis(),
@@ -150,13 +156,24 @@ describe('checkPublishAuthorization — dedup + FR-7 chairman_decisions routing'
       eq: vi.fn().mockReturnThis(),
       maybeSingle: vi.fn(() => Promise.resolve({ data: ventureRow, error: null })),
     };
+    // FR-1 invariant 3 reads marketing_content on its own chain — sharing ledgerChain would
+    // consume one of its call-count-based maybeSingle slots and corrupt the dedup mock.
+    const marketingContentChain = {
+      select: vi.fn().mockReturnThis(),
+      eq: vi.fn().mockReturnThis(),
+      maybeSingle: vi.fn(() => Promise.resolve({ data: contentRow, error: contentError })),
+    };
     return {
       from: vi.fn((table) => {
         if (table === 'venture_channel_autonomy') return autonomyChain;
         if (table === 'ventures') return venturesChain;
+        if (table === 'marketing_content') return marketingContentChain;
         return ledgerChain;
       }),
+      // FR-1 invariant 4 delegates to marketlens-caps.checkWriteBudget, which calls this RPC.
+      rpc: vi.fn(() => Promise.resolve({ data: [writeBudget], error: writeBudgetError })),
       ledgerChain,
+      marketingContentChain,
     };
   }
 
