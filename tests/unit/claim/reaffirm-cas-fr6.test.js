@@ -78,7 +78,10 @@ describe('FR-6: the SD branch compare-and-sets', () => {
     const reaffirm = await loadFn();
     const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
     try {
-      const s = stub([{ sd_key: 'SD-A' }]);
+      // EVERY-CLAIM-WRITE-001: a HEALTHY row must now carry claiming_session_id, because success is
+      // asserted from the readback rather than from the intended write. The old fixture omitted it,
+      // which is (correctly) no longer a healthy path. The test's intent is unchanged.
+      const s = stub([{ sd_key: 'SD-A', claiming_session_id: ME }]);
       await reaffirm(s.client, 'SD-A', ME);
       expect(warn).not.toHaveBeenCalled();      // a warning on a healthy path trains readers to ignore it
     } finally { warn.mockRestore(); }
@@ -90,8 +93,15 @@ describe('FR-6: the SD branch compare-and-sets', () => {
     const reaffirm = await loadFn();
     const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
     try {
+      // EVERY-CLAIM-WRITE-001 — ASSERTION UPDATED, PROPERTY PRESERVED. The property this test
+      // defends is "a lost race must never become an exception that kills the caller", and that is
+      // still asserted. `toBeUndefined()` pinned the RETURN VALUE, and returning nothing is exactly
+      // the defect this SD fixes: a reaffirm that reported only to a console.warn let all three
+      // callers return success:true over a write that never landed. So the no-throw property stays
+      // and the over-specified pin becomes an assertion on the reported reason.
       const s = stub([]);
-      await expect(reaffirm(s.client, 'SD-A', ME)).resolves.toBeUndefined();
+      const result = await reaffirm(s.client, 'SD-A', ME);   // must not throw
+      expect(result).toEqual({ ok: false, reason: 'NOT_HELD' });
     } finally { warn.mockRestore(); }
   });
 
