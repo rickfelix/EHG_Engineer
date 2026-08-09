@@ -19,6 +19,19 @@
  *
  * The 42703 it prevents says "column ... does not exist" about a column that DOES exist — the error
  * misnames its own cause, which is what made the original defect read as transient cache staleness.
+ *
+ * KNOWN LIMITATION — what this control CANNOT see, stated concretely so nobody reads a clean run as
+ * proof of absence:
+ *  1. A `.or()` whose argument is a VARIABLE rather than a string literal is invisible. MEASURED:
+ *     `.update({...}).eq('id', i).or(orFilter).select('id')` yields ZERO findings, and this is not
+ *     hypothetical — `lib/claim/reacquire-self-live.mjs:304` builds its filter into `orFilter` and
+ *     passes it exactly that way. That site is correct today (it projects the column), but if it
+ *     ever narrows its projection THIS LINT WILL NOT CATCH IT. A text scan cannot resolve a value.
+ *  2. A chain assembled across statements (`let q = sb.from(t).update(x); if (c) q = q.or(...);`)
+ *     is not contiguous text, so the window never sees the `.or()` and the `.select()` together.
+ *  3. The scan window ends at the first statement terminator or 2000 characters, whichever comes
+ *     first; a chain longer than that is truncated and under-reported.
+ * All three fail SILENT (a miss, never a false alarm). Closing them needs an AST pass, not a regex.
  */
 
 /** Columns referenced inside an `.or(...)` argument: `col.op.value`, comma-separated. */
@@ -44,7 +57,13 @@ export function projectionColumns(selectArg) {
  */
 export function findUnprojectedOrFilters(source, filePath = '<source>') {
   const findings = [];
-  const text = String(source || '');
+  // COMMENTS ARE BLANKED FIRST — A COMMENT IS NOT CODE. Measured: against the real pre-fix
+  // lib/claim-guard.mjs this reported TWO findings for ONE defect, because a comment above the
+  // chain quoting `.update(...)` opened a scan window that swallowed the genuine chain below it.
+  // Blanked (not deleted) so byte offsets — and therefore reported line numbers — stay true.
+  const text = String(source || '')
+    .replace(/\/\*[\s\S]*?\*\//g, (m) => m.replace(/[^\n]/g, ' '))
+    .replace(/(^|[^:])\/\/[^\n]*/g, (m, p1) => p1 + ' '.repeat(m.length - p1.length));
   for (const m of text.matchAll(/\.update\s*\(/g)) {
     const chain = text.slice(m.index, m.index + 2000).split(/;\s*(?:\r?\n|$)/)[0];
     const orMatch = chain.match(/\.or\s*\(\s*[`'"]([^`'"]*)[`'"]/);
