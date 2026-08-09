@@ -67,12 +67,47 @@ describe('RETROSPECTIVE_QUALITY_GATE', () => {
     const supabase = buildSupabase({ children, retrospective: retro });
     const gate = createRetrospectiveQualityGate(supabase);
 
+    // SD-LEO-INFRA-RETRO-INTEGRITY-RUN-001 FR-3: the orchestrator fast-path no longer gates on
+    // the STORED retrospectives.quality_score (a diagnostic gauge this SD measured to be
+    // writer-fabricated). It now requires a MEASURED assessment, so this test states that
+    // precondition explicitly instead of inheriting a pass from the stored number.
+    // The mock's un-stubbed default is undefined, which fails closed — correct by design.
+    validateSDCompletionReadiness.mockResolvedValue({ passed: true, score: 75, issues: [], warnings: [] });
+
     const ctx = { sd: createMockSD({ id: 'parent-uuid' }) };
     const result = await gate.validator(ctx);
 
     expect(result.passed).toBe(true);
     expect(result.details.orchestrator_auto_pass).toBe(true);
+    // Still 75, but now the ASSESSED score rather than the stored gauge.
     expect(result.score).toBe(75);
+  });
+
+  // SD-LEO-INFRA-RETRO-INTEGRITY-RUN-001 FR-3 — THE REFUSE HALF.
+  //
+  // Added because mutation-testing exposed that it was missing: disabling the new assessment
+  // guard killed ZERO tests, meaning the accept case alone could not tell a working guard from
+  // an absent one. That is the exact defect class this SD exists to abolish, found in my own
+  // control, so it is fixed here rather than noted.
+  it('DECLINES the orchestrator fast-path when the retrospective does not pass assessment', async () => {
+    const children = [
+      { id: 'child-1', title: 'Child 1', status: 'completed' },
+      { id: 'child-2', title: 'Child 2', status: 'completed' },
+    ];
+    // A high STORED gauge that would have auto-passed under the old quality_score >= 60 predicate.
+    const retro = { id: 'retro-1', quality_score: 95, status: 'PUBLISHED' };
+    const supabase = buildSupabase({ children, retrospective: retro });
+    const gate = createRetrospectiveQualityGate(supabase);
+
+    // ...but the MEASURED assessment says no.
+    validateSDCompletionReadiness.mockResolvedValue({ passed: false, score: 20, issues: ['thin'], warnings: [] });
+
+    const ctx = { sd: createMockSD({ id: 'parent-uuid' }) };
+    const result = await gate.validator(ctx);
+
+    // It must NOT auto-pass on the stored gauge; the fast-path declines and standard validation runs.
+    expect(result.details?.orchestrator_auto_pass).toBeUndefined();
+    expect(result.passed).toBe(false);
   });
 
   it('auto-passes for database type SD with retrospective', async () => {
