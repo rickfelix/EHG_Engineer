@@ -153,24 +153,52 @@ export function createRetrospectiveQualityGate(supabase) {
  */
 async function checkAutoPassConditions(ctx, retrospective, children, allChildrenComplete) {
   // ORCHESTRATOR FAST-PATH
-  if (allChildrenComplete && retrospective?.quality_score >= 60 && retrospective?.status === 'PUBLISHED') {
-    console.log(`   ✅ ORCHESTRATOR AUTO-PASS: All ${children.length} children completed + retrospective exists`);
-    console.log(`      Retrospective quality_score: ${retrospective.quality_score}/100`);
+  //
+  // SD-LEO-INFRA-RETRO-INTEGRITY-RUN-001 FR-3 step 2 — this predicate used to read
+  // `retrospective?.quality_score >= 60`. That cited retrospectives.quality_score as a GATING
+  // THRESHOLD, which scripts/lint/diagnostic-gauge-citation-lint.mjs:50 forbids and which this SD
+  // measured to be writer-fabricated. Unlike the five decorative arms below, this one is a REAL
+  // predicate, so it could not simply be deleted — deleting it would have OPENED the gate (every
+  // orchestrator with a PUBLISHED retro would auto-pass regardless of quality). It is REPLACED
+  // with the AI-evaluator verdict, which is a measured signal rather than a stored artifact.
+  //
+  // Scoped to this arm deliberately: the evaluation is only consulted for orchestrators, so the
+  // other auto-pass arms keep short-circuiting without paying for it. And it is safe to depend on
+  // now only because the evaluator's outage fallback was made FAIL-CLOSED in the same change —
+  // previously it fell back to this very gauge plus content presence, so citing it here would have
+  // moved the fabricated dependency into a catch block instead of removing it.
+  if (allChildrenComplete && retrospective?.status === 'PUBLISHED') {
+    const { validateSDCompletionReadiness: assessOrchestratorRetro } =
+      await import('../../../../sd-quality-validation.js');
+    const orchestratorAssessment = await assessOrchestratorRetro(ctx.sd, retrospective);
+
+    if (!orchestratorAssessment?.passed) {
+      // Not an auto-pass. Fall through to the standard path, which will evaluate and report
+      // properly rather than silently treating "did not qualify" as "failed".
+      console.log('   ↩️  Orchestrator fast-path declined — retrospective did not pass assessment; using standard validation');
+      return null;
+    }
+
+    console.log(`   ✅ ORCHESTRATOR AUTO-PASS: All ${children.length} children completed + retrospective assessed`);
+    console.log(`      Assessed score: ${orchestratorAssessment.score}/100 (measured, not the stored diagnostic gauge)`);
     console.log('      Rationale: Orchestrators coordinate, children produce deliverables');
 
     return {
       passed: true,
-      score: retrospective.quality_score,
+      // FR-3: the MEASURED assessment, not the stored diagnostic gauge.
+      score: orchestratorAssessment.score,
       max_score: 100,
       issues: [],
-      warnings: ['Orchestrator auto-pass: Quality validated via children completion'],
+      warnings: ['Orchestrator auto-pass: Quality validated via children completion + retrospective assessment'],
       details: {
         orchestrator_auto_pass: true,
         child_count: children.length,
         children_completed: children.filter(c => c.status === 'completed').length,
         children: children,
         retrospective_id: retrospective.id,
-        retrospective_quality: retrospective.quality_score
+        assessed_score: orchestratorAssessment.score,
+        // Reported for operator context ONLY — never used to decide the verdict above.
+        observed_diagnostic_quality_score: retrospective.quality_score
       }
     };
   }
@@ -184,7 +212,13 @@ async function checkAutoPassConditions(ctx, retrospective, children, allChildren
 
     return {
       passed: true,
-      score: Math.max(retrospective.quality_score || 60, 60),
+      // SD-LEO-INFRA-RETRO-INTEGRITY-RUN-001 FR-3 — stopped citing retrospectives.quality_score.
+      // scripts/lint/diagnostic-gauge-citation-lint.mjs:50 declares it a DIAGNOSTIC gauge that no
+      // consumer may cite as a gating threshold, and this SD's own premise is that the value was
+      // fabricated. The citation here was DECORATIVE: `passed: true` above is unconditional, so
+      // Math.max(quality_score || 60, 60) only populated a reported number and never influenced
+      // the decision. Reporting the floor the arm actually guarantees is the honest value.
+      score: 60,
       max_score: 100,
       issues: [],
       warnings: ['Database auto-pass: Validated via migration success + DATABASE sub-agent'],
@@ -205,7 +239,8 @@ async function checkAutoPassConditions(ctx, retrospective, children, allChildren
 
     return {
       passed: true,
-      score: Math.max(retrospective.quality_score || 50, 50),
+      // FR-3: decorative citation removed — see the DATABASE arm above for the full reasoning.
+      score: 50,
       max_score: 100,
       issues: [],
       warnings: [`${sdType} auto-pass: Simple fix validated via git commit evidence`],
@@ -227,7 +262,8 @@ async function checkAutoPassConditions(ctx, retrospective, children, allChildren
 
     return {
       passed: true,
-      score: Math.max(retrospective.quality_score || 55, 55),
+      // FR-3: decorative citation removed — see the DATABASE arm above for the full reasoning.
+      score: 55,
       max_score: 100,
       issues: [],
       warnings: ['Corrective auto-pass: Heal-generated SD with targeted gap-closure scope'],
@@ -250,7 +286,8 @@ async function checkAutoPassConditions(ctx, retrospective, children, allChildren
 
     return {
       passed: true,
-      score: Math.max(retrospective.quality_score || 55, 55),
+      // FR-3: decorative citation removed — see the DATABASE arm above for the full reasoning.
+      score: 55,
       max_score: 100,
       issues: [],
       warnings: ['Enhancement auto-pass: Narrow-scope improvement SD with inherently thin retrospective'],
@@ -273,7 +310,8 @@ async function checkAutoPassConditions(ctx, retrospective, children, allChildren
 
     return {
       passed: true,
-      score: Math.max(retrospective.quality_score || 55, 55),
+      // FR-3: decorative citation removed — see the DATABASE arm above for the full reasoning.
+      score: 55,
       max_score: 100,
       issues: [],
       warnings: [`${sdType} auto-pass: Thin retrospective expected for ${sdType} SDs`],

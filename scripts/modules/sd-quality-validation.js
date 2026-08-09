@@ -267,28 +267,44 @@ export async function validateRetrospectiveQuality(retrospective, sd = null) {
   } catch (error) {
     console.error(`Retrospective Quality Validation Error (${sdId}):`, error.message);
 
-    // Fallback: use stored quality_score if available (fail-open on AI outage)
+    // SD-LEO-INFRA-RETRO-INTEGRITY-RUN-001 FR-3 — THIS FALLBACK NOW FAILS CLOSED.
+    //
+    // It used to read: storedScore = quality_score || 0; fallbackPassed = fallbackScore >= 55 —
+    // and its own comment said "fail-open on AI outage". That combined BOTH defects this SD
+    // exists to remove, in the one place nobody looks:
+    //   * it gated on retrospectives.quality_score, which scripts/lint/diagnostic-gauge-citation-lint.mjs:50
+    //     declares a DIAGNOSTIC gauge no consumer may cite as a threshold — and which this SD
+    //     measured to be writer-fabricated;
+    //   * it auto-PASSED on that fabricated number plus mere content PRESENCE, so an evaluator
+    //     outage silently converted "we could not assess this" into "this is fine".
+    //
+    // A gate that cannot run has NOT passed. Could-this-pass-against-a-broken-build is the whole
+    // question, and a fail-open catch block answers yes by construction. So: no score is invented,
+    // the diagnostic gauge is not consulted, and the outcome is an explicit block requiring manual
+    // review. OPERATIONAL NOTE, stated rather than discovered: this changes behaviour on a real AI
+    // outage — work that previously slid through now stops and asks for a human. That is the
+    // intended trade, and it is why the reason is returned explicitly instead of as a bare false.
     const storedScore = retrospective.quality_score || 0;
-    const hasContent = (retrospective.key_learnings?.length > 0) && (retrospective.action_items?.length > 0);
-    const fallbackScore = (storedScore > 0 && hasContent) ? storedScore : 0;
-    const fallbackPassed = fallbackScore >= 55;
-
-    if (fallbackScore > 0) {
-      console.log(`   ⚠️  AI unavailable — using stored quality_score fallback: ${fallbackScore}/100`);
-    }
+    console.log(`   ⛔ AI evaluator unavailable — FAILING CLOSED (manual review required): ${error.message}`);
 
     return {
       retro_id: retroId,
       sd_id: sdId,
-      valid: fallbackPassed,
-      passed: fallbackPassed,
-      score: fallbackScore,
-      issues: fallbackPassed ? [] : [`AI quality assessment failed: ${error.message}`],
-      warnings: ['AI evaluator unavailable - using stored quality_score fallback', 'Manual review required'],
+      valid: false,
+      passed: false,
+      score: 0,
+      manual_review_required: true,
+      issues: [`AI quality assessment failed and no fallback is permitted: ${error.message}`],
+      warnings: [
+        'AI evaluator unavailable — FAIL-CLOSED, manual review required',
+        'The stored quality_score is a DIAGNOSTIC gauge and is deliberately NOT used as a fallback gate'
+      ],
       details: {
         error: error.message,
-        fallback_used: true,
-        stored_quality_score: storedScore
+        fallback_used: false,
+        fail_closed: true,
+        // Reported for operator context ONLY — never used to decide the verdict above.
+        observed_diagnostic_quality_score: storedScore
       }
     };
   }
