@@ -124,7 +124,9 @@ describe('FR-1: one isPreSendCc representation repo-wide (GAP-5)', () => {
     const defs = [];
     const walk = (dir) => {
       for (const entry of fs.readdirSync(dir, { withFileTypes: true })) {
-        if (entry.name === 'node_modules' || entry.name === '.git' || entry.name === 'archive') continue;
+        // one-off excluded: untracked scratch evidence-writers QUOTE predicate source in
+        // findings text — they are records about the code, not definitions of it.
+        if (entry.name === 'node_modules' || entry.name === '.git' || entry.name === 'archive' || entry.name === 'one-off') continue;
         const full = path.join(dir, entry.name);
         if (entry.isDirectory()) walk(full);
         else if (/\.(cjs|mjs|js)$/.test(entry.name) && !/\.test\./.test(entry.name)) {
@@ -154,7 +156,7 @@ const ADAM_ROW_LITERALS = {
 
 function makeDedupSupabase({ recentRows = [], readError = null, reject = false } = {}) {
   const c = {};
-  for (const m of ['select', 'eq', 'gte', 'limit']) c[m] = () => c;
+  for (const m of ['select', 'eq', 'gte', 'order', 'limit']) c[m] = () => c;
   c.then = (res, rej) => {
     if (reject) return rej(new Error('connection reset'));
     return res({ data: recentRows, error: readError });
