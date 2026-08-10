@@ -367,6 +367,20 @@ describe('gather — what this job can HONESTLY measure today', () => {
     expect(ids.some((i) => /leg3/.test(i)), 'leg 3 appears zero times in the SD and the PRD').toBe(false);
   });
 
+  it('leg1 reason tells the MEASURED truth, with provenance — not the stale not-wired claim', async () => {
+    // SD-LEO-INFRA-DRIVE-SCORE-LEG1-001 (Option B, ruling fea8b4c4). This pin is the ONLY
+    // instrument that observes the reason text (measured: swapping it left 531/531 green), so
+    // both halves are load-bearing. Read through unavailable_legs — LEGS do not use the
+    // sections' `.unavailable.reason` idiom; copying it reads undefined and vacuously passes.
+    const { driveScore } = await gather();
+    const reason = driveScore.unavailable_legs.find((l) => l.leg === 'leg1_landed').reason;
+    expect(reason).toMatch(/unearnable/i);            // the finding, not a wiring excuse
+    expect(reason).toMatch(/7\/111/);                 // the population-scoped measurement
+    expect(reason).toMatch(/ab82da6b/);               // VALIDATION evidence provenance
+    expect(reason).toMatch(/fea8b4c4/);               // the coordinator ruling holding it
+    expect(reason).not.toMatch(/neither is wired/);   // the stale claim's unique fingerprint
+  });
+
   it('composes into a report the producer will accept', async () => {
     // The end-to-end shape, so "gather returns something" is not the claim — composeReport
     // refuses a sectionless report, and this proves the real gather clears that bar.
