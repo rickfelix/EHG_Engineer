@@ -590,13 +590,19 @@ export function checkCoordinatorContractRead(repoRoot = REPO_ROOT, stateReader =
       // coordinator that paginated (e.g. via /read-full) would have been recorded PARTIAL for doing
       // MORE work, which is the same inversion FR-3 removes for adam and solomon. One implementation,
       // three roles; the size tier inside the verdict is what keeps this file's happy path green.
+      const fit = singleReadFit(repoRoot, COORDINATOR_CONTRACT_FILE);
       const verdict = contractReadVerdict(
         status,
         contractLineCount(repoRoot, COORDINATOR_CONTRACT_FILE),
-        { singleReadFit: singleReadFit(repoRoot, COORDINATOR_CONTRACT_FILE) }
+        { singleReadFit: fit }
       );
       result.contract_read = verdict.read;
-      result.contract_read_partial = !verdict.fully_read;
+      // FR-2 (SD-LEO-INFRA-CONTRACT-READ-FIT-001): assert PARTIAL only on POSITIVE disproof of a full
+      // read, OR when the contract is CONFIDENTLY over the single-read cap (fit.fits === false) and the
+      // read was not confirmed full. A near-cap MARGINAL prediction (fit.fits === null) with no disproof
+      // reads "unconfirmed" — never the false PARTIAL that !fully_read produced for a marginal file.
+      result.contract_read_partial = verdict.confirmed_partial === true
+        || (fit.fits === false && verdict.fully_read !== true);
       result.contract_coverage_pct = verdict.coverage_pct;
       result.contract_read_basis = verdict.basis;
       result.contract_last_read_at = status.lastReadAt || null;
@@ -610,10 +616,14 @@ export function checkCoordinatorContractRead(repoRoot = REPO_ROOT, stateReader =
       // sentences" defect this same commit removed one function below, reintroduced by the fix for
       // it. A legacy bare-filename list carries NO coverage information; it is sufficient only when
       // the contract provably fits in one call, and that has to be measured, not asserted.
+      // A bare filename list carries no coverage evidence, so the fit prediction is the only signal.
+      // Assert PARTIAL only when the contract is CONFIDENTLY over-cap (fits === false); a marginal
+      // (null) or fitting (true) prediction cannot support a partial assertion (FR-2).
       const fit = opts.fit || singleReadFit(repoRoot, COORDINATOR_CONTRACT_FILE);
       result.contract_read = true;
-      result.contract_read_partial = fit.fits !== true;
-      result.contract_read_basis = fit.fits === true ? 'legacy_array_single_read_safe' : 'legacy_array_no_evidence';
+      result.contract_read_partial = fit.fits === false;
+      result.contract_read_basis = fit.fits === true ? 'legacy_array_single_read_safe'
+        : fit.fits === false ? 'legacy_array_no_evidence' : 'legacy_array_marginal_unconfirmed';
     }
   } catch { /* fail-open: tracking unavailable must never break coordinator startup */ }
   return result;
@@ -684,6 +694,13 @@ export function roleArmingStates(repoRoot = REPO_ROOT, fitter = null) {
     // Unmeasurable (including `fits: null`) => DISARMED. Absence of evidence is never promoted to
     // compliance; that promotion is the defect this whole SD exists to remove.
     if (!fit || fit.fits !== true) {
+      // SD-LEO-INFRA-CONTRACT-READ-FIT-001: a MARGINAL prediction (fits:null WITH a token count, basis
+      // 'predicted_marginal') is not "unmeasurable" — it is near-cap, inside the model's own error
+      // band. Report that honestly instead of borrowing the no-tokenizer message; otherwise FR-1 turns
+      // SOLOMON's specific "25236 > cap" reason into a vague "not measurable", a regression.
+      if (fit && fit.fits === null && fit.basis === 'predicted_marginal' && tokens !== null) {
+        return { role, file, tokens, bytes, armed: false, reason: `${file} is near the read cap (${tokens} tokens vs ${SINGLE_READ_TOKEN_BUDGET} cap, within the model's error band) — single-read fit unconfirmed` };
+      }
       if (!fit || fit.fits === null || fit.fits === undefined) {
         return { role, file, tokens, bytes, armed: false, reason: `${file} not measurable — cannot establish readability` };
       }

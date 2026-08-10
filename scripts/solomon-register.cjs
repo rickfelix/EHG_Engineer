@@ -267,9 +267,15 @@ function checkContractRead(projectDir) {
       // SD-LEO-INFRA-ROLE-CONTRACT-READ-GATE-001 / FR-3 — identical fix to adam-register.cjs, from
       // one shared implementation. This path had NO test coverage at all before this SD, which is
       // part of why the inversion survived here as long as it did.
-      const verdict = contractReadVerdict(status, contractLineCount(root, CONTRACT_FILE), { singleReadFit: singleReadFit(root, CONTRACT_FILE) });
+      const fit = singleReadFit(root, CONTRACT_FILE);
+      const verdict = contractReadVerdict(status, contractLineCount(root, CONTRACT_FILE), { singleReadFit: fit });
       result.contract_read = verdict.read;
-      result.contract_read_partial = !verdict.fully_read;
+      // FR-2 (SD-LEO-INFRA-CONTRACT-READ-FIT-001): assert PARTIAL only on POSITIVE disproof of a full
+      // read, OR when the contract is CONFIDENTLY over the single-read cap (fit.fits === false) and the
+      // read was not confirmed full. A near-cap MARGINAL prediction (fit.fits === null) with no disproof
+      // reads "unconfirmed" — this is the exact false PARTIAL every /solomon full read used to emit.
+      result.contract_read_partial = verdict.confirmed_partial === true
+        || (fit.fits === false && verdict.fully_read !== true);
       result.contract_coverage_pct = verdict.coverage_pct;
       result.contract_read_basis = verdict.basis;
       result.contract_last_read_at = status.lastReadAt || null;
@@ -279,10 +285,14 @@ function checkContractRead(projectDir) {
       // distinguish a full read from a silently truncated one, which is the defect this SD closes.
       // Measured on TOKENS, not bytes: the byte proxy this replaced disarmed CLAUDE_SOLOMON.md
       // (67,501 B but only 15,965 tokens) even though it reads in one call.
-      const legacyFits = singleReadFit(root, CONTRACT_FILE).fits === true;
+      // A bare filename list carries no coverage evidence, so the fit prediction is the only signal.
+      // Assert PARTIAL only when the contract is CONFIDENTLY over-cap (fits === false); a marginal
+      // (null) or fitting (true) prediction cannot support a partial assertion (FR-2).
+      const fit = singleReadFit(root, CONTRACT_FILE);
       result.contract_read = true;
-      result.contract_read_partial = !legacyFits;
-      result.contract_read_basis = legacyFits ? 'legacy_array_single_read_safe' : 'legacy_array_no_evidence';
+      result.contract_read_partial = fit.fits === false;
+      result.contract_read_basis = fit.fits === true ? 'legacy_array_single_read_safe'
+        : fit.fits === false ? 'legacy_array_no_evidence' : 'legacy_array_marginal_unconfirmed';
     }
   } catch { /* fail-open: tracking unavailable must never break role activation */ }
   return result;
