@@ -400,4 +400,53 @@ describe('drainSmsRelayStaging', () => {
     const result = await drainSmsRelayStaging(sb);
     expect(result.drained).toBe(0);
   });
+
+  // SD-LEO-INFRA-COMPLETE-SMS-RELAY-001 FR-1: exactly-once under concurrency. The fake's awaits
+  // yield to the microtask queue, so two drains launched together genuinely interleave at each
+  // await — the same TOCTOU window the 5-min cron and an Adam-tick manual drain hit in production.
+  // The atomic claim (UPDATE ... WHERE drained_at IS NULL) must let each row be processed by
+  // exactly one drainer. Observable proof: each processed row writes exactly one sms_inbound_log
+  // entry, so N staged rows → N log entries total across BOTH drains (not 2N).
+  it('two concurrent drains process each row exactly once (no double side-effects)', async () => {
+    const staging = [];
+    for (let i = 0; i < 5; i += 1) {
+      staging.push({
+        id: `stg-cc-${i}`, provider_message_id: `SM-cc-${i}`, from_phone: '+15550000009',
+        to_phone: '+15559999999', body_raw: `no candidate ${i}`, signature_valid: true,
+        received_at: new Date(Date.now() - (5 - i) * 1000).toISOString(), drained_at: null,
+      });
+    }
+    const sb = makeFakeSupabase({ sms_relay_staging: staging });
+
+    const [a, b] = await Promise.all([drainSmsRelayStaging(sb), drainSmsRelayStaging(sb)]);
+
+    // Every row claimed and processed exactly once, split across the two racing drains.
+    expect(a.drained + b.drained).toBe(5);
+    // Exactly one side-effect (inbound log entry) per row — the double-count FR-1 prevents.
+    expect(sb._tables.sms_inbound_log.length).toBe(5);
+    // Every staging row ends up claimed.
+    expect(sb._tables.sms_relay_staging.every((r) => r.drained_at)).toBe(true);
+  });
+
+  it('releases the claim (drained_at -> null) when handleInboundSmsReply throws, so the next tick retries', async () => {
+    const sb = makeFakeSupabase({
+      sms_relay_staging: [
+        { id: 'stg-throw', provider_message_id: 'SM-throw', from_phone: '+15551112222', to_phone: '+15559999999', body_raw: 'x', signature_valid: true, received_at: new Date().toISOString(), drained_at: null },
+      ],
+    });
+    // Force a throw on the FIRST post-claim read handleInboundSmsReply makes (sms_inbound_log
+    // count / notifications lookup). Make chairman_notifications.select throw once.
+    const realFrom = sb.from.bind(sb);
+    let thrown = false;
+    sb.from = (table) => {
+      if (table === 'sms_inbound_log' && !thrown) {
+        thrown = true;
+        return { select: () => { throw new Error('transient DB error'); } };
+      }
+      return realFrom(table);
+    };
+    await expect(drainSmsRelayStaging(sb)).rejects.toThrow(/transient DB error/);
+    // The claim was rolled back so the row is retryable, not lost.
+    expect(sb._tables.sms_relay_staging.find((r) => r.id === 'stg-throw').drained_at).toBe(null);
+  });
 });
