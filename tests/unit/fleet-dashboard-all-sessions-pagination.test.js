@@ -21,7 +21,9 @@ describe('fleet-dashboard.cjs allSessions read — paginated, not capped (QF-202
     expect(idx).toBeGreaterThan(-1);
     const block = src.slice(idx, idx + 700);
     expect(block).toContain('fapPaginate');
-    expect(block).toContain("select('session_id, sd_key, computed_status, metadata, tty, heartbeat_age_seconds, heartbeat_age_human')");
+    // SD-LEO-INFRA-SILENT-HOLDER-AUDIT-001: + qf_id (the idle filter now honors authoritative
+    // QF claims, not only the sd_key mirror).
+    expect(block).toContain("select('session_id, sd_key, qf_id, computed_status, metadata, tty, heartbeat_age_seconds, heartbeat_age_human')");
     // Regression guard against reintroducing the old raw-select variant that fed
     // allSessRes/warnIfCapTruncated instead of the paginated promise.
     expect(src).not.toMatch(/warnIfCapTruncated\(allSessRes\.data/);
