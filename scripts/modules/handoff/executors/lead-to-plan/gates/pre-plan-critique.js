@@ -23,6 +23,7 @@
  *   novel gap-classes require tier-2/human review.
  */
 
+import crypto from 'node:crypto';
 import { critiquePlanProposal, COULD_NOT_CHECK } from '../../../../../../lib/eva/devils-advocate.js';
 import { runInvariantChecks } from '../../../../../../lib/eva/invariant-library.js';
 
@@ -154,9 +155,9 @@ export async function validatePrePlanCritique(ctx) {
     token_usage: critique.token_usage,
   }, warnings);
 
-  // FR-1: verdict. 'block' fails unless an audited override exists.
+  // FR-1: verdict. 'block' fails unless an audited override exists FOR THESE FINDINGS.
   if (combined === 'block') {
-    const override = await findActiveOverride(supabase, sd.id);
+    const override = await findActiveOverride(supabase, sd.id, findingsFingerprint(findings));
     if (override) {
       const msg = `BLOCK downgraded by audited override: ${override.override_by} — "${override.override_reason}" (critique ${override.id}, ${override.created_at})`;
       console.log(`   ⚠️  ${msg}`);
@@ -175,8 +176,10 @@ export async function validatePrePlanCritique(ctx) {
       max_score: 100,
       issues: [
         `Adversarial critique found BLOCK-severity planning gaps (${findings.length} finding(s)). ` +
-        'Fix the plan, or record an audited override: set override_reason and override_by on the ' +
-        'blocking plan_critiques row (this downgrades the verdict; it does not delete the findings).',
+        'Fix the plan, or record an audited override on the blocking plan_critiques row via ' +
+        '`node scripts/critique-override.js <SD-KEY> --by <who> --reason "<why>"` — the override ' +
+        'binds to this exact findings set (a changed set re-blocks) and downgrades rather than ' +
+        'deletes the findings.',
       ],
       warnings,
     };
@@ -215,27 +218,43 @@ async function persistCritique(supabase, row, warnings) {
 }
 
 /**
- * Audited escape hatch (FR-1): the most recent blocking critique row for this SD carrying
- * both override_reason and override_by, within the lookback window. The override lives on
- * the row where an operator set it — severity stays 'block', findings stay readable.
+ * Stable fingerprint of a findings set: severity + message pairs, sorted. Used to bind an
+ * override to the exact findings it excuses.
  */
-async function findActiveOverride(supabase, sdId) {
+export function findingsFingerprint(findings) {
+  const pairs = (findings || [])
+    .map((f) => `${String(f.severity || '').toLowerCase()}::${String(f.message || '')}`)
+    .sort();
+  return crypto.createHash('sha256').update(JSON.stringify(pairs)).digest('hex');
+}
+
+/**
+ * Audited escape hatch (FR-1): a blocking critique row for this SD carrying both
+ * override_reason and override_by, within the lookback window, WHOSE FINDINGS MATCH the
+ * current run's (by fingerprint). SECURITY MEDIUM-1 (evidence row e77d1c4b): without the
+ * binding, one override auto-downgraded every subsequent block on the SD for 14 days —
+ * including entirely new findings from later PRD edits. Binding to the findings set means
+ * a changed finding set re-blocks and requires re-approval.
+ */
+async function findActiveOverride(supabase, sdId, currentFingerprint) {
   try {
     const since = new Date(Date.now() - OVERRIDE_LOOKBACK_DAYS * 24 * 60 * 60 * 1000).toISOString();
     const { data, error } = await supabase
       .from('plan_critiques')
-      .select('id, override_reason, override_by, created_at')
+      .select('id, findings, override_reason, override_by, created_at')
       .eq('sd_id', sdId)
       .eq('overall_severity', 'block')
       .not('override_reason', 'is', null)
       .not('override_by', 'is', null)
       .gte('created_at', since)
       .order('created_at', { ascending: false })
-      .limit(1);
+      .limit(10);
     if (error || !data || data.length === 0) return null;
-    const row = data[0];
-    if (!String(row.override_reason).trim() || !String(row.override_by).trim()) return null;
-    return row;
+    for (const row of data) {
+      if (!String(row.override_reason).trim() || !String(row.override_by).trim()) continue;
+      if (findingsFingerprint(row.findings) === currentFingerprint) return row;
+    }
+    return null;
   } catch {
     // Fail-closed: an unreadable override table means NO override — the block stands.
     return null;

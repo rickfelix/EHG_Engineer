@@ -106,27 +106,49 @@ describe('gate promotion (FR-1)', () => {
     const result = await validatePrePlanCritique({ sd: SD, supabase });
     expect(result.pass).toBe(false);
     expect(result.score).toBe(0);
-    expect(result.issues.join(' ')).toMatch(/override_reason and override_by/);
+    expect(result.issues.join(' ')).toMatch(/critique-override\.js/);
     // FR-4: the block was persisted BEFORE the verdict returned
     expect(supabase._inserted).toHaveLength(1);
     expect(supabase._inserted[0].overall_severity).toBe('block');
   });
 
-  it('DOWNGRADES on an audited override — passes with the override cited, findings still persisted', async () => {
+  it('DOWNGRADES on an audited override bound to the SAME findings — passes with the override cited, findings still persisted', async () => {
+    const blockFindings = [{ severity: 'block', category: 'missing_criteria', message: 'untestable', location: 'PRD' }];
     critiquePlanProposal.mockResolvedValue({
-      findings: [{ severity: 'block', category: 'missing_criteria', message: 'untestable', location: 'PRD' }],
+      findings: blockFindings,
       overall_severity: 'block',
       model_used: 'test-model',
       token_usage: null,
     });
     const supabase = makeSupabase({
-      overrideRows: [{ id: 'crit-1', override_reason: 'AC covered by parent SD', override_by: 'chairman', created_at: '2026-08-09T00:00:00Z' }],
+      overrideRows: [{ id: 'crit-1', findings: blockFindings, override_reason: 'AC covered by parent SD', override_by: 'chairman', created_at: '2026-08-09T00:00:00Z' }],
     });
     const result = await validatePrePlanCritique({ sd: SD, supabase });
     expect(result.pass).toBe(true);
     expect(result.score).toBe(60);
     expect(result.warnings.join(' ')).toMatch(/audited override.*chairman/);
     expect(supabase._inserted).toHaveLength(1); // downgrade, not silence
+  });
+
+  it('an override for DIFFERENT findings does NOT downgrade — the block stands (SECURITY MEDIUM-1 binding)', async () => {
+    critiquePlanProposal.mockResolvedValue({
+      findings: [{ severity: 'block', category: 'contradiction', message: 'a NEW, different planning gap', location: 'PRD' }],
+      overall_severity: 'block',
+      model_used: 'test-model',
+      token_usage: null,
+    });
+    const supabase = makeSupabase({
+      overrideRows: [{
+        id: 'crit-1',
+        findings: [{ severity: 'block', category: 'missing_criteria', message: 'the OLD excused finding', location: 'PRD' }],
+        override_reason: 'excused the old finding only',
+        override_by: 'chairman',
+        created_at: '2026-08-09T00:00:00Z',
+      }],
+    });
+    const result = await validatePrePlanCritique({ sd: SD, supabase });
+    expect(result.pass).toBe(false);
+    expect(result.score).toBe(0);
   });
 
   it('still PASSES clean at 100 (direction 2: promotion did not break the pass path)', async () => {
