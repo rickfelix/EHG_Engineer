@@ -199,10 +199,22 @@ async function generateRetrospective(sdInput) {
     related_prs: [],
     tags: [sd.sd_key, 'automated-retro', 'quality-validated'],
 
-    // WORKAROUND: Set initial quality_score to bypass trigger ordering issue
-    // The auto_populate_retrospective_fields trigger runs before auto_validate_retrospective_quality
-    // and checks quality_score before it's calculated, so we provide a valid default
-    quality_score: 85,
+    // SD-LEO-INFRA-RETRO-INTEGRITY-RUN-001 FR-2 — the `quality_score: 85` pre-set that lived here
+    // is REMOVED, and its stated justification was measured before removal rather than assumed.
+    //
+    // The comment claimed it was needed because auto_populate_retrospective_fields checks
+    // quality_score before auto_validate_retrospective_quality calculates it. MEASURED at
+    // database/migrations/20260505_fix_retrospectives_auto_populate_predicate.sql:75-79: that
+    // check is guarded by `is_status_changing_to_published`, so it does NOT fire on a DRAFT
+    // insert — and this function already inserts as DRAFT (below), reads the calculated score
+    // back, and only promotes to PUBLISHED when it clears 70. The DRAFT-first flow ALREADY
+    // solves the ordering problem the constant was working around; the constant was vestigial.
+    //
+    // It was also actively harmful, which is why removing it belongs in this SD rather than a
+    // tidy-up: a literal 85 is a number nobody measured, and any path where the trigger declines
+    // to recalculate leaves that fabricated 85 standing as the stored score — high enough to
+    // satisfy the >= 70 publish gate on its own. Omitting the key makes the stored score solely
+    // what the evaluation produced.
 
     team_satisfaction: Math.min(10, Math.max(1, Math.floor(sd.progress / 10))),
     business_value_delivered: sd.priority >= 70 ? 'HIGH' : sd.priority >= 40 ? 'MEDIUM' : 'LOW',

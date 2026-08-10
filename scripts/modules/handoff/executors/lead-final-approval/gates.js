@@ -443,7 +443,9 @@ export function createRetrospectiveExistsGate(supabase) {
       const sdType = ctx.sd?.sd_type || ctx.sd?.category || 'feature';
 
       if (tier <= 2) {
-        const score = Math.max(retrospective.quality_score || 55, 55);
+        // FR-3: decorative citation removed. `passed: true` below is unconditional for tier<=2,
+        // so this only populated a reported number; report the floor the exemption guarantees.
+        const score = 55;
         console.log(`   ⏭️  SKIP: Tier ${tier} SD — retrospective gate exempt`);
         console.log(`   Score floor: ${score}/100`);
         return {
@@ -465,15 +467,30 @@ export function createRetrospectiveExistsGate(supabase) {
         };
       }
 
-      // Tier 3 SDs: require quality_score >= 60
+      // Tier 3 SDs: require a MEASURED assessment, not the stored diagnostic gauge.
+      //
+      // SD-LEO-INFRA-RETRO-INTEGRITY-RUN-001 FR-3 step 2 — this read
+      // `retrospective.quality_score < minScore`. Like the orchestrator fast-path, it is a REAL
+      // predicate, so deleting the citation would have OPENED the gate rather than reconciled it.
+      // Replaced with the AI-evaluator verdict — a measured signal — which is only safe to depend
+      // on because that evaluator's outage fallback was made FAIL-CLOSED in this same change.
+      // Previously it fell back to this exact gauge plus content presence, so citing it here
+      // would have relocated the fabricated dependency rather than removed it.
       const minScore = 60;
-      if (retrospective.quality_score < minScore) {
+      const { validateSDCompletionReadiness } = await import('../../../sd-quality-validation.js');
+      const assessment = await validateSDCompletionReadiness(ctx.sd, retrospective);
+
+      if (!assessment?.passed || assessment.score < minScore) {
         return {
           passed: false,
-          score: retrospective.quality_score,
+          score: assessment?.score ?? 0,
           max_score: 100,
-          issues: [`Retrospective quality score ${retrospective.quality_score}% is below minimum ${minScore}%`],
-          warnings: []
+          issues: [
+            assessment?.manual_review_required
+              ? 'Retrospective could not be assessed (evaluator unavailable) — MANUAL REVIEW REQUIRED. A gate that cannot run has not passed.'
+              : `Retrospective assessed score ${assessment?.score ?? 0}% is below minimum ${minScore}%`
+          ],
+          warnings: assessment?.warnings || []
         };
       }
 
