@@ -67,9 +67,23 @@ describe('FR-7: ORDER ships, FILTER does not', () => {
 
 describe('FR-8: resume detects MISMATCH and MULTIPLICITY, not just NULL', () => {
   const elseBranch = (() => {
-    const i = RESUME.indexOf('} else {');
+    // ANCHORED, NOT POSITIONAL (SD-LEO-INFRA-CHECKIN-DISPATCH-READ-001 FR-1). This used to slice
+    // from the FIRST `} else {` in the file. When FR-1 added an earlier `} else {` to the
+    // !ctx.mySd branch, that slice silently began measuring a DIFFERENT branch — it happened to
+    // fail loudly only because the new block contains healOwnClaimPointer. Had it not, every
+    // assertion below would have gone GREEN while measuring code they were never about. Anchor on
+    // the multiplicity branch's own marker so the region cannot drift.
+    const marker = RESUME.indexOf('SD-LEO-INFRA-CLAIM-LIFECYCLE-RELEASE-002 (FR-8)');
+    const i = RESUME.lastIndexOf('} else {', marker);
     return RESUME.slice(i, RESUME.indexOf('    // 4. already working', i));
   })();
+
+  it('the slice actually landed on the multiplicity branch (anti-drift control)', () => {
+    // Without this, a future edit that moves the anchor turns every assertion below into a
+    // vacuous pass over the wrong region.
+    expect(elseBranch).toMatch(/MULTIPLICITY/);
+    expect(elseBranch).not.toMatch(/FR-1\): findOwnSdClaim answers the ownership/);
+  });
 
   it('consults the authoritative source even when the mirror is NON-empty', () => {
     // The original code only looked when ctx.mySd was null, which is why both states were invisible.

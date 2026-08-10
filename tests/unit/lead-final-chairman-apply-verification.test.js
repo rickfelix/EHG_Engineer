@@ -24,20 +24,28 @@ const sdWith = (metadata) => ({ sd: { sd_key: 'SD-TEST-001', metadata } });
 
 beforeEach(() => classifyMigrationApplyState.mockReset());
 
-describe('TS-3: an SD without the flag is completely unaffected', () => {
-  it('passes as not-applicable and never consults the classifier', async () => {
+describe('an SD without the flag is enforced too (widened by SD-LEO-INFRA-COMPLETION-FAIL-OWN-001)', () => {
+  // These cases previously asserted the OLD contract (unflagged → applicable:false, classifier
+  // never consulted). That contract is deliberately reversed per coordinator ruling 454e005a:
+  // an applier now exists for ungated migrations, so blocking is clearable and legitimate.
+  it('consults the classifier and passes migrationless when the SD owns no migration', async () => {
+    classifyMigrationApplyState.mockResolvedValue({
+      files: [{ file: '20260102_unrelated.sql', status: 'APPLIED' }],
+      error: null
+    });
     const r = await gate().validator(sdWith({}));
     expect(r.passed).toBe(true);
-    expect(r.details.applicable).toBe(false);
-    // The regression that matters: unflagged SDs must not gain a new dependency or failure mode.
-    expect(classifyMigrationApplyState).not.toHaveBeenCalled();
+    expect(r.details.applicable).toBe(true);
+    expect(r.details.migrationless).toBe(true);
+    expect(classifyMigrationApplyState).toHaveBeenCalled();
   });
 
-  it('treats a non-affirmative flag value as not applicable', async () => {
+  it('treats a non-affirmative flag value as ungated (enforced, coordinator ceremony)', async () => {
     for (const v of [false, 'false', 1, null, undefined, 'yes']) {
+      classifyMigrationApplyState.mockResolvedValue({ files: [], error: null });
       const r = await gate().validator(sdWith({ requires_chairman_apply: v }));
       expect(r.passed).toBe(true);
-      expect(r.details.applicable).toBe(false);
+      expect(r.details.migrationless).toBe(true);
     }
   });
 

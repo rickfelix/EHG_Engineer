@@ -330,6 +330,7 @@ export async function validateSDCompletionReadiness(sd, retrospective = null) {
 
   if (!sd) {
     result.valid = false;
+    result.passed = false;
     result.issues.push('Strategic Directive is null or undefined');
     return result;
   }
@@ -375,6 +376,21 @@ export async function validateSDCompletionReadiness(sd, retrospective = null) {
   }
 
   result.valid = result.issues.length === 0;
+  // QF-20260809-341 emitted `passed` so the tier-3 RETROSPECTIVE_EXISTS arm could read it at
+  // all; QF-20260809-827 scopes it to the gate's SUBJECT. `passed = valid` required ZERO issues
+  // on ANY axis, so one AI-judge nit about the SD's own authoring text blocked LEAD-FINAL
+  // regardless of retro quality (live-hit: retro assessed 83/100, gate failed on a 4/10
+  // strategic-objectives note written at SD creation). Every consumer of `passed` reads it as
+  // the RETRO assessment's verdict: the tier-3 arm pairs it with the blended score threshold,
+  // the orchestrator fast-path names it "retrospective did not pass assessment", and the
+  // PLAN-TO-LEAD standard path explicitly demotes these same SD-authoring issues to ADVISORY
+  // warnings. The SD-authoring axis stays in `valid`/`issues`, and still shapes the blended
+  // `score` the gate thresholds — only the verdict bit is retro-scoped.
+  // manual_review_required rides up for the same reason: the fail-closed evaluator-outage path
+  // sets it on the retro sub-result, and the tier-3 arm branches its operator message on it —
+  // without the propagation an outage misprints as a score failure.
+  result.manual_review_required = Boolean(result.retroQuality?.manual_review_required);
+  result.passed = result.retroQuality ? result.retroQuality.passed === true : false;
 
   return result;
 }

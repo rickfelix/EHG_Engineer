@@ -130,7 +130,13 @@ describe('resume.cjs step — SILENT-STARVE reproduction and fix (reproduces the
     const findOwnSdClaim = vi.fn(async () => null);
     const healOwnClaimPointer = vi.fn(async () => false);
     const ctx = {
-      sb: {},
+      // GENUINELY IDLE means both claim surfaces were READ and both came back empty. This was
+      // `sb: {}`, which reads as "don't care" but is actually an UNREADABLE client — and since
+      // SD-LEO-INFRA-CHECKIN-DISPATCH-READ-001 FR-1 the two are deliberately no longer the same
+      // outcome (an unreadable surface must not authorise a hand). Give the fixture the state its
+      // own name claims; every assertion below is unchanged and still meaningful.
+      sb: { from() { return this; }, select() { return this; }, eq() { return this; },
+        then(res, rej) { return Promise.resolve({ data: [], error: null }).then(res, rej); } },
       sessionId: 'genuinely-idle-session',
       sessionRole: null,
       mySd: null,
