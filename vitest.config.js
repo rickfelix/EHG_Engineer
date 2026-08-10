@@ -147,6 +147,20 @@ const DB_INCLUDE = [
  */
 const SMOKE_INCLUDE = ['**/tests/smoke.test.js'];
 
+// ─── SD-LEO-INFRA-MIGRATION-APPLY-STATE-002 (FR-C): the drift-guard wiring proof ────────────────
+//
+// tests/integration/migration-apply-state-ledger-wiring.test.js was routed to the gated `db`
+// project purely BY DIRECTORY. It imports no db setup and touches no client — its only credential
+// consumer is the verifier SUBPROCESS it spawns, which inherits the invoking step's env. With the
+// db project disabled in CI (no designated non-production target), vitest collected zero files and
+// exited 1 ("No test files found"), so the drift gate's proof step was red on every run regardless
+// of the drift verdict (measured: 6/6 recent runs). This dedicated UNGATED project — the
+// SMOKE_INCLUDE precedent — lets the proof actually execute where the workflow step supplies the
+// credentials. Deliberately NOT gated on VITEST_DB_ALLOW_REF: that flag authorizes all 225 db
+// suites against the configured target; this project resolves exactly one self-contained file.
+// (Locally, an enabled db project also collects this file via DB_INCLUDE — a harmless double-run.)
+const MIGRATION_GATE_INCLUDE = ['**/tests/integration/migration-apply-state-ledger-wiring.test.js'];
+
 // ─── QF-20260726-459 Part 1b: gate the PROJECT, not the individual files ────────────────────────
 //
 // Part 1 made tests/helpers/db-available.js fail closed. That was necessary and insufficient:
@@ -322,6 +336,19 @@ export default defineConfig({
           // UNGATED by design. See SMOKE_INCLUDE: the pre-commit hook filters to this exact file,
           // and a filter that resolves to zero files exits 1 and blocks every commit in the repo.
           include: SMOKE_INCLUDE,
+          exclude: SHARED_EXCLUDE,
+        },
+      },
+      {
+        extends: true,
+        test: {
+          name: 'migration-gate',
+          // Same setup shape as `smoke` (the precedent): real-credential dotenv load is a no-op
+          // in CI (no .env file; the workflow step supplies env directly) and harmless locally.
+          // The suite itself never opens a client — credentials only reach the verifier
+          // subprocess it spawns. See MIGRATION_GATE_INCLUDE for the full rationale.
+          setupFiles: ['./tests/setup.db.js'],
+          include: MIGRATION_GATE_INCLUDE,
           exclude: SHARED_EXCLUDE,
         },
       },

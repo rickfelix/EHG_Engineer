@@ -18,6 +18,11 @@ on:
     branches: [main]
     paths:
       - 'database/migrations/*.sql'
+      # SD-LEO-INFRA-MIGRATION-APPLY-STATE-002 (FR-B): the verifier scans every migration
+      # location now — a merge touching only these dirs must re-run the gate too.
+      - 'database/functions/*.sql'
+      - 'database/manual-updates/*.sql'
+      - 'supabase/migrations/*.sql'
       - 'scripts/verify-migration-apply-state.mjs'
       - 'scripts/lib/migration-guards.js'
       - '.github/workflows/migration-deploy-drift-guard.yml'
@@ -134,10 +139,34 @@ jobs:
       # the SD's only end-to-end safety proof was unreachable in CI: green forever, asserting
       # nothing. Runs AFTER the sync check so its ledger backup/restore can never be mistaken
       # for seeder drift.
+      # SD-LEO-INFRA-MIGRATION-APPLY-STATE-002 (FR-C): the proof now RUNS — the test needed no
+      # db-project gating at all (it imports no db setup; its only credential consumer is the
+      # verifier subprocess, which this step supplies). It executes under the dedicated ungated
+      # `migration-gate` vitest project (SMOKE_INCLUDE precedent). THREE-ARM harness/verdict
+      # separation: proof ran and passed → OK; proof ran and FAILED → the gate fails (a real
+      # verdict); the harness could not run it ("No test files found") → a loud warning that
+      # NAMES the harness and exits 0 — a harness failure can neither mask nor impersonate a
+      # drift verdict. Before this change the db project was disabled in CI, vitest exited 1
+      # with zero tests collected, and this step redded the gate on every run regardless of
+      # verdict (measured: 6/6 recent runs, e.g. run 31359162717). Deliberately NOT setting
+      # VITEST_DB_ALLOW_REF — that would authorize all db suites against production secrets.
       - name: FR-6 fail-open wiring proof
         if: always()
         env:
           SUPABASE_DB_PASSWORD: ${{ secrets.SUPABASE_DB_PASSWORD }}
           SUPABASE_POOLER_URL: ${{ secrets.SUPABASE_POOLER_URL }}
           DATABASE_URL: ${{ secrets.DATABASE_URL }}
-        run: npx vitest run tests/integration/migration-apply-state-ledger-wiring.test.js --project db
+        run: |
+          set +e
+          out="$(npx vitest run tests/integration/migration-apply-state-ledger-wiring.test.js --project migration-gate 2>&1)"
+          code=$?
+          echo "$out"
+          if [ "$code" = "0" ]; then
+            exit 0
+          fi
+          if echo "$out" | grep -Fq 'No test files found'; then
+            echo "::warning::FR-6 wiring proof DID NOT RUN — the vitest migration-gate project collected zero tests (harness unavailability, not a verdict). The fail-open wiring is UNPROVEN this run; fix the project include before trusting the gate's suppression logic."
+            exit 0
+          fi
+          echo "::error::FR-6 fail-open wiring proof FAILED — the gate's suppression logic is not safe against a corrupt ledger. This is a real verdict, not a harness issue."
+          exit "$code"

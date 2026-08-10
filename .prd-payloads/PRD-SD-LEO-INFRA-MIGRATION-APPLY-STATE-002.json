@@ -1,0 +1,79 @@
+{
+  "executive_summary": "Coverage/wire fix of an instrument that already exists and is wired — the migration apply-state verifier and its CI drift gate. Premise VERIFIED TRUE at LEAD (a first this session): the verifier scans only database/migrations (verify-migration-apply-state.mjs:30), the gate's push filter never re-triggers on database/functions/ / database/manual-updates/ / supabase/migrations/, and the gate's final wiring-proof step runs a db-project vitest test that CI's disabled db project turns into 'No test files found' exit 1 — red on every run regardless of drift verdict (empirically corroborated: GH run 31359162717). VALIDATION measured three load-bearing corrections now folded into the FRs: (1) disposition-ledger keys are BASENAMES end-to-end by documented design, and 5 basenames exist in BOTH database/migrations and supabase/migrations (one with DIVERGENT content) — naive multi-root scanning would let one disposition suppress two different files and make the ledger-sync step an order-dependent flake; (2) the LEAD-FINAL chairman-apply-state gate matches migration declarations by exact string — the new-root repo-relative id IS the declaration contract; (3) the wiring-proof test needs no db-project gating at all (it imports no db setup) — RELOCATING it so the proof actually RUNS in CI beats warning-and-skipping, which would recreate 'green forever, asserting nothing'. Also measured: extending the scan surfaces exactly ONE genuinely new blocking gap (supabase/migrations/20260625_eva_stage_gate_results_outcome.sql, live-verified NOT_APPLIED) — the gate is ALREADY red with 10 pre-existing recent gaps, so 'gate is green' is explicitly NOT an acceptance criterion; the gaps are the gate working.",
+  "functional_requirements": [
+    {
+      "id": "FR-A",
+      "title": "Multi-root scan with collision exclusion — every migration location visible, no basename ever suppresses two files",
+      "priority": "critical",
+      "description": "Extend scripts/verify-migration-apply-state.mjs to scan database/functions/, database/manual-updates/, and supabase/migrations/ (*.sql only; ARTIFACT_RE exclusion tested on the basename) alongside the primary root. Primary-root files keep BARE BASENAME ids (the disposition ledger's documented basename keys stay byte-stable); new-root files get REPO-RELATIVE ids ('supabase/migrations/x.sql'). Content resolution: id contains '/' → resolve from repo root, else from MIGRATIONS_DIR. migrationDateToken/isRecent/orderMigrations extract from path.basename(id) (back-compat: basename of a basename is itself) so a recent-dated new-root file classifies RECENT — without this the prefixed id silently classifies LEGACY, a fail-open. COLLISION EXCLUSION (the VALIDATION-critical correction): a new-root file whose basename already exists in the primary root is EXCLUDED from the scan and reported loudly to stderr with a content-comparison verdict (byte-identical → benign copy note; DIVERGENT → named explicitly — the live specimen is 20251129_musk_algorithm_pareto.sql). Exclusion, not dual-keying: ledger keys, suppressedBasenames() and gapBasename() all strip to basename by documented design, so admitting a colliding id would let one disposition suppress two different files and make buildLedger() order-dependent. ENOENT on a configured new root warns to stderr and continues (files gone from git = nothing to verify); any other readdir error stays fail-closed MISCONFIG, matching the existing unreadable-entry posture.",
+      "acceptance_criteria": [
+        "POSITIVE: with the real repo, --json output contains database/functions/semantic_code_search.sql and repo-relative ids from database/manual-updates/ and supabase/migrations/ — the exact file that slipped merged-not-applied this week is visible to the audit.",
+        "NEGATIVE (key stability): every database/migrations id in the output is a bare basename, byte-identical to the pre-change format — the committed disposition ledger and its seeder diff stay stable (the gate's ledger-sync step must remain green on merge).",
+        "COLLISION: a new-root file with a primary-root basename twin is excluded and loudly reported with the content verdict; proven two-sided with fixture roots (identical twin → note; divergent twin → named).",
+        "RECENT classification: a new-root file dated >= cutoff classifies RECENT (basename extraction proven — a prefixed id must not silently classify LEGACY).",
+        "Non-.sql files in the new roots (the 9 .md files in manual-updates) never enter the scan.",
+        "ENOENT on a configured root → stderr warning + scan continues; a non-ENOENT readdir error → MISCONFIG (fail-closed), both pinned."
+      ]
+    },
+    {
+      "id": "FR-B",
+      "title": "Gate re-triggers on every migration location",
+      "priority": "high",
+      "description": "Add database/functions/*.sql, database/manual-updates/*.sql, and supabase/migrations/*.sql to the workflow's push path filter so a merge touching only those dirs re-runs the drift gate. The daily cron remains the backstop for anything else.",
+      "acceptance_criteria": [
+        "The workflow push paths contain all three new globs (pinned by a static unit test on the workflow YAML, precedent-style).",
+        "Existing filter entries are untouched (verifier, guards, workflow, ledger, ledger-reader)."
+      ]
+    },
+    {
+      "id": "FR-C",
+      "title": "Harness/verdict separation — the wiring proof RUNS in CI, and harness unavailability can neither mask nor impersonate a verdict",
+      "priority": "critical",
+      "description": "TWO layers, per the VALIDATION reframe. LAYER 1 (the real fix): tests/integration/migration-apply-state-ledger-wiring.test.js is routed to the gated db project purely BY DIRECTORY — it imports only vitest/child_process/fs/path/url, never touches setup.db.js, and needs credentials only for the verifier subprocess the workflow step already supplies. Relocate it so it actually executes in CI (move to tests/unit/ or include via a dedicated vitest project pattern mirroring the SMOKE_INCLUDE precedent at vitest.config.js:147). Do NOT set VITEST_DB_ALLOW_REF — that authorizes all 225 db suites against production secrets. Budget for first-run failure: the suite hardcodes a fixture filename (20260713_quick_fixes_factory_lane.sql) and has likely never executed in CI — fix what it finds, don't skip it. LAYER 2 (defense in depth): the workflow step separates outcomes — proof ran and passed → OK; proof ran and failed → gate FAILS (real verdict); harness could not run the proof ('No test files found' signature) → loud ::warning explicitly stating the proof did NOT run, exit 0 — never a red that impersonates a drift verdict, never a silent green that claims the proof ran. EXPLICITLY NOT AN AC: 'the gate is green'. The strict verifier step reds today on 10 pre-existing genuine recent gaps (12/12 recent runs) and will surface one more (the eva_stage_gate_results gap) when FR-A lands — the gaps are the gate WORKING; applying them is chairman-gated and out of scope.",
+      "acceptance_criteria": [
+        "The wiring-proof test executes in CI's unit-tier vitest invocation (proven by it appearing in the run's collected tests, not by absence of error).",
+        "Two-sided step logic (pinned by a static workflow test): a genuine test failure exits 1; the no-test-files signature warns loudly (message states the proof did not run) and exits 0.",
+        "The relocated test passes locally against the real verifier; any hardcoded-fixture breakage found is fixed, not skipped.",
+        "No VITEST_DB_ALLOW_REF anywhere in the workflow."
+      ]
+    },
+    {
+      "id": "FR-D",
+      "title": "Dispositions and declarations for the newly-visible corpus",
+      "priority": "medium",
+      "description": "Run the disposition seeder over the extended gap set and commit the ledger delta (reason-required per the ledger contract; buildLedger writes only auto-classifiable entries — measured: 3 entries from 130 gaps today, so expect a small delta). Record the expected merge-day observable in the PR: exactly ONE new RECENT red line (supabase/migrations/20260625_eva_stage_gate_results_outcome.sql, live-verified NOT_APPLIED — its byte-identical 20260731 sibling classifies APPLIED). Document the declaration contract for the LEAD-FINAL chairman-apply-state gate at the choke point: declarations for new-root migrations must name the REPO-RELATIVE id (the gate matches by exact string; the colliding-basename hazard is closed by FR-A's exclusion). Route the divergent-content twin specimen (20251129_musk_algorithm_pareto.sql) to the durable feedback channel.",
+      "acceptance_criteria": [
+        "The gate's ledger-sync step verdict is unchanged by this SD (seeder re-run produces the committed ledger).",
+        "The one-new-red-line expectation is stated in the PR body (so merge-day observers read it as the gate working, not breaking).",
+        "The declaration-contract note exists at the verifier or gate choke point (repo-relative ids for new-root declarations).",
+        "The divergent twin is recorded in the feedback channel with both paths."
+      ]
+    }
+  ],
+  "technical_requirements": [
+    { "id": "TR-1", "title": "Extend the live instrument; no duplicate scanner", "description": "All changes live in verify-migration-apply-state.mjs + the workflow + vitest config/test relocation. No second scanner, no new predicate for dates/artifacts — the exported helpers are generalized (basename-first) with existing test contracts preserved (they pass basenames; basename of a basename is itself)." },
+    { "id": "TR-2", "title": "Every arm two-sided with positive-control injection", "description": "Fixture-root tests inject the failing inputs (colliding basename, divergent twin, prefixed recent date, .md files, ENOENT root). 'Gate is green' is not an AC and no AC may be satisfiable by the pre-change code." },
+    { "id": "TR-3", "title": "Verify-only boundary", "description": "No change to the apply path (apply-migration.js, migration-guards.js, the 3-factor @approved-by gate) and no migration applied by this SD. Zero DDL." }
+  ],
+  "test_scenarios": [
+    { "id": "TS-1", "scenario": "Fixture roots: primary + new root with unique, colliding-identical, colliding-divergent, recent-dated, and .md entries", "type": "unit", "expected": "Unique new-root files scanned with repo-relative ids; colliding files excluded with content verdicts; recent-dated new-root file classifies RECENT; .md never scanned" },
+    { "id": "TS-2", "scenario": "Primary-root ids byte-stable vs pre-change output", "type": "unit", "expected": "Bare basenames, identical ordering semantics" },
+    { "id": "TS-3", "scenario": "Workflow YAML static assertions", "type": "static", "expected": "Three new push-path globs present; FR-C step has the two-sided harness separation; no VITEST_DB_ALLOW_REF" },
+    { "id": "TS-4", "scenario": "Relocated wiring-proof test collected and passing in the unit-tier vitest run", "type": "unit", "expected": "Collected (not skipped) and green locally; hardcoded-fixture breakage fixed if found" },
+    { "id": "TS-5", "scenario": "ENOENT root vs other readdir error", "type": "unit", "expected": "Warn-and-continue vs MISCONFIG, two-sided" },
+    { "id": "TS-6", "scenario": "Three-dot PR diff", "type": "static", "expected": "Zero database DDL; ledger delta only via the seeder" }
+  ],
+  "acceptance_criteria": [
+    "Every FR arm proven two-sided with injected positive controls; no AC satisfiable by pre-change code.",
+    "Disposition-ledger basename keys stay byte-stable for the primary root; the collision exclusion is loud and content-aware.",
+    "The wiring proof actually executes in CI; harness unavailability is a loud warning that names itself, never a red or a silent green.",
+    "The one-new-red-line merge-day delta is pre-declared in the PR body.",
+    "Each behavioural arm mutation-proven against a baseline verified green FIRST (commit before mutating)."
+  ],
+  "risks": [
+    { "risk": "The relocated wiring-proof test fails in CI on first real execution (hardcoded fixture, never run).", "mitigation": "Run it locally first and fix what it finds before shipping; budgeted explicitly per VALIDATION.", "severity": "medium" },
+    { "risk": "Extending the scan makes the already-red gate redder and observers read the SD as the cause.", "mitigation": "The +1 red line (a REAL live-verified gap) is pre-declared in the PR body with its live measurement; 'green gate' was never the AC.", "severity": "low" },
+    { "risk": "Ledger-sync step flakes if collision handling admits dual-copy basenames.", "mitigation": "FR-A excludes colliding new-root files outright; the divergent twin is routed to humans via feedback, not into the ledger.", "severity": "high" },
+    { "risk": "chairman-apply-state declarations for new-root migrations fail exact-string matching.", "mitigation": "FR-D documents the repo-relative-id declaration contract at the choke point; colliding basenames are excluded so partial-match fail-open cannot occur.", "severity": "medium" }
+  ]
+}

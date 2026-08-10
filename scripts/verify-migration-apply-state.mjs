@@ -70,7 +70,12 @@ export const RETIRED_BEFORE = '20260615';
  * (FR-2 adversarial review, med-severity fail-open class).
  */
 export function migrationDateToken(file) {
-  const s = String(file);
+  // SD-LEO-INFRA-MIGRATION-APPLY-STATE-002 (FR-A): basename-first. New-root files carry
+  // repo-relative ids ('supabase/migrations/20260625_x.sql'); anchoring on the raw string
+  // would classify every one of them LEGACY (null token) — a silent fail-open that keeps
+  // recent new-root drift out of the strict gate. Basename of a bare basename is itself,
+  // so every pre-existing caller (and the 42-test contract suite) is byte-compatible.
+  const s = String(file).replace(/^.*[\\/]/, '');
   const compact = s.match(/^(\d{8,})/);
   if (compact) return compact[1];
   const sep = s.match(/^(\d{4})[-_](\d{2})[-_](\d{2})/);
@@ -139,11 +144,71 @@ export function partitionRecentGaps(gaps, cutoff = RETIRED_BEFORE, suppressed = 
  */
 export const ARTIFACT_RE = /(_DOWN|_rollback|_DEFERRED)\.sql$/i;
 
-export function listForwardMigrations(dir = MIGRATIONS_DIR) {
-  const all = readdirSync(dir).filter((f) => f.endsWith('.sql'));
-  const down = all.filter((f) => ARTIFACT_RE.test(f));
-  const forward = all.filter((f) => !ARTIFACT_RE.test(f));
-  return { forward: orderMigrations(forward), down };
+/**
+ * SD-LEO-INFRA-MIGRATION-APPLY-STATE-002 (FR-A): every migration location, one scan.
+ *
+ * The primary root keeps BARE BASENAME ids — the disposition ledger keys on basenames by
+ * documented design (migration-disposition-ledger.mjs gapBasename), and those keys must stay
+ * byte-stable. New roots emit REPO-RELATIVE ids ('supabase/migrations/x.sql'), which is also
+ * the declaration contract for the LEAD-FINAL chairman-apply-state gate (exact-string match).
+ *
+ * COLLISION EXCLUSION, deliberately, instead of dual-keying: 5 basenames exist in BOTH
+ * database/migrations and supabase/migrations (measured 2026-08-10), and every ledger consumer
+ * strips ids to basenames — admitting a colliding id would let ONE disposition silently
+ * suppress TWO different files and make buildLedger() order-dependent. A new-root file whose
+ * basename already exists in the primary root is excluded from the scan and reported loudly
+ * with a content verdict (byte-identical copy vs DIVERGENT content — the divergent class is
+ * the dangerous one and is named explicitly; live specimen: 20251129_musk_algorithm_pareto.sql).
+ *
+ * ENOENT on a configured extra root warns and continues — a root deleted from git has nothing
+ * left to verify. Any other readdir error stays fail-closed (MISCONFIG upstream), matching the
+ * unreadable-entry posture in main().
+ */
+export const DEFAULT_EXTRA_ROOTS = ['database/functions', 'database/manual-updates', 'supabase/migrations'];
+const REPO_ROOT = path.resolve(__dirname, '..');
+
+export function listForwardMigrations({ primary = MIGRATIONS_DIR, extraRoots = DEFAULT_EXTRA_ROOTS, repoRoot = REPO_ROOT } = {}) {
+  const primaryAll = readdirSync(primary).filter((f) => f.endsWith('.sql'));
+  const primarySet = new Set(primaryAll);
+  const all = [...primaryAll];
+  const excluded = [];
+  for (const root of extraRoots) {
+    let entries;
+    try {
+      entries = readdirSync(path.resolve(repoRoot, root)).filter((f) => f.endsWith('.sql'));
+    } catch (e) {
+      if (e && e.code === 'ENOENT') {
+        console.error(`Scan root ${root}/ not found — skipping (nothing committed there to verify).`);
+        continue;
+      }
+      throw e; // non-ENOENT stays fail-closed: surfaces as MISCONFIG via main()'s guard
+    }
+    for (const f of entries) {
+      if (primarySet.has(f)) {
+        let verdict = 'content-unreadable';
+        try {
+          const a = readFileSync(path.join(primary, f), 'utf8');
+          const b = readFileSync(path.resolve(repoRoot, root, f), 'utf8');
+          verdict = a === b ? 'byte-identical copy' : 'DIVERGENT CONTENT';
+        } catch { /* verdict stays content-unreadable */ }
+        excluded.push({ id: `${root}/${f}`, twin: f, verdict });
+        continue;
+      }
+      all.push(`${root}/${f}`);
+    }
+  }
+  const down = all.filter((f) => ARTIFACT_RE.test(f.replace(/^.*[\\/]/, '')));
+  const forward = all.filter((f) => !ARTIFACT_RE.test(f.replace(/^.*[\\/]/, '')));
+  return { forward: orderMigrations(forward), down, excluded };
+}
+
+/**
+ * Resolve a scan id to its on-disk path: repo-relative ids (contain '/') resolve from the
+ * repo root; bare basenames resolve from the primary root — the same duality the id format
+ * encodes. Exported as the single resolution seam (FR-A).
+ */
+export function resolveMigrationPath(id, { primary = MIGRATIONS_DIR, repoRoot = REPO_ROOT } = {}) {
+  return /[\\/]/.test(id) ? path.resolve(repoRoot, id) : path.join(primary, id);
 }
 
 /**
@@ -157,7 +222,10 @@ export function orderMigrations(files) {
   const dated = [];
   const legacy = [];
   for (const f of files) {
-    const m = f.match(/^(\d{8,})/);
+    // FR-A: basename-first, matching migrationDateToken — a repo-relative id must sort by
+    // its date token, not fall into the legacy bucket (which sorts FIRST and would reorder
+    // the cross-file DROP-tracking fold).
+    const m = f.replace(/^.*[\\/]/, '').match(/^(\d{8,})/);
     if (m) dated.push({ f, key: m[1] });
     else legacy.push(f);
   }
@@ -406,7 +474,26 @@ async function main() {
   }
   const cutoff = sinceVal || RETIRED_BEFORE;
 
-  const { forward, down } = listForwardMigrations();
+  // FR-A: a non-ENOENT enumeration failure must be MISCONFIG (fail-closed, exit 2), never
+  // allowed to escape into the entry catch — that prints INFRA_ERROR, which the drift-guard
+  // workflow converts to exit 0: a one-throw permanent gate silencer (the documented
+  // false-pass class this file guards against everywhere else).
+  let scan;
+  try {
+    scan = listForwardMigrations();
+  } catch (e) {
+    console.error(`Scan-root enumeration failed: ${e.code || e.message}`);
+    console.log(`[${OUTCOME.MISCONFIG}]`);
+    return 2;
+  }
+  const { forward, down, excluded } = scan;
+  // FR-A collision exclusion is LOUD: an excluded file is invisible to the whole audit, and
+  // silence here would be exactly the coverage hole this SD closes. DIVERGENT twins are the
+  // dangerous class — same basename, different DDL — and stay a human problem (feedback
+  // channel), never a ledger entry.
+  for (const ex of excluded) {
+    console.error(`Excluded from scan (basename collides with database/migrations/${printableFile(ex.twin)}): ${printableFile(ex.id)} — ${ex.verdict}`);
+  }
   // An unreadable entry is an operator error, not a transient outage, and it must FAIL CLOSED.
   // Left unguarded, a committed DIRECTORY named `x.sql/` (git stores `x.sql/keep`) passes the
   // .sql filter and makes readFileSync throw EISDIR, which escapes main() into the entry catch
@@ -417,13 +504,13 @@ async function main() {
   const fileFacts = [];
   for (const file of forward) {
     try {
-      fileFacts.push({ file, ...extractDdlFacts(readFileSync(path.join(MIGRATIONS_DIR, file), 'utf8')) });
+      fileFacts.push({ file, ...extractDdlFacts(readFileSync(resolveMigrationPath(file), 'utf8')) });
     } catch (e) {
       unreadable.push(`${file} (${e.code || e.message})`);
     }
   }
   if (unreadable.length) {
-    console.error(`Unreadable migration entr(ies) in ${MIGRATIONS_DIR}: ${unreadable.join(', ')}`);
+    console.error(`Unreadable migration entr(ies): ${unreadable.join(', ')}`);
     console.log(`[${OUTCOME.MISCONFIG}]`);
     return 2;
   }
