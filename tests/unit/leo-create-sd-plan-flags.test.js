@@ -47,6 +47,14 @@ describe('FR-3: one canonical normalizeDependsOn', () => {
       .toEqual([{ sd_id: 'SD-OK' }]);
   });
 
+  it('blank sd_id falls through to sd_key — the || semantics the ?? hardening silently broke (PR #6935 WARNING)', () => {
+    // {sd_id:'', sd_key:'SD-OK'} fenced the SD before the hardening; a ?? fallback dropped
+    // it (born claimable, fail-open). The fallback must survive blank AND non-string sd_id.
+    expect(fromChild([{ sd_id: '', sd_key: 'SD-OK' }])).toEqual([{ sd_id: 'SD-OK' }]);
+    expect(fromChild([{ sd_id: 42, sd_key: 'SD-ALSO' }])).toEqual([{ sd_id: 'SD-ALSO' }]);
+    expect(fromChild([{ sd_id: '', sd_key: 42 }])).toEqual([]);
+  });
+
   it('exactly one definition exists across the creation lanes (child.js only re-exports)', () => {
     const childSrc = read('../../lib/sd-creation/source-adapters/child.js');
     expect(childSrc).not.toMatch(/function\s+normalizeDependsOn/);

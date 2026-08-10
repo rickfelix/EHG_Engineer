@@ -333,7 +333,15 @@ export function mapProposalToCreateArgs(normalized, proposal, filePath, opts = {
  * proposal without depends_on yields dependencies=[] (no behavior change). PURE.
  */
 export function normalizeDependsOn(dependsOn) {
-  if (!Array.isArray(dependsOn)) return [];
+  if (!Array.isArray(dependsOn)) {
+    // Whole-input shape mismatch must be as loud as a per-entry drop: a caller passing the
+    // CLI's own comma-string shape ('SD-A,SD-B') here would otherwise get [] silently and
+    // an SD born entirely unfenced (adversarial review PR #6935, INFO-1).
+    if (dependsOn != null) {
+      console.warn('⚠️  normalizeDependsOn: expected an ARRAY of entries, got ' + typeof dependsOn + ' — ALL dependencies dropped; the SD will not be fenced. (A comma string must be split before this call.)');
+    }
+    return [];
+  }
   const out = [];
   let dropped = 0;
   for (const entry of dependsOn) {
@@ -346,8 +354,11 @@ export function normalizeDependsOn(dependsOn) {
       // (SD-LEO-INFRA-LEO-CREATE-PLAN-001) made that latent throw shared across every
       // lane (SECURITY LOW-2, evidence f54bdc8e). Dropped, not coerced: String({}) would
       // mint a garbage-but-truthy '[object Object]' dependency key.
-      const raw = entry.sd_id ?? entry.sd_key;
-      key = typeof raw === 'string' ? raw.trim() : null;
+      // sd_id falls through to sd_key on blank/non-string — the old `||` semantics:
+      // {sd_id:'', sd_key:'SD-OK'} must keep fencing (a `??` here silently un-fenced that
+      // previously-valid shape — adversarial review PR #6935, the one WARNING).
+      const primary = typeof entry.sd_id === 'string' && entry.sd_id.trim() ? entry.sd_id : entry.sd_key;
+      key = typeof primary === 'string' ? primary.trim() : null;
     }
     if (key) out.push({ sd_id: key });
     else dropped += 1;
