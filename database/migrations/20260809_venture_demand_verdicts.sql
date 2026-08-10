@@ -1,3 +1,5 @@
+-- @approved-by: codestreetlabs@gmail.com
+-- Approval provenance: chairman SMS reply "A" 2026-08-10T00:37:39Z, sms_relay_staging row 4bbbfbf9-8bfc-4002-a20c-8a9bdd1659db (sig_valid), answering decision packet adam-venture-demand-apply-20260809 (sent 2026-08-10T00:12Z, rec A = apply tonight via scribe ceremony). Transcribed by Adam per ruling 5d86e2e3 (worker may transcribe @approved-by with full citation). Solomon consult 80eb4567 -> CONCUR-A (advisories 7aba74b2, e0ba608c).
 -- SD-LEO-FEAT-VENTURE-DEMAND-VALIDATION-001 — FR-1.
 --
 -- THE GAP THIS CLOSES: a marketing channel graduates to autonomous purely on a clean-streak
