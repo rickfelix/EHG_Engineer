@@ -3,6 +3,8 @@
 
 ## Table of Contents
 
+- [2026-08-10](#2026-08-10)
+  - [Infrastructure](#infrastructure)
 - [2026-07-31](#2026-07-31)
   - [Security](#security)
 - [2026-07-19](#2026-07-19)
@@ -103,6 +105,14 @@
   - [Housekeeping & CI](#housekeeping-ci)
   - [EHG_Engineering](#ehg_engineering)
   - [EHG (Venture App)](#ehg-venture-app)
+
+## 2026-08-10
+
+### Infrastructure
+- **Drive-score leg1_landed: unavailable reason now tells the measured truth instead of a stale, disproven "not wired" claim** - PR #6950 (SD-LEO-INFRA-DRIVE-SCORE-LEG1-001)
+  - **What shipped**: `scripts/cron/drive-report-sweep.mjs`'s leg1 `unavailable` reason previously read "scoreLeg1 needs the same uncapped chain-item set as the belt sections, plus a git runner in the job; neither is wired into this cron" — false on both halves by the time this SD ran (the leg module is fully built and tested, and the chain-item set was already fetched earlier in the same cron). The reason now records the actual, measured cause: the ratified ancestry rule (merge-base `--is-ancestor`, ruling `d50b9f12`) is unearnable in this repo's delete-branch-on-merge workflow — only 7/111 branches resolved as ancestors even over the favourable completed-items population (18 branches absent, 86 not-ancestor), and the open-item input set is definitionally not-landed. The new text cites the measurement (evidence `ab82da6b`) and the ruling holding it unavailable (`fea8b4c4`) pending a chairman decision on redefining the landing question.
+  - **Why this shipped instead of the originally-scoped leg1 wiring**: the SD's original scope was to wire leg1 into the cron. LEAD-phase premise measurement found that scope would have moved the chairman's drive score from an honest "0/0 unmeasured" to a **permanently false** "0/2 measured" — the exact harm the aggregate's own contract forbids. Escalated to the coordinator as a spec conflict with two options (A: redefine the landing question, chairman-surfaced; B: ship only the honest-reason correction). The coordinator ruled Option B same-tick; Option A remains open, tracked separately.
+  - **Verification**: a two-sided regression pin (`tests/unit/cron/drive-report-sweep.test.js`) asserts the new reason's load-bearing phrases AND the absence of the old "neither is wired" text, so it cannot silently regress in either direction. 46/46 tests green on `origin/main` post-merge. Diff scoped to exactly the sweep and its test file — no leg-definition, workflow, or wiring changes. `/heal` scored 94/100.
 
 ## 2026-07-31
 
