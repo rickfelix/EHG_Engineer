@@ -59,6 +59,21 @@ describe('assessInstructionPremise — the claim-time verdict', () => {
     expect(r.directive).not.toBeNull();
   });
 
+  it('a FUTURE-DATED stamp is surfaced, never fresh — one wrong stamp must not silence the guard forever (SECURITY probe)', () => {
+    // Without the future bound, ageMs goes negative and passes every staleness test — a
+    // tz-naive local timestamp on a US-Eastern seat is enough to reach this state honestly.
+    const r = assessInstructionPremise({ instruction: 'apply migration X', premise_measured_at: new Date(NOW + 24 * 3600_000).toISOString() }, NOW);
+    expect(r.verdict).toBe('future');
+    expect(r.directive).toMatch(/RE-VERIFY BEFORE EXECUTING/);
+    expect(r.directive).toMatch(/UNVERIFIED/);
+  });
+
+  it('NEGATIVE: slight clock skew (within tolerance) still reads fresh — the future bound must not refuse honest stamps', () => {
+    const r = assessInstructionPremise({ instruction: 'apply migration X', premise_measured_at: new Date(NOW + 2 * 60_000).toISOString() }, NOW);
+    expect(r.verdict).toBe('fresh');
+    expect(r.directive).toBeNull();
+  });
+
   it('every instruction-body key the FR names is detected: instruction, apply, body, steps', () => {
     for (const key of ['instruction', 'apply', 'body', 'steps']) {
       expect(hasInstructionBody({ [key]: 'do the thing' }), key).toBe(true);

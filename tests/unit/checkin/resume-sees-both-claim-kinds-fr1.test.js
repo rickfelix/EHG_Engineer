@@ -112,6 +112,33 @@ describe('FR-1 — a seat holding a QF is not handed more work', () => {
     expect(hits).toEqual([]);
   });
 
+  it('BOUNDARY PIN: a PARKED SD claim (is_working_on=false) is NOT resumed by the new branch', async () => {
+    // The commit's stated reason for not swapping findOwnSdClaim wholesale: getMyClaims does not
+    // test is_working_on, so widening the new branch to SDs would newly resume PARKED claims — a
+    // behaviour change FR-1 does not own. TESTING's independent mutation battery proved this
+    // boundary had no fixture (widening `c.kind === 'QF'` to include 'SD' kept everything green);
+    // this test is that missing pin. The parked SD is VISIBLE to getMyClaims here — only the
+    // QF-kind filter keeps it un-resumed, which is exactly what the mutation removes.
+    const hits = [];
+    const sb = makeSb({ sdRows: [{ sd_key: 'SD-PARKED-001', is_working_on: false, status: 'active' }], qfRows: [] });
+    const res = await runSteps([resume, stackingTier(hits)], makeCtx({ sb }));
+    expect(res.action).toBe('self_claimed_qf');
+    expect(hits).toEqual(['handed']);
+  });
+
+  it('HEAL PIN: the QF resume path heals the mirror and says so, like the SD path does', async () => {
+    // TESTING's battery deleted healOwnClaimPointer from the QF branch and everything stayed
+    // green — the heal was stubbed but never asserted. Without it the mirror stays NULL and the
+    // seat re-derives its own claim from the authoritative table on every single tick.
+    const ctx = makeCtx({ sb: makeSb({ sdRows: [], qfRows: [{ id: 'QF-20260807-999', status: 'open' }] }) });
+    const heal = vi.fn(async () => true);
+    ctx.helpers.healOwnClaimPointer = heal;
+    const res = await runSteps([resume], ctx);
+    expect(res.action).toBe('resume');
+    expect(heal).toHaveBeenCalledWith(ctx.sb, ME, 'QF-20260807-999');
+    expect(ctx.base.self_healed_own_claim_pointer).toEqual({ sd: 'QF-20260807-999', cache_updated: true });
+  });
+
   it('an UNREADABLE quick_fixes surface does not read as "holds nothing"', async () => {
     // get-my-claims reports partial-read errors precisely so a caller can tell "you hold nothing"
     // from "I could not see one of the two surfaces". Handing work on an unreadable surface is the
