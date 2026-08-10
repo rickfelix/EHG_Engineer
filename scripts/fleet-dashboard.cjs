@@ -638,7 +638,11 @@ function printWorkers(d) {
     console.log('');
     console.log('  Stale (' + d.staleSessions.length + '):');
     for (const s of d.staleSessions) {
-      const shortSd = s.sd_key.replace('SD-LEO-ORCH-STAGE-VENTURE-WORKFLOW-001-', '').replace(/^SD-.*-/, '');
+      // QF-20260810-290: guard null sd_key. SILENT-HOLDER-AUDIT-001 (#6932) widened the claimed
+      // roster to admit qf_id-only rows (sd_key is only the MIRROR and is NULL for QF holders); a
+      // stale such row reached here and crashed the whole dashboard on .replace of null. Same guard
+      // as the claimed-worker section.
+      const shortSd = (s.sd_key || s.qf_id || '?').replace('SD-LEO-ORCH-STAGE-VENTURE-WORKFLOW-001-', '').replace(/^SD-.*-/, '');
       console.log('  ' + pad(s.tty, 12) + pad(shortSd, 10) + s.heartbeat_age_human);
     }
   }
