@@ -152,6 +152,13 @@ async function hasRecentReminder(sb, { target, topic, now = Date.now(), windowMs
       // non-coordinator producers (periodic-liveness-watcher, sweep, adam) and the orphan
       // reroute re-types arbitrary rows to it; only coordinator-sent reminders may arm this.
       .eq('sender_type', 'coordinator')
+      // THE WINDOW CLAUSE IS THE WHOLE PREDICATE — adversarial ship review of PR #6942 caught
+      // the SEC-3/4 edit REPLACING this line: without it, sinceIso is dead code and one
+      // delivered reminder suppresses the channel for the target's LIFETIME (the table has no
+      // reaper; expired rows still match) — the silent-alarm-death inversion this SD exists
+      // to prevent, strictly worse than the double-fire it fixes. The filter-recording test
+      // now pins this exact clause so a mock cannot go blind to it again.
+      .gte('created_at', sinceIso)
       // SEC-4: the skip log claims to name the LAST-delivered row — order makes that true
       // when >1 row matches (exactly the double-fire condition this dedup exists for).
       .order('created_at', { ascending: false })

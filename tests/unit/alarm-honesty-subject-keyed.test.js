@@ -103,6 +103,22 @@ describe('FR-1: isPreSendCc — the reply-owed-by-addressee exclusion (three arm
     const out = findOverdueReplyNeeded([ccRow], NOW, new Set());
     expect(out).toHaveLength(1); // the pure classifier still reports it overdue; only the ping seam excludes
   });
+
+  it('a suppressed CC RETIRES from the sweep: stamped ping_suppressed_at, and the fetch excludes stamped rows (PR #6942 WARNING)', async () => {
+    // Without retirement, excluded CCs match the unordered limit-200 fetch forever and can
+    // starve genuine consults out of the window once a CC-heavy sender accumulates >200.
+    const ccRow = rowShape('cc', { consult_purpose: 'pre_send' });
+    const sb = makeSweepSupabase([ccRow]);
+    await checkAndPingOverdueReplies(sb, {
+      sessionId: 'adam-uuid', senderType: 'adam', now: NOW,
+      insert: async () => ({ data: { id: 'p' }, error: null }),
+    });
+    // The CC was not pinged, but it WAS retired with the honestly-named stamp.
+    expect(sb._updates).toHaveLength(1);
+    expect(sb._updates[0].id).toBe('cc');
+    expect(sb._updates[0].patch.payload.ping_suppressed_at).toBe(new Date(NOW).toISOString());
+    expect(sb._updates[0].patch.payload.ping_sent_at).toBeUndefined(); // never a fake ping stamp
+  });
 });
 
 describe('FR-1: one isPreSendCc representation repo-wide (GAP-5)', () => {
@@ -155,13 +171,20 @@ const ADAM_ROW_LITERALS = {
 };
 
 function makeDedupSupabase({ recentRows = [], readError = null, reject = false } = {}) {
+  // FILTER-RECORDING mock (adversarial review PR #6942): the previous no-op chain could not
+  // see a DROPPED clause — the SEC-3/4 edit silently replaced .gte(created_at) and every
+  // test stayed green while one delivered reminder suppressed the channel forever. Every
+  // chain call is recorded so the query SHAPE is assertable, not just its result.
+  const calls = [];
   const c = {};
-  for (const m of ['select', 'eq', 'gte', 'order', 'limit']) c[m] = () => c;
+  for (const m of ['select', 'eq', 'gte', 'order', 'limit']) {
+    c[m] = (...args) => { calls.push({ m, args }); return c; };
+  }
   c.then = (res, rej) => {
     if (reject) return rej(new Error('connection reset'));
     return res({ data: recentRows, error: readError });
   };
-  return { from: () => c };
+  return { from: () => c, _calls: calls };
 }
 
 describe('FR-2: hasRecentReminder — three outcomes, fail-open (GAP-1/GAP-2)', () => {
@@ -173,6 +196,19 @@ describe('FR-2: hasRecentReminder — three outcomes, fail-open (GAP-1/GAP-2)', 
   it('returns false (measured-absent) when none in window', async () => {
     const out = await hasRecentReminder(makeDedupSupabase({}), { target: 't', topic: 'x', now: NOW });
     expect(out).toBe(false);
+  });
+
+  it('THE QUERY SHAPE ITSELF: window clause present with the computed sinceIso, sender-narrowed, newest-first (PR #6942 CRITICAL)', async () => {
+    const sb = makeDedupSupabase({});
+    await hasRecentReminder(sb, { target: 't1', topic: 'adam_responsibilities', now: NOW, windowMs: 55 * 60 * 1000 });
+    const expectSince = new Date(NOW - 55 * 60 * 1000).toISOString();
+    // The dropped-clause regression: one delivered reminder suppressed the channel forever
+    // because sinceIso was computed but never applied. This pin makes the WINDOW clause a
+    // test-visible contract, not an implementation detail a refactor can silently drop.
+    expect(sb._calls).toContainEqual({ m: 'gte', args: ['created_at', expectSince] });
+    expect(sb._calls).toContainEqual({ m: 'eq', args: ['sender_type', 'coordinator'] });
+    expect(sb._calls).toContainEqual({ m: 'order', args: ['created_at', { ascending: false }] });
+    expect(sb._calls).toContainEqual({ m: 'eq', args: ['payload->>topic', 'adam_responsibilities'] });
   });
   it('returns null (could-not-look) on a query error AND on a thrown rejection — never a suppressing value', async () => {
     expect(await hasRecentReminder(makeDedupSupabase({ readError: { message: 'boom' } }), { target: 't', topic: 'x', now: NOW })).toBe(null);
