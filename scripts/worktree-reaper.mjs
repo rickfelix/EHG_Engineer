@@ -49,6 +49,7 @@
  */
 
 import { execSync, spawnSync } from 'node:child_process';
+import { runHardenedGit } from '../lib/git/hardened-runner.cjs';
 import fs from 'node:fs';
 import path from 'node:path';
 import readline from 'node:readline';
@@ -610,17 +611,18 @@ async function loadSdKeySets(supabase) {
 
 // ── Git / Gh runners ───────────────────────────────────────────────────
 
+// Adopted from the published hardened runner (SD-LEO-INFRA-PUBLISH-SHELL-INJECTION-001-A);
+// exported (FR-5) so the fs-rm+prune fallback path that reaches it is testable.
 function runGit(args, opts = {}) {
-  const res = spawnSync('git', args, {
+  const r = runHardenedGit(args, {
     cwd: opts.cwd || process.cwd(),
-    encoding: 'utf8',
     stdio: ['ignore', 'pipe', 'pipe'],
-    windowsHide: true,
+    result: true,
   });
   return {
-    stdout: res.stdout || '',
-    stderr: res.stderr || '',
-    code: res.status == null ? 1 : res.status,
+    stdout: r.stdout,
+    stderr: r.stderr,
+    code: r.status == null ? 1 : r.status,
   };
 }
 
@@ -1655,6 +1657,7 @@ if (isMainModule) {
 
 // Exports for integration testing.
 export {
+  runGit,
   parseArgs,
   assertCwdIsMainRepoRoot,
   loadDotenvFromDir,

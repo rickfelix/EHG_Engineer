@@ -29,7 +29,7 @@
 //   node scripts/lint/no-process-cwd-in-sub-agents-lint.mjs --all --json
 import fs from 'node:fs';
 import path from 'node:path';
-import { execFileSync } from 'node:child_process';
+import { makeHardenedGitRunner } from '../../lib/git/hardened-runner.cjs';
 import { fileURLToPath } from 'node:url';
 import { Linter } from 'eslint';
 import rule from '../../eslint-rules/no-process-cwd-in-sub-agents.js';
@@ -97,7 +97,8 @@ function candidateFilesAll(root) {
  * execFileSync rather than execSync: no shell features are needed, so no shell is involved.
  */
 function candidateFilesDiff(root) {
-  const git = (args) => execFileSync('git', args, { cwd: root, encoding: 'utf8' });
+  // Adopted from the published runner (SD-LEO-INFRA-PUBLISH-SHELL-INJECTION-001-A).
+  const git = makeHardenedGitRunner(root);
   const base = git(['merge-base', 'HEAD', 'origin/main']).trim();
   const names = new Set();
   for (const args of [

@@ -130,7 +130,12 @@ describe('R5-4: the scrub is asserted by EFFECT, so unwiring it is detectable', 
     expect(start, 'defaultRunner must exist').toBeGreaterThan(-1);
     const next = src.indexOf('\nfunction ', start + 1);
     const body = src.slice(start, next > -1 ? next : src.length);
-    expect(body).toContain('scrubGitEnv(process.env)');
+    // The wire moved from an inline scrubGitEnv(process.env) to the published hardened runner
+    // (SD-LEO-INFRA-PUBLISH-SHELL-INJECTION-001-A), which carries the same scrub internally —
+    // proven by effect in lib/git/hardened-runner.test.js ('default scrubs' + TS-2). The rule
+    // here stays the same: the production path must be scrub-carrying, never a bare spawn.
+    expect(body).toContain('runHardenedGit(');
+    expect(body).not.toMatch(/execFileSync|spawnSync/);
   });
 });
 

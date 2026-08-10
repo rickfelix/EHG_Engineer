@@ -166,7 +166,11 @@ describe('THE LOAD-BEARING ASSERTION — the real runners spawn without a shell'
       expect(spy).toHaveBeenCalledTimes(2);
       for (const [bin, args, opts] of spy.mock.calls) {
         expect(['gh', 'git']).toContain(bin);
-        expect(opts).not.toHaveProperty('shell'); // ABSENT — falsy would pass on ubuntu
+        // The RULE is "shell is never truthy". Two spellings satisfy it: ABSENT (gh's private
+        // runner) or EXPLICIT false (the published hardened runner, which git now routes
+        // through — SD-LEO-INFRA-PUBLISH-SHELL-INJECTION-001-A — where the stated false must be
+        // consciously flipped to regress). Asserting exact absence would fail the SAFER spelling.
+        expect([undefined, false]).toContain(opts.shell);
         expect(args).toContain(HOSTILE_BRANCH);   // discrete element, never concatenated
       }
     } finally {

@@ -18,7 +18,7 @@
 // Idempotent: a SHA-256 dedup_hash over (date::symptom::file) prevents duplicate inserts.
 // Filter rows: category='harness_backlog' AND status='new' for the open backlog.
 import 'dotenv/config';
-import { execSync } from 'node:child_process';
+import { runHardenedGit } from '../lib/git/hardened-runner.cjs';
 import { realpathSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import { createClient } from '@supabase/supabase-js';
@@ -31,9 +31,12 @@ import { emitFeedback } from '../lib/governance/emit-feedback.js';
  * never blocks the insert — purely advisory. Returns { commit, when, subject, via } or null.
  */
 export function findPossiblePriorFix({ symptom, file } = {}) {
+  // Adopted from the published runner (SD-LEO-INFRA-PUBLISH-SHELL-INJECTION-001-A): this was a
+  // template-literal execSync — the exact sink shape the sibling lint (child B) forbids — with
+  // caller-influenced values (file path, symptom token) reaching the shell string. Now argv.
   const git = (args) => {
     try {
-      return execSync(`git ${args}`, { encoding: 'utf-8', timeout: 5000, stdio: ['pipe', 'pipe', 'pipe'] }).trim();
+      return runHardenedGit(args, { timeout: 5000, stdio: ['pipe', 'pipe', 'pipe'] }).trim();
     } catch {
       return '';
     }
@@ -52,14 +55,14 @@ export function findPossiblePriorFix({ symptom, file } = {}) {
   try {
     // Source 1: most recent origin/main commit touching the cited file.
     if (file) {
-      const hit = parse(git(`log origin/main -n 1 --format="%h|%cI|%s" -- "${file.replace(/"/g, '')}"`), 'file:' + file);
+      const hit = parse(git(['log', 'origin/main', '-n', '1', '--format=%h|%cI|%s', '--', file]), 'file:' + file);
       if (hit) return hit;
     }
     // Source 2: the most distinctive identifier/path token from the symptom, matched (literal,
     // case-insensitive) against recent origin/main commit messages. Cheap vs. full-history pickaxe.
     const token = (symptom || '').match(/[A-Za-z0-9_./-]{8,}/g)?.sort((a, b) => b.length - a.length)[0];
     if (token) {
-      const hit = parse(git(`log origin/main -n 1 --format="%h|%cI|%s" -F -i --grep="${token.replace(/"/g, '')}"`), 'keyword:' + token);
+      const hit = parse(git(['log', 'origin/main', '-n', '1', '--format=%h|%cI|%s', '-F', '-i', '--grep=' + token]), 'keyword:' + token);
       if (hit) return hit;
     }
   } catch {
