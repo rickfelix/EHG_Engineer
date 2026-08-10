@@ -55,20 +55,41 @@ export function isLoopbackHost(host) {
   return h === 'localhost' || h === '127.0.0.1' || h === '::1' || h === '0.0.0.0' || h.startsWith('127.');
 }
 
-/** Extract the target host from the many net/tls connect() call shapes. Exported for the same
+/** Classify the target of a net/tls connect() call across ALL of Node's documented shapes.
+ *  Returns { kind, host }: kind is 'network' (host is the target), 'unix' (a socket path — never
+ *  network), or 'unknown' (unrecognised shape → the caller FAILS CLOSED). Exported for the same
  *  reason as isLoopbackHost. */
+export function connectTargetOf(args) {
+  let a = args[0];
+  // Node normalises some internal calls to ([options, cb]) — recurse into a lone array.
+  if (Array.isArray(a) && args.length === 1) return connectTargetOf(a);
+  if (a && typeof a === 'object') {
+    if (typeof a.path === 'string') return { kind: 'unix', host: null };        // options-form unix socket
+    const host = a.host ?? a.hostname;
+    return { kind: 'network', host: host ?? '127.0.0.1' };                       // options-form TCP (host omitted → localhost)
+  }
+  if (typeof a === 'number' || (typeof a === 'string' && /^\d+$/.test(a))) {     // (port[, host]) — numeric OR string port
+    return { kind: 'network', host: typeof args[1] === 'string' ? args[1] : '127.0.0.1' };
+  }
+  if (typeof a === 'string') return { kind: 'unix', host: null };               // (path) — unix socket
+  return { kind: 'unknown', host: null };                                       // fail closed
+}
+
+/** Back-compat: the host string, or null for non-network / unknown shapes. */
 export function connectHostOf(args) {
-  const a = args[0];
-  if (a && typeof a === 'object') return a.host ?? a.hostname ?? null; // options form (incl. Unix socket path → host undefined)
-  if (typeof a === 'number') return typeof args[1] === 'string' ? args[1] : '127.0.0.1'; // (port[, host])
-  return null; // (path) — Unix socket, not network
+  const t = connectTargetOf(args);
+  return t.kind === 'network' ? t.host : null;
 }
 
 /** The socket-guard decision, pure: refuse a connect() whose target is a routable (non-loopback)
- *  host. This is what makes the pg/pooler path safe regardless of how its connection string was
- *  obtained — and it is unit-assertable without touching real sockets. */
+ *  host, OR whose shape we cannot parse (fail CLOSED — an unrecognised call must not be a free
+ *  pass). Unix-socket paths are never network and are allowed. This is what makes the pg/pooler
+ *  path safe regardless of how its connection string was obtained. */
 export function shouldRefuseConnect(args) {
-  return !isLoopbackHost(connectHostOf(args));
+  const t = connectTargetOf(args);
+  if (t.kind === 'unix') return false;
+  if (t.kind === 'unknown') return true;         // fail closed
+  return !isLoopbackHost(t.host);
 }
 
 let socketGuardInstalled = false;
@@ -161,16 +182,17 @@ export function installDbTierGate({
   // spawn arm end-to-end.
   if (globalObj === globalThis && !socketGuardInstalled) {
     socketGuardInstalled = true;
-    const socketConnect = net.Socket.prototype.connect;
-    const netConnect = net.connect;
-    const tlsConnect = tls.connect;
     const wrap = (orig, self) => function (...args) {
-      if (shouldRefuseConnect(args)) throw blocked(`tcp://${connectHostOf(args)}`);
+      if (shouldRefuseConnect(args)) throw blocked(`tcp://${connectHostOf(args) ?? 'unknown-shape'}`);
       return orig.apply(self ?? this, args);
     };
-    net.Socket.prototype.connect = wrap(socketConnect);
-    net.connect = wrap(netConnect, net);
-    tls.connect = wrap(tlsConnect, tls);
+    // Patch EVERY connect entry point: Socket.prototype.connect, the net.connect and
+    // net.createConnection aliases (distinct functions — patching one leaves the other live),
+    // and tls.connect. http/https build on net.createConnection, so this covers them too.
+    net.Socket.prototype.connect = wrap(net.Socket.prototype.connect);
+    net.connect = wrap(net.connect, net);
+    net.createConnection = wrap(net.createConnection, net);
+    tls.connect = wrap(tls.connect, tls);
   }
 
   if (!warned) {

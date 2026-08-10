@@ -112,13 +112,28 @@ describe('FR-1 — the fetch guard is the safety layer (two-sided)', () => {
   it('SEC-01 socket guard: the pg/pooler chokepoint refuses a ROUTABLE host, allows loopback (the pure classifier)', () => {
     // The real net/tls patch is proven end-to-end by the spawn arm; this pins the DECISION that
     // makes the pg path safe regardless of how its connection string was obtained.
-    expect(shouldRefuseConnect([{ host: 'aws-1-us-east-1.pooler.supabase.com', port: 5432 }])).toBe(true);
-    expect(shouldRefuseConnect([5432, 'aws-1-us-east-1.pooler.supabase.com'])).toBe(true);
-    expect(shouldRefuseConnect([{ host: '127.0.0.1', port: 1 }])).toBe(false);     // the poison target
+    const PROD = 'aws-1-us-east-1.pooler.supabase.com';
+    expect(shouldRefuseConnect([{ host: PROD, port: 5432 }])).toBe(true);         // options form
+    expect(shouldRefuseConnect([{ hostname: PROD, port: 5432 }])).toBe(true);     // hostname alias
+    expect(shouldRefuseConnect([5432, PROD])).toBe(true);                         // (numericPort, host)
+    expect(shouldRefuseConnect(['5432', PROD])).toBe(true);                       // SEC-06: STRING port
+    expect(shouldRefuseConnect([[{ host: PROD, port: 5432 }]])).toBe(true);       // SEC-06: normalised [options] array
+    expect(shouldRefuseConnect([{ host: '127.0.0.1', port: 1 }])).toBe(false);    // the poison target
     expect(shouldRefuseConnect([{ host: 'localhost', port: 5432 }])).toBe(false);
-    expect(shouldRefuseConnect(['/tmp/pg.sock'])).toBe(false);                     // unix socket, not network
+    expect(shouldRefuseConnect(['/tmp/pg.sock'])).toBe(false);                    // unix socket, not network
+    expect(shouldRefuseConnect([{ path: '/tmp/pg.sock' }])).toBe(false);          // options-form unix socket
+    expect(shouldRefuseConnect([])).toBe(true);                                   // SEC-06: unparseable ⇒ fail CLOSED
+    expect(shouldRefuseConnect([null])).toBe(true);                              // fail closed
     expect(isLoopbackHost('::1')).toBe(true);
     expect(connectHostOf([{ host: 'prod.example', port: 5432 }])).toBe('prod.example');
+  });
+
+  it('SEC-06: all four connect entry points are wrapped (net.connect and net.createConnection are distinct)', () => {
+    const src = fs.readFileSync(path.join(REPO, 'tests/helpers/db-tier-gate.js'), 'utf8');
+    expect(src).toMatch(/net\.Socket\.prototype\.connect\s*=\s*wrap/);
+    expect(src).toMatch(/net\.connect\s*=\s*wrap/);
+    expect(src).toMatch(/net\.createConnection\s*=\s*wrap/);
+    expect(src).toMatch(/tls\.connect\s*=\s*wrap/);
   });
 
   it('SEC-01 control: a DESIGNATED run keeps the direct-Postgres creds intact (real coverage needs them)', () => {
