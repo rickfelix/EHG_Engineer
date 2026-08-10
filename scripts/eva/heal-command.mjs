@@ -155,7 +155,13 @@ async function cmdSDQuery(opts) {
       .from('strategic_directives_v2')
       .select('sd_key, title, key_changes, success_criteria, success_metrics, strategic_objectives, smoke_test_steps, delivers_capabilities, completion_date, status, metadata');
 
-    q = opts.inProgress ? q.in('status', ['completed', 'in_progress', 'active']) : q.eq('status', 'completed');
+    // SD-LEO-INFRA-HEAL-BEFORE-COMPLETE-001 FR-3: an EXPLICIT --sd-id implies the widened status
+    // set — a named-SD query refusing the SD you named is a broken contract, and it made the
+    // HEAL_BEFORE_COMPLETE gate's printed remediation unreachable pre-completion. Set queries
+    // (--today/--last/--since) keep the completed-only default.
+    q = (opts.inProgress || opts.sdId)
+      ? q.in('status', ['completed', 'in_progress', 'active', 'pending_approval'])
+      : q.eq('status', 'completed');
     q = q.order('completion_date', { ascending: false }).order('sd_key', { ascending: true }); // unique tiebreaker (FR-6)
 
     if (opts.sdId) {
@@ -195,7 +201,7 @@ async function cmdSDQuery(opts) {
   if (!sds || sds.length === 0) {
     console.log('\nNo completed SDs found matching the filter.');
     if (opts.today) console.log('  (No SDs completed today)');
-    if (opts.sdId) console.log(`  (SD ${opts.sdId} not found or not completed)`);
+    if (opts.sdId) console.log(`  (SD ${opts.sdId} not found in completed/in_progress/active/pending_approval)`);
     process.exit(0);
   }
 
