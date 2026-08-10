@@ -597,11 +597,14 @@ describe('the BOARD is the renderer first consumer — and never degrades quietl
   // FR-6: the drive state must be reached in the DEFAULT config with no env gate, and the consumer
   // must never fall back to hand-formatting or to silence. renderDriveState THROWS on an incomplete
   // verdict by design; printing the axes we DID get would be the exact defect this SD removes.
-  it('the board imports the composer, the registry and BOTH render entry points', () => {
+  it('the board imports the composer, the registry, the FORCING layer and the refusal renderer', () => {
+    // SD-LEO-INFRA-DRIVE-STATE-FORCING-001: the board renders THROUGH composeDriveStateReport
+    // (which calls renderDriveState internally and adds owed-action blocking) — importing the raw
+    // renderer directly would let the board print an unblocked all-green around the forcing layer.
     const src = readFileSync(new URL('../../../scripts/adam-pm-board.mjs', import.meta.url), 'utf8');
     expect(src).toContain('computeDriveState');
     expect(src).toContain('ADAPTERS');
-    expect(src).toContain('renderDriveState');
+    expect(src).toContain('composeDriveStateReport');
     expect(src).toContain('renderRefusal');
   });
 
@@ -646,10 +649,11 @@ describe('the BOARD is the renderer first consumer — and never degrades quietl
 describe('SECOND consumer: coordinator-hourly-review renders FROM the probe', () => {
   const SRC = readFileSync(new URL('../../../scripts/coordinator-hourly-review.cjs', import.meta.url), 'utf8');
 
-  it('imports the composer, the registry and BOTH render entry points', () => {
+  it('imports the composer, the registry, the FORCING layer and the refusal renderer', () => {
+    // SD-LEO-INFRA-DRIVE-STATE-FORCING-001: the review renders THROUGH composeDriveStateReport.
     expect(SRC).toContain('computeDriveState');
     expect(SRC).toContain('ADAPTERS');
-    expect(SRC).toContain('renderDriveState');
+    expect(SRC).toContain('composeDriveStateReport');
     expect(SRC).toContain('renderRefusal');
   });
 
