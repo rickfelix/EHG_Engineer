@@ -2,19 +2,12 @@ import { defineConfig } from 'vitest/config';
 import fs from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { config as loadEnv } from 'dotenv';
-// QF-20260726-459 Part 1b. The predicate is imported, never re-derived — see db-target.js.
-import { assessDbTarget } from './tests/helpers/db-target.js';
-
-// The db gate is evaluated HERE, at config load, but `.env` is normally loaded by the db project's
-// setupFiles INSIDE the worker — so without this, process.env has no SUPABASE_URL at gate time and
-// the project would be disabled unconditionally. An always-off gate is safe but wrong: it is
-// indistinguishable from a working one while silently deleting all DB coverage, and it would make
-// a legitimate VITEST_DB_ALLOW_REF opt-in impossible. Mirror setup.db.js so the gate assesses the
-// SAME environment the tests would actually run against. Shell env still wins (dotenv never
-// overrides an existing value).
-loadEnv({ path: '.env' });
-loadEnv({ path: '.env.test' });
+// SD-LEO-INFRA-VITEST-TIER-REAL-001: the designation predicate no longer gates discovery here —
+// it gates at RUNTIME in tests/setup.db.js (imported there, never re-derived; see db-target.js).
+// The config-level dotenv load that fed the old discovery gate is gone WITH the gate: it put real
+// credentials into the config process env, which `pool: 'forks'` workers inherit — including unit
+// workers whose whole tier contract is never seeing them. Each project's setupFiles load exactly
+// the env that project is entitled to.
 
 /**
  * Quarantine manifest — SD-LEO-FIX-GREEN-MAIN-TRIAGE-001.
@@ -114,6 +107,12 @@ const SHARED_EXCLUDE = [
   // also covers a preserved copy that lands outside the top-level scratch/ root.
   'scratch/**',
   '**/scratch/**',
+  // SD-LEO-INFRA-VITEST-TIER-REAL-001: .reaper-source/ is a gitignored FULL REPO COPY
+  // (.gitignore '.reaper-source'), the same two-surface divergence class as scratch/ above —
+  // measured at 3117 phantom collection entries locally (3116 in the unit project) that CI never
+  // sees. Excluding it is a hard prerequisite for any local==CI collection assertion.
+  '.reaper-source/**',
+  '**/.reaper-source/**',
 ];
 
 // Inherently DB-dependent test locations — routed to the opt-in `db` project
@@ -151,48 +150,33 @@ const SMOKE_INCLUDE = ['**/tests/smoke.test.js'];
 //
 // tests/integration/migration-apply-state-ledger-wiring.test.js was routed to the gated `db`
 // project purely BY DIRECTORY. It imports no db setup and touches no client — its only credential
-// consumer is the verifier SUBPROCESS it spawns, which inherits the invoking step's env. With the
-// db project disabled in CI (no designated non-production target), vitest collected zero files and
-// exited 1 ("No test files found"), so the drift gate's proof step was red on every run regardless
-// of the drift verdict (measured: 6/6 recent runs). This dedicated UNGATED project — the
-// SMOKE_INCLUDE precedent — lets the proof actually execute where the workflow step supplies the
-// credentials. Deliberately NOT gated on VITEST_DB_ALLOW_REF: that flag authorizes all 225 db
-// suites against the configured target; this project resolves exactly one self-contained file.
-// (Locally, an enabled db project also collects this file via DB_INCLUDE — a harmless double-run.)
+// consumer is the verifier SUBPROCESS it spawns, which inherits the invoking step's env. Before
+// this SD, the CI-disabled db project collected zero files, vitest exited 1 ("No test files
+// found"), and the drift gate's proof step was red on every run regardless of the drift verdict
+// (measured: 6/6 recent runs). This dedicated project — the SMOKE_INCLUDE precedent — lets the
+// proof actually execute in CI. Deliberately NOT gated on VITEST_DB_ALLOW_REF: that flag
+// authorizes all db suites against the configured target; this project resolves exactly one
+// self-contained file. MERGE NOTE (VITEST-TIER-REAL-001): the db gate now lives at RUNTIME in
+// tests/setup.db.js and SKIPS every test on an undesignated target — which is why this project
+// carries NO setupFiles (see the project block): loading that setup would silently skip the
+// proof and the workflow's exit-0 arm would read green-while-unproven, the exact masking FR-C
+// abolishes. The suite needs no setup — it opens no client.
 const MIGRATION_GATE_INCLUDE = ['**/tests/integration/migration-apply-state-ledger-wiring.test.js'];
 
-// ─── QF-20260726-459 Part 1b: gate the PROJECT, not the individual files ────────────────────────
+// ─── SD-LEO-INFRA-VITEST-TIER-REAL-001: the db gate moved from DISCOVERY to RUNTIME ─────────────
 //
-// Part 1 made tests/helpers/db-available.js fail closed. That was necessary and insufficient:
-// measured statically, the db project resolves 225 files and only 100 reference the guard in any
-// form. THE OTHER 125 NEVER IMPORT IT, so no change to that helper can gate them — and the db
-// project's setupFiles load the REAL .env. The QF's own title claim stayed true for those files.
+// QF-20260726-459 Part 1b gated the PROJECT here (include: [] when undesignated), which closed
+// the live-DB hole but made every db_include member a member of ZERO projects — silent-vanish and
+// zero-member states became indistinguishable, and the membership guard could only warn about it.
 //
-// A per-file fix does not scale to 125 files and, worse, silently un-fixes itself the moment
-// someone adds file 226. The only place that covers every file regardless of what it imports is
-// the project definition, so the gate goes here: when the configured target is not an explicitly
-// designated non-production database, the db project resolves to ZERO test files.
-//
-// This is the same predicate the helper uses, imported — NOT re-derived. Re-implementing it here
-// is precisely how the original defect survived its own test suite.
-const DB_TARGET = assessDbTarget(process.env);
-
-if (!DB_TARGET.allowed) {
-  // Loud, because "there was no DB coverage" and "DB coverage silently vanished" look identical in
-  // a green run. Anyone who expected these tests to execute must be told why they did not.
-  console.warn(
-    `[vitest] db project DISABLED — no designated non-production target (reason: ${DB_TARGET.reason}` +
-      `${DB_TARGET.ref ? `, target ref: ${DB_TARGET.ref}` : ''}). 0 of ${''}db tests will run.\n` +
-      '[vitest] These suites write to whatever they point at, and 125 of 225 do not self-guard.\n' +
-      '[vitest] To run them, set VITEST_DB_ALLOW_REF=<project-ref> naming the ref your SUPABASE_URL\n' +
-      '[vitest] actually points at — an authorisation, not a rubber stamp. Never name production.',
-  );
-}
-
-// Empty include => vitest resolves no files for this project. Skipping is the intended end state
-// (per the QF: "fail-closed-with-nothing-to-allow is a safe end state; every DB test skips, which
-// is strictly better than running against production"), so this must not turn every run red.
-const DB_INCLUDE_GATED = DB_TARGET.allowed ? DB_INCLUDE : [];
+// The gate now lives at runtime in tests/setup.db.js (the doctrine the smoke project above has
+// always stated: the gate belongs at runtime, inside the suite, not at file discovery). When the
+// target is undesignated, that setup file forces sentinels, refuses ALL network via a
+// globalThis.fetch guard (suite hooks execute under every viable skip mechanism, and env-forcing
+// alone has a measured dotenv-override bypass), skips every test, and writes one stderr line per
+// process. Discovery is therefore UNGATED: every db_include member always resolves, and the
+// designation predicate stays where it always was — imported from tests/helpers/db-target.js,
+// never re-derived.
 
 export default defineConfig({
   plugins: [stripShebangPlugin()],
@@ -315,13 +299,16 @@ export default defineConfig({
         extends: true,
         test: {
           name: 'db',
-          // Loads .env + .env.test (real credentials) — opt-in DB tier only.
+          // Loads .env + .env.test (real credentials) — opt-in DB tier only. The setup file IS
+          // the runtime gate (SD-LEO-INFRA-VITEST-TIER-REAL-001): undesignated targets skip
+          // every test and refuse all network; see tests/setup.db.js.
           setupFiles: ['./tests/setup.db.js'],
-          // QF-20260726-459 Part 1b: gated — empty unless the target is an explicitly designated
-          // non-production database. See DB_INCLUDE_GATED above.
-          include: DB_INCLUDE_GATED,
-          exclude: SHARED_EXCLUDE,
-          // A gated-empty project must not fail the run: skipping IS the safe end state here.
+          include: DB_INCLUDE,
+          // tests/ddl/**/*.db.test.js also matches DB_INCLUDE's '**/*.db.test.js' but is owned
+          // by vitest.ddl.config.mjs — excluded here so the same file is never double-collected.
+          exclude: [...SHARED_EXCLUDE, 'tests/ddl/**'],
+          // A filtered run that matches no files must not fail the run: skipping IS the safe
+          // end state for this tier.
           passWithNoTests: true,
         },
       },
@@ -343,27 +330,25 @@ export default defineConfig({
         extends: true,
         test: {
           name: 'migration-gate',
-          // Same setup shape as `smoke` (the precedent): real-credential dotenv load is a no-op
-          // in CI (no .env file; the workflow step supplies env directly) and harmless locally.
-          // The suite itself never opens a client — credentials only reach the verifier
-          // subprocess it spawns. See MIGRATION_GATE_INCLUDE for the full rationale.
+          // NO setupFiles, deliberately (post-merge with VITEST-TIER-REAL-001): setup.db.js now
+          // enforces the runtime db gate and SKIPS every test on an undesignated target — loading
+          // it here would silently skip the proof while the workflow's exit-0 arm read green.
+          // The suite needs no setup: it opens no client; only its verifier SUBPROCESS uses
+          // credentials, inherited from this process env (the workflow step supplies them in CI;
+          // the subprocess's own dotenv load never overrides inherited vars).
           //
           // SECURITY SEC-2: the verifier subprocess CAN write (emitBreakageAlert inserts into
-          // system_alerts under --strict with gaps) — in CI that write dies only because the
-          // step omits SUPABASE_URL/service-role, an accident of env. These stubs make the
-          // accident structural: test.env is applied before setupFiles and dotenv never
-          // overrides set vars, so the alert INSERT is impossible everywhere while the
-          // POOLER/DATABASE_URL read path keeps working.
+          // system_alerts under --strict with gaps) — in CI that write died only because the
+          // step omits the URL/service-role vars, an accident of env. These stubs make the
+          // accident structural: test.env lands in this process env, the child inherits it, and
+          // dotenv-in-the-child never overrides set vars — the alert INSERT is impossible
+          // everywhere while the POOLER/DATABASE_URL read path keeps working. Both URL legs
+          // stubbed (the service-client factory PREFERS the NEXT_PUBLIC_ sibling).
           env: {
             SUPABASE_URL: 'https://test.invalid.local',
-            // Second fence leg (adversarial review): createSupabaseServiceClient PREFERS
-            // NEXT_PUBLIC_SUPABASE_URL, which setup.db.js's dotenv load would populate with
-            // the real production URL — the fake key already made writes impossible, but the
-            // failed INSERT was still addressed at production. Both legs now structural.
             NEXT_PUBLIC_SUPABASE_URL: 'https://test.invalid.local',
             SUPABASE_SERVICE_ROLE_KEY: 'test-service-role-key-not-real',
           },
-          setupFiles: ['./tests/setup.db.js'],
           include: MIGRATION_GATE_INCLUDE,
           exclude: SHARED_EXCLUDE,
         },

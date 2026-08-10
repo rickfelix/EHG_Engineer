@@ -141,15 +141,22 @@ jobs:
       # for seeder drift.
       # SD-LEO-INFRA-MIGRATION-APPLY-STATE-002 (FR-C): the proof now RUNS — the test needed no
       # db-project gating at all (it imports no db setup; its only credential consumer is the
-      # verifier subprocess, which this step supplies). It executes under the dedicated ungated
-      # `migration-gate` vitest project (SMOKE_INCLUDE precedent). THREE-ARM harness/verdict
-      # separation: proof ran and passed → OK; proof ran and FAILED → the gate fails (a real
-      # verdict); the harness could not run it ("No test files found") → a loud warning that
-      # NAMES the harness and exits 0 — a harness failure can neither mask nor impersonate a
-      # drift verdict. Before this change the db project was disabled in CI, vitest exited 1
-      # with zero tests collected, and this step redded the gate on every run regardless of
-      # verdict (measured: 6/6 recent runs, e.g. run 31359162717). Deliberately NOT setting
-      # VITEST_DB_ALLOW_REF — that would authorize all db suites against production secrets.
+      # verifier subprocess, which this step supplies). It executes under the dedicated
+      # `migration-gate` vitest project (no setupFiles — see vitest.config.js). THREE-ARM
+      # harness/verdict separation: proof ran and passed → OK; proof ran and FAILED → the gate
+      # fails (a real verdict); the harness could not run it ("No test files found") → a loud
+      # warning that NAMES the harness and exits 0 — a harness failure can neither mask nor
+      # impersonate a drift verdict. Before this change the db-project invocation redded this
+      # step on every run regardless of verdict (measured: 6/6 recent runs, e.g. 31359162717).
+      # Deliberately NOT setting VITEST_DB_ALLOW_REF — that would authorize all db suites
+      # against production secrets.
+      #
+      # MERGE NOTE (supersedes VITEST-TIER-REAL-001's dbgate/skip pair FOR THIS STEP ONLY):
+      # that SD made the not-running state explicit (assess designation → run under the db project
+      # when allowed, else a loud SKIPPED step). The migration-gate project removes the
+      # designation dependency entirely — the proof runs on every gate run, which is strictly
+      # stronger than declaring why it did not. The dbgate assessment pattern remains available
+      # for suites that genuinely open db clients; this one does not.
       - name: FR-6 fail-open wiring proof
         if: always()
         env:

@@ -196,3 +196,26 @@ describe('classifyFirstArg unit coverage', () => {
     expect(classifyFirstArg('')).toBe('safe');
   });
 });
+
+// SD-LEO-INFRA-CLOSE-SHELL-INJECTION-001 (SEC-1): S2 widened from the literal shell:true to any
+// non-literal-false shell: value. The 3 live sites were shell: process.platform==='win32'.
+describe('SEC-1: S2 flags shell: with any non-literal-false value (two-sided)', () => {
+  it('flags shell: process.platform === "win32" (the shape the literal regex missed)', () => {
+    const line = "spawn('npx', args, { shell: process.platform === 'win32' });";
+    expect(scanLine(stripForScan(line), line).map((h) => h.selector)).toContain('S2');
+  });
+  it('flags a bare-identifier shell: value', () => {
+    const line = 'spawnSync(bin, args, { shell: useShell });';
+    expect(scanLine(stripForScan(line), line).map((h) => h.selector)).toContain('S2');
+  });
+  it('still flags the literal shell: true (no regression)', () => {
+    const line = 'spawnSync(bin, args, { shell: true });';
+    expect(scanLine(stripForScan(line), line).map((h) => h.selector)).toContain('S2');
+  });
+  it('does NOT flag shell: false or shell: 0 (the off-switches)', () => {
+    for (const off of ['shell: false', 'shell:false', 'shell: 0']) {
+      const line = 'spawnSync(bin, args, { ' + off + ' });';
+      expect(scanLine(stripForScan(line), line).map((h) => h.selector)).not.toContain('S2');
+    }
+  });
+});

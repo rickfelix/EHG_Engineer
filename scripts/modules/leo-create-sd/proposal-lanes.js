@@ -333,13 +333,41 @@ export function mapProposalToCreateArgs(normalized, proposal, filePath, opts = {
  * proposal without depends_on yields dependencies=[] (no behavior change). PURE.
  */
 export function normalizeDependsOn(dependsOn) {
-  if (!Array.isArray(dependsOn)) return [];
+  if (!Array.isArray(dependsOn)) {
+    // Whole-input shape mismatch must be as loud as a per-entry drop: a caller passing the
+    // CLI's own comma-string shape ('SD-A,SD-B') here would otherwise get [] silently and
+    // an SD born entirely unfenced (adversarial review PR #6935, INFO-1).
+    if (dependsOn != null) {
+      console.warn('⚠️  normalizeDependsOn: expected an ARRAY of entries, got ' + typeof dependsOn + ' — ALL dependencies dropped; the SD will not be fenced. (A comma string must be split before this call.)');
+    }
+    return [];
+  }
   const out = [];
+  let dropped = 0;
   for (const entry of dependsOn) {
     let key = null;
     if (typeof entry === 'string') key = entry.trim();
-    else if (entry && typeof entry === 'object') key = (entry.sd_id || entry.sd_key || '').trim();
+    else if (entry && typeof entry === 'object') {
+      // Only string-typed keys count. `(entry.sd_id || entry.sd_key || '').trim()` threw on
+      // {sd_id: 42} — contradicting this function's own fail-soft contract ("malformed
+      // entries are dropped ... must never crash SD creation"), and FR-3's de-dupe
+      // (SD-LEO-INFRA-LEO-CREATE-PLAN-001) made that latent throw shared across every
+      // lane (SECURITY LOW-2, evidence f54bdc8e). Dropped, not coerced: String({}) would
+      // mint a garbage-but-truthy '[object Object]' dependency key.
+      // sd_id falls through to sd_key on blank/non-string — the old `||` semantics:
+      // {sd_id:'', sd_key:'SD-OK'} must keep fencing (a `??` here silently un-fenced that
+      // previously-valid shape — adversarial review PR #6935, the one WARNING).
+      const primary = typeof entry.sd_id === 'string' && entry.sd_id.trim() ? entry.sd_id : entry.sd_key;
+      key = typeof primary === 'string' ? primary.trim() : null;
+    }
     if (key) out.push({ sd_id: key });
+    else dropped += 1;
+  }
+  if (dropped > 0) {
+    // LOUD, never silent: a dropped dep means the SD is born UNFENCED on that edge —
+    // born-fenced sequencing (QF-20260711-841) is the invariant at stake, and a generator
+    // that starts emitting numeric sd_id must be detectable (REGRESSION a0266b0d).
+    console.warn(`⚠️  normalizeDependsOn: dropped ${dropped} malformed dependency entr${dropped === 1 ? 'y' : 'ies'} — the SD will NOT be fenced on the dropped edge(s). Entries must be "SD-KEY" or {sd_id|sd_key: "SD-KEY"}.`);
   }
   return out;
 }

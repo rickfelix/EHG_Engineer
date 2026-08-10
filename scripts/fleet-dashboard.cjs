@@ -638,7 +638,10 @@ function printWorkers(d) {
     console.log('');
     console.log('  Stale (' + d.staleSessions.length + '):');
     for (const s of d.staleSessions) {
-      const shortSd = s.sd_key.replace('SD-LEO-ORCH-STAGE-VENTURE-WORKFLOW-001-', '').replace(/^SD-.*-/, '');
+      // sd_key can be null on a stale row (claim released / QF-holder mirror — the sd_key
+      // column is only a MIRROR, per SILENT-HOLDER-AUDIT-001); an unguarded .replace crashed
+      // the whole dashboard (harness bug b7839fd7).
+      const shortSd = (s.sd_key || '').replace('SD-LEO-ORCH-STAGE-VENTURE-WORKFLOW-001-', '').replace(/^SD-.*-/, '');
       console.log('  ' + pad(s.tty, 12) + pad(shortSd, 10) + s.heartbeat_age_human);
     }
   }

@@ -17,7 +17,7 @@
  * testFiles})` does NO I/O — all git/fs lives in the CLI wrapper at the bottom
  * of this file, which collects inputs and invokes the pure function.
  */
-import { runHardenedGit } from '../lib/git/hardened-runner.cjs';
+import { runHardenedGit, validateBaseRef } from '../lib/git/hardened-runner.cjs';
 import { readdirSync, readFileSync, statSync } from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -221,6 +221,12 @@ const __filename = fileURLToPath(import.meta.url);
 if (process.argv[1] && path.resolve(process.argv[1]) === path.resolve(__filename)) {
   const repoPath = process.cwd();
   const baseRef = process.env.PHANTOM_AUDIT_BASE_REF || 'origin/main';
+  // SD-LEO-INFRA-CLOSE-SHELL-INJECTION-001 (SEC-5): PHANTOM_AUDIT_BASE_REF flows to the safeGit
+  // string seam; an unvalidated env value enabled arbitrary file write via a --output= token
+  // (parent SECURITY evidence b1952aa0). Reuse the existing validator rather than inventing one —
+  // it throws HOSTILE_BASE_REF on anything outside VALID_BASE_REF. The LEAD-FINAL gate path passes
+  // no baseRef and never reaches here, so only the reachable CLI env path is newly guarded.
+  validateBaseRef(baseRef);
   const { triggered, result } = collectAndAudit({ repoPath, baseRef });
   if (!triggered) {
     console.log('[PHANTOM_TEST_AUDIT] No commit subject matches /phantom.*table|dead.*query/i — audit not applicable (early-return PASS).');

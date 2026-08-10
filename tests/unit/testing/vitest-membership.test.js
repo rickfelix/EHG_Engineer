@@ -10,7 +10,7 @@ import { execFileSync } from 'child_process';
 import fs from 'fs';
 import path from 'path';
 import { fileURLToPath } from 'url';
-import { classifyTrackedFile, findUnmembered, splitAdvisory, EXCLUSION_REASONS } from '../../../lib/testing/vitest-membership.js';
+import { classifyTrackedFile, findUnmembered, EXCLUSION_REASONS } from '../../../lib/testing/vitest-membership.js';
 
 const REPO = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '../../..');
 
@@ -23,10 +23,16 @@ function loadAuthorities() {
   const playwrightDir = (pw.match(/testDir:\s*['"]\.?\/?([^'"]+)['"]/) || [])[1] || 'tests/e2e';
   // The config's NARROW .mjs include anchors, e.g. '**/tests/unit/org/**/*.test.mjs'.
   const vitestMjsAnchors = [...cfg.matchAll(/'\*\*\/([^']+?)\/\*\*\/\*\.test\.mjs'/g)].map((m) => m[1]);
+  // SD-LEO-INFRA-VITEST-TIER-REAL-001: the ddl config owns tests/ddl/**/*.db.test.js in its own
+  // CI job — DERIVED from its include array, never hand-listed (guessing the shape is the lie).
+  const ddl = fs.readFileSync(path.join(REPO, 'vitest.ddl.config.mjs'), 'utf8');
+  const ddlBlock = (ddl.match(/include:\s*\[([^\]]*)\]/) || [])[1] || '';
+  const ddlGlobs = [...ddlBlock.matchAll(/'([^']+)'/g)].map((m) => m[1]);
   return {
     playwrightDir,
     quarantined: (manifest.quarantined || []).map((e) => e.file),
     vitestMjsAnchors,
+    ddlGlobs,
     // SHARED_EXCLUDE entries that are SOURCE trees, not test locations. lib/agents holds
     // product code; tests/unit/agents does NOT and must stay in the population (FR-3).
     productTrees: ['lib/agents', 'applications', 'archive', 'press-kit', 'scratch', 'test'],
@@ -129,55 +135,46 @@ describe('findUnmembered — two-sided, and it cannot pass on a failed enumerati
   });
 });
 
-describe('splitAdvisory — the waiver is PATTERN-scoped, not a snapshot of what happens to fail', () => {
-  it('waives the gated-db class', () => {
-    const { waived, blocking } = splitAdvisory(['tests/database/x.test.js', 'lib/y.db.test.js']);
-    expect(waived).toHaveLength(2);
-    expect(blocking).toEqual([]);
-  });
-
-  it('BLOCKS anything outside that class — a NEW orphan fails on day one', () => {
-    const { waived, blocking } = splitAdvisory(['tests/unit/brand-new-orphan.test.js']);
-    expect(waived).toEqual([]);
-    expect(blocking).toEqual(['tests/unit/brand-new-orphan.test.js']);
-  });
-
-  it('the 12 agents files would NOT have been waived — the advisory split could not have hidden them', () => {
-    // Proves the waiver is scoped by DB_INCLUDE patterns and not by "currently unmembered".
-    // Had it been a snapshot, FR-3's defect would have been absorbed instead of fixed.
-    const { waived, blocking } = splitAdvisory(['tests/unit/agents/agent-registry.test.js']);
-    expect(waived).toEqual([]);
-    expect(blocking).toHaveLength(1);
+describe('the gated-db waiver is GONE — promotion to blocking is a deletion, not a toggle', () => {
+  it('a db-shaped orphan is BLOCKING again: the module exports no advisory split to hide behind', async () => {
+    // SD-LEO-INFRA-VITEST-TIER-REAL-001 FR-4. The waiver's population hit zero when db discovery
+    // ungated; a pattern waiver left behind after that would absorb the NEXT db-shaped orphan
+    // (including a silent re-closure of the discovery gate). Deleting the export makes any
+    // resurrection loud: this import assertion fails the moment someone re-adds it.
+    const mod = await import('../../../lib/testing/vitest-membership.js');
+    expect(mod.splitAdvisory).toBeUndefined();
+    expect(mod.KNOWN_STRANDED_DB_PATTERNS).toBeUndefined();
   });
 });
 
 describe('LIVE: every tracked test file that should be collected IS collected', () => {
-  // ADVISORY for the gated-db class ONLY, until the sibling data-integrity SD lands the runtime
-  // gate in tests/setup.db.js. That class cannot be repaired here without running 125
-  // non-self-guarding suites against a live database (vitest.config.js:163; coordinator
-  // verified independently). Everything else is BLOCKING from day one.
-  it('no tracked test file outside the waived gated-db class belongs to zero collected projects', () => {
+  // BLOCKING for every file shape (SD-LEO-INFRA-VITEST-TIER-REAL-001 FR-4): the runtime gate in
+  // tests/setup.db.js landed and db discovery is ungated, so the gated-db advisory waiver is
+  // deleted. Any unmembered tracked test file — db-shaped included — fails this guard on day one.
+  it('no tracked test file belongs to zero collected projects', () => {
     const collected = enumerateCollected();
     const tracked = enumerateTracked();
     const unmembered = findUnmembered({ collected, tracked, authorities: loadAuthorities() });
-    const { waived, blocking } = splitAdvisory(unmembered);
 
-    if (waived.length > 0) {
-      // Reported every run so the debt stays visible instead of decaying into background noise.
-      console.warn(
-        `[vitest-membership] ADVISORY: ${waived.length} gated-db test file(s) are members of zero ` +
-        'collected projects and never run. Not blocked here — repairing this requires a runtime ' +
-        'gate in tests/setup.db.js (sibling data-integrity SD). Promote this guard to blocking ' +
-        'when that lands.'
-      );
-    }
-    if (blocking.length > 0) {
+    // REPLACEMENT SIGNAL for the deleted advisory: the db tier now resolves everywhere but only
+    // EXECUTES against a designated non-production ref (none is provisioned today — see
+    // tests/helpers/db-target.js). The zero-coverage debt stays visible, derived, never a literal.
+    const dbResolved = collected.filter((f) =>
+      /(^|\/)tests\/(integration|database|db-invariants|migration-readiness)\/.*\.test\.js$/.test(f) ||
+      /\.db\.test\.js$/.test(f)
+    ).length;
+    process.stderr.write(
+      `[vitest-membership] db tier: ${dbResolved} suite(s) resolve and SKIP at runtime unless a ` +
+      'designated non-production ref is authorized (VITEST_DB_ALLOW_REF). Coverage debt, not absence.\n'
+    );
+
+    if (unmembered.length > 0) {
       throw new Error(
-        `${blocking.length} tracked test file(s) belong to ZERO collected vitest projects — ` +
-        `they never run and the suite still reports green:\n  ${blocking.slice(0, 40).join('\n  ')}` +
-        (blocking.length > 40 ? `\n  …and ${blocking.length - 40} more` : '')
+        `${unmembered.length} tracked test file(s) belong to ZERO collected vitest projects — ` +
+        `they never run and the suite still reports green:\n  ${unmembered.slice(0, 40).join('\n  ')}` +
+        (unmembered.length > 40 ? `\n  …and ${unmembered.length - 40} more` : '')
       );
     }
-    expect(blocking).toEqual([]);
+    expect(unmembered).toEqual([]);
   }, 900000);
 });

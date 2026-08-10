@@ -15,6 +15,7 @@ import { Client } from 'pg';
 import dotenv from 'dotenv';
 import fs from 'fs';
 import path from 'path';
+import { assessDbTarget } from '../helpers/db-target.js';
 
 dotenv.config();
 
@@ -96,7 +97,13 @@ function parseCheckConstraint(constraintDef) {
   return values.sort();
 }
 
-describe('SD-LEO-FIX-ENUM-DOCS-001: sd_scope_deliverables Constraint Validation', () => {
+// SD-LEO-INFRA-VITEST-TIER-REAL-001: this suite connects with a raw pg Client over the pooler URL
+// — a path the db-tier fetch guard cannot see. Gate on the DESIGNATION predicate, not on
+// credential PRESENCE: the gate poisons-but-keeps SUPABASE_POOLER_URL present (so dotenv can't
+// restore production), which means a `!POOLER_URL` guard would never fire. assessDbTarget is the
+// single designation source and skips this beforeAll statically under an undesignated target.
+// (The gate's socket guard is the safety backstop even if this predicate ever regressed.)
+describe.skipIf(!assessDbTarget(process.env).allowed)('SD-LEO-FIX-ENUM-DOCS-001: sd_scope_deliverables Constraint Validation', () => {
   let client;
   let dbConstraints = {};
 
