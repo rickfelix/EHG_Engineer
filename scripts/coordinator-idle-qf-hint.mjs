@@ -202,9 +202,15 @@ export async function emitDeliveryAlarm(supabase, {
   return { alarmed: true, ratio, dedup_key: dedupKey, event_id: res.id };
 }
 
-export function eligibleIdleWorkers(liveWorkers, nowMs) {
+export function eligibleIdleWorkers(liveWorkers, nowMs, qfHolderSessionIds = new Set()) {
   return (liveWorkers || []).filter((w) => {
     if (w.sd_key) return false; // already claiming something — not idle
+    // SD-LEO-INFRA-SILENT-HOLDER-AUDIT-001: sd_key is only the MIRROR of a past claim decision
+    // (lib/claim/get-my-claims.cjs:8-15); QF ownership lives in quick_fixes.claiming_session_id
+    // and mirrors NULL here. Without this check a QF holder counts as idle capacity and gets
+    // hinted MORE work (measured: Bravo held QF-20260728-894 four days while idleWorkers=0
+    // reported no one to worry about).
+    if (qfHolderSessionIds.has(w.session_id)) return false;
     const createdAt = w.created_at ? Date.parse(w.created_at) : NaN;
     return Number.isFinite(createdAt) && (nowMs - createdAt) >= SPIN_UP_GRACE_MS;
   });
@@ -254,7 +260,22 @@ export async function runIdleQfHintCore(supabase, { nowMs = Date.now(), dryRun =
   } catch { sessions = []; }
   const coordinatorId = await getActiveCoordinatorId(supabase).catch(() => null);
   const live = liveFleetWorkers(sessions || [], coordinatorId, nowMs);
-  const idle = eligibleIdleWorkers(live, nowMs);
+  // SD-LEO-INFRA-SILENT-HOLDER-AUDIT-001: enumerate QF holders from the AUTHORITATIVE column so
+  // a session whose sd_key mirror is NULL but who holds a live QF is never counted idle.
+  // Fail-CLOSED to the mirror-only behaviour is the wrong direction here (it re-opens the hole),
+  // but a read failure must not crash the hint pass — degrade with the gap named in the summary.
+  let qfHolderSessionIds = new Set();
+  try {
+    const { data: qfHolders } = await supabase
+      .from('quick_fixes')
+      .select('claiming_session_id')
+      .not('claiming_session_id', 'is', null)
+      .in('status', ['open', 'in_progress']);
+    qfHolderSessionIds = new Set((qfHolders || []).map((r) => r.claiming_session_id).filter(Boolean));
+  } catch (e) {
+    summary.undeliveredReasons.push('qf_holder_read_failed:' + (e?.message || 'unknown'));
+  }
+  const idle = eligibleIdleWorkers(live, nowMs, qfHolderSessionIds);
   summary.idleWorkers = idle.length;
   if (idle.length === 0) return summary;
 

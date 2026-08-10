@@ -2443,6 +2443,50 @@ async function main() {
 
   const conflicts = Object.entries(bySD).filter(([, arr]) => arr.length > 1);
 
+  // SD-LEO-INFRA-SILENT-HOLDER-AUDIT-001: THE SECOND CONFLICT DIRECTION. bySD above groups
+  // TWO-SESSIONS-ON-ONE-SD; ONE-SESSION-ON-TWO-CLAIMS was structurally undetectable because
+  // claude_sessions carries a single sd_key mirror. Measured case: one session held a critical
+  // chairman-ratified SD AND another SD while the mirror named only one — the un-pointed claim
+  // was blocked invisibly and the sweep printed CONFLICTS: None on the same pass. Group the
+  // AUTHORITATIVE ownership columns (both work tables) by session; a session with N>1 claims
+  // surfaces with the claims its mirror does NOT name, since those are the invisible ones.
+  // (Same columns clearStaleQfClaims already reads — this joins them into the report instead of
+  // leaving them a silo.)
+  let multiClaimSessions = [];
+  let qfHolderRows = []; // authoritative QF holders, for the census section (same read, no silo)
+  try {
+    const [{ data: sdClaimRows }, { data: qfClaimRows }] = await Promise.all([
+      supabase.from('strategic_directives_v2')
+        .select('sd_key, claiming_session_id, status')
+        .not('claiming_session_id', 'is', null)
+        .not('status', 'in', '(completed,cancelled,archived)'),
+      supabase.from('quick_fixes')
+        .select('id, claiming_session_id, status')
+        .not('claiming_session_id', 'is', null)
+        .in('status', ['open', 'in_progress']),
+    ]);
+    qfHolderRows = qfClaimRows || [];
+    const bySession = new Map();
+    for (const r of sdClaimRows || []) {
+      if (!bySession.has(r.claiming_session_id)) bySession.set(r.claiming_session_id, []);
+      bySession.get(r.claiming_session_id).push({ kind: 'SD', key: r.sd_key });
+    }
+    for (const r of qfClaimRows || []) {
+      if (!bySession.has(r.claiming_session_id)) bySession.set(r.claiming_session_id, []);
+      bySession.get(r.claiming_session_id).push({ kind: 'QF', key: r.id });
+    }
+    const mirrorBySession = new Map(classified.map(s => [s.session_id, s.sd_key]));
+    multiClaimSessions = [...bySession.entries()]
+      .filter(([sid, claims]) => claims.length > 1 && !isFixtureSession(sid))
+      .map(([sid, claims]) => ({
+        session_id: sid,
+        claims,
+        unpointed: claims.filter(c => c.key !== mirrorBySession.get(sid)),
+      }));
+  } catch (e) {
+    console.log('  ⚠️  session-direction conflict pass failed (mirror-direction results above are unaffected): ' + (e?.message || e));
+  }
+
   // 3b-3d + FIX #2. QA claim-safety: completed/cancelled-SD release, orphaned claims,
   // stuck pending_approval, terminal-claim clear. SD-ARCH-HOTSPOT-SWEEP-001: extracted
   // to runQaFixtureScan() (top-level function above main(), this file) to shrink main().
@@ -3657,6 +3701,17 @@ async function main() {
     const tag = s.status === 'ALIVE_NO_HEARTBEAT' ? ' (PID alive, loading)' : '';
     console.log('  ' + (s.tty || '?').padEnd(12) + (s.sd_key || '?').padEnd(50) + bar(pct) + ' ' + pct + '%' + tag);
   });
+  // SD-LEO-INFRA-SILENT-HOLDER-AUDIT-001: QF holders from the AUTHORITATIVE column, labeled
+  // separately so the sd_key census above keeps its shape. A holder whose mirror already names
+  // the QF appears above; one whose mirror is NULL appeared NOWHERE (measured: 4 days).
+  const mirroredKeys = new Set(activeSessions.map(s => s.sd_key));
+  const unmirroredQfHolders = qfHolderRows.filter(r => !mirroredKeys.has(r.id));
+  if (unmirroredQfHolders.length > 0) {
+    console.log('QF HOLDERS not in the census above (' + unmirroredQfHolders.length + ') — authoritative quick_fixes.claiming_session_id:');
+    unmirroredQfHolders.forEach(r => {
+      console.log('  ' + r.claiming_session_id.substring(0, 20).padEnd(22) + r.id.padEnd(24) + '(' + r.status + ')');
+    });
+  }
   console.log('');
 
   // QF-20260526-279: route through CLAIM_HOLDING_STATUSES so STALE/DEAD render
@@ -3687,11 +3742,17 @@ async function main() {
     console.log('');
   }
 
-  // Conflicts
-  if (conflicts.length > 0) {
-    console.log('CONFLICTS DETECTED: ' + conflicts.length);
+  // Conflicts — SD-LEO-INFRA-SILENT-HOLDER-AUDIT-001: "None" only when BOTH directions are empty.
+  if (conflicts.length > 0 || multiClaimSessions.length > 0) {
+    console.log('CONFLICTS DETECTED: ' + (conflicts.length + multiClaimSessions.length));
     conflicts.forEach(([sdId, arr]) => {
       console.log('  ' + sdId + ': ' + arr.map(s => s.session_id.substring(0, 20) + '(' + s.status + ')').join(' vs '));
+    });
+    multiClaimSessions.forEach(m => {
+      const all = m.claims.map(c => c.kind + ':' + c.key).join(' + ');
+      const invisible = m.unpointed.map(c => c.kind + ':' + c.key).join(', ') || '(mirror names none)';
+      console.log('  ' + m.session_id.substring(0, 20) + ' holds ' + m.claims.length + ' claims: ' + all
+        + ' — UN-POINTED (invisibly blocked): ' + invisible);
     });
     console.log('');
   } else {
