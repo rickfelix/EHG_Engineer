@@ -25,8 +25,31 @@
  */
 
 import { randomUUID } from 'crypto';
+import { fileURLToPath } from 'url';
+import nodePath from 'path';
 import { isPersonaStoryRoleEnabled } from '../lib/persona-extractor.js';
 import { getLLMClient } from '../../lib/llm/client-factory.js';
+// SD-LEO-INFRA-STORY-E2E-WRITE-001 (FR-1): the EXISTING write-time choke-point (sibling
+// STORY-E2E-AUTO-001 FR-1). Reused verbatim, never re-derived — a second existence predicate
+// is how the write side and the read gate drift.
+import { resolveE2ePath } from '../../lib/stories/e2e-path-guard.js';
+
+/**
+ * SD-LEO-INFRA-STORY-E2E-WRITE-001 (FR-2, closed by adversarial review): the repo root the
+ * guard checks against must be the TARGET repo of the story's spec, and the story corpus spans
+ * two repos. EHG-app-target SDs' specs live in the sibling ehg checkout (the EHG_APP_PATH
+ * precedent from map-e2e-tests-to-stories.js — same env var, same relative fallback);
+ * everything else validates against this repo (STORY_E2E_REPO_ROOT override, else cwd).
+ * Without this, a real ehg spec re-generated after EXEC would be checked against the WRONG
+ * disk and nulled — the exact real-coverage loss FR-2's contract forbids.
+ */
+export function resolveStoryE2eRoot(targetApplication) {
+  if (String(targetApplication || '').trim().toUpperCase() === 'EHG') {
+    return process.env.EHG_APP_PATH
+      || nodePath.join(nodePath.dirname(fileURLToPath(import.meta.url)), '../../../ehg');
+  }
+  return process.env.STORY_E2E_REPO_ROOT || process.cwd();
+}
 
 /**
  * SD-LEO-INFRA-AUTO-STORY-QUALITY-GATE-001 Option B helper.
@@ -64,14 +87,43 @@ const LLM_CONFIG = {
 // ============================================
 
 /**
- * Generate E2E test path based on SD type and story details
+ * Generate E2E test path based on SD type and story details.
+ *
+ * SD-LEO-INFRA-STORY-E2E-WRITE-001 (FR-1): the templated candidate is now routed through the
+ * existing choke-point (lib/stories/e2e-path-guard.js resolveE2ePath, requireRelevance:false —
+ * the sibling gate's deliberate existence-only bar; the relevance arm is heuristic and must
+ * never null real coverage). A candidate naming a spec file that DOES NOT EXIST persists as
+ * NULL: the intent "a test should exist here" already lives once, honestly, in the
+ * CHECK-constrained e2e_test_status='not_created' — the path column carrying a fabricated
+ * string was a second, lying representation (measured by the sibling SD: 641 rows claimed
+ * 'passing' against nonexistent files). The documentation sentinel string is likewise NULL now:
+ * it was neither NULL nor a path. Status stamping is byte-identical to before.
+ *
+ * FR-2 (repo-root contract): the guard is only sound against the filesystem root the candidate
+ * is relative to. repoRoot is INJECTABLE (options.repoRoot, or STORY_E2E_REPO_ROOT env —
+ * mirroring map-e2e-tests-to-stories.js's EHG_APP_PATH precedent), defaulting to process.cwd().
+ * Callers generating stories whose specs live in a DIFFERENT repo must pass that repo's root,
+ * or a real existing spec would be (wrongly) refused. deps is threaded for test injection.
+ *
+ * FR-3 (declared blind spot, measured 2026-08-10): the Postgres trigger
+ * sync_test_evidence_to_user_stories (defined byte-equivalently in BOTH
+ * database/migrations/20251210_unified_test_evidence.sql:352 AND
+ * 20251211_unified_test_evidence_fixed.sql:246 — mutual-revert hazard, flagged to the feedback
+ * channel) writes e2e_test_path server-side where this choke-point cannot see it. It has NEVER
+ * fired (story_test_mappings: 0 rows), and its source is test_results from EXECUTED tests, so
+ * its paths carry existence-by-provenance. Deliberately NOT given a companion DB-side check: a
+ * second enforcement site for a zero-traffic path is the umbrella-guard anti-pattern.
+ *
  * @param {string} sdId - Strategic directive ID
  * @param {string} sdType - SD type (feature, infrastructure, documentation, etc.)
  * @param {string} storyNumber - Story number (e.g., '001')
  * @param {string} storyTitle - Story title for slug generation
- * @returns {Object} - { path: string, status: string }
+ * @param {object} [options]
+ * @param {string} [options.repoRoot] - filesystem root the candidate path is relative to
+ * @param {object} [options.deps] - injected fs deps for the guard (tests)
+ * @returns {Object} - { path: string|null, status: string }
  */
-function generateE2ETestPath(sdId, sdType, storyNumber, storyTitle) {
+export function generateE2ETestPath(sdId, sdType, storyNumber, storyTitle, { repoRoot, deps } = {}) {
   // Normalize SD ID to create slug (e.g., SD-VISION-V2-003 -> vision-v2-003)
   const sdSlug = sdId.toLowerCase().replace(/^sd-/, '').replace(/[^a-z0-9]+/g, '-');
 
@@ -106,12 +158,32 @@ function generateE2ETestPath(sdId, sdType, storyNumber, storyTitle) {
     default: `tests/e2e/${sdSlug}-us-${storyNumber}.spec.ts`
   };
 
-  const path = pathPatterns[sdType] || pathPatterns.default;
-
-  // Determine initial status based on SD type
+  // Status semantics are byte-identical to pre-wiring: documentation SDs are
+  // 'not_applicable', everything else starts 'not_created'. Only the PATH column changed
+  // owner — it now tells the truth or stays NULL.
   const status = sdType === 'documentation' ? 'not_applicable' : 'not_created';
 
-  return { path, status };
+  // Documentation SDs never carried a real path — the old sentinel string was neither NULL
+  // nor a path (and the guard rejects it anyway: no '/'). NULL is the honest value.
+  if (sdType === 'documentation') {
+    return { path: null, status };
+  }
+
+  const candidatePath = pathPatterns[sdType] || pathPatterns.default;
+
+  // FR-1 wiring: existence-only bar (requireRelevance:false — see function header).
+  // A brand-new story's templated spec almost never exists yet, so the common honest
+  // outcome is { path: null, status: 'not_created' } — pointing at nothing and saying so.
+  const root = repoRoot || process.env.STORY_E2E_REPO_ROOT || process.cwd();
+  const resolved = resolveE2ePath({
+    repoRoot: root,
+    candidatePath,
+    story: { title: storyTitle },
+    requireRelevance: false,
+    ...(deps ? { deps } : {}),
+  });
+
+  return { path: resolved, status };
 }
 
 /**
@@ -431,23 +503,25 @@ ${existingStories.map(s => `- ${s.story_key}: ${s.title}`).join('\n')}`);
  * @returns {Promise<string>} SD type (feature, documentation, infrastructure, database, security)
  */
 async function getSDType(supabase, sdId) {
+  // SD-LEO-INFRA-STORY-E2E-WRITE-001 (FR-2): target_application rides along so the e2e-path
+  // guard can be pointed at the story's TARGET repo root (see resolveStoryE2eRoot).
   try {
     const { data: sd, error } = await supabase
       .from('strategic_directives_v2')
-      .select('sd_type')
+      .select('sd_type, target_application')
       .or(`id.eq.${sdId},sd_key.eq.${sdId}`)
       .single();
 
     if (error || !sd) {
       console.log(`   ⚠️  Could not fetch SD type, defaulting to 'feature'`);
-      return 'feature';
+      return { sdType: 'feature', targetApplication: null };
     }
 
     // sd_type takes precedence over category
-    return sd.sd_type || 'feature';
+    return { sdType: sd.sd_type || 'feature', targetApplication: sd.target_application || null };
   } catch (err) {
     console.log(`   ⚠️  SD type lookup error: ${err.message}, defaulting to 'feature'`);
-    return 'feature';
+    return { sdType: 'feature', targetApplication: null };
   }
 }
 
@@ -1082,7 +1156,9 @@ async function generateUserStoriesFromPRD(supabase, prd, resolvedSdId, sdKey, pr
   }
 
   // SD-TYPE-AWARE: Fetch SD type for criteria transformation
-  const sdType = await getSDType(supabase, resolvedSdId);
+  const { sdType, targetApplication } = await getSDType(supabase, resolvedSdId);
+  // FR-2: the guard validates existence against the story's TARGET repo, not the running repo.
+  const e2eRepoRoot = resolveStoryE2eRoot(targetApplication);
   console.log(`   📋 SD Type: ${sdType} (criteria will be ${sdType === 'feature' || sdType === 'security' ? 'STRICT' : sdType === 'documentation' ? 'LENIENT' : 'MODERATE'})`);
 
   for (let i = 0; i < functionalRequirements.length; i++) {
@@ -1110,7 +1186,7 @@ async function generateUserStoriesFromPRD(supabase, prd, resolvedSdId, sdKey, pr
     // SD-LEO-INFRA-AUTO-TRIGGER-STORIES-FK-FIX-001: slug uses sdKey (stable, sd-key-format),
     // sd_id uses resolvedSdId (FK target).
     const storyTitle = fr.requirement || `Implement ${fr.id}`;
-    const e2eConfig = generateE2ETestPath(sdKey, sdType, storyNumber, storyTitle);
+    const e2eConfig = generateE2ETestPath(sdKey, sdType, storyNumber, storyTitle, { repoRoot: e2eRepoRoot });
 
     const userStory = {
       id: randomUUID(),
@@ -1143,7 +1219,9 @@ async function generateUserStoriesFromPRD(supabase, prd, resolvedSdId, sdKey, pr
       metadata: {
         sd_type_at_generation: sdType,
         criteria_transformation_applied: true,
-        e2e_path_auto_generated: true,
+        // Truthful provenance (adversarial-review INFO): the flag now tracks whether a path
+        // was actually persisted — a guard-refused NULL row must not claim auto-generation.
+        e2e_path_auto_generated: e2eConfig.path != null,
         generation_version: '1.3.0'
       }
     };
