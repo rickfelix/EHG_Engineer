@@ -559,6 +559,31 @@ describe('runProbe integration (TS-1..TS-5 wired end-to-end)', () => {
     expect(inserted.some((i) => i.t === 'session_coordination')).toBe(false);
   });
 
+  // SD-LEO-INFRA-COORDINATOR-HEALTH-BREACH-001: the ASSEMBLY-layer fence (TESTING residual
+  // 6fecf403). The pure-classifier tests above cannot see the assembled breach at the
+  // runProbe layer — mutating the assembly to re-add plan starvation ran GREEN across all
+  // 92 tests until this fixture existed. Plan-only starvation through the WHOLE probe must
+  // yield breach:false (score 100, no advisory) with planBreach:true still reported.
+  it('ASSEMBLY: plan-only starvation through runProbe yields breach:false, planBreach reported, score 100, no advisory', async () => {
+    vi.spyOn(waveLinkage, 'computeWaveLinkageCoverage').mockResolvedValueOnce({ coverage: 3 / 27, linked: 3, total: 27, starved: true, unlinkedKeys: ['SD-U1'] });
+    const inserted = [];
+    const supabase = makeFakeSupabase(
+      {
+        claude_sessions: [liveCoordinatorRow()],
+        strategic_directives_v2: [],
+        codebase_health_snapshots: [],
+      },
+      { onInsert: (t, r) => inserted.push({ t, r }) },
+    );
+    const reading = await runProbe(supabase, { makePgClient: pgDisabled });
+    expect(reading.plan_adherence.status).toBe('measured');
+    expect(reading.breach.planBreach).toBe(true);   // observation survives
+    expect(reading.breach.breach).toBe(false);       // the retired axis fires nothing, through the ASSEMBLY
+    const snapshot = inserted.find((i) => i.t === 'codebase_health_snapshots');
+    expect(snapshot).toBeDefined();
+    expect(inserted.some((i) => i.t === 'session_coordination')).toBe(false); // no advisory dun
+  });
+
   it('on a real breach, resolves the live coordinator session id (not the broadcast fallback)', async () => {
     vi.spyOn(waveLinkage, 'computeWaveLinkageCoverage').mockResolvedValueOnce({ coverage: null, linked: 0, total: 0, starved: false, unlinkedKeys: [] });
     vi.spyOn(coordinatorResolve, 'getActiveCoordinatorId').mockResolvedValueOnce('live-coordinator-session-1');
