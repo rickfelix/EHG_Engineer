@@ -29,7 +29,7 @@
 //   node scripts/lint/no-process-cwd-in-sub-agents-lint.mjs --all --json
 import fs from 'node:fs';
 import path from 'node:path';
-import { execFileSync } from 'node:child_process';
+import { makeHardenedGitRunner } from '../../lib/git/hardened-runner.cjs';
 import { fileURLToPath } from 'node:url';
 import { Linter } from 'eslint';
 import rule from '../../eslint-rules/no-process-cwd-in-sub-agents.js';
@@ -47,8 +47,8 @@ const PLUGIN_NS = 'sub-agents';
 const RULE_NAME = 'no-process-cwd-in-sub-agents';
 const RULE_ID = `${PLUGIN_NS}/${RULE_NAME}`;
 
-// Shapes this predicate knowingly does NOT catch. Printed every run so a zero-finding result is
-// never mistaken for a zero-defect codebase.
+// KNOWN LIMITATION: shapes this predicate knowingly does NOT catch. Printed every run so a
+// zero-finding result is never mistaken for a zero-defect codebase.
 const KNOWN_MISSED = [
   'indirect cwd: `const {cwd} = process; cwd()` — the member expression is destructured away, so the AST match cannot see it',
   'aliased: `const p = process; p.cwd()` — single-file AST does not track the alias',
@@ -97,7 +97,8 @@ function candidateFilesAll(root) {
  * execFileSync rather than execSync: no shell features are needed, so no shell is involved.
  */
 function candidateFilesDiff(root) {
-  const git = (args) => execFileSync('git', args, { cwd: root, encoding: 'utf8' });
+  // Adopted from the published runner (SD-LEO-INFRA-PUBLISH-SHELL-INJECTION-001-A).
+  const git = makeHardenedGitRunner(root);
   const base = git(['merge-base', 'HEAD', 'origin/main']).trim();
   const names = new Set();
   for (const args of [

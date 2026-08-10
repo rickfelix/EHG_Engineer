@@ -29,7 +29,6 @@ import { readFileSync, existsSync, readdirSync } from 'node:fs';
 // degrades to an advisory full sweep, and the one in baselineViolationKeys treats a throw as
 // "file did not exist at the merge base". spawnSync returns {stdout,stderr,status} and does NOT
 // throw, so swapping it in would silently stop BOTH catches from ever firing.
-import { execFileSync } from 'node:child_process';
 import path from 'node:path';
 import { extractReferences, findViolations } from './schema-reference-extract.mjs';
 // SD-LEO-INFRA-SCHEMA-LINT-DEGRADED-FAILOPEN-001: a degraded --diff run (unresolvable base ->
@@ -67,8 +66,10 @@ const STALE_DAYS = 7;
 // later reader could mistake for the protection. (docmon.js DOES pass a pathspec and DOES need it.)
 // `opts` exists so per-call stdio survives the conversion. The baseline read deliberately keeps
 // stderr on 'ignore'; folding that into the runner for every call would change unrelated output.
-const runGit = (args, opts = {}) => execFileSync('git', args, {
-  encoding: 'utf8', timeout: 30000, maxBuffer: 32 * 1024 * 1024, ...opts,
+// Adopted from the published runner (SD-LEO-INFRA-PUBLISH-SHELL-INJECTION-001-A) with
+// literalPathspecs: false — the opt-out above is RECORDED in the runner's OPT_OUTS ledger.
+const runGit = makeHardenedGitRunner(process.cwd(), {
+  literalPathspecs: false, timeout: 30000, maxBuffer: 32 * 1024 * 1024,
 });
 
 // SEC: argv-safety stops SHELLS, not ARGUMENT injection. `base` reaches git as a positional
@@ -85,10 +86,11 @@ const runGit = (args, opts = {}) => execFileSync('git', args, {
 // (process.env.SCHEMA_LINT_BASE below) and in CI is set from a workflow context expression at
 // .github/workflows/schema-reference-lint.yml:60, so it is not a hypothetical.
 //
-// This repo already adopted exactly this control for the identical sink — lib/fleet/tree-currency.cjs:53,
-// applied at :105 for its own SEC-1 finding — and it simply was not carried here. Same regex, reused
-// verbatim: two shape-guards that drift apart are worse than one shared one.
-const VALID_BASE_REF = /^[A-Za-z0-9._][A-Za-z0-9._/-]*$/;
+// This repo already adopted exactly this control for the identical sink — lib/fleet/tree-currency.cjs,
+// applied for its own SEC-1 finding — and it simply was not carried here. Now imported from the
+// published single representation: two shape-guards that drift apart are worse than one shared one.
+// (SD-LEO-INFRA-PUBLISH-SHELL-INJECTION-001-A)
+import { VALID_BASE_REF, makeHardenedGitRunner } from '../../lib/git/hardened-runner.cjs';
 
 const args = process.argv.slice(2);
 const mode = args.includes('--all') ? 'all' : 'diff';

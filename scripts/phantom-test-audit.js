@@ -17,7 +17,7 @@
  * testFiles})` does NO I/O — all git/fs lives in the CLI wrapper at the bottom
  * of this file, which collects inputs and invokes the pure function.
  */
-import { execSync } from 'node:child_process';
+import { runHardenedGit } from '../lib/git/hardened-runner.cjs';
 import { readdirSync, readFileSync, statSync } from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -151,8 +151,17 @@ export function collectAndAudit({ repoPath, baseRef = 'origin/main' }) {
 }
 
 function safeGit(cmd, cwd, opts = {}) {
+  // The SEAM contract stays a full command string (injected fakes and the gate test's pins both
+  // assert e.g. 'git merge-base HEAD origin/main' verbatim); only the DEFAULT implementation
+  // moved off execSync — the string is tokenized (quoted pathspecs unwrapped: the quotes were
+  // shell-level) and executed argv-style through the published hardened runner
+  // (SD-LEO-INFRA-PUBLISH-SHELL-INJECTION-001-A). A shell metacharacter in the string is now a
+  // literal argument git rejects, never a second command.
   try {
-    return execSync(cmd, { encoding: 'utf8', cwd, timeout: 15000, maxBuffer: 8 * 1024 * 1024, ...opts });
+    const tokens = (String(cmd).trim().match(/"([^"]*)"|\S+/g) || [])
+      .map((t) => t.replace(/^"|"$/g, ''));
+    if (tokens[0] !== 'git') return '';
+    return runHardenedGit(tokens.slice(1), { cwd, timeout: 15000, maxBuffer: 8 * 1024 * 1024, ...opts });
   } catch (_err) {
     return '';
   }

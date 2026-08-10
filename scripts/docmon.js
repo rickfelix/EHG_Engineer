@@ -25,7 +25,7 @@ import path from 'path';
 // merge-base fallbacks to 'HEAD~1', the getChangedFiles fallback to a full scan, and
 // getBeforeWordCount's `return 0 // New file`. spawnSync returns {stdout,stderr,status} and does
 // NOT throw, so swapping it in would silently stop ALL THREE from ever firing.
-import { execFileSync } from 'child_process';
+import { makeHardenedGitRunner } from '../lib/git/hardened-runner.cjs';
 import { fileURLToPath } from 'url';
 import { minimatch } from 'minimatch';
 
@@ -95,7 +95,10 @@ Configuration:
 // Applied in the RUNNER, so it also covers `git show` below, where it is INERT (a <rev>:<path>
 // object name is a single argv token, not a pathspec). Kept uniform on purpose: excluding it there
 // would need per-call-site logic, which is exactly the fragility the runner principle warns about.
-const runGit = (args) => execFileSync('git', ['--literal-pathspecs', ...args], { encoding: 'utf-8' });
+// Adopted from the published runner (SD-LEO-INFRA-PUBLISH-SHELL-INJECTION-001-A):
+// --literal-pathspecs is its DEFAULT, and it adds the env scrub + fsmonitor/pager clearing this
+// private copy never had.
+const runGit = makeHardenedGitRunner(process.cwd());
 
 function getChangedFiles() {
   try {
