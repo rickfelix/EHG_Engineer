@@ -146,6 +146,23 @@ const DB_INCLUDE = [
  */
 const SMOKE_INCLUDE = ['**/tests/smoke.test.js'];
 
+// ─── SD-LEO-INFRA-MIGRATION-APPLY-STATE-002 (FR-C): the drift-guard wiring proof ────────────────
+//
+// tests/integration/migration-apply-state-ledger-wiring.test.js was routed to the gated `db`
+// project purely BY DIRECTORY. It imports no db setup and touches no client — its only credential
+// consumer is the verifier SUBPROCESS it spawns, which inherits the invoking step's env. Before
+// this SD, the CI-disabled db project collected zero files, vitest exited 1 ("No test files
+// found"), and the drift gate's proof step was red on every run regardless of the drift verdict
+// (measured: 6/6 recent runs). This dedicated project — the SMOKE_INCLUDE precedent — lets the
+// proof actually execute in CI. Deliberately NOT gated on VITEST_DB_ALLOW_REF: that flag
+// authorizes all db suites against the configured target; this project resolves exactly one
+// self-contained file. MERGE NOTE (VITEST-TIER-REAL-001): the db gate now lives at RUNTIME in
+// tests/setup.db.js and SKIPS every test on an undesignated target — which is why this project
+// carries NO setupFiles (see the project block): loading that setup would silently skip the
+// proof and the workflow's exit-0 arm would read green-while-unproven, the exact masking FR-C
+// abolishes. The suite needs no setup — it opens no client.
+const MIGRATION_GATE_INCLUDE = ['**/tests/integration/migration-apply-state-ledger-wiring.test.js'];
+
 // ─── SD-LEO-INFRA-VITEST-TIER-REAL-001: the db gate moved from DISCOVERY to RUNTIME ─────────────
 //
 // QF-20260726-459 Part 1b gated the PROJECT here (include: [] when undesignated), which closed
@@ -306,6 +323,33 @@ export default defineConfig({
           // UNGATED by design. See SMOKE_INCLUDE: the pre-commit hook filters to this exact file,
           // and a filter that resolves to zero files exits 1 and blocks every commit in the repo.
           include: SMOKE_INCLUDE,
+          exclude: SHARED_EXCLUDE,
+        },
+      },
+      {
+        extends: true,
+        test: {
+          name: 'migration-gate',
+          // NO setupFiles, deliberately (post-merge with VITEST-TIER-REAL-001): setup.db.js now
+          // enforces the runtime db gate and SKIPS every test on an undesignated target — loading
+          // it here would silently skip the proof while the workflow's exit-0 arm read green.
+          // The suite needs no setup: it opens no client; only its verifier SUBPROCESS uses
+          // credentials, inherited from this process env (the workflow step supplies them in CI;
+          // the subprocess's own dotenv load never overrides inherited vars).
+          //
+          // SECURITY SEC-2: the verifier subprocess CAN write (emitBreakageAlert inserts into
+          // system_alerts under --strict with gaps) — in CI that write died only because the
+          // step omits the URL/service-role vars, an accident of env. These stubs make the
+          // accident structural: test.env lands in this process env, the child inherits it, and
+          // dotenv-in-the-child never overrides set vars — the alert INSERT is impossible
+          // everywhere while the POOLER/DATABASE_URL read path keeps working. Both URL legs
+          // stubbed (the service-client factory PREFERS the NEXT_PUBLIC_ sibling).
+          env: {
+            SUPABASE_URL: 'https://test.invalid.local',
+            NEXT_PUBLIC_SUPABASE_URL: 'https://test.invalid.local',
+            SUPABASE_SERVICE_ROLE_KEY: 'test-service-role-key-not-real',
+          },
+          include: MIGRATION_GATE_INCLUDE,
           exclude: SHARED_EXCLUDE,
         },
       },

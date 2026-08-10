@@ -252,6 +252,17 @@ describe('recent-vs-legacy classifier (FR-2)', () => {
       expect(partitionRecentGaps(pathGaps, RETIRED_BEFORE, new Set(['20260701_real_new_drift.sql']))).toHaveLength(0);
     });
 
+    it('C3 NEGATIVE CONTROL: an UNsuppressed path-qualified recent gap stays in the fail set', () => {
+      // SD-LEO-INFRA-MIGRATION-APPLY-STATE-002. The test above passed for the WRONG reason
+      // before the multi-root change: migrationDateToken anchored on the raw string, so the
+      // prefixed id had a null token, classified LEGACY, and the empty result proved nothing
+      // about suppression — the exact fail-open FR-A closes (a recent new-root gap escaping
+      // the strict gate). This control fails pre-change and pins the repaired meaning: the
+      // gap survives an EMPTY suppression set precisely because it now classifies RECENT.
+      const pathGaps = [{ file: 'supabase/migrations/20260701_real_new_drift.sql' }];
+      expect(partitionRecentGaps(pathGaps, RETIRED_BEFORE, new Set())).toHaveLength(1);
+    });
+
     it('a non-Set argument degrades to no suppression rather than throwing', () => {
       for (const bad of [null, undefined, ['20260701_real_new_drift.sql'], 'x', {}]) {
         expect(partitionRecentGaps(gaps, RETIRED_BEFORE, bad)).toHaveLength(2);

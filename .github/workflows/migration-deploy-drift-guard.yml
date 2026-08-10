@@ -18,6 +18,11 @@ on:
     branches: [main]
     paths:
       - 'database/migrations/*.sql'
+      # SD-LEO-INFRA-MIGRATION-APPLY-STATE-002 (FR-B): the verifier scans every migration
+      # location now — a merge touching only these dirs must re-run the gate too.
+      - 'database/functions/*.sql'
+      - 'database/manual-updates/*.sql'
+      - 'supabase/migrations/*.sql'
       - 'scripts/verify-migration-apply-state.mjs'
       - 'scripts/lib/migration-guards.js'
       - '.github/workflows/migration-deploy-drift-guard.yml'
@@ -134,35 +139,47 @@ jobs:
       # the SD's only end-to-end safety proof was unreachable in CI: green forever, asserting
       # nothing. Runs AFTER the sync check so its ledger backup/restore can never be mistaken
       # for seeder drift.
-      # SD-LEO-INFRA-VITEST-TIER-REAL-001: this was the ONE db-vitest CI consumer with no dbgate
-      # guard. Under the old discovery gate it silently collected ZERO files (no SUPABASE_URL in
-      # this env, so the db project was empty and passWithNoTests made it green-asserting-nothing).
-      # Now that db discovery is ungated, the file RESOLVES here — and without designation its
-      # beforeAll DB work would be refused loudly (DB_TIER_BLOCKED) and fail the step. The gate
-      # below makes the not-running state explicit instead of red-or-invisible.
-      - name: Assess db target designation
-        id: dbgate
-        if: always()
-        run: |
-          node --input-type=module -e "
-          import { assessDbTarget } from './tests/helpers/db-target.js';
-          import fs from 'node:fs';
-          const r = assessDbTarget(process.env);
-          console.log('db target assessment: ' + JSON.stringify(r));
-          fs.appendFileSync(process.env.GITHUB_OUTPUT, 'allowed=' + (r.allowed ? 'true' : 'false') + '\n');
-          fs.appendFileSync(process.env.GITHUB_OUTPUT, 'reason=' + (r.reason || '') + '\n');
-          "
-
+      # SD-LEO-INFRA-MIGRATION-APPLY-STATE-002 (FR-C): the proof now RUNS — the test needed no
+      # db-project gating at all (it imports no db setup; its only credential consumer is the
+      # verifier subprocess, which this step supplies). It executes under the dedicated
+      # `migration-gate` vitest project (no setupFiles — see vitest.config.js). THREE-ARM
+      # harness/verdict separation: proof ran and passed → OK; proof ran and FAILED → the gate
+      # fails (a real verdict); the harness could not run it ("No test files found") → a loud
+      # warning that NAMES the harness and exits 0 — a harness failure can neither mask nor
+      # impersonate a drift verdict. Before this change the db-project invocation redded this
+      # step on every run regardless of verdict (measured: 6/6 recent runs, e.g. 31359162717).
+      # Deliberately NOT setting VITEST_DB_ALLOW_REF — that would authorize all db suites
+      # against production secrets.
+      #
+      # MERGE NOTE (supersedes VITEST-TIER-REAL-001's dbgate/skip pair FOR THIS STEP ONLY):
+      # that SD made the not-running state explicit (assess designation → run under the db project
+      # when allowed, else a loud SKIPPED step). The migration-gate project removes the
+      # designation dependency entirely — the proof runs on every gate run, which is strictly
+      # stronger than declaring why it did not. The dbgate assessment pattern remains available
+      # for suites that genuinely open db clients; this one does not.
       - name: FR-6 fail-open wiring proof
-        if: always() && steps.dbgate.outputs.allowed == 'true'
+        if: always()
         env:
           SUPABASE_DB_PASSWORD: ${{ secrets.SUPABASE_DB_PASSWORD }}
           SUPABASE_POOLER_URL: ${{ secrets.SUPABASE_POOLER_URL }}
           DATABASE_URL: ${{ secrets.DATABASE_URL }}
-        run: npx vitest run tests/integration/migration-apply-state-ledger-wiring.test.js --project db
-
-      - name: FR-6 wiring proof SKIPPED — no designated db target
-        if: always() && steps.dbgate.outputs.allowed != 'true'
         run: |
-          echo "::warning title=FR-6 fail-open wiring proof SKIPPED::db tier has no designated non-production target (reason: ${{ steps.dbgate.outputs.reason }}). The end-to-end proof did not run — designate a non-prod ref (tests/helpers/db-target.js) to restore it."
-          echo "SKIPPED: FR-6 wiring proof (db tier not designated: ${{ steps.dbgate.outputs.reason }})" >> "$GITHUB_STEP_SUMMARY"
+          set +e
+          out="$(npx vitest run tests/integration/migration-apply-state-ledger-wiring.test.js --project migration-gate 2>&1)"
+          code=$?
+          echo "$out"
+          if [ "$code" = "0" ]; then
+            exit 0
+          fi
+          # -Fxq WHOLE-LINE, not -Fq substring (TESTING C2 + SECURITY SEC-1, both reproduced the
+          # forgery independently): vitest prints untruncated diff blocks containing gap FILENAMES,
+          # so a committed legacy-dated migration named after this phrase would downgrade a REAL
+          # wiring-proof failure to a harness warning — the exact class the -Fxq greps above close.
+          # vitest emits this exact bare line (od-verified, no ANSI under CI); if vitest ever
+          # rewords it, the match fails CLOSED into the error arm — loud, the correct direction.
+          if echo "$out" | grep -Fxq 'No test files found, exiting with code 1'; then
+            echo "::warning::FR-6 wiring proof DID NOT RUN — the vitest migration-gate project collected zero tests (harness unavailability, not a verdict). The fail-open wiring is UNPROVEN this run; fix the project include before trusting the gate's suppression logic."
+            exit 0
+          fi
+          echo "::error::FR-6 fail-open wiring proof FAILED — the gate's suppression logic is not safe against a corrupt ledger. This is a real verdict, not a harness issue."
+          exit "$code"
