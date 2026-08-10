@@ -85,10 +85,11 @@ const runGit = (args, opts = {}) => execFileSync('git', args, {
 // (process.env.SCHEMA_LINT_BASE below) and in CI is set from a workflow context expression at
 // .github/workflows/schema-reference-lint.yml:60, so it is not a hypothetical.
 //
-// This repo already adopted exactly this control for the identical sink — lib/fleet/tree-currency.cjs:53,
-// applied at :105 for its own SEC-1 finding — and it simply was not carried here. Same regex, reused
-// verbatim: two shape-guards that drift apart are worse than one shared one.
-const VALID_BASE_REF = /^[A-Za-z0-9._][A-Za-z0-9._/-]*$/;
+// This repo already adopted exactly this control for the identical sink — lib/fleet/tree-currency.cjs,
+// applied for its own SEC-1 finding — and it simply was not carried here. Now imported from the
+// published single representation: two shape-guards that drift apart are worse than one shared one.
+// (SD-LEO-INFRA-PUBLISH-SHELL-INJECTION-001-A)
+import { VALID_BASE_REF } from '../../lib/git/hardened-runner.cjs';
 
 const args = process.argv.slice(2);
 const mode = args.includes('--all') ? 'all' : 'diff';
