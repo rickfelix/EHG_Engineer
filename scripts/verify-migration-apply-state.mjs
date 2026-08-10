@@ -506,7 +506,11 @@ async function main() {
     try {
       fileFacts.push({ file, ...extractDdlFacts(readFileSync(resolveMigrationPath(file), 'utf8')) });
     } catch (e) {
-      unreadable.push(`${file} (${e.code || e.message})`);
+      // SECURITY SEC-3: printableFile-wrapped — a committed directory named after a gate
+      // MARKER (git stores x.sql/keep) would otherwise emit a stderr line that IS the marker,
+      // and the workflow's step-2 -Fxq grep would warn+exit 0, skipping the seeder-sync check.
+      // core.protectNTFS does NOT block newlines; this wrap is the only real defence.
+      unreadable.push(printableFile(`${file} (${e.code || e.message})`));
     }
   }
   if (unreadable.length) {

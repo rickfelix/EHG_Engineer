@@ -164,7 +164,13 @@ jobs:
           if [ "$code" = "0" ]; then
             exit 0
           fi
-          if echo "$out" | grep -Fq 'No test files found'; then
+          # -Fxq WHOLE-LINE, not -Fq substring (TESTING C2 + SECURITY SEC-1, both reproduced the
+          # forgery independently): vitest prints untruncated diff blocks containing gap FILENAMES,
+          # so a committed legacy-dated migration named after this phrase would downgrade a REAL
+          # wiring-proof failure to a harness warning — the exact class the -Fxq greps above close.
+          # vitest emits this exact bare line (od-verified, no ANSI under CI); if vitest ever
+          # rewords it, the match fails CLOSED into the error arm — loud, the correct direction.
+          if echo "$out" | grep -Fxq 'No test files found, exiting with code 1'; then
             echo "::warning::FR-6 wiring proof DID NOT RUN — the vitest migration-gate project collected zero tests (harness unavailability, not a verdict). The fail-open wiring is UNPROVEN this run; fix the project include before trusting the gate's suppression logic."
             exit 0
           fi

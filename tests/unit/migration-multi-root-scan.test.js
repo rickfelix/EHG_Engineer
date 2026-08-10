@@ -121,8 +121,13 @@ describe('TS-3 — workflow and config static assertions (FR-B/FR-C)', () => {
   it('FR-C: the wiring-proof step runs the ungated migration-gate project with three-arm separation', () => {
     expect(wf).toContain('--project migration-gate');
     expect(wf).not.toContain('--project db\n'); // the old always-red invocation is gone
-    expect(wf).toContain('No test files found'); // harness arm exists…
-    expect(wf).toContain('DID NOT RUN'); // …and names itself instead of impersonating a verdict
+    // ANCHORED whole-line grep, pinned exactly (TESTING C2 + SECURITY SEC-1, forgery reproduced
+    // by both): a -Fq substring match let a committed migration FILENAME containing the phrase
+    // downgrade a REAL wiring-proof failure to a harness warning. The -Fxq + full-literal form
+    // is load-bearing; this assertion reds if the anchoring silently regresses.
+    expect(wf).toContain("grep -Fxq 'No test files found, exiting with code 1'");
+    expect(wf).not.toMatch(/grep -Fq 'No test files found/);
+    expect(wf).toContain('DID NOT RUN'); // the harness arm names itself instead of impersonating a verdict
     expect(wf).toContain('This is a real verdict, not a harness issue');
     // Never SET as an env assignment (a comment may name it while explaining why not).
     expect(wf).not.toMatch(/VITEST_DB_ALLOW_REF\s*[:=]/);

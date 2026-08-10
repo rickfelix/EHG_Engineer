@@ -347,6 +347,17 @@ export default defineConfig({
           // in CI (no .env file; the workflow step supplies env directly) and harmless locally.
           // The suite itself never opens a client — credentials only reach the verifier
           // subprocess it spawns. See MIGRATION_GATE_INCLUDE for the full rationale.
+          //
+          // SECURITY SEC-2: the verifier subprocess CAN write (emitBreakageAlert inserts into
+          // system_alerts under --strict with gaps) — in CI that write dies only because the
+          // step omits SUPABASE_URL/service-role, an accident of env. These stubs make the
+          // accident structural: test.env is applied before setupFiles and dotenv never
+          // overrides set vars, so the alert INSERT is impossible everywhere while the
+          // POOLER/DATABASE_URL read path keeps working.
+          env: {
+            SUPABASE_URL: 'https://test.invalid.local',
+            SUPABASE_SERVICE_ROLE_KEY: 'test-service-role-key-not-real',
+          },
           setupFiles: ['./tests/setup.db.js'],
           include: MIGRATION_GATE_INCLUDE,
           exclude: SHARED_EXCLUDE,
