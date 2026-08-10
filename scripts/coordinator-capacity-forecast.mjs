@@ -104,6 +104,8 @@ async function main() {
   const {
     idleNow, freeingSoon, building, stalled,
     claimableCount, openQfCount, claimable, rows, workers, maskedIds,
+    // SD-LEO-INFRA-CAPACITY-FORECASTER-BELT-001 (FR-3): the named extent + raw-vs-dispatchable split.
+    beltExtent, rawUnclaimed, dispatchableCount,
   } = inputs;
 
   // THE LADDER IS NO LONGER SPELLED HERE. computeBeltVerdict owns it, and drive-report-sweep.mjs
@@ -121,7 +123,7 @@ async function main() {
   for (const r of rows) {
     console.log(`    ${r.sess} ${String(r.callsign).padEnd(8)} ${r.state.padEnd(13)} ${r.eta.padEnd(18)} ${r.detail}`);
   }
-  console.log(`  BELT: ${beltDepth} claimable (${claimable.length} SD + ${openQfCount} QF)  |  DEMAND(soon): ${demandSoon} (idle ${idleNow} + freeing-soon ${freeingSoon})  |  buffer ${BELT_BUFFER}`);
+  console.log(`  BELT: ${beltDepth} claimable [${beltExtent}: ${dispatchableCount} dispatchable of ${rawUnclaimed} raw-unclaimed] (${claimable.length} SD + ${openQfCount} QF)  |  DEMAND(soon): ${demandSoon} (idle ${idleNow} + freeing-soon ${freeingSoon})  |  buffer ${BELT_BUFFER}`);
   if (claimable.length) console.log(`        claimable SDs: ${claimable.map(d => d.sd_key.replace('SD-LEO-INFRA-', '')).join(', ')}`);
 
   // SD-LEO-INFRA-BELT-TIER-AWARE-CLAIMABILITY-001 (FR-3): TRUE per-tier claimable depth so a tier-specific
@@ -239,7 +241,7 @@ async function main() {
   }
 
   // machine-readable last line for the cron/log (+ sourcing-engine awareness fields, FR-2)
-  console.log(`  GAUGE belt=${beltDepth} idle=${idleNow} freeing_soon=${freeingSoon} demand=${demandSoon} deficit=${Math.max(0, deficit)} verdict=${verdict} masked_stall=${maskedIds.size} engine_on=${awareness.anyOn} unpromoted=${awareness.countStr}`);
+  console.log(`  GAUGE belt=${beltDepth} belt_extent=${beltExtent} dispatchable=${dispatchableCount} raw_unclaimed=${rawUnclaimed} idle=${idleNow} freeing_soon=${freeingSoon} demand=${demandSoon} deficit=${Math.max(0, deficit)} verdict=${verdict} masked_stall=${maskedIds.size} engine_on=${awareness.anyOn} unpromoted=${awareness.countStr}`);
 
   try {
     await stampLastFired(sb, 'standard_loop:capacity-forecast');
@@ -280,6 +282,11 @@ async function main() {
         // suppressed one.
         auto_refill_on: autoRefillOn,
         unpromoted_count: unpromotedCount,
+        // SD-LEO-INFRA-CAPACITY-FORECASTER-BELT-001 (FR-3): the extent belt_depth spans, recorded so a
+        // reader of belt_capacity_verdicts can never mistake raw-unclaimed for the dispatchable-leaf belt.
+        belt_extent: beltExtent,
+        dispatchable_count: dispatchableCount,
+        raw_unclaimed: rawUnclaimed,
       },
     });
   } catch (err) {
