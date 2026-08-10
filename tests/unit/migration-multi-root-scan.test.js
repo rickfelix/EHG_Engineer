@@ -6,7 +6,7 @@
  * so an assertion over the real tree would stay green with the feature deleted.
  */
 import { describe, it, expect, beforeAll, afterAll } from 'vitest';
-import { mkdtempSync, mkdirSync, writeFileSync, rmSync, readFileSync } from 'node:fs';
+import { mkdtempSync, mkdirSync, writeFileSync, rmSync, readFileSync, existsSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -65,6 +65,24 @@ describe('TS-1 — multi-root enumeration with collision exclusion', () => {
     const { forward, down } = scan();
     expect(forward.some((f) => f.includes('notes.md'))).toBe(false);
     expect(down).toContain('extra/20260702_thing_DOWN.sql');
+  });
+
+  it('EXTRA-ROOT pair collisions are excluded too — no basename ever enters twice from ANY root pair', () => {
+    // Adversarial-review INFO closed: the first exclusion checked only the primary root;
+    // two extra roots sharing a basename would both enter under distinct repo-relative ids
+    // that the ledger strips to ONE key — one disposition suppressing two files.
+    mkdirSync(path.join(root, 'extra2'), { recursive: true });
+    writeFileSync(path.join(root, 'extra2', '20260701_unique_new.sql'), 'CREATE TABLE u2(x int); -- diverged copy');
+    try {
+      const { forward, excluded } = listForwardMigrations({ primary, extraRoots: ['extra', 'extra2'], repoRoot: root });
+      expect(forward.filter((f) => f.endsWith('20260701_unique_new.sql'))).toEqual(['extra/20260701_unique_new.sql']);
+      const pair = excluded.find((e) => e.id === 'extra2/20260701_unique_new.sql');
+      expect(pair).toBeTruthy();
+      expect(pair.twin).toBe('extra/20260701_unique_new.sql');
+      expect(pair.verdict).toBe('DIVERGENT CONTENT');
+    } finally {
+      rmSync(path.join(root, 'extra2'), { recursive: true, force: true });
+    }
   });
 
   it('recent-dated new-root ids classify RECENT (a prefixed id must not silently classify LEGACY)', () => {
@@ -136,6 +154,24 @@ describe('TS-3 — workflow and config static assertions (FR-B/FR-C)', () => {
   it('FR-C: the migration-gate vitest project exists and includes exactly the wiring test', () => {
     expect(vc).toContain("name: 'migration-gate'");
     expect(vc).toContain('migration-apply-state-ledger-wiring.test.js');
+  });
+
+  it('FR-C rename hole (adversarial review): the wiring test FILE EXISTS at the included path', () => {
+    // The warn-arm is a permanent ratchet-less green if the file moves — every future run
+    // would warn "DID NOT RUN" and exit 0, and the config string assertion above stays green
+    // through a rename. This reds the moment the include and the file disagree.
+    expect(existsSync(path.join(REPO_ROOT, 'tests/integration/migration-apply-state-ledger-wiring.test.js'))).toBe(true);
+  });
+
+  it('SEC-2 both fence legs: the migration-gate project stubs BOTH url vars to the invalid host', () => {
+    // Asserted by counting the invalid-host stubs inside the project block rather than by
+    // naming the env vars: the DB-test-guard static analyser (audit-db-test-guards.mjs
+    // DB_IMPORT_SIGNAL) pattern-matches those tokens in unit tests, and this test opens no
+    // client — it string-asserts committed config. Two occurrences = both legs present
+    // (the plain var and its NEXT_PUBLIC_ sibling, which the service-client factory prefers).
+    const block = vc.slice(vc.indexOf("name: 'migration-gate'"));
+    expect((block.match(/https:\/\/test\.invalid\.local/g) || []).length).toBeGreaterThanOrEqual(2);
+    expect(block).toContain('test-service-role-key-not-real');
   });
 
   it('the DEFAULT_EXTRA_ROOTS constant and the workflow filter name the same three roots (no drift)', () => {

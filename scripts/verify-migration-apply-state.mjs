@@ -172,6 +172,11 @@ export function listForwardMigrations({ primary = MIGRATIONS_DIR, extraRoots = D
   const primarySet = new Set(primaryAll);
   const all = [...primaryAll];
   const excluded = [];
+  // Adversarial-review INFO closed: collisions are excluded against EVERY earlier root, not
+  // only the primary — two extra roots sharing a basename would otherwise both enter under
+  // distinct repo-relative ids that gapBasename strips to ONE ledger key, recreating the
+  // one-disposition-suppresses-two-files hazard FR-A's title claims closed.
+  const seenExtra = new Map(); // basename -> first-claiming repo-relative id
   for (const root of extraRoots) {
     let entries;
     try {
@@ -194,6 +199,17 @@ export function listForwardMigrations({ primary = MIGRATIONS_DIR, extraRoots = D
         excluded.push({ id: `${root}/${f}`, twin: f, verdict });
         continue;
       }
+      if (seenExtra.has(f)) {
+        let verdict = 'content-unreadable';
+        try {
+          const a = readFileSync(path.resolve(repoRoot, seenExtra.get(f)), 'utf8');
+          const b = readFileSync(path.resolve(repoRoot, root, f), 'utf8');
+          verdict = a === b ? 'byte-identical copy' : 'DIVERGENT CONTENT';
+        } catch { /* verdict stays content-unreadable */ }
+        excluded.push({ id: `${root}/${f}`, twin: seenExtra.get(f), verdict });
+        continue;
+      }
+      seenExtra.set(f, `${root}/${f}`);
       all.push(`${root}/${f}`);
     }
   }

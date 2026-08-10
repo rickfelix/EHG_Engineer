@@ -356,6 +356,11 @@ export default defineConfig({
           // POOLER/DATABASE_URL read path keeps working.
           env: {
             SUPABASE_URL: 'https://test.invalid.local',
+            // Second fence leg (adversarial review): createSupabaseServiceClient PREFERS
+            // NEXT_PUBLIC_SUPABASE_URL, which setup.db.js's dotenv load would populate with
+            // the real production URL — the fake key already made writes impossible, but the
+            // failed INSERT was still addressed at production. Both legs now structural.
+            NEXT_PUBLIC_SUPABASE_URL: 'https://test.invalid.local',
             SUPABASE_SERVICE_ROLE_KEY: 'test-service-role-key-not-real',
           },
           setupFiles: ['./tests/setup.db.js'],
