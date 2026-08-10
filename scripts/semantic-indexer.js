@@ -147,7 +147,11 @@ function createSemanticDescription(entity) {
  * Process a single file and extract entities
  */
 async function processFile(filePath, applicationRoot, application) {
-  const relativePath = path.relative(applicationRoot, filePath);
+  // Canonical forward slashes. path.relative emits backslashes on Windows and forward
+  // slashes on Linux, so the SAME entity would key differently across the seats that run
+  // this (local Windows seed vs the Linux cron) — every cron run would then see 18k "new"
+  // entities, re-embed the world, and write a slash-variant twin of every row.
+  const relativePath = path.relative(applicationRoot, filePath).split(path.sep).join('/');
   const fileContent = await fs.readFile(filePath, 'utf8');
   const ext = path.extname(filePath);
 
@@ -307,6 +311,34 @@ async function indexEntities(entities, options) {
 }
 
 /**
+ * Fetch every stored (key → semantic_description) for the application, PAGINATED — a single
+ * capped fetch would measure the cap, not the population, and silently un-skip everything
+ * beyond row 1000.
+ */
+async function fetchExistingDescriptions(application) {
+  const map = new Map();
+  const PAGE = 1000;
+  for (let from = 0; ; from += PAGE) {
+    const { data, error } = await supabase
+      .from('codebase_semantic_index')
+      .select('file_path, entity_name, entity_type, semantic_description')
+      .eq('application', application)
+      .range(from, from + PAGE - 1);
+    if (error) {
+      // Could-not-look must not masquerade as empty: an unreadable index means NO skip
+      // (everything re-embeds — wasteful but correct), stated out loud.
+      console.warn(`  ⚠️  Could not read existing index for incremental skip (${error.message}) — re-embedding everything`);
+      return new Map();
+    }
+    for (const r of data || []) {
+      map.set(`${r.file_path}::${r.entity_name}::${r.entity_type}`, r.semantic_description);
+    }
+    if (!data || data.length < PAGE) break;
+  }
+  return map;
+}
+
+/**
  * Main indexing workflow
  */
 async function main() {
@@ -389,9 +421,23 @@ async function main() {
 
   console.log(`✅ Extracted ${allEntities.length} code entities\n`);
 
+  // Layer 9: --incremental must actually BE incremental. It only skipped the DELETE and then
+  // re-embedded every entity, so a full pass ran ~6h at measured embed rates — which turns the
+  // weekly cron (45-min job timeout) into an instrument that times out every run while its
+  // data-present verify step stays green on last week's rows. Skip entities whose stored
+  // semantic_description is byte-identical: the description is the exact text that gets
+  // embedded, so an unchanged description means an unchanged embedding. New and changed
+  // entities still embed; the skip count is reported, never folded into 'indexed'.
+  let toIndex = allEntities;
+  if (incremental) {
+    const existing = await fetchExistingDescriptions(application);
+    toIndex = allEntities.filter((e) => existing.get(`${e.filePath}::${e.entityName}::${e.entityType}`) !== e.semanticDescription);
+    console.log(`↻ Incremental: ${allEntities.length - toIndex.length} unchanged entities skipped, ${toIndex.length} to embed\n`);
+  }
+
   // Index entities
   console.log('🚀 Generating embeddings and indexing...');
-  const stats = await indexEntities(allEntities, options);
+  const stats = await indexEntities(toIndex, options);
 
   // Summary
   console.log('\n══════════════════════════════════════════════════════════');
