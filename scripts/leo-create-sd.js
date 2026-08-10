@@ -147,13 +147,19 @@ Flags:
   --scope-slice <JSON>  (--child only) Declare the slice of parent orchestrator scope this
                         child claims. JSON shape: {stages?: number[], deliverable_globs?: string[]}.
                         Example: --scope-slice='{"stages":[18]}'
-  --depends-on <list>   (--child only) Comma-separated sibling SD keys this child depends on.
-                        Set on the dependencies column ATOMICALLY with the child's insert
-                        (QF-20260711-841 born-fenced sequencing) so the shared claim-eligibility
+  --depends-on <list>   (--child and --from-plan) Comma-separated SD keys this SD depends on.
+                        Set on the dependencies column ATOMICALLY with the insert
+                        (QF-20260711-841 born-fenced sequencing; extended to the plan lane by
+                        SD-LEO-INFRA-LEO-CREATE-PLAN-001) so the shared claim-eligibility
                         predicate (lib/fleet/claim-eligibility.cjs draftDepsSatisfied) blocks
-                        claiming until every referenced sibling completes -- no post-hoc
+                        claiming until every referenced SD completes -- no post-hoc
                         coordinator fencing window between birth and dependency-gating.
                         Example: --depends-on SD-LEO-ORCH-FOO-001-A,SD-LEO-ORCH-FOO-001-B
+  --roadmap-link-reason "<text>"  (--from-plan) Operator reason recorded on
+                        metadata.roadmap_link_exception when the creation is unlinked from the
+                        roadmap (register-first exception). Without it the exception stamps
+                        no-reason-supplied — the counted gap the sourcing health probe drives
+                        to zero. Recorded only when actually unlinked; never a refusal path.
   --target-repos <list> Set metadata.target_repos[] for cross-repo SDs (comma-separated).
                         Valid values: EHG, EHG_Engineer (case-insensitive; normalized).
                         When set, PR_MERGE_VERIFICATION at LEAD-FINAL scopes its scan
@@ -188,6 +194,8 @@ Flags:
 Dependency Field Guide:
   The "dependencies" column (JSONB array) is the CORRECT place for SD prerequisites.
   Format: [{"sd_id": "SD-XXX-001"}, {"sd_id": "SD-YYY-002"}]
+  Write it at creation with --depends-on (works on --child AND --from-plan):
+    node scripts/leo-create-sd.js --from-plan my-plan.md --depends-on SD-XXX-001 --yes
 
   It is the ONLY dependency home honored by EVERY consumer — sd:next's
   queue display, AUTO-PROCEED skip/process, the worker claim lanes, AND
@@ -385,7 +393,21 @@ Note: SD keys starting with QF- will be redirected to create-quick-fix.js.
       const waveDispositionPlan = waveIdxPlan !== -1
         ? { waveId: args[waveIdxPlan + 1] }
         : (noWaveIdxPlan !== -1 ? { noWave: args[noWaveIdxPlan + 1] } : null);
-      // Path is any arg that isn't a flag or a flag's value
+      // SD-LEO-INFRA-LEO-CREATE-PLAN-001: creation-time relationship/reason intent.
+      // Comma-split contract copied from the child lane (:454) — without the split,
+      // --depends-on SD-A,SD-B would land ONE malformed dep and the SD is born
+      // silently unfenced.
+      const dependsOnIdxPlan = args.indexOf('--depends-on');
+      const dependsOnPlan = dependsOnIdxPlan !== -1 && args[dependsOnIdxPlan + 1]
+        ? args[dependsOnIdxPlan + 1].split(',').map((k) => k.trim()).filter(Boolean)
+        : null;
+      const linkReasonIdxPlan = args.indexOf('--roadmap-link-reason');
+      const roadmapLinkReasonPlan = linkReasonIdxPlan !== -1 ? args[linkReasonIdxPlan + 1] : null;
+      // Path is any arg that isn't a flag or a flag's value.
+      // A value-taking flag MUST appear in BOTH flagValuePositions and knownPlanFlags:
+      // the planPath predicate short-circuits on !startsWith('-') so only
+      // flagValuePositions stops a flag's VALUE (an SD key does not start with '-')
+      // from being silently adopted as planPath — the direct-lane.js:65-69 bug class.
       const flagValuePositions = new Set(
         [
           typeIdx !== -1 ? typeIdx + 1 : -1,
@@ -396,12 +418,15 @@ Note: SD keys starting with QF- will be redirected to create-quick-fix.js.
           targetReposIdxPlan !== -1 ? targetReposIdxPlan + 1 : -1,
           waveIdxPlan !== -1 ? waveIdxPlan + 1 : -1,
           noWaveIdxPlan !== -1 ? noWaveIdxPlan + 1 : -1,
+          dependsOnIdxPlan !== -1 ? dependsOnIdxPlan + 1 : -1,
+          linkReasonIdxPlan !== -1 ? linkReasonIdxPlan + 1 : -1,
         ].filter(i => i > 0)
       );
       const knownPlanFlags = new Set([
         '--yes', '-y', '--type', '--title', '--priority', '--from-plan',
         '--vision-key', '--arch-key', '--migration-reviewed', '--security-reviewed',
-        '--target-repos', '--force-create', '--wave', '--no-wave'
+        '--target-repos', '--force-create', '--wave', '--no-wave',
+        '--depends-on', '--roadmap-link-reason'
       ]);
       const planPath = args.find((arg, i) =>
         i > 0 && !arg.startsWith('-') && !flagValuePositions.has(i) && !knownPlanFlags.has(arg)
@@ -417,6 +442,8 @@ Note: SD keys starting with QF- will be redirected to create-quick-fix.js.
         targetRepos: targetReposPlan,
         forceCreate,
         waveDisposition: waveDispositionPlan,
+        dependsOn: dependsOnPlan,
+        roadmapLinkReason: roadmapLinkReasonPlan,
       });
       exitFromResult(planRes);
     } else if (args[0] === '--child') {
