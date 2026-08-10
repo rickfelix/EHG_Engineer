@@ -131,6 +131,24 @@ describe('FR-2 fail-loud — a rationale without a guard-visible marker is refus
     expect(classifyDeliberateHoldMarker({ notBefore: inHours(2) })).toMatchObject({ valid: true, mode: 'time_gated' });
     expect(classifyDeliberateHoldMarker({ owner: 'chairman', releaseCondition: 'x' })).toMatchObject({ valid: true, mode: 'event_gated' });
   });
+
+  it('a PAST not_before is flagged inPast and warned about loudly — accepted (the un-park verb) but never a silent pseudo-hold', async () => {
+    // Adversarial review reproduced the trap: a mistyped/tz-naive-parsed-to-past timestamp
+    // printed a clean success while the row stayed immediately re-handable. The un-park use
+    // (past not_before, often with --reopen) is legitimate, so this stays ACCEPTED — the fix
+    // is honesty, not refusal.
+    expect(classifyDeliberateHoldMarker({ notBefore: inHours(-2) })).toMatchObject({ valid: true, mode: 'time_gated', inPast: true });
+    expect(classifyDeliberateHoldMarker({ notBefore: inHours(2) })).toMatchObject({ valid: true, mode: 'time_gated', inPast: false });
+    const warns = [];
+    const orig = console.warn;
+    console.warn = (m) => warns.push(String(m));
+    try {
+      const stub = makeSupabaseStub({ id: 'QF-X', status: 'open', not_before: inHours(-2) });
+      await deferQuickFix('QF-X', inHours(-2), { supabaseClient: stub.client });
+      expect(warns.join(' ')).toMatch(/PAST[\s\S]*holds NOTHING/);
+      expect(stub.update).toHaveBeenCalled(); // still writes — un-park preserved
+    } finally { console.warn = orig; }
+  });
 });
 
 describe('FR-2 negative controls — markerless paths that must KEEP succeeding', () => {

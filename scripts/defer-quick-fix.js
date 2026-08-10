@@ -91,7 +91,12 @@ export function classifyDeliberateHoldMarker({ notBefore, owner, releaseConditio
   if (notBefore) {
     const v = validateNotBefore(notBefore);
     if (!v.valid) return { valid: false, error: v.error };
-    return { valid: true, mode: 'time_gated', iso: v.iso };
+    // A PAST not_before is still accepted — it is the deliberate un-park verb (often with
+    // --reopen) — but it excludes NOTHING at hand-time, so it must never masquerade as a hold.
+    // The adversarial review reproduced the trap: a mistyped or tz-naive-parsed-to-past
+    // timestamp printed a clean success while the row stayed immediately re-handable.
+    const inPast = Date.parse(v.iso) <= Date.now();
+    return { valid: true, mode: 'time_gated', iso: v.iso, inPast };
   }
   if (isChairmanGatedQF({ owner, release_condition: releaseCondition })) {
     return { valid: true, mode: 'event_gated', iso: null };
@@ -166,6 +171,9 @@ export async function deferQuickFix(qfId, notBefore, { reopen = false, reason, o
   }
 
   if (marker.mode === 'time_gated') {
+    if (marker.inPast) {
+      console.warn(`⚠️  not_before ${marker.iso} is in the PAST — this write holds NOTHING at hand-time; the row is immediately claimable again. If you meant to hold, supply a future timestamp (or the event-gated form); if you meant to un-park, this is the expected effect.`);
+    }
     const daysOut = (Date.parse(marker.iso) - Date.now()) / (24 * 60 * 60 * 1000);
     if (daysOut > FAR_FUTURE_PARK_DAYS && !(releaseCondition && String(releaseCondition).trim())) {
       const err = new Error(`--not-before is ${Math.round(daysOut)} days out (>${FAR_FUTURE_PARK_DAYS}) and requires --release-condition -- a far-future park with no release trigger never resurfaces (QF-20260720-137)`);
