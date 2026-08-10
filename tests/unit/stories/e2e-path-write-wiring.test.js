@@ -12,7 +12,8 @@
 import { describe, it, expect } from 'vitest';
 import { readFileSync } from 'node:fs';
 import { execSync } from 'node:child_process';
-import { generateE2ETestPath } from '../../../scripts/modules/auto-trigger-stories.mjs';
+import { fileURLToPath } from 'node:url';
+import { generateE2ETestPath, resolveStoryE2eRoot } from '../../../scripts/modules/auto-trigger-stories.mjs';
 
 const noFile = { existsSync: () => false };
 const everyFile = { existsSync: () => true };
@@ -91,13 +92,52 @@ describe('FR-4 — the counter-pressure instrument census, pinned', () => {
   // migration. The write-side NULLs therefore cannot regress any live code path through them.
   // If this test reds, a consumer appeared and the recorded contradiction (feedback channel,
   // SD-LEO-INFRA-STORY-E2E-WRITE-001) must be re-evaluated BEFORE relying on that consumer.
-  it('validate_story_e2e_requirements and relatives have zero callers under scripts/ and lib/', () => {
+  it('validate_story_e2e_requirements and relatives have zero callers under scripts/, lib/ and src/', () => {
+    // Adversarial-review hardening: a broken census instrument must FAIL LOUD, never read as
+    // the pinned-good state. git grep exits 1 for "no matches" (the pinned state) but 128 for
+    // a bad cwd / not-a-repo — only exit 1 may be swallowed. cwd goes through fileURLToPath so
+    // a checkout path containing spaces cannot silently break the instrument.
+    const repoRoot = fileURLToPath(new URL('../../..', import.meta.url));
     for (const fn of ['validate_story_e2e_requirements', 'validate_sd_stories_e2e_requirements', 'get_e2e_template_for_sd']) {
       let out = '';
       try {
-        out = execSync(`git grep -l "${fn}" -- scripts lib`, { encoding: 'utf8', cwd: new URL('../../..', import.meta.url).pathname.replace(/^\/([A-Za-z]:)/, '$1') });
-      } catch { /* non-zero exit = no matches = the pinned state */ }
+        out = execSync(`git grep -l "${fn}" -- scripts lib src`, { encoding: 'utf8', cwd: repoRoot });
+      } catch (e) {
+        if (e.status !== 1) throw new Error(`census instrument broke (exit ${e.status}): ${e.message}`);
+        // exit 1 = genuinely zero matches = the pinned state
+      }
       expect(out.trim(), `${fn} gained a code consumer — re-evaluate the recorded contradiction`).toBe('');
+    }
+  });
+});
+
+describe('FR-2 — production root resolution follows the story TARGET repo', () => {
+  // Adversarial-review WARNING closed: the production call site previously defaulted every
+  // SD to process.cwd(), so an ehg-target SD's REAL spec (created after EXEC) would have been
+  // checked against the wrong disk and nulled on re-generation.
+  it('EHG-target SDs resolve to the ehg checkout (EHG_APP_PATH override honored)', () => {
+    const prev = process.env.EHG_APP_PATH;
+    try {
+      process.env.EHG_APP_PATH = '/custom/ehg';
+      expect(resolveStoryE2eRoot('EHG')).toBe('/custom/ehg');
+      expect(resolveStoryE2eRoot(' ehg ')).toBe('/custom/ehg');
+      delete process.env.EHG_APP_PATH;
+      expect(resolveStoryE2eRoot('EHG').replace(/\\/g, '/')).toMatch(/\/ehg$/);
+    } finally {
+      if (prev === undefined) delete process.env.EHG_APP_PATH; else process.env.EHG_APP_PATH = prev;
+    }
+  });
+
+  it('non-EHG targets resolve to this repo (STORY_E2E_REPO_ROOT override, else cwd)', () => {
+    const prev = process.env.STORY_E2E_REPO_ROOT;
+    try {
+      process.env.STORY_E2E_REPO_ROOT = '/custom/engineer';
+      expect(resolveStoryE2eRoot('EHG_Engineer')).toBe('/custom/engineer');
+      expect(resolveStoryE2eRoot(null)).toBe('/custom/engineer');
+      delete process.env.STORY_E2E_REPO_ROOT;
+      expect(resolveStoryE2eRoot('EHG_Engineer')).toBe(process.cwd());
+    } finally {
+      if (prev === undefined) delete process.env.STORY_E2E_REPO_ROOT; else process.env.STORY_E2E_REPO_ROOT = prev;
     }
   });
 });

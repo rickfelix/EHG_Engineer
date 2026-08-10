@@ -25,12 +25,31 @@
  */
 
 import { randomUUID } from 'crypto';
+import { fileURLToPath } from 'url';
+import nodePath from 'path';
 import { isPersonaStoryRoleEnabled } from '../lib/persona-extractor.js';
 import { getLLMClient } from '../../lib/llm/client-factory.js';
 // SD-LEO-INFRA-STORY-E2E-WRITE-001 (FR-1): the EXISTING write-time choke-point (sibling
 // STORY-E2E-AUTO-001 FR-1). Reused verbatim, never re-derived — a second existence predicate
 // is how the write side and the read gate drift.
 import { resolveE2ePath } from '../../lib/stories/e2e-path-guard.js';
+
+/**
+ * SD-LEO-INFRA-STORY-E2E-WRITE-001 (FR-2, closed by adversarial review): the repo root the
+ * guard checks against must be the TARGET repo of the story's spec, and the story corpus spans
+ * two repos. EHG-app-target SDs' specs live in the sibling ehg checkout (the EHG_APP_PATH
+ * precedent from map-e2e-tests-to-stories.js — same env var, same relative fallback);
+ * everything else validates against this repo (STORY_E2E_REPO_ROOT override, else cwd).
+ * Without this, a real ehg spec re-generated after EXEC would be checked against the WRONG
+ * disk and nulled — the exact real-coverage loss FR-2's contract forbids.
+ */
+export function resolveStoryE2eRoot(targetApplication) {
+  if (String(targetApplication || '').trim().toUpperCase() === 'EHG') {
+    return process.env.EHG_APP_PATH
+      || nodePath.join(nodePath.dirname(fileURLToPath(import.meta.url)), '../../../ehg');
+  }
+  return process.env.STORY_E2E_REPO_ROOT || process.cwd();
+}
 
 /**
  * SD-LEO-INFRA-AUTO-STORY-QUALITY-GATE-001 Option B helper.
@@ -484,23 +503,25 @@ ${existingStories.map(s => `- ${s.story_key}: ${s.title}`).join('\n')}`);
  * @returns {Promise<string>} SD type (feature, documentation, infrastructure, database, security)
  */
 async function getSDType(supabase, sdId) {
+  // SD-LEO-INFRA-STORY-E2E-WRITE-001 (FR-2): target_application rides along so the e2e-path
+  // guard can be pointed at the story's TARGET repo root (see resolveStoryE2eRoot).
   try {
     const { data: sd, error } = await supabase
       .from('strategic_directives_v2')
-      .select('sd_type')
+      .select('sd_type, target_application')
       .or(`id.eq.${sdId},sd_key.eq.${sdId}`)
       .single();
 
     if (error || !sd) {
       console.log(`   ⚠️  Could not fetch SD type, defaulting to 'feature'`);
-      return 'feature';
+      return { sdType: 'feature', targetApplication: null };
     }
 
     // sd_type takes precedence over category
-    return sd.sd_type || 'feature';
+    return { sdType: sd.sd_type || 'feature', targetApplication: sd.target_application || null };
   } catch (err) {
     console.log(`   ⚠️  SD type lookup error: ${err.message}, defaulting to 'feature'`);
-    return 'feature';
+    return { sdType: 'feature', targetApplication: null };
   }
 }
 
@@ -1135,7 +1156,9 @@ async function generateUserStoriesFromPRD(supabase, prd, resolvedSdId, sdKey, pr
   }
 
   // SD-TYPE-AWARE: Fetch SD type for criteria transformation
-  const sdType = await getSDType(supabase, resolvedSdId);
+  const { sdType, targetApplication } = await getSDType(supabase, resolvedSdId);
+  // FR-2: the guard validates existence against the story's TARGET repo, not the running repo.
+  const e2eRepoRoot = resolveStoryE2eRoot(targetApplication);
   console.log(`   📋 SD Type: ${sdType} (criteria will be ${sdType === 'feature' || sdType === 'security' ? 'STRICT' : sdType === 'documentation' ? 'LENIENT' : 'MODERATE'})`);
 
   for (let i = 0; i < functionalRequirements.length; i++) {
@@ -1163,7 +1186,7 @@ async function generateUserStoriesFromPRD(supabase, prd, resolvedSdId, sdKey, pr
     // SD-LEO-INFRA-AUTO-TRIGGER-STORIES-FK-FIX-001: slug uses sdKey (stable, sd-key-format),
     // sd_id uses resolvedSdId (FK target).
     const storyTitle = fr.requirement || `Implement ${fr.id}`;
-    const e2eConfig = generateE2ETestPath(sdKey, sdType, storyNumber, storyTitle);
+    const e2eConfig = generateE2ETestPath(sdKey, sdType, storyNumber, storyTitle, { repoRoot: e2eRepoRoot });
 
     const userStory = {
       id: randomUUID(),
@@ -1196,7 +1219,9 @@ async function generateUserStoriesFromPRD(supabase, prd, resolvedSdId, sdKey, pr
       metadata: {
         sd_type_at_generation: sdType,
         criteria_transformation_applied: true,
-        e2e_path_auto_generated: true,
+        // Truthful provenance (adversarial-review INFO): the flag now tracks whether a path
+        // was actually persisted — a guard-refused NULL row must not claim auto-generation.
+        e2e_path_auto_generated: e2eConfig.path != null,
         generation_version: '1.3.0'
       }
     };
