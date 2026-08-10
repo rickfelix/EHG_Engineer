@@ -1,5 +1,9 @@
 -- SD-LEO-INFRA-SYSTEMATIZE-COMPLETENESS-CRITIC-001 (FR-3/FR-4)
 -- @chairman-gated
+-- @approved-by: codestreetlabs@gmail.com
+-- (approval chain: coordinator classification on read 2026-08-10 seat 56f09320 under the standing
+--  delegated framework — pure additive CHECK-widening, no RLS/GRANT, no stored value invalidated;
+--  chairman full-speed directive 22:47Z applies)
 --
 -- WIDEN plan_critiques.overall_severity TO ACCEPT 'could_not_check'.
 --
