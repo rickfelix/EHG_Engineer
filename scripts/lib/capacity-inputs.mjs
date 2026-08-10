@@ -46,16 +46,22 @@
 'use strict';
 
 import { fetchAllPaginated, renderCount } from '../../lib/db/fetch-all-paginated.mjs';
-import { isExcludedFromBelt } from '../../lib/coordinator/sd-exclusion.mjs';
-import { classifyDispatchIneligibility } from '../../lib/fleet/claim-eligibility.cjs';
+import { isBareShell } from '../../lib/coordinator/sd-exclusion.mjs';
+import { parentLeadPendingVerdict } from '../../lib/fleet/claim-eligibility.cjs';
 import { countClaimableQuickFixes } from '../../lib/fleet/belt-depth.cjs';
+// SD-LEO-INFRA-CAPACITY-FORECASTER-BELT-001: reuse the ranker's PURE leaf predicates from the
+// client-free SSOT so the forecaster belt spans the DISPATCHABLE-leaf extent (what the ranker
+// counts as "1 claimable leaf"), not the raw-unclaimed extent. Applied IN-MEMORY on the rows this
+// module already fetches — never a second SD-table read or per-child parent fetch.
+import { claimableDbFreeReason, blockerKeysFor } from './claimable-leaves.mjs';
 import { isLiveCountableWorker } from './live-countable-worker.mjs';
 import { createRequire } from 'module';
 
 const require = createRequire(import.meta.url);
 const { stalledLoopSessionIds, maskedStallSessionIds } = require('../../lib/coordinator/detectors.cjs');
 const { getActiveCoordinatorId } = require('../../lib/coordinator/resolve.cjs');
-const { parseSdDependencies } = require('../../lib/utils/parse-sd-dependencies.cjs');
+// SD-LEO-INFRA-CAPACITY-FORECASTER-BELT-001: dependency keys now come from the shared blockerKeysFor
+// (which folds in metadata.blocked_by_sd_key too) — the bare parseSdDependencies require was dropped.
 
 // SD-FDBK-INFRA-STALL-AFTER-COMPLETION-001 — DORMANT BY DEFAULT. See the forecast script header for
 // the full reasoning: process_alive_at is currently fleet-broken, so keying the masked-stall detector
@@ -202,7 +208,10 @@ export async function gatherCapacityInputs(sb, { now = Date.now() } = {}) {
     // SD-REFILL-00306WTS: + target_application so un-actionable auto-filed venture remediation
     // SDs (target_application != EHG_Engineer) are excluded from belt depth (false-SURPLUS fix).
     fetchAllPaginated(() => sb.from('strategic_directives_v2')
-      .select('sd_key, title, description, status, sd_type, current_phase, progress_percentage, claiming_session_id, dependencies, metadata, target_application')
+      // SD-LEO-INFRA-CAPACITY-FORECASTER-BELT-001: + id + parent_sd_id so the shared leaf predicates
+      // can resolve an orchestrator child's parent IN-MEMORY (parent_sd_id references the parent id or
+      // sd_key) without a per-child DB round-trip.
+      .select('id, sd_key, title, description, status, sd_type, current_phase, progress_percentage, claiming_session_id, dependencies, metadata, target_application, parent_sd_id')
       .not('status', 'in', '("completed","cancelled","deferred")')
       .order('sd_key', { ascending: true })) // unique tiebreaker (FR-6)
       .catch(() => []),
@@ -225,11 +234,14 @@ export async function gatherCapacityInputs(sb, { now = Date.now() } = {}) {
   const openQfCountRendered = renderCount(openQfCountRaw);
   const openQfCount = typeof openQfCountRendered === 'number' ? openQfCountRendered : 0; // fail-open: unreadable → 0 belt contribution, unchanged from the prior fallback
 
-  // ── resolve dependency statuses → claimable belt ──
-  // parseSdDependencies handles the live shape mix ([{sd_id}], [{sd_key}], raw strings) AND drops the
-  // 'none' sentinel + free-text non-SD placeholders, returning only real /^SD-/ blocker keys.
+  // ── resolve dependency statuses → DISPATCHABLE-LEAF belt (SD-LEO-INFRA-CAPACITY-FORECASTER-BELT-001) ──
+  // blockerKeysFor is the SAME shared predicate the ranker uses: `dependencies` column PLUS the
+  // canonical metadata.blocked_by_sd_key (the forecaster previously read only the top-level column,
+  // so metadata-blocked rows leaked onto the belt).
+  const byKey = new Map((sds || []).map(d => [d.sd_key, d]));
+  const byId = new Map((sds || []).filter(d => d.id != null).map(d => [d.id, d]));
   const depKeys = new Set();
-  (sds || []).forEach(d => parseSdDependencies(d.dependencies).forEach(k => depKeys.add(k)));
+  (sds || []).forEach(d => blockerKeysFor(d).forEach(k => depKeys.add(k)));
   let depStatus = {};
   if (depKeys.size) {
     // SD-LEO-INFRA-COUNT-TRUNCATION-DISCIPLINE-001 FR-6 batch 9: bounded by design — depKeys is
@@ -240,6 +252,7 @@ export async function gatherCapacityInputs(sb, { now = Date.now() } = {}) {
   }
   const claimable = [];
   const claimsBySession = {};
+  let rawUnclaimed = 0;      // every unclaimed non-terminal row, pre-exclusion — the extent the bug measured
   let beltExcludes = 0;
   let ineligibleExcludes = 0;
   for (const d of (sds || [])) {
@@ -247,26 +260,40 @@ export async function gatherCapacityInputs(sb, { now = Date.now() } = {}) {
       (claimsBySession[d.claiming_session_id] ||= []).push(d);
       continue;
     }
-    // SD-FDBK-INFRA-BACKLOG-RANK-EXCLUSION-001: fixtures and bare-shell stubs are not real
-    // belt — neither can pass LEAD-TO-PLAN. Excluding them keeps beltDepth honest so a
-    // forecast deficit (and the proactive Adam reach-out) is not masked by non-distributable rows.
-    if (isExcludedFromBelt(d)) { beltExcludes++; continue; }
-    // SD-LEO-INFRA-BACKLOG-RANK-CLAIMABLE-ELIGIBILITY-ALIGN-001: apply the SHARED claim-eligibility
-    // predicate (the SSOT the worker resolver uses) so belt depth == actually-claimable depth. Catches
-    // orchestrator_parent, human_action_required (the previously-missing axis), co_author_pending,
-    // sd_deferred, sd_terminal, test_fixture_key. Without this the forecaster over-counted RHA-held +
-    // co-author-pending SDs and fired false belt-low DEFICITs that masked genuine starvation.
-    const ineligible = classifyDispatchIneligibility(d);
-    if (ineligible) {
-      ineligibleExcludes++;
-      console.log(`  [belt-skip] ${ineligible} (not worker-claimable): ${d.sd_key}`);
+    rawUnclaimed++;
+    // ── the DISPATCHABLE-LEAF predicate, shared with the ranker (never a parallel re-count) ──
+    // claimableDbFreeReason folds in-flight/started + fixture + un-actionable-venture-remediation +
+    // the full classifyDispatchIneligibility axis table (human-action/orchestrator/co-author/deferred/
+    // terminal/clone-tree). The forecaster PREVIOUSLY missed the in-flight axis, so started-but-unclaimed
+    // SDs read as fresh supply.
+    const reason = claimableDbFreeReason(d);
+    if (reason && reason !== 'claimed') {
+      // Non-distributable stubs vs dispatch-ineligible holds — kept separate for the emitted breakdown.
+      if (reason === 'in_flight' || reason === 'fixture' || reason === 'unactionable_venture_remediation') beltExcludes++;
+      else ineligibleExcludes++;
+      console.log(`  [belt-skip] ${reason} (not dispatchable-leaf): ${d.sd_key}`);
       continue;
     }
-    const unmet = parseSdDependencies(d.dependencies).filter(k => depStatus[k] !== 'completed');
-    if (unmet.length === 0) claimable.push(d);
+    // isBareShell on top: computeClaimableLeaves DEMOTES bare-shell but does not DROP it — the
+    // forecaster keeps dropping it (a bare-shell cannot pass LEAD-TO-PLAN), so the forecaster count is
+    // a SUBSET of the ranker leaf set. Under-count is the SAFE deficit direction (never masks starvation).
+    if (isBareShell(d)) { beltExcludes++; continue; }
+    // blockerKeysFor: `dependencies` + metadata.blocked_by_sd_key, resolved against the in-memory
+    // non-terminal set (a completed/absent blocker is satisfied).
+    const unmet = blockerKeysFor(d).filter(k => (byKey.has(k) ? byKey.get(k).status !== 'completed' : depStatus[k] !== 'completed'));
+    if (unmet.length) { ineligibleExcludes++; continue; }
+    // Parent-LEAD IN-MEMORY: an orchestrator child whose parent has not passed LEAD is not yet
+    // dispatchable. Resolve the parent from the already-fetched non-terminal set (by id or sd_key) and
+    // apply the shared pure verdict — no per-child DB round-trip. An absent/terminal parent => not pending.
+    if (d.parent_sd_id != null) {
+      const parent = byId.get(d.parent_sd_id) || byKey.get(d.parent_sd_id);
+      if (parentLeadPendingVerdict(parent)) { ineligibleExcludes++; continue; }
+    }
+    claimable.push(d);
   }
-  if (beltExcludes) console.log(`[CAPACITY-FORECAST] ${beltExcludes} non-distributable SD(s) (fixture/bare-shell/un-actionable-venture-remediation) excluded from belt depth`);
-  if (ineligibleExcludes) console.log(`[CAPACITY-FORECAST] ${ineligibleExcludes} dispatch-ineligible SD(s) (human-action/orchestrator/co-author-pending/deferred/terminal) excluded from belt depth (claim-eligibility SSOT)`);
+  if (beltExcludes) console.log(`[CAPACITY-FORECAST] ${beltExcludes} non-distributable SD(s) (in-flight/fixture/bare-shell/un-actionable-venture-remediation) excluded from dispatchable-leaf belt`);
+  if (ineligibleExcludes) console.log(`[CAPACITY-FORECAST] ${ineligibleExcludes} dispatch-ineligible SD(s) (human-action/orchestrator/co-author/deferred/terminal/dep-blocked/parent-LEAD) excluded from dispatchable-leaf belt (shared leaf SSOT)`);
+  console.log(`[CAPACITY-FORECAST] belt extent=dispatchable-leaf: ${claimable.length} dispatchable of ${rawUnclaimed} raw-unclaimed`);
 
   // ── classify live workers (exclude coordinator + adam + non_fleet + fixtures + released) ──
   // SD-LEO-INFRA-FORECASTER-FIXTURE-WORKER-EXCLUSION-001: use the canonical isDispatchableFleetMember
@@ -340,6 +367,12 @@ export async function gatherCapacityInputs(sb, { now = Date.now() } = {}) {
     claimable, rows, workers, claimsBySession,
     maskedIds, stalledIds, phaseMinActuals,
     beltExcludes, ineligibleExcludes,
+    // SD-LEO-INFRA-CAPACITY-FORECASTER-BELT-001 (FR-3): NAME the extent + the raw-vs-dispatchable
+    // breakdown so a reader (and the persisted verdict detail) can never mistake raw-unclaimed for
+    // the dispatchable-leaf belt again. beltExtent labels which extent claimableCount spans.
+    beltExtent: 'dispatchable-leaf',
+    rawUnclaimed,
+    dispatchableCount: claimable.length,
     now,
   };
 }

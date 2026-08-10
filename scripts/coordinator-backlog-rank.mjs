@@ -33,73 +33,26 @@ import { guardMutation, resolveOwnSessionId } from '../lib/coordinator-mutation-
 // demotes bare-shell stubs. FIXTURE_RE catches epoch-stamped TEST-E2E keys; the
 // bare-shell demotion uses the shared bareShellLastCompare so the test suite
 // exercises the real comparator, not a re-implementation.
-import { isFixtureSd, isBareShell, bareShellLastCompare, isStartedSd, stripDispatchRank, isUnactionableRemediationSd } from '../lib/coordinator/sd-exclusion.mjs';
-// SD-LEO-INFRA-FORECASTER-DEP-SENTINEL-BELTDEPTH-001: resolve dependency keys via the canonical
-// blocker rule (the same SSOT coordinator-audit.mjs imports) so the ranker and the capacity
-// forecaster AGREE on the 'no dependencies' sentinel ({sd_key:'none'} / bare 'none') and on
-// free-text non-SD placeholders. parseSdDependencies returns ONLY real /^SD-/ blocker keys —
-// handling both the [{sd_id}]/[{sd_key}] object and raw-string shapes the old hand-rolled
-// resolver coerced, while correctly dropping the sentinel the hand-rolled one mis-counted.
-import { parseSdDependencies } from '../lib/utils/parse-sd-dependencies.cjs';
+// SD-LEO-INFRA-CAPACITY-FORECASTER-BELT-001: isFixtureSd / isStartedSd / isUnactionableRemediationSd /
+// parseSdDependencies / parentLeadPending / classifyDispatchIneligibility / resolveHoldProvenance /
+// formatHoldProvenance / checkMetadataDependency moved with the leaf SSOT into claimable-leaves.mjs;
+// only the ranker-specific classifiers remain imported here.
+import { isBareShell, bareShellLastCompare, stripDispatchRank } from '../lib/coordinator/sd-exclusion.mjs';
 import { resolveCanonicalWaveIds } from '../lib/roadmap/canonical-roadmap.js';
 // SD-LEO-INFRA-ADAM-WORK-SELECTION-001 FR-2/FR-3: ONE roadmap-marker predicate, imported rather
 // than re-declared. A hardcoded copy here had already drifted from the reader's list by 326 SDs.
 import { isPlanLinked } from '../lib/adam/work-selection-gate.js';
-// SD-REFILL-00MFWEGZ: reuse the canonical parent-LEAD-pass dispatch gate so the ranking surface
-// mirrors what claim-eligibility actually blocks (no drift between rank-vs-claim).
-import { parentLeadPending, classifyDispatchIneligibility, resolveHoldProvenance, formatHoldProvenance } from '../lib/fleet/claim-eligibility.cjs';
-// SD-REFILL-00AH2L4Q: honor the SAME canonical metadata blocker key (metadata.blocked_by_sd_key)
-// that dependency-resolver + worker-checkin enforce, so the dispatch ranker does not keep a
-// metadata-blocked SD on the claimable belt (the convention was inconsistently enforced fleet-wide).
-import { checkMetadataDependency } from './modules/sd-next/dependency-resolver.js';
-// SD-LEO-INFRA-COUNT-TRUNCATION-DISCIPLINE-001 FR-6 batch 9 — computeClaimableLeaves is the SSOT
-// claimable-SD computation that worker-checkin's dispatch_rank consumer relies on; a capped read
-// here would silently make some non-terminal SDs unrankable/unclaimable. strategic_directives_v2
-// is the flagship growing table.
+// SD-LEO-INFRA-COUNT-TRUNCATION-DISCIPLINE-001 FR-6 batch 9 — the terminal-ranked cleanup read below
+// must not be capped; strategic_directives_v2 is the flagship growing table.
 import { fetchAllPaginated } from '../lib/db/fetch-all-paginated.mjs';
 
-// Collect every blocker sd_key for an SD: the `dependencies` column PLUS the canonical
-// metadata.blocked_by_sd_key. ONE predicate, shared by depKeys collection and the unmet check.
-export function blockerKeysFor(d) {
-  const keys = parseSdDependencies(d.dependencies);
-  const { blockerSdKey } = checkMetadataDependency(d.metadata);
-  if (blockerSdKey) keys.push(blockerSdKey);
-  return keys;
-}
-
-/**
- * SD-LEO-INFRA-BACKLOG-RANK-CLAIMABLE-ELIGIBILITY-ALIGN-001: the DB-FREE claimable gate for the ranker,
- * composed so the ranked belt matches the actually-claimable set the worker resolver enforces. Returns
- * null when the SD passes every DB-free claimable axis, or a reason string when it must be excluded:
- *   - 'claimed'  — a live session already holds it (claiming_session_id set)
- *   - 'in_flight' — started/mid-build past LEAD draft (resumed via resume_orphan, never fresh-ranked)
- *   - 'fixture'  — backlog-rank's BROADER fixture detection (epoch TEST-E2E keys / metadata.is_fixture)
- *   - else the SHARED claim-eligibility reason: 'orchestrator_parent' | 'human_action_required' |
- *     'co_author_pending' | 'sd_deferred' | 'sd_terminal' | 'test_fixture_key'.
- * The shared predicate (classifyDispatchIneligibility) is the SSOT — re-implementing it is exactly how
- * the requires_human_action skip drifted out of the ranker. Pure; the DB-backed axes (dependency/metadata
- * blockers, parent-LEAD-pending) remain in the async claim loop. Exported for unit testing.
- * @param {object} d - an SD row (sd_key, sd_type, status, current_phase, claiming_session_id, metadata)
- * @returns {null|string}
- */
-export function claimableDbFreeReason(d) {
-  if (!d) return 'missing';
-  if (d.claiming_session_id) return 'claimed';
-  if (isStartedSd(d)) return 'in_flight';
-  if (isFixtureSd(d.sd_key, d.metadata)) return 'fixture';
-  // SD-FDBK-INFRA-RANKER-FORECAST-EXCLUSION-PARITY-001: an un-actionable auto-filed venture-remediation
-  // SD (SD-LEO-FIX-REMEDIATION-* targeting a venture repo, not EHG_Engineer) cannot be actioned by any
-  // fleet worker, so it must not earn a real dispatch_rank. The capacity-forecaster already excludes
-  // these from belt depth via isExcludedFromBelt -> isUnactionableRemediationSd; the ranker previously
-  // demoted ONLY bare-shell stubs (isBareShell), so a ~345-char remediation stub slipped through and
-  // even outranked a real walk-blocker. Calling the SAME shared predicate here makes the two belts agree
-  // by construction (SSOT, can't diverge). NOTE: FR-1 described a 'generated_by fr-c' criterion, but the
-  // forecaster's actual detector is this key-prefix+target predicate — parity (FR-4) requires the SAME
-  // predicate in both paths, so we reuse the existing SSOT rather than introduce a divergent new one
-  // (spec-conflict signaled 2cde0ce8).
-  if (isUnactionableRemediationSd(d)) return 'unactionable_venture_remediation';
-  return classifyDispatchIneligibility(d); // null => eligible on the DB-free axes
-}
+// SD-LEO-INFRA-CAPACITY-FORECASTER-BELT-001: the claimable-leaf SSOT moved to the client-free
+// scripts/lib/claimable-leaves.mjs so the capacity forecaster can reuse the SAME predicates without
+// importing this file's module-scope Supabase client. Imported locally (this file's body still calls
+// blockerKeysFor + computeClaimableLeaves) AND re-exported so every existing importer of these three
+// keeps resolving from this path unchanged (barrel — a bare `export … from` would not bind them here).
+import { blockerKeysFor, claimableDbFreeReason, computeClaimableLeaves } from './lib/claimable-leaves.mjs';
+export { blockerKeysFor, claimableDbFreeReason, computeClaimableLeaves };
 // SD-LEO-INFRA-FLEET-CRITICAL-DISPATCH-LANE-001 (FR-1): the narrow, explicit fleet-critical predicate.
 // metadata.fleet_critical===true marks work whose ABSENCE blocks ALL fleet progress. Exported pure so
 // the band ordering is unit-testable. STRICT === true so a stray truthy value can't silently enrol.
@@ -243,131 +196,6 @@ const sb = createClient(
   process.env.SUPABASE_SERVICE_ROLE_KEY,
 );
 
-/**
- * SD-LEO-INFRA-GUARANTEE-CLAIMABLE-SD-RANKED-001-D (FR-4): the claimable-leaf computation, extracted
- * out of main() so the eligible-but-unranked-leaf-count gauge (scripts/gauge-unranked-claimable-leaves.mjs)
- * reuses the SAME claimable set the ranker itself acts on — never a second re-derivation that could drift
- * from what the ranker (and therefore worker-checkin) actually considers claimable. main() below is
- * byte-identical in behavior; it now calls this function instead of inlining the fetch+filter.
- * @param {object} sb - supabase service-role client
- * @param {{ quiet?: boolean }} [opts] - QF-20260704-051: quiet=true silences the per-skip
- *   console.log lines below (still counts them) — for callers like fleet-dashboard.cjs that
- *   poll this on every render and must not spam stdout with ranker skip-reason logging.
- * @returns {Promise<{ error?: object, sds: object[], byKey: Map, depStatus: object, claimable: object[], humanActionHolds: Array<{sd_key: string, provenance: object|null}> }>}
- */
-export async function computeClaimableLeaves(sb, opts = {}) {
-  const log = opts.quiet ? () => {} : console.log;
-  let sds;
-  try {
-    sds = await fetchAllPaginated(() => sb.from('strategic_directives_v2')
-      // SD-FDBK-INFRA-BACKLOG-RANK-EXCLUSION-001: + title, description to classify bare-shell stubs.
-      // SD-FDBK-INFRA-SHARED-FLEET-WORKER-001: + current_phase for the in-flight (started) guard.
-      // SD-REFILL-00MFWEGZ: + parent_sd_id so parentLeadPending can exclude an orchestrator child
-      // whose parent has not yet passed LEAD (else the field is undefined → the gate silently no-ops).
-      .select('sd_key, title, description, status, sd_type, priority, created_at, current_phase, claiming_session_id, dependencies, metadata, parent_sd_id')
-      .not('status', 'in', '("completed","cancelled","deferred")')
-      .order('sd_key', { ascending: true }));
-  } catch (error) {
-    console.error('[BACKLOG-RANK] load failed:', error.message);
-    return { error, sds: [], byKey: new Map(), depStatus: {}, claimable: [], humanActionHolds: [] };
-  }
-
-  // ── dependency graph: edges dep -> dependents (over non-terminal set + completed deps resolved) ──
-  const byKey = new Map((sds || []).map(d => [d.sd_key, d]));
-  const depKeys = new Set();
-  (sds || []).forEach(d => blockerKeysFor(d).forEach(k => depKeys.add(k)));
-  let depStatus = {};
-  if (depKeys.size) {
-    const { data: deps } = await sb.from('strategic_directives_v2').select('sd_key,status').in('sd_key', Array.from(depKeys));
-    (deps || []).forEach(d => { depStatus[d.sd_key] = d.status; });
-  }
-
-  // ── claimable leaves ──
-  const claimable = [];
-  // QF-20260704-193: held SDs with their coalesced provenance, returned so consumers
-  // (fleet-dashboard) can SURFACE hold reasons instead of rendering nothing.
-  const humanActionHolds = [];
-  let fixtureSkips = 0;
-  let inFlightSkips = 0;
-  let awaitingConvergenceSkips = 0;
-  let humanActionSkips = 0;
-  let ineligibleSkips = 0;
-  let depBlockedSkips = 0;
-  for (const d of (sds || [])) {
-    // SD-LEO-INFRA-BACKLOG-RANK-CLAIMABLE-ELIGIBILITY-ALIGN-001: the DB-free claimable axes (claimed /
-    // in-flight / fixture / the SHARED claim-eligibility predicate) are computed by one pure helper so
-    // the ranked belt matches the actually-claimable set the worker resolver enforces. The shared
-    // predicate (classifyDispatchIneligibility) closes the drift that was missing the requires_human_action
-    // skip — RHA-held SDs were leaking onto 'claimable', inflating belt depth and masking genuine
-    // starvation behind a deliberate all-held state.
-    const dbFreeSkip = claimableDbFreeReason(d);
-    if (dbFreeSkip) {
-      switch (dbFreeSkip) {
-        case 'claimed': break;                              // claimed by a live session — silent (not a skip-log)
-        case 'in_flight':
-          inFlightSkips++;
-          log(`  [skip] in-flight (${d.current_phase}) excluded from fresh ranking: ${d.sd_key}`);
-          break;
-        case 'fixture':
-          fixtureSkips++;
-          log(`  [skip] fixture excluded from ranking: ${d.sd_key}`);
-          break;
-        case 'co_author_pending':
-          // NOT idle-belt depth: a co-authored SD awaiting convergence would let a parked worker write
-          // the PRD before the co-author input lands (SD-LEO-INFRA-CO-AUTHOR-CONVERGE-BEFORE-CLAIMABLE-001).
-          awaitingConvergenceSkips++;
-          log(`  [skip] awaiting co-author convergence (not idle-belt depth): ${d.sd_key}`);
-          break;
-        case 'human_action_required': {
-          humanActionSkips++;
-          // QF-20260704-193: the hold reasons already EXIST under ad-hoc metadata keys —
-          // print them so a 3 AM operator can tell deliberate parking from an accidental
-          // freeze without hand-querying metadata (live: 47 rha-frozen sprint children).
-          const prov = resolveHoldProvenance(d.metadata);
-          humanActionHolds.push({ sd_key: d.sd_key, provenance: prov });
-          log(`  [skip] requires human action — not worker-claimable (not idle-belt depth): ${d.sd_key} [${formatHoldProvenance(prov)}]`);
-          break;
-        }
-        default:
-          ineligibleSkips++;
-          log(`  [skip] dispatch-ineligible (${dbFreeSkip}): ${d.sd_key}`);
-      }
-      continue;
-    }
-    // SD-REFILL-00AH2L4Q: include metadata.blocked_by_sd_key (via blockerKeysFor) so a metadata-blocked
-    // SD whose blocker is not yet completed is NOT ranked/dispatched — matching worker-checkin's claim guard.
-    const unmet = blockerKeysFor(d)
-      .filter(k => (byKey.has(k) ? byKey.get(k).status !== 'completed' : depStatus[k] !== 'completed'));
-    if (unmet.length) {
-      // QF-20260703-999: this exclusion previously had NO skip-log (unlike every other exclusion
-      // reason above), so a dep-blocked SD vanished from both ranked and skip output with zero trace.
-      depBlockedSkips++;
-      log(`  [skip] dependency-blocked (${unmet.join(', ')}): ${d.sd_key}`);
-      continue;
-    }
-    // SD-REFILL-00MFWEGZ: an orchestrator child whose PARENT has not passed LEAD is not yet
-    // dispatchable (claim-eligibility blocks it via the same gate, and it would hit the hard
-    // parent-LEAD EXEC-transition block) — exclude it from fresh ranking so the ranked belt
-    // matches the actually-claimable set. parentLeadPending early-returns false for parentless
-    // SDs (no fetch) and fail-opens on error (never strands a child).
-    if (await parentLeadPending(sb, d)) {
-      log(`  [skip] parent not past LEAD — child not yet dispatchable: ${d.sd_key}`);
-      continue;
-    }
-    claimable.push(d);
-  }
-  if (fixtureSkips) log(`[BACKLOG-RANK] ${fixtureSkips} fixture SD(s) excluded from ranking`);
-  if (inFlightSkips) log(`[BACKLOG-RANK] ${inFlightSkips} in-flight SD(s) excluded from fresh ranking`);
-  if (awaitingConvergenceSkips) log(`[BACKLOG-RANK] ${awaitingConvergenceSkips} SD(s) awaiting co-author convergence (excluded from claimable depth)`);
-  if (humanActionSkips) log(`[BACKLOG-RANK] ${humanActionSkips} SD(s) requiring human action excluded from claimable depth (not worker-claimable)`);
-  if (ineligibleSkips) log(`[BACKLOG-RANK] ${ineligibleSkips} SD(s) dispatch-ineligible (orchestrator-parent / deferred / terminal) excluded from claimable depth`);
-  if (depBlockedSkips) log(`[BACKLOG-RANK] ${depBlockedSkips} SD(s) dependency-blocked excluded from claimable depth`);
-  // Deterministic order (adversarial-review I4): the select has no .order(), so without
-  // this sort the dashboard's grouped render could reorder between ticks and defeat the
-  // steady-state suppress hash.
-  humanActionHolds.sort((a, b) => a.sd_key.localeCompare(b.sd_key));
-  return { sds, byKey, depStatus, claimable, humanActionHolds };
-}
 
 async function main() {
   const { error, sds, byKey, depStatus, claimable } = await computeClaimableLeaves(sb);
