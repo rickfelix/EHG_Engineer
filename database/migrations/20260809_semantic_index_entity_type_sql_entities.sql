@@ -1,5 +1,9 @@
 -- SD-LEO-INFRA-SYSTEMATIZE-COMPLETENESS-CRITIC-001 (FR-5, layer 3)
 -- @chairman-gated
+-- @approved-by: codestreetlabs@gmail.com
+-- (approval chain: chairman resume-brief pre-authorization "apply Bravo's entity_type widening
+--  migration POST-MERGE" 2026-08-09 + coordinator classification on read 2026-08-10 seat 56f09320:
+--  pure additive CHECK-widening, no RLS/GRANT, no stored value invalidated)
 --
 -- WIDEN codebase_semantic_index.entity_type TO ACCEPT THE SQL ENTITIES THE PARSER ALREADY EMITS.
 --
