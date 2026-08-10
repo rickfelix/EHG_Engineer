@@ -35,6 +35,12 @@ const RANKER = resolve(__dirname, '../../scripts/coordinator-backlog-rank.mjs');
 // now holds the code keeps it doing that. Loosening the pattern instead (or dropping the assertion
 // because "it moved") would retire a guard over a file move and leave the deletion undetected.
 const FORECASTER = resolve(__dirname, '../../scripts/lib/capacity-inputs.mjs');
+// SD-LEO-INFRA-CAPACITY-FORECASTER-BELT-001: REPOINTED, not relaxed (same discipline as FORECASTER
+// above). The ranker's claimable-leaf predicates (isFixtureSd / isStartedSd + the SD SELECT that
+// feeds them) MOVED verbatim into the client-free scripts/lib/claimable-leaves.mjs so the capacity
+// forecaster could reuse ONE representation instead of a parallel count. The call sites still exist;
+// pointing these guards at the file that now holds them keeps them catching call-site DELETION.
+const LEAVES = resolve(__dirname, '../../scripts/lib/claimable-leaves.mjs');
 
 describe('isFixtureSd — fixture inclusion', () => {
   it('excludes the witnessed epoch-stamped UAT fixture keys (the b5f21465 gap)', () => {
@@ -233,33 +239,38 @@ describe('isStartedSd — the REAL ranker in-flight guard', () => {
 describe('production wiring guards (catch call-site deletion)', () => {
   const rankerSrc = readFileSync(RANKER, 'utf8');
   const forecasterSrc = readFileSync(FORECASTER, 'utf8');
+  const leavesSrc = readFileSync(LEAVES, 'utf8');
 
-  it('the ranker imports and applies the fixture skip + bare-shell comparator', () => {
-    expect(rankerSrc).toMatch(/from '\.\.\/lib\/coordinator\/sd-exclusion\.mjs'/);
-    expect(rankerSrc).toContain('isFixtureSd(d.sd_key, d.metadata)');
+  it('the leaf SSOT imports and applies the fixture skip; the ranker keeps the bare-shell comparator', () => {
+    // The fixture skip moved into the shared leaf module (via claimableDbFreeReason); the bare-shell
+    // demotion comparator stays in the ranker's sort. Both call sites still exist — repointed, not dropped.
+    expect(leavesSrc).toMatch(/from '(\.\.\/)+lib\/coordinator\/sd-exclusion\.mjs'/);
+    expect(leavesSrc).toContain('isFixtureSd(d.sd_key, d.metadata)');
     expect(rankerSrc).toContain('bareShellLastCompare(a, b)');
   });
 
-  it('the ranker imports and applies the in-flight (started) guard', () => {
-    expect(rankerSrc).toContain('isStartedSd');
-    expect(rankerSrc).toContain('isStartedSd(d)');
+  it('the leaf SSOT imports and applies the in-flight (started) guard', () => {
+    expect(leavesSrc).toContain('isStartedSd');
+    expect(leavesSrc).toContain('isStartedSd(d)');
   });
 
-  it('the forecaster imports and applies the belt exclusion', () => {
-    // The relative depth is allowed to vary (the belt build now sits one directory deeper); the
-    // MODULE and the CALL are what this guard is about, and both are still asserted exactly.
+  it('the forecaster imports and applies the belt exclusion (shared leaf predicate + bare-shell on top)', () => {
+    // SD-LEO-INFRA-CAPACITY-FORECASTER-BELT-001: the forecaster's belt exclusion is now the SHARED
+    // claimableDbFreeReason (the ranker's leaf predicate) PLUS isBareShell applied on top — the wire
+    // this guard exists to catch. isExcludedFromBelt was replaced, so the guard tracks the new call.
     expect(forecasterSrc).toMatch(/from '(\.\.\/)+lib\/coordinator\/sd-exclusion\.mjs'/);
-    expect(forecasterSrc).toContain('isExcludedFromBelt(d)');
+    expect(forecasterSrc).toContain('claimableDbFreeReason(d)');
+    expect(forecasterSrc).toContain('isBareShell(d)');
   });
 
-  it('both scripts SELECT the columns their classifiers read', () => {
-    // bare-shell needs title+description; is_fixture needs metadata.
-    expect(rankerSrc).toMatch(/select\([^)]*title[^)]*description[^)]*metadata/s);
+  it('both the leaf SSOT and the forecaster SELECT the columns their classifiers read', () => {
+    // bare-shell needs title+description; is_fixture needs metadata. The ranker SELECT moved into the leaf SSOT.
+    expect(leavesSrc).toMatch(/select\([^)]*title[^)]*description[^)]*metadata/s);
     expect(forecasterSrc).toMatch(/select\([^)]*title[^)]*description[^)]*metadata/s);
   });
 
-  it('the ranker SELECTs current_phase for the in-flight guard', () => {
-    expect(rankerSrc).toMatch(/select\([^)]*current_phase/s);
+  it('the leaf SSOT SELECTs current_phase for the in-flight guard', () => {
+    expect(leavesSrc).toMatch(/select\([^)]*current_phase/s);
   });
 
   // SD-FDBK-INFRA-COORDINATOR-BACKLOG-RANK-001: the ranker must sweep stale ranks off TERMINAL SDs too
