@@ -34,6 +34,9 @@ import {
 // brand-new parallel 'EVA Intake Roadmap' instead of writing into the existing one).
 import { resolveCanonicalRoadmap } from '../lib/roadmap/canonical-roadmap.js';
 import { evaluateFullCreate, roadmapsToArchive, REFUSE_REASON_REQUIRED, AUDIT_SEVERITY } from '../lib/roadmap/full-create-guard.js';
+// SD-LEO-INFRA-TODOIST-YOUTUBE-ROADMAP-001: map title + refuse a title-less mint at both promotion
+// sites (extracted so it is unit-testable — this file self-invokes main() at load).
+import { buildWaveItemRow } from '../lib/roadmap/wave-item-row.js';
 
 dotenv.config();
 
@@ -117,15 +120,21 @@ async function createWaves(roadmapId, waves, items) {
 
     if (waveErr) throw new Error(`Failed to create wave ${i}: ${waveErr.message}`);
 
-    // Insert wave items — reference intake source directly
-    const waveItems = wave.item_indices
-      .map(idx => items[idx - 1])
-      .filter(Boolean)
-      .map(item => ({
-        wave_id: waveRow.id,
-        source_type: item.source_type,
-        source_id: item.id,
-      }));
+    // Insert wave items — reference intake source directly. SD-LEO-INFRA-TODOIST-YOUTUBE-ROADMAP-001:
+    // map title via buildWaveItemRow; an unusable-title item is SKIPPED and collected (loud,
+    // non-fatal) rather than minted title-less — so the whole wave still lands.
+    const waveItems = [];
+    const titleSkips = [];
+    for (const idx of wave.item_indices) {
+      const item = items[idx - 1];
+      if (!item) continue;
+      const built = buildWaveItemRow(item, waveRow.id);
+      if (built.skip) { titleSkips.push(built.source_id); continue; }
+      waveItems.push(built.row);
+    }
+    if (titleSkips.length > 0) {
+      console.warn(`  Warning: wave ${i} skipped ${titleSkips.length} title-less item(s) (unusable source title): ${titleSkips.join(', ')}`);
+    }
 
     if (waveItems.length > 0) {
       const { error: itemErr } = await supabase
@@ -295,13 +304,16 @@ async function runIncremental(roadmap, options) {
     const wave = existingWaves[a.wave_index - 1];
     if (!item || !wave) continue;
 
+    // SD-LEO-INFRA-TODOIST-YOUTUBE-ROADMAP-001: map title + refuse a title-less mint (skip+log+continue).
+    const built = buildWaveItemRow(item, wave.id);
+    if (built.skip) {
+      console.warn(`  Warning: skipped title-less item ${item.id} for wave ${wave.title} (unusable source title)`);
+      continue;
+    }
+
     const { error } = await supabase
       .from('roadmap_wave_items')
-      .insert({
-        wave_id: wave.id,
-        source_type: item.source_type,
-        source_id: item.id,
-      });
+      .insert(built.row);
 
     if (error) {
       console.warn(`  Warning: Could not insert item ${item.id} into wave ${wave.title}: ${error.message}`);
