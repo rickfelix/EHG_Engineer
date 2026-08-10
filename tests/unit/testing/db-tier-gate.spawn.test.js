@@ -97,6 +97,9 @@ describe.skipIf(IS_CI)('spawn: undesignated tier run — canary skips, exit 0, b
       // The beforeAll DB call is refused BEFORE any socket opens; the file fails LOUDLY —
       // a hook that demands a DB is unrunnable here, and green-over-broken would hide it.
       expect(r.out).toMatch(/DB_TIER_BLOCKED: refused http/);
+      // Positive interception proof: the guard's own log recorded the attempt (>=1), so this is
+      // measured containment, not inferred-from-a-message.
+      expect(r.out).toMatch(/REFUSED_COUNT: [1-9]/);
       expect(r.out).toMatch(/skipped|failed/i);
       expect(r.code, 'a refused hook is a loud failure, not a silent green').not.toBe(0);
     } finally {

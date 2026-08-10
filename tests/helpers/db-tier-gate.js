@@ -6,20 +6,33 @@
  * CI-load-bearing assertion about this gate imports and executes THIS module directly. The spawn
  * arms exercise the same code through a real child vitest, locally only.
  *
- * Two layers, two threats:
- *  - fetch refusal (SAFETY): suite beforeAll/afterAll hooks execute under every viable skip
- *    mechanism on vitest 4 (measured), and env-forcing alone has a measured live bypass —
- *    dotenv.config({ override: true }) at module scope restores the real URL over any forced
- *    sentinel. The network boundary is the one chokepoint every code path shares.
+ * Three defenses, because the db tier reaches a database TWO ways:
+ *  - fetch refusal (SAFETY, supabase-js/PostgREST path): suite beforeAll/afterAll hooks execute
+ *    under every viable skip mechanism on vitest 4 (measured), and env-forcing alone has a
+ *    measured live bypass — dotenv.config({ override: true }) at module scope restores the real
+ *    URL over any forced sentinel. supabase-js resolves fetch late-bound through globalThis, so
+ *    refusing globalThis.fetch covers every HTTP client regardless of construction order.
+ *  - direct-Postgres credential DELETION (SAFETY, `pg`/pooler path): ~10 db-tier suites connect
+ *    with a raw pg client over SUPABASE_POOLER_URL / DATABASE_URL, which NEVER touches
+ *    globalThis.fetch. Sentinelling them would keep their `describe.skipIf(!POOLER_URL)` suites
+ *    "enabled" and red; DELETING them makes those guards statically skip so beforeAll never
+ *    fires, and closes the child-process path (children inherit the parent env). This is the
+ *    axis the discovery gate covered for free and the ungate re-exposed (SEC-01).
  *  - runtime skip (REPORTING): tests read as skipped rather than failing on refused connections.
- *    A hook that itself demands the DB still fails, LOUDLY, with DB_TIER_BLOCKED naming the URL —
- *    that is correct: an undesignated environment cannot run it, and green-over-broken would be
- *    the silent-vanish defect one layer down.
+ *    A hook that itself demands the DB still fails LOUDLY (DB_TIER_BLOCKED) — an undesignated
+ *    environment cannot run it, and green-over-broken would be the silent-vanish defect one down.
  *
  * The designation predicate is IMPORTED from its single definition site (db-target.js) — never
  * re-derived. Widening designation happens there or nowhere.
  */
 import { assessDbTarget } from './db-target.js';
+
+/** Direct-Postgres credentials the `pg`/pooler path reads — DELETED (not sentinelled) when the
+ *  target is undesignated. These never route through globalThis.fetch, so the fetch guard cannot
+ *  see them; removing them makes the skipIf(!POOLER_URL) suites statically skip. */
+const DIRECT_PG_ENV = Object.freeze([
+  'SUPABASE_POOLER_URL', 'DATABASE_URL', 'SUPABASE_DB_PASSWORD', 'EHG_DB_PASSWORD',
+]);
 
 /** 127.0.0.1:1 settles in ~7s (connection refused) vs ~50s DNS retry backoff for a .invalid
  *  hostname — supabase-js retries 4x regardless of failure kind. */
@@ -76,7 +89,11 @@ export function installDbTierGate({
   env.SUPABASE_SERVICE_ROLE_KEY = 'test-service-role-key-not-real';
   env.NEXT_PUBLIC_SUPABASE_ANON_KEY = 'test-anon-key-not-real';
 
-  globalObj.fetch = function dbTierBlockedFetch(input) {
+  // Direct-Postgres credentials are DELETED, not sentinelled — see DIRECT_PG_ENV. A skipIf that
+  // reads `!process.env.SUPABASE_POOLER_URL` skips statically only when the var is absent.
+  for (const k of DIRECT_PG_ENV) delete env[k];
+
+  const guard = function dbTierBlockedFetch(input) {
     const url = typeof input === 'string' ? input : (input && input.url) || String(input);
     refusedRequests.push({ url, refused_at: new Date().toISOString() });
     // The message is the only channel that survives stringifying catch blocks, so the URL and
@@ -87,6 +104,9 @@ export function installDbTierGate({
       'SUPABASE_URL actually points at. Never name production.'
     );
   };
+  // Non-reconfigurable so a db-tier module cannot reassign it back to a live fetch
+  // (globalThis.fetch = (await import('undici')).fetch defeated a writable guard — SEC-02).
+  Object.defineProperty(globalObj, 'fetch', { value: guard, writable: false, configurable: false });
 
   if (!warned) {
     warned = true;

@@ -25,6 +25,9 @@ const K_NURL = 'NEXT_PUBLIC_SUPABASE_URL';
 const K_SRK = 'SUPABASE_SERVICE_ROLE_KEY';
 const K_ANON = 'NEXT_PUBLIC_SUPABASE_ANON_KEY';
 const K_ALLOW = 'VITEST_DB_ALLOW_REF';
+// Direct-Postgres credential key names — the pg/pooler axis SEC-01 deletes. String literals, so
+// the DB-test guard reads this file as the unit test it is (no live client).
+const PG_KEYS = ['SUPABASE_POOLER_URL', 'DATABASE_URL', 'SUPABASE_DB_PASSWORD', 'EHG_DB_PASSWORD'];
 
 /** A realistic UNDESIGNATED env: real-looking ref with no authorization. */
 const undesignatedEnv = () => ({
@@ -92,6 +95,38 @@ describe('FR-1 — the fetch guard is the safety layer (two-sided)', () => {
     expect(h.stderr).toHaveLength(0);
   });
 
+  it('SEC-01: direct-Postgres creds are DELETED under an undesignated target (the pg/pooler axis)', () => {
+    // pg connects over these and never touches globalThis.fetch — deleting them makes the
+    // skipIf(!POOLER_URL) suites statically skip so their beforeAll never opens a live socket.
+    const env = { ...undesignatedEnv() };
+    for (const k of PG_KEYS) env[k] = 'present-nonempty-value';
+    harness(env);
+    for (const k of PG_KEYS) {
+      expect(env[k], `${k} must be absent, not sentinelled`).toBeUndefined();
+    }
+  });
+
+  it('SEC-01 control: a DESIGNATED run keeps the direct-Postgres creds (real coverage needs them)', () => {
+    const env = { ...designatedEnv(), [PG_KEYS[0]]: 'present-nonempty-value' };
+    harness(env);
+    expect(env[PG_KEYS[0]]).toBe('present-nonempty-value');
+  });
+
+  it('SEC-02: the fetch guard is non-reconfigurable — a db-tier module cannot reassign it to a live fetch', () => {
+    const h = harness(undesignatedEnv());
+    expect(() => { h.globalObj.fetch = () => 'live'; }).toThrow(); // strict-mode assignment to non-writable throws
+    expect(h.globalObj.fetch.name).toBe('dbTierBlockedFetch');
+    expect(() => Object.defineProperty(h.globalObj, 'fetch', { value: () => 'x' })).toThrow();
+  });
+
+  it('M2 closure: globalObj DEFAULTS to the real globalThis — the guard installs where suites read fetch', () => {
+    // We do NOT execute the default path here: the guard is non-configurable, so installing on the
+    // real globalThis would permanently poison this worker. The default is proven by source (below)
+    // + setup.db.js not overriding it + the spawn arm exercising the real global end-to-end.
+    const src = fs.readFileSync(path.join(REPO, 'tests/helpers/db-tier-gate.js'), 'utf8');
+    expect(src).toMatch(/globalObj\s*=\s*globalThis/);
+  });
+
   it('designated with a MISSING anon key: ||= fallbacks fill only the holes (collection safety)', () => {
     // A missing SERVICE key correctly fails the predicate closed (not designated) — so the
     // hole-filling contract is asserted on the anon key, which designation does not require.
@@ -157,6 +192,14 @@ describe('the predicate is imported, never re-derived (single-representation)', 
       target: assessDbTarget(env),
     });
     expect(computed.gate.installed).toBe(injected.installed);
+  });
+
+  it('M2 closure: setup.db.js does NOT pass its own globalObj — it uses the real globalThis default', () => {
+    // If setup.db.js passed globalObj:{}, the guard would install on a throwaway object and every
+    // real suite would keep the live fetch — the exact mutation the injected in-process tests miss.
+    const setup = fs.readFileSync(path.join(REPO, 'tests/setup.db.js'), 'utf8');
+    const call = setup.slice(setup.indexOf('installDbTierGate('), setup.indexOf('installDbTierGate(') + 200);
+    expect(call).not.toMatch(/globalObj\s*:/);
   });
 });
 

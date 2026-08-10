@@ -19,6 +19,9 @@
 import { config } from 'dotenv';
 import { describe, it, expect, beforeAll } from 'vitest';
 import { createClient } from '@supabase/supabase-js';
+// The gate's own refusal log — imported so the spawn harness can positively assert the guard
+// INTERCEPTED the call, rather than infer zero-leak from a stringified message.
+import { refusedRequests } from '../../setup.db.js';
 
 // The measured bypass: override:true beats any forced sentinel value.
 config({ path: '.env', override: true });
@@ -34,6 +37,9 @@ describe('bypass attempt: module-scope env restore + hook-level DB call', () => 
     // spawn harness parsing child output. This is the observable proof the guard fired.
     const { error } = await client.from('ventures').select('id').limit(1);
     if (error) process.stderr.write(`HOOK_DB_RESULT: ${error.message}\n`);
+    // POSITIVE zero-leak proof: the guard logged the attempt (interception happened) — this is the
+    // request that would have hit production, refused before any socket opened.
+    process.stderr.write(`REFUSED_COUNT: ${refusedRequests.length}\n`);
     // A hook that demands a DB is unrunnable under an undesignated target: fail LOUDLY rather
     // than let the file pass green (the silent-vanish defect one layer down).
     if (error && /DB_TIER_BLOCKED/.test(error.message)) {

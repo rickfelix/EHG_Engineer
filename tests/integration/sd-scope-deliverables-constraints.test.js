@@ -96,7 +96,11 @@ function parseCheckConstraint(constraintDef) {
   return values.sort();
 }
 
-describe('SD-LEO-FIX-ENUM-DOCS-001: sd_scope_deliverables Constraint Validation', () => {
+// SD-LEO-INFRA-VITEST-TIER-REAL-001: this suite connects with a raw pg Client over the pooler URL
+// — a path the db-tier fetch guard cannot see. skipIf statically skips when the credential is
+// absent, which the runtime gate guarantees under an undesignated target (it DELETES
+// SUPABASE_POOLER_URL). Previously this beforeAll ran unconditionally against production.
+describe.skipIf(!process.env.SUPABASE_POOLER_URL)('SD-LEO-FIX-ENUM-DOCS-001: sd_scope_deliverables Constraint Validation', () => {
   let client;
   let dbConstraints = {};
 
