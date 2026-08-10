@@ -19,8 +19,15 @@
 
 import { createClient } from '@supabase/supabase-js';
 import dotenv from 'dotenv';
+import { createRequire } from 'node:module';
 import { isMainModule } from '../lib/utils/is-main-module.js';
 import { checkHoldStamp, buildProvenancedStamp, logHoldStateViolation } from '../lib/governance/hold-state-contract.js';
+
+// SD-LEO-INFRA-CHECKIN-DISPATCH-READ-001 (FR-2): the SAME predicate the hand-time read guard
+// runs (worker-checkin.cjs isAutoStartableQF -> isChairmanGatedQF). Reused verbatim rather than
+// re-derived so the writer can only accept marker combinations the reader actually excludes.
+const require_ = createRequire(import.meta.url);
+const { isChairmanGatedQF } = require_('../lib/fleet/qf-gated-hold.cjs');
 
 dotenv.config();
 
@@ -64,6 +71,44 @@ export function validateNotBefore(value) {
   return { valid: true, iso: new Date(parsed).toISOString() };
 }
 
+/**
+ * SD-LEO-INFRA-CHECKIN-DISPATCH-READ-001 (FR-2): a deliberate release is only valid when it
+ * persists a marker the hand-time guard (isAutoStartableQF) actually reads. Two such markers
+ * exist, and this classifier accepts EXACTLY those two — a marker combination the guard cannot
+ * see (e.g. owner='worker' + release_condition) is refused, because writing it would feel like
+ * a hold while excluding nothing:
+ *
+ *   time_gated   not_before in ISO form            (isAutoStartableQF's not_before gate)
+ *   event_gated  owner='chairman' + release_condition  (isChairmanGatedQF, reused verbatim)
+ *
+ * The refusal NAMES the missing columns (never a silent completion): before this SD, a worker
+ * whose blocker had no natural timestamp had no structured verb at all — the rationale went
+ * into verification_notes as prose, the stale-claim sweep later cleared the claim with no
+ * marker (correctly — a swept claim is not a deliberate release), and the row returned to the
+ * queue fully claimable by the next seat that also could not satisfy the blocking condition.
+ */
+export function classifyDeliberateHoldMarker({ notBefore, owner, releaseCondition } = {}) {
+  if (notBefore) {
+    const v = validateNotBefore(notBefore);
+    if (!v.valid) return { valid: false, error: v.error };
+    return { valid: true, mode: 'time_gated', iso: v.iso };
+  }
+  if (isChairmanGatedQF({ owner, release_condition: releaseCondition })) {
+    return { valid: true, mode: 'event_gated', iso: null };
+  }
+  const ownerShown = owner && String(owner).trim() ? `'${String(owner).trim()}'` : 'NULL';
+  const condShown = releaseCondition && String(releaseCondition).trim() ? 'present' : 'NULL';
+  return {
+    valid: false,
+    code: 'DELIBERATE_RELEASE_MARKER_MISSING',
+    error: 'deliberate release refused: no guard-visible hold marker. Missing columns: '
+      + 'not_before (time-gated hold) — or, for an event-gated hold, owner=\'chairman\' '
+      + `(owner is ${ownerShown}) + release_condition (${condShown}). `
+      + 'A rationale recorded only as prose is invisible at hand-time; persist the marker '
+      + 'isAutoStartableQF reads (SD-LEO-INFRA-CHECKIN-DISPATCH-READ-001 FR-2).',
+  };
+}
+
 function displayHelp() {
   console.log(`
 Defer Quick-Fix — durable time-gated defer (SD-LEO-FIX-QUICK-FIXES-NEEDS-001)
@@ -72,9 +117,18 @@ Usage:
   node scripts/defer-quick-fix.js <QF-ID> --not-before <ISO-timestamp> [--reopen]
     [--reason <text>] [--owner <text>] [--release-condition <text>]
 
+  Event-gated form (SD-LEO-INFRA-CHECKIN-DISPATCH-READ-001 FR-2 — a blocker with no
+  natural timestamp; excluded from the worker lane via the chairman-gated hold marker):
+  node scripts/defer-quick-fix.js <QF-ID> --owner chairman \\
+    --release-condition <text> --reason <text> [--reopen]
+
 Options:
-  --not-before <ts>   Required. ISO-8601 timestamp. The QF is not claimable/
+  --not-before <ts>   ISO-8601 timestamp. The QF is not claimable/
                       auto-startable by any picker until this time passes.
+                      Required unless the event-gated form (owner='chairman'
+                      + --release-condition + --reason) is used instead — a
+                      deliberate release MUST persist one of the two markers
+                      the hand-time guard reads, or it is refused loudly.
   --reopen            Also set status='open' (use when clearing a manual
                       status='escalated' defer workaround).
   --reason <text>     Hold-state contract stamp (SD-LEO-INFRA-HOLD-STATE-CONTRACT-001):
@@ -102,15 +156,28 @@ Example:
 const FAR_FUTURE_PARK_DAYS = 30;
 
 export async function deferQuickFix(qfId, notBefore, { reopen = false, reason, owner, releaseCondition, writingSessionId, supabaseClient = null } = {}) {
-  const validation = validateNotBefore(notBefore);
-  if (!validation.valid) {
-    throw new Error(validation.error);
+  // SD-LEO-INFRA-CHECKIN-DISPATCH-READ-001 (FR-2): accept exactly the two guard-visible marker
+  // shapes; refuse everything else LOUDLY, naming the missing columns, before any DB write.
+  const marker = classifyDeliberateHoldMarker({ notBefore, owner, releaseCondition });
+  if (!marker.valid) {
+    const err = new Error(marker.error);
+    if (marker.code) err.code = marker.code;
+    throw err;
   }
 
-  const daysOut = (Date.parse(validation.iso) - Date.now()) / (24 * 60 * 60 * 1000);
-  if (daysOut > FAR_FUTURE_PARK_DAYS && !(releaseCondition && String(releaseCondition).trim())) {
-    const err = new Error(`--not-before is ${Math.round(daysOut)} days out (>${FAR_FUTURE_PARK_DAYS}) and requires --release-condition -- a far-future park with no release trigger never resurfaces (QF-20260720-137)`);
-    err.code = 'FAR_FUTURE_PARK_REQUIRES_RELEASE_CONDITION';
+  if (marker.mode === 'time_gated') {
+    const daysOut = (Date.parse(marker.iso) - Date.now()) / (24 * 60 * 60 * 1000);
+    if (daysOut > FAR_FUTURE_PARK_DAYS && !(releaseCondition && String(releaseCondition).trim())) {
+      const err = new Error(`--not-before is ${Math.round(daysOut)} days out (>${FAR_FUTURE_PARK_DAYS}) and requires --release-condition -- a far-future park with no release trigger never resurfaces (QF-20260720-137)`);
+      err.code = 'FAR_FUTURE_PARK_REQUIRES_RELEASE_CONDITION';
+      throw err;
+    }
+  } else if (!(reason && String(reason).trim())) {
+    // Event-gated: owner + release_condition are guaranteed by the classifier; the rationale
+    // itself must ALSO land structured — an event hold whose "why" exists only as prose is the
+    // exact half-marker state FR-2 exists to refuse.
+    const err = new Error('event-gated release refused: missing column: reason. An owner=\'chairman\' + release_condition hold must carry its rationale in the reason column, not as prose (SD-LEO-INFRA-CHECKIN-DISPATCH-READ-001 FR-2).');
+    err.code = 'DELIBERATE_RELEASE_MARKER_MISSING';
     throw err;
   }
 
@@ -119,13 +186,19 @@ export async function deferQuickFix(qfId, notBefore, { reopen = false, reason, o
     process.env.SUPABASE_SERVICE_ROLE_KEY
   );
 
-  const holdCheck = checkHoldStamp({ reason, owner, review_at: validation.iso, release_condition: releaseCondition });
-  if (!holdCheck.ok && holdCheck.mode === 'observe') {
-    await logHoldStateViolation(supabase, {
-      surface: 'quick_fix_defer',
-      stamp: { reason, owner, review_at: validation.iso, release_condition: releaseCondition },
-      errors: holdCheck.errors,
-    });
+  // Hold-state contract check stays scoped to the time-gated path (byte-identical to before this
+  // SD — every pre-existing write was time-gated). The event-gated arm cannot satisfy review_at
+  // by construction (its release trigger is the condition, not a timestamp) and already enforces
+  // {reason, owner, release_condition} unconditionally above — stricter than observe mode.
+  if (marker.mode === 'time_gated') {
+    const holdCheck = checkHoldStamp({ reason, owner, review_at: marker.iso, release_condition: releaseCondition });
+    if (!holdCheck.ok && holdCheck.mode === 'observe') {
+      await logHoldStateViolation(supabase, {
+        surface: 'quick_fix_defer',
+        stamp: { reason, owner, review_at: marker.iso, release_condition: releaseCondition },
+        errors: holdCheck.errors,
+      });
+    }
   }
   const stamped = buildProvenancedStamp({ reason, owner, release_condition: releaseCondition }, writingSessionId);
 
@@ -134,7 +207,8 @@ export async function deferQuickFix(qfId, notBefore, { reopen = false, reason, o
   // is no other way out, because lib/quick-fix-claim.mjs exports claimQuickFix and no releaseQuickFix,
   // and `npm run sd:release` reports "no SD claimed" for a QF since it only queries
   // strategic_directives_v2. Clearing the authoritative column here is the whole release path.
-  const update = { not_before: validation.iso, claiming_session_id: null };
+  const update = { claiming_session_id: null };
+  if (marker.mode === 'time_gated') update.not_before = marker.iso;
   if (reopen) update.status = 'open';
   if (stamped.reason) update.reason = stamped.reason;
   if (stamped.owner) update.owner = stamped.owner;
@@ -210,7 +284,9 @@ async function main() {
       releaseCondition: parsed.releaseCondition,
       writingSessionId: process.env.CLAUDE_SESSION_ID || null,
     });
-    console.log(`✅ ${result.id}: not_before=${result.not_before}, status=${result.status}`);
+    console.log(result.not_before
+      ? `✅ ${result.id}: not_before=${result.not_before}, status=${result.status}`
+      : `✅ ${result.id}: event-gated hold (owner=${result.owner}, release_condition=${result.release_condition}), status=${result.status}`);
     process.exitCode = 0;
   } catch (err) {
     console.error(`❌ ${err.message}`);
