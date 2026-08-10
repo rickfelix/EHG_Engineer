@@ -167,6 +167,15 @@ export async function mapE2ETestsToUserStories(sdId, supabase, options = {}) {
   }
 
   // Step 4: Update database
+  //
+  // SD-LEO-INFRA-STORY-E2E-WRITE-001 (FR-2) — DOCUMENTED EXEMPTION from the write-time
+  // choke-point (lib/stories/e2e-path-guard.js), decided rather than inherited: every
+  // new_test_path written below comes from the Step-1 filesystem scan of the EHG app repo
+  // (EHG_APP_PATH, ../ehg) — THE SCAN IS THE EXISTENCE PROOF. Routing these through the
+  // guard would require threading the ../ehg root; routing them with THIS repo's root
+  // (the natural mistake) would refuse every real path and null out genuine coverage —
+  // the exact hazard the repo-root contract exists to prevent. A path that was just
+  // enumerated from disk cannot fail an existence check against the same disk.
   let successCount = 0;
   let errorCount = 0;
 

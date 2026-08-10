@@ -1,0 +1,89 @@
+{
+  "executive_summary": "Prevention half of the STORY-E2E pair (sibling SD-LEO-INFRA-STORY-E2E-AUTO-001 delivered detection + remediation). The SD as authored instructed BUILDING a write-time choke-point; measured at LEAD against main eee090393fa, that premise was false: lib/stories/e2e-path-guard.js (resolveE2ePath / specFileExists / specReferencesStory) already exists, is tested 17/17, and has ZERO write-side importers — resolveE2ePath has zero importers anywhere. The deliverable is therefore WIRING and policy: route the one live fabricating writer through the existing guard at the existence-only bar the sibling gate deliberately chose (requireRelevance:false — the relevance arm is heuristic and must never null real coverage), rule explicitly that aspirational paths persist as NULL (the intent already lives once, honestly, in the CHECK-constrained e2e_test_status='not_created'; the path column was a second, lying representation), thread the correct repo root for the two-repo corpus, and declare the server-side trigger blind spot at its source rather than building a second enforcement site for a path that has never fired (story_test_mappings: 0 rows). Every acceptance criterion carries a positive-control injection because the measured baseline is already quiet (0 of 443 stories created in the last 6 days carry a non-null path) — a green-by-default AC cannot distinguish fix from no-op.",
+  "functional_requirements": [
+    {
+      "id": "FR-1",
+      "title": "Wire the existing guard into the live fabricating writer — a fiction path becomes NULL at write",
+      "priority": "critical",
+      "description": "scripts/modules/auto-trigger-stories.mjs is the only live writer that FABRICATES e2e_test_path: generateE2ETestPath (lines ~74-115) is pure string templating that never touches the filesystem, and the insert (~line 1140) persists the fabricated path with e2e_test_status='not_created' (honest about non-existence — the sibling FR-3 explicitly declined to blame this class). Wire the write path through the EXISTING lib/stories/e2e-path-guard.js resolveE2ePath({ repoRoot, candidatePath, story, requireRelevance: false }): persist the returned value when the spec file exists, NULL otherwise. ASPIRATIONAL-PATH RULING (explicit, per LEAD): fabricated not-yet-existing paths persist as NULL — e2e_test_status='not_created' remains the single honest representation of intent, and the status stamping is NOT changed by this FR. The documentation-SD sentinel string ('N/A - documentation SD (no E2E required)') also becomes NULL — it is neither NULL nor a path, and specFileExists already rejects it. requireRelevance MUST be false: the relevance arm is stricter than the sibling gate's deliberate existence-only predicate and would re-derive the judgment call that gate refused to make. REUSE, never re-derive: the wiring imports the guard; no second existence predicate may appear.",
+      "acceptance_criteria": [
+        "POSITIVE CONTROL (not green-by-default): drive the writer's path arm with a story whose templated candidate names a NONEXISTENT spec file and observe e2e_test_path=NULL in the persisted/insert-bound row — the fiction path is refused AT write, not filtered later.",
+        "NEGATIVE CONTROL: the same arm with a candidate naming an EXISTING spec file persists the path unchanged — real coverage is never nulled.",
+        "Sentinel control: a documentation-type story persists e2e_test_path=NULL, not the 'N/A - …' sentinel string.",
+        "e2e_test_status semantics are untouched: 'not_created' (and 'not_applicable' for documentation) stamping is byte-identical before and after the wiring — proven by asserting the status value in the same controls.",
+        "Single representation: the wiring imports resolveE2ePath/specFileExists from lib/stories/e2e-path-guard.js; grep proves no new existence predicate was introduced in the writer."
+      ]
+    },
+    {
+      "id": "FR-2",
+      "title": "Repo-root contract — the guard is only sound against the right filesystem root",
+      "priority": "high",
+      "description": "The story corpus spans two repos. scripts/modules/handoff/map-e2e-tests-to-stories.js derives paths from a REAL filesystem scan rooted in ../ehg (a different repo), so it is existence-safe by construction — but routing it through the guard with the EHG_Engineer root would null out REAL coverage (VALIDATION confirmed this exact hazard). Deliverable: an explicit repo-root contract at the choke-point call site — the guard call must receive the repoRoot of the TARGET repo for the story's spec, and map-e2e-tests-to-stories.js is either routed through the guard with its own ../ehg root or left un-routed with a documented exemption stating that its scan IS the existence proof (decide in EXEC; either outcome must be recorded in the file at the call site). The contract must be stated where the next caller will see it (the guard call site), not only in the PRD.",
+      "acceptance_criteria": [
+        "Two-sided repo-root test: an ehg-rooted REAL spec path is preserved when validated against the ehg root, and the SAME path is (correctly) refused against the EHG_Engineer root — proving the verdict follows the root, so a wrong-root wiring cannot silently pass.",
+        "map-e2e-tests-to-stories.js outcome recorded in-file: either routed through the guard with its own root, or a comment at the write site documenting the scan-is-existence-proof exemption.",
+        "No call site passes a hardcoded root that disagrees with the target repo of the paths it validates."
+      ]
+    },
+    {
+      "id": "FR-3",
+      "title": "Declare and bound the server-side blind spot — do not build a second enforcement site for zero coverage",
+      "priority": "medium",
+      "description": "The Postgres trigger sync_test_evidence_to_user_stories (defined byte-equivalently in BOTH database/migrations/20251210_unified_test_evidence.sql:352 and 20251211_unified_test_evidence_fixed.sql:246 — a mutual-revert hazard) writes e2e_test_path server-side where no JS choke-point can see it; a DB trigger conversely cannot see the filesystem (enforcement splits by observability). MEASURED: story_test_mappings has 0 rows — the trigger has NEVER fired; its source is test_results from executed tests, so its paths carry existence-by-provenance. Deliverable: declare the blind spot at the JS choke-point (comment naming the trigger, both DDL sites, the 0-row measurement date, and the provenance argument), and record the mutual-revert DDL hazard to the durable feedback channel. EXPLICITLY OUT: any migration/DDL change (schema is a Tier-3 risk class and the trigger has zero live traffic to protect against); building a companion DB-side CHECK or trigger (a second enforcement site for a never-fired path is exactly the umbrella-guard anti-pattern).",
+      "acceptance_criteria": [
+        "The choke-point call site carries the blind-spot declaration: trigger name, both migration file:line sites, the story_test_mappings row count with measurement date, and the existence-by-provenance rationale.",
+        "The 20251210/20251211 byte-equivalent DDL hazard is recorded via the durable feedback channel (log-harness-bug or capture-completion-flags), with both file paths.",
+        "No migration files are added or modified by this SD — proven by the PR diff containing zero database/migrations changes."
+      ]
+    },
+    {
+      "id": "FR-4",
+      "title": "Measure the counter-pressure instrument — the function that demands the fiction",
+      "priority": "medium",
+      "description": "Live DB function public.validate_story_e2e_requirements reports a NULL e2e_test_path as an ISSUE — it actively pressures writers toward exactly the fabrication this SD prevents; left unmeasured it will make the FR-1 NULLs read as regressions on whatever surface consumes it. Deliverable is MEASUREMENT + routing, not change: census its consumers (grep code; check gates/reports/dashboards), classify each as verdict-consumer vs display-only, and route the finding — if any consumer treats 'NULL path' as a blocking issue, file the reconciliation to the durable feedback channel naming the consumer and the contradiction; DDL change to the function is OUT (chairman-gated class).",
+      "acceptance_criteria": [
+        "A consumer census for validate_story_e2e_requirements exists in the PR (comment or short doc note at the choke-point, or the feedback-channel record), with each consumer named and classified (verdict vs display).",
+        "The contradiction (a live instrument demanding non-NULL paths while the write side enforces NULL-unless-exists) is recorded durably with the census attached — never silently left for the next session to rediscover.",
+        "No DDL change to the function in this SD."
+      ]
+    }
+  ],
+  "technical_requirements": [
+    {
+      "id": "TR-1",
+      "title": "Extend live instruments; introduce no duplicate predicate",
+      "description": "FR-1/FR-2 reuse lib/stories/e2e-path-guard.js verbatim (requireRelevance:false). The wiring must not re-derive existence checking, path sanitization, or sentinel rejection — all three already live in the guard and are tested. A second predicate is how the write side and the read gate drift."
+    },
+    {
+      "id": "TR-2",
+      "title": "Every guard proven two-sided with positive-control injection",
+      "description": "The measured baseline is quiet (0/443 recent stories carry a path), so a 'no new fiction rows' assertion is green even if the wiring is inert. Every AC must inject the failing input (a fiction path) and observe the NULL, and inject the passing input (a real file) and observe preservation. Mutation-proof against a baseline verified green first."
+    },
+    {
+      "id": "TR-3",
+      "title": "No schema changes",
+      "description": "No DDL: no CHECK on e2e_test_path, no trigger amendment, no migration files. The server-side blind spot is declared and bounded (FR-3), not closed — it has zero live traffic and its source carries existence-by-provenance."
+    }
+  ],
+  "test_scenarios": [
+    { "id": "TS-1", "scenario": "Writer path arm driven with a fabricated (nonexistent) spec path", "type": "unit", "expected": "Persisted/insert-bound row carries e2e_test_path=NULL; e2e_test_status still 'not_created'" },
+    { "id": "TS-2", "scenario": "Writer path arm driven with a spec path whose file EXISTS (temp fixture)", "type": "unit", "expected": "Path persisted unchanged; status unchanged — real coverage never nulled" },
+    { "id": "TS-3", "scenario": "Documentation-type story", "type": "unit", "expected": "e2e_test_path=NULL (sentinel string gone); documentation status semantics unchanged" },
+    { "id": "TS-4", "scenario": "Repo-root flip: same real ehg-rooted path validated against ehg root and against EHG_Engineer root", "type": "unit", "expected": "Preserved against its own root; refused against the wrong root — verdict follows the root" },
+    { "id": "TS-5", "scenario": "Grep control: no new existence predicate in the writer", "type": "static", "expected": "Writer imports the guard; no fs.existsSync/statSync on spec paths outside lib/stories/e2e-path-guard.js" },
+    { "id": "TS-6", "scenario": "PR diff contains zero database/migrations changes", "type": "static", "expected": "FR-3/TR-3 boundary held" }
+  ],
+  "acceptance_criteria": [
+    "Every FR's guard is proven two-sided: the fiction input is observed becoming NULL (positive control) and the real-file input is observed preserved (negative control) — no green-by-default assertions.",
+    "The existing guard is reused with requireRelevance:false; no new predicate, no schema change, no migration.",
+    "The aspirational-path ruling (fabricated paths persist NULL; intent stays solely in e2e_test_status) is stated in the code at the wiring site.",
+    "The server-side trigger blind spot and the counter-pressure function census are recorded durably, not narrated.",
+    "Each behavioural arm is mutation-proven against a baseline verified green FIRST, with every mutation redding at least one named test."
+  ],
+  "risks": [
+    { "risk": "Nulling aspirational paths breaks a consumer that treated the templated path as a scaffolding target.", "mitigation": "VALIDATION searched for such a consumer and found none (recorded in evidence 377e96cf); the status column carries the intent unchanged; blast radius is new writes only.", "severity": "low" },
+    { "risk": "A wrong repoRoot at a guard call site nulls REAL coverage in the ehg-rooted corpus.", "mitigation": "FR-2's two-sided repo-root flip test makes a wrong-root wiring fail loudly in unit tests; map-e2e's outcome is recorded in-file either way.", "severity": "medium" },
+    { "risk": "The declared-but-open server-side blind spot later goes live (story_test_mappings gains traffic) and writes unchecked paths.", "mitigation": "The declaration names the trigger and measurement date at the choke-point, and the provenance argument (paths from executed tests) bounds the harm; re-measure when the table gains rows.", "severity": "low" },
+    { "risk": "validate_story_e2e_requirements consumers read the new NULLs as regressions.", "mitigation": "FR-4's census + durable routing surfaces every consumer before the wiring lands; contradiction recorded with names, not left to rediscovery.", "severity": "medium" }
+  ]
+}
