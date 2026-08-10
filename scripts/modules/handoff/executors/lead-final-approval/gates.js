@@ -1340,6 +1340,11 @@ export function createPhaseCoverageExitGate(supabase) {
  * fail-open). This gate is the reconciliation, not a fourth mechanism: it REUSES the mature
  * classifier verbatim, by invoking it, and adds the one thing missing — refusal.
  *
+ * WIDENED to ALL SDs by SD-LEO-INFRA-COMPLETION-FAIL-OWN-001 (2026-08-10, ruling 454e005a):
+ * the requires_chairman_apply flag now selects which clearance ceremony a refusal names, not
+ * whether enforcement happens. See the dated comment inside the validator for why the original
+ * unflagged-SDs-see-no-change scoping went stale.
+ *
  * @returns {Object} Gate definition
  */
 export function createChairmanApplyVerificationGate() {
@@ -1361,14 +1366,17 @@ export function createChairmanApplyVerificationGate() {
       const rawFlag = sd.metadata?.requires_chairman_apply;
       const gated = rawFlag === true || rawFlag === 'true';
 
-      // Not flagged → not applicable. Unflagged SDs must see no behaviour change at all.
-      if (!gated) {
-        console.log('   ℹ️  metadata.requires_chairman_apply not set — not applicable');
-        return {
-          passed: true, score: 100, max_score: 100, issues: [], warnings: [],
-          details: { applicable: false }
-        };
-      }
+      // WIDENED 2026-08-10 (SD-LEO-INFRA-COMPLETION-FAIL-OWN-001, coordinator ruling 454e005a):
+      // this branch used to return passed:true/applicable:false for unflagged SDs — "Unflagged
+      // SDs must see no behaviour change at all." That scoping was correct when written: no role
+      // was defined as the applier for an ungated migration, so a completion-block would have
+      // been unclearable, and an unclearable block is worse than a silent miss. The standing
+      // 2026-06-16 token authority plus ruling 454e005a have since named an applier for BOTH
+      // classes (ungated → coordinator, delegable via database-agent; gated → chairman approval
+      // + coordinator apply), which is the one condition that makes blocking legitimate. The
+      // flag now selects WHICH clearance ceremony a refusal names, not WHETHER enforcement
+      // happens. SD-LEO-FEAT-VENTURE-DEMAND-VALIDATION-001 reached status=completed with two
+      // absent tables through the old early-return; that is the incident this widening closes.
 
       try {
         // Which migration(s) does this SD own? Deliberately does NOT reuse or improve
@@ -1412,8 +1420,19 @@ export function createChairmanApplyVerificationGate() {
         }
 
         if (!owned.length) {
-          return failClosed(`no migration file could be associated with ${sdKey}`, sdKey,
-            ['Declare the SD\'s migration(s) in metadata.migration_files so this gate can verify them.']);
+          // A gated SD is an explicit promise that a migration exists — finding none is
+          // unverifiable, and unverifiable is not verified. An UNGATED SD owning nothing in the
+          // corpus is the majority of the fleet: the classifier ran and found nothing of ours to
+          // verify, which is a determinate pass, not the old applicable:false skip.
+          if (gated) {
+            return failClosed(`no migration file could be associated with ${sdKey}`, sdKey,
+              ['Declare the SD\'s migration(s) in metadata.migration_files so this gate can verify them.']);
+          }
+          console.log('   ✅ no migration associated with this SD — nothing to verify');
+          return {
+            passed: true, score: 100, max_score: 100, issues: [], warnings: [],
+            details: { applicable: true, migrationless: true }
+          };
         }
 
         // PARTIAL is not APPLIED. A half-applied migration is precisely the state this gate exists
@@ -1421,24 +1440,30 @@ export function createChairmanApplyVerificationGate() {
         const unapplied = owned.filter(f => f.status !== 'APPLIED' && f.status !== 'NO_DDL');
         if (unapplied.length) {
           console.log(`   ❌ ${unapplied.length} migration(s) not applied`);
+          // Applier-reachability is a requirement, not rationale (ruling 454e005a condition 4):
+          // a refusal must name the ceremony that clears it, or it recreates the unclearable
+          // block the original scoping existed to avoid.
+          const clearance = gated
+            ? 'REMEDIATION (chairman-gated): obtain the chairman GO, then the coordinator applies via the apply-migration.js token ceremony, then re-run this handoff.'
+            : 'REMEDIATION (ungated): route the apply to the coordinator — delegable via database-agent over the pooler (standing 2026-06-16 token authority; ruling 454e005a) — then re-run this handoff.';
           return {
             passed: false, score: 0, max_score: 100,
             issues: [
-              `${sdKey} is chairman-gated but its migration is NOT applied to the live database.`,
+              `${sdKey}'s own migration is merged but NOT applied to the live database${gated ? ' (chairman-gated)' : ''}.`,
               ...unapplied.map(f => `  ${f.file} → ${f.status}${f.missing?.length ? ` (missing: ${f.missing.slice(0, 3).join(', ')})` : ''}`),
               '',
-              'REMEDIATION: obtain the chairman GO and apply the migration, then re-run this handoff.',
-              'Completing now would mark the SD done against a production migration that was never applied.'
+              clearance,
+              'Completing now would mark the SD done against a migration that was never applied — code-shipped is not capability-live.'
             ],
             warnings: [],
-            details: { applicable: true, unapplied: unapplied.map(f => ({ file: f.file, status: f.status })) }
+            details: { applicable: true, gated, unapplied: unapplied.map(f => ({ file: f.file, status: f.status })) }
           };
         }
 
-        console.log(`   ✅ ${owned.length} chairman-gated migration(s) verified applied`);
+        console.log(`   ✅ ${owned.length} owned migration(s) verified applied`);
         return {
           passed: true, score: 100, max_score: 100, issues: [], warnings: [],
-          details: { applicable: true, verified: owned.map(f => f.file) }
+          details: { applicable: true, gated, verified: owned.map(f => f.file) }
         };
       } catch (e) {
         return failClosed(e.message, sdKey);
@@ -1484,8 +1509,9 @@ export function getRequiredGates(supabase, prdRepo, sd = null) {
   gates.push(createRetrospectiveExistsGate(supabase));
   gates.push(createPRMergeVerificationGate(supabase));
 
-  // Chairman-Apply Verification (SD-LEO-INFRA-CHAIRMAN-APPLY-FLAG-001) — refuses completion of
-  // a chairman-gated SD whose staged migration was never applied. Registration is a manual push
+  // Chairman-Apply Verification (SD-LEO-INFRA-CHAIRMAN-APPLY-FLAG-001; widened to all SDs by
+  // SD-LEO-INFRA-COMPLETION-FAIL-OWN-001) — refuses completion of
+  // any SD whose own staged migration was never applied. Registration is a manual push
   // (there is no directory scan here), so a gate that is written but not pushed silently does
   // nothing — which is how the flag it enforces became decorative in the first place.
   gates.push(createChairmanApplyVerificationGate());
