@@ -330,6 +330,7 @@ export async function validateSDCompletionReadiness(sd, retrospective = null) {
 
   if (!sd) {
     result.valid = false;
+    result.passed = false;
     result.issues.push('Strategic Directive is null or undefined');
     return result;
   }
@@ -375,6 +376,11 @@ export async function validateSDCompletionReadiness(sd, retrospective = null) {
   }
 
   result.valid = result.issues.length === 0;
+  // QF-20260809-341: the RETROSPECTIVE_EXISTS tier-3 arm (lead-final-approval/gates.js) reads
+  // `assessment.passed` — a contract its own test ratifies by MOCKING this function with a
+  // passed key this function never emitted. With only `valid`, `!assessment?.passed` was true
+  // for every tier-3 SD, so the gate could not pass regardless of score. Emit both.
+  result.passed = result.valid;
 
   return result;
 }
