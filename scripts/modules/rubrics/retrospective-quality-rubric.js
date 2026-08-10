@@ -151,7 +151,27 @@ Look for "meta-lessons" about process, architecture, or methodology - not just p
     /continue.*current.*approach/i,
     /maintain.*momentum/i,
     /stay.*course/i,
-    /keep.*doing.*what/i
+    /keep.*doing.*what/i,
+
+    // Handoff-retro TEMPLATE ASSERTIONS (SD-LEO-INFRA-WIRE-EXISTING-RETROSPECTIVEQUALITYRUBRIC-001).
+    // The 44 patterns above catch ASPIRATIONAL filler ("improve X", "continue Y"); the corpus that
+    // actually dominates fleet boilerplate is the auto-generator's template ASSERTIONS
+    // (lead-to-plan/retrospective.js:136-147), every one writer-stamped is_boilerplate:false.
+    // FR-0 measured the gap live: a textbook template retro scored 68 with boilerplate_penalty 0,
+    // and the AI criterion graded its learning_specificity 8/10 because splicing an SD-ID into
+    // filler reads as specificity. These anchored full-phrase patterns are the deterministic
+    // discrimination the AI cannot provide — anchored to the complete distinctive assertion so
+    // genuine prose that merely echoes a word or two ("the SD scope was clear to reviewers")
+    // cannot trip the penalty.
+    /SD was clear and well-defined/i,
+    /acceptance criteria were comprehensive and actionable/i,
+    /dependencies were correctly identified upfront/i,
+    /simplicity assessment was accurate/i,
+    /handoff validation passed all gates/i,
+    /all validation gates passed/i,
+    /phase completed - handoff executed/i,
+    /benefit from the \d+-handoff workflow/i,
+    /was the primary implementation vector/i
   ];
 
   /**
