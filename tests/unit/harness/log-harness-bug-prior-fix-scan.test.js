@@ -42,9 +42,14 @@ describe('QF-20260525-785: findPossiblePriorFix is best-effort and never throws'
 });
 
 describe('QF-20260525-785: source-level guards', () => {
-  it('git --format is quoted (regression pin: unquoted | is a shell pipe and breaks the scan)', () => {
-    expect(src).toMatch(/--format="%h\|%cI\|%s"/);
-    expect(src).not.toMatch(/--format=%h\|%cI\|%s(?!")/);
+  it('git --format | never reaches a shell (was: quoting pin; now: argv pin — SD-LEO-INFRA-PUBLISH-SHELL-INJECTION-001-A)', () => {
+    // The original rule: an unquoted | in --format was a SHELL PIPE and broke the scan. The
+    // quoting was the shell-era spelling of that rule. The scan now runs argv-style through the
+    // published hardened runner — | travels inside one discrete array token and no shell exists
+    // to interpret it — so the pin asserts the structural form instead of the quoting.
+    expect(src).toMatch(/'--format=%h\|%cI\|%s'/);
+    expect(src).not.toMatch(/execSync\(\s*`git /);
+    expect(src).toMatch(/runHardenedGit\(/);
   });
 
   it('main() is guarded so importing the module does not run the CLI', () => {
