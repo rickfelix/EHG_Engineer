@@ -636,7 +636,8 @@
     "flags:enroll-tier-gate": "node scripts/enroll-migration-tier-gate-flag.mjs",
     "audit:anon-write-contract": "node scripts/anon-write-contract-probe.mjs",
     "test:cjs-pins": "node tests/unit/governance/fixture-exclusion-cjs-pin.cjs",
-    "lint:fixture-producer-guard": "node scripts/lint/fixture-producer-guard-lint.mjs"
+    "lint:fixture-producer-guard": "node scripts/lint/fixture-producer-guard-lint.mjs",
+    "lint:shell-injection-argv": "node scripts/lint/shell-injection-argv-lint.mjs"
   },
   "dependencies": {
     "@anthropic-ai/sdk": "^0.85.0",
