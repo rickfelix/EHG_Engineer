@@ -1,0 +1,43 @@
+# shell-injection-argv-lint — SD-LEO-INFRA-PUBLISH-SHELL-INJECTION-001-B.
+#
+# ADVISORY-FIRST (FR-6): the lint step is `continue-on-error: true` so it CANNOT turn an
+# in-flight PR red while the measured ~324-site backlog soaks (baseline in
+# scripts/lint/shell-injection-argv-allowlist.json _scope_note).
+#
+# DATED FLIP: soak through 2026-09-09, then remove continue-on-error (flip to blocking) or
+# record why not. THE DEADLINE IS SELF-ENFORCING — tests/unit/lint/shell-injection-argv-lint.test.js
+# carries a case that FAILS once the date passes while this file is still advisory, so the parked
+# state cannot decay silently (testing-agent B-2). FLIP PRECONDITION (B-3): the moved/reflowed-line
+# resurfacing behavior must be addressed (see the reflow test) before blocking, per the
+# schema-lint-scope precedent ("the backlog must not become the toucher's problem").
+name: shell-injection-argv-lint
+
+on:
+  pull_request:
+    paths:
+      - '**/*.js'
+      - '**/*.cjs'
+      - '**/*.mjs'
+      - 'scripts/lint/shell-injection-argv-allowlist.json'
+      - '.github/workflows/shell-injection-argv-lint.yml'
+
+permissions:
+  contents: read
+
+jobs:
+  shell-injection-argv:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+
+      - name: Run shell-injection-argv-lint (advisory soak — see dated flip note in header)
+        continue-on-error: true
+        env:
+          SHELL_INJECTION_ARGV_BASE: origin/${{ github.base_ref }}
+        run: node scripts/lint/shell-injection-argv-lint.mjs

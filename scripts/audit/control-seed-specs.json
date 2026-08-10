@@ -284,5 +284,29 @@
    "input": "ESLint rule no-process-cwd-in-sub-agents evaluated over lib/sub-agents/** source text; file set from git merge-base diff (default) or a module-anchored walk of SCAN_DIRS (--all)",
    "seen": "live invocation at the LEAD phase of SD-LEO-INFRA-NO-PROCESS-CWD-SUB-AGENTS-001 measured 5 real violations, all resolved by that SD — recorded in the lint's own main() (\"The tree was measured clean at LEAD (5 violations, all resolved by this SD)\"); the lint runs blocking on every invocation since"
   }
+ },
+ {
+  "name": "shell-injection-argv-lint",
+  "script": "scripts/lint/shell-injection-argv-lint.mjs",
+  "rootFlag": null,
+  "cwdScope": true,
+  "extraArgs": [
+   "--all"
+  ],
+  "note": "SD-LEO-INFRA-PUBLISH-SHELL-INJECTION-001-B. Module-anchored REPO_ROOT scanner over lib/scripts/server/tests; aimed by planting the seed in lib/ and running --all (diagnostic census mode). The seeded defect is the S1 bare-variable shape — the exact sink class the sibling SD (child A) remediated in phantom-test-audit.js.",
+  "fixtures": [
+   {
+    "path": "lib/seeded-shell-injection-defect.js",
+    "content": "// SEEDED DEFECT: non-literal command reaches execSync (always a shell).\nexport function run(cmd) { return execSync(cmd, { encoding: \"utf8\" }); }\n"
+   }
+  ],
+  "detectTokens": [
+   "seeded-shell-injection-defect",
+   "S1"
+  ],
+  "observability_proof": {
+   "input": "git diff --unified=0 added-line patch text vs merge-base (env SHELL_INJECTION_ARGV_BASE, CI sets origin/base_ref in .github/workflows/shell-injection-argv-lint.yml), stripped by lib/lint/added-line-text.mjs stripComments + stripStringLiterals, matched by S1 (non-literal exec/execSync arg) and S2 (shell:true)",
+   "seen": "live --all census at authoring measured the real backlog (270 template-literal sites/143 files + ~54 bare-variable + ~11 live shell:true at main b0334b50439, recorded in shell-injection-argv-allowlist.json _scope_note); the founding real positives are the four lineage sinks this SD family closed, incl. scripts/generate-playground-config.cjs:67 (template + shell:true) still live on main and visible to --all"
+  }
  }
 ]
