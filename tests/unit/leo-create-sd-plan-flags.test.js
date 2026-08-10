@@ -40,6 +40,13 @@ describe('FR-3: one canonical normalizeDependsOn', () => {
     expect(fromChild([{ sd_id: 'SD-A' }, { sd_key: 'SD-B' }])).toEqual([{ sd_id: 'SD-A' }, { sd_id: 'SD-B' }]);
   });
 
+  it('malformed entries DROP, never throw and never coerce (SECURITY LOW-2, the fail-soft contract)', () => {
+    // {sd_id: 42} used to throw ".trim is not a function" — contradicting the function's
+    // own doc; String() coercion would mint a garbage '[object Object]' key instead.
+    expect(fromChild([{ sd_id: 42 }, { sd_id: { deep: true } }, { sd_id: 'SD-OK' }, {}]))
+      .toEqual([{ sd_id: 'SD-OK' }]);
+  });
+
   it('exactly one definition exists across the creation lanes (child.js only re-exports)', () => {
     const childSrc = read('../../lib/sd-creation/source-adapters/child.js');
     expect(childSrc).not.toMatch(/function\s+normalizeDependsOn/);

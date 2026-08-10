@@ -338,7 +338,16 @@ export function normalizeDependsOn(dependsOn) {
   for (const entry of dependsOn) {
     let key = null;
     if (typeof entry === 'string') key = entry.trim();
-    else if (entry && typeof entry === 'object') key = (entry.sd_id || entry.sd_key || '').trim();
+    else if (entry && typeof entry === 'object') {
+      // Only string-typed keys count. `(entry.sd_id || entry.sd_key || '').trim()` threw on
+      // {sd_id: 42} — contradicting this function's own fail-soft contract ("malformed
+      // entries are dropped ... must never crash SD creation"), and FR-3's de-dupe
+      // (SD-LEO-INFRA-LEO-CREATE-PLAN-001) made that latent throw shared across every
+      // lane (SECURITY LOW-2, evidence f54bdc8e). Dropped, not coerced: String({}) would
+      // mint a garbage-but-truthy '[object Object]' dependency key.
+      const raw = entry.sd_id ?? entry.sd_key;
+      key = typeof raw === 'string' ? raw.trim() : null;
+    }
     if (key) out.push({ sd_id: key });
   }
   return out;
