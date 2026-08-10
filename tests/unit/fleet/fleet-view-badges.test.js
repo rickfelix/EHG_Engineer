@@ -39,8 +39,18 @@ describe('computeSessionBadge (design vocab — SD-...-SHELL-001-D / mockup-1 FR
     expect(computeSessionBadge({ loopState: 'looping', model: 'opus', effort: 'high' })).toBe('DEEP WORK');
   });
 
-  it("returns IDLE when loop_state is 'idle'", () => {
-    expect(computeSessionBadge({ loopState: 'idle', pAlive: 0.9 })).toBe('IDLE');
+  // SD-LEO-INFRA-SILENT-HOLDER-AUDIT-001: the IDLE branch is deleted — it compared loopState
+  // against 'idle', a value the writer enum (loop-state-tracker.cjs:19-29:
+  // active|awaiting_tick|exited|unknown) never produces, so this test ratified dead code. A
+  // genuinely idle seat is identified by its claim surfaces, not loop_state.
+  it("an unrecognized loop_state value falls through to WORKING (no dead 'idle' branch)", () => {
+    expect(computeSessionBadge({ loopState: 'idle', pAlive: 0.9 })).toBe('WORKING');
+  });
+
+  it('UNKNOWN on a tool-silent mid-loop seat, regardless of model/effort (measured false DEEP WORK)', () => {
+    expect(computeSessionBadge({ loopState: 'active', pAlive: 0.9, model: 'opus', effort: 'high', toolSilentMinutes: 60 })).toBe('UNKNOWN');
+    expect(computeSessionBadge({ loopState: 'awaiting_tick', pAlive: 0.9, model: 'opus', effort: 'xhigh', toolSilentMinutes: 15 })).toBe('UNKNOWN');
+    expect(computeSessionBadge({ loopState: 'active', pAlive: 0.9, model: 'opus', effort: 'high', toolSilentMinutes: 3 })).toBe('DEEP WORK');
   });
 
   it('returns MECHANICAL for the cheap/mechanical proxy (model=haiku OR effort=low)', () => {

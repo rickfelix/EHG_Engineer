@@ -174,7 +174,10 @@ async function loadData() {
         .from('v_active_sessions')
         // SD-FDBK-INFRA-SHARED-FLEET-WORKER-001: + metadata so the idle filter can apply
         // isDispatchableFleetMember (excludes coordinator/adam/non_fleet/fixture).
-        .select('session_id, sd_key, computed_status, metadata, tty, heartbeat_age_seconds, heartbeat_age_human')
+        // SD-LEO-INFRA-SILENT-HOLDER-AUDIT-001: + qf_id — the view has exposed the authoritative
+        // QF claim (quick_fixes.claiming_session_id lateral) since 20260727; the idle filter read
+        // only the sd_key MIRROR, so a QF holder rendered 'idle' (measured: Bravo, 4 days).
+        .select('session_id, sd_key, qf_id, computed_status, metadata, tty, heartbeat_age_seconds, heartbeat_age_human')
         .order('heartbeat_age_seconds', { ascending: true })
         .order('session_id', { ascending: true })); // unique tiebreaker: stable page boundaries (FR-6)
     } catch (e) {
@@ -186,8 +189,11 @@ async function loadData() {
   const [sessRes, childRes, coordRes, rawSessRes, drainRes] = await Promise.all([
     supabase
       .from('v_active_sessions')
-      .select('session_id, sd_key, sd_title, heartbeat_age_seconds, heartbeat_age_human, computed_status, hostname, tty, pid, track, terminal_id, loop_state')
-      .not('sd_key', 'is', null)
+      // SD-LEO-INFRA-SILENT-HOLDER-AUDIT-001: + qf_id/qf_status, and the filter admits QF
+      // holders — a claim held via quick_fixes.claiming_session_id (authoritative) with a NULL
+      // sd_key mirror previously fell out of the claimed roster entirely.
+      .select('session_id, sd_key, qf_id, qf_status, sd_title, heartbeat_age_seconds, heartbeat_age_human, computed_status, hostname, tty, pid, track, terminal_id, loop_state')
+      .or('sd_key.not.is.null,qf_id.not.is.null')
       .order('heartbeat_age_seconds', { ascending: true }),
     supabase
       .from('strategic_directives_v2')
@@ -299,7 +305,7 @@ async function loadData() {
       // through this SAME already-working telemetry-merge seam instead of a new query.
       const { data: teleRows } = await supabase
         .from('claude_sessions')
-        .select('session_id,current_tool,current_tool_expected_end_at,expected_silence_until,process_alive_at,last_activity_kind,commits_since_claim,files_modified_since_claim,current_phase,handoff_fail_count,has_uncommitted_changes,metadata')
+        .select('session_id,current_tool,current_tool_expected_end_at,expected_silence_until,process_alive_at,last_activity_kind,commits_since_claim,files_modified_since_claim,current_phase,handoff_fail_count,has_uncommitted_changes,last_tool_at,metadata')
         .in('session_id', ids);
       for (const row of teleRows || []) telemetryById.set(row.session_id, row);
     }
@@ -319,6 +325,8 @@ async function loadData() {
       current_phase: t.current_phase,
       handoff_fail_count: t.handoff_fail_count,
       has_uncommitted_changes: t.has_uncommitted_changes,
+      // SD-LEO-INFRA-SILENT-HOLDER-AUDIT-001: raw tool clock for the badge's tool-silence input.
+      last_tool_at: t.last_tool_at,
       // SD-LEO-INFRA-LEO-COMPLETION-001-E (FR-2): model/effort chip source.
       model: t.metadata && t.metadata.model,
       effort: t.metadata && t.metadata.effort,
@@ -369,6 +377,10 @@ async function loadData() {
   // garbage, so a classification quirk never hides a true idle worker).
   const idleSessions = allSessions.filter(s =>
     !s.sd_key &&
+    // SD-LEO-INFRA-SILENT-HOLDER-AUDIT-001: a live QF claim is a claim. sd_key is only the
+    // MIRROR (lib/claim/get-my-claims.cjs:8-15); quick_fixes.claiming_session_id is authoritative
+    // and the view surfaces it as qf_id. Without this, a QF holder reads as available.
+    !s.qf_id &&
     s.heartbeat_age_seconds < DEAD_THRESHOLD &&
     isDispatchableFleetMember(s, _dashCoordinatorId)
   );
@@ -575,8 +587,16 @@ function printWorkers(d) {
       const child = d.sdStatusMap[s.sd_key];
       const pct = child ? child.progress_percentage : 0;
       const phase = s.current_phase || (child ? child.current_phase : '?');
-      const shortSd = s.sd_key.replace('SD-LEO-ORCH-STAGE-VENTURE-WORKFLOW-001-', '').replace(/^SD-.*-/, '');
+      // SD-LEO-INFRA-SILENT-HOLDER-AUDIT-001: QF holders have a NULL sd_key mirror — render the
+      // authoritative claim id instead of throwing on .replace of null.
+      const claimKey = s.sd_key || s.qf_id || '?';
+      const shortSd = claimKey.replace('SD-LEO-ORCH-STAGE-VENTURE-WORKFLOW-001-', '').replace(/^SD-.*-/, '');
       const fails = s.handoff_fail_count != null ? String(s.handoff_fail_count) : '-';
+      // ADVISORY ONLY (SD-LEO-INFRA-SILENT-HOLDER-AUDIT-001): has_uncommitted_changes failed the
+      // two-sided admissibility control — measured Y on two seats whose worktrees held 0 porcelain
+      // lines and 0 unpushed commits. It fails in the dangerous direction (a false Y argues
+      // AGAINST releasing a stranded claim). Never decide a release on this column; measure the
+      // worktree. Writer-side fix is a flagged follow-up.
       const wip = s.has_uncommitted_changes === true ? 'Y' : s.has_uncommitted_changes === false ? 'N' : '-';
       const struggleTag = (s.handoff_fail_count || 0) > 3 ? ' [STRUGGLING]' : '';
       // markerIds[id] is { claude_session_id, pid, alive } per getMarkerSessionIds(); read property before substring
@@ -593,6 +613,10 @@ function printWorkers(d) {
       const loopCell = (!loopRaw || loopRaw === 'unknown') ? '--' : String(loopRaw);
       // SD-LEO-INFRA-FLEET-VIEW-BADGES-001 (FR-2): rollup of already-rendered columns, NOT a
       // new liveness classification (SD-LEO-INFRA-FLEET-WATCHDOG-001 owns that separately).
+      // SD-LEO-INFRA-SILENT-HOLDER-AUDIT-001: raw tool-clock age feeds the badge so a frozen
+      // seat renders UNKNOWN instead of an affirmative DEEP WORK (the measured false badge).
+      const lastToolMs = s.last_tool_at ? Date.parse(s.last_tool_at) : NaN;
+      const toolSilentMinutes = Number.isFinite(lastToolMs) ? (Date.now() - lastToolMs) / 60000 : null;
       const badge = computeSessionBadge({
         loopState: loopRaw,
         pAlive: mcRow ? mcRow.p_alive : null,
@@ -603,6 +627,7 @@ function printWorkers(d) {
         computedStatus: s.computed_status,
         model: s.model,
         effort: s.effort,
+        toolSilentMinutes,
       });
       const modelEffortChip = formatModelEffortChip(s);
       console.log('  ' + pad(s.tty, 12) + csid + pad(shortSd, 10) + bar(pct) + ' ' + pad(pct + '%', 5) + pad(phase, 8) + pad(fails, 6) + pad(wip, 5) + pad(loopCell, 14) + pad(badge, 14) + pad(modelEffortChip, 16) + pad(activity, 18) + pad(silent, 14) + mcCell + s.heartbeat_age_human + struggleTag);
