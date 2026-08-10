@@ -46,12 +46,20 @@ describe('aggregate — an unavailable leg is not a zero leg', () => {
     expect(r.unavailable_legs.map((u) => u.leg)).toEqual(['b', 'c']);
   });
 
-  it('states the denominator and its non-ratification in the emission', () => {
+  it('[FR-2] states the RATIFIED denominator (3 legs / 6 points) with provenance — literally, not tautologically', () => {
+    // SD-LEO-INFRA-DRIVE-SCORE-DENOMINATOR-001: the prior assertion read `X/${SPEC_LEG_COUNT*POINTS_PER_LEG}`
+    // — the SAME expression the source emits from the SAME imported constant, so it stayed green in
+    // lockstep and pinned nothing. Assert the ratified values LITERALLY instead, plus the derived count.
     const r = aggregateScore({ legs: [leg('a', 2)] });
+    expect(SPEC_LEG_COUNT).toBe(3);                 // derived from the frozen DRIVE_SCORE_LEGS SSOT
+    expect(SPEC_LEG_COUNT * POINTS_PER_LEG).toBe(6);
     expect(r.score.predicate).toMatch(/out of 2/);
     expect(r.score.predicate).toMatch(/UNAVAILABLE LEGS ARE EXCLUDED FROM THE DENOMINATOR/);
-    expect(r.score.limitation).toMatch(/DENOMINATOR IS NOT RATIFIED/);
-    expect(r.score.limitation).toMatch(new RegExp(`X/${SPEC_LEG_COUNT * POINTS_PER_LEG}`));
+    expect(r.score.limitation).toMatch(/RATIFIED at 3 legs \/ 6 points/);
+    expect(r.score.limitation).toMatch(/d50b9f12/);            // Adam ruling provenance
+    expect(r.score.limitation).toMatch(/ac704cbd/);            // coordinator scope provenance
+    expect(r.score.limitation).not.toMatch(/NOT RATIFIED/);    // the placeholder wording is gone
+    expect(r.score.limitation).not.toMatch(/X\/8/);
   });
 
   it('unions row_ids, and a leg citing NONE is not treated as a gap', () => {
