@@ -125,7 +125,56 @@ async function buildFoundationsPointer(sb) {
 // and cycle-down gate (the caller checks assessFleetActivity ONCE before invoking this). Self-contained
 // (returns a verdict; does NOT exit main) so it composes alongside the Adam leg. Fail-open / non-fatal.
 // Exported for tests. @returns {Promise<{dispatched:boolean, reason?:string, target?:string}>}
-async function dispatchSolomonReminder(sb, { dryRun = DRY_RUN, resolveSolomon = getActiveSolomonId, insert = insertCoordinationRow, buildFoundations = buildFoundationsPointer } = {}) {
+// SD-LEO-INFRA-ALARM-HONESTY-001 (FR-2): has a reminder on this topic ALREADY BEEN DELIVERED to
+// this target within the window? READER: both reminder legs below, called BEFORE insert, so a
+// second invocation source (manual run, re-registered cron, startup-check re-fire — the measured
+// ~65min double-fire) becomes a logged no-op instead of a duplicate dun. Keyed on the INSERTED
+// row (created_at + kind + topic + target + sender_type): an insert that FAILED never arms the
+// dedup; an inserted-but-unread reminder DOES (the key carries no read_at — SEC-5 precision),
+// which the 55min-under-60min window self-heals. expires_at is deliberately NOT the key — the
+// 90m TTL self-expires within one cron period, so a sent-but-expired row must still count.
+//
+// DEDUP FAILS OPEN, DELIBERATELY (coordinator-idle-qf-hint.mjs precedent): this function has its
+// OWN catch and returns null (= could-not-look) on any fault, because the reminder legs' outer
+// catch is fail-CLOSED (it skips the dispatch) — a dedup READ that faults must never ride that
+// path and swallow the reminder. The caller treats null exactly like "no recent reminder".
+const REMINDER_DEDUP_WINDOW_MS = 55 * 60 * 1000; // under the 60min cadence, over cron jitter
+
+async function hasRecentReminder(sb, { target, topic, now = Date.now(), windowMs = REMINDER_DEDUP_WINDOW_MS } = {}) {
+  try {
+    const sinceIso = new Date(now - windowMs).toISOString();
+    const { data, error } = await sb.from('session_coordination')
+      .select('id, created_at')
+      .eq('target_session', target)
+      .eq('payload->>kind', 'coordinator_reminder')
+      .eq('payload->>topic', topic)
+      // SEC-3: narrow by CONSTRAINT, not coincidence — 1,342 live rows carry this kind from
+      // non-coordinator producers (periodic-liveness-watcher, sweep, adam) and the orphan
+      // reroute re-types arbitrary rows to it; only coordinator-sent reminders may arm this.
+      .eq('sender_type', 'coordinator')
+      // THE WINDOW CLAUSE IS THE WHOLE PREDICATE — adversarial ship review of PR #6942 caught
+      // the SEC-3/4 edit REPLACING this line: without it, sinceIso is dead code and one
+      // delivered reminder suppresses the channel for the target's LIFETIME (the table has no
+      // reaper; expired rows still match) — the silent-alarm-death inversion this SD exists
+      // to prevent, strictly worse than the double-fire it fixes. The filter-recording test
+      // now pins this exact clause so a mock cannot go blind to it again.
+      .gte('created_at', sinceIso)
+      // SEC-4: the skip log claims to name the LAST-delivered row — order makes that true
+      // when >1 row matches (exactly the double-fire condition this dedup exists for).
+      .order('created_at', { ascending: false })
+      .limit(1);
+    if (error) {
+      console.log('[HOURLY-REVIEW] dedup read failed (fail-open, reminder will dispatch): ' + error.message);
+      return null; // could-not-look — never suppress on a fault
+    }
+    return data && data.length > 0 ? data[0] : false;
+  } catch (e) {
+    console.log('[HOURLY-REVIEW] dedup read threw (fail-open, reminder will dispatch): ' + (e && e.message));
+    return null;
+  }
+}
+
+async function dispatchSolomonReminder(sb, { dryRun = DRY_RUN, resolveSolomon = getActiveSolomonId, insert = insertCoordinationRow, buildFoundations = buildFoundationsPointer, checkRecent = hasRecentReminder, now } = {}) {
   try {
     const solomonId = await resolveSolomon(sb);
     if (!solomonId) {
@@ -135,6 +184,13 @@ async function dispatchSolomonReminder(sb, { dryRun = DRY_RUN, resolveSolomon = 
     if (dryRun) {
       console.log('\n[HOURLY-REVIEW] Solomon: would dispatch reminder to ' + String(solomonId).slice(0, 8) + '. [dry-run, not sent]');
       return { dispatched: false, reason: 'dry_run', target: solomonId };
+    }
+    // FR-2 dedup — false means measured-absent (dispatch); null means could-not-look (dispatch,
+    // fail-open); a row means a reminder was DELIVERED within the window (skip, and say which).
+    const recent = await checkRecent(sb, { target: solomonId, topic: 'solomon_responsibilities', now });
+    if (recent) {
+      console.log('\n[HOURLY-REVIEW] Solomon: reminder already delivered within the window (row ' + String(recent.id).slice(0, 8) + ' at ' + recent.created_at + ') — dedup skip.');
+      return { dispatched: false, reason: 'dedup_recent', target: solomonId, recentId: recent.id };
     }
     // SD-LEO-INFRA-SOLOMON-REFRESHER-FOUNDATIONS-EXTENSION-001: only build the foundations pointer on the
     // real-dispatch path (not on the no-Solomon / dry-run early returns) — cheap, and "re-read only when
@@ -207,6 +263,50 @@ async function reconcileStaleSolomonInbound(sb, { dryRun = DRY_RUN, resolveSolom
   } catch (e) {
     console.log('[HOURLY-REVIEW] Solomon reconcile skipped (non-fatal): ' + e.message);
     return { reconciled: 0, staleCount: 0, reason: 'error' };
+  }
+}
+
+// SD-LEO-INFRA-ALARM-HONESTY-001 (FR-2): the Adam reminder leg, extracted VERBATIM from
+// main() so it is DI-testable (the inline original was unreachable by any test) — the same
+// extraction doctrine already applied to dispatchSolomonReminder and presend-consult-lane.
+// Self-contained (returns a verdict; does NOT exit main — the CALLER replicates main's
+// original early-return semantics for no_live_adam/dry_run). payload.kind stays
+// 'coordinator_reminder' (ADAM_INBOX_KINDS drain contract). Exported for tests.
+// @returns {Promise<{dispatched:boolean, reason?:string, target?:string, recentId?:string}>}
+async function dispatchAdamReminder(sb, { dryRun = DRY_RUN, resolveAdam = resolveLiveAdam, insert = insertCoordinationRow, checkRecent = hasRecentReminder, freshS = ADAM_FRESH_S, now } = {}) {
+  try {
+    const adam = await resolveAdam(sb, freshS);
+    if (!adam) {
+      console.log('\n[HOURLY-REVIEW] Adam: no live session — skipping Adam reminder (itself a cycle-down).');
+      return { dispatched: false, reason: 'no_live_adam' };
+    }
+    if (dryRun) {
+      console.log('\n[HOURLY-REVIEW] Adam: would dispatch reminder to ' + adam.id.slice(0, 8) + ' (hb ' + Math.round(adam.ageS) + 's). [dry-run, not sent]');
+      return { dispatched: false, reason: 'dry_run', target: adam.id };
+    }
+    // FR-2 dedup — same three-outcome contract as the Solomon leg: false=measured-absent
+    // (dispatch), null=could-not-look (dispatch, fail-open), row=delivered-within-window (skip).
+    const recent = await checkRecent(sb, { target: adam.id, topic: 'adam_responsibilities', now });
+    if (recent) {
+      console.log('\n[HOURLY-REVIEW] Adam: reminder already delivered within the window (row ' + String(recent.id).slice(0, 8) + ' at ' + recent.created_at + ') — dedup skip.');
+      return { dispatched: false, reason: 'dedup_recent', target: adam.id, recentId: recent.id };
+    }
+    const row = {
+      sender_session: process.env.CLAUDE_SESSION_ID || null,
+      sender_type: 'coordinator',
+      target_session: adam.id,
+      message_type: 'INFO',
+      subject: 'Hourly: review your Adam responsibilities',
+      body: ADAM_REMINDER,
+      payload: { kind: 'coordinator_reminder', topic: 'adam_responsibilities', sent_at: new Date().toISOString() },
+      expires_at: new Date(Date.now() + 90 * 60 * 1000).toISOString(),
+    };
+    await insert(sb, row, { logger: console });
+    console.log('\n[HOURLY-REVIEW] Adam: reminder dispatched to ' + adam.id.slice(0, 8) + ' (hb ' + Math.round(adam.ageS) + 's).');
+    return { dispatched: true, target: adam.id };
+  } catch (e) {
+    console.log('[HOURLY-REVIEW] Adam reminder skipped (non-fatal): ' + e.message);
+    return { dispatched: false, reason: 'error' };
   }
 }
 
@@ -490,31 +590,16 @@ async function main() {
   // SD-LEO-INFRA-COMMS-DELIVERY-CONTRACT-001 / FR-1: periodic stale-identity reconciliation, same tick.
   await reconcileStaleSolomonInbound(sb);
 
-  // Adam leg
-  try {
-    const adam = await resolveLiveAdam(sb, ADAM_FRESH_S);
-    if (!adam) {
-      console.log('\n[HOURLY-REVIEW] Adam: no live session — skipping Adam reminder (itself a cycle-down).');
+  // Adam leg — extracted to dispatchAdamReminder (SD-LEO-INFRA-ALARM-HONESTY-001 FR-2).
+  // ORIGINAL main() control flow preserved EXACTLY: no-Adam and dry-run still return out of
+  // main (skipping the undelivered-receipt check below, as before); error, dedup-skip, and
+  // successful dispatch all fall through (error always did via the old catch; dedup-skip is
+  // new and behaves like a delivered reminder).
+  {
+    const adamRes = await dispatchAdamReminder(sb);
+    if (!adamRes.dispatched && (adamRes.reason === 'no_live_adam' || adamRes.reason === 'dry_run')) {
       return;
     }
-    if (DRY_RUN) {
-      console.log('\n[HOURLY-REVIEW] Adam: would dispatch reminder to ' + adam.id.slice(0, 8) + ' (hb ' + Math.round(adam.ageS) + 's). [dry-run, not sent]');
-      return;
-    }
-    const row = {
-      sender_session: process.env.CLAUDE_SESSION_ID || null,
-      sender_type: 'coordinator',
-      target_session: adam.id,
-      message_type: 'INFO',
-      subject: 'Hourly: review your Adam responsibilities',
-      body: ADAM_REMINDER,
-      payload: { kind: 'coordinator_reminder', topic: 'adam_responsibilities', sent_at: new Date().toISOString() },
-      expires_at: new Date(Date.now() + 90 * 60 * 1000).toISOString(),
-    };
-    await insertCoordinationRow(sb, row, { logger: console });
-    console.log('\n[HOURLY-REVIEW] Adam: reminder dispatched to ' + adam.id.slice(0, 8) + ' (hb ' + Math.round(adam.ageS) + 's).');
-  } catch (e) {
-    console.log('[HOURLY-REVIEW] Adam reminder skipped (non-fatal): ' + e.message);
   }
 
   // FR-2 (SD-LEO-INFRA-COORD-ADAM-COMMS-RESILIENT-001): hourly UNDELIVERED-receipt check.
@@ -595,4 +680,4 @@ if (require.main === module) {
   }).catch(function (e) { console.error('[HOURLY-REVIEW] error (non-fatal): ' + e.message); }).finally(function () { process.exit(0); });
 }
 
-module.exports = { dispatchSolomonReminder, SOLOMON_REMINDER, buildFoundationsPointer, reconcileStaleSolomonInbound, persistRenderedVerdict, runDriveStateSection };
+module.exports = { dispatchSolomonReminder, dispatchAdamReminder, hasRecentReminder, REMINDER_DEDUP_WINDOW_MS, SOLOMON_REMINDER, ADAM_REMINDER, buildFoundationsPointer, reconcileStaleSolomonInbound, persistRenderedVerdict, runDriveStateSection };
