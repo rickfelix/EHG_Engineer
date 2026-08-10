@@ -8,10 +8,20 @@
  * WHY scripts/lib: this module writes, and the write path for this subsystem lives here by the
  * same ratified reasoning as drive-state-verdict-store.cjs:8-13 (lib/ proposes, it does not write).
  *
- * IDEMPOTENT PER (axis, since): one unactioned row per stall span, however many ticks the stall
- * lasts. The row is NOT the clearance mechanism — clearance is the axis leaving STALLED at the
- * next derivation (drain-descriptor prohibition, contract.cjs:44-47) — so re-emitting per tick
- * would only manufacture duplicate residents on a lane with per-row manual acking.
+ * IDEMPOTENT PER AXIS (unactioned): at most ONE unactioned owed-action row per axis, however many
+ * ticks the stall lasts — the lane's population is bounded at six forever. The row is NOT the
+ * clearance mechanism — clearance is the axis leaving STALLED at the next derivation
+ * (drain-descriptor prohibition, contract.cjs:44-47) — so re-emitting per tick would only
+ * manufacture duplicate residents on a lane with per-row manual acking.
+ *
+ * WHY NOT (axis, since): the since anchor is NOT stable across a stall span, in three reproduced
+ * ways (EXEC TESTING 2e94a3dd + SECURITY 7f5fb22a, both executed PoCs): (1) tick 1 of every
+ * episode keys on verdict.measured_at (the axis is not yet in spans) while tick 2 keys on the
+ * persisted recorded_at — different value AND format, two rows per episode; (2) once the global
+ * 2000-row window saturates, a truncated span's anchor advances one run per tick — one new
+ * DIRECTIVE row per hour per stalled axis, forever; (3) the same flood starts immediately while
+ * persistRenderedVerdict is failing. An axis-scoped key is immune to all three, and a new stall
+ * episode after the prior row was ACKED still emits fresh (actioned_at excludes it from the match).
  *
  * PAYLOAD CONSTRUCTION HAZARD, load-bearing: buildActionRequiredPayload destructures exactly
  * {actionKind, body, senderCallsign} and rebuilds a fresh object — any extra key passed IN is
@@ -47,13 +57,14 @@ async function emitOwedActions({ supabase, owedActions, targetSession, senderSes
   const sender = senderSession || process.env.CLAUDE_SESSION_ID || 'coordinator-hourly-review-cron';
 
   for (const oa of list) {
+    // The key is the AXIS ALONE — see the header for the three reproduced ways a since-anchored
+    // key floods this deliver-not-consume lane.
     const { data: existing, error: selErr } = await supabase
       .from(TABLE)
       .select('id')
       .eq('payload->>kind', 'adam_action_required')
       .eq('payload->>action_kind', ACTION_KIND)
       .eq('payload->>owed_axis', oa.axis)
-      .eq('payload->>since', oa.since)
       .is('payload->>actioned_at', null)
       .limit(1);
     if (selErr) {
@@ -61,15 +72,20 @@ async function emitOwedActions({ supabase, owedActions, targetSession, senderSes
     }
     if (existing && existing.length) continue;
 
+    // since is display data, normalized to one format — the persisted recorded_at arrives as
+    // '+00:00' with microseconds while measured_at is ISO-Z, and two formats for one instant is
+    // how the original key broke.
+    const sinceIso = Number.isFinite(Date.parse(oa.since)) ? new Date(oa.since).toISOString() : String(oa.since);
+
     const body =
-      'OWED ACTION (drive-state forcing-function): axis ' + oa.axis + ' STALLED since ' + oa.since +
+      'OWED ACTION (drive-state forcing-function): axis ' + oa.axis + ' STALLED since ' + sinceIso +
       ' (runs' + (oa.truncated ? '>=' : '=') + oa.runs + '). Owed act: ' + oa.act +
       '. The all-green drive-state summary is withheld until this axis moves. Citation: ' + safeCitation(oa.citation);
 
     const payload = {
       ...buildActionRequiredPayload({ actionKind: ACTION_KIND, body, senderCallsign: sender }),
       owed_axis: oa.axis,
-      since: oa.since,
+      since: sinceIso,
       run_id: oa.run_id,
       citation: safeCitation(oa.citation),
     };

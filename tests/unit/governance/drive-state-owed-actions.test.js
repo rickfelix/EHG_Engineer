@@ -284,12 +284,60 @@ describe('FR-3 — emission: idempotent, payload survives, clearance is row-free
     spans: [{ axis: 'fleet_health', since: '2026-08-09T01:00:00.000Z', runs: 35, truncated: false }],
   });
 
-  it('TS-5: two consecutive runs over the same (axis, since) span leave exactly ONE unactioned row — counted by readback', async () => {
+  it('TS-5: two consecutive runs over the same stall leave exactly ONE unactioned row — counted by readback', async () => {
     const lane = statefulLane();
     await emitOwedActions({ supabase: lane, owedActions: owed(), senderSession: 'test-session' });
     const second = await emitOwedActions({ supabase: lane, owedActions: owed(), senderSession: 'test-session' });
     expect(lane.rows).toHaveLength(1);
     expect(second).toHaveLength(1);
+  });
+
+  it('TS-5 REGRESSION (EXEC TESTING 2e94a3dd / SECURITY 7f5fb22a): a MOVING since anchor must not mint a second row', async () => {
+    // Reproduces the production tick pair the original (axis, since) key flooded on: tick 1 the
+    // axis is newly stalled and absent from spans (since falls back to measured_at, ISO-Z); tick 2
+    // the persisted span exists with a DIFFERENT anchor in the +00:00 microsecond format. The old
+    // key saw two distinct values and inserted twice per episode — and once the 2000-row window
+    // saturated, once per tick forever. The axis-scoped key must hold the lane at ONE row.
+    const lane = statefulLane();
+    const tick1 = deriveOwedActions({ verdict: verdict({ fleet_health: { state: STATE.STALLED } }) });
+    expect(tick1[0].since).toBe(MEASURED_AT); // the fallback anchor
+    await emitOwedActions({ supabase: lane, owedActions: tick1, senderSession: 'test-session' });
+
+    const tick2 = deriveOwedActions({
+      verdict: verdict({ fleet_health: { state: STATE.STALLED } }),
+      spans: [{ axis: 'fleet_health', since: '2026-08-10 11:59:00.123456+00:00', runs: 2, truncated: false }],
+    });
+    expect(tick2[0].since).not.toBe(tick1[0].since); // the anchor genuinely moved
+    await emitOwedActions({ supabase: lane, owedActions: tick2, senderSession: 'test-session' });
+
+    // Tick 3: a truncated span whose anchor advanced again (the window-slide case).
+    const tick3 = deriveOwedActions({
+      verdict: verdict({ fleet_health: { state: STATE.STALLED } }),
+      spans: [{ axis: 'fleet_health', since: '2026-08-10 12:59:00.999999+00:00', runs: 333, truncated: true }],
+    });
+    await emitOwedActions({ supabase: lane, owedActions: tick3, senderSession: 'test-session' });
+
+    expect(lane.rows, 'a moving anchor must never mint duplicate DIRECTIVE rows').toHaveLength(1);
+  });
+
+  it('TS-5 two-sided: an ACKED row does not suppress a NEW stall episode — actioned_at excludes it from the match', async () => {
+    const lane = statefulLane();
+    await emitOwedActions({ supabase: lane, owedActions: owed(), senderSession: 'test-session' });
+    expect(lane.rows).toHaveLength(1);
+    lane.rows[0].payload = { ...lane.rows[0].payload, actioned_at: '2026-08-10T13:00:00.000Z' }; // someone acked it
+
+    await emitOwedActions({ supabase: lane, owedActions: owed(), senderSession: 'test-session' });
+    expect(lane.rows, 'a fresh episode after an acked row must emit fresh loudness').toHaveLength(2);
+  });
+
+  it('payload.since is normalized to ISO-Z whatever format the span delivered', async () => {
+    const lane = statefulLane();
+    const fromSpan = deriveOwedActions({
+      verdict: verdict({ fleet_health: { state: STATE.STALLED } }),
+      spans: [{ axis: 'fleet_health', since: '2026-08-09 01:00:00.532404+00:00', runs: 3, truncated: false }],
+    });
+    const readback = await emitOwedActions({ supabase: lane, owedActions: fromSpan, senderSession: 'test-session' });
+    expect(readback[0].payload.since).toBe('2026-08-09T01:00:00.532Z');
   });
 
   it('TS-10: owed_axis/since/run_id/citation SURVIVE onto the stored row — buildActionRequiredPayload drops unknown args silently', async () => {
