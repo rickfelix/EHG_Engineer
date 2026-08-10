@@ -13,7 +13,9 @@
  *
  * Auto-heal strategy (3-tier fallback):
  *   1. Fast heal: Structural checks (DB state) + Claude Haiku semantic spot-check (~10-15s)
- *   2. Full heal: Full vision-dimension scoring via scoreSD() (~60-180s)
+ *   2. Scoped heal: same scorer fed the SD's resolved changed-file set
+ *      (SD-LEO-INFRA-HEAL-BEFORE-COMPLETE-001 — replaced the vision-dimension scoreSD()
+ *      fallback, whose repo-wide gauge a small SD could never move)
  *   3. Structural-only: Deterministic DB/file checks as last resort (~2s)
  *
  * - SD heal: BLOCKING — score must be >= (threshold - tolerance)
@@ -84,7 +86,9 @@ export function buildFastHealDimensionScores(fastResult) {
       semantic: { score: fastResult?.semanticScore ?? 70 }
     };
   }
-  const { elapsed_ms: _elapsedMs, ...qualityDims } = fastResult.details;
+  // scored_files (SD-LEO-INFRA-HEAL-BEFORE-COMPLETE-001) is provenance, not a quality dimension —
+  // same rule as elapsed_ms: it stays in rubric_snapshot.details, never in dimension_scores.
+  const { elapsed_ms: _elapsedMs, scored_files: _scoredFiles, ...qualityDims } = fastResult.details;
   return qualityDims;
 }
 
@@ -106,6 +110,56 @@ const FAST_HEAL_TIMEOUT_MS = 30_000; // 30 seconds for fast Haiku path
 const FAST_HEAL_SD_TYPES = ['infrastructure', 'documentation', 'fix', 'refactor', 'enhancement'];
 
 /**
+ * SD-LEO-INFRA-HEAL-BEFORE-COMPLETE-001 FR-2: resolve the SD's own changed-file set.
+ *
+ * The heal gauge must measure the SD's changed files, not the repo: the previous fallback scored
+ * vision/architecture extracted_dimensions (scoreSD), a gauge insensitive to the SD's diff, so a
+ * small honest SD re-rolled a stable sub-threshold number to EXHAUSTED. This resolver feeds the
+ * semantic scorer the actual work.
+ *
+ * Resolution ladder, best-effort and NEVER blocking:
+ *   1. SD-key-greppable commits (any branch) → their file lists
+ *   2. merge-base diff of the current branch vs origin/main
+ *   3. null — caller degrades to key_changes-only scoring with a logged warning.
+ * A git failure is a DEGRADATION, not a gate failure: the enforcement point stays the threshold
+ * comparison; blocking on git state would recreate an unclearable block.
+ *
+ * EXPORTED for unit testing.
+ *
+ * @param {string} sdKey
+ * @returns {string[]|null} changed file paths (deduped, capped) or null when unresolvable
+ */
+export function resolveSdChangedFiles(sdKey) {
+  try {
+    const commits = execSync(
+      `git log --all --grep="${sdKey}" --format=%H -n 20`,
+      { encoding: 'utf8', timeout: 8000 }
+    ).trim().split(/\r?\n/).filter(Boolean);
+
+    let files = [];
+    if (commits.length > 0) {
+      const out = execSync(
+        `git show --name-only --format= ${commits.slice(0, 10).join(' ')}`,
+        { encoding: 'utf8', timeout: 8000 }
+      );
+      files = out.split(/\r?\n/).map((l) => l.trim()).filter(Boolean);
+    }
+
+    if (files.length === 0) {
+      const base = execSync('git merge-base HEAD origin/main', { encoding: 'utf8', timeout: 8000 }).trim();
+      const out = execSync(`git diff --name-only ${base}..HEAD`, { encoding: 'utf8', timeout: 8000 });
+      files = out.split(/\r?\n/).map((l) => l.trim()).filter(Boolean);
+    }
+
+    const deduped = [...new Set(files)];
+    return deduped.length > 0 ? deduped.slice(0, 100) : null;
+  } catch (e) {
+    console.debug('[HealBeforeComplete] changed-file resolution degraded:', e?.message || e);
+    return null;
+  }
+}
+
+/**
  * SD-LEO-INFRA-TYPE-AWARE-GATE-001: Fast auto-heal using structural checks + Claude Haiku.
  *
  * Produces a reliable score in ~10-15s instead of 60-180s by:
@@ -118,9 +172,15 @@ const FAST_HEAL_SD_TYPES = ['infrastructure', 'documentation', 'fix', 'refactor'
  * @param {string} sdType - SD type
  * @returns {Promise<{score: number, mode: string, details: Object}|null>} Score or null if fast heal unavailable
  */
-async function fastAutoHeal(supabase, sdKey, sdUuid, sdType) {
+async function fastAutoHeal(supabase, sdKey, sdUuid, sdType, opts = {}) {
   const startTime = Date.now();
   const details = { structural: {}, semantic: {} };
+  // FR-2 (SD-LEO-INFRA-HEAL-BEFORE-COMPLETE-001): when the caller resolved the SD's changed
+  // files, record what the scorer actually saw — an auditable answer to "scoped to WHAT?".
+  const changedFiles = Array.isArray(opts.changedFiles) && opts.changedFiles.length > 0
+    ? opts.changedFiles
+    : null;
+  details.scored_files = changedFiles || 'degraded:key_changes_only';
 
   // ── Phase 1: Structural verification (deterministic, <2s) ──
   let structuralScore = 0;
@@ -282,7 +342,7 @@ SUCCESS CRITERIA:
 
 RECENT GIT ACTIVITY:
 ${gitDiff}
-
+${changedFiles ? `\nFILES CHANGED BY THIS SD (score delivery against THESE, not the wider repo):\n- ${changedFiles.slice(0, 40).join('\n- ')}\n` : ''}
 STRUCTURAL VERIFICATION RESULTS:
 ${Object.entries(details.structural).map(([k, v]) => `- ${k}: ${v}`).join('\n')}
 
@@ -335,7 +395,9 @@ Respond with ONLY a JSON object: {"score": <0-100>, "reasoning": "<one sentence>
   return {
     score: compositeScore,
     mode,
-    details: { structural: details.structural, semantic: details.semantic, elapsed_ms: elapsedMs }
+    // scored_files must survive this reconstruction — the return builds a NEW details object, and
+    // omitting it here silently dropped the provenance the caller persists (caught by test).
+    details: { structural: details.structural, semantic: details.semantic, elapsed_ms: elapsedMs, scored_files: details.scored_files }
   };
 }
 
@@ -615,14 +677,20 @@ export function createHealBeforeCompleteGate(supabase) {
 
       healError = allErr;
       if (allScores && allScores.length > 0) {
-        // A FIFTH snapshot shape exists that no prior reading modelled: 161 rows store
-        // rubric_snapshot as a STRING (a raw LLM prompt), where `?.mode` yields undefined. Those
-        // rows are correctly excluded from the sd-heal set here — but note they remain eligible as
-        // the `allScores[0]` fallback, which is how a non-sd-heal rubric reaches the comparison.
-        // That selection breadth is FR-1's subject, not FR-3's; naming it so the next reader does
-        // not mistake this filter for the guarantee.
+        // SD-LEO-INFRA-HEAL-BEFORE-COMPLETE-001 FR-1: sd-heal rows ONLY. The previous fallback
+        // `[allScores[0]]` let a vision-scorer row — a repo/vision-wide gauge a small SD cannot
+        // move — become the verdict row whenever no sd-heal row existed yet. That is exactly the
+        // stable-sub-threshold HEAL_EXHAUSTED class (79/87 on IDEATION/CODIFY): the gate compared
+        // the SD's threshold against a number the SD's own work could not change. When only
+        // non-sd-heal rows exist, that is NO SCORE, and the auto-heal path below produces a
+        // fresh SD-scoped one. (The STRING-snapshot fifth shape — 161 raw-prompt rows — is
+        // likewise excluded by isSdHealSnapshot and now stays excluded instead of resurfacing
+        // via the fallback.)
         const sdHealMode = allScores.filter((s) => isSdHealSnapshot(s.rubric_snapshot));
-        healScores = sdHealMode.length > 0 ? [sdHealMode[0]] : [allScores[0]];
+        healScores = sdHealMode.length > 0 ? [sdHealMode[0]] : [];
+        if (sdHealMode.length === 0) {
+          console.log(`   ℹ️  ${allScores.length} score row(s) exist but none are sd-heal mode — treating as no score (SD-scoped auto-heal will run)`);
+        }
       } else {
         healScores = allScores;
       }
@@ -710,42 +778,61 @@ export function createHealBeforeCompleteGate(supabase) {
           }
         }
 
-        // ── Tier 2: Full vision-dimension scorer — ~60-180s ──
-        // SD-LEARN-FIX-ADDRESS-PAT-AUTO-054: tag auto-heal scores as sd-heal mode
+        // ── Tier 2: SD-diff-scoped scorer — replaces the vision-dimension scoreSD() fallback ──
+        // SD-LEO-INFRA-HEAL-BEFORE-COMPLETE-001 FR-2: scoreSD() scored eva_vision_documents
+        // extracted_dimensions — a vision/architecture rubric with no changed-files input, so a
+        // small SD re-rolled a stable sub-threshold number it could not move (non-determinism
+        // documented at trackBestHealScore). The gate now scores the SD's OWN changed files with
+        // the same scorer the fast path uses; vision-scorer.js is untouched for its /heal vision
+        // consumers — this gate simply stops calling it.
         if (!autoHealScore) {
           console.log(useFastHeal
-            ? '   🔄 Falling back to full vision-dimension scorer...'
-            : `   🔍 Full heal path (SD type: ${sdType} requires thorough scoring)`);
+            ? '   🔄 Falling back to SD-diff-scoped scorer...'
+            : `   🔍 Scoped heal path (SD type: ${sdType}) — scoring the SD's changed files`);
           try {
-            const { scoreSD } = await import('../../../../../../scripts/eva/vision-scorer.js');
-            const healPromise = scoreSD({ sdKey, supabase });
-            const timeoutPromise = new Promise((_, reject) =>
-              setTimeout(() => reject(new Error('Auto-heal timed out')), AUTO_HEAL_TIMEOUT_MS)
-            );
-            await Promise.race([healPromise, timeoutPromise]);
-
-            // Re-query for the newly created score
-            const { data: newScores } = await supabase
-              .from('eva_vision_scores')
-              .select('id, sd_id, total_score, threshold_action, rubric_snapshot, scored_at')
-              .eq('sd_id', sdKey)
-              .order('scored_at', { ascending: false })
-              .limit(1);
-
-            if (newScores && newScores.length > 0) {
-              autoHealScore = newScores[0];
-              // Tag the auto-created score as sd-heal mode if not already
-              if (autoHealScore.rubric_snapshot?.mode !== 'sd-heal') {
-                const updatedSnapshot = { ...(autoHealScore.rubric_snapshot || {}), mode: 'sd-heal', source: 'auto-heal-gate' };
-                await supabase.from('eva_vision_scores').update({ rubric_snapshot: updatedSnapshot }).eq('id', autoHealScore.id);
-                autoHealScore.rubric_snapshot = updatedSnapshot;
-              }
-              console.log(`   ✅ Full heal complete: score ${autoHealScore.total_score}/100 (mode: sd-heal)`);
+            const changedFiles = resolveSdChangedFiles(sdKey);
+            if (!changedFiles) {
+              console.log('   ⚠️  Changed-file resolution degraded — scoring against key_changes only');
             } else {
-              console.log('   ⚠️  Full heal ran but no score was persisted');
+              console.log(`   📁 Scoring against ${changedFiles.length} changed file(s)`);
+            }
+            const scopedResult = await fastAutoHeal(supabase, sdKey, sdUuid, sdType, { changedFiles });
+            if (scopedResult) {
+              let t2VisionId = null;
+              const { data: t2VisionDocs } = await supabase
+                .from('eva_vision_documents').select('id').order('created_at', { ascending: false }).limit(1);
+              if (t2VisionDocs && t2VisionDocs.length > 0) t2VisionId = t2VisionDocs[0].id;
+
+              const { count: t2IterCount } = await supabase
+                .from('eva_vision_scores').select('id', { count: 'exact', head: true }).eq('sd_id', sdKey);
+
+              const t2Payload = {
+                sd_id: sdKey,
+                total_score: scopedResult.score,
+                threshold_action: scopedResult.score >= threshold ? 'accept' : 'minor_sd',
+                iteration: (t2IterCount || 0) + 1,
+                dimension_scores: buildFastHealDimensionScores(scopedResult),
+                rubric_snapshot: {
+                  mode: 'sd-heal',
+                  source: 'scoped-fallback-heal',
+                  scoring_mode: scopedResult.mode,
+                  details: scopedResult.details
+                }
+              };
+              if (t2VisionId) t2Payload.vision_id = t2VisionId;
+
+              const { data: inserted, error: t2InsertErr } = await supabase
+                .from('eva_vision_scores')
+                .insert(t2Payload)
+                .select('id, sd_id, total_score, threshold_action, rubric_snapshot, scored_at');
+              if (t2InsertErr) console.log(`   ⚠️  Scoped heal score insert failed: ${t2InsertErr.message}`);
+              if (inserted && inserted.length > 0) {
+                autoHealScore = inserted[0];
+                console.log(`   ✅ Scoped heal complete: score ${autoHealScore.total_score}/100`);
+              }
             }
           } catch (err) {
-            console.log(`   ❌ Full heal failed: ${err.message}`);
+            console.log(`   ❌ Scoped heal failed: ${err.message}`);
           }
         }
 
@@ -812,16 +899,20 @@ export function createHealBeforeCompleteGate(supabase) {
           console.log('   All auto-heal tiers failed (fast, full, structural).');
           console.log('   This is unusual — check LLM provider connectivity.');
           console.log('');
-          console.log(`   Run manually: /heal sd --sd-id ${sdKey}`);
+          // SD-LEO-INFRA-HEAL-BEFORE-COMPLETE-001 FR-3: this gate runs PRE-completion, and the
+          // plain `/heal sd --sd-id` form selects completed SDs only — the printed fix returned
+          // "not found or not completed" at exactly the moment it was prescribed. --in-progress
+          // (heal-command.mjs, ALIGN-HEAL-GATE-001 FR-4) makes it reachable here.
+          console.log(`   Run manually: /heal sd --sd-id ${sdKey} --in-progress`);
           console.log('   Then retry PLAN-TO-LEAD.');
 
           return {
             passed: false,
             score: 0,
             max_score: 100,
-            issues: [`Auto-heal failed for ${sdKey} (all 3 tiers) — run /heal sd --sd-id ${sdKey} manually`],
-            warnings: ['Fast heal, full heal, and structural fallback all failed'],
-            remediation: `/heal sd --sd-id ${sdKey}`
+            issues: [`Auto-heal failed for ${sdKey} (all 3 tiers) — run /heal sd --sd-id ${sdKey} --in-progress manually`],
+            warnings: ['Fast heal, scoped heal, and structural fallback all failed'],
+            remediation: `/heal sd --sd-id ${sdKey} --in-progress`
           };
         }
 
@@ -1106,31 +1197,39 @@ export function createHealBeforeCompleteGate(supabase) {
           }
 
           if (!result) {
+            // SD-LEO-INFRA-HEAL-BEFORE-COMPLETE-001 FR-2: re-heal also scores the SD's changed
+            // files (same scoped scorer as Tier 2), never the vision dimensions.
             try {
-              const { scoreSD } = await import('../../../../../../scripts/eva/vision-scorer.js');
-              const healPromise = scoreSD({ sdKey, supabase });
-              const timeoutPromise = new Promise((_, reject) =>
-                setTimeout(() => reject(new Error('Auto-re-heal timed out')), AUTO_HEAL_TIMEOUT_MS)
-              );
-              await Promise.race([healPromise, timeoutPromise]);
+              const changedFiles = resolveSdChangedFiles(sdKey);
+              const scopedResult = await fastAutoHeal(supabase, sdKey, sdUuid, sdType, { changedFiles });
+              if (scopedResult) {
+                let reScopedVisionId = null;
+                const { data: reScopedDocs } = await supabase
+                  .from('eva_vision_documents').select('id').order('created_at', { ascending: false }).limit(1);
+                if (reScopedDocs && reScopedDocs.length > 0) reScopedVisionId = reScopedDocs[0].id;
 
-              const { data: newScores } = await supabase
-                .from('eva_vision_scores')
-                .select('id, sd_id, total_score, threshold_action, rubric_snapshot, scored_at')
-                .eq('sd_id', sdKey)
-                .order('scored_at', { ascending: false })
-                .limit(1);
+                const { count: reScopedIter } = await supabase
+                  .from('eva_vision_scores').select('id', { count: 'exact', head: true }).eq('sd_id', sdKey);
 
-              if (newScores && newScores.length > 0) {
-                result = newScores[0];
-                if (result.rubric_snapshot?.mode !== 'sd-heal') {
-                  const updatedSnapshot = { ...(result.rubric_snapshot || {}), mode: 'sd-heal', source: 'auto-re-heal-gate' };
-                  await supabase.from('eva_vision_scores').update({ rubric_snapshot: updatedSnapshot }).eq('id', result.id);
-                  result.rubric_snapshot = updatedSnapshot;
-                }
+                const reScopedPayload = {
+                  sd_id: sdKey,
+                  total_score: scopedResult.score,
+                  threshold_action: scopedResult.score >= threshold ? 'accept' : 'minor_sd',
+                  iteration: (reScopedIter || 0) + 1,
+                  dimension_scores: buildFastHealDimensionScores(scopedResult),
+                  rubric_snapshot: { mode: 'sd-heal', source: 'scoped-re-heal', scoring_mode: scopedResult.mode, details: scopedResult.details }
+                };
+                if (reScopedVisionId) reScopedPayload.vision_id = reScopedVisionId;
+
+                const { data: inserted, error: reScopedErr } = await supabase
+                  .from('eva_vision_scores')
+                  .insert(reScopedPayload)
+                  .select('id, sd_id, total_score, threshold_action, rubric_snapshot, scored_at');
+                if (reScopedErr) console.log(`   ⚠️  Scoped re-heal insert failed: ${reScopedErr.message}`);
+                if (inserted && inserted.length > 0) result = inserted[0];
               }
             } catch (err) {
-              console.log(`   ❌ Auto-re-heal failed: ${err.message}`);
+              console.log(`   ❌ Scoped re-heal failed: ${err.message}`);
             }
           }
 
@@ -1247,7 +1346,9 @@ export function createHealBeforeCompleteGate(supabase) {
         console.log(`   ❌ EXHAUSTED: ${exhaustedNote}`);
         console.log('');
         console.log('   Fix the gaps within this SD, re-ship, then re-run:');
-        console.log(`   /heal sd --sd-id ${sdKey}`);
+        // FR-3: --in-progress — the SD is not completed at PLAN-TO-LEAD, and the plain form
+        // refuses non-completed SDs.
+        console.log(`   /heal sd --sd-id ${sdKey} --in-progress`);
 
         return {
           passed: false,
@@ -1261,7 +1362,7 @@ export function createHealBeforeCompleteGate(supabase) {
             ...(visionAdvisory ? [`Vision heal advisory: ${visionAdvisory.score}/100`] : []),
             ...(intentAdvisory ? [`Intent-vs-Outcome advisory: ${intentAdvisory.coverage}% parent scope coverage (parent: "${intentAdvisory.parent_title}")`] : [])
           ],
-          remediation: `Fix identified gaps, re-ship, run /heal sd --sd-id ${sdKey}, then retry PLAN-TO-LEAD`,
+          remediation: `Fix identified gaps, re-ship, run /heal sd --sd-id ${sdKey} --in-progress, then retry PLAN-TO-LEAD`,
           details: {
             verdict: 'EXHAUSTED',
             reason_code: GATE_REASON_CODES.HEAL_EXHAUSTED,
