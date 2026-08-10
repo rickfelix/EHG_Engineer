@@ -47,8 +47,8 @@ const PLUGIN_NS = 'sub-agents';
 const RULE_NAME = 'no-process-cwd-in-sub-agents';
 const RULE_ID = `${PLUGIN_NS}/${RULE_NAME}`;
 
-// Shapes this predicate knowingly does NOT catch. Printed every run so a zero-finding result is
-// never mistaken for a zero-defect codebase.
+// KNOWN LIMITATION: shapes this predicate knowingly does NOT catch. Printed every run so a
+// zero-finding result is never mistaken for a zero-defect codebase.
 const KNOWN_MISSED = [
   'indirect cwd: `const {cwd} = process; cwd()` — the member expression is destructured away, so the AST match cannot see it',
   'aliased: `const p = process; p.cwd()` — single-file AST does not track the alias',
