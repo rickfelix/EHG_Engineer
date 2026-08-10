@@ -37,7 +37,25 @@ export async function runPreflightChecks(sdUuid, validation, supabase) {
     }
 
     const gate2Validation = gate2Handoff[0].metadata?.gate2_validation;
-    if (!gate2Validation || !gate2Validation.passed) {
+
+    // ABSENT is not FAILED (SD-LEO-INFRA-ABSENT-GATE-SCORE-001). An accepted EXEC-TO-PLAN handoff
+    // that carries NO gate2_validation object is a gate that never produced a verdict — not-run /
+    // not-recorded — which is INAPPLICABLE, not a failing verdict. The never-handed-off case is
+    // already blocked above (the handoff-existence guard). A gate genuinely ruled inapplicable is
+    // recorded `passed:true` by the writer, so it takes the pass path below; and the writer's
+    // `{passed:false, score:0}` placeholder is PRESENT, so it correctly hard-blocks in the next
+    // branch. Hence: key ABSENT on `== null` ONLY — never on `!passed` — so a present-but-failed
+    // score (real or placeholder) keeps blocking downstream Gate-3 checks.
+    if (gate2Validation == null) {
+      validation.warnings ??= [];
+      validation.warnings.push('[PHASE 1] Gate 2 validation absent (not-run/not-recorded) - treated as INAPPLICABLE, not a failure');
+      console.log('   INAPPLICABLE Gate 2 score absent (no verdict recorded) - NOT blocking Gate 3');
+      console.log('   Note An instrument that produced no verdict is not a failing verdict');
+      console.log('='.repeat(60));
+      return { passed: true, gate2Data: null };
+    }
+
+    if (!gate2Validation.passed) {
       validation.issues.push('[PHASE 1] CRITICAL: Gate 2 validation failed - cannot proceed to Gate 3');
       validation.failed_gates.push('GATE2_FAILED');
       validation.passed = false;
