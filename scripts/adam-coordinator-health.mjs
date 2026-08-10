@@ -293,12 +293,25 @@ export async function computeFailLoudIntegrity(supabase, { selfReportedCounts, c
   };
 }
 
-/** Pure: a breach requires idle workers AND a non-empty backlog together (never idle alone). */
+/** Pure: a breach requires idle workers AND a non-empty backlog together (never idle alone).
+ *
+ * SD-LEO-INFRA-COORDINATOR-HEALTH-BREACH-001: planBreach is COMPUTED AND REPORTED but no
+ * longer breach arithmetic — the retired-axis rule. READER: the breach flag's consumers
+ * (advisory subject, persistReading score, the coordinator-performance drive-state axis) —
+ * every breach:true must be actionable on a CANONICAL axis. CLAUDE_ADAM.md 2a retired raw
+ * stamped-% as the KPI-2 target ("unstamped != off-plan"); the dispatch reason-code BAND is
+ * the scoring and band_breach is its axis in the assembled breach. Witnessed 2026-08-10
+ * 05:5xZ: coverage 3/27=11% fired breach:true alone every 6h in a feedback-band-heavy
+ * window — the ack-and-skip alarm-fatigue class. Plan starvation still alarms canonically
+ * via the plan-drift-coverage gauge trip (gauge-registry.js, pinned two-sided) — this flag
+ * was a DUPLICATE alarm on the retired axis. Mirrors the human_action_held precedent above:
+ * retained for observability, no longer arithmetic input.
+ */
 export function classifyBreach({ utilization, planAdherence, integrity }) {
   const idleWithBacklog = utilization.idle > 0 && utilization.dispatchable_backlog_size > 0;
   const integrityBreach = integrity.integrity_ok === false;
   const planBreach = planAdherence.status === 'measured' && planAdherence.starved === true;
-  return { breach: idleWithBacklog || integrityBreach || planBreach, idleWithBacklog, integrityBreach, planBreach };
+  return { breach: idleWithBacklog || integrityBreach, idleWithBacklog, integrityBreach, planBreach };
 }
 
 /**
@@ -331,7 +344,11 @@ export function buildCoordinatorHealthAdvisoryRows(
   const which = [
     reading.breach.idleWithBacklog && 'idle workers + non-empty dispatchable backlog',
     reading.breach.integrityBreach && `fail-loud integrity divergence (${(reading.integrity.divergent_fields || []).join(', ')})`,
-    reading.breach.planBreach && `plan-adherence starved (coverage ${(reading.plan_adherence.coverage * 100).toFixed(1)}%)`,
+    // SD-LEO-INFRA-COORDINATOR-HEALTH-BREACH-001: context, never the breach cause — this
+    // line only renders when a CANONICAL axis fired the advisory, and its wording must not
+    // read as the reason (the retired-axis rule; the plan-drift-coverage gauge is where
+    // plan starvation alarms canonically).
+    reading.breach.planBreach && `context: plan-adherence starved (coverage ${(reading.plan_adherence.coverage * 100).toFixed(1)}%) — observability, not a breach axis`,
     // SD-LEO-INFRA-COORDINATOR-HEALTH-KPI-001: the coordinator sees WHICH of the
     // six classes fired, not just 'breach'.
     ...(reading.breach.firing_failure_classes || []).map((c) => `failure class ${c}`),

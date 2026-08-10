@@ -301,6 +301,49 @@ describe('classifyBreach + advisory (TS-4, TS-8)', () => {
     expect(result.idleWithBacklog).toBe(true);
   });
 
+  // SD-LEO-INFRA-COORDINATOR-HEALTH-BREACH-001 (TS-1, two-sided in one describe): the
+  // retired axis reports but never fires. Fixture is the WITNESSED incident shape
+  // (2026-08-10 05:5xZ: coverage 3/27=11% -> breach:true while every canonical axis was
+  // clean). Before this SD the mutation "drop planBreach from the OR" ran GREEN across all
+  // 106 related tests — the term was unprotected; these arms are its sole protection, so
+  // both directions live here.
+  const starvedMeasured = { status: 'measured', coverage: 3 / 27, starved: true };
+
+  it('INCIDENT SHAPE: plan-only starvation does NOT breach, but planBreach stays reported (retired axis)', () => {
+    const result = classifyBreach({ utilization: { idle: 0, dispatchable_backlog_size: 4 }, planAdherence: starvedMeasured, integrity: okIntegrity });
+    expect(result.breach).toBe(false);      // the false-dun stops
+    expect(result.planBreach).toBe(true);   // the observation survives (human_action_held precedent)
+  });
+
+  it('canonical axes still fire WITH plan starvation present (the exclusion never widens)', () => {
+    const idle = classifyBreach({ utilization: { idle: 2, dispatchable_backlog_size: 5 }, planAdherence: starvedMeasured, integrity: okIntegrity });
+    expect(idle.breach).toBe(true);
+    const integ = classifyBreach({ utilization: { idle: 0, dispatchable_backlog_size: 0 }, planAdherence: starvedMeasured, integrity: { integrity_ok: false } });
+    expect(integ.breach).toBe(true);
+  });
+
+  it('advisory prose renders plan starvation as CONTEXT, never as the breach cause', async () => {
+    const inserted = [];
+    const supabase = makeFakeSupabase({}, { onInsert: (t, r) => inserted.push({ t, r }) });
+    const reading = {
+      timestamp: '2026-08-10T05:55:00Z',
+      utilization: { idle: 2, dispatchable_backlog_size: 5 },
+      plan_adherence: { ...starvedMeasured },
+      integrity: okIntegrity,
+      // Canonical axis fired the advisory; the retired axis is present as observation.
+      breach: { breach: true, idleWithBacklog: true, integrityBreach: false, planBreach: true },
+    };
+    await pushCoordinatorHealthAdvisory(supabase, reading, { coordinatorId: 'c1' });
+    expect(inserted.length).toBe(1);
+    const subject = inserted[0].r.subject;
+    expect(subject).toContain('idle workers');
+    expect(subject).toContain('context: plan-adherence starved');
+    expect(subject).toContain('observability, not a breach axis');
+    // The context phrase must never be the sole listed reason: strip it and a canonical
+    // reason must remain.
+    expect(subject.replace(/context: plan-adherence starved[^;]*/, '')).toMatch(/idle workers/);
+  });
+
   it('emits exactly one propose-only advisory naming the breached KPI, never a dispatch call', async () => {
     const inserted = [];
     const supabase = makeFakeSupabase({}, { onInsert: (t, r) => inserted.push({ t, r }) });
@@ -514,6 +557,31 @@ describe('runProbe integration (TS-1..TS-5 wired end-to-end)', () => {
     expect(reading.integrity.integrity_ok).toBe(true);
     expect(inserted.some((i) => i.t === 'codebase_health_snapshots')).toBe(true);
     expect(inserted.some((i) => i.t === 'session_coordination')).toBe(false);
+  });
+
+  // SD-LEO-INFRA-COORDINATOR-HEALTH-BREACH-001: the ASSEMBLY-layer fence (TESTING residual
+  // 6fecf403). The pure-classifier tests above cannot see the assembled breach at the
+  // runProbe layer — mutating the assembly to re-add plan starvation ran GREEN across all
+  // 92 tests until this fixture existed. Plan-only starvation through the WHOLE probe must
+  // yield breach:false (score 100, no advisory) with planBreach:true still reported.
+  it('ASSEMBLY: plan-only starvation through runProbe yields breach:false, planBreach reported, score 100, no advisory', async () => {
+    vi.spyOn(waveLinkage, 'computeWaveLinkageCoverage').mockResolvedValueOnce({ coverage: 3 / 27, linked: 3, total: 27, starved: true, unlinkedKeys: ['SD-U1'] });
+    const inserted = [];
+    const supabase = makeFakeSupabase(
+      {
+        claude_sessions: [liveCoordinatorRow()],
+        strategic_directives_v2: [],
+        codebase_health_snapshots: [],
+      },
+      { onInsert: (t, r) => inserted.push({ t, r }) },
+    );
+    const reading = await runProbe(supabase, { makePgClient: pgDisabled });
+    expect(reading.plan_adherence.status).toBe('measured');
+    expect(reading.breach.planBreach).toBe(true);   // observation survives
+    expect(reading.breach.breach).toBe(false);       // the retired axis fires nothing, through the ASSEMBLY
+    const snapshot = inserted.find((i) => i.t === 'codebase_health_snapshots');
+    expect(snapshot).toBeDefined();
+    expect(inserted.some((i) => i.t === 'session_coordination')).toBe(false); // no advisory dun
   });
 
   it('on a real breach, resolves the live coordinator session id (not the broadcast fallback)', async () => {
