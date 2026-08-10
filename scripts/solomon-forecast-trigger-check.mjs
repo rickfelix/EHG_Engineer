@@ -48,6 +48,26 @@ const OPEN_STATUSES = ['draft', 'in_progress', 'active', 'pending_approval'];
 export const VELOCITY_DELTA = 0.15;
 export const SCOPE_DELTA = 0.10;
 
+/**
+ * QF-20260809-138: same-series-by-construction. The basis row embeds its own series definition
+ * (metadata.scope_series_query, v17+, e.g. "strategic_directives_v2 count where status NOT IN
+ * (completed,cancelled)") precisely for this consumption. Counting the live scope with the
+ * hardcoded narrow OPEN_STATUSES compared 35 (draft+active+pending_approval) against a canonical
+ * 59 on 2026-08-09 — a daily false-fire whose ack-and-skip consumer nearly ate a genuine +20.4%
+ * canonical fire the same day. Parse the exclusion set out of the basis's own query:
+ *   null      -> field absent (pre-v17 basis): caller falls back to OPEN_STATUSES
+ *   undefined -> field present but unparseable: caller must SKIP the scope comparison
+ *                (a cross-series compare is the defect; an explicit skip is honest)
+ *   string[]  -> statuses to exclude via NOT IN (same series as the basis count)
+ */
+export function scopeExclusionsFromSeriesQuery(q) {
+  if (typeof q !== 'string' || !q.trim()) return null;
+  const m = /NOT\s+IN\s*\(([^)]+)\)/i.exec(q);
+  if (!m) return undefined;
+  const list = m[1].split(',').map((s) => s.trim().replace(/^['"]|['"]$/g, '')).filter(Boolean);
+  return list.length ? list : undefined;
+}
+
 async function resolveTarget(sb) {
   try { const id = await getActiveSolomonId(sb); if (id) return id; } catch { /* fall through */ }
   return 'broadcast-solomon';
@@ -79,18 +99,34 @@ export async function runDailyTriggers(sb, { nowMs = Date.now() } = {}) {
   const since = new Date(nowMs - 7 * DAY).toISOString();
   const { count: completed7d } = await sb.from('strategic_directives_v2')
     .select('id', { count: 'exact', head: true }).eq('status', 'completed').gte('completion_date', since);
-  const { count: openScope } = await sb.from('strategic_directives_v2')
-    .select('id', { count: 'exact', head: true }).in('status', OPEN_STATUSES);
+
+  // QF-20260809-138: derive the live scope from the basis row's OWN series definition so fires
+  // and no-fires are same-series by construction; OPEN_STATUSES survives only as the pre-v17
+  // fallback for basis rows that predate the embedded query.
+  const exclusions = scopeExclusionsFromSeriesQuery(m.scope_series_query);
+  let openScope = null;
+  let scopeSeries;
+  if (exclusions === null) {
+    scopeSeries = 'narrow_fallback_pre_v17';
+    ({ count: openScope } = await sb.from('strategic_directives_v2')
+      .select('id', { count: 'exact', head: true }).in('status', OPEN_STATUSES));
+  } else if (exclusions === undefined) {
+    scopeSeries = 'unparseable_query_scope_skipped';
+  } else {
+    scopeSeries = 'basis_canonical';
+    ({ count: openScope } = await sb.from('strategic_directives_v2')
+      .select('id', { count: 'exact', head: true }).not('status', 'in', `(${exclusions.join(',')})`));
+  }
 
   const liveVelocity = (completed7d || 0) / 7;
   const fired = [];
   if (Number(m.velocity_per_day) > 0 && Math.abs(liveVelocity - m.velocity_per_day) / m.velocity_per_day > VELOCITY_DELTA) {
     fired.push(`velocity ${m.velocity_per_day}/d -> ${liveVelocity.toFixed(1)}/d`);
   }
-  if (Number(m.open_scope_count) > 0 && Math.abs((openScope || 0) - m.open_scope_count) / m.open_scope_count > SCOPE_DELTA) {
-    fired.push(`scope ${m.open_scope_count} -> ${openScope}`);
+  if (openScope !== null && Number(m.open_scope_count) > 0 && Math.abs((openScope || 0) - m.open_scope_count) / m.open_scope_count > SCOPE_DELTA) {
+    fired.push(`scope ${m.open_scope_count} -> ${openScope} (${scopeSeries})`);
   }
-  if (!fired.length) return { status: 'clean', liveVelocity, openScope };
+  if (!fired.length) return { status: 'clean', liveVelocity, openScope, scopeSeries };
 
   const target = await resolveTarget(sb);
   // One episode per basis: keyed on the basis timestamp so a re-check of the SAME drift
