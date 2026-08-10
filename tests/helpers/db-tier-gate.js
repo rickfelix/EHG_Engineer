@@ -25,18 +25,53 @@
  * The designation predicate is IMPORTED from its single definition site (db-target.js) — never
  * re-derived. Widening designation happens there or nowhere.
  */
+import net from 'node:net';
+import tls from 'node:tls';
 import { assessDbTarget } from './db-target.js';
 
-/** Direct-Postgres credentials the `pg`/pooler path reads — DELETED (not sentinelled) when the
- *  target is undesignated. These never route through globalThis.fetch, so the fetch guard cannot
- *  see them; removing them makes the skipIf(!POOLER_URL) suites statically skip. */
+/** Direct-Postgres credentials the `pg`/pooler path reads. POISONED-PRESENT (not deleted) when
+ *  undesignated: a deleted key is re-injected by any later dotenv.config() (dotenv only skips keys
+ *  already present — measured: 47 db-tier files re-load .env at module scope and restored the
+ *  production pooler), so deletion INVITES the restore while a present-but-unreachable value is
+ *  immune. Value points at loopback:1 so nothing routable is even named. The socket guard below is
+ *  the layer that does not depend on the string at all. */
 const DIRECT_PG_ENV = Object.freeze([
   'SUPABASE_POOLER_URL', 'DATABASE_URL', 'SUPABASE_DB_PASSWORD', 'EHG_DB_PASSWORD',
 ]);
+// No embedded credentials — a loopback host alone; the socket guard is the real barrier and a
+// userinfo-bearing URL would trip the repo's secret scanner for no added safety.
+const PG_POISON_URL = 'postgresql://127.0.0.1:1/db_tier_blocked';
 
 /** 127.0.0.1:1 settles in ~7s (connection refused) vs ~50s DNS retry backoff for a .invalid
  *  hostname — supabase-js retries 4x regardless of failure kind. */
 export const SENTINEL_URL = 'http://127.0.0.1:1';
+
+/** Loopback hosts a refused-network run may still reach (the poison URL points here; a Unix-socket
+ *  connect has no host and is never network). Everything else is a routable target and refused.
+ *  Exported so the classifier is CI-testable without patching process-global net/tls. */
+export function isLoopbackHost(host) {
+  if (host == null || host === '') return true;
+  const h = String(host).toLowerCase();
+  return h === 'localhost' || h === '127.0.0.1' || h === '::1' || h === '0.0.0.0' || h.startsWith('127.');
+}
+
+/** Extract the target host from the many net/tls connect() call shapes. Exported for the same
+ *  reason as isLoopbackHost. */
+export function connectHostOf(args) {
+  const a = args[0];
+  if (a && typeof a === 'object') return a.host ?? a.hostname ?? null; // options form (incl. Unix socket path → host undefined)
+  if (typeof a === 'number') return typeof args[1] === 'string' ? args[1] : '127.0.0.1'; // (port[, host])
+  return null; // (path) — Unix socket, not network
+}
+
+/** The socket-guard decision, pure: refuse a connect() whose target is a routable (non-loopback)
+ *  host. This is what makes the pg/pooler path safe regardless of how its connection string was
+ *  obtained — and it is unit-assertable without touching real sockets. */
+export function shouldRefuseConnect(args) {
+  return !isLoopbackHost(connectHostOf(args));
+}
+
+let socketGuardInstalled = false;
 
 /** Per-process stderr dedupe. Module state, not env: forked workers don't share writes and one
  *  line per worker process is the honest cadence. */
@@ -89,24 +124,54 @@ export function installDbTierGate({
   env.SUPABASE_SERVICE_ROLE_KEY = 'test-service-role-key-not-real';
   env.NEXT_PUBLIC_SUPABASE_ANON_KEY = 'test-anon-key-not-real';
 
-  // Direct-Postgres credentials are DELETED, not sentinelled — see DIRECT_PG_ENV. A skipIf that
-  // reads `!process.env.SUPABASE_POOLER_URL` skips statically only when the var is absent.
-  for (const k of DIRECT_PG_ENV) delete env[k];
+  // Direct-Postgres credentials POISONED-PRESENT (see DIRECT_PG_ENV): present so dotenv cannot
+  // restore the production value, unreachable so nothing routable is named.
+  for (const k of DIRECT_PG_ENV) env[k] = k.endsWith('PASSWORD') ? 'db-tier-blocked' : PG_POISON_URL;
 
-  const guard = function dbTierBlockedFetch(input) {
-    const url = typeof input === 'string' ? input : (input && input.url) || String(input);
-    refusedRequests.push({ url, refused_at: new Date().toISOString() });
-    // The message is the only channel that survives stringifying catch blocks, so the URL and
+  const blocked = (subject) => {
+    refusedRequests.push({ url: subject, refused_at: new Date().toISOString() });
+    // The message is the only channel that survives stringifying catch blocks, so the subject and
     // the remedy ride in it.
-    throw new Error(
-      `DB_TIER_BLOCKED: refused ${url} — no designated non-production target (${t.reason}). ` +
+    return new Error(
+      `DB_TIER_BLOCKED: refused ${subject} — no designated non-production target (${t.reason}). ` +
       'The db tier is runtime-gated; set VITEST_DB_ALLOW_REF=<ref> naming the ref your ' +
       'SUPABASE_URL actually points at. Never name production.'
     );
   };
-  // Non-reconfigurable so a db-tier module cannot reassign it back to a live fetch
-  // (globalThis.fetch = (await import('undici')).fetch defeated a writable guard — SEC-02).
-  Object.defineProperty(globalObj, 'fetch', { value: guard, writable: false, configurable: false });
+
+  // Layer 1 — supabase-js / PostgREST path: refuse globalThis.fetch. Non-reconfigurable so a
+  // db-tier module cannot reassign it back to a live fetch (globalThis.fetch = (await
+  // import('undici')).fetch defeated a writable guard — SEC-02).
+  const fetchGuard = function dbTierBlockedFetch(input) {
+    const url = typeof input === 'string' ? input : (input && input.url) || String(input);
+    throw blocked(url);
+  };
+  Object.defineProperty(globalObj, 'fetch', { value: fetchGuard, writable: false, configurable: false });
+
+  // Layer 2 — the `pg`/pooler path: refuse any raw socket to a ROUTABLE host. This is indifferent
+  // to how the connection string was obtained (env, hardcoded config, dotenv re-injection) — the
+  // same reason the fetch guard survived every bypass that env-neutralisation did not (SEC-01).
+  // Loopback is allowed so the poison URL (127.0.0.1:1) fails fast as connection-refused rather
+  // than reaching anything.
+  //
+  // ONLY patches process-global net/tls when installing on the REAL globalThis (the setup-file
+  // path). The injected-globalObj unit harness must NOT patch — net/tls are module globals, so a
+  // patch there would leak across the whole unit worker and refuse unrelated suites' sockets. The
+  // classifier (shouldRefuseConnect) is unit-tested directly; the real patch is proven by the
+  // spawn arm end-to-end.
+  if (globalObj === globalThis && !socketGuardInstalled) {
+    socketGuardInstalled = true;
+    const socketConnect = net.Socket.prototype.connect;
+    const netConnect = net.connect;
+    const tlsConnect = tls.connect;
+    const wrap = (orig, self) => function (...args) {
+      if (shouldRefuseConnect(args)) throw blocked(`tcp://${connectHostOf(args)}`);
+      return orig.apply(self ?? this, args);
+    };
+    net.Socket.prototype.connect = wrap(socketConnect);
+    net.connect = wrap(netConnect, net);
+    tls.connect = wrap(tlsConnect, tls);
+  }
 
   if (!warned) {
     warned = true;

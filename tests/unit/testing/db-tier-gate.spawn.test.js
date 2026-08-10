@@ -107,6 +107,25 @@ describe.skipIf(IS_CI)('spawn: undesignated tier run — canary skips, exit 0, b
     }
   });
 
+  it('SEC-01: a raw socket to a routable host (the pg/pooler axis) is REFUSED with zero live traffic', () => {
+    const { dir, file } = writeThrowawayConfig({
+      include: ['tests/fixtures/db-tier-canary/pg-socket-attempt.canaryspec.mjs'],
+    });
+    try {
+      const r = runChild({
+        configFile: file,
+        env: childEnv({ SUPABASE_URL: 'https://zzznotdesignated.supabase.co', SUPABASE_SERVICE_ROLE_KEY: 'k' }),
+      });
+      // The socket guard throws before any packet leaves the machine — never CONNECTED.
+      expect(r.out).toMatch(/PG_SOCKET_RESULT: DB_TIER_BLOCKED/);
+      expect(r.out).not.toMatch(/PG_SOCKET_RESULT: CONNECTED/);
+      expect(r.out).toMatch(/REFUSED_COUNT: [1-9]/);
+      expect(r.code, 'a refused pg socket is a loud failure, not a silent green').not.toBe(0);
+    } finally {
+      fs.rmSync(dir, { recursive: true, force: true });
+    }
+  });
+
   it('TS-1 designated control: the canary EXECUTES when the ref is authorized', () => {
     const { dir, file } = writeThrowawayConfig({
       include: ['tests/integration/__db_tier_canary__/tier-gate-canary.test.js'],

@@ -9,7 +9,7 @@
  * Two-sided throughout: every undesignated behavior has a designated control.
  */
 import { describe, it, expect, beforeEach } from 'vitest';
-import { installDbTierGate, SENTINEL_URL, __resetWarnDedupeForTest } from '../../../tests/helpers/db-tier-gate.js';
+import { installDbTierGate, SENTINEL_URL, __resetWarnDedupeForTest, shouldRefuseConnect, isLoopbackHost, connectHostOf } from '../../../tests/helpers/db-tier-gate.js';
 import { assessDbTarget } from '../../../tests/helpers/db-target.js';
 import fs from 'fs';
 import path from 'path';
@@ -95,21 +95,36 @@ describe('FR-1 — the fetch guard is the safety layer (two-sided)', () => {
     expect(h.stderr).toHaveLength(0);
   });
 
-  it('SEC-01: direct-Postgres creds are DELETED under an undesignated target (the pg/pooler axis)', () => {
-    // pg connects over these and never touches globalThis.fetch — deleting them makes the
-    // skipIf(!POOLER_URL) suites statically skip so their beforeAll never opens a live socket.
+  it('SEC-01: direct-Postgres creds are POISONED-PRESENT under an undesignated target (dotenv-immune)', () => {
+    // Deletion is reversible — a later dotenv.config() re-injects the key from .env (dotenv only
+    // skips keys ALREADY present). Present-but-unreachable is immune: the value stays, dotenv
+    // never overwrites it, and it names only loopback:1.
     const env = { ...undesignatedEnv() };
-    for (const k of PG_KEYS) env[k] = 'present-nonempty-value';
+    for (const k of PG_KEYS) env[k] = 'real-production-value-from-dotenv';
     harness(env);
     for (const k of PG_KEYS) {
-      expect(env[k], `${k} must be absent, not sentinelled`).toBeUndefined();
+      expect(env[k], `${k} must be present so dotenv cannot restore it`).toBeDefined();
+      expect(env[k], `${k} must not be the production value`).not.toBe('real-production-value-from-dotenv');
+      expect(String(env[k])).toMatch(/127\.0\.0\.1|db-tier-blocked/);
     }
   });
 
-  it('SEC-01 control: a DESIGNATED run keeps the direct-Postgres creds (real coverage needs them)', () => {
-    const env = { ...designatedEnv(), [PG_KEYS[0]]: 'present-nonempty-value' };
+  it('SEC-01 socket guard: the pg/pooler chokepoint refuses a ROUTABLE host, allows loopback (the pure classifier)', () => {
+    // The real net/tls patch is proven end-to-end by the spawn arm; this pins the DECISION that
+    // makes the pg path safe regardless of how its connection string was obtained.
+    expect(shouldRefuseConnect([{ host: 'aws-1-us-east-1.pooler.supabase.com', port: 5432 }])).toBe(true);
+    expect(shouldRefuseConnect([5432, 'aws-1-us-east-1.pooler.supabase.com'])).toBe(true);
+    expect(shouldRefuseConnect([{ host: '127.0.0.1', port: 1 }])).toBe(false);     // the poison target
+    expect(shouldRefuseConnect([{ host: 'localhost', port: 5432 }])).toBe(false);
+    expect(shouldRefuseConnect(['/tmp/pg.sock'])).toBe(false);                     // unix socket, not network
+    expect(isLoopbackHost('::1')).toBe(true);
+    expect(connectHostOf([{ host: 'prod.example', port: 5432 }])).toBe('prod.example');
+  });
+
+  it('SEC-01 control: a DESIGNATED run keeps the direct-Postgres creds intact (real coverage needs them)', () => {
+    const env = { ...designatedEnv(), [PG_KEYS[0]]: 'real-production-value-from-dotenv' };
     harness(env);
-    expect(env[PG_KEYS[0]]).toBe('present-nonempty-value');
+    expect(env[PG_KEYS[0]]).toBe('real-production-value-from-dotenv');
   });
 
   it('SEC-02: the fetch guard is non-reconfigurable — a db-tier module cannot reassign it to a live fetch', () => {
