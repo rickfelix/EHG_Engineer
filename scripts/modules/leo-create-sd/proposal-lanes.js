@@ -335,6 +335,7 @@ export function mapProposalToCreateArgs(normalized, proposal, filePath, opts = {
 export function normalizeDependsOn(dependsOn) {
   if (!Array.isArray(dependsOn)) return [];
   const out = [];
+  let dropped = 0;
   for (const entry of dependsOn) {
     let key = null;
     if (typeof entry === 'string') key = entry.trim();
@@ -349,6 +350,13 @@ export function normalizeDependsOn(dependsOn) {
       key = typeof raw === 'string' ? raw.trim() : null;
     }
     if (key) out.push({ sd_id: key });
+    else dropped += 1;
+  }
+  if (dropped > 0) {
+    // LOUD, never silent: a dropped dep means the SD is born UNFENCED on that edge —
+    // born-fenced sequencing (QF-20260711-841) is the invariant at stake, and a generator
+    // that starts emitting numeric sd_id must be detectable (REGRESSION a0266b0d).
+    console.warn(`⚠️  normalizeDependsOn: dropped ${dropped} malformed dependency entr${dropped === 1 ? 'y' : 'ies'} — the SD will NOT be fenced on the dropped edge(s). Entries must be "SD-KEY" or {sd_id|sd_key: "SD-KEY"}.`);
   }
   return out;
 }
