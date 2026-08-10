@@ -175,18 +175,42 @@ describe('RETROSPECTIVE_QUALITY_GATE', () => {
     expect(result.score).toBe(82);
   });
 
-  it('auto-passes for infrastructure type SD with retrospective', async () => {
+  // SD-LEO-INFRA-WIRE-EXISTING-RETROSPECTIVEQUALITYRUBRIC-001: the infrastructure existence
+  // auto-pass is deliberately DELETED. These tests previously ratified passed:true on retro
+  // existence — the hole that let 70.4% of SDs (3935/5591 measured) clear completion without
+  // content scoring. Infra/process/doc SDs now flow to the standard blended validation; FR-0
+  // measured that thin-but-SD-specific retros pass it (67 >= 55), so no PAT-AUTO-047 re-break.
+  it('infrastructure SD with a CONTENT-WORTHY retro passes via the STANDARD path (no auto-pass)', async () => {
     const retro = { id: 'retro-6', quality_score: 45 };
     const supabase = buildSupabase({ retrospective: retro });
+    // FR-0 anchor: thin-legit-specific infra retro scored 67 blended against threshold 55.
+    validateSDCompletionReadiness.mockResolvedValue({ passed: true, score: 67, issues: [], warnings: [], improvements: [] });
+    getThresholdProfile.mockResolvedValue({ retrospectiveQuality: 55 });
     const gate = createRetrospectiveQualityGate(supabase);
 
     const ctx = { sd: createMockSD({ sd_type: 'infrastructure', id: 'infra-uuid' }) };
     const result = await gate.validator(ctx);
 
     expect(result.passed).toBe(true);
-    expect(result.details.infrastructure_auto_pass).toBe(true);
-    // Score should be at least 55 (floor for infrastructure)
-    expect(result.score).toBeGreaterThanOrEqual(55);
+    expect(result.score).toBe(67);
+    expect(result.details?.infrastructure_auto_pass).toBeUndefined();
+    expect(validateSDCompletionReadiness).toHaveBeenCalled();
+  });
+
+  it('infrastructure SD with a BOILERPLATE retro FAILS — existence alone no longer passes', async () => {
+    const retro = { id: 'retro-7', quality_score: 70 };
+    const supabase = buildSupabase({ retrospective: retro });
+    // FR-0 anchor: template-boilerplate blended ~49 after the -25 detectBoilerplate penalty.
+    validateSDCompletionReadiness.mockResolvedValue({ passed: false, score: 49, issues: ['boilerplate'], warnings: [], improvements: [] });
+    getThresholdProfile.mockResolvedValue({ retrospectiveQuality: 55 });
+    const gate = createRetrospectiveQualityGate(supabase);
+
+    const ctx = { sd: createMockSD({ sd_type: 'infrastructure', id: 'infra-uuid-2' }) };
+    const result = await gate.validator(ctx);
+
+    expect(result.passed).toBe(false);
+    expect(result.score).toBe(49);
+    expect(result.details?.infrastructure_auto_pass).toBeUndefined();
   });
 
   // SD-LEO-INFRA-RETROSPECTIVE-GATES-FAIL-001 — new failure-mode tests.
@@ -240,20 +264,23 @@ describe('RETROSPECTIVE_QUALITY_GATE', () => {
     expect(validateSDCompletionReadiness).not.toHaveBeenCalled();
   });
 
-  it('passes auto-pass fast-path for infrastructure with a valid SD-completion retro (no regression)', async () => {
-    // AC4 + AC7: a valid retro (all three filters satisfied → helper returns it) passes the
-    // existing infrastructure fast-path unchanged. Regression guard for FR5.
+  it('infrastructure with a valid SD-completion retro is CONTENT-scored, never existence-passed', async () => {
+    // Rewritten by SD-LEO-INFRA-WIRE-EXISTING-RETROSPECTIVEQUALITYRUBRIC-001: this test used to
+    // ratify the existence fast-path ("passes ... unchanged") — the 70.4% hole. The retro-filter
+    // regression it guarded (a valid three-filter retro reaches scoring) is preserved: the retro
+    // must arrive AND be scored, not short-circuited.
     const retro = { id: 'retro-valid', quality_score: 70, retro_type: 'SD_COMPLETION', status: 'PUBLISHED' };
     const supabase = buildSupabase({ retrospective: retro });
+    validateSDCompletionReadiness.mockResolvedValue({ passed: true, score: 67, issues: [], warnings: [], improvements: [] });
+    getThresholdProfile.mockResolvedValue({ retrospectiveQuality: 55 });
     const gate = createRetrospectiveQualityGate(supabase);
 
     const ctx = { sd: createMockSD({ sd_type: 'infrastructure', id: 'infra-valid-uuid' }) };
     const result = await gate.validator(ctx);
 
     expect(result.passed).toBe(true);
-    expect(result.details.infrastructure_auto_pass).toBe(true);
-    expect(result.score).toBeGreaterThanOrEqual(55);
-    // Fast-path short-circuits before the quality validator is invoked.
-    expect(validateSDCompletionReadiness).not.toHaveBeenCalled();
+    expect(result.details?.infrastructure_auto_pass).toBeUndefined();
+    // The valid retro reached the CONTENT scorer — the filter regression this test guards.
+    expect(validateSDCompletionReadiness).toHaveBeenCalled();
   });
 });

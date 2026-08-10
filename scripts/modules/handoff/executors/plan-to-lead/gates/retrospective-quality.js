@@ -300,29 +300,19 @@ async function checkAutoPassConditions(ctx, retrospective, children, allChildren
     };
   }
 
-  // INFRASTRUCTURE FAST-PATH
-  // Infrastructure/process/documentation SDs produce inherently thin retrospectives
-  // that fail the AI rubric's learning_specificity criterion (40% weight).
-  // These SDs are simple by design — the retrospective gate adds friction without value.
-  if ((sdType === 'infrastructure' || sdType === 'process' || sdType === 'documentation') && retrospective) {
-    console.log(`   🏗️ INFRASTRUCTURE AUTO-PASS: ${sdType} SD with retrospective exists`);
-    console.log(`      Retrospective quality_score: ${retrospective.quality_score || 0}/100`);
-
-    return {
-      passed: true,
-      // FR-3: decorative citation removed — see the DATABASE arm above for the full reasoning.
-      score: 55,
-      max_score: 100,
-      issues: [],
-      warnings: [`${sdType} auto-pass: Thin retrospective expected for ${sdType} SDs`],
-      details: {
-        infrastructure_auto_pass: true,
-        sd_type: sdType,
-        retrospective_id: retrospective.id,
-        retrospective_quality: retrospective.quality_score
-      }
-    };
-  }
+  // INFRASTRUCTURE FAST-PATH — DELETED (SD-LEO-INFRA-WIRE-EXISTING-RETROSPECTIVEQUALITYRUBRIC-001).
+  //
+  // The arm returned passed:true score:55 on sdType∈(infrastructure,process,documentation) AND
+  // retro-EXISTENCE — 70.4% of SDs (3935/5591 measured) cleared completion on a retro merely
+  // existing, and its justifying comment ("thin retrospectives ... fail the AI rubric's
+  // learning_specificity criterion") was PROSE that FR-0 measured FALSE: a thin-but-SD-specific
+  // infra retro scores 67 blended against the standard path's threshold 55 and passes without
+  // any bypass. Deleting the arm therefore does NOT re-break PAT-AUTO-047's two-gate
+  // consistency; infra/process/doc SDs now flow to the standard path below (:84-92), which was
+  // already wired to the shared RetrospectiveQualityRubric all along. The discrimination the AI
+  // criterion cannot provide (it scored textbook template content 8/10 on specificity — SD-ID
+  // splicing reads as specificity) comes from the rubric's deterministic detectBoilerplate
+  // penalty, calibrated with the template-assertion corpus in the same SD.
 
   return null; // No auto-pass
 }
