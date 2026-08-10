@@ -289,7 +289,15 @@ export function buildGather({ supabase, computePlanCheckStatus, gatherCapacity, 
     // fabricating a measurement. aggregateScore already discloses that the denominator is
     // unratified, and excludes unavailable legs from it rather than scoring them zero.
     const legs = [
-      { leg: LEG1_ID, unavailable: unavailable('scoreLeg1 needs the same uncapped chain-item set as the belt sections, plus a git runner in the job; neither is wired into this cron') },
+      // SD-LEO-INFRA-DRIVE-SCORE-LEG1-001 (Option B, coordinator ruling fea8b4c4): the old
+      // reason claimed "not wired", which became false on both halves — the leg module is fully
+      // built and tested, and the chain-item set is already fetched above. The TRUE blocker is
+      // the ratified rule itself, measured (VALIDATION evidence ab82da6b): ancestry-by-branch-ref
+      // cannot be earned in a delete-branch-on-merge flow, and the open-item input set is
+      // definitionally the not-landed set. Redefining the landing question is a chairman-surfaced
+      // spec change (parent SD's own gate), in flight via Adam. Until it lands, leg1 stays
+      // honestly UNAVAILABLE — never a false 0-of-2 measurement on the chairman's score.
+      { leg: LEG1_ID, unavailable: unavailable('scoreLeg1 is built but its ratified rule (merge-base ancestry, d50b9f12) is unearnable in this delete-branch-on-merge flow — measured 7/111 ancestors over even the favourable completed population (18 branches absent, 86 not-ancestor), and the open-item input set is definitionally not-landed (evidence ab82da6b). Held unavailable pending the chairman decision on the landing-question redefinition (ruling fea8b4c4).') },
       { leg: LEG2_ID, unavailable: unavailable('scoreLeg2 needs the ranked top-5 backlog, which this job does not query') },
       await scoreCapacityLeg({ gatherCapacity, persistVerdict, runId: capacityRunId }),
     ];

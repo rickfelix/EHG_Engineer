@@ -1,0 +1,49 @@
+{
+  "executive_summary": "Ruled down from full leg1 wiring to the honest-truth update (coordinator ruling fea8b4c4, Option B of the spec-conflict escalation; Option A — redefining the landing question — travels to the chairman via Adam in parallel). VALIDATION measured (evidence ab82da6b, SHA-accurate) that the ratified leg1 rule (merge-base --is-ancestor, d50b9f12) is unearnable in this delete-branch-on-merge flow: the named input set (open_items_all) is definitionally the not-landed set (live: 1 item, 0 promoted), and even over the favourable 111-completed-items population only 7 branches are ancestors (18 absent, 86 not-ancestor). Wiring as originally scoped would have moved the chairman drive score from an honest 0/0-unmeasured to a PERMANENT FALSE 0/2-measured — the exact harm the aggregate's own header forbids. This SD ships the one honest change that needs no chairman surface: the leg1 unavailable REASON stops claiming 'not wired' (now false — the leg is fully built) and records the measured unearnability with its evidence and ruling references, pinned so it cannot silently regress.",
+  "functional_requirements": [
+    {
+      "id": "FR-1",
+      "title": "The leg1 unavailable reason tells the measured truth",
+      "priority": "high",
+      "description": "scripts/cron/drive-report-sweep.mjs (~line 292): replace the leg1 unavailable reason — currently 'scoreLeg1 needs the same uncapped chain-item set as the belt sections, plus a git runner in the job; neither is wired into this cron', a claim now FALSE on both halves (the leg module is fully built and tested; the chain-item set is already fetched in this cron) — with the measured truth: the ratified ancestry rule (d50b9f12) is unearnable in a delete-branch-on-merge flow (7/111 ancestors over the favourable completed population, 18 branches absent, 86 not-ancestor; the open-item input set is definitionally not-landed), held pending the chairman decision on the landing-question redefinition, citing evidence ab82da6b and ruling fea8b4c4. leg1 REMAINS unavailable — no semantics change; the chairman score is never a false 0/2.",
+      "acceptance_criteria": [
+        "The stale not-wired reason text is gone from the sweep (grep-clean).",
+        "The new reason names: unearnable-as-ratified, the delete-branch-on-merge mechanism, the 7/111 measurement, evidence ab82da6b, ruling fea8b4c4, and that the redefinition is chairman-pending."
+      ]
+    },
+    {
+      "id": "FR-2",
+      "title": "Two-sided regression pin on the reason",
+      "priority": "high",
+      "description": "Add a test in tests/unit/cron/drive-report-sweep.test.js asserting the leg1 unavailable reason matches the load-bearing new phrases (unearnable + the ruling reference) AND does not match the old 'neither is wired' text — so the honest text cannot silently regress in either direction (back to the stale claim, or to some third unvetted wording that drops the provenance).",
+      "acceptance_criteria": [
+        "The pin reds when the reason is reverted to the old text (proven by mutation).",
+        "The pin reds when the ruling reference is dropped from the new text (proven by mutation)."
+      ]
+    },
+    {
+      "id": "FR-3",
+      "title": "The unavailability CONTRACT is byte-preserved — nothing else changes",
+      "priority": "medium",
+      "description": "The ruling's OUT boundary as a verifiable requirement: leg1 still resolves unavailable (driveScore.possible === 0, measured_legs === [], unavailable_legs length 3 — the existing pins at tests/unit/cron/drive-report-sweep.test.js :356-366 stay green byte-unchanged), and the diff touches ONLY the sweep and its test file: no leg module edits, no workflow edits, no wiring groundwork (that ships only after the chairman rules on Option A).",
+      "acceptance_criteria": [
+        "Existing leg-set and possible===0 pins pass without modification.",
+        "The three-dot PR diff contains exactly two files: scripts/cron/drive-report-sweep.mjs and tests/unit/cron/drive-report-sweep.test.js (plus the PRD payload)."
+      ]
+    }
+  ],
+  "technical_requirements": [
+    { "id": "TR-1", "title": "Truth over scaffolding", "description": "Only the reason string and its pin change. The ratified leg definition, the sweep's structure, the workflow, and all wiring groundwork are untouched — groundwork ships only after the chairman rules on Option A." }
+  ],
+  "test_scenarios": [
+    { "id": "TS-1", "scenario": "Gather with the fixture harness", "type": "unit", "expected": "leg1 unavailable with the NEW reason; possible 0; three unavailable legs" },
+    { "id": "TS-2", "scenario": "Reason regression pin", "type": "unit", "expected": "Matches unearnable+ruling phrases; rejects the old not-wired text" }
+  ],
+  "acceptance_criteria": [
+    "One-file source diff (sweep) plus its test file; existing pins green unchanged; the new pin two-sided (matches new, rejects old).",
+    "The chairman-facing surfaces keep rendering an honest unmeasured score."
+  ],
+  "risks": [
+    { "risk": "The reason text drifts from what Option A eventually decides.", "mitigation": "The text says chairman-pending and cites the ruling; the Option A SD (or amendment) supersedes it explicitly.", "severity": "low" }
+  ]
+}
