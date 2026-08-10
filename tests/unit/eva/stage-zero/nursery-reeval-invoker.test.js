@@ -52,7 +52,16 @@ function makeSupabase({ due = [], open = [], insertResult = { id: 'req-1' }, ope
   };
 }
 
-const withPrincipal = { registeredPrincipals: [SERVICE_PRINCIPAL] };
+// `principalExists` stubs the auth.users EXISTENCE precondition added alongside the dangling-
+// principal fix. These tests are about request SHAPE, dedupe and selection, so they assert their
+// own subjects against a principal that resolves; the existence guard itself is falsified
+// separately in nursery-reeval-principal-existence.test.js (including the fail-closed and
+// two-sided cases). Stubbing it here would be a hole ONLY if nothing else exercised it — that
+// file is what stops this from being one.
+const withPrincipal = {
+  registeredPrincipals: [SERVICE_PRINCIPAL],
+  principalExists: async () => ({ exists: true, detail: null }),
+};
 const candidate = { id: HEADLINE_TRANSFORMER, name: 'Headline Transformer', current_score: 90 };
 
 describe('invokeNurseryReeval — FR-6 scheduled invoker', () => {
