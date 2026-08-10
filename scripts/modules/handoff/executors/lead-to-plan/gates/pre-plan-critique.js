@@ -61,13 +61,20 @@ export async function validatePrePlanCritique(ctx) {
 
   // Load PRD content. No PRD at LEAD-TO-PLAN is the normal state for a fresh SD (the
   // PRD is created during PLAN) — NOT_APPLICABLE, never a failure, never checked-clean.
+  // ABSENCE ≠ READ FAILURE: .single() errors on outages and RLS faults too, and mapping
+  // those to NOT_APPLICABLE at score 100 is a could-not-check outcome wearing
+  // not-applicable's clothes (adversarial ship review, PR #6927). PGRST116 is the
+  // zero-rows code — only that is genuine absence.
   try {
     const { data: prd, error } = await supabase
       .from('product_requirements_v2')
       .select('id, executive_summary, functional_requirements, system_architecture, acceptance_criteria, test_scenarios, implementation_approach, risks')
       .eq('sd_id', sd.id)
       .single();
-    if (error || !prd) {
+    if (error && error.code !== 'PGRST116') {
+      return couldNotCheckVerdict([`PRD read FAILED (${error.code || '?'}: ${error.message}) — COULD_NOT_CHECK, not absence: nothing was critiqued and nothing could persist`]);
+    }
+    if (!prd) {
       return notApplicable([`No PRD exists yet for SD ${sd.sd_key || sd.id} — critique NOT_APPLICABLE (a fresh SD gets its PRD in PLAN)`]);
     }
     prdId = prd.id;
@@ -79,7 +86,7 @@ export async function validatePrePlanCritique(ctx) {
       risks: prd.risks,
     });
   } catch (err) {
-    return notApplicable([`PRD load error: ${err.message} — critique NOT_APPLICABLE this run`]);
+    return couldNotCheckVerdict([`PRD load threw (${err.message}) — COULD_NOT_CHECK, not absence`]);
   }
 
   // Load architecture plan content (best effort — not required)
@@ -116,14 +123,22 @@ export async function validatePrePlanCritique(ctx) {
   const llmBlind = critique.overall_severity === COULD_NOT_CHECK;
   const findings = [...(critique.findings || []), ...invariant.findings];
 
-  // Combined severity: findings (from either source) outrank blindness of one source.
+  // Combined severity. SEEDED FROM THE LLM'S OWN VERDICT, never re-derived from findings
+  // alone: the adversarial ship review (PR #6927) showed that deriving purely from
+  // per-finding severities let {findings: [], overall_severity: 'block'} score 100 and
+  // persist as 'pass' — a blocking verdict silently converted to checked-clean, the exact
+  // class this SD removes. Findings can raise the seed, never lower it.
+  const llmOverall = String(critique.overall_severity || '').toLowerCase();
+  let combined = llmOverall in SEVERITY_RANK ? llmOverall : 'pass';
+  for (const f of findings) {
+    const raw = String(f.severity || 'note').toLowerCase();
+    // Off-vocabulary severities ('critical', 'high', …) must not rank BELOW pass by
+    // falling out of the table — map unknowns conservatively to 'warn'.
+    const s = raw in SEVERITY_RANK ? raw : 'warn';
+    if (SEVERITY_RANK[s] > SEVERITY_RANK[combined]) combined = s;
+  }
   // could_not_check survives as the outcome ONLY when the LLM was blind AND no finding
   // exists — "found nothing" from a half-blind instrument is not checked-clean.
-  let combined = 'pass';
-  for (const f of findings) {
-    const s = String(f.severity || 'note').toLowerCase();
-    if ((SEVERITY_RANK[s] || 0) > (SEVERITY_RANK[combined] || 0)) combined = s;
-  }
   if (findings.length === 0 && llmBlind) combined = COULD_NOT_CHECK;
 
   // FR-3: COVERAGE line, never completeness.
@@ -218,12 +233,18 @@ async function persistCritique(supabase, row, warnings) {
 }
 
 /**
- * Stable fingerprint of a findings set: severity + message pairs, sorted. Used to bind an
- * override to the exact findings it excuses.
+ * Stable fingerprint of a findings set: severity + category (+ invariant id) pairs,
+ * sorted. Binds an override to the KIND of findings it excuses. Deliberately NOT keyed on
+ * message text: LLM messages are re-worded on every run, so a message-keyed fingerprint
+ * never matches twice and the override becomes structurally dead for LLM-originated
+ * blocks (adversarial ship review, PR #6927) — trading "excuses too much" for "excuses
+ * nothing". Category is enum-constrained on the LLM side and invariant_id is exact on the
+ * library side, so a new KIND of block re-blocks while a re-worded same-kind block stays
+ * excused.
  */
 export function findingsFingerprint(findings) {
   const pairs = (findings || [])
-    .map((f) => `${String(f.severity || '').toLowerCase()}::${String(f.message || '')}`)
+    .map((f) => `${String(f.severity || '').toLowerCase()}::${String(f.category || '').toLowerCase()}::${String(f.invariant_id || '')}`)
     .sort();
   return crypto.createHash('sha256').update(JSON.stringify(pairs)).digest('hex');
 }
@@ -263,6 +284,14 @@ async function findActiveOverride(supabase, sdId, currentFingerprint) {
 
 function notApplicable(warnings = []) {
   return { pass: true, score: 100, max_score: 100, issues: [], warnings };
+}
+
+// A PRD read that FAILED is a could-not-check outcome: degraded pass (same score as the
+// LLM-blind path), loud, and honest that nothing persisted (no prd_id exists to persist
+// against — plan_critiques.prd_id is NOT NULL).
+function couldNotCheckVerdict(warnings = []) {
+  for (const w of warnings) console.warn(`   ⚠️  ${w}`);
+  return { pass: true, score: SCORE_BY_OUTCOME[COULD_NOT_CHECK], max_score: 100, issues: [], warnings };
 }
 
 /**

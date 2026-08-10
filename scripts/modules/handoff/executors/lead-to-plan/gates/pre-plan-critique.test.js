@@ -231,9 +231,44 @@ describe('could-not-check honesty (FR-3/FR-4)', () => {
   });
 });
 
+describe('verdict cannot be laundered through findings shape (adversarial review, PR #6927)', () => {
+  it('FAILS when the LLM says block with EMPTY findings — the verdict seeds combined severity', async () => {
+    critiquePlanProposal.mockResolvedValue({
+      findings: [], overall_severity: 'block', model_used: 'test-model', token_usage: null,
+    });
+    const supabase = makeSupabase();
+    const result = await validatePrePlanCritique({ sd: SD, supabase });
+    expect(result.pass).toBe(false);
+    expect(result.score).toBe(0);
+    expect(supabase._inserted[0].overall_severity).toBe('block'); // never persisted as 'pass'
+  });
+
+  it('off-vocabulary finding severities rank as warn, never below pass', async () => {
+    critiquePlanProposal.mockResolvedValue({
+      findings: [{ severity: 'critical', category: 'contradiction', message: 'x', location: 'PRD' }],
+      overall_severity: 'pass', // LLM aggregation also broken
+      model_used: 'test-model', token_usage: null,
+    });
+    const result = await validatePrePlanCritique({ sd: SD, supabase: makeSupabase() });
+    expect(result.pass).toBe(true);
+    expect(result.score).toBe(75); // warn, not a silent 100
+  });
+});
+
+describe('PRD read failure is could-not-check, not absence (adversarial review, PR #6927)', () => {
+  it('degrades to score 50 on a non-PGRST116 read error', async () => {
+    const supabase = makeSupabase({ prd: null, prdError: { code: '57014', message: 'statement timeout' } });
+    const result = await validatePrePlanCritique({ sd: SD, supabase });
+    expect(result.pass).toBe(true);
+    expect(result.score).toBe(50);
+    expect(result.warnings.join(' ')).toMatch(/COULD_NOT_CHECK/);
+    expect(critiquePlanProposal).not.toHaveBeenCalled();
+  });
+});
+
 describe('not-applicable is neither clean nor blind', () => {
   it('passes with NOT_APPLICABLE when no PRD exists yet (normal for a fresh SD at LEAD-TO-PLAN)', async () => {
-    const supabase = makeSupabase({ prd: null, prdError: { message: 'No rows' } });
+    const supabase = makeSupabase({ prd: null, prdError: { code: 'PGRST116', message: 'JSON object requested, multiple (or no) rows returned' } });
     const result = await validatePrePlanCritique({ sd: SD, supabase });
     expect(result.pass).toBe(true);
     expect(result.warnings.join(' ')).toMatch(/NOT_APPLICABLE/);

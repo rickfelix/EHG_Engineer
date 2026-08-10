@@ -197,6 +197,7 @@ async function indexEntities(entities, options) {
   let indexed = 0;
   let skipped = 0;
   let errors = 0;
+  let embedFailures = 0;
 
   // Process in batches
   for (let i = 0; i < entities.length; i += BATCH_SIZE) {
@@ -305,10 +306,13 @@ async function indexEntities(entities, options) {
       // (src=100, scripts=1749, lib/tests/database=0 rows) with no usable diagnostic.
       console.error(`  ❌ Batch processing error: ${batchErr.message}`);
       errors += batch.length;
+      // Tracked separately from constraint refusals: an embedding-layer throw is the
+      // feed dying (revoked key, provider outage), not a declared row-level gap.
+      embedFailures += batch.length;
     }
   }
 
-  return { indexed, skipped, errors };
+  return { indexed, skipped, errors, embedFailures };
 }
 
 /**
@@ -320,10 +324,15 @@ async function fetchExistingDescriptions(application) {
   const map = new Map();
   const PAGE = 1000;
   for (let from = 0; ; from += PAGE) {
+    // Stable order is load-bearing: paged .range() without .order() has no guaranteed
+    // row ordering across requests, so pages can miss or repeat rows. Benign for
+    // correctness (missed rows just re-embed, upsert is last-wins) but it leaks the
+    // quota the skip exists to conserve.
     const { data, error } = await supabase
       .from('codebase_semantic_index')
       .select('file_path, entity_name, entity_type, semantic_description')
       .eq('application', application)
+      .order('id', { ascending: true })
       .range(from, from + PAGE - 1);
     if (error) {
       // Could-not-look must not masquerade as empty: an unreadable index means NO skip
@@ -431,9 +440,23 @@ async function main() {
   // entities still embed; the skip count is reported, never folded into 'indexed'.
   let toIndex = allEntities;
   if (incremental) {
-    const existing = await fetchExistingDescriptions(application);
-    toIndex = allEntities.filter((e) => existing.get(`${e.filePath}::${e.entityName}::${e.entityType}`) !== e.semanticDescription);
-    console.log(`↻ Incremental: ${allEntities.length - toIndex.length} unchanged entities skipped, ${toIndex.length} to embed\n`);
+    // MODEL GUARD: "unchanged description → unchanged embedding" holds only while the
+    // embedder is fixed. This repo already swapped embedders once (OpenAI → gemini);
+    // after the next swap, skipping unchanged entities would freeze old-model vectors in
+    // a table with no model column while queries embed with the new model — cosine
+    // similarity across mixed vector spaces is noise with every instrument green. When
+    // the active model differs from the calibration record, incremental skip is DISABLED
+    // and everything re-embeds (the correct action after a swap). Update
+    // SIMILARITY_TIERS.calibrated_for as part of recalibrating the consumer thresholds.
+    const { SIMILARITY_TIERS } = await import('../lib/utils/validation-automation.js');
+    const embedder = await getEmbedder();
+    if (embedder.model !== SIMILARITY_TIERS.calibrated_for) {
+      console.warn(`⚠️  Embedding model changed (${SIMILARITY_TIERS.calibrated_for} → ${embedder.model}) — incremental skip DISABLED; full re-embed required to keep the vector space uniform.`);
+    } else {
+      const existing = await fetchExistingDescriptions(application);
+      toIndex = allEntities.filter((e) => existing.get(`${e.filePath}::${e.entityName}::${e.entityType}`) !== e.semanticDescription);
+      console.log(`↻ Incremental: ${allEntities.length - toIndex.length} unchanged entities skipped, ${toIndex.length} to embed\n`);
+    }
   }
 
   // Index entities
@@ -448,7 +471,18 @@ async function main() {
   console.log(`Files processed: ${allFiles.length}`);
   console.log(`Entities extracted: ${allEntities.length}`);
   console.log(`Entities indexed: ${stats.indexed}`);
-  console.log(`Errors: ${stats.errors}\n`);
+  console.log(`Errors: ${stats.errors} (${stats.embedFailures} embedding-layer)\n`);
+
+  // TOTAL FEED FAILURE must not exit 0: a run where every batch dies (revoked key,
+  // provider outage) used to print "✅ complete!" and the weekly cron stayed green on
+  // last week's rows forever. Exit 1 exactly when work existed, the embedding layer
+  // failed, and NOTHING landed — partial transient losses (a couple of 503 batches) stay
+  // exit 0 because next week's incremental picks them up; a permanently red gate on a
+  // 2-of-15k blip would be as useless as a permanently green one.
+  if (toIndex.length > 0 && stats.embedFailures > 0 && stats.indexed === 0) {
+    console.error('❌ FEED FAILURE: entities were queued, the embedding layer failed, and zero rows landed.');
+    process.exitCode = 1;
+  }
 
   // Verify index
   const { data: indexStats } = await supabase

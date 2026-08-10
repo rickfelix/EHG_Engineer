@@ -63,7 +63,10 @@ jobs:
           import { createSupabaseServiceClient } from './lib/supabase-client.js';
           const db = createSupabaseServiceClient();
           let failed = false;
-          for (const p of ['src', 'scripts', 'lib', 'tests']) {
+          // 'database' rides at >0 despite the unapplied entity_type widening: SQL
+          // function entities use the allowed 'function' type, so at least those land;
+          // table/view rows stay a declared gap until the chairman-gated migration.
+          for (const p of ['src', 'scripts', 'lib', 'tests', 'database']) {
             const { count, error } = await db.from('codebase_semantic_index')
               .select('*', { count: 'exact', head: true }).ilike('file_path', p + '%');
             const n = error ? null : count;
