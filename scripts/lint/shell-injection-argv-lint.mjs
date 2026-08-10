@@ -49,8 +49,19 @@ const PRAGMA = 'shell-injection-argv-disable-line';
 
 /** Spawn-family callee for S1. execSync on any receiver; bare exec only (RegExp .exec collision). */
 const S1_CALL = /(?:(?<![\w.])exec|execSync)\s*\(\s*([^)\n]*)/g;
-/** S2: an explicit shell: true in an options object. */
-const S2_SHELL_TRUE = /\bshell\s*:\s*true\b/;
+/**
+ * S2: a shell: option set to anything that is not a literal falsy off-switch.
+ *
+ * SD-LEO-INFRA-CLOSE-SHELL-INJECTION-001 (SEC-1): this was /\bshell\s*:\s*true\b/ — the literal
+ * only — so shell: process.platform==='win32' (the exact shape REAPER-GH flag d5c57a01 was about)
+ * was invisible, and a --all census missed 3 live sites (phase3-execution.js:89,
+ * control-seed-test.mjs:354, node-modules-autoheal.cjs:137). Widened to flag shell: followed by
+ * anything except a literal `false` or `0` — a non-literal value (identifier, member, ternary) is
+ * exactly the runtime-decided shell that cannot be judged safe by reading the source. String
+ * literals and comments are already removed by stripForScan, so `shell:` inside a string cannot
+ * reach here. The negative lookahead keeps shell:false / shell:0 clean (two-sided).
+ */
+const S2_SHELL_NON_LITERAL_FALSE = /\bshell\s*:\s*(?!false\b|0\b)\S/;
 
 /**
  * Classify an S1 first-argument slice. SAFE: plain string literal (contents were stripped, the
@@ -80,8 +91,8 @@ export function scanLine(strippedLine, rawLine) {
       break; // one S1 report per line
     }
   }
-  if (S2_SHELL_TRUE.test(strippedLine)) {
-    hits.push({ selector: 'S2', detail: 'shell: true — the argv array is handed to a shell; drop the option or record a reasoned allowlist entry' });
+  if (S2_SHELL_NON_LITERAL_FALSE.test(strippedLine)) {
+    hits.push({ selector: 'S2', detail: 'shell: <non-false> — the argv array is handed to a shell (a runtime value like process.platform still spawns a shell on the true branch); drop the option, gate it to a safe spawn, or record a reasoned allowlist entry' });
   }
   return hits;
 }
