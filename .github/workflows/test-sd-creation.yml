@@ -76,7 +76,8 @@ jobs:
       # The real fix is to designate a non-production ref for CI (tests/helpers/db-target.js
       # DESIGNATED_NON_PROD_REFS is an empty frozen array). Do NOT "fix" this by pointing
       # VITEST_DB_ALLOW_REF at the production ref — these suites write to whatever they are
-      # aimed at, and 125 of 225 db-tier files do not self-guard.
+      # aimed at, and most db-tier files do not self-guard (the tier-level runtime gate in
+      # tests/setup.db.js is what protects them, per SD-LEO-INFRA-VITEST-TIER-REAL-001).
       - name: DB tier gated off — integration tests SKIPPED
         if: steps.dbgate.outputs.allowed != 'true'
         run: |
