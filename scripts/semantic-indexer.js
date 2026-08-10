@@ -23,6 +23,7 @@ import { createSupabaseServiceClient } from '../lib/supabase-client.js';
 // "Semantic index empty" (64 of 65 runs; 0 of 300 ever searched).
 import { promises as fs } from 'node:fs';
 import path from 'node:path';
+import { pathToFileURL } from 'node:url';
 import { parseCodeEntities } from './modules/language-parsers.js';
 import 'dotenv/config';
 
@@ -465,8 +466,16 @@ async function main() {
   console.log('\n✅ Semantic indexing complete!\n');
 }
 
-// Run
-main().catch(error => {
-  console.error('\n❌ Fatal error:', error.message);
-  process.exit(1);
-});
+// Run ONLY when executed directly. Without this guard, a bare import() of this module
+// started a run whose FIRST act (full-rebuild mode) is DELETING the index — the
+// VALIDATION sub-agent hit exactly that while checking loadability, and all 18,367 rows
+// survived only because a Postgres statement timeout killed the DELETE (evidence row
+// 69905ea5). Before FR-5a the same import died on a harmless ReferenceError, so this SD
+// itself upgraded the hazard from crash-on-import to destroy-on-import; the guard
+// restores import-safety.
+if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) {
+  main().catch(error => {
+    console.error('\n❌ Fatal error:', error.message);
+    process.exit(1);
+  });
+}
