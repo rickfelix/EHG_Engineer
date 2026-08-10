@@ -122,11 +122,14 @@ export const RESPONSIBILITIES = [
 //   gauge-runner                | SAFE    | gauge-runner.mjs's own header: "Idempotent (safe to re-run — findings are [deduped])"
 //   feedback-sla                | SAFE    | lib/coordinator/feedback-sla-gauge.cjs's remindSlaBreaches is rate-limited/deduped per category per day via metadata.sla_key, per its own STANDARD_LOOPS comment above
 //   solomon-ledger-resurface     | SAFE    | solomon-ledger-pending-resurface.cjs's own header: capped to once per stale ledger row per day via payload.dedup_key checked before insert
-//   hourly-review               | SAFE    | SD-LEO-INFRA-ALARM-HONESTY-001: both reminder legs call hasRecentReminder (query-before-insert on payload kind+topic+target within a 55min window, fail-open on read faults) — a double-fire (measured ~65min apart pre-fix) dedups to one delivered reminder
+//   hourly-review               | SAFE    | SD-LEO-INFRA-ALARM-HONESTY-001: both reminder legs call hasRecentReminder (query-before-insert on payload kind+topic+target+sender_type within a 55min window, newest-first, fail-open on read faults) — a double-fire (measured ~65min apart pre-fix) dedups to one delivered reminder. NOTE: unlike the 13 rows above, this one REQUIRED a code change to reach SAFE (the dedup is this SD's deliverable).
 //
-// All 13 verified SAFE for an occasional session+GHA double-fire. None required a code change to
-// reach this verdict — the additive migration pattern only works because these loops were already
-// built idempotent (a prerequisite the design doc's precedent, retention/backlog-rank, also relied on).
+// All 15 rows verified SAFE for an occasional session+GHA double-fire. The original 13 required
+// no code change — the additive migration pattern only works because those loops were already
+// built idempotent (a prerequisite the design doc's precedent, retention/backlog-rank, also relied
+// on). The two later rows are each verified in their own entry: sms-relay-drain (QF-20260727-064,
+// pre-existing drained_at stamping) and hourly-review (SD-LEO-INFRA-ALARM-HONESTY-001, which
+// BUILT the dedup — the one row whose SAFE verdict is a deliverable, not a discovery).
 export const STANDARD_LOOPS = [
   { key: 'sweep',       label: 'Stale-session sweep',  script: 'stale-session-sweep.cjs',   cron: '*/5 * * * *',
     gha_backed: true,

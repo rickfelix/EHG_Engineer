@@ -112,10 +112,30 @@ describe('FR-1: one isPreSendCc representation repo-wide (GAP-5)', () => {
     expect(replyClass).toMatch(/function isPreSendCc/);
     expect(solomonAdv).not.toMatch(/const isPreSendCc\s*=/);
     expect(solomonAdv).toMatch(/isPreSendCc,?\s*\n?\}?\s*=\s*require\(.*reply-class/s);
-    // Repo-wide: no OTHER definition site (grep both trees the predicate could plausibly land in).
     const defCount = (src) => (src.match(/function isPreSendCc|const isPreSendCc\s*=/g) || []).length;
     expect(defCount(replyClass)).toBe(1);
     expect(defCount(solomonAdv)).toBe(0);
+  });
+
+  it('REPO-WIDE census: no third definition anywhere in lib/ or scripts/ (a two-file pin cannot see a third copy)', () => {
+    // TESTING GAP-5 (evidence 94c7c9af): walk the trees the predicate could plausibly land in,
+    // so a third copy in ANY file turns this red — not just the two named ones.
+    const roots = ['lib', 'scripts'].map((d) => path.resolve(__dirname, '../../' + d));
+    const defs = [];
+    const walk = (dir) => {
+      for (const entry of fs.readdirSync(dir, { withFileTypes: true })) {
+        if (entry.name === 'node_modules' || entry.name === '.git' || entry.name === 'archive') continue;
+        const full = path.join(dir, entry.name);
+        if (entry.isDirectory()) walk(full);
+        else if (/\.(cjs|mjs|js)$/.test(entry.name) && !/\.test\./.test(entry.name)) {
+          const src = fs.readFileSync(full, 'utf-8');
+          if (/function isPreSendCc|const isPreSendCc\s*=/.test(src)) defs.push(full);
+        }
+      }
+    };
+    roots.forEach(walk);
+    expect(defs).toHaveLength(1);
+    expect(defs[0]).toMatch(/reply-class\.cjs$/);
   });
 });
 

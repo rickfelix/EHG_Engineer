@@ -129,9 +129,10 @@ async function buildFoundationsPointer(sb) {
 // this target within the window? READER: both reminder legs below, called BEFORE insert, so a
 // second invocation source (manual run, re-registered cron, startup-check re-fire — the measured
 // ~65min double-fire) becomes a logged no-op instead of a duplicate dun. Keyed on the INSERTED
-// row (created_at + kind + topic + target): a delivery that never landed never arms the dedup.
-// expires_at is deliberately NOT the key — the 90m TTL self-expires within one cron period, so a
-// delivered-but-expired row must still count as delivered.
+// row (created_at + kind + topic + target + sender_type): an insert that FAILED never arms the
+// dedup; an inserted-but-unread reminder DOES (the key carries no read_at — SEC-5 precision),
+// which the 55min-under-60min window self-heals. expires_at is deliberately NOT the key — the
+// 90m TTL self-expires within one cron period, so a sent-but-expired row must still count.
 //
 // DEDUP FAILS OPEN, DELIBERATELY (coordinator-idle-qf-hint.mjs precedent): this function has its
 // OWN catch and returns null (= could-not-look) on any fault, because the reminder legs' outer
@@ -147,7 +148,13 @@ async function hasRecentReminder(sb, { target, topic, now = Date.now(), windowMs
       .eq('target_session', target)
       .eq('payload->>kind', 'coordinator_reminder')
       .eq('payload->>topic', topic)
-      .gte('created_at', sinceIso)
+      // SEC-3: narrow by CONSTRAINT, not coincidence — 1,342 live rows carry this kind from
+      // non-coordinator producers (periodic-liveness-watcher, sweep, adam) and the orphan
+      // reroute re-types arbitrary rows to it; only coordinator-sent reminders may arm this.
+      .eq('sender_type', 'coordinator')
+      // SEC-4: the skip log claims to name the LAST-delivered row — order makes that true
+      // when >1 row matches (exactly the double-fire condition this dedup exists for).
+      .order('created_at', { ascending: false })
       .limit(1);
     if (error) {
       console.log('[HOURLY-REVIEW] dedup read failed (fail-open, reminder will dispatch): ' + error.message);
