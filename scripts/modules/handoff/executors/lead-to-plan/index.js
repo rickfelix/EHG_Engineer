@@ -164,8 +164,10 @@ export class LeadToPlanExecutor extends BaseExecutor {
     // Advisory-only: warns when SD may affect consumers in other repos
     gates.push(createCrossRepoConsumerImpactGate());
 
-    // Pre-PLAN Adversarial Critique Gate (SD-LEO-INFRA-PRE-PLAN-ADVERSARIAL-001)
-    // Advisory-only: runs critiquePlanProposal and persists to plan_critiques
+    // Pre-PLAN Adversarial Critique Gate (SD-LEO-INFRA-PRE-PLAN-ADVERSARIAL-001,
+    // promoted by SD-LEO-INFRA-SYSTEMATIZE-COMPLETENESS-CRITIC-001)
+    // VERDICT-BEARING: LLM critique + codified invariant library; BLOCK fails unless an
+    // audited override (plan_critiques.override_reason/override_by) downgrades it.
     gates.push(createPrePlanCritiqueGate(this.supabase));
 
     // DFE Escalation advisory gate (SD-MAN-GEN-CORRECTIVE-VISION-GAP-003)

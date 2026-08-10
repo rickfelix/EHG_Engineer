@@ -307,7 +307,13 @@ async function parseCodeEntities(code, language, filePath) {
   }
 }
 
-module.exports = {
+// SD-LEO-INFRA-SYSTEMATIZE-COMPLETENESS-CRITIC-001 (FR-5a): was `module.exports = {...}` in a
+// package.json `type: module` repo, so this file is loaded as ESM and exported NOTHING. Measured:
+// `import('./language-parsers.js')` resolved with an EMPTY export list, which is why its only
+// consumer (scripts/semantic-indexer.js) could never obtain parseCodeEntities. A CommonJS export
+// block in an ESM-typed file is invisible rather than loud — the module imports "fine" and simply
+// has no names on it.
+export {
   parseCodeEntities,
   parseTypeScriptJavaScript,
   parseSQL

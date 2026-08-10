@@ -13,10 +13,19 @@ import { createSupabaseServiceClient } from '../lib/supabase-client.js';
  *   node scripts/semantic-indexer.js [--application ehg|ehg_engineer] [--incremental]
  */
 
-const fs = require('fs').promises;
-const path = require('path');
-const { parseCodeEntities } = require('./modules/language-parsers');
-require('dotenv').config();
+// SD-LEO-INFRA-SYSTEMATIZE-COMPLETENESS-CRITIC-001 (FR-5a). THIS SCRIPT COULD NEVER RUN.
+// It mixed an ESM `import` (line 2) with CommonJS `require` here, in a package.json `type: module`
+// repo, so `node scripts/semantic-indexer.js` died on load with:
+//   ReferenceError: require is not defined in ES module scope
+// MEASURED BY EXECUTION, not inferred — and executing it (rather than scheduling it) is the only
+// reason this was found: a cron entry would have logged that stack trace forever while
+// codebase_semantic_index stayed empty and every VALIDATION duplicate search reported
+// "Semantic index empty" (64 of 65 runs; 0 of 300 ever searched).
+import { promises as fs } from 'node:fs';
+import path from 'node:path';
+import { pathToFileURL } from 'node:url';
+import { parseCodeEntities } from './modules/language-parsers.js';
+import 'dotenv/config';
 
 // Configuration
 const BATCH_SIZE = 50; // Embeddings batch size
@@ -139,7 +148,11 @@ function createSemanticDescription(entity) {
  * Process a single file and extract entities
  */
 async function processFile(filePath, applicationRoot, application) {
-  const relativePath = path.relative(applicationRoot, filePath);
+  // Canonical forward slashes. path.relative emits backslashes on Windows and forward
+  // slashes on Linux, so the SAME entity would key differently across the seats that run
+  // this (local Windows seed vs the Linux cron) — every cron run would then see 18k "new"
+  // entities, re-embed the world, and write a slash-variant twin of every row.
+  const relativePath = path.relative(applicationRoot, filePath).split(path.sep).join('/');
   const fileContent = await fs.readFile(filePath, 'utf8');
   const ext = path.extname(filePath);
 
@@ -184,6 +197,7 @@ async function indexEntities(entities, options) {
   let indexed = 0;
   let skipped = 0;
   let errors = 0;
+  let embedFailures = 0;
 
   // Process in batches
   for (let i = 0; i < entities.length; i += BATCH_SIZE) {
@@ -208,31 +222,130 @@ async function indexEntities(entities, options) {
         application: entity.application
       }));
 
+      // SD-LEO-INFRA-SYSTEMATIZE-COMPLETENESS-CRITIC-001 (FR-5, layer 4). DE-DUPLICATE WITHIN THE
+      // BATCH ON THE EXACT CONFLICT KEY. Postgres refuses an ON CONFLICT DO UPDATE that would touch
+      // the same row twice in one statement ("cannot affect row a second time"), so a single
+      // duplicated (file_path, entity_name, entity_type) discarded the WHOLE batch of
+      // BATCH_SIZE entities, not just the offender. Measured on the first successful run of this
+      // script. Real duplicates occur legitimately: overloads, re-declared types, and a name that
+      // parses as two entities in one file. Last-wins matches upsert semantics.
+      const deduped = [...new Map(
+        records.map((r) => [`${r.file_path}::${r.entity_name}::${r.entity_type}`, r])
+      ).values()];
+      if (deduped.length !== records.length) {
+        skipped += records.length - deduped.length;
+      }
+
       // Upsert to database (update if exists, insert if new)
       const { error } = await supabase
         .from('codebase_semantic_index')
-        .upsert(records, {
+        .upsert(deduped, {
           onConflict: 'file_path,entity_name,entity_type',
           ignoreDuplicates: false
         });
 
       if (error) {
-        console.error(`  ❌ Batch error: ${error.message}`);
-        errors += batch.length;
+        // SD-LEO-INFRA-SYSTEMATIZE-COMPLETENESS-CRITIC-001 (FR-5, layer 6): NAME THE OFFENDER.
+        // A bare "Batch error: <message>" says 50 entities failed and nothing about WHICH or WHY,
+        // so the operator cannot act and the run looks like noise. Control characters are the known
+        // cause here: a literal NUL (U+0000) in a source file is encoded by JSON.stringify as
+        //  and Postgres refuses it — reproduced with a two-sided control (plain text writes
+        // fine; the same row with U+0000 fails). Reporting the file_path turns an opaque batch
+        // failure into a fixable one.
+        const CONTROL_CHARS = /[\u0000-\u0008\u000B\u000C\u000E-\u001F]/;
+        const suspects = deduped
+          .filter((r) => CONTROL_CHARS.test(r.code_snippet || '') || CONTROL_CHARS.test(r.semantic_description || ''))
+          .map((r) => r.file_path);
+        console.error(`  ❌ Batch error: ${error.message}${error.code ? ` [${error.code}]` : ''}`);
+        if (suspects.length > 0) {
+          console.error(`     ↳ ${suspects.length} record(s) carry control characters: ${[...new Set(suspects)].slice(0, 5).join(', ')}`);
+        } else {
+          console.error('     ↳ no control characters found in this batch — cause is NOT the known U+0000 case');
+        }
+
+        // Layer 7: DO NOT LET ONE REFUSED ROW POISON ITS BATCH. A single row Postgres
+        // refuses (e.g. entity_type 'table'/'view' while the 20260809 widening migration is
+        // unapplied) failed the whole 50-row statement, so 49 innocent entities vanished
+        // with it — same class as layer 4, where one duplicate discarded the batch. Fall
+        // back to per-row upserts: constraint-agnostic (no allowed-value list to drift from
+        // the live constraint), self-healing (when the DDL applies, the same rows just
+        // start landing), and it names each refused row exactly.
+        let rowFailures = 0;
+        const refusedByReason = new Map();
+        for (const row of deduped) {
+          const { error: rowError } = await supabase
+            .from('codebase_semantic_index')
+            .upsert(row, { onConflict: 'file_path,entity_name,entity_type', ignoreDuplicates: false });
+          if (rowError) {
+            rowFailures++;
+            const key = `${rowError.code || '?'} ${rowError.message}`.slice(0, 120);
+            if (!refusedByReason.has(key)) refusedByReason.set(key, []);
+            refusedByReason.get(key).push(`${row.file_path}::${row.entity_name} (${row.entity_type})`);
+          } else {
+            indexed++;
+          }
+        }
+        for (const [reason, rows] of refusedByReason) {
+          console.error(`     ↳ ${rows.length} row(s) refused [${reason}]: ${rows.slice(0, 3).join(', ')}${rows.length > 3 ? ', …' : ''}`);
+        }
+        errors += rowFailures;
       } else {
-        indexed += batch.length;
+        // Count what was actually WRITTEN, not what was offered — `batch.length` over-reports by
+        // exactly the number de-duplicated above, and a seeder that inflates its own success count
+        // is the same class of defect this SD exists to remove.
+        indexed += deduped.length;
         if (verbose) {
-          console.log(`  ✅ Indexed batch ${Math.floor(i / BATCH_SIZE) + 1}: ${batch.length} entities`);
+          console.log(`  ✅ Indexed batch ${Math.floor(i / BATCH_SIZE) + 1}: ${deduped.length} entities`);
         }
       }
 
-    } catch (_error) {
-      console.error(`  ❌ Batch processing error: ${error.message}`);
+    } catch (batchErr) {
+      // This catch previously bound `_error` but reported `error.message` — a ReferenceError
+      // INSIDE the error path, which killed the whole run as "Fatal error: error is not defined"
+      // and hid the real cause. Measured consequence: the 2026-08-09 seed run died partway
+      // (src=100, scripts=1749, lib/tests/database=0 rows) with no usable diagnostic.
+      console.error(`  ❌ Batch processing error: ${batchErr.message}`);
       errors += batch.length;
+      // Tracked separately from constraint refusals: an embedding-layer throw is the
+      // feed dying (revoked key, provider outage), not a declared row-level gap.
+      embedFailures += batch.length;
     }
   }
 
-  return { indexed, skipped, errors };
+  return { indexed, skipped, errors, embedFailures };
+}
+
+/**
+ * Fetch every stored (key → semantic_description) for the application, PAGINATED — a single
+ * capped fetch would measure the cap, not the population, and silently un-skip everything
+ * beyond row 1000.
+ */
+async function fetchExistingDescriptions(application) {
+  const map = new Map();
+  const PAGE = 1000;
+  for (let from = 0; ; from += PAGE) {
+    // Stable order is load-bearing: paged .range() without .order() has no guaranteed
+    // row ordering across requests, so pages can miss or repeat rows. Benign for
+    // correctness (missed rows just re-embed, upsert is last-wins) but it leaks the
+    // quota the skip exists to conserve.
+    const { data, error } = await supabase
+      .from('codebase_semantic_index')
+      .select('file_path, entity_name, entity_type, semantic_description')
+      .eq('application', application)
+      .order('id', { ascending: true })
+      .range(from, from + PAGE - 1);
+    if (error) {
+      // Could-not-look must not masquerade as empty: an unreadable index means NO skip
+      // (everything re-embeds — wasteful but correct), stated out loud.
+      console.warn(`  ⚠️  Could not read existing index for incremental skip (${error.message}) — re-embedding everything`);
+      return new Map();
+    }
+    for (const r of data || []) {
+      map.set(`${r.file_path}::${r.entity_name}::${r.entity_type}`, r.semantic_description);
+    }
+    if (!data || data.length < PAGE) break;
+  }
+  return map;
 }
 
 /**
@@ -309,16 +422,46 @@ async function main() {
         const relPath = path.relative(applicationRoot, filePath);
         console.log(`  ${relPath}: ${entities.length} entities`);
       }
-    } catch (_error) {
-      console.error(`  ⚠️  Error processing ${filePath}: ${error.message}`);
+    } catch (fileErr) {
+      // Same defect as the batch catch above: `_error` bound, `error` reported — the error
+      // path itself threw. A reporter that crashes on report is the class this SD removes.
+      console.error(`  ⚠️  Error processing ${filePath}: ${fileErr.message}`);
     }
   }
 
   console.log(`✅ Extracted ${allEntities.length} code entities\n`);
 
+  // Layer 9: --incremental must actually BE incremental. It only skipped the DELETE and then
+  // re-embedded every entity, so a full pass ran ~6h at measured embed rates — which turns the
+  // weekly cron (45-min job timeout) into an instrument that times out every run while its
+  // data-present verify step stays green on last week's rows. Skip entities whose stored
+  // semantic_description is byte-identical: the description is the exact text that gets
+  // embedded, so an unchanged description means an unchanged embedding. New and changed
+  // entities still embed; the skip count is reported, never folded into 'indexed'.
+  let toIndex = allEntities;
+  if (incremental) {
+    // MODEL GUARD: "unchanged description → unchanged embedding" holds only while the
+    // embedder is fixed. This repo already swapped embedders once (OpenAI → gemini);
+    // after the next swap, skipping unchanged entities would freeze old-model vectors in
+    // a table with no model column while queries embed with the new model — cosine
+    // similarity across mixed vector spaces is noise with every instrument green. When
+    // the active model differs from the calibration record, incremental skip is DISABLED
+    // and everything re-embeds (the correct action after a swap). Update
+    // SIMILARITY_TIERS.calibrated_for as part of recalibrating the consumer thresholds.
+    const { SIMILARITY_TIERS } = await import('../lib/utils/validation-automation.js');
+    const embedder = await getEmbedder();
+    if (embedder.model !== SIMILARITY_TIERS.calibrated_for) {
+      console.warn(`⚠️  Embedding model changed (${SIMILARITY_TIERS.calibrated_for} → ${embedder.model}) — incremental skip DISABLED; full re-embed required to keep the vector space uniform.`);
+    } else {
+      const existing = await fetchExistingDescriptions(application);
+      toIndex = allEntities.filter((e) => existing.get(`${e.filePath}::${e.entityName}::${e.entityType}`) !== e.semanticDescription);
+      console.log(`↻ Incremental: ${allEntities.length - toIndex.length} unchanged entities skipped, ${toIndex.length} to embed\n`);
+    }
+  }
+
   // Index entities
   console.log('🚀 Generating embeddings and indexing...');
-  const stats = await indexEntities(allEntities, options);
+  const stats = await indexEntities(toIndex, options);
 
   // Summary
   console.log('\n══════════════════════════════════════════════════════════');
@@ -328,7 +471,18 @@ async function main() {
   console.log(`Files processed: ${allFiles.length}`);
   console.log(`Entities extracted: ${allEntities.length}`);
   console.log(`Entities indexed: ${stats.indexed}`);
-  console.log(`Errors: ${stats.errors}\n`);
+  console.log(`Errors: ${stats.errors} (${stats.embedFailures} embedding-layer)\n`);
+
+  // TOTAL FEED FAILURE must not exit 0: a run where every batch dies (revoked key,
+  // provider outage) used to print "✅ complete!" and the weekly cron stayed green on
+  // last week's rows forever. Exit 1 exactly when work existed, the embedding layer
+  // failed, and NOTHING landed — partial transient losses (a couple of 503 batches) stay
+  // exit 0 because next week's incremental picks them up; a permanently red gate on a
+  // 2-of-15k blip would be as useless as a permanently green one.
+  if (toIndex.length > 0 && stats.embedFailures > 0 && stats.indexed === 0) {
+    console.error('❌ FEED FAILURE: entities were queued, the embedding layer failed, and zero rows landed.');
+    process.exitCode = 1;
+  }
 
   // Verify index
   const { data: indexStats } = await supabase
@@ -346,8 +500,16 @@ async function main() {
   console.log('\n✅ Semantic indexing complete!\n');
 }
 
-// Run
-main().catch(error => {
-  console.error('\n❌ Fatal error:', error.message);
-  process.exit(1);
-});
+// Run ONLY when executed directly. Without this guard, a bare import() of this module
+// started a run whose FIRST act (full-rebuild mode) is DELETING the index — the
+// VALIDATION sub-agent hit exactly that while checking loadability, and all 18,367 rows
+// survived only because a Postgres statement timeout killed the DELETE (evidence row
+// 69905ea5). Before FR-5a the same import died on a harmless ReferenceError, so this SD
+// itself upgraded the hazard from crash-on-import to destroy-on-import; the guard
+// restores import-safety.
+if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) {
+  main().catch(error => {
+    console.error('\n❌ Fatal error:', error.message);
+    process.exit(1);
+  });
+}

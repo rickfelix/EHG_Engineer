@@ -1,0 +1,77 @@
+name: "Semantic indexer (cron)"
+
+# SD-LEO-INFRA-SYSTEMATIZE-COMPLETENESS-CRITIC-001 (FR-5c) — keep codebase_semantic_index FED.
+#
+# The VALIDATION sub-agent's duplicate search (searchExistingInfrastructure) was blind for 289
+# days because scripts/semantic-indexer.js could not load (ESM/CJS mix) and NOTHING invoked it —
+# an instrument nobody invokes is indistinguishable from an absent one. This workflow is the
+# standing invocation: weekly incremental refresh, always-on GitHub Actions, independent of any
+# coordinator/worker session.
+#
+# Incremental mode UPSERTS (no destructive clear). Batch refusals name themselves (layer 6) and
+# fall back to per-row writes so one refused row cannot poison its batch (layer 7). SQL entities
+# ('table'/'view') keep being refused until the chairman-gated 20260809 entity_type widening
+# migration is applied — a KNOWN, DECLARED gap the job's log states rather than hides.
+
+on:
+  schedule:
+    # Weekly, Sunday 04:17 UTC — embedding ~18k entities costs real API quota; weekly matches
+    # how fast the entity population actually drifts, and the offset dodges the o'clock herd.
+    - cron: '17 4 * * 0'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ${{ github.workflow }}
+  cancel-in-progress: false
+
+jobs:
+  index:
+    name: Incremental semantic index refresh
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+
+    env:
+      SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+      SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
+      GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
+      OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: 'npm'
+
+      - name: Install dependencies
+        run: npm ci --ignore-scripts
+
+      - name: Run incremental index
+        run: node scripts/semantic-indexer.js --incremental
+
+      - name: Verify rows landed (data-present, not code-present)
+        # Repair-without-data completes on code merged while the table stays partial. Gate the
+        # job's green on the DATA: every scanned top-level directory must have rows.
+        run: |
+          node --input-type=module -e "
+          import { createSupabaseServiceClient } from './lib/supabase-client.js';
+          const db = createSupabaseServiceClient();
+          let failed = false;
+          // 'database' rides at >0 despite the unapplied entity_type widening: SQL
+          // function entities use the allowed 'function' type, so at least those land;
+          // table/view rows stay a declared gap until the chairman-gated migration.
+          for (const p of ['src', 'scripts', 'lib', 'tests', 'database']) {
+            const { count, error } = await db.from('codebase_semantic_index')
+              .select('*', { count: 'exact', head: true }).ilike('file_path', p + '%');
+            const n = error ? null : count;
+            console.log(p.padEnd(10), n === null ? 'UNREADABLE: ' + error.message : n);
+            if (n === null || n === 0) failed = true;
+          }
+          if (failed) { console.error('Index is PARTIAL or unreadable — a scanned directory has zero rows.'); process.exit(1); }
+          "
