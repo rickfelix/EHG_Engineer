@@ -256,7 +256,33 @@ async function indexEntities(entities, options) {
         } else {
           console.error('     ↳ no control characters found in this batch — cause is NOT the known U+0000 case');
         }
-        errors += batch.length;
+
+        // Layer 7: DO NOT LET ONE REFUSED ROW POISON ITS BATCH. A single row Postgres
+        // refuses (e.g. entity_type 'table'/'view' while the 20260809 widening migration is
+        // unapplied) failed the whole 50-row statement, so 49 innocent entities vanished
+        // with it — same class as layer 4, where one duplicate discarded the batch. Fall
+        // back to per-row upserts: constraint-agnostic (no allowed-value list to drift from
+        // the live constraint), self-healing (when the DDL applies, the same rows just
+        // start landing), and it names each refused row exactly.
+        let rowFailures = 0;
+        const refusedByReason = new Map();
+        for (const row of deduped) {
+          const { error: rowError } = await supabase
+            .from('codebase_semantic_index')
+            .upsert(row, { onConflict: 'file_path,entity_name,entity_type', ignoreDuplicates: false });
+          if (rowError) {
+            rowFailures++;
+            const key = `${rowError.code || '?'} ${rowError.message}`.slice(0, 120);
+            if (!refusedByReason.has(key)) refusedByReason.set(key, []);
+            refusedByReason.get(key).push(`${row.file_path}::${row.entity_name} (${row.entity_type})`);
+          } else {
+            indexed++;
+          }
+        }
+        for (const [reason, rows] of refusedByReason) {
+          console.error(`     ↳ ${rows.length} row(s) refused [${reason}]: ${rows.slice(0, 3).join(', ')}${rows.length > 3 ? ', …' : ''}`);
+        }
+        errors += rowFailures;
       } else {
         // Count what was actually WRITTEN, not what was offered — `batch.length` over-reports by
         // exactly the number de-duplicated above, and a seeder that inflates its own success count
@@ -267,8 +293,12 @@ async function indexEntities(entities, options) {
         }
       }
 
-    } catch (_error) {
-      console.error(`  ❌ Batch processing error: ${error.message}`);
+    } catch (batchErr) {
+      // This catch previously bound `_error` but reported `error.message` — a ReferenceError
+      // INSIDE the error path, which killed the whole run as "Fatal error: error is not defined"
+      // and hid the real cause. Measured consequence: the 2026-08-09 seed run died partway
+      // (src=100, scripts=1749, lib/tests/database=0 rows) with no usable diagnostic.
+      console.error(`  ❌ Batch processing error: ${batchErr.message}`);
       errors += batch.length;
     }
   }
@@ -350,8 +380,10 @@ async function main() {
         const relPath = path.relative(applicationRoot, filePath);
         console.log(`  ${relPath}: ${entities.length} entities`);
       }
-    } catch (_error) {
-      console.error(`  ⚠️  Error processing ${filePath}: ${error.message}`);
+    } catch (fileErr) {
+      // Same defect as the batch catch above: `_error` bound, `error` reported — the error
+      // path itself threw. A reporter that crashes on report is the class this SD removes.
+      console.error(`  ⚠️  Error processing ${filePath}: ${fileErr.message}`);
     }
   }
 
