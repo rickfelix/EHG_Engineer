@@ -134,10 +134,35 @@ jobs:
       # the SD's only end-to-end safety proof was unreachable in CI: green forever, asserting
       # nothing. Runs AFTER the sync check so its ledger backup/restore can never be mistaken
       # for seeder drift.
-      - name: FR-6 fail-open wiring proof
+      # SD-LEO-INFRA-VITEST-TIER-REAL-001: this was the ONE db-vitest CI consumer with no dbgate
+      # guard. Under the old discovery gate it silently collected ZERO files (no SUPABASE_URL in
+      # this env, so the db project was empty and passWithNoTests made it green-asserting-nothing).
+      # Now that db discovery is ungated, the file RESOLVES here — and without designation its
+      # beforeAll DB work would be refused loudly (DB_TIER_BLOCKED) and fail the step. The gate
+      # below makes the not-running state explicit instead of red-or-invisible.
+      - name: Assess db target designation
+        id: dbgate
         if: always()
+        run: |
+          node --input-type=module -e "
+          import { assessDbTarget } from './tests/helpers/db-target.js';
+          import fs from 'node:fs';
+          const r = assessDbTarget(process.env);
+          console.log('db target assessment: ' + JSON.stringify(r));
+          fs.appendFileSync(process.env.GITHUB_OUTPUT, 'allowed=' + (r.allowed ? 'true' : 'false') + '\n');
+          fs.appendFileSync(process.env.GITHUB_OUTPUT, 'reason=' + (r.reason || '') + '\n');
+          "
+
+      - name: FR-6 fail-open wiring proof
+        if: always() && steps.dbgate.outputs.allowed == 'true'
         env:
           SUPABASE_DB_PASSWORD: ${{ secrets.SUPABASE_DB_PASSWORD }}
           SUPABASE_POOLER_URL: ${{ secrets.SUPABASE_POOLER_URL }}
           DATABASE_URL: ${{ secrets.DATABASE_URL }}
         run: npx vitest run tests/integration/migration-apply-state-ledger-wiring.test.js --project db
+
+      - name: FR-6 wiring proof SKIPPED — no designated db target
+        if: always() && steps.dbgate.outputs.allowed != 'true'
+        run: |
+          echo "::warning title=FR-6 fail-open wiring proof SKIPPED::db tier has no designated non-production target (reason: ${{ steps.dbgate.outputs.reason }}). The end-to-end proof did not run — designate a non-prod ref (tests/helpers/db-target.js) to restore it."
+          echo "SKIPPED: FR-6 wiring proof (db tier not designated: ${{ steps.dbgate.outputs.reason }})" >> "$GITHUB_STEP_SUMMARY"
