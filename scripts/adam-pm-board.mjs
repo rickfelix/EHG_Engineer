@@ -31,7 +31,12 @@ const { createClient } = require('@supabase/supabase-js');
 // to replace.
 const { computeDriveState } = require('../lib/governance/drive-state/index.cjs');
 const { ADAPTERS } = require('../lib/governance/drive-state/adapters.cjs');
-const { renderDriveState, renderRefusal } = require('../lib/governance/drive-state/render.cjs');
+const { renderRefusal } = require('../lib/governance/drive-state/render.cjs');
+// SD-LEO-INFRA-DRIVE-STATE-FORCING-001: the board composes through the forcing layer so a stalled
+// axis surfaces as an OWED-ACTION hard line and withholds the summary tail. spans/history stay
+// null ON PURPOSE — this board must not reference the verdict store (the single-writer invariant,
+// test-enforced), so its owed-actions derive from the live verdict alone.
+const { composeDriveStateReport } = require('../lib/governance/drive-state/owed-actions.cjs');
 
 function makeClient() {
   const url = process.env.SUPABASE_URL || process.env.NEXT_PUBLIC_SUPABASE_URL;
@@ -100,12 +105,15 @@ export async function buildDriveStateSection(sb, { now } = {}) {
   let verdict = null;
   try {
     verdict = await computeDriveState({ adapters: ADAPTERS, supabase: sb, now });
-    // renderDriveState returns an ARRAY OF LINES, not a string. Joining is the caller's job and
-    // forgetting it prints a comma-spliced blob, so it is done once, here.
-    return { lines: renderDriveState(verdict), verdict, refused: null };
+    // composeDriveStateReport returns an ARRAY OF LINES, not a string. Joining is the caller's job
+    // and forgetting it prints a comma-spliced blob, so it is done once, here. When nothing is
+    // owed the lines are byte-identical to renderDriveState; when an axis is stalled the summary
+    // tail is withheld and OWED-ACTION lines appear (SD-LEO-INFRA-DRIVE-STATE-FORCING-001 FR-4).
+    const composed = composeDriveStateReport({ verdict, spans: null, priorNewestRecordedAt: null, now });
+    return { lines: composed.lines, verdict, refused: null, owedActions: composed.owedActions };
   } catch (e) {
     const reason = e && e.message ? e.message : String(e);
-    return { lines: renderRefusal(reason), verdict, refused: reason };
+    return { lines: renderRefusal(reason), verdict, refused: reason, owedActions: [] };
   }
 }
 

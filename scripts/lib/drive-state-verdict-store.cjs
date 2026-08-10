@@ -159,6 +159,13 @@ async function currentStallSpans({ supabase, table = TABLE, limit = 2000 } = {})
     byAxis.get(row.axis).push(row);
   }
 
+  // SD-LEO-INFRA-DRIVE-STATE-FORCING-001 FR-6: the limit is a GLOBAL newest-first window (six
+  // rows per run across all axes, so ~limit/6 runs per axis). A span that consumed every fetched
+  // row for its axis while the window was full may extend beyond the window — its `runs` is a
+  // floor, not a count, and reporting it as exact silently understates precisely the longest
+  // stalls. `truncated` makes that boundary visible so consumers can render `runs>=N`.
+  const fetchFull = (data || []).length === limit;
+
   const out = [];
   for (const [axis, rows] of byAxis) {
     // rows are newest-first. The current span ends the moment a non-STALLED reading appears.
@@ -166,10 +173,31 @@ async function currentStallSpans({ supabase, table = TABLE, limit = 2000 } = {})
     let i = 0;
     while (i < rows.length && rows[i].state === STATE.STALLED) i += 1;
     const span = rows.slice(0, i);
-    out.push({ axis, since: span[span.length - 1].recorded_at, runs: span.length });
+    out.push({ axis, since: span[span.length - 1].recorded_at, runs: span.length, truncated: fetchFull && i === rows.length });
   }
   out.sort((a, b) => String(a.since).localeCompare(String(b.since)));
   return out;
 }
 
-module.exports = { persistDriveState, currentStallSpans, TABLE };
+/**
+ * SD-LEO-INFRA-DRIVE-STATE-FORCING-001 FR-6 — the freshness input for the stale-basis guard.
+ * MUST be read BEFORE this tick persists: measured after, the newest row is this tick's own and
+ * the basis always reads ~0s old, so the guard can never fire (the exact blindness the PLAN
+ * TESTING pass caught in the first draft). Returns null when no history exists at all.
+ */
+async function newestRecordedAt({ supabase, table = TABLE } = {}) {
+  if (!supabase) throw new Error('newestRecordedAt(): supabase client is required');
+  const { data, error } = await supabase
+    .from(table)
+    .select('recorded_at')
+    .order('recorded_at', { ascending: false })
+    .limit(1);
+  if (error) {
+    const err = new Error(`newestRecordedAt(): read failed (${error.code || 'no-code'}): ${error.message}`);
+    err.cause = error;
+    throw err;
+  }
+  return (data && data[0] && data[0].recorded_at) || null;
+}
+
+module.exports = { persistDriveState, currentStallSpans, newestRecordedAt, TABLE };

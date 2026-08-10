@@ -330,21 +330,72 @@ try {
  * by code that never runs is the 'registration is not drainage' anti-precedent.
  */
 async function reportDriveState(sb) {
-  const { computeDriveState } = require('../lib/governance/drive-state/index.cjs');
-  const { ADAPTERS } = require('../lib/governance/drive-state/adapters.cjs');
-  const { renderDriveState, renderRefusal } = require('../lib/governance/drive-state/render.cjs');
+  return runDriveStateSection(sb);
+}
+
+/**
+ * SD-LEO-INFRA-DRIVE-STATE-FORCING-001 — the drive-state section, EXPORTED AND DEPENDENCY-
+ * INJECTED so tests EXECUTE the wiring (compute → read-history → compose → persist → emit →
+ * meta-control) rather than regex it. The regex-only precedent let a dead-coded persist survive
+ * 37,365 tests (see persistRenderedVerdict's header); this section carries strictly more wiring,
+ * so the same extract-and-export defence applies to all of it.
+ *
+ * ORDER IS LOAD-BEARING, twice:
+ *  - History (spans + prior-newest recorded_at) is read BEFORE this tick persists. Read after,
+ *    the newest row is this tick's own, the basis always reads fresh, and the stale-basis guard
+ *    (FR-6) can never fire.
+ *  - The lines are printed before the persist and never gated on it (the OBSERVABILITY-001 rule).
+ *
+ * FAILURE SURFACES, per class:
+ *  - compute/compose failure → the existing REFUSAL banner (unchanged channel).
+ *  - persist failure → persistRenderedVerdict's own visible banner (unchanged).
+ *  - emission/meta-control failure → a DISTINCT loud banner. NOT renderRefusal — that banner says
+ *    "verdict incomplete", which is false for a forcing miss, and collapsing the two vocabularies
+ *    is the same defect as folding UNMEASURABLE into CLEAR, one layer up. Non-fatal to the rest
+ *    of the review (matching the persist-failure precedent): the loudness is the banner plus the
+ *    withheld all-green summary already in the lines.
+ */
+async function runDriveStateSection(sb, deps = {}) {
+  const { renderRefusal } = require('../lib/governance/drive-state/render.cjs');
+  const { composeDriveStateReport, assertForcingRan } = require('../lib/governance/drive-state/owed-actions.cjs');
+
+  const compute = deps.compute || (async () => {
+    const { computeDriveState } = require('../lib/governance/drive-state/index.cjs');
+    const { ADAPTERS } = require('../lib/governance/drive-state/adapters.cjs');
+    return computeDriveState({ adapters: ADAPTERS, supabase: sb });
+  });
+  const readHistory = deps.readHistory || (async () => {
+    const { currentStallSpans, newestRecordedAt } = require('./lib/drive-state-verdict-store.cjs');
+    const priorNewest = await newestRecordedAt({ supabase: sb });
+    const spans = await currentStallSpans({ supabase: sb });
+    return { spans, priorNewest };
+  });
+  const persist = deps.persist || persistRenderedVerdict;
+  const emit = deps.emit || (async (owedActions) => {
+    const { emitOwedActions } = require('./lib/drive-state-owed-emitter.cjs');
+    return emitOwedActions({ supabase: sb, owedActions });
+  });
+  const assertRan = deps.assertRan || assertForcingRan;
+  const log = deps.log || console.log;
 
   let lines;
   let verdict = null;
+  let owedActions = [];
   try {
-    verdict = await computeDriveState({ adapters: ADAPTERS, supabase: sb });
-    lines = renderDriveState(verdict); // returns an ARRAY of lines
+    verdict = await compute();
+    // FR-6: history BEFORE persist — see the header.
+    const { spans, priorNewest } = await readHistory();
+    const composed = composeDriveStateReport({ verdict, spans, priorNewestRecordedAt: priorNewest });
+    lines = composed.lines;
+    owedActions = composed.owedActions;
   } catch (e) {
     verdict = null;
     lines = renderRefusal(e && e.message ? e.message : String(e));
   }
-  console.log('');
-  for (const line of lines) console.log(line);
+  log('');
+  for (const line of lines) log(line);
+
+  if (!verdict) return { verdict, owedActions, forcing: 'refused' };
 
   // SD-LEO-INFRA-DRIVE-STATE-OBSERVABILITY-001 FR-3 — THE SINGLE WRITER.
   //
@@ -354,15 +405,22 @@ async function reportDriveState(sb) {
   // its cadence is regular and external, which is what makes a time series interpretable; the PM
   // board is on-demand and would sample irregularly. THAT IS A DECISION WITH A REASON — if you are
   // here to "fix" the missing write on the PM board, this comment is why it is missing.
-  //
-  // ORDER IS LOAD-BEARING: the render above has already happened and is never gated on the write.
-  //
-  // THE FAILURE IS VISIBLE, NOT SWALLOWED. An earlier draft required the output be byte-identical
-  // under a persistence failure — but byte-identical means INVISIBLE, and persistence could then be
-  // dead for weeks while every hourly report looked perfectly normal. That is precisely the defect
-  // this SD exists to remove, recreated one layer down. So the existing lines are untouched AND a
-  // distinguishable banner is printed when the write fails.
-  await persistRenderedVerdict(verdict, sb);
+  await persist(verdict, sb);
+
+  // SD-LEO-INFRA-DRIVE-STATE-FORCING-001 FR-1/FR-5 — emit owed-actions, then the meta-control
+  // asserts (by re-derivation + post-insert readback) that every stalled axis got one.
+  try {
+    const readback = await emit(owedActions);
+    assertRan({ verdict, emittedReadback: readback });
+    return { verdict, owedActions, forcing: 'ok' };
+  } catch (e) {
+    const msg = e && e.message ? e.message : String(e);
+    log('DRIVE-STATE FORCING-FUNCTION — MISS OR EMISSION FAILURE');
+    log('─'.repeat(72));
+    log('  ' + msg);
+    log('  A stalled axis may have NO owed-action on the lane. This tick is NOT all-green.');
+    return { verdict, owedActions, forcing: 'miss', error: msg };
+  }
 }
 
 /**
@@ -537,4 +595,4 @@ if (require.main === module) {
   }).catch(function (e) { console.error('[HOURLY-REVIEW] error (non-fatal): ' + e.message); }).finally(function () { process.exit(0); });
 }
 
-module.exports = { dispatchSolomonReminder, SOLOMON_REMINDER, buildFoundationsPointer, reconcileStaleSolomonInbound, persistRenderedVerdict };
+module.exports = { dispatchSolomonReminder, SOLOMON_REMINDER, buildFoundationsPointer, reconcileStaleSolomonInbound, persistRenderedVerdict, runDriveStateSection };

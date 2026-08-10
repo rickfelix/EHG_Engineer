@@ -127,3 +127,93 @@ describe('a missing or refused verdict writes nothing', () => {
     expect(c.calls.tables).toHaveLength(0);
   });
 });
+
+/**
+ * SD-LEO-INFRA-DRIVE-STATE-FORCING-001 — the forcing wiring, EXECUTED at the exported seam.
+ * runDriveStateSection is dependency-injected precisely so this file can run the real
+ * orchestration (compute → read-history → compose → persist → emit → meta-control) and pin the
+ * DATA FLOW and CALL ORDER, not a statement form a dead-code mutation would survive.
+ */
+describe('[FORCING, executed] runDriveStateSection wires history-before-persist, emission and the meta-control', () => {
+  const { runDriveStateSection } = require_('../../../scripts/coordinator-hourly-review.cjs');
+
+  const stalledVerdict = () => {
+    const v = verdict();
+    v.axes[4].state = STATE.STALLED; // fleet_health
+    return v;
+  };
+
+  function harness({ compute, emit, readHistory } = {}) {
+    const order = [];
+    const logs = [];
+    const deps = {
+      compute: compute || (async () => { order.push('compute'); return stalledVerdict(); }),
+      readHistory: readHistory || (async () => { order.push('readHistory'); return { spans: [], priorNewest: null }; }),
+      persist: async () => { order.push('persist'); return { persisted: true }; },
+      emit: emit || (async (owed) => {
+        order.push('emit');
+        return owed.map((oa, i) => ({ id: i + 1, payload: { owed_axis: oa.axis } }));
+      }),
+      log: (l) => logs.push(String(l)),
+    };
+    return { order, logs, deps };
+  }
+
+  it('[FR-6 ORDER] history is read BEFORE the persist — read after, the stale-basis guard can never fire', async () => {
+    const { order, deps } = harness();
+    const res = await runDriveStateSection({}, deps);
+    expect(order.indexOf('readHistory')).toBeGreaterThan(-1);
+    expect(order.indexOf('readHistory'), 'readHistory must precede persist').toBeLessThan(order.indexOf('persist'));
+    expect(res.forcing).toBe('ok');
+  });
+
+  it('[FR-1 executed] a stalled axis flows compute → derive → emit, and the meta-control passes on a faithful readback', async () => {
+    const { order, logs, deps } = harness();
+    const res = await runDriveStateSection({}, deps);
+    expect(order).toEqual(['compute', 'readHistory', 'persist', 'emit']);
+    expect(res.owedActions).toHaveLength(1);
+    expect(res.owedActions[0].axis).toBe('fleet_health');
+    const out = logs.join('\n');
+    expect(out).toContain('OWED-ACTION');
+    expect(out, 'the summary tail must be withheld while an action is owed').not.toContain('  axes=');
+  });
+
+  it('[FR-5 PLANTED MISS, executed] an emission that silently drops the owed-action produces the LOUD forcing banner', async () => {
+    const { logs, deps } = harness({ emit: async () => [] }); // computed, stalled, emitted NOTHING
+    const res = await runDriveStateSection({}, deps);
+    expect(res.forcing).toBe('miss');
+    const out = logs.join('\n');
+    expect(out).toContain('DRIVE-STATE FORCING-FUNCTION — MISS OR EMISSION FAILURE');
+    expect(out).toContain('DRIVE_STATE_FORCING_MISS');
+    expect(out).toContain('fleet_health');
+    expect(out).toContain('NOT all-green');
+  });
+
+  it('[CONTROL] nothing stalled → no owed-actions, no miss banner, byte-normal tail', async () => {
+    const { logs, deps } = harness({ compute: async () => verdict() });
+    const res = await runDriveStateSection({}, deps);
+    expect(res.forcing).toBe('ok');
+    expect(res.owedActions).toHaveLength(0);
+    const out = logs.join('\n');
+    expect(out).toContain('  axes=');
+    expect(out).not.toContain('OWED-ACTION');
+    expect(out).not.toContain('FORCING-FUNCTION — MISS');
+  });
+
+  it('[REFUSAL PATH] a compute failure renders the refusal banner and never reaches persist or emit', async () => {
+    const { order, logs, deps } = harness({ compute: async () => { throw new Error('probe down'); } });
+    const res = await runDriveStateSection({}, deps);
+    expect(res.forcing).toBe('refused');
+    expect(order).not.toContain('persist');
+    expect(order).not.toContain('emit');
+    expect(logs.join('\n')).toContain('NOT an all-clear');
+  });
+
+  it('[HISTORY-READ FAILURE] a spans read failure refuses loudly rather than composing on a blind basis', async () => {
+    const { order, logs, deps } = harness({ readHistory: async () => { throw new Error('history unreachable'); } });
+    const res = await runDriveStateSection({}, deps);
+    expect(res.forcing).toBe('refused');
+    expect(logs.join('\n')).toContain('history unreachable');
+    expect(order).not.toContain('persist');
+  });
+});
