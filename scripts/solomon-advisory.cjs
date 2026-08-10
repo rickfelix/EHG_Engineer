@@ -61,6 +61,9 @@ const { MESSAGE_KINDS, MESSAGE_KIND_SET } = require('../lib/coordinator/message-
 const {
   REPLY_CLASSES, isValidReplyClass, computeReplyExpectedBy, checkAndPingOverdueReplies,
   alreadyAnswered: sharedAlreadyAnswered,
+  // SD-LEO-INFRA-ALARM-HONESTY-001 (FR-1): the ONE pre-send-CC predicate — the local copy
+  // in orderSolomonInboxRows is deleted in favor of this import (never a re-derived copy).
+  isPreSendCc,
 } = require('../lib/coordinator/reply-class.cjs');
 // SD-LEO-INFRA-COMMS-PRESENCE-GROUNDING-SIGNALS-001 — same shared presence/read-receipt/working-signal
 // lane Adam wires (lib/coordinator/presence-grounding-signals.cjs) — no per-role reimplementation.
@@ -1140,7 +1143,8 @@ async function main() {
  * @returns {Array} a new array; the input is not mutated
  */
 function orderSolomonInboxRows(rows = []) {
-  const isPreSendCc = (r) => (r && r.payload && r.payload.consult_purpose) === 'pre_send';
+  // isPreSendCc now imported from reply-class.cjs (SD-LEO-INFRA-ALARM-HONESTY-001 FR-1) —
+  // the same predicate ping_on_silence excludes on, so ordering and dunning cannot drift.
   // Tiebreak on created_at EXPLICITLY rather than relying on the caller's order. The live query
   // does sort created_at ASC, so index-stability would behave identically in production — and
   // that is exactly what makes it the wrong thing to depend on: the function would silently stop

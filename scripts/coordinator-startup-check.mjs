@@ -122,6 +122,7 @@ export const RESPONSIBILITIES = [
 //   gauge-runner                | SAFE    | gauge-runner.mjs's own header: "Idempotent (safe to re-run — findings are [deduped])"
 //   feedback-sla                | SAFE    | lib/coordinator/feedback-sla-gauge.cjs's remindSlaBreaches is rate-limited/deduped per category per day via metadata.sla_key, per its own STANDARD_LOOPS comment above
 //   solomon-ledger-resurface     | SAFE    | solomon-ledger-pending-resurface.cjs's own header: capped to once per stale ledger row per day via payload.dedup_key checked before insert
+//   hourly-review               | SAFE    | SD-LEO-INFRA-ALARM-HONESTY-001: both reminder legs call hasRecentReminder (query-before-insert on payload kind+topic+target within a 55min window, fail-open on read faults) — a double-fire (measured ~65min apart pre-fix) dedups to one delivered reminder
 //
 // All 13 verified SAFE for an occasional session+GHA double-fire. None required a code change to
 // reach this verdict — the additive migration pattern only works because these loops were already
