@@ -28,5 +28,14 @@
     "review_by": "2026-10-23T19:13:40.087Z",
     "source": "auto:chairman-gate-marker",
     "corroborated": false
+  },
+  "20260803_current_wave_must_carry_items.sql": {
+    "disposition": "DEFERRED",
+    "reason": "Migration header verbatim: \"STAGED. NOT APPLIED. ... Applying the trigger below does not retroactively reject existing rows, but the FIRST update to Wave 0 would then fail, and any attempt to add the equivalent CHECK constraint would fail immediately. So this migration has a HARD PREREQUISITE: Wave 0 must first either gain its items or move off horizon='now'. ... THAT IS A PLAN DECISION, NOT AN ENGINEERING ONE, which is why this SD stages the mechanism and does not resolve the violation.\" Surfaced as a CEREMONY_PENDING gap by SD-LEO-INFRA-APPLY-STATE-CEREMONY-PENDING-001's new database/chairman-gated/ scan. Coordinator ruling (signal 13b6e577, reply ad1dce17, 2026-08-11): defer until Wave 0 either gains items or moves off horizon='now' — do not apply against this precondition.",
+    "owner": "chairman",
+    "sd_key": "SD-LEO-INFRA-APPLY-STATE-CEREMONY-PENDING-001",
+    "recorded_at": "2026-08-11T13:55:00.000Z",
+    "source": "manual:coordinator-ruling",
+    "corroborated": true
   }
 }
