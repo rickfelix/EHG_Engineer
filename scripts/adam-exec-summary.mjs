@@ -20,6 +20,10 @@ import { pathToFileURL } from 'url';
 import { resolve } from 'path';
 import { liveFleetWorkers, isFleetWorker, FREEZE_TERM_COLUMNS } from '../lib/fleet/genuine-worker.mjs';
 import { renderDecisionLines, prepareDecisions, DEAD_VENTURE_STATUSES } from '../lib/chairman/decision-layman.mjs';
+// SD-LEO-INFRA-VENTURE-STATUS-LANGUAGE-001 (FR-3): batch-fetch measured venture build status and
+// attach it to rows before rendering, so decision-layman.mjs's pure renderer can flag a
+// build-status word in free-text prose that contradicts measured factory state.
+import { fetchVentureBuildStatusBatch } from '../lib/governance/venture-build-status.mjs';
 import { resolveActionsStatusLabel } from '../lib/chairman/actions-status-label.mjs';
 // SD-LEO-INFRA-AUTOMATED-ONE-ROADMAP-001 (FR-4): the LIVE VDR build-% gauge, replacing the
 // static .adam-vision-build.json number.
@@ -93,7 +97,21 @@ try {
     }
   }
 } catch (e) { console.warn('[adam-email] venture-status filter skipped (fail-soft): ' + (e?.message || e)); }
-const preparedRows = prepareDecisions(rows, { deadVentureIds });
+
+// SD-LEO-INFRA-VENTURE-STATUS-LANGUAGE-001 (FR-3): attach measured build status to every row that
+// carries a venture_id, so a stale "built and waiting"-style claim in free-text prose renders with
+// the factory truth instead of unchallenged. Fail-soft: a fetch error leaves rows unattached, which
+// decision-layman.mjs treats identically to pre-SD behavior (no attached status = no check).
+let rowsWithBuildStatus = rows;
+try {
+  const ventureIds = [...new Set(rows.filter((r) => r.venture_id).map((r) => r.venture_id))];
+  if (ventureIds.length) {
+    const statusMap = await fetchVentureBuildStatusBatch(db, ventureIds);
+    rowsWithBuildStatus = rows.map((r) => (r.venture_id && statusMap.has(r.venture_id) ? { ...r, venture_build_status: statusMap.get(r.venture_id) } : r));
+  }
+} catch (e) { console.warn('[adam-email] venture-build-status attach skipped (fail-soft): ' + (e?.message || e)); }
+
+const preparedRows = prepareDecisions(rowsWithBuildStatus, { deadVentureIds });
 const { count: nActions, lines } = renderDecisionLines(preparedRows, new Date(t));
 
 // Quiescence gate (QF-20260612-437): skip the hourly send when the fleet is fully OFF — UNLESS the
