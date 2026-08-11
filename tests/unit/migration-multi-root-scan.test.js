@@ -174,10 +174,26 @@ describe('TS-3 — workflow and config static assertions (FR-B/FR-C)', () => {
     expect(block).toContain('test-service-role-key-not-real');
   });
 
-  it('the DEFAULT_EXTRA_ROOTS constant and the workflow filter name the same three roots (no drift)', () => {
+  it('the DEFAULT_EXTRA_ROOTS constant and the workflow filter name the same roots (no drift)', () => {
     for (const root2 of DEFAULT_EXTRA_ROOTS) {
       expect(wf, root2).toContain(`'${root2}/*.sql'`);
     }
-    expect(DEFAULT_EXTRA_ROOTS).toHaveLength(3);
+    // SD-LEO-INFRA-APPLY-STATE-CEREMONY-PENDING-001 (FR-1) added database/chairman-gated as a
+    // 4th scanned root — bumped from 3 deliberately, not silently, so a future 5th root drift
+    // still reds this assertion rather than the count quietly ratcheting with no test change.
+    expect(DEFAULT_EXTRA_ROOTS).toHaveLength(4);
+  });
+});
+
+describe('SD-LEO-INFRA-APPLY-STATE-CEREMONY-PENDING-001 FR-1 — database/chairman-gated/ is scanned', () => {
+  it('a chairman-gated file enters the scan with a repo-relative id under its own root', () => {
+    mkdirSync(path.join(root, 'database', 'chairman-gated'), { recursive: true });
+    writeFileSync(path.join(root, 'database', 'chairman-gated', '20260807_gated_thing.sql'), 'CREATE TABLE gated(x int);');
+    try {
+      const { forward } = listForwardMigrations({ primary, extraRoots: [...DEFAULT_EXTRA_ROOTS], repoRoot: root });
+      expect(forward).toContain('database/chairman-gated/20260807_gated_thing.sql');
+    } finally {
+      rmSync(path.join(root, 'database', 'chairman-gated'), { recursive: true, force: true });
+    }
   });
 });

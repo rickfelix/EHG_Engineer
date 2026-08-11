@@ -129,6 +129,31 @@ describe('TS-5: PARTIAL is not APPLIED', () => {
   });
 });
 
+describe('SD-LEO-INFRA-APPLY-STATE-CEREMONY-PENDING-001 TS-6: CEREMONY_PENDING blocks with zero gate changes', () => {
+  it('blocks a chairman-gated migration reporting CEREMONY_PENDING, same as NOT_APPLIED/PARTIAL', async () => {
+    // Proves the FR-3 contract: this gate's status !== APPLIED && status !== NO_DDL check
+    // already generalizes to the new status value — no gates.js source change was required.
+    classifyMigrationApplyState.mockResolvedValue({
+      files: [{
+        file: 'database/chairman-gated/20260807_belt_capacity_verdicts.sql',
+        status: 'CEREMONY_PENDING', missing: ['table:belt_capacity_verdicts'], age_days: 4,
+      }],
+      error: null
+    });
+    const r = await gate().validator(sdWith({
+      requires_chairman_apply: true,
+      migration_files: ['database/chairman-gated/20260807_belt_capacity_verdicts.sql']
+    }));
+    expect(r.passed).toBe(false);
+    expect(r.score).toBe(0);
+    const text = r.issues.join('\n');
+    expect(text).toContain('database/chairman-gated/20260807_belt_capacity_verdicts.sql');
+    expect(text).toContain('CEREMONY_PENDING');
+    // gated-aware remediation text (line 1446-1448) must still fire for this status.
+    expect(text).toMatch(/chairman GO/i);
+  });
+});
+
 describe('TS-4: fail closed - could-not-determine BLOCKS, it never passes', () => {
   it('blocks when the classifier reports an error (e.g. database unreachable)', async () => {
     classifyMigrationApplyState.mockResolvedValue({ files: [], error: 'connect ECONNREFUSED' });

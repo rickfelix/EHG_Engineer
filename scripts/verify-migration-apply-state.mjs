@@ -164,7 +164,17 @@ export const ARTIFACT_RE = /(_DOWN|_rollback|_DEFERRED)\.sql$/i;
  * left to verify. Any other readdir error stays fail-closed (MISCONFIG upstream), matching the
  * unreadable-entry posture in main().
  */
-export const DEFAULT_EXTRA_ROOTS = ['database/functions', 'database/manual-updates', 'supabase/migrations'];
+// SD-LEO-INFRA-APPLY-STATE-CEREMONY-PENDING-001 (FR-1): database/chairman-gated/ is
+// deliberately excluded from the AUTO-APPLY scanner (pending-migrations-check.js) as a
+// safety mechanism, but this READ-ONLY reporting verifier is a separate consumer — its
+// exclusion here was an accidental inheritance, not a safety boundary, and left a
+// chairman-gated migration invisible to both this report and the downstream
+// CHAIRMAN_APPLY_VERIFICATION gate for days. Scanning it here does not affect what
+// auto-applies; classifyFiles() (below) also gives it a distinct CEREMONY_PENDING status.
+export const DEFAULT_EXTRA_ROOTS = ['database/functions', 'database/manual-updates', 'supabase/migrations', 'database/chairman-gated'];
+
+/** Repo-relative-id prefix identifying a chairman-gated migration (FR-2). */
+const CHAIRMAN_GATED_PREFIX = 'database/chairman-gated/';
 const REPO_ROOT = path.resolve(__dirname, '..');
 
 export function listForwardMigrations({ primary = MIGRATIONS_DIR, extraRoots = DEFAULT_EXTRA_ROOTS, repoRoot = REPO_ROOT } = {}) {
@@ -451,8 +461,28 @@ async function resolveLive(client, expected) {
   return live;
 }
 
-/** Per-file classification from its SURVIVING expected objects (drop-aware). */
-export function classifyFiles(orderedFiles, expected, perFile, live) {
+/**
+ * Whole calendar days between a migrationDateToken() (YYYYMMDD-leading) and `now`. Pure and
+ * injectable (TR-2) — never reads a live clock itself, so classifyFiles stays unit-testable
+ * with a fixed reference date instead of drifting a fraction of a day per test run.
+ */
+function daysSinceToken(token, now) {
+  const y = Number(token.slice(0, 4));
+  const m = Number(token.slice(4, 6));
+  const d = Number(token.slice(6, 8));
+  const tokenUtc = Date.UTC(y, m - 1, d);
+  const nowUtc = Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate());
+  return Math.max(0, Math.round((nowUtc - tokenUtc) / 86400000));
+}
+
+/**
+ * Per-file classification from its SURVIVING expected objects (drop-aware).
+ *
+ * `now` defaults to the live clock for production callers but is an explicit injection point
+ * (TR-2) so age_days is deterministic under test — classifyFiles itself never calls
+ * Date.now()/new Date() unconditionally.
+ */
+export function classifyFiles(orderedFiles, expected, perFile, live, now = new Date()) {
   const survivingByFile = new Map();
   for (const { cls, name, file } of expected.values()) {
     if (!survivingByFile.has(file)) survivingByFile.set(file, []);
@@ -465,8 +495,42 @@ export function classifyFiles(orderedFiles, expected, perFile, live) {
     if (!surviving.length) return { file, status: 'APPLIED', missing: [], objects: 0, note: 'all objects superseded by later migrations' };
     const missing = surviving.filter((o) => !live.has(`${o.cls}:${o.name}`));
     const status = missing.length === 0 ? 'APPLIED' : missing.length === surviving.length ? 'NOT_APPLIED' : 'PARTIAL';
-    return { file, status, missing, objects: surviving.length };
+    const result = { file, status, missing, objects: surviving.length };
+    // FR-2: a chairman-gated file that would otherwise read NOT_APPLIED/PARTIAL is an
+    // EXPECTED wait state (merged, awaiting the chairman apply ceremony), not an ordinary
+    // gap — CEREMONY_PENDING says so explicitly and carries age_days so staleness is still
+    // visible. APPLIED/NO_DDL chairman-gated files are unaffected; every non-chairman-gated
+    // file keeps the four-value vocabulary above completely unchanged.
+    if (status !== 'APPLIED' && file.startsWith(CHAIRMAN_GATED_PREFIX)) {
+      result.status = 'CEREMONY_PENDING';
+      const token = migrationDateToken(file);
+      if (token) result.age_days = daysSinceToken(token, now);
+    }
+    return result;
   });
+}
+
+/**
+ * Pure post-classification aggregation: per-status summary counts plus the `gaps` array that
+ * feeds failSet/OUTCOME. Extracted (SD-LEO-INFRA-APPLY-STATE-CEREMONY-PENDING-001 FR-3) so the
+ * "CEREMONY_PENDING must flow into gaps, never just the summary counter" contract is
+ * unit-testable without a live DB or a full CLI run.
+ */
+export function summarizeResults(results, { scanned, excludedDown = 0, droppedLater = 0 } = {}) {
+  const summary = {
+    scanned: scanned ?? results.length,
+    excluded_down: excludedDown,
+    applied: results.filter((r) => r.status === 'APPLIED').length,
+    partial: results.filter((r) => r.status === 'PARTIAL').length,
+    not_applied: results.filter((r) => r.status === 'NOT_APPLIED').length,
+    no_ddl: results.filter((r) => r.status === 'NO_DDL').length,
+    ceremony_pending: results.filter((r) => r.status === 'CEREMONY_PENDING').length,
+    dropped_later: droppedLater,
+  };
+  const gaps = results
+    .filter((r) => r.status === 'PARTIAL' || r.status === 'NOT_APPLIED' || r.status === 'CEREMONY_PENDING')
+    .reverse(); // newest first
+  return { summary, gaps };
 }
 
 // ── CLI ───────────────────────────────────────────────────────────────────────
@@ -598,16 +662,9 @@ async function main() {
   }
 
   const results = classifyFiles(forward, expected, perFile, live);
-  const summary = {
-    scanned: forward.length,
-    excluded_down: down.length,
-    applied: results.filter((r) => r.status === 'APPLIED').length,
-    partial: results.filter((r) => r.status === 'PARTIAL').length,
-    not_applied: results.filter((r) => r.status === 'NOT_APPLIED').length,
-    no_ddl: results.filter((r) => r.status === 'NO_DDL').length,
-    dropped_later: droppedLater.length,
-  };
-  const gaps = results.filter((r) => r.status === 'PARTIAL' || r.status === 'NOT_APPLIED').reverse(); // newest first
+  const { summary, gaps } = summarizeResults(results, {
+    scanned: forward.length, excludedDown: down.length, droppedLater: droppedLater.length,
+  });
 
   // FR-2 recent-vs-legacy partition. failSet drives the --strict exit + GAPS marker + alert.
   // FR-6 layers ledger suppression on top: with no (or a broken) ledger every set below is
