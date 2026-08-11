@@ -442,6 +442,15 @@ export async function surfaceInboxItems(sb) {
 // labelled but non-matches still surface. Read-only surfacing (mirrors drainSmsRelayStaging's
 // all-undrained query in lib/chairman/sms-bridge.js); fail-soft — any error returns rows:[].
 const SMS_INBOUND_CAP = 50;
+// QF-20260810-590: the automated "are you still there?" watchdog is NOT the chairman (witnessed
+// 2026-08-11 01:58Z: it fired the full CHAIRMAN SMS CHANNEL DUTY reply path during quiet hours,
+// burning the presence window diagnosing a bot message). EXACT-PREFIX match on the canonical
+// body, deliberately narrow — an ambiguous/non-matching body must default to the existing hard
+// interrupt (fail-toward-chairman), never the reverse.
+export const WATCHDOG_BODY_PREFIX = "I haven't received any text messages from you in over an hour.";
+export function isWatchdogBody(body) {
+  return typeof body === 'string' && body.startsWith(WATCHDOG_BODY_PREFIX);
+}
 // QF-20260719-825 (layer 2): oversight-staleness backstop. Even with the durable loop
 // entries + the GHA cron (QF-20260719-196), a lost cron must not go unnoticed for days
 // again (coordinator-health evidence was 70.4h stale; the self-score 16 days). Reads the
@@ -929,6 +938,12 @@ async function main() {
       .includes(String(process.env.SMS_RELAY_DRAIN_ENABLED ?? '').trim().toLowerCase());
     for (const s of smsInbound.rows) {
       const detail = `id=${s.id} from=${s.fromPhone} chairman=${s.isChairman} sig=${s.signatureValid} age=${s.ageMin}m body="${s.body}"`;
+      // QF-20260810-590: checked FIRST, unconditionally of the drain flag — a watchdog body is
+      // never the chairman regardless of whether the drain is enabled.
+      if (isWatchdogBody(s.body)) {
+        console.log(`QUIET_TICK_SMS_WATCHDOG=adam ${detail} — automated are-you-still-there watchdog, not the chairman; check your own outbound cadence, do not reply-to-chairman. INFORMATIONAL, not a hard interrupt.`);
+        continue;
+      }
       if (!smsDrainEnabled) {
         // REGRESSION FIX (mine, from QF-20260808-834): the suppressed line used to carry NO token
         // at all. But the summary above still prints `sms=${smsInbound.count}` — that count is

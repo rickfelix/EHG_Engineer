@@ -50,7 +50,8 @@ describe('QF-834 SMS inbound interrupt is gated on the drain flag', () => {
     // QUIET_TICK_STALL_SUPPRESSED / QUIET_TICK_VENTURE_PARK_SUPPRESSED: informational, deliberately
     // ABSENT from the NO-OP allowlist, so the exclusion is never silent and no interrupt re-arms.
     // What must remain true is narrower and sharper than "no token": not the INTERRUPT token.
-    const quiet = block.slice(block.indexOf('if (!smsDrainEnabled)'), block.indexOf('continue;'));
+    const drainFlagIdx = block.indexOf('if (!smsDrainEnabled)');
+    const quiet = block.slice(drainFlagIdx, block.indexOf('continue;', drainFlagIdx));
     expect(quiet.length).toBeGreaterThan(0);
     expect(quiet).not.toContain('QUIET_TICK_SMS_INBOUND');
     expect(quiet).toContain('QUIET_TICK_SMS_SUPPRESSED');
@@ -58,7 +59,8 @@ describe('QF-834 SMS inbound interrupt is gated on the drain flag', () => {
 
   it('reconciles the count: the suppressed line references sms=${smsInbound.count}', () => {
     // Without this the two numbers can drift apart again silently.
-    const quiet = block.slice(block.indexOf('if (!smsDrainEnabled)'), block.indexOf('continue;'));
+    const drainFlagIdx = block.indexOf('if (!smsDrainEnabled)');
+    const quiet = block.slice(drainFlagIdx, block.indexOf('continue;', drainFlagIdx));
     expect(quiet).toContain('smsInbound.count');
   });
 
@@ -82,7 +84,8 @@ describe('QF-834 SMS inbound interrupt is gated on the drain flag', () => {
   it('does NOT go dark: the disabled path still prints the row', () => {
     // The ticket offered "skip entirely". A detector that goes fully dark on a CHAIRMAN SMS
     // channel is a worse failure than the alert fatigue being fixed.
-    const quiet = block.slice(block.indexOf('if (!smsDrainEnabled)'), block.indexOf('continue;'));
+    const drainFlagIdx = block.indexOf('if (!smsDrainEnabled)');
+    const quiet = block.slice(drainFlagIdx, block.indexOf('continue;', drainFlagIdx));
     expect(quiet).toContain('console.log');
     expect(quiet).toContain('${detail}');
   });
