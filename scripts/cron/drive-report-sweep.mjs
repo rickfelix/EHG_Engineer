@@ -51,7 +51,11 @@ import { LEG_ID as LEG1_ID } from '../../lib/drive-loop/score/leg1-landed.js';
 // (imported above for LEG_ID only) is reference-only now — see its header amendment.
 import { scoreLeg1ALocal } from '../../lib/drive-loop/score/leg1-landed-alocal.js';
 import { runHardenedGit } from '../../lib/git/hardened-runner.cjs';
-import { LEG_ID as LEG2_ID } from '../../lib/drive-loop/score/leg2-uptake.js';
+import { LEG_ID as LEG2_ID, CLAIM_WINDOW_MS as LEG2_CLAIM_WINDOW_MS, scoreLeg2 } from '../../lib/drive-loop/score/leg2-uptake.js';
+// SD-LEO-INFRA-DRIVE-SCORE-LEG2-001 (FR-2): the cohort reader is imported here for the CLI wiring
+// block at the bottom of this file, and injected into buildGather like every other real dependency
+// — never defaulted inside buildGather itself (see the gatherCapacity/persistVerdict precedent below).
+import { readRankedTop5Cohort } from '../../lib/drive-loop/score/leg2-cohort-reader.js';
 import { LEG_ID as LEG4_ID, scoreLeg4 } from '../../lib/drive-loop/score/leg4-capacity.js';
 // SD-LEO-INFRA-PERSIST-BELT-CAPACITY-001 (FR-3): the ladder, shared with the capacity forecast so
 // the two ends cannot drift into two spellings; and BELT_BUFFER, whose calibration the forecast owns.
@@ -225,13 +229,50 @@ export async function scoreCapacityLeg({ gatherCapacity, persistVerdict, runId =
 }
 
 /**
+ * SD-LEO-INFRA-DRIVE-SCORE-LEG2-001 (FR-2/FR-3/FR-5): reads the nearest fully-elapsed ranked-top-5
+ * cohort and scores leg2, isolated in try/catch so a broken or missing snapshot (missing table,
+ * malformed cohort, scoreLeg2 throwing on bad input) converts to an `unavailable` leg entry rather
+ * than crashing the whole gather() call — every OTHER leg and section must still produce a report.
+ * Exported so it is independently unit-testable without constructing the full buildGather closure.
+ *
+ * @param {object} o
+ * @param {Function} o.readLeg2Cohort (nowMs, windowMs) => Promise<cohort|null>
+ * @param {number} o.nowMs the report's own clock, used only to find the elapsed-window boundary
+ */
+export async function computeLeg2({ readLeg2Cohort, nowMs }) {
+  try {
+    const cohort = await readLeg2Cohort(nowMs, LEG2_CLAIM_WINDOW_MS);
+    if (!cohort) {
+      return { leg: LEG2_ID, unavailable: unavailable('no ranked-top-5 snapshot cohort has fully elapsed its 24h claim window yet (drive_rank_snapshots is empty, or every cohort is still within the open window)') };
+    }
+    // R8/TR-5: a live-refetch shortfall against the snapshot's own recorded cohort size is a
+    // data-integrity condition, not a smaller-but-honest ranked-top-5 — refuse to score against
+    // a silently shrunk denominator rather than inflate the fraction.
+    if (!cohort.integrityOk) {
+      return {
+        leg: LEG2_ID,
+        unavailable: unavailable(`ranked-top-5 snapshot cohort at ${cohort.rankedAt} recorded `
+          + `${cohort.cohortSize} SD(s), but the live refetch returned only ${cohort.rankedTop5.length} — `
+          + 'data-integrity mismatch, refusing to score against a silently shrunk denominator'),
+      };
+    }
+    // FR-3: anchor the claim window to WHEN THE COHORT WAS RANKED, not the live report clock —
+    // the self-healing 05:00-08:59 ET window can land report time 21-27h after ranking.
+    const anchoredNowMs = Date.parse(cohort.rankedAt) + LEG2_CLAIM_WINDOW_MS;
+    return scoreLeg2({ rankedTop5: cohort.rankedTop5, nowMs: anchoredNowMs });
+  } catch (e) {
+    return { leg: LEG2_ID, unavailable: unavailable(`leg2 cohort read/score failed: ${e.message}`) };
+  }
+}
+
+/**
  * Build the gather function the producer calls.
  *
  * Every `unavailable` reason below is a MEASURED blocker, not a shrug. Read them before
  * "finishing" any of them — two are traps where the obvious wiring produces a confidently wrong
  * number rather than an incomplete one.
  */
-export function buildGather({ supabase, computePlanCheckStatus, gatherCapacity, persistVerdict, capacityRunId = null, runGitLog }) {
+export function buildGather({ supabase, computePlanCheckStatus, gatherCapacity, persistVerdict, capacityRunId = null, runGitLog, readLeg2Cohort, nowMs }) {
   // SD-LEO-INFRA-PERSIST-BELT-CAPACITY-001 (FR-3): leg4's two injections are REQUIRED here, not
   // defaulted to the real implementations. A default would make this function look wired while the
   // CLI passed nothing — which is precisely how `persist` went missing from runDriveReportSweep and
@@ -247,6 +288,15 @@ export function buildGather({ supabase, computePlanCheckStatus, gatherCapacity, 
   // injection here must fail loudly rather than hide an unwired CLI behind a green suite.
   if (typeof runGitLog !== 'function') {
     throw new Error("buildGather(): runGitLog must be injected — leg1's A-LOCAL predicate refuses to silently shell out");
+  }
+  // SD-LEO-INFRA-DRIVE-SCORE-LEG2-001 (FR-2): same refuse-without-injection pattern as above —
+  // an unwired CLI must fail loudly at construction, not hide behind a green stubbed test suite.
+  // nowMs is required too: it is the ONLY input readLeg2Cohort uses to find the nearest
+  // fully-elapsed snapshot cohort (nowMs - CLAIM_WINDOW_MS), and an implicit clock would make that
+  // boundary untestable — the same reasoning scoreLeg2 itself already enforces (leg2-uptake.js:89-93).
+  if (typeof readLeg2Cohort !== 'function' || !Number.isFinite(nowMs)) {
+    throw new Error('buildGather(): readLeg2Cohort (function) and nowMs (finite number) must be injected — '
+      + 'leg2 refuses without them, for the same reason leg4 refuses without gatherCapacity/persistVerdict');
   }
 
   return async function gather() {
@@ -313,7 +363,9 @@ export function buildGather({ supabase, computePlanCheckStatus, gatherCapacity, 
       planStatus.done && planStatus.done.length > 0
         ? scoreLeg1ALocal({ items: planStatus.done, runGitLog })
         : { leg: LEG1_ID, unavailable: unavailable('scoreLeg1 is built but its ratified rule (merge-base ancestry, d50b9f12) is unearnable in this delete-branch-on-merge flow — measured 7/111 ancestors over even the favourable completed population (18 branches absent, 86 not-ancestor), and the open-item input set is definitionally not-landed (evidence ab82da6b). Held unavailable pending the chairman decision on the landing-question redefinition (ruling fea8b4c4).') },
-      { leg: LEG2_ID, unavailable: unavailable('scoreLeg2 needs the ranked top-5 backlog, which this job does not query') },
+      // SD-LEO-INFRA-DRIVE-SCORE-LEG2-001 (FR-2/FR-3/FR-5): the ranked-top-5 SNAPSHOT wiring —
+      // see computeLeg2 above for the cohort-selection, window-anchor, and failure-isolation logic.
+      await computeLeg2({ readLeg2Cohort, nowMs }),
       await scoreCapacityLeg({ gatherCapacity, persistVerdict, runId: capacityRunId }),
     ];
 
@@ -440,6 +492,10 @@ if (isMainModule(import.meta.url)) {
       // is THE published shell-injection-safe git invocation — reused rather than re-derived. Only
       // ever asked `log main --merges --format=%s [--since=...]`, never a caller-controlled ref.
       runGitLog: (args) => runHardenedGit(args, { cwd: process.cwd() }).split('\n').filter(Boolean),
+      // SD-LEO-INFRA-DRIVE-SCORE-LEG2-001 (FR-2): supabase pre-bound at this CLI edge, same
+      // shape as gatherCapacity/persistVerdict above.
+      readLeg2Cohort: (nowMsArg, windowMsArg) => readRankedTop5Cohort(supabase, nowMsArg, windowMsArg),
+      nowMs: cliNowMs,
     }),
     persist: async (row) => {
       const { data, error } = await supabase.from('drive_reports').insert(row).select('id').single();

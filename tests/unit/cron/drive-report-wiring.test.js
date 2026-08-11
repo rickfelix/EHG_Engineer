@@ -74,6 +74,23 @@ describe('the Drive Report producer names its dispatcher (TR-1)', () => {
     expect(src, 'and the sweep must refuse without it rather than fail deep in the producer').toMatch(/persist must be injected/);
   });
 
+  it('[SD-LEO-INFRA-DRIVE-SCORE-LEG2-001 / TS-9] the CLI supplies the real leg2 cohort reader', () => {
+    // Prospective testing-agent risk R6 (evidence 4abcf446): this file asserts gatherCapacity and
+    // persistVerdict are the REAL implementations at the CLI edge, but had ZERO references to any
+    // third injection — exactly the precedent this file's own header describes (armed logic with
+    // no dispatcher is indistinguishable from logic that always passes). Closed for leg2 the same
+    // way FR-3/leg4's injections are closed above.
+    const src = code(SWEEP);
+    expect(src, 'sweep no longer imports the cohort reader').toMatch(
+      /import\s*\{[^}]*readRankedTop5Cohort[^}]*\}\s*from\s*['"]\.\.\/\.\.\/lib\/drive-loop\/score\/leg2-cohort-reader\.js['"]/
+    );
+    expect(src, 'the CLI must bind the real reader to the real supabase client').toMatch(
+      /readLeg2Cohort:\s*\([^)]*\)\s*=>\s*readRankedTop5Cohort\(supabase,/
+    );
+    expect(src, 'and pass the real report clock, not a stub or a second Date.now() read').toMatch(/nowMs:\s*cliNowMs/);
+    expect(src, 'the legs array must call computeLeg2, not declare it dead').toMatch(/await\s+computeLeg2\(/);
+  });
+
   it('the sweep names the workflow that dispatches it, by path', () => {
     expect(code(SWEEP)).toMatch(
       /ACTIVATION_TRIGGER\s*=\s*['"]\.github\/workflows\/drive-report-cron\.yml['"]/

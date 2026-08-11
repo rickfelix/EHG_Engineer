@@ -2,10 +2,11 @@
 
 **Category**: Runbook
 **Status**: Approved
-**Version**: 1.0.0
-**Author**: SD-LEO-INFRA-COMPLETE-SMS-RELAY-001 (Alpha-4)
+**Version**: 1.1.0
+**Author**: SD-LEO-INFRA-COMPLETE-SMS-RELAY-001 (Alpha-4); parking behavior added by
+SD-LEO-INFRA-CHAIRMAN-INBOUND-VISIBILITY-001
 **Last Updated**: 2026-08-10
-**Tags**: chairman-comms, sms, drain, go-live, cutover
+**Tags**: chairman-comms, sms, drain, go-live, cutover, parking
 
 ---
 
@@ -61,6 +62,31 @@ it makes the cutover *safe and performable*; this document is the remaining huma
      `chairman_decisions` (or the correct non-answer outcome is logged once, e.g. `no_match`).
    - `sms_relay_staging` has no growing undrained backlog (the drain's `checkBacklogStall`
      signal stays quiet).
+
+## Chairman-number parking (SD-LEO-INFRA-CHAIRMAN-INBOUND-VISIBILITY-001)
+
+The drain's `no_match`/`rate_limited` outcomes (step 3's canary bullet, "the correct
+non-answer outcome is logged once") are no longer purely terminal for the **verified chairman
+number**. As of this SD, `drainSmsRelayStaging` additionally stamps `sms_relay_staging.parked_at`
+on a claimed row when BOTH: the outcome is `no_match` or `rate_limited`, AND
+`phoneKey(row.from_phone) === phoneKey(CHAIRMAN_PHONE)`. `drained_at` is untouched — parking is a
+second, orthogonal marker, not a substitute for the exactly-once claim this runbook's precondition
+describes.
+
+A parked row (`parked_at IS NOT NULL AND resolved_at IS NULL`) re-fires
+`QUIET_TICK_SMS_PARKED` on **every** Adam quiet-tick — unlike `QUIET_TICK_SMS_INBOUND` above,
+this one is not gated on `SMS_RELAY_DRAIN_ENABLED` and has no suppressed/informational variant,
+since resolving it is a plain CLI script rather than something waiting on the drain cutover. Once
+addressed, disposition it explicitly with
+`node scripts/resolve-parked-chairman-sms.cjs <sms_relay_staging-row-id>` (sets `resolved_at`,
+idempotent — a second call on an already-resolved row is a no-op) or the interrupt keeps firing.
+
+Operational implication for this runbook's canary step: after the go-live flip, a chairman-number
+message that resolves `no_match` or `rate_limited` will show up TWICE in tick output — once as
+`QUIET_TICK_SMS_INBOUND` while still undrained (pre-drain), and, once drained-but-unmatched, as a
+persistent `QUIET_TICK_SMS_PARKED` until someone runs the resolve script. Seeing the row disappear
+from `QUIET_TICK_SMS_INBOUND` alone is NOT the end state to look for — confirm it either answered
+(no `QUIET_TICK_SMS_PARKED` line) or is parked-and-later-resolved.
 
 ## Rollback
 

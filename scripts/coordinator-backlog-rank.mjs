@@ -176,6 +176,30 @@ export function buildRankClearQuery(sdKey) {
     params: [sdKey],
   };
 }
+// SD-LEO-INFRA-DRIVE-SCORE-LEG2-001 (FR-1/TR-1/TR-2): the ranked-top-5 SNAPSHOT write, INSERT-only
+// into a table separate from strategic_directives_v2.metadata (never touches the same row buildRankPatch/
+// buildRankClearQuery mutate, so it structurally cannot clobber a concurrent metadata write — R5).
+// sd_id is resolved server-side from sd_key via the JOIN, not passed from a JS-side id the caller does
+// not have (this ranker only ever selects sd_key — claimable-leaves.mjs:73). `rank` comes from array
+// position (1-based via WITH ORDINALITY), matching this loop's own `const rank = i + 1` below.
+// ON CONFLICT DO NOTHING makes a retried/duplicate insert for the same (ranked_at, rank) a no-op rather
+// than an error, without ever UPDATing an existing snapshot row (append-only is enforced at the DB level
+// by the migration's guard trigger regardless).
+export function buildRankSnapshotInsertQuery(top5SdKeys, rankedAtIso) {
+  if (!Array.isArray(top5SdKeys) || top5SdKeys.length === 0) return null;
+  return {
+    sql: `INSERT INTO drive_rank_snapshots (ranked_at, rank, sd_id, sd_key)
+          SELECT $1::timestamptz, t.ord::int, sd.id, sd.sd_key
+          FROM unnest($2::text[]) WITH ORDINALITY AS t(sd_key, ord)
+          JOIN strategic_directives_v2 sd ON sd.sd_key = t.sd_key
+          ON CONFLICT (ranked_at, rank) DO NOTHING`,
+    params: [rankedAtIso, top5SdKeys],
+  };
+}
+// The cohort size: how many of the top-5 SD KEYS this run intended to snapshot. Exported so the
+// EXEC-phase reader-side test (TS-10, TR-5) can assert a live refetch shortfall is measured against
+// THIS number, not silently re-derived from whatever the refetch itself returns.
+export const RANK_SNAPSHOT_TOP_N = 5;
 // SD-LEO-INFRA-PROGRESS-ROLLUP-NEEDLE-PRIORITIZATION-001-C (FR-2): needle-movement prioritization.
 // Reuse FR-1's rollup (active rung + per-rung progress) and the pure needle scorer to order remaining
 // work active-rung-first among same-unlock candidates. Loaded fail-soft — any read error leaves the
@@ -470,6 +494,31 @@ async function main() {
         console.error(`  ! skipped ${d.sd_key}: no atomic-merge DB client available (would reintroduce a stale-write race)`);
       }
     } catch (e) { console.error(`  ! ${d.sd_key}: ${e.message}`); } // fail-soft per item
+  }
+
+  // ── SD-LEO-INFRA-DRIVE-SCORE-LEG2-001 (FR-1): snapshot the ranked top-5, INSERT-only ──
+  // Placed AFTER the main write loop so the snapshot reflects the SAME rank order just written
+  // (not a second, potentially-reordered pass), and reuses the SAME pgClient/`now` this run
+  // already resolved — one cohort, one timestamp, one connection. Skipped identically to the
+  // main loop when pgClient is unavailable (fail-soft, never a partial-write race) or when
+  // claimable is empty (zero candidates → zero snapshot rows, consistent with zero rank writes —
+  // R10). top-5 only: leg2_uptake's own spec is the ranked TOP-5, not the full claimable list
+  // this loop ranks.
+  if (!DRY && pgClient) {
+    const top5SdKeys = claimable.slice(0, RANK_SNAPSHOT_TOP_N).map((d) => d.sd_key);
+    const snapQuery = buildRankSnapshotInsertQuery(top5SdKeys, now);
+    if (snapQuery) {
+      try {
+        await pgClient.query(snapQuery.sql, snapQuery.params);
+        console.log(`[BACKLOG-RANK] snapshot: ${top5SdKeys.length} row(s) for cohort ranked_at=${now}`);
+      } catch (e) {
+        // Fail-soft: a snapshot-write failure must never abort the rank pass itself (the rank
+        // writes above already succeeded and are more load-bearing than the snapshot).
+        console.error(`[BACKLOG-RANK] ! snapshot insert failed (non-fatal): ${e.message}`);
+      }
+    }
+  } else if (!DRY && !pgClient) {
+    console.error('[BACKLOG-RANK] ! skipped snapshot insert: no atomic-merge DB client available');
   }
 
   // ── clear stale ranks on rows no longer claimable (claimed/blocked now) ──
