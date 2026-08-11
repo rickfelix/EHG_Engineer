@@ -150,6 +150,44 @@ BEGIN
       AND policyname = 'drive_rank_snapshots_service_role'
   ), 'drive_rank_snapshots: the service_role policy is missing or renamed';
 
+  -- SECURITY review (evidence 36b4016b): a name-only + count-only policy check is satisfiable by
+  -- a policy named drive_rank_snapshots_service_role but written FOR ALL TO PUBLIC — porting the
+  -- drive_reports precedent (20260803_drive_reports.sql) verbatim rather than shipping the same
+  -- gap twice. pg_policy.polroles is the load-bearing column: TO PUBLIC stores {0}, so an explicit
+  -- ARRAY['service_role'::regrole] comparison rejects it.
+  ASSERT EXISTS (
+    SELECT 1 FROM pg_policy p
+    WHERE p.polrelid = 'public.drive_rank_snapshots'::regclass
+      AND p.polname = 'drive_rank_snapshots_service_role'
+      AND p.polroles = ARRAY['service_role'::regrole::oid]
+      AND p.polcmd = '*'
+      AND p.polpermissive
+  ), 'drive_rank_snapshots: the policy exists but is NOT "FOR ALL TO service_role" — a policy TO PUBLIC (polroles {0}) or scoped to one command would pass a name-only check while granting this table far more widely, which is the permission-class reclassification this table requires chairman approval for';
+
+  -- Table-level ACL tripwire, reading pg_class.relacl via aclexplode (the authoritative ACL,
+  -- representing PUBLIC explicitly as grantee OID 0) — deny-by-default so a role invented next
+  -- year is caught by construction, not by amendment.
+  ASSERT NOT EXISTS (
+    SELECT 1
+    FROM pg_class c
+    CROSS JOIN LATERAL aclexplode(COALESCE(c.relacl, acldefault('r', c.relowner))) a
+    WHERE c.oid = 'public.drive_rank_snapshots'::regclass
+      AND a.grantee <> c.relowner
+      AND COALESCE(pg_get_userbyid(NULLIF(a.grantee, 0)), 'PUBLIC') <> 'service_role'
+  ), 'drive_rank_snapshots: a non-service grant exists (including PUBLIC) — this table is now PERMISSION-CLASS and requires chairman approval';
+
+  -- Column-level ACL tripwire. pg_class.relacl holds only table grants; a column-scoped GRANT
+  -- lands in pg_attribute.attacl and leaves relacl untouched, invisible to the check above.
+  ASSERT NOT EXISTS (
+    SELECT 1
+    FROM pg_attribute at
+    CROSS JOIN LATERAL aclexplode(at.attacl) a
+    WHERE at.attrelid = 'public.drive_rank_snapshots'::regclass
+      AND at.attacl IS NOT NULL
+      AND a.grantee <> (SELECT relowner FROM pg_class WHERE oid = 'public.drive_rank_snapshots'::regclass)
+      AND COALESCE(pg_get_userbyid(NULLIF(a.grantee, 0)), 'PUBLIC') <> 'service_role'
+  ), 'drive_rank_snapshots: a non-service COLUMN grant exists (including PUBLIC) — column grants live in pg_attribute.attacl and are invisible to the table-level ACL check; this table is now PERMISSION-CLASS and requires chairman approval';
+
   ASSERT EXISTS (
     SELECT 1 FROM pg_constraint
     WHERE conrelid = 'public.drive_rank_snapshots'::regclass
