@@ -10,6 +10,14 @@ vi.mock('../../../../lib/comms/adam-outbound/chairman-sms-gate/index.js', () => 
 vi.mock('../../../../lib/chairman/record-pending-decision.mjs', () => ({
   escalateChairmanDecision: vi.fn(async () => ({ escalated: true })),
 }));
+// SD-LEO-INFRA-CHAIRMAN-QUIET-WINDOW-001 (FR-3): buildSender()'s default closure now resolves
+// the chairman's zone (dynamically imported) before calling sendChairmanSMS. Mocked here for
+// the same reason the two modules above are -- this test file exercises the DEFAULT sender
+// (buildSender(), not an injected opts.sender) in tests that have a real owed decision to send,
+// and the real resolver would otherwise reach a live Supabase client.
+vi.mock('../../../../lib/comms/adam-outbound/quiet-hours-extension.js', () => ({
+  resolveChairmanZone: vi.fn(async () => ({ zone: 'America/New_York', source: 'default' })),
+}));
 
 import { sendChairmanSMS } from '../../../../lib/comms/adam-outbound/chairman-sms-gate/index.js';
 import { escalateChairmanDecision } from '../../../../lib/chairman/record-pending-decision.mjs';

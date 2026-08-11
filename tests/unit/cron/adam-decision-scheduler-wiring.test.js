@@ -8,6 +8,12 @@ import { describe, it, expect, vi } from 'vitest';
 import fs from 'fs';
 import path from 'path';
 import { fileURLToPath } from 'url';
+// SD-LEO-INFRA-CHAIRMAN-QUIET-WINDOW-001 (FR-5): main() now resolves the chairman's zone once
+// per tick before the quiet-window check; the real resolver reaches a live Supabase client,
+// which hangs in the vitest sandbox.
+vi.mock('../../../lib/comms/adam-outbound/quiet-hours-extension.js', () => ({
+  resolveChairmanZone: vi.fn(async () => ({ zone: 'America/New_York', source: 'default' })),
+}));
 import {
   main,
   isWithinAdamSmsQuietWindow,
@@ -182,5 +188,14 @@ describe('TS-10: isWithinAdamSmsQuietWindow — DST-aware 22:00-06:00 America/Ne
 
   it('fall side of a DST transition (post fall-back, EST) classifies 22:00 ET as inside', () => {
     expect(isWithinAdamSmsQuietWindow(new Date(Date.UTC(2026, 10, 21, 3, 0)))).toBe(true); // 22:00 ET Nov 20 (EST)
+  });
+
+  it('FR-5: a non-ET zone (America/Jamaica) changes the verdict at the SAME instant, proving the zone threads through end to end', () => {
+    // Same instant as the "EDT (July): 22:00 ET inside" fixture above. Jamaica is UTC-5
+    // year-round (no DST); EDT is UTC-4 in July -- Jamaica reads one hour earlier (21:00),
+    // which is OUTSIDE the 22:00-06:00 window while ET (22:00) is inside it.
+    const instant = new Date(Date.UTC(2026, 6, 19, 2, 0));
+    expect(isWithinAdamSmsQuietWindow(instant)).toBe(true);                       // ET default: 22:00, inside
+    expect(isWithinAdamSmsQuietWindow(instant, 'America/Jamaica')).toBe(false);   // Jamaica: 21:00, outside
   });
 });
