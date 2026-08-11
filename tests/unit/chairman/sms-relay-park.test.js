@@ -293,3 +293,31 @@ describe('checkAndApplyAutoSuspend — invalid_signature counter unaffected by F
     expect(after.outcome).toBe('suspended');
   });
 });
+
+describe('FR-4: chained drainSmsRelayStaging -> surfaceParkedChairmanSms on the same state', () => {
+  it('a chairman no_match row drained now, surfaces on the very next tick — the two halves are wired, not just independently correct', async () => {
+    process.env.CHAIRMAN_PHONE = CHAIR;
+    const OTHER = '+15127770000';
+    const sb = makeFakeSupabase({
+      sms_relay_staging: [
+        { id: 'stg-chain-chair', provider_message_id: 'SM-chain-chair', from_phone: CHAIR, to_phone: '+15559999999', body_raw: 'chained: any word yet?', signature_valid: true, received_at: new Date(Date.now() - 2000).toISOString(), drained_at: null },
+        { id: 'stg-chain-other', provider_message_id: 'SM-chain-other', from_phone: OTHER, to_phone: '+15559999999', body_raw: 'chained: unrelated spam', signature_valid: true, received_at: new Date(Date.now() - 1000).toISOString(), drained_at: null },
+      ],
+    });
+
+    const drainResult = await drainSmsRelayStaging(sb);
+    expect(drainResult.results.find((r) => r.id === 'stg-chain-chair').outcome).toBe('no_match');
+    expect(drainResult.results.find((r) => r.id === 'stg-chain-other').outcome).toBe('no_match');
+
+    // AC: the non-chairman row still terminal-drains without parking, AND it was logged toward
+    // the unmatched counter (TS-7/TS-8 test the threshold separately; this proves it registers).
+    expect(sb._tables.sms_relay_staging.find((r) => r.id === 'stg-chain-other').parked_at).toBeFalsy();
+    expect(sb._tables.sms_inbound_log.some((r) => r.from_phone === OTHER && r.outcome === 'no_match')).toBe(true);
+
+    // The read half runs against the SAME fake instance the write half just mutated — proves
+    // the actual row shape drainSmsRelayStaging persists is exactly what the query expects.
+    const surfaced = await surfaceParkedChairmanSms(sb);
+    expect(surfaced.rows.map((r) => r.id)).toEqual(['stg-chain-chair']);
+    expect(surfaced.rows.map((r) => r.id)).not.toContain('stg-chain-other');
+  });
+});
