@@ -1,3 +1,10 @@
+-- @chairman-gated
+-- @approved-by: codestreetlabs@gmail.com
+-- (approval chain: chairman verbal A by SMS 2026-08-11 ~11:44Z on serialized decision #2,
+--  durable capture 5218a74c, relayed by Adam advisory 877cac62; ruling riders: DELETE scoped
+--  to exact-duplicate NULL-venture groups keeping newest + pre-apply count-check --
+--  measured pre-apply 2026-08-11: 1 dup group (notifications.quiet_hours_extended_until n=2),
+--  4 total rows, constraint plain UNIQUE. Coordinator seat 56f09320 executes the ceremony.)
 -- ============================================================================
 -- chairman_preferences: fix NULL-venture_id upsert bug via UNIQUE NULLS NOT DISTINCT
 -- SD-LEO-INFRA-CHAIRMAN-QUIET-WINDOW-001 (FR-1)
