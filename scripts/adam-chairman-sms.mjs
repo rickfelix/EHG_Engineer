@@ -9,10 +9,13 @@ import { resolveAllowQuietHours } from '../lib/comms/adam-outbound/quiet-hours-e
 
 enforceCliSendGuard({
   scriptName: 'scripts/adam-chairman-sms.mjs',
-  flags: [{ name: '--dry-run' }, { name: '--body', takesValue: true }, { name: '--kind', takesValue: true }, { name: '--dedupe-key', takesValue: true }],
+  flags: [{ name: '--dry-run' }, { name: '--body', takesValue: true }, { name: '--kind', takesValue: true }, { name: '--dedupe-key', takesValue: true }, { name: '--reply-to-inbound' }],
 });
 
 const DRY = process.argv.includes('--dry-run');
+// QF-20260810-285: declares a reply-class send so the chairman-sms-gate's measured-presence
+// quiet-hours carve-out (chairman-sms-gate/index.js) is reachable from the CLI at all.
+const REPLY_TO_INBOUND = process.argv.includes('--reply-to-inbound');
 function argValue(flag) {
   const i = process.argv.indexOf(flag);
   return i >= 0 && i + 1 < process.argv.length ? process.argv[i + 1] : null;
@@ -33,7 +36,7 @@ if (DRY) {
 } else {
   // QF-20260720-824: honor a recorded chairman window-extension; default window unchanged.
   const now = new Date();
-  const context = { now, allowQuietHours: await resolveAllowQuietHours(now) };
+  const context = { now, allowQuietHours: await resolveAllowQuietHours(now), replyToInbound: REPLY_TO_INBOUND };
   const r = await sendChairmanSMS(message, context);
   console.log('ADAM-CHAIRMAN-SMS', JSON.stringify(r));
 }

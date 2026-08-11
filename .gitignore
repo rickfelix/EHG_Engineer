@@ -33,6 +33,12 @@ verification-packages/
 .worktree.json
 .worktree-nm-mode
 
+# QF-20260808-951: regenerable pattern-cache written by lib/workflow-review/pattern-cache.js.
+# Same class as above -- tracking it means a `git merge --ff-only origin/main` aborts with
+# "local changes would be overwritten" whenever the local process and an upstream commit
+# both touch it, blocking the shared root's fast-forward.
+.workflow-patterns.json
+
 # Backup files (git already provides versioning)
 *.backup
 *.bak
