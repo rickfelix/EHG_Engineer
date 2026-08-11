@@ -439,7 +439,29 @@ describe('leg1 A-LOCAL wiring — measures for real when the completed-items win
     expect(driveScore.measured_legs).toContain('leg1_landed');
   });
 
-  it('[TS-4, population-discrimination guard] scoring the SAME predicate against open_items_all instead of done[] must NOT read as landed', async () => {
+  it('[TS-4, WIRING population-discrimination guard] leg1 stays unavailable when open_items_all looks landed but done[] is empty — the wiring must never read from open_items_all', async () => {
+    // The forbidden population (open_items_all is definitionally not-landed per LEG1-001's own
+    // premise) is populated with REAL-looking landed keys, while done[] -- the only population
+    // buildGather is allowed to feed leg1 -- stays empty. If the wiring ever silently swapped
+    // populations, this fixture would make leg1 measure landed; it must not.
+    const gather = buildGather({
+      supabase: {},
+      computePlanCheckStatus: async () => ({
+        open_total: 0, next: [], next_truncated: false, slipped: [],
+        open_items_all: [
+          { id: 'o1', wave_id: 'w1', title: 'A', promoted_to_sd_key: 'SD-REALLY-LANDED-001', item_disposition: 'pending', remainder_state: 'promotable_now', lane: null, metadata: {}, sd: null },
+        ],
+        waves: [],
+        done: [],
+      }),
+      gatherCapacity, persistVerdict: persistTableAbsent, runGitLog,
+    });
+    const { driveScore } = await gather();
+    expect(driveScore.unavailable_legs.map((l) => l.leg), 'leg1 must stay unavailable -- done[] is empty regardless of what open_items_all contains').toContain('leg1_landed');
+    expect(driveScore.measured_legs).not.toContain('leg1_landed');
+  });
+
+  it('[TS-4b, scorer-level population-discrimination guard] scoring the SAME predicate against open_items_all instead of done[] must NOT read as landed', async () => {
     // Same-test negative control, proving the fixture is non-vacuous: done[] and open_items_all
     // are constructed to DISAGREE by design (real landed keys in done[], fabricated never-landed
     // keys in open_items_all). Scoring against done[] must be non-zero; scoring the identical
