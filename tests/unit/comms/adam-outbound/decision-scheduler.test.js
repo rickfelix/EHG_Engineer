@@ -181,6 +181,11 @@ describe('runDecisionSchedulerTick', () => {
     expect(result.results[0].action).toBe('resurfaced');
     expect(sendChairmanSMS).toHaveBeenCalledTimes(1);
     expect(sendChairmanSMS.mock.calls[0][0]).toMatchObject({ decisionId: 'dec-1' });
+    // PLAN-VERIFY (validation-agent, mutation-tested): stripping chairmanZone from
+    // buildSender()'s context left this whole suite green because only calls[0][0] (the
+    // message) was ever asserted, never calls[0][1] (the context) -- FR-3's "resolves the
+    // zone once per send and it reaches the context object" AC was unverified here.
+    expect(sendChairmanSMS.mock.calls[0][1]).toMatchObject({ chairmanZone: 'America/New_York' });
     expect(owedStore.markResurfaced).toHaveBeenCalledWith('row-1');
   });
 

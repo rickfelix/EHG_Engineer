@@ -35,6 +35,31 @@ function createMockSupabase(overrides = {}) {
   };
 }
 
+/**
+ * PLAN-VERIFY (validation-agent, mutation-tested): a mock whose .order() IGNORES the
+ * {ascending} argument and just returns a fixture pre-sorted the "right" way lets a test
+ * pass even if production code flips ascending:false -> true -- the mock never asked "which
+ * direction". This one genuinely sorts by the requested column/direction, so a flip
+ * produces the WRONG winning row and the assertion actually fails.
+ */
+function makeOrderAwareSupabase(rows) {
+  return {
+    from: vi.fn(() => ({
+      select: vi.fn().mockReturnThis(),
+      eq: vi.fn().mockReturnThis(),
+      is: vi.fn().mockReturnThis(),
+      in: vi.fn().mockReturnThis(),
+      order: vi.fn((col, { ascending } = {}) => {
+        const sorted = [...rows].sort((a, b) => {
+          const cmp = a[col] < b[col] ? -1 : a[col] > b[col] ? 1 : 0;
+          return ascending ? cmp : -cmp;
+        });
+        return Promise.resolve({ data: sorted, error: null });
+      }),
+    })),
+  };
+}
+
 describe('ChairmanPreferenceStore', () => {
   let store;
   let mockSupabase;
@@ -461,6 +486,14 @@ describe('ChairmanPreferenceStore', () => {
         expect.objectContaining({ rowCount: 2, scope: 'global' }),
       );
     });
+
+    it('PLAN-VERIFY: genuinely requests DESCENDING order -- a flip to ascending would return the OLDER row, not just reshuffle a pre-sorted fixture', async () => {
+      const older = { id: 'g1', preference_key: 'k1', preference_value: 'old', value_type: 'string', source: 's', updated_at: '2026-01-01T00:00:00Z' };
+      const newer = { id: 'g2', preference_key: 'k1', preference_value: 'new', value_type: 'string', source: 's', updated_at: '2026-02-01T00:00:00Z' };
+      store.supabase = makeOrderAwareSupabase([older, newer]); // fixture order deliberately NOT pre-sorted
+      const result = await store.getPreference({ chairmanId: 'c1', key: 'k1' });
+      expect(result.value).toBe('new');
+    });
   });
 
   describe('getPreferences - batch resolution', () => {
@@ -559,6 +592,14 @@ describe('ChairmanPreferenceStore', () => {
         'chairman_preference.multi_row_scope_violation',
         expect.objectContaining({ key: 'k1', scope: 'global', rowCount: 2 }),
       );
+    });
+
+    it('PLAN-VERIFY: getPreferences genuinely requests DESCENDING order too -- a flip to ascending would return the OLDER row', async () => {
+      const older = { id: 'g1', preference_key: 'k1', preference_value: 'old', value_type: 'string', source: 's', updated_at: '2026-01-01T00:00:00Z' };
+      const newer = { id: 'g2', preference_key: 'k1', preference_value: 'new', value_type: 'string', source: 's', updated_at: '2026-02-01T00:00:00Z' };
+      store.supabase = makeOrderAwareSupabase([older, newer]);
+      const result = await store.getPreferences({ chairmanId: 'c1', keys: ['k1'] });
+      expect(result.get('k1').value).toBe('new');
     });
   });
 
