@@ -23,6 +23,10 @@ on:
       - 'database/functions/*.sql'
       - 'database/manual-updates/*.sql'
       - 'supabase/migrations/*.sql'
+      # SD-LEO-INFRA-APPLY-STATE-CEREMONY-PENDING-001 (FR-1): now a scanned root too — a
+      # chairman-gated merge must re-run the gate so its CEREMONY_PENDING status is visible
+      # promptly instead of waiting for the next unrelated migration push or the daily cron.
+      - 'database/chairman-gated/*.sql'
       - 'scripts/verify-migration-apply-state.mjs'
       - 'scripts/lib/migration-guards.js'
       - '.github/workflows/migration-deploy-drift-guard.yml'

@@ -10,7 +10,7 @@ import { fileURLToPath } from 'node:url';
 import {
   extractDdlFacts, orderMigrations, foldLifecycle, classifyFiles, ARTIFACT_RE,
   isRecent, partitionRecentGaps, migrationDateToken, RETIRED_BEFORE,
-  hasAnyDbCredential, OUTCOME,
+  hasAnyDbCredential, OUTCOME, summarizeResults, DEFAULT_EXTRA_ROOTS,
 } from '../scripts/verify-migration-apply-state.mjs';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
@@ -142,6 +142,90 @@ describe('classification', () => {
     const { expected, perFile } = foldLifecycle(ff);
     const res = classifyFiles(['old.sql', 'newer.sql'], expected, perFile, new Set(['table:kept']));
     expect(res.find((r) => r.file === 'old.sql').status).toBe('APPLIED');
+  });
+});
+
+// SD-LEO-INFRA-APPLY-STATE-CEREMONY-PENDING-001 — database/chairman-gated/ visibility.
+// TS-1/TS-2/TS-3: chairman-gated files get a distinct CEREMONY_PENDING status carrying
+// age_days; every other file (including chairman-gated APPLIED/NO_DDL) is unaffected.
+describe('CEREMONY_PENDING classification (chairman-gated)', () => {
+  const NOW = new Date('2026-08-11T00:00:00Z');
+
+  it('TS-1: a merged-but-unapplied chairman-gated file classifies CEREMONY_PENDING with age_days', () => {
+    const ff = [{ file: 'database/chairman-gated/20260807_gated.sql', ...extractDdlFacts('CREATE TABLE gated (x int);') }];
+    const { expected, perFile } = foldLifecycle(ff);
+    const [row] = classifyFiles(['database/chairman-gated/20260807_gated.sql'], expected, perFile, new Set(), NOW);
+    expect(row.status).toBe('CEREMONY_PENDING');
+    expect(row.age_days).toBe(4); // 2026-08-07 -> 2026-08-11
+  });
+
+  it('TS-1b: a PARTIALLY-applied chairman-gated file also classifies CEREMONY_PENDING (not PARTIAL)', () => {
+    const ff = [{ file: 'database/chairman-gated/20260807_gated.sql', ...extractDdlFacts('CREATE TABLE g1 (x int); CREATE TABLE g2 (x int);') }];
+    const { expected, perFile } = foldLifecycle(ff);
+    const [row] = classifyFiles(['database/chairman-gated/20260807_gated.sql'], expected, perFile, new Set(['table:g1']), NOW);
+    expect(row.status).toBe('CEREMONY_PENDING');
+    expect(row.missing).toEqual([{ cls: 'table', name: 'g2' }]);
+  });
+
+  it('TS-2: a fully-applied chairman-gated file still classifies APPLIED, never CEREMONY_PENDING', () => {
+    const ff = [{ file: 'database/chairman-gated/20260807_gated.sql', ...extractDdlFacts('CREATE TABLE gated (x int);') }];
+    const { expected, perFile } = foldLifecycle(ff);
+    const [row] = classifyFiles(['database/chairman-gated/20260807_gated.sql'], expected, perFile, new Set(['table:gated']), NOW);
+    expect(row.status).toBe('APPLIED');
+    expect(row.age_days).toBeUndefined();
+  });
+
+  it('TS-2b: a NO_DDL chairman-gated file is unaffected', () => {
+    const ff = [{ file: 'database/chairman-gated/20260807_docs.sql', ...extractDdlFacts('-- comment only\nSELECT 1;') }];
+    const { expected, perFile } = foldLifecycle(ff);
+    const [row] = classifyFiles(['database/chairman-gated/20260807_docs.sql'], expected, perFile, new Set(), NOW);
+    expect(row.status).toBe('NO_DDL');
+  });
+
+  it('TS-3 (regression): an identical missing/surviving shape OUTSIDE chairman-gated keeps NOT_APPLIED/PARTIAL unchanged', () => {
+    const ff = [
+      { file: '20260807_plain.sql', ...extractDdlFacts('CREATE TABLE plain (x int);') },
+      { file: 'database/functions/20260807_fn.sql', ...extractDdlFacts('CREATE TABLE fnroot (x int);') },
+    ];
+    const { expected, perFile } = foldLifecycle(ff);
+    const res = classifyFiles(['20260807_plain.sql', 'database/functions/20260807_fn.sql'], expected, perFile, new Set(), NOW);
+    expect(res.find((r) => r.file === '20260807_plain.sql').status).toBe('NOT_APPLIED');
+    expect(res.find((r) => r.file === 'database/functions/20260807_fn.sql').status).toBe('NOT_APPLIED');
+    expect(res.every((r) => r.age_days === undefined)).toBe(true);
+  });
+
+  it('database/chairman-gated is one of the DEFAULT_EXTRA_ROOTS (FR-1 wiring)', () => {
+    expect(DEFAULT_EXTRA_ROOTS).toContain('database/chairman-gated');
+  });
+});
+
+// TS-5: CEREMONY_PENDING must flow through summarizeResults into `gaps`, not just the
+// dedicated counter — otherwise the OUTCOME marker (main(): failSet.length ? GAPS : PASS)
+// would silently read PASS for a run that in fact contains an unapplied chairman-gated file.
+describe('summarizeResults — CEREMONY_PENDING counts as a gap (FR-3)', () => {
+  it('a CEREMONY_PENDING-only result set is non-empty in `gaps` (would drive OUTCOME.GAPS)', () => {
+    const results = [{ file: 'database/chairman-gated/20260807_gated.sql', status: 'CEREMONY_PENDING', missing: [], objects: 1, age_days: 4 }];
+    const { summary, gaps } = summarizeResults(results, { scanned: 1 });
+    expect(summary.ceremony_pending).toBe(1);
+    expect(gaps).toHaveLength(1);
+    expect(gaps[0].status).toBe('CEREMONY_PENDING');
+  });
+
+  it('an APPLIED-only result set produces an empty gaps array (would drive OUTCOME.PASS)', () => {
+    const results = [{ file: 'a.sql', status: 'APPLIED', missing: [], objects: 1 }];
+    const { gaps } = summarizeResults(results, { scanned: 1 });
+    expect(gaps).toHaveLength(0);
+  });
+
+  it('summary counters partition APPLIED/PARTIAL/NOT_APPLIED/NO_DDL/CEREMONY_PENDING independently', () => {
+    const results = [
+      { file: 'a.sql', status: 'APPLIED' }, { file: 'b.sql', status: 'PARTIAL' },
+      { file: 'c.sql', status: 'NOT_APPLIED' }, { file: 'd.sql', status: 'NO_DDL' },
+      { file: 'database/chairman-gated/e.sql', status: 'CEREMONY_PENDING' },
+    ];
+    const { summary, gaps } = summarizeResults(results, { scanned: 5 });
+    expect(summary).toMatchObject({ applied: 1, partial: 1, not_applied: 1, no_ddl: 1, ceremony_pending: 1 });
+    expect(gaps.map((g) => g.file).sort()).toEqual(['b.sql', 'c.sql', 'database/chairman-gated/e.sql']);
   });
 });
 
