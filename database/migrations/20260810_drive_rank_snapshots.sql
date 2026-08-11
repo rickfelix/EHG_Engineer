@@ -22,10 +22,23 @@
 -- Upserting would collapse every ranking of an SD into one row and destroy the ability to pick
 -- "the cohort ~24h ago" rather than "the latest cohort" — and the latest cohort is BY
 -- CONSTRUCTION unclaimed (the ranker only ranks currently-claimable leaves), so reading it would
--- read as a permanent ~0% uptake while still reporting leg2 as measured. Enforced here at the DB
--- level (UPDATE always blocked; DELETE blocked unless explicitly permitted in the same
--- transaction), mirroring drive_reports' append-only enforcement — not merely a documented
--- application-level discipline.
+-- read as a permanent ~0% uptake while still reporting leg2 as measured. UPDATE is blocked at the
+-- DB level (a snapshot row that can be edited after ranking is not a snapshot). DELETE is
+-- deliberately NOT blocked — see "REAPER" below for why an unconditional DELETE guard, modeled
+-- on drive_reports' guard-with-a-GUC-escape-hatch, would have made this table's own retention
+-- policy silently non-functional.
+--
+-- REAPER (operator-contract, lib/retention/policies.js): this table accumulates ~175k rows/year
+-- (5 rows every ~15min from the armed standard_loop:backlog-rank cron) and needs the SAME
+-- retention-enforce.js archive-then-delete cycle every other trend table in this repo uses. That
+-- cycle issues a plain supabase-js `.delete().in('id', ch)` with no way to set a per-request
+-- Postgres GUC — so a DELETE-side guard requiring `SET LOCAL ...allow_delete='on'` (as
+-- drive_reports_guard_delete does) would make the archiver succeed at archiving and then fail at
+-- deleting, FOREVER, every single run: a reaper that only ever looks satisfied. Caught before
+-- shipping by working through what the declared policy actually needs to succeed, not just what
+-- satisfies the gate's existence check. The UPDATE guard alone is the load-bearing invariant for
+-- leg2's window-anchor math (ranked_at must never move for a LIVE row); a row's eventual deletion
+-- by the standard retention cycle does not threaten that.
 
 CREATE TABLE IF NOT EXISTS public.drive_rank_snapshots (
   id            uuid PRIMARY KEY DEFAULT gen_random_uuid(),
@@ -48,7 +61,7 @@ CREATE TABLE IF NOT EXISTS public.drive_rank_snapshots (
 );
 
 COMMENT ON TABLE public.drive_rank_snapshots IS
-  'SD-LEO-INFRA-DRIVE-SCORE-LEG2-001 — append-only ranked-top-5 snapshot, one row per (ranked_at cohort, rank 1-5), written by coordinator-backlog-rank.mjs at ranking time and read by drive-report-sweep.mjs leg2_uptake at report time. Exists so leg2''s numerator survives coordinator-backlog-rank.mjs clearing metadata.dispatch_rank on claim. INSERT-only: UPDATE is always blocked, DELETE requires SET LOCAL drive_rank_snapshots.allow_delete = ''on'' in the same transaction. Service-role only.';
+  'SD-LEO-INFRA-DRIVE-SCORE-LEG2-001 — append-only ranked-top-5 snapshot, one row per (ranked_at cohort, rank 1-5), written by coordinator-backlog-rank.mjs at ranking time and read by drive-report-sweep.mjs leg2_uptake at report time. Exists so leg2''s numerator survives coordinator-backlog-rank.mjs clearing metadata.dispatch_rank on claim. Rows are never UPDATEd (DB-enforced trigger — a live row''s ranked_at must never move); rows ARE deleted by the standard retention-enforce.js archive-then-delete cycle (lib/retention/policies.js), which needs a plain DELETE with no GUC escape hatch to function. Service-role only.';
 
 -- The reader's primary access pattern: find the nearest cohort whose ranked_at has fully
 -- elapsed the claim window, then fetch that cohort's rows.
@@ -73,11 +86,8 @@ END
 $rank_snap_uniq$;
 
 -- ---------------------------------------------------------------------------
--- APPEND-ONLY, ENFORCED. UPDATE is always blocked — a snapshot row that can be edited after the
--- fact is not a snapshot. DELETE is possible but never accidental (same shape as
--- drive_reports_guard_delete): a retention policy will eventually need it, so a blanket block
--- would just get the trigger dropped entirely by whoever needs that later. SET LOCAL scopes the
--- permission to one transaction and cannot leak into the next.
+-- APPEND-ONLY (UPDATE half only). A snapshot row that can be edited after the fact is not a
+-- snapshot, and leg2's window-anchor math depends on a live row's ranked_at never moving.
 -- ---------------------------------------------------------------------------
 CREATE OR REPLACE FUNCTION public.drive_rank_snapshots_guard_update()
 RETURNS trigger
@@ -93,22 +103,17 @@ CREATE TRIGGER drive_rank_snapshots_guard_update_trg
   BEFORE UPDATE ON public.drive_rank_snapshots
   FOR EACH ROW EXECUTE FUNCTION public.drive_rank_snapshots_guard_update();
 
-CREATE OR REPLACE FUNCTION public.drive_rank_snapshots_guard_delete()
-RETURNS trigger
-LANGUAGE plpgsql
-AS $del$
-BEGIN
-  IF COALESCE(current_setting('drive_rank_snapshots.allow_delete', true), 'off') <> 'on' THEN
-    RAISE EXCEPTION 'drive_rank_snapshots rows are append-only: DELETE would let a cohort be rewritten by DELETE + re-INSERT. If this is deliberate (retention, or a test), say so in the same transaction: SET LOCAL drive_rank_snapshots.allow_delete = ''on'' (row id %)', OLD.id;
-  END IF;
-  RETURN OLD;
-END
-$del$;
-
+-- ---------------------------------------------------------------------------
+-- NO DELETE GUARD (deliberate, and a repair of this file's first version — see the REAPER note
+-- near the top). retention-enforce.js's plain `.delete().in('id', ch)` has no path to set a
+-- per-request GUC, so a delete-side guard would leave this table's reaper permanently unable to
+-- actually shrink the hot table while still reporting "archived" every run. Explicitly dropped
+-- (not merely omitted) so a re-run of this file REPAIRS a database that already has the
+-- earlier, delete-guarded version applied — the same self-healing property every other
+-- idempotent statement in this file has.
+-- ---------------------------------------------------------------------------
 DROP TRIGGER IF EXISTS drive_rank_snapshots_guard_delete_trg ON public.drive_rank_snapshots;
-CREATE TRIGGER drive_rank_snapshots_guard_delete_trg
-  BEFORE DELETE ON public.drive_rank_snapshots
-  FOR EACH ROW EXECUTE FUNCTION public.drive_rank_snapshots_guard_delete();
+DROP FUNCTION IF EXISTS public.drive_rank_snapshots_guard_delete();
 
 -- ---------------------------------------------------------------------------
 -- Posture: service-role only. Asserted, not inherited.
@@ -200,10 +205,13 @@ BEGIN
       AND tgname = 'drive_rank_snapshots_guard_update_trg'
   ), 'drive_rank_snapshots: the append-only UPDATE guard trigger is missing';
 
-  ASSERT EXISTS (
+  -- Deliberately ABSENT (see the REAPER note near the top): a DELETE guard would make
+  -- retention-enforce.js's plain `.delete()` fail forever, so this asserts it stays gone even if
+  -- a future edit reintroduces it by copy-paste from the drive_reports precedent.
+  ASSERT NOT EXISTS (
     SELECT 1 FROM pg_trigger
     WHERE tgrelid = 'public.drive_rank_snapshots'::regclass
       AND tgname = 'drive_rank_snapshots_guard_delete_trg'
-  ), 'drive_rank_snapshots: the append-only DELETE guard trigger is missing';
+  ), 'drive_rank_snapshots: a DELETE guard trigger exists — this would make retention-enforce.js archive successfully and then fail to delete, forever; the reaper needs a plain DELETE to function';
 END
 $verify$;
