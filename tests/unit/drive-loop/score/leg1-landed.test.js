@@ -72,7 +72,7 @@ describe('leg1 — landed means ANCESTOR of main, not patch-equivalent to it', (
     expect(all.landed_count.value).toBe(2);
 
     const partial = scoreLeg1({ items: [ITEM('i1', 'a'), ITEM('i2', 'not-landed')], runGit });
-    expect(partial.points.value, 'partial landing is not landing — the leg is all-or-nothing').toBe(0);
+    expect(partial.points.value, 'partial landing is not landing — this REFERENCE implementation is all-or-nothing (the LIVE leg1 rule, A-LOCAL, scores proportionally instead — see leg1-landed-alocal.js)').toBe(0);
     expect(partial.landed_count.value).toBe(1);
   });
 
