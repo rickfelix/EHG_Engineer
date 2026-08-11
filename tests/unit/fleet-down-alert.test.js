@@ -2,6 +2,12 @@
 // Oscillation-robust (sustained window, not point-in-time), claimable-gated, and edge-trigger-deduped
 // so a long outage emails once rather than every 15-min run.
 import { describe, it, expect, vi } from 'vitest';
+// SD-LEO-INFRA-CHAIRMAN-QUIET-WINDOW-001 (E1): checkDeadCoordinator's send branch now
+// resolves the chairman's zone via a dynamic import; the real resolver reaches a live
+// ChairmanPreferenceStore/Supabase client, which hangs in the vitest sandbox.
+vi.mock('../../lib/comms/adam-outbound/quiet-hours-extension.js', () => ({
+  resolveChairmanZone: vi.fn(async () => ({ zone: 'America/New_York', source: 'default' })),
+}));
 import { evaluateFleetDownAlert, evaluateDeadCoordinatorAlert, buildDeadCoordinatorMessage, checkDeadCoordinator } from '../../scripts/fleet-down-alert.mjs';
 
 // Helper: build a newest-first pulse list from active_count values.
@@ -153,9 +159,33 @@ describe('evaluateDeadCoordinatorAlert (SD-LEO-INFRA-DURABLE-COORDINATOR-LOOPS-0
     // however it naturally does in this env (it degrades gracefully with no supabase writes).
     await checkDeadCoordinator(db, false, sendChairmanSMSFn, NOW);
     expect(sendChairmanSMSFn).toHaveBeenCalledTimes(1);
-    const [message] = sendChairmanSMSFn.mock.calls[0];
+    const [message, context] = sendChairmanSMSFn.mock.calls[0];
     expect(message.body).toMatch(/DEAD COORDINATOR/);
     expect(message.kind).toBe('dead_coordinator_alert');
+    // SD-LEO-INFRA-CHAIRMAN-QUIET-WINDOW-001 (E1): the resolved chairman zone is threaded
+    // into the send context, not silently defaulted inside sendChairmanSMS.
+    expect(context.chairmanZone).toBe('America/New_York'); // the mocked resolver's default
+  });
+
+  it('E1: checkDeadCoordinator() resolves and threads a non-ET chairman zone into the send context', async () => {
+    const { resolveChairmanZone } = await import('../../lib/comms/adam-outbound/quiet-hours-extension.js');
+    resolveChairmanZone.mockResolvedValueOnce({ zone: 'America/Jamaica', source: 'chairman_preference' });
+    const sendChairmanSMSFn = vi.fn().mockResolvedValue({ sent: true });
+    const db = {
+      from: () => ({
+        select: () => ({
+          eq: () => ({
+            order: () => ({
+              limit: async () => ({ data: [{ heartbeat_at: minutesAgo(16) }], error: null }),
+            }),
+          }),
+        }),
+      }),
+    };
+    await checkDeadCoordinator(db, false, sendChairmanSMSFn, NOW);
+    expect(sendChairmanSMSFn).toHaveBeenCalledTimes(1);
+    const [, context] = sendChairmanSMSFn.mock.calls[0];
+    expect(context.chairmanZone).toBe('America/Jamaica');
   });
 
   it('TS-7: checkDeadCoordinator() does NOT call sendChairmanSMS when the coordinator heartbeat is fresh', async () => {

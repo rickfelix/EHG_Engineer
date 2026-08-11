@@ -261,6 +261,29 @@ describe('ChairmanPreferenceStore', () => {
       });
       expect(result.success).toBe(false);
     });
+
+    // SEC-QW-02: 'Asia/Kolkata' does NOT throw when handed to Intl.DateTimeFormat -- it
+    // silently canonicalizes to the legacy alias 'Asia/Calcutta' -- so a bare
+    // throw-or-not check (the pre-fix validator) accepted it at write time while the
+    // read-time resolver (isValidCanonicalZone's round-trip check) rejects it, leaving a
+    // write that reports success but is silently discarded at read. Confirmed reproducible
+    // in this Node/ICU runtime.
+    it('SEC-QW-02: rejects a legacy zone alias that Intl tolerates but does not canonically round-trip (bare-string form)', async () => {
+      const result = await store.setPreference({
+        chairmanId: 'c1', key: 'notifications.timezone', value: 'Asia/Kolkata', valueType: 'string',
+      });
+      expect(result.success).toBe(false);
+      expect(result.error).toContain('valid IANA timezone');
+    });
+
+    it('SEC-QW-02: rejects the same legacy alias in the composite form', async () => {
+      const result = await store.setPreference({
+        chairmanId: 'c1', key: 'notifications.timezone',
+        value: { zone: 'Asia/Kolkata', until: '2026-08-14T12:00:00.000Z' }, valueType: 'object',
+      });
+      expect(result.success).toBe(false);
+      expect(result.error).toContain('valid IANA timezone');
+    });
   });
 
   describe('setPreference - upsert', () => {
@@ -454,7 +477,8 @@ describe('ChairmanPreferenceStore', () => {
         select: vi.fn().mockReturnThis(),
         eq: vi.fn().mockReturnThis(),
         is: vi.fn().mockReturnThis(),
-        in: vi.fn().mockImplementation(function () {
+        in: vi.fn().mockReturnThis(),
+        order: vi.fn().mockImplementation(function () {
           queryCount++;
           if (queryCount === 1) return Promise.resolve({ data: ventureRows, error: null });
           return Promise.resolve({ data: globalRows, error: null });
@@ -480,7 +504,8 @@ describe('ChairmanPreferenceStore', () => {
         select: vi.fn().mockReturnThis(),
         eq: vi.fn().mockReturnThis(),
         is: vi.fn().mockReturnThis(),
-        in: vi.fn().mockResolvedValue({ data: globalRows, error: null }),
+        in: vi.fn().mockReturnThis(),
+        order: vi.fn().mockResolvedValue({ data: globalRows, error: null }),
       });
 
       const result = await store.getPreferences({ chairmanId: 'c1', keys: ['k1'] });
@@ -497,7 +522,8 @@ describe('ChairmanPreferenceStore', () => {
       mockSupabase.from.mockReturnValue({
         select: vi.fn().mockReturnThis(),
         eq: vi.fn().mockReturnThis(),
-        in: vi.fn().mockResolvedValue({ data: ventureRows, error: null }),
+        in: vi.fn().mockReturnThis(),
+        order: vi.fn().mockResolvedValue({ data: ventureRows, error: null }),
       });
 
       const result = await store.getPreferences({
@@ -505,6 +531,34 @@ describe('ChairmanPreferenceStore', () => {
       });
       expect(result.size).toBe(2);
       expect(mockSupabase.from).toHaveBeenCalledTimes(1);
+    });
+
+    // SEC-QW-01: getPreferences() previously had no .order() and last-row-wins over an
+    // UNORDERED result set -- non-deterministic given real duplicate rows (the exact bug
+    // class FR-1 fixed for getPreference() but missed here; resolveQuietHoursContext reads
+    // through this path).
+    it('SEC-QW-01: a duplicate row per key resolves to the MOST RECENT (pre-ordered) row, not whichever the DB happened to return first, and warns once per duplicated key', async () => {
+      // Server-side .order('updated_at', {ascending:false}) means the most-recent row per
+      // key arrives FIRST in this array -- the fake mirrors that pre-ordering.
+      const globalRows = [
+        { id: 'g2', preference_key: 'k1', preference_value: 'newest', value_type: 'string', source: 's', updated_at: '2026-02-01' },
+        { id: 'g1', preference_key: 'k1', preference_value: 'oldest', value_type: 'string', source: 's', updated_at: '2026-01-01' },
+      ];
+      mockSupabase.from.mockReturnValue({
+        select: vi.fn().mockReturnThis(),
+        eq: vi.fn().mockReturnThis(),
+        is: vi.fn().mockReturnThis(),
+        in: vi.fn().mockReturnThis(),
+        order: vi.fn().mockResolvedValue({ data: globalRows, error: null }),
+      });
+
+      const result = await store.getPreferences({ chairmanId: 'c1', keys: ['k1'] });
+
+      expect(result.get('k1').value).toBe('newest');
+      expect(silentLogger.error).toHaveBeenCalledWith(
+        'chairman_preference.multi_row_scope_violation',
+        expect.objectContaining({ key: 'k1', scope: 'global', rowCount: 2 }),
+      );
     });
   });
 

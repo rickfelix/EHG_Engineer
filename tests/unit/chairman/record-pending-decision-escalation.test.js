@@ -9,6 +9,19 @@
  * recorded regardless of the cap — only the email amplification is capped.
  */
 import { describe, it, expect, vi } from 'vitest';
+// SD-LEO-INFRA-CHAIRMAN-QUIET-WINDOW-001 (E1): escalateChairmanDecision's default gatedSms
+// (attemptGatedChairmanSms) now resolves the chairman's zone via a dynamic import; the real
+// resolver reaches a live ChairmanPreferenceStore/Supabase client, which hangs in the vitest
+// sandbox. None of this file's tests inject a custom gatedSms, so they all reach the default.
+vi.mock('../../../lib/comms/adam-outbound/quiet-hours-extension.js', () => ({
+  resolveChairmanZone: vi.fn(async () => ({ zone: 'America/New_York', source: 'default' })),
+}));
+// None of this file's existing assertions observe sendChairmanSMS's own behavior (only the
+// email-side spawn/escalated/digest/deduped/suppressed outcomes), so mocking it here to
+// observe the context it receives is additive, not a behavior change for existing tests.
+vi.mock('../../../lib/comms/adam-outbound/chairman-sms-gate/index.js', () => ({
+  sendChairmanSMS: vi.fn(async () => ({ sent: true })),
+}));
 import {
   shouldAutoEscalate,
   escalateChairmanDecision,
@@ -333,5 +346,27 @@ describe('SD-LEO-INFRA-CHAIRMAN-DECISION-EMAIL-001 FR-2 — atomic stamp-before-
     expect(r.escalated).toBe(false);
     expect(r.error).toMatch(/db unavailable/);
     expect(spawn).not.toHaveBeenCalled();                  // fail-closed
+  });
+});
+
+// SD-LEO-INFRA-CHAIRMAN-QUIET-WINDOW-001 (E1): testing-agent found this was one of 2
+// production sendChairmanSMS callers still silently defaulting to ET (PLAN blocker F2).
+// attemptGatedChairmanSms (escalateChairmanDecision's default gatedSms) now resolves the
+// chairman zone before calling sendChairmanSMS.
+describe('E1: the decision-question SMS gate resolves and threads the chairman zone', () => {
+  it('passes the resolved chairmanZone through to sendChairmanSMS', async () => {
+    const { sendChairmanSMS } = await import('../../../lib/comms/adam-outbound/chairman-sms-gate/index.js');
+    const { resolveChairmanZone } = await import('../../../lib/comms/adam-outbound/quiet-hours-extension.js');
+    sendChairmanSMS.mockClear();
+    resolveChairmanZone.mockResolvedValueOnce({ zone: 'America/Jamaica', source: 'chairman_preference' });
+
+    const sb = makeSupabase({ briefData: { title: 'q' } });
+    const spawn = vi.fn();
+    const r = await escalateChairmanDecision(sb, 'dec-1', { spawn, quietWindow: () => false });
+
+    expect(r.escalated).toBe(true);
+    expect(sendChairmanSMS).toHaveBeenCalledTimes(1);
+    const [, context] = sendChairmanSMS.mock.calls[0];
+    expect(context.chairmanZone).toBe('America/Jamaica');
   });
 });

@@ -91,6 +91,31 @@ describe('resolveChairmanZone / deriveChairmanZone', () => {
     expect(deriveChairmanZone(now, { value: 'America/Jamaica' })).toEqual({ zone: 'America/Jamaica', source: 'chairman_preference' });
     expect(deriveChairmanZone(now, { value: ['America/Jamaica'] })).toEqual({ zone: DEFAULT_ZONE, source: 'invalid_fallback' });
   });
+
+  // SEC-QW-03: source:'invalid_fallback' was computed and returned but never OBSERVED by
+  // any caller -- the gap that let SEC-QW-02 (a write accepted, then silently discarded at
+  // read) go undetected. Every invalid_fallback path must now be logged.
+  it('SEC-QW-03: logs chairman_zone.invalid_fallback when a stored value is rejected at read', async () => {
+    const store = { getPreference: vi.fn().mockResolvedValue({ value: 'not-a-zone' }) };
+    const logger = { warn: vi.fn() };
+    const result = await resolveChairmanZone(now, { store, logger });
+    expect(result.source).toBe('invalid_fallback');
+    expect(logger.warn).toHaveBeenCalledWith('chairman_zone.invalid_fallback', expect.objectContaining({ zone: DEFAULT_ZONE, caller: 'resolveChairmanZone' }));
+  });
+
+  it('SEC-QW-03: does NOT log when the source is the normal default (unset) case', async () => {
+    const store = { getPreference: vi.fn().mockResolvedValue(null) };
+    const logger = { warn: vi.fn() };
+    await resolveChairmanZone(now, { store, logger });
+    expect(logger.warn).not.toHaveBeenCalled();
+  });
+
+  it('SEC-QW-03: does NOT log when a valid zone resolves normally', async () => {
+    const store = { getPreference: vi.fn().mockResolvedValue({ value: 'America/Jamaica' }) };
+    const logger = { warn: vi.fn() };
+    await resolveChairmanZone(now, { store, logger });
+    expect(logger.warn).not.toHaveBeenCalled();
+  });
 });
 
 // SD-LEO-INFRA-CHAIRMAN-QUIET-WINDOW-001 FR-2/FR-3: batched resolution for the hot send path.
@@ -129,5 +154,22 @@ describe('resolveQuietHoursContext', () => {
     expect(await resolveQuietHoursContext(now, { store })).toEqual({
       allowQuietHours: false, chairmanZone: DEFAULT_ZONE, chairmanZoneSource: 'invalid_fallback',
     });
+  });
+
+  it('SEC-QW-03: logs chairman_zone.invalid_fallback when the batched zone value is rejected at read', async () => {
+    const map = new Map([[ZONE_KEY, { value: 'not-a-zone' }]]);
+    const store = { getPreferences: vi.fn().mockResolvedValue(map) };
+    const logger = { warn: vi.fn() };
+    const result = await resolveQuietHoursContext(now, { store, logger });
+    expect(result.chairmanZoneSource).toBe('invalid_fallback');
+    expect(logger.warn).toHaveBeenCalledWith('chairman_zone.invalid_fallback', expect.objectContaining({ zone: DEFAULT_ZONE, caller: 'resolveQuietHoursContext' }));
+  });
+
+  it('SEC-QW-03: does NOT log when the batch resolves normally (valid zone, no extension)', async () => {
+    const map = new Map([[ZONE_KEY, { value: 'America/Jamaica' }]]);
+    const store = { getPreferences: vi.fn().mockResolvedValue(map) };
+    const logger = { warn: vi.fn() };
+    await resolveQuietHoursContext(now, { store, logger });
+    expect(logger.warn).not.toHaveBeenCalled();
   });
 });

@@ -240,7 +240,14 @@ export async function checkDeadCoordinator(db, DRY, sendChairmanSMSFn = null, no
     return;
   }
   const send = sendChairmanSMSFn || (await import(pathToFileURL(path.resolve('lib/comms/adam-outbound/chairman-sms-gate/index.js')).href)).sendChairmanSMS;
-  const r = await send(message, { now });
+  // SD-LEO-INFRA-CHAIRMAN-QUIET-WINDOW-001 (E1/FR-3 completion): resolve the chairman's zone
+  // before sending -- this dead-coordinator page is the second of 2 production sendChairmanSMS
+  // callers testing-agent found still silently defaulting to ET. Dynamic import (same
+  // reasoning as the sendChairmanSMSFn resolution above): keeps quiet-hours-extension.js out
+  // of this file's static import graph. Never throws (fail-safe ET default).
+  const { resolveChairmanZone } = await import(pathToFileURL(path.resolve('lib/comms/adam-outbound/quiet-hours-extension.js')).href);
+  const { zone: chairmanZone } = await resolveChairmanZone(now);
+  const r = await send(message, { now, chairmanZone });
   console.log('[dead-coordinator-alert] sendChairmanSMS result:', JSON.stringify(r));
 }
 
