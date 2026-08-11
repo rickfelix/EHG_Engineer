@@ -331,6 +331,29 @@ function parseArgs(argv) {
 async function deliverReplyOrExit(supabase, { adv, replyBody, coordinatorSession }) {
   if (!replyBody) { console.error('ERROR: --reply requires a body.'); process.exit(2); }
   const originator = adv.sender_session;
+
+  // QF-20260728-468: refuse when --advisory names a row a NON-ADAM session sent. The reply target
+  // is always resolved to the CURRENT live Adam below (FR-1) — a STALE Adam sender_session
+  // legitimately differs from that target and must still be let through (retargeting is FR-1's
+  // whole point). What this catches is narrower: a sender_session whose REGISTERED ROLE is not
+  // 'adam' at all (e.g. Solomon) means --advisory named a THIRD PARTY's row. Replying to Adam and
+  // then stamping that row's actioned_at silently retires the third party's advisory unread, with
+  // the reply landing somewhere unrelated to it — reproduced 2026-07-28 (827b6a2e, a Solomon
+  // advisory, passed instead of 472027ac). Fail-open on everything else: a null/non-UUID sender
+  // (cron-emitted Adam advisories) or an unresolvable role lookup is unchanged.
+  if (isFullUuid(originator)) {
+    const { data: senderRow } = await supabase.from('claude_sessions').select('metadata').eq('session_id', originator).maybeSingle();
+    const senderRole = senderRow && senderRow.metadata && senderRow.metadata.role;
+    if (senderRole && senderRole !== 'adam') {
+      console.error(
+        `ERROR: --advisory ${adv.id} was sent by a '${senderRole}'-role session (${originator}), not Adam. `
+        + 'Refusing to reply-to-Adam-and-stamp-this-row: that would deliver the reply to Adam while '
+        + `silently retiring the ${senderRole} row unread. Pass the correct advisory id, or omit --reply to just ack this row.`
+      );
+      process.exit(1);
+    }
+  }
+
   const correlationId = adv.payload && adv.payload.correlation_id;
   if (!correlationId) { console.error('ERROR: advisory carries no payload.correlation_id (not replyable).'); process.exit(1); }
 
