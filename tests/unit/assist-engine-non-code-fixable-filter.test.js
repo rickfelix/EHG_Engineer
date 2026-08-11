@@ -10,8 +10,22 @@
  */
 
 import { describe, it, expect, vi, afterEach } from 'vitest';
+import { createRequire } from 'node:module';
+
+const require = createRequire(import.meta.url);
 
 const FEEDBACK_TABLE = 'v_feedback_with_sensemaking';
+
+describe('FR-1 AC5: direct CommonJS require() of the new governance module', () => {
+  it('exposes NON_CODE_FIXABLE_CATEGORIES and filterIssuesExcludingNonCodeFixable via require(), not only via the assist-engine.js re-export', () => {
+    const direct = require('../../lib/governance/non-code-fixable-categories.cjs');
+    expect(direct.NON_CODE_FIXABLE_CATEGORIES).toBeInstanceOf(Set);
+    expect(direct.NON_CODE_FIXABLE_CATEGORIES.size).toBe(11);
+    expect(typeof direct.filterIssuesExcludingNonCodeFixable).toBe('function');
+    // Same module.exports shape as the precedent (module.exports = { CONSTANT, function }).
+    expect(Object.keys(direct).sort()).toEqual(['NON_CODE_FIXABLE_CATEGORIES', 'filterIssuesExcludingNonCodeFixable'].sort());
+  });
+});
 
 function makeQueryBuilder(rows) {
   const builder = {
