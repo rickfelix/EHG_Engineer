@@ -35,7 +35,7 @@ import { fetchAllPaginated, POSTGREST_MAX_ROWS } from '../lib/db/fetch-all-pagin
 // KPI-0 outcome/flow is the PRIMARY axis; the base 3 KPIs stay untouched below.
 import { execSync } from 'child_process';
 import {
-  computeOutcomeFlow, classifyFailureClasses, fetchStuckWithoutHold,
+  computeOutcomeFlow, classifyFailureClasses, fetchStuckWithoutHold, fetchStaleUnreviewedHolds,
   deriveDispatchReasons, evaluateReasonBand, sampleFalseCompletions, selectCohort,
   FALSE_COMPLETION_SAMPLE, OUTCOME_WINDOW_DAYS,
 } from '../lib/oversight/coordinator-health-sharpenings.mjs';
@@ -429,7 +429,7 @@ export function gitGrepMainForSd(sdKey) {
  */
 export async function computeSharpenings(supabase, { utilization, integrity, nowMs = Date.now(), gitGrep = gitGrepMainForSd } = {}) {
   let outcomeFlow = null; let dispatchReasons = null; let bandVerdict = null;
-  let stuckRows = []; let falseCompletionSample = null;
+  let stuckRows = []; let staleHoldRows = []; let staleHoldError = null; let falseCompletionSample = null;
   try { outcomeFlow = await computeOutcomeFlow(supabase, { nowMs }); } catch (e) { outcomeFlow = { status: 'error', error: e.message }; }
   try {
     // S3 classifies the SAME first-claim-in-window cohort KPI-0 measures —
@@ -450,7 +450,12 @@ export async function computeSharpenings(supabase, { utilization, integrity, now
     dispatchReasons = deriveDispatchReasons(selectCohort(data, nowMs));
     bandVerdict = evaluateReasonBand(dispatchReasons);
   } catch (e) { bandVerdict = { band_ok: true, error: e.message }; }
-  try { stuckRows = await fetchStuckWithoutHold(supabase, { nowMs }); } catch { stuckRows = []; }
+  // SD-LEO-INFRA-AGE-GAUGE-NON-001 FR-3b: preserve the error like the two sibling fetches in
+  // this function already do — a query failure collapsing to [] was indistinguishable from a
+  // genuinely clean result and nearly mis-diagnosed the RCA specimen as a detector bug.
+  let stuckRowsError = null;
+  try { stuckRows = await fetchStuckWithoutHold(supabase, { nowMs }); } catch (e) { stuckRows = []; stuckRowsError = e.message; }
+  try { staleHoldRows = await fetchStaleUnreviewedHolds(supabase, { nowMs }); } catch (e) { staleHoldRows = []; staleHoldError = e.message; }
   try {
     // Sample RECENT completions only (non-null completion_date within ~4 windows):
     // ancient/null-dated rows predate merge-trace conventions and would make the
@@ -465,8 +470,12 @@ export async function computeSharpenings(supabase, { utilization, integrity, now
       .limit(FALSE_COMPLETION_SAMPLE);
     falseCompletionSample = sampleFalseCompletions(recentCompleted || [], gitGrep);
   } catch (e) { falseCompletionSample = { samples: [], false_completions: [], error: e.message }; }
-  const failureClasses = classifyFailureClasses({ outcomeFlow, utilization, integrity, stuckRows, falseCompletionSample });
-  return { outcomeFlow, dispatchReasons, bandVerdict, failureClasses };
+  const failureClasses = classifyFailureClasses({ outcomeFlow, utilization, integrity, stuckRows, staleHoldRows, falseCompletionSample });
+  return {
+    outcomeFlow, dispatchReasons, bandVerdict, failureClasses,
+    // FR-3b: distinguishable from a genuinely clean run — null on success, the fetch error otherwise.
+    stuck_fetch_error: stuckRowsError, stale_hold_fetch_error: staleHoldError,
+  };
 }
 
 export async function runProbe(supabase, opts = {}) {
