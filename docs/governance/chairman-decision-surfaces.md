@@ -139,3 +139,35 @@ only, never step-up-gated, since it is itself the break-glass re-enrollment path
 
 `blocking DESC` → `effective_priority` class (base priority bumped one class
 after 72h pending — visibility only) → `created_at ASC` (oldest first).
+
+## Venture build-status contradiction flag on the LEAN decision email (SD-LEO-INFRA-VENTURE-STATUS-LANGUAGE-001, 2026-08-11)
+
+Chairman-witnessed incident: a venture read as "built and waiting" in decision prose while
+measured factory state (`workflow_status`, `deployment_url`, `launch_mode`) said the build had
+never started. `scripts/adam-decision-email.mjs` (the LEAN on-demand renderer, `renderLeanDecision`
+in `lib/chairman/decision-layman.mjs` — surface #1's `chairman_decisions` base-table path, distinct
+from the hourly exec-summary's `chairman_pending_decisions` view path already documented in
+`docs/flywheel/15-executive-summary-email.md`) now carries the same fix:
+
+- The script's existing batched `ventures` fetch (already used for the dead-venture-ids /
+  fixture-venture-ids filters above) is extended to also read `workflow_status`,
+  `workflow_started_at`, `deployment_url`, `repo_url`, `launch_mode`, plus one additional
+  `venture_deployments` (status=`routed`) query — composed via `deriveVentureBuildStatus`
+  (`lib/governance/venture-build-status.mjs`, PURE) into a `venture_build_status` field
+  attached to each row before rendering. No second `ventures` query is issued.
+- `decision-layman.mjs` stays I/O-free: `renderLeanDecision` scans only the RAW `brief_data.title`
+  + recommendation (never the assembled line, which is padded with this file's own "waiting Xd"
+  template phrasing) for a narrow build-status word (`built|deployed|live` — `waiting`/`ready`
+  deliberately excluded as too ambiguous in this codebase's own vocabulary) and appends a
+  factory-truth correction via `ventureStatusContradictionNote` only when it contradicts the
+  measured status. A row with no attached status, or no build-status word, or an agreeing word,
+  renders byte-identical to pre-SD behavior.
+- One-time non-destructive sweep for pre-existing stale rows:
+  `scripts/one-off/annotate-stale-venture-status-prose.mjs` — stamps
+  `brief_data.venture_status_correction` (namespaced, never touching the original
+  title/recommendation/summary text).
+- Deliberately measures `workflow_status` + deployment evidence + `launch_mode`, never
+  `venture_stage_work` row count or `current_lifecycle_stage` — verified live against the
+  witnessed venture, which had 7 completed `venture_stage_work` rows (planning/artifact-stage
+  work) despite no real build ever starting; that table is a different axis and conflating it
+  with build/deploy evidence would reproduce the incident one level down.
