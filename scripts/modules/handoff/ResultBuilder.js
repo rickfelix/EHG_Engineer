@@ -77,7 +77,13 @@ export class ResultBuilder {
    */
   static systemError(error, sourceStep = null) {
     const isErrorInstance = error instanceof Error;
-    const rawMessage = isErrorInstance ? error.message : String(error);
+    // QF-20260808-281: String(plainObject) renders the literal '[object Object]', burying the
+    // real reason -- hit for non-Error throwables (e.g. a Supabase-style {message, code, ...}
+    // result passed through as `error`). Same extraction precedent as gateFailure's issues
+    // mapping above (QF-20260605-024): prefer .message, then .code, then a serialized fallback.
+    const rawMessage = isErrorInstance
+      ? error.message
+      : (typeof error === 'string' ? error : ((error && error.message) || (error && error.code) || JSON.stringify(error)));
     const errorClass = isErrorInstance ? (error.constructor?.name || 'Error') : 'Unknown';
     const errorName = isErrorInstance ? error.name : null;
     const stack = isErrorInstance && error.stack

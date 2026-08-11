@@ -91,3 +91,39 @@ describe('ResultBuilder.systemError diagnostic enhancement (QF-20260423-200)', (
     expect(ResultBuilder.systemError(err).reasonCode).toBe('SYSTEM_ERROR');
   });
 });
+
+describe('ResultBuilder.systemError non-Error plain-object inputs (QF-20260808-281)', () => {
+  it('extracts .message from a plain object (e.g. a Supabase-style error) instead of stringifying it', () => {
+    const supabaseStyleError = { message: 'duplicate key value violates unique constraint', code: '23505', details: null, hint: null };
+    const result = ResultBuilder.systemError(supabaseStyleError);
+    expect(result.error).toBe('duplicate key value violates unique constraint');
+    expect(result.message).toBe('duplicate key value violates unique constraint');
+    expect(result.error).not.toBe('[object Object]');
+  });
+
+  it('falls back to .code when a plain object has no .message', () => {
+    const result = ResultBuilder.systemError({ code: 'PGRST116' });
+    expect(result.error).toBe('PGRST116');
+    expect(result.error).not.toBe('[object Object]');
+  });
+
+  it('falls back to a JSON-serialized form when a plain object has neither .message nor .code', () => {
+    const result = ResultBuilder.systemError({ detail: 'claim-reaffirm write failed', rows: 0 });
+    expect(result.error).not.toBe('[object Object]');
+    expect(JSON.parse(result.error)).toEqual({ detail: 'claim-reaffirm write failed', rows: 0 });
+  });
+
+  it('never renders the literal [object Object] on the operator line for any object-shaped input', () => {
+    const cases = [
+      { message: 'named error' },
+      { code: 'ERR_CODE' },
+      { arbitrary: 'shape' },
+      {},
+    ];
+    for (const input of cases) {
+      const result = ResultBuilder.systemError(input);
+      expect(result.error).not.toBe('[object Object]');
+      expect(result.message).not.toBe('[object Object]');
+    }
+  });
+});
