@@ -9,7 +9,7 @@ import 'dotenv/config';
 import crypto from 'crypto';
 import { enforceCliSendGuard } from '../lib/notifications/cli-send-guard.mjs';
 import { sendChairmanSMS } from '../lib/comms/adam-outbound/chairman-sms-gate/index.js';
-import { resolveAllowQuietHours } from '../lib/comms/adam-outbound/quiet-hours-extension.js';
+import { resolveQuietHoursContext } from '../lib/comms/adam-outbound/quiet-hours-extension.js';
 
 enforceCliSendGuard({
   scriptName: 'scripts/adam-chairman-decision.mjs',
@@ -60,8 +60,12 @@ if (DRY) {
   console.log('=== [ADAM CHAIRMAN DECISION — DRY RUN] no send ===\n' + JSON.stringify(message, null, 2));
 } else {
   // QF-20260720-824: honor a recorded chairman window-extension; default window unchanged.
+  // SD-LEO-INFRA-CHAIRMAN-QUIET-WINDOW-001 (FR-3): also resolves the chairman's location zone
+  // in the SAME batched preference read (resolveQuietHoursContext), replacing the narrower
+  // resolveAllowQuietHours call -- one round trip, not two.
   const now = new Date();
-  const context = { now, allowQuietHours: await resolveAllowQuietHours(now) };
+  const { allowQuietHours, chairmanZone } = await resolveQuietHoursContext(now);
+  const context = { now, allowQuietHours, chairmanZone };
   const r = await sendChairmanSMS(message, context);
   console.log('ADAM-CHAIRMAN-DECISION', JSON.stringify(r));
 }

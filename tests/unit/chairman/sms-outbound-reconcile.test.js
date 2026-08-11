@@ -6,6 +6,14 @@
  * chairman_notifications) and stubbed messaging providers — no live DB, no live Twilio.
  */
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
+// SD-LEO-INFRA-CHAIRMAN-QUIET-WINDOW-001 (FR-4): reconcileOutboundSms now resolves the
+// chairman's zone once per sweep (default: the real resolver, which reaches a live
+// ChairmanPreferenceStore/Supabase client and hangs in the vitest sandbox). Mocked here rather
+// than threaded through every one of this file's ~24 reconcileOutboundSms(...) call sites --
+// one module mock covers all of them uniformly.
+vi.mock('../../../lib/comms/adam-outbound/quiet-hours-extension.js', () => ({
+  resolveChairmanZone: vi.fn(async () => ({ zone: 'America/New_York', source: 'default' })),
+}));
 import { enqueueChairmanSms, smsOutboundObligationsLive } from '../../../lib/chairman/sms-bridge.js';
 import { reconcileOutboundSms, maskPhone } from '../../../lib/chairman/sms-outbound-worker.js';
 import { handleTwilioStatusCallback } from '../../../api/webhooks/twilio-sms.js';
@@ -580,6 +588,23 @@ describe('sleep-window at retry-release (Solomon Pin #1)', () => {
     const provider = okProvider();
     await reconcileOutboundSms(sb, { provider, maxAttempts: 3, now: outsideWindow.getTime() });
     expect(provider.send).toHaveBeenCalledTimes(1); // re-armed then resent in the same pass
+    const row = sb._tables.sms_outbound_obligations[0];
+    expect(row.status).toBe('sent');
+  });
+
+  it('FR-4: the resolved chairman zone (not always ET) governs the quiet-window check -- same instant, different verdict', async () => {
+    // Same UTC instant as the "INSIDE the ET window" test above (11:58 PM ET on 2026-01-15,
+    // deferred there). In January America/Los_Angeles is UTC-8 (PST, no DST): that instant is
+    // 8:58 PM Pacific -- OUTSIDE the 22:00-06:00 quiet window -- proving the resolved zone (not
+    // a hardcoded ET) is what the worker's quiet-window check actually runs against.
+    const sameInstant = new Date('2026-01-16T04:58:00.000Z');
+    const sb = makeFakeSupabase({ sms_outbound_obligations: [owedRow({ status: 'undelivered', attempts: 1 })] });
+    const provider = okProvider();
+    const resolveChairmanZone = vi.fn(async () => ({ zone: 'America/Los_Angeles', source: 'chairman_preference' }));
+    await reconcileOutboundSms(sb, { provider, maxAttempts: 3, now: sameInstant.getTime(), resolveChairmanZone });
+
+    expect(resolveChairmanZone).toHaveBeenCalledWith(sameInstant);
+    expect(provider.send).toHaveBeenCalledTimes(1); // released immediately, resent same pass
     const row = sb._tables.sms_outbound_obligations[0];
     expect(row.status).toBe('sent');
   });

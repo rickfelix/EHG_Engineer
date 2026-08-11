@@ -44,6 +44,7 @@ import { createClient } from '@supabase/supabase-js';
 import { enqueueChairmanSms } from '../../lib/chairman/sms-bridge.js';
 import { buildMorningReviewBody } from './chairman-morning-review-sweep.mjs';
 import { etLocalHour, etDateStr, et6amIso } from '../../lib/time/chairman-et-wall-clock.js';
+import { resolveChairmanZone } from '../../lib/comms/adam-outbound/quiet-hours-extension.js';
 
 export const QF_KEY = 'QF-20260720-531';
 export const ACTIVATION_TRIGGER = '.github/workflows/chairman-morning-brief-cron.yml';
@@ -116,7 +117,10 @@ export async function main(argv = process.argv, deps = {}) {
   // quiet window per lib/time/chairman-et-wall-clock.js), so notBefore must defer the actual
   // send to 6:00 AM ET — mirroring chairman-morning-review-sweep.mjs's et6amIso(now) usage. On
   // ticks at/after 6:00 ET, et6amIso(now) is already in the past, so this is a no-op deferral.
-  const notBefore = et6amIso(now);
+  // SD-LEO-INFRA-CHAIRMAN-QUIET-WINDOW-001 (FR-4): defer to the chairman's OWN 6AM, not always
+  // ET. resolveChairmanZone never throws (fails safe to America/New_York).
+  const { zone: chairmanZone } = await (deps.resolveChairmanZone || resolveChairmanZone)(now);
+  const notBefore = et6amIso(now, chairmanZone);
   // Owed-state enqueue ONLY — the pre-existing sms-outbound-worker owns the provider send.
   const enq = await enqueue(supabase, { recipientPhone, kind: 'morning_brief', body, decisionId: null, dedupeKey, notBefore });
   const action = enq.enqueued ? 'enqueued' : (enq.deduped ? 'deduped' : 'inert');

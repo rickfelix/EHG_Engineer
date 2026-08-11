@@ -10,7 +10,13 @@
  * minimal fake Supabase (no live DB, no live Twilio) and asserts the retry-without-column
  * path restores claim+send end to end.
  */
-import { describe, it, expect } from 'vitest';
+import { describe, it, expect, vi } from 'vitest';
+// SD-LEO-INFRA-CHAIRMAN-QUIET-WINDOW-001 (FR-4): reconcileOutboundSms now resolves the
+// chairman's zone once per sweep; the real resolver reaches a live Supabase client, which
+// hangs in the vitest sandbox.
+vi.mock('../../../lib/comms/adam-outbound/quiet-hours-extension.js', () => ({
+  resolveChairmanZone: vi.fn(async () => ({ zone: 'America/New_York', source: 'default' })),
+}));
 import { reconcileOutboundSms } from '../../../lib/chairman/sms-outbound-worker.js';
 
 function makeFakeSupabaseMissingPriorSidColumn(seedRow) {

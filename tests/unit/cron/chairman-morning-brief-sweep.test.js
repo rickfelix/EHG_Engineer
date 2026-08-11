@@ -15,7 +15,6 @@ import {
   parseArgs,
   etLocalHour,
   etDateStr,
-  et6amIso,
 } from '../../../scripts/cron/chairman-morning-brief-sweep.mjs';
 
 // Instants chosen so the self-healing window gate is exercised in BOTH DST seasons.
@@ -41,6 +40,10 @@ function baseDeps(overrides = {}) {
     now: SUMMER_WINDOW_START,
     logger: { log: vi.fn(), warn: vi.fn(), error: vi.fn() },
     buildBody: vi.fn(async () => 'Roadmap: 40% build. Yesterday: 2 shipped.'),
+    // SD-LEO-INFRA-CHAIRMAN-QUIET-WINDOW-001 (FR-4): main() now resolves the chairman's zone
+    // (real resolveChairmanZone reaches a live ChairmanPreferenceStore/Supabase client, which
+    // hangs in the vitest sandbox) -- stubbed here, matching this file's own DI convention.
+    resolveChairmanZone: vi.fn(async () => ({ zone: 'America/New_York', source: 'default' })),
     ...overrides,
   };
 }
@@ -137,15 +140,30 @@ describe('TS-5 — QF-20260722-277: notBefore defers early-window enqueues to 6:
   it('at window start (5:00 ET) notBefore is set to 6:00 AM ET the same day, deferring the actual send', async () => {
     const enqueue = vi.fn(async () => ({ enqueued: true, obligationId: 'ob-1' }));
     await main(['node', 's', '--once'], baseDeps({ enqueue }));
-    expect(enqueue.mock.calls[0][1].notBefore).toBe(et6amIso(SUMMER_WINDOW_START));
+    // Independently hardcoded (not et6amIso(SUMMER_WINDOW_START) — that would be a tautological
+    // oracle, per the PLAN-phase testing-agent finding on the sibling review-sweep test). SUMMER_
+    // WINDOW_START = 2026-07-18T09:00:00Z = 05:00 EDT; 6:00 AM EDT that day = 10:00Z.
+    expect(enqueue.mock.calls[0][1].notBefore).toBe('2026-07-18T10:00:00.000Z');
   });
 
   it('on a later in-window tick (10:45 ET) notBefore is already elapsed, so no extra delay is added', async () => {
     const enqueue = vi.fn(async () => ({ enqueued: true, obligationId: 'ob-late' }));
     await main(['node', 's', '--once'], baseDeps({ enqueue, now: SUMMER_WINDOW_LATE }));
     const notBefore = enqueue.mock.calls[0][1].notBefore;
-    expect(notBefore).toBe(et6amIso(SUMMER_WINDOW_LATE));
+    // Same calendar day as above -> same 6:00 AM EDT instant, now in the past relative to 10:45.
+    expect(notBefore).toBe('2026-07-18T10:00:00.000Z');
     expect(new Date(notBefore).getTime()).toBeLessThan(SUMMER_WINDOW_LATE.getTime());
+  });
+
+  it('FR-4: resolves the chairman zone and threads it into et6amIso -- non-ET zone changes notBefore', async () => {
+    const enqueue = vi.fn(async () => ({ enqueued: true, obligationId: 'ob-1' }));
+    // America/Jamaica is UTC-5 year-round (no DST): 6:00 AM Jamaica on 2026-07-18 is 11:00Z, one
+    // hour later than the 10:00Z ET default asserted above.
+    const resolveChairmanZone = vi.fn(async () => ({ zone: 'America/Jamaica', source: 'chairman_preference' }));
+    await main(['node', 's', '--once'], baseDeps({ enqueue, resolveChairmanZone }));
+
+    expect(resolveChairmanZone).toHaveBeenCalledWith(SUMMER_WINDOW_START);
+    expect(enqueue.mock.calls[0][1].notBefore).toBe('2026-07-18T11:00:00.000Z');
   });
 });
 

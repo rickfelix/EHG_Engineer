@@ -10,6 +10,14 @@ vi.mock('../../../../lib/comms/adam-outbound/chairman-sms-gate/index.js', () => 
 vi.mock('../../../../lib/chairman/record-pending-decision.mjs', () => ({
   escalateChairmanDecision: vi.fn(async () => ({ escalated: true })),
 }));
+// SD-LEO-INFRA-CHAIRMAN-QUIET-WINDOW-001 (FR-3): buildSender()'s default closure now resolves
+// the chairman's zone (dynamically imported) before calling sendChairmanSMS. Mocked here for
+// the same reason the two modules above are -- this test file exercises the DEFAULT sender
+// (buildSender(), not an injected opts.sender) in tests that have a real owed decision to send,
+// and the real resolver would otherwise reach a live Supabase client.
+vi.mock('../../../../lib/comms/adam-outbound/quiet-hours-extension.js', () => ({
+  resolveChairmanZone: vi.fn(async () => ({ zone: 'America/New_York', source: 'default' })),
+}));
 
 import { sendChairmanSMS } from '../../../../lib/comms/adam-outbound/chairman-sms-gate/index.js';
 import { escalateChairmanDecision } from '../../../../lib/chairman/record-pending-decision.mjs';
@@ -173,6 +181,11 @@ describe('runDecisionSchedulerTick', () => {
     expect(result.results[0].action).toBe('resurfaced');
     expect(sendChairmanSMS).toHaveBeenCalledTimes(1);
     expect(sendChairmanSMS.mock.calls[0][0]).toMatchObject({ decisionId: 'dec-1' });
+    // PLAN-VERIFY (validation-agent, mutation-tested): stripping chairmanZone from
+    // buildSender()'s context left this whole suite green because only calls[0][0] (the
+    // message) was ever asserted, never calls[0][1] (the context) -- FR-3's "resolves the
+    // zone once per send and it reaches the context object" AC was unverified here.
+    expect(sendChairmanSMS.mock.calls[0][1]).toMatchObject({ chairmanZone: 'America/New_York' });
     expect(owedStore.markResurfaced).toHaveBeenCalledWith('row-1');
   });
 

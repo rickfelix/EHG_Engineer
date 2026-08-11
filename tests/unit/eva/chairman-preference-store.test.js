@@ -20,6 +20,10 @@ function createMockSupabase(overrides = {}) {
     is: vi.fn().mockReturnThis(),
     in: vi.fn().mockReturnThis(),
     single: vi.fn().mockResolvedValue({ data: null, error: null }),
+    // getPreference (SD-LEO-INFRA-CHAIRMAN-QUIET-WINDOW-001 FR-1) uses .order() as the
+    // terminal call instead of .single(), returning an array so multi-row scope
+    // violations are observable instead of silently swallowed.
+    order: vi.fn().mockResolvedValue({ data: [], error: null }),
     upsert: vi.fn().mockReturnThis(),
     delete: vi.fn().mockReturnThis(),
     update: vi.fn().mockReturnThis(),
@@ -28,6 +32,31 @@ function createMockSupabase(overrides = {}) {
   return {
     from: vi.fn(() => ({ ...mockQuery, ...overrides })),
     _mockQuery: mockQuery,
+  };
+}
+
+/**
+ * PLAN-VERIFY (validation-agent, mutation-tested): a mock whose .order() IGNORES the
+ * {ascending} argument and just returns a fixture pre-sorted the "right" way lets a test
+ * pass even if production code flips ascending:false -> true -- the mock never asked "which
+ * direction". This one genuinely sorts by the requested column/direction, so a flip
+ * produces the WRONG winning row and the assertion actually fails.
+ */
+function makeOrderAwareSupabase(rows) {
+  return {
+    from: vi.fn(() => ({
+      select: vi.fn().mockReturnThis(),
+      eq: vi.fn().mockReturnThis(),
+      is: vi.fn().mockReturnThis(),
+      in: vi.fn().mockReturnThis(),
+      order: vi.fn((col, { ascending } = {}) => {
+        const sorted = [...rows].sort((a, b) => {
+          const cmp = a[col] < b[col] ? -1 : a[col] > b[col] ? 1 : 0;
+          return ascending ? cmp : -cmp;
+        });
+        return Promise.resolve({ data: sorted, error: null });
+      }),
+    })),
   };
 }
 
@@ -192,6 +221,96 @@ describe('ChairmanPreferenceStore', () => {
     });
   });
 
+  // SD-LEO-INFRA-CHAIRMAN-QUIET-WINDOW-001 FR-6 (TS-10, TS-11): the amended
+  // notifications.timezone validator -- back-compat bare-string form, new composite
+  // {zone, until} form, and rejection of both malformed zones and arrays.
+  describe('setPreference - notifications.timezone (composite + back-compat)', () => {
+    function mockUpsertSuccess() {
+      store.supabase = {
+        from: vi.fn().mockReturnValue({
+          upsert: vi.fn().mockReturnValue({
+            select: vi.fn().mockReturnValue({
+              single: vi.fn().mockResolvedValue({ data: { id: 'x' }, error: null }),
+            }),
+          }),
+        }),
+      };
+    }
+
+    it('accepts a bare IANA string (back-compat, no expiry)', async () => {
+      mockUpsertSuccess();
+      const result = await store.setPreference({
+        chairmanId: 'c1', key: 'notifications.timezone', value: 'America/Jamaica', valueType: 'string',
+      });
+      expect(result.success).toBe(true);
+    });
+
+    it('accepts the composite {zone, until} form', async () => {
+      mockUpsertSuccess();
+      const result = await store.setPreference({
+        chairmanId: 'c1', key: 'notifications.timezone',
+        value: { zone: 'America/Jamaica', until: '2026-08-14T12:00:00.000Z' }, valueType: 'object',
+      });
+      expect(result.success).toBe(true);
+    });
+
+    it('rejects a malformed zone in the composite form', async () => {
+      const result = await store.setPreference({
+        chairmanId: 'c1', key: 'notifications.timezone',
+        value: { zone: 'not-a-zone', until: '2026-08-14T12:00:00.000Z' }, valueType: 'object',
+      });
+      expect(result.success).toBe(false);
+      expect(result.error).toContain('valid IANA timezone');
+    });
+
+    it('rejects a malformed "until" in the composite form', async () => {
+      const result = await store.setPreference({
+        chairmanId: 'c1', key: 'notifications.timezone',
+        value: { zone: 'America/Jamaica', until: 'not-a-date' }, valueType: 'object',
+      });
+      expect(result.success).toBe(false);
+      expect(result.error).toContain('until');
+    });
+
+    it('rejects an array, even when declared as valueType "array"', async () => {
+      const result = await store.setPreference({
+        chairmanId: 'c1', key: 'notifications.timezone', value: ['America/Jamaica'], valueType: 'array',
+      });
+      expect(result.success).toBe(false);
+      expect(result.error).toContain('not an array');
+    });
+
+    it('does not weaken sibling bare-string-validated keys (notifications.email still rejects an object)', async () => {
+      const result = await store.setPreference({
+        chairmanId: 'c1', key: 'notifications.email', value: { zone: 'x' }, valueType: 'object',
+      });
+      expect(result.success).toBe(false);
+    });
+
+    // SEC-QW-02: 'Asia/Kolkata' does NOT throw when handed to Intl.DateTimeFormat -- it
+    // silently canonicalizes to the legacy alias 'Asia/Calcutta' -- so a bare
+    // throw-or-not check (the pre-fix validator) accepted it at write time while the
+    // read-time resolver (isValidCanonicalZone's round-trip check) rejects it, leaving a
+    // write that reports success but is silently discarded at read. Confirmed reproducible
+    // in this Node/ICU runtime.
+    it('SEC-QW-02: rejects a legacy zone alias that Intl tolerates but does not canonically round-trip (bare-string form)', async () => {
+      const result = await store.setPreference({
+        chairmanId: 'c1', key: 'notifications.timezone', value: 'Asia/Kolkata', valueType: 'string',
+      });
+      expect(result.success).toBe(false);
+      expect(result.error).toContain('valid IANA timezone');
+    });
+
+    it('SEC-QW-02: rejects the same legacy alias in the composite form', async () => {
+      const result = await store.setPreference({
+        chairmanId: 'c1', key: 'notifications.timezone',
+        value: { zone: 'Asia/Kolkata', until: '2026-08-14T12:00:00.000Z' }, valueType: 'object',
+      });
+      expect(result.success).toBe(false);
+      expect(result.error).toContain('valid IANA timezone');
+    });
+  });
+
   describe('setPreference - upsert', () => {
     it('should succeed with valid preference', async () => {
       const mockRecord = { id: 'pref-1', preference_key: 'budget.max_monthly_usd', preference_value: 5000 };
@@ -289,7 +408,7 @@ describe('ChairmanPreferenceStore', () => {
         select: vi.fn().mockReturnThis(),
         eq: vi.fn().mockReturnThis(),
         is: vi.fn().mockReturnThis(),
-        single: vi.fn().mockResolvedValue({ data: ventureRow, error: null }),
+        order: vi.fn().mockResolvedValue({ data: [ventureRow], error: null }),
       });
 
       const result = await store.getPreference({
@@ -312,10 +431,10 @@ describe('ChairmanPreferenceStore', () => {
         select: vi.fn().mockReturnThis(),
         eq: vi.fn().mockReturnThis(),
         is: vi.fn().mockReturnThis(),
-        single: vi.fn().mockImplementation(() => {
+        order: vi.fn().mockImplementation(() => {
           callCount++;
-          if (callCount === 1) return Promise.resolve({ data: null, error: null });
-          return Promise.resolve({ data: globalRow, error: null });
+          if (callCount === 1) return Promise.resolve({ data: [], error: null });
+          return Promise.resolve({ data: [globalRow], error: null });
         }),
       }));
 
@@ -336,12 +455,44 @@ describe('ChairmanPreferenceStore', () => {
         select: vi.fn().mockReturnThis(),
         eq: vi.fn().mockReturnThis(),
         is: vi.fn().mockReturnThis(),
-        single: vi.fn().mockResolvedValue({ data: globalRow, error: null }),
+        order: vi.fn().mockResolvedValue({ data: [globalRow], error: null }),
       });
 
       const result = await store.getPreference({ chairmanId: 'c1', key: 'key' });
       expect(result.scope).toBe('global');
       expect(mockSupabase.from).toHaveBeenCalledTimes(1);
+    });
+
+    it('logs a multi-row scope violation and returns the most-recently-updated row (SD-LEO-INFRA-CHAIRMAN-QUIET-WINDOW-001 FR-1)', async () => {
+      const older = {
+        id: 'g1', preference_key: 'notifications.quiet_hours_extended_until', preference_value: 'old',
+        value_type: 'string', source: 'chairman_directive', updated_at: '2026-07-25T00:00:00Z',
+      };
+      const newer = {
+        id: 'g2', preference_key: 'notifications.quiet_hours_extended_until', preference_value: 'new',
+        value_type: 'string', source: 'chairman_directive', updated_at: '2026-08-08T00:00:00Z',
+      };
+      mockSupabase.from.mockReturnValue({
+        select: vi.fn().mockReturnThis(),
+        eq: vi.fn().mockReturnThis(),
+        is: vi.fn().mockReturnThis(),
+        order: vi.fn().mockResolvedValue({ data: [newer, older], error: null }),
+      });
+
+      const result = await store.getPreference({ chairmanId: 'c1', key: 'notifications.quiet_hours_extended_until' });
+      expect(result.value).toBe('new');
+      expect(silentLogger.error).toHaveBeenCalledWith(
+        'chairman_preference.multi_row_scope_violation',
+        expect.objectContaining({ rowCount: 2, scope: 'global' }),
+      );
+    });
+
+    it('PLAN-VERIFY: genuinely requests DESCENDING order -- a flip to ascending would return the OLDER row, not just reshuffle a pre-sorted fixture', async () => {
+      const older = { id: 'g1', preference_key: 'k1', preference_value: 'old', value_type: 'string', source: 's', updated_at: '2026-01-01T00:00:00Z' };
+      const newer = { id: 'g2', preference_key: 'k1', preference_value: 'new', value_type: 'string', source: 's', updated_at: '2026-02-01T00:00:00Z' };
+      store.supabase = makeOrderAwareSupabase([older, newer]); // fixture order deliberately NOT pre-sorted
+      const result = await store.getPreference({ chairmanId: 'c1', key: 'k1' });
+      expect(result.value).toBe('new');
     });
   });
 
@@ -359,7 +510,8 @@ describe('ChairmanPreferenceStore', () => {
         select: vi.fn().mockReturnThis(),
         eq: vi.fn().mockReturnThis(),
         is: vi.fn().mockReturnThis(),
-        in: vi.fn().mockImplementation(function () {
+        in: vi.fn().mockReturnThis(),
+        order: vi.fn().mockImplementation(function () {
           queryCount++;
           if (queryCount === 1) return Promise.resolve({ data: ventureRows, error: null });
           return Promise.resolve({ data: globalRows, error: null });
@@ -385,7 +537,8 @@ describe('ChairmanPreferenceStore', () => {
         select: vi.fn().mockReturnThis(),
         eq: vi.fn().mockReturnThis(),
         is: vi.fn().mockReturnThis(),
-        in: vi.fn().mockResolvedValue({ data: globalRows, error: null }),
+        in: vi.fn().mockReturnThis(),
+        order: vi.fn().mockResolvedValue({ data: globalRows, error: null }),
       });
 
       const result = await store.getPreferences({ chairmanId: 'c1', keys: ['k1'] });
@@ -402,7 +555,8 @@ describe('ChairmanPreferenceStore', () => {
       mockSupabase.from.mockReturnValue({
         select: vi.fn().mockReturnThis(),
         eq: vi.fn().mockReturnThis(),
-        in: vi.fn().mockResolvedValue({ data: ventureRows, error: null }),
+        in: vi.fn().mockReturnThis(),
+        order: vi.fn().mockResolvedValue({ data: ventureRows, error: null }),
       });
 
       const result = await store.getPreferences({
@@ -410,6 +564,42 @@ describe('ChairmanPreferenceStore', () => {
       });
       expect(result.size).toBe(2);
       expect(mockSupabase.from).toHaveBeenCalledTimes(1);
+    });
+
+    // SEC-QW-01: getPreferences() previously had no .order() and last-row-wins over an
+    // UNORDERED result set -- non-deterministic given real duplicate rows (the exact bug
+    // class FR-1 fixed for getPreference() but missed here; resolveQuietHoursContext reads
+    // through this path).
+    it('SEC-QW-01: a duplicate row per key resolves to the MOST RECENT (pre-ordered) row, not whichever the DB happened to return first, and warns once per duplicated key', async () => {
+      // Server-side .order('updated_at', {ascending:false}) means the most-recent row per
+      // key arrives FIRST in this array -- the fake mirrors that pre-ordering.
+      const globalRows = [
+        { id: 'g2', preference_key: 'k1', preference_value: 'newest', value_type: 'string', source: 's', updated_at: '2026-02-01' },
+        { id: 'g1', preference_key: 'k1', preference_value: 'oldest', value_type: 'string', source: 's', updated_at: '2026-01-01' },
+      ];
+      mockSupabase.from.mockReturnValue({
+        select: vi.fn().mockReturnThis(),
+        eq: vi.fn().mockReturnThis(),
+        is: vi.fn().mockReturnThis(),
+        in: vi.fn().mockReturnThis(),
+        order: vi.fn().mockResolvedValue({ data: globalRows, error: null }),
+      });
+
+      const result = await store.getPreferences({ chairmanId: 'c1', keys: ['k1'] });
+
+      expect(result.get('k1').value).toBe('newest');
+      expect(silentLogger.error).toHaveBeenCalledWith(
+        'chairman_preference.multi_row_scope_violation',
+        expect.objectContaining({ key: 'k1', scope: 'global', rowCount: 2 }),
+      );
+    });
+
+    it('PLAN-VERIFY: getPreferences genuinely requests DESCENDING order too -- a flip to ascending would return the OLDER row', async () => {
+      const older = { id: 'g1', preference_key: 'k1', preference_value: 'old', value_type: 'string', source: 's', updated_at: '2026-01-01T00:00:00Z' };
+      const newer = { id: 'g2', preference_key: 'k1', preference_value: 'new', value_type: 'string', source: 's', updated_at: '2026-02-01T00:00:00Z' };
+      store.supabase = makeOrderAwareSupabase([older, newer]);
+      const result = await store.getPreferences({ chairmanId: 'c1', keys: ['k1'] });
+      expect(result.get('k1').value).toBe('new');
     });
   });
 

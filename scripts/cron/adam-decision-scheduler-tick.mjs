@@ -41,25 +41,30 @@ import { isMainModule } from '../../lib/utils/is-main-module.js';
 import { runDecisionSchedulerTick } from '../../lib/comms/adam-outbound/decision-scheduler/index.js';
 import { registerArmedMachinery, armedProcessKey } from '../../lib/machinery-class/armed-registration.js';
 import { stampLastFired } from '../../lib/periodic-liveness/stamp-last-fired.js';
+import { isSmsQuietHour } from '../../lib/time/chairman-et-wall-clock.js';
+import { resolveChairmanZone } from '../../lib/comms/adam-outbound/quiet-hours-extension.js';
 
 export const SD_KEY = 'SD-LEO-INFRA-ADAM-DECISION-SCHEDULER-001';
 export const ACTIVATION_TRIGGER = 'sms_outbound_obligations STAGED migration applied by chairman ceremony';
 
 /**
- * DST-aware chairman SMS sleep-window check — 22:00-06:00 America/New_York (a DIFFERENT,
+ * DST-aware chairman SMS sleep-window check — 22:00-06:00 in the chairman's zone (a DIFFERENT,
  * SMS-specific window from the general 23:00-05:00 chairman/email quiet window guarded by
- * isWithinChairmanQuietWindow in lib/notifications/resend-adapter.js). No shared helper for
- * this exact boundary exists repo-wide (confirmed by search), so it is inlined here, scoped
- * to this cron only, mirroring the same Intl/toLocaleTimeString pattern.
+ * isWithinChairmanQuietWindow in lib/notifications/resend-adapter.js). Delegates to the
+ * canonical lib/time/chairman-et-wall-clock.js boundary (zone-aware since SD-LEO-INFRA-
+ * CHAIRMAN-QUIET-WINDOW-001 FR-4) rather than re-deriving the arithmetic here — kept as a
+ * named export (not inlined into main()) so this file's existing behavioral test coverage
+ * (tests/unit/cron/adam-decision-scheduler-wiring.test.js) keeps importing and calling it
+ * directly (FR-5).
  *
  * This RUNTIME check is authoritative. The GHA cron schedule (adam-decision-scheduler-cron.yml)
- * is only a coarse UTC cadence limiter and cannot itself be DST-precise for an ET window.
+ * is only a coarse UTC cadence limiter and cannot itself be DST-precise for the window.
  * @param {Date} [now]
+ * @param {string} [zone] IANA zone, default 'America/New_York' (FR-5)
  * @returns {boolean}
  */
-export function isWithinAdamSmsQuietWindow(now = new Date()) {
-  const hour = Number(now.toLocaleTimeString('en-US', { timeZone: 'America/New_York', hour12: false, hour: '2-digit' }));
-  return hour >= 22 || hour < 6;
+export function isWithinAdamSmsQuietWindow(now = new Date(), zone) {
+  return isSmsQuietHour(now, zone);
 }
 
 export function parseArgs(argv) {
@@ -129,10 +134,13 @@ export async function main(argv = process.argv, deps = {}) {
   catch (err) { logger.warn?.(`[decision-scheduler-tick] liveness stamp failed (non-fatal): ${err.message}`); }
 
   // Authoritative runtime guard (FR-2 AC) — the GHA schedule is only a coarse cadence
-  // limiter and cannot itself be DST-precise for the 22:00-06:00 America/New_York window.
+  // limiter and cannot itself be DST-precise for the 22:00-06:00 chairman-zone window.
   const now = deps.now || new Date();
+  // SD-LEO-INFRA-CHAIRMAN-QUIET-WINDOW-001 (FR-5): resolve the chairman's zone the same way
+  // as the other callers before invoking the (now zone-aware) quiet-window guard.
+  const { zone: chairmanZone } = await (deps.resolveChairmanZone || resolveChairmanZone)(now);
   const quietCheck = deps.isWithinAdamSmsQuietWindow || isWithinAdamSmsQuietWindow;
-  if (quietCheck(now)) {
+  if (quietCheck(now, chairmanZone)) {
     logger.log?.(`[decision-scheduler-tick] ${JSON.stringify({ ts: now.toISOString(), action: 'quiet_window_skip' })}`);
     return { exitCode: 0, action: 'quiet_window_skip' };
   }
