@@ -1,9 +1,9 @@
 ---
 category: documentation
 status: draft
-version: 0.1.0
+version: 0.2.0
 author: docmon-agent (Information Architecture Lead)
-last_updated: 2026-06-20
+last_updated: 2026-08-11
 tags: [flywheel, executive-summary, chairman-email, adam, calculation]
 ---
 
@@ -144,6 +144,16 @@ forecastLine = formatForecastLine(toF(fc[0]), toF(fc[1]));   // current + delta-
   (`prepareDecisions` / `renderDecisionLines`, `lib/chairman/decision-layman.mjs`).
 - Renders a copy-paste block; each line ends with `decision_type:id`. Free-text flags shown **as
   received** (no LLM, chairman 2026-06-14).
+- **Venture build-status contradiction flag** (SD-LEO-INFRA-VENTURE-STATUS-LANGUAGE-001,
+  2026-08-11): for any decision row with a non-null `venture_id`, `adam-exec-summary.mjs` batch-fetches
+  and attaches `venture_build_status` (from `lib/governance/venture-build-status.mjs`'s
+  `deriveVentureBuildStatus`, a measured factory-state read — never prose-derived) before rendering.
+  `decision-layman.mjs` stays pure I/O-free: it only scans the pre-attached prose for a narrow
+  build-status word (`built|deployed|live` — deliberately excludes `waiting`/`ready`, this file's own
+  pervasive template vocabulary) and appends `ventureStatusContradictionNote` when the word contradicts
+  the derived status. The original recommendation/summary/title text is never altered — this narrows,
+  not reverses, the 2026-06-14 "take text as we receive it" directive. No attached status is
+  byte-identical to pre-SD behavior.
 
 ## Fail-soft doctrine (every section)
 
