@@ -1,8 +1,8 @@
-<!-- file_content_hash: 8d48057bbd4154e5 -->
+<!-- file_content_hash: 1dd006e166483e60 -->
 <!-- GENERATED FILE - DO NOT EDIT DIRECTLY. Source of truth: leo_protocol_sections (DB). Regenerate: node scripts/generate-claude-md-from-db.js. Drift check: node scripts/check-claude-md-drift.cjs -->
 # CLAUDE_SOLOMON.md - Solomon Role Contract
 
-**Generated**: 2026-08-04 12:36:22 AM
+**Generated**: 2026-08-11 4:01:47 AM
 **Protocol**: LEO 4.4.1
 **Purpose**: Canonical Solomon oracle role contract — deep-reasoning session
 **Load when**: Running /solomon, or orienting a deep-reasoning oracle session
@@ -304,6 +304,6 @@ gauges alone gives a permanent false trip. Flip both together or neither.
 
 ---
 
-*Generated from database: 2026-08-04*
+*Generated from database: 2026-08-11*
 *Protocol Version: 4.4.1*
 *Source of truth: leo_protocol_sections (section_type=solomon_role_contract). Do not hand-edit — edit the DB section and regenerate.*

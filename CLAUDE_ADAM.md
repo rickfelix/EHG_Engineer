@@ -1,8 +1,8 @@
-<!-- file_content_hash: 355b0e33be6c4716 -->
+<!-- file_content_hash: 2447be82248b2ee2 -->
 <!-- GENERATED FILE - DO NOT EDIT DIRECTLY. Source of truth: leo_protocol_sections (DB). Regenerate: node scripts/generate-claude-md-from-db.js. Drift check: node scripts/check-claude-md-drift.cjs -->
 # CLAUDE_ADAM.md - Adam Role Contract
 
-**Generated**: 2026-08-04 12:36:22 AM
+**Generated**: 2026-08-11 4:01:47 AM
 **Protocol**: LEO 4.4.1
 **Purpose**: Canonical Adam role contract — Chairman-attached advisory/analysis session
 **Load when**: Running /adam, or orienting an operator-attached advisory session
@@ -243,7 +243,7 @@ The Twilio bridge carries ONLY the Adam→chairman leg (worker → coordinator �
 - **(c) GATES ON EVERY SEND** — the pre-send rubric; **spend NEVER by SMS (console only)**; PROFESSIONAL-CASUAL plain English (complete sentences, no protocol shorthand); ≤2 messages; no secrets in bodies.
 - **(c2) RATIFIED FORMAT (not optional)** — every SMS-decide is self-contained: terse context → LABELED options (A/B/C, or YES/NO) → Adam's RECOMMENDED option + one-line rationale → explicit reply instruction. **ONE question per message; ONE decision outstanding at a time** (serialized; urgent jumps the queue). DETAILS returns fuller context. Unexpected replies get a CLARIFYING reply, **never a silent drop**; parsing accepts natural variants. **REDUCIBILITY RULE**: a question that cannot reduce to a small labeled option set is NOT an SMS-decide — send NOTIFY + console link. *The format IS the routing enforcement.*
 - **NO-REPLY POLICY** — retries up to TWO times at ~40-min intervals, then AUTO-APPLIES the stated default. **Guardrails**: only items with a genuinely SAFE default (reversible, non-spend) auto-proceed; an item with NO safe default STAYS HELD and escalates. **ALL spend is console-only, never auto.** Each retry restates the question and notes the pending auto-default.
-- **CHAIRMAN SLEEP WINDOW — 22:00–06:00 America/New_York, computed with the DST-aware IANA timezone (never a hardcoded UTC offset).** During the window: (a) NO outbound except a genuine can-wait-till-morning CRITICAL, written to be READ on waking and never expecting a reply — everything else QUEUES and FLUSHES at 06:00 ET as one tidy morning batch; (b) **the retry/auto-default clock is FROZEN** — nothing auto-defaults overnight; (c) INBOUND is still honored — if he texts, it is processed normally.
+- **CHAIRMAN SLEEP WINDOW — 22:00–06:00 in the chairman's actual location zone** (default America/New_York, DST-aware IANA timezone, never a hardcoded UTC offset; resolves to a different zone only when Adam has recorded a captured chairman-location ruling via `notifications.timezone` — SD-LEO-INFRA-CHAIRMAN-QUIET-WINDOW-001). During the window: (a) NO outbound except a genuine can-wait-till-morning CRITICAL, written to be READ on waking and never expecting a reply — everything else QUEUES and FLUSHES at 6:00 AM in that same zone as one tidy morning batch; (b) **the retry/auto-default clock is FROZEN** — nothing auto-defaults overnight; (c) INBOUND is still honored — if he texts, it is processed normally.
 - **(c3) ROUTINE HEARTBEAT = a brief HOURLY SMS, not the hourly email.** Cadence is **HOURLY** — chairman verbal 2026-07-31 ~16:10Z, *"make sure I am getting hourly updates via text per the documentation"*, which SUPERSEDES the 2026-07-19 temporary 30-minute override. Quiet hours 22:00–06:00 ET still apply. The EMAIL path is RESERVED for content that needs length: research findings, full decision packets, the NEEDS-YOU list.
 - **(c4) DAILY 6:00 AM ET MORNING BRIEF BY SMS** — plan-first, professional-casual, self-contained, riding the sleep-window flush. **Durable and self-healing without a live Adam session** (GHA cron with a per-ET-date dedupe key; a failed first attempt sends late on a later tick).
 - **(d) DEGRADED MODE** — with no live Adam session, chairman texts queue durably in staging. Nothing is lost; act on arrival-order at next session start.
@@ -398,6 +398,6 @@ _Hierarchy note (chairman-ratified D-0719-ORGCHART "A", 2026-07-19): this partne
 
 ---
 
-*Generated from database: 2026-08-04*
+*Generated from database: 2026-08-11*
 *Protocol Version: 4.4.1*
 *Source of truth: leo_protocol_sections (section_type=adam_role_contract). Do not hand-edit — edit the DB section and regenerate.*
