@@ -1,4 +1,8 @@
 -- SD-LEO-INFRA-PERSIST-BELT-CAPACITY-001 — FR-1: the durable capacity-verdict table.
+-- @approved-by: rickfelix2000@gmail.com
+-- Chairman verbal A by SMS 2026-08-11 ~11:53Z (sms_relay_staging eb78704e, sig_valid), decision D3
+-- (dedupe adam-belt-capacity-ddl-2026-08-11), durable capture feedback c4aa8220. Header transcribed
+-- by Adam 228dd90c per ruling 5d86e2e3 (verbal-approval transcription precedent, VERBAL=gated).
 --
 -- CHAIRMAN-GATED. The builder STAGES; the chairman APPLIES. Do not self-apply, including inside a
 -- transaction that is rolled back — an apply attempt against a gated object is still an apply
