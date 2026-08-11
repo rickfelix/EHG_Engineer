@@ -1,5 +1,5 @@
 {
- "generated_at": "2026-08-11T01:37:30.168Z",
+ "generated_at": "2026-08-11T02:27:20.679Z",
  "source": "scripts/lint/schema-reference-snapshot.mjs (pg_attribute/pg_class, schema public)",
  "table_count": 856,
  "view_count": 185,
@@ -661,7 +661,7 @@
   "sms_inbound_suspensions": "{from_phone,suspended_at,reason,cleared_at}",
   "sms_outbound_obligations": "{id,recipient_phone,kind,decision_id,body,dedupe_key,status,provider_message_id,attempts,not_before,claimed_at,claimed_by,created_at,sent_at,delivered_at,last_error,media_url}",
   "sms_relay_secret": "{id,secret_value,updated_at}",
-  "sms_relay_staging": "{id,provider_message_id,from_phone,to_phone,body_raw,signature_valid,received_at,drained_at}",
+  "sms_relay_staging": "{id,provider_message_id,from_phone,to_phone,body_raw,signature_valid,received_at,drained_at,parked_at,resolved_at}",
   "solomon_advice_outcome_ledger": "{id,advisory_id,correlation_id,sd_key,proposal_summary,proposal_kind,decision,decision_by,decision_at,outcome,outcome_sd_key,outcome_ref,cost_tokens,cost_wall_ms,created_at,updated_at,closed_by,closed_at,parent_correlation_id,defer_trigger,cost_captured,batch_stamped}",
   "soul_extractions": "{id,venture_id,simulation_session_id,extraction_stage,soul_content,extracted_at}",
   "sourcing_chairman_queue": "{id,source_id,title,lane,gate_type,escalation_type,context,sla_hours,sla_due_at,state,deferred_until,created_at,decided_at}",
