@@ -93,6 +93,21 @@ describe('fetchMergeSubjects — the one place production shells out', () => {
     const subjects = fetchMergeSubjects({ runGitLog: () => ['a', 'b'] });
     expect(subjects).toEqual(['a', 'b']);
   });
+
+  it('[VALIDATION dbc5d211, V2] filters blank lines — a genuinely empty git log ("".split("\\n") = [""], length 1) must resolve to length 0, not 1', () => {
+    // runHardenedGit returns stdout as a STRING; an empty log is '', and ''.split('\n') is [''].
+    // Without this filter, scoreLeg1ALocal's subjects.length===0 guard would silently NOT fire on
+    // the exact shallow-clone case it exists to catch — safety would depend entirely on a caller
+    // already having filtered blanks (which the CLI wiring happens to do today, untested).
+    expect(fetchMergeSubjects({ runGitLog: () => ''.split('\n') })).toEqual([]);
+    expect(fetchMergeSubjects({ runGitLog: () => [''] })).toEqual([]);
+    expect(fetchMergeSubjects({ runGitLog: () => ['a', '', 'b'] })).toEqual(['a', 'b']);
+  });
+
+  it('a non-array return from runGitLog resolves to an empty corpus, never a crash', () => {
+    expect(fetchMergeSubjects({ runGitLog: () => null })).toEqual([]);
+    expect(fetchMergeSubjects({ runGitLog: () => undefined })).toEqual([]);
+  });
 });
 
 describe('scoreLeg1ALocal — fetches ONCE, proportional scoring, never a false zero on failure', () => {
