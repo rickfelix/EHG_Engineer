@@ -75,6 +75,11 @@ function baseDeps(overrides = {}) {
     env: { CHAIRMAN_PHONE: '+15555550123' },
     now: SUMMER_WORK,
     logger: { log: vi.fn(), warn: vi.fn(), error: vi.fn() },
+    // SD-LEO-INFRA-CHAIRMAN-QUIET-WINDOW-001 (FR-4): main() now resolves the chairman's zone
+    // (real resolveChairmanZone reaches a live ChairmanPreferenceStore/Supabase client, which
+    // hangs in the vitest sandbox) -- stubbed here, matching this file's own DI convention, so
+    // every test using baseDeps() gets a safe default without needing its own override.
+    resolveChairmanZone: vi.fn(async () => ({ zone: 'America/New_York', source: 'default' })),
     ...overrides,
   };
 }
@@ -148,10 +153,30 @@ describe('TS-3 — notBefore = 6AM ET defers an overnight/early enqueue', () => 
     await main(['node', 's', '--once'], deps);
 
     const { notBefore } = enqueue.mock.calls[0][1];
-    expect(notBefore).toBe(et6amIso(SUMMER_WORK));
+    // PLAN-phase testing-agent finding: comparing against et6amIso(SUMMER_WORK) here would be
+    // a tautological oracle (the function under test compared to a call of itself) that stays
+    // green even if zone-threading is never wired in. SUMMER_WORK = 2026-07-18T09:45:00Z =
+    // 05:45 EDT, so 6:00 AM EDT that same calendar day is 2026-07-18T10:00:00.000Z —
+    // independently hardcoded, not derived from the function under test.
+    expect(notBefore).toBe('2026-07-18T10:00:00.000Z');
     const nb = new Date(notBefore);
     expect(etLocalHour(nb)).toBe(6);              // resolves to 6AM ET wall-clock
     expect(nb.getTime()).toBeGreaterThan(SUMMER_WORK.getTime()); // 5:45 precedes 6:00 -> deferred
+  });
+
+  it('FR-4: resolves the chairman zone and threads it into et6amIso -- non-ET zone changes notBefore', async () => {
+    const enqueue = vi.fn(async () => ({ enqueued: true, obligationId: 'ob-1' }));
+    // America/Jamaica is UTC-5 year-round (no DST): 6:00 AM Jamaica on 2026-07-18 is 11:00Z,
+    // one hour later than the 10:00Z ET default asserted above -- proof the resolved zone
+    // actually reaches et6amIso rather than the call silently defaulting to ET.
+    const resolveChairmanZone = vi.fn(async () => ({ zone: 'America/Jamaica', source: 'chairman_preference' }));
+    const deps = baseDeps({ enqueue, resolveChairmanZone });
+    await main(['node', 's', '--once'], deps);
+
+    expect(resolveChairmanZone).toHaveBeenCalledWith(SUMMER_WORK);
+    const { notBefore } = enqueue.mock.calls[0][1];
+    expect(notBefore).toBe('2026-07-18T11:00:00.000Z');
+    expect(notBefore).not.toBe(et6amIso(SUMMER_WORK)); // must differ from the ET default
   });
 });
 

@@ -39,6 +39,7 @@ import { createClient } from '@supabase/supabase-js';
 import { enqueueChairmanSms } from '../../lib/chairman/sms-bridge.js';
 import { computeForecast, formatForecastLine } from '../../lib/vision/build-completion-forecast.mjs';
 import { etLocalHour, etDateStr, et6amIso, etPrior545Iso } from '../../lib/time/chairman-et-wall-clock.js';
+import { resolveChairmanZone } from '../../lib/comms/adam-outbound/quiet-hours-extension.js';
 import { fetchAllPaginated } from '../../lib/db/fetch-all-paginated.mjs';
 import { resolveCanonicalRoadmap } from '../../lib/roadmap/canonical-roadmap.js';
 import { buildRoadmapStatusDoc } from '../../lib/chairman/daily-review/roadmap-status-doc.js';
@@ -304,7 +305,11 @@ export async function main(argv = process.argv, deps = {}) {
   // the same key a degraded-to-text-only composer fallback reuses, so a partial media failure
   // can never double-send under a different key).
   const dedupeKey = `morning_review:${etDateStr(now)}`;
-  const notBefore = et6amIso(now); // defer an overnight/early enqueue to the 6AM batch (sleep-window)
+  // SD-LEO-INFRA-CHAIRMAN-QUIET-WINDOW-001 (FR-4): defer to the chairman's OWN 6AM, not always
+  // ET. resolveChairmanZone never throws (fails safe to America/New_York) so this needs no
+  // separate try/catch.
+  const { zone: chairmanZone } = await (deps.resolveChairmanZone || resolveChairmanZone)(now);
+  const notBefore = et6amIso(now, chairmanZone); // defer an overnight/early enqueue to the 6AM batch (sleep-window)
 
   // Read the composed-path flag PER-INVOCATION (never at module load) so flipping it is a
   // pure env var change with an instant revert to the byte-identical text-only path (TS-11).
