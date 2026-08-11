@@ -15,7 +15,7 @@ const __dirname = dirname(fileURLToPath(import.meta.url));
 const REPO_ROOT = resolve(__dirname, '../../../');
 
 describe('policy registry (TS-1)', () => {
-  it('registers all 14 unbounded tables with the VERIFIED timestamp columns', () => {
+  it('registers all 15 unbounded tables with the VERIFIED timestamp columns', () => {
     const m = Object.fromEntries(RETENTION_POLICIES.map((p) => [p.table, p.timestampColumn]));
     expect(m).toEqual({
       workflow_trace_log: 'created_at',
@@ -67,6 +67,12 @@ describe('policy registry (TS-1)', () => {
       // (latest event wins), so a writer-supplied timestamp could backdate an opt_in to outrank a
       // later opt_out and resurrect someone who unsubscribed.
       venture_consent_events: 'occurred_at',
+      // SD-LEO-INFRA-DRIVE-SCORE-LEG2-001: drive_rank_snapshots gets up to 5 rows every ~15min
+      // from the armed standard_loop:backlog-rank cron (~175k rows/yr) and is append-only by
+      // design (UPDATE-guard trigger, no DELETE guard so retention-enforce.js's plain
+      // .delete() can actually reap it). Keyed on created_at, DATABASE-stamped (DEFAULT now()),
+      // not the app-supplied ranked_at.
+      drive_rank_snapshots: 'created_at',
     });
   });
 
