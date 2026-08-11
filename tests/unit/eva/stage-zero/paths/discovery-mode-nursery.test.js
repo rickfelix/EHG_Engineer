@@ -343,4 +343,36 @@ describe('nursery_id scoped selection (SD-LEO-FIX-FINGERPRINT-STOP-CHAIRMAN-001)
     expect(result[0].nursery_id).toBe('n-real');
     expect(result.find(c => c.nursery_id === 'n-hallucinated')).toBeUndefined();
   });
+
+  // SECURITY sub-agent finding, second pass: the byId-validation filter above is only
+  // viable in production if the LLM was actually TOLD each item's real id — the prompt
+  // previously omitted item.id entirely while still asking the model to echo back "the
+  // original ID", which a model with no way to know it can only invent, so the filter
+  // would silently reject every candidate on every real run. Assert on the PROMPT itself
+  // (what the mock captures as its call argument), not on a mocked response — a mock can
+  // always fake a correct response even when the code that produces the real prompt is
+  // broken.
+  test('the prompt discloses every queried item\'s real id (so the byId filter is satisfiable)', async () => {
+    const items = [
+      { id: 'n-alpha', name: 'Alpha Venture', current_score: 90, source_ref: { brief: {} }, next_evaluation_at: null },
+      { id: 'n-beta', name: 'Beta Venture', current_score: 90, source_ref: { brief: {} }, next_evaluation_at: null },
+    ];
+    const llmClient = { complete: vi.fn().mockResolvedValue('[]') };
+    const supabase = {
+      from: vi.fn(() => ({
+        select: vi.fn().mockReturnThis(),
+        eq: vi.fn().mockResolvedValue({ error: null }),
+        is: vi.fn().mockReturnThis(),
+        or: vi.fn().mockReturnThis(),
+        order: vi.fn().mockReturnThis(),
+        limit: vi.fn().mockResolvedValue({ data: items, error: null }),
+      })),
+    };
+
+    await runNurseryReeval({ constraints: {}, candidateCount: 5 }, { supabase, logger: silentLogger, llmClient });
+
+    const [, sentPrompt] = llmClient.complete.mock.calls[0];
+    expect(sentPrompt).toContain('n-alpha');
+    expect(sentPrompt).toContain('n-beta');
+  });
 });
