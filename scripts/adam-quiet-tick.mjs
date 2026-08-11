@@ -947,7 +947,7 @@ async function main() {
         console.log(`QUIET_TICK_SMS_SUPPRESSED=adam ${detail} — undrained chairman SMS, but SMS_RELAY_DRAIN_ENABLED is unset so scripts/sms-relay-drain.cjs is a no-op. Recorded so sms=${smsInbound.count} never coexists with zero surfaced rows; INFORMATIONAL, not a hard interrupt. Durable fix: complete the SMS drain cutover.`);
         continue;
       }
-      console.log(`QUIET_TICK_SMS_INBOUND=adam ${detail} — undrained chairman SMS; DRAIN+reply per CHAIRMAN SMS CHANNEL DUTY (node scripts/sms-relay-drain.cjs)`);
+      console.log(`QUIET_TICK_SMS_INBOUND=adam ${detail} — undrained chairman SMS; DRAIN+reply per CHAIRMAN SMS CHANNEL DUTY (node scripts/sms-relay-drain.cjs, then reply with node scripts/adam-chairman-sms.mjs --reply-to-inbound --kind heartbeat_status --body "<line>" to reach the quiet-hours measured-presence carve-out)`);
     }
     // SD-LEO-INFRA-CHAIRMAN-INBOUND-VISIBILITY-001 FR-2: a parked row already terminal-drained
     // (drained_at is set) as no_match/rate_limited, so it will NEVER appear in the smsInbound
