@@ -83,6 +83,30 @@ describe('rationaleBar — advisory rationale bar (FR-2 / TS-1, TS-2)', () => {
     });
   });
 
+  // ── QF-20260810-738: 'urgent' was negation-blind — \burgent\b matched THROUGH the hyphen
+  // word-boundary in 'not-urgent'/'non-urgent'. Witnessed 2026-08-09: reworded two legitimate
+  // Adam->Solomon disposition sends to avoid this exact false positive. ──
+  describe('QF-20260810-738 — negated urgency reporting is not manipulation', () => {
+    it('the witnessed passing fixture: factual severity reporting with "nothing urgent"', () => {
+      const body = 'Overnight sweep presses on nothing urgent; rationale: routine backlog scan.';
+      expect(MANIPULATIVE_PATTERNS.test(body)).toBe(false);
+      const r = checkAdamOutbound({ body, kind: ADVISORY });
+      expect(r.checks.rationaleBar.pass).toBe(true);
+    });
+
+    it('hyphenated and spaced negation prefixes all pass', () => {
+      for (const body of ['not-urgent', 'non-urgent', 'not urgent', 'non urgent', 'nothing urgent']) {
+        expect(MANIPULATIVE_PATTERNS.test(body)).toBe(false);
+      }
+    });
+
+    it('STILL blocks genuine urgency framing around the same word (the witnessed blocking fixture)', () => {
+      for (const body of ['act urgently', 'urgent', 'urgently']) {
+        expect(MANIPULATIVE_PATTERNS.test(body)).toBe(true);
+      }
+    });
+  });
+
   it('passes a well-reasoned advisory', () => {
     const r = checkAdamOutbound({ body: 'Recommend parking Alt-Text because demand-test CHECK forbids truth_ metrics; rationale: no live anchor.', kind: ADVISORY });
     expect(r.checks.rationaleBar.pass).toBe(true);
