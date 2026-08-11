@@ -1,8 +1,9 @@
 import { describe, it, expect } from 'vitest';
 import {
   deriveOutcomeFlow, classifyDispatchReason, deriveDispatchReasons, evaluateReasonBand,
-  lacksHoldReason, sampleFalseCompletions, classifyFailureClasses,
+  lacksHoldReason, hasStaleUnreviewedHold, sampleFalseCompletions, classifyFailureClasses,
   FAILURE_CLASSES, REASON_BAND, CONVERSION_FLOOR, LATENCY_CEILING_MS, MIN_COHORT_FOR_ALARM,
+  STALE_HOLD_CEILING_HOURS,
 } from '../../../lib/oversight/coordinator-health-sharpenings.mjs';
 
 const NOW = Date.parse('2026-07-16T12:00:00Z');
@@ -63,15 +64,16 @@ describe('TS-3 dispatch reason band (S3)', () => {
   });
 });
 
-describe('TS-2 six failure classes (S2)', () => {
+describe('TS-2 seven failure classes (S2)', () => {
   const healthy = {
     outcomeFlow: { status: 'measured', cohort_size: MIN_COHORT_FOR_ALARM + 2, conversion: 0.8, median_latency_ms: 1000, rework_rate: 0.1 },
     utilization: { idle: 0, dispatchable_backlog_size: 5 },
     integrity: { integrity_ok: true, divergent_fields: [] },
     stuckRows: [],
+    staleHoldRows: [],
     falseCompletionSample: { samples: [], false_completions: [] },
   };
-  it('exactly the 6 enumerated classes, all silent on healthy input', () => {
+  it('exactly the 7 enumerated classes, all silent on healthy input', () => {
     const classes = classifyFailureClasses(healthy);
     expect(classes.map((c) => c.cls)).toEqual([...FAILURE_CLASSES]);
     expect(classes.every((c) => c.firing === false)).toBe(true);
@@ -80,15 +82,16 @@ describe('TS-2 six failure classes (S2)', () => {
     const fire = (over) => classifyFailureClasses({ ...healthy, ...over });
     expect(fire({ falseCompletionSample: { samples: [], false_completions: ['SD-GHOST-001'] } })[0].firing).toBe(true);
     expect(fire({ stuckRows: [sd({ sd_key: 'SD-STUCK-001' })] })[1].firing).toBe(true);
-    expect(fire({ utilization: { idle: 2, dispatchable_backlog_size: 4 } })[2].firing).toBe(true);
-    expect(fire({ integrity: { integrity_ok: false, divergent_fields: ['dispatchable_count'] } })[3].firing).toBe(true);
-    expect(fire({ outcomeFlow: { ...healthy.outcomeFlow, conversion: CONVERSION_FLOOR - 0.05 } })[4].firing).toBe(true);
-    expect(fire({ outcomeFlow: { ...healthy.outcomeFlow, median_latency_ms: LATENCY_CEILING_MS + 1 } })[5].firing).toBe(true);
+    expect(fire({ staleHoldRows: [sd({ sd_key: 'SD-STALE-HOLD-001' })] })[2].firing).toBe(true);
+    expect(fire({ utilization: { idle: 2, dispatchable_backlog_size: 4 } })[3].firing).toBe(true);
+    expect(fire({ integrity: { integrity_ok: false, divergent_fields: ['dispatchable_count'] } })[4].firing).toBe(true);
+    expect(fire({ outcomeFlow: { ...healthy.outcomeFlow, conversion: CONVERSION_FLOOR - 0.05 } })[5].firing).toBe(true);
+    expect(fire({ outcomeFlow: { ...healthy.outcomeFlow, median_latency_ms: LATENCY_CEILING_MS + 1 } })[6].firing).toBe(true);
   });
   it('outcome classes never alarm on insufficient cohorts', () => {
     const classes = classifyFailureClasses({ ...healthy, outcomeFlow: { status: 'measured', cohort_size: 1, conversion: 0, median_latency_ms: 1e12, rework_rate: 1 } });
-    expect(classes[4].firing).toBe(false);
     expect(classes[5].firing).toBe(false);
+    expect(classes[6].firing).toBe(false);
   });
 });
 
@@ -102,9 +105,64 @@ describe('S2 STUCK_WITHOUT_HOLD_REASON predicate', () => {
     expect(lacksHoldReason({ ...stale, updated_at: daysAgo(0) }, NOW)).toBe(false);
     expect(lacksHoldReason({ ...stale, status: 'draft' }, NOW)).toBe(false);
   });
-  it('orchestrator parents are unclaimed BY DESIGN — never the stuck class', () => {
+  it('SD-LEO-INFRA-AGE-GAUGE-NON-001 FR-2: an orchestrator with NO children data is NOT vacuously exempt (corrects the old blanket sd_type skip)', () => {
     const parent = sd({ status: 'in_progress', updated_at: daysAgo(5), sd_type: 'orchestrator', metadata: {} });
-    expect(lacksHoldReason(parent, NOW)).toBe(false);
+    expect(lacksHoldReason(parent, NOW)).toBe(true); // no children arg -> defaults to [] -> not exempt
+    expect(lacksHoldReason(parent, NOW, 24, [])).toBe(true); // explicit empty array -> same
+  });
+  it('FR-2: an orchestrator whose children are ALL human-held IS exempt', () => {
+    const parent = sd({ status: 'in_progress', updated_at: daysAgo(5), sd_type: 'orchestrator', metadata: {} });
+    const heldChild = { sd_key: 'SD-CHILD-A', sd_type: 'bugfix', status: 'draft', metadata: { requires_human_action: true } };
+    expect(lacksHoldReason(parent, NOW, 24, [heldChild])).toBe(false);
+  });
+  it('FR-2: a MIXED-state orchestrator (one child held, one not) breaches — proves live per-child state, not a blanket skip', () => {
+    const parent = sd({ status: 'in_progress', updated_at: daysAgo(5), sd_type: 'orchestrator', metadata: {} });
+    const heldChild = { sd_key: 'SD-CHILD-A', sd_type: 'bugfix', status: 'draft', metadata: { requires_human_action: true } };
+    const notHeldChild = { sd_key: 'SD-CHILD-B', sd_type: 'bugfix', status: 'draft', metadata: {} };
+    expect(lacksHoldReason(parent, NOW, 24, [heldChild, notHeldChild])).toBe(true);
+  });
+  it('TS-7 regression: a stray falsy-but-not-strictly-false hold value (empty string) no longer counts as a hold', () => {
+    const stale = sd({ status: 'in_progress', updated_at: daysAgo(2) });
+    // Old check (!== false) treated '' as a hold (bug); new Boolean() check correctly does not.
+    expect(lacksHoldReason({ ...stale, metadata: { requires_human_action: '' } }, NOW)).toBe(true);
+    // Regression guard: a genuinely truthy hold of any shape still counts (object, not just boolean).
+    expect(lacksHoldReason({ ...stale, metadata: { lead_blocker: { reason: 'x' } } }, NOW)).toBe(false);
+  });
+});
+
+describe('SD-LEO-INFRA-AGE-GAUGE-NON-001 FR-1: hasStaleUnreviewedHold (STALE_HOLD_UNREVIEWED)', () => {
+  it('TS-1: a hold with no review_at, past the ceiling, is stale', () => {
+    const row = {
+      sd_key: 'SD-FDBK-ENH-LEARNING-LOOP-DESTROYS-001', status: 'pending_approval', claiming_session_id: null,
+      created_at: daysAgo(9), metadata: { requires_human_action: true, requires_human_action_reason: 'FORMAL FENCE' },
+    };
+    expect(hasStaleUnreviewedHold(row, NOW)).toBe(true);
+  });
+  it('TS-2: a hold with a future review_at stays silent', () => {
+    const row = {
+      sd_key: 'SD-X-001', created_at: daysAgo(9),
+      metadata: { requires_human_action: true, requires_human_action_review_at: new Date(NOW + 24 * 60 * 60 * 1000).toISOString() },
+    };
+    expect(hasStaleUnreviewedHold(row, NOW)).toBe(false);
+  });
+  it('TS-3: a past review_at fires even within the fallback ceiling window (review_at takes precedence)', () => {
+    const row = {
+      sd_key: 'SD-X-002', created_at: daysAgo(1), // within STALE_HOLD_CEILING_HOURS if using set_at fallback
+      metadata: { requires_human_action: true, requires_human_action_review_at: daysAgo(0.1) },
+    };
+    expect(hasStaleUnreviewedHold(row, NOW)).toBe(true);
+  });
+  it('a hold within the ceiling window and no review_at stays silent', () => {
+    const row = { sd_key: 'SD-X-003', created_at: daysAgo(1), metadata: { requires_human_action: true } };
+    expect(hasStaleUnreviewedHold(row, NOW)).toBe(false);
+    expect(STALE_HOLD_CEILING_HOURS).toBeGreaterThan(24); // deliberately longer than STUCK_HOURS
+  });
+  it('no hold at all -> never stale (that is lacksHoldReason\'s job, not this class)', () => {
+    expect(hasStaleUnreviewedHold({ sd_key: 'SD-X-004', created_at: daysAgo(30), metadata: {} }, NOW)).toBe(false);
+  });
+  it('exec_boundary_hold_set_at (lib/fleet/exec-boundary-hold-writer.js convention) is honored as the fallback clock', () => {
+    const row = { sd_key: 'SD-X-005', created_at: daysAgo(0), metadata: { exec_boundary_hold: true, exec_boundary_hold_set_at: daysAgo(9) } };
+    expect(hasStaleUnreviewedHold(row, NOW)).toBe(true);
   });
 });
 

@@ -24,14 +24,16 @@ describe('coordinator-health delta — live path (read-only)', () => {
   }, 30000);
 
   live('fetchStuckWithoutHold returns rows that all genuinely lack hold provenance', async () => {
+    // SD-LEO-INFRA-AGE-GAUGE-NON-001 FR-2: an orchestrator row CAN now appear here — the old
+    // blanket sd_type==='orchestrator' exemption was replaced with a live child-state check
+    // (a childless parent, or one with any non-fully-held child, is no longer vacuously exempt).
     const rows = await fetchStuckWithoutHold(sb);
     for (const r of rows) {
       expect(r.claiming_session_id).toBeNull();
-      expect(r.sd_type).not.toBe('orchestrator');
     }
   }, 30000);
 
-  live('computeSharpenings produces exactly the six classes + a band verdict on live data', async () => {
+  live('computeSharpenings produces exactly the seven classes + a band verdict on live data', async () => {
     const utilization = { idle: 0, dispatchable_backlog_size: 0 };
     const integrity = { integrity_ok: true, divergent_fields: [] };
     const s = await computeSharpenings(sb, { utilization, integrity, gitGrep: () => 'unverifiable' });
