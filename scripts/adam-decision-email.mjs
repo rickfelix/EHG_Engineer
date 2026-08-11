@@ -15,6 +15,12 @@ import { createClient } from '@supabase/supabase-js';
 import { pathToFileURL } from 'url';
 import { resolve } from 'path';
 import { renderLeanDecisionEmail, filterStaleLeanDecisions, DEAD_VENTURE_STATUSES } from '../lib/chairman/decision-layman.mjs';
+// SD-LEO-INFRA-VENTURE-STATUS-LANGUAGE-001 (FR-3): attach measured venture build status so
+// decision-layman.mjs's pure renderer can flag a stale "built/deployed/live" claim in free-text
+// prose. deriveVentureBuildStatus (PURE) is used directly, not fetchVentureBuildStatusBatch,
+// because this file already batch-fetches the ventures rows below for the dead-venture check --
+// composing here avoids a second, duplicate ventures query.
+import { deriveVentureBuildStatus } from '../lib/governance/venture-build-status.mjs';
 import { isEscalationActionable, isFixtureVenture } from '../lib/chairman/chairman-actionable.mjs';
 import { enforceCliSendGuard } from '../lib/notifications/cli-send-guard.mjs';
 import { isWithinChairmanQuietWindow } from '../lib/notifications/resend-adapter.js';
@@ -72,19 +78,35 @@ if (rows.length === 0) {
 // skips the filter (show all), mirroring adam-exec-summary.mjs's dead-venture pattern.
 let deadVentureIds = new Set();
 let fixtureVentureIds = new Set();
+let buildStatusById = new Map();
 try {
   const vids = [...new Set(rows.filter((r) => r.venture_id).map((r) => r.venture_id))];
   if (vids.length) {
-    const { data: vrows, error: vErr } = await db.from('ventures').select('id, status, name, is_demo').in('id', vids);
+    const { data: vrows, error: vErr } = await db.from('ventures')
+      .select('id, status, name, is_demo, workflow_status, workflow_started_at, deployment_url, repo_url, launch_mode')
+      .in('id', vids);
     if (!vErr) {
       const found = new Set((vrows || []).map((v) => v.id));
       deadVentureIds = new Set(vids.filter((id) => !found.has(id) || (vrows || []).some((v) => v.id === id && DEAD_VENTURE_STATUSES.has(String(v.status || '').toLowerCase()))));
       // SD-LEO-INFRA-CHAIRMAN-DECISION-QUEUE-002 (FR-1): fixture ventures resolve fail-INCLUDE
       // (missing/unreadable venture row is NOT treated as a fixture), matching the console RPC.
       fixtureVentureIds = new Set((vrows || []).filter((v) => isFixtureVenture(v)).map((v) => v.id));
+
+      // SD-LEO-INFRA-VENTURE-STATUS-LANGUAGE-001 (FR-3): one extra batched query for routed-deployment
+      // evidence, composed with the ventures rows already fetched above via the PURE deriveVentureBuildStatus.
+      let routedIds = new Set();
+      try {
+        const { data: deps, error: depErr } = await db.from('venture_deployments').select('venture_id').in('venture_id', vids).eq('status', 'routed');
+        if (!depErr) routedIds = new Set((deps || []).map((d) => d.venture_id));
+      } catch { /* fail-soft: deployment evidence degrades to not-confirmed per-venture */ }
+      buildStatusById = new Map((vrows || []).map((v) => [v.id, deriveVentureBuildStatus(v, { hasRoutedDeployment: routedIds.has(v.id) })]));
     }
   }
 } catch (e) { console.warn('[adam-decision-email] venture-status filter skipped (fail-soft): ' + (e?.message || e)); }
+
+if (buildStatusById.size) {
+  rows = rows.map((r) => (r.venture_id && buildStatusById.has(r.venture_id) ? { ...r, venture_build_status: buildStatusById.get(r.venture_id) } : r));
+}
 
 // SD-LEO-INFRA-CHAIRMAN-DECISION-QUEUE-002 (FR-1): the digest applies the SAME
 // chairman-actionable predicate as the SLA sweep (isEscalationActionable — the documented
