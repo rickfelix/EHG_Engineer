@@ -3,6 +3,8 @@
 
 ## Table of Contents
 
+- [2026-08-11](#2026-08-11)
+  - [Bugfix](#bugfix)
 - [2026-08-10](#2026-08-10)
   - [Infrastructure](#infrastructure)
 - [2026-07-31](#2026-07-31)
@@ -105,6 +107,17 @@
   - [Housekeeping & CI](#housekeeping-ci)
   - [EHG_Engineering](#ehg_engineering)
   - [EHG (Venture App)](#ehg-venture-app)
+
+## 2026-08-11
+
+### Bugfix
+- **Learning loop: lessons no longer destroyed while the run reports success** - PR #6726, #6727 (SD-FDBK-ENH-LEARNING-LOOP-DESTROYS-001)
+  - **What was broken**: `lib/learning/issue-knowledge-base.js` generated `pattern_id` by reading the max existing id and incrementing it, but the max was lexicographically ordered on a TEXT column (`VGAP-V11` sorted above every `PAT-NNN` row). `/PAT-(\d+)/` never matched it, the counter stayed at its initializer, every generated id came out `PAT-001`, and every insert after the first collided on the primary key with Postgres error 23505. The `if (match)` branch had no `else`, so the failure was invisible at its point of origin. Downstream, the live writer (`auto-extract-patterns-from-retro.js`) had no per-item try/catch — one throw abandoned every remaining lesson in the retrospective — and the caller swallowed the rejection to a `console.warn` printed *after* the retro had already logged its own success line, so a run could destroy every lesson it processed while reporting "Findings: N created."
+  - **Fixed (6 of 7 FRs in the first PR)**: pattern ids now derive from a content fingerprint (`PAT-LES-<sha12>`) instead of a racy read-then-increment; the live writer isolates each lesson so one bad item no longer costs the batch; destruction is now distinguishable from "nothing to create" via a first-class `destroyed` field and a non-zero exit code; two previously-rejected enum values gained CHECK-constraint support; critical/high-severity lessons bypass the single-SD closed-source filter; and the same defect class was repaired (not deleted) in `pattern-detection-engine.js`.
+  - **FR-5 needed a second PR**: the read-path companion bug — `v_patterns_with_decay` was defined with `SELECT p.*`, which Postgres expands and freezes at `CREATE OR REPLACE` time, so six columns added to `issue_patterns` since 2026-02-07 were missing from the view and every read 42703'd — could not ship as a `CREATE OR REPLACE`. Postgres rejected the replace attempt outright (`cannot change name of view column`), because the drifted columns sit in the middle of the expansion and `REPLACE` may only append columns, never reorder or rename. PR #6727 changed the standing pattern to `DROP VIEW` → `CREATE VIEW WITH (security_invoker=on)` → replay grants, all inside one transaction (DDL is transactional, so the view is never absent), with two in-transaction post-conditions that RAISE and roll back rather than silently pass: every `issue_patterns` column must be exposed, and `security_invoker` must survive the recreate (a bare `DROP`+`CREATE` silently drops reloptions if omitted).
+  - **Held at LEAD_FINAL deliberately**: the FR-5 migration is tier-2 DDL requiring a human `@approved-by` stamp, so both PRs explicitly left the SD un-approved pending a human apply and live AC-6/AC-7 re-verification — completing an SD against an unapplied migration would have been code-shipped-but-not-capability-live. The migration was subsequently applied and this SD's LEAD-FINAL-APPROVAL passed today (score 92%, `CHAIRMAN_APPLY_VERIFICATION` 100%) after a stranded-claim re-route.
+  - **Related, separate follow-up**: QF-20260808-463 (PR #6890) fixed an adjacent defect in the same data path — a proven-solution match assumed string elements, so a non-string `action_items[0]` passed through as `solution` — surfaced by re-checking this SD's own premise against `main` before acting on the ticket as filed.
+  - **Verification**: 153/153 tests green across `tests/unit/learning/`, `tests/learn/`, and a new repo-wide guard against the same fingerprint-separator defect class (its 4th occurrence in this tree).
 
 ## 2026-08-10
 
