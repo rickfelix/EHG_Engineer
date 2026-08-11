@@ -1,8 +1,8 @@
-<!-- file_content_hash: 0f526e3d7ab3d6d9 -->
+<!-- file_content_hash: 01503bca1805094b -->
 <!-- GENERATED FILE - DO NOT EDIT DIRECTLY. Source of truth: leo_protocol_sections (DB). Regenerate: node scripts/generate-claude-md-from-db.js. Drift check: node scripts/check-claude-md-drift.cjs -->
 # CLAUDE_CORE.md - LEO Protocol Core Context
 
-**Generated**: 2026-08-04 12:36:22 AM
+**Generated**: 2026-08-11 4:01:47 AM
 **Protocol**: LEO 4.4.1
 **Purpose**: Essential workflow context for all sessions
 **Effort**: medium (core context; phase-specific files tag their own effort for phase work)
@@ -1591,7 +1591,7 @@ Each SD should trace upward through this hierarchy. When evaluating or creating 
 |------------|----------|----------|-------|-------|--------------|
 | PAT-HF-PLANTOLEAD-27a62713 | handoff_failure | [HIGH] high | 7 | [STABLE] | N/A |
 | PAT-RETRO-PLANTOLEAD-27a62713 | session_retrospective | [HIGH] high | 7 | [STABLE] | N/A |
-| PAT-HF-PLANTOLEAD-e8842331 | handoff_failure | [HIGH] high | 6 | [STABLE] | N/A |
+| PAT-HF-LEADTOPLAN-90e39736 | handoff_failure | [HIGH] high | 6 | [STABLE] | N/A |
 | PAT-TEST-PINS-FACT-NOT-BEHAVIOUR-001 | testing | [HIGH] high | 6 | [STABLE] | Assert the RULE, not today's answer. The |
 | PAT-RETRO-PLANTOLEAD-e8842331 | session_retrospective | [HIGH] high | 6 | [STABLE] | N/A |
 
@@ -1608,15 +1608,7 @@ Each SD should trace upward through this hierarchy. When evaluating or creating 
 
 ## Known Friction Points
 
-**From Worker Signals** — recurring friction observed by 3+ workers via `/signal`. Aggregated into harness-backlog by `lib/coordinator/signal-router.cjs` on every sweep cycle. Triage via `node scripts/sd-from-feedback.js`.
-
-| Signal Type | Workers | Severity | Title |
-|-------------|---------|----------|-------|
-| feedback | 6 | medium | online — entering autonomous loop |
-| feedback | 3 | medium | wakeup-armed +600s — idle, 0 claimable at my tier (unchanged |
-| feedback | 3 | medium | comms-check ack — read you |
-
-*Auto-updated from `feedback` table where `category='harness_backlog'` AND `metadata.contributing_workers` length ≥ 3.*
+*(No widespread friction signals tracked currently — workers can /signal to surface recurring issues.)*
 
 
 
@@ -1625,18 +1617,7 @@ Each SD should trace upward through this hierarchy. When evaluating or creating 
 
 **From Published Retrospectives** - Apply these learnings proactively.
 
-### 1. Retrospective: SD-LEO-INFRA-CHAIRMAN-DECISION-SURFACING-001 — widen escalation to any raiser, arm the dormant SLA sweep notify-only [QUALITY]
-**Category**: APPLICATION_ISSUE | **Date**: 7/10/2026 | **Score**: 100
-
-**Key Improvements**:
-- The ALL-PATHS requirement (escalation must reach every producer of a blocking pending decision) coul...
-- Test-writing surfaced two real bugs in test design rather than product code: enforceDecisionSLAs cal...
-
-**Action Items**:
-- [ ] When arming a "registered but never dispatched" module (C2 dormant-machinery cla...
-- [ ] When a predicate change (e.g. shouldAutoEscalate) widens WHO triggers a downstre...
-
-### 2. SD-LEO-INFRA-SESSION-SPAWN-AND-PROMPT-LIBRARY-001-F: wiring assertLaunchContract at three spawn seams — and the SD reproducing its own defect (deletable enforcement) [QUALITY]
+### 1. SD-LEO-INFRA-SESSION-SPAWN-AND-PROMPT-LIBRARY-001-F: wiring assertLaunchContract at three spawn seams — and the SD reproducing its own defect (deletable enforcement) [QUALITY]
 **Category**: PROCESS_IMPROVEMENT | **Date**: 7/26/2026 | **Score**: 100
 
 **Key Improvements**:
@@ -1647,18 +1628,18 @@ Each SD should trace upward through this hierarchy. When evaluating or creating 
 - [ ] File a work item covering the three spawn surfaces that never reach buildSession...
 - [ ] Document FLEET_CLAUDE_CMD and CLAUDE_CLI_PATH — neither appears in any doc today...
 
-### 3. SD-LEO-INFRA-FOLD-LEO-INTO-EHG-001 Retrospective — Fleet Sessions inside EHG (spawn, see, open) [QUALITY]
-**Category**: PROCESS_IMPROVEMENT | **Date**: 7/25/2026 | **Score**: 100
+### 2. SD-LEO-INFRA-SESSION-SPAWN-AND-PROMPT-LIBRARY-001-D: pointer-file startup transport + callsign-keyed prompt selection — and six ways a 1096-green suite lied [QUALITY]
+**Category**: PROCESS_IMPROVEMENT | **Date**: 7/26/2026 | **Score**: 100
 
 **Key Improvements**:
-- TEST-MASKING NEARLY SHIPPED, INTRODUCED BY EXEC ITSELF. The first version of the hook tests re-imple...
-- A VITEST FOOTGUN COST REAL DEBUGGING TIME. `beforeEach(() => mock.mockReset())` — the concise arrow ...
+- THE SD's OWN HEADLINE HAZARD WENT LIVE ON ITS OWN BRANCH, ARMED BY ITS OWN ENABLING COMMIT. FR-3 req...
+- NO GATE, TEST OR CHECKLIST RE-CHECKED THE EARLIER WORK AT THE MOMENT REACHABILITY CHANGED. 'Not reac...
 
 **Action Items**:
-- [ ] MERGE THE BRANCH (or stand up a worktree dev server) so http://localhost:8080/bu...
-- [ ] RECORD A PR-SIZE JUSTIFICATION IN THE SD (880 LOC total, ~437 source, vs a 400-L...
+- [ ] Adopt ARMING-COMMIT RE-CHECK as a standing EXEC rule: when a commit converts unr...
+- [ ] Adopt PAIRED-CONTROL FOR ABSENCE ASSERTIONS as a standing TESTING rule: every ne...
 
-### 4. SD-LEO-INFRA-LAUNCHER-CAN-HOST-001 Retrospective [QUALITY]
+### 3. SD-LEO-INFRA-LAUNCHER-CAN-HOST-001 Retrospective [QUALITY]
 **Category**: APPLICATION_ISSUE | **Date**: 7/25/2026 | **Score**: 100
 
 **Key Improvements**:
@@ -1669,16 +1650,27 @@ Each SD should trace upward through this hierarchy. When evaluating or creating 
 - [ ] WIRE PROVISIONING INTO THE DRILL PATH (closes C4): add the provisionCanary call ...
 - [ ] VERIFY C5 (Open raises a window) with an actual observation of SetForegroundWind...
 
-### 5. SD-LEO-INFRA-SESSION-SPAWN-AND-PROMPT-LIBRARY-001-D: pointer-file startup transport + callsign-keyed prompt selection — and six ways a 1096-green suite lied [QUALITY]
-**Category**: PROCESS_IMPROVEMENT | **Date**: 7/26/2026 | **Score**: 100
+### 4. SD-LEO-INFRA-FOLD-LEO-INTO-EHG-001 Retrospective — Fleet Sessions inside EHG (spawn, see, open) [QUALITY]
+**Category**: PROCESS_IMPROVEMENT | **Date**: 7/25/2026 | **Score**: 100
 
 **Key Improvements**:
-- THE SD's OWN HEADLINE HAZARD WENT LIVE ON ITS OWN BRANCH, ARMED BY ITS OWN ENABLING COMMIT. FR-3 req...
-- NO GATE, TEST OR CHECKLIST RE-CHECKED THE EARLIER WORK AT THE MOMENT REACHABILITY CHANGED. 'Not reac...
+- TEST-MASKING NEARLY SHIPPED, INTRODUCED BY EXEC ITSELF. The first version of the hook tests re-imple...
+- A VITEST FOOTGUN COST REAL DEBUGGING TIME. `beforeEach(() => mock.mockReset())` — the concise arrow ...
 
 **Action Items**:
-- [ ] Adopt ARMING-COMMIT RE-CHECK as a standing EXEC rule: when a commit converts unr...
-- [ ] Adopt PAIRED-CONTROL FOR ABSENCE ASSERTIONS as a standing TESTING rule: every ne...
+- [ ] MERGE THE BRANCH (or stand up a worktree dev server) so http://localhost:8080/bu...
+- [ ] RECORD A PR-SIZE JUSTIFICATION IN THE SD (880 LOC total, ~437 source, vs a 400-L...
+
+### 5. SD-LEO-INFRA-CLAIM-LIVENESS-FENCE-001 Retrospective: fail-direction is a per-signal decision, and a green suite proved nothing about three unmutated checks [QUALITY]
+**Category**: TESTING_STRATEGY | **Date**: 7/26/2026 | **Score**: 100
+
+**Key Improvements**:
+- FR-3 (the QF lane, the lane every cited incident actually occurred on) has BEHAVIORAL test coverage ...
+- The classifier's recorded_pid_name_match branch (no tick pidfile, but the recorded claude_sessions.p...
+
+**Action Items**:
+- [ ] PLAN must explicitly decide between (a) continuing to route every JS claim-write...
+- [ ] scripts/qf-start.js and scripts/create-quick-fix.js are currently covered only b...
 
 
 *Lessons auto-generated from `retrospectives` table. Query for full details.*
@@ -1745,7 +1737,7 @@ Results MUST be persisted to `sub_agent_execution_results` table.
 
 ---
 
-*Generated from database: 2026-08-04*
+*Generated from database: 2026-08-11*
 *Protocol Version: 4.4.1*
 *Includes: Proposals (0) + Hot Patterns (5) + Lessons (5)*
 *Load this file first in all sessions*
