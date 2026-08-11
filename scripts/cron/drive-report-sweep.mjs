@@ -47,6 +47,10 @@ import { SECTION_ID as CHAIN_ID, buildChainToGate } from '../../lib/drive-loop/s
 import { SECTION_ID as ACTS_ID, buildNextActs } from '../../lib/drive-loop/sections/next-acts.js';
 import { SECTION_ID as STALL_ID } from '../../lib/drive-loop/sections/stall-deltas.js';
 import { LEG_ID as LEG1_ID } from '../../lib/drive-loop/score/leg1-landed.js';
+// SD-LEO-INFRA-DRIVE-SCORE-LEG1-ALOCAL-001: the chairman-ratified live rule. leg1-landed.js
+// (imported above for LEG_ID only) is reference-only now — see its header amendment.
+import { scoreLeg1ALocal } from '../../lib/drive-loop/score/leg1-landed-alocal.js';
+import { runHardenedGit } from '../../lib/git/hardened-runner.cjs';
 import { LEG_ID as LEG2_ID } from '../../lib/drive-loop/score/leg2-uptake.js';
 import { LEG_ID as LEG4_ID, scoreLeg4 } from '../../lib/drive-loop/score/leg4-capacity.js';
 // SD-LEO-INFRA-PERSIST-BELT-CAPACITY-001 (FR-3): the ladder, shared with the capacity forecast so
@@ -227,7 +231,7 @@ export async function scoreCapacityLeg({ gatherCapacity, persistVerdict, runId =
  * "finishing" any of them — two are traps where the obvious wiring produces a confidently wrong
  * number rather than an incomplete one.
  */
-export function buildGather({ supabase, computePlanCheckStatus, gatherCapacity, persistVerdict, capacityRunId = null }) {
+export function buildGather({ supabase, computePlanCheckStatus, gatherCapacity, persistVerdict, capacityRunId = null, runGitLog }) {
   // SD-LEO-INFRA-PERSIST-BELT-CAPACITY-001 (FR-3): leg4's two injections are REQUIRED here, not
   // defaulted to the real implementations. A default would make this function look wired while the
   // CLI passed nothing — which is precisely how `persist` went missing from runDriveReportSweep and
@@ -237,6 +241,12 @@ export function buildGather({ supabase, computePlanCheckStatus, gatherCapacity, 
   if (typeof gatherCapacity !== 'function' || typeof persistVerdict !== 'function') {
     throw new Error('buildGather(): gatherCapacity and persistVerdict must be injected — leg4 refuses '
       + 'without them (leg4-capacity.js:57), and a defaulted injection hides an unwired CLI behind a green suite');
+  }
+  // SD-LEO-INFRA-DRIVE-SCORE-LEG1-ALOCAL-001 (FR-2): same mandatory-injection contract as above —
+  // leg1's A-LOCAL predicate refuses to silently shell out (leg1-landed-alocal.js), so a missing
+  // injection here must fail loudly rather than hide an unwired CLI behind a green suite.
+  if (typeof runGitLog !== 'function') {
+    throw new Error("buildGather(): runGitLog must be injected — leg1's A-LOCAL predicate refuses to silently shell out");
   }
 
   return async function gather() {
@@ -253,7 +263,12 @@ export function buildGather({ supabase, computePlanCheckStatus, gatherCapacity, 
     // been handed exactly what they were asked for. The bug would simply move one layer up into
     // this file. That is why the wiring test asserts WHAT IS PASSED here, not what the sections
     // do with it.
-    const planStatus = await computePlanCheckStatus(supabase);
+    // SD-LEO-INFRA-DRIVE-SCORE-LEG1-ALOCAL-001 (FR-2): windowHours widened to 720h (30 days) for
+    // leg1's population specifically — measured EMPTY at the 48h default and at 168h (7 days) at
+    // PLAN time (open_items_all/waves are NOT window-filtered, verified in plan-check-status.js,
+    // so this has no effect on the other consumers below). This is still the ONLY call to
+    // computePlanCheckStatus in this function (see the dedupe comment above) — zero new queries.
+    const planStatus = await computePlanCheckStatus(supabase, { windowHours: 720 });
     const beltItems = planStatus.open_items_all || [];
 
     const sections = {
@@ -289,15 +304,15 @@ export function buildGather({ supabase, computePlanCheckStatus, gatherCapacity, 
     // fabricating a measurement. aggregateScore already discloses that the denominator is
     // unratified, and excludes unavailable legs from it rather than scoring them zero.
     const legs = [
-      // SD-LEO-INFRA-DRIVE-SCORE-LEG1-001 (Option B, coordinator ruling fea8b4c4): the old
-      // reason claimed "not wired", which became false on both halves — the leg module is fully
-      // built and tested, and the chain-item set is already fetched above. The TRUE blocker is
-      // the ratified rule itself, measured (VALIDATION evidence ab82da6b): ancestry-by-branch-ref
-      // cannot be earned in a delete-branch-on-merge flow, and the open-item input set is
-      // definitionally the not-landed set. Redefining the landing question is a chairman-surfaced
-      // spec change (parent SD's own gate), in flight via Adam. Until it lands, leg1 stays
-      // honestly UNAVAILABLE — never a false 0-of-2 measurement on the chairman's score.
-      { leg: LEG1_ID, unavailable: unavailable('scoreLeg1 is built but its ratified rule (merge-base ancestry, d50b9f12) is unearnable in this delete-branch-on-merge flow — measured 7/111 ancestors over even the favourable completed population (18 branches absent, 86 not-ancestor), and the open-item input set is definitionally not-landed (evidence ab82da6b). Held unavailable pending the chairman decision on the landing-question redefinition (ruling fea8b4c4).') },
+      // SD-LEO-INFRA-DRIVE-SCORE-LEG1-ALOCAL-001: the chairman-ratified A-LOCAL rule (SMS
+      // 2026-08-10T23:26Z, ruling c8ad4998) supersedes the merge-base-ancestry rule
+      // SD-LEO-INFRA-DRIVE-SCORE-LEG1-001 measured unearnable (evidence ab82da6b, ruling
+      // fea8b4c4). When the (720h-windowed, see above) completed-items population is non-empty,
+      // score it for real; an empty window is still a real, honest outcome — never a false 0-of-2
+      // — and keeps the exact reason text a prior reader already saw.
+      planStatus.done && planStatus.done.length > 0
+        ? scoreLeg1ALocal({ items: planStatus.done, runGitLog })
+        : { leg: LEG1_ID, unavailable: unavailable('scoreLeg1 is built but its ratified rule (merge-base ancestry, d50b9f12) is unearnable in this delete-branch-on-merge flow — measured 7/111 ancestors over even the favourable completed population (18 branches absent, 86 not-ancestor), and the open-item input set is definitionally not-landed (evidence ab82da6b). Held unavailable pending the chairman decision on the landing-question redefinition (ruling fea8b4c4).') },
       { leg: LEG2_ID, unavailable: unavailable('scoreLeg2 needs the ranked top-5 backlog, which this job does not query') },
       await scoreCapacityLeg({ gatherCapacity, persistVerdict, runId: capacityRunId }),
     ];
@@ -421,6 +436,10 @@ if (isMainModule(import.meta.url)) {
       // The SAME window key the report row is written under, so an auditor can join a verdict to
       // the report that cites it. Derived from cliNowMs, not a second clock read.
       capacityRunId: windowKey(cliNowMs),
+      // SD-LEO-INFRA-DRIVE-SCORE-LEG1-ALOCAL-001 (FR-2): the hardened runner (lib/git/hardened-runner.cjs)
+      // is THE published shell-injection-safe git invocation — reused rather than re-derived. Only
+      // ever asked `log main --merges --format=%s [--since=...]`, never a caller-controlled ref.
+      runGitLog: (args) => runHardenedGit(args, { cwd: process.cwd() }).split('\n').filter(Boolean),
     }),
     persist: async (row) => {
       const { data, error } = await supabase.from('drive_reports').insert(row).select('id').single();

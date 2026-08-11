@@ -275,7 +275,11 @@ describe('gather — what this job can HONESTLY measure today', () => {
     open_total: 42,
     next: [{ item_id: 'i1' }, { item_id: 'i2' }],
     next_truncated: true,
-    done: [{ item_id: 'd1' }],
+    // SD-LEO-INFRA-DRIVE-SCORE-LEG1-ALOCAL-001: empty on purpose. This shared fixture pre-dates
+    // leg1 reading `done` at all (leg1 was unconditionally unavailable before this SD); keeping it
+    // empty here preserves every test below exactly as it read before A-LOCAL wiring landed. The
+    // MEASURED path (non-empty done[]) gets its own dedicated fixtures further down.
+    done: [],
     slipped: [],
     waves: [{ id: 'w1', title: 'Wave 1', sequence_rank: 1, status: 'approved' }],
     // RAW consumer-read field names — the rename of these is the defect this SD had to fix.
@@ -294,6 +298,10 @@ describe('gather — what this job can HONESTLY measure today', () => {
   const gather = buildGather({
     supabase: {}, computePlanCheckStatus: async () => status,
     gatherCapacity, persistVerdict: persistTableAbsent,
+    // SD-LEO-INFRA-DRIVE-SCORE-LEG1-ALOCAL-001: never invoked (done: [] above takes the
+    // unavailable branch before runGitLog is called), but mandatory injection still requires a
+    // function here.
+    runGitLog: () => [],
   });
 
   it('section 1 is REAL — the enriched remainder, not next.length', async () => {
@@ -397,6 +405,67 @@ describe('gather — what this job can HONESTLY measure today', () => {
   });
 });
 
+describe('leg1 A-LOCAL wiring — measures for real when the completed-items window has data (SD-LEO-INFRA-DRIVE-SCORE-LEG1-ALOCAL-001)', () => {
+  const gatherCapacity = async () => ({ idleNow: 1, freeingSoon: 0, claimableCount: 0, openQfCount: 0 });
+  const persistTableAbsent = async () => { const e = new Error('relation does not exist'); e.code = 'PGRST205'; throw e; };
+  const runGitLog = () => ['Merge pull request #1 from rickfelix/feat/SD-REALLY-LANDED-001'];
+
+  it('[TS-7] empty done[] leaves the unavailable reason byte-identical to LEG1-001\'s shipped text', async () => {
+    const gather = buildGather({
+      supabase: {},
+      computePlanCheckStatus: async () => ({ open_total: 0, next: [], next_truncated: false, slipped: [], open_items_all: [], waves: [], done: [] }),
+      gatherCapacity, persistVerdict: persistTableAbsent, runGitLog,
+    });
+    const { driveScore } = await gather();
+    const reason = driveScore.unavailable_legs.find((l) => l.leg === 'leg1_landed').reason;
+    expect(reason).toMatch(/unearnable/i);
+    expect(reason).toMatch(/7\/111/);
+    expect(reason).toMatch(/ab82da6b/);
+    expect(reason).toMatch(/fea8b4c4/);
+  });
+
+  it('non-empty done[] measures leg1 for real — it leaves unavailable_legs and joins measured_legs', async () => {
+    const gather = buildGather({
+      supabase: {},
+      computePlanCheckStatus: async () => ({
+        open_total: 0, next: [], next_truncated: false, slipped: [],
+        open_items_all: [], waves: [],
+        done: [{ item_id: 'd1', sd_key: 'SD-REALLY-LANDED-001', title: 'T', wave: 'W', completed_at: '2026-01-01T00:00:00Z' }],
+      }),
+      gatherCapacity, persistVerdict: persistTableAbsent, runGitLog,
+    });
+    const { driveScore } = await gather();
+    expect(driveScore.unavailable_legs.map((l) => l.leg)).not.toContain('leg1_landed');
+    expect(driveScore.measured_legs).toContain('leg1_landed');
+  });
+
+  it('[TS-4, population-discrimination guard] scoring the SAME predicate against open_items_all instead of done[] must NOT read as landed', async () => {
+    // Same-test negative control, proving the fixture is non-vacuous: done[] and open_items_all
+    // are constructed to DISAGREE by design (real landed keys in done[], fabricated never-landed
+    // keys in open_items_all). Scoring against done[] must be non-zero; scoring the identical
+    // predicate against a done[]-shaped read of open_items_all must be 0. A future edit that
+    // silently reverts the population back to open_items_all (the LEG1-001-forbidden population)
+    // fails this test loudly rather than shipping a false measurement.
+    const { scoreLeg1ALocal } = await import('../../../lib/drive-loop/score/leg1-landed-alocal.js');
+    const doneItems = [{ item_id: 'd1', sd_key: 'SD-REALLY-LANDED-001' }];
+    const openItemsAll = [
+      { id: 'o1', promoted_to_sd_key: 'SD-FAKE-NEVER-MERGED-001' },
+      { id: 'o2', promoted_to_sd_key: 'SD-FAKE-ALSO-NEVER-001' },
+    ];
+    const fromDone = scoreLeg1ALocal({ items: doneItems, runGitLog });
+    expect(fromDone.points.value).toBeGreaterThan(0);
+
+    // The forbidden population, read through the SAME done[]-shaped contract (sd_key field) so
+    // the two calls are apples-to-apples -- a caller who reverted the population would pass
+    // exactly this shape.
+    const fromOpenItemsAll = scoreLeg1ALocal({
+      items: openItemsAll.map((o) => ({ item_id: o.id, sd_key: o.promoted_to_sd_key })),
+      runGitLog,
+    });
+    expect(fromOpenItemsAll.points.value, 'the forbidden population must never read as landed against these fabricated keys').toBe(0);
+  });
+});
+
 /**
  * THE TEST THAT WOULD HAVE CAUGHT IT.
  *
@@ -416,6 +485,7 @@ describe('[END-TO-END] the sweep drives the REAL producer — no stub in between
     supabase: {}, computePlanCheckStatus: async () => status,
     gatherCapacity: async () => ({ idleNow: 1, freeingSoon: 0, claimableCount: 0, openQfCount: 0 }),
     persistVerdict: async () => { const e = new Error('relation does not exist'); e.code = 'PGRST205'; throw e; },
+    runGitLog: () => [], // status.done is [] above -- never invoked, mandatory injection only.
   });
 
   it('writes exactly one real row through the real producer', async () => {
@@ -595,6 +665,15 @@ describe('FR-3 — leg4 is injected, not declared unavailable', () => {
     // went missing from runDriveReportSweep and threw on every tick with the suite green.
     expect(() => buildGather({ supabase: {}, computePlanCheckStatus: async () => ({}) }))
       .toThrow(/gatherCapacity and persistVerdict must be injected/);
+  });
+
+  it('buildGather REFUSES an uninjected runGitLog rather than shelling out silently (SD-LEO-INFRA-DRIVE-SCORE-LEG1-ALOCAL-001)', () => {
+    expect(() => buildGather({
+      supabase: {},
+      computePlanCheckStatus: async () => ({}),
+      gatherCapacity: async () => ({}),
+      persistVerdict: async () => ({}),
+    })).toThrow(/runGitLog must be injected/);
   });
 
   it('[WIRING] the CLI passes the REAL gatherer and the REAL writer', () => {
