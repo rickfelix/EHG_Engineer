@@ -23,9 +23,10 @@ import fs from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import {
-  etParts, windowKey, withinWindow, runDriveReportSweep, buildGather, scoreCapacityLeg,
+  etParts, windowKey, withinWindow, runDriveReportSweep, buildGather, scoreCapacityLeg, computeLeg2,
   WINDOW_START_HOUR, WINDOW_END_HOUR, PROCESS_KEY, ACTIVATION_TRIGGER, SD_KEY,
 } from '../../../scripts/cron/drive-report-sweep.mjs';
+import { CLAIM_WINDOW_MS as LEG2_CLAIM_WINDOW_MS } from '../../../lib/drive-loop/score/leg2-uptake.js';
 import { armedProcessKey } from '../../../lib/machinery-class/armed-registration.js';
 import { produceDriveReport } from '../../../scripts/drive-report-produce.mjs';
 import { LAST_RUN_FIELD } from '../../../lib/drive-loop/report-posture.js';
@@ -291,9 +292,13 @@ describe('gather — what this job can HONESTLY measure today', () => {
   // block is unchanged, and that is the point: the pre-ceremony state is a PASS, not a regression.
   const gatherCapacity = async () => ({ idleNow: 1, freeingSoon: 0, claimableCount: 0, openQfCount: 0 });
   const persistTableAbsent = async () => { const e = new Error('relation does not exist'); e.code = 'PGRST205'; throw e; };
+  // SD-LEO-INFRA-DRIVE-SCORE-LEG2-001: no snapshot cohort has ever been ranked in this stub world,
+  // so leg2 stays unavailable — matching the pre-existing "3 unavailable legs" pin below exactly.
+  const readLeg2Cohort = async () => null;
   const gather = buildGather({
     supabase: {}, computePlanCheckStatus: async () => status,
     gatherCapacity, persistVerdict: persistTableAbsent,
+    readLeg2Cohort, nowMs: Date.parse('2026-08-07T09:00:00.000Z'),
   });
 
   it('section 1 is REAL — the enriched remainder, not next.length', async () => {
@@ -398,6 +403,88 @@ describe('gather — what this job can HONESTLY measure today', () => {
 });
 
 /**
+ * SD-LEO-INFRA-DRIVE-SCORE-LEG2-001 — computeLeg2: cohort selection, window anchor, and failure
+ * isolation. The reader's own SELECT logic (nearest fully-elapsed cohort, live refetch, integrity
+ * check) is unit-tested against a fake supabase client in
+ * tests/unit/drive-loop/score/leg2-cohort-reader.test.js; these tests exercise computeLeg2's
+ * CONTRACT with that reader — a plain function stub is enough here, matching how the sibling
+ * `gather — what this job can HONESTLY measure today` block above stubs its own dependencies.
+ */
+describe('SD-LEO-INFRA-DRIVE-SCORE-LEG2-001 — computeLeg2 wiring', () => {
+  const RANKED_AT = '2026-08-06T09:00:00.000Z'; // 24h before the report nowMs used below
+  const REPORT_NOW = Date.parse('2026-08-07T09:00:00.000Z');
+  const claimedSd = (id, agoMs) => ({
+    id, sd_key: id,
+    metadata: { claim_history: [{ session_id: 's', claimed_at: new Date(Date.parse(RANKED_AT) + LEG2_CLAIM_WINDOW_MS - agoMs).toISOString() }] },
+  });
+
+  it('TS-1 [HAPPY PATH] a fully-elapsed cohort with a claimed SD is measured, not unavailable', async () => {
+    const cohort = {
+      rankedAt: RANKED_AT,
+      rankedTop5: [claimedSd('SD-A', 1000)],
+      cohortSize: 1,
+      integrityOk: true,
+    };
+    const leg = await computeLeg2({ readLeg2Cohort: async () => cohort, nowMs: REPORT_NOW });
+    expect(leg.unavailable, 'a real cohort with a real claim must not be unavailable').toBeUndefined();
+    expect(leg.fraction.value).toBe(1);
+    expect(leg.fraction.citation.row_ids).toEqual(['SD-A']);
+  });
+
+  it('TS-4 no fully-elapsed cohort yet — unavailable, never a scored zero', async () => {
+    const leg = await computeLeg2({ readLeg2Cohort: async () => null, nowMs: REPORT_NOW });
+    expect(leg.unavailable.available).toBe(false);
+    expect(leg.unavailable.value).toBe(null);
+    expect(leg.unavailable.reason).toMatch(/no ranked-top-5 snapshot cohort/);
+  });
+
+  it('TS-3 [WINDOW-ANCHOR INVARIANCE] the fraction is identical whether the report fires at ET-05 or ET-08', async () => {
+    // Same cohort (same rankedAt, same claim data). The self-healing window can fire this report
+    // anywhere from 21h to 27h after ranking — computeLeg2 must not let that drift change the
+    // measured fraction, because it anchors nowMs to cohort.rankedAt, not to its own argument.
+    const cohort = { rankedAt: RANKED_AT, rankedTop5: [claimedSd('SD-A', 1000)], cohortSize: 1, integrityOk: true };
+    const at05 = Date.parse('2026-08-07T05:00:00.000Z'); // 20h after ranked_at
+    const at08 = Date.parse('2026-08-07T13:00:00.000Z'); // 28h after ranked_at
+    const legAt05 = await computeLeg2({ readLeg2Cohort: async () => cohort, nowMs: at05 });
+    const legAt08 = await computeLeg2({ readLeg2Cohort: async () => cohort, nowMs: at08 });
+    expect(legAt05.fraction.value).toBe(legAt08.fraction.value);
+    expect(legAt05.points.value).toBe(legAt08.points.value);
+  });
+
+  it('TS-10/R8 a live-refetch shortfall is a data-integrity flag, never a silently shrunk denominator', async () => {
+    const cohort = { rankedAt: RANKED_AT, rankedTop5: [claimedSd('SD-A', 1000)], cohortSize: 5, integrityOk: false };
+    const leg = await computeLeg2({ readLeg2Cohort: async () => cohort, nowMs: REPORT_NOW });
+    expect(leg.unavailable.available).toBe(false);
+    expect(leg.unavailable.reason).toMatch(/data-integrity mismatch/);
+    expect(leg.unavailable.reason).toMatch(/recorded 5 SD\(s\)/);
+  });
+
+  it('TS-5/R7 a rejecting cohort reader is caught, never crashes gather() — leg2 degrades to unavailable', async () => {
+    const leg = await computeLeg2({
+      readLeg2Cohort: async () => { throw new Error('relation "drive_rank_snapshots" does not exist'); },
+      nowMs: REPORT_NOW,
+    });
+    expect(leg.unavailable.available).toBe(false);
+    expect(leg.unavailable.reason).toMatch(/leg2 cohort read\/score failed/);
+    expect(leg.unavailable.reason).toMatch(/drive_rank_snapshots/);
+  });
+
+  it('[FULL GATHER] a rejecting readLeg2Cohort does not take down the other legs or sections', async () => {
+    const status = { open_total: 1, next: [], next_truncated: false, done: [], slipped: [], open_items_all: [] };
+    const gather = buildGather({
+      supabase: {}, computePlanCheckStatus: async () => status,
+      gatherCapacity: async () => ({ idleNow: 0, freeingSoon: 0, claimableCount: 0, openQfCount: 0 }),
+      persistVerdict: async () => { const e = new Error('relation does not exist'); e.code = 'PGRST205'; throw e; },
+      readLeg2Cohort: async () => { throw new Error('boom'); },
+      nowMs: REPORT_NOW,
+    });
+    const { driveScore } = await gather();
+    const ids = driveScore.unavailable_legs.map((l) => l.leg);
+    expect(ids, 'leg1 and leg4 must still be present despite leg2 throwing').toEqual(['leg1_landed', 'leg2_uptake', 'leg4_capacity']);
+  });
+});
+
+/**
  * THE TEST THAT WOULD HAVE CAUGHT IT.
  *
  * Everything above injects a STUB `produce`, and the wiring test asserts only the EDGE
@@ -412,10 +499,14 @@ describe('gather — what this job can HONESTLY measure today', () => {
  */
 describe('[END-TO-END] the sweep drives the REAL producer — no stub in between', () => {
   const status = { open_total: 42, next: [{ item_id: 'i1' }], next_truncated: false, done: [], slipped: [] };
-  const realGather = () => buildGather({
+  const realGather = (nowMs = Date.UTC(...JULY, 10, 0, 0)) => buildGather({
     supabase: {}, computePlanCheckStatus: async () => status,
     gatherCapacity: async () => ({ idleNow: 1, freeingSoon: 0, claimableCount: 0, openQfCount: 0 }),
     persistVerdict: async () => { const e = new Error('relation does not exist'); e.code = 'PGRST205'; throw e; },
+    // SD-LEO-INFRA-DRIVE-SCORE-LEG2-001: no snapshot cohort has ever been ranked in this E2E
+    // fixture world; leg2 stays unavailable, unchanged from before this SD.
+    readLeg2Cohort: async () => null,
+    nowMs,
   });
 
   it('writes exactly one real row through the real producer', async () => {
@@ -597,6 +688,22 @@ describe('FR-3 — leg4 is injected, not declared unavailable', () => {
       .toThrow(/gatherCapacity and persistVerdict must be injected/);
   });
 
+  // SD-LEO-INFRA-DRIVE-SCORE-LEG2-001 (TS-9/R6): the third mandatory injection, asserted with the
+  // SAME refuse-without-it shape leg4's two injections already have above — an unwired CLI must
+  // fail loudly at construction, never hide behind a green stubbed suite.
+  it('buildGather REFUSES an uninjected leg2 cohort reader / nowMs rather than defaulting it', () => {
+    const okLeg4Args = {
+      supabase: {}, computePlanCheckStatus: async () => ({}),
+      gatherCapacity: async () => ({}), persistVerdict: async () => ({}),
+    };
+    expect(() => buildGather(okLeg4Args))
+      .toThrow(/readLeg2Cohort \(function\) and nowMs \(finite number\) must be injected/);
+    expect(() => buildGather({ ...okLeg4Args, readLeg2Cohort: async () => null }))
+      .toThrow(/readLeg2Cohort \(function\) and nowMs \(finite number\) must be injected/); // nowMs still missing
+    expect(() => buildGather({ ...okLeg4Args, readLeg2Cohort: async () => null, nowMs: Date.now() }))
+      .not.toThrow();
+  });
+
   it('[WIRING] the CLI passes the REAL gatherer and the REAL writer', () => {
     const src = fs.readFileSync(path.join(repoRoot, 'scripts', 'cron', 'drive-report-sweep.mjs'), 'utf8')
       .replace(/\/\*[\s\S]*?\*\//g, '').replace(/^\s*\/\/.*$/gm, '');
@@ -607,6 +714,15 @@ describe('FR-3 — leg4 is injected, not declared unavailable', () => {
     // shape when a run cannot be measured, and forbidding it would outlaw the honest degradation.
     expect(src, 'the legs array must score leg4').toMatch(/await\s+scoreCapacityLeg\(/);
     expect(src, 'the old "writer is not built" declaration must be gone').not.toMatch(/is not built/);
+    // SD-LEO-INFRA-DRIVE-SCORE-LEG2-001 (TS-9): the third injection, at the SAME CLI edge —
+    // prospective testing-agent risk R6 measured this file's own precedent (persist going
+    // missing from runDriveReportSweep, suite green) and found leg2's reader had zero coverage
+    // here before this SD.
+    expect(src, 'the CLI must supply the real cohort reader, bound to the real supabase client').toMatch(
+      /readLeg2Cohort:\s*\([^)]*\)\s*=>\s*readRankedTop5Cohort\(supabase,/
+    );
+    expect(src, 'and the real report clock, not a second Date.now() read').toMatch(/nowMs:\s*cliNowMs/);
+    expect(src, 'the legs array must call computeLeg2').toMatch(/await\s+computeLeg2\(/);
   });
 });
 
