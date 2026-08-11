@@ -5,6 +5,7 @@
 
 - [2026-08-11](#2026-08-11)
   - [Bugfix](#bugfix)
+  - [Infrastructure](#infrastructure)
 - [2026-08-10](#2026-08-10)
   - [Infrastructure](#infrastructure)
 - [2026-07-31](#2026-07-31)
@@ -118,6 +119,13 @@
   - **Held at LEAD_FINAL deliberately**: the FR-5 migration is tier-2 DDL requiring a human `@approved-by` stamp, so both PRs explicitly left the SD un-approved pending a human apply and live AC-6/AC-7 re-verification — completing an SD against an unapplied migration would have been code-shipped-but-not-capability-live. The migration was subsequently applied and this SD's LEAD-FINAL-APPROVAL passed today (score 92%, `CHAIRMAN_APPLY_VERIFICATION` 100%) after a stranded-claim re-route.
   - **Related, separate follow-up**: QF-20260808-463 (PR #6890) fixed an adjacent defect in the same data path — a proven-solution match assumed string elements, so a non-string `action_items[0]` passed through as `solution` — surfaced by re-checking this SD's own premise against `main` before acting on the ticket as filed.
   - **Verification**: 153/153 tests green across `tests/unit/learning/`, `tests/learn/`, and a new repo-wide guard against the same fingerprint-separator defect class (its 4th occurrence in this tree).
+
+### Infrastructure
+- **STALE_HOLD_UNREVIEWED: age the hold, not just the work** - PR #6974 (SD-LEO-INFRA-AGE-GAUGE-NON-001)
+  - **The SD's original plan was substantially redundant, and LEAD-phase investigation caught it before any code was written**: the plan proposed a brand-new gauge over unclaimed non-terminal SDs. A VALIDATION sub-agent pass found that population already covered, at a *tighter* 24h threshold, by the existing `STUCK_WITHOUT_HOLD_REASON` detector (`lib/oversight/coordinator-health-sharpenings.mjs`, cron-wired via `scripts/adam-coordinator-health.mjs` every 3h). Building a second gauge (new column, new trigger, new gauge-registry entry, new cron) would have shipped ~70% redundant infrastructure.
+  - **RCA found the real gap**: the existing detector didn't miss its cited specimen (`SD-FDBK-ENH-LEARNING-LOOP-DESTROYS-001`, pending_approval/unclaimed/234h) due to a bug — a formal hold fence (`metadata.requires_human_action=true`, set by a coordinator 2026-08-03 after a real prior incident) correctly suppressed the alarm. The defect: that suppression is **unconditional and ageless**. The fence's own release condition was satisfied 2026-08-07 (PR #6727 merged) but sat unlifted 4 more days, because nothing anywhere ages hold staleness.
+  - **What shipped**: a new `STALE_HOLD_UNREVIEWED` failure class in the same, already-cron-wired detector file — fires when a hold key's `*_review_at` (a convention `lib/fleet/exec-boundary-hold-writer.js` already writes but nothing previously read) is in the past, or falls back to a 7-day ceiling for hold keys with no review_at convention. Folded in two adjacent, necessary-but-insufficient fixes in the same touched code: `lacksHoldReason`'s blanket `sd_type==='orchestrator' => never stuck` exemption is now a live per-child check (`classifyAllDispatchIneligibility` + `CLAIM_WRITE_FENCE_AXES`, closing a real `Array.prototype.every`-on-empty-array vacuous-true bug), and hold-key truthiness was tightened from `!== false` to `Boolean()` so a stray empty string no longer counts as an active hold. No new database column, migration, gauge-registry entry, or cron.
+  - **Verification**: the RCA specimen's exact metadata shape reproduces as `STALE_HOLD_UNREVIEWED` under a synthetic clock; live (read-only) run against production found 0 false positives on the current in-flight population. 26/26 tests passing in `tests/unit/oversight/coordinator-health-sharpenings.test.js`. `scope_reduction_percentage=70` vs. the original plan.
 
 ## 2026-08-10
 
