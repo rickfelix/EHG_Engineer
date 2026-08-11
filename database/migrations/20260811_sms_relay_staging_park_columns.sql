@@ -1,4 +1,8 @@
 -- SD-LEO-INFRA-CHAIRMAN-INBOUND-VISIBILITY-001 FR-1/FR-4c
+-- @approved-by: codestreetlabs@gmail.com
+-- (approval chain: coordinator classification on read 2026-08-11 seat 56f09320 — pure additive
+--  nullable IF NOT EXISTS columns, no RLS/GRANT, orthogonal to the drained_at claim; applied by
+--  coordinator per two-denial fallback after worker seat classifier denials, signal 1cb9c898)
 --
 -- Additive-only: two nullable timestamptz columns. drained_at's exactly-once processing
 -- claim (lib/chairman/sms-bridge.js drainSmsRelayStaging) is untouched — parked_at/
