@@ -69,6 +69,14 @@ jobs:
     steps:
       - name: Checkout
         uses: actions/checkout@v4
+        with:
+          # SD-LEO-INFRA-DRIVE-SCORE-LEG1-ALOCAL-001: the default fetch-depth:1 shallow clone
+          # makes `git log main --merges` (leg1's A-LOCAL landing predicate) exit 0 with ZERO
+          # subjects — indistinguishable from "nothing merged" and, unguarded, a silent
+          # append-only false 0/2 on the chairman's drive score (SECURITY evidence f84884eb).
+          # leg1-landed-alocal.js now also guards this defensively (empty corpus -> unavailable,
+          # never a score), but the full-history checkout is the actual fix, not a backstop.
+          fetch-depth: 0
 
       - name: Setup Node
         uses: actions/setup-node@v4

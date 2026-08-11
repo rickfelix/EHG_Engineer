@@ -410,6 +410,21 @@ describe('leg1 A-LOCAL wiring — measures for real when the completed-items win
   const persistTableAbsent = async () => { const e = new Error('relation does not exist'); e.code = 'PGRST205'; throw e; };
   const runGitLog = () => ['Merge pull request #1 from rickfelix/feat/SD-REALLY-LANDED-001'];
 
+  it('[F1, TESTING evidence 7b22c9ee] computePlanCheckStatus is called with windowHours: 720 -- reverting to the 48h/168h default silently no-ops the whole SD (measured empty at PLAN time)', async () => {
+    const receivedOptions = [];
+    const gather = buildGather({
+      supabase: {},
+      computePlanCheckStatus: async (_supabase, options) => {
+        receivedOptions.push(options);
+        return { open_total: 0, next: [], next_truncated: false, slipped: [], open_items_all: [], waves: [], done: [] };
+      },
+      gatherCapacity, persistVerdict: persistTableAbsent, runGitLog,
+    });
+    await gather();
+    expect(receivedOptions, 'computePlanCheckStatus must be called exactly once (the dedupe this file already documents)').toHaveLength(1);
+    expect(receivedOptions[0]).toEqual({ windowHours: 720 });
+  });
+
   it('[TS-7] empty done[] leaves the unavailable reason byte-identical to LEG1-001\'s shipped text', async () => {
     const gather = buildGather({
       supabase: {},
