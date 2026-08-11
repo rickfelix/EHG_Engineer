@@ -1,18 +1,22 @@
 ---
 category: database
 status: approved
-version: 1.0.0
+version: 1.1.0
 author: rickfelix
-last_updated: 2026-07-25
+last_updated: 2026-08-11
 tags: [database, migrations, ci, governance]
 ---
 
 # Migration disposition ledger
 
-**Source**: SD-LEO-INFRA-MIGRATION-APPLY-STATE-TRIAGE-001.
+**Source**: SD-LEO-INFRA-MIGRATION-APPLY-STATE-TRIAGE-001. Gap-set scope widened by
+SD-LEO-INFRA-APPLY-STATE-CEREMONY-PENDING-001 (see "CEREMONY_PENDING" below).
 
-Every committed migration under `database/migrations/` that the apply-state verifier reports as
-a gap must have a recorded, readable decision. This is where that decision lives.
+Every committed migration the apply-state verifier reports as a gap must have a recorded,
+readable decision. This is where that decision lives. Originally scoped to
+`database/migrations/`; as of 2026-08-11 the verifier also scans `database/chairman-gated/`
+(previously invisible to it entirely — see below), so gaps from that directory now belong here
+too.
 
 ## Why it exists
 
@@ -62,6 +66,24 @@ Windows paths (229 distinct paths for 227 distinct basenames), so a path is not 
 | `RETIRED` | Deliberately never applying this. | Yes |
 | `DEFERRED` | Will decide/apply later; blocked or not yet worth it. | Yes |
 | `APPLIED` | It has been applied. | **Never** |
+
+## `database/chairman-gated/` and `CEREMONY_PENDING`
+
+`database/chairman-gated/` is deliberately excluded from the *auto-apply* scanner
+(`scripts/modules/handoff/pre-checks/pending-migrations-check.js`) — that exclusion is the
+safety mechanism documented in `database/chairman-gated/README.md` and is unrelated to this
+ledger. Until SD-LEO-INFRA-APPLY-STATE-CEREMONY-PENDING-001, the same exclusion had also leaked
+into this *read-only reporting* verifier by omission (`DEFAULT_EXTRA_ROOTS` simply never named
+the directory), so a merged-but-unapplied chairman-gated migration was invisible to both this
+ledger and the `CHAIRMAN_APPLY_VERIFICATION` LEAD-FINAL gate for as long as 4 days in the
+incident that prompted the fix.
+
+The verifier now scans `database/chairman-gated/` and reports a file there that would otherwise
+read `NOT_APPLIED`/`PARTIAL` as **`CEREMONY_PENDING`** instead, carrying an `age_days` field.
+`CEREMONY_PENDING` flows into the same `gaps`/undispositioned set as `NOT_APPLIED`/`PARTIAL` — it
+is a distinct *label* (an expected wait-state, not silent neglect), not a distinct *lane*. It can
+be dispositioned `DEFERRED` or `RETIRED` exactly like any other gap, following the same
+adjudication process below.
 
 ## The four invariants
 
@@ -132,6 +154,14 @@ Only two rules are trusted, both re-derivable from tracked sources:
   *self-asserted in the author's own SQL* and is not checked against any registry, so an author
   can obtain this deferral by adding one comment line. It is time-boxed to 90 days for that
   reason.
+  **Caveat (2026-08-11):** this is a content-marker rule (`CHAIRMAN_GATED_RE` in
+  `scripts/seed-migration-dispositions.mjs`), not a path rule — it does not fire merely because a
+  file lives under `database/chairman-gated/`. Measured against the 11 files in that directory at
+  the time `CEREMONY_PENDING` shipped: **none** carry the literal `@chairman-gated` or
+  `requires-chairman-apply` comment the regex requires, including the 2 that were newly
+  surfaced as `CEREMONY_PENDING` gaps. Directory placement and Rule A's marker are two different,
+  currently-unreconciled conventions for saying the same thing — a file in the directory needs a
+  **manual** disposition entry (steps below) until that's reconciled.
 - **B — the 2026-06-10 human sweep → its verdict**, but only when *every* object the verifier
   reports missing for that file is covered by the doc **and** the doc cites that exact file.
   Currently this yields zero files, because the sweep adjudicated tables and views from a
