@@ -561,6 +561,38 @@ export async function surfaceSmsInbound(sb) {
   }
 }
 
+/**
+ * SD-LEO-INFRA-CHAIRMAN-INBOUND-VISIBILITY-001 FR-2: surface PARKED chairman SMS every tick,
+ * until explicitly resolved (scripts/resolve-parked-chairman-sms.cjs). A parked row is a
+ * verified-chairman-number message that resolved no_match/rate_limited and already terminal-
+ * drained (drained_at is set) — surfaceSmsInbound's received_at window above will never show it
+ * again once it ages out. This detector has NO time window: `parked_at IS NOT NULL AND
+ * resolved_at IS NULL` IS the queue, so a parked row re-fires every tick for as long as it stays
+ * unaddressed — that persistence (not a decaying window) is the FR-2 acceptance criterion.
+ */
+export async function surfaceParkedChairmanSms(sb) {
+  try {
+    const { data, error } = await sb
+      .from('sms_relay_staging')
+      .select('id, from_phone, body_raw, parked_at')
+      .not('parked_at', 'is', null)
+      .is('resolved_at', null)
+      .order('parked_at', { ascending: true })
+      .limit(SMS_INBOUND_CAP);
+    if (error) return { rows: [], count: 0, error: error.message };
+
+    const rows = (data || []).map((r) => ({
+      id: r.id,
+      fromPhone: r.from_phone,
+      ageMin: Math.floor((Date.now() - new Date(r.parked_at).getTime()) / 60_000),
+      body: String(r.body_raw || '').replace(/\s+/g, ' ').slice(0, 120),
+    }));
+    return { rows, count: rows.length };
+  } catch (e) {
+    return { rows: [], count: 0, error: e && e.message };
+  }
+}
+
 async function readSalientState(sb) {
   const state = { beltZero: true, openSignalCount: 0, venture1State: null };
   try {
@@ -662,6 +694,11 @@ async function main() {
 
   // QF-20260719-848: contract INBOUND WATCH — surface undrained chairman SMS every tick.
   const smsInbound = await surfaceSmsInbound(sb);
+
+  // SD-LEO-INFRA-CHAIRMAN-INBOUND-VISIBILITY-001 FR-2: parked chairman SMS — orthogonal to the
+  // window-bound smsInbound above (drained_at is already set on these rows; only parked_at/
+  // resolved_at gate this queue), so it is read and surfaced separately every tick.
+  const smsParked = await surfaceParkedChairmanSms(sb);
 
   // SD-LEO-INFRA-ADAM-DURABLE-STANDING-001: evaluate the durable standing priority. Fail-soft like
   // its siblings above — and fail QUIET: a detector that cannot read its store reports 'unknown'
@@ -768,6 +805,7 @@ async function main() {
     inboxBacklog: inboxSurface.backlogCount,
     inboxBacklogBreaching: inboxSurface.backlogBreachingCount,
     smsInbound: smsInbound.count,
+    smsParked: smsParked.count,
     outboundSilence,
     crossPartyPing: delta.changed,
     pingFields: delta.fields,
@@ -796,6 +834,7 @@ async function main() {
       // shown the truth. `?` when the selector failed, never a healthy-looking 0.
       `backlog=${inboxSurface.backlogCount ?? '?'}(breach:${inboxSurface.backlogBreachingCount ?? '?'}) ` +
       `sms=${smsInbound.count} ` +
+      `smsParked=${smsParked.count} ` +
       `probes=${outboundSilence.probed.length} esc=${outboundSilence.escalated.length} ` +
       `ping=${delta.changed ? delta.fields.join(',') : 'suppressed'} ` +
       `nextWakeSeconds=${delaySeconds} :: ${modeReason}`
@@ -909,6 +948,14 @@ async function main() {
         continue;
       }
       console.log(`QUIET_TICK_SMS_INBOUND=adam ${detail} — undrained chairman SMS; DRAIN+reply per CHAIRMAN SMS CHANNEL DUTY (node scripts/sms-relay-drain.cjs)`);
+    }
+    // SD-LEO-INFRA-CHAIRMAN-INBOUND-VISIBILITY-001 FR-2: a parked row already terminal-drained
+    // (drained_at is set) as no_match/rate_limited, so it will NEVER appear in the smsInbound
+    // loop above — this is the only surface that re-fires it. Hard interrupt, unconditionally
+    // (unlike QUIET_TICK_SMS_INBOUND above, there is no inert-drain-flag case to downgrade for:
+    // resolving a parked row is a CLI script, not gated on SMS_RELAY_DRAIN_ENABLED).
+    for (const s of smsParked.rows) {
+      console.log(`QUIET_TICK_SMS_PARKED=adam id=${s.id} from=${s.fromPhone} age=${s.ageMin}m body="${s.body}" — parked chairman SMS awaiting disposition; resolve via node scripts/resolve-parked-chairman-sms.cjs ${s.id}`);
     }
     for (const p of outboundSilence.probed) {
       console.log(`QUIET_TICK_OUTBOUND_PROBE=adam target=${p.target} row=${p.rowId}`);
