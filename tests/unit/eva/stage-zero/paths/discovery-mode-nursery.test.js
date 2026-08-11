@@ -303,4 +303,44 @@ describe('nursery_id scoped selection (SD-LEO-FIX-FINGERPRINT-STOP-CHAIRMAN-001)
 
     expect(eqCalls.find(([col]) => col === 'id')).toBeUndefined();
   });
+
+  // SECURITY sub-agent finding (EXEC-TO-PLAN review): the query-level pin bounds WHICH
+  // ROWS the LLM sees, but nothing bounded which nursery_id it hands back in its own JSON
+  // response — a hallucinated or prompt-influenced id could still reach promotion
+  // untouched. Drives runNurseryReeval directly (candidateCount/constraints only, no
+  // executeDiscoveryMode scaffolding needed) since the defect is entirely inside this
+  // function's own response handling.
+  test('drops an LLM-returned candidate whose nursery_id was not in the queried pool', async () => {
+    const items = [
+      { id: 'n-real', name: 'Real Venture', current_score: 90, source_ref: { brief: {} }, next_evaluation_at: null },
+    ];
+    const llmClient = {
+      complete: vi.fn().mockResolvedValue(JSON.stringify([
+        { nursery_id: 'n-real', name: 'Real Venture', new_score: 91, revival_reason: 'still valid' },
+        { nursery_id: 'n-hallucinated', name: 'Never Queried', new_score: 99, revival_reason: 'model invented this' },
+      ])),
+    };
+    const supabase = {
+      from: vi.fn((table) => {
+        if (table === 'nursery_evaluation_log') {
+          return { insert: vi.fn((row) => ({ select: vi.fn(() => ({ single: vi.fn().mockResolvedValue({ data: { id: 'log-1', ...row }, error: null }) })) })) };
+        }
+        return {
+          select: vi.fn().mockReturnThis(),
+          eq: vi.fn().mockResolvedValue({ error: null }),
+          is: vi.fn().mockReturnThis(),
+          or: vi.fn().mockReturnThis(),
+          order: vi.fn().mockReturnThis(),
+          limit: vi.fn().mockResolvedValue({ data: items, error: null }),
+          update: vi.fn(() => ({ eq: vi.fn().mockResolvedValue({ error: null }) })),
+        };
+      }),
+    };
+
+    const result = await runNurseryReeval({ constraints: {}, candidateCount: 5 }, { supabase, logger: silentLogger, llmClient });
+
+    expect(result).toHaveLength(1);
+    expect(result[0].nursery_id).toBe('n-real');
+    expect(result.find(c => c.nursery_id === 'n-hallucinated')).toBeUndefined();
+  });
 });
