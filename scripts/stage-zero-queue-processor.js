@@ -234,6 +234,10 @@ function mapRequestToParams(request) {
           // (camelCase); read both casings so the value is not silently dropped to the default.
           candidateCount: request.metadata?.candidate_count ?? request.metadata?.candidateCount ?? 5,
           constraints: request.metadata?.constraints || {},
+          // SD-LEO-FIX-FINGERPRINT-STOP-CHAIRMAN-001: nursery_reeval requests name a specific
+          // target row via metadata.nursery_id (see nursery-reeval-request.js). Forward it so
+          // runNurseryReeval can pin selection instead of re-scoring the whole pending pool.
+          nursery_id: request.metadata?.nursery_id ?? null,
         },
         options: { nonInteractive: true },
       };
@@ -275,7 +279,12 @@ function discoveryDedupKey(metadata = {}) {
   const strategy = metadata.strategy || 'trend_scanner';
   const candidateCount = metadata.candidate_count ?? metadata.candidateCount ?? 5;
   const constraints = JSON.stringify(metadata.constraints || {});
-  return `${strategy}::${candidateCount}::${constraints}`;
+  // SD-LEO-FIX-FINGERPRINT-STOP-CHAIRMAN-001: without nursery_id, every nursery_reeval
+  // request shares strategy=nursery_reeval/candidateCount=1/constraints={} and collides on
+  // an identical key — a request targeting one venture could return a cached result for a
+  // completely different one. Include it so distinct targets never share a dedup entry.
+  const nurseryId = metadata.nursery_id ?? '';
+  return `${strategy}::${candidateCount}::${constraints}::${nurseryId}`;
 }
 
 // SD-LEO-FIX-FIX-STAGE-QUEUE-001: conservative discovery_mode dedup. Discovery is intentionally
