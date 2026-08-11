@@ -1,3 +1,10 @@
+-- @chairman-gated
+-- @approved-by: codestreetlabs@gmail.com
+-- (approval chain: chairman verbal A by SMS 2026-08-11 ~15:58Z, decision row d79f24d4, durable
+--  capture afb308b8, GO relayed by Adam advisory e73d3a02; queued as serialized ceremony after
+--  D2/D3 per one-question-at-a-time. Pre-apply measured 2026-08-11: trigger trg_sd_mutation_audit
+--  ABSENT, function log_sd_mutation_audit ABSENT, audit_log 390 old_value rows / 223379 total.
+--  Coordinator seat 56f09320 executes the ceremony.)
 -- SD-LEO-INFRA-AUDIT-LOG-MUTATION-BLIND-001 (FR-1)
 -- Mutation auditing for strategic_directives_v2: status, current_phase, claiming_session_id.
 --
