@@ -462,7 +462,13 @@ export class ValidationOrchestrator {
     // SD-LEO-INFRA-HARDENING-001: Enforce SD-type-specific thresholds
     // This ensures security SDs require 90%, features require 85%, etc.
     // SD-MAN-FEAT-VISION-DASHBOARD-VALIDATE-001: Check registry for DISABLED override
-    if (results.passed && context.sd?.sd_type) {
+    if (results.passed && context.sd?.sd_type && totalWeight === 0) {
+      // QF-20260812-365: totalWeight=0 means no weighted gates were applicable to this
+      // phase/sd_type combination -- normalizedScore is a synthetic 0 (no content ran),
+      // not a real score of zero. Comparing it against the threshold produces a misleading
+      // "requires 85%, got 0%" block on a handoff that has no weighted gate content to fail.
+      console.log('   [GatePolicyResolver] SKIPPED: SD_TYPE_THRESHOLD (no weighted gates applicable, totalWeight=0)');
+    } else if (results.passed && context.sd?.sd_type) {
       const sdType = context.sd.sd_type;
 
       // Check if SD_TYPE_THRESHOLD is DISABLED in validation_gate_registry
