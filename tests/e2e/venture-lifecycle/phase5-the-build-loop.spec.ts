@@ -1,25 +1,33 @@
 /**
  * Phase 5: THE BUILD LOOP - Venture Lifecycle E2E Tests (Stages 17-22)
  *
- * Tests the development and implementation phase:
- * - Stage 17: Pre-Build Checklist (SD_REQUIRED, requires: system_prompt, cicd_config)
- * - Stage 18: Sprint Planning (SD_REQUIRED)
+ * Tests the development and implementation phase (live stage identities per
+ * docs/reference/venture-stage-marketing-map.md and the venture_stages DB table
+ * -- corrected from pre-S18-S26-redesign names by SD-LEO-INFRA-AUTHOR-VENTURE-
+ * LIFECYCLE-001; the old names below are historical, not live):
+ * - Stage 17: Pre-Build Checklist (SD_REQUIRED, requires: system_devils_advocate_review)
+ * - Stage 18: Marketing Copy Studio (SD_REQUIRED, requires: 9 marketing_* copy artifacts)
  * - Stage 19: Build Execution (SD_REQUIRED)
- * - Stage 20: Quality Assurance (SD_REQUIRED, requires: security_audit)
- * - Stage 21: Build Review (SD_REQUIRED, requires: test_plan, uat_report)
- * - Stage 22: Release Readiness (SD_REQUIRED, requires: deployment_runbook)
+ * - Stage 20: Quality Assurance (SD_REQUIRED, requires: code_quality_report)
+ * - Stage 21: Distribution Setup (SD_REQUIRED, requires: distribution_channel_config,
+ *   distribution_ad_copy) -- implemented by stage-22-distribution-setup.js, named for
+ *   the PRE-swap numbering (migration 20260607_swap_stage_21_22_full_content.sql
+ *   swapped stages 21/22's content; LIFECYCLE_STAGE=21 is hardcoded in that file).
+ * - Stage 22: Visual Assets (SD_REQUIRED, requires: visual_device_screenshots,
+ *   visual_social_graphics) -- implemented by stage-21-visual-assets.js, likewise
+ *   named for the pre-swap numbering.
  *
  * All stages in Phase 5 require Strategic Directives (SD)
  */
 
 import { test, expect } from '@playwright/test';
 import { createClient } from '@supabase/supabase-js';
-import { getStageForArtifactType, resolveArtifactType } from '../../../lib/eva/artifact-types.js';
+import { getStageForArtifactType, resolveArtifactType, ARTIFACT_TYPES } from '../../../lib/eva/artifact-types.js';
 
 const SUPABASE_URL = process.env.SUPABASE_URL || 'http://localhost:54321';
 const SUPABASE_KEY = process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.SUPABASE_KEY;
 
-test.describe('Phase 5: THE BUILD LOOP (Stages 17-20)', () => {
+test.describe('Phase 5: THE BUILD LOOP (Stages 17-22)', () => {
   // fullyParallel:true (playwright.config.js) schedules tests within a file across
   // workers unless pinned serial -- these tests share mutable venture state
   // (testVentureId, advancing stage-by-stage) and MUST run in declaration order.
@@ -68,6 +76,12 @@ test.describe('Phase 5: THE BUILD LOOP (Stages 17-20)', () => {
 
   test.afterAll(async () => {
     if (testVentureId) {
+      // chairman_decisions_venture_id_fkey is ON DELETE RESTRICT (verified live) --
+      // the Stage 21 BINDING-block test below inserts a chairman_decisions row for
+      // this venture, so it must be deleted before the venture or this cleanup
+      // throws a foreign-key violation and orphans the venture/company for every
+      // subsequent run.
+      await supabase.from('chairman_decisions').delete().eq('venture_id', testVentureId);
       await supabase.from('venture_artifacts').delete().eq('venture_id', testVentureId);
       await supabase.from('ventures').delete().eq('id', testVentureId);
     }
@@ -211,21 +225,10 @@ test.describe('Phase 5: THE BUILD LOOP (Stages 17-20)', () => {
   });
 
   // =========================================================================
-  // STAGE 18: Sprint Planning (SD_REQUIRED)
+  // STAGE 18: Marketing Copy Studio (SD_REQUIRED)
   // =========================================================================
-  test.describe('Stage 18: Sprint Planning', () => {
-    // venture_stages.required_artifacts[18] = 9 marketing_* copy artifacts (verified
-    // live) -- Stage 18 was renumbered to "Marketing Copy Studio" by the S18-S26
-    // pipeline redesign (lib/eva/artifact-types.js ARTIFACT_TYPE_BY_STAGE[18] comment).
-    // This test's own "Sprint Planning" content has no thematic fit with that
-    // requirement; fabricating 9 unrelated marketing artifacts here would be
-    // dishonest. Skipped rather than forced green. test.fixme() would be the more
-    // conventional marker but is blocked by a literal /FIXME/gi CI scan
-    // (preflight/index.js AMBIGUITY_RESOLUTION check) -- test.skip() with this
-    // citation is the honest equivalent. Follow-up: SD-LEO-INFRA-AUTHOR-VENTURE-
-    // LIFECYCLE-001 tracks re-authoring this block against the live Marketing
-    // Copy Studio contract.
-    test.skip('S18-001: should advance to Stage 18', async () => {
+  test.describe('Stage 18: Marketing Copy Studio', () => {
+    test('S18-001: should advance to Stage 18', async () => {
       const { error } = await supabase
         .from('ventures')
         .update({ current_lifecycle_stage: 18 })
@@ -234,52 +237,43 @@ test.describe('Phase 5: THE BUILD LOOP (Stages 17-20)', () => {
       expect(error).toBeNull();
     });
 
-    test('S18-002: should track MVP development progress', async () => {
-      const mvpProgress = {
-        sprint_summary: {
-          current_sprint: 3,
-          total_sprints: 6,
-          velocity: 21,
-          completion_percentage: 0.45
-        },
-        features_completed: [
-          { id: 'F001', name: 'User Authentication', stories_completed: 3, stories_total: 3 },
-          { id: 'F002', name: 'Dashboard', stories_completed: 5, stories_total: 5 }
-        ],
-        features_in_progress: [
-          { id: 'F003', name: 'Venture Creation', stories_completed: 2, stories_total: 4 },
-          { id: 'F004', name: 'Document Management', stories_completed: 1, stories_total: 6 }
-        ],
-        blockers: [],
-        tech_debt: [
-          { item: 'Refactor auth service', priority: 'medium', estimated_effort: '2 days' }
-        ],
-        metrics: {
-          code_coverage: 0.72,
-          bug_count: 3,
-          performance_score: 85
-        }
-      };
+    // venture_stages.required_artifacts[18] = 9 marketing_* copy artifacts (verified
+    // live via ARTIFACT_TYPE_BY_STAGE[18] in lib/eva/artifact-types.js), one per
+    // COPY_SECTIONS entry, matching what lib/eva/stage-templates/analysis-steps/
+    // stage-18-marketing-copy.js and server/routes/stage18.js both write.
+    test('S18-002: should create the 9 Marketing Copy Studio artifacts', async () => {
+      const sections = [
+        { type: ARTIFACT_TYPES.MARKETING_TAGLINE, title: 'Marketing Tagline', data: { tagline: 'Ship ventures faster, validated by real demand.' } },
+        { type: ARTIFACT_TYPES.MARKETING_APP_STORE_DESC, title: 'App Store Description', data: { short_description: 'Autonomous venture building, from idea to launch.', long_description: 'VentureForge takes a validated idea through build, distribution, and launch with an AI co-pilot at every stage.' } },
+        { type: ARTIFACT_TYPES.MARKETING_LANDING_HERO, title: 'Landing Page Hero', data: { headline: 'From idea to launched venture.', subheadline: 'AI-driven validation, build, and distribution in one pipeline.', cta: 'Start your venture' } },
+        { type: ARTIFACT_TYPES.MARKETING_EMAIL_WELCOME, title: 'Welcome Email', data: { subject: 'Welcome to VentureForge', body: 'Your venture pipeline is set up and ready for Stage 1 validation.' } },
+        { type: ARTIFACT_TYPES.MARKETING_EMAIL_ONBOARDING, title: 'Onboarding Email', data: { subject: 'Get the most out of VentureForge', body: 'Here is how to move your venture through validation, build, and launch.' } },
+        { type: ARTIFACT_TYPES.MARKETING_EMAIL_REENGAGEMENT, title: 'Re-engagement Email', data: { subject: 'Your venture is waiting', body: 'Pick up where you left off and keep your venture moving toward launch.' } },
+        { type: ARTIFACT_TYPES.MARKETING_SOCIAL_POSTS, title: 'Social Media Posts', data: { posts: [{ platform: 'twitter_x', copy: 'Building a venture with an AI co-pilot. Idea to launch, validated at every stage.' }] } },
+        { type: ARTIFACT_TYPES.MARKETING_SEO_META, title: 'SEO Metadata', data: { meta_title: 'VentureForge — AI Venture Building', meta_description: 'Validate, build, and launch ventures with an autonomous AI pipeline.' } },
+        { type: ARTIFACT_TYPES.MARKETING_BLOG_DRAFT, title: 'Launch Blog Draft', data: { title: 'How we validate a venture before writing a line of code', body: 'Every venture starts with a falsifiable demand thesis, not a hunch.' } },
+      ];
 
-      // mvp_progress has no artifact_type CHECK-constraint equivalent and stage 18's
-      // actual required_artifacts (verified live) are 9 marketing_* copy artifacts --
-      // a genuine stage-renumbering drift (S18-S26 pipeline redesign, see
-      // lib/eva/artifact-types.js ARTIFACT_TYPE_BY_STAGE[18] comment) that predates
-      // this SD. build_mvp_build is the closest legal, thematically-related type;
-      // stored here purely so this row is a valid insert -- NOT claimed to satisfy
-      // stage 18's real gate requirement (see S18-001 skip below for that honesty).
-      const { error } = await supabase
-        .from('venture_artifacts')
-        .insert({
+      const { error } = await supabase.from('venture_artifacts').insert(
+        sections.map((s) => ({
           venture_id: testVentureId,
-          artifact_type: 'build_mvp_build',
+          artifact_type: s.type,
           is_current: true,
-          lifecycle_stage: getStageForArtifactType('build_mvp_build'),
-          title: 'MVP Development Progress',
-          artifact_data: mvpProgress,
-        });
-
+          lifecycle_stage: getStageForArtifactType(s.type),
+          title: s.title,
+          artifact_data: s.data,
+        }))
+      );
       expect(error).toBeNull();
+
+      const { data: artifacts } = await supabase
+        .from('venture_artifacts')
+        .select('artifact_type, lifecycle_stage')
+        .eq('venture_id', testVentureId)
+        .in('artifact_type', sections.map((s) => s.type));
+
+      expect(artifacts?.length).toBe(9);
+      expect(artifacts?.every((a) => a.lifecycle_stage === 18)).toBe(true);
     });
   });
 
@@ -329,16 +323,45 @@ test.describe('Phase 5: THE BUILD LOOP (Stages 17-20)', () => {
         .from('venture_artifacts')
         .insert({
           venture_id: testVentureId,
-          // No CHECK-constraint equivalent for 'integration_status'. build_mvp_build is
-          // already used by S18-002 above (and getStageForArtifactType resolves it to
-          // stage 19 regardless, so that earlier insert already satisfies stage 19's
-          // real gate requirement) -- reusing it here would collide on the partial
-          // unique index. build_test_coverage_report is the next-closest legal type.
+          // No CHECK-constraint equivalent for 'integration_status'. build_test_coverage_report
+          // is the next-closest legal type; build_mvp_build (S19-003 below) is stage 19's
+          // OWN required-artifact type, not reused here.
           artifact_type: 'build_test_coverage_report',
           is_current: true,
           lifecycle_stage: getStageForArtifactType('build_test_coverage_report') ?? 19,
           title: 'Integration Status',
           artifact_data: integrationStatus,
+        });
+
+      expect(error).toBeNull();
+    });
+
+    test('S19-003: should create build_mvp_build artifact', async () => {
+      // venture_stages.required_artifacts[19] includes build_mvp_build (verified live
+      // by STAGE_ADVANCEMENT_ARTIFACT_GATE, which blocks the Stage 20 advance below
+      // with 23514 "missing required artifact(s): build_mvp_build" if this is absent).
+      // ARTIFACT_TYPE_BY_STAGE[19] in lib/eva/artifact-types.js registers it as the
+      // build-completion output for this stage. Previously satisfied incidentally by
+      // a Stage 18 filler insert (SD-LEO-INFRA-AUTHOR-VENTURE-LIFECYCLE-001 replaced
+      // that filler with real Marketing Copy Studio content) -- written here directly
+      // instead, at the stage that actually requires it.
+      const mvpProgress = {
+        sprint_summary: { current_sprint: 3, total_sprints: 6, velocity: 21, completion_percentage: 0.45 },
+        features_completed: [{ id: 'F001', name: 'User Authentication', stories_completed: 3, stories_total: 3 }],
+        features_in_progress: [{ id: 'F003', name: 'Venture Creation', stories_completed: 2, stories_total: 4 }],
+        blockers: [],
+        metrics: { code_coverage: 0.72, bug_count: 3, performance_score: 85 },
+      };
+
+      const { error } = await supabase
+        .from('venture_artifacts')
+        .insert({
+          venture_id: testVentureId,
+          artifact_type: ARTIFACT_TYPES.BUILD_MVP_BUILD,
+          is_current: true,
+          lifecycle_stage: getStageForArtifactType(ARTIFACT_TYPES.BUILD_MVP_BUILD),
+          title: 'MVP Development Progress',
+          artifact_data: mvpProgress,
         });
 
       expect(error).toBeNull();
@@ -436,6 +459,11 @@ test.describe('Phase 5: THE BUILD LOOP (Stages 17-20)', () => {
     });
 
     test('S20-003: should complete Phase 5 with all artifacts', async () => {
+      // marketing_tagline added -- SD-LEO-INFRA-AUTHOR-VENTURE-LIFECYCLE-001 replaced
+      // the Stage 18 filler with the real Marketing Copy Studio artifacts (S18-002
+      // above); marketing_tagline is one of those 9. build_mvp_build is now written
+      // by S19-003 (its real gate-required stage) instead of the old Stage 18 filler.
+      // Count is 6: one per stage 17/18/19/20 own-artifact type this file authors.
       const { data: artifacts } = await supabase
         .from('venture_artifacts')
         .select('artifact_type')
@@ -443,12 +471,13 @@ test.describe('Phase 5: THE BUILD LOOP (Stages 17-20)', () => {
         .in('artifact_type', [
           'build_system_prompt',
           'build_cicd_config',
+          'marketing_tagline',
           'build_mvp_build',
           'build_test_coverage_report',
           'build_security_audit'
         ]);
 
-      expect(artifacts?.length).toBe(5);
+      expect(artifacts?.length).toBe(6);
 
       // Stage 20's real gate requirement (verified live) is code_quality_report,
       // distinct from the security_audit content this file authors -- seed it so
@@ -465,13 +494,153 @@ test.describe('Phase 5: THE BUILD LOOP (Stages 17-20)', () => {
         });
       expect(qualitySeedError).toBeNull();
 
-      // Ready for Phase 6 (Stage 21)
       const { error } = await supabase
         .from('ventures')
         .update({ current_lifecycle_stage: 21 })
         .eq('id', testVentureId);
 
       expect(error).toBeNull();
+    });
+  });
+
+  // =========================================================================
+  // STAGE 21: Distribution Setup (SD_REQUIRED)
+  // Implemented by lib/eva/stage-templates/analysis-steps/stage-22-distribution-setup.js
+  // (LIFECYCLE_STAGE=21 hardcoded there -- file named for the pre-swap numbering).
+  // =========================================================================
+  test.describe('Stage 21: Distribution Setup', () => {
+    test('S21-001: should create the canonical distribution_channel_config + distribution_ad_copy pair', async () => {
+      // CANONICAL_PAIR_TYPES in stage-22-distribution-setup.js:58 -- the only two
+      // types persistCanonicalPair() writes on the success path (launch_test_plan
+      // is a legacy dual-emit, not part of the canonical contract this SD tests).
+      const channelConfig = {
+        experiments: [
+          { channel: 'blog_seo', rank: 1, hypothesis: 'Organic search reaches early-adopter personas cheaply', persona_mapping: 'Solo Founder', cost_to_signal_bound: '$0 / 8 hours to reach 100 strangers', execution_tier: 'T0' },
+        ],
+        total_channels: 1,
+        active_channels: 1,
+        attribution: 'first_touch',
+      };
+      const adCopy = {
+        channels_with_copy: [
+          { channel: 'blog_seo', persona_mapping: 'Solo Founder', message_variants: [{ variant_id: 'A', headline: 'Validate before you build', body: 'A falsifiable demand thesis beats a hunch.', cta: 'Read the thesis' }] },
+        ],
+      };
+
+      const { error } = await supabase.from('venture_artifacts').insert([
+        { venture_id: testVentureId, artifact_type: ARTIFACT_TYPES.DISTRIBUTION_CHANNEL_CONFIG, is_current: true, lifecycle_stage: getStageForArtifactType(ARTIFACT_TYPES.DISTRIBUTION_CHANNEL_CONFIG), title: 'Distribution channel config', artifact_data: channelConfig },
+        { venture_id: testVentureId, artifact_type: ARTIFACT_TYPES.DISTRIBUTION_AD_COPY, is_current: true, lifecycle_stage: getStageForArtifactType(ARTIFACT_TYPES.DISTRIBUTION_AD_COPY), title: 'Distribution ad copy', artifact_data: adCopy },
+      ]);
+      expect(error).toBeNull();
+
+      const { data: artifacts } = await supabase
+        .from('venture_artifacts')
+        .select('artifact_type, lifecycle_stage')
+        .eq('venture_id', testVentureId)
+        .in('artifact_type', [ARTIFACT_TYPES.DISTRIBUTION_CHANNEL_CONFIG, ARTIFACT_TYPES.DISTRIBUTION_AD_COPY]);
+
+      expect(artifacts?.length).toBe(2);
+      expect(artifacts?.every((a) => a.lifecycle_stage === 21)).toBe(true);
+    });
+
+    test('S21-002: BINDING block path should record a blocking chairman_decisions row on total failure', async () => {
+      // stage-22-distribution-setup.js blockDistribution() (e.g. on demand_thesis_missing)
+      // records a blocking chairman_decisions row via recordPendingDecision -- shape
+      // verified live (lib/chairman/record-pending-decision.mjs:298-307): decision is
+      // NOT NULL and always 'pending' regardless of decision_type. There is NO
+      // _skip:true and NO fabricated canonical pair on this path (module header,
+      // stage-22-distribution-setup.js:19-24).
+      //
+      // The module's persistBlockMarker() ALSO attempts a distribution_block_marker
+      // venture_artifacts row, but that artifact_type is registered in
+      // lib/eva/artifact-types.js (DISTRIBUTION_BLOCK_MARKER) while NOT YET present in
+      // the live venture_artifacts_artifact_type_check CHECK constraint (verified live,
+      // 2026-08-12) -- the insert fails, and persistBlockMarker() swallows that error
+      // into a warn log without surfacing it to its caller (return value discarded at
+      // stage-22-distribution-setup.js:563). This test does not assert that row exists
+      // until the CHECK constraint is widened ("CHECK-widening pending chairman apply"
+      // per the artifact-types.js comment) -- asserting it today would assert something
+      // currently false about the live system, the exact defect class this SD exists to fix.
+      const { error, data } = await supabase
+        .from('chairman_decisions')
+        .insert({
+          venture_id: testVentureId,
+          lifecycle_stage: 21,
+          decision: 'pending',
+          decision_type: 'distribution_block',
+          status: 'pending',
+          summary: 'Distribution blocked for E2E test venture: demand_thesis_missing',
+          brief_data: { title: 'Distribution blocked', recorded_via: 'record-pending-decision' },
+          blocking: true,
+        })
+        .select('id, decision_type, blocking, status')
+        .single();
+
+      expect(error).toBeNull();
+      expect(data?.decision_type).toBe('distribution_block');
+      expect(data?.blocking).toBe(true);
+      expect(data?.status).toBe('pending');
+    });
+  });
+
+  // =========================================================================
+  // STAGE 22: Visual Assets (SD_REQUIRED)
+  // Implemented by lib/eva/stage-templates/analysis-steps/stage-21-visual-assets.js
+  // (runs as stage 22 by elimination -- file named for the pre-swap numbering).
+  // =========================================================================
+  test.describe('Stage 22: Visual Assets', () => {
+    test('S22-001: should create the canonical visual_device_screenshots + visual_social_graphics pair', async () => {
+      // Canonical pair per stage-21-visual-assets.js:246-247, registered at stage 22
+      // in ARTIFACT_TYPE_BY_STAGE (lib/eva/artifact-types.js:447-451) -- resolved via
+      // getStageForArtifactType rather than a literal, matching the rest of this file.
+      const screenshotData = { devices: [{ device: 'iphone_15', screens: ['onboarding', 'dashboard'] }] };
+      const socialData = { platforms: [{ platform: 'twitter_x', dimensions: '1200x675', headline: 'Launching soon' }] };
+
+      const { error } = await supabase.from('venture_artifacts').insert([
+        { venture_id: testVentureId, artifact_type: ARTIFACT_TYPES.VISUAL_DEVICE_SCREENSHOTS, is_current: true, lifecycle_stage: getStageForArtifactType(ARTIFACT_TYPES.VISUAL_DEVICE_SCREENSHOTS), title: 'S21 Visual Assets — Device Screenshots', artifact_data: screenshotData },
+        { venture_id: testVentureId, artifact_type: ARTIFACT_TYPES.VISUAL_SOCIAL_GRAPHICS, is_current: true, lifecycle_stage: getStageForArtifactType(ARTIFACT_TYPES.VISUAL_SOCIAL_GRAPHICS), title: 'S21 Visual Assets — Social Graphics', artifact_data: socialData },
+      ]);
+      expect(error).toBeNull();
+
+      const { data: artifacts } = await supabase
+        .from('venture_artifacts')
+        .select('artifact_type, lifecycle_stage')
+        .eq('venture_id', testVentureId)
+        .in('artifact_type', [ARTIFACT_TYPES.VISUAL_DEVICE_SCREENSHOTS, ARTIFACT_TYPES.VISUAL_SOCIAL_GRAPHICS]);
+
+      expect(artifacts?.length).toBe(2);
+      expect(artifacts?.every((a) => a.lifecycle_stage === 22)).toBe(true);
+    });
+
+    test('S22-002: precondition-missing path should create a visual_assets_skipped marker', async () => {
+      // stage-21-visual-assets.js refuses to run (and writes this marker instead)
+      // when any of identity_visual (S11), s17_designs (S17), or
+      // venture_resources.deployment_url (S19) is absent -- verified live at
+      // lines 45-54 and 358-406. artifact_type='visual_assets_skipped' and
+      // lifecycle_stage=22 are both live-valid (confirmed against the
+      // venture_artifacts_artifact_type_check CHECK constraint); title is NOT NULL.
+      const { error } = await supabase.from('venture_artifacts').insert({
+        venture_id: testVentureId,
+        artifact_type: 'visual_assets_skipped',
+        is_current: true,
+        lifecycle_stage: 22,
+        title: 'S21 Visual Assets — Skipped',
+        artifact_data: {
+          skip_reason: 'missing_preconditions',
+          missing_preconditions: ['identity_visual', 's17_designs', 'venture_resources.deployment_url'],
+        },
+      });
+      expect(error).toBeNull();
+
+      const { data: marker } = await supabase
+        .from('venture_artifacts')
+        .select('artifact_type, lifecycle_stage, title')
+        .eq('venture_id', testVentureId)
+        .eq('artifact_type', 'visual_assets_skipped')
+        .maybeSingle();
+
+      expect(marker?.lifecycle_stage).toBe(22);
+      expect(marker?.title).toBeTruthy();
     });
   });
 });
