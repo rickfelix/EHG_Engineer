@@ -86,8 +86,8 @@ async function probe(client, q) {
 
     const forms = [
       ['SELECT', `select 1 from ${TABLE} limit 1`],
-      ['INSERT', `insert into ${TABLE} (venture_id, ingest_secret) values (gen_random_uuid(), 'probe-value-never-lands')`],
-      ['UPDATE', `update ${TABLE} set ingest_secret = 'probe-value-never-lands' where true`],
+      ['INSERT', `insert into ${TABLE} (venture_id, ingest_secret_hash) values (gen_random_uuid(), 'probe-value-never-lands')`],
+      ['UPDATE', `update ${TABLE} set ingest_secret_hash = 'probe-value-never-lands' where true`],
       ['DELETE', `delete from ${TABLE} where true`],
     ];
 

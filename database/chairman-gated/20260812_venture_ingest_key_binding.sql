@@ -375,13 +375,26 @@ BEGIN
 
   -- Rate limit, mirrored from anon_feedback_ingress_bounds for the same reason, PLUS the new
   -- per-venture scope (FR-4, TS-4) that policy never had.
-  -- CORRECTED (EXEC-phase SECURITY sub-agent finding, evidence b99c9ec7, BLOCK-2): the global
-  -- threshold below must match the ELSE branch (50) of the live anon_feedback_ingress_bounds
-  -- CASE, not the auto_capture-specific 250 — 250 was ratified for auto_capture's OWN measured
-  -- peak of 213 (database/chairman-gated/20260804_ingress_bound_definer_basis.sql), which has
-  -- nothing to do with 'venture_worker' traffic, a brand-new source_type with zero measured
-  -- volume. Borrowing an unrelated number here was an inconsistency, not a considered choice.
-  IF public.fn_anon_ingress_prior_hour_count('venture_worker') >= 50 THEN
+  -- CORRECTED TWICE, and this is the version that actually holds (VERIFY-phase VALIDATION
+  -- finding, evidence 2df8275b, FR-4 FAIL): the EXEC-phase SECURITY correction (evidence
+  -- b99c9ec7, BLOCK-2) rightly flagged 250 as an arbitrary borrow from auto_capture's own
+  -- measured peak, but changing it to ALSO be 50 broke FR-4 itself — fn_venture_ingest_prior_
+  -- hour_count(venture, source_type) is a strict SUBSET of fn_anon_ingress_prior_hour_count
+  -- (source_type) (same predicate, plus a venture_id filter), so it can never exceed it. With
+  -- both thresholds equal, the GLOBAL check always trips first regardless of which venture is
+  -- responsible, making the per-venture check unreachable dead code and silently reintroducing
+  -- the exact cross-venture DoS FR-4 exists to prevent (one venture's 50 events/hour locks out
+  -- every other venture, identical to the status quo this migration is supposed to improve on).
+  -- The global threshold MUST be strictly greater than the per-venture one for FR-4 to mean
+  -- anything. 'venture_worker' has zero measured traffic (it's brand new), so there is no
+  -- peak to derive a number from the way auto_capture's 250 was derived — instead this uses a
+  -- reasoned multiplier: 10x the per-venture limit, i.e. enough headroom for 10 CONCURRENTLY
+  -- flooding ventures (currently 3 known near-term callers per FR-5: AltifyAI, apexniche-ai,
+  -- marketlens) before the shared source_type budget closes to everyone. This is a coarse
+  -- system-sanity backstop against a runaway/bug scenario, NOT the primary protection — the
+  -- primary protection is the per-venture check immediately below, which fires first for any
+  -- single flooding venture and leaves the shared budget intact for every other venture.
+  IF public.fn_anon_ingress_prior_hour_count('venture_worker') >= 500 THEN
     RAISE EXCEPTION 'fn_submit_venture_feedback: rate limited' USING ERRCODE = '53400';
   END IF;
   IF public.fn_venture_ingest_prior_hour_count(p_venture_id, 'venture_worker') >= 50 THEN
