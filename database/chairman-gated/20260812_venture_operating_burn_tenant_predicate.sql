@@ -14,7 +14,19 @@
 --
 -- @approved-by: <unfilled -- set by the chairman's own apply session, matching his git user.email,
 --                per apply-migration.js's self-consistency check (header email == invoker's git
---                email + a valid --issue-token). This file does not apply itself.>
+--                email + a matching, unconsumed, <1h MIGRATION_APPLY_TOKEN). This file does not
+--                apply itself.>
+--
+-- APPLY SEQUENCE (SECURITY review, evidence row 8d2a6a6f-dd80-43af-9ddf-17a7c4ad48ee, finding
+-- S-7: --issue-token is a MODE flag, not combinable with --prod-deploy on the same invocation --
+-- passing both together mints a token and exits without applying anything. This file also lives
+-- outside database/migrations/, so resolveMigrationPath needs --allow-any-path or it is rejected.
+-- Two separate commands, in order:
+--   1) node scripts/apply-migration.js --issue-token
+--      (prints a token to stdout; single-use, expires in 1h)
+--   2) MIGRATION_APPLY_TOKEN=<token from step 1> node scripts/apply-migration.js \
+--        "database/chairman-gated/20260812_venture_operating_burn_tenant_predicate.sql" \
+--        --prod-deploy --allow-any-path
 --
 -- ============================================================================================
 -- WHAT IS WRONG TODAY (verified live via pooler catalog query, worker acf9242e, signal 87404880)
@@ -84,18 +96,26 @@ BEGIN;
 
 DROP POLICY IF EXISTS venture_operating_burn_auth_read ON public.venture_operating_burn;
 
+-- The auth.role() = 'service_role' disjunct below is inert in practice for the service-role
+-- consumer (lib/operator/venture-burn-substrate.js runs via createSupabaseServiceClient(), and
+-- service_role carries BYPASSRLS in Supabase regardless of any policy) -- kept for idiom parity
+-- with the two other live policies this fix copies
+-- (database/migrations/20260713_legal_doc_producer_schema.sql:126-135,
+-- database/migrations/20260712_feedback_authenticated_select_caller_venture_STAGED.sql:75-81).
+-- The separate venture_operating_burn_service policy (FOR ALL TO service_role) is what actually
+-- serves that consumer -- do not drop it in a future cleanup on the mistaken belief this disjunct
+-- covers it.
+--
+-- SECURITY review (evidence row 8d2a6a6f-dd80-43af-9ddf-17a7c4ad48ee, finding S-5): this comment
+-- was originally INSIDE the USING(...) parens. An unbalanced paren inside a comment there would
+-- make extractParenBlock() return null for the whole USING clause, silently disarming the
+-- acceptance script's lint check while extractPolicies() still reports a policy was found --
+-- a check that looks like it ran but examined nothing. Moved above CREATE POLICY so the USING(...)
+-- body contains only the executable predicate.
 CREATE POLICY venture_operating_burn_auth_read ON public.venture_operating_burn
     FOR SELECT
     TO authenticated
     USING (
-        -- Inert in practice for the service-role consumer (lib/operator/venture-burn-substrate.js
-        -- runs via createSupabaseServiceClient(), and service_role carries BYPASSRLS in Supabase
-        -- regardless of any policy) -- kept for idiom parity with the two other live policies this
-        -- fix copies (database/migrations/20260713_legal_doc_producer_schema.sql:126-135,
-        -- database/migrations/20260712_feedback_authenticated_select_caller_venture_STAGED.sql:
-        -- 75-81). The separate venture_operating_burn_service policy (FOR ALL TO service_role) is
-        -- what actually serves that consumer -- do not drop it in a future cleanup on the mistaken
-        -- belief this disjunct covers it.
         auth.role() = 'service_role'
         OR public.fn_user_has_venture_access(venture_id)
     );
