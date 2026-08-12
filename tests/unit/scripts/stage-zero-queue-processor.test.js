@@ -209,6 +209,25 @@ describe('FR-6 — mapRequestToParams candidateCount casing (TS-5)', () => {
   });
 });
 
+// SD-LEO-FIX-FINGERPRINT-STOP-CHAIRMAN-001 (BL-FINGERPRINT-001, hop 1 of 4): pre-fix,
+// mapRequestToParams's discovery_mode branch forwarded only strategy/candidateCount/
+// constraints — metadata.nursery_id (naming a chairman-confirmed target venture) was
+// discarded at the FIRST hop, before executeDiscoveryMode/the runner dispatch/
+// runNurseryReeval ever saw it. This is the queue-processor boundary entry point the
+// PLAN validation pass called out — testing runNurseryReeval alone would not have
+// caught this defect, since the field never reached that far.
+describe('AC-1/BL-FINGERPRINT-001 — mapRequestToParams forwards nursery_id (TS-boundary)', () => {
+  test('threads metadata.nursery_id into pathParams for discovery_mode', () => {
+    const params = mapRequestToParams({ metadata: { path: 'discovery_mode', strategy: 'nursery_reeval', nursery_id: 'nursery-a' } });
+    expect(params.pathParams.nursery_id).toBe('nursery-a');
+  });
+
+  test('defaults to null when absent (every non-nursery_reeval request)', () => {
+    const params = mapRequestToParams({ metadata: { path: 'discovery_mode', strategy: 'trend_scanner' } });
+    expect(params.pathParams.nursery_id).toBeNull();
+  });
+});
+
 describe('FR-1/FR-2 — request→venture idempotency guard', () => {
   test('findVentureForRequest resolves via the durable metadata back-reference when venture_id is NULL', async () => {
     const supabase = makeSupabaseV2({ ventures: [{ id: 'v-1', requestId: 'req-stale' }] });
@@ -301,5 +320,40 @@ describe('FR-5 — conservative discovery_mode dedup (TS-3)', () => {
     const supabase = makeSupabaseV2({ completed: [] });
     const dup = await checkForDuplicate(supabase, reqBase);
     expect(dup).toBeNull();
+  });
+});
+
+// SD-LEO-FIX-FINGERPRINT-STOP-CHAIRMAN-001 (BL-FINGERPRINT-002): pre-fix, every
+// nursery_reeval request shared the identical key strategy::candidateCount::constraints
+// (all nursery_reeval requests use candidateCount=1, constraints={}), so a request naming
+// one venture could dedup-hit a cached result for a completely different one — no score
+// tie required, weaker precondition than the runNurseryReeval selection defect above.
+describe('BL-FINGERPRINT-002 — nursery_id dedup-collision fix', () => {
+  const nurseryReqBase = {
+    id: 'req-new', requested_by: 'chairman-agent',
+    metadata: { path: 'discovery_mode', strategy: 'nursery_reeval', candidateCount: 1, constraints: {}, nursery_id: 'nursery-a' },
+  };
+
+  test('two nursery_reeval requests naming DIFFERENT ventures do not dedup-collide', async () => {
+    const supabase = makeSupabaseV2({
+      completed: [{
+        id: 'req-old', result: { ok: true },
+        metadata: { path: 'discovery_mode', strategy: 'nursery_reeval', candidateCount: 1, constraints: {}, nursery_id: 'nursery-b' },
+      }],
+    });
+    const dup = await checkForDuplicate(supabase, nurseryReqBase);
+    expect(dup).toBeNull();
+  });
+
+  test('same requester re-submitting for the SAME nursery_id within the window is still a dedup hit', async () => {
+    const supabase = makeSupabaseV2({
+      completed: [{
+        id: 'req-old', result: { ok: true },
+        metadata: { path: 'discovery_mode', strategy: 'nursery_reeval', candidateCount: 1, constraints: {}, nursery_id: 'nursery-a' },
+      }],
+    });
+    const dup = await checkForDuplicate(supabase, nurseryReqBase);
+    expect(dup).not.toBeNull();
+    expect(dup.id).toBe('req-old');
   });
 });

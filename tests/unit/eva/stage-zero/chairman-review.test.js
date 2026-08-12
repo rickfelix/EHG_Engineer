@@ -288,6 +288,41 @@ describe('ChairmanReview', () => {
       expect(result.stage_zero_decision_id).toBe('decision-1');
     });
 
+    // SD-LEO-FIX-FINGERPRINT-STOP-CHAIRMAN-001: authorized_target (the originally-requested
+    // nursery_id, carried on brief.metadata.authorized_nursery_id) and selected_target (what
+    // the run actually picked, brief.nursery_id) must both reach the minted chairman-decision
+    // brief, restoring visibility for a future authorized-vs-selected mismatch. Distinct fields
+    // with distinct provenance (see synthesis/index.js) — a mismatch here proves the substitution
+    // this SD exists to make detectable, without making the gate itself blocking.
+    it('stamps authorized_target and selected_target on the minted gate brief', async () => {
+      // brief.nursery_id is set, so persistVentureBrief also calls stampNurseryPromotion —
+      // needs the venture_nursery-aware mock (defined below), not the plain one.
+      const mockSupabase = createMockSupabaseWithNursery();
+      const briefWithNursery = {
+        ...validBrief,
+        nursery_id: 'n-selected',
+        metadata: { authorized_nursery_id: 'n-authorized' },
+      };
+      await persistVentureBrief(
+        { decision: 'ready', brief: briefWithNursery, validation: { valid: true, errors: [] } },
+        { supabase: mockSupabase, logger: silentLogger },
+      );
+      const mintArg = createOrReusePendingDecision.mock.calls[0][0];
+      expect(mintArg.briefData.authorized_target).toBe('n-authorized');
+      expect(mintArg.briefData.selected_target).toBe('n-selected');
+    });
+
+    it('both target fields are null off the non-nursery path (no regression for the common case)', async () => {
+      const mockSupabase = createMockSupabase();
+      await persistVentureBrief(
+        { decision: 'ready', brief: validBrief, validation: { valid: true, errors: [] } },
+        { supabase: mockSupabase, logger: silentLogger },
+      );
+      const mintArg = createOrReusePendingDecision.mock.calls[0][0];
+      expect(mintArg.briefData.authorized_target).toBeNull();
+      expect(mintArg.briefData.selected_target).toBeNull();
+    });
+
     it('never writes chairman_decisions directly — no machine-forged approval row exists', async () => {
       const mockSupabase = createMockSupabase();
       await persistVentureBrief(
