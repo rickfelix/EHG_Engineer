@@ -35,6 +35,9 @@ on:
       # Adding the paths is the whole fix; the tier still refuses to become a general one.
       - 'database/migrations/20260808_drive_state_verdicts.sql'
       - 'tests/ddl/drive-state-verdicts-ddl.db.test.js'
+      # SD-LEO-INFRA-HOURLY-DRIVE-SCORE-001 FR-7 — same trap, same fix, applied again.
+      - 'database/migrations/20260812_drive_reports_hourly_cadence.sql'
+      - 'tests/ddl/drive-reports-hourly-cadence-ddl.db.test.js'
       - 'vitest.ddl.config.mjs'
       # Self-validating: edits to this file re-run it.
       - '.github/workflows/drive-reports-ddl.yml'
