@@ -11,9 +11,12 @@
 // per-venture rate limit, content-integrity bound, uniform rejection). It does NOT prove:
 //   - production posture (Supabase role inheritance / ALTER DEFAULT PRIVILEGES are not
 //     reproduced by vanilla Postgres — see drive-reports-ddl.db.test.js's identical caveat)
-//   - that record_venture_error's ORIGINAL signature survives untouched (TS-5) — that requires
-//     the real record_venture_error to already exist, which is a live-schema fact, not something
-//     an ephemeral stub can honestly assert. TS-5 belongs to Tier B (the chairman-gated
+//   - that record_venture_error's ORIGINAL signature survives untouched (TS-5) — the stub below
+//     creates a minimal stand-in matching the real function's signature purely so this migration's
+//     OWN $verify$ block (which unconditionally asserts pg_proc count=1 for that name, since it
+//     also has to hold on the real instance where the function genuinely pre-exists) doesn't
+//     spuriously fail here. That stand-in proves nothing about the REAL function's behavior — the
+//     genuine "still callable, no PGRST203 overload" claim is Tier B's job (the chairman-gated
 //     acceptance script), not here.
 //   - anon-readability of venture_ingest_keys (GAP-1 / FR-1's anon-probe acceptance criterion) —
 //     that requires the real PostgREST/Supabase grant surface, which is Tier C
@@ -99,6 +102,20 @@ CREATE UNIQUE INDEX IF NOT EXISTS idx_feedback_venture_error_hash
 CREATE OR REPLACE FUNCTION public._venture_error_storm_watermark_hash()
 RETURNS text LANGUAGE sql IMMUTABLE
 AS $$ SELECT 'ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff'; $$;
+
+-- Stand-in for the PRE-EXISTING public.record_venture_error (database/migrations/
+-- 20260704d_venture_error_aggregation_rpc.sql) — same name and argument signature, inert body.
+-- Exists ONLY so this migration's own $verify$ block sees pg_proc count=1 for that name on this
+-- ephemeral database, matching the real instance's precondition (see header comment above: this
+-- is not a claim that the real function's behavior is reproduced).
+CREATE OR REPLACE FUNCTION public.record_venture_error(
+  p_venture_id uuid,
+  p_error_hash text,
+  p_message text,
+  p_context jsonb DEFAULT '{}'::jsonb
+)
+RETURNS jsonb LANGUAGE sql
+AS $$ SELECT jsonb_build_object('ok', false, 'reason', 'stub_not_implemented'); $$;
 
 CREATE OR REPLACE FUNCTION public.venture_exists_and_active(p_venture_id UUID)
 RETURNS BOOLEAN LANGUAGE sql STABLE SECURITY DEFINER
