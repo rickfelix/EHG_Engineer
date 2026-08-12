@@ -11,11 +11,17 @@
 
 import { test, expect } from '@playwright/test';
 import { createClient } from '@supabase/supabase-js';
+import { getStageForArtifactType } from '../../../lib/eva/artifact-types.js';
 
 const SUPABASE_URL = process.env.SUPABASE_URL || 'http://localhost:54321';
 const SUPABASE_KEY = process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.SUPABASE_KEY;
 
 test.describe('Phase 4: THE BLUEPRINT (Stages 13-16)', () => {
+  // fullyParallel:true (playwright.config.js) schedules tests within a file across
+  // workers unless pinned serial -- these tests share mutable venture state
+  // (testVentureId, advancing stage-by-stage) and MUST run in declaration order.
+  test.describe.configure({ mode: 'serial' });
+
   let supabase: any;
   let testVentureId: string;
   let testCompanyId: string;
@@ -48,18 +54,30 @@ test.describe('Phase 4: THE BLUEPRINT (Stages 13-16)', () => {
     // Seed Stage 12's own exit artifact — STAGE_ADVANCEMENT_ARTIFACT_GATE requires it
     // to already exist before the venture can advance past the stage it was born at.
     if (testVentureId) {
-      await supabase.from('venture_documents').insert({
-        venture_id: testVentureId,
-        document_type: 'identity_gtm_sales_strategy',
-        title: 'Seed artifact for Stage 12',
-        content: { placeholder: true }
-      });
+      await supabase.from('venture_artifacts').insert([
+        {
+          venture_id: testVentureId,
+          artifact_type: 'identity_brand_guidelines',
+          is_current: true,
+          lifecycle_stage: getStageForArtifactType('identity_brand_guidelines'),
+          title: 'Seed artifact for Stage 12',
+          artifact_data: { placeholder: true }
+        },
+        {
+          venture_id: testVentureId,
+          artifact_type: 'identity_gtm_sales_strategy',
+          is_current: true,
+          lifecycle_stage: getStageForArtifactType('identity_gtm_sales_strategy'),
+          title: 'Seed artifact for Stage 12',
+          artifact_data: { placeholder: true }
+        }
+      ]);
     }
   });
 
   test.afterAll(async () => {
     if (testVentureId) {
-      await supabase.from('venture_documents').delete().eq('venture_id', testVentureId);
+      await supabase.from('venture_artifacts').delete().eq('venture_id', testVentureId);
       await supabase.from('ventures').delete().eq('id', testVentureId);
     }
     if (testCompanyId) {
@@ -149,12 +167,14 @@ test.describe('Phase 4: THE BLUEPRINT (Stages 13-16)', () => {
       };
 
       const { data: artifact, error } = await supabase
-        .from('venture_documents')
+        .from('venture_artifacts')
         .insert({
           venture_id: testVentureId,
-          document_type: 'blueprint_product_roadmap',
+          artifact_type: 'blueprint_product_roadmap',
+          is_current: true,
+          lifecycle_stage: getStageForArtifactType('blueprint_product_roadmap'),
           title: 'Tech Stack Decision',
-          content: techStackDecision,
+          artifact_data: techStackDecision,
         })
         .select('id')
         .single();
@@ -226,12 +246,14 @@ test.describe('Phase 4: THE BLUEPRINT (Stages 13-16)', () => {
       };
 
       const { error } = await supabase
-        .from('venture_documents')
+        .from('venture_artifacts')
         .insert({
           venture_id: testVentureId,
-          document_type: 'blueprint_data_model',
+          artifact_type: 'blueprint_data_model',
+          is_current: true,
+          lifecycle_stage: getStageForArtifactType('blueprint_data_model'),
           title: 'Data Model',
-          content: dataModel,
+          artifact_data: dataModel,
         });
 
       expect(error).toBeNull();
@@ -272,13 +294,54 @@ erDiagram
       };
 
       const { error } = await supabase
-        .from('venture_documents')
+        .from('venture_artifacts')
         .insert({
           venture_id: testVentureId,
-          document_type: 'blueprint_erd_diagram',
+          artifact_type: 'blueprint_erd_diagram',
+          is_current: true,
+          lifecycle_stage: getStageForArtifactType('blueprint_erd_diagram'),
           title: 'ERD Diagram',
-          content: erdDiagram,
+          artifact_data: erdDiagram,
         });
+
+      expect(error).toBeNull();
+    });
+
+    test('S14-004: should seed the remaining Stage 14 required artifacts', async () => {
+      // Stage 14 canonically requires the full 5-artifact set (lib/eva/artifact-types.js
+      // ARTIFACT_TYPE_BY_STAGE[14]): blueprint_technical_architecture, blueprint_data_model,
+      // blueprint_erd_diagram, blueprint_api_contract, blueprint_schema_spec. This file
+      // originally created only 2 of the 5 at Stage 14 -- api_contract/schema_spec were
+      // (incorrectly, per the canonical registry) created later under "Stage 16", and
+      // blueprint_technical_architecture was never created anywhere. Seeded here as
+      // placeholders; S16-002/S16-003 below enrich the api_contract/schema_spec rows via
+      // update() (not a second insert, which would collide on the partial unique index).
+      const { error } = await supabase.from('venture_artifacts').insert([
+        {
+          venture_id: testVentureId,
+          artifact_type: 'blueprint_technical_architecture',
+          is_current: true,
+          lifecycle_stage: getStageForArtifactType('blueprint_technical_architecture'),
+          title: 'Technical Architecture (seed)',
+          artifact_data: { placeholder: true },
+        },
+        {
+          venture_id: testVentureId,
+          artifact_type: 'blueprint_api_contract',
+          is_current: true,
+          lifecycle_stage: getStageForArtifactType('blueprint_api_contract'),
+          title: 'API Contract (seed)',
+          artifact_data: { placeholder: true },
+        },
+        {
+          venture_id: testVentureId,
+          artifact_type: 'blueprint_schema_spec',
+          is_current: true,
+          lifecycle_stage: getStageForArtifactType('blueprint_schema_spec'),
+          title: 'Schema Specification (seed)',
+          artifact_data: { placeholder: true },
+        },
+      ]);
 
       expect(error).toBeNull();
     });
@@ -366,12 +429,14 @@ erDiagram
       };
 
       const { error } = await supabase
-        .from('venture_documents')
+        .from('venture_artifacts')
         .insert({
           venture_id: testVentureId,
-          document_type: 'blueprint_user_story_pack',
+          artifact_type: 'blueprint_user_story_pack',
+          is_current: true,
+          lifecycle_stage: getStageForArtifactType('blueprint_user_story_pack'),
           title: 'User Story Pack',
-          content: userStoryPack,
+          artifact_data: userStoryPack,
         });
 
       expect(error).toBeNull();
@@ -381,6 +446,28 @@ erDiagram
         epic.stories.every(story => story.invest_compliant)
       );
       expect(allStoriesCompliant).toBe(true);
+    });
+
+    test('S15-003: should create wireframe_screens artifact', async () => {
+      // venture_stages.required_artifacts[15] = [wireframe_screens, blueprint_user_story_pack]
+      // -- wireframe_screens was never created anywhere in this file (verified live).
+      const wireframeScreens = {
+        screens: [
+          { id: 'dashboard', name: 'Dashboard', layout: 'sidebar-main', components: ['NavBar', 'VentureList', 'StatsPanel'] },
+          { id: 'venture-detail', name: 'Venture Detail', layout: 'full-width', components: ['StageTracker', 'ArtifactList', 'ActionPanel'] }
+        ]
+      };
+
+      const { error } = await supabase.from('venture_artifacts').insert({
+        venture_id: testVentureId,
+        artifact_type: 'wireframe_screens',
+        is_current: true,
+        lifecycle_stage: getStageForArtifactType('wireframe_screens'),
+        title: 'Wireframe Screens',
+        artifact_data: wireframeScreens,
+      });
+
+      expect(error).toBeNull();
     });
   });
 
@@ -445,14 +532,17 @@ erDiagram
         }
       };
 
+      // Enriches the row seeded in S14-004 (update, not insert -- a second
+      // insert would collide on the partial unique index).
       const { error } = await supabase
-        .from('venture_documents')
-        .insert({
-          venture_id: testVentureId,
-          document_type: 'blueprint_api_contract',
+        .from('venture_artifacts')
+        .update({
           title: 'API Contract',
-          content: apiContract,
-        });
+          artifact_data: apiContract,
+        })
+        .eq('venture_id', testVentureId)
+        .eq('artifact_type', 'blueprint_api_contract')
+        .eq('is_current', true);
 
       expect(error).toBeNull();
     });
@@ -510,14 +600,17 @@ export interface Venture {
         decision_gate_status: 'approved'
       };
 
+      // Enriches the row seeded in S14-004 (update, not insert -- a second
+      // insert would collide on the partial unique index).
       const { error } = await supabase
-        .from('venture_documents')
-        .insert({
-          venture_id: testVentureId,
-          document_type: 'blueprint_schema_spec',
+        .from('venture_artifacts')
+        .update({
           title: 'Schema Specification',
-          content: schemaSpec,
-        });
+          artifact_data: schemaSpec,
+        })
+        .eq('venture_id', testVentureId)
+        .eq('artifact_type', 'blueprint_schema_spec')
+        .eq('is_current', true);
 
       expect(error).toBeNull();
 
@@ -531,21 +624,47 @@ export interface Venture {
       expect(checklist.typescript_interfaces_generated).toBe(true);
     });
 
-    test('S16-004: should complete Phase 4 (Kochel Firewall)', async () => {
+    test('S16-004: should create financial_projection artifact', async () => {
+      // venture_stages.required_artifacts[16] = [blueprint_financial_projection] (verified
+      // live) -- api_contract/schema_spec canonically belong to Stage 14 (see S14-004),
+      // not Stage 16. This artifact was never created anywhere in this file.
+      const financialProjection = {
+        revenue_projections: { year1: 500000, year2: 1500000, year3: 4000000 },
+        unit_economics: { gross_margin: 0.72, cac_ltv_ratio: 3.98 },
+        breakeven_analysis: { breakeven_months: 14 },
+        decision_gate_status: 'approved'
+      };
+
+      const { error } = await supabase.from('venture_artifacts').insert({
+        venture_id: testVentureId,
+        artifact_type: 'blueprint_financial_projection',
+        is_current: true,
+        lifecycle_stage: getStageForArtifactType('blueprint_financial_projection'),
+        title: 'Financial Projections',
+        artifact_data: financialProjection,
+      });
+
+      expect(error).toBeNull();
+    });
+
+    test('S16-005: should complete Phase 4 (Kochel Firewall)', async () => {
       const { data: artifacts } = await supabase
-        .from('venture_documents')
-        .select('document_type')
+        .from('venture_artifacts')
+        .select('artifact_type')
         .eq('venture_id', testVentureId)
-        .in('document_type', [
+        .in('artifact_type', [
           'blueprint_product_roadmap',
+          'blueprint_technical_architecture',
           'blueprint_data_model',
           'blueprint_erd_diagram',
-          'blueprint_user_story_pack',
           'blueprint_api_contract',
-          'blueprint_schema_spec'
+          'blueprint_schema_spec',
+          'wireframe_screens',
+          'blueprint_user_story_pack',
+          'blueprint_financial_projection'
         ]);
 
-      expect(artifacts?.length).toBe(6);
+      expect(artifacts?.length).toBe(9);
 
       // Ready for Phase 5 (Stage 17)
       const { error } = await supabase
