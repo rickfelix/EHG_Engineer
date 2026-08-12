@@ -207,7 +207,11 @@ async function fetchDriveReport(get = pgGet) {
     // `get` is injectable for the same reason orient()'s dependencies are: the derivation below is
     // the part that was wrong, and a test should be able to drive it without credentials or a
     // stubbed global. The default is the real reader, so no caller changes.
-    const rows = await get('drive_reports?select=id,drive_score&order=generated_at.desc&limit=1');
+    // SD-LEO-INFRA-HOURLY-DRIVE-SCORE-001 FR-4: cadence=eq.scheduled — this fleet-wide
+    // SessionStart hook is the highest-blast-radius of the 6 known consumers (injects into every
+    // worker session) and did not even select run_id, so no identity check was possible before
+    // this fix.
+    const rows = await get('drive_reports?select=id,drive_score&cadence=eq.scheduled&order=generated_at.desc&limit=1');
     const r = rows?.[0];
     if (!r?.id) return null;
     const { factsFromReport, formatBody } = await import('../drive-report-sms.mjs');

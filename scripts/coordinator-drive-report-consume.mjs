@@ -202,8 +202,10 @@ export async function runDriveReportConsumeCore(supabase, {
       return { status: 'skipped', reason: 'not_coordinator_seat' };
     }
 
+    // SD-LEO-INFRA-HOURLY-DRIVE-SCORE-001 FR-4: cadence='scheduled' filter — an hourly-cadence
+    // row must never be read here as if it were the canonical daily report.
     const { data: rows, error: readErr } = await withTimeout(
-      (signal) => supabase.from('drive_reports').select('id').order('generated_at', { ascending: false }).limit(1).abortSignal(signal),
+      (signal) => supabase.from('drive_reports').select('id').eq('cadence', 'scheduled').order('generated_at', { ascending: false }).limit(1).abortSignal(signal),
       WRITE_TIMEOUT_MS, 'drive_reports read');
 
     if (readErr) {
