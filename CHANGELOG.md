@@ -5,6 +5,7 @@
 
 - [2026-08-12](#2026-08-12)
   - [Bugfix](#bugfix)
+  - [Infrastructure](#infrastructure)
 - [2026-08-11](#2026-08-11)
   - [Bugfix](#bugfix)
   - [Infrastructure](#infrastructure)
@@ -119,6 +120,14 @@
   - **Fixed**: Stage 18 rewritten to assert the real 9 `marketing_*` artifacts at `lifecycle_stage=18`; new Stage 21 block asserts the `distribution_channel_config`/`distribution_ad_copy` canonical pair plus the BINDING-block `chairman_decisions` path; new Stage 22 block asserts the `visual_device_screenshots`/`visual_social_graphics` canonical pair plus the `visual_assets_skipped` precondition-missing marker. Along the way, found and fixed a real dependency break: removing the old Stage 18 filler also silently removed the only artifact satisfying `STAGE_ADVANCEMENT_ARTIFACT_GATE`'s stage-19-exit requirement (`build_mvp_build`) — re-added at its own correct stage (19) instead of routed around.
   - **Explicitly deferred**: `phase6-launch-and-learn.spec.ts`'s own colliding Stage 21/22 blocks and `full-journey.spec.ts`'s STAGES array were investigated but left untouched — `full-journey.spec.ts` already carries the correct names/types from the prior SD; `phase6-launch-and-learn.spec.ts`'s remaining tests write legacy-but-not-fabricated artifact types (no collision), a smaller follow-up than originally scoped.
   - **Verification**: 80/80 E2E assertions pass (5 browser projects × 16 tests) on the modified file; 515/515 pass (10 pre-existing skips) across the full `tests/e2e/venture-lifecycle/` directory with zero collateral regressions; 65/65 unit tests pass for the two reference analysis-step modules.
+
+### Infrastructure
+- **Migration ledger reconciliation: a stale-content alarm on an already-superseded orchestrator terminal-status file** - PR #6997 (SD-LEO-INFRA-RECONCILE-20260711-ORCHESTRATOR-001)
+  - **What was wrong**: `database/migrations/20260711_orchestrator_terminal_status_sql_parity.sql`'s apply-ledger entry (`schema_migrations_applied`) held a sha256 from before the file's round-2 edits, so `readAuditLatestForPath` (`scripts/apply-migration.js`) compared it against the file's *current* on-disk content and tripped `MIGRATION_APPLY_PROD_FAIL_TAMPERED` — a false alarm, since the live database objects were never actually behind.
+  - **Verified against the live catalog, not the file**: direct `pg_proc.prosrc`/`pg_get_triggerdef` inspection (never trust a migration file or its own ledger row as proof of what's live) confirmed sections (a)/(b) `get_progress_breakdown` were superseded-forward by a later, independent migration (`20260724_fix_get_progress_breakdown_deferred_terminal.sql`, QF-20260724-212, which additionally counts `deferred` as terminal); sections (d)/(e) `try_auto_complete_parent_orchestrator` and its trigger already matched this file's round-2 content exactly; section (c) `complete_orchestrator_sd` was confirmed out of scope, owned by `20260712_orchestrator_ghost_complete_lead_final.sql`.
+  - **What shipped**: an honest ledger reconciliation row (`dry_run=true`, `prod_deploy=false` — no DDL executed, sha256 keyed to the current file) so the tamper guard stops firing; an inline "RECONCILED" note appended to the migration file itself, at the exact point a future reader hits it; and a new read-only `scripts/orchestrator-20260711-parity-status.mjs` status script for future spot-checks (named to avoid the `scripts/verify-*.mjs` gitignore trap that has silently swallowed status scripts before, QF-20260509-393).
+  - **Found and deferred, not fixed inline (out of this SD's scope)**: `scripts/check-migration-readiness.mjs` (the pre-merge migration-readiness CI gate) has no "superseded by a later migration" exemption — only a chairman-gated-pending marker — so it will keep flagging this file's pre-existing drift on any future touch; confirmed advisory-only (not a required branch-protection check) and pre-existing on `main`, not introduced by this PR.
+  - **Verification**: live pg_proc/pg_trigger bodies re-checked post-merge via the new status script; all four checked objects (a,b,d,e) confirmed reconciled.
 
 ## 2026-08-11
 
