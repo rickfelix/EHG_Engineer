@@ -577,10 +577,14 @@ BEGIN
   -- TWO-SIDED: the client-facing RPCs MUST still be anon-callable — a verify block strict enough
   -- to reject every anon grant would silently no-op the two functions that exist specifically to
   -- BE anon-callable, and this assertion would never catch that regression.
-  IF NOT has_function_privilege('anon', 'public.fn_submit_venture_feedback(uuid,text,text,text,text,text)', 'EXECUTE') THEN
+  -- IS NOT TRUE, not NOT, matching this file's own stated principle (re-verification finding,
+  -- evidence 83b9ce04, ADV-1) — has_function_privilege errors rather than returning NULL for a
+  -- malformed identity, so NOT was not exploitable here, but the inconsistency undercut the
+  -- principle the ownership checks above establish.
+  IF has_function_privilege('anon', 'public.fn_submit_venture_feedback(uuid,text,text,text,text,text)', 'EXECUTE') IS NOT TRUE THEN
     RAISE EXCEPTION 'VERIFY FAILED: fn_submit_venture_feedback is NOT anon-callable — the fix would be unreachable';
   END IF;
-  IF NOT has_function_privilege('anon', 'public.fn_submit_venture_error(uuid,text,text,text,jsonb)', 'EXECUTE') THEN
+  IF has_function_privilege('anon', 'public.fn_submit_venture_error(uuid,text,text,text,jsonb)', 'EXECUTE') IS NOT TRUE THEN
     RAISE EXCEPTION 'VERIFY FAILED: fn_submit_venture_error is NOT anon-callable — the fix would be unreachable';
   END IF;
 
