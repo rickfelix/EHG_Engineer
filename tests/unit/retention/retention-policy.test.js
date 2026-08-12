@@ -15,7 +15,7 @@ const __dirname = dirname(fileURLToPath(import.meta.url));
 const REPO_ROOT = resolve(__dirname, '../../../');
 
 describe('policy registry (TS-1)', () => {
-  it('registers all 15 unbounded tables with the VERIFIED timestamp columns', () => {
+  it('registers all 16 unbounded tables with the VERIFIED timestamp columns', () => {
     const m = Object.fromEntries(RETENTION_POLICIES.map((p) => [p.table, p.timestampColumn]));
     expect(m).toEqual({
       workflow_trace_log: 'created_at',
@@ -26,6 +26,11 @@ describe('policy registry (TS-1)', () => {
       permission_audit_log: 'created_at',
       // SD-REFILL-00LHUVME: eva_scheduler_metrics retention coverage
       eva_scheduler_metrics: 'created_at',
+      // Fixes the recurring "violates foreign key constraint
+      // design_quality_scores_source_result_id_fkey" delete failure on
+      // sub_agent_execution_results — a shorter hot window so this table's rows always
+      // clear the FK before their parent ages out. See the policies.js entry comment.
+      design_quality_scores: 'created_at',
       // SD-FDBK-FIX-BUS-RETENTION-CLEANUP-001 FR-3
       sub_agent_execution_results: 'created_at',
       // SD-LEO-FEAT-TWO-WAY-CHAIRMAN-001: sms_inbound_log retention coverage
@@ -89,7 +94,31 @@ describe('policy registry (TS-1)', () => {
 
   it('default window is 90d (3x the 30d longest consumer lookback)', () => {
     expect(DEFAULT_HOT_DAYS).toBe(90);
-    for (const p of RETENTION_POLICIES) expect(effectiveHotDays(p, {})).toBe(90);
+    // design_quality_scores is the one deliberate exception: its shorter window exists
+    // specifically to age out ahead of its parent sub_agent_execution_results (see its
+    // policies.js entry comment) — every other table uses the shared default.
+    for (const p of RETENTION_POLICIES) {
+      if (p.table === 'design_quality_scores') continue;
+      expect(effectiveHotDays(p, {})).toBe(90);
+    }
+  });
+
+  it('design_quality_scores ages out well ahead of its parent (FK-clearing invariant)', () => {
+    const p = RETENTION_POLICIES.find((x) => x.table === 'design_quality_scores');
+    const parent = RETENTION_POLICIES.find((x) => x.table === 'sub_agent_execution_results');
+    expect(p).toBeDefined();
+    expect(p.timestampColumn).toBe('created_at');
+    expect(p.mode).toBe('archive');
+    // Observed live max skew (child created after parent) was 27 days -- require at least
+    // that much margin below the parent's window, or this invariant would silently stop
+    // protecting the fix if either window is ever tuned independently.
+    const OBSERVED_MAX_SKEW_DAYS = 27;
+    expect(effectiveHotDays(parent, {}) - effectiveHotDays(p, {})).toBeGreaterThan(OBSERVED_MAX_SKEW_DAYS);
+    // Must still clear the floor.
+    expect(effectiveHotDays(p, {})).toBeGreaterThanOrEqual(MIN_HOT_DAYS);
+    // Must be processed before its parent in the array (archive-order dependency).
+    const order = RETENTION_POLICIES.map((x) => x.table);
+    expect(order.indexOf('design_quality_scores')).toBeLessThan(order.indexOf('sub_agent_execution_results'));
   });
 
   it('floor assert: a window below MIN_HOT_DAYS refuses to run', () => {
