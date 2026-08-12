@@ -86,6 +86,35 @@
 --     guarantees an ingest outage for that venture until its deployment is updated. Phase 3 or a
 --     later amendment should consider a short-lived dual-valid window if rotation-under-suspicion
 --     becomes a real operational need.
+--
+-- THREE MORE, from an independent peer review (sec-rls-expert, this session, ranked "fix-before-
+-- Phase-3, not fix-before-apply" by the reviewer's own assessment — items 1/3/5/6 from that same
+-- review WERE treated as fix-before-apply and are fixed above/below):
+--   Failed-auth attempts (a wrong secret, a spoofed venture_id) are unmetered and unlogged — the
+--     28000 exceptions at the top of both RPCs raise before any rate check runs and nothing
+--     writes a failure row anywhere. Not a guessing risk at 256 bits of entropy, but a genuine
+--     observability gap: a cross-tenant attack in progress (the exact threat model this file
+--     exists for) is currently invisible. A later amendment should consider a lightweight
+--     failure-count mechanism, structured so it cannot itself become a new oracle.
+--   The feedback_type/source_type CHECK-constraint widenings (below) are DROP+ADD from a
+--     snapshot of the live constraint captured at authoring time, not asserted as a subset in the
+--     $verify$ block — a legitimate value added to either constraint between authoring and apply
+--     would be silently reverted by this file, and the $verify$ block as written cannot detect
+--     that. A later amendment could capture the pre-DROP value list and assert old ⊆ new. Related
+--     but separate: ADD CONSTRAINT here takes ACCESS EXCLUSIVE with full validation on the live
+--     table (~24.6k rows at authoring time) for the duration of this transaction — the same lock
+--     class the 2026-08-12 incident (see the incident record in this SD's metadata) held on
+--     production during an earlier, accidental apply. A NOT VALID + separate VALIDATE CONSTRAINT
+--     pattern would reduce that window; not done here to keep this file's DDL shape matching its
+--     own precedent (database/migrations/20260704d_venture_error_aggregation_rpc.sql uses the
+--     same plain DROP+ADD).
+--   fn_submit_venture_error's storm-suppression ON CONFLICT arbiter (idx_feedback_venture_error_
+--     hash) is only exercised once a venture crosses 20 distinct fingerprints in the trailing
+--     hour — a code path this SD's test suite cannot practically reach without a dedicated load
+--     scenario. A 42P10 (arbiter mismatch) would first surface during a real error storm, not
+--     during review. Flagged rather than fixed: the arbiter was independently verified to match
+--     the live index predicate exactly (byte-for-byte), so this is a coverage gap, not a known
+--     defect.
 
 BEGIN;
 
@@ -193,7 +222,7 @@ AS $function$
     SELECT 1 FROM public.venture_ingest_keys k
     WHERE k.venture_id = p_venture_id
       AND p_ingest_secret IS NOT NULL
-      AND k.ingest_secret_hash = encode(digest(p_ingest_secret, 'sha256'), 'hex')
+      AND k.ingest_secret_hash = encode(extensions.digest(p_ingest_secret, 'sha256'), 'hex')
   );
 $function$;
 
@@ -226,13 +255,19 @@ BEGIN
 
   -- gen_random_bytes lives in the extensions schema (pgcrypto), not public — confirmed live via
   -- pg_extension.extnamespace, matching the pinned search_path convention already established in
-  -- database/migrations/20260602_pin_search_path_invoker_functions.sql.
-  v_secret := encode(gen_random_bytes(32), 'hex');
+  -- database/migrations/20260602_pin_search_path_invoker_functions.sql. Schema-qualified
+  -- explicitly (peer review finding sec-rls-expert, Q3 item 5, this session), not merely relying
+  -- on search_path ordering: search_path here lists public BEFORE extensions, so an object named
+  -- public.gen_random_bytes/public.digest would shadow pgcrypto's real ones for a SECURITY
+  -- DEFINER function on the auth path. Not reachable today (measured: anon/authenticated lack
+  -- CREATE on public), but qualifying costs nothing and removes the class of risk entirely rather
+  -- than depending on a permission staying narrow.
+  v_secret := encode(extensions.gen_random_bytes(32), 'hex');
 
   -- Only the HASH is stored (see _verify_venture_ingest_secret's header note) — v_secret itself
   -- exists only in this function's local memory and the value returned to the caller once.
   INSERT INTO public.venture_ingest_keys (venture_id, ingest_secret_hash, created_at, rotated_at)
-  VALUES (p_venture_id, encode(digest(v_secret, 'sha256'), 'hex'), now(), NULL)
+  VALUES (p_venture_id, encode(extensions.digest(v_secret, 'sha256'), 'hex'), now(), NULL)
   ON CONFLICT (venture_id) DO UPDATE
     SET ingest_secret_hash = EXCLUDED.ingest_secret_hash,
         rotated_at = now();
@@ -244,8 +279,12 @@ $$;
 COMMENT ON FUNCTION public.fn_provision_venture_ingest_key(UUID) IS
   'SD-LEO-INFRA-FEEDBACK-ANON-RLS-GAPS-001 FR-5: mints or rotates a venture''s ingest secret. '
   'service_role only. Returns the plaintext secret ONCE — store it in that venture''s deployment '
-  'env immediately. Only a SHA-256 hash is persisted; the plaintext genuinely cannot be read back '
-  'from venture_ingest_keys afterward, by any role.';
+  'env immediately. Only a SHA-256 hash is persisted; the plaintext cannot be READ BACK from '
+  'venture_ingest_keys afterward by any role (peer review correction, sec-rls-expert, this '
+  'session: this claim is about READING, not about every capability — service_role holds '
+  'rolbypassrls and a full table grant, so it can still WRITE a chosen ingest_secret_hash and '
+  'impersonate any venture; that is inherent to what service_role is, not something hashing '
+  'closes, and is the same trust boundary every table in this schema already depends on).';
 
 -- CORRECTED (EXEC-phase SECURITY sub-agent finding, evidence b99c9ec7, BLOCK-1, CRITICAL): the
 -- original REVOKE ... FROM PUBLIC alone left this function directly anon-EXECUTE-able via this
@@ -460,6 +499,7 @@ DECLARE
   -- Moved so every expression genuinely runs after authorization, not merely every side effect.
   v_watermark_hash TEXT;
   v_existing_row_id UUID;
+  v_updated_id UUID;
 BEGIN
   -- Ownership check FIRST — same uniform code, same reasoning as fn_submit_venture_feedback (TS-6).
   -- IS NOT TRUE, not NOT — see the matching note in fn_submit_venture_feedback above.
@@ -492,13 +532,39 @@ BEGIN
   LIMIT 1;
 
   IF v_existing_row_id IS NOT NULL THEN
+    -- Per-hash cooldown (peer review finding sec-rls-expert, Q3 item 1, this session): this
+    -- aggregation path previously had NO rate limit at all -- unlike fn_submit_venture_feedback,
+    -- which calls fn_venture_ingest_prior_hour_count, a repeated error_hash never creates a new
+    -- feedback row, so a row-COUNTING check can't see repeat-call volume; a secret holder could
+    -- increment occurrence_count without bound in a tight loop. A 1-second minimum interval
+    -- between increments for the SAME (venture, error_hash) caps that without new state --
+    -- genuine incident traffic (real repeated errors, typically seconds-to-minutes apart) is
+    -- unaffected; a pathological tight loop is capped at ~3600 increments/hour per hash instead
+    -- of unbounded.
+    -- clock_timestamp() throughout this cooldown, NOT now() (live dry-run finding, this session,
+    -- confirmed empirically): now()/CURRENT_TIMESTAMP is fixed at TRANSACTION START in Postgres,
+    -- not real wall-clock time. Using now() for the STORED value while comparing against
+    -- clock_timestamp() made the stored last_seen look artificially stale the instant more than
+    -- one real second had elapsed since the enclosing transaction began, regardless of true
+    -- call-to-call spacing -- exactly the false-immediate-pass a cooldown must not have. Using
+    -- clock_timestamp() consistently for both the stored value and the comparison ties the whole
+    -- check to real elapsed time, which is also the more precise semantic for a genuinely
+    -- "last SEEN" timestamp. Harmless for the normal case (a real PostgREST call is its own short
+    -- transaction, where now() and clock_timestamp() are indistinguishable) and correct for the
+    -- edge case (multiple calls batched in one caller-side transaction) that motivated using
+    -- clock_timestamp() for the comparison in the first place.
     UPDATE public.feedback
     SET occurrence_count = occurrence_count + 1,
-        last_seen = now(),
-        updated_at = now()
-    WHERE id = v_existing_row_id;
+        last_seen = clock_timestamp(),
+        updated_at = clock_timestamp()
+    WHERE id = v_existing_row_id
+      AND last_seen < clock_timestamp() - interval '1 second'
+    RETURNING id INTO v_updated_id;
 
-    RETURN jsonb_build_object('ok', true, 'action', 'aggregated', 'id', v_existing_row_id);
+    IF v_updated_id IS NOT NULL THEN
+      RETURN jsonb_build_object('ok', true, 'action', 'aggregated', 'id', v_updated_id);
+    END IF;
+    RETURN jsonb_build_object('ok', true, 'action', 'aggregated_rate_limited', 'id', v_existing_row_id);
   END IF;
 
   SELECT count(DISTINCT error_hash) INTO v_distinct_count
@@ -534,7 +600,10 @@ BEGIN
   ) VALUES (
     p_venture_id, 'venture_error', 'error_capture',
     (SELECT name FROM public.ventures WHERE id = p_venture_id),
-    p_error_hash, p_message, 1, now(), now(),
+    -- last_seen (not first_seen) is clock_timestamp() -- it is the field the cooldown check
+    -- above reads on the NEXT call for this hash, so it needs real elapsed time, matching the
+    -- clock_timestamp() correction on the aggregation branch above.
+    p_error_hash, p_message, 1, now(), clock_timestamp(),
     left(coalesce(p_message, 'Venture error'), 200), coalesce(p_message, ''),
     'issue', 'new', 'medium', p_context
   )
@@ -572,6 +641,25 @@ BEGIN
     RAISE EXCEPTION 'VERIFY FAILED: venture_ingest_keys is readable by anon or authenticated';
   END IF;
 
+  -- Three additions (peer review finding sec-rls-expert, Q3 item 3, this session): the block
+  -- above only checked SELECT for anon/authenticated, and nothing asserted RLS is actually
+  -- enabled, that zero policies exist, or that service_role can ACTUALLY execute the provisioning
+  -- RPC. The harness that validated this file so far called fn_provision_venture_ingest_key as
+  -- postgres (the owner, which retains EXECUTE regardless of any REVOKE) — a missing or typo'd
+  -- GRANT to service_role at the end of this file would pass every existing check while leaving
+  -- FR-5's provisioning path dead on arrival for the only role meant to use it.
+  IF (SELECT relrowsecurity FROM pg_class WHERE oid = 'public.venture_ingest_keys'::regclass) IS NOT TRUE THEN
+    RAISE EXCEPTION 'VERIFY FAILED: venture_ingest_keys does not have RLS enabled';
+  END IF;
+
+  IF (SELECT count(*) FROM pg_policies WHERE schemaname = 'public' AND tablename = 'venture_ingest_keys') <> 0 THEN
+    RAISE EXCEPTION 'VERIFY FAILED: venture_ingest_keys has a policy — it must remain deny-all-by-absence';
+  END IF;
+
+  IF has_function_privilege('service_role', 'public.fn_provision_venture_ingest_key(uuid)', 'EXECUTE') IS NOT TRUE THEN
+    RAISE EXCEPTION 'VERIFY FAILED: service_role cannot execute fn_provision_venture_ingest_key — FR-5 provisioning would be unreachable';
+  END IF;
+
   IF has_function_privilege('anon', 'public.fn_provision_venture_ingest_key(uuid)', 'EXECUTE')
      OR has_function_privilege('authenticated', 'public.fn_provision_venture_ingest_key(uuid)', 'EXECUTE') THEN
     RAISE EXCEPTION 'VERIFY FAILED: fn_provision_venture_ingest_key is callable by anon or authenticated';
@@ -607,6 +695,13 @@ BEGIN
   END IF;
 END
 $verify$;
+
+-- PostgREST caches the schema; without this, both new RPCs return 404/PGRST202 to real anon
+-- clients until PostgREST's own reload cycle catches up — a window where has_function_privilege
+-- (a grant check) already reads correctly but the fix is not yet reachable over the actual API
+-- surface (peer review finding sec-rls-expert, Q3 item 8, this session). Established convention
+-- in this codebase (e.g. database/migrations/20260426_add_claude_sessions_loop_state.sql).
+NOTIFY pgrst, 'reload schema';
 
 COMMIT;
 

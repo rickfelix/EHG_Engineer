@@ -28,6 +28,7 @@
 import { describe, it, expect, beforeAll, afterAll } from 'vitest';
 import fs from 'node:fs';
 import { fileURLToPath } from 'node:url';
+import { createHash } from 'node:crypto';
 import pg from 'pg';
 
 const MIGRATION_PATH = fileURLToPath(
@@ -193,6 +194,22 @@ describe('FR-5: fn_provision_venture_ingest_key', () => {
     expect(secret.length).toBeGreaterThanOrEqual(32);
   });
 
+  it('stores exactly sha256(secret) as the hash — mutation-resistant, not merely "not the plaintext"', async () => {
+    // Peer review finding (sec-rls-expert, this session): asserting `stored !== plaintext` (the
+    // original check, in a since-deleted script) does not distinguish "correctly hashed" from
+    // "wrongly hashed" or even "garbage" — any non-plaintext value passes. This asserts the exact
+    // digest, which a mutant that hashed with the wrong algorithm, truncated the digest, or
+    // stored a random value would fail.
+    const ventureId = await makeVenture();
+    const secret = await provisionSecret(ventureId);
+    const { rows } = await client.query(
+      'SELECT ingest_secret_hash FROM public.venture_ingest_keys WHERE venture_id = $1',
+      [ventureId],
+    );
+    const expected = createHash('sha256').update(secret).digest('hex');
+    expect(rows[0].ingest_secret_hash).toBe(expected);
+  });
+
   it('is not executable by anon or authenticated', async () => {
     const { rows } = await client.query(`
       SELECT count(*)::int AS n
@@ -228,9 +245,18 @@ describe('FR-2/TS-1/TS-6: fn_submit_venture_feedback ownership binding', () => {
   });
 
   it("[TS-1] venture A's valid secret with p_venture_id=B is rejected, uniform code", async () => {
+    // CORRECTED (peer review sec-rls-expert, this session): the original version provisioned a
+    // secret for ventureA ONLY, so ventureB had NO row in venture_ingest_keys at all — the
+    // rejection was then produced entirely by "WHERE k.venture_id = p_venture_id" matching zero
+    // rows, never reaching the hash comparison. A mutant that deleted the hash-comparison clause
+    // entirely would still pass this test. Both ventures now get a REAL row, so the venture_id
+    // predicate matches (a row for B exists) and the hash comparison is what must reject A's
+    // secret against B's row — this is the only version of the test that actually exercises the
+    // ownership check it claims to validate.
     const ventureA = await makeVenture('A');
     const ventureB = await makeVenture('B');
     const secretA = await provisionSecret(ventureA);
+    await provisionSecret(ventureB);
     await expect(
       client.query(
         'SELECT public.fn_submit_venture_feedback($1, $2, \'venture_worker\', NULL, NULL, \'spoofed\') AS r',
@@ -414,9 +440,12 @@ describe('FR-3/TS-1/TS-6: fn_submit_venture_error ownership binding and dedup', 
   });
 
   it("venture A's secret with p_venture_id=B is rejected, uniform 28000", async () => {
+    // Same predicate-void correction as TS-1 above — ventureB needs its own real row or the
+    // venture_id predicate alone (not the hash comparison) produces the rejection.
     const ventureA = await makeVenture('A2');
     const ventureB = await makeVenture('B2');
     const secretA = await provisionSecret(ventureA);
+    await provisionSecret(ventureB);
     await expect(
       client.query('SELECT public.fn_submit_venture_error($1, $2, $3, \'spoof\') AS r', [ventureB, secretA, hash1]),
     ).rejects.toThrow(/unauthorized/);
