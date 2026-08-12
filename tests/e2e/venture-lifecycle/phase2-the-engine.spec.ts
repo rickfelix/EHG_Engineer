@@ -43,6 +43,7 @@ test.describe('Phase 2: THE ENGINE (Stages 6-9)', () => {
       .insert({
         name: `Phase 2 Test Venture ${Date.now()}`,
         company_id: testCompanyId,
+        problem_statement: 'Test problem statement for E2E lifecycle testing',
         current_lifecycle_stage: 5,
         description: 'Testing THE ENGINE phase lifecycle'
       })
@@ -50,6 +51,17 @@ test.describe('Phase 2: THE ENGINE (Stages 6-9)', () => {
       .single();
 
     if (venture) testVentureId = venture.id;
+
+    // Seed Stage 5's own exit artifact — STAGE_ADVANCEMENT_ARTIFACT_GATE requires it
+    // to already exist before the venture can advance past the stage it was born at.
+    if (testVentureId) {
+      await supabase.from('venture_documents').insert({
+        venture_id: testVentureId,
+        document_type: 'truth_financial_model',
+        title: 'Seed artifact for Stage 5',
+        content: { placeholder: true }
+      });
+    }
 
     // Create prerequisite Phase 1 artifacts
     const phase1Artifacts = [
@@ -175,7 +187,6 @@ test.describe('Phase 2: THE ENGINE (Stages 6-9)', () => {
           document_type: 'engine_risk_matrix',
           title: 'Risk Assessment',
           content: riskMatrix,
-          status: 'complete'
         })
         .select('id')
         .single();
@@ -276,7 +287,6 @@ test.describe('Phase 2: THE ENGINE (Stages 6-9)', () => {
           document_type: 'engine_pricing_model',
           title: 'Revenue Architecture',
           content: pricingModel,
-          status: 'complete'
         })
         .select('id')
         .single();
@@ -365,7 +375,6 @@ test.describe('Phase 2: THE ENGINE (Stages 6-9)', () => {
           document_type: 'engine_business_model_canvas',
           title: 'Business Model Canvas',
           content: businessModelCanvas,
-          status: 'complete'
         })
         .select('id')
         .single();
@@ -456,7 +465,6 @@ test.describe('Phase 2: THE ENGINE (Stages 6-9)', () => {
           document_type: 'engine_exit_strategy',
           title: 'Exit Strategy',
           content: exitStrategy,
-          status: 'complete'
         })
         .select('id')
         .single();

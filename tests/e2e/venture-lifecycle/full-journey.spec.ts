@@ -76,7 +76,8 @@ test.describe('Full Venture Lifecycle Journey (Stages 1-25)', () => {
       .insert({
         name: `Full Lifecycle Journey Venture ${Date.now()}`,
         company_id: testCompanyId,
-        current_lifecycle_stage: 0,
+        problem_statement: 'Test problem statement for E2E lifecycle testing',
+        current_lifecycle_stage: 1,
         description: 'Testing complete venture lifecycle from Stage 1 to Stage 25'
       })
       .select('id')
@@ -170,7 +171,6 @@ test.describe('Full Venture Lifecycle Journey (Stages 1-25)', () => {
             document_type: artifactType,
             title: `${artifactType} for Stage ${stage.number}`,
             content: artifactContent[artifactType] || { placeholder: true },
-            status: 'complete'
           });
 
         // Artifact might already exist from previous test run

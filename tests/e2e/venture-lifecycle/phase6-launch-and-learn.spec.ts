@@ -41,6 +41,7 @@ test.describe('Phase 6: LAUNCH & LEARN (Stages 21-25)', () => {
       .insert({
         name: `Phase 6 Test Venture ${Date.now()}`,
         company_id: testCompanyId,
+        problem_statement: 'Test problem statement for E2E lifecycle testing',
         current_lifecycle_stage: 20,
         description: 'Testing LAUNCH & LEARN phase lifecycle'
       })
@@ -48,6 +49,17 @@ test.describe('Phase 6: LAUNCH & LEARN (Stages 21-25)', () => {
       .single();
 
     if (venture) testVentureId = venture.id;
+
+    // Seed Stage 20's own exit artifact — STAGE_ADVANCEMENT_ARTIFACT_GATE requires it
+    // to already exist before the venture can advance past the stage it was born at.
+    if (testVentureId) {
+      await supabase.from('venture_documents').insert({
+        venture_id: testVentureId,
+        document_type: 'security_audit',
+        title: 'Seed artifact for Stage 20',
+        content: { placeholder: true }
+      });
+    }
   });
 
   test.afterAll(async () => {
@@ -124,7 +136,6 @@ test.describe('Phase 6: LAUNCH & LEARN (Stages 21-25)', () => {
           document_type: 'test_plan',
           title: 'Test Plan',
           content: testPlan,
-          status: 'complete'
         });
 
       expect(error).toBeNull();
@@ -171,7 +182,6 @@ test.describe('Phase 6: LAUNCH & LEARN (Stages 21-25)', () => {
           document_type: 'uat_report',
           title: 'UAT Report',
           content: uatReport,
-          status: 'complete'
         });
 
       expect(error).toBeNull();
@@ -247,7 +257,6 @@ test.describe('Phase 6: LAUNCH & LEARN (Stages 21-25)', () => {
           document_type: 'deployment_runbook',
           title: 'Deployment Runbook',
           content: deploymentRunbook,
-          status: 'complete'
         });
 
       expect(error).toBeNull();
@@ -318,7 +327,6 @@ test.describe('Phase 6: LAUNCH & LEARN (Stages 21-25)', () => {
           document_type: 'launch_checklist',
           title: 'Launch Checklist',
           content: launchChecklist,
-          status: 'complete'
         });
 
       expect(error).toBeNull();
@@ -409,7 +417,6 @@ test.describe('Phase 6: LAUNCH & LEARN (Stages 21-25)', () => {
           document_type: 'analytics_dashboard',
           title: 'Analytics Dashboard',
           content: analyticsDashboard,
-          status: 'complete'
         });
 
       expect(error).toBeNull();
@@ -473,7 +480,6 @@ test.describe('Phase 6: LAUNCH & LEARN (Stages 21-25)', () => {
           document_type: 'optimization_roadmap',
           title: 'Optimization Roadmap',
           content: optimizationRoadmap,
-          status: 'complete'
         });
 
       expect(error).toBeNull();

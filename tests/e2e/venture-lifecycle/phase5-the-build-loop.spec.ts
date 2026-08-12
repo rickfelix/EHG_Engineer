@@ -39,6 +39,7 @@ test.describe('Phase 5: THE BUILD LOOP (Stages 17-20)', () => {
       .insert({
         name: `Phase 5 Test Venture ${Date.now()}`,
         company_id: testCompanyId,
+        problem_statement: 'Test problem statement for E2E lifecycle testing',
         current_lifecycle_stage: 16,
         description: 'Testing THE BUILD LOOP phase lifecycle'
       })
@@ -46,6 +47,15 @@ test.describe('Phase 5: THE BUILD LOOP (Stages 17-20)', () => {
       .single();
 
     if (venture) testVentureId = venture.id;
+
+    // Seed Stage 16's own exit artifacts — STAGE_ADVANCEMENT_ARTIFACT_GATE requires
+    // them to already exist before the venture can advance past its birth stage.
+    if (testVentureId) {
+      await supabase.from('venture_documents').insert([
+        { venture_id: testVentureId, document_type: 'blueprint_api_contract', title: 'Seed artifact for Stage 16', content: { placeholder: true } },
+        { venture_id: testVentureId, document_type: 'blueprint_schema_spec', title: 'Seed artifact for Stage 16', content: { placeholder: true } }
+      ]);
+    }
   });
 
   test.afterAll(async () => {
@@ -108,7 +118,6 @@ test.describe('Phase 5: THE BUILD LOOP (Stages 17-20)', () => {
           document_type: 'system_prompt',
           title: 'AI Agent System Prompt',
           content: systemPrompt,
-          status: 'complete'
         });
 
       expect(error).toBeNull();
@@ -158,7 +167,6 @@ test.describe('Phase 5: THE BUILD LOOP (Stages 17-20)', () => {
           document_type: 'cicd_config',
           title: 'CI/CD Configuration',
           content: cicdConfig,
-          status: 'complete'
         });
 
       expect(error).toBeNull();
@@ -268,7 +276,6 @@ test.describe('Phase 5: THE BUILD LOOP (Stages 17-20)', () => {
           document_type: 'integration_status',
           title: 'Integration Status',
           content: integrationStatus,
-          status: 'complete'
         });
 
       expect(error).toBeNull();
@@ -353,7 +360,6 @@ test.describe('Phase 5: THE BUILD LOOP (Stages 17-20)', () => {
           document_type: 'security_audit',
           title: 'Quality Assurance Audit',
           content: securityAudit,
-          status: 'complete'
         })
         .select('id')
         .single();
