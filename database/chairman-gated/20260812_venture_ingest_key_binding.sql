@@ -115,6 +115,36 @@
 --     during review. Flagged rather than fixed: the arbiter was independently verified to match
 --     the live index predicate exactly (byte-for-byte), so this is a coverage gap, not a known
 --     defect.
+--
+-- TWO MORE, from a second independent peer review (db-txn-expert, this session, database/
+-- transaction focus) and a follow-up confirmation pass from the first reviewer (sec-rls-expert),
+-- both ranked low/non-blocking:
+--   The per-(venture, error_hash) cooldown on fn_submit_venture_error (added above) caps WRITES
+--     to a given hash, not the RATE OF CALLS — a rate-limited call still runs the hash validation,
+--     several index lookups, and a no-op UPDATE. Genuine request-rate control belongs at the
+--     PostgREST/edge layer, not inside this function. Also: the cooldown does not compose into a
+--     per-venture AGGREGATE cap — the storm ceiling bounds new DISTINCT hashes to 20/hour, but a
+--     venture that seeds hashes over time (up to ~480/day at the ceiling) can keep cycling all of
+--     them at 1 increment/second each, unbounded in total UPDATE volume. Ranked low because this
+--     requires already holding a valid per-venture secret (self-DoS or post-compromise, not the
+--     cross-tenant threat this file exists to close) and the outcome is write volume, not
+--     unauthorized access. A per-venture aggregate increment cap would be the complete fix.
+--
+--   SPLITTER DEFECT IN MAINLINE TOOLING, NOT IN THIS FILE (same reviewer; escalates signal
+--     47b6cf4c with measured blast radius): scripts/lib/supabase-connection.js's
+--     splitPostgreSQLStatements() tracks only bare $$ dollar-quote tags, not NAMED ones
+--     ($function$, $verify$) — every semicolon inside a named-tag body terminates a "statement"
+--     early. This migration would shred into ~51 fragments if run through that splitter. NOT
+--     exercised by the default apply path (scripts/apply-migration.js sends the whole file unless
+--     --split-statements is passed, and no caller in this repo passes it) — but the splitter runs
+--     UNCONDITIONALLY to compute schema_migrations_applied.statement_count for every apply,
+--     corrupting that audit column for any past or future migration with a named tag (measured:
+--     26 of 258 recorded applies already carry a corrupted count). --split-statements is
+--     advertised as supported in this script's own usage banner; the first real use of it against
+--     any of the ~194 named-tag .sql files under database/ would partially apply mid-function, the
+--     same failure class as this SD's own 2026-08-12 incident, reached through a sanctioned flag
+--     rather than a script bug. Not fixed here — it is mainline tooling shared across the whole
+--     database/ directory, out of this SD's own scope.
 
 BEGIN;
 
@@ -405,11 +435,27 @@ BEGIN
 
   -- Content-integrity bound, mirrored from anon_feedback_ingress_bounds (which does not
   -- evaluate for this SECURITY DEFINER path — see file header correction (1)).
+  -- CORRECTED (independent peer review, db-txn-expert, this session): the original check only
+  -- excluded critical/high, so any OTHER out-of-domain value (a typo, a client bug) fell through
+  -- to the live feedback_severity_check CHECK constraint and raised 23514 -- a distinguishable
+  -- response from this RPC's own uniform-rejection convention used everywhere else. Now validated
+  -- against the exact live allowed set (critical/high/medium/low, or NULL), with the business-rule
+  -- exclusion (critical/high not permitted on this anon path) kept as a second, explicit check.
+  IF p_severity IS NOT NULL AND p_severity NOT IN ('critical', 'high', 'medium', 'low') THEN
+    RAISE EXCEPTION 'fn_submit_venture_feedback: invalid severity' USING ERRCODE = '22004';
+  END IF;
   IF p_severity IS NOT NULL AND p_severity IN ('critical', 'high') THEN
     RAISE EXCEPTION 'fn_submit_venture_feedback: severity not permitted on this path' USING ERRCODE = '22004';
   END IF;
   IF p_category IS NOT DISTINCT FROM 'chairman_decision_deferred' THEN
     RAISE EXCEPTION 'fn_submit_venture_feedback: category not permitted on this path' USING ERRCODE = '22004';
+  END IF;
+  -- category has no live CHECK constraint but IS column-length-bound: public.feedback.category is
+  -- varchar(50) (confirmed live via information_schema.columns, not assumed) -- truncating to
+  -- anything >50 would itself raise "value too long for type character varying(50)", the exact
+  -- failure a length guard exists to prevent. Caught by this file's own live dry-run validation.
+  IF p_category IS NOT NULL AND length(p_category) > 50 THEN
+    p_category := left(p_category, 50);
   END IF;
 
   -- Rate limit, mirrored from anon_feedback_ingress_bounds for the same reason, PLUS the new
@@ -440,7 +486,11 @@ BEGIN
     RAISE EXCEPTION 'fn_submit_venture_feedback: rate limited' USING ERRCODE = '53400';
   END IF;
 
-  SELECT name INTO v_venture_name FROM public.ventures WHERE id = p_venture_id;
+  -- COALESCE guard (independent peer review, db-txn-expert, this session): source_application is
+  -- NOT NULL on public.feedback. Latent today (0 of 151 live ventures have a NULL name), but a
+  -- future NULL-named venture would otherwise raise a raw 23502 instead of a clean outcome for an
+  -- otherwise-valid, correctly-authenticated submission.
+  SELECT coalesce(name, 'unknown-venture') INTO v_venture_name FROM public.ventures WHERE id = p_venture_id;
 
   INSERT INTO public.feedback (
     venture_id, feedback_type, source_type, source_application,
@@ -492,6 +542,7 @@ DECLARE
   v_ceiling CONSTANT INTEGER := 20;
   v_window CONSTANT INTERVAL := interval '1 hour';
   v_distinct_count INTEGER;
+  v_venture_name TEXT;
   -- Assigned inside BEGIN, not here (EXEC-phase SECURITY sub-agent finding, evidence b99c9ec7,
   -- item 1): a DECLARE-block default expression evaluates at function entry, before the ownership
   -- check below — harmless today since this call is a pure IMMUTABLE constant with no venture-
@@ -523,6 +574,10 @@ BEGIN
   IF public.venture_exists_and_active(p_venture_id) IS NOT TRUE THEN
     RAISE EXCEPTION 'fn_submit_venture_error: unauthorized' USING ERRCODE = '28000';
   END IF;
+
+  -- COALESCE guard (independent peer review, db-txn-expert, this session) — same reasoning as
+  -- fn_submit_venture_feedback above: source_application is NOT NULL, latent-only risk today.
+  SELECT coalesce(name, 'unknown-venture') INTO v_venture_name FROM public.ventures WHERE id = p_venture_id;
 
   SELECT id INTO v_existing_row_id
   FROM public.feedback
@@ -581,7 +636,7 @@ BEGIN
       title, description, type, status, severity
     ) VALUES (
       p_venture_id, 'venture_error', 'error_capture',
-      (SELECT name FROM public.ventures WHERE id = p_venture_id),
+      v_venture_name,
       v_watermark_hash, '[STORM SUPPRESSED] distinct-fingerprint ceiling exceeded',
       1, now(), now(),
       'Venture error storm watermark', 'Distinct-fingerprint ceiling exceeded for this venture in the trailing window',
@@ -599,7 +654,7 @@ BEGIN
     title, description, type, status, severity, metadata
   ) VALUES (
     p_venture_id, 'venture_error', 'error_capture',
-    (SELECT name FROM public.ventures WHERE id = p_venture_id),
+    v_venture_name,
     -- last_seen (not first_seen) is clock_timestamp() -- it is the field the cooldown check
     -- above reads on the NEXT call for this hash, so it needs real elapsed time, matching the
     -- clock_timestamp() correction on the aggregation branch above.
@@ -617,7 +672,10 @@ COMMENT ON FUNCTION public.fn_submit_venture_error(UUID, TEXT, TEXT, TEXT, JSONB
   'SD-LEO-INFRA-FEEDBACK-ANON-RLS-GAPS-001 FR-3: ownership-bound sibling of record_venture_error. '
   'A NEW, separately-named function (not an added parameter on the existing signature) to avoid a '
   'PostgREST same-name RPC overload (PGRST203) that would otherwise break every unmigrated caller '
-  'the instant this migration applies (TS-5). record_venture_error itself is untouched by this file.';
+  'the instant this migration applies (TS-5). record_venture_error itself is untouched by this file. '
+  'CLIENT CONTRACT NOTE (peer review, sec-rls-expert): a rate-limited repeat submission returns '
+  '{ok:true, action:"aggregated_rate_limited"} -- ok alone does not mean "occurrence_count was '
+  'incremented"; a caller that only checks ok will silently undercount a suppressed repeat.';
 
 REVOKE ALL ON FUNCTION public.fn_submit_venture_error(UUID, TEXT, TEXT, TEXT, JSONB) FROM PUBLIC;
 REVOKE ALL ON FUNCTION public.fn_submit_venture_error(UUID, TEXT, TEXT, TEXT, JSONB) FROM authenticated;
@@ -636,9 +694,22 @@ GRANT EXECUTE ON FUNCTION public.fn_submit_venture_error(UUID, TEXT, TEXT, TEXT,
 -- ============================================================
 DO $verify$
 BEGIN
+  -- CORRECTED (independent peer review, db-txn-expert, this session): the original check only
+  -- tested SELECT. This instance's ALTER DEFAULT PRIVILEGES grants a fresh public-schema table
+  -- anon=arwdDxtm (confirmed live via pg_default_acl) -- SELECT is the LEAST dangerous of the
+  -- eight privileges the REVOKE above actually removes. A partial re-apply that lost the REVOKE
+  -- but still passed a SELECT-only check would leave anon able to UPDATE any venture's
+  -- ingest_secret_hash to one it chose (forging that venture's identity) or INSERT/DELETE rows,
+  -- while this assertion read clean. Checking all four DML privileges closes that.
   IF has_table_privilege('anon', 'public.venture_ingest_keys', 'SELECT')
-     OR has_table_privilege('authenticated', 'public.venture_ingest_keys', 'SELECT') THEN
-    RAISE EXCEPTION 'VERIFY FAILED: venture_ingest_keys is readable by anon or authenticated';
+     OR has_table_privilege('anon', 'public.venture_ingest_keys', 'INSERT')
+     OR has_table_privilege('anon', 'public.venture_ingest_keys', 'UPDATE')
+     OR has_table_privilege('anon', 'public.venture_ingest_keys', 'DELETE')
+     OR has_table_privilege('authenticated', 'public.venture_ingest_keys', 'SELECT')
+     OR has_table_privilege('authenticated', 'public.venture_ingest_keys', 'INSERT')
+     OR has_table_privilege('authenticated', 'public.venture_ingest_keys', 'UPDATE')
+     OR has_table_privilege('authenticated', 'public.venture_ingest_keys', 'DELETE') THEN
+    RAISE EXCEPTION 'VERIFY FAILED: venture_ingest_keys is reachable (SELECT/INSERT/UPDATE/DELETE) by anon or authenticated';
   END IF;
 
   -- Three additions (peer review finding sec-rls-expert, Q3 item 3, this session): the block
