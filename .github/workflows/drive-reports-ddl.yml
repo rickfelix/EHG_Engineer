@@ -35,6 +35,11 @@ on:
       # Adding the paths is the whole fix; the tier still refuses to become a general one.
       - 'database/migrations/20260808_drive_state_verdicts.sql'
       - 'tests/ddl/drive-state-verdicts-ddl.db.test.js'
+      # SD-LEO-INFRA-FEEDBACK-ANON-RLS-GAPS-001. Same TR-5 fix, applied to a NEW pair rather than
+      # amended-in: this workflow's own paths filter is literal, so a PR touching only this SD's
+      # migration and its ddl test would otherwise trigger nothing.
+      - 'database/chairman-gated/20260812_venture_ingest_key_binding.sql'
+      - 'tests/ddl/venture-ingest-key-binding-ddl.db.test.js'
       - 'vitest.ddl.config.mjs'
       # Self-validating: edits to this file re-run it.
       - '.github/workflows/drive-reports-ddl.yml'
