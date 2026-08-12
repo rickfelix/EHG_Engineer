@@ -3,7 +3,7 @@
 -- Date: 2026-07-12
 --
 -- APPROVED FOR APPLY 2026-08-12 (decision G1).
--- @approved-by: Chairman via SMS 2026-08-12T11:19:53Z — "Fix staged, rollback file ready. Proceed."
+-- @approved-by: rickfelix2000@gmail.com (Chairman, via SMS 2026-08-12T11:19:53Z — "Fix staged, rollback file ready. Proceed.")
 -- Applied by coordinator session 56f09320 per the proven ceremony (token + --prod-deploy + readback).
 -- TIER-2 (non-delegatable): CREATE OR REPLACE of a SECURITY DEFINER function
 -- per migration-tier-classifier.mjs. Apply via apply-migration.js --prod-deploy.
