@@ -19,40 +19,48 @@
 
 import { test, expect } from '@playwright/test';
 import { createClient } from '@supabase/supabase-js';
+import { getStageForArtifactType } from '../../../lib/eva/artifact-types.js';
 
 const SUPABASE_URL = process.env.SUPABASE_URL || 'http://localhost:54321';
 const SUPABASE_KEY = process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.SUPABASE_KEY;
 
-// Stage configuration from lifecycle_stage_config
+// Stage configuration -- artifacts[] corrected to match the LIVE
+// venture_stages.required_artifacts per stage (verified directly against the
+// DB, not the broader lib/eva/artifact-types.js ARTIFACT_TYPE_BY_STAGE set nor
+// this file's own prior stale assumptions). Several stages were renumbered by
+// a pipeline redesign predating this SD (see phase5/phase6 spec comments for
+// the same finding) -- names updated to match venture_stages.stage_name.
 const STAGES = [
-  { number: 1, name: 'Idea Capture', phase: 'THE TRUTH', artifacts: ['truth_idea_brief'] },
-  { number: 2, name: 'Idea Analysis', phase: 'THE TRUTH', artifacts: ['truth_ai_critique'] },
-  { number: 3, name: 'Kill Gate', phase: 'THE TRUTH', artifacts: ['truth_validation_decision'], decision_gate: true },
-  { number: 4, name: 'Competitive Landscape', phase: 'THE TRUTH', artifacts: ['truth_competitive_analysis'] },
-  { number: 5, name: 'Kill Gate (Financial)', phase: 'THE TRUTH', artifacts: ['truth_financial_model'], decision_gate: true },
-  { number: 6, name: 'Risk Assessment', phase: 'THE ENGINE', artifacts: ['engine_risk_matrix'] },
+  { number: 1, name: 'Draft Idea', phase: 'THE TRUTH', artifacts: ['truth_idea_brief'] },
+  { number: 2, name: 'AI Review', phase: 'THE TRUTH', artifacts: ['truth_ai_critique'] },
+  { number: 3, name: 'Comprehensive Validation', phase: 'THE TRUTH', artifacts: ['truth_validation_decision'], decision_gate: true },
+  { number: 4, name: 'Competitive Intelligence', phase: 'THE TRUTH', artifacts: ['truth_competitive_analysis'] },
+  { number: 5, name: 'Profitability Forecasting', phase: 'THE TRUTH', artifacts: ['truth_financial_model'], decision_gate: true },
+  { number: 6, name: 'Risk Evaluation', phase: 'THE ENGINE', artifacts: ['engine_risk_matrix'] },
   { number: 7, name: 'Revenue Architecture', phase: 'THE ENGINE', artifacts: ['engine_pricing_model'] },
   { number: 8, name: 'Business Model Canvas', phase: 'THE ENGINE', artifacts: ['engine_business_model_canvas'] },
   { number: 9, name: 'Exit Strategy', phase: 'THE ENGINE', artifacts: ['engine_exit_strategy'] },
-  { number: 10, name: 'Customer & Brand Foundation', phase: 'THE IDENTITY', artifacts: ['identity_brand_guidelines'], sd_required: true },
-  { number: 11, name: 'Naming & Visual Identity', phase: 'THE IDENTITY', artifacts: ['identity_naming_visual', 'identity_persona_brand'] },
-  { number: 12, name: 'GTM & Sales Strategy', phase: 'THE IDENTITY', artifacts: ['identity_gtm_sales_strategy'] },
+  { number: 10, name: 'Customer & Brand Foundation', phase: 'THE IDENTITY', artifacts: ['identity_persona_brand'], sd_required: true },
+  { number: 11, name: 'Naming & Visual Identity', phase: 'THE IDENTITY', artifacts: ['identity_naming_visual'] },
+  { number: 12, name: 'GTM & Sales Strategy', phase: 'THE IDENTITY', artifacts: ['identity_brand_guidelines', 'identity_gtm_sales_strategy'] },
   { number: 13, name: 'Product Roadmap', phase: 'THE BLUEPRINT', artifacts: ['blueprint_product_roadmap'], decision_gate: true },
-  { number: 14, name: 'Technical Architecture', phase: 'THE BLUEPRINT', artifacts: ['blueprint_data_model', 'blueprint_erd_diagram'], sd_required: true },
-  { number: 15, name: 'Risk Register', phase: 'THE BLUEPRINT', artifacts: ['blueprint_user_story_pack'], sd_required: true },
-  { number: 16, name: 'Financial Projections', phase: 'THE BLUEPRINT', artifacts: ['blueprint_api_contract', 'blueprint_schema_spec'], sd_required: true, decision_gate: true },
-  { number: 17, name: 'Pre-Build Checklist', phase: 'THE BUILD LOOP', artifacts: ['system_prompt', 'cicd_config'], sd_required: true },
-  { number: 18, name: 'Sprint Planning', phase: 'THE BUILD LOOP', artifacts: [], sd_required: true },
-  { number: 19, name: 'Build Execution', phase: 'THE BUILD LOOP', artifacts: [], sd_required: true },
-  { number: 20, name: 'Quality Assurance', phase: 'THE BUILD LOOP', artifacts: ['security_audit'], sd_required: true },
-  { number: 21, name: 'Build Review', phase: 'THE BUILD LOOP', artifacts: ['test_plan', 'uat_report'], sd_required: true },
-  { number: 22, name: 'Release Readiness', phase: 'THE BUILD LOOP', artifacts: ['deployment_runbook'], sd_required: true },
-  { number: 23, name: 'Marketing Preparation', phase: 'LAUNCH & LEARN', artifacts: ['launch_checklist'], decision_gate: true },
-  { number: 24, name: 'Launch Readiness', phase: 'LAUNCH & LEARN', artifacts: ['analytics_dashboard'] },
-  { number: 25, name: 'Launch Execution', phase: 'LAUNCH & LEARN', artifacts: ['optimization_roadmap'], sd_required: true }
+  { number: 14, name: 'Technical Architecture', phase: 'THE BLUEPRINT', artifacts: ['blueprint_technical_architecture', 'blueprint_data_model', 'blueprint_erd_diagram', 'blueprint_api_contract', 'blueprint_schema_spec'], sd_required: true },
+  { number: 15, name: 'Design Studio', phase: 'THE BLUEPRINT', artifacts: ['wireframe_screens', 'blueprint_user_story_pack'], sd_required: true },
+  { number: 16, name: 'Financial Projections', phase: 'THE BLUEPRINT', artifacts: ['blueprint_financial_projection'], sd_required: true, decision_gate: true },
+  { number: 17, name: 'Blueprint Review', phase: 'THE BUILD LOOP', artifacts: ['system_devils_advocate_review'], sd_required: true },
+  { number: 18, name: 'Marketing Copy Studio', phase: 'THE BUILD LOOP', artifacts: ['marketing_tagline', 'marketing_app_store_desc', 'marketing_landing_hero', 'marketing_email_welcome', 'marketing_email_onboarding', 'marketing_email_reengagement', 'marketing_social_posts', 'marketing_seo_meta', 'marketing_blog_draft'], sd_required: true },
+  { number: 19, name: 'Sprint Planning', phase: 'THE BUILD LOOP', artifacts: ['build_mvp_build'], sd_required: true },
+  { number: 20, name: 'Code Quality Gate', phase: 'THE BUILD LOOP', artifacts: ['code_quality_report'], sd_required: true },
+  { number: 21, name: 'Distribution Setup', phase: 'THE BUILD LOOP', artifacts: ['distribution_channel_config', 'distribution_ad_copy'], sd_required: true },
+  { number: 22, name: 'Visual Assets', phase: 'THE BUILD LOOP', artifacts: ['visual_device_screenshots', 'visual_social_graphics'], sd_required: true },
+  { number: 23, name: 'Launch Readiness', phase: 'LAUNCH & LEARN', artifacts: ['launch_readiness_checklist'], decision_gate: true },
+  { number: 24, name: 'Go Live & Announce', phase: 'LAUNCH & LEARN', artifacts: ['launch_metrics'] },
+  { number: 25, name: 'Post-Launch Review', phase: 'LAUNCH & LEARN', artifacts: ['postlaunch_assumptions_vs_reality', 'postlaunch_user_feedback_summary'], sd_required: true }
 ];
 
 test.describe('Full Venture Lifecycle Journey (Stages 1-25)', () => {
+  test.describe.configure({ mode: 'serial' }); // fullyParallel:true otherwise races shared testVentureId state
+
   let supabase: any;
   let testVentureId: string;
   let testCompanyId: string;
@@ -92,7 +100,7 @@ test.describe('Full Venture Lifecycle Journey (Stages 1-25)', () => {
   test.afterAll(async () => {
     // Cleanup
     if (testVentureId) {
-      await supabase.from('venture_documents').delete().eq('venture_id', testVentureId);
+      await supabase.from('venture_artifacts').delete().eq('venture_id', testVentureId);
       await supabase.from('ventures').delete().eq('id', testVentureId);
     }
     if (testCompanyId) {
@@ -129,17 +137,28 @@ test.describe('Full Venture Lifecycle Journey (Stages 1-25)', () => {
     artifactContent['blueprint_schema_spec'] = { sql_schema: 'CREATE TABLE test', checklist: { all_entities_named: true, all_fields_typed: true, all_relationships_explicit: true, all_constraints_stated: true, api_contracts_generated: true, typescript_interfaces_generated: true } };
 
     // Phase 5: THE BUILD LOOP
-    artifactContent['system_prompt'] = { agent_config: { name: 'TestAgent' }, prompts: {} };
-    artifactContent['cicd_config'] = { platform: 'github_actions', workflows: {} };
-    artifactContent['security_audit'] = { security_assessment: { owasp_top_10: {} }, accessibility: { wcag_level: '2.1 AA' } };
+    artifactContent['system_devils_advocate_review'] = { objections: [], resolution: 'approved to proceed' };
+    artifactContent['marketing_tagline'] = { placeholder: true };
+    artifactContent['marketing_app_store_desc'] = { placeholder: true };
+    artifactContent['marketing_landing_hero'] = { placeholder: true };
+    artifactContent['marketing_email_welcome'] = { placeholder: true };
+    artifactContent['marketing_email_onboarding'] = { placeholder: true };
+    artifactContent['marketing_email_reengagement'] = { placeholder: true };
+    artifactContent['marketing_social_posts'] = { placeholder: true };
+    artifactContent['marketing_seo_meta'] = { placeholder: true };
+    artifactContent['marketing_blog_draft'] = { placeholder: true };
+    artifactContent['build_mvp_build'] = { agent_config: { name: 'TestAgent' }, prompts: {} };
+    artifactContent['code_quality_report'] = { security_assessment: { owasp_top_10: {} }, accessibility: { wcag_level: '2.1 AA' } };
 
     // Phase 6: LAUNCH & LEARN
-    artifactContent['test_plan'] = { coverage_targets: { overall_minimum: 0.80 }, overall_coverage: 0.82 };
-    artifactContent['uat_report'] = { uat_summary: { pass_rate: 0.95 }, ready_for_launch: true };
-    artifactContent['deployment_runbook'] = { infrastructure: { provider: 'AWS' }, deployment_process: {} };
-    artifactContent['launch_checklist'] = { pre_launch: { all_complete: true }, decision_gate: { go_no_go: 'GO' } };
-    artifactContent['analytics_dashboard'] = { metrics: { revenue: { mrr: 10000 } } };
-    artifactContent['optimization_roadmap'] = { growth_initiatives: {}, success_metrics: {} };
+    artifactContent['distribution_channel_config'] = { channels: [] };
+    artifactContent['distribution_ad_copy'] = { ads: [] };
+    artifactContent['visual_device_screenshots'] = { screenshots: [] };
+    artifactContent['visual_social_graphics'] = { graphics: [] };
+    artifactContent['launch_readiness_checklist'] = { pre_launch: { all_complete: true }, decision_gate: { go_no_go: 'GO' } };
+    artifactContent['launch_metrics'] = { metrics: { revenue: { mrr: 10000 } } };
+    artifactContent['postlaunch_assumptions_vs_reality'] = { assumptions: [], reality: [] };
+    artifactContent['postlaunch_user_feedback_summary'] = { feedback: [] };
   }
 
   // Generate test for each stage
@@ -165,12 +184,14 @@ test.describe('Full Venture Lifecycle Journey (Stages 1-25)', () => {
       // Create required artifacts for this stage
       for (const artifactType of stage.artifacts) {
         const { error: artifactError } = await supabase
-          .from('venture_documents')
+          .from('venture_artifacts')
           .insert({
             venture_id: testVentureId,
-            document_type: artifactType,
+            artifact_type: artifactType,
+            is_current: true,
+            lifecycle_stage: getStageForArtifactType(artifactType) ?? stage.number,
             title: `${artifactType} for Stage ${stage.number}`,
-            content: artifactContent[artifactType] || { placeholder: true },
+            artifact_data: artifactContent[artifactType] || { placeholder: true },
           });
 
         // Artifact might already exist from previous test run
@@ -182,10 +203,10 @@ test.describe('Full Venture Lifecycle Journey (Stages 1-25)', () => {
       // Verify artifacts exist
       if (stage.artifacts.length > 0) {
         const { data: artifacts } = await supabase
-          .from('venture_documents')
-          .select('document_type')
+          .from('venture_artifacts')
+          .select('artifact_type')
           .eq('venture_id', testVentureId)
-          .in('document_type', stage.artifacts);
+          .in('artifact_type', stage.artifacts);
 
         expect(artifacts?.length).toBe(stage.artifacts.length);
       }
@@ -207,8 +228,8 @@ test.describe('Full Venture Lifecycle Journey (Stages 1-25)', () => {
 
     // Count total artifacts created
     const { data: artifacts } = await supabase
-      .from('venture_documents')
-      .select('document_type')
+      .from('venture_artifacts')
+      .select('artifact_type')
       .eq('venture_id', testVentureId);
 
     const totalArtifacts = artifacts?.length || 0;
@@ -222,6 +243,8 @@ test.describe('Full Venture Lifecycle Journey (Stages 1-25)', () => {
 });
 
 test.describe('Lifecycle Regression Tests', () => {
+  test.describe.configure({ mode: 'serial' }); // fullyParallel:true otherwise races shared testVentureId state
+
   let supabase: any;
 
   test.beforeAll(async () => {
@@ -236,15 +259,18 @@ test.describe('Lifecycle Regression Tests', () => {
       .select('id')
       .single();
 
-    const { data: venture } = await supabase
+    const { data: venture, error: ventureInsertError } = await supabase
       .from('ventures')
       .insert({
         name: `Skip Test Venture ${Date.now()}`,
         company_id: company.id,
+        problem_statement: 'Test problem statement for stage-skip regression test',
         current_lifecycle_stage: 1
       })
       .select('id')
       .single();
+
+    expect(ventureInsertError).toBeNull();
 
     // Try to skip from Stage 1 to Stage 5 (should ideally be blocked by business logic)
     const { error } = await supabase

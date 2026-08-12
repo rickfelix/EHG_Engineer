@@ -16,11 +16,17 @@
 
 import { test, expect } from '@playwright/test';
 import { createClient } from '@supabase/supabase-js';
+import { getStageForArtifactType } from '../../../lib/eva/artifact-types.js';
 
 const SUPABASE_URL = process.env.SUPABASE_URL || 'http://localhost:54321';
 const SUPABASE_KEY = process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.SUPABASE_KEY;
 
 test.describe('Phase 2: THE ENGINE (Stages 6-9)', () => {
+  // fullyParallel:true (playwright.config.js) schedules tests within a file across
+  // workers unless pinned serial -- these tests share mutable venture state
+  // (testVentureId, advancing stage-by-stage) and MUST run in declaration order.
+  test.describe.configure({ mode: 'serial' });
+
   let supabase: any;
   let testVentureId: string;
   let testCompanyId: string;
@@ -52,29 +58,27 @@ test.describe('Phase 2: THE ENGINE (Stages 6-9)', () => {
 
     if (venture) testVentureId = venture.id;
 
-    // Seed Stage 5's own exit artifact — STAGE_ADVANCEMENT_ARTIFACT_GATE requires it
-    // to already exist before the venture can advance past the stage it was born at.
-    if (testVentureId) {
-      await supabase.from('venture_documents').insert({
-        venture_id: testVentureId,
-        document_type: 'truth_financial_model',
-        title: 'Seed artifact for Stage 5',
-        content: { placeholder: true }
-      });
-    }
-
-    // Create prerequisite Phase 1 artifacts
+    // Seed all 5 Phase 1 artifacts, including Stage 5's own exit artifact
+    // (truth_financial_model) -- STAGE_ADVANCEMENT_ARTIFACT_GATE requires it to
+    // already exist before the venture can advance past the stage it was born at.
+    // A previous fixture-only version of this file (QF-20260809-601) seeded
+    // truth_financial_model in a separate standalone block; that duplicated this
+    // array's own entry and would collide on venture_artifacts' partial unique
+    // index (venture_id, lifecycle_stage, artifact_type WHERE is_current) --
+    // removed here, this array is the single source.
     const phase1Artifacts = [
-      { document_type: 'truth_idea_brief', title: 'Idea Brief', content: { summary: 'Test idea' }, status: 'complete' },
-      { document_type: 'truth_ai_critique', title: 'Critique', content: { score: 7.5 }, status: 'complete' },
-      { document_type: 'truth_validation_decision', title: 'Validation', content: { score: 7.0 }, status: 'complete' },
-      { document_type: 'truth_competitive_analysis', title: 'Competition', content: { competitors: [] }, status: 'complete' },
-      { document_type: 'truth_financial_model', title: 'Financial', content: { revenue: 1000000 }, status: 'complete' }
+      { artifact_type: 'truth_idea_brief', title: 'Idea Brief', artifact_data: { summary: 'Test idea' } },
+      { artifact_type: 'truth_ai_critique', title: 'Critique', artifact_data: { score: 7.5 } },
+      { artifact_type: 'truth_validation_decision', title: 'Validation', artifact_data: { score: 7.0 } },
+      { artifact_type: 'truth_competitive_analysis', title: 'Competition', artifact_data: { competitors: [] } },
+      { artifact_type: 'truth_financial_model', title: 'Financial', artifact_data: { revenue: 1000000 } }
     ];
 
     for (const artifact of phase1Artifacts) {
-      await supabase.from('venture_documents').insert({
+      await supabase.from('venture_artifacts').insert({
         venture_id: testVentureId,
+        is_current: true,
+        lifecycle_stage: getStageForArtifactType(artifact.artifact_type),
         ...artifact
       });
     }
@@ -82,7 +86,7 @@ test.describe('Phase 2: THE ENGINE (Stages 6-9)', () => {
 
   test.afterAll(async () => {
     if (testVentureId) {
-      await supabase.from('venture_documents').delete().eq('venture_id', testVentureId);
+      await supabase.from('venture_artifacts').delete().eq('venture_id', testVentureId);
       await supabase.from('ventures').delete().eq('id', testVentureId);
     }
     if (testCompanyId) {
@@ -181,12 +185,14 @@ test.describe('Phase 2: THE ENGINE (Stages 6-9)', () => {
       };
 
       const { data: artifact, error } = await supabase
-        .from('venture_documents')
+        .from('venture_artifacts')
         .insert({
           venture_id: testVentureId,
-          document_type: 'engine_risk_matrix',
+          artifact_type: 'engine_risk_matrix',
+          is_current: true,
+          lifecycle_stage: getStageForArtifactType('engine_risk_matrix'),
           title: 'Risk Assessment',
-          content: riskMatrix,
+          artifact_data: riskMatrix,
         })
         .select('id')
         .single();
@@ -281,12 +287,14 @@ test.describe('Phase 2: THE ENGINE (Stages 6-9)', () => {
       };
 
       const { data: artifact, error } = await supabase
-        .from('venture_documents')
+        .from('venture_artifacts')
         .insert({
           venture_id: testVentureId,
-          document_type: 'engine_pricing_model',
+          artifact_type: 'engine_pricing_model',
+          is_current: true,
+          lifecycle_stage: getStageForArtifactType('engine_pricing_model'),
           title: 'Revenue Architecture',
-          content: pricingModel,
+          artifact_data: pricingModel,
         })
         .select('id')
         .single();
@@ -369,12 +377,14 @@ test.describe('Phase 2: THE ENGINE (Stages 6-9)', () => {
       };
 
       const { data: artifact, error } = await supabase
-        .from('venture_documents')
+        .from('venture_artifacts')
         .insert({
           venture_id: testVentureId,
-          document_type: 'engine_business_model_canvas',
+          artifact_type: 'engine_business_model_canvas',
+          is_current: true,
+          lifecycle_stage: getStageForArtifactType('engine_business_model_canvas'),
           title: 'Business Model Canvas',
-          content: businessModelCanvas,
+          artifact_data: businessModelCanvas,
         })
         .select('id')
         .single();
@@ -459,12 +469,14 @@ test.describe('Phase 2: THE ENGINE (Stages 6-9)', () => {
       };
 
       const { data: artifact, error } = await supabase
-        .from('venture_documents')
+        .from('venture_artifacts')
         .insert({
           venture_id: testVentureId,
-          document_type: 'engine_exit_strategy',
+          artifact_type: 'engine_exit_strategy',
+          is_current: true,
+          lifecycle_stage: getStageForArtifactType('engine_exit_strategy'),
           title: 'Exit Strategy',
-          content: exitStrategy,
+          artifact_data: exitStrategy,
         })
         .select('id')
         .single();
@@ -480,17 +492,17 @@ test.describe('Phase 2: THE ENGINE (Stages 6-9)', () => {
 
     test('S9-003: should complete Phase 2 with all artifacts', async () => {
       const { data: artifacts } = await supabase
-        .from('venture_documents')
-        .select('document_type')
+        .from('venture_artifacts')
+        .select('artifact_type')
         .eq('venture_id', testVentureId)
-        .in('document_type', [
+        .in('artifact_type', [
           'engine_risk_matrix',
           'engine_pricing_model',
           'engine_business_model_canvas',
           'engine_exit_strategy'
         ]);
 
-      const artifactTypes = artifacts?.map(a => a.document_type) || [];
+      const artifactTypes = artifacts?.map(a => a.artifact_type) || [];
 
       expect(artifactTypes).toContain('engine_risk_matrix');
       expect(artifactTypes).toContain('engine_pricing_model');

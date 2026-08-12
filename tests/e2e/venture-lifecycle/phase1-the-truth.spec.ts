@@ -18,11 +18,17 @@
 
 import { test, expect } from '@playwright/test';
 import { createClient } from '@supabase/supabase-js';
+import { getStageForArtifactType } from '../../../lib/eva/artifact-types.js';
 
 const SUPABASE_URL = process.env.SUPABASE_URL || 'http://localhost:54321';
 const SUPABASE_KEY = process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.SUPABASE_KEY;
 
 test.describe('Phase 1: THE TRUTH (Stages 1-5)', () => {
+  // fullyParallel:true (playwright.config.js) schedules tests within a file across
+  // workers unless pinned serial -- these tests share mutable venture state
+  // (testVentureId, advancing stage-by-stage) and MUST run in declaration order.
+  test.describe.configure({ mode: 'serial' });
+
   let supabase: any;
   let testVentureId: string;
   let testCompanyId: string;
@@ -57,7 +63,7 @@ test.describe('Phase 1: THE TRUTH (Stages 1-5)', () => {
 
   test.afterAll(async () => {
     if (testVentureId) {
-      await supabase.from('venture_documents').delete().eq('venture_id', testVentureId);
+      await supabase.from('venture_artifacts').delete().eq('venture_id', testVentureId);
       await supabase.from('ventures').delete().eq('id', testVentureId);
     }
     if (testCompanyId) {
@@ -81,10 +87,10 @@ test.describe('Phase 1: THE TRUTH (Stages 1-5)', () => {
 
       // When checking Stage 2 entry gate
       const { data: stage1Artifacts } = await supabase
-        .from('venture_documents')
-        .select('document_type')
+        .from('venture_artifacts')
+        .select('artifact_type')
         .eq('venture_id', testVentureId)
-        .eq('document_type', 'truth_idea_brief');
+        .eq('artifact_type', 'truth_idea_brief');
 
       // Then entry should be blocked without idea_brief
       const hasIdeaBrief = stage1Artifacts && stage1Artifacts.length > 0;
@@ -94,12 +100,14 @@ test.describe('Phase 1: THE TRUTH (Stages 1-5)', () => {
     test('S2-002: should allow Stage 2 entry after idea_brief created', async () => {
       // Given idea_brief artifact is created
       const { data: artifact, error } = await supabase
-        .from('venture_documents')
+        .from('venture_artifacts')
         .insert({
           venture_id: testVentureId,
-          document_type: 'truth_idea_brief',
+          artifact_type: 'truth_idea_brief',
+          is_current: true,
+          lifecycle_stage: getStageForArtifactType('truth_idea_brief'),
           title: 'Test Idea Brief',
-          content: {
+          artifact_data: {
             problem_statement: 'Users struggle with venture lifecycle management',
             proposed_solution: 'AI-powered lifecycle automation',
             target_market: 'Startup founders and VCs',
@@ -156,12 +164,14 @@ test.describe('Phase 1: THE TRUTH (Stages 1-5)', () => {
       };
 
       const { data: critique, error } = await supabase
-        .from('venture_documents')
+        .from('venture_artifacts')
         .insert({
           venture_id: testVentureId,
-          document_type: 'truth_ai_critique',
+          artifact_type: 'truth_ai_critique',
+          is_current: true,
+          lifecycle_stage: getStageForArtifactType('truth_ai_critique'),
           title: 'Idea Analysis Report',
-          content: critiqueReport,
+          artifact_data: critiqueReport,
         })
         .select('id')
         .single();
@@ -177,17 +187,17 @@ test.describe('Phase 1: THE TRUTH (Stages 1-5)', () => {
     test('S2-004: should validate Stage 2 exit gates', async () => {
       // Given critique_report exists
       const { data: critiques } = await supabase
-        .from('venture_documents')
-        .select('content')
+        .from('venture_artifacts')
+        .select('artifact_data')
         .eq('venture_id', testVentureId)
-        .eq('document_type', 'truth_ai_critique')
+        .eq('artifact_type', 'truth_ai_critique')
         .single();
 
       // Then all exit gates should pass
       const gates = {
-        multiModelPassComplete: critiques?.content?.models_used?.length >= 2,
-        contrarianReviewDone: !!critiques?.content?.contrarian_review,
-        top5RisksIdentified: critiques?.content?.top_5_risks?.length === 5
+        multiModelPassComplete: critiques?.artifact_data?.models_used?.length >= 2,
+        contrarianReviewDone: !!critiques?.artifact_data?.contrarian_review,
+        top5RisksIdentified: critiques?.artifact_data?.top_5_risks?.length === 5
       };
 
       expect(gates.multiModelPassComplete).toBe(true);
@@ -203,10 +213,10 @@ test.describe('Phase 1: THE TRUTH (Stages 1-5)', () => {
     test('S3-001: should require critique_report before Stage 3 entry', async () => {
       // Given Stage 2 complete
       const { data: critiques } = await supabase
-        .from('venture_documents')
+        .from('venture_artifacts')
         .select('id')
         .eq('venture_id', testVentureId)
-        .eq('document_type', 'truth_ai_critique');
+        .eq('artifact_type', 'truth_ai_critique');
 
       expect(critiques.length).toBeGreaterThan(0);
 
@@ -246,12 +256,14 @@ test.describe('Phase 1: THE TRUTH (Stages 1-5)', () => {
       };
 
       const { data: validation, error } = await supabase
-        .from('venture_documents')
+        .from('venture_artifacts')
         .insert({
           venture_id: testVentureId,
-          document_type: 'truth_validation_decision',
+          artifact_type: 'truth_validation_decision',
+          is_current: true,
+          lifecycle_stage: getStageForArtifactType('truth_validation_decision'),
           title: 'Kill Gate Report',
-          content: validationReport,
+          artifact_data: validationReport,
         })
         .select('id')
         .single();
@@ -274,20 +286,20 @@ test.describe('Phase 1: THE TRUTH (Stages 1-5)', () => {
       };
 
       const { error } = await supabase
-        .from('venture_documents')
+        .from('venture_artifacts')
         .update({
-          content: {
+          artifact_data: {
             ...((await supabase
-              .from('venture_documents')
-              .select('content')
+              .from('venture_artifacts')
+              .select('artifact_data')
               .eq('venture_id', testVentureId)
-              .eq('document_type', 'truth_validation_decision')
-              .single()).data?.content || {}),
+              .eq('artifact_type', 'truth_validation_decision')
+              .single()).data?.artifact_data || {}),
             chairman_decision: chairmanDecision
           }
         })
         .eq('venture_id', testVentureId)
-        .eq('document_type', 'truth_validation_decision');
+        .eq('artifact_type', 'truth_validation_decision');
 
       expect(error).toBeNull();
       expect(decisionOptions).toContain(chairmanDecision.decision);
@@ -296,14 +308,14 @@ test.describe('Phase 1: THE TRUTH (Stages 1-5)', () => {
     test('S3-004: should validate tier cap enforcement (max tier 3)', async () => {
       // Given tier rating in validation report
       const { data: validation } = await supabase
-        .from('venture_documents')
-        .select('content')
+        .from('venture_artifacts')
+        .select('artifact_data')
         .eq('venture_id', testVentureId)
-        .eq('document_type', 'truth_validation_decision')
+        .eq('artifact_type', 'truth_validation_decision')
         .single();
 
       // Then tier rating should not exceed cap
-      const tierRating = validation?.content?.tier_rating || 0;
+      const tierRating = validation?.artifact_data?.tier_rating || 0;
       expect(tierRating).toBeLessThanOrEqual(3);
       expect(tierRating).toBeGreaterThanOrEqual(1);
     });
@@ -370,12 +382,14 @@ test.describe('Phase 1: THE TRUTH (Stages 1-5)', () => {
       };
 
       const { data: analysis, error } = await supabase
-        .from('venture_documents')
+        .from('venture_artifacts')
         .insert({
           venture_id: testVentureId,
-          document_type: 'truth_competitive_analysis',
+          artifact_type: 'truth_competitive_analysis',
+          is_current: true,
+          lifecycle_stage: getStageForArtifactType('truth_competitive_analysis'),
           title: 'Competitive Intelligence Report',
-          content: competitiveAnalysis,
+          artifact_data: competitiveAnalysis,
         })
         .select('id')
         .single();
@@ -438,12 +452,14 @@ test.describe('Phase 1: THE TRUTH (Stages 1-5)', () => {
       };
 
       const { data: model, error } = await supabase
-        .from('venture_documents')
+        .from('venture_artifacts')
         .insert({
           venture_id: testVentureId,
-          document_type: 'truth_financial_model',
+          artifact_type: 'truth_financial_model',
+          is_current: true,
+          lifecycle_stage: getStageForArtifactType('truth_financial_model'),
           title: 'Profitability Forecast Model',
-          content: financialModel,
+          artifact_data: financialModel,
         })
         .select('id')
         .single();
@@ -458,16 +474,16 @@ test.describe('Phase 1: THE TRUTH (Stages 1-5)', () => {
 
     test('S5-003: should validate financial viability gates', async () => {
       const { data: model } = await supabase
-        .from('venture_documents')
-        .select('content')
+        .from('venture_artifacts')
+        .select('artifact_data')
         .eq('venture_id', testVentureId)
-        .eq('document_type', 'truth_financial_model')
+        .eq('artifact_type', 'truth_financial_model')
         .single();
 
       const gates = {
-        grossMarginMet: model?.content?.unit_economics?.gross_margin >= 0.40,
-        breakevenInTime: model?.content?.breakeven_analysis?.breakeven_months <= 18,
-        cacLtvHealthy: model?.content?.unit_economics?.cac_ltv_ratio >= 3.0
+        grossMarginMet: model?.artifact_data?.unit_economics?.gross_margin >= 0.40,
+        breakevenInTime: model?.artifact_data?.breakeven_analysis?.breakeven_months <= 18,
+        cacLtvHealthy: model?.artifact_data?.unit_economics?.cac_ltv_ratio >= 3.0
       };
 
       expect(gates.grossMarginMet).toBe(true);
@@ -478,10 +494,10 @@ test.describe('Phase 1: THE TRUTH (Stages 1-5)', () => {
     test('S5-004: should complete Phase 1 with all artifacts', async () => {
       // Given all Phase 1 artifacts created
       const { data: artifacts } = await supabase
-        .from('venture_documents')
-        .select('document_type')
+        .from('venture_artifacts')
+        .select('artifact_type')
         .eq('venture_id', testVentureId)
-        .in('document_type', [
+        .in('artifact_type', [
           'truth_idea_brief',
           'truth_ai_critique',
           'truth_validation_decision',
@@ -490,7 +506,7 @@ test.describe('Phase 1: THE TRUTH (Stages 1-5)', () => {
         ]);
 
       // Then all required artifacts exist
-      const artifactTypes = artifacts?.map(a => a.document_type) || [];
+      const artifactTypes = artifacts?.map(a => a.artifact_type) || [];
       expect(artifactTypes).toContain('truth_idea_brief');
       expect(artifactTypes).toContain('truth_ai_critique');
       expect(artifactTypes).toContain('truth_validation_decision');

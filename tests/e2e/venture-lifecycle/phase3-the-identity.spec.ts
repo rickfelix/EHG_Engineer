@@ -11,11 +11,17 @@
 
 import { test, expect } from '@playwright/test';
 import { createClient } from '@supabase/supabase-js';
+import { getStageForArtifactType } from '../../../lib/eva/artifact-types.js';
 
 const SUPABASE_URL = process.env.SUPABASE_URL || 'http://localhost:54321';
 const SUPABASE_KEY = process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.SUPABASE_KEY;
 
 test.describe('Phase 3: THE IDENTITY (Stages 10-12)', () => {
+  // fullyParallel:true (playwright.config.js) schedules tests within a file across
+  // workers unless pinned serial -- these tests share mutable venture state
+  // (testVentureId, advancing stage-by-stage) and MUST run in declaration order.
+  test.describe.configure({ mode: 'serial' });
+
   let supabase: any;
   let testVentureId: string;
   let testCompanyId: string;
@@ -49,11 +55,13 @@ test.describe('Phase 3: THE IDENTITY (Stages 10-12)', () => {
     // Seed Stage 9's own exit artifact — STAGE_ADVANCEMENT_ARTIFACT_GATE requires it
     // to already exist before the venture can advance past the stage it was born at.
     if (testVentureId) {
-      await supabase.from('venture_documents').insert({
+      await supabase.from('venture_artifacts').insert({
         venture_id: testVentureId,
-        document_type: 'engine_exit_strategy',
+        artifact_type: 'engine_exit_strategy',
+        is_current: true,
+        lifecycle_stage: getStageForArtifactType('engine_exit_strategy'),
         title: 'Seed artifact for Stage 9',
-        content: { placeholder: true }
+        artifact_data: { placeholder: true }
       });
     }
   });
@@ -63,7 +71,7 @@ test.describe('Phase 3: THE IDENTITY (Stages 10-12)', () => {
       await supabase.from('strategic_directives_v2').delete().eq('id', testSDId);
     }
     if (testVentureId) {
-      await supabase.from('venture_documents').delete().eq('venture_id', testVentureId);
+      await supabase.from('venture_artifacts').delete().eq('venture_id', testVentureId);
       await supabase.from('ventures').delete().eq('id', testVentureId);
     }
     if (testCompanyId) {
@@ -154,12 +162,14 @@ test.describe('Phase 3: THE IDENTITY (Stages 10-12)', () => {
       };
 
       const { data: artifact, error } = await supabase
-        .from('venture_documents')
+        .from('venture_artifacts')
         .insert({
           venture_id: testVentureId,
-          document_type: 'identity_brand_guidelines',
+          artifact_type: 'identity_brand_guidelines',
+          is_current: true,
+          lifecycle_stage: getStageForArtifactType('identity_brand_guidelines'),
           title: 'Brand Guidelines',
-          content: brandGuidelines,
+          artifact_data: brandGuidelines,
         })
         .select('id')
         .single();
@@ -170,6 +180,25 @@ test.describe('Phase 3: THE IDENTITY (Stages 10-12)', () => {
       expect(brandGuidelines.brand_name.primary).toBeDefined();
       expect(brandGuidelines.brand_variants.length).toBeGreaterThan(0);
       expect(brandGuidelines.visual_identity.primary_colors.length).toBeGreaterThan(0);
+
+      // Stage 10 canonically requires BOTH identity_brand_guidelines AND
+      // identity_persona_brand (lib/eva/artifact-types.js ARTIFACT_TYPE_BY_STAGE[10]).
+      // Seed a minimal placeholder here so the gate is satisfied at the correct
+      // stage; S11-003 below enriches this same row with the marketing_manifest
+      // content via update() rather than a second insert (which would collide
+      // on venture_artifacts' partial unique index).
+      const { error: personaSeedError } = await supabase
+        .from('venture_artifacts')
+        .insert({
+          venture_id: testVentureId,
+          artifact_type: 'identity_persona_brand',
+          is_current: true,
+          lifecycle_stage: getStageForArtifactType('identity_persona_brand'),
+          title: 'Marketing Manifest (seed)',
+          artifact_data: { placeholder: true },
+        });
+
+      expect(personaSeedError).toBeNull();
     });
   });
 
@@ -238,12 +267,14 @@ test.describe('Phase 3: THE IDENTITY (Stages 10-12)', () => {
       };
 
       const { data: artifact, error } = await supabase
-        .from('venture_documents')
+        .from('venture_artifacts')
         .insert({
           venture_id: testVentureId,
-          document_type: 'identity_naming_visual',
+          artifact_type: 'identity_naming_visual',
+          is_current: true,
+          lifecycle_stage: getStageForArtifactType('identity_naming_visual'),
           title: 'Go-to-Market Plan',
-          content: gtmPlan,
+          artifact_data: gtmPlan,
         })
         .select('id')
         .single();
@@ -279,14 +310,17 @@ test.describe('Phase 3: THE IDENTITY (Stages 10-12)', () => {
         }
       };
 
+      // Enriches the identity_persona_brand row seeded in S10-003 (update, not
+      // insert -- a second insert would collide on the partial unique index).
       const { data: artifact, error } = await supabase
-        .from('venture_documents')
-        .insert({
-          venture_id: testVentureId,
-          document_type: 'identity_persona_brand',
+        .from('venture_artifacts')
+        .update({
           title: 'Marketing Manifest',
-          content: marketingManifest,
+          artifact_data: marketingManifest,
         })
+        .eq('venture_id', testVentureId)
+        .eq('artifact_type', 'identity_persona_brand')
+        .eq('is_current', true)
         .select('id')
         .single();
 
@@ -345,12 +379,14 @@ test.describe('Phase 3: THE IDENTITY (Stages 10-12)', () => {
       };
 
       const { data: artifact, error } = await supabase
-        .from('venture_documents')
+        .from('venture_artifacts')
         .insert({
           venture_id: testVentureId,
-          document_type: 'identity_gtm_sales_strategy',
+          artifact_type: 'identity_gtm_sales_strategy',
+          is_current: true,
+          lifecycle_stage: getStageForArtifactType('identity_gtm_sales_strategy'),
           title: 'Sales Playbook',
-          content: salesPlaybook,
+          artifact_data: salesPlaybook,
         })
         .select('id')
         .single();
@@ -360,12 +396,12 @@ test.describe('Phase 3: THE IDENTITY (Stages 10-12)', () => {
 
     test('S12-003: should complete Phase 3 with all artifacts', async () => {
       const { data: artifacts } = await supabase
-        .from('venture_documents')
-        .select('document_type')
+        .from('venture_artifacts')
+        .select('artifact_type')
         .eq('venture_id', testVentureId)
-        .in('document_type', ['identity_brand_guidelines', 'identity_naming_visual', 'identity_persona_brand', 'identity_gtm_sales_strategy']);
+        .in('artifact_type', ['identity_brand_guidelines', 'identity_naming_visual', 'identity_persona_brand', 'identity_gtm_sales_strategy']);
 
-      const artifactTypes = artifacts?.map(a => a.document_type) || [];
+      const artifactTypes = artifacts?.map(a => a.artifact_type) || [];
 
       expect(artifactTypes).toContain('identity_brand_guidelines');
       expect(artifactTypes).toContain('identity_naming_visual');
