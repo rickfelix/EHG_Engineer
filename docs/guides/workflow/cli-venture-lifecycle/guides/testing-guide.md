@@ -3,7 +3,7 @@ category: guide
 status: draft
 version: 1.0.0
 author: auto-fixer
-last_updated: 2026-03-01
+last_updated: 2026-08-12
 tags: [guide, auto-generated]
 ---
 
@@ -43,9 +43,9 @@ Category: Guide
 Status: Approved
 Version: 1.0.0
 Author: DOCMON Sub-Agent
-Last Updated: 2026-02-08
+Last Updated: 2026-08-12
 Tags: [cli-venture-lifecycle, eva, guide]
-Related SDs: [SD-LEO-ORCH-CLI-VENTURE-LIFECYCLE-001]
+Related SDs: [SD-LEO-ORCH-CLI-VENTURE-LIFECYCLE-001, SD-LEO-INFRA-RECONCILE-VENTURE-ARTIFACTS-001]
 ---
 
 # Testing Guide
@@ -460,6 +460,8 @@ npx playwright test tests/uat/eva.spec.js --trace on
 | Table not found | Migration not run | Execute migrations via DATABASE agent |
 | Stale data | Previous test cleanup failed | Manual cleanup with test venture name |
 | Timeout | Supabase connection slow | Increase Vitest timeout for integration |
+| Stage-advance test passes but the gate isn't actually exercised | Writing artifacts to `venture_documents` (legacy, 0 live rows, no production writer, no `is_current`/`lifecycle_stage`/`artifact_type` CHECK constraint) instead of `venture_artifacts` (the table `enforce_stage_advancement_artifact_gate` actually reads, via `venture_stages.required_artifacts`) | Write to `venture_artifacts` with `artifact_type` (CHECK-constrained, see `lib/eva/artifact-types.js`), `is_current: true`, `lifecycle_stage`. Query `venture_stages.required_artifacts` directly for the authoritative per-stage requirement -- it is narrower than and can diverge from `lib/eva/artifact-types.js` `ARTIFACT_TYPE_BY_STAGE`, and from a spec file's own assumed content (stage renumbering can silently strand a test's narrative, e.g. "Sprint Planning" content against a stage now requiring marketing-copy artifacts). See SD-LEO-INFRA-RECONCILE-VENTURE-ARTIFACTS-001. |
+| Tests pass individually but fail/race when run as a suite | `playwright.config.js` sets `fullyParallel: true`; a `describe` block sharing mutable state (e.g. `testVentureId`) across tests with no `test.describe.configure({ mode: 'serial' })` runs those tests out of declaration order across workers | Add `test.describe.configure({ mode: 'serial' })` as the first line inside any `describe` block whose tests share mutable state |
 
 ### Common Playwright Issues
 
