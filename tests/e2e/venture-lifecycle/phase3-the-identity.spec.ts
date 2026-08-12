@@ -37,6 +37,7 @@ test.describe('Phase 3: THE IDENTITY (Stages 10-12)', () => {
       .insert({
         name: `Phase 3 Test Venture ${Date.now()}`,
         company_id: testCompanyId,
+        problem_statement: 'Test problem statement for E2E lifecycle testing',
         current_lifecycle_stage: 9,
         description: 'Testing THE IDENTITY phase lifecycle'
       })
@@ -44,6 +45,17 @@ test.describe('Phase 3: THE IDENTITY (Stages 10-12)', () => {
       .single();
 
     if (venture) testVentureId = venture.id;
+
+    // Seed Stage 9's own exit artifact — STAGE_ADVANCEMENT_ARTIFACT_GATE requires it
+    // to already exist before the venture can advance past the stage it was born at.
+    if (testVentureId) {
+      await supabase.from('venture_documents').insert({
+        venture_id: testVentureId,
+        document_type: 'engine_exit_strategy',
+        title: 'Seed artifact for Stage 9',
+        content: { placeholder: true }
+      });
+    }
   });
 
   test.afterAll(async () => {
@@ -73,9 +85,13 @@ test.describe('Phase 3: THE IDENTITY (Stages 10-12)', () => {
         .insert({
           id: testSDId,
           sd_key: testSDId,
-          legacy_id: testSDId,
+          sd_code_user_facing: testSDId,
+          uuid_internal_pk: crypto.randomUUID(),
+          sequence_rank: timestamp % 1000000,
           title: 'Brand Identity Development',
           description: 'Develop comprehensive brand identity and naming strategy',
+          rationale: 'Stage 10 requires a governing Strategic Directive before brand identity work can begin',
+          scope: 'Brand identity, naming, and visual guidelines for the test venture',
           category: 'brand',
           priority: 'high',
           status: 'active',
@@ -144,7 +160,6 @@ test.describe('Phase 3: THE IDENTITY (Stages 10-12)', () => {
           document_type: 'identity_brand_guidelines',
           title: 'Brand Guidelines',
           content: brandGuidelines,
-          status: 'complete'
         })
         .select('id')
         .single();
@@ -229,7 +244,6 @@ test.describe('Phase 3: THE IDENTITY (Stages 10-12)', () => {
           document_type: 'identity_naming_visual',
           title: 'Go-to-Market Plan',
           content: gtmPlan,
-          status: 'complete'
         })
         .select('id')
         .single();
@@ -272,7 +286,6 @@ test.describe('Phase 3: THE IDENTITY (Stages 10-12)', () => {
           document_type: 'identity_persona_brand',
           title: 'Marketing Manifest',
           content: marketingManifest,
-          status: 'complete'
         })
         .select('id')
         .single();
@@ -338,7 +351,6 @@ test.describe('Phase 3: THE IDENTITY (Stages 10-12)', () => {
           document_type: 'identity_gtm_sales_strategy',
           title: 'Sales Playbook',
           content: salesPlaybook,
-          status: 'complete'
         })
         .select('id')
         .single();

@@ -45,6 +45,7 @@ test.describe('Phase 1: THE TRUTH (Stages 1-5)', () => {
       .insert({
         name: `Phase 1 Test Venture ${Date.now()}`,
         company_id: testCompanyId,
+        problem_statement: 'Test problem statement for E2E lifecycle testing',
         current_lifecycle_stage: 1,
         description: 'Testing THE TRUTH phase lifecycle'
       })
@@ -104,7 +105,6 @@ test.describe('Phase 1: THE TRUTH (Stages 1-5)', () => {
             target_market: 'Startup founders and VCs',
             unique_value: 'End-to-end automation with governance'
           },
-          status: 'complete'
         })
         .select('id')
         .single();
@@ -162,7 +162,6 @@ test.describe('Phase 1: THE TRUTH (Stages 1-5)', () => {
           document_type: 'truth_ai_critique',
           title: 'Idea Analysis Report',
           content: critiqueReport,
-          status: 'complete'
         })
         .select('id')
         .single();
@@ -253,7 +252,6 @@ test.describe('Phase 1: THE TRUTH (Stages 1-5)', () => {
           document_type: 'truth_validation_decision',
           title: 'Kill Gate Report',
           content: validationReport,
-          status: 'complete'
         })
         .select('id')
         .single();
@@ -378,7 +376,6 @@ test.describe('Phase 1: THE TRUTH (Stages 1-5)', () => {
           document_type: 'truth_competitive_analysis',
           title: 'Competitive Intelligence Report',
           content: competitiveAnalysis,
-          status: 'complete'
         })
         .select('id')
         .single();
@@ -447,7 +444,6 @@ test.describe('Phase 1: THE TRUTH (Stages 1-5)', () => {
           document_type: 'truth_financial_model',
           title: 'Profitability Forecast Model',
           content: financialModel,
-          status: 'complete'
         })
         .select('id')
         .single();

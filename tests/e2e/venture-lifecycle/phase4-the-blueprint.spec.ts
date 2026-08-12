@@ -36,6 +36,7 @@ test.describe('Phase 4: THE BLUEPRINT (Stages 13-16)', () => {
       .insert({
         name: `Phase 4 Test Venture ${Date.now()}`,
         company_id: testCompanyId,
+        problem_statement: 'Test problem statement for E2E lifecycle testing',
         current_lifecycle_stage: 12,
         description: 'Testing THE BLUEPRINT phase lifecycle'
       })
@@ -43,6 +44,17 @@ test.describe('Phase 4: THE BLUEPRINT (Stages 13-16)', () => {
       .single();
 
     if (venture) testVentureId = venture.id;
+
+    // Seed Stage 12's own exit artifact — STAGE_ADVANCEMENT_ARTIFACT_GATE requires it
+    // to already exist before the venture can advance past the stage it was born at.
+    if (testVentureId) {
+      await supabase.from('venture_documents').insert({
+        venture_id: testVentureId,
+        document_type: 'identity_gtm_sales_strategy',
+        title: 'Seed artifact for Stage 12',
+        content: { placeholder: true }
+      });
+    }
   });
 
   test.afterAll(async () => {
@@ -143,7 +155,6 @@ test.describe('Phase 4: THE BLUEPRINT (Stages 13-16)', () => {
           document_type: 'blueprint_product_roadmap',
           title: 'Tech Stack Decision',
           content: techStackDecision,
-          status: 'complete'
         })
         .select('id')
         .single();
@@ -221,7 +232,6 @@ test.describe('Phase 4: THE BLUEPRINT (Stages 13-16)', () => {
           document_type: 'blueprint_data_model',
           title: 'Data Model',
           content: dataModel,
-          status: 'complete'
         });
 
       expect(error).toBeNull();
@@ -268,7 +278,6 @@ erDiagram
           document_type: 'blueprint_erd_diagram',
           title: 'ERD Diagram',
           content: erdDiagram,
-          status: 'complete'
         });
 
       expect(error).toBeNull();
@@ -363,7 +372,6 @@ erDiagram
           document_type: 'blueprint_user_story_pack',
           title: 'User Story Pack',
           content: userStoryPack,
-          status: 'complete'
         });
 
       expect(error).toBeNull();
@@ -444,7 +452,6 @@ erDiagram
           document_type: 'blueprint_api_contract',
           title: 'API Contract',
           content: apiContract,
-          status: 'complete'
         });
 
       expect(error).toBeNull();
@@ -510,7 +517,6 @@ export interface Venture {
           document_type: 'blueprint_schema_spec',
           title: 'Schema Specification',
           content: schemaSpec,
-          status: 'complete'
         });
 
       expect(error).toBeNull();
