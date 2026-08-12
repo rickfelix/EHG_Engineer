@@ -12,8 +12,15 @@
 -- otherwise correct.
 --
 -- ═══════════════════════════════════════════════════════════════════════════════════════════════
--- THE DEFECT THIS CLOSES (verified live, all probes rolled back — see PLAN-phase evidence
--- dff83abd (LEAD VALIDATION) and 3db8cfa8 (PLAN TESTING) on this SD)
+-- THE DEFECT THIS DESIGNS A FIX FOR (verified live, all probes rolled back — see PLAN-phase
+-- evidence dff83abd (LEAD VALIDATION) and 3db8cfa8 (PLAN TESTING) on this SD)
+-- ═══════════════════════════════════════════════════════════════════════════════════════════════
+-- CORRECTED framing (EXEC-phase SECURITY sub-agent finding, evidence b99c9ec7, item MED-6): this
+-- file closes NEITHER hole below on its own. It ADDS a safer alternative path; the vulnerable
+-- surfaces (telegram_bot_insert_feedback, record_venture_error's original signature) remain
+-- exactly as reachable as before until the separate follow-on migrations named in "SCOPE OF THIS
+-- FILE" below are also ratified and applied, AFTER callers have migrated. Do not record this SD
+-- as having closed the vulnerability until that follow-on has actually landed.
 -- ═══════════════════════════════════════════════════════════════════════════════════════════════
 --   public.feedback policy telegram_bot_insert_feedback: WITH CHECK (source_type = 'telegram').
 --   No venture predicate at all — any anon caller can INSERT a row with ANY venture_id by setting
@@ -62,6 +69,23 @@
 -- Rollback: DROP the five functions and the venture_ingest_keys table (see foot of file); the
 -- ALTER TABLE feedback_type CHECK widening is additive (new value only) and safe to leave in place
 -- even on rollback — it does not change behavior for any existing feedback_type value.
+--
+-- TWO ARCHITECTURAL RESIDUALS, named rather than hidden (EXEC-phase SECURITY sub-agent finding,
+-- evidence b99c9ec7, items HIGH-2/HIGH-3), neither fixed by this file — both belong to Phase 3
+-- (caller migration), not Phase 1 (this file):
+--   HIGH-2: a per-venture secret shipped in a venture's own client-side bundle (the same delivery
+--     pattern as the CURRENT shared anon key) is still extractable by anyone who can read that
+--     bundle. This design converts GLOBAL forgery (any anon-key holder, any venture) into
+--     PER-VENTURE forgery (that venture's own key only) — closing cross-tenant spoofing, which is
+--     the stated threat model — but is not ownership proof against someone targeting one specific
+--     venture. Phase 3 should keep secret delivery server-side only where a venture's deployment
+--     architecture allows it, and should not assume client-bundle delivery is equivalent to a
+--     genuinely private credential.
+--   HIGH-3: fn_provision_venture_ingest_key's UPSERT has no rotation grace window — rotating a
+--     venture's secret immediately invalidates the old one, so rotation under suspected compromise
+--     guarantees an ingest outage for that venture until its deployment is updated. Phase 3 or a
+--     later amendment should consider a short-lived dual-valid window if rotation-under-suspicion
+--     becomes a real operational need.
 
 BEGIN;
 
@@ -73,7 +97,7 @@ BEGIN;
 -- ============================================================
 CREATE TABLE IF NOT EXISTS public.venture_ingest_keys (
   venture_id UUID PRIMARY KEY REFERENCES public.ventures(id),
-  ingest_secret TEXT NOT NULL,
+  ingest_secret_hash TEXT NOT NULL,
   created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
   rotated_at TIMESTAMPTZ
 );
@@ -81,14 +105,18 @@ CREATE TABLE IF NOT EXISTS public.venture_ingest_keys (
 COMMENT ON TABLE public.venture_ingest_keys IS
   'SD-LEO-INFRA-FEEDBACK-ANON-RLS-GAPS-001: one secret per venture, used by fn_submit_venture_feedback '
   'and fn_submit_venture_error to bind an anon-authenticated write to a SPECIFIC venture, closing the '
-  'existence-only venture_id validation gap on public.feedback and record_venture_error. RLS-deny-all '
-  '(no policy for anon/authenticated/service_role) PLUS an explicit table-level REVOKE below — this '
-  'instance''s ALTER DEFAULT PRIVILEGES was measured live (migration dry-run, rolled back) to grant '
-  'every new public-schema table full SELECT/INSERT/UPDATE/DELETE to anon and authenticated BY '
-  'DEFAULT, independent of RLS. RLS alone would still functionally deny access, but the explicit '
-  'REVOKE means this table''s safety does not depend solely on RLS remaining enabled — the same '
-  'defense-in-depth posture database/migrations/20260803_drive_reports.sql already established for '
-  'a comparably sensitive table on this instance.';
+  'existence-only venture_id validation gap on public.feedback and record_venture_error. Stores only a '
+  'SHA-256 HASH (ingest_secret_hash), never the plaintext secret (EXEC-phase SECURITY sub-agent '
+  'correction, evidence b99c9ec7) — the plaintext exists only transiently in fn_provision_venture_'
+  'ingest_key''s local memory and the value returned to the caller once. RLS-deny-all (no policy for '
+  'anon/authenticated/service_role) PLUS an explicit table-level REVOKE below — this instance''s ALTER '
+  'DEFAULT PRIVILEGES was measured live (migration dry-run, rolled back) to grant every new public-'
+  'schema table full SELECT/INSERT/UPDATE/DELETE to anon and authenticated BY DEFAULT, independent of '
+  'RLS. RLS alone would still functionally deny access, but the explicit REVOKE means this table''s '
+  'safety does not depend solely on RLS remaining enabled — the same defense-in-depth posture database/'
+  'migrations/20260803_drive_reports.sql already established for a comparably sensitive table on this '
+  'instance. The SAME ALTER DEFAULT PRIVILEGES mechanism applies to newly created FUNCTIONS too, not '
+  'only tables (confirmed live) — every internal function below carries the equivalent explicit REVOKE.';
 
 ALTER TABLE public.venture_ingest_keys ENABLE ROW LEVEL SECURITY;
 
@@ -127,7 +155,16 @@ COMMENT ON FUNCTION public.fn_venture_ingest_prior_hour_count(UUID, TEXT) IS
   'global-per-source_type anon_feedback_ingress_bounds policy (which additionally never evaluates '
   'for a SECURITY DEFINER caller in the first place).';
 
-REVOKE ALL ON FUNCTION public.fn_venture_ingest_prior_hour_count(UUID, TEXT) FROM PUBLIC;
+-- CORRECTED (EXEC-phase SECURITY sub-agent finding, evidence b99c9ec7, FAIL/BLOCK-1): the same
+-- ALTER DEFAULT PRIVILEGES this file's own comments document for TABLES (see venture_ingest_keys
+-- above) ALSO applies to FUNCTIONS on this instance — confirmed live: a freshly created function
+-- gets EXECUTE granted directly to anon AND authenticated, not merely to PUBLIC. REVOKE ... FROM
+-- PUBLIC cannot remove a direct role grant. Every internal helper in this file must REVOKE FROM
+-- anon, authenticated explicitly, not only PUBLIC — the omission below-this-comment's ORIGINAL
+-- form would have made fn_provision_venture_ingest_key (further down) directly anon-callable,
+-- handing out any venture's plaintext-equivalent secret to any anon-key holder. Fixed here and at
+-- every other internal-function REVOKE in this file.
+REVOKE ALL ON FUNCTION public.fn_venture_ingest_prior_hour_count(UUID, TEXT) FROM PUBLIC, anon, authenticated;
 
 -- ============================================================
 -- 3. _verify_venture_ingest_secret: shared secret-check helper. Returns FALSE uniformly whether
@@ -136,32 +173,36 @@ REVOKE ALL ON FUNCTION public.fn_venture_ingest_prior_hour_count(UUID, TEXT) FRO
 --    (TS-6). Not anon/authenticated-executable for the same nested-call reason as above; also
 --    avoids handing out a standalone secret-guessing oracle independent of the RPCs' other
 --    business-logic latency.
---    Known residual limitation (documented, not fixed here): the equality check below is a plain
---    IS NOT DISTINCT FROM, not constant-time — identical to the precedent this migration follows
---    (fn_relay_insert_sms_candidate's p_relay_secret check, database/migrations/20260717_sms_
---    relay_staging.sql:103), not a new gap introduced by this file.
+--    CORRECTED (EXEC-phase SECURITY sub-agent finding, evidence b99c9ec7, item 2): compares
+--    against a SHA-256 hash, not the plaintext secret. This closes the timing-comparison residual
+--    for free (no non-constant-time plaintext comparison exists anywhere anymore) AND makes
+--    fn_provision_venture_ingest_key's COMMENT ("cannot be read back") literally true, which it
+--    was NOT while venture_ingest_keys stored plaintext — a service_role connection (or a future
+--    grant mistake) could previously read every venture's live secret directly off the table; now
+--    it can only read a hash. digest() is pgcrypto (extensions schema, per the search_path note
+--    on fn_provision_venture_ingest_key above).
 -- ============================================================
 CREATE OR REPLACE FUNCTION public._verify_venture_ingest_secret(p_venture_id UUID, p_ingest_secret TEXT)
 RETURNS BOOLEAN
 LANGUAGE sql
 STABLE
 SECURITY DEFINER
-SET search_path = public, pg_temp
+SET search_path = public, extensions, pg_temp
 AS $function$
   SELECT EXISTS (
     SELECT 1 FROM public.venture_ingest_keys k
     WHERE k.venture_id = p_venture_id
       AND p_ingest_secret IS NOT NULL
-      AND k.ingest_secret = p_ingest_secret
+      AND k.ingest_secret_hash = encode(digest(p_ingest_secret, 'sha256'), 'hex')
   );
 $function$;
 
 COMMENT ON FUNCTION public._verify_venture_ingest_secret(UUID, TEXT) IS
   'SD-LEO-INFRA-FEEDBACK-ANON-RLS-GAPS-001: uniform venture-ownership check — FALSE for both a '
   'nonexistent venture_id and a real venture_id with the wrong secret, so response shape does not '
-  'enumerate venture existence (TS-6).';
+  'enumerate venture existence (TS-6). Compares a SHA-256 hash, never the plaintext secret.';
 
-REVOKE ALL ON FUNCTION public._verify_venture_ingest_secret(UUID, TEXT) FROM PUBLIC;
+REVOKE ALL ON FUNCTION public._verify_venture_ingest_secret(UUID, TEXT) FROM PUBLIC, anon, authenticated;
 
 -- ============================================================
 -- 4. fn_provision_venture_ingest_key: mints (or rotates) a venture's secret. service_role only —
@@ -188,10 +229,12 @@ BEGIN
   -- database/migrations/20260602_pin_search_path_invoker_functions.sql.
   v_secret := encode(gen_random_bytes(32), 'hex');
 
-  INSERT INTO public.venture_ingest_keys (venture_id, ingest_secret, created_at, rotated_at)
-  VALUES (p_venture_id, v_secret, now(), NULL)
+  -- Only the HASH is stored (see _verify_venture_ingest_secret's header note) — v_secret itself
+  -- exists only in this function's local memory and the value returned to the caller once.
+  INSERT INTO public.venture_ingest_keys (venture_id, ingest_secret_hash, created_at, rotated_at)
+  VALUES (p_venture_id, encode(digest(v_secret, 'sha256'), 'hex'), now(), NULL)
   ON CONFLICT (venture_id) DO UPDATE
-    SET ingest_secret = EXCLUDED.ingest_secret,
+    SET ingest_secret_hash = EXCLUDED.ingest_secret_hash,
         rotated_at = now();
 
   RETURN v_secret;
@@ -201,9 +244,16 @@ $$;
 COMMENT ON FUNCTION public.fn_provision_venture_ingest_key(UUID) IS
   'SD-LEO-INFRA-FEEDBACK-ANON-RLS-GAPS-001 FR-5: mints or rotates a venture''s ingest secret. '
   'service_role only. Returns the plaintext secret ONCE — store it in that venture''s deployment '
-  'env immediately, it cannot be read back from venture_ingest_keys afterward.';
+  'env immediately. Only a SHA-256 hash is persisted; the plaintext genuinely cannot be read back '
+  'from venture_ingest_keys afterward, by any role.';
 
-REVOKE ALL ON FUNCTION public.fn_provision_venture_ingest_key(UUID) FROM PUBLIC;
+-- CORRECTED (EXEC-phase SECURITY sub-agent finding, evidence b99c9ec7, BLOCK-1, CRITICAL): the
+-- original REVOKE ... FROM PUBLIC alone left this function directly anon-EXECUTE-able via this
+-- instance's ALTER DEFAULT PRIVILEGES (confirmed live, same mechanism as the table-grant finding
+-- above) — any anon-key holder could have called this to read any venture's secret AND
+-- simultaneously invalidate that venture's real one via the rotation UPSERT. Explicit REVOKE FROM
+-- anon, authenticated closes it; this was the most severe defect this migration would have shipped.
+REVOKE ALL ON FUNCTION public.fn_provision_venture_ingest_key(UUID) FROM PUBLIC, anon, authenticated;
 GRANT EXECUTE ON FUNCTION public.fn_provision_venture_ingest_key(UUID) TO service_role;
 
 -- ============================================================
@@ -288,11 +338,16 @@ DECLARE
 BEGIN
   -- Ownership check FIRST, before any business-logic branch, so a nonexistent venture_id and a
   -- real venture_id with the wrong secret are indistinguishable (TS-6).
-  IF NOT public._verify_venture_ingest_secret(p_venture_id, p_ingest_secret) THEN
+  -- IS NOT TRUE (not NOT ...), a defensive shape (EXEC-phase SECURITY sub-agent finding, evidence
+  -- b99c9ec7, item 1): both helpers are SELECT EXISTS(...), which never returns NULL today, so NOT
+  -- would be equally safe right now — but IF NOT <expr> is a fail-OPEN shape if that guarantee is
+  -- ever weakened by a future edit (NULL fails NOT's IF-branch silently). IS NOT TRUE fails closed
+  -- regardless of what the expression returns.
+  IF public._verify_venture_ingest_secret(p_venture_id, p_ingest_secret) IS NOT TRUE THEN
     RAISE EXCEPTION 'fn_submit_venture_feedback: unauthorized' USING ERRCODE = '28000';
   END IF;
 
-  IF NOT public.venture_exists_and_active(p_venture_id) THEN
+  IF public.venture_exists_and_active(p_venture_id) IS NOT TRUE THEN
     -- Defense-in-depth: a venture can be soft-deleted or have ingestion disabled after its key
     -- was provisioned. Same uniform code — do not distinguish "deactivated" from "unauthorized".
     RAISE EXCEPTION 'fn_submit_venture_feedback: unauthorized' USING ERRCODE = '28000';
@@ -320,7 +375,13 @@ BEGIN
 
   -- Rate limit, mirrored from anon_feedback_ingress_bounds for the same reason, PLUS the new
   -- per-venture scope (FR-4, TS-4) that policy never had.
-  IF public.fn_anon_ingress_prior_hour_count('venture_worker') >= 250 THEN
+  -- CORRECTED (EXEC-phase SECURITY sub-agent finding, evidence b99c9ec7, BLOCK-2): the global
+  -- threshold below must match the ELSE branch (50) of the live anon_feedback_ingress_bounds
+  -- CASE, not the auto_capture-specific 250 — 250 was ratified for auto_capture's OWN measured
+  -- peak of 213 (database/chairman-gated/20260804_ingress_bound_definer_basis.sql), which has
+  -- nothing to do with 'venture_worker' traffic, a brand-new source_type with zero measured
+  -- volume. Borrowing an unrelated number here was an inconsistency, not a considered choice.
+  IF public.fn_anon_ingress_prior_hour_count('venture_worker') >= 50 THEN
     RAISE EXCEPTION 'fn_submit_venture_feedback: rate limited' USING ERRCODE = '53400';
   END IF;
   IF public.fn_venture_ingest_prior_hour_count(p_venture_id, 'venture_worker') >= 50 THEN
@@ -379,13 +440,21 @@ DECLARE
   v_ceiling CONSTANT INTEGER := 20;
   v_window CONSTANT INTERVAL := interval '1 hour';
   v_distinct_count INTEGER;
-  v_watermark_hash TEXT := public._venture_error_storm_watermark_hash();
+  -- Assigned inside BEGIN, not here (EXEC-phase SECURITY sub-agent finding, evidence b99c9ec7,
+  -- item 1): a DECLARE-block default expression evaluates at function entry, before the ownership
+  -- check below — harmless today since this call is a pure IMMUTABLE constant with no venture-
+  -- specific input or side effect, but it made the file's own "check FIRST" claim literally false.
+  -- Moved so every expression genuinely runs after authorization, not merely every side effect.
+  v_watermark_hash TEXT;
   v_existing_row_id UUID;
 BEGIN
   -- Ownership check FIRST — same uniform code, same reasoning as fn_submit_venture_feedback (TS-6).
-  IF NOT public._verify_venture_ingest_secret(p_venture_id, p_ingest_secret) THEN
+  -- IS NOT TRUE, not NOT — see the matching note in fn_submit_venture_feedback above.
+  IF public._verify_venture_ingest_secret(p_venture_id, p_ingest_secret) IS NOT TRUE THEN
     RAISE EXCEPTION 'fn_submit_venture_error: unauthorized' USING ERRCODE = '28000';
   END IF;
+
+  v_watermark_hash := public._venture_error_storm_watermark_hash();
 
   IF p_error_hash IS NULL OR p_error_hash !~ '^[0-9a-f]{64}$' THEN
     RETURN jsonb_build_object('ok', false, 'reason', 'invalid_error_hash');
@@ -398,7 +467,7 @@ BEGIN
     p_context := jsonb_build_object('truncated', true);
   END IF;
 
-  IF NOT public.venture_exists_and_active(p_venture_id) THEN
+  IF public.venture_exists_and_active(p_venture_id) IS NOT TRUE THEN
     RAISE EXCEPTION 'fn_submit_venture_error: unauthorized' USING ERRCODE = '28000';
   END IF;
 
@@ -472,6 +541,55 @@ REVOKE ALL ON FUNCTION public.fn_submit_venture_error(UUID, TEXT, TEXT, TEXT, JS
 REVOKE ALL ON FUNCTION public.fn_submit_venture_error(UUID, TEXT, TEXT, TEXT, JSONB) FROM authenticated;
 GRANT EXECUTE ON FUNCTION public.fn_submit_venture_error(UUID, TEXT, TEXT, TEXT, JSONB) TO anon;
 GRANT EXECUTE ON FUNCTION public.fn_submit_venture_error(UUID, TEXT, TEXT, TEXT, JSONB) TO service_role;
+
+-- ============================================================
+-- 8. Self-verify the grant posture. EXEC-phase SECURITY sub-agent finding, evidence b99c9ec7,
+--    item 5: "add a fail-closed has_table_privilege/has_function_privilege assertion so it's a
+--    measured invariant, not a one-time act" — this instance's ALTER DEFAULT PRIVILEGES fires on
+--    every fresh CREATE, so a future re-run of the CREATE-side statements above without the
+--    matching REVOKE (a partial re-apply, a copy-paste into a new file, a restore that replays
+--    only some statements) could silently reintroduce exactly the BLOCK-1 defect this file's
+--    corrections just closed. This block turns "we revoked it" into "we assert it holds", and
+--    fails the whole transaction rather than applying half-fixed.
+-- ============================================================
+DO $verify$
+BEGIN
+  IF has_table_privilege('anon', 'public.venture_ingest_keys', 'SELECT')
+     OR has_table_privilege('authenticated', 'public.venture_ingest_keys', 'SELECT') THEN
+    RAISE EXCEPTION 'VERIFY FAILED: venture_ingest_keys is readable by anon or authenticated';
+  END IF;
+
+  IF has_function_privilege('anon', 'public.fn_provision_venture_ingest_key(uuid)', 'EXECUTE')
+     OR has_function_privilege('authenticated', 'public.fn_provision_venture_ingest_key(uuid)', 'EXECUTE') THEN
+    RAISE EXCEPTION 'VERIFY FAILED: fn_provision_venture_ingest_key is callable by anon or authenticated';
+  END IF;
+
+  IF has_function_privilege('anon', 'public._verify_venture_ingest_secret(uuid,text)', 'EXECUTE')
+     OR has_function_privilege('authenticated', 'public._verify_venture_ingest_secret(uuid,text)', 'EXECUTE') THEN
+    RAISE EXCEPTION 'VERIFY FAILED: _verify_venture_ingest_secret is callable by anon or authenticated';
+  END IF;
+
+  IF has_function_privilege('anon', 'public.fn_venture_ingest_prior_hour_count(uuid,text)', 'EXECUTE')
+     OR has_function_privilege('authenticated', 'public.fn_venture_ingest_prior_hour_count(uuid,text)', 'EXECUTE') THEN
+    RAISE EXCEPTION 'VERIFY FAILED: fn_venture_ingest_prior_hour_count is callable by anon or authenticated';
+  END IF;
+
+  -- TWO-SIDED: the client-facing RPCs MUST still be anon-callable — a verify block strict enough
+  -- to reject every anon grant would silently no-op the two functions that exist specifically to
+  -- BE anon-callable, and this assertion would never catch that regression.
+  IF NOT has_function_privilege('anon', 'public.fn_submit_venture_feedback(uuid,text,text,text,text,text)', 'EXECUTE') THEN
+    RAISE EXCEPTION 'VERIFY FAILED: fn_submit_venture_feedback is NOT anon-callable — the fix would be unreachable';
+  END IF;
+  IF NOT has_function_privilege('anon', 'public.fn_submit_venture_error(uuid,text,text,text,jsonb)', 'EXECUTE') THEN
+    RAISE EXCEPTION 'VERIFY FAILED: fn_submit_venture_error is NOT anon-callable — the fix would be unreachable';
+  END IF;
+
+  -- TS-5: record_venture_error's original signature must be completely untouched.
+  IF (SELECT count(*) FROM pg_proc WHERE proname = 'record_venture_error') <> 1 THEN
+    RAISE EXCEPTION 'VERIFY FAILED: record_venture_error signature count changed — an overload may have been introduced';
+  END IF;
+END
+$verify$;
 
 COMMIT;
 
