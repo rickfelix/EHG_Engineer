@@ -11,9 +11,12 @@
 // per-venture rate limit, content-integrity bound, uniform rejection). It does NOT prove:
 //   - production posture (Supabase role inheritance / ALTER DEFAULT PRIVILEGES are not
 //     reproduced by vanilla Postgres — see drive-reports-ddl.db.test.js's identical caveat)
-//   - that record_venture_error's ORIGINAL signature survives untouched (TS-5) — that requires
-//     the real record_venture_error to already exist, which is a live-schema fact, not something
-//     an ephemeral stub can honestly assert. TS-5 belongs to Tier B (the chairman-gated
+//   - that record_venture_error's ORIGINAL signature survives untouched (TS-5) — the stub below
+//     creates a minimal stand-in matching the real function's signature purely so this migration's
+//     OWN $verify$ block (which unconditionally asserts pg_proc count=1 for that name, since it
+//     also has to hold on the real instance where the function genuinely pre-exists) doesn't
+//     spuriously fail here. That stand-in proves nothing about the REAL function's behavior — the
+//     genuine "still callable, no PGRST203 overload" claim is Tier B's job (the chairman-gated
 //     acceptance script), not here.
 //   - anon-readability of venture_ingest_keys (GAP-1 / FR-1's anon-probe acceptance criterion) —
 //     that requires the real PostgREST/Supabase grant surface, which is Tier C
@@ -49,7 +52,15 @@ BEGIN
 END
 $roles$;
 
-CREATE EXTENSION IF NOT EXISTS pgcrypto;
+-- Mirrors the real Supabase layout: pgcrypto lives in a schema literally named "extensions"
+-- there (confirmed live, this SD's own EXEC-phase finding), and the migration's functions now
+-- schema-qualify digest()/gen_random_bytes() as extensions.* rather than relying on search_path
+-- order (peer review finding, sec-rls-expert/db-txn-expert, VERIFY phase). A vanilla ephemeral
+-- Postgres has no "extensions" schema at all unless created explicitly — CREATE EXTENSION with no
+-- SCHEMA clause installs into the current search_path's first schema (public here), which is why
+-- this stub must create the schema and install into it by name, not just install pgcrypto anywhere.
+CREATE SCHEMA IF NOT EXISTS extensions;
+CREATE EXTENSION IF NOT EXISTS pgcrypto SCHEMA extensions;
 
 CREATE TABLE IF NOT EXISTS public.ventures (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
@@ -91,6 +102,20 @@ CREATE UNIQUE INDEX IF NOT EXISTS idx_feedback_venture_error_hash
 CREATE OR REPLACE FUNCTION public._venture_error_storm_watermark_hash()
 RETURNS text LANGUAGE sql IMMUTABLE
 AS $$ SELECT 'ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff'; $$;
+
+-- Stand-in for the PRE-EXISTING public.record_venture_error (database/migrations/
+-- 20260704d_venture_error_aggregation_rpc.sql) — same name and argument signature, inert body.
+-- Exists ONLY so this migration's own $verify$ block sees pg_proc count=1 for that name on this
+-- ephemeral database, matching the real instance's precondition (see header comment above: this
+-- is not a claim that the real function's behavior is reproduced).
+CREATE OR REPLACE FUNCTION public.record_venture_error(
+  p_venture_id uuid,
+  p_error_hash text,
+  p_message text,
+  p_context jsonb DEFAULT '{}'::jsonb
+)
+RETURNS jsonb LANGUAGE sql
+AS $$ SELECT jsonb_build_object('ok', false, 'reason', 'stub_not_implemented'); $$;
 
 CREATE OR REPLACE FUNCTION public.venture_exists_and_active(p_venture_id UUID)
 RETURNS BOOLEAN LANGUAGE sql STABLE SECURITY DEFINER
@@ -170,7 +195,13 @@ describe('the migration applied', () => {
   });
 
   it('re-running the migration is idempotent', async () => {
-    await expect(applyMigration()).resolves.toBeTruthy();
+    // applyMigration() has no return statement (matches the sibling DDL files' convention,
+    // e.g. drive-reports-ddl.db.test.js) -- it always resolves undefined. The idempotency claim
+    // is that re-applying does not throw, which a bare await already proves; wrapping it in
+    // .resolves.toBeTruthy() made this assertion fail unconditionally (undefined is never
+    // truthy) regardless of idempotency. Never caught before now because this whole file was
+    // skipped by the beforeAll failure this migration's own $verify$ TS-5 check was raising.
+    await applyMigration();
   });
 });
 
@@ -431,12 +462,41 @@ describe('FR-3/TS-1/TS-6: fn_submit_venture_error ownership binding and dedup', 
     expect(rows[0].r.action).toBe('created');
   });
 
-  it('a repeat of the same fingerprint aggregates instead of duplicating', async () => {
+  it('a repeat of the same fingerprint within the cooldown window is rate-limited, not duplicated', async () => {
+    // This assertion originally expected plain 'aggregated' -- written before the peer-review
+    // cooldown (sec-rls-expert, Q3 item 1) existed, and never actually run against real Postgres
+    // until now (this whole file was skipped by the migration's own $verify$ TS-5 beforeAll
+    // failure until that was fixed). Two calls this close together (milliseconds apart) correctly
+    // hit the 1-second per-(venture,error_hash) cooldown -- 'aggregated_rate_limited' is the
+    // intended outcome, not a bug. The real "not duplicating" claim is the row count, asserted
+    // directly below rather than inferred from the action label.
     const ventureId = await makeVenture();
     const secret = await provisionSecret(ventureId);
     await client.query('SELECT public.fn_submit_venture_error($1, $2, $3, \'boom\') AS r', [ventureId, secret, hash1]);
     const { rows } = await client.query('SELECT public.fn_submit_venture_error($1, $2, $3, \'boom again\') AS r', [ventureId, secret, hash1]);
+    expect(rows[0].r.action).toBe('aggregated_rate_limited');
+
+    const { rows: count } = await client.query(
+      "SELECT count(*)::int AS n FROM public.feedback WHERE venture_id = $1 AND feedback_type = 'venture_error' AND error_hash = $2",
+      [ventureId, hash1],
+    );
+    expect(count[0].n).toBe(1);
+  });
+
+  it('[TWO-SIDED] a repeat AFTER the cooldown window elapses aggregates and increments occurrence_count', async () => {
+    // Companion to the rate-limited case above -- the cooldown must not be a de-facto permanent
+    // block on aggregation, only a per-second cap. Backdates last_seen directly rather than a
+    // real sleep, since the check compares against clock_timestamp() at call time either way.
+    const ventureId = await makeVenture();
+    const secret = await provisionSecret(ventureId);
+    const { rows: first } = await client.query('SELECT public.fn_submit_venture_error($1, $2, $3, \'boom\') AS r', [ventureId, secret, hash1]);
+    const rowId = first[0].r.id;
+    await client.query("UPDATE public.feedback SET last_seen = clock_timestamp() - interval '2 seconds' WHERE id = $1", [rowId]);
+    const { rows } = await client.query('SELECT public.fn_submit_venture_error($1, $2, $3, \'boom again\') AS r', [ventureId, secret, hash1]);
     expect(rows[0].r.action).toBe('aggregated');
+
+    const { rows: check } = await client.query('SELECT occurrence_count FROM public.feedback WHERE id = $1', [rowId]);
+    expect(check[0].occurrence_count).toBe(2);
   });
 
   it("venture A's secret with p_venture_id=B is rejected, uniform 28000", async () => {
