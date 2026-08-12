@@ -3,6 +3,8 @@
 
 ## Table of Contents
 
+- [2026-08-12](#2026-08-12)
+  - [Bugfix](#bugfix)
 - [2026-08-11](#2026-08-11)
   - [Bugfix](#bugfix)
   - [Infrastructure](#infrastructure)
@@ -108,6 +110,15 @@
   - [Housekeeping & CI](#housekeeping-ci)
   - [EHG_Engineering](#ehg_engineering)
   - [EHG (Venture App)](#ehg-venture-app)
+
+## 2026-08-12
+
+### Bugfix
+- **Venture-lifecycle E2E: Stage 18/21/22 tested the wrong contract, or nothing at all** - PR #6994 (SD-LEO-INFRA-AUTHOR-VENTURE-LIFECYCLE-001)
+  - **What was broken**: `tests/e2e/venture-lifecycle/phase5-the-build-loop.spec.ts`'s Stage 18 block asserted a generic "Sprint Planning" `mvp_progress` payload with no relation to Stage 18's real, live contract (Marketing Copy Studio: 9 `marketing_*` artifacts). Stage 21 (Distribution Setup) and Stage 22 (Visual Assets) had zero E2E coverage at all, despite the file's own header claiming both. A prior SD (SD-LEO-INFRA-RECONCILE-VENTURE-ARTIFACTS-001) had already fixed the underlying `venture_documents`→`venture_artifacts` schema mismatch across this file and `skip()`'d the three mismatched blocks with citations naming this SD as the follow-up.
+  - **Fixed**: Stage 18 rewritten to assert the real 9 `marketing_*` artifacts at `lifecycle_stage=18`; new Stage 21 block asserts the `distribution_channel_config`/`distribution_ad_copy` canonical pair plus the BINDING-block `chairman_decisions` path; new Stage 22 block asserts the `visual_device_screenshots`/`visual_social_graphics` canonical pair plus the `visual_assets_skipped` precondition-missing marker. Along the way, found and fixed a real dependency break: removing the old Stage 18 filler also silently removed the only artifact satisfying `STAGE_ADVANCEMENT_ARTIFACT_GATE`'s stage-19-exit requirement (`build_mvp_build`) — re-added at its own correct stage (19) instead of routed around.
+  - **Explicitly deferred**: `phase6-launch-and-learn.spec.ts`'s own colliding Stage 21/22 blocks and `full-journey.spec.ts`'s STAGES array were investigated but left untouched — `full-journey.spec.ts` already carries the correct names/types from the prior SD; `phase6-launch-and-learn.spec.ts`'s remaining tests write legacy-but-not-fabricated artifact types (no collision), a smaller follow-up than originally scoped.
+  - **Verification**: 80/80 E2E assertions pass (5 browser projects × 16 tests) on the modified file; 515/515 pass (10 pre-existing skips) across the full `tests/e2e/venture-lifecycle/` directory with zero collateral regressions; 65/65 unit tests pass for the two reference analysis-step modules.
 
 ## 2026-08-11
 
