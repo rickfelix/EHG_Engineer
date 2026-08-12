@@ -1,8 +1,11 @@
 // Behavioural acceptance for database/chairman-gated/20260812_venture_ingest_key_binding.sql
 // (SD-LEO-INFRA-FEEDBACK-ANON-RLS-GAPS-001).
 //
-// NOT YET EXECUTED. Authored alongside the staged migration; the migration it tests is not
-// applied. This file makes no claim to have passed. It is the instrument, not the evidence.
+// --baseline HAS been executed (2026-08-12, EXEC phase) and PASSED: all three discriminators
+// correctly reported the pre-apply state (both RPCs PGRST202, table absent from schema cache) --
+// proof the probe CAN fail, not proof the fix works. --verify has NOT been executed: the
+// migration itself remains staged, not chairman-ratified, not applied. This file's --verify mode
+// makes no claim to have passed.
 //
 // ── RUN IT TWICE. THE BASELINE IS NOT OPTIONAL. ───────────────────────────────────────────────
 //   node <this file> --baseline    BEFORE the apply. Every RPC call must fail with "could not
