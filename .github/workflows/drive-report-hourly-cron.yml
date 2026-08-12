@@ -1,0 +1,64 @@
+name: "Drive Report hourly producer (chairman-directed diagnostic cadence)"
+
+# SD-LEO-INFRA-HOURLY-DRIVE-SCORE-001 — the sibling hourly-cadence dispatcher, modeled on
+# drive-report-cron.yml (which dispatches scripts/cron/drive-report-sweep.mjs, the DAILY
+# producer). This workflow dispatches scripts/cron/drive-report-hourly-sweep.mjs instead.
+#
+# ── UTC CRON, NO DST DANCE NEEDED ─────────────────────────────────────────────────────────────
+# The daily workflow needs two overlapping UTC cron lines to cover one fixed ET wall-clock window
+# across both DST offsets. This workflow has no such requirement: it fires once per UTC hour,
+# every hour, and the sweep's own idempotence key (hourlyWindowKey) is ALSO UTC-derived — so
+# there is no ET-wall-clock reasoning anywhere in this path, and therefore no DST collision risk
+# to guard against with a second cron line.
+#
+# ── GATED BEHIND A REPOSITORY VARIABLE, NOT A CODE CHANGE ─────────────────────────────────────
+# HOURLY_SWEEP_ENABLED is read as a GitHub Actions VARIABLE (not a secret — it carries no
+# sensitive value), so it can be flipped from 'false' to 'true' via the GitHub UI/CLI once the
+# chairman-gated cadence-widening migration (20260812_drive_reports_hourly_cadence.sql) is
+# confirmed applied, with no new PR required. This is the whole point of PRD TR-2: decoupling
+# this workflow's merge/deploy from the migration's apply timing.
+
+on:
+  schedule:
+    - cron: '0 * * * *'   # once per UTC hour
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ${{ github.workflow }}
+  cancel-in-progress: false
+
+jobs:
+  produce:
+    name: Produce the hourly Drive Report (diagnostic cadence)
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+
+    env:
+      SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+      SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
+      HOURLY_SWEEP_ENABLED: ${{ vars.HOURLY_SWEEP_ENABLED }}
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          # Same requirement as the daily workflow, and for the identical reason: this sweep
+          # calls the same buildGather()/scoreLeg1ALocal() path, whose A-LOCAL landing predicate
+          # needs full merge history. A shallow clone would silently produce a false 0/2 leg1
+          # score every hour rather than once a day.
+          fetch-depth: 0
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: 'npm'
+
+      - name: Install dependencies
+        run: npm ci --ignore-scripts
+
+      - name: Produce the hourly Drive Report
+        run: node scripts/cron/drive-report-hourly-sweep.mjs

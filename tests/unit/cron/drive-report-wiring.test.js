@@ -126,3 +126,51 @@ describe('the Drive Report producer names its dispatcher (TR-1)', () => {
     expect(stripped, 'and it must NOT survive stripping — there is no such call site').not.toMatch(/GITHUB_RUN_ID/);
   });
 });
+
+// SD-LEO-INFRA-HOURLY-DRIVE-SCORE-001 — the same armed-machinery-needs-a-dispatcher pattern,
+// cloned for the hourly sibling workflow/sweep pair, per this SD's own exploration_summary
+// (identifying this file's pattern as the one to follow for a second cadence-like leg).
+const HOURLY_WORKFLOW = path.join(repoRoot, '.github', 'workflows', 'drive-report-hourly-cron.yml');
+const HOURLY_SWEEP = path.join(repoRoot, 'scripts', 'cron', 'drive-report-hourly-sweep.mjs');
+
+describe('the Drive Report hourly producer names its dispatcher (SD-LEO-INFRA-HOURLY-DRIVE-SCORE-001)', () => {
+  it('the hourly workflow exists and its run step invokes the hourly sweep', () => {
+    expect(fs.existsSync(HOURLY_WORKFLOW), `missing dispatcher workflow: ${HOURLY_WORKFLOW}`).toBe(true);
+    expect(read(HOURLY_WORKFLOW)).toMatch(/node\s+scripts\/cron\/drive-report-hourly-sweep\.mjs/);
+  });
+
+  it('the hourly workflow passes HOURLY_SWEEP_ENABLED from a repo variable, never DRIVE_CADENCE', () => {
+    const yml = read(HOURLY_WORKFLOW);
+    expect(yml, 'must wire HOURLY_SWEEP_ENABLED from vars, not a hardcoded value').toMatch(
+      /HOURLY_SWEEP_ENABLED:\s*\$\{\{\s*vars\.HOURLY_SWEEP_ENABLED\s*\}\}/
+    );
+    expect(yml, 'must never reuse DRIVE_CADENCE — it is a value, not a boolean gate (PRD TR-2)').not.toMatch(/DRIVE_CADENCE/);
+  });
+
+  it('the hourly sweep exists, gates on HOURLY_SWEEP_ENABLED, and calls the producer with cadence hourly', () => {
+    expect(fs.existsSync(HOURLY_SWEEP), `missing sweep: ${HOURLY_SWEEP}`).toBe(true);
+    const src = code(HOURLY_SWEEP);
+    expect(src, 'sweep no longer imports produceDriveReport').toMatch(
+      /import\s*\{[^}]*produceDriveReport[^}]*\}\s*from\s*['"]\.\.\/drive-report-produce\.mjs['"]/
+    );
+    expect(src, 'sweep no longer passes the producer to the run function').toMatch(/produce:\s*produceDriveReport/);
+    expect(src, 'the CLI must gate on HOURLY_SWEEP_ENABLED === "true" (strict equality, not truthiness)').toMatch(
+      /process\.env\.HOURLY_SWEEP_ENABLED\s*!==\s*['"]true['"]/
+    );
+    expect(src, 'cadence must be hardcoded hourly, never read from an env var').toMatch(/cadence:\s*['"]hourly['"]/);
+  });
+
+  it('the hourly sweep reuses buildGather from the daily sweep, not a re-derived scoring path', () => {
+    const src = code(HOURLY_SWEEP);
+    expect(src, 'must import buildGather from the daily sweep file').toMatch(
+      /import\s*\{[^}]*buildGather[^}]*\}\s*from\s*['"]\.\/drive-report-sweep\.mjs['"]/
+    );
+  });
+
+  it('the hourly sweep names the workflow that dispatches it, by path, under its OWN identity', () => {
+    const src = code(HOURLY_SWEEP);
+    expect(src).toMatch(/HOURLY_ACTIVATION_TRIGGER\s*=\s*['"]\.github\/workflows\/drive-report-hourly-cron\.yml['"]/);
+    expect(src, 'must not reuse the daily SD_KEY').not.toMatch(/HOURLY_SD_KEY\s*=\s*['"]SD-LEO-INFRA-DRIVE-LOOP-INSTRUMENT-001-B['"]/);
+    expect(src, 'the expected interval must be hourly (3600s), not the daily 86400s').toMatch(/HOURLY_EXPECTED_INTERVAL_SECONDS\s*=\s*60\s*\*\s*60/);
+  });
+});
