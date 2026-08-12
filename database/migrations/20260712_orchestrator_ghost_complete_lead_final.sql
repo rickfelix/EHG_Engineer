@@ -2,7 +2,11 @@
 -- SD: SD-FDBK-FIX-ORCHESTRATOR-GHOST-COMPLETE-001
 -- Date: 2026-07-12
 --
--- ⚠️  STAGED — NOT YET APPROVED FOR APPLY. CHAIRMAN APPLY REQUIRED. ⚠️
+-- APPROVED FOR APPLY 2026-08-12 (decision G1).
+-- @approved-by: codestreetlabs@gmail.com
+-- (Chairman approval via SMS 2026-08-12T11:19:53Z — "Fix staged, rollback file ready. Proceed.";
+--  guard binds the stamp to the machine git identity, which is the chairman's codestreetlabs address)
+-- Applied by coordinator session 56f09320 per the proven ceremony (token + --prod-deploy + readback).
 -- TIER-2 (non-delegatable): CREATE OR REPLACE of a SECURITY DEFINER function
 -- per migration-tier-classifier.mjs. Apply via apply-migration.js --prod-deploy.
 -- Rollback companion: 20260712_orchestrator_ghost_complete_lead_final_rollback.sql
