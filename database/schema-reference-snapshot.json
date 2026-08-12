@@ -1,9 +1,9 @@
 {
- "generated_at": "2026-08-11T02:27:20.679Z",
+ "generated_at": "2026-08-12T03:50:54.401Z",
  "source": "scripts/lint/schema-reference-snapshot.mjs (pg_attribute/pg_class, schema public)",
- "table_count": 856,
+ "table_count": 857,
  "view_count": 185,
- "check_count": 1471,
+ "check_count": 1472,
  "tables": {
   "_migration_metadata": "{key,value}",
   "account_usage_snapshots": "{id,account_name,account_uuid8,weekly_pct,five_hour_pct,weekly_resets_at,five_hour_resets_at,state,fetched_at,created_at}",
@@ -59,6 +59,7 @@
   "auto_apply_denylist": "{table_name,created_at,created_by}",
   "backlog_item_completion": "{id,backlog_id,source_sd_id,completed_by_sd_id,completed_by_prd_id,completion_type,completion_status,completion_date,implementation_details,code_location,test_coverage_pct,documentation_url,verified,verified_by,verified_at,verification_notes,created_at,updated_at,created_by}",
   "batch_operation_log": "{id,operation,dry_run,operator,total_items,processed,skipped,failed,details,started_at,completed_at,duration_ms,error_message,created_at}",
+  "belt_capacity_verdicts": "{id,run_id,verdict,belt_depth,demand_soon,deficit,detail,recorded_at}",
   "blueprint_board_submissions": "{id,blueprint_id,submitted_by,board_meeting_id,submission_notes,priority,status,review_decision,reviewed_at,created_at,updated_at}",
   "blueprint_quality_assessments": "{id,venture_id,template_id,artifact_type,assessment_scores,overall_score,gate_decision,assessor_model,created_at,updated_at,metadata,notes}",
   "blueprint_selection_signals": "{id,blueprint_id,user_id,event_type,metadata,created_at}",
@@ -1127,6 +1128,7 @@
   "audit_triangulation_log.audit_triangulation_log_consensus_type_check": "CHECK (((consensus_type)::text = ANY ((ARRAY['HIGH'::character varying, 'MEDIUM'::character varying, 'LOW'::character varying, 'DIVERGENT'::character varying])::text[])))",
   "backlog_item_completion.backlog_item_completion_completion_status_check": "CHECK ((completion_status = ANY (ARRAY['IN_PROGRESS'::text, 'COMPLETED'::text, 'VERIFIED'::text, 'FAILED'::text])))",
   "backlog_item_completion.backlog_item_completion_completion_type_check": "CHECK ((completion_type = ANY (ARRAY['DIRECT'::text, 'SHARED'::text, 'PARTIAL'::text, 'REFERENCE'::text, 'SUPERSEDED'::text])))",
+  "belt_capacity_verdicts.belt_capacity_verdicts_verdict_check": "CHECK ((verdict = ANY (ARRAY['DEFICIT-URGENT'::text, 'DEFICIT'::text, 'TIGHT'::text, 'SURPLUS'::text])))",
   "blueprint_board_submissions.blueprint_board_submissions_priority_check": "CHECK (((priority)::text = ANY ((ARRAY['low'::character varying, 'normal'::character varying, 'high'::character varying, 'urgent'::character varying])::text[])))",
   "blueprint_board_submissions.blueprint_board_submissions_status_check": "CHECK (((status)::text = ANY ((ARRAY['pending'::character varying, 'scheduled'::character varying, 'in_review'::character varying, 'approved'::character varying, 'rejected'::character varying, 'deferred'::character varying, 'withdrawn'::character varying])::text[])))",
   "blueprint_quality_assessments.blueprint_quality_assessments_gate_decision_check": "CHECK ((gate_decision = ANY (ARRAY['pass'::text, 'fail'::text, 'retry'::text])))",
