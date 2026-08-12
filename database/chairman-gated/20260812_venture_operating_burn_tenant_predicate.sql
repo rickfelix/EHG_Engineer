@@ -223,7 +223,13 @@ END $$;
 COMMIT;
 
 -- ============================================================================================
--- AFTER APPLY: the apply exit code is not the acceptance. Run the companion acceptance script
--- (20260812_venture_operating_burn_tenant_predicate_acceptance.mjs) both before and after apply
--- to confirm the catalog baseline moved as expected.
+-- AFTER APPLY: the apply exit code is not the acceptance, AND (EXEC-phase TESTING finding
+-- T-EXEC-1, evidence row 72cebe20-9772-4075-97c2-d5dfdd0bf75e) the acceptance script's OWN exit
+-- code cannot discriminate pre-apply from post-apply either -- both states print "PASS" and exit
+-- 0, because both a genuine pre-apply baseline and a silently-no-op'd apply render the same
+-- "still USING(true)" / "already carries the fixed predicate" branches without failing. Read the
+-- PRINTED live qual line, not the exit code, to know which state you are in. Run the companion
+-- acceptance script (20260812_venture_operating_burn_tenant_predicate_acceptance.mjs) both before
+-- and after apply and confirm the printed qual actually changed from 'true' to the
+-- fn_user_has_venture_access predicate.
 -- ============================================================================================
