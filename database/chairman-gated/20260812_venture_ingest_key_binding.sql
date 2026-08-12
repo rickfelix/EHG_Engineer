@@ -489,7 +489,10 @@ BEGIN
   -- COALESCE guard (independent peer review, db-txn-expert, this session): source_application is
   -- NOT NULL on public.feedback. Latent today (0 of 151 live ventures have a NULL name), but a
   -- future NULL-named venture would otherwise raise a raw 23502 instead of a clean outcome for an
-  -- otherwise-valid, correctly-authenticated submission.
+  -- otherwise-valid, correctly-authenticated submission. WIDTH COUPLING (same reviewer, follow-up
+  -- pass): this is safe from truncation only because ventures.name and feedback.source_application
+  -- are BOTH varchar(255) today ("safety by coincidence", not a cap) -- widening ventures.name in
+  -- some future migration would silently arm a 22001 here. Longest live name is 53 chars.
   SELECT coalesce(name, 'unknown-venture') INTO v_venture_name FROM public.ventures WHERE id = p_venture_id;
 
   INSERT INTO public.feedback (

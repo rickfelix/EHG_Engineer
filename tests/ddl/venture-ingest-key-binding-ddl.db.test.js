@@ -49,7 +49,15 @@ BEGIN
 END
 $roles$;
 
-CREATE EXTENSION IF NOT EXISTS pgcrypto;
+-- Mirrors the real Supabase layout: pgcrypto lives in a schema literally named "extensions"
+-- there (confirmed live, this SD's own EXEC-phase finding), and the migration's functions now
+-- schema-qualify digest()/gen_random_bytes() as extensions.* rather than relying on search_path
+-- order (peer review finding, sec-rls-expert/db-txn-expert, VERIFY phase). A vanilla ephemeral
+-- Postgres has no "extensions" schema at all unless created explicitly — CREATE EXTENSION with no
+-- SCHEMA clause installs into the current search_path's first schema (public here), which is why
+-- this stub must create the schema and install into it by name, not just install pgcrypto anywhere.
+CREATE SCHEMA IF NOT EXISTS extensions;
+CREATE EXTENSION IF NOT EXISTS pgcrypto SCHEMA extensions;
 
 CREATE TABLE IF NOT EXISTS public.ventures (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
