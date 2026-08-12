@@ -33,19 +33,20 @@ describe('createCloudflareCostAdapter — credential gate', () => {
 });
 
 describe('readWorkersUsage', () => {
-  it('POSTs a GraphQL query with the account tag and date range, never leaking the token in the body', async () => {
+  it('POSTs a GraphQL query with the account tag, date range, and scriptName, never leaking the token in the body', async () => {
     const fetchImpl = vi.fn(async () => ({
       ok: true,
       json: async () => ({ data: { viewer: { accounts: [{ workersInvocationsAdaptive: [] }] } } }),
     }));
     const adapter = createCloudflareCostAdapter({ CLOUDFLARE_API_TOKEN: 'secret-tok', CLOUDFLARE_ACCOUNT_ID: 'acct-1' }, { fetchImpl });
-    await adapter.readWorkersUsage('2026-06-12', '2026-07-12');
+    await adapter.readWorkersUsage('2026-06-12', '2026-07-12', 'apex-niche-ai-worker');
     expect(fetchImpl).toHaveBeenCalledTimes(1);
     const [url, opts] = fetchImpl.mock.calls[0];
     expect(url).toBe('https://api.cloudflare.com/client/v4/graphql');
     expect(opts.headers.authorization).toBe('Bearer secret-tok');
     expect(opts.body).not.toContain('secret-tok');
     expect(opts.body).toContain('acct-1');
+    expect(opts.body).toContain('apex-niche-ai-worker');
   });
 
   it('throws a sanitized error on a GraphQL error response, never echoing the token', async () => {
@@ -54,8 +55,34 @@ describe('readWorkersUsage', () => {
       json: async () => ({ errors: [{ message: 'invalid account tag' }] }),
     }));
     const adapter = createCloudflareCostAdapter({ CLOUDFLARE_API_TOKEN: 'secret-tok', CLOUDFLARE_ACCOUNT_ID: 'acct-1' }, { fetchImpl });
-    await expect(adapter.readWorkersUsage('2026-06-12', '2026-07-12')).rejects.toThrow('invalid account tag');
-    await expect(adapter.readWorkersUsage('2026-06-12', '2026-07-12')).rejects.not.toThrow(/secret-tok/);
+    await expect(adapter.readWorkersUsage('2026-06-12', '2026-07-12', 'a-worker')).rejects.toThrow('invalid account tag');
+    await expect(adapter.readWorkersUsage('2026-06-12', '2026-07-12', 'a-worker')).rejects.not.toThrow(/secret-tok/);
+  });
+
+  // SD-ALTIFYAI-LEO-ORCH-SPRINT-2026-001-G: the account-scoping bug this SD closes. Without
+  // scriptName, every venture sharing CLOUDFLARE_ACCOUNT_ID would read the identical
+  // account-wide total — a fabricated per-venture measurement.
+  it('rejects a call with no scriptName rather than silently querying the whole account', async () => {
+    const fetchImpl = vi.fn();
+    const adapter = createCloudflareCostAdapter({ CLOUDFLARE_API_TOKEN: 'secret-tok', CLOUDFLARE_ACCOUNT_ID: 'acct-1' }, { fetchImpl });
+    expect(() => adapter.readWorkersUsage('2026-06-12', '2026-07-12')).toThrow('requires scriptName');
+    expect(fetchImpl).not.toHaveBeenCalled();
+  });
+
+  it('two distinct scriptName calls produce two distinct GraphQL request bodies (positive control for per-venture scoping)', async () => {
+    const fetchImpl = vi.fn(async () => ({
+      ok: true,
+      json: async () => ({ data: { viewer: { accounts: [{ workersInvocationsAdaptive: [] }] } } }),
+    }));
+    const adapter = createCloudflareCostAdapter({ CLOUDFLARE_API_TOKEN: 'secret-tok', CLOUDFLARE_ACCOUNT_ID: 'acct-1' }, { fetchImpl });
+    await adapter.readWorkersUsage('2026-06-12', '2026-07-12', 'apex-niche-ai-worker');
+    await adapter.readWorkersUsage('2026-06-12', '2026-07-12', 'altifyai-worker');
+    const [, apexOpts] = fetchImpl.mock.calls[0];
+    const [, altifyOpts] = fetchImpl.mock.calls[1];
+    expect(apexOpts.body).toContain('apex-niche-ai-worker');
+    expect(apexOpts.body).not.toContain('altifyai-worker');
+    expect(altifyOpts.body).toContain('altifyai-worker');
+    expect(altifyOpts.body).not.toContain('apex-niche-ai-worker');
   });
 });
 

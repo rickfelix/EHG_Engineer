@@ -13,7 +13,7 @@ import {
 } from '../../../scripts/operator/feed-venture-operating-burn.mjs';
 
 describe('parseFlag', () => {
-  it('extracts a --flag <value> pair', () => {
+  it('extracts a --flag value pair', () => {
     expect(parseFlag(['node', 'script.mjs', '--venture-id', 'v-1'], '--venture-id')).toBe('v-1');
   });
   it('returns null when the flag is absent', () => {
@@ -30,10 +30,10 @@ describe('estimateInfraCostUsd', () => {
     expect(estimateInfraCostUsd(undefined)).toBeNull();
   });
   it('prices requests and cpuMs at the published per-million rate', () => {
-    const usd = estimateInfraCostUsd({ requests: 2_000_000, cpuMs: 0 });
-    expect(usd).toBeCloseTo(0.6, 4); // 2M requests * $0.30/M
+    const usd = estimateInfraCostUsd({ requests: 2000000, cpuMs: 0 });
+    expect(usd).toBeCloseTo(0.6, 4);
   });
-  it('zero usage prices to $0 (a real, honest zero — not withheld)', () => {
+  it('zero usage prices to 0 dollars (a real, honest zero -- not withheld)', () => {
     expect(estimateInfraCostUsd({ requests: 0, cpuMs: 0 })).toBe(0);
   });
 });
@@ -78,7 +78,7 @@ function fakeSupabaseSpy() {
   };
 }
 
-describe('main — fail-soft integration', () => {
+describe('main -- fail-soft integration', () => {
   it('throws if --venture-id or --source-application is missing', async () => {
     await expect(main({ argv: ['node', 'x.mjs'] })).rejects.toThrow('--venture-id');
     await expect(main({ argv: ['node', 'x.mjs', '--venture-id', 'v-1'] })).rejects.toThrow('--source-application');
@@ -101,11 +101,11 @@ describe('main — fail-soft integration', () => {
   it('writes a measured infra cost and leaves AI unattested when no gateway is configured', async () => {
     const supabase = fakeSupabaseSpy();
     const cf = {
-      readWorkersUsage: vi.fn(async () => ({ viewer: { accounts: [{ workersInvocationsAdaptive: [{ sum: { requests: 1_000_000 } }] }] } })),
+      readWorkersUsage: vi.fn(async () => ({ viewer: { accounts: [{ workersInvocationsAdaptive: [{ sum: { requests: 1000000 } }] }] } })),
       readAiGatewayCost: vi.fn(),
     };
     const result = await main({
-      argv: ['node', 'x.mjs', '--venture-id', 'v-1', '--source-application', 'apex_niche_ai'],
+      argv: ['node', 'x.mjs', '--venture-id', 'v-1', '--source-application', 'apex_niche_ai', '--script-name', 'apexniche-ai'],
       env: { CLOUDFLARE_API_TOKEN: 'tok', CLOUDFLARE_ACCOUNT_ID: 'acct' },
       supabase,
       cloudflareAdapterFactory: () => cf,
@@ -114,17 +114,18 @@ describe('main — fail-soft integration', () => {
     expect(result.infra.value_usd).toBeCloseTo(0.3, 4);
     expect(result.ai.status).toBe('unattested');
     expect(cf.readAiGatewayCost).not.toHaveBeenCalled();
+    expect(cf.readWorkersUsage).toHaveBeenCalledWith(expect.any(String), expect.any(String), 'apexniche-ai');
     expect(supabase.upserts.map((u) => u.table)).toEqual(['venture_operating_burn']);
   });
 
-  it('F6: an empty Workers usage dataset leaves infra unattested, never an attested $0', async () => {
+  it('F6: an empty Workers usage dataset leaves infra unattested, never an attested 0', async () => {
     const supabase = fakeSupabaseSpy();
     const cf = {
       readWorkersUsage: vi.fn(async () => ({ viewer: { accounts: [{ workersInvocationsAdaptive: [] }] } })),
       readAiGatewayCost: vi.fn(),
     };
     const result = await main({
-      argv: ['node', 'x.mjs', '--venture-id', 'v-1', '--source-application', 'apex_niche_ai'],
+      argv: ['node', 'x.mjs', '--venture-id', 'v-1', '--source-application', 'apex_niche_ai', '--script-name', 'apexniche-ai'],
       env: { CLOUDFLARE_API_TOKEN: 'tok', CLOUDFLARE_ACCOUNT_ID: 'acct' },
       supabase,
       cloudflareAdapterFactory: () => cf,
@@ -141,7 +142,7 @@ describe('main — fail-soft integration', () => {
       readAiGatewayCost: vi.fn(async () => ({ result: [{ cost: 1.5 }] })),
     };
     const result = await main({
-      argv: ['node', 'x.mjs', '--venture-id', 'v-1', '--source-application', 'apex_niche_ai'],
+      argv: ['node', 'x.mjs', '--venture-id', 'v-1', '--source-application', 'apex_niche_ai', '--script-name', 'apexniche-ai'],
       env: { CLOUDFLARE_API_TOKEN: 'tok', CLOUDFLARE_ACCOUNT_ID: 'acct', CLOUDFLARE_AI_GATEWAY_ID_APEX_NICHE_AI: 'gw-1' },
       supabase,
       cloudflareAdapterFactory: () => cf,
@@ -158,7 +159,7 @@ describe('main — fail-soft integration', () => {
       readAiGatewayCost: vi.fn(),
     };
     const result = await main({
-      argv: ['node', 'x.mjs', '--venture-id', 'v-1', '--source-application', 'apex_niche_ai'],
+      argv: ['node', 'x.mjs', '--venture-id', 'v-1', '--source-application', 'apex_niche_ai', '--script-name', 'apexniche-ai'],
       env: { CLOUDFLARE_API_TOKEN: 'tok', CLOUDFLARE_ACCOUNT_ID: 'acct' },
       supabase,
       cloudflareAdapterFactory: () => cf,
@@ -167,9 +168,27 @@ describe('main — fail-soft integration', () => {
     expect(result.infra.error).toContain('cloudflare rate limited');
     expect(supabase.upserts.length).toBe(0);
   });
+
+  it('leaves infra unattested (and never calls readWorkersUsage) when --script-name is absent, even with live credentials', async () => {
+    const supabase = fakeSupabaseSpy();
+    const cf = {
+      readWorkersUsage: vi.fn(async () => ({ viewer: { accounts: [{ workersInvocationsAdaptive: [{ sum: { requests: 999999 } }] }] } })),
+      readAiGatewayCost: vi.fn(),
+    };
+    const result = await main({
+      argv: ['node', 'x.mjs', '--venture-id', 'altifyai-venture-id', '--source-application', 'altifyai'],
+      env: { CLOUDFLARE_API_TOKEN: 'tok', CLOUDFLARE_ACCOUNT_ID: 'acct' },
+      supabase,
+      cloudflareAdapterFactory: () => cf,
+    });
+    expect(result.infra.written).toBe(false);
+    expect(result.infra.reason).toContain('script-name');
+    expect(cf.readWorkersUsage).not.toHaveBeenCalled();
+    expect(supabase.upserts.some((u) => 'infra_cost_usd' in u.row)).toBe(false);
+  });
 });
 
-describe('TR-1 — never touches the fleet-wide singleton tables (regression tripwire, NOT a formal proof)', () => {
+describe('TR-1 -- never touches the fleet-wide singleton tables (regression tripwire, NOT a formal proof)', () => {
   it('the writer source never references income_capture_monthly or operator_cash_burn_monthly', () => {
     const raw = readFileSync(new URL('../../../scripts/operator/feed-venture-operating-burn.mjs', import.meta.url), 'utf8');
     const codeOnly = raw
