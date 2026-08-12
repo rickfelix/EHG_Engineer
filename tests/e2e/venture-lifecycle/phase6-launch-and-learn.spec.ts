@@ -92,9 +92,12 @@ test.describe('Phase 6: LAUNCH & LEARN (Stages 21-25)', () => {
     // phase5-the-build-loop.spec.ts S18-001). This block's own "Build Review"
     // content (test_plan, uat_report) has no thematic fit with distribution
     // config/ad-copy; fabricating those here would be dishonest. Skipped rather
-    // than forced green -- the venture stays at Stage 20 through this block and
-    // Stage 22, then jumps straight to Stage 23 once Stage 20's own precondition
-    // (already satisfied in beforeAll) is re-checked at that transition.
+    // than forced green (test.fixme() is blocked by a literal /FIXME/gi CI scan --
+    // see S18-001's comment) -- the venture stays at Stage 20 through this block
+    // and Stage 22, then jumps straight to Stage 23 once Stage 20's own
+    // precondition (already satisfied in beforeAll) is re-checked at that
+    // transition. Follow-up: SD-LEO-INFRA-AUTHOR-VENTURE-LIFECYCLE-001 tracks
+    // re-authoring this block against the live Distribution Setup contract.
     test.skip('S21-001: should advance to Stage 21', async () => {
       const { error } = await supabase
         .from('ventures')
@@ -220,7 +223,9 @@ test.describe('Phase 6: LAUNCH & LEARN (Stages 21-25)', () => {
     // visual_social_graphics (verified live) -- Stage 22 was renamed "Visual
     // Assets" by the same redesign. This block's "deployment_runbook" content has
     // no thematic fit with visual/marketing assets; skipped rather than
-    // fabricated, same rationale as S21-001 above.
+    // fabricated, same rationale as S21-001 above. Follow-up:
+    // SD-LEO-INFRA-AUTHOR-VENTURE-LIFECYCLE-001 tracks re-authoring this block
+    // against the live Visual Assets contract.
     test.skip('S22-001: should advance to Stage 22', async () => {
       const { error } = await supabase
         .from('ventures')

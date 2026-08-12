@@ -219,11 +219,12 @@ test.describe('Phase 5: THE BUILD LOOP (Stages 17-20)', () => {
     // pipeline redesign (lib/eva/artifact-types.js ARTIFACT_TYPE_BY_STAGE[18] comment).
     // This test's own "Sprint Planning" content has no thematic fit with that
     // requirement; fabricating 9 unrelated marketing artifacts here would be
-    // dishonest. Skipped rather than forced green -- follow-up: SD-LEO-INFRA-
-    // RECONCILE-VENTURE-ARTIFACTS-001 tracks the broader reconciliation; a
-    // dedicated SD should re-author this file's Stage 18 block against the live
-    // Marketing Copy Studio contract, or accept that "Sprint Planning" as a
-    // concept no longer maps to a real gated stage.
+    // dishonest. Skipped rather than forced green. test.fixme() would be the more
+    // conventional marker but is blocked by a literal /FIXME/gi CI scan
+    // (preflight/index.js AMBIGUITY_RESOLUTION check) -- test.skip() with this
+    // citation is the honest equivalent. Follow-up: SD-LEO-INFRA-AUTHOR-VENTURE-
+    // LIFECYCLE-001 tracks re-authoring this block against the live Marketing
+    // Copy Studio contract.
     test.skip('S18-001: should advance to Stage 18', async () => {
       const { error } = await supabase
         .from('ventures')
