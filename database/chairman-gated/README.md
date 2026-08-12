@@ -109,6 +109,42 @@ distinct per-source counts, not the table total) and re-asserted at apply time b
 role and is subject to that role's SELECT RLS, so narrowing the anon SELECT policy still makes it
 undercount and fail **open**.
 
+## Applying `20260812_venture_operating_burn_tenant_predicate.sql`
+
+Two separate commands — `--issue-token` is a mode flag, not combinable with `--prod-deploy` in the
+same invocation (it mints a token and exits without applying), and this file needs
+`--allow-any-path` since it lives outside `database/migrations/`:
+
+```
+node scripts/apply-migration.js --issue-token
+MIGRATION_APPLY_TOKEN=<token from above> node scripts/apply-migration.js \
+  "database/chairman-gated/20260812_venture_operating_burn_tenant_predicate.sql" \
+  --prod-deploy --allow-any-path
+```
+
+(SD-LEO-INFRA-VENTURE-BURN-RLS-TENANT-PREDICATE-001, SECURITY review finding S-7 — evidence row
+`8d2a6a6f-dd80-43af-9ddf-17a7c4ad48ee`. Note: the `20260803` entry above uses the older
+`--issue-token <token> --prod-deploy` combined form, which has the same defect — read against the
+live `apply-migration.js` source before running it, not against either README entry verbatim.)
+
+Chairman-approved 2026-08-12 (S1 'A', SMS 11:43:53Z, Adam packet item 3). Fixes
+`venture_operating_burn_auth_read`, which was `USING (true)` for `authenticated` — any tenant could
+read every venture's financial burn data. Replaces it with the established local idiom
+(`auth.role() = 'service_role' OR fn_user_has_venture_access(venture_id)`, matching two other live
+policies) and revokes `anon`'s inert table-level SELECT grant.
+
+**Run the acceptance before AND after apply, and read the printed `qual` line, not the exit code —
+both states exit 0:**
+
+```
+node database/chairman-gated/20260812_venture_operating_burn_tenant_predicate_acceptance.mjs
+```
+
+This script is catalog + staged-source-text verification only (binds to the lint's exported
+`lintSql()` directly, since the lint CLI cannot see this directory at all). It is deliberately NOT a
+row-level behavioural probe: the table holds 0 rows, so any such probe would pass identically under
+the leaking or the fixed policy.
+
 ## The underlying finding, which outlives this SD
 
 SUPERSEDED (SD-LEO-INFRA-TIER-GATE-FLAG-001): the TIER-2 default-deny protection is now ACTIVE by default — the gate reads the `LEO_MIGRATION_TIER_GATE_BYPASS` flag and fails CLOSED, so it holds unless a bypass is deliberately enabled. The text below described the prior state, in which the protection was inert
