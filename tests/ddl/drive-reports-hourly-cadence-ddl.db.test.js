@@ -86,6 +86,15 @@ describe('20260812_drive_reports_hourly_cadence.sql — widens cadence, nothing 
   it('[SELF-HEAL] a manually narrowed constraint is repaired by re-running the migration', async () => {
     // The production corollary: if someone (or a rollback attempt) narrowed the constraint back,
     // re-applying this migration must restore the widened version, not merely assert it once.
+    //
+    // This file shares ONE table across ALL its tests (one client, no per-test transaction), and
+    // two earlier tests already committed cadence='hourly' rows (ddl-hourly-1, ddl-hourly-2).
+    // Postgres validates ALL existing rows when a bare ADD CONSTRAINT runs, so narrowing back to
+    // ('scheduled','on_demand') while those rows exist fails with 23514 — a real, correct Postgres
+    // refusal, not a bug in the migration. This test's OWN subject is "does narrow-then-reapply
+    // self-heal", not "does narrowing survive incompatible data" (a real but different question),
+    // so it clears its own precondition first.
+    await client.query("DELETE FROM public.drive_reports WHERE cadence = 'hourly';");
     await client.query('ALTER TABLE public.drive_reports DROP CONSTRAINT drive_reports_cadence_check;');
     await client.query("ALTER TABLE public.drive_reports ADD CONSTRAINT drive_reports_cadence_check CHECK (cadence IN ('scheduled', 'on_demand'));");
     await expect(
