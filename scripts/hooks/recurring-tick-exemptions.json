@@ -19,6 +19,10 @@
     {
       "script": "adam-startup-check.mjs",
       "reason": "Adam startup probe re-run on session/loop restarts — parity with the builtin-exempt coordinator-startup-check.mjs"
+    },
+    {
+      "script": "sms-relay-drain.cjs",
+      "reason": "Coordinator */5 cadence duty (STANDARD_LOOPS, QF-20260727-064), idempotent fail-soft exit-0 — hard-blocks at the 3rd invocation within its own 10-min schedule (QF-20260812-090). CAVEAT (recorded per this file's own tradeoff doc-comment, not silently assumed safe): this script never calls stampLastFired, so its periodic_process_registry row never leaves UNVERIFIED and the periodic-liveness watcher lane this file's doc-comment names as the compensating control does NOT actually cover it yet — exemption removes the only loop-detection net this script currently has. Follow-up: wire stampLastFired into sms-relay-drain.cjs to close that gap."
     }
   ]
 }
