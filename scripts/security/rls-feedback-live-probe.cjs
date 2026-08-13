@@ -78,6 +78,14 @@ const CASES = [
   { name: "telegram + severity='critical', venture-owned",
     because: 'the RESTRICTIVE anon_feedback_ingress_bounds bars critical/high regardless of which permissive policy would otherwise grant — venture-owned so the RESTRICTIVE bound stays exercised even after telegram_bot_insert_feedback is dropped (it was never a fallback grant)',
     expect: VERDICT.REFUSED, needsVenture: true,
+    // SECURITY sub-agent finding (EXEC re-review, L3/R2): the default nonsenseControl below
+    // ({...row, severity:'critical'}) would be BYTE-IDENTICAL to this row (which already carries
+    // severity:'critical'), leaving the control unable to fail independently of the case it is
+    // meant to cross-check — exactly the "present as a field, absent as a check" failure
+    // lib/security/rls-probe-template.cjs's own header warns about. Override with a control denied
+    // by a GENUINELY different mechanism: venture_id:null trips venture_user_insert_feedback's own
+    // NOT NULL clause, independent of the RESTRICTIVE bound this case actually tests.
+    controlOverride: { venture_id: null },
     row: (m, v) => ({ ...base(m), source_type: 'telegram', feedback_type: 'user_bug', venture_id: v, severity: 'critical' }) },
   { name: "telegram + category='chairman_decision_deferred', venture-owned",
     because: 'the RESTRICTIVE bounds bar that category regardless of which permissive policy would otherwise grant — venture-owned so the bound stays exercised post-drop too',
@@ -161,10 +169,12 @@ async function main() {
     const row = c.row(marker, ventureId);
     const plan = buildProbePlan({
       table: 'feedback', validRow: row, fieldUnderTest: 'source_type', markerColumn: 'title',
-      // The control must be a row that CANNOT pass: the RESTRICTIVE bounds bar severity='critical'
-      // whatever any permissive policy grants. If this is ever ACCEPTED, runProbe withdraws the
-      // REFUSED verdict rather than reporting it.
-      nonsenseControl: { ...row, severity: 'critical' },
+      // The control must be a row that CANNOT pass, via a mechanism INDEPENDENT of what the case
+      // itself tests: the RESTRICTIVE bounds bar severity='critical' whatever any permissive policy
+      // grants. If this is ever ACCEPTED, runProbe withdraws the REFUSED verdict rather than
+      // reporting it. controlOverride (per-case) replaces the default when the default would
+      // collide with the row under test (L3/R2, see case 3 above).
+      nonsenseControl: { ...row, ...(c.controlOverride || { severity: 'critical' }) },
     });
     let verdict;
     try { verdict = await runProbe({ anon, service, plan, assertPrecondition }); }

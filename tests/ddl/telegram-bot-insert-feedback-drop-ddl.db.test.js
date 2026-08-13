@@ -181,12 +181,13 @@ describe('the migration applied', () => {
     expect(rows[0].relrowsecurity).toBe(true);
   });
 
-  it('anon_feedback_ingress_bounds remains present and RESTRICTIVE (M1, DATABASE sub-agent finding — it was NEVER a permissive fallback grant)', async () => {
+  it('anon_feedback_ingress_bounds remains present, applies to INSERT, and is RESTRICTIVE (M1, DATABASE sub-agent finding — it was NEVER a permissive fallback grant; cmd pin added per SECURITY sub-agent finding L1)', async () => {
     const { rows } = await client.query(`
-      SELECT permissive FROM pg_policies
+      SELECT cmd, permissive FROM pg_policies
       WHERE schemaname='public' AND tablename='feedback' AND policyname='anon_feedback_ingress_bounds'
     `);
     expect(rows).toHaveLength(1);
+    expect(rows[0].cmd).toBe('INSERT');
     expect(rows[0].permissive).toBe('RESTRICTIVE');
   });
 });
@@ -372,7 +373,9 @@ describe('TS-4a/TS-4b: the REAL $verify$ block (extracted from the migration fil
     await client.query('BEGIN');
     try {
       await client.query('DROP POLICY IF EXISTS anon_feedback_ingress_bounds ON public.feedback');
-      await expect(client.query(VERIFY_BLOCK_SQL)).rejects.toThrow(/anon_feedback_ingress_bounds is missing or is no longer RESTRICTIVE/);
+      // Message text updated (SECURITY sub-agent finding, EXEC re-review, L1) to match the migration's
+      // cmd='INSERT' pin added to this same assertion.
+      await expect(client.query(VERIFY_BLOCK_SQL)).rejects.toThrow(/anon_feedback_ingress_bounds is missing, no longer applies to INSERT, or is no longer RESTRICTIVE/);
     } finally {
       await client.query('ROLLBACK');
     }

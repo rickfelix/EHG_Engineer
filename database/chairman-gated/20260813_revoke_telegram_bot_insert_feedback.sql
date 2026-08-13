@@ -117,9 +117,12 @@ SET LOCAL search_path = public, pg_catalog;
 DROP POLICY IF EXISTS telegram_bot_insert_feedback ON public.feedback;
 
 -- ============================================================
--- 2. Self-verify: three-way, mutation-resistant (TR-2, TS-4a/TS-4b). A one-sided check (only
---    confirming the drop happened) cannot distinguish a correct surgical removal from an
---    accidental over-broad drop or a collaterally-revoked grant.
+-- 2. Self-verify: FIVE-way, mutation-resistant (TR-2, TS-4a/TS-4b) — CORRECTED (SECURITY sub-agent
+--    finding, EXEC re-review, L2): this was "three-way" until (d) relrowsecurity and (e)
+--    anon_feedback_ingress_bounds were added; a header undercounting its own assertions is the
+--    same "measures less than it claims" defect this whole SD exists to fix, in miniature. A
+--    one-sided check (only confirming the drop happened) cannot distinguish a correct surgical
+--    removal from an accidental over-broad drop or a collaterally-revoked grant.
 -- ============================================================
 DO $verify$
 DECLARE
@@ -164,15 +167,18 @@ BEGIN
     RAISE EXCEPTION 'VERIFY FAILED: public.feedback does not have RLS enabled';
   END IF;
 
-  -- (e) anon_feedback_ingress_bounds must remain present and RESTRICTIVE (DATABASE sub-agent
-  --     finding, EXEC review) — this file's own header now relies on that policy continuing to
-  --     bound severity/category/rate for every anon INSERT that reaches venture_user_insert_
-  --     feedback; if it were ever silently dropped or flipped to PERMISSIVE, this file's stated
-  --     safety posture would be false.
+  -- (e) anon_feedback_ingress_bounds must remain present, RESTRICTIVE, AND still apply to INSERT
+  --     (SECURITY sub-agent finding, EXEC re-review, L1: the cmd predicate was missing — a
+  --     same-named policy re-created for a different cmd or with roles/predicates stripped could
+  --     satisfy a name+permissive-only check while this file's stated posture became false) — this
+  --     file's own header now relies on that policy continuing to bound severity/category/rate for
+  --     every anon INSERT that reaches venture_user_insert_feedback; if it were ever silently
+  --     dropped, re-scoped off INSERT, or flipped to PERMISSIVE, this file's stated safety posture
+  --     would be false.
   IF (SELECT count(*) FROM pg_policies
       WHERE schemaname = 'public' AND tablename = 'feedback'
-        AND policyname = 'anon_feedback_ingress_bounds' AND permissive = 'RESTRICTIVE') <> 1 THEN
-    RAISE EXCEPTION 'VERIFY FAILED: anon_feedback_ingress_bounds is missing or is no longer RESTRICTIVE';
+        AND policyname = 'anon_feedback_ingress_bounds' AND cmd = 'INSERT' AND permissive = 'RESTRICTIVE') <> 1 THEN
+    RAISE EXCEPTION 'VERIFY FAILED: anon_feedback_ingress_bounds is missing, no longer applies to INSERT, or is no longer RESTRICTIVE';
   END IF;
 END
 $verify$;
