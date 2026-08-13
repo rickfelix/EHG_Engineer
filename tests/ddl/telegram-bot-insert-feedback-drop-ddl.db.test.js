@@ -158,7 +158,7 @@ describe('the migration applied', () => {
   });
 
   it('anon retains table-level INSERT privilege on feedback (grant not collaterally revoked, TR-1/TR-2)', async () => {
-    const { rows } = await client.query(`SELECT has_table_privilege('anon','public.feedback','INSERT') AS ok`);
+    const { rows } = await client.query('SELECT has_table_privilege(\'anon\',\'public.feedback\',\'INSERT\') AS ok');
     expect(rows[0].ok).toBe(true);
   });
 
@@ -177,7 +177,7 @@ describe('the migration applied', () => {
   });
 
   it('public.feedback still has RLS enabled (M1, DATABASE sub-agent finding)', async () => {
-    const { rows } = await client.query(`SELECT relrowsecurity FROM pg_class WHERE oid = 'public.feedback'::regclass`);
+    const { rows } = await client.query('SELECT relrowsecurity FROM pg_class WHERE oid = \'public.feedback\'::regclass');
     expect(rows[0].relrowsecurity).toBe(true);
   });
 
@@ -234,7 +234,7 @@ describe('TS-1/TS-6: bare telegram-sourced anon INSERT is rejected post-migratio
       let err;
       try {
         await client.query(
-          `INSERT INTO public.feedback (source_type, feedback_type, venture_id) VALUES ('telegram', 'sentry_error', NULL)`,
+          'INSERT INTO public.feedback (source_type, feedback_type, venture_id) VALUES (\'telegram\', \'sentry_error\', NULL)',
         );
       } catch (e) {
         err = e;
@@ -264,11 +264,11 @@ describe('TS-1/TS-6: bare telegram-sourced anon INSERT is rejected post-migratio
       // (source_type='telegram'), but confirming via a privileged read after RESET ROLE keeps this
       // test's proof mechanism uniform with TS-2/TS-8 above rather than depending on it.
       await client.query(
-        `INSERT INTO public.feedback (source_type, feedback_type, venture_id) VALUES ('telegram', 'sentry_error', NULL)`,
+        'INSERT INTO public.feedback (source_type, feedback_type, venture_id) VALUES (\'telegram\', \'sentry_error\', NULL)',
       );
       await client.query('RESET ROLE');
       const { rows } = await client.query(
-        `SELECT id FROM public.feedback WHERE source_type = 'telegram' AND feedback_type = 'sentry_error' AND venture_id IS NULL`,
+        'SELECT id FROM public.feedback WHERE source_type = \'telegram\' AND feedback_type = \'sentry_error\' AND venture_id IS NULL',
       );
       expect(rows.length).toBeGreaterThanOrEqual(1);
     } finally {
@@ -291,12 +291,12 @@ describe('TS-2/TS-8: the venture_user_insert_feedback residual path still lands 
     try {
       await client.query('SET LOCAL ROLE anon');
       await client.query(
-        `INSERT INTO public.feedback (source_type, feedback_type, venture_id) VALUES ('auto_capture', 'user_bug', $1)`,
+        'INSERT INTO public.feedback (source_type, feedback_type, venture_id) VALUES (\'auto_capture\', \'user_bug\', $1)',
         [ventureId],
       );
       await client.query('RESET ROLE');
       const { rows } = await client.query(
-        `SELECT id FROM public.feedback WHERE venture_id = $1 AND source_type = 'auto_capture'`,
+        'SELECT id FROM public.feedback WHERE venture_id = $1 AND source_type = \'auto_capture\'',
         [ventureId],
       );
       expect(rows).toHaveLength(1);
@@ -311,12 +311,12 @@ describe('TS-2/TS-8: the venture_user_insert_feedback residual path still lands 
     try {
       await client.query('SET LOCAL ROLE anon');
       await client.query(
-        `INSERT INTO public.feedback (source_type, feedback_type, venture_id) VALUES ('telegram', 'user_bug', $1)`,
+        'INSERT INTO public.feedback (source_type, feedback_type, venture_id) VALUES (\'telegram\', \'user_bug\', $1)',
         [ventureId],
       );
       await client.query('RESET ROLE');
       const { rows } = await client.query(
-        `SELECT id FROM public.feedback WHERE venture_id = $1 AND source_type = 'telegram'`,
+        'SELECT id FROM public.feedback WHERE venture_id = $1 AND source_type = \'telegram\'',
         [ventureId],
       );
       expect(rows).toHaveLength(1);

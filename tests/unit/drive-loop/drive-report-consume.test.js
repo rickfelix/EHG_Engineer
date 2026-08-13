@@ -50,18 +50,24 @@ const REPORT_ID = 'ffffffff-1111-2222-3333-444444444444';
  * stateless fake cannot fail on a dropped predicate.
  */
 function makeDb({ reports = [{ id: REPORT_ID }], readError = null, writeError = null, upsertCount = 1 } = {}) {
-  const db = { upserts: [], upsertOpts: [], selects: [], orders: [], limits: [], tables: [], signals: [] };
+  const db = { upserts: [], upsertOpts: [], selects: [], eqs: [], orders: [], limits: [], tables: [], signals: [] };
   db.from = (table) => {
     db.tables.push(table);
     if (table === 'drive_reports') {
       return {
+        // SD-LEO-INFRA-HOURLY-DRIVE-SCORE-001 FR-4: the real client chains .eq('cadence',
+        // 'scheduled') between select() and order() (see coordinator-drive-report-consume.mjs);
+        // this fake now models that link so the chain shape matches production rather than
+        // throwing "eq is not a function" and masking every scenario below as status:'failed'.
         select: (cols) => { db.selects.push(cols); return {
-          order: (col, opts) => { db.orders.push({ col, opts }); return {
-            limit: (n) => { db.limits.push(n); return {
-              // MODELS abortSignal, so the timeout wiring is assertable. Without it a mutant that
-              // drops the signal is invisible and the 2000ms bound stays advisory — the real
-              // ceiling then being the host 90s kill, whose SIGTERM is a FALSE FAILED CORE.
-              abortSignal: async (sig) => { db.signals.push(sig); return { data: readError ? null : reports, error: readError, count: null }; },
+          eq: (col, val) => { db.eqs.push({ col, val }); return {
+            order: (col, opts) => { db.orders.push({ col, opts }); return {
+              limit: (n) => { db.limits.push(n); return {
+                // MODELS abortSignal, so the timeout wiring is assertable. Without it a mutant that
+                // drops the signal is invisible and the 2000ms bound stays advisory — the real
+                // ceiling then being the host 90s kill, whose SIGTERM is a FALSE FAILED CORE.
+                abortSignal: async (sig) => { db.signals.push(sig); return { data: readError ? null : reports, error: readError, count: null }; },
+              }; },
             }; },
           }; },
         }; },
@@ -133,6 +139,12 @@ describe('it reads the NEWEST report — the assertion whose absence let the wor
     expect(db.orders[0].col).toBe('generated_at');
     expect(db.orders[0].opts).toEqual({ ascending: false });
     expect(db.limits).toEqual([1]);
+  });
+
+  it('[SD-LEO-INFRA-HOURLY-DRIVE-SCORE-001 FR-4] filters to cadence=scheduled before ordering — an hourly row must never be read as the current report', async () => {
+    const db = makeDb();
+    await runDriveReportConsumeCore(db, seat(randomUUID()));
+    expect(db.eqs).toEqual([{ col: 'cadence', val: 'scheduled' }]);
   });
 
   it('attaches a real AbortSignal to BOTH queries, so the timeout is not merely advisory', async () => {

@@ -30,15 +30,38 @@ const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const MIGRATION = path.resolve(__dirname, '../../../database/migrations/20260803_drive_reports.sql');
 const SQL = fs.readFileSync(MIGRATION, 'utf8');
 
+// SD-LEO-INFRA-HOURLY-DRIVE-SCORE-001 FR-5/FR-7: a SECOND migration now ALTERs the cadence CHECK
+// this file's original single-file parser could not see. Reading only 20260803_drive_reports.sql
+// would keep asserting the OLD two-value list forever and falsely report drift the moment
+// CADENCES is widened -- not because anything is actually out of sync, but because this test's
+// own scope stayed narrower than the migration history. LATER-WINS FOLDING, not a second parallel
+// list: any migration that re-defines a column's CHECK (via ALTER TABLE ... ADD CONSTRAINT ...
+// CHECK) supersedes an earlier definition for that same column, mirroring how Postgres itself
+// only ever has ONE live constraint by that name at a time.
+const FOLDED_MIGRATIONS = [
+  MIGRATION,
+  path.resolve(__dirname, '../../../database/migrations/20260812_drive_reports_hourly_cadence.sql'),
+].filter((p) => fs.existsSync(p));
+
 /**
- * Pull the value list out of `CHECK (<column> IN ('a', 'b'))`. Returns null when the constraint
- * is absent, so "the CHECK vanished" is distinguishable from "the CHECK is empty" — those are
- * different failures and only one of them is a drift.
+ * Pull the value list out of `CHECK (<column> IN ('a', 'b'))`, folding later migrations'
+ * redefinitions over earlier ones for the same column. Returns null when NO migration in the
+ * fold ever defines the constraint, so "the CHECK never existed" stays distinguishable from
+ * "the CHECK is empty" — those are different failures and only one of them is a drift.
  */
 function checkValues(column) {
-  const m = SQL.match(new RegExp(`CHECK\\s*\\(\\s*${column}\\s+IN\\s*\\(([^)]*)\\)`, 'i'));
-  if (!m) return null;
-  return m[1].split(',').map((s) => s.trim().replace(/^'|'$/g, '')).filter(Boolean).sort();
+  let found = null;
+  for (const migrationPath of FOLDED_MIGRATIONS) {
+    const raw = migrationPath === MIGRATION ? SQL : fs.readFileSync(migrationPath, 'utf8');
+    // SQL line comments stripped before matching — a migration's own header prose (e.g. quoting
+    // the PRE-widening value for documentation, as 20260812's does) can otherwise shadow the
+    // real ADD CONSTRAINT statement further down, since a plain (non-global) match returns
+    // whichever occurrence comes FIRST in the file regardless of which one is live SQL.
+    const sql = raw.replace(/--[^\n]*/g, '');
+    const m = sql.match(new RegExp(`CHECK\\s*\\(\\s*${column}\\s+IN\\s*\\(([^)]*)\\)`, 'i'));
+    if (m) found = m[1].split(',').map((s) => s.trim().replace(/^'|'$/g, '')).filter(Boolean).sort();
+  }
+  return found;
 }
 
 describe('vocabulary drift — a JS constant and a SQL CHECK are two representations of one rule', () => {

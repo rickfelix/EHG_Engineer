@@ -16,6 +16,7 @@ import {
   SMS_ACTIVATION_TRIGGER, SMS_SD_KEY,
 } from '../../../scripts/cron/drive-report-sms-sweep.mjs';
 import { etParts } from '../../../scripts/cron/drive-report-sweep.mjs';
+import { hourlyWindowKey } from '../../../scripts/cron/drive-report-hourly-sweep.mjs';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const repoRoot = path.resolve(__dirname, '../../..');
@@ -248,6 +249,60 @@ describe('a MISSING report is itself the signal (TR-3), never silence', () => {
       recipients: TO,
     });
     expect(b.calls[0].body).toBe('Drive report MISSING: none ever produced');
+  });
+});
+
+// SD-LEO-INFRA-HOURLY-DRIVE-SCORE-001 FR-4 AC-3. Every findLatestReport above is a bare stub
+// returning a fixed row — it proves isTodays given a CORRECT result, never exercises the actual
+// selection rule the real CLI closure applies (.eq('cadence','scheduled').order('generated_at',
+// {ascending:false}).limit(1)). This models that selection rule over a real in-memory row set
+// instead of hand-picking the answer, so the test can actually fail if the rule regresses.
+describe('[SD-LEO-INFRA-HOURLY-DRIVE-SCORE-001 FR-4 AC-3] an hourly row newer than the daily one does not trigger a false STALE alarm', () => {
+  // The producer window must be CLOSED for a wrongly-resolved report to reach the STALE branch
+  // at all (isTodays=false otherwise falls into "producer window still open" and never enqueues,
+  // which is a different code path — using an open-window nowMs here would make the negative
+  // control below assert on an enqueue call that never happened).
+  const CLOSED = Date.UTC(2026, 6, 15, 14, 0, 0); // 10:00 ET, producer window closed
+  const TODAY_RUN_ID = 'drive-2026-07-15';
+  const dailyRow = { id: 'd1', run_id: TODAY_RUN_ID, cadence: 'scheduled', generated_at: new Date(JULY - 3_600_000).toISOString(), drive_score: { score: { value: 4 }, possible: 6, capacity_verdict: 'TIGHT', unavailable_legs: [] } };
+  const hourlyRow = { id: 'h1', run_id: hourlyWindowKey(JULY), cadence: 'hourly', generated_at: new Date(JULY - 600_000).toISOString(), drive_score: { score: { value: 9 }, possible: 6, capacity_verdict: 'TIGHT', unavailable_legs: [] } };
+
+  /** Mirrors the real Supabase call: filter to cadence, newest first, take one. */
+  const cadenceFilteredFindLatest = (rows) => async () => {
+    const filtered = rows.filter((r) => r.cadence === 'scheduled');
+    filtered.sort((a, b) => new Date(b.generated_at) - new Date(a.generated_at));
+    return filtered[0] ?? null;
+  };
+
+  it('resolves to the daily row and sends the real score, even though the hourly row is newer', async () => {
+    expect(new Date(hourlyRow.generated_at).getTime(), 'the fixture must actually be newer to be a meaningful test').toBeGreaterThan(new Date(dailyRow.generated_at).getTime());
+    const b = bridge();
+    const r = await runDriveSmsSweep({
+      nowMs: CLOSED,
+      findLatestReport: cadenceFilteredFindLatest([dailyRow, hourlyRow]),
+      enqueue: b.enqueue,
+      recipients: TO,
+    });
+    expect(r.signal).toBe('score');
+    expect(b.calls[0].body).toBe('Drive 4/6 | capacity TIGHT');
+  });
+
+  it('[NEGATIVE CONTROL] without the cadence filter, the same row set DOES produce a false STALE alarm', async () => {
+    // Proves the filter is load-bearing for this exact scenario, not incidentally passing: an
+    // unfiltered "newest wins" selection (the pre-SD behavior) picks the hourly row, whose
+    // run_id never equals today's daily windowKey, so isTodays goes false.
+    const unfilteredFindLatest = (rows) => async () => {
+      const sorted = [...rows].sort((a, b) => new Date(b.generated_at) - new Date(a.generated_at));
+      return sorted[0] ?? null;
+    };
+    const b = bridge();
+    await runDriveSmsSweep({
+      nowMs: CLOSED,
+      findLatestReport: unfilteredFindLatest([dailyRow, hourlyRow]),
+      enqueue: b.enqueue,
+      recipients: TO,
+    });
+    expect(b.calls[0].body).toMatch(/^Drive report STALE/);
   });
 });
 

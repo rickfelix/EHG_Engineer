@@ -31,6 +31,7 @@ import { armedProcessKey } from '../../../lib/machinery-class/armed-registration
 import { produceDriveReport } from '../../../scripts/drive-report-produce.mjs';
 import { LAST_RUN_FIELD } from '../../../lib/drive-loop/report-posture.js';
 import { makeCapacityVerdictPersist } from '../../../scripts/lib/capacity-verdict-store.mjs';
+import { hourlyWindowKey } from '../../../scripts/cron/drive-report-hourly-sweep.mjs';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const repoRoot = path.resolve(__dirname, '../../..');
@@ -610,18 +611,21 @@ describe('SD-LEO-INFRA-DRIVE-SCORE-LEG2-001 — computeLeg2 wiring', () => {
  * callee proves it matches what the callee ACTUALLY wants. Found by the SECURITY sub-agent, which
  * executed the pipeline instead of reading it.
  */
+// Module-scoped (not describe-scoped) so the FR-4 AC-5 block below can reuse the identical real
+// gather() pipeline rather than re-declare a second, potentially-drifting fixture.
+const E2E_STATUS = { open_total: 42, next: [{ item_id: 'i1' }], next_truncated: false, done: [], slipped: [] };
+const realGather = (nowMs = Date.UTC(...JULY, 10, 0, 0)) => buildGather({
+  supabase: {}, computePlanCheckStatus: async () => E2E_STATUS,
+  gatherCapacity: async () => ({ idleNow: 1, freeingSoon: 0, claimableCount: 0, openQfCount: 0 }),
+  persistVerdict: async () => { const e = new Error('relation does not exist'); e.code = 'PGRST205'; throw e; },
+  runGitLog: () => [], // E2E_STATUS.done is [] above -- never invoked, mandatory injection only.
+  // SD-LEO-INFRA-DRIVE-SCORE-LEG2-001: no snapshot cohort has ever been ranked in this E2E
+  // fixture world; leg2 stays unavailable, unchanged from before this SD.
+  readLeg2Cohort: async () => null,
+  nowMs,
+});
+
 describe('[END-TO-END] the sweep drives the REAL producer — no stub in between', () => {
-  const status = { open_total: 42, next: [{ item_id: 'i1' }], next_truncated: false, done: [], slipped: [] };
-  const realGather = (nowMs = Date.UTC(...JULY, 10, 0, 0)) => buildGather({
-    supabase: {}, computePlanCheckStatus: async () => status,
-    gatherCapacity: async () => ({ idleNow: 1, freeingSoon: 0, claimableCount: 0, openQfCount: 0 }),
-    persistVerdict: async () => { const e = new Error('relation does not exist'); e.code = 'PGRST205'; throw e; },
-    runGitLog: () => [], // status.done is [] above -- never invoked, mandatory injection only.
-    // SD-LEO-INFRA-DRIVE-SCORE-LEG2-001: no snapshot cohort has ever been ranked in this E2E
-    // fixture world; leg2 stays unavailable, unchanged from before this SD.
-    readLeg2Cohort: async () => null,
-    nowMs,
-  });
 
   it('writes exactly one real row through the real producer', async () => {
     const rows = [];
@@ -661,6 +665,55 @@ describe('[END-TO-END] the sweep drives the REAL producer — no stub in between
       produce: produceDriveReport,
       gather: realGather(),
     })).rejects.toThrow(/persist must be injected/);
+  });
+});
+
+// SD-LEO-INFRA-HOURLY-DRIVE-SCORE-001 FR-4 AC-5. This is the ONE consumer-guard site that lives
+// in THIS file rather than the hourly sweep's own: the daily sweep's own already-produced check
+// (findExisting, injected by the CLI at drive-report-sweep.mjs:541) relies solely on the two
+// window-key schemes being string-disjoint to avoid ever matching an hourly row. The disjointness
+// of the KEY FORMATS is already proven exhaustively in drive-report-hourly-sweep.test.js; this
+// proves the CONSUMING function — findExisting as actually used inside runDriveReportSweep's
+// already-produced check — is not fooled when an hourly row genuinely coexists in the same table.
+// A test-only addition; the daily sweep's own production code is untouched (PRD TR-1).
+describe('[SD-LEO-INFRA-HOURLY-DRIVE-SCORE-001 FR-4 AC-5] the daily already-produced check is never fooled by a coexisting hourly row', () => {
+  const IN_WINDOW = Date.UTC(...JULY, 10, 0, 0); // 06:00 ET, drive-2026-07-15
+
+  it('an hourly row for the same day does NOT make the daily sweep think it already ran', async () => {
+    // Seeds ONLY an hourly-scheme row — no daily row exists yet for this window.
+    const seeded = [{ run_id: hourlyWindowKey(IN_WINDOW) }];
+    const findExisting = async (id) => (seeded.find((x) => x.run_id === id) ? { id: 'row-1' } : null);
+    const rows = [];
+    const out = await runDriveReportSweep({
+      nowMs: IN_WINDOW,
+      produce: produceDriveReport,
+      gather: realGather(),
+      persist: async (row) => { rows.push(row); return { id: `row-${rows.length}` }; },
+      findExisting,
+    });
+
+    expect(out.written, 'the hourly row must not be mistaken for the daily one').toBe(true);
+    expect(rows, 'the daily sweep must still write its own row').toHaveLength(1);
+    expect(rows[0].run_id).toBe(windowKey(IN_WINDOW));
+    expect(rows[0].run_id).not.toBe(seeded[0].run_id);
+  });
+
+  it('[TWO-SIDED] a genuine daily row for the same window IS recognized as already-produced', async () => {
+    // Companion to the test above: proves findExisting is not simply vacuously permissive — it
+    // still correctly recognizes ITS OWN key scheme, it just does not conflate the other one.
+    const seeded = [{ run_id: windowKey(IN_WINDOW) }, { run_id: hourlyWindowKey(IN_WINDOW) }];
+    const findExisting = async (id) => (seeded.find((x) => x.run_id === id) ? { id: 'row-1' } : null);
+    const rows = [];
+    const out = await runDriveReportSweep({
+      nowMs: IN_WINDOW,
+      produce: produceDriveReport,
+      gather: realGather(),
+      persist: async (row) => { rows.push(row); return { id: `row-${rows.length}` }; },
+      findExisting,
+    });
+
+    expect(out).toMatchObject({ ran: true, written: false, skipped: 'already_produced' });
+    expect(rows, 'a genuinely already-produced daily window must not write again').toHaveLength(0);
   });
 });
 

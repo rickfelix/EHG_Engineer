@@ -58,10 +58,15 @@ describe('composeReport — shapes the row, never writes it', () => {
   });
 
   it('refuses a cadence the column would reject, naming it here instead of at the insert', () => {
-    expect(() => composeReport({ sections: SECTIONS, generatedAt: AT, cadence: 'hourly' })).toThrow(/cadence must be one of/);
+    // SD-LEO-INFRA-HOURLY-DRIVE-SCORE-001 FR-5: 'hourly' is now VALID (CADENCES widened) — this
+    // replaces the old assertion that it threw. The negative control below (a genuinely bogus
+    // value) keeps CADENCES' rejection path tested, so widening the allowlist does not also
+    // remove the only proof that composeReport() actually rejects an invalid cadence.
+    expect(() => composeReport({ sections: SECTIONS, generatedAt: AT, cadence: 'bogus' })).toThrow(/cadence must be one of/);
     for (const c of CADENCES) {
       expect(composeReport({ sections: SECTIONS, generatedAt: AT, cadence: c }).cadence).toBe(c);
     }
+    expect(CADENCES).toContain('hourly');
   });
 
   it('a missing drive_score becomes {} rather than undefined — the column is NOT NULL', () => {

@@ -285,7 +285,12 @@ if (isMainModule(import.meta.url)) {
         // (report.run_id === today's window key), so omitting it here would make isTodays
         // permanently false and every day would report MISSING. A column the code reads and the
         // query does not fetch is undefined, never an error.
+        // SD-LEO-INFRA-HOURLY-DRIVE-SCORE-001 FR-4: cadence='scheduled' is a BACKSTOP alongside
+        // the run_id identity check above — without it, an hourly row's different run_id would
+        // make isTodays false and this sweep would report a false STALE alarm to the chairman
+        // instead of correctly finding the daily row one query away.
         .select('id, run_id, generated_at, drive_score')
+        .eq('cadence', 'scheduled')
         .order('generated_at', { ascending: false })
         .limit(1)
         .maybeSingle();

@@ -78,7 +78,42 @@ describe('FR-3 — an embedded section renders section 2s answer, not a rederive
 });
 
 describe('FR-3 — fetchChainToGate degrades to null rather than throwing', () => {
-  const client = (impl) => ({ from: () => ({ select: () => ({ order: () => ({ limit: () => ({ maybeSingle: impl }) }) }) }) });
+  // SD-LEO-INFRA-HOURLY-DRIVE-SCORE-001 FR-4: fetchChainToGate now chains .eq('cadence',
+  // 'scheduled') between select() and order(). This fake MUST model that link — the narrower
+  // shape it had before returned a select() with no .eq, and fetchChainToGate's own try/catch
+  // swallowed the resulting TypeError and degraded to null. Every case in this block then read
+  // as "the table is absent" and only the one case asserting a NON-null result went red, which
+  // is the worst possible signal: three tests stayed green while measuring nothing.
+  //
+  // Same fix, same reason, as tests/unit/drive-loop/drive-report-consume.test.js's makeDb().
+  //
+  // The eq arguments are RECORDED, not merely accepted: a fake that silently tolerates any
+  // .eq() proves the chain shape but not the predicate, and the predicate is the whole point of
+  // FR-4. hourly-cadence-consumer-census.test.js pins this guard STATICALLY (source scan); the
+  // assertion below pins it BEHAVIOURALLY at the one consumer whose read the chairman's daily
+  // review doc depends on.
+  const client = (impl) => {
+    const eqs = [];
+    return {
+      eqs,
+      from: () => ({
+        select: () => ({
+          eq: (col, val) => { eqs.push({ col, val }); return {
+            order: () => ({ limit: () => ({ maybeSingle: impl }) }),
+          }; },
+        }),
+      }),
+    };
+  };
+
+  it("[FR-4] filters the read to cadence='scheduled' so an hourly row cannot supply section 2", async () => {
+    // The consumer this SD flagged as highest-exposure: without the filter an hourly partial's
+    // chain_to_gate silently replaces the daily one in the chairman's review doc — a wrong
+    // answer rendered with full confidence, which is worse than the UNAVAILABLE path above.
+    const c = client(async () => ({ data: { id: 'rep-9', sections: { chain_to_gate: section() } }, error: null }));
+    await fetchChainToGate(c);
+    expect(c.eqs).toContainEqual({ col: 'cadence', val: 'scheduled' });
+  });
 
   it('returns the stored section AND the report id that carries it', async () => {
     // The id travels with the section because FR-4 stamps a receipt against the report actually
