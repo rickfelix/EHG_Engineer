@@ -10,6 +10,17 @@ import { insertGuarded, CLASSIFICATION } from '../../lib/governance/fixture-prod
 // TS-5: anon role cannot forge occurrence_count/first_seen/last_seen directly.
 // TS-7: ingestion revocation is venture-scoped.
 //
+// SD-LEO-INFRA-RECORD-VENTURE-ERROR-DEFINER-POSTURE-001
+// TS-8: EXPECTED RED. record_venture_error validates that p_venture_id names an eligible
+// venture, never that the caller has any relationship to it -- there is no auth.uid(),
+// auth.jwt(), or shared secret anywhere in the function body. This test names the exploit
+// TS-3/TS-4/TS-5/TS-7 already exercise implicitly (every anon.rpc() call above succeeds for
+// a venture the bare anon client has no session tied to) so the vulnerability has an explicit,
+// intentionally-failing assertion rather than being merely implied by tests that don't
+// comment on it. Expected to start passing only once a caller-identity-bound replacement
+// (fn_submit_venture_error, staged in database/chairman-gated/20260812_venture_ingest_key_binding.sql)
+// is live and record_venture_error's anon EXECUTE grant is revoked -- see that SD's PRD FR-1/FR-3.
+//
 // All against the LIVE database (no mocks), per each scenario's acceptance criteria.
 // Uses a disposable fixture venture (created in beforeAll, deleted in afterAll) so
 // these tests never touch a real production venture's rows.
@@ -151,5 +162,31 @@ describeDb('record_venture_error RPC — live aggregation, storm, security, revo
     } finally {
       await svc.from('ventures').update({ metadata: {} }).eq('id', ventureId);
     }
+  }, 30000);
+
+  // NOTE: this proves the anon-caller vector only. `authenticated` also holds EXECUTE today
+  // (see the cutover runbook's §0) and is an equally real, wider forgery surface (any logged-in
+  // platform user, not just the three known anon-key external callers) -- this harness has no
+  // authenticated-session test fixture to exercise it. See the runbook's "Known test-coverage
+  // gap" note: do not treat this test going green as proof the authenticated vector is closed.
+  itDb('TS-8 [EXPECTED RED — SD-LEO-INFRA-RECORD-VENTURE-ERROR-DEFINER-POSTURE-001]: an anon caller with zero relationship to otherVentureId cannot forge a venture_error row attributed to it', async () => {
+    const errorHash = hash(`ts8-forgery-${randomUUID()}`);
+    const { data, error } = await anon.rpc('record_venture_error', {
+      p_venture_id: otherVentureId,
+      p_error_hash: errorHash,
+      p_message: 'attacker-controlled: this caller has no session, ownership, or relationship to otherVentureId',
+      p_context: { attack: 'cross-tenant-forgery-proof' },
+    });
+    // TODAY this call SUCCEEDS ({ok:true, action:'created'}) because record_venture_error
+    // only validates that otherVentureId names an eligible venture, never that the caller
+    // has any right to write on its behalf. Rejection can arrive either as a graceful
+    // {ok:false} (the function's own logic) or as a Postgres/PostgREST error (e.g. 42501
+    // once its anon EXECUTE grant is revoked per the cutover runbook's step 5, or PGRST202
+    // if the function is later dropped) -- accept either shape, never {ok:true}. Do not
+    // narrow this to require ONE specific shape: the planned fix closes this via a grant
+    // revocation, which produces an error, not a graceful ok:false response, and a
+    // conjunctive assertion (no error AND ok:false) can never go green after that fix lands.
+    expect(error !== null || data?.ok === false).toBe(true);
+    expect(data?.ok).not.toBe(true);
   }, 30000);
 });
