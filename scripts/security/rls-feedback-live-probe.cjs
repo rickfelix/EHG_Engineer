@@ -82,9 +82,16 @@ const CASES = [
     // ({...row, severity:'critical'}) would be BYTE-IDENTICAL to this row (which already carries
     // severity:'critical'), leaving the control unable to fail independently of the case it is
     // meant to cross-check — exactly the "present as a field, absent as a check" failure
-    // lib/security/rls-probe-template.cjs's own header warns about. Override with a control denied
-    // by a GENUINELY different mechanism: venture_id:null trips venture_user_insert_feedback's own
-    // NOT NULL clause, independent of the RESTRICTIVE bound this case actually tests.
+    // lib/security/rls-probe-template.cjs's own header warns about. Override with venture_id:null,
+    // which trips venture_user_insert_feedback's own NOT NULL clause POST-migration (once
+    // telegram_bot_insert_feedback is dropped and that's the only remaining permissive path) —
+    // a genuinely independent mechanism from the RESTRICTIVE bound this case tests. Adversarial
+    // /ship review finding (round 2): PRE-migration, telegram_bot_insert_feedback's own
+    // source_type-only WITH CHECK still authorizes this control regardless of venture_id, so in
+    // that window it is refused by the SAME anon_feedback_ingress_bounds severity bound as the row
+    // under test, not independently. Either way the control still correctly reads REFUSED (this
+    // case is not gated by requiresTelegramPolicy), so no verdict is ever wrong — only the
+    // cross-check's independence is window-dependent, not its correctness.
     controlOverride: { venture_id: null },
     row: (m, v) => ({ ...base(m), source_type: 'telegram', feedback_type: 'user_bug', venture_id: v, severity: 'critical' }) },
   { name: "telegram + category='chairman_decision_deferred', venture-owned",
