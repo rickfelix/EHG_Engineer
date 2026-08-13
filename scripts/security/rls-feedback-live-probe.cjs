@@ -117,7 +117,7 @@ async function main() {
   let telegramPolicyPresent = true; // conservative default until measured below
   const assertPrecondition = async () => {
     const { data, error } = await service.rpc('exec_sql', {
-      sql_text: "select policyname, permissive from pg_policies where schemaname='public' and tablename='feedback' and cmd='INSERT'",
+      sql_text: "select policyname, permissive, roles from pg_policies where schemaname='public' and tablename='feedback' and cmd='INSERT'",
     });
     if (error) {
       // FIXED (T-4): this used to be `if (error) return;`, silently no-op'ing on the exec_sql
@@ -131,13 +131,21 @@ async function main() {
     // therefore `[{ result: [...] }]`; the policy rows live at `data[0].result`.
     const rows = data?.[0]?.result || [];
     const permissiveNames = rows.filter((r) => r.permissive === 'PERMISSIVE').map((r) => r.policyname).sort();
-    const restrictiveNames = rows.filter((r) => r.permissive === 'RESTRICTIVE').map((r) => r.policyname).sort();
+    // Adversarial /ship review finding (INFO — same gap as the migration's own check (e)): a
+    // name+permissive-only filter would still call a RESTRICTIVE anon_feedback_ingress_bounds
+    // re-scoped to e.g. `TO authenticated` a live match, even though it would no longer bound any
+    // anon write at all. Requiring 'public' in the row's own roles array (exec_sql serializes
+    // pg_policies.roles as a JSON array of role-name strings, measured live) closes that gap.
+    const restrictiveNames = rows
+      .filter((r) => r.permissive === 'RESTRICTIVE' && Array.isArray(r.roles) && r.roles.includes('public'))
+      .map((r) => r.policyname)
+      .sort();
 
     const missing = ALWAYS_EXPECTED_INSERT_POLICIES.filter((p) => !permissiveNames.includes(p));
     if (missing.length) throw new Error(`policy set DRIFTED — missing PERMISSIVE INSERT policies: ${missing.join(', ')}. Predictions in this file were derived from the old set.`);
 
     if (!restrictiveNames.includes(ALWAYS_EXPECTED_RESTRICTIVE_POLICY)) {
-      throw new Error(`policy set DRIFTED — missing RESTRICTIVE INSERT policy: ${ALWAYS_EXPECTED_RESTRICTIVE_POLICY}. The severity/category CASES in this file rely on it continuing to bound every anon write.`);
+      throw new Error(`policy set DRIFTED — missing RESTRICTIVE INSERT policy (or it no longer applies to the public role): ${ALWAYS_EXPECTED_RESTRICTIVE_POLICY}. The severity/category CASES in this file rely on it continuing to bound every anon write.`);
     }
 
     telegramPolicyPresent = permissiveNames.includes('telegram_bot_insert_feedback');

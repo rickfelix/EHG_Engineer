@@ -385,9 +385,25 @@ describe('TS-4a/TS-4b: the REAL $verify$ block (extracted from the migration fil
     await client.query('BEGIN');
     try {
       await client.query('DROP POLICY IF EXISTS anon_feedback_ingress_bounds ON public.feedback');
-      // Message text updated (SECURITY sub-agent finding, EXEC re-review, L1) to match the migration's
-      // cmd='INSERT' pin added to this same assertion.
-      await expect(client.query(VERIFY_BLOCK_SQL)).rejects.toThrow(/anon_feedback_ingress_bounds is missing, no longer applies to INSERT, or is no longer RESTRICTIVE/);
+      // Message text updated (adversarial /ship review finding, this pass) to match the migration's
+      // roles predicate added to this same assertion.
+      await expect(client.query(VERIFY_BLOCK_SQL)).rejects.toThrow(/anon_feedback_ingress_bounds is missing, no longer applies to INSERT, is no longer RESTRICTIVE, or no longer applies to the public role/);
+    } finally {
+      await client.query('ROLLBACK');
+    }
+  });
+
+  it('[M1c] RAISEs if anon_feedback_ingress_bounds survives name+cmd+permissive but is re-scoped off the public role (adversarial /ship review finding: a name+cmd+permissive-only check would silently pass a policy stripped down to e.g. TO authenticated, which bounds nothing for anon)', async () => {
+    await client.query('BEGIN');
+    try {
+      await client.query('DROP POLICY IF EXISTS anon_feedback_ingress_bounds ON public.feedback');
+      await client.query(`
+        CREATE POLICY anon_feedback_ingress_bounds ON public.feedback
+          AS RESTRICTIVE
+          FOR INSERT TO authenticated
+          WITH CHECK (true);
+      `);
+      await expect(client.query(VERIFY_BLOCK_SQL)).rejects.toThrow(/anon_feedback_ingress_bounds is missing, no longer applies to INSERT, is no longer RESTRICTIVE, or no longer applies to the public role/);
     } finally {
       await client.query('ROLLBACK');
     }

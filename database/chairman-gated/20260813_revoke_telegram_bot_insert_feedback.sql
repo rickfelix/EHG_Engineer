@@ -167,18 +167,21 @@ BEGIN
     RAISE EXCEPTION 'VERIFY FAILED: public.feedback does not have RLS enabled';
   END IF;
 
-  -- (e) anon_feedback_ingress_bounds must remain present, RESTRICTIVE, AND still apply to INSERT
-  --     (SECURITY sub-agent finding, EXEC re-review, L1: the cmd predicate was missing — a
-  --     same-named policy re-created for a different cmd or with roles/predicates stripped could
-  --     satisfy a name+permissive-only check while this file's stated posture became false) — this
-  --     file's own header now relies on that policy continuing to bound severity/category/rate for
-  --     every anon INSERT that reaches venture_user_insert_feedback; if it were ever silently
-  --     dropped, re-scoped off INSERT, or flipped to PERMISSIVE, this file's stated safety posture
-  --     would be false.
+  -- (e) anon_feedback_ingress_bounds must remain present, RESTRICTIVE, still apply to INSERT, AND
+  --     still apply to the public role (SECURITY sub-agent finding, EXEC re-review, L1: the cmd
+  --     predicate was missing; adversarial /ship review finding, this pass: the cmd+permissive-only
+  --     check still let a same-named policy survive with its ROLES stripped down to e.g.
+  --     `TO authenticated` — satisfying name+cmd+permissive while ceasing to bound anon traffic at
+  --     all, exactly the "roles/predicates stripped" threat this comment already named but did not
+  --     test) — this file's own header now relies on that policy continuing to bound
+  --     severity/category/rate for every anon INSERT that reaches venture_user_insert_feedback; if
+  --     it were ever silently dropped, re-scoped off INSERT or off the public role, or flipped to
+  --     PERMISSIVE, this file's stated safety posture would be false.
   IF (SELECT count(*) FROM pg_policies
       WHERE schemaname = 'public' AND tablename = 'feedback'
-        AND policyname = 'anon_feedback_ingress_bounds' AND cmd = 'INSERT' AND permissive = 'RESTRICTIVE') <> 1 THEN
-    RAISE EXCEPTION 'VERIFY FAILED: anon_feedback_ingress_bounds is missing, no longer applies to INSERT, or is no longer RESTRICTIVE';
+        AND policyname = 'anon_feedback_ingress_bounds' AND cmd = 'INSERT' AND permissive = 'RESTRICTIVE'
+        AND 'public' = ANY(roles)) <> 1 THEN
+    RAISE EXCEPTION 'VERIFY FAILED: anon_feedback_ingress_bounds is missing, no longer applies to INSERT, is no longer RESTRICTIVE, or no longer applies to the public role';
   END IF;
 END
 $verify$;
