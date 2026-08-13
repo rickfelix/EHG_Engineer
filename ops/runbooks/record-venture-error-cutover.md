@@ -62,9 +62,13 @@ The two wrong orderings are both **outages**, not merely suboptimal:
 3. **[External repo work, tracked separately — see §3]** Update altifyai, apexniche-ai, and
    marketlens to call `fn_submit_venture_error(p_venture_id, p_ingest_secret, ...)` with their
    provisioned secret, replacing the `record_venture_error` call.
-4. **[Verification]** Confirm all three callers are migrated and successfully submitting via the
-   new function (e.g. a period with zero new `record_venture_error`-originated rows, or explicit
-   confirmation from each repo's own deploy).
+4. **[Verification]** Confirm all three callers are migrated via explicit confirmation from each
+   repo's own deploy (e.g. a merged PR/release referencing the switch). A row-count check against
+   `public.feedback` is NOT a valid substitute: `record_venture_error` and `fn_submit_venture_error`
+   insert byte-identical rows (same columns, same `source_type='error_capture'` literal, `metadata`
+   populated from caller-supplied `p_context` in both) — nothing in the written row distinguishes
+   which function wrote it, so "zero new record_venture_error-originated rows" is unmeasurable and
+   must not be used as the gate in front of step 5.
 5. **[CHAIRMAN-GATED DDL, follow-up migration]** Only once step 4 is confirmed:
    `REVOKE EXECUTE ON FUNCTION record_venture_error FROM anon;` and, optionally, drop the
    function. This is a **separate**, later migration — not part of the 20260812 file.

@@ -174,9 +174,14 @@ describeDb('record_venture_error RPC — live aggregation, storm, security, revo
     });
     // TODAY this call SUCCEEDS ({ok:true, action:'created'}) because record_venture_error
     // only validates that otherVentureId names an eligible venture, never that the caller
-    // has any right to write on its behalf. This assertion states the correct behavior and
-    // is expected to FAIL until the fix lands -- do not loosen it to make the suite green.
-    expect(error).toBeNull();
-    expect(data?.ok).toBe(false);
+    // has any right to write on its behalf. Rejection can arrive either as a graceful
+    // {ok:false} (the function's own logic) or as a Postgres/PostgREST error (e.g. 42501
+    // once its anon EXECUTE grant is revoked per the cutover runbook's step 5, or PGRST202
+    // if the function is later dropped) -- accept either shape, never {ok:true}. Do not
+    // narrow this to require ONE specific shape: the planned fix closes this via a grant
+    // revocation, which produces an error, not a graceful ok:false response, and a
+    // conjunctive assertion (no error AND ok:false) can never go green after that fix lands.
+    expect(error !== null || data?.ok === false).toBe(true);
+    expect(data?.ok).not.toBe(true);
   }, 30000);
 });
