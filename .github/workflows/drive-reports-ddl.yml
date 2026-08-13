@@ -40,6 +40,11 @@ on:
       # migration and its ddl test would otherwise trigger nothing.
       - 'database/chairman-gated/20260812_venture_ingest_key_binding.sql'
       - 'tests/ddl/venture-ingest-key-binding-ddl.db.test.js'
+      # SD-FDBK-INFRA-MIGRATE-ANON-INGEST-001. Same TR-5 fix, applied to a NEW pair rather than
+      # amended-in: this workflow's own paths filter is literal, so a PR touching only this SD's
+      # migration and its ddl test would otherwise trigger nothing.
+      - 'database/chairman-gated/20260813_revoke_telegram_bot_insert_feedback.sql'
+      - 'tests/ddl/telegram-bot-insert-feedback-drop-ddl.db.test.js'
       # SD-LEO-INFRA-HOURLY-DRIVE-SCORE-001 FR-7 — same trap, same fix, applied again.
       - 'database/migrations/20260812_drive_reports_hourly_cadence.sql'
       - 'tests/ddl/drive-reports-hourly-cadence-ddl.db.test.js'
