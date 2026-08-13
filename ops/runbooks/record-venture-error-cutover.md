@@ -86,6 +86,14 @@ fixture exists in this test harness today. Before declaring step 5 complete, ver
 caller in a follow-up, or by an explicit live check that `authenticated` no longer holds EXECUTE
 (`information_schema.routine_privileges`).
 
+**Known census gap**: §1's caller list and step 4's verification cover only the three known
+EXTERNAL callers, which happen to use the `anon` key. Neither establishes that no `authenticated`
+-session caller exists anywhere (e.g. an in-app "report a bug" feature calling this RPC with a
+logged-in user's own session) — absence from the known-caller list is not proof of absence in
+general. Before executing the `authenticated` half of step 5, search the EHG frontend (and any
+other first-party authenticated client) for direct calls to `record_venture_error`, not only rely
+on this runbook's external-repo census.
+
 ## 3. External-repo caller migration — tracked dependency, not this SD's scope
 
 This repository (`EHG_Engineer`) cannot modify `altifyai`, `apexniche-ai`, or `marketlens` source
