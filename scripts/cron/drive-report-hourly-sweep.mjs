@@ -51,6 +51,17 @@
  * Unlike the daily sweep (a single self-healing 05:00-08:59 ET window for one report/day), the
  * hourly sweep is meant to fire on every scheduled tick, all day. There is no ET-hour admission
  * gate here — the workflow's own cron schedule is the only cadence control.
+ *
+ * ── THE STAMP IS WHAT LETS THE ALARM CLEAR (found by SECURITY sub-agent EXEC review) ───────────
+ * registerArmedMachinery upserts last_fired_at: null on first arm. Without a stamp call after
+ * every healthy run, periodic-liveness-watcher.mjs sees an armed row whose last_fired_at never
+ * advances off NULL, and once now - armed_at exceeds expected_interval_seconds * grace_multiplier
+ * (3600 * 2 = 2h) it reports OVERDUE / armed_never_produced — permanently, even though the sweep
+ * is producing a report every hour. A stuck-on alarm is the exact false-negative this instrument
+ * exists to prevent, and it would trigger silently the first time HOURLY_SWEEP_ENABLED flips to
+ * 'true'. Mirrors the daily sweep's register-then-produce-then-check-blocked-then-stamp order
+ * exactly, for the identical reason: stamping before checking `blocked` would silence the alarm
+ * for a run that wrote nothing.
  */
 
 import { isMainModule } from '../../lib/utils/is-main-module.js';
@@ -89,11 +100,12 @@ export function hourlyWindowKey(nowMs) {
  * @param {Function} o.gather buildGather({...cadence-agnostic...})'s returned closure
  * @param {Function} o.persist the real drive_reports insert, table-absent-aware
  * @param {Function} [o.register] registerArmedMachinery, bound to THIS sweep's own identity
+ * @param {Function} [o.stamp] writes LAST_RUN_FIELD = now on THIS sweep's registry row
  * @param {Function} [o.findExisting] the run_id-equality idempotence probe
  * @param {Function} [o.log]
  */
 export async function runDriveReportHourlySweep({
-  nowMs, produce, gather, persist, register = null, findExisting = null, log = () => {},
+  nowMs, produce, gather, persist, register = null, stamp = null, findExisting = null, log = () => {},
 } = {}) {
   if (typeof produce !== 'function' || typeof gather !== 'function' || typeof persist !== 'function') {
     throw new Error('runDriveReportHourlySweep(): produce, gather, and persist must be injected — a sweep whose write is hidden cannot be tested for whether it ran');
@@ -120,6 +132,10 @@ export async function runDriveReportHourlySweep({
     log('BLOCKED: the hourly report could not be persisted (table absent) — registry deliberately NOT stamped');
     return { ran: true, blocked: 'table_absent', run_id: runId };
   }
+
+  // Stamp on either healthy outcome, same as the daily sweep. `already_produced` still means a
+  // report for this window EXISTS, which is what the alarm asks about.
+  if (stamp) await stamp({ processKey: HOURLY_PROCESS_KEY, field: LAST_RUN_FIELD, at: new Date(nowMs).toISOString() });
 
   log(result.written ? `produced hourly report for ${runId}` : `${result.skipped} for ${runId}`);
   return { ran: true, run_id: runId, ...result };
@@ -190,6 +206,15 @@ if (isMainModule(import.meta.url)) {
       return data || null;
     },
     register: (opts) => registerArmedMachinery(supabase, { sd_key: HOURLY_SD_KEY }, opts),
+    stamp: async ({ processKey, field, at }) => {
+      // grace_multiplier: 2 mirrors the daily sweep's own stamp closure — without it this row
+      // inherits the periodic_process_registry column default, and the OVERDUE alarm this fix
+      // exists to keep clear would fire on the wrong schedule.
+      const { error } = await supabase.from('periodic_process_registry')
+        .update({ [field]: at, grace_multiplier: 2 })
+        .eq('process_key', processKey);
+      if (error) console.warn(`[drive-report-hourly-sweep] stamp failed: ${error.message}`);
+    },
     log: (m) => console.log(`[drive-report-hourly-sweep] ${m}`),
   });
 

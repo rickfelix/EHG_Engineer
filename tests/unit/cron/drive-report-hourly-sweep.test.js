@@ -9,6 +9,7 @@ import {
   HOURLY_EXPECTED_INTERVAL_SECONDS, HOURLY_PROCESS_KEY,
 } from '../../../scripts/cron/drive-report-hourly-sweep.mjs';
 import { windowKey } from '../../../scripts/cron/drive-report-sweep.mjs';
+import { LAST_RUN_FIELD } from '../../../lib/drive-loop/report-posture.js';
 
 const ROOT = join(dirname(fileURLToPath(import.meta.url)), '..', '..', '..');
 
@@ -71,13 +72,14 @@ describe('runDriveReportHourlySweep — orchestration', () => {
   const NOW = Date.UTC(2026, 7, 13, 5, 0, 0);
 
   function makeStubs({ produceResult = { written: true, id: 'r1' }, registerResult = { ok: true } } = {}) {
-    const calls = { produce: [], register: [], log: [] };
+    const calls = { produce: [], register: [], stamp: [], order: [], log: [] };
     return {
       calls,
       gather: vi.fn(async () => ({ sections: {}, driveScore: {} })),
       produce: vi.fn(async (args) => { calls.produce.push(args); return produceResult; }),
       persist: vi.fn(async () => ({ id: 'r1' })),
-      register: vi.fn(async (opts) => { calls.register.push(opts); return registerResult; }),
+      register: vi.fn(async (opts) => { calls.register.push(opts); calls.order.push('register'); return registerResult; }),
+      stamp: vi.fn(async (opts) => { calls.stamp.push(opts); calls.order.push('stamp'); }),
       findExisting: vi.fn(async () => null),
       log: (m) => calls.log.push(m),
     };
@@ -118,19 +120,80 @@ describe('runDriveReportHourlySweep — orchestration', () => {
     expect(s.calls.log.some((m) => m.includes('registration failed'))).toBe(true);
   });
 
-  it('a table-absent block is reported, not thrown', async () => {
+  it('a table-absent block is reported, not thrown, and the alarm must stay armed — no stamp', async () => {
     const s = makeStubs({ produceResult: { id: null, blocked: true } });
     const out = await runDriveReportHourlySweep({ nowMs: NOW, ...s });
     expect(out.ran).toBe(true);
     expect(out.blocked).toBe('table_absent');
+    expect(s.calls.stamp, 'a blocked run wrote nothing — stamping it would report healthy while no report exists').toHaveLength(0);
   });
 
-  it('works with no register/findExisting injected (both optional)', async () => {
+  it('works with no register/findExisting/stamp injected (all optional)', async () => {
     const s = makeStubs();
     delete s.register;
     delete s.findExisting;
+    delete s.stamp;
     const out = await runDriveReportHourlySweep({ nowMs: NOW, gather: s.gather, produce: s.produce, persist: s.persist, log: s.log });
     expect(out.ran).toBe(true);
+  });
+});
+
+describe('runDriveReportHourlySweep — the stamp is what lets the liveness alarm CLEAR (SECURITY sub-agent finding)', () => {
+  // Without this coverage the sweep can produce a report every single hour while
+  // periodic-liveness-watcher.mjs reports it permanently OVERDUE, because
+  // registerArmedMachinery upserts last_fired_at: null and nothing ever advances it off NULL.
+  const NOW = Date.UTC(2026, 7, 13, 5, 0, 0);
+
+  function makeStubs({ produceResult = { written: true, id: 'r1' }, registerResult = { ok: true } } = {}) {
+    const calls = { produce: [], register: [], stamp: [], order: [], log: [] };
+    return {
+      calls,
+      gather: vi.fn(async () => ({ sections: {}, driveScore: {} })),
+      produce: vi.fn(async (args) => { calls.produce.push(args); return produceResult; }),
+      persist: vi.fn(async () => ({ id: 'r1' })),
+      register: vi.fn(async (opts) => { calls.register.push(opts); calls.order.push('register'); return registerResult; }),
+      stamp: vi.fn(async (opts) => { calls.stamp.push(opts); calls.order.push('stamp'); }),
+      findExisting: vi.fn(async () => null),
+      log: (m) => calls.log.push(m),
+    };
+  }
+
+  it('[ORDER] registers BEFORE stamping — reversed, registerArmedMachinery\'s null upsert erases the stamp', async () => {
+    const s = makeStubs();
+    await runDriveReportHourlySweep({ nowMs: NOW, ...s });
+    expect(s.calls.order).toEqual(['register', 'stamp']);
+  });
+
+  it('stamps with THIS sweep\'s own process key and the shared LAST_RUN_FIELD constant', async () => {
+    const s = makeStubs();
+    await runDriveReportHourlySweep({ nowMs: NOW, ...s });
+    expect(s.calls.stamp).toHaveLength(1);
+    expect(s.calls.stamp[0].processKey).toBe(HOURLY_PROCESS_KEY);
+    expect(s.calls.stamp[0].field).toBe(LAST_RUN_FIELD);
+    expect(s.calls.stamp[0].field).toBe('last_fired_at');
+    expect(s.calls.stamp[0].at).toBe(new Date(NOW).toISOString());
+  });
+
+  it('stamps on already_produced too — otherwise every tick after the first re-arms the alarm', async () => {
+    const s = makeStubs({ produceResult: { written: false, skipped: 'already_produced', id: 'r1' } });
+    await runDriveReportHourlySweep({ nowMs: NOW, ...s });
+    expect(s.calls.stamp, 'a report already existing for this window is HEALTHY, not "did not run"').toHaveLength(1);
+  });
+
+  it('does NOT stamp when the producer throws — a failed run must leave the alarm armed', async () => {
+    const s = makeStubs();
+    s.produce = vi.fn(async () => { throw new Error('boom'); });
+    await expect(runDriveReportHourlySweep({ nowMs: NOW, ...s })).rejects.toThrow('boom');
+    expect(s.calls.stamp).toHaveLength(0);
+  });
+
+  it('[TWO-SIDED] a genuinely successful run DOES stamp', async () => {
+    // Pairs with the blocked/throw tests above — without this, a guard that never stamped would
+    // pass both negative tests while permanently leaving the alarm stuck on.
+    const s = makeStubs();
+    const out = await runDriveReportHourlySweep({ nowMs: NOW, ...s });
+    expect(out.ran).toBe(true);
+    expect(s.calls.stamp).toHaveLength(1);
   });
 });
 
