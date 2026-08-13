@@ -192,22 +192,23 @@ describe('the migration applied', () => {
   });
 });
 
+// Strips full-line `--` comments before matching (DATABASE sub-agent finding, EXEC review, B1),
+// hoisted for reuse (testing-agent finding, EXEC re-review, T-19): the migration's own header
+// prose names record_venture_error AND states "never a table-level REVOKE" in plain English — a
+// raw-text match against MIGRATION_SQL would false-fail on either mention, deterministically, with
+// no database needed. Applied to every text-only TR-1/TR-4 assertion below, not just one.
+const MIGRATION_CODE_ONLY = MIGRATION_SQL.replace(/^\s*--.*$/gm, '');
+
 describe('TR-1: mechanism is DROP POLICY, never a table-level REVOKE', () => {
   it('the file text uses DROP POLICY IF EXISTS and never REVOKEs the table-level grant', () => {
-    expect(MIGRATION_SQL).toMatch(/DROP POLICY IF EXISTS telegram_bot_insert_feedback ON public\.feedback/);
-    expect(MIGRATION_SQL).not.toMatch(/REVOKE\s+(ALL|INSERT)\s+ON\s+(TABLE\s+)?(public\.)?feedback/i);
+    expect(MIGRATION_CODE_ONLY).toMatch(/DROP POLICY IF EXISTS telegram_bot_insert_feedback ON public\.feedback/);
+    expect(MIGRATION_CODE_ONLY).not.toMatch(/REVOKE\s+(ALL|INSERT)\s+ON\s+(TABLE\s+)?(public\.)?feedback/i);
   });
 });
 
 describe('TR-4: migration file stays out of excluded scope', () => {
   it('never references record_venture_error in executable SQL (comments are exempt — the header deliberately documents this exclusion, US-005/FR-5)', () => {
-    // Strips full-line `--` comments before matching (DATABASE sub-agent finding, EXEC review,
-    // B1): the header's own SCOPE-exclusion paragraph names record_venture_error by design, and a
-    // raw-text match against MIGRATION_SQL fails on that prose every time, deterministically, with
-    // no database needed — this is exactly the "I could not get a real green run locally" gap that
-    // concealed it.
-    const codeOnly = MIGRATION_SQL.replace(/^\s*--.*$/gm, '');
-    expect(codeOnly).not.toMatch(/record_venture_error/);
+    expect(MIGRATION_CODE_ONLY).not.toMatch(/record_venture_error/);
   });
 
   it('never CREATEs/ALTERs/DROPs venture_user_insert_feedback', () => {
@@ -222,14 +223,25 @@ describe('TS-1/TS-6: bare telegram-sourced anon INSERT is rejected post-migratio
     // which is also 42501 but a DIFFERENT message ("permission denied for table ..."). Asserting
     // the live-measured RLS message text closes that gap — confirmed live against the real
     // instance (via a rolled-back simulation, never committed) before pinning this string.
+    // CORRECTED (testing-agent finding, EXEC re-review, T-17): `toMatchObject({message: /regex/})`
+    // does NOT apply the regex as a matcher against a string property under this repo's vitest —
+    // it was silently ignored, so this assertion was equivalent to a bare `code: '42501'` check
+    // despite its comment claiming otherwise. Explicit try/catch enforces both properties for real
+    // (verified: a `permission denied for table` message now genuinely fails this assertion).
     await client.query('BEGIN');
     try {
       await client.query('SET LOCAL ROLE anon');
-      await expect(
-        client.query(
+      let err;
+      try {
+        await client.query(
           `INSERT INTO public.feedback (source_type, feedback_type, venture_id) VALUES ('telegram', 'sentry_error', NULL)`,
-        ),
-      ).rejects.toMatchObject({ code: '42501', message: /row-level security policy/ });
+        );
+      } catch (e) {
+        err = e;
+      }
+      expect(err).toBeTruthy();
+      expect(err.code).toBe('42501');
+      expect(err.message).toMatch(/row-level security policy/);
     } finally {
       await client.query('ROLLBACK');
     }
