@@ -8,8 +8,9 @@ import {
   hourlyWindowKey, runDriveReportHourlySweep, HOURLY_SD_KEY, HOURLY_ACTIVATION_TRIGGER,
   HOURLY_EXPECTED_INTERVAL_SECONDS, HOURLY_PROCESS_KEY,
 } from '../../../scripts/cron/drive-report-hourly-sweep.mjs';
-import { windowKey } from '../../../scripts/cron/drive-report-sweep.mjs';
+import { windowKey, buildGather } from '../../../scripts/cron/drive-report-sweep.mjs';
 import { LAST_RUN_FIELD } from '../../../lib/drive-loop/report-posture.js';
+import { assertProducedLegsMatchSSOT, RATIFIED_LEG_IDS } from '../../../lib/drive-loop/score/drive-score-legs.js';
 
 const ROOT = join(dirname(fileURLToPath(import.meta.url)), '..', '..', '..');
 
@@ -217,5 +218,71 @@ describe('[SD-LEO-INFRA-HOURLY-DRIVE-SCORE-001 FR-6, AC-3] CLI wiring: capacityR
     // specifically, the actual executable-usage signal, not the explanatory text about it.
     const codeOnly = source.replace(/\/\*[\s\S]*?\*\//g, '').replace(/^\s*\/\/.*$/gm, '');
     expect(codeOnly).not.toMatch(/import\s*\{[^}]*\bwindowKey\b[^}]*\}\s*from\s*['"]\.\/drive-report-sweep\.mjs['"]/);
+  });
+});
+
+// Shared by the two behavioural blocks below. Mirrors drive-report-sweep.test.js's own
+// `realGather` helper (same fixture status shape) so the hourly path is exercised through the
+// SAME buildGather()/scoreCapacityLeg() pipeline the daily sweep already proves end-to-end —
+// not a second, parallel test double. capacityRunId is hourlyWindowKey(nowMs), matching the real
+// CLI wiring asserted statically above.
+const HOURLY_STATUS = { open_total: 1, next: [], next_truncated: false, done: [], slipped: [] };
+function stubHourlyGather(nowMs, { persistVerdict = async () => ({ id: 'v1' }) } = {}) {
+  return buildGather({
+    supabase: {}, computePlanCheckStatus: async () => HOURLY_STATUS,
+    gatherCapacity: async () => ({ idleNow: 1, freeingSoon: 0, claimableCount: 0, openQfCount: 0 }),
+    persistVerdict,
+    capacityRunId: hourlyWindowKey(nowMs),
+    runGitLog: () => [], // HOURLY_STATUS.done is [] — never invoked, mandatory injection only.
+    readLeg2Cohort: async () => null, // no ranked cohort in this fixture world — leg2 unavailable.
+    nowMs,
+  });
+}
+
+describe('[SD-LEO-INFRA-HOURLY-DRIVE-SCORE-001 FR-3 AC-1] the hourly gather() output is pinned to the ratified 3-leg SSOT', () => {
+  // buildGather() is reused verbatim from the daily sweep (PRD TR-1) — this is not a new leg-
+  // scoring path, but FR-3 asks for a SECOND invocation-site assertion specifically at the hourly
+  // path's own consumption of it, following the existing drive-score-legs.test.js pattern. The
+  // regression this catches: a future edit adds/drops a leg inside buildGather() without noticing
+  // the hourly caller also depends on the produced set exactly matching RATIFIED_LEG_IDS.
+  it('measured_legs + unavailable_legs together equal RATIFIED_LEG_IDS, never more, never fewer', async () => {
+    const gather = stubHourlyGather(Date.UTC(2026, 6, 15, 10, 0, 0)); // 06:00 ET
+    const { driveScore } = await gather();
+    const producedLegIds = [...driveScore.measured_legs, ...driveScore.unavailable_legs.map((u) => u.leg)];
+
+    expect(() => assertProducedLegsMatchSSOT(producedLegIds)).not.toThrow();
+    expect(new Set(producedLegIds)).toEqual(new Set(RATIFIED_LEG_IDS));
+    expect(producedLegIds).toHaveLength(RATIFIED_LEG_IDS.length);
+  });
+
+  it('[POSITIVE CONTROL] a leg dropped from the produced set is NOT silently accepted', () => {
+    // Proves the assertion above is load-bearing, not vacuous — mirrors the existing POSITIVE
+    // CONTROL pattern in drive-score-legs.test.js, applied to this file's own import of the guard.
+    const missingOne = RATIFIED_LEG_IDS.slice(1);
+    expect(() => assertProducedLegsMatchSSOT(missingOne)).toThrow(/DRIVE_SCORE_LEG_SET_DRIFT/);
+  });
+});
+
+describe('[SD-LEO-INFRA-HOURLY-DRIVE-SCORE-001 FR-6 AC-3] three consecutive hourly ticks write three distinct capacity-verdict run_ids', () => {
+  // Without this, capacityRunId reverting to a shared/daily key would silently accumulate
+  // duplicate belt_capacity_verdicts rows under one run_id every hour — no unique constraint on
+  // run_id there to catch it, and the static wiring test above only proves the CLI's assignment
+  // expression, not that three real ticks actually resolve to three real distinct values.
+  it('persistVerdict receives 3 distinct run_ids across 3 consecutive hourly ticks in the same ET day', async () => {
+    const seenRunIds = [];
+    const persistVerdict = async (row) => { seenRunIds.push(row.run_id); return { id: 'v1' }; };
+
+    const ticks = [
+      Date.UTC(2026, 6, 15, 9, 0, 0),  // 05:00 ET
+      Date.UTC(2026, 6, 15, 10, 0, 0), // 06:00 ET
+      Date.UTC(2026, 6, 15, 11, 0, 0), // 07:00 ET
+    ];
+    for (const nowMs of ticks) {
+      await stubHourlyGather(nowMs, { persistVerdict })();
+    }
+
+    expect(seenRunIds).toHaveLength(3);
+    expect(new Set(seenRunIds).size, 'all 3 must be distinct — not 1 shared key').toBe(3);
+    expect(seenRunIds).toEqual(ticks.map((t) => hourlyWindowKey(t)));
   });
 });
