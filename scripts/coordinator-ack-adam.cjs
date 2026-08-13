@@ -354,8 +354,18 @@ async function deliverReplyOrExit(supabase, { adv, replyBody, coordinatorSession
     }
   }
 
+  // QF-20260811-526: a missing correlation_id means THIS advisory can't carry a reply — it does NOT
+  // mean the row must stay unactioned. Exiting here (as this used to) skipped Stage 2 entirely,
+  // leaving a no-correlation advisory pending forever via the --reply path (worker signal a6067eb7;
+  // QF-20260728-468's filer measured three coordinator-health probes hit this). Fall through instead:
+  // main() proceeds to Stage 2 and reports the reply as skipped rather than sent. console.warn (not
+  // .error) deliberately — this is not a fatal branch, so it stays outside the 1:1
+  // fatal-console.error/process.exit pairing the reply-ordering test asserts on the rest of this fn.
   const correlationId = adv.payload && adv.payload.correlation_id;
-  if (!correlationId) { console.error('ERROR: advisory carries no payload.correlation_id (not replyable).'); process.exit(1); }
+  if (!correlationId) {
+    console.warn('  ⚠ --reply skipped: advisory carries no payload.correlation_id (not replyable) — proceeding to ack.');
+    return { skipped: true, reason: 'no_correlation_id' };
+  }
 
   // FR-1: target the CURRENT live Adam, never a stale originating session.
   const { target: adamSession, retargeted } = await resolveAdamReplyTarget(supabase, originator);
@@ -475,15 +485,19 @@ async function main() {
       process.exit(0);
     }
     // The send + delivery verification already happened above, BEFORE the advisory was retired.
-    console.log('✓ Coordinator reply sent to Adam (delivery verified)');
-    console.log('  reply_id:', replyOutcome.replyId);
-    console.log('  to_adam:', replyOutcome.adamSession);
-    console.log('  reply_to:', replyOutcome.correlationId);
+    if (replyOutcome && replyOutcome.skipped) {
+      console.log(`NOTE: --reply skipped (${replyOutcome.reason}) — advisory was still actioned.`);
+    } else {
+      console.log('✓ Coordinator reply sent to Adam (delivery verified)');
+      console.log('  reply_id:', replyOutcome.replyId);
+      console.log('  to_adam:', replyOutcome.adamSession);
+      console.log('  reply_to:', replyOutcome.correlationId);
+    }
   }
 }
 
 module.exports = {
-  isMatchableRef, parseArgs, recordLedgerDecision, inheritTailDecisions, VALID_DISPOSITIONS, resolveOutcomeRef, isNoArtifactRef, NO_ARTIFACT_MARKER, LINKAGE_REQUIRED_DISPOSITIONS };
+  isMatchableRef, parseArgs, recordLedgerDecision, inheritTailDecisions, VALID_DISPOSITIONS, resolveOutcomeRef, isNoArtifactRef, NO_ARTIFACT_MARKER, LINKAGE_REQUIRED_DISPOSITIONS, deliverReplyOrExit };
 
 if (require.main === module) {
   main().catch(err => { console.error('UNHANDLED:', err.message || err); process.exit(1); });
