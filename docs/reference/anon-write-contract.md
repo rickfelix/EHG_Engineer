@@ -2,9 +2,9 @@
 
 **Category**: Reference
 **Status**: Approved
-**Version**: 1.0.0
+**Version**: 1.1.0
 **Author**: SD-LEO-INFRA-DEAD-VENTURE-USER-001
-**Last Updated**: 2026-08-04
+**Last Updated**: 2026-08-13
 **Tags**: rls, postgres, anon, feedback, ingress
 
 ## Read this first
@@ -134,3 +134,17 @@ Distinct from the above, and easy to conflate — there are **two** rate limits 
 
 The remedy is filed as a separate chairman-gated SD rather than applied here: making a dormant limit
 suddenly bind would begin rejecting live traffic across four source types with existing volume.
+
+## Related: telegram_bot_insert_feedback removal staged
+
+`telegram_bot_insert_feedback` (the fourth writer form implied by "five anon-path writers" above)
+has a **staged, not-yet-applied** removal: `database/chairman-gated/20260813_revoke_telegram_bot_insert_feedback.sql`
+(SD-FDBK-INFRA-MIGRATE-ANON-INGEST-001). It has `WITH CHECK (source_type = 'telegram')` only — no
+`venture_id` predicate, no content/rate bound of its own — the RESTRICTIVE `anon_feedback_ingress_bounds`
+policy above is what has always bounded its severity/category/rate, before and after this migration.
+The verdicts in [The contract](#the-contract) remain accurate **as measured today** — this table's
+policy set is unchanged until a chairman applies the migration. Post-apply, telegram-sourced writes
+route through `venture_user_insert_feedback` instead (requires a real `venture_id`) or are refused;
+re-run `scripts/anon-write-contract-probe.mjs --table public.feedback` to re-measure. This closes an
+unbounded carve-out, not venture-ID spoofing — `venture_user_insert_feedback`'s `venture_exists_and_active()`
+check remains existence-only, unchanged by this migration.

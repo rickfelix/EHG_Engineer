@@ -73,6 +73,14 @@ remained open and is closed by this SD.
   (`database/chairman-gated/`), staged with no `@approved-by`. **The design is complete and
   merged to `main` as an unapplied artifact; the fix itself is not live until the chairman
   ratifies and applies it.**
+- **`telegram_bot_insert_feedback` update (2026-08-13):** left untouched by this migration (see
+  FR row above) — it now has its own, separate staged removal:
+  `database/chairman-gated/20260813_revoke_telegram_bot_insert_feedback.sql`
+  (SD-FDBK-INFRA-MIGRATE-ANON-INGEST-001). Also staged, also unapplied. That migration removes the
+  "no `venture_id` predicate at all" carve-out this audit's Finding table flags — it is a narrower
+  fix (closes the unbounded write path, not venture-ID spoofing) and does not touch
+  `venture_exists_and_active()`'s existence-only check, which remains this audit's open residual.
+  See `docs/reference/anon-write-contract.md#related-telegram_bot_insert_feedback-removal-staged`.
 - **Rollback:** the migration's own `$verify$` self-verification block asserts the full grant
   posture (all 4 DML privileges × `anon`/`authenticated`, on both the table and all three
   internal functions) before `COMMIT` — a partial re-apply that loses a REVOKE fails closed
