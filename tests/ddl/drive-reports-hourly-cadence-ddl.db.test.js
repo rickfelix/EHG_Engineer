@@ -94,7 +94,15 @@ describe('20260812_drive_reports_hourly_cadence.sql — widens cadence, nothing 
     // refusal, not a bug in the migration. This test's OWN subject is "does narrow-then-reapply
     // self-heal", not "does narrowing survive incompatible data" (a real but different question),
     // so it clears its own precondition first.
+    //
+    // drive_reports is append-only (drive_reports_guard_delete(), base migration 20260803): a bare
+    // DELETE is refused unless the same transaction declares SET LOCAL drive_reports.allow_delete
+    // = 'on' first — SET LOCAL's scope ends at COMMIT, matching the established pattern in
+    // drive-reports-ddl.db.test.js's own delete-permission tests.
+    await client.query('BEGIN');
+    await client.query("SET LOCAL drive_reports.allow_delete = 'on';");
     await client.query("DELETE FROM public.drive_reports WHERE cadence = 'hourly';");
+    await client.query('COMMIT');
     await client.query('ALTER TABLE public.drive_reports DROP CONSTRAINT drive_reports_cadence_check;');
     await client.query("ALTER TABLE public.drive_reports ADD CONSTRAINT drive_reports_cadence_check CHECK (cadence IN ('scheduled', 'on_demand'));");
     await expect(
