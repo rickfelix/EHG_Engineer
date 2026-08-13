@@ -18,10 +18,13 @@ import { dirname, join } from 'node:path';
 
 const ROOT = join(dirname(fileURLToPath(import.meta.url)), '..', '..', '..');
 
-// The 6 known sites this SD's FR-4 covers. drive-report-sweep.mjs's own findExisting probe is
-// deliberately excluded here -- it queries by EXACT run_id equality, not "newest row", so it is
-// safe by construction (disjoint run_id schemes) rather than by a cadence filter; it is covered
-// by hourly-cadence-run-id-disjointness.test.js instead.
+// The 4 "newest row" sites this SD's FR-4 covers with a cadence filter. Two further sites
+// (drive-report-sweep.mjs's daily findExisting probe and drive-report-hourly-sweep.mjs's own)
+// are deliberately excluded here -- both query by EXACT run_id equality, not "newest row", so
+// they are safe by construction (disjoint windowKey()/hourlyWindowKey() schemes) rather than by
+// a cadence filter; that disjointness is covered by hourlyWindowKey's own property tests in
+// tests/unit/cron/drive-report-hourly-sweep.test.js and by the FR-4 AC-5 block in
+// tests/unit/cron/drive-report-sweep.test.js.
 const GUARDED_SITES = [
   { file: 'scripts/coordinator-drive-report-consume.mjs', kind: 'js' },
   { file: 'scripts/cron/drive-report-sms-sweep.mjs', kind: 'js' },

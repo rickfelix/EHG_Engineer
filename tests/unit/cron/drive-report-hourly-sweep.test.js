@@ -199,17 +199,25 @@ describe('runDriveReportHourlySweep — the stamp is what lets the liveness alar
 });
 
 describe('[SD-LEO-INFRA-HOURLY-DRIVE-SCORE-001 FR-6, AC-3] CLI wiring: capacityRunId is the HOURLY key, never the daily one', () => {
-  // A behavioural test would need to stub the whole gather()/leg4 chain to observe capacityRunId,
-  // which is only ever constructed inside the CLI (isMainModule) block. This asserts the wiring
-  // statically instead, mirroring this repo's own drive-report-wiring.test.js pattern for exactly
-  // this class of "is the CLI edge wired to the right function" concern — the discriminating
-  // regression here is a future edit that reintroduces windowKey(cliNowMs) (the DAILY key) for
-  // capacityRunId, which would silently accumulate duplicate belt_capacity_verdicts rows (no
-  // unique constraint on run_id there) without ever throwing or failing a behavioural test.
+  // The CLI's own construction of capacityRunId (isMainModule block) is only reachable statically
+  // — asserted here, mirroring this repo's own drive-report-wiring.test.js pattern. The behavioural
+  // proof that 3 real ticks resolve to 3 real distinct persisted run_ids lives in the FR-6 AC-3
+  // describe block below, which drives the real buildGather()/scoreCapacityLeg() pipeline directly
+  // rather than the CLI block itself.
   const source = readFileSync(join(ROOT, 'scripts/cron/drive-report-hourly-sweep.mjs'), 'utf8');
 
   it('capacityRunId is derived from hourlyWindowKey(cliNowMs)', () => {
     expect(source).toMatch(/capacityRunId\s*=\s*hourlyWindowKey\(cliNowMs\)/);
+  });
+
+  it('capacityRunId is actually PASSED to buildGather(), not just computed and discarded', () => {
+    // VALIDATION sub-agent finding: the assertion above proves the variable's own assignment, but
+    // neither it nor the behavioural block below asserts buildGather({...}) is called WITH it —
+    // drop the property from that call and both would still pass while it silently defaults to
+    // null (buildGather's own default), which is exactly the FR-6 AC-3 regression this SD exists
+    // to prevent.
+    const codeOnly = source.replace(/\/\*[\s\S]*?\*\//g, '').replace(/^\s*\/\/.*$/gm, '');
+    expect(codeOnly).toMatch(/buildGather\(\{[\s\S]{0,400}?capacityRunId,/);
   });
 
   it('[NEGATIVE CONTROL] the daily windowKey is never IMPORTED (executable usage, not this file\'s own prose explaining why)', () => {
