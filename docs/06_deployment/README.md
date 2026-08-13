@@ -25,6 +25,7 @@ This directory contains production deployment guides and operational documentati
 - [CI CD STATUS REPORT](ci-cd-status-report.md)
 - [Context Preservation Guide](context-preservation-guide.md)
 - [Deployment Ops](deployment_ops.md)
+- [Drive Report Hourly Cadence Runbook](drive-report-hourly-cadence-runbook.md)
 - [IMPORTANT DATABASE DISTINCTION](important-database-distinction.md)
 - [Kochel Migration Phase A](kochel-migration-phase-a.md)
 - [PRODUCTION GO LIVE](production-go-live.md)
