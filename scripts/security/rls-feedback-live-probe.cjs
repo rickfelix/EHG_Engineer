@@ -137,7 +137,7 @@ async function main() {
     if (missing.length) throw new Error(`policy set DRIFTED — missing PERMISSIVE INSERT policies: ${missing.join(', ')}. Predictions in this file were derived from the old set.`);
 
     if (!restrictiveNames.includes(ALWAYS_EXPECTED_RESTRICTIVE_POLICY)) {
-      throw new Error(`policy set DRIFTED — missing RESTRICTIVE INSERT policy: ${ALWAYS_EXPECTED_RESTRICTIVE_POLICY}. The severity/category CASES in this file rely on it continuing to bound every anon INSERT.`);
+      throw new Error(`policy set DRIFTED — missing RESTRICTIVE INSERT policy: ${ALWAYS_EXPECTED_RESTRICTIVE_POLICY}. The severity/category CASES in this file rely on it continuing to bound every anon write.`);
     }
 
     telegramPolicyPresent = permissiveNames.includes('telegram_bot_insert_feedback');
