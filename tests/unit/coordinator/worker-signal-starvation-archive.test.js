@@ -94,8 +94,11 @@ describe('FR-1: a reply that retention moved to the archive still proves the sig
 
   // FR-4: the archive is bounded by the same lookback. row_timestamp (=expires_at) is only a coarse
   // indexed bound, so the precise cut must be applied to the revived row's own created_at.
+  // QF-20260812-112: the lookback widened from 24h to 30 days (LOOKBACK_MS was the bug -- signals
+  // that aged past it became permanently invisible), so the fixture proving rows OUTSIDE the
+  // window are still ignored must itself be outside the NEW window, not the old one.
   it('ignores archived rows created outside the lookback window', async () => {
-    const stale = reply('rep-old', 'sig-4', 60 * 48); // 48h ago, outside the 24h lookback
+    const stale = reply('rep-old', 'sig-4', 60 * 24 * 31); // 31 days ago, outside the 30-day lookback
     const res = await run(makeDb({ live: [signal('sig-4')], archived: [stale] }));
     expect(res.starved).toBe(1);
   });
