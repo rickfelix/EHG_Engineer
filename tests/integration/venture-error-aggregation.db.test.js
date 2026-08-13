@@ -164,6 +164,11 @@ describeDb('record_venture_error RPC — live aggregation, storm, security, revo
     }
   }, 30000);
 
+  // NOTE: this proves the anon-caller vector only. `authenticated` also holds EXECUTE today
+  // (see the cutover runbook's §0) and is an equally real, wider forgery surface (any logged-in
+  // platform user, not just the three known anon-key external callers) -- this harness has no
+  // authenticated-session test fixture to exercise it. See the runbook's "Known test-coverage
+  // gap" note: do not treat this test going green as proof the authenticated vector is closed.
   itDb('TS-8 [EXPECTED RED — SD-LEO-INFRA-RECORD-VENTURE-ERROR-DEFINER-POSTURE-001]: an anon caller with zero relationship to otherVentureId cannot forge a venture_error row attributed to it', async () => {
     const errorHash = hash(`ts8-forgery-${randomUUID()}`);
     const { data, error } = await anon.rpc('record_venture_error', {

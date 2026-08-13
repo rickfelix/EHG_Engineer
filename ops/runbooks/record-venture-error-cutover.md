@@ -70,8 +70,21 @@ The two wrong orderings are both **outages**, not merely suboptimal:
    which function wrote it, so "zero new record_venture_error-originated rows" is unmeasurable and
    must not be used as the gate in front of step 5.
 5. **[CHAIRMAN-GATED DDL, follow-up migration]** Only once step 4 is confirmed:
-   `REVOKE EXECUTE ON FUNCTION record_venture_error FROM anon;` and, optionally, drop the
-   function. This is a **separate**, later migration — not part of the 20260812 file.
+   `REVOKE EXECUTE ON FUNCTION record_venture_error FROM anon, authenticated;` and, optionally,
+   drop the function. **Both roles, not `anon` alone** — §0 documents that `anon`, `authenticated`,
+   AND `service_role` all currently hold EXECUTE, and the three known callers being anon-key
+   server processes does not make `authenticated` safe to leave granted: any logged-in platform
+   user could call the RPC directly via PostgREST with the identical cross-tenant forgery, a
+   materially wider surface than the three named external callers. This is a **separate**, later
+   migration — not part of the 20260812 file. `service_role` is intentionally left granted
+   (trusted, not caller-identity-constrained by design).
+
+**Known test-coverage gap**: TS-8 (this SD) exercises only the `anon` client — it will read green
+once `anon` alone is revoked, which is NOT sufficient (see above). No `authenticated`-session test
+fixture exists in this test harness today. Before declaring step 5 complete, verify the
+`authenticated` vector is also closed — either by extending TS-8 with an authenticated-session
+caller in a follow-up, or by an explicit live check that `authenticated` no longer holds EXECUTE
+(`information_schema.routine_privileges`).
 
 ## 3. External-repo caller migration — tracked dependency, not this SD's scope
 
