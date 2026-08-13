@@ -34,7 +34,7 @@ const { assessFleetActivity } = require('../lib/coordinator/fleet-quiescence.cjs
 const { decideCadence, detectSalientDelta, runCoresFailSoft } = require('../lib/coordinator/quiet-tick.cjs');
 // QF-20260725-342: single source of truth for the resurface threshold (see that module's header).
 const { thresholdArgs } = require('../lib/coordination/resurface-threshold.cjs');
-const { getActiveCoordinatorId } = require('../lib/coordinator/resolve.cjs');
+const { getActiveCoordinatorId, refreshCoordinatorFlag } = require('../lib/coordinator/resolve.cjs');
 const { hasUndeliveredChairmanEscalation } = require('../lib/coordinator/undelivered-escalation.cjs');
 // QF-20260719-138: emit the cross-party ping row ourselves (mechanical, byte-identical) rather
 // than instructing the coordinator to hand-insert it every tick (that tripped the RCA 3x guard).
@@ -294,9 +294,35 @@ export async function hasOutstandingChairmanDirective(sb) {
   }
 }
 
+/**
+ * QF-20260813-683: self-heal metadata.is_coordinator if THIS session IS the resolved active
+ * coordinator but its DB row's flag has silently drifted false (observed: a long session lost
+ * the stamp with no traced write path, causing a false coordinator_liveness no_coordinator_row
+ * even though the file-based active-coordinator.json pointer stayed intact). Guarded on session
+ * identity match against the file-pointer-authoritative resolver — this can only ever refresh an
+ * already-active coordinator's own flag, never promote a worker. Fail-soft: never throws.
+ * Deps are injectable so this is testable without a real DB.
+ * @returns {Promise<boolean>} true iff the refresh fired
+ */
+export async function selfHealCoordinatorFlag(sb, {
+  sessionId = process.env.CLAUDE_SESSION_ID,
+  getActiveCoordinatorIdFn = getActiveCoordinatorId,
+  refreshFn = refreshCoordinatorFlag,
+} = {}) {
+  try {
+    if (sessionId && (await getActiveCoordinatorIdFn(sb)) === sessionId) {
+      await refreshFn(sb, sessionId);
+      return true;
+    }
+  } catch { /* fail-soft — self-heal must never block the tick */ }
+  return false;
+}
+
 async function main() {
   const asJson = process.argv.includes('--json');
   const sb = makeClient();
+
+  await selfHealCoordinatorFlag(sb);
 
   // FR-5: mode decision from the canonical quiescence gate (do not re-derive).
   let quiescent = false;
