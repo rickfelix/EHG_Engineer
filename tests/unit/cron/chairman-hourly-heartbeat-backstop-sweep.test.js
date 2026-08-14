@@ -23,6 +23,7 @@ import {
   parseArgs,
   classifyRowCoverage,
   combineHourVerdict,
+  buildBackstopBody,
   STALENESS_GRACE_MS,
   LOOKBACK_MS,
   LIVE_KIND,
@@ -316,6 +317,31 @@ describe('TS-J — F6 fix: the backstop\'s own OWED row, even very old, is never
     // (one per 15-minute tick, the pre-fix defect) and NOT 1 (which would mean an outage
     // lasting longer than the lookback window goes permanently uncovered).
     expect(enqueue).toHaveBeenCalledTimes(2);
+  });
+});
+
+describe('buildBackstopBody — N2 fix: includes hourKey so a recovery burst is distinguishable per hour', () => {
+  it('two calls with different hourKeys never produce byte-identical bodies', () => {
+    const a = buildBackstopBody({ liveVerdict: 'unfilled', backstopVerdict: 'unfilled', hourKey: '2026-07-18T13' });
+    const b = buildBackstopBody({ liveVerdict: 'unfilled', backstopVerdict: 'unfilled', hourKey: '2026-07-18T14' });
+    expect(a).not.toBe(b);
+    expect(a).toContain('2026-07-18T13');
+    expect(b).toContain('2026-07-18T14');
+  });
+
+  it('never fabricates a "sent" or "delivered" claim in the body text (FR-4: honest, not an invented all-good)', () => {
+    const body = buildBackstopBody({ liveVerdict: 'unfilled', backstopVerdict: 'unfilled', hourKey: '2026-07-18T13' });
+    expect(body).not.toMatch(/\b(sent|delivered)\b/i);
+  });
+});
+
+describe('main() end-to-end: the enqueued body carries the current hourKey (N2 wiring)', () => {
+  it('the body passed to enqueue contains the same hourKey the sweep computed', async () => {
+    const enqueue = vi.fn(async () => ({ enqueued: true, obligationId: 'ob-1' }));
+    await main(['node', 's', '--once'], baseDeps({ enqueue, supabase: makeFilterAwareSupabase([]) }));
+
+    const [, arg] = enqueue.mock.calls[0];
+    expect(arg.body).toContain('2026-07-18T13');
   });
 });
 

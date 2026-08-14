@@ -190,9 +190,15 @@ async function fetchLatestRowForKind(supabase, kind, sinceIso) {
   return { row: data && data[0] ? data[0] : null, error: null };
 }
 
-/** Minimal, honest last-hour content — never a fabricated all-good (FR-4). */
-export function buildBackstopBody({ liveVerdict, backstopVerdict }) {
-  return `[backstop] Still here — hourly heartbeat check-in (no live heartbeat reached this hour; live=${liveVerdict}, prior-backstop=${backstopVerdict}).`;
+/**
+ * Minimal, honest content — never a fabricated all-good (FR-4). Includes hourKey (EXEC-phase
+ * TESTING sub-agent finding N2): during a sustained multi-hour outage, a fresh fill happens
+ * roughly once per lookback window (see LOOKBACK_MS above) — without a distinguishing label
+ * every one of those recovery-burst messages would be byte-identical and the chairman could
+ * not tell which hours were actually covered.
+ */
+export function buildBackstopBody({ liveVerdict, backstopVerdict, hourKey }) {
+  return `[backstop ${hourKey}] Still here — hourly heartbeat check-in (no live heartbeat reached this hour; live=${liveVerdict}, prior-backstop=${backstopVerdict}).`;
 }
 
 export { etHourWindowUtc };
@@ -264,7 +270,7 @@ export async function main(argv = process.argv, deps = {}) {
     return { exitCode: 0, action: 'no_send', summary: { reason: hourVerdict, liveVerdict, backstopVerdict, hourKey } };
   }
 
-  const body = (deps.buildBackstopBody || buildBackstopBody)({ liveVerdict, backstopVerdict });
+  const body = (deps.buildBackstopBody || buildBackstopBody)({ liveVerdict, backstopVerdict, hourKey });
   // Millisecond-timestamped, never a plain per-hour key — see file header for why (avoids a
   // same-key UPSERT collision between two near-simultaneous ticks surfacing as a false
   // transport-failure alert).
