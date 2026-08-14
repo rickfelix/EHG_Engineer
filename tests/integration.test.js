@@ -258,7 +258,7 @@ async function runTests() {
   }
   
   console.log('\n' + '═'.repeat(50));
-  console.log(`📊 Integration Test Results:`);
+  console.log('📊 Integration Test Results:');
   console.log(`   Passed: ${totalPassed}`);
   console.log(`   Failed: ${totalFailed}`);
   console.log(`   Total: ${totalPassed + totalFailed}`);

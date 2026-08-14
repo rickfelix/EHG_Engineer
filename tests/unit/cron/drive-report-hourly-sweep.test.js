@@ -220,6 +220,15 @@ describe('[SD-LEO-INFRA-HOURLY-DRIVE-SCORE-001 FR-6, AC-3] CLI wiring: capacityR
     expect(codeOnly).toMatch(/buildGather\(\{[\s\S]{0,400}?capacityRunId,/);
   });
 
+  it('resolveRows is actually PASSED to buildGather(), not just imported (SD-LEO-INFRA-DRIVE-SCORE-PER-001 FR-3)', () => {
+    // Same shape as the capacityRunId assertion above and for the same reason: importing
+    // makeRowResolver proves nothing about whether this sweep hands it to buildGather. Drop the
+    // property and buildGather would throw at runtime on every hourly tick while a source-text
+    // scan for the import stayed green.
+    const codeOnly = source.replace(/\/\*[\s\S]*?\*\//g, '').replace(/^\s*\/\/.*$/gm, '');
+    expect(codeOnly).toMatch(/resolveRows:\s*makeRowResolver\(supabase\)/);
+  });
+
   it('[NEGATIVE CONTROL] the daily windowKey is never IMPORTED (executable usage, not this file\'s own prose explaining why)', () => {
     // The header comments explain the design decision by NAME-DROPPING windowKey() in prose,
     // which a bare word-boundary scan would also match — this checks the import statement
@@ -244,6 +253,10 @@ function stubHourlyGather(nowMs, { persistVerdict = async () => ({ id: 'v1' }) }
     runGitLog: () => [], // HOURLY_STATUS.done is [] — never invoked, mandatory injection only.
     readLeg2Cohort: async () => null, // no ranked cohort in this fixture world — leg2 unavailable.
     nowMs,
+    // SD-LEO-INFRA-DRIVE-SCORE-PER-001 (FR-3): mandatory injection. Resolves whatever it is asked,
+    // because none of this file's assertions is about citation resolution — the control's real
+    // semantics are pinned in tests/unit/drive-loop/score/verify-leg-citations.test.js.
+    resolveRows: async (_table, ids) => ids,
   });
 }
 
@@ -256,7 +269,7 @@ describe('[SD-LEO-INFRA-HOURLY-DRIVE-SCORE-001 FR-3 AC-1] the hourly gather() ou
   it('measured_legs + unavailable_legs together equal RATIFIED_LEG_IDS, never more, never fewer', async () => {
     const gather = stubHourlyGather(Date.UTC(2026, 6, 15, 10, 0, 0)); // 06:00 ET
     const { driveScore } = await gather();
-    const producedLegIds = [...driveScore.measured_legs, ...driveScore.unavailable_legs.map((u) => u.leg)];
+    const producedLegIds = [...driveScore.measured_legs.map((m) => m.leg), ...driveScore.unavailable_legs.map((u) => u.leg)];
 
     expect(() => assertProducedLegsMatchSSOT(producedLegIds)).not.toThrow();
     expect(new Set(producedLegIds)).toEqual(new Set(RATIFIED_LEG_IDS));

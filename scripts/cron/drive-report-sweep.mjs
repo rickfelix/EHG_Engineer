@@ -62,6 +62,7 @@ import { LEG_ID as LEG4_ID, scoreLeg4 } from '../../lib/drive-loop/score/leg4-ca
 import { computeBeltVerdict } from '../../lib/drive-loop/belt-verdict.js';
 import { BELT_BUFFER } from '../lib/capacity-inputs.mjs';
 import { aggregateScore } from '../../lib/drive-loop/score/aggregate.js';
+import { verifyLegCitations, makeRowResolver } from '../../lib/drive-loop/score/verify-leg-citations.js';
 import { unavailable, LAST_RUN_FIELD } from '../../lib/drive-loop/report-posture.js';
 import { armedProcessKey } from '../../lib/machinery-class/armed-registration.js';
 import { produceDriveReport } from '../drive-report-produce.mjs';
@@ -272,7 +273,7 @@ export async function computeLeg2({ readLeg2Cohort, nowMs }) {
  * "finishing" any of them — two are traps where the obvious wiring produces a confidently wrong
  * number rather than an incomplete one.
  */
-export function buildGather({ supabase, computePlanCheckStatus, gatherCapacity, persistVerdict, capacityRunId = null, runGitLog, readLeg2Cohort, nowMs }) {
+export function buildGather({ supabase, computePlanCheckStatus, gatherCapacity, persistVerdict, capacityRunId = null, runGitLog, readLeg2Cohort, nowMs, resolveRows }) {
   // SD-LEO-INFRA-PERSIST-BELT-CAPACITY-001 (FR-3): leg4's two injections are REQUIRED here, not
   // defaulted to the real implementations. A default would make this function look wired while the
   // CLI passed nothing — which is precisely how `persist` went missing from runDriveReportSweep and
@@ -297,6 +298,14 @@ export function buildGather({ supabase, computePlanCheckStatus, gatherCapacity, 
   if (typeof readLeg2Cohort !== 'function' || !Number.isFinite(nowMs)) {
     throw new Error('buildGather(): readLeg2Cohort (function) and nowMs (finite number) must be injected — '
       + 'leg2 refuses without them, for the same reason leg4 refuses without gatherCapacity/persistVerdict');
+  }
+  // SD-LEO-INFRA-DRIVE-SCORE-PER-001 (FR-3): same mandatory-injection contract, and here it is the
+  // point rather than a convention — the citation check is DEFINED by which table it queries, so a
+  // defaulted resolver would let a test prove the check ran while proving nothing about what it asked.
+  if (typeof resolveRows !== 'function') {
+    throw new Error('buildGather(): resolveRows must be injected — the citation check is defined by '
+      + 'WHICH TABLE it asks about (verify-leg-citations.js), and a defaulted resolver hides an '
+      + 'unwired CLI behind a green suite');
   }
 
   return async function gather() {
@@ -369,7 +378,19 @@ export function buildGather({ supabase, computePlanCheckStatus, gatherCapacity, 
       await scoreCapacityLeg({ gatherCapacity, persistVerdict, runId: capacityRunId }),
     ];
 
-    return { sections, driveScore: aggregateScore({ legs }) };
+    // SD-LEO-INFRA-DRIVE-SCORE-PER-001 (FR-3): resolve every cited row id against the table ITS OWN
+    // leg names, BEFORE aggregating and therefore before the insert. drive_score is append-only (a
+    // DB freeze trigger raises on UPDATE), so there is no repair path after this point — a citation
+    // that ships wrong ships wrong forever, which is how drive-2026-08-12 became permanent.
+    //
+    // Running it here rather than inside aggregateScore keeps that function synchronous and pure,
+    // and lets an unresolvable leg arrive as an ordinary unavailable leg — reusing the exclusion
+    // machinery instead of adding a second path. verifyLegCitations never throws on an unresolvable
+    // citation, deliberately: produce() below has no try/catch, so a throw here would take the
+    // chairman's daily report offline over a provenance defect.
+    const { legs: verifiedLegs, verification } = await verifyLegCitations({ legs, resolveRows });
+
+    return { sections, driveScore: aggregateScore({ legs: verifiedLegs, citationVerification: verification }) };
   };
 }
 
@@ -496,6 +517,9 @@ if (isMainModule(import.meta.url)) {
       // shape as gatherCapacity/persistVerdict above.
       readLeg2Cohort: (nowMsArg, windowMsArg) => readRankedTop5Cohort(supabase, nowMsArg, windowMsArg),
       nowMs: cliNowMs,
+      // SD-LEO-INFRA-DRIVE-SCORE-PER-001 (FR-3): supabase pre-bound at this CLI edge, same shape as
+      // the injections above. Shared with the hourly sweep rather than re-declared there.
+      resolveRows: makeRowResolver(supabase),
     }),
     persist: async (row) => {
       const { data, error } = await supabase.from('drive_reports').insert(row).select('id').single();

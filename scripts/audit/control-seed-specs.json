@@ -308,5 +308,21 @@
    "input": "git diff --unified=0 added-line patch text vs merge-base (env SHELL_INJECTION_ARGV_BASE, CI sets origin/base_ref in .github/workflows/shell-injection-argv-lint.yml), stripped by lib/lint/added-line-text.mjs stripComments + stripStringLiterals, matched by S1 (non-literal exec/execSync arg) and S2 (shell:true)",
    "seen": "live --all census at authoring measured the real backlog (270 template-literal sites/143 files + ~54 bare-variable + ~11 live shell:true at main b0334b50439, recorded in shell-injection-argv-allowlist.json _scope_note); the founding real positives are the four lineage sinks this SD family closed, incl. scripts/generate-playground-config.cjs:67 (template + shell:true) still live on main and visible to --all"
   }
+ },
+ {
+  "name": "eol-renormalization-lint",
+  "script": "scripts/lint/eol-renormalization-lint.mjs",
+  "note": "SD-ALTIFYAI-FDBK-FIX-HOUSEKEEPING-WEEKLY-REPORT-001 FR-2. Cannot be seeded via the fixtures form: reproducing i/crlf or i/mixed requires a committed blob that PREDATES a .gitattributes eol=lf rule (a two-phase git HISTORY), which a single git init + git add -A always clean-filters straight to i/lf. Uses the seedTest form instead against the already-existing, already-mutation-verified unit suite.",
+  "seedTest": "tests/unit/eol-renormalization-lint.test.js",
+  "neuter": {
+   "file": "scripts/lint/eol-renormalization-lint.mjs",
+   "find": "return DIRTY_INDEX_STATES.has(parsed.index);",
+   "replace": "return parsed.index !== 'lf';",
+   "why": "Reverts the inclusion-list classification to an exclusion-of-lf check -- the exact blocking defect a prospective testing-agent review (evidence a4d4ba87-2a56-4912-a8b0-cbd3e3d16a2e) found in this control's original design: it would misclassify binary (i/-text) and empty (i/none) files as dirty. TS-2 and TS-3 assert this must not happen and go red under this neuter (manually verified pre-registration)."
+  },
+  "observability_proof": {
+   "input": "git ls-files --eol output for every tracked path: the i/<state> (index eol) field, parsed positionally, filtered to paths whose attr/ field resolves an eol=lf attribute",
+   "seen": "PR #7025 CI run 31769236228, job eol-renormalization-lint: reported 3 real un-allowlisted violations by exact path (scripts/archive/one-time/apply-orchestrator-fix.js, apply-sd-key-not-null-migration.js, execute-e2e-schema-fix.js) -- a genuine positive in the deployment environment, not a fixture, on files deliberately left un-renormalized pending a separate security escalation (signal e84715bb-3f3c-4251-bd18-79c403336fd3)"
+  }
  }
 ]

@@ -66,6 +66,7 @@
 
 import { isMainModule } from '../../lib/utils/is-main-module.js';
 import { buildGather } from './drive-report-sweep.mjs';
+import { makeRowResolver } from '../../lib/drive-loop/score/verify-leg-citations.js';
 import { produceDriveReport } from '../drive-report-produce.mjs';
 import { registerArmedMachinery, armedProcessKey } from '../../lib/machinery-class/armed-registration.js';
 import { LAST_RUN_FIELD } from '../../lib/drive-loop/report-posture.js';
@@ -183,6 +184,10 @@ if (isMainModule(import.meta.url)) {
       runGitLog: (args) => runHardenedGit(args, { cwd: process.cwd() }).split('\n').filter(Boolean),
       readLeg2Cohort: (nowMsArg, windowMsArg) => readRankedTop5Cohort(supabase, nowMsArg, windowMsArg),
       nowMs: cliNowMs,
+      // SD-LEO-INFRA-DRIVE-SCORE-PER-001 (FR-3): the SAME resolver factory the daily sweep uses,
+      // imported rather than re-declared — PRD TR-1's one-representation rule applies to the
+      // citation check exactly as it does to buildGather itself.
+      resolveRows: makeRowResolver(supabase),
     }),
     persist: async (row) => {
       const { data, error } = await supabase.from('drive_reports').insert(row).select('id').single();
