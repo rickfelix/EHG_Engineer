@@ -3,12 +3,16 @@
  *
  * Pins the status-decision-table dedupe (PLAN-phase TESTING sub-agent finding G1: mere row
  * existence must not count as "filled" — a stuck status='owed' row is exactly the failure mode
- * this backstop exists to catch), the negative selectivity controls (hour and kind — finding
- * G5), the read-error fail-closed branch (finding G3), and the staleness-threshold two-sided
- * assertion (finding G4). The fake supabase client below is FILTER-AWARE (records .eq/.gte/.lt
- * args and applies them to a fixture row set) specifically so these tests exercise the sweep's
- * own hour/kind selection logic rather than merely echoing a stub's return value — the
- * tautology risk the TESTING sub-agent flagged against the sibling's non-filter-aware fake.
+ * this backstop exists to catch), the negative selectivity control (kind — finding G5), the
+ * read-error fail-closed branch (finding G3), the staleness-threshold two-sided assertion
+ * (finding G4), and the TRAILING-WINDOW coverage read (EXEC-phase TESTING sub-agent finding
+ * F1: an earlier revision used a fixed calendar-hour bucket, which is empty by construction at
+ * the top of every hour and would have sent a spurious backstop SMS ~16x/day even with a fully
+ * healthy live path — TS-G below pins that a live send just before an hour boundary still
+ * counts as coverage at the next hour's first tick, and TS-H pins that a send older than the
+ * lookback window genuinely does not). The fake supabase client below is FILTER-AWARE (records
+ * .eq/.gte/.lt args and applies them to a fixture row set) specifically so these tests exercise
+ * the sweep's own kind/window selection logic rather than merely echoing a stub's return value.
  */
 import { describe, it, expect, vi } from 'vitest';
 import {
@@ -17,6 +21,7 @@ import {
   classifyRowCoverage,
   combineHourVerdict,
   STALENESS_GRACE_MS,
+  LOOKBACK_MS,
   LIVE_KIND,
   BACKSTOP_KIND,
 } from '../../../scripts/cron/chairman-hourly-heartbeat-backstop-sweep.mjs';
@@ -25,6 +30,7 @@ import { etHourWindowUtc } from '../../../lib/time/chairman-et-wall-clock.js';
 // Instants chosen so the coarse window gate and both DST offsets are exercised. All at ET
 // (chairman zone defaults to America/New_York in these tests via the stubbed resolver).
 const MID_DAY = new Date('2026-07-18T17:30:00Z');       // 13:30 EDT -> zone hour 13 (in window)
+const TOP_OF_HOUR = new Date('2026-07-18T18:00:00Z');    // 14:00:00 EDT exactly -> zone hour 14 (in window)
 const TOO_EARLY = new Date('2026-07-18T09:30:00Z');      // 05:30 EDT -> zone hour 5 (inert)
 const TOO_LATE = new Date('2026-07-18T02:30:00Z');       // 22:30 EDT (prior-day UTC date) -> zone hour 22 (inert)
 const WINTER_MID_DAY = new Date('2026-01-15T18:30:00Z'); // 13:30 EST -> zone hour 13 (in window)
@@ -162,7 +168,16 @@ describe('TS-A — missed-hour: no qualifying row this chairman-zone hour -> sen
     expect(send).toHaveBeenCalledTimes(1);
     const [message] = send.mock.calls[0];
     expect(message.kind).toBe(BACKSTOP_KIND);
-    expect(message.dedupeKey).toContain(BACKSTOP_KIND);
+    // EXEC-phase TESTING sub-agent finding F3: the millisecond-timestamp suffix is
+    // load-bearing (it is what makes each real attempt's dedupeKey unique, avoiding a
+    // same-key UPSERT collision that would surface as a false transport-failure alert — see
+    // the file header). Assert the exact key format, not merely that it contains the kind
+    // string, so a future "cleanup" to a tidy per-hour-only key fails this test.
+    expect(message.dedupeKey).toBe(`${BACKSTOP_KIND}:2026-07-18T13:${MID_DAY.getTime()}`);
+    // EXEC-phase TESTING sub-agent finding F5: recipientPhone must ride on `message`, not
+    // `context` — makeDefaultSender reads message.recipientPhone (chairman-sms-gate/index.js),
+    // context is never forwarded to the sender.
+    expect(message.recipientPhone).toBe('+15555550123');
   });
 });
 
@@ -236,10 +251,42 @@ describe('TS-F — present-hour, canceled/owed_escalate -> do-not-retry, zero se
   });
 });
 
-describe('G5 — negative selectivity controls', () => {
-  it('a heartbeat_status row from the PREVIOUS hour does NOT suppress the current hour', async () => {
-    const prevHour = new Date(MID_DAY.getTime() - 60 * 60 * 1000).toISOString();
-    const rows = [{ kind: LIVE_KIND, status: 'delivered', created_at: prevHour }];
+describe('G5 — negative selectivity control (kind)', () => {
+  it('an unrelated kind (morning_brief) in the trailing window does NOT suppress the backstop', async () => {
+    const rows = [{ kind: 'morning_brief', status: 'delivered', created_at: MID_DAY.toISOString() }];
+    const send = vi.fn(async () => ({ sent: true, reason: 'sent', verdict: 'pass', authorityClass: 'sms' }));
+    const r = await main(['node', 's', '--once'], baseDeps({ send, supabase: makeFilterAwareSupabase(rows) }));
+
+    expect(r.action).toBe('sent');
+    expect(send).toHaveBeenCalledTimes(1);
+  });
+});
+
+describe('TS-G — F1 fix: a live send just before an hour boundary still counts as coverage at the next hour\'s first tick', () => {
+  it('a delivered row 3 minutes before TOP_OF_HOUR suppresses the backstop at TOP_OF_HOUR exactly (trailing window spans the boundary)', async () => {
+    const justBefore = new Date(TOP_OF_HOUR.getTime() - 3 * 60 * 1000).toISOString();
+    const rows = [{ kind: LIVE_KIND, status: 'delivered', created_at: justBefore }];
+    const send = vi.fn();
+    const r = await main(['node', 's', '--once'], baseDeps({ send, now: TOP_OF_HOUR, supabase: makeFilterAwareSupabase(rows) }));
+
+    expect(r.action).toBe('no_send');
+    expect(r.summary.reason).toBe('filled');
+    expect(send).not.toHaveBeenCalled();
+  });
+
+  it('regression guard: an EMPTY ledger at TOP_OF_HOUR still correctly triggers a send (genuinely no coverage, not a calendar-bucket artifact)', async () => {
+    const send = vi.fn(async () => ({ sent: true, reason: 'sent', verdict: 'pass', authorityClass: 'sms' }));
+    const r = await main(['node', 's', '--once'], baseDeps({ send, now: TOP_OF_HOUR, supabase: makeFilterAwareSupabase([]) }));
+
+    expect(r.action).toBe('sent');
+    expect(send).toHaveBeenCalledTimes(1);
+  });
+});
+
+describe('TS-H — trailing-window boundary: a send older than LOOKBACK_MS genuinely does not count as coverage', () => {
+  it('a delivered row older than LOOKBACK_MS triggers a send (real SLA breach, not a false positive)', async () => {
+    const tooOld = new Date(MID_DAY.getTime() - LOOKBACK_MS - 1000).toISOString();
+    const rows = [{ kind: LIVE_KIND, status: 'delivered', created_at: tooOld }];
     const send = vi.fn(async () => ({ sent: true, reason: 'sent', verdict: 'pass', authorityClass: 'sms' }));
     const r = await main(['node', 's', '--once'], baseDeps({ send, supabase: makeFilterAwareSupabase(rows) }));
 
@@ -247,13 +294,14 @@ describe('G5 — negative selectivity controls', () => {
     expect(send).toHaveBeenCalledTimes(1);
   });
 
-  it('an unrelated kind (morning_brief) in the current hour does NOT suppress the backstop', async () => {
-    const rows = [{ kind: 'morning_brief', status: 'delivered', created_at: MID_DAY.toISOString() }];
-    const send = vi.fn(async () => ({ sent: true, reason: 'sent', verdict: 'pass', authorityClass: 'sms' }));
+  it('a delivered row just within LOOKBACK_MS still counts as coverage', async () => {
+    const justWithin = new Date(MID_DAY.getTime() - LOOKBACK_MS + 1000).toISOString();
+    const rows = [{ kind: LIVE_KIND, status: 'delivered', created_at: justWithin }];
+    const send = vi.fn();
     const r = await main(['node', 's', '--once'], baseDeps({ send, supabase: makeFilterAwareSupabase(rows) }));
 
-    expect(r.action).toBe('sent');
-    expect(send).toHaveBeenCalledTimes(1);
+    expect(r.action).toBe('no_send');
+    expect(send).not.toHaveBeenCalled();
   });
 });
 
