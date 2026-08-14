@@ -1,0 +1,35 @@
+{
+  "_fixture_note": "FROZEN SNAPSHOT of the founding negative case for SD-LEO-INFRA-DRIVE-SCORE-PER-001 — the drive_score of drive_reports run_id='drive-2026-08-12' (row 71a08983-0d31-47eb-b99b-9d2e495976e9, generated_at 2026-08-12T10:15:10.403Z), captured verbatim on 2026-08-13. It is a STATIC snapshot on purpose, not a live re-query: drive_score is append-only (a DB freeze trigger raises on UPDATE, tests/ddl/drive-reports-ddl.db.test.js), so this row keeps its defective shape permanently, and a post-fix live query would be compared against data that structurally cannot match the new shape. MEASURED against the live database on 2026-08-13: of the 12 row_ids below, labelled table='drive_reports', ZERO exist in drive_reports; 11 exist in roadmap_wave_items and 1 (d9d9e778-bc23-440b-a323-b7d5fc7ff465, present in the 08-13 sibling row) in strategic_directives_v2. drive-2026-08-13 carried the identical shape, so the defect was live and recurring when this SD was built, not historical.",
+  "_measured_resolution": {
+    "measured_at": "2026-08-13",
+    "drive_reports": 0,
+    "roadmap_wave_items": 11,
+    "strategic_directives_v2": 1,
+    "total_cited": 12
+  },
+  "score": {
+    "value": 3.29,
+    "citation": {
+      "table": "drive_reports",
+      "source": "lib/drive-loop/score/aggregate.js aggregateScore",
+      "row_ids": [
+        "02c6786a-5897-41e2-863b-6cc0fa0e0ca8",
+        "154170cf-9ee5-4288-90c1-49fb89e5c10e",
+        "4389b444-dd30-45b5-a578-ccf9cb96e970",
+        "48e77173-ff3f-471a-bde4-5e615f1eef87",
+        "92a25049-6052-4815-9ee3-98df0a770d31",
+        "973c6c72-86c5-4cda-8da2-a4d7fb3aab21",
+        "9e3efa02-3787-43a2-92a1-9bcac047be14",
+        "d17390b7-9f16-4e63-a34c-28f79e2eb688",
+        "d2057c11-6f61-44cb-8bef-d8c03f77100b",
+        "e82c9fb6-c233-4095-88aa-22c3bd1be95c",
+        "ea5e452b-26e2-434d-9e1c-75bdcfbfb4b3",
+        "dff41959-beda-4b72-8b6b-d2eb12cbd273"
+      ]
+    },
+    "predicate": "sum of 3 MEASURED leg(s) at 2 points each, out of 6. UNAVAILABLE LEGS ARE EXCLUDED FROM THE DENOMINATOR, NOT SCORED ZERO — a 3.29/6 from a stalled fleet and one from broken instruments are the same number and opposite claims. Legs citing no rows (leg 4, by FR-2 design) contribute no row_ids and that is not a missing grain"
+  },
+  "possible": 6,
+  "measured_legs": ["leg1_landed", "leg2_uptake", "leg4_capacity"],
+  "unavailable_legs": []
+}
