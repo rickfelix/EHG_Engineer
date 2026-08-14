@@ -1,0 +1,16 @@
+{
+  "verdict": "CONDITIONAL_PASS",
+  "confidence": 90,
+  "summary": "Independently re-verified the Explore findings by reading the actual source files and measuring live production data. Found the originally-proposed design (mirror the morning-brief precedent exactly, share a per-ET-hour dedupe key between the live and backstop paths) has three CRITICAL blocking defects and one measured-live defect inherited from the precedent itself. The LEAD-phase design was revised in response before handoff; this evidence documents the findings that drove the revision.",
+  "conditions_required_before_lead_to_plan": [
+    "Do not share a dedupe key/kind between the live heartbeat path and the backstop -- use a distinct kind (heartbeat_status_backstop) and a read-check dedupe instead of a write-time UPSERT race, because (a) a shared key on kind=heartbeat_status would suppress the measured 44% of hours that legitimately carry >1 send (chairman replies via adam-quiet-tick.mjs:965), and (b) a benign dedupe on the shared path is currently indistinguishable from a transport failure at chairman-sms-gate/index.js:92 and would fire a false [ACTION NEEDED] alert email.",
+    "Send via the existing sendChairmanSMS() gated pipeline, not a raw enqueueChairmanSms() call -- the morning-brief precedent this SD was originally scoped to mirror has no measured always-on dispatcher for owed rows (grep of .github/workflows/*.yml and package.json found nothing invokes scripts/cron/sms-outbound-reconcile-sweep.mjs; its only production caller is the inline call inside sendChairmanSMS itself).",
+    "Do not rely on key-existence alone for self-healing retry -- read the found obligation's status and retry on failed/stuck-owed, mirroring scripts/cron/drive-report-sms-sweep.mjs:299-305's findObligation pattern, because a key burned by a failed row is otherwise permanently unretriable within the window (measured live: morning_brief:2026-08-13 sits at status=failed)."
+  ],
+  "measured_defects_in_precedent_not_this_sds_scope": [
+    "MEASURED LIVE 2026-08-13: morning_brief:2026-08-13 (status=failed, code-composed key) and adam-morning-brief-2026-08-13 (status=delivered, LLM-composed key) exist as two separate obligations for the same duty/day -- the precedent's own dual dedupe-key scheme does not actually dedupe against itself in production. Logged as harness bug (feedback row 9b4fbc61-d689-4b99-81e5-2a311e740123); out of this SD's scope to fix.",
+    "sms_outbound_obligations live DB CHECK constraint on status is missing 'owed_escalate' though the repo migration file includes it -- applied DB is behind the file. Logged as harness bug (feedback row 9840ca69-1571-4742-a879-87c06ac94104); out of this SD's scope to fix (this SD writes no such status)."
+  ],
+  "repo_path": "C:\\Users\\rickf\\Projects\\_EHG\\EHG_Engineer\\.worktrees\\SD-LEO-INFRA-DURABLE-HOURLY-HEARTBEAT-001",
+  "executed_from_cwd": "C:\\Users\\rickf\\Projects\\_EHG\\EHG_Engineer\\.worktrees\\SD-LEO-INFRA-DURABLE-HOURLY-HEARTBEAT-001"
+}
