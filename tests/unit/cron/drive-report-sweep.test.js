@@ -308,6 +308,7 @@ describe('gather — what this job can HONESTLY measure today', () => {
     // function here.
     runGitLog: () => [],
     readLeg2Cohort, nowMs: Date.parse('2026-08-07T09:00:00.000Z'),
+    resolveRows: TEST_RESOLVE_ROWS,
   });
 
   it('section 1 is REAL — the enriched remainder, not next.length', async () => {
@@ -428,7 +429,7 @@ describe('leg1 A-LOCAL wiring — measures for real when the completed-items win
         receivedOptions.push(options);
         return { open_total: 0, next: [], next_truncated: false, slipped: [], open_items_all: [], waves: [], done: [] };
       },
-      gatherCapacity, persistVerdict: persistTableAbsent, runGitLog, readLeg2Cohort, nowMs,
+      gatherCapacity, persistVerdict: persistTableAbsent, runGitLog, readLeg2Cohort, nowMs, resolveRows: TEST_RESOLVE_ROWS,
     });
     await gather();
     expect(receivedOptions, 'computePlanCheckStatus must be called exactly once (the dedupe this file already documents)').toHaveLength(1);
@@ -439,7 +440,7 @@ describe('leg1 A-LOCAL wiring — measures for real when the completed-items win
     const gather = buildGather({
       supabase: {},
       computePlanCheckStatus: async () => ({ open_total: 0, next: [], next_truncated: false, slipped: [], open_items_all: [], waves: [], done: [] }),
-      gatherCapacity, persistVerdict: persistTableAbsent, runGitLog, readLeg2Cohort, nowMs,
+      gatherCapacity, persistVerdict: persistTableAbsent, runGitLog, readLeg2Cohort, nowMs, resolveRows: TEST_RESOLVE_ROWS,
     });
     const { driveScore } = await gather();
     const reason = driveScore.unavailable_legs.find((l) => l.leg === 'leg1_landed').reason;
@@ -457,11 +458,11 @@ describe('leg1 A-LOCAL wiring — measures for real when the completed-items win
         open_items_all: [], waves: [],
         done: [{ item_id: 'd1', sd_key: 'SD-REALLY-LANDED-001', title: 'T', wave: 'W', completed_at: '2026-01-01T00:00:00Z' }],
       }),
-      gatherCapacity, persistVerdict: persistTableAbsent, runGitLog, readLeg2Cohort, nowMs,
+      gatherCapacity, persistVerdict: persistTableAbsent, runGitLog, readLeg2Cohort, nowMs, resolveRows: TEST_RESOLVE_ROWS,
     });
     const { driveScore } = await gather();
     expect(driveScore.unavailable_legs.map((l) => l.leg)).not.toContain('leg1_landed');
-    expect(driveScore.measured_legs).toContain('leg1_landed');
+    expect(driveScore.measured_legs.map((m) => m.leg)).toContain('leg1_landed');
   });
 
   it('[TS-4, WIRING population-discrimination guard] leg1 stays unavailable when open_items_all looks landed but done[] is empty — the wiring must never read from open_items_all', async () => {
@@ -479,11 +480,11 @@ describe('leg1 A-LOCAL wiring — measures for real when the completed-items win
         waves: [],
         done: [],
       }),
-      gatherCapacity, persistVerdict: persistTableAbsent, runGitLog, readLeg2Cohort, nowMs,
+      gatherCapacity, persistVerdict: persistTableAbsent, runGitLog, readLeg2Cohort, nowMs, resolveRows: TEST_RESOLVE_ROWS,
     });
     const { driveScore } = await gather();
     expect(driveScore.unavailable_legs.map((l) => l.leg), 'leg1 must stay unavailable -- done[] is empty regardless of what open_items_all contains').toContain('leg1_landed');
-    expect(driveScore.measured_legs).not.toContain('leg1_landed');
+    expect(driveScore.measured_legs.map((m) => m.leg)).not.toContain('leg1_landed');
   });
 
   it('[TS-4b, scorer-level population-discrimination guard] scoring the SAME predicate against open_items_all instead of done[] must NOT read as landed', async () => {
@@ -591,6 +592,7 @@ describe('SD-LEO-INFRA-DRIVE-SCORE-LEG2-001 — computeLeg2 wiring', () => {
       runGitLog: () => [],
       readLeg2Cohort: async () => { throw new Error('boom'); },
       nowMs: REPORT_NOW,
+      resolveRows: TEST_RESOLVE_ROWS,
     });
     const { driveScore } = await gather();
     const ids = driveScore.unavailable_legs.map((l) => l.leg);
@@ -613,6 +615,20 @@ describe('SD-LEO-INFRA-DRIVE-SCORE-LEG2-001 — computeLeg2 wiring', () => {
  */
 // Module-scoped (not describe-scoped) so the FR-4 AC-5 block below can reuse the identical real
 // gather() pipeline rather than re-declare a second, potentially-drifting fixture.
+/**
+ * SD-LEO-INFRA-DRIVE-SCORE-PER-001 (FR-3): buildGather now REFUSES an uninjected resolveRows, so
+ * every construction below supplies one. This stub resolves whatever it is asked, which is correct
+ * for THESE tests — none of them is about citation resolution, and their fixture ids exist in no
+ * real table, so a strict resolver would turn every unrelated pin into a citation failure.
+ *
+ * An echo resolver is precisely the vacuous shape the control must not have in production, and it
+ * is proven not to have one in tests/unit/drive-loop/score/verify-leg-citations.test.js, where the
+ * any-table resolver is asserted to ACCEPT the defective drive-2026-08-12 row while the
+ * table-scoped one rejects it. Named here so a later reader does not mistake this stub for the
+ * contract.
+ */
+const TEST_RESOLVE_ROWS = async (_table, ids) => ids;
+
 const E2E_STATUS = { open_total: 42, next: [{ item_id: 'i1' }], next_truncated: false, done: [], slipped: [] };
 const realGather = (nowMs = Date.UTC(...JULY, 10, 0, 0)) => buildGather({
   supabase: {}, computePlanCheckStatus: async () => E2E_STATUS,
@@ -623,6 +639,7 @@ const realGather = (nowMs = Date.UTC(...JULY, 10, 0, 0)) => buildGather({
   // fixture world; leg2 stays unavailable, unchanged from before this SD.
   readLeg2Cohort: async () => null,
   nowMs,
+  resolveRows: TEST_RESOLVE_ROWS,
 });
 
 describe('[END-TO-END] the sweep drives the REAL producer — no stub in between', () => {
@@ -879,8 +896,22 @@ describe('FR-3 — leg4 is injected, not declared unavailable', () => {
       .toThrow(/readLeg2Cohort \(function\) and nowMs \(finite number\) must be injected/);
     expect(() => buildGather({ ...okLeg4Args, readLeg2Cohort: async () => null }))
       .toThrow(/readLeg2Cohort \(function\) and nowMs \(finite number\) must be injected/); // nowMs still missing
-    expect(() => buildGather({ ...okLeg4Args, readLeg2Cohort: async () => null, nowMs: Date.now() }))
+    expect(() => buildGather({ ...okLeg4Args, readLeg2Cohort: async () => null, nowMs: Date.now(), resolveRows: TEST_RESOLVE_ROWS }))
       .not.toThrow();
+  });
+
+  // SD-LEO-INFRA-DRIVE-SCORE-PER-001 (FR-3): the fourth mandatory injection. Here the refusal is
+  // the requirement rather than a convention — the citation check is DEFINED by which table it
+  // queries, so a defaulted resolver would let the suite prove the check ran while proving nothing
+  // about what it asked, which is the exact blindness this SD exists to remove.
+  it('buildGather REFUSES an uninjected resolveRows rather than defaulting the citation check', () => {
+    const okArgs = {
+      supabase: {}, computePlanCheckStatus: async () => ({}),
+      gatherCapacity: async () => ({}), persistVerdict: async () => ({}),
+      runGitLog: () => [], readLeg2Cohort: async () => null, nowMs: Date.now(),
+    };
+    expect(() => buildGather(okArgs)).toThrow(/resolveRows must be injected/);
+    expect(() => buildGather({ ...okArgs, resolveRows: TEST_RESOLVE_ROWS })).not.toThrow();
   });
 
   it('[WIRING] the CLI passes the REAL gatherer and the REAL writer', () => {
@@ -901,6 +932,14 @@ describe('FR-3 — leg4 is injected, not declared unavailable', () => {
       /readLeg2Cohort:\s*\([^)]*\)\s*=>\s*readRankedTop5Cohort\(supabase,/
     );
     expect(src, 'and the real report clock, not a second Date.now() read').toMatch(/nowMs:\s*cliNowMs/);
+    // SD-LEO-INFRA-DRIVE-SCORE-PER-001 (FR-3): the FOURTH injection, at the same CLI edge. Found
+    // missing by the EXEC testing-agent: buildGather REFUSES an absent resolveRows (so the
+    // behavioural tests all pass one), but nothing asserted the CLI passes the REAL one — the
+    // identical gap that let `persist` go missing from runDriveReportSweep with the suite green.
+    expect(src, 'the CLI must supply the real row resolver, bound to the real supabase client').toMatch(
+      /resolveRows:\s*makeRowResolver\(supabase\)/
+    );
+    expect(src, 'and the citation check must actually be CALLED, not merely imported').toMatch(/await\s+verifyLegCitations\(/);
     expect(src, 'the legs array must call computeLeg2').toMatch(/await\s+computeLeg2\(/);
   });
 });
