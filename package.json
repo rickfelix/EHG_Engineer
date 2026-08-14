@@ -527,7 +527,7 @@
     "worktree:cleanup-pending": "node scripts/cleanup-pending-sweep.mjs",
     "worktree:cleanup-pending:dry": "node scripts/cleanup-pending-sweep.mjs --dry-run",
     "handoff": "node scripts/handoff.js",
-    "handoff:dry-run": "node scripts/unified-handoff-system-v2.js execute --dry-run",
+    "handoff:dry-run": "node scripts/handoff.js dry-run",
     "handoff:list": "node scripts/handoff.js list",
     "handoff:stats": "node scripts/handoff.js stats",
     "handoff:compliance": "node scripts/check-handoff-compliance.js",
