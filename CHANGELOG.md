@@ -3,6 +3,8 @@
 
 ## Table of Contents
 
+- [2026-08-14](#2026-08-14)
+  - [Bugfix](#bugfix)
 - [2026-08-12](#2026-08-12)
   - [Bugfix](#bugfix)
   - [Infrastructure](#infrastructure)
@@ -111,6 +113,15 @@
   - [Housekeeping & CI](#housekeeping-ci)
   - [EHG_Engineering](#ehg_engineering)
   - [EHG (Venture App)](#ehg-venture-app)
+
+## 2026-08-14
+
+### Bugfix
+- **Housekeeping Weekly Report workflow failed twice on a CRLF/eol=lf renormalization collision** - PR #7025 (SD-ALTIFYAI-FDBK-FIX-HOUSEKEEPING-WEEKLY-REPORT-001)
+  - **What was broken**: the Housekeeping Weekly Report workflow (191488677) failed on 2026-08-02 and 2026-08-09 with `local changes to the following files would be overwritten by merge`. `.gitattributes` declares `*.js/*.mjs/*.cjs text eol=lf` (added by an earlier SD), but 26 files' committed blobs were never renormalized after that rule landed — a fresh checkout's own attribute-driven normalization collided with `peter-evans/create-pull-request@v6`'s internal `git stash push`/`stash pop` choreography.
+  - **Fixed**: renormalized 22 of the 26 confirmed files in a single, provably line-ending-only commit (verified via `git diff --ignore-cr-at-eol`). 4 files deliberately deferred and left visible as debt rather than silently fixed or hidden: 3 (`scripts/archive/one-time/apply-orchestrator-fix.js`, `apply-sd-key-not-null-migration.js`, `execute-e2e-schema-fix.js`) turned out to hardcode a live-looking, world-readable database credential — a separate, escalated CRITICAL security finding, not remediated here; 1 (`lib/agents/venture-ceo-factory.js`) collided with a different team's active scope-fence test and was left untouched to avoid conflicting with concurrent work.
+  - **Regression prevention**: a new, dedicated, advisory-first CI check (`.github/workflows/eol-renormalization-lint.yml` + `scripts/lint/eol-renormalization-lint.mjs`) detects this class of debt going forward — `git ls-files --eol` parsed positionally, an inclusion list (never an exclusion of `i/lf`, which would misclassify binary/empty files), and an attribute-derived scope (not a hardcoded extension glob, so a future `eol=lf` pin on a new extension is covered automatically). The detector's design was corrected by a prospective sub-agent review *before* implementation, which caught 2 blocking defects in the original sketch. 19 unit tests, mutation-verified.
+  - **Verification**: directly confirmed by manually re-triggering the real workflow after merge — it completed cleanly with zero stash/pop conflict, the exact failure signature from both prior runs.
 
 ## 2026-08-12
 
