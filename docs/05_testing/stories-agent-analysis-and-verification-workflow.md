@@ -221,7 +221,7 @@ Based on LEO Protocol structure, user story implementation verification should h
 - Returns FAIL if any stories incomplete
 
 #### Option C: Enhance Handoff Script
-- Add user story checks to `unified-handoff-system-v2.js`
+- Add user story checks to `handoff.js` (canonical entry point; `unified-handoff-system-v2.js` was removed as a dormant, zero-caller second entry point per SD-ALTIFYAI-FDBK-FIX-HANDOFF-ENTRY-POINT-001)
 - Query user_stories table during EXEC→PLAN
 - Block handoff if stories incomplete
 - Simpler but less flexible
