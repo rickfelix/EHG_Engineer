@@ -270,6 +270,28 @@ export default defineConfig({
             // why it belongs: tests/unit/fleet/browser-control.test.js currently passes by
             // accident and would go red for any operator who exports it.
             FLEET_BROWSER_PROFILES_DIR: '',
+
+            // SD-ALTIFYAI-FDBK-FIX-GENERIC-SECURITY-SUB-001 — DIRECT-POSTGRES CREDENTIAL FENCE.
+            //
+            // tests/setup.unit.js neutralises the four PostgREST vars (SUPABASE_URL,
+            // NEXT_PUBLIC_SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY, NEXT_PUBLIC_SUPABASE_ANON_KEY)
+            // and the db tier's guard is a globalThis.fetch guard — NEITHER can observe a pg
+            // net.Socket connection. Meanwhile lib/sub-agents/security.js calls dotenv.config()
+            // at module scope, so importing the module under test repopulates process.env from
+            // .env, and scripts/lib/supabase-connection.js falls back through
+            // DATABASE_URL → SUPABASE_DB_PASSWORD → EHG_DB_PASSWORD to build a PRODUCTION
+            // connection string. A unit test of the new catalog probe would therefore have
+            // reached the live catalog. Fencing only SUPABASE_POOLER_URL would close one of
+            // four doors.
+            //
+            // With all four empty, createDatabaseClient throws "Database password not found"
+            // and the probe reports probe_ran:false — an observable, asserted outcome
+            // (tests/unit/sub-agents/security-definer-posture.test.js, TS-10) rather than a
+            // silent success against production.
+            SUPABASE_POOLER_URL: '',
+            DATABASE_URL: '',
+            SUPABASE_DB_PASSWORD: '',
+            EHG_DB_PASSWORD: '',
           },
           include: [
             '**/__tests__/**/*.test.js',

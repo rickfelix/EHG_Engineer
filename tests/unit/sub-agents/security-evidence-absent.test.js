@@ -43,7 +43,23 @@ vi.mock('../../../scripts/lib/supabase-connection.js', () => ({
       if (state.mode === 'error') throw new Error('rpc get_tables_without_rls failed');
       return { data: [], error: null };
     }
-  }))
+  })),
+  // SD-ALTIFYAI-FDBK-FIX-GENERIC-SECURITY-SUB-001 added a live-catalog DEFINER-exposure probe
+  // as Phase 6. This factory did not exist on the mock before, so the probe was UNAVAILABLE,
+  // and an unavailable catalog tier is now (correctly) a non-PASS verdict — which broke the
+  // "clean scan yields PASS@100" case below.
+  //
+  // The fixture is updated rather than the assertion weakened. "Clean" must now mean what it
+  // says: every scan RAN and every scan found nothing — including the catalog tier. Relaxing
+  // the PASS@100 assertion instead would have re-manufactured the exact false-clean verdict
+  // that SD removes.
+  createDatabaseClient: vi.fn(async () => {
+    if (state.mode === 'error') throw new Error('catalog connection failed');
+    return {
+      query: async () => ({ rows: [] }),   // available AND genuinely clean
+      end: async () => {}
+    };
+  })
 }));
 
 vi.mock('../../../scripts/lib/handoff-preflight.js', () => ({
