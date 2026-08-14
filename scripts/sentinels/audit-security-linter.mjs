@@ -27,6 +27,9 @@
  */
 
 import { createDatabaseClient } from '../lib/supabase-connection.js';
+// SD-ALTIFYAI-FDBK-FIX-GENERIC-SECURITY-SUB-001: shared with the SECURITY sub-agent
+// (lib/sub-agents/security.js) so one catalog definition serves both instruments.
+import { DEFINER_EXPOSURE_SQL, classifyDefinerExposure } from '../../lib/security/definer-exposure.js';
 
 const JSON_MODE = process.argv.includes('--json');
 const STRICT = process.argv.includes('--strict');
@@ -125,6 +128,19 @@ async function main() {
         AND NOT EXISTS (SELECT 1 FROM unnest(COALESCE(p.proconfig, '{}')) x WHERE x LIKE 'search_path=%')
       ORDER BY 1`);
 
+    // (5) definer_rls_bypass_exposed — SD-ALTIFYAI-FDBK-FIX-GENERIC-SECURITY-SUB-001.
+    // SECURITY DEFINER functions that execute as a BYPASSRLS owner AND are EXECUTE-able by
+    // anon/authenticated: the caller reaches owner-level, RLS-bypassing access through them.
+    //
+    // This is a SEPARATE AXIS from check (4) above, and the distinction is load-bearing. Check
+    // (4) filters to functions WITHOUT a pinned search_path. The fleet-wide pinning migration
+    // (20260602_pin_search_path_security_definer_functions.sql) pinned nearly everything, so
+    // check (4)'s visibility into THIS class collapsed to 2 of 44 — measured. The function with
+    // a proven cross-tenant exploit, public.record_venture_error, is pinned and was therefore
+    // invisible to the only live-catalog security instrument the repo has. Hence: never filter
+    // this query on proconfig/search_path.
+    const definerExposed = classifyDefinerExposure((await client.query(DEFINER_EXPOSURE_SQL)).rows);
+
     // Prevention liveness: is the view event trigger present + enabled? ('D' = disabled)
     const trig = await client.query(
       `SELECT evtenabled FROM pg_event_trigger WHERE evtname = 'leo_enforce_view_security_invoker'`);
@@ -134,12 +150,21 @@ async function main() {
       rlsDisabled: tables.rows.map(r => r.name).filter(n => !isExemptTable(n)),
       sensitiveExposed: sensitive.rows.map(r => r.name).filter(n => !isExemptTable(n)),
       securityDefinerMutableFns: secdefFns.rows.map(r => r.name),
+      definerRlsBypassExposed: definerExposed.map(f => `${f.name}(${f.args})`),
       triggerEnabled: trig.rows.length === 1 && trig.rows[0].evtenabled !== 'D',
     };
   } finally {
     await client.end();
   }
 
+  // SD-ALTIFYAI-FDBK-FIX-GENERIC-SECURITY-SUB-001: definerRlsBypassExposed is REPORTED but is
+  // deliberately NOT summed into `findings`, so it cannot flip `clean` or the --strict exit
+  // code. Measured at authoring time: 44 functions are in this class, all pre-existing exposure
+  // whose remediation DDL is staged in a separate chairman-gated cutover runbook. Adding 44 to
+  // the sum would turn the weekly job red on day one for something no PR introduced, and a
+  // sentinel that is red for reasons the reader cannot act on gets muted — which would cost the
+  // repo the four checks that DO gate. Promote it into the sum once the cutover has burned the
+  // backlog down to zero; the burn-down is what makes it enforceable, not this line.
   const findings = result.securityDefinerViews.length + result.rlsDisabled.length
     + result.sensitiveExposed.length + result.securityDefinerMutableFns.length;
   const clean = findings === 0 && result.triggerEnabled;
@@ -152,11 +177,17 @@ async function main() {
   log(`  rls_disabled_in_public (tables w/o RLS):            ${result.rlsDisabled.length}`);
   log(`  sensitive_columns_exposed (session_id, no RLS):     ${result.sensitiveExposed.length}`);
   log(`  function_search_path_mutable (SECURITY DEFINER fn): ${result.securityDefinerMutableFns.length}`);
+  log(`  definer_rls_bypass_exposed (report-only):            ${result.definerRlsBypassExposed.length}`);
   log(`  view-invoker event trigger enabled:                 ${result.triggerEnabled}`);
   log('  ' + '-'.repeat(40));
   if (result.securityDefinerViews.length) log('  Views:  ' + result.securityDefinerViews.join(', '));
   if (result.rlsDisabled.length) log('  Tables: ' + result.rlsDisabled.join(', '));
   if (result.securityDefinerMutableFns.length) log('  Functions: ' + result.securityDefinerMutableFns.join(', '));
+  if (result.definerRlsBypassExposed.length) {
+    log('  RLS-bypass-exposed DEFINER functions (anon/authenticated EXECUTE, owner has BYPASSRLS):');
+    log('    ' + result.definerRlsBypassExposed.join('\n    '));
+    log('    ^ report-only: pre-existing exposure, remediated by the cutover runbook, not by this job.');
+  }
   if (!result.triggerEnabled) log('  ⚠ PREVENTION GAP: view-invoker event trigger missing/disabled!');
   log(clean ? '  ✓ CLEAN' : '  ✗ FINDINGS PRESENT');
   log('='.repeat(60));

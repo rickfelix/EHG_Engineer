@@ -15,6 +15,13 @@ import { describe, it, expect, vi } from 'vitest';
 vi.mock('../../../scripts/lib/supabase-connection.js', () => ({
   createSupabaseServiceClient: vi.fn(async () => ({
     rpc: async () => ({ data: [], error: null })
+  })),
+  // SD-ALTIFYAI-FDBK-FIX-GENERIC-SECURITY-SUB-001: Phase 6 opens a catalog connection through
+  // this factory. Stubbed available-and-empty so this test stays focused on its own subject —
+  // the four real shell scans — rather than incidentally exercising the catalog tier.
+  createDatabaseClient: vi.fn(async () => ({
+    query: async () => ({ rows: [] }),
+    end: async () => {}
   }))
 }));
 

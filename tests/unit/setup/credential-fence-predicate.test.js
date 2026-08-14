@@ -89,18 +89,39 @@ describe('evaluateSentinelPostCondition — drift', () => {
     expect(fence.breaches.map((b) => b.key).sort()).toEqual(Object.keys(REQUIRED_SENTINELS).sort());
   });
 
-  it('covers all four credential variables — the set cannot silently shrink', () => {
+  it('covers all eight credential variables — the set cannot silently shrink', () => {
     // Pins the contract itself. Dropping a variable from REQUIRED_SENTINELS would otherwise narrow
     // the fence with every per-variable test above still green, because those iterate the same set.
+    //
+    // SD-ALTIFYAI-FDBK-FIX-GENERIC-SECURITY-SUB-001 widened this from four to eight, and this
+    // guard is why the widening had to be declared rather than absorbed: it caught the expansion
+    // in CI (1 failed / 38556 passed) when a local subset run had missed the file entirely. Keep
+    // the list EXACT rather than asserting a minimum length — a length check would let a future
+    // change swap one variable for another while staying green, which is the shrink this pins.
+    //
+    // The first four are PostgREST credentials. The last four are the separate routes by which
+    // scripts/lib/supabase-connection.js can build a direct pg connection (connectionString from
+    // SUPABASE_POOLER_URL or DATABASE_URL, else assembled from SUPABASE_DB_PASSWORD or
+    // EHG_DB_PASSWORD); neither the PostgREST sentinels nor the db tier's globalThis.fetch guard
+    // can observe a pg net.Socket, so the fence needed all eight.
     expect(Object.keys(REQUIRED_SENTINELS).sort()).toEqual([
+      'DATABASE_URL',
+      'EHG_DB_PASSWORD',
       'NEXT_PUBLIC_SUPABASE_ANON_KEY',
       'NEXT_PUBLIC_SUPABASE_URL',
+      'SUPABASE_DB_PASSWORD',
+      'SUPABASE_POOLER_URL',
       'SUPABASE_SERVICE_ROLE_KEY',
       'SUPABASE_URL',
     ]);
     expect(REQUIRED_SENTINELS[URL_KEY]).toBe(SENTINEL_URL);
     expect(REQUIRED_SENTINELS[KEY_KEY]).toBe(SENTINEL_SERVICE_ROLE_KEY);
     expect(REQUIRED_SENTINELS[ANON_KEY]).toBe(SENTINEL_ANON_KEY);
+    // Empty string, not a sentinel URL: '' is falsy but not nullish, so it survives `??` chains
+    // and still trips the `if (!password)` guard in createDatabaseClient.
+    for (const k of ['SUPABASE_POOLER_URL', 'DATABASE_URL', 'SUPABASE_DB_PASSWORD', 'EHG_DB_PASSWORD']) {
+      expect(REQUIRED_SENTINELS[k]).toBe('');
+    }
   });
 });
 
