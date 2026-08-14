@@ -67,7 +67,18 @@ describe('classifyDefinerExposure — two-sided by construction', () => {
     expect(classifyDefinerExposure([pinned]).map(f => f.name)).toEqual(['record_venture_error']);
   });
 
-  it('tolerates a non-array input rather than throwing', () => {
+  it('does not flag a row whose security_definer flag is absent or non-boolean', () => {
+    // All three axes are strict === true. This one previously read `!== false`, which admitted
+    // null/undefined/'false' while its neighbours demanded true.
+    expect(classifyDefinerExposure([{ ...EXPOSED, name: 'no_flag', security_definer: undefined }])).toEqual([]);
+    expect(classifyDefinerExposure([{ ...EXPOSED, name: 'str_flag', security_definer: 'true' }])).toEqual([]);
+  });
+
+  it('is a pure helper: a non-array input yields [] rather than throwing', () => {
+    // Tolerance here is fine BECAUSE probeDefinerExposure now rejects an uninterpretable payload
+    // before it ever reaches this function (see the malformed-payload test below). Previously the
+    // two composed into a silent { probe_ran:true, functions_at_risk:0 } — a fabricated clean
+    // result, i.e. this SD's own defect class reproduced inside its own fix.
     expect(classifyDefinerExposure(undefined)).toEqual([]);
     expect(classifyDefinerExposure(null)).toEqual([]);
   });
@@ -99,6 +110,19 @@ describe('probeDefinerExposure — three distinguishable states', () => {
     });
     expect(r.probe_ran).toBe(true);
     expect(r.functions_at_risk).toBe(0);
+  });
+
+  it('a RESOLVED but uninterpretable payload is probe_ran:false, never a clean zero', async () => {
+    // Regression for the defect this SD's own fix committed: a query that succeeds with a
+    // non-array payload must not be indistinguishable from a genuinely clean catalog.
+    for (const bad of [{ rows: 'not-an-array' }, {}, undefined, null]) {
+      const r = await probeDefinerExposure({
+        connect: async () => ({ query: async () => bad, end: async () => {} })
+      });
+      expect(r.probe_ran).toBe(false);
+      expect(r.functions_at_risk).toBeNull();
+      expect(r.reason).toMatch(/uninterpretable|rows/i);
+    }
   });
 
   it('a query failure is probe_ran:false with a null count, never a clean zero', async () => {
