@@ -1,0 +1,44 @@
+name: EOL Renormalization Lint
+
+# SD-ALTIFYAI-FDBK-FIX-HOUSEKEEPING-WEEKLY-REPORT-001, FR-2.
+# Detects tracked files whose committed content is renormalization-dirty relative to a
+# .gitattributes eol=lf rule -- the exact class of debt that broke the Housekeeping Weekly
+# Report workflow (191488677) twice (2026-08-02, 2026-08-09).
+#
+# ADVISORY-FIRST (matches this repo's own metadata-flag-lint.yml precedent): continue-on-error
+# so this cannot turn an in-flight parallel-session PR red on day one. This is not theoretical --
+# at the time this workflow was authored, 3 files (scripts/archive/one-time/*.js) were KNOWN,
+# deliberately-deferred violations (entangled with a separate, actively-escalated security
+# finding), which would have failed a blocking check on this very PR. Flip to blocking once that
+# finding resolves and the tree is clean, or once the team has lived with the advisory report.
+#
+# Deliberately its OWN workflow, not a step inside housekeeping-weekly-report.yml -- that job's
+# generate-report step writes files before create-pull-request@v6's internal stash/pop, making it
+# the worst possible neighbor for a worktree-sensitive check.
+
+on:
+  pull_request:
+    paths:
+      - '**/*.js'
+      - '**/*.mjs'
+      - '**/*.cjs'
+      - '**/*.sql'
+      - '.gitattributes'
+      - 'scripts/lint/eol-renormalization-lint.mjs'
+      - '.github/workflows/eol-renormalization-lint.yml'
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  eol-renormalization-lint:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+      - name: Detect renormalization-dirty eol=lf-managed files (advisory)
+        continue-on-error: true
+        run: node scripts/lint/eol-renormalization-lint.mjs
