@@ -127,20 +127,35 @@ function buildSupabase() {
  * Status-decision table (PLAN-phase TESTING sub-agent finding G1), over all 8 statuses in the
  * sms_outbound_obligations DDL CHECK: owed, sending, sent, delivered, undelivered, failed,
  * canceled, owed_escalate.
+ *
+ * EXEC-phase TESTING sub-agent finding F6 (merge-blocking, discovered after the SEC-H1
+ * enqueue-only pivot): for the BACKSTOP'S OWN kind, an owed/sending row must NOT expire into
+ * 'unfilled' after STALENESS_GRACE_MS. Enqueueing is this sweep's entire deliverable — there is
+ * no credentialed dispatcher in this process to ever move it past 'owed' during a genuine
+ * outage (that is the whole point of enqueue-only). Applying the live-path staleness grace to
+ * the backstop's OWN row meant every 15-minute tick during a sustained outage re-classified its
+ * own still-owed prior attempt as stale and enqueued ANOTHER one — a growing pile of duplicate
+ * obligations that would all deliver as a delivery burst once a credentialed process eventually
+ * drained the queue, the opposite of what this SD exists to prevent. `ownKind: true` is passed
+ * ONLY for the backstop's own kind's row; the live path's staleness/grace behavior (a stuck live
+ * send genuinely warrants a backstop fill after the grace period) is unchanged.
  * @param {{status?: string, created_at?: string}|null} row the most recent row for one kind,
- *   within the current hour window (or null if none exists)
+ *   within the trailing lookback window (or null if none exists)
  * @param {Date} now
+ * @param {{ownKind?: boolean}} [opts] ownKind=true when `row` is this sweep's OWN prior kind
  * @returns {'filled'|'in_flight'|'unfilled'|'do_not_retry'}
  */
-export function classifyRowCoverage(row, now) {
+export function classifyRowCoverage(row, now, { ownKind = false } = {}) {
   if (!row || !row.status) return 'unfilled';
   const { status } = row;
   if (status === 'sent' || status === 'delivered') return 'filled';
   if (status === 'canceled' || status === 'owed_escalate') return 'do_not_retry';
-  // owed | sending | undelivered | failed
-  const ageMs = row.created_at ? now.getTime() - new Date(row.created_at).getTime() : Infinity;
-  if ((status === 'owed' || status === 'sending') && ageMs < STALENESS_GRACE_MS) return 'in_flight';
-  return 'unfilled'; // stale owed/sending, or a terminal failure (undelivered/failed) — send.
+  if (status === 'owed' || status === 'sending') {
+    if (ownKind) return 'in_flight'; // F6 fix: never re-enqueue merely because our own prior attempt hasn't been dispatched yet.
+    const ageMs = row.created_at ? now.getTime() - new Date(row.created_at).getTime() : Infinity;
+    return ageMs < STALENESS_GRACE_MS ? 'in_flight' : 'unfilled';
+  }
+  return 'unfilled'; // undelivered | failed — a terminal failure signal, always retry (own or live).
 }
 
 /**
@@ -241,7 +256,7 @@ export async function main(argv = process.argv, deps = {}) {
   }
 
   const liveVerdict = classifyRowCoverage(liveRow, now);
-  const backstopVerdict = classifyRowCoverage(backstopRow, now);
+  const backstopVerdict = classifyRowCoverage(backstopRow, now, { ownKind: true }); // F6 fix
   const hourVerdict = combineHourVerdict(liveVerdict, backstopVerdict);
 
   if (hourVerdict !== 'unfilled') {
@@ -263,7 +278,11 @@ export async function main(argv = process.argv, deps = {}) {
   // Owed-state enqueue ONLY (SEC-H1 remediation, see file header) — the pre-existing
   // sms-outbound-worker / any live sendChairmanSMS caller owns the actual provider dispatch.
   const enq = await enqueue(supabase, { recipientPhone, kind: BACKSTOP_KIND, body, decisionId: null, dedupeKey });
-  const action = enq.enqueued ? 'enqueued' : (enq.deduped ? 'deduped' : 'inert');
+  // EXEC-phase TESTING sub-agent finding F7: a genuine enqueue failure (e.g. table_absent_or_
+  // error) must be distinguishable in logs/action from the benign no-op reasons used elsewhere
+  // (outside_coarse_window, quiet_hours, read_error, deduped) — a silently-failing backstop is
+  // exactly the failure class this SD exists to eliminate.
+  const action = enq.enqueued ? 'enqueued' : (enq.deduped ? 'deduped' : 'enqueue_error');
 
   // PII-safe: log outcome/reason only — never the recipient phone or the body text.
   log({

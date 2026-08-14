@@ -145,6 +145,23 @@ describe('classifyRowCoverage — status-decision table (finding G1)', () => {
   it('owed_escalate -> do_not_retry', () => {
     expect(classifyRowCoverage({ status: 'owed_escalate', created_at: now.toISOString() }, now)).toBe('do_not_retry');
   });
+
+  describe('ownKind=true — F6 fix (the backstop must never re-enqueue over its own still-owed prior attempt)', () => {
+    it('owed, VERY OLD, ownKind=true -> in_flight, never unfilled (no re-enqueue)', () => {
+      const veryOld = new Date(now.getTime() - 4 * STALENESS_GRACE_MS).toISOString();
+      expect(classifyRowCoverage({ status: 'owed', created_at: veryOld }, now, { ownKind: true })).toBe('in_flight');
+    });
+    it('sending, VERY OLD, ownKind=true -> in_flight', () => {
+      const veryOld = new Date(now.getTime() - 4 * STALENESS_GRACE_MS).toISOString();
+      expect(classifyRowCoverage({ status: 'sending', created_at: veryOld }, now, { ownKind: true })).toBe('in_flight');
+    });
+    it('failed, ownKind=true -> unfilled (a genuine dispatch failure still warrants a retry)', () => {
+      expect(classifyRowCoverage({ status: 'failed', created_at: now.toISOString() }, now, { ownKind: true })).toBe('unfilled');
+    });
+    it('sent, ownKind=true -> filled (unaffected)', () => {
+      expect(classifyRowCoverage({ status: 'sent', created_at: now.toISOString() }, now, { ownKind: true })).toBe('filled');
+    });
+  });
 });
 
 describe('combineHourVerdict', () => {
@@ -259,6 +276,56 @@ describe('TS-I — deduped: a repeat tick against an already-enqueued dedupeKey 
     const r = await main(['node', 's', '--once'], baseDeps({ enqueue, supabase: makeFilterAwareSupabase([]) }));
     expect(r.exitCode).toBe(0);
     expect(r.action).toBe('deduped');
+  });
+});
+
+describe('TS-J — F6 fix: the backstop\'s own OWED row, even very old, is never re-enqueued', () => {
+  it('a backstop-kind row still at status=owed from well over an hour ago suppresses a second enqueue', async () => {
+    const veryOld = new Date(MID_DAY.getTime() - 4 * STALENESS_GRACE_MS).toISOString();
+    const rows = [{ kind: BACKSTOP_KIND, status: 'owed', created_at: veryOld }];
+    const enqueue = vi.fn();
+    const r = await main(['node', 's', '--once'], baseDeps({ enqueue, supabase: makeFilterAwareSupabase(rows) }));
+
+    expect(r.action).toBe('no_send');
+    expect(r.summary.reason).toBe('in_flight');
+    expect(enqueue).not.toHaveBeenCalled();
+  });
+
+  it('regression: during a SUSTAINED outage, the sweep re-fills roughly once per lookback window, never once per 15-minute tick', async () => {
+    // Simulates a sustained outage: nothing ever dispatches the enqueued row (status stays
+    // 'owed' forever), and the sweep fires every 15 minutes for 105 minutes (8 ticks: t=0, 15,
+    // 30, 45, 60, 75, 90, 105). Before the F6 fix this produced 8 duplicate obligations (one
+    // per tick, since the 5-minute STALENESS_GRACE_MS expired well before the next tick).
+    // After the fix: the row is treated as coverage for as long as it remains inside the
+    // trailing LOOKBACK_MS (65min) window -- so a SECOND enqueue only happens once that window
+    // genuinely ages past the first attempt (t=75, the first tick past 65min), which is the
+    // CORRECT behavior (covering the next ~hour of the outage), not a duplicate-suppression bug.
+    let lastRowCreatedAt = null;
+    const enqueue = vi.fn(async (_supabase, args) => {
+      lastRowCreatedAt = args.__nowForTest; // the sweep's own `now` at enqueue time
+      return { enqueued: true, obligationId: 'ob-outage' };
+    });
+    for (let tick = 0; tick < 8; tick++) {
+      const now = new Date(MID_DAY.getTime() + tick * 15 * 60 * 1000);
+      const rows = lastRowCreatedAt ? [{ kind: BACKSTOP_KIND, status: 'owed', created_at: lastRowCreatedAt.toISOString() }] : [];
+      const enqueueWithNow = vi.fn((supabaseArg, args) => enqueue(supabaseArg, { ...args, __nowForTest: now }));
+      await main(['node', 's', '--once'], baseDeps({ enqueue: enqueueWithNow, now, supabase: makeFilterAwareSupabase(rows) }));
+    }
+    // Exactly 2: the initial fill (t=0) and one re-fill once the lookback window aged past it
+    // (t=75, the first tick where elapsed time since t=0 exceeds LOOKBACK_MS=65min) -- NOT 8
+    // (one per 15-minute tick, the pre-fix defect) and NOT 1 (which would mean an outage
+    // lasting longer than the lookback window goes permanently uncovered).
+    expect(enqueue).toHaveBeenCalledTimes(2);
+  });
+});
+
+describe('F7 — a genuine enqueue failure is distinguishable from a benign no-op', () => {
+  it('surfaces action=enqueue_error (not the generic "inert" used by benign skips), exitCode 0', async () => {
+    const enqueue = vi.fn(async () => ({ enqueued: false, reason: 'table_absent_or_error' }));
+    const r = await main(['node', 's', '--once'], baseDeps({ enqueue, supabase: makeFilterAwareSupabase([]) }));
+    expect(r.exitCode).toBe(0);
+    expect(r.action).toBe('enqueue_error');
+    expect(r.summary.reason).toBe('table_absent_or_error');
   });
 });
 
