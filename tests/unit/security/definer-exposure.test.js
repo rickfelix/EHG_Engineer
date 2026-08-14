@@ -89,7 +89,13 @@ describe('probeDefinerExposure — three distinguishable states', () => {
     // No injected factory: this exercises createDatabaseClient for real.
     const r = await probeDefinerExposure();
     expect(r.probe_ran).toBe(false);
-    expect(r.reason).toMatch(/Database password not found|connection|connect/i);
+    // Deliberately narrow. The looser /connection|connect/i alternation this replaced was
+    // VACUOUS: the probe prefixes every connect failure with "catalog connection unavailable:",
+    // so the test passed even when the fence was bypassed and a real outbound socket had been
+    // opened and refused — it witnessed the prefix, not the fence. Only createDatabaseClient's
+    // credential guard (scripts/lib/supabase-connection.js:175-179) produces this exact string,
+    // and it throws BEFORE any socket is attempted, which is the property under test.
+    expect(r.reason).toMatch(/Database password not found/);
     // The load-bearing assertion: an unrun probe must NOT be readable as "zero at risk".
     expect(r.functions_at_risk).toBeNull();
     expect(r.functions).toEqual([]);

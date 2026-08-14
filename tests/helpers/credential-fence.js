@@ -75,6 +75,23 @@ export const REQUIRED_SENTINELS = Object.freeze({
   NEXT_PUBLIC_SUPABASE_URL: SENTINEL_URL,
   SUPABASE_SERVICE_ROLE_KEY: SENTINEL_SERVICE_ROLE_KEY,
   NEXT_PUBLIC_SUPABASE_ANON_KEY: SENTINEL_ANON_KEY,
+
+  // SD-ALTIFYAI-FDBK-FIX-GENERIC-SECURITY-SUB-001 — DIRECT-POSTGRES ROUTES.
+  // The four above are PostgREST credentials; these four are the separate paths by which
+  // scripts/lib/supabase-connection.js can build a real pg connection (connectionString from
+  // SUPABASE_POOLER_URL or DATABASE_URL, else a string assembled from SUPABASE_DB_PASSWORD or
+  // EHG_DB_PASSWORD). The unit tier gained a pooler-backed catalog probe, and neither the
+  // PostgREST sentinels nor the db tier's globalThis.fetch guard can observe a pg net.Socket —
+  // so without these the fence had a post-condition on four doors while four others stood open.
+  //
+  // Expected value is the empty string, matching the "empty string, not delete" doctrine in the
+  // vitest unit-project env block: '' is falsy but not nullish, so it survives `??` chains and
+  // still trips `if (!password)`. They are assigned there rather than in setup.unit.js because
+  // vitest loads .env into the parent process and pool:'forks' has every worker inherit it.
+  SUPABASE_POOLER_URL: '',
+  DATABASE_URL: '',
+  SUPABASE_DB_PASSWORD: '',
+  EHG_DB_PASSWORD: '',
 });
 
 /**

@@ -132,6 +132,42 @@ describe('SECURITY catalog tier — unavailability must not read as clean', () =
     expect(r.warnings.length + r.critical_issues.length).toBeGreaterThan(0);
   });
 
+  // FR-2 ISOLATION — these two exist because TS-1a/TS-1b DO NOT actually guard FR-2.
+  //
+  // Found by adversarial review and then reproduced by mutation: restoring BOTH fabricating
+  // fallbacks to { checked:true, tables_without_rls:0 } — the exact pre-fix defect this SD is
+  // named for — left all 254 tests GREEN. The reason is the disjunct in the verdict branch:
+  // `catalogUnverified` is true if the RLS tier OR the definer probe is unverified, and the
+  // suite's beforeEach leaves the probe unavailable. So TS-1a/TS-1b were passing entirely
+  // through the FR-8 half and would have kept passing if FR-2 had never been written.
+  //
+  // These cases hold the definer probe AVAILABLE and CLEAN, which removes that disjunct and
+  // leaves checkRLSPolicies as the ONLY possible source of a non-PASS verdict.
+  it('FR-2/a: inner fallback alone drives non-PASS when the definer probe is available and clean', async () => {
+    state.rpcMode = 'resolve-error';
+    state.catalogMode = 'rows';
+    state.catalogRows = [];
+    const r = await execute('SD-TEST-FR2-INNER', {}, {});
+    expect(r.findings.definer_posture.probe_ran).toBe(true);
+    expect(r.findings.definer_posture.functions_at_risk).toBe(0);
+    expect(r.findings.rls_policies.checked).toBe(false);
+    expect(r.findings.rls_policies.tables_without_rls).toBeNull();
+    expect(r.verdict).not.toBe('PASS');
+    expect(r.confidence).not.toBe(100);
+  });
+
+  it('FR-2/b: outer fallback alone drives non-PASS when the definer probe is available and clean', async () => {
+    state.rpcMode = 'throw';
+    state.catalogMode = 'rows';
+    state.catalogRows = [];
+    const r = await execute('SD-TEST-FR2-OUTER', {}, {});
+    expect(r.findings.definer_posture.probe_ran).toBe(true);
+    expect(r.findings.rls_policies.checked).toBe(false);
+    expect(r.findings.rls_policies.tables_without_rls).toBeNull();
+    expect(r.verdict).not.toBe('PASS');
+    expect(r.confidence).not.toBe(100);
+  });
+
   it('TS-10: with no usable credential the probe reports probe_ran:false and a reason', async () => {
     state.catalogMode = 'unavailable';
     const r = await execute('SD-TEST-TS-10', {}, {});
