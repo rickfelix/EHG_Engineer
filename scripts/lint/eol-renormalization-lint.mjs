@@ -5,6 +5,12 @@
 // Report workflow (191488677): a checkout normalizes eol=lf paths to LF, but the committed
 // blob still carries CRLF, so any stash/restore choreography sees a spurious conflict.
 //
+// scanner-convention-lint-exempt: this script reads `git ls-files --eol` (tracked-file state),
+// never a `git diff` patch, so lib/lint/added-line-text.mjs's fragment-hazard handling does not
+// apply. The backtick-quoted "git diff --cached --ignore-cr-at-eol" below is advisory text for a
+// human running the fix manually, not an invocation this script executes -- a known false-positive
+// shape the lint's own docstring names (a string that opens with the command is indistinguishable
+// from an invocation by that heuristic).
 import { execFileSync } from 'node:child_process';
 import { isMainModule } from '../../lib/utils/is-main-module.js';
 
