@@ -11,6 +11,14 @@
 // human running the fix manually, not an invocation this script executes -- a known false-positive
 // shape the lint's own docstring names (a string that opens with the command is indistinguishable
 // from an invocation by that heuristic).
+//
+// KNOWN LIMITATION: this reads `git ls-files --eol`, which only enumerates TRACKED paths. It
+// cannot see renormalization debt in untracked or gitignored files, and it cannot see whether a
+// currently-clean (i/lf) path was PREVIOUSLY dirty and silently fixed by an unrelated commit that
+// happened to rewrite its content -- it measures current index state only, never history. It also
+// cannot detect debt in binary-detected (i/-text) paths at all, by design (--renormalize is a
+// no-op on them; see ALLOWLIST's absence of any binary entries -- there is nothing this control
+// could ask a human to fix there).
 import { execFileSync } from 'node:child_process';
 import { isMainModule } from '../../lib/utils/is-main-module.js';
 
