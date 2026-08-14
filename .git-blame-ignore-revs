@@ -1,0 +1,8 @@
+# Commits listed here are skipped by `git blame --ignore-revs-file .git-blame-ignore-revs`
+# (or `git config blame.ignoreRevsFile .git-blame-ignore-revs` to apply automatically).
+# Only line-ending-only / pure-reformatting commits belong here -- never a commit with real
+# content changes mixed in.
+
+# SD-ALTIFYAI-FDBK-FIX-HOUSEKEEPING-WEEKLY-REPORT-001 FR-1: renormalize 23 CRLF-committed
+# .js/.mjs/.cjs files (line-ending-only, verified via `git diff --ignore-cr-at-eol` empty).
+35e4d8ddd3c5b957eeeddce94afe80055d532ed2
