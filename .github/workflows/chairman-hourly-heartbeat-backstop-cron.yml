@@ -19,10 +19,11 @@ name: "Chairman hourly-heartbeat backstop (cloud-side, independent of Adam sessi
 on:
   schedule:
     # Both DST offsets always registered (mirrors chairman-morning-brief-cron.yml) — the sweep
-    # itself gates real work on the actual resolved chairman-zone wall clock (06:00-22:00), so
-    # over-covering here by a few edge hours is harmless (those ticks just log 'inert').
-    - cron: '*/15 10-23,0-1 * * *'  # 06:00-21:59 EDT (UTC-4): UTC 10:00 through 01:59 next day
-    - cron: '*/15 11-23,0-2 * * *'  # 06:00-21:59 EST (UTC-5): UTC 11:00 through 02:59 next day
+    # itself gates real work on the actual resolved chairman-zone wall clock (05:00-22:59
+    # coarse pre-filter, quiet-hours-checked against 22:00-06:00 within that), so over-covering
+    # here by a few edge hours is harmless (those ticks just log 'inert').
+    - cron: '*/15 9-23,0-1 * * *'   # 05:00-22:59 EDT (UTC-4): UTC 09:00 through 01:59 next day
+    - cron: '*/15 10-23,0-3 * * *'  # 05:00-22:59 EST (UTC-5): UTC 10:00 through 03:59 next day
   workflow_dispatch:
 
 permissions:

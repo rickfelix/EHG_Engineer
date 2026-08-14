@@ -18,22 +18,36 @@
  * instead:
  *   1. READS sms_outbound_obligations for the MOST RECENT row per relevant kind
  *      (heartbeat_status = the live path, heartbeat_status_backstop = this sweep's own prior
- *      fills) created within the current chairman-zone hour.
- *   2. Classifies hour coverage via an explicit status-decision table over ALL 8 statuses in
- *      the DDL CHECK (PLAN-phase TESTING sub-agent finding G1: mere row existence must not
- *      count as "filled" — a stuck status='owed' row is enqueued-but-never-delivered, exactly
- *      the failure mode this backstop exists to catch).
- *   3. On UNFILLED, sends via the EXISTING sendChairmanSMS() gated pipeline (chairman-sms-gate)
- *      — never a raw enqueueChairmanSms() call — so quiet-hours (chairman-zone-aware, not a
- *      hardcoded ET check), the pre-send safety rubric, and inline dispatch-and-verify
- *      (reconcileOutboundSms) are all inherited for free. This closes the LEAD-phase-found gap
- *      that the morning-brief precedent has no measured always-on dispatcher for owed rows.
+ *      fills) created within a trailing lookback window.
+ *   2. Classifies coverage via an explicit status-decision table over ALL 8 statuses in the DDL
+ *      CHECK (PLAN-phase TESTING sub-agent finding G1: mere row existence must not count as
+ *      "filled" — a stuck status='owed' row is enqueued-but-never-delivered, exactly the
+ *      failure mode this backstop exists to catch).
+ *   3. On UNFILLED, ENQUEUES ONLY via enqueueChairmanSms (lib/chairman/sms-bridge.js) —
+ *      DELIBERATELY NOT sendChairmanSMS's inline dispatch. EXEC-phase SECURITY sub-agent review
+ *      (sub_agent_execution_results id=094291c6-3266-4875-abf9-6b9a877785be, SEC-H1,
+ *      merge-blocking) found this GHA workflow's env block — copied from the enqueue-only
+ *      morning-brief/morning-review precedents — carries NO Twilio credentials. Calling
+ *      sendChairmanSMS anyway would reach makeDefaultSender's inline reconcileOutboundSms with
+ *      no way to actually dispatch: the reconciler's unfiltered `status='owed'` claim (no kind
+ *      scoping) would then burn retry attempts and PERMANENTLY DEAD-LETTER unrelated owed rows
+ *      (e.g. a legitimate morning_brief obligation) precisely during the machine-off outage
+ *      this SD exists to cover — the opposite of durable. Explicit quiet-hours gating
+ *      (isSmsQuietHour, chairman-zone-aware, matching the drop-not-queue behavior already
+ *      established for heartbeats) is therefore done HERE rather than inherited from
+ *      sendChairmanSMS's rubric, since that pipeline is no longer invoked.
  *   4. Uses its OWN distinct kind (heartbeat_status_backstop) and a millisecond-timestamped
- *      dedupeKey (never a plain per-hour counter — avoids a same-key collision between two
- *      near-simultaneous ticks, which would otherwise surface as a false transport-failure
- *      alert per chairman-sms-gate/index.js's softFailed handling) as defense-in-depth against
- *      this sweep's own overlapping runs, paired with a GHA concurrency group. It never shares
- *      a key/kind namespace with the live heartbeat path.
+ *      dedupeKey (never a plain per-hour counter — avoids a same-key UPSERT collision between
+ *      two near-simultaneous ticks) as defense-in-depth against this sweep's own overlapping
+ *      runs, paired with a GHA concurrency group. It never shares a key/kind namespace with the
+ *      live heartbeat path.
+ *
+ * The resulting 'owed' obligation is drained by whatever credentialed process next calls
+ * sendChairmanSMS for any reason (the reconciler claims any owed row, unscoped by kind) — this
+ * is the SAME dispatch dependency the already-shipped morning-brief/morning-review sweeps have,
+ * not a new one. A backstop SMS sitting owed until a credentialed process drains it is strictly
+ * safer than an uncredentialed GHA job actively burning through -- and dead-lettering -- other
+ * obligations it has no business touching.
  *
  * OUT OF SCOPE (deliberately, per LEAD-phase risk findings): scripts/adam-chairman-sms.mjs,
  * scripts/adam-startup-check.mjs, and the morning-brief/morning-review sweeps are unmodified.
@@ -48,20 +62,25 @@
 import 'dotenv/config';
 import { pathToFileURL } from 'url';
 import { createClient } from '@supabase/supabase-js';
-import { sendChairmanSMS } from '../../lib/comms/adam-outbound/chairman-sms-gate/index.js';
+import { enqueueChairmanSms } from '../../lib/chairman/sms-bridge.js';
 import { resolveQuietHoursContext } from '../../lib/comms/adam-outbound/quiet-hours-extension.js';
-import { etHourWindowUtc } from '../../lib/time/chairman-et-wall-clock.js';
+import { etHourWindowUtc, isSmsQuietHour } from '../../lib/time/chairman-et-wall-clock.js';
 
 export const SD_KEY = 'SD-LEO-INFRA-DURABLE-HOURLY-HEARTBEAT-001';
 export const ACTIVATION_TRIGGER = '.github/workflows/chairman-hourly-heartbeat-backstop-cron.yml';
 export const LIVE_KIND = 'heartbeat_status';
 export const BACKSTOP_KIND = 'heartbeat_status_backstop';
 
-// Coarse pre-filter only (not the quiet-hours authority — sendChairmanSMS's rubric gate is).
-// Avoids pointless GHA runs outside plausible awake hours; the real quiet-hours enforcement is
-// inherited from the existing gate below.
-const WINDOW_START_ZONE_HOUR = 6;
-const WINDOW_END_ZONE_HOUR = 22;
+// Coarse pre-filter only. The real quiet-hours authority is the explicit isSmsQuietHour check
+// below (22:00-06:00 chairman-zone). DELIBERATELY WIDER than the quiet-hours window by one hour
+// on each side (05:00-23:00, not 06:00-22:00) — mirroring QF-20260722-277's identical rationale
+// for the morning-brief sweep: buffers GHA scheduled-workflow lag so a tick nominally due just
+// before the quiet-hours boundary, but that actually fires a few minutes late, is still
+// evaluated by the real (reachable) isSmsQuietHour check against its ACTUAL fire time rather
+// than being silently dropped by an over-tight pre-filter. If this band exactly matched the
+// quiet-hours boundary, the explicit check below would be unreachable dead code.
+const WINDOW_START_ZONE_HOUR = 5;
+const WINDOW_END_ZONE_HOUR = 23;
 
 // A single named constant used by classifyRowCoverage's owed/sending branch (PLAN-phase
 // TESTING sub-agent finding G4): "how long is a stuck live-owed/sending row allowed to sit
@@ -168,7 +187,7 @@ export async function main(argv = process.argv, deps = {}) {
   const logger = deps.logger || console;
   const env = deps.env || process.env;
   const now = deps.now instanceof Date ? deps.now : (Number.isFinite(deps.now) ? new Date(deps.now) : new Date());
-  const send = deps.send || sendChairmanSMS;
+  const enqueue = deps.enqueue || enqueueChairmanSms;
   const resolveQuietHours = deps.resolveQuietHoursContext || resolveQuietHoursContext;
   const log = (obj) => logger.log?.(`[hourly-heartbeat-backstop] ${JSON.stringify(obj)}`);
 
@@ -182,15 +201,24 @@ export async function main(argv = process.argv, deps = {}) {
 
   const { allowQuietHours, chairmanZone } = await resolveQuietHours(now);
 
-  // Coarse pre-filter only — see file header. Real quiet-hours enforcement is inherited from
-  // sendChairmanSMS's rubric gate below, using the SAME chairmanZone just resolved. hourKey is
-  // a readable per-tick label for logs/dedupeKey only — it does NOT bound the coverage read
-  // (see LOOKBACK_MS/F1 above: the coverage read is a trailing window, not this calendar hour).
+  // hourKey is a readable per-tick label for logs/dedupeKey only — it does NOT bound the
+  // coverage read (see LOOKBACK_MS/F1 above: the coverage read is a trailing window, not this
+  // calendar hour).
   const { hourKey } = etHourWindowUtc(now, chairmanZone);
   const zoneHour = Number(hourKey.slice(-2));
   if (zoneHour >= WINDOW_END_ZONE_HOUR || zoneHour < WINDOW_START_ZONE_HOUR) {
     log({ action: 'inert', reason: 'outside_coarse_window', zone_hour: zoneHour });
     return { exitCode: 0, action: 'inert', reason: 'outside_coarse_window' };
+  }
+
+  // EXEC-phase SECURITY sub-agent finding (SEC-H1 remediation): this sweep no longer calls
+  // sendChairmanSMS, so its rubric-gate quiet-hours check is no longer inherited for free.
+  // Explicit chairman-zone-aware quiet-hours gate, reusing the existing isSmsQuietHour rather
+  // than reimplementing (matches the drop-not-queue behavior already established for
+  // heartbeat-class sends; a chairman-authorized allowQuietHours override still applies).
+  if (!allowQuietHours && isSmsQuietHour(now, chairmanZone)) {
+    log({ action: 'inert', reason: 'quiet_hours', zone_hour: zoneHour });
+    return { exitCode: 0, action: 'inert', reason: 'quiet_hours' };
   }
 
   let supabase;
@@ -232,26 +260,23 @@ export async function main(argv = process.argv, deps = {}) {
     return { exitCode: 0, action: 'dry_run', summary: { dedupeKey, hourKey, bodyLength: body.length } };
   }
 
-  // recipientPhone rides on `message` (matching makeDefaultSender's read of
-  // message.recipientPhone || process.env.CHAIRMAN_PHONE) — NOT on `context`, which
-  // sendChairmanSMS never forwards to the sender.
-  const message = { type: 'status', body, kind: BACKSTOP_KIND, dedupeKey, recipientPhone };
-  const context = { now, allowQuietHours, chairmanZone };
-  const result = await send(message, context);
+  // Owed-state enqueue ONLY (SEC-H1 remediation, see file header) — the pre-existing
+  // sms-outbound-worker / any live sendChairmanSMS caller owns the actual provider dispatch.
+  const enq = await enqueue(supabase, { recipientPhone, kind: BACKSTOP_KIND, body, decisionId: null, dedupeKey });
+  const action = enq.enqueued ? 'enqueued' : (enq.deduped ? 'deduped' : 'inert');
 
   // PII-safe: log outcome/reason only — never the recipient phone or the body text.
   log({
-    action: result.sent ? 'sent' : 'no_send',
-    reason: result.reason || null,
-    held: !!result.held,
-    transport_failed: !!result.transportFailed,
+    action,
+    obligation_id: enq.obligationId || null,
+    reason: enq.reason || null,
     dedupe_key: dedupeKey,
     hour_key: hourKey,
   });
   return {
     exitCode: 0,
-    action: result.sent ? 'sent' : 'no_send',
-    summary: { sent: !!result.sent, held: !!result.held, transportFailed: !!result.transportFailed, reason: result.reason || null, dedupeKey, hourKey, bodyLength: body.length },
+    action,
+    summary: { enqueued: !!enq.enqueued, deduped: !!enq.deduped, reason: enq.reason || null, dedupeKey, hourKey, bodyLength: body.length, obligationId: enq.obligationId || null },
   };
 }
 
