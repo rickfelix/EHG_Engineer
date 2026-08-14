@@ -220,6 +220,15 @@ describe('[SD-LEO-INFRA-HOURLY-DRIVE-SCORE-001 FR-6, AC-3] CLI wiring: capacityR
     expect(codeOnly).toMatch(/buildGather\(\{[\s\S]{0,400}?capacityRunId,/);
   });
 
+  it('resolveRows is actually PASSED to buildGather(), not just imported (SD-LEO-INFRA-DRIVE-SCORE-PER-001 FR-3)', () => {
+    // Same shape as the capacityRunId assertion above and for the same reason: importing
+    // makeRowResolver proves nothing about whether this sweep hands it to buildGather. Drop the
+    // property and buildGather would throw at runtime on every hourly tick while a source-text
+    // scan for the import stayed green.
+    const codeOnly = source.replace(/\/\*[\s\S]*?\*\//g, '').replace(/^\s*\/\/.*$/gm, '');
+    expect(codeOnly).toMatch(/resolveRows:\s*makeRowResolver\(supabase\)/);
+  });
+
   it('[NEGATIVE CONTROL] the daily windowKey is never IMPORTED (executable usage, not this file\'s own prose explaining why)', () => {
     // The header comments explain the design decision by NAME-DROPPING windowKey() in prose,
     // which a bare word-boundary scan would also match — this checks the import statement

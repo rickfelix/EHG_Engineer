@@ -932,6 +932,14 @@ describe('FR-3 — leg4 is injected, not declared unavailable', () => {
       /readLeg2Cohort:\s*\([^)]*\)\s*=>\s*readRankedTop5Cohort\(supabase,/
     );
     expect(src, 'and the real report clock, not a second Date.now() read').toMatch(/nowMs:\s*cliNowMs/);
+    // SD-LEO-INFRA-DRIVE-SCORE-PER-001 (FR-3): the FOURTH injection, at the same CLI edge. Found
+    // missing by the EXEC testing-agent: buildGather REFUSES an absent resolveRows (so the
+    // behavioural tests all pass one), but nothing asserted the CLI passes the REAL one — the
+    // identical gap that let `persist` go missing from runDriveReportSweep with the suite green.
+    expect(src, 'the CLI must supply the real row resolver, bound to the real supabase client').toMatch(
+      /resolveRows:\s*makeRowResolver\(supabase\)/
+    );
+    expect(src, 'and the citation check must actually be CALLED, not merely imported').toMatch(/await\s+verifyLegCitations\(/);
     expect(src, 'the legs array must call computeLeg2').toMatch(/await\s+computeLeg2\(/);
   });
 });
