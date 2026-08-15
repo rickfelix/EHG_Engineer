@@ -100,6 +100,16 @@ CREATE POLICY telegram_bot_insert_feedback ON public.feedback
   FOR INSERT TO anon
   WITH CHECK (source_type = 'telegram');
 
+-- DROP IF EXISTS before these two CREATE POLICY statements (Postgres has no CREATE POLICY IF NOT
+-- EXISTS): SD-LEO-FIX-CLOSE-ANON-VENTURE-001's DDL test declares stub policies of these SAME two
+-- names for the same reason (its own migration's $verify$ block also reads them), and all
+-- tests/ddl/**/*.db.test.js files share ONE ephemeral Postgres container within a CI job
+-- (fileParallelism: false, sequential, but the database persists across files) — file run order is
+-- NOT guaranteed alphabetical (measured live in CI: this file ran both before and after that one
+-- across two consecutive runs of the same job), so whichever file's beforeAll runs second must not
+-- assume a clean slate. venture_user_insert_feedback and anon_feedback_ingress_bounds are the two
+-- names both files share; telegram_bot_insert_feedback is unique to this file and needs no guard.
+DROP POLICY IF EXISTS venture_user_insert_feedback ON public.feedback;
 CREATE POLICY venture_user_insert_feedback ON public.feedback
   FOR INSERT TO anon
   WITH CHECK (
@@ -114,6 +124,7 @@ CREATE POLICY venture_user_insert_feedback ON public.feedback
 -- now asserts this policy is present and RESTRICTIVE, DATABASE sub-agent finding M1) does not
 -- spuriously RAISE on this ephemeral database. Always-true, so it never changes any other test's
 -- observable behavior below.
+DROP POLICY IF EXISTS anon_feedback_ingress_bounds ON public.feedback;
 CREATE POLICY anon_feedback_ingress_bounds ON public.feedback
   AS RESTRICTIVE
   FOR INSERT TO public
