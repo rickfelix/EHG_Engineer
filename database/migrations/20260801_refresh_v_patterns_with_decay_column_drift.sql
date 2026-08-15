@@ -1,3 +1,5 @@
+-- @approved-by: codestreetlabs@gmail.com
+-- (chairman verbal approval in-session 2026-08-13 ~12:40Z: "I Approve rebuilding the v_patterns_with_decay view (DROP + CREATE)"; scribed by Adam per the chairman-verbal apply ceremony)
 -- Migration: rebuild v_patterns_with_decay so its column list matches issue_patterns again
 -- Date: 2026-08-01
 -- SD: SD-FDBK-ENH-LEARNING-LOOP-DESTROYS-001 (FR-5)
