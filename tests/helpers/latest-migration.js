@@ -11,13 +11,22 @@
  * to 20260710_create_get_pending_chairman_items.sql after 20260717 and then this SD's
  * migration both superseded it.
  *
- * Migration filenames in this repo are date-prefixed (YYYYMMDD_description.sql), so
- * lexicographic sort order is chronological order — the last file containing the marker
- * string is the newest DECLARED body (see the note below on why that is not always the
- * same thing as the currently-live one).
+ * Sort order matters here, and "migration filenames are date-prefixed" is NOT true of the
+ * whole database/migrations/ directory — it holds legacy non-date-prefixed files (e.g.
+ * uat-tracking-schema.sql) plus a mix of dash-dated (2025-09-22-*.sql) and compact
+ * YYYYMMDD_ (20260815_*.sql) prefixes, whose lexicographic order does not agree with true
+ * chronological order (verified against this repo's actual database/migrations/ listing,
+ * adversarial review of SD-LEO-FIX-CHILD-TAIL-CHAIRMAN-001 PR #7057). Sorting ALL .sql
+ * filenames together would silently resolve to the wrong "latest" file with no error — the
+ * exact silent-staleness failure mode this helper exists to prevent. To keep the guarantee
+ * real rather than assumed, this function only considers files matching the compact
+ * `^\d{8}_` prefix (the convention every migration extending get_pending_chairman_items
+ * actually uses); among THOSE, lexicographic sort order is chronological order.
  */
 import { readFileSync, readdirSync } from 'node:fs';
 import { resolve } from 'node:path';
+
+const DATE_PREFIXED = /^\d{8}_/;
 
 /**
  * NOTE ON "LATEST" vs "LIVE": this returns the newest DECLARED body among migration files —
@@ -30,17 +39,17 @@ import { resolve } from 'node:path';
  * @param {string} repoRoot - absolute path to the repo root
  * @param {string} marker - a string that must appear in the migration (e.g. a function name)
  * @returns {{ path: string, sql: string }} the newest matching migration file and its contents
- * @throws if no migration under database/migrations/ contains the marker
+ * @throws if no `^\d{8}_`-prefixed migration under database/migrations/ contains the marker
  */
 export function resolveLatestMigration(repoRoot, marker) {
   const dir = resolve(repoRoot, 'database/migrations');
   const candidates = readdirSync(dir)
-    .filter((f) => f.endsWith('.sql'))
-    .sort(); // date-prefixed filenames: lexicographic === chronological
+    .filter((f) => f.endsWith('.sql') && DATE_PREFIXED.test(f))
+    .sort(); // restricted to ^\d{8}_ prefixes: lexicographic === chronological, verified above
   for (let i = candidates.length - 1; i >= 0; i--) {
     const path = resolve(dir, candidates[i]);
     const sql = readFileSync(path, 'utf8');
     if (sql.includes(marker)) return { path, sql };
   }
-  throw new Error(`resolveLatestMigration: no migration under ${dir} contains "${marker}"`);
+  throw new Error(`resolveLatestMigration: no ^\\d{8}_-prefixed migration under ${dir} contains "${marker}"`);
 }
