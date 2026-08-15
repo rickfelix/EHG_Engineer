@@ -2,9 +2,9 @@
 
 **Category**: Reference
 **Status**: Approved
-**Version**: 1.1.0
-**Author**: SD-LEO-INFRA-DEAD-VENTURE-USER-001
-**Last Updated**: 2026-08-13
+**Version**: 1.2.0
+**Author**: SD-LEO-INFRA-DEAD-VENTURE-USER-001, SD-LEO-FIX-CLOSE-ANON-VENTURE-001
+**Last Updated**: 2026-08-15
 **Tags**: rls, postgres, anon, feedback, ingress
 
 ## Read this first
@@ -134,6 +134,35 @@ Distinct from the above, and easy to conflate — there are **two** rate limits 
 
 The remedy is filed as a separate chairman-gated SD rather than applied here: making a dormant limit
 suddenly bind would begin rejecting live traffic across four source types with existing volume.
+
+## Related: venture_user_insert_feedback's existence-only gap closed, staged (SD-LEO-FIX-CLOSE-ANON-VENTURE-001)
+
+The sentence below, in the telegram section, is accurate about that migration in isolation but is
+now superseded by a second, separately-staged migration: `venture_user_insert_feedback`'s
+`venture_exists_and_active()` check (existence of a real, active venture_id — no correlation to
+caller identity) is replaced, not merely narrowed, by
+`database/chairman-gated/20260815_venture_user_feedback_ownership_rpc.sql`
+(`fn_submit_venture_user_feedback`, a new `SECURITY DEFINER` RPC requiring a per-venture ingest
+secret, reusing `database/chairman-gated/20260812_venture_ingest_key_binding.sql`'s
+`_verify_venture_ingest_secret` unmodified). **STAGED, NOT APPLIED as of this writing** (chairman-
+gated, same convention as the telegram removal below) — the contract verdicts above remain accurate
+until it lands.
+
+Sequencing is strict and security-load-bearing, not apply-order hygiene: this migration must apply
+AFTER `20260813_revoke_telegram_bot_insert_feedback.sql` (below), or `telegram_bot_insert_feedback`'s
+zero-constraint bypass survives as a live alternate anon-INSERT path for the same feedback_type
+LIKE 'user_%' shape this migration targets. There is also an APPLICATION precondition, found by
+adversarial review during EXEC, not by the migration's own logic: `ehg/src/integrations/feedback/
+feedbackDataAccess.ts` (the same file cited above under [What to do instead](#what-to-do-instead))
+still inserts through the raw `venture_user_insert_feedback` policy this migration drops — it must
+switch to calling `fn_submit_venture_user_feedback` (with the venture ingest secret) and ship BEFORE
+this migration applies, or that app's own feedback submissions break the moment the policy is gone.
+
+Residual, documented rather than silently accepted: for a BROWSER-exposed ingest secret (shipped in
+a public client bundle, as `feedbackDataAccess.ts` is), no client-held credential can stay secret
+from whoever loads that page — this narrows cross-venture forgery to per-venture forgery for such
+callers, it does not eliminate targeted forgery against one specific venture. Full ownership closure
+holds only for a server-side secret holder.
 
 ## Related: telegram_bot_insert_feedback removal staged
 
