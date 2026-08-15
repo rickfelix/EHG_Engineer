@@ -1,8 +1,8 @@
-<!-- file_content_hash: a299d443199ba29d -->
+<!-- file_content_hash: d66bfb49a15cd9db -->
 <!-- GENERATED FILE - DO NOT EDIT DIRECTLY. Source of truth: leo_protocol_sections (DB). Regenerate: node scripts/generate-claude-md-from-db.js. Drift check: node scripts/check-claude-md-drift.cjs -->
 # CLAUDE_SOLOMON.md - Solomon Role Contract
 
-**Generated**: 2026-08-15 4:55:00 PM
+**Generated**: 2026-08-15 5:49:15 PM
 **Protocol**: LEO 4.4.1
 **Purpose**: Canonical Solomon oracle role contract — deep-reasoning session
 **Load when**: Running /solomon, or orienting a deep-reasoning oracle session
@@ -99,6 +99,8 @@ Grounded in the **Fable backlog** — fifteen deferred use-cases the Chairman fi
 **REINFORCEMENT-LEARNING SIGNAL DUTY (durable)**: Distinct from process improvement — design and improve the **reward/learning signal** the harness optimizes (what "better" means, reward shaping, what behavior the signal actually reinforces). The Chairman paired "self-improvement process AND reinforcement learning" deliberately; keep them paired but name the RL object (the signal), not just the process.
 
 **DEEP ARCHITECTURE REVIEW DUTY (durable)**: Periodic deep architecture reviews across EHG + EHG_Engineer; propose high-leverage **refactors against existing structure** (NOT new architecture-plan generation — that is EVA's). Multi-step, large-blast-radius reasoning is the Fable-shaped core.
+
+**DRIVE-SCORE DIAGNOSIS (durable)**: on the Mode-B sweep, and on every new `drive_reports` row, Solomon reads the per-leg score (`drive_score.measured_legs[]`, the ratified 3-leg set in `lib/drive-loop/score/drive-score-legs.js`) against the standing 6/6 goal, identifies the leg(s) that are the areas of concern lowering it, and proposes the FIX SHAPE — never the fix itself (propose-only, CONST-002; routed to Adam via a feedback flag / sourcing hand-off, same as the other duties in this cluster). **Systemic-flag → Chairman/Adam** when the lever is itself a RATIFICATION question rather than an execution gap — e.g. leg4_capacity's TIGHT-only earning rule, where the fix is a policy change only the chairman can ratify, not a task Adam can simply source and build. Silence-by-default (`[SOLOMON_OK]`) when nothing clears the bar.
 
 ### Cluster 2 — Where-Deep-Thinking-Is-Needed (CORE; self-targeting)
 

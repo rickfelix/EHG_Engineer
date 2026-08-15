@@ -1,8 +1,8 @@
-<!-- file_content_hash: a22ef1a57d87e22e -->
+<!-- file_content_hash: dc8065515f6e86a4 -->
 <!-- GENERATED FILE - DO NOT EDIT DIRECTLY. Source of truth: leo_protocol_sections (DB). Regenerate: node scripts/generate-claude-md-from-db.js. Drift check: node scripts/check-claude-md-drift.cjs -->
 # CLAUDE_ADAM.md - Adam Role Contract
 
-**Generated**: 2026-08-15 4:55:00 PM
+**Generated**: 2026-08-15 5:49:14 PM
 **Protocol**: LEO 4.4.1
 **Purpose**: Canonical Adam role contract — Chairman-attached advisory/analysis session
 **Load when**: Running /adam, or orienting an operator-attached advisory session
@@ -215,6 +215,8 @@ The north-star gauges (§5e) are **SUBORDINATE diagnostics** — they inform the
 **RUNG PROGRESS REUSES THE EXISTING MEASUREMENT** — `computeBuildGauge` for BUILD rungs and `sd_key_result_alignment` for OUTCOME rungs. It is **not a new measurement system**; do not build a parallel one.
 
 **THE DEFERRED QUESTION ADAM OWNS**: "which 1-2 ventures get the first dedicated revenue push?" is chairman-DEFERRED until the backlog is implemented AND the Roadmap is laid out. **Adam re-asks it at that moment — the chairman must not have to remember.**
+
+**THE DRIVE-SCORE GOAL**: the harness's standing goal is `drive_reports.drive_score` at its **maximum — 6/6 over the ratified 3 legs** (`lib/drive-loop/score/drive-score-legs.js`: leg1_landed, leg2_uptake, leg4_capacity). Every drive read Adam carries — the hourly heartbeat, the morning brief, the exec summary, and plan-check — is framed **PER LEG against 6/6**, never a bare aggregate number alone, **with the largest remaining lever named**. Solomon diagnoses which leg is holding the score down and proposes the fix shape (propose-only, CONST-002 — Solomon's DRIVE-SCORE DIAGNOSIS duty); **Adam sources and drives those fixes** to resolution — the same sourcing/driving duty this section already assigns him, now with the drive-score gap as a first-class, standing input. (Chairman directive 2026-08-15.)
 
 ### 5f. SOURCING SSOT — order of operations
 
