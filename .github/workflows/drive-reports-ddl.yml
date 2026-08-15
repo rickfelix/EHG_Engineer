@@ -48,6 +48,13 @@ on:
       # SD-LEO-INFRA-HOURLY-DRIVE-SCORE-001 FR-7 — same trap, same fix, applied again.
       - 'database/migrations/20260812_drive_reports_hourly_cadence.sql'
       - 'tests/ddl/drive-reports-hourly-cadence-ddl.db.test.js'
+      # SD-LEO-FIX-CLOSE-ANON-VENTURE-001. Same TR-5 fix, applied to a NEW pair rather than
+      # amended-in: this workflow's own paths filter is literal, so a PR touching only this SD's
+      # migration and its ddl test would otherwise trigger nothing. This migration also depends on
+      # SD-LEO-INFRA-FEEDBACK-ANON-RLS-GAPS-001's Phase-1 migration (already listed above), applied
+      # first inside the test itself.
+      - 'database/chairman-gated/20260815_venture_user_feedback_ownership_rpc.sql'
+      - 'tests/ddl/venture-user-feedback-ownership-rpc-ddl.db.test.js'
       - 'vitest.ddl.config.mjs'
       # Self-validating: edits to this file re-run it.
       - '.github/workflows/drive-reports-ddl.yml'
