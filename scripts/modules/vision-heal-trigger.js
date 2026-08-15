@@ -167,8 +167,6 @@ export function executeVisionHeal(visionKey, archKey) {
  * @param {Object} supabase - Supabase client
  */
 export async function runVisionHealIfTriggered(sd, supabase) {
-  const sdKey = sd.sd_key || sd.id;
-
   console.log('\n🔭 VISION HEAL TRIGGER CHECK');
   console.log('-'.repeat(50));
 
