@@ -3,6 +3,8 @@
  * SD-LEO-FEAT-PROVEN-BETTER-NEW-001 FR-1/FR-3.
  */
 import { describe, it, expect, vi } from 'vitest';
+import { readFileSync } from 'fs';
+import { join } from 'path';
 import { scorePbnBuckets } from '../../../../lib/eva/stage-zero/pbn-scoring.js';
 
 const brief = { name: 'Test Idea', problem_statement: 'p', solution: 's', target_market: 'm' };
@@ -85,5 +87,36 @@ describe('scorePbnBuckets', () => {
     const result = await scorePbnBuckets(brief, { llmClient: { complete: vi.fn().mockRejectedValue(new Error('down')) }, logger: { error: vi.fn() } });
     const verdict = evaluatePbnVerdict(result);
     expect(verdict.verdict).toBe('REJECT');
+  });
+
+  // US-006 AC #2: a genuinely-empty referent search must yield coverage=false honestly, never
+  // three plausible-looking invented citations built from the idea's own text.
+  it('an idea with zero external referents yields coverage=false on every bucket — the LLM honestly reports nothing to cite (not a scoring failure)', async () => {
+    const content = JSON.stringify({
+      proven: { mechanic: null, citations: [], coverage: false },
+      better: { hypothesis: null, friction_point: null, citations: [], coverage: false },
+      new: { wedge: 'a genuinely novel wedge', wedge_count: 1, coverage: false },
+    });
+    const result = await scorePbnBuckets(
+      { name: 'Totally Novel Idea With No Prior Art', problem_statement: 'p', solution: 's' },
+      { llmClient: fakeClient(content), logger: { error: vi.fn() } },
+    );
+    expect(result.scoring_error).toBeFalsy(); // this is a clean run, not a failure
+    expect(result.proven.coverage).toBe(false);
+    expect(result.better.coverage).toBe(false);
+    expect(result.proven.citations).toEqual([]);
+    expect(result.better.citations).toEqual([]);
+  });
+});
+
+describe('citation-construction static scan (US-006 AC #2)', () => {
+  it('normalizeRawBuckets never interpolates the idea/brief text into a citation field', () => {
+    const src = readFileSync(join(__dirname, '..', '..', '..', '..', 'lib', 'eva', 'stage-zero', 'pbn-scoring.js'), 'utf8');
+    // The only citation-shaped assignments must be pass-throughs of the raw LLM array
+    // (`Array.isArray(x.citations) ? x.citations : []`), never a template/interpolation of
+    // `brief.` fields into a `source`/`reference`/`measured` value.
+    expect(src).not.toMatch(/citations:\s*\[\s*\{[^}]*brief\./s);
+    expect(src).not.toMatch(/reference:\s*`[^`]*\$\{brief/);
+    expect(src).not.toMatch(/source:\s*`[^`]*\$\{brief/);
   });
 });

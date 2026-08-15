@@ -97,7 +97,7 @@ describe('sanitizePbnVerdictForPersistence (TR-7/C1)', () => {
 describe('runPbnGate (orchestration: score -> gate -> sanitize)', () => {
   it('scores via the injected LLM client, gates the result, and returns a sanitized verdict', async () => {
     const content = JSON.stringify({
-      proven: { mechanic: 'incumbent', citations: [{ source: 'real ref', measured: 'x', reference: 'https://example.test' }], coverage: true },
+      proven: { mechanic: 'incumbent', citations: [{ source: 'Category leader X', measured: 'Public revenue disclosure, FY2025 10-K', reference: 'https://example.test' }], coverage: true },
       better: { hypothesis: 'h', citations: [], coverage: false },
       new: { wedge: 'w', wedge_count: 1, coverage: true },
     });

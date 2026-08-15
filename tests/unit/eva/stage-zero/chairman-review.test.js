@@ -12,6 +12,7 @@
  */
 
 import { describe, it, expect, vi, beforeEach } from 'vitest';
+import { ALL_NEW_VERDICT, TWO_WEDGE_VERDICT } from '../../../fixtures/pbn-fixtures.js';
 
 // QF-20260712-860: the WIP live-count now chains .not('name', 'ilike', ...) after .in() to
 // exclude test-fixture-name-prefixed rows. Real PostgREST query builders are thenable at
@@ -142,6 +143,36 @@ function createMockSupabase(overrides = {}) {
     from: vi.fn((table) => (table === 'ventures' ? venturesTable : table === 'eva_config' ? evaConfigTable : { ...mockChain })),
     _mockChain: mockChain,
   };
+}
+
+// Wraps createMockSupabase() with a spyable venture_nursery table — every other table
+// (ventures/eva_config/generic) keeps its existing mocked behavior unchanged. Module-scoped
+// so both the persistVentureBrief describe block and the PBN gate integration describe block
+// (which needs it for recordPbnEvaluation-on-reactivation tests) can use it.
+function createMockSupabaseWithNursery({ isResult = { data: [{ id: 'nursery-1' }], error: null }, overrides = {} } = {}) {
+  const base = createMockSupabase(overrides);
+  const nurseryUpdateSpy = vi.fn();
+  const nurseryEqSpy = vi.fn();
+  const nurseryTable = {
+    update: vi.fn((payload) => {
+      nurseryUpdateSpy(payload);
+      return {
+        eq: vi.fn((col, val) => {
+          nurseryEqSpy(col, val);
+          return {
+            is: vi.fn(() => ({
+              select: vi.fn().mockResolvedValue(isResult),
+            })),
+          };
+        }),
+      };
+    }),
+  };
+  const originalFrom = base.from;
+  base.from = vi.fn((table) => (table === 'venture_nursery' ? nurseryTable : originalFrom(table)));
+  base._nurseryUpdateSpy = nurseryUpdateSpy;
+  base._nurseryEqSpy = nurseryEqSpy;
+  return base;
 }
 
 // SD-LEO-INFRA-STAGE-OPPORTUNITY-INTAKE-001 (F4): mock that distinguishes the venture
@@ -354,34 +385,8 @@ describe('ChairmanReview', () => {
     });
 
     // ── SD-FDBK-FIX-STAGE-PROMOTION-NEVER-001: nursery back-link stamp (FR-3) ──
-
-    // Wraps createMockSupabase() with a spyable venture_nursery table — every other table
-    // (ventures/eva_config/generic) keeps its existing mocked behavior unchanged.
-    function createMockSupabaseWithNursery({ isResult = { data: [{ id: 'nursery-1' }], error: null }, overrides = {} } = {}) {
-      const base = createMockSupabase(overrides);
-      const nurseryUpdateSpy = vi.fn();
-      const nurseryEqSpy = vi.fn();
-      const nurseryTable = {
-        update: vi.fn((payload) => {
-          nurseryUpdateSpy(payload);
-          return {
-            eq: vi.fn((col, val) => {
-              nurseryEqSpy(col, val);
-              return {
-                is: vi.fn(() => ({
-                  select: vi.fn().mockResolvedValue(isResult),
-                })),
-              };
-            }),
-          };
-        }),
-      };
-      const originalFrom = base.from;
-      base.from = vi.fn((table) => (table === 'venture_nursery' ? nurseryTable : originalFrom(table)));
-      base._nurseryUpdateSpy = nurseryUpdateSpy;
-      base._nurseryEqSpy = nurseryEqSpy;
-      return base;
-    }
+    // createMockSupabaseWithNursery is defined at module scope (below createMockSupabase) so
+    // the PBN gate integration describe block can reuse it too.
 
     it('stamps venture_nursery.promoted_to_venture_id + promoted_at when brief.nursery_id is present', async () => {
       const mockSupabase = createMockSupabaseWithNursery();
@@ -932,14 +937,8 @@ describe('ChairmanReview — PBN gate integration', () => {
     vi.clearAllMocks();
   });
 
-  const rejectVerdict = {
-    proven: { mechanic: null, citations: [], coverage: false },
-    better: { hypothesis: null, citations: [], coverage: false },
-    new: { wedge: null, wedge_count: 0, coverage: false },
-    verdict: 'REJECT',
-    measured_at: '2026-08-15T00:00:00.000Z',
-    rule_trace: [{ rule_id: 'EMPTY_PROVEN', fired: true, detail: 'x' }],
-  };
+  // US-008 AC #5: shared with pbn-gate.test.js and pbn-gate-flow.test.js via tests/fixtures/pbn-fixtures.js.
+  const rejectVerdict = ALL_NEW_VERDICT;
 
   it('a REJECT verdict overrides decision=ready to park — the idea never reaches the ventures table', async () => {
     runPbnGate.mockResolvedValueOnce(rejectVerdict);
@@ -984,7 +983,7 @@ describe('ChairmanReview — PBN gate integration', () => {
   });
 
   it('a TRIM verdict also overrides decision=ready to park (not just REJECT)', async () => {
-    const trimVerdict = { ...rejectVerdict, verdict: 'TRIM', rule_trace: [{ rule_id: 'NEW_MULTI_WEDGE', fired: true, detail: 'x' }] };
+    const trimVerdict = TWO_WEDGE_VERDICT; // shared fixture — internally consistent (proven IS covered, 2 wedges)
     runPbnGate.mockResolvedValueOnce(trimVerdict);
     const mockSupabase = createMockSupabase();
 
@@ -1021,6 +1020,32 @@ describe('ChairmanReview — PBN gate integration', () => {
     expect(parkVenture).not.toHaveBeenCalled();
     const insertArg = mockSupabase._mockChain.insert.mock.calls[0][0];
     expect(insertArg.metadata.stage_zero.pbn_verdict.verdict).toBe('PASS');
+  });
+
+  // US-004: "every PBN verdict — PASS, REJECT and TRIM alike" is audit-logged. A PASS
+  // verdict only has a real nurseryId to log against on the reactivation path.
+  it('a PASS verdict on a REACTIVATED brief (nursery_id set) is ALSO recorded via recordPbnEvaluation', async () => {
+    const mockSupabase = createMockSupabaseWithNursery();
+    const briefWithNursery = { ...validBrief, nursery_id: 'nursery-1' };
+
+    await persistVentureBrief(
+      { decision: 'ready', brief: briefWithNursery, validation: { valid: true, errors: [] } },
+      { supabase: mockSupabase, logger: silentLogger },
+    );
+
+    expect(recordPbnEvaluation).toHaveBeenCalledTimes(1);
+    expect(recordPbnEvaluation).toHaveBeenCalledWith('nursery-1', expect.objectContaining({ verdict: 'PASS' }), expect.anything());
+  });
+
+  it('a PASS verdict on a first-time brief (no nursery_id) is NOT logged — there is no nurseryId to attach it to', async () => {
+    const mockSupabase = createMockSupabase();
+
+    await persistVentureBrief(
+      { decision: 'ready', brief: validBrief, validation: { valid: true, errors: [] } },
+      { supabase: mockSupabase, logger: silentLogger },
+    );
+
+    expect(recordPbnEvaluation).not.toHaveBeenCalled();
   });
 
   it('runPbnGate is invoked with the brief and the same deps persistVentureBrief received', async () => {

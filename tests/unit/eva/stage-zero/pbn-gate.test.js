@@ -3,6 +3,8 @@
  * PRD test scenarios: TS-1, TS-2, TS-3a, TS-3b, TS-4.
  */
 import { describe, it, expect } from 'vitest';
+import { execFileSync } from 'child_process';
+import { join } from 'path';
 import {
   resolveCitation,
   resolveBucketCoverage,
@@ -10,11 +12,15 @@ import {
   buildPbnVerdict,
   PBN_RULES,
 } from '../../../../lib/eva/stage-zero/pbn-gate.js';
+import { PROVEN_CLONE_BUCKETS, ALL_NEW_BUCKETS } from '../../../fixtures/pbn-fixtures.js';
 
-const realCitation = { source: 'Category leader X', measured: 'Public revenue disclosure', reference: 'https://example.test/x-revenue' };
-const fabricatedCitation = { source: 'Something', measured: 'made up' }; // no reference field
-const provenCloneBucket = { mechanic: 'incumbent loop', citations: [realCitation], coverage: true };
-const emptyProvenBucket = { mechanic: null, citations: [], coverage: false };
+// US-008 AC #5: proven-clone and all-new derive from the one shared fixture module rather than
+// private near-copies (chairman-review.test.js and pbn-gate-flow.test.js reference the same
+// module). two-wedge is TWO_WEDGE_BUCKETS, used directly where needed below.
+const realCitation = PROVEN_CLONE_BUCKETS.proven.citations[0];
+const fabricatedCitation = { source: 'Something real-sounding', measured: 'made up' }; // no reference field
+const provenCloneBucket = PROVEN_CLONE_BUCKETS.proven;
+const emptyProvenBucket = ALL_NEW_BUCKETS.proven;
 const uncoverableProvenBucket = { mechanic: 'claimed mechanic', citations: [fabricatedCitation], coverage: true }; // LLM claims coverage but citation doesn't resolve
 
 describe('resolveCitation (FR-5, hermetic check)', () => {
@@ -32,6 +38,20 @@ describe('resolveCitation (FR-5, hermetic check)', () => {
   it('does not resolve a citation with empty-string fields', () => {
     expect(resolveCitation({ source: '', reference: '' })).toBe(false);
     expect(resolveCitation({ source: '   ', reference: '   ' })).toBe(false);
+  });
+
+  // US-001 AC #2: length floors mirror invariant-library.js:132,137 (source>=8, measured>=20)
+  // — a trivially short field is a bare assertion, not a real citation, and must not resolve.
+  it('does not resolve a citation whose source is shorter than invariant-library.js\'s 8-char floor', () => {
+    expect(resolveCitation({ source: 'x'.repeat(7), measured: 'a'.repeat(20), reference: 'r' })).toBe(false);
+    expect(resolveCitation({ source: 'x'.repeat(8), measured: 'a'.repeat(20), reference: 'r' })).toBe(true);
+  });
+  it('does not resolve a citation whose measured is shorter than invariant-library.js\'s 20-char floor', () => {
+    expect(resolveCitation({ source: 'x'.repeat(8), measured: 'a'.repeat(19), reference: 'r' })).toBe(false);
+    expect(resolveCitation({ source: 'x'.repeat(8), measured: 'a'.repeat(20), reference: 'r' })).toBe(true);
+  });
+  it('a bare string standing in for a citation object never resolves regardless of its length', () => {
+    expect(resolveCitation('a'.repeat(50))).toBe(false);
   });
 });
 
@@ -61,7 +81,16 @@ describe('evaluatePbnVerdict (FR-2 hard gate rules)', () => {
       new: { wedge: 'one wedge', wedge_count: 1, coverage: true },
     });
     expect(result.verdict).toBe('PASS');
-    expect(result.rule_trace).toEqual([]);
+    // Verdict-driving rules: none fired (proven is evidenced, wedge_count<=1).
+    const verdictRuleIds = result.rule_trace
+      .filter((r) => r.rule_id !== PBN_RULES.NO_RESOLVABLE_REFERENT)
+      .map((r) => r.rule_id);
+    expect(verdictRuleIds).toEqual([]);
+    // Coverage-reporting (US-006 AC #3, FR-3): better is coverage=false by design (FR-2 iii —
+    // recorded as a future hypothesis, not gated) and still gets its own trace entry.
+    expect(result.rule_trace).toContainEqual(
+      expect.objectContaining({ rule_id: PBN_RULES.NO_RESOLVABLE_REFERENT, bucket: 'better' }),
+    );
   });
 
   // TS-2: all-new idea is rejected on the empty-proven rule
@@ -72,7 +101,17 @@ describe('evaluatePbnVerdict (FR-2 hard gate rules)', () => {
       new: { wedge: 'w', wedge_count: 1, coverage: true },
     });
     expect(result.verdict).toBe('REJECT');
-    expect(result.rule_trace.map((r) => r.rule_id)).toEqual([PBN_RULES.EMPTY_PROVEN]);
+    const verdictRuleIds = result.rule_trace
+      .filter((r) => r.rule_id !== PBN_RULES.NO_RESOLVABLE_REFERENT)
+      .map((r) => r.rule_id);
+    expect(verdictRuleIds).toEqual([PBN_RULES.EMPTY_PROVEN]);
+    // Coverage-reporting: both proven and better are coverage=false here, each traced.
+    expect(result.rule_trace).toContainEqual(
+      expect.objectContaining({ rule_id: PBN_RULES.NO_RESOLVABLE_REFERENT, bucket: 'proven' }),
+    );
+    expect(result.rule_trace).toContainEqual(
+      expect.objectContaining({ rule_id: PBN_RULES.NO_RESOLVABLE_REFERENT, bucket: 'better' }),
+    );
   });
 
   // TS-3a: two-wedge idea with an evidenced proven bucket TRIMS
@@ -83,8 +122,16 @@ describe('evaluatePbnVerdict (FR-2 hard gate rules)', () => {
       new: { wedge: 'two wedges named', wedge_count: 2, coverage: true },
     });
     expect(result.verdict).toBe('TRIM');
-    expect(result.rule_trace.map((r) => r.rule_id)).toEqual([PBN_RULES.NEW_MULTI_WEDGE]);
+    const verdictRuleIds = result.rule_trace
+      .filter((r) => r.rule_id !== PBN_RULES.NO_RESOLVABLE_REFERENT)
+      .map((r) => r.rule_id);
+    expect(verdictRuleIds).toEqual([PBN_RULES.NEW_MULTI_WEDGE]);
     expect(result.resolved.proven_coverage).toBe(true);
+    // proven IS covered here, so only better gets a coverage-reporting entry.
+    expect(result.rule_trace).toContainEqual(
+      expect.objectContaining({ rule_id: PBN_RULES.NO_RESOLVABLE_REFERENT, bucket: 'better' }),
+    );
+    expect(result.rule_trace.filter((r) => r.bucket === 'proven')).toEqual([]);
   });
 
   // TS-3b: two-wedge idea with an UNevidenced proven bucket REJECTS (rules compound)
@@ -98,7 +145,12 @@ describe('evaluatePbnVerdict (FR-2 hard gate rules)', () => {
     const ruleIds = result.rule_trace.map((r) => r.rule_id);
     expect(ruleIds).toContain(PBN_RULES.EMPTY_PROVEN);
     expect(ruleIds).toContain(PBN_RULES.NEW_MULTI_WEDGE);
-    expect(ruleIds).toHaveLength(2);
+    const verdictRuleIds = result.rule_trace
+      .filter((r) => r.rule_id !== PBN_RULES.NO_RESOLVABLE_REFERENT)
+      .map((r) => r.rule_id);
+    expect(verdictRuleIds).toHaveLength(2);
+    // Both proven and better are coverage=false — each independently traced (US-006 AC #3).
+    expect(result.rule_trace.filter((r) => r.rule_id === PBN_RULES.NO_RESOLVABLE_REFERENT)).toHaveLength(2);
   });
 
   it('wedge_count derives from a truthy wedge string when the LLM omits an explicit count', () => {
@@ -119,6 +171,58 @@ describe('evaluatePbnVerdict (FR-2 hard gate rules)', () => {
     });
     expect(result.resolved.wedge_count).toBe(0);
     expect(result.verdict).toBe('PASS');
+  });
+});
+
+describe('module loads under plain node (US-001 AC #5 — VITEST≠NODE regression guard)', () => {
+  it('pbn-scoring.js, pbn-gate.js and pbn-integration.js all load with no unresolved import outside vitest', () => {
+    const root = join(__dirname, '..', '..', '..', '..');
+    const script = [
+      "import('./lib/eva/stage-zero/pbn-scoring.js')",
+      ".then(() => import('./lib/eva/stage-zero/pbn-gate.js'))",
+      ".then(() => import('./lib/eva/stage-zero/pbn-integration.js'))",
+      ".then(() => console.log('OK'))",
+      '.catch((e) => { console.error(e.message); process.exit(1); })',
+    ].join('');
+    const output = execFileSync(process.execPath, ['-e', script], { cwd: root, encoding: 'utf8' });
+    expect(output.trim()).toBe('OK');
+  });
+});
+
+describe('rule_trace coverage-reporting (US-006 AC #3, #5 — FR-3 machine-readable home)', () => {
+  it('a coverage=false bucket gets a rule_trace entry naming the bucket and the reason, distinguishable from a covered one', () => {
+    const result = evaluatePbnVerdict({
+      proven: provenCloneBucket, // covered
+      better: { hypothesis: 'h', citations: [], coverage: false }, // uncovered
+      new: { wedge: 'w', wedge_count: 1, coverage: true },
+    });
+    const betterEntry = result.rule_trace.find((r) => r.bucket === 'better');
+    expect(betterEntry).toEqual(
+      expect.objectContaining({ rule_id: PBN_RULES.NO_RESOLVABLE_REFERENT, fired: true, bucket: 'better' }),
+    );
+    expect(typeof betterEntry.detail).toBe('string');
+    expect(betterEntry.detail.length).toBeGreaterThan(0);
+    // No entry at all for the covered bucket — coverage=true is never traced as a "reason".
+    expect(result.rule_trace.some((r) => r.bucket === 'proven')).toBe(false);
+  });
+
+  it('coverage flips true and the rule_trace entry disappears once a referent becomes available at re-score — coverage is a measurement in time, not a permanent label', () => {
+    const uncovered = evaluatePbnVerdict({
+      proven: emptyProvenBucket,
+      better: { hypothesis: 'h', citations: [], coverage: false },
+      new: { wedge: 'w', wedge_count: 1, coverage: true },
+    });
+    expect(uncovered.rule_trace.some((r) => r.bucket === 'proven')).toBe(true);
+    expect(uncovered.verdict).toBe('REJECT');
+
+    // Same idea, re-scored later with a now-resolvable referent for proven.
+    const rescored = evaluatePbnVerdict({
+      proven: provenCloneBucket,
+      better: { hypothesis: 'h', citations: [], coverage: false },
+      new: { wedge: 'w', wedge_count: 1, coverage: true },
+    });
+    expect(rescored.rule_trace.some((r) => r.bucket === 'proven')).toBe(false);
+    expect(rescored.verdict).toBe('PASS');
   });
 });
 

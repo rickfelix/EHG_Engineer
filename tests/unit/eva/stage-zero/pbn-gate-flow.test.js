@@ -30,6 +30,7 @@ vi.mock('../../../../lib/eva/stage-zero/pbn-integration.js', async (importOrigin
 
 import { persistVentureBrief } from '../../../../lib/eva/stage-zero/chairman-review.js';
 import { runPbnGate } from '../../../../lib/eva/stage-zero/pbn-integration.js';
+import { ALL_NEW_BUCKETS, TWO_WEDGE_VERDICT } from '../../../fixtures/pbn-fixtures.js';
 
 const silentLogger = { log: vi.fn(), warn: vi.fn(), error: vi.fn() };
 
@@ -45,9 +46,10 @@ const brief = {
 };
 
 const rejectVerdict = (n) => ({
-  proven: { mechanic: null, citations: [], coverage: false },
-  better: { hypothesis: null, citations: [], coverage: false },
-  new: { wedge: null, wedge_count: 0, coverage: false },
+  // US-008 AC #5: shape shared with pbn-gate.test.js / chairman-review.test.js via
+  // tests/fixtures/pbn-fixtures.js's ALL_NEW_BUCKETS; measured_at varies per call (n) to
+  // prove each scoring attempt is independently timestamped.
+  ...ALL_NEW_BUCKETS,
   verdict: 'REJECT',
   measured_at: `2026-08-1${n}T00:00:00.000Z`,
   rule_trace: [{ rule_id: 'EMPTY_PROVEN', fired: true, detail: `attempt ${n}` }],
@@ -202,5 +204,26 @@ describe('PBN gate flow — TS-5/TS-6/TS-7', () => {
 
     expect(result.id).toBe('nursery-1'); // park itself still succeeded
     expect(silentLogger.error).toHaveBeenCalledWith(expect.stringContaining('log insert failed'));
+  });
+
+  // US-008 AC #4 ("all three fixtures... nursery_evaluation_log contains one row per fixture
+  // run"): a REJECT run producing its own evalLog row is demonstrated directly above (TS-7
+  // tests). TRIM's own audit row is demonstrated in chairman-review.test.js ('a TRIM verdict
+  // also overrides decision=ready to park'), and PASS's in chairman-review.test.js ('a PASS
+  // verdict on a REACTIVATED brief... is ALSO recorded via recordPbnEvaluation') — this file's
+  // stateful mock is purpose-built for the REJECT/park path only (no venture_briefs/full-ventures
+  // handling), so a combined single-run PASS+REJECT+TRIM assertion belongs with chairman-review's
+  // complete mock rather than forcing this one to grow a parallel PASS path it doesn't need.
+  it('TWO_WEDGE_VERDICT (shared fixture) also produces its own independent nursery_evaluation_log row via the REJECT/park path', async () => {
+    const { supabase, evalLog } = makeStatefulNurseryDb();
+    runPbnGate.mockResolvedValueOnce(TWO_WEDGE_VERDICT);
+
+    await persistVentureBrief(
+      { decision: 'ready', brief, validation: { valid: true, errors: [] } },
+      { supabase, logger: silentLogger },
+    );
+
+    expect(evalLog).toHaveLength(1);
+    expect(evalLog[0].trigger_details.verdict).toBe('TRIM');
   });
 });
