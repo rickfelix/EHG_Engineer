@@ -136,6 +136,26 @@ describe('SEC-GSB-1 — a NON-NUMERIC count is a failed measurement, not an empt
   });
 });
 
+// Adversarial-review finding (deep-tier /ship gate, PR #7040), WARNING, reproduced here:
+// isAutoStartableQF itself never inspects claiming_session_id (it mirrors the worker's real
+// candidate query, which relies on claim_sd flipping status atomically with the claimant) — safe
+// for the worker, whose downstream claim_sd RPC call is the real arbiter, but this gauge has no
+// such arbiter. Without a query-level filter, a status='open'-but-claimed row (a reachable state
+// — see lib/checkin/steps/resume.cjs, lib/fleet/best-effort-release.mjs) would be over-counted,
+// reopening the exact defect class SD-LEO-INFRA-GATE-SIDE-BELT-001 fixed.
+describe('countAutoStartableQuickFixes — claiming_session_id exclusion (adversarial-review fix)', () => {
+  it('does not count a row that is status=open but already claimed by another session', async () => {
+    const client = fakeClient({ qfs: [...openUnclaimed(4), ...openClaimed(3)] });
+    await expect(countAutoStartableQuickFixes(client)).resolves.toBe(4);
+  });
+
+  it('countBeltDepth inherits the same exclusion via its qfDepth reading', async () => {
+    const client = fakeClient({ qfs: [...openUnclaimed(4), ...openClaimed(3)] });
+    const depth = await countBeltDepth(client);
+    expect(depth.qfDepth).toBe(4);
+  });
+});
+
 // SD-LEO-INFRA-QF-SUPPLY-PREDICATE-AUTO-START-001 (FR-3, TS-2 scope clause): a scoped call must
 // not silently fall back to fleet-wide counting on the new row-fetch path — both the factory_lane
 // probe and the paginated fetch have to carry the SAME .eq('target_application', scope) filter
@@ -205,6 +225,33 @@ describe('countAutoStartableQuickFixes — factory_lane 42703 fallback (TR-2/TS-
   it('a non-42703 error on the probe still propagates (fail-loud is not weakened by the retry)', async () => {
     const client = { from: () => ({ select: () => ({ eq() { return this; }, is() { return this; }, limit: () => Promise.resolve({ data: null, error: { code: 'PGRST205', message: 'relation not found' } }) }) }) };
     await expect(countAutoStartableQuickFixes(client)).rejects.toBeTruthy();
+  });
+
+  // Adversarial-review finding (deep-tier /ship gate, PR #7040), CRITICAL, reproduced here: on
+  // LIVE PRODUCTION the FIRST probe (with factory_lane) always hits 42703 -- the prior version of
+  // this guard only checked the shape of THAT discarded first attempt, never the retry probe that
+  // uses the column list actually fed to the real fetch. This is the scenario that matters: probe
+  // #1 -> 42703 (expected, triggers the fallback), probe #2 (retry, no factory_lane) -> the
+  // degenerate {data:null, error:null} shape. Must still throw, not resolve to 0.
+  it('a probe that hits 42703, then a RETRY probe that resolves data=null/error=null, still THROWS', async () => {
+    const client = {
+      from: () => ({
+        select: (cols) => {
+          const includesFactoryLane = /(^|,)\s*factory_lane\s*(,|$)/.test(cols);
+          const b = {
+            eq() { return b; },
+            is() { return b; },
+            limit: () => Promise.resolve(
+              includesFactoryLane
+                ? { data: null, error: { code: '42703', message: 'column quick_fixes.factory_lane does not exist' } }
+                : { data: null, error: null }
+            ),
+          };
+          return b;
+        },
+      }),
+    };
+    await expect(countAutoStartableQuickFixes(client)).rejects.toThrow(/refusing to treat an unreadable quick_fixes table as empty/);
   });
 
   // TR-1 / SEC-GSB-1 parity: PostgREST's documented missing-relation signature is {count:null,
