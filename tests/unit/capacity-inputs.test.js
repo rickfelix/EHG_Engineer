@@ -26,7 +26,11 @@ import { computeBeltVerdict } from '../../lib/drive-loop/belt-verdict.js';
 
 /**
  * A fake Supabase whose builders satisfy fetchAllPaginated (fresh builder per page, .range applied
- * by the caller) and the head-count path countClaimableQuickFixes uses.
+ * by the caller) and the row-fetch path countAutoStartableQuickFixes uses (SD-LEO-INFRA-QF-SUPPLY-
+ * PREDICATE-AUTO-START-001 FR-4: was the head-count path countClaimableQuickFixes used — that
+ * builder only ever needed to answer a bare {count}, never a row; countAutoStartableQuickFixes
+ * fetches rows and runs isAutoStartableQF over them in JS, so quick_fixes now needs the SAME
+ * row-capable builder claude_sessions/strategic_directives_v2 already use, not a narrower one).
  */
 function fakeClient({ sessions = [], sds = [], qfCount = 0 } = {}) {
   const table = (rows) => {
@@ -39,28 +43,36 @@ function fakeClient({ sessions = [], sds = [], qfCount = 0 } = {}) {
       not() { return b; },
       gte() { return b; },
       order() { return b; },
-      limit() { return b; },
+      limit(n) { return Promise.resolve({ data: b._rows.slice(0, n), error: null }); },
       range(from, to) { return Promise.resolve({ data: b._rows.slice(from, to + 1), error: null }); },
       then(res) { return Promise.resolve({ data: b._rows, error: null }).then(res); },
     };
     return b;
   };
+  // Fresh, open, unambiguously isAutoStartableQF-eligible rows — qfCount stays the test-facing
+  // knob ("N open QFs on the belt"), it just now has to carry the fields the row-level predicate
+  // reads (created_at above all: a missing one reads as unparseable age and excludes the row).
+  const qfs = Array.from({ length: qfCount }, (_, i) => ({
+    id: `qf-fake-${i}`,
+    status: 'open',
+    pr_url: null,
+    commit_sha: null,
+    created_at: new Date().toISOString(),
+    routing_tier: null,
+    title: 'Fix a typo in a comment',
+    // Deliberately free of TIER3_RISK_RE's keywords (auth/schema/migration/etc.) — a description
+    // merely ASSERTING their absence would itself contain the words and self-exclude the row.
+    description: 'No behavioral change.',
+    not_before: null,
+    factory_lane: false,
+    owner: null,
+    release_condition: null,
+  }));
   return {
     from(name) {
       if (name === 'claude_sessions') return table(sessions);
       if (name === 'strategic_directives_v2') return table(sds);
-      if (name === 'quick_fixes') {
-        const b = {
-          select() { return b; },
-          eq() { return b; },
-          in() { return b; },
-          is() { return b; },
-          not() { return b; },
-          order() { return b; },
-          then(res) { return Promise.resolve({ count: qfCount, error: null }).then(res); },
-        };
-        return b;
-      }
+      if (name === 'quick_fixes') return table(qfs);
       return table([]);
     },
   };

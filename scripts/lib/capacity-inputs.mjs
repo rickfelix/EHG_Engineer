@@ -48,7 +48,14 @@
 import { fetchAllPaginated, renderCount } from '../../lib/db/fetch-all-paginated.mjs';
 import { isBareShell } from '../../lib/coordinator/sd-exclusion.mjs';
 import { parentLeadPendingVerdict } from '../../lib/fleet/claim-eligibility.cjs';
-import { countClaimableQuickFixes } from '../../lib/fleet/belt-depth.cjs';
+// SD-LEO-INFRA-QF-SUPPLY-PREDICATE-AUTO-START-001 (FR-4): was countClaimableQuickFixes. This
+// forecaster answers "how much belt is there for a worker to pick up" — countAutoStartableQuickFixes
+// is the reading that matches what a worker's /checkin self-claim loop would actually take (same
+// isAutoStartableQF predicate), so the forecast no longer counts stale/factory-lane/chairman-gated/
+// risk-flagged QFs no worker could reach. lib/governance/qf-mint-gate.mjs's demand gauge still calls
+// countClaimableQuickFixes directly — a different contract (mint-floor supply, not forecast belt) —
+// and is untouched by this SD.
+import { countAutoStartableQuickFixes } from '../../lib/fleet/belt-depth.cjs';
 // SD-LEO-INFRA-CAPACITY-FORECASTER-BELT-001: reuse the ranker's PURE leaf predicates from the
 // client-free SSOT so the forecaster belt spans the DISPATCHABLE-leaf extent (what the ranker
 // counts as "1 claimable leaf"), not the raw-unclaimed extent. Applied IN-MEMORY on the rows this
@@ -220,16 +227,21 @@ export async function gatherCapacityInputs(sb, { now = Date.now() } = {}) {
     //
     // SD-LEO-INFRA-GATE-SIDE-BELT-001: this was a local head-count on `status='open'` that IGNORED
     // claiming_session_id, while the SD term ~20 lines below skips claimed rows — one surface, two
-    // claimability rules, over-reporting by 3 (148 counted, 145 actually claimable). It now shares
-    // the coordinator's QF supply predicate through lib/fleet/belt-depth.cjs, so this number and the
-    // coordinator's own supply reads cannot disagree again.
+    // claimability rules, over-reporting by 3 (148 counted, 145 actually claimable). It then shared
+    // the coordinator's QF supply predicate through lib/fleet/belt-depth.cjs.
     //
-    // FAIL-OPEN IS PRESERVED DELIBERATELY, AND SAID OUT LOUD. countClaimableQuickFixes is fail-LOUD
-    // by contract, because a gauge that reports 0 when it cannot read is indistinguishable from an
-    // empty belt. THIS surface has always fallen back to a 0 QF contribution rather than aborting the
-    // whole forecast, so the catch keeps that behaviour at the call site where a reader can see it,
-    // instead of weakening the shared gauge for every other consumer.
-    countClaimableQuickFixes(sb).catch(() => null),
+    // SD-LEO-INFRA-QF-SUPPLY-PREDICATE-AUTO-START-001 (FR-4): now countAutoStartableQuickFixes, the
+    // worker-auto-start reading (isAutoStartableQF) rather than the looser coordinator-supply reading
+    // — a QF held by staleness/factory-lane/chairman-gate/risk-keyword was still counted as forecast
+    // belt before this, over-reporting capacity a worker could never actually claim.
+    //
+    // FAIL-OPEN IS PRESERVED DELIBERATELY, AND SAID OUT LOUD. countAutoStartableQuickFixes is
+    // fail-LOUD by contract, same as countClaimableQuickFixes was, because a gauge that reports 0
+    // when it cannot read is indistinguishable from an empty belt. THIS surface has always fallen
+    // back to a 0 QF contribution rather than aborting the whole forecast, so the catch keeps that
+    // behaviour at the call site where a reader can see it, instead of weakening the shared gauge for
+    // every other consumer.
+    countAutoStartableQuickFixes(sb).catch(() => null),
   ]);
   const openQfCountRendered = renderCount(openQfCountRaw);
   const openQfCount = typeof openQfCountRendered === 'number' ? openQfCountRendered : 0; // fail-open: unreadable → 0 belt contribution, unchanged from the prior fallback
