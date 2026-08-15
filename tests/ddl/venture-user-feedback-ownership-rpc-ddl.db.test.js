@@ -550,7 +550,13 @@ describe('FR-2/TS-10: global cross-venture ceiling (state-aware, must run last)'
       "SELECT count(*)::int AS n FROM public.feedback WHERE feedback_type IN ('user_bug','user_feature_request','user_usability','user_other') AND created_at > now() - interval '1 hour'",
     );
     const already = countRows[0].n;
-    const toLand = Math.max(0, GLOBAL_CEILING - already - 1); // leave exactly one slot open
+    // The migration's check reads the count via a SELECT BEFORE inserting the current row, so the
+    // count does NOT yet include the row being submitted. To make the BOUNDARY submission below be
+    // the one that trips "count >= 500", the count must already equal exactly 500 when its check
+    // runs -- so top up to GLOBAL_CEILING exactly, not GLOBAL_CEILING - 1 (off-by-one caught live in
+    // CI, this SD's fourth push: the boundary submission landed successfully as row #500 instead of
+    // being rejected as the 501st).
+    const toLand = Math.max(0, GLOBAL_CEILING - already);
 
     // Spread remaining submissions across enough ventures that no SINGLE venture's own 50/hour
     // per-venture threshold (a DIFFERENT check, FR-2 direct-truthy) can be the cause of a
