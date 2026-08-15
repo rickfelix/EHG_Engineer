@@ -48,13 +48,14 @@ const sampleBrief = {
   metadata: { synthesis: { weighted_score: { total_score: 81 }, cross_reference: {} } },
 };
 
-// Live column set from database/migrations/20260209_stage0_venture_entry_schema.sql —
-// the ONLY keys any venture_nursery write may use.
+// Live column set from database/migrations/20260209_stage0_venture_entry_schema.sql, plus
+// pbn_verdict from database/migrations/20260815_venture_nursery_pbn_verdict.sql
+// (SD-LEO-FEAT-PROVEN-BETTER-NEW-001 TR-1) — the ONLY keys any venture_nursery write may use.
 const LIVE_COLUMNS = new Set([
   'id', 'brief_id', 'name', 'description', 'maturity_level', 'trigger_conditions',
   'current_score', 'score_history', 'last_evaluated_at', 'next_evaluation_at',
   'evaluation_interval_days', 'promoted_to_venture_id', 'source_type', 'source_ref',
-  'created_at', 'updated_at',
+  'created_at', 'updated_at', 'pbn_verdict',
 ]);
 
 /** Capturing mock: records insert/update payloads + select cols; FIFO list/single data. */
@@ -161,6 +162,20 @@ describe('parkVenture (FR-1: live-schema insert)', () => {
       parkVenture({ ...sampleBrief, maturity: 'blocked' }, { reason: 'constraints failed' }, { supabase, logger: silentLogger })
     ).resolves.toBeTruthy();
     expect(captured.inserts[0].payload.maturity_level).toBe('seed'); // CHECK-safe mapping
+  });
+
+  // SD-LEO-FEAT-PROVEN-BETTER-NEW-001 TR-1/TR-8
+  test('writes params.pbnVerdict onto the pbn_verdict column when provided', async () => {
+    const { supabase, captured } = captureSb();
+    const pbnVerdict = { proven: { coverage: true }, better: { coverage: false }, new: { wedge_count: 1 }, verdict: 'PASS', measured_at: '2026-08-15T00:00:00.000Z', rule_trace: [] };
+    await parkVenture(sampleBrief, { reason: 'test', pbnVerdict }, { supabase, logger: silentLogger });
+    expect(captured.inserts[0].payload.pbn_verdict).toEqual(pbnVerdict);
+  });
+
+  test('pbn_verdict is null (not undefined/absent) when no PBN check ran ahead of this park', async () => {
+    const { supabase, captured } = captureSb();
+    await parkVenture(sampleBrief, { reason: 'test' }, { supabase, logger: silentLogger });
+    expect(captured.inserts[0].payload.pbn_verdict).toBeNull();
   });
 
   test('surfaces a genuine insert error as "Failed to park venture: <msg>" (error branch preserved from the predecessor suite)', async () => {
