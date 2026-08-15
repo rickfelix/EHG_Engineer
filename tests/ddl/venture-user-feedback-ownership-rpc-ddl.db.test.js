@@ -76,6 +76,10 @@ function extractDoBlock(sql, tagName, occurrence = 1) {
 const PREFLIGHT_1_SQL = extractDoBlock(MIGRATION_SQL, 'preflight');
 const PREFLIGHT_2_SQL = extractDoBlock(MIGRATION_SQL, 'preflight2');
 const VERIFY_BLOCK_SQL = extractDoBlock(MIGRATION_SQL, 'verify');
+// T-4 (testing-agent, EXEC re-review): the sibling's own $verify$ block, extracted the same way,
+// re-run later against this file's own post-migration state to prove the WRONG apply order is a
+// real, detected failure -- not only asserted in prose (see the 'T-4' describe block below).
+const TELEGRAM_VERIFY_BLOCK_SQL = extractDoBlock(TELEGRAM_REVOKE_SQL, 'verify');
 
 // Strips full-line `--` comments before matching (established convention, this SD family) — the
 // header prose above names things like "REVOKE" and "record_venture_error" in plain English.
@@ -349,14 +353,19 @@ describe('MEDIUM-1: the now-orphaned direct-EXECUTE oracle is closed', () => {
 });
 
 describe('MEDIUM-2: the global ceiling only counts rows THIS RPC created', () => {
-  it('a user_bug-shaped row inserted by a different writer (source_type != user_feedback) does not count against the ceiling', async () => {
+  it('500 user_bug-shaped rows from a different writer (source_type != user_feedback) do not count against the ceiling', async () => {
+    // T-10 (testing-agent, EXEC re-review): a single non-RPC row against a 500 ceiling cannot
+    // fail if the AND source_type = 'user_feedback' filter were reverted -- 1 or 2 counted rows
+    // is still nowhere near the threshold either way, so the original single-row version of this
+    // test proved the RPC works, not that the filter scopes the count. 500 rows is decisive:
+    // unfiltered, this alone reaches the >= 500 threshold regardless of how many legitimate RPC
+    // rows other tests have already landed by this point in the file; filtered (the fix under
+    // test), it contributes zero, and the RPC below must still succeed.
     const otherVentureId = await makeVenture('other-writer');
-    // Direct insert as the (superuser) test client, mirroring a writer that is NOT this RPC --
-    // e.g. a pre-migration historical row, or any future service_role writer that happens to use
-    // the same feedback_type values. Before MEDIUM-2 this would have counted against the same
-    // global ceiling as RPC-created rows; after, it must not.
     await client.query(
-      "INSERT INTO public.feedback (feedback_type, type, source_type, source_application, title, venture_id) VALUES ('user_bug', 'issue', 'manual_feedback', 'other-writer', 'not from the RPC', $1)",
+      `INSERT INTO public.feedback (feedback_type, type, source_type, source_application, title, venture_id)
+       SELECT 'user_bug', 'issue', 'manual_feedback', 'other-writer', 'bulk non-rpc row ' || gs, $1
+       FROM generate_series(1, 500) AS gs`,
       [otherVentureId],
     );
 
@@ -687,6 +696,20 @@ describe('HIGH-1: the telegram bypass is closed only once BOTH migrations have a
     } finally {
       await client.query('ROLLBACK');
     }
+  });
+});
+
+describe('T-4: applying migrations in the WRONG order is a real, detected failure, not only asserted in prose', () => {
+  it("telegram-revoke's own $verify$ block RAISEs when re-run after this migration has already dropped venture_user_insert_feedback", async () => {
+    // By this point in the file, beforeAll already applied telegram-revoke THEN this migration,
+    // in the strict order the migration header now documents as security-load-bearing -- so
+    // venture_user_insert_feedback is already gone. Re-running telegram-revoke's OWN $verify$
+    // block against that state is exactly what would happen if telegram-revoke were (incorrectly)
+    // applied AFTER this migration instead of before it: its byte-exact WITH CHECK compare finds
+    // the sibling policy missing and raises. This proves the migration header's claim ("applying
+    // this file first would cause that sibling migration's own next apply attempt to hard-fail")
+    // is a real, detected failure mode -- not only documented prose the suite never exercises.
+    await expect(client.query(TELEGRAM_VERIFY_BLOCK_SQL)).rejects.toThrow(/venture_user_insert_feedback is missing from pg_policies/);
   });
 });
 

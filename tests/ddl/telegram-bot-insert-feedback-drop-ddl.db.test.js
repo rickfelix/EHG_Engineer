@@ -55,9 +55,23 @@ BEGIN
 END
 $roles$;
 
+-- T-9 (testing-agent, SD-LEO-FIX-CLOSE-ANON-VENTURE-001 EXEC re-review): same T-1/T-2 self-
+-- sufficiency treatment, applied to the OTHER table these tests/ddl/**/*.db.test.js files share.
+-- Vitest's sequencer sorts files by size DESCENDING with no cache, so growing this file's own
+-- public.feedback stub (T-1/T-2's fix) shifted which file wins the shared CREATE TABLE IF NOT
+-- EXISTS race for public.ventures too -- a minimal (id, deleted_at) shape here vs the richer
+-- (id, name, deleted_at, metadata) shape both venture-ingest-key-binding-ddl.db.test.js and
+-- venture-user-feedback-ownership-rpc-ddl.db.test.js declare. CI is green today only because this
+-- SD's own larger file happens to run first; trimming it back below either sibling's size would
+-- make THIS minimal shape win instead, breaking both siblings' own INSERT INTO public.ventures
+-- (name) and venture_exists_and_active's v.metadata reference. Matching the richer shape here
+-- removes the order-dependency the same way T-1/T-2 did for public.feedback, rather than relying
+-- on today's incidental file-size ordering.
 CREATE TABLE IF NOT EXISTS public.ventures (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-  deleted_at TIMESTAMPTZ
+  name TEXT,
+  deleted_at TIMESTAMPTZ,
+  metadata JSONB DEFAULT '{}'::jsonb
 );
 
 -- T-1/T-2 (testing-agent, SD-LEO-FIX-CLOSE-ANON-VENTURE-001 EXEC review): this table shape now
