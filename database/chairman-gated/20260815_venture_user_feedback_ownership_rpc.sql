@@ -107,9 +107,22 @@
 -- feedbackDataAccess.ts currently inserts feedback as anon THROUGH venture_user_insert_feedback,
 -- the exact policy this file DROPs — it has NOT been switched to call fn_submit_venture_user_feedback
 -- in this PR. Applying this migration BEFORE that app switch ships would break the EHG app's own
--- feedback submissions (RLS-rejected the moment the policy is gone). REQUIRED ORDER: (1) EHG app
--- switches its insert path to fn_submit_venture_user_feedback (with the venture ingest secret) and
--- ships; (2) THEN apply this migration (after Phase-1 + telegram-revoke, per the sequencing above).
+-- feedback submissions (RLS-rejected the moment the policy is gone).
+--
+-- EXTENDED (coordinator supplemental adversarial review, directive e93cd4a9, finding #2, 2026-08-15):
+-- the app-switch precondition alone is INCOMPLETE. fn_submit_venture_user_feedback's ownership check
+-- requires a per-venture secret from Phase-1's venture_ingest_keys table (populated by
+-- fn_provision_venture_ingest_key, called separately per venture) — this table is confirmed EMPTY as
+-- of 2026-08-15 (Phase-1 itself is also unapplied). Combined with the FR-3/2026-08-02 invariant that
+-- public.feedback must always retain >=1 permissive anon-INSERT policy (database/migrations/
+-- 20260802_bound_anon_feedback_ingress.sql:210-213) or legitimate ingress is fully closed: applying
+-- this migration with venture_ingest_keys still empty — even AFTER the app switch ships — means NO
+-- venture has a provisioned secret yet, so fn_submit_venture_user_feedback rejects every caller
+-- (uniform 28000) and anon feedback submission is 100% down until keys are provisioned. REQUIRED
+-- ORDER, all three, in this sequence: (1) per-venture ingest keys are provisioned for every venture
+-- that submits user-facing feedback (fn_provision_venture_ingest_key, per Phase-1); (2) EHG app
+-- switches its insert path to fn_submit_venture_user_feedback (with the provisioned secret) and
+-- ships; (3) THEN apply this migration (after Phase-1 + telegram-revoke, per the sequencing above).
 -- Tracked as a hard precondition on strategic_directives_v2.metadata.apply_pending_ceremony and on
 -- successor SD-LEO-INFRA-CHAIRMAN-APPLY-CEREMONY-001 (FR-6).
 --
@@ -284,10 +297,15 @@ BEGIN
 
   -- created_at/status/votes/assigned_to/triaged_by/user_id are never parameters -- none can be
   -- client-forged (matches fn_submit_venture_feedback's established contract).
+  -- SEC-FOLLOWUP-5 (coordinator supplemental adversarial review, directive e93cd4a9, finding #5):
+  -- v_venture_name is unclamped, unlike p_title/p_description below -- ventures.name has no length
+  -- bound, so a venture whose name exceeds 255 chars would hard-fail 22001 on this INSERT AFTER the
+  -- ownership check has already passed, rather than failing cleanly at the same validation layer as
+  -- every other input. left(...,255) matches source_application's live VARCHAR(255) column exactly.
   INSERT INTO public.feedback (
     venture_id, feedback_type, type, source_type, source_application, title, description, status
   ) VALUES (
-    p_venture_id, p_feedback_type, v_type, 'user_feedback', v_venture_name,
+    p_venture_id, p_feedback_type, v_type, 'user_feedback', left(v_venture_name, 255),
     left(p_title, 255), left(p_description, 2000), 'new'
   )
   RETURNING id INTO v_new_id;
@@ -407,6 +425,34 @@ BEGIN
       AND grantee IN ('anon', 'authenticated', 'PUBLIC')
   ) THEN
     RAISE EXCEPTION 'VERIFY FAILED: venture_ingest_keys is reachable by anon/authenticated/PUBLIC -- Phase-1 lockdown appears weakened';
+  END IF;
+
+  -- SEC-FOLLOWUP-1 (coordinator supplemental adversarial review, directive e93cd4a9, finding #1):
+  -- everything above confirms venture_user_insert_feedback specifically is gone, but never censuses
+  -- the FULL set of anon-reachable permissive INSERT policies on public.feedback -- an unnoticed
+  -- residual (or a future addition) could still authorize feedback_type LIKE 'user_%' via some OTHER
+  -- policy this file never touches. Census pattern mirrors database/migrations/
+  -- 20260802_bound_anon_feedback_ingress.sql:195-213 exactly, INVERTED: that file asserts >=1
+  -- permissive anon-INSERT policy remains (protecting legitimate ingress from being fully closed);
+  -- this asserts EXACTLY ZERO remain (protecting against an alternate anon-INSERT path picking up
+  -- this shape after the DROP). Correct only in the required apply order (telegram-revoke already
+  -- applied) -- doubles as a live, fail-closed catch for the wrong-order scenario TS-4/T-4 already
+  -- test statically: if telegram_bot_insert_feedback were still present when this runs, this count
+  -- would be 1, not 0, and this migration would abort instead of silently completing.
+  IF (
+    SELECT count(*)
+    FROM pg_policy p
+    JOIN pg_class c ON c.oid = p.polrelid
+    WHERE c.relname = 'feedback'
+      AND c.relnamespace = 'public'::regnamespace
+      AND p.polpermissive
+      AND p.polcmd = 'a'
+      AND (
+            0 = ANY(p.polroles)
+            OR EXISTS (SELECT 1 FROM pg_roles r WHERE r.oid = ANY(p.polroles) AND r.rolname = 'anon')
+          )
+  ) <> 0 THEN
+    RAISE EXCEPTION 'VERIFY FAILED: a permissive anon-reachable INSERT policy still exists on public.feedback -- expected zero once this migration and its required-first sibling (20260813_revoke_telegram_bot_insert_feedback.sql) have both applied';
   END IF;
 END
 $verify$;
