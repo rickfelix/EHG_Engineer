@@ -213,4 +213,44 @@ describe('chairman-sms-gate sendChairmanSMS() — FR-3 decision staging guard', 
     expect(sb._tables.chairman_notifications).toHaveLength(0);
     expect(sender.send).toHaveBeenCalledTimes(1);
   });
+
+  it('TS-10 (adversarial-review finding): a confirmed transport failure rolls back the just-staged token — the decision is no longer matcher-eligible', async () => {
+    const sb = makeFakeSupabase({ chairman_decisions: [{ id: 'dec-10', status: 'pending', brief_data: {} }] });
+    const sender = { send: vi.fn(async () => ({ sid: null, softFailed: true, reason: 'enqueued_not_dispatched: status=owed' })) };
+    const res = await sendChairmanSMS(
+      wellFormedDecision({ decisionId: 'dec-10', recipientPhone: '+15557778888' }),
+      DAYTIME,
+      { sender, console: silentConsole, supabase: sb },
+    );
+    expect(res.sent).toBe(false);
+    expect(res.transportFailed).toBe(true);
+
+    // Staging DID run (the row exists, for audit) but the token must be cleared...
+    expect(sb._tables.chairman_notifications).toHaveLength(1);
+    expect(sb._tables.chairman_notifications[0].status).toBe('failed');
+    const decision = sb._tables.chairman_decisions[0];
+    expect(decision.sms_reply_token).toBeNull();
+    expect(decision.sms_reply_token_expires_at).toBeNull();
+
+    // ...so a subsequent inbound reply to the phone the (undelivered) message would have used
+    // finds no eligible candidate — it must NOT be silently consumed as this decision's answer.
+    const reply = await handleInboundSmsReply(sb, {
+      from: '+15557778888', to: '+15550000000', body: 'A', messageSid: 'SM-in-10', signatureValid: true,
+    });
+    expect(reply.outcome).not.toBe('answered');
+  });
+
+  it('TS-11 (defensive hardening): a sender that THROWS instead of resolving softFailed still rolls back the staged token', async () => {
+    const sb = makeFakeSupabase({ chairman_decisions: [{ id: 'dec-11', status: 'pending', brief_data: {} }] });
+    const sender = { send: vi.fn(async () => { throw new Error('boom'); }) };
+    const res = await sendChairmanSMS(
+      wellFormedDecision({ decisionId: 'dec-11', recipientPhone: '+15556667777' }),
+      DAYTIME,
+      { sender, console: silentConsole, supabase: sb },
+    );
+    expect(res.sent).toBe(false);
+    expect(res.transportFailed).toBe(true);
+    expect(res.reason).toContain('sender_threw');
+    expect(sb._tables.chairman_decisions[0].sms_reply_token).toBeNull();
+  });
 });
