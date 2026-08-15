@@ -34,6 +34,11 @@
 -- git user.email -- see scripts/lib/migration-guards.js APPROVED_BY_RE) and applied via
 -- `node scripts/apply-migration.js`.
 --
+-- @chairman-gated
+--   ^ dedicated marker for scripts/check-migration-readiness.mjs's CHAIRMAN-GATED-EXEMPT-001
+--     path (parseChairmanGatedMarker): tells the pre-merge readiness probe that a live-vs-file
+--     body divergence here is EXPECTED (staged, not yet applied), not drift to fail on.
+--
 -- @approved-by:
 --   ^ INTENTIONALLY BLANK. checkApproverFactor() fails closed on a missing header, so this
 --     migration cannot be applied by accident. Do NOT fill this in on the SD's behalf.
