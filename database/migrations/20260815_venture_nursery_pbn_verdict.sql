@@ -117,8 +117,11 @@ COMMENT ON COLUMN public.venture_nursery.pbn_verdict IS
   'reactivations", not this column, which only ever answers "what did THIS row score". '
   'Shape: {proven:{mechanic,citations,coverage}, better:{hypothesis,friction_point,citations,'
   'coverage}, new:{wedge,wedge_count,coverage}, verdict:PASS|REJECT|TRIM, measured_at:ISO-8601 '
-  'UTC, rule_trace:[]}. coverage is a BOOLEAN (pbn-gate.js resolveBucketCoverage), NOT a '
-  'fraction or percentage. NULL = never gated (distinct from any verdict). verdict is '
+  'UTC, rule_trace:[], scoring_error:string|null}. coverage is a BOOLEAN (pbn-gate.js '
+  'resolveBucketCoverage), NOT a fraction or percentage. NULL = never gated (distinct from any '
+  'verdict). scoring_error is set only when the LLM scorer failed and buckets were forced '
+  'fail-closed -- a REJECT with scoring_error set is NOT a merit rejection, see the '
+  'SCORING_FAILED rule_trace entry (post-EXEC-TO-PLAN adversarial review finding). verdict is '
   'CHECK-constrained; the rest of the shape is by convention.';
 
 COMMIT;

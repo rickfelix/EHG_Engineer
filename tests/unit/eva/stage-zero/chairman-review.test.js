@@ -956,6 +956,27 @@ describe('ChairmanReview — PBN gate integration', () => {
     expect(result).toEqual({ id: 'nursery-1', name: 'TestVenture' });
   });
 
+  // Adversarial review finding (deep-tier /ship gate, post-PLAN-TO-LEAD): buildParkReason
+  // only branched on brief.maturity, so a PBN-forced park of a 'ready' brief (validBrief.maturity
+  // is 'ready') fell through to the generic "Early maturity stage: ready" -- actively wrong,
+  // since the brief WAS ready and the PBN gate is the true cause. The prior test above proved
+  // the OVERRIDE happens; this proves the persisted REASON correctly names why.
+  it('the parked reason names the PBN override, not the generic maturity fallback', async () => {
+    runPbnGate.mockResolvedValueOnce(rejectVerdict);
+    const mockSupabase = createMockSupabase();
+
+    await persistVentureBrief(
+      { decision: 'ready', brief: validBrief, validation: { valid: true, errors: [] } },
+      { supabase: mockSupabase, logger: silentLogger },
+    );
+
+    const parkCallArgs = parkVenture.mock.calls[0];
+    expect(parkCallArgs[1].reason).toBe(
+      "PBN gate REJECT: merit gate overrode 'ready' decision to park (FR-2 hard rule)"
+    );
+    expect(parkCallArgs[1].reason).not.toContain('Early maturity stage');
+  });
+
   it('a REJECT verdict is passed through to parkVenture as params.pbnVerdict', async () => {
     runPbnGate.mockResolvedValueOnce(rejectVerdict);
     const mockSupabase = createMockSupabase();

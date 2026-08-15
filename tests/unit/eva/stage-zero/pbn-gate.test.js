@@ -260,4 +260,35 @@ describe('buildPbnVerdict (persisted shape)', () => {
     const second = buildPbnVerdict({ proven: provenCloneBucket, better: { citations: [], coverage: false }, new: { wedge_count: 1 } }, { now: '2026-08-16T12:00:00.000Z' });
     expect(Date.parse(second.measured_at)).toBeGreaterThan(Date.parse(first.measured_at));
   });
+
+  it('scoring_error is null when the scorer succeeded (the common case)', () => {
+    const verdict = buildPbnVerdict({ proven: provenCloneBucket, better: { citations: [], coverage: false }, new: { wedge_count: 1 } });
+    expect(verdict.scoring_error).toBeNull();
+  });
+
+  // Adversarial review finding (deep-tier /ship gate, post-PLAN-TO-LEAD): pbn-scoring.js's
+  // fail-closed catch path returns all-uncoverable buckets plus `scoring_error`, which fires
+  // EMPTY_PROVEN and produces a REJECT textually identical to a genuinely-evaluated,
+  // evidence-free idea. Before this fix, buildPbnVerdict silently dropped scoring_error.
+  it('a scorer failure (buckets.scoring_error set) surfaces both a SCORING_FAILED rule_trace entry and the top-level scoring_error field', () => {
+    const failedBuckets = {
+      proven: { mechanic: null, citations: [], coverage: false },
+      better: { hypothesis: null, friction_point: null, citations: [], coverage: false },
+      new: { wedge: null, wedge_count: 0, coverage: false },
+      scoring_error: 'Request timed out after 30000ms',
+    };
+    const verdict = buildPbnVerdict(failedBuckets);
+    expect(verdict.verdict).toBe('REJECT'); // fail-closed verdict computation is unchanged
+    expect(verdict.scoring_error).toBe('Request timed out after 30000ms');
+    const scoringFailedEntry = verdict.rule_trace.find((r) => r.rule_id === 'SCORING_FAILED');
+    expect(scoringFailedEntry).toBeDefined();
+    expect(scoringFailedEntry.fired).toBe(true);
+    expect(scoringFailedEntry.detail).not.toContain('30000ms'); // code-authored only, never buckets.scoring_error itself
+  });
+
+  it('a genuine (non-scorer-failure) REJECT carries no SCORING_FAILED entry', () => {
+    const verdict = buildPbnVerdict({ proven: uncoverableProvenBucket, better: { citations: [], coverage: false }, new: { wedge_count: 1 } });
+    expect(verdict.verdict).toBe('REJECT');
+    expect(verdict.rule_trace.find((r) => r.rule_id === 'SCORING_FAILED')).toBeUndefined();
+  });
 });

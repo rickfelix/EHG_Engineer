@@ -145,6 +145,27 @@ describe('sanitizePbnVerdictForPersistence (TR-7/C1)', () => {
     const sanitized = sanitizePbnVerdictForPersistence(verdict);
     expect(sanitized.proven.citations[0]).toBeNull();
   });
+
+  // Adversarial review finding (deep-tier /ship gate, post-PLAN-TO-LEAD): scoring_error carries
+  // a raw caught-error message (external-origin, from pbn-scoring.js's LLM client) — same class
+  // of leaf as proven.mechanic/better.hypothesis above, so it needs the same sanitizer coverage.
+  it('sanitizes scoring_error (external-origin scorer-failure text)', () => {
+    const verdict = {
+      proven: { citations: [], coverage: false }, better: { citations: [], coverage: false }, new: { wedge_count: 0 },
+      verdict: 'REJECT', rule_trace: [], scoring_error: 'LLM client rejected key for rick@example.com',
+    };
+    const sanitized = sanitizePbnVerdictForPersistence(verdict);
+    expect(sanitized.scoring_error).not.toContain('rick@example.com');
+    expect(sanitized.scoring_error).toContain('[REDACTED_EMAIL]');
+  });
+
+  it('passes scoring_error through as null when the scorer succeeded', () => {
+    const verdict = {
+      proven: { citations: [], coverage: false }, better: { citations: [], coverage: false }, new: { wedge_count: 0 },
+      verdict: 'REJECT', rule_trace: [], scoring_error: null,
+    };
+    expect(sanitizePbnVerdictForPersistence(verdict).scoring_error).toBeNull();
+  });
 });
 
 describe('runPbnGate (orchestration: score -> gate -> sanitize)', () => {
