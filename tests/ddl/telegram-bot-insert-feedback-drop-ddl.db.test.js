@@ -55,17 +55,65 @@ BEGIN
 END
 $roles$;
 
+-- T-9 (testing-agent, SD-LEO-FIX-CLOSE-ANON-VENTURE-001 EXEC re-review): same T-1/T-2 self-
+-- sufficiency treatment, applied to the OTHER table these tests/ddl/**/*.db.test.js files share.
+-- Vitest's sequencer sorts files by size DESCENDING with no cache, so growing this file's own
+-- public.feedback stub (T-1/T-2's fix) shifted which file wins the shared CREATE TABLE IF NOT
+-- EXISTS race for public.ventures too -- a minimal (id, deleted_at) shape here vs the richer
+-- (id, name, deleted_at, metadata) shape both venture-ingest-key-binding-ddl.db.test.js and
+-- venture-user-feedback-ownership-rpc-ddl.db.test.js declare. CI is green today only because this
+-- SD's own larger file happens to run first; trimming it back below either sibling's size would
+-- make THIS minimal shape win instead, breaking both siblings' own INSERT INTO public.ventures
+-- (name) and venture_exists_and_active's v.metadata reference. Matching the richer shape here
+-- removes the order-dependency the same way T-1/T-2 did for public.feedback, rather than relying
+-- on today's incidental file-size ordering.
 CREATE TABLE IF NOT EXISTS public.ventures (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-  deleted_at TIMESTAMPTZ
+  name TEXT,
+  deleted_at TIMESTAMPTZ,
+  metadata JSONB DEFAULT '{}'::jsonb
 );
 
+-- T-1/T-2 (testing-agent, SD-LEO-FIX-CLOSE-ANON-VENTURE-001 EXEC review): this table shape now
+-- matches the live schema's full NOT NULL column set exactly (type, source_application, title
+-- included), the SAME definition SD-LEO-FIX-CLOSE-ANON-VENTURE-001's own ddl test declares for this
+-- shared table. Both files' CREATE TABLE IF NOT EXISTS now produce an IDENTICAL shape, so this file
+-- passes in isolation AND regardless of which file's beforeAll wins the shared-database race — no
+-- longer order-dependent (previously: this file's own bare INSERTs supplied type/source_application/
+-- title while this table never declared them, so this file could only pass if the OTHER file's
+-- richer definition happened to run first and win the race).
 CREATE TABLE IF NOT EXISTS public.feedback (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-  feedback_type VARCHAR NOT NULL DEFAULT 'sentry_error',
-  source_type VARCHAR NOT NULL,
+  type VARCHAR(20) NOT NULL,
+  source_application VARCHAR(255) NOT NULL,
+  source_type VARCHAR(30) NOT NULL,
+  title VARCHAR(255) NOT NULL,
+  description TEXT,
+  status VARCHAR(20) DEFAULT 'new',
+  severity VARCHAR(20),
+  category VARCHAR(50),
+  error_message TEXT,
+  error_hash VARCHAR(64),
+  occurrence_count INTEGER DEFAULT 1,
+  first_seen TIMESTAMPTZ,
+  last_seen TIMESTAMPTZ,
+  votes INTEGER DEFAULT 0,
+  assigned_to VARCHAR(100),
+  triaged_by VARCHAR(100),
+  user_id UUID,
+  created_at TIMESTAMPTZ DEFAULT now(),
+  updated_at TIMESTAMPTZ DEFAULT now(),
+  metadata JSONB DEFAULT '{}'::jsonb,
   venture_id UUID,
-  created_at TIMESTAMPTZ DEFAULT now()
+  feedback_type VARCHAR(30) NOT NULL DEFAULT 'sentry_error',
+  CONSTRAINT feedback_feedback_type_check CHECK (feedback_type IN (
+    'sentry_error', 'user_bug', 'user_feature_request', 'user_usability', 'user_other', 'venture_error'
+  )),
+  CONSTRAINT feedback_source_type_check CHECK (source_type IN (
+    'manual_feedback', 'auto_capture', 'uat_failure', 'error_capture', 'uncaught_exception',
+    'unhandled_rejection', 'manual_capture', 'todoist_intake', 'youtube_intake',
+    'claude_code_intake', 'telegram', 'user_feedback'
+  ))
 );
 
 ALTER TABLE public.feedback ENABLE ROW LEVEL SECURITY;
@@ -95,11 +143,33 @@ RETURNS BOOLEAN LANGUAGE sql STABLE SECURITY DEFINER
 SET search_path = public, pg_catalog
 AS $$ SELECT false; $$;
 
+-- Explicit, unconditional re-GRANT (measured live in CI, this SD's fifth push): CREATE OR REPLACE
+-- FUNCTION preserves an EXISTING function's ACL rather than resetting it to default -- it does NOT
+-- restore a grant a PRIOR statement revoked. SD-LEO-FIX-CLOSE-ANON-VENTURE-001's own migration (also
+-- applied for real, earlier, in tests/ddl/venture-user-feedback-ownership-rpc-ddl.db.test.js, which
+-- shares this SAME physical database) now REVOKEs anon/authenticated EXECUTE on these same two
+-- function names as part of its own MEDIUM-1 fix -- correct for that migration's real target (the
+-- policy that needed the grant is dropped there), but this file's OWN stub venture_user_insert_
+-- feedback policy below STILL evaluates both under RLS as anon and needs the grant restored,
+-- regardless of which file's beforeAll happened to run first in this shared-database CI job.
+GRANT EXECUTE ON FUNCTION public.venture_exists_and_active(uuid) TO anon;
+GRANT EXECUTE ON FUNCTION public.check_feedback_rate_limit(uuid) TO anon;
+
 -- Pre-existing, mirrors live state BEFORE this migration runs.
 CREATE POLICY telegram_bot_insert_feedback ON public.feedback
   FOR INSERT TO anon
   WITH CHECK (source_type = 'telegram');
 
+-- DROP IF EXISTS before these two CREATE POLICY statements (Postgres has no CREATE POLICY IF NOT
+-- EXISTS): SD-LEO-FIX-CLOSE-ANON-VENTURE-001's DDL test declares stub policies of these SAME two
+-- names for the same reason (its own migration's $verify$ block also reads them), and all
+-- tests/ddl/**/*.db.test.js files share ONE ephemeral Postgres container within a CI job
+-- (fileParallelism: false, sequential, but the database persists across files) — file run order is
+-- NOT guaranteed alphabetical (measured live in CI: this file ran both before and after that one
+-- across two consecutive runs of the same job), so whichever file's beforeAll runs second must not
+-- assume a clean slate. venture_user_insert_feedback and anon_feedback_ingress_bounds are the two
+-- names both files share; telegram_bot_insert_feedback is unique to this file and needs no guard.
+DROP POLICY IF EXISTS venture_user_insert_feedback ON public.feedback;
 CREATE POLICY venture_user_insert_feedback ON public.feedback
   FOR INSERT TO anon
   WITH CHECK (
@@ -114,6 +184,7 @@ CREATE POLICY venture_user_insert_feedback ON public.feedback
 -- now asserts this policy is present and RESTRICTIVE, DATABASE sub-agent finding M1) does not
 -- spuriously RAISE on this ephemeral database. Always-true, so it never changes any other test's
 -- observable behavior below.
+DROP POLICY IF EXISTS anon_feedback_ingress_bounds ON public.feedback;
 CREATE POLICY anon_feedback_ingress_bounds ON public.feedback
   AS RESTRICTIVE
   FOR INSERT TO public
@@ -233,8 +304,16 @@ describe('TS-1/TS-6: bare telegram-sourced anon INSERT is rejected post-migratio
       await client.query('SET LOCAL ROLE anon');
       let err;
       try {
+        // type/source_application/title added (this SD's PR): the real public.feedback has these
+        // as NOT NULL with no default (confirmed live, 2026-08-15) — irrelevant to THIS test since
+        // RLS denial fires before row materialization, but kept consistent with the other inserts
+        // below. T-1/T-2 (testing-agent, EXEC review): this file's OWN CREATE TABLE IF NOT EXISTS
+        // above now declares these same NOT NULL columns, so this insert's shape is correct
+        // regardless of which file's beforeAll wins the shared-database table-creation race — no
+        // longer order-dependent (superseded an earlier version of this comment that claimed
+        // order-independence while the table definition below it did not yet match).
         await client.query(
-          'INSERT INTO public.feedback (source_type, feedback_type, venture_id) VALUES (\'telegram\', \'sentry_error\', NULL)',
+          "INSERT INTO public.feedback (source_type, feedback_type, venture_id, type, source_application, title) VALUES ('telegram', 'sentry_error', NULL, 'issue', 'ddl-test-stub', 'stub row')",
         );
       } catch (e) {
         err = e;
@@ -263,8 +342,10 @@ describe('TS-1/TS-6: bare telegram-sourced anon INSERT is rejected post-migratio
       // No RETURNING here either — telegram_bot_select_feedback would cover this specific row
       // (source_type='telegram'), but confirming via a privileged read after RESET ROLE keeps this
       // test's proof mechanism uniform with TS-2/TS-8 above rather than depending on it.
+      // type/source_application/title added (this SD's PR) -- see the note on the first bare
+      // insert above.
       await client.query(
-        'INSERT INTO public.feedback (source_type, feedback_type, venture_id) VALUES (\'telegram\', \'sentry_error\', NULL)',
+        "INSERT INTO public.feedback (source_type, feedback_type, venture_id, type, source_application, title) VALUES ('telegram', 'sentry_error', NULL, 'issue', 'ddl-test-stub', 'stub row')",
       );
       await client.query('RESET ROLE');
       const { rows } = await client.query(
@@ -290,8 +371,10 @@ describe('TS-2/TS-8: the venture_user_insert_feedback residual path still lands 
     await client.query('BEGIN');
     try {
       await client.query('SET LOCAL ROLE anon');
+      // type/source_application/title added (this SD's PR) -- see the note on the first bare
+      // insert in the describe block above.
       await client.query(
-        'INSERT INTO public.feedback (source_type, feedback_type, venture_id) VALUES (\'auto_capture\', \'user_bug\', $1)',
+        "INSERT INTO public.feedback (source_type, feedback_type, venture_id, type, source_application, title) VALUES ('auto_capture', 'user_bug', $1, 'issue', 'ddl-test-stub', 'stub row')",
         [ventureId],
       );
       await client.query('RESET ROLE');
@@ -310,8 +393,10 @@ describe('TS-2/TS-8: the venture_user_insert_feedback residual path still lands 
     await client.query('BEGIN');
     try {
       await client.query('SET LOCAL ROLE anon');
+      // type/source_application/title added (this SD's PR) -- see the note on the first bare
+      // insert in this file, above.
       await client.query(
-        'INSERT INTO public.feedback (source_type, feedback_type, venture_id) VALUES (\'telegram\', \'user_bug\', $1)',
+        "INSERT INTO public.feedback (source_type, feedback_type, venture_id, type, source_application, title) VALUES ('telegram', 'user_bug', $1, 'issue', 'ddl-test-stub', 'stub row')",
         [ventureId],
       );
       await client.query('RESET ROLE');
