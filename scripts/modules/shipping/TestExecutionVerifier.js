@@ -17,7 +17,13 @@ import { join } from 'path';
 import { execSync } from 'child_process';
 
 const RECENT_THRESHOLD_MS = 15 * 60 * 1000; // 15 minutes
-const TEST_TIMEOUT_MS = 5 * 60 * 1000; // 5 minutes
+// QF-20260813-529: this repo's own Unit Tier CI job measures 10-14min for the full
+// suite this shells out to (REGRESSION sub-agent measurement, SD-FDBK-INFRA-MIGRATE-ANON-INGEST-001
+// PR #7017: "Run Unit Tier (quarantine-aware)" completed in 11m37s). The prior 5min
+// value guaranteed a SIGTERM kill on every real run without --skip-tests, producing
+// 'inconclusive' rather than a genuine pass/fail signal. 20min leaves headroom above
+// the measured ceiling.
+const TEST_TIMEOUT_MS = 20 * 60 * 1000; // 20 minutes
 
 /**
  * Standard locations for test result files.

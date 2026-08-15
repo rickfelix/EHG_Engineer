@@ -43,6 +43,32 @@
 --
 -- APPLY IS CHAIRMAN-GATED (requires_chairman_apply): node scripts/apply-migration.js
 -- --prod-deploy with @approved-by stamp. Trigger/function DDL on the live DB.
+-- @approved-by: Chairman via SMS 2026-08-12T11:19:53Z — "Fix staged, rollback file ready. Proceed."
+--   (decision G1). RE-APPLY ATTEMPT 2026-08-12 BLOCKED by MIGRATION_APPLY_PROD_FAIL_TAMPERED:
+--   the apply ledger records this migration as APPLIED 2026-07-11T14:11:53-05:00 at sha 8a4ce805…,
+--   i.e. an EARLIER revision of this file — it was revised afterward (round-2 fixes per header)
+--   without re-apply. The 20260712 header's "also-staged" claim about this file was stale.
+--   OPEN FINDING: live DB may hold round-1 versions of sections (a),(b),(d),(e); needs a
+--   deliberate reconcile decision, not a guard bypass. Section (c) is superseded by the
+--   20260712 apply either way. Recorded by coordinator session 56f09320.
+--
+-- RECONCILED 2026-08-12 (SD-LEO-INFRA-RECONCILE-20260711-ORCHESTRATOR-001), closing the OPEN
+-- FINDING above with direct pg_proc.prosrc / pg_get_triggerdef catalog verification over the
+-- pooler (independently corroborated by a second read-only pass) rather than a re-apply:
+--   (a),(b) get_progress_breakdown(text|uuid) — NOT round-1. Superseded FORWARD of this file's
+--     round-2 by a later, independent, already-applied migration:
+--     database/migrations/20260724_fix_get_progress_breakdown_deferred_terminal.sql
+--     (QF-20260724-212), which took round-2 verbatim and additionally widened the terminal set
+--     to include 'deferred'. Live currently reads status IN ('completed','cancelled','deferred').
+--   (d) try_auto_complete_parent_orchestrator, (e) trg_auto_complete_parent_orchestrator —
+--     confirmed live-matching this file's round-2 content exactly. Not diverged.
+--   (c) complete_orchestrator_sd — confirmed superseded by
+--     database/migrations/20260712_orchestrator_ghost_complete_lead_final.sql (its own header,
+--     lines 15-19, states this explicitly).
+-- CONCLUSION: no object declared in this file needs any further DDL apply. This header edit
+-- (no DDL body changed) is itself the artifact that closes the apply-ledger reconciliation —
+-- see scripts/reconcile-20260711-orchestrator-migration-ledger.mjs and
+-- scripts/orchestrator-20260711-parity-status.mjs for the durable, re-runnable evidence trail.
 --
 -- ─── ROLLBACK (verbatim prior definitions, captured live via pg_get_functiondef/
 -- pg_get_triggerdef 2026-07-11) ───

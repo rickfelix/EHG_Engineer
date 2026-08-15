@@ -1,4 +1,4 @@
--- @chairman-gated: staged, not yet applied
+-- @chairman-gated: applied (confirmed live via pg_class, 2026-08-12 -- SD-ALTIFYAI-LEO-ORCH-SPRINT-2026-001-G)
 -- SD: SD-APEXNICHE-AI-LEO-ORCH-SPRINT-2026-001-E1
 -- Additive (TIER-1): new venture-scoped cash/burn snapshot table. No destructive DDL,
 -- no ALTER of any existing table. Disjoint from operator_cash_burn_monthly and

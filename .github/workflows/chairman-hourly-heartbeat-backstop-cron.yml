@@ -1,0 +1,65 @@
+name: "Chairman hourly-heartbeat backstop (cloud-side, independent of Adam session)"
+
+# SD-LEO-INFRA-DURABLE-HOURLY-HEARTBEAT-001 — closes the D8 (interface_clarity) N=3 self-score
+# escalation (Adam self-assessment cycles 60/61/62, 2026-08-12/13).
+#
+# ROOT CAUSE: the live hourly heartbeat (chairman contract c3) fires only via a session-scoped
+# harness CronCreate job re-armed on /adam startup — it dies with the local session/machine.
+# Confirmed root cause of the witnessed slips: a hotel room cutting power on no-motion since
+# 2026-08-09, not a software timer bug. This workflow is a cloud-side backstop, independent of
+# any local Adam process, that fills a missed hour.
+#
+# DELIBERATELY additive, not a mirror of the morning-brief sweep's write-time dedupe-key race —
+# see scripts/cron/chairman-hourly-heartbeat-backstop-sweep.mjs's header for the read-based
+# status-decision-table dedupe design and why it avoids the morning-brief precedent's measured
+# live double-send defect. Self-healing window (every 15 min, ~05:00-22:59 chairman-zone
+# approximated as ET for the cron schedule; the sweep itself resolves the actual chairman zone
+# for its coarse pre-filter and the real quiet-hours gate — enqueue-only, no Twilio dispatch
+# from this workflow, see FR-2c/SEC-H1 remediation).
+
+on:
+  schedule:
+    # Both DST offsets always registered (mirrors chairman-morning-brief-cron.yml) — the sweep
+    # itself gates real work on the actual resolved chairman-zone wall clock (05:00-22:59
+    # coarse pre-filter, quiet-hours-checked against 22:00-06:00 within that), so over-covering
+    # here by a few edge hours is harmless (those ticks just log 'inert').
+    - cron: '*/15 9-23,0-1 * * *'   # 05:00-22:59 EDT (UTC-4): UTC 09:00 through 01:59 next day
+    - cron: '*/15 10-23,0-3 * * *'  # 05:00-22:59 EST (UTC-5): UTC 10:00 through 03:59 next day
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ${{ github.workflow }}
+  cancel-in-progress: true
+
+jobs:
+  hourly-heartbeat-backstop:
+    name: Fill a missed hourly chairman heartbeat (05:00-22:59 chairman-zone, self-healing)
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+
+    # No Twilio credentials here, deliberately — this job enqueues only (SEC-H1 remediation,
+    # see scripts/cron/chairman-hourly-heartbeat-backstop-sweep.mjs's header). Only what the
+    # DB read + enqueue path needs.
+    env:
+      SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+      SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
+      CHAIRMAN_PHONE: ${{ secrets.CHAIRMAN_PHONE }}
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: 'npm'
+
+      - name: Install dependencies
+        run: npm ci --ignore-scripts
+
+      - name: Fill a missed hourly heartbeat (self-healing window)
+        run: node scripts/cron/chairman-hourly-heartbeat-backstop-sweep.mjs --once
