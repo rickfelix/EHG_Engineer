@@ -35,6 +35,10 @@ dotenv.config();
 
 const supabaseUrl = process.env.SUPABASE_URL || process.env.NEXT_PUBLIC_SUPABASE_URL;
 const supabaseKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
+if (!supabaseUrl || !supabaseKey) {
+  console.error('❌ FAILED: SUPABASE_URL (or NEXT_PUBLIC_SUPABASE_URL) and SUPABASE_SERVICE_ROLE_KEY must both be set');
+  process.exit(1);
+}
 const supabase = createClient(supabaseUrl, supabaseKey);
 
 const SD_KEY = 'SD-LEARN-FIX-ADDRESS-PATTERN-LEARN-142';
@@ -184,23 +188,45 @@ const retrospective = {
 };
 
 async function main() {
-  console.log(`\n📝 Inserting SD_COMPLETION retrospective for ${SD_KEY}...`);
+  console.log(`\n📝 Checking for an existing SD_COMPLETION retrospective for ${SD_KEY}...`);
 
-  const { data: inserted, error } = await supabase
+  const { data: existing, error: existingErr } = await supabase
     .from('retrospectives')
-    .insert(retrospective)
-    .select()
-    .single();
+    .select('id, created_at, quality_score, quality_issues, status, retro_type, retrospective_type')
+    .eq('sd_id', SD_KEY)
+    .eq('retro_type', 'SD_COMPLETION')
+    .is('retrospective_type', null)
+    .limit(1);
 
-  if (error) {
-    console.error('❌ Insert failed:', error);
+  if (existingErr) {
+    console.error('❌ Idempotency check failed:', existingErr);
     process.exit(1);
   }
 
-  console.log(`✅ Retrospective inserted: id=${inserted.id}`);
-  console.log(`   Persisted quality_score (DB-trigger-owned): ${inserted.quality_score}`);
-  console.log(`   quality_issues: ${JSON.stringify(inserted.quality_issues)}`);
-  console.log(`   status: ${inserted.status}, retro_type: ${inserted.retro_type}, retrospective_type: ${inserted.retrospective_type}`);
+  let inserted;
+  if (existing?.length) {
+    console.log(`   ↻ Already exists: id=${existing[0].id} (created ${existing[0].created_at}) -- skipping insert, re-run is a no-op`);
+    inserted = existing[0];
+  } else {
+    console.log(`\n📝 Inserting SD_COMPLETION retrospective for ${SD_KEY}...`);
+
+    const { data, error } = await supabase
+      .from('retrospectives')
+      .insert(retrospective)
+      .select()
+      .single();
+
+    if (error) {
+      console.error('❌ Insert failed:', error);
+      process.exit(1);
+    }
+    inserted = data;
+
+    console.log(`✅ Retrospective inserted: id=${inserted.id}`);
+    console.log(`   Persisted quality_score (DB-trigger-owned): ${inserted.quality_score}`);
+    console.log(`   quality_issues: ${JSON.stringify(inserted.quality_issues)}`);
+    console.log(`   status: ${inserted.status}, retro_type: ${inserted.retro_type}, retrospective_type: ${inserted.retrospective_type}`);
+  }
 
   // ── Write RETRO sub_agent_execution_results evidence row ──
   console.log('\n📝 Writing RETRO sub-agent evidence row for PLAN-TO-LEAD SUBAGENT_EVIDENCE_MISSING...');
