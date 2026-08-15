@@ -251,9 +251,12 @@ describe('verifyReadback — TS-8 query error is not coerced into a rowcount fai
 });
 
 describe('verifyReadback — TS-9 static source-pin: no write calls (FR-2 AC-3, G7)', () => {
-  it('lib/checkers/readback-checker.mjs source contains no insert/update/upsert/delete calls', () => {
+  it('lib/checkers/readback-checker.mjs source contains no insert/update/upsert/delete/rpc calls', () => {
+    // SECURITY sub-agent finding (EXEC evidence 95177219): the checker's service-role client
+    // bypasses RLS, so an .rpc( call to a mutating SECURITY DEFINER function would be just as
+    // dangerous here as a direct write and must be pinned alongside the CRUD verbs.
     const src = fs.readFileSync(path.join(REPO_ROOT, 'lib', 'checkers', 'readback-checker.mjs'), 'utf8');
-    expect(src).not.toMatch(/\.(insert|update|upsert|delete)\(/);
+    expect(src).not.toMatch(/\.(insert|update|upsert|delete|rpc)\(/);
   });
 
   it('verifyReadback() public signature has no client-injection parameter (TR-1/G9)', () => {
