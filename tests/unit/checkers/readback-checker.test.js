@@ -78,67 +78,103 @@ describe('verifyReadback — TS-1 positive control + fresh-client call count (G1
 });
 
 describe('verifyReadback — TS-2 rowcount: fence-no-op (0 rows) and over-broad match (>1 rows) (G2)', () => {
-  it('throws ReadbackRowcountError for zero rows (fence-no-op)', async () => {
+  it('throws ReadbackRowcountError for zero rows (fence-no-op), carrying count=0 and the match used', async () => {
     const { intendedRow } = fenceNoOpFixture();
     mockCreateClient.mockReturnValue(mockClientReturning([]));
-    await expect(verifyReadback({
-      table: 'sub_agent_execution_results',
-      match: { id: intendedRow.id },
-      expectedFields: { verdict: intendedRow.verdict },
-    })).rejects.toThrow(ReadbackRowcountError);
+    let caught;
+    try {
+      await verifyReadback({
+        table: 'sub_agent_execution_results',
+        match: { id: intendedRow.id },
+        expectedFields: { verdict: intendedRow.verdict },
+      });
+    } catch (e) { caught = e; }
+    expect(caught).toBeInstanceOf(ReadbackRowcountError);
+    expect(caught.count).toBe(0);
+    expect(caught.table).toBe('sub_agent_execution_results');
+    expect(caught.match).toEqual({ id: intendedRow.id });
   });
 
-  it('throws ReadbackRowcountError with a distinct message for more than one matched row', async () => {
+  it('throws ReadbackRowcountError with a distinct message and count=2 for more than one matched row', async () => {
     const { intendedRow, persistedRow } = correctWriteFixture();
     mockCreateClient.mockReturnValue(mockClientReturning([persistedRow, { ...persistedRow, id: 'row-2' }]));
-    await expect(verifyReadback({
-      table: 'sub_agent_execution_results',
-      match: { id: intendedRow.id },
-      expectedFields: { verdict: intendedRow.verdict },
-    })).rejects.toThrow(/expected exactly 1 row/);
+    let caught;
+    try {
+      await verifyReadback({
+        table: 'sub_agent_execution_results',
+        match: { id: intendedRow.id },
+        expectedFields: { verdict: intendedRow.verdict },
+      });
+    } catch (e) { caught = e; }
+    expect(caught).toBeInstanceOf(ReadbackRowcountError);
+    expect(caught.count).toBe(2);
+    expect(caught.message).toMatch(/expected exactly 1 row/);
   });
 });
 
 describe('verifyReadback — TS-3 metadata-clobber: dropped AND nulled required keys (G4)', () => {
-  it('throws ReadbackKeyDropError when a required key is fully absent', async () => {
+  it('throws ReadbackKeyDropError naming BOTH dropped keys when fully absent', async () => {
     const { intendedRow, persistedRow } = metadataClobberFixture({ nullify: false });
     mockCreateClient.mockReturnValue(mockClientReturning([persistedRow]));
-    await expect(verifyReadback({
-      table: 'sub_agent_execution_results',
-      match: { id: intendedRow.id },
-      requiredKeys: { metadata: ['is_coordinator', 'coordinator_since'] },
-    })).rejects.toThrow(ReadbackKeyDropError);
+    let caught;
+    try {
+      await verifyReadback({
+        table: 'sub_agent_execution_results',
+        match: { id: intendedRow.id },
+        requiredKeys: { metadata: ['is_coordinator', 'coordinator_since'] },
+      });
+    } catch (e) { caught = e; }
+    expect(caught).toBeInstanceOf(ReadbackKeyDropError);
+    expect(caught.column).toBe('metadata');
+    expect(caught.droppedKeys.sort()).toEqual(['coordinator_since', 'is_coordinator']);
   });
 
-  it('throws ReadbackKeyDropError when a required key is present but null (the clobber survives as null, not absent)', async () => {
+  it('throws ReadbackKeyDropError naming the dropped key when present but null (the clobber survives as null, not absent)', async () => {
     const { intendedRow, persistedRow } = metadataClobberFixture({ nullify: true });
     mockCreateClient.mockReturnValue(mockClientReturning([persistedRow]));
-    await expect(verifyReadback({
-      table: 'sub_agent_execution_results',
-      match: { id: intendedRow.id },
-      requiredKeys: { metadata: ['is_coordinator', 'coordinator_since'] },
-    })).rejects.toThrow(ReadbackKeyDropError);
+    let caught;
+    try {
+      await verifyReadback({
+        table: 'sub_agent_execution_results',
+        match: { id: intendedRow.id },
+        requiredKeys: { metadata: ['is_coordinator', 'coordinator_since'] },
+      });
+    } catch (e) { caught = e; }
+    expect(caught).toBeInstanceOf(ReadbackKeyDropError);
+    expect(caught.droppedKeys.sort()).toEqual(['coordinator_since', 'is_coordinator']);
   });
 
-  it('throws ReadbackKeyDropError (not a crash) when the whole required column is null, not just a sub-key', async () => {
+  it('throws ReadbackKeyDropError (not a crash) naming the key when the whole required column is null', async () => {
     mockCreateClient.mockReturnValue(mockClientReturning([{ id: 'row-1', metadata: null }]));
-    await expect(verifyReadback({
-      table: 'sub_agent_execution_results',
-      match: { id: 'row-1' },
-      requiredKeys: { metadata: ['is_coordinator'] },
-    })).rejects.toThrow(ReadbackKeyDropError);
+    let caught;
+    try {
+      await verifyReadback({
+        table: 'sub_agent_execution_results',
+        match: { id: 'row-1' },
+        requiredKeys: { metadata: ['is_coordinator'] },
+      });
+    } catch (e) { caught = e; }
+    expect(caught).toBeInstanceOf(ReadbackKeyDropError);
+    expect(caught.droppedKeys).toEqual(['is_coordinator']);
   });
 });
 
 describe('verifyReadback — TS-4 phantom-flip + deep equality, not === (G3, G6)', () => {
-  it('throws ReadbackFieldMismatchError for a mismatched primitive field', async () => {
+  it('throws ReadbackFieldMismatchError for a mismatched primitive field, carrying field+expected+actual', async () => {
     const { intendedRow, persistedRow } = phantomFlipFixture();
     mockCreateClient.mockReturnValue(mockClientReturning([persistedRow]));
-    await expect(verifyReadback({
-      table: 'sub_agent_execution_results',
-      match: { id: intendedRow.id },
-      expectedFields: { verdict: intendedRow.verdict },
-    })).rejects.toThrow(ReadbackFieldMismatchError);
+    let caught;
+    try {
+      await verifyReadback({
+        table: 'sub_agent_execution_results',
+        match: { id: intendedRow.id },
+        expectedFields: { verdict: intendedRow.verdict },
+      });
+    } catch (e) { caught = e; }
+    expect(caught).toBeInstanceOf(ReadbackFieldMismatchError);
+    expect(caught.field).toBe('verdict');
+    expect(caught.expected).toBe(intendedRow.verdict); // 'PASS'
+    expect(caught.actual).toBe(persistedRow.verdict); // 'FAIL'
   });
 
   it('does NOT throw for a deep-equal object/array-valued field (proves comparison is not ===)', async () => {

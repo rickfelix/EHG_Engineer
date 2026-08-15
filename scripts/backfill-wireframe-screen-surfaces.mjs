@@ -39,6 +39,7 @@
 
 import { createClient } from '@supabase/supabase-js';
 import { classifySurface } from '../lib/eva/stage-templates/analysis-steps/stage-15-wireframe-generator.js';
+import { isMainModule } from '../lib/utils/is-main-module.js';
 // SD-LEO-INFRA-COUNT-TRUNCATION-DISCIPLINE-001 FR-6 batch 9 — the prior `.limit(LIMIT)` (LIMIT up
 // to 5000 per --limit) did NOT actually bound the read to more than 1000: PostgREST's server-side
 // max-rows clamp applies regardless of a larger client-requested limit, so `--limit 5000` silently
@@ -152,7 +153,12 @@ async function main() {
   console.log(`[backfill-wireframe-surface] Done. updated=${successCount} errors=${errorCount}`);
 }
 
-main().catch(err => {
-  console.error('[backfill-wireframe-surface] Fatal:', err.message);
-  process.exit(1);
-});
+// SD-LEO-INFRA-CHECKER-READBACK-WRITE-001 (RCA a726dd91, B1-NEW): guard against firing as a
+// side effect of a test importing classifySurface-adjacent pure helpers — see the matching
+// comment in scripts/validate-boundary-config-coherence.mjs for the full mechanism.
+if (isMainModule(import.meta.url)) {
+  main().catch(err => {
+    console.error('[backfill-wireframe-surface] Fatal:', err.message);
+    process.exit(1);
+  });
+}

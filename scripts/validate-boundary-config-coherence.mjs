@@ -24,6 +24,7 @@
  */
 
 import { createClient } from '@supabase/supabase-js';
+import { isMainModule } from '../lib/utils/is-main-module.js';
 
 /**
  * Find artifact_types in `boundaries` that no upstream stage emits.
@@ -117,7 +118,17 @@ async function main() {
 
 // libuv-safe exit pattern (QF-20260511-469): await main, catch unhandled, then
 // explicit exit. Avoids dangling timers / handle close races on Windows.
-main().catch((err) => {
-  console.error(`[BOUNDARY_CHECK_INFRA_ERROR] Unhandled: ${err?.message || err}`);
-  process.exit(2);
-});
+//
+// SD-LEO-INFRA-CHECKER-READBACK-WRITE-001 (RCA a726dd91, B1-NEW): main() was unconditional at
+// module scope, so a test importing ONLY the pure findOrphanArtifactTypes/evaluateCoherence
+// exports also fired this DB-querying side effect in the background. It used to fail/exit
+// silently after the fast synchronous test assertions had already completed; the unit-tier
+// network fence (tests/setup.unit.js) makes that same rejection resolve fast enough to land
+// inside the test's lifetime instead, surfacing as an unhandled rejection / non-zero exit.
+// Guarding on isMainModule is the fix, not weakening the fence that exposed it.
+if (isMainModule(import.meta.url)) {
+  main().catch((err) => {
+    console.error(`[BOUNDARY_CHECK_INFRA_ERROR] Unhandled: ${err?.message || err}`);
+    process.exit(2);
+  });
+}

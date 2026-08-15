@@ -12,6 +12,7 @@ import { createClient } from '@supabase/supabase-js';
 // PostgREST-capped read would silently mis-bucket handoffs for any SD past the cap as
 // sd_type='unknown', corrupting the per-SD-type breakdown.
 import { fetchAllPaginated } from '../../lib/db/fetch-all-paginated.mjs';
+import { isMainModule } from '../../lib/utils/is-main-module.js';
 
 const JSON_MODE = process.argv.includes('--json');
 const PAGE_SIZE = 1000;
@@ -114,4 +115,9 @@ async function main() {
   console.log('');
 }
 
-main().catch((e) => { console.error('[handoff-rejection-rates] FATAL: ' + (e?.message || e)); process.exit(1); });
+// SD-LEO-INFRA-CHECKER-READBACK-WRITE-001 (RCA a726dd91, B1-NEW): guard against firing as a
+// side effect of a test importing the pure helpers above (bucketRejectionReason etc.) — see the
+// matching comment in scripts/validate-boundary-config-coherence.mjs for the full mechanism.
+if (isMainModule(import.meta.url)) {
+  main().catch((e) => { console.error('[handoff-rejection-rates] FATAL: ' + (e?.message || e)); process.exit(1); });
+}
