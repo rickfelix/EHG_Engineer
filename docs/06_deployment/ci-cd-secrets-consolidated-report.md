@@ -174,8 +174,10 @@ gh run watch
 
 **Recommended Format** (from database-agent validation):
 ```
-postgresql://postgres.dedlbzhpgkmetvhbkyzq:Fl%21M32DaM00n%211@aws-1-us-east-1.pooler.supabase.com:5432/postgres
+postgresql://postgres.dedlbzhpgkmetvhbkyzq@aws-1-us-east-1.pooler.supabase.com:5432/postgres
 ```
+Insert `:<url-encoded password>` immediately after `dedlbzhpgkmetvhbkyzq` and before the `@`
+(the value lives only in `SUPABASE_DB_PASSWORD` — never written here).
 
 **Why This Format**:
 - Uses Transaction Mode pooler (handles 100 concurrent connections)
