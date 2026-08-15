@@ -5,19 +5,25 @@
 // WHAT A GREEN RUN OF THIS FILE DOES **NOT** MEAN
 //
 // This runs against an EPHEMERAL vanilla PostgreSQL 16 with a hand-stubbed schema, reproduced only
-// as far as this migration (and its Phase-1 prerequisite, applied first for real, not stubbed) touch
-// it. It proves this migration's OWN new logic (ownership check, rate-limit polarity, policy
-// removal, pre-flight guard) does what it claims. It does NOT prove:
+// as far as this migration (and its Phase-1 and telegram-revoke prerequisites, both applied first for
+// real, not stubbed) touch it. It proves this migration's OWN new logic (ownership check, rate-limit
+// polarity, policy removal, pre-flight guard) does what it claims, AND (HIGH-1, SECURITY sub-agent,
+// EXEC review) that the combined end-state after Phase-1 + telegram-revoke + this migration actually
+// closes the anon venture-spoofing gap this SD targets, including the source_type='telegram' bypass
+// this migration alone does not touch. It does NOT prove:
 //   - production posture (Supabase ALTER DEFAULT PRIVILEGES is not reproduced by vanilla Postgres)
-//   - that the FR-7 cross-migration sequencing constraint is respected at apply time — that is an
-//     operational/ceremony-level check (see this migration's own header), not provable here
+//   - that operators actually apply the three migrations in this order at chairman-ceremony time —
+//     this suite exercises the correct order and documents why it is required, it cannot enforce a
+//     human's real apply sequence
 //   - anon-reachability over the real PostgREST/Supabase surface — that would be a Tier C live probe,
 //     not this ephemeral Postgres
 //
-// Unlike the sibling telegram-revoke DDL test (which stubs Phase-1's objects with fakes), THIS file
-// applies Phase-1's REAL migration file first, then this SD's migration on top — a closer rehearsal
-// of the real apply sequence, and the only way to test this migration's own pre-flight guard against
-// genuinely-present (not faked) Phase-1 objects.
+// Unlike the sibling telegram-revoke DDL test (which stubs Phase-1's objects with fakes and tests
+// telegram-revoke ALONE), THIS file applies Phase-1's and telegram-revoke's REAL migration files
+// first, then this SD's migration on top — a closer rehearsal of the real apply sequence, the only
+// way to test this migration's own pre-flight guard against genuinely-present (not faked) Phase-1
+// objects, and the only way to test the fully-closed end state rather than this migration in
+// isolation.
 //
 // FAIL-CLOSED, no skip branch: if this file cannot reach a database it fails loudly rather than
 // silently passing (matches this SD family's established convention).
@@ -30,10 +36,19 @@ import pg from 'pg';
 const PHASE1_MIGRATION_PATH = fileURLToPath(
   new URL('../../database/chairman-gated/20260812_venture_ingest_key_binding.sql', import.meta.url),
 );
+// HIGH-1 (SECURITY sub-agent, EXEC review, evidence cefd6b89-cf93-4b34-8b4e-e9b348795bd2): applied
+// for real, between Phase-1 and this SD's own migration, matching the STRICT order this migration's
+// own header now documents as security-load-bearing (not mere apply-order hygiene) -- without this,
+// the fully-closed end state this test suite validates was never actually exercised, and TS-5 could
+// false-green against a bypass (source_type='telegram') it never attempted.
+const TELEGRAM_REVOKE_MIGRATION_PATH = fileURLToPath(
+  new URL('../../database/chairman-gated/20260813_revoke_telegram_bot_insert_feedback.sql', import.meta.url),
+);
 const THIS_MIGRATION_PATH = fileURLToPath(
   new URL('../../database/chairman-gated/20260815_venture_user_feedback_ownership_rpc.sql', import.meta.url),
 );
 const PHASE1_SQL = fs.readFileSync(PHASE1_MIGRATION_PATH, 'utf8');
+const TELEGRAM_REVOKE_SQL = fs.readFileSync(TELEGRAM_REVOKE_MIGRATION_PATH, 'utf8');
 const MIGRATION_SQL = fs.readFileSync(THIS_MIGRATION_PATH, 'utf8');
 
 // Anchored to start-of-line, matching tests/ddl/telegram-bot-insert-feedback-drop-ddl.db.test.js's
@@ -195,6 +210,15 @@ CREATE POLICY venture_user_insert_feedback ON public.feedback
     AND (NOT check_feedback_rate_limit(venture_id))
   );
 
+-- HIGH-1: pre-migration live state ALSO includes telegram_bot_insert_feedback (zero venture_id /
+-- feedback_type constraint) -- without stubbing this too, applying the telegram-revoke migration
+-- below would DROP POLICY IF EXISTS a policy that was never there, silently proving nothing about
+-- the bypass this SD's own migration does not by itself close.
+DROP POLICY IF EXISTS telegram_bot_insert_feedback ON public.feedback;
+CREATE POLICY telegram_bot_insert_feedback ON public.feedback
+  FOR INSERT TO anon
+  WITH CHECK (source_type = 'telegram');
+
 DROP POLICY IF EXISTS anon_feedback_ingress_bounds ON public.feedback;
 CREATE POLICY anon_feedback_ingress_bounds ON public.feedback
   AS RESTRICTIVE
@@ -206,6 +230,9 @@ let client;
 
 async function applyPhase1() {
   await client.query(PHASE1_SQL);
+}
+async function applyTelegramRevoke() {
+  await client.query(TELEGRAM_REVOKE_SQL);
 }
 async function applyThisMigration() {
   await client.query(MIGRATION_SQL);
@@ -236,6 +263,12 @@ beforeAll(async () => {
   await client.connect();
   await client.query(STUB_SCHEMA);
   await applyPhase1();
+  // Strict order (this migration's own header, "SEQUENCING DEPENDENCY IS SECURITY-LOAD-BEARING"):
+  // telegram-revoke MUST land before this SD's migration -- its own $verify$ block byte-compares
+  // venture_user_insert_feedback's WITH CHECK text and would hard-fail if that policy were already
+  // gone. Applying it here, in this order, is what makes every test below run against the FULLY
+  // closed end state (both anon-reachable bypass policies gone), not just this migration alone.
+  await applyTelegramRevoke();
   await applyThisMigration();
 }, 60_000);
 
@@ -286,6 +319,54 @@ describe('TR-2: grant posture on the new function', () => {
   });
 });
 
+describe('MEDIUM-1: the now-orphaned direct-EXECUTE oracle is closed', () => {
+  it('neither anon nor authenticated can directly execute venture_exists_and_active', async () => {
+    const { rows } = await client.query(`
+      SELECT
+        has_function_privilege('anon', 'public.venture_exists_and_active(uuid)', 'EXECUTE') AS anon_ok,
+        has_function_privilege('authenticated', 'public.venture_exists_and_active(uuid)', 'EXECUTE') AS auth_ok
+    `);
+    expect(rows[0].anon_ok).toBe(false);
+    expect(rows[0].auth_ok).toBe(false);
+  });
+
+  it('neither anon nor authenticated can directly execute check_feedback_rate_limit', async () => {
+    const { rows } = await client.query(`
+      SELECT
+        has_function_privilege('anon', 'public.check_feedback_rate_limit(uuid)', 'EXECUTE') AS anon_ok,
+        has_function_privilege('authenticated', 'public.check_feedback_rate_limit(uuid)', 'EXECUTE') AS auth_ok
+    `);
+    expect(rows[0].anon_ok).toBe(false);
+    expect(rows[0].auth_ok).toBe(false);
+  });
+
+  it('the new RPC still succeeds end-to-end despite the callee revokes (internal calls run under the SECURITY DEFINER owner, not the caller)', async () => {
+    const ventureId = await makeVenture();
+    const secret = await provisionSecret(ventureId);
+    const { rows } = await submit(ventureId, secret, 'user_bug', 'still works', null);
+    expect(rows[0].r.ok).toBe(true);
+  });
+});
+
+describe('MEDIUM-2: the global ceiling only counts rows THIS RPC created', () => {
+  it('a user_bug-shaped row inserted by a different writer (source_type != user_feedback) does not count against the ceiling', async () => {
+    const otherVentureId = await makeVenture('other-writer');
+    // Direct insert as the (superuser) test client, mirroring a writer that is NOT this RPC --
+    // e.g. a pre-migration historical row, or any future service_role writer that happens to use
+    // the same feedback_type values. Before MEDIUM-2 this would have counted against the same
+    // global ceiling as RPC-created rows; after, it must not.
+    await client.query(
+      "INSERT INTO public.feedback (feedback_type, type, source_type, source_application, title, venture_id) VALUES ('user_bug', 'issue', 'manual_feedback', 'other-writer', 'not from the RPC', $1)",
+      [otherVentureId],
+    );
+
+    const ventureId = await makeVenture();
+    const secret = await provisionSecret(ventureId);
+    const { rows } = await submit(ventureId, secret, 'user_bug', 'still under the ceiling', null);
+    expect(rows[0].r.ok).toBe(true);
+  });
+});
+
 describe('FR-1/TS-1: legitimate submission', () => {
   it('a valid secret for the SAME venture succeeds and the row lands with the correct venture_id', async () => {
     const ventureId = await makeVenture();
@@ -310,6 +391,30 @@ describe('FR-1/TS-1: legitimate submission', () => {
     const { rows } = await submit(ventureId, secret, 'user_feature_request', 'add dark mode', null);
     const { rows: landed } = await client.query('SELECT type FROM public.feedback WHERE id = $1', [rows[0].r.id]);
     expect(landed[0].type).toBe('enhancement');
+  });
+});
+
+describe('FR-1 AC-4 (T-3, testing-agent EXEC review): invalid feedback_type is rejected', () => {
+  it('a valid secret with an out-of-allowlist feedback_type raises 22004 and zero rows land', async () => {
+    const ventureId = await makeVenture();
+    const secret = await provisionSecret(ventureId);
+    const before = (await client.query('SELECT count(*)::int AS n FROM public.feedback')).rows[0].n;
+
+    let err;
+    try {
+      // Ownership passes (real venture, real secret) -- isolates the feedback_type allowlist check
+      // specifically. 'made_up_type' is not in ('user_bug','user_feature_request','user_usability',
+      // 'user_other'); deleting the migration's IF branch that raises 22004 would let this row land
+      // as a false pass without this test.
+      await submit(ventureId, secret, 'made_up_type', 'x', null);
+    } catch (e) {
+      err = e;
+    }
+    expect(err).toBeTruthy();
+    expect(err.code).toBe('22004');
+
+    const after = (await client.query('SELECT count(*)::int AS n FROM public.feedback')).rows[0].n;
+    expect(after).toBe(before);
   });
 });
 
@@ -505,6 +610,26 @@ describe('$verify$ block (extracted from the real migration file) is mutation-re
     }
   });
 
+  it('RAISEs (MEDIUM-1) if venture_exists_and_active is re-granted directly to anon', async () => {
+    await client.query('BEGIN');
+    try {
+      await client.query('GRANT EXECUTE ON FUNCTION public.venture_exists_and_active(uuid) TO anon');
+      await expect(client.query(VERIFY_BLOCK_SQL)).rejects.toThrow(/venture_exists_and_active is still directly callable/);
+    } finally {
+      await client.query('ROLLBACK');
+    }
+  });
+
+  it('RAISEs (MEDIUM-1) if check_feedback_rate_limit is re-granted directly to authenticated', async () => {
+    await client.query('BEGIN');
+    try {
+      await client.query('GRANT EXECUTE ON FUNCTION public.check_feedback_rate_limit(uuid) TO authenticated');
+      await expect(client.query(VERIFY_BLOCK_SQL)).rejects.toThrow(/check_feedback_rate_limit is still directly callable/);
+    } finally {
+      await client.query('ROLLBACK');
+    }
+  });
+
   it('does NOT raise in the correct post-migration state (two-sided)', async () => {
     await expect(client.query(VERIFY_BLOCK_SQL)).resolves.toBeDefined();
   });
@@ -534,6 +659,37 @@ describe('TS-5: raw anon INSERT against the bare table is rejected post-drop (by
   });
 });
 
+describe('HIGH-1: the telegram bypass is closed only once BOTH migrations have applied', () => {
+  it('a raw anon INSERT spoofing source_type=telegram is rejected (no permissive policy authorizes it post-drop)', async () => {
+    const ventureId = await makeVenture();
+    await client.query('BEGIN');
+    try {
+      await client.query('SET LOCAL ROLE anon');
+      let err;
+      try {
+        // Pre-telegram-revoke, this exact shape was the live bypass HIGH-1 flagged:
+        // telegram_bot_insert_feedback's WITH CHECK (source_type = 'telegram') has NO venture_id or
+        // feedback_type constraint at all, so a caller could attribute a user_bug row to ANY
+        // venture_id merely by tagging source_type='telegram' instead of calling the new RPC --
+        // completely bypassing this migration's ownership check. beforeAll applies telegram-revoke
+        // BEFORE this migration (the strict order its own header now documents as security-load-
+        // bearing), so by the time this test runs, no permissive policy authorizes this shape either.
+        await client.query(
+          "INSERT INTO public.feedback (feedback_type, type, source_type, source_application, title, venture_id) VALUES ('user_bug', 'issue', 'telegram', 'x', 'telegram-spoofed bypass attempt', $1)",
+          [ventureId],
+        );
+      } catch (e) {
+        err = e;
+      }
+      expect(err).toBeTruthy();
+      expect(err.code).toBe('42501');
+      expect(err.message).toMatch(/row-level security policy/);
+    } finally {
+      await client.query('ROLLBACK');
+    }
+  });
+});
+
 // MUST RUN LAST IN THE FILE (measured live in CI, this SD's first push): the global ceiling
 // (FR-2) counts ALL feedback_type IN ('user_bug', ...) rows created in the trailing hour, with
 // no reset between test blocks -- every prior test in this file that lands a real row (TS-1,
@@ -546,8 +702,12 @@ describe('TS-5: raw anon INSERT against the bare table is rejected post-drop (by
 describe('FR-2/TS-10: global cross-venture ceiling (state-aware, must run last)', () => {
   it('[TS-10] tops up to exactly the boundary, then asserts the NEXT submission is rejected by the global ceiling', async () => {
     const GLOBAL_CEILING = 500;
+    // MEDIUM-2: mirrors the migration's own (corrected) filter exactly, including source_type =
+    // 'user_feedback' -- without it, a non-RPC row inserted by the MEDIUM-2 test above (or any
+    // future test) would inflate `already` relative to what the migration itself counts, silently
+    // under-topping this test's own boundary math.
     const { rows: countRows } = await client.query(
-      "SELECT count(*)::int AS n FROM public.feedback WHERE feedback_type IN ('user_bug','user_feature_request','user_usability','user_other') AND created_at > now() - interval '1 hour'",
+      "SELECT count(*)::int AS n FROM public.feedback WHERE feedback_type IN ('user_bug','user_feature_request','user_usability','user_other') AND source_type = 'user_feedback' AND created_at > now() - interval '1 hour'",
     );
     const already = countRows[0].n;
     // The migration's check reads the count via a SELECT BEFORE inserting the current row, so the

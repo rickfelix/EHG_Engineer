@@ -60,12 +60,46 @@ CREATE TABLE IF NOT EXISTS public.ventures (
   deleted_at TIMESTAMPTZ
 );
 
+-- T-1/T-2 (testing-agent, SD-LEO-FIX-CLOSE-ANON-VENTURE-001 EXEC review): this table shape now
+-- matches the live schema's full NOT NULL column set exactly (type, source_application, title
+-- included), the SAME definition SD-LEO-FIX-CLOSE-ANON-VENTURE-001's own ddl test declares for this
+-- shared table. Both files' CREATE TABLE IF NOT EXISTS now produce an IDENTICAL shape, so this file
+-- passes in isolation AND regardless of which file's beforeAll wins the shared-database race — no
+-- longer order-dependent (previously: this file's own bare INSERTs supplied type/source_application/
+-- title while this table never declared them, so this file could only pass if the OTHER file's
+-- richer definition happened to run first and win the race).
 CREATE TABLE IF NOT EXISTS public.feedback (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-  feedback_type VARCHAR NOT NULL DEFAULT 'sentry_error',
-  source_type VARCHAR NOT NULL,
+  type VARCHAR(20) NOT NULL,
+  source_application VARCHAR(255) NOT NULL,
+  source_type VARCHAR(30) NOT NULL,
+  title VARCHAR(255) NOT NULL,
+  description TEXT,
+  status VARCHAR(20) DEFAULT 'new',
+  severity VARCHAR(20),
+  category VARCHAR(50),
+  error_message TEXT,
+  error_hash VARCHAR(64),
+  occurrence_count INTEGER DEFAULT 1,
+  first_seen TIMESTAMPTZ,
+  last_seen TIMESTAMPTZ,
+  votes INTEGER DEFAULT 0,
+  assigned_to VARCHAR(100),
+  triaged_by VARCHAR(100),
+  user_id UUID,
+  created_at TIMESTAMPTZ DEFAULT now(),
+  updated_at TIMESTAMPTZ DEFAULT now(),
+  metadata JSONB DEFAULT '{}'::jsonb,
   venture_id UUID,
-  created_at TIMESTAMPTZ DEFAULT now()
+  feedback_type VARCHAR(30) NOT NULL DEFAULT 'sentry_error',
+  CONSTRAINT feedback_feedback_type_check CHECK (feedback_type IN (
+    'sentry_error', 'user_bug', 'user_feature_request', 'user_usability', 'user_other', 'venture_error'
+  )),
+  CONSTRAINT feedback_source_type_check CHECK (source_type IN (
+    'manual_feedback', 'auto_capture', 'uat_failure', 'error_capture', 'uncaught_exception',
+    'unhandled_rejection', 'manual_capture', 'todoist_intake', 'youtube_intake',
+    'claude_code_intake', 'telegram', 'user_feedback'
+  ))
 );
 
 ALTER TABLE public.feedback ENABLE ROW LEVEL SECURITY;
@@ -247,8 +281,11 @@ describe('TS-1/TS-6: bare telegram-sourced anon INSERT is rejected post-migratio
         // type/source_application/title added (this SD's PR): the real public.feedback has these
         // as NOT NULL with no default (confirmed live, 2026-08-15) — irrelevant to THIS test since
         // RLS denial fires before row materialization, but kept consistent with the other inserts
-        // below so no bare insert in this file depends on which stub table definition happens to
-        // win the shared-database CREATE TABLE IF NOT EXISTS race.
+        // below. T-1/T-2 (testing-agent, EXEC review): this file's OWN CREATE TABLE IF NOT EXISTS
+        // above now declares these same NOT NULL columns, so this insert's shape is correct
+        // regardless of which file's beforeAll wins the shared-database table-creation race — no
+        // longer order-dependent (superseded an earlier version of this comment that claimed
+        // order-independence while the table definition below it did not yet match).
         await client.query(
           "INSERT INTO public.feedback (source_type, feedback_type, venture_id, type, source_application, title) VALUES ('telegram', 'sentry_error', NULL, 'issue', 'ddl-test-stub', 'stub row')",
         );

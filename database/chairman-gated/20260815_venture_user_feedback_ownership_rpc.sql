@@ -47,19 +47,49 @@
 -- someone targeting that one specific venture. Do not represent this migration as closing that case
 -- fully — it narrows, it does not eliminate, for a browser-exposed secret.
 --
+-- SEC-M3 (SECURITY sub-agent, EXEC review, documentation-only, evidence cefd6b89-cf93-4b34-8b4e-
+-- e9b348795bd2): GLOBAL-CEILING SCALING TRIPWIRE. A single browser-exposed secret can drive one
+-- venture to its own 50/hour per-venture threshold; the 500/hour global ceiling therefore starts
+-- meaningfully constraining LEGITIMATE traffic once roughly 10 browser-exposed ventures are each
+-- independently near their own per-venture cap in the same trailing hour -- at that point the global
+-- ceiling degrades from "cross-venture DoS backstop" toward "shared budget venture operators compete
+-- for." Not a blocker today (current traffic measured two orders of magnitude below this ceiling,
+-- per the SECURITY sub-agent's own live measurement), but worth revisiting if browser-exposed adoption
+-- grows materially past that scale.
+--
 -- ═══════════════════════════════════════════════════════════════════════════════════════════════
--- SEQUENCING DEPENDENCY (PRD FR-7 — operational, not a DDL-enforceable check within this file)
+-- SEQUENCING DEPENDENCY IS SECURITY-LOAD-BEARING, NOT MERE APPLY-ORDER HYGIENE (PRD FR-7 — CORRECTED
+-- post-EXEC, SECURITY sub-agent HIGH-1 finding, evidence cefd6b89-cf93-4b34-8b4e-e9b348795bd2)
 -- ═══════════════════════════════════════════════════════════════════════════════════════════════
+-- THIS MIGRATION ALONE DOES NOT FULLY CLOSE THE VENTURE-SPOOFING GAP. public.feedback's
+-- telegram_bot_insert_feedback policy (PERMISSIVE, anon, INSERT, WITH CHECK (source_type =
+-- 'telegram')) has NO venture_id or feedback_type constraint whatsoever. As long as it remains
+-- live, an anon caller can attribute a user_bug-shaped row to ANY venture by simply setting
+-- source_type='telegram' instead of calling fn_submit_venture_user_feedback — bypassing this
+-- migration's entire ownership check via a policy this file does not touch. Dropping
+-- venture_user_insert_feedback does not narrow that other policy; PostgreSQL PERMISSIVE policies OR
+-- together, so removing one still-flawed permissive policy does nothing while a MORE permissive
+-- sibling (zero venture constraint, strictly weaker than the existence check this file replaces)
+-- remains reachable. Acceptance criterion "no anon caller can spoof venture_id for user_%-type
+-- feedback" is therefore only TRUE once BOTH this file AND the sibling below have applied — not
+-- after this file alone.
+--
 -- database/chairman-gated/20260813_revoke_telegram_bot_insert_feedback.sql (sibling, from the
 -- completed SD-FDBK-INFRA-MIGRATE-ANON-INGEST-001, also confirmed STAGED-NOT-APPLIED live 2026-08-15)
--- has its OWN $verify$ block that asserts venture_user_insert_feedback remains PRESENT with an
--- UNCHANGED WITH CHECK clause, and that anon retains table-level INSERT — all violated by THIS
--- file's own DROP POLICY action below. BEFORE APPLYING THIS FILE: confirm via a live pg_policies
--- read whether 20260813_revoke_telegram_bot_insert_feedback.sql has already landed (telegram_bot_
--- insert_feedback absent = already applied, no action needed) or is still pending (telegram_bot_
--- insert_feedback present = apply that migration first, or in the same ceremony immediately before
--- this one). Applying THIS file first would cause that sibling migration's own next apply attempt
--- to hard-fail on a confusing, seemingly-unrelated error.
+-- drops that exact policy, and has its OWN $verify$ block that asserts venture_user_insert_feedback
+-- remains PRESENT with an UNCHANGED WITH CHECK clause, and that anon retains table-level INSERT —
+-- both violated by THIS file's own DROP POLICY action below. THE ORDER IS THEREFORE STRICT, not a
+-- convenience: the sibling MUST land first (or in the same ceremony immediately before this one).
+-- BEFORE APPLYING THIS FILE: confirm via a live pg_policies read whether
+-- 20260813_revoke_telegram_bot_insert_feedback.sql has already landed (telegram_bot_insert_feedback
+-- absent = already applied, safe to proceed) or is still pending (telegram_bot_insert_feedback
+-- present = apply that migration first). Applying THIS file first would ALSO cause that sibling
+-- migration's own next apply attempt to hard-fail (its byte-exact WITH CHECK compare would find
+-- venture_user_insert_feedback missing) — a real but secondary consequence; the primary one is the
+-- unclosed spoofing path above, which persists for however long the wrong order stands.
+-- tests/ddl/venture-user-feedback-ownership-rpc-ddl.db.test.js applies both migrations, in this
+-- exact order, in its own beforeAll, and asserts the source_type='telegram' bypass is rejected only
+-- once both have run — it does not claim closure from this file in isolation.
 --
 -- ═══════════════════════════════════════════════════════════════════════════════════════════════
 -- CORRECTIONS FROM PROSPECTIVE PLAN-PHASE TESTING REVIEW (evidence ffe58c4e-7c8d-4d53-8dbf-
@@ -93,9 +123,15 @@
 --
 -- ═══════════════════════════════════════════════════════════════════════════════════════════════
 -- ROLLBACK (manual, if needed — additive except for the one DROP POLICY, safe to reverse in one pass)
+-- SEC-L2 (SECURITY sub-agent, EXEC review): wrapped in its own transaction, with a trailing PostgREST
+-- reload -- matching this file's own apply block, so a rollback leaves the schema cache consistent
+-- with pg_catalog immediately rather than until PostgREST's own next reload cycle.
 -- ═══════════════════════════════════════════════════════════════════════════════════════════════
+-- BEGIN;
 -- REVOKE EXECUTE ON FUNCTION public.fn_submit_venture_user_feedback(UUID, TEXT, TEXT, TEXT, TEXT) FROM anon, service_role;
 -- DROP FUNCTION IF EXISTS public.fn_submit_venture_user_feedback(UUID, TEXT, TEXT, TEXT, TEXT);
+-- GRANT EXECUTE ON FUNCTION public.venture_exists_and_active(uuid) TO anon;
+-- GRANT EXECUTE ON FUNCTION public.check_feedback_rate_limit(uuid) TO anon, authenticated;
 -- CREATE POLICY venture_user_insert_feedback ON public.feedback
 --   FOR INSERT TO anon
 --   WITH CHECK (
@@ -104,8 +140,19 @@
 --     AND venture_exists_and_active(venture_id)
 --     AND (NOT check_feedback_rate_limit(venture_id))
 --   );
+-- NOTIFY pgrst, 'reload schema';
+-- COMMIT;
 
 BEGIN;
+
+-- SEC-L1 (SECURITY sub-agent, EXEC review, evidence cefd6b89-cf93-4b34-8b4e-e9b348795bd2): bounded
+-- wait for the ACCESS EXCLUSIVE lock DROP POLICY needs on public.feedback -- same rationale and
+-- precedent as the sibling telegram-revoke migration's identical guard (this table's own 2026-08-12
+-- incident record is exactly an unbounded lock wait here turning into a live-writer-blocking queue).
+-- 5s, not that sibling's 2s: this migration does strictly more work under the same lock (two extra
+-- REVOKEs, a richer $verify$ block) so a slightly wider window avoids a spurious fail-fast on an
+-- otherwise-healthy apply.
+SET LOCAL lock_timeout = '5s';
 
 -- ============================================================
 -- 0. PRE-FLIGHT GUARD (FR-5/TR-5): Phase-1 prerequisites must exist before any CREATE FUNCTION
@@ -189,9 +236,15 @@ BEGIN
   -- never evaluates the RESTRICTIVE anon_feedback_ingress_bounds policy (rolbypassrls), so without
   -- this the cross-venture DoS protection that policy provided for the raw-INSERT path is silently
   -- lost, not merely narrowed.
+  -- MEDIUM-2 (SECURITY sub-agent, EXEC review, evidence cefd6b89-cf93-4b34-8b4e-e9b348795bd2):
+  -- source_type = 'user_feedback' scopes the count to rows THIS RPC created. Without it, any other
+  -- writer of a user_%-type row (the pre-drop policy's own historical rows, a future service_role
+  -- insert, etc.) silently counts against a ceiling meant to bound only this anon-reachable path,
+  -- letting an unrelated writer exhaust the channel for every venture at once.
   SELECT count(*) INTO v_global_count
   FROM public.feedback
   WHERE feedback_type IN ('user_bug', 'user_feature_request', 'user_usability', 'user_other')
+    AND source_type = 'user_feedback'
     AND created_at > now() - interval '1 hour';
   IF v_global_count >= 500 THEN
     RAISE EXCEPTION 'fn_submit_venture_user_feedback: rate limited' USING ERRCODE = '53400';
@@ -243,6 +296,28 @@ GRANT EXECUTE ON FUNCTION public.fn_submit_venture_user_feedback(UUID, TEXT, TEX
 DROP POLICY IF EXISTS venture_user_insert_feedback ON public.feedback;
 
 -- ============================================================
+-- 2b. MEDIUM-1 (SECURITY sub-agent, EXEC review, evidence cefd6b89-cf93-4b34-8b4e-e9b348795bd2):
+--     close the now-orphaned direct-EXECUTE oracle. venture_exists_and_active was granted TO anon
+--     by database/migrations/20260704f_fix_venture_user_feedback_ventures_visibility.sql SPECIFICALLY
+--     because venture_user_insert_feedback's WITH CHECK evaluates it under RLS -- RLS policy
+--     expressions run as the querying role even for a SECURITY DEFINER function, so anon needed
+--     direct EXECUTE to invoke it there (confirmed live: that migration's own header, "so anon-role
+--     RLS policies (e.g. venture_user_insert_feedback) can gate on it"). check_feedback_rate_limit
+--     was, for the identical reason, the sole entry (count "(1)") kept off database/migrations/
+--     20260603_03_revoke_secdef_execute_from_anon_authenticated.sql's revoke sweep by its dynamic
+--     policy-usage scan. Both grants are now orphaned by the DROP above -- confirmed no OTHER live
+--     policy or direct .rpc() caller depends on either (anon_feedback_ingress_bounds only mentions
+--     them in a contrasting comment; every remaining caller -- this file's own function, Phase-1's
+--     fn_submit_venture_feedback/fn_submit_venture_error -- invokes them from INSIDE its own
+--     SECURITY DEFINER body, which runs under the FUNCTION OWNER's privileges for nested calls, not
+--     the caller's, so neither needs anon's direct grant). Leaving them live is an unauthenticated
+--     existence/rate-limit oracle with no write attached -- narrow, but unnecessary once the one
+--     policy that required it is gone.
+-- ============================================================
+REVOKE EXECUTE ON FUNCTION public.venture_exists_and_active(uuid) FROM PUBLIC, anon, authenticated;
+REVOKE EXECUTE ON FUNCTION public.check_feedback_rate_limit(uuid) FROM PUBLIC, anon, authenticated;
+
+-- ============================================================
 -- 3. Self-verify (TR-3): static catalog assertions only -- the dynamic "a raw anon INSERT is now
 --    rejected" behavioral proof (TS-5) lives in this file's DDL test (rolled-back transactions with
 --    SET LOCAL ROLE anon), matching this SD family's established split between static $verify$
@@ -291,6 +366,18 @@ BEGIN
   IF has_function_privilege('anon', 'public._verify_venture_ingest_secret(uuid,text)', 'EXECUTE')
      OR has_function_privilege('authenticated', 'public._verify_venture_ingest_secret(uuid,text)', 'EXECUTE') THEN
     RAISE EXCEPTION 'VERIFY FAILED: _verify_venture_ingest_secret is callable by anon or authenticated -- Phase-1 lockdown appears weakened';
+  END IF;
+
+  -- MEDIUM-1: the two REVOKEs above actually took effect -- neither helper remains a direct
+  -- existence/rate-limit oracle for anon or authenticated. This function's own internal calls to
+  -- both (inside this SECURITY DEFINER body) are unaffected by either revoke.
+  IF has_function_privilege('anon', 'public.venture_exists_and_active(uuid)', 'EXECUTE')
+     OR has_function_privilege('authenticated', 'public.venture_exists_and_active(uuid)', 'EXECUTE') THEN
+    RAISE EXCEPTION 'VERIFY FAILED: venture_exists_and_active is still directly callable by anon or authenticated -- MEDIUM-1 revoke did not take effect';
+  END IF;
+  IF has_function_privilege('anon', 'public.check_feedback_rate_limit(uuid)', 'EXECUTE')
+     OR has_function_privilege('authenticated', 'public.check_feedback_rate_limit(uuid)', 'EXECUTE') THEN
+    RAISE EXCEPTION 'VERIFY FAILED: check_feedback_rate_limit is still directly callable by anon or authenticated -- MEDIUM-1 revoke did not take effect';
   END IF;
   IF EXISTS (
     SELECT 1 FROM information_schema.role_table_grants
