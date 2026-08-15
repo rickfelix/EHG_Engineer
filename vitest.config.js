@@ -36,7 +36,7 @@ function stripShebangPlugin() {
   return {
     name: 'strip-shebang',
     enforce: 'pre',
-    transform(code, id) {
+    transform(code, _id) {
       if (code.startsWith('#!')) {
         return {
           code: code.replace(/^#![^\n]*\n/, '\n'),
@@ -207,7 +207,11 @@ export default defineConfig({
       reportsDirectory: 'coverage',
       reporter: ['text', 'json-summary', 'html'],
       include: [
-        'lib/**/*.js',
+        // SD-LEO-INFRA-CHECKER-READBACK-WRITE-001 (TR-5): widened js -> {js,mjs} so lib/checkers/*.mjs
+        // (and any other .mjs module under lib/) is actually measured — previously lib/**/*.js silently
+        // excluded every .mjs file (e.g. lib/claim-guard.mjs's sibling golden-references/*.mjs pattern)
+        // from coverage with no error, just a silent zero.
+        'lib/**/*.{js,mjs}',
         'scripts/**/*.js',
       ],
       exclude: [
