@@ -1,8 +1,8 @@
-<!-- file_content_hash: a67d31b7ba97e500 -->
+<!-- file_content_hash: ef66b4ecffd40e17 -->
 <!-- GENERATED FILE - DO NOT EDIT DIRECTLY. Source of truth: leo_protocol_sections (DB). Regenerate: node scripts/generate-claude-md-from-db.js. Drift check: node scripts/check-claude-md-drift.cjs -->
 # CLAUDE_COORDINATOR.md - Coordinator Role Contract
 
-**Generated**: 2026-08-11 4:01:47 AM
+**Generated**: 2026-08-15 4:55:00 PM
 **Protocol**: LEO 4.4.1
 **Purpose**: Canonical coordinator role + SRE charter — fleet supervisor session
 **Load when**: Running /coordinator, or orienting a fleet-coordinator session
@@ -60,6 +60,8 @@ Canonical SSOT: docs/protocol/fleet-coordinator-and-worker-behavior.md ("Blocked
 
 Before acting on any Adam-sourced count or queue gauge (belt sizes, unpromoted totals, backlog percentages), CHALLENGE the number: (a) exact head-count (`{ count: 'exact', head: true }`) or a capped row-fetch? A gauge reading exactly 1000 is presumed truncated (live incident 2026-07-19: probe reported 1000 — the PostgREST cap — true count 1495). (b) plan-of-record-scoped, or raw table-wide? (c) deduped vs origin/main / done-state? This is the symmetric twin of Adam KPI-3 (independently recompute coordinator gauges) — bidirectional verification, no correlated blindness. count=null renders 'unavailable', never 0 (a missing relation is a measurement failure, not a healthy zero). Mechanism: lib/db/fetch-all-paginated.mjs (fetchAllPaginated / assertNotCapTruncated / renderCount) + the enumerated ledger docs/audits/count-truncation-inventory.json. Provenance: SD-LEO-INFRA-COUNT-TRUNCATION-DISCIPLINE-001 FR-8; Solomon verdict db4b2292.
 
+(d) did the QF term's DEFINITION change recently, not just its value? The belt gauge in duty 5 above (`belt=N ... (N SD + M QF)`) sums the SD-dispatchable count with a QF count. As of SD-LEO-INFRA-QF-SUPPLY-PREDICATE-AUTO-START-001 (2026-08-15), the QF term is `countAutoStartableQuickFixes` — the SAME strict predicate the worker's own /checkin self-claim path runs (excludes stale >3d, `factory_lane`, chairman-gated, TIER3_RISK_RE keyword matches, and fixture rows), not the looser unclaimed+status='open'-only count `lib/governance/qf-mint-gate.mjs`'s demand gauge still uses. Measured live the day this shipped: the old, looser count read 173; the new, accurate count read 0. A belt reading that drops sharply right after this SD merged is the fix taking effect — the prior reading was silently counting QFs no worker could actually claim — not a belt collapse. A QF term that stays nonzero-but-small thereafter is the real, accurate signal to act on (or to feed back to Adam as sourcing demand); do not "correct" it back toward the old inflated number.
+
 ## Adam GOVERNANCE & OVERSIGHT over the Coordinator (CHAIRMAN-RATIFIED — encoded here 2026-07-19 per D-0719-ORGCHART reply "A"; original verbal directives 2026-07-16/17)
 
 The chairman directed (2026-07-16 verbal: "you need to provide governance and oversight over the coordinator"; reaffirmed 2026-07-17 with the assistant framing removed: "You can help, but you are in governance and oversight") that **Adam holds GOVERNANCE & OVERSIGHT over the coordinator role**. This clause lands the SAME standing assignment already recorded in the Adam Role Contract (id=601) into THIS contract, closing the two-org-charts divergence Solomon's tri-role review surfaced (e72dad97 C-EV4; chairman decision D-0719-ORGCHART, SMS reply "A", 2026-07-19).
@@ -94,6 +96,6 @@ _Hierarchy note (chairman-ratified D-0719-ORGCHART "A", 2026-07-19): this partne
 
 ---
 
-*Generated from database: 2026-08-11*
+*Generated from database: 2026-08-15*
 *Protocol Version: 4.4.1*
 *Source of truth: leo_protocol_sections (section_type=coordinator_role_contract). Do not hand-edit — edit the DB section and regenerate.*
