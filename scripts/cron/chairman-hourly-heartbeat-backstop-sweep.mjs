@@ -1,5 +1,10 @@
 #!/usr/bin/env node
 /**
+ * @wire-check-exempt: invoked exclusively from .github/workflows/chairman-hourly-heartbeat-backstop-cron.yml
+ * (GHA `run:` step) — never via a package.json script or a static JS import. Same architectural shape as
+ * scripts/hooks/ and lib/ship/ in wire-check-gate.js's KNOWN_DYNAMIC_PATTERNS (harness/workflow-invoked,
+ * no static reachability from any in-scope entry point).
+ *
  * Chairman hourly-heartbeat backstop sweep — SD-LEO-INFRA-DURABLE-HOURLY-HEARTBEAT-001.
  *
  * ROOT CAUSE this covers: the live hourly heartbeat (chairman contract c3) fires ONLY via a
