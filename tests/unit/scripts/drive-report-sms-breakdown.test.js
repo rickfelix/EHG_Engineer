@@ -101,6 +101,24 @@ describe('formatDriveBreakdown — the closed-set throw for top lever', () => {
   });
 });
 
+describe('formatDriveBreakdown — the closed-set throw applies to leg ids too, not just topLeverLeg', () => {
+  it('throws when a leg id is not a ratified leg id (adversarial review finding)', () => {
+    const bad = { ...FACTS, legs: [{ id: 'leg3_never_existed', value: 1 }] };
+    expect(() => formatDriveBreakdown(bad)).toThrow(/leg id must be one of/);
+  });
+
+  it('refuses a free-text reason in place of a leg id — same discipline as topLeverLeg', () => {
+    const bad = { ...FACTS, legs: [{ id: 'the uptake leg is the biggest gap', value: 1 }] };
+    expect(() => formatDriveBreakdown(bad)).toThrow(/leg id must be one of/);
+  });
+
+  it('every RATIFIED leg id is accepted as a leg id', () => {
+    for (const id of RATIFIED_LEG_IDS) {
+      expect(() => formatDriveBreakdown({ ...FACTS, legs: [{ id, value: 1 }], topLeverLeg: id })).not.toThrow();
+    }
+  });
+});
+
 describe('formatDriveBreakdown — numeric validation throws for every numeric field', () => {
   it('refuses a negative or non-finite score/possible', () => {
     expect(() => formatDriveBreakdown({ ...FACTS, score: -1 })).toThrow(/non-negative/);

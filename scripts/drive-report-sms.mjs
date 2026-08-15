@@ -202,6 +202,11 @@ export function formatDriveBreakdown(facts = {}) {
     if (!leg || typeof leg !== 'object' || typeof leg.id !== 'string' || leg.id.trim() === '') {
       throw new Error(`formatDriveBreakdown(): every leg needs a string id — got ${JSON.stringify(leg)}`);
     }
+    // CLOSED-SET, same discipline as topLeverLeg below. A leg id reaches the wire either way —
+    // this loop must not be the free-text passthrough the module's own header rules out.
+    if (!RATIFIED_LEG_IDS.includes(leg.id)) {
+      throw new Error(`formatDriveBreakdown(): leg id must be one of ${RATIFIED_LEG_IDS.join(', ')} — got ${JSON.stringify(leg.id)}`);
+    }
     // UNAVAILABLE, never 0. `value` may be absent, null, or undefined — all three mean the same
     // thing here: nothing was measured for this leg on the row this facts object was built from
     // (e.g. an old-shape pre-migration row that predates per-leg values entirely).
