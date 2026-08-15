@@ -138,7 +138,7 @@ export async function incrementCompletionCounter(supabase) {
  * @returns {{success: boolean, output: string}}
  */
 export function executeVisionHeal(visionKey, archKey) {
-  const healScript = join(__dirname, '../../eva/heal-command.mjs');
+  const healScript = join(__dirname, '../eva/heal-command.mjs');
 
   const args = [healScript, 'vision', 'score'];
   if (visionKey) args.push('--vision-key', visionKey);
@@ -167,8 +167,6 @@ export function executeVisionHeal(visionKey, archKey) {
  * @param {Object} supabase - Supabase client
  */
 export async function runVisionHealIfTriggered(sd, supabase) {
-  const sdKey = sd.sd_key || sd.id;
-
   console.log('\n🔭 VISION HEAL TRIGGER CHECK');
   console.log('-'.repeat(50));
 
