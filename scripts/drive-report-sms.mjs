@@ -25,10 +25,28 @@
  * cron is a bill and a trust problem at the same time.
  *
  * LIVES IN scripts/ because it SENDS. The FR-7 propose-only scan forbids that under lib/drive-loop.
+ *
+ * ── formatDriveBreakdown: THE PER-LEG SIBLING OF formatBody (SD-FDBK-INFRA-ENCODE-DRIVE-SIX-GOAL-001) ──
+ * Chairman directive 2026-08-15: chairman-facing drive reads must show the per-leg breakdown and a
+ * named top lever, not a bare aggregate number alone. This is a NEW, SEPARATE function rather than
+ * a parameter on formatBody — formatBody's 7 callers are pinned on its exact byte-for-byte output,
+ * and giving it an optional "breakdown" mode is exactly the kind of change that quietly reshapes a
+ * pinned contract. formatDriveBreakdown mirrors formatBody's own disciplines (own-properties-only,
+ * non-negative numeric validation, a closed-set throw, a length-budget throw) rather than reusing
+ * any of its code, so the two can evolve independently and neither can silently break the other.
  */
+
+import { RATIFIED_LEG_IDS } from '../lib/drive-loop/score/drive-score-legs.js';
 
 export const MAX_RECIPIENTS = 3;
 export const MAX_BODY_CHARS = 320;   // 2 SMS segments; beyond this carriers split unpredictably
+// formatDriveBreakdown's OWN budget, deliberately larger than MAX_BODY_CHARS: a full per-leg
+// breakdown ("X/6 = leg1_landed 2 + leg2_uptake 1 + leg4_capacity 0; top lever: leg4_capacity") is
+// appended to callers' own bodies (morning-brief SMS, exec-summary email) rather than sent as a
+// bare SMS body itself, so it does not need to fit inside one/two SMS segments on its own — but it
+// still needs SOME bound, so a malformed/runaway input (e.g. an absurd leg count) fails loud rather
+// than producing an unbounded string.
+export const MAX_BREAKDOWN_CHARS = 400;
 export const VERDICTS = Object.freeze(['DEFICIT-URGENT', 'DEFICIT', 'TIGHT', 'SURPLUS', 'UNKNOWN']);
 
 /** E.164: a leading + and 8-15 digits. Anything else is not a phone number we will dial. */
@@ -133,6 +151,84 @@ export function formatBody(facts = {}) {
   ].filter(Boolean);
   const body = parts.join(' | ');
   if (body.length > MAX_BODY_CHARS) throw new Error('formatBody(): body exceeds the segment cap');
+  return body;
+}
+
+/**
+ * The per-leg sibling of formatBody (SD-FDBK-INFRA-ENCODE-DRIVE-SIX-GOAL-001). Renders the
+ * chairman-facing breakdown: "X/6 = leg1_landed 2 + leg2_uptake 1 + leg4_capacity 0; top lever:
+ * leg4_capacity". Same closed-inputs discipline as formatBody — numbers and closed-set leg ids
+ * only, so no upstream free text (predicates, limitation strings, reasons) can reach this string.
+ *
+ * `facts.topLeverLeg` is a CALLER-SUPPLIED leg id, not computed here — this function renders and
+ * VALIDATES, it does not decide which leg is the biggest lever (that judgement lives with the
+ * caller composing `facts`, e.g. lib/fleet/exec-email-drive-line.mjs), exactly as formatBody does
+ * not decide the capacity verdict, only validates it against VERDICTS.
+ *
+ * @param {object} facts
+ * @param {number} facts.score earned points this run (non-negative)
+ * @param {number} facts.possible the denominator to show against (non-negative — callers frame
+ *   this as the fixed ratified max, not aggregate.js's own run-scoped `possible`, so the chairman
+ *   always reads progress against the standing 6/6 goal rather than a denominator that shrinks
+ *   when a leg is unavailable)
+ * @param {Array<{id:string, value:number|null}>} facts.legs one entry per leg to render, in
+ *   display order. `value: null` (or omitted) means UNAVAILABLE for that leg — rendered as such,
+ *   NEVER as 0: an unmeasured leg and a measured zero are different claims (aggregate.js's own
+ *   rule, one layer down).
+ * @param {string} facts.topLeverLeg the leg id to name as the top lever — MUST be a ratified leg
+ *   id (RATIFIED_LEG_IDS); anything else throws.
+ */
+export function formatDriveBreakdown(facts = {}) {
+  if (facts === null || typeof facts !== 'object') {
+    throw new Error(`formatDriveBreakdown(): facts must be an object — got ${JSON.stringify(facts)}`);
+  }
+  // OWN PROPERTIES ONLY — see formatBody's own comment on prototype pollution; the same hazard
+  // applies here and the same fix applies here.
+  for (const k of ['score', 'possible', 'legs', 'topLeverLeg']) {
+    if (!Object.hasOwn(facts, k)) {
+      throw new Error(`formatDriveBreakdown(): ${k} must be an OWN property of facts — an inherited value means it was not computed by this run`);
+    }
+  }
+  const { score, possible, legs, topLeverLeg } = facts;
+
+  for (const [k, v] of Object.entries({ score, possible })) {
+    if (!Number.isFinite(v) || v < 0) throw new Error(`formatDriveBreakdown(): ${k} must be a non-negative number — got ${JSON.stringify(v)}`);
+  }
+  if (!Array.isArray(legs) || legs.length === 0) {
+    throw new Error('formatDriveBreakdown(): legs must be a non-empty array');
+  }
+
+  const legParts = legs.map((leg) => {
+    if (!leg || typeof leg !== 'object' || typeof leg.id !== 'string' || leg.id.trim() === '') {
+      throw new Error(`formatDriveBreakdown(): every leg needs a string id — got ${JSON.stringify(leg)}`);
+    }
+    // CLOSED-SET, same discipline as topLeverLeg below. A leg id reaches the wire either way —
+    // this loop must not be the free-text passthrough the module's own header rules out.
+    if (!RATIFIED_LEG_IDS.includes(leg.id)) {
+      throw new Error(`formatDriveBreakdown(): leg id must be one of ${RATIFIED_LEG_IDS.join(', ')} — got ${JSON.stringify(leg.id)}`);
+    }
+    // UNAVAILABLE, never 0. `value` may be absent, null, or undefined — all three mean the same
+    // thing here: nothing was measured for this leg on the row this facts object was built from
+    // (e.g. an old-shape pre-migration row that predates per-leg values entirely).
+    if (leg.value === null || leg.value === undefined) {
+      return `${leg.id} unavailable`;
+    }
+    if (!Number.isFinite(leg.value) || leg.value < 0) {
+      throw new Error(`formatDriveBreakdown(): leg ${leg.id} value must be a non-negative number — got ${JSON.stringify(leg.value)}`);
+    }
+    return `${leg.id} ${leg.value}`;
+  });
+
+  // CLOSED-SET, imported — never a locally re-declared id list, and never a free-text reason. The
+  // whole point of naming a leg id (not a prose explanation) is that "top lever" stays a pointer
+  // into the ratified vocabulary a reader can cross-check, not another string this function would
+  // have to trust.
+  if (typeof topLeverLeg !== 'string' || !RATIFIED_LEG_IDS.includes(topLeverLeg)) {
+    throw new Error(`formatDriveBreakdown(): topLeverLeg must be one of ${RATIFIED_LEG_IDS.join(', ')} — got ${JSON.stringify(topLeverLeg)}`);
+  }
+
+  const body = `${score}/${possible} = ${legParts.join(' + ')}; top lever: ${topLeverLeg}`;
+  if (body.length > MAX_BREAKDOWN_CHARS) throw new Error('formatDriveBreakdown(): body exceeds the breakdown length budget');
   return body;
 }
 
