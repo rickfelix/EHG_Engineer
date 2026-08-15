@@ -74,6 +74,60 @@ global.console = {
   debug: vi.fn(),
 };
 
+// ─── Unit-tier network fence (SD-LEO-INFRA-CHECKER-READBACK-WRITE-001, RCA a726dd91) ───────────
+//
+// The credential sentinels above neutralise WHICH database a client points at, but do nothing to
+// bound HOW LONG a request to that neutralised-but-still-resolvable host takes. Unit-tier code
+// that constructs its own Supabase client (bypassing the per-file vi.mock convention other tests
+// rely on) reaches the real network: @supabase/postgrest-js retries a failed GET 4x with
+// exponential backoff (~7s floor), and the sentinel host is SLOW to fail DNS resolution on Windows
+// (measured 1.8s-11s per attempt) — compounding into a 40s+ stall, well past this project's 60s
+// default test timeout. This exact class was already on record as an avoided-not-fixed hazard
+// (scripts/hooks/capture-baseline-test-state.cjs explicitly skips the full suite "which hung
+// against the test.invalid.local sentinel").
+//
+// This guard makes "no live network" STRUCTURAL for the unit tier rather than assumed from
+// credential sentinelling alone — inspired by, but deliberately NOT copying, the db tier's fetch
+// guard (tests/helpers/db-tier-gate.js):
+//   1. WRITABLE + CONFIGURABLE (not frozen): 24 unit-tier files vi.stubGlobal('fetch') or assign
+//      globalThis.fetch directly; a non-reconfigurable descriptor (correct for the db tier's
+//      stricter security posture) would break every one of them here. This is a latency/safety
+//      control, not a security fence — the credential sentinels above remain the actual fence.
+//   2. ABORT-SHAPED throw (name='AbortError'): postgrest-js's executeWithRetry has an explicit
+//      escape hatch for abort-shaped errors that skips its retry loop entirely — a plain
+//      TypeError/Error still costs the full 4-attempt/~7s-backoff sequence even though every
+//      attempt fails instantly. Measured: abort-shaped throw = 1 attempt, ~0ms; plain throw =
+//      4 attempts, ~7s.
+// Loopback (127.0.0.1 / localhost / ::1) is allowed through, matching the db tier's loopback
+// allowance, so a test that legitimately spins up a local server is not caught by this guard.
+function isLoopbackFetchTarget(input) {
+  try {
+    const raw = typeof input === 'string' ? input : (input && input.url) || String(input);
+    const { hostname } = new URL(raw, 'http://unit-tier-fence-base.invalid');
+    return hostname === '127.0.0.1' || hostname === 'localhost' || hostname === '::1' || hostname === '[::1]';
+  } catch {
+    return false;
+  }
+}
+const __unitTierRealFetch = globalThis.fetch;
+function unitTierNetworkFence(input, init) {
+  if (isLoopbackFetchTarget(input)) {
+    return __unitTierRealFetch
+      ? __unitTierRealFetch(input, init)
+      : Promise.reject(new Error('unit tier network fence: no underlying fetch available for a loopback request'));
+  }
+  const url = typeof input === 'string' ? input : (input && input.url) || String(input);
+  const err = new Error(
+    `UNIT_TIER_NETWORK_REFUSED: refused fetch to ${url} — the unit vitest project must never reach a ` +
+    'live network. If this is unexpected, the code under test likely needs its Supabase client ' +
+    'factory mocked (vi.mock), the same convention this repo\'s other unit tests already follow.'
+  );
+  err.name = 'AbortError'; // abort-shaped on purpose — see the executeWithRetry note above
+  err.code = 'ABORT_ERR';
+  return Promise.reject(err);
+}
+Object.defineProperty(globalThis, 'fetch', { value: unitTierNetworkFence, writable: true, configurable: true });
+
 // SD-LEO-INFRA-UNIT-TEST-ISOLATION-POLLUTION-001 FR-1: per-test process.env snapshot/restore.
 // pool:'forks' runs MULTIPLE test files in one process; vitest's module isolation gives each file a
 // fresh module registry but does NOT reset process.env (process-global). So a test that mutates
