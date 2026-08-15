@@ -40,14 +40,17 @@ describe('US-007 scope guard: evaluateScopeGuard (pure predicate)', () => {
   });
 });
 
+// TESTING sub-agent EXEC-TO-PLAN F4: a merge-base computed against origin/main is a MOVING
+// target — once this branch merges, merge-base===HEAD and the diff goes empty, silently
+// degrading these assertions to vacuous (the exact-filename check would then fail outright).
+// Pinned instead to the literal SHA this branch actually forked from (main's HEAD when this
+// SD's branch was created) — a fixed historical commit stays reachable and produces the same
+// diff before OR after merge, as long as this branch isn't rebased.
+const SD_BRANCH_BASE_SHA = 'a944ae2dd71bf9f2fc0d139a640c8c1ba2be69fe';
+
 describe('US-007 AC #1: exactly one migration object, zero CREATE TABLE (real diff)', () => {
   const root = join(__dirname, '..', '..', '..', '..');
-  const mergeBase = execSync('git merge-base HEAD origin/main 2>nul || git merge-base HEAD main', {
-    cwd: root,
-    encoding: 'utf8',
-    shell: true,
-  }).trim();
-  const changedFiles = execSync(`git diff --name-only ${mergeBase}...HEAD`, { cwd: root, encoding: 'utf8' })
+  const changedFiles = execSync(`git diff --name-only ${SD_BRANCH_BASE_SHA}...HEAD`, { cwd: root, encoding: 'utf8' })
     .split('\n')
     .filter(Boolean);
 

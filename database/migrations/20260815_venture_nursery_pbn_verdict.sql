@@ -64,6 +64,17 @@
 --     54b9686a-299e-47ff-ad2a-86031c12cade. Fixing it here would address 1 of 208 while
 --     implying the other 207 were reviewed; this SD does not touch venture_nursery's RLS
 --     policies or grants.
+--     C4 (SECURITY re-review, EXEC-TO-PLAN handoff, F3): the 16-row measured basis above
+--     carries source_ref.candidate (traversability-gate.js's parkFailedCandidate writer), NOT
+--     source_ref.brief — 0/16. This SD's own writer (venture-nursery.js parkVenture) produces
+--     source_ref.brief instead. The equivalence still holds, for an invariant this note did NOT
+--     previously state: parkVenture co-publishes ALL FIVE prompt inputs (name, problem_statement,
+--     solution, target_market, thesis) into source_ref.brief on the SAME anon-readable row in
+--     the SAME insert as pbn_verdict — so pbn_verdict's richer structure exposes no field the
+--     row doesn't already expose beside it. THIS INVARIANT IS LOAD-BEARING: it holds only as
+--     long as every field the PBN scorer's prompt reads from is ALSO in source_ref.brief. If a
+--     future change feeds the scorer any input NOT already published there, this resolution
+--     must be re-reviewed before that change ships.
 --
 -- ============================================================================
 
@@ -95,14 +106,20 @@ ALTER TABLE public.venture_nursery
   );
 
 COMMENT ON COLUMN public.venture_nursery.pbn_verdict IS
-  'SD-LEO-FEAT-PROVEN-BETTER-NEW-001. Latest Proven/Better/New gate verdict. OVERWRITTEN on '
-  'each unpark re-check — this column is CURRENT STATE, never history. The append-only history '
-  'lives in nursery_evaluation_log via recordNurseryEvaluation() (TR-5); query that, not this, '
-  'for "was this ever rejected?". Shape: {proven:{citations,coverage}, '
-  'better:{hypothesis,citations,coverage}, new:{wedge,coverage}, verdict:PASS|REJECT|TRIM, '
-  'measured_at:ISO-8601 UTC, rule_trace:[]}. coverage is a 0..1 fraction, NOT a percentage. '
-  'NULL = never gated (distinct from any verdict). verdict is CHECK-constrained; the rest of '
-  'the shape is by convention.';
+  'SD-LEO-FEAT-PROVEN-BETTER-NEW-001. The Proven/Better/New gate verdict from THIS ROW''s own '
+  'park (TR-8, corrected post-PLAN): this column is NEVER updated in place after insert — '
+  'reactivateVenture() does not touch it, and a re-check at unpark writes its fresh verdict to '
+  'a DIFFERENT destination (a brand-new venture_nursery row on REJECT/TRIM, or the resulting '
+  'venture''s metadata.stage_zero.pbn_verdict on PASS). History therefore survives by '
+  'immutability, not by an append-only log compensating for an overwrite. '
+  'nursery_evaluation_log via recordNurseryEvaluation() (TR-5) is still the independently- '
+  'queryable audit trail — query it for "every verdict this idea has ever received across '
+  'reactivations", not this column, which only ever answers "what did THIS row score". '
+  'Shape: {proven:{mechanic,citations,coverage}, better:{hypothesis,friction_point,citations,'
+  'coverage}, new:{wedge,wedge_count,coverage}, verdict:PASS|REJECT|TRIM, measured_at:ISO-8601 '
+  'UTC, rule_trace:[]}. coverage is a BOOLEAN (pbn-gate.js resolveBucketCoverage), NOT a '
+  'fraction or percentage. NULL = never gated (distinct from any verdict). verdict is '
+  'CHECK-constrained; the rest of the shape is by convention.';
 
 COMMIT;
 

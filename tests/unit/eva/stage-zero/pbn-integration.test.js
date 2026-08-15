@@ -76,21 +76,74 @@ describe('sanitizePbnVerdictForPersistence (TR-7/C1)', () => {
     expect(sanitized.proven.citations[0]).toEqual(verdict.proven.citations[0]);
   });
 
-  it('leaves rule_trace completely untouched (code-authored, never LLM echo — see module docblock)', () => {
+  // SECURITY EXEC-TO-PLAN F2: the ORIGINAL version of this test held a fixture with nothing
+  // redactable in rule_trace, so it could not distinguish "untouched" from "nothing to touch" —
+  // this fixture embeds a real canary (email) in a rule_trace detail string, which sanitize
+  // must NOT redact (it is code-authored, but a fixture that could never fail proves nothing).
+  it('leaves rule_trace completely untouched even when it happens to contain canary-shaped text (code-authored, never LLM echo)', () => {
     const verdict = {
       proven: { citations: [], coverage: false },
       better: { citations: [], coverage: false },
       new: { wedge_count: 0 },
       verdict: 'REJECT',
-      rule_trace: [{ rule_id: 'EMPTY_PROVEN', fired: true, detail: 'proven bucket has no resolvable citation — empty-proven auto-fails (FR-2 i)' }],
+      rule_trace: [{ rule_id: 'EMPTY_PROVEN', fired: true, detail: 'contact rick@example.com re: SD-LEO-FEAT-PROVEN-BETTER-NEW-001' }],
     };
     const sanitized = sanitizePbnVerdictForPersistence(verdict);
     expect(sanitized.rule_trace).toEqual(verdict.rule_trace);
+    expect(sanitized.rule_trace[0].detail).toContain('rick@example.com');
   });
 
   it('handles empty citation arrays without throwing', () => {
     const verdict = { proven: { citations: [], coverage: false }, better: { citations: [], coverage: false }, new: { wedge_count: 0 }, verdict: 'REJECT', rule_trace: [] };
     expect(() => sanitizePbnVerdictForPersistence(verdict)).not.toThrow();
+  });
+
+  // SECURITY EXEC-TO-PLAN F1: the ORIGINAL sanitizer covered citations only (1 of 7 LLM-
+  // authored leaves) — proven.mechanic, better.hypothesis, better.friction_point and new.wedge
+  // all leaked a canary unredacted. These pin the fix; each must independently fail if the
+  // corresponding field regresses to unsanitized.
+  it('sanitizes proven.mechanic (was leaking — F1)', () => {
+    const verdict = { proven: { mechanic: 'contact rick@example.com', citations: [], coverage: false }, better: { citations: [], coverage: false }, new: { wedge_count: 0 }, verdict: 'REJECT', rule_trace: [] };
+    expect(sanitizePbnVerdictForPersistence(verdict).proven.mechanic).not.toContain('rick@example.com');
+  });
+  it('sanitizes better.hypothesis and better.friction_point (was leaking — F1)', () => {
+    const verdict = {
+      proven: { citations: [], coverage: false },
+      better: { hypothesis: 'per rick@example.com', friction_point: 'row 47472599-654a-4b15-89a7-055f02ea3e8e', citations: [], coverage: false },
+      new: { wedge_count: 0 }, verdict: 'REJECT', rule_trace: [],
+    };
+    const sanitized = sanitizePbnVerdictForPersistence(verdict);
+    expect(sanitized.better.hypothesis).not.toContain('rick@example.com');
+    expect(sanitized.better.friction_point).not.toContain('47472599-654a-4b15-89a7-055f02ea3e8e');
+  });
+  it('sanitizes new.wedge (was leaking — F1)', () => {
+    const verdict = { proven: { citations: [], coverage: false }, better: { citations: [], coverage: false }, new: { wedge: 'per SD-LEO-FEAT-PROVEN-BETTER-NEW-001', wedge_count: 1 }, verdict: 'PASS', rule_trace: [] };
+    expect(sanitizePbnVerdictForPersistence(verdict).new.wedge).not.toContain('SD-LEO-FEAT-PROVEN-BETTER-NEW-001');
+  });
+  it('drops an LLM-invented extra key inside a citation object rather than passing it through (was leaking — F1 spread-is-a-denylist)', () => {
+    const verdict = {
+      proven: { citations: [{ source: 'Category leader X', measured: 'Public revenue disclosure', reference: 'r', internal_note: 'rick@example.com' }], coverage: true },
+      better: { citations: [], coverage: false }, new: { wedge_count: 1 }, verdict: 'PASS', rule_trace: [],
+    };
+    const sanitized = sanitizePbnVerdictForPersistence(verdict);
+    expect(sanitized.proven.citations[0]).not.toHaveProperty('internal_note');
+    expect(Object.keys(sanitized.proven.citations[0]).sort()).toEqual(['measured', 'reference', 'source']);
+  });
+  it('nulls out a citation.reference that is an object instead of passing it through unredacted (was leaking — F1)', () => {
+    const verdict = {
+      proven: { citations: [{ source: 'Category leader X', measured: 'Public revenue disclosure', reference: { url: 'rick@example.com' } }], coverage: true },
+      better: { citations: [], coverage: false }, new: { wedge_count: 1 }, verdict: 'PASS', rule_trace: [],
+    };
+    const sanitized = sanitizePbnVerdictForPersistence(verdict);
+    expect(sanitized.proven.citations[0].reference).toBeNull();
+  });
+  it('drops a bare string standing in for a citation object rather than passing it through (was leaking — F1)', () => {
+    const verdict = {
+      proven: { citations: ['rick@example.com is the contact'], coverage: true },
+      better: { citations: [], coverage: false }, new: { wedge_count: 1 }, verdict: 'PASS', rule_trace: [],
+    };
+    const sanitized = sanitizePbnVerdictForPersistence(verdict);
+    expect(sanitized.proven.citations[0]).toBeNull();
   });
 });
 
@@ -130,7 +183,7 @@ describe('runPbnGate (orchestration: score -> gate -> sanitize)', () => {
 });
 
 describe('recordPbnEvaluation (TR-5 wiring)', () => {
-  it('calls recordNurseryEvaluation with triggerType=manual, evaluatedBy=pbn_gate, skipAdvance=true', async () => {
+  it('calls recordNurseryEvaluation with triggerType=manual, evaluatedBy=pbn_gate', async () => {
     const insertSpy = vi.fn().mockReturnValue({ select: () => ({ single: async () => ({ data: { id: 'eval-1' }, error: null }) }) });
     const supabase = { from: (table) => (table === 'nursery_evaluation_log' ? { insert: insertSpy } : {}) };
     const verdict = { verdict: 'REJECT', proven: { coverage: false }, new: { wedge_count: 0 }, measured_at: '2026-08-15T00:00:00.000Z', rule_trace: [] };
@@ -143,6 +196,28 @@ describe('recordPbnEvaluation (TR-5 wiring)', () => {
     expect(row.trigger_type).toBe('manual');
     expect(row.evaluated_by).toBe('pbn_gate');
     expect(row.trigger_details).toEqual(verdict);
+  });
+
+  // T2-F5 (TESTING sub-agent, EXEC-TO-PLAN): the prior version of this test's TITLE claimed
+  // skipAdvance=true but never asserted it. skipAdvance gates a SEPARATE call
+  // (advanceNurserySchedule, which touches venture_nursery) — proven here by giving
+  // venture_nursery a spy and asserting it is NEVER touched: a PBN score is not a scheduled
+  // re-evaluation event (module docblock), so recordPbnEvaluation must not reschedule one.
+  it('passes skipAdvance=true through to recordNurseryEvaluation — a PBN score never reschedules venture_nursery', async () => {
+    const insertSpy = vi.fn().mockReturnValue({ select: () => ({ single: async () => ({ data: { id: 'eval-1' }, error: null }) }) });
+    const nurserySpy = vi.fn();
+    const supabase = {
+      from: (table) => {
+        if (table === 'nursery_evaluation_log') return { insert: insertSpy };
+        if (table === 'venture_nursery') return { update: nurserySpy, select: nurserySpy };
+        return {};
+      },
+    };
+    const verdict = { verdict: 'PASS', proven: { coverage: true }, new: { wedge_count: 1 }, measured_at: '2026-08-15T00:00:00.000Z', rule_trace: [] };
+
+    await recordPbnEvaluation('nursery-1', verdict, { supabase, logger: { log: vi.fn() } });
+
+    expect(nurserySpy).not.toHaveBeenCalled();
   });
 
   it('propagates an error when nurseryId is missing (recordNurseryEvaluation\'s own contract)', async () => {

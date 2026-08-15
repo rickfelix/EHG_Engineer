@@ -31,7 +31,7 @@ import {
 } from '../../../../lib/eva/stage-zero/venture-nursery.js';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
-const silentLogger = { log: vi.fn(), warn: vi.fn() };
+const silentLogger = { log: vi.fn(), warn: vi.fn(), error: vi.fn() };
 
 const sampleBrief = {
   name: 'Test Venture',
@@ -48,14 +48,18 @@ const sampleBrief = {
   metadata: { synthesis: { weighted_score: { total_score: 81 }, cross_reference: {} } },
 };
 
-// Live column set from database/migrations/20260209_stage0_venture_entry_schema.sql, plus
-// pbn_verdict from database/migrations/20260815_venture_nursery_pbn_verdict.sql
-// (SD-LEO-FEAT-PROVEN-BETTER-NEW-001 TR-1) — the ONLY keys any venture_nursery write may use.
+// Live column set from database/migrations/20260209_stage0_venture_entry_schema.sql. A
+// MIGRATION FILE IS A LEAD, NEVER PROOF OF A LIVE OBJECT: pbn_verdict (from
+// database/migrations/20260815_venture_nursery_pbn_verdict.sql, SD-LEO-FEAT-PROVEN-BETTER-
+// NEW-001 TR-1) is deliberately NOT in this set — it is chairman-gated and not yet applied.
+// parkVenture sends it optimistically anyway and gracefully degrades on a schema-cache miss
+// (see 'degrades gracefully when pbn_verdict column does not exist yet' below) — THAT test,
+// not this static allowlist, is what actually guards against the column-not-found regression.
 const LIVE_COLUMNS = new Set([
   'id', 'brief_id', 'name', 'description', 'maturity_level', 'trigger_conditions',
   'current_score', 'score_history', 'last_evaluated_at', 'next_evaluation_at',
   'evaluation_interval_days', 'promoted_to_venture_id', 'source_type', 'source_ref',
-  'created_at', 'updated_at', 'pbn_verdict',
+  'created_at', 'updated_at',
 ]);
 
 /** Capturing mock: records insert/update payloads + select cols; FIFO list/single data. */
@@ -109,16 +113,63 @@ describe('parkVenture (FR-1: live-schema insert)', () => {
       .rejects.toThrow('reason is required');
   });
 
-  test('insert payload uses ONLY live columns — the CH-1 phantom set is gone', async () => {
+  test('insert payload uses ONLY live columns (+ the one recognized-pending pbn_verdict) — the CH-1 phantom set is gone', async () => {
     const { supabase, captured } = captureSb();
     await parkVenture(sampleBrief, { reason: 'not ready' }, { supabase, logger: silentLogger });
     const payload = captured.inserts[0].payload;
     for (const key of Object.keys(payload)) {
-      expect(LIVE_COLUMNS.has(key), `phantom column in insert: ${key}`).toBe(true);
+      expect(LIVE_COLUMNS.has(key) || key === 'pbn_verdict', `phantom column in insert: ${key}`).toBe(true);
     }
     for (const phantom of ['problem_statement', 'solution', 'target_market', 'origin_type', 'raw_chairman_intent', 'maturity', 'parked_reason', 'status', 'metadata']) {
       expect(payload).not.toHaveProperty(phantom);
     }
+  });
+
+  // T2-F1/F2 (TESTING sub-agent, EXEC-TO-PLAN pass): the pbn_verdict migration is chairman-
+  // gated and was found NOT applied on the live DB — a real PostgREST probe returned PGRST204
+  // "Could not find the 'pbn_verdict' column". Every park call (including PBN-unrelated ones,
+  // e.g. decision-activation.js's chairman-rejection path) sends it optimistically, so without
+  // this fallback EVERY park would break until the migration lands. This test, not the static
+  // LIVE_COLUMNS allowlist above, is what actually guards the regression.
+  test('degrades gracefully when pbn_verdict column does not exist yet (schema-cache miss), retrying without it', async () => {
+    const inserts = [];
+    let callCount = 0;
+    const supabase = {
+      from: () => ({
+        insert: (payload) => {
+          callCount += 1;
+          inserts.push(payload);
+          return {
+            select: () => ({
+              single: async () => (callCount === 1
+                ? { data: null, error: { message: "Could not find the 'pbn_verdict' column of 'venture_nursery' in the schema cache" } }
+                : { data: { id: 'nursery-1', ...payload }, error: null }),
+            }),
+          };
+        },
+      }),
+    };
+
+    const result = await parkVenture(sampleBrief, { reason: 'chairman rejected' }, { supabase, logger: silentLogger });
+
+    expect(callCount).toBe(2);
+    expect(inserts[0]).toHaveProperty('pbn_verdict'); // first attempt: optimistic
+    expect(inserts[1]).not.toHaveProperty('pbn_verdict'); // retry: degraded, matches CH-1-era live shape
+    expect(result.id).toBe('nursery-1'); // the park still succeeds
+  });
+
+  test('a genuinely different insert error is NOT swallowed by the pbn_verdict fallback', async () => {
+    const supabase = {
+      from: () => ({
+        insert: () => ({
+          select: () => ({
+            single: async () => ({ data: null, error: { message: 'duplicate key value violates unique constraint' } }),
+          }),
+        }),
+      }),
+    };
+    await expect(parkVenture(sampleBrief, { reason: 'not ready' }, { supabase, logger: silentLogger }))
+      .rejects.toThrow('duplicate key value violates unique constraint');
   });
 
   test('maps the brief into the live shape (description/maturity_level/score/schedule/source_ref)', async () => {
