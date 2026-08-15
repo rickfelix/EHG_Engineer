@@ -179,6 +179,13 @@ AS $$
 $$;
 
 -- Pre-existing policies, mirroring live state BEFORE this SD's migration runs.
+-- DROP IF EXISTS before each CREATE POLICY (Postgres has no CREATE POLICY IF NOT EXISTS): all
+-- tests/ddl/**/*.db.test.js files share ONE ephemeral Postgres container within a CI job
+-- (fileParallelism: false, sequential, but the DATABASE persists across files) — the sibling
+-- telegram-bot-insert-feedback-drop-ddl.db.test.js's own stub also declares
+-- anon_feedback_ingress_bounds, and whichever file's beforeAll runs second would otherwise hit
+-- 42710 "policy already exists" (measured live in CI, this SD's first push).
+DROP POLICY IF EXISTS venture_user_insert_feedback ON public.feedback;
 CREATE POLICY venture_user_insert_feedback ON public.feedback
   FOR INSERT TO anon
   WITH CHECK (
@@ -188,6 +195,7 @@ CREATE POLICY venture_user_insert_feedback ON public.feedback
     AND (NOT check_feedback_rate_limit(venture_id))
   );
 
+DROP POLICY IF EXISTS anon_feedback_ingress_bounds ON public.feedback;
 CREATE POLICY anon_feedback_ingress_bounds ON public.feedback
   AS RESTRICTIVE
   FOR INSERT TO public
@@ -386,24 +394,6 @@ describe('FR-2/TS-4/TS-9: rate-limit polarity — the discriminating case', () =
   }, 30_000);
 });
 
-describe('FR-2/TS-10: global cross-venture ceiling', () => {
-  it('[TS-10] the 501st submission across many different under-threshold ventures is rejected by the global ceiling', async () => {
-    // 500 submissions spread across 20 ventures (25 each, safely under each venture's own 50/hour
-    // per-venture threshold) so ONLY the global ceiling can be the cause of the 501st rejection.
-    const secrets = [];
-    for (let v = 0; v < 20; v++) {
-      const ventureId = await makeVenture(`global-${v}`);
-      secrets.push([ventureId, await provisionSecret(ventureId)]);
-    }
-    for (let i = 0; i < 500; i++) {
-      const [ventureId, secret] = secrets[i % 20];
-      await submit(ventureId, secret, 'user_bug', `g${i}`, null);
-    }
-    const [lastVentureId, lastSecret] = secrets[0];
-    await expect(submit(lastVentureId, lastSecret, 'user_bug', 'over global ceiling', null)).rejects.toThrow(/rate limited/);
-  }, 60_000);
-});
-
 describe('TR-1: no forgeable workflow columns as parameters', () => {
   it('the function signature has no status/votes/created_at/assigned_to/triaged_by/user_id parameter', () => {
     const sig = MIGRATION_CODE_ONLY.match(/CREATE OR REPLACE FUNCTION public\.fn_submit_venture_user_feedback\(([^)]*)\)/)[1];
@@ -542,4 +532,47 @@ describe('TS-5: raw anon INSERT against the bare table is rejected post-drop (by
       await client.query('ROLLBACK');
     }
   });
+});
+
+// MUST RUN LAST IN THE FILE (measured live in CI, this SD's first push): the global ceiling
+// (FR-2) counts ALL feedback_type IN ('user_bug', ...) rows created in the trailing hour, with
+// no reset between test blocks -- every prior test in this file that lands a real row (TS-1,
+// TS-4/TS-9's 51-row flood test, etc.) contributes to the SAME counter. A version of this test
+// that assumed a clean slate (submit exactly 500, expect the 501st to fail) crashed mid-loop
+// instead of reaching its own assertion, because earlier tests had already pushed the count
+// close to the ceiling -- and left the counter tripped for every test that ran AFTER it. This
+// version is state-aware (reads the current count first) and runs last, so it cannot pollute
+// any other test's global-ceiling budget.
+describe('FR-2/TS-10: global cross-venture ceiling (state-aware, must run last)', () => {
+  it('[TS-10] tops up to exactly the boundary, then asserts the NEXT submission is rejected by the global ceiling', async () => {
+    const GLOBAL_CEILING = 500;
+    const { rows: countRows } = await client.query(
+      "SELECT count(*)::int AS n FROM public.feedback WHERE feedback_type IN ('user_bug','user_feature_request','user_usability','user_other') AND created_at > now() - interval '1 hour'",
+    );
+    const already = countRows[0].n;
+    const toLand = Math.max(0, GLOBAL_CEILING - already - 1); // leave exactly one slot open
+
+    // Spread remaining submissions across enough ventures that no SINGLE venture's own 50/hour
+    // per-venture threshold (a DIFFERENT check, FR-2 direct-truthy) can be the cause of a
+    // rejection here -- only the global ceiling should fire in this test.
+    const perVenture = 30;
+    const venturesNeeded = Math.max(1, Math.ceil(toLand / perVenture));
+    const secrets = [];
+    for (let v = 0; v < venturesNeeded; v++) {
+      const ventureId = await makeVenture(`global-${v}`);
+      secrets.push([ventureId, await provisionSecret(ventureId)]);
+    }
+    for (let i = 0; i < toLand; i++) {
+      const [ventureId, secret] = secrets[Math.floor(i / perVenture) % secrets.length];
+      await submit(ventureId, secret, 'user_bug', `g${i}`, null);
+    }
+
+    // One fresh, never-before-used venture for the boundary assertion itself -- so a per-venture
+    // limit on a REUSED venture from the top-up loop above cannot be mistaken for the global one.
+    const boundaryVentureId = await makeVenture('global-boundary');
+    const boundarySecret = await provisionSecret(boundaryVentureId);
+    await expect(
+      submit(boundaryVentureId, boundarySecret, 'user_bug', 'over global ceiling', null),
+    ).rejects.toThrow(/rate limited/);
+  }, 120_000);
 });
