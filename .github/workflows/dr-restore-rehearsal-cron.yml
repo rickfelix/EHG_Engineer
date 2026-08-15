@@ -75,5 +75,12 @@ jobs:
           🤖 Generated with [Claude Code](https://claude.com/claude-code)
 
           Co-Authored-By: GitHub Actions <noreply@github.com>"
-            git push || echo "Push skipped"
+            # QF-20260815-288: mirrors the commit bypass above, for the push side.
+            # pre-push's work-tracking check has no CI-actor exception, so this push was
+            # being silently swallowed by the `|| echo` fallback below on every run.
+            # EHG_ALLOW_MAIN_PUSH is .husky/pre-push's own existing automation flag -- it
+            # bypasses ONLY the SD/QF-tracking predicate for this one push; DOCMON and every
+            # other pre-push check still run. The `|| echo` fallback stays, for any other
+            # future push failure (network, conflict, etc.).
+            EHG_ALLOW_MAIN_PUSH=1 git push || echo "Push skipped"
           fi
