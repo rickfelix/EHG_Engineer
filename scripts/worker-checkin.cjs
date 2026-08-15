@@ -61,9 +61,11 @@ const { fetchOutstandingSignals, formatOutstandingWarning } = require('../lib/fl
 // SD-LEO-FIX-COORDINATOR-SWEEP-CLAIMED-001: shared dispatch-eligibility predicate, also used by
 // scripts/stale-session-sweep.cjs CLAIM_FIX (closes the self_claim-vs-sweep writer-consumer-asymmetry).
 const { draftDepsSatisfied, baselinedCandidateEligible, classifyDispatchIneligibility, coordinatorReservation, isSeatBusyOnDirectedWork, parentLeadPending, liveClaimWriteFenceReason } = require('../lib/fleet/claim-eligibility.cjs');
-// SD-LEO-INFRA-EXCLUDE-CHAIRMAN-GATED-001: canonical chairman-gated-hold predicate (shared
-// with sd-next data-loaders + the coordinator dashboard so the sites can never drift).
-const { isChairmanGatedQF } = require('../lib/fleet/qf-gated-hold.cjs');
+// SD-LEO-INFRA-QF-SUPPLY-PREDICATE-AUTO-START-001 (FR-1/FR-2): the auto-start predicate moved
+// to lib/fleet/qf-auto-start.cjs so belt-depth.cjs can share it (previously duplicated by
+// nothing — belt-depth used the looser qf-supply-predicate.cjs instead). Imported here in
+// place of the local definitions that used to follow this line; behavior is byte-identical.
+const { isAutoStartableQF, STALE_QF_DAYS } = require('../lib/fleet/qf-auto-start.cjs');
 // SD-ARCH-HOTSPOT-SD-START-001 FR-2: the CONVERGED dependency gate shared with scripts/sd-start.js
 // (one resolution truth — deps array shapes + blocked_on_sd fold + sd_key-OR-id lookup). This
 // consumer applies its native FAIL-CLOSED polarity via depsSatisfiedFromVerdict: skip on
@@ -212,7 +214,6 @@ function isCriticalQfJumpEligible(qf, nowMs) {
   return (nowMs - created) >= CRITICAL_QF_JUMP_GRACE_MS;
 }
 
-const STALE_QF_DAYS = Number(process.env.SD_NEXT_QF_STALE_DAYS) || 3;  // verify-first freshness boundary (shared with sd-next display)
 // SD-LEO-FEAT-WORKER-CHECKIN-SELF-001 (FR-2): gap before confirmRowGone's confirming read so it lands
 // genuinely later than the first (defends a momentary stale-replica null). Env-overridable; tests set 0.
 const CONFIRM_DELETE_GAP_MS = process.env.CHECKIN_CONFIRM_GAP_MS != null ? Number(process.env.CHECKIN_CONFIRM_GAP_MS) : 250;
@@ -299,13 +300,6 @@ async function isGlobalStandDownActive(sb) {
     return false;
   }
 }
-// Tier-3 risk keywords (CLAUDE.md Work Item Routing). Auto-self-claim is for small,
-// low-risk QFs only. The sd-next display path excludes _escalate via a LIVE re-triage
-// (runTriageGate, ESM); a .cjs can't run that pipeline, so we approximate parity with the
-// PERSISTED routing_tier PLUS this keyword scan — holding risk-bearing QFs for the
-// triage/human path. SD-LEO-INFRA-MAKE-OPEN-QFS-001 (SECURITY re-triage-parity advisory).
-const TIER3_RISK_RE = /\b(auth|authentication|authorization|rls|payments?|credentials?|migration|schema|alter\s+table|create\s+table|drop\s+table)\b/i;
-
 const SD_KEY_RE = /SD-[A-Z0-9]+(?:-[A-Z0-9]+)+/;
 
 /**
@@ -613,90 +607,6 @@ async function rehydrateCallsign(sb, sessionId, currentMeta) {
  * id so it is unit-testable without env/network. Returns the resolution object
  * (the same object printed as JSON by the CLI). NEVER throws, NEVER reads stdin.
  */
-/**
- * Pure predicate: is this quick_fixes row safe to AUTO-start via the worker
- * self-claim path? Mirrors (inverts) the verify-first gate in
- * scripts/modules/sd-next/display/quick-fixes.js. Re-implemented INLINE because
- * worker-checkin.cjs is CommonJS and that module is ESM (package.json
- * type:module), so it cannot be require()d here. SD-LEO-INFRA-MAKE-OPEN-QFS-001.
- *
- * *** CORRECTION (SD-LEO-INFRA-REPO-WIDE-TIMEZONE-001). THE REASON ABOVE IS FALSE, AND
- * BELIEVING IT COST FOUR INCOMPLETE FIXES. *** CJS can require ESM: it has been stable
- * since Node 22.12 and this fleet runs 24. It was tested, not assumed — requiring the ESM
- * parseAsUTC from a .cjs returns a working function. The retained text above is left
- * visible rather than deleted because it is the primary evidence for WHY the timezone bug
- * class survived four separate fixes without ever reaching this file: each pass read this
- * docblock, believed reuse was impossible here, and stopped.
- *
- * The one real limit is narrower: require() fails with ERR_REQUIRE_ASYNC_MODULE against a
- * module carrying a TOP-LEVEL AWAIT. That is why the canonical normalizer now lives at
- * lib/time/pg-timestamp.cjs — a CJS home carries no such constraint, and ESM can import
- * CJS unconditionally.
- *
- * THE DUPLICATION ITSELF IS STILL REAL and is NOT resolved by this SD: this predicate and
- * scripts/modules/sd-next/display/quick-fixes.js:275 remain independent implementations
- * that both carried the identical timezone defect. Consolidating them is follow-on work.
- */
-function isAutoStartableQF(qf, nowMs) {
-  if (!qf || qf.status !== 'open') return false;
-  // SD-LEO-INFRA-ONE-SYNTHETIC-ROW-001-C FR-1: fixture rows are never self-claimable.
-  //
-  // THIS IS THE CONSEQUENTIAL SITE IN THE WHOLE SD. Everywhere else an unfiltered fixture row makes
-  // a number wrong; HERE it is handed to a REAL WORKER, who then builds against a row that was never
-  // real work. The other converted surfaces protect gauges — this one protects a person's afternoon.
-  //
-  // The defect was INCONSISTENCY, not absence: five surfaces already filter quick_fixes with this
-  // exact predicate (recursion-governor.js:128, adam-github-assessment.mjs:136,
-  // adam-self-adherence-review.mjs:105, fleet-dashboard.cjs:476 and sd-next/data-loaders.js:473 —
-  // the dispatch queue itself) while the CLAIM PATH did not. Five consumers agreed on a convention
-  // and the door that hands out work was left out of it.
-  //
-  // ADDED, never substituted: every exclusion below is a different concern and all of them still run.
-  // Degrade-safe like the surrounding predicate, but LOUDLY — an unreported fallback here is
-  // indistinguishable from a working filter, and this is the last gate before a worker is dispatched.
-  try {
-    const { isFixtureQf } = require('../lib/governance/fixture-exclusion.mjs');
-    if (isFixtureQf(qf)) return false;
-  } catch (e) {
-    console.error(`[worker-checkin] fixture predicate unavailable — self-claim UNFILTERED: ${e?.message || e}`);
-  }
-  if (qf.pr_url || qf.commit_sha) return false;        // already in PR/commit (verify-first / merge-race guard)
-  // SD-FDBK-FIX-DISPATCH-ELIGIBILITY-HONOR-001: quick_fixes.factory_lane is the structured
-  // "coordinator-dispatch only, not worker-self-claimable" marker (replaces the pre-fix free-text
-  // "FACTORY-LANE:" convention buried in description, which this predicate could not see -- live
-  // incident: QF-20260712-481 self-claimed despite being factory-lane). Fail-closed: any truthy
-  // value excludes; only exactly false (the column default) allows self-claim.
-  if (qf.factory_lane) return false;
-  if (qf.routing_tier != null && Number(qf.routing_tier) >= 3) return false;  // persisted Tier-3 -> full SD, not auto-QF
-  // QF-20260725-244: scan TITLE **and** DESCRIPTION. Title-only let QF-20260725-096 through --
-  // an auth/security QF whose implied fix ("thread the internal API key into the fetch headers")
-  // would publish an app-wide admin-bypass secret to an UNAUTHENTICATED page. Its title reads
-  // "internal-API-key", which has no word-boundary `auth`, while its description is saturated
-  // with auth / authorization / credential. Verified by executing this exact regex against that
-  // row: title=false, description=true. scripts/classify-quick-fix.js already gates on
-  // DESCRIPTION and FAILS that QF, so description is the correct surface -- reading the title
-  // alone is what let the two surfaces disagree. `description` is already in
-  // QF_CANDIDATE_COLUMNS, so this needs no query change.
-  if (TIER3_RISK_RE.test(`${qf.title || ''} ${qf.description || ''}`)) return false; // risk-keyword drift -> hold for triage/human
-  // SD-LEO-FIX-QUICK-FIXES-NEEDS-001: durable time-gated defer -- a QF genuinely not ready
-  // yet (e.g. needs a clean 24h observation window) stays status='open' but is ineligible
-  // for claim until not_before passes. Prevents the same worker re-claiming it every cycle.
-  if (qf.not_before) {
-    const notBefore = Date.parse(qf.not_before);
-    if (Number.isFinite(notBefore) && notBefore > nowMs) return false;
-  }
-  // SD-LEO-INFRA-EXCLUDE-CHAIRMAN-GATED-001: chairman-gated hold (owner='chairman' +
-  // release_condition) -- the QF-508/QF-970 class whose APPLY awaits a chairman condition.
-  // Stays status='open' but is false open work for a worker: exclude until released via
-  // scripts/release-chairman-gated-qf.js. Visible on the coordinator surface, never lost.
-  if (isChairmanGatedQF(qf)) return false;
-  // SD-LEO-INFRA-REPO-WIDE-TIMEZONE-001: naive created_at, see the require at the top of this file.
-  const created = qf.created_at ? pgTimestampMs(qf.created_at) : NaN;
-  if (!Number.isFinite(created)) return false;
-  const ageDays = (nowMs - created) / (24 * 60 * 60 * 1000);
-  return ageDays < STALE_QF_DAYS;                       // exclude stale/verify-first QFs
-}
-
 /**
  * Self-claim tier for open quick_fixes — sourced ONLY here because
  * v_sd_next_candidates is SD-only. Sits strictly BELOW the SD self-claim loop

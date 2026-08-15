@@ -3,6 +3,8 @@
 
 ## Table of Contents
 
+- [2026-08-15](#2026-08-15)
+  - [Infrastructure](#infrastructure)
 - [2026-08-14](#2026-08-14)
   - [Bugfix](#bugfix)
 - [2026-08-12](#2026-08-12)
@@ -113,6 +115,14 @@
   - [Housekeeping & CI](#housekeeping-ci)
   - [EHG_Engineering](#ehg_engineering)
   - [EHG (Venture App)](#ehg-venture-app)
+
+## 2026-08-15
+
+### Infrastructure
+- **Belt/capacity gauges counted 173 "claimable" quick-fixes while a worker could actually auto-start 0 of them** - PR #7040 (SD-LEO-INFRA-QF-SUPPLY-PREDICATE-AUTO-START-001)
+  - **What was broken**: the worker `/checkin` self-claim path (`isAutoStartableQF` in `scripts/worker-checkin.cjs`) decides which `quick_fixes` a worker can auto-claim via a strict predicate (excludes stale/factory-lane/chairman-gated/risk-keyword/fixture rows). The belt-depth and capacity-forecast gauges (`lib/fleet/belt-depth.cjs`, `scripts/lib/capacity-inputs.mjs`) answered the same question with a much looser predicate (`lib/coordinator/qf-supply-predicate.cjs`'s `applyClaimableQfFilter`: unclaimed + `status='open'` only) — a single-representation violation between two "can a worker take this" answers. Measured live: the gauge reported 173, the worker predicate would start 0.
+  - **Fixed**: extracted the worker's predicate into a new shared module, `lib/fleet/qf-auto-start.cjs` (decision-logic-identical move, verified against the full pre-existing QF behavior-pinning suite plus a character-by-character diff). Added `countAutoStartableQuickFixes` to `lib/fleet/belt-depth.cjs`, reusing that predicate with a fail-loud contract (an unreadable table throws, never resolves to a healthy-looking 0 — including the degenerate PostgREST `{data:null,error:null}` missing-relation shape) and the same `factory_lane`-42703 staged-migration fallback the worker path already carries. `countBeltDepth` and `scripts/lib/capacity-inputs.mjs` now both source their QF term from it. `countClaimableQuickFixes`, `lib/coordinator/qf-supply-predicate.cjs`, and `lib/governance/qf-mint-gate.mjs` are all deliberately untouched — different consumers, different contracts (verified zero diff on the latter two).
+  - **Verification**: live re-measured post-fix — `countClaimableQuickFixes` (old, still used by the mint gate) reads 173 against the same table `countAutoStartableQuickFixes` (new) reads 0 on; `node scripts/coordinator-capacity-forecast.mjs` now reports the belt as `17 SD + 0 QF` instead of folding 173 phantom QFs in. Full pre-existing QF test suite passes with zero modification; new/updated tests pin the divergence between the two predicates as a deliberate, enforced requirement rather than a fixture-table accident.
 
 ## 2026-08-14
 

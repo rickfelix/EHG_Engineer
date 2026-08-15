@@ -15,7 +15,15 @@ import { computeBeltVerdict } from '../../lib/drive-loop/belt-verdict.js';
 import { claimableDbFreeReason, blockerKeysFor } from '../../scripts/lib/claimable-leaves.mjs';
 import { isBareShell } from '../../lib/coordinator/sd-exclusion.mjs';
 
-/** Fake supabase mirroring capacity-inputs.test.js, plus a from()-call counter for the read-count assertion. */
+/**
+ * Fake supabase mirroring capacity-inputs.test.js, plus a from()-call counter for the read-count
+ * assertion. SD-LEO-INFRA-QF-SUPPLY-PREDICATE-AUTO-START-001 (FR-4): the QF term now comes from
+ * countAutoStartableQuickFixes, which fetches ROWS (isAutoStartableQF runs in JS), not a bare
+ * head-count — quick_fixes now uses the same row-capable `table()` builder as the other tables,
+ * fed by real, isAutoStartableQF-eligible rows generated from qfCount (a missing created_at reads
+ * as unparseable age and excludes the row, matching the fixture-fidelity gap already found and
+ * fixed in tests/unit/capacity-inputs.test.js's sibling fakeClient).
+ */
 function fakeClient({ sessions = [], sds = [], qfCount = 0, counter } = {}) {
   const table = (rows) => {
     const b = {
@@ -27,19 +35,27 @@ function fakeClient({ sessions = [], sds = [], qfCount = 0, counter } = {}) {
     };
     return b;
   };
+  const qfs = Array.from({ length: qfCount }, (_, i) => ({
+    id: `qf-fake-${i}`,
+    status: 'open',
+    claiming_session_id: null,
+    pr_url: null,
+    commit_sha: null,
+    created_at: new Date().toISOString(),
+    routing_tier: null,
+    title: 'Fix a typo in a comment',
+    description: 'No behavioral change.',
+    not_before: null,
+    factory_lane: false,
+    owner: null,
+    release_condition: null,
+  }));
   return {
     from(name) {
       if (counter) counter[name] = (counter[name] || 0) + 1;
       if (name === 'claude_sessions') return table(sessions);
       if (name === 'strategic_directives_v2') return table(sds);
-      if (name === 'quick_fixes') {
-        const b = {
-          select() { return b; }, eq() { return b; }, in() { return b; }, is() { return b; },
-          not() { return b; }, order() { return b; },
-          then(res) { return Promise.resolve({ count: qfCount, error: null }).then(res); },
-        };
-        return b;
-      }
+      if (name === 'quick_fixes') return table(qfs);
       return table([]);
     },
   };

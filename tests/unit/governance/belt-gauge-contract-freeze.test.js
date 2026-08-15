@@ -45,6 +45,11 @@ function wideStub({ count = 0, rows = [] } = {}) {
     not() { return chain; },
     or() { return chain; },
     order() { return chain; },
+    // SD-LEO-INFRA-QF-SUPPLY-PREDICATE-AUTO-START-001 (FR-3): countAutoStartableQuickFixes's
+    // factory_lane probe calls .limit(1) before the real fetch — infrastructure widening, same
+    // spirit as the rest of this stub being "wider than the ones already in the suite" (see the
+    // docblock above). No assertion below changes.
+    limit() { return Promise.resolve({ data: rows.slice(0, 1), count, error: null }); },
     range() { return Promise.resolve({ data: rows, count, error: null }); },
     then(res) { return Promise.resolve({ data: rows, count, error: null }).then(res); },
   };

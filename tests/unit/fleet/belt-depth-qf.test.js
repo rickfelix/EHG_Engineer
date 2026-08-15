@@ -1,9 +1,17 @@
 // GSB-A — the QF-side reading and the invariant that keeps the SD reading unchanged.
 // SD-LEO-INFRA-GATE-SIDE-BELT-001, TS-1/TS-2/TS-3.
+//
+// SD-LEO-INFRA-QF-SUPPLY-PREDICATE-AUTO-START-001 (FR-3): countBeltDepth's qfDepth now comes
+// from countAutoStartableQuickFixes (isAutoStartableQF), not countClaimableQuickFixes — so TS-2
+// exercises a row-filtering predicate with staleness/fixture/risk checks, not a head-count. The
+// fake client needed .limit() (the factory_lane-probe step) and the openUnclaimed/openClaimed
+// fixtures needed a created_at, or every row reads as unparseable-age and isAutoStartableQF
+// excludes all of them — countClaimableQuickFixes (still exercised directly in TS-3) never
+// looked at created_at at all, so this gap was invisible before FR-3 existed.
 import { describe, it, expect } from 'vitest';
 import { createRequire } from 'node:module';
 const require = createRequire(import.meta.url);
-const { countDispatchableBacklog, countClaimableQuickFixes, countBeltDepth } = require('../../../lib/fleet/belt-depth.cjs');
+const { countDispatchableBacklog, countClaimableQuickFixes, countAutoStartableQuickFixes, countBeltDepth } = require('../../../lib/fleet/belt-depth.cjs');
 const { CLAIMABLE_QF_STATUSES } = require('../../../lib/coordinator/qf-supply-predicate.cjs');
 
 /**
@@ -30,6 +38,7 @@ function fakeClient({ sds = [], qfs = [] } = {}) {
       in(col, vals) { qfFilters.push(`in:${col}`); filtered = filtered.filter((r) => vals.includes(r[col])); return builder; },
       not() { return builder; },
       order() { return builder; },
+      limit(n) { filtered = filtered.slice(0, n); return builder; },
       range(from, to) { filtered = filtered.slice(from, to + 1); return builder; },
       then(resolve, reject) {
         return Promise.resolve({ data: builder._head ? null : filtered, count: filtered.length, error: null })
@@ -45,8 +54,11 @@ function fakeClient({ sds = [], qfs = [] } = {}) {
   };
 }
 
-const openUnclaimed = (n) => Array.from({ length: n }, (_, i) => ({ id: `qf-open-${i}`, status: CLAIMABLE_QF_STATUSES[0], claiming_session_id: null }));
-const openClaimed = (n) => Array.from({ length: n }, (_, i) => ({ id: `qf-claimed-${i}`, status: CLAIMABLE_QF_STATUSES[0], claiming_session_id: `sess-${i}` }));
+// created_at must be present and fresh: isAutoStartableQF treats a missing/unparseable
+// created_at as a failed age check and excludes the row (see the FR-3 note above the imports).
+const FRESH_CREATED_AT = new Date().toISOString();
+const openUnclaimed = (n) => Array.from({ length: n }, (_, i) => ({ id: `qf-open-${i}`, status: CLAIMABLE_QF_STATUSES[0], claiming_session_id: null, created_at: FRESH_CREATED_AT }));
+const openClaimed = (n) => Array.from({ length: n }, (_, i) => ({ id: `qf-claimed-${i}`, status: CLAIMABLE_QF_STATUSES[0], claiming_session_id: `sess-${i}`, created_at: FRESH_CREATED_AT }));
 
 describe('TS-1 — countDispatchableBacklog never reads quick_fixes', () => {
   // BEHAVIOURAL, NOT A PINNED COUNT. The first draft of this asserted dispatchable===23; it had
@@ -121,5 +133,142 @@ describe('SEC-GSB-1 — a NON-NUMERIC count is a failed measurement, not an empt
     // Both arms in one describe: a version that throws unconditionally fails here, and a version
     // that coerces unconditionally fails above. Neither constant survives.
     await expect(countClaimableQuickFixes(emptyBelt)).resolves.toBe(0);
+  });
+});
+
+// Adversarial-review finding (deep-tier /ship gate, PR #7040), WARNING, reproduced here:
+// isAutoStartableQF itself never inspects claiming_session_id (it mirrors the worker's real
+// candidate query, which relies on claim_sd flipping status atomically with the claimant) — safe
+// for the worker, whose downstream claim_sd RPC call is the real arbiter, but this gauge has no
+// such arbiter. Without a query-level filter, a status='open'-but-claimed row (a reachable state
+// — see lib/checkin/steps/resume.cjs, lib/fleet/best-effort-release.mjs) would be over-counted,
+// reopening the exact defect class SD-LEO-INFRA-GATE-SIDE-BELT-001 fixed.
+describe('countAutoStartableQuickFixes — claiming_session_id exclusion (adversarial-review fix)', () => {
+  it('does not count a row that is status=open but already claimed by another session', async () => {
+    const client = fakeClient({ qfs: [...openUnclaimed(4), ...openClaimed(3)] });
+    await expect(countAutoStartableQuickFixes(client)).resolves.toBe(4);
+  });
+
+  it('countBeltDepth inherits the same exclusion via its qfDepth reading', async () => {
+    const client = fakeClient({ qfs: [...openUnclaimed(4), ...openClaimed(3)] });
+    const depth = await countBeltDepth(client);
+    expect(depth.qfDepth).toBe(4);
+  });
+});
+
+// SD-LEO-INFRA-QF-SUPPLY-PREDICATE-AUTO-START-001 (FR-3, TS-2 scope clause): a scoped call must
+// not silently fall back to fleet-wide counting on the new row-fetch path — both the factory_lane
+// probe and the paginated fetch have to carry the SAME .eq('target_application', scope) filter
+// countClaimableQuickFixes already applies for its own (head-count) query.
+describe('countAutoStartableQuickFixes — lane scoping', () => {
+  it('counts only rows in the requested lane, not the fleet total', async () => {
+    const engRow = { id: 'qf-eng', status: 'open', claiming_session_id: null, created_at: FRESH_CREATED_AT, target_application: 'EHG_Engineer' };
+    const otherRow = { id: 'qf-other', status: 'open', claiming_session_id: null, created_at: FRESH_CREATED_AT, target_application: 'EHG' };
+    const client = fakeClient({ qfs: [engRow, otherRow] });
+    await expect(countAutoStartableQuickFixes(client, 'EHG_Engineer')).resolves.toBe(1);
+    await expect(countAutoStartableQuickFixes(client, 'EHG')).resolves.toBe(1);
+  });
+
+  it('an unresolvable scope throws rather than silently counting the fleet total', async () => {
+    const client = fakeClient({ qfs: openUnclaimed(3) });
+    await expect(countAutoStartableQuickFixes(client, '')).rejects.toThrow(/unresolvable lane scope/);
+  });
+
+  it('an unscoped call (scope omitted) counts across all lanes, unchanged from before scoping existed', async () => {
+    const engRow = { id: 'qf-eng', status: 'open', claiming_session_id: null, created_at: FRESH_CREATED_AT, target_application: 'EHG_Engineer' };
+    const otherRow = { id: 'qf-other', status: 'open', claiming_session_id: null, created_at: FRESH_CREATED_AT, target_application: 'EHG' };
+    const client = fakeClient({ qfs: [engRow, otherRow] });
+    await expect(countAutoStartableQuickFixes(client)).resolves.toBe(2);
+  });
+});
+
+// SD-LEO-INFRA-QF-SUPPLY-PREDICATE-AUTO-START-001 (TR-2/TS-4): factory_lane is a staged,
+// unapplied migration (database/migrations/20260713_quick_fixes_factory_lane.sql) — selecting it
+// throws Postgres 42703 in live production today. The 42703 fallback lives INSIDE
+// fetchAutoStartCandidateRows (belt-depth.cjs), not left as a per-caller responsibility, mirroring
+// scripts/worker-checkin.cjs's selfClaimQuickFix retry (lines ~712-747) for the SAME condition.
+describe('countAutoStartableQuickFixes — factory_lane 42703 fallback (TR-2/TS-4)', () => {
+  // A column-list-sensitive stub: the probe (which selects factory_lane) hits 42703; the retried
+  // probe/fetch (without factory_lane) succeeds. Distinct from the generic fakeClient() above
+  // because this needs to inspect WHICH columns were requested, not just filter rows.
+  function factoryLaneMissingClient(rows) {
+    const make = (cols) => {
+      const includesFactoryLane = /(^|,)\s*factory_lane\s*(,|$)/.test(cols);
+      const b = {
+        _cols: cols,
+        eq() { return b; },
+        is() { return b; },
+        limit(n) {
+          if (includesFactoryLane) {
+            return Promise.resolve({ data: null, error: { code: '42703', message: 'column quick_fixes.factory_lane does not exist' } });
+          }
+          return Promise.resolve({ data: rows.slice(0, n), error: null });
+        },
+        range(from, to) {
+          if (includesFactoryLane) {
+            return Promise.resolve({ data: null, error: { code: '42703', message: 'column quick_fixes.factory_lane does not exist' } });
+          }
+          return Promise.resolve({ data: rows.slice(from, to + 1), error: null });
+        },
+      };
+      return b;
+    };
+    return { from: () => ({ select: (cols) => make(cols) }) };
+  }
+
+  it('retries without factory_lane on 42703 and still counts the eligible rows', async () => {
+    const rows = openUnclaimed(4); // factory_lane absent on every row -> falsy -> isAutoStartableQF admits them
+    const client = factoryLaneMissingClient(rows);
+    await expect(countAutoStartableQuickFixes(client)).resolves.toBe(4);
+  });
+
+  it('a non-42703 error on the probe still propagates (fail-loud is not weakened by the retry)', async () => {
+    const client = { from: () => ({ select: () => ({ eq() { return this; }, is() { return this; }, limit: () => Promise.resolve({ data: null, error: { code: 'PGRST205', message: 'relation not found' } }) }) }) };
+    await expect(countAutoStartableQuickFixes(client)).rejects.toBeTruthy();
+  });
+
+  // Adversarial-review finding (deep-tier /ship gate, PR #7040), CRITICAL, reproduced here: on
+  // LIVE PRODUCTION the FIRST probe (with factory_lane) always hits 42703 -- the prior version of
+  // this guard only checked the shape of THAT discarded first attempt, never the retry probe that
+  // uses the column list actually fed to the real fetch. This is the scenario that matters: probe
+  // #1 -> 42703 (expected, triggers the fallback), probe #2 (retry, no factory_lane) -> the
+  // degenerate {data:null, error:null} shape. Must still throw, not resolve to 0.
+  it('a probe that hits 42703, then a RETRY probe that resolves data=null/error=null, still THROWS', async () => {
+    const client = {
+      from: () => ({
+        select: (cols) => {
+          const includesFactoryLane = /(^|,)\s*factory_lane\s*(,|$)/.test(cols);
+          const b = {
+            eq() { return b; },
+            is() { return b; },
+            limit: () => Promise.resolve(
+              includesFactoryLane
+                ? { data: null, error: { code: '42703', message: 'column quick_fixes.factory_lane does not exist' } }
+                : { data: null, error: null }
+            ),
+          };
+          return b;
+        },
+      }),
+    };
+    await expect(countAutoStartableQuickFixes(client)).rejects.toThrow(/refusing to treat an unreadable quick_fixes table as empty/);
+  });
+
+  // TR-1 / SEC-GSB-1 parity: PostgREST's documented missing-relation signature is {count:null,
+  // error:null} under head:true (lib/db/fetch-all-paginated.mjs's renderCount docblock). Its own
+  // fetchAllPaginated defends the analogous {data:null, error:null} shape for a plain select by
+  // silently coercing to [] — the exact fail-open direction this SD's whole premise is against.
+  // The probe is the one place that shape is still checkable before it disappears into
+  // fetchAllPaginated's loop.
+  it('a probe that resolves with data=null and error=null THROWS rather than reporting 0', async () => {
+    const client = { from: () => ({ select: () => ({ eq() { return this; }, is() { return this; }, limit: () => Promise.resolve({ data: null, error: null }) }) }) };
+    await expect(countAutoStartableQuickFixes(client)).rejects.toThrow(/refusing to treat an unreadable quick_fixes table as empty/);
+  });
+
+  it('a probe that resolves with data=[] (genuinely empty, not null) does NOT throw', async () => {
+    // Control for the control above: an empty ARRAY is a valid, distinguishable "really has zero
+    // rows" signal. Only a non-array data with no error is treated as a failed measurement.
+    const client = fakeClient({ qfs: [] });
+    await expect(countAutoStartableQuickFixes(client)).resolves.toBe(0);
   });
 });

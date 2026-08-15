@@ -23,6 +23,7 @@ import { createRequire } from 'node:module';
 const require_ = createRequire(import.meta.url);
 const { isClaimableQfSupply, CLAIMABLE_QF_STATUSES } = require_('../../../lib/coordinator/qf-supply-predicate.cjs');
 const { isAutoStartableQF } = require_('../../../scripts/worker-checkin.cjs');
+const { STALE_QF_DAYS } = require_('../../../lib/fleet/qf-auto-start.cjs');
 
 const base = (over) => ({
   id: 'QF-T',
@@ -144,5 +145,54 @@ describe('FR-4: gauge and chokepoint agree on the axis where they used to disagr
     // fails. That direction would let workers claim held or attestation-pending rows.
     expect(CLAIMABLE_QF_STATUSES).toEqual(['open']);
     expect(isAutoStartableQF(base({ status: 'in_progress' }), Date.now())).toBe(false);
+  });
+});
+
+/**
+ * SD-LEO-INFRA-QF-SUPPLY-PREDICATE-AUTO-START-001 (FR-5) — the axes where the two predicates are
+ * SUPPOSED to disagree, pinned rather than left implicit.
+ *
+ * A SEPARATE describe block, over its OWN fixture population — deliberately not added to
+ * `fixtures` above. isClaimableQfSupply's docblock (lib/coordinator/qf-supply-predicate.cjs:62-65,
+ * 82-85) already states it does NOT apply staleness/tier/factory-lane/chairman-gate, only
+ * "unclaimed + open-ish status" — different question, different consumer (detectThunderingHerd).
+ * Every row below is FREE (claiming_session_id: null) and status='open', so the existing free-row
+ * biconditional up above (`isClaimableQfSupply === isAutoStartableQF`, guarded on
+ * `claiming_session_id === null`) would break the moment any of these joined `fixtures` — that
+ * collision is exactly why this is its own block, not an extension of the other one.
+ *
+ * The property under test is the INVERSE of FR-4's: for a FREE row on one of these axes,
+ * isClaimableQfSupply (loose: coordinator supply) and isAutoStartableQF (strict: worker
+ * auto-start) MUST diverge — true and false respectively. If a future change makes them agree
+ * here, either the coordinator gauge quietly grew the strict checks (and needs its own FR-4-style
+ * re-verification against the chokepoints) or isAutoStartableQF quietly lost one — both are
+ * regressions this block exists to catch.
+ */
+describe('FR-5: axes where isClaimableQfSupply and isAutoStartableQF are DELIBERATELY different', () => {
+  const FUTURE = new Date(Date.now() + 24 * 60 * 60 * 1000).toISOString();
+  const staleCreatedAt = new Date(Date.now() - (STALE_QF_DAYS + 1) * 24 * 60 * 60 * 1000).toISOString();
+
+  const divergent = [
+    { name: 'stale — older than STALE_QF_DAYS', row: base({ created_at: staleCreatedAt }) },
+    { name: 'factory_lane — coordinator-dispatch only', row: base({ factory_lane: true }) },
+    { name: 'chairman-gated hold', row: base({ owner: 'chairman', release_condition: 'EU-send-planned' }) },
+    { name: 'TIER3_RISK_RE keyword in title', row: base({ title: 'rotate auth credentials' }) },
+    { name: 'TIER3_RISK_RE keyword in description', row: base({ description: 'apply the pending schema migration' }) },
+    { name: 'not_before in the future', row: base({ not_before: FUTURE }) },
+  ];
+
+  for (const f of divergent) {
+    it(`diverges for: ${f.name} (supply says yes, auto-start says no)`, () => {
+      expect(f.row.claiming_session_id, 'this axis only means something for a FREE row').toBeNull();
+      expect(isClaimableQfSupply(f.row)).toBe(true);
+      expect(isAutoStartableQF(f.row, Date.now())).toBe(false);
+    });
+  }
+
+  it('CONTROL: the same base() row (no divergence override) agrees on both sides', () => {
+    // Without this, "diverges" above could be true trivially because base() itself never agrees —
+    // this proves the axis-specific override, not the fixture shape, is what causes each divergence.
+    expect(isClaimableQfSupply(base())).toBe(true);
+    expect(isAutoStartableQF(base(), Date.now())).toBe(true);
   });
 });
