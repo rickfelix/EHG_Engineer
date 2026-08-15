@@ -195,8 +195,8 @@ rewrites the witness below via `scripts/dr/stamp-rehearsal-result.mjs`.
 PRECONDITION for `SD-FDBK-FIX-BUS-RETENTION-CLEANUP-001`'s `retention_archive`
 365d TTL step: do not enable that TTL until a rehearsal PASS below is <90d old.
 
-**Latest live run — 2026-07-13T03:06:17.381Z: `PASS`** (scratch schema
-`dr_rehearsal_20260713_0306`, 1.3 s):
+**Latest live run — 2026-08-15T18:58:38.821Z: `PASS`** (scratch schema
+`dr_rehearsal_20260815_1858`, 3.2 s):
 
 | Drill | Result |
 |---|---|
