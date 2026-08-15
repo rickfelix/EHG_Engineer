@@ -34,7 +34,7 @@ import { getSupabaseClient } from '../../lib/sub-agent-executor/supabase-client.
 dotenv.config();
 
 const supabaseUrl = process.env.SUPABASE_URL || process.env.NEXT_PUBLIC_SUPABASE_URL;
-const supabaseKey = process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.NEXT_PUBLIC_SUPABASE_SERVICE_ROLE_KEY;
+const supabaseKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
 const supabase = createClient(supabaseUrl, supabaseKey);
 
 const SD_KEY = 'SD-LEARN-FIX-ADDRESS-PATTERN-LEARN-142';
