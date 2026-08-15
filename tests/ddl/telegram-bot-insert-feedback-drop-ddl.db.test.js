@@ -129,6 +129,18 @@ RETURNS BOOLEAN LANGUAGE sql STABLE SECURITY DEFINER
 SET search_path = public, pg_catalog
 AS $$ SELECT false; $$;
 
+-- Explicit, unconditional re-GRANT (measured live in CI, this SD's fifth push): CREATE OR REPLACE
+-- FUNCTION preserves an EXISTING function's ACL rather than resetting it to default -- it does NOT
+-- restore a grant a PRIOR statement revoked. SD-LEO-FIX-CLOSE-ANON-VENTURE-001's own migration (also
+-- applied for real, earlier, in tests/ddl/venture-user-feedback-ownership-rpc-ddl.db.test.js, which
+-- shares this SAME physical database) now REVOKEs anon/authenticated EXECUTE on these same two
+-- function names as part of its own MEDIUM-1 fix -- correct for that migration's real target (the
+-- policy that needed the grant is dropped there), but this file's OWN stub venture_user_insert_
+-- feedback policy below STILL evaluates both under RLS as anon and needs the grant restored,
+-- regardless of which file's beforeAll happened to run first in this shared-database CI job.
+GRANT EXECUTE ON FUNCTION public.venture_exists_and_active(uuid) TO anon;
+GRANT EXECUTE ON FUNCTION public.check_feedback_rate_limit(uuid) TO anon;
+
 -- Pre-existing, mirrors live state BEFORE this migration runs.
 CREATE POLICY telegram_bot_insert_feedback ON public.feedback
   FOR INSERT TO anon
