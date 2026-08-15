@@ -21,6 +21,17 @@
 -- caller owns this venture" — ownership requires a caller-presented credential checked against a
 -- per-venture record, hence this migration.
 --
+-- NEW-1 (SECURITY sub-agent, EXEC re-review, evidence 378ea5c4-a693-456d-9c40-58b6b12a965f, non-
+-- blocking scope-precision note): this SD's own name can be over-read as closing ALL anon venture-
+-- spoofing. It does not. record_venture_error (a DIFFERENT anon-executable SECURITY DEFINER
+-- function) hardcodes feedback_type='venture_error'/source_type='error_capture' as literals, so it
+-- cannot be driven to emit a user_%-type row and this migration's own acceptance criterion is
+-- unaffected — but it retains the SAME existence-only (not ownership) venture_id check for the
+-- venture_error shape specifically, deliberately out of scope here and already named as deferred
+-- work in Phase-1's own header (database/chairman-gated/20260812_venture_ingest_key_binding.sql).
+-- User_%-shaped spoofing: closed by this file (plus its sibling, see below). Venture_error-shaped
+-- spoofing: still open, owned by SD-LEO-INFRA-FEEDBACK-ANON-RLS-GAPS-001, not this SD.
+--
 -- ═══════════════════════════════════════════════════════════════════════════════════════════════
 -- RELATIONSHIP TO SD-LEO-INFRA-FEEDBACK-ANON-RLS-GAPS-001 PHASE-1 (completed 2026-08-13)
 -- ═══════════════════════════════════════════════════════════════════════════════════════════════
