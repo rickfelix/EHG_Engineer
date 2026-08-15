@@ -29,12 +29,20 @@
  * scripts/one-off/_arm-machinery-codify-honest-activation.mjs (SD-LEO-FEAT-CODIFY-HONEST-
  * ACTIVATION-001, same kind='gate'/free_text_match shape, ARMED, zero bypass).
  *
- * expectedIntervalSeconds is set to 30 days, NOT the 86400s (1-day) default: RCA measured that
- * all 3 existing never-fired ARMED rows in this registry are already OVERDUE false alarms
- * (6.6d/6.7d/8.2d against a 2-day grace-multiplied threshold) because the default cadence was
- * tuned for hourly/daily processes, not "ships ahead of its producer, pending a chairman-gated
- * migration" SDs. A 30-day cadence honestly says "if this is still inert after two months
- * (grace_multiplier=2), surface it" instead of manufacturing a guaranteed false alarm in 48h.
+ * CORRECTION (same session, before this PR merged): an independent parallel review
+ * (gate-semantics-expert + db-evidence-expert) found that BOTH cited ARMED precedents
+ * (SD-LEO-FEAT-VENTURE-DEMAND-VALIDATION-001, SD-LEO-FEAT-CODIFY-HONEST-ACTIVATION-001) are
+ * themselves already permanently OVERDUE (consecutive_miss_count 109/111, verified live) --
+ * a synchronous validator has no legal "overdue" state, so ANY expectedIntervalSeconds just
+ * delays the same false alarm, it does not prevent it. The 30-day tuning below was a mitigation
+ * of that symptom, not a fix. db-evidence-expert's correction, also verified live: register the
+ * row (it satisfies checkArmedRegistration, which checks EXISTENCE only) but immediately set
+ * currently_expected_active=false so periodic-liveness-watcher.mjs skips it and it can never
+ * join the OVERDUE set. expectedIntervalSeconds is left tuned anyway as a documented intent, in
+ * case a future SD re-activates this row once the migration lands. See PR #7046 discussion for
+ * the full back-and-forth; the deeper root cause (classify.js's free-text lane feeding sd.title
+ * into an OR-combined regex match, inherited unsafely from an AND-combined sibling classifier
+ * where it was safe) is filed as a harness bug, not fixed here.
  */
 import { getSupabaseClient } from '../../lib/sub-agent-executor/supabase-client.js';
 import { registerArmedMachinery } from '../../lib/machinery-class/armed-registration.js';
@@ -75,3 +83,19 @@ console.log(`process_key=${data.process_key} owner=${data.owner} active=${data.c
 console.log(`expected_interval_seconds=${data.expected_interval_seconds} grace_multiplier=${data.grace_multiplier}`);
 console.log(`sd_key=${data.liveness_source_ref?.sd_key} armed_at=${data.liveness_source_ref?.armed_at}`);
 console.log(`activation_trigger=${(data.liveness_source_ref?.activation_trigger ?? 'ABSENT').slice(0, 160)}…`);
+
+// Deactivate: satisfies INVOCATION_PATH_PROOF (row exists) without ever joining the OVERDUE set
+// (periodic-liveness-watcher.mjs skips rows where currently_expected_active=false). See the
+// CORRECTION note above for why this step exists.
+const { data: deactivated, error: deactivateError } = await supabase
+  .from('periodic_process_registry')
+  .update({ currently_expected_active: false, updated_at: new Date().toISOString() })
+  .eq('process_key', result.processKey)
+  .select('process_key, currently_expected_active')
+  .maybeSingle();
+if (deactivateError) { console.error('DEACTIVATE FAILED:', deactivateError.message); process.exit(1); }
+if (!deactivated || deactivated.currently_expected_active !== false) {
+  console.error('DEACTIVATE READBACK MISMATCH — row still shows active');
+  process.exit(1);
+}
+console.log(`deactivated: process_key=${deactivated.process_key} currently_expected_active=${deactivated.currently_expected_active}`);
