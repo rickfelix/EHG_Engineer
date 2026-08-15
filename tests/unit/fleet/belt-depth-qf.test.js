@@ -206,4 +206,22 @@ describe('countAutoStartableQuickFixes — factory_lane 42703 fallback (TR-2/TS-
     const client = { from: () => ({ select: () => ({ eq() { return this; }, is() { return this; }, limit: () => Promise.resolve({ data: null, error: { code: 'PGRST205', message: 'relation not found' } }) }) }) };
     await expect(countAutoStartableQuickFixes(client)).rejects.toBeTruthy();
   });
+
+  // TR-1 / SEC-GSB-1 parity: PostgREST's documented missing-relation signature is {count:null,
+  // error:null} under head:true (lib/db/fetch-all-paginated.mjs's renderCount docblock). Its own
+  // fetchAllPaginated defends the analogous {data:null, error:null} shape for a plain select by
+  // silently coercing to [] — the exact fail-open direction this SD's whole premise is against.
+  // The probe is the one place that shape is still checkable before it disappears into
+  // fetchAllPaginated's loop.
+  it('a probe that resolves with data=null and error=null THROWS rather than reporting 0', async () => {
+    const client = { from: () => ({ select: () => ({ eq() { return this; }, is() { return this; }, limit: () => Promise.resolve({ data: null, error: null }) }) }) };
+    await expect(countAutoStartableQuickFixes(client)).rejects.toThrow(/refusing to treat an unreadable quick_fixes table as empty/);
+  });
+
+  it('a probe that resolves with data=[] (genuinely empty, not null) does NOT throw', async () => {
+    // Control for the control above: an empty ARRAY is a valid, distinguishable "really has zero
+    // rows" signal. Only a non-array data with no error is treated as a failed measurement.
+    const client = fakeClient({ qfs: [] });
+    await expect(countAutoStartableQuickFixes(client)).resolves.toBe(0);
+  });
 });
