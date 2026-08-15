@@ -112,3 +112,53 @@ describe('chairman-sms-gate sendChairmanSMS()', () => {
     expect(fallbackSend).not.toHaveBeenCalled();
   });
 });
+
+describe('FR-1/FR-4 (SD-LEARN-FIX-ADDRESS-PATTERN-LEARN-141): chairmanZone resolved at the choke point, not per-caller', () => {
+  // Measured discriminating fixture: at this instant, America/New_York reads 23:00 (inside the
+  // 22:00-06:00 quiet window) while America/Los_Angeles reads 20:00 (outside it) -- same message,
+  // same rubric, only the zone differs, and the verdict flips HELD -> SENT. This is what actually
+  // proves the fallback is invoked AND its result used, not merely that the code compiles.
+  const NOW = new Date('2026-01-15T04:00:00Z');
+
+  it("omitting chairmanZone AND nowHourET resolves via the real choke-point fallback and is held on the default zone's quiet hours", async () => {
+    const sender = makeSender();
+    const stub = vi.fn(async () => ({ zone: 'America/New_York', source: 'test_stub' }));
+    const ctx = { now: NOW, rateCap: 10, sentInWindow: 0 };
+    const res = await sendChairmanSMS(wellFormedDecision(), ctx, { sender, console: silentConsole, resolveChairmanZone: stub });
+    expect(res.sent).toBe(false);
+    expect((res.blockedReasons || []).join(',')).toMatch(/quiet_hours/);
+    expect(stub).toHaveBeenCalledTimes(1);
+    expect(stub).toHaveBeenCalledWith(expect.any(Date));
+    expect(sender.send).not.toHaveBeenCalled();
+    expect(ctx.chairmanZone).toBeUndefined(); // the caller's own context object was never mutated
+  });
+
+  it("the SAME instant with an injected non-ET zone resolves to SENT -- the fallback's result is what the rubric actually uses", async () => {
+    const sender = makeSender();
+    const stub = vi.fn(async () => ({ zone: 'America/Los_Angeles', source: 'test_stub' }));
+    const ctx = { now: NOW, rateCap: 10, sentInWindow: 0 };
+    const res = await sendChairmanSMS(wellFormedDecision(), ctx, { sender, console: silentConsole, resolveChairmanZone: stub });
+    expect(res.sent).toBe(true);
+    expect((res.blockedReasons || []).join(',')).not.toMatch(/quiet_hours/);
+    expect(stub).toHaveBeenCalledTimes(1);
+    expect(sender.send).toHaveBeenCalledTimes(1);
+    expect(ctx.chairmanZone).toBeUndefined(); // still never mutated, even on the SENT path
+  });
+
+  it('supplying nowHourET (the shape all TS-1..TS-8 tests above use) short-circuits the fallback -- zero calls to resolveChairmanZone', async () => {
+    const sender = makeSender();
+    const stub = vi.fn(async () => ({ zone: 'America/Los_Angeles', source: 'test_stub' }));
+    const res = await sendChairmanSMS(wellFormedDecision(), DAYTIME, { sender, console: silentConsole, resolveChairmanZone: stub });
+    expect(res.sent).toBe(true);
+    expect(stub).not.toHaveBeenCalled();
+  });
+
+  it('supplying chairmanZone explicitly (the shape all 5 production callers use today) short-circuits the fallback -- zero calls to resolveChairmanZone', async () => {
+    const sender = makeSender();
+    const stub = vi.fn(async () => ({ zone: 'America/Los_Angeles', source: 'test_stub' }));
+    const ctx = { now: NOW, chairmanZone: 'America/Los_Angeles', rateCap: 10, sentInWindow: 0 };
+    const res = await sendChairmanSMS(wellFormedDecision(), ctx, { sender, console: silentConsole, resolveChairmanZone: stub });
+    expect(res.sent).toBe(true);
+    expect(stub).not.toHaveBeenCalled();
+  });
+});

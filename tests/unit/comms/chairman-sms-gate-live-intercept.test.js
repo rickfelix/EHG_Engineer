@@ -11,25 +11,31 @@ const __dirname = dirname(fileURLToPath(import.meta.url));
 const passEval = async () => ({ verdict: 'pass', effectiveType: 'decision', authorityClass: 'sms', blockedReasons: [] });
 const blockEval = async () => ({ verdict: 'blocked', effectiveType: 'decision', authorityClass: 'sms', blockedReasons: ['bad_format'] });
 const throwEval = async () => { throw new Error('rubric down'); };
+// SD-LEARN-FIX-ADDRESS-PATTERN-LEARN-141: every call in this file passes an empty context ({}),
+// so each one now takes the new chairmanZone-resolution fallback path. Inject a stub here instead
+// of letting the real resolveChairmanZone run -- it never throws, but under tests/setup.unit.js's
+// sentinel Supabase creds it attempts a real network fetch that hangs for tens of seconds before
+// its own internal catch swallows the error, silently slowing (not failing) every test below.
+const zoneStub = async () => ({ zone: 'America/New_York', source: 'test_stub' });
 
 describe('chairman-SMS gate — fail-closed guarantee (acceptance b / TS-1, TS-3)', () => {
   it('HOLDS a rubric-FAILING decision — no send (fail-closed)', async () => {
     const sender = { send: vi.fn().mockResolvedValue({ sid: 'x' }) };
-    const r = await sendChairmanSMS({ type: 'decision', body: 'unformatted' }, {}, { evaluate: blockEval, sender });
+    const r = await sendChairmanSMS({ type: 'decision', body: 'unformatted' }, {}, { evaluate: blockEval, sender, resolveChairmanZone: zoneStub });
     expect(r.sent).toBe(false);
     expect(r.held).toBe(true);
     expect(sender.send).not.toHaveBeenCalled(); // never reached the sender
   });
   it('HOLDS a decision when the rubric THROWS (fail-closed, NOT fail-open)', async () => {
     const sender = { send: vi.fn().mockResolvedValue({ sid: 'x' }) };
-    const r = await sendChairmanSMS({ type: 'decision', body: 'x' }, {}, { evaluate: throwEval, sender });
+    const r = await sendChairmanSMS({ type: 'decision', body: 'x' }, {}, { evaluate: throwEval, sender, resolveChairmanZone: zoneStub });
     expect(r.held).toBe(true);
     expect(r.reason).toBe('gate_unavailable');
     expect(sender.send).not.toHaveBeenCalled();
   });
   it('SENDS a rubric-PASS decision via the injected sender', async () => {
     const sender = { send: vi.fn().mockResolvedValue({ sid: 'obl-1' }) };
-    const r = await sendChairmanSMS({ type: 'decision', body: 'ok' }, {}, { evaluate: passEval, sender });
+    const r = await sendChairmanSMS({ type: 'decision', body: 'ok' }, {}, { evaluate: passEval, sender, resolveChairmanZone: zoneStub });
     expect(r.sent).toBe(true);
     expect(sender.send).toHaveBeenCalledOnce();
   });
@@ -51,7 +57,7 @@ describe('makeDefaultSender delegation (FR-2) — durable path, fail-soft, no Tw
     const prev = process.env.CHAIRMAN_PHONE;
     delete process.env.CHAIRMAN_PHONE;
     const fallbackSend = vi.fn(async () => ({ fired: true }));
-    const r = await sendChairmanSMS({ type: 'decision', body: 'ok' }, {}, { evaluate: passEval, fallbackSend });
+    const r = await sendChairmanSMS({ type: 'decision', body: 'ok' }, {}, { evaluate: passEval, fallbackSend, resolveChairmanZone: zoneStub });
     expect(r.sent).toBe(false); // did not throw, but honestly reports the transport drop
     expect(r.transportFailed).toBe(true);
     expect(r.reason).toBe('no_recipient_phone');
