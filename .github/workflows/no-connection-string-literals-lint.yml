@@ -1,0 +1,41 @@
+name: No Connection String Literals Lint
+
+# SD-LEO-FIX-STRIP-DEAD-DB-CREDENTIAL-LITERALS-001, FR-3.
+# Tree-at-rest guard: scans every git-tracked file for (A) a postgres(ql):// URL shape with
+# something in the password slot, and (B) the specific rotated credential from this SD's
+# incident, via length-bounded hash comparison (see scripts/lint/no-connection-string-literals-
+# lint.mjs for the full design rationale). Verified clean against this repo's full tracked
+# tree (17.8k files, ~1m40s) before this workflow was added -- blocking from day one, no
+# advisory period needed (contrast .github/workflows/eol-renormalization-lint.yml, which had
+# 3 known unresolved violations at authoring time and so started advisory).
+
+on:
+  pull_request:
+    paths:
+      - '**/*.js'
+      - '**/*.mjs'
+      - '**/*.cjs'
+      - '**/*.ts'
+      - '**/*.md'
+      - '**/*.sh'
+      - '**/*.sql'
+      - '**/*.yml'
+      - '**/*.yaml'
+      - '.husky/**'
+      - 'scripts/lint/no-connection-string-literals-lint.mjs'
+      - '.github/workflows/no-connection-string-literals-lint.yml'
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  no-connection-string-literals-lint:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+      - name: Scan tracked tree for connection-string literals
+        run: node scripts/lint/no-connection-string-literals-lint.mjs
