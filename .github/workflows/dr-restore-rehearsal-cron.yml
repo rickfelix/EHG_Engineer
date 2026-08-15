@@ -59,6 +59,13 @@ jobs:
 
       - name: Commit runbook update
         if: always()
+        env:
+          # QF-20260815-099: .husky/pre-push's work-tracking guard also blocks this
+          # branch=main push in non-interactive mode (no SD-*/QF-* branch name to
+          # match) — a second, separate hook from the pre-commit one below. Same
+          # narrow justification: additive-only, single-file, CI-bot-authored
+          # record-keeping push, not real development work.
+          EHG_ALLOW_MAIN_PUSH: '1'
         run: |
           git config --local user.email "github-actions[bot]@users.noreply.github.com"
           git config --local user.name "github-actions[bot]"
@@ -75,5 +82,5 @@ jobs:
           🤖 Generated with [Claude Code](https://claude.com/claude-code)
 
           Co-Authored-By: GitHub Actions <noreply@github.com>"
-            git push || echo "Push skipped"
+            git push
           fi
