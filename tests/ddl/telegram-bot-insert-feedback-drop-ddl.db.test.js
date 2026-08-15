@@ -244,8 +244,13 @@ describe('TS-1/TS-6: bare telegram-sourced anon INSERT is rejected post-migratio
       await client.query('SET LOCAL ROLE anon');
       let err;
       try {
+        // type/source_application/title added (this SD's PR): the real public.feedback has these
+        // as NOT NULL with no default (confirmed live, 2026-08-15) — irrelevant to THIS test since
+        // RLS denial fires before row materialization, but kept consistent with the other inserts
+        // below so no bare insert in this file depends on which stub table definition happens to
+        // win the shared-database CREATE TABLE IF NOT EXISTS race.
         await client.query(
-          'INSERT INTO public.feedback (source_type, feedback_type, venture_id) VALUES (\'telegram\', \'sentry_error\', NULL)',
+          "INSERT INTO public.feedback (source_type, feedback_type, venture_id, type, source_application, title) VALUES ('telegram', 'sentry_error', NULL, 'issue', 'ddl-test-stub', 'stub row')",
         );
       } catch (e) {
         err = e;
@@ -274,8 +279,10 @@ describe('TS-1/TS-6: bare telegram-sourced anon INSERT is rejected post-migratio
       // No RETURNING here either — telegram_bot_select_feedback would cover this specific row
       // (source_type='telegram'), but confirming via a privileged read after RESET ROLE keeps this
       // test's proof mechanism uniform with TS-2/TS-8 above rather than depending on it.
+      // type/source_application/title added (this SD's PR) -- see the note on the first bare
+      // insert above.
       await client.query(
-        'INSERT INTO public.feedback (source_type, feedback_type, venture_id) VALUES (\'telegram\', \'sentry_error\', NULL)',
+        "INSERT INTO public.feedback (source_type, feedback_type, venture_id, type, source_application, title) VALUES ('telegram', 'sentry_error', NULL, 'issue', 'ddl-test-stub', 'stub row')",
       );
       await client.query('RESET ROLE');
       const { rows } = await client.query(
@@ -301,8 +308,10 @@ describe('TS-2/TS-8: the venture_user_insert_feedback residual path still lands 
     await client.query('BEGIN');
     try {
       await client.query('SET LOCAL ROLE anon');
+      // type/source_application/title added (this SD's PR) -- see the note on the first bare
+      // insert in the describe block above.
       await client.query(
-        'INSERT INTO public.feedback (source_type, feedback_type, venture_id) VALUES (\'auto_capture\', \'user_bug\', $1)',
+        "INSERT INTO public.feedback (source_type, feedback_type, venture_id, type, source_application, title) VALUES ('auto_capture', 'user_bug', $1, 'issue', 'ddl-test-stub', 'stub row')",
         [ventureId],
       );
       await client.query('RESET ROLE');
@@ -321,8 +330,10 @@ describe('TS-2/TS-8: the venture_user_insert_feedback residual path still lands 
     await client.query('BEGIN');
     try {
       await client.query('SET LOCAL ROLE anon');
+      // type/source_application/title added (this SD's PR) -- see the note on the first bare
+      // insert in this file, above.
       await client.query(
-        'INSERT INTO public.feedback (source_type, feedback_type, venture_id) VALUES (\'telegram\', \'user_bug\', $1)',
+        "INSERT INTO public.feedback (source_type, feedback_type, venture_id, type, source_application, title) VALUES ('telegram', 'user_bug', $1, 'issue', 'ddl-test-stub', 'stub row')",
         [ventureId],
       );
       await client.query('RESET ROLE');
