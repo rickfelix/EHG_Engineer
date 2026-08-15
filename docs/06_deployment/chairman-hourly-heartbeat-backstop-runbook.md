@@ -15,7 +15,7 @@ harness `CronCreate` job (`scripts/adam-startup-check.mjs` ADAM_LOOPS entry `hea
 cron `14 * * * *`), re-armed only when an `/adam` session starts. When the host machine loses
 power — confirmed root cause: a hotel room cutting power on no-motion, 2026-08-09 onward, not a
 software timer bug — every local session/cron dies with it and the hourly SLA breaks silently.
-Two slips were witnessed 2026-08-12/13 (2h14m, ~4.5h), driving Adam self-score D8
+Two slips occurred 2026-08-12/13 (2h14m, ~4.5h), driving Adam self-score D8
 (`interface_clarity`) to a 3-consecutive-cycle escalation.
 
 This adds a **cloud-side, GHA-cron backstop** — `scripts/cron/chairman-hourly-heartbeat-backstop-
