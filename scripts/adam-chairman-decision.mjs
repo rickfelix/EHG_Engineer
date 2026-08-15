@@ -40,8 +40,14 @@ const noReplyConsequence = argValue('--no-reply-policy');
 const replyInstruction = argValue('--reply-instruction')
   || `Reply with the option letter, or DETAILS for more context (ref ${replyId}).`;
 
-if (!bodyText || !bodyText.trim() || options.length < 2 || !noReplyConsequence || !noReplyConsequence.trim()) {
-  console.warn('[adam-chairman-decision] --body, at least two --option, and --no-reply-policy are required — nothing sent');
+const decisionId = argValue('--decision-id');
+
+// SD-LEO-INFRA-SMS-DECIDE-REPLY-MATCHABLE-001 FR-4: --decision-id is required, not optional.
+// Without it the chairman-sms-gate's staging guard never fires (it only fires when a decisionId
+// is present), and the decisionId must reference an EXISTING chairman_decisions row anyway for a
+// letter reply to resolve anything — a decision packet with no decisionId has nothing to answer.
+if (!bodyText || !bodyText.trim() || options.length < 2 || !noReplyConsequence || !noReplyConsequence.trim() || !decisionId) {
+  console.warn('[adam-chairman-decision] --body, at least two --option, --no-reply-policy, and --decision-id are required — nothing sent');
   process.exit(0);
 }
 
@@ -53,7 +59,7 @@ const message = {
   replyInstruction,
   replyId,
   noReplyConsequence: noReplyConsequence.trim(),
-  decisionId: argValue('--decision-id') || null,
+  decisionId,
   dedupeKey: argValue('--dedupe-key') || null,
 };
 if (DRY) {
