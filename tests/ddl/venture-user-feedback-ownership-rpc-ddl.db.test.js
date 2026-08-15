@@ -401,6 +401,17 @@ describe('FR-1/TS-1: legitimate submission', () => {
     const { rows: landed } = await client.query('SELECT type FROM public.feedback WHERE id = $1', [rows[0].r.id]);
     expect(landed[0].type).toBe('enhancement');
   });
+
+  it('SEC-FOLLOWUP-5: a venture name over 255 chars is clamped, not a hard 22001 failure, after ownership already passed', async () => {
+    const longName = 'v'.repeat(300);
+    const ventureId = await makeVenture(longName);
+    const secret = await provisionSecret(ventureId);
+    const { rows } = await submit(ventureId, secret, 'user_bug', 'long venture name case', null);
+    expect(rows[0].r.ok).toBe(true);
+    const { rows: landed } = await client.query('SELECT source_application FROM public.feedback WHERE id = $1', [rows[0].r.id]);
+    expect(landed[0].source_application).toHaveLength(255);
+    expect(landed[0].source_application).toBe(longName.slice(0, 255));
+  });
 });
 
 describe('FR-1 AC-4 (T-3, testing-agent EXEC review): invalid feedback_type is rejected', () => {
@@ -634,6 +645,22 @@ describe('$verify$ block (extracted from the real migration file) is mutation-re
     try {
       await client.query('GRANT EXECUTE ON FUNCTION public.check_feedback_rate_limit(uuid) TO authenticated');
       await expect(client.query(VERIFY_BLOCK_SQL)).rejects.toThrow(/check_feedback_rate_limit is still directly callable/);
+    } finally {
+      await client.query('ROLLBACK');
+    }
+  });
+
+  it('RAISEs (SEC-FOLLOWUP-1) if ANY OTHER permissive anon-INSERT policy exists on public.feedback, under a name this file never checks by name', async () => {
+    // Proves the new census is genuinely broader than the earlier "is venture_user_insert_feedback
+    // specifically gone" check above -- a synthetic policy under a DIFFERENT name would sail past
+    // every other assertion in this block and only this new count-based check would catch it.
+    await client.query('BEGIN');
+    try {
+      await client.query(`
+        CREATE POLICY synthetic_anon_insert_policy ON public.feedback
+          FOR INSERT TO anon WITH CHECK (true)
+      `);
+      await expect(client.query(VERIFY_BLOCK_SQL)).rejects.toThrow(/a permissive anon-reachable INSERT policy still exists/);
     } finally {
       await client.query('ROLLBACK');
     }
