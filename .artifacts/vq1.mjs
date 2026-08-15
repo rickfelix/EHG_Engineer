@@ -1,0 +1,13 @@
+import 'dotenv/config';
+import { createClient } from '@supabase/supabase-js';
+const sb = createClient(process.env.SUPABASE_URL || process.env.NEXT_PUBLIC_SUPABASE_URL, process.env.SUPABASE_SERVICE_ROLE_KEY);
+const { data: sd, error: e1 } = await sb.from('strategic_directives_v2').select('id,sd_key,title,status,current_phase,progress,success_criteria,scope').eq('sd_key','SD-LEO-INFRA-DURABLE-HOURLY-HEARTBEAT-001');
+if (e1) console.error('SD ERR', e1.message);
+const r = sd?.[0];
+console.log('=== SD ===');
+console.log('status:', r?.status, '| phase:', r?.current_phase, '| progress:', r?.progress);
+console.log('title:', r?.title);
+console.log('--- success_criteria ---');
+console.log(JSON.stringify(r?.success_criteria, null, 2));
+console.log('--- scope ---');
+console.log(typeof r?.scope === 'string' ? r.scope.slice(0,2500) : JSON.stringify(r?.scope, null, 2).slice(0,2500));

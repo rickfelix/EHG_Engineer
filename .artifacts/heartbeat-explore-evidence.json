@@ -1,0 +1,16 @@
+{
+  "verdict": "PASS",
+  "confidence": 92,
+  "summary": "Investigated the existing morning-brief GHA-cron durability pattern and the live hourly-heartbeat send path to determine what the new backstop must mirror and what dedupe/ledger surface it can reuse.",
+  "findings": [
+    "Morning-brief durability: .github/workflows/chairman-morning-brief-cron.yml runs a self-healing window cron (*/15 9-15 * * * EDT, */15 10-16 * * * EST) invoking node scripts/cron/chairman-morning-brief-sweep.mjs --once.",
+    "Dedupe mechanism reused by both morning-brief and the live heartbeat: lib/chairman/sms-bridge.js:221-245 enqueueChairmanSms() writes to sms_outbound_obligations via UPSERT onConflict dedupe_key, ignoreDuplicates:true.",
+    "Live hourly heartbeat armed by scripts/adam-startup-check.mjs ADAM_LOOPS entry key='heartbeat-sms' (session-scoped CronCreate, cron '14 * * * *', re-armed only on /adam startup) -- confirmed root cause of silent SLA breaks on session/machine death.",
+    "Live heartbeat send script scripts/adam-chairman-sms.mjs calls sendChairmanSMS() from lib/comms/adam-outbound/chairman-sms-gate/index.js; currently invoked with --kind heartbeat_status and NO dedupe key.",
+    "Existing reusable quiet-hours implementations: lib/time/chairman-et-wall-clock.js isSmsQuietHour(now, zone); lib/comms/adam-outbound/rubric-engine/lint.js inQuietHours() (blocking rubric check wired into sendChairmanSMS).",
+    "Existing precedent test pattern: tests/unit/cron/chairman-morning-brief-sweep.test.js (DI-stub supabase client, window-gate fixtures across both DST offsets, dedupe-no-op assertions) -- used as the test-shape template for this SD's FR-5.",
+    "No pre-existing 'heartbeat-SLA-no-backstop' backlog rows found in files; provenance is the Adam self-assessment escalation recorded in .claude/adam-session-state-228dd90c.md (D8 N=3 escalation, 2 witnessed ScheduleWakeup slips 2026-08-12/13)."
+  ],
+  "repo_path": "C:\\Users\\rickf\\Projects\\_EHG\\EHG_Engineer\\.worktrees\\SD-LEO-INFRA-DURABLE-HOURLY-HEARTBEAT-001",
+  "executed_from_cwd": "C:\\Users\\rickf\\Projects\\_EHG\\EHG_Engineer\\.worktrees\\SD-LEO-INFRA-DURABLE-HOURLY-HEARTBEAT-001"
+}
