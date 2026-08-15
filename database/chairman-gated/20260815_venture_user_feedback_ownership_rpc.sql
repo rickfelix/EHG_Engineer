@@ -102,6 +102,17 @@
 -- exact order, in its own beforeAll, and asserts the source_type='telegram' bypass is rejected only
 -- once both have run — it does not claim closure from this file in isolation.
 --
+-- COORDINATOR ADVERSARIAL REVIEW FINDING (directive 679ac85f, 2026-08-15, CONDITIONAL_PASS — not a
+-- code change in this PR, sequencing precondition only): ehg/src/integrations/feedback/
+-- feedbackDataAccess.ts currently inserts feedback as anon THROUGH venture_user_insert_feedback,
+-- the exact policy this file DROPs — it has NOT been switched to call fn_submit_venture_user_feedback
+-- in this PR. Applying this migration BEFORE that app switch ships would break the EHG app's own
+-- feedback submissions (RLS-rejected the moment the policy is gone). REQUIRED ORDER: (1) EHG app
+-- switches its insert path to fn_submit_venture_user_feedback (with the venture ingest secret) and
+-- ships; (2) THEN apply this migration (after Phase-1 + telegram-revoke, per the sequencing above).
+-- Tracked as a hard precondition on strategic_directives_v2.metadata.apply_pending_ceremony and on
+-- successor SD-LEO-INFRA-CHAIRMAN-APPLY-CEREMONY-001 (FR-6).
+--
 -- ═══════════════════════════════════════════════════════════════════════════════════════════════
 -- CORRECTIONS FROM PROSPECTIVE PLAN-PHASE TESTING REVIEW (evidence ffe58c4e-7c8d-4d53-8dbf-
 -- 8634b5f0ec62), applied before this file was first written, not discovered after
