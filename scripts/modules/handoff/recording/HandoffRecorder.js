@@ -121,6 +121,48 @@ export class HandoffRecorder {
   }
 
   /**
+   * QF-20260816-725: increment handoff_fail_count for fleet telemetry. Two bugs fixed here:
+   * (1) the RPC's {error} return was never checked — supabase-js resolves rpc() normally
+   *     (does not throw) even when the function doesn't exist (PGRST202), so the old
+   *     try/catch around a bare `await this.supabase.rpc(...)` never triggered its fallback;
+   *     confirmed live: increment_handoff_fail_count does NOT exist in the schema cache.
+   * (2) the fallback called `this.supabase.raw(...)`, a Knex.js idiom that does not exist on
+   *     the supabase-js client — it threw a TypeError synchronously while building the
+   *     .update() call, which the outer catch silently swallowed. Replaced with a real
+   *     read-then-update sequence.
+   * Best-effort telemetry: every failure here is logged and swallowed, never thrown.
+   * @param {string} sdId - Strategic Directive ID
+   */
+  async _incrementHandoffFailCount(sdId) {
+    try {
+      const { error: rpcError } = await this.supabase.rpc('increment_handoff_fail_count', { p_sd_id: sdId });
+      if (!rpcError) return;
+
+      const { data: session, error: readError } = await this.supabase
+        .from('claude_sessions')
+        .select('handoff_fail_count')
+        .eq('sd_key', sdId)
+        .eq('status', 'active')
+        .maybeSingle();
+      if (readError || !session) {
+        console.warn(`   [handoff-fail-count] Non-blocking: RPC unavailable (${rpcError.message}) and fallback read ${readError ? `failed: ${readError.message}` : 'found no active session for this SD'}`);
+        return;
+      }
+
+      const { error: updateError } = await this.supabase
+        .from('claude_sessions')
+        .update({ handoff_fail_count: (session.handoff_fail_count || 0) + 1 })
+        .eq('sd_key', sdId)
+        .eq('status', 'active');
+      if (updateError) {
+        console.warn(`   [handoff-fail-count] Non-blocking: fallback update failed: ${updateError.message}`);
+      }
+    } catch (err) {
+      console.warn(`   [handoff-fail-count] Non-blocking: ${err.message}`);
+    }
+  }
+
+  /**
    * Record a successful handoff execution
    * @param {string} handoffType - Handoff type
    * @param {string} sdId - Strategic Directive ID
@@ -448,20 +490,7 @@ export class HandoffRecorder {
 
       // SD-MAN-INFRA-WORKER-WORKTREE-SELF-001: Increment handoff_fail_count for fleet telemetry
       // SD-LEO-FIX-HANDOFF-QUERY-BATCHING-001: Batch update replaces N+1 loop
-      try {
-        await this.supabase.rpc('increment_handoff_fail_count', { p_sd_id: sdId });
-      } catch (rpcErr) {
-        // Fallback: single UPDATE with increment expression if RPC doesn't exist
-        try {
-          await this.supabase
-            .from('claude_sessions')
-            .update({ handoff_fail_count: this.supabase.raw('COALESCE(handoff_fail_count, 0) + 1') })
-            .eq('sd_key', sdId)
-            .eq('status', 'active');
-        } catch (fallbackErr) {
-          console.warn(`   [handoff-fail-count] Non-blocking: ${fallbackErr.message}`);
-        }
-      }
+      await this._incrementHandoffFailCount(sdId);
 
       // SD-MAN-FEAT-CORRECTIVE-VISION-GAP-072 US-001: Governance audit trail
       // Log every handoff execution (failure) to validation_audit_log for compliance review
@@ -549,11 +578,7 @@ export class HandoffRecorder {
       console.log(`📝 Failure recorded: ${executionId} (completion action → leo_handoff_executions)`);
 
       // Same fleet telemetry + governance audit as the phase-transition path
-      try {
-        await this.supabase.rpc('increment_handoff_fail_count', { p_sd_id: sdId });
-      } catch (rpcErr) {
-        console.warn(`   [handoff-fail-count] Non-blocking: ${rpcErr.message}`);
-      }
+      await this._incrementHandoffFailCount(sdId);
       await this._logGovernanceAudit(handoffType, sdUuid, {
         status: 'rejected',
         score: normalizedScore,
