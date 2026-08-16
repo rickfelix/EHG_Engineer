@@ -103,7 +103,7 @@ async function checkResumeEligibility(sdUuid, currentPhase) {
   };
 }
 
-const SD_COLUMNS = 'id, sd_key, title, status, priority, is_working_on, claiming_session_id, created_at, current_phase, progress, description';
+const SD_COLUMNS = 'id, sd_key, title, status, priority, is_working_on, claiming_session_id, created_at, current_phase, progress_percentage, description';
 
 async function getWorkingOnSD() {
   try {
@@ -119,7 +119,7 @@ async function getWorkingOnSD() {
         .from('strategic_directives_v2')
         .select(SD_COLUMNS)
         .eq('claiming_session_id', sessionId)
-        .lt('progress', 100);
+        .lt('progress_percentage', 100);
       if (!ownError && ownClaim && ownClaim.length > 0) {
         workingOn = ownClaim;
       }
@@ -146,7 +146,7 @@ async function getWorkingOnSD() {
         .from('strategic_directives_v2')
         .select(SD_COLUMNS)
         .or('claiming_session_id.not.is.null,is_working_on.eq.true')
-        .lt('progress', 100);  // Less than 100% complete
+        .lt('progress_percentage', 100);  // Less than 100% complete
 
       if (workingError) {
         console.error('Error querying working_on SD:', workingError);
@@ -167,7 +167,7 @@ async function getWorkingOnSD() {
    Status: ${sd.status}
    Priority: ${sd.priority || 'not set'}
    Current Phase: ${sd.current_phase || 'not set'}
-   Progress: ${sd.progress || 0}%
+   Progress: ${sd.progress_percentage || 0}%
    Claimed by: ${sd.claiming_session_id || 'unknown (legacy is_working_on)'}
    Created: ${new Date(sd.created_at).toLocaleDateString()}
 
@@ -211,14 +211,14 @@ async function getWorkingOnSD() {
       // Also check if there's a completed SD still marked
       const { data: completedWorking } = await supabase
         .from('strategic_directives_v2')
-        .select('id, title, progress, claiming_session_id')
+        .select('id, title, progress_percentage, claiming_session_id')
         .or('claiming_session_id.not.is.null,is_working_on.eq.true')
-        .gte('progress', 100);
+        .gte('progress_percentage', 100);
 
       if (completedWorking && completedWorking.length > 0) {
         console.log('⚠️  Note: The following completed SD still has working_on flag:');
         completedWorking.forEach(sd => {
-          console.log(`   - ${sd.id}: ${sd.title} (${sd.progress}% complete)`);
+          console.log(`   - ${sd.id}: ${sd.title} (${sd.progress_percentage}% complete)`);
         });
         console.log('   This SD is being ignored since it\'s 100% complete.\n');
       }

@@ -58,7 +58,7 @@ export function buildRelatedSDsPrefix({ sds = [], blockers = [] } = {}) {
   for (const sd of sds.slice(0, 5)) {
     if (seen.has(sd.sd_key)) continue;
     seen.add(sd.sd_key);
-    const progress = typeof sd.progress === 'number' ? `${sd.progress}%` : '—';
+    const progress = typeof sd.progress_percentage === 'number' ? `${sd.progress_percentage}%` : '—';
     lines.push(`  ${sd.sd_key} | ${sd.status} | ${progress}`);
   }
   for (const b of blockers.slice(0, 3)) {

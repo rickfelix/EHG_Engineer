@@ -282,7 +282,7 @@ function calculateQualityScore(insights, prdAnalysis, subAgents, sd) {
   let score = 70; // Base score (UPDATED from 60 to ensure minimum threshold)
 
   // Progress contribution (30 points)
-  score += (sd.progress || 0) * 0.3;
+  score += (sd.progress_percentage || 0) * 0.3;
 
   // Sub-agent verification (10 points)
   if (subAgents.consulted >= 3) score += 10;
@@ -376,7 +376,7 @@ async function generateComprehensiveRetrospective(sdId) {
   }
 
   console.log(`SD: ${sd.sd_key} - ${sd.title}`);
-  console.log(`Status: ${sd.status}, Progress: ${sd.progress}%`);
+  console.log(`Status: ${sd.status}, Progress: ${sd.progress_percentage}%`);
 
   // Check if an SD_COMPLETION retrospective already exists.
   // Scope the dedup to retro_type so typed rows (e.g. a LEAD_TO_PLAN handoff
@@ -442,7 +442,7 @@ async function generateComprehensiveRetrospective(sdId) {
   // Build comprehensive retrospective - ensure quality thresholds met (trigger scoring)
   const baseAchievements = [
     ...handoffInsights.achievements.slice(0, 10),
-    sd.progress >= 100 ? `SD completed at ${sd.progress}% progress` : `Progress achieved: ${sd.progress}%`,
+    sd.progress_percentage >= 100 ? `SD completed at ${sd.progress_percentage}% progress` : `Progress achieved: ${sd.progress_percentage}%`,
     subAgentAnalysis.consulted > 0 ? `${subAgentAnalysis.consulted} sub-agent(s) consulted for verification` : 'Implementation completed with quality verification',
     prdAnalysis ? `PRD created with ${prdAnalysis.acceptance_criteria} acceptance criteria` : 'Requirements documented comprehensively',
     'Database-first architecture maintained throughout',
@@ -649,7 +649,7 @@ async function generateComprehensiveRetrospective(sdId) {
     bugs_found: 0,
     bugs_resolved: 0,
     tests_added: handoffInsights.patterns.some(p => p.toLowerCase().includes('test')) ? 1 : 0,
-    objectives_met: sd.progress >= 100,
+    objectives_met: sd.progress_percentage >= 100,
     on_schedule: true,
     within_scope: true,
     success_patterns: successPatterns,

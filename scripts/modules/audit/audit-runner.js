@@ -212,25 +212,25 @@ const DETECTION_RULES = {
     name: 'Progress Status Mismatch',
     severity: 'medium',
     evaluate: (sd, _config) => {
-      if (sd.status === 'completed' && sd.progress < 100) {
+      if (sd.status === 'completed' && sd.progress_percentage < 100) {
         return {
           triggered: true,
-          message: `SD marked completed but progress is only ${sd.progress}%`,
+          message: `SD marked completed but progress is only ${sd.progress_percentage}%`,
           evidence: {
             timestamps: {
-              progress: sd.progress,
+              progress: sd.progress_percentage,
               expected_progress: 100
             }
           }
         };
       }
-      if (sd.progress === 100 && sd.status !== 'completed' && sd.status !== 'on_hold' && sd.status !== 'cancelled') {
+      if (sd.progress_percentage === 100 && sd.status !== 'completed' && sd.status !== 'on_hold' && sd.status !== 'cancelled') {
         return {
           triggered: true,
           message: `SD has 100% progress but status is "${sd.status}" (expected: completed)`,
           evidence: {
             timestamps: {
-              progress: sd.progress,
+              progress: sd.progress_percentage,
               status: sd.status
             }
           }

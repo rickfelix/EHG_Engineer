@@ -50,6 +50,13 @@ try {
   if (state.sd && state.sd.id) {
     console.log('[SD] Working on: ' + state.sd.id);
     if (state.sd.phase) console.log('[SD] Phase: ' + state.sd.phase);
+    // NOT part of SD-LEO-INFRA-PROGRESS-COLUMN-DEAD-TWIN-001's scope: this reads a JSON snapshot
+    // key from .claude/unified-session-state.json, not the strategic_directives_v2 DB column
+    // directly. The producer (lib/context/unified-state-manager.js) always writes this field as
+    // `progress` (see its STATE_SCHEMA and every getSDState() return path) -- reading
+    // `progress_percentage` here would always be undefined and silently drop this line. (The
+    // producer's own separate bug, selecting a nonexistent progress_pct DB column, is logged as
+    // feedback 05a14092 and is unrelated to this JS key name.)
     if (state.sd.progress !== null && state.sd.progress !== undefined) {
       console.log('[SD] Progress: ' + state.sd.progress + '%');
     }

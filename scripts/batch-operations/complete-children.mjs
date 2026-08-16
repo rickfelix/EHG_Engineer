@@ -69,10 +69,15 @@ export default {
       }
 
       try {
+        // SD-LEO-INFRA-PROGRESS-COLUMN-DEAD-TWIN-001: do not write `progress` here.
+        // enforce_progress_on_completion() (database/migrations/20251211_fix_progress_trigger_rls_access.sql:334-356)
+        // is a BEFORE-UPDATE trigger that unconditionally overwrites progress_percentage on this exact
+        // status transition, so an explicit progress_percentage write in this same statement would
+        // silently no-op. The trigger already sets progress_percentage correctly; writing the dead
+        // `progress` column here was the only remaining live writer of it.
         const updates = {
           status: 'completed',
           current_phase: 'COMPLETED',
-          progress: 100,
           updated_at: new Date().toISOString()
         };
 

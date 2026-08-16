@@ -65,7 +65,7 @@ async function generateRetrospective(sdInput) {
   const { sdId, sd } = await resolveSdInput(sdInput, supabase);
 
   console.log(`SD: ${sd.sd_key} - ${sd.title}`);
-  console.log(`Status: ${sd.status}, Progress: ${sd.progress}%`);
+  console.log(`Status: ${sd.status}, Progress: ${sd.progress_percentage}%`);
 
   // QF-20260526-904: route through getFilteredRetrospective so the writer
   // sees the same row the LEAD-FINAL-APPROVAL gate and PLAN-TO-LEAD
@@ -130,7 +130,7 @@ async function generateRetrospective(sdInput) {
 
   // High-quality content arrays (will be converted to JSONB)
   const what_went_well_array = [
-    `${sd.sd_key} completed successfully with ${sd.progress}% progress achieved`,
+    `${sd.sd_key} completed successfully with ${sd.progress_percentage}% progress achieved`,
     'LEO Protocol validation gates passed with comprehensive testing coverage',
     'Clear handoffs maintained between LEAD→PLAN→EXEC phases with proper documentation',
     'Database schema changes validated through Database Architect sub-agent review',
@@ -180,7 +180,7 @@ async function generateRetrospective(sdInput) {
     // omitting the key also yields NULL — this explicit null is kept as defense-in-depth.
     retrospective_type: null,
     title: `${sd.sd_key} Retrospective`,
-    description: `Retrospective analysis for ${sd.title} - completed at ${sd.progress}% with ${sd.status} status`,
+    description: `Retrospective analysis for ${sd.title} - completed at ${sd.progress_percentage}% with ${sd.status} status`,
     conducted_date: new Date().toISOString(),
     agents_involved: ['LEAD', 'PLAN', 'EXEC'],
     sub_agents_involved: prd ? ['Database Architect', 'QA Director', 'Code Reviewer'] : [],
@@ -216,7 +216,7 @@ async function generateRetrospective(sdInput) {
     // satisfy the >= 70 publish gate on its own. Omitting the key makes the stored score solely
     // what the evaluation produced.
 
-    team_satisfaction: Math.min(10, Math.max(1, Math.floor(sd.progress / 10))),
+    team_satisfaction: Math.min(10, Math.max(1, Math.floor(sd.progress_percentage / 10))),
     business_value_delivered: sd.priority >= 70 ? 'HIGH' : sd.priority >= 40 ? 'MEDIUM' : 'LOW',
     customer_impact: 'MEDIUM',
     technical_debt_addressed: true,
@@ -224,7 +224,7 @@ async function generateRetrospective(sdInput) {
     bugs_found: 0,
     bugs_resolved: 0,
     tests_added: prd ? 2 : 0, // Assume unit + E2E if PRD exists
-    objectives_met: sd.progress >= 100,
+    objectives_met: sd.progress_percentage >= 100,
     on_schedule: true,
     within_scope: true,
     success_patterns: ['Quality-first approach', 'Database-driven validation', 'Automated testing'],
