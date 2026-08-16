@@ -23,6 +23,16 @@
 import { safeTruncate } from '../../../../../../lib/utils/safe-truncate.js';
 
 /**
+ * QF-20260816-014: itemName below is free-text PRD prose, not an author-defined pattern —
+ * escape regex metacharacters before interpolating into a RegExp source, or FR text
+ * containing parens/brackets throws (observed: 'Unmatched )', 'Range out of order in
+ * character class').
+ */
+function escapeRegExp(str) {
+  return str.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+}
+
+/**
  * Reason codes for gate failures (FR-2, FR-3)
  */
 const REASON_CODES = {
@@ -271,7 +281,7 @@ function checkItemHasConsumer(itemName, content, config) {
   }
 
   // Check if item name appears in consumer context
-  const itemRegex = new RegExp(`(use|query|from|call|invoke|execute).*${itemName}`, 'i');
+  const itemRegex = new RegExp(`(use|query|from|call|invoke|execute).*${escapeRegExp(itemName)}`, 'i');
   if (itemRegex.test(content)) {
     evidence.push({
       type: 'item_usage',
@@ -875,4 +885,4 @@ export async function generateFollowUpSD(parentSd, gaps, supabase) {
 }
 
 // Export reason codes for external use
-export { REASON_CODES };
+export { REASON_CODES, checkItemHasConsumer, escapeRegExp };
