@@ -1,5 +1,12 @@
 -- SD-LEO-INFRA-CHAIRMAN-DECISION-VIEW-001 — Source-4 rework of chairman_all_decision_signals
 --
+-- SUPERSEDED-BY: database/chairman-gated/20260817_chairman_all_decision_signals_merged.sql
+-- (QF-20260816-456, 2026-08-16). Do NOT apply this file — its decided_at/decided_by/priority/
+-- security_invoker fixes were merged into the successor alongside
+-- 20260803_chairman_queue_truthful_render.sql's title/status HELD-rendering fixes, which this file
+-- does not have (this file's branch 4 still renders decision='pause' as 'rejected'). Kept here
+-- unmodified for history/diff provenance only.
+--
 -- ============================ STAGED. NOT APPLIED. ============================
 -- CREATE OR REPLACE VIEW is TIER-2 under scripts/lib/migration-tier-classifier.mjs, so the
 -- classifier will never auto-apply it. There is NO @approved-by attestation on this file and this
