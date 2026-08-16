@@ -25,6 +25,27 @@ describe('DRIVE_SCORE_LEGS — the ratified SSOT', () => {
   });
 });
 
+describe('leg1_landed — amendment dc828e43 provenance (SD-LEO-INFRA-DRIVE-SCORE-LEG1-ANY-SUBJECT-001)', () => {
+  it('cites c8ad4998 amended by dc828e43 (2026-08-15) on the leg1_landed entry only', () => {
+    const leg1 = DRIVE_SCORE_LEGS.find((l) => l.id === 'leg1_landed');
+    expect(leg1.amendment).toBeDefined();
+    expect(leg1.amendment.amends).toBe('c8ad4998');
+    expect(leg1.amendment.by).toBe('dc828e43');
+    expect(leg1.amendment.at).toBe('2026-08-15');
+    // The amendment is leg1-specific — the leg-SET ratification (d50b9f12) is untouched by it,
+    // and the other two legs carry no amendment field at all.
+    expect(leg1.ratified_by).toBe(RATIFICATION.ruling);
+    const leg2 = DRIVE_SCORE_LEGS.find((l) => l.id === 'leg2_uptake');
+    const leg4 = DRIVE_SCORE_LEGS.find((l) => l.id === 'leg4_capacity');
+    expect(leg2.amendment).toBeUndefined();
+    expect(leg4.amendment).toBeUndefined();
+  });
+
+  it('the amendment field does not break the ratified-marker guard (still every leg has ratified_by)', () => {
+    expect(() => assertLegSetRatified()).not.toThrow();
+  });
+});
+
 describe('FR-3 assertLegSetRatified — a phantom leg (no marker) fails loud', () => {
   it('[POSITIVE CONTROL] fires on a leg minted WITHOUT a ratified_by marker', () => {
     const withPhantom = [...DRIVE_SCORE_LEGS, { id: 'leg3_phantom' }]; // no ratified_by

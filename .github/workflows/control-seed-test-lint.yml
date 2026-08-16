@@ -7,21 +7,18 @@
 # exactly as blind as the gauge it inspects — it RUNS the control against a real seeded defect
 # and requires it to fire.
 #
-# *** THE ADVISORY SOAK IS AN IRONY AND I AM NAMING IT RATHER THAN HIDING IT ***
-# Repo convention (schema-reference-lint, diagnostic-gauge-citation-lint) is continue-on-error
-# for a 7-day soak on any brand-new lint. But "advisory controls block nothing at merge time" is
-# finding #2 of this SD's own FR-1 census — session-coordination-insert-classguard-lint found a
-# real seeded violation, named the file, and exited 0. So this gate ships in precisely the state
-# it exists to criticise, and that is a deliberate, bounded trade rather than an oversight:
-#   - WHY SOAK ANYWAY: this gate EXECUTES other people's controls inside CI. That is a genuine
-#     flake surface (one sampled control already crashed on a git revision error against a
-#     scratch repo), and a new gate that flakes gets disabled rather than fixed.
-#   - WHY THE SOAK IS SHORT AND NARROW: it only evaluates files ADDED in the diff that match the
-#     control globs. It does not sweep existing code, so there is no pre-existing backlog able to
-#     block an unrelated PR — the usual reason a soak runs long does not apply.
-# FLIP CRITERION, dated and falsifiable: 7 days from merge with zero false-positive reports in
-# the harness backlog -> set continue-on-error to false. If that flip has not happened by then,
-# the correct read is that this gate joined the census, not that it is still soaking.
+# BLOCKING (SD-LEARN-FIX-ADDRESS-PAT-LES-001): the soak ran 15 days (merged 2026-07-31, reviewed
+# 2026-08-15 — more than double the originally stated 7) and held clean at the phenomenon level:
+# 10 true-positive firings against real controls across 7 branches (eol-renormalization-lint,
+# or-filter-must-project, schema-reference-lint, fixture-producer-guard-lint,
+# scanner-convention-lint, stage-advancement-chokepoint-lint, diagnostic-gauge-citation-lint,
+# session-coordination-insert-classguard-lint), every one merged only after the underlying
+# control was fixed. One HARNESS_ERROR (CI run 30957843441): a seedTest trial spawned a real git
+# worktree and a nested vitest inside this gate's own test file, and blew vitest's 60s default
+# under full-suite CI contention. Root-caused and fixed in commit eb48a344bf4 before this review —
+# see tests/unit/lint/control-seed-test-lint.test.js:238-258 (exec/spawn are now stubbed there).
+# No further reports since. Escape hatch for a genuine new false positive: revert this one line
+# in a normal PR, same as any other CI gate.
 name: Control Seed-Test Lint
 
 on:
@@ -40,8 +37,8 @@ jobs:
   control-seed-test-lint:
     name: control-seed-test-lint
     runs-on: ubuntu-latest
-    # ADVISORY SOAK — see the flip criterion in the header. Not a permanent state.
-    continue-on-error: true
+    # BLOCKING (soak completed, see header comment) — SD-LEARN-FIX-ADDRESS-PAT-LES-001.
+    continue-on-error: false
     steps:
       - uses: actions/checkout@v4
         with:

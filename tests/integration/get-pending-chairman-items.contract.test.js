@@ -1,5 +1,16 @@
 /**
  * SD-EHG-CONSOLE-PENDING-ITEMS-RPC-001 — get_pending_chairman_items contract test.
+ * Re-pinned by SD-LEO-FIX-CHILD-TAIL-CHAIRMAN-001 (FR-4): this file used to hardcode
+ * 20260710_create_get_pending_chairman_items.sql, so it silently re-created and tested a
+ * SUPERSEDED function body while 20260717 (and now this SD's migration) were the live
+ * predicate — a stale-but-green integration test. Signature/security/allowlist/fixture
+ * assertions and the live transactional test now resolve the LATEST migration containing
+ * the function (tests/helpers/latest-migration.js), so a future extension is tracked
+ * automatically instead of requiring every consumer to remember to re-pin. ONE assertion
+ * — the literal `DROP FUNCTION IF EXISTS` rollback comment — is intentionally kept against
+ * the ORIGINAL 20260710 file specifically: that string is a property of the original
+ * creation's rollback story (later migrations roll back by re-applying the prior version,
+ * not by DROP FUNCTION), not something that should exist in every subsequent extension.
  *
  * Pins the RPC's envelope shape and the SHARED chairman-actionable predicate so consumer/DB
  * drift fails CI (reader/writer contract pattern). Two halves, per the established recipe
@@ -18,11 +29,24 @@ import { describe, it, expect, beforeAll, afterAll } from 'vitest';
 import { readFileSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import { dirname, resolve } from 'node:path';
+import { resolveLatestMigration } from '../helpers/latest-migration.js';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const REPO_ROOT = resolve(__dirname, '../../');
-const MIGRATION_PATH = resolve(REPO_ROOT, 'database/migrations/20260710_create_get_pending_chairman_items.sql');
-const SQL = readFileSync(MIGRATION_PATH, 'utf8');
+const FN_MARKER = 'CREATE OR REPLACE FUNCTION public.get_pending_chairman_items(';
+
+// The newest DECLARED body: whichever migration most recently extended the function. NOTE:
+// for a chairman-gated migration this file may be staged and not yet applied — "newest
+// declared" and "currently live in the database" can differ during that window (see
+// tests/helpers/latest-migration.js). Static assertions below check the declared SQL text;
+// the live BEGIN..ROLLBACK section further down is the only thing that touches an actual
+// database, and it self-applies this same declared body inside its own transaction.
+const { sql: SQL } = resolveLatestMigration(REPO_ROOT, FN_MARKER);
+
+// The ORIGINAL creation migration specifically — only for the one assertion (below) that is
+// genuinely about that file's own rollback comment, not about "whatever is currently live".
+const ORIGINAL_PATH = resolve(REPO_ROOT, 'database/migrations/20260710_create_get_pending_chairman_items.sql');
+const ORIGINAL_SQL = readFileSync(ORIGINAL_PATH, 'utf8');
 
 describe('get_pending_chairman_items — static migration contract', () => {
   it('creates the exact consumer-called signature (text, integer, integer)', () => {
@@ -51,13 +75,23 @@ describe('get_pending_chairman_items — static migration contract', () => {
     expect(SQL).not.toMatch(/IN \([^)]*'flag_enablement'/);
   });
 
-  it('fixture exclusion + grants + rollback are declared (positive-identification form, NULL-safe)', () => {
+  it('fixture exclusion + grants are declared (positive-identification form, NULL-safe)', () => {
     expect(SQL).toMatch(/NOT COALESCE\(/);
     expect(SQL).toMatch(/is_demo IS TRUE/);
     expect(SQL).toMatch(/LIKE '\\_\\_%'/);
     expect(SQL).toMatch(/, false\)/); // NULL/dangling/RLS-invisible venture resolves to INCLUDE
     expect(SQL).toMatch(/GRANT EXECUTE ON FUNCTION public\.get_pending_chairman_items\(text, integer, integer\) TO authenticated/);
-    expect(SQL).toMatch(/DROP FUNCTION IF EXISTS public\.get_pending_chairman_items\(text, integer, integer\)/);
+  });
+
+  it('current fixture exclusion additionally covers ZZZ_/UAT/epoch-tail (SD-LEO-FIX-CHILD-TAIL-CHAIRMAN-001)', () => {
+    expect(SQL).toMatch(/ILIKE 'ZZZ\\_%'/);
+    expect(SQL).toMatch(/ILIKE 'UAT-%'/);
+    expect(SQL).toMatch(/ILIKE 'UAT\\_%'/);
+    expect(SQL).toMatch(/v\.name ~ '\[-:\]\[0-9\]\{10,\}\$'/);
+  });
+
+  it("the ORIGINAL creation migration's rollback comment documents DROP FUNCTION (a property of that file specifically, not of every extension)", () => {
+    expect(ORIGINAL_SQL).toMatch(/DROP FUNCTION IF EXISTS public\.get_pending_chairman_items\(text, integer, integer\)/);
   });
 });
 

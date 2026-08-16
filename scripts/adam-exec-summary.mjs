@@ -51,6 +51,10 @@ import { enforceCliSendGuard } from '../lib/notifications/cli-send-guard.mjs';
 // SD-LEO-INFRA-COUNT-TRUNCATION-DISCIPLINE-001 FR-6 batch 9: chairman_decisions has no filter
 // below and is displayed as an honest "consumed X of Y" total to the chairman.
 import { fetchAllPaginated } from '../lib/db/fetch-all-paginated.mjs';
+// SD-FDBK-INFRA-ENCODE-DRIVE-SIX-GOAL-001: the chairman-facing per-leg drive-score breakdown,
+// shared VERBATIM with the morning-brief SMS (same module, same query) so the two surfaces can
+// never disagree about which row is "the current score" in one morning.
+import { composeDriveLine } from '../lib/fleet/exec-email-drive-line.mjs';
 
 enforceCliSendGuard({
   scriptName: 'scripts/adam-exec-summary.mjs',
@@ -233,6 +237,12 @@ try {
   visNote = `(gauge unavailable ${EM} compute error)`;
 }
 
+// SD-FDBK-INFRA-ENCODE-DRIVE-SIX-GOAL-001: the drive-score breakdown line -- additive only, never
+// touches the vision-gauge variables above. composeDriveLine never throws (fail-soft by construction).
+let driveLine = null;
+try { driveLine = (await composeDriveLine({ supabase: db }))?.line ?? null; }
+catch (e) { console.warn('[adam-email] drive-score breakdown skipped (fail-soft): ' + (e?.message || e)); }
+
 // SD-LEO-INFRA-EXEC-EMAIL-STRATEGY-ALIGNED-001 (FR-3): the infra-build-completion forecast line is
 // STRIPPED from the exec-summary email surface. Its compute (a read of build_completion_forecast_log)
 // is removed with the line — the forecast table keeps being WRITTEN by its own cron for other
@@ -394,6 +404,8 @@ const text = [
   ...(metaLine ? ['   ' + metaLine] : []),
   ...(distanceToQuitLine ? ['   ' + distanceToQuitLine] : []),
   ...(watchdogLine ? ['   ' + watchdogLine] : []),
+  // SD-FDBK-INFRA-ENCODE-DRIVE-SIX-GOAL-001: the drive-score goal, framed per leg against 6/6.
+  ...(driveLine ? ['   Drive: ' + driveLine] : []),
   ...(opsActualsLines.length ? ['', 'Venture actuals:', ...opsActualsLines.map((l) => '   ' + l)] : []),
   ...(recentText ? ['', recentText] : []),
   ...(decisionsLine ? [decisionsLine] : []),
@@ -424,6 +436,8 @@ const html = '<div style="font-family:system-ui,Arial,sans-serif;max-width:640px
   (metaLine ? `<div style="font-size:13px;color:#444;margin:2px 0 0">${esc(metaLine)}</div>` : '') +
   (distanceToQuitLine ? `<div style="font-size:13px;color:#444;margin:2px 0 0">${esc(distanceToQuitLine)}</div>` : '') +
   (watchdogLine ? `<div style="font-size:12px;color:#b54708;margin:2px 0 0">${esc(watchdogLine)}</div>` : '') +
+  // SD-FDBK-INFRA-ENCODE-DRIVE-SIX-GOAL-001: the drive-score goal, framed per leg against 6/6.
+  (driveLine ? `<div style="font-size:13px;color:#444;margin:2px 0 0">Drive: ${esc(driveLine)}</div>` : '') +
   (opsActualsLines.length
     ? `<p style="font-size:13px;font-weight:600;margin:8px 0 0">Venture actuals:</p>` +
       opsActualsLines.map((l) => `<div style="font-size:12px;color:#444;margin:2px 0 0">${esc(l)}</div>`).join('')

@@ -2,7 +2,7 @@
 category: runbook
 status: active
 sd: SD-LEO-FEAT-TWO-WAY-CHAIRMAN-001
-last_updated: 2026-07-17
+last_updated: 2026-08-15
 ---
 
 # Two-Way Chairman SMS Bridge — Architecture + Chairman-Gated Checklist
@@ -98,6 +98,24 @@ direct-write path as the only live inbound route:
 10. Only after 6-9 are green: flip Twilio's "A message comes in" webhook to the relay URL,
    then set `SMS_RELAY_CUTOVER_COMPLETE=true` on the EHG_Engineer deployment to decommission
    the old direct-write handler.
+
+## Decision-packet path: matchability fix (2026-08-15, SD-LEO-INFRA-SMS-DECIDE-REPLY-MATCHABLE-001)
+
+Adam's SMS **decision packets** (option-letter questions like "A) ship / B) hold",
+sent via `scripts/adam-chairman-decision.mjs` → `lib/comms/adam-outbound/chairman-sms-gate/index.js`,
+a distinct send path layered on top of `sendChairmanSmsQuestion()` above) previously sent
+the SMS without staging a matchable reply token: `handleInboundSmsReply`'s matcher requires
+BOTH a `chairman_notifications` row (channel='sms', `recipient_phone`, `decision_id` set)
+AND a live `chairman_decisions.sms_reply_token` to resolve a reply, and the gate was only
+ever writing the notification, not the token pair — so every option-letter reply parked as
+`no_match` regardless of content.
+
+`chairman-sms-gate/index.js` now calls `stageDecisionSmsNotification()`
+(`lib/chairman/sms-bridge.js`) to write both rows atomically before sending, and
+`invalidateDecisionSmsStaging()` to roll the token back if the send is a confirmed
+soft-failure or throws — a staged-but-undelivered token is never left live and matchable.
+This only applies to the **decision-packet** path; the original `sendChairmanSmsQuestion()`
+outbound flow documented above was already correct and is unchanged.
 
 ## Not in scope (deferred, per the archived plan)
 

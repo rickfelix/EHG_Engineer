@@ -278,7 +278,7 @@ node scripts/check-real-backlog-gaps.js
 When setting up a new environment, verify:
 - [ ] Can run: `psql "$SUPABASE_POOLER_URL" -c "SELECT 1;"`
 - [ ] Username includes project ref: `postgres.dedlbzhpgkmetvhbkyzq`
-- [ ] Password is URL-encoded: `Fl%21M32DaM00n%211`
+- [ ] Password is URL-encoded: `<URL_ENCODED_PASSWORD>`
 - [ ] Using pooler host: `aws-1-us-east-1.pooler.supabase.com`
 - [ ] SSL mode is set: `?sslmode=require`
 - [ ] Connection string is single-quoted in bash

@@ -281,6 +281,12 @@ FIXTURE_CONTENT=$(git diff --cached --diff-filter=ACM -U0 -- 'docs/design/apa-ca
 STAGED_CONTENT="${STAGED_CONTENT}
 ${FIXTURE_CONTENT}"
 
+# SD-LEO-FIX-STRIP-DEAD-DB-CREDENTIAL-LITERALS-001: scan ADDED lines only. The -U0 diff
+# includes REMOVED lines (leading "-"), so a commit that REDACTS a secret (deleting the
+# old line, adding a placeholder) was blocked by construction — the scanner must block
+# secrets ENTERING the tree, never secrets LEAVING it. "+++" file headers are excluded.
+STAGED_CONTENT=$(printf '%s\n' "$STAGED_CONTENT" | grep -E '^\+' | grep -vE '^\+\+\+' || true)
+
 # Define secret patterns (regex)
 # These patterns match common API key and credential formats
 SECRET_PATTERNS=(

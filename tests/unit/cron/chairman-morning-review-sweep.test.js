@@ -15,6 +15,7 @@ import {
   parseArgs,
   buildMorningReviewBody,
   buildComposedBody,
+  assembleMorningBody,
   etLocalHour,
   etDateStr,
   et6amIso,
@@ -54,6 +55,11 @@ function makeSupabase(data = {}) {
         if (table === 'strategic_roadmaps') rows = data.roadmaps || [];
         else if (table === 'roadmap_waves') rows = data.waves || [];
         else if (table === 'strategic_directives_v2') rows = has('not') ? (data.inFlight || []) : (data.completed || []);
+        // SD-FDBK-INFRA-ENCODE-DRIVE-SIX-GOAL-001: absent by default (rows stays []), so every
+        // PRE-EXISTING test in this file (none of which set data.driveReports) sees the SAME
+        // empty-result behavior composeDriveLine already degrades gracefully from — the drive
+        // line is simply omitted, and this file's 27 pre-existing tests are untouched by this addition.
+        else if (table === 'drive_reports') rows = data.driveReports || [];
         return Promise.resolve({ data: rows, error: null }).then(resolve, reject);
       },
     };
@@ -395,5 +401,84 @@ describe('buildComposedBody (FR-2) — render/upload failure degrades to text-on
     expect(result.body.length).toBeLessThanOrEqual(COMPOSED_BODY_CEILING);
     expect(result.body.endsWith('…')).toBe(true);
     expect(result.body).not.toMatch(/wor…$/); // never cuts mid-word
+  });
+});
+
+// ── SD-FDBK-INFRA-ENCODE-DRIVE-SIX-GOAL-001 — the drive-score breakdown 4th line ──────────────
+
+const DRIVE_ROW = {
+  run_id: 'drive-2026-07-18',
+  generated_at: '2026-07-18T09:00:00Z',
+  drive_score: {
+    score: { value: 4 },
+    possible: 6,
+    measured_legs: [
+      { leg: 'leg1_landed', value: 2, table: 't', predicate: 'p' },
+      { leg: 'leg2_uptake', value: 1, table: 't', predicate: 'p' },
+      { leg: 'leg4_capacity', value: 1, table: 't', predicate: 'p' },
+    ],
+    unavailable_legs: [],
+  },
+};
+
+describe('TS (drive line) — the 4th line, additive, fail-soft, never breaking the pinned 3-line core', () => {
+  it('no drive_reports row available (every pre-existing test\'s shape): body is UNCHANGED from the 3-line core (TS-6/TS-11 byte-identity)', async () => {
+    const body = await buildMorningReviewBody(makeSupabase(richData), { now: SUMMER_WORK });
+    expect(body.split('\n')).toHaveLength(3);
+    expect(body).not.toMatch(/top lever/);
+  });
+
+  it('a real drive_reports row adds a 4th line carrying the per-leg breakdown', async () => {
+    const data = { ...richData, driveReports: [DRIVE_ROW] };
+    const body = await buildMorningReviewBody(makeSupabase(data), { now: SUMMER_WORK });
+    const lines = body.split('\n');
+    expect(lines).toHaveLength(4);
+    expect(lines[3]).toBe('4/6 = leg1_landed 2 + leg2_uptake 1 + leg4_capacity 1; top lever: leg2_uptake (as of 2026-07-18)');
+  });
+
+  it('queries drive_reports via composeDriveLine\'s .limit(1)+data[0] shape -- this mock exposes no .single()/.maybeSingle(), so that shape is REQUIRED for the wiring to work at all', async () => {
+    const data = { ...richData, driveReports: [DRIVE_ROW] };
+    const sb = makeSupabase(data);
+    await buildMorningReviewBody(sb, { now: SUMMER_WORK });
+    const driveCall = sb._calls.find((c) => c.table === 'drive_reports');
+    expect(driveCall, 'the sweep must query drive_reports').toBeDefined();
+    expect(driveCall.ops.some((o) => o.m === 'limit' && o.args[0] === 1)).toBe(true);
+  });
+
+  it('an unreadable drive_score row degrades to the 3-line core, never throws', async () => {
+    const data = { ...richData, driveReports: [{ run_id: 'r', generated_at: '2026-07-18T09:00:00Z', drive_score: {} }] };
+    const body = await buildMorningReviewBody(makeSupabase(data), { now: SUMMER_WORK });
+    expect(body.split('\n')).toHaveLength(3);
+  });
+});
+
+describe('assembleMorningBody — PURE ceiling-drop decision (the "which line yields" choice, pinned)', () => {
+  it('includes the drive line when everything fits under the ceiling', () => {
+    const body = assembleMorningBody(['a', 'b', 'c'], 'drive line', 100);
+    expect(body).toBe('a\nb\nc\ndrive line');
+  });
+
+  it('DROPS THE DRIVE LINE FIRST when its presence would breach the ceiling -- the core 3 lines survive intact', () => {
+    const core = ['a'.repeat(50), 'b'.repeat(50), 'c'.repeat(50)]; // 150 chars + 2 separators = 152
+    const driveLine = 'd'.repeat(100); // would push well past a 200 ceiling
+    const body = assembleMorningBody(core, driveLine, 200);
+    expect(body).toBe(core.join('\n'));
+    expect(body).not.toContain('d'.repeat(100));
+  });
+
+  it('falls back to the pre-existing whole-body ellipsis truncation only when the core ALONE still exceeds the ceiling', () => {
+    const core = ['x'.repeat(300)];
+    const body = assembleMorningBody(core, 'drive line', 200);
+    expect(body.length).toBe(200);
+    expect(body.endsWith('…')).toBe(true);
+  });
+
+  it('a null/omitted drive line never appears and never affects the core', () => {
+    expect(assembleMorningBody(['a', 'b'], null, 100)).toBe('a\nb');
+    expect(assembleMorningBody(['a', 'b'], undefined, 100)).toBe('a\nb');
+  });
+
+  it('falsy core lines (empty forecast/roadmap/yesterday) are filtered, matching the pre-existing .filter(Boolean) contract implicitly relied on by callers', () => {
+    expect(assembleMorningBody(['a', '', null, 'b'], 'd', 100)).toBe('a\nb\nd');
   });
 });

@@ -45,6 +45,10 @@ import { resolveCanonicalRoadmap } from '../../lib/roadmap/canonical-roadmap.js'
 import { buildRoadmapStatusDoc } from '../../lib/chairman/daily-review/roadmap-status-doc.js';
 import { renderGanttPng } from '../../lib/chairman/daily-review/gantt-renderer.js';
 import { uploadPrivateAndSign } from '../../lib/storage/private-signed-upload.js';
+// SD-FDBK-INFRA-ENCODE-DRIVE-SIX-GOAL-001: the chairman-facing per-leg drive-score breakdown,
+// shared VERBATIM with the exec-summary email (same module, same query) so the two surfaces can
+// never disagree about which row is "the current score" in one morning.
+import { composeDriveLine } from '../../lib/fleet/exec-email-drive-line.mjs';
 
 export const SD_KEY = 'SD-LEO-INFRA-CHAIRMAN-DAILY-REVIEW-DOC-001-B';
 export const ACTIVATION_TRIGGER = '.github/workflows/chairman-morning-review-cron.yml';
@@ -193,6 +197,25 @@ async function gatherYesterday(supabase, priorMorningIso) {
   return { shipped, inFlight };
 }
 
+/**
+ * PURE: join the proven 3-line core with the optional drive-score line, dropping the DRIVE LINE
+ * FIRST if the ceiling would be breached — the core trio is the pinned, proven surface (TS-6); the
+ * drive line is the newest addition and the one that grows with the leg vocabulary, so it is the
+ * one that yields rather than forcing a mid-sentence truncation onto a line that used to always fit.
+ * Falls back to the pre-existing whole-body truncation (SD-LEO-INFRA-CHAIRMAN-DAILY-REVIEW-DOC-001-B)
+ * only if the core trio ALONE still exceeds the ceiling.
+ * @param {string[]} coreLines
+ * @param {string|null} driveLine
+ * @param {number} [ceiling]
+ */
+export function assembleMorningBody(coreLines, driveLine, ceiling = BODY_CEILING) {
+  const core = coreLines.filter(Boolean);
+  let body = [...core, driveLine].filter(Boolean).join('\n');
+  if (driveLine && body.length > ceiling) body = core.join('\n');
+  if (body.length > ceiling) body = `${body.slice(0, ceiling - 1)}…`;
+  return body;
+}
+
 /** Build the SHORT, PII-free morning-review body. Login-gated summary data only. */
 export async function buildMorningReviewBody(supabase, { now = new Date() } = {}) {
   const nowMs = now.getTime();
@@ -205,9 +228,12 @@ export async function buildMorningReviewBody(supabase, { now = new Date() } = {}
   const { shipped, inFlight } = await gatherYesterday(supabase, etPrior545Iso(now));
   const yesterdayLine = `Yesterday: ${shipped} shipped, ${inFlight} in-flight`;
 
-  let body = [forecastLine, roadmapLine, yesterdayLine].join('\n');
-  if (body.length > BODY_CEILING) body = `${body.slice(0, BODY_CEILING - 1)}…`;
-  return body;
+  // SD-FDBK-INFRA-ENCODE-DRIVE-SIX-GOAL-001: fail-soft by construction (composeDriveLine never
+  // throws) -- a read/format failure degrades to the SAME "line omitted" behavior as "no row yet".
+  const drive = await composeDriveLine({ supabase });
+  const driveLine = drive?.line ?? null;
+
+  return assembleMorningBody([forecastLine, roadmapLine, yesterdayLine], driveLine);
 }
 
 // SD-LEO-INFRA-DAILY-BRIEF-E2E-WIRING-001 FR-2: feature flag gating the composed (text + MMS
