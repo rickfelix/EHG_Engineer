@@ -1,24 +1,8 @@
 -- Close the remaining SECURITY DEFINER EXECUTE exposure: 16 functions (live-verified residual,
--- corrected from an original 42-function scan).
+-- corrected from an original 42-function scan), plus a scoped ALTER DEFAULT PRIVILEGES fix.
 -- SD: SD-LEO-INFRA-CLOSE-REMAINING-SECURITY-001
 -- Date: 2026-08-16
 -- Target DB: EHG_Engineer consolidated (dedlbzhpgkmetvhbkyzq)
---
--- FR-4 (ALTER DEFAULT PRIVILEGES recurrence-prevention) DESCOPED to a follow-up migration —
--- EXEC-TO-PLAN review found the ADP statement does not reliably suppress anon EXECUTE on newly
--- created functions: a cross-transaction outcome check (a real probe function created in a
--- SEPARATE, post-COMMIT statement — not the same-transaction visibility question raised and ruled
--- out earlier) directly measured anon_exec=true on a function created after this migration's own
--- ADP REVOKE had committed. That is a genuine, unresolved defect in the ADP mechanism/statement
--- itself (or an environment-specific Postgres/Supabase interaction this session's tooling can't
--- diagnose further — no local Postgres available for empirical iteration), not a test-harness
--- artifact, and not something safe to ship inside a one-shot, non-re-enterable chairman-ceremony
--- transaction: a broken self-test here would abort Buckets A and B (proven correct, see below)
--- along with it every time the chairman applies. Two independent recurrence controls remain live
--- regardless of this descope: the FR-6 secdef-execute-revoke-lint (blocking CI, requires an
--- explicit PUBLIC-naming REVOKE alongside every new SECURITY DEFINER function) and
--- scripts/audit-rpc-execute-grants.mjs's completeness gate (measures the live catalog directly,
--- covering the lint's stated blind spot — a function created outside any migration file).
 --
 -- CHAIRMAN-GATED. Per the SD family convention this file is a DELIVERABLE, not an applied
 -- change. It is inert until the approver header below is filled with the approving bare
@@ -96,11 +80,16 @@
 -- fires when a proacl read is NULL (a real state: SetDefaultACL deletes a pg_default_acl row
 -- entirely when it equals acldefault(), which would otherwise defeat this exact drift check).
 --
--- ON THE (REMOVED) ALTER DEFAULT PRIVILEGES STATEMENT — see the FR-4 descope note at the top of
--- this file. pg_default_acl for (postgres, public, functions) already carries ZERO PUBLIC items
--- today (measured); the open question was whether an ADP REVOKE ... FROM anon reliably suppresses
--- anon EXECUTE on NEW functions, and a direct cross-transaction outcome measurement found it does
--- not, reliably, in this environment — deferred to a follow-up migration for further diagnosis.
+-- ON THE ALTER DEFAULT PRIVILEGES STATEMENT — CORRECTED RATIONALE (TESTING sub-agent finding,
+-- PLAN-TO-EXEC): the original SD description's "natural experiment" reasoning (a function with
+-- no explicit GRANT still carrying a PUBLIC grant, implying an additive default) was FALSIFIED
+-- by measurement. pg_default_acl for (postgres, public, functions) already carries ZERO PUBLIC
+-- items today; a newer function (fn_anon_ingress_prior_hour_count, created 2026-08-04) matches
+-- the ADP row byte-for-byte with NO PUBLIC grant, while the apparent counter-example
+-- (log_sd_mutation_audit, created 2026-08-02) is explained by CREATION DATE, not an additive
+-- mechanism. The PUBLIC-revoke half of this statement is therefore ALREADY SATISFIED by existing
+-- state — the only real state change is REVOKE ... FROM anon. The self-test below still proves
+-- this at apply time rather than trusting either the original or corrected theory on faith.
 --
 -- ============================================================================
 
@@ -189,14 +178,33 @@ GRANT EXECUTE ON FUNCTION public.reject_chairman_decision(uuid, text, text, uuid
 GRANT EXECUTE ON FUNCTION public.upsert_operator_cash_burn(numeric, numeric, numeric, numeric) TO service_role, authenticated;
 
 -- --------------------------------------------------------------------------
--- RECURRENCE PREVENTION (ALTER DEFAULT PRIVILEGES): DESCOPED to a follow-up migration — see the
--- FR-4 descope note at the top of this file. A direct cross-transaction outcome measurement found
--- the ADP REVOKE does not reliably suppress anon EXECUTE on newly created functions in this
--- environment; shipping an unresolved self-test inside this one-shot chairman-ceremony transaction
--- would risk aborting Buckets A/B (proven correct below) along with it. Two independent recurrence
--- controls remain live: the FR-6 secdef-execute-revoke-lint and the audit-rpc-execute-grants
--- completeness gate.
+-- RECURRENCE PREVENTION: scoped to role=postgres only (see header — a second pg_default_acl row
+-- exists for role=supabase_admin; currently OUT OF SCOPE because all 759 public-schema functions
+-- are postgres-owned today, so it is provably inert, not silently ignored).
 -- --------------------------------------------------------------------------
+ALTER DEFAULT PRIVILEGES FOR ROLE postgres IN SCHEMA public
+  REVOKE EXECUTE ON FUNCTIONS FROM PUBLIC, anon;
+
+-- Empirical self-test (TESTING sub-agent design, PLAN-TO-EXEC): prove the ADP change actually
+-- suppresses anon/PUBLIC EXECUTE on a NEW function, in the same transaction the chairman
+-- approves, rather than trusting a theory about Postgres/Supabase default-ACL mechanics.
+DO $adp_self_test$
+DECLARE
+  test_oid oid;
+  has_anon boolean;
+  has_public boolean;
+BEGIN
+  CREATE FUNCTION public._sd_leo_infra_close_remaining_security_001_adp_probe() RETURNS void
+    LANGUAGE sql AS 'SELECT 1' SECURITY DEFINER;
+  SELECT oid INTO test_oid FROM pg_proc WHERE proname = '_sd_leo_infra_close_remaining_security_001_adp_probe';
+  has_anon := has_function_privilege('anon', test_oid, 'EXECUTE');
+  has_public := has_function_privilege('public', test_oid, 'EXECUTE');
+  DROP FUNCTION public._sd_leo_infra_close_remaining_security_001_adp_probe();
+  IF has_anon OR has_public THEN
+    RAISE EXCEPTION 'ADP_SELF_TEST_FAILED: a function created AFTER the ALTER DEFAULT PRIVILEGES statement still carries anon_exec=% public_exec=% -- the recurrence-prevention fix did not take effect as expected. Aborting transaction; do not apply until this is understood.', has_anon, has_public;
+  END IF;
+END;
+$adp_self_test$;
 
 -- --------------------------------------------------------------------------
 -- VERIFY BLOCK: Bucket A/B reached their required state; Bucket C is byte-identical to the

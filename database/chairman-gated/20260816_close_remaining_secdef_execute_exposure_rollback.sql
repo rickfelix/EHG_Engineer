@@ -11,16 +11,26 @@
 --   node scripts/one-off/exec-live-baseline-close-remaining-security-001.mjs
 --
 -- This restores PUBLIC + anon + authenticated EXECUTE to every one of the 16 functions the
--- forward migration touched. It does NOT touch Bucket C (the forward migration never touched it
--- either), and there is no ALTER DEFAULT PRIVILEGES to revert — see the forward migration's FR-4
--- descope note: the ADP statement was removed from this migration pair entirely at EXEC-TO-PLAN
--- after a cross-transaction outcome measurement found it did not reliably suppress anon EXECUTE on
--- new functions; deferred to a follow-up migration.
+-- forward migration touched, and reverts the ALTER DEFAULT PRIVILEGES statement. It does NOT
+-- touch Bucket C (the forward migration never touched it either).
 --
 -- @approved-by:
 --   ^ INTENTIONALLY BLANK, same chairman-gate discipline as the forward migration.
 
 BEGIN;
+
+-- --------------------------------------------------------------------------
+-- Restore ALTER DEFAULT PRIVILEGES to its pre-migration state. SECURITY sub-agent finding (S1,
+-- EXEC-TO-PLAN review): the forward migration's REVOKE FROM PUBLIC, anon was a no-op for PUBLIC
+-- (pg_default_acl for (postgres, public, functions) already carried ZERO PUBLIC items before this
+-- SD ever ran, per its own corrected header) -- only anon was actually removed. The TRUE inverse
+-- therefore re-grants anon ONLY; granting PUBLIC back (the original version of this line) would
+-- introduce a default-ACL state that never existed pre-migration, silently widening every future
+-- postgres-owned function in schema public to PUBLIC-executable-by-default -- the exact recurrence
+-- class this SD exists to close.
+-- --------------------------------------------------------------------------
+ALTER DEFAULT PRIVILEGES FOR ROLE postgres IN SCHEMA public
+  GRANT EXECUTE ON FUNCTIONS TO anon;
 
 -- --------------------------------------------------------------------------
 -- BUCKET A (6): restore PUBLIC + anon + authenticated EXECUTE (all six carried public=true
@@ -52,7 +62,36 @@ GRANT EXECUTE ON FUNCTION public.upsert_operator_cash_burn(numeric, numeric, num
 -- VERIFY: every function this rollback touched matches its measured pre-migration grant state
 -- exactly (not just "has some grants back") — using has_function_privilege(), never a text match
 -- against proacl, and IS DISTINCT FROM semantics throughout (see forward migration header for why).
+--
+-- SECURITY sub-agent finding (S2, EXEC-TO-PLAN review): the per-function checks below are BLIND
+-- to the default-ACL posture (S1) — a rollback that over-grants PUBLIC by default would report
+-- success anyway, since none of the 16 named functions themselves changed. Mirrors the forward
+-- migration's own $adp_self_test$ pattern (create a throwaway probe, check its EXECUTE grants,
+-- drop it) but asserts the OPPOSITE direction: a function created AFTER this rollback must have
+-- anon EXECUTE restored (proving the re-grant took effect) and must NOT have PUBLIC EXECUTE
+-- (proving the rollback did not over-grant beyond the true pre-migration state).
 -- --------------------------------------------------------------------------
+DO $adp_rollback_self_test$
+DECLARE
+  test_oid oid;
+  has_anon boolean;
+  has_public boolean;
+BEGIN
+  CREATE FUNCTION public._sd_leo_infra_close_remaining_security_001_rollback_probe() RETURNS void
+    LANGUAGE sql AS 'SELECT 1' SECURITY DEFINER;
+  SELECT oid INTO test_oid FROM pg_proc WHERE proname = '_sd_leo_infra_close_remaining_security_001_rollback_probe';
+  has_anon := has_function_privilege('anon', test_oid, 'EXECUTE');
+  has_public := has_function_privilege('public', test_oid, 'EXECUTE');
+  DROP FUNCTION public._sd_leo_infra_close_remaining_security_001_rollback_probe();
+  IF NOT has_anon THEN
+    RAISE EXCEPTION 'ADP_ROLLBACK_SELF_TEST_FAILED: a function created AFTER the rollback''s ALTER DEFAULT PRIVILEGES statement has anon_exec=false -- the anon re-grant did not take effect. Aborting transaction.';
+  END IF;
+  IF has_public THEN
+    RAISE EXCEPTION 'ADP_ROLLBACK_SELF_TEST_FAILED: a function created AFTER the rollback''s ALTER DEFAULT PRIVILEGES statement has public_exec=true -- the rollback over-granted PUBLIC, which never held this default pre-migration. Aborting transaction.';
+  END IF;
+END;
+$adp_rollback_self_test$;
+
 DO $verify_rollback$
 DECLARE
   r RECORD;
