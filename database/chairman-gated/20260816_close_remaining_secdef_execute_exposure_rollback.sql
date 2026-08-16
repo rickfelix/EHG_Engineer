@@ -11,26 +11,16 @@
 --   node scripts/one-off/exec-live-baseline-close-remaining-security-001.mjs
 --
 -- This restores PUBLIC + anon + authenticated EXECUTE to every one of the 16 functions the
--- forward migration touched, and reverts the ALTER DEFAULT PRIVILEGES statement. It does NOT
--- touch Bucket C (the forward migration never touched it either).
+-- forward migration touched. It does NOT touch Bucket C (the forward migration never touched it
+-- either), and there is no ALTER DEFAULT PRIVILEGES to revert — see the forward migration's FR-4
+-- descope note: the ADP statement was removed from this migration pair entirely at EXEC-TO-PLAN
+-- after a cross-transaction outcome measurement found it did not reliably suppress anon EXECUTE on
+-- new functions; deferred to a follow-up migration.
 --
 -- @approved-by:
 --   ^ INTENTIONALLY BLANK, same chairman-gate discipline as the forward migration.
 
 BEGIN;
-
--- --------------------------------------------------------------------------
--- Restore ALTER DEFAULT PRIVILEGES to its pre-migration state. SECURITY sub-agent finding (S1,
--- EXEC-TO-PLAN review): the forward migration's REVOKE FROM PUBLIC, anon was a no-op for PUBLIC
--- (pg_default_acl for (postgres, public, functions) already carried ZERO PUBLIC items before this
--- SD ever ran, per its own corrected header) -- only anon was actually removed. The TRUE inverse
--- therefore re-grants anon ONLY; granting PUBLIC back (the original version of this line) would
--- introduce a default-ACL state that never existed pre-migration, silently widening every future
--- postgres-owned function in schema public to PUBLIC-executable-by-default -- the exact recurrence
--- class this SD exists to close.
--- --------------------------------------------------------------------------
-ALTER DEFAULT PRIVILEGES FOR ROLE postgres IN SCHEMA public
-  GRANT EXECUTE ON FUNCTIONS TO anon;
 
 -- --------------------------------------------------------------------------
 -- BUCKET A (6): restore PUBLIC + anon + authenticated EXECUTE (all six carried public=true
@@ -62,44 +52,7 @@ GRANT EXECUTE ON FUNCTION public.upsert_operator_cash_burn(numeric, numeric, num
 -- VERIFY: every function this rollback touched matches its measured pre-migration grant state
 -- exactly (not just "has some grants back") — using has_function_privilege(), never a text match
 -- against proacl, and IS DISTINCT FROM semantics throughout (see forward migration header for why).
---
--- SECURITY sub-agent finding (S2, EXEC-TO-PLAN review): the per-function checks below are BLIND
--- to the default-ACL posture (S1) — a rollback that over-grants PUBLIC by default would report
--- success anyway, since none of the 16 named functions themselves changed.
---
--- REDESIGNED (TESTING sub-agent RCA, EXEC-TO-PLAN, mirrors the forward migration's own
--- $adp_self_test$ re-design): was create-a-throwaway-probe-and-check-its-grants, which a live
--- diagnostic run showed does not reliably observe an ALTER DEFAULT PRIVILEGES change made earlier
--- in the SAME transaction, even though the stored pg_default_acl row is provably correct at that
--- point. Asserts the actual stored ACL DIRECTLY via aclexplode() (grantee=0 is its documented
--- representation of PUBLIC) instead: anon must be present (re-grant took effect), PUBLIC must be
--- absent (rollback did not over-grant beyond the true pre-migration state).
 -- --------------------------------------------------------------------------
-DO $adp_rollback_self_test$
-DECLARE
-  has_anon boolean;
-  has_public boolean;
-BEGIN
-  SELECT
-    COALESCE(bool_or(a.grantee = 0), false),
-    COALESCE(bool_or(a.grantee = 'anon'::regrole), false)
-  INTO has_public, has_anon
-  FROM pg_default_acl d
-  JOIN pg_roles ro ON ro.oid = d.defaclrole
-  JOIN pg_namespace n ON n.oid = d.defaclnamespace
-  CROSS JOIN LATERAL aclexplode(d.defaclacl) AS a
-  WHERE ro.rolname = 'postgres' AND n.nspname = 'public' AND d.defaclobjtype = 'f'
-    AND a.privilege_type = 'EXECUTE';
-
-  IF NOT has_anon THEN
-    RAISE EXCEPTION 'ADP_ROLLBACK_SELF_TEST_FAILED: pg_default_acl for (postgres, public, functions) does not grant anon EXECUTE after the rollback''s ALTER DEFAULT PRIVILEGES statement -- the anon re-grant did not take effect. Aborting transaction.';
-  END IF;
-  IF has_public THEN
-    RAISE EXCEPTION 'ADP_ROLLBACK_SELF_TEST_FAILED: pg_default_acl for (postgres, public, functions) grants PUBLIC EXECUTE after the rollback -- the rollback over-granted PUBLIC, which never held this default pre-migration. Aborting transaction.';
-  END IF;
-END;
-$adp_rollback_self_test$;
-
 DO $verify_rollback$
 DECLARE
   r RECORD;
