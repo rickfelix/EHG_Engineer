@@ -237,6 +237,38 @@ describe('coverage, never completeness (FR-3)', () => {
     // llm_result already contained the merge, that re-merge would duplicate it.
     expect(supabase._inserted[0].metadata.llm_result).toEqual({ findings: [], overall_severity: 'pass' });
   });
+
+  // VALIDATION (PLAN_VERIFICATION evidence, VAL-4): FR-1 AC-4 requires a persisted
+  // metadata.truncated row, not just critiquePlanProposal's own return value — the gate-level
+  // WRITE was previously unasserted.
+  it('persists metadata.truncated with literal booleans and side-qualified counts (FR-1 AC-4)', async () => {
+    critiquePlanProposal.mockResolvedValue({
+      findings: [], overall_severity: 'pass', model_used: 'test-model', token_usage: null,
+      truncated: {
+        prd: { truncated: true, charsRead: 60000, charsTotal: 70000 },
+        arch: { truncated: false, charsRead: 500, charsTotal: 500 },
+      },
+    });
+    const supabase = makeSupabase();
+    await validatePrePlanCritique({ sd: SD, supabase });
+    expect(supabase._inserted[0].metadata.truncated).toEqual({
+      prd: true, arch: false, shownPrd: 60000, totalPrd: 70000, shownArch: 500, totalArch: 500,
+    });
+  });
+
+  // VALIDATION (PLAN_VERIFICATION evidence, VAL-4): FR-4 AC-5 requires a cache-hit row to persist
+  // metadata.cache_hit=true + cache_source_id — likewise only asserted at the return-value level
+  // before this test, never at the gate's actual INSERT payload.
+  it('persists metadata.cache_hit and cache_source_id when the critique was a cache hit (FR-4 AC-5)', async () => {
+    critiquePlanProposal.mockResolvedValue({
+      findings: [], overall_severity: 'pass', model_used: 'test-model', token_usage: null,
+      cacheHit: true, cacheSourceId: 'cached-row-xyz',
+    });
+    const supabase = makeSupabase();
+    await validatePrePlanCritique({ sd: SD, supabase });
+    expect(supabase._inserted[0].metadata.cache_hit).toBe(true);
+    expect(supabase._inserted[0].metadata.cache_source_id).toBe('cached-row-xyz');
+  });
 });
 
 describe('could-not-check honesty (FR-3/FR-4)', () => {
