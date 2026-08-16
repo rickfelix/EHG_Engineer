@@ -192,34 +192,80 @@ describe('TS-9: repeat-unsurfaced drift dedup over a STATEFUL multi-tick sequenc
     expect(liveMetadata.gated_guard_prior_hit_at).toBe(new Date(NOW.getTime() + 1 * 60 * 60 * 1000).toISOString());
   });
 
-  it('recovering (a tick where the SD is no longer a hit) and later regressing fires drift again', async () => {
+  it('a full two-episode lifecycle (stuck -> recover -> re-fence -> stuck again) fires drift on BOTH episodes, not just the first', async () => {
+    // REGRESSION (EXEC-TO-PLAN re-verification, testing-agent F10/F11): the original version of
+    // this test never actually drove a second episode, despite its title claiming it did — its
+    // own inline comment asserted the stale markers were "harmless", a claim three independent
+    // probes falsified (episode2_drift_rows=0, permanently, once F1/F2's fix pinned prior_hit_at
+    // without ever clearing it on recovery). This version drives the FULL lifecycle for real,
+    // including the `excluded` branch (a pending decision existing) that the fix's marker-clear
+    // lives in — the prior version never reached that branch at all.
     let liveMetadata = { requires_human_action: true, human_decider: 'chairman' };
     mergeMetadataKeysMock.mockImplementation(async (sdKey, patch) => {
       liveMetadata = { ...liveMetadata, ...patch };
       return { merged: true, sdKey };
     });
+    const feedbackPerTick = [];
+    const tickAt = (n) => new Date(NOW.getTime() + n * 60 * 60 * 1000);
 
-    // Ticks 1-2: stuck, drift fires on tick 2 (as above).
+    // Episode 1, ticks 1-2: stuck (record fails) — drift fires tick 2.
     recordPendingDecisionMock.mockResolvedValue({ recorded: false, error: 'insert_failed' });
-    for (let tick = 1; tick <= 2; tick++) {
+    for (const tick of [1, 2]) {
       const sd = sdRow({ sd_key: 'SD-DRIFT-002', metadata: { ...liveMetadata } });
-      const now = new Date(NOW.getTime() + tick * 60 * 60 * 1000);
       const sb = makeFakeSupabase({ sds: [sd], decisions: [] });
       // eslint-disable-next-line no-await-in-loop
-      await runChairmanGatedDecisionRowGuard(sb, { now });
+      await runChairmanGatedDecisionRowGuard(sb, { now: tickAt(tick) });
+      feedbackPerTick.push(sb._feedbackInserts.length);
     }
+    expect(feedbackPerTick).toEqual([0, 1]);
     expect(liveMetadata.gated_guard_drift_flagged_at).toBeTruthy();
+    expect(liveMetadata.gated_guard_prior_hit_at).toBeTruthy();
 
-    // Tick 3: recovers (recordPendingDecision now succeeds) — stamps chairman_decision_id,
-    // which the population query excludes on the NEXT fetch (simulated here by simply not
-    // re-selecting it — the stale prior_hit_at/drift_flagged_at markers are now moot/harmless).
-    recordPendingDecisionMock.mockResolvedValue({ recorded: true, id: 'dec-recovered', escalated: true });
-    const sdRecovering = sdRow({ sd_key: 'SD-DRIFT-002', metadata: { ...liveMetadata } });
-    const tick3 = new Date(NOW.getTime() + 3 * 60 * 60 * 1000);
-    await runChairmanGatedDecisionRowGuard(makeFakeSupabase({ sds: [sdRecovering], decisions: [] }), { now: tick3 });
-    // recovery re-stamps chairman_decision_id but does NOT clear the stale drift markers —
-    // documented, harmless (the SD is excluded from selection going forward regardless).
-    expect(liveMetadata.chairman_decision_id).toBe('dec-recovered');
+    // Tick 3: recovers — record now succeeds, chairman_decision_id stamped to 'dec-1' (status pending).
+    recordPendingDecisionMock.mockResolvedValue({ recorded: true, id: 'dec-1', escalated: true });
+    {
+      const sd = sdRow({ sd_key: 'SD-DRIFT-002', metadata: { ...liveMetadata } });
+      const sb = makeFakeSupabase({ sds: [sd], decisions: [] });
+      await runChairmanGatedDecisionRowGuard(sb, { now: tickAt(3) });
+      feedbackPerTick.push(sb._feedbackInserts.length);
+    }
+    expect(liveMetadata.chairman_decision_id).toBe('dec-1');
+
+    // Tick 4: the SD is now EXCLUDED (dec-1 exists and is still pending) — this is the branch
+    // the fix lives in. Both drift markers must be cleared here, ending episode 1 for real.
+    {
+      const sd = sdRow({ sd_key: 'SD-DRIFT-002', metadata: { ...liveMetadata } });
+      const sb = makeFakeSupabase({ sds: [sd], decisions: [{ id: 'dec-1', status: 'pending' }] });
+      const result = await runChairmanGatedDecisionRowGuard(sb, { now: tickAt(4) });
+      expect(result.hits).toBe(0); // excluded, not a hit
+      feedbackPerTick.push(sb._feedbackInserts.length);
+    }
+    expect(liveMetadata.gated_guard_prior_hit_at).toBeNull();
+    expect(liveMetadata.gated_guard_drift_flagged_at).toBeNull();
+
+    // Tick 5: dec-1 resolves (approved) and the SD is re-fenced — FR-1's collapsed check makes
+    // it a hit again (episode 2, tick 1). record fails again (stuck once more). No drift yet —
+    // this is a FRESH first sighting, markers were genuinely cleared.
+    recordPendingDecisionMock.mockResolvedValue({ recorded: false, error: 'insert_failed_again' });
+    {
+      const sd = sdRow({ sd_key: 'SD-DRIFT-002', metadata: { ...liveMetadata } });
+      const sb = makeFakeSupabase({ sds: [sd], decisions: [{ id: 'dec-1', status: 'approved' }] });
+      const result = await runChairmanGatedDecisionRowGuard(sb, { now: tickAt(5) });
+      expect(result.hits).toBe(1); // re-fenced, a genuine new hit (resolved row does not exclude)
+      feedbackPerTick.push(sb._feedbackInserts.length);
+    }
+
+    // Tick 6: episode 2, tick 2 — still stuck. Drift MUST fire again — this is the assertion
+    // the original test's title promised and never made.
+    {
+      const sd = sdRow({ sd_key: 'SD-DRIFT-002', metadata: { ...liveMetadata } });
+      const sb = makeFakeSupabase({ sds: [sd], decisions: [{ id: 'dec-1', status: 'approved' }] });
+      await runChairmanGatedDecisionRowGuard(sb, { now: tickAt(6) });
+      feedbackPerTick.push(sb._feedbackInserts.length);
+    }
+
+    // [ep1-t1, ep1-t2, recovery-t3, excluded-t4, ep2-t5, ep2-t6]
+    expect(feedbackPerTick).toEqual([0, 1, 0, 0, 0, 1]);
   });
 });
 
