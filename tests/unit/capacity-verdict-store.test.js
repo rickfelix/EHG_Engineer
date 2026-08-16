@@ -19,6 +19,8 @@
 import { describe, it, expect } from 'vitest';
 import {
   makeCapacityVerdictPersist,
+  makeCapacityVerdictUnavailablePersist,
+  UNAVAILABLE_VERDICT,
   CAPACITY_VERDICT_TABLE,
   isTableAbsentError,
   TABLE_ABSENT_CODES,
@@ -224,5 +226,67 @@ describe('CONTRACT — bound to the REAL caller, not to this file\'s idea of one
     const persist = makeCapacityVerdictPersist(client());
     await expect(persist({ verdict: 'TIGHT', runId: 'run-7', detail: {} }))
       .rejects.toThrow(/belt_depth must be a finite number/);
+  });
+});
+
+describe('SD-LEO-FIX-BELT-CAPACITY-VERDICTS-001 FR-2/FR-5/TS-7 — the sentinel writer, in isolation', () => {
+  // Deliberately NOT routed through persistCapacityVerdict()'s guards (see that function's own
+  // header and this new function's own doc comment): a sentinel row's null measurements are the
+  // CORRECT shape here, so this writer has no VERDICTS.includes / finite-number check of its own.
+
+  it('a successful call inserts read_failed=true, verdict=UNAVAILABLE_VERDICT, and null measurements', async () => {
+    const captured = {};
+    const persist = makeCapacityVerdictUnavailablePersist(client({ captured }));
+    const written = await persist({ run_id: 'run-9', detail: { source: 'drive-report-sweep', reason: 'boom' } });
+    expect(captured.row).toMatchObject({
+      run_id: 'run-9',
+      verdict: UNAVAILABLE_VERDICT,
+      read_failed: true,
+      belt_depth: null,
+      demand_soon: null,
+      deficit: null,
+    });
+    expect(written.id).toBe('row-1');
+  });
+
+  it('a DB error on insert throws — propagates, is never swallowed', async () => {
+    const persist = makeCapacityVerdictUnavailablePersist(client({ fail: { code: '42501', message: 'permission denied' } }));
+    await expect(persist({ run_id: 'run-9' })).rejects.toThrow(/durable sentinel write failed/);
+  });
+
+  it('fails at CONSTRUCTION when given no client, not at the first write', () => {
+    expect(() => makeCapacityVerdictUnavailablePersist(null)).toThrow(/supabase client is required/);
+  });
+
+  it('writes to the SAME table as the normal-path writer', async () => {
+    const captured = {};
+    await makeCapacityVerdictUnavailablePersist(client({ captured }))({ run_id: 'run-9' });
+    expect(captured.table).toBe(CAPACITY_VERDICT_TABLE);
+  });
+
+  it('[STATIC] the returned closure\'s own source never references VERDICTS.includes or the finite-number guard', () => {
+    // Scoped to the RETURNED FUNCTION's source text, not the module's import list — the module as a
+    // whole still imports VERDICTS for the pre-existing persistCapacityVerdict (TR-2), so asserting
+    // against the module's imports would be trivially false. This is a source-text check, not an
+    // import-graph one: Function.prototype.toString() on the closure itself.
+    const persist = makeCapacityVerdictUnavailablePersist(client());
+    const src = persist.toString();
+    expect(src, 'the sentinel writer must not gate on the reader\'s verdict vocabulary').not.toMatch(/VERDICTS\.includes/);
+    expect(src, 'the sentinel writer must not gate on the finite-number guard — its measurements are deliberately null').not.toMatch(/Number\.isFinite/);
+  });
+});
+
+describe('SD-LEO-FIX-BELT-CAPACITY-VERDICTS-001 TS-8 — regression pin: UNAVAILABLE_VERDICT can never re-enter VERDICTS', () => {
+  it('VERDICTS does not contain UNAVAILABLE_VERDICT', () => {
+    // If a future edit adds UNAVAILABLE to leg4-capacity.js's VERDICTS list, this fails before
+    // scoreLeg4 (leg4-capacity.js:66) can silently ACCEPT and SCORE it as 0 — the exact defect
+    // FR-2's separate-writer design exists to prevent, recreated one layer up.
+    expect(VERDICTS).not.toContain(UNAVAILABLE_VERDICT);
+  });
+
+  it('[CONTROL] UNAVAILABLE_VERDICT is a real, non-empty string distinct from every real verdict', () => {
+    expect(typeof UNAVAILABLE_VERDICT).toBe('string');
+    expect(UNAVAILABLE_VERDICT.length).toBeGreaterThan(0);
+    expect(VERDICTS).not.toContain(UNAVAILABLE_VERDICT);
   });
 });

@@ -18,7 +18,7 @@
  * NOT caught here — stated rather than papered over.
  */
 
-import { describe, it, expect } from 'vitest';
+import { describe, it, expect, vi } from 'vitest';
 import fs from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -30,7 +30,7 @@ import { CLAIM_WINDOW_MS as LEG2_CLAIM_WINDOW_MS } from '../../../lib/drive-loop
 import { armedProcessKey } from '../../../lib/machinery-class/armed-registration.js';
 import { produceDriveReport } from '../../../scripts/drive-report-produce.mjs';
 import { LAST_RUN_FIELD } from '../../../lib/drive-loop/report-posture.js';
-import { makeCapacityVerdictPersist } from '../../../scripts/lib/capacity-verdict-store.mjs';
+import { makeCapacityVerdictPersist, makeCapacityVerdictUnavailablePersist } from '../../../scripts/lib/capacity-verdict-store.mjs';
 import { gatherCapacityInputs } from '../../../scripts/lib/capacity-inputs.mjs';
 import { hourlyWindowKey } from '../../../scripts/cron/drive-report-hourly-sweep.mjs';
 
@@ -972,6 +972,80 @@ describe('FR-3 — leg4 is injected, not declared unavailable', () => {
 });
 
 /**
+ * SD-LEO-FIX-BELT-CAPACITY-VERDICTS-001 — FR-3/TS-1/TS-2/TS-3: persistUnavailable, wired into
+ * scoreCapacityLeg's catch block. Best-effort and optional — see that function's own header
+ * comment for why a secondary sentinel failure must never be allowed to change what the caller
+ * sees, and why the legacy (no persistUnavailable) call shape must stay byte-identical.
+ */
+describe('SD-LEO-FIX-BELT-CAPACITY-VERDICTS-001 FR-3 — persistUnavailable, wired into the catch block', () => {
+  const gatherCapacity = async () => { throw new Error('belt query failed'); };
+  const okPersist = (captured) => async (row) => { captured.push(row); return { id: 'verdict-row-1' }; };
+
+  it('TS-1 — a forced gather failure, with persistUnavailable injected, writes exactly one sentinel row and still reports unavailable', async () => {
+    const sentinelCalls = [];
+    const persistVerdictCalls = [];
+    const leg = await scoreCapacityLeg({
+      gatherCapacity,
+      persistVerdict: okPersist(persistVerdictCalls),
+      persistUnavailable: async (row) => { sentinelCalls.push(row); return { id: 'sentinel-row-1' }; },
+      runId: 'drive-2026-08-16',
+    });
+
+    expect(sentinelCalls, 'exactly one sentinel write').toHaveLength(1);
+    expect(sentinelCalls[0]).toMatchObject({ run_id: 'drive-2026-08-16' });
+    expect(sentinelCalls[0].detail?.reason, 'the sentinel row must carry the real failure reason').toMatch(/belt query failed/);
+    expect(persistVerdictCalls, 'the normal-path writer must never be called on a gather failure').toHaveLength(0);
+    expect(leg.leg).toBe('leg4_capacity');
+    expect(leg.unavailable.available).toBe(false);
+    expect(leg.unavailable.reason).toMatch(/belt query failed/);
+    expect(leg.points, 'a sentinel write must never produce points').toBeUndefined();
+  });
+
+  it('TS-2 — persistUnavailable itself throwing does not propagate; scoreCapacityLeg still resolves with unavailable()', async () => {
+    const consoleErrorSpy = vi.spyOn(console, 'error').mockImplementation(() => {});
+    try {
+      const leg = await scoreCapacityLeg({
+        gatherCapacity,
+        persistVerdict: okPersist([]),
+        persistUnavailable: async () => { throw new Error('sentinel table not migrated yet'); },
+      });
+      expect(leg.unavailable.available).toBe(false);
+      expect(leg.unavailable.reason, 'the PRIMARY (gather) failure reason must survive the SECONDARY sentinel failure').toMatch(/belt query failed/);
+      expect(consoleErrorSpy, 'the secondary failure must be logged, not silently dropped').toHaveBeenCalled();
+      expect(consoleErrorSpy.mock.calls[0][0]).toMatch(/sentinel table not migrated yet/);
+    } finally {
+      consoleErrorSpy.mockRestore();
+    }
+  });
+
+  it('TS-3 — scoreCapacityLeg constructed WITHOUT persistUnavailable (legacy call shape) attempts no sentinel write of any kind', async () => {
+    // Byte-identical to every pre-existing test in the FR-3 block above (none of which pass
+    // persistUnavailable and all still pass unmodified) — named explicitly here rather than left
+    // implicit across other tests' incidental omission of the parameter.
+    const leg = await scoreCapacityLeg({ gatherCapacity, persistVerdict: okPersist([]) });
+    expect(leg.unavailable.available).toBe(false);
+    expect(leg.unavailable.reason).toMatch(/belt query failed/);
+
+    // [STATIC — TESTING sub-agent EXEC-TO-PLAN finding, evidence a17901cc-9e31-424f-a421-c4ac3110bba0,
+    // sharpened per follow-up finding on evidence b78f71ec-3e2c-47e5-bfe4-0798780c4ca1]
+    // The behavioral assertions above are BLIND to a mutated default: they pass byte-identically
+    // even if `persistUnavailable = null` were replaced with a default that silently fires a write,
+    // because both produce the same unavailable() return shape — mutation-verified by the sub-agent
+    // (all 156 tests stayed green under that exact mutation). This pins the one thing that actually
+    // distinguishes "omitted" from "a smuggled-in default": the source text of the default itself.
+    //
+    // A FILE-WIDE regex was tried first and the sub-agent proved it blind too, two-sided: this file
+    // ALSO has `persistUnavailable = null` on buildGather's signature (line ~292), so mutating ONLY
+    // scoreCapacityLeg's own default still matched the file-wide pattern via the OTHER site — the
+    // exact same "assertion executes but cannot discriminate which site holds the property" shape.
+    // Scoping to scoreCapacityLeg.toString() itself closes that: it can only ever read the ONE
+    // function this test is about, immune to drift even if a third call site gains the same param.
+    expect(scoreCapacityLeg.toString(), 'persistUnavailable must default to null, never to a callable — a '
+      + 'default that silently fires would be invisible to every behavioral assertion above').toMatch(/persistUnavailable\s*=\s*null/);
+  });
+});
+
+/**
  * SD-LEO-INFRA-PERSIST-BELT-CAPACITY-001 — the gap the TESTING sub-agent MEASURED, closed.
  *
  * It mutated makeCapacityVerdictPersist to swallow its insert error and return {id:'x'}. The store's
@@ -1045,6 +1119,47 @@ describe('[BOUND] scoreCapacityLeg against the REAL writer, not a stub', () => {
     });
     expect(leg.unavailable.available).toBe(false);
     expect(leg.points).toBeUndefined();
+  });
+
+  // SD-LEO-FIX-BELT-CAPACITY-VERDICTS-001 (FR-3, REAL_CALLEE_ATTESTATION): the same class of blind
+  // spot this header already records, recurring at the NEW seam if left uncovered. The [TS-1/TS-2/
+  // TS-3] block above injects only a hand-rolled persistUnavailable stub, and FR-5's coverage in
+  // capacity-verdict-store.test.js exercises makeCapacityVerdictUnavailablePersist in isolation — so
+  // nothing before this test actually ran scoreCapacityLeg against the REAL sentinel writer.
+  it('the REAL sentinel writer + scoreCapacityLeg together — not a stub on either side', async () => {
+    const captured = {};
+    const leg = await scoreCapacityLeg({
+      gatherCapacity: async () => { throw new Error('belt query failed'); },
+      persistVerdict: makeCapacityVerdictPersist(client()),
+      persistUnavailable: makeCapacityVerdictUnavailablePersist(client({ captured })),
+      runId: 'drive-2026-08-16',
+    });
+
+    expect(captured.table).toBe('belt_capacity_verdicts');
+    expect(captured.row, 'the real sentinel writer must receive exactly the shape scoreCapacityLeg sends').toMatchObject({
+      run_id: 'drive-2026-08-16', verdict: 'UNAVAILABLE', read_failed: true, belt_depth: null, demand_soon: null, deficit: null,
+    });
+    expect(leg.leg).toBe('leg4_capacity');
+    expect(leg.unavailable.available).toBe(false);
+    expect(leg.unavailable.reason).toMatch(/belt query failed/);
+    expect(leg.points, 'a sentinel write must never produce points').toBeUndefined();
+  });
+
+  it('[MUTATION GUARD] a real sentinel-write failure is logged but never blocks the primary unavailable() result', async () => {
+    const consoleErrorSpy = vi.spyOn(console, 'error').mockImplementation(() => {});
+    try {
+      const leg = await scoreCapacityLeg({
+        gatherCapacity: async () => { throw new Error('belt query failed'); },
+        persistVerdict: makeCapacityVerdictPersist(client()),
+        persistUnavailable: makeCapacityVerdictUnavailablePersist(client({ fail: { code: '42501', message: 'permission denied' } })),
+        runId: 'drive-2026-08-16',
+      });
+      expect(leg.unavailable.available).toBe(false);
+      expect(leg.unavailable.reason).toMatch(/belt query failed/);
+      expect(consoleErrorSpy, 'a real sentinel-write failure must still be logged, not silently dropped').toHaveBeenCalled();
+    } finally {
+      consoleErrorSpy.mockRestore();
+    }
   });
 });
 

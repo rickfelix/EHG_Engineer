@@ -146,3 +146,61 @@ export function makeCapacityVerdictPersist(supabase, opts = {}) {
     return data;
   };
 }
+
+/**
+ * SD-LEO-FIX-BELT-CAPACITY-VERDICTS-001 (FR-2): the sentinel verdict for a run that could not be
+ * measured at all -- distinct from every real verdict in VERDICTS (lib/drive-loop/score/
+ * leg4-capacity.js). Deliberately NOT added to that list: VERDICTS is dual-purpose there
+ * (persistence vocabulary AND scoreLeg4's own scoring-input guard), so admitting this value into
+ * it would make scoreLeg4 accept and SCORE it as 0 -- silently recreating the exact
+ * "indistinguishable from a genuine DEFICIT" defect this constant exists to close. This value is
+ * only ever written by makeCapacityVerdictUnavailablePersist below, never read by scoreLeg4.
+ */
+export const UNAVAILABLE_VERDICT = 'UNAVAILABLE';
+
+/**
+ * Build the sentinel-row persist function for a leg4 run that could not be measured (FR-2/FR-3).
+ *
+ * Deliberately NOT a branch inside persistCapacityVerdict(): that function's VERDICTS.includes()
+ * and finite-number guards exist specifically so a row with null measurements can never look like
+ * a real, measured verdict (see its own header). A sentinel row's null measurements are the
+ * correct, intended shape here -- routing through the same guarded function would mean either
+ * relaxing those guards (weakening the normal path) or special-casing UNAVAILABLE inside it
+ * (coupling two callers with opposite validation needs into one function). A fully separate,
+ * narrow function keeps both contracts simple and independently reviewable.
+ *
+ * Throws on its own write failure, matching persistCapacityVerdict()'s throw-not-swallow
+ * convention -- the caller (scoreCapacityLeg's catch block) is responsible for treating this as
+ * best-effort, not this function.
+ *
+ * @param {object} supabase
+ * @param {object} [opts]
+ * @param {string} [opts.table] - override for tests
+ * @returns {(row: {run_id?: string|null, detail?: object}) => Promise<object>}
+ */
+export function makeCapacityVerdictUnavailablePersist(supabase, opts = {}) {
+  if (!supabase || typeof supabase.from !== 'function') {
+    throw new Error('makeCapacityVerdictUnavailablePersist(): a supabase client is required');
+  }
+  const table = opts.table || CAPACITY_VERDICT_TABLE;
+
+  return async function persistCapacityVerdictUnavailable(row = {}) {
+    const { run_id = null, detail = null } = row;
+
+    const { data, error } = await supabase
+      .from(table)
+      .insert({ run_id, verdict: UNAVAILABLE_VERDICT, read_failed: true, belt_depth: null, demand_soon: null, deficit: null, detail })
+      .select('id, verdict, read_failed, recorded_at')
+      .single();
+
+    if (error) {
+      const err = new Error(
+        `persistCapacityVerdictUnavailable(): durable sentinel write failed (${error.code || 'no-code'}): ${error.message}.`
+      );
+      err.code = error.code;
+      err.cause = error;
+      throw err;
+    }
+    return data;
+  };
+}

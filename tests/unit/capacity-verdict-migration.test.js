@@ -21,16 +21,20 @@ import { describe, it, expect } from 'vitest';
 import fs from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { CAPACITY_VERDICT_TABLE } from '../../scripts/lib/capacity-verdict-store.mjs';
+import { CAPACITY_VERDICT_TABLE, UNAVAILABLE_VERDICT } from '../../scripts/lib/capacity-verdict-store.mjs';
 import { VERDICTS } from '../../lib/drive-loop/score/leg4-capacity.js';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const GATED_DIR = path.resolve(__dirname, '../../database/chairman-gated');
 const UP = path.join(GATED_DIR, '20260807_belt_capacity_verdicts.sql');
 const DOWN = path.join(GATED_DIR, '20260807_belt_capacity_verdicts_DOWN.sql');
+const ALTER_UP = path.join(GATED_DIR, '20260816_belt_capacity_verdicts_unavailable_sentinel.sql');
+const ALTER_DOWN = path.join(GATED_DIR, '20260816_belt_capacity_verdicts_unavailable_sentinel_DOWN.sql');
 
 const upSql = () => fs.readFileSync(UP, 'utf8');
 const downSql = () => fs.readFileSync(DOWN, 'utf8');
+const alterUpSql = () => fs.readFileSync(ALTER_UP, 'utf8');
+const alterDownSql = () => fs.readFileSync(ALTER_DOWN, 'utf8');
 
 describe('FR-1 — the migration ships staged, under the chairman gate, with a paired _DOWN', () => {
   it('lives under database/chairman-gated/, which is what makes it gated at all', () => {
@@ -105,5 +109,68 @@ describe('the DDL and the application code cannot drift apart silently', () => {
       .not.toMatch(/CREATE TABLE\s+IF NOT EXISTS\s+public\./);
     expect(sql, '[CONTROL] and the plain CREATE TABLE statement must actually be there')
       .toMatch(/CREATE TABLE\s+public\.belt_capacity_verdicts\s*\(/);
+  });
+});
+
+describe('SD-LEO-FIX-BELT-CAPACITY-VERDICTS-001 FR-4/FR-1/TS-5 — the ALTER file, composed with the original', () => {
+  // This block reads ONLY the new 20260816 alter file, never the original 20260807 file above —
+  // per FR-4's own finding (validation-agent, evidence a3e53f13-f1ca-4a01-88ed-024acd6fc24c), the
+  // original file's assertions stay true of that unmodified file forever, which is exactly why they
+  // cannot observe a drift that lives in a SEPARATE, additive file. This block is the composed check.
+
+  it('lives under database/chairman-gated/, matching the table\'s own established gated convention', () => {
+    expect(fs.existsSync(ALTER_UP), `missing staged ALTER: ${ALTER_UP}`).toBe(true);
+    expect(ALTER_UP.replace(/\\/g, '/')).toMatch(/database\/chairman-gated\//);
+  });
+
+  it('has a paired _DOWN', () => {
+    expect(fs.existsSync(ALTER_DOWN), 'a gated apply with no rollback is a one-way door').toBe(true);
+  });
+
+  it('does NOT edit the original file — additive only, same convention as every other family here', () => {
+    expect(alterUpSql()).not.toMatch(/CREATE TABLE\s+public\.belt_capacity_verdicts\s*\(/);
+  });
+
+  it('widens the verdict CHECK to admit UNAVAILABLE_VERDICT (imported constant, not a literal) IN ADDITION to the original frozen four', () => {
+    const sql = alterUpSql();
+    for (const v of [...VERDICTS, UNAVAILABLE_VERDICT]) {
+      expect(sql, `the widened CHECK is missing ${v}`).toContain(`'${v}'`);
+    }
+    const checkLine = sql.match(/CHECK \(verdict IN \(([^)]*)\)\)/);
+    expect(checkLine, 'the alter file must recreate the verdict CHECK constraint').not.toBeNull();
+    const listed = checkLine[1].match(/'([^']+)'/g).map((s) => s.replace(/'/g, ''));
+    expect(listed, 'the widened CHECK must be exactly the original four plus the sentinel — no more, no less')
+      .toEqual([...VERDICTS, UNAVAILABLE_VERDICT]);
+  });
+
+  it('drops NOT NULL on belt_depth, demand_soon, deficit — a read-failure run has no measurement to report', () => {
+    const sql = alterUpSql();
+    for (const col of ['belt_depth', 'demand_soon', 'deficit']) {
+      expect(sql, `${col} must have its NOT NULL dropped`).toMatch(new RegExp(`ALTER COLUMN\\s+${col}\\s+DROP NOT NULL`));
+    }
+  });
+
+  it('adds read_failed boolean NOT NULL DEFAULT false — every pre-existing row backfills to a real measured run', () => {
+    expect(alterUpSql()).toMatch(/ADD COLUMN\s+read_failed\s+boolean\s+NOT NULL\s+DEFAULT\s+false/i);
+  });
+
+  it('asserts its own claim in-transaction rather than exiting green on a partial apply', () => {
+    const sql = alterUpSql();
+    expect(sql).toMatch(/POSTCONDITION FAILED/);
+    expect(sql, 'a pre-condition must refuse to adopt a table this migration did not expect').toMatch(/PRECONDITION FAILED/);
+  });
+
+  it('the _DOWN warns rollback is destructive to sentinel/null-measurement rows and cannot be recomputed', () => {
+    const sql = alterDownSql();
+    expect(sql).toMatch(/DESTROYED|cannot be recomputed/i);
+    expect(sql, 'it must tell the operator to back up sentinel rows first').toMatch(/backup/i);
+  });
+
+  it('if this file is later edited to NOT widen the CHECK or NOT drop the NOT NULL constraints, this test fails', () => {
+    // Not a real edit — a same-invariant CONTROL restating the point of every assertion above: this
+    // file's own text is what the assertions above depend on, not a separately-tracked expectation.
+    const sql = alterUpSql();
+    expect(sql).toContain(`'${UNAVAILABLE_VERDICT}'`);
+    expect(sql).toMatch(/ALTER COLUMN\s+belt_depth\s+DROP NOT NULL/);
   });
 });
