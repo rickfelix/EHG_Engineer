@@ -49,7 +49,7 @@ import { SECTION_ID as STALL_ID } from '../../lib/drive-loop/sections/stall-delt
 import { LEG_ID as LEG1_ID } from '../../lib/drive-loop/score/leg1-landed.js';
 // SD-LEO-INFRA-DRIVE-SCORE-LEG1-ALOCAL-001: the chairman-ratified live rule. leg1-landed.js
 // (imported above for LEG_ID only) is reference-only now — see its header amendment.
-import { scoreLeg1ALocal } from '../../lib/drive-loop/score/leg1-landed-alocal.js';
+import { scoreLeg1ALocal, LANDED_LOG_MAX_BUFFER_BYTES } from '../../lib/drive-loop/score/leg1-landed-alocal.js';
 import { runHardenedGit } from '../../lib/git/hardened-runner.cjs';
 import { LEG_ID as LEG2_ID, CLAIM_WINDOW_MS as LEG2_CLAIM_WINDOW_MS, scoreLeg2 } from '../../lib/drive-loop/score/leg2-uptake.js';
 // SD-LEO-INFRA-DRIVE-SCORE-LEG2-001 (FR-2): the cohort reader is imported here for the CLI wiring
@@ -511,8 +511,16 @@ if (isMainModule(import.meta.url)) {
       capacityRunId: windowKey(cliNowMs),
       // SD-LEO-INFRA-DRIVE-SCORE-LEG1-ALOCAL-001 (FR-2): the hardened runner (lib/git/hardened-runner.cjs)
       // is THE published shell-injection-safe git invocation — reused rather than re-derived. Only
-      // ever asked `log main --merges --format=%s [--since=...]`, never a caller-controlled ref.
-      runGitLog: (args) => runHardenedGit(args, { cwd: process.cwd() }).split('\n').filter(Boolean),
+      // ever asked `log main --format=%s [--since=...]` (every commit subject, not merges-only —
+      // amendment dc828e43, SD-LEO-INFRA-DRIVE-SCORE-LEG1-ANY-SUBJECT-001), never a caller-controlled ref.
+      // maxBuffer is EXPLICIT, not left at spawnSync's 1MB default: the any-subject corpus this
+      // amendment introduces measured 1.18MB live (2026-08-15/16) — already OVER the default —
+      // where the old merge-only corpus was 29.5% of it (SECURITY finding S5, previously deferred
+      // as a non-issue precisely because of that headroom; the headroom is gone). See
+      // LANDED_LOG_MAX_BUFFER_BYTES's own doc for the single-source-of-truth rationale.
+      runGitLog: (args) => runHardenedGit(args, {
+        cwd: process.cwd(), maxBuffer: LANDED_LOG_MAX_BUFFER_BYTES, timeout: 30000,
+      }).split('\n').filter(Boolean),
       // SD-LEO-INFRA-DRIVE-SCORE-LEG2-001 (FR-2): supabase pre-bound at this CLI edge, same
       // shape as gatherCapacity/persistVerdict above.
       readLeg2Cohort: (nowMsArg, windowMsArg) => readRankedTop5Cohort(supabase, nowMsArg, windowMsArg),
