@@ -121,6 +121,14 @@ export const PATH_ALLOWLIST = [
       + 'as the .husky/pre-commit entry above, not an instance of the shape.',
   },
   {
+    path: 'scripts/audit/control-seed-specs.json',
+    rationale: 'The control-seed-test-lint gate registry: this control\'s own entry commits a '
+      + 'deliberately fake, structurally-shaped credential as a seeded-defect fixture, proving '
+      + 'this guard can fire (see scripts/lint/control-seed-test-lint.mjs). Found by this guard '
+      + 'flagging its own registry entry on the first live scan after that spec was committed --'
+      + ' correct behavior for an un-allowlisted file, which is exactly what this entry fixes.',
+  },
+  {
     pattern: /(^|\/)tests\//,
     rationale: 'Test fixtures legitimately contain fictional example connection strings to '
       + 'exercise parsing/redaction logic (e.g. tests/unit/session-summary/secret-redactor.test.js '
