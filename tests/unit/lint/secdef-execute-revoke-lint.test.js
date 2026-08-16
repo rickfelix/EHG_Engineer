@@ -2,13 +2,16 @@
 // logic (extractSecdefFunctions / evaluateFunction / lintFile), per TESTING sub-agent's TS-1
 // correction: this tests the CHECKING LOGIC against synthetic fixtures, not today's live/
 // ephemeral repo state — the --all sweep of real files is a separate, non-committed check.
-import { describe, it, expect } from 'vitest';
+import { describe, it, expect, beforeAll, afterAll } from 'vitest';
+import fs from 'node:fs';
+import os from 'node:os';
+import path from 'node:path';
 import {
   extractSecdefFunctions,
-  extractGrantActions,
   evaluateFunction,
   isTransientProbe,
   lintFile,
+  listScopedFiles,
 } from '../../../scripts/lint/secdef-execute-revoke-lint.mjs';
 
 describe('extractSecdefFunctions', () => {
@@ -108,7 +111,7 @@ describe('isTransientProbe', () => {
 });
 
 describe('lintFile — end-to-end fixture scan', () => {
-  it('TS-4 equivalent: scans a fixture regardless of which of the 3 scoped directories it claims to be from (directory scoping itself is exercised by listScopedFiles/CLI, not lintFile)', () => {
+  it('the per-file logic itself is path-agnostic: a violation is caught the same way regardless of which scoped directory the file path claims to be from (the directory-SCOPING decision belongs to listScopedFiles, tested separately below for TS-4)', () => {
     const sql = `
       CREATE FUNCTION public.needs_fix() RETURNS void LANGUAGE sql SECURITY DEFINER AS $$ SELECT 1 $$;
       REVOKE EXECUTE ON FUNCTION public.needs_fix() FROM anon, authenticated;
@@ -127,5 +130,38 @@ describe('lintFile — end-to-end fixture scan', () => {
   it('a clean fixture with zero SECURITY DEFINER functions produces zero findings', () => {
     const sql = 'CREATE TABLE public.foo (id uuid PRIMARY KEY);';
     expect(lintFile(sql, 'database/migrations/fake.sql', {})).toEqual([]);
+  });
+});
+
+describe('listScopedFiles — TS-4: --all mode scans database/chairman-gated/, not just database/migrations/', () => {
+  let tmpRoot;
+
+  beforeAll(() => {
+    tmpRoot = fs.mkdtempSync(path.join(os.tmpdir(), 'secdef-lint-ts4-'));
+    fs.mkdirSync(path.join(tmpRoot, 'database', 'migrations'), { recursive: true });
+    fs.mkdirSync(path.join(tmpRoot, 'database', 'chairman-gated'), { recursive: true });
+    fs.mkdirSync(path.join(tmpRoot, 'supabase', 'migrations'), { recursive: true });
+    fs.writeFileSync(path.join(tmpRoot, 'database', 'migrations', 'a_migrations_fixture.sql'), '-- fixture');
+    fs.writeFileSync(path.join(tmpRoot, 'database', 'chairman-gated', 'b_chairman_gated_fixture.sql'), '-- fixture');
+    fs.writeFileSync(path.join(tmpRoot, 'supabase', 'migrations', 'c_supabase_migrations_fixture.sql'), '-- fixture');
+    // A non-.sql file in a scoped dir must never be picked up.
+    fs.writeFileSync(path.join(tmpRoot, 'database', 'chairman-gated', 'README.md'), '# not sql');
+  });
+
+  afterAll(() => {
+    fs.rmSync(tmpRoot, { recursive: true, force: true });
+  });
+
+  it('--all includes the database/chairman-gated/ fixture, not just database/migrations/', () => {
+    const files = listScopedFiles('all', tmpRoot);
+    const normalized = files.map((f) => f.split(path.sep).join('/'));
+    expect(normalized).toContain('database/chairman-gated/b_chairman_gated_fixture.sql');
+    expect(normalized).toContain('database/migrations/a_migrations_fixture.sql');
+    expect(normalized).toContain('supabase/migrations/c_supabase_migrations_fixture.sql');
+  });
+
+  it('--all does not pick up non-.sql files even inside a scoped directory', () => {
+    const files = listScopedFiles('all', tmpRoot);
+    expect(files.some((f) => f.endsWith('README.md'))).toBe(false);
   });
 });

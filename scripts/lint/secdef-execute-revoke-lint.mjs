@@ -137,7 +137,13 @@ function loadAllowlist() {
   return JSON.parse(fs.readFileSync(ALLOWLIST_PATH, 'utf8'));
 }
 
-function listScopedFiles(mode, root) {
+/**
+ * TS-4: enumerate migration files in scope for `mode`. --all walks the UNION of SCOPED_DIRS
+ * (database/migrations, supabase/migrations, database/chairman-gated) — exported so a unit test
+ * can prove the chairman-gated directory is actually included, not just database/migrations/
+ * (the FR-6 scope fix this lint exists to enforce on itself).
+ */
+export function listScopedFiles(mode, root) {
   if (mode === 'all') {
     const files = [];
     for (const dir of SCOPED_DIRS) {
