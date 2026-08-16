@@ -825,12 +825,17 @@ async function getPendingImprovements(limit = TOP_N) {
  * patterns from issue_patterns WHERE source = 'vision_scorer'.
  */
 async function getVisionGapPatterns(limit = TOP_N) {
+  // SD-LEO-INFRA-LEARN-VISION-GAP-RUBRIC-CLASSIFY-001: capture the sync's drop-accounting
+  // (previously discarded entirely) so /learn can report it instead of staying silent.
+  let dropped = null;
   try {
     // Sync recent vision scores to patterns (idempotent, fast)
-    await syncVisionScoresToPatterns(supabase, { lookbackDays: 30 });
+    const syncResult = await syncVisionScoresToPatterns(supabase, { lookbackDays: 30 });
+    dropped = { excluded: syncResult.excluded || 0, unscored: syncResult.unscored || 0 };
   } catch (err) {
     console.warn(`  Warning: Vision-to-patterns sync failed: ${err.message}`);
-    // Continue without blocking — vision gaps are additive
+    // Continue without blocking — vision gaps are additive. dropped stays null: the sync
+    // itself failed, so "nothing dropped" would be a false claim, not just an absent one.
   }
 
   // Filter by metadata.type = 'vision_scorer' (source column has a check constraint)
@@ -845,10 +850,10 @@ async function getVisionGapPatterns(limit = TOP_N) {
 
   if (error) {
     console.warn(`  Warning: Could not fetch vision gap patterns: ${error.message}`);
-    return [];
+    return { patterns: [], dropped };
   }
 
-  return (data || []).map(p => ({
+  const patterns = (data || []).map(p => ({
     id: p.id,
     pattern_id: p.pattern_id,
     content: p.issue_summary,
@@ -859,13 +864,14 @@ async function getVisionGapPatterns(limit = TOP_N) {
     trend: p.trend,
     source: 'vision_scorer',
   }));
+  return { patterns, dropped };
 }
 
 export async function buildLearningContext(sdId = null, options = {}) {
   console.log('Building learning context with severity-weighted filtering...');
   console.log(`  Thresholds: Critical/High=1 occ, Medium/Low=3 occ, min ${FILTER_CONFIG.MIN_CONFIDENCE_THRESHOLD}% confidence`);
 
-  const [lessons, patternResult, improvements, feedbackLearnings, feedbackPatterns, subAgentLearnings, visionGaps] = await Promise.all([
+  const [lessons, patternResult, improvements, feedbackLearnings, feedbackPatterns, subAgentLearnings, visionGapResult] = await Promise.all([
     getRecentLessons(sdId, TOP_N),
     getIssuePatterns(TOP_N, { bypass: options.bypass === true }),
     getPendingImprovements(TOP_N),
@@ -878,6 +884,12 @@ export async function buildLearningContext(sdId = null, options = {}) {
   // Extract patterns and filtered stats
   const patterns = patternResult.patterns || [];
   const patternFiltered = patternResult.filtered || { lowOccurrence: 0, lowConfidence: 0, staleDecline: 0, total: 0 };
+
+  // SD-LEO-INFRA-LEARN-VISION-GAP-RUBRIC-CLASSIFY-001: unpack here (not at the Promise.all
+  // destructure) so `visionGaps` keeps its pre-existing bare-array identity and every
+  // downstream usage below needs zero changes; `dropped` is surfaced separately.
+  const visionGaps = visionGapResult.patterns || [];
+  const visionGapDropped = visionGapResult.dropped || null;
 
   // Find similar patterns (duplicate detection)
   let similarPatterns = {};
@@ -920,6 +932,10 @@ export async function buildLearningContext(sdId = null, options = {}) {
       // Vision gap intelligence (SD-MAN-INFRA-EXTEND-LEARN-COMMAND-001)
       vision_gap_count: visionGaps.length,
       vision_gaps: visionGaps,
+      // Drop accounting (SD-LEO-INFRA-LEARN-VISION-GAP-RUBRIC-CLASSIFY-001): dimensions
+      // excluded as non-comparable-scale or unscored -- null means the sync itself failed,
+      // {excluded:0, unscored:0} means it ran and found nothing to report.
+      vision_gap_dropped: visionGapDropped,
       // Filtering transparency (v2)
       filtering: {
         patterns_scanned: patternFiltered.total,

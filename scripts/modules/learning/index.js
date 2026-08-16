@@ -18,6 +18,27 @@ import { buildInsightsReport, formatInsightsForDisplay } from './insights.js';
 import { createSupabaseServiceClient } from '../../../lib/supabase-client.js';
 
 /**
+ * SD-LEO-INFRA-LEARN-VISION-GAP-RUBRIC-CLASSIFY-001: build the /learn vision-gaps summary
+ * header line. Extracted as a pure function (rather than inlined into autoApproveCommand)
+ * so the print-guard restructuring -- firing on visionGapDropped !== null alone, not just
+ * visionGaps.length > 0 -- is directly unit-testable. Gating on visionGaps.length alone
+ * would silently print nothing for the exact motivating scenario (everything excluded,
+ * nothing surfaced), reproducing the silent-absence bug this SD exists to fix.
+ * @param {Array} visionGaps
+ * @param {{excluded: number, unscored: number}|null} visionGapDropped null means the sync
+ *   itself failed (unknown), NOT "nothing dropped".
+ * @returns {string|null} the line to print, or null when there is nothing to report at all
+ */
+export function buildVisionGapSummaryLine(visionGaps, visionGapDropped) {
+  if (visionGaps.length === 0 && visionGapDropped === null) return null;
+  const droppedTotal = visionGapDropped ? (visionGapDropped.excluded || 0) + (visionGapDropped.unscored || 0) : 0;
+  const droppedSuffix = visionGapDropped !== null
+    ? `, ${droppedTotal} dimensions not evaluated: excluded ${visionGapDropped.excluded || 0} (non-comparable scale), unscored ${visionGapDropped.unscored || 0} (no dimension data)`
+    : '';
+  return `\n  Vision Gaps (${visionGaps.length} surfaced${droppedSuffix}):`;
+}
+
+/**
  * SD-LEO-FIX-PLAN-LEARN-COMPOSITE-001 (FR-6): emit a loud, audited record of
  * --no-filter usage. Loud: WARN line on stdout. Audited: best-effort INSERT
  * into audit_log; failure logs to stderr but does not block the bypass.
@@ -171,10 +192,18 @@ async function autoApproveCommand(threshold = 50, sdId = null, options = {}) {
     }
   }
 
-  // SD-MAN-INFRA-EXTEND-LEARN-COMMAND-001: Include vision gap patterns
+  // SD-MAN-INFRA-EXTEND-LEARN-COMMAND-001 / SD-LEO-INFRA-LEARN-VISION-GAP-RUBRIC-CLASSIFY-001:
+  // Include vision gap patterns, and report what was NOT evaluated (excluded as a
+  // non-comparable rubric/duration scale, or unscored with no dimension data at all) so a
+  // run where everything is excluded reads as inconclusive, never silently absent. The guard
+  // below intentionally also fires on visionGapDropped !== null alone (dropped-but-nothing-
+  // surfaced is exactly the motivating case) -- gating on visionGaps.length alone would print
+  // nothing for that case, reproducing the bug this SD exists to fix.
   const visionGaps = context.intelligence?.vision_gaps || [];
-  if (visionGaps.length > 0) {
-    console.log(`\n  Vision Gaps (${visionGaps.length} low-scoring dimensions):`);
+  const visionGapDropped = context.intelligence?.vision_gap_dropped || null;
+  const visionGapSummaryLine = buildVisionGapSummaryLine(visionGaps, visionGapDropped);
+  if (visionGapSummaryLine !== null) {
+    console.log(visionGapSummaryLine);
     for (const gap of visionGaps) {
       const score = gap.occurrence_count >= 2 ? threshold : threshold - 10;
       const label = gap.severity === 'high' ? '🔴' : '🟡';
