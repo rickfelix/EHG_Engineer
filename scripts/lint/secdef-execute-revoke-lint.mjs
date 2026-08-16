@@ -215,7 +215,13 @@ export function listScopedFiles(mode, root) {
       return [];
     }
   }
-  const changed = execSync(`git diff --name-only --diff-filter=ACMR ${mergeBase}...HEAD`, { cwd: root, encoding: 'utf8' })
+  // --diff-filter=AR only (Added/Renamed) -- NOT M(odified) or C(opied). REGRESSION sub-agent
+  // (SD-LEO-INFRA-CLOSE-REMAINING-SECURITY-001 VERIFY, evidence row 2e1d2148-81e2-4072-9d7a-4387ecfc6628,
+  // finding G1) proved by repro that ACMR re-scans the WHOLE file on any edit, so appending even a
+  // comment to a legacy migration with pre-existing SECDEF findings elsewhere in that file blocks the
+  // PR on violations it never introduced -- directly contradicting the "pre-existing backlog must
+  // never block a PR that didn't introduce it" intent stated above.
+  const changed = execSync(`git diff --name-only --diff-filter=AR ${mergeBase}...HEAD`, { cwd: root, encoding: 'utf8' })
     .split('\n').filter(Boolean);
   return changed.filter((f) => SCOPED_DIRS.some((d) => f.startsWith(d + '/')) && f.endsWith('.sql'));
 }

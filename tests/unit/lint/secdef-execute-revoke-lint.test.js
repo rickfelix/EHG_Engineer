@@ -6,6 +6,7 @@ import { describe, it, expect, beforeAll, afterAll } from 'vitest';
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
+import { execSync } from 'node:child_process';
 import {
   extractSecdefFunctions,
   evaluateFunction,
@@ -237,5 +238,55 @@ describe('listScopedFiles — TS-4: --all mode scans database/chairman-gated/, n
   it('--all does not pick up non-.sql files even inside a scoped directory', () => {
     const files = listScopedFiles('all', tmpRoot);
     expect(files.some((f) => f.endsWith('README.md'))).toBe(false);
+  });
+});
+
+describe('listScopedFiles — TS-7: --diff mode never re-sweeps a pre-existing legacy file on an unrelated edit', () => {
+  // REGRESSION sub-agent (SD-LEO-INFRA-CLOSE-REMAINING-SECURITY-001 VERIFY, evidence row
+  // 2e1d2148-81e2-4072-9d7a-4387ecfc6628, finding G1) proved by repro that --diff-filter=ACMR
+  // includes Modified files, so a merely-touched legacy migration is fully re-scanned and any
+  // PRE-EXISTING SECDEF findings elsewhere in that same file block the PR -- directly
+  // contradicting this lint's own stated intent ("a pre-existing backlog must never block a PR
+  // that didn't introduce it"). Fixed to --diff-filter=AR (Added/Renamed only). This test proves
+  // the fix: a genuinely-new file is swept, a merely-modified legacy file is not.
+  let tmpRoot;
+
+  function git(args) {
+    return execSync(`git ${args}`, { cwd: tmpRoot, encoding: 'utf8' });
+  }
+
+  beforeAll(() => {
+    tmpRoot = fs.mkdtempSync(path.join(os.tmpdir(), 'secdef-lint-ts7-'));
+    fs.mkdirSync(path.join(tmpRoot, 'database', 'migrations'), { recursive: true });
+    git('init -q -b main');
+    git('config user.email "test@example.com"');
+    git('config user.name "Test"');
+
+    const legacyPath = path.join(tmpRoot, 'database', 'migrations', 'legacy_fixture.sql');
+    fs.writeFileSync(legacyPath, '-- legacy, pre-existing, out of scope for this edit\n');
+    git('add -A');
+    git('commit -q -m baseline');
+
+    git('checkout -q -b feature');
+    // An unrelated, content-preserving edit -- appending a comment, not touching any function.
+    fs.appendFileSync(legacyPath, '-- unrelated trailing comment\n');
+    const newPath = path.join(tmpRoot, 'database', 'migrations', 'brand_new_fixture.sql');
+    fs.writeFileSync(newPath, '-- genuinely new file\n');
+    git('add -A');
+    git('commit -q -m "unrelated edit + new file"');
+  });
+
+  afterAll(() => {
+    fs.rmSync(tmpRoot, { recursive: true, force: true });
+  });
+
+  it('a merely-modified legacy file is NOT swept (M excluded from --diff-filter)', () => {
+    const files = listScopedFiles('diff', tmpRoot).map((f) => f.split(path.sep).join('/'));
+    expect(files).not.toContain('database/migrations/legacy_fixture.sql');
+  });
+
+  it('a genuinely new file IS swept (A included in --diff-filter)', () => {
+    const files = listScopedFiles('diff', tmpRoot).map((f) => f.split(path.sep).join('/'));
+    expect(files).toContain('database/migrations/brand_new_fixture.sql');
   });
 });
