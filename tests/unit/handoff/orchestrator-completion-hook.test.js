@@ -285,7 +285,20 @@ describe('Orchestrator Completion Hook', () => {
     });
 
     // SD-LEO-ENH-AUTO-PROCEED-001-05: Orchestrator Chaining Tests
-    it('should return chainContinue when chaining enabled and orchestrator available', async () => {
+    // SD-LEO-INFRA-LEAD-FINAL-CASCADE-ISOLATION-001: individually skipped (not the whole
+    // file) — this test was the sole reason the ENTIRE file was quarantined in
+    // tests/quarantine-manifest.json since 2026-06-11 (assertion-drift, linked_ref
+    // feedback:65fce396-3dfb-4fda-b9d4-81417d7205f7, a generic 114-file re-pin backlog item,
+    // defer_only:true — never actively worked). That whole-file quarantine silently dropped
+    // this SD's own new TS-2/[STATIC] tests from real CI collection (found by
+    // testing-plan-cascade — the exact "test file in zero collected projects never runs,
+    // and the suite still says green" class this repo has hit before, commit 5a2be57d588).
+    // Confirmed via git-stash isolation this test fails identically against unmodified HEAD
+    // (pre-existing, unrelated to this SD) — see harness bug feedback 9fe2e252-03dc-4ae9-aa75-8c7f59fbabc3.
+    // Un-quarantining the file and skipping only this one test keeps the drift VISIBLE
+    // (reports skipped, not silently absent) while giving the other 24 tests in this file
+    // real CI coverage again.
+    it.skip('should return chainContinue when chaining enabled and orchestrator available', async () => {
       // SD-MAN-INFRA-CLAIM-AUTO-PROCEED-001: Configure session mock for chaining=true
       resolveOwnSession.mockResolvedValue({
         data: { session_id: 'test', metadata: { auto_proceed: true, chain_orchestrators: true } },
