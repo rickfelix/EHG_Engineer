@@ -34,10 +34,6 @@ jobs:
     timeout-minutes: 25
 
     env:
-      # Matches log-harness-bug.js's actual read order (SUPABASE_URL || NEXT_PUBLIC_SUPABASE_URL)
-      # -- TR-5.
-      SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
-      SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
       TEST_CLOCK_OFFSET_MS: 3888000000 # +45 days, matching the arithmetic pinned by TS-... (45*24*60*60*1000)
 
     steps:
@@ -68,4 +64,11 @@ jobs:
       # loud signal by design.
       - name: Report time-bombs to the harness backlog (one row per failing file)
         if: failure()
+        env:
+          # Scoped to this step only (SECURITY, EXEC-TO-PLAN finding SEC-2) -- only
+          # log-harness-bug.js needs these; neither `npm ci` nor the vitest run step do.
+          # Matches log-harness-bug.js's actual read order (SUPABASE_URL ||
+          # NEXT_PUBLIC_SUPABASE_URL) -- TR-5.
+          SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+          SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
         run: node scripts/clock-skew-report-failures.mjs clock-skew-run.log
