@@ -22,16 +22,20 @@
  *   NEVER THROWS and NEVER scores an empty/errored corpus as "0 landed".
  */
 
-import { describe, it, expect } from 'vitest';
+import { describe, it, expect, beforeAll } from 'vitest';
+import { execSync } from 'node:child_process';
 import {
   isSdLandedInMainHistory,
   fetchMergeSubjects,
   scoreLeg1ALocal,
   anchoredKeyPattern,
   mergeLogArgs,
+  landedLogArgs,
   LEG_ID,
   LEG_POINTS,
+  LANDED_LOG_MAX_BUFFER_BYTES,
 } from '../../../../lib/drive-loop/score/leg1-landed-alocal.js';
+import { runHardenedGit } from '../../../../lib/git/hardened-runner.cjs';
 
 describe('isSdLandedInMainHistory — end-anchored match against an already-fetched corpus', () => {
   it('[TS-1, positive] a subject containing the exact key, end-anchored, measures landed', () => {
@@ -77,10 +81,28 @@ describe('isSdLandedInMainHistory — end-anchored match against an already-fetc
     expect(() => isSdLandedInMainHistory('SD-X-001', undefined)).toThrow(/subjects must be an array/);
   });
 
-  it('the permitted git question is fixed and inspectable', () => {
-    expect(mergeLogArgs()).toEqual(['log', 'main', '--merges', '--format=%s']);
-    expect(mergeLogArgs({ sinceIso: '2026-01-01T00:00:00Z' }))
-      .toEqual(['log', 'main', '--merges', '--format=%s', '--since=2026-01-01T00:00:00Z']);
+  it('[AMENDMENT dc828e43] the permitted git question is ANY commit subject on main — no --merges', () => {
+    expect(landedLogArgs()).toEqual(['log', 'main', '--format=%s']);
+    expect(landedLogArgs({ sinceIso: '2026-01-01T00:00:00Z' }))
+      .toEqual(['log', 'main', '--format=%s', '--since=2026-01-01T00:00:00Z']);
+  });
+
+  it('mergeLogArgs is kept as a back-compat alias of landedLogArgs, not a divergent duplicate', () => {
+    expect(mergeLogArgs).toBe(landedLogArgs);
+    expect(mergeLogArgs()).toEqual(['log', 'main', '--format=%s']);
+  });
+
+  it('[AMENDMENT dc828e43, squash-subject fixture] a key appearing ONLY in a squash-merge subject (real shape, no merge commit) still measures landed', () => {
+    // Real squash-commit subjects sampled from this repo's own history (2026-08-16) — the exact
+    // shape `git log main --merges` cannot see, which is the entire premise of this amendment.
+    const subjects = [
+      'feat(SD-LEO-INFRA-FLEET-VIEW-BADGES-001): capacity chip + status badge + DB-only attention strip (#6357)',
+      'docs(SD-LEO-GEN-SATELLITE-AGENT-LIFECYCLE-001): mark Satellite 3.6 build shape shipped (#6109)',
+    ];
+    expect(isSdLandedInMainHistory('SD-LEO-INFRA-FLEET-VIEW-BADGES-001', subjects)).toBe(true);
+    expect(isSdLandedInMainHistory('SD-LEO-GEN-SATELLITE-AGENT-LIFECYCLE-001', subjects)).toBe(true);
+    // A key with no matching subject at all (e.g. landed in a different repo) still measures NOT landed.
+    expect(isSdLandedInMainHistory('SD-LEO-FEAT-CHAIRMAN-ROADMAP-TAB-001', subjects)).toBe(false);
   });
 });
 
@@ -226,6 +248,57 @@ describe('scoreLeg1ALocal — fetches ONCE, proportional scoring, never a false 
     expect(r.points.value).toBe(LEG_POINTS);
     expect(r.points.predicate).toMatch(/excluded from the denominator/);
   });
+
+  it('[AMENDMENT dc828e43] a corpus with ZERO merge-commit-shaped lines (pure squash-merge history) still lands its keys — the full pipeline, not just the pure match fn', () => {
+    // No "Merge pull request" line anywhere — the exact shape a squash-merge-only history
+    // produces, and the exact shape the OLD (--merges) rule measured as an empty corpus.
+    const runGitLog = () => [
+      'feat(SD-LANDED-001): implement the thing (#123)',
+      'fix(SD-LANDED-001): correct an edge case (#124)',
+      'docs(SD-OTHER-001): unrelated docs update (#125)',
+    ];
+    const r = scoreLeg1ALocal({ items: [{ item_id: 'a', sd_key: 'SD-LANDED-001' }], runGitLog });
+    expect(r.unavailable, 'a squash-only corpus is a real, non-empty corpus — never unavailable').toBeUndefined();
+    expect(r.points.value).toBe(LEG_POINTS);
+    expect(r.landed_count.value).toBe(1);
+  });
+
+  it('[SD-LEO-INFRA-DRIVE-SCORE-LEG1-ANY-SUBJECT-001, 08-15 population fixture] 16 of 17 land = 1.88 points (was 11/17 = 1.29 under the pre-amendment merge-only rule)', () => {
+    // The 6 items named in this SD's measured premise (Solomon 0f127ce4, re-derived 2026-08-15):
+    // 5 land ONLY via a squash subject (invisible under --merges), 1 (CHAIRMAN-ROADMAP-TAB) is
+    // absent from EITHER corpus — genuinely landed in a different repo, out of scope here.
+    const squashOnlyLanded = [
+      'feat(SD-LEO-INFRA-FLEET-VIEW-BADGES-001): capacity chip + status badge (#6357)',
+      'fix(SD-LEO-INFRA-LEO-APP-LAUNCHER-001): launcher fix (#6201)',
+      'feat(SD-LEO-INFRA-FLEET-WATCHDOG-001): watchdog heartbeat (#6180)',
+      'feat(SD-LEO-INFRA-FLEET-REGISTRY-MANIFEST-001): manifest registry (#6155)',
+      'docs(SD-LEO-GEN-SATELLITE-AGENT-LIFECYCLE-001): mark Satellite 3.6 build shape shipped (#6109)',
+    ];
+    // 11 more items that already landed under the OLD merge-only rule (real merge-commit shape) —
+    // rounds the population out to 17 items / 16 landed total, matching the cited premise exactly.
+    const preExistingMergeLanded = Array.from({ length: 11 }, (_, i) =>
+      `Merge pull request #${7000 + i} from rickfelix/feat/SD-WAVE1-FILLER-${String(i + 1).padStart(3, '0')}`);
+    const subjects = [...squashOnlyLanded, ...preExistingMergeLanded];
+    const runGitLog = () => subjects;
+
+    const items = [
+      { item_id: 'i1', sd_key: 'SD-LEO-INFRA-FLEET-VIEW-BADGES-001' },
+      { item_id: 'i2', sd_key: 'SD-LEO-INFRA-LEO-APP-LAUNCHER-001' },
+      { item_id: 'i3', sd_key: 'SD-LEO-INFRA-FLEET-WATCHDOG-001' },
+      { item_id: 'i4', sd_key: 'SD-LEO-INFRA-FLEET-REGISTRY-MANIFEST-001' },
+      { item_id: 'i5', sd_key: 'SD-LEO-GEN-SATELLITE-AGENT-LIFECYCLE-001' },
+      { item_id: 'i6', sd_key: 'SD-LEO-FEAT-CHAIRMAN-ROADMAP-TAB-001' }, // NOT landed here — different repo
+      ...Array.from({ length: 11 }, (_, i) => ({
+        item_id: `f${i + 1}`,
+        sd_key: `SD-WAVE1-FILLER-${String(i + 1).padStart(3, '0')}`,
+      })),
+    ];
+    expect(items).toHaveLength(17);
+
+    const r = scoreLeg1ALocal({ items, runGitLog });
+    expect(r.landed_count.value).toBe(16);
+    expect(r.points.value).toBe(1.88); // 2 * 16/17 = 1.8823... -> rounded 1.88
+  });
 });
 
 /**
@@ -285,5 +358,44 @@ describe('[TS-8] the done[]-shaped test fixture is bound to the REAL computePlan
     // The exact contract scoreLeg1ALocal reads.
     const scored = scoreLeg1ALocal({ items: status.done, runGitLog: () => ['Merge pull request #1 from rickfelix/feat/SD-X-001'] });
     expect(scored.points.value).toBe(LEG_POINTS);
+  });
+});
+
+describe('[BUFFER SAFETY canary, amendment dc828e43] the REAL production wiring against THIS repo\'s live history', () => {
+  // SD-LEO-INFRA-DRIVE-SCORE-LEG1-ANY-SUBJECT-001: widening the corpus from merge-only to any
+  // commit subject measured 1.18MB live on 2026-08-15/16 — already OVER spawnSync's unconfigured
+  // 1MB default (see leg1-landed-alocal.js's "BUFFER SAFETY" header section and
+  // LANDED_LOG_MAX_BUFFER_BYTES). This test runs the EXACT same call the CLI wiring makes — real
+  // git, real repo, real hardened runner — so a future corpus-size regression (or a maxBuffer
+  // value that drifts out of sync with reality) fails loud in CI, not silently in production.
+  //
+  // CI-CHECKOUT GOTCHA (found live, PR #7069, unit-tier.yml): a pull_request-triggered job checks
+  // out the PR's merge ref with fetch-depth:0 (full HISTORY), but that does NOT create a LOCAL
+  // branch literally named `main` — only `origin/main`. landedLogArgs() deliberately hardcodes the
+  // literal ref `main` (never a caller-controlled ref — see its own docs), which is always true in
+  // the REAL production job (drive-report-cron.yml checks out main directly), but is NOT guaranteed
+  // in every CI job that happens to run this test suite. Ensuring `main` resolves locally is an
+  // environment fix scoped to THIS TEST ONLY — it does not touch landedLogArgs's fixed-ref
+  // contract, which is exactly what this canary exists to exercise unmodified.
+  beforeAll(() => {
+    try {
+      execSync('git rev-parse --verify --quiet main', { cwd: process.cwd(), stdio: 'ignore' });
+    } catch {
+      execSync('git branch main origin/main', { cwd: process.cwd(), stdio: 'ignore' });
+    }
+  });
+
+  it('runHardenedGit(landedLogArgs(), {maxBuffer: LANDED_LOG_MAX_BUFFER_BYTES}) succeeds, with healthy margin below the budget', () => {
+    const raw = runHardenedGit(landedLogArgs(), {
+      cwd: process.cwd(), maxBuffer: LANDED_LOG_MAX_BUFFER_BYTES, timeout: 30000,
+    });
+    expect(typeof raw).toBe('string');
+    const bytes = Buffer.byteLength(raw, 'utf8');
+    expect(
+      bytes,
+      `live any-subject corpus is ${bytes} bytes against a ${LANDED_LOG_MAX_BUFFER_BYTES}-byte `
+      + 'budget (spawnSync\'s unconfigured default is 1,048,576) — if this creeps past half the '
+      + 'budget, widen LANDED_LOG_MAX_BUFFER_BYTES before it silently degrades leg1 to unavailable().',
+    ).toBeLessThan(LANDED_LOG_MAX_BUFFER_BYTES / 2);
   });
 });
