@@ -22,7 +22,7 @@ const require = createRequire(import.meta.url);
 const sweep = require(SOURCE_PATH);
 
 /** A minimal chainable fake for `.from('strategic_directives_v2').update(...).eq(...).select()`. */
-function makeFakeSupabase({ updateError = null } = {}) {
+function makeFakeSupabase({ updateError = null, updateMatchesZeroRows = false } = {}) {
   const calls = [];
   const from = (table) => ({
     update(payload) {
@@ -32,7 +32,10 @@ function makeFakeSupabase({ updateError = null } = {}) {
           calls[calls.length - 1].eqCol = col;
           calls[calls.length - 1].eqVal = val;
           return {
-            select: () => Promise.resolve({ error: updateError, data: updateError ? null : [{ sd_key: val }] }),
+            select: () => Promise.resolve({
+              error: updateError,
+              data: updateError ? null : (updateMatchesZeroRows ? [] : [{ sd_key: val }]),
+            }),
           };
         },
       };
@@ -227,6 +230,20 @@ describe('completeStuck100Sd — LEAD-FINAL-APPROVAL witness fence', () => {
     expect(result.written).toBe(false);
     expect(result.line).toBeNull();
     expect(result.error).toBe(dbError);
+  });
+
+  it('[adversarial-review fix, QF-20260727-363 parity] an UPDATE matching zero rows is NOT reported as written -- !error alone never proved a write happened', async () => {
+    const { from, calls } = makeFakeSupabase({ updateMatchesZeroRows: true });
+    const sd = { id: 'uuid-6', sd_key: 'SD-LEAF-RACED-001', progress_percentage: 100, completion_date: '2026-08-15T00:00:00Z' };
+    const result = await sweep.completeStuck100Sd(
+      { from },
+      sd,
+      { orchestratorSdKeys: new Set(), acceptedLeadFinalSet: new Set(['SD-LEAF-RACED-001']) },
+    );
+    expect(result.written).toBe(false);
+    expect(result.line).toMatch(/zero rows/);
+    expect(result.line).not.toMatch(/^QA: completed/);
+    expect(calls.length).toBe(1); // the write WAS attempted, just didn't match -- distinct from the two upstream guard refusals (zero calls)
   });
 });
 
