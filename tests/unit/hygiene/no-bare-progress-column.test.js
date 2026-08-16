@@ -19,6 +19,8 @@ import {
   scanSource,
   evaluateFiles,
   loadTrackedFiles,
+  findNewViolations,
+  ratchetKey,
 } from '../../../scripts/lint/progress-column-lint.mjs';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
@@ -278,17 +280,55 @@ describe('evaluateFiles — mutation/red-green meta-test', () => {
   });
 });
 
+describe('findNewViolations / ratchetKey — the ratchet comparison itself, on synthetic data', () => {
+  // PLAN-phase VALIDATION review (SD-LEO-INFRA-PROGRESS-COLUMN-DEAD-TWIN-001): the mutation
+  // meta-test above proves evaluateFiles() can return ok:false, but never proves the SUBSET
+  // COMPARISON that decides pass/fail in Section 5 can actually detect a new violation -- in
+  // the normal passing state live findings equal the baseline exactly, so newFindings is
+  // trivially empty regardless of whether the comparison logic is even correct. These tests
+  // exercise findNewViolations() directly with synthetic data, decoupled from live git state,
+  // so a broken key-construction bug (like the file:line:rule collision this same review found
+  // and fixed) would fail a committed, deterministic test rather than only an ad-hoc probe.
+  const site = (file, line, rule, method) => ({ file, line, rule, method });
+
+  it('returns [] when every live finding matches a baseline entry exactly', () => {
+    const baseline = [site('a.js', 10, 'A', 'select'), site('b.js', 20, 'B', 'update')];
+    const live = [site('a.js', 10, 'A', 'select'), site('b.js', 20, 'B', 'update')];
+    expect(findNewViolations(live, baseline)).toEqual([]);
+  });
+
+  it('flags a live finding on a file/line never in the baseline', () => {
+    const baseline = [site('a.js', 10, 'A', 'select')];
+    const live = [site('a.js', 10, 'A', 'select'), site('c.js', 5, 'B', 'insert')];
+    expect(findNewViolations(live, baseline)).toEqual([site('c.js', 5, 'B', 'insert')]);
+  });
+
+  // The regression case: two DIFFERENT violations sharing a file+line (a chained call, per the
+  // Babel loc-is-chain-start behavior this review found) must both be tracked independently,
+  // not collapse onto one baseline slot that a second, genuinely new violation could hide in.
+  it('does NOT let a new violation hide behind an existing baseline entry on the same file+line', () => {
+    const baseline = [site('handoff-export.cjs', 89, 'A', 'lt'), site('handoff-export.cjs', 89, 'A', 'select')];
+    const live = [
+      site('handoff-export.cjs', 89, 'A', 'lt'),
+      site('handoff-export.cjs', 89, 'A', 'select'),
+      site('handoff-export.cjs', 89, 'A', 'gte'), // a third, genuinely new violation on the same line
+    ];
+    expect(findNewViolations(live, baseline)).toEqual([site('handoff-export.cjs', 89, 'A', 'gte')]);
+  });
+
+  it('a shrunk baseline (future cleanup) still passes once the fixed site is removed from live', () => {
+    const baseline = [site('a.js', 10, 'A', 'select'), site('b.js', 20, 'B', 'update')];
+    const live = [site('a.js', 10, 'A', 'select')]; // b.js was fixed by a later SD
+    expect(findNewViolations(live, baseline)).toEqual([]);
+  });
+
+  it('ratchetKey composes exactly file:line:rule:method', () => {
+    expect(ratchetKey(site('x.js', 7, 'C', 'property-read'))).toBe('x.js:7:C:property-read');
+  });
+});
+
 describe('live ratchet — ok:true only while every live finding is already in the frozen baseline', () => {
   const baseline = JSON.parse(readFileSync(BASELINE_PATH, 'utf8'));
-  // Adversarial review of PR #7141 (SD-LEO-INFRA-PROGRESS-COLUMN-DEAD-TWIN-001): a
-  // file:line:rule key is NOT unique -- Babel's node.loc.start.line for a chained
-  // CallExpression is the start of the WHOLE fluent chain, so two DIFFERENT findings on the
-  // same table/rule (e.g. .lt('progress',...) and .select('...progress...') both starting at
-  // scripts/handoff-export.cjs:89) collide onto one key. Verified against the live baseline:
-  // 37 sites, only 36 unique file:line:rule keys before `method` was added here. Without
-  // `method` in the key, a genuinely NEW violation landing on an already-baselined line would
-  // silently pass the subset check instead of failing it.
-  const baselineKeys = new Set(baseline.sites.map((s) => `${s.file}:${s.line}:${s.rule}:${s.method}`));
 
   it('baseline file has the expected shape', () => {
     expect(baseline.table).toBe('strategic_directives_v2');
@@ -298,14 +338,14 @@ describe('live ratchet — ok:true only while every live finding is already in t
   });
 
   it('the baseline dedup key (file:line:rule:method) has no collisions (regression guard for the PR #7141 review finding)', () => {
-    expect(baselineKeys.size).toBe(baseline.sites.length);
+    const keys = new Set(baseline.sites.map(ratchetKey));
+    expect(keys.size).toBe(baseline.sites.length);
   });
 
   it('every LIVE finding is already present in the frozen baseline (no NEW site)', () => {
     const { files } = loadTrackedFiles();
     const { findings } = evaluateFiles(files);
-    const newFindings = findings.filter((f) => !baselineKeys.has(`${f.file}:${f.line}:${f.rule}:${f.method}`));
-    expect(newFindings).toEqual([]);
+    expect(findNewViolations(findings, baseline.sites)).toEqual([]);
   }, 60000);
 
   // Not a hard requirement (the baseline is allowed to still equal the live count if nothing
