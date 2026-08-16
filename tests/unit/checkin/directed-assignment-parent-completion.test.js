@@ -5,6 +5,12 @@
  * Without this, a parent_completion WORK_ASSIGNMENT that assertSdDispatchable allowed to be
  * CREATED would still be immediately DECLINED/purged at the worker's own claim step, because
  * classifyDispatchIneligibility is consumed independently here too (TESTING finding TST-C3).
+ *
+ * SEC-H1 (EXEC-phase security review, evidence d727c054): the production code now calls the REAL,
+ * unmocked classifyAllDispatchIneligibility (required directly, not injected via ctx.helpers) --
+ * an injectable mock would hide exactly the bug this finding describes (a first-match classifier
+ * silently discarding a second, real axis). These tests exercise the real classifier against real
+ * fixture shapes for that reason; ctx.helpers no longer carries a classifier at all.
  */
 import { describe, it, expect, vi } from 'vitest';
 import { createRequire } from 'node:module';
@@ -26,7 +32,7 @@ function assignmentRow(kind) {
   };
 }
 
-function baseHelpers({ classifyVerdict = 'orchestrator_parent', claimResult = { ok: true } } = {}) {
+function baseHelpers({ claimResult = { ok: true } } = {}) {
   return {
     ws: { getMessagesForSession: vi.fn(async () => [assignmentRow('parent_completion')]) },
     tryClaim: vi.fn(async () => claimResult),
@@ -34,7 +40,6 @@ function baseHelpers({ classifyVerdict = 'orchestrator_parent', claimResult = { 
     ackMessage: vi.fn(async () => ({ acknowledged: true })),
     extractSdFromAssignment: () => PARENT_KEY,
     isInformationalNudge: () => false,
-    classifyDispatchIneligibility: vi.fn(() => classifyVerdict),
     antiWinddownDirective: () => '',
     ASSIGNMENT_RECENCY_WINDOW_MS: 24 * 60 * 60 * 1000,
     TERMINAL_CLAIM_ERRORS: new Set(),
@@ -140,11 +145,30 @@ describe('directed-assignment.cjs — FR-1 parent_completion claim exception', (
   });
 
   it('a non-orchestrator_parent ineligibility verdict is never overridden by this exception', async () => {
-    const helpers = baseHelpers({ classifyVerdict: 'human_action_required' });
+    const helpers = baseHelpers();
     const ctx = makeCtx({
       helpers,
       sdRow: { id: PARENT_ID, status: 'pending_approval', sd_type: 'feature', metadata: { requires_human_action: true }, target_application: 'EHG_Engineer' },
       childrenRows: [],
+      handoffRows: [],
+    });
+    const result = await directedAssignment.run(ctx);
+    expect(result).toBeUndefined();
+    expect(helpers.tryClaim).not.toHaveBeenCalled();
+  });
+
+  it('SEC-H1 regression: an orchestrator parent that ALSO carries a real second hold (requires_human_action) is REFUSED, not silently let through as a bare orchestrator_parent case', async () => {
+    const helpers = baseHelpers();
+    const ctx = makeCtx({
+      helpers,
+      // sd_type='orchestrator' fires the orchestrator_parent axis; metadata.requires_human_action
+      // ALSO fires the human_action_required axis. A first-match classifier would report only
+      // 'orchestrator_parent' (checked first) and silently mask the human-action hold -- the
+      // exact defect SEC-H1 describes. The fix requires the axis SET to be exactly
+      // ['orchestrator_parent'] before the parent_completion exception applies; two real axes
+      // present must refuse, even with all children terminal and payload.kind='parent_completion'.
+      sdRow: { id: PARENT_ID, status: 'pending_approval', sd_type: 'orchestrator', metadata: { requires_human_action: true }, target_application: 'EHG_Engineer' },
+      childrenRows: [{ id: 'c1', status: 'completed' }],
       handoffRows: [],
     });
     const result = await directedAssignment.run(ctx);
