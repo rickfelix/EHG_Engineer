@@ -257,6 +257,12 @@ beforeAll(async () => {
   // not reporting a role that was never grantable in this ephemeral database at all.
   await client.query('CREATE FUNCTION public._test_pre_adp_control() RETURNS void LANGUAGE sql AS \'SELECT NULL::void\'');
   preAdpControlGrant = await grantState('_test_pre_adp_control', '');
+  // TEMPORARY DIAGNOSTIC (TESTING sub-agent RCA follow-up): this value was already captured above
+  // but never printed. Decisive for H2 — if public_exec is TRUE here (before the migration's ADP
+  // REVOKE has run at all), the SEED itself never suppressed PUBLIC and the CI harness is
+  // unrepresentative of production in exactly the dimension FR-4 tests. If FALSE, the seed starts
+  // PUBLIC-suppressed and the later failure is a genuine mid-migration regression, not a seed gap.
+  console.log('[DIAG3] pre-ADP-migration control grant (seed state, before REVOKE runs):', JSON.stringify(preAdpControlGrant));
 
   // TS-5: run the migration's OWN extracted self-test block standalone, in this same pre-fix
   // window — before the ADP fix has been applied, its precondition check (has_anon OR has_public)
