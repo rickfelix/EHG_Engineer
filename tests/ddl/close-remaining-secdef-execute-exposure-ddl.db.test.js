@@ -18,11 +18,12 @@
 //
 // NOTE: this file previously also carried FR-4 (an ALTER DEFAULT PRIVILEGES recurrence-prevention
 // statement + self-test). FR-4 was DESCOPED to a follow-up migration at EXEC-TO-PLAN after three
-// independent, evidence-targeted fix attempts (seed via REVOKE-then-GRANT, an aclexplode-based
-// stored-row self-test, and a seed forcing the owner entry to match production's measured shape)
-// all failed identically against the real CI Postgres 16 environment. See the forward migration's
-// own header for the full note. This file's STUB_SCHEMA, tests, and helpers were trimmed
-// accordingly — Buckets A/B/C only.
+// independent, evidence-targeted fix attempts all failed identically — and a live production
+// re-measurement (SECURITY sub-agent) found this is NOT a CI-fixture artifact: new functions are
+// born PUBLIC-executable in production too (84% of all public functions, actively ongoing), so no
+// further CI-side fix could have resolved it. See the forward migration's own header for the full
+// finding. This file's STUB_SCHEMA, tests, and helpers were trimmed accordingly — Buckets A/B/C
+// only.
 //
 // FAIL-CLOSED, no skip branch: if this file cannot reach a database it fails loudly rather than
 // silently passing (matches tests/ddl/drive-reports-ddl.db.test.js's convention).

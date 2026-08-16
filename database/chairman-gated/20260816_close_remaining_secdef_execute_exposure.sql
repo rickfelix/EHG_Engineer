@@ -5,32 +5,45 @@
 -- Target DB: EHG_Engineer consolidated (dedlbzhpgkmetvhbkyzq)
 --
 -- FR-4 (ALTER DEFAULT PRIVILEGES recurrence-prevention) DESCOPED to a follow-up migration, after
--- THREE independent, evidence-targeted fix attempts all failed identically against the real CI
--- Postgres 16 environment: (1) seeding pg_default_acl via REVOKE-then-GRANT, (2) redesigning the
--- self-test to inspect the stored ACL row directly via aclexplode() instead of a probe function
--- (itself later found to be a false negative — the stored row can read clean while a function
--- created under it still measures anon/PUBLIC executable), and (3) forcing an explicit owner
--- entry into the seeded row via a single GRANT naming postgres, anon, authenticated together —
--- deliberately reproducing production's own measured pg_default_acl shape
--- ({postgres,anon,authenticated,service_role}, confirmed live) rather than guessing at it. All
--- three produced the IDENTICAL ADP_SELF_TEST_FAILED outcome. A cross-transaction outcome
--- measurement (a real probe function created in a separate, post-COMMIT statement — ruling out a
--- same-transaction visibility artifact) confirmed the failure is genuine, not a harness quirk:
--- anon_exec measured true on a function created after the migration's own ADP REVOKE had
--- committed. This cannot be reproduced or validated correctly in the environment available to
--- this session (no local Postgres for empirical iteration; the live production database is
--- correctly off-limits for DDL experimentation) and is deferred to a follow-up migration for
--- further diagnosis with better tooling. Two independent recurrence controls remain live and
--- unaffected by this descope, on two different observability axes: the FR-6
--- secdef-execute-revoke-lint (blocking CI, requires an explicit PUBLIC-naming REVOKE alongside
--- every new SECURITY DEFINER function) and scripts/audit-rpc-execute-grants.mjs's completeness
--- gate run with AUDIT_GRANTS_MODE=buckets (measures the live catalog directly, covering the
--- lint's stated blind spot — a function created outside any migration file; confirmed genuinely
--- discriminating by SECURITY sub-agent, currently reporting RED against the pre-apply live state
--- as expected). Both are DETECTIVE controls, not PREVENTIVE like the descoped ADP clause would
--- have been — worth naming explicitly as scope reduction, and the completeness gate is currently
--- wired only as a manual npm script (no CI/cron caller) — the follow-up SD should either wire it
--- into CI or name an owner/cadence for running it.
+-- THREE independent, evidence-targeted fix attempts all failed identically: (1) seeding
+-- pg_default_acl via REVOKE-then-GRANT, (2) redesigning the self-test to inspect the stored ACL
+-- row directly via aclexplode() instead of a probe function (itself later found to be a false
+-- negative), and (3) forcing an explicit owner entry into the seeded row to exactly reproduce
+-- production's measured pg_default_acl shape. All three produced the IDENTICAL
+-- ADP_SELF_TEST_FAILED outcome: a function created after the ADP REVOKE still measures
+-- anon/PUBLIC executable.
+--
+-- CORRECTED, IMPORTANT (SECURITY sub-agent, EXEC-TO-PLAN, live re-measurement — supersedes this
+-- header's earlier claim that this was a CI-fixture artifact): it is NOT. Production exhibits the
+-- SAME behavior. The 11 most-recently-created public functions ALL carry an explicit PUBLIC
+-- aclitem and public_exec=true, live, right now — 636 of 759 public functions (84%) currently
+-- read public_exec=true, and new functions keep arriving that way. This is an ACTIVE, ONGOING
+-- issue, not a historical backlog and not a test-harness limitation — the CI container was
+-- faithfully reproducing production the whole time. Consequence for THIS FR: the ADP row is
+-- ALREADY PUBLIC-free (matching the "PUBLIC-revoke half is already satisfied" claim below), yet
+-- functions are still born PUBLIC-executable — meaning the leak enters DOWNSTREAM of the default
+-- ACL, not from an ineffective ADP statement. A correctly-worded ADP REVOKE ... FROM PUBLIC would
+-- therefore have been a no-op for the PUBLIC axis by design, same as it is today; FR-4's only
+-- real, deliverable value was ever the anon-axis default removal. A follow-up investigation
+-- retrying "fix the ALTER DEFAULT PRIVILEGES statement" would target the wrong mechanism.
+-- Concrete lead for that follow-up (unverified as to whether it ever executed — flagged, not
+-- asserted): database/migrations/20260603_03_revoke_secdef_execute_from_anon_authenticated_rollback.sql:19
+-- contains a blanket `GRANT EXECUTE ON FUNCTION public.%I(%s) TO anon, authenticated, PUBLIC`
+-- loop over every SECURITY DEFINER function in public — the only file in this repo that grants a
+-- function TO PUBLIC, and itself a second live instance of the "over-granting rollback" defect
+-- class this SD's own rollback file was corrected for (see the paired rollback's header).
+--
+-- Two independent recurrence controls remain live and unaffected by this descope, on two
+-- different observability axes: the FR-6 secdef-execute-revoke-lint (blocking CI, requires an
+-- explicit PUBLIC-naming REVOKE alongside every new SECURITY DEFINER function) and
+-- scripts/audit-rpc-execute-grants.mjs's completeness gate run with AUDIT_GRANTS_MODE=buckets
+-- (measures the live catalog directly, covering the lint's stated blind spot — a function created
+-- outside any migration file; confirmed genuinely discriminating by SECURITY sub-agent, currently
+-- reporting RED against the live pre-apply state, consistent with the 84% figure above). Both are
+-- DETECTIVE controls, not PREVENTIVE like the descoped ADP clause would have been — worth naming
+-- explicitly as scope reduction, and the completeness gate is currently wired only as a manual
+-- npm script (no CI/cron caller) — the follow-up SD should either wire it into CI or name an
+-- owner/cadence for running it.
 --
 -- CHAIRMAN-GATED. Per the SD family convention this file is a DELIVERABLE, not an applied
 -- change. It is inert until the approver header below is filled with the approving bare
@@ -109,10 +122,9 @@
 -- entirely when it equals acldefault(), which would otherwise defeat this exact drift check).
 --
 -- ON THE (REMOVED) ALTER DEFAULT PRIVILEGES STATEMENT — see the FR-4 descope note at the top of
--- this file. pg_default_acl for (postgres, public, functions) already carries ZERO PUBLIC items
--- today (measured); the open question was whether an ADP REVOKE ... FROM anon reliably suppresses
--- anon EXECUTE on NEW functions, and three independent, targeted measurements all found it does
--- not, reliably, in this environment — deferred to a follow-up migration for further diagnosis.
+-- this file for the full finding: new functions in public are being born PUBLIC-executable in
+-- BOTH production and CI, downstream of a pg_default_acl row that is already PUBLIC-free. Deferred
+-- to a follow-up migration scoped to the actual mechanism, not another ADP-statement retry.
 --
 -- ============================================================================
 
