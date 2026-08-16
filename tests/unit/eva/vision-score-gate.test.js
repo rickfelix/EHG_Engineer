@@ -313,5 +313,110 @@ describe('vision-score-gate: validateVisionScore', () => {
       expect(result.details).not.toMatch(/TRUNCATED/);
       expect(result.warnings).toEqual([]);
     });
+
+    // The truncation note/warning are computed ONCE, before the dynamic-threshold
+    // section, specifically so every score-bearing return path can reference it —
+    // not just the below-threshold-block and normal-pass paths covered above. These
+    // 3 tests pin the remaining paths named in the QF-20260728-277 adversarial review.
+    function mockSupabaseWithDims(totalScore, thresholdAction, dimensionScores) {
+      return {
+        from: () => ({
+          select: () => ({
+            eq: () => ({
+              order: () => ({
+                limit: () => ({
+                  data: [{
+                    total_score: totalScore,
+                    threshold_action: thresholdAction,
+                    scored_at: '2026-01-01',
+                    dimension_scores: dimensionScores,
+                    rubric_snapshot: {
+                      input_truncated: true,
+                      truncated_fields: [{ field: 'description', charsTotal: 21693, charsRead: 8000 }],
+                    },
+                  }],
+                  error: null,
+                }),
+              }),
+            }),
+          }),
+        }),
+      };
+    }
+
+    it('surfaces truncation on the floor-rule "too few addressable dims" PASS path (score=75)', async () => {
+      // infrastructure patterns match 'architecture'/'reliability'; 'usability'/'creativity'/
+      // 'novelty' match none — 2 addressable of 5 total, below MIN_ADDRESSABLE_DIMENSIONS (3).
+      const sd = { sd_key: 'SD-TEST', sd_type: 'infrastructure', vision_score: null, vision_score_action: null };
+      const dims = { architecture: 80, reliability: 80, usability: 80, creativity: 80, novelty: 80 };
+      const result = await validateVisionScore(sd, mockSupabaseWithDims(65, 'gap_closure_sd', dims));
+      expect(result.passed).toBe(true);
+      expect(result.score).toBe(75);
+      expect(result.details).toMatch(/Floor rule: 2\/5 addressable dims/);
+      expect(result.details).toMatch(/INPUT TRUNCATED/);
+      expect(result.warnings).toHaveLength(2);
+      expect(result.warnings.some(w => /Floor rule triggered/.test(w))).toBe(true);
+      expect(result.warnings.some(w => /truncated/i.test(w))).toBe(true);
+    });
+
+    it('surfaces truncation on the floor-rule "addressable dim avg below floor" BLOCK path (score=0)', async () => {
+      // 3 addressable dims (architecture/reliability/security, avg=30) clears the
+      // MIN_ADDRESSABLE_DIMENSIONS count floor but trips the FLOOR_MINIMUM_SCORE (60) avg floor.
+      const sd = { sd_key: 'SD-TEST', sd_type: 'infrastructure', vision_score: null, vision_score_action: null };
+      const dims = { architecture: 30, reliability: 30, security: 30, usability: 80, creativity: 80 };
+      const result = await validateVisionScore(sd, mockSupabaseWithDims(65, 'escalate', dims));
+      expect(result.passed).toBe(false);
+      expect(result.score).toBe(0);
+      expect(result.details).toMatch(/addressable dim avg 30\/100 below minimum 60/);
+      expect(result.details).toMatch(/INPUT TRUNCATED/);
+      expect(result.warnings.some(w => /truncated/i.test(w))).toBe(true);
+    });
+
+    it('surfaces truncation on the chairman-override PASS path (score forced to 100)', async () => {
+      const sd = { sd_key: 'SD-TEST', sd_type: 'infrastructure', vision_score: null, vision_score_action: null };
+      const mockSupabase = {
+        from: (table) => {
+          if (table === 'validation_gate_registry') {
+            return {
+              select: () => ({
+                eq: () => ({
+                  eq: () => ({
+                    eq: () => ({
+                      limit: () => ({ data: [{ reason: 'Chairman approved via override' }], error: null }),
+                    }),
+                  }),
+                }),
+              }),
+            };
+          }
+          return {
+            select: () => ({
+              eq: () => ({
+                order: () => ({
+                  limit: () => ({
+                    data: [{
+                      total_score: 50,
+                      threshold_action: 'escalate',
+                      scored_at: '2026-01-01',
+                      rubric_snapshot: {
+                        input_truncated: true,
+                        truncated_fields: [{ field: 'description', charsTotal: 21693, charsRead: 8000 }],
+                      },
+                    }],
+                    error: null,
+                  }),
+                }),
+              }),
+            }),
+          };
+        },
+      };
+      const result = await validateVisionScore(sd, mockSupabase);
+      expect(result.passed).toBe(true);
+      expect(result.score).toBe(100);
+      expect(result.details).toMatch(/OVERRIDDEN/);
+      expect(result.details).toMatch(/INPUT TRUNCATED/);
+      expect(result.warnings.some(w => /truncated/i.test(w))).toBe(true);
+    });
   });
 });
