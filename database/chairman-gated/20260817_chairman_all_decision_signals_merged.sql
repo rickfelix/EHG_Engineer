@@ -1,3 +1,5 @@
+-- @approved-by: codestreetlabs@gmail.com
+-- (approval transcribed by Adam per chairman ruling 2026-08-07; chairman 'run it' on Group 3 at terminal, 2026-08-16 ceremony)
 -- QF-20260816-456 — MERGE of two rival chairman-gated views of chairman_all_decision_signals
 -- into ONE, ahead of the 2026-08-17 chairman ceremony. Supersedes both:
 --   database/chairman-gated/20260803_chairman_queue_truthful_render.sql   ("File A")
