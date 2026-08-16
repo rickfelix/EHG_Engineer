@@ -1,0 +1,1221 @@
+/**
+ * HandoffRecorder - Records handoff executions and artifacts
+ * Part of LEO Protocol Unified Handoff System refactor
+ *
+ * Manages recording of successful/failed handoffs and creates artifacts.
+ *
+ * IMPORTANT DISTINCTION (revised by SD-FDBK-FIX-LFA-ACCEPT-CANONICAL-001):
+ * - Phase TRANSITIONS (LEAD-TO-PLAN, PLAN-TO-EXEC, etc.) create artifacts in sd_phase_handoffs.
+ * - COMPLETION actions (LEAD-FINAL-APPROVAL) record in leo_handoff_executions AND now also
+ *   persist an accepted sd_phase_handoffs row with to_phase coerced 'APPROVAL'->'LEAD'
+ *   (parity with recordFailure, which always wrote rejected LFA rows that way).
+ *   The original skip (SD-VENTURE-STAGE0-UI-001, citing the to_phase CHECK) made every
+ *   recorder-path completion read as a ghost in v_sd_completion_integrity, which treats
+ *   an accepted sd_phase_handoffs LFA row as the canonical completion evidence.
+ */
+
+import { randomUUID } from 'crypto';
+import { safeTruncate } from '../../../../lib/utils/safe-truncate.js';
+import ContentBuilder from '../content/ContentBuilder.js';
+import ValidationOrchestrator from '../validation/ValidationOrchestrator.js';
+import { withRetry, isRetryable, RETRY_PRESETS } from '../../resilience/retry-executor.js';
+import { captureFailurePattern } from '../failure-pattern-capture.js';
+
+/**
+ * Handoff types that are COMPLETION actions, not phase transitions.
+ * These only record in leo_handoff_executions, not sd_phase_handoffs.
+ *
+ * Why: sd_phase_handoffs has constraint to_phase IN ('LEAD', 'PLAN', 'EXEC')
+ * Completion actions don't have a valid to_phase - they end the lifecycle.
+ */
+const COMPLETION_ACTIONS = [
+  'LEAD-FINAL-APPROVAL'  // Completes SD lifecycle after PLAN-TO-LEAD
+];
+
+/**
+ * Check if a handoff type is a completion action (not a phase transition)
+ * @param {string} handoffType - Handoff type to check
+ * @returns {boolean} True if this is a completion action
+ */
+function isCompletionAction(handoffType) {
+  return COMPLETION_ACTIONS.includes(handoffType.toUpperCase());
+}
+
+/**
+ * SD-FDBK-FIX-HANDOFF-CLAIM-GATE-001 FR-4: session attribution on every recorded row.
+ * The legacy constant carried zero session identity, so a parallel pipeline driver
+ * could not be attributed after the fact (2026-06-12 incident). Lookups that
+ * previously keyed on the constant must match BOTH values (see recorderIdentities).
+ */
+export const HANDOFF_SYSTEM_TAG = 'UNIFIED-HANDOFF-SYSTEM';
+export function recorderIdentity() {
+  return process.env.CLAUDE_SESSION_ID || HANDOFF_SYSTEM_TAG;
+}
+export function recorderIdentities() {
+  const id = recorderIdentity();
+  return id === HANDOFF_SYSTEM_TAG ? [HANDOFF_SYSTEM_TAG] : [HANDOFF_SYSTEM_TAG, id];
+}
+
+export class HandoffRecorder {
+  constructor(supabase, options = {}) {
+    if (!supabase) {
+      throw new Error('HandoffRecorder requires a Supabase client');
+    }
+    this.supabase = supabase;
+    this.contentBuilder = options.contentBuilder || new ContentBuilder();
+    this.validationOrchestrator = options.validationOrchestrator || new ValidationOrchestrator(supabase);
+  }
+
+  /**
+   * Validate SD ID exists in database
+   *
+   * FIX (2025-12-27): strategic_directives_v2.id uses VARCHAR format (e.g., "SD-UNIFIED-PATH-3.1.1"),
+   * NOT UUIDs. The previous _resolveToUUID was incorrectly converting to UUIDs which caused
+   * FK constraint failures when storing handoffs in sd_phase_handoffs table.
+   *
+   * @param {string} sdId - Strategic Directive ID (VARCHAR format like "SD-XXX")
+   * @returns {Promise<string>} The validated SD ID (unchanged)
+   */
+  async _resolveToUUID(sdId) {
+    // NOTE: Despite the method name, we do NOT convert to UUID.
+    // strategic_directives_v2.id is VARCHAR, not UUID.
+    // sd_phase_handoffs.sd_id references this VARCHAR column.
+    // We just validate the ID exists and return it unchanged.
+
+    const { data: sd, error } = await this.supabase
+      .from('strategic_directives_v2')
+      .select('id')
+      .or(`id.eq.${sdId},sd_key.eq.${sdId}`)
+      .single();
+
+    if (error || !sd) {
+      console.warn(`⚠️  Could not verify SD exists: ${sdId}`);
+      // Return original - let FK constraint catch the error with clear message
+      return sdId;
+    }
+
+    // Return the canonical ID from the database (ensures exact match)
+    return sd.id;
+  }
+
+  /**
+   * Normalize validation score to integer 0-100
+   * @param {number} score - Raw score value
+   * @returns {number} Normalized integer score
+   */
+  _normalizeValidationScore(score) {
+    // Default to 100 if not provided
+    if (score === null || score === undefined) {
+      return 100;
+    }
+
+    // Convert to number if string
+    const numScore = typeof score === 'string' ? parseFloat(score) : score;
+
+    // Round to nearest integer
+    const rounded = Math.round(numScore);
+
+    // Clamp to 0-100 range
+    return Math.max(0, Math.min(100, rounded));
+  }
+
+  /**
+   * Record a successful handoff execution
+   * @param {string} handoffType - Handoff type
+   * @param {string} sdId - Strategic Directive ID
+   * @param {object} result - Execution result
+   * @param {object} template - Handoff template (optional)
+   */
+  async recordSuccess(handoffType, sdId, result, template = null) {
+    // SD-FDBK-INFRA-REFACTOR-LEADFINALAPPROVALEXECUTOR-LHE-001 FR-2: `let` (was const) so the
+    // LFA-pending upsert path can reassign to the existing row's ID after UPDATE.
+    let executionId = randomUUID();
+
+    // SD-VENTURE-STAGE0-UI-001: Resolve to UUID for FK constraints
+    const sdUuid = await this._resolveToUUID(sdId);
+
+    // Use normalizedScore (weighted average) if available, otherwise calculate from totalScore/maxScore
+    // This fixes the bug where summed scores (266) were being clamped to 100
+    let rawScore;
+    if (result.normalizedScore !== undefined) {
+      rawScore = result.normalizedScore;
+    } else if (result.qualityScore !== undefined) {
+      rawScore = result.qualityScore;
+    } else if (result.totalScore !== undefined && result.maxScore !== undefined && result.maxScore > 0) {
+      rawScore = Math.round((result.totalScore / result.maxScore) * 100);
+    } else {
+      rawScore = result.totalScore || 100;
+    }
+    const normalizedScore = this._normalizeValidationScore(rawScore);
+
+    console.log(`🔍 Validation score: ${rawScore}% (normalized: ${normalizedScore}%)`);
+
+    const execution = {
+      id: executionId,
+      template_id: template?.id,
+      from_agent: handoffType.split('-')[0],
+      to_agent: handoffType.split('-')[2],
+      sd_id: sdUuid,
+      prd_id: result.prdId,
+      handoff_type: handoffType,
+      status: 'accepted',
+      validation_score: normalizedScore,
+      validation_passed: true,
+      // FIX: Store validation summary instead of full result to prevent bloat
+      validation_details: {
+        summary: {
+          passed: result.passed,
+          score: result.normalizedScore || result.totalScore,
+          gate_count: result.gateCount,
+          failed_gate: result.failedGate || null,
+          issue_count: (result.issues || []).length,
+          warning_count: (result.warnings || []).length
+        },
+        verified_at: new Date().toISOString(),
+        verifier: 'unified-handoff-system.js'
+      },
+      accepted_at: new Date().toISOString(),
+      created_by: recorderIdentity()
+    };
+
+    try {
+      // Pre-validate execution data
+      const preValidation = await this.validationOrchestrator.preValidateData('leo_handoff_executions', execution);
+      if (!preValidation.valid) {
+        throw new Error(`Pre-validation failed for leo_handoff_executions: ${preValidation.errors.map(e => e.message).join('; ')}`);
+      }
+
+      // SD-FDBK-INFRA-REFACTOR-LEADFINALAPPROVALEXECUTOR-LHE-001 FR-2 (PR-A):
+      // For LEAD-FINAL-APPROVAL with LEO_LHE_PENDING_STATUS='true', the executor pre-inserted
+      // a row with status='pending_acceptance' (FR-1). Look it up and UPDATE to status='accepted'
+      // instead of INSERTing a duplicate. Lookup scoped to created_by='UNIFIED-HANDOFF-SYSTEM'
+      // (FR-2a) to prevent stale-row collision after retry-after-failure (PLAN risk-agent R-2).
+      // Fallback to INSERT preserves legacy + handles flag-off-in-executor / flag-on-in-recorder edge.
+      const flagEnabled = process.env.LEO_LHE_PENDING_STATUS === 'true';
+      const isLfaFlagOn = handoffType === 'LEAD-FINAL-APPROVAL' && flagEnabled;
+      let upsertedExistingRow = false;
+      if (isLfaFlagOn) {
+        const { data: pendingRows, error: lookupError } = await this.supabase
+          .from('leo_handoff_executions')
+          .select('id')
+          .eq('sd_id', sdUuid)
+          .eq('handoff_type', 'LEAD-FINAL-APPROVAL')
+          .eq('status', 'pending_acceptance')
+          .in('created_by', recorderIdentities())
+          .limit(2);
+        if (lookupError) {
+          console.warn(`   [LFA-PENDING-UPSERT] lookup failed: ${lookupError.message} — falling back to INSERT`);
+        } else if (pendingRows && pendingRows.length >= 1) {
+          const existingId = pendingRows[0].id;
+          const updatePayload = {
+            status: 'accepted',
+            accepted_at: execution.accepted_at,
+            validation_score: execution.validation_score,
+            validation_passed: true,
+            validation_details: { ...execution.validation_details, upserted_by_recorder: true }
+          };
+          const { error: updateError } = await this.supabase
+            .from('leo_handoff_executions')
+            .update(updatePayload)
+            .eq('id', existingId);
+          if (updateError) {
+            console.warn(`   [LFA-PENDING-UPSERT] UPDATE failed: ${updateError.message} — falling back to INSERT`);
+          } else {
+            execution.id = existingId;
+            executionId = existingId; // FR-2: keep all downstream references (audit, log, createArtifact, return) on the real row ID
+            upsertedExistingRow = true;
+            console.log(`   ✅ [LFA-PENDING-UPSERT] flipped pending_acceptance → accepted (existing row ${existingId})`);
+          }
+        }
+      }
+
+      let insertError = null;
+      if (!upsertedExistingRow) {
+        const { error } = await this.supabase
+          .from('leo_handoff_executions')
+          .insert(execution)
+          .select();
+        insertError = error;
+      }
+
+      if (insertError) {
+        console.error('❌ Failed to store handoff execution:', insertError.message);
+        console.error('   Execution data:', JSON.stringify(execution, null, 2));
+        throw insertError;
+      }
+
+      console.log(`📝 Success recorded: ${execution.id}`);
+
+      // SD-MAN-INFRA-WORKER-WORKTREE-SELF-001: Reset handoff_fail_count on success
+      try {
+        await this.supabase
+          .from('claude_sessions')
+          .update({ handoff_fail_count: 0 })
+          .eq('sd_key', sdId)
+          .eq('status', 'active');
+      } catch (resetErr) {
+        console.warn(`   [handoff-fail-count] Reset non-blocking: ${resetErr.message}`);
+      }
+
+      // SD-MAN-FEAT-CORRECTIVE-VISION-GAP-072 US-001: Governance audit trail
+      // Log every handoff execution (success) to validation_audit_log for compliance review
+      await this._logGovernanceAudit(handoffType, sdUuid, {
+        status: 'accepted',
+        score: normalizedScore,
+        executionId,
+        gateCount: result.gateCount,
+        failedGate: result.failedGate || null
+      });
+
+      // SD-FDBK-FIX-LFA-ACCEPT-CANONICAL-001 FR-1/FR-2: completion actions now ALSO
+      // persist to sd_phase_handoffs (to_phase coerced 'APPROVAL'->'LEAD', parity with
+      // recordFailure). The prior skip (SD-VENTURE-STAGE0-UI-001) made every recorder-path
+      // completion a ghost: v_sd_completion_integrity treats sd_phase_handoffs as canonical
+      // and saw only rejected LFA rows. createArtifact THROWS on write failure (fail-loud) —
+      // an SD is never marked completed on the executions-table write alone.
+      if (isCompletionAction(handoffType)) {
+        // Idempotency: a clean re-run after a prior accept must not duplicate the canonical row.
+        const { data: existingAccept } = await this.supabase
+          .from('sd_phase_handoffs')
+          .select('id')
+          .eq('sd_id', sdUuid)
+          .eq('handoff_type', handoffType)
+          .eq('status', 'accepted')
+          .limit(1)
+          .maybeSingle();
+        if (existingAccept) {
+          console.log(`ℹ️  ${handoffType} canonical row already accepted (${existingAccept.id}) — skipping duplicate insert`);
+        } else {
+          await this.createArtifact(handoffType, sdId, result, executionId);
+          console.log(`   (Completion also recorded in leo_handoff_executions: ${executionId})`);
+        }
+      } else {
+        await this.createArtifact(handoffType, sdId, result, executionId);
+      }
+
+      // SD-LEO-INFRA-ENHANCE-LEARN-SESSION-001: Capture failure patterns on retry success
+      // Non-blocking: if capture fails, handoff still succeeds
+      try {
+        const captureResult = await captureFailurePattern(sdUuid, handoffType, { supabaseClient: this.supabase });
+        if (captureResult.patternCreated) {
+          console.log(`   [failure-capture] Issue pattern created: ${captureResult.patternId}`);
+        }
+      } catch (captureErr) {
+        console.warn(`   [failure-capture] Non-blocking error: ${captureErr.message}`);
+      }
+
+      return executionId;
+
+    } catch (error) {
+      console.error('⚠️  Critical: Could not store execution:', error.message);
+      throw error;
+    }
+  }
+
+  /**
+   * Record a failed/rejected handoff execution
+   * @param {string} handoffType - Handoff type
+   * @param {string} sdId - Strategic Directive ID
+   * @param {object} result - Failure result
+   * @param {object} template - Handoff template (optional)
+   */
+  async recordFailure(handoffType, sdId, result, template = null) {
+    const executionId = randomUUID();
+
+    // SD-VENTURE-STAGE0-UI-001: Resolve to UUID for FK constraints
+    const sdUuid = await this._resolveToUUID(sdId);
+
+    const rejectionContent = this.contentBuilder.buildRejection(handoffType, sdId, result);
+
+    // Normalize validation score
+    const rawScore = result.actualScore || 0;
+    const normalizedScore = this._normalizeValidationScore(rawScore);
+
+    // SD-PAT-FIX-LEAD-PLAN-REJECTED-004 (FR-3): persist per-field deficits in
+    // the row workers actually read. Before this, the rejected sd_phase_handoffs
+    // row carried only the generic message ("Strategic Directive does not meet
+    // completeness standards") while the actionable error list lived in console
+    // output + leo_handoff_rejections — producing blind retry loops (7x on SD
+    // e756f97d, 2026-05-16).
+    const requiredImprovements = (Array.isArray(result.improvements?.required) && result.improvements.required.length > 0)
+      ? result.improvements.required
+      : (Array.isArray(result.details?.sdValidation?.errors) && result.details.sdValidation.errors.length > 0)
+        ? result.details.sdValidation.errors
+        : null;
+    const actualScore = result.details?.actualScore ?? result.actualScore ?? null;
+    const requiredScore = result.details?.requiredScore ?? result.requiredScore ?? null;
+    // QF-20260720-851 (P1): some rejecting callers (e.g. BaseExecutor's claim-guard early
+    // return) set only `.error`/`.reasonCode`, never `.message` — that silently wrote
+    // rejection_reason=NULL (40% of rejections over a 48h Solomon sweep, diagnosis-resistant
+    // by construction). Every rejection writer now stamps SOME reason.
+    let enrichedRejectionReason = result.message || result.error || result.reasonCode || 'UNSPECIFIED_REJECTION (see validation_details)';
+    if (requiredImprovements) {
+      const scoreSuffix = (actualScore != null && requiredScore != null)
+        ? ` (score ${actualScore}%, required ${requiredScore}%)`
+        : '';
+      enrichedRejectionReason = `${enrichedRejectionReason} | deficits: ${requiredImprovements.join('; ')}${scoreSuffix}`.slice(0, 1000);
+    }
+
+    // SD-MAN-INFRA-MEDIUM-EFFORT-HARDENING-001 (FR-1): completion actions record
+    // failures to leo_handoff_executions — PARITY with recordSuccess, which skips
+    // sd_phase_handoffs for completion actions (no valid to_phase). Before this fix,
+    // accepted finals lived only in leo_handoff_executions while every failed attempt
+    // inserted a rejected row into sd_phase_handoffs, so analytics reading that table
+    // saw LEAD-FINAL as 100% rejected (52/0 in the 4-day baseline vs 289 acceptances).
+    if (isCompletionAction(handoffType)) {
+      return this._recordCompletionActionFailure({
+        executionId, handoffType, sdId, sdUuid, result, template, normalizedScore
+      });
+    }
+
+    const execution = {
+      id: executionId,
+      template_id: template?.id,
+      from_phase: handoffType.split('-')[0],
+      // LEAD-FINAL-APPROVAL splits to 'APPROVAL' which violates CHECK constraint (LEAD/PLAN/EXEC only)
+      to_phase: (() => { const p = handoffType.split('-')[2]; return ['LEAD', 'PLAN', 'EXEC'].includes(p) ? p : 'LEAD'; })(),
+      sd_id: sdUuid,
+      handoff_type: handoffType,
+      status: 'rejected',
+      ...rejectionContent,
+      validation_score: normalizedScore,
+      validation_passed: false,
+      // FIX: Store validation summary instead of full result to prevent bloat
+      validation_details: {
+        summary: {
+          passed: false,
+          score: result.normalizedScore || result.actualScore || 0,
+          gate_count: result.gateCount,
+          failed_gate: result.failedGate || null,
+          issue_count: (result.issues || []).length,
+          warning_count: (result.warnings || []).length,
+          // SD-PAT-FIX-LEAD-PLAN-REJECTED-004 (FR-3): full per-field error
+          // list + required score, queryable without joining leo_handoff_rejections.
+          ...(requiredImprovements ? { required_improvements: requiredImprovements } : {}),
+          ...(requiredScore != null ? { required_score: requiredScore } : {})
+        },
+        rejected_at: new Date().toISOString(),
+        reason: result.reasonCode,
+        message: result.message
+      },
+      rejection_reason: enrichedRejectionReason,
+      created_by: HANDOFF_SYSTEM_TAG // sd_phase_handoffs DB guard allowlists the system tag; session identity lives on leo_handoff_executions.created_by
+    };
+
+    // SD-MAN-ORCH-LEO-HARNESS-EFFICIENCY-001-B (L5): persist per-gate verdicts on
+    // REJECTED rows too (previously summary-only). Retries follow rejections, so
+    // this is the storage the gate-verdict cache reads back — entries carry
+    // input_hash where the gate has a declared extractor. Version 2 = hash-bearing.
+    const perGateResults = result.gateResults || result.details?.details || null;
+    if (perGateResults && typeof perGateResults === 'object' && Object.keys(perGateResults).length > 0) {
+      execution.metadata = {
+        ...(execution.metadata || {}),
+        gate_results: perGateResults,
+        gate_results_version: 2,
+      };
+    }
+
+    try {
+      // Pre-validate - for rejections, try to fix common issues
+      const preValidation = await this.validationOrchestrator.preValidateData('sd_phase_handoffs', execution);
+      if (!preValidation.valid) {
+        console.warn('⚠️  Pre-validation failed for rejection record, attempting with modified data');
+        preValidation.errors.forEach(err => {
+          if (err.validValues && err.validValues.length > 0) {
+            execution[err.field] = err.validValues[0];
+            console.log(`   Fixed ${err.field}: ${err.value} → ${err.validValues[0]}`);
+          }
+        });
+      }
+
+      const { error } = await this.supabase
+        .from('sd_phase_handoffs')
+        .insert(execution)
+        .select();
+
+      if (error) {
+        console.error('❌ Failed to store handoff rejection:', error.message);
+        throw error;
+      }
+
+      console.log(`📝 Failure recorded: ${executionId}`);
+
+      // SD-MAN-INFRA-WORKER-WORKTREE-SELF-001: Increment handoff_fail_count for fleet telemetry
+      // SD-LEO-FIX-HANDOFF-QUERY-BATCHING-001: Batch update replaces N+1 loop
+      try {
+        await this.supabase.rpc('increment_handoff_fail_count', { p_sd_id: sdId });
+      } catch (rpcErr) {
+        // Fallback: single UPDATE with increment expression if RPC doesn't exist
+        try {
+          await this.supabase
+            .from('claude_sessions')
+            .update({ handoff_fail_count: this.supabase.raw('COALESCE(handoff_fail_count, 0) + 1') })
+            .eq('sd_key', sdId)
+            .eq('status', 'active');
+        } catch (fallbackErr) {
+          console.warn(`   [handoff-fail-count] Non-blocking: ${fallbackErr.message}`);
+        }
+      }
+
+      // SD-MAN-FEAT-CORRECTIVE-VISION-GAP-072 US-001: Governance audit trail
+      // Log every handoff execution (failure) to validation_audit_log for compliance review
+      await this._logGovernanceAudit(handoffType, sdUuid, {
+        status: 'rejected',
+        score: normalizedScore,
+        executionId,
+        gateCount: result.gateCount,
+        failedGate: result.failedGate || null,
+        reasonCode: result.reasonCode
+      });
+
+      return executionId;
+
+    } catch (error) {
+      console.error('⚠️  Critical: Could not store rejection:', error.message);
+      // Don't throw - rejection recording is less critical
+      return null;
+    }
+  }
+
+  /**
+   * SD-MAN-INFRA-MEDIUM-EFFORT-HARDENING-001 (FR-1): record a completion-action
+   * failure in leo_handoff_executions (same table as completion-action successes).
+   * Mirrors recordSuccess's row shape (from_agent/to_agent) with status='rejected'.
+   * Per-gate verdicts go into validation_details.gate_results (the table has no
+   * metadata column); LEAD-FINAL is excluded from the gate-verdict cache anyway.
+   * @private
+   */
+  async _recordCompletionActionFailure({ executionId, handoffType, sdId, sdUuid, result, template, normalizedScore }) {
+    const perGateResults = result.gateResults || result.details?.details || null;
+    const execution = {
+      id: executionId,
+      template_id: template?.id,
+      from_agent: handoffType.split('-')[0],
+      to_agent: handoffType.split('-')[2],
+      sd_id: sdUuid,
+      handoff_type: handoffType,
+      status: 'rejected',
+      validation_score: normalizedScore,
+      validation_passed: false,
+      validation_details: {
+        summary: {
+          passed: false,
+          score: result.normalizedScore || result.actualScore || 0,
+          gate_count: result.gateCount,
+          failed_gate: result.failedGate || null,
+          issue_count: (result.issues || []).length,
+          warning_count: (result.warnings || []).length
+        },
+        rejected_at: new Date().toISOString(),
+        reason: result.reasonCode,
+        message: result.message,
+        ...(perGateResults && typeof perGateResults === 'object' && Object.keys(perGateResults).length > 0
+          ? { gate_results: perGateResults, gate_results_version: 2 }
+          : {})
+      },
+      // QF-20260720-851 (P1): same NULL-reason fix as recordFailure — some rejecting
+      // callers (e.g. the claim-guard early return) set only `.error`/`.reasonCode`.
+      rejection_reason: result.message || result.error || result.reasonCode || 'UNSPECIFIED_REJECTION (see validation_details)',
+      created_by: recorderIdentity()
+    };
+
+    try {
+      const preValidation = await this.validationOrchestrator.preValidateData('leo_handoff_executions', execution);
+      if (!preValidation.valid) {
+        console.warn('⚠️  Pre-validation failed for completion-action rejection, attempting with modified data');
+        preValidation.errors.forEach(err => {
+          if (err.validValues && err.validValues.length > 0) {
+            execution[err.field] = err.validValues[0];
+            console.log(`   Fixed ${err.field}: ${err.value} → ${err.validValues[0]}`);
+          }
+        });
+      }
+
+      const { error } = await this.supabase
+        .from('leo_handoff_executions')
+        .insert(execution)
+        .select();
+      if (error) {
+        console.error('❌ Failed to store completion-action rejection:', error.message);
+        throw error;
+      }
+
+      console.log(`📝 Failure recorded: ${executionId} (completion action → leo_handoff_executions)`);
+
+      // Same fleet telemetry + governance audit as the phase-transition path
+      try {
+        await this.supabase.rpc('increment_handoff_fail_count', { p_sd_id: sdId });
+      } catch (rpcErr) {
+        console.warn(`   [handoff-fail-count] Non-blocking: ${rpcErr.message}`);
+      }
+      await this._logGovernanceAudit(handoffType, sdUuid, {
+        status: 'rejected',
+        score: normalizedScore,
+        executionId,
+        gateCount: result.gateCount,
+        failedGate: result.failedGate || null,
+        reasonCode: result.reasonCode
+      });
+
+      return executionId;
+    } catch (error) {
+      console.error('⚠️  Critical: Could not store completion-action rejection:', error.message);
+      return null; // parity: rejection recording is less critical
+    }
+  }
+
+  /**
+   * Record a WAIT verdict — handoff blocked but not a validation failure.
+   *
+   * SD-LEO-INFRA-ORCH-PARENT-LIFECYCLE-001 FR-5: WAIT is distinct from FAIL.
+   * Used when a gate returns wait=true (e.g. parent orchestrator awaiting children
+   * completion). Records a sd_phase_handoffs row with status='blocked' +
+   * metadata.wait=true so the row appears in audit trail but does NOT increment
+   * handoff_fail_count and does NOT set rejection_reason.
+   *
+   * @param {string} handoffType - Handoff type
+   * @param {string} sdId - Strategic Directive ID
+   * @param {object} result - Wait result (must have waitVerdict=true)
+   * @param {object} template - Handoff template (optional)
+   */
+  async recordWait(handoffType, sdId, result, template = null) {
+    const executionId = randomUUID();
+    const sdUuid = await this._resolveToUUID(sdId);
+
+    const waitReasons = Array.isArray(result.waitReasons) ? result.waitReasons : [];
+    const waitingGates = Array.isArray(result.waitingGates) ? result.waitingGates : [];
+
+    const execution = {
+      id: executionId,
+      template_id: template?.id,
+      from_phase: handoffType.split('-')[0],
+      to_phase: (() => { const p = handoffType.split('-')[2]; return ['LEAD', 'PLAN', 'EXEC'].includes(p) ? p : 'LEAD'; })(),
+      sd_id: sdUuid,
+      handoff_type: handoffType,
+      // Use existing 'blocked' status (no schema change required); discriminator is metadata.wait
+      status: 'blocked',
+      executive_summary: `Handoff WAIT: ${result.message || waitReasons.join('; ')}`,
+      deliverables_manifest: 'Handoff blocked on WAIT condition — prerequisite not yet satisfied (not a validation failure).',
+      key_decisions: 'No decisions — waiting on prerequisite (e.g. child SDs completion).',
+      known_issues: '',
+      resource_utilization: '',
+      action_items: waitReasons.map(r => `- [ ] ${r}`).join('\n') || '- [ ] Resolve WAIT condition then re-run handoff',
+      completeness_report: `Waiting on ${waitingGates.length} gate(s): ${waitingGates.join(', ')}`,
+      // NOT rejected — this is a wait state
+      validation_score: 0,
+      validation_passed: false,
+      validation_details: {
+        wait: true,
+        wait_verdict: true,
+        waiting_gates: waitingGates,
+        wait_reasons: waitReasons,
+        recorded_at: new Date().toISOString()
+      },
+      // No rejection_reason — that field is reserved for actual failures
+      rejection_reason: null,
+      metadata: {
+        wait: true,
+        waiting_gates: waitingGates,
+        wait_reasons: waitReasons,
+        wait_protocol: 'SD-LEO-INFRA-ORCH-PARENT-LIFECYCLE-001',
+        // SD-LEO-INFRA-EXTEND-WAIT-VERDICT-001 FR-5: persist wait-loop accounting
+        // so the NEXT attempt's max-wait ceiling can detect a perpetually-stuck gate.
+        wait_attempts: Number(result.waitMetadata?.wait_attempts) || 0,
+        first_wait_at: result.waitMetadata?.first_wait_at || new Date().toISOString()
+      },
+      created_by: HANDOFF_SYSTEM_TAG // sd_phase_handoffs DB guard allowlists the system tag; session identity lives on leo_handoff_executions.created_by
+    };
+
+    try {
+      const { error } = await this.supabase
+        .from('sd_phase_handoffs')
+        .insert(execution)
+        .select();
+
+      if (error) {
+        console.error('❌ Failed to store handoff WAIT:', error.message);
+        return null;
+      }
+
+      console.log(`📝 WAIT recorded: ${executionId} (no retry budget consumed)`);
+      // INTENTIONALLY: do NOT increment handoff_fail_count — wait is not a failure.
+      return executionId;
+    } catch (error) {
+      console.error('⚠️  Could not store WAIT:', error.message);
+      return null;
+    }
+  }
+
+  /**
+   * Record a system error
+   * @param {string} handoffType - Handoff type
+   * @param {string} sdId - Strategic Directive ID
+   * @param {string} errorMessage - Error message
+   */
+  async recordSystemError(handoffType, sdId, errorMessage) {
+    const executionId = randomUUID();
+
+    // SD-VENTURE-STAGE0-UI-001: Resolve to UUID for FK constraints
+    const sdUuid = await this._resolveToUUID(sdId);
+
+    const execution = {
+      id: executionId,
+      sd_id: sdUuid,
+      from_phase: handoffType.split('-')[0],
+      // SD-LEARN-FIX-ADDRESS-PATTERN-LEARN-076: Match recordFailure() phase parsing
+      to_phase: (() => { const p = handoffType.split('-')[2]; return ['LEAD', 'PLAN', 'EXEC'].includes(p) ? p : 'LEAD'; })(),
+      handoff_type: handoffType,
+      status: 'failed',
+      executive_summary: `System error during ${handoffType} handoff: ${errorMessage}`,
+      deliverables_manifest: 'Handoff could not be completed due to system error',
+      key_decisions: 'No decisions made - system error occurred',
+      known_issues: errorMessage,
+      resource_utilization: '',
+      action_items: '- [ ] Investigate and fix system error\n- [ ] Retry handoff',
+      completeness_report: 'System Error - handoff incomplete',
+      rejection_reason: errorMessage,
+      validation_score: 0,
+      validation_passed: false,
+      validation_details: {
+        error: errorMessage,
+        occurred_at: new Date().toISOString()
+      },
+      created_by: HANDOFF_SYSTEM_TAG // sd_phase_handoffs DB guard allowlists the system tag; session identity lives on leo_handoff_executions.created_by
+    };
+
+    try {
+      const { error } = await this.supabase
+        .from('sd_phase_handoffs')
+        .insert(execution)
+        .select();
+
+      if (error) {
+        console.error('Failed to record system error:', error.message);
+      } else {
+        console.log(`📝 System error recorded: ${executionId}`);
+      }
+
+      // SD-LEARN-FIX-ADDRESS-PATTERN-LEARN-076: Governance audit trail (match recordFailure pattern)
+      await this._logGovernanceAudit(handoffType, sdUuid, {
+        status: 'failed',
+        score: 0,
+        executionId,
+        reasonCode: 'SYSTEM_ERROR',
+        errorMessage
+      });
+    } catch (e) {
+      console.error('Could not record system error:', e.message);
+    }
+  }
+
+  /**
+   * Create the actual handoff artifact in sd_phase_handoffs table
+   * @param {string} handoffType - Handoff type
+   * @param {string} sdId - Strategic Directive ID
+   * @param {object} result - Execution result
+   * @param {string} executionId - Related execution record ID
+   */
+  async createArtifact(handoffType, sdId, result, executionId) {
+    try {
+      // SD-VENTURE-STAGE0-UI-001: Resolve to UUID for FK constraints and queries
+      const sdUuid = await this._resolveToUUID(sdId);
+
+      // Get SD details (using UUID)
+      const { data: sd } = await this.supabase
+        .from('strategic_directives_v2')
+        .select('*')
+        .eq('id', sdUuid)
+        .single();
+
+      if (!sd) {
+        console.warn('⚠️  Cannot create handoff artifact: SD not found');
+        return null;
+      }
+
+      // Get sub-agent results (using UUID)
+      const { data: subAgentResults } = await this.supabase
+        .from('sub_agent_execution_results')
+        .select('*')
+        .eq('sd_id', sdUuid)
+        .order('created_at', { ascending: false })
+        .limit(10);
+
+      // Build content
+      // SD-FDBK-FIX-LFA-ACCEPT-CANONICAL-001 FR-1: coerce 'APPROVAL'->'LEAD' exactly as
+      // recordFailure already does, so accepted LEAD-FINAL-APPROVAL rows satisfy the
+      // sd_phase_handoffs to_phase CHECK ('LEAD','PLAN','EXEC'). The old skip made every
+      // recorder-path completion a ghost in v_sd_completion_integrity (275/291 since 06-01).
+      const [fromPhase, , rawToPhase] = handoffType.split('-');
+      const toPhase = rawToPhase === 'APPROVAL' ? 'LEAD' : rawToPhase;
+      const handoffContent = this.contentBuilder.build(handoffType, sd, result, subAgentResults);
+
+      // Use normalizedScore (weighted average) if available, otherwise calculate from totalScore/maxScore
+      let rawScore;
+      if (result.normalizedScore !== undefined) {
+        rawScore = result.normalizedScore;
+      } else if (result.qualityScore !== undefined) {
+        rawScore = result.qualityScore;
+      } else if (result.totalScore !== undefined && result.maxScore !== undefined && result.maxScore > 0) {
+        rawScore = Math.round((result.totalScore / result.maxScore) * 100);
+      } else {
+        rawScore = result.totalScore || 100;
+      }
+      const normalizedScore = this._normalizeValidationScore(rawScore);
+
+      const handoffId = randomUUID();
+
+      // Build metadata with gate-specific validation results for downstream handoffs
+      // PlanToLeadExecutor expects metadata.gate2_validation from EXEC-TO-PLAN
+      // LeadFinalApprovalExecutor expects metadata.gate1_validation from PLAN-TO-EXEC
+      const metadata = {
+        execution_id: executionId,
+        quality_score: normalizedScore,
+        created_via: 'unified-handoff-system',
+        sub_agent_count: subAgentResults?.length || 0
+      };
+
+      // SD-LEO-INFRA-CONTEXT-AWARE-LLM-001C: Log automated test evidence for UAT-exempt SDs
+      if (result.automatedTestEvidence) {
+        metadata.automated_test_verification = {
+          recorded_at: new Date().toISOString(),
+          uatExempt: result.uatExempt || false,
+          uatExemptReason: result.uatExemptReason || null,
+          evidence: {
+            testRunId: result.automatedTestEvidence.testRunId,
+            verdict: result.automatedTestEvidence.verdict,
+            passRate: result.automatedTestEvidence.passRate,
+            totalTests: result.automatedTestEvidence.totalTests,
+            passedTests: result.automatedTestEvidence.passedTests,
+            failedTests: result.automatedTestEvidence.failedTests,
+            testFramework: result.automatedTestEvidence.testFramework,
+            commitSha: result.automatedTestEvidence.commitSha,
+            ciUrl: result.automatedTestEvidence.ciUrl,
+            storiesCovered: result.automatedTestEvidence.storiesCovered
+          }
+        };
+        console.log('   📋 Automated test evidence recorded in handoff metadata');
+        console.log(`      Test Run ID: ${result.automatedTestEvidence.testRunId}`);
+        console.log(`      Commit SHA: ${result.automatedTestEvidence.commitSha || 'N/A'}`);
+        console.log(`      CI URL: ${result.automatedTestEvidence.ciUrl || 'N/A'}`);
+      }
+
+      // PAT-RETRO-BOILERPLATE-001: Include discovered issues in handoff metadata
+      // Query issue_patterns for this SD to store in metadata
+      try {
+        const { data: sdIssues } = await this.supabase
+          .from('issue_patterns')
+          .select('pattern_id, issue_summary, category, severity')
+          .or(`first_seen_sd_id.eq.${sdUuid},last_seen_sd_id.eq.${sdUuid}`)
+          .eq('status', 'active');
+
+        if (sdIssues && sdIssues.length > 0) {
+          metadata.discovered_issues = sdIssues.map(i => ({
+            pattern_id: i.pattern_id,
+            category: i.category,
+            severity: i.severity,
+            summary: safeTruncate(i.issue_summary, 200)
+          }));
+          metadata.issue_pattern_ids = sdIssues.map(i => i.pattern_id);
+          console.log(`   📋 ${sdIssues.length} issue pattern(s) linked to handoff metadata`);
+        }
+      } catch (issueErr) {
+        // Non-blocking - don't fail handoff if issue query fails
+        console.log(`   ⚠️  Could not query issue patterns: ${issueErr.message}`);
+      }
+
+      // Extract gate validation results for cross-handoff traceability
+      // SD-LEO-STREAMS-001 Retrospective: Critical for downstream gate validation
+      if (result.gateResults) {
+        // EXEC-TO-PLAN: Store Gate 2 results for PLAN-TO-LEAD
+        // CRITICAL: metadata.gate2_validation is read by PLAN-TO-LEAD Gate 3 (Traceability)
+        // See: docs/reference/schema/handoff-field-reference.md
+        if (handoffType === 'EXEC-TO-PLAN') {
+          if (result.gateResults.GATE2_IMPLEMENTATION_FIDELITY) {
+            metadata.gate2_validation = result.gateResults.GATE2_IMPLEMENTATION_FIDELITY;
+            console.log('   ✅ Gate 2 fidelity data saved to metadata.gate2_validation');
+          } else {
+            // SD-LEO-STREAMS-001: Warn if fidelity data missing - this will cause PLAN-TO-LEAD Gate 3 to fail
+            console.warn('   ⚠️  WARNING: GATE2_IMPLEMENTATION_FIDELITY not found in gateResults');
+            console.warn('      PLAN-TO-LEAD Gate 3 (Traceability) will fail without fidelity data');
+            console.warn('      Fix: Ensure GATE2_IMPLEMENTATION_FIDELITY gate runs in EXEC-TO-PLAN');
+            // Create placeholder to prevent downstream confusion
+            metadata.gate2_validation = {
+              warning: 'Fidelity data not populated during EXEC-TO-PLAN',
+              score: 0,
+              passed: false,
+              gate_scores: {}
+            };
+          }
+        }
+        // PLAN-TO-EXEC: Store Gate 1 results for LEAD-FINAL-APPROVAL
+        // SD-FDBK-FIX-GATE-PIPELINE-GATE1-001: gateResults is keyed by gate.name, and the live
+        // PLAN-TO-EXEC gate is GATE1_DESIGN_DATABASE — the legacy GATE1_PRD_QUALITY key is never
+        // produced, so gate1 was never mirrored to metadata.gate1_validation and GATE4 at
+        // LEAD-FINAL never found it (undercounting C1, forcing a bypass on passing security SDs).
+        // Recognize the live key with GATE1_PRD_QUALITY back-compat. (The full map is also stored
+        // at metadata.gate_results below, so the GATE4 reader can read the canonical name too.)
+        if (handoffType === 'PLAN-TO-EXEC') {
+          const gate1 = result.gateResults.GATE1_DESIGN_DATABASE || result.gateResults.GATE1_PRD_QUALITY;
+          if (gate1) {
+            metadata.gate1_validation = gate1;
+            console.log('   ✅ Gate 1 (DESIGN→DATABASE) saved to metadata.gate1_validation');
+          } else {
+            console.warn('   ⚠️  WARNING: GATE1 (GATE1_DESIGN_DATABASE / GATE1_PRD_QUALITY) not found in gateResults');
+          }
+        }
+        // PLAN-TO-LEAD: Store Gate 3 results for LEAD-FINAL-APPROVAL Gate 4
+        // SD-LEARN-FIX-ADDRESS-PAT-AUTO-002: Previously missing — Gate 4 couldn't find gate3 data
+        if (handoffType === 'PLAN-TO-LEAD') {
+          if (result.gateResults.GATE3_TRACEABILITY) {
+            metadata.gate3_validation = result.gateResults.GATE3_TRACEABILITY;
+            console.log('   ✅ Gate 3 traceability saved to metadata.gate3_validation');
+          } else {
+            console.warn('   ⚠️  WARNING: GATE3_TRACEABILITY not found in gateResults');
+          }
+        }
+        // Store all gate results for comprehensive audit trail.
+        // L5 (SD-MAN-ORCH-LEO-HARNESS-EFFICIENCY-001-B): version 2 when any entry
+        // carries an input_hash (hash-bearing shape the gate-verdict cache reads).
+        metadata.gate_results = result.gateResults;
+        metadata.gate_results_version =
+          Object.values(result.gateResults).some(r => r && r.input_hash) ? 2 : 1;
+      } else {
+        console.warn('   ⚠️  No gateResults in result object - cross-handoff traceability compromised');
+      }
+
+      // FIX (SD-LEO-INFRA-INTELLIGENT-LOCAL-LLM-001A RCA):
+      // CRITICAL: status MUST be set AFTER ...handoffContent spread operator.
+      // ContentBuilder may return fields that could overwrite status if spread comes later.
+      // By placing status AFTER the spread, we guarantee it's always 'pending_acceptance'.
+      const handoffRecord = {
+        id: handoffId,
+        sd_id: sdUuid,
+        from_phase: fromPhase,
+        to_phase: toPhase,
+        handoff_type: handoffType,
+        ...handoffContent,
+        // AFTER spread: These fields MUST override anything in handoffContent
+        status: 'pending_acceptance', // Always start as pending, update to accepted below
+        validation_score: normalizedScore,
+        validation_passed: result.success !== false,
+        validation_details: result.validation || {},
+        metadata,
+        created_by: HANDOFF_SYSTEM_TAG // sd_phase_handoffs DB guard allowlists the system tag; session identity lives on leo_handoff_executions.created_by
+      };
+
+      // Log elements for debugging
+      this.contentBuilder.logElements(handoffRecord);
+
+      // Pre-validate
+      const preValidation = await this.validationOrchestrator.preValidateData('sd_phase_handoffs', handoffRecord);
+      if (!preValidation.valid) {
+        console.error('❌ Handoff artifact pre-validation failed');
+        throw new Error(`Pre-validation failed: ${preValidation.errors.map(e => e.message).join('; ')}`);
+      }
+
+      // Insert as pending
+      const { error: insertError } = await this.supabase
+        .from('sd_phase_handoffs')
+        .insert(handoffRecord);
+
+      if (insertError) {
+        // SD-LEARN-FIX-ADDRESS-PAT-AUTO-023: If INSERT fails due to session claim check
+        // (e.g. is_working_on=false for orchestrator SDs), check if an artifact was already
+        // created by satisfyOrchestratorTemplateRequirements() and use it instead.
+        const isSessionClaimError = insertError.message && (
+          insertError.message.includes('session claim') ||
+          insertError.message.includes('is_working_on') ||
+          insertError.message.includes('LEO Protocol Violation')
+        );
+        if (isSessionClaimError) {
+          console.log('   ℹ️  Session claim check failed — checking for pre-created artifact...');
+          const { data: existing } = await this.supabase
+            .from('sd_phase_handoffs')
+            .select('id')
+            .eq('sd_id', sdUuid)
+            .eq('from_phase', fromPhase)
+            .eq('to_phase', toPhase)
+            .eq('status', 'accepted')
+            .limit(1)
+            .single();
+          if (existing) {
+            console.log('   ✅ Using pre-created artifact (orchestrator auto-completion):', existing.id);
+            return existing.id;
+          }
+        }
+        console.error('❌ Failed to create handoff artifact:', insertError.message);
+        throw insertError;
+      }
+
+      console.log('📄 Handoff artifact created (pending validation)...');
+
+      // Update to accepted
+      const { error: updateError } = await this.supabase
+        .from('sd_phase_handoffs')
+        .update({
+          status: 'accepted',
+          accepted_at: new Date().toISOString()
+        })
+        .eq('id', handoffId);
+
+      if (updateError) {
+        console.error('❌ Failed to accept handoff:', updateError.message);
+        // Clean up
+        await this.supabase.from('sd_phase_handoffs').delete().eq('id', handoffId);
+        throw updateError;
+      }
+
+      console.log('✅ Handoff accepted and stored in sd_phase_handoffs');
+      return handoffId;
+
+    } catch (error) {
+      // SD-LEO-PROTOCOL-V435-001 US-004: Silent error logging with recovery paths
+      console.error('⚠️  Could not create handoff artifact:', error.message);
+      console.error('⚠️  ARTIFACT ERROR STACK:', error.stack?.slice(0, 500));
+
+      // Log error silently to database for debugging
+      await this._logErrorSilently('createArtifact', {
+        handoffType,
+        sdId,
+        executionId,
+        error: error.message,
+        stack: safeTruncate(error.stack || '', 500)
+      });
+
+      // SD-DUALPLAT-MOBILE-WEB-ORCH-001 RCA: If artifact creation fails,
+      // the handoff reports PASS but sd_phase_handoffs has no accepted record.
+      // This causes sequence validator to block the next handoff.
+      // THROW instead of returning null so the handoff correctly reports failure.
+      throw error;
+    }
+  }
+
+  /**
+   * SD-LEO-PROTOCOL-V435-001 US-004: Silent Error Logging
+   *
+   * Attempt recovery from an error with retry logic and proper logging.
+   * SD-GENESIS-V32-PULSE: Refactored from _logErrorSilently to provide
+   * actual recovery attempts and structured error logging.
+   *
+   * @param {string} operation - The operation that failed
+   * @param {object} context - Error context details
+   * @param {Function} retryOperation - Optional function to retry
+   * @returns {Promise<{recovered: boolean, result?: any, errorId?: string}>}
+   */
+  async _attemptRecovery(operation, context, retryOperation = null) {
+    try {
+      // Determine error type and recovery guidance
+      const errorMsg = (context.error || '').toLowerCase();
+      const errorAnalysis = this._analyzeError(errorMsg);
+
+      console.log(`   📋 Recovery Guidance: ${errorAnalysis.guidance}`);
+      console.log(`   🔍 Error Type: ${errorAnalysis.errorType}`);
+
+      // Check if error is retryable
+      const mockError = { message: context.error, status: context.status || 500 };
+      const retryCheck = isRetryable(mockError);
+
+      // If we have a retry operation and error is retryable, attempt recovery
+      if (retryOperation && retryCheck.retryable) {
+        console.log('   ⚡ Attempting recovery with retry...');
+        try {
+          const result = await withRetry(retryOperation, {
+            ...RETRY_PRESETS.database,
+            operationName: operation,
+            component: 'HandoffRecorder',
+            sdId: context.sdId,
+            onRetry: (err, attempt, delay) => {
+              console.log(`   ⚡ Retry attempt ${attempt}: waiting ${delay}ms...`);
+            }
+          });
+          console.log('   ✅ Recovery successful after retry');
+          return { recovered: true, result };
+        } catch (retryError) {
+          console.log(`   ❌ Recovery failed after retries: ${retryError.message}`);
+          // Fall through to log the error
+          context.retryError = retryError.message;
+        }
+      }
+
+      // Log error to leo_error_log table (non-blocking)
+      const errorId = await this._logToErrorTable(operation, context, errorAnalysis);
+
+      return {
+        recovered: false,
+        errorId,
+        guidance: errorAnalysis.guidance,
+        errorType: errorAnalysis.errorType
+      };
+
+    } catch (recoveryError) {
+      // If recovery itself fails, log silently and return
+      console.warn(`   ⚠️  Recovery attempt error: ${recoveryError.message}`);
+      return { recovered: false };
+    }
+  }
+
+  /**
+   * Analyze error message to determine type and recovery guidance.
+   *
+   * @param {string} errorMsg - Lowercase error message
+   * @returns {{errorType: string, guidance: string, isRetryable: boolean}}
+   */
+  _analyzeError(errorMsg) {
+    if (errorMsg.includes('foreign key') || errorMsg.includes('fk constraint')) {
+      return {
+        errorType: 'VALIDATION_ERROR',
+        guidance: 'Verify SD exists in strategic_directives_v2. Check sd_id format.',
+        isRetryable: false
+      };
+    }
+    if (errorMsg.includes('unique constraint') || errorMsg.includes('duplicate')) {
+      return {
+        errorType: 'VALIDATION_ERROR',
+        guidance: 'Handoff may already exist. Check sd_phase_handoffs for existing record.',
+        isRetryable: false
+      };
+    }
+    if (errorMsg.includes('null value') || errorMsg.includes('not-null')) {
+      return {
+        errorType: 'VALIDATION_ERROR',
+        guidance: 'Required field is missing. Check handoff content builder output.',
+        isRetryable: false
+      };
+    }
+    if (errorMsg.includes('check constraint')) {
+      return {
+        errorType: 'VALIDATION_ERROR',
+        guidance: 'Invalid enum value. Check status, handoff_type, or phase values.',
+        isRetryable: false
+      };
+    }
+    if (errorMsg.includes('timeout') || errorMsg.includes('connection')) {
+      return {
+        errorType: 'TIMEOUT',
+        guidance: 'Database connection issue. Wait and retry or check Supabase status.',
+        isRetryable: true
+      };
+    }
+    if (errorMsg.includes('rate limit') || errorMsg.includes('too many')) {
+      return {
+        errorType: 'RATE_LIMIT',
+        guidance: 'Rate limit hit. Wait before retrying.',
+        isRetryable: true
+      };
+    }
+    if (errorMsg.includes('auth') || errorMsg.includes('unauthorized')) {
+      return {
+        errorType: 'AUTH_ERROR',
+        guidance: 'Authentication failed. Check API keys and permissions.',
+        isRetryable: false
+      };
+    }
+    return {
+      errorType: 'DATABASE_ERROR',
+      guidance: 'Check database connectivity and retry.',
+      isRetryable: true
+    };
+  }
+
+  /**
+   * Log error to leo_error_log table.
+   *
+   * @param {string} operation - The operation that failed
+   * @param {object} context - Error context
+   * @param {object} errorAnalysis - Analysis from _analyzeError
+   * @returns {Promise<string|null>} Error log ID if successful
+   */
+  async _logToErrorTable(operation, context, errorAnalysis) {
+    try {
+      const errorRecord = {
+        error_type: errorAnalysis.errorType,
+        error_message: context.error || 'Unknown error',
+        error_code: context.errorCode || null,
+        error_stack: context.stack || null,
+        operation: operation,
+        component: 'HandoffRecorder',
+        sd_id: context.sdId || null,
+        attempt_count: context.attemptCount || 1,
+        is_recoverable: errorAnalysis.isRetryable,
+        recovery_guidance: errorAnalysis.guidance,
+        session_id: context.sessionId || null,
+        context: {
+          handoffType: context.handoffType,
+          executionId: context.executionId,
+          timestamp: new Date().toISOString(),
+          retryError: context.retryError
+        },
+        severity: errorAnalysis.isRetryable ? 'warning' : 'error'
+      };
+
+      const { data, error } = await this.supabase
+        .from('leo_error_log')
+        .insert(errorRecord)
+        .select('id')
+        .single();
+
+      if (error) {
+        console.warn(`   ⚠️  Could not log error to database: ${error.message}`);
+        return null;
+      }
+
+      return data?.id;
+    } catch (logError) {
+      // Error logging should never block operations
+      console.warn(`   ⚠️  Error logging exception: ${logError.message}`);
+      return null;
+    }
+  }
+
+  /**
+   * SD-MAN-FEAT-CORRECTIVE-VISION-GAP-072 US-001: Governance Audit Trail
+   *
+   * Log handoff execution to validation_audit_log for compliance review.
+   * Non-blocking — audit logging failures do not prevent handoff completion.
+   *
+   * @param {string} handoffType - Handoff type (e.g., 'LEAD-TO-PLAN')
+   * @param {string} sdUuid - SD UUID
+   * @param {object} details - Audit details (status, score, executionId, etc.)
+   */
+  async _logGovernanceAudit(handoffType, sdUuid, details) {
+    try {
+      const { error } = await this.supabase
+        .from('validation_audit_log')
+        .insert({
+          correlation_id: `handoff-${details.executionId}`,
+          sd_id: sdUuid,
+          validator_name: `handoff_${handoffType.toLowerCase().replace(/-/g, '_')}`,
+          failure_reason: details.status === 'accepted'
+            ? `Handoff ${handoffType} accepted with score ${details.score}%`
+            : `Handoff ${handoffType} rejected: ${details.reasonCode || 'VALIDATION_FAILED'}`,
+          failure_category: details.status === 'accepted' ? 'pass' : 'gate_failure',
+          metadata: {
+            handoff_type: handoffType,
+            execution_id: details.executionId,
+            validation_score: details.score,
+            gate_count: details.gateCount,
+            failed_gate: details.failedGate,
+            outcome: details.status
+          },
+          execution_context: 'handoff-recorder'
+        });
+
+      if (error) {
+        console.warn(`   ⚠️  Governance audit log failed: ${error.message}`);
+      }
+    } catch (err) {
+      // Non-blocking — audit failures must never prevent handoff completion
+      console.warn(`   ⚠️  Governance audit exception: ${err.message}`);
+    }
+  }
+
+  /**
+   * @deprecated Use _attemptRecovery instead. Kept for backward compatibility.
+   * Logs errors to database without blocking the main flow.
+   */
+  async _logErrorSilently(operation, context) {
+    return this._attemptRecovery(operation, context);
+  }
+}
+
+export default HandoffRecorder;
