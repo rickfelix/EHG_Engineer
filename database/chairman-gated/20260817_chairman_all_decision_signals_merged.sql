@@ -99,6 +99,29 @@
 -- venture_decisions, ventures). A non-service reader does not lose access under invoker semantics —
 -- confirmed, not assumed.
 --
+-- ==================== QF-20260816-988 — decided_at/decided_by column mismatch ====================
+-- Coordinator AC (bug_016, A3 ultrareview via Adam, 2026-08-16): the gate above checks
+-- cd.decided_by (text), while the decided_by OUTPUT column projects cd.decided_by_user_id (uuid) —
+-- a DIFFERENT column. Result: a row decided by a system/agent actor (adam, testing_agent,
+-- monitoring_agent — measured 180 of 249 gate-passing rows) OR by the chairman via a free-text
+-- label rather than a linked uuid (measured ~69 of 249: chairman, chairman-cli,
+-- codestreetlabs@gmail.com, etc.) gets a real decided_at timestamp while decided_by silently reads
+-- NULL — "decided at X by nobody".
+--
+-- REJECTED FIX: gate AND project the SAME column (decided_by_user_id for both). Measured live:
+-- only 14 of 249 gate-passing rows have decided_by_user_id set. This would suppress decided_at for
+-- 235 rows outright, including ~69 that a real human chairman genuinely decided — a much larger
+-- regression than the defect it fixes.
+--
+-- APPLIED FIX (the directive's own sanctioned alternative — "surface decided_by text as a label
+-- alongside"): decided_at's gate and decided_by's projection are UNCHANGED from the original merge
+-- (still broad, still honest about which 249 rows have SOME recorded decider); details now also
+-- carries decided_by_label := cd.decided_by (the raw text), so a row with decided_by NULL is no
+-- longer silently unexplained — a consumer reading details.decided_by_label sees "adam" /
+-- "chairman-cli" / etc. even when no linkable uuid exists. Column type stays uuid|NULL on the
+-- union-typed output (text cannot be projected there without breaking the UNION — confirmed by the
+-- superseded File B's own test comment: "UNION types uuid and text cannot be matched").
+--
 -- ROLLBACK: database/chairman-gated/20260817_chairman_all_decision_signals_merged_DOWN.sql
 -- CONTROL QUERY (run immediately after apply): database/chairman-gated/20260817_chairman_all_decision_signals_merged_CONTROL.sql
 -- ============================================================================
@@ -214,7 +237,7 @@ UNION ALL
     cd.decided_by_user_id AS decided_by,
     NULL::text AS requestor_name,
     v.name AS venture_name,
-    jsonb_build_object('health_score', cd.health_score, 'override_reason', cd.override_reason, 'risks_acknowledged', cd.risks_acknowledged, 'quick_fixes_applied', cd.quick_fixes_applied, 'source_decision_type', cd.decision_type) AS details,
+    jsonb_build_object('health_score', cd.health_score, 'override_reason', cd.override_reason, 'risks_acknowledged', cd.risks_acknowledged, 'quick_fixes_applied', cd.quick_fixes_applied, 'source_decision_type', cd.decision_type, 'decided_by_label', cd.decided_by) AS details,
     COALESCE(cd.blocking, false) AS blocking
    FROM chairman_decisions cd
      LEFT JOIN ventures v ON v.id = cd.venture_id
