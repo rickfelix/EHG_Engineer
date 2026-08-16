@@ -88,6 +88,7 @@ import {
 import { getRemediation } from './remediations.js';
 import { clearState as clearAutoProceedState } from '../../auto-proceed-state.js';
 import { recorderIdentity, recorderIdentities } from '../../recording/HandoffRecorder.js';
+import { NOT_MEASURED_SCORE } from '../../gates/fr-delivery-classifier.js';
 import { recordSdCompleted } from '../../../../../lib/learning/outcome-tracker.js';
 // SD-MAN-INFRA-SAME-TURN-NEXT-001 FR-3: completion-boundary instrumentation
 import { stampCompletion, stampExecutionContext } from '../../../../../lib/fleet/claim-stamp.cjs';
@@ -1094,9 +1095,12 @@ export class LeadFinalApprovalExecutor extends BaseExecutor {
         .order('created_at', { ascending: false })
         .limit(1);
       const srcId = lheRows && lheRows[0] ? lheRows[0].id : null;
+      const srcScoreMeasured = !!((lheRows && lheRows[0] && lheRows[0].validation_score != null)
+        || (gateResults && gateResults.actualScore != null));
       const srcScore = (lheRows && lheRows[0] && lheRows[0].validation_score != null)
         ? lheRows[0].validation_score
-        : (gateResults && gateResults.actualScore != null ? gateResults.actualScore : 100);
+        : (gateResults && gateResults.actualScore != null ? gateResults.actualScore : NOT_MEASURED_SCORE);
+      const srcScoreSource = srcScoreMeasured ? 'measured' : 'not_measured';
 
       // F1/FR-3: surface genuine retro known-issues on the resume/reconcile path too, combined
       // with (never replacing) the existing honest provenance note. combineKnownIssuesWithProvenance
@@ -1125,7 +1129,7 @@ export class LeadFinalApprovalExecutor extends BaseExecutor {
           completeness_report: { validation_score: srcScore, source: 'leo_handoff_executions' },
           validation_score: srcScore,
           validation_passed: true,
-          validation_details: { reconciled_by: 'LeadFinalApprovalExecutor already-completed path', sd_ref: 'SD-REFILL-0038AO42' },
+          validation_details: { reconciled_by: 'LeadFinalApprovalExecutor already-completed path', sd_ref: 'SD-REFILL-0038AO42', score_source: srcScoreSource },
           accepted_at: new Date().toISOString(),
           created_by: 'ADMIN_OVERRIDE',
           metadata: { canonical_reconcile_write: true, resume_path: true, source_execution_id: srcId, sd_ref: 'SD-REFILL-0038AO42' }
