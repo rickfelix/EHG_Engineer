@@ -1,8 +1,8 @@
-<!-- file_content_hash: a950778cdfa4431b -->
+<!-- file_content_hash: 1afb999ef86d931e -->
 <!-- GENERATED FILE - DO NOT EDIT DIRECTLY. Source of truth: leo_protocol_sections (DB). Regenerate: node scripts/generate-claude-md-from-db.js. Drift check: node scripts/check-claude-md-drift.cjs -->
 # CLAUDE_CORE.md - LEO Protocol Core Context
 
-**Generated**: 2026-08-16 5:04:34 PM
+**Generated**: 2026-08-16 7:53:13 PM
 **Protocol**: LEO 4.4.1
 **Purpose**: Essential workflow context for all sessions
 **Effort**: medium (core context; phase-specific files tag their own effort for phase work)
@@ -1617,18 +1617,7 @@ Each SD should trace upward through this hierarchy. When evaluating or creating 
 
 **From Published Retrospectives** - Apply these learnings proactively.
 
-### 1. Reversibility classifier + chairman policy table + ratchet guard - Retrospective [QUALITY]
-**Category**: APPLICATION_ISSUE | **Date**: 7/17/2026 | **Score**: 100
-
-**Key Improvements**:
-- Risk managed: Implementation may not fully address root cause
-- Documentation could be enhanced with more visual diagrams
-
-**Action Items**:
-- [ ] Create PRD for SD-LEO-INFRA-INTELLIGENT-SWITCH-AUTOMATION-001-A in product_requi...
-- [ ] Record missing handoffs for SD-LEO-INFRA-INTELLIGENT-SWITCH-AUTOMATION-001-A in ...
-
-### 2. SD-LEO-INFRA-MODEL-CAPABILITY-EVAL-002-B Comprehensive Retrospective [QUALITY]
+### 1. SD-LEO-INFRA-MODEL-CAPABILITY-EVAL-002-B Comprehensive Retrospective [QUALITY]
 **Category**: PROCESS_IMPROVEMENT | **Date**: 7/17/2026 | **Score**: 100
 
 **Key Improvements**:
@@ -1638,6 +1627,17 @@ Each SD should trace upward through this hierarchy. When evaluating or creating 
 **Action Items**:
 - [ ] Add a query helper/lint that resolves product_requirements_v2 by sd_key (directi...
 - [ ] Document the "loader may only re-enter the grader via lazy import()" module-boun...
+
+### 2. Shared pre-send rubric engine — deterministic lint + independent LLM review harness - Retrospective [QUALITY]
+**Category**: PROCESS_IMPROVEMENT | **Date**: 7/17/2026 | **Score**: 100
+
+**Key Improvements**:
+- No specific issues identified - handoff executed smoothly
+- SD-LEO-INFRA-SMS-CHANNEL-HARDENING-001-A proceeded without PRD - scope defined informally
+
+**Action Items**:
+- [ ] Verify: All implementation items from scope are complete for SD-LEO-INFRA-SMS-CH...
+- [ ] Validate: Code passes lint and type checks for SD-LEO-INFRA-SMS-CHANNEL-HARDENIN...
 
 ### 3. R7+R8+Vision label cleanup: residual marketing archive, dead nav-taxonomy links, stale EHG-2028 label - Retrospective [QUALITY]
 **Category**: PROCESS_IMPROVEMENT | **Date**: 7/17/2026 | **Score**: 100
@@ -1650,16 +1650,16 @@ Each SD should trace upward through this hierarchy. When evaluating or creating 
 - [ ] Verify: No file in src/ imports from src/_deprecated/ for SD-EHG-PRODUCT-UIUX-RE...
 - [ ] Validate: All navigationTaxonomy.ts nav entries resolve to a live route for SD-E...
 
-### 4. Shared pre-send rubric engine — deterministic lint + independent LLM review harness - Retrospective [QUALITY]
-**Category**: PROCESS_IMPROVEMENT | **Date**: 7/17/2026 | **Score**: 100
+### 4. Reversibility classifier + chairman policy table + ratchet guard - Retrospective [QUALITY]
+**Category**: APPLICATION_ISSUE | **Date**: 7/17/2026 | **Score**: 100
 
 **Key Improvements**:
-- No specific issues identified - handoff executed smoothly
-- SD-LEO-INFRA-SMS-CHANNEL-HARDENING-001-A proceeded without PRD - scope defined informally
+- Risk managed: Implementation may not fully address root cause
+- Documentation could be enhanced with more visual diagrams
 
 **Action Items**:
-- [ ] Verify: All implementation items from scope are complete for SD-LEO-INFRA-SMS-CH...
-- [ ] Validate: Code passes lint and type checks for SD-LEO-INFRA-SMS-CHANNEL-HARDENIN...
+- [ ] Create PRD for SD-LEO-INFRA-INTELLIGENT-SWITCH-AUTOMATION-001-A in product_requi...
+- [ ] Record missing handoffs for SD-LEO-INFRA-INTELLIGENT-SWITCH-AUTOMATION-001-A in ...
 
 ### 5. SD Completion Retrospective: R7+R8+Vision label cleanup (residual marketing archive, dead nav-taxonomy links, stale EHG-2028 label) [QUALITY]
 **Category**: PROCESS_IMPROVEMENT | **Date**: 7/18/2026 | **Score**: 100
