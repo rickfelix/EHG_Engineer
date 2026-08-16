@@ -636,7 +636,15 @@ async function selfClaimQuickFix(sb, sessionId, base, sessionModel) {
 // the batch collapses into one group and is probed against EHG_Engineer regardless of target —
 // a wrong-repo false CLEAR. Zero live impact today only because the one non-Engineer QF is
 // in_progress while this lane filters status='open'; correct by luck is not correct.
-const QF_CANDIDATE_COLUMNS = 'id, status, pr_url, commit_sha, created_at, routing_tier, title, description, severity, not_before, factory_lane, owner, release_condition, target_application'; // schema-lint-disable-line: factory_lane staged, see comment above
+// SD-LEO-INFRA-STALE-QF-DISPOSITION-SWEEP-001 (FR-6): verified_at is a SECOND,
+// independently-staged column (its own migration file, never applied together with
+// factory_lane's) -- both can be absent from the live table at once, as they are as of this SD.
+// isAutoStartableQF degrades safely when qf.verified_at is undefined (falls back to
+// created_at-only), so on ANY 42703 below both are stripped together in one retry rather than
+// probing which of the two actually caused the failure -- simpler than belt-depth.cjs's own
+// layered per-column probe, and correct for this file: the worst case is a more conservative
+// (never wrong, never crashing) age computation until both migrations have landed.
+const QF_CANDIDATE_COLUMNS = 'id, status, pr_url, commit_sha, created_at, routing_tier, title, description, severity, not_before, factory_lane, owner, release_condition, target_application, verified_at'; // schema-lint-disable-line: factory_lane + verified_at staged, see comment above
     let { data: qfs, error: qfErr } = await sb
       .from('quick_fixes')
       .select(QF_CANDIDATE_COLUMNS)
@@ -648,7 +656,7 @@ const QF_CANDIDATE_COLUMNS = 'id, status, pr_url, commit_sha, created_at, routin
     if (qfErr && qfErr.code === '42703') {
       ({ data: qfs } = await sb
         .from('quick_fixes')
-        .select(QF_CANDIDATE_COLUMNS.replace(', factory_lane', ''))
+        .select(QF_CANDIDATE_COLUMNS.replace(', factory_lane', '').replace(', verified_at', ''))
         .eq('status', 'open')
         .is('pr_url', null)
         .is('commit_sha', null)

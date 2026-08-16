@@ -272,3 +272,78 @@ describe('countAutoStartableQuickFixes — factory_lane 42703 fallback (TR-2/TS-
     await expect(countAutoStartableQuickFixes(client)).resolves.toBe(0);
   });
 });
+
+// SD-LEO-INFRA-STALE-QF-DISPOSITION-SWEEP-001 (FR-6): verified_at is a SECOND, independently
+// staged column that can be absent even when factory_lane is present (or vice versa). This is a
+// separate probe stage LAYERED AFTER the factory_lane resolution above — these tests pin that it
+// never re-decides factory_lane's own inclusion, only adds/omits ", verified_at" on top of it.
+describe('countAutoStartableQuickFixes — verified_at layered probe (FR-6)', () => {
+  // factory_lane succeeds (present, not under test here); verified_at is the ONE missing column.
+  function verifiedAtMissingClient(rows) {
+    const make = (cols) => {
+      const includesVerifiedAt = /(^|,)\s*verified_at\s*(,|$)/.test(cols);
+      const b = {
+        eq() { return b; },
+        is() { return b; },
+        limit(n) {
+          if (includesVerifiedAt) {
+            return Promise.resolve({ data: null, error: { code: '42703', message: 'column quick_fixes.verified_at does not exist' } });
+          }
+          return Promise.resolve({ data: rows.slice(0, n), error: null });
+        },
+        range(from, to) {
+          if (includesVerifiedAt) {
+            return Promise.resolve({ data: null, error: { code: '42703', message: 'column quick_fixes.verified_at does not exist' } });
+          }
+          return Promise.resolve({ data: rows.slice(from, to + 1), error: null });
+        },
+      };
+      return b;
+    };
+    return { from: () => ({ select: (cols) => make(cols) }) };
+  }
+
+  it('factory_lane present, verified_at absent: still counts eligible rows via the factory_lane-resolved column list', async () => {
+    const rows = openUnclaimed(3);
+    const client = verifiedAtMissingClient(rows);
+    await expect(countAutoStartableQuickFixes(client)).resolves.toBe(3);
+  });
+
+  it('a non-42703 error on the verified_at probe still propagates (fail-loud, not weakened by the fallback)', async () => {
+    const client = {
+      from: () => ({
+        select: (cols) => {
+          const includesVerifiedAt = /(^|,)\s*verified_at\s*(,|$)/.test(cols);
+          const b = {
+            eq() { return b; },
+            is() { return b; },
+            limit: () => Promise.resolve(
+              includesVerifiedAt
+                ? { data: null, error: { code: '42501', message: 'permission denied' } }
+                : { data: [], error: null }
+            ),
+          };
+          return b;
+        },
+      }),
+    };
+    await expect(countAutoStartableQuickFixes(client)).rejects.toBeTruthy();
+  });
+
+  it('a verified_at probe that resolves data=null/error=null still THROWS rather than reporting 0', async () => {
+    const client = {
+      from: () => ({
+        select: (cols) => {
+          const includesVerifiedAt = /(^|,)\s*verified_at\s*(,|$)/.test(cols);
+          const b = {
+            eq() { return b; },
+            is() { return b; },
+            limit: () => Promise.resolve(includesVerifiedAt ? { data: null, error: null } : { data: [], error: null }),
+          };
+          return b;
+        },
+      }),
+    };
+    await expect(countAutoStartableQuickFixes(client)).rejects.toThrow(/refusing to treat an unreadable quick_fixes table as empty/);
+  });
+});

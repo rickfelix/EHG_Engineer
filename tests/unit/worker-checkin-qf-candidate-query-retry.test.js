@@ -52,6 +52,15 @@ describe('selfClaimQuickFix — retries the candidate query without factory_lane
     expect(result).toBeNull();
   });
 
+  it('SD-LEO-INFRA-STALE-QF-DISPOSITION-SWEEP-001 FR-6: base select includes verified_at, and a factory_lane 42703 retry strips BOTH staged columns together', async () => {
+    const selects = [];
+    const sb = makeFakeSb({ onSelect: (cols) => selects.push(cols) });
+    await selfClaimQuickFix(sb, 'sess-1', {}, 'sonnet');
+    expect(selects[0]).toContain('verified_at');
+    expect(selects[1]).not.toContain('factory_lane');
+    expect(selects[1]).not.toContain('verified_at');
+  });
+
   it('does not retry when the query succeeds on the first attempt (no unnecessary second query)', async () => {
     const selects = [];
     const sb = makeFakeSb({ onSelect: (cols) => selects.push(cols) });

@@ -79,4 +79,27 @@ describe('QF freshness/supersession gate (QF-20260525-522)', () => {
     const { summary } = classifyQuickFixes([qf({ id: 'QF-2D', created_at: daysAgo(2) })]);
     expect(summary.topStartableQF?.id).toBe('QF-2D');
   });
+
+  // SD-LEO-INFRA-STALE-QF-DISPOSITION-SWEEP-001 (FR-6): a disposition-sweep re-verify
+  // (verified_at) resets this gate's staleness clock the same way it resets
+  // lib/fleet/qf-auto-start.cjs's auto-start predicate — the two must agree.
+  it('a stale-by-created_at QF with a RECENT verified_at is no longer verify-first', () => {
+    const { summary, classified } = classifyQuickFixes([
+      qf({ id: 'QF-REVERIFIED', created_at: daysAgo(60), verified_at: daysAgo(1) }),
+    ]);
+    expect(classified[0]._verifyFirst).toBe(false);
+    expect(summary.topStartableQF?.id).toBe('QF-REVERIFIED');
+  });
+
+  it('verified_at absent/undefined degrades to created_at-only (pre-migration / not-yet-selected column)', () => {
+    const { classified } = classifyQuickFixes([qf({ id: 'QF-NOVER', created_at: daysAgo(9) })]);
+    expect(classified[0]._verifyFirst).toBe(true);
+  });
+
+  it('an OLDER verified_at than created_at does not resurrect staleness — created_at (the more recent) still wins', () => {
+    const { classified } = classifyQuickFixes([
+      qf({ id: 'QF-OLDVER', created_at: daysAgo(1), verified_at: daysAgo(90) }),
+    ]);
+    expect(classified[0]._verifyFirst).toBe(false);
+  });
 });
