@@ -159,6 +159,11 @@ describe('TS-8: H2 CLI gate + positive control via the REAL citation checker', (
     await expect(runSweep(['node', 'sweep', '--apply', '--h2-confirmed=2026-08-16'], { supabase, nowMs: NOW, seatCount: 3 }))
       .resolves.toBeTruthy();
   });
+  it('--h2-confirmed with a non-date value refuses (SECURITY sub-agent finding: a non-empty check alone accepted any string)', async () => {
+    const supabase = makeSupabase({ rows: [], columnsExist: true });
+    await expect(runSweep(['node', 'sweep', '--apply', '--h2-confirmed=yes'], { supabase, nowMs: NOW, seatCount: 3 }))
+      .rejects.toThrow(/H2_NOT_CONFIRMED/);
+  });
   it('a seeded past-fence positive-control fixture run through the REAL citation checker resolves STILL_PRESENT, never premise_resolved', async () => {
     const row = baseRow({ id: 'QF-POSCTRL', severity: 'high', description: 'covered by tests/failing.test.js' });
     const supabase = makeSupabase({ rows: [row], columnsExist: true });

@@ -387,6 +387,14 @@ export async function runSweep(argv, deps = {}) {
     if (!args.h2Confirmed) {
       throw new Error('H2_NOT_CONFIRMED: --apply requires --h2-confirmed=<ISO-date>, attesting the coordinator has completed the one-time two-sided verification pass (FR-8). Refusing to write.');
     }
+    // SECURITY sub-agent finding, EXEC-TO-PLAN (LOW severity): a non-empty check alone accepts
+    // any string, so a typo'd or placeholder value would still pass the attestation gate. Require
+    // a plain YYYY-MM-DD prefix -- still not proof the pass genuinely happened (that's a
+    // coordinator procedure, not something code can verify), but it closes the "any string at
+    // all" gap cheaply.
+    if (!/^\d{4}-\d{2}-\d{2}/.test(args.h2Confirmed)) {
+      throw new Error(`H2_NOT_CONFIRMED: --h2-confirmed must start with a plain YYYY-MM-DD date, got: ${args.h2Confirmed}`);
+    }
   }
 
   const seatCount = deps.seatCount ?? args.seatCount ?? (await defaultSeatCount(supabase, nowMs));

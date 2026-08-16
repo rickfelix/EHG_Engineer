@@ -63,7 +63,16 @@ jobs:
 
       - name: Run sweep
         id: run
+        shell: bash
         run: |
+          # SECURITY sub-agent finding, EXEC-TO-PLAN: `node ... | tee sweep.log` masks the
+          # sweep's own exit code behind tee's (always-0) status unless pipefail is active, which
+          # would let a genuine SWEEP_FATAL -- including the PAGINATION_MISMATCH safety abort,
+          # whose entire purpose is refusing to proceed on a possibly-truncated read -- report as
+          # a green step. Set explicitly rather than relying on any assumption about the runner's
+          # default shell flags.
+          set -euo pipefail
+          #
           # THE CORRECTED GATE (FR-9): POSITIVE and explicit, never a
           # `${{ github.event.inputs.x || 'false' }}`-style fallback. On a `schedule` trigger
           # github.event.inputs is entirely empty/undefined, so that fallback shape silently

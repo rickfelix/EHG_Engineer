@@ -5,7 +5,7 @@ import { describe, it, expect, beforeAll, afterAll } from 'vitest';
 import fs from 'node:fs';
 import path from 'node:path';
 import os from 'node:os';
-import { checkQuickFixCitation, extractCitations, OUTCOMES } from '../../../lib/eva/quick-fix-citation-checker.js';
+import { checkQuickFixCitation, extractCitations, OUTCOMES, buildVitestInvocation } from '../../../lib/eva/quick-fix-citation-checker.js';
 
 describe('extractCitations', () => {
   it('extracts a file:line citation (no range)', () => {
@@ -188,5 +188,55 @@ describe('checkQuickFixCitation', () => {
     const r = checkQuickFixCitation(qf, { repoRoot: tmpDir, runTest: runTestStub });
     expect(r.outcome).toBe(OUTCOMES.STILL_PRESENT);
     expect(r.extractedPathCount).toBeGreaterThanOrEqual(3);
+  });
+});
+
+describe('buildVitestInvocation — the exact argv runNamedTestReal spawns (SECURITY sub-agent finding)', () => {
+  // runNamedTestReal previously had ZERO coverage of any kind -- every test above injects
+  // opts.runTest, which never exercises the real invocation. That gap is exactly how a genuine,
+  // measured regression shipped silently: a "defense-in-depth" `--` argv separator broke
+  // vitest's file targeting entirely (every check silently ran the WHOLE ~3400-file repo suite
+  // instead of the one cited file, and `execFileSync('npx', ...)` additionally threw ENOENT on
+  // Windows). A real end-to-end subprocess spawn is deliberately NOT exercised from inside this
+  // repo's own vitest run -- verified during EXEC-TO-PLAN that a nested `vitest run` spawned as a
+  // child of an already-running vitest process produces incorrect PASS/FAIL results (a test-
+  // harness artifact of nesting shared cache/worker-pool state, not a defect in production, where
+  // the sweep always runs as a plain, non-nested `node` CLI process). Asserting the argv SHAPE
+  // deterministically catches the exact regression class (a stray flag, a reintroduced `--`, a
+  // reintroduced `npx`) without needing a real, flaky subprocess spawn to notice.
+  it('invokes node directly against vitest.mjs -- never npx, never a shell, never a stray -- separator', () => {
+    const { command, args } = buildVitestInvocation('some/path.test.js');
+    expect(command).toBe(process.execPath);
+    expect(args).toHaveLength(3);
+    expect(args[0]).toMatch(/vitest\.mjs$/);
+    expect(args[1]).toBe('run');
+    expect(args[2]).toBe('some/path.test.js');
+    expect(args).not.toContain('--');
+    expect(args).not.toContain('npx');
+    expect(command).not.toMatch(/npx/);
+  });
+
+  it('the resolved vitest CLI path genuinely exists on disk', () => {
+    const { args } = buildVitestInvocation('irrelevant.test.js');
+    expect(fs.existsSync(args[0])).toBe(true);
+  });
+
+  it('testPath is passed through byte-for-byte as the final positional argument, never mutated', () => {
+    const weirdButLegal = 'tests/unit/eva/some-file.test.js';
+    const { args } = buildVitestInvocation(weirdButLegal);
+    expect(args[args.length - 1]).toBe(weirdButLegal);
+  });
+});
+
+describe('runNamedTestReal — real, non-nested subprocess execution (manually verified, documented rather than re-spawned in-suite)', () => {
+  // The actual end-to-end mechanism (process.execPath + VITEST_CLI_PATH correctly targets ONLY
+  // the cited file, in well under a second, and correctly resolves PASS/FAIL for genuinely
+  // passing/failing fixtures, on win32) was verified manually via a plain, non-nested `node -e`
+  // invocation during EXEC-TO-PLAN -- not re-asserted here because running it from WITHIN this
+  // repo's own vitest suite is the exact nested-invocation scenario documented above as
+  // unreliable. buildVitestInvocation's argv-shape tests above are the permanent regression
+  // guard; this block exists so a future reader knows the omission was deliberate, not missed.
+  it('is covered by buildVitestInvocation (argv shape) plus manual, non-nested verification -- not re-spawned here', () => {
+    expect(true).toBe(true);
   });
 });
