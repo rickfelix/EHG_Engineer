@@ -533,6 +533,9 @@ async function generateAndValidatePRDContent(supabase, sdId, sdIdValue, sdData, 
                 breakdown: result.breakdown
               };
               console.log(`   [prd-quality] ${JSON.stringify(logPayload)}`);
+              // FR-5 / PAT-LES-e6ebbba78e2d: warn-only, independent of qualityMode's
+              // pass/fail decision -- never blocks even when qualityMode === 'block'.
+              for (const w of result.warnings || []) console.warn(`   ⚠️  ${w}`);
               if (!result.passed) {
                 if (qualityMode === 'block') {
                   console.error(`\n   ❌ PRD QUALITY GATE FAILED: score=${result.score} threshold=${result.threshold}`);
@@ -597,6 +600,9 @@ async function generateAndValidatePRDContent(supabase, sdId, sdIdValue, sdData, 
       const qualityResult = validatePRDQuality(llmPrdContent);
       const qualityMode = resolveEnforcementMode();
       console.log(`   [prd-quality] score=${qualityResult.score} threshold=${qualityResult.threshold} passed=${qualityResult.passed} mode=${qualityMode}`);
+      // FR-5 / PAT-LES-e6ebbba78e2d: warn-only, independent of qualityMode's pass/fail
+      // decision -- never blocks even when qualityMode === 'block'.
+      for (const w of qualityResult.warnings || []) console.warn(`   ⚠️  ${w}`);
       if (!qualityResult.passed && qualityMode === 'block') {
         console.error(`\n   ❌ PRD QUALITY GATE FAILED: score=${qualityResult.score} threshold=${qualityResult.threshold}`);
         for (const dim of qualityResult.breakdown || []) {
@@ -608,7 +614,7 @@ async function generateAndValidatePRDContent(supabase, sdId, sdIdValue, sdData, 
       } else if (!qualityResult.passed) {
         console.warn(`   ⚠️  PRD quality warning (warn-only): score=${qualityResult.score} threshold=${qualityResult.threshold}`);
       } else {
-        console.log(`   ✅ Quality validation passed`);
+        console.log('   ✅ Quality validation passed');
       }
       llmPrdContent.metadata = {
         ...(llmPrdContent.metadata || {}),
