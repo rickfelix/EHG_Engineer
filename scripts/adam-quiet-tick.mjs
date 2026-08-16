@@ -45,6 +45,7 @@ import { evaluateRealBuildStall } from '../lib/governance/real-build-stall-alarm
 // below, because the measured failure was the queue setting the agenda — a priority printed beneath
 // a dozen inbound rows has been filed, not surfaced.
 import { evaluateStandingPriority } from '../lib/adam/standing-priority.js';
+import { runChairmanGatedDecisionRowGuard } from '../lib/chairman/chairman-gated-decision-row-guard.mjs';
 
 const require = createRequire(import.meta.url);
 const crypto = require('crypto');
@@ -899,6 +900,22 @@ async function main() {
       console.log(`QUIET_TICK_STANDING_PRIORITY=adam status=served source=${standing.priority.source} anchored=${standing.anchored} title="${standing.priority.title}" servedBy=${standing.servedBy.join(',')}`);
     } else if (standing.status === 'unserved') {
       console.log(`QUIET_TICK_STANDING_PRIORITY_UNSERVED=adam source=${standing.priority.source} anchored=${standing.anchored} title="${standing.priority.title}" linked=${(standing.priority.linked_sd_keys || []).join(',') || '(none)'} — a standing priority is set and NOTHING is routed into it. This tick is NOT a no-op: route work to it, or clear it deliberately.`);
+    }
+
+    // SD-LEO-INFRA-CHAIRMAN-GATED-SD-DECISION-ROW-GUARD-001: a chairman-gated SD with no
+    // chairman_decisions row is invisible to every decision-driving instrument. Own try/catch
+    // (not the outer one) so a guard-specific failure never aborts the rest of this tick's
+    // checks — matches this tick's per-check resilience convention.
+    try {
+      const guard = await runChairmanGatedDecisionRowGuard(sb);
+      if (guard.hits > 0) {
+        console.log(`QUIET_TICK_CHAIRMAN_GATED_UNSURFACED=${guard.hits} recorded=${guard.recorded} backfilled=${guard.backfilled} errors=${guard.errors.length}`);
+      }
+      for (const e of guard.errors) {
+        console.error(`QUIET_TICK_CHAIRMAN_GATED_STAMP_ERROR=adam sd_key=${e.sd_key} error="${e.error}"`);
+      }
+    } catch (e) {
+      console.error(`QUIET_TICK_CHAIRMAN_GATED_STAMP_ERROR=adam guard_failed error="${e && e.message ? e.message : e}"`);
     }
     // SD-LEO-INFRA-ADAM-INBOX-SURFACE-NOT-STAMP-001 (FR-3): first-class inbox surfacing —
     // directive/reply-needed rows carry the distinct hard-interrupt token.
