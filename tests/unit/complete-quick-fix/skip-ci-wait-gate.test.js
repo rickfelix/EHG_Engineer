@@ -9,8 +9,15 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 
 const execSyncMock = vi.fn();
+// QF-20260816-049: mergeToMain's primary merge path now calls execFileSync (gh-merge-safe.mjs
+// via process.execPath), not execSync with a literal 'gh pr merge' string -- both must be
+// mocked or the primary path throws (execFileSync undefined), gets caught by mergeToMain's own
+// try/catch, and silently falls through to the local-merge fallback (which DOES use execSync),
+// masking what these tests actually exist to assert.
+const execFileSyncMock = vi.fn();
 vi.mock('child_process', () => ({
-  execSync: (...args) => execSyncMock(...args)
+  execSync: (...args) => execSyncMock(...args),
+  execFileSync: (...args) => execFileSyncMock(...args)
 }));
 
 const {
@@ -23,7 +30,14 @@ const {
 beforeEach(() => {
   vi.spyOn(console, 'log').mockImplementation(() => {});
   execSyncMock.mockReset();
+  execFileSyncMock.mockReset();
 });
+
+/** True when execFileSyncMock was called with the gh-merge-safe.mjs invocation shape. */
+function calledGhMergeSafe() {
+  return execFileSyncMock.mock.calls.some(([, args]) =>
+    Array.isArray(args) && args.some((a) => String(a).includes('gh-merge-safe')) && args.includes('--merge') && args.includes('--delete-branch'));
+}
 
 // ─── Pure decision functions — no IO, no mocking needed ───────────────────
 
@@ -112,7 +126,7 @@ describe('mergeToMain — CI-wait gate (QF-20260702-515)', () => {
       forceComplete: true, reason: 'audited'
     });
     expect(prompt).not.toHaveBeenCalled();
-    expect(execSyncMock.mock.calls.some(([cmd]) => cmd.startsWith('gh pr merge'))).toBe(true);
+    expect(calledGhMergeSafe()).toBe(true);
   });
 
   it('force-complete refuses to merge when a required check has failed', async () => {
@@ -124,7 +138,7 @@ describe('mergeToMain — CI-wait gate (QF-20260702-515)', () => {
       forceComplete: true, reason: 'audited'
     }).catch(e => { thrown = e; });
     expect(thrown).toBeNull(); // mergeToMain swallows and logs, per its existing contract
-    expect(execSyncMock.mock.calls.some(([cmd]) => cmd.startsWith('gh pr merge'))).toBe(false);
+    expect(calledGhMergeSafe()).toBe(false);
   });
 
   it('force-complete + skip-ci-wait merges without checking CI status at all', async () => {
@@ -132,7 +146,7 @@ describe('mergeToMain — CI-wait gate (QF-20260702-515)', () => {
     await mergeToMain('/fake', { id: 'QF-TEST' }, 'https://github.com/x/y/pull/42', vi.fn(), {
       forceComplete: true, skipCiWait: true, reason: 'audited-skip'
     });
-    expect(execSyncMock.mock.calls.some(([cmd]) => cmd.startsWith('gh pr merge'))).toBe(true);
+    expect(calledGhMergeSafe()).toBe(true);
   });
 
   it('force-complete polls past a pending check and merges once it completes', async () => {
@@ -160,6 +174,6 @@ describe('mergeToMain — CI-wait gate (QF-20260702-515)', () => {
     await mergePromise;
 
     expect(call).toBeGreaterThanOrEqual(2);
-    expect(execSyncMock.mock.calls.some(([cmd]) => cmd.startsWith('gh pr merge'))).toBe(true);
+    expect(calledGhMergeSafe()).toBe(true);
   });
 });
