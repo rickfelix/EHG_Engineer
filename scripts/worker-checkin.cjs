@@ -1944,6 +1944,15 @@ async function main() {
   }
   const result = await runCheckin(sb, sessionId, { model: cliModel, effort: cliEffort });
   console.log(JSON.stringify(result, null, 2));
+  // SD-LEO-INFRA-COMPLETION-TIER-SCRIPT-EXIT-001: this CLI previously hung past the
+  // harness Bash timeout after the checkin result had already printed (exit 143), so
+  // callers misread a completed run as a failure. armCliTeardown (lib/cli-graceful-exit.js)
+  // is the already-shipped fix for this class -- it never calls process.exit() directly on
+  // the normal path (avoiding a Windows libuv crash a bare exit() can trigger), closes
+  // undici's idle sockets, and force-exits only via a bounded backstop if the loop still
+  // fails to drain.
+  const { armCliTeardown } = await import('../lib/cli-graceful-exit.js');
+  await armCliTeardown(0, { backstopMs: 3000 });
 }
 
 // SD-ARCH-HOTSPOT-CHECKIN-001: dependency injection for the lib/checkin/steps/* pipeline.

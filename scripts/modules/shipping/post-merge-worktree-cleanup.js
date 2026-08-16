@@ -500,10 +500,21 @@ if (isMain) {
     else if (args[i] === '--merge-output' && args[i + 1]) { mergeOutputArg = args[++i]; }
   }
 
-  const emit = (p) => p.then(result => {
+  // SD-LEO-INFRA-COMPLETION-TIER-SCRIPT-EXIT-001: this CLI previously hung past the
+  // harness Bash timeout after cleanup already completed (exit 143). armCliTeardown
+  // (lib/cli-graceful-exit.js, an already-shipped fix for this class) never calls
+  // process.exit() directly on the normal path, so it cannot trigger the Windows libuv
+  // crash a bare exit() risks; it force-exits only via a bounded backstop. Called on BOTH
+  // arms with code 0 to preserve today's exact contract -- this script always exits 0,
+  // with the {cleaned, reason} outcome carried in the printed JSON, not the exit code.
+  const emit = (p) => p.then(async result => {
     process.stdout.write(JSON.stringify(result));
-  }).catch(err => {
+    const { armCliTeardown } = await import('../../../lib/cli-graceful-exit.js');
+    await armCliTeardown(0, { backstopMs: 3000 });
+  }).catch(async err => {
     process.stdout.write(JSON.stringify({ cleaned: false, reason: 'error', error: err.message }));
+    const { armCliTeardown } = await import('../../../lib/cli-graceful-exit.js');
+    await armCliTeardown(0, { backstopMs: 3000 });
   });
 
   if (mergeOutputArg !== null) {
