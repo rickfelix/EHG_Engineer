@@ -18,6 +18,9 @@
 #   <!-- gh-merge-guard-exempt: <reason> -->      (md)
 name: gh-merge-guard Lint
 
+permissions:
+  contents: read
+
 on:
   pull_request:
     paths:
