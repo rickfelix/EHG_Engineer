@@ -54,6 +54,41 @@ describe('normalizeConfidence', () => {
     });
   });
 
+  describe('TS-2b: QF-20260816-262 - legacy 0-1 fraction scales to 0-100 integer', () => {
+    it('scales a 0-1 legacy confidence fraction up by *100 and rounds', () => {
+      const results = { confidence: 0.95 };
+      const result = normalizeConfidence(results, defaultOptions);
+
+      expect(result.value).toBe(95);
+      expect(Number.isInteger(result.value)).toBe(true);
+      expect(result.source).toBe('confidence_legacy');
+      expect(result.warning).toContain('confidence.legacy_mapped');
+      expect(result.warning).toContain('scaled 0.95 -> 95');
+    });
+
+    it('scales confidence:1 (full legacy scale) to 100', () => {
+      const results = { confidence: 1 };
+      const result = normalizeConfidence(results, defaultOptions);
+
+      expect(result.value).toBe(100);
+    });
+
+    it('scales confidence:0 to 0 (unchanged either way)', () => {
+      const results = { confidence: 0 };
+      const result = normalizeConfidence(results, defaultOptions);
+
+      expect(result.value).toBe(0);
+    });
+
+    it('leaves an already-0-100-scale legacy confidence untouched', () => {
+      const results = { confidence: 73 };
+      const result = normalizeConfidence(results, defaultOptions);
+
+      expect(result.value).toBe(73);
+      expect(result.warning).not.toContain('scaled');
+    });
+  });
+
   describe('TS-3: Dual-field input prefers confidence_score', () => {
     it('should use confidence_score when both fields present and emit warning', () => {
       const results = { confidence_score: 90, confidence: 10 };
