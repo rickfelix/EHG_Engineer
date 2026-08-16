@@ -664,6 +664,20 @@ export class HandoffRecorder {
     // SD-VENTURE-STAGE0-UI-001: Resolve to UUID for FK constraints
     const sdUuid = await this._resolveToUUID(sdId);
 
+    // QF-20260816-107: parity with recordFailure (line ~371) — completion actions
+    // (e.g. LEAD-FINAL-APPROVAL) must record system errors to leo_handoff_executions,
+    // not sd_phase_handoffs, whose to_phase CHECK constraint + phase-transition
+    // analytics are wrong for a completion action and reproduce the same
+    // "100% rejected" distortion FR-1 fixed for recordFailure.
+    if (isCompletionAction(handoffType)) {
+      return this._recordCompletionActionFailure({
+        executionId, handoffType, sdId, sdUuid,
+        result: { message: errorMessage, reasonCode: 'SYSTEM_ERROR', systemError: true },
+        template: null,
+        normalizedScore: 0
+      });
+    }
+
     const execution = {
       id: executionId,
       sd_id: sdUuid,

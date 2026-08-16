@@ -258,7 +258,14 @@ export class HandoffOrchestrator {
           // handoff is still visible in the audit trail without burning failure metrics.
           console.log('📝 Handoff recorded as WAIT (recorder.recordWait not available — using blocked+metadata fallback)');
         }
-      } else if (!result.systemError) {
+      } else if (result.systemError) {
+        // QF-20260816-107: BaseExecutor can RETURN ResultBuilder.systemError(...) instead
+        // of throwing (e.g. executeSpecific's catch at BaseExecutor.js:838) — the prior
+        // '!result.systemError' guard silently dropped these on the floor (no row in
+        // either table). The thrown-error path is still handled separately below at the
+        // catch block (line ~299-303); this covers the RETURNED-error path.
+        await this.recorder.recordSystemError(normalizedType, sdId, result.message || result.error || 'Unknown system error');
+      } else {
         await this.recorder.recordFailure(normalizedType, sdId, result, template);
       }
 

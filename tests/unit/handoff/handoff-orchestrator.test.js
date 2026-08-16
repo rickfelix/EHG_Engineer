@@ -304,6 +304,46 @@ describe('HandoffOrchestrator', () => {
       expect(result.error).toBe('Database connection lost');
       expect(recorder.recordSystemError).toHaveBeenCalledOnce();
     });
+
+    it('QF-20260816-107: records system error when executor RETURNS a systemError result (does not throw)', async () => {
+      const recorder = {
+        recordSuccess: vi.fn(() => Promise.resolve()),
+        recordFailure: vi.fn(() => Promise.resolve()),
+        recordSystemError: vi.fn(() => Promise.resolve())
+      };
+
+      // BaseExecutor.executeSpecific's own catch path can RETURN
+      // ResultBuilder.systemError(...) instead of throwing — the prior
+      // '!result.systemError' guard silently dropped this on the floor (no
+      // recordFailure call because systemError was truthy, no recordSystemError
+      // call because nothing threw).
+      const returningExecutor = createMockExecutor({
+        success: false,
+        systemError: true,
+        error: 'executeSpecific internal failure',
+        message: 'executeSpecific internal failure',
+        reasonCode: 'SYSTEM_ERROR'
+      });
+
+      const orchestrator = createTestOrchestrator({
+        recorder,
+        executors: {
+          'LEAD-FINAL-APPROVAL': returningExecutor,
+          'LEAD-TO-PLAN': createMockExecutor(),
+          'PLAN-TO-EXEC': createMockExecutor(),
+          'EXEC-TO-PLAN': createMockExecutor(),
+          'PLAN-TO-LEAD': createMockExecutor()
+        }
+      });
+
+      const result = await orchestrator.executeHandoff('LEAD-FINAL-APPROVAL', 'SD-TEST-001');
+
+      expect(result.success).toBe(false);
+      expect(result.systemError).toBe(true);
+      expect(recorder.recordSystemError).toHaveBeenCalledOnce();
+      expect(recorder.recordSystemError).toHaveBeenCalledWith('LEAD-FINAL-APPROVAL', 'SD-TEST-001', 'executeSpecific internal failure');
+      expect(recorder.recordFailure).not.toHaveBeenCalled();
+    });
   });
 
   // =========================================================================
