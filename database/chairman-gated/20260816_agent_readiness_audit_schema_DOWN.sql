@@ -16,9 +16,9 @@
 --
 -- DATA LOSS WARNING: if the UP migration was ever applied and real audit_run/audit_sample/
 -- llm_txt_version rows were written, this DOWN destroys them irrecoverably (the tables are
--- append-only/immutable BY DESIGN — that immutability protects against in-place edits, not against
--- a DROP TABLE). Confirm no measurement data needs preserving before running this in --verify mode
--- for real, not just as a rehearsal.
+-- append-only/immutable BY DESIGN — that immutability protects in-place edits, not a full table
+-- removal via this rollback script). Confirm no measurement data needs preserving before running
+-- this in --verify mode for real, not just as a rehearsal.
 
 BEGIN;
 
