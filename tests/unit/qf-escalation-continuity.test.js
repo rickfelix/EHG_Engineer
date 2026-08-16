@@ -248,6 +248,17 @@ describe('Description/scope inheritance (QF-20260729-534 option C)', () => {
     expect(h.createSDArgs.description).toBe(short);
   });
 
+  it('does not truncate a description at exactly MAX_CONTENT_CHARS (boundary, not over it)', async () => {
+    // TESTING sub-agent adversarial pass: composed.length > MAX_CONTENT_CHARS mutated to
+    // >= survived every other test here, because none of them supply a fixture of exactly
+    // 8000 chars -- all sit strictly on one side of both operators. Only an exact-length
+    // fixture distinguishes "over the cap" from "at the cap".
+    const exact = 'w'.repeat(8000);
+    h.cfg = { qfRow: baseQfRow({ description: exact, expected_behavior: null, actual_behavior: null }) };
+    await createFromQF('QF-TEST-1');
+    expect(h.createSDArgs.description).toBe(exact);
+  });
+
   it('preserves the full, untruncated original in metadata.qf_origin_body regardless of length', async () => {
     const long = 'z'.repeat(21693);
     h.cfg = {
