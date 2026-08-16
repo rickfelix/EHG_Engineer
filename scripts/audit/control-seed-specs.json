@@ -368,5 +368,27 @@
       "input": "migration SQL file TEXT under database/migrations/, supabase/migrations/, database/chairman-gated/ (paren-balance-scanned for CREATE [OR REPLACE] FUNCTION ... SECURITY DEFINER, then regex-matched for a same-function REVOKE naming PUBLIC and each of anon/authenticated addressed). Consumes no DB columns and no live catalog state -- that axis is the separate scripts/audit-rpc-execute-grants.mjs completeness gate, declared as this control's own KNOWN LIMITATION.",
       "seen": "live --all sweep against this repo's real database/migrations/, supabase/migrations/, database/chairman-gated/ at HEAD (session 642532a6, 2026-08-16): 1517 files scanned, 326 real pre-existing violations by exact file+function name -- a genuine positive in the deployment environment, not a fixture. The migration this SD authored (database/chairman-gated/20260816_close_remaining_secdef_execute_exposure.sql) was independently confirmed to score ZERO findings against the same live sweep."
     }
+  },
+  {
+    "name": "progress-column-lint",
+    "script": "scripts/lint/progress-column-lint.mjs",
+    "rootFlag": null,
+    "cwdScope": true,
+    "extraArgs": [],
+    "note": "SD-LEO-INFRA-PROGRESS-COLUMN-DEAD-TWIN-001 FR-7. Scans via git ls-files (inherits cwd, so it IS aimable at a scratch git repo like no-connection-string-literals-lint and secdef-execute-revoke-lint above -- cwdScope:true, no --root flag needed). Reporting-only CLI (always exits 0 by design; the tests/unit/hygiene/no-bare-progress-column.test.js ratchet check, not this CLI's exit code, is what enforces pass/fail against the frozen baseline), so detection is by output text, not exit code -- matches the harness's DETECTS verdict path.",
+    "fixtures": [
+      {
+        "path": "lib/seeded-progress-column-defect.js",
+        "content": "// SEEDED DEFECT: writes the dead-twin `progress` column instead of `progress_percentage`\n// on the same UPDATE that sets status to 'completed' -- the exact class of bug\n// complete-children.mjs originally shipped.\nexport async function markComplete(supabase, sdId) {\n  return supabase.from('strategic_directives_v2').update({ status: 'completed', progress: 100 }).eq('id', sdId);\n}\n"
+      }
+    ],
+    "detectTokens": [
+      "seeded-progress-column-defect",
+      "RULE B"
+    ],
+    "observability_proof": {
+      "input": "git ls-files output (tracked .js/.mjs/.cjs/.ts/.tsx paths, filtered by PATH_EXCLUDE_PREFIXES) with each file's source TEXT AST-parsed via @babel/parser -- RULE A/B/C all require the same call or binding chain to also contain .from('strategic_directives_v2'); consumes no DB columns and no environment variables.",
+      "seen": "Live scan against this repo's real tracked tree at HEAD (session 642532a6-bd77-485d-9717-aa034628319c, 2026-08-16): 4621 files scanned, 37 real pre-existing bare-progress-column sites found across 20 files by exact file+line+rule (frozen into tests/unit/hygiene/progress-column-baseline.json) -- a genuine positive in the deployment tree, not a fixture. Every file this SD itself repointed (sd-reader.js, sd-blocker-surface.js, dispatcher.js, revert.js, integration-verification-gate.js, complete-children.mjs, heal-command.mjs, vision-heal.js, generate-retrospective.js, generate-comprehensive-retrospective.js, get-working-on-sd.js, leo-resume.js, audit-runner.js, efficient-database-queries.js) was independently confirmed to score ZERO findings against the same live scan."
+    }
   }
 ]
