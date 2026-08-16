@@ -236,6 +236,19 @@ export const SEED_TRIAL = Object.freeze({
 const ASSERTION_RE = /AssertionError|expected .+ to |Tests\s+\d+ failed/i;
 const LOAD_CRASH_RE = /ERR_MODULE_NOT_FOUND|Failed to load url|Cannot find (module|package)|SyntaxError|ReferenceError/i;
 
+// PAT-LES-c4ec7d0aab94 (SD-LEARN-FIX-ADDRESS-PATTERN-LEARN-143): the two evidence sites below
+// used to diverge -- one filtered for failure-vocabulary content, the other took the raw last-3
+// lines (frequently vitest's boilerplate summary footer, not the actual assertion). One shared
+// helper closes the asymmetry. Falls back to the raw last-3-lines when nothing matches the
+// vocabulary, so a real failure whose wording this regex doesn't cover is never silently
+// reported as empty evidence -- strictly additive over the old raw-slice behavior, never worse.
+const SEED_TEST_EVIDENCE_RE = /FAIL|AssertionError|expected|Tests\s/i;
+export function extractSeedTestEvidence(out) {
+  const lines = String(out || '').trim().split('\n').filter(Boolean);
+  const matched = lines.filter((l) => SEED_TEST_EVIDENCE_RE.test(l));
+  return (matched.length ? matched : lines).slice(-3);
+}
+
 /**
  * The whole decision, as a pure function — no spawning, no filesystem.
  *
@@ -364,7 +377,7 @@ export function runSeedTestTrial(spec, repoRoot, deps = {}) {
     // mutating, and running anyway would only produce a red we could not interpret.
     if (clean.code !== 0) {
       const c = classifySeedTrial({ cleanExit: clean.code, mutationLanded: false, mutantExit: 1 });
-      return { ...c, name: spec.name, evidence: clean.out.trim().split('\n').filter(Boolean).slice(-3) };
+      return { ...c, name: spec.name, evidence: extractSeedTestEvidence(clean.out) };
     }
 
     const p = join(wt, target);
@@ -396,7 +409,7 @@ export function runSeedTestTrial(spec, repoRoot, deps = {}) {
 
     const mutant = mutationLanded ? runVitest(wt) : { code: 1, out: '' };
     const c = classifySeedTrial({ cleanExit: clean.code, mutationLanded, mutantExit: mutant.code, mutantOut: mutant.out, neuterWhy: spec.neuter.why });
-    return { ...c, name: spec.name, evidence: mutant.out.trim().split('\n').filter((l) => /FAIL|AssertionError|expected|Tests\s/.test(l)).slice(-3) };
+    return { ...c, name: spec.name, evidence: extractSeedTestEvidence(mutant.out) };
   } catch (e) {
     return { name: spec.name, verdict: SEED_TRIAL.HARNESS_ERROR, code: 'HARNESS_THREW', reason: `the observed-RED harness itself failed: ${e.message}`, evidence: [] };
   } finally {

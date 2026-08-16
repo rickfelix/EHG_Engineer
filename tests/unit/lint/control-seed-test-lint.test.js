@@ -9,7 +9,7 @@
 // No DB, no network: pure evaluate() against a committed fixture.
 import { describe, it, expect } from 'vitest';
 import { evaluate } from '../../../scripts/lint/control-seed-test-lint.mjs';
-import { classifySeedTrial, SEED_TRIAL, runSeedTestTrial } from '../../../scripts/audit/control-seed-test.mjs';
+import { classifySeedTrial, SEED_TRIAL, runSeedTestTrial, extractSeedTestEvidence } from '../../../scripts/audit/control-seed-test.mjs';
 
 const BLIND = 'tests/fixtures/control-seed-gate/blind-gauge-lint.mjs';
 const onlyBlind = (p) => p === BLIND;
@@ -255,5 +255,37 @@ describe('SECURITY — the spec file is untrusted input', () => {
     expect(r.code).not.toBe('NEUTER_FILE_NOT_SCRIPT');
     expect(r.code).not.toBe('NEUTER_FIND_EMPTY');
     expect(r.code).toBe('HARNESS_THREW'); // reached the body, i.e. the guards let it through
+  });
+});
+
+// PAT-LES-c4ec7d0aab94 (SD-LEARN-FIX-ADDRESS-PATTERN-LEARN-143) — TS-1, TS-2.
+//
+// Both evidence sites in control-seed-test.mjs (RED_BEFORE_NEUTER and the neutered-mutant
+// path) now share this one extraction helper. Pure function, no I/O.
+describe('extractSeedTestEvidence — PAT-LES-c4ec7d0aab94', () => {
+  it('[TS-1] surfaces the real assertion line, not the boilerplate summary footer', () => {
+    const out = [
+      'stdout | tests/unit/x.test.js > some test',
+      'AssertionError: expected true to be false',
+      '',
+      'Test Files  1 failed (1)',
+      '     Tests  3 failed | 2 passed (5)',
+      '  Start at  10:23:45',
+      '  Duration  1.23s',
+    ].join('\n');
+    const evidence = extractSeedTestEvidence(out);
+    expect(evidence.some((l) => l.includes('AssertionError'))).toBe(true);
+    expect(evidence).not.toContain('  Start at  10:23:45');
+  });
+
+  it('[TS-2] falls back to the raw last-3-lines when nothing matches the failure vocabulary', () => {
+    const out = ['line one', 'line two', 'line three', 'line four'].join('\n');
+    const evidence = extractSeedTestEvidence(out);
+    expect(evidence.length).toBeGreaterThan(0);
+    expect(evidence).toEqual(['line two', 'line three', 'line four']);
+  });
+
+  it('never returns an empty array for non-empty input, even with zero vocabulary matches', () => {
+    expect(extractSeedTestEvidence('nothing recognizable here')).toEqual(['nothing recognizable here']);
   });
 });
