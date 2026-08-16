@@ -91,8 +91,8 @@ describe('budget-guard — familyOf', () => {
     expect(_internal.familyOf('openai:gpt-5')).toBe('openai');
   });
 
-  it('returns the whole string unchanged when there is no colon (defensive, should not happen given audit-runner.js validates this shape)', () => {
-    expect(_internal.familyOf('claude-opus-5')).toBe('claude-opus-5');
+  it('throws on a malformed (no-colon) entry — matches audit-runner.js familyModel()\'s contract exactly, so a bad modelSet entry fails budget preflight BEFORE registerAuditRun()\'s DB write, not after it (closes an orphaned-row gap a second adversarial review pass caught)', () => {
+    expect(() => _internal.familyOf('claude-opus-5')).toThrow(/family:model/);
   });
 });
 
