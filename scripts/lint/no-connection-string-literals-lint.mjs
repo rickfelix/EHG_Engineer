@@ -23,6 +23,16 @@
 // in principle match adversarial text), so SELF_PATHS adds an explicit path exclusion as a
 // second, independent safeguard on top of the regex's own escaped-slash construction (see
 // URL_SHAPE_RE below) never containing a literal "://" run in this file's own source text.
+//
+// KNOWN LIMITATION: assertion B cannot catch a credential that is word-wrapped mid-token
+// across a line break, or constructed at runtime via string concatenation/decoding rather than
+// appearing as a literal contiguous token (verified during an adversarial review of an earlier
+// draft: recovering the real rotated credential from git history and testing both encodings
+// confirmed neither is split by whitespace in any of its actual occurrences, so this gap is
+// real but not observed to matter for the incident this guard exists to prevent). Assertion A
+// is a heuristic covering unknown-future secrets by SHAPE; it is not the security backstop
+// (assertion B is) and can be defeated by a credential built entirely from runtime expressions
+// with no literal shape at all -- e.g. `new URL(scheme + host).toString()`.
 import { execFileSync } from 'node:child_process';
 import { readFileSync } from 'node:fs';
 import { createHash } from 'node:crypto';
@@ -109,6 +119,14 @@ export const PATH_ALLOWLIST = [
     rationale: 'Documents a DIFFERENT pattern-detection system\'s own regex convention '
       + '(postgres_conn_with_password) as a reference table -- a pattern DEFINITION, same class '
       + 'as the .husky/pre-commit entry above, not an instance of the shape.',
+  },
+  {
+    path: 'scripts/audit/control-seed-specs.json',
+    rationale: 'The control-seed-test-lint gate registry: this control\'s own entry commits a '
+      + 'deliberately fake, structurally-shaped credential as a seeded-defect fixture, proving '
+      + 'this guard can fire (see scripts/lint/control-seed-test-lint.mjs). Found by this guard '
+      + 'flagging its own registry entry on the first live scan after that spec was committed --'
+      + ' correct behavior for an un-allowlisted file, which is exactly what this entry fixes.',
   },
   {
     pattern: /(^|\/)tests\//,
