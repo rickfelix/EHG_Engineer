@@ -45,7 +45,8 @@ function makeCapturingDb() {
           return api;
         },
         order() { return api; },
-        limit() { return Promise.resolve({ data: [] }); },
+        // QF-20260816-023: production code now pages via .range(from, to) instead of .limit(n).
+        range() { return Promise.resolve({ data: [] }); },
       };
       return api;
     },
