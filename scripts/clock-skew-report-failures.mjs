@@ -1,4 +1,9 @@
 #!/usr/bin/env node
+// @wire-check-exempt: invoked exclusively from .github/workflows/unit-tier-clock-skew.yml
+// (GHA `run:` step) — never via a package.json script or a static JS import. Same architectural
+// shape as scripts/cron/chairman-hourly-heartbeat-backstop-sweep.mjs (harness/workflow-invoked,
+// no static reachability from any in-scope entry point).
+//
 // SD-LEO-INFRA-CLOCK-SKEW-CI-SWEEP-001 (FR-2). Parses a captured `vitest run --project unit`
 // log for FAIL lines, extracts distinct failing test file paths, and calls log-harness-bug.js
 // ONCE PER FILE (not one aggregated string) so findPossiblePriorFix's {symptom, file} lookup and
