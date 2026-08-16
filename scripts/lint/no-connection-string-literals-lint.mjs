@@ -23,6 +23,16 @@
 // in principle match adversarial text), so SELF_PATHS adds an explicit path exclusion as a
 // second, independent safeguard on top of the regex's own escaped-slash construction (see
 // URL_SHAPE_RE below) never containing a literal "://" run in this file's own source text.
+//
+// KNOWN LIMITATION: assertion B cannot catch a credential that is word-wrapped mid-token
+// across a line break, or constructed at runtime via string concatenation/decoding rather than
+// appearing as a literal contiguous token (verified during an adversarial review of an earlier
+// draft: recovering the real rotated credential from git history and testing both encodings
+// confirmed neither is split by whitespace in any of its actual occurrences, so this gap is
+// real but not observed to matter for the incident this guard exists to prevent). Assertion A
+// is a heuristic covering unknown-future secrets by SHAPE; it is not the security backstop
+// (assertion B is) and can be defeated by a credential built entirely from runtime expressions
+// with no literal shape at all -- e.g. `new URL(scheme + host).toString()`.
 import { execFileSync } from 'node:child_process';
 import { readFileSync } from 'node:fs';
 import { createHash } from 'node:crypto';
