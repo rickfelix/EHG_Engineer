@@ -2,22 +2,43 @@
 
 **Category**: Reference
 **Status**: Approved
-**Version**: 1.2.0
-**Author**: SD-LEO-INFRA-DEAD-VENTURE-USER-001, SD-LEO-FIX-CLOSE-ANON-VENTURE-001
-**Last Updated**: 2026-08-15
+**Version**: 1.3.0
+**Author**: SD-LEO-INFRA-DEAD-VENTURE-USER-001, SD-LEO-FIX-CLOSE-ANON-VENTURE-001, SD-ALTIFYAI-LEO-ORCH-SPRINT-2026-001-E1
+**Last Updated**: 2026-08-16
 **Tags**: rls, postgres, anon, feedback, ingress
 
 ## Read this first
 
-**No live caller is broken.** All five anon-path writers to `public.feedback` use the form that
-lands. This document describes a **latent trap**, not an outage — do not "fix" callers that are
-already correct, and do not restore the dropped `venture_user_select_feedback` policy (see
-[What not to do](#what-not-to-do)).
+**As of 2026-08-16T15:15Z, this section's original claim is FALSE for two of the five writers.**
+Both `database/chairman-gated/20260815_venture_user_feedback_ownership_rpc.sql` (drops
+`venture_user_insert_feedback`) and `database/chairman-gated/20260813_revoke_telegram_bot_insert_feedback.sql`
+(drops `telegram_bot_insert_feedback`) have **APPLIED** — live-confirmed via `pg_policies` on
+`public.feedback`: zero PERMISSIVE anon INSERT policies remain (only `service_role`-only
+`insert_feedback_policy` and the RESTRICTIVE `anon_feedback_ingress_bounds` survive). The only
+anon-reachable write path now is the `SECURITY DEFINER` RPC, `fn_submit_venture_user_feedback`.
+
+Both ownership migrations shipped with an explicit precondition — every caller still on the raw
+`venture_user_insert_feedback` INSERT path must cut over to the RPC *before* the migration applies
+(see [Related: venture_user_insert_feedback's existence-only gap closed](#related-venture_user_insert_feedbacks-existence-only-gap-closed-staged-sd-leo-fix-close-anon-venture-001)).
+That precondition was met for `altifyai` (`lib/feedback/submit.js`, PR
+`rickfelix/altifyai#24`, SD-ALTIFYAI-LEO-ORCH-SPRINT-2026-001-E1) but **was NOT met for `ehg`** —
+`ehg/src/integrations/feedback/feedbackDataAccess.ts`'s `submitFeedback()` still does a raw
+`.from('feedback').insert(...)` whose own doc-comment names the now-dead policy. **Every anon
+feedback submission from the `ehg` app is broken in production as of the apply timestamp above.**
+Flagged to the coordinator 2026-08-16 (signal 4b2f29cb, severity critical); not yet fixed as of
+this writing. Do not restore the dropped `venture_user_select_feedback` policy as a workaround for
+this or any other symptom (see [What not to do](#what-not-to-do)) — the fix is cutting `ehg` over
+to the RPC, the same swap `altifyai` already made.
 
 ## The contract
 
-Verdicts below are **measured** by `scripts/anon-write-contract-probe.mjs` against the live
-database, not derived from the documentation. Two of them contradict the intuitive reading.
+**Historical, for `venture_user_insert_feedback` specifically — that policy no longer exists (see
+[Read this first](#read-this-first)).** Verdicts below were **measured** by
+`scripts/anon-write-contract-probe.mjs` against the live database prior to 2026-08-16T15:15Z. They
+remain accurate as a description of *how Postgres RLS INSERT/RETURNING/ON CONFLICT semantics
+interact*, and apply again to any future permissive anon INSERT policy on this table shape — but
+today there is no such policy to probe. Re-run the probe once a new anon-writable policy exists to
+re-measure against it specifically.
 
 | Write form | Verdict | Cause |
 |---|---|---|
@@ -135,28 +156,35 @@ Distinct from the above, and easy to conflate — there are **two** rate limits 
 The remedy is filed as a separate chairman-gated SD rather than applied here: making a dormant limit
 suddenly bind would begin rejecting live traffic across four source types with existing volume.
 
-## Related: venture_user_insert_feedback's existence-only gap closed, staged (SD-LEO-FIX-CLOSE-ANON-VENTURE-001)
+## Related: venture_user_insert_feedback's existence-only gap closed, APPLIED (SD-LEO-FIX-CLOSE-ANON-VENTURE-001)
 
-The sentence below, in the telegram section, is accurate about that migration in isolation but is
-now superseded by a second, separately-staged migration: `venture_user_insert_feedback`'s
-`venture_exists_and_active()` check (existence of a real, active venture_id — no correlation to
-caller identity) is replaced, not merely narrowed, by
-`database/chairman-gated/20260815_venture_user_feedback_ownership_rpc.sql`
+The sentence below, in the telegram section, was accurate about that migration in isolation but is
+now superseded by a second migration: `venture_user_insert_feedback`'s `venture_exists_and_active()`
+check (existence of a real, active venture_id — no correlation to caller identity) is replaced, not
+merely narrowed, by `database/chairman-gated/20260815_venture_user_feedback_ownership_rpc.sql`
 (`fn_submit_venture_user_feedback`, a new `SECURITY DEFINER` RPC requiring a per-venture ingest
 secret, reusing `database/chairman-gated/20260812_venture_ingest_key_binding.sql`'s
-`_verify_venture_ingest_secret` unmodified). **STAGED, NOT APPLIED as of this writing** (chairman-
-gated, same convention as the telegram removal below) — the contract verdicts above remain accurate
-until it lands.
+`_verify_venture_ingest_secret` unmodified). **APPLIED 2026-08-16T15:15Z** (chairman-gated, same
+convention as the telegram removal below) — `venture_user_insert_feedback` is gone; the contract
+verdicts above are historical (see [The contract](#the-contract)).
 
-Sequencing is strict and security-load-bearing, not apply-order hygiene: this migration must apply
+Sequencing was strict and security-load-bearing, not apply-order hygiene: this migration had to apply
 AFTER `20260813_revoke_telegram_bot_insert_feedback.sql` (below), or `telegram_bot_insert_feedback`'s
-zero-constraint bypass survives as a live alternate anon-INSERT path for the same feedback_type
-LIKE 'user_%' shape this migration targets. There is also an APPLICATION precondition, found by
-adversarial review during EXEC, not by the migration's own logic: `ehg/src/integrations/feedback/
-feedbackDataAccess.ts` (the same file cited above under [What to do instead](#what-to-do-instead))
-still inserts through the raw `venture_user_insert_feedback` policy this migration drops — it must
-switch to calling `fn_submit_venture_user_feedback` (with the venture ingest secret) and ship BEFORE
-this migration applies, or that app's own feedback submissions break the moment the policy is gone.
+zero-constraint bypass would have survived as a live alternate anon-INSERT path for the same
+feedback_type LIKE 'user_%' shape this migration targets — live-confirmed both applied together.
+There was also an APPLICATION precondition, found by adversarial review during EXEC, not by the
+migration's own logic: `ehg/src/integrations/feedback/feedbackDataAccess.ts` (the same file cited
+above under [What to do instead](#what-to-do-instead)) still inserts through the raw
+`venture_user_insert_feedback` policy this migration drops — it needed to switch to calling
+`fn_submit_venture_user_feedback` (with the venture ingest secret) and ship BEFORE this migration
+applied, or that app's own feedback submissions would break the moment the policy is gone.
+**That precondition was NOT met.** `ehg`'s `submitFeedback()` was not cut over before this migration
+applied, and is confirmed broken in production as of the apply timestamp (see
+[Read this first](#read-this-first)). `altifyai` DID meet the precondition (`lib/feedback/submit.js`,
+PR `rickfelix/altifyai#24`) — its ingest key is not yet provisioned either (0 rows in
+`venture_ingest_keys` for that venture), but that is an inert, fails-closed deploy-time gap, not a
+broken-in-production one: `altifyai` has no live Cloudflare Workers deployment yet, so nothing is
+actually calling this path for that venture today.
 
 Residual, documented rather than silently accepted: for a BROWSER-exposed ingest secret (shipped in
 a public client bundle, as `feedbackDataAccess.ts` is), no client-held credential can stay secret
@@ -164,16 +192,17 @@ from whoever loads that page — this narrows cross-venture forgery to per-ventu
 callers, it does not eliminate targeted forgery against one specific venture. Full ownership closure
 holds only for a server-side secret holder.
 
-## Related: telegram_bot_insert_feedback removal staged
+## Related: telegram_bot_insert_feedback removal, APPLIED
 
 `telegram_bot_insert_feedback` (the fourth writer form implied by "five anon-path writers" above)
-has a **staged, not-yet-applied** removal: `database/chairman-gated/20260813_revoke_telegram_bot_insert_feedback.sql`
-(SD-FDBK-INFRA-MIGRATE-ANON-INGEST-001). It has `WITH CHECK (source_type = 'telegram')` only — no
-`venture_id` predicate, no content/rate bound of its own — the RESTRICTIVE `anon_feedback_ingress_bounds`
-policy above is what has always bounded its severity/category/rate, before and after this migration.
-The verdicts in [The contract](#the-contract) remain accurate **as measured today** — this table's
-policy set is unchanged until a chairman applies the migration. Post-apply, telegram-sourced writes
-route through `venture_user_insert_feedback` instead (requires a real `venture_id`) or are refused;
-re-run `scripts/anon-write-contract-probe.mjs --table public.feedback` to re-measure. This closes an
-unbounded carve-out, not venture-ID spoofing — `venture_user_insert_feedback`'s `venture_exists_and_active()`
-check remains existence-only, unchanged by this migration.
+has **APPLIED**: `database/chairman-gated/20260813_revoke_telegram_bot_insert_feedback.sql`
+(SD-FDBK-INFRA-MIGRATE-ANON-INGEST-001), live-confirmed alongside the ownership RPC migration
+2026-08-16T15:15Z. It had `WITH CHECK (source_type = 'telegram')` only — no `venture_id` predicate,
+no content/rate bound of its own — the RESTRICTIVE `anon_feedback_ingress_bounds` policy above is
+what has always bounded its severity/category/rate, before and after this migration. Telegram-sourced
+writes now route through `fn_submit_venture_user_feedback` (requires a valid per-venture ingest
+secret, per the ownership migration above) or are refused; re-run
+`scripts/anon-write-contract-probe.mjs --table public.feedback` to re-measure against the current
+policy set (see [The contract](#the-contract) for why that probe will now find nothing to measure).
+This closed an unbounded carve-out, not venture-ID spoofing on its own — but combined with the
+ownership migration above, ownership is now enforced for every remaining anon path.
