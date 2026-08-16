@@ -52,6 +52,113 @@ describe('Control 2 — isReadOnlyCommand (deny-by-default classifier)', () => {
     expect(isReadOnlyCommand(undefined)).toBe(false);
     expect(isReadOnlyCommand('')).toBe(false);
   });
+
+  // SD-LEO-INFRA-RCA-READONLY-GH-VERBS-001 (FR-1): gh CLI read verbs. Legitimate CI polling
+  // (gh run list/view, gh pr checks/list/view/diff) previously classified non-read-only —
+  // READ_ONLY_LEADING_RE had zero gh verbs — and accumulated toward the 3-strike RCA block.
+  it('FR-1: gh read verbs classify as read-only', () => {
+    for (const c of [
+      'gh run list', 'gh run view 123', 'gh run watch 9',
+      'gh pr list', 'gh pr view 45', 'gh pr diff 45', 'gh pr checks 45', 'gh pr status',
+      'gh workflow list', 'gh workflow view x',
+      'gh issue list', 'gh issue view 1',
+      'gh api repos/x/y',
+      'GH PR LIST', // case-insensitive
+      'gh  pr   list', // tolerant of extra whitespace
+    ]) {
+      expect(isReadOnlyCommand(c)).toBe(true);
+    }
+  });
+
+  // FR-1 AC-3 + FR-2: near-miss gh verbs (real gh subcommands, confirmed via `gh <noun> --help`,
+  // that are NOT read-only) must not slip through a too-broad pattern. Most consequential:
+  // 'gh pr checkout' is one edit away from the allowlisted 'gh pr checks'.
+  it('FR-1 AC-3: near-miss gh verbs (real but mutating/targeted subcommands) are NOT read-only', () => {
+    for (const c of [
+      'gh pr merge 1', 'gh pr create', 'gh pr close 1', 'gh pr comment 1 --body x',
+      'gh pr checkout 1', 'gh pr edit 1', 'gh pr review 1', 'gh pr ready 1',
+      'gh run rerun 1', 'gh run cancel 1', 'gh run download 1',
+      'gh workflow run deploy.yml', 'gh workflow disable x',
+      'gh issue create', 'gh issue close 1',
+      'gh prune something', // near-miss to the bare-verb family, not a gh subcommand at all
+    ]) {
+      expect(isReadOnlyCommand(c)).toBe(false);
+    }
+  });
+
+  // FR-1 AC-2 + TR-1: gh api's mutating-method exclusion must be a FULL-STRING check, not a
+  // next-token check — adversarially probed (.artifacts/tst-regex-probe.cjs, 40 cases). A
+  // next-token-only implementation passes the obvious cases but false-positives on all of these,
+  // including a real mutation with the flag placed after the path.
+  it('FR-1 AC-2 + TR-1: gh api mutating-method shapes are NOT read-only, including adversarial flag placement', () => {
+    for (const c of [
+      'gh api -X POST /x', 'gh api -XPOST /x',
+      'gh api --method DELETE /x', 'gh api --method delete /x',
+      'gh api -X post /x',
+      'gh api /repos/x/y -X POST', // flag AFTER the path (ordering)
+      'gh api repos/x --method PATCH',
+      'gh api graphql -f query=abc',
+      'gh api repos/x -F body=@f',
+      'gh api repos/x --field a=b', // long form of -f
+      'gh api repos/x --raw-field a=b', // long form of -F
+      'gh api repos/x --input f.json',
+    ]) {
+      expect(isReadOnlyCommand(c)).toBe(false);
+    }
+  });
+
+  // FR-2 AC-2: gh read verbs combined with chaining/redirection remain non-read-only — the
+  // pre-existing MUTATION_OPERATOR_RE guard applies identically to the new gh patterns.
+  it('FR-2 AC-2: gh read verbs combined with chaining/redirection remain non-read-only', () => {
+    for (const c of [
+      'gh run list && git push', 'gh pr view 1 > out.txt', 'gh pr list; echo done',
+      'gh run list | grep foo', 'gh pr view $(echo 1)',
+    ]) {
+      expect(isReadOnlyCommand(c)).toBe(false);
+    }
+  });
+
+  // FR-2 AC-3: every gh verb pattern added in FR-1 must correspond to a real, documented gh
+  // read-only subcommand — not a wildcard over-match. Reference list verified directly against
+  // `gh <noun> --help` output (gh CLI, 2026-08-16) — hardcoded here (not shelled out at test
+  // time) so the test stays deterministic and does not depend on `gh` being installed in CI.
+  it('FR-2 AC-3: parity — every added gh verb is a real, documented read-only subcommand', () => {
+    const REAL_GH_READONLY_SUBCOMMANDS = {
+      run: ['list', 'view', 'watch'],
+      pr: ['list', 'view', 'diff', 'checks', 'status'],
+      workflow: ['list', 'view'],
+      issue: ['list', 'view'],
+    };
+    // Real gh subcommands that exist but are deliberately NOT in the read-only set (mutating or
+    // targeted-write) — asserts the classifier does not accidentally cover them.
+    const REAL_GH_NON_READONLY_SUBCOMMANDS = {
+      run: ['cancel', 'delete', 'download', 'rerun'],
+      pr: ['checkout', 'close', 'comment', 'create', 'edit', 'lock', 'merge', 'ready', 'reopen', 'review', 'unlock', 'update-branch'],
+      workflow: ['disable', 'enable', 'run'],
+      issue: ['close', 'comment', 'create', 'delete', 'develop', 'edit', 'lock', 'pin', 'reopen', 'transfer', 'unlock', 'unpin'],
+    };
+    for (const [noun, verbs] of Object.entries(REAL_GH_READONLY_SUBCOMMANDS)) {
+      for (const verb of verbs) {
+        expect(isReadOnlyCommand(`gh ${noun} ${verb}`)).toBe(true);
+      }
+    }
+    for (const [noun, verbs] of Object.entries(REAL_GH_NON_READONLY_SUBCOMMANDS)) {
+      for (const verb of verbs) {
+        expect(isReadOnlyCommand(`gh ${noun} ${verb} arg`)).toBe(false);
+      }
+    }
+  });
+
+  // FR-1 AC-4 (regression guard, C2/TS-3): the pre-existing EXEMPT_PATTERNS allowlist entry for
+  // 'gh pr checks' (QF-20260704-784) must remain untouched and still cover piped forms that
+  // isReadOnlyCommand structurally cannot (MUTATION_OPERATOR_RE rejects the pipe) — proving FR-1
+  // did not regress the 2026-07-05 3-worker incident that entry was created to fix.
+  it('FR-1 AC-4 / TS-3: gh-pr-checks EXEMPT_PATTERNS entry still covers piped forms isReadOnlyCommand cannot', () => {
+    const { isExempt } = loadFresh();
+    const piped = 'gh pr checks 1 --repo x/y | head -3';
+    expect(isReadOnlyCommand(piped)).toBe(false); // classifier correctly cannot prove this read-only
+    expect(isExempt(piped)).toBe(true); // allowlist backstop still covers it
+  });
 });
 
 describe('TS-1 — succeeding poll (prior SAME command exit 0) never accumulates', () => {

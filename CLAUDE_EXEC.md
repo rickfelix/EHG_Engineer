@@ -1,8 +1,8 @@
-<!-- file_content_hash: 0eac6122d57cd225 -->
+<!-- file_content_hash: 4c02b1e901b8b55f -->
 <!-- GENERATED FILE - DO NOT EDIT DIRECTLY. Source of truth: leo_protocol_sections (DB). Regenerate: node scripts/generate-claude-md-from-db.js. Drift check: node scripts/check-claude-md-drift.cjs -->
 # CLAUDE_EXEC.md - EXEC Phase Operations
 
-**Generated**: 2026-08-16 8:21:11 PM
+**Generated**: 2026-08-16 12:09:32 PM
 **Protocol**: LEO 4.4.1
 **Purpose**: EXEC agent implementation requirements and testing
 **Effort**: xhigh (implementation + testing require maximum reasoning for agentic coding per Opus 4.8 guidance)
@@ -2019,6 +2019,25 @@ git log origin/main --oneline -10 -- <suspected-missing-path>
 If the merges show recent activity on the path in question, the "missing" code may simply be behind an unmerged/unpulled commit from another session — a routine staleness gap, not a real defect or an incomplete sibling SD.
 
 > Why: In a heavily-parallel multi-session fleet, merges land every few minutes. A 9-minute-stale worktree once made another session's in-flight PR (#5783, landing the exact function an SD's rationale depended on) look like a phantom-completed sibling SD, costing real investigation time chasing a non-issue. This pre-check is cheap (one `git fetch` + `git log`) relative to the cost of a false "code is missing" conclusion driving wrong downstream decisions (SD-LEO-FIX-PAYMENT-RAIL-RETRO-001).
+
+## Sanctioned Read-Only CI-Wait Pattern
+
+When you need to block-wait on CI (e.g. during a fix-CI-fix loop), use the built-in `gh` watch subcommands instead of a manual poll loop:
+
+```bash
+# Wait on a specific PR's checks
+gh pr checks <PR#> --repo <owner/repo> --watch
+
+# Wait on a specific workflow run
+gh run watch <run-id>
+```
+
+Both are read-only from the RCA retry-guard's perspective. `gh pr checks --watch` has been allowlist-exempt since QF-20260704-784 (it is not newly enabled by this section) and is now also covered by the classifier's `gh pr checks` pattern. `gh run watch` is covered by the classifier's `gh run watch` pattern; as a single blocking invocation it does not itself generate repeat signatures the way a manual poll loop does.
+
+**Do NOT** hand-roll a poll loop (`while ! gh pr checks ...; do sleep N; done`) — each individual invocation is a separate tool call, and while `gh pr checks` itself is exempt, the surrounding shell loop or a non-exempt variant of the same idea can still accumulate toward the 3-strike guard on unrelated command shapes.
+
+> Why: `gh run list`, `gh pr view`, and other legitimate CI-polling reads had zero coverage in the retry-guard's read-only classifier (`READ_ONLY_LEADING_RE`) before SD-LEO-INFRA-RCA-READONLY-GH-VERBS-001 — 13 narrow one-off allow-list patches landed in 8 weeks instead of a classifier-level fix (QF-20260704-784 for `gh pr checks` alone, after 3 workers tripped it in 90 minutes). Documenting the sanctioned watch-based pattern here, rather than leaving it as a hook source-code comment, means a worker learns it by instruction instead of by accident.
+
 
 ## Database Schema Constraints Reference
 
