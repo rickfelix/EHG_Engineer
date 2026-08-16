@@ -19,6 +19,7 @@ import {
   NOT_MEASURED_SCORE,
   ERRORED_SCORE,
 } from './fr-delivery-classifier.js';
+import { isParentOrchestrator } from '../../../../lib/handoff/parent-detection.js';
 
 /** The real validation body — separated so the fail-open wrapper below stays trivial. */
 async function runFrDeliveryTraceability(supabase, ctx) {
@@ -26,11 +27,15 @@ async function runFrDeliveryTraceability(supabase, ctx) {
   console.log('-'.repeat(50));
   const sd = ctx.sd || {};
   // Orchestrator PARENTS delegate FR delivery to their children — skip here.
-  const { data: children } = await supabase
-    .from('strategic_directives_v2')
-    .select('id')
-    .eq('parent_sd_id', sd.id);
-  if (children && children.length > 0) {
+  // QF-20260816-550: this used to be a hand-rolled, metadata-blind, error-blind
+  // query (a 4th detection path alongside the ones lib/handoff/parent-detection.js
+  // was written to unify) — a metadata-only parent (metadata.is_parent=true, DB
+  // children not yet materialized) or a transient query error both silently fell
+  // through to "not a parent" and ran FR classification directly. The canonical
+  // helper OR-merges metadata + DB signals and fails closed toward metadata on a
+  // query error (see parent-detection.js).
+  const isParent = await isParentOrchestrator(sd, supabase);
+  if (isParent) {
     // SD-FDBK-FIX-COMPLETION-FLAG-HARNESS-001: delegation is a NON-MEASUREMENT, not a delivery.
     // Reporting 100 here made "the children were checked" arithmetically identical to "this SD
     // verified every FR", which the composite mean cannot distinguish.
