@@ -34,7 +34,7 @@ const { buildRetentionAckPayload } = require('../lib/retention/retention-ack-mar
 const { PROMOTION_ACK_KEY, isPromotionAcked } = require('../lib/coordinator/promotion-ack.cjs'); // SIGNAL-ROUTER-AUTO-001 FR-8
 // SD-LEO-FIX-COORDINATOR-SWEEP-CLAIMED-001: shared dispatch-eligibility predicate (same one the
 // worker self_claim path uses) so CLAIM_FIX never re-affirms an orchestrator PARENT / dep-blocked SD.
-const { evaluateDispatchEligibility, classifyDispatchIneligibility, TEST_FIXTURE_KEY_RE } = require('../lib/fleet/claim-eligibility.cjs');
+const { evaluateDispatchEligibility, classifyDispatchIneligibility, classifyAllDispatchIneligibility, TEST_FIXTURE_KEY_RE } = require('../lib/fleet/claim-eligibility.cjs');
 // SD-LEO-FEAT-CLAIM-ASSIGNMENT-PATH-001: the sweep is the primary scheduled WORK_ASSIGNMENT producer
 // and inserts raw (it does NOT route through insertCoordinationRow), so the dispatch-side terminal
 // guard would never reach it. Call assertSdDispatchable here so the sweep also refuses to nudge a
@@ -586,6 +586,102 @@ async function getExecContextGuard() {
     _execContextGuardCache = await import('../lib/exec-context-guard.mjs');
   }
   return _execContextGuardCache;
+}
+
+/**
+ * QF-20260423-909 / SD-LEO-INFRA-STUCK100-COMPLETED-WRITE-FENCE-001: PURE resolver — given the
+ * candidate SD rows and their already-fetched sd_phase_handoffs rows (PLAN-TO-LEAD and/or
+ * LEAD-FINAL-APPROVAL, any order), returns the set of sd_keys with an ACCEPTED, LATEST handoff
+ * of each type. Handles the dual-keying directly: sd_phase_handoffs.sd_id holds EITHER a row's
+ * uuid OR its sd_key across eras AND today (measured live 2026-08-16: 161/1000 LEAD-FINAL-APPROVAL
+ * rows are sd_key-string-keyed, not historical debt) — a handoff row whose sd_id matches neither
+ * a candidate's id nor its sd_key is silently ignored (not this SD's row). "Latest" is by
+ * created_at, PER handoff_type PER logical sd_key (SD-LEO-INFRA-ORCH-PARENT-LIFECYCLE-LANES-001
+ * FR-5 precedent: "does ANY accepted row EVER exist" is the wrong question — an old, superseded
+ * accepted row must never permanently suppress a decision after the SD's state has since
+ * regressed). Caller is responsible for ordering `handoffRows` created_at DESC before calling.
+ *
+ * @param {Array<{id?: string, sd_key?: string}>} candidateSds
+ * @param {Array<{sd_id: string, handoff_type: string, status: string, created_at: string}>} handoffRows
+ * @returns {{acceptedPlanToLeadSet: Set<string>, acceptedLeadFinalSet: Set<string>}}
+ */
+function resolveAcceptedHandoffSets(candidateSds, handoffRows) {
+  const idToSdKey = new Map();
+  for (const sd of candidateSds) {
+    if (sd.id) idToSdKey.set(sd.id, sd.sd_key);
+    if (sd.sd_key) idToSdKey.set(sd.sd_key, sd.sd_key);
+  }
+  const latestBySdKeyAndType = new Map(); // key: `${handoff_type}::${sdKey}`
+  for (const h of handoffRows) {
+    const logicalKey = idToSdKey.get(h.sd_id);
+    if (!logicalKey) continue;
+    const compositeKey = h.handoff_type + '::' + logicalKey;
+    if (!latestBySdKeyAndType.has(compositeKey)) latestBySdKeyAndType.set(compositeKey, h); // caller pre-sorts created_at DESC -> first seen is latest
+  }
+  const acceptedPlanToLeadSet = new Set();
+  const acceptedLeadFinalSet = new Set();
+  for (const [compositeKey, h] of latestBySdKeyAndType) {
+    if (h.status !== 'accepted') continue;
+    const sdKey = compositeKey.slice(h.handoff_type.length + 2);
+    if (h.handoff_type === 'PLAN-TO-LEAD') acceptedPlanToLeadSet.add(sdKey);
+    else if (h.handoff_type === 'LEAD-FINAL-APPROVAL') acceptedLeadFinalSet.add(sdKey);
+  }
+  return { acceptedPlanToLeadSet, acceptedLeadFinalSet };
+}
+
+/**
+ * SD-LEO-INFRA-STUCK100-COMPLETED-WRITE-FENCE-001: the SOLE site in this file that may write
+ * status='completed' from the STUCK_100 stale-approval branch (any pending_approval row at
+ * 100% progress with a completion_date set). Previously a raw, unfenced UPDATE with no
+ * sd_type/orchestrator check and no LEAD-FINAL-APPROVAL witness -- safe only by COINCIDENCE
+ * (the two live orchestrator-parent rows at this shape both happen to have completion_date
+ * NULL). Fenced on two independent axes, both precomputed once per batch by the caller (never
+ * a per-SD round trip):
+ *   1. orchestratorSdKeys -- this row (or a row with children pointing at it) is an
+ *      orchestrator parent. Route to the parent-completion path (claim-orchestrator-for-rollup.mjs
+ *      / the LANES-001 outcome) instead -- never a raw write here.
+ *   2. acceptedLeadFinalSet -- an ACCEPTED LEAD-FINAL-APPROVAL handoff exists for this SD
+ *      (dual-keyed: sd_phase_handoffs.sd_id holds uuid- or sd_key-style values, both live
+ *      today, not just historical). Absent => STUCK_100_NO_LFA_WITNESS, no write, surfaced via
+ *      the returned line (this sweep has no interactive session to /signal from; actions[] IS
+ *      the coordinator-visible channel, same convention as the accepted-handoff override guard
+ *      immediately below).
+ * Preserves the exact prior write shape (and prior action-log wording) for the genuinely
+ * eligible case, so accepted, non-orchestrator completions behave byte-identically to before.
+ *
+ * @returns {Promise<{written: boolean, line: string|null, error?: object}>}
+ */
+async function completeStuck100Sd(supabaseClient, sd, { orchestratorSdKeys, acceptedLeadFinalSet }) {
+  if (orchestratorSdKeys.has(sd.sd_key)) {
+    return {
+      written: false,
+      line: 'QA: skipped STUCK_100 completion on ' + sd.sd_key
+        + ' — orchestrator_parent (route to parent-completion path, never a raw write)',
+    };
+  }
+  if (!acceptedLeadFinalSet.has(sd.sd_key)) {
+    return {
+      written: false,
+      line: 'QA: skipped STUCK_100 completion on ' + sd.sd_key
+        + ' — STUCK_100_NO_LFA_WITNESS (no accepted LEAD-FINAL-APPROVAL handoff found)',
+    };
+  }
+  const { error } = await supabaseClient
+    .from('strategic_directives_v2')
+    .update({
+      status: 'completed',
+      claiming_session_id: null,
+      active_session_id: null, // FR-1: co-clear (no claude_sessions flip here → trigger won't fire)
+      is_working_on: false,
+    })
+    .eq('sd_key', sd.sd_key)
+    .select();
+
+  if (error) return { written: false, line: null, error };
+  return {
+    written: true,
+    line: 'QA: completed ' + sd.sd_key + ' — was stuck at 100%/pending_approval with completion_date',
+  };
 }
 
 /**
@@ -1546,28 +1642,45 @@ async function runQaFixtureScan(ctx) {
   // 476+ historically-accepted rows have accepted_at IS NULL) -- only THAT verdict decides whether
   // "awaiting LEAD-FINAL-APPROVAL" is still true.
   const stuckApprovalIds = stuckApproval.flatMap(sd => [sd.id, sd.sd_key].filter(Boolean));
+  // SD-LEO-INFRA-STUCK100-COMPLETED-WRITE-FENCE-001: an ACCEPTED LEAD-FINAL-APPROVAL row is the
+  // witness the STUCK_100 completion fence below requires. NOT UUID-only, despite that being this
+  // SD's own original assumption -- measured live 2026-08-16: 161/1000 LEAD-FINAL-APPROVAL rows
+  // are sd_key-STRING-keyed, including one from a completion earlier the SAME SESSION this fence
+  // was authored in (SD-LEARN-FIX-ADDRESS-PATTERN-LEARN-142) -- an ACTIVE code path, not resolved
+  // historical debt. A UUID-only witness check would have wrongly STUCK_100_NO_LFA_WITNESS every
+  // legitimately-approved SD that happens to hit that path. Same dual-key + latest-per-SD
+  // resolution the PLAN-TO-LEAD guard already used (see resolveAcceptedHandoffSets): the ORIGINAL
+  // query-shape risk ("does ANY accepted row EVER exist") applies identically here.
   let acceptedPlanToLeadSet = new Set();
+  let acceptedLeadFinalSet = new Set();
   if (stuckApprovalIds.length > 0) {
-    const { data: p2lHandoffs } = await supabase
+    const { data: handoffs } = await supabase
       .from('sd_phase_handoffs')
-      .select('sd_id, status, created_at')
-      .eq('handoff_type', 'PLAN-TO-LEAD')
+      .select('sd_id, handoff_type, status, created_at')
+      .in('handoff_type', ['PLAN-TO-LEAD', 'LEAD-FINAL-APPROVAL'])
       .in('sd_id', stuckApprovalIds)
       .order('created_at', { ascending: false });
-    // Latest-per-SD, resolving the dual-keying: a single logical SD may have handoff rows under
-    // EITHER its uuid or its sd_key across eras, so group by the LOGICAL sd_key, not raw h.sd_id.
-    const idToSdKey = new Map();
+    ({ acceptedPlanToLeadSet, acceptedLeadFinalSet } = resolveAcceptedHandoffSets(stuckApproval, handoffs || []));
+  }
+
+  // SD-LEO-INFRA-STUCK100-COMPLETED-WRITE-FENCE-001: orchestrator-parent detection for the
+  // STUCK_100 completion fence below. TWO independent axes, because sd_type can be wrong or
+  // missing but a real child row cannot lie: (1) the SHARED classifier's orchestrator_parent
+  // verdict (lib/fleet/claim-eligibility.cjs -- one representation, not a hand-rolled
+  // `sd_type === 'orchestrator'` check re-derived here); (2) a live children lookup
+  // (parent_sd_id), defense-in-depth against an untyped/mistyped parent row.
+  const orchestratorSdKeys = new Set(
+    stuckApproval.filter(sd => classifyAllDispatchIneligibility(sd).includes('orchestrator_parent')).map(sd => sd.sd_key),
+  );
+  const parentIdsToCheck = stuckApproval.map(sd => sd.id).filter(Boolean);
+  if (parentIdsToCheck.length > 0) {
+    const { data: childRows } = await supabase
+      .from('strategic_directives_v2')
+      .select('parent_sd_id')
+      .in('parent_sd_id', parentIdsToCheck);
+    const parentIdsWithChildren = new Set((childRows || []).map(r => r.parent_sd_id).filter(Boolean));
     for (const sd of stuckApproval) {
-      if (sd.id) idToSdKey.set(sd.id, sd.sd_key);
-      if (sd.sd_key) idToSdKey.set(sd.sd_key, sd.sd_key);
-    }
-    const latestBySdKey = new Map();
-    for (const h of (p2lHandoffs || [])) {
-      const logicalKey = idToSdKey.get(h.sd_id);
-      if (logicalKey && !latestBySdKey.has(logicalKey)) latestBySdKey.set(logicalKey, h); // rows arrive created_at DESC -> first seen is latest
-    }
-    for (const [sdKey, h] of latestBySdKey) {
-      if (h.status === 'accepted') acceptedPlanToLeadSet.add(sdKey);
+      if (sd.id && parentIdsWithChildren.has(sd.id)) orchestratorSdKeys.add(sd.sd_key);
     }
   }
 
@@ -1580,21 +1693,9 @@ async function runQaFixtureScan(ctx) {
     }
     // FIX #1: STUCK_100 — if at 100% with completion_date, mark completed instead of resetting
     if (sd.progress_percentage >= 100 && sd.completion_date) {
-      const { error } = await supabase
-        .from('strategic_directives_v2')
-        .update({
-          status: 'completed',
-          claiming_session_id: null,
-          active_session_id: null, // FR-1: co-clear (no claude_sessions flip here → trigger won't fire)
-          is_working_on: false
-        })
-        .eq('sd_key', sd.sd_key)
-        .select();
-
-      if (!error) {
-        applied.completed++; // QF-20260727-363
-        actions.push('QA: completed ' + sd.sd_key + ' — was stuck at 100%/pending_approval with completion_date');
-      }
+      const result = await completeStuck100Sd(supabase, sd, { orchestratorSdKeys, acceptedLeadFinalSet });
+      if (result.written) applied.completed++; // QF-20260727-363
+      if (result.line) actions.push(result.line);
     } else {
       // SD-FDBK-INFRA-EXEC-CONTEXT-GUARD-001 (FR-3, AC-4/AC-5): generalized
       // accepted-handoff override guard for the pending_approval reset path.
@@ -4210,6 +4311,11 @@ module.exports.anyClaudeProcessRunning = anyClaudeProcessRunning;
 // touching the live ESM module). Seeding the cache is exactly what the first real call
 // does — no production behavior change.
 module.exports.isSweepResetAllowed = isSweepResetAllowed;
+// SD-LEO-INFRA-STUCK100-COMPLETED-WRITE-FENCE-001: the fenced STUCK_100 completion write —
+// exported so unit tests can drive it directly with a fake supabase client and fixture sets,
+// without running the whole sweep.
+module.exports.completeStuck100Sd = completeStuck100Sd;
+module.exports.resolveAcceptedHandoffSets = resolveAcceptedHandoffSets;
 module.exports.isDormancyWatchdogEnabled = isDormancyWatchdogEnabled; // SD-FDBK-ENH-CONFIRMED-LIVE-TODAY-001
 module.exports.filterDormantByPidLiveness = filterDormantByPidLiveness; // SD-LEO-INFRA-FIX-RESIDUAL-PROCESS-001
 module.exports.isHeadlessZombie = isHeadlessZombie; // QF-20260704-081
