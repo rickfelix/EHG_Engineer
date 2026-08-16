@@ -1341,34 +1341,56 @@ async function main() {
 }
 
 /**
- * FR-4 (SD-LEO-INFRA-ROLE-SESSION-HANDOFF-PROTOCOL-001-C): on an Adam (re)register/restart, re-target
- * UNREAD session_coordination rows destined for an OLD Adam session to the NEW Adam session, so a
- * restarted Adam receives replies/directives the prior session never consumed. Mirrors the
- * coordinator broadcast-drain (lib/coordinator/resolve.cjs:233-238). IDEMPOTENT: gates on
- * read_at IS NULL and re-targets old->new, so a re-run matches nothing (no loop, no duplicate).
- * FAIL-OPEN: returns { moved:0, error? } on any error, never throws. Invoked unconditionally by
- * adam-register's registerAdam() whenever a stale prior Adam was retired.
+ * FR-4 (SD-LEO-INFRA-ROLE-SESSION-HANDOFF-PROTOCOL-001-C), widened by
+ * SD-LEO-INFRA-ADAM-HANDOFF-MAIL-FORWARDING-001 (FR-1-FR-3): on an Adam (re)register/restart,
+ * re-target every UNACKED, non-handler-owned session_coordination row destined for an OLD Adam
+ * session to the NEW Adam session, so a restarted Adam receives replies/directives the prior
+ * session never consumed — including rows that were READ (auto-stamped or genuine) but never
+ * ACKED, and rows older than the old 24h window. IDEMPOTENT: gates on acknowledged_at IS NULL
+ * (an acked row never moves) and re-targets old->new via the shared FR-1 predicate
+ * (applySuccessorInheritFilters), so a re-run over the same rows matches nothing. Stamps
+ * payload.retargeted_from/retargeted_at on every moved row. FAIL-OPEN: returns
+ * { moved:0, byKind:{}, error? } on any error, never throws.
  * @param {object} supabase
  * @param {{ newSessionId: string, oldSessionIds: string[] }} p
- * @returns {Promise<{ moved: number, error?: string }>}
+ * @returns {Promise<{ moved: number, byKind: Object<string,number>, error?: string }>}
  */
 async function drainAdamOutbound(supabase, { newSessionId, oldSessionIds } = {}) {
-  if (!supabase || !newSessionId || !Array.isArray(oldSessionIds)) return { moved: 0 };
+  if (!supabase || !newSessionId || !Array.isArray(oldSessionIds)) return { moved: 0, byKind: {} };
   const olds = oldSessionIds.filter((s) => typeof s === 'string' && s && s !== newSessionId);
-  if (!olds.length) return { moved: 0 };
+  if (!olds.length) return { moved: 0, byKind: {} };
+  const { applySuccessorInheritFilters } = require('../lib/coordinator/adam-identity.cjs');
   try {
-    const cutoff = new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString();
-    const { data, error } = await supabase
-      .from('session_coordination')
-      .update({ target_session: newSessionId })
-      .in('target_session', olds)
-      .is('read_at', null)            // only UNREAD rows → idempotent (consumed rows never re-move)
-      .gte('created_at', cutoff)
-      .select('id');
-    if (error) return { moved: 0, error: error.message };
-    return { moved: Array.isArray(data) ? data.length : 0 };
+    const selectQuery = applySuccessorInheritFilters(
+      supabase.from('session_coordination').select('id, payload, target_session').in('target_session', olds),
+    );
+    const { data: candidates, error: selectError } = await selectQuery;
+    if (selectError) return { moved: 0, byKind: {}, error: selectError.message };
+    if (!Array.isArray(candidates) || !candidates.length) return { moved: 0, byKind: {} };
+    const nowIso = new Date().toISOString();
+    let moved = 0;
+    const byKind = {};
+    for (const row of candidates) {
+      const { data, error } = await supabase
+        .from('session_coordination')
+        .update({
+          target_session: newSessionId,
+          payload: { ...(row.payload || {}), retargeted_from: row.target_session, retargeted_at: nowIso },
+        })
+        .eq('id', row.id)
+        .is('acknowledged_at', null)
+        .eq('target_session', row.target_session)
+        .select('id');
+      if (error) return { moved, byKind, error: error.message };
+      if (Array.isArray(data) && data.length) {
+        moved += 1;
+        const kind = (row.payload && row.payload.kind) || 'unknown';
+        byKind[kind] = (byKind[kind] || 0) + 1;
+      }
+    }
+    return { moved, byKind };
   } catch (e) {
-    return { moved: 0, error: e && e.message ? e.message : String(e) };
+    return { moved: 0, byKind: {}, error: e && e.message ? e.message : String(e) };
   }
 }
 

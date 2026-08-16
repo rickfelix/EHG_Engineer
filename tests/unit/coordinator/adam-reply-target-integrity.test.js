@@ -9,38 +9,52 @@
  */
 import { describe, it, expect } from 'vitest';
 import adamIdentity from '../../../lib/coordinator/adam-identity.cjs';
+import { createFixtureSupabase } from '../../helpers/postgrest-fixture-store.js';
 
 const { resolveAdamReplyTarget, retargetStaleAdamInbound, verifyReplyDelivered } = adamIdentity;
 
-// Minimal chainable supabase mock. claude_sessions reads return `freshAdams`; session_coordination
-// UPDATE...select('id') returns `retargetRows`; maybeSingle returns `verifyRow`.
-function makeSb({ freshAdams = [], retargetRows = [], retargetError = null, verifyRow = null } = {}) {
+// Minimal chainable supabase mock. claude_sessions reads return `freshAdams` (the election query,
+// unfiltered pagination) OR, when SD-LEO-INFRA-ADAM-HANDOFF-MAIL-FORWARDING-001's
+// resolveRetiredAdamSeats issues its role-filtered query, the ids in `retiredSeats`.
+// session_coordination is routed through the genuinely-filtering postgrest-fixture-store
+// (retargetStaleAdamInbound now selects real rows, not a bulk-update patch) so `retargetRows`
+// carries real row shape (target_session/acknowledged_at/payload/created_at), not just `{id}`.
+// maybeSingle returns `verifyRow`.
+function makeSb({ freshAdams = [], retiredSeats = [], retargetRows = [], retargetError = null, verifyRow = null } = {}) {
   const calls = { updates: [] };
+  const seedRows = retargetRows.map((r) => ({ ...r }));
+  if (verifyRow) seedRows.push({ ...verifyRow });
+  const scFixture = createFixtureSupabase({ session_coordination: seedRows });
   const sb = {
     _calls: calls,
+    table: (name) => scFixture.table(name),
     from(table) {
-      let isUpdate = false;
+      if (table === 'session_coordination') {
+        if (retargetError) scFixture.setError('session_coordination', retargetError.message);
+        const inner = scFixture.from(table);
+        const wrapped = Object.create(inner);
+        wrapped.update = (patch) => { calls.updates.push({ table, patch }); return inner.update(patch); };
+        return wrapped;
+      }
+      let roleFilter;
       const builder = {
         select() { return builder; },
         gte() { return builder; },
         filter() { return builder; },
-        eq() { return builder; },
+        eq(col, val) { if (col === 'metadata->>role') roleFilter = val; return builder; },
         is() { return builder; },
-        // FR-6 (count-truncation discipline): fetchFreshAdams paginates via fetchAllPaginated,
-        // whose pages end in .order(...).range(from, to) — slice so the short-page loop exits.
+        // FR-6 (count-truncation discipline): fetchFreshAdams / resolveRetiredAdamSeats paginate
+        // via fetchAllPaginated, whose pages end in .order(...).range(from, to).
         order() { return builder; },
         range(from, to) {
-          const rows = table === 'claude_sessions' ? freshAdams : [];
+          const rows = roleFilter !== undefined
+            ? retiredSeats.map((id) => ({ session_id: id }))
+            : freshAdams;
           return Promise.resolve({ data: rows.slice(from, to + 1), error: null });
         },
-        update(patch) { isUpdate = true; calls.updates.push({ table, patch }); return builder; },
         maybeSingle() { return Promise.resolve({ data: verifyRow, error: null }); },
         then(resolve, reject) {
-          let result;
-          if (table === 'claude_sessions') result = { data: freshAdams, error: null };
-          else if (table === 'session_coordination') result = isUpdate ? { data: retargetRows, error: retargetError } : { data: [], error: null };
-          else result = { data: [], error: null };
-          return Promise.resolve(result).then(resolve, reject);
+          return Promise.resolve({ data: freshAdams, error: null }).then(resolve, reject);
         },
       };
       return builder;
@@ -76,34 +90,54 @@ describe('FR-1 resolveAdamReplyTarget — re-route to the live Adam', () => {
   });
 });
 
+const recent = (minAgo = 60) => new Date(Date.now() - minAgo * 60_000).toISOString();
+const retargetRow = (id, overrides = {}) => ({
+  id, target_session: 'stale', acknowledged_at: null, payload: { kind: 'coordinator_reply' }, created_at: recent(), ...overrides,
+});
+
 describe('FR-2 retargetStaleAdamInbound — recover stuck unread inbound', () => {
   it('recovers unread coordinator rows from the stale originator and reports the count', async () => {
-    const sb = makeSb({ retargetRows: [{ id: 'm1' }, { id: 'm2' }] });
+    const sb = makeSb({ retiredSeats: ['stale'], retargetRows: [retargetRow('m1'), retargetRow('m2')] });
     const r = await retargetStaleAdamInbound(sb, { staleOriginator: 'stale', liveAdam: 'live' });
     expect(r.retargeted).toBe(2);
     expect(r.error).toBe(null);
   });
 
   it('is a no-op when originator === live Adam (nothing to recover)', async () => {
-    const sb = makeSb({ retargetRows: [{ id: 'm1' }] });
+    const sb = makeSb({ retiredSeats: ['x'], retargetRows: [retargetRow('m1', { target_session: 'x' })] });
     const r = await retargetStaleAdamInbound(sb, { staleOriginator: 'x', liveAdam: 'x' });
     expect(r.retargeted).toBe(0);
   });
 
+  // SD-LEO-INFRA-ADAM-HANDOFF-MAIL-FORWARDING-001 (FR-4): staleOriginator must now be
+  // independently VERIFIED as a retired seat — a plausible-looking originator that resolveRetiredAdamSeats
+  // does not recognize moves nothing, even though rows exist and are otherwise eligible.
+  it('an UNVERIFIED staleOriginator (not in the retired-seat set) moves 0 — the blast-radius regression', async () => {
+    const sb = makeSb({ retiredSeats: [], retargetRows: [retargetRow('m1')] });
+    const r = await retargetStaleAdamInbound(sb, { staleOriginator: 'stale', liveAdam: 'live' });
+    expect(r.retargeted).toBe(0);
+    expect(r.error).toBe(null);
+  });
+
   it('surfaces a recovery error (never silent)', async () => {
-    const sb = makeSb({ retargetError: { message: 'db down' } });
+    const sb = makeSb({ retiredSeats: ['stale'], retargetError: { message: 'db down' } });
     const r = await retargetStaleAdamInbound(sb, { staleOriginator: 'stale', liveAdam: 'live' });
     expect(r.retargeted).toBe(0);
     expect(r.error).toBe('db down');
   });
 
-  // SD-LEO-INFRA-COORDINATION-LANE-DELIVERY-CONTRACT-001 FR-3: regression pin, not a fix — one
-  // of the 4 already-correct re-target paths RISK identified.
-  it('(FR-3 pin) the update patch is ONLY {target_session} — never sender_session/created_at', async () => {
-    const sb = makeSb({ retargetRows: [{ id: 'm1' }] });
+  // SD-LEO-INFRA-COORDINATION-LANE-DELIVERY-CONTRACT-001 FR-3, updated by
+  // SD-LEO-INFRA-ADAM-HANDOFF-MAIL-FORWARDING-001 (FR-4/AC-16): the patch now also stamps
+  // payload.retargeted_from/retargeted_at (this mover previously carried no such breadcrumb) —
+  // still never sender_session/created_at.
+  it('(FR-3/AC-16 pin) the update patch is {target_session, payload} with retargeted_from/at stamped — never sender_session/created_at', async () => {
+    const sb = makeSb({ retiredSeats: ['stale'], retargetRows: [retargetRow('m1')] });
     await retargetStaleAdamInbound(sb, { staleOriginator: 'stale', liveAdam: 'live' });
     const patch = sb._calls.updates[0].patch;
-    expect(patch).toEqual({ target_session: 'live' });
+    expect(Object.keys(patch).sort()).toEqual(['payload', 'target_session']);
+    expect(patch.target_session).toBe('live');
+    expect(patch.payload.retargeted_from).toBe('stale');
+    expect(patch.payload.retargeted_at).toBeTruthy();
   });
 });
 
