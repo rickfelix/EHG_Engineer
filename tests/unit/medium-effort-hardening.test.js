@@ -290,6 +290,54 @@ describe('FR-1: HandoffRecorder.recordFailure routing', async () => {
   });
 });
 
+// ── QF-20260816-107: recordSystemError routing (parity with recordFailure) ──
+describe('QF-20260816-107: HandoffRecorder.recordSystemError routing', async () => {
+  const { HandoffRecorder } = await import('../../scripts/modules/handoff/recording/HandoffRecorder.js');
+
+  function makeRecorder() {
+    const inserts = [];
+    const supabase = {
+      from: (table) => ({
+        insert: (row) => {
+          inserts.push({ table, row });
+          return { select: () => Promise.resolve({ data: [row], error: null }) };
+        },
+      }),
+      rpc: () => Promise.resolve({ data: null, error: null }),
+    };
+    const recorder = new HandoffRecorder(supabase, {
+      contentBuilder: { buildRejection: () => ({ executive_summary: 'r' }) },
+      validationOrchestrator: { preValidateData: async () => ({ valid: true, errors: [] }) },
+    });
+    recorder._resolveToUUID = async () => '00000000-0000-0000-0000-000000000001';
+    recorder._logGovernanceAudit = async () => {};
+    return { recorder, inserts };
+  }
+
+  it('completion action (LEAD-FINAL-APPROVAL) system error -> leo_handoff_executions, NOT sd_phase_handoffs', async () => {
+    const { recorder, inserts } = makeRecorder();
+    const id = await recorder.recordSystemError('LEAD-FINAL-APPROVAL', 'SD-T-001', 'Database connection lost');
+    expect(id).toBeTruthy();
+    const tables = inserts.map((i) => i.table);
+    expect(tables).toContain('leo_handoff_executions');
+    expect(tables).not.toContain('sd_phase_handoffs');
+    const row = inserts.find((i) => i.table === 'leo_handoff_executions').row;
+    expect(row.status).toBe('rejected');
+    expect(row.rejection_reason).toBe('Database connection lost');
+  });
+
+  it('phase transition (PLAN-TO-EXEC) system error -> sd_phase_handoffs unchanged', async () => {
+    const { recorder, inserts } = makeRecorder();
+    await recorder.recordSystemError('PLAN-TO-EXEC', 'SD-T-001', 'Database connection lost');
+    const tables = inserts.map((i) => i.table);
+    expect(tables).toContain('sd_phase_handoffs');
+    expect(tables).not.toContain('leo_handoff_executions');
+    const row = inserts.find((i) => i.table === 'sd_phase_handoffs').row;
+    expect(row.status).toBe('failed');
+    expect(row.rejection_reason).toBe('Database connection lost');
+  });
+});
+
 // ── FR-4: track-model-usage token flags parse (light contract pin) ───────────
 describe('FR-4: track-model-usage token capture', () => {
   it('source carries the explicit-token path, transcript fallback, and fail-soft', async () => {
