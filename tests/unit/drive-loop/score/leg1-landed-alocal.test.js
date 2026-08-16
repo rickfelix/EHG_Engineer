@@ -22,7 +22,8 @@
  *   NEVER THROWS and NEVER scores an empty/errored corpus as "0 landed".
  */
 
-import { describe, it, expect } from 'vitest';
+import { describe, it, expect, beforeAll } from 'vitest';
+import { execSync } from 'node:child_process';
 import {
   isSdLandedInMainHistory,
   fetchMergeSubjects,
@@ -367,6 +368,23 @@ describe('[BUFFER SAFETY canary, amendment dc828e43] the REAL production wiring 
   // LANDED_LOG_MAX_BUFFER_BYTES). This test runs the EXACT same call the CLI wiring makes — real
   // git, real repo, real hardened runner — so a future corpus-size regression (or a maxBuffer
   // value that drifts out of sync with reality) fails loud in CI, not silently in production.
+  //
+  // CI-CHECKOUT GOTCHA (found live, PR #7069, unit-tier.yml): a pull_request-triggered job checks
+  // out the PR's merge ref with fetch-depth:0 (full HISTORY), but that does NOT create a LOCAL
+  // branch literally named `main` — only `origin/main`. landedLogArgs() deliberately hardcodes the
+  // literal ref `main` (never a caller-controlled ref — see its own docs), which is always true in
+  // the REAL production job (drive-report-cron.yml checks out main directly), but is NOT guaranteed
+  // in every CI job that happens to run this test suite. Ensuring `main` resolves locally is an
+  // environment fix scoped to THIS TEST ONLY — it does not touch landedLogArgs's fixed-ref
+  // contract, which is exactly what this canary exists to exercise unmodified.
+  beforeAll(() => {
+    try {
+      execSync('git rev-parse --verify --quiet main', { cwd: process.cwd(), stdio: 'ignore' });
+    } catch {
+      execSync('git branch main origin/main', { cwd: process.cwd(), stdio: 'ignore' });
+    }
+  });
+
   it('runHardenedGit(landedLogArgs(), {maxBuffer: LANDED_LOG_MAX_BUFFER_BYTES}) succeeds, with healthy margin below the budget', () => {
     const raw = runHardenedGit(landedLogArgs(), {
       cwd: process.cwd(), maxBuffer: LANDED_LOG_MAX_BUFFER_BYTES, timeout: 30000,
