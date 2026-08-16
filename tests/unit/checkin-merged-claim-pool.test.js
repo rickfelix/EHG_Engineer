@@ -56,11 +56,16 @@ describe('merged pool construction invariants (source-pinned)', () => {
     // The merged tier exists and the old sequential 6.25 call inside runCheckin is gone.
     expect(src).toMatch(/ONE merged SD pool/);
     expect(src).toMatch(/sortByDispatchRank\(sb, merged, \(x\) => x\.key\)/);
-    // selfClaimDraftSd survives as an exported wrapper but runCheckin no longer calls it.
-    const runCheckinBody = src;
-    expect(runCheckinBody).not.toMatch(/selfClaimDraftSd\(/);
     // Dedup: baselined entry wins when both pools surface one SD (seen-set built baselined-first).
-    expect(runCheckinBody).toMatch(/seen\.has\(c\.sd_id\)/);
-    expect(runCheckinBody).toMatch(/seen\.has\(d\.sd_key\)/);
+    expect(src).toMatch(/seen\.has\(c\.sd_id\)/);
+    expect(src).toMatch(/seen\.has\(d\.sd_key\)/);
+    // SD-LEO-INFRA-SELF-CLAIM-TIER-ENFORCEMENT-001: this used to assert "runCheckin no longer
+    // calls selfClaimDraftSd" by checking THIS file's text (mis-scoped -- src above is
+    // merged-pool-self-claim.cjs, not worker-checkin.cjs, so it never actually verified
+    // runCheckin's own body). selfClaimDraftSd is now confirmed removed entirely (dead code,
+    // excluded from CHECKIN_HELPERS, zero live call sites since the 2026-07-09 step-pipeline
+    // refactor) -- pin the REAL file so a future re-add of the definition is caught here.
+    const workerCheckinSrc = readFileSync(new URL('../../scripts/worker-checkin.cjs', import.meta.url), 'utf8');
+    expect(workerCheckinSrc).not.toMatch(/function selfClaimDraftSd/);
   });
 });
