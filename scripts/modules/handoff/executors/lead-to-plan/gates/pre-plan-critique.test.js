@@ -217,7 +217,11 @@ describe('could-not-check honesty (FR-3/FR-4)', () => {
     expect(supabase._inserted[0].overall_severity).toBe('warn');
   });
 
-  it('reports the KNOWN LIMITATION loudly when the constraint refuses could_not_check (23514)', async () => {
+  it('reports a CHECK constraint violation loudly, distinct from a generic insert failure (23514)', async () => {
+    // The 20260810 migration widening this constraint to permit could_not_check is confirmed live
+    // (verified 2026-08-16) — the old could_not_check-specific "KNOWN LIMITATION" framing (TR-4)
+    // is stale and removed. This pins the current, general behavior: ANY 23514 gets its own named
+    // branch, distinct from the generic 'plan_critiques insert failed' message.
     critiquePlanProposal.mockResolvedValue({
       findings: [], overall_severity: 'could_not_check', model_used: null, token_usage: null,
       fallback_reason: 'LLM timeout',
@@ -226,8 +230,20 @@ describe('could-not-check honesty (FR-3/FR-4)', () => {
     const result = await validatePrePlanCritique({ sd: SD, supabase });
     expect(result.pass).toBe(true);
     expect(result.score).toBe(50);
-    expect(result.warnings.join(' ')).toMatch(/20260810_plan_critiques_could_not_check\.sql/);
+    expect(result.warnings.join(' ')).toMatch(/CHECK constraint violation/);
     expect(result.warnings.join(' ')).toMatch(/NOT persisted/);
+  });
+
+  it('reports a SCHEMA MISSING error loudly, distinct from a generic insert failure (FR-6: PGRST204/42703)', async () => {
+    critiquePlanProposal.mockResolvedValue({
+      findings: [], overall_severity: 'pass', model_used: 'test-model', token_usage: null, truncated: null,
+    });
+    const supabase = makeSupabase({ insertError: { code: 'PGRST204', message: "Could not find the 'content_hash' column of 'plan_critiques' in the schema cache" } });
+    const result = await validatePrePlanCritique({ sd: SD, supabase });
+    expect(result.pass).toBe(true);
+    expect(result.warnings.join(' ')).toMatch(/SCHEMA MISSING/);
+    expect(result.warnings.join(' ')).toMatch(/shipped ahead of its migration/);
+    expect(result.warnings.join(' ')).not.toMatch(/plan_critiques insert failed:/);
   });
 });
 

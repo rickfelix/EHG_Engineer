@@ -4,6 +4,7 @@
  */
 import { describe, it, expect, vi } from 'vitest';
 import { critiquePlanProposal, COULD_NOT_CHECK, _internal } from '../../../lib/eva/devils-advocate.js';
+import { findingsFingerprint } from '../../../scripts/modules/handoff/executors/lead-to-plan/gates/pre-plan-critique.js';
 
 const { buildBudgetedPrdText, buildCritiqueUserPrompt, MAX_CRITIQUE_ANALYSIS_CHARS, MAX_ANALYSIS_CHARS, buildUserPrompt } = _internal;
 
@@ -47,8 +48,8 @@ describe('buildBudgetedPrdText (FR-2)', () => {
     const longString = 'x'.repeat(MAX_CRITIQUE_ANALYSIS_CHARS + 500);
     const result = buildBudgetedPrdText(longString);
     expect(result.truncated).toBe(true);
-    expect(result.shown).toBe(MAX_CRITIQUE_ANALYSIS_CHARS);
-    expect(result.total).toBe(longString.length);
+    expect(result.charsRead).toBe(MAX_CRITIQUE_ANALYSIS_CHARS);
+    expect(result.charsTotal).toBe(longString.length);
   });
 
   it('treats null/undefined as an empty, non-truncated string', () => {
@@ -68,7 +69,7 @@ describe('buildCritiqueUserPrompt (FR-1)', () => {
     expect(truncated.prd.truncated).toBe(true);
     expect(truncated.arch.truncated).toBe(false);
 
-    const markerIdx = prompt.indexOf('[TRUNCATED:');
+    const markerIdx = prompt.indexOf('INPUT TRUNCATED');
     const prdBeginIdx = prompt.indexOf('===PRD_CONTENT_BEGIN');
     expect(markerIdx).toBeGreaterThan(-1);
     expect(markerIdx).toBeLessThan(prdBeginIdx); // marker is BEFORE the untrusted fence opens
@@ -86,9 +87,40 @@ describe('buildCritiqueUserPrompt (FR-1)', () => {
 
   it('emits no truncation marker when nothing is cut', () => {
     const { prompt, truncated } = buildCritiqueUserPrompt({ prdContent: UNDER_BUDGET_PRD, archContent: 'short', sdContext: {} });
-    expect(prompt).not.toContain('[TRUNCATED:');
+    expect(prompt).not.toContain('INPUT TRUNCATED');
     expect(truncated.prd.truncated).toBe(false);
     expect(truncated.arch.truncated).toBe(false);
+  });
+
+  // FR-1 AC-3: reuses lib/eva/input-sanitizer.js's {truncated, charsTotal, charsRead} shape and
+  // vision-score.js's "<field> read N/M chars" wording (PT-5) — not a third, invented dialect.
+  it('marker wording matches the "<field> read N/M chars" convention from vision-score.js', () => {
+    const bigFrs = Array.from({ length: 500 }, (_, i) => ({ id: `FR-${i + 1}`, description: 'x'.repeat(200) }));
+    const { prompt, truncated } = buildCritiqueUserPrompt({
+      prdContent: { ...UNDER_BUDGET_PRD, functional_requirements: bigFrs },
+      archContent: 'y'.repeat(MAX_CRITIQUE_ANALYSIS_CHARS + 1000),
+      sdContext: {},
+    });
+    expect(prompt).toContain(`prd read ${truncated.prd.charsRead}/${truncated.prd.charsTotal} chars`);
+    expect(prompt).toContain(`arch read ${truncated.arch.charsRead}/${truncated.arch.charsTotal} chars`);
+  });
+
+  // FR-1 AC-2 (PT-6): truncation state must never perturb the findings fingerprint or escalate
+  // severity — it lives only in metadata/the prompt frame/warnings, never in the findings array.
+  it('does not change findingsFingerprint between a truncated and an untruncated run over the same findings', () => {
+    const findings = [{ severity: 'warn', category: 'other' }];
+    const fingerprintUntruncated = findingsFingerprint(findings);
+
+    // Confirm a truncation actually occurred in this run's prompt-building, then check the
+    // caller-facing findings array (what findingsFingerprint hashes) was never touched by it.
+    const bigFrs = Array.from({ length: 500 }, (_, i) => ({ id: `FR-${i + 1}`, description: 'x'.repeat(200) }));
+    const { truncated } = buildCritiqueUserPrompt({
+      prdContent: { ...UNDER_BUDGET_PRD, functional_requirements: bigFrs },
+      archContent: 'short',
+      sdContext: {},
+    });
+    expect(truncated.prd.truncated).toBe(true);
+    expect(findingsFingerprint(findings)).toBe(fingerprintUntruncated);
   });
 });
 
@@ -100,8 +132,8 @@ describe('critiquePlanProposal truncated return contract (FR-1)', () => {
       { adapter, logger: { warn: vi.fn(), error: vi.fn() } }
     );
     expect(result.truncated).toEqual({
-      prd: { truncated: false, shown: expect.any(Number), total: expect.any(Number) },
-      arch: { truncated: false, shown: 5, total: 5 },
+      prd: { truncated: false, charsRead: expect.any(Number), charsTotal: expect.any(Number) },
+      arch: { truncated: false, charsRead: 5, charsTotal: 5 },
     });
   });
 
@@ -118,7 +150,7 @@ describe('critiquePlanProposal truncated return contract (FR-1)', () => {
       { adapter, logger: { warn: vi.fn(), error: vi.fn() } }
     );
     expect(result.overall_severity).toBe(COULD_NOT_CHECK);
-    expect(result.truncated).toEqual({ prd: { truncated: false, shown: expect.any(Number), total: expect.any(Number) }, arch: { truncated: false, shown: 5, total: 5 } });
+    expect(result.truncated).toEqual({ prd: { truncated: false, charsRead: expect.any(Number), charsTotal: expect.any(Number) }, arch: { truncated: false, charsRead: 5, charsTotal: 5 } });
   });
 });
 

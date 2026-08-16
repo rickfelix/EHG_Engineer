@@ -154,12 +154,15 @@ export async function validatePrePlanCritique(ctx) {
   console.log(`   ${coverage}`);
   warnings.push(coverage);
 
-  // FR-1: loud, never silent — name the truncation in the same warnings-array style as COVERAGE.
-  if (critique.truncated && (critique.truncated.prd?.truncated || critique.truncated.arch?.truncated)) {
+  // FR-1: loud, never silent — same warnings-array style as COVERAGE, same "read N/M chars"
+  // wording as vision-score.js's truncationWarning (AC-3 — reused convention, not a new dialect).
+  const prdWasTruncated = critique.truncated?.prd?.truncated;
+  const archWasTruncated = critique.truncated?.arch?.truncated;
+  if (prdWasTruncated || archWasTruncated) {
     const parts = [];
-    if (critique.truncated.prd?.truncated) parts.push(`PRD ${critique.truncated.prd.shown}/${critique.truncated.prd.total} chars`);
-    if (critique.truncated.arch?.truncated) parts.push(`ARCH ${critique.truncated.arch.shown}/${critique.truncated.arch.total} chars`);
-    const truncMsg = `TRUNCATED: ${parts.join(', ')} shown to the critique LLM — findings reflect only the visible portion.`;
+    if (prdWasTruncated) parts.push(`prd ${critique.truncated.prd.charsRead}/${critique.truncated.prd.charsTotal}`);
+    if (archWasTruncated) parts.push(`arch ${critique.truncated.arch.charsRead}/${critique.truncated.arch.charsTotal}`);
+    const truncMsg = `Input truncated before critique — findings may not reflect the full PRD/arch (${parts.join(', ')})`;
     console.log(`   ⚠️  ${truncMsg}`);
     warnings.push(truncMsg);
   }
@@ -174,9 +177,26 @@ export async function validatePrePlanCritique(ctx) {
     console.log(`   ... and ${findings.length - MAX_FINDING_PREVIEW} more (see plan_critiques table)`);
   }
 
-  // FR-4: persist BEFORE deriving the verdict, on EVERY path that has a PRD — including
-  // could_not_check. The old code returned from skip/fail paths before persisting, which
-  // is exactly why plan_critiques could not distinguish never-ran from ran-clean.
+  // FR-1 AC-4/AC-5: metadata.truncated.prd/arch are literal booleans (not the richer internal
+  // {truncated, charsRead, charsTotal} shape) so a direct `metadata.truncated.prd === true/false`
+  // read matches the AC's own wording; shown/total travel as separate, side-qualified keys so an
+  // independent prd-only or arch-only truncation is never ambiguous about which side they describe.
+  // Undefined (not present) when critique.truncated is null — a could-not-check path that failed
+  // before the prompt was ever built (see couldNotCheckResult's tri-state contract) has nothing
+  // honest to report here; omitting the key is the not-measured state, never a fabricated false.
+  const truncatedMetadata = critique.truncated ? {
+    prd: critique.truncated.prd.truncated,
+    arch: critique.truncated.arch.truncated,
+    shownPrd: critique.truncated.prd.charsRead,
+    totalPrd: critique.truncated.prd.charsTotal,
+    shownArch: critique.truncated.arch.charsRead,
+    totalArch: critique.truncated.arch.charsTotal,
+  } : undefined;
+
+  // FR-4 (of the ORIGINAL SD-LEO-INFRA-SYSTEMATIZE-COMPLETENESS-CRITIC-001, a different, already-
+  // shipped SD — not this SD's own FR-4): persist BEFORE deriving the verdict, on EVERY path that
+  // has a PRD — including could_not_check. The old code returned from skip/fail paths before
+  // persisting, which is exactly why plan_critiques could not distinguish never-ran from ran-clean.
   await persistCritique(supabase, {
     sd_id: sd.id,
     prd_id: prdId,
@@ -184,6 +204,7 @@ export async function validatePrePlanCritique(ctx) {
     overall_severity: combined,
     model_used: critique.model_used,
     token_usage: critique.token_usage,
+    ...(truncatedMetadata ? { metadata: { truncated: truncatedMetadata } } : {}),
   }, warnings);
 
   // FR-1: verdict. 'block' fails unless an audited override exists FOR THESE FINDINGS.
@@ -225,20 +246,36 @@ export async function validatePrePlanCritique(ctx) {
   };
 }
 
+// FR-6: PostgREST's schema-cache-miss code (unknown column on INSERT) and Postgres's own
+// "column does not exist" code — both confirmed live against this exact table (2026-08-16,
+// pre-migration): SELECT of a missing column returns 42703; INSERT including one returns
+// PGRST204. Either means the writer shipped ahead of its migration, not a data problem.
+const SCHEMA_MISSING_CODES = new Set(['PGRST204', '42703']);
+
 /**
- * Persist the critique row. On the could_not_check severity the live CHECK constraint may
- * refuse until the chairman-gated migration 20260810_plan_critiques_could_not_check.sql is
- * applied — KNOWN LIMITATION, reported loudly, never worked around by writing a value the
- * run did not earn (mapping could_not_check onto pass/note would make the column lie).
+ * Persist the critique row.
+ *
+ * FR-6 (testing-agent PT-3, BLOCKING, live-demonstrated during this SD's own LEAD-phase evidence
+ * write): a schema-missing error (metadata/content_hash not yet migrated — SCHEMA_MISSING_CODES)
+ * gets its own loud, NAMED branch, distinct from a generic insert failure. Before this fix, EVERY
+ * non-23514 error — including "the writer shipped ahead of its migration" — fell into the same
+ * generic 'plan_critiques insert failed' message; if FR-1/FR-4's writer merged before TR-3's
+ * migration applied in production, persistence would silently stop entirely while the gate kept
+ * passing, and scripts/critique-catch-rate-monitor.js would read zero runs as zero runs, not as
+ * blind runs — worse than the could_not_check state this table exists to distinguish.
  */
 async function persistCritique(supabase, row, warnings) {
   try {
     const { error } = await supabase.from('plan_critiques').insert(row);
     if (error) {
-      const gated = error.code === '23514' && row.overall_severity === COULD_NOT_CHECK;
-      const msg = gated
-        ? `plan_critiques refused '${COULD_NOT_CHECK}' (constraint not yet widened — apply database/migrations/20260810_plan_critiques_could_not_check.sql). Outcome NOT persisted; the catch-rate monitor is blind to this run.`
-        : `plan_critiques insert failed: ${error.message}`;
+      let msg;
+      if (SCHEMA_MISSING_CODES.has(error.code)) {
+        msg = `plan_critiques SCHEMA MISSING (${error.code}): ${error.message} — the writer shipped ahead of its migration (database/chairman-gated/20260816_plan_critiques_add_metadata_and_content_hash.sql). Outcome NOT persisted; the catch-rate monitor is blind to this run. Do not treat this as a generic insert failure — apply the migration.`;
+      } else if (error.code === '23514') {
+        msg = `plan_critiques CHECK constraint violation (${error.code}): ${error.message}. Outcome NOT persisted.`;
+      } else {
+        msg = `plan_critiques insert failed: ${error.message}`;
+      }
       console.warn(`   ⚠️  ${msg}`);
       warnings.push(msg);
     }
