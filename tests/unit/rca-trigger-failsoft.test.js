@@ -14,7 +14,14 @@
 import { describe, test, expect, beforeEach, vi } from 'vitest';
 
 const createSupabaseClient = vi.fn();
-vi.mock('../../lib/supabase-client.js', () => ({ createSupabaseClient: () => createSupabaseClient() }));
+const createSupabaseServiceClient = vi.fn();
+// SD-LEO-INFRA-REGRESSION-DETECTION-SILENT-001 (FR-5): triggerRCAOrThrow's write client is now
+// service-role, not anon (a 42501 RLS denial on the anon client was itself the mechanism this SD
+// closes). Mocked separately from createSupabaseClient so a test can assert WHICH factory is used.
+vi.mock('../../lib/supabase-client.js', () => ({
+  createSupabaseClient: () => createSupabaseClient(),
+  createSupabaseServiceClient: () => createSupabaseServiceClient(),
+}));
 // The RCA sub-agent is irrelevant here and must not reach the network on the happy path.
 vi.mock('../../lib/sub-agents/rca.js', () => ({ execute: vi.fn(async () => ({ ok: true })) }));
 
@@ -65,7 +72,7 @@ describe('triggerRCA fail-soft (QF-20260726-175)', () => {
     //   Failed to create RCR: { code: '42501', message: 'new row violates row-level security policy...' }
     // The OLD implementation threw here, which killed the process. If the throw is restored, this
     // test fails — it is the falsifiable half.
-    createSupabaseClient.mockReturnValue(clientWithInsertResult({
+    createSupabaseServiceClient.mockReturnValue(clientWithInsertResult({
       data: null,
       error: { code: '42501', message: 'new row violates row-level security policy for table "root_cause_reports"' },
     }));
@@ -76,7 +83,7 @@ describe('triggerRCA fail-soft (QF-20260726-175)', () => {
   test('the failure is LOUD — a dropped RCR is still a real loss of diagnostic coverage', async () => {
     // Fail-soft must not mean fail-silent: the QF is explicit that silently losing RCRs is the
     // same class of invisible failure as the crash itself.
-    createSupabaseClient.mockReturnValue(clientWithInsertResult({
+    createSupabaseServiceClient.mockReturnValue(clientWithInsertResult({
       data: null,
       error: { code: '42501', message: 'denied' },
     }));
@@ -91,7 +98,7 @@ describe('triggerRCA fail-soft (QF-20260726-175)', () => {
 
   test('a thrown (non-Supabase-error) failure is also contained', async () => {
     // Covers the class, not just the one error shape — e.g. the client itself blowing up.
-    createSupabaseClient.mockImplementation(() => { throw new Error('client exploded'); });
+    createSupabaseServiceClient.mockImplementation(() => { throw new Error('client exploded'); });
 
     await expect(triggerRCA(PARAMS)).resolves.toBeNull();
     expect(console.error.mock.calls.flat().join(' ')).toContain('client exploded');
@@ -100,11 +107,26 @@ describe('triggerRCA fail-soft (QF-20260726-175)', () => {
   test('CONTROL: a successful write still returns the RCR id and is not swallowed', async () => {
     // Proves the tests above pass because failures are contained, NOT because triggerRCA has
     // stopped doing its job and returns null unconditionally.
-    createSupabaseClient.mockReturnValue(clientWithInsertResult({
+    createSupabaseServiceClient.mockReturnValue(clientWithInsertResult({
       data: { id: 'rcr-abc-123' },
       error: null,
     }));
 
     await expect(triggerRCA(PARAMS)).resolves.toBe('rcr-abc-123');
+  });
+
+  test('SD-LEO-INFRA-REGRESSION-DETECTION-SILENT-001 (TS-9): the write client is service-role, not anon', async () => {
+    // The 42501 fixture above proves an ANON write is denied. This proves triggerRCA no longer
+    // even attempts one -- it reaches for createSupabaseServiceClient, and createSupabaseClient
+    // (the anon factory) is never called for the write path.
+    createSupabaseServiceClient.mockReturnValue(clientWithInsertResult({
+      data: { id: 'rcr-service-role-123' },
+      error: null,
+    }));
+
+    await triggerRCA(PARAMS);
+
+    expect(createSupabaseServiceClient).toHaveBeenCalled();
+    expect(createSupabaseClient).not.toHaveBeenCalled();
   });
 });
