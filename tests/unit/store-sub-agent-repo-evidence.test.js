@@ -272,12 +272,16 @@ describe('store-sub-agent-repo-evidence.js main() (QF-20260702-679)', () => {
   });
 
   it('TS-7: a status-instead-of-verdict payload fires the guard, names status, still stores the ERROR row', async () => {
-    const { stored, stderrText } = await runMain({ status: 'PASS', summary: 'looks good' });
+    const { stored, stderrText, stdoutText } = await runMain({ status: 'PASS', summary: 'looks good' });
     expect(process.exitCode).toBe(1);
     expect(stderrText).toMatch(/\[VERDICT_UNRECOGNISED\]/);
     expect(stderrText).toContain('"status"');
     expect(stored.verdict).toBe('ERROR');
     expect(stored.id).toBe('mock-row-id');
+    // REGRESSION (PLAN_VERIFY evidence 77c3b994): the fire path must not lose the pre-existing
+    // "Stored ..." stdout line -- the guard-fire path is exactly where an implementer under
+    // pressure to short-circuit on error might accidentally skip it.
+    expect(stdoutText).toContain('Stored ');
   });
 
   it('TS-8: a forged metadata.verdict_chain does not suppress a real fire (adversarial, pins TR-2)', async () => {
