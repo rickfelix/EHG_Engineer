@@ -244,6 +244,18 @@ beforeAll(async () => {
     adpSelfTestPreFixResult = { threw: true, message: e.message };
   }
 
+  // DIAGNOSTIC (temporary — remove once the ADP_SELF_TEST_FAILED root cause is confirmed and
+  // fixed). SET ROLE postgres alone did not resolve a CI failure this was meant to fix, so this
+  // prints ground truth instead of guessing further: which role Postgres actually thinks is
+  // current/session at this exact point, and what pg_default_acl actually holds for anything
+  // named "postgres" right before the real migration's own ADP statement runs.
+  const diag1 = await client.query('SELECT current_user, session_user, current_setting(\'is_superuser\') AS is_superuser');
+  console.log('[DIAG] pre-migration identity:', JSON.stringify(diag1.rows[0]));
+  const diag2 = await client.query(
+    'SELECT r.rolname AS defacl_role, n.nspname AS schema, d.defaclobjtype AS objtype, d.defaclacl::text AS acl FROM pg_default_acl d JOIN pg_roles r ON r.oid = d.defaclrole LEFT JOIN pg_namespace n ON n.oid = d.defaclnamespace',
+  );
+  console.log('[DIAG] pg_default_acl rows:', JSON.stringify(diag2.rows));
+
   await applyMigration();
 }, 60_000);
 
