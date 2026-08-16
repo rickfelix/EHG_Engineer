@@ -1026,15 +1026,22 @@ describe('SD-LEO-FIX-BELT-CAPACITY-VERDICTS-001 FR-3 — persistUnavailable, wir
     expect(leg.unavailable.available).toBe(false);
     expect(leg.unavailable.reason).toMatch(/belt query failed/);
 
-    // [STATIC — TESTING sub-agent EXEC-TO-PLAN finding, evidence a17901cc-9e31-424f-a421-c4ac3110bba0]
+    // [STATIC — TESTING sub-agent EXEC-TO-PLAN finding, evidence a17901cc-9e31-424f-a421-c4ac3110bba0,
+    // sharpened per follow-up finding on evidence b78f71ec-3e2c-47e5-bfe4-0798780c4ca1]
     // The behavioral assertions above are BLIND to a mutated default: they pass byte-identically
     // even if `persistUnavailable = null` were replaced with a default that silently fires a write,
     // because both produce the same unavailable() return shape — mutation-verified by the sub-agent
     // (all 156 tests stayed green under that exact mutation). This pins the one thing that actually
     // distinguishes "omitted" from "a smuggled-in default": the source text of the default itself.
-    const src = fs.readFileSync(path.join(repoRoot, 'scripts', 'cron', 'drive-report-sweep.mjs'), 'utf8');
-    expect(src, 'persistUnavailable must default to null, never to a callable — a default that silently '
-      + 'fires would be invisible to every behavioral assertion above').toMatch(/persistUnavailable\s*=\s*null/);
+    //
+    // A FILE-WIDE regex was tried first and the sub-agent proved it blind too, two-sided: this file
+    // ALSO has `persistUnavailable = null` on buildGather's signature (line ~292), so mutating ONLY
+    // scoreCapacityLeg's own default still matched the file-wide pattern via the OTHER site — the
+    // exact same "assertion executes but cannot discriminate which site holds the property" shape.
+    // Scoping to scoreCapacityLeg.toString() itself closes that: it can only ever read the ONE
+    // function this test is about, immune to drift even if a third call site gains the same param.
+    expect(scoreCapacityLeg.toString(), 'persistUnavailable must default to null, never to a callable — a '
+      + 'default that silently fires would be invisible to every behavioral assertion above').toMatch(/persistUnavailable\s*=\s*null/);
   });
 });
 
