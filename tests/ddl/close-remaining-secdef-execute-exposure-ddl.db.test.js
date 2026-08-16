@@ -189,7 +189,33 @@ let preAdpControlGrant; // captured between STUB_SCHEMA and applyMigration() —
 let adpSelfTestPreFixResult; // {threw, message} — TS-5, captured in the same pre-fix window.
 
 async function applyMigration() {
-  await client.query(MIGRATION_SQL);
+  // TEMPORARY DIAGNOSTIC (E2, TESTING sub-agent's H1-vs-H2 discriminator, adds to the E3
+  // diagnostics already in this file — remove both once the ADP_SELF_TEST_FAILED root cause is
+  // confirmed and fixed). Splits MIGRATION_SQL at the ADP REVOKE statement's closing semicolon and
+  // inspects pg_default_acl for role postgres MID-TRANSACTION, immediately after the REVOKE and
+  // before the self-test probe runs — the one measurement neither prior diagnostic pass took.
+  // H1: no row at all (SetDefaultACL collapsed it to acldefault(), which implicitly grants PUBLIC).
+  // H2: a row survives (e.g. {authenticated=X/postgres}) but the probe still comes out public_exec.
+  const ADP_MARKER = 'REVOKE EXECUTE ON FUNCTIONS FROM PUBLIC, anon;';
+  const splitIdx = MIGRATION_SQL.indexOf(ADP_MARKER);
+  if (splitIdx === -1) throw new Error('DIAG2: ADP_MARKER not found in MIGRATION_SQL — migration text changed, update the marker');
+  const part1 = MIGRATION_SQL.slice(0, splitIdx + ADP_MARKER.length);
+  const part2 = MIGRATION_SQL.slice(splitIdx + ADP_MARKER.length);
+
+  await client.query(part1);
+
+  const diagAcl = await client.query(
+    `SELECT ro.rolname AS role, n.nspname AS schema, d.defaclobjtype AS objtype, d.defaclacl::text AS acl
+     FROM pg_default_acl d
+     JOIN pg_roles ro ON ro.oid = d.defaclrole
+     LEFT JOIN pg_namespace n ON n.oid = d.defaclnamespace
+     WHERE ro.rolname = 'postgres'`,
+  );
+  console.log('[DIAG2] post-ADP-REVOKE pg_default_acl rows for role postgres (mid-transaction, pre-self-test):', JSON.stringify(diagAcl.rows));
+  const diagIdentity = await client.query('SELECT current_user, current_setting(\'is_superuser\') AS is_superuser');
+  console.log('[DIAG2] post-ADP-REVOKE identity (mid-transaction):', JSON.stringify(diagIdentity.rows[0]));
+
+  await client.query(part2);
 }
 
 async function grantState(name, args) {
