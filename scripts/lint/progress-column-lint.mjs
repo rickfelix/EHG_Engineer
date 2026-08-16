@@ -4,7 +4,7 @@
 // the enforce_progress_on_completion() BEFORE-UPDATE trigger only maintains the latter — see
 // database/migrations/20251211_fix_progress_trigger_rls_access.sql:334-356). The column is not
 // dropped (no DDL in this SD's scope), so it still silently accepts reads and writes. This is a
-// RATCHET guard, not a zero-tolerance one: a fresh census at authoring time found 32 pre-existing
+// RATCHET guard, not a zero-tolerance one: a fresh census at authoring time found 37 pre-existing
 // bare-`progress` sites outside this SD's own repointed files (frozen in
 // tests/unit/hygiene/progress-column-baseline.json). The guard blocks any NEW site beyond that
 // baseline; the baseline may only shrink over time as future SDs clean up the remainder.
@@ -13,30 +13,53 @@
 // .from('strategic_directives_v2') (single-chain, syntactic — same precedent as
 // lib/static-analysis/consumer-index.js, no deep taint tracking):
 //   RULE A (readers) — a PostgREST query-builder method (.select/.order/.eq/.neq/.gt/.gte/.lt/
-//           .lte/.is) whose column-name string argument is EXACTLY "progress" (.select splits
-//           its comma-separated argument first; the rest take a single column name). Exact-token
-//           matching, not substring, so progress_percentage and progress_pct never match.
-//   RULE B (writers) — .update({...}) / .insert({...}) object literal with a top-level key
-//           exactly named "progress".
+//           .lte/.is/.in/.filter/.like/.ilike/.contains) whose column-name string argument is
+//           EXACTLY "progress" (.select splits its comma-separated argument first; the rest
+//           take a single column name). Exact-token matching, not substring, so
+//           progress_percentage and progress_pct never match.
+//   RULE B (writers) — .update({...}) / .insert({...}) / .upsert({...}) object literal (or
+//           array-of-objects batch form) with a top-level key exactly named "progress".
 //   RULE C (readers, partial coverage) — a bare `x.progress` property read where `x` is a
-//           SAME-SCOPE, SAME-STATEMENT variable directly initialized from a chain containing
-//           .from('strategic_directives_v2') (e.g. `const { data: sd } = await supabase.from(...)
-//           .select(...); ...sd.progress`).
+//           SAME-SCOPE variable directly (and only ever, see reassignment note below)
+//           initialized from a chain containing .from('strategic_directives_v2') (e.g.
+//           `const { data: sd } = await supabase.from(...).select(...); ...sd.progress`).
 //
-// KNOWN LIMITATION (measured, not guessed): RULE C only resolves a single-hop direct
-// declarator-init binding. It does NOT trace through function parameters (e.g.
-// scripts/modules/audit/audit-runner.js's `evaluate: (sd, _config) => ...` — sd arrives from a
-// caller elsewhere in the file), array indexing after a reassignment (e.g.
-// scripts/get-working-on-sd.js's `workingOn = spotlight; ... sd = workingOn[0]`), or
-// cross-function resolver calls (e.g. scripts/generate-retrospective.js's sd argument, sourced
-// from a separate resolver). Full interprocedural dataflow tracing would close this but is out
-// of proportion to this SD's scope and inconsistent with the codebase's own single-hop static-
-// analysis precedent. COMPENSATING CONTROL for the files this SD actually touched: every
-// repointed read site was verified by direct grep + Read against its own select-clause during
-// EXEC (never repointed blind), and the two pinned regression tests
-// (tests/unit/eva-support/sd-reader.test.js, tests/unit/sd-revert.test.js) assert the exact
-// column name each source now selects. A future SD extending RULE C to trace parameters/
-// reassignment would close the remaining gap for files added after this one.
+// KNOWN LIMITATIONS (measured via adversarial review, not guessed):
+//   - RULE C only resolves a single-hop direct declarator-init binding, and only when the
+//     binding is never reassigned (binding.constant — a reassigned variable is skipped
+//     entirely rather than risk a false positive from a stale .init). It does NOT trace through
+//     function parameters (e.g. scripts/modules/audit/audit-runner.js's
+//     `evaluate: (sd, _config) => ...` — sd arrives from a caller elsewhere in the file), array
+//     indexing after a reassignment (e.g. scripts/get-working-on-sd.js's
+//     `workingOn = spotlight; ... sd = workingOn[0]`), destructuring a field back OUT of an
+//     already-resolved binding (`const { data: sd } = await ...; const { progress } = sd;`), or
+//     cross-function resolver calls (e.g. scripts/generate-retrospective.js's sd argument,
+//     sourced from a separate resolver). Full interprocedural dataflow tracing would close this
+//     but is out of proportion to this SD's scope and inconsistent with the codebase's own
+//     single-hop static-analysis precedent.
+//   - chainContainsFromTable requires .from(...)'s argument to be a literal string. A table
+//     name held in a constant/variable (e.g. `supabase.from(TABLE)`) defeats detection for all
+//     three rules. This module exports its own TABLE constant (below) that could in principle
+//     be imported and used this exact way -- not yet observed in this codebase, but plausible.
+//   - Optional chaining (`?.`) produces OptionalCallExpression/OptionalMemberExpression AST
+//     nodes, which none of the three visitors recognize (despite ast-parse.js enabling the
+//     optionalChaining parser plugin) -- `supabase?.from(...)`, `.select(...)?.eq(...)`, and
+//     `row?.progress` are all invisible to every rule. Not observed as a live pattern against
+//     strategic_directives_v2 in this codebase at authoring time.
+//   - RULE B's ObjectExpression/ArrayExpression handling only covers a LITERAL argument. A
+//     write payload built in a variable and passed by reference (e.g.
+//     `const insert = {...}; supabase.from(TABLE).upsert(insert)` -- a real, live pattern at
+//     scripts/pocock/weekly-deepening-report.mjs:117) is invisible; tracing it would need the
+//     same binding-resolution machinery as RULE C, applied to write arguments.
+//   - RULE A's column-list split does not parse PostgREST `alias:column` select syntax
+//     (`.select('foo:progress')`), and neither RULE B nor RULE C recognizes computed/bracket
+//     property access (`row['progress']`, `update({ ['progress']: 0 })`).
+// COMPENSATING CONTROL for the files this SD actually touched: every repointed read/write site
+// was verified by direct grep + Read against its own select/update clause during EXEC (never
+// repointed blind), and the pinned regression tests (tests/unit/eva-support/sd-reader.test.js,
+// tests/unit/sd-revert.test.js, tests/unit/eva-support/dispatcher.test.js) assert the exact
+// column name each source now uses. A future SD closing any of the gaps above would tighten the
+// ratchet for files added after this one; none of them affect files this SD already fixed.
 import { execFileSync } from 'node:child_process';
 import { readFileSync, writeFileSync, mkdirSync } from 'node:fs';
 import { dirname } from 'node:path';
@@ -52,7 +75,10 @@ export const DEAD_COLUMN = 'progress';
 
 // PostgREST query-builder methods whose first argument is a single column-name string.
 // `select` is comma-separated and handled specially, not included here.
-const SINGLE_COLUMN_FILTER_METHODS = new Set(['order', 'eq', 'neq', 'gt', 'gte', 'lt', 'lte', 'is']);
+const SINGLE_COLUMN_FILTER_METHODS = new Set(['order', 'eq', 'neq', 'gt', 'gte', 'lt', 'lte', 'is', 'in', 'filter', 'like', 'ilike', 'contains']);
+
+// Write methods whose object-literal argument RULE B inspects for a `progress` key.
+const WRITE_METHODS = new Set(['update', 'insert', 'upsert']);
 
 export const SELF_PATHS = new Set([
   'scripts/lint/progress-column-lint.mjs',
@@ -144,18 +170,24 @@ export function scanSource(content, filePath) {
         if (arg.value === DEAD_COLUMN) {
           findings.push({ line: node.loc?.start?.line ?? 0, rule: 'A', method: methodName, snippet: `${methodName}('${arg.value}', ...)` });
         }
-      } else if (methodName === 'update' || methodName === 'insert') {
+      } else if (WRITE_METHODS.has(methodName)) {
         if (!chainContainsFromTable(callee.object, TABLE)) return;
         const arg = node.arguments[0];
-        if (!arg || arg.type !== 'ObjectExpression') return;
-        for (const prop of arg.properties) {
-          if (
-            prop.type === 'ObjectProperty' &&
-            !prop.computed &&
-            ((prop.key.type === 'Identifier' && prop.key.name === DEAD_COLUMN) ||
-              (prop.key.type === 'StringLiteral' && prop.key.value === DEAD_COLUMN))
-          ) {
-            findings.push({ line: node.loc?.start?.line ?? 0, rule: 'B', method: methodName, snippet: `${methodName}({ ${DEAD_COLUMN}: ... })` });
+        if (!arg) return;
+        // .insert([{...}, {...}]) / .upsert([{...}, {...}]) batch form: check every element.
+        const objectArgs = arg.type === 'ObjectExpression' ? [arg]
+          : arg.type === 'ArrayExpression' ? arg.elements.filter((e) => e && e.type === 'ObjectExpression')
+          : [];
+        for (const objArg of objectArgs) {
+          for (const prop of objArg.properties) {
+            if (
+              prop.type === 'ObjectProperty' &&
+              !prop.computed &&
+              ((prop.key.type === 'Identifier' && prop.key.name === DEAD_COLUMN) ||
+                (prop.key.type === 'StringLiteral' && prop.key.value === DEAD_COLUMN))
+            ) {
+              findings.push({ line: node.loc?.start?.line ?? 0, rule: 'B', method: methodName, snippet: `${methodName}({ ${DEAD_COLUMN}: ... })` });
+            }
           }
         }
       }
@@ -169,6 +201,12 @@ export function scanSource(content, filePath) {
 
       const binding = nodePath.scope.getBinding(node.object.name);
       if (!binding) return;
+      // Adversarial review of PR #7141: a binding that is REASSIGNED after its declaration
+      // (`row = { progress: 42 }` after `let row = supabase.from(...).select(...)`) must not
+      // be trusted -- the declarator's .init reflects only the FIRST assignment, not the value
+      // at the actual read site. binding.constant is false whenever any constantViolations
+      // exist (Babel resolves this without needing our own control-flow analysis).
+      if (!binding.constant) return;
 
       let declaratorPath = binding.path;
       while (declaratorPath && declaratorPath.node.type !== 'VariableDeclarator') {

@@ -60,7 +60,7 @@ describe('RULE A — reader string-literal membership', () => {
     expect(scanSource(src, 'f.js')).toEqual([]);
   });
 
-  it.each(['order', 'eq', 'neq', 'gt', 'gte', 'lt', 'lte', 'is'])(
+  it.each(['order', 'eq', 'neq', 'gt', 'gte', 'lt', 'lte', 'is', 'in', 'filter', 'like', 'ilike', 'contains'])(
     'flags .%s("progress", ...) as a single-column filter/order call',
     (method) => {
       const src = `supabase.from('strategic_directives_v2').select('id').${method}('progress', 100);`;
@@ -118,6 +118,29 @@ describe('RULE B — writer object-literal key check', () => {
     `;
     expect(scanSource(src, 'f.js')).toEqual([]);
   });
+
+  // Adversarial review of PR #7141: .upsert() was entirely uncovered (real precedent:
+  // scripts/pocock/weekly-deepening-report.mjs:117), and batch array-of-objects .insert()/
+  // .upsert() calls (not just a single object literal) were also uncovered.
+  it('flags upsert({ progress: ... }) on strategic_directives_v2', () => {
+    const src = 'supabase.from(\'strategic_directives_v2\').upsert({ id: x, progress: 0 }, { onConflict: \'id\' });';
+    const findings = scanSource(src, 'f.js');
+    expect(findings).toEqual([{ line: 1, rule: 'B', method: 'upsert', snippet: 'upsert({ progress: ... })' }]);
+  });
+
+  it('flags a violation inside a batch array-of-objects .insert([...]) call', () => {
+    const src = 'supabase.from(\'strategic_directives_v2\').insert([{ sd_key: \'a\' }, { sd_key: \'b\', progress: 10 }]);';
+    const findings = scanSource(src, 'f.js');
+    expect(findings).toEqual([{ line: 1, rule: 'B', method: 'insert', snippet: 'insert({ progress: ... })' }]);
+  });
+
+  it('does NOT flag .upsert(insert) where the payload is a variable reference (documented limitation)', () => {
+    const src = `
+      const insert = { id: x, progress: 0 };
+      supabase.from('strategic_directives_v2').upsert(insert, { onConflict: 'id' });
+    `;
+    expect(scanSource(src, 'f.js')).toEqual([]);
+  });
 });
 
 describe('RULE C — same-scope property-read (partial coverage, documented limitation)', () => {
@@ -162,6 +185,20 @@ describe('RULE C — same-scope property-read (partial coverage, documented limi
       function evaluate(sd, _config) {
         if (sd.status === 'completed' && sd.progress < 100) return true;
         return false;
+      }
+    `;
+    expect(scanSource(src, 'f.js')).toEqual([]);
+  });
+
+  // Adversarial review of PR #7141: a binding resolved from a strategic_directives_v2 chain
+  // but then REASSIGNED before the .progress read must not be flagged -- the declarator's
+  // .init reflects the FIRST assignment only, not the value at the actual read site.
+  it('does NOT flag row.progress when row is reassigned to an unrelated value first (false-positive guard)', () => {
+    const src = `
+      function run(supabase) {
+        let row = supabase.from('strategic_directives_v2').select('id');
+        row = { progress: 42 };
+        return row.progress;
       }
     `;
     expect(scanSource(src, 'f.js')).toEqual([]);
@@ -243,7 +280,15 @@ describe('evaluateFiles — mutation/red-green meta-test', () => {
 
 describe('live ratchet — ok:true only while every live finding is already in the frozen baseline', () => {
   const baseline = JSON.parse(readFileSync(BASELINE_PATH, 'utf8'));
-  const baselineKeys = new Set(baseline.sites.map((s) => `${s.file}:${s.line}:${s.rule}`));
+  // Adversarial review of PR #7141 (SD-LEO-INFRA-PROGRESS-COLUMN-DEAD-TWIN-001): a
+  // file:line:rule key is NOT unique -- Babel's node.loc.start.line for a chained
+  // CallExpression is the start of the WHOLE fluent chain, so two DIFFERENT findings on the
+  // same table/rule (e.g. .lt('progress',...) and .select('...progress...') both starting at
+  // scripts/handoff-export.cjs:89) collide onto one key. Verified against the live baseline:
+  // 37 sites, only 36 unique file:line:rule keys before `method` was added here. Without
+  // `method` in the key, a genuinely NEW violation landing on an already-baselined line would
+  // silently pass the subset check instead of failing it.
+  const baselineKeys = new Set(baseline.sites.map((s) => `${s.file}:${s.line}:${s.rule}:${s.method}`));
 
   it('baseline file has the expected shape', () => {
     expect(baseline.table).toBe('strategic_directives_v2');
@@ -252,10 +297,14 @@ describe('live ratchet — ok:true only while every live finding is already in t
     expect(baseline.count).toBe(baseline.sites.length);
   });
 
+  it('the baseline dedup key (file:line:rule:method) has no collisions (regression guard for the PR #7141 review finding)', () => {
+    expect(baselineKeys.size).toBe(baseline.sites.length);
+  });
+
   it('every LIVE finding is already present in the frozen baseline (no NEW site)', () => {
     const { files } = loadTrackedFiles();
     const { findings } = evaluateFiles(files);
-    const newFindings = findings.filter((f) => !baselineKeys.has(`${f.file}:${f.line}:${f.rule}`));
+    const newFindings = findings.filter((f) => !baselineKeys.has(`${f.file}:${f.line}:${f.rule}:${f.method}`));
     expect(newFindings).toEqual([]);
   }, 60000);
 
