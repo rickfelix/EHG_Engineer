@@ -1,8 +1,8 @@
-<!-- file_content_hash: a22ef1a57d87e22e -->
+<!-- file_content_hash: fb9335ffaaf908e9 -->
 <!-- GENERATED FILE - DO NOT EDIT DIRECTLY. Source of truth: leo_protocol_sections (DB). Regenerate: node scripts/generate-claude-md-from-db.js. Drift check: node scripts/check-claude-md-drift.cjs -->
 # CLAUDE_ADAM.md - Adam Role Contract
 
-**Generated**: 2026-08-15 4:55:00 PM
+**Generated**: 2026-08-16 8:26:48 PM
 **Protocol**: LEO 4.4.1
 **Purpose**: Canonical Adam role contract — Chairman-attached advisory/analysis session
 **Load when**: Running /adam, or orienting an operator-attached advisory session
@@ -216,6 +216,8 @@ The north-star gauges (§5e) are **SUBORDINATE diagnostics** — they inform the
 
 **THE DEFERRED QUESTION ADAM OWNS**: "which 1-2 ventures get the first dedicated revenue push?" is chairman-DEFERRED until the backlog is implemented AND the Roadmap is laid out. **Adam re-asks it at that moment — the chairman must not have to remember.**
 
+**THE DRIVE-SCORE GOAL**: the harness's standing goal is `drive_reports.drive_score` at its **maximum — 6/6 over the ratified 3 legs** (`lib/drive-loop/score/drive-score-legs.js`: leg1_landed, leg2_uptake, leg4_capacity). Every drive read Adam carries — the hourly heartbeat, the morning brief, the exec summary, and plan-check — is framed **PER LEG against 6/6**, never a bare aggregate number alone, **with the largest remaining lever named**. Solomon diagnoses which leg is holding the score down and proposes the fix shape (propose-only, CONST-002 — Solomon's DRIVE-SCORE DIAGNOSIS duty); **Adam sources and drives those fixes** to resolution — the same sourcing/driving duty this section already assigns him, now with the drive-score gap as a first-class, standing input. (Chairman directive 2026-08-15.) **EARNABLE-IN-THIS-REPO, per leg (Solomon systemic flag 0f127ce4, 2026-08-15) — a leg whose earnability is unknown reads unknown, never assumed:** leg1_landed — is the landed corpus blind to the repo's actual ship path (squash merges)? Currently **squash-blind, pending chairman decision dc828e43.** leg4_capacity — has TIGHT ever been reachable on honest depth? Currently **0 of 206 verdicts ever TIGHT; re-check 7 days after SD-LEO-INFRA-QF-SUPPLY-PREDICATE-AUTO-START-001 lands.** Framing a drive read against 6/6 before these are resolved risks training on a target a leg cannot earn — cite the current answer, not the aspirational 6/6, when either caveat is still open.
+
 ### 5f. SOURCING SSOT — order of operations
 
 **Read this BEFORE sourcing anything.** Work top-down; stop at the first that yields:
@@ -398,6 +400,6 @@ _Hierarchy note (chairman-ratified D-0719-ORGCHART "A", 2026-07-19): this partne
 
 ---
 
-*Generated from database: 2026-08-15*
+*Generated from database: 2026-08-16*
 *Protocol Version: 4.4.1*
 *Source of truth: leo_protocol_sections (section_type=adam_role_contract). Do not hand-edit — edit the DB section and regenerate.*
