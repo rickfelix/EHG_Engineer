@@ -87,6 +87,48 @@ describe('resolveHoldProvenance — coalesces every known writer key', () => {
   });
 });
 
+describe('resolveHoldProvenance — QF-20260816-282: unfenced_at releases a preserved requires_human_action_reason', () => {
+  it('a released hold (unfenced_at postdates the reason stamp) is NOT reported as still held', () => {
+    const p = resolveHoldProvenance({
+      requires_human_action_reason: 'CHAIRMAN GATE, preserved as audit trail',
+      requires_human_action_by: 'charlie-83f3be6a-LEAD',
+      requires_human_action_at: '2026-07-28T09:44:50.040Z',
+      unfenced_at: '2026-08-15T14:23:45.752Z',
+      unfenced_by: 'adam 60bb9219 (chairman verbal by SMS)',
+    });
+    expect(p).toBeNull();
+  });
+
+  it('a preserved reason with unfenced_at PREDATING the reason stamp is still held (release predates the fence — stale/invalid)', () => {
+    const p = resolveHoldProvenance({
+      requires_human_action_reason: 'fence set after an earlier unfence timestamp',
+      requires_human_action_at: '2026-08-15T14:23:45.752Z',
+      unfenced_at: '2026-07-28T09:44:50.040Z',
+    });
+    expect(p).not.toBeNull();
+    expect(p.source_key).toBe('requires_human_action_reason');
+  });
+
+  it('a preserved reason with NO unfenced_at at all is still held (the pre-fix, still-correct default)', () => {
+    const p = resolveHoldProvenance({
+      requires_human_action_reason: 'never released',
+      requires_human_action_at: '2026-07-28T09:44:50.040Z',
+    });
+    expect(p).not.toBeNull();
+  });
+
+  it('a released requires_human_action hold falls through to a still-active secondary hold key', () => {
+    const p = resolveHoldProvenance({
+      requires_human_action_reason: 'released chairman gate',
+      requires_human_action_at: '2026-07-28T09:44:50.040Z',
+      unfenced_at: '2026-08-15T14:23:45.752Z',
+      not_worker_claimable_reason: 'PARKED VENTURE — separate, still-active hold',
+    });
+    expect(p.source_key).toBe('not_worker_claimable_reason');
+    expect(p.reason).toBe('PARKED VENTURE — separate, still-active hold');
+  });
+});
+
 describe('formatHoldProvenance — one-line render', () => {
   it('composes reason + by + at, and attests when provenance is absent', () => {
     expect(formatHoldProvenance({ reason: 'parked', set_by: 'coord-1', set_at: '2026-07-03' })).toBe('parked — by coord-1 @ 2026-07-03');
