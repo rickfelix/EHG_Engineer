@@ -640,7 +640,26 @@ async function selfClaimQuickFix(sb, sessionId, base, sessionModel) {
 // the batch collapses into one group and is probed against EHG_Engineer regardless of target —
 // a wrong-repo false CLEAR. Zero live impact today only because the one non-Engineer QF is
 // in_progress while this lane filters status='open'; correct by luck is not correct.
-const QF_CANDIDATE_COLUMNS = 'id, status, pr_url, commit_sha, created_at, routing_tier, title, description, severity, not_before, factory_lane, owner, release_condition, target_application'; // schema-lint-disable-line: factory_lane staged, see comment above
+// SD-LEO-INFRA-STALE-QF-DISPOSITION-SWEEP-001 (FR-6): verified_at is a SECOND,
+// independently-staged column (its own migration file, never applied together with
+// factory_lane's) -- both can be absent from the live table at once, as they are as of this SD.
+// isAutoStartableQF degrades safely when qf.verified_at is undefined (falls back to
+// created_at-only).
+//
+// REGRESSION sub-agent finding, VERIFY phase (this file previously stripped BOTH columns
+// together on any 42703, reasoned as "simpler than belt-depth.cjs's layered probe, and correct
+// here since the worst case is a more conservative age computation" -- THAT REASONING WAS WRONG.
+// The two staged columns are NOT equally safe to lose: factory_lane absence makes
+// qf.factory_lane undefined (falsy), which BLINDS isAutoStartableQF's dispatch-only guard
+// (lib/fleet/qf-auto-start.cjs:87 `if (qf.factory_lane) return false`) and re-arms the
+// QF-20260712-481 incident class SD-FDBK-FIX-DISPATCH-ELIGIBILITY-HONOR-001 fixed --
+// verified_at absence only degrades the age computation, which is always-safe. The two
+// migrations are staged INDEPENDENTLY and factory_lane's has been staged a month longer, so it
+// is the MORE likely of the two to land first in production -- a naive strip-both-on-any-42703
+// would blind the safety-critical guard even when factory_lane was itself genuinely selectable.
+// Layered now, matching belt-depth.cjs's own probe: strip verified_at FIRST and retry (keeping
+// factory_lane); only strip factory_lane too if THAT retry also 42703s.
+const QF_CANDIDATE_COLUMNS = 'id, status, pr_url, commit_sha, created_at, routing_tier, title, description, severity, not_before, factory_lane, owner, release_condition, target_application, verified_at'; // schema-lint-disable-line: factory_lane + verified_at staged, see comment above
     let { data: qfs, error: qfErr } = await sb
       .from('quick_fixes')
       .select(QF_CANDIDATE_COLUMNS)
@@ -650,9 +669,21 @@ const QF_CANDIDATE_COLUMNS = 'id, status, pr_url, commit_sha, created_at, routin
       .order('created_at', { ascending: true })
       .limit(QF_CANDIDATE_LIMIT);
     if (qfErr && qfErr.code === '42703') {
+      ({ data: qfs, error: qfErr } = await sb
+        .from('quick_fixes')
+        .select(QF_CANDIDATE_COLUMNS.replace(', verified_at', ''))
+        .eq('status', 'open')
+        .is('pr_url', null)
+        .is('commit_sha', null)
+        .order('created_at', { ascending: true })
+        .limit(QF_CANDIDATE_LIMIT));
+    }
+    if (qfErr && qfErr.code === '42703') {
+      // factory_lane is ALSO absent (today's live state, and the only reachable case pre-either-
+      // migration) -- strip it too, mirroring the pre-SD single-column fallback exactly.
       ({ data: qfs } = await sb
         .from('quick_fixes')
-        .select(QF_CANDIDATE_COLUMNS.replace(', factory_lane', ''))
+        .select(QF_CANDIDATE_COLUMNS.replace(', factory_lane', '').replace(', verified_at', ''))
         .eq('status', 'open')
         .is('pr_url', null)
         .is('commit_sha', null)

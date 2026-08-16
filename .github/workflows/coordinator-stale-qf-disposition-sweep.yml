@@ -1,0 +1,123 @@
+# SD-LEO-INFRA-STALE-QF-DISPOSITION-SWEEP-001 (FR-9)
+#
+# Weekly dry-run sweep of open, unclaimed quick_fixes rows past the STALE_QF_DAYS fence,
+# after the coordinator has completed the initial bulk --apply pass (H2-controlled,
+# chairman-lined). The scheduled trigger NEVER applies -- only a manual workflow_dispatch
+# with dry_run explicitly 'false' can request --apply, and --apply still refuses inside the
+# script itself (FR-2/FR-8) unless the disposition columns exist live and h2_confirmed is set.
+
+name: Stale QF Disposition Sweep
+
+on:
+  schedule:
+    # Weekly, Monday 06:00 UTC.
+    - cron: '0 6 * * 1'
+  workflow_dispatch:
+    inputs:
+      dry_run:
+        description: 'If false, run --apply (still requires h2_confirmed). Any trigger other than a manual dispatch with this explicitly set to false always dry-runs.'
+        required: false
+        default: 'true'
+      h2_confirmed:
+        description: 'ISO date the coordinator completed the one-time H2 two-sided verification pass (required for --apply; see FR-8)'
+        required: false
+        default: ''
+      seat_count:
+        description: 'Override live worker seat-count auto-detection (optional)'
+        required: false
+        default: ''
+
+permissions:
+  contents: read
+
+concurrency:
+  group: stale-qf-disposition-sweep
+  cancel-in-progress: false
+
+jobs:
+  sweep:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    env:
+      SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+      SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
+      # Piped through env vars (not spliced directly into the run: script body via ${{ }}) so a
+      # workflow_dispatch input containing shell metacharacters cannot inject into the sweep
+      # command line.
+      EVENT_NAME: ${{ github.event_name }}
+      DRY_RUN_INPUT: ${{ github.event.inputs.dry_run }}
+      H2_CONFIRMED_INPUT: ${{ github.event.inputs.h2_confirmed }}
+      SEAT_COUNT_INPUT: ${{ github.event.inputs.seat_count }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 1
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'npm'
+
+      - name: Install minimal deps
+        run: npm ci --ignore-scripts --prefer-offline --no-audit
+
+      - name: Run sweep
+        id: run
+        shell: bash
+        run: |
+          # SECURITY sub-agent finding, EXEC-TO-PLAN: `node ... | tee sweep.log` masks the
+          # sweep's own exit code behind tee's (always-0) status unless pipefail is active, which
+          # would let a genuine SWEEP_FATAL -- including the PAGINATION_MISMATCH safety abort,
+          # whose entire purpose is refusing to proceed on a possibly-truncated read -- report as
+          # a green step. Set explicitly rather than relying on any assumption about the runner's
+          # default shell flags.
+          set -euo pipefail
+          #
+          # THE CORRECTED GATE (FR-9): POSITIVE and explicit, never a
+          # `${{ github.event.inputs.x || 'false' }}`-style fallback. On a `schedule` trigger
+          # github.event.inputs is entirely empty/undefined, so that fallback shape silently
+          # resolves to a truthy default on every scheduled tick -- the exact
+          # .github/workflows/orphan-qf-reaper.yml class of bug this workflow deliberately does
+          # NOT copy. Only a workflow_dispatch with dry_run explicitly "false" can request
+          # --apply; every other trigger (including schedule) stays dry-run, no fallthrough.
+          #
+          # ARGV is built as a bash ARRAY, never a concatenated-then-word-split string: a
+          # STRING build (`ARGS="$ARGS --seat-count $SEAT_COUNT_INPUT"` then `node ... $ARGS`
+          # unquoted) lets a crafted seat_count input like `3 --apply --h2-confirmed=2026-08-16`
+          # word-split into EXTRA argv entries at the final unquoted expansion, defeating this
+          # exact dry-run gate regardless of dry_run's own value (TESTING sub-agent finding,
+          # EXEC-TO-PLAN). An array + `"${ARGS[@]}"` keeps every element a single argv token no
+          # matter what characters it contains. seat_count is additionally validated as a plain
+          # integer, so a malformed input fails loudly instead of silently misparsing.
+          ARGS=(--json)
+          if [ "$EVENT_NAME" = "workflow_dispatch" ] && [ "$DRY_RUN_INPUT" = "false" ]; then
+            ARGS+=(--apply)
+            if [ -n "$H2_CONFIRMED_INPUT" ]; then
+              ARGS+=("--h2-confirmed=$H2_CONFIRMED_INPUT")
+            fi
+          fi
+          if [ -n "$SEAT_COUNT_INPUT" ]; then
+            if ! [[ "$SEAT_COUNT_INPUT" =~ ^[0-9]+$ ]]; then
+              echo "::error::seat_count must be a plain non-negative integer, got: $SEAT_COUNT_INPUT"
+              exit 1
+            fi
+            ARGS+=(--seat-count "$SEAT_COUNT_INPUT")
+          fi
+          echo "Running: node scripts/coordinator-stale-qf-disposition-sweep.mjs ${ARGS[*]}"
+          node scripts/coordinator-stale-qf-disposition-sweep.mjs "${ARGS[@]}" 2>&1 | tee sweep.log
+
+      - name: Extract summary for job summary
+        if: always()
+        run: |
+          echo "## Stale QF Disposition Sweep — $(date -u +%Y-%m-%dT%H:%MZ)" >> "$GITHUB_STEP_SUMMARY"
+          echo '```json' >> "$GITHUB_STEP_SUMMARY"
+          tail -20 sweep.log >> "$GITHUB_STEP_SUMMARY" || echo '{"note":"no output captured"}' >> "$GITHUB_STEP_SUMMARY"
+          echo '```' >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Upload log artifact
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: stale-qf-disposition-sweep-log-${{ github.run_id }}
+          path: sweep.log
+          retention-days: 30

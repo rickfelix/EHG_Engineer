@@ -135,7 +135,7 @@ export function classifyQuickFixes(quickFixes, triageResults = new Map(), sessio
       !claimingSessionId &&
       !qf.pr_url &&
       !qf.commit_sha &&
-      ageDays(qf.created_at) >= STALE_QF_DAYS;
+      ageDays(qf.created_at, qf.verified_at) >= STALE_QF_DAYS;
 
     // SD-LEO-FIX-QUICK-FIXES-NEEDS-001: durable time-gated defer. Mirrors the
     // isAutoStartableQF() guard in worker-checkin.cjs so a human operator can't
@@ -223,7 +223,7 @@ export function renderQFRow(qf, indent = '') {
     console.log(`${indent}  ${colors.bold}${tierBadge}${colors.reset} ${badge}${verifyBadge}${deferBadge}${factoryLaneBadge}${statusBadge}${qf.id} - ${truncate(qf.title, 45)}  ${colors.dim}${qf.severity}  ${age}${colors.reset}`);
     console.log(`${indent}       ${colors.dim}Est: ${loc} | Type: ${qf.type} | Target: ${target}${colors.reset}`);
     if (qf._verifyFirst) {
-      console.log(`${indent}       ${colors.dim}⚠ open ${ageDays(qf.created_at)}d & unclaimed — may already be resolved by another SD; verify before starting (not auto-routed)${colors.reset}`);
+      console.log(`${indent}       ${colors.dim}⚠ open ${ageDays(qf.created_at, qf.verified_at)}d & unclaimed — may already be resolved by another SD; verify before starting (not auto-routed)${colors.reset}`);
     }
     if (qf._deferred) {
       console.log(`${indent}       ${colors.dim}⏳ gated until ${qf.not_before} — not claimable/auto-startable until then${colors.reset}`);
@@ -277,8 +277,7 @@ function inferTier(estimatedLoc) {
  * Whole-day age of a timestamp. QF-20260525-522: shared by the freshness gate
  * and formatAge so the "verify-first" threshold and the displayed age agree.
  */
-function ageDays(createdAt) {
-  if (!createdAt) return 0;
+function ageDays(createdAt, verifiedAt) {
   // SD-LEO-INFRA-REPO-WIDE-TIMEZONE-001. quick_fixes.created_at is `timestamp without time
   // zone`, so PostgREST returns it with no designator and new Date() reads it as LOCAL —
   // shifting this age by the host's UTC offset. This site was INVISIBLE to the repo scan that
@@ -286,7 +285,18 @@ function ageDays(createdAt) {
   // string `created_at` never shares a line with Date.now(). It carries the identical defect to
   // scripts/worker-checkin.cjs:isAutoStartableQF, independently — the two are separate
   // implementations of the same predicate.
-  return Math.floor(pgTimestampAgeMs(createdAt) / (1000 * 60 * 60 * 24));
+  //
+  // SD-LEO-INFRA-STALE-QF-DISPOSITION-SWEEP-001 (FR-6): a disposition sweep re-verify
+  // (verified_at) resets staleness the same way it does in qf-auto-start.cjs's eligibility
+  // predicate — this reader must agree with that gate or the two disagree on the same QF.
+  // pgTimestampAgeMs() returns NaN (never 0) for an absent/unparseable timestamp, and
+  // Math.min() with a NaN argument returns NaN, so candidates are filtered to finite values
+  // BEFORE taking the min (a more recent timestamp = smaller age).
+  const candidates = [verifiedAt, createdAt]
+    .map((ts) => (ts ? pgTimestampAgeMs(ts) : NaN))
+    .filter(Number.isFinite);
+  if (candidates.length === 0) return 0;
+  return Math.floor(Math.min(...candidates) / (1000 * 60 * 60 * 24));
 }
 
 /**

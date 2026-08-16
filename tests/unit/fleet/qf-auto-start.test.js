@@ -113,3 +113,34 @@ describe('isAutoStartableQF — one representative case per exclusion branch', (
     expect(isAutoStartableQF(qf({ created_at: null }), NOW)).toBe(false);
   });
 });
+
+// SD-LEO-INFRA-STALE-QF-DISPOSITION-SWEEP-001 (FR-6): verified_at is a second, more-recent
+// age-source signal a disposition-sweep re-verify can stamp. The age computation takes the
+// MOST RECENT of verified_at/created_at (Math.max on epoch ms), so a stale row the sweep just
+// re-verified re-enters auto-start immediately rather than waiting for a fresh created_at.
+describe('isAutoStartableQF — FR-6 verified_at age-source', () => {
+  const staleCreated = new Date(NOW - (STALE_QF_DAYS + 30) * 24 * 60 * 60 * 1000).toISOString(); // now-60d-ish
+  const recentVerified = new Date(NOW - 1 * 24 * 60 * 60 * 1000).toISOString(); // now-1d
+
+  test('a row with verified_at=now-1d and created_at=now-60d IS auto-startable (was NOT, before this fix)', () => {
+    expect(isAutoStartableQF(qf({ created_at: staleCreated }), NOW)).toBe(false); // baseline: created_at alone is stale
+    expect(isAutoStartableQF(qf({ created_at: staleCreated, verified_at: recentVerified }), NOW)).toBe(true);
+  });
+
+  test('verified_at absent/undefined degrades to created_at-only (pre-migration / not-yet-selected column)', () => {
+    const row = qf({ created_at: staleCreated });
+    delete row.verified_at;
+    expect(isAutoStartableQF(row, NOW)).toBe(false);
+    expect(isAutoStartableQF(qf({ created_at: staleCreated, verified_at: null }), NOW)).toBe(false);
+  });
+
+  test('an OLDER verified_at than created_at does not resurrect staleness — created_at (the more recent) still wins', () => {
+    const veryOldVerified = new Date(NOW - (STALE_QF_DAYS + 90) * 24 * 60 * 60 * 1000).toISOString();
+    const freshCreated = new Date(NOW - (STALE_QF_DAYS - 1) * 24 * 60 * 60 * 1000).toISOString();
+    expect(isAutoStartableQF(qf({ created_at: freshCreated, verified_at: veryOldVerified }), NOW)).toBe(true);
+  });
+
+  test('both verified_at and created_at unparseable excludes (fail-closed), never throws', () => {
+    expect(isAutoStartableQF(qf({ created_at: 'not-a-date', verified_at: 'also-not-a-date' }), NOW)).toBe(false);
+  });
+});

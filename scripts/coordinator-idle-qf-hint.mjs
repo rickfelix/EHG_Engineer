@@ -281,11 +281,28 @@ export async function runIdleQfHintCore(supabase, { nowMs = Date.now(), dryRun =
 
   // SD-LEO-INFRA-COUNT-TRUNCATION-DISCIPLINE-001 FR-6 batch 9: quick_fixes is unbounded and this
   // open-backlog read feeds the ranked hint list below — paginate to completion; fail-open to [].
+  //
+  // SD-LEO-INFRA-STALE-QF-DISPOSITION-SWEEP-001 FR-6: verified_at is a staged (not-yet-applied)
+  // column read by isAutoStartableQF() (via eligibleQfCandidates below) as an alternate
+  // staleness-clock source. Probe for it first rather than selecting it unconditionally --
+  // fetchAllPaginated throws a wrapped Error on any page failure (losing the structured
+  // error.code), and this call site's existing catch is a blanket fail-open to qfs=[], so an
+  // unconditional select would silently zero out every idle-hint candidate until the migration
+  // lands (the QF-20260720-763 / QF-20260724-598 outage class the other readers guard against
+  // with a post-error layered retry -- this call site probes first instead, since
+  // fetchAllPaginated's thrown error doesn't preserve .code for a post-error retry to key on).
+  const QF_HINT_BASE_COLUMNS = 'id, title, description, severity, status, pr_url, commit_sha, created_at, routing_tier, not_before, owner, release_condition';
+  let verifiedAtSelectable = true;
+  try {
+    const { error: probeErr } = await supabase.from('quick_fixes').select('verified_at').limit(1); // schema-lint-disable-line: verified_at is staged (database/migrations/20260816_add_quick_fixes_disposition_columns.sql), probed here before use
+    verifiedAtSelectable = !(probeErr && probeErr.code === '42703');
+  } catch { verifiedAtSelectable = false; }
+
   let qfs;
   try {
     qfs = await fetchAllPaginated(() => supabase
       .from('quick_fixes')
-      .select('id, title, description, severity, status, pr_url, commit_sha, created_at, routing_tier, not_before, owner, release_condition')
+      .select(verifiedAtSelectable ? `${QF_HINT_BASE_COLUMNS}, verified_at` : QF_HINT_BASE_COLUMNS)
       .eq('status', 'open')
       .is('pr_url', null)
       .is('commit_sha', null)

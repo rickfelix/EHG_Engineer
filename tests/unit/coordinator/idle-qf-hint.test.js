@@ -108,25 +108,46 @@ describe('eligibleIdleWorkers — sd_key + spin-up grace', () => {
 });
 
 describe('runIdleQfHintCore — end-to-end decision (dry-run seam, no live insert)', () => {
-  function makeFakeSupabase({ sessions, qfs }) {
+  function qfsForSelect(qfs, selectedCols) {
+    if (selectedCols.includes('verified_at')) return qfs;
+    return (qfs || []).map(({ verified_at, ...rest }) => rest);
+  }
+
+  // verifiedAtMissing simulates the staged (not-yet-applied) verified_at column
+  // (SD-LEO-INFRA-STALE-QF-DISPOSITION-SWEEP-001 FR-6): the pre-flight probe
+  // (.select('verified_at').limit(1)) resolves 42703 when true, null-error otherwise.
+  function makeFakeSupabase({ sessions, qfs, verifiedAtMissing = false }) {
     return {
       from(table) {
+        let selectedCols = '';
         return {
-          select() { return this; },
+          select(cols) { selectedCols = cols || ''; return this; },
           eq() { return this; },
           is() { return this; },
           order() { return this; },
+          // The verified_at pre-flight probe's terminal call.
+          limit() {
+            if (table === 'quick_fixes' && selectedCols === 'verified_at') {
+              return Promise.resolve(verifiedAtMissing
+                ? { data: null, error: { code: '42703', message: 'column quick_fixes.verified_at does not exist' } }
+                : { data: [], error: null });
+            }
+            return Promise.resolve({ data: [], error: null });
+          },
           // fetchAllPaginated's terminal call (SD-LEO-INFRA-COUNT-TRUNCATION-DISCIPLINE-001 FR-6
           // batch 9: runIdleQfHintCore now paginates both reads) — resolve the same {data, error}
           // the implicit-await path below produces; both fixtures are single short pages.
+          // Mirrors real PostgREST: strip verified_at from returned rows when the resolved
+          // select column list didn't ask for it, so a test can prove the probe's outcome
+          // actually changed what the main query returns (not just that it ran without crashing).
           range() {
             if (table === 'claude_sessions') return Promise.resolve({ data: sessions, error: null });
-            if (table === 'quick_fixes') return Promise.resolve({ data: qfs, error: null });
+            if (table === 'quick_fixes') return Promise.resolve({ data: qfsForSelect(qfs, selectedCols), error: null });
             return Promise.resolve({ data: [], error: null });
           },
           then(resolve) {
             if (table === 'claude_sessions') return resolve({ data: sessions, error: null });
-            if (table === 'quick_fixes') return resolve({ data: qfs, error: null });
+            if (table === 'quick_fixes') return resolve({ data: qfsForSelect(qfs, selectedCols), error: null });
             resolve({ data: [], error: null });
           },
         };
@@ -160,5 +181,45 @@ describe('runIdleQfHintCore — end-to-end decision (dry-run seam, no live inser
     const summary = await runIdleQfHintCore(sb, { nowMs: NOW, dryRun: true });
     expect(summary.idleWorkers).toBe(0);
     expect(summary.hinted).toBe(0);
+  });
+
+  // SD-LEO-INFRA-STALE-QF-DISPOSITION-SWEEP-001 FR-6: this was the third reader of
+  // isAutoStartableQF (after qf-auto-start.cjs's other 2 known call sites) missing verified_at
+  // from its column list, found post-review -- the pre-flight probe fix must actually change
+  // what reaches isAutoStartableQF, not merely avoid crashing.
+  describe('FR-6: verified_at pre-flight probe (staged, not-yet-applied column)', () => {
+    const oldCreatedAt = new Date(NOW - 10 * 24 * 60 * 60 * 1000).toISOString(); // 10d old, past the 3d fence
+    const recentVerifiedAt = new Date(NOW - 60 * 60 * 1000).toISOString(); // 1h ago
+
+    it('verified_at selectable: a stale-by-created_at QF re-verified recently is hinted (clock reset)', async () => {
+      const sb = makeFakeSupabase({
+        sessions: [worker()],
+        qfs: [qf({ created_at: oldCreatedAt, verified_at: recentVerifiedAt })],
+        verifiedAtMissing: false,
+      });
+      const summary = await runIdleQfHintCore(sb, { nowMs: NOW, dryRun: true });
+      expect(summary.hinted).toBe(1);
+    });
+
+    it('verified_at NOT selectable (migration unapplied): same QF stays excluded via created_at alone, no crash, no zeroed-out candidate set', async () => {
+      const sb = makeFakeSupabase({
+        sessions: [worker()],
+        qfs: [qf({ created_at: oldCreatedAt, verified_at: recentVerifiedAt })],
+        verifiedAtMissing: true,
+      });
+      const summary = await runIdleQfHintCore(sb, { nowMs: NOW, dryRun: true });
+      expect(summary.idleWorkers).toBe(1); // proves qfs/sessions still loaded -- not a blanket fail-open to []
+      expect(summary.hinted).toBe(0); // created_at alone is still 10d stale -> correctly excluded
+    });
+
+    it('verified_at NOT selectable: an unrelated fresh QF in the same run is still hinted normally', async () => {
+      const sb = makeFakeSupabase({
+        sessions: [worker()],
+        qfs: [qf({ created_at: oldCreatedAt, verified_at: recentVerifiedAt }), qf({ id: 'QF-20260720-002' })],
+        verifiedAtMissing: true,
+      });
+      const summary = await runIdleQfHintCore(sb, { nowMs: NOW, dryRun: true });
+      expect(summary.hinted).toBe(1); // the fresh routine QF, not the stale one
+    });
   });
 });
