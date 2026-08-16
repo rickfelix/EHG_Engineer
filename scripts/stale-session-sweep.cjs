@@ -1536,22 +1536,45 @@ async function runQaFixtureScan(ctx) {
   // QF-20260423-909: Guard against resetting SDs that legitimately completed
   // PLAN-TO-LEAD and are resting in pending_approval awaiting LEAD-FINAL-APPROVAL.
   // sd_phase_handoffs.sd_id holds BOTH uuid- and sd_key-style values; check both.
+  //
+  // SD-LEO-INFRA-ORCH-PARENT-LIFECYCLE-LANES-001 (FR-5): the original query checked "does ANY
+  // accepted PLAN-TO-LEAD row EVER exist for this SD" with no recency filter at all -- an old,
+  // superseded accepted row (e.g. from a prior cycle) permanently suppressed the reset AND kept
+  // emitting the misleading "awaiting LEAD-FINAL-APPROVAL" message even after the SD's state had
+  // since regressed (a real, live specimen: -H's own PLAN-TO-LEAD history). Fixed to check the
+  // LATEST PLAN-TO-LEAD handoff per SD (ordered by created_at DESC, never accepted_at -- TR-2:
+  // 476+ historically-accepted rows have accepted_at IS NULL) -- only THAT verdict decides whether
+  // "awaiting LEAD-FINAL-APPROVAL" is still true.
   const stuckApprovalIds = stuckApproval.flatMap(sd => [sd.id, sd.sd_key].filter(Boolean));
   let acceptedPlanToLeadSet = new Set();
   if (stuckApprovalIds.length > 0) {
     const { data: p2lHandoffs } = await supabase
       .from('sd_phase_handoffs')
-      .select('sd_id')
+      .select('sd_id, status, created_at')
       .eq('handoff_type', 'PLAN-TO-LEAD')
-      .eq('status', 'accepted')
-      .in('sd_id', stuckApprovalIds);
-    acceptedPlanToLeadSet = new Set((p2lHandoffs || []).map(h => h.sd_id));
+      .in('sd_id', stuckApprovalIds)
+      .order('created_at', { ascending: false });
+    // Latest-per-SD, resolving the dual-keying: a single logical SD may have handoff rows under
+    // EITHER its uuid or its sd_key across eras, so group by the LOGICAL sd_key, not raw h.sd_id.
+    const idToSdKey = new Map();
+    for (const sd of stuckApproval) {
+      if (sd.id) idToSdKey.set(sd.id, sd.sd_key);
+      if (sd.sd_key) idToSdKey.set(sd.sd_key, sd.sd_key);
+    }
+    const latestBySdKey = new Map();
+    for (const h of (p2lHandoffs || [])) {
+      const logicalKey = idToSdKey.get(h.sd_id);
+      if (logicalKey && !latestBySdKey.has(logicalKey)) latestBySdKey.set(logicalKey, h); // rows arrive created_at DESC -> first seen is latest
+    }
+    for (const [sdKey, h] of latestBySdKey) {
+      if (h.status === 'accepted') acceptedPlanToLeadSet.add(sdKey);
+    }
   }
 
   for (const sd of stuckApproval) {
-    // QF-20260423-909: Skip reset if PLAN-TO-LEAD handoff already accepted —
-    // SD is legitimately awaiting LEAD-FINAL-APPROVAL, not stuck.
-    if (acceptedPlanToLeadSet.has(sd.sd_key) || acceptedPlanToLeadSet.has(sd.id)) {
+    // QF-20260423-909: Skip reset if the LATEST PLAN-TO-LEAD handoff is accepted — SD is
+    // legitimately awaiting LEAD-FINAL-APPROVAL, not stuck. (FR-5: latest, not merely "ever".)
+    if (acceptedPlanToLeadSet.has(sd.sd_key)) {
       actions.push('QA: skipped reset on ' + sd.sd_key + ' — PLAN-TO-LEAD accepted, awaiting LEAD-FINAL-APPROVAL');
       continue;
     }
@@ -1576,7 +1599,17 @@ async function runQaFixtureScan(ctx) {
       // SD-FDBK-INFRA-EXEC-CONTEXT-GUARD-001 (FR-3, AC-4/AC-5): generalized
       // accepted-handoff override guard for the pending_approval reset path.
       // Tag: NEW-GUARD (pre-existing reset behavior preserved on allow).
+      //
+      // SD-LEO-INFRA-ORCH-PARENT-LIFECYCLE-LANES-001 (FR-5): a refusal here previously only
+      // logged via isSweepResetAllowed's own bare console.log/console.warn -- invisible to
+      // anything reading the sweep's structured actions[] summary (dashboard, coordinator query).
+      // A live specimen (-C: accepted LEAD-TO-PLAN/PLAN-TO-EXEC/EXEC-TO-PLAN, latest PLAN-TO-LEAD
+      // 'blocked') is correctly protected from reset by this guard, but that correct decision was
+      // silent at the actions[] layer -- worse invisibility than the misleading-but-visible
+      // message this same FR fixes above. A refused reset is now surfaced explicitly, never a
+      // bare `continue`.
       if (!(await isSweepResetAllowed(sd.sd_key, 'LEAD', 'pending_approval-reset'))) {
+        actions.push('QA: reset refused on ' + sd.sd_key + ' — accepted handoff(s) past LEAD exist or gate error; see WARN/SKIP_RESET log for detail (see stale-session-sweep console output)');
         continue;
       }
       // QF-20260727-363: `.select()` added. Without it this update returned no rows and the code
