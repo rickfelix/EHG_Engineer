@@ -118,6 +118,42 @@ describe('findActiveOverride content_hash binding — real DB (TS-8)', () => {
     expect(error).toBeNull();
     expect(data.length).toBe(0);
   });
+
+  // TS-9 / FR-5 (VALIDATION VAL-3: this scenario was declared in the file header but had no
+  // actual test — FR-5's own text says it exists "so it is deliberately tested, not an unverified
+  // side effect of FR-4"). SDs are measured to have critique bursts up to 17 rows; a bare
+  // .limit(10) with no content filter could push a matching override outside the window purely on
+  // row count. The content_hash filter narrows the candidate set BEFORE .limit(10), so a matching
+  // override survives regardless of how many non-matching rows sort ahead of it.
+  it('a matching override survives past 10 non-matching rows because content_hash narrows before .limit(10) (TS-9/FR-5)', async () => {
+    const matchingHash = `${HASH_PREFIX}burst-match-${Date.now()}`;
+    // 12 newer, non-matching blocking rows (each with a distinct content_hash) inserted AFTER the
+    // real override row below, so a bare created_at-DESC .limit(10) with no content filter would
+    // push the real match outside the window.
+    await insertFixtureRow({
+      content_hash: matchingHash,
+      override_reason: 'itest: TS-9 the real, matching override',
+      override_by: 'integration-test',
+    });
+    for (let i = 0; i < 12; i++) {
+      await insertFixtureRow({ content_hash: `${HASH_PREFIX}burst-noise-${i}-${Date.now()}` });
+    }
+
+    const { data, error } = await supabase
+      .from('plan_critiques')
+      .select('id, content_hash, override_reason')
+      .eq('sd_id', SD_ID)
+      .eq('overall_severity', 'block')
+      .eq('content_hash', matchingHash)
+      .not('override_reason', 'is', null)
+      .not('override_by', 'is', null)
+      .order('created_at', { ascending: false })
+      .limit(10);
+
+    expect(error).toBeNull();
+    expect(data.length).toBe(1);
+    expect(data[0].content_hash).toBe(matchingHash);
+  });
 });
 
 describe('critiquePlanProposal cache-hit path — real DB (TS-5/TS-6)', () => {

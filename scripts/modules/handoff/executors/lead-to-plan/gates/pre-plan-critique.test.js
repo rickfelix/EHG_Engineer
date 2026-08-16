@@ -29,7 +29,7 @@ const NEUTRAL_PRD = {
   risks: [],
 };
 
-function makeSupabase({ prd = NEUTRAL_PRD, prdError = null, overrideRows = [], insertError = null } = {}) {
+function makeSupabase({ prd = NEUTRAL_PRD, prdError = null, overrideRows = [], insertError = null, overrideError = null } = {}) {
   const inserted = [];
   const client = {
     _inserted: inserted,
@@ -55,7 +55,7 @@ function makeSupabase({ prd = NEUTRAL_PRD, prdError = null, overrideRows = [], i
           not: () => chain,
           gte: () => chain,
           order: () => chain,
-          limit: async () => ({ data: overrideRows, error: null }),
+          limit: async () => ({ data: overrideError ? null : overrideRows, error: overrideError }),
         };
         return {
           insert: async (row) => {
@@ -173,6 +173,27 @@ describe('gate promotion (FR-1)', () => {
     const result = await validatePrePlanCritique({ sd: SD, supabase });
     expect(result.pass).toBe(false);
     expect(result.score).toBe(0);
+  });
+
+  // VALIDATION (PLAN_VERIFICATION evidence, VAL-1, HIGH): a schema-missing error on the OVERRIDE
+  // LOOKUP itself (not the insert) must be distinguishable from "no override was ever recorded" —
+  // the block still correctly stands (fail-closed), but the gate must say WHY, loudly, matching
+  // FR-6's own precedent at persistCritique. Before this fix, `if (error || ...) return null` made
+  // this indistinguishable from a genuine absence.
+  it('a schema-missing error on the override lookup itself is reported loudly, distinct from "no override recorded"', async () => {
+    critiquePlanProposal.mockResolvedValue({
+      findings: [{ severity: 'block', category: 'missing_criteria', message: 'untestable', location: 'PRD' }],
+      overall_severity: 'block',
+      model_used: 'test-model',
+      token_usage: null,
+      contentHash: 'hash-abc123',
+    });
+    const supabase = makeSupabase({ overrideError: { code: '42703', message: 'column plan_critiques.content_hash does not exist' } });
+    const result = await validatePrePlanCritique({ sd: SD, supabase });
+    expect(result.pass).toBe(false); // still fail-closed — no override CAN apply
+    expect(result.score).toBe(0);
+    expect(result.warnings.join(' ')).toMatch(/SCHEMA MISSING on override lookup/);
+    expect(result.warnings.join(' ')).toMatch(/NOT evidence that no override was ever recorded/);
   });
 
   it('still PASSES clean at 100 (direction 2: promotion did not break the pass path)', async () => {

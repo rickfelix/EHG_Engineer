@@ -242,7 +242,7 @@ export async function validatePrePlanCritique(ctx) {
   // (FR-4/FR-5 — content_hash REPLACES findingsFingerprint as the binding predicate; see
   // findActiveOverride's own docstring for why).
   if (combined === 'block') {
-    const override = await findActiveOverride(supabase, sd.id, critique.contentHash);
+    const { override, schemaMissing } = await findActiveOverride(supabase, sd.id, critique.contentHash);
     if (override) {
       const msg = `BLOCK downgraded by audited override: ${override.override_by} — "${override.override_reason}" (critique ${override.id}, ${override.created_at})`;
       console.log(`   ⚠️  ${msg}`);
@@ -254,6 +254,13 @@ export async function validatePrePlanCritique(ctx) {
         issues: [],
         warnings,
       };
+    }
+    // VALIDATION VAL-1: a schema-missing lookup failure is NOT "no override recorded" — say so
+    // loudly, distinct from the generic block-issue text below, matching FR-6's own precedent.
+    if (schemaMissing) {
+      const msg = 'plan_critiques SCHEMA MISSING on override lookup — the writer shipped ahead of its migration (database/chairman-gated/20260816_plan_critiques_add_metadata_and_content_hash.sql). No override can bind until the migration applies; this is NOT evidence that no override was ever recorded. Do not treat this block as unoverridable-by-design.';
+      console.warn(`   ⚠️  ${msg}`);
+      warnings.push(msg);
     }
     return {
       pass: false,
@@ -354,15 +361,28 @@ export function findingsFingerprint(findings) {
  * matching override could fall outside a bare .limit(10) purely on row count, independent of
  * content).
  *
- * TR-5: a null/undefined currentContentHash returns null WITHOUT querying — never calls
- * .eq('content_hash', null). This is deliberately more conservative than relying on Postgres's
- * own NULL != NULL semantics (which already protects the other direction: a stored row with
- * content_hash IS NULL can never match a real hash value, and needs no special-casing here) —
+ * TR-5: a null/undefined currentContentHash returns {override: null} WITHOUT querying — never
+ * calls .eq('content_hash', null). This is deliberately more conservative than relying on
+ * Postgres's own NULL != NULL semantics (which already protects the other direction: a stored row
+ * with content_hash IS NULL can never match a real hash value, and needs no special-casing here) —
  * an override should never bind to a could-not-check block whose content identity was never
  * measured in the first place.
+ *
+ * VALIDATION (PLAN_VERIFICATION evidence, VAL-1, HIGH): returns {override, schemaMissing}, not a
+ * bare value — a schema-missing error (content_hash/metadata not yet migrated) must be
+ * DISTINGUISHABLE from a genuine "no override recorded" outcome, the same distinction FR-6 already
+ * gives persistCritique. Before this fix, `if (error || ...) return null` treated a 42703/PGRST204
+ * identically to "checked the table, no override exists" — measured live: while TR-3's migration
+ * is staged (not applied), EVERY blocking critique is silently unoverridable fleet-wide (30/30
+ * plan_critiques rows in the last 14 days were block-severity, 7 carried an override attempt) with
+ * no loud signal on this specific path, even though FR-6/the ROLLOUT PRECONDITION claimed the
+ * gate "degrades LOUDLY, never silently" for exactly this pre-migration window. The block still
+ * correctly stands either way (fail-closed is right — an override cannot apply if the table can't
+ * be queried) — what changes is that the OPERATOR now learns WHY, instead of concluding no
+ * override was ever recorded.
  */
 async function findActiveOverride(supabase, sdId, currentContentHash) {
-  if (!currentContentHash) return null;
+  if (!currentContentHash) return { override: null, schemaMissing: false };
   try {
     const since = new Date(Date.now() - OVERRIDE_LOOKBACK_DAYS * 24 * 60 * 60 * 1000).toISOString();
     const { data, error } = await supabase
@@ -378,15 +398,16 @@ async function findActiveOverride(supabase, sdId, currentContentHash) {
       .gte('created_at', since)
       .order('created_at', { ascending: false })
       .limit(10);
-    if (error || !data || data.length === 0) return null;
+    if (error) return { override: null, schemaMissing: SCHEMA_MISSING_CODES.has(error.code) };
+    if (!data || data.length === 0) return { override: null, schemaMissing: false };
     for (const row of data) {
       if (!String(row.override_reason).trim() || !String(row.override_by).trim()) continue;
-      return row;
+      return { override: row, schemaMissing: false };
     }
-    return null;
+    return { override: null, schemaMissing: false };
   } catch {
     // Fail-closed: an unreadable override table means NO override — the block stands.
-    return null;
+    return { override: null, schemaMissing: false };
   }
 }
 

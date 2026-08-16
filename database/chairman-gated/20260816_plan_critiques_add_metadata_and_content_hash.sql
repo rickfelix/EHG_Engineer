@@ -19,13 +19,18 @@
 --                  shownArch, totalArch}. cache_hit: bool + cache_source_id when this row reused
 --                  a prior LLM call (FR-4/FR-5) — see the COMMENT ON COLUMN below for the exact,
 --                  currently-accurate shape; this prose predates a later FR-4 revision.
---   content_hash  text — SHA-256 of the exact post-truncation/chunking PRD+arch text sent to the
---                  critique LLM, plus the requested model (adapter.defaultModel, NEVER
---                  response.model — see FR-4's binding-predicate note). Becomes findActiveOverride's
---                  new matching predicate (REPLACING findingsFingerprint, not ANDing with it),
---                  because a human override is realistically recorded minutes-to-days after a block,
---                  well outside any LLM-call-caching window — content identity is what must bind,
---                  not a specific LLM call's non-deterministic finding composition.
+--   content_hash  text — SHA-256 of the FULL, pre-truncation PRD+arch content (NOT the truncated
+--                  text actually sent to the LLM — SECURITY re-verification SEC-HIGH-1: hashing
+--                  only the sent/truncated text, even with a length appended, left content edited
+--                  entirely beyond the truncation boundary colliding with the original), plus the
+--                  requested model (adapter.defaultModel, NEVER response.model — see FR-4's
+--                  binding-predicate note) and the MAX_CRITIQUE_ANALYSIS_CHARS/SECTION_BUDGETS
+--                  constants (a budget change is a critic-version change, same role as model).
+--                  Becomes findActiveOverride's new matching predicate (REPLACING
+--                  findingsFingerprint, not ANDing with it), because a human override is
+--                  realistically recorded minutes-to-days after a block, well outside any
+--                  LLM-call-caching window — content identity is what must bind, not a specific
+--                  LLM call's non-deterministic finding composition.
 --
 -- TIER-1 (all_statements_provably_additive): verified by EXECUTING classifyMigration() against this
 -- exact SQL (database-agent, LEAD phase evidence 4cac69dc-0cf8-4b4f-95b3-c4febd8c06ed), not by
@@ -59,5 +64,5 @@
 
 ALTER TABLE plan_critiques ADD COLUMN IF NOT EXISTS metadata jsonb;
 ALTER TABLE plan_critiques ADD COLUMN IF NOT EXISTS content_hash text;
-COMMENT ON COLUMN plan_critiques.content_hash IS 'SHA-256 of the exact PRD+arch text sent to the LLM, post-truncation, plus adapter.defaultModel + archLoadStatus.';
+COMMENT ON COLUMN plan_critiques.content_hash IS 'SHA-256 of the FULL, pre-truncation PRD+arch content (not the truncated text sent to the LLM), plus adapter.defaultModel + archLoadStatus + the MAX_CRITIQUE_ANALYSIS_CHARS/SECTION_BUDGETS constants.';
 COMMENT ON COLUMN plan_critiques.metadata IS 'Gate-run metadata. llm_result: {findings,overall_severity} (RAW pre-merge LLM output, read by the FR-4 cache — never the combined top-level columns). truncated: {prd,arch,shownPrd,totalPrd,shownArch,totalArch}. cache_hit/cache_source_id: set when this row reused a prior LLM call.';

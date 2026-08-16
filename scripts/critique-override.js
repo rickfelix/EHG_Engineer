@@ -11,12 +11,14 @@
  * the override excuses.
  *
  * BINDING (SECURITY MEDIUM-1, evidence e77d1c4b; predicate updated by SD-LEO-INFRA-PRE-PLAN-
- * CRITIQUE-PRD-TRUNCATION-001 FR-4/FR-5): the gate honors an override only when the SAME
- * content_hash (the exact post-truncation PRD+arch text + requested model, SHA-256'd) reappears
- * on a later run — not a findings-fingerprint match. content-identity binds across the realistic
- * minutes-to-days gap between a block and a human running this CLI; a fingerprint match could
- * not, since the LLM's findings composition is non-deterministic even on unchanged input. A
- * later critique over DIFFERENT PRD/arch content re-blocks and needs a fresh override on ITS row.
+ * CRITIQUE-PRD-TRUNCATION-001 FR-4/FR-5, SEC-HIGH-1): the gate honors an override only when the
+ * SAME content_hash (SHA-256 of the FULL, pre-truncation PRD+arch content + requested model +
+ * the critique budget constants — NOT just the truncated text sent to the LLM, closed after
+ * SEC-HIGH-1's re-verification) reappears on a later run — not a findings-fingerprint match.
+ * content-identity binds across the realistic minutes-to-days gap between a block and a human
+ * running this CLI; a fingerprint match could not, since the LLM's findings composition is
+ * non-deterministic even on unchanged input. A later critique over DIFFERENT PRD/arch content
+ * re-blocks and needs a fresh override on ITS row.
  *
  * HONEST RESIDUAL: override_by is stamped provenance, not authentication — anyone holding
  * the service-role key can write anything here. The value of this path over a raw UPDATE
