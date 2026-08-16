@@ -50,6 +50,26 @@ function extractFunctionBody(fullSrc, exportedFnName) {
 
 const fnBody = extractFunctionBody(src, 'handleExecuteWithContinuation');
 
+// Same technique as extractFunctionBody, applied to a call's own argument list instead of a
+// function body — end-anchored on the matching closing paren rather than a fixed-length
+// slice. VALIDATION's finding: a fixed slice(idx, idx+600) overshoots into unrelated code
+// once the call grows past 600 chars, silently widening what the trailing negative assertion
+// no longer covers. This never returns a wrong answer for either assertion direction.
+function extractBalancedCall(bodySrc, callStartMarker) {
+  const startIdx = bodySrc.indexOf(callStartMarker);
+  if (startIdx === -1) return null;
+  const openParenIdx = bodySrc.indexOf('(', startIdx + callStartMarker.length - 1);
+  let depth = 0;
+  for (let i = openParenIdx; i < bodySrc.length; i++) {
+    if (bodySrc[i] === '(') depth++;
+    else if (bodySrc[i] === ')') {
+      depth--;
+      if (depth === 0) return bodySrc.slice(startIdx, i + 1);
+    }
+  }
+  return null;
+}
+
 describe('cli-main.js handleExecuteWithContinuation — reprint seam wiring (FR-3/FR-4)', () => {
   it('handleExecuteWithContinuation exists and was extracted (sanity check on the extraction itself)', () => {
     expect(fnBody, 'extractFunctionBody found no match -- either the function was renamed/removed, or the brace-depth scan is broken').not.toBeNull();
@@ -71,10 +91,11 @@ describe('cli-main.js handleExecuteWithContinuation — reprint seam wiring (FR-
   });
 
   it('TS-6 — the reprintFn passed to runWithGuaranteedReprint reprints originalResult/originalHandoffType/originalSdId, never the mutating currentResult/currentHandoffType/currentSdId loop variables', () => {
-    const guaranteedReprintIdx = fnBody.indexOf('return runWithGuaranteedReprint(');
-    // The reprintFn is the second argument; isolate the call's own argument list from the
-    // rest of the (much larger) function body that follows it.
-    const callSlice = fnBody.slice(guaranteedReprintIdx, guaranteedReprintIdx + 600);
+    // The reprintFn is the second argument; isolate exactly the call's own argument list
+    // (end-anchored on its matching closing paren) from the rest of the much larger function
+    // body that follows it.
+    const callSlice = extractBalancedCall(fnBody, 'return runWithGuaranteedReprint(');
+    expect(callSlice, 'runWithGuaranteedReprint call not found or unbalanced').not.toBeNull();
 
     expect(callSlice).toMatch(/printHandoffResultLines\(\s*originalResult\s*,\s*originalHandoffType\s*,\s*originalSdId\s*\)/);
     expect(callSlice).not.toMatch(/printHandoffResultLines\(\s*currentResult/);
