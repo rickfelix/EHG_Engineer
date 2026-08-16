@@ -1,0 +1,317 @@
+[
+  {
+    "proname": "advance_venture_stage",
+    "anon_exec": false,
+    "auth_exec": true,
+    "signature": "public.advance_venture_stage(p_venture_id uuid, p_from_stage integer, p_to_stage integer, p_transition_type text)",
+    "literal_public": false
+  },
+  {
+    "proname": "advance_venture_to_stage",
+    "anon_exec": false,
+    "auth_exec": true,
+    "signature": "public.advance_venture_to_stage(p_venture_id uuid, p_target_stage integer, p_build_method text, p_repo_url text)",
+    "literal_public": false
+  },
+  {
+    "proname": "approve_chairman_decision",
+    "anon_exec": true,
+    "auth_exec": true,
+    "signature": "public.approve_chairman_decision(p_decision_id uuid, p_rationale text, p_decided_by text, p_approval_type approval_type_enum, p_stepup_token uuid)",
+    "literal_public": true
+  },
+  {
+    "proname": "bootstrap_venture_workflow",
+    "anon_exec": false,
+    "auth_exec": true,
+    "signature": "public.bootstrap_venture_workflow(p_venture_id uuid)",
+    "literal_public": false
+  },
+  {
+    "proname": "can_auto_advance",
+    "anon_exec": false,
+    "auth_exec": true,
+    "signature": "public.can_auto_advance(p_stage_number integer)",
+    "literal_public": false
+  },
+  {
+    "proname": "check_feedback_duplicate",
+    "anon_exec": true,
+    "auth_exec": true,
+    "signature": "public.check_feedback_duplicate(p_venture_id uuid, p_title text)",
+    "literal_public": false
+  },
+  {
+    "proname": "claim_sd",
+    "anon_exec": true,
+    "auth_exec": true,
+    "signature": "public.claim_sd(p_sd_id text, p_session_id text, p_track text, p_force_takeover boolean, p_client_gate_version integer)",
+    "literal_public": true
+  },
+  {
+    "proname": "create_eva_conversation",
+    "anon_exec": false,
+    "auth_exec": true,
+    "signature": "public.create_eva_conversation(p_user_id uuid, p_title text, p_metadata jsonb)",
+    "literal_public": false
+  },
+  {
+    "proname": "delete_venture",
+    "anon_exec": false,
+    "auth_exec": true,
+    "signature": "public.delete_venture(p_venture_id uuid)",
+    "literal_public": false
+  },
+  {
+    "proname": "eva_circuit_allows_request",
+    "anon_exec": false,
+    "auth_exec": true,
+    "signature": "public.eva_circuit_allows_request(p_venture_id text)",
+    "literal_public": false
+  },
+  {
+    "proname": "export_blueprint_review",
+    "anon_exec": false,
+    "auth_exec": true,
+    "signature": "public.export_blueprint_review(p_venture_id uuid)",
+    "literal_public": false
+  },
+  {
+    "proname": "fn_advance_pipeline_stage",
+    "anon_exec": true,
+    "auth_exec": true,
+    "signature": "public.fn_advance_pipeline_stage(p_case_id uuid, p_from_stage text, p_to_stage text, p_provenance_event_id uuid, p_idempotency_key uuid)",
+    "literal_public": false
+  },
+  {
+    "proname": "fn_anon_ingress_prior_hour_count",
+    "anon_exec": true,
+    "auth_exec": true,
+    "signature": "public.fn_anon_ingress_prior_hour_count(p_source_type text)",
+    "literal_public": false
+  },
+  {
+    "proname": "fn_enforce_stage_advancement_artifact_gate",
+    "anon_exec": true,
+    "auth_exec": true,
+    "signature": "public.fn_enforce_stage_advancement_artifact_gate()",
+    "literal_public": true
+  },
+  {
+    "proname": "fn_is_chairman",
+    "anon_exec": true,
+    "auth_exec": true,
+    "signature": "public.fn_is_chairman()",
+    "literal_public": true
+  },
+  {
+    "proname": "fn_is_service_role",
+    "anon_exec": true,
+    "auth_exec": true,
+    "signature": "public.fn_is_service_role()",
+    "literal_public": true
+  },
+  {
+    "proname": "fn_list_chairman_webauthn_credentials",
+    "anon_exec": true,
+    "auth_exec": true,
+    "signature": "public.fn_list_chairman_webauthn_credentials()",
+    "literal_public": true
+  },
+  {
+    "proname": "fn_quick_fixes_validate_target_application",
+    "anon_exec": true,
+    "auth_exec": true,
+    "signature": "public.fn_quick_fixes_validate_target_application()",
+    "literal_public": true
+  },
+  {
+    "proname": "fn_relay_insert_sms_candidate",
+    "anon_exec": true,
+    "auth_exec": false,
+    "signature": "public.fn_relay_insert_sms_candidate(p_provider_message_id text, p_from_phone text, p_to_phone text, p_body_raw text, p_relay_secret text)",
+    "literal_public": false
+  },
+  {
+    "proname": "fn_stage_artifact_precondition",
+    "anon_exec": true,
+    "auth_exec": true,
+    "signature": "public.fn_stage_artifact_precondition(p_venture_id uuid, p_stage integer)",
+    "literal_public": true
+  },
+  {
+    "proname": "fn_submit_venture_error",
+    "anon_exec": true,
+    "auth_exec": false,
+    "signature": "public.fn_submit_venture_error(p_venture_id uuid, p_ingest_secret text, p_error_hash text, p_message text, p_context jsonb)",
+    "literal_public": false
+  },
+  {
+    "proname": "fn_submit_venture_feedback",
+    "anon_exec": true,
+    "auth_exec": false,
+    "signature": "public.fn_submit_venture_feedback(p_venture_id uuid, p_ingest_secret text, p_source_type text, p_severity text, p_category text, p_message text)",
+    "literal_public": false
+  },
+  {
+    "proname": "fn_submit_venture_user_feedback",
+    "anon_exec": true,
+    "auth_exec": false,
+    "signature": "public.fn_submit_venture_user_feedback(p_venture_id uuid, p_ingest_secret text, p_feedback_type text, p_title text, p_description text)",
+    "literal_public": false
+  },
+  {
+    "proname": "fn_user_has_company_access",
+    "anon_exec": true,
+    "auth_exec": true,
+    "signature": "public.fn_user_has_company_access(company_uuid uuid)",
+    "literal_public": true
+  },
+  {
+    "proname": "fn_user_has_venture_access",
+    "anon_exec": true,
+    "auth_exec": true,
+    "signature": "public.fn_user_has_venture_access(venture_uuid uuid)",
+    "literal_public": true
+  },
+  {
+    "proname": "fn_verify_and_consume_stepup_token",
+    "anon_exec": true,
+    "auth_exec": true,
+    "signature": "public.fn_verify_and_consume_stepup_token(p_token uuid, p_decision_id uuid)",
+    "literal_public": true
+  },
+  {
+    "proname": "fn_write_kill_audit_trail",
+    "anon_exec": true,
+    "auth_exec": true,
+    "signature": "public.fn_write_kill_audit_trail(p_venture_id uuid, p_lifecycle_stage integer, p_rationale text, p_decided_by uuid, p_source text, p_decision_id uuid)",
+    "literal_public": true
+  },
+  {
+    "proname": "get_gate_decision_status",
+    "anon_exec": true,
+    "auth_exec": true,
+    "signature": "public.get_gate_decision_status(p_venture_id uuid, p_stage integer)",
+    "literal_public": false
+  },
+  {
+    "proname": "is_chairman_role",
+    "anon_exec": true,
+    "auth_exec": true,
+    "signature": "public.is_chairman_role()",
+    "literal_public": false
+  },
+  {
+    "proname": "is_leo_admin",
+    "anon_exec": true,
+    "auth_exec": true,
+    "signature": "public.is_leo_admin()",
+    "literal_public": true
+  },
+  {
+    "proname": "kill_venture",
+    "anon_exec": false,
+    "auth_exec": true,
+    "signature": "public.kill_venture(p_venture_id uuid, p_rationale text)",
+    "literal_public": false
+  },
+  {
+    "proname": "lhe_pending_migration_applied",
+    "anon_exec": true,
+    "auth_exec": true,
+    "signature": "public.lhe_pending_migration_applied()",
+    "literal_public": true
+  },
+  {
+    "proname": "log_sd_mutation_audit",
+    "anon_exec": true,
+    "auth_exec": true,
+    "signature": "public.log_sd_mutation_audit()",
+    "literal_public": true
+  },
+  {
+    "proname": "log_stage_advance_override",
+    "anon_exec": false,
+    "auth_exec": true,
+    "signature": "public.log_stage_advance_override(p_venture_id uuid, p_reason text, p_verdict_snapshot jsonb)",
+    "literal_public": false
+  },
+  {
+    "proname": "park_venture_decision",
+    "anon_exec": false,
+    "auth_exec": true,
+    "signature": "public.park_venture_decision(p_decision_id uuid, p_park_type text, p_reason text, p_decided_by text)",
+    "literal_public": false
+  },
+  {
+    "proname": "record_eva_failure",
+    "anon_exec": false,
+    "auth_exec": true,
+    "signature": "public.record_eva_failure(p_venture_id text, p_error_message text, p_error_context jsonb)",
+    "literal_public": false
+  },
+  {
+    "proname": "record_eva_success",
+    "anon_exec": false,
+    "auth_exec": true,
+    "signature": "public.record_eva_success(p_venture_id text)",
+    "literal_public": false
+  },
+  {
+    "proname": "record_venture_error",
+    "anon_exec": true,
+    "auth_exec": true,
+    "signature": "public.record_venture_error(p_venture_id uuid, p_error_hash text, p_message text, p_context jsonb)",
+    "literal_public": false
+  },
+  {
+    "proname": "reject_chairman_decision",
+    "anon_exec": true,
+    "auth_exec": true,
+    "signature": "public.reject_chairman_decision(p_decision_id uuid, p_rationale text, p_decided_by text, p_stepup_token uuid)",
+    "literal_public": true
+  },
+  {
+    "proname": "rescan_stage_20",
+    "anon_exec": false,
+    "auth_exec": true,
+    "signature": "public.rescan_stage_20(p_venture_id uuid)",
+    "literal_public": false
+  },
+  {
+    "proname": "reset_eva_circuit",
+    "anon_exec": false,
+    "auth_exec": true,
+    "signature": "public.reset_eva_circuit(p_venture_id text, p_reset_by text)",
+    "literal_public": false
+  },
+  {
+    "proname": "set_global_auto_proceed",
+    "anon_exec": false,
+    "auth_exec": true,
+    "signature": "public.set_global_auto_proceed(p_enabled boolean)",
+    "literal_public": false
+  },
+  {
+    "proname": "set_session_working_context",
+    "anon_exec": true,
+    "auth_exec": true,
+    "signature": "public.set_session_working_context(p_session_id text, p_wc jsonb)",
+    "literal_public": true
+  },
+  {
+    "proname": "set_stage_override",
+    "anon_exec": false,
+    "auth_exec": true,
+    "signature": "public.set_stage_override(p_stage_number integer, p_auto_proceed boolean, p_reason text)",
+    "literal_public": false
+  },
+  {
+    "proname": "upsert_operator_cash_burn",
+    "anon_exec": true,
+    "auth_exec": true,
+    "signature": "public.upsert_operator_cash_burn(p_cash_usd numeric, p_ai_burn_usd numeric, p_other_burn_usd numeric, p_revenue_usd numeric)",
+    "literal_public": true
+  }
+]

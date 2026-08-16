@@ -7,7 +7,15 @@
 // today's ephemeral live-catalog fact — that one-shot measurement lives separately in
 // scripts/one-off/exec-live-baseline-close-remaining-security-001.mjs).
 import { describe, it, expect } from 'vitest';
+import { readFileSync } from 'node:fs';
+import { fileURLToPath } from 'node:url';
+import path from 'node:path';
 import { evaluateBucketCompliance, findUndeclaredExposures } from '../../scripts/audit-rpc-execute-grants.mjs';
+
+const __dirname = path.dirname(fileURLToPath(import.meta.url));
+const manifest = JSON.parse(
+  readFileSync(path.join(__dirname, '../../scripts/audit-rpc-execute-grants-buckets.json'), 'utf8')
+);
 
 describe('evaluateBucketCompliance — TS-1: discriminates an exposed function from a closed one', () => {
   it('Bucket A function still carrying anon/auth/public EXECUTE (exposed, pre-fix state) FAILS', () => {
@@ -69,5 +77,80 @@ describe('findUndeclaredExposures — TS-8: the completeness gate catches a func
     const declared = new Set(['public.known()']);
     const undeclared = findUndeclaredExposures(['public.known()', 'public.rogue()'], declared);
     expect(undeclared).toEqual(['public.rogue()']);
+  });
+});
+
+// SD-LEO-SEC-DEFACL-ANON-AUTH-AXIS-001 FR-2/FR-5: the manifest gained 3 Bucket C entries for the
+// binding-KEEP functions VALIDATION/Explore found undeclared. These tests read the REAL manifest
+// file (not a synthetic fixture) so a future edit that removes or misclassifies one of the 3
+// entries fails a test, not just a live gate run.
+describe('scripts/audit-rpc-execute-grants-buckets.json — binding-KEEP manifest coverage (FR-2)', () => {
+  const BINDING_KEEP_SIGNATURES = [
+    'public.fn_submit_venture_user_feedback(p_venture_id uuid, p_ingest_secret text, p_feedback_type text, p_title text, p_description text)',
+    'public.fn_submit_venture_feedback(p_venture_id uuid, p_ingest_secret text, p_source_type text, p_severity text, p_category text, p_message text)',
+    'public.fn_submit_venture_error(p_venture_id uuid, p_ingest_secret text, p_error_hash text, p_message text, p_context jsonb)',
+  ];
+
+  it('all 3 binding-KEEP signatures are present in Bucket C', () => {
+    const bucketCSignatures = manifest.buckets.C.functions.map((f) => f.signature);
+    for (const sig of BINDING_KEEP_SIGNATURES) {
+      expect(bucketCSignatures).toContain(sig);
+    }
+  });
+
+  it('none of the binding-KEEP signatures is present in Bucket A or B (they must never be revoked)', () => {
+    const revokeSignatures = new Set([
+      ...manifest.buckets.A.functions.map((f) => f.signature),
+      ...manifest.buckets.B.functions.map((f) => f.signature),
+    ]);
+    for (const sig of BINDING_KEEP_SIGNATURES) {
+      expect(revokeSignatures.has(sig)).toBe(false);
+    }
+  });
+
+  it('manifest grew from 27 to 30 total declared entries (no accidental duplicate or drop)', () => {
+    const total = Object.values(manifest.buckets).reduce((sum, b) => sum + b.functions.length, 0);
+    expect(total).toBe(30);
+  });
+
+  it('every declared signature is unique across all buckets (no function double-classified)', () => {
+    const all = Object.values(manifest.buckets).flatMap((b) => b.functions.map((f) => f.signature));
+    expect(new Set(all).size).toBe(all.length);
+  });
+});
+
+// SD-LEO-SEC-DEFACL-ANON-AUTH-AXIS-001 FR-5: mutation test at manifest scale, proving the
+// completeness gate actually discriminates rather than being vacuously green — run over the
+// REAL manifest's full signature set (30 entries), not a 2-entry toy fixture.
+describe('findUndeclaredExposures — FR-5 mutation test at manifest scale', () => {
+  it('a synthetic snapshot matching every declared signature reports zero undeclared', () => {
+    const declared = new Map(
+      Object.entries(manifest.buckets).flatMap(([bucket, { functions }]) =>
+        functions.map((f) => [f.signature, bucket])
+      )
+    );
+    const exposed = [...declared.keys()]; // every declared signature is "live-exposed" in this fixture
+    expect(findUndeclaredExposures(exposed, declared)).toEqual([]);
+  });
+
+  it('injecting one undeclared anon-EXEC signature into the exposed set is caught, not silently absorbed', () => {
+    const declared = new Map(
+      Object.entries(manifest.buckets).flatMap(([bucket, { functions }]) =>
+        functions.map((f) => [f.signature, bucket])
+      )
+    );
+    const mutatedExposed = [...declared.keys(), 'public.fn_never_triaged_regression()'];
+    const undeclared = findUndeclaredExposures(mutatedExposed, declared);
+    expect(undeclared).toEqual(['public.fn_never_triaged_regression()']);
+  });
+
+  it('reverting the mutation returns to zero undeclared (proves the test fixture itself is sound, not permanently red)', () => {
+    const declared = new Map(
+      Object.entries(manifest.buckets).flatMap(([bucket, { functions }]) =>
+        functions.map((f) => [f.signature, bucket])
+      )
+    );
+    const exposed = [...declared.keys()];
+    expect(findUndeclaredExposures(exposed, declared)).toEqual([]);
   });
 });
