@@ -3,7 +3,7 @@
  */
 
 import { describe, it, expect, afterEach } from 'vitest';
-import { validatePRDQuality, resolveEnforcementMode, DEFAULT_PASS_THRESHOLD } from '../../scripts/prd/quality-validator.js';
+import { validatePRDQuality, resolveEnforcementMode, DEFAULT_PASS_THRESHOLD, scanAbsenceClaims, ABSENCE_CLAIM_RE } from '../../scripts/prd/quality-validator.js';
 
 function goodPRD() {
   return {
@@ -140,5 +140,64 @@ describe('resolveEnforcementMode', () => {
   it('falls back to off for unknown values', () => {
     process.env.PRD_QUALITY_ENFORCEMENT_MODE = 'strict';
     expect(resolveEnforcementMode()).toBe('off');
+  });
+});
+
+// ─── PAT-LES-e6ebbba78e2d (SD-LEARN-FIX-ADDRESS-PATTERN-LEARN-143), FR-5 ─────
+// An acceptance criterion asserting an absence ("no other X exists") is as unverified as
+// one asserting a presence. Warn-only: must never affect score/passed.
+describe('scanAbsenceClaims', () => {
+  it('[TS-6] flags "no other" as an unverified absence claim', () => {
+    const warnings = scanAbsenceClaims({ acceptance_criteria: ['no other implementation exists in the codebase'] });
+    expect(warnings).toHaveLength(1);
+    expect(warnings[0]).toMatch(/ABSENCE_CLAIM_UNVERIFIED/);
+    expect(warnings[0]).toMatch(/acceptance_criteria\[0\]/);
+  });
+
+  it('flags "the only" and "sole" and "nowhere else"', () => {
+    expect(scanAbsenceClaims({ acceptance_criteria: ['this is the only place prosecdef is used'] })).toHaveLength(1);
+    expect(scanAbsenceClaims({ acceptance_criteria: ['this is the sole authoritative source'] })).toHaveLength(1);
+    expect(scanAbsenceClaims({ acceptance_criteria: ['verified nowhere else in the codebase'] })).toHaveLength(1);
+  });
+
+  it('[TS-7] does NOT flag a hyphenated qualifier compound ("<word>-only implementation")', () => {
+    // TESTING sub-agent found this exact shape as a 4/4 false-positive rate against real PRD data.
+    expect(scanAbsenceClaims({ acceptance_criteria: ['a route-only implementation is a FAIL'] })).toEqual([]);
+    expect(scanAbsenceClaims({ acceptance_criteria: ['database-only implementation confirmed'] })).toEqual([]);
+  });
+
+  it('DOES flag a non-hyphenated "only implementation" phrase', () => {
+    expect(scanAbsenceClaims({ acceptance_criteria: ['this is the only implementation of the gate'] })).toHaveLength(1);
+  });
+
+  it('does not match "does not exist elsewhere" phrasing (dropped -- 0 real hits, dead weight)', () => {
+    expect(ABSENCE_CLAIM_RE.test('confirmed to not exist elsewhere in the repo')).toBe(false);
+  });
+
+  it('is case-insensitive and handles object-shaped acceptance_criteria entries', () => {
+    const warnings = scanAbsenceClaims({ acceptance_criteria: [{ criterion: 'NO OTHER writer touches this table' }] });
+    expect(warnings).toHaveLength(1);
+  });
+
+  it('returns [] for acceptance criteria with no absence-claim phrasing', () => {
+    expect(scanAbsenceClaims({ acceptance_criteria: ['the endpoint returns 200 on success', 'errors are logged with a correlation id'] })).toEqual([]);
+  });
+
+  it('is safe against missing/non-array acceptance_criteria', () => {
+    expect(scanAbsenceClaims({})).toEqual([]);
+    expect(scanAbsenceClaims({ acceptance_criteria: null })).toEqual([]);
+  });
+
+  it('is warn-only: validatePRDQuality never lets warnings affect score/passed', () => {
+    const prd = { ...goodPRD(), acceptance_criteria: [...goodPRD().acceptance_criteria, 'no other consumer of this table exists'] };
+    const withClaim = validatePRDQuality(prd);
+    const without = validatePRDQuality(goodPRD());
+    expect(withClaim.warnings.length).toBeGreaterThan(0);
+    expect(withClaim.score).toBe(without.score);
+    expect(withClaim.passed).toBe(without.passed);
+  });
+
+  it('a clean PRD carries an empty warnings array on the validatePRDQuality result', () => {
+    expect(validatePRDQuality(goodPRD()).warnings).toEqual([]);
   });
 });

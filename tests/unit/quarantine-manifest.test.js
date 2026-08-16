@@ -92,4 +92,18 @@ describe('quarantine-manifest shape (debt register integrity)', () => {
   it('this test file itself is not quarantined (self-hosting guard)', () => {
     expect(manifest.quarantined.some(e => e.file.includes('quarantine-manifest.test.js'))).toBe(false);
   });
+
+  it('SD-LEO-FIX-STRIP-DEAD-DB-CREDENTIAL-LITERALS-001 guard + its test are never quarantined', () => {
+    // FR-5: the anti-quarantine self-check must live in a permanently-unquarantined host file
+    // (this one), not embedded in the guard itself -- vitest.config.js excludes
+    // quarantine-manifest-listed files from the unit project BEFORE loading, so a self-check
+    // embedded in a quarantinable file can never fire once quarantined.
+    const guardFiles = [
+      'scripts/lint/no-connection-string-literals-lint.mjs',
+      'tests/unit/hygiene/no-connection-string-literals.test.js',
+    ];
+    for (const f of guardFiles) {
+      expect(manifest.quarantined.some(e => e.file.includes(f))).toBe(false);
+    }
+  });
 });

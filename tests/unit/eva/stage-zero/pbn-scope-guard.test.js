@@ -1,12 +1,27 @@
 /**
  * Scope guard for SD-LEO-FEAT-PROVEN-BETTER-NEW-001 (US-007, FR-4 reuse mandate).
  * evaluateScopeGuard() is a pure predicate over a changed-file list: no new lib/marketing/
- * file, no new CREATE TABLE migration. Exercised three ways — against a seeded violation
- * (proves the guard can observe its subject, per PER-001 / known-answer-control discipline),
- * against a known-good control, and against this SD's REAL diff vs its merge-base.
+ * file, no new CREATE TABLE migration. Exercised against a seeded violation (proves the guard
+ * can observe its subject, per PER-001 / known-answer-control discipline) and a known-good
+ * control.
+ *
+ * REMOVED 2026-08-15 (found by SD-LEO-FIX-CHILD-TAIL-CHAIRMAN-001's CI, PR #7057): a third
+ * describe block used to assert this SD's REAL diff against a fixed historical SHA
+ * (SD_BRANCH_BASE_SHA). Its own comment correctly reasoned about one moving-target failure —
+ * a merge-base computed against origin/main going stale once this branch merged — and "fixed"
+ * it by pinning to a fixed ancestor SHA instead. That did not fix the actual problem: once
+ * SD-LEO-FEAT-PROVEN-BETTER-NEW-001 merged, this test file itself became part of main, so
+ * `git diff <fixed-SHA>...HEAD` on any LATER branch computes that later branch's entire
+ * history back to the same ancient point — which necessarily also contains this file's own
+ * PR (already in main) plus whatever the later branch adds, so the hardcoded
+ * exactly-one-migration-file assertion false-fails on any subsequent PR that touches
+ * database/migrations/ at all (confirmed: PR #7057 failed CI on exactly this). A one-time
+ * acceptance check for a SPECIFIC PR's diff cannot correctly generalize into a permanent
+ * multi-branch CI gate — pinning the SHA changes which kind of drift breaks it, not whether
+ * it breaks. The PBN migration's own static content (no CREATE TABLE) is still checked below,
+ * directly, without depending on live git state.
  */
 import { describe, it, expect } from 'vitest';
-import { execSync } from 'child_process';
 import { readFileSync } from 'fs';
 import { join } from 'path';
 
@@ -40,32 +55,10 @@ describe('US-007 scope guard: evaluateScopeGuard (pure predicate)', () => {
   });
 });
 
-// TESTING sub-agent EXEC-TO-PLAN F4: a merge-base computed against origin/main is a MOVING
-// target — once this branch merges, merge-base===HEAD and the diff goes empty, silently
-// degrading these assertions to vacuous (the exact-filename check would then fail outright).
-// Pinned instead to the literal SHA this branch actually forked from (main's HEAD when this
-// SD's branch was created) — a fixed historical commit stays reachable and produces the same
-// diff before OR after merge, as long as this branch isn't rebased.
-const SD_BRANCH_BASE_SHA = 'a944ae2dd71bf9f2fc0d139a640c8c1ba2be69fe';
-
-describe('US-007 AC #1: exactly one migration object, zero CREATE TABLE (real diff)', () => {
+describe('US-007 AC #1: the PBN migration itself is additive-only (static content check)', () => {
   const root = join(__dirname, '..', '..', '..', '..');
-  const changedFiles = execSync(`git diff --name-only ${SD_BRANCH_BASE_SHA}...HEAD`, { cwd: root, encoding: 'utf8' })
-    .split('\n')
-    .filter(Boolean);
 
-  it('the real diff contains no new file under lib/marketing/', () => {
-    const result = evaluateScopeGuard(changedFiles);
-    expect(result.pass).toBe(true);
-    expect(result.violations).toEqual([]);
-  });
-
-  it('the real diff touches exactly one file under database/migrations/', () => {
-    const migrationFiles = changedFiles.filter((f) => f.startsWith('database/migrations/'));
-    expect(migrationFiles).toEqual(['database/migrations/20260815_venture_nursery_pbn_verdict.sql']);
-  });
-
-  it('that migration file contains zero CREATE TABLE statements (additive column only)', () => {
+  it('database/migrations/20260815_venture_nursery_pbn_verdict.sql contains zero CREATE TABLE statements (additive column only)', () => {
     const sql = readFileSync(join(root, 'database/migrations/20260815_venture_nursery_pbn_verdict.sql'), 'utf8');
     const result = evaluateMigrationGuard(sql);
     expect(result.pass).toBe(true);

@@ -1,347 +1,372 @@
 [
- {
-  "name": "diagnostic-gauge-citation-lint",
-  "script": "scripts/lint/diagnostic-gauge-citation-lint.mjs",
-  "rootFlag": null,
-  "cwdScope": true,
-  "extraArgs": [
-   "--all"
-  ],
-  "note": "CONTROL-ABOUT-CONTROLS. No --root, but it enumerates via git/fs calls that inherit cwd, so it IS aimable — scopability by flag alone under-counted it.",
-  "fixtures": [
-   {
-    "path": "lib/seeded-gauge-citation-defect.js",
-    "content": "// SEEDED DEFECT: cites a DIAGNOSTIC-ONLY gauge as a numeric gating threshold.\nexport function gate(retro) {\n  if (retro.quality_score >= 90) { return 'ship'; }\n  return 'block';\n}\n"
-   }
-  ],
-  "detectTokens": [
-   "quality_score",
-   "seeded-gauge-citation-defect"
-  ]
- },
- {
-  "name": "fleet-liveness-select-lint",
-  "script": "scripts/lint/fleet-liveness-select-lint.mjs",
-  "rootFlag": null,
-  "cwdScope": true,
-  "extraArgs": [],
-  "note": "CONTROL-ABOUT-CONTROLS. TESTED IN DEFAULT MODE, DELIBERATELY. An earlier run passed --enforce and scored BLOCKS, but --enforce is NOT what CI runs — the ruled question is whether a control BLOCKS AT MERGE TIME, so measuring a non-default enforcing mode overstates protection. In its default advisory mode it DETECTS and exits 0.",
-  "fixtures": [
-   {
-    "path": "lib/seeded-liveness-select-defect.js",
-    "content": "// SEEDED DEFECT: unbounded multi-row claude_sessions select — the PostgREST 1000-row\n// cap silently drops the NEWEST live workers, so liveness undercounts.\nexport async function all(supabase) {\n  return supabase.from('claude_sessions').select('session_id, heartbeat_at');\n}\n"
-   }
-  ],
-  "detectTokens": [
-   "seeded-liveness-select-defect",
-   "claude_sessions"
-  ]
- },
- {
-  "name": "realtime-subscribe-teardown-recursion-lint",
-  "script": "scripts/lint/realtime-subscribe-teardown-recursion-lint.mjs",
-  "rootFlag": "--root",
-  "fixtures": [
-   {
-    "path": "lib/seeded-realtime-defect.js",
-    "content": "// SEEDED DEFECT: teardown called synchronously inside the subscribe callback.\nexport function wire(supabase) {\n  const ch = supabase.channel('x');\n  ch.on('postgres_changes', {}, () => {}).subscribe((status) => {\n    if (status === 'SUBSCRIBED') {\n      supabase.removeChannel(ch);\n    }\n  });\n  return ch;\n}\n"
-   }
-  ]
- },
- {
-  "name": "session-coordination-insert-classguard-lint",
-  "script": "scripts/lint/session-coordination-insert-classguard-lint.mjs",
-  "rootFlag": "--root",
-  "fixtures": [
-   {
-    "path": "lib/seeded-coord-defect.js",
-    "content": "// SEEDED DEFECT: raw session_coordination insert bypassing insertCoordinationRow().\nexport async function send(supabase, payload) {\n  const { error } = await supabase.from('session_coordination').insert({\n    message_type: 'INFO',\n    payload\n  });\n  return error;\n}\n"
-   }
-  ]
- },
- {
-  "name": "alter-default-override-lint",
-  "script": "scripts/lint/alter-default-override-lint.mjs",
-  "rootFlag": "--root",
-  "fixtures": [
-   {
-    "path": "database/migrations/20260731000000_seeded_default.sql",
-    "content": "-- SEEDED DEFECT: migration sets a default that code below contradicts.\nALTER TABLE seeded_widgets ALTER COLUMN status SET DEFAULT 'active';\n"
-   },
-   {
-    "path": "lib/seeded-default-writer.js",
-    "content": "// SEEDED DEFECT: hardcodes a DIFFERENT literal than the migration default above,\n// silently negating it at insert time (the F12 drift class).\nexport async function create(supabase) {\n  return supabase.from('seeded_widgets').insert({ status: 'draft' });\n}\n"
-   }
-  ]
- },
- {
-  "name": "count-delta-gate-lint",
-  "script": "scripts/lint/count-delta-gate-lint.mjs",
-  "rootFlag": "--root",
-  "fixtures": [
-   {
-    "path": "scripts/ci/seeded-count-delta-defect.mjs",
-    "content": "// SEEDED DEFECT: gates on a raw failure-COUNT delta rather than an identity-set diff.\n// Uses the rule's actual lexicon (failedCount / baselineFailed) — my first seed said\n// failCount, which the lexicon does not match, so the control correctly reported 0.\nexport function gate(baselineFailed, failedCount) {\n  if (failedCount > baselineFailed) {\n    throw new Error('failure count rose');\n  }\n  return true;\n}\n"
-   }
-  ],
-  "seedNote": "SEED WAS WRONG AND HAS BEEN FIXED. The rule's EXACT_LEXICON/LEXICON_PATTERN match failed|failing|failure names (failedCount, baselineFailed). My first seed used failCount, which is outside the lexicon, so the control scanned the fixture and correctly found nothing. That was a SEED MISMATCH, never evidence of blindness."
- },
- {
-  "name": "ismainmodule-classguard-lint",
-  "script": "scripts/lint/ismainmodule-classguard-lint.mjs",
-  "rootFlag": "--root",
-  "fixtures": [
-   {
-    "path": "scripts/seeded-ismainmodule-defect.mjs",
-    "content": "// SEEDED DEFECT: the raw Windows-broken direct-execution guard. argv[1] is a\n// backslash path on Windows and import.meta.url is a file:// URL, so this never\n// matches and the guard silently no-ops.\nfunction main() { console.log('ran'); }\nif (import.meta.url === `file://${process.argv[1]}`) main();\n"
-   }
-  ]
- },
- {
-  "name": "metadata-flag-lint",
-  "script": "scripts/lint/metadata-flag-lint.mjs",
-  "rootFlag": "--root",
-  "fixtures": [
-   {
-    "path": "lib/seeded-metadata-orphan-defect.js",
-    "content": "// SEEDED DEFECT: writes metadata.is_seeded_orphan and nothing ever reads it (ORPHAN).\nexport async function mark(supabase, id) {\n  return supabase.from('widgets').update({ metadata: { is_seeded_orphan: true } }).eq('id', id);\n}\n"
-   }
-  ],
-  "detectTokens": [
-   "is_seeded_orphan"
-  ]
- },
- {
-  "name": "rls-anon-tenant-predicate-lint",
-  "script": "scripts/lint/rls-anon-tenant-predicate-lint.mjs",
-  "rootFlag": "--root",
-  "fixtures": [
-   {
-    "path": "database/migrations/20260731000001_seeded_rls_defect.sql",
-    "content": "-- SEEDED DEFECT: SELECT policy references a tenant-shaped column without binding it\n-- to the caller's own identity, so any anon caller reads every tenant's rows.\nCREATE POLICY seeded_anon_select_widgets ON public.widgets\n  FOR SELECT TO anon\n  USING (venture_id IS NOT NULL);\n"
-   }
-  ]
- },
- {
-  "name": "no-mocked-sut-import-lint",
-  "script": "scripts/lint/no-mocked-sut-import-lint.mjs",
-  "rootFlag": null,
-  "cwdScope": true,
-  "extraArgs": [
-   "--all"
-  ],
-  "fixtures": [
-   {
-    "path": "tests/unit/seeded-mock-sut.test.js",
-    "content": "import { vi } from 'vitest';\n// SEEDED DEFECT: mocks the module under test itself.\nvi.mock('../../lib/seeded-sut.js');\nimport { thing } from '../../lib/seeded-sut.js';\nit('x', () => { expect(thing).toBeDefined(); });\n"
-   },
-   {
-    "path": "lib/seeded-sut.js",
-    "content": "export const thing = 1;\n"
-   }
-  ],
-  "detectTokens": [
-   "seeded-mock-sut"
-  ],
-  "note": "WAS marked UNTESTABLE on flags alone. SCAN_DIRS is RELATIVE, so it resolves against cwd — retesting via cwdScope.",
-  "seedNote": "UNRESOLVED SILENT, and NOT a mode artifact: re-probed with NO_MOCKED_SUT_IMPORT_MODE=block and it is STILL silent, so promoting it would not change the verdict. Either the seed does not match its detector shape or it genuinely does not fire. NOT recorded as blind on this evidence."
- },
- {
-  "name": "venture-artifacts-write-lint",
-  "script": "scripts/lint/venture-artifacts-write-lint.mjs",
-  "rootFlag": null,
-  "cwdScope": true,
-  "fixtures": [
-   {
-    "path": "lib/seeded-venture-artifact-defect.js",
-    "content": "// SEEDED DEFECT: venture_artifacts insert omitting the NOT-NULL title column,\n// which inserts ZERO rows and swallows the error.\nexport async function write(supabase, ventureId) {\n  return supabase.from('venture_artifacts').insert({\n    venture_id: ventureId,\n    lifecycle_stage: 'stage_21',\n    artifact_type: 'design'\n  });\n}\n"
-   }
-  ],
-  "detectTokens": [
-   "seeded-venture-artifact-defect",
-   "title"
-  ],
-  "note": "WAS marked UNTESTABLE on flags alone. SCAN_DIRS is RELATIVE, so it resolves against cwd — retesting via cwdScope."
- },
- {
-  "name": "control-seed-test-lint",
-  "script": "scripts/lint/control-seed-test-lint.mjs",
-  "seedTest": "tests/unit/lint/control-seed-test-lint.test.js",
-  "note": "Seeded by the committed TS-5 test: plants a deliberately blind gauge and asserts the gate REFUSES it. Cannot use a fixture trial — this control's certified output is a VERDICT about other controls, not a code pattern in a file.",
-  "neuter": {
-   "find": "reason: 'SEED_DID_NOT_FIRE'",
-   "replace": "reason: 'SEED_DID_NOT_FIRE_NEUTERED'",
-   "why": "the gate stops emitting the SEED_DID_NOT_FIRE reason its own seed-test asserts on"
+  {
+    "name": "diagnostic-gauge-citation-lint",
+    "script": "scripts/lint/diagnostic-gauge-citation-lint.mjs",
+    "rootFlag": null,
+    "cwdScope": true,
+    "extraArgs": [
+      "--all"
+    ],
+    "note": "CONTROL-ABOUT-CONTROLS. No --root, but it enumerates via git/fs calls that inherit cwd, so it IS aimable — scopability by flag alone under-counted it.",
+    "fixtures": [
+      {
+        "path": "lib/seeded-gauge-citation-defect.js",
+        "content": "// SEEDED DEFECT: cites a DIAGNOSTIC-ONLY gauge as a numeric gating threshold.\nexport function gate(retro) {\n  if (retro.quality_score >= 90) { return 'ship'; }\n  return 'block';\n}\n"
+      }
+    ],
+    "detectTokens": [
+      "quality_score",
+      "seeded-gauge-citation-defect"
+    ]
   },
-  "observability_proof": {
-   "input": "The set of control files CHANGED IN THE DIFF (git diff --name-only against the merge base) intersected with the specs in scripts/audit/control-seed-specs.json; each control's OWN SOURCE TEXT (scanned for the KNOWN LIMITATION declaration); and, per seeded trial, the child process EXIT CODE plus stdout of the control run against a planted fixture. It consumes NO database columns and NO environment variables.",
-   "seen": "Real positive observed in the deployment environment on 2026-08-08: this control BLOCKED PR #6875 in CI with 5 findings across 5 controls (NO_SEED_TEST x3, NO_KNOWN_LIMITATION x2), which is a live CI block, not a fixture trial. Additionally the NO_OBSERVABILITY_PROOF reason added by SD-LEO-INFRA-STANDING-OBSERVABILITY-ACCEPTANCE-001 was observed firing against THIS control at HEAD in a live run (matched 1, TRIALS RUN 1, PROVEN_RED:1) before this proof was declared."
-  }
- },
- {
-  "name": "control-seed-test",
-  "script": "scripts/audit/control-seed-test.mjs",
-  "seedTest": "tests/unit/lint/control-seed-test-lint.test.js",
-  "note": "Same TS-5 test exercises runTrial through evaluate — a blind gauge must come back SILENT. Its certified behaviour is a verdict, so there is no code pattern to seed into a fixture.",
-  "neuter": {
-   "find": ": VERDICT.SILENT;",
-   "replace": ": VERDICT.DETECTS;",
-   "why": "runTrial can no longer return SILENT, so a blind gauge reads as detecting"
-  }
- },
- {
-  "name": "scanner-convention-lint",
-  "script": "scripts/lint/scanner-convention-lint.mjs",
-  "seedTest": "tests/unit/lint/scanner-convention-lint.test.js",
-  "note": "SD-LEO-INFRA-SWEEP-REPO-SCANNERS-001. Cannot use a fixture trial: this control resolves its scan root from import.meta.url (path.resolve(__dirname,'../..')), NOT from cwd or a --root flag, so the harness cannot aim it at a temp tree. The committed test instead PLANTS a violating scanner through an injected fs and asserts it is caught.",
-  "neuter": {
-   "find": "if (!readsAddedLineText(src)) continue;",
-   "replace": "if (true) continue;",
-   "why": "findViolations stops classifying anything as shape A, so the [PLANTED] case that expects exactly one violation gets zero and goes RED"
-  }
- },
- {
-  "name": "schema-reference-lint",
-  "script": "scripts/lint/schema-reference-lint.mjs",
-  "seedTest": "tests/unit/lint/scanner-fixture-exclusion.test.js",
-  "note": "SD-LEO-INFRA-SWEEP-REPO-SCANNERS-001 (FR-2). A fixture trial is impractical here: this control exits early without database/schema-reference-snapshot.json, so a bare temp tree cannot exercise it. The committed test plants one payload at two paths differing ONLY in being fixture material and RUNS the control against both, asserting the control file is flagged (control-first) and the fixture twin is not.",
-  "neuter": {
-   "find": "if (isFixtureEntry(p, e.isDirectory())) continue;",
-   "replace": "if (false) continue;",
-   "why": "the --all walk stops pruning fixture directories, so the planted lib/__tests__ file is scanned and flagged, and the assertion that no hit contains __tests__ goes RED"
+  {
+    "name": "fleet-liveness-select-lint",
+    "script": "scripts/lint/fleet-liveness-select-lint.mjs",
+    "rootFlag": null,
+    "cwdScope": true,
+    "extraArgs": [],
+    "note": "CONTROL-ABOUT-CONTROLS. TESTED IN DEFAULT MODE, DELIBERATELY. An earlier run passed --enforce and scored BLOCKS, but --enforce is NOT what CI runs — the ruled question is whether a control BLOCKS AT MERGE TIME, so measuring a non-default enforcing mode overstates protection. In its default advisory mode it DETECTS and exits 0.",
+    "fixtures": [
+      {
+        "path": "lib/seeded-liveness-select-defect.js",
+        "content": "// SEEDED DEFECT: unbounded multi-row claude_sessions select — the PostgREST 1000-row\n// cap silently drops the NEWEST live workers, so liveness undercounts.\nexport async function all(supabase) {\n  return supabase.from('claude_sessions').select('session_id, heartbeat_at');\n}\n"
+      }
+    ],
+    "detectTokens": [
+      "seeded-liveness-select-defect",
+      "claude_sessions"
+    ]
   },
-  "observability_proof": {
-   "input": "git diff added-line file set (merge-base..HEAD via its runGit, now the published hardened runner) cross-referenced against relation names in database/schema-reference-snapshot.json; base ref from env SCHEMA_LINT_BASE (set in CI by .github/workflows/schema-reference-lint.yml:60)",
-   "seen": "real positives triaged as escapes into scripts/lint/schema-reference-allowlist.json (files/tables entries recorded under SD-LEO-INFRA-SCHEMA-REFERENCE-LINT-001) during the advisory soak that preceded the blocking flip pinned by tests/unit/schema-reference-lint-workflow-blocking.test.js (soak 2026-06-10..2026-06-17); the lint runs live on every PR via .github/workflows/schema-reference-lint.yml"
-  }
- },
- {
-  "name": "stage-advancement-chokepoint-lint",
-  "script": "scripts/lint/stage-advancement-chokepoint-lint.mjs",
-  "seedTest": "tests/unit/lint/scanner-fixture-exclusion.test.js",
-  "note": "SD-LEO-INFRA-SWEEP-REPO-SCANNERS-001 (FR-2). Same committed two-sided test: one payload, two paths differing only in being fixture material, control asserted FIRST so a silently-dead scanner cannot pass as 'no fixture hit'.",
-  "neuter": {
-   "find": "if (isFixtureEntry(p, e.isDirectory())) continue;",
-   "replace": "if (false) continue;",
-   "why": "the --all walk stops pruning fixture directories, so the planted lib/__tests__ file is scanned and flagged, and the assertion that no hit contains __tests__ goes RED"
-  }
- },
- {
-  "name": "fixture-producer-guard-lint",
-  "script": "scripts/lint/fixture-producer-guard-lint.mjs",
-  "rootFlag": "--root",
-  "observability_proof": {
-   "input": "The SOURCE TEXT of every *.mjs/*.js/*.cjs file found by a recursive walk of four named roots (tests/integration, tests/database, scripts/harness, scripts/canary), read with readFileSync and stripped of comments and string bodies before matching; plus scripts/lint/fixture-producer-guard-allowlist.json, whose keys are '<repo-relative-file>' or '<repo-relative-file>:<line>'. Its OUTPUT SIGNAL is the process exit code (0 = clean, 1 = violations found OR zero guarded sites OR the startup selfTest failed) plus a stdout summary line carrying the guarded-site and unguarded-write counts, and one stderr line per violation naming file:line. It consumes NO database columns and NO environment variables.",
-   "seen": "Real UNPLANTED positive observed in the deployment environment (live invocation against the actual repository working tree, 2026-08-08): during the conversion sweep this control reported an unguarded ventures write in tests/integration/eva/venture-error-aggregation-realdb.test.js that a bulk rewrite had silently failed to convert — that file binds its supabase client as 'svc', so a rewrite keyed to one spelling matched zero sites there while reporting success on the other files. The control's count is what exposed it; the rewrite's own report said success. Separately, a planted two-sided probe on the same real tree showed the pre-fix build printing '2 write-site(s) found' AND 'every ventures write routes through insertGuarded' at exit 0, and the post-fix build exiting 1 naming both sites. HONEST LIMIT ON THIS FIELD: the .github/workflows/fixture-producer-guard-lint.yml job has so far only ever run GREEN — this control has NOT yet blocked a pull request in CI, so the positives cited above are live local invocations, not CI blocks."
+  {
+    "name": "realtime-subscribe-teardown-recursion-lint",
+    "script": "scripts/lint/realtime-subscribe-teardown-recursion-lint.mjs",
+    "rootFlag": "--root",
+    "fixtures": [
+      {
+        "path": "lib/seeded-realtime-defect.js",
+        "content": "// SEEDED DEFECT: teardown called synchronously inside the subscribe callback.\nexport function wire(supabase) {\n  const ch = supabase.channel('x');\n  ch.on('postgres_changes', {}, () => {}).subscribe((status) => {\n    if (status === 'SUBSCRIBED') {\n      supabase.removeChannel(ch);\n    }\n  });\n  return ch;\n}\n"
+      }
+    ]
   },
-  "note": "SD-LEO-INFRA-ONE-SYNTHETIC-ROW-001-D (FR-6). TWO fixtures, and the second is load-bearing rather than decoration. This lint REFUSES to report success on zero guarded sites (a blind extractor and a clean tree otherwise print the same green), and that refusal returns BEFORE the violation listing. Seeding only the defect would therefore exercise the zero-guarded branch and never emit the seeded filename, scoring a firing control SILENT. The guarded twin puts the denominator above zero so the trial drives the REAL violation-reporting path. DETECTION IS DELIBERATELY KEYED ON THE SEEDED FILENAME ALONE: the summary line prints 'N unguarded ventures write-site(s)' on every run including a clean one, so declaring that phrase a detectToken would mark this control as firing when it found nothing.",
-  "fixtures": [
-   {
-    "path": "tests/integration/seeded-fixture-producer-defect.js",
-    "content": "// SEEDED DEFECT: a raw ventures insert that no producer-side assert ever checked.\nexport async function make(supabase) {\n  return supabase.from('ventures').insert({ name: 'seeded-unguarded-row', is_demo: true });\n}\n"
-   },
-   {
-    "path": "scripts/harness/seeded-fixture-producer-guarded.js",
-    "content": "// NOT the defect. A correctly guarded producer, present so the coverage denominator is\n// non-zero — see the note on this spec. The lint reads source as TEXT and never imports it,\n// so the unresolvable path below is irrelevant to the trial.\nimport { insertGuarded, CLASSIFICATION } from '../../lib/governance/fixture-producer-guard.mjs';\nexport async function ok(supabase) {\n  return insertGuarded(supabase, 'ventures', { name: 'TEST-seeded-guarded', is_demo: true },\n    { classification: CLASSIFICATION.FIXTURE, source: 'seed-trial' });\n}\n"
-   }
-  ]
- },
- {
-  "name": "or-filter-must-project",
-  "script": "scripts/lint/or-filter-must-project.mjs",
-  "seedTest": "tests/unit/claim/every-claim-write-reaffirm.test.js",
-  "note": "SD-LEO-INFRA-EVERY-CLAIM-WRITE-001 (FR-4). The control it guards: on a PostgREST UPDATE an .or() filter resolves its columns against the RETURNING projection, so filtering on a column the .select() omits returns 42703 on EVERY call — and the error names that column as missing when it exists, which is why the original defect was misdiagnosed as transient schema-cache staleness. seedTest form rather than fixtures because this control ships as a PURE FUNCTION over source text with no file-walking CLI, so there is no root to aim at a fixture directory; the committed test compensates by carrying BOTH directions itself — a hand-written broken chain that must be flagged, the real lib/quick-fix-claim.mjs that must NOT be (the positive control the coordinator directed me to leave untouched), an .eq-only chain that must NOT be flagged (measured: .eq does not resolve against the projection, so linting it would churn three working release sites), and an in-test mutation that narrows the real claim-guard projection back and asserts the lint catches it.",
-  "neuter": {
-   "find": "if (missing.length > 0) {",
-   "replace": "if (false) {",
-   "why": "the lint stops reporting findings, so the deliberately-broken chain in the seed test is no longer flagged and the FLAGS-the-narrowed-projection assertion goes RED — proving the control is what makes that test pass, not the test asserting its own premise."
+  {
+    "name": "session-coordination-insert-classguard-lint",
+    "script": "scripts/lint/session-coordination-insert-classguard-lint.mjs",
+    "rootFlag": "--root",
+    "fixtures": [
+      {
+        "path": "lib/seeded-coord-defect.js",
+        "content": "// SEEDED DEFECT: raw session_coordination insert bypassing insertCoordinationRow().\nexport async function send(supabase, payload) {\n  const { error } = await supabase.from('session_coordination').insert({\n    message_type: 'INFO',\n    payload\n  });\n  return error;\n}\n"
+      }
+    ]
   },
-  "observability_proof": {
-   "input": "The SOURCE TEXT of a single .js/.mjs/.cjs file, passed directly to findUnprojectedOrFilters(source, filePath) as a string, with block and line comments BLANKED (not deleted, so reported line numbers stay true) before matching. It consumes NO database columns, NO environment variables, and NO filesystem walk — the caller supplies the text. Its OUTPUT SIGNAL is the returned array of findings, each {file, line, missing[], projection, message}; an empty array means no unprojected .or() filter was found in that text.",
-   "seen": "A REAL positive on REAL DEPLOYED SOURCE, not a temp-dir fixture: run against the pre-fix blob of lib/claim-guard.mjs as it stood on origin/main (blob ab68046eecdcb5f4d78bab0df94f9092fc4e5bed), it returns exactly ONE finding, at line 211, missing=claiming_session_id, projection=sd_key. That is the precise chain which, executed against live PostgREST under a service-role key on 2026-08-09, returned 42703 column strategic_directives_v2.claiming_session_id does not exist on every call while a SELECT with the identical .or filter returned rows — so the control fires on the exact deployed line whose live failure was independently observed, and the readback of claim_gate_client_version (NULL under that blob, 1 after the fix) is the persisted evidence of that failure. Two-sided in the same run: 0 findings on the fixed file, 0 on lib/quick-fix-claim.mjs and 0 on lib/claim/reacquire-self-live.mjs, both of which are correct and must never be flagged. NOTE the limitation that bounds this proof: reacquire-self-live passes a VARIABLE to .or(), so its 0 is unanalyzable-and-silent, not verified-clean."
-  }
- },
- {
-  "name": "no-process-cwd-in-sub-agents-lint",
-  "script": "scripts/lint/no-process-cwd-in-sub-agents-lint.mjs",
-  "rootFlag": null,
-  "cwdScope": true,
-  "extraArgs": [
-   "--all"
-  ],
-  "note": "Surfaced by SD-LEO-INFRA-PUBLISH-SHELL-INJECTION-001-A adopting the published git runner in this lint (no control-logic change) — the control itself predates that diff and had no spec entry. Module-anchored REPO_ROOT, self-gated to lib/sub-agents/, so it is aimed by planting the seed there and running --all.",
-  "fixtures": [
-   {
-    "path": "lib/sub-agents/seeded-process-cwd-defect.js",
-    "content": "// SEEDED DEFECT: resolves repo paths against process.cwd() inside a sub-agent module.\nexport function repoPath() { return process.cwd(); }\n"
-   }
-  ],
-  "detectTokens": [
-   "seeded-process-cwd-defect",
-   "process.cwd"
-  ],
-  "observability_proof": {
-   "input": "ESLint rule no-process-cwd-in-sub-agents evaluated over lib/sub-agents/** source text; file set from git merge-base diff (default) or a module-anchored walk of SCAN_DIRS (--all)",
-   "seen": "live invocation at the LEAD phase of SD-LEO-INFRA-NO-PROCESS-CWD-SUB-AGENTS-001 measured 5 real violations, all resolved by that SD — recorded in the lint's own main() (\"The tree was measured clean at LEAD (5 violations, all resolved by this SD)\"); the lint runs blocking on every invocation since"
-  }
- },
- {
-  "name": "shell-injection-argv-lint",
-  "script": "scripts/lint/shell-injection-argv-lint.mjs",
-  "rootFlag": null,
-  "cwdScope": true,
-  "extraArgs": [
-   "--all"
-  ],
-  "note": "SD-LEO-INFRA-PUBLISH-SHELL-INJECTION-001-B. Module-anchored REPO_ROOT scanner over lib/scripts/server/tests; aimed by planting the seed in lib/ and running --all (diagnostic census mode). The seeded defect is the S1 bare-variable shape — the exact sink class the sibling SD (child A) remediated in phantom-test-audit.js.",
-  "fixtures": [
-   {
-    "path": "lib/seeded-shell-injection-defect.js",
-    "content": "// SEEDED DEFECT: non-literal command reaches execSync (always a shell).\nexport function run(cmd) { return execSync(cmd, { encoding: \"utf8\" }); }\n"
-   }
-  ],
-  "detectTokens": [
-   "seeded-shell-injection-defect",
-   "S1"
-  ],
-  "observability_proof": {
-   "input": "git diff --unified=0 added-line patch text vs merge-base (env SHELL_INJECTION_ARGV_BASE, CI sets origin/base_ref in .github/workflows/shell-injection-argv-lint.yml), stripped by lib/lint/added-line-text.mjs stripComments + stripStringLiterals, matched by S1 (non-literal exec/execSync arg) and S2 (shell:true)",
-   "seen": "live --all census at authoring measured the real backlog (270 template-literal sites/143 files + ~54 bare-variable + ~11 live shell:true at main b0334b50439, recorded in shell-injection-argv-allowlist.json _scope_note); the founding real positives are the four lineage sinks this SD family closed, incl. scripts/generate-playground-config.cjs:67 (template + shell:true) still live on main and visible to --all"
-  }
- },
- {
-  "name": "eol-renormalization-lint",
-  "script": "scripts/lint/eol-renormalization-lint.mjs",
-  "note": "SD-ALTIFYAI-FDBK-FIX-HOUSEKEEPING-WEEKLY-REPORT-001 FR-2. Cannot be seeded via the fixtures form: reproducing i/crlf or i/mixed requires a committed blob that PREDATES a .gitattributes eol=lf rule (a two-phase git HISTORY), which a single git init + git add -A always clean-filters straight to i/lf. Uses the seedTest form instead against the already-existing, already-mutation-verified unit suite.",
-  "seedTest": "tests/unit/eol-renormalization-lint.test.js",
-  "neuter": {
-   "file": "scripts/lint/eol-renormalization-lint.mjs",
-   "find": "return DIRTY_INDEX_STATES.has(parsed.index);",
-   "replace": "return parsed.index !== 'lf';",
-   "why": "Reverts the inclusion-list classification to an exclusion-of-lf check -- the exact blocking defect a prospective testing-agent review (evidence a4d4ba87-2a56-4912-a8b0-cbd3e3d16a2e) found in this control's original design: it would misclassify binary (i/-text) and empty (i/none) files as dirty. TS-2 and TS-3 assert this must not happen and go red under this neuter (manually verified pre-registration)."
+  {
+    "name": "alter-default-override-lint",
+    "script": "scripts/lint/alter-default-override-lint.mjs",
+    "rootFlag": "--root",
+    "fixtures": [
+      {
+        "path": "database/migrations/20260731000000_seeded_default.sql",
+        "content": "-- SEEDED DEFECT: migration sets a default that code below contradicts.\nALTER TABLE seeded_widgets ALTER COLUMN status SET DEFAULT 'active';\n"
+      },
+      {
+        "path": "lib/seeded-default-writer.js",
+        "content": "// SEEDED DEFECT: hardcodes a DIFFERENT literal than the migration default above,\n// silently negating it at insert time (the F12 drift class).\nexport async function create(supabase) {\n  return supabase.from('seeded_widgets').insert({ status: 'draft' });\n}\n"
+      }
+    ]
   },
-  "observability_proof": {
-   "input": "git ls-files --eol output for every tracked path: the i/<state> (index eol) field, parsed positionally, filtered to paths whose attr/ field resolves an eol=lf attribute",
-   "seen": "PR #7025 CI run 31769236228, job eol-renormalization-lint: reported 3 real un-allowlisted violations by exact path (scripts/archive/one-time/apply-orchestrator-fix.js, apply-sd-key-not-null-migration.js, execute-e2e-schema-fix.js) -- a genuine positive in the deployment environment, not a fixture, on files deliberately left un-renormalized pending a separate security escalation (signal e84715bb-3f3c-4251-bd18-79c403336fd3)"
+  {
+    "name": "count-delta-gate-lint",
+    "script": "scripts/lint/count-delta-gate-lint.mjs",
+    "rootFlag": "--root",
+    "fixtures": [
+      {
+        "path": "scripts/ci/seeded-count-delta-defect.mjs",
+        "content": "// SEEDED DEFECT: gates on a raw failure-COUNT delta rather than an identity-set diff.\n// Uses the rule's actual lexicon (failedCount / baselineFailed) — my first seed said\n// failCount, which the lexicon does not match, so the control correctly reported 0.\nexport function gate(baselineFailed, failedCount) {\n  if (failedCount > baselineFailed) {\n    throw new Error('failure count rose');\n  }\n  return true;\n}\n"
+      }
+    ],
+    "seedNote": "SEED WAS WRONG AND HAS BEEN FIXED. The rule's EXACT_LEXICON/LEXICON_PATTERN match failed|failing|failure names (failedCount, baselineFailed). My first seed used failCount, which is outside the lexicon, so the control scanned the fixture and correctly found nothing. That was a SEED MISMATCH, never evidence of blindness."
+  },
+  {
+    "name": "ismainmodule-classguard-lint",
+    "script": "scripts/lint/ismainmodule-classguard-lint.mjs",
+    "rootFlag": "--root",
+    "fixtures": [
+      {
+        "path": "scripts/seeded-ismainmodule-defect.mjs",
+        "content": "// SEEDED DEFECT: the raw Windows-broken direct-execution guard. argv[1] is a\n// backslash path on Windows and import.meta.url is a file:// URL, so this never\n// matches and the guard silently no-ops.\nfunction main() { console.log('ran'); }\nif (import.meta.url === `file://${process.argv[1]}`) main();\n"
+      }
+    ]
+  },
+  {
+    "name": "metadata-flag-lint",
+    "script": "scripts/lint/metadata-flag-lint.mjs",
+    "rootFlag": "--root",
+    "fixtures": [
+      {
+        "path": "lib/seeded-metadata-orphan-defect.js",
+        "content": "// SEEDED DEFECT: writes metadata.is_seeded_orphan and nothing ever reads it (ORPHAN).\nexport async function mark(supabase, id) {\n  return supabase.from('widgets').update({ metadata: { is_seeded_orphan: true } }).eq('id', id);\n}\n"
+      }
+    ],
+    "detectTokens": [
+      "is_seeded_orphan"
+    ]
+  },
+  {
+    "name": "rls-anon-tenant-predicate-lint",
+    "script": "scripts/lint/rls-anon-tenant-predicate-lint.mjs",
+    "rootFlag": "--root",
+    "fixtures": [
+      {
+        "path": "database/migrations/20260731000001_seeded_rls_defect.sql",
+        "content": "-- SEEDED DEFECT: SELECT policy references a tenant-shaped column without binding it\n-- to the caller's own identity, so any anon caller reads every tenant's rows.\nCREATE POLICY seeded_anon_select_widgets ON public.widgets\n  FOR SELECT TO anon\n  USING (venture_id IS NOT NULL);\n"
+      }
+    ]
+  },
+  {
+    "name": "no-mocked-sut-import-lint",
+    "script": "scripts/lint/no-mocked-sut-import-lint.mjs",
+    "rootFlag": null,
+    "cwdScope": true,
+    "extraArgs": [
+      "--all"
+    ],
+    "fixtures": [
+      {
+        "path": "tests/unit/seeded-mock-sut.test.js",
+        "content": "import { vi } from 'vitest';\n// SEEDED DEFECT: mocks the module under test itself.\nvi.mock('../../lib/seeded-sut.js');\nimport { thing } from '../../lib/seeded-sut.js';\nit('x', () => { expect(thing).toBeDefined(); });\n"
+      },
+      {
+        "path": "lib/seeded-sut.js",
+        "content": "export const thing = 1;\n"
+      }
+    ],
+    "detectTokens": [
+      "seeded-mock-sut"
+    ],
+    "note": "WAS marked UNTESTABLE on flags alone. SCAN_DIRS is RELATIVE, so it resolves against cwd — retesting via cwdScope.",
+    "seedNote": "UNRESOLVED SILENT, and NOT a mode artifact: re-probed with NO_MOCKED_SUT_IMPORT_MODE=block and it is STILL silent, so promoting it would not change the verdict. Either the seed does not match its detector shape or it genuinely does not fire. NOT recorded as blind on this evidence."
+  },
+  {
+    "name": "venture-artifacts-write-lint",
+    "script": "scripts/lint/venture-artifacts-write-lint.mjs",
+    "rootFlag": null,
+    "cwdScope": true,
+    "fixtures": [
+      {
+        "path": "lib/seeded-venture-artifact-defect.js",
+        "content": "// SEEDED DEFECT: venture_artifacts insert omitting the NOT-NULL title column,\n// which inserts ZERO rows and swallows the error.\nexport async function write(supabase, ventureId) {\n  return supabase.from('venture_artifacts').insert({\n    venture_id: ventureId,\n    lifecycle_stage: 'stage_21',\n    artifact_type: 'design'\n  });\n}\n"
+      }
+    ],
+    "detectTokens": [
+      "seeded-venture-artifact-defect",
+      "title"
+    ],
+    "note": "WAS marked UNTESTABLE on flags alone. SCAN_DIRS is RELATIVE, so it resolves against cwd — retesting via cwdScope."
+  },
+  {
+    "name": "control-seed-test-lint",
+    "script": "scripts/lint/control-seed-test-lint.mjs",
+    "seedTest": "tests/unit/lint/control-seed-test-lint.test.js",
+    "note": "Seeded by the committed TS-5 test: plants a deliberately blind gauge and asserts the gate REFUSES it. Cannot use a fixture trial — this control's certified output is a VERDICT about other controls, not a code pattern in a file.",
+    "neuter": {
+      "find": "reason: 'SEED_DID_NOT_FIRE'",
+      "replace": "reason: 'SEED_DID_NOT_FIRE_NEUTERED'",
+      "why": "the gate stops emitting the SEED_DID_NOT_FIRE reason its own seed-test asserts on"
+    },
+    "observability_proof": {
+      "input": "The set of control files CHANGED IN THE DIFF (git diff --name-only against the merge base) intersected with the specs in scripts/audit/control-seed-specs.json; each control's OWN SOURCE TEXT (scanned for the KNOWN LIMITATION declaration); and, per seeded trial, the child process EXIT CODE plus stdout of the control run against a planted fixture. It consumes NO database columns and NO environment variables.",
+      "seen": "Real positive observed in the deployment environment on 2026-08-08: this control BLOCKED PR #6875 in CI with 5 findings across 5 controls (NO_SEED_TEST x3, NO_KNOWN_LIMITATION x2), which is a live CI block, not a fixture trial. Additionally the NO_OBSERVABILITY_PROOF reason added by SD-LEO-INFRA-STANDING-OBSERVABILITY-ACCEPTANCE-001 was observed firing against THIS control at HEAD in a live run (matched 1, TRIALS RUN 1, PROVEN_RED:1) before this proof was declared."
+    }
+  },
+  {
+    "name": "control-seed-test",
+    "script": "scripts/audit/control-seed-test.mjs",
+    "seedTest": "tests/unit/lint/control-seed-test-lint.test.js",
+    "note": "Same TS-5 test exercises runTrial through evaluate — a blind gauge must come back SILENT. Its certified behaviour is a verdict, so there is no code pattern to seed into a fixture.",
+    "neuter": {
+      "find": ": VERDICT.SILENT;",
+      "replace": ": VERDICT.DETECTS;",
+      "why": "runTrial can no longer return SILENT, so a blind gauge reads as detecting"
+    },
+    "observability_proof": {
+      "input": "runTrial's actual production input is a control-seed-specs.json entry (script path, rootFlag/cwdScope, fixtures) plus the real repo working tree it spawns the named control against; its output is that spawned child process's EXIT CODE and combined stdout+stderr, matched against each fixture's filename/detectTokens to classify BLOCKS/DETECTS/SILENT. runTrial is not called directly in CI -- it is invoked exclusively through control-seed-test-lint.mjs's evaluate(), which is what actually runs in .github/workflows/control-seed-test-lint.yml on every PR touching a control file.",
+      "seen": "Real positive observed in the deployment environment on 2026-08-08: runTrial's SILENT verdict path is the exact mechanism that BLOCKED PR #6875 in CI with 5 findings across 5 controls (NO_SEED_TEST x3, NO_KNOWN_LIMITATION x2) via control-seed-test-lint.mjs's live invocation of it -- not a fixture trial. runTrial has no independent CI entry point of its own; its production observability is inherited from, and identical to, the sibling control-seed-test-lint spec entry above, which invokes it directly."
+    }
+  },
+  {
+    "name": "scanner-convention-lint",
+    "script": "scripts/lint/scanner-convention-lint.mjs",
+    "seedTest": "tests/unit/lint/scanner-convention-lint.test.js",
+    "note": "SD-LEO-INFRA-SWEEP-REPO-SCANNERS-001. Cannot use a fixture trial: this control resolves its scan root from import.meta.url (path.resolve(__dirname,'../..')), NOT from cwd or a --root flag, so the harness cannot aim it at a temp tree. The committed test instead PLANTS a violating scanner through an injected fs and asserts it is caught.",
+    "neuter": {
+      "find": "if (!readsAddedLineText(src)) continue;",
+      "replace": "if (true) continue;",
+      "why": "findViolations stops classifying anything as shape A, so the [PLANTED] case that expects exactly one violation gets zero and goes RED"
+    }
+  },
+  {
+    "name": "schema-reference-lint",
+    "script": "scripts/lint/schema-reference-lint.mjs",
+    "seedTest": "tests/unit/lint/scanner-fixture-exclusion.test.js",
+    "note": "SD-LEO-INFRA-SWEEP-REPO-SCANNERS-001 (FR-2). A fixture trial is impractical here: this control exits early without database/schema-reference-snapshot.json, so a bare temp tree cannot exercise it. The committed test plants one payload at two paths differing ONLY in being fixture material and RUNS the control against both, asserting the control file is flagged (control-first) and the fixture twin is not.",
+    "neuter": {
+      "find": "if (isFixtureEntry(p, e.isDirectory())) continue;",
+      "replace": "if (false) continue;",
+      "why": "the --all walk stops pruning fixture directories, so the planted lib/__tests__ file is scanned and flagged, and the assertion that no hit contains __tests__ goes RED"
+    },
+    "observability_proof": {
+      "input": "git diff added-line file set (merge-base..HEAD via its runGit, now the published hardened runner) cross-referenced against relation names in database/schema-reference-snapshot.json; base ref from env SCHEMA_LINT_BASE (set in CI by .github/workflows/schema-reference-lint.yml:60)",
+      "seen": "real positives triaged as escapes into scripts/lint/schema-reference-allowlist.json (files/tables entries recorded under SD-LEO-INFRA-SCHEMA-REFERENCE-LINT-001) during the advisory soak that preceded the blocking flip pinned by tests/unit/schema-reference-lint-workflow-blocking.test.js (soak 2026-06-10..2026-06-17); the lint runs live on every PR via .github/workflows/schema-reference-lint.yml"
+    }
+  },
+  {
+    "name": "stage-advancement-chokepoint-lint",
+    "script": "scripts/lint/stage-advancement-chokepoint-lint.mjs",
+    "seedTest": "tests/unit/lint/scanner-fixture-exclusion.test.js",
+    "note": "SD-LEO-INFRA-SWEEP-REPO-SCANNERS-001 (FR-2). Same committed two-sided test: one payload, two paths differing only in being fixture material, control asserted FIRST so a silently-dead scanner cannot pass as 'no fixture hit'.",
+    "neuter": {
+      "find": "if (isFixtureEntry(p, e.isDirectory())) continue;",
+      "replace": "if (false) continue;",
+      "why": "the --all walk stops pruning fixture directories, so the planted lib/__tests__ file is scanned and flagged, and the assertion that no hit contains __tests__ goes RED"
+    }
+  },
+  {
+    "name": "fixture-producer-guard-lint",
+    "script": "scripts/lint/fixture-producer-guard-lint.mjs",
+    "rootFlag": "--root",
+    "observability_proof": {
+      "input": "The SOURCE TEXT of every *.mjs/*.js/*.cjs file found by a recursive walk of four named roots (tests/integration, tests/database, scripts/harness, scripts/canary), read with readFileSync and stripped of comments and string bodies before matching; plus scripts/lint/fixture-producer-guard-allowlist.json, whose keys are '<repo-relative-file>' or '<repo-relative-file>:<line>'. Its OUTPUT SIGNAL is the process exit code (0 = clean, 1 = violations found OR zero guarded sites OR the startup selfTest failed) plus a stdout summary line carrying the guarded-site and unguarded-write counts, and one stderr line per violation naming file:line. It consumes NO database columns and NO environment variables.",
+      "seen": "Real UNPLANTED positive observed in the deployment environment (live invocation against the actual repository working tree, 2026-08-08): during the conversion sweep this control reported an unguarded ventures write in tests/integration/eva/venture-error-aggregation-realdb.test.js that a bulk rewrite had silently failed to convert — that file binds its supabase client as 'svc', so a rewrite keyed to one spelling matched zero sites there while reporting success on the other files. The control's count is what exposed it; the rewrite's own report said success. Separately, a planted two-sided probe on the same real tree showed the pre-fix build printing '2 write-site(s) found' AND 'every ventures write routes through insertGuarded' at exit 0, and the post-fix build exiting 1 naming both sites. HONEST LIMIT ON THIS FIELD: the .github/workflows/fixture-producer-guard-lint.yml job has so far only ever run GREEN — this control has NOT yet blocked a pull request in CI, so the positives cited above are live local invocations, not CI blocks."
+    },
+    "note": "SD-LEO-INFRA-ONE-SYNTHETIC-ROW-001-D (FR-6). TWO fixtures, and the second is load-bearing rather than decoration. This lint REFUSES to report success on zero guarded sites (a blind extractor and a clean tree otherwise print the same green), and that refusal returns BEFORE the violation listing. Seeding only the defect would therefore exercise the zero-guarded branch and never emit the seeded filename, scoring a firing control SILENT. The guarded twin puts the denominator above zero so the trial drives the REAL violation-reporting path. DETECTION IS DELIBERATELY KEYED ON THE SEEDED FILENAME ALONE: the summary line prints 'N unguarded ventures write-site(s)' on every run including a clean one, so declaring that phrase a detectToken would mark this control as firing when it found nothing.",
+    "fixtures": [
+      {
+        "path": "tests/integration/seeded-fixture-producer-defect.js",
+        "content": "// SEEDED DEFECT: a raw ventures insert that no producer-side assert ever checked.\nexport async function make(supabase) {\n  return supabase.from('ventures').insert({ name: 'seeded-unguarded-row', is_demo: true });\n}\n"
+      },
+      {
+        "path": "scripts/harness/seeded-fixture-producer-guarded.js",
+        "content": "// NOT the defect. A correctly guarded producer, present so the coverage denominator is\n// non-zero — see the note on this spec. The lint reads source as TEXT and never imports it,\n// so the unresolvable path below is irrelevant to the trial.\nimport { insertGuarded, CLASSIFICATION } from '../../lib/governance/fixture-producer-guard.mjs';\nexport async function ok(supabase) {\n  return insertGuarded(supabase, 'ventures', { name: 'TEST-seeded-guarded', is_demo: true },\n    { classification: CLASSIFICATION.FIXTURE, source: 'seed-trial' });\n}\n"
+      }
+    ]
+  },
+  {
+    "name": "or-filter-must-project",
+    "script": "scripts/lint/or-filter-must-project.mjs",
+    "seedTest": "tests/unit/claim/every-claim-write-reaffirm.test.js",
+    "note": "SD-LEO-INFRA-EVERY-CLAIM-WRITE-001 (FR-4). The control it guards: on a PostgREST UPDATE an .or() filter resolves its columns against the RETURNING projection, so filtering on a column the .select() omits returns 42703 on EVERY call — and the error names that column as missing when it exists, which is why the original defect was misdiagnosed as transient schema-cache staleness. seedTest form rather than fixtures because this control ships as a PURE FUNCTION over source text with no file-walking CLI, so there is no root to aim at a fixture directory; the committed test compensates by carrying BOTH directions itself — a hand-written broken chain that must be flagged, the real lib/quick-fix-claim.mjs that must NOT be (the positive control the coordinator directed me to leave untouched), an .eq-only chain that must NOT be flagged (measured: .eq does not resolve against the projection, so linting it would churn three working release sites), and an in-test mutation that narrows the real claim-guard projection back and asserts the lint catches it.",
+    "neuter": {
+      "find": "if (missing.length > 0) {",
+      "replace": "if (false) {",
+      "why": "the lint stops reporting findings, so the deliberately-broken chain in the seed test is no longer flagged and the FLAGS-the-narrowed-projection assertion goes RED — proving the control is what makes that test pass, not the test asserting its own premise."
+    },
+    "observability_proof": {
+      "input": "The SOURCE TEXT of a single .js/.mjs/.cjs file, passed directly to findUnprojectedOrFilters(source, filePath) as a string, with block and line comments BLANKED (not deleted, so reported line numbers stay true) before matching. It consumes NO database columns, NO environment variables, and NO filesystem walk — the caller supplies the text. Its OUTPUT SIGNAL is the returned array of findings, each {file, line, missing[], projection, message}; an empty array means no unprojected .or() filter was found in that text.",
+      "seen": "A REAL positive on REAL DEPLOYED SOURCE, not a temp-dir fixture: run against the pre-fix blob of lib/claim-guard.mjs as it stood on origin/main (blob ab68046eecdcb5f4d78bab0df94f9092fc4e5bed), it returns exactly ONE finding, at line 211, missing=claiming_session_id, projection=sd_key. That is the precise chain which, executed against live PostgREST under a service-role key on 2026-08-09, returned 42703 column strategic_directives_v2.claiming_session_id does not exist on every call while a SELECT with the identical .or filter returned rows — so the control fires on the exact deployed line whose live failure was independently observed, and the readback of claim_gate_client_version (NULL under that blob, 1 after the fix) is the persisted evidence of that failure. Two-sided in the same run: 0 findings on the fixed file, 0 on lib/quick-fix-claim.mjs and 0 on lib/claim/reacquire-self-live.mjs, both of which are correct and must never be flagged. NOTE the limitation that bounds this proof: reacquire-self-live passes a VARIABLE to .or(), so its 0 is unanalyzable-and-silent, not verified-clean."
+    }
+  },
+  {
+    "name": "no-process-cwd-in-sub-agents-lint",
+    "script": "scripts/lint/no-process-cwd-in-sub-agents-lint.mjs",
+    "rootFlag": null,
+    "cwdScope": true,
+    "extraArgs": [
+      "--all"
+    ],
+    "note": "Surfaced by SD-LEO-INFRA-PUBLISH-SHELL-INJECTION-001-A adopting the published git runner in this lint (no control-logic change) — the control itself predates that diff and had no spec entry. Module-anchored REPO_ROOT, self-gated to lib/sub-agents/, so it is aimed by planting the seed there and running --all.",
+    "fixtures": [
+      {
+        "path": "lib/sub-agents/seeded-process-cwd-defect.js",
+        "content": "// SEEDED DEFECT: resolves repo paths against process.cwd() inside a sub-agent module.\nexport function repoPath() { return process.cwd(); }\n"
+      }
+    ],
+    "detectTokens": [
+      "seeded-process-cwd-defect",
+      "process.cwd"
+    ],
+    "observability_proof": {
+      "input": "ESLint rule no-process-cwd-in-sub-agents evaluated over lib/sub-agents/** source text; file set from git merge-base diff (default) or a module-anchored walk of SCAN_DIRS (--all)",
+      "seen": "live invocation at the LEAD phase of SD-LEO-INFRA-NO-PROCESS-CWD-SUB-AGENTS-001 measured 5 real violations, all resolved by that SD — recorded in the lint's own main() (\"The tree was measured clean at LEAD (5 violations, all resolved by this SD)\"); the lint runs blocking on every invocation since"
+    }
+  },
+  {
+    "name": "shell-injection-argv-lint",
+    "script": "scripts/lint/shell-injection-argv-lint.mjs",
+    "rootFlag": null,
+    "cwdScope": true,
+    "extraArgs": [
+      "--all"
+    ],
+    "note": "SD-LEO-INFRA-PUBLISH-SHELL-INJECTION-001-B. Module-anchored REPO_ROOT scanner over lib/scripts/server/tests; aimed by planting the seed in lib/ and running --all (diagnostic census mode). The seeded defect is the S1 bare-variable shape — the exact sink class the sibling SD (child A) remediated in phantom-test-audit.js.",
+    "fixtures": [
+      {
+        "path": "lib/seeded-shell-injection-defect.js",
+        "content": "// SEEDED DEFECT: non-literal command reaches execSync (always a shell).\nexport function run(cmd) { return execSync(cmd, { encoding: \"utf8\" }); }\n"
+      }
+    ],
+    "detectTokens": [
+      "seeded-shell-injection-defect",
+      "S1"
+    ],
+    "observability_proof": {
+      "input": "git diff --unified=0 added-line patch text vs merge-base (env SHELL_INJECTION_ARGV_BASE, CI sets origin/base_ref in .github/workflows/shell-injection-argv-lint.yml), stripped by lib/lint/added-line-text.mjs stripComments + stripStringLiterals, matched by S1 (non-literal exec/execSync arg) and S2 (shell:true)",
+      "seen": "live --all census at authoring measured the real backlog (270 template-literal sites/143 files + ~54 bare-variable + ~11 live shell:true at main b0334b50439, recorded in shell-injection-argv-allowlist.json _scope_note); the founding real positives are the four lineage sinks this SD family closed, incl. scripts/generate-playground-config.cjs:67 (template + shell:true) still live on main and visible to --all"
+    }
+  },
+  {
+    "name": "eol-renormalization-lint",
+    "script": "scripts/lint/eol-renormalization-lint.mjs",
+    "note": "SD-ALTIFYAI-FDBK-FIX-HOUSEKEEPING-WEEKLY-REPORT-001 FR-2. Cannot be seeded via the fixtures form: reproducing i/crlf or i/mixed requires a committed blob that PREDATES a .gitattributes eol=lf rule (a two-phase git HISTORY), which a single git init + git add -A always clean-filters straight to i/lf. Uses the seedTest form instead against the already-existing, already-mutation-verified unit suite.",
+    "seedTest": "tests/unit/eol-renormalization-lint.test.js",
+    "neuter": {
+      "file": "scripts/lint/eol-renormalization-lint.mjs",
+      "find": "return DIRTY_INDEX_STATES.has(parsed.index);",
+      "replace": "return parsed.index !== 'lf';",
+      "why": "Reverts the inclusion-list classification to an exclusion-of-lf check -- the exact blocking defect a prospective testing-agent review (evidence a4d4ba87-2a56-4912-a8b0-cbd3e3d16a2e) found in this control's original design: it would misclassify binary (i/-text) and empty (i/none) files as dirty. TS-2 and TS-3 assert this must not happen and go red under this neuter (manually verified pre-registration)."
+    },
+    "observability_proof": {
+      "input": "git ls-files --eol output for every tracked path: the i/<state> (index eol) field, parsed positionally, filtered to paths whose attr/ field resolves an eol=lf attribute",
+      "seen": "PR #7025 CI run 31769236228, job eol-renormalization-lint: reported 3 real un-allowlisted violations by exact path (scripts/archive/one-time/apply-orchestrator-fix.js, apply-sd-key-not-null-migration.js, execute-e2e-schema-fix.js) -- a genuine positive in the deployment environment, not a fixture, on files deliberately left un-renormalized pending a separate security escalation (signal e84715bb-3f3c-4251-bd18-79c403336fd3)"
+    }
+  },
+  {
+    "name": "no-connection-string-literals-lint",
+    "script": "scripts/lint/no-connection-string-literals-lint.mjs",
+    "rootFlag": null,
+    "cwdScope": true,
+    "extraArgs": [],
+    "note": "SD-LEO-FIX-STRIP-DEAD-DB-CREDENTIAL-LITERALS-001 FR-3. No --root flag, but scoped via git ls-files -z inheriting cwd (same cwdScope shape as diagnostic-gauge-citation-lint / fleet-liveness-select-lint above) -- the harness's own git init + git add -A in the scratch dir makes the seeded fixture visible.",
+    "fixtures": [
+      {
+        "path": "lib/seeded-connstr-defect.js",
+        "content": "// SEEDED DEFECT: a hardcoded database connection string literal with an embedded credential.\n// Deliberately uses the bare 'postgres' scheme, no 'ql' suffix: the control's own URL_SHAPE_RE\n// accepts either spelling via an optional group (proving the same code path either way), but\n// .husky/pre-commit's scanner only matches when the 'ql' suffix is present -- omitting it here\n// avoids a second, unrelated pre-commit block on a fixture that is not a real credential.\nexport const DATABASE_URL = 'postgres://admin:hunter2seed@db.example.com:5432/prod';\n"
+      }
+    ],
+    "detectTokens": [
+      "hunter2seed"
+    ],
+    "observability_proof": {
+      "input": "git ls-files -z output (every tracked file path, NUL-delimited) and each file content read via readFileSync -- assertion A regex-matches a postgres(ql):// URL shape per line, assertion B sliding-window-hashes each whitespace-delimited token",
+      "seen": "Local live run against this repo's full tracked tree (17,821 files) on 2026-08-16 found 2 real un-allowlisted assertion-A matches by exact path (CLAUDE_CORE.md:1218, scripts/__tests__/replay/README.md:75) before they were reviewed and added to PATH_ALLOWLIST -- a genuine positive in the deployment tree, not a fixture, proving assertion A receives and evaluates real repo content."
+    }
+  },
+  {
+    "name": "secdef-execute-revoke-lint",
+    "script": "scripts/lint/secdef-execute-revoke-lint.mjs",
+    "rootFlag": "--root",
+    "extraArgs": [
+      "--all"
+    ],
+    "note": "SD-LEO-INFRA-CLOSE-REMAINING-SECURITY-001 FR-6. --all mode used because --diff computes a git merge-base against origin/main, which does not exist in the seed harness's freshly git-init'd scratch dir; --all walks the scoped dirs by filesystem readdir instead, which works against any root.",
+    "fixtures": [
+      {
+        "path": "database/migrations/seeded_secdef_execute_defect.sql",
+        "content": "-- SEEDED DEFECT: REVOKE omits PUBLIC, so anon/authenticated inherit PUBLIC's EXECUTE grant\n-- and the REVOKE below is a no-op for any function that also carries a PUBLIC grant.\nCREATE FUNCTION public.seeded_secdef_defect() RETURNS void LANGUAGE sql SECURITY DEFINER AS $$ SELECT 1 $$;\nREVOKE EXECUTE ON FUNCTION public.seeded_secdef_defect() FROM anon, authenticated;\n"
+      }
+    ],
+    "observability_proof": {
+      "input": "migration SQL file TEXT under database/migrations/, supabase/migrations/, database/chairman-gated/ (paren-balance-scanned for CREATE [OR REPLACE] FUNCTION ... SECURITY DEFINER, then regex-matched for a same-function REVOKE naming PUBLIC and each of anon/authenticated addressed). Consumes no DB columns and no live catalog state -- that axis is the separate scripts/audit-rpc-execute-grants.mjs completeness gate, declared as this control's own KNOWN LIMITATION.",
+      "seen": "live --all sweep against this repo's real database/migrations/, supabase/migrations/, database/chairman-gated/ at HEAD (session 642532a6, 2026-08-16): 1517 files scanned, 326 real pre-existing violations by exact file+function name -- a genuine positive in the deployment environment, not a fixture. The migration this SD authored (database/chairman-gated/20260816_close_remaining_secdef_execute_exposure.sql) was independently confirmed to score ZERO findings against the same live sweep."
+    }
   }
- },
- {
-  "name": "secdef-execute-revoke-lint",
-  "script": "scripts/lint/secdef-execute-revoke-lint.mjs",
-  "rootFlag": "--root",
-  "extraArgs": [
-   "--all"
-  ],
-  "note": "SD-LEO-INFRA-CLOSE-REMAINING-SECURITY-001 FR-6. --all mode used because --diff computes a git merge-base against origin/main, which does not exist in the seed harness's freshly git-init'd scratch dir; --all walks the scoped dirs by filesystem readdir instead, which works against any root.",
-  "fixtures": [
-   {
-    "path": "database/migrations/seeded_secdef_execute_defect.sql",
-    "content": "-- SEEDED DEFECT: REVOKE omits PUBLIC, so anon/authenticated inherit PUBLIC's EXECUTE grant\n-- and the REVOKE below is a no-op for any function that also carries a PUBLIC grant.\nCREATE FUNCTION public.seeded_secdef_defect() RETURNS void LANGUAGE sql SECURITY DEFINER AS $$ SELECT 1 $$;\nREVOKE EXECUTE ON FUNCTION public.seeded_secdef_defect() FROM anon, authenticated;\n"
-   }
-  ],
-  "observability_proof": {
-   "input": "migration SQL file TEXT under database/migrations/, supabase/migrations/, database/chairman-gated/ (paren-balance-scanned for CREATE [OR REPLACE] FUNCTION ... SECURITY DEFINER, then regex-matched for a same-function REVOKE naming PUBLIC and each of anon/authenticated addressed). Consumes no DB columns and no live catalog state -- that axis is the separate scripts/audit-rpc-execute-grants.mjs completeness gate, declared as this control's own KNOWN LIMITATION.",
-   "seen": "live --all sweep against this repo's real database/migrations/, supabase/migrations/, database/chairman-gated/ at HEAD (session 642532a6, 2026-08-16): 1517 files scanned, 326 real pre-existing violations by exact file+function name -- a genuine positive in the deployment environment, not a fixture. The migration this SD authored (database/chairman-gated/20260816_close_remaining_secdef_execute_exposure.sql) was independently confirmed to score ZERO findings against the same live sweep."
-  }
- }
 ]

@@ -14,6 +14,7 @@ import { branchBelongsToSd, loadKeySet, OWNER_REASON } from '../../../../../lib/
 import { resolveRepoPath, resolveGitHubRepo, ENGINEER_ROOT } from '../../../../../lib/repo-paths.js';
 import { getTierForSD } from '../../../sd-type-checker.js';
 import { getFilteredRetrospective } from '../../retro-filters.js';
+import { sdKeyOwnsFile } from './sd-key-file-ownership.js';
 
 // Core Protocol Gate - SD Start Gate (SD-LEO-INFRA-ENHANCED-PROTOCOL-FILE-001)
 import { createSdStartGate } from '../../gates/core-protocol-gate.js';
@@ -1405,7 +1406,14 @@ export function createChairmanApplyVerificationGate() {
         // metadata is a DATABASE WRITE, not part of any git diff, so that bypass would have
         // been invisible to review of the PR that introduced it. A declaration may only ever
         // ADD to what is checked; it can never subtract.
-        const owned = files.filter(f => declared.includes(f.file) || f.file.includes(sdKey));
+        // SD-LEO-INFRA-ORCH-PARENT-LIFECYCLE-LANES-001 (FR-6, coordinator rulings #6/#7):
+        // a bare substring match here let an orchestrator PARENT's sd_key (a strict PREFIX of
+        // its CHILDREN's sd_keys) "own" a child's staged migration file -- measured live on -H
+        // (inheriting H1's DDL) and -C (inheriting C1..C4's). Boundary-anchored via
+        // sdKeyOwnsFile: matches the fallback case exactly as before EXCEPT when the character
+        // immediately following the matched key is alphanumeric (a longer, different key).
+        // declared.includes(f.file) is UNCHANGED -- an explicit declaration remains exact-match.
+        const owned = files.filter(f => declared.includes(f.file) || sdKeyOwnsFile(sdKey, f.file));
 
         // A declaration that names a file the corpus does not contain is itself unverifiable.
         // Without this, declaring ['real.sql','typo.sql'] checked only real.sql and silently

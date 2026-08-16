@@ -1,8 +1,8 @@
-<!-- file_content_hash: 27cea777ab713d77 -->
+<!-- file_content_hash: 0eac6122d57cd225 -->
 <!-- GENERATED FILE - DO NOT EDIT DIRECTLY. Source of truth: leo_protocol_sections (DB). Regenerate: node scripts/generate-claude-md-from-db.js. Drift check: node scripts/check-claude-md-drift.cjs -->
 # CLAUDE_EXEC.md - EXEC Phase Operations
 
-**Generated**: 2026-08-15 4:55:00 PM
+**Generated**: 2026-08-16 8:21:11 PM
 **Protocol**: LEO 4.4.1
 **Purpose**: EXEC agent implementation requirements and testing
 **Effort**: xhigh (implementation + testing require maximum reasoning for agentic coding per Opus 4.8 guidance)
@@ -280,6 +280,19 @@ If `research_confidence_score = 0.00`, you skipped this step.
 
 ---
 
+
+### 6. Reinventing Existing Deletion Primitives (repeats a fixed hazard class)
+**Pattern**: Writing new worktree-adjacent file-deletion logic without first checking for an existing primitive
+
+**Evidence**: SD-LEARN-FIX-ADDRESS-PATTERN-LEARN-143 (PAT-LES-947b3fca46cc)
+> "US-007's first design (junction + a fresh raw rmSync) reintroduced a hazard class lib/worktree-manager.js's safeRecursiveRm already carries a header dated 2026-05-09 documenting -- a symlink/junction near a worktree deletion, witnessed wiping a repo-root once already. The fix (routing both deletes through safeRecursiveRm) landed only after a pre-existing static guard flagged it as a break in the ONLY required check on main at the time."
+
+**Fix**: Before writing ANY worktree-adjacent file-deletion code, grep for the existing chokepoint first:
+```bash
+grep -rn "rmSync\|junction\|safeRecursiveRm" lib/worktree-manager.js
+```
+Route the delete through `safeRecursiveRm` (lib/worktree-manager.js) rather than a fresh `fs.rmSync`/raw recursive delete -- it is the one place this repo's junction-safe deletion policy is maintained, and a second unreviewed implementation is a second unreviewed policy.
+
 ### Quick Reference
 
 | Anti-Pattern | Time Cost | Fix |
@@ -289,6 +302,7 @@ If `research_confidence_score = 0.00`, you skipped this step.
 | Workarounds first | 2-3x multiplier | Fix root cause |
 | Accept environmental | Hours of idle | 5-step debug minimum |
 | Simulate sub-agents | 15% quality loss | Execute actual tools |
+| Reinvent deletion primitive | Repeat of a fixed hazard class | grep for safeRecursiveRm first |
 
 **Pattern References**: PAT-RECURSION-001 through PAT-RECURSION-005
 
@@ -2148,6 +2162,6 @@ Verifies version consistency between CLAUDE*.md files and database. Use --fix to
 
 ---
 
-*Generated from database: 2026-08-15*
+*Generated from database: 2026-08-16*
 *Protocol Version: 4.4.1*
 *Load when: User mentions EXEC, implementation, coding, or testing*

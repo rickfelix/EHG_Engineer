@@ -7,12 +7,14 @@
  */
 
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
+import { execFileSync } from 'node:child_process';
 import {
   validateSubagentEvidence,
   createSubagentEvidenceGate,
   classifyVerdict,
   resolveSubagentVerdictMode,
-  REQUIRED_SUBAGENTS
+  REQUIRED_SUBAGENTS,
+  _internals
 } from '../../scripts/modules/handoff/gates/subagent-evidence-gate.js';
 
 // ─── Fixtures ────────────────────────────────────────────────────────────────
@@ -720,5 +722,132 @@ describe('non-evidence blocks unconditionally (SD-LEO-INFRA-EXPLORE-UNREGISTERED
     delete process.env.SUBAGENT_VERDICT_MODE;
     const advisory = await validateSubagentEvidence({ sd: makeSD(), handoffType: 'PLAN-TO-EXEC' }, supabase());
     expect(blocked.passed).not.toBe(advisory.passed);
+  });
+});
+
+// ─── PAT-LES-83842538ee01 (SD-LEARN-FIX-ADDRESS-PATTERN-LEARN-143), FR-3 ─────
+// Sub-agent evidence with no commit-freshness signal at all -- only the wall-clock
+// check above. Advisory-only "stale" classification, scoped strictly to EXEC-TO-PLAN.
+describe('detectStaleEvidence / resolveCurrentHeadSha — pure functions (_internals)', () => {
+  const REAL_HEAD = execFileSync('git', ['rev-parse', 'HEAD'], { cwd: process.cwd(), encoding: 'utf8' }).trim();
+  const norm = s => String(s || '').toUpperCase().replace(/-AGENT$/, '').replace(/-+/g, '_');
+
+  it('resolveCurrentHeadSha resolves the real HEAD of a real repo', () => {
+    expect(_internals.resolveCurrentHeadSha({ worktree_path: process.cwd() })).toBe(REAL_HEAD);
+  });
+
+  it('resolveCurrentHeadSha returns null (never throws) when worktree_path is absent', () => {
+    expect(_internals.resolveCurrentHeadSha({})).toBeNull();
+    expect(_internals.resolveCurrentHeadSha(null)).toBeNull();
+  });
+
+  it('resolveCurrentHeadSha returns null for an unresolvable path', () => {
+    expect(_internals.resolveCurrentHeadSha({ worktree_path: 'C:/not/a/repo/xyz' })).toBeNull();
+  });
+
+  it('detectStaleEvidence flags a mismatched evaluated_commit_sha', () => {
+    const latestByCode = new Map([['TESTING', { evaluated_commit_sha: 'deadbeef00000000000000000000000000000000' }]]);
+    const { stale, warnings } = _internals.detectStaleEvidence(latestByCode, ['TESTING'], { worktree_path: process.cwd() }, norm);
+    expect(stale).toEqual([{ agent: 'TESTING', evaluated_commit_sha: 'deadbeef00000000000000000000000000000000', current_head_sha: REAL_HEAD }]);
+    expect(warnings[0]).toMatch(/SUBAGENT_EVIDENCE_STALE/);
+    expect(warnings[0]).toMatch(/TESTING/);
+  });
+
+  it('detectStaleEvidence does NOT flag a matching evaluated_commit_sha', () => {
+    const latestByCode = new Map([['TESTING', { evaluated_commit_sha: REAL_HEAD }]]);
+    const { stale, warnings } = _internals.detectStaleEvidence(latestByCode, ['TESTING'], { worktree_path: process.cwd() }, norm);
+    expect(stale).toEqual([]);
+    expect(warnings).toEqual([]);
+  });
+
+  it('detectStaleEvidence does NOT flag a null evaluated_commit_sha (pre-SD rows, cannot determine freshness)', () => {
+    const latestByCode = new Map([['TESTING', { evaluated_commit_sha: null }]]);
+    const { stale } = _internals.detectStaleEvidence(latestByCode, ['TESTING'], { worktree_path: process.cwd() }, norm);
+    expect(stale).toEqual([]);
+  });
+
+  it('detectStaleEvidence is a no-op (never accuses) when current HEAD cannot be resolved', () => {
+    const latestByCode = new Map([['TESTING', { evaluated_commit_sha: 'deadbeef00000000000000000000000000000000' }]]);
+    const { stale, warnings } = _internals.detectStaleEvidence(latestByCode, ['TESTING'], {}, norm);
+    expect(stale).toEqual([]);
+    expect(warnings).toEqual([]);
+  });
+
+  it('staleEvidenceCheckDisabled respects LEO_DISABLE_STALE_EVIDENCE_CHECK', () => {
+    delete process.env.LEO_DISABLE_STALE_EVIDENCE_CHECK;
+    expect(_internals.staleEvidenceCheckDisabled()).toBe(false);
+    process.env.LEO_DISABLE_STALE_EVIDENCE_CHECK = '1';
+    expect(_internals.staleEvidenceCheckDisabled()).toBe(true);
+    delete process.env.LEO_DISABLE_STALE_EVIDENCE_CHECK;
+  });
+});
+
+describe('validateSubagentEvidence — FR-3 stale-evidence integration', () => {
+  const REAL_HEAD = execFileSync('git', ['rev-parse', 'HEAD'], { cwd: process.cwd(), encoding: 'utf8' }).trim();
+  const STALE_SHA = 'deadbeef00000000000000000000000000000000';
+
+  beforeEach(() => {
+    delete process.env.LEO_DISABLE_SUBAGENT_EVIDENCE_GATE;
+    delete process.env.LEO_DISABLE_STALE_EVIDENCE_CHECK;
+  });
+  afterEach(() => {
+    delete process.env.LEO_DISABLE_SUBAGENT_EVIDENCE_GATE;
+    delete process.env.LEO_DISABLE_STALE_EVIDENCE_CHECK;
+  });
+
+  it('EXEC-TO-PLAN: a TESTING row evaluated against a stale commit is flagged, gate still PASSES (advisory)', async () => {
+    const supabase = makeSupabase({
+      phaseStart: PHASE_START_ISO,
+      evidenceRows: [
+        { sub_agent_code: 'TESTING', created_at: '2026-04-24T21:00:00Z', verdict: 'PASS', evaluated_commit_sha: STALE_SHA },
+        { sub_agent_code: 'SECURITY', created_at: '2026-04-24T21:00:00Z', verdict: 'PASS', evaluated_commit_sha: REAL_HEAD },
+      ]
+    });
+    const ctx = { sd: { ...makeSD(), worktree_path: process.cwd() }, handoffType: 'EXEC-TO-PLAN' };
+    const result = await validateSubagentEvidence(ctx, supabase);
+    expect(result.passed).toBe(true); // advisory-only — never fails the gate
+    expect(result.details.stale).toEqual([expect.objectContaining({ agent: 'TESTING', evaluated_commit_sha: STALE_SHA })]);
+    expect(result.warnings.some(w => /SUBAGENT_EVIDENCE_STALE/.test(w) && /TESTING/.test(w))).toBe(true);
+  });
+
+  it('LEAD-TO-PLAN: a mismatched evaluated_commit_sha is NOT flagged (scope guard — mismatch is normal pre-EXEC)', async () => {
+    const supabase = makeSupabase({
+      phaseStart: PHASE_START_ISO,
+      evidenceRows: [
+        { sub_agent_code: 'VALIDATION', created_at: '2026-04-24T21:00:00Z', verdict: 'PASS', evaluated_commit_sha: STALE_SHA },
+        { sub_agent_code: 'Explore', created_at: '2026-04-24T21:00:00Z', verdict: 'PASS', evaluated_commit_sha: STALE_SHA },
+      ]
+    });
+    const ctx = { sd: { ...makeSD(), worktree_path: process.cwd() }, handoffType: 'LEAD-TO-PLAN' };
+    const result = await validateSubagentEvidence(ctx, supabase);
+    expect(result.passed).toBe(true);
+    // The scope guard is on WHETHER the check runs, not on the shape of `details.stale` --
+    // it stays a (harmlessly empty) array rather than being conditionally omitted.
+    expect(result.details.stale).toEqual([]);
+    expect(result.warnings.some(w => /SUBAGENT_EVIDENCE_STALE/.test(w))).toBe(false);
+  });
+
+  it('LEO_DISABLE_STALE_EVIDENCE_CHECK=1 suppresses the stale warning at EXEC-TO-PLAN', async () => {
+    process.env.LEO_DISABLE_STALE_EVIDENCE_CHECK = '1';
+    const supabase = makeSupabase({
+      phaseStart: PHASE_START_ISO,
+      evidenceRows: [
+        { sub_agent_code: 'TESTING', created_at: '2026-04-24T21:00:00Z', verdict: 'PASS', evaluated_commit_sha: STALE_SHA },
+        { sub_agent_code: 'SECURITY', created_at: '2026-04-24T21:00:00Z', verdict: 'PASS', evaluated_commit_sha: REAL_HEAD },
+      ]
+    });
+    const ctx = { sd: { ...makeSD(), worktree_path: process.cwd() }, handoffType: 'EXEC-TO-PLAN' };
+    const result = await validateSubagentEvidence(ctx, supabase);
+    expect(result.passed).toBe(true);
+    expect(result.warnings.some(w => /SUBAGENT_EVIDENCE_STALE/.test(w))).toBe(false);
+  });
+
+  it('REGRESSION (TS-8): existing missing/failing classification is unaffected by the new field', async () => {
+    const supabase = makeSupabase({ phaseStart: PHASE_START_ISO, evidenceRows: [] });
+    const ctx = { sd: { ...makeSD(), worktree_path: process.cwd() }, handoffType: 'EXEC-TO-PLAN' };
+    const result = await validateSubagentEvidence(ctx, supabase);
+    expect(result.passed).toBe(false);
+    expect(result.details.reason).toBe('SUBAGENT_EVIDENCE_MISSING');
+    expect(result.details.missing.sort()).toEqual(['SECURITY', 'TESTING']);
   });
 });

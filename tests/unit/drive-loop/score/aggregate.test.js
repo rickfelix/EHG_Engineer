@@ -147,6 +147,29 @@ describe('aggregate — PER-001: a citation names one table, so it may carry onl
     expect(byLeg.leg1_landed.predicate).toBe('p:leg1_landed');
   });
 
+  it('[SD-FDBK-INFRA-ENCODE-DRIVE-SIX-GOAL-001] each measured leg carries its OWN earned point value', () => {
+    // twoTables(): leg1_landed=2, leg2_uptake=1, leg4_capacity=2 (see the leg() calls above).
+    const r = twoTables();
+    const byLeg = Object.fromEntries(r.measured_legs.map((m) => [m.leg, m]));
+    expect(byLeg.leg1_landed.value).toBe(2);
+    expect(byLeg.leg2_uptake.value).toBe(1);
+    expect(byLeg.leg4_capacity.value).toBe(2);
+    // The per-leg values sum to the SAME earned total the aggregate reports — one fact, not two
+    // that could drift apart.
+    const sum = r.measured_legs.reduce((s, m) => s + m.value, 0);
+    expect(sum).toBe(r.score.value);
+  });
+
+  it('[SD-FDBK-INFRA-ENCODE-DRIVE-SIX-GOAL-001] a MEASURED zero leg carries value:0, not an absent field', () => {
+    // Mirrors the file's own "a measured zero is not an unavailable one" rule, one layer down: a
+    // leg that measured and earned nothing must still show up with a real 0, never omit `value`.
+    const r = aggregateScore({ legs: [leg('a', 0), leg('b', 2)] });
+    const byLeg = Object.fromEntries(r.measured_legs.map((m) => [m.leg, m]));
+    expect(Object.hasOwn(byLeg.a, 'value')).toBe(true);
+    expect(byLeg.a.value).toBe(0);
+    expect(byLeg.b.value).toBe(2);
+  });
+
   it('[FR-1/TS-12] leg2 grains survive, and a leg with no row grain has row_ids ABSENT, not []', () => {
     const r = twoTables();
     const byLeg = Object.fromEntries(r.measured_legs.map((m) => [m.leg, m]));
