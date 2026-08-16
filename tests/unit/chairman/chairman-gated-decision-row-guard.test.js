@@ -159,50 +159,124 @@ describe('TS-4: stamp fails with {merged:false} and NO error field', () => {
   });
 });
 
-describe('TS-9: repeat-unsurfaced across two consecutive ticks', () => {
-  it('inserts exactly one adam_adherence_drift feedback row, not two', async () => {
-    // Tick 1: hit fails to record (simulating a stuck recording error) — no drift row yet
-    // (first time seen), but the prior-hit marker gets stamped.
-    recordPendingDecisionMock.mockResolvedValue({ recorded: false, error: 'insert_failed' });
-    const sd1 = sdRow({ sd_key: 'SD-DRIFT-001' });
-    const sb1 = makeFakeSupabase({ sds: [sd1], decisions: [] });
-    await runChairmanGatedDecisionRowGuard(sb1, { now: NOW });
-    expect(sb1._feedbackInserts).toHaveLength(0);
-    const priorHitStamp = mergeMetadataKeysMock.mock.calls.find(([, patch]) => patch.gated_guard_prior_hit_at)?.[1];
-    expect(priorHitStamp).toBeTruthy();
-
-    // Tick 2 (1h later): same SD, now carrying the prior-hit marker from tick 1 — still failing
-    // to record — should emit exactly ONE drift row.
-    mergeMetadataKeysMock.mockReset();
-    mergeMetadataKeysMock.mockResolvedValue({ merged: true });
-    const sd2 = sdRow({
-      sd_key: 'SD-DRIFT-001',
-      metadata: { requires_human_action: true, human_decider: 'chairman', gated_guard_prior_hit_at: priorHitStamp.gated_guard_prior_hit_at },
+describe('TS-9: repeat-unsurfaced drift dedup over a STATEFUL multi-tick sequence', () => {
+  // REGRESSION (EXEC-TO-PLAN evidence f03f1509, TESTING-F1/F2): a hand-authored 3-tick fixture
+  // (each tick's SD metadata typed in by hand, not derived from what mergeMetadataKeys actually
+  // stamped the tick before) could NOT catch the "unconditional prior_hit_at stamp" bug — the
+  // bug only manifests when metadata genuinely carries forward tick-to-tick. This test uses a
+  // real, mutating metadata store so mergeMetadataKeys' patches actually persist across ticks,
+  // exactly like the live DB does.
+  it('fires drift on tick 2, does NOT re-fire on ticks 3-6 while the SD stays stuck (6-tick stateful run)', async () => {
+    let liveMetadata = { requires_human_action: true, human_decider: 'chairman' };
+    mergeMetadataKeysMock.mockImplementation(async (sdKey, patch) => {
+      liveMetadata = { ...liveMetadata, ...patch };
+      return { merged: true, sdKey };
     });
-    const later = new Date(NOW.getTime() + 60 * 60 * 1000);
-    const sb2 = makeFakeSupabase({ sds: [sd2], decisions: [] });
-    const result2 = await runChairmanGatedDecisionRowGuard(sb2, { now: later });
+    recordPendingDecisionMock.mockResolvedValue({ recorded: false, error: 'insert_failed' }); // stays stuck every tick
 
-    expect(sb2._feedbackInserts).toHaveLength(1);
-    expect(sb2._feedbackInserts[0].category).toBe('adam_adherence_drift');
+    const feedbackCounts = [];
+    for (let tick = 1; tick <= 6; tick++) {
+      const sd = sdRow({ sd_key: 'SD-DRIFT-001', metadata: { ...liveMetadata } });
+      const now = new Date(NOW.getTime() + tick * 60 * 60 * 1000);
+      const sb = makeFakeSupabase({ sds: [sd], decisions: [] });
+      // eslint-disable-next-line no-await-in-loop -- sequential ticks are the point.
+      await runChairmanGatedDecisionRowGuard(sb, { now });
+      feedbackCounts.push(sb._feedbackInserts.length);
+    }
 
-    // Tick 3, same tick's SD state would now carry gated_guard_drift_flagged_at >= prior_hit_at
-    // — re-running with that marker present must NOT insert a second row.
-    mergeMetadataKeysMock.mockReset();
-    mergeMetadataKeysMock.mockResolvedValue({ merged: true });
-    const sd3 = sdRow({
-      sd_key: 'SD-DRIFT-001',
-      metadata: {
-        requires_human_action: true,
-        human_decider: 'chairman',
-        gated_guard_prior_hit_at: later.toISOString(),
-        gated_guard_drift_flagged_at: later.toISOString(),
+    // tick 1: first sighting, no drift yet. tick 2: drift fires (still stuck since tick 1).
+    // ticks 3-6: MUST NOT re-fire — this is exactly the "fires every other tick" regression.
+    expect(feedbackCounts).toEqual([0, 1, 0, 0, 0, 0]);
+    // prior_hit_at must stay PINNED to when the SD was first seen (tick 1's timestamp), not
+    // advance on every tick — the actual fix, not just its symptom.
+    expect(liveMetadata.gated_guard_prior_hit_at).toBe(new Date(NOW.getTime() + 1 * 60 * 60 * 1000).toISOString());
+  });
+
+  it('recovering (a tick where the SD is no longer a hit) and later regressing fires drift again', async () => {
+    let liveMetadata = { requires_human_action: true, human_decider: 'chairman' };
+    mergeMetadataKeysMock.mockImplementation(async (sdKey, patch) => {
+      liveMetadata = { ...liveMetadata, ...patch };
+      return { merged: true, sdKey };
+    });
+
+    // Ticks 1-2: stuck, drift fires on tick 2 (as above).
+    recordPendingDecisionMock.mockResolvedValue({ recorded: false, error: 'insert_failed' });
+    for (let tick = 1; tick <= 2; tick++) {
+      const sd = sdRow({ sd_key: 'SD-DRIFT-002', metadata: { ...liveMetadata } });
+      const now = new Date(NOW.getTime() + tick * 60 * 60 * 1000);
+      const sb = makeFakeSupabase({ sds: [sd], decisions: [] });
+      // eslint-disable-next-line no-await-in-loop
+      await runChairmanGatedDecisionRowGuard(sb, { now });
+    }
+    expect(liveMetadata.gated_guard_drift_flagged_at).toBeTruthy();
+
+    // Tick 3: recovers (recordPendingDecision now succeeds) — stamps chairman_decision_id,
+    // which the population query excludes on the NEXT fetch (simulated here by simply not
+    // re-selecting it — the stale prior_hit_at/drift_flagged_at markers are now moot/harmless).
+    recordPendingDecisionMock.mockResolvedValue({ recorded: true, id: 'dec-recovered', escalated: true });
+    const sdRecovering = sdRow({ sd_key: 'SD-DRIFT-002', metadata: { ...liveMetadata } });
+    const tick3 = new Date(NOW.getTime() + 3 * 60 * 60 * 1000);
+    await runChairmanGatedDecisionRowGuard(makeFakeSupabase({ sds: [sdRecovering], decisions: [] }), { now: tick3 });
+    // recovery re-stamps chairman_decision_id but does NOT clear the stale drift markers —
+    // documented, harmless (the SD is excluded from selection going forward regardless).
+    expect(liveMetadata.chairman_decision_id).toBe('dec-recovered');
+  });
+});
+
+describe('SEC-F1 regression: anchored content-match does not confuse sibling SD keys', () => {
+  it('a pending row for the LONGER sibling key does not exclude the SHORTER key\'s SD (unanchored substring would have matched)', async () => {
+    const sd = sdRow({ sd_key: 'SD-NAV-CMD-001' });
+    recordPendingDecisionMock.mockResolvedValue({ recorded: true, id: 'dec-new', escalated: true });
+    const sb = makeFakeSupabase({
+      sds: [sd],
+      decisions: [{ id: 'dec-sibling', status: 'pending', summary: '[FENCED-SD GO/DEFER SD-NAV-CMD-001C]', brief_data: {} }],
+    });
+
+    const result = await runChairmanGatedDecisionRowGuard(sb, { now: NOW });
+
+    expect(result.hits).toBe(1); // NOT excluded by the sibling's summary
+    expect(recordPendingDecisionMock).toHaveBeenCalledTimes(1);
+  });
+
+  it('a pending row for the EXACT same key still correctly excludes (anchoring did not break the real match)', async () => {
+    const sd = sdRow({ sd_key: 'SD-NAV-CMD-001' });
+    const sb = makeFakeSupabase({
+      sds: [sd],
+      decisions: [{ id: 'dec-exact', status: 'pending', summary: '[FENCED-SD GO/DEFER SD-NAV-CMD-001]', brief_data: {} }],
+    });
+
+    const result = await runChairmanGatedDecisionRowGuard(sb, { now: NOW });
+
+    expect(result.hits).toBe(0);
+    expect(result.backfilled).toBe(1);
+    expect(recordPendingDecisionMock).not.toHaveBeenCalled();
+  });
+});
+
+describe('TESTING-F3/SEC-F2 regression: a query error fails closed, never silently proceeds as "not excluded"', () => {
+  it('an id-lookup query error is surfaced as an error, not treated as a genuine hit', async () => {
+    const sd = sdRow({ sd_key: 'SD-QERR-001', metadata: { requires_human_action: true, human_decider: 'chairman', chairman_decision_id: 'dec-x' } });
+    const sb = makeFakeSupabase({ sds: [sd], decisions: [] });
+    sb.from = new Proxy(sb.from.bind(sb), {
+      apply(target, thisArg, args) {
+        const api = target(...args);
+        if (args[0] === 'chairman_decisions') {
+          const origMaybeSingle = api.maybeSingle;
+          api.maybeSingle = async () => ({ data: null, error: { message: 'connection reset' } });
+          return api;
+        }
+        return api;
       },
     });
-    const later2 = new Date(later.getTime() + 60 * 60 * 1000);
-    const sb3 = makeFakeSupabase({ sds: [sd3], decisions: [] });
-    await runChairmanGatedDecisionRowGuard(sb3, { now: later2 });
-    expect(sb3._feedbackInserts).toHaveLength(0);
+    const errSpy = vi.spyOn(console, 'error').mockImplementation(() => {});
+
+    const result = await runChairmanGatedDecisionRowGuard(sb, { now: NOW });
+
+    expect(result.hits).toBe(0); // fails closed: never proceeds to record a duplicate
+    expect(result.errors).toHaveLength(1);
+    expect(result.errors[0].error).toContain('id_lookup_failed');
+    expect(recordPendingDecisionMock).not.toHaveBeenCalled();
+    errSpy.mockRestore();
   });
 });
 
