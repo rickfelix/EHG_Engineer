@@ -34,7 +34,7 @@ import {
   checkMultiRepoStatus,
   displayMultiRepoStatus
 } from './index.js';
-import { checkBypassRateLimits, displayExecutionResult } from './execution-helpers.js';
+import { checkBypassRateLimits, displayExecutionResult, printHandoffResultLines, runWithGuaranteedReprint } from './execution-helpers.js';
 import { detectBlockers, DETECTION_TIMEOUT_MS } from '../blocker-resolution.js';
 import { analyzeClaimRelationship, autoReleaseStaleDeadClaim } from '../../sd-next/claim-analysis.js';
 import { writeCompactAfterHandoffFlag } from './compact-after-handoff.js';
@@ -1024,6 +1024,28 @@ export async function handleExecuteWithContinuation(handoffType, sdId, args) {
 
   // Execute the initial handoff
   let currentResult = await handleExecuteCommand(handoffType, sdId, args);
+
+  // SD-LEO-INFRA-LEAD-FINAL-CASCADE-ISOLATION-001 (FR-3): cache the ORIGINAL SD's own
+  // result/identity BEFORE any cascade attempt can reassign currentResult. This is what
+  // gets reprinted -- never whatever a cascaded SD's own handoff produced.
+  const originalResult = currentResult;
+  const originalHandoffType = handoffType;
+  const originalSdId = sdId;
+  // Only reprint when a cascade was actually attempted -- the common (non-cascading)
+  // case must stay byte-identical to today (a single HANDOFF_RESULT= line, not two).
+  let cascadeAttempted = false;
+
+  return runWithGuaranteedReprint(
+    () => handleExecuteWithContinuationLoop(),
+    async () => {
+      if (cascadeAttempted) {
+        console.log('\n=== ORIGINAL SD RESULT (reprinted after cascade attempt) ===');
+        await printHandoffResultLines(originalResult, originalHandoffType, originalSdId);
+      }
+    }
+  );
+
+  async function handleExecuteWithContinuationLoop() {
   let currentSdId = sdId;
   let currentHandoffType = handoffType;
   let iterationCount = 0;
@@ -1094,6 +1116,11 @@ export async function handleExecuteWithContinuation(handoffType, sdId, args) {
         // Update for next iteration - start the next orchestrator
         currentSdId = chainingInfo.nextOrchestrator;
         currentHandoffType = 'LEAD-TO-PLAN';
+        // SD-LEO-INFRA-LEAD-FINAL-CASCADE-ISOLATION-001 (FR-3/FR-4): mark that a cascade
+        // was attempted (so the original SD's result reprints after this), and delimit
+        // this cascade attempt's own output from the original SD's completion output.
+        cascadeAttempted = true;
+        console.log('\n=== AUTO-CHAIN ATTEMPT ===');
         currentResult = await handleExecuteCommand('LEAD-TO-PLAN', chainingInfo.nextOrchestrator, args);
         continue; // Continue the loop for the new orchestrator's children
       }
@@ -1117,6 +1144,9 @@ export async function handleExecuteWithContinuation(handoffType, sdId, args) {
 
           currentSdId = nextSD.id;
           currentHandoffType = 'LEAD-TO-PLAN';
+          // SD-LEO-INFRA-LEAD-FINAL-CASCADE-ISOLATION-001 (FR-3/FR-4)
+          cascadeAttempted = true;
+          console.log('\n=== AUTO-CHAIN ATTEMPT ===');
           currentResult = await handleExecuteCommand('LEAD-TO-PLAN', nextSD.id, args);
           continue;
         }
@@ -1196,6 +1226,9 @@ export async function handleExecuteWithContinuation(handoffType, sdId, args) {
         console.log('   ➡️  AUTO-PROCEED: executing parent LEAD-FINAL-APPROVAL...');
         currentSdId = completedSD.parent_sd_id;
         currentHandoffType = 'LEAD-FINAL-APPROVAL';
+        // SD-LEO-INFRA-LEAD-FINAL-CASCADE-ISOLATION-001 (FR-3/FR-4)
+        cascadeAttempted = true;
+        console.log('\n=== AUTO-CHAIN ATTEMPT ===');
         currentResult = await handleExecuteCommand('LEAD-FINAL-APPROVAL', completedSD.parent_sd_id, args);
         continue;
       }
@@ -1221,6 +1254,10 @@ export async function handleExecuteWithContinuation(handoffType, sdId, args) {
     currentSdId = nextChild.id;
     currentHandoffType = 'LEAD-TO-PLAN';
 
+    // SD-LEO-INFRA-LEAD-FINAL-CASCADE-ISOLATION-001 (FR-3/FR-4)
+    cascadeAttempted = true;
+    console.log('\n=== AUTO-CHAIN ATTEMPT ===');
+
     // Execute LEAD-TO-PLAN for next child
     currentResult = await handleExecuteCommand('LEAD-TO-PLAN', nextChild.id, args);
 
@@ -1234,6 +1271,7 @@ export async function handleExecuteWithContinuation(handoffType, sdId, args) {
   }
 
   return currentResult;
+  } // end handleExecuteWithContinuationLoop
 }
 
 /**

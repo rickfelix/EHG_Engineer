@@ -552,6 +552,78 @@ describe('Orchestrator Completion Hook', () => {
       expect(result.orchestrator).toBe(null);
       expect(result.reason).toContain('Query error');
     });
+
+    // SD-LEO-INFRA-LEAD-FINAL-CASCADE-ISOLATION-001 (FR-2/TS-2): authority-fence tests.
+    // Uses a universally-chainable, universally-thenable mock (every method the real
+    // code could call resolves correctly, including .range() for the paginated
+    // claimed-sessions query) so a missing chained method can never silently fail open
+    // and make the assertion vacuous (the exact TESTING sub-agent F7 finding).
+    describe('authority fence (FR-2)', () => {
+      function makeChainableQuery(terminalValue) {
+        const methods = ['select', 'in', 'is', 'neq', 'not', 'order', 'range', 'eq', 'limit'];
+        const chain = {};
+        for (const m of methods) chain[m] = vi.fn(() => chain);
+        chain.then = (resolve) => resolve(terminalValue);
+        return chain;
+      }
+      function mockSupabaseFor(candidates, claimedSessions = []) {
+        return {
+          from: vi.fn((table) => {
+            if (table === 'claude_sessions') return makeChainableQuery({ data: claimedSessions, error: null });
+            return makeChainableQuery({ data: candidates, error: null });
+          }),
+        };
+      }
+
+      const FENCED = { id: 'fenced-uuid', sd_key: 'SD-FENCED-001', title: 'Fenced', status: 'draft', priority: 5, parent_sd_id: null, metadata: { requires_human_action: true } };
+      const NORMAL = { id: 'normal-uuid', sd_key: 'SD-NORMAL-001', title: 'Normal', status: 'draft', priority: 3, parent_sd_id: null, metadata: {} };
+
+      it('TS-2 — a requires_human_action=TRUE top candidate is never returned; a lower-priority normal candidate is returned instead', async () => {
+        const mockSupabase = mockSupabaseFor([FENCED, NORMAL]);
+        const result = await findNextAvailableOrchestrator(mockSupabase);
+
+        expect(result.orchestrator?.sd_key).not.toBe('SD-FENCED-001');
+        expect(result.orchestrator?.sd_key).toBe('SD-NORMAL-001');
+      });
+
+      it('returns the documented no-candidate result when every unclaimed candidate is fenced', async () => {
+        const mockSupabase = mockSupabaseFor([FENCED]);
+        const result = await findNextAvailableOrchestrator(mockSupabase);
+
+        expect(result.orchestrator).toBeNull();
+        expect(result.reason).toMatch(/authority-fenced/);
+      });
+
+      it('composes correctly with the existing claimed-SD exclusion — additive, not a replacement', async () => {
+        const claimed = { id: 'claimed-uuid', sd_key: 'SD-CLAIMED-001', title: 'Claimed', status: 'draft', priority: 5, parent_sd_id: null, metadata: {} };
+        const mockSupabase = mockSupabaseFor([claimed, NORMAL], [{ sd_key: 'SD-CLAIMED-001', id: 'session-1' }]);
+        const result = await findNextAvailableOrchestrator(mockSupabase);
+
+        expect(result.orchestrator?.sd_key).toBe('SD-NORMAL-001');
+      });
+
+      it('TS-3 (findNextAvailableOrchestrator half) — regression pin: a normal candidate set selects the same candidate id as pre-fix', async () => {
+        const mockSupabase = mockSupabaseFor([NORMAL]);
+        const result = await findNextAvailableOrchestrator(mockSupabase);
+
+        expect(result.orchestrator?.id).toBe('normal-uuid');
+      });
+
+      it('[STATIC] never adds sd_type to the eligibility-relevant select — this function selects orchestrator-type rows by design (status/parent_sd_id filter), and the general classifier would refuse its own subject', () => {
+        // findNextAvailableOrchestrator has MULTIPLE .select(...) calls (the candidate query
+        // AND a separate claimed-sessions query) — a plain .match() takes whichever occurs
+        // FIRST in source order, which is not necessarily the eligibility-relevant one (it
+        // was the claimed-sessions select here, making the earlier version of this assertion
+        // pass or fail for the wrong reason). Scan every .select(...) call and assert on the
+        // one that actually selects metadata — the candidate query.
+        const src = findNextAvailableOrchestrator.toString();
+        const selectCalls = [...src.matchAll(/\.select\(\s*(['"`])([^'"`]*)\1/g)].map((m) => m[2]);
+        expect(selectCalls.length, 'findNextAvailableOrchestrator must have at least one literal .select(...) call').toBeGreaterThan(0);
+        const candidateSelect = selectCalls.find((cols) => cols.split(',').map((s) => s.trim()).includes('metadata'));
+        expect(candidateSelect, `expected one .select(...) call to include metadata; found: ${JSON.stringify(selectCalls)}`).toBeDefined();
+        expect(candidateSelect.split(',').map((s) => s.trim())).not.toContain('sd_type');
+      });
+    });
   });
 
   // SD-LEO-ENH-AUTO-PROCEED-001-05: emitChainingTelemetry Tests

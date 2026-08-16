@@ -330,6 +330,79 @@ describe('Child SD Selector', () => {
       expect(result.allComplete).toBe(false);
       expect(result.reason).toContain('Query error');
     });
+
+    // SD-LEO-INFRA-LEAD-FINAL-CASCADE-ISOLATION-001 (FR-6/TS-8): authority-fence tests.
+    // This is the THIRD cascade picker (found only by TESTING's F4 finding, never in the
+    // original scope) — getNextReadyChild had ZERO eligibility checks pre-fix. Its select()
+    // already includes sd_type (pre-existing, for unrelated SD-type-aware workflow
+    // continuation) — safe here because the fix uses classifyAllDispatchIneligibility +
+    // the narrow CLAIM_WRITE_FENCE_AXES set, which deliberately EXCLUDES orchestrator_parent,
+    // so a nested child that happens to be sd_type='orchestrator' is never wrongly refused
+    // by this check regardless of what's selected.
+    describe('authority fence (FR-6)', () => {
+      const FENCED_CHILD = { id: 'child-fenced', sd_key: 'SD-CHILD-FENCED-001', title: 'Fenced Child', status: 'draft', priority: 90, sequence_rank: 1, metadata: { requires_human_action: true } };
+      const NORMAL_CHILD = { id: 'child-normal', sd_key: 'SD-CHILD-NORMAL-001', title: 'Normal Child', status: 'draft', priority: 50, sequence_rank: 2, metadata: {} };
+
+      function mockFor(candidates) {
+        return {
+          from: () => ({
+            select: () => ({
+              eq: () => ({
+                in: () => Promise.resolve({ data: candidates, error: null })
+              })
+            })
+          })
+        };
+      }
+
+      it('TS-8 — a requires_human_action=TRUE top-priority child is never returned; a lower-priority normal child is returned instead', async () => {
+        const result = await getNextReadyChild(mockFor([FENCED_CHILD, NORMAL_CHILD]), 'parent-1');
+
+        expect(result.sd?.sd_key).not.toBe('SD-CHILD-FENCED-001');
+        expect(result.sd?.sd_key).toBe('SD-CHILD-NORMAL-001');
+      });
+
+      it('returns no-ready-children (not allComplete) when the only candidate is fenced — a fenced child is neither "ready" nor "complete"', async () => {
+        // getNextReadyChild falls through to a SECOND query (.select('id, status').eq(...),
+        // awaited directly with no further chain) when the first query yields zero ready
+        // candidates, to distinguish "no children exist" / "all terminal" / "exist but not
+        // ready" — matches the dualMock/queryCount convention used elsewhere in this file.
+        let queryCount = 0;
+        const dualMock = {
+          from: () => ({
+            select: () => ({
+              eq: () => {
+                queryCount++;
+                if (queryCount === 1) {
+                  return { in: () => Promise.resolve({ data: [FENCED_CHILD], error: null }) };
+                }
+                return Promise.resolve({ data: [{ id: FENCED_CHILD.id, status: FENCED_CHILD.status }], error: null });
+              }
+            })
+          })
+        };
+
+        const result = await getNextReadyChild(dualMock, 'parent-1');
+
+        expect(result.sd).toBeNull();
+        expect(result.allComplete).toBe(false);
+        expect(result.reason).toContain('No ready children');
+      });
+
+      it('TS-3 (getNextReadyChild half) — regression pin: a normal candidate set selects the same child id as pre-fix', async () => {
+        const result = await getNextReadyChild(mockFor([NORMAL_CHILD]), 'parent-1');
+
+        expect(result.sd?.id).toBe('child-normal');
+        expect(result.sd?.sd_key).toBe('SD-CHILD-NORMAL-001');
+      });
+
+      it('a nested child that is itself sd_type=orchestrator is NOT wrongly refused — CLAIM_WRITE_FENCE_AXES deliberately excludes orchestrator_parent', async () => {
+        const nestedOrchestratorChild = { id: 'child-nested-orch', sd_key: 'SD-CHILD-NESTED-ORCH-001', title: 'Nested Orchestrator Child', status: 'draft', priority: 70, sequence_rank: 1, sd_type: 'orchestrator', metadata: {} };
+        const result = await getNextReadyChild(mockFor([nestedOrchestratorChild]), 'parent-1');
+
+        expect(result.sd?.sd_key).toBe('SD-CHILD-NESTED-ORCH-001');
+      });
+    });
   });
 
   describe('getOrchestratorContext', () => {

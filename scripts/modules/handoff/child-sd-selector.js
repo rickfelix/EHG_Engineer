@@ -20,6 +20,8 @@ import { isTerminalChildStatus } from '../../../lib/orchestrator/child-terminal-
 // gated helper the sd-next reaper uses, so a PARKED /loop worker on a CHILD SD (armed silence, PID dead
 // between ticks) is NOT reaped/phase-reset while its window is live. Reuses the ONE shared predicate.
 import { autoReleaseStaleDeadClaim } from '../sd-next/claim-analysis.js';
+// SD-LEO-INFRA-LEAD-FINAL-CASCADE-ISOLATION-001 (FR-6): authority-fence check for child candidates
+import { classifyAllDispatchIneligibility, CLAIM_WRITE_FENCE_AXES } from '../../../lib/fleet/claim-eligibility.cjs';
 
 /**
  * Check if an SD is a child (has a parent)
@@ -112,9 +114,22 @@ export async function getNextReadyChild(supabase, parentSdId, excludeCompletedId
       return true;
     });
 
+    // SD-LEO-INFRA-LEAD-FINAL-CASCADE-ISOLATION-001 (FR-6): refuse any candidate the
+    // authority fence catches (requires_human_action, needs_coordinator_review,
+    // not_before_hold, lead_blocker_active, chairman_ratification_pending). Uses
+    // classifyAllDispatchIneligibility + CLAIM_WRITE_FENCE_AXES, NEVER the general
+    // classifier -- this function's own select() already includes sd_type (line 54,
+    // pre-existing, unrelated to this fix), and the general classifier's
+    // orchestratorParent axis reads exactly that field, so a naive general-classifier
+    // check here would risk the identical wrong-refusal class fixed in queue-selector.js
+    // and orchestrator-completion-hook.js for the SAME reason.
+    const authorityCleared = cadenceCleared.filter(
+      (child) => !classifyAllDispatchIneligibility(child).find((r) => CLAIM_WRITE_FENCE_AXES.has(r))
+    );
+
     // SD-LEO-ENH-AUTO-PROCEED-001-11: Sort by urgency (band > score > enqueue_time)
     // Map candidates to include urgency data for sorting
-    const withUrgency = cadenceCleared.map(child => ({
+    const withUrgency = authorityCleared.map(child => ({
       ...child,
       urgency_score: child.metadata?.urgency_score ?? 0.5,
       urgency_band: child.metadata?.urgency_band ?? scoreToBand(child.metadata?.urgency_score ?? 0.5),
