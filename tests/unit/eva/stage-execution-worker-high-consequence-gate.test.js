@@ -4,11 +4,17 @@
  * Mirrors stage-execution-worker-product-review-gate.test.js's pattern: drives the
  * REAL _advanceStage() method against a mocked, chainable supabase fake.
  *
+ * QF-20260712-716 (Adam flag-gov ruling 8118abe7, 2026-08-16): the
+ * LEO_HIGH_CONSEQUENCE_GATES_ENABLED kill-switch read was GRADUATED (removed from
+ * the code — the check is now permanently enforced). The three tests that
+ * exercised the flag's OFF/absent/throw behavior (formerly TS-11, the
+ * "row absent defaults to ENABLED" test, and TS-8b) are removed along with it —
+ * there is no longer a flag read to disable or throw on.
+ *
  * Complements tests/integration/eva/high-consequence-blocking-gate-realdb.test.js
- * (real DB, covers TS-1/2/4/6/9/10) with the two scenarios that are unsafe or
+ * (real DB, covers TS-1/2/4/6/9/10) with the one scenario that is unsafe or
  * impractical to force against shared live infrastructure:
  *   - TS-8: fail-CLOSED when the evaluator itself throws
- *   - TS-11: the kill-switch flag disables the check entirely
  */
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 
@@ -44,27 +50,23 @@ import { getStageGovernance } from '../../../lib/eva/stage-governance.js';
 const logger = { log: vi.fn(), warn: vi.fn(), error: vi.fn(), info: vi.fn(), debug: vi.fn() };
 
 /**
- * Thenable chainable supabase fake. Distinguishes by TABLE + the actual .eq() filter
- * values applied, not just table name -- the pre-existing artifact-precondition
- * backstop (checkStageArtifactPrecondition, lib/eva/stage-artifact-precondition.js)
- * ALSO unconditionally reads leo_feature_flags (flag_key='LEO_S22_GATES_ENABLED') on
- * every call, so a table-name-only mock cannot tell that read apart from THIS new
- * check's flag_key='LEO_HIGH_CONSEQUENCE_GATES_ENABLED' read. Defaults every OTHER
+ * Thenable chainable supabase fake. leo_feature_flags is still legitimately read by
+ * the pre-existing artifact-precondition backstop (checkStageArtifactPrecondition,
+ * lib/eva/stage-artifact-precondition.js, flag_key='LEO_S22_GATES_ENABLED') on every
+ * call — this fake resolves that read to absent (null) and defaults every OTHER
  * table (ventures, venture_stages, stage_artifact_requirements) to a response that
  * makes the artifact-precondition check resolve to blocked:false with zero required
  * artifacts, so the high-consequence check is the only blocker these tests exercise.
  *
- * `leoFeatureFlagRow` / `throwOnHcFlagRead` apply ONLY to the
- * LEO_HIGH_CONSEQUENCE_GATES_ENABLED read; `pendingBlockingDecision` /
- * `throwOnChairmanDecisionsRead` apply to the chairman_decisions read.
+ * `pendingBlockingDecision` / `throwOnChairmanDecisionsRead` apply to the
+ * chairman_decisions read (the only DB read this choke-point makes post-graduation).
  */
-function makeSupabase({ leoFeatureFlagRow = null, pendingBlockingDecision = null, throwOnHcFlagRead = false, throwOnChairmanDecisionsRead = false } = {}) {
+function makeSupabase({ pendingBlockingDecision = null, throwOnChairmanDecisionsRead = false } = {}) {
   const calls = { venturesUpdate: 0 };
   const from = (table) => {
-    const eqFilters = [];
     const chain = {
       select: () => chain,
-      eq: (col, val) => { eqFilters.push([col, val]); return chain; },
+      eq: () => chain,
       neq: () => chain,
       in: () => chain,
       gt: () => chain,
@@ -72,12 +74,7 @@ function makeSupabase({ leoFeatureFlagRow = null, pendingBlockingDecision = null
       limit: () => chain,
       maybeSingle: async () => {
         if (table === 'leo_feature_flags') {
-          const isHcFlagQuery = eqFilters.some(([c, v]) => c === 'flag_key' && v === 'LEO_HIGH_CONSEQUENCE_GATES_ENABLED');
-          if (isHcFlagQuery) {
-            if (throwOnHcFlagRead) throw new Error('db down');
-            return { data: leoFeatureFlagRow, error: null };
-          }
-          return { data: null, error: null }; // e.g. LEO_S22_GATES_ENABLED -> absent
+          return { data: null, error: null }; // LEO_S22_GATES_ENABLED -> absent
         }
         if (table === 'chairman_decisions') {
           if (throwOnChairmanDecisionsRead) throw new Error('db down');
@@ -111,7 +108,7 @@ describe('_advanceStage high-consequence blocking-gate choke-point (FR-3) — re
     mockIsHighConsequence = () => false;
   });
 
-  it('short-circuits with ZERO chairman_decisions queries for a non-high-consequence stage (leo_feature_flags is still legitimately read by the pre-existing artifact-precondition backstop for a DIFFERENT flag_key)', async () => {
+  it('short-circuits with ZERO chairman_decisions queries for a non-high-consequence stage', async () => {
     mockIsHighConsequence = () => false;
     let touchedChairmanDecisions = false;
     const supabase = makeSupabase();
@@ -149,24 +146,12 @@ describe('_advanceStage high-consequence blocking-gate choke-point (FR-3) — re
     expect(supabase.calls.venturesUpdate).toBe(1);
   });
 
-  // TS-11
-  it('TS-11: the kill-switch flag (is_enabled=false) disables the check entirely, even with a pending blocking decision', async () => {
+  // QF-20260712-716: the check is now permanently enforced (no kill-switch to test) —
+  // this replaces the removed "row absent defaults to ENABLED" test with the same
+  // assertion, minus the now-nonexistent flag mock.
+  it('holds on a pending blocking decision for a high-consequence stage (graduated: unconditional, no flag)', async () => {
     mockIsHighConsequence = () => true;
-    const supabase = makeSupabase({
-      leoFeatureFlagRow: { is_enabled: false },
-      pendingBlockingDecision: { id: 'decision-1' }, // would normally hold
-    });
-    const worker = makeWorker(supabase);
-
-    const result = await worker._advanceStage('v-1', 10, 11, {});
-
-    expect(result?.blocked).not.toBe(true);
-    expect(supabase.calls.venturesUpdate).toBe(1);
-  });
-
-  it('kill-switch flag row absent defaults to ENABLED — still holds on a pending blocking decision', async () => {
-    mockIsHighConsequence = () => true;
-    const supabase = makeSupabase({ leoFeatureFlagRow: null, pendingBlockingDecision: { id: 'decision-1' } });
+    const supabase = makeSupabase({ pendingBlockingDecision: { id: 'decision-1' } });
     const worker = makeWorker(supabase);
 
     const result = await worker._advanceStage('v-1', 10, 11, {});
@@ -178,17 +163,6 @@ describe('_advanceStage high-consequence blocking-gate choke-point (FR-3) — re
   it('TS-8: fails CLOSED (holds) when the chairman_decisions evaluator query throws', async () => {
     mockIsHighConsequence = () => true;
     const supabase = makeSupabase({ throwOnChairmanDecisionsRead: true });
-    const worker = makeWorker(supabase);
-
-    const result = await worker._advanceStage('v-1', 10, 11, {});
-
-    expect(result).toEqual({ advanced: false, blocked: true, reason: 'high_consequence_gate_blocked' });
-    expect(supabase.calls.venturesUpdate).toBe(0);
-  });
-
-  it('TS-8b: fails CLOSED when the leo_feature_flags kill-switch read itself throws', async () => {
-    mockIsHighConsequence = () => true;
-    const supabase = makeSupabase({ throwOnHcFlagRead: true });
     const worker = makeWorker(supabase);
 
     const result = await worker._advanceStage('v-1', 10, 11, {});
