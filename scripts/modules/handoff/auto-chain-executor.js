@@ -97,9 +97,12 @@ export async function executeAutoChain(supabase, params) {
       // "unclaimed" contains "claimed", so the fenced-queue reason (queue-selector.js:91) maps
       // here too, deliberately (EXIT_ALL_CLAIMED is the more conservative label for "candidates
       // exist but are fenced," vs EXIT_EMPTY_QUEUE which would wrongly assert none exist). This
-      // mapping is a coincidence of wording pinned only by
-      // tests/unit/handoff/auto-chain-executor-exit-code.test.js -- reword either string and
-      // re-run that test before assuming the mapping is unaffected.
+      // mapping is a coincidence of wording. Reword the .includes('claimed') check on the
+      // next line and tests/unit/handoff/auto-chain-executor-exit-code.test.js catches it.
+      // Reword queue-selector.js:91's string instead and that file will NOT catch it (it
+      // mocks queue-selector.js wholesale) -- re-run
+      // auto-chain-executor-exit-code-live-selector.test.js instead, which exercises the
+      // real selectNextSD.
       const exitCode = selectReason.includes('claimed')
         ? EXIT_CODES.EXIT_ALL_CLAIMED
         : EXIT_CODES.EXIT_EMPTY_QUEUE;

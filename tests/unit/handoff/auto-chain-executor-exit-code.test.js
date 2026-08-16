@@ -14,8 +14,17 @@
  * not control flow. But it IS an accident of wording, unpinned by any test -- reword either
  * string and this silently flips with no test failure to catch it.
  *
- * This test pins the CURRENT (judged-safer) mapping deliberately, so a future wording change
- * to either file fails loudly here instead of drifting silently.
+ * This test pins the CURRENT (judged-safer) mapping deliberately -- but ONLY covers
+ * auto-chain-executor.js's side of the coupling (the .includes('claimed') matcher). It mocks
+ * queue-selector.js wholesale, so the reason string below is a hard-coded literal, not a
+ * value queue-selector.js's real code produced -- rewording queue-selector.js:91's template
+ * literal would leave THIS test green while production silently flips to EXIT_EMPTY_QUEUE.
+ * (REGRESSION EXEC's second-pass review caught that an earlier version of this comment
+ * overclaimed "fails if either side's wording changes" -- it doesn't.) The other direction is
+ * covered by auto-chain-executor-exit-code-live-selector.test.js, which runs the REAL
+ * (unmocked) selectNextSD against a stubbed Supabase client so the reason string it actually
+ * produces is what flows through the mapping. Between the two files, a reword on either side
+ * is caught.
  */
 
 import { describe, it, expect, vi } from 'vitest';

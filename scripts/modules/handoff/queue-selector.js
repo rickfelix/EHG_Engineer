@@ -89,7 +89,10 @@ export async function selectNextSD(supabase, options = {}) {
       // auto-chain-executor.js:95's selectReason.includes('claimed') check relies on
       // (deliberately, see the comment there) to route a fenced queue to EXIT_ALL_CLAIMED.
       // If you reword this string, re-run
-      // tests/unit/handoff/auto-chain-executor-exit-code.test.js.
+      // tests/unit/handoff/auto-chain-executor-exit-code-live-selector.test.js -- it runs
+      // THIS function for real (unmocked) and would catch a reword here.
+      // auto-chain-executor-exit-code.test.js will NOT catch it (queue-selector.js is
+      // vi.mock'd wholesale there; that file only covers the OTHER side of this coupling).
       return {
         sd: null,
         candidates: [],
