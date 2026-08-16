@@ -27,6 +27,10 @@ import {
   getReadyChildren,
   getOrchestratorContext
 } from '../../../scripts/modules/handoff/child-sd-selector.js';
+// Handles onto the module-level mocks above, so per-test .mockReturnValue() can drive
+// getReadyChildren's DAG-requiring path without needing the real DAG algorithm — this
+// file tests the authority-fence logic, not dependency-graph correctness.
+import { buildDependencyDAG, detectCycles, computeRunnableSet } from '../../../lib/orchestrator/dependency-dag.js';
 
 describe('Child SD Selector', () => {
   describe('isChildSD', () => {
@@ -401,6 +405,106 @@ describe('Child SD Selector', () => {
         const result = await getNextReadyChild(mockFor([nestedOrchestratorChild]), 'parent-1');
 
         expect(result.sd?.sd_key).toBe('SD-CHILD-NESTED-ORCH-001');
+      });
+
+      // SECURITY EXEC review (S4/Q1): a fixture combining sd_type='orchestrator' with
+      // requires_human_action=true is the actual FAIL-OPEN detector for a reversion to the
+      // first-match classifier. Measured by SECURITY: classifyAllDispatchIneligibility on
+      // this combo returns ['orchestrator_parent','human_action_required'] (fenced=true,
+      // correct); the first-match classifyDispatchIneligibility returns only
+      // 'orchestrator_parent' first, which CLAIM_WRITE_FENCE_AXES does NOT contain
+      // (fenced=FALSE — a silent fail-open, not a false-refusal). The prior nested-orchestrator
+      // test above only proves under-refusal is fixed; this one proves a specific
+      // classifier-form regression would be caught, not silently accepted.
+      it('[FAIL-OPEN REGRESSION GUARD] a fenced child that is ALSO sd_type=orchestrator is still refused — catches a reversion to the first-match classifier', async () => {
+        const fencedNestedOrchestrator = { id: 'child-fenced-orch', sd_key: 'SD-CHILD-FENCED-ORCH-001', title: 'Fenced Nested Orchestrator', status: 'draft', priority: 95, sequence_rank: 1, sd_type: 'orchestrator', metadata: { requires_human_action: true } };
+        const result = await getNextReadyChild(mockFor([fencedNestedOrchestrator, NORMAL_CHILD]), 'parent-1');
+
+        expect(result.sd?.sd_key).not.toBe('SD-CHILD-FENCED-ORCH-001');
+        expect(result.sd?.sd_key).toBe('SD-CHILD-NORMAL-001');
+      });
+
+      it('[STATIC] getNextReadyChild uses the all-match classifier form (classifyAllDispatchIneligibility), never the first-match form alone — the first-match form short-circuits on orchestrator_parent before ever checking human_action_required', () => {
+        // Word-boundary-anchored, not a literal "NAME(" match — Vite's SSR transform rewrites
+        // imported-binding calls to (0,__vite_ssr_import_N__.NAME)(args), so the identifier is
+        // followed by ")" in the transformed .toString(), not "(". \b correctly does NOT match
+        // "classifyDispatchIneligibility" inside "classifyAllDispatchIneligibility" (no boundary
+        // between "...lAll" and "Dispatch...").
+        const src = getNextReadyChild.toString();
+        expect(src).toMatch(/\bclassifyAllDispatchIneligibility\b/);
+        expect(src).not.toMatch(/\bclassifyDispatchIneligibility\b/);
+      });
+    });
+
+    // SD-LEO-INFRA-LEAD-FINAL-CASCADE-ISOLATION-001 (SECURITY EXEC S2, post-EXEC-TO-PLAN
+    // finding): getReadyChildren is a FOURTH cascade picker, reached from cli-main.js's
+    // parallel-team check (gated on ORCH_PARALLEL_CHILDREN_ENABLED, currently unset/latent)
+    // BEFORE getNextReadyChild's own fence is ever reached — its 'parallel' result returns
+    // early, skipping getNextReadyChild for that iteration entirely. It already selected
+    // metadata (pre-existing, for DAG construction) but never consulted it until this fix.
+    describe('getReadyChildren — authority fence (S2 security finding)', () => {
+      const FENCED = { id: 'child-fenced', sd_key: 'SD-CHILD-FENCED-001', title: 'Fenced', status: 'draft', priority: 90, sequence_rank: 1, metadata: { requires_human_action: true }, governance_metadata: {}, created_at: '2026-01-01T00:00:00Z' };
+      const NORMAL_A = { id: 'child-normal-a', sd_key: 'SD-CHILD-NORMAL-A', title: 'Normal A', status: 'draft', priority: 50, sequence_rank: 2, metadata: {}, governance_metadata: {}, created_at: '2026-01-01T00:00:00Z' };
+      const NORMAL_B = { id: 'child-normal-b', sd_key: 'SD-CHILD-NORMAL-B', title: 'Normal B', status: 'draft', priority: 40, sequence_rank: 3, metadata: {}, governance_metadata: {}, created_at: '2026-01-01T00:00:00Z' };
+
+      function mockAllChildren(children) {
+        return {
+          from: () => ({
+            select: () => ({
+              eq: () => Promise.resolve({ data: children, error: null })
+            })
+          })
+        };
+      }
+
+      // buildDependencyDAG/detectCycles/computeRunnableSet are bare vi.fn() at module scope
+      // (this file tests authority-fence logic, not DAG correctness) — drive them per-test so
+      // the code reaches the cadence/authority filter stages instead of throwing on an
+      // unimplemented mock's undefined return.
+      function stubDagAsIndependent(children) {
+        buildDependencyDAG.mockReturnValue({ dag: {}, errors: [] });
+        detectCycles.mockReturnValue({ hasCycles: false, cyclePath: [] });
+        computeRunnableSet.mockReturnValue({ runnable: children.map((c) => c.id) });
+      }
+
+      it('parallel mode: excludes a fenced child from the full returned array while keeping normal siblings', async () => {
+        const children = [FENCED, NORMAL_A, NORMAL_B];
+        stubDagAsIndependent(children);
+
+        const result = await getReadyChildren(mockAllChildren(children), 'parent-1', { parallelEnabled: true });
+
+        const keys = result.children.map((c) => c.sd_key);
+        expect(keys).not.toContain('SD-CHILD-FENCED-001');
+        expect(keys).toContain('SD-CHILD-NORMAL-A');
+        expect(keys).toContain('SD-CHILD-NORMAL-B');
+      });
+
+      it('sequential mode (parallelEnabled: false): skips a higher-priority fenced child and selects the next normal one', async () => {
+        const children = [FENCED, NORMAL_A];
+        stubDagAsIndependent(children);
+
+        const result = await getReadyChildren(mockAllChildren(children), 'parent-1', { parallelEnabled: false });
+
+        expect(result.children).toHaveLength(1);
+        expect(result.children[0].sd_key).toBe('SD-CHILD-NORMAL-A');
+      });
+
+      it('[FAIL-OPEN REGRESSION GUARD] a fenced child that is ALSO sd_type=orchestrator is still refused in parallel mode', async () => {
+        const fencedNestedOrchestrator = { ...FENCED, id: 'child-fenced-orch', sd_key: 'SD-CHILD-FENCED-ORCH-001', sd_type: 'orchestrator' };
+        const children = [fencedNestedOrchestrator, NORMAL_A];
+        stubDagAsIndependent(children);
+
+        const result = await getReadyChildren(mockAllChildren(children), 'parent-1', { parallelEnabled: true });
+
+        const keys = result.children.map((c) => c.sd_key);
+        expect(keys).not.toContain('SD-CHILD-FENCED-ORCH-001');
+        expect(keys).toContain('SD-CHILD-NORMAL-A');
+      });
+
+      it('[STATIC] getReadyChildren uses the all-match classifier form (classifyAllDispatchIneligibility), never the first-match form alone', () => {
+        const src = getReadyChildren.toString();
+        expect(src).toMatch(/\bclassifyAllDispatchIneligibility\b/);
+        expect(src).not.toMatch(/\bclassifyDispatchIneligibility\b/);
       });
     });
   });

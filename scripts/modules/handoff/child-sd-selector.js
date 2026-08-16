@@ -323,8 +323,22 @@ export async function getReadyChildren(supabase, parentSdId, options = {}) {
       return true;
     });
 
+    // SD-LEO-INFRA-LEAD-FINAL-CASCADE-ISOLATION-001 (FR-6 follow-up, SECURITY EXEC S2):
+    // getReadyChildren is a FOURTH cascade picker -- reached from cli-main.js's parallel-team
+    // check (=== PARALLEL TEAM CHECK ===, gated on ORCH_PARALLEL_CHILDREN_ENABLED) BEFORE
+    // getNextReadyChild's own authority fence is ever reached, and its 'parallel' result
+    // returns early, skipping getNextReadyChild entirely for that iteration. It already
+    // selected metadata (line 261, pre-existing) but never consulted it. Same fix, same
+    // reasoning as getNextReadyChild above: classifyAllDispatchIneligibility + the narrow
+    // CLAIM_WRITE_FENCE_AXES set, never the general classifier (this function's own select()
+    // also includes sd_type, pre-existing, for DAG construction -- safe for the same reason:
+    // CLAIM_WRITE_FENCE_AXES excludes orchestrator_parent regardless of what's selected).
+    const authorityCleared = cadenceCleared.filter(
+      (child) => !classifyAllDispatchIneligibility(child).find((r) => CLAIM_WRITE_FENCE_AXES.has(r))
+    );
+
     // Apply urgency sorting (same as getNextReadyChild)
-    const withUrgency = cadenceCleared.map(child => ({
+    const withUrgency = authorityCleared.map(child => ({
       ...child,
       urgency_score: child.metadata?.urgency_score ?? 0.5,
       urgency_band: child.metadata?.urgency_band ?? scoreToBand(child.metadata?.urgency_score ?? 0.5),
