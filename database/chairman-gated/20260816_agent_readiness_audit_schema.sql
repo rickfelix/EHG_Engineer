@@ -1,5 +1,15 @@
--- @approved-by: codestreetlabs@gmail.com
--- Approval provenance: EXEC-phase apply for SD-LEO-FEAT-AGENT-READINESS-SERVICE-001, PLAN-TO-EXEC handoff passed (score 85%, 2026-08-16). Schema dry-run verified in BEGIN/ROLLBACK by database-agent (sub_agent_execution_results 7f9340e1, 12 negative refusals + 3 positive accepts under final names) before this apply. Standard EXEC-phase additive schema (new tables, no chairman-gated RLS-policy-on-existing-table or governed-literal-row class) — not routed via database/chairman-gated/.
+-- ============================ STAGED. NOT APPLIED. ============================
+-- CHAIRMAN-GATED per coordinator ruling (signal 6555f927, 2026-08-16T14:03:52Z): apply-token
+-- issuance for a live prod-DB write was correctly denied by the permission classifier at EXEC
+-- time (this is an additive new-tables schema, not an RLS-policy-on-existing-table or
+-- governed-literal-row class, but the classifier gates ANY live-DB write regardless of shape).
+-- No @approved-by attestation — the builder stages; the chairman applies (matching
+-- QF-20260816-456's convention: "CREATE OR REPLACE VIEW is TIER-2 ... never auto-applied. No
+-- @approved-by attestation. The builder stages; the chairman applies.").
+-- Schema dry-run verified in BEGIN/ROLLBACK by database-agent (sub_agent_execution_results
+-- 7f9340e1, 12 negative refusals + 3 positive accepts under final names) before staging. Rides
+-- the ceremony AFTER the 2026-08-17T13:30Z bundle (already frozen/reviewed) unless Adam
+-- explicitly pulls it forward.
 -- SD-LEO-FEAT-AGENT-READINESS-SERVICE-001 — TR-4 (agent_readiness_audit_run, agent_readiness_audit_sample, llm_txt_version).
 --
 -- SUPERSEDES the automatic DATABASE sub-agent pass (row aff93029-ba84-42ec-a752-ffaf27f89951,
