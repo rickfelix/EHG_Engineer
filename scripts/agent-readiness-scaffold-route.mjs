@@ -10,6 +10,10 @@
  * when the scaffold lands.
  *
  * Usage: node scripts/agent-readiness-scaffold-route.mjs --target <path-to-venture-repo>
+ *
+ * @wire-check-exempt: operator-invoked CLI requiring an explicit --target path into a DIFFERENT
+ * (venture) repo — cannot be wired into a package.json script or imported by a caller in this
+ * repo by construction (TR-1: never vendored/auto-invoked against a venture codebase).
  */
 
 import { readFileSync, writeFileSync, mkdirSync, existsSync } from 'node:fs';
