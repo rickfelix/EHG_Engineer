@@ -121,11 +121,15 @@ BEGIN
   -- real owning role on the live Supabase instance (measured live, not assumed) -- correct for
   -- production and must not change. The CI service container's bootstrap superuser is whatever
   -- POSTGRES_USER names (ddl_runner, per drive-reports-ddl.yml), and the postgres image does NOT
-  -- also create a role literally named "postgres" in that case, so a bare role of that name is
-  -- created here purely as a valid target for that statement -- superuser bypasses the membership
-  -- check ALTER DEFAULT PRIVILEGES FOR ROLE normally requires, so this is safe with no grants of
-  -- its own.
-  IF NOT EXISTS (SELECT 1 FROM pg_roles WHERE rolname = 'postgres')      THEN CREATE ROLE postgres NOLOGIN;    END IF;
+  -- also create a role literally named "postgres" in that case, so a stand-in of that name is
+  -- created here. A BARE role only fixed "role postgres does not exist" -- ALTER DEFAULT
+  -- PRIVILEGES FOR ROLE postgres then ran without error but had NO EFFECT, because default
+  -- privileges are scoped to whichever role actually CREATES an object, and nothing in this test
+  -- is ever created BY role postgres unless the session actively switches to it (SET ROLE,
+  -- below). SUPERUSER here so that switching to it never loses the privilege ddl_runner had --
+  -- without it, subsequent REVOKE/GRANT and CREATE FUNCTION statements on objects owned by
+  -- ddl_runner would fail once the session is running as this otherwise-bare role.
+  IF NOT EXISTS (SELECT 1 FROM pg_roles WHERE rolname = 'postgres')      THEN CREATE ROLE postgres NOLOGIN SUPERUSER; END IF;
 END
 $roles$;
 
@@ -207,6 +211,17 @@ beforeAll(async () => {
   });
   await client.connect();
   await client.query(STUB_SCHEMA);
+
+  // Switch the session's effective role to the stand-in "postgres" role for the rest of this
+  // file. ALTER DEFAULT PRIVILEGES FOR ROLE X only affects objects actually CREATED BY role X --
+  // registering the rule (already done, inside STUB_SCHEMA and inside MIGRATION_SQL below) works
+  // regardless of who issues it, since ddl_runner is superuser, but every CREATE FUNCTION that
+  // needs to OBSERVE that rule (the two-sided control probe just below, the ADP self-test's
+  // pre-fix standalone run, the migration's own embedded probe, FR-4's post-migration probe) must
+  // run AS role postgres or the rule never applies to it. Safe to stay switched for everything
+  // after this point, including REVOKE/GRANT on objects owned by ddl_runner: postgres is SUPERUSER
+  // (see STUB_SCHEMA above), so it bypasses ownership checks exactly like ddl_runner did.
+  await client.query('SET ROLE postgres');
 
   // Two-sided control for the FR-4 ADP test, captured HERE — the only point in this file where
   // "before the migration's ALTER DEFAULT PRIVILEGES ran" is actually true. A function created
