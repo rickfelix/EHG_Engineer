@@ -9,6 +9,20 @@ tags: [tiered-orchestration, door-routing, dispatch, economics, model-tier, fabl
 
 # Tiered Orchestration — One-Way/Two-Way Door Routing
 
+> **RETIRED 2026-08-16 (SD-LEO-INFRA-DOOR-ROUTING-INERT-DECIDE-001).** The `door_class`
+> classifier/stamper/dispatch-gate/ledger subsystem described in "Components" 1-4, "The
+> same-evidence invariant", "Cutover & rollback", and "Deferred" below was never activated
+> (`DOOR_ROUTING_ENABLED` was never true in any real environment, and `door-classifier.mjs`/
+> `door-stamper.mjs` had zero production callers ever). The chairman decided RETIRE (SMS
+> dc87e7a0, decision row 9ce56d34); `lib/fleet/door-constants.cjs`, `door-classifier.mjs`,
+> `door-stamper.mjs`, `door-routing-ledger.cjs`, and the `fable-allocation-report` reporting
+> script (formerly under `scripts/`) are all deleted, along with
+> `assertDoorRoutingAllowed` in `lib/coordinator/dispatch.cjs`. Sections below
+> describing them are kept as historical record, not as current architecture. The separate
+> "content-tier (Fable-use doctrine)" section further down **remains live** — `door_class` and
+> `model_recommendation` were always two different, independent axes (see the comparison table
+> in that section), and only the former was retired.
+
 **Operating model (chairman sprint item 5 + 2026-07-05 2:35 PM amendment):** after
 the Tuesday pricing cutover, Fable 5 runs as the high-level orchestrator on API
 pricing. **ONE-WAY doors** (irreversible work) stay Fable-exclusive; **TWO-WAY
@@ -80,8 +94,8 @@ question than `door_class` does. **Do not conflate the two axes:**
 
 | Axis | Question it answers | Classifier | Fail bias |
 |---|---|---|---|
-| `door_class` (above) | *Who is authorized to execute this?* (reversibility/execution-authority) | `lib/fleet/door-classifier.mjs` | fails **closed** toward `one_way` |
-| `model_recommendation` (this section) | *Does this work item's content warrant Fable's judgment at all?* (R1-R5 doctrine) | `lib/fleet/model-recommendation.cjs` | fails **open** toward `sonnet` |
+| `door_class` (above, **retired**) | *Who is authorized to execute this?* (reversibility/execution-authority) | ~~`lib/fleet/door-classifier.mjs`~~ deleted | failed **closed** toward `one_way` |
+| `model_recommendation` (this section, **live**) | *Does this work item's content warrant Fable's judgment at all?* (R1-R5 doctrine) | `lib/fleet/model-recommendation.cjs` | fails **open** toward `sonnet` |
 
 ### Components
 
@@ -89,10 +103,13 @@ question than `door_class` does. **Do not conflate the two axes:**
    → `{tier, criterion, reason}`. Pure, no I/O. Scores title/description/scope/
    key_changes text against 5 keyword-list rules (R1 compounding-constraint/
    architecture, R2 negative-space/pre-mortem, R3 taste/UX-judgment, R4
-   cross-subsystem coupling ≥3, R5 reversal-stakes). A `door_class.door ===
-   'one_way'` stamp on the item is treated as an automatic R5 (reversal-stakes)
-   shortcut. Defaults to `sonnet` when nothing matches — the doctrine's own
-   standing rule ("Default: Sonnet. Escalate to Fable IFF R1-R5").
+   cross-subsystem coupling ≥3, R5 reversal-stakes keyword match). Defaults to
+   `sonnet` when nothing matches — the doctrine's own standing rule ("Default:
+   Sonnet. Escalate to Fable IFF R1-R5"). **(2026-08-16, SD-LEO-INFRA-DOOR-ROUTING-
+   INERT-DECIDE-001)** previously also carried a `door_class.door === 'one_way'`
+   → automatic-R5 shortcut, composing with the now-retired `door_class` axis;
+   removed alongside that axis's retirement — R5 is reached only via its
+   keyword match now.
 2. **Stamper** — `stampModelRecommendation` in `lib/coordinator/dispatch.cjs`,
    wired into `insertCoordinationRow` immediately after the existing
    `stampEffortRecommendation` call (the same single dispatch choke point as
@@ -107,20 +124,21 @@ question than `door_class` does. **Do not conflate the two axes:**
    never blocks dispatch).
 4. **Audit trail** — a fire-and-forget, FIFO-capped-at-20 append to
    `strategic_directives_v2.metadata.model_tier_decisions[]` on every dispatch.
-5. **Economics** — the same `door_routing_ledger` table gains two additive,
-   nullable columns, `r_criterion` (which R1-R5 rule fired) and
-   `funnel_position` (`selection`|`design`|`detailing`, phase-derived via
-   `funnelPositionForPhase()` in `lib/fleet/door-routing-ledger.cjs` — LEAD→
-   selection, PLAN→design, else→detailing), added by
-   `database/migrations/20260707_door_routing_ledger_fable_criterion_funnel.sql`
-   (additive-only, idempotent; applied at the same door-routing cutover as the
-   base table). `scripts/fable-allocation-report.mjs` aggregates ledger rows by
-   both dimensions, turning the doctrine's own observed bias ("we over-allocate
-   Fable to detailing, under-allocate to selection/pre-mortems") into a
-   measured, trending number instead of folklore.
+5. **Economics (retired 2026-08-16, SD-LEO-INFRA-DOOR-ROUTING-INERT-DECIDE-001)** —
+   this doctrine previously piggybacked on the `door_routing_ledger` table (two
+   additive columns, `r_criterion`/`funnel_position`, added by
+   `database/migrations/20260707_door_routing_ledger_fable_criterion_funnel.sql`)
+   via `lib/fleet/door-routing-ledger.cjs` and a `fable-allocation-report` reporting
+   script formerly under `scripts/`.
+   Because that piggyback only ever fired when the target SD already carried a
+   classified `door_class.door` (the ledger's `door` column is `NOT NULL`) — and
+   `door_class` was never populated in production — this economics leg never
+   wrote a single row. It was deleted alongside `door_class`'s retirement; the
+   `door_routing_ledger` table itself (2 already-applied, immutable migrations,
+   0 rows) is left in place as a separate, deferred decision, not dropped by
+   that SD. The doctrine's own observed-bias question ("do we over-allocate
+   Fable to detailing, under-allocate to selection/pre-mortems?") remains
+   unmeasured pending a replacement instrumentation path.
 
-Like `door_class`, everything here is inert until the target SD already carries
-data the stamps depend on — the ledger write specifically requires a classified
-`door_class.door` (the ledger's `door` column is `NOT NULL`), so an SD with no
-door classification yet simply has no ledger row written; the dispatch stamp
-itself is unconditional and always fires.
+The dispatch stamp (items 1-4 above) is unconditional and always fires —
+independent of `door_class`, which was never a dependency of this axis.
