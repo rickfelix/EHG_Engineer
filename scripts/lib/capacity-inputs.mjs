@@ -186,8 +186,13 @@ export async function gatherCapacityInputs(sb, { now = Date.now() } = {}) {
   const [sessions, sds, openQfCountRaw] = await Promise.all([
     // SD-LEO-INFRA-COUNT-TRUNCATION-DISCIPLINE-001 FR-6 batch 9: claude_sessions is a growing
     // table and this read feeds worker-count/capacity math directly (filtered + iterated
-    // below) — paginate to completion. Preserve the prior fail-open policy (undefined `data`
-    // on error → `(sessions || [])` fallback below) by catching the throw and returning [].
+    // below) — paginate to completion.
+    // QF-20260816-435: the prior `.catch(() => [])` here silently turned a read FAILURE into a
+    // read of ZERO live sessions — indistinguishable from "genuinely no workers online" — which
+    // fed a manufactured DEFICIT verdict into scoreLeg4, persisted and scored 0/2 (the exact
+    // unavailable-vs-zero collapse report-posture.js's header exists to forbid). This read now
+    // propagates its throw; scoreCapacityLeg (scripts/cron/drive-report-sweep.mjs) already
+    // catches it and reports leg4 unavailable() rather than scoring or persisting anything.
     fetchAllPaginated(() => sb.from('claude_sessions')
       // SD-LEO-INFRA-FORECASTER-FIXTURE-WORKER-EXCLUSION-001: + status so released/terminal sessions
       // are not counted as available workers even with a recent heartbeat (FR-2).
@@ -204,12 +209,13 @@ export async function gatherCapacityInputs(sb, { now = Date.now() } = {}) {
       // a fleet-down false alarm to the operator). Replicate the detector input-column contract.
       .select('session_id, terminal_id, sd_key, heartbeat_at, process_alive_at, loop_state, expected_silence_until, metadata, status, released_reason, released_at')
       .gte('heartbeat_at', liveCutoff)
-      .order('session_id', { ascending: true })) // unique tiebreaker: stable page boundaries (FR-6)
-      .catch(() => []),
+      .order('session_id', { ascending: true })), // unique tiebreaker: stable page boundaries (FR-6)
     // SD-LEO-INFRA-COUNT-TRUNCATION-DISCIPLINE-001 FR-6 batch 9: strategic_directives_v2 is a
     // growing table and this read feeds belt-depth/dependency resolution directly (iterated +
-    // acted on below) — paginate to completion. Preserve the prior fail-open policy (undefined
-    // `data` on error → `(sds || [])` fallbacks below) by catching the throw and returning [].
+    // acted on below) — paginate to completion.
+    // QF-20260816-435: same fix as the sessions read above — a read failure previously became a
+    // silent read of ZERO open SDs (indistinguishable from "genuinely no belt"), manufacturing a
+    // DEFICIT verdict instead of surfacing as unavailable. Now propagates.
     // SD-FDBK-INFRA-BACKLOG-RANK-EXCLUSION-001: + metadata (is_fixture marker) and
     // title/description (bare-shell detection) so excluded rows do not inflate belt depth.
     // SD-REFILL-00306WTS: + target_application so un-actionable auto-filed venture remediation
@@ -220,8 +226,7 @@ export async function gatherCapacityInputs(sb, { now = Date.now() } = {}) {
       // sd_key) without a per-child DB round-trip.
       .select('id, sd_key, title, description, status, sd_type, current_phase, progress_percentage, claiming_session_id, dependencies, metadata, target_application, parent_sd_id')
       .not('status', 'in', '("completed","cancelled","deferred")')
-      .order('sd_key', { ascending: true })) // unique tiebreaker (FR-6)
-      .catch(() => []),
+      .order('sd_key', { ascending: true })),
     // Open QFs are claimable belt too (a worker can claim a QF) — counting only SDs
     // under-reports belt depth and over-reports deficit (workers self-claim QFs).
     //

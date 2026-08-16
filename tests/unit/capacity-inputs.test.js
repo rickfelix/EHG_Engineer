@@ -191,6 +191,26 @@ describe('gatherCapacityInputs — the counts the verdict ladder consumes', () =
     expect(out.openQfCount).toBe(0);
     expect(out.claimableCount, 'the SD arm must still be measured').toBe(1);
   });
+
+  // QF-20260816-435: unlike the QF gauge above, the sessions and SD reads previously had the SAME
+  // `.catch(() => [])` softening — but they feed the deficit computation directly, so a read
+  // failure silently became "read cleanly, zero workers/zero belt", manufacturing a real DEFICIT
+  // verdict indistinguishable from a genuine one. These two now assert the opposite of the QF-gauge
+  // test above: a sessions or SD read failure must propagate out of gatherCapacityInputs so the
+  // caller (scoreCapacityLeg) can convert it to leg4 unavailable() instead of scoring/persisting.
+  it('a claude_sessions read failure propagates — never silently reads as zero live workers', async () => {
+    const client = fakeClient({ sds: [claimableSd()] });
+    const orig = client.from.bind(client);
+    client.from = (n) => (n === 'claude_sessions' ? { select() { throw new Error('sessions read failed'); } } : orig(n));
+    await expect(gatherCapacityInputs(client)).rejects.toThrow('sessions read failed');
+  });
+
+  it('a strategic_directives_v2 read failure propagates — never silently reads as zero belt depth', async () => {
+    const client = fakeClient({ sessions: [liveSession()] });
+    const orig = client.from.bind(client);
+    client.from = (n) => (n === 'strategic_directives_v2' ? { select() { throw new Error('sds read failed'); } } : orig(n));
+    await expect(gatherCapacityInputs(client)).rejects.toThrow('sds read failed');
+  });
 });
 
 describe('the ETA helpers moved intact', () => {
