@@ -243,6 +243,28 @@ export function evaluateFiles(files, { selfPaths = SELF_PATHS, excludePrefixes =
   return { findings, ok: findings.length === 0 };
 }
 
+/** Build the dedup key a baseline entry or a live finding is compared by. */
+export function ratchetKey(site) {
+  return `${site.file}:${site.line}:${site.rule}:${site.method}`;
+}
+
+/**
+ * Pure ratchet comparison, decoupled from live git/filesystem state so it can be exercised
+ * deterministically with synthetic data (PLAN-phase VALIDATION review of PR #7143 found the
+ * committed meta-test only proved evaluateFiles() could return ok:false on synthetic input --
+ * it never proved THIS comparison could detect a genuinely new violation, since in the normal
+ * passing state live findings equal the baseline exactly and a broken key-construction bug
+ * would be indistinguishable from correctness).
+ *
+ * @param {Array<{file,line,rule,method}>} liveFindings
+ * @param {Array<{file,line,rule,method}>} baselineSites
+ * @returns {Array<{file,line,rule,method}>} findings present live but NOT in the baseline
+ */
+export function findNewViolations(liveFindings, baselineSites) {
+  const baselineKeys = new Set(baselineSites.map(ratchetKey));
+  return liveFindings.filter((f) => !baselineKeys.has(ratchetKey(f)));
+}
+
 export function loadTrackedFiles() {
   // -z: NUL-delimited, sidesteps core.quotePath escaping of non-ASCII paths (same rationale as
   // scripts/lint/no-connection-string-literals-lint.mjs's loadTrackedFiles).
