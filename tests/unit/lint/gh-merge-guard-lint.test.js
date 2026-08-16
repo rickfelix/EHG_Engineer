@@ -5,7 +5,12 @@
 // TS-4 (exclusions): Category D (--auto) and Category E (--repo / no-PR#) sites must NOT trip it
 // (they carry inline pragmas, same mechanism as the negative control -- tested together here).
 import { describe, it, expect } from 'vitest';
+import fs from 'node:fs';
+import path from 'node:path';
+import { fileURLToPath } from 'node:url';
 import { findFileViolations, findViolations, stripCommentsPreservingLines, SCAN_FILES } from '../../../scripts/lint/gh-merge-guard-lint.mjs';
+
+const repoRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '../../..');
 
 describe('stripCommentsPreservingLines', () => {
   it('preserves line count across a multi-line block comment', () => {
@@ -101,5 +106,32 @@ describe('gh-merge-guard-lint — full repo scan (TS-2, TS-4)', () => {
       throw new Error(`${violations.length} unresolved bare "gh pr merge" site(s): ${summary}`);
     }
     expect(violations).toHaveLength(0);
+  });
+});
+
+describe('FR-3 — CLAUDE_EXEC.md content-assertion, not just drift-check', () => {
+  // Content-anchored, not line-anchored (SD-LEO-INFRA-GH-MERGE-SAFE-WIRING-001 regenerates this
+  // file from the DB on every run; unrelated section churn -- e.g. the "Recent Retrospectives"
+  // block -- routinely shifts line numbers between regens, so a fixed-line assertion would rot).
+  //
+  // FR-3 edited leo_protocol_sections.id=286 (the completion-merge step) and added an exemption
+  // pragma to id=306 (the --auto workflow), which is explicitly OUT of this SD's fix scope --
+  // gh-merge-safe.mjs has no --auto support. This test pins that id=306's actual COMMAND TEXT is
+  // untouched (only a trailing pragma comment was appended), so a future regen can't silently
+  // mangle the one site this SD deliberately left alone.
+  const claudeExec = fs.readFileSync(path.join(repoRoot, 'CLAUDE_EXEC.md'), 'utf8');
+
+  it('the id=286 completion step names gh-merge-safe.mjs', () => {
+    expect(claudeExec).toMatch(/node scripts\/gh-merge-safe\.mjs <PR#> --merge --delete-branch/);
+  });
+
+  it('the id=306 --auto workflow command text is unchanged (still both occurrences, still --auto)', () => {
+    const autoLines = claudeExec.match(/gh pr merge --auto --squash --delete-branch/g) || [];
+    expect(autoLines).toHaveLength(2);
+  });
+
+  it('both --auto lines carry the mandatory-reason exemption (would otherwise re-trip the guard)', () => {
+    const pragmaLines = claudeExec.match(/gh pr merge --auto --squash --delete-branch\s+# gh-merge-guard-exempt: \S/g) || [];
+    expect(pragmaLines).toHaveLength(2);
   });
 });

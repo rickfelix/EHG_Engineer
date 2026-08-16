@@ -98,7 +98,7 @@ This triggers the Ship command which handles:
 │  Step 5: Return PR URL                                              │
 │                                                                     │
 │  Step 6: Ask About Merging                                          │
-│  ├─ "Yes, merge now" → gh pr merge --merge --delete-branch          │
+│  ├─ "Yes, merge now" → node scripts/gh-merge-safe.mjs --merge --delete-branch │
 │  └─ "No, I'll review first" → End                                   │
 │                                                                     │
 └─────────────────────────────────────────────────────────────────────┘
@@ -220,7 +220,7 @@ infra(SD-LEO-001): add intelligent branch cleanup
 ### After Merge
 
 When "Yes, merge now" is selected:
-1. `gh pr merge --merge --delete-branch` deletes remote branch
+1. `node scripts/gh-merge-safe.mjs --merge --delete-branch` deletes remote branch
 2. Local branch is deleted via cleanup
 3. `git checkout main && git pull` syncs local
 

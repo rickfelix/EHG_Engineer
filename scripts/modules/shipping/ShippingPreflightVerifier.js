@@ -223,7 +223,7 @@ export class ShippingPreflightVerifier {
         console.log(`   • PR #${pr.number}: ${pr.title}`);
         console.log(`     Branch: ${pr.branch}`);
         console.log(`     Repo: ${pr.repo}`);
-        console.log(`     → Merge: gh pr merge ${pr.number} --repo ${pr.repo} --merge --delete-branch`);
+        console.log(`     → Merge: gh pr merge ${pr.number} --repo ${pr.repo} --merge --delete-branch`); // gh-merge-guard-exempt: FR-1B -- gh-merge-safe.mjs has no --repo support (Category E, SD-LEO-INFRA-GH-MERGE-SAFE-WIRING-001)
       }
     }
 
@@ -295,7 +295,7 @@ export class ShippingPreflightVerifier {
 
     // Open PRs need to be merged
     for (const pr of this.results.openPRs) {
-      steps.push(`gh pr merge ${pr.number} --repo ${pr.repo} --merge --delete-branch`);
+      steps.push(`gh pr merge ${pr.number} --repo ${pr.repo} --merge --delete-branch`); // gh-merge-guard-exempt: FR-1B -- gh-merge-safe.mjs has no --repo support (Category E, SD-LEO-INFRA-GH-MERGE-SAFE-WIRING-001)
     }
 
     // Unmerged branches need PRs created then merged

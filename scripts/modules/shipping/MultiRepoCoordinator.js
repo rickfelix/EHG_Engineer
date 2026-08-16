@@ -309,7 +309,7 @@ export class MultiRepoCoordinator {
           repo: branch.repo,
           branch: branch.branch,
           prNumber: branch.prNumber,
-          command: `gh pr merge ${branch.prNumber} --repo ${branch.repoInfo.github} --merge --delete-branch`
+          command: `gh pr merge ${branch.prNumber} --repo ${branch.repoInfo.github} --merge --delete-branch` // gh-merge-guard-exempt: FR-1B -- gh-merge-safe.mjs has no --repo support (Category E, SD-LEO-INFRA-GH-MERGE-SAFE-WIRING-001)
         });
       }
     }

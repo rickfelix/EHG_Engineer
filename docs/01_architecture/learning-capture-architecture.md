@@ -139,7 +139,7 @@ The system assumed **all valuable work goes through Strategic Directives**. But 
 ┌─────────────────────────────────────────────────────────────────┐
 │  PostToolUse Hook Layer (auto-learning-capture.cjs)             │
 │  ─────────────────────────────────────────────────────────────  │
-│  • Monitors: gh pr merge commands (Bash tool)                   │
+│  • Monitors: gh pr merge commands (Bash tool)                   │ <!-- gh-merge-guard-exempt: describes existing hook detection pattern, not an instruction -->
 │  • Triggers: When merge is successful                           │
 │  • Decision: SD/QF work? (skip) vs Non-SD work? (capture)       │
 └───────────────────────┬─────────────────────────────────────────┘
@@ -184,7 +184,7 @@ The system assumed **all valuable work goes through Strategic Directives**. But 
 **Purpose**: Detect successful non-SD PR merges and trigger learning capture.
 
 **Responsibilities**:
-- Monitor `gh pr merge` Bash commands via PostToolUse hook
+- Monitor `gh pr merge` Bash commands via PostToolUse hook <!-- gh-merge-guard-exempt: describes existing hook detection pattern, not an instruction -->
 - Parse command output to detect merge success
 - Extract PR number from command or output
 - Query database to determine if work is SD/QF-related
@@ -192,7 +192,7 @@ The system assumed **all valuable work goes through Strategic Directives**. But 
 - Run as non-blocking (detached process)
 
 **Key Design Decisions**:
-- **Hook type**: PostToolUse (Bash matcher) - runs after `gh pr merge` completes
+- **Hook type**: PostToolUse (Bash matcher) - runs after `gh pr merge` completes <!-- gh-merge-guard-exempt: describes existing hook trigger condition, not an instruction -->
 - **Timeout**: 20 seconds (allows time for database queries)
 - **Error handling**: Non-blocking - failures don't break ship workflow
 - **Logging**: Structured JSON logs with timestamps and event types
@@ -498,7 +498,7 @@ Auto-captured patterns appear in `/learn` output alongside SD-generated patterns
 ### End-to-End Flow
 
 ```
-1. Developer runs: gh pr merge 123 --merge --delete-branch
+1. Developer runs: node scripts/gh-merge-safe.mjs 123 --merge --delete-branch
    │
    ├─→ PostToolUse hook triggers (auto-learning-capture.cjs)
    │   │
@@ -566,7 +566,7 @@ Auto-captured patterns appear in `/learn` output alongside SD-generated patterns
 
 ### Functional Requirements
 
-- [x] Hook detects `gh pr merge` commands
+- [x] Hook detects `gh pr merge` commands <!-- gh-merge-guard-exempt: describes existing hook capability, not an instruction -->
 - [x] Hook correctly identifies SD/QF work (skip capture)
 - [x] Hook correctly identifies non-SD work (trigger capture)
 - [x] Engine extracts PR metadata via `gh` CLI

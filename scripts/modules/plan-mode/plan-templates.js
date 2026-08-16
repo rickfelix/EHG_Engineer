@@ -224,9 +224,9 @@ ${sdTitle || 'Complete SD and merge changes'}
 
 ## Commands
 \`\`\`bash
-gh pr merge --merge --delete-branch   # Merge and cleanup
-git checkout main && git pull         # Sync local
-npm run sd:status                     # Verify completion
+node scripts/gh-merge-safe.mjs <PR#> --merge --delete-branch   # Merge and cleanup
+git checkout main && git pull                                  # Sync local
+npm run sd:status                                               # Verify completion
 \`\`\`
 `;
 
