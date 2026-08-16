@@ -438,7 +438,12 @@ export class BaseExecutor {
         // SD-FDBK-INFRA-FIX-GATE-SUBAGENT-001: without this, subagent-evidence-gate.js's
         // REQUIRED_SUBAGENTS[ctx.handoffType] always resolved to [] (undefined key), so
         // GATE_SUBAGENT_EVIDENCE has been fail-open fleet-wide since introduction.
-        handoffType: this.handoffType
+        handoffType: this.handoffType,
+        // QF-20260816-923: without this, fr-delivery-classifier.js's descopeFor()
+        // self-approval guard (`requesterSessionId && approver === requesterSessionId`) was
+        // dead code on every production handoff — requesterSessionId was always null, so a
+        // worker's own session could descope an FR "approved" by that same session.
+        sessionId: options?.autoProceedSessionId || process.env.CLAUDE_SESSION_ID || null
       };
 
       // SD-LEO-INFRA-EXTEND-WAIT-VERDICT-001 FR-5/TR-4: surface prior consecutive-wait

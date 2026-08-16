@@ -1,7 +1,7 @@
 // Tests for SD-LEO-INFRA-HARDEN-LEO-COMPLETION-001
 // Real per-FR delivery classification + default-OFF warn-only enforcement + approver descope.
 
-import { describe, it, expect } from 'vitest';
+import { describe, it, expect, vi } from 'vitest';
 import {
   isFrTraceabilityEnforced,
   frIdOf,
@@ -71,6 +71,30 @@ describe('FR-4: descopeFor — approver-gated', () => {
     expect(descopeFor(md, 'FR-007', 'other-session')).toBeTruthy();
   });
   it('null when no descope list', () => expect(descopeFor({}, 'FR-1')).toBeNull());
+
+  // QF-20260816-923: requesterSessionId was always null in production (BaseExecutor's
+  // validationContext never set it) -- the self-approval guard above never ran. Now that
+  // sessionId is threaded through, an identity-unknown call must warn loudly rather than
+  // silently trust the descope.
+  it('QF-20260816-923: warns loudly when requesterSessionId is unknown (self-approval guard cannot run)', () => {
+    const warnSpy = vi.spyOn(console, 'warn').mockImplementation(() => {});
+    try {
+      expect(descopeFor(md, 'FR-005')).toBeTruthy(); // still honored (warn-only per QF scope)
+      expect(warnSpy).toHaveBeenCalledWith(expect.stringContaining('requesterSessionId is unknown'));
+    } finally {
+      warnSpy.mockRestore();
+    }
+  });
+
+  it('QF-20260816-923: does NOT warn when requesterSessionId is provided', () => {
+    const warnSpy = vi.spyOn(console, 'warn').mockImplementation(() => {});
+    try {
+      descopeFor(md, 'FR-007', 'other-session');
+      expect(warnSpy).not.toHaveBeenCalled();
+    } finally {
+      warnSpy.mockRestore();
+    }
+  });
 });
 
 // Injectable supabase stub: returns FRs from the PRD query and stories from user_stories.
