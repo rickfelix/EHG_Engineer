@@ -47,16 +47,6 @@ describe('recommendModelTier — default Sonnet, escalate only on a positive R-m
     expect(r.criterion).toBe('R5');
   });
 
-  it('TS-3: metadata.door_class.door === "one_way" recommends fable via R5 even with zero other keyword matches', () => {
-    const r = recommendModelTier({ title: 'Fix a typo', description: 'Nothing special here', metadata: { door_class: { door: 'one_way', reasons: ['migration_file'] } } });
-    expect(r).toEqual({ tier: 'fable', criterion: 'R5', reason: expect.any(String) });
-  });
-
-  it('a two_way door_class does not trigger the R5 shortcut on its own', () => {
-    const r = recommendModelTier({ description: 'Plain content edit', metadata: { door_class: { door: 'two_way' } } });
-    expect(r).toEqual({ tier: 'sonnet', criterion: null, reason: expect.any(String) });
-  });
-
   it('purity: identical input always returns identical output, called twice', () => {
     const item = { description: 'architecture decision needed' };
     expect(recommendModelTier(item)).toEqual(recommendModelTier(item));

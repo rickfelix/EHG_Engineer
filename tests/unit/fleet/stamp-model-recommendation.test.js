@@ -51,13 +51,6 @@ describe('stampModelRecommendation (FR-2)', () => {
     expect(row.payload.model_recommendation_criterion).toBeNull();
   });
 
-  it('AC-2-2: a one_way-door SD gets model_recommendation="fable", criterion="R5"', async () => {
-    const row = { message_type: 'WORK_ASSIGNMENT', payload: { sd_key: 'SD-X-002' } };
-    await stampModelRecommendation(fakeSb({ sdRow: { title: 'x', description: 'y', metadata: { door_class: { door: 'one_way', reasons: ['migration_file'] } } }, evidenceRows: [{ id: 'r1' }] }), row);
-    expect(row.payload.model_recommendation).toBe('fable');
-    expect(row.payload.model_recommendation_criterion).toBe('R5');
-  });
-
   it('AC-2-3 / TS-4: a target-SD lookup that throws leaves payload unchanged and does not propagate', async () => {
     const row = { message_type: 'WORK_ASSIGNMENT', payload: { sd_key: 'SD-X-003' } };
     await expect(stampModelRecommendation(fakeSb({ sdRow: null, throwOnSelect: true }), row)).resolves.toBeUndefined();

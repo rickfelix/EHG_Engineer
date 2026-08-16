@@ -26,7 +26,13 @@ function stubSupabase({ sds = {}, qfs = {}, throwOn = null, liveSessions = [LIVE
         maybeSingle() {
           if (throwOn === table) return Promise.resolve({ data: null, error: { message: 'transient boom' } });
           if (table === 'strategic_directives_v2') {
-            return Promise.resolve({ data: chain._eq in sds ? { status: sds[chain._eq] } : null, error: null });
+            if (!(chain._eq in sds)) return Promise.resolve({ data: null, error: null });
+            const entry = sds[chain._eq];
+            // Entry may be a bare status string (existing fixtures) or {status, metadata} —
+            // the latter lets the door-routing equivalence test below seed a synthetic
+            // metadata.door_class without touching any pre-existing test.
+            const data = typeof entry === 'string' ? { status: entry } : { status: entry.status, metadata: entry.metadata };
+            return Promise.resolve({ data, error: null });
           }
           if (table === 'quick_fixes') {
             return Promise.resolve({ data: chain._eq in qfs ? { status: qfs[chain._eq] } : null, error: null });
@@ -133,6 +139,28 @@ describe('insertCoordinationRow integration: terminal SD is refused before inser
     const sb = stubSupabase({ sds: { 'SD-GO': 'active' } });
     const res = await insertCoordinationRow(sb, {
       message_type: 'WORK_ASSIGNMENT', target_session: LIVE_TARGET, payload: { assigned_sd: 'SD-GO' },
+    }, { logger: silentLog });
+    expect(res.error).toBeNull();
+  });
+
+  // SD-LEO-INFRA-DOOR-ROUTING-INERT-DECIDE-001 FR-4 (coordinator condition a): the admit/refuse
+  // decision must be byte-identical whether or not the target SD carries a stray
+  // metadata.door_class — the deleted door-routing gate (assertDoorRoutingAllowed) is no longer
+  // anywhere on this path, so a one_way or two_way door_class value can no longer influence
+  // dispatch at all. Scoped precisely to admit/refuse per condition (a)'s literal text; the
+  // model-TIER recommendation for a door_class-carrying row is allowed to differ (FR-2's AC).
+  it('a one_way metadata.door_class does not cause a refusal — admits identically to a plain SD', async () => {
+    const sb = stubSupabase({ sds: { 'SD-DOOR-1': { status: 'active', metadata: { door_class: { door: 'one_way', reasons: ['risk_keyword:migration'] } } } } });
+    const res = await insertCoordinationRow(sb, {
+      message_type: 'WORK_ASSIGNMENT', target_session: LIVE_TARGET, payload: { assigned_sd: 'SD-DOOR-1' },
+    }, { logger: silentLog });
+    expect(res.error).toBeNull();
+  });
+
+  it('a two_way metadata.door_class does not cause a refusal — admits identically to a plain SD', async () => {
+    const sb = stubSupabase({ sds: { 'SD-DOOR-2': { status: 'active', metadata: { door_class: { door: 'two_way' } } } } });
+    const res = await insertCoordinationRow(sb, {
+      message_type: 'WORK_ASSIGNMENT', target_session: LIVE_TARGET, payload: { assigned_sd: 'SD-DOOR-2' },
     }, { logger: silentLog });
     expect(res.error).toBeNull();
   });
