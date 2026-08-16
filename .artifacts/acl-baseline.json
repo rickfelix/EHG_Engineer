@@ -1,0 +1,1519 @@
+{
+  "captured_at": "2026-08-16T00:45:10.625Z",
+  "rows": [
+    {
+      "sig": "approve_chairman_decision(uuid,text,text,approval_type_enum,uuid)",
+      "owner": "postgres",
+      "aclitem": "=X/postgres",
+      "proname": "approve_chairman_decision"
+    },
+    {
+      "sig": "approve_chairman_decision(uuid,text,text,approval_type_enum,uuid)",
+      "owner": "postgres",
+      "aclitem": "anon=X/postgres",
+      "proname": "approve_chairman_decision"
+    },
+    {
+      "sig": "approve_chairman_decision(uuid,text,text,approval_type_enum,uuid)",
+      "owner": "postgres",
+      "aclitem": "authenticated=X/postgres",
+      "proname": "approve_chairman_decision"
+    },
+    {
+      "sig": "approve_chairman_decision(uuid,text,text,approval_type_enum,uuid)",
+      "owner": "postgres",
+      "aclitem": "postgres=X/postgres",
+      "proname": "approve_chairman_decision"
+    },
+    {
+      "sig": "approve_chairman_decision(uuid,text,text,approval_type_enum,uuid)",
+      "owner": "postgres",
+      "aclitem": "service_role=X/postgres",
+      "proname": "approve_chairman_decision"
+    },
+    {
+      "sig": "check_feedback_duplicate(uuid,text)",
+      "owner": "postgres",
+      "aclitem": "anon=X/postgres",
+      "proname": "check_feedback_duplicate"
+    },
+    {
+      "sig": "check_feedback_duplicate(uuid,text)",
+      "owner": "postgres",
+      "aclitem": "authenticated=X/postgres",
+      "proname": "check_feedback_duplicate"
+    },
+    {
+      "sig": "check_feedback_duplicate(uuid,text)",
+      "owner": "postgres",
+      "aclitem": "postgres=X/postgres",
+      "proname": "check_feedback_duplicate"
+    },
+    {
+      "sig": "check_feedback_duplicate(uuid,text)",
+      "owner": "postgres",
+      "aclitem": "service_role=X/postgres",
+      "proname": "check_feedback_duplicate"
+    },
+    {
+      "sig": "check_feedback_rate_limit(uuid)",
+      "owner": "postgres",
+      "aclitem": "=X/postgres",
+      "proname": "check_feedback_rate_limit"
+    },
+    {
+      "sig": "check_feedback_rate_limit(uuid)",
+      "owner": "postgres",
+      "aclitem": "anon=X/postgres",
+      "proname": "check_feedback_rate_limit"
+    },
+    {
+      "sig": "check_feedback_rate_limit(uuid)",
+      "owner": "postgres",
+      "aclitem": "authenticated=X/postgres",
+      "proname": "check_feedback_rate_limit"
+    },
+    {
+      "sig": "check_feedback_rate_limit(uuid)",
+      "owner": "postgres",
+      "aclitem": "postgres=X/postgres",
+      "proname": "check_feedback_rate_limit"
+    },
+    {
+      "sig": "check_feedback_rate_limit(uuid)",
+      "owner": "postgres",
+      "aclitem": "service_role=X/postgres",
+      "proname": "check_feedback_rate_limit"
+    },
+    {
+      "sig": "claim_sd(text,text,text,boolean,integer)",
+      "owner": "postgres",
+      "aclitem": "=X/postgres",
+      "proname": "claim_sd"
+    },
+    {
+      "sig": "claim_sd(text,text,text,boolean,integer)",
+      "owner": "postgres",
+      "aclitem": "anon=X/postgres",
+      "proname": "claim_sd"
+    },
+    {
+      "sig": "claim_sd(text,text,text,boolean,integer)",
+      "owner": "postgres",
+      "aclitem": "authenticated=X/postgres",
+      "proname": "claim_sd"
+    },
+    {
+      "sig": "claim_sd(text,text,text,boolean,integer)",
+      "owner": "postgres",
+      "aclitem": "postgres=X/postgres",
+      "proname": "claim_sd"
+    },
+    {
+      "sig": "claim_sd(text,text,text,boolean,integer)",
+      "owner": "postgres",
+      "aclitem": "service_role=X/postgres",
+      "proname": "claim_sd"
+    },
+    {
+      "sig": "fn_advance_pipeline_stage(uuid,text,text,uuid,uuid)",
+      "owner": "postgres",
+      "aclitem": "anon=X/postgres",
+      "proname": "fn_advance_pipeline_stage"
+    },
+    {
+      "sig": "fn_advance_pipeline_stage(uuid,text,text,uuid,uuid)",
+      "owner": "postgres",
+      "aclitem": "authenticated=X/postgres",
+      "proname": "fn_advance_pipeline_stage"
+    },
+    {
+      "sig": "fn_advance_pipeline_stage(uuid,text,text,uuid,uuid)",
+      "owner": "postgres",
+      "aclitem": "postgres=X/postgres",
+      "proname": "fn_advance_pipeline_stage"
+    },
+    {
+      "sig": "fn_advance_pipeline_stage(uuid,text,text,uuid,uuid)",
+      "owner": "postgres",
+      "aclitem": "service_role=X/postgres",
+      "proname": "fn_advance_pipeline_stage"
+    },
+    {
+      "sig": "fn_anon_ingress_prior_hour_count(text)",
+      "owner": "postgres",
+      "aclitem": "anon=X/postgres",
+      "proname": "fn_anon_ingress_prior_hour_count"
+    },
+    {
+      "sig": "fn_anon_ingress_prior_hour_count(text)",
+      "owner": "postgres",
+      "aclitem": "authenticated=X/postgres",
+      "proname": "fn_anon_ingress_prior_hour_count"
+    },
+    {
+      "sig": "fn_anon_ingress_prior_hour_count(text)",
+      "owner": "postgres",
+      "aclitem": "postgres=X/postgres",
+      "proname": "fn_anon_ingress_prior_hour_count"
+    },
+    {
+      "sig": "fn_anon_ingress_prior_hour_count(text)",
+      "owner": "postgres",
+      "aclitem": "service_role=X/postgres",
+      "proname": "fn_anon_ingress_prior_hour_count"
+    },
+    {
+      "sig": "fn_enforce_stage_advancement_artifact_gate()",
+      "owner": "postgres",
+      "aclitem": "=X/postgres",
+      "proname": "fn_enforce_stage_advancement_artifact_gate"
+    },
+    {
+      "sig": "fn_enforce_stage_advancement_artifact_gate()",
+      "owner": "postgres",
+      "aclitem": "anon=X/postgres",
+      "proname": "fn_enforce_stage_advancement_artifact_gate"
+    },
+    {
+      "sig": "fn_enforce_stage_advancement_artifact_gate()",
+      "owner": "postgres",
+      "aclitem": "authenticated=X/postgres",
+      "proname": "fn_enforce_stage_advancement_artifact_gate"
+    },
+    {
+      "sig": "fn_enforce_stage_advancement_artifact_gate()",
+      "owner": "postgres",
+      "aclitem": "postgres=X/postgres",
+      "proname": "fn_enforce_stage_advancement_artifact_gate"
+    },
+    {
+      "sig": "fn_enforce_stage_advancement_artifact_gate()",
+      "owner": "postgres",
+      "aclitem": "service_role=X/postgres",
+      "proname": "fn_enforce_stage_advancement_artifact_gate"
+    },
+    {
+      "sig": "fn_is_chairman()",
+      "owner": "postgres",
+      "aclitem": "=X/postgres",
+      "proname": "fn_is_chairman"
+    },
+    {
+      "sig": "fn_is_chairman()",
+      "owner": "postgres",
+      "aclitem": "anon=X/postgres",
+      "proname": "fn_is_chairman"
+    },
+    {
+      "sig": "fn_is_chairman()",
+      "owner": "postgres",
+      "aclitem": "authenticated=X/postgres",
+      "proname": "fn_is_chairman"
+    },
+    {
+      "sig": "fn_is_chairman()",
+      "owner": "postgres",
+      "aclitem": "postgres=X/postgres",
+      "proname": "fn_is_chairman"
+    },
+    {
+      "sig": "fn_is_chairman()",
+      "owner": "postgres",
+      "aclitem": "service_role=X/postgres",
+      "proname": "fn_is_chairman"
+    },
+    {
+      "sig": "fn_is_service_role()",
+      "owner": "postgres",
+      "aclitem": "=X/postgres",
+      "proname": "fn_is_service_role"
+    },
+    {
+      "sig": "fn_is_service_role()",
+      "owner": "postgres",
+      "aclitem": "anon=X/postgres",
+      "proname": "fn_is_service_role"
+    },
+    {
+      "sig": "fn_is_service_role()",
+      "owner": "postgres",
+      "aclitem": "authenticated=X/postgres",
+      "proname": "fn_is_service_role"
+    },
+    {
+      "sig": "fn_is_service_role()",
+      "owner": "postgres",
+      "aclitem": "postgres=X/postgres",
+      "proname": "fn_is_service_role"
+    },
+    {
+      "sig": "fn_is_service_role()",
+      "owner": "postgres",
+      "aclitem": "service_role=X/postgres",
+      "proname": "fn_is_service_role"
+    },
+    {
+      "sig": "fn_list_chairman_webauthn_credentials()",
+      "owner": "postgres",
+      "aclitem": "=X/postgres",
+      "proname": "fn_list_chairman_webauthn_credentials"
+    },
+    {
+      "sig": "fn_list_chairman_webauthn_credentials()",
+      "owner": "postgres",
+      "aclitem": "anon=X/postgres",
+      "proname": "fn_list_chairman_webauthn_credentials"
+    },
+    {
+      "sig": "fn_list_chairman_webauthn_credentials()",
+      "owner": "postgres",
+      "aclitem": "authenticated=X/postgres",
+      "proname": "fn_list_chairman_webauthn_credentials"
+    },
+    {
+      "sig": "fn_list_chairman_webauthn_credentials()",
+      "owner": "postgres",
+      "aclitem": "postgres=X/postgres",
+      "proname": "fn_list_chairman_webauthn_credentials"
+    },
+    {
+      "sig": "fn_list_chairman_webauthn_credentials()",
+      "owner": "postgres",
+      "aclitem": "service_role=X/postgres",
+      "proname": "fn_list_chairman_webauthn_credentials"
+    },
+    {
+      "sig": "fn_quick_fixes_validate_target_application()",
+      "owner": "postgres",
+      "aclitem": "=X/postgres",
+      "proname": "fn_quick_fixes_validate_target_application"
+    },
+    {
+      "sig": "fn_quick_fixes_validate_target_application()",
+      "owner": "postgres",
+      "aclitem": "anon=X/postgres",
+      "proname": "fn_quick_fixes_validate_target_application"
+    },
+    {
+      "sig": "fn_quick_fixes_validate_target_application()",
+      "owner": "postgres",
+      "aclitem": "authenticated=X/postgres",
+      "proname": "fn_quick_fixes_validate_target_application"
+    },
+    {
+      "sig": "fn_quick_fixes_validate_target_application()",
+      "owner": "postgres",
+      "aclitem": "postgres=X/postgres",
+      "proname": "fn_quick_fixes_validate_target_application"
+    },
+    {
+      "sig": "fn_quick_fixes_validate_target_application()",
+      "owner": "postgres",
+      "aclitem": "service_role=X/postgres",
+      "proname": "fn_quick_fixes_validate_target_application"
+    },
+    {
+      "sig": "fn_relay_insert_sms_candidate(text,text,text,text,text)",
+      "owner": "postgres",
+      "aclitem": "anon=X/postgres",
+      "proname": "fn_relay_insert_sms_candidate"
+    },
+    {
+      "sig": "fn_relay_insert_sms_candidate(text,text,text,text,text)",
+      "owner": "postgres",
+      "aclitem": "postgres=X/postgres",
+      "proname": "fn_relay_insert_sms_candidate"
+    },
+    {
+      "sig": "fn_relay_insert_sms_candidate(text,text,text,text,text)",
+      "owner": "postgres",
+      "aclitem": "service_role=X/postgres",
+      "proname": "fn_relay_insert_sms_candidate"
+    },
+    {
+      "sig": "fn_stage_artifact_precondition(uuid,integer)",
+      "owner": "postgres",
+      "aclitem": "=X/postgres",
+      "proname": "fn_stage_artifact_precondition"
+    },
+    {
+      "sig": "fn_stage_artifact_precondition(uuid,integer)",
+      "owner": "postgres",
+      "aclitem": "anon=X/postgres",
+      "proname": "fn_stage_artifact_precondition"
+    },
+    {
+      "sig": "fn_stage_artifact_precondition(uuid,integer)",
+      "owner": "postgres",
+      "aclitem": "authenticated=X/postgres",
+      "proname": "fn_stage_artifact_precondition"
+    },
+    {
+      "sig": "fn_stage_artifact_precondition(uuid,integer)",
+      "owner": "postgres",
+      "aclitem": "postgres=X/postgres",
+      "proname": "fn_stage_artifact_precondition"
+    },
+    {
+      "sig": "fn_stage_artifact_precondition(uuid,integer)",
+      "owner": "postgres",
+      "aclitem": "service_role=X/postgres",
+      "proname": "fn_stage_artifact_precondition"
+    },
+    {
+      "sig": "fn_user_has_company_access(uuid)",
+      "owner": "postgres",
+      "aclitem": "=X/postgres",
+      "proname": "fn_user_has_company_access"
+    },
+    {
+      "sig": "fn_user_has_company_access(uuid)",
+      "owner": "postgres",
+      "aclitem": "anon=X/postgres",
+      "proname": "fn_user_has_company_access"
+    },
+    {
+      "sig": "fn_user_has_company_access(uuid)",
+      "owner": "postgres",
+      "aclitem": "authenticated=X/postgres",
+      "proname": "fn_user_has_company_access"
+    },
+    {
+      "sig": "fn_user_has_company_access(uuid)",
+      "owner": "postgres",
+      "aclitem": "postgres=X/postgres",
+      "proname": "fn_user_has_company_access"
+    },
+    {
+      "sig": "fn_user_has_company_access(uuid)",
+      "owner": "postgres",
+      "aclitem": "service_role=X/postgres",
+      "proname": "fn_user_has_company_access"
+    },
+    {
+      "sig": "fn_user_has_venture_access(uuid)",
+      "owner": "postgres",
+      "aclitem": "=X/postgres",
+      "proname": "fn_user_has_venture_access"
+    },
+    {
+      "sig": "fn_user_has_venture_access(uuid)",
+      "owner": "postgres",
+      "aclitem": "anon=X/postgres",
+      "proname": "fn_user_has_venture_access"
+    },
+    {
+      "sig": "fn_user_has_venture_access(uuid)",
+      "owner": "postgres",
+      "aclitem": "authenticated=X/postgres",
+      "proname": "fn_user_has_venture_access"
+    },
+    {
+      "sig": "fn_user_has_venture_access(uuid)",
+      "owner": "postgres",
+      "aclitem": "postgres=X/postgres",
+      "proname": "fn_user_has_venture_access"
+    },
+    {
+      "sig": "fn_user_has_venture_access(uuid)",
+      "owner": "postgres",
+      "aclitem": "service_role=X/postgres",
+      "proname": "fn_user_has_venture_access"
+    },
+    {
+      "sig": "fn_verify_and_consume_stepup_token(uuid,uuid)",
+      "owner": "postgres",
+      "aclitem": "=X/postgres",
+      "proname": "fn_verify_and_consume_stepup_token"
+    },
+    {
+      "sig": "fn_verify_and_consume_stepup_token(uuid,uuid)",
+      "owner": "postgres",
+      "aclitem": "anon=X/postgres",
+      "proname": "fn_verify_and_consume_stepup_token"
+    },
+    {
+      "sig": "fn_verify_and_consume_stepup_token(uuid,uuid)",
+      "owner": "postgres",
+      "aclitem": "authenticated=X/postgres",
+      "proname": "fn_verify_and_consume_stepup_token"
+    },
+    {
+      "sig": "fn_verify_and_consume_stepup_token(uuid,uuid)",
+      "owner": "postgres",
+      "aclitem": "postgres=X/postgres",
+      "proname": "fn_verify_and_consume_stepup_token"
+    },
+    {
+      "sig": "fn_verify_and_consume_stepup_token(uuid,uuid)",
+      "owner": "postgres",
+      "aclitem": "service_role=X/postgres",
+      "proname": "fn_verify_and_consume_stepup_token"
+    },
+    {
+      "sig": "fn_write_kill_audit_trail(uuid,integer,text,uuid,text,uuid)",
+      "owner": "postgres",
+      "aclitem": "=X/postgres",
+      "proname": "fn_write_kill_audit_trail"
+    },
+    {
+      "sig": "fn_write_kill_audit_trail(uuid,integer,text,uuid,text,uuid)",
+      "owner": "postgres",
+      "aclitem": "anon=X/postgres",
+      "proname": "fn_write_kill_audit_trail"
+    },
+    {
+      "sig": "fn_write_kill_audit_trail(uuid,integer,text,uuid,text,uuid)",
+      "owner": "postgres",
+      "aclitem": "authenticated=X/postgres",
+      "proname": "fn_write_kill_audit_trail"
+    },
+    {
+      "sig": "fn_write_kill_audit_trail(uuid,integer,text,uuid,text,uuid)",
+      "owner": "postgres",
+      "aclitem": "postgres=X/postgres",
+      "proname": "fn_write_kill_audit_trail"
+    },
+    {
+      "sig": "fn_write_kill_audit_trail(uuid,integer,text,uuid,text,uuid)",
+      "owner": "postgres",
+      "aclitem": "service_role=X/postgres",
+      "proname": "fn_write_kill_audit_trail"
+    },
+    {
+      "sig": "get_gate_decision_status(uuid,integer)",
+      "owner": "postgres",
+      "aclitem": "anon=X/postgres",
+      "proname": "get_gate_decision_status"
+    },
+    {
+      "sig": "get_gate_decision_status(uuid,integer)",
+      "owner": "postgres",
+      "aclitem": "authenticated=X/postgres",
+      "proname": "get_gate_decision_status"
+    },
+    {
+      "sig": "get_gate_decision_status(uuid,integer)",
+      "owner": "postgres",
+      "aclitem": "postgres=X/postgres",
+      "proname": "get_gate_decision_status"
+    },
+    {
+      "sig": "get_gate_decision_status(uuid,integer)",
+      "owner": "postgres",
+      "aclitem": "service_role=X/postgres",
+      "proname": "get_gate_decision_status"
+    },
+    {
+      "sig": "is_chairman_role()",
+      "owner": "postgres",
+      "aclitem": "anon=X/postgres",
+      "proname": "is_chairman_role"
+    },
+    {
+      "sig": "is_chairman_role()",
+      "owner": "postgres",
+      "aclitem": "authenticated=X/postgres",
+      "proname": "is_chairman_role"
+    },
+    {
+      "sig": "is_chairman_role()",
+      "owner": "postgres",
+      "aclitem": "postgres=X/postgres",
+      "proname": "is_chairman_role"
+    },
+    {
+      "sig": "is_chairman_role()",
+      "owner": "postgres",
+      "aclitem": "service_role=X/postgres",
+      "proname": "is_chairman_role"
+    },
+    {
+      "sig": "is_leo_admin()",
+      "owner": "postgres",
+      "aclitem": "=X/postgres",
+      "proname": "is_leo_admin"
+    },
+    {
+      "sig": "is_leo_admin()",
+      "owner": "postgres",
+      "aclitem": "anon=X/postgres",
+      "proname": "is_leo_admin"
+    },
+    {
+      "sig": "is_leo_admin()",
+      "owner": "postgres",
+      "aclitem": "authenticated=X/postgres",
+      "proname": "is_leo_admin"
+    },
+    {
+      "sig": "is_leo_admin()",
+      "owner": "postgres",
+      "aclitem": "postgres=X/postgres",
+      "proname": "is_leo_admin"
+    },
+    {
+      "sig": "is_leo_admin()",
+      "owner": "postgres",
+      "aclitem": "service_role=X/postgres",
+      "proname": "is_leo_admin"
+    },
+    {
+      "sig": "lhe_pending_migration_applied()",
+      "owner": "postgres",
+      "aclitem": "=X/postgres",
+      "proname": "lhe_pending_migration_applied"
+    },
+    {
+      "sig": "lhe_pending_migration_applied()",
+      "owner": "postgres",
+      "aclitem": "anon=X/postgres",
+      "proname": "lhe_pending_migration_applied"
+    },
+    {
+      "sig": "lhe_pending_migration_applied()",
+      "owner": "postgres",
+      "aclitem": "authenticated=X/postgres",
+      "proname": "lhe_pending_migration_applied"
+    },
+    {
+      "sig": "lhe_pending_migration_applied()",
+      "owner": "postgres",
+      "aclitem": "postgres=X/postgres",
+      "proname": "lhe_pending_migration_applied"
+    },
+    {
+      "sig": "lhe_pending_migration_applied()",
+      "owner": "postgres",
+      "aclitem": "service_role=X/postgres",
+      "proname": "lhe_pending_migration_applied"
+    },
+    {
+      "sig": "log_sd_mutation_audit()",
+      "owner": "postgres",
+      "aclitem": "=X/postgres",
+      "proname": "log_sd_mutation_audit"
+    },
+    {
+      "sig": "log_sd_mutation_audit()",
+      "owner": "postgres",
+      "aclitem": "anon=X/postgres",
+      "proname": "log_sd_mutation_audit"
+    },
+    {
+      "sig": "log_sd_mutation_audit()",
+      "owner": "postgres",
+      "aclitem": "authenticated=X/postgres",
+      "proname": "log_sd_mutation_audit"
+    },
+    {
+      "sig": "log_sd_mutation_audit()",
+      "owner": "postgres",
+      "aclitem": "postgres=X/postgres",
+      "proname": "log_sd_mutation_audit"
+    },
+    {
+      "sig": "log_sd_mutation_audit()",
+      "owner": "postgres",
+      "aclitem": "service_role=X/postgres",
+      "proname": "log_sd_mutation_audit"
+    },
+    {
+      "sig": "record_venture_error(uuid,text,text,jsonb)",
+      "owner": "postgres",
+      "aclitem": "anon=X/postgres",
+      "proname": "record_venture_error"
+    },
+    {
+      "sig": "record_venture_error(uuid,text,text,jsonb)",
+      "owner": "postgres",
+      "aclitem": "authenticated=X/postgres",
+      "proname": "record_venture_error"
+    },
+    {
+      "sig": "record_venture_error(uuid,text,text,jsonb)",
+      "owner": "postgres",
+      "aclitem": "postgres=X/postgres",
+      "proname": "record_venture_error"
+    },
+    {
+      "sig": "record_venture_error(uuid,text,text,jsonb)",
+      "owner": "postgres",
+      "aclitem": "service_role=X/postgres",
+      "proname": "record_venture_error"
+    },
+    {
+      "sig": "reject_chairman_decision(uuid,text,text,uuid)",
+      "owner": "postgres",
+      "aclitem": "=X/postgres",
+      "proname": "reject_chairman_decision"
+    },
+    {
+      "sig": "reject_chairman_decision(uuid,text,text,uuid)",
+      "owner": "postgres",
+      "aclitem": "anon=X/postgres",
+      "proname": "reject_chairman_decision"
+    },
+    {
+      "sig": "reject_chairman_decision(uuid,text,text,uuid)",
+      "owner": "postgres",
+      "aclitem": "authenticated=X/postgres",
+      "proname": "reject_chairman_decision"
+    },
+    {
+      "sig": "reject_chairman_decision(uuid,text,text,uuid)",
+      "owner": "postgres",
+      "aclitem": "postgres=X/postgres",
+      "proname": "reject_chairman_decision"
+    },
+    {
+      "sig": "reject_chairman_decision(uuid,text,text,uuid)",
+      "owner": "postgres",
+      "aclitem": "service_role=X/postgres",
+      "proname": "reject_chairman_decision"
+    },
+    {
+      "sig": "set_session_working_context(text,jsonb)",
+      "owner": "postgres",
+      "aclitem": "=X/postgres",
+      "proname": "set_session_working_context"
+    },
+    {
+      "sig": "set_session_working_context(text,jsonb)",
+      "owner": "postgres",
+      "aclitem": "anon=X/postgres",
+      "proname": "set_session_working_context"
+    },
+    {
+      "sig": "set_session_working_context(text,jsonb)",
+      "owner": "postgres",
+      "aclitem": "authenticated=X/postgres",
+      "proname": "set_session_working_context"
+    },
+    {
+      "sig": "set_session_working_context(text,jsonb)",
+      "owner": "postgres",
+      "aclitem": "postgres=X/postgres",
+      "proname": "set_session_working_context"
+    },
+    {
+      "sig": "set_session_working_context(text,jsonb)",
+      "owner": "postgres",
+      "aclitem": "service_role=X/postgres",
+      "proname": "set_session_working_context"
+    },
+    {
+      "sig": "upsert_operator_cash_burn(numeric,numeric,numeric,numeric)",
+      "owner": "postgres",
+      "aclitem": "=X/postgres",
+      "proname": "upsert_operator_cash_burn"
+    },
+    {
+      "sig": "upsert_operator_cash_burn(numeric,numeric,numeric,numeric)",
+      "owner": "postgres",
+      "aclitem": "anon=X/postgres",
+      "proname": "upsert_operator_cash_burn"
+    },
+    {
+      "sig": "upsert_operator_cash_burn(numeric,numeric,numeric,numeric)",
+      "owner": "postgres",
+      "aclitem": "authenticated=X/postgres",
+      "proname": "upsert_operator_cash_burn"
+    },
+    {
+      "sig": "upsert_operator_cash_burn(numeric,numeric,numeric,numeric)",
+      "owner": "postgres",
+      "aclitem": "postgres=X/postgres",
+      "proname": "upsert_operator_cash_burn"
+    },
+    {
+      "sig": "upsert_operator_cash_burn(numeric,numeric,numeric,numeric)",
+      "owner": "postgres",
+      "aclitem": "service_role=X/postgres",
+      "proname": "upsert_operator_cash_burn"
+    },
+    {
+      "sig": "venture_exists_and_active(uuid)",
+      "owner": "postgres",
+      "aclitem": "anon=X/postgres",
+      "proname": "venture_exists_and_active"
+    },
+    {
+      "sig": "venture_exists_and_active(uuid)",
+      "owner": "postgres",
+      "aclitem": "authenticated=X/postgres",
+      "proname": "venture_exists_and_active"
+    },
+    {
+      "sig": "venture_exists_and_active(uuid)",
+      "owner": "postgres",
+      "aclitem": "postgres=X/postgres",
+      "proname": "venture_exists_and_active"
+    },
+    {
+      "sig": "venture_exists_and_active(uuid)",
+      "owner": "postgres",
+      "aclitem": "service_role=X/postgres",
+      "proname": "venture_exists_and_active"
+    }
+  ],
+  "stmts": [
+    {
+      "proname": "approve_chairman_decision",
+      "sig": "approve_chairman_decision(uuid,text,text,approval_type_enum,uuid)",
+      "grantee": "PUBLIC",
+      "stmt": "GRANT EXECUTE ON FUNCTION approve_chairman_decision(uuid,text,text,approval_type_enum,uuid) TO PUBLIC;"
+    },
+    {
+      "proname": "approve_chairman_decision",
+      "sig": "approve_chairman_decision(uuid,text,text,approval_type_enum,uuid)",
+      "grantee": "anon",
+      "stmt": "GRANT EXECUTE ON FUNCTION approve_chairman_decision(uuid,text,text,approval_type_enum,uuid) TO anon;"
+    },
+    {
+      "proname": "approve_chairman_decision",
+      "sig": "approve_chairman_decision(uuid,text,text,approval_type_enum,uuid)",
+      "grantee": "authenticated",
+      "stmt": "GRANT EXECUTE ON FUNCTION approve_chairman_decision(uuid,text,text,approval_type_enum,uuid) TO authenticated;"
+    },
+    {
+      "proname": "approve_chairman_decision",
+      "sig": "approve_chairman_decision(uuid,text,text,approval_type_enum,uuid)",
+      "grantee": "postgres",
+      "stmt": "GRANT EXECUTE ON FUNCTION approve_chairman_decision(uuid,text,text,approval_type_enum,uuid) TO postgres;"
+    },
+    {
+      "proname": "approve_chairman_decision",
+      "sig": "approve_chairman_decision(uuid,text,text,approval_type_enum,uuid)",
+      "grantee": "service_role",
+      "stmt": "GRANT EXECUTE ON FUNCTION approve_chairman_decision(uuid,text,text,approval_type_enum,uuid) TO service_role;"
+    },
+    {
+      "proname": "check_feedback_duplicate",
+      "sig": "check_feedback_duplicate(uuid,text)",
+      "grantee": "anon",
+      "stmt": "GRANT EXECUTE ON FUNCTION check_feedback_duplicate(uuid,text) TO anon;"
+    },
+    {
+      "proname": "check_feedback_duplicate",
+      "sig": "check_feedback_duplicate(uuid,text)",
+      "grantee": "authenticated",
+      "stmt": "GRANT EXECUTE ON FUNCTION check_feedback_duplicate(uuid,text) TO authenticated;"
+    },
+    {
+      "proname": "check_feedback_duplicate",
+      "sig": "check_feedback_duplicate(uuid,text)",
+      "grantee": "postgres",
+      "stmt": "GRANT EXECUTE ON FUNCTION check_feedback_duplicate(uuid,text) TO postgres;"
+    },
+    {
+      "proname": "check_feedback_duplicate",
+      "sig": "check_feedback_duplicate(uuid,text)",
+      "grantee": "service_role",
+      "stmt": "GRANT EXECUTE ON FUNCTION check_feedback_duplicate(uuid,text) TO service_role;"
+    },
+    {
+      "proname": "check_feedback_rate_limit",
+      "sig": "check_feedback_rate_limit(uuid)",
+      "grantee": "PUBLIC",
+      "stmt": "GRANT EXECUTE ON FUNCTION check_feedback_rate_limit(uuid) TO PUBLIC;"
+    },
+    {
+      "proname": "check_feedback_rate_limit",
+      "sig": "check_feedback_rate_limit(uuid)",
+      "grantee": "anon",
+      "stmt": "GRANT EXECUTE ON FUNCTION check_feedback_rate_limit(uuid) TO anon;"
+    },
+    {
+      "proname": "check_feedback_rate_limit",
+      "sig": "check_feedback_rate_limit(uuid)",
+      "grantee": "authenticated",
+      "stmt": "GRANT EXECUTE ON FUNCTION check_feedback_rate_limit(uuid) TO authenticated;"
+    },
+    {
+      "proname": "check_feedback_rate_limit",
+      "sig": "check_feedback_rate_limit(uuid)",
+      "grantee": "postgres",
+      "stmt": "GRANT EXECUTE ON FUNCTION check_feedback_rate_limit(uuid) TO postgres;"
+    },
+    {
+      "proname": "check_feedback_rate_limit",
+      "sig": "check_feedback_rate_limit(uuid)",
+      "grantee": "service_role",
+      "stmt": "GRANT EXECUTE ON FUNCTION check_feedback_rate_limit(uuid) TO service_role;"
+    },
+    {
+      "proname": "claim_sd",
+      "sig": "claim_sd(text,text,text,boolean,integer)",
+      "grantee": "PUBLIC",
+      "stmt": "GRANT EXECUTE ON FUNCTION claim_sd(text,text,text,boolean,integer) TO PUBLIC;"
+    },
+    {
+      "proname": "claim_sd",
+      "sig": "claim_sd(text,text,text,boolean,integer)",
+      "grantee": "anon",
+      "stmt": "GRANT EXECUTE ON FUNCTION claim_sd(text,text,text,boolean,integer) TO anon;"
+    },
+    {
+      "proname": "claim_sd",
+      "sig": "claim_sd(text,text,text,boolean,integer)",
+      "grantee": "authenticated",
+      "stmt": "GRANT EXECUTE ON FUNCTION claim_sd(text,text,text,boolean,integer) TO authenticated;"
+    },
+    {
+      "proname": "claim_sd",
+      "sig": "claim_sd(text,text,text,boolean,integer)",
+      "grantee": "postgres",
+      "stmt": "GRANT EXECUTE ON FUNCTION claim_sd(text,text,text,boolean,integer) TO postgres;"
+    },
+    {
+      "proname": "claim_sd",
+      "sig": "claim_sd(text,text,text,boolean,integer)",
+      "grantee": "service_role",
+      "stmt": "GRANT EXECUTE ON FUNCTION claim_sd(text,text,text,boolean,integer) TO service_role;"
+    },
+    {
+      "proname": "fn_advance_pipeline_stage",
+      "sig": "fn_advance_pipeline_stage(uuid,text,text,uuid,uuid)",
+      "grantee": "anon",
+      "stmt": "GRANT EXECUTE ON FUNCTION fn_advance_pipeline_stage(uuid,text,text,uuid,uuid) TO anon;"
+    },
+    {
+      "proname": "fn_advance_pipeline_stage",
+      "sig": "fn_advance_pipeline_stage(uuid,text,text,uuid,uuid)",
+      "grantee": "authenticated",
+      "stmt": "GRANT EXECUTE ON FUNCTION fn_advance_pipeline_stage(uuid,text,text,uuid,uuid) TO authenticated;"
+    },
+    {
+      "proname": "fn_advance_pipeline_stage",
+      "sig": "fn_advance_pipeline_stage(uuid,text,text,uuid,uuid)",
+      "grantee": "postgres",
+      "stmt": "GRANT EXECUTE ON FUNCTION fn_advance_pipeline_stage(uuid,text,text,uuid,uuid) TO postgres;"
+    },
+    {
+      "proname": "fn_advance_pipeline_stage",
+      "sig": "fn_advance_pipeline_stage(uuid,text,text,uuid,uuid)",
+      "grantee": "service_role",
+      "stmt": "GRANT EXECUTE ON FUNCTION fn_advance_pipeline_stage(uuid,text,text,uuid,uuid) TO service_role;"
+    },
+    {
+      "proname": "fn_anon_ingress_prior_hour_count",
+      "sig": "fn_anon_ingress_prior_hour_count(text)",
+      "grantee": "anon",
+      "stmt": "GRANT EXECUTE ON FUNCTION fn_anon_ingress_prior_hour_count(text) TO anon;"
+    },
+    {
+      "proname": "fn_anon_ingress_prior_hour_count",
+      "sig": "fn_anon_ingress_prior_hour_count(text)",
+      "grantee": "authenticated",
+      "stmt": "GRANT EXECUTE ON FUNCTION fn_anon_ingress_prior_hour_count(text) TO authenticated;"
+    },
+    {
+      "proname": "fn_anon_ingress_prior_hour_count",
+      "sig": "fn_anon_ingress_prior_hour_count(text)",
+      "grantee": "postgres",
+      "stmt": "GRANT EXECUTE ON FUNCTION fn_anon_ingress_prior_hour_count(text) TO postgres;"
+    },
+    {
+      "proname": "fn_anon_ingress_prior_hour_count",
+      "sig": "fn_anon_ingress_prior_hour_count(text)",
+      "grantee": "service_role",
+      "stmt": "GRANT EXECUTE ON FUNCTION fn_anon_ingress_prior_hour_count(text) TO service_role;"
+    },
+    {
+      "proname": "fn_enforce_stage_advancement_artifact_gate",
+      "sig": "fn_enforce_stage_advancement_artifact_gate()",
+      "grantee": "PUBLIC",
+      "stmt": "GRANT EXECUTE ON FUNCTION fn_enforce_stage_advancement_artifact_gate() TO PUBLIC;"
+    },
+    {
+      "proname": "fn_enforce_stage_advancement_artifact_gate",
+      "sig": "fn_enforce_stage_advancement_artifact_gate()",
+      "grantee": "anon",
+      "stmt": "GRANT EXECUTE ON FUNCTION fn_enforce_stage_advancement_artifact_gate() TO anon;"
+    },
+    {
+      "proname": "fn_enforce_stage_advancement_artifact_gate",
+      "sig": "fn_enforce_stage_advancement_artifact_gate()",
+      "grantee": "authenticated",
+      "stmt": "GRANT EXECUTE ON FUNCTION fn_enforce_stage_advancement_artifact_gate() TO authenticated;"
+    },
+    {
+      "proname": "fn_enforce_stage_advancement_artifact_gate",
+      "sig": "fn_enforce_stage_advancement_artifact_gate()",
+      "grantee": "postgres",
+      "stmt": "GRANT EXECUTE ON FUNCTION fn_enforce_stage_advancement_artifact_gate() TO postgres;"
+    },
+    {
+      "proname": "fn_enforce_stage_advancement_artifact_gate",
+      "sig": "fn_enforce_stage_advancement_artifact_gate()",
+      "grantee": "service_role",
+      "stmt": "GRANT EXECUTE ON FUNCTION fn_enforce_stage_advancement_artifact_gate() TO service_role;"
+    },
+    {
+      "proname": "fn_is_chairman",
+      "sig": "fn_is_chairman()",
+      "grantee": "PUBLIC",
+      "stmt": "GRANT EXECUTE ON FUNCTION fn_is_chairman() TO PUBLIC;"
+    },
+    {
+      "proname": "fn_is_chairman",
+      "sig": "fn_is_chairman()",
+      "grantee": "anon",
+      "stmt": "GRANT EXECUTE ON FUNCTION fn_is_chairman() TO anon;"
+    },
+    {
+      "proname": "fn_is_chairman",
+      "sig": "fn_is_chairman()",
+      "grantee": "authenticated",
+      "stmt": "GRANT EXECUTE ON FUNCTION fn_is_chairman() TO authenticated;"
+    },
+    {
+      "proname": "fn_is_chairman",
+      "sig": "fn_is_chairman()",
+      "grantee": "postgres",
+      "stmt": "GRANT EXECUTE ON FUNCTION fn_is_chairman() TO postgres;"
+    },
+    {
+      "proname": "fn_is_chairman",
+      "sig": "fn_is_chairman()",
+      "grantee": "service_role",
+      "stmt": "GRANT EXECUTE ON FUNCTION fn_is_chairman() TO service_role;"
+    },
+    {
+      "proname": "fn_is_service_role",
+      "sig": "fn_is_service_role()",
+      "grantee": "PUBLIC",
+      "stmt": "GRANT EXECUTE ON FUNCTION fn_is_service_role() TO PUBLIC;"
+    },
+    {
+      "proname": "fn_is_service_role",
+      "sig": "fn_is_service_role()",
+      "grantee": "anon",
+      "stmt": "GRANT EXECUTE ON FUNCTION fn_is_service_role() TO anon;"
+    },
+    {
+      "proname": "fn_is_service_role",
+      "sig": "fn_is_service_role()",
+      "grantee": "authenticated",
+      "stmt": "GRANT EXECUTE ON FUNCTION fn_is_service_role() TO authenticated;"
+    },
+    {
+      "proname": "fn_is_service_role",
+      "sig": "fn_is_service_role()",
+      "grantee": "postgres",
+      "stmt": "GRANT EXECUTE ON FUNCTION fn_is_service_role() TO postgres;"
+    },
+    {
+      "proname": "fn_is_service_role",
+      "sig": "fn_is_service_role()",
+      "grantee": "service_role",
+      "stmt": "GRANT EXECUTE ON FUNCTION fn_is_service_role() TO service_role;"
+    },
+    {
+      "proname": "fn_list_chairman_webauthn_credentials",
+      "sig": "fn_list_chairman_webauthn_credentials()",
+      "grantee": "PUBLIC",
+      "stmt": "GRANT EXECUTE ON FUNCTION fn_list_chairman_webauthn_credentials() TO PUBLIC;"
+    },
+    {
+      "proname": "fn_list_chairman_webauthn_credentials",
+      "sig": "fn_list_chairman_webauthn_credentials()",
+      "grantee": "anon",
+      "stmt": "GRANT EXECUTE ON FUNCTION fn_list_chairman_webauthn_credentials() TO anon;"
+    },
+    {
+      "proname": "fn_list_chairman_webauthn_credentials",
+      "sig": "fn_list_chairman_webauthn_credentials()",
+      "grantee": "authenticated",
+      "stmt": "GRANT EXECUTE ON FUNCTION fn_list_chairman_webauthn_credentials() TO authenticated;"
+    },
+    {
+      "proname": "fn_list_chairman_webauthn_credentials",
+      "sig": "fn_list_chairman_webauthn_credentials()",
+      "grantee": "postgres",
+      "stmt": "GRANT EXECUTE ON FUNCTION fn_list_chairman_webauthn_credentials() TO postgres;"
+    },
+    {
+      "proname": "fn_list_chairman_webauthn_credentials",
+      "sig": "fn_list_chairman_webauthn_credentials()",
+      "grantee": "service_role",
+      "stmt": "GRANT EXECUTE ON FUNCTION fn_list_chairman_webauthn_credentials() TO service_role;"
+    },
+    {
+      "proname": "fn_quick_fixes_validate_target_application",
+      "sig": "fn_quick_fixes_validate_target_application()",
+      "grantee": "PUBLIC",
+      "stmt": "GRANT EXECUTE ON FUNCTION fn_quick_fixes_validate_target_application() TO PUBLIC;"
+    },
+    {
+      "proname": "fn_quick_fixes_validate_target_application",
+      "sig": "fn_quick_fixes_validate_target_application()",
+      "grantee": "anon",
+      "stmt": "GRANT EXECUTE ON FUNCTION fn_quick_fixes_validate_target_application() TO anon;"
+    },
+    {
+      "proname": "fn_quick_fixes_validate_target_application",
+      "sig": "fn_quick_fixes_validate_target_application()",
+      "grantee": "authenticated",
+      "stmt": "GRANT EXECUTE ON FUNCTION fn_quick_fixes_validate_target_application() TO authenticated;"
+    },
+    {
+      "proname": "fn_quick_fixes_validate_target_application",
+      "sig": "fn_quick_fixes_validate_target_application()",
+      "grantee": "postgres",
+      "stmt": "GRANT EXECUTE ON FUNCTION fn_quick_fixes_validate_target_application() TO postgres;"
+    },
+    {
+      "proname": "fn_quick_fixes_validate_target_application",
+      "sig": "fn_quick_fixes_validate_target_application()",
+      "grantee": "service_role",
+      "stmt": "GRANT EXECUTE ON FUNCTION fn_quick_fixes_validate_target_application() TO service_role;"
+    },
+    {
+      "proname": "fn_relay_insert_sms_candidate",
+      "sig": "fn_relay_insert_sms_candidate(text,text,text,text,text)",
+      "grantee": "anon",
+      "stmt": "GRANT EXECUTE ON FUNCTION fn_relay_insert_sms_candidate(text,text,text,text,text) TO anon;"
+    },
+    {
+      "proname": "fn_relay_insert_sms_candidate",
+      "sig": "fn_relay_insert_sms_candidate(text,text,text,text,text)",
+      "grantee": "postgres",
+      "stmt": "GRANT EXECUTE ON FUNCTION fn_relay_insert_sms_candidate(text,text,text,text,text) TO postgres;"
+    },
+    {
+      "proname": "fn_relay_insert_sms_candidate",
+      "sig": "fn_relay_insert_sms_candidate(text,text,text,text,text)",
+      "grantee": "service_role",
+      "stmt": "GRANT EXECUTE ON FUNCTION fn_relay_insert_sms_candidate(text,text,text,text,text) TO service_role;"
+    },
+    {
+      "proname": "fn_stage_artifact_precondition",
+      "sig": "fn_stage_artifact_precondition(uuid,integer)",
+      "grantee": "PUBLIC",
+      "stmt": "GRANT EXECUTE ON FUNCTION fn_stage_artifact_precondition(uuid,integer) TO PUBLIC;"
+    },
+    {
+      "proname": "fn_stage_artifact_precondition",
+      "sig": "fn_stage_artifact_precondition(uuid,integer)",
+      "grantee": "anon",
+      "stmt": "GRANT EXECUTE ON FUNCTION fn_stage_artifact_precondition(uuid,integer) TO anon;"
+    },
+    {
+      "proname": "fn_stage_artifact_precondition",
+      "sig": "fn_stage_artifact_precondition(uuid,integer)",
+      "grantee": "authenticated",
+      "stmt": "GRANT EXECUTE ON FUNCTION fn_stage_artifact_precondition(uuid,integer) TO authenticated;"
+    },
+    {
+      "proname": "fn_stage_artifact_precondition",
+      "sig": "fn_stage_artifact_precondition(uuid,integer)",
+      "grantee": "postgres",
+      "stmt": "GRANT EXECUTE ON FUNCTION fn_stage_artifact_precondition(uuid,integer) TO postgres;"
+    },
+    {
+      "proname": "fn_stage_artifact_precondition",
+      "sig": "fn_stage_artifact_precondition(uuid,integer)",
+      "grantee": "service_role",
+      "stmt": "GRANT EXECUTE ON FUNCTION fn_stage_artifact_precondition(uuid,integer) TO service_role;"
+    },
+    {
+      "proname": "fn_user_has_company_access",
+      "sig": "fn_user_has_company_access(uuid)",
+      "grantee": "PUBLIC",
+      "stmt": "GRANT EXECUTE ON FUNCTION fn_user_has_company_access(uuid) TO PUBLIC;"
+    },
+    {
+      "proname": "fn_user_has_company_access",
+      "sig": "fn_user_has_company_access(uuid)",
+      "grantee": "anon",
+      "stmt": "GRANT EXECUTE ON FUNCTION fn_user_has_company_access(uuid) TO anon;"
+    },
+    {
+      "proname": "fn_user_has_company_access",
+      "sig": "fn_user_has_company_access(uuid)",
+      "grantee": "authenticated",
+      "stmt": "GRANT EXECUTE ON FUNCTION fn_user_has_company_access(uuid) TO authenticated;"
+    },
+    {
+      "proname": "fn_user_has_company_access",
+      "sig": "fn_user_has_company_access(uuid)",
+      "grantee": "postgres",
+      "stmt": "GRANT EXECUTE ON FUNCTION fn_user_has_company_access(uuid) TO postgres;"
+    },
+    {
+      "proname": "fn_user_has_company_access",
+      "sig": "fn_user_has_company_access(uuid)",
+      "grantee": "service_role",
+      "stmt": "GRANT EXECUTE ON FUNCTION fn_user_has_company_access(uuid) TO service_role;"
+    },
+    {
+      "proname": "fn_user_has_venture_access",
+      "sig": "fn_user_has_venture_access(uuid)",
+      "grantee": "PUBLIC",
+      "stmt": "GRANT EXECUTE ON FUNCTION fn_user_has_venture_access(uuid) TO PUBLIC;"
+    },
+    {
+      "proname": "fn_user_has_venture_access",
+      "sig": "fn_user_has_venture_access(uuid)",
+      "grantee": "anon",
+      "stmt": "GRANT EXECUTE ON FUNCTION fn_user_has_venture_access(uuid) TO anon;"
+    },
+    {
+      "proname": "fn_user_has_venture_access",
+      "sig": "fn_user_has_venture_access(uuid)",
+      "grantee": "authenticated",
+      "stmt": "GRANT EXECUTE ON FUNCTION fn_user_has_venture_access(uuid) TO authenticated;"
+    },
+    {
+      "proname": "fn_user_has_venture_access",
+      "sig": "fn_user_has_venture_access(uuid)",
+      "grantee": "postgres",
+      "stmt": "GRANT EXECUTE ON FUNCTION fn_user_has_venture_access(uuid) TO postgres;"
+    },
+    {
+      "proname": "fn_user_has_venture_access",
+      "sig": "fn_user_has_venture_access(uuid)",
+      "grantee": "service_role",
+      "stmt": "GRANT EXECUTE ON FUNCTION fn_user_has_venture_access(uuid) TO service_role;"
+    },
+    {
+      "proname": "fn_verify_and_consume_stepup_token",
+      "sig": "fn_verify_and_consume_stepup_token(uuid,uuid)",
+      "grantee": "PUBLIC",
+      "stmt": "GRANT EXECUTE ON FUNCTION fn_verify_and_consume_stepup_token(uuid,uuid) TO PUBLIC;"
+    },
+    {
+      "proname": "fn_verify_and_consume_stepup_token",
+      "sig": "fn_verify_and_consume_stepup_token(uuid,uuid)",
+      "grantee": "anon",
+      "stmt": "GRANT EXECUTE ON FUNCTION fn_verify_and_consume_stepup_token(uuid,uuid) TO anon;"
+    },
+    {
+      "proname": "fn_verify_and_consume_stepup_token",
+      "sig": "fn_verify_and_consume_stepup_token(uuid,uuid)",
+      "grantee": "authenticated",
+      "stmt": "GRANT EXECUTE ON FUNCTION fn_verify_and_consume_stepup_token(uuid,uuid) TO authenticated;"
+    },
+    {
+      "proname": "fn_verify_and_consume_stepup_token",
+      "sig": "fn_verify_and_consume_stepup_token(uuid,uuid)",
+      "grantee": "postgres",
+      "stmt": "GRANT EXECUTE ON FUNCTION fn_verify_and_consume_stepup_token(uuid,uuid) TO postgres;"
+    },
+    {
+      "proname": "fn_verify_and_consume_stepup_token",
+      "sig": "fn_verify_and_consume_stepup_token(uuid,uuid)",
+      "grantee": "service_role",
+      "stmt": "GRANT EXECUTE ON FUNCTION fn_verify_and_consume_stepup_token(uuid,uuid) TO service_role;"
+    },
+    {
+      "proname": "fn_write_kill_audit_trail",
+      "sig": "fn_write_kill_audit_trail(uuid,integer,text,uuid,text,uuid)",
+      "grantee": "PUBLIC",
+      "stmt": "GRANT EXECUTE ON FUNCTION fn_write_kill_audit_trail(uuid,integer,text,uuid,text,uuid) TO PUBLIC;"
+    },
+    {
+      "proname": "fn_write_kill_audit_trail",
+      "sig": "fn_write_kill_audit_trail(uuid,integer,text,uuid,text,uuid)",
+      "grantee": "anon",
+      "stmt": "GRANT EXECUTE ON FUNCTION fn_write_kill_audit_trail(uuid,integer,text,uuid,text,uuid) TO anon;"
+    },
+    {
+      "proname": "fn_write_kill_audit_trail",
+      "sig": "fn_write_kill_audit_trail(uuid,integer,text,uuid,text,uuid)",
+      "grantee": "authenticated",
+      "stmt": "GRANT EXECUTE ON FUNCTION fn_write_kill_audit_trail(uuid,integer,text,uuid,text,uuid) TO authenticated;"
+    },
+    {
+      "proname": "fn_write_kill_audit_trail",
+      "sig": "fn_write_kill_audit_trail(uuid,integer,text,uuid,text,uuid)",
+      "grantee": "postgres",
+      "stmt": "GRANT EXECUTE ON FUNCTION fn_write_kill_audit_trail(uuid,integer,text,uuid,text,uuid) TO postgres;"
+    },
+    {
+      "proname": "fn_write_kill_audit_trail",
+      "sig": "fn_write_kill_audit_trail(uuid,integer,text,uuid,text,uuid)",
+      "grantee": "service_role",
+      "stmt": "GRANT EXECUTE ON FUNCTION fn_write_kill_audit_trail(uuid,integer,text,uuid,text,uuid) TO service_role;"
+    },
+    {
+      "proname": "get_gate_decision_status",
+      "sig": "get_gate_decision_status(uuid,integer)",
+      "grantee": "anon",
+      "stmt": "GRANT EXECUTE ON FUNCTION get_gate_decision_status(uuid,integer) TO anon;"
+    },
+    {
+      "proname": "get_gate_decision_status",
+      "sig": "get_gate_decision_status(uuid,integer)",
+      "grantee": "authenticated",
+      "stmt": "GRANT EXECUTE ON FUNCTION get_gate_decision_status(uuid,integer) TO authenticated;"
+    },
+    {
+      "proname": "get_gate_decision_status",
+      "sig": "get_gate_decision_status(uuid,integer)",
+      "grantee": "postgres",
+      "stmt": "GRANT EXECUTE ON FUNCTION get_gate_decision_status(uuid,integer) TO postgres;"
+    },
+    {
+      "proname": "get_gate_decision_status",
+      "sig": "get_gate_decision_status(uuid,integer)",
+      "grantee": "service_role",
+      "stmt": "GRANT EXECUTE ON FUNCTION get_gate_decision_status(uuid,integer) TO service_role;"
+    },
+    {
+      "proname": "is_chairman_role",
+      "sig": "is_chairman_role()",
+      "grantee": "anon",
+      "stmt": "GRANT EXECUTE ON FUNCTION is_chairman_role() TO anon;"
+    },
+    {
+      "proname": "is_chairman_role",
+      "sig": "is_chairman_role()",
+      "grantee": "authenticated",
+      "stmt": "GRANT EXECUTE ON FUNCTION is_chairman_role() TO authenticated;"
+    },
+    {
+      "proname": "is_chairman_role",
+      "sig": "is_chairman_role()",
+      "grantee": "postgres",
+      "stmt": "GRANT EXECUTE ON FUNCTION is_chairman_role() TO postgres;"
+    },
+    {
+      "proname": "is_chairman_role",
+      "sig": "is_chairman_role()",
+      "grantee": "service_role",
+      "stmt": "GRANT EXECUTE ON FUNCTION is_chairman_role() TO service_role;"
+    },
+    {
+      "proname": "is_leo_admin",
+      "sig": "is_leo_admin()",
+      "grantee": "PUBLIC",
+      "stmt": "GRANT EXECUTE ON FUNCTION is_leo_admin() TO PUBLIC;"
+    },
+    {
+      "proname": "is_leo_admin",
+      "sig": "is_leo_admin()",
+      "grantee": "anon",
+      "stmt": "GRANT EXECUTE ON FUNCTION is_leo_admin() TO anon;"
+    },
+    {
+      "proname": "is_leo_admin",
+      "sig": "is_leo_admin()",
+      "grantee": "authenticated",
+      "stmt": "GRANT EXECUTE ON FUNCTION is_leo_admin() TO authenticated;"
+    },
+    {
+      "proname": "is_leo_admin",
+      "sig": "is_leo_admin()",
+      "grantee": "postgres",
+      "stmt": "GRANT EXECUTE ON FUNCTION is_leo_admin() TO postgres;"
+    },
+    {
+      "proname": "is_leo_admin",
+      "sig": "is_leo_admin()",
+      "grantee": "service_role",
+      "stmt": "GRANT EXECUTE ON FUNCTION is_leo_admin() TO service_role;"
+    },
+    {
+      "proname": "lhe_pending_migration_applied",
+      "sig": "lhe_pending_migration_applied()",
+      "grantee": "PUBLIC",
+      "stmt": "GRANT EXECUTE ON FUNCTION lhe_pending_migration_applied() TO PUBLIC;"
+    },
+    {
+      "proname": "lhe_pending_migration_applied",
+      "sig": "lhe_pending_migration_applied()",
+      "grantee": "anon",
+      "stmt": "GRANT EXECUTE ON FUNCTION lhe_pending_migration_applied() TO anon;"
+    },
+    {
+      "proname": "lhe_pending_migration_applied",
+      "sig": "lhe_pending_migration_applied()",
+      "grantee": "authenticated",
+      "stmt": "GRANT EXECUTE ON FUNCTION lhe_pending_migration_applied() TO authenticated;"
+    },
+    {
+      "proname": "lhe_pending_migration_applied",
+      "sig": "lhe_pending_migration_applied()",
+      "grantee": "postgres",
+      "stmt": "GRANT EXECUTE ON FUNCTION lhe_pending_migration_applied() TO postgres;"
+    },
+    {
+      "proname": "lhe_pending_migration_applied",
+      "sig": "lhe_pending_migration_applied()",
+      "grantee": "service_role",
+      "stmt": "GRANT EXECUTE ON FUNCTION lhe_pending_migration_applied() TO service_role;"
+    },
+    {
+      "proname": "log_sd_mutation_audit",
+      "sig": "log_sd_mutation_audit()",
+      "grantee": "PUBLIC",
+      "stmt": "GRANT EXECUTE ON FUNCTION log_sd_mutation_audit() TO PUBLIC;"
+    },
+    {
+      "proname": "log_sd_mutation_audit",
+      "sig": "log_sd_mutation_audit()",
+      "grantee": "anon",
+      "stmt": "GRANT EXECUTE ON FUNCTION log_sd_mutation_audit() TO anon;"
+    },
+    {
+      "proname": "log_sd_mutation_audit",
+      "sig": "log_sd_mutation_audit()",
+      "grantee": "authenticated",
+      "stmt": "GRANT EXECUTE ON FUNCTION log_sd_mutation_audit() TO authenticated;"
+    },
+    {
+      "proname": "log_sd_mutation_audit",
+      "sig": "log_sd_mutation_audit()",
+      "grantee": "postgres",
+      "stmt": "GRANT EXECUTE ON FUNCTION log_sd_mutation_audit() TO postgres;"
+    },
+    {
+      "proname": "log_sd_mutation_audit",
+      "sig": "log_sd_mutation_audit()",
+      "grantee": "service_role",
+      "stmt": "GRANT EXECUTE ON FUNCTION log_sd_mutation_audit() TO service_role;"
+    },
+    {
+      "proname": "record_venture_error",
+      "sig": "record_venture_error(uuid,text,text,jsonb)",
+      "grantee": "anon",
+      "stmt": "GRANT EXECUTE ON FUNCTION record_venture_error(uuid,text,text,jsonb) TO anon;"
+    },
+    {
+      "proname": "record_venture_error",
+      "sig": "record_venture_error(uuid,text,text,jsonb)",
+      "grantee": "authenticated",
+      "stmt": "GRANT EXECUTE ON FUNCTION record_venture_error(uuid,text,text,jsonb) TO authenticated;"
+    },
+    {
+      "proname": "record_venture_error",
+      "sig": "record_venture_error(uuid,text,text,jsonb)",
+      "grantee": "postgres",
+      "stmt": "GRANT EXECUTE ON FUNCTION record_venture_error(uuid,text,text,jsonb) TO postgres;"
+    },
+    {
+      "proname": "record_venture_error",
+      "sig": "record_venture_error(uuid,text,text,jsonb)",
+      "grantee": "service_role",
+      "stmt": "GRANT EXECUTE ON FUNCTION record_venture_error(uuid,text,text,jsonb) TO service_role;"
+    },
+    {
+      "proname": "reject_chairman_decision",
+      "sig": "reject_chairman_decision(uuid,text,text,uuid)",
+      "grantee": "PUBLIC",
+      "stmt": "GRANT EXECUTE ON FUNCTION reject_chairman_decision(uuid,text,text,uuid) TO PUBLIC;"
+    },
+    {
+      "proname": "reject_chairman_decision",
+      "sig": "reject_chairman_decision(uuid,text,text,uuid)",
+      "grantee": "anon",
+      "stmt": "GRANT EXECUTE ON FUNCTION reject_chairman_decision(uuid,text,text,uuid) TO anon;"
+    },
+    {
+      "proname": "reject_chairman_decision",
+      "sig": "reject_chairman_decision(uuid,text,text,uuid)",
+      "grantee": "authenticated",
+      "stmt": "GRANT EXECUTE ON FUNCTION reject_chairman_decision(uuid,text,text,uuid) TO authenticated;"
+    },
+    {
+      "proname": "reject_chairman_decision",
+      "sig": "reject_chairman_decision(uuid,text,text,uuid)",
+      "grantee": "postgres",
+      "stmt": "GRANT EXECUTE ON FUNCTION reject_chairman_decision(uuid,text,text,uuid) TO postgres;"
+    },
+    {
+      "proname": "reject_chairman_decision",
+      "sig": "reject_chairman_decision(uuid,text,text,uuid)",
+      "grantee": "service_role",
+      "stmt": "GRANT EXECUTE ON FUNCTION reject_chairman_decision(uuid,text,text,uuid) TO service_role;"
+    },
+    {
+      "proname": "set_session_working_context",
+      "sig": "set_session_working_context(text,jsonb)",
+      "grantee": "PUBLIC",
+      "stmt": "GRANT EXECUTE ON FUNCTION set_session_working_context(text,jsonb) TO PUBLIC;"
+    },
+    {
+      "proname": "set_session_working_context",
+      "sig": "set_session_working_context(text,jsonb)",
+      "grantee": "anon",
+      "stmt": "GRANT EXECUTE ON FUNCTION set_session_working_context(text,jsonb) TO anon;"
+    },
+    {
+      "proname": "set_session_working_context",
+      "sig": "set_session_working_context(text,jsonb)",
+      "grantee": "authenticated",
+      "stmt": "GRANT EXECUTE ON FUNCTION set_session_working_context(text,jsonb) TO authenticated;"
+    },
+    {
+      "proname": "set_session_working_context",
+      "sig": "set_session_working_context(text,jsonb)",
+      "grantee": "postgres",
+      "stmt": "GRANT EXECUTE ON FUNCTION set_session_working_context(text,jsonb) TO postgres;"
+    },
+    {
+      "proname": "set_session_working_context",
+      "sig": "set_session_working_context(text,jsonb)",
+      "grantee": "service_role",
+      "stmt": "GRANT EXECUTE ON FUNCTION set_session_working_context(text,jsonb) TO service_role;"
+    },
+    {
+      "proname": "upsert_operator_cash_burn",
+      "sig": "upsert_operator_cash_burn(numeric,numeric,numeric,numeric)",
+      "grantee": "PUBLIC",
+      "stmt": "GRANT EXECUTE ON FUNCTION upsert_operator_cash_burn(numeric,numeric,numeric,numeric) TO PUBLIC;"
+    },
+    {
+      "proname": "upsert_operator_cash_burn",
+      "sig": "upsert_operator_cash_burn(numeric,numeric,numeric,numeric)",
+      "grantee": "anon",
+      "stmt": "GRANT EXECUTE ON FUNCTION upsert_operator_cash_burn(numeric,numeric,numeric,numeric) TO anon;"
+    },
+    {
+      "proname": "upsert_operator_cash_burn",
+      "sig": "upsert_operator_cash_burn(numeric,numeric,numeric,numeric)",
+      "grantee": "authenticated",
+      "stmt": "GRANT EXECUTE ON FUNCTION upsert_operator_cash_burn(numeric,numeric,numeric,numeric) TO authenticated;"
+    },
+    {
+      "proname": "upsert_operator_cash_burn",
+      "sig": "upsert_operator_cash_burn(numeric,numeric,numeric,numeric)",
+      "grantee": "postgres",
+      "stmt": "GRANT EXECUTE ON FUNCTION upsert_operator_cash_burn(numeric,numeric,numeric,numeric) TO postgres;"
+    },
+    {
+      "proname": "upsert_operator_cash_burn",
+      "sig": "upsert_operator_cash_burn(numeric,numeric,numeric,numeric)",
+      "grantee": "service_role",
+      "stmt": "GRANT EXECUTE ON FUNCTION upsert_operator_cash_burn(numeric,numeric,numeric,numeric) TO service_role;"
+    },
+    {
+      "proname": "venture_exists_and_active",
+      "sig": "venture_exists_and_active(uuid)",
+      "grantee": "anon",
+      "stmt": "GRANT EXECUTE ON FUNCTION venture_exists_and_active(uuid) TO anon;"
+    },
+    {
+      "proname": "venture_exists_and_active",
+      "sig": "venture_exists_and_active(uuid)",
+      "grantee": "authenticated",
+      "stmt": "GRANT EXECUTE ON FUNCTION venture_exists_and_active(uuid) TO authenticated;"
+    },
+    {
+      "proname": "venture_exists_and_active",
+      "sig": "venture_exists_and_active(uuid)",
+      "grantee": "postgres",
+      "stmt": "GRANT EXECUTE ON FUNCTION venture_exists_and_active(uuid) TO postgres;"
+    },
+    {
+      "proname": "venture_exists_and_active",
+      "sig": "venture_exists_and_active(uuid)",
+      "grantee": "service_role",
+      "stmt": "GRANT EXECUTE ON FUNCTION venture_exists_and_active(uuid) TO service_role;"
+    }
+  ]
+}
