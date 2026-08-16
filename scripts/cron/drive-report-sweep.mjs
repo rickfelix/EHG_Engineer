@@ -518,6 +518,10 @@ if (isMainModule(import.meta.url)) {
       // where the old merge-only corpus was 29.5% of it (SECURITY finding S5, previously deferred
       // as a non-issue precisely because of that headroom; the headroom is gone). See
       // LANDED_LOG_MAX_BUFFER_BYTES's own doc for the single-source-of-truth rationale.
+      // timeout: 30000 (ADVERSARIAL REVIEW, /ship deep-tier pass — flagged as an ungrounded magic
+      // number alongside the well-evidenced maxBuffer): measured live, `git log main --format=%s`
+      // against this repo's real history (13584 lines, 1.18MB) completes in ~610ms — 30s is ~49x
+      // that measured cost, generous headroom for history growth without masking a genuine hang.
       runGitLog: (args) => runHardenedGit(args, {
         cwd: process.cwd(), maxBuffer: LANDED_LOG_MAX_BUFFER_BYTES, timeout: 30000,
       }).split('\n').filter(Boolean),
