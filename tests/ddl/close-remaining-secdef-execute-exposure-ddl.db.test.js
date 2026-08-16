@@ -205,8 +205,28 @@ async function applyMigration() {
   await client.query(MIGRATION_SQL);
 }
 
+/**
+ * PostgreSQL's regprocedure input parser requires a BARE type list ("uuid, integer") — unlike
+ * GRANT/REVOKE ON FUNCTION and CREATE FUNCTION, which both accept an optional leading parameter
+ * name before each type ("p_venture_id uuid, p_stage integer", the format BUCKET_A/B/C store and
+ * stubFunctionSql() legitimately reuses as-is). This latent bug was never exercised before this
+ * file's beforeAll first succeeded (every prior CI run threw before any it() ran) — confirmed live
+ * on the fixed HEAD: 42601 "syntax error at or near \"uuid\"" from every non-empty-arg grantState()
+ * call, since regprocedure tried to parse "p_venture_id uuid" as a single type name.
+ */
+function typesOnly(argsStr) {
+  if (!argsStr) return '';
+  return argsStr
+    .split(',')
+    .map((part) => {
+      const tokens = part.trim().split(/\s+/).filter(Boolean);
+      return tokens.length >= 2 ? tokens.slice(1).join(' ') : tokens.join(' ');
+    })
+    .join(', ');
+}
+
 async function grantState(name, args) {
-  const sig = `public.${name}(${args})`;
+  const sig = `public.${name}(${typesOnly(args)})`;
   const { rows } = await client.query(
     'SELECT has_function_privilege(\'anon\', $1::regprocedure, \'EXECUTE\') AS anon_exec, has_function_privilege(\'authenticated\', $1::regprocedure, \'EXECUTE\') AS auth_exec, has_function_privilege(\'public\', $1::regprocedure, \'EXECUTE\') AS public_exec',
     [sig],
