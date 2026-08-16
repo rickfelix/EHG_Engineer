@@ -17,6 +17,11 @@ const iso = (msAgo) => new Date(NOW - msAgo).toISOString();
 
 /** Table-aware supabase mock: per-table select rows + recorded upserts/updates. */
 function makeMock({ obligations = [], selectError = null, registryError = null } = {}) {
+  // QF-20260816-173: selectError may be a bare string (message-only, no .code — an
+  // operational fault with no PostgREST error code) or a full {code, message} object
+  // (e.g. {code: 'PGRST205', ...} for a genuine table-absent signature).
+  const selectErrorObj = selectError == null ? null
+    : (typeof selectError === 'string' ? { message: selectError } : selectError);
   const upserts = []; const updates = [];
   function chain(table) {
     const state = { op: 'select', payload: null };
@@ -43,7 +48,7 @@ function makeMock({ obligations = [], selectError = null, registryError = null }
         return { data: [], error: null };
       }
       if (table === 'sms_outbound_obligations') {
-        if (selectError && state.op === 'select') return { data: null, error: { message: selectError } };
+        if (selectErrorObj && state.op === 'select') return { data: null, error: selectErrorObj };
         if (state.op === 'update') { updates.push({ table, payload: state.payload }); return { data: [], error: null }; }
         return { data: obligations, error: null };
       }
@@ -131,10 +136,35 @@ describe('FR-2 / TS-2: channel-state degradation alarm', () => {
     expect(emit).not.toHaveBeenCalled();
   });
 
-  it('fail-soft: absent owed-state table => no alarm, no throw', async () => {
-    const m = makeMock({ selectError: 'relation "sms_outbound_obligations" does not exist' });
+  it('fail-soft: absent owed-state table (PGRST205) => no alarm, no throw, reason table_absent', async () => {
+    const m = makeMock({ selectError: { code: 'PGRST205', message: 'relation "sms_outbound_obligations" does not exist' } });
     const res = await detectChannelDegradation(m.supabase, { now: NOW, emit: vi.fn(), logger: quiet });
     expect(res).toEqual({ alarmed: false, reason: 'table_absent' });
+  });
+
+  it('fail-soft: absent owed-state table (42P01, raw Postgres code) => reason table_absent', async () => {
+    const m = makeMock({ selectError: { code: '42P01', message: 'relation "sms_outbound_obligations" does not exist' } });
+    const res = await detectChannelDegradation(m.supabase, { now: NOW, emit: vi.fn(), logger: quiet });
+    expect(res).toEqual({ alarmed: false, reason: 'table_absent' });
+  });
+
+  it('QF-20260816-173: an operational fault (42501, RLS-denied) is NOT table_absent — distinct reason, warning logged', async () => {
+    const m = makeMock({ selectError: { code: '42501', message: 'permission denied for table sms_outbound_obligations' } });
+    const warn = vi.fn();
+    const res = await detectChannelDegradation(m.supabase, { now: NOW, emit: vi.fn(), logger: { warn } });
+    expect(res).toEqual({ alarmed: false, reason: 'query_failed:42501' });
+    expect(warn).toHaveBeenCalledOnce();
+    expect(warn.mock.calls[0][0]).toMatch(/CANARY/);
+    expect(warn.mock.calls[0][0]).toMatch(/42501/);
+  });
+
+  it('QF-20260816-173: a thrown (non-table-absent) exception is NOT table_absent — distinct reason, warning logged', async () => {
+    const warn = vi.fn();
+    const throwingSupabase = { from: () => { throw new Error('ECONNRESET: network reset'); } };
+    const res = await detectChannelDegradation(throwingSupabase, { now: NOW, emit: vi.fn(), logger: { warn } });
+    expect(res).toEqual({ alarmed: false, reason: 'query_threw:ECONNRESET: network reset' });
+    expect(warn).toHaveBeenCalledOnce();
+    expect(warn.mock.calls[0][0]).toMatch(/CANARY/);
   });
 });
 
@@ -172,6 +202,24 @@ describe('FR-3 / TS-3: carrier-filter email-fallback escalation', () => {
     const res = await escalateCarrierFiltered(m.supabase, { sendEmail, logger: quiet });
     expect(res.escalated).toBe(0);
     expect(sendEmail).not.toHaveBeenCalled();
+  });
+
+  it('fail-soft: absent owed-state table (PGRST205) => empty result, no warning', async () => {
+    const m = makeMock({ selectError: { code: 'PGRST205', message: 'relation "sms_outbound_obligations" does not exist' } });
+    const warn = vi.fn();
+    const res = await escalateCarrierFiltered(m.supabase, { sendEmail: vi.fn(), logger: { warn } });
+    expect(res).toEqual({ scanned: 0, escalated: 0, emailUnavailable: 0 });
+    expect(warn).not.toHaveBeenCalled();
+  });
+
+  it('QF-20260816-173: an operational fault (42501, RLS-denied) still fails soft, but logs a CANARY warning naming the real fault', async () => {
+    const m = makeMock({ selectError: { code: '42501', message: 'permission denied for table sms_outbound_obligations' } });
+    const warn = vi.fn();
+    const res = await escalateCarrierFiltered(m.supabase, { sendEmail: vi.fn(), logger: { warn } });
+    expect(res).toEqual({ scanned: 0, escalated: 0, emailUnavailable: 0 });
+    expect(warn).toHaveBeenCalledOnce();
+    expect(warn.mock.calls[0][0]).toMatch(/CANARY/);
+    expect(warn.mock.calls[0][0]).toMatch(/42501/);
   });
 
   it('email-send failure: logged non-escalation, NO stamp (retryable next sweep)', async () => {
