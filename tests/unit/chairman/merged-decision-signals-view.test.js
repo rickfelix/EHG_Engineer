@@ -155,8 +155,8 @@ describe('MERGE-6: staging discipline', () => {
     }
   });
 
-  it('carries no approved-by attestation', () => {
-    expect(sql).not.toMatch(/^-- @approved-by:/m);
+  it('carries the chairman approved-by attestation in guard bare-email format (stamped at the 2026-08-16 ceremony; before apply this test asserted absence)', () => {
+    expect(sql).toMatch(/^-- @approved-by: \S+@\S+$/m);
   });
 
   it('ships a DOWN file with the exact pre-merge definition (all three original defects present)', () => {

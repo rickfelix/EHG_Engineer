@@ -1,3 +1,5 @@
+-- @approved-by: codestreetlabs@gmail.com
+-- (approval transcribed by Adam per chairman ruling 2026-08-07; chairman 'run it' at terminal, 2026-08-16 ceremony)
 -- SMS decision-class whitelist SEED — register 'blocking stage-gate approval' as an SMS-eligible
 -- decision class (owner-run at the chairman ceremony).
 -- SD-LEO-FEAT-HIGH-CONSEQUENCE-STAGE-001-B (FR-3; child B of the high-consequence-stage

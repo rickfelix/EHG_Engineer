@@ -1,3 +1,5 @@
+-- @approved-by: codestreetlabs@gmail.com
+-- (approval transcribed by Adam per chairman ruling 2026-08-07; chairman 'run it' on the G6 trio at terminal, 2026-08-16 ceremony)
 -- SD-LEO-FIX-CLOSE-ANON-VENTURE-001 — ownership-bound RPC replacing venture_user_insert_feedback
 --
 -- ═══════════════════════════════════════════════════════════════════════════════════════════════

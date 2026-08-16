@@ -1,3 +1,5 @@
+-- @approved-by: codestreetlabs@gmail.com
+-- (approval transcribed by Adam per chairman ruling 2026-08-07; chairman 'run it' at terminal, 2026-08-16 ceremony)
 -- SD-LEO-INFRA-ROLE-SESSION-SELF-001 / FR-2 — declare WHICH KIND OF GREEN a ledger row is.
 -- ============================================================================================
 -- WHY. A role-session adherence review returned CLEAN on the night of a self-reported execution

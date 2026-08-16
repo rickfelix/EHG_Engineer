@@ -1,3 +1,5 @@
+-- @approved-by: codestreetlabs@gmail.com
+-- (approval transcribed by Adam per chairman ruling 2026-08-07; chairman 'run it' on Group 4 at terminal, 2026-08-16 ceremony)
 -- SD-LEO-INFRA-GATE-THRESHOLD-TUNING-001 — FR-3: give the tuner symmetric guards.
 -- CHAIRMAN-GATED. The builder STAGES; the chairman APPLIES. Do not self-apply, including inside a
 -- transaction that is rolled back — an apply attempt against a gated object is still an apply attempt.
