@@ -28,6 +28,11 @@ describe('checkin step registry (lib/checkin/steps/index.cjs)', () => {
       'canary-claim-fence',
       'directed-assignment',
       'seat-busy-fence',
+      // SD-LEO-INFRA-SELF-CLAIM-TIER-ENFORCEMENT-001: hoist {worker_tier_rank, tiering_active}
+      // into ctx.tierCtx ONCE per tick, before recover-stranded-final/adopt-orphan, so both can
+      // apply the tier axis via tierBlocks() -- previously only merged-pool-self-claim (below)
+      // computed this, too late for the two earlier lanes.
+      'tier-context',
       'recover-stranded-final',
       'adopt-orphan',
       'drain-reservations',

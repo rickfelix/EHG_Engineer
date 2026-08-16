@@ -623,7 +623,10 @@ describe('FIX-DEDUP: runCheckin skips in-flight SDs in BOTH self-claim tiers', (
     expect(r.action).toBe('self_claimed');
     expect(r.sd).toBe('SD-FRESH-002'); // the claimable-but-in-flight top candidate was skipped
   });
-  it('selfClaimDraftSd: skips a live-foreign-held draft and claims the next free one', async () => {
+  // SD-LEO-INFRA-SELF-CLAIM-TIER-ENFORCEMENT-001: retitled -- this exercises runCheckin end-to-end
+  // (the merged-pool draft self-claim path), not the removed selfClaimDraftSd function directly;
+  // the old title named a function this test's body never called even before that function's removal.
+  it('merged-pool draft self-claim: skips a live-foreign-held draft and claims the next free one', async () => {
     const sb = makeStub({ ...base,
       candidates: [],
       drafts: [
