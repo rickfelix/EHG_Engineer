@@ -37,17 +37,28 @@ export const URL_SHAPE_RE = /postgres(?:ql)?:\/\/[^\s'"`]+:[^\s'"@]+@/;
 // strategic_directives_v2.metadata.credential_validity_probe), in both encodings it appeared
 // in across the tree. Never the plaintext. A sliding window of the exact LENGTH is hashed and
 // compared, so this list can only ever grow by adding another {length, sha256} pair, never a
-// literal value.
+// literal value. ROTATED/DEAD VALUES ONLY: a sha256 digest of an unsalted secret is a crackable
+// offline oracle for anyone who reads this file, so never add a hash for a value that is still
+// live -- rotate first, then add the digest here as a permanent regression check.
 export const SECRET_HASHES = [
   { length: 18, sha256: '3a6157e77d6a1702c932da50c2718c74e287850c6a1d45362cdbf7c3fb6a63a7', note: 'url-encoded form' },
   { length: 14, sha256: '027815e1921626ed2078c557acf22e31b48c947a52a9829496c830ccb5c66fc4', note: 'raw-decoded form' },
 ];
 
-// Bounds total scan cost on a pathological single-line file (minified bundle, generated
-// lockfile) rather than any backtracking risk in the patterns above, which are linear.
-const MAX_LINE_LENGTH = 4096;
+// Assertion A's regex cost is linear in line length (no backtracking risk -- the character
+// classes are all negated, single-step matches), so it is run against every line regardless of
+// length. Assertion B is bounded per TOKEN, not per line (see MAX_TOKEN_LENGTH below) --
+// tokenizing first already makes an ordinary long line cheap, so a line-wide cutoff would only
+// ever discard genuine coverage (a real credential can sit anywhere in a long line, e.g. a long
+// comment or a long list) without buying back any real cost protection.
+const MAX_TOKEN_LENGTH = 16384;
 const MAX_FILE_BYTES = 2 * 1024 * 1024;
 
+// Assertion-A-only, same rule as PATH_ALLOWLIST below: assertion B is NEVER path-exempted,
+// including for these two files. An adversarial review of an earlier draft caught a real bug
+// here -- evaluateFiles() used to `continue` past a self-path entirely, silently disabling
+// assertion B for exactly the file (this guard's own test) a future maintainer is most likely
+// to paste the real plaintext into "to check the hash matches".
 export const SELF_PATHS = new Set([
   'scripts/lint/no-connection-string-literals-lint.mjs',
   'tests/unit/hygiene/no-connection-string-literals.test.js',
@@ -89,6 +100,17 @@ export const PATH_ALLOWLIST = [
     rationale: 'Feature reference doc: illustrative connection-string URL with a generic user/pass example.',
   },
   {
+    path: 'CLAUDE_CORE.md',
+    rationale: 'Protocol doc: an explicit "wrong, do not do this" connection example with a literal '
+      + 'PROJECT placeholder token in both the username and host positions.',
+  },
+  {
+    path: 'scripts/__tests__/replay/README.md',
+    rationale: 'Documents a DIFFERENT pattern-detection system\'s own regex convention '
+      + '(postgres_conn_with_password) as a reference table -- a pattern DEFINITION, same class '
+      + 'as the .husky/pre-commit entry above, not an instance of the shape.',
+  },
+  {
     pattern: /(^|\/)tests\//,
     rationale: 'Test fixtures legitimately contain fictional example connection strings to '
       + 'exercise parsing/redaction logic (e.g. tests/unit/session-summary/secret-redactor.test.js '
@@ -114,9 +136,15 @@ export const VALUE_ALLOWLIST_PATTERNS = [
   // are live JS template-literal CODE interpolating a variable at runtime, never a literal
   // value -- exactly the "template-literal prefix, not an embedded credential" false-positive
   // class this SD's own LEAD-phase investigation found in the original (wrong) premise.
-  { name: 'template-or-env-var-reference', re: /^(\$\{.+\}|\$[A-Za-z0-9_]+|%[A-Za-z0-9_]+%)$/ },
+  // [^{}]+ (not .+) is load-bearing: a greedy .+ lets this match SPAN two separate ${...}
+  // expressions with a real secret sandwiched between them (e.g. "${a}REALSECRET${b}") --
+  // excluding brace characters forces exactly one balanced expression per match.
+  { name: 'template-or-env-var-reference', re: /^(\$\{[^{}]+\}|\$[A-Za-z0-9_]+|%[A-Za-z0-9_]+%)$/ },
   { name: 'redaction-mask', re: /^(\*{3,}|[xX]{3,}|REDACTED)$/i },
-  { name: 'bare-marker-word', re: /^(PASSWORD|SECRET|CREDENTIAL|TOKEN)$/i },
+  // Case-SENSITIVE (no /i): the all-caps convention is what documentation markers actually use
+  // (PASSWORD, YOUR_PASSWORD); a real weak credential is far more likely spelled "password" or
+  // "Password123", which this deliberately does NOT exempt.
+  { name: 'bare-marker-word', re: /^(PASSWORD|SECRET|CREDENTIAL|TOKEN)$/ },
 ];
 
 export function isAllowlistedValue(text) {
@@ -131,12 +159,15 @@ export function isSelfPath(filePath, selfPaths = SELF_PATHS) {
   return selfPaths.has(filePath);
 }
 
-// The password slot is the text between the LAST ':' before '@' and '@' itself -- lastIndexOf
-// searches backward from just before '@', so it lands on the user:password separator rather
-// than the earlier scheme "://" colon.
+// The password slot is the text between the FIRST ':' after the scheme separator and '@'.
+// Deliberately the FIRST colon, not the last one before '@': a real user:password delimiter
+// never repeats, so using the LAST colon let a value like "user:REALSECRET:MARKER@" extract
+// only the trailing "MARKER" as the checked slot, silently allowlisting the embedded real
+// secret sitting in what this parse would otherwise treat as part of the username.
 function extractPasswordSlot(matchText) {
+  const schemeEnd = matchText.indexOf('://') + 3;
+  const colonIdx = matchText.indexOf(':', schemeEnd);
   const atIdx = matchText.lastIndexOf('@');
-  const colonIdx = matchText.lastIndexOf(':', atIdx - 1);
   return matchText.slice(colonIdx + 1, atIdx);
 }
 
@@ -159,13 +190,22 @@ export function findUrlShapeMatches(line) {
 // anywhere within a long token (a URL, an env-var value, a base64 blob). This intentionally
 // cannot catch a credential word-wrapped mid-token across a line break -- not a realistic
 // placement for a connection-string value, and unbounded whole-line scanning is not tractable.
+//
+// Bounded per TOKEN (MAX_TOKEN_LENGTH), not per line: an ordinary long line (many short tokens)
+// costs nothing extra regardless of its total length, so only a single pathologically long
+// unbroken token (a minified blob, a giant base64 chunk) is ever skipped -- and that skip is
+// reported via `skipped`, never silent.
 export function findHashMatches(line, hashes = SECRET_HASHES) {
   const hits = [];
-  if (line.length > MAX_LINE_LENGTH) return hits;
+  const skipped = [];
   const tokens = line.match(/\S+/g);
-  if (!tokens) return hits;
-  for (const entry of hashes) {
-    for (const token of tokens) {
+  if (!tokens) return { hits, skipped };
+  for (const token of tokens) {
+    if (token.length > MAX_TOKEN_LENGTH) {
+      skipped.push({ length: token.length });
+      continue;
+    }
+    for (const entry of hashes) {
       for (let i = 0; i + entry.length <= token.length; i++) {
         const window = token.slice(i, i + entry.length);
         if (createHash('sha256').update(window, 'utf8').digest('hex') === entry.sha256) {
@@ -174,24 +214,30 @@ export function findHashMatches(line, hashes = SECRET_HASHES) {
       }
     }
   }
-  return hits;
+  return { hits, skipped };
 }
 
 /**
  * Pure evaluator over already-loaded {path, content} pairs, so tests can exercise allowlist /
  * self-exclusion / hash-match behavior without depending on live repo state or git.
+ *
+ * SELF_PATHS and PATH_ALLOWLIST both narrow assertion A ONLY. Assertion B is never
+ * path-exempted for ANY file, including the guard's own source and test: B is
+ * self-exclusion-safe by construction (finding a substring that hashes to a stored digest is
+ * computationally infeasible without the plaintext), so it needs no exemption -- and the guard's
+ * own test file is exactly where a future maintainer is most likely to paste the real value "to
+ * check the hash matches", which a path exemption would silently swallow.
  */
 export function evaluateFiles(files, { pathAllowlist = PATH_ALLOWLIST, selfPaths = SELF_PATHS, hashes = SECRET_HASHES } = {}) {
   const violations = [];
+  const skippedTokens = [];
 
   for (const { path: filePath, content } of files) {
-    if (isSelfPath(filePath, selfPaths)) continue;
-    const skipAssertionA = isAllowlistedPath(filePath, pathAllowlist);
+    const skipAssertionA = isSelfPath(filePath, selfPaths) || isAllowlistedPath(filePath, pathAllowlist);
     const lines = content.split('\n');
 
     lines.forEach((line, i) => {
       const lineNumber = i + 1;
-      if (line.length > MAX_LINE_LENGTH) return;
 
       if (!skipAssertionA) {
         for (const match of findUrlShapeMatches(line)) {
@@ -201,36 +247,59 @@ export function evaluateFiles(files, { pathAllowlist = PATH_ALLOWLIST, selfPaths
         }
       }
 
-      for (const hit of findHashMatches(line, hashes)) {
+      const { hits, skipped } = findHashMatches(line, hashes);
+      for (const hit of hits) {
         violations.push({ file: filePath, line: lineNumber, assertion: 'B', detail: `known-bad value (${hit.note})` });
+      }
+      for (const s of skipped) {
+        skippedTokens.push({ file: filePath, line: lineNumber, length: s.length });
       }
     });
   }
 
-  return { violations, ok: violations.length === 0 };
+  return { violations, ok: violations.length === 0, skippedTokens };
 }
 
 function loadTrackedFiles() {
-  const raw = execFileSync('git', ['ls-files'], { encoding: 'utf8', maxBuffer: 64 * 1024 * 1024 });
-  const paths = raw.split('\n').filter(Boolean);
+  // -z: NUL-delimited output. Plain `git ls-files` quote-escapes any path with non-ASCII or
+  // special characters (core.quotePath, on by default) as e.g. "caf\303\251.md" -- a string
+  // readFileSync can't open, silently dropping that file via the catch below with zero
+  // indication. -z sidesteps quoting entirely and hands back raw path bytes.
+  const raw = execFileSync('git', ['ls-files', '-z'], { encoding: 'utf8', maxBuffer: 64 * 1024 * 1024 });
+  const paths = raw.split('\0').filter(Boolean);
   const files = [];
+  const skippedFiles = [];
   for (const p of paths) {
     try {
       const buf = readFileSync(p);
-      if (buf.length > MAX_FILE_BYTES) continue;
+      if (buf.length > MAX_FILE_BYTES) {
+        skippedFiles.push({ path: p, bytes: buf.length });
+        continue;
+      }
       files.push({ path: p, content: buf.toString('utf8') });
     } catch {
       continue; // binary decode failure, deleted-since-ls-files, permission error -- not a violation
     }
   }
-  return files;
+  return { files, skippedFiles };
 }
 
 function main() {
-  const files = loadTrackedFiles();
+  const { files, skippedFiles } = loadTrackedFiles();
   const result = evaluateFiles(files);
 
   console.log(`[no-connection-string-literals-lint] scanned ${files.length} tracked file(s)`);
+
+  // No silent caps: a bounded scan that never reports what it dropped reads as "covered
+  // everything" when it didn't.
+  if (skippedFiles.length > 0) {
+    console.log(`⚠ skipped ${skippedFiles.length} file(s) over the ${MAX_FILE_BYTES}-byte cap (not scanned):`);
+    for (const s of skippedFiles) console.log(`   ${s.path} (${s.bytes} bytes)`);
+  }
+  if (result.skippedTokens.length > 0) {
+    console.log(`⚠ skipped ${result.skippedTokens.length} token(s) over the ${MAX_TOKEN_LENGTH}-char cap for assertion B (not hash-scanned):`);
+    for (const s of result.skippedTokens) console.log(`   ${s.file}:${s.line} (token length ${s.length})`);
+  }
 
   if (!result.ok) {
     console.error(`\n❌ ${result.violations.length} connection-string-literal violation(s):`);

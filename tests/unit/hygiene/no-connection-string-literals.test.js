@@ -62,6 +62,19 @@ describe('URL_SHAPE_RE / findUrlShapeMatches: assertion A shape detection', () =
   it('URL_SHAPE_RE source contains no literal "://" run (self-exclusion by construction)', () => {
     expect(URL_SHAPE_RE.source.includes('://')).toBe(false);
   });
+
+  // F4 from an adversarial review of an earlier draft: extracting text after the LAST colon
+  // before '@' (rather than the FIRST colon after the scheme) let a real secret embedded
+  // earlier in the credential slot hide behind a trailing marker-shaped decoy.
+  it('extracts everything after the FIRST colon, not just the text after the last one -- ' +
+     'a real secret cannot hide behind a trailing marker-shaped decoy', () => {
+    const line = pgUrl('user', 'REALSECRETVALUE:REDACTED', 'host/db');
+    const matches = findUrlShapeMatches(line);
+    expect(matches[0].passwordSlot).toBe('REALSECRETVALUE:REDACTED');
+    // and therefore does NOT match any allowlist family (unlike the bare "REDACTED" it would
+    // have extracted under the old last-colon logic)
+    expect(isAllowlistedValue(matches[0].passwordSlot)).toBe(false);
+  });
 });
 
 describe('isAllowlistedValue: the 6 documented marker families', () => {
@@ -98,6 +111,21 @@ describe('isAllowlistedValue: the 6 documented marker families', () => {
   ])('recognizes a JS template-literal expression as code, not a value: %s', (value) => {
     expect(isAllowlistedValue(value)).toBe(true);
   });
+
+  // F4 from an adversarial review of an earlier draft: a greedy `.+` inside `${...}` let the
+  // pattern span TWO separate template expressions with a real secret sandwiched between them.
+  it('does NOT allowlist a real secret sandwiched between two separate ${...} expressions', () => {
+    expect(isAllowlistedValue('${a}REALSECRETVALUE${b}')).toBe(false);
+  });
+
+  // F5 from the same review: the marker-word family used to be case-insensitive, exempting
+  // real (if weak) lowercase credentials that happen to spell the word "password".
+  it.each(['password', 'Password', 'secret', 'Token'])(
+    'does NOT allowlist a lowercase/mixed-case bare word (real weak credential, not a marker): %s',
+    (value) => {
+      expect(isAllowlistedValue(value)).toBe(false);
+    },
+  );
 });
 
 describe('isAllowlistedPath / isSelfPath', () => {
@@ -135,30 +163,45 @@ describe('findHashMatches: assertion B sliding-window hash detection (synthetic 
   const testHashes = [{ length: fixture.length, sha256: sha256(fixture), note: 'synthetic-fixture' }];
 
   it('finds the fixture value embedded inside a longer line', () => {
-    const hits = findHashMatches(`SUPABASE_DB_PASSWORD=${fixture}`, testHashes);
+    const { hits } = findHashMatches(`SUPABASE_DB_PASSWORD=${fixture}`, testHashes);
     expect(hits).toHaveLength(1);
     expect(hits[0].note).toBe('synthetic-fixture');
   });
 
   it('finds the fixture value when it IS the whole line', () => {
-    expect(findHashMatches(fixture, testHashes)).toHaveLength(1);
+    expect(findHashMatches(fixture, testHashes).hits).toHaveLength(1);
   });
 
   it('does not match a different string of the identical length', () => {
     const decoy = 'Zq9!fakeSecret2'; // same length, last char differs
     expect(decoy).toHaveLength(fixture.length);
-    expect(findHashMatches(decoy, testHashes)).toHaveLength(0);
+    expect(findHashMatches(decoy, testHashes).hits).toHaveLength(0);
   });
 
   it('never matches a line shorter than the window length', () => {
-    expect(findHashMatches(fixture.slice(0, -1), testHashes)).toHaveLength(0);
+    expect(findHashMatches(fixture.slice(0, -1), testHashes).hits).toHaveLength(0);
   });
 
   it('finds multiple independent hash families in the same line', () => {
     const other = 'AnotherFake99'; // 13 chars
     const multiHashes = [...testHashes, { length: other.length, sha256: sha256(other), note: 'second-fixture' }];
-    const hits = findHashMatches(`${fixture} and ${other}`, multiHashes);
+    const { hits } = findHashMatches(`${fixture} and ${other}`, multiHashes);
     expect(hits.map((h) => h.note).sort()).toEqual(['second-fixture', 'synthetic-fixture']);
+  });
+
+  it('finds the fixture inside a long line as long as no SINGLE token exceeds the cap ' +
+     '(assertion B is bounded per token, not per line)', () => {
+    const longButNormal = Array.from({ length: 400 }, (_, i) => `word${i}`).join(' '); // ~2800 chars, short tokens
+    const { hits, skipped } = findHashMatches(`${longButNormal} ${fixture}`, testHashes);
+    expect(hits).toHaveLength(1);
+    expect(skipped).toHaveLength(0);
+  });
+
+  it('skips (and reports) a single token that exceeds the token-length cap, without affecting other tokens', () => {
+    const giantToken = 'x'.repeat(20000); // over MAX_TOKEN_LENGTH (16384)
+    const { hits, skipped } = findHashMatches(`${giantToken} ${fixture}`, testHashes);
+    expect(hits).toHaveLength(1); // the fixture, in its own separate token, is still found
+    expect(skipped).toEqual([{ length: giantToken.length }]);
   });
 });
 
@@ -217,23 +260,52 @@ describe('evaluateFiles: end-to-end, both assertions, allowlist interplay', () =
     expect(result.violations[0].line).toBe(2);
   });
 
-  it('suppresses BOTH assertions entirely for a self-path file', () => {
+  it('suppresses assertion A for a self-path file (a fictional example in the guard\'s own comments)', () => {
     const files = [{
       path: 'scripts/lint/no-connection-string-literals-lint.mjs',
-      content: `const url = '${pgUrl('u', 'realsecretvalue', 'host/db')}';\n${fixture}`,
+      content: `const url = '${pgUrl('u', 'realsecretvalue', 'host/db')}';`,
     }];
     const result = evaluateFiles(files, { hashes: testHashes });
     expect(result.ok).toBe(true);
   });
 
-  it('skips a pathologically long line for both assertions (bounded-scan guard)', () => {
+  // F1 from an adversarial review of an earlier draft: evaluateFiles() used to `continue` past
+  // a self-path entirely, silently disabling assertion B too -- exactly the file (the guard's
+  // own test) a future maintainer is most likely to paste the real plaintext into.
+  it('does NOT suppress assertion B for a self-path file (F1 regression -- this must never ' +
+     'go back to `continue`-ing past self-paths entirely)', () => {
+    const files = [{
+      path: 'scripts/lint/no-connection-string-literals-lint.mjs',
+      content: fixture,
+    }];
+    const result = evaluateFiles(files, { hashes: testHashes });
+    expect(result.ok).toBe(false);
+    expect(result.violations).toEqual([
+      { file: 'scripts/lint/no-connection-string-literals-lint.mjs', line: 1, assertion: 'B', detail: expect.stringContaining('synthetic-fixture') },
+    ]);
+  });
+
+  it('assertion A is not line-length-bounded -- a violation deep inside a long line is still caught', () => {
     const longPadding = 'x'.repeat(5000);
     const files = [{
       path: 'scripts/example.mjs',
-      content: `${longPadding}${pgUrl('u', 'realsecretvalue', 'host/db')} ${fixture}`,
+      content: `${longPadding} ${pgUrl('u', 'realsecretvalue', 'host/db')}`,
     }];
     const result = evaluateFiles(files, { hashes: testHashes });
-    expect(result.ok).toBe(true);
+    expect(result.ok).toBe(false);
+    expect(result.violations[0].assertion).toBe('A');
+  });
+
+  it('assertion B skips only a pathologically long TOKEN, not the whole line, and reports it via skippedTokens', () => {
+    const giantToken = 'y'.repeat(20000);
+    const files = [{
+      path: 'scripts/example.mjs',
+      content: `${giantToken} ${fixture}`,
+    }];
+    const result = evaluateFiles(files, { hashes: testHashes });
+    expect(result.ok).toBe(false); // fixture, in its own token, is still found
+    expect(result.violations[0].assertion).toBe('B');
+    expect(result.skippedTokens).toEqual([{ file: 'scripts/example.mjs', line: 1, length: giantToken.length }]);
   });
 
   it('reports correct file/line across multiple files evaluated together', () => {

@@ -5,25 +5,26 @@ name: No Connection String Literals Lint
 # something in the password slot, and (B) the specific rotated credential from this SD's
 # incident, via length-bounded hash comparison (see scripts/lint/no-connection-string-literals-
 # lint.mjs for the full design rationale). Verified clean against this repo's full tracked
-# tree (17.8k files, ~1m40s) before this workflow was added -- blocking from day one, no
-# advisory period needed (contrast .github/workflows/eol-renormalization-lint.yml, which had
-# 3 known unresolved violations at authoring time and so started advisory).
+# tree (17.8k files, ~1m30s) before this workflow was added.
+#
+# Deliberately NO `paths:` filter: an adversarial review of an earlier draft (which did filter
+# by extension) measured 745+ tracked files this workflow would silently never scan --
+# .json, .ps1, extensionless files (incl. supabase/.temp/pooler-url, whose entire purpose is
+# holding a pooler connection URL), .env.example/.env.claude*, .tsx/.jsx, .py, .toml, .npmrc,
+# .pem. A credential can land in any tracked file; this job always runs on every PR instead.
+# Also runs on push to main so a squash-merge or an admin-bypassed PR still gets scanned.
+#
+# NOT yet a required status check in branch protection (verified via `gh api
+# repos/.../branches/main/protection` at authoring time -- only "Run Unit Tier (quarantine-aware)"
+# is required). This workflow reports and can fail the run, but cannot yet BLOCK a merge on its
+# own; making it required is a branch-protection admin action outside this PR's scope, signaled
+# to the coordinator separately rather than self-granted here.
 
 on:
-  pull_request:
-    paths:
-      - '**/*.js'
-      - '**/*.mjs'
-      - '**/*.cjs'
-      - '**/*.ts'
-      - '**/*.md'
-      - '**/*.sh'
-      - '**/*.sql'
-      - '**/*.yml'
-      - '**/*.yaml'
-      - '.husky/**'
-      - 'scripts/lint/no-connection-string-literals-lint.mjs'
-      - '.github/workflows/no-connection-string-literals-lint.yml'
+  pull_request: {}
+  push:
+    branches:
+      - main
 
 concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}
