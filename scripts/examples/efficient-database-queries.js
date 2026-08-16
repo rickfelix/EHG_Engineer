@@ -57,12 +57,12 @@ async function example1_selectColumns() {
 
   const { data: sdGood } = await supabase
     .from('strategic_directives_v2')
-    .select('id, title, status, priority, progress')
+    .select('id, title, status, priority, progress_percentage')
     .order('created_at', { ascending: false })
     .limit(1)
     .single();
 
-  const goodOutput = `${sdGood.id}: ${sdGood.title} (status: ${sdGood.status}, priority: ${sdGood.priority}, progress: ${sdGood.progress}%)`;
+  const goodOutput = `${sdGood.id}: ${sdGood.title} (status: ${sdGood.status}, priority: ${sdGood.priority}, progress: ${sdGood.progress_percentage}%)`;
   console.log('Output:', goodOutput);
   console.log(`Tokens: ~${estimateTokens(goodOutput)}`);
   console.log();

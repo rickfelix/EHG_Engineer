@@ -50,8 +50,11 @@ try {
   if (state.sd && state.sd.id) {
     console.log('[SD] Working on: ' + state.sd.id);
     if (state.sd.phase) console.log('[SD] Phase: ' + state.sd.phase);
-    if (state.sd.progress !== null && state.sd.progress !== undefined) {
-      console.log('[SD] Progress: ' + state.sd.progress + '%');
+    // Note (SD-LEO-INFRA-PROGRESS-COLUMN-DEAD-TWIN-001): state.sd.progress_percentage depends on the
+    // writer (lib/context/unified-state-manager.js) selecting the correct DB column, which it does
+    // not today (separate bug logged: feedback 05a14092, selects a nonexistent progress_pct column).
+    if (state.sd.progress_percentage !== null && state.sd.progress_percentage !== undefined) {
+      console.log('[SD] Progress: ' + state.sd.progress_percentage + '%');
     }
   }
 
