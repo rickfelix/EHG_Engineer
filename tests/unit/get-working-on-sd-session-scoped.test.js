@@ -59,7 +59,7 @@ describe('QF-20260703-742: session-scoped getWorkingOnSD resolution', () => {
   it('resolves the calling session\'s own claim without touching the global spotlight', async () => {
     process.env.CLAUDE_SESSION_ID = 'session-mine';
     mockSupabase = buildSupabaseMock({
-      ownClaimResult: { data: [{ id: 'sd-1', sd_key: 'SD-MINE', title: 'Mine', progress: 40, claiming_session_id: 'session-mine' }], error: null },
+      ownClaimResult: { data: [{ id: 'sd-1', sd_key: 'SD-MINE', title: 'Mine', progress_percentage: 40, claiming_session_id: 'session-mine' }], error: null },
       liveCountResult: { count: null, error: new Error('should not be called') },
       spotlightResult: { data: null, error: new Error('should not be called') },
     });
@@ -75,7 +75,7 @@ describe('QF-20260703-742: session-scoped getWorkingOnSD resolution', () => {
     mockSupabase = buildSupabaseMock({
       ownClaimResult: { data: [], error: null },
       liveCountResult: { count: 1, error: null },
-      spotlightResult: { data: [{ id: 'sd-2', sd_key: 'SD-SOLO', title: 'Solo', progress: 10, claiming_session_id: 'session-mine' }], error: null },
+      spotlightResult: { data: [{ id: 'sd-2', sd_key: 'SD-SOLO', title: 'Solo', progress_percentage: 10, claiming_session_id: 'session-mine' }], error: null },
     });
 
     const { default: getWorkingOnSD } = await import('../../scripts/get-working-on-sd.js');
