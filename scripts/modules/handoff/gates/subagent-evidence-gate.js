@@ -292,7 +292,10 @@ function resolveCurrentHeadSha(sd) {
   const repoPath = sd?.worktree_path;
   if (!repoPath) return null;
   try {
-    return execFileSync('git', ['rev-parse', 'HEAD'], { cwd: repoPath, encoding: 'utf8' }).trim() || null;
+    // 5s timeout, matching this codebase's convention of always bounding git/gh
+    // execFileSync calls (deep-tier adversarial review finding) -- runs on every
+    // EXEC-TO-PLAN handoff, so an unresponsive filesystem/mount must never hang it.
+    return execFileSync('git', ['rev-parse', 'HEAD'], { cwd: repoPath, encoding: 'utf8', timeout: 5000 }).trim() || null;
   } catch {
     return null;
   }
