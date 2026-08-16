@@ -136,13 +136,19 @@ export async function syncVisionScoresToPatterns(supabase, options = {}) {
   const dimAggregates = {};
 
   for (const scoreRecord of scores) {
-    if (!scoreRecord.dimension_scores || typeof scoreRecord.dimension_scores !== 'object') continue;
+    // SD-LEO-INFRA-LEARN-VISION-GAP-RUBRIC-CLASSIFY-001: a missing/non-object/empty
+    // dimension_scores previously `continue`d with zero counter impact -- invisible to
+    // every field on the return object. Tally all three shapes as `unscored` so /learn
+    // can report them as inconclusive rather than silently absent (ship-review finding:
+    // an earlier version of this fix only caught the empty-object case, leaving
+    // null/non-object rows undercounted despite the CLI label claiming otherwise).
+    if (!scoreRecord.dimension_scores || typeof scoreRecord.dimension_scores !== 'object') {
+      unscored++;
+      continue;
+    }
 
     const dimEntries = Object.entries(scoreRecord.dimension_scores);
     if (dimEntries.length === 0) {
-      // SD-LEO-INFRA-LEARN-VISION-GAP-RUBRIC-CLASSIFY-001: an empty dimension_scores object
-      // previously iterated zero times and was invisible to every counter. Tally it explicitly
-      // so /learn can report it as inconclusive rather than silently absent.
       unscored++;
       continue;
     }

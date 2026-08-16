@@ -242,6 +242,21 @@ describe('syncVisionScoresToPatterns', () => {
     expect(result.skipped).toBe(0);
   });
 
+  it('a null dimension_scores (not an empty object) is also tallied as unscored -- ship-review finding: the pre-existing top-level guard silently continued with zero counter impact before this fix', async () => {
+    const scores = [{
+      id: 'null-scores', sd_id: 'SD-NULL-SCORES', total_score: 20,
+      dimension_scores: null,
+      rubric_snapshot: {},
+    }];
+
+    const supabase = createMockSupabase(scores);
+    const result = await syncVisionScoresToPatterns(supabase, { dryRun: true });
+
+    expect(result.unscored).toBe(1);
+    expect(result.synced).toBe(0);
+    expect(result.skipped).toBe(0);
+  });
+
   it('TS-4: an empty dimension_scores object is tallied as unscored, not silently ignored', async () => {
     const scores = [{
       id: 'empty-ts4',
