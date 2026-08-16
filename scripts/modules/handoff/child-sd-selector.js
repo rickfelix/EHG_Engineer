@@ -51,6 +51,9 @@ export async function getNextReadyChild(supabase, parentSdId, excludeCompletedId
     // SD-LEO-ENH-AUTO-PROCEED-001-10: Also fetch metadata to check for blockers
     // SD-LEO-ENH-AUTO-PROCEED-001-11: Fetch all candidates for urgency-based sorting
     // FIX: 2026-02-05 - Added sd_type for SD-type-aware workflow continuation
+    // ADVERSARIAL SHIP REVIEW (INFO, not fixed here): CLAIM_WRITE_FENCE_AXES does not include
+    // sd_deferred/sd_terminal -- excluded only because this .in(...) list never selects those
+    // statuses. If this list ever changes, re-check deferred/terminal children stay excluded.
     let query = supabase
       .from('strategic_directives_v2')
       .select('id, sd_key, title, status, priority, current_phase, sequence_rank, created_at, metadata, governance_metadata, dependencies, updated_at, progress_percentage, sd_type, claiming_session_id')
@@ -304,6 +307,9 @@ export async function getReadyChildren(supabase, parentSdId, options = {}) {
     const { runnable } = computeRunnableSet(dag, completedIds, failedIds, runningIds);
 
     // Filter to only children that are in workable status (draft or active)
+    // ADVERSARIAL SHIP REVIEW (INFO, not fixed here): CLAIM_WRITE_FENCE_AXES does not include
+    // sd_deferred/sd_terminal -- excluded only because this list never includes those
+    // statuses. If this list ever changes, re-check deferred/terminal children stay excluded.
     const workableStatuses = ['draft', 'active'];
     const readyCandidates = runnable
       .map(id => allChildren.find(c => c.id === id))

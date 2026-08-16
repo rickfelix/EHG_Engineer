@@ -37,6 +37,11 @@ export async function selectNextSD(supabase, options = {}) {
     // candidates when orchestratorsOnly is set, which is precisely this function's own
     // purpose in that mode (live-measured: 3/20 real candidates wrongly refused). Using
     // CLAIM_WRITE_FENCE_AXES below avoids that axis by construction.
+    // ADVERSARIAL SHIP REVIEW (INFO, not fixed here): CLAIM_WRITE_FENCE_AXES does not include
+    // sd_deferred/sd_terminal -- those two statuses are excluded only because this .in(...)
+    // list never selects them in the first place. Correct today, but widening this status
+    // filter would silently un-fence a coordinator/Adam deferral. If this list ever changes,
+    // re-check that deferred/terminal SDs stay excluded.
     let query = supabase
       .from('strategic_directives_v2')
       .select('id, sd_key, title, status, priority, parent_sd_id, category, current_phase, metadata')

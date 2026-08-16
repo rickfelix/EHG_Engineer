@@ -180,6 +180,9 @@ export async function findNextAvailableOrchestrator(supabase, excludeOrchestrato
     // top-level (implicitly orchestrator-shaped) SDs, and the general classifier's
     // orchestratorParent axis would refuse its own legitimate subject. See queue-selector.js's
     // selectNextSD for the same reasoning and the live-measured evidence.
+    // ADVERSARIAL SHIP REVIEW (INFO, not fixed here): CLAIM_WRITE_FENCE_AXES does not include
+    // sd_deferred/sd_terminal -- excluded only because this .in(...) list never selects those
+    // statuses. If this list ever changes, re-check deferred/terminal SDs stay excluded.
     let query = supabase
       .from('strategic_directives_v2')
       .select('id, sd_key, title, status, priority, parent_sd_id, metadata')
