@@ -56,6 +56,7 @@ export async function validatePrePlanCritique(ctx) {
   }
 
   let prdContent = '';
+  let prdSections = null;
   let archContent = '';
   let prdId = null;
 
@@ -78,13 +79,16 @@ export async function validatePrePlanCritique(ctx) {
       return notApplicable([`No PRD exists yet for SD ${sd.sd_key || sd.id} — critique NOT_APPLICABLE (a fresh SD gets its PRD in PLAN)`]);
     }
     prdId = prd.id;
-    prdContent = JSON.stringify({
+    prdSections = {
       executive_summary: prd.executive_summary,
       functional_requirements: prd.functional_requirements,
       acceptance_criteria: prd.acceptance_criteria,
       test_scenarios: prd.test_scenarios,
       risks: prd.risks,
-    });
+    };
+    // Flat string kept for runInvariantChecks (unchanged, out of this SD's scope) — the
+    // structured prdSections object below is what enables FR-2 section-aware budgeting.
+    prdContent = JSON.stringify(prdSections);
   } catch (err) {
     return couldNotCheckVerdict([`PRD load threw (${err.message}) — COULD_NOT_CHECK, not absence`]);
   }
@@ -112,12 +116,14 @@ export async function validatePrePlanCritique(ctx) {
   let critique;
   try {
     critique = await critiquePlanProposal({
-      prdContent,
+      // FR-2: the structured object (not the pre-stringified prdContent above) so
+      // buildCritiqueUserPrompt can apply section-aware budgets instead of one flat cut.
+      prdContent: prdSections,
       archContent,
       sdContext: { sd_key: sd.sd_key, sd_id: sd.id, title: sd.title },
     });
   } catch (err) {
-    critique = { findings: [], overall_severity: COULD_NOT_CHECK, model_used: null, token_usage: null, fallback_reason: `Critique invocation error: ${err.message}` };
+    critique = { findings: [], overall_severity: COULD_NOT_CHECK, model_used: null, token_usage: null, fallback_reason: `Critique invocation error: ${err.message}`, truncated: null };
   }
 
   const llmBlind = critique.overall_severity === COULD_NOT_CHECK;
@@ -147,6 +153,16 @@ export async function validatePrePlanCritique(ctx) {
     : `COVERAGE: LLM adversarial critique (${critique.model_used || 'unknown model'}) + invariant classes [${invariant.checked_classes.join(', ')}] checked. No claim of completeness — novel gap-classes require tier-2/human review.`;
   console.log(`   ${coverage}`);
   warnings.push(coverage);
+
+  // FR-1: loud, never silent — name the truncation in the same warnings-array style as COVERAGE.
+  if (critique.truncated && (critique.truncated.prd?.truncated || critique.truncated.arch?.truncated)) {
+    const parts = [];
+    if (critique.truncated.prd?.truncated) parts.push(`PRD ${critique.truncated.prd.shown}/${critique.truncated.prd.total} chars`);
+    if (critique.truncated.arch?.truncated) parts.push(`ARCH ${critique.truncated.arch.shown}/${critique.truncated.arch.total} chars`);
+    const truncMsg = `TRUNCATED: ${parts.join(', ')} shown to the critique LLM — findings reflect only the visible portion.`;
+    console.log(`   ⚠️  ${truncMsg}`);
+    warnings.push(truncMsg);
+  }
 
   // Surface findings inline
   console.log(`   Critique severity: ${combined.toUpperCase()} (${findings.length} finding${findings.length === 1 ? '' : 's'})`);
