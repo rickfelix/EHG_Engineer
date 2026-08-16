@@ -134,8 +134,8 @@ describe('verifyChildrenCompleted', () => {
   it('returns complete=true when all children completed', async () => {
     const supabase = createMockSupabase({
       strategic_directives_v2: [
-        { id: 'uuid-a', sd_key: 'SD-ORCH-001-A', status: 'completed', progress: 100, current_phase: 'COMPLETED', parent_sd_id: 'uuid-parent' },
-        { id: 'uuid-b', sd_key: 'SD-ORCH-001-B', status: 'completed', progress: 100, current_phase: 'COMPLETED', parent_sd_id: 'uuid-parent' }
+        { id: 'uuid-a', sd_key: 'SD-ORCH-001-A', status: 'completed', progress_percentage: 100, current_phase: 'COMPLETED', parent_sd_id: 'uuid-parent' },
+        { id: 'uuid-b', sd_key: 'SD-ORCH-001-B', status: 'completed', progress_percentage: 100, current_phase: 'COMPLETED', parent_sd_id: 'uuid-parent' }
       ]
     });
 
@@ -148,8 +148,8 @@ describe('verifyChildrenCompleted', () => {
   it('returns warnings for incomplete children', async () => {
     const supabase = createMockSupabase({
       strategic_directives_v2: [
-        { id: 'uuid-a', sd_key: 'SD-ORCH-002-A', status: 'completed', progress: 100, parent_sd_id: 'uuid-parent' },
-        { id: 'uuid-b', sd_key: 'SD-ORCH-002-B', status: 'in_progress', progress: 60, parent_sd_id: 'uuid-parent' }
+        { id: 'uuid-a', sd_key: 'SD-ORCH-002-A', status: 'completed', progress_percentage: 100, parent_sd_id: 'uuid-parent' },
+        { id: 'uuid-b', sd_key: 'SD-ORCH-002-B', status: 'in_progress', progress_percentage: 60, parent_sd_id: 'uuid-parent' }
       ]
     });
 
@@ -305,7 +305,7 @@ describe('verifyIntegration', () => {
       strategic_directives_v2: [
         { id: 'uuid-p', sd_key: 'SD-ORCH-009', sd_type: 'orchestrator', parent_sd_id: null },
         {
-          id: 'uuid-a', sd_key: 'SD-ORCH-009-A', status: 'in_progress', progress: 50,
+          id: 'uuid-a', sd_key: 'SD-ORCH-009-A', status: 'in_progress', progress_percentage: 50,
           current_phase: 'EXEC', parent_sd_id: 'uuid-p',
           delivers_capabilities: [{ capability_key: 'orphan-cap' }],
           dependencies: []
@@ -327,7 +327,7 @@ describe('verifyIntegration', () => {
       strategic_directives_v2: [
         { id: 'uuid-p', sd_key: 'SD-ORCH-UUID', sd_type: 'orchestrator', parent_sd_id: null },
         {
-          id: 'uuid-a', sd_key: 'SD-ORCH-UUID-A', status: 'completed', progress: 100,
+          id: 'uuid-a', sd_key: 'SD-ORCH-UUID-A', status: 'completed', progress_percentage: 100,
           parent_sd_id: 'uuid-p', delivers_capabilities: [], dependencies: []
         }
       ],
@@ -346,13 +346,13 @@ describe('verifyIntegration', () => {
       strategic_directives_v2: [
         { id: 'uuid-p', sd_key: 'SD-ORCH-010', sd_type: 'orchestrator', parent_sd_id: null },
         {
-          id: 'uuid-a', sd_key: 'SD-ORCH-010-A', status: 'completed', progress: 100,
+          id: 'uuid-a', sd_key: 'SD-ORCH-010-A', status: 'completed', progress_percentage: 100,
           current_phase: 'COMPLETED', parent_sd_id: 'uuid-p',
           delivers_capabilities: [{ capability_key: 'cap-a' }],
           dependencies: []
         },
         {
-          id: 'uuid-b', sd_key: 'SD-ORCH-010-B', status: 'completed', progress: 100,
+          id: 'uuid-b', sd_key: 'SD-ORCH-010-B', status: 'completed', progress_percentage: 100,
           current_phase: 'COMPLETED', parent_sd_id: 'uuid-p',
           delivers_capabilities: [],
           dependencies: [{ capability_key: 'cap-a' }]
@@ -378,7 +378,7 @@ describe('verifyIntegration', () => {
       strategic_directives_v2: [
         { id: 'uuid-p', sd_key: 'SD-ORCH-011', sd_type: 'orchestrator', parent_sd_id: null },
         {
-          id: 'uuid-a', sd_key: 'SD-ORCH-011-A', status: 'completed', progress: 100,
+          id: 'uuid-a', sd_key: 'SD-ORCH-011-A', status: 'completed', progress_percentage: 100,
           current_phase: 'COMPLETED', parent_sd_id: 'uuid-p',
           delivers_capabilities: [], dependencies: []
         }

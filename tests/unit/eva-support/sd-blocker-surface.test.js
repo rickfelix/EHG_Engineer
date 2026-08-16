@@ -92,17 +92,17 @@ describe('sd-blocker-surface.js — runtime behavior', () => {
     readerStub = {
       flag_enabled: true,
       sds: [
-        { sd_key: 'SD-A', title: 'A', status: 'draft', current_phase: 'LEAD', target_application: 'EHG_Engineer', priority: 'high', progress: 0 },
-        { sd_key: 'SD-B', title: 'B', status: 'draft', current_phase: 'LEAD', target_application: 'EHG_Engineer', priority: 'critical', progress: 0 },
-        { sd_key: 'SD-C', title: 'C', status: 'draft', current_phase: 'LEAD', target_application: 'EHG_Engineer', priority: 'medium', progress: 0 },
+        { sd_key: 'SD-A', title: 'A', status: 'draft', current_phase: 'LEAD', target_application: 'EHG_Engineer', priority: 'high', progress_percentage: 0 },
+        { sd_key: 'SD-B', title: 'B', status: 'draft', current_phase: 'LEAD', target_application: 'EHG_Engineer', priority: 'critical', progress_percentage: 0 },
+        { sd_key: 'SD-C', title: 'C', status: 'draft', current_phase: 'LEAD', target_application: 'EHG_Engineer', priority: 'medium', progress_percentage: 0 },
       ],
     };
 
     const { client } = makeChainSpy({
       strategic_directives_v2: { data: [
-        { id: 'aaa', sd_key: 'SD-A', title: 'A', status: 'draft', current_phase: 'LEAD', priority: 'high', progress: 0, parent_sd_id: null, target_application: 'EHG_Engineer' },
-        { id: 'bbb', sd_key: 'SD-B', title: 'B', status: 'draft', current_phase: 'LEAD', priority: 'critical', progress: 0, parent_sd_id: 'ddd', target_application: 'EHG_Engineer' },
-        { id: 'ccc', sd_key: 'SD-C', title: 'C', status: 'draft', current_phase: 'LEAD', priority: 'medium', progress: 0, parent_sd_id: null, target_application: 'EHG_Engineer' },
+        { id: 'aaa', sd_key: 'SD-A', title: 'A', status: 'draft', current_phase: 'LEAD', priority: 'high', progress_percentage: 0, parent_sd_id: null, target_application: 'EHG_Engineer' },
+        { id: 'bbb', sd_key: 'SD-B', title: 'B', status: 'draft', current_phase: 'LEAD', priority: 'critical', progress_percentage: 0, parent_sd_id: 'ddd', target_application: 'EHG_Engineer' },
+        { id: 'ccc', sd_key: 'SD-C', title: 'C', status: 'draft', current_phase: 'LEAD', priority: 'medium', progress_percentage: 0, parent_sd_id: null, target_application: 'EHG_Engineer' },
       ], error: null },
       sd_phase_handoffs: { data: [
         { sd_id: 'aaa', from_phase: 'LEAD', to_phase: 'PLAN', status: 'rejected', created_at: '2026-05-26T00:00:00Z', rejection_reason: 'PRD incomplete' },
@@ -121,9 +121,9 @@ describe('sd-blocker-surface.js — runtime behavior', () => {
         sdCallCount++;
         if (sdCallCount === 1) {
           result = { data: [
-            { id: 'aaa', sd_key: 'SD-A', title: 'A', status: 'draft', current_phase: 'LEAD', priority: 'high', progress: 0, parent_sd_id: null, target_application: 'EHG_Engineer' },
-            { id: 'bbb', sd_key: 'SD-B', title: 'B', status: 'draft', current_phase: 'LEAD', priority: 'critical', progress: 0, parent_sd_id: 'ddd', target_application: 'EHG_Engineer' },
-            { id: 'ccc', sd_key: 'SD-C', title: 'C', status: 'draft', current_phase: 'LEAD', priority: 'medium', progress: 0, parent_sd_id: null, target_application: 'EHG_Engineer' },
+            { id: 'aaa', sd_key: 'SD-A', title: 'A', status: 'draft', current_phase: 'LEAD', priority: 'high', progress_percentage: 0, parent_sd_id: null, target_application: 'EHG_Engineer' },
+            { id: 'bbb', sd_key: 'SD-B', title: 'B', status: 'draft', current_phase: 'LEAD', priority: 'critical', progress_percentage: 0, parent_sd_id: 'ddd', target_application: 'EHG_Engineer' },
+            { id: 'ccc', sd_key: 'SD-C', title: 'C', status: 'draft', current_phase: 'LEAD', priority: 'medium', progress_percentage: 0, parent_sd_id: null, target_application: 'EHG_Engineer' },
           ], error: null };
         } else {
           // Parent lookup
