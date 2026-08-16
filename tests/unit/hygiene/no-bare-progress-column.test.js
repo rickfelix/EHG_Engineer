@@ -26,6 +26,12 @@ const ROOT = path.resolve(__dirname, '../../..');
 const BASELINE_PATH = path.join(ROOT, 'tests/unit/hygiene/progress-column-baseline.json');
 
 describe('constants', () => {
+  it('PATH_EXCLUDE_PREFIXES is a non-empty array of string prefixes', () => {
+    expect(Array.isArray(PATH_EXCLUDE_PREFIXES)).toBe(true);
+    expect(PATH_EXCLUDE_PREFIXES.length).toBeGreaterThan(0);
+    for (const p of PATH_EXCLUDE_PREFIXES) expect(typeof p).toBe('string');
+  });
+
   it('targets strategic_directives_v2 and the "progress" column', () => {
     expect(TABLE).toBe('strategic_directives_v2');
     expect(DEAD_COLUMN).toBe('progress');
