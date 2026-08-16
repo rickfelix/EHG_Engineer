@@ -116,6 +116,14 @@ export function isValidatedStory(story) {
 /** Approver-gated descope lookup for an FR id. requesterSessionId is excluded as a self-approver. */
 export function descopeFor(sdMetadata, frId, requesterSessionId = null) {
   const list = (sdMetadata && Array.isArray(sdMetadata.descoped_frs)) ? sdMetadata.descoped_frs : [];
+  // QF-20260816-923: requesterSessionId was null on every production handoff (BaseExecutor's
+  // validationContext never set it), so the self-approval check below never even ran — a
+  // worker could descope an FR "approved" by itself with no guard firing at all. Now that
+  // sessionId is threaded through, warn loudly on the identity-unknown case rather than
+  // silently trusting it, so a caller that still can't identify itself is visible in logs.
+  if (!requesterSessionId) {
+    console.warn('[fr-delivery-classifier] descopeFor: requesterSessionId is unknown — the self-approval guard cannot run for this check');
+  }
   return list.find((d) => {
     if (!d || (d.fr_id !== frId && d.id !== frId)) return false;
     const approver = typeof d.approved_by === 'string' ? d.approved_by.trim() : '';
