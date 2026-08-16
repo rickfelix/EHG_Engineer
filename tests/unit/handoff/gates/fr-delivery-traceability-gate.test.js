@@ -7,7 +7,7 @@ import { createFrDeliveryTraceabilityGate } from '../../../../scripts/modules/ha
 // supabase stub: no children, FRs from PRD (keyed on directive_id == PRD_KEY to catch the
 // UUID-vs-sd_key lookup bug), stories from user_stories.
 const PRD_KEY = 'SD-FR-001'; // the sd_key; PRD.directive_id stores this, NOT the UUID
-function stub({ children = [], frs = [], stories = [] } = {}) {
+function stub({ children = [], frs = [], stories = [], childrenQueryError = null } = {}) {
   return {
     from(table) {
       const state = { filters: {} };
@@ -23,6 +23,14 @@ function stub({ children = [], frs = [], stories = [] } = {}) {
           }
           return Promise.resolve({ data: null, error: null });
         },
+        // QF-20260816-550: isParentOrchestrator() calls .eq(...).limit(1) on
+        // strategic_directives_v2 — the gate no longer hand-rolls this query.
+        limit(_n) {
+          if (table === 'strategic_directives_v2') {
+            return Promise.resolve(childrenQueryError ? { data: null, error: childrenQueryError } : { data: children, error: null });
+          }
+          return Promise.resolve({ data: [], error: null });
+        },
         then(res) {
           if (table === 'strategic_directives_v2') return Promise.resolve({ data: children, error: null }).then(res);
           if (table === 'user_stories') return Promise.resolve({ data: stories, error: null }).then(res);
@@ -34,7 +42,15 @@ function stub({ children = [], frs = [], stories = [] } = {}) {
   };
 }
 
-const ctx = { sd: { id: 'sd-uuid-1', sd_key: PRD_KEY, metadata: {} } };
+// QF-20260816-550: isParentOrchestrator() caches its verdict in a WeakMap keyed on SD
+// object IDENTITY. The gate's old hand-rolled query re-ran on every call (no caching), so
+// a single shared `ctx` constant across every test in this file was harmless. Delegating to
+// the canonical helper means that stale pattern silently poisons every later test with the
+// FIRST test's cached verdict for that exact object — makeCtx() gives each test its own SD
+// object so each gets its own cache entry.
+function makeCtx(metadataOverrides = {}) {
+  return { sd: { id: 'sd-uuid-1', sd_key: PRD_KEY, metadata: metadataOverrides } };
+}
 
 describe('FR-3: createFrDeliveryTraceabilityGate', () => {
   it('has the expected gate shape', () => {
@@ -45,7 +61,7 @@ describe('FR-3: createFrDeliveryTraceabilityGate', () => {
 
   it('orchestrator PARENT delegates to children (pass)', async () => {
     const g = createFrDeliveryTraceabilityGate(stub({ children: [{ id: 'child-1' }] }));
-    const r = await g.validator(ctx);
+    const r = await g.validator(makeCtx());
     expect(r.passed).toBe(true);
     expect(r.warnings.join(' ')).toMatch(/delegated to children/i);
   });
@@ -55,7 +71,7 @@ describe('FR-3: createFrDeliveryTraceabilityGate', () => {
     delete process.env.LEO_FR_TRACEABILITY_ENFORCE;
     try {
       const g = createFrDeliveryTraceabilityGate(stub({ frs: [{ id: 'FR-001' }], stories: [] }));
-      const r = await g.validator(ctx);
+      const r = await g.validator(makeCtx());
       expect(r.passed).toBe(true);
       expect(r.required).toBe(false);
       expect(r.warnings.join(' ')).toMatch(/FR-001/);
@@ -67,7 +83,7 @@ describe('FR-3: createFrDeliveryTraceabilityGate', () => {
     process.env.LEO_FR_TRACEABILITY_ENFORCE = '1';
     try {
       const g = createFrDeliveryTraceabilityGate(stub({ frs: [{ id: 'FR-001' }], stories: [] }));
-      const r = await g.validator(ctx);
+      const r = await g.validator(makeCtx());
       expect(r.passed).toBe(false);
       expect(r.required).toBe(true);
     } finally { if (prev === undefined) delete process.env.LEO_FR_TRACEABILITY_ENFORCE; else process.env.LEO_FR_TRACEABILITY_ENFORCE = prev; }
@@ -75,7 +91,28 @@ describe('FR-3: createFrDeliveryTraceabilityGate', () => {
 
   it('delivered FR -> pass', async () => {
     const g = createFrDeliveryTraceabilityGate(stub({ frs: [{ id: 'FR-001' }], stories: [{ id: 's1', title: 'do FR-001', status: 'completed' }] }));
-    const r = await g.validator(ctx);
+    const r = await g.validator(makeCtx());
     expect(r.passed).toBe(true);
+  });
+
+  describe('QF-20260816-550: canonical isParentOrchestrator dispatch (was a hand-rolled, error-blind query)', () => {
+    it('leaf (metadata unset, 0 children) -> FR delivery IS classified, not skipped', async () => {
+      const g = createFrDeliveryTraceabilityGate(stub({ frs: [{ id: 'FR-001' }], stories: [] }));
+      const r = await g.validator(makeCtx());
+      expect(r.warnings.join(' ')).not.toMatch(/delegated to children/i);
+    });
+
+    it('metadata-only parent (is_parent=true, 0 DB children, query succeeds) -> treated as LEAF per the mismatch fix, not delegated', async () => {
+      const g = createFrDeliveryTraceabilityGate(stub({ frs: [{ id: 'FR-001' }], stories: [], children: [] }));
+      const r = await g.validator(makeCtx({ is_parent: true }));
+      expect(r.warnings.join(' ')).not.toMatch(/delegated to children/i);
+    });
+
+    it('children query error -> falls back to metadata flag (parent branch), NOT silently treated as leaf', async () => {
+      const g = createFrDeliveryTraceabilityGate(stub({ frs: [{ id: 'FR-001' }], stories: [], childrenQueryError: { message: 'connection reset' } }));
+      const r = await g.validator(makeCtx({ is_parent: true }));
+      expect(r.passed).toBe(true);
+      expect(r.warnings.join(' ')).toMatch(/delegated to children/i);
+    });
   });
 });

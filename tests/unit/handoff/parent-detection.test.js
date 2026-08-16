@@ -8,7 +8,7 @@
 import { describe, it, expect } from 'vitest';
 import { isParentOrchestrator, isParentOrchestratorSync } from '../../../lib/handoff/parent-detection.js';
 
-function makeFakeSupabase(children = []) {
+function makeFakeSupabase(children = [], error = null) {
   return {
     from(_table) {
       return {
@@ -17,7 +17,7 @@ function makeFakeSupabase(children = []) {
             eq(_col, _val) {
               return {
                 async limit(_n) {
-                  return { data: children, error: null };
+                  return { data: error ? null : children, error };
                 },
               };
             },
@@ -29,9 +29,15 @@ function makeFakeSupabase(children = []) {
 }
 
 describe('SD-LEO-INFRA-ORCH-PARENT-LIFECYCLE-001 isParentOrchestrator', () => {
-  it('TS-1: returns true when metadata.is_parent=true (metadata-flag-only path)', async () => {
+  it('QF-20260816-550 TS-1: metadata.is_parent=true but DB confirms 0 children -> false (stale-flag mismatch, treated as LEAF)', async () => {
     const sd = { id: 'sd-1', metadata: { is_parent: true } };
     const supabase = makeFakeSupabase([]);
+    expect(await isParentOrchestrator(sd, supabase)).toBe(false);
+  });
+
+  it('QF-20260816-550: a DB query error does NOT silently downgrade a metadata-flagged parent to a leaf', async () => {
+    const sd = { id: 'sd-1b', metadata: { is_parent: true } };
+    const supabase = makeFakeSupabase([], { message: 'connection reset' });
     expect(await isParentOrchestrator(sd, supabase)).toBe(true);
   });
 
