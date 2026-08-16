@@ -20,6 +20,7 @@ import ContentBuilder from '../content/ContentBuilder.js';
 import ValidationOrchestrator from '../validation/ValidationOrchestrator.js';
 import { withRetry, isRetryable, RETRY_PRESETS } from '../../resilience/retry-executor.js';
 import { captureFailurePattern } from '../failure-pattern-capture.js';
+import { NOT_MEASURED_SCORE } from '../gates/fr-delivery-classifier.js';
 
 /**
  * Handoff types that are COMPLETION actions, not phase transitions.
@@ -137,6 +138,7 @@ export class HandoffRecorder {
     // Use normalizedScore (weighted average) if available, otherwise calculate from totalScore/maxScore
     // This fixes the bug where summed scores (266) were being clamped to 100
     let rawScore;
+    let scoreSource = 'measured';
     if (result.normalizedScore !== undefined) {
       rawScore = result.normalizedScore;
     } else if (result.qualityScore !== undefined) {
@@ -144,11 +146,14 @@ export class HandoffRecorder {
     } else if (result.totalScore !== undefined && result.maxScore !== undefined && result.maxScore > 0) {
       rawScore = Math.round((result.totalScore / result.maxScore) * 100);
     } else {
-      rawScore = result.totalScore || 100;
+      rawScore = result.totalScore ?? NOT_MEASURED_SCORE;
+      if (result.totalScore === undefined || result.totalScore === null) {
+        scoreSource = 'not_measured';
+      }
     }
     const normalizedScore = this._normalizeValidationScore(rawScore);
 
-    console.log(`🔍 Validation score: ${rawScore}% (normalized: ${normalizedScore}%)`);
+    console.log(`🔍 Validation score: ${rawScore}% (normalized: ${normalizedScore}%, source: ${scoreSource})`);
 
     const execution = {
       id: executionId,
@@ -172,7 +177,8 @@ export class HandoffRecorder {
           warning_count: (result.warnings || []).length
         },
         verified_at: new Date().toISOString(),
-        verifier: 'unified-handoff-system.js'
+        verifier: 'unified-handoff-system.js',
+        score_source: scoreSource
       },
       accepted_at: new Date().toISOString(),
       created_by: recorderIdentity()
@@ -751,6 +757,7 @@ export class HandoffRecorder {
 
       // Use normalizedScore (weighted average) if available, otherwise calculate from totalScore/maxScore
       let rawScore;
+      let scoreSource = 'measured';
       if (result.normalizedScore !== undefined) {
         rawScore = result.normalizedScore;
       } else if (result.qualityScore !== undefined) {
@@ -758,7 +765,10 @@ export class HandoffRecorder {
       } else if (result.totalScore !== undefined && result.maxScore !== undefined && result.maxScore > 0) {
         rawScore = Math.round((result.totalScore / result.maxScore) * 100);
       } else {
-        rawScore = result.totalScore || 100;
+        rawScore = result.totalScore ?? NOT_MEASURED_SCORE;
+        if (result.totalScore === undefined || result.totalScore === null) {
+          scoreSource = 'not_measured';
+        }
       }
       const normalizedScore = this._normalizeValidationScore(rawScore);
 
@@ -898,7 +908,7 @@ export class HandoffRecorder {
         status: 'pending_acceptance', // Always start as pending, update to accepted below
         validation_score: normalizedScore,
         validation_passed: result.success !== false,
-        validation_details: result.validation || {},
+        validation_details: { ...(result.validation || {}), score_source: scoreSource },
         metadata,
         created_by: HANDOFF_SYSTEM_TAG // sd_phase_handoffs DB guard allowlists the system tag; session identity lives on leo_handoff_executions.created_by
       };

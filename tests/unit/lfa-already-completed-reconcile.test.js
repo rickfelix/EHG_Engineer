@@ -18,6 +18,7 @@ import { readFileSync } from 'node:fs';
 import { resolve, dirname } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { LeadFinalApprovalExecutor } from '../../scripts/modules/handoff/executors/lead-final-approval/index.js';
+import { NOT_MEASURED_SCORE } from '../../scripts/modules/handoff/gates/fr-delivery-classifier.js';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const SRC = readFileSync(
@@ -82,6 +83,7 @@ describe('LFA already-completed canonical reconcile (SD-REFILL-0038AO42)', () =>
     expect(payload.created_by).toBe('ADMIN_OVERRIDE'); // completed SD => is_working_on=false => must bypass claim guard
     expect(payload.to_phase).toBe('LEAD'); // APPROVAL->LEAD coercion (CHECK-safe)
     expect(payload.validation_score).toBe(99); // sourced from accepted LHE, not the gate fallback
+    expect(payload.validation_details.score_source).toBe('measured');
     expect(payload.metadata.source_execution_id).toBe('lhe-1');
   });
 
@@ -92,13 +94,15 @@ describe('LFA already-completed canonical reconcile (SD-REFILL-0038AO42)', () =>
     expect(supabase._calls.inserts).toHaveLength(0);
   });
 
-  it('falls back to score 100 when no accepted LHE row and no gate score', async () => {
+  it('QF-20260816-210: falls back to NOT_MEASURED_SCORE (75), not 100, when no accepted LHE row and no gate score', async () => {
     const supabase = makeSupabase({ existingSph: null, lheRows: [], insertError: null });
     const exec = makeExecutor(supabase);
     await exec._reconcileCanonicalLfaRow(SD, undefined);
     expect(supabase._calls.inserts).toHaveLength(1);
-    expect(supabase._calls.inserts[0].payload.validation_score).toBe(100);
-    expect(supabase._calls.inserts[0].payload.metadata.source_execution_id).toBeNull();
+    const { payload } = supabase._calls.inserts[0];
+    expect(payload.validation_score).toBe(NOT_MEASURED_SCORE);
+    expect(payload.validation_details.score_source).toBe('not_measured');
+    expect(payload.metadata.source_execution_id).toBeNull();
   });
 
   it('is NON-FATAL: a rejected insert does not throw (verification still succeeds)', async () => {
