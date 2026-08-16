@@ -474,13 +474,18 @@ export async function scoreSD(options = {}) {
 
   // Load SD context (unless custom scope provided)
   let sdContext = null;
+  // QF-20260728-277: previously totalModifications was console.log'd and discarded,
+  // so a truncated-input read was indistinguishable downstream from a genuine low
+  // score. Captured here (outer scope) so it can be persisted with the score below.
+  let inputTruncatedFields = [];
   if (sdKey) {
     sdContext = await loadSDContext(supabase, sdKey);
     // SD-CONTEXTAWARE-VISION-SCORING-DYNAMIC-ORCH-001-B: Sanitize input before LLM
-    const { sd: sanitized, totalModifications } = sanitizeSDForScoring(sdContext, { logWarnings: true });
+    const { sd: sanitized, totalModifications, truncatedFields } = sanitizeSDForScoring(sdContext, { logWarnings: true });
     if (totalModifications.length > 0) {
       console.log(`[VisionScorer] Input sanitized: ${totalModifications.length} modification(s)`);
     }
+    inputTruncatedFields = truncatedFields;
     sdContext = sanitized;
   }
 
@@ -625,6 +630,11 @@ ${rawResponse.substring(0, 1000)}`;
       criteria: allCriteria.map(c => ({ id: c.id, name: c.name, weight: c.weight })),
       summary: parsed.summary,
       latency_ms: latencyMs,
+      // QF-20260728-277: make a silent 8000-char input cap loud — a caller reading
+      // only total_score/threshold_action can no longer mistake a truncated-input
+      // read for a genuine low score without consulting this.
+      input_truncated: inputTruncatedFields.length > 0,
+      truncated_fields: inputTruncatedFields,
     },
   };
 
@@ -707,6 +717,11 @@ ${rawResponse.substring(0, 1000)}`;
   // Expose summary and latency for callers even though they're in rubric_snapshot
   scoreRecord.summary = parsed.summary;
   scoreRecord.latency_ms = latencyMs;
+  // QF-20260728-277: same reasoning — expose at top level so a caller consuming
+  // scoreSD()'s direct return (e.g. autoScoreUnscoredSD) doesn't have to know to
+  // look inside rubric_snapshot.
+  scoreRecord.input_truncated = inputTruncatedFields.length > 0;
+  scoreRecord.truncated_fields = inputTruncatedFields;
 
   return scoreRecord;
 }
