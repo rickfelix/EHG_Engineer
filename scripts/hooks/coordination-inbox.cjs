@@ -1,0 +1,958 @@
+/**
+ * Coordination Inbox Hook — Surfaces cross-session messages + auto-claim for idle workers
+ *
+ * Hook: PostToolUse (no matcher — fires on every tool call)
+ * Throttled: Only checks DB every 60 seconds via temp file timestamp
+ *
+ * SD-LEO-INFRA-MID-FLIGHT-DIRECTIVE-001 / FR-4: this is TOOL-BOUNDARY surfacing, not
+ * true mid-call surfacing — a PostToolUse hook only fires between tool calls, so a
+ * directive arriving during one long single tool/sub-agent call is not seen until that
+ * call returns. That gap is out of scope here (no hook design can close it); the
+ * guarantee this hook provides is "seen within a few tool calls of arrival," including
+ * for a BUSY (claim-holding) session, not just an idle one draining at /checkin.
+ *
+ * Reads from session_coordination table for this session.
+ * When messages are found, outputs them and marks as read/acknowledged.
+ *
+ * AUTO-CLAIM: When session is idle (no SD claimed) and work is available,
+ * emits AUTO_PROCEED_ACTION directive so Claude auto-starts the next SD.
+ *
+ * Falls back to metadata.coordination_message if table doesn't exist yet.
+ */
+
+const fs = require('fs');
+const path = require('path');
+const os = require('os');
+
+// QF-20260505-canonical-hook — when invoked from a worktree, delegate to the
+// parent worktree's hook implementation. Hook fixes shipped to main don't
+// otherwise reach existing worktrees because settings.json paths resolve via
+// ${CLAUDE_PROJECT_DIR}, which is per-session. Witnessed 2026-05-04 with
+// PR #3546 DELIVERED layer (0 production firings despite correct code).
+if (require.main === module) {
+  try {
+    const { findCanonicalParent } = require(path.resolve(__dirname, '../../lib/hooks/canonical-parent.cjs'));
+    const canonical = findCanonicalParent(__dirname);
+    const myParent = path.resolve(__dirname, '../..');
+    if (canonical && canonical !== myParent) {
+      const parentHook = path.join(canonical, 'scripts/hooks/coordination-inbox.cjs');
+      if (fs.existsSync(parentHook)) {
+        const { spawnSync } = require('child_process');
+        const r = spawnSync(process.execPath, [parentHook], { stdio: 'inherit', windowsHide: true });
+        process.exit(typeof r.status === 'number' ? r.status : 0);
+      }
+    }
+  } catch { /* fall through to local impl on any error */ }
+}
+
+// QF-20260504-912: per-session throttle/heartbeat paths. Pre-fix these were
+// host-shared, causing 5/6 sessions to be starved for up to 60s after any one
+// session marked the throttle. Mirror the friction-counters pattern (validated
+// regex + per-session filename) at lines ~96-125 below.
+function getThrottleFile(sessionId) {
+  if (!isValidSessionId(sessionId)) return null;
+  return path.join(os.tmpdir(), `claude-coordination-inbox-throttle-${sessionId}.json`);
+}
+function getHeartbeatFile(sessionId) {
+  if (!isValidSessionId(sessionId)) return null;
+  return path.join(os.tmpdir(), `claude-coordination-inbox-heartbeat-${sessionId}.json`);
+}
+
+// SD-LEO-INFRA-TWO-WAY-COORDINATOR-001 / FR-5c — friction-detection counter file.
+// Per-session counter of recurring failures; emits proactive /signal nudge when
+// thresholds cross. Path is in .claude/tmp/ (gitignored). Security M4: validate
+// session_id with regex /^[a-zA-Z0-9_-]{1,128}$/ before path.join.
+const FRICTION_COUNTERS_DIR = path.resolve(__dirname, '../../.claude/tmp');
+const FRICTION_TRIGGERS = {
+  GATE_FAILURE_3X: 3,    // same gate failed 3+ times same session
+  TOOL_FAILURE_3X: 3     // same tool error 3+ times same session
+};
+const IDENTITY_DIR = path.resolve(__dirname, '../../.claude');
+// Per-session identity file keyed by session ID (birth certificate UUID or resolved).
+// Falls back to shared file for sessions without a resolvable ID.
+/**
+ * SD-LEO-INFRA-ROLE-BLIND-SESSION-001 FR-4 — should a SET_IDENTITY write be refused?
+ *
+ * Returns a reason string to refuse, or null to allow. Exported so the decision is testable
+ * without driving the whole inbox flow.
+ *
+ * @param {string} sessionId
+ * @param {string} [dir] identity dir override, for tests
+ * @returns {string|null}
+ */
+function setIdentityRefusalReason(sessionId, dir) {
+  try {
+    const rp = require('../../lib/fleet/role-status-identity.cjs');
+    const existing = rp.readIdentityFile(String(sessionId || ''), dir || rp.IDENTITY_DIR);
+    if (rp.verdictFromIdentityFile(existing) === rp.ROLE_VERDICT.ROLE) {
+      return `role session (${existing.callsign || 'role'}) — worker callsigns are not assigned to role seats`;
+    }
+  } catch { /* predicate unavailable -> allow, exactly as before this SD */ }
+  return null;
+}
+
+function getIdentityFile(resolvedSessionId) {
+  const csid = resolvedSessionId || process.env.CLAUDE_SESSION_ID;
+  if (csid) return path.join(IDENTITY_DIR, `fleet-identity-${csid}.json`);
+  return path.join(IDENTITY_DIR, 'fleet-identity.json');
+}
+// SD-LEO-INFRA-FLEET-COORDINATION-RESILIENCE-001 (FR-003):
+// Reduced from 300s to 60s for faster coordination message delivery.
+// Configurable via env var for tuning under high DB load.
+// QF-20260504-912: default reduced 60_000 → 15_000 — safe now that throttle is
+// per-session (no peer interference). Per-session DB load: 4 queries/min × 6
+// sessions = 24/min, well below capacity.
+const CHECK_INTERVAL_MS = parseInt(process.env.COORDINATION_CHECK_INTERVAL_MS, 10) || 15_000;
+const HEARTBEAT_INTERVAL_MS = 30_000; // Update heartbeat every 30 seconds
+// SD-LEO-INFRA-PARKED-WORKER-CLAIM-LAPSE-001 FR-4: how fresh a session heartbeat must be for that
+// session to count as a live builder holding its sd_key. 15min matches the claim TTL the fleet
+// already uses (chairman_dashboard_config), so a parked /loop worker on a 900-1800s wake cadence
+// is still recognised as building between ticks rather than having its SD advertised out from
+// under it. Deliberately generous: a false "held" only delays a dispatch, a false "free" causes
+// the second-dispatch collision this SD exists to prevent.
+// Retained for back-compat with callers/tests that import it. Liveness itself is NOT decided here
+// — selectAvailableSds delegates to the lib/fleet/session-liveness.cjs SSOT, which owns the
+// heartbeat threshold (LIVENESS_HEARTBEAT_SEC), the tick window and the armed-silence cap. Do not
+// re-derive any of those locally; that fork is what DEFECT-7 of this SD was.
+const SESSION_LIVENESS_WINDOW_MS = 15 * 60 * 1000;
+// The READ-TIME liveness SSOT. Guarded require so an unavailable lib degrades to a conservative
+// hold (see selectAvailableSds) rather than crashing the hook.
+let isSessionAlive;
+try {
+  ({ isSessionAlive } = require(path.resolve(__dirname, '../../lib/fleet/session-liveness.cjs')));
+} catch {
+  // Fail CLOSED: with no liveness oracle we cannot prove any worker is gone, so treat every
+  // session that names an SD as holding it. Suppresses dispatch rather than risking a collision.
+  isSessionAlive = () => ({ alive: true, reason: 'liveness_ssot_unavailable' });
+}
+const ACTIONABLE_TYPES = ['WORK_ASSIGNMENT', 'CLAIM_RELEASED', 'CLAIM_REMINDER'];
+// SD-FDBK-FIX-WORKER-CHECK-SURFACES-001 (adversarial-review finding #1): only WORK_ASSIGNMENT
+// has a worker-side CLOSURE path for a busy worker (claim_sd/ackMessage stamps read_at when the
+// worker eventually actions it), so it is safe to surface-not-drain regardless of idle. The
+// advisory types (CLAIM_RELEASED/CLAIM_REMINDER) have NO worker-side ack path — surfacing them
+// regardless of idle would re-render every poll forever AND perpetually feed the coordinator's
+// findUndelivered UNDELIVERED-OUTBOUND alert with no terminal event. So they stay gated on idle
+// (drain-on-display for a busy worker, as before this SD).
+const DIRECTED_SURFACE_TYPES = ['WORK_ASSIGNMENT'];
+const ADVISORY_IDLE_TYPES = ['CLAIM_RELEASED', 'CLAIM_REMINDER'];
+
+// FR-3 (SD-LEO-INFRA-COORD-ADAM-COMMS-RESILIENT-001): the canonical directive-kind
+// allowlist lives in lib/fleet/worker-status.cjs — IMPORTED, never duplicated (the
+// QF-20260610-545 lesson: classify the row KIND, not the sender). Guarded require:
+// if the lib is unavailable the list is empty and behavior degrades to today's
+// drain (fail-toward-current), never a hook crash.
+let DIRECTIVE_KINDS = [];
+let PRIORITY_EXEMPT_DIRECTIVE_KINDS = [];
+try {
+  ({ DIRECTIVE_KINDS, PRIORITY_EXEMPT_DIRECTIVE_KINDS } = require(path.resolve(__dirname, '../../lib/fleet/worker-status.cjs')));
+} catch { /* fail-open: ack-withholding disabled, hook still runs */ }
+
+// SD-LEO-FIX-FIX-COORDINATION-INBOX-001: pure, per-message inbox decision.
+// Returns { skip, markRead, markDelivered, markAck }. The bug this fixes: this PostToolUse hook
+// (fires on every tool call in every session) stamped read_at on poll for actionable rows AND only
+// skipped coordinator-exclusive rows when amCoordinator===true — so a non-coordinator session
+// (Adam, or a misrouted worker) DRAINED read_at before the agent processed the body, and the
+// Adam inbox monitor (which gates on read_at IS NULL) then reported UNREAD:0, hiding coordinator
+// directives fleet-wide. Rules:
+//   - read_at = "agent PROCESSED" (set later by worker-checkin ackMessage on genuine claim, or
+//     by an Adam read); acknowledged_at = "received". A poll must NOT pre-stamp read_at for
+//     anything still needing action — leave it NULL so the row re-surfaces (the existing
+//     read_at IS NULL SELECT) until actioned.
+//   - delivered_at = "a consumer's process saw this row exist" (transport receipt), stamped by
+//     markDelivered instead of read_at where a poll needs to stop treating a row as brand-new
+//     without falsely implying it was processed (SD-LEO-INFRA-COORDINATOR-WAKE-ON-DIRECTIVE-001
+//     FR-2/FR-3 — see the DIRECTIVE_KINDS branch below).
+// Pure + synchronous; no DB calls (amCoordinator/amAdam/twoWayOn/isIdle resolved once by caller).
+function classifyInboxMessage(msg, opts = {}) {
+  const { twoWayOn = false, amAdam = false, amSolomon = false, isIdle = false } = opts;
+  const p = (msg && msg.payload) || {};
+  const isInfo = msg && msg.message_type === 'INFO';
+  // Coordinator-exclusive INFO rows — SKIP for EVERY session (the coordinator surfaces them via
+  // fleet-dashboard printInbox/printAdamInbox; non-coordinator sessions must not drain them).
+  // Previously these three skips were gated on amCoordinator===true (the root bug).
+  // FR-3a worker friction signal (OUTBOUND, worker->coordinator) — skip for non-coordinator sessions.
+  // EXCEPT an inbound coordinator->worker SIGNAL_RESOLVED notification that merely echoes signal_type as
+  // context (it carries signal_resolved:true) — that is genuine push delivered via /checkin, not a
+  // friction signal (SD-LEO-INFRA-WORKER-INBOX-PUSH-DELIVERY-001 adversarial-review finding).
+  if (isInfo && p.signal_type && !p.signal_resolved) return { skip: true };
+  if (isInfo && p.kind === 'adam_advisory') return { skip: true };    // Adam advisory -> coordinator inbox
+  // A worker's awaitCoordinatorReply consumes its own coordinator_reply, so workers skip it.
+  // SD-LEO-INFRA-RESILIENT-SYMMETRIC-ADAM-001 FR-4: an ADAM session must NOT skip — it falls
+  // through to the :105 carve-out below (surfaces, read_at left NULL) so a reply arriving after
+  // a sync await times out is recovered by adam-advisory.cjs's durable `replies` reader.
+  if (twoWayOn && isInfo && p.kind === 'coordinator_reply' && !amAdam) return { skip: true };
+  // Adam session: NEVER auto-drain ANY inbound row — surface-not-drain, unconditionally.
+  // QF-20260610-623 dropped the isInfo gate but kept a sender_type ALLOWLIST
+  // (orchestrator|coordinator), so sender_type=chairman directives (a live, exercised value —
+  // 5 chairman messages auto-acked unseen 2026-06-10, harness-bug 43c2dee2, directive
+  // dq-inbox-rca-20260610) fell through to the default drain below. Compounding: Adam manual
+  // polls filter acknowledged_at IS NULL, so a drained row is invisible forever.
+  // QF-20260610-545 (chairman-specified shape): the poll path must never stamp read/ack on a
+  // row not actually routed to the agent — for amAdam, EVERY non-skip directed row surfaces
+  // with read_at/acknowledged_at left NULL; Adam stamps ack on genuine processing. Cost: pure
+  // notifications re-surface until acked — acceptable for an advisory session whose duty is
+  // never missing a directive. Non-Adam (worker/coordinator) drain behavior is untouched.
+  if (amAdam) {
+    return { skip: false, markRead: false, markAck: false };
+  }
+  // QF-20260709-800: mirror the amAdam carve-out for Solomon. Without this, a
+  // solomon_consult row (INFO, kind not in DIRECTIVE_KINDS by design) falls
+  // through to the default drain below and gets read_at stamped on the FIRST
+  // tool-call poll — before scripts/solomon-advisory.cjs's specialized
+  // drainInbox() (which queries read_at IS NULL) ever sees it. That drain has
+  // its own closure path (it answers, then stamps read_at itself), so it must
+  // own the stamping, not this generic hook.
+  if (amSolomon) {
+    return { skip: false, markRead: false, markAck: false };
+  }
+  // Actionable directed rows — surface but do NOT mark read/ack on poll; re-surface until the
+  // agent genuinely actions them (worker-checkin ackMessage stamps both on claim).
+  // SD-FDBK-FIX-WORKER-CHECK-SURFACES-001 (seam 2): WORK_ASSIGNMENT previously gated on isIdle, so a
+  // coordinator->worker assignment sent to a BUSY (claim-holding) worker fell through to the default
+  // drain below (markRead:true/markAck:true) on the next poll and never re-surfaced — the
+  // directed-dispatch lane was unreliable for busy workers (witnessed: an assignment to Alpha stayed
+  // UNREAD across full check-in cycles). WORK_ASSIGNMENT has a worker-side CLOSURE path (claim_sd/
+  // ackMessage stamps read_at when actioned), so surface-not-drain regardless of idle; worker-checkin
+  // (seam 1) reads it on check-in without dropping the held claim.
+  const mt = msg && msg.message_type;
+  if (DIRECTED_SURFACE_TYPES.includes(mt)) {
+    return { skip: false, markRead: false, markAck: false };
+  }
+  // Advisory directed rows (CLAIM_RELEASED/CLAIM_REMINDER): genuinely relevant to surface for an
+  // IDLE worker (its claim was released / is at risk), but they have NO worker-side ack/closure path,
+  // so for a BUSY worker they must NOT re-surface forever (adversarial-review finding #1 — would also
+  // perpetually feed the coordinator UNDELIVERED-OUTBOUND alert with no terminal event). Keep the
+  // idle gate: surface-not-drain when idle, else fall through to the default drain-on-display.
+  if (isIdle && ADVISORY_IDLE_TYPES.includes(mt)) {
+    return { skip: false, markRead: false, markAck: false };
+  }
+  // FR-3 (SD-LEO-INFRA-COORD-ADAM-COMMS-RESILIENT-001): DIRECTIVE kinds never receive
+  // acknowledged_at from a poll, for ANY role/sender. SD-LEO-INFRA-COORDINATOR-WAKE-ON-DIRECTIVE-001
+  // FR-3 correction: this branch used to stamp read_at here as a stand-in "delivered" marker
+  // (there was no separate delivered_at column yet) — but read_at IS NULL is exactly the signal
+  // scripts/coordinator-quiet-tick.mjs's hasUnactionedDirective() (and Adam's inbox monitor) key
+  // off of to detect a pending directive, so stamping it on the FIRST poll hid the row from those
+  // consumers before it was ever genuinely actioned — the root cause of the 2026-07-09 incident
+  // (a directive stack sat unactioned for 25+ minutes while looking "read"). Now that delivered_at
+  // exists, stamp THAT instead: read_at stays NULL (re-surfaces every throttled poll — the intended
+  // urgency signal) until genuine action-required processing (worker-checkin ackMessage on a real
+  // claim, an Adam action-required drill, ack-chairman-directive.cjs, etc.) stamps it later.
+  // Kind-allowlist shape per QF-20260610-545 — never a sender_type allow/denylist.
+  if (p.kind && DIRECTIVE_KINDS.includes(p.kind)) {
+    return { skip: false, markRead: false, markDelivered: true, markAck: false };
+  }
+  // SD-LEO-INFRA-WORKER-INBOX-PUSH-DELIVERY-001 (FR-3): COACHING + any remaining coordinator->worker
+  // INFO push (plain announcements, coordinator_reply when two-way is OFF) are now DELIVERED by the
+  // worker /checkin loop as coordinator_messages[]. This poll must NOT auto-ACK them (read-only drain:
+  // read_at=DELIVERED so the ephemeral render stops, acknowledged_at WITHHELD) — /checkin filters
+  // acknowledged_at IS NULL and is the authoritative bounded consumption point that stamps the ack.
+  // Without this, the hook drained (acked) COACHING/INFO before /checkin saw them — the RCA bug.
+  // (signal_type / adam_advisory / two-way coordinator_reply are already skipped above; CLAIM_RELEASED/
+  // CLAIM_REMINDER are their own message_types and keep the default drain.)
+  // (p.kind=roll_call is the worker's OWN availability ping, not coordinator->worker coaching — it must
+  // keep the legacy full-drain so it does not re-surface in acknowledged_at-IS-NULL readers. Mirrors the
+  // isCoordinatorPush roll_call exclusion in worker-checkin.cjs.)
+  if ((mt === 'COACHING' || isInfo) && p.kind !== 'roll_call') {
+    return { skip: false, markRead: true, markAck: false };
+  }
+  // Default — a pure notification with no follow-up action; drain on display (legacy behavior).
+  return { skip: false, markRead: true, markAck: true };
+}
+
+// FR-1 (SD-LEO-INFRA-MID-FLIGHT-DIRECTIVE-001): merge priority-exempt rows (e.g. a
+// fence_notice) ahead of the oldest-N batch, deduped by id, without disturbing the
+// oldest-batch's own relative ordering (regression: non-fence directive kinds keep
+// today's plain oldest-first fairness — TS-4). Pure, synchronous, no DB calls.
+function mergePriorityExempt(priorityRows, oldestBatch) {
+  const seen = new Set((priorityRows || []).map((r) => r.id));
+  const rest = (oldestBatch || []).filter((r) => !seen.has(r.id));
+  return [...(priorityRows || []), ...rest];
+}
+
+function shouldCheck(sessionId) {
+  const file = getThrottleFile(sessionId);
+  if (!file) return true;
+  try {
+    if (!fs.existsSync(file)) return true;
+    const data = JSON.parse(fs.readFileSync(file, 'utf8'));
+    return (Date.now() - data.lastCheck) > CHECK_INTERVAL_MS;
+  } catch {
+    return true;
+  }
+}
+
+function markChecked(sessionId) {
+  const file = getThrottleFile(sessionId);
+  if (!file) return;
+  try {
+    fs.writeFileSync(file, JSON.stringify({ lastCheck: Date.now() }));
+  } catch { /* ignore */ }
+}
+
+function shouldHeartbeat(sessionId) {
+  const file = getHeartbeatFile(sessionId);
+  if (!file) return true;
+  try {
+    if (!fs.existsSync(file)) return true;
+    const data = JSON.parse(fs.readFileSync(file, 'utf8'));
+    return (Date.now() - data.lastHeartbeat) > HEARTBEAT_INTERVAL_MS;
+  } catch {
+    return true;
+  }
+}
+
+function markHeartbeat(sessionId) {
+  const file = getHeartbeatFile(sessionId);
+  if (!file) return;
+  try {
+    fs.writeFileSync(file, JSON.stringify({ lastHeartbeat: Date.now() }));
+  } catch { /* ignore */ }
+}
+
+/**
+ * Update heartbeat_at on claude_sessions — runs every 30s regardless of inbox check
+ */
+async function updateHeartbeat(supabase, sessionId) {
+  if (!shouldHeartbeat(sessionId)) return;
+  markHeartbeat(sessionId);
+  try {
+    // stampBranch keeps current_branch fresh on inbox-hook heartbeats — see
+    // lib/session-writer.cjs and SD-LEO-INFRA-SESSION-CURRENT-BRANCH-001.
+    const { stampBranch } = require('../../lib/session-writer.cjs');
+    await supabase
+      .from('claude_sessions')
+      .update(stampBranch({ heartbeat_at: new Date().toISOString() }))
+      .eq('session_id', sessionId);
+  } catch { /* fail silently */ }
+}
+
+// SD-LEO-INFRA-TWO-WAY-COORDINATOR-001 / FR-5c — friction-detection helpers.
+// Security M4: validate session_id pattern before path.join.
+function isValidSessionId(sid) {
+  return typeof sid === 'string' && /^[a-zA-Z0-9_-]{1,128}$/.test(sid);
+}
+
+function getFrictionCounterFile(sessionId) {
+  if (!isValidSessionId(sessionId)) return null;
+  return path.join(FRICTION_COUNTERS_DIR, `friction-counters-${sessionId}.json`);
+}
+
+function readFrictionCounters(sessionId) {
+  const file = getFrictionCounterFile(sessionId);
+  if (!file) return {};
+  try {
+    if (!fs.existsSync(file)) return {};
+    return JSON.parse(fs.readFileSync(file, 'utf8')) || {};
+  } catch {
+    return {};
+  }
+}
+
+function writeFrictionCounters(sessionId, counters) {
+  const file = getFrictionCounterFile(sessionId);
+  if (!file) return;
+  try {
+    fs.mkdirSync(FRICTION_COUNTERS_DIR, { recursive: true });
+    fs.writeFileSync(file, JSON.stringify(counters));
+  } catch { /* fail silently */ }
+}
+
+// Note: this hook does NOT auto-detect failures from tool outputs (PostToolUse runs
+// AFTER each call but does not see error counts). Counter increments must come from
+// other hooks/scripts that detect domain failures (e.g., gate failure handler in
+// handoff.js). The proactive-prompt fires when ANY counter crosses threshold.
+function emitFrictionPrompt(counters, triggerKey) {
+  const count = counters[triggerKey] || 0;
+  console.log('');
+  console.log('================================================================');
+  console.log('  💡 PROACTIVE FRICTION PROMPT (SD-LEO-INFRA-TWO-WAY-COORDINATOR-001 / FR-5c)');
+  console.log('  Trigger: ' + triggerKey + ' = ' + count + ' (threshold: ' + FRICTION_TRIGGERS[triggerKey] + ')');
+  console.log('  This recurring friction looks aggregatable across sessions.');
+  console.log('  Consider: /signal stuck "<one-line summary of friction>"');
+  console.log('  Decision rule: see /signal --help, FR-6 in CLAUDE_CORE.md "Signaling friction" section.');
+  console.log('================================================================');
+  console.log('');
+}
+
+function checkFrictionThresholds(sessionId) {
+  const counters = readFrictionCounters(sessionId);
+  if (!counters._sd_key_at_check) return; // not yet stamped — first check
+  let fired = false;
+  for (const [key, threshold] of Object.entries(FRICTION_TRIGGERS)) {
+    if ((counters[key] || 0) >= threshold && !counters['_fired_' + key]) {
+      emitFrictionPrompt(counters, key);
+      counters['_fired_' + key] = new Date().toISOString();
+      fired = true;
+    }
+  }
+  if (fired) writeFrictionCounters(sessionId, counters);
+}
+
+function resetFrictionCountersIfSdChanged(sessionId, currentSdKey) {
+  if (!isValidSessionId(sessionId)) return;
+  const counters = readFrictionCounters(sessionId);
+  if (counters._sd_key_at_check && counters._sd_key_at_check !== currentSdKey) {
+    // SD changed — reset counters but keep history sticky for telemetry.
+    const fresh = { _sd_key_at_check: currentSdKey, _reset_at: new Date().toISOString() };
+    writeFrictionCounters(sessionId, fresh);
+  } else if (!counters._sd_key_at_check) {
+    counters._sd_key_at_check = currentSdKey;
+    writeFrictionCounters(sessionId, counters);
+  }
+}
+
+function getCurrentSessionId() {
+  try {
+    // QF-20260504-964 FIX 1: env var is canonical post-2026-04-08 session-stability rules.
+    if (process.env.CLAUDE_SESSION_ID) return process.env.CLAUDE_SESSION_ID;
+
+    // QF-20260504-297: read from canonical SessionStart marker dir (RCA: the
+    // old .claude/session-id.json singular-file lookup at this position was
+    // dead code — no script in the repo ever wrote to that path. The actual
+    // markers live at .claude/session-identity/pid-<ccPid>.json, written by
+    // capture-session-id.cjs at SessionStart). This unblocks coord sessions
+    // that never claim an SD (and so have no ~/.claude-sessions/<sid>.json
+    // file) from the silent if(!sessionId) return — closes feedback row
+    // 7f49b45f-9065-4d9d-917d-9a8a032e1462.
+    try {
+      const { readSessionIdFromIdentityMarker } = require('../../lib/hooks/session-id.cjs');
+      const fromMarker = readSessionIdFromIdentityMarker();
+      if (fromMarker) return fromMarker;
+    } catch { /* helper unavailable — fall through */ }
+
+    // Final fallback: scan ~/.claude-sessions for sd-claim sessions (workers
+    // that claimed an SD via lib/session-manager.mjs). Note: process.ppid is
+    // unreliable on Windows (often 1), so this path is only useful when the
+    // session_id includes a PID-derived suffix or when ppid happens to match.
+    const sessionDir = path.join(os.homedir(), '.claude-sessions');
+    if (!fs.existsSync(sessionDir)) return null;
+    const files = fs.readdirSync(sessionDir).filter(f => f.endsWith('.json'));
+    const pid = process.ppid || process.pid;
+
+    for (const file of files) {
+      try {
+        const data = JSON.parse(fs.readFileSync(path.join(sessionDir, file), 'utf8'));
+        if (data.pid === pid || data.session_id?.includes('win' + pid)) {
+          return data.session_id;
+        }
+      } catch { /* skip */ }
+    }
+  } catch { /* ignore */ }
+  return null;
+}
+
+/**
+ * Emit action directive for idle workers to pick up available work
+ */
+function emitAutoClaimDirective(suggestedSd, availableSds) {
+  const sdId = suggestedSd || (availableSds && availableSds[0]);
+
+  if (sdId) {
+    // Structured action line (same pattern as sd-next.js AUTO_PROCEED_ACTION)
+    console.log('AUTO_PROCEED_ACTION:' + JSON.stringify({
+      action: 'start',
+      sd_key: sdId,
+      reason: 'Coordination inbox: idle session with available work'
+    }));
+  }
+
+  console.log('');
+  console.log('================================================================');
+  console.log('  ACTION REQUIRED: You are IDLE with no SD claimed.');
+  if (sdId) {
+    console.log('  Work is available. Run this command NOW:');
+    console.log('');
+    console.log('    npm run sd:next');
+    console.log('');
+    console.log('  Recommended SD: ' + sdId);
+  } else if (availableSds && availableSds.length > 0) {
+    console.log('  ' + availableSds.length + ' SD(s) available for work.');
+    console.log('  Run: npm run sd:next');
+  }
+  console.log('  AUTO-PROCEED is ON — execute immediately, do not ask.');
+  console.log('================================================================');
+  console.log('');
+}
+
+// SD-LEO-INFRA-COORDINATOR-WORKER-DELIVERED-001 — DELIVERED-layer helper.
+//
+// When the receiver hook reads an inbound INFO row with payload.request_ack=true,
+// INSERT a paired DELIVERED row back to the original sender. Provides
+// transport-layer confirmation independent of LLM activity, closing the
+// structural ~50% ACK-rate observability gap identified in the 2026-05-04 RCA.
+//
+// Contract:
+//   - FR-1: paired row uses message_type='INFO' (existing enum), subject
+//     '[DELIVERED <8-char>]', payload.delivered_for=<orig.id>,
+//     payload.sender=<this-worker>, payload.kind='transport_ack'.
+//   - FR-2: idempotent — dedup pre-SELECT by (subject, sender_session,
+//     target_session). Re-firing the hook does NOT produce a duplicate.
+//   - FR-3: best-effort — INSERT failures emit a single stderr log line and
+//     return without throwing. Caller's read_at update is unaffected.
+//   - FR-4: sender_session sourced from caller (which uses canonical resolver
+//     in lib/hooks/session-id.cjs). No new resolution paths.
+//   - FR-5: subject format exactly '[DELIVERED <first-8-hex-of-orig-id>]'.
+//   - FR-6: msg.payload?.request_ack !== true → no-op.
+//
+// Returns 'inserted' | 'duplicate' | 'skipped' | 'error' (used by tests; the
+// caller in main() ignores the return value).
+async function insertDeliveredRowIfRequested(supabase, sessionId, msg) {
+  if (!msg || !msg.payload || msg.payload.request_ack !== true) return 'skipped';
+  if (!msg.sender_session || !msg.id || !sessionId) return 'skipped';
+  try {
+    const origIdPrefix = String(msg.id).replace(/-/g, '').slice(0, 8);
+    const deliveredSubject = '[DELIVERED ' + origIdPrefix + ']';
+    const { data: existing } = await supabase
+      .from('session_coordination')
+      .select('id')
+      .eq('subject', deliveredSubject)
+      .eq('sender_session', sessionId)
+      .eq('target_session', msg.sender_session)
+      .limit(1);
+    if (existing && existing.length > 0) return 'duplicate';
+    await supabase
+      .from('session_coordination')
+      .insert({
+        sender_session: sessionId,
+        // eslint-disable-next-line no-echoed-session-coordination-target -- transport-ack replies to msg's original sender; flagged by SD-LEO-INFRA-SESSION-COORDINATION-LANE-001's census as a stale-target risk, deferred to that SD's follow-on investigation
+        target_session: msg.sender_session,
+        message_type: 'INFO',
+        subject: deliveredSubject,
+        payload: {
+          delivered_for: msg.id,
+          sender: sessionId,
+          kind: 'transport_ack'
+        },
+        sender_type: 'worker'
+      });
+    return 'inserted';
+  } catch (e) {
+    process.stderr.write('[coord-inbox] DELIVERED insert failed: ' + (e && e.message ? e.message : String(e)) + '\n');
+    return 'error';
+  }
+}
+
+// SD-LEO-INFRA-COMPLETE-TWO-WAY-001 / FR-6 (P0-1 mitigation): a coordinator reply
+// row (payload.kind='coordinator_reply') targeting this worker must be left UNREAD
+// for the worker's awaitCoordinatorReply() poll to consume — otherwise this
+// PostToolUse hook marks it read_at first and the await never sees it. Mirror of
+// the FR-3a coordinator-skip in the message loop. DEFAULT-OFF: inert unless
+// COORDINATOR_TWOWAY_V2='on' (and such rows only exist when the round-trip is used),
+// so flag-OFF inbox behavior is byte-identical (GG-2). Read the flag inside the
+// function body (GG-1). Exported for unit testing.
+function shouldSkipCoordinatorReply(msg) {
+  if (process.env.COORDINATOR_TWOWAY_V2 !== 'on') return false;
+  return !!msg
+    && msg.message_type === 'INFO'
+    && !!msg.payload
+    && msg.payload.kind === 'coordinator_reply';
+}
+
+// QF-20260504-007: Claude Code passes hook payload as JSON on stdin per its
+// PostToolUse protocol. The session_id field is the only reliable identifier of
+// the calling session — env vars (CLAUDE_SESSION_ID) are NOT propagated to hook
+// subprocesses, and per-worktree session-id files don't exist in the parent
+// worktree where the hook actually runs from. Without this read, every auto-fire
+// of this hook returned null at getCurrentSessionId() and exited silently
+// (closes feedback bdc65df3).
+async function readSessionIdFromStdin(timeoutMs = 250) {
+  return new Promise((resolve) => {
+    let buf = '';
+    const timer = setTimeout(() => resolve(null), timeoutMs);
+    try {
+      process.stdin.setEncoding('utf8');
+      process.stdin.on('data', c => { buf += c; });
+      process.stdin.on('end', () => {
+        clearTimeout(timer);
+        try { resolve(JSON.parse(buf)?.session_id || null); } catch { resolve(null); }
+      });
+      process.stdin.on('error', () => { clearTimeout(timer); resolve(null); });
+    } catch { clearTimeout(timer); resolve(null); }
+  });
+}
+
+async function main() {
+  let supabase;
+  try {
+    const { createSupabaseServiceClient } = require('../../lib/supabase-client.cjs');
+    supabase = createSupabaseServiceClient();
+  } catch {
+    return;
+  }
+
+  // QF-20260504-007: stdin is the canonical source for PostToolUse session_id.
+  // Falls back to env/file/PID-scan resolution for non-PostToolUse invocations.
+  const sessionId = (await readSessionIdFromStdin()) || getCurrentSessionId();
+  if (!sessionId) return;
+
+  // Always update heartbeat (30s throttle) — even when inbox check is skipped
+  await updateHeartbeat(supabase, sessionId);
+
+  if (!shouldCheck(sessionId)) return;
+  markChecked(sessionId);
+
+  // SD-LEO-INFRA-TWO-WAY-COORDINATOR-001 / FR-5c — check friction counters and
+  // reset if SD changed. Counters are populated by external hooks (gate failures,
+  // tool retries) — this hook only reacts when thresholds cross.
+  try {
+    const { data: sdRow } = await supabase
+      .from('claude_sessions')
+      .select('sd_key')
+      .eq('session_id', sessionId)
+      .maybeSingle();
+    resetFrictionCountersIfSdChanged(sessionId, sdRow?.sd_key || null);
+    checkFrictionThresholds(sessionId);
+  } catch { /* fail silently — friction nudge is best-effort */ }
+
+  // Check if this session is idle (no SD claimed) + whether it is the Adam advisory session.
+  // SD-LEO-FIX-FIX-COORDINATION-INBOX-001: select metadata too (same query, no extra round-trip)
+  // so the inbox classifier can avoid draining coordinator directives in an Adam session.
+  let isIdle = false;
+  let amAdam = false;
+  let amSolomon = false;
+  try {
+    const { data: sessionData } = await supabase
+      .from('claude_sessions')
+      .select('sd_key, metadata')
+      .eq('session_id', sessionId)
+      .single();
+    isIdle = !sessionData?.sd_id; // NOTE: pre-existing bug — column is sd_key, so this is ~always true (flagged, out of scope)
+    amAdam = sessionData?.metadata?.role === 'adam';
+    amSolomon = sessionData?.metadata?.role === 'solomon'; // QF-20260709-800
+  } catch { /* assume not idle / not adam / not solomon if query fails */ }
+
+  // Read unread coordination messages for this session
+  const SELECT_COLS = 'id, message_type, subject, body, payload, sender_type, sender_session, created_at';
+  const { data: oldestBatch, error: tableErr } = await supabase
+    .from('session_coordination')
+    .select(SELECT_COLS)
+    .eq('target_session', sessionId)
+    .is('read_at', null)
+    .order('created_at', { ascending: true })
+    .limit(5);
+
+  // FR-1 (SD-LEO-INFRA-MID-FLIGHT-DIRECTIVE-001): the oldest-5 cap above starves a NEWER
+  // priority-exempt row (e.g. a fence_notice) that isn't among the 5 oldest unread rows —
+  // reused bug class from Adam's QF-20260710-743. Fetch priority-exempt unread rows
+  // separately (small, uncapped-by-position) and merge them ahead of the oldest batch.
+  // Only fires when PRIORITY_EXEMPT_DIRECTIVE_KINDS is non-empty (fail-open on lib load
+  // failure — see the guarded require above).
+  let priorityRows = [];
+  if (!tableErr && PRIORITY_EXEMPT_DIRECTIVE_KINDS.length > 0) {
+    try {
+      const { data: pr } = await supabase
+        .from('session_coordination')
+        .select(SELECT_COLS)
+        .eq('target_session', sessionId)
+        .is('read_at', null)
+        .in('payload->>kind', PRIORITY_EXEMPT_DIRECTIVE_KINDS)
+        .order('created_at', { ascending: true })
+        .limit(5);
+      priorityRows = pr || [];
+    } catch { /* fail-open: priority fetch failure falls back to oldest-batch-only behavior */ }
+  }
+  const messages = mergePriorityExempt(priorityRows, oldestBatch || []);
+
+  let emittedDirective = false;
+
+  // QF-20260508-988: when this session is the active coordinator, FR-3a worker
+  // signals (message_type=INFO + payload.signal_type) must be deferred to the
+  // /coordinator inbox renderer (scripts/fleet-dashboard.cjs:1042) instead of
+  // being drained here. Otherwise the dashboard's `read_at IS NULL` filter
+  // never matches because this hook marks them read first.
+  // SD-LEO-INFRA-TWO-WAY-COORDINATOR-001 / FR-3a.
+  let amCoordinator = false;
+  if (!tableErr && messages && messages.length > 0) {
+    try {
+      const { getActiveCoordinatorId } = require(path.resolve(__dirname, '../../lib/coordinator/resolve.cjs'));
+      const coordinatorId = await getActiveCoordinatorId(supabase);
+      amCoordinator = coordinatorId && coordinatorId === sessionId;
+    } catch { /* fail-open: process messages normally if resolve.cjs missing */ }
+  }
+
+  if (!tableErr && messages && messages.length > 0) {
+    // SD-LEO-FIX-FIX-COORDINATION-INBOX-001: resolve the two-way flag once for the pure classifier.
+    const twoWayOn = process.env.COORDINATOR_TWOWAY_V2 === 'on';
+    // Output each message
+    for (const msg of messages) {
+      // SD-LEO-FIX-FIX-COORDINATION-INBOX-001: single pure decision replaces the three inline
+      // skip guards (which were wrongly gated on amCoordinator, letting Adam/workers drain
+      // coordinator-exclusive rows) and the read_at/ack stamping below.
+      const verdict = classifyInboxMessage(msg, { isIdle, twoWayOn, amAdam, amSolomon });
+      if (verdict.skip) {
+        continue;
+      }
+      const typeLabel = {
+        'CLAIM_RELEASED': 'CLAIM RELEASED',
+        'WORK_ASSIGNMENT': 'WORK ASSIGNMENT',
+        'SD_BLOCKED': 'SD BLOCKED',
+        'SD_COMPLETED_NEARBY': 'NEARBY SD COMPLETED',
+        'PRIORITY_CHANGE': 'PRIORITY CHANGE',
+        'COACHING': 'COACHING' + (msg.payload?.coaching_type ? ': ' + msg.payload.coaching_type : ''),
+        'IDENTITY_COLLISION': 'IDENTITY COLLISION',
+        'CLAIM_REMINDER': 'CLAIM REMINDER',
+        'STALE_WARNING': 'STALE WARNING',
+        'SET_IDENTITY': 'IDENTITY ASSIGNMENT',
+        'INFO': 'INFO'
+      }[msg.message_type] || msg.message_type;
+
+      // SD-LEO-INFRA-THREE-WAY-COMMS-RELIABILITY-001-B / FR-1: a chairman_directive rides on INFO but is
+      // FIRST-CLASS — relabel it (by payload.kind) so it never hides behind the generic 'INFO' banner.
+      // Classification (deliver-not-consume) is already handled by the DIRECTIVE_KINDS branch in
+      // classifyInboxMessage above (chairman_directive is in the imported allowlist). This is render-only.
+      const typeLabelFinal = (msg.payload && msg.payload.kind === 'chairman_directive')
+        ? '★ CHAIRMAN DIRECTIVE' + (msg.payload.directive_id ? ' ' + msg.payload.directive_id : '')
+        : typeLabel;
+
+      // Handle SET_IDENTITY: write per-session identity file for statusline integration
+      if (msg.message_type === 'SET_IDENTITY' && msg.payload) {
+        // SD-LEO-INFRA-ROLE-BLIND-SESSION-001 FR-4: the RECEIVER now guards too.
+        //
+        // The sending side already refuses to hand a NATO callsign to a role seat. A guard on only
+        // one side is satisfied by any caller that skips that side, which is how a role session
+        // ended up wearing a worker callsign.
+        //
+        // The damage is not only cosmetic. This write REPLACES the identity file wholesale, and the
+        // role file it clobbers is the one writeRoleStatusIdentity wrote with `role: true` — the
+        // same marker FR-2's stop hook reads to choose role guidance over worker doctrine. So an
+        // unguarded SET_IDENTITY silently un-does FR-2 for that seat, and it also burns one of the
+        // 8 claim-gated NATO names on a session that will never hold a claim.
+        //
+        // Reads the EXISTING file rather than the DB: the file is what is about to be overwritten,
+        // so it is the authority on what is being destroyed, and this path has no budget for a
+        // round trip. Fail-open — an unreadable/absent file means "not known to be a role seat",
+        // which preserves today's behaviour for every worker.
+        const refuseReason = setIdentityRefusalReason(sessionId);
+
+        if (refuseReason) {
+          // Exactly one line, per the SD. A refusal nobody can see is indistinguishable from a
+          // write that silently failed.
+          console.log(`[coordination-inbox] SET_IDENTITY REFUSED for ${sessionId}: ${refuseReason}`);
+        } else {
+          try {
+            fs.writeFileSync(getIdentityFile(sessionId), JSON.stringify({
+              color: msg.payload.color,
+              callsign: msg.payload.callsign,
+              display_name: msg.payload.display_name,
+              assigned_at: new Date().toISOString()
+            }));
+          } catch { /* ignore write errors */ }
+        }
+      }
+
+      console.log('');
+      console.log('=== COORDINATION: ' + typeLabelFinal + ' ===');
+      console.log('From: ' + (msg.sender_type || 'orchestrator'));
+      console.log('Subject: ' + msg.subject);
+      if (msg.body) console.log('Details: ' + msg.body);
+      // FR-1: for a chairman_directive, surface how to ACK it (per-role, keyed by directive_id).
+      if (msg.payload && msg.payload.kind === 'chairman_directive' && msg.payload.directive_id) {
+        console.log('ACK when actioned: node scripts/ack-chairman-directive.cjs --id ' + msg.payload.directive_id + ' --role <your-role>');
+      }
+      if (msg.payload?.suggested_sd) {
+        console.log('Suggested next SD: ' + msg.payload.suggested_sd);
+      }
+      if (msg.payload?.available_sds && msg.payload.available_sds.length > 0) {
+        console.log('Available SDs: ' + msg.payload.available_sds.join(', '));
+      }
+      console.log('===');
+
+      // Emit auto-claim directive for idle sessions receiving actionable messages
+      if (isIdle && !emittedDirective && ACTIONABLE_TYPES.includes(msg.message_type)) {
+        emitAutoClaimDirective(msg.payload?.suggested_sd, msg.payload?.available_sds);
+        emittedDirective = true;
+      }
+
+      // SD-LEO-FIX-FIX-COORDINATION-INBOX-001: stamp ONLY what the verdict says. Actionable rows
+      // and coordinator-directives-to-Adam keep read_at NULL (re-surface until genuinely actioned);
+      // pure notifications still drain (read_at + acknowledged_at) on display. Skip the UPDATE
+      // entirely when neither flag is set so read_at/acknowledged_at stay NULL.
+      // SD-LEO-INFRA-COORDINATOR-WAKE-ON-DIRECTIVE-001 FR-2/FR-3: markDelivered stamps the new
+      // delivered_at transport-receipt column instead of read_at for DIRECTIVE_KINDS rows — see
+      // classifyInboxMessage's DIRECTIVE_KINDS branch for why read_at must stay NULL here.
+      const upd = {};
+      if (verdict.markRead) upd.read_at = new Date().toISOString();
+      if (verdict.markDelivered) upd.delivered_at = new Date().toISOString();
+      if (verdict.markAck) upd.acknowledged_at = new Date().toISOString();
+      if (Object.keys(upd).length > 0) {
+        await supabase
+          .from('session_coordination')
+          .update(upd)
+          .eq('id', msg.id);
+      }
+
+      // SD-LEO-INFRA-COORDINATOR-WORKER-DELIVERED-001 — DELIVERED-layer.
+      // Best-effort, idempotent. See insertDeliveredRowIfRequested() doc.
+      await insertDeliveredRowIfRequested(supabase, sessionId, msg);
+    }
+  }
+
+  // Fallback: check metadata.coordination_message (legacy)
+  if (tableErr && tableErr.code === '42P01') {
+    const { data: session } = await supabase
+      .from('claude_sessions')
+      .select('metadata')
+      .eq('session_id', sessionId)
+      .single();
+
+    if (!session?.metadata?.coordination_message) return;
+    const msg = session.metadata.coordination_message;
+    if (msg.acknowledged) return;
+
+    console.log('');
+    console.log('=== COORDINATION MESSAGE ===');
+    console.log('From: ' + (msg.from || 'orchestrator'));
+    console.log('Message: ' + (msg.message || ''));
+    if (msg.suggested_sd) console.log('Suggested next SD: ' + msg.suggested_sd);
+    if (msg.available_sds?.length > 0) console.log('Available SDs: ' + msg.available_sds.join(', '));
+    console.log('===');
+
+    if (isIdle && !emittedDirective) {
+      emitAutoClaimDirective(msg.suggested_sd, msg.available_sds);
+      emittedDirective = true;
+    }
+
+    const updatedMeta = { ...session.metadata };
+    updatedMeta.coordination_message.acknowledged = true;
+    updatedMeta.coordination_message.acknowledged_at = new Date().toISOString();
+    await supabase
+      .from('claude_sessions')
+      .update({ metadata: updatedMeta })
+      .eq('session_id', sessionId);
+    return;
+  }
+
+  // PROACTIVE CHECK: If idle with no messages, check for available SDs directly
+  if (isIdle && !emittedDirective) {
+    try {
+      const { data: availableSDs } = await supabase
+        .from('strategic_directives_v2')
+        .select('sd_key')
+        .in('status', ['draft', 'ready', 'in_progress'])
+        .is('claiming_session_id', null)
+        .not('current_phase', 'eq', 'COMPLETED')
+        .order('priority_score', { ascending: false })
+        .limit(3);
+
+      // SD-LEO-INFRA-PARKED-WORKER-CLAIM-LAPSE-001 FR-4: claiming_session_id alone is NOT
+      // evidence an SD is free. A live worker parked on ScheduleWakeup can have its claim
+      // transiently cleared while it is still building, and this query would then advertise
+      // its SD for auto-claim — the second-dispatch risk this SD exists to close. Cross-check
+      // against the session side, the pattern coordinator-email-summary.mjs:64-66 already uses
+      // ("claiming_session_id drifts to NULL after a claim-sweep even while the worker keeps
+      // building"). That workaround existed in the email path and was never propagated here.
+      // Every column the session-liveness SSOT reads must be selected, or the cross-check silently
+      // degrades to whichever signals happen to be present — a PARKED worker stops heartbeating on
+      // purpose, and a busy one mid sub-agent call emits no heartbeat either, so heartbeat_at alone
+      // is not evidence that nobody is building. is_alive / terminal_id / process_alive_at carry the
+      // raw, PID and tick signals respectively.
+      const { data: liveSessions, error: liveSessionsErr } = await supabase
+        .from('claude_sessions')
+        .select('sd_key, heartbeat_at, expected_silence_until, is_alive, terminal_id, process_alive_at')
+        .not('sd_key', 'is', null);
+      if (liveSessionsErr) {
+        // The consequence is already safe (data is null on error → selectAvailableSds fails closed
+        // → nothing advertised), but the surrounding block swallows exceptions, so a persistent
+        // claude_sessions failure would suppress dispatch INDEFINITELY and look identical to
+        // "nothing available". Given this fleet's belt-starvation history, make it observable.
+        console.error(`[coordination-inbox] live-session cross-check FAILED (${liveSessionsErr.message}) — suppressing auto-claim dispatch this tick (fail-closed).`);
+      }
+
+      const claimable = selectAvailableSds(availableSDs, liveSessions);
+      if (claimable.length > 0) {
+        emitAutoClaimDirective(
+          claimable[0].sd_key,
+          claimable.map(sd => sd.sd_key)
+        );
+      }
+    } catch { /* fail silently */ }
+  }
+}
+
+/**
+ * SD-LEO-INFRA-PARKED-WORKER-CLAIM-LAPSE-001 FR-7/FR-4 — the dispatch-availability predicate,
+ * extracted from main() so it can be asserted directly. It previously lived inline, which meant
+ * any test of it could only have mocked the query it was supposed to be testing.
+ *
+ * PURE. Returns the SDs that are genuinely claimable: those whose sd_key is NOT held by a live
+ * session. Fails CLOSED on an unusable session list — if we cannot prove nobody is building an
+ * SD, we do not advertise it. (Emptiness is not proof of absence: an unchecked query error
+ * returning null was the root cause of the claim lapse this SD came from.)
+ *
+ * @param {Array<{sd_key:string}>|null} sdRows        candidate SDs (claiming_session_id IS NULL)
+ * @param {Array<{sd_key:string, heartbeat_at:string}>|null} liveSessions  sessions holding an sd_key
+ * @param {{nowMs?:number, livenessWindowMs?:number}} [opts]
+ * @returns {Array<{sd_key:string}>}
+ */
+function selectAvailableSds(sdRows, liveSessions, opts = {}) {
+  const rows = Array.isArray(sdRows) ? sdRows : [];
+  if (rows.length === 0) return [];
+  // Fail closed: a null/undefined session list means the cross-check could not run.
+  if (!Array.isArray(liveSessions)) return [];
+  const nowMs = opts.nowMs ?? Date.now();
+
+  // Liveness is delegated to the READ-TIME SSOT (lib/fleet/session-liveness.cjs), which declares
+  // itself "used by EVERY consumer" and covers FIVE signals: raw is_alive, fresh heartbeat, live
+  // PID marker, fresh process_alive_at tick, and an armed expected_silence_until window.
+  //
+  // This predicate first shipped with a hand-rolled two-signal check (heartbeat + silence). That
+  // left a worker which is PID-alive and tick-fresh but heartbeat-stale INVISIBLE here, so its SD
+  // was still advertised for auto-claim — the COLLISION direction, which is the harmful one. The
+  // omission is notable because FR-2 of this same SD went out of its way to compute an alive-PID
+  // set locally for the sweep, on the explicit reasoning that dropping the PID signal "would
+  // silently degrade shouldHoldClaim to heartbeat-only and lose exactly the PID-aliveness signal
+  // that distinguishes a parked-but-live worker from a dead one". That reasoning was correct and
+  // simply had not been carried one file over. Re-deriving liveness locally also forked a second
+  // heartbeat threshold and a fourth cap-constant name away from the SSOT.
+  //
+  // The SSOT's ONE-DIRECTIONAL contract is what makes it safe here: it can only ever read MORE
+  // alive than the raw flag, never less. For a dispatch-advertisement guard that is the correct
+  // asymmetry — a false HOLD costs a little dispatch delay, while a false FREE costs a collision
+  // with a live builder, which is the failure this SD exists to prevent.
+  //
+  // A dead session does not hold its SD forever: the sweep independently writes is_alive=false
+  // for genuinely dead sessions, which retires every raw/PID/tick signal here.
+  const aliveCcPids = opts.aliveCcPids ?? null;
+  const isHolding = (s) => {
+    if (!s || !s.sd_key) return false;
+    try {
+      return isSessionAlive(s, { nowMs, aliveCcPids }).alive === true;
+    } catch {
+      // Fail CLOSED for this row: if liveness cannot be determined we must not conclude the
+      // worker is gone. Treating an unanswerable check as "free" is the root-cause pattern.
+      return true;
+    }
+  };
+
+  const heldByLive = new Set(liveSessions.filter(isHolding).map((s) => s.sd_key));
+  return rows.filter((sd) => sd && sd.sd_key && !heldByLive.has(sd.sd_key));
+}
+
+if (require.main === module) {
+  main().catch(() => { /* fail silently */ });
+}
+
+module.exports = {
+  setIdentityRefusalReason,
+  // SD-LEO-INFRA-PARKED-WORKER-CLAIM-LAPSE-001 FR-7: exported so the dispatch-availability
+  // predicate can be asserted directly instead of through a mock of its own query.
+  selectAvailableSds,
+  SESSION_LIVENESS_WINDOW_MS,
+  getCurrentSessionId,
+  readSessionIdFromStdin,
+  // QF-20260504-912 — exposed for per-session throttle/heartbeat tests
+  shouldCheck,
+  markChecked,
+  shouldHeartbeat,
+  markHeartbeat,
+  getThrottleFile,
+  getHeartbeatFile,
+  // SD-LEO-INFRA-COORDINATOR-WORKER-DELIVERED-001 — exposed for unit tests
+  insertDeliveredRowIfRequested,
+  // SD-LEO-INFRA-COMPLETE-TWO-WAY-001 / FR-6 — exposed for unit tests
+  shouldSkipCoordinatorReply,
+  // SD-LEO-FIX-FIX-COORDINATION-INBOX-001 — exposed for unit tests
+  classifyInboxMessage,
+  // SD-LEO-INFRA-MID-FLIGHT-DIRECTIVE-001 / FR-1 — exposed for unit tests
+  mergePriorityExempt
+};
