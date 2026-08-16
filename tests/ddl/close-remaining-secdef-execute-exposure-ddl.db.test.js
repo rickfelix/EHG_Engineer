@@ -83,7 +83,17 @@ const BUCKET_C = [
 // sibling's own CREATE OR REPLACE (using ITS real return type) equally unaffected by whichever
 // ran first.
 const RETURN_TYPE_OVERRIDES = {
-  record_venture_error: { returns: 'jsonb', body: "SELECT '{}'::jsonb" }, // matches venture-ingest-key-binding-ddl / venture-user-feedback-ownership-rpc-ddl
+  // record_venture_error: sibling stubs also declare `p_context jsonb DEFAULT '{}'::jsonb` —
+  // CREATE OR REPLACE can ADD or change a default but cannot REMOVE one from an existing
+  // function ("cannot remove parameter defaults from existing function", 42P13), so createArgs
+  // carries the default ONLY for the CREATE statement. GRANT/REVOKE and regprocedure casts
+  // (grantState() below) resolve purely by name+TYPES — defaults are not part of a function's
+  // identity there — so they keep using the plain, default-free `args` from BUCKET_C unchanged.
+  record_venture_error: {
+    returns: 'jsonb',
+    body: "SELECT '{}'::jsonb",
+    createArgs: "p_venture_id uuid, p_error_hash text, p_message text, p_context jsonb DEFAULT '{}'::jsonb",
+  }, // matches venture-ingest-key-binding-ddl / venture-user-feedback-ownership-rpc-ddl
   venture_exists_and_active: { returns: 'boolean', body: 'SELECT true' }, // matches venture-ingest-key-binding-ddl / venture-user-feedback-ownership-rpc-ddl / telegram-bot-insert-feedback-drop-ddl
   fn_anon_ingress_prior_hour_count: { returns: 'bigint', body: 'SELECT 0::bigint' }, // matches venture-ingest-key-binding-ddl / venture-user-feedback-ownership-rpc-ddl
   check_feedback_rate_limit: { returns: 'boolean', body: 'SELECT true' }, // matches venture-user-feedback-ownership-rpc-ddl / telegram-bot-insert-feedback-drop-ddl
@@ -93,8 +103,9 @@ function stubFunctionSql([name, args]) {
   const override = RETURN_TYPE_OVERRIDES[name];
   const returns = override?.returns ?? 'void';
   const body = override?.body ?? 'SELECT NULL::void';
+  const createArgs = override?.createArgs ?? args;
   return `
-CREATE OR REPLACE FUNCTION public.${name}(${args})
+CREATE OR REPLACE FUNCTION public.${name}(${createArgs})
 RETURNS ${returns} LANGUAGE sql SECURITY DEFINER AS $stub$ ${body}; $stub$;
 GRANT EXECUTE ON FUNCTION public.${name}(${args}) TO PUBLIC, anon, authenticated, service_role;
 `;
