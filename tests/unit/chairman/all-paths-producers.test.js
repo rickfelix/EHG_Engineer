@@ -28,6 +28,7 @@ const PRODUCERS = [
   // —— routed through recordPendingDecision (creation-path escalation) ——
   { producer: 'lib/adam/stall-alert.js', path: 'creation', shape: { decision_type: 'session_question', blocking: true, raised_by: 'adam' } },
   { producer: 'scripts/coordinator-escalate-question.mjs (critical)', path: 'creation', shape: { decision_type: 'session_question', blocking: true, raised_by: undefined } },
+  { producer: 'lib/chairman/chairman-gated-decision-row-guard.mjs (SD-LEO-INFRA-CHAIRMAN-GATED-SD-DECISION-ROW-GUARD-001)', path: 'creation', shape: { decision_type: 'session_question', blocking: true, raised_by: 'adam' } },
   // —— direct inserts into chairman_decisions (sweep-path escalation) ——
   { producer: 'lib/eva/event-bus/handlers/budget-exceeded.js', path: 'sweep', shape: { decision_type: 'budget_override', blocking: true } },
   { producer: 'lib/eva/event-bus/handlers/stage-failed.js', path: 'sweep', shape: { decision_type: 'stage_failure_review', blocking: true } },
@@ -47,8 +48,8 @@ const PRODUCERS = [
 ];
 
 describe('ALL-PATHS: a blocking pending row from EVERY enumerated producer reaches escalation (FR-6)', () => {
-  it('enumeration pin: 16 producer shapes (update deliberately when adding a producer)', () => {
-    expect(PRODUCERS.length).toBe(16);
+  it('enumeration pin: 17 producer shapes (update deliberately when adding a producer)', () => {
+    expect(PRODUCERS.length).toBe(17);
   });
 
   for (const { producer, path: escalationPath, shape } of PRODUCERS) {

@@ -1,0 +1,48 @@
+{
+  "_comment": "SD-LEO-INFRA-CLOSE-REMAINING-SECURITY-001. Bucket manifest for the anon/PUBLIC-axis half of scripts/audit-rpc-execute-grants.mjs. Every SECURITY DEFINER function in public that currently has anon OR public EXECUTE MUST appear here (enforced by the completeness gate) so a newly-exposed function can never silently evade review. Signatures captured live 2026-08-16 via has_function_privilege() / pg_get_function_identity_arguments(), not from a migration file.",
+  "captured_at": "2026-08-16T01:36:58.765Z",
+  "buckets": {
+    "A": {
+      "description": "REVOKE EXECUTE FROM PUBLIC, anon, authenticated; GRANT TO service_role only. Trigger-only or SECURITY-DEFINER-internal-only functions.",
+      "functions": [
+        { "signature": "public.fn_enforce_stage_advancement_artifact_gate()", "reason": "Trigger function, no client-facing caller." },
+        { "signature": "public.fn_quick_fixes_validate_target_application()", "reason": "Trigger function, no client-facing caller." },
+        { "signature": "public.fn_stage_artifact_precondition(p_venture_id uuid, p_stage integer)", "reason": "Direct .rpc() caller exists at scripts/harness/s20-fixture.mjs:219, but that caller builds a service_role client (SUPABASE_SERVICE_ROLE_KEY) — safe to revoke authenticated by that mechanism, not because 'called only by SECDEF fn' (that original reasoning was factually wrong and corrected during LEAD/PLAN review)." },
+        { "signature": "public.fn_user_has_company_access(company_uuid uuid)", "reason": "Reverses a prior explicit defense-in-depth allowlisting (20260603_03_revoke_secdef_execute_from_anon_authenticated.sql). Safe today (zero policies reference it) but scripts/lint/rls-anon-tenant-predicate-lint.mjs:207 steers future policy authors toward it as an auth primitive — flagged explicitly to the chairman as a reversal, not a routine entry." },
+        { "signature": "public.fn_verify_and_consume_stepup_token(p_token uuid, p_decision_id uuid)", "reason": "Called only internally by approve_chairman_decision/reject_chairman_decision (SECURITY DEFINER); no committed CREATE FUNCTION found in-repo, signature confirmed live." },
+        { "signature": "public.log_sd_mutation_audit()", "reason": "Trigger function on strategic_directives_v2, 0 policies/callers found." }
+      ]
+    },
+    "B": {
+      "description": "REVOKE EXECUTE FROM PUBLIC, anon; GRANT TO service_role, authenticated (authenticated explicitly preserved). App-called or RLS-policy-backing functions.",
+      "functions": [
+        { "signature": "public.approve_chairman_decision(p_decision_id uuid, p_rationale text, p_decided_by text, p_approval_type approval_type_enum, p_stepup_token uuid)", "reason": "App-called (chairman decision queue)." },
+        { "signature": "public.check_feedback_duplicate(p_venture_id uuid, p_title text)", "reason": "App-called." },
+        { "signature": "public.claim_sd(p_sd_id text, p_session_id text, p_track text, p_force_takeover boolean, p_client_gate_version integer)", "reason": "App-called; also used by the fleet harness (service_role) and the chairman Telegram bot (service_role client)." },
+        { "signature": "public.fn_is_service_role()", "reason": "RLS policy helper backing 7 policies." },
+        { "signature": "public.fn_list_chairman_webauthn_credentials()", "reason": "App-called (chairman WebAuthn flow)." },
+        { "signature": "public.fn_user_has_venture_access(venture_uuid uuid)", "reason": "RLS policy helper backing 17 policies." },
+        { "signature": "public.fn_write_kill_audit_trail(p_venture_id uuid, p_lifecycle_stage integer, p_rationale text, p_decided_by uuid, p_source text, p_decision_id uuid)", "reason": "Moved here from Bucket A during PLAN: has a SECURITY INVOKER caller (fn_chairman_decide, prosecdef=false) whose inner call runs AS THE CALLING ROLE — revoking authenticated would have broken it. This is the only such instance among all 17 originally-candidate functions." },
+        { "signature": "public.get_gate_decision_status(p_venture_id uuid, p_stage integer)", "reason": "App-called." },
+        { "signature": "public.reject_chairman_decision(p_decision_id uuid, p_rationale text, p_decided_by text, p_stepup_token uuid)", "reason": "App-called (chairman decision queue)." },
+        { "signature": "public.upsert_operator_cash_burn(p_cash_usd numeric, p_ai_burn_usd numeric, p_other_burn_usd numeric, p_revenue_usd numeric)", "reason": "App-called." }
+      ]
+    },
+    "C": {
+      "description": "REVOKE NOTHING. Anon-facing-policy-backed or genuinely external-integration-shaped. The migration must not touch these; the completeness gate still requires them to be listed so a future drift (e.g. a Bucket C function's policy being removed) is visible.",
+      "functions": [
+        { "signature": "public.check_feedback_rate_limit(p_venture_id uuid)", "reason": "Referenced by an anon-facing RLS policy." },
+        { "signature": "public.fn_advance_pipeline_stage(p_case_id uuid, p_from_stage text, p_to_stage text, p_provenance_event_id uuid, p_idempotency_key uuid)", "reason": "No internal caller found across any of the 5 scan dimensions — treated as a signature of an external integration, not evidence of an orphan (per the SD's own adopted principle), not revoked on absence of evidence." },
+        { "signature": "public.fn_is_chairman()", "reason": "Referenced by an anon-facing RLS policy (29 policies total)." },
+        { "signature": "public.fn_relay_insert_sms_candidate(p_provider_message_id text, p_from_phone text, p_to_phone text, p_body_raw text, p_relay_secret text)", "reason": "Anon-only grant with zero internal callers — almost certainly the Twilio inbound SMS webhook, the chairman's channel to reach Adam. Revoking would break it." },
+        { "signature": "public.is_leo_admin()", "reason": "Referenced by an anon-facing RLS policy (9 policies)." },
+        { "signature": "public.lhe_pending_migration_applied()", "reason": "No internal caller found across any scan dimension — treated as external-integration-shaped, not revoked on absence of evidence." },
+        { "signature": "public.record_venture_error(p_venture_id uuid, p_error_hash text, p_message text, p_context jsonb)", "reason": "No internal caller found across any scan dimension — treated as external-integration-shaped, not revoked on absence of evidence." },
+        { "signature": "public.set_session_working_context(p_session_id text, p_wc jsonb)", "reason": "No internal caller found across any scan dimension — treated as external-integration-shaped, not revoked on absence of evidence." },
+        { "signature": "public.venture_exists_and_active(p_venture_id uuid)", "reason": "Referenced by an anon-facing RLS policy (feedback.venture_user_insert_feedback)." },
+        { "signature": "public.is_chairman_role()", "reason": "Moved here from Bucket B during PLAN: referenced by a roles={public} policy on archetype_benchmarks_admin (RLS enabled, anon holds table-level SELECT) — roles={public} includes anon, so the SD's own Bucket-C exclusion rule applies." },
+        { "signature": "public.fn_anon_ingress_prior_hour_count(p_source_type text)", "reason": "Newly-triaged during PLAN: backs feedback::anon_feedback_ingress_bounds (roles={public}) — it IS the anon ingress rate-limit bound, revoking it would defeat its own purpose." }
+      ]
+    }
+  }
+}

@@ -638,7 +638,8 @@
     "audit:anon-write-contract": "node scripts/anon-write-contract-probe.mjs",
     "test:cjs-pins": "node tests/unit/governance/fixture-exclusion-cjs-pin.cjs",
     "lint:fixture-producer-guard": "node scripts/lint/fixture-producer-guard-lint.mjs",
-    "lint:shell-injection-argv": "node scripts/lint/shell-injection-argv-lint.mjs"
+    "lint:shell-injection-argv": "node scripts/lint/shell-injection-argv-lint.mjs",
+    "lint:secdef-execute-revoke": "node scripts/lint/secdef-execute-revoke-lint.mjs"
   },
   "dependencies": {
     "@anthropic-ai/sdk": "^0.85.0",
@@ -674,7 +675,7 @@
     "js-yaml": "^4.1.1",
     "openai": "^5.23.2",
     "p-retry": "^7.0.0",
-    "pg": "^8.18.0",
+    "pg": "^8.23.0",
     "playwright": "^1.58.2",
     "sharp": "^0.35.3",
     "stripe": "^18.5.0",

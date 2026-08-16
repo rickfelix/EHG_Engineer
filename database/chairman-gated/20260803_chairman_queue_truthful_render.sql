@@ -1,5 +1,11 @@
 -- SD-LEO-INFRA-CHAIRMAN-DECISION-QUEUE-003 — FR-3: truthful render
 --
+-- SUPERSEDED-BY: database/chairman-gated/20260817_chairman_all_decision_signals_merged.sql
+-- (QF-20260816-456, 2026-08-16). Do NOT apply this file — its title/status/priority fixes were
+-- merged into the successor alongside 20260803_chairman_source4_rework.sql's decided_at/
+-- decided_by/security_invoker fixes, which this file does not have. Kept here unmodified for
+-- history/diff provenance only.
+--
 -- STAGED, NOT APPLIED. Chairman-facing view = TIER-2.
 --
 -- AUTHORED AGAINST THE LIVE VIEW, NOT THE PROPOSED FILE. FR-3's mandatory pin: the PROPOSED

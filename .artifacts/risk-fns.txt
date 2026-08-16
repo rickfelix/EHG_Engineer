@@ -1,0 +1,6 @@
+fn_enforce_stage_advancement_artifact_gate
+fn_quick_fixes_validate_target_application
+fn_stage_artifact_precondition
+fn_user_has_company_access
+fn_verify_and_consume_stepup_token
+fn_write_kill_audit_trail

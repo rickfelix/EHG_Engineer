@@ -55,6 +55,11 @@ on:
       # first inside the test itself.
       - 'database/chairman-gated/20260815_venture_user_feedback_ownership_rpc.sql'
       - 'tests/ddl/venture-user-feedback-ownership-rpc-ddl.db.test.js'
+      # SD-LEO-INFRA-CLOSE-REMAINING-SECURITY-001. Same TR-5 fix, applied to a NEW pair rather
+      # than amended-in: this workflow's own paths filter is literal, so a PR touching only this
+      # SD's migration and its ddl test would otherwise trigger nothing.
+      - 'database/chairman-gated/20260816_close_remaining_secdef_execute_exposure.sql'
+      - 'tests/ddl/close-remaining-secdef-execute-exposure-ddl.db.test.js'
       - 'vitest.ddl.config.mjs'
       # Self-validating: edits to this file re-run it.
       - '.github/workflows/drive-reports-ddl.yml'

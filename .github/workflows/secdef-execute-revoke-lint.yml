@@ -1,0 +1,42 @@
+name: SECDEF EXECUTE-Revoke Lint
+
+# SD-LEO-INFRA-CLOSE-REMAINING-SECURITY-001 FR-6.
+#
+# Blocks any PR introducing a new SECURITY DEFINER function whose REVOKE omits PUBLIC (a no-op,
+# since anon/authenticated inherit PUBLIC's grant) or leaves anon/authenticated unaddressed --
+# the exact recurrence mechanism this SD's own migration exists to close (46 of 137 functions
+# were exposed this way, with zero migration ever having written a REVOKE). A pre-existing
+# backlog (326 findings, scanned advisory-only via --all, never blocking) is NOT retroactively
+# enforced here -- this lint's job is to stop NEW non-compliant functions, matching
+# rls-anon-tenant-predicate-lint.yml's own bounded-scope posture.
+#
+# GENUINELY BLOCKING (no continue-on-error): mirrors rls-anon-tenant-predicate-lint.yml's own
+# rationale -- this repo's `npm run lint` is not invoked by any other CI workflow, so a
+# dedicated workflow is the real enforcement mechanism.
+
+on:
+  pull_request:
+    paths:
+      - 'database/migrations/**/*.sql'
+      - 'supabase/migrations/**/*.sql'
+      - 'database/chairman-gated/**/*.sql'
+      - 'scripts/lint/secdef-execute-revoke-lint.mjs'
+      - 'scripts/lint/secdef-execute-revoke-allowlist.json'
+      - '.github/workflows/secdef-execute-revoke-lint.yml'
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  secdef-execute-revoke-lint:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+      - name: Detect new SECURITY DEFINER functions with an incomplete EXECUTE revoke
+        run: node scripts/lint/secdef-execute-revoke-lint.mjs

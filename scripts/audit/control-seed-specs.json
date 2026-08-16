@@ -349,5 +349,24 @@
       "input": "git ls-files -z output (every tracked file path, NUL-delimited) and each file content read via readFileSync -- assertion A regex-matches a postgres(ql):// URL shape per line, assertion B sliding-window-hashes each whitespace-delimited token",
       "seen": "Local live run against this repo's full tracked tree (17,821 files) on 2026-08-16 found 2 real un-allowlisted assertion-A matches by exact path (CLAUDE_CORE.md:1218, scripts/__tests__/replay/README.md:75) before they were reviewed and added to PATH_ALLOWLIST -- a genuine positive in the deployment tree, not a fixture, proving assertion A receives and evaluates real repo content."
     }
+  },
+  {
+    "name": "secdef-execute-revoke-lint",
+    "script": "scripts/lint/secdef-execute-revoke-lint.mjs",
+    "rootFlag": "--root",
+    "extraArgs": [
+      "--all"
+    ],
+    "note": "SD-LEO-INFRA-CLOSE-REMAINING-SECURITY-001 FR-6. --all mode used because --diff computes a git merge-base against origin/main, which does not exist in the seed harness's freshly git-init'd scratch dir; --all walks the scoped dirs by filesystem readdir instead, which works against any root.",
+    "fixtures": [
+      {
+        "path": "database/migrations/seeded_secdef_execute_defect.sql",
+        "content": "-- SEEDED DEFECT: REVOKE omits PUBLIC, so anon/authenticated inherit PUBLIC's EXECUTE grant\n-- and the REVOKE below is a no-op for any function that also carries a PUBLIC grant.\nCREATE FUNCTION public.seeded_secdef_defect() RETURNS void LANGUAGE sql SECURITY DEFINER AS $$ SELECT 1 $$;\nREVOKE EXECUTE ON FUNCTION public.seeded_secdef_defect() FROM anon, authenticated;\n"
+      }
+    ],
+    "observability_proof": {
+      "input": "migration SQL file TEXT under database/migrations/, supabase/migrations/, database/chairman-gated/ (paren-balance-scanned for CREATE [OR REPLACE] FUNCTION ... SECURITY DEFINER, then regex-matched for a same-function REVOKE naming PUBLIC and each of anon/authenticated addressed). Consumes no DB columns and no live catalog state -- that axis is the separate scripts/audit-rpc-execute-grants.mjs completeness gate, declared as this control's own KNOWN LIMITATION.",
+      "seen": "live --all sweep against this repo's real database/migrations/, supabase/migrations/, database/chairman-gated/ at HEAD (session 642532a6, 2026-08-16): 1517 files scanned, 326 real pre-existing violations by exact file+function name -- a genuine positive in the deployment environment, not a fixture. The migration this SD authored (database/chairman-gated/20260816_close_remaining_secdef_execute_exposure.sql) was independently confirmed to score ZERO findings against the same live sweep."
+    }
   }
 ]

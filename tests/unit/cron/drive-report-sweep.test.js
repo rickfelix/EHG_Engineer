@@ -31,6 +31,7 @@ import { armedProcessKey } from '../../../lib/machinery-class/armed-registration
 import { produceDriveReport } from '../../../scripts/drive-report-produce.mjs';
 import { LAST_RUN_FIELD } from '../../../lib/drive-loop/report-posture.js';
 import { makeCapacityVerdictPersist } from '../../../scripts/lib/capacity-verdict-store.mjs';
+import { gatherCapacityInputs } from '../../../scripts/lib/capacity-inputs.mjs';
 import { hourlyWindowKey } from '../../../scripts/cron/drive-report-hourly-sweep.mjs';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
@@ -863,6 +864,32 @@ describe('FR-3 — leg4 is injected, not declared unavailable', () => {
       persistVerdict: okPersist([]),
     });
     expect(leg.unavailable.reason).toMatch(/belt query failed/);
+  });
+
+  // QF-20260816-435: the [TRAP] test above proves scoreCapacityLeg converts ANY thrown gather to
+  // unavailable, using an arbitrary stub. These two prove the REAL gatherCapacityInputs (not a
+  // stub) now actually throws when the sessions or SD read fails — the fix this QF makes — and
+  // that no belt_capacity_verdicts row gets persisted when it does.
+  it('[QF-20260816-435] a real claude_sessions read failure -> leg4 unavailable, nothing persisted', async () => {
+    const captured = [];
+    const client = { from(n) { return n === 'claude_sessions' ? { select() { throw new Error('sessions down'); } } : { select() { return this; }, eq() { return this; }, in() { return this; }, is() { return this; }, not() { return this; }, gte() { return this; }, order() { return this; }, range() { return Promise.resolve({ data: [], error: null }); }, then(res) { return Promise.resolve({ data: [], error: null }).then(res); } }; } };
+    const leg = await scoreCapacityLeg({
+      gatherCapacity: () => gatherCapacityInputs(client),
+      persistVerdict: okPersist(captured),
+    });
+    expect(leg.unavailable.reason).toMatch(/sessions down/);
+    expect(captured, 'a failed gather must never reach the persist call').toHaveLength(0);
+  });
+
+  it('[QF-20260816-435] a real strategic_directives_v2 read failure -> leg4 unavailable, nothing persisted', async () => {
+    const captured = [];
+    const client = { from(n) { return n === 'strategic_directives_v2' ? { select() { throw new Error('sds down'); } } : { select() { return this; }, eq() { return this; }, in() { return this; }, is() { return this; }, not() { return this; }, gte() { return this; }, order() { return this; }, range() { return Promise.resolve({ data: [], error: null }); }, then(res) { return Promise.resolve({ data: [], error: null }).then(res); } }; } };
+    const leg = await scoreCapacityLeg({
+      gatherCapacity: () => gatherCapacityInputs(client),
+      persistVerdict: okPersist(captured),
+    });
+    expect(leg.unavailable.reason).toMatch(/sds down/);
+    expect(captured, 'a failed gather must never reach the persist call').toHaveLength(0);
   });
 
   it('buildGather REFUSES an uninjected leg4 rather than defaulting it', () => {

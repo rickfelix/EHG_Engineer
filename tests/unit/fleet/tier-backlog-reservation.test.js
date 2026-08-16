@@ -12,6 +12,8 @@ import { ladderTopRank } from '../../../lib/fleet/tier-ladder.cjs';
 import { idleWorkerCensusByTier, lowerTierBacklog, fetchLowerTierBacklogData } from '../../../lib/fleet/tier-backlog.cjs';
 import { classifyDispatchIneligibility } from '../../../lib/fleet/claim-eligibility.cjs';
 import { assertWorkerTierAllowed } from '../../../lib/coordinator/dispatch.cjs';
+import { tierRankVerdict } from '../../../lib/fleet/tier-ladder.cjs';
+import { readFileSync } from 'fs';
 
 const TOP = ladderTopRank();
 
@@ -308,5 +310,79 @@ describe('FR-6 both-enforcement-sites-consistent: same backlog data, same verdic
     await expect(assertWorkerTierAllowed(sb, {
       message_type: 'WORK_ASSIGNMENT', target_session: 'target-worker', payload: { assigned_sd: 'SD-LOWER-001' },
     })).rejects.toMatchObject({ code: 'DISPATCH_RESERVED_NO_LOWER_BACKLOG' });
+  });
+});
+
+// ---- SD-LEO-INFRA-SELF-CLAIM-TIER-ENFORCEMENT-001 (FR-4/TS-5): shared tier-rank predicate ----
+//
+// Before this SD, lib/fleet/claim-eligibility.cjs tierAxes and lib/coordinator/dispatch.cjs
+// assertWorkerTierAllowed independently hand-rolled the SAME minRank/workerRank comparison,
+// sharing only leaf primitives (resolveWorkerTierRank, lowerTierBacklog) — confirmed by direct
+// code read during this SD's PLAN phase, not assumed. tierAxes defensively checked
+// Number.isFinite(workerTierRank) before comparing; assertWorkerTierAllowed did not, relying
+// entirely on resolveWorkerTierRank's current contract (never returns non-finite) to stay correct
+// by coincidence rather than by its own construction. Both now delegate to tierRankVerdict
+// (lib/fleet/tier-ladder.cjs).
+describe('FR-4 tierRankVerdict — the ONE shared tier-rank predicate', () => {
+  it('unscored SD (non-finite minTierRank) -> null, regardless of workerTierRank', () => {
+    expect(tierRankVerdict(1, undefined)).toBeNull();
+    expect(tierRankVerdict(undefined, undefined)).toBeNull();
+    expect(tierRankVerdict(1, NaN)).toBeNull();
+  });
+
+  it('missing/non-finite workerTierRank on a SCORED SD -> tier_stamp_missing (fail closed)', () => {
+    expect(tierRankVerdict(undefined, 4)).toBe('tier_stamp_missing');
+    expect(tierRankVerdict(NaN, 4)).toBe('tier_stamp_missing');
+  });
+
+  it('workerTierRank below minTierRank -> above_worker_tier', () => {
+    expect(tierRankVerdict(2, 4)).toBe('above_worker_tier');
+  });
+
+  it('workerTierRank at or above minTierRank -> null (allowed)', () => {
+    expect(tierRankVerdict(4, 4)).toBeNull();
+    expect(tierRankVerdict(5, 4)).toBeNull();
+  });
+
+  // Source-pinned: proves BOTH call sites actually delegate to the shared function, not merely
+  // that their outputs happen to coincide for the cases exercised above. A future edit that
+  // reintroduces an inline `minRank > workerRank` comparison in either file, bypassing
+  // tierRankVerdict, is caught here even before any behavioral test would notice.
+  it('both claim-eligibility.cjs tierAxes and dispatch.cjs assertWorkerTierAllowed call tierRankVerdict', () => {
+    const claimEligibilitySrc = readFileSync(new URL('../../../lib/fleet/claim-eligibility.cjs', import.meta.url), 'utf8');
+    const dispatchSrc = readFileSync(new URL('../../../lib/coordinator/dispatch.cjs', import.meta.url), 'utf8');
+    expect(claimEligibilitySrc).toMatch(/tierRankVerdict\(ctx\.worker_tier_rank, minRank\)/);
+    expect(dispatchSrc).toMatch(/tierRankVerdict\(workerRank, minRank\)/);
+  });
+});
+
+describe('FR-4 above_worker_tier agreement between the two real call sites', () => {
+  // Complements the existing backlog-only agreement test above (line ~295) with the more common
+  // above_worker_tier case, reached via BOTH real entry points (not the extracted predicate in
+  // isolation) so a fail-open catch-all elsewhere in either function cannot silently swallow a
+  // block and still read green.
+  it('classifyDispatchIneligibility and assertWorkerTierAllowed both refuse the same above-tier claim', async () => {
+    const targetSession = targetWorkerSession(2);
+    const targetSd = sdRow('SD-ABOVE-001', 4);
+    const liveWorkers = [liveWorker('w-1'), targetSession];
+    const sb = stubSupabase({ liveWorkers, sds: [targetSd], targetSession, targetSd });
+
+    const selfClaimVerdict = classifyDispatchIneligibility(targetSd, { worker_tier_rank: 2, tiering_active: true });
+    expect(selfClaimVerdict).toBe('above_worker_tier');
+    await expect(assertWorkerTierAllowed(sb, {
+      message_type: 'WORK_ASSIGNMENT', target_session: 'target-worker', payload: { assigned_sd: 'SD-ABOVE-001' },
+    })).rejects.toMatchObject({ code: 'DISPATCH_ABOVE_WORKER_TIER' });
+  });
+
+  it('both ALLOW the same at-or-above-tier claim (two-sided control)', async () => {
+    const targetSession = targetWorkerSession(4);
+    const targetSd = sdRow('SD-ELIGIBLE-001', 4);
+    const liveWorkers = [liveWorker('w-1'), targetSession];
+    const sb = stubSupabase({ liveWorkers, sds: [targetSd], targetSession, targetSd });
+
+    expect(classifyDispatchIneligibility(targetSd, { worker_tier_rank: 4, tiering_active: true })).toBeNull();
+    await expect(assertWorkerTierAllowed(sb, {
+      message_type: 'WORK_ASSIGNMENT', target_session: 'target-worker', payload: { assigned_sd: 'SD-ELIGIBLE-001' },
+    })).resolves.toBeUndefined();
   });
 });
