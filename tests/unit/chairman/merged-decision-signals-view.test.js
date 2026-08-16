@@ -66,6 +66,22 @@ describe('MERGE-1: File A survives — HELD rendering for parked decisions', () 
   });
 });
 
+describe('QF-988: decided_at and decided_by no longer reference different columns silently', () => {
+  it('the gate (decided_at) and the projection (decided_by) still read from different raw columns', () => {
+    // This is not a bug in itself -- decided_by (text) and decided_by_user_id (uuid) really are
+    // different columns with different coverage (249 vs 14 rows). The defect was that a row could
+    // pass the gate and render a real decided_at while decided_by silently read NULL with no
+    // explanation anywhere. The fix is not "make them the same column" (that would suppress
+    // decided_at for 235 of 249 rows) -- it's "never let decided_by read NULL without a label".
+    expect(branch4).toMatch(/CASE WHEN cd\.decided_by IS NOT NULL AND cd\.status <> 'pending'::text THEN cd\.updated_at/);
+    expect(branch4).toMatch(/cd\.decided_by_user_id AS decided_by/);
+  });
+
+  it('details carries the raw text actor as decided_by_label, so a NULL decided_by is never unexplained', () => {
+    expect(branch4).toMatch(/'decided_by_label', cd\.decided_by/);
+  });
+});
+
 describe('MERGE-2: File B survives — honest decided_at/decided_by and blocking-based priority', () => {
   it('decided_at is conditional, not aliased from created_at', () => {
     expect(branch4).not.toMatch(/cd\.created_at AS decided_at/);
@@ -157,6 +173,7 @@ describe('MERGE-6: staging discipline', () => {
     expect(control).toMatch(/check_2_ratified_hold_renders_held/);
     expect(control).toMatch(/check_3_ratified_hold_title_explains_itself/);
     expect(control).toMatch(/check_4_decided_row_shows_real_decider/);
+    expect(control).toMatch(/check_5_system_write_not_decided_by_nobody/);
     // pre_count is a bind parameter, not a literal — a hardcoded number would go stale by ceremony time.
     expect(control).toMatch(/:pre_count/);
   });
