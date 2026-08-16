@@ -470,3 +470,9 @@ scripts/harness/.spine-verify-first-runs/
 # `git add` of a new evidence script would have failed SILENTLY. Ignore the one runtime artifact,
 # not the convention.
 .artifacts/drive-report-consume-last-failure.json
+
+# SD-LEO-SEC-DEFACL-ANON-AUTH-AXIS-001: --baseline mode's regenerable output (re-written fresh
+# each run, read back by --verify). Same narrow-not-blanket convention as the entry above — the
+# committed evidence file for this SD (.artifacts/defacl-full-census.json, a one-shot LEAD/EXEC
+# measurement) stays tracked; only the re-runnable operational artifact is ignored.
+.artifacts/defacl-anon-auth-axis-baseline.json
