@@ -1,3 +1,5 @@
+-- @approved-by: codestreetlabs@gmail.com
+-- (approval transcribed by Adam per chairman ruling 2026-08-07; chairman 'run it' on Group 2 at terminal, 2026-08-16 ceremony)
 -- SD-LEO-INFRA-DEFAULT-ANON-AUTHENTICATED-001 — recorded audience + the third narrowing.
 --
 -- *** TIER-2. CHAIRMAN-GATED APPLY. DO NOT AUTO-APPLY. ***

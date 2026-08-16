@@ -1,3 +1,5 @@
+-- @approved-by: codestreetlabs@gmail.com
+-- (approval transcribed by Adam per chairman ruling 2026-08-07; chairman 'run it' on Group 2 at terminal, 2026-08-16 ceremony)
 -- Narrows the switchon_auto_actions / switchon_decision_audit authenticated-read RLS
 -- policies from an unconditional USING (true) to fn_is_chairman()-gated reads.
 -- SD-LEO-INFRA-INTELLIGENT-SWITCH-AUTOMATION-001-C follow-up.
