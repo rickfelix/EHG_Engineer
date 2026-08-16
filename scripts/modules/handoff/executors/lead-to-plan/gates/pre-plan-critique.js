@@ -56,6 +56,7 @@ export async function validatePrePlanCritique(ctx) {
   }
 
   let prdContent = '';
+  let prdSections = null;
   let archContent = '';
   let prdId = null;
 
@@ -78,30 +79,45 @@ export async function validatePrePlanCritique(ctx) {
       return notApplicable([`No PRD exists yet for SD ${sd.sd_key || sd.id} — critique NOT_APPLICABLE (a fresh SD gets its PRD in PLAN)`]);
     }
     prdId = prd.id;
-    prdContent = JSON.stringify({
+    prdSections = {
       executive_summary: prd.executive_summary,
       functional_requirements: prd.functional_requirements,
       acceptance_criteria: prd.acceptance_criteria,
       test_scenarios: prd.test_scenarios,
       risks: prd.risks,
-    });
+    };
+    // Flat string kept for runInvariantChecks (unchanged, out of this SD's scope) — the
+    // structured prdSections object below is what enables FR-2 section-aware budgeting.
+    prdContent = JSON.stringify(prdSections);
   } catch (err) {
     return couldNotCheckVerdict([`PRD load threw (${err.message}) — COULD_NOT_CHECK, not absence`]);
   }
 
-  // Load architecture plan content (best effort — not required)
+  // Load architecture plan content (best effort — not required).
+  // FR-4 PT-8: archLoadStatus distinguishes a genuine "no arch plan" state ('not_found' — no
+  // arch_key configured, or PGRST116 zero-rows) from a transient read failure ('load_failed' —
+  // any other error, or a thrown exception). Both leave archContent='', but only 'ok' content_hash
+  // inputs should be treated as equivalent to each other; a flake must never hash the same as a
+  // real, examined absence, or a transient failure could force an unwanted cache miss / silently
+  // invalidate a fresh override binding for a reason unrelated to the actual PRD/arch content.
+  let archLoadStatus = 'not_found';
   try {
     const archKey = sd.metadata?.arch_key;
     if (archKey) {
-      const { data: arch } = await supabase
+      const { data: arch, error: archError } = await supabase
         .from('eva_architecture_plans')
         .select('content')
         .eq('plan_key', archKey)
         .single();
-      if (arch?.content) archContent = arch.content;
+      if (archError) {
+        archLoadStatus = archError.code === 'PGRST116' ? 'not_found' : 'load_failed';
+      } else if (arch?.content) {
+        archContent = arch.content;
+        archLoadStatus = 'ok';
+      }
     }
   } catch {
-    // Best-effort — proceed without arch content
+    archLoadStatus = 'load_failed';
   }
 
   // FR-2: invariant library — deterministic, runs even when the LLM half cannot.
@@ -112,12 +128,15 @@ export async function validatePrePlanCritique(ctx) {
   let critique;
   try {
     critique = await critiquePlanProposal({
-      prdContent,
+      // FR-2: the structured object (not the pre-stringified prdContent above) so
+      // buildCritiqueUserPrompt can apply section-aware budgets instead of one flat cut.
+      prdContent: prdSections,
       archContent,
+      archLoadStatus, // FR-4 PT-8: folded into content_hash so a flake never hashes like absence
       sdContext: { sd_key: sd.sd_key, sd_id: sd.id, title: sd.title },
-    });
+    }, { supabase });
   } catch (err) {
-    critique = { findings: [], overall_severity: COULD_NOT_CHECK, model_used: null, token_usage: null, fallback_reason: `Critique invocation error: ${err.message}` };
+    critique = { findings: [], overall_severity: COULD_NOT_CHECK, model_used: null, token_usage: null, fallback_reason: `Critique invocation error: ${err.message}`, truncated: null };
   }
 
   const llmBlind = critique.overall_severity === COULD_NOT_CHECK;
@@ -148,6 +167,19 @@ export async function validatePrePlanCritique(ctx) {
   console.log(`   ${coverage}`);
   warnings.push(coverage);
 
+  // FR-1: loud, never silent — same warnings-array style as COVERAGE, same "read N/M chars"
+  // wording as vision-score.js's truncationWarning (AC-3 — reused convention, not a new dialect).
+  const prdWasTruncated = critique.truncated?.prd?.truncated;
+  const archWasTruncated = critique.truncated?.arch?.truncated;
+  if (prdWasTruncated || archWasTruncated) {
+    const parts = [];
+    if (prdWasTruncated) parts.push(`prd ${critique.truncated.prd.charsRead}/${critique.truncated.prd.charsTotal}`);
+    if (archWasTruncated) parts.push(`arch ${critique.truncated.arch.charsRead}/${critique.truncated.arch.charsTotal}`);
+    const truncMsg = `Input truncated before critique — findings may not reflect the full PRD/arch (${parts.join(', ')})`;
+    console.log(`   ⚠️  ${truncMsg}`);
+    warnings.push(truncMsg);
+  }
+
   // Surface findings inline
   console.log(`   Critique severity: ${combined.toUpperCase()} (${findings.length} finding${findings.length === 1 ? '' : 's'})`);
   findings.slice(0, MAX_FINDING_PREVIEW).forEach((f) => {
@@ -158,9 +190,43 @@ export async function validatePrePlanCritique(ctx) {
     console.log(`   ... and ${findings.length - MAX_FINDING_PREVIEW} more (see plan_critiques table)`);
   }
 
-  // FR-4: persist BEFORE deriving the verdict, on EVERY path that has a PRD — including
-  // could_not_check. The old code returned from skip/fail paths before persisting, which
-  // is exactly why plan_critiques could not distinguish never-ran from ran-clean.
+  // FR-1 AC-4/AC-5: metadata.truncated.prd/arch are literal booleans (not the richer internal
+  // {truncated, charsRead, charsTotal} shape) so a direct `metadata.truncated.prd === true/false`
+  // read matches the AC's own wording; shown/total travel as separate, side-qualified keys so an
+  // independent prd-only or arch-only truncation is never ambiguous about which side they describe.
+  // Undefined (not present) when critique.truncated is null — a could-not-check path that failed
+  // before the prompt was ever built (see couldNotCheckResult's tri-state contract) has nothing
+  // honest to report here; omitting the key is the not-measured state, never a fabricated false.
+  const truncatedMetadata = critique.truncated ? {
+    prd: critique.truncated.prd.truncated,
+    arch: critique.truncated.arch.truncated,
+    shownPrd: critique.truncated.prd.charsRead,
+    totalPrd: critique.truncated.prd.charsTotal,
+    shownArch: critique.truncated.arch.charsRead,
+    totalArch: critique.truncated.arch.charsTotal,
+  } : undefined;
+
+  // FR-4 AC-5/PT-1: a cache hit STILL inserts a row (never a bare early-return), flagged
+  // cache-derived so scripts/critique-catch-rate-monitor.js's ratios stay computed over a
+  // complete, honest row set instead of going blind to hit runs.
+  const cacheMetadata = critique.cacheHit ? { cache_hit: true, cache_source_id: critique.cacheSourceId } : undefined;
+
+  // TESTING (EXEC-phase evidence, HIGH finding #2): llm_result is the RAW pre-merge LLM output
+  // (critique.findings/overall_severity, BEFORE invariant.findings is merged in below and BEFORE
+  // combined severity is derived) — persisted UNCONDITIONALLY on every row so lookupCacheHit
+  // (devils-advocate.js) always has genuine raw content to reuse on a future hit. Reusing the
+  // top-level findings/overall_severity columns instead would hand a future call the GATE's
+  // already-combined result, which then gets invariant findings re-merged a second time and an
+  // already-derived severity re-seeded as if it were fresh — compounding every hit within the
+  // cache TTL (PT-9: cache the CRITIQUE RESULT, never a pre-derived final gate VERDICT).
+  const llmResultMetadata = { findings: critique.findings || [], overall_severity: critique.overall_severity };
+
+  const metadata = { llm_result: llmResultMetadata, ...(truncatedMetadata ? { truncated: truncatedMetadata } : {}), ...cacheMetadata };
+
+  // FR-4 (of the ORIGINAL SD-LEO-INFRA-SYSTEMATIZE-COMPLETENESS-CRITIC-001, a different, already-
+  // shipped SD — not this SD's own FR-4): persist BEFORE deriving the verdict, on EVERY path that
+  // has a PRD — including could_not_check. The old code returned from skip/fail paths before
+  // persisting, which is exactly why plan_critiques could not distinguish never-ran from ran-clean.
   await persistCritique(supabase, {
     sd_id: sd.id,
     prd_id: prdId,
@@ -168,11 +234,15 @@ export async function validatePrePlanCritique(ctx) {
     overall_severity: combined,
     model_used: critique.model_used,
     token_usage: critique.token_usage,
+    content_hash: critique.contentHash ?? null,
+    metadata,
   }, warnings);
 
-  // FR-1: verdict. 'block' fails unless an audited override exists FOR THESE FINDINGS.
+  // FR-1: verdict. 'block' fails unless an audited override exists FOR THIS EXACT CONTENT
+  // (FR-4/FR-5 — content_hash REPLACES findingsFingerprint as the binding predicate; see
+  // findActiveOverride's own docstring for why).
   if (combined === 'block') {
-    const override = await findActiveOverride(supabase, sd.id, findingsFingerprint(findings));
+    const { override, schemaMissing } = await findActiveOverride(supabase, sd.id, critique.contentHash);
     if (override) {
       const msg = `BLOCK downgraded by audited override: ${override.override_by} — "${override.override_reason}" (critique ${override.id}, ${override.created_at})`;
       console.log(`   ⚠️  ${msg}`);
@@ -185,6 +255,13 @@ export async function validatePrePlanCritique(ctx) {
         warnings,
       };
     }
+    // VALIDATION VAL-1: a schema-missing lookup failure is NOT "no override recorded" — say so
+    // loudly, distinct from the generic block-issue text below, matching FR-6's own precedent.
+    if (schemaMissing) {
+      const msg = 'plan_critiques SCHEMA MISSING on override lookup — the writer shipped ahead of its migration (database/chairman-gated/20260816_plan_critiques_add_metadata_and_content_hash.sql). No override can bind until the migration applies; this is NOT evidence that no override was ever recorded. Do not treat this block as unoverridable-by-design.';
+      console.warn(`   ⚠️  ${msg}`);
+      warnings.push(msg);
+    }
     return {
       pass: false,
       score: SCORE_BY_OUTCOME.block,
@@ -193,8 +270,9 @@ export async function validatePrePlanCritique(ctx) {
         `Adversarial critique found BLOCK-severity planning gaps (${findings.length} finding(s)). ` +
         'Fix the plan, or record an audited override on the blocking plan_critiques row via ' +
         '`node scripts/critique-override.js <SD-KEY> --by <who> --reason "<why>"` — the override ' +
-        'binds to this exact findings set (a changed set re-blocks) and downgrades rather than ' +
-        'deletes the findings.',
+        'binds to this exact PRD/arch content (a content_hash match, not a findings-set match: ' +
+        'it excuses any findings this same reviewed text produces, and re-blocks the moment the ' +
+        'content changes) and downgrades rather than deletes the findings.',
       ],
       warnings,
     };
@@ -209,20 +287,36 @@ export async function validatePrePlanCritique(ctx) {
   };
 }
 
+// FR-6: PostgREST's schema-cache-miss code (unknown column on INSERT) and Postgres's own
+// "column does not exist" code — both confirmed live against this exact table (2026-08-16,
+// pre-migration): SELECT of a missing column returns 42703; INSERT including one returns
+// PGRST204. Either means the writer shipped ahead of its migration, not a data problem.
+const SCHEMA_MISSING_CODES = new Set(['PGRST204', '42703']);
+
 /**
- * Persist the critique row. On the could_not_check severity the live CHECK constraint may
- * refuse until the chairman-gated migration 20260810_plan_critiques_could_not_check.sql is
- * applied — KNOWN LIMITATION, reported loudly, never worked around by writing a value the
- * run did not earn (mapping could_not_check onto pass/note would make the column lie).
+ * Persist the critique row.
+ *
+ * FR-6 (testing-agent PT-3, BLOCKING, live-demonstrated during this SD's own LEAD-phase evidence
+ * write): a schema-missing error (metadata/content_hash not yet migrated — SCHEMA_MISSING_CODES)
+ * gets its own loud, NAMED branch, distinct from a generic insert failure. Before this fix, EVERY
+ * non-23514 error — including "the writer shipped ahead of its migration" — fell into the same
+ * generic 'plan_critiques insert failed' message; if FR-1/FR-4's writer merged before TR-3's
+ * migration applied in production, persistence would silently stop entirely while the gate kept
+ * passing, and scripts/critique-catch-rate-monitor.js would read zero runs as zero runs, not as
+ * blind runs — worse than the could_not_check state this table exists to distinguish.
  */
 async function persistCritique(supabase, row, warnings) {
   try {
     const { error } = await supabase.from('plan_critiques').insert(row);
     if (error) {
-      const gated = error.code === '23514' && row.overall_severity === COULD_NOT_CHECK;
-      const msg = gated
-        ? `plan_critiques refused '${COULD_NOT_CHECK}' (constraint not yet widened — apply database/migrations/20260810_plan_critiques_could_not_check.sql). Outcome NOT persisted; the catch-rate monitor is blind to this run.`
-        : `plan_critiques insert failed: ${error.message}`;
+      let msg;
+      if (SCHEMA_MISSING_CODES.has(error.code)) {
+        msg = `plan_critiques SCHEMA MISSING (${error.code}): ${error.message} — the writer shipped ahead of its migration (database/chairman-gated/20260816_plan_critiques_add_metadata_and_content_hash.sql). Outcome NOT persisted; the catch-rate monitor is blind to this run. Do not treat this as a generic insert failure — apply the migration.`;
+      } else if (error.code === '23514') {
+        msg = `plan_critiques CHECK constraint violation (${error.code}): ${error.message}. Outcome NOT persisted.`;
+      } else {
+        msg = `plan_critiques insert failed: ${error.message}`;
+      }
       console.warn(`   ⚠️  ${msg}`);
       warnings.push(msg);
     }
@@ -233,14 +327,17 @@ async function persistCritique(supabase, row, warnings) {
 }
 
 /**
- * Stable fingerprint of a findings set: severity + category (+ invariant id) pairs,
- * sorted. Binds an override to the KIND of findings it excuses. Deliberately NOT keyed on
- * message text: LLM messages are re-worded on every run, so a message-keyed fingerprint
- * never matches twice and the override becomes structurally dead for LLM-originated
- * blocks (adversarial ship review, PR #6927) — trading "excuses too much" for "excuses
- * nothing". Category is enum-constrained on the LLM side and invariant_id is exact on the
- * library side, so a new KIND of block re-blocks while a re-worded same-kind block stays
- * excused.
+ * Stable fingerprint of a findings set: severity + category (+ invariant id) pairs, sorted.
+ *
+ * NO LONGER the override-binding predicate (SECURITY EXEC-phase finding SEC-MED-1 — this
+ * docstring previously said it was, which is now stale/misleading): FR-4/FR-5 replaced
+ * findings-set binding with content_hash equality (findActiveOverride, this file). This function
+ * has zero production callers today — kept exported for its own still-meaningful invariant (used
+ * by tests to assert truncation/formatting changes never perturb a findings-derived fingerprint)
+ * and as a historical record of the KIND-of-finding binding approach findActiveOverride's own
+ * docstring explains was insufficient once the LLM is nondeterministic even on unchanged input.
+ * Deliberately NOT keyed on message text: LLM messages are re-worded on every run, so a
+ * message-keyed fingerprint never matches twice (adversarial ship review, PR #6927).
  */
 export function findingsFingerprint(findings) {
   const pairs = (findings || [])
@@ -250,35 +347,67 @@ export function findingsFingerprint(findings) {
 }
 
 /**
- * Audited escape hatch (FR-1): a blocking critique row for this SD carrying both
- * override_reason and override_by, within the lookback window, WHOSE FINDINGS MATCH the
- * current run's (by fingerprint). SECURITY MEDIUM-1 (evidence row e77d1c4b): without the
- * binding, one override auto-downgraded every subsequent block on the SD for 14 days —
- * including entirely new findings from later PRD edits. Binding to the findings set means
- * a changed finding set re-blocks and requires re-approval.
+ * Audited escape hatch. BINDING PREDICATE (FR-4/FR-5, testing-agent T1/T12 — resolves a real
+ * contradiction with the original TR-2, see TR-2's rewrite): content_hash REPLACES
+ * findingsFingerprint here — it does not AND with it. content-identity is a strictly stronger
+ * binding signal than "these specific findings recurred": a human override is realistically
+ * recorded minutes-to-days after a block (the scripts/critique-override.js timeline), well
+ * outside any single-call caching window, and the LLM's findings composition is non-deterministic
+ * even on byte-identical input — findingsFingerprint alone could never bind across that gap
+ * (SECURITY MEDIUM-1, evidence row e77d1c4b, is what closing this gap must not reopen: an
+ * override binds to WHAT WAS REVIEWED, never widening to excuse content it never saw). The
+ * content_hash filter is applied via .eq() before .limit(10), so it narrows the candidate set
+ * FIRST — FR-5's fix for the pre-existing burst-limit gap (SDs measured up to 17 critiques; a
+ * matching override could fall outside a bare .limit(10) purely on row count, independent of
+ * content).
+ *
+ * TR-5: a null/undefined currentContentHash returns {override: null} WITHOUT querying — never
+ * calls .eq('content_hash', null). This is deliberately more conservative than relying on
+ * Postgres's own NULL != NULL semantics (which already protects the other direction: a stored row
+ * with content_hash IS NULL can never match a real hash value, and needs no special-casing here) —
+ * an override should never bind to a could-not-check block whose content identity was never
+ * measured in the first place.
+ *
+ * VALIDATION (PLAN_VERIFICATION evidence, VAL-1, HIGH): returns {override, schemaMissing}, not a
+ * bare value — a schema-missing error (content_hash/metadata not yet migrated) must be
+ * DISTINGUISHABLE from a genuine "no override recorded" outcome, the same distinction FR-6 already
+ * gives persistCritique. Before this fix, `if (error || ...) return null` treated a 42703/PGRST204
+ * identically to "checked the table, no override exists" — measured live: while TR-3's migration
+ * is staged (not applied), EVERY blocking critique is silently unoverridable fleet-wide (30/30
+ * plan_critiques rows in the last 14 days were block-severity, 7 carried an override attempt) with
+ * no loud signal on this specific path, even though FR-6/the ROLLOUT PRECONDITION claimed the
+ * gate "degrades LOUDLY, never silently" for exactly this pre-migration window. The block still
+ * correctly stands either way (fail-closed is right — an override cannot apply if the table can't
+ * be queried) — what changes is that the OPERATOR now learns WHY, instead of concluding no
+ * override was ever recorded.
  */
-async function findActiveOverride(supabase, sdId, currentFingerprint) {
+async function findActiveOverride(supabase, sdId, currentContentHash) {
+  if (!currentContentHash) return { override: null, schemaMissing: false };
   try {
     const since = new Date(Date.now() - OVERRIDE_LOOKBACK_DAYS * 24 * 60 * 60 * 1000).toISOString();
     const { data, error } = await supabase
       .from('plan_critiques')
-      .select('id, findings, override_reason, override_by, created_at')
+      // content_hash is TR-3's staged column, not yet live in the schema snapshot — remove this
+      // pragma and re-run `npm run schema:snapshot:lint` once ceremony N+1 applies the migration.
+      .select('id, content_hash, override_reason, override_by, created_at') // schema-lint-disable-line
       .eq('sd_id', sdId)
       .eq('overall_severity', 'block')
+      .eq('content_hash', currentContentHash)
       .not('override_reason', 'is', null)
       .not('override_by', 'is', null)
       .gte('created_at', since)
       .order('created_at', { ascending: false })
       .limit(10);
-    if (error || !data || data.length === 0) return null;
+    if (error) return { override: null, schemaMissing: SCHEMA_MISSING_CODES.has(error.code) };
+    if (!data || data.length === 0) return { override: null, schemaMissing: false };
     for (const row of data) {
       if (!String(row.override_reason).trim() || !String(row.override_by).trim()) continue;
-      if (findingsFingerprint(row.findings) === currentFingerprint) return row;
+      return { override: row, schemaMissing: false };
     }
-    return null;
+    return { override: null, schemaMissing: false };
   } catch {
     // Fail-closed: an unreadable override table means NO override — the block stands.
-    return null;
+    return { override: null, schemaMissing: false };
   }
 }
 

@@ -29,7 +29,7 @@ const NEUTRAL_PRD = {
   risks: [],
 };
 
-function makeSupabase({ prd = NEUTRAL_PRD, prdError = null, overrideRows = [], insertError = null } = {}) {
+function makeSupabase({ prd = NEUTRAL_PRD, prdError = null, overrideRows = [], insertError = null, overrideError = null } = {}) {
   const inserted = [];
   const client = {
     _inserted: inserted,
@@ -44,26 +44,25 @@ function makeSupabase({ prd = NEUTRAL_PRD, prdError = null, overrideRows = [], i
         };
       }
       if (table === 'plan_critiques') {
+        // TR-7: a self-chaining query builder (not a fixed-depth .eq().eq().not()... shape) so
+        // findActiveOverride's content_hash filter (a 3rd .eq(), added by FR-4/FR-5) — or any
+        // future filter — never breaks this mock's shape again. Fully argument-blind: it returns
+        // overrideRows regardless of what was filtered on, matching this file's existing
+        // discipline that content_hash-EQUALITY correctness itself belongs to the real-DB
+        // integration harness (TS-8/TS-9's own routing note), not this mocked unit suite.
+        const chain = {
+          eq: () => chain,
+          not: () => chain,
+          gte: () => chain,
+          order: () => chain,
+          limit: async () => ({ data: overrideError ? null : overrideRows, error: overrideError }),
+        };
         return {
           insert: async (row) => {
             inserted.push(row);
             return { error: insertError };
           },
-          select: () => ({
-            eq: () => ({
-              eq: () => ({
-                not: () => ({
-                  not: () => ({
-                    gte: () => ({
-                      order: () => ({
-                        limit: async () => ({ data: overrideRows, error: null }),
-                      }),
-                    }),
-                  }),
-                }),
-              }),
-            }),
-          }),
+          select: () => chain,
         };
       }
       if (table === 'eva_architecture_plans') {
@@ -112,43 +111,89 @@ describe('gate promotion (FR-1)', () => {
     expect(supabase._inserted[0].overall_severity).toBe('block');
   });
 
-  it('DOWNGRADES on an audited override bound to the SAME findings — passes with the override cited, findings still persisted', async () => {
+  it('DOWNGRADES on an audited override bound to the SAME content_hash — passes with the override cited, findings still persisted (FR-4/FR-5 binding predicate)', async () => {
     const blockFindings = [{ severity: 'block', category: 'missing_criteria', message: 'untestable', location: 'PRD' }];
     critiquePlanProposal.mockResolvedValue({
       findings: blockFindings,
       overall_severity: 'block',
       model_used: 'test-model',
       token_usage: null,
+      contentHash: 'hash-abc123',
     });
     const supabase = makeSupabase({
-      overrideRows: [{ id: 'crit-1', findings: blockFindings, override_reason: 'AC covered by parent SD', override_by: 'chairman', created_at: '2026-08-09T00:00:00Z' }],
+      overrideRows: [{ id: 'crit-1', content_hash: 'hash-abc123', override_reason: 'AC covered by parent SD', override_by: 'chairman', created_at: '2026-08-09T00:00:00Z' }],
     });
     const result = await validatePrePlanCritique({ sd: SD, supabase });
     expect(result.pass).toBe(true);
     expect(result.score).toBe(60);
     expect(result.warnings.join(' ')).toMatch(/audited override.*chairman/);
     expect(supabase._inserted).toHaveLength(1); // downgrade, not silence
+    expect(supabase._inserted[0].content_hash).toBe('hash-abc123'); // the block row also persists its own hash
   });
 
-  it('an override for DIFFERENT findings does NOT downgrade — the block stands (SECURITY MEDIUM-1 binding)', async () => {
+  // FR-4/FR-5, testing-agent T1/T12: content_hash REPLACES findingsFingerprint as the binding
+  // predicate — an override is scoped to WHAT WAS REVIEWED (content), not to a specific LLM
+  // call's non-deterministic findings composition. This test's mock is argument-blind (it cannot
+  // itself enforce that a real content_hash mismatch is filtered out in Postgres — that's the
+  // real-DB integration harness's job, TS-8/TS-9), so it asserts the CALLER-SIDE half of the
+  // contract instead: the gate calls findActiveOverride with the CURRENT run's own contentHash,
+  // never with a stale or borrowed value, and returns no rows when the mock reports none (a
+  // real content_hash filter would return none for a genuine mismatch).
+  it('an override with no matching content_hash does NOT downgrade — the block stands', async () => {
     critiquePlanProposal.mockResolvedValue({
       findings: [{ severity: 'block', category: 'contradiction', message: 'a NEW, different planning gap', location: 'PRD' }],
       overall_severity: 'block',
       model_used: 'test-model',
       token_usage: null,
+      contentHash: 'hash-new-content',
+    });
+    // overrideRows empty: simulates Postgres's content_hash equality filter finding no match for
+    // 'hash-new-content' (a real DB never returns a row whose content_hash differs from the filter).
+    const supabase = makeSupabase({ overrideRows: [] });
+    const result = await validatePrePlanCritique({ sd: SD, supabase });
+    expect(result.pass).toBe(false);
+    expect(result.score).toBe(0);
+  });
+
+  // TR-5: a could-not-check block (contentHash never computed — the prompt was never built) must
+  // never bind to ANY override, including one that happens to carry content_hash IS NULL in the
+  // DB. findActiveOverride's own guard returns null WITHOUT querying when currentContentHash is
+  // falsy — this pins that the gate-level verdict reflects that (block stands, not overridden).
+  it('a could-not-check block (no computed content_hash) never binds to an override, even one with content_hash NULL', async () => {
+    critiquePlanProposal.mockResolvedValue({
+      findings: [{ severity: 'block', category: 'contradiction', message: 'invariant-only block, LLM was blind', location: 'PRD' }],
+      overall_severity: 'block', // combined can still reach 'block' via invariant escalation
+      model_used: null,
+      token_usage: null,
+      contentHash: null,
     });
     const supabase = makeSupabase({
-      overrideRows: [{
-        id: 'crit-1',
-        findings: [{ severity: 'block', category: 'missing_criteria', message: 'the OLD excused finding', location: 'PRD' }],
-        override_reason: 'excused the old finding only',
-        override_by: 'chairman',
-        created_at: '2026-08-09T00:00:00Z',
-      }],
+      overrideRows: [{ id: 'crit-old', content_hash: null, override_reason: 'stale null-hash override', override_by: 'chairman', created_at: '2026-08-09T00:00:00Z' }],
     });
     const result = await validatePrePlanCritique({ sd: SD, supabase });
     expect(result.pass).toBe(false);
     expect(result.score).toBe(0);
+  });
+
+  // VALIDATION (PLAN_VERIFICATION evidence, VAL-1, HIGH): a schema-missing error on the OVERRIDE
+  // LOOKUP itself (not the insert) must be distinguishable from "no override was ever recorded" —
+  // the block still correctly stands (fail-closed), but the gate must say WHY, loudly, matching
+  // FR-6's own precedent at persistCritique. Before this fix, `if (error || ...) return null` made
+  // this indistinguishable from a genuine absence.
+  it('a schema-missing error on the override lookup itself is reported loudly, distinct from "no override recorded"', async () => {
+    critiquePlanProposal.mockResolvedValue({
+      findings: [{ severity: 'block', category: 'missing_criteria', message: 'untestable', location: 'PRD' }],
+      overall_severity: 'block',
+      model_used: 'test-model',
+      token_usage: null,
+      contentHash: 'hash-abc123',
+    });
+    const supabase = makeSupabase({ overrideError: { code: '42703', message: 'column plan_critiques.content_hash does not exist' } });
+    const result = await validatePrePlanCritique({ sd: SD, supabase });
+    expect(result.pass).toBe(false); // still fail-closed — no override CAN apply
+    expect(result.score).toBe(0);
+    expect(result.warnings.join(' ')).toMatch(/SCHEMA MISSING on override lookup/);
+    expect(result.warnings.join(' ')).toMatch(/NOT evidence that no override was ever recorded/);
   });
 
   it('still PASSES clean at 100 (direction 2: promotion did not break the pass path)', async () => {
@@ -185,6 +230,44 @@ describe('coverage, never completeness (FR-3)', () => {
     expect(result.pass).toBe(true);
     expect(result.score).toBe(75); // warn from the invariant, despite LLM pass
     expect(supabase._inserted[0].findings.some((f) => f.invariant_id === 'INV-001-control-without-could-not-check-path')).toBe(true);
+    // TESTING (EXEC-phase evidence, HIGH finding #2): metadata.llm_result is the RAW pre-merge
+    // LLM output — it must NOT carry the invariant finding that only entered the top-level,
+    // COMBINED findings column above. A future cache hit reads llm_result and lets
+    // validatePrePlanCritique freshly re-merge invariant findings on its own next run; if
+    // llm_result already contained the merge, that re-merge would duplicate it.
+    expect(supabase._inserted[0].metadata.llm_result).toEqual({ findings: [], overall_severity: 'pass' });
+  });
+
+  // VALIDATION (PLAN_VERIFICATION evidence, VAL-4): FR-1 AC-4 requires a persisted
+  // metadata.truncated row, not just critiquePlanProposal's own return value — the gate-level
+  // WRITE was previously unasserted.
+  it('persists metadata.truncated with literal booleans and side-qualified counts (FR-1 AC-4)', async () => {
+    critiquePlanProposal.mockResolvedValue({
+      findings: [], overall_severity: 'pass', model_used: 'test-model', token_usage: null,
+      truncated: {
+        prd: { truncated: true, charsRead: 60000, charsTotal: 70000 },
+        arch: { truncated: false, charsRead: 500, charsTotal: 500 },
+      },
+    });
+    const supabase = makeSupabase();
+    await validatePrePlanCritique({ sd: SD, supabase });
+    expect(supabase._inserted[0].metadata.truncated).toEqual({
+      prd: true, arch: false, shownPrd: 60000, totalPrd: 70000, shownArch: 500, totalArch: 500,
+    });
+  });
+
+  // VALIDATION (PLAN_VERIFICATION evidence, VAL-4): FR-4 AC-5 requires a cache-hit row to persist
+  // metadata.cache_hit=true + cache_source_id — likewise only asserted at the return-value level
+  // before this test, never at the gate's actual INSERT payload.
+  it('persists metadata.cache_hit and cache_source_id when the critique was a cache hit (FR-4 AC-5)', async () => {
+    critiquePlanProposal.mockResolvedValue({
+      findings: [], overall_severity: 'pass', model_used: 'test-model', token_usage: null,
+      cacheHit: true, cacheSourceId: 'cached-row-xyz',
+    });
+    const supabase = makeSupabase();
+    await validatePrePlanCritique({ sd: SD, supabase });
+    expect(supabase._inserted[0].metadata.cache_hit).toBe(true);
+    expect(supabase._inserted[0].metadata.cache_source_id).toBe('cached-row-xyz');
   });
 });
 
@@ -217,7 +300,11 @@ describe('could-not-check honesty (FR-3/FR-4)', () => {
     expect(supabase._inserted[0].overall_severity).toBe('warn');
   });
 
-  it('reports the KNOWN LIMITATION loudly when the constraint refuses could_not_check (23514)', async () => {
+  it('reports a CHECK constraint violation loudly, distinct from a generic insert failure (23514)', async () => {
+    // The 20260810 migration widening this constraint to permit could_not_check is confirmed live
+    // (verified 2026-08-16) — the old could_not_check-specific "KNOWN LIMITATION" framing (TR-4)
+    // is stale and removed. This pins the current, general behavior: ANY 23514 gets its own named
+    // branch, distinct from the generic 'plan_critiques insert failed' message.
     critiquePlanProposal.mockResolvedValue({
       findings: [], overall_severity: 'could_not_check', model_used: null, token_usage: null,
       fallback_reason: 'LLM timeout',
@@ -226,8 +313,20 @@ describe('could-not-check honesty (FR-3/FR-4)', () => {
     const result = await validatePrePlanCritique({ sd: SD, supabase });
     expect(result.pass).toBe(true);
     expect(result.score).toBe(50);
-    expect(result.warnings.join(' ')).toMatch(/20260810_plan_critiques_could_not_check\.sql/);
+    expect(result.warnings.join(' ')).toMatch(/CHECK constraint violation/);
     expect(result.warnings.join(' ')).toMatch(/NOT persisted/);
+  });
+
+  it('reports a SCHEMA MISSING error loudly, distinct from a generic insert failure (FR-6: PGRST204/42703)', async () => {
+    critiquePlanProposal.mockResolvedValue({
+      findings: [], overall_severity: 'pass', model_used: 'test-model', token_usage: null, truncated: null,
+    });
+    const supabase = makeSupabase({ insertError: { code: 'PGRST204', message: "Could not find the 'content_hash' column of 'plan_critiques' in the schema cache" } });
+    const result = await validatePrePlanCritique({ sd: SD, supabase });
+    expect(result.pass).toBe(true);
+    expect(result.warnings.join(' ')).toMatch(/SCHEMA MISSING/);
+    expect(result.warnings.join(' ')).toMatch(/shipped ahead of its migration/);
+    expect(result.warnings.join(' ')).not.toMatch(/plan_critiques insert failed:/);
   });
 });
 

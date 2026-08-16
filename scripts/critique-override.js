@@ -10,8 +10,14 @@
  * SD, stamps who/why, verifies the write by read-back, and prints exactly which findings
  * the override excuses.
  *
- * BINDING (SECURITY MEDIUM-1): the gate honors an override only for the findings set on
- * the row that carries it (fingerprint match). A later critique with different findings
+ * BINDING (SECURITY MEDIUM-1, evidence e77d1c4b; predicate updated by SD-LEO-INFRA-PRE-PLAN-
+ * CRITIQUE-PRD-TRUNCATION-001 FR-4/FR-5, SEC-HIGH-1): the gate honors an override only when the
+ * SAME content_hash (SHA-256 of the FULL, pre-truncation PRD+arch content + requested model +
+ * the critique budget constants — NOT just the truncated text sent to the LLM, closed after
+ * SEC-HIGH-1's re-verification) reappears on a later run — not a findings-fingerprint match.
+ * content-identity binds across the realistic minutes-to-days gap between a block and a human
+ * running this CLI; a fingerprint match could not, since the LLM's findings composition is
+ * non-deterministic even on unchanged input. A later critique over DIFFERENT PRD/arch content
  * re-blocks and needs a fresh override on ITS row.
  *
  * HONEST RESIDUAL: override_by is stamped provenance, not authentication — anyone holding
@@ -57,11 +63,22 @@ async function main() {
 
   const { data: rows, error: critErr } = await supabase
     .from('plan_critiques')
-    .select('id, findings, override_reason, override_by, created_at')
+    // content_hash is TR-3's staged column, not yet live in some environments.
+    .select('id, findings, content_hash, override_reason, override_by, created_at') // schema-lint-disable-line
     .eq('sd_id', sd.id)
     .eq('overall_severity', 'block')
     .order('created_at', { ascending: false })
     .limit(1);
+  // REGRESSION (PLAN_VERIFICATION evidence, REG-1, HIGH): a schema-missing error here is NOT "no
+  // blocking critique exists" — pre-plan-critique.js's persistCritique/findActiveOverride already
+  // give schema-missing (content_hash/metadata not yet migrated) its own loud, named branch
+  // (SCHEMA_MISSING_CODES); this CLI, the THIRD consumer of the same staged column, was missed.
+  // Without this, an operator holding a genuine block reads "nothing to override" and concludes
+  // there is no override needed, rather than "the migration hasn't landed yet."
+  if (critErr && ['PGRST204', '42703'].includes(critErr.code)) {
+    console.error(`SCHEMA MISSING (${critErr.code}): ${critErr.message} — the migration (database/chairman-gated/20260816_plan_critiques_add_metadata_and_content_hash.sql) has not been applied yet. This is NOT evidence that no blocking critique exists; it means this CLI cannot run until the migration lands.`);
+    process.exit(1);
+  }
   if (critErr || !rows || rows.length === 0) {
     console.error(`No blocking critique found for ${sdKey}${critErr ? ` (${critErr.message})` : ''} — nothing to override.`);
     process.exit(1);
@@ -96,11 +113,12 @@ async function main() {
   console.log(`✅ Override recorded on critique ${target.id} (${sdKey})`);
   console.log(`   by: ${check.override_by}`);
   console.log(`   reason: ${check.override_reason}`);
-  console.log(`   This override excuses EXACTLY these ${findings.length} finding(s):`);
+  console.log(`   content_hash: ${target.content_hash || '(none — pre-migration or could-not-check row; this override cannot bind to any future run)'}`);
+  console.log(`   Binds to this EXACT reviewed content — it excuses ANY findings this same PRD/arch text produces for the 14-day lookback, not only these ${findings.length} finding(s) shown below:`);
   for (const f of findings.slice(0, 10)) {
     console.log(`     [${String(f.severity || 'note').toUpperCase()}] ${(f.message || '').substring(0, 120)}`);
   }
-  console.log('   A later critique with a DIFFERENT findings set re-blocks and needs a fresh override.');
+  console.log('   A later critique over DIFFERENT PRD/arch content (a different content_hash) re-blocks and needs a fresh override.');
 }
 
 main().catch((err) => {

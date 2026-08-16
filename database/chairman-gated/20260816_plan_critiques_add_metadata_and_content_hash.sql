@@ -1,0 +1,68 @@
+-- SD-LEO-INFRA-PRE-PLAN-CRITIQUE-PRD-TRUNCATION-001 — TR-3
+-- @approved-by: codestreetlabs@gmail.com
+--
+-- STAGED for ceremony N+1 (COORDINATOR RULING 9e51c5ae, 2026-08-16 — this is the 5th anchor,
+-- alongside Agent-Readiness DDL, story-cascade trigger, QF-disposition columns, wave trigger).
+-- Ruling text: "TIER-1/additive does not change the lane — the classifier gate is the lane." The
+-- auto-mode permission classifier denied the direct apply from database/migrations/ (identically
+-- across Bash and PowerShell, both before and after the file carried a valid @approved-by header),
+-- so this migration is staged here rather than retried against the classifier. EXEC completes on
+-- code + tests without gating the SD on the live apply — see FR-1..FR-3 implementation
+-- (lib/eva/devils-advocate.js, scripts/modules/handoff/executors/lead-to-plan/gates/
+-- pre-plan-critique.js) and this file's sibling _acceptance.mjs for the pre/post-apply readback.
+--
+-- Adds two columns to plan_critiques:
+--   metadata      jsonb — gate-run metadata. llm_result: {findings, overall_severity} (the RAW
+--                  pre-merge LLM output, persisted on every row, read by the FR-4 cache — never
+--                  the row's own top-level findings/overall_severity, which are the GATE's
+--                  post-merge combined result). truncated: {prd, arch, shownPrd, totalPrd,
+--                  shownArch, totalArch}. cache_hit: bool + cache_source_id when this row reused
+--                  a prior LLM call (FR-4/FR-5) — see the COMMENT ON COLUMN below for the exact,
+--                  currently-accurate shape; this prose predates a later FR-4 revision.
+--   content_hash  text — SHA-256 of the FULL, pre-truncation PRD+arch content (NOT the truncated
+--                  text actually sent to the LLM — SECURITY re-verification SEC-HIGH-1: hashing
+--                  only the sent/truncated text, even with a length appended, left content edited
+--                  entirely beyond the truncation boundary colliding with the original), plus the
+--                  requested model (adapter.defaultModel, NEVER response.model — see FR-4's
+--                  binding-predicate note) and the MAX_CRITIQUE_ANALYSIS_CHARS/SECTION_BUDGETS
+--                  constants (a budget change is a critic-version change, same role as model).
+--                  Becomes findActiveOverride's new matching predicate (REPLACING
+--                  findingsFingerprint, not ANDing with it), because a human override is
+--                  realistically recorded minutes-to-days after a block, well outside any
+--                  LLM-call-caching window — content identity is what must bind, not a specific
+--                  LLM call's non-deterministic finding composition.
+--
+-- TIER-1 (all_statements_provably_additive): verified by EXECUTING classifyMigration() against this
+-- exact SQL (database-agent, LEAD phase evidence 4cac69dc-0cf8-4b4f-95b3-c4febd8c06ed), not by
+-- reading the classifier's rules. TIER-1 classification is still accurate — it just does not
+-- entitle a worker to bypass the auto-mode classifier's own gate; see the ceremony-N+1 note above.
+--
+-- NO BACKFILL, NO DEFAULT. An UPDATE statement would force TIER-2 (forbidden top-level verb for
+-- additive classification). NULL is honest for the ~241 pre-migration rows: "this row predates the
+-- feature", not "measured empty". All existing readers are NULL-safe by construction (independently
+-- confirmed by both database-agent and testing-agent): scripts/critique-catch-rate-monitor.js does a
+-- count-only head select; scripts/critique-override.js and findActiveOverride use explicit column
+-- lists that must be updated in application code (this migration only adds the column; the
+-- content_hash equality filter itself is FR-4/FR-5's code change, not this file's).
+--
+-- NO NEW INDEX on content_hash. Measured live (database-agent): table is 6 pages / 96 kB / 237 rows
+-- at measurement time; the existing idx_plan_critiques_sd_id already narrows to <=17 rows per SD,
+-- and the residual filter benchmarks identically to the current (unindexed) override lookup at
+-- 0.065-0.097ms. Two pre-existing indexes on this table (idx_plan_critiques_severity,
+-- the created_at BRIN) already show 0 scans — a third would compound, not fix, that. Defer a
+-- content_hash index as a documented TIER-1 follow-up only if this table passes ~10k rows.
+--
+-- APPLY (ceremony N+1, after --issue-token):
+--   node scripts/apply-migration.js --issue-token
+--   MIGRATION_APPLY_TOKEN=<token from above> node scripts/apply-migration.js \
+--     "database/chairman-gated/20260816_plan_critiques_add_metadata_and_content_hash.sql" \
+--     --prod-deploy --allow-any-path
+--
+-- ROLLBACK: 20260816_plan_critiques_add_metadata_and_content_hash_DOWN.sql
+-- READBACK: 20260816_plan_critiques_add_metadata_and_content_hash_acceptance.mjs (run before AND
+--   after apply — the baseline run is what gives the post-apply run meaning).
+
+ALTER TABLE plan_critiques ADD COLUMN IF NOT EXISTS metadata jsonb;
+ALTER TABLE plan_critiques ADD COLUMN IF NOT EXISTS content_hash text;
+COMMENT ON COLUMN plan_critiques.content_hash IS 'SHA-256 of the FULL, pre-truncation PRD+arch content (not the truncated text sent to the LLM), plus adapter.defaultModel + archLoadStatus + the MAX_CRITIQUE_ANALYSIS_CHARS/SECTION_BUDGETS constants.';
+COMMENT ON COLUMN plan_critiques.metadata IS 'Gate-run metadata. llm_result: {findings,overall_severity} (RAW pre-merge LLM output, read by the FR-4 cache — never the combined top-level columns). truncated: {prd,arch,shownPrd,totalPrd,shownArch,totalArch}. cache_hit/cache_source_id: set when this row reused a prior LLM call.';
