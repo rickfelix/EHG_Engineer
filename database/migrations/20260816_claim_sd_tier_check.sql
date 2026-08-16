@@ -17,6 +17,18 @@
 -- Explore evidence. This migration mirrors that scope exactly rather than introducing a new,
 -- broader QF-tier invariant unilaterally.
 --
+-- KNOWN DIVERGENCE FROM THE CLIENT-SIDE CHECK (found during EXEC-phase TESTING review): the
+-- client-side fix (lib/fleet/tier-claimable.cjs tierBlocks, reused by recoverStrandedFinal and
+-- adoptOrphanInProgress) ALSO honors a scored SD's explicit min_tier_rank floor when tiering is
+-- OFF (fewer than 2 live workers) -- it synthesizes tiering_active:true for that comparison
+-- specifically (the SD-LEO-INFRA-BELT-CLAIMABLE-ACCURACY-FLOOR-001 precedent). This migration
+-- does NOT replicate that: it only refuses when v_live_worker_count >= 2, matching a literal
+-- "tiering active" reading rather than the floor-always-honored behavior tierBlocks provides.
+-- A reviewer applying this migration should decide whether to port the floor-always-honored
+-- semantics into SQL too (drop the v_live_worker_count >= 2 condition entirely, since an explicit
+-- per-SD floor is an author reservation independent of fleet headcount) before or as part of the
+-- apply ceremony.
+--
 -- SIMPLIFIED "tiering active" check, deliberately NOT a faithful port of
 -- lib/fleet/tier-ladder.cjs isTieringActive(): that function excludes canary/test sessions and
 -- the active coordinator via lib/fleet/genuine-worker.mjs liveFleetWorkers before counting, which

@@ -14,6 +14,7 @@
 
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { createRequire } from 'module';
+import { readFileSync } from 'fs';
 
 const require_ = createRequire(import.meta.url);
 const checkin = require_('../../../scripts/worker-checkin.cjs');
@@ -149,6 +150,24 @@ describe('TS-4 — a SCORED SD is refused when tierCtx.worker_tier_rank is missi
   });
 });
 
+describe('TS-6 — structural guard against the identified inflight_git_state regression', () => {
+  // The risk this discriminates: a naive fix would spread merged-pool-self-claim.cjs's FULL
+  // 8-field tierCtx (which includes inflight_git_state) into recoverStrandedFinal, which would
+  // incorrectly refuse recovering a LEAD_FINAL SD whose PR is already merged -- the exact
+  // population that lane exists to recover. Source-pinned rather than scenario-simulated: the
+  // actual fix (tierBlocks(sd, workerTierRank, tieringActive), a 3-arg call) structurally cannot
+  // read inflight_git_state at all, so this proves the regression is impossible by construction,
+  // not merely untriggered by one test's fixture data.
+  it('the tierBlocks call site in worker-checkin.cjs never references inflight_git_state', () => {
+    const src = readFileSync(new URL('../../../scripts/worker-checkin.cjs', import.meta.url), 'utf8');
+    const tierBlocksCallSites = src.match(/tierBlocks\([^)]*\)/g) || [];
+    expect(tierBlocksCallSites.length).toBeGreaterThanOrEqual(2); // recoverStrandedFinal + adoptOrphanInProgress
+    for (const call of tierBlocksCallSites) {
+      expect(call).not.toMatch(/inflight_git_state/);
+    }
+  });
+});
+
 describe('TS-6/TS-9 — negative control: an eligible seat is NOT over-blocked by the tier check', () => {
   it('recoverStrandedFinal still recovers a tier-eligible stranded SD (regression guard)', async () => {
     const claimed = [];
@@ -193,7 +212,7 @@ describe('recoverStrandedFinal/adoptOrphanInProgress reuse tierBlocks exactly �
       expect(tierBlocks(sd, c.worker, c.tiering)).toBe(c.blocked);
       const claimed = [];
       const sb = fakeSb({ rows: [sd], claimed });
-      const r = await recoverStrandedFinal(sb, 'sess-1', {}, { worker_tier_rank: c.worker, tiering_active: c.tiering });
+      await recoverStrandedFinal(sb, 'sess-1', {}, { worker_tier_rank: c.worker, tiering_active: c.tiering });
       expect(claimed.includes('SD-MATRIX')).toBe(!c.blocked);
     });
   }
@@ -215,30 +234,33 @@ describe('TS-8 — the hoisted tier-context step wires ctx.tierCtx into the real
 
   async function runLadder(rows, { workerTierRank, tieringActive }) {
     const claimed = [];
+    const resolveWorkerTierRank = vi.fn(() => workerTierRank);
+    const isTieringActive = vi.fn(async () => tieringActive);
     const ctx = {
       sb: fakeSb({ rows, claimed }),
       sessionId: 'sess-1',
       base: {},
       sessionMetadata: {},
-      helpers: {
-        recoverStrandedFinal, adoptOrphanInProgress,
-        resolveWorkerTierRank: () => workerTierRank,
-        isTieringActive: async () => tieringActive,
-      },
+      helpers: { recoverStrandedFinal, adoptOrphanInProgress, resolveWorkerTierRank, isTieringActive },
     };
     const steps = [tierContextStep, recoverStep, adoptStep];
     const resolution = await runSteps(steps, ctx);
-    return { claimed, resolution, tierCtx: ctx.tierCtx };
+    return { claimed, resolution, tierCtx: ctx.tierCtx, resolveWorkerTierRank, isTieringActive };
   }
 
   it('ctx.tierCtx is populated before recover-stranded-final runs, and BLOCKS a tier-4 row for a tier-2 seat', async () => {
-    const { claimed, resolution, tierCtx } = await runLadder(
+    const { claimed, resolution, tierCtx, resolveWorkerTierRank, isTieringActive } = await runLadder(
       [strandedRow('SD-WIRE-001', 4)],
       { workerTierRank: 2, tieringActive: true },
     );
     expect(tierCtx).toEqual({ worker_tier_rank: 2, tiering_active: true });
     expect(claimed).not.toContain('SD-WIRE-001');
     expect(resolution?.action).not.toBe('resume_final');
+    // FR-1 AC-3 (relocate, not duplicate): the hoisted producer is the ONLY caller across the
+    // whole ladder run -- if recover-stranded-final or adopt-orphan resolved their own tier rank
+    // independently, these counts would exceed 1.
+    expect(resolveWorkerTierRank).toHaveBeenCalledTimes(1);
+    expect(isTieringActive).toHaveBeenCalledTimes(1);
   });
 
   it('the SAME hoisted ctx.tierCtx also reaches adopt-orphan (step 9) for a tier-4 orphan', async () => {
@@ -260,8 +282,9 @@ describe('TS-8 — the hoisted tier-context step wires ctx.tierCtx into the real
   });
 
   it('a hoisted-producer failure (fail-open ctx.tierCtx={}) still fails CLOSED on a scored SD via tierBlocks', async () => {
+    const claimed = [];
     const ctx = {
-      sb: fakeSb({ rows: [strandedRow('SD-WIRE-004', 4)] }),
+      sb: fakeSb({ rows: [strandedRow('SD-WIRE-004', 4)], claimed }),
       sessionId: 'sess-1',
       base: {},
       sessionMetadata: {},
@@ -271,7 +294,40 @@ describe('TS-8 — the hoisted tier-context step wires ctx.tierCtx into the real
         isTieringActive: async () => true,
       },
     };
-    await runSteps([tierContextStep, recoverStep], ctx);
+    const resolution = await runSteps([tierContextStep, recoverStep], ctx);
     expect(ctx.tierCtx).toEqual({}); // the hoisted step's own fail-open contract
+    // The behavioral claim in this test's title: the empty tierCtx must not read as "unrestricted" --
+    // tierBlocks(sd, undefined, undefined) still blocks a SCORED SD via tier_stamp_missing.
+    expect(claimed).not.toContain('SD-WIRE-004');
+    expect(resolution?.action).not.toBe('resume_final');
+  });
+
+  it('an unscored SD is UNAFFECTED by the same hoisted-producer failure (two-sided control)', async () => {
+    const claimed = [];
+    const ctx = {
+      sb: fakeSb({ rows: [strandedRow('SD-WIRE-005', null)], claimed }),
+      sessionId: 'sess-1',
+      base: {},
+      sessionMetadata: {},
+      helpers: {
+        recoverStrandedFinal,
+        resolveWorkerTierRank: () => { throw new Error('producer boom'); },
+        isTieringActive: async () => true,
+      },
+    };
+    const resolution = await runSteps([tierContextStep, recoverStep], ctx);
+    expect(resolution?.action).toBe('resume_final');
+    expect(claimed).toEqual(['SD-WIRE-005']);
+  });
+
+  // TR-2 (relocate, not duplicate): source-pinned, so a future edit that reintroduces a direct
+  // resolveWorkerTierRank/isTieringActive call inside merged-pool-self-claim.cjs -- instead of
+  // reading the hoisted ctx.tierCtx -- is caught even before any call-count spy would notice.
+  it('merged-pool-self-claim.cjs no longer calls resolveWorkerTierRank/isTieringActive directly', () => {
+    const src = readFileSync(new URL('../../../lib/checkin/steps/merged-pool-self-claim.cjs', import.meta.url), 'utf8');
+    expect(src).not.toMatch(/resolveWorkerTierRank\(/);
+    expect(src).not.toMatch(/isTieringActive\(/);
+    expect(src).toMatch(/ctx\.tierCtx && ctx\.tierCtx\.worker_tier_rank/);
+    expect(src).toMatch(/ctx\.tierCtx && ctx\.tierCtx\.tiering_active/);
   });
 });
