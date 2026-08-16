@@ -4337,14 +4337,42 @@ async function stampSweepLiveness() {
   }
 }
 
+// SD-LEO-INFRA-COMPLETION-TIER-SCRIPT-EXIT-001: this CLI previously hung past the harness
+// Bash timeout after a successful tick (exit 143), even after the liveness stamp above had
+// already landed. armCliTeardown (lib/cli-graceful-exit.js, already shipped) is the fix for
+// this class — it never calls process.exit() directly on the normal path, closing undici's
+// idle sockets instead and force-exiting only via a bounded backstop. Kept as its own named
+// function, chained AFTER stampSweepLiveness (never wrapping it fire-and-forget, or the
+// liveness write could be truncated), and referenced by name — not inlined — so the
+// main().then(...) chain stays short enough for the builder-catch regression guard test's
+// rejection-handler-proximity source scan (an inline dynamic-import expression at this
+// position measures too long a lookback and fails that scan).
+async function armSweepTeardown() {
+  try {
+    const { armCliTeardown } = await import('../lib/cli-graceful-exit.js');
+    await armCliTeardown(0, { backstopMs: 3000 });
+  } catch (err) {
+    // Symmetric with stampSweepLiveness above: non-fatal. A teardown-mechanism failure must
+    // never propagate to the outer rejection handler and mislabel a fully successful sweep
+    // as "SWEEP FATAL" (which would force exit 1 and could trigger an unnecessary retry).
+    console.error(`[stale-session-sweep] armCliTeardown failed (non-fatal): ${err.message}`);
+  }
+}
+
 // SD-FDBK-INFRA-CROSS-SESSION-CONFLICTION-001 / FR-2: guard auto-run so the pure
 // collision functions can be imported by unit tests without main() hitting the DB.
 if (require.main === module) {
-  main().then(stampSweepLiveness).catch(err => {
+  main().then(stampSweepLiveness).then(armSweepTeardown).catch(err => {
     console.error('SWEEP FATAL:', err.message);
     process.exit(1);
   });
 }
+
+// SD-LEO-INFRA-COMPLETION-TIER-SCRIPT-EXIT-001 exports — lets a unit test observe
+// stampSweepLiveness/armSweepTeardown ordering with a mocked client, without spawning the
+// real (fleet-mutating: releases claims, cancels fixtures, hands back work items) sweep.
+module.exports.stampSweepLiveness = stampSweepLiveness;
+module.exports.armSweepTeardown = armSweepTeardown;
 
 // FR-4 (SD-LEO-INFRA-COORD-ADAM-COMMS-RESILIENT-001) exports — pure dead-letter planner.
 module.exports.planDeadLetters = planDeadLetters;

@@ -305,9 +305,31 @@ const invokedDirectly = (() => {
   }
 })();
 
+// SD-LEO-INFRA-COMPLETION-TIER-SCRIPT-EXIT-001: this CLI previously hung past the harness
+// Bash timeout after main() had already settled (exit 143), including on the usage-error
+// early-return paths above that only set process.exitCode without ever exiting. armCliTeardown
+// (lib/cli-graceful-exit.js, already shipped) is the fix — it never calls process.exit()
+// directly on the normal path, closing undici's idle sockets instead and force-exiting only
+// via a bounded backstop. Wired on BOTH the resolve and reject arms so a thrown error (not
+// just an early return) is also covered; the resolve arm passes through any process.exitCode
+// already set by an early return rather than forcing 0 over it.
 if (invokedDirectly) {
-  main().catch((e) => {
-    console.error(e);
-    process.exitCode = 1;
-  });
+  // Each arm's teardown call is wrapped in its own try/catch so a teardown-mechanism failure
+  // can never fall through to the OTHER arm's handler (they are chained on the same promise)
+  // and overwrite an already-correct outcome with a misleading duplicate.
+  main()
+    .then(async () => {
+      try {
+        const { armCliTeardown } = await import('../lib/cli-graceful-exit.js');
+        await armCliTeardown(Number.isInteger(process.exitCode) ? process.exitCode : 0, { backstopMs: 3000 });
+      } catch { /* non-fatal -- process.exitCode already reflects the real outcome */ }
+    })
+    .catch(async (e) => {
+      console.error(e);
+      process.exitCode = 1;
+      try {
+        const { armCliTeardown } = await import('../lib/cli-graceful-exit.js');
+        await armCliTeardown(1, { backstopMs: 3000 });
+      } catch { /* non-fatal -- process.exitCode is already 1 */ }
+    });
 }
