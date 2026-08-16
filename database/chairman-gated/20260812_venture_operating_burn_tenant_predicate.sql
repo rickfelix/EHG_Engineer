@@ -12,7 +12,8 @@
 -- chairman-gated ceremony below, per this repo's separation-of-duties convention (worker authors
 -- and stages; the chairman's own terminal, under his own git identity, performs the apply).
 --
--- @approved-by: codestreetlabs@gmail.com (transcribed by Adam per chairman ruling 2026-08-07; approval: chairman terminal 'run it' on Group 1, 2026-08-16 ceremony)
+-- @approved-by: codestreetlabs@gmail.com
+-- (approval transcribed by Adam per chairman ruling 2026-08-07; chairman 'run it' at terminal, 2026-08-16 ceremony)
 --                per apply-migration.js's self-consistency check (header email == invoker's git
 --                email + a matching, unconsumed, <1h MIGRATION_APPLY_TOKEN). This file does not
 --                apply itself.>
