@@ -1,0 +1,215 @@
+/**
+ * ResultBuilder - Unified response factory for handoff operations
+ * Part of LEO Protocol Unified Handoff System refactor
+ *
+ * Consolidates 21 duplicate error response patterns into a single factory.
+ * Ensures consistent response structure across all handoff operations.
+ */
+
+import { getRemediation as getMappedRemediation } from './rejection-subagent-mapping.js';
+
+export class ResultBuilder {
+  /**
+   * Create a success response
+   * @param {object} data - Additional data to include
+   * @returns {object} Success response
+   */
+  static success(data = {}) {
+    return {
+      success: true,
+      ...data
+    };
+  }
+
+  /**
+   * Create a rejection response (validation failed but not system error)
+   * @param {string} reasonCode - Machine-readable reason code
+   * @param {string} message - Human-readable message
+   * @param {object} details - Validation details
+   * @param {string} remediation - Remediation instructions
+   * @returns {object} Rejection response
+   */
+  static rejected(reasonCode, message, details = {}, remediation = null) {
+    return {
+      success: false,
+      rejected: true,
+      reasonCode,
+      message,
+      details,
+      remediation: remediation || this.getDefaultRemediation(reasonCode)
+    };
+  }
+
+  /**
+   * Create a gate failure response
+   * @param {string} gateName - Name of the failed gate
+   * @param {object} gateResult - Gate validation result
+   * @param {string} remediation - Optional remediation override
+   * @returns {object} Gate failure response
+   */
+  static gateFailure(gateName, gateResult, remediation = null) {
+    // QF-20260605-024: gateResult.issues may be objects ({ code, message, ... }); map each to a
+    // readable string so the joined failure message is not "[object Object]" (PAT-HF-PLANTOEXEC-82e31435).
+    const issues = (gateResult.issues || []).map((i) =>
+      typeof i === 'string' ? i : ((i && i.message) || (i && i.code) || JSON.stringify(i))
+    );
+    return this.rejected(
+      `${gateName}_FAILED`,
+      `${gateName} validation failed - ${issues.join('; ') || 'Check details'}`,
+      gateResult,
+      remediation
+    );
+  }
+
+  /**
+   * Create a system error response.
+   *
+   * QF-20260423-200: Enhanced to surface errorClass, stack frames, and source
+   * step so operators can diagnose uncaught exceptions instead of seeing an
+   * opaque "SYSTEM_ERROR" with empty message. If the error was wrapped with a
+   * structured name (ANALYSIS_SYNTHESIS_FAILED, RUSSIAN_JUDGE_FAILED,
+   * VERIFIER_EXCEPTION), that name is used as the reasonCode — the CLI surfaces
+   * the specific failure step via `REASON=<specific>` instead of generic.
+   *
+   * @param {Error|string} error - Error object or message
+   * @param {string} [sourceStep=null] - Optional hint about which step threw (e.g. 'executeSpecific')
+   * @returns {object} System error response with diagnostic fields
+   */
+  static systemError(error, sourceStep = null) {
+    const isErrorInstance = error instanceof Error;
+    // QF-20260808-281: String(plainObject) renders the literal '[object Object]', burying the
+    // real reason -- hit for non-Error throwables (e.g. a Supabase-style {message, code, ...}
+    // result passed through as `error`). Same extraction precedent as gateFailure's issues
+    // mapping above (QF-20260605-024): prefer .message, then .code, then a serialized fallback.
+    const rawMessage = isErrorInstance
+      ? error.message
+      : (typeof error === 'string' ? error : ((error && error.message) || (error && error.code) || JSON.stringify(error)));
+    const errorClass = isErrorInstance ? (error.constructor?.name || 'Error') : 'Unknown';
+    const errorName = isErrorInstance ? error.name : null;
+    const stack = isErrorInstance && error.stack
+      ? error.stack.split('\n').slice(0, 10).join('\n')
+      : null;
+
+    // Structured reason codes surface the precise failure step via CLI output
+    const STRUCTURED_NAMES = new Set([
+      'ANALYSIS_SYNTHESIS_FAILED',
+      'RUSSIAN_JUDGE_FAILED',
+      'VERIFIER_EXCEPTION'
+    ]);
+    const reasonCode = (errorName && STRUCTURED_NAMES.has(errorName)) ? errorName : 'SYSTEM_ERROR';
+    const message = rawMessage && rawMessage.length > 0
+      ? rawMessage
+      : `${errorClass} thrown with no message${sourceStep ? ` at ${sourceStep}` : ''}`;
+
+    return {
+      success: false,
+      error: message,
+      message,
+      errorClass,
+      errorStack: stack,
+      sourceStep: sourceStep || null,
+      reasonCode,
+      systemError: true,
+      remediation: stack
+        ? `Error class: ${errorClass}\nSource step: ${sourceStep || 'executor post-gate path'}\nStack (first 10 frames):\n${stack}`
+        : null
+    };
+  }
+
+  /**
+   * Create a "not found" response
+   * @param {string} entityType - Type of entity (e.g., 'SD', 'PRD')
+   * @param {string} id - Entity ID
+   * @returns {object} Not found response
+   */
+  static notFound(entityType, id) {
+    return this.rejected(
+      `${entityType.toUpperCase()}_NOT_FOUND`,
+      `${entityType} not found: ${id}`,
+      { entityType, id }
+    );
+  }
+
+  /**
+   * Create an "unsupported type" response
+   * @param {string} handoffType - Unsupported handoff type
+   * @param {array} supportedTypes - List of supported types
+   * @returns {object} Unsupported type response
+   */
+  static unsupportedType(handoffType, supportedTypes) {
+    return this.rejected(
+      'UNSUPPORTED_HANDOFF_TYPE',
+      `Unsupported handoff type: ${handoffType}. Supported: ${supportedTypes.join(', ')}`,
+      { handoffType, supportedTypes }
+    );
+  }
+
+  /**
+   * Get default remediation for known reason codes.
+   * Delegates to centralized rejection-subagent-mapping for Task tool invocations.
+   * SD-LEO-INFRA-ACTIONABLE-REJECTION-TEMPLATES-001
+   *
+   * @param {string} reasonCode - Reason code
+   * @param {Object} context - Optional { sdId, gateName, details, score } for richer prompts
+   * @returns {string|null} Default remediation or null
+   */
+  static getDefaultRemediation(reasonCode, context = {}) {
+    // Try centralized mapping first (includes Task tool invocations)
+    const mapped = getMappedRemediation(reasonCode, context);
+    if (mapped) return mapped.message;
+
+    // Fallback: legacy static remediations for any unmapped codes
+    return null;
+  }
+
+  /**
+   * Create a database field error response with exact path
+   * SD-LEO-STREAMS-001 Retrospective: Faster resolution with field paths
+   * @param {string} table - Table name
+   * @param {string} field - Field path (e.g., 'metadata.gate2_validation')
+   * @param {string} issue - What's wrong
+   * @param {string} fix - How to fix
+   * @returns {object} Field error response
+   */
+  static fieldError(table, field, issue, fix = null) {
+    return this.rejected(
+      'DATABASE_FIELD_ERROR',
+      `Field error: ${table}.${field} - ${issue}`,
+      {
+        table,
+        field,
+        fullPath: `${table}.${field}`,
+        issue
+      },
+      fix || `Update the ${field} field in ${table}. See: docs/reference/schema/handoff-field-reference.md`
+    );
+  }
+
+  /**
+   * Log a gate result with consistent formatting
+   * @param {string} gateName - Gate name
+   * @param {object} result - Gate result
+   * @param {boolean} failed - Whether gate failed
+   */
+  static logGateResult(gateName, result, failed = false) {
+    if (failed) {
+      console.error(`\n❌ ${gateName} VALIDATION FAILED`);
+      console.error(`   Score: ${result.score}/${result.max_score || result.maxScore}`);
+      if (result.issues && result.issues.length > 0) {
+        console.error(`   Issues: ${result.issues.join(', ')}`);
+      }
+    } else {
+      console.log(`✅ ${gateName} validation passed`);
+      if (result.score !== undefined) {
+        console.log(`   Score: ${result.score}/${result.max_score || result.maxScore}`);
+      }
+    }
+
+    if (result.warnings && result.warnings.length > 0) {
+      console.log(`\n⚠️  ${gateName} WARNINGS:`);
+      result.warnings.forEach(w => console.log(`   • ${w}`));
+    }
+  }
+}
+
+export default ResultBuilder;

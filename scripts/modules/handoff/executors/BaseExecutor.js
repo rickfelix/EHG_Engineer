@@ -1,0 +1,1623 @@
+/**
+ * BaseExecutor - Abstract base class for handoff executors
+ * Part of LEO Protocol Unified Handoff System refactor
+ *
+ * Provides template method pattern for consistent handoff execution flow.
+ */
+
+import ResultBuilder from '../ResultBuilder.js';
+import { safeTruncate as _safeTruncate } from '../../../../lib/utils/safe-truncate.js';
+import path from 'path';
+import { fileURLToPath } from 'url';
+import { execSync } from 'child_process';
+import { createRequire } from 'module';
+import { shouldSkipAndContinue, executeSkipAndContinue } from '../skip-and-continue.js';
+import { resolveRepoPath, ENGINEER_ROOT, isVentureRepo, resolveGateRepoContext } from '../../../../lib/repo-paths.js';
+import { fetchAllPaginated } from '../../../../lib/db/fetch-all-paginated.mjs';
+// SD-LEO-FIX-HANDOFF-PIPELINE-GIT-001: Shared git context to eliminate redundant execSync calls
+import { SharedGitContext } from '../shared-git-context.js';
+
+// SD-MAN-GEN-CORRECTIVE-VISION-GAP-013 (V02): Max gate retry attempts before failure
+const GATE_MAX_RETRIES = 2;
+import { checkPendingMigrations } from '../pre-checks/pending-migrations-check.js';
+import { applyGatePolicies } from '../gate-policy-resolver.js';
+import { validateMultiSessionClaim } from '../gates/multi-session-claim-gate.js';
+
+// SD-MAN-GEN-CORRECTIVE-VISION-GAP-012 (V04): Global DFE escalation gate injection
+import { createDFEEscalationGate } from '../gates/dfe-escalation-gate.js';
+
+// SD-LEO-ENH-WORKFLOW-TELEMETRY-AUTO-001A: Workflow telemetry
+import { createTraceContext, startSpan, endSpan, persist } from '../../../../lib/telemetry/workflow-timer.js';
+
+// SD-MAN-GEN-CORRECTIVE-VISION-GAP-009: CLI authority tracking
+import { trackWriteSource } from '../../../../lib/eva/cli-write-gate.js';
+
+// Cross-platform path resolution (SD-WIN-MIG-005 fix)
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = path.dirname(__filename);
+
+/**
+ * Get cross-platform repository path.
+ *
+ * QF-20260522-272: Delegate to the canonical registry-based resolver in
+ * lib/repo-paths.js, which returns absolute paths and is therefore independent
+ * of the current working directory / git worktree. The previous implementation
+ * derived paths from `git rev-parse --show-toplevel` and resolved EHG as a
+ * `<gitRoot>/../ehg` sibling; when a handoff ran with its cwd inside a worktree,
+ * gitRoot was the worktree, so EHG resolved to a nonexistent
+ * `<repo>/.worktrees/ehg` path. That broke GATE6_BRANCH_ENFORCEMENT (and the
+ * userStory app-path check) for every EHG-targeted SD run from a worktree.
+ * This matches the already-correct getRepoPath in lead-to-plan/utils.js and
+ * lead-final-approval/gates.js.
+ *
+ * @param {string} repoName - 'EHG_Engineer' or 'EHG'/'ehg'
+ * @returns {string} Resolved absolute path
+ */
+function getRepoPath(repoName) {
+  return resolveRepoPath(repoName) || ENGINEER_ROOT;
+}
+
+export class BaseExecutor {
+  constructor(dependencies = {}) {
+    this.supabase = dependencies.supabase;
+    this.sdRepo = dependencies.sdRepo;
+    this.prdRepo = dependencies.prdRepo;
+    this.validationOrchestrator = dependencies.validationOrchestrator;
+    this.contentBuilder = dependencies.contentBuilder;
+
+    if (!this.supabase) {
+      throw new Error('BaseExecutor requires a Supabase client');
+    }
+  }
+
+  /**
+   * Execute the handoff - template method
+   * Subclasses should NOT override this, but implement abstract methods
+   * @param {string} sdId - Strategic Directive ID
+   * @param {object} options - Execution options
+   * @returns {Promise<object>} Execution result
+   */
+  async execute(sdId, options = {}) {
+    console.log(`🔍 ${this.handoffType} HANDOFF EXECUTION`);
+    console.log('-'.repeat(30));
+
+    // SD-LEO-ENH-WORKFLOW-TELEMETRY-AUTO-001A: Create trace context for this execution
+    let traceCtx, rootSpan;
+    try {
+      const executionId = `${this.handoffType}-${sdId}-${Date.now()}`;
+      traceCtx = createTraceContext(executionId, { sdId });
+      rootSpan = startSpan('workflow.execute', {
+        span_type: 'workflow',
+        workflow_execution_id: executionId,
+        sd_key: sdId,
+        handoff_type: this.handoffType,
+        executor_class: this.constructor.name,
+        telemetry_version: '1',
+      }, traceCtx);
+    } catch (e) {
+      // Intentionally suppressed: telemetry init failure is non-fatal
+      console.debug('[BaseExecutor] telemetry init suppressed:', e?.message || e);
+    }
+
+    try {
+      // Step 1: Load SD
+      let step1Span;
+      try { step1Span = startSpan('step.loadSD', { span_type: 'phase', step_name: 'loadSD', sd_key: sdId }, traceCtx, rootSpan); } catch (e) { console.debug('[BaseExecutor] telemetry suppressed:', e?.message || e); }
+      let sd = await this.sdRepo.getById(sdId);
+      try { endSpan(step1Span); } catch (e) { console.debug('[BaseExecutor] telemetry suppressed:', e?.message || e); }
+
+      // Step 1.3: SD-LEO-INFRA-FAIL-CLOSED-CLAIM-001 — Fail-closed claim identity + worktree isolation.
+      // Rejects handoff when:
+      //   (a) resolveOwnSession returns ambiguous/no_deterministic_identity (cross-CC collision),
+      //   (b) SD.claiming_session_id does not match our session (foreign claim),
+      //   (c) process.cwd() is not inside SD.worktree_path (wrong directory).
+      // SD-LEARN-FIX-ADDRESS-PATTERN-LEARN-094: Orchestrator SDs are exempt from worktree
+      // isolation (check c) because they coordinate children and don't produce code directly.
+      // They still must pass identity (a) and ownership (b) checks.
+      // SD-LEO-INFRA-CONSOLIDATE-DUAL-DETECTION-001 FR-2: use canonical helper
+      // (sync variant — hot-path mid-handoff, metadata-flag-only per RISK C1).
+      const { isOrchestratorSync } = await import('../../../../lib/sd/type-detection.js');
+      const isOrchestrator = isOrchestratorSync(sd);
+
+      // SD-LEO-INFRA-CONSOLIDATE-DUAL-DETECTION-001 FR-3: pre-handoff claim diagnostic.
+      // Reads the canonical claim holder so handoff failure logs include holder liveness
+      // status (alive_source_side vs active vs alive_no_heartbeat). This is informational —
+      // claim-validity-gate.js below does the authoritative ownership check.
+      const { getClaimHolder } = await import('../../../../lib/claim/ownership-detection.js');
+      const claimHolder = await getClaimHolder(sd?.sd_key, this.supabase).catch(() => null);
+      if (claimHolder) {
+        console.log(`   [claim-diag] sd_key=${sd?.sd_key} holder=${claimHolder.session_id?.slice?.(0, 8) || '?'} status=${claimHolder.holding_status}`);
+      }
+
+      // SD-LEO-INFRA-CONSOLIDATE-DUAL-DETECTION-001 FR-4: gate-skip diagnostic.
+      // Records whether this SD would be a candidate for the documentation-only fast-path
+      // (skips heavy code-validation gates). Diagnostic only — actual gate routing still
+      // owned by the per-handoff gate set.
+      const { shouldSkipForType } = await import('../../../../lib/handoff/gate-skip-detection.js');
+      const codeValidationSkip = shouldSkipForType(sd, ['feature', 'bugfix', 'security', 'enhancement', 'refactor', 'performance'], { gateName: 'BaseExecutor.codeValidationCandidate' });
+      if (codeValidationSkip.skip) {
+        console.log(`   [skip-diag] ${codeValidationSkip.reason}`);
+      }
+      try {
+        const { assertValidClaim, ClaimIdentityError } = await import('../../../../lib/claim-validity-gate.js');
+        const sdKeyForGate = sd?.sd_key || sdId;
+
+        // SD-LEARN-FIX-ADDRESS-PATTERN-LEARN-126 (PAT-RETRO/HF-EXECTOPLAN-0bda95fe residual):
+        // Close the marker-file race. capture-session-id hook writes
+        // .claude/session-identity/<sid>.json but can lag behind handoff invocation
+        // by ~100-250ms on cold sessions. One-shot retry with 250ms delay on
+        // no_deterministic_identity failures closes the race without adding
+        // latency to the happy path (retry fires only on failure).
+        let attempt = 0;
+        const maxAttempts = 2;
+        let claimCheck = null;
+        while (true) {
+          try {
+            claimCheck = await assertValidClaim(this.supabase, sdKeyForGate, {
+              operation: `handoff_${this.handoffType}`,
+              allowMainRepoForAcquisition: isOrchestrator
+            });
+            break; // success
+          } catch (retryable) {
+            attempt += 1;
+            const isFirstRetryWindow = attempt < maxAttempts
+              && retryable?.name === 'ClaimIdentityError'
+              && retryable?.reason === 'no_deterministic_identity';
+            if (!isFirstRetryWindow) throw retryable;
+            console.warn(`[claim-validity] no_deterministic_identity on attempt ${attempt} — waiting 250ms for marker-file to settle, then retrying once.`);
+            await new Promise(r => setTimeout(r, 250));
+          }
+        }
+        // SD-FDBK-FIX-HANDOFF-CLAIM-GATE-001 FR-2: assertValidClaim returns
+        // ownership='unclaimed' both for claiming_session_id=NULL and after its
+        // orphan auto-release path. Handoffs are claim-holder-only operations —
+        // an unclaimed SD must be explicitly claimed (sd-start) before any
+        // session may drive the pipeline (2026-06-12 parallel-driver incident).
+        const { evaluateClaimCheckForHandoff } = await import('../claim-gate-decision.js');
+        // SD-LEO-FIX-POST-MERGE-AUTOMATION-001 FR-2: the `sd` loaded at Step 1 can be
+        // stale by the time we reach this check — a concurrent invocation may have
+        // completed the SD (and cleared its own claim) in between, which is exactly
+        // the race this closes. Only re-read when ownership is 'unclaimed' (the one
+        // case evaluateClaimCheckForHandoff needs status for); the happy path
+        // (claim-holder) never pays this extra query.
+        // Security review (EXEC-TO-PLAN, SD-LEO-FIX-POST-MERGE-AUTOMATION-001): the
+        // exemption must be scoped to LEAD-FINAL-APPROVAL only — that is the sole
+        // handoff type whose success can make an SD "unclaimed because completed",
+        // and the only executor with a compensating already-completed reconcile
+        // path. Passing the fresh status for any OTHER handoff type would let an
+        // unclaimed session clear the claim gate on an already-completed SD and
+        // drive e.g. PLAN-TO-LEAD (reverting status to 'pending_approval') or
+        // PLAN-TO-EXEC/EXEC-TO-PLAN (mutating current_phase) with no per-type
+        // completed-guard downstream.
+        const exemptionEligible = this.handoffType === 'LEAD-FINAL-APPROVAL';
+        let freshSdForGate = sd;
+        if (exemptionEligible && claimCheck?.ownership === 'unclaimed') {
+          const refetched = await this.sdRepo.getById(sdId).catch(() => null);
+          if (refetched) freshSdForGate = refetched;
+        }
+        let noClaim = evaluateClaimCheckForHandoff(claimCheck, sdKeyForGate, exemptionEligible ? freshSdForGate?.status : undefined);
+
+        // QF-20260726-593: the self-live re-acquire net existed but was UNREACHABLE.
+        // It ran only inside _claimSDForSession (Step 2.5), which this NO_CLAIM branch
+        // returns before ever reaching — so the one path that recovers a mechanically
+        // lost claim never fired for the case it was written for. release_sd is
+        // SESSION-scoped and takes no SD argument (20260502_release_clear_worktree_state.sql:24),
+        // so running sd-start against one SD silently releases a live claim on another;
+        // this is where that damage must be undone.
+        //
+        // Safe at a blocking gate because reacquireSelfLiveClaim is fail-CLOSED: it
+        // re-acquires only on a positive self-ownership witness (cwd inside the SD's
+        // registered worktree, or a deterministic own-session whose sd_key matches) and
+        // its CAS refuses to clobber a live foreign claim. Note release_sd nulls
+        // claude_sessions.worktree_path but NOT strategic_directives_v2.worktree_path —
+        // which is the column the witness reads — so the primary witness survives a
+        // release even though the session-sd_key fallback does not.
+        //
+        // Re-evaluated, never assumed: we only clear the gate if a FRESH assertValidClaim
+        // agrees. A failed re-acquire falls through to the original NO_CLAIM failure.
+        if (noClaim.block) {
+          const recovered = await this._reacquireSelfLiveClaimIfReleased(sdId, sd, sdKeyForGate);
+          if (recovered) {
+            try {
+              const recheck = await assertValidClaim(this.supabase, sdKeyForGate, {
+                operation: `handoff_${this.handoffType}`,
+                allowMainRepoForAcquisition: isOrchestrator
+              });
+              const after = evaluateClaimCheckForHandoff(recheck, sdKeyForGate, exemptionEligible ? freshSdForGate?.status : undefined);
+              if (!after.block) {
+                console.log(`   [claim-gate] ♻️  NO_CLAIM cleared by self-live re-acquire on ${sdKeyForGate} — claim was mechanically released (see QF-20260726-593), not deliberately.`);
+                claimCheck = recheck;
+                noClaim = after;
+              }
+            } catch (recheckErr) {
+              // Re-check failed — keep the original NO_CLAIM decision rather than
+              // inferring success from a re-acquire we could not confirm.
+              console.debug('[BaseExecutor] post-reacquire claim re-check suppressed:', recheckErr?.message || recheckErr);
+            }
+          }
+        }
+
+        if (noClaim.block) {
+          console.error(`❌ NO_CLAIM: ${noClaim.detail}`);
+          try { endSpan(rootSpan, { result: 'claim_validity_gate_blocked' }); persist(traceCtx, { supabase: this.supabase }); } catch (_) { /* telemetry non-fatal */ }
+          return ResultBuilder.gateFailure('GATE_CLAIM_VALIDITY', {
+            issues: [`NO_CLAIM: handoff_${this.handoffType} attempted on unclaimed SD ${sdKeyForGate} — ${noClaim.detail}`],
+            score: 0,
+            max_score: 100,
+            // QF-20260726-425 ITEM B: the bare form is a DEAD END for orchestrator PARENTS, which
+            // are a large share of the population that trips this gate — it routes orchestrators to
+            // leaves, so the operator follows the advice, watches it claim something else, and is
+            // no closer. Both working forms are listed. Verified present before being suggested:
+            // sd-start.js reads --parent/--confirm (scripts/sd-start.js:637-638) and
+            // scripts/claim-orchestrator-for-rollup.mjs exists.
+            warnings: [
+              `Acquire the claim first: node scripts/sd-start.js ${sdKeyForGate}`,
+              `If ${sdKeyForGate} is an ORCHESTRATOR PARENT the bare form above will not claim it — use one of:`,
+              `  node scripts/sd-start.js ${sdKeyForGate} --parent --confirm`,
+              '  node scripts/claim-orchestrator-for-rollup.mjs',
+            ]
+          }, `NO_CLAIM: ${sdKeyForGate} is unclaimed — handoffs require the claim-holding session`);
+        }
+        if (noClaim.alreadyCompleted) {
+          console.log(`   ℹ️  [claim-gate] ${sdKeyForGate} is unclaimed but already status='completed' — proceeding without re-claim (idempotent reconcile path handles it downstream).`);
+          // Propagate the fresh row so setup()/executeSpecific() see status='completed',
+          // not the Step-1 snapshot that may still show 'pending_approval'.
+          sd = freshSdForGate;
+        }
+      } catch (e) {
+        if (e?.name === 'ClaimIdentityError') {
+          console.error(e.toBanner ? e.toBanner() : e.message);
+          try { endSpan(rootSpan, { result: 'claim_validity_gate_blocked' }); persist(traceCtx, { supabase: this.supabase }); } catch (_) { /* telemetry non-fatal */ }
+          return ResultBuilder.gateFailure('GATE_CLAIM_VALIDITY', {
+            issues: [`${e.reason}: ${e.message}`],
+            score: 0,
+            max_score: 100,
+            warnings: [e.remediation || '']
+          }, e.message);
+        }
+        throw e;
+      }
+
+      // Step 1.5: Pre-handoff migration check (auto-execute pending migrations)
+      // FR-2: consume result.blocking. Gate enforcement is governed by env
+      // flag LEO_MIGRATION_GATE_ENFORCE (default unset/'warn' = log + audit
+      // only; 'block' = hard gateFailure). Preserves options.skipMigrationCheck
+      // escape hatch — that path returns null so the gate never trips.
+      let step1_5Span;
+      try { step1_5Span = startSpan('step.migrationCheck', { span_type: 'phase', step_name: 'migrationCheck', sd_key: sdId }, traceCtx, rootSpan); } catch (e) { console.debug('[BaseExecutor] telemetry suppressed:', e?.message || e); }
+      const migrationCheckResult = await this._checkAndExecutePendingMigrations(sd, options);
+      try { endSpan(step1_5Span); } catch (e) { console.debug('[BaseExecutor] telemetry suppressed:', e?.message || e); }
+
+      if (migrationCheckResult && migrationCheckResult.blocking === true) {
+        const enforceMode = (process.env.LEO_MIGRATION_GATE_ENFORCE || 'warn').toLowerCase();
+        // When the tier gate (LEO_MIGRATION_TIER_GATE) deferred only TIER-2 files (the
+        // TIER-1 subset already auto-applied), the precise blocking set is tierDeferredFiles
+        // — prefer it so the operator recipe lists only files that actually need the
+        // chairman gate. Falls back to the full pending set when the tier gate is OFF
+        // (tierDeferredFiles undefined), preserving the original message verbatim.
+        const pending = Array.isArray(migrationCheckResult.tierDeferredFiles) && migrationCheckResult.tierDeferredFiles.length
+          ? [...migrationCheckResult.tierDeferredFiles]
+          : [
+              ...(migrationCheckResult.uncommittedManualUpdates || []),
+              ...(migrationCheckResult.pendingMigrations || []).map(m => m.file)
+            ];
+        const applyRecipe = pending.map(p => `  node scripts/apply-migration.js "${p}" --prod-deploy --issue-token <token>`).join('\n');
+        if (enforceMode === 'block') {
+          try { endSpan(rootSpan, { result: 'migration_gate_block' }); persist(traceCtx, { supabase: this.supabase }); } catch (_) { /* telemetry non-fatal */ }
+          return ResultBuilder.gateFailure('GATE_PENDING_MIGRATIONS', {
+            issues: pending.length
+              ? [`${pending.length} pending migration(s) — schema objects not present in live DB`, ...pending.map(p => `pending: ${p}`)]
+              : ['Pending migrations detected'],
+            score: 0,
+            max_score: 100,
+            warnings: [`apply manually:\n${applyRecipe}`, 'set LEO_MIGRATION_GATE_ENFORCE=warn to downgrade to warning-only']
+          }, `GATE_PENDING_MIGRATIONS: ${pending.length} migration(s) not yet applied to live DB`);
+        } else {
+          console.log(`   [Migration Gate] result.blocking=true but LEO_MIGRATION_GATE_ENFORCE=${enforceMode} — warning only (grace window).`);
+          if (pending.length) console.log(`   [Migration Gate] To apply manually:\n${applyRecipe}`);
+        }
+      }
+
+      // Step 1.8: PAT-MSESS-BYP-001 - Multi-session claim conflict check (BLOCKING)
+      // Prevents duplicate work when another Claude Code instance is already working on this SD
+      let step1_8Span;
+      try { step1_8Span = startSpan('step.claimConflictCheck', { span_type: 'phase', step_name: 'claimConflictCheck', sd_key: sdId }, traceCtx, rootSpan); } catch (e) { console.debug('[BaseExecutor] telemetry suppressed:', e?.message || e); }
+      const claimConflict = await this._checkMultiSessionClaimConflict(sdId, sd);
+      try { endSpan(step1_8Span); } catch (e) { console.debug('[BaseExecutor] telemetry suppressed:', e?.message || e); }
+      if (claimConflict && !claimConflict.pass) {
+        try { endSpan(rootSpan, { result: 'claim_conflict' }); persist(traceCtx, { supabase: this.supabase }); } catch (e) { console.debug('[BaseExecutor] telemetry suppressed:', e?.message || e); }
+        return ResultBuilder.gateFailure('GATE_MULTI_SESSION_CLAIM_CONFLICT', {
+          issues: claimConflict.issues,
+          score: claimConflict.score,
+          max_score: claimConflict.max_score,
+          warnings: claimConflict.warnings
+        }, claimConflict.issues[0] || 'SD is claimed by another active session. Pick a different SD.');
+      }
+
+      // Step 1.9: QF-20260711-569 (scope-widened leg) — coordinator-authority fence at the
+      // HANDOFF boundary. SPINE-001-C executed PLAN->EXEC THROUGH a needs_coordinator_review
+      // fence because handoff gates never consulted it. Same ONE shared predicate as the
+      // claim-write fences (QF-272 / QF-937 / sd-start direct path): live row re-fetch,
+      // fail-closed, binds human_action_required / needs_coordinator_review / not_before_hold
+      // at every handoff type. options.bypassValidation remains the documented (rate-limited,
+      // reason-required) emergency hatch.
+      {
+        const { liveClaimWriteFenceReason } = createRequire(import.meta.url)('../../../../lib/fleet/claim-eligibility.cjs');
+        const fenceReason = await liveClaimWriteFenceReason(this.supabase, sd?.sd_key || sdId);
+        if (fenceReason) {
+          if (options.bypassValidation) {
+            console.log(`\n⚠️  BYPASS ACTIVE: coordinator-authority fence (${fenceReason}) overridden — emergency path, audited.`);
+          } else {
+            try { endSpan(rootSpan, { result: 'authority_fence' }); persist(traceCtx, { supabase: this.supabase }); } catch (e) { console.debug('[BaseExecutor] telemetry suppressed:', e?.message || e); }
+            return ResultBuilder.gateFailure('GATE_COORDINATOR_AUTHORITY_FENCE', {
+              issues: [`SD is fenced at the authority boundary: ${fenceReason}`, 'Only coordinator/human authority clears this fence (clear-coordinator-review, flag removal, not_before expiry).'],
+              score: 0,
+              max_score: 100,
+              warnings: ['Do NOT work this SD until the fence clears; pick another via npm run sd:next']
+            }, `GATE_COORDINATOR_AUTHORITY_FENCE: ${fenceReason} — handoff refused`);
+          }
+        }
+      }
+
+      // Step 2: Pre-execution setup (optional, override in subclass)
+      let step2Span;
+      try { step2Span = startSpan('step.setup', { span_type: 'phase', step_name: 'setup', sd_key: sdId }, traceCtx, rootSpan); } catch (e) { console.debug('[BaseExecutor] telemetry suppressed:', e?.message || e); }
+      const setupResult = await this.setup(sdId, sd, options);
+      try { endSpan(step2Span); } catch (e) { console.debug('[BaseExecutor] telemetry suppressed:', e?.message || e); }
+      if (setupResult && !setupResult.success) {
+        try { endSpan(rootSpan, { result: 'setup_failed' }); persist(traceCtx, { supabase: this.supabase }); } catch (e) { console.debug('[BaseExecutor] telemetry suppressed:', e?.message || e); }
+        return setupResult;
+      }
+
+      // Step 2.5: Auto-claim SD for this session (sets is_working_on = true)
+      let step2_5Span;
+      try { step2_5Span = startSpan('step.claimAndPrepare', { span_type: 'phase', step_name: 'claimAndPrepare', sd_key: sdId }, traceCtx, rootSpan); } catch (e) { console.debug('[BaseExecutor] telemetry suppressed:', e?.message || e); }
+      const claimResult = await this._claimSDForSession(sdId, sd);
+      if (claimResult && !claimResult.success) {
+        try { endSpan(step2_5Span, { result: 'claim_failed' }); persist(traceCtx, { supabase: this.supabase }); } catch (e) { console.debug('[BaseExecutor] telemetry suppressed:', e?.message || e); }
+        return claimResult;
+      }
+
+      // Step 2.6: SD-LEARN-010:US-004 - Auto-trigger DATABASE sub-agent for schema SDs
+      await this._autoTriggerDatabaseSubAgent(sd);
+
+      // Step 2.7: SD-LEO-CONTINUITY-001 - Display HANDOFF_START directives (protocol familiarization)
+      const targetPhase = this._getTargetPhaseFromHandoff();
+      await this._displayHandoffStartDirectives(targetPhase);
+      try { endSpan(step2_5Span); } catch (e) { console.debug('[BaseExecutor] telemetry suppressed:', e?.message || e); }
+
+      // Step 3: Run required gates (with database rule integration - SD-VALIDATION-REGISTRY-001)
+      let step3Span;
+      try { step3Span = startSpan('step.gateValidation', { span_type: 'phase', step_name: 'gateValidation', sd_key: sdId }, traceCtx, rootSpan); } catch (e) { console.debug('[BaseExecutor] telemetry suppressed:', e?.message || e); }
+      const hardcodedGates = await this.getRequiredGates(sd, options);
+
+      // SD-MAN-GEN-CORRECTIVE-VISION-GAP-012 (V04): Inject DFE escalation gate globally
+      // All handoff types get DFE enforcement. Deduplicate by name to avoid double execution
+      // when individual executors also add it via getRequiredGates().
+      const hasDFE = hardcodedGates.some(g => g.name === 'DFE_ESCALATION_GATE');
+      if (!hasDFE) {
+        hardcodedGates.push(createDFEEscalationGate(this.supabase, `${this.handoffType}-gate`));
+      }
+
+      // SD-LEO-INFRA-VALIDATION-GATE-REGISTRY-001: Apply database-driven gate policies
+      // Filters gates based on validation_gate_registry policies (DISABLED gates removed)
+      const { filteredGates: policyFilteredGates, fallbackUsed } = await applyGatePolicies(
+        this.supabase,
+        hardcodedGates,
+        {
+          sdType: sd?.sd_type,
+          validationProfile: sd?.validation_profile || options?.validationProfile,
+          sdId: sd?.sd_key || sdId
+        }
+      );
+
+      if (fallbackUsed) {
+        console.log('   [GatePolicy] Using hardcoded gate set (DB policy unavailable)');
+      }
+
+      // SD-LEO-001: Load PRD for validators that need it (e.g., prdQualityValidation)
+      // This fixes the "No PRD provided" error in PLAN-TO-EXEC handoffs
+      let prd = null;
+      if (this.prdRepo) {
+        prd = await this.prdRepo.getBySdId(sd.id);
+      }
+
+      // SD-LEO-INFRA-HARDENING-001: Deep-copy context objects to prevent mutation
+      // This ensures chained skills and validators don't accidentally modify original data
+      // SD-LEO-FIX-HANDOFF-PIPELINE-GIT-001: Inject SharedGitContext for gates to reuse
+      const gitContext = new SharedGitContext();
+      const validationContext = {
+        sdId,
+        sd_id: sd?.id || sdId,  // Use UUID when available for database queries
+        sd: sd ? structuredClone(sd) : null,  // Deep copy to prevent mutation
+        prd: prd ? structuredClone(prd) : null,  // SD-LEO-001: Include PRD in context for validators
+        prdId: prd?.id,  // Also provide prdId for convenience
+        options: options ? structuredClone(options) : {},  // Deep copy options
+        supabase: this.supabase,  // Supabase client cannot be cloned (has methods)
+        gitContext,  // SD-LEO-FIX-HANDOFF-PIPELINE-GIT-001: Cached git state (branch, diffFiles, gitRoot)
+        // SD-FDBK-INFRA-FIX-GATE-SUBAGENT-001: without this, subagent-evidence-gate.js's
+        // REQUIRED_SUBAGENTS[ctx.handoffType] always resolved to [] (undefined key), so
+        // GATE_SUBAGENT_EVIDENCE has been fail-open fleet-wide since introduction.
+        handoffType: this.handoffType
+      };
+
+      // SD-LEO-INFRA-EXTEND-WAIT-VERDICT-001 FR-5/TR-4: surface prior consecutive-wait
+      // accounting so the orchestrator's max-wait ceiling can escalate a perpetually
+      // WAITing gate to FAIL. Best-effort: read the most recent WAIT row's
+      // metadata.{wait_attempts,first_wait_at} for this SD + handoff type.
+      validationContext.waitState = await this._loadPriorWaitState(sd?.id || sdId);
+
+      // Use database-driven gates when available, fall back to hardcoded
+      const gates = await this.validationOrchestrator.buildGatesFromRules(
+        policyFilteredGates,
+        this.handoffType,
+        validationContext
+      );
+
+      // SD-LEO-ENH-WORKFLOW-TELEMETRY-AUTO-001A: Pass trace context to gate validation for gate-level spans
+      validationContext._traceCtx = traceCtx;
+      validationContext._parentSpan = step3Span;
+
+      // SD-MAN-ORCH-LEO-HARNESS-EFFICIENCY-001-B (L5): gate-verdict cache setup.
+      // PASS-only reuse for declared-input gates across retries of the same
+      // handoff. LEAD-FINAL-APPROVAL is hard-excluded (final bar); --no-cache
+      // (options.noCache) forces a full re-run. Fail-open: loader errors → no cache.
+      let verdictCacheModule = null;
+      try {
+        verdictCacheModule = await import('../gate-verdict-cache.js');
+        const cacheEnabled = verdictCacheModule.isCacheAllowed({
+          noCache: options.noCache,
+          handoffType: this.handoffType,
+        });
+        let priorResults = null;
+        if (cacheEnabled) {
+          priorResults = await verdictCacheModule.loadPriorGateResults(
+            this.supabase, sd?.id || sdId, this.handoffType
+          );
+        }
+        validationContext._verdictCache = {
+          enabled: cacheEnabled && !!priorResults,
+          prior: priorResults || {},
+          _allowed: cacheEnabled,
+        };
+        if (validationContext._verdictCache.enabled) {
+          console.log(`   ♻️  Gate-verdict cache armed (${Object.keys(priorResults).length} prior gate result(s) with input hashes)`);
+        }
+      } catch (cacheErr) {
+        validationContext._verdictCache = { enabled: false, prior: {}, _allowed: false };
+        console.warn(`   [gate-verdict-cache] disabled (fail-open): ${cacheErr.message}`);
+      }
+
+      // SD-MAN-GEN-CORRECTIVE-VISION-GAP-013 (V02): Gate retry loop — auto-retry transient failures
+      let gateResults;
+      let currentRetryCount = options._retryCount || 0;
+      const maxGateRetries = GATE_MAX_RETRIES;
+      // QF-20260705-788: captured at the retryCount===2 crossing, but only actually EMITTED after
+      // the loop exits and the FINAL gateResults.passed is known — see below.
+      let _pendingGateAutoSignalArgs = null;
+
+      for (let attempt = 0; attempt <= maxGateRetries; attempt++) {
+        gateResults = await this.validationOrchestrator.validateGates(gates, validationContext);
+
+        // L5: fold this attempt's hash-bearing PASS verdicts into the cache so the
+        // in-process retry below reuses them too (same PASS-only semantics).
+        if (verdictCacheModule && validationContext._verdictCache && validationContext._verdictCache._allowed) {
+          try {
+            validationContext._verdictCache.prior = verdictCacheModule.mergePassResults(
+              validationContext._verdictCache.prior, gateResults.gateResults
+            );
+            validationContext._verdictCache.enabled =
+              Object.keys(validationContext._verdictCache.prior).length > 0;
+          } catch { /* fail-open */ }
+        }
+
+        if (gateResults.passed) break; // Gates passed — exit retry loop
+
+        // Check if we should retry
+        if (attempt < maxGateRetries) {
+          const skipCheck = shouldSkipAndContinue({
+            sd,
+            gateResults,
+            retryCount: currentRetryCount,
+            autoProceed: options.autoProceed
+          });
+
+          if (!skipCheck.shouldSkip && skipCheck.reason.includes('etry')) {
+            // Retry eligible — increment and loop
+            currentRetryCount++;
+            console.log(`\n   🔄 Gate retry ${currentRetryCount}/${maxGateRetries}: ${skipCheck.reason}`);
+            // SD-LEO-INFRA-SIGNAL-THRESHOLD-AUTO-EMIT-001 (FR-1): auto-emit a /signal at the gate-2x
+            // crossing — enforcement-layer escalation mirroring the shipped RCA-2x wiring. Env-gated
+            // (LEO_AUTO_SIGNAL=off), wrapped fail-open: it can NEVER block, slow, or throw into the
+            // handoff. QF-20260705-788: only CAPTURED here (not spawned) — a 2x-fail crossing still
+            // has one gate re-evaluation left in this same loop (GATE_MAX_RETRIES=2), and that final
+            // attempt routinely passes (the known WIRE_CHECK_GATE transient-fail gotcha). Emitting
+            // immediately fired HIGH-severity noise for a self-healing condition; the actual spawn now
+            // happens AFTER the loop, gated on the FINAL gateResults.passed still being false.
+            try {
+              const _req = createRequire(import.meta.url);
+              const { shouldEmitGateAutoSignal, buildGateAutoSignalArgs } =
+                _req(path.join(ENGINEER_ROOT, 'lib', 'hooks', 'auto-signal-threshold.cjs'));
+              const _sessionId = process.env.CLAUDE_SESSION_ID;
+              if (shouldEmitGateAutoSignal({ retryCount: currentRetryCount, sessionId: _sessionId, env: process.env })) {
+                _pendingGateAutoSignalArgs = {
+                  args: buildGateAutoSignalArgs({
+                    gateName: gateResults.failedGate,
+                    sdKey: sd?.sd_key || sd?.id,
+                    retryCount: currentRetryCount,
+                  }),
+                  sessionId: _sessionId,
+                };
+              }
+            } catch { /* fail-open: auto-signal must never block the handoff */ }
+            continue;
+          }
+        }
+        break; // Not retry-eligible or max retries reached
+      }
+
+      // QF-20260705-788: emit the captured gate-2x auto-signal ONLY if the handoff's gates are
+      // STILL failing after the retry loop exhausted (genuine exhaustion) — a subsequent PASS
+      // within this same loop (the self-healing WIRE_CHECK_GATE case) suppresses it entirely.
+      // Fire-and-forget (detached + unref), same safety contract as before.
+      if (_pendingGateAutoSignalArgs && !gateResults.passed) {
+        try {
+          const _req = createRequire(import.meta.url);
+          const { spawn } = _req('child_process');
+          const _child = spawn(
+            process.execPath,
+            [path.join(ENGINEER_ROOT, 'scripts', 'worker-signal.cjs'), ..._pendingGateAutoSignalArgs.args],
+            { detached: true, stdio: 'ignore', env: { ...process.env, CLAUDE_SESSION_ID: _pendingGateAutoSignalArgs.sessionId } }
+          );
+          _child.unref();
+        } catch { /* fail-open: auto-signal must never block the handoff */ }
+      }
+
+      try { endSpan(step3Span, { result: gateResults.passed ? 'pass' : 'fail' }); } catch (e) { console.debug('[BaseExecutor] telemetry suppressed:', e?.message || e); }
+
+      // L5 telemetry: cache-hit counts per run (fail-soft, fire-and-forget).
+      try {
+        const allEntries = Object.entries(gateResults.gateResults || {});
+        const hitNames = allEntries.filter(([, r]) => r && r.cache_hit === true).map(([n]) => n);
+        if (hitNames.length > 0 && verdictCacheModule) {
+          console.log(`   ♻️  Gate-verdict cache: ${hitNames.length} reused, ${allEntries.length - hitNames.length} evaluated (${hitNames.join(', ')})`);
+          verdictCacheModule.logCacheTelemetry(this.supabase, {
+            sdKey: sd?.sd_key || sdId,
+            handoffType: this.handoffType,
+            hits: hitNames.length,
+            reran: allEntries.length - hitNames.length,
+            gates: hitNames,
+          }).catch(() => {});
+        }
+      } catch { /* telemetry never affects the verdict */ }
+
+      // SD-LEO-INFRA-ORCH-PARENT-LIFECYCLE-001 FR-5: WAIT verdict short-circuit.
+      // A WAIT verdict means the handoff is correctly blocked (e.g. parent orchestrator
+      // awaiting children completion) but it is NOT a validation failure — no RCA, no
+      // retry budget burn, no rejection_reason. Return a non-success result that the
+      // recorder + UI treat distinctly (blocked_wait status, no failure metrics).
+      if (!gateResults.passed && gateResults.waitVerdict) {
+        console.log('');
+        console.log('⏳ HANDOFF BLOCKED — WAIT VERDICT (not a failure)');
+        console.log('-'.repeat(50));
+        console.log(`   Waiting gates: ${gateResults.waitingGates.join(', ')}`);
+        gateResults.waitReasons.forEach(r => console.log(`   - ${r}`));
+        console.log('   Retry budget NOT consumed; handoff will re-evaluate on next attempt.');
+        console.log('');
+
+        try { endSpan(rootSpan, { result: 'wait' }); persist(traceCtx, { supabase: this.supabase }); } catch (e) { console.debug('[BaseExecutor] telemetry suppressed:', e?.message || e); }
+
+        // Build a wait-specific result. Mark success=false (handoff did not pass) but
+        // include wait discriminator so HandoffOrchestrator skips recordFailure and
+        // HandoffRecorder routes to a wait-status row.
+        return {
+          success: false,
+          wait: true,
+          waitVerdict: true,
+          waitingGates: gateResults.waitingGates,
+          waitReasons: gateResults.waitReasons,
+          // SD-LEO-INFRA-EXTEND-WAIT-VERDICT-001 FR-5: carry the updated wait
+          // accounting so HandoffRecorder.recordWait persists it for the next attempt.
+          waitMetadata: gateResults.waitMetadata || null,
+          message: gateResults.waitReasons.join('; ') || 'Handoff blocked — waiting on prerequisites',
+          warnings: gateResults.warnings,
+          gateResults: gateResults.gateResults,
+          handoffType: this.handoffType,
+          sdId
+        };
+      }
+
+      // SD-LEARN-010:US-005: Handle bypass validation
+      if (!gateResults.passed) {
+        if (options.bypassValidation) {
+          console.log('');
+          console.log('⚠️  BYPASS ACTIVE: Gate failures overridden');
+          console.log(`   Failed gate: ${gateResults.failedGate}`);
+          console.log(`   Issues: ${gateResults.issues.length}`);
+          console.log('   Proceeding despite validation failures...');
+          console.log('');
+          // Continue execution despite gate failure
+        } else {
+          // SD-LEO-ENH-AUTO-PROCEED-001-07: Check for skip-and-continue conditions (post-retry)
+          const skipCheck = shouldSkipAndContinue({
+            sd,
+            gateResults,
+            retryCount: currentRetryCount,
+            autoProceed: options.autoProceed
+          });
+
+          if (skipCheck.shouldSkip) {
+            // Execute skip-and-continue flow
+            const correlationId = `skip-${sdId}-${Date.now()}`;
+            const skipResult = await executeSkipAndContinue({
+              supabase: this.supabase,
+              sd,
+              gateResults,
+              correlationId,
+              sessionId: options.autoProceedSessionId || 'unknown'
+            });
+
+            try { endSpan(rootSpan, { result: 'skipped' }); persist(traceCtx, { supabase: this.supabase }); } catch (e) { console.debug('[BaseExecutor] telemetry suppressed:', e?.message || e); }
+            // Return special result for skip-and-continue
+            return {
+              success: false,
+              skippedAndContinued: true,
+              blockedSdId: sdId,
+              nextSibling: skipResult.nextSibling,
+              allBlocked: skipResult.allBlocked,
+              skipReason: skipResult.reason,
+              correlationId,
+              failedGate: gateResults.failedGate,
+              issues: gateResults.issues
+            };
+          }
+
+          // SD-LEO-CONTINUITY-001: Display ON_FAILURE directives (5-Whys, Sustainable Resolution)
+          const failurePhase = this._getSourcePhaseFromHandoff();
+          await this._displayOnFailureDirectives(failurePhase);
+
+          // QF-20260424-806: pass sdId so remediation prompts interpolate correctly.
+          const remediation = this.getRemediation(gateResults.failedGate, { sdId });
+
+          // RCA Auto-Trigger on gate failure (SD-LEO-ENH-ENHANCE-RCA-SUB-001)
+          // SD-LEARN-FIX-ADDRESS-PAT-AUTO-003: Use individual gate score, not overall aggregate.
+          try {
+            const { triggerRCAOnFailure, buildGateContext } = await import('../../../../lib/rca/index.js');
+            const failedGateResult = gateResults.gateResults?.[gateResults.failedGate];
+            await triggerRCAOnFailure(buildGateContext({
+              gateName: gateResults.failedGate,
+              score: failedGateResult?.score ?? gateResults.totalScore,
+              threshold: failedGateResult?.maxScore ?? gateResults.totalMaxScore,
+              breakdown: gateResults.issues,
+              sdId,
+              handoffType: this.handoffType
+            }));
+          } catch (e) {
+            // Intentionally suppressed: RCA trigger should never block handoff
+            console.debug('[BaseExecutor] RCA trigger suppressed:', e?.message || e);
+          }
+
+          try { endSpan(rootSpan, { result: 'gate_failure' }); persist(traceCtx, { supabase: this.supabase }); } catch (e) { console.debug('[BaseExecutor] telemetry suppressed:', e?.message || e); }
+          const gateFailureResult = ResultBuilder.gateFailure(gateResults.failedGate, {
+            issues: gateResults.issues,
+            score: gateResults.totalScore,
+            max_score: gateResults.totalMaxScore,
+            warnings: gateResults.warnings,
+            details: gateResults.gateResults
+          }, remediation);
+          // L5 (SD-MAN-ORCH-LEO-HARNESS-EFFICIENCY-001-B): surface per-gate results
+          // top-level so recordFailure persists them — retries follow rejections, so
+          // without this the cache has nothing to reuse.
+          gateFailureResult.gateResults = gateResults.gateResults;
+          // FR-3 (SD-LEO-INFRA-OPERATOR-CONTRACT-GATE-002). HandoffRecorder.js already READS
+          // result.failedGate when building validation_details.summary — nobody was setting it.
+          // ResultBuilder.gateFailure() takes the gate name only to shape the reasonCode and
+          // delegates to .rejected(), which returns no failedGate; the skip-and-continue path
+          // above DOES carry it, so this branch was the odd one out. Measured before the fix:
+          // failed_gate null on 25 of 25 rejected rows, leaving the gate NAME recoverable only
+          // by string-parsing `message`.
+          //
+          // This is the WHOLE persistence fix. The PRD originally also proposed copying
+          // gate_results into validation_details; TESTING measured that they are ALREADY
+          // persisted there (13/25 rows carry metadata.gate_results, 13/13 of those with
+          // OPERATOR_CONTRACT.details), so that half would have been a second representation
+          // of one fact — and a test for it would have gone green before EXEC began.
+          gateFailureResult.failedGate = gateResults.failedGate;
+          return gateFailureResult;
+        }
+      }
+
+      // Step 3.9: SD-LEO-INFRA-HANDOFF-INTEGRITY-RECOVERY-001 — Claim heartbeat validation
+      // Verify this session still holds the claim before executing state transitions
+      try {
+        const sdKey = sd?.sd_key || sdId;
+        const { data: currentClaim } = await this.supabase
+          .from('claude_sessions')
+          .select('session_id, sd_key')
+          .eq('sd_key', sdKey)
+          .eq('status', 'active')
+          .limit(1)
+          .single();
+
+        // Also check by UUID if sd_key didn't match
+        if (!currentClaim && sd?.id) {
+          const { data: uuidClaim } = await this.supabase
+            .from('claude_sessions')
+            .select('session_id, sd_key')
+            .eq('sd_key', sd.id)
+            .eq('status', 'active')
+            .limit(1)
+            .single();
+
+          if (uuidClaim && options.autoProceedSessionId && uuidClaim.session_id !== options.autoProceedSessionId) {
+            console.log(`\n⚠️  CLAIM HEARTBEAT: Another session (${uuidClaim.session_id}) now holds this SD`);
+            console.log('   Aborting handoff to prevent race condition.');
+            try { endSpan(rootSpan, { result: 'claim_lost' }); persist(traceCtx, { supabase: this.supabase }); } catch (e) { console.debug('[BaseExecutor] telemetry suppressed:', e?.message || e); }
+            return ResultBuilder.gateFailure('CLAIM_HEARTBEAT_LOST', {
+              issues: [`Claim on ${sdKey} was lost to session ${uuidClaim.session_id} during handoff execution`],
+              score: 0,
+              max_score: 100
+            }, 'Re-claim the SD with npm run sd:start before retrying the handoff.');
+          }
+        }
+      } catch (e) {
+        // Non-fatal: heartbeat check failure should not block handoff
+        console.debug('[BaseExecutor] Claim heartbeat check suppressed:', e?.message || e);
+      }
+
+      // Step 4: Execute type-specific logic
+      let step4Span;
+      try { step4Span = startSpan('step.executeSpecific', { span_type: 'phase', step_name: 'executeSpecific', sd_key: sdId }, traceCtx, rootSpan); } catch (e) { console.debug('[BaseExecutor] telemetry suppressed:', e?.message || e); }
+      const executionResult = await this.executeSpecific(sdId, sd, options, gateResults);
+      try { endSpan(step4Span, { result: executionResult.success ? 'pass' : 'fail' }); } catch (e) { console.debug('[BaseExecutor] telemetry suppressed:', e?.message || e); }
+      if (!executionResult.success) {
+        try { endSpan(rootSpan, { result: 'exec_failed' }); persist(traceCtx, { supabase: this.supabase }); } catch (e) { console.debug('[BaseExecutor] telemetry suppressed:', e?.message || e); }
+        return executionResult;
+      }
+
+      // Step 4.5: Handle Plan Mode transition (SD-PLAN-MODE-001)
+      await this._handlePlanModeTransition(sdId, sd, options);
+
+      // Step 4.6: SD-MAN-GEN-CORRECTIVE-VISION-GAP-009 - Track CLI authority for phase transition
+      try {
+        await trackWriteSource(this.supabase, {
+          table: 'sd_phase_handoffs',
+          operation: 'insert',
+          source: 'cli',
+          command: 'handoff',
+          sdKey: sd?.sd_key || sdId,
+        });
+      } catch (e) {
+        // Intentionally suppressed: CLI tracking is fire-and-forget
+        console.debug('[BaseExecutor] CLI tracking suppressed:', e?.message || e);
+      }
+
+      // Step 5: Build success result
+      console.log(`\n✅ ${this.handoffType} HANDOFF APPROVED`);
+      console.log('   ⚠️  IMPORTANT: Follow the LEO protocol diligently.');
+
+      // SD-LEO-INFRA-TYPE-AWARE-GATE-001: Progressive gate preflight advisory
+      try {
+        await this._displayProgressivePreflight(sd);
+      } catch (e) {
+        // Intentionally suppressed: advisory is non-blocking
+        console.debug('[BaseExecutor] progressive preflight advisory suppressed:', e?.message || e);
+      }
+
+      // SD-LEO-ENH-WORKFLOW-TELEMETRY-AUTO-001A: End root span and persist
+      try { endSpan(rootSpan, { result: 'success' }); persist(traceCtx, { supabase: this.supabase }); } catch (e) { console.debug('[BaseExecutor] telemetry suppressed:', e?.message || e); }
+
+      return {
+        success: true,
+        ...executionResult,
+        gateResults: gateResults.gateResults,
+        // Scoring: normalized is the weighted average (0-100%), totalScore/maxScore for backward compat
+        normalizedScore: gateResults.normalizedScore,
+        totalScore: gateResults.totalScore,
+        maxScore: gateResults.totalMaxScore,
+        gateCount: gateResults.gateCount,
+        warnings: gateResults.warnings
+      };
+
+    } catch (error) {
+      // QF-20260423-200: Log with full diagnostic context (was: just error.message)
+      const errorClass = error?.constructor?.name || 'Unknown';
+      const errorName = error?.name || errorClass;
+      console.error(`❌ ${this.handoffType} execution error [${errorName}]:`, error?.message || '(no message)');
+      if (error?.stack) {
+        console.error(error.stack.split('\n').slice(0, 5).join('\n'));
+      }
+
+      // SD-LEO-ENH-WORKFLOW-TELEMETRY-AUTO-001A: Record error in telemetry
+      try { endSpan(rootSpan, { result: 'error', error_class: error.constructor?.name, error_message: error.message }); persist(traceCtx, { supabase: this.supabase }); } catch (e) { console.debug('[BaseExecutor] telemetry suppressed:', e?.message || e); }
+
+      // SD-LEO-CONTINUITY-001: Display ON_FAILURE directives (5-Whys, Sustainable Resolution)
+      const failurePhase = this._getSourcePhaseFromHandoff();
+      await this._displayOnFailureDirectives(failurePhase);
+
+      return ResultBuilder.systemError(error, 'executeSpecific');
+    }
+  }
+
+  // ============ Abstract methods - MUST implement in subclasses ============
+
+  /**
+   * @returns {string} Handoff type (e.g., 'PLAN-TO-EXEC')
+   */
+  get handoffType() {
+    throw new Error('Subclass must implement handoffType getter');
+  }
+
+  /**
+   * Get required gates for this handoff type
+   * @param {object} sd - Strategic Directive
+   * @param {object} options - Options
+   * @returns {Promise<array>} Array of gate definitions
+   */
+  async getRequiredGates(_sd, _options) {
+    throw new Error('Subclass must implement getRequiredGates()');
+  }
+
+  /**
+   * SD-LEO-INFRA-EXTEND-WAIT-VERDICT-001 FR-5/TR-4: load the prior consecutive-wait
+   * accounting for this SD + handoff type from the most recent WAIT row's metadata.
+   * Returns { wait_attempts, first_wait_at } (zeroed when none / on any error).
+   * Best-effort — a lookup failure must never block a handoff.
+   *
+   * @param {string} sdUuid
+   * @returns {Promise<{wait_attempts:number, first_wait_at:(string|null)}>}
+   */
+  async _loadPriorWaitState(sdUuid) {
+    const empty = { wait_attempts: 0, first_wait_at: null };
+    if (!sdUuid || !this.supabase) return empty;
+    try {
+      const { data, error } = await this.supabase
+        .from('sd_phase_handoffs')
+        .select('metadata, created_at')
+        .eq('sd_id', sdUuid)
+        .eq('handoff_type', this.handoffType)
+        .eq('status', 'blocked')
+        .order('created_at', { ascending: false })
+        .limit(1)
+        .maybeSingle();
+      if (error || !data?.metadata?.wait) return empty;
+      const md = data.metadata;
+      return {
+        wait_attempts: Number(md.wait_attempts) || 0,
+        first_wait_at: md.first_wait_at || null
+      };
+    } catch {
+      return empty;
+    }
+  }
+
+  /**
+   * Execute type-specific logic after gates pass
+   * @param {string} sdId - SD ID
+   * @param {object} sd - SD record
+   * @param {object} options - Options
+   * @param {object} gateResults - Results from gate validation
+   * @returns {Promise<object>} Execution result
+   */
+  async executeSpecific(_sdId, _sd, _options, _gateResults) {
+    throw new Error('Subclass must implement executeSpecific()');
+  }
+
+  /**
+   * Get remediation instructions for a failed gate
+   * @param {string} gateName - Name of failed gate
+   * @returns {string|null} Remediation instructions
+   */
+  getRemediation(_gateName) {
+    return null; // Default: use ResultBuilder's defaults
+  }
+
+  // ============ Optional overrides ============
+
+  /**
+   * Pre-execution setup (optional)
+   * @param {string} sdId - SD ID
+   * @param {object} sd - SD record
+   * @param {object} options - Options
+   * @returns {Promise<object|null>} Result if should abort, null to continue
+   */
+  async setup(_sdId, _sd, _options) {
+    return null; // Default: no setup needed
+  }
+
+  // ============ Helper methods ============
+
+  /**
+   * SD-LEO-INFRA-TYPE-AWARE-GATE-001: Progressive gate preflight advisory.
+   * After a handoff succeeds, show what the NEXT handoff's gates will expect.
+   */
+  async _displayProgressivePreflight(sd) {
+    const HANDOFF_CHAIN = {
+      'LEAD-TO-PLAN': { next: 'PLAN-TO-EXEC', expectations: ['PRD record in product_requirements_v2 (status: approved)', 'System architecture defined', 'Implementation approach documented'] },
+      'PLAN-TO-EXEC': { next: 'EXEC-TO-PLAN', expectations: ['Code implementation complete', 'Tests passing', 'User stories marked completed with evidence'] },
+      'EXEC-TO-PLAN': { next: 'PLAN-TO-LEAD', expectations: ['Acceptance criteria validated per user story', 'Retrospective created (status: PUBLISHED)', 'All user stories in completed/validated status'] },
+      'PLAN-TO-LEAD': { next: 'LEAD-FINAL-APPROVAL', expectations: ['All user stories completed (100%)', 'Retrospective quality gate passes', 'SD completion score meets threshold'] }
+    };
+
+    const chain = HANDOFF_CHAIN[this.handoffType];
+    if (!chain) return;
+
+    // Check SD type profile for type-specific expectations
+    const sdType = sd?.sd_type || 'feature';
+    let typeNote = '';
+    try {
+      // Drive-by (caught by schema-reference diff lint): 'gate_threshold' was a
+      // phantom column (live 42703) — the whole select errored into the catch on
+      // every call, so the type note NEVER rendered. 'prd_minimum_score' is the
+      // real threshold-style column on sd_type_validation_profiles.
+      const { data: profile } = await this.supabase
+        .from('sd_type_validation_profiles')
+        .select('requires_prd, requires_user_stories, prd_minimum_score')
+        .eq('sd_type', sdType)
+        .single();
+      if (profile) {
+        const notes = [];
+        if (!profile.requires_prd) notes.push('PRD not required for this SD type');
+        if (!profile.requires_user_stories) notes.push('User stories not required for this SD type');
+        if (profile.prd_minimum_score) notes.push(`PRD minimum score: ${profile.prd_minimum_score}`);
+        if (notes.length > 0) typeNote = `\n   SD type '${sdType}': ${notes.join(', ')}`;
+      }
+    } catch (e) {
+      // Intentionally suppressed: SD type profile lookup is non-fatal
+      console.debug('[BaseExecutor] SD type profile query suppressed:', e?.message || e);
+    }
+
+    console.log(`\n📋 NEXT HANDOFF: ${chain.next}`);
+    console.log('   The next gate will expect:');
+    chain.expectations.forEach(e => console.log(`   • ${e}`));
+    if (typeNote) console.log(typeNote);
+  }
+
+  /**
+   * Pre-handoff migration check
+   *
+   * CRITICAL: This check MUST USE the DATABASE sub-agent to execute any
+   * pending migrations. The DATABASE sub-agent is the authoritative executor
+   * for all migration work.
+   *
+   * Checks for pending database migrations (uncommitted manual updates,
+   * SD-specific migrations not yet executed) and engages the DATABASE
+   * sub-agent to execute them automatically.
+   *
+   * Retry Strategy (implemented in pending-migrations-check.js):
+   * - Attempt 1: Standard DATABASE sub-agent invocation
+   * - Attempt 2: Consult issue_patterns for known solutions, retry with context
+   * - Attempt 3: Consult retrospectives for similar past issues, retry with learnings
+   * - Only after 3 failed attempts: Escalate to user
+   *
+   * Non-blocking: Errors are logged but handoff continues (with warning)
+   *
+   * @param {object} sd - SD record
+   * @param {object} options - Handoff options
+   */
+  async _checkAndExecutePendingMigrations(sd, options = {}) {
+    try {
+      // Skip migration check if explicitly disabled
+      if (options.skipMigrationCheck === true) {
+        console.log('   [Migration Check] Skipped (disabled via options)');
+        return null;
+      }
+
+      const result = await checkPendingMigrations(this.supabase, sd, {
+        autoExecute: options.autoExecuteMigrations !== false
+      });
+
+      // Store result for potential gate validation
+      this._migrationCheckResult = result;
+
+      // Log retry statistics if attempts were made
+      if (result.executionAttempted && result.attemptsUsed > 0) {
+        console.log(`   [Migration Check] Attempts used: ${result.attemptsUsed}/3`);
+        if (result.knowledgeBaseConsulted) {
+          console.log('   [Migration Check] Knowledge base was consulted for solutions');
+        }
+      }
+
+      // If there are still pending migrations after all retry attempts
+      if (result.hasPendingMigrations && result.errors.length > 0) {
+        console.log('\n   ╔════════════════════════════════════════════════════════════╗');
+        console.log('   ║  ⚠️  MIGRATION EXECUTION INCOMPLETE - MANUAL ACTION NEEDED ║');
+        console.log('   ╚════════════════════════════════════════════════════════════╝');
+        console.log('');
+        console.log('   The DATABASE sub-agent attempted execution but could not complete.');
+        console.log('   The handoff will continue, but you MUST manually execute these:');
+        result.uncommittedManualUpdates.forEach(f => console.log(`      • ${f}`));
+        result.pendingMigrations.forEach(m => console.log(`      • ${m.file}`));
+        console.log('');
+        console.log('   Options:');
+        console.log('   1. Run: node scripts/apply-migration.js <file> --prod-deploy --issue-token <token>');
+        console.log('   2. Use /rca to perform root cause analysis on the failure');
+        console.log('   3. Execute the SQL manually via psql or Supabase dashboard');
+        console.log('');
+      }
+      return result;
+    } catch (error) {
+      // Non-fatal - allow handoff to proceed
+      console.log(`   [Migration Check] ⚠️ Error (non-blocking): ${error.message}`);
+      return null;
+    }
+  }
+
+  /**
+   * SD-LEARN-010:US-004: Auto-trigger DATABASE sub-agent for schema SDs
+   *
+   * Automatically invokes DATABASE sub-agent when SD has:
+   * - sd_type = 'database'
+   * - metadata.schema_changes = true
+   *
+   * Creates sub_agent_executions record with trigger_type='auto'
+   * Non-blocking: Errors are logged but handoff continues
+   *
+   * @param {object} sd - Strategic Directive record
+   */
+  async _autoTriggerDatabaseSubAgent(sd) {
+    try {
+      const sdType = (sd.sd_type || '').toLowerCase();
+      const hasSchemaChanges = sd.metadata?.schema_changes === true;
+
+      // Only trigger for database SDs or schema changes
+      if (sdType !== 'database' && !hasSchemaChanges) {
+        return;
+      }
+
+      console.log('\n   🗄️  DATABASE SUB-AGENT AUTO-TRIGGER (SD-LEARN-010:US-004)');
+      console.log(`      Reason: ${sdType === 'database' ? 'sd_type=database' : 'schema_changes=true'}`);
+
+      // Check if DATABASE sub-agent already executed for this SD
+      const { data: existingExecution } = await this.supabase
+        .from('sub_agent_execution_results')
+        .select('id, verdict')
+        .eq('sd_id', sd.id)
+        .eq('sub_agent_code', 'DATABASE')
+        .limit(1);
+
+      if (existingExecution && existingExecution.length > 0) {
+        console.log(`      ℹ️  DATABASE sub-agent already executed (verdict: ${existingExecution[0].verdict})`);
+        return;
+      }
+
+      // Auto-invoke DATABASE sub-agent
+      console.log('      🔄 Auto-invoking DATABASE sub-agent...');
+
+      try {
+        const { orchestrate } = await import('../../../orchestrate-phase-subagents.js');
+        const result = await orchestrate('PLAN_PRD', sd.id, {
+          specificSubAgent: 'DATABASE',
+          triggerType: 'auto',
+          autoRemediate: false
+        });
+
+        if (result.status === 'PASS' || result.status === 'COMPLETE') {
+          console.log('      ✅ DATABASE sub-agent auto-triggered successfully');
+        } else {
+          console.log(`      ⚠️  DATABASE sub-agent status: ${result.status}`);
+        }
+      } catch (invokeError) {
+        // Non-fatal - allow handoff to proceed
+        console.log(`      ⚠️  DATABASE auto-invoke unavailable: ${invokeError.message}`);
+        console.log('      → Proceeding with handoff - manual DATABASE invocation may be required');
+      }
+    } catch (error) {
+      // Non-fatal - allow handoff to proceed
+      console.log(`   [DATABASE Auto-Trigger] ⚠️ Error (non-blocking): ${error.message}`);
+    }
+  }
+
+  /**
+   * Validate that this SD has an existing claim from the parent conversation.
+   *
+   * Handoff scripts are transient subprocesses — they should NOT create their
+   * own claims. The claim lifecycle is: sd:start creates it, LEAD-FINAL-APPROVAL
+   * releases it. Handoffs just validate that a claim exists.
+   *
+   * If no claim exists (e.g., handoff run without sd:start), falls back to
+   * creating one for backward compatibility, but logs a warning.
+   *
+   * @param {string} sdId - SD ID
+   * @param {object} sd - SD record
+   */
+  async _claimSDForSession(sdId, sd) {
+    const { claimGuard, formatClaimFailure } = await import('../../../../lib/claim-guard.mjs');
+    const heartbeatManager = await import('../../../../lib/heartbeat-manager.mjs');
+
+    const claimId = sd.sd_key || sdId;
+
+    // Step 0: SD-FDBK-ENH-CLAIM-WORKING-GOES-001 (Approach B) — re-acquire
+    // is_working_on for a self-owned, sweep-released claim BEFORE the rest of
+    // the claim flow. During long parallel sub-agent runs the heartbeat goes
+    // stale, the sweep flips active->stale->released and clears the SD's
+    // is_working_on, and the sync trigger's SET branch won't re-fire (no
+    // claude_sessions sd_key NULL->non-NULL transition for an already-active
+    // row). Without this, Step 1's activeClaim early-return refreshes only the
+    // heartbeat and the handoff INSERT trips trg_enforce_is_working_on_handoffs.
+    // Fail-closed (CAS), self-ownership-gated, default-ON
+    // (CLAIM_REACQUIRE_SELF_LIVE), strict no-op on the healthy path, and wrapped
+    // so any failure degrades to today's hard-fail behavior.
+    await this._reacquireSelfLiveClaimIfReleased(sdId, sd, claimId);
+
+    // Step 1: Check if a valid claim already exists (from sd:start or parent conversation).
+    // SD-LEO-INFRA-CONSOLIDATE-CLAIMS-INTO-001: sd_claims dropped — claude_sessions is the
+    // single source of truth. Active claims are sessions with sd_id set and status='active'.
+    const { data: existingClaims } = await this.supabase
+      .from('claude_sessions')
+      .select('session_id, sd_key, claimed_at, heartbeat_at')
+      .eq('sd_key', claimId)
+      .in('status', ['active', 'idle']);
+
+    const activeClaim = (existingClaims || []).find(c => {
+      const ageSeconds = (Date.now() - new Date(c.heartbeat_at || c.claimed_at).getTime()) / 1000;
+      return ageSeconds < 900;
+    });
+
+    if (activeClaim) {
+      // Valid claim exists from parent conversation — just validate, don't replace
+      console.log(`   [Claim] ✅ SD ${claimId} claimed (${activeClaim.session_id === (await this._getCurrentSessionId()) ? 'already_owned' : 'parent_conversation'})`);
+
+      // Refresh the existing claim's heartbeat to keep it alive during handoff
+      await this.supabase
+        .from('claude_sessions')
+        .update({ heartbeat_at: new Date().toISOString() })
+        .eq('session_id', activeClaim.session_id);
+
+      // Start heartbeat for the existing session (not a new one)
+      // SD-LEO-INFRA-LEO-PROTOCOL-POLICY-001 (FR-007): cooperative mode here —
+      // the claim predated this subprocess (caller already owns it), so we
+      // must NOT release on exit. Preserves caller claim across handoff.js
+      // invocation (fixes feedback_handoff_releases_claim.md pattern).
+      const heartbeatStatus = heartbeatManager.isHeartbeatActive();
+      if (!heartbeatStatus.active) {
+        heartbeatManager.startHeartbeat(activeClaim.session_id, { ownershipMode: 'cooperative' });
+      }
+
+      // Show duration estimate (non-blocking)
+      await this._showDurationEstimate(sd);
+      return;
+    }
+
+    // Step 2: No active claim found — resolve existing session before creating new one.
+    // After context compaction, the old session's heartbeat goes stale but the DB row
+    // still exists with the same terminal_id. Reuse it instead of creating a duplicate.
+    console.log('   [Claim] ⚠️  No existing claim found — resolving session identity...');
+
+    let session = null;
+    try {
+      const { resolveOwnSession } = await import('../../../../lib/resolve-own-session.js');
+      const resolved = await resolveOwnSession(this.supabase, {
+        select: 'session_id, sd_key, status, heartbeat_at',
+        warnOnFallback: false
+      });
+      if (resolved.data && resolved.source !== 'heartbeat_fallback') {
+        session = resolved.data;
+        console.log(`   [Claim] Reusing existing session ${session.session_id} (via ${resolved.source})`);
+      }
+    } catch (e) {
+      // Intentionally suppressed: resolve-own-session not available, fall back
+      console.debug('[BaseExecutor] resolve-own-session suppressed:', e?.message || e);
+    }
+
+    if (!session) {
+      console.log('   [Claim] No existing session found — creating new one');
+      const sessionManager = await import('../../../../lib/session-manager.mjs');
+      session = await sessionManager.getOrCreateSession();
+    }
+
+    if (!session) {
+      console.log('   [Claim] ❌ No session available - cannot proceed without claim');
+      return { success: false, error: 'Claim required - no session available', message: 'Claim required - no session available' };
+    }
+
+    const result = await claimGuard(claimId, session.session_id);
+
+    if (!result.success) {
+      console.log(formatClaimFailure(result));
+      console.log('   [Claim] ❌ Cannot proceed - claim guard rejected');
+      // QF-20260720-851 (P1): fold the claimGuard verdict's own error/status into a
+      // concrete `.message` — recorder writers key rejection_reason off `.message`, and
+      // the prior hardcoded string (with no verdict detail) is exactly what produced a
+      // NULL/uninformative rejection_reason for every claim-guard rejection.
+      const detail = result.status ? `${result.error} (status=${result.status})` : (result.fence || result.error || 'unknown');
+      const message = `Claim guard rejected: ${detail}`;
+      return { success: false, error: message, message, claimConflict: true };
+    }
+
+    console.log(`   [Claim] ✅ SD ${claimId} claimed (${result.claim.status})`);
+
+    // Start automatic heartbeat updates
+    const heartbeatStatus = heartbeatManager.isHeartbeatActive();
+    if (!heartbeatStatus.active || heartbeatStatus.sessionId !== session.session_id) {
+      heartbeatManager.startHeartbeat(session.session_id);
+    }
+
+    // Show duration estimate (non-blocking)
+    await this._showDurationEstimate(sd);
+  }
+
+  /**
+   * SD-FDBK-ENH-CLAIM-WORKING-GOES-001 (Approach B): re-acquire is_working_on
+   * for a self-owned, sweep-released claim at the handoff chokepoint.
+   *
+   * Thin BaseExecutor seam over the testable, DB-agnostic core in
+   * lib/claim/reacquire-self-live.mjs. Binds resolveOwnSession +
+   * checkPreClaimEvidence to this.supabase and supplies process.cwd(). Never
+   * throws — any failure degrades to today's behavior (the rest of
+   * _claimSDForSession runs unchanged and the handoff hard-fails as before if
+   * the claim cannot be legitimately re-acquired).
+   *
+   * @param {string} sdId
+   * @param {object} sd - SD record (for sd_key + cheap is_working_on pre-filter)
+   * @param {string} claimId - resolved sd_key/id
+   */
+  async _reacquireSelfLiveClaimIfReleased(sdId, sd, claimId) {
+    try {
+      const { reacquireSelfLiveClaim } = await import('../../../../lib/claim/reacquire-self-live.mjs');
+      const { resolveOwnSession } = await import('../../../../lib/resolve-own-session.js');
+      const { checkPreClaimEvidence } = await import('../../claim-health/triangulate.js');
+
+      const result = await reacquireSelfLiveClaim(this.supabase, {
+        sd: { ...sd, sd_key: sd?.sd_key || claimId },
+        resolveSession: () => resolveOwnSession(this.supabase, {
+          select: 'session_id, sd_key, status, heartbeat_at',
+          warnOnFallback: false
+        }),
+        checkPreClaimEvidence,
+        cwd: process.cwd()
+      });
+
+      if (result?.reacquired) {
+        console.log(`   [Claim] ♻️  Re-acquired sweep-released claim for ${result.sessionId ? result.sessionId.slice(0, 8) : 'self'} on ${claimId} (via ${result.via})`);
+      }
+      // QF-20260726-593: report the outcome so the NO_CLAIM gate can re-evaluate
+      // instead of blocking on a claim that was just legitimately recovered.
+      return result?.reacquired === true;
+    } catch (e) {
+      // Non-fatal — degrade to today's behavior. The downstream claim flow and
+      // the DB enforce-trigger remain the safety net.
+      console.debug('[BaseExecutor] reacquire-self-live suppressed:', e?.message || e);
+      return false;
+    }
+  }
+
+  /**
+   * Get the current subprocess session ID (if one exists).
+   * Helper for claim validation — does NOT create a new session.
+   */
+  async _getCurrentSessionId() {
+    try {
+      const sessionManager = await import('../../../../lib/session-manager.mjs');
+      const existing = sessionManager.getCurrentSession?.();
+      return existing?.session_id || null;
+    } catch (e) {
+      console.debug('[BaseExecutor] getCurrentSessionId suppressed:', e?.message || e);
+      return null;
+    }
+  }
+
+  /**
+   * PAT-MSESS-BYP-001: Check for multi-session claim conflicts
+   *
+   * BLOCKING check that prevents handoff execution when another active
+   * session has claimed the target SD. Runs before gates and before
+   * _claimSDForSession to prevent duplicate work.
+   *
+   * @param {string} sdId - SD ID (UUID)
+   * @param {object} sd - SD record
+   * @returns {Promise<Object|null>} Gate result if blocked, null if OK
+   */
+  async _checkMultiSessionClaimConflict(sdId, sd) {
+    try {
+      // Get current session ID for self-exclusion.
+      // Use resolveOwnSession() first to find existing DB session by terminal_id,
+      // avoiding duplicate session creation after context compaction.
+      let currentSessionId = null;
+      try {
+        const { resolveOwnSession } = await import('../../../../lib/resolve-own-session.js');
+        const resolved = await resolveOwnSession(this.supabase, {
+          select: 'session_id',
+          warnOnFallback: false
+        });
+        if (resolved.data && resolved.source !== 'heartbeat_fallback') {
+          currentSessionId = resolved.data.session_id;
+        }
+      } catch (e) {
+        // Intentionally suppressed: fall through to session manager
+        console.debug('[BaseExecutor] resolveOwnSession fallback suppressed:', e?.message || e);
+      }
+      if (!currentSessionId) {
+        try {
+          const sessionManager = await import('../../../../lib/session-manager.mjs');
+          const session = await sessionManager.getOrCreateSession();
+          currentSessionId = session?.session_id || null;
+        } catch (_err) {
+          // Intentionally suppressed: session manager unavailable, proceed without self-exclusion
+          console.debug('[BaseExecutor] resolveOwnSession session-manager fallback suppressed:', _err?.message || _err);
+        }
+      }
+
+      // Use sd_key for claim lookup (matches how claims are stored)
+      const claimId = sd?.sd_key || sdId;
+
+      // PAT-SESSION-IDENTITY-003: Use centralized terminal identity
+      const os = await import('os');
+      const { getTerminalId } = await import('../../../../lib/terminal-identity.js');
+      const currentTerminalId = getTerminalId();
+      const result = await validateMultiSessionClaim(this.supabase, claimId, {
+        currentSessionId,
+        currentHostname: os.hostname(),
+        currentTerminalId
+      });
+
+      if (!result.pass) {
+        return result;
+      }
+
+      return null; // No conflict - proceed
+    } catch (error) {
+      // SD-LEO-INFRA-CLAIM-GUARD-001: Fail-closed on claim check errors.
+      // Previous behavior was fail-open (return null), which allowed handoffs
+      // to proceed without verified claim ownership.
+      console.log(`   [MultiSession] ❌ Claim check error (BLOCKING): ${error.message}`);
+      return {
+        pass: false,
+        gate: 'GATE_MULTI_SESSION_CLAIM_CONFLICT',
+        score: 0,
+        issues: [`Claim verification failed: ${error.message}. Cannot proceed without verified claim ownership.`],
+        warnings: ['Previous behavior was non-blocking (fail-open). Changed to fail-closed per SD-LEO-INFRA-CLAIM-GUARD-001.']
+      };
+    }
+  }
+
+  /**
+   * Show duration estimate for the SD
+   * Non-blocking: Errors are logged but handoff continues
+   * @param {object} sd - SD record
+   */
+  async _showDurationEstimate(sd) {
+    try {
+      const { getEstimatedDuration, formatEstimateDetailed } =
+        await import('../../../lib/duration-estimator.js');
+
+      const estimate = await getEstimatedDuration(this.supabase, sd);
+
+      if (estimate) {
+        console.log('\n   📊 Duration Estimate:');
+        const lines = formatEstimateDetailed(estimate);
+        lines.forEach(line => {
+          if (line.startsWith('  •')) {
+            console.log(`      ${line}`);
+          } else if (line === '') {
+            // Skip empty lines
+          } else {
+            console.log(`      ${line}`);
+          }
+        });
+      }
+    } catch (error) {
+      // Non-fatal - estimate is optional
+      console.log(`   [Estimate] ⚠️ Could not calculate duration estimate: ${error.message}`);
+    }
+  }
+
+  /**
+   * Determine target repository based on SD
+   */
+  determineTargetRepository(sd) {
+    // PRIMARY: Use target_application field if explicitly set
+    if (sd.target_application) {
+      const targetApp = sd.target_application.toLowerCase().trim();
+
+      if (targetApp.includes('engineer') ||
+          targetApp === 'ehg_engineer' ||
+          targetApp === 'ehg-engineer') {
+        console.log(`   Repository determined by target_application: "${sd.target_application}" → EHG_Engineer`);
+        return getRepoPath('EHG_Engineer');
+      }
+
+      if (targetApp === 'ehg' ||
+          targetApp === 'app' ||
+          targetApp === 'application') {
+        console.log(`   Repository determined by target_application: "${sd.target_application}" → EHG`);
+        return getRepoPath('EHG');
+      }
+
+      // SD-LEO-INFRA-VENTURE-DEVWORKFLOW-AWARENESS-001-F: Venture repo fallback
+      const venturePath = resolveRepoPath(sd.target_application);
+      if (venturePath) {
+        console.log(`   Repository determined by target_application: "${sd.target_application}" → venture (${venturePath})`);
+        return venturePath;
+      }
+
+      console.warn(`   ⚠️  Unknown target_application value: "${sd.target_application}"`);
+    }
+
+    // FALLBACK: Heuristic detection
+    console.log('   Repository determined by heuristics...');
+
+    const engineeringCategories = ['engineering', 'tool', 'infrastructure', 'devops', 'ci-cd'];
+    const engineeringKeywords = ['eng/', 'tool/', 'infra/', 'pipeline/', 'build/', 'deploy/'];
+
+    if (engineeringKeywords.some(keyword => sd.id.toLowerCase().includes(keyword))) {
+      return getRepoPath('EHG_Engineer');
+    }
+
+    if (sd.category && engineeringCategories.includes(sd.category.toLowerCase())) {
+      return getRepoPath('EHG_Engineer');
+    }
+
+    if (sd.title) {
+      const titleLower = sd.title.toLowerCase();
+      if (titleLower.includes('engineer') ||
+          titleLower.includes('protocol') ||
+          titleLower.includes('leo ') ||
+          titleLower.includes('gate ') ||
+          titleLower.includes('handoff')) {
+        return getRepoPath('EHG_Engineer');
+      }
+    }
+
+    return getRepoPath('EHG');
+  }
+
+  /**
+   * SD-LEO-INFRA-VENTURE-AWARE-COMPLETION-001 (FR-1): DB-first target-repo resolution.
+   *
+   * Async sibling of determineTargetRepository(). Platform SDs — and SDs with no/unknown
+   * target_application — resolve via the SYNC determineTargetRepository(): BYTE-IDENTICAL,
+   * no DB call (TR-4 platform invariant). ONLY a venture target_application takes the
+   * DB-first path (applications.local_path via resolveGateRepoContext). If the venture is
+   * unresolvable it falls back to the sync heuristic, so behavior is never WORSE than today.
+   *
+   * Call from async setup() and store on options._appPath; the sync determineTargetRepository
+   * stays the precheck/no-setup fallback (QF-20260520-358 pattern).
+   *
+   * @param {Object} sd - Strategic Directive record
+   * @returns {Promise<string>} resolved repository path
+   */
+  async resolveTargetRepository(sd) {
+    const targetApp = sd?.target_application;
+    if (targetApp && isVentureRepo(targetApp)) {
+      try {
+        const ctx = await resolveGateRepoContext(sd, this.supabase);
+        if (ctx.resolved && ctx.repoPath) return ctx.repoPath;
+      } catch (err) {
+        console.warn(`   ⚠️  DB-first repo resolution failed for "${targetApp}" — using sync fallback: ${err.message}`);
+      }
+    }
+    return this.determineTargetRepository(sd);
+  }
+
+  // ============ Plan Mode Integration (SD-PLAN-MODE-001) ============
+
+  async _handlePlanModeTransition(sdId, sd, _options) {
+    try {
+      const { LEOPlanModeOrchestrator } = await import('../../plan-mode/index.js');
+      const orchestrator = new LEOPlanModeOrchestrator({ verbose: true });
+
+      const targetPhase = this._getTargetPhaseFromHandoff();
+      const fromPhase = this._getSourcePhaseFromHandoff();
+
+      const result = await orchestrator.handlePhaseTransition({
+        sdId: sd.sd_key || sdId,
+        fromPhase,
+        toPhase: targetPhase,
+        handoffType: this.handoffType
+      });
+
+      if (result.skipped) {
+        console.log(`   [Plan Mode] ${result.reason}`);
+      } else if (result.success && result.message) {
+        console.log(result.message);
+      }
+    } catch (error) {
+      console.log(`   [Plan Mode] Transition error (non-blocking): ${error.message}`);
+    }
+  }
+
+  _getTargetPhaseFromHandoff() {
+    const handoffToPhase = {
+      'LEAD-TO-PLAN': 'PLAN',
+      'PLAN-TO-EXEC': 'EXEC',
+      'EXEC-TO-PLAN': 'PLAN',
+      'EXEC-TO-VERIFY': 'VERIFY',
+      'LEAD-FINAL-APPROVAL': 'FINAL',
+      'LEAD-APPROVAL': 'LEAD'
+    };
+    return handoffToPhase[this.handoffType] || 'EXEC';
+  }
+
+  _getSourcePhaseFromHandoff() {
+    const handoffFromPhase = {
+      'LEAD-TO-PLAN': 'LEAD',
+      'PLAN-TO-EXEC': 'PLAN',
+      'EXEC-TO-PLAN': 'EXEC',
+      'EXEC-TO-VERIFY': 'EXEC',
+      'LEAD-FINAL-APPROVAL': 'VERIFY',
+      'LEAD-APPROVAL': 'START'
+    };
+    return handoffFromPhase[this.handoffType] || 'LEAD';
+  }
+
+  // ============ Autonomous Continuation Directives (SD-LEO-CONTINUITY-001) ============
+
+  /**
+   * Fetch autonomous directives from database
+   * @param {string} enforcementPoint - 'ALWAYS', 'ON_FAILURE', or 'HANDOFF_START'
+   * @param {string} phase - 'LEAD', 'PLAN', or 'EXEC'
+   * @returns {Promise<array>} Array of directive objects
+   */
+  async _fetchAutonomousDirectives(enforcementPoint, phase) {
+    try {
+      // Count/truncation discipline (SD-LEO-INFRA-COUNT-TRUNCATION-DISCIPLINE-001 FR-6):
+      // directives registry read — a capped read would silently drop blocking directives.
+      // Error policy preserved: any failure → [] (fail-open, catch below).
+      const data = await fetchAllPaginated(() => this.supabase
+        .from('leo_autonomous_directives')
+        .select('directive_code, title, content, is_blocking, id')
+        .eq('active', true)
+        .eq('enforcement_point', enforcementPoint)
+        .contains('applies_to_phases', [phase])
+        .order('display_order')
+        .order('id')); // unique-key tiebreaker for stable pagination
+
+      return data || [];
+    } catch (err) {
+      console.log(`   [Directives] ⚠️ Error fetching directives: ${err.message}`);
+      return [];
+    }
+  }
+
+  /**
+   * Display HANDOFF_START directives (protocol familiarization)
+   * Called at the start of each handoff execution
+   * @param {string} phase - Target phase (LEAD, PLAN, EXEC)
+   */
+  async _displayHandoffStartDirectives(phase) {
+    const directives = await this._fetchAutonomousDirectives('HANDOFF_START', phase);
+
+    if (directives.length === 0) return;
+
+    console.log('\n   📋 AUTONOMOUS DIRECTIVES (SD-LEO-CONTINUITY-001)');
+    console.log('   ─'.repeat(25));
+
+    for (const d of directives) {
+      const blockingBadge = d.is_blocking ? ' [BLOCKING]' : '';
+      console.log(`\n   🎯 ${d.title}${blockingBadge}`);
+      // Wrap content at ~60 chars for readability
+      const lines = d.content.match(/.{1,60}(\s|$)/g) || [d.content];
+      lines.forEach(line => console.log(`      ${line.trim()}`));
+    }
+
+    console.log('\n   ─'.repeat(25));
+  }
+
+  /**
+   * Display ON_FAILURE directives (5-Whys, Sustainable Resolution)
+   * Called when errors or blockers are encountered
+   * @param {string} phase - Current phase (LEAD, PLAN, EXEC)
+   */
+  async _displayOnFailureDirectives(phase) {
+    const directives = await this._fetchAutonomousDirectives('ON_FAILURE', phase);
+
+    if (directives.length === 0) return;
+
+    console.log('\n   ⚠️  AUTONOMOUS FAILURE RESPONSE DIRECTIVES');
+    console.log('   ─'.repeat(30));
+
+    for (const d of directives) {
+      const blockingBadge = d.is_blocking ? ' [BLOCKING]' : '';
+      console.log(`\n   🔍 ${d.title}${blockingBadge}`);
+      // Wrap content at ~60 chars for readability
+      const lines = d.content.match(/.{1,60}(\s|$)/g) || [d.content];
+      lines.forEach(line => console.log(`      ${line.trim()}`));
+    }
+
+    console.log('\n   💡 Use /rca to invoke the formal 5-Whys root cause analysis process');
+    console.log('   ─'.repeat(30));
+  }
+}
+
+export default BaseExecutor;
