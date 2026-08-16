@@ -263,8 +263,9 @@ export async function validatePrePlanCritique(ctx) {
         `Adversarial critique found BLOCK-severity planning gaps (${findings.length} finding(s)). ` +
         'Fix the plan, or record an audited override on the blocking plan_critiques row via ' +
         '`node scripts/critique-override.js <SD-KEY> --by <who> --reason "<why>"` — the override ' +
-        'binds to this exact findings set (a changed set re-blocks) and downgrades rather than ' +
-        'deletes the findings.',
+        'binds to this exact PRD/arch content (a content_hash match, not a findings-set match: ' +
+        'it excuses any findings this same reviewed text produces, and re-blocks the moment the ' +
+        'content changes) and downgrades rather than deletes the findings.',
       ],
       warnings,
     };
@@ -319,14 +320,17 @@ async function persistCritique(supabase, row, warnings) {
 }
 
 /**
- * Stable fingerprint of a findings set: severity + category (+ invariant id) pairs,
- * sorted. Binds an override to the KIND of findings it excuses. Deliberately NOT keyed on
- * message text: LLM messages are re-worded on every run, so a message-keyed fingerprint
- * never matches twice and the override becomes structurally dead for LLM-originated
- * blocks (adversarial ship review, PR #6927) — trading "excuses too much" for "excuses
- * nothing". Category is enum-constrained on the LLM side and invariant_id is exact on the
- * library side, so a new KIND of block re-blocks while a re-worded same-kind block stays
- * excused.
+ * Stable fingerprint of a findings set: severity + category (+ invariant id) pairs, sorted.
+ *
+ * NO LONGER the override-binding predicate (SECURITY EXEC-phase finding SEC-MED-1 — this
+ * docstring previously said it was, which is now stale/misleading): FR-4/FR-5 replaced
+ * findings-set binding with content_hash equality (findActiveOverride, this file). This function
+ * has zero production callers today — kept exported for its own still-meaningful invariant (used
+ * by tests to assert truncation/formatting changes never perturb a findings-derived fingerprint)
+ * and as a historical record of the KIND-of-finding binding approach findActiveOverride's own
+ * docstring explains was insufficient once the LLM is nondeterministic even on unchanged input.
+ * Deliberately NOT keyed on message text: LLM messages are re-worded on every run, so a
+ * message-keyed fingerprint never matches twice (adversarial ship review, PR #6927).
  */
 export function findingsFingerprint(findings) {
   const pairs = (findings || [])

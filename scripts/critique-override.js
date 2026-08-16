@@ -61,7 +61,8 @@ async function main() {
 
   const { data: rows, error: critErr } = await supabase
     .from('plan_critiques')
-    .select('id, findings, override_reason, override_by, created_at')
+    // content_hash is TR-3's staged column, not yet live in some environments.
+    .select('id, findings, content_hash, override_reason, override_by, created_at') // schema-lint-disable-line
     .eq('sd_id', sd.id)
     .eq('overall_severity', 'block')
     .order('created_at', { ascending: false })
@@ -100,11 +101,12 @@ async function main() {
   console.log(`✅ Override recorded on critique ${target.id} (${sdKey})`);
   console.log(`   by: ${check.override_by}`);
   console.log(`   reason: ${check.override_reason}`);
-  console.log(`   This override excuses EXACTLY these ${findings.length} finding(s):`);
+  console.log(`   content_hash: ${target.content_hash || '(none — pre-migration or could-not-check row; this override cannot bind to any future run)'}`);
+  console.log(`   Binds to this EXACT reviewed content — it excuses ANY findings this same PRD/arch text produces for the 14-day lookback, not only these ${findings.length} finding(s) shown below:`);
   for (const f of findings.slice(0, 10)) {
     console.log(`     [${String(f.severity || 'note').toUpperCase()}] ${(f.message || '').substring(0, 120)}`);
   }
-  console.log('   A later critique with a DIFFERENT findings set re-blocks and needs a fresh override.');
+  console.log('   A later critique over DIFFERENT PRD/arch content (a different content_hash) re-blocks and needs a fresh override.');
 }
 
 main().catch((err) => {

@@ -239,6 +239,56 @@ describe('computeContentHash (FR-4)', () => {
     expect(notFound).not.toBe(ok);
     expect(loadFailed).not.toBe(ok);
   });
+
+  // SECURITY (EXEC-phase evidence, SEC-HIGH-1, live-reachable: 11/253 eva_architecture_plans
+  // already exceed MAX_CRITIQUE_ANALYSIS_CHARS): the truncated PREFIX alone is not enough to bind
+  // content identity -- prdCharsTotal/archCharsTotal must independently affect the hash, so an
+  // edit made entirely beyond the truncation boundary (leaving the sent prefix byte-identical)
+  // still changes the hash. Same PT-8 principle as archLoadStatus, applied to length.
+  it('changes when charsTotal differs, even with byte-identical prdText/archText (the sent prefix)', () => {
+    const h0 = computeContentHash({ ...base, prdCharsTotal: 5000, archCharsTotal: 3000 });
+    expect(computeContentHash({ ...base, prdCharsTotal: 5001, archCharsTotal: 3000 })).not.toBe(h0);
+    expect(computeContentHash({ ...base, prdCharsTotal: 5000, archCharsTotal: 3001 })).not.toBe(h0);
+  });
+});
+
+// SECURITY (EXEC-phase evidence, SEC-HIGH-1): the closer-to-real-exploit form of the fix above --
+// two PRDs whose TRUNCATED PREFIX is engineered to be byte-identical, but whose real,
+// pre-truncation content genuinely differs, must still produce different content_hash values at
+// the critiquePlanProposal level (not just when computeContentHash is called directly with
+// hand-picked totals). Before this fix, an override/cache-hit binding could apply to content that
+// was never actually reviewed by the LLM.
+describe('content_hash across the truncation boundary (FR-4 SEC-HIGH-1)', () => {
+  it('two functional_requirements arrays with an identical truncated prefix but different real length hash differently', () => {
+    const bigFrsA = Array.from({ length: 500 }, (_, i) => ({ id: `FR-${i + 1}`, description: 'x'.repeat(200) }));
+    // Same 500 FR ids (so the [FR ids present: ...] marker length — and therefore the cut point —
+    // is identical between A and B) — only the LAST entry's description grows, far past where
+    // truncation already occurs among the first ~200 entries. A naive "same ids, so same content"
+    // read would miss that B's real content genuinely differs.
+    const bigFrsB = bigFrsA.map((fr, i) => (i === bigFrsA.length - 1 ? { ...fr, description: 'x'.repeat(200) + ' PLUS AN ENTIRELY NEW TAIL PAST THE CUT' } : fr));
+
+    const a = buildCritiqueUserPrompt({ prdContent: { ...UNDER_BUDGET_PRD, functional_requirements: bigFrsA }, archContent: 'short', sdContext: {} });
+    const b = buildCritiqueUserPrompt({ prdContent: { ...UNDER_BUDGET_PRD, functional_requirements: bigFrsB }, archContent: 'short', sdContext: {} });
+
+    // The sent PREFIX is byte-identical (both truncate long before reaching the last entry)...
+    expect(a.prdText).toBe(b.prdText);
+    // ...but the real content differs, so the hash inputs (via charsTotal) must differ too.
+    const { computeContentHash } = _internal;
+    const hashA = computeContentHash({ prdText: a.prdText, archText: a.archText, archLoadStatus: 'ok', model: 'gpt-5.4', prdCharsTotal: a.truncated.prd.charsTotal, archCharsTotal: a.truncated.arch.charsTotal });
+    const hashB = computeContentHash({ prdText: b.prdText, archText: b.archText, archLoadStatus: 'ok', model: 'gpt-5.4', prdCharsTotal: b.truncated.prd.charsTotal, archCharsTotal: b.truncated.arch.charsTotal });
+    expect(a.truncated.prd.charsTotal).not.toBe(b.truncated.prd.charsTotal);
+    expect(hashA).not.toBe(hashB);
+  });
+
+  it('arch content edited entirely past the 64,000-char cap changes the hash even though the sent text is identical', async () => {
+    const archA = 'y'.repeat(MAX_CRITIQUE_ANALYSIS_CHARS + 1000);
+    const archB = archA + 'ENTIRELY NEW CONTENT PAST THE CUT — must not be invisible to the hash';
+    const adapterA = mockAdapter({ findings: [], overall_severity: 'pass' });
+    const adapterB = mockAdapter({ findings: [], overall_severity: 'pass' });
+    const resultA = await critiquePlanProposal({ prdContent: UNDER_BUDGET_PRD, archContent: archA, sdContext: {} }, { adapter: adapterA, logger: { warn: vi.fn(), error: vi.fn() } });
+    const resultB = await critiquePlanProposal({ prdContent: UNDER_BUDGET_PRD, archContent: archB, sdContext: {} }, { adapter: adapterB, logger: { warn: vi.fn(), error: vi.fn() } });
+    expect(resultA.contentHash).not.toBe(resultB.contentHash);
+  });
 });
 
 describe('critiquePlanProposal cache-hit path (FR-4 AC-5/PT-1/PT-9)', () => {
