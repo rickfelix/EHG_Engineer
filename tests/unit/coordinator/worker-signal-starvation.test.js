@@ -23,7 +23,8 @@ function fakeSupabase(rows, { throwOn = false } = {}) {
     select() { return api; },
     gte() { return api; },
     order() { return api; },
-    limit() {
+    // QF-20260816-023: production code now pages via .range(from, to) instead of .limit(n).
+    range() {
       if (throwOn) return Promise.reject(new Error('boom'));
       return Promise.resolve({ data: rows });
     },

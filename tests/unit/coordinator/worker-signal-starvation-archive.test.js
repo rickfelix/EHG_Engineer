@@ -52,12 +52,15 @@ function makeDb({ live = [], archived = [], archiveThrows = false } = {}) {
         eq() { return chain; },
         gte() { return chain; },
         order() { return chain; },
-        limit(n) {
+        // QF-20260816-023: production code now pages via .range(from, to) instead of .limit(n).
+        // These fixtures are always tiny, so this resolves in a single page regardless.
+        range(from, to) {
+          const n = to - from + 1;
           if (chain._t === 'retention_archive') {
             if (archiveThrows) return Promise.resolve({ data: null, error: { message: 'archive boom' } });
-            return Promise.resolve({ data: archived.slice(0, n).map((r) => ({ row_data: r })), error: null });
+            return Promise.resolve({ data: archived.slice(from, from + n).map((r) => ({ row_data: r })), error: null });
           }
-          return Promise.resolve({ data: live.slice(0, n), error: null });
+          return Promise.resolve({ data: live.slice(from, from + n), error: null });
         },
       };
       return chain;
