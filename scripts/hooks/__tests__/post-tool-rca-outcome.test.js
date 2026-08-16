@@ -83,6 +83,34 @@ describe('L4 — post-tool-rca-outcome.cjs', () => {
     expect(written.stdout_sha).toBe(digestStdoutTail('SD_TYPE_CHANGE_EXPLANATION_REQUIRED: provide a reason'));
   });
 
+  it('FR-3 (SD-LEO-INFRA-RCA-READONLY-GH-VERBS-001): a realistic Claude-Code-shaped Bash tool_response (no exit_code/code/status field, ever) captures exit_code:null, not a fabricated number', () => {
+    // This is the layer distinction the PRD's FR-3 narrows to: retry-state-manager.cjs's
+    // recordAndCount() succeeding-poll exit_code===0 branch is ALREADY fully tested at the
+    // logic layer (tests/unit/retry-state-manager-polling-exemption.test.js) -- given a
+    // numeric exit_code:0 it correctly exempts. What is untested is the CAPTURE layer: does
+    // Claude Code's real Bash tool_response ever actually contain a numeric exit_code/code/
+    // status field for this test to see? The shape below mirrors the real payload shape used
+    // elsewhere in this file (stdout/stderr/interrupted/isImage/noOutputExpected) with
+    // deliberately NO numeric exit field, matching production. If this test ever needs a
+    // numeric field to pass, that is itself the signal that this harness now reports a real
+    // exit code and the succeeding-poll branch's forward-compat path has become reachable.
+    const payload = JSON.stringify({
+      tool_name: 'Bash',
+      tool_input: { command: 'gh run list' },
+      tool_response: { stdout: 'STATUS\tTITLE\tWORKFLOW\n', stderr: '', interrupted: false, isImage: false, noOutputExpected: false },
+    });
+    const result = spawnSync('node', [HOOK_PATH], {
+      input: payload,
+      env: { ...process.env, CLAUDE_TOOL_NAME: 'Bash', CLAUDE_SESSION_ID: SESSION_ID, LEO_RETRY_STATE_DIR: tmpDir },
+      encoding: 'utf8',
+    });
+    expect(result.status).toBe(0);
+    const outFile = path.join(tmpDir, `last-outcome-${SESSION_ID}.json`);
+    expect(fs.existsSync(outFile)).toBe(true); // non-empty stdout is a usable signal, file IS written
+    const written = JSON.parse(fs.readFileSync(outFile, 'utf8'));
+    expect(written.exit_code).toBeNull(); // never fabricated, never observed as a real number
+  });
+
   it('TS-5 (SUCCEEDING-POLL-EXEMPTION-001, inverted contract): a SUCCESS payload with NO stdout/stderr content writes NO file and never records exit_code 0', () => {
     // Claude Code Bash tool_response carries NO exit_code and routes error text to stdout,
     // so the OLD Control-4 inference fabricated exit_code:0 for success AND hard failure

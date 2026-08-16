@@ -1227,7 +1227,23 @@ async function main() {
           // fingerprint (claimed SD + phase + percent), already on disk so no extra I/O.
           // recordAndCount compares it across the repetition; a change means the session is
           // advancing → the auto-signal is suppressed (not a stuck loop).
-          progressFingerprint = `${claimedSdKey || ''}:${st.sd?.phase ?? ''}:${st.sd?.progress ?? ''}`;
+          // SD-LEO-INFRA-RCA-READONLY-GH-VERBS-001: delegate to the extracted, unit-tested
+          // computeProgressFingerprint -- it returns undefined (not a degenerate '::' constant)
+          // when no SD is claimed or progress isn't a real number, so recordAndCount's
+          // typeof-string guard skips Control 3 entirely instead of writing a stale baseline
+          // that could later false-suppress a genuine stuck loop on an unclaimed→claimed
+          // transition. See its docblock in lib/hooks/auto-signal-threshold.cjs.
+          const { computeProgressFingerprint } = require('../../lib/hooks/auto-signal-threshold.cjs');
+          progressFingerprint = computeProgressFingerprint({
+            claimedSdKey,
+            phase: st.sd?.phase,
+            progress: st.sd?.progress,
+          });
+          if (progressFingerprint === undefined && process.env.LEO_TELEMETRY_DEBUG === '1') {
+            process.stderr.write(
+              `[pre-tool-enforce] no_progress_signal (claimedSdKey=${claimedSdKey || 'none'}, progress=${JSON.stringify(st.sd?.progress)})\n`
+            );
+          }
         }
       } catch {
         // Missing state file is not fatal — reset lookup simply no-ops.

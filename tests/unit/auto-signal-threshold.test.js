@@ -7,10 +7,13 @@
  * (on the ===2 crossing, not the 3rd hard-block), respects the LEO_AUTO_SIGNAL=off kill-switch, and
  * never fires without a real session identity.
  */
-import { describe, it, expect } from 'vitest';
+import { describe, it, expect, beforeEach, afterEach } from 'vitest';
 import { createRequire } from 'node:module';
+import path from 'node:path';
+import fs from 'node:fs';
+import os from 'node:os';
 const require = createRequire(import.meta.url);
-const { shouldEmitAutoSignal, buildAutoSignalArgs, shouldEmitGateAutoSignal, buildGateAutoSignalArgs, shouldHardBlock } = require('../../lib/hooks/auto-signal-threshold.cjs');
+const { shouldEmitAutoSignal, buildAutoSignalArgs, shouldEmitGateAutoSignal, buildGateAutoSignalArgs, shouldHardBlock, computeProgressFingerprint } = require('../../lib/hooks/auto-signal-threshold.cjs');
 
 const SID = '11111111-2222-4333-8444-555555555555';
 
@@ -137,6 +140,73 @@ describe('shouldHardBlock (SD-LEO-INFRA-RCA-ENFORCEMENT-PROGRESS-STALL-NOT-REPET
   it('ignores non-integer attempts (fail-safe — never blocks on a malformed count)', () => {
     expect(shouldHardBlock({ attempts: NaN })).toBe(false);
     expect(shouldHardBlock({ attempts: undefined })).toBe(false);
+  });
+});
+
+// SD-LEO-INFRA-RCA-READONLY-GH-VERBS-001 (FR-4): extracted from pre-tool-enforce.cjs so the
+// fingerprint computation is unit-testable at its own producer boundary, not just via the
+// consumer (recordAndCount). See the function's own docblock for the full defect history.
+describe('computeProgressFingerprint (SD-LEO-INFRA-RCA-READONLY-GH-VERBS-001, FR-4)', () => {
+  it('returns undefined (never the degenerate constant "::") when no SD is claimed or progress is not a real number', () => {
+    expect(computeProgressFingerprint({ claimedSdKey: null, phase: undefined, progress: undefined })).toBeUndefined();
+    expect(computeProgressFingerprint({})).toBeUndefined();
+    expect(computeProgressFingerprint({ claimedSdKey: 'SD-X', phase: 'LEAD', progress: undefined })).toBeUndefined(); // claimed but no real progress yet
+    expect(computeProgressFingerprint({ claimedSdKey: '', phase: 'LEAD', progress: 10 })).toBeUndefined(); // falsy claimedSdKey
+    expect(computeProgressFingerprint({ claimedSdKey: 'SD-X', phase: 'LEAD', progress: NaN })).toBeUndefined();
+    expect(computeProgressFingerprint({ claimedSdKey: 'SD-X', phase: 'LEAD', progress: 'not-a-number' })).toBeUndefined();
+  });
+
+  it('returns a real, changing string when claimedSdKey and a genuine numeric progress are present', () => {
+    const a = computeProgressFingerprint({ claimedSdKey: 'SD-X', phase: 'EXEC', progress: 40 });
+    const b = computeProgressFingerprint({ claimedSdKey: 'SD-X', phase: 'EXEC', progress: 55 });
+    expect(typeof a).toBe('string');
+    expect(typeof b).toBe('string');
+    expect(a).not.toBe(b);
+  });
+
+  it('progress: 0 is a genuine number, not falsy-treated-as-absent', () => {
+    expect(typeof computeProgressFingerprint({ claimedSdKey: 'SD-X', phase: 'LEAD', progress: 0 })).toBe('string');
+  });
+});
+
+// SD-LEO-INFRA-RCA-READONLY-GH-VERBS-001 (FR-4, TS-5): integration-shaped test reproducing the
+// EXACT defect testing-agent found — a stale baseline written while unclaimed silently
+// suppressing a genuinely-repeating command once the session claims an SD. The pre-fix code
+// would write the constant '::' as the baseline during the unclaimed phase, causing the first
+// real (post-claim) fingerprint to read as "progress" (progressStalled=false) purely because it
+// differed from '::' — not because the command actually stopped repeating.
+describe('TS-5: a stale unclaimed-phase baseline cannot false-suppress a genuine stuck loop after claiming an SD', () => {
+  let tmpDir;
+  beforeEach(() => {
+    tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), 'progress-fp-'));
+    process.env.LEO_RETRY_STATE_DIR = tmpDir;
+  });
+  afterEach(() => {
+    delete process.env.LEO_RETRY_STATE_DIR;
+    fs.rmSync(tmpDir, { recursive: true, force: true });
+  });
+
+  it('progressStalled reads true (fresh baseline) on the first post-claim sighting, not false via a stale mismatch', async () => {
+    const { recordAndCount } = require('../../scripts/hooks/retry-state-manager.cjs');
+    const session = 'sess-transition';
+    const cmd = 'node scripts/some-repeating-check.js';
+    const rcaCheck = async () => null;
+
+    // Phase 1 (unclaimed): computeProgressFingerprint({claimedSdKey:null}) is undefined (the
+    // fix) -- recordAndCount's typeof-string guard skips Control 3 entirely, so NO baseline is
+    // written for this signature.
+    const unclaimedFp = computeProgressFingerprint({ claimedSdKey: null });
+    const r1 = await recordAndCount(session, null, 'Bash', { command: cmd }, { rcaCheck, progressFingerprint: unclaimedFp });
+    expect(r1.progressStalled).toBeUndefined(); // no fingerprint was tracked at all
+
+    // Phase 2: the SAME session claims an SD, and the SAME signature repeats again -- this is
+    // the FIRST time recordAndCount has ever seen a real progressFingerprint for it.
+    const claimedFp = computeProgressFingerprint({ claimedSdKey: 'SD-X-001', phase: 'LEAD', progress: 0 });
+    const r2 = await recordAndCount(session, 'SD-X-001', 'Bash', { command: cmd }, { rcaCheck, progressFingerprint: claimedFp });
+
+    // Correctly treated as a FRESH baseline, not a stale-'::' mismatch misread as progress.
+    expect(r2.progressStalled).toBe(true);
+    expect(r2.attempts).toBe(2); // the repeat counter itself still accrues normally across both calls
   });
 });
 

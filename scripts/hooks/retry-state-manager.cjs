@@ -170,8 +170,29 @@ function isExempt(commandStr) {
 const MUTATION_OPERATOR_RE = /[;&|`]|>>?|\$\(|<\(/;
 
 // Provably read-only leading verbs (anchored at the start of the trimmed command).
+//
+// SD-LEO-INFRA-RCA-READONLY-GH-VERBS-001: adds gh read verbs. The gh api exclusion is a
+// FULL-STRING negative lookahead, not a next-token check -- a next-token-only implementation
+// was adversarially probed (40 cases, .artifacts/tst-regex-probe.cjs) and produces false
+// positives whenever a mutating flag appears after the path (e.g. 'gh api /repos/x/y -X POST'),
+// or via the --field/--raw-field long forms. TR-3 (PRD): the pre-existing bare-verb alternations
+// above (git/ls/cat/etc) are NOT touched by this change -- their lack of \b word-boundary
+// anchoring (lsof/catx/findmnt/envsubst all currently misclassify read-only) is a separate,
+// confirmed, out-of-scope defect, logged for a future targeted fix.
+//
+// SECURITY review (EXEC-TO-PLAN) found the lookahead's plain `.*` does not match `\n` (no /s
+// flag), so a mutating flag placed on an indented continuation line (`gh api /x \` + newline +
+// `  --method PUT`) was invisible -- `[\s\S]*` fixes this. It also found the -X/--method value
+// match required the verb to follow the flag with no separating quote char, so `-X 'PUT'` /
+// `--method="POST"` slipped through -- `['"]?` tolerates an optional quote before the verb.
+// Both closed with zero regression to the 75+ pre-existing/adversarial cases (.artifacts/
+// verify-security-fix.cjs); linear-time confirmed (no ReDoS) on multi-megabyte inputs.
+// PLAN_VERIFY VALIDATION review then found a third, internal-consistency leak: `-X` was the
+// lone alternative among the three (-X / --method / -f,-F) that didn't accept `=` — `gh api
+// ... -X=PUT` (verified against the real gh CLI: `-X=GET` behaves identically to `-X GET`)
+// slipped through. `-X[=\s]*` normalizes it to match its siblings' `=`-tolerance.
 const READ_ONLY_LEADING_RE =
-  /^(?:git\s+(?:status|log|diff|show|branch|rev-parse|describe|remote(?:\s+-v)?|config\s+--get|cat-file|ls-files|for-each-ref)\b|ls|ll|pwd|cat|head|tail|grep|rg|find|wc|stat|echo|whoami|date|env|printenv|which|type|node\s+--version|npm\s+(?:run\s+)?(?:ls|list|view|outdated)\b)/i;
+  /^(?:git\s+(?:status|log|diff|show|branch|rev-parse|describe|remote(?:\s+-v)?|config\s+--get|cat-file|ls-files|for-each-ref)\b|ls|ll|pwd|cat|head|tail|grep|rg|find|wc|stat|echo|whoami|date|env|printenv|which|type|node\s+--version|npm\s+(?:run\s+)?(?:ls|list|view|outdated)\b|gh\s+(?:run\s+(?:list|view|watch)|pr\s+(?:list|view|diff|checks|status)|workflow\s+(?:list|view)|issue\s+(?:list|view))\b|gh\s+api\b(?![\s\S]*(?:(?:^|\s)-X[=\s]*['"]?(?:POST|PUT|PATCH|DELETE)\b|--method[=\s]+['"]?(?:POST|PUT|PATCH|DELETE)\b|(?:^|\s)-[fF](?:\s|=)|--field\b|--raw-field\b|--input\b)))/i;
 
 /**
  * Structurally classify a Bash command as provably read-only / non-mutating.
