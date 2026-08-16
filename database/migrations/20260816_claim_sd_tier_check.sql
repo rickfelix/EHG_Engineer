@@ -29,6 +29,13 @@
 -- per-SD floor is an author reservation independent of fleet headcount) before or as part of the
 -- apply ceremony.
 --
+-- KNOWN DIVERGENCE #3 (found during EXEC-phase SECURITY review): a NULL or malformed caller
+-- tier_rank REFUSES the claim here, whereas the client-side resolveWorkerTierRank(session)
+-- defaults an absent/invalid stamp to the TOP rung and never refuses on that basis alone. Flagged
+-- inline at the comparison for a reviewer to resolve before applying -- unstamped-caller behavior
+-- may reasonably be stricter for a server-side backstop of last resort, but it is a deliberate
+-- choice this migration does not make silently.
+--
 -- SIMPLIFIED "tiering active" check, deliberately NOT a faithful port of
 -- lib/fleet/tier-ladder.cjs isTieringActive(): that function excludes canary/test sessions and
 -- the active coordinator via lib/fleet/genuine-worker.mjs liveFleetWorkers before counting, which
@@ -175,9 +182,18 @@ BEGIN
     -- SD-LEO-INFRA-SELF-CLAIM-TIER-ENFORCEMENT-001 (FR-5): THE ONE BEHAVIORAL ADDITION in this
     -- migration. Same guard family as the terminal-status check above -- a structural eligibility
     -- refusal that fires before any live-peer/takeover logic. Unscored SDs (no min_tier_rank) are
-    -- unaffected. See the file header for the simplified tiering-active check's known divergence
-    -- from lib/fleet/tier-ladder.cjs isTieringActive.
-    SELECT (sd2.metadata->>'min_tier_rank')::integer
+    -- unaffected. See the file header for the simplified tiering-active check's known divergences
+    -- from lib/fleet/tier-ladder.cjs isTieringActive and lib/fleet/tier-claimable.cjs tierBlocks.
+    --
+    -- SECURITY REVIEW FINDING (EXEC-phase, this SD): a bare ::integer cast on a JSONB text value
+    -- raises an UNHANDLED 22P02 (invalid_text_representation) on any malformed stamp -- e.g. a
+    -- min_tier_rank or tier_rank accidentally written as a non-numeric string -- which would abort
+    -- the ENTIRE claim_sd call with a raw Postgres error instead of a structured refusal, making
+    -- the SD permanently unclaimable through this RPC until the bad value is manually corrected.
+    -- Guarded below with a regex pre-check (NULL on anything non-numeric, same fail-open posture
+    -- as an absent stamp) so a malformed value degrades to "treat as missing" rather than erroring.
+    SELECT CASE WHEN sd2.metadata->>'min_tier_rank' ~ '^[0-9]+$'
+                THEN (sd2.metadata->>'min_tier_rank')::integer END
       INTO v_sd_min_tier_rank
       FROM strategic_directives_v2 sd2
      WHERE sd2.sd_key = p_sd_id;
@@ -187,7 +203,14 @@ BEGIN
        WHERE status IN ('active', 'idle')
          AND heartbeat_at >= NOW() - INTERVAL '900 seconds';
       IF v_live_worker_count >= 2 THEN
-        SELECT (metadata->>'tier_rank')::integer
+        -- KNOWN DIVERGENCE #3 (SECURITY review): a NULL/malformed caller tier_rank REFUSES here
+        -- (v_caller_tier_rank IS NULL below), whereas the client-side resolveWorkerTierRank(session)
+        -- defaults an absent/invalid stamp to the TOP rung (never refuses on that basis alone). A
+        -- reviewer should decide whether this backstop should match that default-up posture before
+        -- applying, or whether refusing on an unstamped caller is the intended stricter server-side
+        -- behavior for a backstop of last resort.
+        SELECT CASE WHEN metadata->>'tier_rank' ~ '^[0-9]+$'
+                    THEN (metadata->>'tier_rank')::integer END
           INTO v_caller_tier_rank
           FROM claude_sessions
          WHERE session_id = p_session_id;
