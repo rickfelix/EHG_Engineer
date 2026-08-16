@@ -151,4 +151,26 @@ describe('review-gate closed-enum false-positive fixes (a78478f9 + 03ccc4d4)', (
       '+ const sb = createClient(import.meta.env.VITE_SUPABASE_URL, process.env.SUPABASE_SERVICE_ROLE_KEY);'
     )).not.toContain('service_role_exposure');
   });
+
+  // CRIT-002 sql_injection pattern 1 -- QF-20260816-154. The keyword match is
+  // case-insensitive ('gi' flags), so the bare word DELETE collides with the ubiquitous
+  // `--delete-branch` CLI flag -- any `${...}` interpolation followed later on the line by
+  // `--delete-branch` false-positived (witnessed 18x in PR #7146, zero genuine matches).
+  it('does NOT flag an interpolated gh CLI invocation using --delete-branch', () => {
+    expect(names(
+      '+ console.log(`node scripts/gh-merge-safe.mjs ${prNumber} --merge --delete-branch`);'
+    )).not.toContain('sql_injection');
+  });
+  it('does NOT flag --delete-branch chained after multiple interpolations', () => {
+    expect(names(
+      '+ const cmd = `gh pr merge ${pr.number} --repo ${pr.repo} --merge --delete-branch`;'
+    )).not.toContain('sql_injection');
+  });
+  it('STILL flags a genuine interpolated DELETE immediately preceded by a hyphen-free context', () => {
+    expect(names('+ const sql = `${userId} + "DELETE FROM users"`;')).toContain('sql_injection');
+  });
+  it('STILL flags the original UPDATE/DROP/ALTER shapes this pattern targets', () => {
+    expect(names('+ const sql = `${prefix} UPDATE accounts SET x=1`;')).toContain('sql_injection');
+    expect(names('+ const sql = `${prefix} DROP TABLE sessions`;')).toContain('sql_injection');
+  });
 });
