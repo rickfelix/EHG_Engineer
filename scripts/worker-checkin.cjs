@@ -1956,9 +1956,13 @@ async function main() {
   // is the already-shipped fix for this class -- it never calls process.exit() directly on
   // the normal path (avoiding a Windows libuv crash a bare exit() can trigger), closes
   // undici's idle sockets, and force-exits only via a bounded backstop if the loop still
-  // fails to drain.
-  const { armCliTeardown } = await import('../lib/cli-graceful-exit.js');
-  await armCliTeardown(0, { backstopMs: 3000 });
+  // fails to drain. Wrapped in its own try/catch so a teardown-mechanism failure can never
+  // propagate out of main() and hit the outer .catch() below -- which would print a second,
+  // contradictory {ok:false,...} blob after the real result above already succeeded.
+  try {
+    const { armCliTeardown } = await import('../lib/cli-graceful-exit.js');
+    await armCliTeardown(0, { backstopMs: 3000 });
+  } catch { /* teardown failure is non-fatal -- the real result already printed above */ }
 }
 
 // SD-ARCH-HOTSPOT-CHECKIN-001: dependency injection for the lib/checkin/steps/* pipeline.

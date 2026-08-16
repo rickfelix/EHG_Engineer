@@ -4348,8 +4348,15 @@ async function stampSweepLiveness() {
 // rejection-handler-proximity source scan (an inline dynamic-import expression at this
 // position measures too long a lookback and fails that scan).
 async function armSweepTeardown() {
-  const { armCliTeardown } = await import('../lib/cli-graceful-exit.js');
-  await armCliTeardown(0, { backstopMs: 3000 });
+  try {
+    const { armCliTeardown } = await import('../lib/cli-graceful-exit.js');
+    await armCliTeardown(0, { backstopMs: 3000 });
+  } catch (err) {
+    // Symmetric with stampSweepLiveness above: non-fatal. A teardown-mechanism failure must
+    // never propagate to the outer rejection handler and mislabel a fully successful sweep
+    // as "SWEEP FATAL" (which would force exit 1 and could trigger an unnecessary retry).
+    console.error(`[stale-session-sweep] armCliTeardown failed (non-fatal): ${err.message}`);
+  }
 }
 
 // SD-FDBK-INFRA-CROSS-SESSION-CONFLICTION-001 / FR-2: guard auto-run so the pure

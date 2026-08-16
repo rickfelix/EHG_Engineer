@@ -314,15 +314,22 @@ const invokedDirectly = (() => {
 // just an early return) is also covered; the resolve arm passes through any process.exitCode
 // already set by an early return rather than forcing 0 over it.
 if (invokedDirectly) {
+  // Each arm's teardown call is wrapped in its own try/catch so a teardown-mechanism failure
+  // can never fall through to the OTHER arm's handler (they are chained on the same promise)
+  // and overwrite an already-correct outcome with a misleading duplicate.
   main()
     .then(async () => {
-      const { armCliTeardown } = await import('../lib/cli-graceful-exit.js');
-      await armCliTeardown(Number.isInteger(process.exitCode) ? process.exitCode : 0, { backstopMs: 3000 });
+      try {
+        const { armCliTeardown } = await import('../lib/cli-graceful-exit.js');
+        await armCliTeardown(Number.isInteger(process.exitCode) ? process.exitCode : 0, { backstopMs: 3000 });
+      } catch { /* non-fatal -- process.exitCode already reflects the real outcome */ }
     })
     .catch(async (e) => {
       console.error(e);
       process.exitCode = 1;
-      const { armCliTeardown } = await import('../lib/cli-graceful-exit.js');
-      await armCliTeardown(1, { backstopMs: 3000 });
+      try {
+        const { armCliTeardown } = await import('../lib/cli-graceful-exit.js');
+        await armCliTeardown(1, { backstopMs: 3000 });
+      } catch { /* non-fatal -- process.exitCode is already 1 */ }
     });
 }

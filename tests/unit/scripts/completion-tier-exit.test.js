@@ -65,7 +65,7 @@ describe('TS-1: worker-checkin.cjs source-pin', () => {
     const src = readFileSync(path.join(ROOT, 'scripts', 'worker-checkin.cjs'), 'utf8');
     const idx = src.indexOf('console.log(JSON.stringify(result, null, 2));');
     expect(idx).toBeGreaterThan(-1);
-    const after = src.slice(idx, idx + 700);
+    const after = src.slice(idx, idx + 1000);
     expect(after).toMatch(/armCliTeardown/);
     expect(after).toMatch(/await import\(['"]\.\.\/lib\/cli-graceful-exit\.js['"]\)/);
   });
