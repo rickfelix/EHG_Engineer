@@ -8,18 +8,21 @@
 // This runs against an EPHEMERAL vanilla PostgreSQL 16 with hand-stubbed roles and 27 minimal
 // stub functions matching the REAL functions' signatures and PRE-migration grant state (all
 // carrying PUBLIC+anon+authenticated+service_role EXECUTE, matching the live baseline captured
-// 2026-08-16 in .artifacts/exec-live-baseline.json). It proves the migration's OWN REVOKE/GRANT/
-// ALTER DEFAULT PRIVILEGES logic and its $verify$/$adp_self_test$ blocks behave correctly against
-// a KNOWN starting state. It does NOT prove:
+// 2026-08-16 in .artifacts/exec-live-baseline.json). It proves the migration's OWN REVOKE/GRANT
+// logic and its $verify$ block behave correctly against a KNOWN starting state. It does NOT prove:
 //   - that the REAL functions in production carry exactly this starting state at apply time
 //     (state may have shifted since this baseline was captured — re-measure live immediately
 //     before the chairman applies, per TR-1/FR-1's acceptance criteria)
 //   - production RLS-policy or app-caller behavior after the revoke (that's the extended
 //     scripts/audit-rpc-execute-grants.mjs run post-apply, a different tier)
-//   - Supabase's actual pg_default_acl posture for the ADP statement (vanilla Postgres has none
-//     by default; this test seeds a representative starting default before applying, per
-//     TESTING sub-agent's explicit caveat that the ephemeral container must not let the ADP
-//     self-test pass trivially in a world where its precondition never existed)
+//
+// NOTE: this file previously also carried FR-4 (an ALTER DEFAULT PRIVILEGES recurrence-prevention
+// statement + self-test). FR-4 was DESCOPED to a follow-up migration at EXEC-TO-PLAN after three
+// independent, evidence-targeted fix attempts (seed via REVOKE-then-GRANT, an aclexplode-based
+// stored-row self-test, and a seed forcing the owner entry to match production's measured shape)
+// all failed identically against the real CI Postgres 16 environment. See the forward migration's
+// own header for the full note. This file's STUB_SCHEMA, tests, and helpers were trimmed
+// accordingly — Buckets A/B/C only.
 //
 // FAIL-CLOSED, no skip branch: if this file cannot reach a database it fails loudly rather than
 // silently passing (matches tests/ddl/drive-reports-ddl.db.test.js's convention).
@@ -117,19 +120,6 @@ BEGIN
   IF NOT EXISTS (SELECT 1 FROM pg_roles WHERE rolname = 'service_role')  THEN CREATE ROLE service_role NOLOGIN;  END IF;
   IF NOT EXISTS (SELECT 1 FROM pg_roles WHERE rolname = 'anon')          THEN CREATE ROLE anon NOLOGIN;          END IF;
   IF NOT EXISTS (SELECT 1 FROM pg_roles WHERE rolname = 'authenticated') THEN CREATE ROLE authenticated NOLOGIN; END IF;
-  -- The real migration hardcodes "ALTER DEFAULT PRIVILEGES FOR ROLE postgres" because that IS the
-  -- real owning role on the live Supabase instance (measured live, not assumed) -- correct for
-  -- production and must not change. The CI service container's bootstrap superuser is whatever
-  -- POSTGRES_USER names (ddl_runner, per drive-reports-ddl.yml), and the postgres image does NOT
-  -- also create a role literally named "postgres" in that case, so a stand-in of that name is
-  -- created here. A BARE role only fixed "role postgres does not exist" -- ALTER DEFAULT
-  -- PRIVILEGES FOR ROLE postgres then ran without error but had NO EFFECT, because default
-  -- privileges are scoped to whichever role actually CREATES an object, and nothing in this test
-  -- is ever created BY role postgres unless the session actively switches to it (SET ROLE,
-  -- below). SUPERUSER here so that switching to it never loses the privilege ddl_runner had --
-  -- without it, subsequent REVOKE/GRANT and CREATE FUNCTION statements on objects owned by
-  -- ddl_runner would fail once the session is running as this otherwise-bare role.
-  IF NOT EXISTS (SELECT 1 FROM pg_roles WHERE rolname = 'postgres')      THEN CREATE ROLE postgres NOLOGIN SUPERUSER; END IF;
 END
 $roles$;
 
@@ -141,33 +131,14 @@ BEGIN
 END
 $enum$;
 
--- Seed a representative pre-migration default-privilege posture: role postgres's default ACL for
--- functions in public ALREADY grants anon/authenticated EXECUTE explicitly (mirrors the live
--- pg_default_acl measurement).
---
--- ROOT CAUSE, ROUND 2 (TESTING sub-agent RCA, EXEC-TO-PLAN review, confirmed via direct
--- measurement across two prior seed attempts): a bare REVOKE against a NONEXISTENT
--- pg_default_acl row is a no-op — it does not materialize a row at all, so a subsequent GRANT
--- still starts from acldefault('f', postgres), which carries an implicit PUBLIC grant not shown
--- in defaclacl's printed aclitem list. Production's real row (measured live:
--- {postgres=X/postgres,anon=X/postgres,authenticated=X/postgres,service_role=X/postgres}) has an
--- explicit OWNER entry (postgres=X/postgres) — the one shape difference that correlates with
--- production correctly suppressing PUBLIC on new functions while every prior CI seed attempt did
--- not. A GRANT always materializes a row (confirmed: this is the one operation that reliably
--- creates a pg_default_acl row from nothing), so naming postgres explicitly in the GRANT list
--- forces the owner entry into existence, matching production's measured shape instead of
--- acldefault()'s.
-ALTER DEFAULT PRIVILEGES FOR ROLE postgres IN SCHEMA public
-  GRANT EXECUTE ON FUNCTIONS TO postgres, anon, authenticated;
-
 ${[...BUCKET_A, ...BUCKET_B, ...BUCKET_C].map(stubFunctionSql).join('\n')}
 `;
 
 /**
- * TS-5/TS-6: extract a named `DO $tag$ ... $tag$;` block verbatim from the REAL migration SQL,
- * so the failure-branch tests below exercise the exact shipped text — not a hand-reimplemented
- * copy that could silently drift from what the chairman actually applies. Anchored on the tag's
- * two occurrences (open + close), both confirmed unique in this file.
+ * TS-6: extract a named `DO $tag$ ... $tag$;` block verbatim from the REAL migration SQL, so the
+ * failure-branch test below exercises the exact shipped text — not a hand-reimplemented copy that
+ * could silently drift from what the chairman actually applies. Anchored on the tag's two
+ * occurrences (open + close), both confirmed unique in this file.
  */
 function extractDollarQuotedDoBlock(tag) {
   const marker = `$${tag}$`;
@@ -182,7 +153,6 @@ function extractDollarQuotedDoBlock(tag) {
   return MIGRATION_SQL.slice(doStart, semiIdx + 1);
 }
 
-const ADP_SELF_TEST_SQL = extractDollarQuotedDoBlock('adp_self_test');
 const VERIFY_BLOCK_SQL = extractDollarQuotedDoBlock('verify');
 const ALL_27_NAMES = [...BUCKET_A, ...BUCKET_B, ...BUCKET_C].map(([n]) => n);
 const BASELINE_CAPTURE_SQL = `
@@ -197,8 +167,6 @@ WHERE n.nspname = 'public' AND p.proname = ANY(ARRAY[${ALL_27_NAMES.map((n) => `
 `;
 
 let client;
-let preAdpControlGrant; // captured between STUB_SCHEMA and applyMigration() — see beforeAll.
-let adpSelfTestPreFixResult; // {threw, message} — TS-5, captured in the same pre-fix window.
 
 async function applyMigration() {
   await client.query(MIGRATION_SQL);
@@ -243,39 +211,6 @@ beforeAll(async () => {
   });
   await client.connect();
   await client.query(STUB_SCHEMA);
-
-  // Switch the session's effective role to the stand-in "postgres" role for the rest of this
-  // file. ALTER DEFAULT PRIVILEGES FOR ROLE X only affects objects actually CREATED BY role X --
-  // registering the rule (already done, inside STUB_SCHEMA and inside MIGRATION_SQL below) works
-  // regardless of who issues it, since ddl_runner is superuser, but every CREATE FUNCTION that
-  // needs to OBSERVE that rule (the two-sided control probe just below, the ADP self-test's
-  // pre-fix standalone run, the migration's own embedded probe, FR-4's post-migration probe) must
-  // run AS role postgres or the rule never applies to it. Safe to stay switched for everything
-  // after this point, including REVOKE/GRANT on objects owned by ddl_runner: postgres is SUPERUSER
-  // (see STUB_SCHEMA above), so it bypasses ownership checks exactly like ddl_runner did.
-  await client.query('SET ROLE postgres');
-
-  // Two-sided control for the FR-4 ADP test, captured HERE — the only point in this file where
-  // "before the migration's ALTER DEFAULT PRIVILEGES ran" is actually true. A function created
-  // under STUB_SCHEMA's seeded default (mirrors live pg_default_acl: anon+authenticated granted)
-  // must show anon=true right now, proving the seeded default is real and the post-migration
-  // probe test (which runs after applyMigration()) is discriminating on the ADP change itself,
-  // not reporting a role that was never grantable in this ephemeral database at all.
-  await client.query('CREATE FUNCTION public._test_pre_adp_control() RETURNS void LANGUAGE sql AS \'SELECT NULL::void\'');
-  preAdpControlGrant = await grantState('_test_pre_adp_control', '');
-
-  // TS-5: run the migration's OWN extracted self-test block standalone, in this same pre-fix
-  // window — before the ADP fix has been applied, its precondition check (has_anon OR has_public)
-  // must be true, so the block must RAISE ADP_SELF_TEST_FAILED. This proves the self-test's
-  // EXCEPTION-raising branch actually fires when it should, not just that it stays quiet when the
-  // fix already worked (the FR-4 tests below only exercise the latter).
-  try {
-    await client.query(ADP_SELF_TEST_SQL);
-    adpSelfTestPreFixResult = { threw: false, message: null };
-  } catch (e) {
-    adpSelfTestPreFixResult = { threw: true, message: e.message };
-  }
-
   await applyMigration();
 }, 60_000);
 
@@ -314,30 +249,11 @@ describe('FR-3: Bucket C — untouched, still carrying its pre-migration grants'
   });
 });
 
-describe('FR-4: ALTER DEFAULT PRIVILEGES — a NEW function created after the migration has no PUBLIC/anon default', () => {
-  it('a throwaway function created post-migration is not anon/PUBLIC-executable by default', async () => {
-    await client.query('CREATE FUNCTION public._test_post_migration_probe() RETURNS void LANGUAGE sql AS \'SELECT NULL::void\'');
-    const g = await grantState('_test_post_migration_probe', '');
-    expect(g.anon_exec).toBe(false);
-    expect(g.public_exec).toBe(false);
-    await client.query('DROP FUNCTION public._test_post_migration_probe()');
-  });
-
-  it('[TWO-SIDED CONTROL] a function created BEFORE the migration ran (captured in beforeAll, under STUB_SCHEMA\'s seeded default) DID carry anon EXECUTE — proving the post-migration probe above is discriminating on the ADP change itself, not reporting a role that was never grantable in this database at all', () => {
-    expect(preAdpControlGrant.anon_exec).toBe(true);
-  });
-
-  it('[SEED FIDELITY] the pre-migration seed itself does NOT carry public_exec — regression guard for the fixture-fidelity defect this SD\'s own RCA found (SetDefaultACL seeding via GRANT-only carries an implicit, undisplayed PUBLIC grant from acldefault() that production\'s real ADP row does not have; STUB_SCHEMA now explicitly REVOKEs PUBLIC before granting anon/authenticated to match)', () => {
-    expect(preAdpControlGrant.public_exec).toBe(false);
-  });
-});
-
-describe('TS-5: the ADP self-test block itself correctly RAISEs on a pre-fix state (not just quiet post-fix)', () => {
-  it('run standalone BEFORE the ADP fix applied (captured in beforeAll), the extracted self-test block threw ADP_SELF_TEST_FAILED', () => {
-    expect(adpSelfTestPreFixResult.threw).toBe(true);
-    expect(adpSelfTestPreFixResult.message).toMatch(/ADP_SELF_TEST_FAILED/);
-  });
-});
+// FR-4 (ALTER DEFAULT PRIVILEGES recurrence-prevention) and its TS-5 self-test-raises coverage
+// were DESCOPED to a follow-up migration at EXEC-TO-PLAN — see the forward migration's own header
+// for the full note. The tests that lived here (a post-migration probe function, a two-sided
+// pre/post control, and a seed-fidelity regression guard) all existed solely to exercise that
+// statement and were removed alongside it, not left behind as dead/skipped assertions.
 
 describe('TS-6: the Bucket C drift check itself correctly RAISEs when Bucket C drifts (not just quiet when untouched)', () => {
   it('deliberately revoking anon from a Bucket C function makes the extracted verify block RAISE, citing that function by name', async () => {

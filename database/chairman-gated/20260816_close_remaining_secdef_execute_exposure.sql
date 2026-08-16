@@ -1,8 +1,36 @@
 -- Close the remaining SECURITY DEFINER EXECUTE exposure: 16 functions (live-verified residual,
--- corrected from an original 42-function scan), plus a scoped ALTER DEFAULT PRIVILEGES fix.
+-- corrected from an original 42-function scan).
 -- SD: SD-LEO-INFRA-CLOSE-REMAINING-SECURITY-001
 -- Date: 2026-08-16
 -- Target DB: EHG_Engineer consolidated (dedlbzhpgkmetvhbkyzq)
+--
+-- FR-4 (ALTER DEFAULT PRIVILEGES recurrence-prevention) DESCOPED to a follow-up migration, after
+-- THREE independent, evidence-targeted fix attempts all failed identically against the real CI
+-- Postgres 16 environment: (1) seeding pg_default_acl via REVOKE-then-GRANT, (2) redesigning the
+-- self-test to inspect the stored ACL row directly via aclexplode() instead of a probe function
+-- (itself later found to be a false negative — the stored row can read clean while a function
+-- created under it still measures anon/PUBLIC executable), and (3) forcing an explicit owner
+-- entry into the seeded row via a single GRANT naming postgres, anon, authenticated together —
+-- deliberately reproducing production's own measured pg_default_acl shape
+-- ({postgres,anon,authenticated,service_role}, confirmed live) rather than guessing at it. All
+-- three produced the IDENTICAL ADP_SELF_TEST_FAILED outcome. A cross-transaction outcome
+-- measurement (a real probe function created in a separate, post-COMMIT statement — ruling out a
+-- same-transaction visibility artifact) confirmed the failure is genuine, not a harness quirk:
+-- anon_exec measured true on a function created after the migration's own ADP REVOKE had
+-- committed. This cannot be reproduced or validated correctly in the environment available to
+-- this session (no local Postgres for empirical iteration; the live production database is
+-- correctly off-limits for DDL experimentation) and is deferred to a follow-up migration for
+-- further diagnosis with better tooling. Two independent recurrence controls remain live and
+-- unaffected by this descope, on two different observability axes: the FR-6
+-- secdef-execute-revoke-lint (blocking CI, requires an explicit PUBLIC-naming REVOKE alongside
+-- every new SECURITY DEFINER function) and scripts/audit-rpc-execute-grants.mjs's completeness
+-- gate run with AUDIT_GRANTS_MODE=buckets (measures the live catalog directly, covering the
+-- lint's stated blind spot — a function created outside any migration file; confirmed genuinely
+-- discriminating by SECURITY sub-agent, currently reporting RED against the pre-apply live state
+-- as expected). Both are DETECTIVE controls, not PREVENTIVE like the descoped ADP clause would
+-- have been — worth naming explicitly as scope reduction, and the completeness gate is currently
+-- wired only as a manual npm script (no CI/cron caller) — the follow-up SD should either wire it
+-- into CI or name an owner/cadence for running it.
 --
 -- CHAIRMAN-GATED. Per the SD family convention this file is a DELIVERABLE, not an applied
 -- change. It is inert until the approver header below is filled with the approving bare
@@ -80,16 +108,11 @@
 -- fires when a proacl read is NULL (a real state: SetDefaultACL deletes a pg_default_acl row
 -- entirely when it equals acldefault(), which would otherwise defeat this exact drift check).
 --
--- ON THE ALTER DEFAULT PRIVILEGES STATEMENT — CORRECTED RATIONALE (TESTING sub-agent finding,
--- PLAN-TO-EXEC): the original SD description's "natural experiment" reasoning (a function with
--- no explicit GRANT still carrying a PUBLIC grant, implying an additive default) was FALSIFIED
--- by measurement. pg_default_acl for (postgres, public, functions) already carries ZERO PUBLIC
--- items today; a newer function (fn_anon_ingress_prior_hour_count, created 2026-08-04) matches
--- the ADP row byte-for-byte with NO PUBLIC grant, while the apparent counter-example
--- (log_sd_mutation_audit, created 2026-08-02) is explained by CREATION DATE, not an additive
--- mechanism. The PUBLIC-revoke half of this statement is therefore ALREADY SATISFIED by existing
--- state — the only real state change is REVOKE ... FROM anon. The self-test below still proves
--- this at apply time rather than trusting either the original or corrected theory on faith.
+-- ON THE (REMOVED) ALTER DEFAULT PRIVILEGES STATEMENT — see the FR-4 descope note at the top of
+-- this file. pg_default_acl for (postgres, public, functions) already carries ZERO PUBLIC items
+-- today (measured); the open question was whether an ADP REVOKE ... FROM anon reliably suppresses
+-- anon EXECUTE on NEW functions, and three independent, targeted measurements all found it does
+-- not, reliably, in this environment — deferred to a follow-up migration for further diagnosis.
 --
 -- ============================================================================
 
@@ -178,33 +201,10 @@ GRANT EXECUTE ON FUNCTION public.reject_chairman_decision(uuid, text, text, uuid
 GRANT EXECUTE ON FUNCTION public.upsert_operator_cash_burn(numeric, numeric, numeric, numeric) TO service_role, authenticated;
 
 -- --------------------------------------------------------------------------
--- RECURRENCE PREVENTION: scoped to role=postgres only (see header — a second pg_default_acl row
--- exists for role=supabase_admin; currently OUT OF SCOPE because all 759 public-schema functions
--- are postgres-owned today, so it is provably inert, not silently ignored).
+-- RECURRENCE PREVENTION (ALTER DEFAULT PRIVILEGES): DESCOPED to a follow-up migration — see the
+-- FR-4 descope note at the top of this file. Two independent recurrence controls remain live:
+-- the FR-6 secdef-execute-revoke-lint and the audit-rpc-execute-grants completeness gate.
 -- --------------------------------------------------------------------------
-ALTER DEFAULT PRIVILEGES FOR ROLE postgres IN SCHEMA public
-  REVOKE EXECUTE ON FUNCTIONS FROM PUBLIC, anon;
-
--- Empirical self-test (TESTING sub-agent design, PLAN-TO-EXEC): prove the ADP change actually
--- suppresses anon/PUBLIC EXECUTE on a NEW function, in the same transaction the chairman
--- approves, rather than trusting a theory about Postgres/Supabase default-ACL mechanics.
-DO $adp_self_test$
-DECLARE
-  test_oid oid;
-  has_anon boolean;
-  has_public boolean;
-BEGIN
-  CREATE FUNCTION public._sd_leo_infra_close_remaining_security_001_adp_probe() RETURNS void
-    LANGUAGE sql AS 'SELECT 1' SECURITY DEFINER;
-  SELECT oid INTO test_oid FROM pg_proc WHERE proname = '_sd_leo_infra_close_remaining_security_001_adp_probe';
-  has_anon := has_function_privilege('anon', test_oid, 'EXECUTE');
-  has_public := has_function_privilege('public', test_oid, 'EXECUTE');
-  DROP FUNCTION public._sd_leo_infra_close_remaining_security_001_adp_probe();
-  IF has_anon OR has_public THEN
-    RAISE EXCEPTION 'ADP_SELF_TEST_FAILED: a function created AFTER the ALTER DEFAULT PRIVILEGES statement still carries anon_exec=% public_exec=% -- the recurrence-prevention fix did not take effect as expected. Aborting transaction; do not apply until this is understood.', has_anon, has_public;
-  END IF;
-END;
-$adp_self_test$;
 
 -- --------------------------------------------------------------------------
 -- VERIFY BLOCK: Bucket A/B reached their required state; Bucket C is byte-identical to the
