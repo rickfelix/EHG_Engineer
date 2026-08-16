@@ -34,6 +34,34 @@ import { VERDICT_VALUES } from '../lib/sub-agents/verdict-chain.js';
 export const LIKELY_VERDICT_FIELDS = ['status', 'overall_status', 'overall_verdict', 'result', 'outcome', 'passed'];
 
 /**
+ * SD-LEO-INFRA-EVIDENCE-WRITER-VERDICT-FAIL-LOUD-001 (SECURITY, EXEC-TO-PLAN evidence 52cd374f,
+ * SEC-1/SEC-2/SEC-3): this is the first place a caller-supplied field VALUE (not just structural
+ * metadata) reaches an output stream in this writer's history, so every value routed into the
+ * guard message goes through here first: never throws (a hostile toString/valueOf shadowing the
+ * default -- e.g. {toString:1,valueOf:2}, JSON-reachable via --content -- makes a bare String(x)
+ * throw AFTER storeSubAgentResults() already persisted the row, per SEC-2 -- the exact
+ * "diagnostic that could break a write" class results-storage.js's own doctrine warns against,
+ * one layer over); bounded (SEC-3: an unbounded echo widens the AUDIENCE and RETENTION of
+ * whatever a payload legitimately or accidentally carries -- e.g. a connection string leaked into
+ * a `result` field -- into CI logs/terminal scrollback/agent transcripts, even though the same
+ * value already reached the DB either way).
+ *
+ * @param {*} value
+ * @param {number} [max]
+ * @returns {string}
+ */
+function safeValue(value, max = 200) {
+  let s;
+  try {
+    s = String(value);
+  } catch {
+    return '(unstringifiable)';
+  }
+  if (s.length > max) s = `${s.slice(0, max)}[+${s.length - max} chars]`;
+  return s;
+}
+
+/**
  * SD-LEO-INFRA-EVIDENCE-WRITER-VERDICT-FAIL-LOUD-001 (FR-1/FR-2/FR-3): pure predicate deciding
  * whether the row storeSubAgentResults() just wrote reflects writer MISUSE (an absent/unrecognised
  * input verdict) rather than a legitimate verdict='ERROR' crash report.
@@ -53,6 +81,12 @@ export const LIKELY_VERDICT_FIELDS = ['status', 'overall_status', 'overall_verdi
  * derived from originalVerdictFor()/metadata.verdict_chain, both of which a payload can forge
  * (verdict-chain.js's own docblock documents this exact pre-seeding attack one layer up).
  *
+ * SECURITY (SEC-1, evidence 52cd374f): every caller-controlled value interpolated into the
+ * returned message is routed through safeValue() then JSON.stringify() -- never raw. A raw
+ * newline in a field value could otherwise forge a second physical line matching this script's
+ * own `Stored ... id=...` success format, and a raw ANSI escape sequence could erase the warning
+ * from a human's terminal. JSON.stringify escapes both and supplies its own quoting.
+ *
  * @param {object} rawPayload - the loaded --content payload, as the caller supplied it
  * @param {string|null|undefined} storedVerdict - the verdict column storeSubAgentResults() wrote
  * @param {boolean} [storageTimeout] - true when the row is storeSubAgentResults' synthetic,
@@ -62,18 +96,21 @@ export const LIKELY_VERDICT_FIELDS = ['status', 'overall_status', 'overall_verdi
 export function verdictMisuseMessage(rawPayload, storedVerdict, storageTimeout) {
   if (storedVerdict !== 'ERROR') return null;
   const rawVerdict = rawPayload?.verdict;
-  const normalized = String(rawVerdict ?? '').trim().toUpperCase();
+  const safeRawVerdict = safeValue(rawVerdict ?? '');
+  const normalized = safeRawVerdict.trim().toUpperCase();
   if (VERDICT_VALUES.includes(normalized)) return null;
 
-  const display = rawVerdict === undefined || rawVerdict === null || String(rawVerdict).trim() === '' ? '(absent)' : String(rawVerdict);
+  const isAbsent = rawVerdict === undefined || rawVerdict === null || safeRawVerdict.trim() === '';
+  const display = isAbsent ? '(absent)' : JSON.stringify(safeRawVerdict);
   let message = `[VERDICT_UNRECOGNISED] input verdict=${display} stored=ERROR accepted=${VERDICT_VALUES.join('|')} -- pass a top-level verdict`;
 
   for (const field of LIKELY_VERDICT_FIELDS) {
-    const value = rawPayload?.[field];
-    if (value !== undefined && value !== null && String(value).trim() !== '') {
-      message += ` (found "${field}": "${value}" -- pass "verdict", not "${field}")`;
-      break;
-    }
+    const rawFieldValue = rawPayload?.[field];
+    if (rawFieldValue === undefined || rawFieldValue === null) continue;
+    const safeFieldValue = safeValue(rawFieldValue);
+    if (safeFieldValue.trim() === '') continue;
+    message += ` (found "${field}": ${JSON.stringify(safeFieldValue)} -- pass "verdict", not "${field}")`;
+    break;
   }
 
   if (storageTimeout) message += ' (write timed out -- row not persisted)';

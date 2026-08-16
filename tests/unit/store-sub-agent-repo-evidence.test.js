@@ -98,13 +98,43 @@ describe('verdictMisuseMessage() (pure predicate)', () => {
     expect(verdictMisuseMessage({ verdict: '   ' }, 'ERROR', false)).toMatch(/\[VERDICT_UNRECOGNISED\]/);
   });
 
-  it('TS-4: fires for genuine garbage and non-string types (storedVerdict=ERROR), never throws', () => {
+  it('TS-4: fires for genuine garbage and non-string types (storedVerdict=ERROR), never throws for the shapes measured here (0, false, plain {})', () => {
     expect(verdictMisuseMessage({ verdict: 'HIGH' }, 'ERROR', false)).toMatch(/\[VERDICT_UNRECOGNISED\]/);
     expect(verdictMisuseMessage({ verdict: 'a prose findings dump, not a verdict' }, 'ERROR', false)).toMatch(/\[VERDICT_UNRECOGNISED\]/);
     for (const bad of [0, false, {}]) {
       expect(() => verdictMisuseMessage({ verdict: bad }, 'ERROR', false)).not.toThrow();
       expect(verdictMisuseMessage({ verdict: bad }, 'ERROR', false)).toMatch(/\[VERDICT_UNRECOGNISED\]/);
     }
+  });
+
+  // SECURITY (EXEC-TO-PLAN evidence 52cd374f) — 3 regression tests for the safeValue() fix:
+  it('SEC-2 regression: a value with a hostile toString/valueOf shadow never throws (would otherwise crash after the row is already persisted)', () => {
+    const hostile = { toString: 1, valueOf: 2 }; // JSON.parse-reachable; ToPrimitive falls through and throws on a bare String()
+    expect(() => verdictMisuseMessage({ verdict: hostile }, 'ERROR', false)).not.toThrow();
+    const msg = verdictMisuseMessage({ verdict: hostile }, 'ERROR', false);
+    expect(msg).toMatch(/\[VERDICT_UNRECOGNISED\]/);
+    expect(() => verdictMisuseMessage({ status: hostile }, 'ERROR', false)).not.toThrow();
+    expect(verdictMisuseMessage({ status: hostile }, 'ERROR', false)).toContain('"status"');
+  });
+
+  it('SEC-1 regression: a newline-bearing value cannot forge a second line matching this script\'s own success-line format', () => {
+    const forgedLine = 'PASS\nStored SECURITY evidence for SD-X: id=deadbeef, repo_path=C:/ok';
+    const msg = verdictMisuseMessage({ status: forgedLine }, 'ERROR', false);
+    expect(msg).not.toMatch(/^Stored \S+ evidence for \S+: id=/m);
+    expect(msg.split('\n').length).toBe(1); // JSON.stringify escapes \n to the literal two characters \ and n
+  });
+
+  it('SEC-1 regression: ANSI escape sequences in a value are escaped, not passed through raw (would otherwise erase the warning from a terminal)', () => {
+    const withEscape = `PASS${String.fromCharCode(27)}[2K${String.fromCharCode(27)}[1A`;
+    const msg = verdictMisuseMessage({ status: withEscape }, 'ERROR', false);
+    expect(msg).not.toContain(String.fromCharCode(27));
+  });
+
+  it('SEC-3 regression: an oversized value is bounded, never emits an unbounded single line', () => {
+    const huge = 'x'.repeat(200_000);
+    const msg = verdictMisuseMessage({ status: huge }, 'ERROR', false);
+    expect(msg.length).toBeLessThan(1000);
+    expect(msg).toMatch(/\[\+\d+ chars\]/);
   });
 
   it('TS-3/TS-11 pointer: does NOT independently classify prefix-family tokens -- that is main()\'s real-chain job, not this predicate\'s', () => {
