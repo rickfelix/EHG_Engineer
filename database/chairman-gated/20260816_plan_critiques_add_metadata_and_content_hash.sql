@@ -54,5 +54,5 @@
 
 ALTER TABLE plan_critiques ADD COLUMN IF NOT EXISTS metadata jsonb;
 ALTER TABLE plan_critiques ADD COLUMN IF NOT EXISTS content_hash text;
-COMMENT ON COLUMN plan_critiques.content_hash IS 'SHA-256 of the exact PRD+arch text sent to the LLM, post-truncation.';
-COMMENT ON COLUMN plan_critiques.metadata IS 'Gate-run metadata. truncated: {prd,arch,shown,total}.';
+COMMENT ON COLUMN plan_critiques.content_hash IS 'SHA-256 of the exact PRD+arch text sent to the LLM, post-truncation, plus adapter.defaultModel + archLoadStatus.';
+COMMENT ON COLUMN plan_critiques.metadata IS 'Gate-run metadata. llm_result: {findings,overall_severity} (RAW pre-merge LLM output, read by the FR-4 cache — never the combined top-level columns). truncated: {prd,arch,shownPrd,totalPrd,shownArch,totalArch}. cache_hit/cache_source_id: set when this row reused a prior LLM call.';

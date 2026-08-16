@@ -209,6 +209,12 @@ describe('coverage, never completeness (FR-3)', () => {
     expect(result.pass).toBe(true);
     expect(result.score).toBe(75); // warn from the invariant, despite LLM pass
     expect(supabase._inserted[0].findings.some((f) => f.invariant_id === 'INV-001-control-without-could-not-check-path')).toBe(true);
+    // TESTING (EXEC-phase evidence, HIGH finding #2): metadata.llm_result is the RAW pre-merge
+    // LLM output — it must NOT carry the invariant finding that only entered the top-level,
+    // COMBINED findings column above. A future cache hit reads llm_result and lets
+    // validatePrePlanCritique freshly re-merge invariant findings on its own next run; if
+    // llm_result already contained the merge, that re-merge would duplicate it.
+    expect(supabase._inserted[0].metadata.llm_result).toEqual({ findings: [], overall_severity: 'pass' });
   });
 });
 

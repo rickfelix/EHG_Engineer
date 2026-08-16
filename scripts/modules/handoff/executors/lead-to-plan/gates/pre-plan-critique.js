@@ -210,9 +210,18 @@ export async function validatePrePlanCritique(ctx) {
   // cache-derived so scripts/critique-catch-rate-monitor.js's ratios stay computed over a
   // complete, honest row set instead of going blind to hit runs.
   const cacheMetadata = critique.cacheHit ? { cache_hit: true, cache_source_id: critique.cacheSourceId } : undefined;
-  const metadata = (truncatedMetadata || cacheMetadata)
-    ? { ...(truncatedMetadata ? { truncated: truncatedMetadata } : {}), ...cacheMetadata }
-    : undefined;
+
+  // TESTING (EXEC-phase evidence, HIGH finding #2): llm_result is the RAW pre-merge LLM output
+  // (critique.findings/overall_severity, BEFORE invariant.findings is merged in below and BEFORE
+  // combined severity is derived) — persisted UNCONDITIONALLY on every row so lookupCacheHit
+  // (devils-advocate.js) always has genuine raw content to reuse on a future hit. Reusing the
+  // top-level findings/overall_severity columns instead would hand a future call the GATE's
+  // already-combined result, which then gets invariant findings re-merged a second time and an
+  // already-derived severity re-seeded as if it were fresh — compounding every hit within the
+  // cache TTL (PT-9: cache the CRITIQUE RESULT, never a pre-derived final gate VERDICT).
+  const llmResultMetadata = { findings: critique.findings || [], overall_severity: critique.overall_severity };
+
+  const metadata = { llm_result: llmResultMetadata, ...(truncatedMetadata ? { truncated: truncatedMetadata } : {}), ...cacheMetadata };
 
   // FR-4 (of the ORIGINAL SD-LEO-INFRA-SYSTEMATIZE-COMPLETENESS-CRITIC-001, a different, already-
   // shipped SD — not this SD's own FR-4): persist BEFORE deriving the verdict, on EVERY path that
@@ -226,7 +235,7 @@ export async function validatePrePlanCritique(ctx) {
     model_used: critique.model_used,
     token_usage: critique.token_usage,
     content_hash: critique.contentHash ?? null,
-    ...(metadata ? { metadata } : {}),
+    metadata,
   }, warnings);
 
   // FR-1: verdict. 'block' fails unless an audited override exists FOR THIS EXACT CONTENT
@@ -354,7 +363,9 @@ async function findActiveOverride(supabase, sdId, currentContentHash) {
     const since = new Date(Date.now() - OVERRIDE_LOOKBACK_DAYS * 24 * 60 * 60 * 1000).toISOString();
     const { data, error } = await supabase
       .from('plan_critiques')
-      .select('id, content_hash, override_reason, override_by, created_at')
+      // content_hash is TR-3's staged column, not yet live in the schema snapshot — remove this
+      // pragma and re-run `npm run schema:snapshot:lint` once ceremony N+1 applies the migration.
+      .select('id, content_hash, override_reason, override_by, created_at') // schema-lint-disable-line
       .eq('sd_id', sdId)
       .eq('overall_severity', 'block')
       .eq('content_hash', currentContentHash)

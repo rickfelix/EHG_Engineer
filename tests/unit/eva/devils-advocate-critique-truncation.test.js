@@ -6,7 +6,7 @@ import { describe, it, expect, vi } from 'vitest';
 import { critiquePlanProposal, COULD_NOT_CHECK, _internal } from '../../../lib/eva/devils-advocate.js';
 import { findingsFingerprint } from '../../../scripts/modules/handoff/executors/lead-to-plan/gates/pre-plan-critique.js';
 
-const { buildBudgetedPrdText, buildCritiqueUserPrompt, MAX_CRITIQUE_ANALYSIS_CHARS, MAX_ANALYSIS_CHARS, buildUserPrompt } = _internal;
+const { buildBudgetedPrdText, buildCritiqueUserPrompt, MAX_CRITIQUE_ANALYSIS_CHARS, MAX_ANALYSIS_CHARS, buildUserPrompt, SECTION_BUDGETS } = _internal;
 
 function mockAdapter(content) {
   return { apiKey: 'test-key', complete: vi.fn().mockResolvedValue({ content: JSON.stringify(content), model: 'gpt-5.4', usage: { total_tokens: 1 } }) };
@@ -55,6 +55,20 @@ describe('buildBudgetedPrdText (FR-2)', () => {
   it('treats null/undefined as an empty, non-truncated string', () => {
     expect(buildBudgetedPrdText(null).truncated).toBe(false);
     expect(buildBudgetedPrdText(undefined).truncated).toBe(false);
+  });
+
+  // TESTING (EXEC-phase evidence, MEDIUM finding #3): measured live against 4,344 real PRDs — 26
+  // (0.60%) have ONE section over its fixed SECTION_BUDGETS allowance while their 5-section total
+  // stays well under MAX_CRITIQUE_ANALYSIS_CHARS. The fast path (skip section budgeting when the
+  // raw total already fits) must produce zero truncation for exactly this shape.
+  it('does not truncate when one section exceeds its fixed allowance but the raw total is still under the overall cap', () => {
+    // acceptance_criteria alone (11,664 chars, matching the largest real specimen measured) far
+    // exceeds its 3,000-char fixed budget, but the 5-section total here is nowhere near 64,000.
+    const bigAcceptanceCriteria = Array.from({ length: 80 }, (_, i) => `Criterion ${i + 1}: ${'x'.repeat(130)}`);
+    const result = buildBudgetedPrdText({ ...UNDER_BUDGET_PRD, acceptance_criteria: bigAcceptanceCriteria });
+    expect(JSON.stringify(bigAcceptanceCriteria).length).toBeGreaterThan(SECTION_BUDGETS.acceptance_criteria);
+    expect(result.truncated).toBe(false);
+    expect(result.text).toContain(bigAcceptanceCriteria[79]); // the LAST criterion survived uncut
   });
 });
 
@@ -121,6 +135,30 @@ describe('buildCritiqueUserPrompt (FR-1)', () => {
     });
     expect(truncated.prd.truncated).toBe(true);
     expect(findingsFingerprint(findings)).toBe(fingerprintUntruncated);
+  });
+});
+
+// FR-4 AC-9 (TESTING EXEC-phase finding #4 — was genuinely uncovered): proves the property at
+// the critiquePlanProposal level, not just inside computeContentHash directly — the hash must
+// stay STABLE when the provider silently serves a DIFFERENT model than requested (response.model
+// != adapter.defaultModel), since T12's whole concern is that hashing response.model would let a
+// silent server-side rotation change the hash on byte-identical content and orphan every override.
+describe('content_hash stability against response.model rotation (FR-4 AC-9)', () => {
+  it('contentHash is identical whether the response reports the requested model or a silently-rotated one', async () => {
+    const requested = { prdContent: UNDER_BUDGET_PRD, archContent: 'short', sdContext: {} };
+    const adapterRequested = {
+      apiKey: 'k',
+      defaultModel: 'gpt-5.4',
+      complete: vi.fn().mockResolvedValue({ content: JSON.stringify({ findings: [], overall_severity: 'pass' }), model: 'gpt-5.4' }),
+    };
+    const adapterRotated = {
+      apiKey: 'k',
+      defaultModel: 'gpt-5.4', // SAME requested model
+      complete: vi.fn().mockResolvedValue({ content: JSON.stringify({ findings: [], overall_severity: 'pass' }), model: 'gpt-5.4-rotated-variant' }), // DIFFERENT served model
+    };
+    const resultA = await critiquePlanProposal(requested, { adapter: adapterRequested, logger: { warn: vi.fn(), error: vi.fn() } });
+    const resultB = await critiquePlanProposal(requested, { adapter: adapterRotated, logger: { warn: vi.fn(), error: vi.fn() } });
+    expect(resultA.contentHash).toBe(resultB.contentHash);
   });
 });
 
@@ -225,9 +263,20 @@ describe('critiquePlanProposal cache-hit path (FR-4 AC-5/PT-1/PT-9)', () => {
     };
   }
 
-  it('skips the LLM call on a cache hit and returns the cached findings/severity, flagged cacheHit', async () => {
+  // TESTING (EXEC-phase evidence, HIGH finding #2): the cache reads the RAW pre-merge LLM output
+  // from metadata.llm_result, never the row's top-level findings/overall_severity (those are the
+  // GATE's already-COMBINED result -- reusing them would re-merge invariant findings a second
+  // time and re-seed an already-derived severity, compounding on every hit within the TTL).
+  it('skips the LLM call on a cache hit and returns the RAW llm_result from metadata, flagged cacheHit', async () => {
     const adapter = mockAdapter({ findings: [], overall_severity: 'pass' }); // would prove a real call happened, if reached
-    const hitRow = { id: 'cached-row-1', findings: [{ severity: 'warn', category: 'other' }], overall_severity: 'warn', model_used: 'gpt-5.4', token_usage: { total_tokens: 5 } };
+    const hitRow = {
+      id: 'cached-row-1',
+      // Top-level columns are the gate's COMBINED result (deliberately DIFFERENT from
+      // metadata.llm_result below) -- proves the cache reads llm_result, not these.
+      model_used: 'gpt-5.4',
+      token_usage: { total_tokens: 5 },
+      metadata: { llm_result: { findings: [{ severity: 'warn', category: 'other' }], overall_severity: 'warn' } },
+    };
     const supabase = makeCacheSupabase(hitRow);
     const result = await critiquePlanProposal(
       { prdContent: UNDER_BUDGET_PRD, archContent: 'short', sdContext: { sd_id: 'sd-1' } },
@@ -237,8 +286,20 @@ describe('critiquePlanProposal cache-hit path (FR-4 AC-5/PT-1/PT-9)', () => {
     expect(result.cacheHit).toBe(true);
     expect(result.cacheSourceId).toBe('cached-row-1');
     expect(result.overall_severity).toBe('warn');
-    expect(result.findings).toEqual(hitRow.findings);
+    expect(result.findings).toEqual(hitRow.metadata.llm_result.findings);
     expect(result.contentHash).toEqual(expect.any(String));
+  });
+
+  it('treats a matching row with no metadata.llm_result as a miss (never returns garbage content)', async () => {
+    const adapter = mockAdapter({ findings: [], overall_severity: 'pass' });
+    const hitRow = { id: 'old-row-predating-fix', findings: [{ severity: 'block', category: 'x' }], overall_severity: 'block', model_used: 'gpt-5.4', token_usage: null, metadata: null };
+    const supabase = makeCacheSupabase(hitRow);
+    const result = await critiquePlanProposal(
+      { prdContent: UNDER_BUDGET_PRD, archContent: 'short', sdContext: { sd_id: 'sd-1' } },
+      { adapter, supabase, logger: { warn: vi.fn(), error: vi.fn(), log: vi.fn() } }
+    );
+    expect(adapter.complete).toHaveBeenCalledTimes(1); // real call happened -- the stale row was correctly ignored
+    expect(result.cacheHit).toBeUndefined();
   });
 
   it('calls the LLM normally when no cache row matches (empty result)', async () => {
