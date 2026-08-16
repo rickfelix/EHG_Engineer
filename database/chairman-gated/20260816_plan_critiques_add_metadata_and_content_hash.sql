@@ -12,8 +12,13 @@
 -- pre-plan-critique.js) and this file's sibling _acceptance.mjs for the pre/post-apply readback.
 --
 -- Adds two columns to plan_critiques:
---   metadata      jsonb — gate-run metadata. truncated: {prd, arch, shown, total}; cache_hit: bool
---                  + pointer to the reused row when a content-hash cache hit occurs (FR-4/FR-5).
+--   metadata      jsonb — gate-run metadata. llm_result: {findings, overall_severity} (the RAW
+--                  pre-merge LLM output, persisted on every row, read by the FR-4 cache — never
+--                  the row's own top-level findings/overall_severity, which are the GATE's
+--                  post-merge combined result). truncated: {prd, arch, shownPrd, totalPrd,
+--                  shownArch, totalArch}. cache_hit: bool + cache_source_id when this row reused
+--                  a prior LLM call (FR-4/FR-5) — see the COMMENT ON COLUMN below for the exact,
+--                  currently-accurate shape; this prose predates a later FR-4 revision.
 --   content_hash  text — SHA-256 of the exact post-truncation/chunking PRD+arch text sent to the
 --                  critique LLM, plus the requested model (adapter.defaultModel, NEVER
 --                  response.model — see FR-4's binding-predicate note). Becomes findActiveOverride's

@@ -302,6 +302,28 @@ describe('critiquePlanProposal cache-hit path (FR-4 AC-5/PT-1/PT-9)', () => {
     expect(result.cacheHit).toBeUndefined();
   });
 
+  // TESTING (EXEC-phase re-verification, finding #2 residual): caching a could_not_check result
+  // would make a transient LLM-blind outcome STICKY for the full TTL and — because a hit skips
+  // adapter.complete entirely — suppress exactly the retry the precheck→execute window exists to
+  // allow. A could_not_check row must always fall through to a fresh LLM call, never be reused.
+  it('never treats a could_not_check row as a cache hit — always falls through to a fresh LLM call', async () => {
+    const adapter = mockAdapter({ findings: [], overall_severity: 'pass' });
+    const hitRow = {
+      id: 'blind-row-1',
+      model_used: null,
+      token_usage: null,
+      metadata: { llm_result: { findings: [], overall_severity: COULD_NOT_CHECK } },
+    };
+    const supabase = makeCacheSupabase(hitRow);
+    const result = await critiquePlanProposal(
+      { prdContent: UNDER_BUDGET_PRD, archContent: 'short', sdContext: { sd_id: 'sd-1' } },
+      { adapter, supabase, logger: { warn: vi.fn(), error: vi.fn(), log: vi.fn() } }
+    );
+    expect(adapter.complete).toHaveBeenCalledTimes(1); // the retry actually happened
+    expect(result.cacheHit).toBeUndefined();
+    expect(result.overall_severity).toBe('pass'); // the fresh call's real result, not the stale blindness
+  });
+
   it('calls the LLM normally when no cache row matches (empty result)', async () => {
     const adapter = mockAdapter({ findings: [], overall_severity: 'pass' });
     const supabase = makeCacheSupabase(null);
