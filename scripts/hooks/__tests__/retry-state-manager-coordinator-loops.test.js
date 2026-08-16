@@ -107,6 +107,29 @@ describe('Control 2 — isReadOnlyCommand (deny-by-default classifier)', () => {
     }
   });
 
+  // SECURITY (EXEC-TO-PLAN review): two additional leak classes in the gh-api mutating-method
+  // exclusion, found by independent adversarial re-probing of the SHIPPED module (not a
+  // re-derivation) -- both fixed in the same commit, asserted here so they cannot regress.
+  it('FR-1 AC-2 + TR-1 (SECURITY hardening): quoted method values and newline-continuation mutating flags are NOT read-only', () => {
+    for (const c of [
+      // Quoted method values -- a quote char between the flag and the verb previously broke
+      // the match, since the alternatives required the verb to follow immediately.
+      "gh api /repos/o/r -X 'PUT'",
+      'gh api /repos/o/r -X "POST"',
+      'gh api /repos/o/r --method="POST"',
+      "gh api /repos/o/r --method 'DELETE'",
+      "gh api /repos/o/r -X'POST'",
+      // Newline-continuation -- plain `.` in the lookahead does not match `\n` without /s;
+      // a mutating flag on an indented continuation line was invisible to the exclusion.
+      'gh api /repos/o/r/pulls/1/merge \\\n --method PUT \\\n -f merge_method=squash',
+    ]) {
+      expect(isReadOnlyCommand(c)).toBe(false);
+    }
+    // Sanity control: a genuinely read-only multi-line gh api call (no mutating flag anywhere)
+    // must still classify read-only -- the newline fix must not become an over-broad rejection.
+    expect(isReadOnlyCommand('gh api \\\n  /repos/o/r/pulls/1')).toBe(true);
+  });
+
   // FR-2 AC-2: gh read verbs combined with chaining/redirection remain non-read-only — the
   // pre-existing MUTATION_OPERATOR_RE guard applies identically to the new gh patterns.
   it('FR-2 AC-2: gh read verbs combined with chaining/redirection remain non-read-only', () => {

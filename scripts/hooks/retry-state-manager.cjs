@@ -179,8 +179,16 @@ const MUTATION_OPERATOR_RE = /[;&|`]|>>?|\$\(|<\(/;
 // above (git/ls/cat/etc) are NOT touched by this change -- their lack of \b word-boundary
 // anchoring (lsof/catx/findmnt/envsubst all currently misclassify read-only) is a separate,
 // confirmed, out-of-scope defect, logged for a future targeted fix.
+//
+// SECURITY review (EXEC-TO-PLAN) found the lookahead's plain `.*` does not match `\n` (no /s
+// flag), so a mutating flag placed on an indented continuation line (`gh api /x \` + newline +
+// `  --method PUT`) was invisible -- `[\s\S]*` fixes this. It also found the -X/--method value
+// match required the verb to follow the flag with no separating quote char, so `-X 'PUT'` /
+// `--method="POST"` slipped through -- `['"]?` tolerates an optional quote before the verb.
+// Both closed with zero regression to the 75+ pre-existing/adversarial cases (.artifacts/
+// verify-security-fix.cjs); linear-time confirmed (no ReDoS) on multi-megabyte inputs.
 const READ_ONLY_LEADING_RE =
-  /^(?:git\s+(?:status|log|diff|show|branch|rev-parse|describe|remote(?:\s+-v)?|config\s+--get|cat-file|ls-files|for-each-ref)\b|ls|ll|pwd|cat|head|tail|grep|rg|find|wc|stat|echo|whoami|date|env|printenv|which|type|node\s+--version|npm\s+(?:run\s+)?(?:ls|list|view|outdated)\b|gh\s+(?:run\s+(?:list|view|watch)|pr\s+(?:list|view|diff|checks|status)|workflow\s+(?:list|view)|issue\s+(?:list|view))\b|gh\s+api\b(?!.*(?:(?:^|\s)-X\s*(?:POST|PUT|PATCH|DELETE)\b|--method[=\s]+(?:POST|PUT|PATCH|DELETE)\b|(?:^|\s)-[fF](?:\s|=)|--field\b|--raw-field\b|--input\b)))/i;
+  /^(?:git\s+(?:status|log|diff|show|branch|rev-parse|describe|remote(?:\s+-v)?|config\s+--get|cat-file|ls-files|for-each-ref)\b|ls|ll|pwd|cat|head|tail|grep|rg|find|wc|stat|echo|whoami|date|env|printenv|which|type|node\s+--version|npm\s+(?:run\s+)?(?:ls|list|view|outdated)\b|gh\s+(?:run\s+(?:list|view|watch)|pr\s+(?:list|view|diff|checks|status)|workflow\s+(?:list|view)|issue\s+(?:list|view))\b|gh\s+api\b(?![\s\S]*(?:(?:^|\s)-X\s*['"]?(?:POST|PUT|PATCH|DELETE)\b|--method[=\s]+['"]?(?:POST|PUT|PATCH|DELETE)\b|(?:^|\s)-[fF](?:\s|=)|--field\b|--raw-field\b|--input\b)))/i;
 
 /**
  * Structurally classify a Bash command as provably read-only / non-mutating.
