@@ -68,9 +68,11 @@ function makeFakeSupabase({ sds = [], decisions = [] } = {}) {
             return { data: row || null, error: null };
           },
           then: (resolve) => {
-            // status='pending' + content match handled by caller (resolveExistingPendingDecision
-            // filters client-side); return the full pending set here.
-            resolve({ data: decisions.filter((d) => d.status === 'pending'), error: null });
+            // QF-20260816-118: the real query no longer filters status server-side (a DECIDED
+            // row must also be fetchable so rowStillExcludes can honor its re-ask interval) —
+            // content match + still-excludes filtering both happen client-side in
+            // resolveExistingPendingDecision. Return every decision here, matching that shape.
+            resolve({ data: decisions, error: null });
           },
         };
         return api;
@@ -340,6 +342,80 @@ describe('TS-11: a stale chairman_decision_id (pointing to a resolved row) does 
     expect(result.hits).toBe(1);
     expect(recordPendingDecisionMock).toHaveBeenCalledTimes(1);
     expect(mergeMetadataKeysMock).toHaveBeenCalledWith('SD-REFENCE-001', { chairman_decision_id: 'dec-new' });
+  });
+});
+
+describe('QF-20260816-118 regression: a DECIDED row keeps excluding within the re-ask interval', () => {
+  it('a row decided 1 hour ago (status=deferred, decided_by set) excludes — no new row, no new email', async () => {
+    const decidedAt = new Date(NOW.getTime() - 60 * 60 * 1000).toISOString(); // 1h ago
+    const sd = sdRow({
+      sd_key: 'SD-JUST-DECIDED-001',
+      metadata: { requires_human_action: true, human_decider: 'chairman', chairman_decision_id: 'dec-decided' },
+    });
+    const sb = makeFakeSupabase({
+      sds: [sd],
+      decisions: [{ id: 'dec-decided', status: 'deferred', decided_by: 'chairman', updated_at: decidedAt }],
+    });
+
+    const result = await runChairmanGatedDecisionRowGuard(sb, { now: NOW });
+
+    expect(result.hits).toBe(0);
+    expect(recordPendingDecisionMock).not.toHaveBeenCalled();
+    // chairman_decision_at is stamped from the decided row's own updated_at (audit trail for the interval).
+    expect(mergeMetadataKeysMock).toHaveBeenCalledWith('SD-JUST-DECIDED-001', { chairman_decision_at: decidedAt });
+  });
+
+  it('a row decided 15 days ago (past the 14d re-ask interval) does NOT exclude — mints a new row', async () => {
+    const decidedAt = new Date(NOW.getTime() - 15 * 24 * 60 * 60 * 1000).toISOString(); // 15d ago
+    const sd = sdRow({
+      sd_key: 'SD-STALE-DECISION-001',
+      metadata: { requires_human_action: true, human_decider: 'chairman', chairman_decision_id: 'dec-old' },
+    });
+    recordPendingDecisionMock.mockResolvedValue({ recorded: true, id: 'dec-refresh', escalated: true });
+    const sb = makeFakeSupabase({
+      sds: [sd],
+      decisions: [{ id: 'dec-old', status: 'deferred', decided_by: 'chairman', updated_at: decidedAt }],
+    });
+
+    const result = await runChairmanGatedDecisionRowGuard(sb, { now: NOW });
+
+    expect(result.hits).toBe(1);
+    expect(recordPendingDecisionMock).toHaveBeenCalledTimes(1);
+  });
+
+  it('a non-pending row with NO decided_by (a bare status flip, not a real decision) does NOT exclude', async () => {
+    const sd = sdRow({
+      sd_key: 'SD-NO-DECIDER-001',
+      metadata: { requires_human_action: true, human_decider: 'chairman', chairman_decision_id: 'dec-nodecider' },
+    });
+    recordPendingDecisionMock.mockResolvedValue({ recorded: true, id: 'dec-new2', escalated: true });
+    const sb = makeFakeSupabase({
+      sds: [sd],
+      decisions: [{ id: 'dec-nodecider', status: 'deferred', updated_at: NOW.toISOString() }], // no decided_by
+    });
+
+    const result = await runChairmanGatedDecisionRowGuard(sb, { now: NOW });
+
+    expect(result.hits).toBe(1);
+    expect(recordPendingDecisionMock).toHaveBeenCalledTimes(1);
+  });
+
+  it('the same decided row is found via content-match when no id is stamped (backfill still works post-decision)', async () => {
+    const decidedAt = new Date(NOW.getTime() - 60 * 60 * 1000).toISOString();
+    const sd = sdRow({ sd_key: 'SD-CONTENT-DECIDED-001' }); // no chairman_decision_id stamped
+    const sb = makeFakeSupabase({
+      sds: [sd],
+      decisions: [{
+        id: 'dec-content', status: 'deferred', decided_by: 'chairman', updated_at: decidedAt,
+        brief_data: { context: { sd_key: 'SD-CONTENT-DECIDED-001' } }, summary: '[FENCED-SD GO/DEFER SD-CONTENT-DECIDED-001]',
+      }],
+    });
+
+    const result = await runChairmanGatedDecisionRowGuard(sb, { now: NOW });
+
+    expect(result.hits).toBe(0);
+    expect(recordPendingDecisionMock).not.toHaveBeenCalled();
+    expect(mergeMetadataKeysMock).toHaveBeenCalledWith('SD-CONTENT-DECIDED-001', { chairman_decision_id: 'dec-content', chairman_decision_at: decidedAt });
   });
 });
 

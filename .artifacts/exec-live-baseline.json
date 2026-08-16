@@ -1,0 +1,221 @@
+{
+  "captured_at": "2026-08-16T01:36:58.765Z",
+  "rows": [
+    {
+      "signature": "public.approve_chairman_decision(p_decision_id uuid, p_rationale text, p_decided_by text, p_approval_type approval_type_enum, p_stepup_token uuid)",
+      "anon_exec": true,
+      "auth_exec": true,
+      "public_exec": true,
+      "svc_exec": true,
+      "is_secdef": true
+    },
+    {
+      "signature": "public.check_feedback_duplicate(p_venture_id uuid, p_title text)",
+      "anon_exec": true,
+      "auth_exec": true,
+      "public_exec": false,
+      "svc_exec": true,
+      "is_secdef": true
+    },
+    {
+      "signature": "public.check_feedback_rate_limit(p_venture_id uuid)",
+      "anon_exec": true,
+      "auth_exec": true,
+      "public_exec": true,
+      "svc_exec": true,
+      "is_secdef": true
+    },
+    {
+      "signature": "public.claim_sd(p_sd_id text, p_session_id text, p_track text, p_force_takeover boolean, p_client_gate_version integer)",
+      "anon_exec": true,
+      "auth_exec": true,
+      "public_exec": true,
+      "svc_exec": true,
+      "is_secdef": true
+    },
+    {
+      "signature": "public.fn_advance_pipeline_stage(p_case_id uuid, p_from_stage text, p_to_stage text, p_provenance_event_id uuid, p_idempotency_key uuid)",
+      "anon_exec": true,
+      "auth_exec": true,
+      "public_exec": false,
+      "svc_exec": true,
+      "is_secdef": true
+    },
+    {
+      "signature": "public.fn_anon_ingress_prior_hour_count(p_source_type text)",
+      "anon_exec": true,
+      "auth_exec": true,
+      "public_exec": false,
+      "svc_exec": true,
+      "is_secdef": true
+    },
+    {
+      "signature": "public.fn_enforce_stage_advancement_artifact_gate()",
+      "anon_exec": true,
+      "auth_exec": true,
+      "public_exec": true,
+      "svc_exec": true,
+      "is_secdef": true
+    },
+    {
+      "signature": "public.fn_is_chairman()",
+      "anon_exec": true,
+      "auth_exec": true,
+      "public_exec": true,
+      "svc_exec": true,
+      "is_secdef": true
+    },
+    {
+      "signature": "public.fn_is_service_role()",
+      "anon_exec": true,
+      "auth_exec": true,
+      "public_exec": true,
+      "svc_exec": true,
+      "is_secdef": true
+    },
+    {
+      "signature": "public.fn_list_chairman_webauthn_credentials()",
+      "anon_exec": true,
+      "auth_exec": true,
+      "public_exec": true,
+      "svc_exec": true,
+      "is_secdef": true
+    },
+    {
+      "signature": "public.fn_quick_fixes_validate_target_application()",
+      "anon_exec": true,
+      "auth_exec": true,
+      "public_exec": true,
+      "svc_exec": true,
+      "is_secdef": true
+    },
+    {
+      "signature": "public.fn_relay_insert_sms_candidate(p_provider_message_id text, p_from_phone text, p_to_phone text, p_body_raw text, p_relay_secret text)",
+      "anon_exec": true,
+      "auth_exec": false,
+      "public_exec": false,
+      "svc_exec": true,
+      "is_secdef": true
+    },
+    {
+      "signature": "public.fn_stage_artifact_precondition(p_venture_id uuid, p_stage integer)",
+      "anon_exec": true,
+      "auth_exec": true,
+      "public_exec": true,
+      "svc_exec": true,
+      "is_secdef": true
+    },
+    {
+      "signature": "public.fn_user_has_company_access(company_uuid uuid)",
+      "anon_exec": true,
+      "auth_exec": true,
+      "public_exec": true,
+      "svc_exec": true,
+      "is_secdef": true
+    },
+    {
+      "signature": "public.fn_user_has_venture_access(venture_uuid uuid)",
+      "anon_exec": true,
+      "auth_exec": true,
+      "public_exec": true,
+      "svc_exec": true,
+      "is_secdef": true
+    },
+    {
+      "signature": "public.fn_verify_and_consume_stepup_token(p_token uuid, p_decision_id uuid)",
+      "anon_exec": true,
+      "auth_exec": true,
+      "public_exec": true,
+      "svc_exec": true,
+      "is_secdef": true
+    },
+    {
+      "signature": "public.fn_write_kill_audit_trail(p_venture_id uuid, p_lifecycle_stage integer, p_rationale text, p_decided_by uuid, p_source text, p_decision_id uuid)",
+      "anon_exec": true,
+      "auth_exec": true,
+      "public_exec": true,
+      "svc_exec": true,
+      "is_secdef": true
+    },
+    {
+      "signature": "public.get_gate_decision_status(p_venture_id uuid, p_stage integer)",
+      "anon_exec": true,
+      "auth_exec": true,
+      "public_exec": false,
+      "svc_exec": true,
+      "is_secdef": true
+    },
+    {
+      "signature": "public.is_chairman_role()",
+      "anon_exec": true,
+      "auth_exec": true,
+      "public_exec": false,
+      "svc_exec": true,
+      "is_secdef": true
+    },
+    {
+      "signature": "public.is_leo_admin()",
+      "anon_exec": true,
+      "auth_exec": true,
+      "public_exec": true,
+      "svc_exec": true,
+      "is_secdef": true
+    },
+    {
+      "signature": "public.lhe_pending_migration_applied()",
+      "anon_exec": true,
+      "auth_exec": true,
+      "public_exec": true,
+      "svc_exec": true,
+      "is_secdef": true
+    },
+    {
+      "signature": "public.log_sd_mutation_audit()",
+      "anon_exec": true,
+      "auth_exec": true,
+      "public_exec": true,
+      "svc_exec": true,
+      "is_secdef": true
+    },
+    {
+      "signature": "public.record_venture_error(p_venture_id uuid, p_error_hash text, p_message text, p_context jsonb)",
+      "anon_exec": true,
+      "auth_exec": true,
+      "public_exec": false,
+      "svc_exec": true,
+      "is_secdef": true
+    },
+    {
+      "signature": "public.reject_chairman_decision(p_decision_id uuid, p_rationale text, p_decided_by text, p_stepup_token uuid)",
+      "anon_exec": true,
+      "auth_exec": true,
+      "public_exec": true,
+      "svc_exec": true,
+      "is_secdef": true
+    },
+    {
+      "signature": "public.set_session_working_context(p_session_id text, p_wc jsonb)",
+      "anon_exec": true,
+      "auth_exec": true,
+      "public_exec": true,
+      "svc_exec": true,
+      "is_secdef": true
+    },
+    {
+      "signature": "public.upsert_operator_cash_burn(p_cash_usd numeric, p_ai_burn_usd numeric, p_other_burn_usd numeric, p_revenue_usd numeric)",
+      "anon_exec": true,
+      "auth_exec": true,
+      "public_exec": true,
+      "svc_exec": true,
+      "is_secdef": true
+    },
+    {
+      "signature": "public.venture_exists_and_active(p_venture_id uuid)",
+      "anon_exec": true,
+      "auth_exec": true,
+      "public_exec": false,
+      "svc_exec": true,
+      "is_secdef": true
+    }
+  ]
+}

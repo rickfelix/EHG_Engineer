@@ -87,7 +87,11 @@ function getDispatchAuthMode() {
 // SD-LEO-INFRA-AUTO-TIERING-ACTIVATION-001-B (FR-3): --model/--effort capture at check-in.
 const { resolveWorkerTierRank, isTieringActive, normalizeModel, normalizeEffort, rankForModelEffort, ladderTopRank, familyFromModelId, seatCapabilityIsVerified, isKnownEffort, isKnownModel } = require('../lib/fleet/tier-ladder.cjs');
 // SD-LEO-INFRA-BELT-TIER-AWARE-CLAIMABILITY-001 (FR-2): tier-aware "claimable-to-MY-rung" rollup.
-const { claimableForTier, claimableForRepo } = require('../lib/fleet/tier-claimable.cjs');
+// tierBlocks also reused directly (SD-LEO-INFRA-SELF-CLAIM-TIER-ENFORCEMENT-001): it already honors
+// a scored SD's explicit min_tier_rank floor even when global tiering is off, which recoverStrandedFinal
+// and adoptOrphanInProgress need and a raw classifyDispatchIneligibility(sd, {worker_tier_rank, tiering_active})
+// call would not provide.
+const { claimableForTier, claimableForRepo, tierBlocks } = require('../lib/fleet/tier-claimable.cjs');
 // SD-LEO-INFRA-AUTO-TIERING-ACTIVATION-001-E (FR-6): backlog-gated downward claims. The fetcher is
 // SHARED with lib/coordinator/dispatch.cjs's assertWorkerTierAllowed so the pull path (here) and
 // the directed-dispatch path compute an IDENTICAL backlog verdict — never two re-derivations.
@@ -941,8 +945,10 @@ async function fetchRankedCandidates(sb) {
     .sort((a, b) => Number(a.metadata.dispatch_rank) - Number(b.metadata.dispatch_rank));
 }
 
-/** Per-row claim attempt for an un-baselined draft candidate (shared by the merged
- *  step-6 tier and the legacy selfClaimDraftSd wrapper). Returns a result or null. */
+/** Per-row claim attempt for an un-baselined draft candidate, called by the merged step-6 tier.
+ * (SD-LEO-INFRA-SELF-CLAIM-TIER-ENFORCEMENT-001: the legacy selfClaimDraftSd wrapper this was
+ * also shared with is removed — confirmed dead code, excluded from CHECKIN_HELPERS, zero live
+ * call sites since the 2026-07-09 step-pipeline refactor.) Returns a result or null. */
 async function tryClaimDraftCandidate(sb, sessionId, base, d, tierCtx = {}) {
   // SD-FDBK-INFRA-CONVERGE-WORK-ASSIGNMENT-001: same shared classifier the baselined candidate-view
   // tier (step 6) and the coordinator/sweep PUSH path use — the un-baselined draft tier must not
@@ -983,20 +989,6 @@ async function tryClaimDraftCandidate(sb, sessionId, base, d, tierCtx = {}) {
   return null;
 }
 
-async function selfClaimDraftSd(sb, sessionId, base) {
-  try {
-    const ordered = await fetchDraftCandidates(sb);
-    // duty-6: a fresh coordinator dispatch_rank overrides the local priority order (rank already
-    // encodes priority as its tie-break); unranked/stale rows keep the order above. Fail-open.
-    const ranked = await sortByDispatchRank(sb, ordered, (d) => d.sd_key);
-    for (const d of ranked) {
-      const result = await tryClaimDraftCandidate(sb, sessionId, base, d);
-      if (result) return result;
-    }
-  } catch { /* fail-open -> caller continues to QF/idle */ }
-  return null;
-}
-
 // SD-FDBK-FIX-RECURRING-2ND-OCCURRENCE-001: recover SDs STRANDED at pending_approval/LEAD_FINAL
 // with the claim cleared. RECURRING bug (2nd occurrence): a worker reaches LEAD_FINAL (PLAN-TO-LEAD
 // accepted, gates passed, retro exists, PR usually merged) then RELEASES its claim and goes idle
@@ -1014,7 +1006,7 @@ const STRANDED_CANDIDATE_LIMIT = 5;
 // window between a transition and the next handoff). A genuinely stranded SD sits indefinitely.
 const STRANDED_MIN_AGE_MS = 5 * 60 * 1000;
 
-async function recoverStrandedFinal(sb, sessionId, base) {
+async function recoverStrandedFinal(sb, sessionId, base, tierCtx = {}) {
   try {
     const cutoffIso = new Date(Date.now() - STRANDED_MIN_AGE_MS).toISOString();
     const { data: stranded } = await sb
@@ -1044,6 +1036,15 @@ async function recoverStrandedFinal(sb, sessionId, base) {
         // FR-1 requires the refusal be LOUD. Silence is what let the original hold go unnoticed —
         // an operator seeing "idle" cannot tell "nothing to recover" from "recovery was refused".
         skipped.push(`${sd.sd_key}: ${ineligible}`);
+        continue;
+      }
+      // SD-LEO-INFRA-SELF-CLAIM-TIER-ENFORCEMENT-001: this lane called classifyDispatchIneligibility
+      // above with NO tierCtx, so the tier axis was silently inert here (WORK-DOWN-NEVER-UP held only
+      // on the merged-pool lane). tierBlocks (not a raw ctx spread) is reused deliberately: it already
+      // honors a scored SD's explicit min_tier_rank floor even when global tiering is off, and it never
+      // reads inflight_git_state, so it cannot regress this lane's own merged-PR recovery behavior.
+      if (tierBlocks(sd, tierCtx.worker_tier_rank, tierCtx.tiering_active)) {
+        skipped.push(`${sd.sd_key}: above_worker_tier`);
         continue;
       }
       // FR-2: soft holds do not refuse, but they must never be INVISIBLE.
@@ -1313,7 +1314,7 @@ async function pendingDirectedAssignmentBlocksAdoption(sb, sdKey) {
   }
 }
 
-async function adoptOrphanInProgress(sb, sessionId, base) {
+async function adoptOrphanInProgress(sb, sessionId, base, tierCtx = {}) {
   try {
     const cutoffIso = new Date(Date.now() - ORPHAN_MIN_AGE_MS).toISOString();
     const { data: orphans } = await sb
@@ -1355,6 +1356,11 @@ async function adoptOrphanInProgress(sb, sessionId, base) {
       // metadata.requires_human_action all skip. SD-LEO-INFRA-WORKER-CLAIM-TIME-001 (FR-2): {cwd}
       // adds the claim-time fitness axes so a repo-mismatched orphan is not adopted here.
       if (classifyDispatchIneligibility(sd, { cwd: process.cwd() }) !== null) continue;
+      // SD-LEO-INFRA-SELF-CLAIM-TIER-ENFORCEMENT-001: same omission as recoverStrandedFinal above --
+      // this lane's classifyDispatchIneligibility call carries no tierCtx, so a below-rung seat could
+      // adopt an above-rung orphan. tierBlocks reused for the same reason: it honors a scored SD's
+      // floor even when global tiering is off, unlike a raw ctx spread into the classifier.
+      if (tierBlocks(sd, tierCtx.worker_tier_rank, tierCtx.tiering_active)) continue;
       // SD-FDBK-INFRA-ORPHAN-ADOPT-RESUME-001: parent-lifecycle guard. classifyDispatchIneligibility
       // excludes orchestrator-parents/test-fixtures/human-action/live-held but NOT a CHILD whose
       // orchestrator parent is still pre-LEAD — adopting one only burns PLAN cycles before the hard
@@ -1388,7 +1394,7 @@ async function adoptOrphanInProgress(sb, sessionId, base) {
 /**
  * Dedup guard: should this SD candidate be SKIPPED by self-claim because it is already
  * being built? v_sd_next_candidates only filters completed/cancelled/deferred and
- * selfClaimDraftSd only filters claiming_session_id IS NULL, so both can surface an SD
+ * fetchDraftCandidates only filters claiming_session_id IS NULL, so both can surface an SD
  * another session is mid-build on; claim_sd's 900s guard misses long-build heartbeat
  * lapses (auto_stale_takeover). Returns true to SKIP when the SD is (a) past LEAD
  * (started — current_phase != 'LEAD'; phase only advances on an ACCEPTED handoff, so this
@@ -1961,7 +1967,7 @@ async function main() {
 // top (imports are referenced directly — never re-derived).
 const CHECKIN_HELPERS = { ws, tryClaim, stampDirectedAssignment, ackMessage, extractSdFromAssignment, extractDirectedSd, isInformationalNudge, classifyDispatchIneligibility, coordinatorReservation, isSeatBusyOnDirectedWork, registerRollCall, rehydrateCallsign, selfClearQuarantine, mergeCheckinModelEffort, recoverStrandedFinal, describeSoftHolds, adoptOrphanInProgress, isSelfClaimDisabled, isGlobalStandDownActive, isBuildForbiddenSession, ensureActiveBaseline, isCriticalQfJumpEligible, tryClaimDraftCandidate, baselinedCandidateEligible, isSdInFlight, selfClaimQuickFix, selfHealStaleClaim, findOwnSdClaim, healOwnClaimPointer, confirmRowGone, surfaceCoordinatorMessages, fetchOutstandingSignals, formatOutstandingWarning, fetchDraftCandidates, fetchNewestDraftCandidates, fetchFleetCriticalCandidates, fetchRankedCandidates, sortByDispatchRank, resolveWorkerTierRank, isTieringActive, fetchLowerTierBacklogData, ladderTopRank, seatCapabilityIsVerified, fetchFableWindowActive, claimableForTier, claimableForRepo, getCommsActivitySignals, computeAdaptiveCadence, antiWinddownDirective, ASSIGNMENT_RECENCY_WINDOW_MS, TERMINAL_CLAIM_ERRORS, QF_CANDIDATE_LIMIT, SELF_CLAIM_CANDIDATE_LIMIT, DEFAULT_IDLE_WAKEUP_SECONDS };
 
-module.exports = { ADOPTABLE_ORPHAN_STATUSES, CHECKIN_HELPERS, stampDirectedAssignment, extractSdFromAssignment, extractDirectedSd, isInformationalNudge, tryClaim, registerRollCall, ackMessage, isCoordinatorPush, surfaceCoordinatorMessages, rehydrateCallsign, runCheckin, resolveCheckin, assignFleetIdentityAtCheckin, selfClaimQuickFix, isAutoStartableQF, sortQfCandidatesBySeverity, QF_SEVERITY_RANK, isCriticalQfJumpEligible, CRITICAL_QF_JUMP_GRACE_MS, selfClaimDraftSd, fetchDraftCandidates, fetchNewestDraftCandidates, fetchFleetCriticalCandidates, fetchRankedCandidates, tryClaimDraftCandidate, draftDepsSatisfied, baselinedCandidateEligible, recoverStrandedFinal, describeSoftHolds, adoptOrphanInProgress, pendingDirectedAssignmentBlocksAdoption, isSelfClaimDisabled, isQuarantined, isParked, selfClearQuarantine, isGlobalStandDownActive, isSdInFlight, isForeignSessionLive, foreignClaimantBlocksSteal, selfHealStaleClaim, findOwnSdClaim, healOwnClaimPointer, confirmRowGone, orderByRankMap, orderByFleetCriticalThenRank, sortByDispatchRank, DISPATCH_RANK_TTL_MS, PRIORITY_RANK, SD_KEY_RE, DEFAULT_IDLE_WAKEUP_SECONDS, STALE_QF_DAYS, antiWinddownDirective, mergeCheckinModelEffort, parseCheckinArgs, carryFencedRefusals };
+module.exports = { ADOPTABLE_ORPHAN_STATUSES, CHECKIN_HELPERS, stampDirectedAssignment, extractSdFromAssignment, extractDirectedSd, isInformationalNudge, tryClaim, registerRollCall, ackMessage, isCoordinatorPush, surfaceCoordinatorMessages, rehydrateCallsign, runCheckin, resolveCheckin, assignFleetIdentityAtCheckin, selfClaimQuickFix, isAutoStartableQF, sortQfCandidatesBySeverity, QF_SEVERITY_RANK, isCriticalQfJumpEligible, CRITICAL_QF_JUMP_GRACE_MS, fetchDraftCandidates, fetchNewestDraftCandidates, fetchFleetCriticalCandidates, fetchRankedCandidates, tryClaimDraftCandidate, draftDepsSatisfied, baselinedCandidateEligible, recoverStrandedFinal, describeSoftHolds, adoptOrphanInProgress, pendingDirectedAssignmentBlocksAdoption, isSelfClaimDisabled, isQuarantined, isParked, selfClearQuarantine, isGlobalStandDownActive, isSdInFlight, isForeignSessionLive, foreignClaimantBlocksSteal, selfHealStaleClaim, findOwnSdClaim, healOwnClaimPointer, confirmRowGone, orderByRankMap, orderByFleetCriticalThenRank, sortByDispatchRank, DISPATCH_RANK_TTL_MS, PRIORITY_RANK, SD_KEY_RE, DEFAULT_IDLE_WAKEUP_SECONDS, STALE_QF_DAYS, antiWinddownDirective, mergeCheckinModelEffort, parseCheckinArgs, carryFencedRefusals };
 
 if (require.main === module) {
   main().catch(err => {

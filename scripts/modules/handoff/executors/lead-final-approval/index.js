@@ -58,6 +58,26 @@ export function projectGateResultsForPersistence(gateResults) {
   });
 }
 
+/**
+ * QF-20260816-723: classify a single-table existence probe result. FAIL-CLOSED — only a
+ * clean read or a definitive "table exists but unreadable" signal counts as found; any
+ * OTHER error (transient fetch-failed, RLS misconfiguration, 5xx) must not be silently
+ * read as "found", or an unapplied migration's table probe can pass by coincidence and
+ * mask the UNAPPLIED_MIGRATIONS rejection this check exists to trigger.
+ *
+ * Pure and exported for direct unit testing (no DB, no orchestrator instance needed).
+ *
+ * @param {{code?: string, message?: string}|null} error - the Supabase PostgREST error, or null
+ * @returns {'found'|'missing'|'missing_unexpected'} 'missing_unexpected' additionally warrants
+ *   a warning naming the error, since it is not a recognized not-found shape.
+ */
+export function classifyTableProbeError(error) {
+  if (!error) return 'found';
+  if (error.code === 'PGRST116' || /permission denied/i.test(error.message || '')) return 'found';
+  if (/Could not find|does not exist/i.test(error.message || '')) return 'missing';
+  return 'missing_unexpected';
+}
+
 // Domain imports
 import { getRequiredGates } from './gates.js';
 import {
@@ -68,6 +88,7 @@ import {
 import { getRemediation } from './remediations.js';
 import { clearState as clearAutoProceedState } from '../../auto-proceed-state.js';
 import { recorderIdentity, recorderIdentities } from '../../recording/HandoffRecorder.js';
+import { NOT_MEASURED_SCORE } from '../../gates/fr-delivery-classifier.js';
 import { recordSdCompleted } from '../../../../../lib/learning/outcome-tracker.js';
 // SD-MAN-INFRA-SAME-TURN-NEXT-001 FR-3: completion-boundary instrumentation
 import { stampCompletion, stampExecutionContext } from '../../../../../lib/fleet/claim-stamp.cjs';
@@ -1074,9 +1095,12 @@ export class LeadFinalApprovalExecutor extends BaseExecutor {
         .order('created_at', { ascending: false })
         .limit(1);
       const srcId = lheRows && lheRows[0] ? lheRows[0].id : null;
+      const srcScoreMeasured = !!((lheRows && lheRows[0] && lheRows[0].validation_score != null)
+        || (gateResults && gateResults.actualScore != null));
       const srcScore = (lheRows && lheRows[0] && lheRows[0].validation_score != null)
         ? lheRows[0].validation_score
-        : (gateResults && gateResults.actualScore != null ? gateResults.actualScore : 100);
+        : (gateResults && gateResults.actualScore != null ? gateResults.actualScore : NOT_MEASURED_SCORE);
+      const srcScoreSource = srcScoreMeasured ? 'measured' : 'not_measured';
 
       // F1/FR-3: surface genuine retro known-issues on the resume/reconcile path too, combined
       // with (never replacing) the existing honest provenance note. combineKnownIssuesWithProvenance
@@ -1105,7 +1129,7 @@ export class LeadFinalApprovalExecutor extends BaseExecutor {
           completeness_report: { validation_score: srcScore, source: 'leo_handoff_executions' },
           validation_score: srcScore,
           validation_passed: true,
-          validation_details: { reconciled_by: 'LeadFinalApprovalExecutor already-completed path', sd_ref: 'SD-REFILL-0038AO42' },
+          validation_details: { reconciled_by: 'LeadFinalApprovalExecutor already-completed path', sd_ref: 'SD-REFILL-0038AO42', score_source: srcScoreSource },
           accepted_at: new Date().toISOString(),
           created_by: 'ADMIN_OVERRIDE',
           metadata: { canonical_reconcile_write: true, resume_path: true, source_execution_id: srcId, sd_ref: 'SD-REFILL-0038AO42' }
@@ -1216,10 +1240,14 @@ export class LeadFinalApprovalExecutor extends BaseExecutor {
             for (const match of matches) {
               const tableName = match[1].toLowerCase();
               const { error } = await this.supabase.from(tableName).select('*').limit(0);
-              if (error && error.message.includes('Could not find')) {
-                result.missingTables.push(tableName);
-              } else {
+              const verdict = classifyTableProbeError(error);
+              if (verdict === 'found') {
                 result.foundTables.push(tableName);
+              } else {
+                result.missingTables.push(tableName);
+                if (verdict === 'missing_unexpected') {
+                  console.warn(`[LeadFinalApproval] verifyMigrationsApplied: unexpected error probing table "${tableName}", treating as missing (fail-closed): ${error.message}`);
+                }
               }
             }
           } catch (e) {

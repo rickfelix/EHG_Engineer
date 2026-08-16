@@ -1,0 +1,119 @@
+{
+  "verdict": "CONDITIONAL_PASS",
+  "confidence": 88,
+  "summary": "SD is NOT duplicate work and its premise is corroborated, but the 42-function enumeration is measurably INCOMPLETE against live state and two of its three mechanisms are specified in a form that prior in-repo evidence proves is a no-op. Recommend LEAD approve with three binding conditions.",
+  "duplicate_check": {
+    "is_duplicate": false,
+    "rationale": "No open SD/QF found doing per-function SECURITY DEFINER EXECUTE triage. The nearest prior art (20260603_03) is COMPLETE and APPLIED, but solved a different slice: it revoked anon+authenticated+PUBLIC wholesale with a dynamic RLS-derived allowlist, and had no anon-vs-authenticated distinction and no recurrence prevention. This SD's Bucket B (revoke anon, KEEP authenticated) and its ALTER DEFAULT PRIVILEGES recurrence fix are genuinely new.",
+    "prior_art_reviewed": [
+      "database/migrations/20260603_03_revoke_secdef_execute_from_anon_authenticated.sql",
+      "database/migrations/20260603_02_revoke_matview_api_exposure.sql",
+      "database/migrations/20260716_revoke_anon_authenticated_write_grants_sensitive_tables.sql",
+      "database/chairman-gated/20260812_venture_ingest_key_binding.sql",
+      "database/chairman-gated/20260815_venture_user_feedback_ownership_rpc.sql",
+      "scripts/audit-rpc-execute-grants.mjs",
+      "scripts/audit/prose-gate-without-flag.mjs"
+    ]
+  },
+  "premise_assessment": {
+    "verdict": "SOUND BUT UNDER-INCLUSIVE AND DRIFTING",
+    "premise_corroborated_by": [
+      "28 of the 42 bucket functions have their latest CREATE/REPLACE in a migration dated AFTER 20260603_03 applied - this is the re-exposure mechanism the SD describes, measured from migration files",
+      "Live PostgREST probe (2026-08-15) confirms fn_is_chairman, is_leo_admin, fn_is_service_role, lhe_pending_migration_applied are anon-EXECUTABLE today"
+    ],
+    "premise_incomplete_because": [
+      "get_daily_briefing, get_okr_metrics, get_portfolio_summary are SECURITY DEFINER, predate the 2026-06-03 revoke, and are anon-EXECUTABLE live TODAY - yet appear in NONE of the three buckets. The 42-name enumeration is therefore not the complete exposed set.",
+      "9 SECURITY DEFINER functions were created in migrations dated after the 2026-07-28 scan and are absent from all buckets: log_sd_mutation_audit, fn_anon_ingress_prior_hour_count, fn_venture_ingest_prior_hour_count, _verify_venture_ingest_secret, fn_provision_venture_ingest_key, fn_submit_venture_feedback, fn_submit_venture_error, fn_submit_venture_user_feedback (+1 regex artifact)",
+      "Bucket A member fn_stage_artifact_precondition was itself redefined 2026-08-12 (20260812_fix_build_deviation_record_case_mismatch.sql), AFTER the scan, so its ACL state has reset since triage"
+    ],
+    "conclusion": "The 42 names are a FLOOR, not a ceiling, and were already drifting on the day they were written. The per-function verdicts remain valuable as CLASSIFICATION INPUT (which functions must keep authenticated, which must be excluded), but must not be the enumeration of what to revoke."
+  },
+  "blocking_conditions": [
+    {
+      "id": "COND-1",
+      "severity": "HIGH",
+      "title": "Bucket B as written ('REVOKE anon ONLY') is a no-op for any function carrying a PUBLIC grant",
+      "evidence": "20260603_03 lines 80-84 document this exact false-green, live-verified: '95 of these functions carried =X/postgres = a PUBLIC EXECUTE grant, so name-only revoke was a no-op for them'. anon inherits the PUBLIC pseudo-role.",
+      "required_change": "Bucket B must be REVOKE EXECUTE FROM PUBLIC, anon; followed by GRANT EXECUTE TO authenticated. Revoking anon alone leaves the function anon-callable via PUBLIC. Same applies to Bucket A (must revoke PUBLIC too, not just anon+authenticated)."
+    },
+    {
+      "id": "COND-2",
+      "severity": "HIGH",
+      "title": "ALTER DEFAULT PRIVILEGES scoped only 'FROM PUBLIC' does not close the recurrence path on THIS instance",
+      "evidence": "20260815_venture_user_feedback_ownership_rpc.sql TR-2 comment, confirmed live: 'this instance's ALTER DEFAULT PRIVILEGES grants EXECUTE directly to anon AND authenticated on every freshly created function ... so REVOKE FROM PUBLIC alone would not remove the direct authenticated grant'. 20260812_venture_ingest_key_binding.sql confirms the same via pg_default_acl.",
+      "required_change": "The ADP statement must revoke from PUBLIC, anon AND authenticated. The SD description currently specifies only 'REVOKE EXECUTE ON FUNCTIONS FROM PUBLIC', which the SD's own stated root cause ('Postgres grants EXECUTE to PUBLIC') under-describes - there are TWO grant sources on this instance, not one. PLAN must also measure pg_default_acl to identify the OWNING role of the existing Supabase ADP entry before assuming the new one can be scoped to it."
+    },
+    {
+      "id": "COND-3",
+      "severity": "MEDIUM",
+      "title": "Migration must re-derive the triage dynamically at apply time, not hardcode 42 names",
+      "evidence": "3 exposed SECDEF functions absent from the buckets + 9 new SECDEF functions since the scan + 1 bucket member redefined post-scan.",
+      "required_change": "Follow 20260603_03's proven pattern: derive the set from pg_proc at apply time, use the SD's 42 verdicts as a static ALLOWLIST/classification overlay (Bucket C = never revoke; Bucket B = re-grant authenticated), and fail the transaction on any SECDEF function that matches neither the dynamic sweep nor a declared verdict. That converts an unknown-new function from a silent gap into a loud failure."
+    }
+  ],
+  "advisory_findings": [
+    {
+      "title": "SD Bucket A reverses a prior deliberate defense-in-depth decision without acknowledging it",
+      "detail": "fn_user_has_company_access is in Bucket A (revoke anon+authenticated). 20260603_03 EXPLICITLY allowlisted it as 'a sibling helper not currently in a policy' kept for defense-in-depth. Narrowing it may be correct, but LEAD/PLAN should record that this overturns a prior documented judgment rather than filling a gap."
+    },
+    {
+      "title": "Cited predecessor migration does not exist as a file in this repo",
+      "detail": "The SD cites 'migration 20260728_revoke_public_execute_role_flag_rpcs.sql' as applied 2026-07-28. No file of that name exists anywhere under database/. Provenance of the 'closed 4 of 46' claim is therefore unverifiable from the repo."
+    },
+    {
+      "title": "No applied-migration ledger exists",
+      "detail": "public.schema_migrations exists but is EMPTY (0 rows); _migrations_log/migrations/migration_history are absent. There is no machine-readable record of which migrations are applied, so 'applied' claims must be established by probing live grant state, never by file presence."
+    },
+    {
+      "title": "Bucket C leaves at least one live, confirmed-reachable anon surface open by design",
+      "detail": "lhe_pending_migration_applied is SECDEF, anon-EXECUTABLE live (HTTP 200), UNPLACED across all five scan dimensions, and NOT in 20260603_03's RLS-derived allowlist - meaning it was revoked in June and has been re-exposed since. The SD's Solomon rule excludes it as a presumed external integration. That exclusion should be an explicit, chairman-visible accepted risk, since unlike fn_relay_insert_sms_candidate (Twilio) there is no named consumer for it."
+    }
+  ],
+  "tooling_recommendation": {
+    "audit_rpc_execute_grants_mjs": "EXTEND, DO NOT DUPLICATE",
+    "exists": true,
+    "path": "scripts/audit-rpc-execute-grants.mjs",
+    "what_it_checks_today": "Asserts has_function_privilege('authenticated', oid, 'EXECUTE') for app-called RPC names only (greps ehg/src for .rpc('name'), else a 24-name committed fallback). One-sided: it can only detect a LOST authenticated grant. It has no anon dimension and no notion of buckets.",
+    "why_extend": "It is the codified guard for the exact failure mode this SD can cause (over-revoking an app-called RPC and 403-ing the chairman console). Bucket B keeps authenticated on 27 functions - this script is precisely the regression test for that half. Duplicating it would create two divergent grant guards.",
+    "required_extensions": [
+      "Add the anon dimension: assert NOT has_function_privilege('anon', oid, 'EXECUTE') for every Bucket A + Bucket B function (the SD's success criteria require verifying anon-revocation; the script does not check anon at all today)",
+      "Add PUBLIC: assert NOT has_function_privilege('public', oid, 'EXECUTE') - per COND-1 this is the privilege that actually makes an anon revoke stick",
+      "Feed the bucket lists in as declared expected posture so Bucket C is asserted UNCHANGED rather than merely unchecked",
+      "Add a fail-loud arm for SECDEF functions matching no declared bucket (implements COND-3)"
+    ]
+  },
+  "live_measurement": {
+    "pooler_status": "BROKEN - blocks the canonical verification path",
+    "detail": "createDatabaseClient('engineer') fails 28P01 'password authentication failed for user postgres'. NEW DATA FOR THE HARNESS-BUG OWNER: SUPABASE_POOLER_URL is a genuinely INDEPENDENT credential (verified it does NOT embed SUPABASE_DB_PASSWORD, raw or URL-encoded) and it fails 28P01 IDENTICALLY. Two independently-stored credentials both rejected points to a server-side password rotation or a locked postgres role, NOT local .env drift.",
+    "working_alternative_found": true,
+    "alternative": "PostgREST RPC probe with the shipped anon key: POST {SUPABASE_URL}/rest/v1/rpc/{fn}. A 42501 / 'permission denied' response proves anon EXECUTE is revoked; a 200 proves it is granted. The instrument is TWO-SIDED and therefore trustworthy - the same sweep returned 4 x 42501 and 5 x 200 across 25 candidates, so it discriminates rather than returning a constant.",
+    "alternative_limitation": "Only decisive for ZERO-ARG functions. Functions requiring arguments return PGRST202 (schema-cache/overload mismatch) before permission is evaluated, which is genuinely ambiguous - 16 of 25 landed here. Supplying correct argument names would resolve most of these. This is a partial but real verification path that works TODAY without the pooler.",
+    "probe_scripts": [
+      ".artifacts/val-anon-rpc-probe.mjs",
+      ".artifacts/val-secdef-sample.mjs",
+      ".artifacts/val-staleness.mjs"
+    ],
+    "key_live_results_2026_08_15": {
+      "anon_executable_confirmed_200": [
+        "fn_is_chairman",
+        "is_leo_admin",
+        "fn_is_service_role",
+        "lhe_pending_migration_applied",
+        "get_daily_briefing",
+        "get_okr_metrics",
+        "get_portfolio_summary"
+      ],
+      "anon_revoked_confirmed_42501_count": 4,
+      "proves": "20260603_03 WAS genuinely applied (the 4 x 42501 could have no other cause), AND its effect has partially eroded since."
+    }
+  },
+  "gate_1_lead_pre_approval": {
+    "duplicate_check": "PASS - not duplicate",
+    "infrastructure_check": "PASS WITH CONDITIONS - substantial reusable prior art exists (20260603_03 dynamic pattern, audit-rpc-execute-grants.mjs) and MUST be reused per COND-3 and the tooling recommendation",
+    "claims_verification": "PARTIAL - premise corroborated by measurement but enumeration proven incomplete; predecessor migration file unverifiable",
+    "backlog_check": "FAIL - 0 rows in sd_backlog_map (checked by both uuid id and sd_key). Also 0 PRD rows and 0 user_stories. SD is status=draft so this is expected at this point, but it BLOCKS transition to status=active per the require_backlog_for_active constraint. LEAD-TO-PLAN must create backlog items covering: Bucket A revoke, Bucket B revoke+regrant, Bucket C exclusion assertions, ALTER DEFAULT PRIVILEGES, CI standing check, and the audit-rpc-execute-grants.mjs extension."
+  },
+  "recommendation": "APPROVE for LEAD-TO-PLAN with COND-1, COND-2, COND-3 attached as PLAN-phase requirements. Do NOT let the 42-name list enter the migration as a literal REVOKE enumeration. The chairman authorization ask should present the buckets as CLASSIFICATION VERDICTS over a dynamically-derived sweep, and should disclose that the exposed set is larger than 42.",
+  "backlog_items_found": 0,
+  "metadata_note": "backlog_items_found=0"
+}

@@ -513,8 +513,6 @@
     "cost:governor-cron": "node scripts/cost-governor-cron.mjs",
     "review:rotation": "node scripts/subsystem-review-rotation.cjs",
     "policy:check": "node scripts/auto-exec-policy-check.mjs",
-    "engine:demo": "node scripts/auto-exec-engine-demo.mjs",
-    "checkout-sync:demo": "node scripts/auto-exec-checkout-sync-demo.mjs",
     "registry:backfill-pending": "node scripts/backfill-pending-enablement-registry.mjs",
     "coord:email-summary": "node scripts/coordinator-email-summary.mjs",
     "worktree:remove": "node scripts/safe-worktree-remove.mjs",
@@ -638,7 +636,8 @@
     "audit:anon-write-contract": "node scripts/anon-write-contract-probe.mjs",
     "test:cjs-pins": "node tests/unit/governance/fixture-exclusion-cjs-pin.cjs",
     "lint:fixture-producer-guard": "node scripts/lint/fixture-producer-guard-lint.mjs",
-    "lint:shell-injection-argv": "node scripts/lint/shell-injection-argv-lint.mjs"
+    "lint:shell-injection-argv": "node scripts/lint/shell-injection-argv-lint.mjs",
+    "lint:secdef-execute-revoke": "node scripts/lint/secdef-execute-revoke-lint.mjs"
   },
   "dependencies": {
     "@anthropic-ai/sdk": "^0.85.0",
