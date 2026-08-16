@@ -1,0 +1,71 @@
+# Weekly clock-skewed unit-tier sweep — SD-LEO-INFRA-CLOCK-SKEW-CI-SWEEP-001 (FR-2).
+#
+# Runs the SAME unit tier as .github/workflows/unit-tier.yml, but with the system clock pinned
+# +45 days forward (TEST_CLOCK_OFFSET_MS, honored by tests/setup.clock-skew.js — see FR-1). Never
+# gates a PR (no push/pull_request trigger, scheduled + manual only): a date-window time-bomb
+# fixture that would only fail once the real calendar crosses its boundary now surfaces here a
+# month early, as a harness_backlog feedback row per failing test, instead of first being
+# discovered when it fires on main.
+#
+# SCOPE LIMIT, stated rather than assumed: this sweep runs the `unit` vitest project, which
+# already excludes every tests/quarantine-manifest.json entry (163 files at last measurement) —
+# a green run here does not mean "the whole unit tier is time-bomb-free", only the
+# currently-passing, non-quarantined slice of it.
+name: Unit Tier Clock Skew
+
+on:
+  schedule:
+    # Sunday 05:00 UTC — one hour ahead of pattern-maintenance-weekly's 06:00 slot, avoiding
+    # runner contention while keeping this repo's existing on-the-hour weekly-workflow convention.
+    - cron: '0 5 * * 0'
+  workflow_dispatch: # allow manual trigger (also used by FR-2 AC-3's own verification)
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  clock-skew-sweep:
+    name: Run Unit Tier at +45 Days
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+
+    env:
+      # Matches log-harness-bug.js's actual read order (SUPABASE_URL || NEXT_PUBLIC_SUPABASE_URL)
+      # -- TR-5.
+      SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+      SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
+      TEST_CLOCK_OFFSET_MS: 3888000000 # +45 days, matching the arithmetic pinned by TS-... (45*24*60*60*1000)
+
+    steps:
+      # fetch-depth: 0 for the same two reasons unit-tier.yml already carries it: the unit tier's
+      # own groundtruth test needs full history, and log-harness-bug.js's findPossiblePriorFix
+      # does its own `git log origin/main` lookups on failure.
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci --no-audit --no-fund
+
+      - name: Run unit project at +45 days (TEST_CLOCK_OFFSET_MS active)
+        id: skew_run
+        shell: bash
+        run: |
+          set -o pipefail
+          npx vitest run --project unit 2>&1 | tee clock-skew-run.log
+
+      # Runs on failure only, and the job is otherwise allowed to report its real (red) status --
+      # "non-blocking" means no PR/push trigger, not a forced-green step. A red run here is the
+      # loud signal by design.
+      - name: Report time-bombs to the harness backlog (one row per failing file)
+        if: failure()
+        run: node scripts/clock-skew-report-failures.mjs clock-skew-run.log
