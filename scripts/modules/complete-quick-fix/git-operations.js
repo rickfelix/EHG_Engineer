@@ -11,8 +11,16 @@
 import { execSync, execFileSync } from 'child_process';
 import path from 'path';
 import fs from 'fs';
+import { fileURLToPath } from 'url';
 import { EXTERNAL_STEP_TIMEOUT_MS } from './constants.js';
 import { observeMergeWorkLadder } from '../../../lib/ship/auto-merge.mjs';
+
+// QF-20260816-049: bare `gh pr merge --delete-branch` fails locally (post-merge)
+// when a sibling worktree already holds `main` -- the merge itself lands fine.
+// scripts/gh-merge-safe.mjs avoids the local checkout entirely (merges via `gh
+// api`). Resolved as an absolute path since this function runs with cwd=testDir,
+// not the repo root.
+const GH_MERGE_SAFE_PATH = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '../../../scripts/gh-merge-safe.mjs');
 
 // SD-LEO-INFRA-SHIP-WITNESS-TRIO-001 (FR-1): best-effort, never-throws observation
 // of a merge that just landed via `gh pr merge` in this lane. Mirrors
@@ -1102,7 +1110,7 @@ export async function mergeToMain(testDir, qf, prUrl, prompt, flags = {}) {
           const prNumber = prUrl.match(/\/pull\/(\d+)/)?.[1];
           // SD-SEC-DATA-VALIDATION-001: Validate PR number is numeric
           if (prNumber && /^\d+$/.test(prNumber)) {
-            execSync(`gh pr merge ${prNumber} --merge --delete-branch`, { stdio: 'inherit', cwd: testDir });
+            execFileSync(process.execPath, [GH_MERGE_SAFE_PATH, prNumber, '--merge', '--delete-branch'], { stdio: 'inherit', cwd: testDir });
             console.log('   ✅ PR merged and branch deleted via GitHub\n');
             const [, repoOwner, repoName] = prUrl.match(/github\.com\/([^/]+)\/([^/]+)\/pull\//) || [];
             await observeQuickFixMerge({ prNumber, repoOwner, repoName, qfId: qf.id });
