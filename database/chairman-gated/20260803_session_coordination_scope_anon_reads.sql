@@ -1,3 +1,5 @@
+-- @approved-by: codestreetlabs@gmail.com
+-- (approval transcribed by Adam per chairman ruling 2026-08-07; chairman 'run it' on Group 5 at terminal, 2026-08-16 ceremony)
 -- SD-LEO-INFRA-COORDINATION-BUS-ACCESS-001 (FR-1)
 -- Scope anon reads off the coordination bus.
 --
