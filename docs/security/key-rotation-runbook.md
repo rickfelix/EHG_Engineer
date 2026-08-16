@@ -65,6 +65,14 @@ This runbook covers rotating all compromised credentials found during the securi
    ```bash
    SUPABASE_DB_PASSWORD=<new-password>
    ```
+5. **Broadcast env-refresh to long-running processes (QF-20260815-918):** `scripts/lib/supabase-connection.js`
+   now prefers the on-disk `.env`'s DB-connection values (`SUPABASE_DB_PASSWORD`, `EHG_DB_PASSWORD`,
+   `SUPABASE_POOLER_URL`, `DATABASE_URL`, `PGPASSWORD`) over a stale inherited `process.env` value,
+   so one-shot script/gate invocations (each a fresh `node` process, the common case — e.g. fleet
+   worker Bash calls, CI gate runs) pick up the new password on their very next run with **no
+   seat restart needed**. The one exception is a **long-running** process that already imported this
+   module before the rotation (a persistent dev server, a daemon) — module-level code only runs once
+   per process, so those must be restarted to pick up the new value.
 
 ## 2. OpenAI API Key
 

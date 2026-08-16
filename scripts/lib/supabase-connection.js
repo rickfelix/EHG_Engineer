@@ -22,8 +22,72 @@ import { isMainModule } from '../../lib/utils/is-main-module.js';
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = dirname(__filename);
 
-// Load environment variables
-dotenv.config({ path: join(__dirname, '../..', '.env') });
+// QF-20260815-918: DB-connection credential keys that must reflect the
+// on-disk .env after a credential rotation, even when a stale value was
+// already inherited into process.env by the parent shell/session.
+const DB_CREDENTIAL_KEYS = [
+  'SUPABASE_DB_PASSWORD',
+  'EHG_DB_PASSWORD',
+  'SUPABASE_POOLER_URL',
+  'DATABASE_URL',
+  'PGPASSWORD',
+];
+
+// QF-20260815-918: walk up from cwd (mirrors lib/supabase-client.cjs's
+// loadEnvFromAncestors) instead of a fixed __dirname-relative path — a
+// `git worktree add` checkout has no .env of its own (gitignored), so the
+// old fixed path silently found nothing there.
+export function findEnvFile() {
+  let dir = process.cwd();
+  while (dir !== dirname(dir)) {
+    const candidate = join(dir, '.env');
+    if (fs.existsSync(candidate)) return candidate;
+    dir = dirname(dir);
+  }
+  const fallback = join(__dirname, '../..', '.env');
+  return fs.existsSync(fallback) ? fallback : null;
+}
+
+// QF-20260815-918: after a credential rotation, the on-disk .env holds the
+// new DB-connection values but a parent shell/session may still be holding
+// pre-rotation values in process.env — dotenv.config() (no override, called
+// by the caller before this) never overwrites those. Prefer the file's value
+// for the DB-connection keys specifically (never a global override:true,
+// which would also clobber deliberate CI/test env injection for unrelated
+// vars). Exported so unit tests can exercise it directly without reloading
+// this module.
+export function preferOnDiskDbCredentials(envPath) {
+  if (!envPath) return { changed: [] };
+  const fileValues = dotenv.parse(fs.readFileSync(envPath));
+  const changed = [];
+  for (const key of DB_CREDENTIAL_KEYS) {
+    if (fileValues[key] !== undefined && fileValues[key] !== process.env[key]) {
+      process.env[key] = fileValues[key];
+      changed.push(key);
+    }
+  }
+  if (changed.length) {
+    console.error('[supabase-connection] using on-disk .env for DB credentials; inherited value differs');
+  }
+  return { changed };
+}
+
+// Load environment variables. dotenv.config() (no override) only fills gaps
+// left by the parent process, so a stale inherited value always wins here —
+// intentional, since deliberate CI/test env injection must not be clobbered.
+const envPath = findEnvFile();
+if (envPath) dotenv.config({ path: envPath });
+
+// QF-20260713-897 precedent (lib/supabase-client.cjs's loadEnvFromAncestors guard):
+// skip the credential-preference check under the test runner. The unit vitest project
+// deliberately EMPTIES these DB vars (vitest.config.js) for credential isolation — a
+// value-diff comparison (unlike dotenv's hasOwnProperty-gated fill above) would read
+// "deliberately emptied" the same as "stale" and clobber the fence with the real
+// on-disk password. Test tiers own their own env setup (tests/setup.db.js loads real
+// .env itself for the db tier); this module must not override that.
+if (!process.env.VITEST && process.env.NODE_ENV !== 'test') {
+  preferOnDiskDbCredentials(envPath);
+}
 
 const { Client } = pg;
 
