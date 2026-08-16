@@ -1,3 +1,4 @@
+-- @approved-by: codestreetlabs@gmail.com (transcribed by Adam per chairman ruling 2026-08-07; approval: chairman terminal 'run it' on Group 1, 2026-08-16 ~15:00Z, ceremony runbook 2026-08-17 moved up per chairman)
 -- Chairman-decisions AUDIT CHANNEL column — records WHICH channel a chairman decision was made
 -- over, so an SMS-decided stage-gate approval is distinguishable from an authenticated-console one
 -- on the SAME chairman_decisions row (audit parity).
