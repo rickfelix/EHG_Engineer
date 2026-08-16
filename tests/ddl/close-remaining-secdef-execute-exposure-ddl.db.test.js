@@ -71,10 +71,31 @@ const BUCKET_C = [
   ['fn_anon_ingress_prior_hour_count', 'p_source_type text'],
 ];
 
+// Four of Bucket C's real functions are ALSO stubbed by sibling DDL suites that share this same
+// job's ephemeral Postgres container (vitest.ddl.config.mjs runs every tests/ddl/*.db.test.js
+// file sequentially against ONE persistent database — confirmed by grepping the other files, not
+// assumed). CREATE OR REPLACE FUNCTION cannot change an existing function's return type, so a
+// bare `RETURNS void` stub here would fail with "cannot change return type of existing function"
+// whenever a sibling file (which needs the REAL return type for its own business-logic checks)
+// runs on either side of this file in the same CI job. Matching their return type — with a
+// trivial, table-free body, since this file never invokes these functions, only checks grants —
+// makes this file's CREATE OR REPLACE succeed regardless of execution order, and leaves the
+// sibling's own CREATE OR REPLACE (using ITS real return type) equally unaffected by whichever
+// ran first.
+const RETURN_TYPE_OVERRIDES = {
+  record_venture_error: { returns: 'jsonb', body: "SELECT '{}'::jsonb" }, // matches venture-ingest-key-binding-ddl / venture-user-feedback-ownership-rpc-ddl
+  venture_exists_and_active: { returns: 'boolean', body: 'SELECT true' }, // matches venture-ingest-key-binding-ddl / venture-user-feedback-ownership-rpc-ddl / telegram-bot-insert-feedback-drop-ddl
+  fn_anon_ingress_prior_hour_count: { returns: 'bigint', body: 'SELECT 0::bigint' }, // matches venture-ingest-key-binding-ddl / venture-user-feedback-ownership-rpc-ddl
+  check_feedback_rate_limit: { returns: 'boolean', body: 'SELECT true' }, // matches venture-user-feedback-ownership-rpc-ddl / telegram-bot-insert-feedback-drop-ddl
+};
+
 function stubFunctionSql([name, args]) {
+  const override = RETURN_TYPE_OVERRIDES[name];
+  const returns = override?.returns ?? 'void';
+  const body = override?.body ?? 'SELECT NULL::void';
   return `
 CREATE OR REPLACE FUNCTION public.${name}(${args})
-RETURNS void LANGUAGE sql SECURITY DEFINER AS $stub$ SELECT NULL::void; $stub$;
+RETURNS ${returns} LANGUAGE sql SECURITY DEFINER AS $stub$ ${body}; $stub$;
 GRANT EXECUTE ON FUNCTION public.${name}(${args}) TO PUBLIC, anon, authenticated, service_role;
 `;
 }
