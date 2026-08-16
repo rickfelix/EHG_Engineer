@@ -106,6 +106,15 @@ BEGIN
   IF NOT EXISTS (SELECT 1 FROM pg_roles WHERE rolname = 'service_role')  THEN CREATE ROLE service_role NOLOGIN;  END IF;
   IF NOT EXISTS (SELECT 1 FROM pg_roles WHERE rolname = 'anon')          THEN CREATE ROLE anon NOLOGIN;          END IF;
   IF NOT EXISTS (SELECT 1 FROM pg_roles WHERE rolname = 'authenticated') THEN CREATE ROLE authenticated NOLOGIN; END IF;
+  -- The real migration hardcodes "ALTER DEFAULT PRIVILEGES FOR ROLE postgres" because that IS the
+  -- real owning role on the live Supabase instance (measured live, not assumed) -- correct for
+  -- production and must not change. The CI service container's bootstrap superuser is whatever
+  -- POSTGRES_USER names (ddl_runner, per drive-reports-ddl.yml), and the postgres image does NOT
+  -- also create a role literally named "postgres" in that case, so a bare role of that name is
+  -- created here purely as a valid target for that statement -- superuser bypasses the membership
+  -- check ALTER DEFAULT PRIVILEGES FOR ROLE normally requires, so this is safe with no grants of
+  -- its own.
+  IF NOT EXISTS (SELECT 1 FROM pg_roles WHERE rolname = 'postgres')      THEN CREATE ROLE postgres NOLOGIN;    END IF;
 END
 $roles$;
 

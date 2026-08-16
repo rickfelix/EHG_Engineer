@@ -32,7 +32,7 @@
  * scope) would be blind to this SD's OWN migration, which lives in database/chairman-gated/
  * (DESIGN sub-agent finding, PLAN phase).
  *
- * Its own blind spot, stated plainly: this is a text lint over migration files. It cannot see a
+ * KNOWN LIMITATION, stated plainly: this is a text lint over migration files. It cannot see a
  * SECURITY DEFINER function created via the Supabase dashboard SQL editor, outside any migration
  * file. That axis is covered by scripts/audit-rpc-execute-grants.mjs's completeness gate
  * (AUDIT_GRANTS_MODE=buckets), which measures the live catalog directly. Two independent
