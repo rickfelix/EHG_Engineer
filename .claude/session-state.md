@@ -1,66 +1,80 @@
-# Session state — SD-LEO-INFRA-COORDINATION-LANE-DRAIN-001
+# Session state — fleet worker Golf (callsign), session 75532716-03c9-476c-992e-068ec7e66bf0
 
-Worker Alpha-3 (fable/high), session cff8013c-93e3-41d2-bea1-f511c2189051, under coordinator 909d861e.
-Compacted 2026-08-07 at the FR-2/FR-5 boundary. Branch `feat/SD-LEO-INFRA-COORDINATION-LANE-DRAIN-001` @ c78a4c2679f, tree clean, status active/EXEC.
+Autonomous fleet worker under coordinator 0d37100a-d9a9-4d54-a711-2466e22244ec.
+Compacted 2026-08-15 ~21:24 ET. Currently in worktree `.worktrees/qf/QF-20260815-748`,
+branch `qf/QF-20260815-748` (PR #7071 just merged, branch deleted remotely — this
+worktree/branch's local copy is now stale/mergeable-cleanup-eligible).
 
-## The defect, in its corrected form
+## What this session completed, in order
 
-Not "rows decay unexpectedly". The dead-letter → audit-trail → reap-after-7-days lifecycle is **designed and documented**. **The remedy stage between stamp and reap was never built.**
+1. **SD-LEO-INFRA-SMS-DECIDE-REPLY-MATCHABLE-001** — full LEAD→PLAN→EXEC→PLAN→LEAD
+   cycle, `status=completed`. Fixed Adam's SMS decision packets never staging a
+   matchable chairman_notifications row + reply token (PR #7051, then a docs
+   follow-up PR #7059). Full post-completion tail run: /document, /heal sd (89/100),
+   /learn (auto-approve, nothing qualified), capture-completion-flags (2 flags: a
+   SUCCESS_METRICS gate regex parsing bug, and an already-signaled DB-connectivity
+   harness bug).
+2. **QF-20260728-720** (merged PR #7064) — six fleet-state fields whose NAME asserts
+   one thing and whose implementation measures something cheaper (the
+   "field-name-is-a-claim" class, documented at
+   `docs/reference/field-name-is-a-claim.md`). Implemented 2 of 6 negative tests
+   (`commits_since_claim` via `it.fails`, `loop_state='exited'` via structural
+   census). Deep-tier adversarial review (2 rounds) found and fixed 2 real WARNINGs
+   (shell-injection-shaped surface widening on `collectGitMetrics`'s export; a
+   regex blind spot in the census test). Left `status=in_progress` (honest partial
+   scope, `--scope-accepted` NOT attested), filed follow-up **QF-20260815-748**.
+3. **QF-20260815-748** (merged PR #7071, this worktree) — while starting the
+   follow-up, discovered my OWN earlier doc entry for `loop_state='awaiting_tick'`
+   was WRONG: I'd only checked `session-register.cjs` (SessionStart-only clearer)
+   and missed that `SD-LEO-INFRA-LOOP-STATE-AWAITING-001` already shipped a second,
+   correct clearer (`scripts/hooks/loop-state-resume-clear.cjs`, UserPromptSubmit,
+   12 passing tests). Corrected the doc, narrowed remaining scope to 3 fields
+   (`acknowledged_at`, `last_tool_at`, `delivered_at`), shipped that correction as
+   its own PR. **QF-20260815-748 itself is still `status=in_progress` / open** —
+   the 3 remaining fields are NOT yet implemented, only documented with recipes.
 
-Two re-route instruments partition the problem with **zero overlap**:
-- `lib/fleet/orphan-reroute-sweep.js` — live-role / **unrecognized-kind**. Scheduled every 15 min. Predicate `isOrphanCandidate` (:51-55) is kind-recognition only and **never inspects target liveness**.
-- `lib/coordination/dead-letter-drain.js` — **dead-target** / any-kind. Was invoked by nothing but its own CLI wrapper + one unit test.
+## Immediate next step
 
-So a well-recognized kind addressed to a reaped session was covered by neither.
+QF-20260815-748 is still claimed and open. Two honest options, pick whichever fits
+the belt state at resume time:
+- **Continue it**: tackle `acknowledged_at` next (most tractable of the 3 — partial
+  investigation already done this session: checked `coordinator-ack-signal.cjs`
+  L79-84 [signal-row self-ack, correct], `worker-signal.cjs` L417/L590 [reply-row
+  reader-ack, correct], `lib/adam/outbound-silence-watchdog.js` L62/L102 [reads
+  `acknowledged_at` on Adam's OWN outbound row by `target_session` — this is the
+  most promising lead: confirm whether ANYTHING ever writes `acknowledged_at` on
+  that specific row shape, or whether it's written elsewhere and the watchdog is
+  structurally blind]. Then `last_tool_at` (QF's own text says likely needs a
+  rename, not a test — a design call, not a quick fix). Then `delivered_at`
+  (needs Twilio provider + reconciler sweep mocked together — the most complex).
+- **Leave it and check the belt**: `npm run sd:next` fresh, claim whatever's next.
+  QF-20260815-748's DB row + `docs/reference/field-name-is-a-claim.md` already
+  accurately reflect current state — safe to leave open/in_progress and pick up
+  later, same pattern as QF-20260728-720.
 
-## Shipped this session
+## Standing session constraints (apply for the rest of this autonomous run)
 
-| Commit | What |
-|---|---|
-| `8ac51445f6d` | FR-1a: removed the `acknowledged_at`+`read_at` co-stamp (blinded 4 surfaces at once); mutation-tested static guard |
-| `e757e38be72` | STEP 0: read-only manifest of 2,644 dead-letter row ids (`docs/evidence/…-dead-letter-manifest.json`) |
-| `51af15fb6cf` | FR-1b live role successors + FR-1c heartbeat liveness oracle |
-| `b1ebdba9d1b` | FR-1d: stamp branch writes **no timestamp column**; survival test |
-| `c78a4c2679f` | FR-2: hourly cron, **dry-run**, writes double-gated |
-
-240 tests green across 23 files.
-
-## Load-bearing measurements (bind criteria to bounds/ratios, never these exact numbers — table moved 3711→3772 in ~15 min)
-
-- **ZERO rows purge-eligible right now.** `expires_at` is past but the `read_at` arm matures **2026-08-12**. Population is SAFE until then; the deadline is confirmed from the predicate, not a projection.
-- Purge predicate: `expires_at < now() AND (acknowledged_at IS NOT NULL OR read_at <= now()-7d)`. The **acked arm has no grace** — that is why FR-1d had to drop `acknowledged_at` too.
-- FR-1c dry-run before→after: live-backlog(excluded) 2971→143, dead-letter 691→3526, retarget 102→516.
-- `status` and `is_alive` **lie in both directions**. Dominant dead target held 91.6% of the backlog while reporting `status='active'`, `is_alive=true`, heartbeat 45h stale.
-- Live table is ~8% of all rows ever written (44,002 lifetime vs ~3,700 live) → **a full-lane gauge must join `retention_archive` or it measures the purge, not the drain.**
-- 162 rows (4.3%) carry **no `payload.kind`** — incl. the WORKER_SIGNAL friction channel, which keys on `signal_type`.
-- `expires_at IS NULL` = **zero** table-wide (column DEFAULT `now()+1h`), so the per-producer TTL axis is refuted. Cut classification on the immunity axis: 518 rows immortal, 100% because `acknowledged_at IS NULL AND read_at IS NULL`.
-
-## Remaining work
-
-- **FR-5** (next, smallest): `payload.consult_purpose` exists at `scripts/worker-signal.cjs:464-469` but is optional, unset by the producer (`scripts/adam-quiet-tick.mjs:654`), never read by `drainInbox` (`scripts/solomon-advisory.cjs:358-433`, label :418 kind-only, order :374 created_at ASC, exported :1117). Producer must SET it; drain must READ+ORDER on it. Precedent: `payload.via='cc_originator'` (:607-609).
-- **FR-3**: EXTEND `lib/fleet/worker-status.cjs` — never a second registry (`tests/static-guards/drain-set-registry-readers.test.js:31-143` fails shadow lists). Classify: ping_on_silence, adam_channel_health_probe, adam_action_wake, inert_worker_alert, completion_boundary_exit_alert, claim_reconciliation, periodic_liveness_ladder, account_switch_notice, row_growth_anomaly, review_supply. Needs a POSITIVE assertion (AC-8) — the guard passes today and cannot show delivery.
-- **FR-4**: extract the gauge from unexported `main()` (`scripts/coordinator-quiet-tick.mjs:294-419`), widen READ path only (deferral rationale :47-50). THREE-armed control; the ~24h arm is mandatory because `readSalientState` is 30-min windowed (:195) while the defect is 20-27h rows.
-- **FR-6**: schedule or explicitly retire `lib/coordination/lane-lint-gauge.cjs`.
-
-Then `node scripts/handoff.js execute EXEC-TO-PLAN SD-LEO-INFRA-COORDINATION-LANE-DRAIN-001` (needs fresh TESTING + SECURITY evidence).
-
-## Standing constraints
-
-- **Never** widen the `adam-advisory-store` kind filter (`:48-49`) — shared by peek AND ack; widening mass-retires ~1800 rows.
-- No test may write to the live `session_coordination` lane. Unit tier only; capture-spy at `tests/unit/fleet/orphan-reroute-sweep.test.js:11-47`.
-- Evidence rows via `storeSubAgentResults` (`lib/sub-agent-executor/results-storage.js:371`), never a hand-rolled insert.
-- Restore `package-lock.json` before committing. Never `--no-verify` (ENF-16). Bash heredocs, not PowerShell here-strings. Always name spawned sub-agents. `npx vitest --reporter=basic` is invalid in vitest 4.
-
-## The lesson this SD keeps teaching (four instances)
-
-A check I was confident in guarded a **narrower** thing than I believed:
-1. FR-1a guard asserted two columns are never set together — never that the row **survives**.
-2. Gauge control asserted non-zero-then-zero — passes vacuously inside a 30-min window when the defect is 20-27h rows.
-3. Registry guard passes **today**, so it can never demonstrate FR-3 was delivered.
-4. A naive FR-2 guard would have passed with **no schedule at all**.
-
-For every remaining FR: ask *what would still be broken if this test passed?*, add the arm that answers it, add a control proving the test can fail, and mutation-prove by breaking the thing and watching it go red.
-
-## Coordinator ruling 797bec7a (banked in SD metadata)
-
-Race the deadline as **ordering, not haste**; quality gates unrelaxed. Evidence stay first (done, snapshot half). The old CLI must never be scheduled as-is. The dead hardcoded successor is in scope here, no separate filing.
+- Never touch the primary repo root (`C:\Users\rickf\Projects\_EHG\EHG_Engineer`
+  itself, not a worktree) — it's the coordinator's own live workspace.
+- Always merge via the hardened `lib/ship/auto-merge.mjs attemptAutoMerge`
+  sequence, never a bare `gh pr merge`. Resolve `.claude-work/ship-repo-resolved.json`
+  fresh in each new worktree if missing (`gh repo view --json owner/name`).
+- Use `git diff main...branch` (three dots) for PR-scoped diffs, NEVER `main..branch`
+  (two dots) — the latter pulls in every unrelated commit that landed on main after
+  the branch forked and produces false CRITICAL findings in the review gate.
+- `git branch <name>` only creates a pointer — always `git checkout` it too, or
+  commits land on the wrong branch (happened twice this session, both times caught
+  and fixed via `git branch -f <name> HEAD` + checkout, no damage).
+- A stale `.git/worktrees/<name>/index.lock` under heavy concurrent-session load is
+  usually safe to remove if it's several minutes old, static, and read-only git ops
+  still work — verify live git.exe PIDs and lock mtime before removing, never blind.
+- This machine runs 10+ concurrent autonomous Claude Code fleet sessions; expect
+  git/CI/subprocess timing to be noisy under load (several genuine timeouts this
+  session, all confirmed environmental via re-check, not caused by this session's
+  own changes) — signal via `/signal harness-bug` rather than chasing them.
+- Never call `ScheduleWakeup` with `stop:true` mid-task — it cancels the pending
+  wakeup instead of just ending the turn (happened once this session, caught and
+  re-armed immediately).
+- Fleet-worker directive: never park while the belt is non-empty; finish → tail →
+  next-claim in the same turn. `npm run sd:next` must be re-run fresh every time,
+  never reuse cached output.
