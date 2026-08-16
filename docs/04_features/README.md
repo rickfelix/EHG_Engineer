@@ -47,6 +47,7 @@ This directory contains Mermaid diagrams visualizing the EHG 40-stage venture wo
 - [36 Parallel Exploration](36_parallel_exploration.md)
 - [38 Timing Optimization](38_timing_optimization.md)
 - [40a Venture Active](40a_venture_active.md)
+- [Agent Readiness Audit Service](agent-readiness-audit-service.md)
 - [Ai Ceo Competitive Intelligence Integration](ai_ceo_competitive_intelligence_integration.md)
 - [Ai Ceo Exit Decision Integration](ai_ceo_exit_decision_integration.md)
 - [Analytics Reports Insights](analytics_reports_insights.md)
