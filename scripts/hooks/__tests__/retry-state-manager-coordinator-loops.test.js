@@ -130,6 +130,17 @@ describe('Control 2 — isReadOnlyCommand (deny-by-default classifier)', () => {
     expect(isReadOnlyCommand('gh api \\\n  /repos/o/r/pulls/1')).toBe(true);
   });
 
+  // PLAN_VERIFY VALIDATION (EXEC-TO-PLAN review round 2): -X was the lone alternative among
+  // -X/--method/-f,-F that didn't tolerate an `=` separator -- `-X=PUT` (verified against the
+  // real gh CLI: behaves identically to `-X PUT`) slipped through. Confirmed newly introduced by
+  // this SD (main had zero gh coverage), not a pre-existing gap.
+  it('FR-1 AC-2 + TR-1 (VALIDATION hardening): -X=VERB equals-shorthand is NOT read-only; -X=GET stays read-only', () => {
+    expect(isReadOnlyCommand('gh api /repos/o/r/pulls/1/merge -X=PUT')).toBe(false);
+    expect(isReadOnlyCommand('gh api /repos/o/r -X=DELETE')).toBe(false);
+    expect(isReadOnlyCommand('gh api /repos/o/r -X=post')).toBe(false); // case-insensitive
+    expect(isReadOnlyCommand('gh api /repos/o/r -X=GET')).toBe(true); // GET is not mutating
+  });
+
   // FR-2 AC-2: gh read verbs combined with chaining/redirection remain non-read-only — the
   // pre-existing MUTATION_OPERATOR_RE guard applies identically to the new gh patterns.
   it('FR-2 AC-2: gh read verbs combined with chaining/redirection remain non-read-only', () => {

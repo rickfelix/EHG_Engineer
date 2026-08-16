@@ -187,8 +187,12 @@ const MUTATION_OPERATOR_RE = /[;&|`]|>>?|\$\(|<\(/;
 // `--method="POST"` slipped through -- `['"]?` tolerates an optional quote before the verb.
 // Both closed with zero regression to the 75+ pre-existing/adversarial cases (.artifacts/
 // verify-security-fix.cjs); linear-time confirmed (no ReDoS) on multi-megabyte inputs.
+// PLAN_VERIFY VALIDATION review then found a third, internal-consistency leak: `-X` was the
+// lone alternative among the three (-X / --method / -f,-F) that didn't accept `=` — `gh api
+// ... -X=PUT` (verified against the real gh CLI: `-X=GET` behaves identically to `-X GET`)
+// slipped through. `-X[=\s]*` normalizes it to match its siblings' `=`-tolerance.
 const READ_ONLY_LEADING_RE =
-  /^(?:git\s+(?:status|log|diff|show|branch|rev-parse|describe|remote(?:\s+-v)?|config\s+--get|cat-file|ls-files|for-each-ref)\b|ls|ll|pwd|cat|head|tail|grep|rg|find|wc|stat|echo|whoami|date|env|printenv|which|type|node\s+--version|npm\s+(?:run\s+)?(?:ls|list|view|outdated)\b|gh\s+(?:run\s+(?:list|view|watch)|pr\s+(?:list|view|diff|checks|status)|workflow\s+(?:list|view)|issue\s+(?:list|view))\b|gh\s+api\b(?![\s\S]*(?:(?:^|\s)-X\s*['"]?(?:POST|PUT|PATCH|DELETE)\b|--method[=\s]+['"]?(?:POST|PUT|PATCH|DELETE)\b|(?:^|\s)-[fF](?:\s|=)|--field\b|--raw-field\b|--input\b)))/i;
+  /^(?:git\s+(?:status|log|diff|show|branch|rev-parse|describe|remote(?:\s+-v)?|config\s+--get|cat-file|ls-files|for-each-ref)\b|ls|ll|pwd|cat|head|tail|grep|rg|find|wc|stat|echo|whoami|date|env|printenv|which|type|node\s+--version|npm\s+(?:run\s+)?(?:ls|list|view|outdated)\b|gh\s+(?:run\s+(?:list|view|watch)|pr\s+(?:list|view|diff|checks|status)|workflow\s+(?:list|view)|issue\s+(?:list|view))\b|gh\s+api\b(?![\s\S]*(?:(?:^|\s)-X[=\s]*['"]?(?:POST|PUT|PATCH|DELETE)\b|--method[=\s]+['"]?(?:POST|PUT|PATCH|DELETE)\b|(?:^|\s)-[fF](?:\s|=)|--field\b|--raw-field\b|--input\b)))/i;
 
 /**
  * Structurally classify a Bash command as provably read-only / non-mutating.
