@@ -13,7 +13,8 @@ tags: [protocol, auto-generated]
 - [What It Does](#what-it-does)
   - [1. 🔍 ESLint Auto-Fix (NEW)](#1-eslint-auto-fix-new)
   - [2. ✅ Smoke Tests](#2-smoke-tests)
-  - [3. 📋 PRD Schema Validation](#3-prd-schema-validation)
+  - [3.5. 🔐 Secret Detection Scan](#35-secret-detection-scan-added-since-this-doc-was-last-fully-updated)
+  - [4. 📋 PRD Schema Validation](#4-prd-schema-validation)
 - [Bypassing the Hook](#bypassing-the-hook)
 - [Hook Execution Order](#hook-execution-order)
 - [Performance](#performance)
@@ -99,7 +100,19 @@ npm run test:smoke
 # - Ensure dependencies are installed (npm install)
 ```
 
-### 3. 📋 PRD Schema Validation
+### 3.5. 🔐 Secret Detection Scan (added since this doc was last fully updated)
+
+**Purpose:** Block a database connection-string credential from entering the tree via a new commit
+
+**Behavior:**
+- Scans staged **added** diff lines (not the whole staged content) for a database connection-string shape: the full scheme word, then a credential slot delimited by a colon and an at-sign
+- **BLOCKS commit if a match is found** in an added line
+
+**Note (SD-LEO-FIX-STRIP-DEAD-DB-CREDENTIAL-LITERALS-001, 2026-08):** the scanner originally scanned the *entire* diff hunk, including **removed** lines — so a commit that *redacted* an existing secret (deleting the old line, adding a placeholder) tripped the scanner by construction, since the diff still showed the old secret being deleted. Fixed to scan added lines only (`grep -E '^\+' | grep -vE '^\+\+\+'`) so redacting a secret is never blocked, only introducing one.
+
+The pattern is purely structural — it has no allowlist, so it will also flag a fictional test fixture or documentation example with the same shape. A complementary, allowlist-aware guard exists for exactly this at the CI/tree-at-rest level: `scripts/lint/no-connection-string-literals-lint.mjs` (see `.github/workflows/no-connection-string-literals-lint.yml`).
+
+### 4. 📋 PRD Schema Validation
 
 **Purpose:** Ensure PRD scripts follow the correct schema
 
