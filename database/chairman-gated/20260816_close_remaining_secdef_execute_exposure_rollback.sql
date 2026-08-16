@@ -65,29 +65,37 @@ GRANT EXECUTE ON FUNCTION public.upsert_operator_cash_burn(numeric, numeric, num
 --
 -- SECURITY sub-agent finding (S2, EXEC-TO-PLAN review): the per-function checks below are BLIND
 -- to the default-ACL posture (S1) — a rollback that over-grants PUBLIC by default would report
--- success anyway, since none of the 16 named functions themselves changed. Mirrors the forward
--- migration's own $adp_self_test$ pattern (create a throwaway probe, check its EXECUTE grants,
--- drop it) but asserts the OPPOSITE direction: a function created AFTER this rollback must have
--- anon EXECUTE restored (proving the re-grant took effect) and must NOT have PUBLIC EXECUTE
--- (proving the rollback did not over-grant beyond the true pre-migration state).
+-- success anyway, since none of the 16 named functions themselves changed.
+--
+-- REDESIGNED (TESTING sub-agent RCA, EXEC-TO-PLAN, mirrors the forward migration's own
+-- $adp_self_test$ re-design): was create-a-throwaway-probe-and-check-its-grants, which a live
+-- diagnostic run showed does not reliably observe an ALTER DEFAULT PRIVILEGES change made earlier
+-- in the SAME transaction, even though the stored pg_default_acl row is provably correct at that
+-- point. Asserts the actual stored ACL DIRECTLY via aclexplode() (grantee=0 is its documented
+-- representation of PUBLIC) instead: anon must be present (re-grant took effect), PUBLIC must be
+-- absent (rollback did not over-grant beyond the true pre-migration state).
 -- --------------------------------------------------------------------------
 DO $adp_rollback_self_test$
 DECLARE
-  test_oid oid;
   has_anon boolean;
   has_public boolean;
 BEGIN
-  CREATE FUNCTION public._sd_leo_infra_close_remaining_security_001_rollback_probe() RETURNS void
-    LANGUAGE sql AS 'SELECT 1' SECURITY DEFINER;
-  SELECT oid INTO test_oid FROM pg_proc WHERE proname = '_sd_leo_infra_close_remaining_security_001_rollback_probe';
-  has_anon := has_function_privilege('anon', test_oid, 'EXECUTE');
-  has_public := has_function_privilege('public', test_oid, 'EXECUTE');
-  DROP FUNCTION public._sd_leo_infra_close_remaining_security_001_rollback_probe();
+  SELECT
+    COALESCE(bool_or(a.grantee = 0), false),
+    COALESCE(bool_or(a.grantee = 'anon'::regrole), false)
+  INTO has_public, has_anon
+  FROM pg_default_acl d
+  JOIN pg_roles ro ON ro.oid = d.defaclrole
+  JOIN pg_namespace n ON n.oid = d.defaclnamespace
+  CROSS JOIN LATERAL aclexplode(d.defaclacl) AS a
+  WHERE ro.rolname = 'postgres' AND n.nspname = 'public' AND d.defaclobjtype = 'f'
+    AND a.privilege_type = 'EXECUTE';
+
   IF NOT has_anon THEN
-    RAISE EXCEPTION 'ADP_ROLLBACK_SELF_TEST_FAILED: a function created AFTER the rollback''s ALTER DEFAULT PRIVILEGES statement has anon_exec=false -- the anon re-grant did not take effect. Aborting transaction.';
+    RAISE EXCEPTION 'ADP_ROLLBACK_SELF_TEST_FAILED: pg_default_acl for (postgres, public, functions) does not grant anon EXECUTE after the rollback''s ALTER DEFAULT PRIVILEGES statement -- the anon re-grant did not take effect. Aborting transaction.';
   END IF;
   IF has_public THEN
-    RAISE EXCEPTION 'ADP_ROLLBACK_SELF_TEST_FAILED: a function created AFTER the rollback''s ALTER DEFAULT PRIVILEGES statement has public_exec=true -- the rollback over-granted PUBLIC, which never held this default pre-migration. Aborting transaction.';
+    RAISE EXCEPTION 'ADP_ROLLBACK_SELF_TEST_FAILED: pg_default_acl for (postgres, public, functions) grants PUBLIC EXECUTE after the rollback -- the rollback over-granted PUBLIC, which never held this default pre-migration. Aborting transaction.';
   END IF;
 END;
 $adp_rollback_self_test$;

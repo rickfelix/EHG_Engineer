@@ -185,23 +185,39 @@ GRANT EXECUTE ON FUNCTION public.upsert_operator_cash_burn(numeric, numeric, num
 ALTER DEFAULT PRIVILEGES FOR ROLE postgres IN SCHEMA public
   REVOKE EXECUTE ON FUNCTIONS FROM PUBLIC, anon;
 
--- Empirical self-test (TESTING sub-agent design, PLAN-TO-EXEC): prove the ADP change actually
--- suppresses anon/PUBLIC EXECUTE on a NEW function, in the same transaction the chairman
--- approves, rather than trusting a theory about Postgres/Supabase default-ACL mechanics.
+-- Empirical self-test (TESTING sub-agent design, PLAN-TO-EXEC; re-designed EXEC-TO-PLAN after a
+-- TESTING sub-agent RCA — see below): prove the ADP change actually suppresses anon/PUBLIC EXECUTE
+-- by default, in the same transaction the chairman approves, rather than trusting a theory about
+-- Postgres/Supabase default-ACL mechanics.
+--
+-- REDESIGNED (was: CREATE a probe function + has_function_privilege() on it). Ground truth from a
+-- live diagnostic run: immediately after this REVOKE, pg_default_acl for (postgres, public,
+-- functions) correctly read {authenticated=X/postgres} — no PUBLIC, no anon — yet a probe function
+-- CREATEd moments later in that same transaction still came out anon_exec=true public_exec=true.
+-- The stored default-ACL row was correct; a same-transaction CREATE FUNCTION did not observe it.
+-- Rather than trust a create-and-check probe that can be defeated by that same-transaction gap,
+-- this asserts the actual invariant DIRECTLY against the stored ACL via aclexplode() (grantee=0 is
+-- aclexplode's documented representation of PUBLIC) — no text matching (this file's own stated
+-- rule: proacl/defaclacl text never contains the literal string "PUBLIC"), no dependency on
+-- whether a same-transaction CREATE sees a same-transaction ADP change.
 DO $adp_self_test$
 DECLARE
-  test_oid oid;
   has_anon boolean;
   has_public boolean;
 BEGIN
-  CREATE FUNCTION public._sd_leo_infra_close_remaining_security_001_adp_probe() RETURNS void
-    LANGUAGE sql AS 'SELECT 1' SECURITY DEFINER;
-  SELECT oid INTO test_oid FROM pg_proc WHERE proname = '_sd_leo_infra_close_remaining_security_001_adp_probe';
-  has_anon := has_function_privilege('anon', test_oid, 'EXECUTE');
-  has_public := has_function_privilege('public', test_oid, 'EXECUTE');
-  DROP FUNCTION public._sd_leo_infra_close_remaining_security_001_adp_probe();
+  SELECT
+    COALESCE(bool_or(a.grantee = 0), false),
+    COALESCE(bool_or(a.grantee = 'anon'::regrole), false)
+  INTO has_public, has_anon
+  FROM pg_default_acl d
+  JOIN pg_roles ro ON ro.oid = d.defaclrole
+  JOIN pg_namespace n ON n.oid = d.defaclnamespace
+  CROSS JOIN LATERAL aclexplode(d.defaclacl) AS a
+  WHERE ro.rolname = 'postgres' AND n.nspname = 'public' AND d.defaclobjtype = 'f'
+    AND a.privilege_type = 'EXECUTE';
+
   IF has_anon OR has_public THEN
-    RAISE EXCEPTION 'ADP_SELF_TEST_FAILED: a function created AFTER the ALTER DEFAULT PRIVILEGES statement still carries anon_exec=% public_exec=% -- the recurrence-prevention fix did not take effect as expected. Aborting transaction; do not apply until this is understood.', has_anon, has_public;
+    RAISE EXCEPTION 'ADP_SELF_TEST_FAILED: pg_default_acl for (postgres, public, functions) still grants EXECUTE to has_public=% has_anon=% -- the recurrence-prevention fix did not take effect as expected. Aborting transaction; do not apply until this is understood.', has_public, has_anon;
   END IF;
 END;
 $adp_self_test$;

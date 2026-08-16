@@ -202,27 +202,7 @@ let preAdpControlGrant; // captured between STUB_SCHEMA and applyMigration() —
 let adpSelfTestPreFixResult; // {threw, message} — TS-5, captured in the same pre-fix window.
 
 async function applyMigration() {
-  // TEMPORARY DIAGNOSTIC round 2 (see the DIAG4 comment above beforeAll for context) -- the seed
-  // fix in c09a764d1dc did not resolve the failure, so split again to see the RAW defaclacl text
-  // (not just derived booleans) immediately after the migration's own REVOKE, mid-transaction.
-  const ADP_MARKER = 'REVOKE EXECUTE ON FUNCTIONS FROM PUBLIC, anon;';
-  const splitIdx = MIGRATION_SQL.indexOf(ADP_MARKER);
-  if (splitIdx === -1) throw new Error('DIAG4: ADP_MARKER not found in MIGRATION_SQL — migration text changed, update the marker');
-  const part1 = MIGRATION_SQL.slice(0, splitIdx + ADP_MARKER.length);
-  const part2 = MIGRATION_SQL.slice(splitIdx + ADP_MARKER.length);
-
-  await client.query(part1);
-
-  const diagAcl = await client.query(
-    `SELECT ro.rolname AS role, n.nspname AS schema, d.defaclobjtype AS objtype, d.defaclacl::text AS acl
-     FROM pg_default_acl d
-     JOIN pg_roles ro ON ro.oid = d.defaclrole
-     LEFT JOIN pg_namespace n ON n.oid = d.defaclnamespace
-     WHERE ro.rolname = 'postgres'`,
-  );
-  console.log('[DIAG4] post-migration-REVOKE pg_default_acl for role postgres (mid-transaction, pre-self-test):', JSON.stringify(diagAcl.rows));
-
-  await client.query(part2);
+  await client.query(MIGRATION_SQL);
 }
 
 async function grantState(name, args) {
@@ -264,20 +244,6 @@ beforeAll(async () => {
   // not reporting a role that was never grantable in this ephemeral database at all.
   await client.query('CREATE FUNCTION public._test_pre_adp_control() RETURNS void LANGUAGE sql AS \'SELECT NULL::void\'');
   preAdpControlGrant = await grantState('_test_pre_adp_control', '');
-  // TEMPORARY DIAGNOSTIC round 2 (the REVOKE-then-GRANT seed fix from c09a764d1dc did NOT resolve
-  // the CI failure -- ground truth needed on the RAW defaclacl text, not just derived booleans, to
-  // check TESTING sub-agent's refined theory: does the row carry an explicit OWNER entry
-  // (postgres=X/postgres), not just "no PUBLIC entry"? console.log (not a test assertion) so this
-  // prints even though a later beforeAll throw would otherwise skip every it() in this file.
-  const diagSeedAcl = await client.query(
-    `SELECT ro.rolname AS role, n.nspname AS schema, d.defaclobjtype AS objtype, d.defaclacl::text AS acl
-     FROM pg_default_acl d
-     JOIN pg_roles ro ON ro.oid = d.defaclrole
-     LEFT JOIN pg_namespace n ON n.oid = d.defaclnamespace
-     WHERE ro.rolname = 'postgres'`,
-  );
-  console.log('[DIAG4] post-seed (pre-migration) pg_default_acl for role postgres:', JSON.stringify(diagSeedAcl.rows));
-  console.log('[DIAG4] pre-migration control grant:', JSON.stringify(preAdpControlGrant));
 
   // TS-5: run the migration's OWN extracted self-test block standalone, in this same pre-fix
   // window — before the ADP fix has been applied, its precondition check (has_anon OR has_public)
