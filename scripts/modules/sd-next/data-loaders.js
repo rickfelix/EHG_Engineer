@@ -442,7 +442,18 @@ export async function loadOpenQuickFixes(supabase) {
     // display/quick-fixes.js already treats identically to the column's own DEFAULT
     // false, so behavior is unchanged once the column lands and the retry simply stops
     // firing (self-heals, no follow-up code change).
-    const QF_DISPLAY_COLUMNS = 'id, title, type, severity, status, estimated_loc, description, created_at, target_application, claiming_session_id, pr_url, commit_sha, not_before, factory_lane, owner, release_condition'; // schema-lint-disable-line: factory_lane staged, see comment above
+    // SD-LEO-INFRA-STALE-QF-DISPOSITION-SWEEP-001 (FR-6): verified_at is a SECOND,
+    // independently-staged column (its own migration, never applied together with factory_lane's)
+    // -- both can be absent at once, as they are today. Without verified_at here,
+    // classifyQuickFixes()'s ageDays(createdAt, verifiedAt) always receives verifiedAt=undefined,
+    // making its FR-6 fix permanently inert for this display/recommendation path specifically
+    // (REGRESSION sub-agent finding, VERIFY phase). Retry is LAYERED, not combined: strip
+    // verified_at FIRST and retry (keeping factory_lane); only strip factory_lane too if THAT
+    // retry also 42703s. factory_lane is NOT safe to lose casually here -- this exact function's
+    // own comment above documents a real incident where its absence let AUTO_PROCEED_ACTION:qf_start
+    // recommend a coordinator-dispatch-only QF; a naive strip-both-on-any-42703 would reopen that
+    // if the older factory_lane migration lands first (the more likely ordering).
+    const QF_DISPLAY_COLUMNS = 'id, title, type, severity, status, estimated_loc, description, created_at, target_application, claiming_session_id, pr_url, commit_sha, not_before, factory_lane, owner, release_condition, verified_at'; // schema-lint-disable-line: factory_lane + verified_at staged, see comment above
     const baseQuery = (columns) => supabase
       .from('quick_fixes')
       .select(columns)
@@ -454,7 +465,10 @@ export async function loadOpenQuickFixes(supabase) {
 
     let { data, error } = await baseQuery(QF_DISPLAY_COLUMNS);
     if (error && error.code === '42703') {
-      ({ data, error } = await baseQuery(QF_DISPLAY_COLUMNS.replace(', factory_lane', '')));
+      ({ data, error } = await baseQuery(QF_DISPLAY_COLUMNS.replace(', verified_at', '')));
+    }
+    if (error && error.code === '42703') {
+      ({ data, error } = await baseQuery(QF_DISPLAY_COLUMNS.replace(', factory_lane', '').replace(', verified_at', '')));
     }
 
     if (error) {

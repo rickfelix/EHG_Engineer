@@ -33,10 +33,12 @@ const OPEN_QF = {
 };
 
 /**
- * Fake supabase whose quick_fixes select fails with 42703 whenever factory_lane is requested,
- * mirroring the live PostgREST behavior against the unapplied column.
+ * Fake supabase whose quick_fixes select fails with 42703 whenever any of `missingColumns` is
+ * requested, mirroring live PostgREST behavior against an unapplied column. 42703 fires
+ * independently per genuinely-missing column, which is what makes the layered-retry scenario
+ * (verified_at missing, factory_lane present) distinguishable from the combined case.
  */
-function makeFakeSupabase({ onSelect, retryRows = [], failOnFactoryLane = true } = {}) {
+function makeFakeSupabase({ onSelect, retryRows = [], missingColumns = ['factory_lane'] } = {}) {
   return {
     from(table) {
       let selectedCols = '';
@@ -51,10 +53,11 @@ function makeFakeSupabase({ onSelect, retryRows = [], failOnFactoryLane = true }
         order() { return builder; },
         limit() {
           if (table !== 'quick_fixes') return Promise.resolve({ data: [], error: null });
-          if (failOnFactoryLane && selectedCols.includes('factory_lane')) {
+          const hitCol = missingColumns.find((c) => selectedCols.includes(c));
+          if (hitCol) {
             return Promise.resolve({
               data: null,
-              error: { code: '42703', message: 'column quick_fixes.factory_lane does not exist' },
+              error: { code: '42703', message: `column quick_fixes.${hitCol} does not exist` },
             });
           }
           return Promise.resolve({ data: retryRows, error: null });
@@ -66,20 +69,44 @@ function makeFakeSupabase({ onSelect, retryRows = [], failOnFactoryLane = true }
 }
 
 describe('loadOpenQuickFixes — retries without factory_lane on 42703', () => {
-  it('retries without the missing column instead of reporting an empty queue', async () => {
+  it('retries without the missing column instead of reporting an empty queue (both staged columns missing, today\'s live state)', async () => {
     const selects = [];
     const supabase = makeFakeSupabase({
       onSelect: (cols) => selects.push(cols),
       retryRows: [OPEN_QF],
+      missingColumns: ['factory_lane', 'verified_at'],
     });
 
     const result = await loadOpenQuickFixes(supabase);
 
-    expect(selects.length).toBe(2);
     expect(selects[0]).toContain('factory_lane');
-    expect(selects[1]).not.toContain('factory_lane');
+    expect(selects.at(-1)).not.toContain('factory_lane');
+    expect(selects.at(-1)).not.toContain('verified_at');
     // The regression: pre-fix this was [] and sd:next showed no open QFs at all.
     expect(result.map((q) => q.id)).toEqual(['QF-20260724-001']);
+  });
+
+  // REGRESSION sub-agent finding, VERIFY phase (SD-LEO-INFRA-STALE-QF-DISPOSITION-SWEEP-001
+  // FR-6): the two staged migrations land INDEPENDENTLY, and factory_lane's has been staged a
+  // month longer -- the MORE likely ordering is factory_lane landing first while verified_at
+  // remains absent. This function's own header comment documents a REAL incident where losing
+  // factory_lane silently let AUTO_PROCEED_ACTION:qf_start recommend a coordinator-dispatch-only
+  // QF -- so the retry must be LAYERED, never a combined strip that could lose factory_lane on a
+  // verified_at-only 42703.
+  it('SD-LEO-INFRA-STALE-QF-DISPOSITION-SWEEP-001 FR-6 (REGRESSION finding): verified_at missing but factory_lane PRESENT -- retries ONCE, factory_lane is preserved, never stripped', async () => {
+    const selects = [];
+    const supabase = makeFakeSupabase({
+      onSelect: (cols) => selects.push(cols),
+      retryRows: [OPEN_QF],
+      missingColumns: ['verified_at'],
+    });
+
+    await loadOpenQuickFixes(supabase);
+
+    expect(selects).toHaveLength(2);
+    expect(selects[0]).toContain('factory_lane');
+    expect(selects[1]).not.toContain('verified_at');
+    expect(selects[1]).toContain('factory_lane'); // <-- the critical assertion: NOT stripped
   });
 
   it('does not issue a second query when the first attempt succeeds', async () => {
@@ -87,7 +114,7 @@ describe('loadOpenQuickFixes — retries without factory_lane on 42703', () => {
     const supabase = makeFakeSupabase({
       onSelect: (cols) => selects.push(cols),
       retryRows: [OPEN_QF],
-      failOnFactoryLane: false,
+      missingColumns: [],
     });
 
     await loadOpenQuickFixes(supabase);
