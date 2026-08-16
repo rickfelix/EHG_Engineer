@@ -913,7 +913,7 @@ LEFT JOIN rca_learning_records lr ON lr.rcr_id = rcr.id;
 
 2. Verify trigger conditions met:
    - T1 quality: Score actually dropped below 70?
-   - T2 regression: Test was passing within 24h?
+   - T2 regression: Test was passing in the most recent earlier run (run-relative, not a time window)?
    - T2 handoff: 2nd rejection for same handoff type?
 
 3. Check for duplicate suppression:
