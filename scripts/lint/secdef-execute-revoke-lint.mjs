@@ -82,9 +82,58 @@ export function extractSecdefFunctions(sql) {
     const tail = sql.slice(i, i + 2000);
     const nextCreate = tail.search(/CREATE\s+(?:OR\s+REPLACE\s+)?FUNCTION/i);
     const window = nextCreate >= 0 ? tail.slice(0, nextCreate) : tail;
-    if (/SECURITY\s+DEFINER/i.test(window)) results.push({ name, args });
+    if (/SECURITY\s+DEFINER/i.test(window)) results.push({ name, args, createEndIdx: i });
   }
   return results;
+}
+
+/**
+ * PURE: strip SQL `--` line comments and `/* *\/` block comments before any pattern-matching
+ * runs, so text that exists ONLY inside a comment (e.g. a REVOKE disabled mid-debugging) cannot
+ * satisfy the lint's requirements. Not a full tokenizer — does not special-case `--`/`/*` inside
+ * a string literal, matching this file's own stated "pragmatic regex, not full parser" scope; a
+ * migration string literal containing `--` is vanishingly rare and not this lint's concern.
+ * @param {string} sql
+ * @returns {string}
+ */
+export function stripSqlComments(sql) {
+  return sql
+    .replace(/\/\*[\s\S]*?\*\//g, ' ')
+    .replace(/--[^\n]*/g, '');
+}
+
+/**
+ * PURE: reduce a CREATE-style argument list ("p_a uuid, p_b integer DEFAULT 5") to just its
+ * ordered type tokens ("uuid,integer"), matching DROP FUNCTION's type-only signature syntax.
+ * Best-effort, not a full SQL type parser — splits on top-level commas (respecting paren depth
+ * for parameterized types like numeric(10,2)), then for each chunk drops a trailing DEFAULT
+ * clause and a leading param-name identifier if present.
+ * @param {string} argsStr
+ * @returns {string}
+ */
+export function normalizeArgTypes(argsStr) {
+  const parts = [];
+  let depth = 0;
+  let cur = '';
+  for (const ch of argsStr) {
+    if (ch === '(') depth++;
+    if (ch === ')') depth--;
+    if (ch === ',' && depth === 0) {
+      parts.push(cur);
+      cur = '';
+      continue;
+    }
+    cur += ch;
+  }
+  if (cur.trim()) parts.push(cur);
+  return parts
+    .map((p) => {
+      const chunk = p.replace(/\bDEFAULT\b[\s\S]*$/i, '').trim();
+      const tokens = chunk.split(/\s+/).filter(Boolean);
+      if (tokens.length >= 2) tokens.shift(); // drop the leading param-name identifier
+      return tokens.join(' ').toLowerCase();
+    })
+    .join(',');
 }
 
 /**
@@ -172,22 +221,49 @@ export function listScopedFiles(mode, root) {
 }
 
 /**
- * PURE: true if the same file both creates and DROPs the function — a transient, self-contained
- * probe (e.g. an empirical self-test inside a DO block) that never persists as a real exposure,
- * so it is exempt from the REVOKE requirement by construction, not by allowlist.
+ * PURE: true only if the SAME function signature is DROPped AFTER this specific CREATE — a
+ * transient, self-contained probe (e.g. an empirical self-test inside a DO block: create, use,
+ * drop, all in one place) that never persists as a real exposure, so it is exempt from the
+ * REVOKE requirement by construction, not by allowlist.
+ *
+ * TESTING/SECURITY sub-agent finding (E4/S3, EXEC-TO-PLAN review): the prior version matched ANY
+ * `DROP FUNCTION <name>(` occurring anywhere in the file, with no ordering or argument check. That
+ * missed the single most common migration idiom this repo actually uses — DROP-then-CREATE to
+ * change a signature or return type, where the function PERSISTS after the file runs and is
+ * exactly the exposure this lint exists to catch — while also missing the guarded `IF EXISTS`
+ * form and matching across unrelated overloads. Now requires: (1) the DROP's match index is AFTER
+ * createEndIdx (so drop-then-create is never exempt — only create-then-drop is), (2) `IF EXISTS`
+ * is accepted, (3) the DROP's own argument list normalizes to the SAME type signature as the
+ * CREATE (so dropping a different overload of the same name doesn't wrongly exempt it).
  */
-export function isTransientProbe(sql, fnName) {
+export function isTransientProbe(sql, fnName, fnArgs, createEndIdx) {
   const esc = fnName.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
-  return new RegExp(`DROP\\s+FUNCTION\\s+(?:public\\.)?${esc}\\s*\\(`, 'i').test(sql);
+  const dropRe = new RegExp(`DROP\\s+FUNCTION\\s+(?:IF\\s+EXISTS\\s+)?(?:public\\.)?${esc}\\s*\\(`, 'gi');
+  const expected = normalizeArgTypes(fnArgs);
+  let m;
+  while ((m = dropRe.exec(sql)) !== null) {
+    if (m.index <= createEndIdx) continue; // DROP-then-CREATE: the function persists, not transient
+    let depth = 1;
+    let i = m.index + m[0].length;
+    while (i < sql.length && depth > 0) {
+      if (sql[i] === '(') depth++;
+      else if (sql[i] === ')') depth--;
+      i++;
+    }
+    const dropArgs = sql.slice(m.index + m[0].length, i - 1);
+    if (normalizeArgTypes(dropArgs) === expected) return true;
+  }
+  return false;
 }
 
-export function lintFile(sql, filePath, allowlist) {
+export function lintFile(rawSql, filePath, allowlist) {
+  const sql = stripSqlComments(rawSql);
   const findings = [];
   const secdefFns = extractSecdefFunctions(sql);
-  for (const { name } of secdefFns) {
+  for (const { name, args, createEndIdx } of secdefFns) {
     const allowEntry = allowlist[name];
     if (allowEntry?.reason) continue; // explicit, documented exception
-    if (isTransientProbe(sql, name)) continue; // created and dropped in the same file
+    if (isTransientProbe(sql, name, args, createEndIdx)) continue; // created, used, dropped in place
     const { compliant, reasons } = evaluateFunction(sql, name);
     if (!compliant) {
       findings.push({ file: filePath, function: name, reasons });

@@ -12,6 +12,7 @@ import {
   isTransientProbe,
   lintFile,
   listScopedFiles,
+  stripSqlComments,
 } from '../../../scripts/lint/secdef-execute-revoke-lint.mjs';
 
 describe('extractSecdefFunctions', () => {
@@ -96,17 +97,90 @@ describe('evaluateFunction — TS-2b: PUBLIC revoked but a DIRECT anon grant lef
 });
 
 describe('isTransientProbe', () => {
-  it('a function created and DROPped in the same file is exempt (self-contained migration-time probe)', () => {
+  it('a function created and DROPped (same signature) AFTER the CREATE is exempt (self-contained migration-time probe)', () => {
     const sql = `
       CREATE FUNCTION public._probe() RETURNS void LANGUAGE sql SECURITY DEFINER AS $$ SELECT 1 $$;
       DROP FUNCTION public._probe();
     `;
-    expect(isTransientProbe(sql, '_probe')).toBe(true);
+    const [{ args, createEndIdx }] = extractSecdefFunctions(sql);
+    expect(isTransientProbe(sql, '_probe', args, createEndIdx)).toBe(true);
   });
 
   it('a function with no matching DROP is NOT transient — the general rule applies', () => {
     const sql = 'CREATE FUNCTION public.persists() RETURNS void LANGUAGE sql SECURITY DEFINER AS $$ SELECT 1 $$;';
-    expect(isTransientProbe(sql, 'persists')).toBe(false);
+    const [{ args, createEndIdx }] = extractSecdefFunctions(sql);
+    expect(isTransientProbe(sql, 'persists', args, createEndIdx)).toBe(false);
+  });
+
+  it('accepts the guarded DROP FUNCTION IF EXISTS form for a genuine create-then-drop probe', () => {
+    const sql = `
+      CREATE FUNCTION public._probe(p_id uuid) RETURNS void LANGUAGE sql SECURITY DEFINER AS $$ SELECT 1 $$;
+      DROP FUNCTION IF EXISTS public._probe(uuid);
+    `;
+    const [{ args, createEndIdx }] = extractSecdefFunctions(sql);
+    expect(isTransientProbe(sql, '_probe', args, createEndIdx)).toBe(true);
+  });
+
+  it('MUST-CATCH (E4/S3, TESTING+SECURITY sub-agent finding): a DROP-then-CREATE — the standard signature-change idiom, where the function PERSISTS after the file runs — is NOT exempt just because the same name appears in an earlier DROP', () => {
+    const sql = `
+      DROP FUNCTION public.evil_fn(uuid);
+      CREATE FUNCTION public.evil_fn(p uuid) RETURNS void LANGUAGE sql SECURITY DEFINER AS $$ SELECT 1 $$;
+    `;
+    const [{ args, createEndIdx }] = extractSecdefFunctions(sql);
+    expect(isTransientProbe(sql, 'evil_fn', args, createEndIdx)).toBe(false);
+    // ...and with no REVOKE at all, this is a real, un-exempted finding end-to-end.
+    const findings = lintFile(sql, 'database/migrations/fake.sql', {});
+    expect(findings).toHaveLength(1);
+    expect(findings[0].function).toBe('evil_fn');
+  });
+
+  it('MUST-CATCH (E4/S3): a DROP of a DIFFERENT overload after CREATE does not wrongly exempt this signature', () => {
+    const sql = `
+      CREATE FUNCTION public.evil_fn(p uuid) RETURNS void LANGUAGE sql SECURITY DEFINER AS $$ SELECT 1 $$;
+      DROP FUNCTION public.evil_fn(text);
+    `;
+    const [{ args, createEndIdx }] = extractSecdefFunctions(sql);
+    expect(isTransientProbe(sql, 'evil_fn', args, createEndIdx)).toBe(false);
+  });
+});
+
+describe('stripSqlComments — S4 (SECURITY sub-agent finding): a REVOKE that exists only inside a comment must not satisfy the lint', () => {
+  it('a REVOKE inside a -- line comment does not count as compliance', () => {
+    const sql = `
+      CREATE FUNCTION public.foo() RETURNS void LANGUAGE sql SECURITY DEFINER AS $$ SELECT 1 $$;
+      -- REVOKE EXECUTE ON FUNCTION public.foo() FROM PUBLIC, anon, authenticated;
+    `;
+    const findings = lintFile(sql, 'database/migrations/fake.sql', {});
+    expect(findings).toHaveLength(1);
+    expect(findings[0].function).toBe('foo');
+  });
+
+  it('a REVOKE inside a /* */ block comment does not count as compliance', () => {
+    const sql = `
+      CREATE FUNCTION public.foo() RETURNS void LANGUAGE sql SECURITY DEFINER AS $$ SELECT 1 $$;
+      /* REVOKE EXECUTE ON FUNCTION public.foo() FROM PUBLIC, anon, authenticated; */
+    `;
+    const findings = lintFile(sql, 'database/migrations/fake.sql', {});
+    expect(findings).toHaveLength(1);
+    expect(findings[0].function).toBe('foo');
+  });
+
+  it('a genuine (non-commented) REVOKE still satisfies compliance after comment stripping', () => {
+    const sql = `
+      -- some header comment
+      CREATE FUNCTION public.foo() RETURNS void LANGUAGE sql SECURITY DEFINER AS $$ SELECT 1 $$;
+      REVOKE EXECUTE ON FUNCTION public.foo() FROM PUBLIC, anon, authenticated;
+    `;
+    expect(lintFile(sql, 'database/migrations/fake.sql', {})).toEqual([]);
+  });
+
+  it('stripSqlComments removes both comment forms while preserving surrounding code', () => {
+    const sql = 'SELECT 1; -- trailing comment\n/* block\ncomment */ SELECT 2;';
+    const stripped = stripSqlComments(sql);
+    expect(stripped).not.toContain('trailing comment');
+    expect(stripped).not.toContain('block');
+    expect(stripped).toContain('SELECT 1;');
+    expect(stripped).toContain('SELECT 2;');
   });
 });
 
