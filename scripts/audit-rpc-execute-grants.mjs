@@ -38,7 +38,7 @@ import dotenv from 'dotenv';
 dotenv.config();
 import fs from 'fs';
 import path from 'path';
-import { fileURLToPath } from 'url';
+import { fileURLToPath, pathToFileURL } from 'url';
 import { createDatabaseClient } from './lib/supabase-connection.js';
 import { createClient } from '@supabase/supabase-js';
 
@@ -174,6 +174,41 @@ async function runAuthenticatedAxisCheck() {
   return true;
 }
 
+/**
+ * PURE (TS-1b): evaluate one function's live anon/authenticated/public grant state against its
+ * declared bucket's required state. `live` is {anon_exec, auth_exec, public_exec} or undefined
+ * (function absent from the live catalog query result).
+ * @returns {string[]} failure reasons — empty array means compliant.
+ */
+export function evaluateBucketCompliance(sig, bucket, live) {
+  const failures = [];
+  if (!live) { failures.push(`${sig}: NOT FOUND in live catalog (declared as Bucket ${bucket})`); return failures; }
+  if (bucket === 'A') {
+    if (live.anon_exec) failures.push(`${sig}: Bucket A but anon_exec=true (should be false)`);
+    if (live.auth_exec) failures.push(`${sig}: Bucket A but auth_exec=true (should be false)`);
+    if (live.public_exec) failures.push(`${sig}: Bucket A but public_exec=true (should be false)`);
+  } else if (bucket === 'B') {
+    if (live.anon_exec) failures.push(`${sig}: Bucket B but anon_exec=true (should be false)`);
+    if (live.public_exec) failures.push(`${sig}: Bucket B but public_exec=true (should be false)`);
+    if (!live.auth_exec) failures.push(`${sig}: Bucket B but auth_exec=false (should be true — this is a regression, not just unclosed exposure)`);
+  }
+  // Bucket C: no assertion here (unapplied migration means C is trivially "unchanged" pre-apply;
+  // the migration's own in-transaction verify block is what proves byte-identity around the apply).
+  return failures;
+}
+
+/**
+ * PURE (TS-8): the completeness gate (A4) — every live-exposed signature absent from the
+ * declared set is a floor-not-ceiling regression: a SECURITY DEFINER function that gained anon
+ * or PUBLIC EXECUTE without ever being triaged into a bucket.
+ * @param {string[]} exposedSignatures
+ * @param {Map<string,string>|Set<string>} declared
+ * @returns {string[]} undeclared signatures — empty array means none found.
+ */
+export function findUndeclaredExposures(exposedSignatures, declared) {
+  return exposedSignatures.filter((sig) => !declared.has(sig));
+}
+
 async function runBucketsAxisCheck() {
   const manifestPath = path.join(REPO_ROOT, 'scripts', 'audit-rpc-execute-grants-buckets.json');
   const manifest = JSON.parse(fs.readFileSync(manifestPath, 'utf8'));
@@ -190,19 +225,7 @@ async function runBucketsAxisCheck() {
 
   const failures = [];
   for (const [sig, bucket] of declared) {
-    const live = bySig.get(sig);
-    if (!live) { failures.push(`${sig}: NOT FOUND in live catalog (declared as Bucket ${bucket})`); continue; }
-    if (bucket === 'A') {
-      if (live.anon_exec) failures.push(`${sig}: Bucket A but anon_exec=true (should be false)`);
-      if (live.auth_exec) failures.push(`${sig}: Bucket A but auth_exec=true (should be false)`);
-      if (live.public_exec) failures.push(`${sig}: Bucket A but public_exec=true (should be false)`);
-    } else if (bucket === 'B') {
-      if (live.anon_exec) failures.push(`${sig}: Bucket B but anon_exec=true (should be false)`);
-      if (live.public_exec) failures.push(`${sig}: Bucket B but public_exec=true (should be false)`);
-      if (!live.auth_exec) failures.push(`${sig}: Bucket B but auth_exec=false (should be true — this is a regression, not just unclosed exposure)`);
-    }
-    // Bucket C: no assertion here (unapplied migration means C is trivially "unchanged" pre-apply;
-    // the migration's own in-transaction verify block is what proves byte-identity around the apply).
+    failures.push(...evaluateBucketCompliance(sig, bucket, bySig.get(sig)));
   }
 
   // Completeness gate (A4): every live SECURITY DEFINER function with anon or PUBLIC EXECUTE
@@ -210,7 +233,7 @@ async function runBucketsAxisCheck() {
   const allExposedRows = await queryLive(
     `SELECT 'public.' || p.proname || '(' || pg_get_function_identity_arguments(p.oid) || ')' AS full_sig FROM pg_proc p JOIN pg_namespace n ON n.oid = p.pronamespace WHERE n.nspname = 'public' AND p.prosecdef = true AND (has_function_privilege('anon', p.oid, 'EXECUTE') OR has_function_privilege('public', p.oid, 'EXECUTE'))`
   );
-  const undeclared = allExposedRows.map((r) => r.full_sig).filter((sig) => !declared.has(sig));
+  const undeclared = findUndeclaredExposures(allExposedRows.map((r) => r.full_sig), declared);
   if (undeclared.length > 0) {
     failures.push(`COMPLETENESS: ${undeclared.length} anon/PUBLIC-executable SECURITY DEFINER function(s) NOT in the manifest: ${undeclared.join(', ')}`);
   }
@@ -225,9 +248,15 @@ async function runBucketsAxisCheck() {
   return true;
 }
 
-const mode = process.env.AUDIT_GRANTS_MODE || 'auth';
-let ok = true;
-if (mode === 'auth' || mode === 'all') ok = (await runAuthenticatedAxisCheck()) && ok;
-if (mode === 'buckets' || mode === 'all') ok = (await runBucketsAxisCheck()) && ok;
+// Guarded so this file can be imported for its pure exports (evaluateBucketCompliance,
+// findUndeclaredExposures — SD-LEO-INFRA-CLOSE-REMAINING-SECURITY-001 TS-1b/TS-8 unit tests)
+// without triggering a live network run + process.exit() as a side effect of import.
+const isMainModule = process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href;
+if (isMainModule) {
+  const mode = process.env.AUDIT_GRANTS_MODE || 'auth';
+  let ok = true;
+  if (mode === 'auth' || mode === 'all') ok = (await runAuthenticatedAxisCheck()) && ok;
+  if (mode === 'buckets' || mode === 'all') ok = (await runBucketsAxisCheck()) && ok;
 
-process.exit(ok ? 0 : 1);
+  process.exit(ok ? 0 : 1);
+}

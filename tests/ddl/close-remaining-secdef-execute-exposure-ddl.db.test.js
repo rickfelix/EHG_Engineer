@@ -106,8 +106,42 @@ ALTER DEFAULT PRIVILEGES FOR ROLE postgres IN SCHEMA public
 ${[...BUCKET_A, ...BUCKET_B, ...BUCKET_C].map(stubFunctionSql).join('\n')}
 `;
 
+/**
+ * TS-5/TS-6: extract a named `DO $tag$ ... $tag$;` block verbatim from the REAL migration SQL,
+ * so the failure-branch tests below exercise the exact shipped text — not a hand-reimplemented
+ * copy that could silently drift from what the chairman actually applies. Anchored on the tag's
+ * two occurrences (open + close), both confirmed unique in this file.
+ */
+function extractDollarQuotedDoBlock(tag) {
+  const marker = `$${tag}$`;
+  const firstIdx = MIGRATION_SQL.indexOf(marker);
+  if (firstIdx === -1) throw new Error(`extractDollarQuotedDoBlock: marker ${marker} not found`);
+  const secondIdx = MIGRATION_SQL.indexOf(marker, firstIdx + marker.length);
+  if (secondIdx === -1) throw new Error(`extractDollarQuotedDoBlock: closing marker ${marker} not found`);
+  const blockEnd = secondIdx + marker.length;
+  const doStart = MIGRATION_SQL.lastIndexOf('DO', firstIdx);
+  const semiIdx = MIGRATION_SQL.indexOf(';', blockEnd);
+  if (doStart === -1 || semiIdx === -1) throw new Error(`extractDollarQuotedDoBlock: could not bound the DO...; statement for ${marker}`);
+  return MIGRATION_SQL.slice(doStart, semiIdx + 1);
+}
+
+const ADP_SELF_TEST_SQL = extractDollarQuotedDoBlock('adp_self_test');
+const VERIFY_BLOCK_SQL = extractDollarQuotedDoBlock('verify');
+const ALL_27_NAMES = [...BUCKET_A, ...BUCKET_B, ...BUCKET_C].map(([n]) => n);
+const BASELINE_CAPTURE_SQL = `
+CREATE TEMP TABLE _pre_migration_baseline AS
+SELECT p.oid,
+       'public.' || p.proname || '(' || pg_get_function_identity_arguments(p.oid) || ')' AS full_sig,
+       has_function_privilege('anon', p.oid, 'EXECUTE') AS anon_exec,
+       has_function_privilege('authenticated', p.oid, 'EXECUTE') AS auth_exec,
+       has_function_privilege('public', p.oid, 'EXECUTE') AS public_exec
+FROM pg_proc p JOIN pg_namespace n ON n.oid = p.pronamespace
+WHERE n.nspname = 'public' AND p.proname = ANY(ARRAY[${ALL_27_NAMES.map((n) => `'${n}'`).join(',')}]);
+`;
+
 let client;
 let preAdpControlGrant; // captured between STUB_SCHEMA and applyMigration() — see beforeAll.
+let adpSelfTestPreFixResult; // {threw, message} — TS-5, captured in the same pre-fix window.
 
 async function applyMigration() {
   await client.query(MIGRATION_SQL);
@@ -141,6 +175,18 @@ beforeAll(async () => {
   // not reporting a role that was never grantable in this ephemeral database at all.
   await client.query('CREATE FUNCTION public._test_pre_adp_control() RETURNS void LANGUAGE sql AS \'SELECT NULL::void\'');
   preAdpControlGrant = await grantState('_test_pre_adp_control', '');
+
+  // TS-5: run the migration's OWN extracted self-test block standalone, in this same pre-fix
+  // window — before the ADP fix has been applied, its precondition check (has_anon OR has_public)
+  // must be true, so the block must RAISE ADP_SELF_TEST_FAILED. This proves the self-test's
+  // EXCEPTION-raising branch actually fires when it should, not just that it stays quiet when the
+  // fix already worked (the FR-4 tests below only exercise the latter).
+  try {
+    await client.query(ADP_SELF_TEST_SQL);
+    adpSelfTestPreFixResult = { threw: false, message: null };
+  } catch (e) {
+    adpSelfTestPreFixResult = { threw: true, message: e.message };
+  }
 
   await applyMigration();
 }, 60_000);
@@ -191,6 +237,39 @@ describe('FR-4: ALTER DEFAULT PRIVILEGES — a NEW function created after the mi
 
   it('[TWO-SIDED CONTROL] a function created BEFORE the migration ran (captured in beforeAll, under STUB_SCHEMA\'s seeded default) DID carry anon EXECUTE — proving the post-migration probe above is discriminating on the ADP change itself, not reporting a role that was never grantable in this database at all', () => {
     expect(preAdpControlGrant.anon_exec).toBe(true);
+  });
+});
+
+describe('TS-5: the ADP self-test block itself correctly RAISEs on a pre-fix state (not just quiet post-fix)', () => {
+  it('run standalone BEFORE the ADP fix applied (captured in beforeAll), the extracted self-test block threw ADP_SELF_TEST_FAILED', () => {
+    expect(adpSelfTestPreFixResult.threw).toBe(true);
+    expect(adpSelfTestPreFixResult.message).toMatch(/ADP_SELF_TEST_FAILED/);
+  });
+});
+
+describe('TS-6: the Bucket C drift check itself correctly RAISEs when Bucket C drifts (not just quiet when untouched)', () => {
+  it('deliberately revoking anon from a Bucket C function makes the extracted verify block RAISE, citing that function by name', async () => {
+    await client.query(BASELINE_CAPTURE_SQL);
+    await client.query('REVOKE EXECUTE ON FUNCTION public.is_chairman_role() FROM anon');
+    try {
+      await expect(client.query(VERIFY_BLOCK_SQL)).rejects.toThrow(/BUCKET C DRIFT/);
+      const { rows } = await client.query(
+        "SELECT has_function_privilege('anon', 'public.is_chairman_role()'::regprocedure, 'EXECUTE') AS anon_exec",
+      );
+      expect(rows[0].anon_exec).toBe(false); // confirms the corruption was real, not a no-op
+    } finally {
+      await client.query('GRANT EXECUTE ON FUNCTION public.is_chairman_role() TO anon');
+      await client.query('DROP TABLE IF EXISTS _pre_migration_baseline');
+    }
+  });
+
+  it('with Bucket C restored and a fresh baseline, the same extracted verify block does NOT throw', async () => {
+    await client.query(BASELINE_CAPTURE_SQL);
+    try {
+      await client.query(VERIFY_BLOCK_SQL);
+    } finally {
+      await client.query('DROP TABLE IF EXISTS _pre_migration_baseline');
+    }
   });
 });
 
