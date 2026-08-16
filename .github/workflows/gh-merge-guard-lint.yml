@@ -63,8 +63,10 @@ jobs:
 
       - name: Run gh-merge-guard lint
         run: |
+          set +e
           node scripts/lint/gh-merge-guard-lint.mjs | tee lint-output.txt
           exit_code=${PIPESTATUS[0]}
+          set -e
           {
             echo "## gh-merge-guard Lint"
             echo ""
