@@ -23,7 +23,7 @@ const { resolveSessionId } = require('../../lib/hooks/session-id.cjs');
 const { drainAndExit } = require('../../lib/hooks/drain-undici.cjs'); // QF-20260719-890: drain before post-fetch exits
 
 // Never throw — the entire hook is wrapped.
-(async function main() {
+async function main() {
   try {
     // QF-20260504-765: stdin (Claude Code hook protocol) is canonical for
     // PostToolUse; env fallback covers manual node invocations and tests.
@@ -100,7 +100,14 @@ const { drainAndExit } = require('../../lib/hooks/drain-undici.cjs'); // QF-2026
       );
     }
   }
-})().then(() => drainAndExit(0)); // QF-20260509-199 exit kept; QF-20260719-890: drain first (post-fetch exit)
+}
+
+// QF-20260509-199 exit kept; QF-20260719-890: drain first (post-fetch exit).
+// require.main guard (QF-20260728-720): lets collectGitMetrics be required
+// for a negative test without triggering a live hook run as a side effect.
+if (require.main === module) {
+  main().then(() => drainAndExit(0));
+}
 
 // ── Helpers ──────────────────────────────────────────────────────────────────
 
@@ -226,3 +233,5 @@ async function fetchWithTimeout(url, init, timeoutMs) {
     clearTimeout(timer);
   }
 }
+
+module.exports = { collectGitMetrics };
