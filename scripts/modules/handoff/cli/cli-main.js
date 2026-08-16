@@ -1028,7 +1028,16 @@ export async function handleExecuteWithContinuation(handoffType, sdId, args) {
   // SD-LEO-INFRA-LEAD-FINAL-CASCADE-ISOLATION-001 (FR-3): cache the ORIGINAL SD's own
   // result/identity BEFORE any cascade attempt can reassign currentResult. This is what
   // gets reprinted -- never whatever a cascaded SD's own handoff produced.
-  const originalResult = currentResult;
+  // ADVERSARIAL SHIP REVIEW (CRITICAL, caught before merge): handleExecuteCommand returns a
+  // WRAPPER { success, sdId, handoffType, result } (see its own return statement above) --
+  // printHandoffResultLines/displayExecutionResult both expect the INNER result object
+  // (result.normalizedScore etc.), the same shape passed to displayExecutionResult at
+  // line 999 inside handleExecuteCommand itself. Capturing the wrapper here made every
+  // reprinted score read as NaN (result.normalizedScore/qualityScore both undefined on the
+  // wrapper, and NaN ?? 0 stays NaN -- ?? only catches null/undefined), which
+  // lib/fleet/parent-completion.mjs's SCORE=(\d+) regex cannot match, silently defeating the
+  // entire point of this feature for its one real consumer.
+  const originalResult = currentResult.result ?? currentResult;
   const originalHandoffType = handoffType;
   const originalSdId = sdId;
   // Only reprint when a cascade was actually attempted -- the common (non-cascading)

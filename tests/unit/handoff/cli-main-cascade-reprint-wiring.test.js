@@ -82,12 +82,20 @@ describe('cli-main.js handleExecuteWithContinuation — reprint seam wiring (FR-
   });
 
   it('TS-6 — snapshots originalResult/originalHandoffType/originalSdId BEFORE the runWithGuaranteedReprint call, not after', () => {
-    const snapshotIdx = fnBody.indexOf('const originalResult = currentResult;');
+    const snapshotIdx = fnBody.indexOf('const originalResult = currentResult.result ?? currentResult;');
     const guaranteedReprintIdx = fnBody.indexOf('return runWithGuaranteedReprint(');
 
     expect(snapshotIdx, 'originalResult snapshot line not found').toBeGreaterThan(-1);
     expect(guaranteedReprintIdx, 'return runWithGuaranteedReprint( call not found').toBeGreaterThan(-1);
     expect(snapshotIdx, 'the ORIGINAL SD snapshot must be taken before the cascade loop can run, or a cascade could mutate currentResult first').toBeLessThan(guaranteedReprintIdx);
+  });
+
+  it('[CRITICAL FIX PIN] the originalResult snapshot unwraps handleExecuteCommand\'s {success,sdId,handoffType,result} wrapper -- capturing the wrapper directly (currentResult with no .result unwrap) produced SCORE=NaN in every reprint (adversarial ship review, pre-merge)', () => {
+    const snapshotLine = fnBody.split('\n').find((line) => line.includes('const originalResult ='));
+    expect(snapshotLine, 'originalResult snapshot line not found').toBeDefined();
+    expect(snapshotLine).toMatch(/currentResult\.result\s*\?\?\s*currentResult/);
+    // The exact bug: assigning the bare wrapper with no unwrap at all.
+    expect(snapshotLine.trim()).not.toBe('const originalResult = currentResult;');
   });
 
   it('TS-6 — the reprintFn passed to runWithGuaranteedReprint reprints originalResult/originalHandoffType/originalSdId, never the mutating currentResult/currentHandoffType/currentSdId loop variables', () => {
