@@ -207,16 +207,16 @@ describe('regression pin — unrelated kill/promotion path is untouched (FR-3 AC
 
 describe('computeContentHash (FR-4)', () => {
   const { computeContentHash } = _internal;
-  const base = { prdText: 'prd content', archText: 'arch content', archLoadStatus: 'ok', model: 'gpt-5.4' };
+  const base = { prdRawText: 'prd content', archRawText: 'arch content', archLoadStatus: 'ok', model: 'gpt-5.4' };
 
   it('is stable for identical inputs', () => {
     expect(computeContentHash(base)).toBe(computeContentHash({ ...base }));
   });
 
-  it('changes when prdText or archText changes', () => {
+  it('changes when prdRawText or archRawText changes', () => {
     const h0 = computeContentHash(base);
-    expect(computeContentHash({ ...base, prdText: 'different prd' })).not.toBe(h0);
-    expect(computeContentHash({ ...base, archText: 'different arch' })).not.toBe(h0);
+    expect(computeContentHash({ ...base, prdRawText: 'different prd' })).not.toBe(h0);
+    expect(computeContentHash({ ...base, archRawText: 'different arch' })).not.toBe(h0);
   });
 
   // T12: must hash adapter.defaultModel (the REQUESTED model), never response.model (the SERVED
@@ -230,53 +230,64 @@ describe('computeContentHash (FR-4)', () => {
   });
 
   // PT-8: a transient arch-load failure must never hash identically to a genuine "no arch plan"
-  // absence, even though both leave archText='' -- archLoadStatus is a distinct hash input.
-  it('changes when archLoadStatus differs, even with byte-identical (empty) archText', () => {
-    const notFound = computeContentHash({ ...base, archText: '', archLoadStatus: 'not_found' });
-    const loadFailed = computeContentHash({ ...base, archText: '', archLoadStatus: 'load_failed' });
-    const ok = computeContentHash({ ...base, archText: '', archLoadStatus: 'ok' });
+  // absence, even though both leave archRawText='' -- archLoadStatus is a distinct hash input.
+  it('changes when archLoadStatus differs, even with byte-identical (empty) archRawText', () => {
+    const notFound = computeContentHash({ ...base, archRawText: '', archLoadStatus: 'not_found' });
+    const loadFailed = computeContentHash({ ...base, archRawText: '', archLoadStatus: 'load_failed' });
+    const ok = computeContentHash({ ...base, archRawText: '', archLoadStatus: 'ok' });
     expect(notFound).not.toBe(loadFailed);
     expect(notFound).not.toBe(ok);
     expect(loadFailed).not.toBe(ok);
   });
-
-  // SECURITY (EXEC-phase evidence, SEC-HIGH-1, live-reachable: 11/253 eva_architecture_plans
-  // already exceed MAX_CRITIQUE_ANALYSIS_CHARS): the truncated PREFIX alone is not enough to bind
-  // content identity -- prdCharsTotal/archCharsTotal must independently affect the hash, so an
-  // edit made entirely beyond the truncation boundary (leaving the sent prefix byte-identical)
-  // still changes the hash. Same PT-8 principle as archLoadStatus, applied to length.
-  it('changes when charsTotal differs, even with byte-identical prdText/archText (the sent prefix)', () => {
-    const h0 = computeContentHash({ ...base, prdCharsTotal: 5000, archCharsTotal: 3000 });
-    expect(computeContentHash({ ...base, prdCharsTotal: 5001, archCharsTotal: 3000 })).not.toBe(h0);
-    expect(computeContentHash({ ...base, prdCharsTotal: 5000, archCharsTotal: 3001 })).not.toBe(h0);
-  });
 });
 
-// SECURITY (EXEC-phase evidence, SEC-HIGH-1): the closer-to-real-exploit form of the fix above --
-// two PRDs whose TRUNCATED PREFIX is engineered to be byte-identical, but whose real,
-// pre-truncation content genuinely differs, must still produce different content_hash values at
-// the critiquePlanProposal level (not just when computeContentHash is called directly with
-// hand-picked totals). Before this fix, an override/cache-hit binding could apply to content that
-// was never actually reviewed by the LLM.
+// SECURITY (EXEC-phase evidence SEC-HIGH-1 + re-verification): computeContentHash hashes the
+// FULL, pre-truncation content (prdRawText/archRawText), not the truncated/sent pair -- these
+// tests prove the property at the level that matters, using content genuinely reviewed vs. not.
+// An earlier version of this fix hashed the sent text plus its length (charsTotal); re-verification
+// showed that closed only length-CHANGING edits beyond the truncation boundary and left
+// length-PRESERVING edits (a same-length date/identifier/threshold swap entirely past the cut)
+// still colliding. Hashing full content closes the class outright, not just the length-changing
+// subset -- these tests include a length-preserving variant to prove that specifically.
 describe('content_hash across the truncation boundary (FR-4 SEC-HIGH-1)', () => {
-  it('two functional_requirements arrays with an identical truncated prefix but different real length hash differently', () => {
+  it('two functional_requirements arrays with an identical sent prefix but different real content hash differently (length-CHANGING edit)', () => {
     const bigFrsA = Array.from({ length: 500 }, (_, i) => ({ id: `FR-${i + 1}`, description: 'x'.repeat(200) }));
     // Same 500 FR ids (so the [FR ids present: ...] marker length — and therefore the cut point —
     // is identical between A and B) — only the LAST entry's description grows, far past where
-    // truncation already occurs among the first ~200 entries. A naive "same ids, so same content"
-    // read would miss that B's real content genuinely differs.
+    // truncation already occurs among the first ~200 entries.
     const bigFrsB = bigFrsA.map((fr, i) => (i === bigFrsA.length - 1 ? { ...fr, description: 'x'.repeat(200) + ' PLUS AN ENTIRELY NEW TAIL PAST THE CUT' } : fr));
 
     const a = buildCritiqueUserPrompt({ prdContent: { ...UNDER_BUDGET_PRD, functional_requirements: bigFrsA }, archContent: 'short', sdContext: {} });
     const b = buildCritiqueUserPrompt({ prdContent: { ...UNDER_BUDGET_PRD, functional_requirements: bigFrsB }, archContent: 'short', sdContext: {} });
 
-    // The sent PREFIX is byte-identical (both truncate long before reaching the last entry)...
-    expect(a.prdText).toBe(b.prdText);
-    // ...but the real content differs, so the hash inputs (via charsTotal) must differ too.
+    expect(a.prdText).toBe(b.prdText); // the sent PREFIX is byte-identical...
+    expect(a.prdRawText).not.toBe(b.prdRawText); // ...but the real, full content differs...
     const { computeContentHash } = _internal;
-    const hashA = computeContentHash({ prdText: a.prdText, archText: a.archText, archLoadStatus: 'ok', model: 'gpt-5.4', prdCharsTotal: a.truncated.prd.charsTotal, archCharsTotal: a.truncated.arch.charsTotal });
-    const hashB = computeContentHash({ prdText: b.prdText, archText: b.archText, archLoadStatus: 'ok', model: 'gpt-5.4', prdCharsTotal: b.truncated.prd.charsTotal, archCharsTotal: b.truncated.arch.charsTotal });
-    expect(a.truncated.prd.charsTotal).not.toBe(b.truncated.prd.charsTotal);
+    const hashA = computeContentHash({ prdRawText: a.prdRawText, archRawText: a.archRawText, archLoadStatus: 'ok', model: 'gpt-5.4' });
+    const hashB = computeContentHash({ prdRawText: b.prdRawText, archRawText: b.archRawText, archLoadStatus: 'ok', model: 'gpt-5.4' });
+    expect(hashA).not.toBe(hashB); // ...so the hash must differ too.
+  });
+
+  // The exact class re-verification flagged as still-open under length-only hashing: a
+  // SAME-LENGTH swap entirely past the truncation boundary must now ALSO produce a different hash.
+  it('a length-PRESERVING edit entirely past the truncation boundary still hashes differently', () => {
+    const bigFrsA = Array.from({ length: 500 }, (_, i) => ({ id: `FR-${i + 1}`, description: 'x'.repeat(200) }));
+    // Last entry's description is replaced with a DIFFERENT string of the EXACT same length —
+    // total charsTotal is identical between A and B; only content past the cut differs.
+    const replacement = 'y'.repeat(200);
+    expect(replacement.length).toBe('x'.repeat(200).length);
+    const bigFrsB = bigFrsA.map((fr, i) => (i === bigFrsA.length - 1 ? { ...fr, description: replacement } : fr));
+
+    const a = buildCritiqueUserPrompt({ prdContent: { ...UNDER_BUDGET_PRD, functional_requirements: bigFrsA }, archContent: 'short', sdContext: {} });
+    const b = buildCritiqueUserPrompt({ prdContent: { ...UNDER_BUDGET_PRD, functional_requirements: bigFrsB }, archContent: 'short', sdContext: {} });
+
+    expect(a.prdText).toBe(b.prdText); // sent prefix identical
+    expect(a.prdRawText.length).toBe(b.prdRawText.length); // SAME total length — the case a
+    // charsTotal-only guard could never distinguish
+    expect(a.prdRawText).not.toBe(b.prdRawText); // but real content genuinely differs
+    const { computeContentHash } = _internal;
+    const hashA = computeContentHash({ prdRawText: a.prdRawText, archRawText: a.archRawText, archLoadStatus: 'ok', model: 'gpt-5.4' });
+    const hashB = computeContentHash({ prdRawText: b.prdRawText, archRawText: b.archRawText, archLoadStatus: 'ok', model: 'gpt-5.4' });
     expect(hashA).not.toBe(hashB);
   });
 
