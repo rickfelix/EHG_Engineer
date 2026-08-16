@@ -239,14 +239,25 @@ const LOAD_CRASH_RE = /ERR_MODULE_NOT_FOUND|Failed to load url|Cannot find (modu
 // PAT-LES-c4ec7d0aab94 (SD-LEARN-FIX-ADDRESS-PATTERN-LEARN-143): the two evidence sites below
 // used to diverge -- one filtered for failure-vocabulary content, the other took the raw last-3
 // lines (frequently vitest's boilerplate summary footer, not the actual assertion). One shared
-// helper closes the asymmetry. Falls back to the raw last-3-lines when nothing matches the
-// vocabulary, so a real failure whose wording this regex doesn't cover is never silently
-// reported as empty evidence -- strictly additive over the old raw-slice behavior, never worse.
-const SEED_TEST_EVIDENCE_RE = /FAIL|AssertionError|expected|Tests\s/i;
+// helper closes the asymmetry.
+//
+// TWO TIERS, NOT ONE (TESTING sub-agent finding during EXEC-TO-PLAN review): a single
+// "FAIL|AssertionError|expected|Tests\s" filter still let a real AssertionError get pushed out
+// of the last-3 window by vitest's OWN summary footer ("Test Files 1 failed", "Tests 3 failed")
+// matching the same regex and sorting after it. STRONG (actual assertion content) is preferred
+// over WEAK (generic failure-count/footer vocabulary); WEAK is used only when nothing strong
+// exists; the raw last-3-lines is the final fallback when nothing matches at all -- so a real
+// failure whose wording neither regex covers is never silently reported as empty evidence.
+// Strictly additive over the pre-fix raw-slice behavior, never worse.
+const SEED_TEST_STRONG_RE = /AssertionError|expected .+ to /i;
+const SEED_TEST_WEAK_RE = /FAIL|Tests\s/i;
 export function extractSeedTestEvidence(out) {
   const lines = String(out || '').trim().split('\n').filter(Boolean);
-  const matched = lines.filter((l) => SEED_TEST_EVIDENCE_RE.test(l));
-  return (matched.length ? matched : lines).slice(-3);
+  const strong = lines.filter((l) => SEED_TEST_STRONG_RE.test(l));
+  if (strong.length) return strong.slice(-3);
+  const weak = lines.filter((l) => SEED_TEST_WEAK_RE.test(l));
+  if (weak.length) return weak.slice(-3);
+  return lines.slice(-3);
 }
 
 /**

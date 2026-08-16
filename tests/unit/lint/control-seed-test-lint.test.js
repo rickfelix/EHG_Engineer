@@ -288,4 +288,25 @@ describe('extractSeedTestEvidence — PAT-LES-c4ec7d0aab94', () => {
   it('never returns an empty array for non-empty input, even with zero vocabulary matches', () => {
     expect(extractSeedTestEvidence('nothing recognizable here')).toEqual(['nothing recognizable here']);
   });
+
+  it('an AssertionError is NOT pushed out of the window by vitest\'s own summary footer (TESTING sub-agent finding)', () => {
+    // A footer with >3 lines all matching the WEAK vocabulary (FAIL/Tests) would, under a
+    // single-tier filter, bury the real assertion outside slice(-3).
+    const out = [
+      'AssertionError: expected 3 to equal 5',
+      'Test Files  1 failed (1)',
+      '     Tests  3 failed | 2 passed (5)',
+      '  Start at  10:23:45',
+      '  Duration  1.23s',
+      'FAIL  tests/unit/x.test.js',
+    ].join('\n');
+    const evidence = extractSeedTestEvidence(out);
+    expect(evidence).toContain('AssertionError: expected 3 to equal 5');
+  });
+
+  it('falls back to WEAK vocabulary (FAIL/Tests-count) when no strong assertion line exists', () => {
+    const out = ['Test Files  1 failed (1)', '     Tests  3 failed | 2 passed (5)', '  Duration  1.23s'].join('\n');
+    const evidence = extractSeedTestEvidence(out);
+    expect(evidence.some((l) => /Tests\s+3 failed/.test(l))).toBe(true);
+  });
 });
