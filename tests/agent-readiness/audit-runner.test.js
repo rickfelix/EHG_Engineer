@@ -32,6 +32,11 @@ vi.mock('../../lib/agent-readiness/prompt-sets.js', () => ({
   promptCountFor: () => 1
 }));
 
+const estimateCostMock = vi.fn(() => 0.001);
+vi.mock('../../lib/research/deep-research-budget.js', () => ({
+  estimateCost: (...args) => estimateCostMock(...args)
+}));
+
 const { runAudit, _internal } = await import('../../lib/agent-readiness/audit-runner.js');
 
 function baseParams(overrides = {}) {
@@ -75,6 +80,13 @@ describe('audit-runner (FR-1/US-002) — TS-1: no-fallback', () => {
     expect(call.requestedModel).toBe('claude-opus-5');
     expect(call.actualResponderModel).toBe('claude-opus-5');
   });
+
+  it('actual cost is estimated with the REAL model family (cell.family), not a hardcoded rate — the exact defect adversarial review caught on PR #7113', async () => {
+    completeMock.mockResolvedValue({ model: 'claude-opus-5', content: 'a plain answer', usage: { inputTokens: 100, outputTokens: 50 } });
+    estimateCostMock.mockClear();
+    await runAudit(baseParams({ modelSet: ['openai:gpt-5'] }));
+    expect(estimateCostMock).toHaveBeenCalledWith('openai', 100, 50);
+  });
 });
 
 describe('audit-runner (FR-1/US-002) — TS-2: no-cache', () => {
@@ -99,6 +111,10 @@ describe('audit-runner (FR-1/US-002) — TS-2: no-cache', () => {
 });
 
 describe('audit-runner — budget guard integration (FR-6)', () => {
+  beforeEach(() => {
+    getProviderAdapterMock.mockClear();
+  });
+
   it('refuses to run when the budget guard disallows, and never calls the adapter', async () => {
     preflightBudgetCheckMock.mockResolvedValueOnce({ allowed: false, reason: 'over daily cap', estimatedCostUsd: 9.99, capUsd: 5 });
     await expect(runAudit(baseParams())).rejects.toThrow(/budget guard/i);

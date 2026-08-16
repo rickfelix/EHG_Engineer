@@ -54,27 +54,45 @@ beforeEach(() => {
 describe('budget-guard (FR-6/US-011) — TS-5: budget cap halts an over-budget run', () => {
   it('TS-5: preflightBudgetCheck returns allowed:false with a reason when checkBudget disallows', async () => {
     checkBudgetMock.mockResolvedValueOnce({ allowed: false, reason: 'daily cap exceeded' });
-    const result = await preflightBudgetCheck({ promptCount: 5, modelCount: 2, samplesPerCell: 5, env: {} });
+    const result = await preflightBudgetCheck({ promptCount: 5, modelSet: ['anthropic:claude-opus-5', 'openai:gpt-5'], samplesPerCell: 5, env: {} });
     expect(result.allowed).toBe(false);
     expect(result.reason).toBe('daily cap exceeded');
   });
 
-  it('TS-5: estimated cost scales with promptCount x modelCount x samplesPerCell — the guard measures the actual fan-out size, not a fixed estimate', async () => {
-    await preflightBudgetCheck({ promptCount: 5, modelCount: 2, samplesPerCell: 5, env: {} });
+  it('TS-5: estimated cost scales with promptCount x modelSet.length x samplesPerCell — the guard measures the actual fan-out size, not a fixed estimate', async () => {
+    await preflightBudgetCheck({ promptCount: 5, modelSet: ['anthropic:claude-opus-5', 'openai:gpt-5'], samplesPerCell: 5, env: {} });
     const [, estimatedCost] = checkBudgetMock.mock.calls[0];
-    // 5 prompts x 2 models x 5 replicates = 50 cells x estimateCost() per call
+    // 5 prompts x 2 models x 5 replicates = 50 cells total, split 25/25 across the two models x estimateCost() per call
     expect(estimatedCost).toBeCloseTo(0.001 * 50, 6);
   });
 
+  it('preflightBudgetCheck estimates PER MODEL FAMILY, not a single flat AUDIT_PROVIDER_KEY rate — the exact defect adversarial review caught on PR #7113 (estimateCost(AUDIT_PROVIDER_KEY,...) silently fell back to the anthropic rate regardless of modelSet)', async () => {
+    await preflightBudgetCheck({ promptCount: 1, modelSet: ['anthropic:claude-opus-5', 'openai:gpt-5', 'google:gemini-3'], samplesPerCell: 1, env: {} });
+    const familiesCalled = estimateCostMock.mock.calls.map((c) => c[0]);
+    expect(familiesCalled).toEqual(['anthropic', 'openai', 'google']);
+    expect(familiesCalled).not.toContain(AUDIT_PROVIDER_KEY);
+  });
+
   it('preflightBudgetCheck calls checkBudget with the AUDIT_PROVIDER_KEY, not deep-research\'s own key', async () => {
-    await preflightBudgetCheck({ promptCount: 1, modelCount: 1, samplesPerCell: 1, env: {} });
+    await preflightBudgetCheck({ promptCount: 1, modelSet: ['anthropic:claude-opus-5'], samplesPerCell: 1, env: {} });
     expect(checkBudgetMock).toHaveBeenCalledWith(AUDIT_PROVIDER_KEY, expect.any(Number));
   });
 
   it('when allowed, returns allowed:true with the estimated cost and resolved cap', async () => {
-    const result = await preflightBudgetCheck({ promptCount: 1, modelCount: 1, samplesPerCell: 1, env: { AUDIT_BUDGET_CAP_USD: '2.5' } });
+    const result = await preflightBudgetCheck({ promptCount: 1, modelSet: ['anthropic:claude-opus-5'], samplesPerCell: 1, env: { AUDIT_BUDGET_CAP_USD: '2.5' } });
     expect(result.allowed).toBe(true);
     expect(result.capUsd).toBe(2.5);
+  });
+});
+
+describe('budget-guard — familyOf', () => {
+  it('extracts the family from a "family:model" entry', () => {
+    expect(_internal.familyOf('anthropic:claude-opus-5')).toBe('anthropic');
+    expect(_internal.familyOf('openai:gpt-5')).toBe('openai');
+  });
+
+  it('returns the whole string unchanged when there is no colon (defensive, should not happen given audit-runner.js validates this shape)', () => {
+    expect(_internal.familyOf('claude-opus-5')).toBe('claude-opus-5');
   });
 });
 
