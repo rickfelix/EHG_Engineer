@@ -250,7 +250,7 @@ export function ratchetKey(site) {
 
 /**
  * Pure ratchet comparison, decoupled from live git/filesystem state so it can be exercised
- * deterministically with synthetic data (PLAN-phase VALIDATION review of PR #7143 found the
+ * deterministically with synthetic data (the PLAN-phase VALIDATION sub-agent review found the
  * committed meta-test only proved evaluateFiles() could return ok:false on synthetic input --
  * it never proved THIS comparison could detect a genuinely new violation, since in the normal
  * passing state live findings equal the baseline exactly and a broken key-construction bug
