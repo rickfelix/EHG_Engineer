@@ -200,7 +200,7 @@ const risks = [
     probability: 'HIGH',
     impact: 'MEDIUM',
     mitigation: "This is documented explicitly, not silently assumed away: TS-8 (the live-fire proof) is marked as an EXEC/verification-phase step executed and documented separately, not a PR-merge blocker. All other test scenarios (TS-1 through TS-7, TS-9) are fully unit-testable without the migration being applied and constitute this SD's PR-merge bar.",
-    rollback_plan: 'ALTER PUBLICATION supabase_realtime DROP TABLE test_results reverses the DDL cleanly without touching application code, if the chairman later decides against it.',
+    rollback_plan: 'Unregister test_results from the supabase_realtime publication (the ALTER PUBLICATION inverse of FR-7\'s ADD TABLE clause) -- reverses the DDL cleanly without touching application code, if the chairman later decides against it.',
   },
   {
     risk: 'The regression lookback introduces a new query pattern (self-join via test_runs) against test_results, which currently has indexes only on (id), (test_run_id), (status) — the lookback is a sequential scan.',
@@ -247,7 +247,7 @@ const integration_operationalization = {
     alerts: ['None new — reuses the existing fail-soft console.error log line for write failures'],
     rollout_strategy: "Code ships in this SD's PR; the DDL half (ALTER PUBLICATION) is staged and applied separately at a chairman ceremony — the code fix is inert but harmless until then",
     rollback_trigger: 'Unexpected load or false-positive RCRs observed post-migration-apply',
-    rollback_procedure: 'git revert the code change and/or ALTER PUBLICATION supabase_realtime DROP TABLE test_results to stop event delivery without touching application code',
+    rollback_procedure: 'git revert the code change and/or unregister test_results from the supabase_realtime publication (the ALTER PUBLICATION inverse of FR-7\'s ADD TABLE clause) to stop event delivery without touching application code',
   },
 };
 
