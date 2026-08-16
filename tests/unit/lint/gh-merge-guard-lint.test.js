@@ -135,3 +135,67 @@ describe('FR-3 — CLAUDE_EXEC.md content-assertion, not just drift-check', () =
     expect(pragmaLines).toHaveLength(2);
   });
 });
+
+describe('TS-8 — FR-4 WHY clause exists and does not self-trip the guard', () => {
+  const errorCodes = fs.readFileSync(path.join(repoRoot, 'docs/reference/error-codes.md'), 'utf8');
+
+  it('the PR_MERGE_VERIFICATION row explains WHY a bare gh pr merge fails in a worktree', () => {
+    expect(errorCodes).toMatch(/PR_MERGE_VERIFICATION/);
+    expect(errorCodes).toMatch(/fails? the local checkout/i);
+  });
+
+  it('the WHY clause names the bare command it warns against without tripping the guard', () => {
+    const violations = findFileViolations('docs/reference/error-codes.md', errorCodes);
+    expect(violations).toHaveLength(0);
+  });
+});
+
+describe('TS-9 — every gh-merge-safe.mjs invocation is actually runnable by its own parseArgs', () => {
+  // The defect class TESTING review caught (docs/reference/ship-command-guide.md:101/:223
+  // originally shipped with NO PR# positional -- gh-merge-safe.mjs's parseArgs requires a numeric
+  // positionals[0] and, unlike bare `gh pr merge`, cannot infer the PR from the current branch, so
+  // the printed command exited 2). This guards the CLASS, not just those two now-fixed instances:
+  // every invocation across the guard's own SCAN_FILES corpus must carry a token before its first
+  // `--flag` (a real number, or a `<placeholder>` a human fills in -- either is fine, "nothing" is
+  // not), and every flag used must be one gh-merge-safe.mjs's parseArgs actually defines
+  // (scripts/gh-merge-safe.mjs: squash/merge/rebase/delete-branch, all boolean).
+  const ALLOWED_FLAGS = new Set(['--squash', '--merge', '--rebase', '--delete-branch']);
+  const INVOCATION = /node scripts\/gh-merge-safe\.mjs\s+(\S+)((?:\s+--[\w-]+)*)/g;
+
+  it('every invocation has a positional before its flags, and only flags parseArgs defines', () => {
+    const missingPositional = [];
+    const unsupportedFlags = [];
+    for (const rel of SCAN_FILES) {
+      let content;
+      try { content = fs.readFileSync(path.join(repoRoot, rel), 'utf8'); } catch { continue; }
+      for (const match of content.matchAll(INVOCATION)) {
+        const [full, firstToken, flagsText] = match;
+        if (firstToken.startsWith('--')) {
+          missingPositional.push(`${rel}: "${full}"`);
+          continue;
+        }
+        for (const flag of flagsText.trim().split(/\s+/).filter(Boolean)) {
+          if (!ALLOWED_FLAGS.has(flag)) unsupportedFlags.push(`${rel}: "${flag}" in "${full}"`);
+        }
+      }
+    }
+    if (missingPositional.length) {
+      throw new Error(`${missingPositional.length} invocation(s) missing a PR# positional: ${missingPositional.join('; ')}`);
+    }
+    if (unsupportedFlags.length) {
+      throw new Error(`${unsupportedFlags.length} unsupported flag(s): ${unsupportedFlags.join('; ')}`);
+    }
+    expect(missingPositional).toHaveLength(0);
+    expect(unsupportedFlags).toHaveLength(0);
+  });
+
+  it('sanity: the corpus actually contains invocations (a regex that matches nothing proves nothing)', () => {
+    let total = 0;
+    for (const rel of SCAN_FILES) {
+      let content;
+      try { content = fs.readFileSync(path.join(repoRoot, rel), 'utf8'); } catch { continue; }
+      total += [...content.matchAll(INVOCATION)].length;
+    }
+    expect(total).toBeGreaterThanOrEqual(13); // FR-1's 2 live sites + FR-2's 13 doc/prompt sites (some files repeat)
+  });
+});
