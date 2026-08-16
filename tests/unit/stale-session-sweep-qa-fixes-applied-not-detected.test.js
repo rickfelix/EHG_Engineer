@@ -66,16 +66,52 @@ describe('QF-20260727-363: QA FIXES reports applied repairs, never detections', 
   it('every applied counter is incremented only inside a confirmed-write branch', () => {
     // THE LOAD-BEARING ONE. Moving an increment out of its `if (!error)` branch would restore the
     // original defect while leaving all the assertions above green.
+    //
+    // SD-LEO-INFRA-STUCK100-COMPLETED-WRITE-FENCE-001: `completed` no longer sits directly inside
+    // its own `if (!error)` — the STUCK_100 write moved into a dedicated, independently-tested,
+    // single-write-site function (completeStuck100Sd, required by this SD's own grep guard below)
+    // so it could be fenced on the orchestrator-parent and LEAD-FINAL-APPROVAL-witness axes without
+    // duplicating the write. The invariant this test protects (increment only on a CONFIRMED write,
+    // never an attempt) still holds -- just through one level of indirection: the call site gates
+    // on `result.written`, and `result.written` is proven true ONLY after `completeStuck100Sd`'s
+    // own `if (error)` guard (asserted separately, immediately below) -- so `completed` is checked
+    // against that pattern instead of the same-scope `if (!error` window the other four counters use.
+    // This mirrors this file's own established precedent for widening a scan when a legitimate
+    // structural change shifts WHERE the guard text lives without weakening WHAT it guarantees (see
+    // the `continue;`-adjacency widening later in this file, SD-LEO-INFRA-ORCH-PARENT-LIFECYCLE-LANES-001).
+    const SAME_SCOPE_GUARDED = ['released', 'releasedOrphaned', 'reset', 'cleared'];
+    const INDIRECTED_GUARDED = { completed: /if \(result\.written\)/ };
     const increments = [...SRC.matchAll(/applied\.(released|releasedOrphaned|completed|reset|cleared)\+\+/g)];
     expect(increments.length, 'all five counters must be incremented somewhere').toBe(5);
     for (const m of increments) {
       const preceding = SRC.slice(Math.max(0, m.index - 400), m.index);
-      const lastGuard = preceding.lastIndexOf('if (!error');
-      expect(
-        lastGuard,
-        `applied.${m[1]}++ is not inside an if (!error...) branch — it would count an attempt, not a repair`
-      ).toBeGreaterThan(-1);
+      if (SAME_SCOPE_GUARDED.includes(m[1])) {
+        const lastGuard = preceding.lastIndexOf('if (!error');
+        expect(
+          lastGuard,
+          `applied.${m[1]}++ is not inside an if (!error...) branch — it would count an attempt, not a repair`
+        ).toBeGreaterThan(-1);
+      } else {
+        const pattern = INDIRECTED_GUARDED[m[1]];
+        expect(pattern, `applied.${m[1]}++ has no recognized guard pattern registered in this test`).toBeDefined();
+        expect(
+          pattern.test(preceding),
+          `applied.${m[1]}++ is not gated by its registered indirected guard (${pattern}) — it would count an attempt, not a repair`
+        ).toBe(true);
+      }
     }
+  });
+
+  it('[indirected guard, completeStuck100Sd] the function feeding applied.completed++ only reports written:true after its own confirmed-write check — the indirection above is not a loophole', () => {
+    const fnStart = SRC.indexOf('async function completeStuck100Sd');
+    expect(fnStart, 'completeStuck100Sd must still exist').toBeGreaterThan(-1);
+    const fnEnd = SRC.indexOf('\nasync function ', fnStart + 1);
+    const fnBody = SRC.slice(fnStart, fnEnd > -1 ? fnEnd : fnStart + 2000);
+    const errorGuardIdx = fnBody.indexOf('if (error) return { written: false');
+    const writtenTrueIdx = fnBody.indexOf('written: true,');
+    expect(errorGuardIdx, 'completeStuck100Sd must refuse (written:false) on a DB error before it can ever report written:true').toBeGreaterThan(-1);
+    expect(writtenTrueIdx).toBeGreaterThan(-1);
+    expect(errorGuardIdx, 'the error guard must precede the written:true return, not follow it').toBeLessThan(writtenTrueIdx);
   });
 
   it('the pending_approval reset selects its rows, so a zero-row update cannot count as a repair', () => {
