@@ -86,9 +86,16 @@ describe('cli-main.js handleExecuteWithContinuation — reprint seam wiring (FR-
   });
 
   it('TS-6 — every real cascade call site (LEAD-TO-PLAN chaining, standalone-SD chaining, parent LEAD-FINAL-APPROVAL, next-child chaining) sets cascadeAttempted = true immediately before reassigning currentResult', () => {
-    // Exactly 4 real cascade sites per the SD's scope (a 5th, parent-cascade-on-child-completion,
-    // was explicitly excluded as structurally different -- see PRD). Each must set the flag so
-    // the reprintFn (guarded on `if (cascadeAttempted)`) knows a cascade was actually attempted.
+    // handleExecuteCommand is called 5 total times in this function: the INITIAL call for the
+    // SD's own requested handoff (not a cascade -- excluded from this count by construction,
+    // since it happens before cascadeAttempted/handleExecuteWithContinuationLoop even exist),
+    // plus these 4 real cascade sites: LEAD-TO-PLAN orchestrator chaining, standalone-SD
+    // chaining, parent LEAD-FINAL-APPROVAL when all children complete (cli-main.js:~1232),
+    // and next-child chaining. (Corrected: an earlier version of this comment mistakenly
+    // described the parent-LEAD-FINAL-APPROVAL site as a separate, excluded 5th cascade site --
+    // TESTING EXEC's T12 finding. It is one of the 4 counted sites, not excluded.) Each of the
+    // 4 must set the flag so the reprintFn (guarded on `if (cascadeAttempted)`) knows a cascade
+    // was actually attempted.
     const flagSets = fnBody.match(/cascadeAttempted = true;/g) || [];
     expect(flagSets.length, `expected exactly 4 cascadeAttempted=true sites, found ${flagSets.length}`).toBe(4);
   });

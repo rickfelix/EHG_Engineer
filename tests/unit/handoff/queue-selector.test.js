@@ -116,4 +116,19 @@ describe('selectNextSD (FR-1) — authority fence', () => {
 
     expect(result.sd?.sd_key).toBe('SD-NORMAL-001');
   });
+
+  // TESTING EXEC (T11): runtime fail-open regression pin, not just the [STATIC] select-string
+  // test above. selectNextSD's real select() never returns sd_type (confirmed by the [STATIC]
+  // test), so this exact combination cannot occur from a real query today -- this fixture
+  // instead pins the CLASSIFIER-FORM choice itself: if a future select() widening ever added
+  // sd_type back, this is the test that would catch the first-match classifier's fail-open
+  // (SECURITY EXEC Q1, live-measured) rather than relying solely on the select-string guard.
+  it('[FAIL-OPEN REGRESSION GUARD] a fenced candidate that is ALSO sd_type=orchestrator is still refused — catches a reversion to the first-match classifier', async () => {
+    const fencedOrchestrator = { id: 'fenced-orch-uuid', sd_key: 'SD-FENCED-ORCH-001', title: 'Fenced Orchestrator', status: 'draft', priority: 'high', parent_sd_id: null, sd_type: 'orchestrator', metadata: { requires_human_action: true } };
+    const supabase = mockSupabase([fencedOrchestrator, NORMAL]);
+    const result = await selectNextSD(supabase);
+
+    expect(result.sd?.sd_key).not.toBe('SD-FENCED-ORCH-001');
+    expect(result.sd?.sd_key).toBe('SD-NORMAL-001');
+  });
 });

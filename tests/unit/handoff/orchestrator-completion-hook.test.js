@@ -622,6 +622,20 @@ describe('Orchestrator Completion Hook', () => {
         expect(result.orchestrator?.id).toBe('normal-uuid');
       });
 
+      // TESTING EXEC (T11): runtime fail-open regression pin, not just the [STATIC] select-string
+      // test below. findNextAvailableOrchestrator's real select() never returns sd_type
+      // (confirmed by the [STATIC] test), so this exact combination cannot occur from a real
+      // query today -- this fixture instead pins the CLASSIFIER-FORM choice itself, so a future
+      // select() widening would be caught here rather than relying solely on the select-string guard.
+      it('[FAIL-OPEN REGRESSION GUARD] a fenced candidate that is ALSO sd_type=orchestrator is still refused — catches a reversion to the first-match classifier', async () => {
+        const fencedOrchestrator = { id: 'fenced-orch-uuid', sd_key: 'SD-FENCED-ORCH-001', title: 'Fenced Orchestrator', status: 'draft', priority: 5, parent_sd_id: null, sd_type: 'orchestrator', metadata: { requires_human_action: true } };
+        const mockSupabase = mockSupabaseFor([fencedOrchestrator, NORMAL]);
+        const result = await findNextAvailableOrchestrator(mockSupabase);
+
+        expect(result.orchestrator?.sd_key).not.toBe('SD-FENCED-ORCH-001');
+        expect(result.orchestrator?.sd_key).toBe('SD-NORMAL-001');
+      });
+
       it('[STATIC] never adds sd_type to the eligibility-relevant select — this function selects orchestrator-type rows by design (status/parent_sd_id filter), and the general classifier would refuse its own subject', () => {
         // findNextAvailableOrchestrator has MULTIPLE .select(...) calls (the candidate query
         // AND a separate claimed-sessions query) — a plain .match() takes whichever occurs
