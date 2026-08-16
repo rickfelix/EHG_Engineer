@@ -25,8 +25,22 @@ export const SD_TYPE_PASS_THRESHOLDS = {
   // Database SDs: Slightly stricter (data integrity)
   database: 65,
 
-  // Security SDs: Stricter (but not blocking)
-  security: 65,
+  // Security SDs: raised 65 -> 70 by QF-20260807-698 (re-measured at claim per Adam addendum
+  // 2026-08-16, superseding the 3-set recorded at filing).
+  // BEFORE VALUE FOR ROLLBACK: 65 (the value SD-LEO-INFRA-GATE-THRESHOLD-TUNING-002 shipped).
+  // Restoring 65 is the whole rollback.
+  //
+  // SAME GRANULARITY TRAP AS refactor's OWN COMMENT BELOW: the tuning view recommends per
+  // (sd_type x content_type), but this table is keyed by sd_type ALONE, so a per-cell
+  // recommendation can only be applied when EVERY content_type cell under that sd_type clears
+  // the new bar. Re-measured live 2026-08-16: security's actionable cell (user_story, n=17,
+  // avg=81.5, 100% pass) supports 70, and its two low-n siblings (prd n=5 avg=84.4;
+  // retrospective n=9 avg=83.4 — both INSUFFICIENT_DATA on their own) already sit comfortably
+  // above 70, so raising the shared key has no collateral. This is the ONLY one of six
+  // live-2026-08-16 INCREASE recommendations that clears this test; see
+  // scripts/quality/tuning-003-disposition.mjs for the full snapshot and the collateral
+  // measurement that refused the other five (bugfix, feature, infrastructure x2, orchestrator).
+  security: 70,
 
   // Refactor SDs: raised 60 -> 65 by SD-LEO-INFRA-GATE-THRESHOLD-TUNING-002.
   // BEFORE VALUE FOR ROLLBACK: no key at all — refactor fell through to DEFAULT_THRESHOLD (60).
