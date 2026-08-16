@@ -171,8 +171,16 @@ async function clearToolState(sessionId, nowMs) {
   });
 }
 
+// QF-20260728-720 (adversarial review): claimedAtIso is interpolated unescaped into
+// a shell command below. Every real caller (the DB-sourced claude_sessions.claimed_at
+// column, and this file's own tests) always passes a timestamp matching this shape, so
+// the check changes nothing for valid input — it only closes the reachable surface that
+// exporting collectGitMetrics widened, by fail-closed rejecting anything else BEFORE
+// it reaches execSync.
+const ISO_TIMESTAMP_RE = /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(\.\d+)?(Z|[+-]\d{2}:?\d{2})?$/;
+
 function collectGitMetrics(worktreePath, claimedAtIso) {
-  if (!claimedAtIso) return null;
+  if (!claimedAtIso || !ISO_TIMESTAMP_RE.test(claimedAtIso)) return null;
   const cwd = worktreePath && isAbsolute(worktreePath) ? worktreePath : process.cwd();
   const opts = { cwd, timeout: 2000, encoding: 'utf8', stdio: ['pipe', 'pipe', 'pipe'] };
 

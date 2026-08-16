@@ -24,7 +24,19 @@ const REPO_ROOT = path.resolve(__dirname, '../../..');
 
 const SCAN_DIRS = ['scripts', 'lib'];
 const EXCLUDE_SEGMENTS = ['node_modules', '.git', '.worktrees', 'dist', 'build', 'coverage', 'archive'];
-const WRITE_PATTERN = /loop_state\s*:\s*(LOOP_STATE_EXITED\b|['"]exited['"])/;
+const EXITED_VALUE = /LOOP_STATE_EXITED\b|['"]exited['"]/.source;
+// Two established write idioms in this codebase (confirmed via
+// scripts/hooks/post-tool-loop-state.cjs and scripts/hooks/stop-loop-wakeup-reminder.cjs,
+// both of which write LOOP_STATE_AWAITING_TICK via setLoopState(sessionId, ...)):
+//   1. object-literal:  .update({ loop_state: LOOP_STATE_EXITED })
+//   2. call-style:      setLoopState(sessionId, LOOP_STATE_EXITED)
+// A future writer that assigns the value to an intermediate variable before either
+// form (data-flow, not textual) would still slip past a regex census — that residual
+// gap is why the assertion below is a deliberate, human-reviewed equality check
+// rather than a "some site exists" boolean.
+const WRITE_PATTERN = new RegExp(
+  `loop_state\\s*:\\s*(${EXITED_VALUE})|setLoopState\\s*\\([^)]*,\\s*(${EXITED_VALUE})`
+);
 const EXCLUDE_FILE_RE = /\.test\.js$/i;
 
 function walk(dir, out) {
