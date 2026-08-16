@@ -41,7 +41,16 @@ import { isMainModule } from '../../lib/utils/is-main-module.js';
 // Escaped slashes (\/\/  rather than //) are not cosmetic: they mean this file's own source
 // text never contains a literal "://" 3-character run, so assertion A structurally cannot
 // match this file's own pattern definition even before SELF_PATHS is consulted.
-export const URL_SHAPE_RE = /postgres(?:ql)?:\/\/[^\s'"`]+:[^\s'"@]+@/;
+//
+// The username class excludes ':' DELIBERATELY -- a second security review measured a real
+// quadratic-time cost (0.8ms at N=1000 to 181.6ms at N=16000, roughly quadrupling per doubling)
+// on a non-matching adversarial line when username and password character classes overlapped
+// (both permitted ':'), because the engine could split at every colon before failing. Excluding
+// ':' from the username class makes the split point unique -- there is exactly one way to parse
+// "user:pw@", never several to backtrack through -- restoring genuine linear-time matching. This
+// does not change what a real connection string can match (usernames never legitimately contain
+// a literal colon); it only removes the ambiguity that made backtracking possible.
+export const URL_SHAPE_RE = /postgres(?:ql)?:\/\/[^\s'"`:]+:[^\s'"@]+@/;
 
 // {length, sha256} pairs for the known-dead credential (rotated 2026-08-15T22:40:46Z — see
 // strategic_directives_v2.metadata.credential_validity_probe), in both encodings it appeared
@@ -55,9 +64,10 @@ export const SECRET_HASHES = [
   { length: 14, sha256: '027815e1921626ed2078c557acf22e31b48c947a52a9829496c830ccb5c66fc4', note: 'raw-decoded form' },
 ];
 
-// Assertion A's regex cost is linear in line length (no backtracking risk -- the character
-// classes are all negated, single-step matches), so it is run against every line regardless of
-// length. Assertion B is bounded per TOKEN, not per line (see MAX_TOKEN_LENGTH below) --
+// Assertion A's regex cost is linear in line length now that URL_SHAPE_RE's username class
+// excludes ':' (see its own comment -- an earlier overlapping-class version was genuinely
+// quadratic, measured and fixed), so it is run against every line regardless of length.
+// Assertion B is bounded per TOKEN, not per line (see MAX_TOKEN_LENGTH below) --
 // tokenizing first already makes an ordinary long line cheap, so a line-wide cutoff would only
 // ever discard genuine coverage (a real credential can sit anywhere in a long line, e.g. a long
 // comment or a long list) without buying back any real cost protection.
@@ -182,11 +192,23 @@ export function isSelfPath(filePath, selfPaths = SELF_PATHS) {
 // never repeats, so using the LAST colon let a value like "user:REALSECRET:MARKER@" extract
 // only the trailing "MARKER" as the checked slot, silently allowlisting the embedded real
 // secret sitting in what this parse would otherwise treat as part of the username.
-function extractPasswordSlot(matchText) {
+//
+// Also derives a REDACTED rendering of the match, sharing the same indices so it can never
+// drift from what passwordSlot actually covers. A second security review caught a real leak
+// here: an earlier version reported the raw match (scheme through the live password) as the
+// violation `detail`, which flows into console output AND `sub_agent_execution_results` rows /
+// agent transcripts -- a wider, longer-lived audience than the source file itself, and for a
+// credential caught for the FIRST time (one assertion A can, by design, still be first to see),
+// that reporting path was itself a disclosure. Assertion B's `detail` never carried this risk
+// (it only ever names a hash family, never the matched text); A now matches that discipline.
+function splitCredentialMatch(matchText) {
   const schemeEnd = matchText.indexOf('://') + 3;
   const colonIdx = matchText.indexOf(':', schemeEnd);
   const atIdx = matchText.lastIndexOf('@');
-  return matchText.slice(colonIdx + 1, atIdx);
+  return {
+    passwordSlot: matchText.slice(colonIdx + 1, atIdx),
+    redacted: `${matchText.slice(0, colonIdx + 1)}<redacted>${matchText.slice(atIdx)}`,
+  };
 }
 
 export function findUrlShapeMatches(line) {
@@ -194,7 +216,7 @@ export function findUrlShapeMatches(line) {
   const matches = [];
   let m;
   while ((m = re.exec(line)) !== null) {
-    matches.push({ matchText: m[0], passwordSlot: extractPasswordSlot(m[0]) });
+    matches.push({ matchText: m[0], ...splitCredentialMatch(m[0]) });
   }
   return matches;
 }
@@ -260,7 +282,7 @@ export function evaluateFiles(files, { pathAllowlist = PATH_ALLOWLIST, selfPaths
       if (!skipAssertionA) {
         for (const match of findUrlShapeMatches(line)) {
           if (!isAllowlistedValue(match.passwordSlot)) {
-            violations.push({ file: filePath, line: lineNumber, assertion: 'A', detail: match.matchText });
+            violations.push({ file: filePath, line: lineNumber, assertion: 'A', detail: match.redacted });
           }
         }
       }

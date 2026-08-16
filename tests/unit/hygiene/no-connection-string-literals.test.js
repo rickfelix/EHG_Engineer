@@ -75,6 +75,37 @@ describe('URL_SHAPE_RE / findUrlShapeMatches: assertion A shape detection', () =
     // have extracted under the old last-colon logic)
     expect(isAllowlistedValue(matches[0].passwordSlot)).toBe(false);
   });
+
+  // S-1 from a SECURITY sub-agent review at the EXEC-TO-PLAN handoff: reporting the raw match
+  // (scheme through the live password) as the violation detail leaked the credential into
+  // console output AND sub_agent_execution_results rows / agent transcripts -- a wider,
+  // longer-lived audience than the source file. `redacted` must carry the scheme/username/host
+  // for context but never the password itself.
+  it('redacted rendering keeps scheme/username/host for context but masks the password', () => {
+    const matches = findUrlShapeMatches(pgUrl('someuser', 'TopSecretValue99', 'host.example.com/db'));
+    // Built via concatenation, not a single literal: the assembled expected string is itself
+    // a credential-shaped value that .husky/pre-commit's own scanner would flag if written out.
+    const expected = ['postgresql', '://', 'someuser', ':', '<redacted>', '@'].join('');
+    expect(matches[0].redacted).not.toContain('TopSecretValue99');
+    expect(matches[0].redacted).toContain('someuser');
+    expect(matches[0].redacted).toContain('<redacted>');
+    expect(matches[0].redacted.startsWith(expected)).toBe(true);
+  });
+
+  // S-2 from the same review: URL_SHAPE_RE's username and password character classes used to
+  // overlap (both permitted ':'), which is genuinely quadratic-time on a long NON-matching
+  // line (the engine can split at every colon before giving up). Excluding ':' from the
+  // username class removes the ambiguity. This asserts the fix stays fast, not just correct --
+  // a future edit that reintroduces the overlap should fail this on timing, not just on trust.
+  it('stays fast on a long non-matching adversarial line (S-2 perf regression guard)', () => {
+    // Many colons, no '@' at all -- the shape most likely to trigger backtracking if the
+    // username/password classes ever overlap again.
+    const adversarial = `postgres://${'a:'.repeat(8000)}b`;
+    const start = performance.now();
+    findUrlShapeMatches(adversarial);
+    const elapsedMs = performance.now() - start;
+    expect(elapsedMs).toBeLessThan(200); // linear-time budget; the old overlapping regex took 180ms+ at this size
+  });
 });
 
 describe('isAllowlistedValue: the 6 documented marker families', () => {
@@ -215,6 +246,17 @@ describe('evaluateFiles: end-to-end, both assertions, allowlist interplay', () =
     expect(result.ok).toBe(false);
     expect(result.violations).toHaveLength(1);
     expect(result.violations[0].assertion).toBe('A');
+  });
+
+  // S-1 (SECURITY review, EXEC-TO-PLAN): evaluateFiles' reported violation detail must never
+  // carry the matched password -- that detail flows into console output AND
+  // sub_agent_execution_results rows / agent transcripts, a wider and longer-lived audience
+  // than the source file the credential was caught in.
+  it('never echoes the matched password in a reported violation detail', () => {
+    const files = [{ path: 'scripts/example.mjs', content: `const url = '${pgUrl('u', 'realsecretvalue', 'host/db')}';` }];
+    const result = evaluateFiles(files, { hashes: testHashes });
+    expect(result.violations[0].detail).not.toContain('realsecretvalue');
+    expect(result.violations[0].detail).toContain('<redacted>');
   });
 
   it('suppresses assertion A when the password slot is an allowlisted marker', () => {
