@@ -226,7 +226,12 @@ export default defineConfig({
         test: {
           name: 'unit',
           // NO dotenv .env load — unit tests must not reach the live DB.
-          setupFiles: ['./tests/setup.unit.js'],
+          // tests/setup.clock-skew.js (SD-LEO-INFRA-CLOCK-SKEW-CI-SWEEP-001, FR-1/TR-1) is
+          // additive and inert unless TEST_CLOCK_OFFSET_MS is set — added here (per-project,
+          // NEVER at vitest.config.js root) because extends:true above merges root+project
+          // setupFiles rather than overriding; a root entry would leak it into db/smoke/
+          // migration-gate too.
+          setupFiles: ['./tests/setup.unit.js', './tests/setup.clock-skew.js'],
           // SD-LEO-INFRA-SPAWN-ROOT-CURRENCY-INVARIANT-001 (post-CI RCA).
           // Pin the fleet repo root to a path that does NOT exist, so the unit tier can
           // never shell out to real git against the developer's actual checkout.

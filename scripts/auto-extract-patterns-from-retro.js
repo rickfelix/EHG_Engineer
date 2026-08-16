@@ -76,6 +76,26 @@ function getRelatedSubAgents(category) {
 }
 
 /**
+ * SD-LEO-INFRA-CLOCK-SKEW-CI-SWEEP-001 (FR-4): best-effort extraction of candidate test paths
+ * from a retrospective row, for the proven_solutions quarantine guard. Empty is the correct,
+ * SAFE result when nothing test-path-shaped is present -- never fabricate a path.
+ *
+ * MEASURED (not assumed) coverage against this table: 65/200 (33%) of recent retrospective rows
+ * carry at least one extractable entry in affected_components/related_files. related_files is
+ * empty on every sampled row so far; affected_components is a mix of real file paths and generic
+ * labels ("LEO Protocol", "Handoff System") that this filter correctly excludes.
+ */
+export function extractCandidateTestPaths(retro) {
+  const combined = [
+    ...(Array.isArray(retro?.affected_components) ? retro.affected_components : []),
+    ...(Array.isArray(retro?.related_files) ? retro.related_files : []),
+  ];
+  return combined.filter(
+    (p) => typeof p === 'string' && (/\.(test|spec)\.(m?js|c?js|ts|tsx)$/i.test(p) || /(^|\/)tests?\//i.test(p)),
+  );
+}
+
+/**
  * Categorize an issue based on keywords
  */
 function categorizeIssue(text) {
@@ -186,7 +206,10 @@ async function extractPatternsFromImprovements(retro, sdId, _sdKey, linkedFeedba
         solution_applied: 'Identified in retrospective',
         resolution_time_minutes: 0,
         was_successful: true,
-        found_via_search: false
+        found_via_search: false,
+        // FR-4: best-effort, honestly empty when retro carries no test-path-shaped field --
+        // never fabricated. See extractCandidateTestPaths' own coverage measurement.
+        target_test_paths: extractCandidateTestPaths(retro)
       });
 
       patterns.push({
