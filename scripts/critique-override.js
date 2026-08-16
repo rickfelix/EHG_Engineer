@@ -69,6 +69,16 @@ async function main() {
     .eq('overall_severity', 'block')
     .order('created_at', { ascending: false })
     .limit(1);
+  // REGRESSION (PLAN_VERIFICATION evidence, REG-1, HIGH): a schema-missing error here is NOT "no
+  // blocking critique exists" — pre-plan-critique.js's persistCritique/findActiveOverride already
+  // give schema-missing (content_hash/metadata not yet migrated) its own loud, named branch
+  // (SCHEMA_MISSING_CODES); this CLI, the THIRD consumer of the same staged column, was missed.
+  // Without this, an operator holding a genuine block reads "nothing to override" and concludes
+  // there is no override needed, rather than "the migration hasn't landed yet."
+  if (critErr && ['PGRST204', '42703'].includes(critErr.code)) {
+    console.error(`SCHEMA MISSING (${critErr.code}): ${critErr.message} — the migration (database/chairman-gated/20260816_plan_critiques_add_metadata_and_content_hash.sql) has not been applied yet. This is NOT evidence that no blocking critique exists; it means this CLI cannot run until the migration lands.`);
+    process.exit(1);
+  }
   if (critErr || !rows || rows.length === 0) {
     console.error(`No blocking critique found for ${sdKey}${critErr ? ` (${critErr.message})` : ''} — nothing to override.`);
     process.exit(1);
