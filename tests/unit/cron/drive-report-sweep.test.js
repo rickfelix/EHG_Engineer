@@ -30,7 +30,7 @@ import { CLAIM_WINDOW_MS as LEG2_CLAIM_WINDOW_MS } from '../../../lib/drive-loop
 import { armedProcessKey } from '../../../lib/machinery-class/armed-registration.js';
 import { produceDriveReport } from '../../../scripts/drive-report-produce.mjs';
 import { LAST_RUN_FIELD } from '../../../lib/drive-loop/report-posture.js';
-import { makeCapacityVerdictPersist } from '../../../scripts/lib/capacity-verdict-store.mjs';
+import { makeCapacityVerdictPersist, makeCapacityVerdictUnavailablePersist } from '../../../scripts/lib/capacity-verdict-store.mjs';
 import { gatherCapacityInputs } from '../../../scripts/lib/capacity-inputs.mjs';
 import { hourlyWindowKey } from '../../../scripts/cron/drive-report-hourly-sweep.mjs';
 
@@ -1112,6 +1112,47 @@ describe('[BOUND] scoreCapacityLeg against the REAL writer, not a stub', () => {
     });
     expect(leg.unavailable.available).toBe(false);
     expect(leg.points).toBeUndefined();
+  });
+
+  // SD-LEO-FIX-BELT-CAPACITY-VERDICTS-001 (FR-3, REAL_CALLEE_ATTESTATION): the same class of blind
+  // spot this header already records, recurring at the NEW seam if left uncovered. The [TS-1/TS-2/
+  // TS-3] block above injects only a hand-rolled persistUnavailable stub, and FR-5's coverage in
+  // capacity-verdict-store.test.js exercises makeCapacityVerdictUnavailablePersist in isolation — so
+  // nothing before this test actually ran scoreCapacityLeg against the REAL sentinel writer.
+  it('the REAL sentinel writer + scoreCapacityLeg together — not a stub on either side', async () => {
+    const captured = {};
+    const leg = await scoreCapacityLeg({
+      gatherCapacity: async () => { throw new Error('belt query failed'); },
+      persistVerdict: makeCapacityVerdictPersist(client()),
+      persistUnavailable: makeCapacityVerdictUnavailablePersist(client({ captured })),
+      runId: 'drive-2026-08-16',
+    });
+
+    expect(captured.table).toBe('belt_capacity_verdicts');
+    expect(captured.row, 'the real sentinel writer must receive exactly the shape scoreCapacityLeg sends').toMatchObject({
+      run_id: 'drive-2026-08-16', verdict: 'UNAVAILABLE', read_failed: true, belt_depth: null, demand_soon: null, deficit: null,
+    });
+    expect(leg.leg).toBe('leg4_capacity');
+    expect(leg.unavailable.available).toBe(false);
+    expect(leg.unavailable.reason).toMatch(/belt query failed/);
+    expect(leg.points, 'a sentinel write must never produce points').toBeUndefined();
+  });
+
+  it('[MUTATION GUARD] a real sentinel-write failure is logged but never blocks the primary unavailable() result', async () => {
+    const consoleErrorSpy = vi.spyOn(console, 'error').mockImplementation(() => {});
+    try {
+      const leg = await scoreCapacityLeg({
+        gatherCapacity: async () => { throw new Error('belt query failed'); },
+        persistVerdict: makeCapacityVerdictPersist(client()),
+        persistUnavailable: makeCapacityVerdictUnavailablePersist(client({ fail: { code: '42501', message: 'permission denied' } })),
+        runId: 'drive-2026-08-16',
+      });
+      expect(leg.unavailable.available).toBe(false);
+      expect(leg.unavailable.reason).toMatch(/belt query failed/);
+      expect(consoleErrorSpy, 'a real sentinel-write failure must still be logged, not silently dropped').toHaveBeenCalled();
+    } finally {
+      consoleErrorSpy.mockRestore();
+    }
   });
 });
 
