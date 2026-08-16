@@ -4,6 +4,7 @@
 // guard's deliberate refuse-new-on-fresh-prior divergence, and the pure MULTIPLE_ADAMS detector.
 import { describe, it, expect } from 'vitest';
 import { createRequire } from 'node:module';
+import { createFixtureSupabase } from '../../helpers/postgrest-fixture-store.js';
 const require = createRequire(import.meta.url);
 const adam = require('../../../lib/coordinator/adam-identity.cjs');
 const { detectMultipleAdams, runDetectors } = require('../../../lib/coordinator/detectors.cjs');
@@ -11,6 +12,11 @@ const { registerAdam } = require('../../../scripts/adam-register.cjs');
 
 const NOW = Date.parse('2026-06-15T16:00:00.000Z');
 const fresh = (minAgo) => new Date(NOW - minAgo * 60_000).toISOString();
+// drainAdamOutbound/retargetStaleAdamInbound's 14-day horizon is computed against REAL
+// Date.now() (not the frozen guard-election NOW above, which only governs heartbeat_at
+// freshness via the injected nowMs param) — session_coordination fixture rows need a
+// genuinely-recent created_at or the shared successor-inherit predicate excludes them.
+const recentReal = (minAgo) => new Date(Date.now() - minAgo * 60_000).toISOString();
 
 describe('pickCanonicalAdam (deterministic election, mirror of coordinator)', () => {
   it('picks adam_since DESC, NULLS LAST, then session_id ASC', () => {
@@ -150,58 +156,87 @@ describe('detectMultipleAdams (pure, mirror of detectSplitBrain)', () => {
 // whichever write path fired, exactly like a live Postgres row would. Only writes targeting
 // `selfSessionId` mutate the tracked row; a retire-fallback update targeting a stale PRIOR
 // session_id is correctly a no-op here (it mutates a different row in reality).
+// SD-LEO-INFRA-ADAM-HANDOFF-MAIL-FORWARDING-001: extended so a retire (RPC clear_adam_flag or
+// the JS-merge fallback) actually mutates the retired session's role to ADAM_RETIRED_ROLE in a
+// live, queryable table — resolveRetiredAdamSeats reads THAT state, not a static fixture — and
+// so session_coordination (drainRows) is routed through the genuinely-filtering
+// postgrest-fixture-store instead of a bulk-update stub, matching the new select-then-per-row
+// drainAdamOutbound implementation.
 function regStub({ selfSessionId = 'self', selfMeta = null, rowExists = true, allAdams = [], rpcError = null, drainRows = [] } = {}) {
   const calls = { update: 0, insert: 0, rpc: [], drainSelect: 0 };
   let currentRowExists = rowExists;
   let currentMeta = selfMeta;
+  const otherSessionsMeta = new Map(allAdams.map((a) => [a.session_id, { ...a.metadata }]));
+  const scFixture = createFixtureSupabase({ session_coordination: drainRows.map((r) => ({ ...r })) });
+
+  function claudeSessionsChain() {
+    let roleFilter;
+    const chain = {
+      select() { return chain; },
+      eq(col, val) { if (col === 'metadata->>role') roleFilter = val; return chain; },
+      gte() { return chain; },
+      filter() { return chain; }, // fetchAllAdams — FR-6: now paginated, resolves via .range below
+      order() { return chain; },
+      range(from, to) {
+        if (roleFilter !== undefined) {
+          const matched = [...otherSessionsMeta.entries()]
+            .filter(([, m]) => m && m.role === roleFilter)
+            .map(([session_id]) => ({ session_id }));
+          return Promise.resolve({ data: matched.slice(from, to + 1), error: null });
+        }
+        const live = allAdams.map((a) => ({ ...a, metadata: otherSessionsMeta.get(a.session_id) || a.metadata }));
+        return Promise.resolve({ data: live.slice(from, to + 1), error: null });
+      },
+      maybeSingle() {
+        return Promise.resolve({
+          data: currentRowExists ? { session_id: selfSessionId, metadata: currentMeta } : null,
+          error: null,
+        });
+      },
+      insert(payload) {
+        calls.insert += 1;
+        if (payload && payload.session_id === selfSessionId) {
+          currentRowExists = true;
+          currentMeta = payload.metadata;
+        }
+        return Promise.resolve({ error: null });
+      },
+      update(payload) {
+        calls.update += 1;
+        const uchain = {
+          eq(_col, val) {
+            if (val === selfSessionId) { currentRowExists = true; currentMeta = payload.metadata; }
+            else if (otherSessionsMeta.has(val)) otherSessionsMeta.set(val, payload.metadata); // JS-merge retire fallback
+            return Promise.resolve({ error: null });
+          },
+        };
+        return uchain;
+      },
+    };
+    return chain;
+  }
+
+  function sessionCoordinationChain() {
+    calls.drainSelect += 1;
+    return scFixture.from('session_coordination');
+  }
+
   const supabase = {
-    from() {
-      const chain = {
-        select() { return chain; },
-        eq() { return chain; },
-        gte() { return chain; },
-        filter() { return chain; }, // fetchAllAdams — FR-6: now paginated, resolves via .range below
-        order() { return chain; },
-        range(from, to) { return Promise.resolve({ data: allAdams.slice(from, to + 1), error: null }); },
-        maybeSingle() {
-          return Promise.resolve({
-            data: currentRowExists ? { session_id: selfSessionId, metadata: currentMeta } : null,
-            error: null,
-          });
-        },
-        insert(payload) {
-          calls.insert += 1;
-          if (payload && payload.session_id === selfSessionId) {
-            currentRowExists = true;
-            currentMeta = payload.metadata;
-          }
-          return Promise.resolve({ error: null });
-        },
-        update(payload) {
-          calls.update += 1;
-          const uchain = {
-            eq(_col, val) {
-              if (val === selfSessionId) { currentRowExists = true; currentMeta = payload.metadata; }
-              return Promise.resolve({ error: null });
-            },
-            in() { return uchain; }, is() { return uchain; }, gte() { return uchain; },
-            select() { calls.drainSelect += 1; return Promise.resolve({ data: drainRows, error: null }); }, // drain
-          };
-          return uchain;
-        },
-      };
-      return chain;
-    },
+    from(table) { return table === 'session_coordination' ? sessionCoordinationChain() : claudeSessionsChain(); },
     rpc(fn, args) {
       calls.rpc.push({ fn, args });
       if (fn === 'set_adam_flag' && !rpcError && args && args.p_session_id === selfSessionId) {
         currentRowExists = true;
         currentMeta = { ...(currentMeta || {}), role: 'adam', non_fleet: true, adam_since: 'test' };
       }
+      if (fn === 'clear_adam_flag' && !rpcError && args && args.p_session_id) {
+        const prev = otherSessionsMeta.get(args.p_session_id) || {};
+        otherSessionsMeta.set(args.p_session_id, { ...prev, role: 'adam_retired', non_fleet: true });
+      }
       return Promise.resolve({ error: rpcError });
     },
   };
-  return { supabase, calls };
+  return { supabase, calls, drainRows: () => scFixture.table('session_coordination') };
 }
 
 describe('registerAdam (single-Adam guard, unconditional RPC-first upsert — SD-FDBK-INFRA-FIX-ADAM-SOLOMON-001)', () => {
@@ -230,16 +265,21 @@ describe('registerAdam (single-Adam guard, unconditional RPC-first upsert — SD
   });
 
   it('a STALE prior => retire (clear_adam_flag) + register + FR-4 drain re-targets inbound', async () => {
-    const { supabase, calls } = regStub({
+    const { supabase, calls, drainRows } = regStub({
       allAdams: [{ session_id: 'staleprior', heartbeat_at: fresh(999), metadata: { role: 'adam' } }],
       rpcError: null,
-      drainRows: [{ id: 'm1' }, { id: 'm2' }],
+      drainRows: [
+        { id: 'm1', target_session: 'staleprior', acknowledged_at: null, payload: { kind: 'coordinator_reply' }, created_at: recentReal(60) },
+        { id: 'm2', target_session: 'staleprior', acknowledged_at: null, payload: { kind: 'adam_advisory' }, created_at: recentReal(60) },
+      ],
     });
     const r = await registerAdam(supabase, 'self', { nowMs: NOW });
     expect(r).toMatchObject({ ok: true, action: 'tagged_after_retire', drained: 2 });
     expect(r.retired).toEqual(['staleprior']);
     expect(calls.rpc.map((c) => c.fn)).toEqual(expect.arrayContaining(['clear_adam_flag', 'set_adam_flag']));
-    expect(calls.drainSelect).toBe(1); // FR-4 drain ran (re-targeted old->new)
+    expect(calls.drainSelect).toBeGreaterThan(0); // FR-4 drain ran (re-targeted old->new)
+    expect(drainRows().every((row) => row.target_session === 'self')).toBe(true);
+    expect(drainRows().map((row) => row.payload.retargeted_from)).toEqual(['staleprior', 'staleprior']);
   });
 
   // QF-20260703-883: clear_adam_flag RPC absent (migration unapplied) must NOT silently leave
@@ -249,14 +289,16 @@ describe('registerAdam (single-Adam guard, unconditional RPC-first upsert — SD
     const { supabase, calls } = regStub({
       allAdams: [{ session_id: 'staleprior', heartbeat_at: fresh(999), metadata: { role: 'adam', non_fleet: true } }],
       rpcError: { code: 'PGRST202', message: 'Could not find the function' },
-      drainRows: [{ id: 'm1' }],
+      drainRows: [
+        { id: 'm1', target_session: 'staleprior', acknowledged_at: null, payload: { kind: 'coordinator_reply' }, created_at: recentReal(60) },
+      ],
     });
     const r = await registerAdam(supabase, 'self', { nowMs: NOW });
     expect(r).toMatchObject({ ok: true, action: 'tagged_after_retire_fallback', drained: 1 });
     expect(r.retired).toEqual(['staleprior']);
     expect(r.retire_fallback_used).toEqual(['staleprior']);
     expect(r.retire_blocked).toBeUndefined();
-    expect(calls.drainSelect).toBe(1); // FR-4 drain still ran for the JS-merge-retired prior
+    expect(calls.drainSelect).toBeGreaterThan(0); // FR-4 drain still ran for the JS-merge-retired prior
   });
 
   // FR-1/TS-1: the bug this SD fixes — a session with NO existing claude_sessions row must be
@@ -291,26 +333,29 @@ describe('registerAdam (single-Adam guard, unconditional RPC-first upsert — SD
   });
 });
 
-describe('drainAdamOutbound (FR-4 idempotent re-target)', () => {
+describe('drainAdamOutbound (FR-4 idempotent re-target, widened per SD-LEO-INFRA-ADAM-HANDOFF-MAIL-FORWARDING-001)', () => {
   const { drainAdamOutbound } = require('../../../scripts/adam-advisory.cjs');
-  it('re-targets unread old-session rows to the new session and counts them', async () => {
-    let captured = null;
-    const sb = { from() { const c = {
-      update(patch) { captured = { patch, in: null }; return c; },
-      in(_col, ids) { captured.in = ids; return c; },
-      is() { return c; }, gte() { return c; },
-      select() { return Promise.resolve({ data: [{ id: 'a' }, { id: 'b' }], error: null }); },
-    }; return c; } };
+  it('re-targets unacked old-session rows (any read_at, within 14 days) to the new session, stamps retargeted_from/at, and counts them', async () => {
+    const sb = createFixtureSupabase({
+      session_coordination: [
+        { id: 'a', target_session: 'old1', acknowledged_at: null, payload: { kind: 'coordinator_reply' }, created_at: recentReal(60) },
+        { id: 'b', target_session: 'old2', acknowledged_at: null, payload: { kind: 'coordinator_reply' }, created_at: recentReal(60) },
+      ],
+    });
     const r = await drainAdamOutbound(sb, { newSessionId: 'new', oldSessionIds: ['old1', 'old2'] });
     expect(r.moved).toBe(2);
-    expect(captured.patch).toEqual({ target_session: 'new' });
-    expect(captured.in).toEqual(['old1', 'old2']);
+    expect(r.byKind).toEqual({ coordinator_reply: 2 });
+    for (const row of sb.table('session_coordination')) {
+      expect(row.target_session).toBe('new');
+      expect(row.payload.retargeted_from).toMatch(/^old\d$/);
+      expect(row.payload.retargeted_at).toBeTruthy();
+    }
   });
   it('no-op for empty/self-only old ids (idempotent boundary)', async () => {
     const sb = { from() { throw new Error('should not query'); } };
-    expect(await drainAdamOutbound(sb, { newSessionId: 'new', oldSessionIds: [] })).toEqual({ moved: 0 });
-    expect(await drainAdamOutbound(sb, { newSessionId: 'new', oldSessionIds: ['new'] })).toEqual({ moved: 0 });
-    expect(await drainAdamOutbound(null, { newSessionId: 'new', oldSessionIds: ['x'] })).toEqual({ moved: 0 });
+    expect(await drainAdamOutbound(sb, { newSessionId: 'new', oldSessionIds: [] })).toEqual({ moved: 0, byKind: {} });
+    expect(await drainAdamOutbound(sb, { newSessionId: 'new', oldSessionIds: ['new'] })).toEqual({ moved: 0, byKind: {} });
+    expect(await drainAdamOutbound(null, { newSessionId: 'new', oldSessionIds: ['x'] })).toEqual({ moved: 0, byKind: {} });
   });
 });
 

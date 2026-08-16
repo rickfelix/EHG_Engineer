@@ -41,7 +41,7 @@ const { contractReadVerdict, contractLineCount, singleReadFit } = require('../li
 // fetchAllAdamsStrict (not fetchFreshAdams) so the guard sees stale priors too and classifies
 // fresh-vs-stale itself (fresh => refuse; stale-only => retire). STRICT (FR-6, count-truncation
 // discipline review): a FAILED prior read must REFUSE registration, never read as "no priors".
-const { fetchAllAdamsStrict, decideSingleAdamGuard, isFresh } = require('../lib/coordinator/adam-identity.cjs');
+const { fetchAllAdamsStrict, decideSingleAdamGuard, isFresh, resolveRetiredAdamSeats } = require('../lib/coordinator/adam-identity.cjs');
 // FR-4: re-target a retired prior Adam's unread inbound to the new session (comms survive a restart).
 const { drainAdamOutbound } = require('./adam-advisory.cjs');
 
@@ -213,13 +213,19 @@ async function registerAdam(supabase, sessionId, opts = {}) {
     }
   }
   if (retired.length) action = action === 'tagged_fallback' ? 'tagged_after_retire_fallback' : 'tagged_after_retire';
-  // FR-4: re-target the retired prior Adam(s)' unread inbound to this new session (comms survive
-  // the handoff) — including priors retired via the JS-merge fallback above. Fail-open + idempotent;
-  // a drain error never fails the registration.
+  // FR-4, widened by SD-LEO-INFRA-ADAM-HANDOFF-MAIL-FORWARDING-001 (FR-2): re-target every retired
+  // Adam seat's stranded inbound to this new session, not only priors retired IN THIS CALL — a
+  // seat's backlog is otherwise only ever attempted once, at the moment it retires, and anything
+  // the predicate missed then was orphaned forever. Decoupled from `retired.length` on purpose:
+  // the common register call retires nobody locally but may still have historical backlog to sweep.
+  // Fail-open + idempotent; a drain error never fails the registration.
   let drained = 0;
-  if (retired.length) {
-    const d = await drainAdamOutbound(supabase, { newSessionId: sessionId, oldSessionIds: retired });
+  let inherited = {};
+  const { ids: allRetiredSeatIds, error: retiredSeatsError } = await resolveRetiredAdamSeats(supabase);
+  if (!retiredSeatsError && allRetiredSeatIds.length) {
+    const d = await drainAdamOutbound(supabase, { newSessionId: sessionId, oldSessionIds: allRetiredSeatIds });
     drained = (d && d.moved) || 0;
+    inherited = (d && d.byKind) || {};
   }
 
   // FR-2: mandatory fail-loud readback. A write that silently didn't land (RLS, CHECK constraint,
@@ -237,10 +243,10 @@ async function registerAdam(supabase, sessionId, opts = {}) {
     return { ok: false, action: 'error', error: `readback verification failed after registration write (action=${action}): tag not confirmed on the row.` };
   }
 
-  return { ok: true, action, session_id: sessionId, role: ADAM_ROLE, non_fleet: true, retired, drained,
+  return { ok: true, action, session_id: sessionId, role: ADAM_ROLE, non_fleet: true, retired, drained, inherited,
     retire_fallback_used: retireFallbackUsed.length ? retireFallbackUsed : undefined,
     retire_blocked: retireBlocked || undefined,
-    message: `Registered as the single Adam${retired.length ? ` (retired stale prior(s): ${retired.join(', ')}; re-targeted ${drained} inbound row(s))` : ''}${retireFallbackUsed.length ? ` [clear_adam_flag RPC absent — retired via JS-merge fallback; apply the chairman-gated migration for atomic clears]` : ''}${retireBlocked ? ' — WARNING: a stale prior could NOT be retired (see retire_blocked)' : ''}${fallbackReason ? ` — fail-soft JS merge (set_adam_flag RPC ${fallbackReason}; apply the chairman-gated migration for atomic writes)` : ' via atomic set_adam_flag'}.` };
+    message: `Registered as the single Adam${retired.length ? ` (retired stale prior(s): ${retired.join(', ')})` : ''}${drained ? ` — inherited ${drained} row(s) from retired seat(s) (${Object.entries(inherited).map(([k, n]) => `${k}:${n}`).join(', ')})` : ''}${retireFallbackUsed.length ? ` [clear_adam_flag RPC absent — retired via JS-merge fallback; apply the chairman-gated migration for atomic clears]` : ''}${retireBlocked ? ' — WARNING: a stale prior could NOT be retired (see retire_blocked)' : ''}${fallbackReason ? ` — fail-soft JS merge (set_adam_flag RPC ${fallbackReason}; apply the chairman-gated migration for atomic writes)` : ' via atomic set_adam_flag'}.` };
 }
 
 /**
