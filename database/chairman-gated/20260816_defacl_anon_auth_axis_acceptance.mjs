@@ -55,6 +55,7 @@
 import 'dotenv/config';
 import fs from 'node:fs';
 import path from 'node:path';
+import { createHash } from 'node:crypto';
 import { fileURLToPath } from 'node:url';
 import { createClient } from '@supabase/supabase-js';
 import { evaluateBucketCompliance, findUndeclaredExposures } from '../../scripts/audit-rpc-execute-grants.mjs';
@@ -66,9 +67,10 @@ const BASELINE_PATH = path.join(REPO_ROOT, '.artifacts', 'defacl-anon-auth-axis-
 const MODE = process.argv.includes('--baseline') ? 'baseline'
            : process.argv.includes('--verify') ? 'verify'
            : process.argv.includes('--self-test') ? 'self-test'
+           : process.argv.includes('--hash') ? 'hash'
            : null;
 if (!MODE) {
-  console.error('Usage: node <this file> --baseline | --verify | --self-test   (the baseline is not optional for --verify)');
+  console.error('Usage: node <this file> --baseline | --verify | --self-test | --hash   (the baseline is not optional for --verify)');
   process.exit(2);
 }
 
@@ -96,6 +98,17 @@ async function fetchDefaclRows() {
      where d.defaclobjtype = 'f' and n.nspname = 'public' and r.rolname = ANY(ARRAY['postgres','supabase_admin'])
   `);
   return rows;
+}
+
+/** TS-4 (FR-3): a stable, order-independent fingerprint of the defacl state this migration
+ *  touches. Run before UP, after UP, and after DOWN — before-UP and after-DOWN must match
+ *  exactly; before-UP and after-UP (no DOWN) must differ. PURE — takes rows, no DB. */
+export function defaclHash(rowsByRole) {
+  const sorted = [...rowsByRole]
+    .map((r) => `${r.creator_role}=${r.raw_acl ?? 'NULL'}`)
+    .sort()
+    .join('|');
+  return createHash('sha256').update(sorted).digest('hex');
 }
 
 /** AXIS-1 assertion logic, PURE — testable via --self-test with no DB. raw_acl is the
@@ -170,6 +183,19 @@ export function scopeGuardUnchanged(baselineCount, verifyCount) {
   return `SCOPE_CREEP: public_exec_count changed from ${baselineCount} to ${verifyCount} — this acceptance script must not claim to fix the separate PUBLIC-axis defect (see database/chairman-gated/20260816_close_remaining_secdef_execute_exposure.sql:16-28); investigate before treating this as progress.`;
 }
 
+/** --hash: prints the current defaclHash. Run this three times around a real (or fixture-driven
+ *  local) apply/rollback cycle: before UP, after UP, after DOWN. before-UP must equal after-DOWN;
+ *  before-UP must differ from after-UP. This is what actually PROVES the DOWN file is an exact
+ *  inverse rather than merely plausible-looking — the exact class of bug (DOWN re-granting PUBLIC
+ *  when the true baseline never had it) that SECURITY sub-agent review caught by manual read,
+ *  which this mode exists to catch mechanically on any future edit. */
+async function runHash() {
+  const defaclRows = await fetchDefaclRows();
+  const hash = defaclHash(defaclRows);
+  console.log('\n--- HASH (run before UP, after UP, and after DOWN; compare the three) ---');
+  console.log(JSON.stringify({ hash, defacl_rows: defaclRows }, null, 2));
+}
+
 async function runBaseline() {
   const defaclRows = await fetchDefaclRows();
   const { failures: axis2Failures, declaredCount } = await axis2Check();
@@ -236,6 +262,24 @@ function runSelfTest() {
   console.log(`AXIS-1 fixture logic: ${axis1Ok ? 'PASS' : 'FAIL'} (pre-apply correctly flagged ${preFailures.length}/4, post-apply correctly clean: ${postFailures.length === 0})`);
   ok = ok && axis1Ok;
 
+  // TS-4 (FR-3): hash must differ pre-UP vs post-UP, and match pre-UP vs post-DOWN (the correctly
+  // corrected DOWN fixture, i.e. GRANT anon/authenticated only, no PUBLIC).
+  const postDownFixtureCorrected = [
+    { creator_role: 'postgres', raw_acl: '{postgres=X/postgres,anon=X/postgres,authenticated=X/postgres,service_role=X/postgres}' },
+    { creator_role: 'supabase_admin', raw_acl: '{postgres=X/supabase_admin,anon=X/supabase_admin,authenticated=X/supabase_admin,service_role=X/supabase_admin}' },
+  ];
+  const postDownFixtureWrong = [ // simulates the bug the SECURITY review caught: DOWN re-grants PUBLIC too
+    { creator_role: 'postgres', raw_acl: '{postgres=X/postgres,anon=X/postgres,authenticated=X/postgres,service_role=X/postgres,=X/postgres}' },
+    { creator_role: 'supabase_admin', raw_acl: '{postgres=X/supabase_admin,anon=X/supabase_admin,authenticated=X/supabase_admin,service_role=X/supabase_admin,=X/supabase_admin}' },
+  ];
+  const preHash = defaclHash(preApplyFixture);
+  const postUpHash = defaclHash(postApplyFixture);
+  const postDownCorrectHash = defaclHash(postDownFixtureCorrected);
+  const postDownWrongHash = defaclHash(postDownFixtureWrong);
+  const hashOk = preHash !== postUpHash && preHash === postDownCorrectHash && preHash !== postDownWrongHash;
+  console.log(`TS-4 hash round-trip fixture logic: ${hashOk ? 'PASS' : 'FAIL'} (pre!=postUP: ${preHash !== postUpHash}, pre==postDOWN-correct: ${preHash === postDownCorrectHash}, pre!=postDOWN-wrong: ${preHash !== postDownWrongHash})`);
+  ok = ok && hashOk;
+
   // AXIS-2 logic: reuse evaluateBucketCompliance/findUndeclaredExposures directly against a
   // synthetic snapshot, including a mutation test (FR-5).
   const declared = new Map([['public.fn_keep_example()', 'C'], ['public.fn_revoke_example()', 'A']]);
@@ -278,6 +322,7 @@ function runSelfTest() {
   try {
     if (MODE === 'baseline') await runBaseline();
     else if (MODE === 'verify') await runVerify();
+    else if (MODE === 'hash') await runHash();
     else runSelfTest();
   } catch (e) {
     console.error('ACCEPTANCE SCRIPT ERROR:', e.message);

@@ -164,12 +164,20 @@ migration: it changes nothing about the 145 functions that already exist (that i
 writing); it only stops NEW functions from being born exposed. Apply both for full closure, in
 either order.
 
-**Run the acceptance in all three modes — the baseline is not optional for `--verify`:**
+**Run the acceptance in all modes — the baseline is not optional for `--verify`, and `--hash` is
+not optional around a real apply/rollback cycle (it is what actually proves the DOWN file is an
+exact inverse — a SECURITY review caught the DOWN file over-granting PUBLIC on a state that never
+had it, by manual read; `--hash` catches that class mechanically on any future edit):**
 
 ```
 node database/chairman-gated/20260816_defacl_anon_auth_axis_acceptance.mjs --self-test   # fixture-only, no DB
+node database/chairman-gated/20260816_defacl_anon_auth_axis_acceptance.mjs --hash         # BEFORE UP    (record the hash)
 node database/chairman-gated/20260816_defacl_anon_auth_axis_acceptance.mjs --baseline     # BEFORE apply
+# ... chairman applies the UP file ...
+node database/chairman-gated/20260816_defacl_anon_auth_axis_acceptance.mjs --hash         # AFTER UP     (must differ from BEFORE)
 node database/chairman-gated/20260816_defacl_anon_auth_axis_acceptance.mjs --verify       # AFTER apply
+# if a rollback is ever needed, after applying the DOWN file:
+node database/chairman-gated/20260816_defacl_anon_auth_axis_acceptance.mjs --hash         # AFTER DOWN   (must equal BEFORE)
 ```
 
 The script proves two independent axes (AXIS-1 default-ACL / future functions, AXIS-2 existing-

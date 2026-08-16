@@ -51,6 +51,19 @@
 --
 -- Does NOT touch: service_role grants (unaffected — service_role keeps its default EXECUTE);
 -- any function body; any already-existing function's grants (see the separate migration above).
+--
+-- ═══════════════════════════════════════════════════════════════════════════════════════════════
+-- REVOKE ... FROM PUBLIC IS ALSO A NO-OP TODAY — KEPT FOR HYGIENE, NOT RESTORED BY THE DOWN FILE
+-- ═══════════════════════════════════════════════════════════════════════════════════════════════
+-- (SECURITY sub-agent, EXEC review, evidence 3bcccfb8-abf0-4a88-9751-c8e81e0bf120). The live
+-- raw_acl strings quoted above name exactly three grantees each (postgres/supabase_admin,anon,
+-- authenticated,service_role) — never a bare `=X/<role>` (which is how a literal-PUBLIC default-
+-- ACL entry renders). So, same as this SD's entire premise about the PREDECESSOR migration's
+-- PUBLIC-only REVOKE: revoking PUBLIC here removes a grant that isn't there. It is kept in this
+-- statement only as forward-looking hygiene (so a literal-PUBLIC default can never silently
+-- reappear), NOT because it changes today's state. Consequence for the paired DOWN file: it does
+-- NOT re-grant PUBLIC — doing so would GRANT something this UP never actually revoked, leaving
+-- post-DOWN state broader than pre-UP state. See that file's own header for the full reasoning.
 
 BEGIN;
 
