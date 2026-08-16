@@ -71,18 +71,31 @@ jobs:
           # .github/workflows/orphan-qf-reaper.yml class of bug this workflow deliberately does
           # NOT copy. Only a workflow_dispatch with dry_run explicitly "false" can request
           # --apply; every other trigger (including schedule) stays dry-run, no fallthrough.
-          ARGS="--json"
+          #
+          # ARGV is built as a bash ARRAY, never a concatenated-then-word-split string: a
+          # STRING build (`ARGS="$ARGS --seat-count $SEAT_COUNT_INPUT"` then `node ... $ARGS`
+          # unquoted) lets a crafted seat_count input like `3 --apply --h2-confirmed=2026-08-16`
+          # word-split into EXTRA argv entries at the final unquoted expansion, defeating this
+          # exact dry-run gate regardless of dry_run's own value (TESTING sub-agent finding,
+          # EXEC-TO-PLAN). An array + `"${ARGS[@]}"` keeps every element a single argv token no
+          # matter what characters it contains. seat_count is additionally validated as a plain
+          # integer, so a malformed input fails loudly instead of silently misparsing.
+          ARGS=(--json)
           if [ "$EVENT_NAME" = "workflow_dispatch" ] && [ "$DRY_RUN_INPUT" = "false" ]; then
-            ARGS="$ARGS --apply"
+            ARGS+=(--apply)
             if [ -n "$H2_CONFIRMED_INPUT" ]; then
-              ARGS="$ARGS --h2-confirmed=$H2_CONFIRMED_INPUT"
+              ARGS+=("--h2-confirmed=$H2_CONFIRMED_INPUT")
             fi
           fi
           if [ -n "$SEAT_COUNT_INPUT" ]; then
-            ARGS="$ARGS --seat-count $SEAT_COUNT_INPUT"
+            if ! [[ "$SEAT_COUNT_INPUT" =~ ^[0-9]+$ ]]; then
+              echo "::error::seat_count must be a plain non-negative integer, got: $SEAT_COUNT_INPUT"
+              exit 1
+            fi
+            ARGS+=(--seat-count "$SEAT_COUNT_INPUT")
           fi
-          echo "Running: node scripts/coordinator-stale-qf-disposition-sweep.mjs $ARGS"
-          node scripts/coordinator-stale-qf-disposition-sweep.mjs $ARGS 2>&1 | tee sweep.log
+          echo "Running: node scripts/coordinator-stale-qf-disposition-sweep.mjs ${ARGS[*]}"
+          node scripts/coordinator-stale-qf-disposition-sweep.mjs "${ARGS[@]}" 2>&1 | tee sweep.log
 
       - name: Extract summary for job summary
         if: always()

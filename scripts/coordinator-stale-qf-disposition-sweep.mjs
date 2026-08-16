@@ -430,13 +430,22 @@ export async function runSweep(argv, deps = {}) {
     }
   }
 
-  // FR-7 TTL re-lapse: previously re_verified rows nobody picked up within the TTL window.
+  // FR-7 TTL re-lapse: previously re_verified rows nobody picked up within the TTL window. These
+  // are sourced from a SEPARATE query (disposition='re_verified'), not from `candidates` above --
+  // folded into the chairman-facing unverifiedStale count (a relapsed row genuinely IS
+  // unverified-stale as of this run) but tracked separately in `relapsedCount` so a caller
+  // reconciling against candidateCount uses the right population (TESTING sub-agent finding,
+  // EXEC-TO-PLAN: the naive sum-of-counts === candidateCount identity silently excludes both
+  // deferredOverSeatCount and relapsed rows).
   const { relapsed } = await runTtlRelapsePass(supabase, { nowMs, columnsExist, apply: args.apply });
   counts.unverifiedStale += relapsed;
 
   const chairmanLine = composeChairmanLine(counts);
 
-  return { counts, chairmanLine, columnsExist, seatCount, apply: args.apply, candidateCount: candidates.length };
+  return {
+    counts, chairmanLine, columnsExist, seatCount, apply: args.apply,
+    candidateCount: candidates.length, relapsedCount: relapsed,
+  };
 }
 
 const isMain = !!process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href;

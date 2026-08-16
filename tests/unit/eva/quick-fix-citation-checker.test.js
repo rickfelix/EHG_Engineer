@@ -42,6 +42,31 @@ describe('extractCitations — hardening against a flag-injection-shaped citatio
   });
 });
 
+describe('extractCitations — hardening against path traversal', () => {
+  it('a path containing a .. segment is never extracted as a secondary-signal path candidate', () => {
+    const { paths } = extractCitations('see a/../../../etc/evil.js for the old implementation');
+    expect(paths).toEqual([]);
+  });
+
+  it('a named-test citation containing a .. segment is rejected, not passed through to fs/execFileSync', () => {
+    const { namedTest } = extractCitations('covered by a/../../../etc/evil.test.js');
+    expect(namedTest).toBeNull();
+  });
+
+  it('a legitimate path containing a literal ".." is unaffected as long as it is not its own segment', () => {
+    // Sanity control: the guard filters SEGMENTS equal to "..", not the substring "..". A
+    // filename like "v2..final.js" (unusual but not a traversal) must still extract normally.
+    const { paths } = extractCitations('see lib/v2..final.js for details');
+    expect(paths).toEqual([{ path: 'lib/v2..final.js', line: null, isRange: false }]);
+  });
+
+  it('checkQuickFixCitation resolves INCONCLUSIVE for a traversal-only citation, never throws', () => {
+    const qf = { title: 'x', description: 'see a/../../../etc/evil.js for the old implementation' };
+    const r = checkQuickFixCitation(qf, { repoRoot: '/tmp/does-not-matter', runTest: () => 'PASS' });
+    expect(r.outcome).toBe(OUTCOMES.INCONCLUSIVE);
+  });
+});
+
 describe('checkQuickFixCitation', () => {
   let tmpDir;
   beforeAll(() => {

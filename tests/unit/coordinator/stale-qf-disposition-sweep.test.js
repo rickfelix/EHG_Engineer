@@ -322,6 +322,29 @@ describe('TS-5 / FR-6: status-flip design — (disposition, status) pairing for 
     const loser = supabase._updates.find((x) => x.vals.disposition === 'duplicate_of');
     expect(loser.vals.status).toBe('closed');
   });
+
+  // FR-6 AC-5 (TESTING sub-agent finding, EXEC-TO-PLAN): the PRD's literal AC asks for a
+  // before/after fixture-driven count check on fleet-dashboard.cjs and data-loaders.js -- both
+  // unedited by this SD. A full functional integration test for two files this SD does not touch
+  // is out of scope; this is the narrower, honest substitute: a source-pin regression proving the
+  // SPECIFIC clauses that make closed/escalated invisible by construction are still there. If a
+  // future edit ever widens either to include 'closed' or 'escalated', this fails loudly instead
+  // of the drop silently regressing.
+  it('source-pin: the two unedited belt/gauge readers still exclude closed/escalated by construction', () => {
+    const dataLoadersSrc = fs.readFileSync(path.resolve(__dirname, '../../../scripts/modules/sd-next/data-loaders.js'), 'utf8');
+    const fleetDashboardSrc = fs.readFileSync(path.resolve(__dirname, '../../../scripts/fleet-dashboard.cjs'), 'utf8');
+    // Both known QF-status-filtering call sites the TESTING sub-agent verified read
+    // .in('status', ['open', 'in_progress']) -- neither substring 'closed' nor 'escalated' may
+    // appear inside that specific array literal.
+    const clause = /\.in\(\s*'status'\s*,\s*\[\s*'open'\s*,\s*'in_progress'\s*\]\s*\)/g;
+    const dataLoadersMatches = dataLoadersSrc.match(clause) || [];
+    const fleetDashboardMatches = fleetDashboardSrc.match(clause) || [];
+    // EXACT counts, not >=1 (TESTING sub-agent re-verification residual): data-loaders.js has TWO
+    // qualifying call sites (:449, :555) -- an >=1 bound would miss one of them silently
+    // regressing while the other still passes. Pinned to the counts measured live at review time.
+    expect(dataLoadersMatches.length).toBe(2);
+    expect(fleetDashboardMatches.length).toBe(1);
+  });
 });
 
 describe('TS-2: FR-2 refusal gate uses the correct 42703/PGRST204 predicate, not table-absence codes', () => {
@@ -399,17 +422,32 @@ describe('TS-6: staleClockMs TTL clock', () => {
   });
 
   describe('BOUNDARY under a pinned non-UTC timezone (30d+2h, inside the measured 4h skew margin)', () => {
-    // Mirrors tests/unit/time/pg-timestamp-tz.test.js's proven pattern exactly: mutating
-    // process.env.TZ in beforeAll was verified to take effect inside vitest's forks pool
-    // without a process restart. A NAIVE (no trailing Z) fixture is required -- an
-    // already-Z-suffixed string parses identically under any TZ and would pass even under a
-    // broken (non-pgTimestampMs) implementation, proving nothing.
+    // Mirrors tests/unit/time/pg-timestamp-tz.test.js's pattern. HONEST CAVEAT (that file's own
+    // documented limit, reproduced here rather than overclaimed): mutating process.env.TZ in
+    // beforeAll is NOT guaranteed to affect Date parsing mid-process on every platform -- measured
+    // inert (0h delta) on win32 during this SD's own EXEC-TO-PLAN review. The self-check below
+    // reports which is actually true on the CURRENT run rather than assuming it. Regardless of
+    // whether the mutation itself took effect, the main assertion below is still meaningful:
+    // staleClockMs must be correct on ANY platform, because pgTimestampMs() never consults
+    // process.env.TZ at all (it appends Z and lets Date parse an already-explicit-UTC string) --
+    // that invariance IS the fix. A NAIVE (no trailing Z) fixture is required for the assertion to
+    // mean anything: an already-Z-suffixed string parses identically under any TZ and would pass
+    // even under a broken (non-pgTimestampMs) implementation.
     const TZ = 'America/New_York';
+    const NAIVE_PROBE = '2026-07-29T05:25:20.028';
     let originalTZ;
     beforeAll(() => { originalTZ = process.env.TZ; process.env.TZ = TZ; });
     afterAll(() => { if (originalTZ === undefined) delete process.env.TZ; else process.env.TZ = originalTZ; });
 
-    it('a 30d+2h-old naive created_at ages out past the 30-day TTL under a non-UTC TZ', () => {
+    it('self-check: reports whether the TZ mutation is actually in effect on this platform (informational, never fails the suite)', () => {
+      // Never asserts -- a platform where the mutation is inert is a KNOWN, already-documented
+      // limit (tests/unit/time/pg-timestamp-tz.test.js:48-57), not a defect in this file.
+      const shiftHours = (Date.parse(NAIVE_PROBE) - Date.parse(`${NAIVE_PROBE}Z`)) / 3600000;
+      // eslint-disable-next-line no-console
+      console.log(`[TZ pin self-check] process.env.TZ=${process.env.TZ}, bare Date.parse shift vs UTC = ${shiftHours}h (0 means the mutation is INERT on this platform/Node build)`);
+    });
+
+    it('a 30d+2h-old naive created_at ages out past the 30-day TTL, independent of host/pin timezone', () => {
       const boundaryMs = NOW - (30 * 24 + 2) * 3600 * 1000;
       const boundaryNaive = new Date(boundaryMs).toISOString().replace(/Z$/, '');
       const clock = staleClockMs({ verified_at: null, started_at: null, created_at: boundaryNaive }, NOW);
@@ -417,6 +455,22 @@ describe('TS-6: staleClockMs TTL clock', () => {
       // Exact instant, not just "greater than" -- a tz-shifted parse would be off by ~4h,
       // still individually plausible but wrong; pin the precise value too.
       expect(clock).toBe(boundaryMs);
+    });
+
+    it('CONTROL: a naive-Date.getTime()-based (broken) implementation WOULD fail this exact fixture on a non-UTC-ambient host', () => {
+      // Proves the guard can fire at all (mirrors the two-halves discipline used for
+      // assertNoRawGreatest below) -- without this, a silently-inert TZ pin plus an
+      // always-passing assertion would be indistinguishable from a real guard.
+      const boundaryMs = NOW - (30 * 24 + 2) * 3600 * 1000;
+      const boundaryNaive = new Date(boundaryMs).toISOString().replace(/Z$/, '');
+      const brokenClock = new Date(boundaryNaive).getTime(); // the naive mistake this SD forbids
+      const ambientIsNonUTC = new Date('2026-01-01T00:00:00').getTimezoneOffset() !== 0;
+      if (ambientIsNonUTC) {
+        expect(brokenClock).not.toBe(boundaryMs);
+      } else {
+        // eslint-disable-next-line no-console
+        console.log('[TZ pin self-check] ambient host is UTC -- the broken-implementation control is not exercisable on this runner.');
+      }
     });
   });
 });
@@ -431,8 +485,15 @@ describe('TS-6: source-pin guard — no raw SQL GREATEST( in the sweep source (t
   });
 });
 
-describe('accounting: candidateCount equals the sum of every bucket', () => {
-  it('every past-fence candidate lands in exactly one bucket', async () => {
+// SD-LEO-INFRA-STALE-QF-DISPOSITION-SWEEP-001 (TESTING sub-agent finding, EXEC-TO-PLAN): the
+// naive `sum(counts) === candidateCount` identity silently breaks in two real cases a
+// seatCount:10-with-zero-relapses fixture never exercises: (a) deferredOverSeatCount is a
+// candidate that got NO disposition this run, so it must be added to the sum, not omitted; (b)
+// TTL-relapsed rows are sourced from a SEPARATE query (disposition='re_verified'), never members
+// of `candidates`, so they must be SUBTRACTED back out of unverifiedStale before comparing
+// against candidateCount. The complete, correct invariant covers both.
+describe('accounting: every past-fence candidate is accounted for exactly once', () => {
+  it('duplicates + resolved + (unverifiedStale - relapsed) + reVerified + promoted + deferred === candidateCount (no deferrals/relapses)', async () => {
     const rows = [
       baseRow({ id: 'QF-A1', title: 'dup', description: 'z' }),
       baseRow({ id: 'QF-A2', title: 'dup', description: 'z' }),
@@ -444,7 +505,53 @@ describe('accounting: candidateCount equals the sum of every bucket', () => {
     const result = await runSweep(['node', 'sweep', '--apply', '--h2-confirmed=2026-08-16'], {
       supabase, nowMs: NOW, seatCount: 10, repoRoot: FIXTURE_ROOT, runTest: runTestStub,
     });
-    const sum = result.counts.duplicates + result.counts.unverifiedStale + result.counts.reVerified + result.counts.promoted + result.counts.resolved;
+    expect(result.relapsedCount).toBe(0);
+    const sum = result.counts.duplicates + result.counts.resolved
+      + (result.counts.unverifiedStale - result.relapsedCount)
+      + result.counts.reVerified + result.counts.promoted + result.counts.deferredOverSeatCount;
     expect(sum).toBe(result.candidateCount);
+  });
+
+  it('holds even when the seat count forces a real deferral (non-zero deferredOverSeatCount)', async () => {
+    const rows = Array.from({ length: 4 }, (_, i) => baseRow({
+      id: `QF-DEFER-${i}`, created_at: daysAgo(10 + i),
+      description: `covered by tests/failing.test.js and lib/${i}.js`,
+    }));
+    const supabase = makeSupabase({ rows, columnsExist: true });
+    const result = await runSweep(['node', 'sweep', '--apply', '--h2-confirmed=2026-08-16'], {
+      supabase, nowMs: NOW, seatCount: 1, repoRoot: FIXTURE_ROOT, runTest: runTestStub,
+    });
+    expect(result.counts.deferredOverSeatCount).toBeGreaterThan(0);
+    const sum = result.counts.duplicates + result.counts.resolved
+      + (result.counts.unverifiedStale - result.relapsedCount)
+      + result.counts.reVerified + result.counts.promoted + result.counts.deferredOverSeatCount;
+    expect(sum).toBe(result.candidateCount);
+  });
+
+  it('holds even when a TTL relapse fires (non-zero relapsedCount, sourced outside candidates)', async () => {
+    const staleReverified = baseRow({
+      id: 'QF-STALE-REVER', disposition: 're_verified', verified_at: daysAgo(31), started_at: null,
+      created_at: daysAgo(90), // older than verified_at too -- staleClockMs must pick verified_at
+      // (the more recent of the two), so the TTL clock genuinely reflects the LAST re-verify, not
+      // this row's original creation. Both must be past the 30-day TTL for the relapse to fire.
+      description: 'covered by tests/failing.test.js',
+    });
+    // A second, unrelated fresh candidate so candidateCount > 0 independently of the relapse row
+    // (which is NOT a member of `candidates` -- it's excluded by the main query's `disposition IS
+    // NULL` filter and picked up only by the separate TTL re-lapse query).
+    const freshCandidate = baseRow({ id: 'QF-FRESH', description: 'no citation anywhere here' });
+    const supabase = makeSupabase({ rows: [staleReverified, freshCandidate], columnsExist: true });
+    const result = await runSweep(['node', 'sweep', '--apply', '--h2-confirmed=2026-08-16'], {
+      supabase, nowMs: NOW, seatCount: 10, repoRoot: FIXTURE_ROOT, runTest: runTestStub,
+    });
+    expect(result.relapsedCount).toBe(1);
+    expect(result.candidateCount).toBe(1); // the re_verified row is NOT a candidate
+    const sum = result.counts.duplicates + result.counts.resolved
+      + (result.counts.unverifiedStale - result.relapsedCount)
+      + result.counts.reVerified + result.counts.promoted + result.counts.deferredOverSeatCount;
+    expect(sum).toBe(result.candidateCount);
+    // And the relapsed row itself really did close as premise_unverified_stale.
+    const relapseUpdate = supabase._updates.find((u) => u.id === 'QF-STALE-REVER');
+    expect(relapseUpdate.vals.disposition).toBe('premise_unverified_stale');
   });
 });
