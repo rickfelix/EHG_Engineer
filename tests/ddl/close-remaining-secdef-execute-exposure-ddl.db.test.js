@@ -145,6 +145,19 @@ $enum$;
 -- functions in public ALREADY grants anon/authenticated EXECUTE explicitly (mirrors the live
 -- pg_default_acl measurement — see TESTING sub-agent's caveat: a vanilla ephemeral Postgres has
 -- NO default ACL row at all by default, so the ADP self-test would pass trivially without this).
+--
+-- ROOT CAUSE (TESTING + SECURITY sub-agent RCA, EXEC-TO-PLAN review, confirmed via the DIAG3
+-- probe below): this seed WAS unrepresentative. A default-ACL row created purely via GRANT (no
+-- prior REVOKE) is computed by SetDefaultACL starting from acldefault('f', postgres), which
+-- carries an IMPLICIT PUBLIC grant not shown in defaclacl's printed aclitem list — so the row
+-- looked clean ({anon=X/postgres,authenticated=X/postgres}, no visible PUBLIC entry) while a
+-- function created under it was still public_exec=true (measured directly: DIAG3 showed
+-- public_exec=true on a probe created immediately after this seed, BEFORE the migration's own
+-- REVOKE ever ran). Production's real ADP row already has PUBLIC revoked from an earlier fix, so
+-- it never carries this implicit grant — this seed must explicitly REVOKE PUBLIC first so the
+-- row's baseline matches production instead of acldefault()'s.
+ALTER DEFAULT PRIVILEGES FOR ROLE postgres IN SCHEMA public
+  REVOKE EXECUTE ON FUNCTIONS FROM PUBLIC;
 ALTER DEFAULT PRIVILEGES FOR ROLE postgres IN SCHEMA public
   GRANT EXECUTE ON FUNCTIONS TO anon, authenticated;
 
@@ -189,33 +202,7 @@ let preAdpControlGrant; // captured between STUB_SCHEMA and applyMigration() —
 let adpSelfTestPreFixResult; // {threw, message} — TS-5, captured in the same pre-fix window.
 
 async function applyMigration() {
-  // TEMPORARY DIAGNOSTIC (E2, TESTING sub-agent's H1-vs-H2 discriminator, adds to the E3
-  // diagnostics already in this file — remove both once the ADP_SELF_TEST_FAILED root cause is
-  // confirmed and fixed). Splits MIGRATION_SQL at the ADP REVOKE statement's closing semicolon and
-  // inspects pg_default_acl for role postgres MID-TRANSACTION, immediately after the REVOKE and
-  // before the self-test probe runs — the one measurement neither prior diagnostic pass took.
-  // H1: no row at all (SetDefaultACL collapsed it to acldefault(), which implicitly grants PUBLIC).
-  // H2: a row survives (e.g. {authenticated=X/postgres}) but the probe still comes out public_exec.
-  const ADP_MARKER = 'REVOKE EXECUTE ON FUNCTIONS FROM PUBLIC, anon;';
-  const splitIdx = MIGRATION_SQL.indexOf(ADP_MARKER);
-  if (splitIdx === -1) throw new Error('DIAG2: ADP_MARKER not found in MIGRATION_SQL — migration text changed, update the marker');
-  const part1 = MIGRATION_SQL.slice(0, splitIdx + ADP_MARKER.length);
-  const part2 = MIGRATION_SQL.slice(splitIdx + ADP_MARKER.length);
-
-  await client.query(part1);
-
-  const diagAcl = await client.query(
-    `SELECT ro.rolname AS role, n.nspname AS schema, d.defaclobjtype AS objtype, d.defaclacl::text AS acl
-     FROM pg_default_acl d
-     JOIN pg_roles ro ON ro.oid = d.defaclrole
-     LEFT JOIN pg_namespace n ON n.oid = d.defaclnamespace
-     WHERE ro.rolname = 'postgres'`,
-  );
-  console.log('[DIAG2] post-ADP-REVOKE pg_default_acl rows for role postgres (mid-transaction, pre-self-test):', JSON.stringify(diagAcl.rows));
-  const diagIdentity = await client.query('SELECT current_user, current_setting(\'is_superuser\') AS is_superuser');
-  console.log('[DIAG2] post-ADP-REVOKE identity (mid-transaction):', JSON.stringify(diagIdentity.rows[0]));
-
-  await client.query(part2);
+  await client.query(MIGRATION_SQL);
 }
 
 async function grantState(name, args) {
@@ -257,12 +244,6 @@ beforeAll(async () => {
   // not reporting a role that was never grantable in this ephemeral database at all.
   await client.query('CREATE FUNCTION public._test_pre_adp_control() RETURNS void LANGUAGE sql AS \'SELECT NULL::void\'');
   preAdpControlGrant = await grantState('_test_pre_adp_control', '');
-  // TEMPORARY DIAGNOSTIC (TESTING sub-agent RCA follow-up): this value was already captured above
-  // but never printed. Decisive for H2 — if public_exec is TRUE here (before the migration's ADP
-  // REVOKE has run at all), the SEED itself never suppressed PUBLIC and the CI harness is
-  // unrepresentative of production in exactly the dimension FR-4 tests. If FALSE, the seed starts
-  // PUBLIC-suppressed and the later failure is a genuine mid-migration regression, not a seed gap.
-  console.log('[DIAG3] pre-ADP-migration control grant (seed state, before REVOKE runs):', JSON.stringify(preAdpControlGrant));
 
   // TS-5: run the migration's OWN extracted self-test block standalone, in this same pre-fix
   // window — before the ADP fix has been applied, its precondition check (has_anon OR has_public)
@@ -275,18 +256,6 @@ beforeAll(async () => {
   } catch (e) {
     adpSelfTestPreFixResult = { threw: true, message: e.message };
   }
-
-  // DIAGNOSTIC (temporary — remove once the ADP_SELF_TEST_FAILED root cause is confirmed and
-  // fixed). SET ROLE postgres alone did not resolve a CI failure this was meant to fix, so this
-  // prints ground truth instead of guessing further: which role Postgres actually thinks is
-  // current/session at this exact point, and what pg_default_acl actually holds for anything
-  // named "postgres" right before the real migration's own ADP statement runs.
-  const diag1 = await client.query('SELECT current_user, session_user, current_setting(\'is_superuser\') AS is_superuser');
-  console.log('[DIAG] pre-migration identity:', JSON.stringify(diag1.rows[0]));
-  const diag2 = await client.query(
-    'SELECT r.rolname AS defacl_role, n.nspname AS schema, d.defaclobjtype AS objtype, d.defaclacl::text AS acl FROM pg_default_acl d JOIN pg_roles r ON r.oid = d.defaclrole LEFT JOIN pg_namespace n ON n.oid = d.defaclnamespace',
-  );
-  console.log('[DIAG] pg_default_acl rows:', JSON.stringify(diag2.rows));
 
   await applyMigration();
 }, 60_000);
@@ -337,6 +306,10 @@ describe('FR-4: ALTER DEFAULT PRIVILEGES — a NEW function created after the mi
 
   it('[TWO-SIDED CONTROL] a function created BEFORE the migration ran (captured in beforeAll, under STUB_SCHEMA\'s seeded default) DID carry anon EXECUTE — proving the post-migration probe above is discriminating on the ADP change itself, not reporting a role that was never grantable in this database at all', () => {
     expect(preAdpControlGrant.anon_exec).toBe(true);
+  });
+
+  it('[SEED FIDELITY] the pre-migration seed itself does NOT carry public_exec — regression guard for the fixture-fidelity defect this SD\'s own RCA found (SetDefaultACL seeding via GRANT-only carries an implicit, undisplayed PUBLIC grant from acldefault() that production\'s real ADP row does not have; STUB_SCHEMA now explicitly REVOKEs PUBLIC before granting anon/authenticated to match)', () => {
+    expect(preAdpControlGrant.public_exec).toBe(false);
   });
 });
 
