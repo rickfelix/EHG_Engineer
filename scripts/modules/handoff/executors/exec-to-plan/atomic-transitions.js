@@ -22,6 +22,11 @@ export function generateRequestId(sdId, sessionId) {
   return `${sdId}-${sessionId || 'unknown'}-${timestampBucket}`;
 }
 
+// Same format gate scripts/lib/sd-id-resolver.js's resolveSdInput() applies before
+// building an identical .or() filter string -- rejects commas/parens/periods that
+// could otherwise alter the intended PostgREST OR-clause.
+const SD_ID_OR_KEY_FORMAT = /^([0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}|SD-[A-Z0-9-]+)$/i;
+
 /**
  * Resolve a Strategic Directive identifier (id or sd_key) to its uuid_id column
  * value -- the SAME column fn_atomic_exec_to_plan_transition resolves p_sd_id to
@@ -36,13 +41,18 @@ export function generateRequestId(sdId, sessionId) {
  * @returns {Promise<string|null>}
  */
 export async function resolveSdUuidId(supabase, sdId) {
+  if (typeof sdId !== 'string' || !SD_ID_OR_KEY_FORMAT.test(sdId)) return null;
   try {
-    const { data } = await supabase
+    const { data, error } = await supabase
       .from('strategic_directives_v2')
       .select('uuid_id')
       .or(`id.eq.${sdId},sd_key.eq.${sdId}`)
       .limit(1)
       .maybeSingle();
+    if (error) {
+      console.log(`   ⚠️  Provenance stamp: could not resolve SD uuid_id (non-fatal): ${error.message}`);
+      return null;
+    }
     return data?.uuid_id || null;
   } catch {
     return null;
@@ -60,11 +70,15 @@ export async function resolveSdUuidId(supabase, sdId) {
 export async function captureInProgressStories(supabase, sdUuidId) {
   if (!sdUuidId) return [];
   try {
-    const { data } = await supabase
+    const { data, error } = await supabase
       .from('user_stories')
       .select('id, completed_by')
       .eq('sd_id', sdUuidId)
       .eq('status', 'in_progress');
+    if (error) {
+      console.log(`   ⚠️  Provenance stamp: could not capture in_progress stories (non-fatal): ${error.message}`);
+      return [];
+    }
     return data || [];
   } catch {
     return [];
@@ -87,18 +101,26 @@ export async function stampRpcPromotedStories(supabase, beforeInProgress) {
   if (!beforeInProgress || beforeInProgress.length === 0) return;
   try {
     const ids = beforeInProgress.map((s) => s.id);
-    const { data: after } = await supabase
+    const { data: after, error: fetchError } = await supabase
       .from('user_stories')
       .select('id, status, completed_by')
       .in('id', ids);
 
+    if (fetchError) {
+      console.log(`   ⚠️  Provenance stamp: could not re-fetch promoted stories (non-fatal): ${fetchError.message}`);
+      return;
+    }
+
     const now = new Date().toISOString();
     for (const story of after || []) {
       if (story.status === 'completed' && !story.completed_by) {
-        await supabase
+        const { error: updateError } = await supabase
           .from('user_stories')
           .update({ completed_by: 'system:fn_atomic_exec_to_plan_transition', completed_at: now })
           .eq('id', story.id);
+        if (updateError) {
+          console.log(`   ⚠️  Provenance stamp: failed to stamp story ${story.id} (non-fatal): ${updateError.message}`);
+        }
       }
     }
   } catch (err) {

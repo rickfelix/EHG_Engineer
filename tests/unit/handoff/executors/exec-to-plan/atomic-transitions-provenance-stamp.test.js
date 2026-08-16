@@ -73,6 +73,28 @@ describe('resolveSdUuidId', () => {
     const db = { from: vi.fn().mockImplementation(() => { throw new Error('boom'); }) };
     await expect(resolveSdUuidId(db, 'SD-FOO-001')).resolves.toBeNull();
   });
+
+  it('ship-review hardening: rejects a malformed sdId before ever building the .or() filter string', async () => {
+    const db = { from: vi.fn() };
+    const result = await resolveSdUuidId(db, 'not,a,valid;id(with)special.chars');
+    expect(result).toBeNull();
+    expect(db.from).not.toHaveBeenCalled();
+  });
+
+  it('ship-review hardening: a Postgrest-level error (resolved, not thrown) is treated as not-found, not propagated', async () => {
+    const db = {
+      from: vi.fn().mockReturnValue({
+        select: vi.fn().mockReturnValue({
+          or: vi.fn().mockReturnValue({
+            limit: vi.fn().mockReturnValue({
+              maybeSingle: vi.fn().mockResolvedValue({ data: null, error: { message: 'connection reset' } }),
+            }),
+          }),
+        }),
+      }),
+    };
+    await expect(resolveSdUuidId(db, 'SD-FOO-001')).resolves.toBeNull();
+  });
 });
 
 describe('captureInProgressStories', () => {
@@ -246,6 +268,75 @@ describe('executeAtomicExecToPlanTransition provenance stamp', () => {
     await executeAtomicExecToPlanTransition(db, 'SD-FOO-001', null);
 
     expect(updateFn).not.toHaveBeenCalled();
+  });
+
+  it('regression-lock: the before-capture genuinely runs before the RPC call, not after', async () => {
+    // Ship-review finding: prior tests here used STATIC fixtures for
+    // beforeStories/afterStories, which would pass unchanged even if a future
+    // refactor accidentally moved resolveSdUuidId/captureInProgressStories to
+    // run AFTER the RPC call -- silently defeating the entire diff design
+    // (before would equal after, nothing would ever get stamped in
+    // production). This test uses a shared mutable fake table that the mocked
+    // rpc() call itself mutates, so the before-query only finds the
+    // in_progress row if it genuinely runs first.
+    const table = { s1: { id: 's1', status: 'in_progress', completed_by: null } };
+    const callOrder = [];
+    const updateCalls = [];
+
+    const db = {
+      rpc: vi.fn().mockImplementation(() => {
+        callOrder.push('rpc');
+        table.s1.status = 'completed'; // simulates the real RPC's effect
+        return Promise.resolve({
+          data: { success: true, audit_id: 'a1', stories_updated: 1 },
+          error: null,
+        });
+      }),
+      from: vi.fn((table_) => {
+        if (table_ === 'strategic_directives_v2') {
+          return {
+            select: vi.fn().mockReturnValue({
+              or: vi.fn().mockReturnValue({
+                limit: vi.fn().mockReturnValue({
+                  maybeSingle: vi.fn().mockResolvedValue({ data: { uuid_id: 'uuid-sd-1' }, error: null }),
+                }),
+              }),
+            }),
+          };
+        }
+        if (table_ === 'user_stories') {
+          return {
+            select: vi.fn().mockReturnValue({
+              eq: vi.fn().mockReturnValue({
+                eq: vi.fn().mockImplementation(() => {
+                  callOrder.push('before-query');
+                  return Promise.resolve({
+                    data: Object.values(table).filter((s) => s.status === 'in_progress'),
+                    error: null,
+                  });
+                }),
+              }),
+              in: vi.fn().mockImplementation(() => {
+                callOrder.push('after-query');
+                return Promise.resolve({ data: Object.values(table), error: null });
+              }),
+            }),
+            update: vi.fn((updates) => {
+              updateCalls.push(updates);
+              return { eq: vi.fn().mockResolvedValue({ error: null }) };
+            }),
+          };
+        }
+        return {};
+      }),
+    };
+
+    const result = await executeAtomicExecToPlanTransition(db, 'SD-FOO-001', null);
+
+    expect(result.success).toBe(true);
+    expect(callOrder).toEqual(['before-query', 'rpc', 'after-query']);
+    expect(updateCalls).toHaveLength(1);
+    expect(updateCalls[0].completed_by).toBe('system:fn_atomic_exec_to_plan_transition');
   });
 
   it('a stamp-diff failure never reverses a successful RPC transition (fails soft)', async () => {
