@@ -114,7 +114,6 @@ export function buildTierRemediationHint(sd) {
     };
   }
   const metaKey = sd?.metadata?.vision_key || null;
-  const metaArch = sd?.metadata?.arch_key || null;
   if (metaKey) {
     return {
       tier: extractTier(metaKey),
@@ -314,6 +313,12 @@ export async function validateVisionScore(sd, supabase, deps = {}) {
   let visionScore = sd.vision_score ?? null;
   let thresholdAction = sd.vision_score_action ?? null;
   let dimensionScores = sd.dimension_scores ?? null;
+  // QF-20260728-277: a description >8000 chars is silently truncated before an
+  // LLM scores it (lib/eva/input-sanitizer.js), and the resulting score is
+  // indistinguishable from a genuine low score unless this is surfaced. Tracked
+  // here so both the cached-DB-read path and the auto-score path below can set it.
+  let inputTruncated = false;
+  let truncatedFieldsInfo = [];
 
   // Fetch if EITHER piece is missing. QF-20260713-713: scoreSD() syncs only the
   // SCALAR back to the SD (no dimension_scores column there); gating this fetch
@@ -322,7 +327,7 @@ export async function validateVisionScore(sd, supabase, deps = {}) {
     try {
       const { data } = await supabase
         .from('eva_vision_scores')
-        .select('total_score, threshold_action, dimension_scores, scored_at')
+        .select('total_score, threshold_action, dimension_scores, rubric_snapshot, scored_at')
         .eq('sd_id', sdKey)
         .order('scored_at', { ascending: false })
         .limit(1);
@@ -331,6 +336,10 @@ export async function validateVisionScore(sd, supabase, deps = {}) {
         visionScore = visionScore ?? data[0].total_score;
         thresholdAction = thresholdAction ?? data[0].threshold_action;
         dimensionScores = dimensionScores ?? data[0].dimension_scores ?? null;
+        if (data[0].rubric_snapshot?.input_truncated) {
+          inputTruncated = true;
+          truncatedFieldsInfo = data[0].rubric_snapshot.truncated_fields || [];
+        }
       }
     } catch (e) {
       // Intentionally suppressed: DB unavailable — proceed to hard block
@@ -349,6 +358,10 @@ export async function validateVisionScore(sd, supabase, deps = {}) {
       visionScore = auto.total_score;
       thresholdAction = auto.threshold_action ?? thresholdAction;
       dimensionScores = auto.dimension_scores ?? dimensionScores;
+      if (auto.input_truncated) {
+        inputTruncated = true;
+        truncatedFieldsInfo = auto.truncated_fields || [];
+      }
     }
   }
 
@@ -462,6 +475,15 @@ export async function validateVisionScore(sd, supabase, deps = {}) {
   console.log(`   Vision Alignment: ${visionScore}/100  ${classification.emoji} ${classification.label}`);
   console.log(`   ${classification.desc}`);
 
+  // QF-20260728-277: make truncation LOUD — computed once here, used by both the
+  // below-threshold block path and the passing path below.
+  const truncationNote = inputTruncated
+    ? ` ⚠ INPUT TRUNCATED: ${truncatedFieldsInfo.map(f => `${f.field} read ${f.charsRead}/${f.charsTotal} chars`).join(', ')} — this score reflects only the truncated prefix, not the full SD.`
+    : '';
+  if (inputTruncated) {
+    console.log(`   ⚠️  Input truncated before scoring: ${truncatedFieldsInfo.map(f => `${f.field} ${f.charsRead}/${f.charsTotal}`).join(', ')}`);
+  }
+
   // ── Score below threshold → check override, then hard block ─────────────
   if (visionScore < threshold) {
     const override = await checkOverride(sdType, supabase);
@@ -502,9 +524,11 @@ export async function validateVisionScore(sd, supabase, deps = {}) {
       passed: false,
       score: 0,
       maxScore: 100,
-      details: `Vision score ${visionScore}/100 does not meet ${sdType} threshold ${threshold}/100${thresholdAdjusted ? ` (adjusted from ${baseThreshold} for ${addressable}/${total} dims)` : ''}${belowTierHint.tier ? `. Resolved tier: ${belowTierHint.tier} (${belowTierHint.source}).` : ''}`,
-      remediation: `Score must reach ${threshold}/100 for ${sdType} SDs. Run: ${rerunCmd}`,
-      warnings: [],
+      details: `Vision score ${visionScore}/100 does not meet ${sdType} threshold ${threshold}/100${thresholdAdjusted ? ` (adjusted from ${baseThreshold} for ${addressable}/${total} dims)` : ''}${belowTierHint.tier ? `. Resolved tier: ${belowTierHint.tier} (${belowTierHint.source}).` : ''}${truncationNote}`,
+      remediation: inputTruncated
+        ? `Score must reach ${threshold}/100 for ${sdType} SDs, but the input was truncated before scoring (${truncatedFieldsInfo.map(f => `${f.field}: ${f.charsRead}/${f.charsTotal} chars`).join(', ')}). Shorten the SD description below 8000 chars, or move the SD-relevant content into the first 8000 chars, then re-run: ${rerunCmd}`
+        : `Score must reach ${threshold}/100 for ${sdType} SDs. Run: ${rerunCmd}`,
+      warnings: inputTruncated ? [`Input truncated before LLM scoring — score may not reflect the full SD (${truncatedFieldsInfo.map(f => `${f.field} ${f.charsRead}/${f.charsTotal}`).join(', ')})`] : [],
     };
   }
 
@@ -527,8 +551,10 @@ export async function validateVisionScore(sd, supabase, deps = {}) {
     passed: true,
     score: 100,
     maxScore: 100,
-    details: `Vision score: ${visionScore}/100 (${thresholdAction || 'unknown'}) — meets ${sdType} threshold ${threshold}${thresholdAdjusted ? ` (adjusted from ${baseThreshold} for ${addressable}/${total} dims)` : ''}`,
-    warnings: dimWarnings,
+    details: `Vision score: ${visionScore}/100 (${thresholdAction || 'unknown'}) — meets ${sdType} threshold ${threshold}${thresholdAdjusted ? ` (adjusted from ${baseThreshold} for ${addressable}/${total} dims)` : ''}${truncationNote}`,
+    warnings: inputTruncated
+      ? [...dimWarnings, `Input truncated before LLM scoring — score may not reflect the full SD (${truncatedFieldsInfo.map(f => `${f.field} ${f.charsRead}/${f.charsTotal}`).join(', ')})`]
+      : dimWarnings,
   };
 }
 

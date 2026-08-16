@@ -11,7 +11,7 @@
  */
 
 import { describe, it, expect } from 'vitest';
-import { validateVisionScore, SD_TYPE_THRESHOLDS, SD_TYPE_ADDRESSABLE_DIMENSIONS, DIMENSION_WARNING_THRESHOLD } from '../../../scripts/modules/handoff/executors/lead-to-plan/gates/vision-score.js';
+import { validateVisionScore, SD_TYPE_THRESHOLDS, SD_TYPE_ADDRESSABLE_DIMENSIONS } from '../../../scripts/modules/handoff/executors/lead-to-plan/gates/vision-score.js';
 
 describe('vision-score-gate: validateVisionScore', () => {
   describe('Path 1: no score available', () => {
@@ -208,6 +208,78 @@ describe('vision-score-gate: validateVisionScore', () => {
       };
       const result = await validateVisionScore(sd, mockSupabase);
       expect(result.passed).toBe(false);
+    });
+  });
+
+  describe('Input truncation surfacing (QF-20260728-277)', () => {
+    // A description >8000 chars is silently truncated before an LLM scores it
+    // (lib/eva/input-sanitizer.js). Before this QF, a truncated-input read was
+    // indistinguishable downstream from a genuine low score — these tests pin
+    // that the gate now surfaces it LOUDLY via rubric_snapshot.input_truncated.
+    function mockSupabaseWithScore(totalScore, thresholdAction, ruleSnapshotExtra = {}) {
+      return {
+        from: () => ({
+          select: () => ({
+            eq: () => ({
+              order: () => ({
+                limit: () => ({
+                  data: [{
+                    total_score: totalScore,
+                    threshold_action: thresholdAction,
+                    scored_at: '2026-01-01',
+                    rubric_snapshot: {
+                      input_truncated: true,
+                      truncated_fields: [{ field: 'description', charsTotal: 21693, charsRead: 8000 }],
+                      ...ruleSnapshotExtra,
+                    },
+                  }],
+                  error: null,
+                }),
+              }),
+            }),
+          }),
+        }),
+      };
+    }
+
+    it('surfaces truncation in details+warnings on the below-threshold BLOCK path', async () => {
+      const sd = { sd_key: 'SD-TEST', sd_type: 'infrastructure', vision_score: null, vision_score_action: null };
+      const result = await validateVisionScore(sd, mockSupabaseWithScore(40, 'escalate'));
+      expect(result.passed).toBe(false);
+      expect(result.details).toMatch(/INPUT TRUNCATED/);
+      expect(result.details).toMatch(/description read 8000\/21693 chars/);
+      expect(result.remediation).toMatch(/truncated/i);
+      expect(result.warnings.some(w => /truncated/i.test(w))).toBe(true);
+    });
+
+    it('surfaces truncation in details+warnings on the PASSING path', async () => {
+      const sd = { sd_key: 'SD-TEST', sd_type: 'infrastructure', vision_score: null, vision_score_action: null };
+      const result = await validateVisionScore(sd, mockSupabaseWithScore(88, 'accept'));
+      expect(result.passed).toBe(true);
+      expect(result.details).toMatch(/INPUT TRUNCATED/);
+      expect(result.warnings.some(w => /truncated/i.test(w))).toBe(true);
+    });
+
+    it('does NOT surface a truncation note when rubric_snapshot has no input_truncated flag (regression guard)', async () => {
+      const sd = { sd_key: 'SD-TEST', sd_type: 'infrastructure', vision_score: null, vision_score_action: null };
+      const mockSupabase = {
+        from: () => ({
+          select: () => ({
+            eq: () => ({
+              order: () => ({
+                limit: () => ({
+                  data: [{ total_score: 88, threshold_action: 'accept', scored_at: '2026-01-01', rubric_snapshot: { input_truncated: false } }],
+                  error: null,
+                }),
+              }),
+            }),
+          }),
+        }),
+      };
+      const result = await validateVisionScore(sd, mockSupabase);
+      expect(result.passed).toBe(true);
+      expect(result.details).not.toMatch(/TRUNCATED/);
+      expect(result.warnings).toEqual([]);
     });
   });
 });
