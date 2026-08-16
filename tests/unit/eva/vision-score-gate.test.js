@@ -281,5 +281,37 @@ describe('vision-score-gate: validateVisionScore', () => {
       expect(result.details).not.toMatch(/TRUNCATED/);
       expect(result.warnings).toEqual([]);
     });
+
+    it('does NOT attach a fetched row\'s truncation flag to a DIFFERENT, already-cached score (provenance fix)', async () => {
+      // sd.vision_score is already cached (88) — the `??` merge means the fetch below
+      // (triggered only because dimension_scores is missing) never actually supplies
+      // visionScore. Its rubric_snapshot belongs to an unrelated total_score=40 run and
+      // must NOT be attached to the displayed 88.
+      const sd = { sd_key: 'SD-TEST', sd_type: 'infrastructure', vision_score: 88, vision_score_action: 'accept', dimension_scores: null };
+      const mockSupabase = {
+        from: () => ({
+          select: () => ({
+            eq: () => ({
+              order: () => ({
+                limit: () => ({
+                  data: [{
+                    total_score: 40,
+                    threshold_action: 'escalate',
+                    scored_at: '2026-01-01',
+                    rubric_snapshot: { input_truncated: true, truncated_fields: [{ field: 'description', charsTotal: 21693, charsRead: 8000 }] },
+                  }],
+                  error: null,
+                }),
+              }),
+            }),
+          }),
+        }),
+      };
+      const result = await validateVisionScore(sd, mockSupabase);
+      expect(result.passed).toBe(true);
+      expect(result.details).toContain('88');
+      expect(result.details).not.toMatch(/TRUNCATED/);
+      expect(result.warnings).toEqual([]);
+    });
   });
 });
