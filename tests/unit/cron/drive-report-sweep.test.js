@@ -1025,6 +1025,16 @@ describe('SD-LEO-FIX-BELT-CAPACITY-VERDICTS-001 FR-3 — persistUnavailable, wir
     const leg = await scoreCapacityLeg({ gatherCapacity, persistVerdict: okPersist([]) });
     expect(leg.unavailable.available).toBe(false);
     expect(leg.unavailable.reason).toMatch(/belt query failed/);
+
+    // [STATIC — TESTING sub-agent EXEC-TO-PLAN finding, evidence a17901cc-9e31-424f-a421-c4ac3110bba0]
+    // The behavioral assertions above are BLIND to a mutated default: they pass byte-identically
+    // even if `persistUnavailable = null` were replaced with a default that silently fires a write,
+    // because both produce the same unavailable() return shape — mutation-verified by the sub-agent
+    // (all 156 tests stayed green under that exact mutation). This pins the one thing that actually
+    // distinguishes "omitted" from "a smuggled-in default": the source text of the default itself.
+    const src = fs.readFileSync(path.join(repoRoot, 'scripts', 'cron', 'drive-report-sweep.mjs'), 'utf8');
+    expect(src, 'persistUnavailable must default to null, never to a callable — a default that silently '
+      + 'fires would be invisible to every behavioral assertion above').toMatch(/persistUnavailable\s*=\s*null/);
   });
 });
 
