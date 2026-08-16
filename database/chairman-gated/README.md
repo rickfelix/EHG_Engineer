@@ -145,6 +145,55 @@ This script is catalog + staged-source-text verification only (binds to the lint
 row-level behavioural probe: the table holds 0 rows, so any such probe would pass identically under
 the leaking or the fixed policy.
 
+## Applying `20260816_defacl_anon_auth_axis.sql`
+
+```
+node scripts/apply-migration.js "database/chairman-gated/20260816_defacl_anon_auth_axis.sql" \
+  --prod-deploy --allow-any-path
+```
+
+(SD-LEO-SEC-DEFACL-ANON-AUTH-AXIS-001.) Per-role `ALTER DEFAULT PRIVILEGES` REVOKE for `postgres`
+and `supabase_admin`, schema `public`, functions — closes the FUTURE-function half of the anon/
+authenticated EXECUTE leak. Live-measured (2026-08-16): `pg_default_acl` for both roles already
+names `anon` and `authenticated` explicitly (not via a literal `PUBLIC` entry), so the
+`20260816_close_remaining_secdef_execute_exposure.sql` migration's `REVOKE ... FROM PUBLIC`-only
+ADP shape was a structural no-op on this axis — every function created since then inherited
+anon/authenticated EXECUTE by default regardless. This is a SEPARATE, independent fix from that
+migration: it changes nothing about the 145 functions that already exist (that is
+`20260816_close_remaining_secdef_execute_exposure.sql`'s job, still ceremony-pending as of this
+writing); it only stops NEW functions from being born exposed. Apply both for full closure, in
+either order.
+
+**Run the acceptance in all modes — the baseline is not optional for `--verify`, and `--hash` is
+not optional around a real apply/rollback cycle (it is what actually proves the DOWN file is an
+exact inverse — a SECURITY review caught the DOWN file over-granting PUBLIC on a state that never
+had it, by manual read; `--hash` catches that class mechanically on any future edit):**
+
+```
+node database/chairman-gated/20260816_defacl_anon_auth_axis_acceptance.mjs --self-test   # fixture-only, no DB
+node database/chairman-gated/20260816_defacl_anon_auth_axis_acceptance.mjs --hash         # BEFORE UP    (record the hash)
+node database/chairman-gated/20260816_defacl_anon_auth_axis_acceptance.mjs --baseline     # BEFORE apply
+# ... chairman applies the UP file ...
+node database/chairman-gated/20260816_defacl_anon_auth_axis_acceptance.mjs --hash         # AFTER UP     (must differ from BEFORE)
+node database/chairman-gated/20260816_defacl_anon_auth_axis_acceptance.mjs --verify       # AFTER apply
+# if a rollback is ever needed, after applying the DOWN file:
+node database/chairman-gated/20260816_defacl_anon_auth_axis_acceptance.mjs --hash         # AFTER DOWN   (must equal BEFORE)
+```
+
+The script proves two independent axes (AXIS-1 default-ACL / future functions, AXIS-2 existing-
+surface manifest completeness — reusing `scripts/audit-rpc-execute-grants.mjs`'s exported pure
+functions rather than re-implementing them) plus a scope guard asserting the separate, already-
+tracked `public_exec=true` defect population (see the entry above) is unchanged by this apply —
+this migration must never be credited with fixing that unrelated defect.
+
+This SD also added 3 previously-undeclared anon-EXEC functions
+(`fn_submit_venture_user_feedback`, `fn_submit_venture_feedback`, `fn_submit_venture_error`) to
+`scripts/audit-rpc-execute-grants-buckets.json`'s Bucket C (KEEP) — a live gap the completeness
+gate could not see until now. No new REVOKE migration was authored for the existing-surface set:
+the other 25 of the 28 live anon-EXEC functions were already triaged and staged by
+`20260816_close_remaining_secdef_execute_exposure.sql`; duplicating that authoring would create a
+second staged file touching the same functions, which this SD deliberately avoids.
+
 ## The underlying finding, which outlives this SD
 
 SUPERSEDED (SD-LEO-INFRA-TIER-GATE-FLAG-001): the TIER-2 default-deny protection is now ACTIVE by default — the gate reads the `LEO_MIGRATION_TIER_GATE_BYPASS` flag and fails CLOSED, so it holds unless a bypass is deliberately enabled. The text below described the prior state, in which the protection was inert
