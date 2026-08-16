@@ -80,3 +80,29 @@ describe('TS-6: regression guard — the recorded envelope is durably actionable
     // ...which is exactly why buildDecisionEnvelope's own decision_type is asserted directly above, not inferred from the predicates.
   });
 });
+
+describe('QF-20260816-118 regression: unfence_condition is a CONDITION, never rendered as a recommendation', () => {
+  it('recommendation comes from adam_recommendation only — unfence_condition never appears there', () => {
+    const sd = { sd_key: 'SD-COND-001', created_at: new Date().toISOString(), metadata: { unfence_condition: 'once Q3 pricing is finalized' } };
+    const envelope = buildDecisionEnvelope(sd);
+    expect(envelope.recommendation).not.toContain('once Q3 pricing is finalized');
+    expect(envelope.recommendation).toBe('GO/DEFER — Adam to recommend'); // no adam_recommendation set -> honest default
+    expect(envelope.context.unfence_condition).toBe('once Q3 pricing is finalized');
+  });
+
+  it('adam_recommendation, when present, drives recommendation regardless of unfence_condition', () => {
+    const sd = {
+      sd_key: 'SD-COND-002', created_at: new Date().toISOString(),
+      metadata: { unfence_condition: 'once Q3 pricing is finalized', adam_recommendation: 'GO — no blockers found' },
+    };
+    const envelope = buildDecisionEnvelope(sd);
+    expect(envelope.recommendation).toBe('GO — no blockers found');
+    expect(envelope.context.unfence_condition).toBe('once Q3 pricing is finalized');
+  });
+
+  it('unfence_condition is null in context when the SD metadata does not set one', () => {
+    const sd = { sd_key: 'SD-COND-003', created_at: new Date().toISOString(), metadata: {} };
+    const envelope = buildDecisionEnvelope(sd);
+    expect(envelope.context.unfence_condition).toBeNull();
+  });
+});

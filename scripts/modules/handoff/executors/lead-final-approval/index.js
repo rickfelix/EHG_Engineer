@@ -58,6 +58,26 @@ export function projectGateResultsForPersistence(gateResults) {
   });
 }
 
+/**
+ * QF-20260816-723: classify a single-table existence probe result. FAIL-CLOSED — only a
+ * clean read or a definitive "table exists but unreadable" signal counts as found; any
+ * OTHER error (transient fetch-failed, RLS misconfiguration, 5xx) must not be silently
+ * read as "found", or an unapplied migration's table probe can pass by coincidence and
+ * mask the UNAPPLIED_MIGRATIONS rejection this check exists to trigger.
+ *
+ * Pure and exported for direct unit testing (no DB, no orchestrator instance needed).
+ *
+ * @param {{code?: string, message?: string}|null} error - the Supabase PostgREST error, or null
+ * @returns {'found'|'missing'|'missing_unexpected'} 'missing_unexpected' additionally warrants
+ *   a warning naming the error, since it is not a recognized not-found shape.
+ */
+export function classifyTableProbeError(error) {
+  if (!error) return 'found';
+  if (error.code === 'PGRST116' || /permission denied/i.test(error.message || '')) return 'found';
+  if (/Could not find|does not exist/i.test(error.message || '')) return 'missing';
+  return 'missing_unexpected';
+}
+
 // Domain imports
 import { getRequiredGates } from './gates.js';
 import {
@@ -1216,10 +1236,14 @@ export class LeadFinalApprovalExecutor extends BaseExecutor {
             for (const match of matches) {
               const tableName = match[1].toLowerCase();
               const { error } = await this.supabase.from(tableName).select('*').limit(0);
-              if (error && error.message.includes('Could not find')) {
-                result.missingTables.push(tableName);
-              } else {
+              const verdict = classifyTableProbeError(error);
+              if (verdict === 'found') {
                 result.foundTables.push(tableName);
+              } else {
+                result.missingTables.push(tableName);
+                if (verdict === 'missing_unexpected') {
+                  console.warn(`[LeadFinalApproval] verifyMigrationsApplied: unexpected error probing table "${tableName}", treating as missing (fail-closed): ${error.message}`);
+                }
               }
             }
           } catch (e) {

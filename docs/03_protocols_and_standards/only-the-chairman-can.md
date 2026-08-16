@@ -1,9 +1,9 @@
 ---
 Category: Protocol
 Status: Approved
-Version: 1.1.0
+Version: 1.2.0
 Author: SD-LEO-INFRA-VENTURE-SELECTION-DEMAND-001
-Last Updated: 2026-07-09
+Last Updated: 2026-08-16
 Tags: ["chairman", "governance", "kill-gate"]
 ---
 
@@ -31,6 +31,7 @@ never auto-resolve. Companion to the Anthropic-cap contingency (`anthropic-cap-c
 | 8 | **Override the no-auto-override doctrine itself** | By definition only the chairman can relax their own guardrail | Never auto-relaxed |
 | 9 | **Confirm the product looks/feels right before public launch** (S23→S24 product-review gate, `decision_type='product_review'`, separate from the S23 kill-gate in row 1) | A hands-on taste/quality check an agent cannot self-certify — public launch is the outward-facing moment | Hold-and-surface (one escalation email, no reminders); enforced independently at both the daemon-walk and RPC advance paths so neither can bypass it (SD-LEO-INFRA-CHAIRMAN-PRODUCT-REVIEW-001) |
 | 10 | **KILL a venture at the S5 financial kill gate** (pre-build, `stage_config.gate_type='kill'`, distinct from the S24 hard-kill in row 1) | Pre-build capital-allocation decision; hardcoded manual autonomy at every L0-L4 level | Hold-and-surface (`chairman_decisions` row, `eva-decisions.js approve`); the computed verdict is now surfaced in the review brief and a computed `kill` verdict requires an explicit `--override-kill --override-reason` to approve — never a silent approve-through (SD-LEO-INFRA-VENTURE-SELECTION-DEMAND-001) |
+| 11 | **PROMOTE a nursery row to a live venture via the UNATTENDED (cron-driven) path** (Stage-0 → live venture) | Ruled 2026-07-29 (chairman, verbatim "I agree with your recommendation"); a genuinely new delegable act the original list predates — this file mentions neither "nursery" nor "stage-0", and `lib/eva/stage-zero/venture-nursery.js` postdates the list by 5 months, `nursery-reeval-request.js` by 17 days. Scoped to the unattended path only: the chairman's own UI action (e.g. a DiscoveryModeDialog click) is itself the human checkpoint and already satisfies this rule — it is not blocked by it | Hold — job gated off, nothing enqueues; the queue stays empty rather than accumulating. Explicitly revisitable at volume per the ruling; threshold not specified at ruling time |
 
 ---
 
