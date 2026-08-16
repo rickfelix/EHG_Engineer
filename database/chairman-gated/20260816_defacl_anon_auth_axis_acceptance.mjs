@@ -175,7 +175,7 @@ async function runBaseline() {
   const { failures: axis2Failures, declaredCount } = await axis2Check();
   const publicExecCount = await fetchPublicExecCount();
   const baseline = {
-    captured_at: new Date(0).toISOString(), // placeholder; real timestamp stamped by caller post-run if needed
+    captured_at: new Date().toISOString(),
     defacl_rows: defaclRows,
     axis1_pre_apply_failures: axis1Compliant(defaclRows), // EXPECTED non-empty pre-apply (proves the probe can see the defect)
     axis2_pre_apply_failures: axis2Failures,
